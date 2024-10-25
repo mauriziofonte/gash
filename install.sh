@@ -212,10 +212,8 @@
         # Install or update Gash
         gashinst_install_or_update
 
-        # Source the updated .bash_profile
-        [ -f "$HOME/.bash_profile" ] && source "$HOME/.bash_profile"
-
-        gashinst_success "Done! Enjoy using Gash 🚀"
+        gashinst_info "Please restart your terminal or run 'source ~/.bash_profile' to start using Gash."
+        gashinst_success "Enjoy using Gash 🚀"
 
         gashinst_reset
     }
