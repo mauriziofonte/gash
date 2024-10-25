@@ -23,14 +23,11 @@ needs_help() {
 
 function needs_confirm_prompt() {
     echo -ne "$@ \e[1;37m(y/N):\033[0m "
-    read -e answer
-    for response in y Y yes YES Yes Sure sure SURE OK ok Ok
-    do
-        if [ "_$answer" == "_$response" ]
-        then
-            return 0
-        fi
-    done
+    read -n 1 -r < /dev/tty
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        return 0
+    fi
 
     return 1
 }

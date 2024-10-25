@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #
-#    _____           _                              _   _                  _____ _          _ _ _ 
+#     _____           _                              _   _                  _____ _          _ _ _ 
 #   / ____|         | |           /\               | | | |                / ____| |        | | | |
 #  | |  __  __ _ ___| |__        /  \   _ __   ___ | |_| |__   ___ _ __  | (___ | |__   ___| | | |
 #  | | |_ |/ _` / __| '_ \      / /\ \ | '_ \ / _ \| __| '_ \ / _ \ '__|  \___ \| '_ \ / _ \ | | |
@@ -17,6 +17,14 @@
 # Get ready to love your shell again!
 # 
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
+#
+# Author: Maurizio Fonte (https://www.mauriziofonte.it)
+# Version: 1.0.1
+# Release Date: 2024-10-24
+# Last Update: 2024-10-26
+# License: Apache License
+#
+# If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
 #
 
 # Exit early if not running interactively.
