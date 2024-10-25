@@ -209,10 +209,6 @@
         fi
         gashinst_echo
 
-        echo "here"
-        gashinst_reset
-        exit 1
-
         # Install or update Gash
         gashinst_install_or_update
 
