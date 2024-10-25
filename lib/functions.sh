@@ -609,7 +609,7 @@ function uninstall_gash() {
             if grep -q "if \[ -f ~/.gashrc \]; then" "$file"; then
                 echo -e " 💡 \033[1;32mRemoving Gash block from: $file\033[0m"
                 # Use sed to delete the block starting from the line with "if [ -f ~/.gashrc ]; then" until "fi"
-                sed -i '/if \[ -f ~/.gashrc \]; then/,/fi/d' "$file"
+                sed -i '/if \[ -f ~\/\.gashrc \]; then/,/fi/d' "$file"
             else
                 echo -e " 💡 \033[1;33mNo Gash block found in: $file, skipping...\033[0m"
             fi

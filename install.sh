@@ -145,25 +145,25 @@
         if [ -d "$INSTALL_DIR" ]; then
             gashinst_info "Gash is already installed. Checking for updates..."
             cd "$INSTALL_DIR" || { error "Failed to change directory to $INSTALL_DIR"; exit 1; }
-            git fetch --tags || { error "Failed to fetch updates from the repository."; exit 1; }
+            git fetch --tags >/dev/null 2>&1 || { error "Failed to fetch updates from the repository."; exit 1; }
             LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
             CURRENT_TAG=$(git describe --tags)
 
             if [ "$CURRENT_TAG" != "$LATEST_TAG" ]; then
                 gashinst_info "Updating to the latest Gash release ($LATEST_TAG)..."
-                git checkout "$LATEST_TAG" || { error "Failed to checkout tag $LATEST_TAG"; exit 1; }
-                git reset --hard "$LATEST_TAG" || { error "Failed to reset to $LATEST_TAG"; exit 1; }
+                git checkout "$LATEST_TAG" >/dev/null 2>&1 || { error "Failed to checkout tag $LATEST_TAG"; exit 1; }
+                git reset --hard "$LATEST_TAG" >/dev/null 2>&1  || { error "Failed to reset to $LATEST_TAG"; exit 1; }
                 gashinst_success "Updated to version $LATEST_TAG."
             else
                 gashinst_success "You are already using the latest version ($CURRENT_TAG)."
             fi
         else
             gashinst_info "Cloning the Gash repository..."
-            git clone "$GIT_REPO" "$INSTALL_DIR" || { error "Failed to clone the Gash repository."; exit 1; }
+            git clone "$GIT_REPO" "$INSTALL_DIR" >/dev/null 2>&1 || { error "Failed to clone the Gash repository."; exit 1; }
             cd "$INSTALL_DIR" || { error "Failed to change directory to $INSTALL_DIR"; exit 1; }
-            git fetch --tags || { error "Failed to fetch tags from the repository."; exit 1; }
+            git fetch --tags >/dev/null 2>&1 || { error "Failed to fetch tags from the repository."; exit 1; }
             LATEST_TAG=$(git describe --tags "$(git rev-list --tags --max-count=1)")
-            git checkout "$LATEST_TAG" || { error "Failed to checkout tag $LATEST_TAG"; exit 1; }
+            git checkout "$LATEST_TAG" >/dev/null 2>&1 || { error "Failed to checkout tag $LATEST_TAG"; exit 1; }
             gashinst_success "Installed Gash version $LATEST_TAG."
         fi
 
@@ -213,9 +213,9 @@
         gashinst_install_or_update
 
         # Source the updated .bash_profile
-        . "$HOME/.bash_profile" || source "$HOME/.bash_profile"
+        [ -f "$HOME/.bash_profile" ] && source "$HOME/.bash_profile"
 
-        success "Done! Enjoy using Gash 🚀"
+        gashinst_success "Done! Enjoy using Gash 🚀"
 
         gashinst_reset
     }
