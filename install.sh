@@ -4,7 +4,7 @@
 # Installation script for Gash. It clones the Gash repository and updates the shell configuration files.
 # 
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.0.1
+# Version: 1.0.2
 # Release Date: 2024-10-24
 # Last Update: 2024-10-26
 # License: Apache License
