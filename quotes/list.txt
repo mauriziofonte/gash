@@ -1,0 +1,200 @@
+“Talk is cheap. Show me the code.” — Linus Torvalds
+“Programs must be written for people to read, and only incidentally for machines to execute.” — Harold Abelson
+“Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live.” — John Woods
+“Any fool can write code that a computer can understand. Good programmers write code that humans can understand.” — Martin Fowler
+“First, solve the problem. Then, write the code.” — John Johnson
+“Experience is the name everyone gives to their mistakes.” — Oscar Wilde
+“In order to be irreplaceable, one must always be different.” — Coco Chanel
+“Java is to JavaScript what car is to Carpet.” — Chris Heilmann
+“Knowledge is power.” — Francis Bacon
+“Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday’s code.” — Dan Salomon
+“Code never lies, comments sometimes do.” — Ron Jeffries
+“The only way to go fast, is to go well.” — Robert C. Martin
+“Simplicity is the soul of efficiency.” — Austin Freeman
+“The best way to get a project done faster is to start sooner.” — Jim Highsmith
+“Programming isn't about what you know; it's about what you can figure out.” — Chris Pine
+“If debugging is the process of removing bugs, then programming must be the process of putting them in.” — Edsger Dijkstra
+“The most disastrous thing that you can ever learn is your first programming language.” — Alan Kay
+“The computer was born to solve problems that did not exist before.” — Bill Gates
+“Walking on water and developing software from a specification are easy if both are frozen.” — Edward V. Berard
+“I'm not a great programmer; I'm just a good programmer with great habits.” — Kent Beck
+“It’s not a bug — it’s an undocumented feature.” — Anonymous
+“A good programmer is someone who always looks both ways before crossing a one-way street.” — Doug Linder
+“Programs are meant to be read by humans and only incidentally for computers to execute.” — Donald Knuth
+“There are only two kinds of programming languages: those people always bitch about and those nobody uses.” — Bjarne Stroustrup
+“Measuring programming progress by lines of code is like measuring aircraft building progress by weight.” — Bill Gates
+“Software is like entropy: It is difficult to grasp, weighs nothing, and obeys the Second Law of Thermodynamics; i.e., it always increases.” — Norman Augustine
+“The function of good software is to make the complex appear to be simple.” — Grady Booch
+“There is no place like 127.0.0.1.” — Anonymous
+“The most important property of a program is whether it accomplishes the intention of its user.” — C.A.R. Hoare
+“Any sufficiently advanced technology is indistinguishable from magic.” — Arthur C. Clarke
+“To iterate is human, to recurse divine.” — L. Peter Deutsch
+“The best thing about a boolean is even if you are wrong, you are only off by a bit.” — Anonymous
+“Weeks of coding can save you hours of planning.” — Anonymous
+“Before software can be reusable it first has to be usable.” — Ralph Johnson
+“One man’s crappy software is another man’s full-time job.” — Jessica Gaston
+“Make it work, make it right, make it fast.” — Kent Beck
+“Computers are good at following instructions, but not at reading your mind.” — Donald Knuth
+“Good code is its own best documentation.” — Steve McConnell
+“It’s hardware that makes a machine fast. It’s software that makes a fast machine slow.” — Craig Bruce
+“The most important single aspect of software development is to be clear about what you are trying to build.” — Bjarne Stroustrup
+“If builders built buildings the way programmers wrote programs, then the first woodpecker that came along would destroy civilization.” — Gerald Weinberg
+“In software, the most beautiful code, the most beautiful functions, and the most beautiful programs are sometimes not there at all.” — Jon Bentley
+“Real programmers don't comment their code. If it was hard to write, it should be hard to understand.” — Anonymous
+“A primary cause of complexity is that software vendors uncritically adopt almost any feature that users want.” — Niklaus Wirth
+“Programs must be written for people to read, and only incidentally for machines to execute.” — Hal Abelson
+“The hardest part of programming is thinking about the problem.” — Steve McConnell
+“It always takes longer than you expect, even when you take into account Hofstadter's Law.” — Douglas Hofstadter
+“Premature optimization is the root of all evil.” — Donald Knuth
+“Computers are incredibly fast, accurate, and stupid; humans are incredibly slow, inaccurate, and brilliant; together they are powerful beyond imagination.” — Albert Einstein
+“The best performance improvement is the transition from the nonworking state to the working state.” — John Ousterhout
+“The key to performance is elegance, not battalions of special cases.” — Jon Bentley
+“Simple things should be simple, complex things should be possible.” — Alan Kay
+“Learning to program has no more to do with designing interactive software than learning to touch type has to do with writing poetry.” — Ted Nelson
+“A language that doesn’t affect the way you think about programming is not worth knowing.” — Alan Perlis
+“The trouble with programmers is that you can never tell what a programmer is doing until it’s too late.” — Seymour Cray
+“In theory, there is no difference between theory and practice. But, in practice, there is.” — Jan L.A. van de Snepscheut
+“Programming is not about typing, it's about thinking.” — Rich Hickey
+“The difference between theory and practice is that in theory, there is no difference between theory and practice.” — Richard Moore
+“Good judgment comes from experience, and experience comes from bad judgment.” — Fred Brooks
+“A bug is never just a mistake. It represents something bigger. An error of thinking that makes you who you are.” — Anonymous
+“If you think it's simple, then you have misunderstood the problem.” — Bjarne Stroustrup
+“Programming is the art of algorithm design and the craft of debugging errant code.” — Ellen Ullman
+“Sometimes it’s better to leave something alone, to pause, and that’s very true of programming.” — Joyce Wheeler
+“Good software, like good wine, takes time.” — Joel Spolsky
+“The only real mistake is the one from which we learn nothing.” — Henry Ford
+“Everything should be made as simple as possible, but not simpler.” — Albert Einstein
+“You can’t have great software without a great team, and most software teams behave like dysfunctional families.” — Jim McCarthy
+“The purpose of software engineering is to control complexity, not to create it.” — Pamela Zave
+“A good programmer is someone who always looks both ways before crossing a one-way street.” — Doug Linder
+“There is an easy way and a hard way. The hard part is finding the easy way.” — Anonymous
+“It's not that I'm so smart, it's just that I stay with problems longer.” — Albert Einstein
+“The most effective debugging tool is still careful thought, coupled with judiciously placed print statements.” — Brian Kernighan
+“The only way to learn a new programming language is by writing programs in it.” — Dennis Ritchie
+“The best error message is the one that never shows up.” — Thomas Fuchs
+“If you automate a mess, you get an automated mess.” — Rod Michael
+“A language that doesn't have everything is actually easier to program in than some that do.” — Dennis Ritchie
+“Good specifications will always improve programmer productivity far better than any programming tool or technique.” — Milt Bryce
+“The more code you have, the more places there are for bugs to hide.” — Anonymous
+“The only thing worse than starting something and failing... is not starting something.” — Seth Godin
+“You can’t trust code that you did not totally create yourself.” — Ken Thompson
+“Deleted code is debugged code.” — Jeff Sickel
+“The best thing about a boolean is even if you are wrong, you are only off by a bit.” — Anonymous
+“A good programmer is someone who looks both ways before crossing a one-way street.” — Doug Linder
+“The best way to predict the future is to implement it.” — David Heinemeier Hansson
+“People think that computer science is the art of geniuses, but the reality is the opposite, just many people doing things that build on each other, like a wall of mini stones.” — Donald Knuth
+“I don't care if it works on your machine! We are not shipping your machine!” — Vidiu Platon
+“There is no silver bullet in software development.” — Fred Brooks
+“Programming is the art of telling another human what one wants the computer to do.” — Donald Knuth
+“The best way to avoid failure is to fail constantly.” — Anonymous
+“Computers are like bikinis. They save people a lot of guesswork.” — Sam Ewing
+“If you think your users are idiots, only idiots will use it.” — Linus Torvalds
+“The fastest algorithm can frequently be replaced by one that is almost as fast and much easier to understand.” — Douglas Crockford
+“If you optimize everything, you will always be unhappy.” — Donald Knuth
+“Sometimes the elegant implementation is just a function. Not a method. Not a class. Not a framework. Just a function.” — John Carmack
+“Simplicity is prerequisite for reliability.” — Edsger W. Dijkstra
+“If you don't work on important problems, it's not likely that you'll do important work.” — Richard Hamming
+“All parts should go together without forcing. You must remember that the parts you are reassembling were disassembled by you. Therefore, if you can’t get them together again, there must be a reason. By all means, do not use a hammer.” — IBM Manual, 1925
+“To understand recursion, one must first understand recursion.” — Anonymous
+“Everything that can be automated will be automated.” — Robert Cannon
+“Programming is like sex: one mistake and you have to support it for the rest of your life.” — Michael Sinz
+“640K ought to be enough for anybody.” — Attributed to Bill Gates
+“Programming today is a race between software engineers striving to build bigger and better idiot-proof programs, and the universe trying to produce bigger and better idiots. So far, the universe is winning.” — Rick Cook
+“Adding manpower to a late software project makes it later.” — Fred Brooks
+“Computer science is no more about computers than astronomy is about telescopes.” — Edsger W. Dijkstra
+“All problems in computer science can be solved by another level of indirection.” — David Wheeler
+“There are only two hard things in Computer Science: cache invalidation and naming things.” — Phil Karlton
+“Program testing can be used to show the presence of bugs, but never to show their absence!” — Edsger W. Dijkstra
+“The best code is no code at all.” — Jeff Atwood
+“Beware of bugs in the above code; I have only proved it correct, not tried it.” — Donald Knuth
+“Copy and paste is a design error.” — David Parnas
+“Any sufficiently advanced bug is indistinguishable from a feature.” — Rich Kulawiec
+“First, solve the problem. Then, write the code.” — John Johnson
+“The question of whether a computer can think is no more interesting than whether a submarine can swim.” — Edsger W. Dijkstra
+“I think Microsoft named .Net so it wouldn’t show up in a Unix directory listing.” — Oktal
+“If the code and the comments disagree, then both are probably wrong.” — Norm Schryer
+“Programming is like writing a book... except if you miss a single comma on page 126, the whole thing makes no sense.” — Anonymous
+“Programming can be fun, so can cryptography; however they should not be combined.” — Kreitzberg and Shneiderman
+“A computer once beat me at chess, but it was no match for me at kickboxing.” — Emo Philips
+“When I wrote this code, only God and I understood what I did. Now only God knows.” — Anonymous
+“If debugging is the process of removing bugs, then programming must be the process of putting them in.” — Edsger W. Dijkstra
+“One of my most productive days was throwing away 1000 lines of code.” — Ken Thompson
+“In C++ it’s harder to shoot yourself in the foot, but when you do, you blow off your whole leg.” — Bjarne Stroustrup
+“The hardest part of design is keeping features out.” — Donald Norman
+“The future is already here - it's just not evenly distributed.” — William Gibson
+“The cheapest, fastest, and most reliable components are those that aren’t there.” — Gordon Bell
+“To err is human, but to really foul things up you need a computer.” — Paul Ehrlich
+“An API that isn’t comprehensible isn’t usable.” — James Gosling
+“Optimism is an occupational hazard of programming; feedback is the treatment.” — Kent Beck
+“Controlling complexity is the essence of computer programming.” — Brian Kernighan
+“A problem well stated is a problem half solved.” — Charles Kettering
+“Simplicity is the ultimate sophistication.” — Leonardo da Vinci
+“I have not failed. I've just found 10,000 ways that won't work.” — Thomas Edison
+“If it works, don't touch it.” — Anonymous
+“Software and cathedrals are much the same - first we build them, then we pray.” — Anonymous
+“Most software today is very much like an Egyptian pyramid with millions of bricks piled on top of each other, with no structural integrity.” — Alan Kay
+“The only way to learn a new programming language is by writing programs in it.” — Dennis Ritchie
+“Computers are like Old Testament gods; lots of rules and no mercy.” — Joseph Campbell
+“Walking on water and developing software from a specification are easy if both are frozen.” — Edward V. Berard
+“Without requirements or design, programming is the art of adding bugs to an empty text file.” — Louis Srygley
+“The best method for accelerating a computer is the one that boosts it by 9.8 m/s².” — Anonymous
+“I think there is a world market for maybe five computers.” — Thomas Watson
+“Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away.” — Antoine de Saint-Exupéry
+“Programming isn’t about what you know; it’s about what you can figure out.” — Chris Pine
+“Computers are useless. They can only give you answers.” — Pablo Picasso
+“Good specifications will always improve programmer productivity far better than any programming tool or technique.” — Milt Bryce
+“Any code of your own that you haven’t looked at for six or more months might as well have been written by someone else.” — Eagleson’s Law
+“All problems in computer science can be solved by another level of indirection.” — Butler Lampson
+“Measuring programming progress by lines of code is like measuring aircraft building progress by weight.” — Bill Gates
+“Computers make it easier to do a lot of things, but most of the things they make it easier to do don't need to be done.” — Andy Rooney
+“The trouble with programmers is that you can never tell what a programmer is doing until it’s too late.” — Seymour Cray
+“Software is eating the world.” — Marc Andreessen
+“Computers are good at following instructions, but not at reading your mind.” — Donald Knuth
+“The best way to predict the future is to invent it.” — Alan Kay
+“Code is like humor. When you have to explain it, it’s bad.” — Cory House
+“In God we trust. All others must bring data.” — W. Edwards Deming
+“First, solve the problem. Then, write the code.” — John Johnson
+“Programmers are tools for converting caffeine into code.” — Unknown
+“Computers are useless. They can only give you answers.” — Pablo Picasso
+“The more code you write, the more bugs you create.” — Anonymous
+“Programs must be written for people to read.” — Harold Abelson
+“The best error message is the one that never shows up.” — Thomas Fuchs
+“The computing scientist’s main challenge is not to get confused by the complexities of his own making.” — Edsger W. Dijkstra
+“Optimism is an occupational hazard of programming.” — Kent Beck
+“Controlling complexity is the essence of computer programming.” — Brian Kernighan
+“A good programmer is someone who looks both ways before crossing a one-way street.” — Doug Linder
+“Software is a gas; it expands to fill its container.” — Nathan Myhrvold
+“Computers are like bikinis. They save people a lot of guesswork.” — Sam Ewing
+“Deleted code is debugged code.” — Jeff Sickel
+“You can’t have great software without a great team.” — Jim McCarthy
+“The best way to get accurate information on Usenet is to post something wrong and wait for corrections.” — Matthew Austern
+“The first 90% of the code accounts for the first 90% of the development time.” — Tom Cargill
+“One of my most productive days was throwing away 1000 lines of code.” — Ken Thompson
+“A good way to stay flexible is to write less code.” — Pragmattic Programmer
+“The best method for accelerating a computer is the one that boosts it by 9.8 m/s².” — Anonymous
+“In theory, theory and practice are the same. In practice, they’re not.” — Yogi Berra
+“The computer was born to solve problems that did not exist before.” — Bill Gates
+“Programming can be fun, so can cryptography; however they should not be combined.” — Kreitzberg and Shneiderman
+“Walking on water and developing software from a specification are easy if both are frozen.” — Edward V. Berard
+“The goal of Computer Science is to build something that will last at least until we've finished building it.” — Anonymous
+“Computers are magnificent tools for the realization of our dreams.” — Louis Gerstner
+“Computers are like Old Testament gods; lots of rules and no mercy.” — Joseph Campbell
+“Programming is the art of algorithm design and the craft of debugging errant code.” — Ellen Ullman
+“Software is like entropy: It is difficult to grasp, weighs nothing, and obeys the Second Law of Thermodynamics.” — Norman Augustine
+“As soon as we started programming, we found to our surprise that it wasn’t as easy to get programs right as we had thought.” — Maurice Wilkes
+“There are only two hard things in Computer Science: cache invalidation and naming things.” — Phil Karlton
+“A language that doesn't affect the way you think about programming is not worth knowing.” — Alan Perlis
+“Measuring programming progress by lines of code is like measuring aircraft building progress by weight.” — Bill Gates
+“If you can't make it good, at least make it look good.” — Bill Gates
+“The most powerful tool we have as developers is automation.” — Scott Hanselman
+“Programming is breaking of one big impossible task into several very small possible tasks.” — Jazzwant
+“The problem of viruses is temporary and will be solved in two years.” — John McAfee, 1988
+“Any sufficiently advanced bug is indistinguishable from a feature.” — Rich Kulawiec
+“Computers are like mirrors. They reflect back what we put in.” — Unknown
+“If you have any trouble sounding condescending, find a Unix user to show you how it's done.” — Scott Adams
+“The best code is no code at all.” — Jeff Atwood
+“Programming without an overall architecture or design in mind is like exploring a cave with only a flashlight.” — Danny Thorpe
+“Computers do not solve problems, they execute solutions.” — Unknown
+“Perl - The only language that looks the same before and after RSA encryption.” — Keith Bostic
+“The limits of my language mean the limits of my world.” — Ludwig Wittgenstein
+“If you don't work on important problems, it's not likely that you'll do important work.” — Richard Hamming

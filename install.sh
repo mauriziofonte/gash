@@ -6,7 +6,7 @@
 # Installation script for Gash. It clones the Gash repository and updates the shell configuration files.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.0.5
+# Version: 1.0.6
 # Release Date: 2024-10-24
 # Last Update: 2024-10-26
 # License: Apache License
@@ -286,8 +286,8 @@ gashinst_echo "${CYAN}🚀 Welcome to the Gash installation script! 🚀${NC}"
 
 # Prompt user for confirmation before proceeding
 gashinst_echo
-gashinst_warning " ⚠️ This script will install Gash. This will modify your shell configuration files."
-gashinst_confirm " ⚠️ ${YELLOW}Do you want to continue?${NC}"
+gashinst_warning "This script will install Gash. This will modify your shell configuration files."
+gashinst_confirm " ⚡ ${YELLOW}Do you want to continue?${NC}"
 if [ $? -eq 1 ]; then
   gashinst_info "Sorry to see you go... Installation aborted."
   exit 0

@@ -5,7 +5,7 @@
 #########################################
 
 # Print help message for a function if requested.
-needs_help() {
+function needs_help() {
     local program="$1"
     local usage="$2"
     local help="$3"
@@ -30,7 +30,7 @@ function needs_confirm_prompt() {
     return 1
 }
 
-print_error() {
+function print_error() {
   echo -e " ⛔ \033[1;31mError:\033[0m \e[1;37m$1\033[0m"
 }
 
@@ -352,7 +352,7 @@ gdel_tag() {
 }
 
 # Stop all running Docker containers
-function docker_stop_all() {
+docker_stop_all() {
     # do we have docker installed?
     if ! command -v docker >/dev/null 2>&1; then
         print_error "Docker is not installed."
@@ -364,7 +364,7 @@ function docker_stop_all() {
 }
 
 # Start all stopped Docker containers
-function docker_start_all() {
+docker_start_all() {
     # do we have docker installed?
     if ! command -v docker >/dev/null 2>&1; then
         print_error "Docker is not installed."
@@ -376,7 +376,7 @@ function docker_start_all() {
 }
 
 # Remove all Docker containers, images, volumes, and networks and clean up the environment
-function docker_prune_all() {
+docker_prune_all() {
     # do we have docker installed?
     if ! command -v docker >/dev/null 2>&1; then
         print_error "Docker is not installed."
@@ -421,7 +421,7 @@ function all_colors() {
 }
 
 # Add 'please' command to re-run the previous command with sudo
-function please() {
+please() {
     if [ "$EUID" -ne 0 ]; then
         if [ "$#" -eq 0 ]; then
             sudo $(fc -ln -1)
@@ -438,14 +438,14 @@ function please() {
 }
 
 # Create a function to make directory and cd into it
-function mkcd() {
+mkcd() {
     needs_help "mkcd" "mkcd DIRECTORY" "Creates a new directory and changes into it." "$1" && return
 
     mkdir -p "$1" && cd "$1"
 }
 
 # Function to extract various archive types (case-insensitive) with optional output directory.
-function extract() {
+extract() {
     needs_help "extract" "extract ARCHIVE_FILE [OUTPUT_DIR]" "Extracts the ARCHIVE_FILE in the current directory or the specified OUTPUT_DIR." "$1" && return
 
     local archive_file="$1"
@@ -483,7 +483,7 @@ function extract() {
 }
 
 # Create a backup of a file with a timestamp suffix
-function backup_file() {
+backup_file() {
     local file="$1"
 
     if [ ! -f "$file" ]; then
@@ -501,7 +501,7 @@ function backup_file() {
 }
 
 # List all empty directories in the specified path (default: current directory)
-function list_empty_dirs() {
+list_empty_dirs() {
     local dir="${1:-.}"
 
     if [ ! -d "$dir" ]; then
@@ -569,7 +569,7 @@ portkill() {
 }
 
 # Stop well-known services like Apache, Nginx, MySQL, MariaDB, Pgsql, redis, memcached, etc.
-function stop_services() {
+stop_services() {
     local services=("apache2" "nginx" "mysql" "mariadb" "postgresql" "mongodb" "redis" "memcached" "docker")
     local force_flag="$1"
     
@@ -669,6 +669,40 @@ gash_uninstall() {
     done
 }
 
+gash_inspiring_quote() {
+    # Check if tput is available, and fallback to 60 if not
+    if command -v tput &> /dev/null; then
+        TTY_WIDTH=$(tput cols)
+    else
+        TTY_WIDTH=60
+    fi
+
+    local GASH_DIR
+    GASH_DIR="${GASH_DIR:-$HOME/.gash}"
+    local QUOTES_FILE="$GASH_DIR/quotes/list.txt"
+
+    # Check if the quote file exists and is readable
+    if [[ ! -r "$QUOTES_FILE" ]]; then
+        return 1
+    fi
+
+    # Read all quotes into an array without changing IFS
+    mapfile -t quotes < "$QUOTES_FILE"
+
+    if [[ ${#quotes[@]} -eq 0 ]]; then
+        return 1
+    fi
+
+    # Generate a random index
+    local IDX=$(( RANDOM % ${#quotes[@]} ))
+
+    # Output the random quote
+    echo -e "\033[1;97m🌟\033[0m They said: \033[1;96m${quotes[$IDX]}\033[0m" | fold -s -w $TTY_WIDTH
+
+    # unset the quotes array
+    unset TTY_WIDTH QUOTES_FILE quotes
+}
+
 # Define custom help function
 function gash_help() {
     # Display the built-in Bash help
@@ -701,6 +735,7 @@ function gash_help() {
         echo -e " > \e[0;33mpskill\033[0m \e[0;36mPROCESS_NAME\033[0m - \e[1;37mKill all processes by name.\033[0m"
         echo -e " > \e[0;33mportkill\033[0m \e[0;36mPORT\033[0m - \e[1;37mKill all processes by port.\033[0m"
         echo -e " > \e[0;33mstop_services\033[0m \e[0;36m[--force]\033[0m - \e[1;37mStop well-known services like Apache, Nginx, MySQL, MariaDB, Pgsql, redis, memcached, etc.\033[0m"
+        echo -e " > \e[0;33mgash_inspiring_quote\033[0m - \e[1;37mDisplay an inspiring quote, to enlighten your day.\033[0m"
         echo -e " > \e[0;33mgash_uninstall\033[0m - \e[1;37mUninstall Gash and clean up configurations.\033[0m"
 
         echo -e " > \e[0;33m..\033[0m - \e[1;37mChange to the parent directory.\033[0m"
