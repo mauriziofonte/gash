@@ -22,13 +22,11 @@ needs_help() {
 }
 
 function needs_confirm_prompt() {
-    echo -ne "$@ \e[1;37m(y/N):\033[0m "
-    read -n 1 -r < /dev/tty
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    command printf '%b' "$1 \e[1;37m(y/N):\033[0m "
+    read -r REPLY < /dev/tty
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
         return 0
     fi
-
     return 1
 }
 
@@ -591,7 +589,13 @@ function stop_services() {
 }
 
 # Function to uninstall Gash and clean up configurations
-function uninstall_gash() {
+gash_uninstall() {
+    # If we don't have a ~/.gash directory, simply exit
+    if [ ! -d "$HOME/.gash" ]; then
+        echo -e " ⛔ \033[1;31mGash is not installed on this system. Maybe you've just uninstalled it?\033[0m"
+        return 1
+    fi
+
     echo -e " ⚠️ \033[1;31mThis will completely remove Gash and its configurations from your system.\033[0m"
     needs_confirm_prompt " ⚠️ \033[1;31mDo you want to continue?\033[0m"
     if [ $? -eq 1 ]; then
@@ -599,40 +603,70 @@ function uninstall_gash() {
         return 0
     fi
 
-    # Define the profile files to check
-    profile_files=(~/.bashrc ~/.bash_profile ~/.bash_aliases)
+    # Define profile files to check
+    profile_files=( "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" )
 
-    # Loop through profile files and remove the Gash sourcing block
-    for file in "${profile_files[@]}"; do
-        if [ -f "$file" ]; then
-            # Check if the Gash block exists in the file
-            if grep -q "if \[ -f ~/.gashrc \]; then" "$file"; then
-                echo -e " 💡 \033[1;32mRemoving Gash block from: $file\033[0m"
-                # Use sed to delete the block starting from the line with "if [ -f ~/.gashrc ]; then" until "fi"
-                sed -i '/if \[ -f ~\/\.gashrc \]; then/,/fi/d' "$file"
+    # Remove Gash sourcing lines from profiles
+    for profile_file in "${profile_files[@]}"; do
+        if [ -f "$profile_file" ]; then
+            if command grep -qc 'source.*[./]gashrc' "$profile_file"; then
+                echo -e " 💡 \033[1;32m Removing Gash block from: $profile_file\033[0m"
+                # Remove the block between '# Load Gash Bash' and 'fi'
+                sed -i.bak '/# Load Gash Bash/,/^fi$/d' "$profile_file"
             else
-                echo -e " 💡 \033[1;33mNo Gash block found in: $file, skipping...\033[0m"
+                echo -e " 💡 \033[1;33m No Gash block found in: $profile_file, skipping...\033[0m"
             fi
         fi
     done
 
-    # Remove the ~/.gash directory if it exists
-    if [ -d ~/.gash ]; then
-        echo -e " 💡 \033[1;32mRemoving Gash directory...\033[0m"
-        rm -rf ~/.gash
-    else
-        echo -e " 💡 \033[1;33mGash directory not found, skipping...\033[0m"
-    fi
-
     # Remove the ~/.gashrc file if it exists
-    if [ -f ~/.gashrc ]; then
-        echo -e " 💡 \033[1;32mRemoving ~/.gashrc file...\033[0m"
-        rm ~/.gashrc
+    if [ -f "$HOME/.gashrc" ]; then
+        echo -e " 💡 \033[1;32m Removing ~/.gashrc file...\033[0m"
+        rm -f "$HOME/.gashrc" >/dev/null 2>&1
+
+        # Failsafe: if the file still exists, try with sudo
+        if [ -f "$HOME/.gashrc" ]; then
+            echo -e " ⚠️ \033[1;33m Failed to remove ~/.gashrc file, trying with sudo...\033[0m"
+            sudo rm -f "$HOME/.gashrc" >/dev/null 2>&1
+
+            if [ -f "$HOME/.gashrc" ]; then
+                echo -e " ⛔ \033[1;31m Failed to remove ~/.gashrc file, please remove it manually.\033[0m"
+            fi
+        fi
     else
-        echo -e " 💡 \033[1;33m~/.gashrc file not found, skipping...\033[0m"
+        echo -e " 💡 \033[1;33m ~/.gashrc file not found, skipping...\033[0m"
     fi
 
-    echo -e " ✅ \033[1;32m Gash successfully uninstalled.\033[0m"
+    # Remove the Gash directory
+    local GASH_DIR
+    GASH_DIR="${GASH_DIR:-$HOME/.gash}"
+
+    if [ -d "$GASH_DIR" ]; then
+        echo -e " 💡 \033[1;32m Removing Gash at ~/.gash ...\033[0m"
+        rm -rf "$GASH_DIR" > /dev/null 2>&1
+
+        # Failsafe: if the directory still exists, try with sudo
+        if [ -d "$GASH_DIR" ]; then
+            echo -e " ⚠️ \033[1;33m Failed to remove Gash ~/.gash directory, trying with sudo...\033[0m"
+            sudo rm -rf "$GASH_DIR" >/dev/null 2>&1
+
+            if [ -d "$GASH_DIR" ]; then
+                echo -e " ⛔ \033[1;31m Failed to remove Gash ~/.gash directory, please remove it manually.\033[0m"
+            fi
+        fi
+    else
+        echo -e " 💡 \033[1;33m Gash directory at ~/.gash not found, skipping...\033[0m"
+    fi
+
+    echo -e " ✅ \033[1;32mGash successfully uninstalled.\033[0m"
+    echo -e " 💡 \033[1;37mPlease restart your terminal to apply changes.\033[0m"
+
+    # Clean up backup files created by sed (if any)
+    for profile_file in "${profile_files[@]}"; do
+        if [ -f "${profile_file}.bak" ]; then
+            rm -f "${profile_file}.bak"
+        fi
+    done
 }
 
 # Define custom help function
@@ -667,7 +701,7 @@ function gash_help() {
         echo -e " > \e[0;33mpskill\033[0m \e[0;36mPROCESS_NAME\033[0m - \e[1;37mKill all processes by name.\033[0m"
         echo -e " > \e[0;33mportkill\033[0m \e[0;36mPORT\033[0m - \e[1;37mKill all processes by port.\033[0m"
         echo -e " > \e[0;33mstop_services\033[0m \e[0;36m[--force]\033[0m - \e[1;37mStop well-known services like Apache, Nginx, MySQL, MariaDB, Pgsql, redis, memcached, etc.\033[0m"
-        echo -e " > \e[0;33muninstall_gash\033[0m - \e[1;37mUninstall Gash and clean up configurations.\033[0m"
+        echo -e " > \e[0;33mgash_uninstall\033[0m - \e[1;37mUninstall Gash and clean up configurations.\033[0m"
 
         echo -e " > \e[0;33m..\033[0m - \e[1;37mChange to the parent directory.\033[0m"
         echo -e " > \e[0;33m...\033[0m - \e[1;37mChange to the parent's parent directory.\033[0m"

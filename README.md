@@ -137,7 +137,7 @@ Gash comes with an automated uninstaller.
 To remove Gash and restore your original configuration:
 
 ```sh
-uninstall_gash
+gash_uninstall
 ```
 
 Then, restart your terminal.
@@ -189,7 +189,7 @@ Then, restart your terminal.
   * `quit`: Stops well-known services (`apache2`, `nginx`, `mysql`, etc.) with the `--force` flag.
   * `ports`: Lists open network ports.
   * `all_colors`: Prints all available terminal colors with ANSI escape codes.
-  * `uninstall_gash`: Uninstalls Gash and cleans up configurations.
+  * `gash_uninstall`: Uninstalls Gash and cleans up configurations.
 
 ### Helpers (Functions)
 
