@@ -35,10 +35,14 @@ if [ ! -d "$HOME/.gash" ]; then
     return
 fi
 
+# "local" warning, quote expansion warning, sed warning, `local` warning
+# shellcheck disable=SC2039,SC2016,SC2001,SC3043
+
 # define some constants
 BASH_NAME="Gash"
 GASH_VERSION="1.0.0"
 GASH_DIR="$HOME/.gash"
+
 
 ###########################################################
 #                    History Configuration                #

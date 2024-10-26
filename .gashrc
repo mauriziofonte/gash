@@ -3,7 +3,9 @@
 
 # Path to your Gash installation.
 export GASH_BASH=$HOME/.gash/gash.sh
+export GASH_COMPLETION=$HOME/.gash/bash_completion
 
 if [ -f $GASH_BASH ]; then
-    source $GASH_BASH
+    source $GASH_BASH # This loads Gash
+    source $GASH_COMPLETION # This loads Gash completion
 fi

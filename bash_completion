@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# Bash completion for Gash functions
+
+# Ensure that Gash functions are available by checking for one core Gash function, like `gadd_tag`.
+if ! declare -f gadd_tag > /dev/null; then
+  return
+fi
+
+# Completion function for Gash
+__gash_complete() {
+  local current_word previous_word
+  current_word="${COMP_WORDS[COMP_CWORD]}"
+  previous_word="${COMP_WORDS[COMP_CWORD - 1]}"
+
+  # Define main Gash commands and options
+  local commands="disk_usage_fs largest_files largest_dirs find_large_dirs hgrep gadd_tag gdel_tag"
+  
+  case "${previous_word}" in
+    # For gadd_tag and gdel_tag, check if in git repo and suggest tags accordingly
+    gadd_tag | gdel_tag)
+      if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        COMPREPLY=($(compgen -W "$(git tag)" -- "${current_word}"))
+      else
+        COMPREPLY=()
+      fi
+      ;;
+    # For Gash commands, suggest available functions
+    *)
+      COMPREPLY=($(compgen -W "${commands}" -- "${current_word}"))
+      ;;
+  esac
+}
+
+# Activate completion for each Gash function
+complete -o default -F __gash_complete gadd_tag
+complete -o default -F __gash_complete gdel_tag
+complete -o default -F __gash_complete disk_usage_fs
+complete -o default -F __gash_complete largest_files
+complete -o default -F __gash_complete largest_dirs
+complete -o default -F __gash_complete find_large_dirs
+complete -o default -F __gash_complete hgrep
