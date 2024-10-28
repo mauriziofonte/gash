@@ -145,8 +145,11 @@ function __add_alias_if_supported() {
     local alias_name="$2"
     local alias_command="$3"
 
-    if command -v "$binary_name" &> /dev/null; then
-        alias "$alias_name"="$alias_command"
+    BINARY=$(command -v "$binary_name" 2>/dev/null)
+
+    # If BINARY exists, then, create an alias replacing __CMD_BINARY with the binary path
+    if [ -n "$BINARY" ]; then
+        alias "$alias_name"="${alias_command//__CMD_BINARY/$BINARY}"
     fi
 }
 
@@ -192,16 +195,57 @@ alias chgrp='chgrp --preserve-root'
 alias reboot='sudo /sbin/reboot'
 alias shutdown='sudo /sbin/shutdown'
 
-# PHP & Composer version-specific aliases
-for version in 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
-    version_alias=${version//./}
-    __add_alias_if_supported "php$version" "php$version_alias" "/usr/bin/php$version -d allow_url_fopen=1 -d memory_limit=2048M"
-    __add_alias_if_supported "php$version" "composer$version_alias" "/usr/bin/php$version -d allow_url_fopen=1 -d memory_limit=2048M /usr/local/bin/composer"
-done
+# Determine the latest version of PHP (if present) and add specific aliases
+if command -v php &> /dev/null; then
+    # Latest PHP version
+    PHP_LV=$(ls -1 /usr/bin/php* | grep -oP '\d+\.\d+' | sort -V | tail -n1)
 
-# Additional Composer-specific aliases
-__add_alias_if_supported "composer" "composer" "/usr/bin/php -d allow_url_fopen=1 -d memory_limit=2048M /usr/local/bin/composer"
-__add_alias_if_supported "composer" "composer-packages-update" "composer global update"
+    # PHP & Composer version-specific aliases
+    for version in 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
+        version_alias=${version//./}
+        __add_alias_if_supported "php$version" "php$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M"
+    done
+
+    # Default PHP version
+    alias php="/usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M"
+
+    if command -v composer &> /dev/null; then
+        COMPOSER_BINARY=$(command -v composer)
+        echo "Composer binary: $COMPOSER_BINARY"
+        for version in 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
+            version_alias=${version//./}
+            __add_alias_if_supported "php$version" "composer$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
+        done
+
+        # Default composer on PHP LV
+        alias composer="/usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
+
+        # Composer global update
+        alias composer-packages-update="$COMPOSER_BINARY global update"
+
+        # Composer self-update
+        alias composer-self-update="sudo $COMPOSER_BINARY self-update"
+    fi
+
+    if command -v composer1 &> /dev/null; then
+        COMPOSER_BINARY=$(command -v composer1)
+        for version in  7.2 7.1 7.0 5.6; do
+            version_alias=${version//./}
+            __add_alias_if_supported "php$version" "1composer$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
+        done
+
+        # Composer self-update
+        alias composer1-self-update="sudo $COMPOSER_BINARY self-update"
+    fi
+
+    # Check if ~/.config/composer/vendor/bin/hte-cli exists and add aliases
+    if [ -f ~/.config/composer/vendor/bin/hte-cli ]; then
+        alias hte="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli create"
+        alias hte-create="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli create"
+        alias hte-remove="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli remove"
+        alias hte-details="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli details"
+    fi
+fi
 
 # Docker-related aliases
 __add_alias_if_supported "docker" "dcls" "docker container ls -a"
