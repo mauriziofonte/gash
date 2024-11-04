@@ -11,8 +11,10 @@ if [ -x "`which inxi 2>&1`" ]; then
 fi
 
 # Greet the fantastic person behind the screen
+GASH_USER_NAME=$(gash_username)
 echo
-echo -e "\033[0;36m💻 G\033[0;33ma\033[38;5;214ms\033[0;32mh \033[1;37mGash, Another SHell!\033[0m - Hello, \033[1;32m$GASH_USER_NAME!\033[0m"
+echo -e "\033[0;36m💻 G\033[0;33ma\033[38;5;214ms\033[0;32mh\033[0m -- \033[1;37mGash, Another SHell!\033[0m"
+echo -e "👋 Hello, \033[1;32m$GASH_USER_NAME\033[0m!"
 gash_inspiring_quote
 echo -e "\033[1;97m✨\033[0m \033[38;5;214mHave a nice day!\033[0m \033[1;97m😊\033[0m"
 echo

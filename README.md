@@ -102,15 +102,15 @@ Gash works out of the box, but it shines when you install these optional tools:
 | `traceroute`     | `mtr`       | Interactive network diagnostics          |
 
 
-### Install recommended tools:
+### Install recommended tools
 
-#### Debian/Ubuntu:
+#### Debian/Ubuntu
 
 ```sh
 sudo apt install most multitail pydf mtr htop colordiff
 ```
 
-#### macOS (with Homebrew):
+#### macOS (with Homebrew)
 
 ```sh
 brew install most multitail pydf mtr htop colordiff
@@ -141,6 +141,18 @@ gash_uninstall
 ```
 
 Then, restart your terminal.
+
+## Upgrading Gash 🚀
+
+To upgrade Gash to the latest version, run the dedicated _Gash Helper_ function
+
+```sh
+gash_upgrade
+```
+
+This will fetch the latest version from the repository and update your local configuration.
+
+Remember to restart your terminal to apply the changes.
 
 ## Full Features List
 
@@ -189,6 +201,10 @@ Then, restart your terminal.
   * `quit`: Stops well-known services (`apache2`, `nginx`, `mysql`, etc.) with the `--force` flag.
   * `ports`: Lists open network ports.
   * `all_colors`: Prints all available terminal colors with ANSI escape codes.
+* **Gash Helper Functions**:
+  * `gash_help`: Displays a list of available Gash commands. (Also, help is shown if you type `help`, at the end of the prompt.)
+  * `gash_upgrade`: Upgrades Gash to the latest version.
+  * `gash_inspiring_quote`: Displays an inspiring quote.
   * `gash_uninstall`: Uninstalls Gash and cleans up configurations.
 
 ### Helpers (Functions)

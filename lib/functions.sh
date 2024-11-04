@@ -669,6 +669,81 @@ gash_uninstall() {
     done
 }
 
+gash_upgrade() {
+    local GASH_DIR
+    GASH_DIR="${GASH_DIR:-$HOME/.gash}"
+
+    # Check if Gash is installed
+    if [ ! -d "$GASH_DIR/.git" ]; then
+        print_error "Gash is not installed. Please refer to https://github.com/mauriziofonte/gash."
+        return 1
+    fi
+
+    # Get the current directory
+    local CURRENT_DIR
+    CURRENT_DIR=$(pwd)
+
+    echo -e " 💡 \033[1;32mUpgrading Gash in $GASH_DIR...\033[0m"
+    cd "$GASH_DIR" || { print_error "Failed to change directory to $GASH_DIR"; exit 1; }
+
+    # Fetch latest tags
+    if ! command git fetch --tags origin; then
+        FETCH_ERROR="Failed to fetch updates. Please check your network connection and try manually with 'git fetch'."
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        print_error "$FETCH_ERROR"
+        return 1
+    fi
+
+    # Get the latest tag
+    local LATEST_TAG
+    LATEST_TAG="$(git describe --tags "$(git rev-list --tags --max-count=1)" 2>/dev/null)"
+    if [ -z "$LATEST_TAG" ]; then
+        echo -e " ⚠️ \033[1;33m No tags found. Using the latest commit on the default branch.\033[0m"
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        return 0
+    fi
+
+    # Check current version
+    local CURRENT_TAG
+    CURRENT_TAG="$(git describe --tags --abbrev=0 2>/dev/null)"
+    if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
+        local RELEASE_DATE
+        RELEASE_DATE="$(git log -1 --format=%ai "$CURRENT_TAG")"
+        echo -e " ✅ \033[1;32mGash is already up-to-date ($CURRENT_TAG, released on $RELEASE_DATE).\033[0m"
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        return 0
+    fi
+
+    # Checkout the latest release tag
+    if ! git checkout "$LATEST_TAG" >/dev/null 2>&1; then
+        print_error "Failed to checkout tag $LATEST_TAG."
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        return 1
+    fi
+
+    if ! git reset --hard "$LATEST_TAG" >/dev/null 2>&1; then
+        print_error "Failed to reset to $LATEST_TAG."
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        return 1
+    fi
+
+    echo -e " ✅ \033[1;32mSuccessfully upgraded Gash to version $LATEST_TAG.\033[0m"
+
+    # Clean up git history to save space
+    echo -e " 💡 \033[1;32mCleaning up Git repository...\033[0m"
+    if ! git reflog expire --expire=now --all; then
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        print_error "Your version of git is out of date. Please update it!"
+    fi
+    if ! git gc --auto --aggressive --prune=now; then
+        cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+        print_error "Your version of git is out of date. Please update it!"
+    fi
+
+    cd "$CURRENT_DIR" || { print_error "Failed to change directory to $CURRENT_DIR"; exit 1; }
+    echo -e " ✅ \033[1;32mGash upgrade completed successfully.\033[0m"
+}
+
 gash_inspiring_quote() {
     # Check if tput is available, and fallback to 60 if not
     if command -v tput &> /dev/null; then
@@ -701,6 +776,32 @@ gash_inspiring_quote() {
 
     # unset the quotes array
     unset TTY_WIDTH QUOTES_FILE quotes
+}
+
+gash_username() {
+    # Check if "whoami" command exists and is executable
+    if command -v whoami >/dev/null 2>&1; then
+        USER_NAME=$(whoami)
+    
+    # Fallback to "id -un" if available
+    elif command -v id >/dev/null 2>&1 && id -un >/dev/null 2>&1; then
+        USER_NAME=$(id -un)
+    
+    # Fallback to "id -u" and grep /etc/passwd if previous methods are unavailable
+    elif command -v id >/dev/null 2>&1; then
+        USER_ID=$(id -u)
+        USER_NAME=$(grep "^.*:.*:$USER_ID:" /etc/passwd | cut -d':' -f1)
+        
+        # If no username was found in /etc/passwd, default to UNKNOWN_USERNAME
+        if [ -z "$USER_NAME" ]; then
+            USER_NAME="UNKNOWN_USERNAME"
+        fi
+    else
+        # If all methods fail, set to UNKNOWN_USERNAME
+        USER_NAME="UNKNOWN_USERNAME"
+    fi
+
+    echo "$USER_NAME"
 }
 
 # Define custom help function
@@ -736,6 +837,8 @@ function gash_help() {
         echo -e " > \e[0;33mportkill\033[0m \e[0;36mPORT\033[0m - \e[1;37mKill all processes by port.\033[0m"
         echo -e " > \e[0;33mstop_services\033[0m \e[0;36m[--force]\033[0m - \e[1;37mStop well-known services like Apache, Nginx, MySQL, MariaDB, Pgsql, redis, memcached, etc.\033[0m"
         echo -e " > \e[0;33mgash_inspiring_quote\033[0m - \e[1;37mDisplay an inspiring quote, to enlighten your day.\033[0m"
+        echo -e " > \e[0;33mgash_username\033[0m - \e[1;37mGet the current username.\033[0m"
+        echo -e " > \e[0;33mgash_upgrade\033[0m - \e[1;37mUpgrade Gash to the latest version.\033[0m"
         echo -e " > \e[0;33mgash_uninstall\033[0m - \e[1;37mUninstall Gash and clean up configurations.\033[0m"
 
         echo -e " > \e[0;33m..\033[0m - \e[1;37mChange to the parent directory.\033[0m"
