@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# Minimal expect mock.
+# The real code calls: expect -f <script> -- <args...>
+# We ignore the script and print deterministic output.
+
+cat <<'OUT'
+spawn ssh-add -- /home/user/.ssh/key1
+Agent pid 9222
+The agent has no identities.
+Identity added: /home/user/.ssh/key1 (user@example.com)
+spawn ssh-add -- /home/user/.ssh/key2
+Identity added: /home/user/.ssh/key2 (user2@example.com)
+OUT

@@ -1,4 +1,4 @@
-# Gash - Gash, Another SHell 🚀
+# Gash - Gash, Another SHell
 
 > Oh Gash, was it _really_ necessary?
 
@@ -6,22 +6,24 @@
 
 ## Why Gash?
 
-* **🚀 Faster workflows**: Jump between directories, manage Git repos, and stop services in one-liners.
-* **🎨 Colorful output**: Command-line information that stands out and helps you focus.
-* **💡 Smarter shell**: Aliases, functions, and an informative prompt that simplifies tasks.
-* **⚡ Lightweight**: No bloat—just the tools you need.
+* **Faster workflows**: Jump between directories, manage Git repos, and stop services in one-liners.
+* **Colorful output**: Command-line information that stands out and helps you focus.
+* **Smarter shell**: Aliases, functions, and an informative prompt that simplifies tasks.
+* **Lightweight**: No bloat—just the tools you need.
 
-## Features At A Glance 👀
+## Features At A Glance
 
 * **Intelligent Prompt**: See everything you need (username, Git branch, jobs, etc.) at a glance.
 * **Productivity Aliases**: Shortcuts for file operations, Git commands, and service management.
 * **Convenient Functions**: One-liners to extract archives, list the largest files, or kill processes by port.
+* **Bash Completion**: Tab-complete Gash functions (and Git tags for tag helpers).
+* **Unload / Restore Session**: Turn off Gash in the current shell and restore the previous state.
 * **Colorful Output**: Enhanced color schemes for better visibility (with `LS_COLORS`, Git status, etc.).
 * **Cross-platform**: Works seamlessly on Linux, macOS, and Windows (WSL).
 
 Check out the [full features list](#full-features-list) for a detailed breakdown.
 
-## Quickstart 🌟
+## Quickstart
 
 Get Gash up and running in **under 60 seconds**:
 
@@ -52,7 +54,7 @@ If no `.bash_profile` is found, the installer will create one for you.
 
 ## Features Breakdown
 
-### 🖥️ Custom Command Prompt
+### Custom Command Prompt
 
 Your new prompt shows:
 
@@ -66,7 +68,7 @@ Your new prompt shows:
 [maurizio@server]:~/projects (main*)[j2] $  # Git branch, jobs, exit code
 ```
 
-### ⚙️ Built-in Aliases
+### Built-in Aliases
 
 Gash improves everyday commands:
 
@@ -77,7 +79,7 @@ Gash improves everyday commands:
 
 And [many more](#aliases)!
 
-### 📂 Useful Functions
+### Useful Functions
 
 Save time with these built-in utilities:
 
@@ -87,10 +89,33 @@ Save time with these built-in utilities:
 * **`pskill process_name`**: Kill all processes by name.
 * **`portkill port_number`**: Kill processes running on a specific port.
 * **`stop_services`**: Stop well-known services like Apache, MySQL, Redis, Docker, etc.
+* **`gash_unload`**: Restore your shell state and remove Gash (current session only).
 
 And [many more](#helpers-functions)!
 
-## Power Up with Additional Tools 💪
+### Bash completion
+
+Gash ships with a dedicated completion script (`bash_completion`). Once sourced (see `~/.gashrc`), it:
+
+* Suggests all public Gash functions (excluding internal helpers)
+* For `gadd_tag` / `gdel_tag`, suggests Git tags when you are inside a Git repository
+
+### Unload Gash (session-only)
+
+If you want to temporarily disable Gash in your current terminal (without uninstalling anything), run:
+
+```sh
+gash_unload
+```
+
+This performs a best-effort restore of the previous shell state (prompt variables, history settings, plus aliases/functions introduced by Gash).
+To re-enable Gash in the same terminal:
+
+```sh
+source ~/.gashrc
+```
+
+## Power Up with Additional Tools
 
 Gash works out of the box, but it shines when you install these optional tools:
 
@@ -100,7 +125,6 @@ Gash works out of the box, but it shines when you install these optional tools:
 | `less`           | `most`      | Better paging for long files             |
 | `top`            | `htop`      | Enhanced process viewer                  |
 | `traceroute`     | `mtr`       | Interactive network diagnostics          |
-
 
 ### Install recommended tools
 
@@ -116,11 +140,116 @@ sudo apt install most multitail pydf mtr htop colordiff
 brew install most multitail pydf mtr htop colordiff
 ```
 
-## Customization 🛠️
+## Customization
 
 Gash is fully customizable. Want to add your own aliases or functions? Easy!
 
-### Create a `~/.bash_local` file:
+### Configuration files you can create
+
+Gash is meant to be sourced from your shell startup files and will optionally load a few user-owned config files.
+These files are the recommended way to customize behavior without editing the Gash repo.
+
+#### `~/.gashrc` (entry point)
+
+This is the file your `.bashrc`/`.bash_profile` sources. The installer creates it if missing.
+It defines where Gash lives and loads both the main script and completion:
+
+```sh
+# ~/.gashrc
+export GASH_BASH="$HOME/.gash/gash.sh"
+export GASH_COMPLETION="$HOME/.gash/bash_completion"
+
+if [ -f "$GASH_BASH" ]; then
+  # Loads Gash (functions, aliases, prompt)
+  source "$GASH_BASH"
+  # Loads bash completion for Gash functions
+  source "$GASH_COMPLETION"
+fi
+```
+
+Developer tip (working on a local checkout): you can point `GASH_BASH`/`GASH_COMPLETION` to a repo clone, or symlink your clone to `~/.gash`.
+
+#### `~/.bash_aliases` (your personal aliases)
+
+If present, Gash loads it near the end of startup. This is a good place for aliases that are specific to your machine/team.
+
+```sh
+# ~/.bash_aliases
+alias k=kubectl
+alias tf=terraform
+alias dcu='docker compose up -d'
+```
+
+#### `~/.bash_local` (your local environment + tooling)
+
+If present, Gash loads it after `~/.bash_aliases`. Use it for environment variables, PATH changes, and tool initialization.
+This is ideal for development tooling that must be available in every terminal.
+
+Example: enable `nvm` (Node.js version manager) reliably in interactive shells:
+
+```sh
+# ~/.bash_local
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$NVM_DIR/nvm.sh"
+fi
+
+# Optional: load bash completion for nvm (if you want it)
+if [ -s "$NVM_DIR/bash_completion" ]; then
+  # shellcheck disable=SC1091
+  . "$NVM_DIR/bash_completion"
+fi
+```
+
+Example: common Cloud/dev defaults (AWS, GCP, Kubernetes):
+
+```sh
+# ~/.bash_local
+
+# AWS
+export AWS_PROFILE="dev"
+export AWS_REGION="eu-west-1"
+
+# GCP (example: pick a default project)
+export CLOUDSDK_CORE_PROJECT="my-dev-project"
+
+# kubectl: default namespace/context helpers (optional)
+alias kctx='kubectl config current-context'
+alias kns='kubectl config set-context --current --namespace'
+```
+
+Note: prefer keeping secrets out of `~/.bash_local` (use your OS keychain/credential helpers where possible).
+
+#### `~/.gash_ssh_credentials` (optional: SSH key auto-unlock)
+
+If this file exists, Gash may attempt to add SSH keys to your running `ssh-agent` at shell startup.
+This feature is implemented by `gash_ssh_auto_unlock` and requires:
+
+* `ssh-agent` running and reachable (`ssh-add -l` must work)
+* `expect` installed (used to provide passphrases non-interactively)
+
+Format: one key per line as `PATH_TO_PRIVATE_KEY:PASS_PHRASE`.
+Empty lines and lines starting with `#` are ignored.
+
+```sh
+# ~/.gash_ssh_credentials
+# Format: /path/to/key:passphrase
+~/.ssh/id_ed25519:correct horse battery staple
+~/.ssh/work_id_rsa:my-work-passphrase
+```
+
+You can also change the location of this file:
+
+```sh
+# ~/.bash_local
+export GASH_SSH_CREDENTIALS_FILE="$HOME/.config/gash/ssh_credentials"
+```
+
+Security note: this file contains sensitive data in plain text.
+If you use it, strongly consider setting permissions to owner-read only (e.g. `chmod 600 ~/.gash_ssh_credentials`) and prefer agent/keychain-based flows when available.
+
+### Create a `~/.bash_local` file
 
 ```sh
 # ~/.bash_local example: 
@@ -130,7 +259,7 @@ greet() {   echo "Hello, $USER!" }
 
 Gash will load your custom settings automatically.
 
-## Uninstalling Gash 🔧
+## Uninstalling Gash
 
 Gash comes with an automated uninstaller.
 
@@ -142,7 +271,7 @@ gash_uninstall
 
 Then, restart your terminal.
 
-## Upgrading Gash 🚀
+## Upgrading Gash
 
 To upgrade Gash to the latest version, run the dedicated _Gash Helper_ function
 
@@ -203,6 +332,7 @@ Remember to restart your terminal to apply the changes.
   * `all_colors`: Prints all available terminal colors with ANSI escape codes.
 * **Gash Helper Functions**:
   * `gash_help`: Displays a list of available Gash commands. (Also, help is shown if you type `help`, at the end of the prompt.)
+  * `gash_unload`: Unloads Gash from the current shell session and restores the previous shell state (best-effort).
   * `gash_upgrade`: Upgrades Gash to the latest version.
   * `gash_inspiring_quote`: Displays an inspiring quote.
   * `gash_uninstall`: Uninstalls Gash and cleans up configurations.
@@ -248,10 +378,10 @@ Remember to restart your terminal to apply the changes.
   * **git add** → `ga`: Quickly adds files to staging.
   * **git commit** → `gc`: Shortcut for committing changes.
 
-## License 📝
+## License
 
 Gash is open-source and distributed under the **Apache License 2.0**.
 
-## Contributing 🤝
+## Contributing
 
 We welcome contributions! Fork the repo, open issues, or submit pull requests to help improve Gash.

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# Minimal docker mock. Default: no containers.
+if [[ "${1:-}" == "ps" ]]; then
+  exit 0
+fi
+exit 0

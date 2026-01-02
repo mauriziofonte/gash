@@ -7,7 +7,7 @@
 “In order to be irreplaceable, one must always be different.” — Coco Chanel
 “Java is to JavaScript what car is to Carpet.” — Chris Heilmann
 “Knowledge is power.” — Francis Bacon
-“Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday’s code.” — Dan Salomon
+“Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday's code.” — Dan Salomon
 “Code never lies, comments sometimes do.” — Ron Jeffries
 “The only way to go fast, is to go well.” — Robert C. Martin
 “Simplicity is the soul of efficiency.” — Austin Freeman
@@ -18,7 +18,7 @@
 “The computer was born to solve problems that did not exist before.” — Bill Gates
 “Walking on water and developing software from a specification are easy if both are frozen.” — Edward V. Berard
 “I'm not a great programmer; I'm just a good programmer with great habits.” — Kent Beck
-“It’s not a bug — it’s an undocumented feature.” — Anonymous
+“It's not a bug — it's an undocumented feature.” — Anonymous
 “A good programmer is someone who always looks both ways before crossing a one-way street.” — Doug Linder
 “Programs are meant to be read by humans and only incidentally for computers to execute.” — Donald Knuth
 “There are only two kinds of programming languages: those people always bitch about and those nobody uses.” — Bjarne Stroustrup
@@ -32,11 +32,11 @@
 “The best thing about a boolean is even if you are wrong, you are only off by a bit.” — Anonymous
 “Weeks of coding can save you hours of planning.” — Anonymous
 “Before software can be reusable it first has to be usable.” — Ralph Johnson
-“One man’s crappy software is another man’s full-time job.” — Jessica Gaston
+“One man's crappy software is another man's full-time job.” — Jessica Gaston
 “Make it work, make it right, make it fast.” — Kent Beck
 “Computers are good at following instructions, but not at reading your mind.” — Donald Knuth
 “Good code is its own best documentation.” — Steve McConnell
-“It’s hardware that makes a machine fast. It’s software that makes a fast machine slow.” — Craig Bruce
+“It's hardware that makes a machine fast. It's software that makes a fast machine slow.” — Craig Bruce
 “The most important single aspect of software development is to be clear about what you are trying to build.” — Bjarne Stroustrup
 “If builders built buildings the way programmers wrote programs, then the first woodpecker that came along would destroy civilization.” — Gerald Weinberg
 “In software, the most beautiful code, the most beautiful functions, and the most beautiful programs are sometimes not there at all.” — Jon Bentley
@@ -51,8 +51,8 @@
 “The key to performance is elegance, not battalions of special cases.” — Jon Bentley
 “Simple things should be simple, complex things should be possible.” — Alan Kay
 “Learning to program has no more to do with designing interactive software than learning to touch type has to do with writing poetry.” — Ted Nelson
-“A language that doesn’t affect the way you think about programming is not worth knowing.” — Alan Perlis
-“The trouble with programmers is that you can never tell what a programmer is doing until it’s too late.” — Seymour Cray
+“A language that doesn't affect the way you think about programming is not worth knowing.” — Alan Perlis
+“The trouble with programmers is that you can never tell what a programmer is doing until it's too late.” — Seymour Cray
 “In theory, there is no difference between theory and practice. But, in practice, there is.” — Jan L.A. van de Snepscheut
 “Programming is not about typing, it's about thinking.” — Rich Hickey
 “The difference between theory and practice is that in theory, there is no difference between theory and practice.” — Richard Moore
@@ -60,11 +60,11 @@
 “A bug is never just a mistake. It represents something bigger. An error of thinking that makes you who you are.” — Anonymous
 “If you think it's simple, then you have misunderstood the problem.” — Bjarne Stroustrup
 “Programming is the art of algorithm design and the craft of debugging errant code.” — Ellen Ullman
-“Sometimes it’s better to leave something alone, to pause, and that’s very true of programming.” — Joyce Wheeler
+“Sometimes it's better to leave something alone, to pause, and that's very true of programming.” — Joyce Wheeler
 “Good software, like good wine, takes time.” — Joel Spolsky
 “The only real mistake is the one from which we learn nothing.” — Henry Ford
 “Everything should be made as simple as possible, but not simpler.” — Albert Einstein
-“You can’t have great software without a great team, and most software teams behave like dysfunctional families.” — Jim McCarthy
+“You can't have great software without a great team, and most software teams behave like dysfunctional families.” — Jim McCarthy
 “The purpose of software engineering is to control complexity, not to create it.” — Pamela Zave
 “A good programmer is someone who always looks both ways before crossing a one-way street.” — Doug Linder
 “There is an easy way and a hard way. The hard part is finding the easy way.” — Anonymous
@@ -77,12 +77,12 @@
 “Good specifications will always improve programmer productivity far better than any programming tool or technique.” — Milt Bryce
 “The more code you have, the more places there are for bugs to hide.” — Anonymous
 “The only thing worse than starting something and failing... is not starting something.” — Seth Godin
-“You can’t trust code that you did not totally create yourself.” — Ken Thompson
+“You can't trust code that you did not totally create yourself.” — Ken Thompson
 “Deleted code is debugged code.” — Jeff Sickel
 “The best thing about a boolean is even if you are wrong, you are only off by a bit.” — Anonymous
 “A good programmer is someone who looks both ways before crossing a one-way street.” — Doug Linder
 “The best way to predict the future is to implement it.” — David Heinemeier Hansson
-“People think that computer science is the art of geniuses, but the reality is the opposite, just many people doing things that build on each other, like a wall of mini stones.” — Donald Knuth
+“People think that computer science is the art of geniuses but the actual reality is the opposite, just many people doing things that build on each other, like a wall of mini stones.” — Donald Knuth
 “I don't care if it works on your machine! We are not shipping your machine!” — Vidiu Platon
 “There is no silver bullet in software development.” — Fred Brooks
 “Programming is the art of telling another human what one wants the computer to do.” — Donald Knuth
@@ -94,7 +94,7 @@
 “Sometimes the elegant implementation is just a function. Not a method. Not a class. Not a framework. Just a function.” — John Carmack
 “Simplicity is prerequisite for reliability.” — Edsger W. Dijkstra
 “If you don't work on important problems, it's not likely that you'll do important work.” — Richard Hamming
-“All parts should go together without forcing. You must remember that the parts you are reassembling were disassembled by you. Therefore, if you can’t get them together again, there must be a reason. By all means, do not use a hammer.” — IBM Manual, 1925
+“All parts should go together without forcing. You must remember that the parts you are reassembling were disassembled by you. Therefore, if you can't get them together again, there must be a reason. By all means, do not use a hammer.” — IBM Manual, 1925
 “To understand recursion, one must first understand recursion.” — Anonymous
 “Everything that can be automated will be automated.” — Robert Cannon
 “Programming is like sex: one mistake and you have to support it for the rest of your life.” — Michael Sinz
@@ -111,7 +111,7 @@
 “Any sufficiently advanced bug is indistinguishable from a feature.” — Rich Kulawiec
 “First, solve the problem. Then, write the code.” — John Johnson
 “The question of whether a computer can think is no more interesting than whether a submarine can swim.” — Edsger W. Dijkstra
-“I think Microsoft named .Net so it wouldn’t show up in a Unix directory listing.” — Oktal
+“I think Microsoft named .Net so it wouldn't show up in a Unix directory listing.” — Oktal
 “If the code and the comments disagree, then both are probably wrong.” — Norm Schryer
 “Programming is like writing a book... except if you miss a single comma on page 126, the whole thing makes no sense.” — Anonymous
 “Programming can be fun, so can cryptography; however they should not be combined.” — Kreitzberg and Shneiderman
@@ -119,12 +119,12 @@
 “When I wrote this code, only God and I understood what I did. Now only God knows.” — Anonymous
 “If debugging is the process of removing bugs, then programming must be the process of putting them in.” — Edsger W. Dijkstra
 “One of my most productive days was throwing away 1000 lines of code.” — Ken Thompson
-“In C++ it’s harder to shoot yourself in the foot, but when you do, you blow off your whole leg.” — Bjarne Stroustrup
+“In C++ it's harder to shoot yourself in the foot, but when you do, you blow off your whole leg.” — Bjarne Stroustrup
 “The hardest part of design is keeping features out.” — Donald Norman
 “The future is already here - it's just not evenly distributed.” — William Gibson
-“The cheapest, fastest, and most reliable components are those that aren’t there.” — Gordon Bell
+“The cheapest, fastest, and most reliable components are those that aren't there.” — Gordon Bell
 “To err is human, but to really foul things up you need a computer.” — Paul Ehrlich
-“An API that isn’t comprehensible isn’t usable.” — James Gosling
+“An API that isn't comprehensible isn't usable.” — James Gosling
 “Optimism is an occupational hazard of programming; feedback is the treatment.” — Kent Beck
 “Controlling complexity is the essence of computer programming.” — Brian Kernighan
 “A problem well stated is a problem half solved.” — Charles Kettering
@@ -140,18 +140,18 @@
 “The best method for accelerating a computer is the one that boosts it by 9.8 m/s².” — Anonymous
 “I think there is a world market for maybe five computers.” — Thomas Watson
 “Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away.” — Antoine de Saint-Exupéry
-“Programming isn’t about what you know; it’s about what you can figure out.” — Chris Pine
+“Programming isn't about what you know; it's about what you can figure out.” — Chris Pine
 “Computers are useless. They can only give you answers.” — Pablo Picasso
 “Good specifications will always improve programmer productivity far better than any programming tool or technique.” — Milt Bryce
-“Any code of your own that you haven’t looked at for six or more months might as well have been written by someone else.” — Eagleson’s Law
+“Any code of your own that you haven't looked at for six or more months might as well have been written by someone else.” — Eagleson's Law
 “All problems in computer science can be solved by another level of indirection.” — Butler Lampson
 “Measuring programming progress by lines of code is like measuring aircraft building progress by weight.” — Bill Gates
 “Computers make it easier to do a lot of things, but most of the things they make it easier to do don't need to be done.” — Andy Rooney
-“The trouble with programmers is that you can never tell what a programmer is doing until it’s too late.” — Seymour Cray
+“The trouble with programmers is that you can never tell what a programmer is doing until it's too late.” — Seymour Cray
 “Software is eating the world.” — Marc Andreessen
 “Computers are good at following instructions, but not at reading your mind.” — Donald Knuth
 “The best way to predict the future is to invent it.” — Alan Kay
-“Code is like humor. When you have to explain it, it’s bad.” — Cory House
+“Code is like humor. When you have to explain it, it's bad.” — Cory House
 “In God we trust. All others must bring data.” — W. Edwards Deming
 “First, solve the problem. Then, write the code.” — John Johnson
 “Programmers are tools for converting caffeine into code.” — Unknown
@@ -159,20 +159,20 @@
 “The more code you write, the more bugs you create.” — Anonymous
 “Programs must be written for people to read.” — Harold Abelson
 “The best error message is the one that never shows up.” — Thomas Fuchs
-“The computing scientist’s main challenge is not to get confused by the complexities of his own making.” — Edsger W. Dijkstra
+“The computing scientist's main challenge is not to get confused by the complexities of his own making.” — Edsger W. Dijkstra
 “Optimism is an occupational hazard of programming.” — Kent Beck
 “Controlling complexity is the essence of computer programming.” — Brian Kernighan
 “A good programmer is someone who looks both ways before crossing a one-way street.” — Doug Linder
 “Software is a gas; it expands to fill its container.” — Nathan Myhrvold
 “Computers are like bikinis. They save people a lot of guesswork.” — Sam Ewing
 “Deleted code is debugged code.” — Jeff Sickel
-“You can’t have great software without a great team.” — Jim McCarthy
+“You can't have great software without a great team.” — Jim McCarthy
 “The best way to get accurate information on Usenet is to post something wrong and wait for corrections.” — Matthew Austern
 “The first 90% of the code accounts for the first 90% of the development time.” — Tom Cargill
 “One of my most productive days was throwing away 1000 lines of code.” — Ken Thompson
 “A good way to stay flexible is to write less code.” — Pragmattic Programmer
 “The best method for accelerating a computer is the one that boosts it by 9.8 m/s².” — Anonymous
-“In theory, theory and practice are the same. In practice, they’re not.” — Yogi Berra
+“In theory, theory and practice are the same. In practice, they're not.” — Yogi Berra
 “The computer was born to solve problems that did not exist before.” — Bill Gates
 “Programming can be fun, so can cryptography; however they should not be combined.” — Kreitzberg and Shneiderman
 “Walking on water and developing software from a specification are easy if both are frozen.” — Edward V. Berard
@@ -181,7 +181,7 @@
 “Computers are like Old Testament gods; lots of rules and no mercy.” — Joseph Campbell
 “Programming is the art of algorithm design and the craft of debugging errant code.” — Ellen Ullman
 “Software is like entropy: It is difficult to grasp, weighs nothing, and obeys the Second Law of Thermodynamics.” — Norman Augustine
-“As soon as we started programming, we found to our surprise that it wasn’t as easy to get programs right as we had thought.” — Maurice Wilkes
+“As soon as we started programming, we found to our surprise that it wasn't as easy to get programs right as we had thought.” — Maurice Wilkes
 “There are only two hard things in Computer Science: cache invalidation and naming things.” — Phil Karlton
 “A language that doesn't affect the way you think about programming is not worth knowing.” — Alan Perlis
 “Measuring programming progress by lines of code is like measuring aircraft building progress by weight.” — Bill Gates
@@ -205,7 +205,7 @@
 “A code base is never finished, only abandoned.” — Paul Graham
 “Computers themselves, and software yet to be developed, will revolutionize the way we learn.” — Steve Jobs
 “A great programmer is just someone who can think of better ways to do things.” — Linus Torvalds
-“There’s no skill in writing code, only in writing great code.” — Robert C. Martin
+“There's no skill in writing code, only in writing great code.” — Robert C. Martin
 “The best code is the one that is never written.” — Martin Fowler
 “Quality means doing it right when no one is looking.” — Henry Ford
 “Perfection is not attainable, but if we chase perfection, we can catch excellence.” — Vince Lombardi
@@ -214,7 +214,7 @@
 “Engineering is not the science of creation but the science of making the impossible possible.” — Freeman Dyson
 “In programming, it's often the small decisions, not the big ones, that make the difference.” — Donald Knuth
 “Making things simple is complicated work.” — Brian Kernighan
-“Success in tech doesn’t happen because of the absence of problems, but because of how we solve them.” — Marissa Mayer
+“Success in tech doesn't happen because of the absence of problems, but because of how we solve them.” — Marissa Mayer
 “A program is never less than 90% complete, and never more than 95% complete.” — Terry Baker
 “If debugging is the process of removing software bugs, then programming must be the process of putting them in.” — Edsger W. Dijkstra
 “The only true wisdom is in knowing you know nothing.” — Socrates
@@ -222,64 +222,64 @@
 “Security is a state of mind.” — Kevin Mitnick
 “To err is human, to debug is divine.” — Frank Sauer
 “Good software takes 10% talent, 20% skill, and 70% perseverance.” — Charles Petzold
-“It’s not what the code looks like; it’s what the code does.” — Anonymous
+“It's not what the code looks like; it's what the code does.” — Anonymous
 “Creativity is intelligence having fun.” — Albert Einstein
 “Some people dream of success, while others get up every morning and make it happen.” — Wayne Huizenga
 “Coding is today's language of creativity.” — Maria Klawe
 “The aim of engineering is to solve complex problems in simple ways.” — Robert Bosch
 “Creativity is contagious. Pass it on.” — Albert Einstein
-“Don’t document the problem, fix it.” — Atli Björgvin Oddsson
-“There’s no single recipe for success in software engineering, but avoiding mistakes is a good start.” — Fred Brooks
+“Don't document the problem, fix it.” — Atli Björgvin Oddsson
+“There's no single recipe for success in software engineering, but avoiding mistakes is a good start.” — Fred Brooks
 “If you automate a mess, you get an automated mess.” — Rod Michael
 “Bad software can be written with good intentions, but it takes effort to write truly good software.” — Rich Hickey
 “Each line of code you write comes with a liability of bugs.” — Martin Fowler
 “Time is an illusion. Debugging time doubly so.” — Anonymous
-“The most reliable components are those that aren’t there.” — Gordon Bell
+“The most reliable components are those that aren't there.” — Gordon Bell
 “Great software works like magic, but it's really just mathematics.” — John von Neumann
 “Perfection is finally attained not when there is no longer anything to add, but when there is no longer anything to take away.” — Antoine de Saint-Exupéry
 “The quieter you become, the more you are able to hear.” — Rumi
 “Every complex problem has a simple, easy-to-understand wrong answer.” — H. L. Mencken
-“Developing software is like building a brick wall; it’s best to use the right tools and have a plan.” — Steve Jobs
+“Developing software is like building a brick wall; it's best to use the right tools and have a plan.” — Steve Jobs
 “Wisdom is not a product of schooling but of the lifelong attempt to acquire it.” — Albert Einstein
-“In the end, it’s all about the users. If they’re happy, we’ve done our job right.” — Jeff Bezos
+“In the end, it's all about the users. If they're happy, we've done our job right.” — Jeff Bezos
 “Some people call it engineering; I call it turning coffee into code.” — Anonymous
 “If you think good architecture is expensive, try bad architecture.” — Brian Foote
-“Every program has two purposes: the one for which it was written and another for which it wasn’t.” — Alan J. Perlis
+“Every program has two purposes: the one for which it was written and another for which it wasn't.” — Alan J. Perlis
 “Programming is a skill best acquired by practice and example rather than from books.” — Alan Turing
 “Testing leads to failure, and failure leads to understanding.” — Burt Rutan
 “The surest way to make a computer go faster is to throw it out a window.” — Anonymous
-“A bad system is easy to maintain until it’s in production.” — Anonymous
+“A bad system is easy to maintain until it's in production.” — Anonymous
 “Good engineering is about finding the simplest solution to a problem.” — Anonymous
 “The best way to learn a new language is to spend time immersed in it.” — Richard Stallman
 “To be a great developer, you must have a great mind for problem-solving.” — Marissa Mayer
-“Wisdom is the reward you get for a lifetime of listening when you’d have preferred to talk.” — Doug Larson
+“Wisdom is the reward you get for a lifetime of listening when you'd have preferred to talk.” — Doug Larson
 “Logic will get you from A to Z; imagination will get you everywhere.” — Albert Einstein
 “Effort only fully releases its reward after a person refuses to quit.” — Napoleon Hill
 “Errors should never pass silently, unless explicitly silenced.” — Tim Peters
-“There’s only one way to improve coding: code.” — Anonymous
+“There's only one way to improve coding: code.” — Anonymous
 “Software is only as valuable as its usefulness.” — Kent Beck
-“If you can’t explain it simply, you don’t understand it well enough.” — Albert Einstein
+“If you can't explain it simply, you don't understand it well enough.” — Albert Einstein
 “Only those who attempt the absurd can achieve the impossible.” — Albert Einstein
 “A good coder can fix a bug in seconds but can prevent one in the first place.” — Anonymous
 “A computer will do what you tell it to do, not what you want it to do.” — Anonymous
 “Knowledge is knowing what to do; wisdom is knowing what not to do.” — Anonymous
-“Don’t try to solve a problem until you’re sure you understand it.” — Brian Kernighan
-“Today’s code is tomorrow’s legacy.” — Anonymous
+“Don't try to solve a problem until you're sure you understand it.” — Brian Kernighan
+“Today's code is tomorrow's legacy.” — Anonymous
 “Being a good software engineer requires patience and the will to learn something new every day.” — John Romero
 “The tools we use have a profound impact on our habits and capabilities.” — Kent Beck
-“Don’t call yourself a hacker unless you’ve solved a problem creatively.” — Paul Graham
-“It’s a fine line between a bug and a feature.” — Bruce Schneier
+“Don't call yourself a hacker unless you've solved a problem creatively.” — Paul Graham
+“It's a fine line between a bug and a feature.” — Bruce Schneier
 “A secure system is only as secure as its weakest link.” — Kevin Mitnick
 “Complexity kills. It sucks the life out of developers, it makes products hard to plan, build, and test.” — Ray Ozzie
 “Good code is its own best documentation.” — Steve McConnell
-“There’s a difference between knowing the path and walking the path.” — Morpheus, The Matrix
+“There's a difference between knowing the path and walking the path.” — Morpheus, The Matrix
 “Great things are not done by impulse, but by a series of small things brought together.” — Vincent Van Gogh
 “The work you do while you procrastinate is probably the work you should be doing for the rest of your life.” — Jessica Hische
-“It’s never a mistake to try something new.” — Anonymous
+“It's never a mistake to try something new.” — Anonymous
 “The journey of a thousand miles begins with a single step.” — Lao Tzu
 “Not everything that counts can be counted, and not everything that can be counted counts.” — William Bruce Cameron
 “Security is not a product, but a process.” — Bruce Schneier
-“Programming isn’t about writing code; it’s about solving problems.” — Anonymous
+“Programming isn't about writing code; it's about solving problems.” — Anonymous
 “Good design is as little design as possible.” — Dieter Rams
 “Data is a precious thing and will last longer than the systems themselves.” — Tim Berners-Lee
 “Computers are useless. They can only give you answers.” — Pablo Picasso
@@ -288,13 +288,325 @@
 “Coding is like poetry; you write it to make it yours.” — Anonymous
 “The act of writing code is the art of reducing complexity.” — John Romero
 “A good software design minimizes the effort required to maintain it.” — Robert C. Martin
-“If you don’t fail, you’re not even trying.” — Denzel Washington
+“If you don't fail, you're not even trying.” — Denzel Washington
 “Code is read more often than it is written.” — Guido van Rossum
 “Programs are made to be understood by humans and only incidentally for computers to execute.” — Donald Knuth
-“Hackers don’t cause data breaches; people do.” — Troy Hunt
+“Hackers don't cause data breaches; people do.” — Troy Hunt
 “Computers make excellent and efficient servants, but I have no wish to serve under them.” — Mr. Spock, Star Trek
 “Simplicity is the most difficult thing to secure in this world.” — William Strunk Jr.
 “A complex system that works is invariably found to have evolved from a simple system that worked.” — John Gall
-“In computer science, we don’t just solve problems, we figure out how to prevent them.” — Edsger W. Dijkstra
+“In computer science, we don't just solve problems, we figure out how to prevent them.” — Edsger W. Dijkstra
 “Software quality is not by accident; it is always by design.” — W. Edwards Deming
 “The best way to learn is to understand where your predecessors went wrong.” — Anonymous
+“Stop thinking about your servers as pets, and start thinking about them as cattle.” — Unknown
+“You build it, you run it.” — Werner Vogels
+“You can't just buy DevOps in a box. DevOps is not a product, it's a culture.” — Damon Edwards
+“DevOps is the union of people, processes, and products to enable continuous delivery of value to our end users.” — Donovan Brown
+“DevOps is about creating a culture of shared responsibility and continuous learning.” — Nicole Forsgren
+“DevOps is not just about automation, it's about fostering a culture of innovation and experimentation.” — John Allspaw
+“DevOps is the key to unlocking agility, speed, and innovation in software delivery.” — Nicole Forsgren
+“DevOps is a cultural and professional movement focused on how we build and operate high-velocity organizations.” — Jez Humble
+“DevOps is not just about the development and operations teams working together, but it's also about the entire organization adopting a mindset of innovation and collaboration.” — Patrick Debois
+“The goal of DevOps is to enable a culture and practice of releasing software that is reliable and secure, at the speed of business.” — James Wickett
+“DevOps is not a one-size-fits-all solution. It requires a deep understanding of your organization's culture, processes, and technology.” — Helen Beal
+“The true power of DevOps lies in its ability to transform not just how we deliver software, but how we work together as a team.” — Mirco Hering
+“DevOps is not just about automation; it's also about creating a culture of shared responsibility and continuous improvement.” — Chris Aniszczyk
+“DevOps is about enabling teams to build, test, and release software faster and more reliably, driving innovation and business growth.” — Unknown
+“DevOps is not just about the technology; it's also about the people and processes that enable us to deliver value to our customers quickly and efficiently.” — Laura Bell
+“DevOps is a journey, not a destination. It's about continuously improving how we deliver software and respond to customer needs.” — Dominica DeGrandis
+“DevOps is not a buzzword; it's a fundamental shift in how we think about delivering value to our customers.” — Unknown
+“DevOps is not a job title, it's a mindset.” — Patrick Debois
+“DevOps is about breaking down silos and fostering a culture of collaboration and shared ownership.” — Dominica DeGrandis
+“DevOps is not a goal, but a never-ending process of continual improvement.” — Jez Humble
+“There is no compression algorithm for experience. You can't learn certain lessons without going through the curve.” — Werner Vogels
+“The most powerful tool we have as developers is automation.” — Scott Hanselman
+“Cybersecurity is much more than a matter of IT—it's a business imperative.” — Stéphane Nappo
+“As cybersecurity leaders, we must craft a message of influence. Security is a culture, not a control.” — Britney Hommertzheim
+“There are only two types of companies: those that have been breached and know it, and those that have been breached and don't know it yet.” — Ted Schlein
+“Insider threats often cost more than external attacks—because insiders know how to hide it.” — Dr. Larry Ponemon
+“It takes 20 years to build a reputation and a few minutes of a cyber-incident to ruin it.” — Stéphane Nappo
+“Effective incident response relies on two things: information and organization.” — Robert Davis
+“There's no silver bullet in cybersecurity; only layered defense works.” — James Scott
+“If you think you know everything about cybersecurity, it was probably poorly explained to you.” — Stéphane Nappo
+“Hacking is about exploring limits—pushing what can be built or broken.” — Mark Zuckerberg
+“Security used to be an inconvenience; now it's essential.” — Martina Navratilova
+“A breach isn't the disaster—mishandling it is.” — Serene Davis
+“Total security would mean no connectivity—cybersecurity is about balance.” — Dan Farmer
+“Hackers don't need names or proximity—just opportunity.” — Robert Mueller
+“Cybercrime is the single biggest threat to every company on earth.” — Ginni Rometty
+“If you think tech will solve your security problems, you don't understand either.” — Bruce Schneier
+“Even garbage can become intel—hackers look everywhere.” — Kevin Mitnick
+“In a connected world, cybersecurity is a shared responsibility.” — Newton Lee
+“Any system can be hacked—this is no longer a secret.” — Dan Kaminsky
+“Spend more on coffee than cybersecurity? You're asking to be hacked.” — Richard Clarke
+“Hackers rarely know your full tech stack—and they don't need to.” — John McAfee
+“Millions on firewalls and encryption mean nothing if humans are the weakest link.” — Kevin Mitnick
+“No internet-connected technology is unhackable.” — Abhijit Naskar
+“Security always feels excessive—until it's too late.” — Robbie Sinclair
+“A determined young hacker with time and curiosity is a serious threat.” — Cory Doctorow
+“In cybercrime, even reality gets distorted into different truths.” — Roderick Vincent
+“Phishing remains unsolvable—there's no patch for human gullibility.” — Mike Danseglio
+“Cybersecurity isn't just IT—it's business resilience.” — Stéphane Nappo
+“The internet is becoming lethal—governments regulate what can kill.” — Bruce Schneier
+“Data protection needs a mindset shift—it's no longer optional.” — Elizabeth Denham
+“Privacy—like eating and breathing—is one of life's basic requirements.” — Katherine Neville
+“You can't have privacy without good security. Anyone saying otherwise is delusional.” — Dr. Larry Ponemon
+“A data breach isn't just technical—it's a customer exodus waiting to happen.” — Christopher Graham
+“The intent behind hacking is what defines its ethical character.” — Kevin Mitnick
+“In a digital world, mass surveillance without consent is outrageously unacceptable.” — Al Gore
+“There are two kinds of companies: those hacked, and those that don't know it yet.” — John Chambers
+“Dismissing privacy because you have 'nothing to hide' is like dismissing free speech because you have nothing to say.” — Edward Snowden
+“Insider threats are underestimated—because smart insiders know how to vanish.” — Dr. Larry Ponemon
+“Want to keep your online privacy? Stay off the internet.” — Abhijit Naskar
+“Cloud computing is really a no-brainer for any start-up because it allows you to test your business plan very quickly for little money.” — Brad Jefferson
+“The cloud services companies of all sizes…The cloud is for everyone. The cloud is a democracy.” — Marc Benioff
+“Cloud computing is empowering, as anyone in any part of world with internet connection and a credit card can run and manage applications in the state of the art global datacenters; companies leveraging cloud will be able to innovate cheaper and faster.” — Unknown
+“With the cloud, individuals and small businesses can snap their fingers and instantly set up enterprise-class services.” — Roy Stephan
+“Cloud computing is often far more secure than traditional computing, because companies like Google and Amazon can attract and retain cyber-security personnel of a higher quality than many governmental agencies.” — Dr. Chris Harding
+“In the pre-cloud ERA, the cost of building software was so high that we often have to define a scope and leave out functionality which we feel doesn't fetch the ROI for automation. Cloud makes whatever that was previously left out of scope as candidate for automation now!” — Suresh Sambandam
+“Clouds are platforms you build on that are paid for on a consumption/utility basis.” — CloudOps Team
+“Artificial Intelligence, deep learning, machine learning — whatever you're doing if you don't understand it — learn it. Because otherwise you're going to be a dinosaur within 3 years.” — Mark Cuban
+“Simple models and a lot of data trump more elaborate models based on less data.” — Peter Norvig
+“More data beats clever algorithms, but better data beats more data.” — Peter Norvig
+“AI is the tool. Intention is the operator.” — Unknown
+“Smart machines still need wise humans.” — Unknown
+“Artificial intelligence, real consequences.” — Unknown
+“Code the future. Keep your conscience updated.” — Unknown
+“We built AI to learn. Now we must learn to lead.” — Unknown
+“Good data. Good models. Better decisions.” — Unknown
+“Automation is not an excuse.” — Unknown
+“Intelligence without empathy is incomplete.” — Unknown
+“Your prompt is your lever.” — Unknown
+“AI will not replace you. A person using AI might.” — Unknown
+“Ethics is the source code of society.” — Unknown
+“Garbage in. Confident nonsense out.” — Unknown
+“AI is fast. Wisdom is slow. We need both.” — Unknown
+“Machines learn from data. People learn from people.” — Unknown
+“Trust is harder to train than any model.” — Unknown
+“Automate tasks, not responsibility.” — Unknown
+“AI extends reach, not accountability.” — Unknown
+“Prediction is easy. Understanding is hard.” — Unknown
+“AI is powerful. Humility is safer.” — Unknown
+“Every dataset hides a story, and a bias.” — Unknown
+“AI is a mirror that reflects our values.” — Unknown
+“The best answers start with better questions.” — Unknown
+“If it is not explainable, it is not dependable.” — Unknown
+“Innovation grows. Guardrails matter.” — Unknown
+“Machine intelligence is the last invention that humanity will ever need to make.” — Nick Bostrom
+“In the long term, artificial intelligence and automation are going to be taking over so much of what gives humans a feeling of purpose.” — Matt Bellamy
+“We are entering a new world. The technologies of machine learning, speech recognition, and natural language understanding are reaching a nexus of capability.” — Amy Stapleton
+“Artificial intelligence is growing up fast, as are robots whose facial expressions can elicit empathy and make your mirror neurons quiver.” — Diane Ackerman
+“I am telling you, the world's first trillionaires are going to come from somebody who masters AI and all its derivatives, and applies it in ways we never thought of.” — Mark Cuban
+“Predicting the future isn't magic, it's artificial intelligence.” — Dave Waters
+“Without big data, you are blind and deaf and in the middle of a freeway.” — Geoffrey Moore
+“In God we trust, all others bring data.” — W Edwards Deming
+“No great marketing decisions have ever been made on qualitative data.” — John Sculley
+“Torture the data, and it will confess to anything.” — Ronald Coase
+“With data collection, 'the sooner the better' is always the best answer.” — Marissa Mayer
+“Big data isn't about bits, it's about talent.” — Douglas Merrill
+“Without a systematic way to start and keep data clean, bad data will happen.” — Donato Diorio
+“You can have data without information, but you cannot have information without data.” — Daniel Keys Moran
+“If we have data, let's look at data. If all we have are opinions, let's go with mine.” — Jim Barksdale
+“Above all else, show the data.” — Edward R. Tufte
+“Big data is at the foundation of all of the megatrends that are happening today, from social to mobile to the cloud to gaming.” — Chris Lynch
+“Where there is data smoke, there is business fire.” — Thomas Redman
+“Big Data are becoming the new raw material of business.” — Craig Mundie
+“I visualize a time when we will be to robots what dogs are to humans, and I'm rooting for the machines.” — Claude Shannon
+“The best thing about standards is that there are so many to choose from.” — Unknown
+“The possession of facts is knowledge; the use of them is wisdom.” — Thomas Jefferson
+“Every man has a right to his opinion, but no man has a right to be wrong in his facts.” — Bernard Mannes Baruch
+“In theory, there's no difference between theory and practice. In practice, however, this is seldom true.” — Jan L. A. van de Snepscheut
+“To study and not think is a waste. To think and not study is dangerous.” — Confucius
+“Not everything that can be counted counts, and not everything that counts can be counted.” — Albert Einstein
+“There is nothing worse than aggressive stupidity.” — Johann Wolfgang von Goethe
+“You can tell whether a man is clever by his answers… You can tell whether a man is wise by his questions.” — Naguib Mahfouz
+“To improve is to change; to be perfect is to change often.” — Sir Winston Churchill
+“We are what we pretend to be, so we must be careful about what we pretend to be.” — Kurt Vonnegut
+“Laws too gentle are seldom obeyed; too severe, seldom executed.” — Benjamin Franklin
+“See first that the design is wise and just; that ascertained, pursue it resolutely.” — William Shakespeare
+“The problem is not that there are problems. The problem is expecting otherwise and thinking that having problems is a problem.” — Theodore Rubin
+“Foolproof systems don't take into account the ingenuity of fools.” — Gene Brown
+“Go ahead and do it, it is easier to apologize than to get permission.” — Admiral Grace Hopper
+“The measure of success is not whether you have a tough problem to deal with, but whether or not it is the same problem you had last year.” — John Foster Dulles
+“Education is what you get when you read the fine print; Experience is what you get when you don't.” — Pete Seeger
+“Experience is the hardest kind of teacher. It gives you the test first and the lesson afterwards.” — Unknown
+“Never write when you can talk. Never talk when you can nod. And never put anything in an e-mail.” — Eliot Spitzer
+“I have noted that persons with bad judgment are most insistent that we do what they think best.” — Lionel Abe
+“Most people don't even know what sysadmins do, but trust me, if they all took a lunch break at the same time they wouldn't make it to the deli before you ran out of bullets protecting your canned goods from roving bands of mutants.” — Unknown
+“I haven't lost my mind, it's backed up on tape… somewhere.” — Unknown
+“Jesus saves! The rest of us better make backups.” — Unknown
+“There are 10 kinds of people in this world, those who understand binary, and those who don't.” — Unknown
+“Passwords are like underwear. You shouldn't leave them out where people can see them. You should change them regularly. And you shouldn't loan them out to strangers.” — Unknown
+“Instant Sysadmin just add caffeine.” — Unknown
+“There's no place like 127.0.0.1.” — Unknown
+“A SysAdmin is like Popeye, but instead of spinach, you give them caffeine.” — Unknown
+“I accrue PTO time through sleep deprivation.” — James485
+“Sysadmin??! No, but I did stay at a Holiday Inn Express last night.” — Unknown
+“CISOs need to frame cybersecurity as a business enabler, not just a cost center. Show how security investments drive customer trust and long-term resilience.” — Matt Malone
+“CISOs were never trained to think about public company reporting and disclosure—this new level of visibility and responsibility has changed the game for them.” — Myrna Soto
+“Cybersecurity isn't about avoiding risk — it's about managing it intelligently. The future belongs to leaders who make cyber resilience a competitive advantage.” — Unknown
+“AI is accelerating both cyber threats and regulatory responses. Policymakers are scrambling to put guardrails in place, but the pace of innovation is making it harder than ever to keep up.” — Adam Fletcher
+“Computer science education cannot make anybody an expert programmer any more than studying brushes and pigment can make somebody an expert painter.” — Eric S. Raymond
+“Given enough eyeballs, all bugs are shallow.” — Linus Torvalds
+“A clever person solves a problem. A wise person avoids it.” — Albert Einstein
+“Being a good software engineer is 3% talent, 97% not being distracted by the internet.” — Unknown
+“There are only two hard problems in Computer Science: cache invalidation and naming things.” — Phil Karlton
+“It is easier to optimize correct code than to correct optimized code.” — Unknown
+“Java: Write Once, Debug Everywhere.” — Unknown
+“Perl - The only language that looks the same before and after RSA encryption.” — Keith Bostic
+“I invented the term Object-Oriented, and I can tell you I did not have C++ in mind.” — Alan Kay
+“Debugging is anticipated with distaste, performed with reluctance, and bragged about forever.” — Dan Kaminsky
+“Memory is like an orgasm. It's a lot better if you don't have to fake it.” — Seymour Cray
+“The most exciting phrase to hear in science, the one that heralds new discoveries, is not 'Eureka!' but 'That's funny...'” — Isaac Asimov
+“A computer lets you make more mistakes faster than any other invention in human history, with the possible exceptions of handguns and tequila.” — Mitch Ratcliffe
+“Engineers are all basically high-functioning autistics who have no idea how normal people do stuff.” — Cory Doctorow
+“Any sufficiently advanced magic is indistinguishable from a rigged demonstration.” — Unknown
+“Vi is a subset of evil.” — Unknown
+“The difference between theory and practice is smaller in theory than in practice.” — Unknown
+“There are only 3 numbers of interest to a computer scientist: 1, 0 and infinity.” — Unknown
+“Debuggers don't remove bugs. They only show them in slow motion.” — Unknown
+“Don't try to solve a problem until you're sure you understand it.” — Brian Kernighan
+“A good tester prevents problems; a great tester finds them.” — Keith Klain
+“In software testing, the earlier a bug is found, the cheaper it is to fix.” — Karen N. Johnson
+“Quality is never an accident; it is always the result of intelligent effort.” — John Ruskin
+“Testing is not responsible for creating quality; only for assessing it.” — Daniel J. Galin
+“Testing is a skill. While this statement is obvious, it is profound in its implications.” — Bret Pettichord
+“The job of testing is not to find bugs but to find features that don't meet the user's needs.” — Michael Bolton
+“The goal of a tester is to stop the software from shipping, not to find bugs.” — Michael Stahl
+“The art of software testing is to ensure that no bugs make it to production.” — Anonymous
+“Testing can show the presence of bugs but never their absence.” — Edsger W. Dijkstra
+“Testing is a skill that you can learn. It's more a mindset than a specific process.” — Janet Gregory
+“Testing is an infinite process of comparing the invisible to the ambiguous in order to avoid the unthinkable happening to the anonymous.” — James Bach
+“Good software testing is a challenging intellectual process.” — Cem Kaner
+“Software developers are always testing as they build. Testers are always building as they test.” — Michael Bolton
+“Testing is a critical part of software development. Without testing, the software is likely to have defects.” — John Tukey
+“Testing is a process that calls for repeatability, consistency, and attention to detail.” — Dave Kelly
+“Testing is not about finding all the bugs and defects. It's about finding the critical ones that matter.” — Anonymous
+“Testing is like cleaning. It's only visible when you don't do it.” — Anonymous
+“Testing is the process of evaluating a product by learning about it through exploration and experimentation.” — Michael Bolton
+“Testing is the only job where you can be happy for having your work rejected.” — Anonymous
+“Testing is not about making things go wrong; it's about finding out what could go wrong.” — Anonymous
+“Testing is not about breaking software; it's about breaking illusions about the software.” — Anonymous
+“Testing is not about proving something right but discovering where things go wrong.” — Michael Bolton
+“Testing is a process that should convince us that our software works, not just confirm that it doesn't.” — Jeff Patton
+“The purpose of automated testing is to reduce the risk of failure of your application.” — Frank DeGeorge
+“Automation is good, so long as you know exactly where to put the machine.” — Eliyahu M. Goldratt
+“If you don't automate your testing process, you're driving your car with your eyes closed.” — Gwen Stewart
+“Automated testing is crucial for software quality.” — Julian Harty
+“With automation tools, you can take the time to refine your tests and make them less brittle.” — Martin Fowler
+“The secret to scalable automation is making sure you're testing the right thing at a high level.” — Lisa Crispin
+“Automating tests is like investing in a reliable credit score. Manual testing is like investing in a lucky rabbit's foot.” — Brett Speckman
+“Automation is a bit like a cheat code for software testing; using this hack, you can practice agile testing without having to do it all manually.” — Torbjorn Gyllebring
+“Test automation isn't automatic; it requires a lot more thought and design than just recording a test script.” — Michael Bolton
+“Automation is an accelerator, not a replacement. It's about putting brains in your muscles.” — Chris Launey
+“Manual software testing will always be needed. Automating everything is impossible.” — Alan Page
+“The best part of manual testing is that it can find something automated testing never will.” — Michael Bolton
+“Manual testing is like a fine wine that only gets better with time.” — Vijay Nair
+“Manual testing is the act of exercising the software with the intent of finding bugs and vulnerabilities that may exist.” — Network Intelligence India
+“Manual testing can uncover issues that automated tests would never find.” — David Cohn
+“Testing validates requirements, and manual testing provides the necessary feedback for requirements refinement and improvement.” — Rex Black
+“Manual testing is still the best way to catch the things that hackers catch.” — Curtis Melody
+“Manual testing enables us to tailor testing to your unique application needs.” — Michael Larsen
+“Manual testing is the only way to verify that the business requirements are successfully met and the customer gets the desired experience.” — Priyanka Sharma
+“The purpose of performance testing is not to break the system but to improve the performance.” — Jamie Posey
+“Performance testing is not about finding bugs but bottlenecks.” — Scott Barber
+“Performance testing helps identify the scalability bottlenecks and validate the non-functional requirements of the application.” — K.D. Khattar
+“Performance testing is an art and science mixed together.” — Sujit Karpe
+“Effective performance testing involves a combination of technical skill, common sense, and creativity.” — James Pulley
+“Performance testing allows you to find out how your application handles a variety of user scenarios.” — Naomi Karten
+“Performance testing helps organizations identify system performance bottlenecks and implement corrective measures before it's too late.” — Julian Harty
+“Performance testing is a key process in ensuring your application is not only functional but also performs efficiently across different user scenarios.” — Pravin Jangale
+“Quality is not an act, it is a habit.” — Aristotle
+“Quality is never an accident; it is always the result of high intention, sincere effort, intelligent direction and skillful execution.” — William A. Foster
+“In the race for quality, there is no finish line.” — David T. Kearns
+“Quality is everyone's responsibility.” — W. Edwards Deming
+“Quality is more important than quantity. One home run is much better than two doubles.” — Steve Jobs
+“Quality is not just meeting customer needs, it's also meeting future expectations.” — Masaaki Imai
+“Quality is when the customer comes back, not the product.” — Hermann Tietz
+“Testing is not a phase, it's a way of life.” — Elisabeth Hendrickson
+“A true professional does not waste the time and money of other people by handing over software that is not reasonably free of obvious bugs.” — Daniel Read
+“Correctness is clearly the prime quality. If a system does not do what it is supposed to do, then everything else about it matters little.” — Bertrand Meyer
+“Be clear about the difference between your role as a programmer and as a tester. The tester in you must be suspicious, uncompromising, hostile.” — Boris Beizer
+“More than the act of testing, the act of designing tests is one of the best bug preventers known.” — Boris Beizer
+“Testing leads to failure, and failure leads to understanding.” — Burt Rutan
+“Never allow the same bug to bite you twice.” — Steve Maguire
+“When you catch bugs early, you also get fewer compound bugs.” — Paul Graham
+“Don't just fix the bugs; fix whatever permitted the bugs in the first place.” — Anonymous
+“Software bugs are like cockroaches; there are probably dozens hiding in difficult to reach places for every one you find and fix.” — Donald G. Firesmith
+“If you don't care about quality, you can meet any other requirement.” — Gerald M. Weinberg
+“Pay attention to zeros. If there is a zero, someone will divide by it.” — Cem Kaner
+“If you're too busy hiding your lack of knowledge, you won't feel comfortable asking questions.” — Elisabeth Hendrickson
+“Quality takes time and reduces quantity, so it makes you, in a sense, less efficient.” — Tom Demarcco
+“Judge us on the quality of our products, and not the quantity of our paperwork.” — Michel Van Mellaerts
+“In many ways, being a good tester is harder than being a good developer because testing requires not only a very good understanding of the development process and its products.” — John D. McGregor
+“Quality is a product of a conflict between programmers and testers.” — Yegor Bugayenko
+“I think quality is core. You need to treat quality as a product internally, and you do not outsource a core product.” — Mik Kersten
+“Quality is the best business plan.” — John Lasseter
+“There is no such thing as a perfect method. Methods always can be improved upon.” — Walter Daiber
+“Quality needs to be constantly improved, but it is just as necessary to make sure that quality never deteriorates.” — Shigeru Mizuno
+“Trying to improve software quality by increasing the amount of testing is like trying to lose weight by weighing yourself more often.” — Steve McConnell
+“Everything is broken. Steps to reproduce: do anything. Expected result: it should work.” — Felipe Knorr Kuhn
+“When debugging, novices insert corrective code; experts remove defective code.” — Richard Pattis
+“If builders built buildings the way programmers wrote programs, then the first woodpecker that came along would destroy civilization.” — Gerald Weinberg
+“The bitterness of poor quality remains long after the sweetness of meeting the schedule has been forgotten.” — Karl Wiegers
+“First do it, then do it right, then do it better.” — Addy Osmani
+“Fix the cause, not the symptom.” — Steve Maguire
+“Optimism is an occupational hazard of programming: feedback is the treatment.” — Kent Beck
+“Before software can be reusable it first has to be usable.” — Ralph Johnson
+“Make it work, make it right, make it fast.” — Kent Beck
+“There are two ways of constructing a software design: One way is to make it so simple that there are obviously no deficiencies.” — C.A.R. Hoare
+“Good judgment comes from experience, and experience comes from bad judgment.” — Fred Brooks
+“You can't have great software without a great team, and most software teams behave like dysfunctional families.” — Jim McCarthy
+“Conceptual integrity is the most important consideration in system design.” — Fred Brooks
+“As a rule, software systems do not work well until they have been used, and have failed repeatedly, in real applications.” — Dave Parnas
+“It's not at all important to get it right the first time. It's vitally important to get it right the last time.” — Andrew Hunt and David Thomas
+“Ever Tried. Ever failed. No matter. Try again. Fail again. Fail better.” — Samuel Beckett
+“If we fail, we fall. If we succeed – then we will face the next task.” — Gandalf (Tolkien)
+“If you're not failing, you're not trying hard enough.” — Martin Fowler
+“Share the pain and find together the solution.” — Lisa Crispin
+“A great tester gives programmers immediate feedback on what they did right and what they did wrong.” — Joel Spolsky
+“Blame doesn't fix bugs.” — Anonymous
+“Testing has to be an integral part of developing software and not a separate phase.” — James Sivak
+“When a flower doesn't bloom you fix the environment in which it grows, not the flower.” — Alexander Den Heijer
+“There is no such thing as a self-made man. You will reach your goals only with the help of others.” — George Shinn
+“The strength of the team is each individual member. The strength of each member is the team.” — Phil Jackson
+“Find a group of people who challenge and inspire you, spend a lot of time with them, and it will change your life forever.” — Amy Poehler
+“None of us is as smart as all of us.” — Ken Blanchard
+“The funny thing about quality is that it can always be improved.” — Anonymous
+“If we want to be serious about quality, it is time to get tired of finding bugs and start preventing their happening in the first place.” — Alan Page
+“QA Engineers solve problems you didn't know exist, in ways you do not understand.” — Anonymous
+“A tester's job is to ask the questions that the user would ask, not the ones the developer expects.” — Michael Bolton
+“Software testers do not make software; they only make it better.” — Anonymous
+“Software testers succeed where others fail.” — Anonymous
+“The principal objective of software testing is to give confidence in the software.” — Anonymous
+“Bad programmers have all the answers. Good testers have all the questions.” — Gil Zilberfeld
+“To tell somebody that he is wrong is called criticism. To do so officially is called testing.” — Gaurav Khurana
+“Testers don't like to break things; they like to dispel the illusion that things work.” — Kaner, Bach, Pettichord
+“One man's crappy software is another man's full time job.” — Jessica Gaston
+“To an optimist, the glass is half full. To a pessimist, the glass is half empty. To a good tester, the glass is twice as big as it needs to be.” — Anonymous
+“Developer: There is no I in TEAM. Tester: We can't spell BUGS without U.” — Dima Al-Adham
+“Every tester has the heart of a developer … in a jar on their desk.” — Prasad Aldangadi
+“Software testers always go to heaven; they've already had their fair share of hell.” — Anonymous
+“Just because you've counted all the trees doesn't mean you've seen the forest.” — Anonymous
+“Discovering the unexpected is more important than confirming the known.” — George E. P. Box
+“As ironic as it seems, the challenge of a tester is to test as little as possible. Test less, but test smarter.” — Federico Toledo
+“The more effort I put into testing the product conceptually at the start of the process, the less effort I had to put into manually testing at the end.” — Trish Khoo
+“I do believe it's important for testers to know the market that their client or their employer is in.” — Karen N. Johnson
+“Automated scripts are checking known paths for expected results. That's not truly testing.” — Angie Jones
+“Just like with everything else, tools won't give you good results unless you know how, when, and why to apply them.” — Christin Wiedemann
+“While we may understand the problem, it is critical for us to change our thinking, our practices, and continuously evolve.” — Mike Lyles
+“A good test is one that has a high probability of breaking the code if there is a problem.” — Michael Bolton
+“The only real mistake is the one from which we learn nothing.” — John Powell
+“Simple systems are not feasible because they require infinite testing.” — Norman R. Augustine
+“If we want to be serious about quality, it is time to be tired of finding bugs and start preventing them.” — Alan Page
+“It's hard enough to find an error in your code when you're looking for it; it's even harder when you assume your code is error-free.” — Steve McConnell
+“Beware of bugs in the above code; I have only proved it correct, not tried it.” — Donald Knuth
+“Performance engineering requires a good collection of metrics and tools to deliver business results.” — Todd DeCapua
+“If an end user perceives bad performance, her next click will likely be on your-competition.com.” — Ian Molyneaux
+“Assigning test automation to a dedicated team of automators often delays feedback in a way that reduces its value.” — Dale Emery
+“Automation does not do what testers used to do; it extends the reach of the tester's work.” — James Bach
+“It's automation, not automagic.” — Jim Hazen
+“Right or wrong, it's very pleasant to break something from time to time.” — Fyodor Dostoevsky
+“Irreproducible bugs become highly reproducible right after delivery to the customer.” — Michael Stahl
+“Q: How many testers does it take to change a lightbulb? A: None, they just tell you the room is dark.” — Anonymous
+“All code is guilty until proven innocent.” — Anonymous

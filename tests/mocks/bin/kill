@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Minimal kill mock for pskill tests.
+# Records calls to $MOCK_KILL_LOG if set.
+
+if [[ -n "${MOCK_KILL_LOG:-}" ]]; then
+  printf '%s\n' "$*" >> "$MOCK_KILL_LOG"
+fi
+
+exit 0

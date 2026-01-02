@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# Minimal systemctl mock.
+# Used by stop_services: systemctl is-active --quiet <service>
+
+if [[ "${1:-}" == "is-active" && "${2:-}" == "--quiet" ]]; then
+  # If MOCK_SYSTEMCTL_ACTIVE is set to a service name, report active.
+  svc="${3:-}"
+  if [[ -n "${MOCK_SYSTEMCTL_ACTIVE:-}" && "$svc" == "$MOCK_SYSTEMCTL_ACTIVE" ]]; then
+    exit 0
+  fi
+  exit 3
+fi
+
+# Accept stop/start to avoid touching the host system.
+if [[ "${1:-}" == "stop" || "${1:-}" == "start" ]]; then
+  exit 0
+fi
+
+echo "unexpected systemctl invocation: $*" >&2
+exit 2

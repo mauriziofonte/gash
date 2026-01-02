@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Set LS_COLORS if not already set
-if [ -z "$LS_COLORS" ]; then
+if [ -z "${LS_COLORS-}" ]; then
     LS_COLORS+='*.7z=38;5;40:*.WARC=38;5;40:*.a=38;5;40:*.arj=38;5;40:*.br=38;5;40:'
     LS_COLORS+='*.bz2=38;5;40:*.cpio=38;5;40:*.gz=38;5;40:*.lrz=38;5;40:*.lz=38;5;40:'
     LS_COLORS+='*.lzma=38;5;40:*.lzo=38;5;40:*.rar=38;5;40:*.s7z=38;5;40:*.sz=38;5;40:'
@@ -30,7 +30,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 # Set LESS_TERMCAP variables for syntax highlighting in less if supported
-if [ -n "$LESS" ]; then
+if [ -n "${LESS-}" ]; then
     export LESS_TERMCAP_mb=$'\E[01;31m'       # Begin blinking
     export LESS_TERMCAP_md=$'\E[01;38;5;74m'  # Begin bold
     export LESS_TERMCAP_me=$'\033[0m'           # End mode
@@ -50,19 +50,43 @@ if command -v dircolors > /dev/null 2>&1; then
         eval "$(dircolors -b)"
     fi
 
-    alias dir='dir --color=auto'
-    alias vdir='vdir --color=auto'
-    alias grep='grep --color=auto'
-    alias fgrep='fgrep --color=auto'
-    alias egrep='egrep --color=auto'
+    # Prefer GNU ls colors when available; on macOS BSD ls uses -G.
+    __gash_ls_color_flag=''
+    if ls --color=auto . >/dev/null 2>&1; then
+        __gash_ls_color_flag='--color=auto'
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        __gash_ls_color_flag='-G'
+    fi
 
-    # Aliases for ls
-    alias ls='ls --color=auto'
-    alias ll='ls -l --color=auto'
-    alias la='ls -la --color=auto'
-    alias l='ls -CF --color=auto'
-    alias lash='ls -lash --color=auto'
-    alias sl='ls --color=auto'  # Correct common typo
+    if command -v dir >/dev/null 2>&1 && [[ -n "$__gash_ls_color_flag" ]]; then
+        alias dir="dir $__gash_ls_color_flag"
+    fi
+    if command -v vdir >/dev/null 2>&1 && [[ -n "$__gash_ls_color_flag" ]]; then
+        alias vdir="vdir $__gash_ls_color_flag"
+    fi
+    if grep --color=auto -q "" /dev/null >/dev/null 2>&1; then
+        alias grep='grep --color=auto'
+        alias fgrep='fgrep --color=auto'
+        alias egrep='egrep --color=auto'
+    fi
+
+    # Aliases for ls (only add color flag if it's meaningful for this platform)
+    if [[ -n "$__gash_ls_color_flag" ]]; then
+        alias ls="ls $__gash_ls_color_flag"
+        alias ll="ls -l $__gash_ls_color_flag"
+        alias la="ls -la $__gash_ls_color_flag"
+        alias l="ls -CF $__gash_ls_color_flag"
+        alias lash="ls -lash $__gash_ls_color_flag"
+        alias sl="ls $__gash_ls_color_flag"  # Correct common typo
+    else
+        alias ll='ls -l'
+        alias la='ls -la'
+        alias l='ls -CF'
+        alias lash='ls -lash'
+        alias sl='ls'  # Correct common typo
+    fi
+
+    unset __gash_ls_color_flag
 else
     alias ll='ls -l'
     alias la='ls -la'
@@ -81,11 +105,10 @@ alias quit='stop_services --force'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias cd..='cd ..'
-alias ...="cd ../../../"
-alias ....="cd ../../../../"
-alias .....="cd ../../../../"
-alias .4="cd ../../../../"
-alias .5="cd ../../../../.."
+alias ....='cd ../../..'
+alias .....='cd ../../../..'
+alias .4='cd ../../../..'
+alias .5='cd ../../../../..'
 
 # Safer versions of common commands
 alias cp='cp -iv'
@@ -100,7 +123,7 @@ alias bc='bc -l'
 alias ports='netstat -tulanp'
 
 # WSL specific alias
-if grep -qi "microsoft" /proc/version && [ -n "$WSLENV" ]; then
+if grep -qi "microsoft" /proc/version && [ -n "${WSLENV-}" ]; then
     alias wslrestart="history -a && cmd.exe /C wsl --shutdown"
     alias wslshutdown="history -a && cmd.exe /C wsl --shutdown"
     alias explorer="explorer.exe ."
@@ -145,6 +168,7 @@ function __add_alias_if_supported() {
     local alias_name="$2"
     local alias_command="$3"
 
+    local BINARY
     BINARY=$(command -v "$binary_name" 2>/dev/null)
 
     # If BINARY exists, then, create an alias replacing __CMD_BINARY with the binary path
@@ -211,7 +235,6 @@ if command -v php &> /dev/null; then
 
     if command -v composer &> /dev/null; then
         COMPOSER_BINARY=$(command -v composer)
-        echo "Composer binary: $COMPOSER_BINARY"
         for version in 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
             version_alias=${version//./}
             __add_alias_if_supported "php$version" "composer$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
@@ -245,6 +268,9 @@ if command -v php &> /dev/null; then
         alias hte-remove="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli remove"
         alias hte-details="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli details"
     fi
+
+    # Avoid leaking temporary variables into the user shell.
+    unset PHP_LV COMPOSER_BINARY version_alias
 fi
 
 # Docker-related aliases

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Minimal ssh-add mock.
+# - `ssh-add -l`:
+#   - if MOCK_SSH_AGENT=0 -> simulate no agent
+#   - else -> simulate agent present but empty
+# - any other args -> succeed silently
+
+if [[ "${1:-}" == "-l" ]]; then
+  if [[ "${MOCK_SSH_AGENT:-1}" == "0" ]]; then
+    echo "Could not open a connection to your authentication agent." >&2
+    exit 2
+  fi
+  echo "The agent has no identities."
+  exit 1
+fi
+
+exit 0

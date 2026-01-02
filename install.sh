@@ -6,9 +6,9 @@
 # Installation script for Gash. It clones the Gash repository and updates the shell configuration files.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.0.7
+# Version: 1.0.9
 # Release Date: 2024-10-24
-# Last Update: 2024-10-28
+# Last Update: 2026-01-02
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
@@ -20,25 +20,26 @@ gashinst_has() {
 
 gashinst_echo() {
   if [ "${QUIET-0}" -eq 1 ]; then
-    return
+    return 0
   fi
+
   command printf '%b\n' "$1"
 }
 
 gashinst_error() {
-  gashinst_echo "${RED} ⛔ $1${NC}"
+  command printf '%b\n' "${RED}Error:${NC} $1" >&2
 }
 
 gashinst_info() {
-  gashinst_echo "${CYAN} 💡 $1${NC}"
+  gashinst_echo "${CYAN}Info:${NC} $1"
 }
 
 gashinst_success() {
-  gashinst_echo "${GREEN} ✅ $1${NC}"
+  gashinst_echo "${GREEN}OK:${NC} $1"
 }
 
 gashinst_warning() {
-  gashinst_echo "${YELLOW} ⚠️ $1${NC}"
+  gashinst_echo "${YELLOW}Warning:${NC} $1"
 }
 
 gashinst_confirm() {
@@ -70,7 +71,7 @@ gashinst_try_profile() {
   if [ -z "${1-}" ] || [ ! -f "${1}" ]; then
     return 1
   fi
-  gashinst_echo "${1}"
+  command printf '%s\n' "${1}"
 }
 
 gashinst_detect_profile() {
@@ -79,7 +80,7 @@ gashinst_detect_profile() {
   fi
 
   if [ -n "${PROFILE}" ] && [ -f "${PROFILE}" ]; then
-    gashinst_echo "${PROFILE}"
+    command printf '%s\n' "${PROFILE}"
     return
   fi
 
@@ -104,7 +105,7 @@ gashinst_detect_profile() {
   fi
 
   if [ -n "$DETECTED_PROFILE" ]; then
-    gashinst_echo "$DETECTED_PROFILE"
+    command printf '%s\n' "$DETECTED_PROFILE"
   fi
 }
 
@@ -219,7 +220,7 @@ gashinst_do_install() {
   fi
 
   gashinst_info "Please restart your terminal or run 'source $GASH_PROFILE' to start using Gash."
-  gashinst_success "Enjoy using Gash 🚀"
+  gashinst_success "Enjoy using Gash"
 
   gashinst_reset
 }
@@ -238,7 +239,7 @@ set -e
 
 # Ensure the script is run with Bash
 if [ -z "$BASH_VERSION" ]; then
-  echo -e " ⛔ Gash is not compatible with the current shell. Please run the script with Bash."
+  echo -e "Error: Gash is not compatible with the current shell. Please run the script with Bash."
   exit 1
 fi
 
@@ -282,12 +283,12 @@ for arg in "$@"; do
 done
 
 gashinst_echo
-gashinst_echo "${CYAN}🚀 Welcome to the Gash installation script! 🚀${NC}"
+gashinst_echo "${CYAN}Welcome to the Gash installation script${NC}"
 
 # Prompt user for confirmation before proceeding
 gashinst_echo
 gashinst_warning "This script will install Gash. This will modify your shell configuration files."
-gashinst_confirm " ⚡ ${YELLOW}Do you want to continue?${NC}"
+gashinst_confirm "${YELLOW}Do you want to continue?${NC}"
 if [ $? -eq 1 ]; then
   gashinst_info "Sorry to see you go... Installation aborted."
   exit 0

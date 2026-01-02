@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Minimal ps mock for psgrep/pskill tests.
+# Supports: ps aux
+
+if [[ "${1:-}" == "aux" ]]; then
+  cat <<'OUT'
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.1  12345  678 ?        Ss   00:00   0:01 /sbin/init
+maurizio  2222  0.1  0.2  99999  111 pts/0    Sl   00:00   0:00 my-proc --flag
+maurizio  3333  0.0  0.1  88888  222 pts/0    Sl   00:00   0:00 another-proc
+OUT
+  exit 0
+fi
+
+# Default: behave like ps with unsupported args.
+echo "unsupported ps invocation: $*" >&2
+exit 2

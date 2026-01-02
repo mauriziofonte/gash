@@ -3,24 +3,63 @@
 # Bash completion for Gash functions
 
 # Ensure that Gash functions are available by checking for one core Gash function, like `gadd_tag`.
-if ! declare -f gadd_tag > /dev/null; then
+if ! declare -f gadd_tag >/dev/null 2>&1; then
   return
 fi
+
+# Build a whitespace-separated list of "public" Gash functions.
+# Prefer __GASH_ADDED_FUNCS (computed by gash.sh) so we don't include user-defined functions.
+__gash_public_functions() {
+  local out=""
+  local fn
+
+  if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
+    local IFS=$'\n'
+    for fn in ${__GASH_ADDED_FUNCS}; do
+      [[ -z "${fn-}" ]] && continue
+
+      case "$fn" in
+        __*|_*)
+          continue
+          ;;
+        needs_help|needs_confirm_prompt|print_error)
+          continue
+          ;;
+      esac
+
+      out+="$fn "
+    done
+
+    printf '%s' "${out% }"
+    return 0
+  fi
+
+  # Fallback: keep a minimal set if we can't detect the added functions.
+  printf '%s' "disk_usage_fs largest_files largest_dirs find_large_dirs hgrep gadd_tag gdel_tag"
+}
 
 # Completion function for Gash
 __gash_complete() {
   local current_word previous_word
   current_word="${COMP_WORDS[COMP_CWORD]}"
-  previous_word="${COMP_WORDS[COMP_CWORD - 1]}"
 
-  # Define main Gash commands and options
-  local commands="disk_usage_fs largest_files largest_dirs find_large_dirs hgrep gadd_tag gdel_tag"
+  # COMP_CWORD can be 0 in some edge cases; avoid negative indexes (bash 3 compatibility).
+  if (( COMP_CWORD > 0 )); then
+    previous_word="${COMP_WORDS[COMP_CWORD - 1]}"
+  else
+    previous_word=""
+  fi
+
+  # Define Gash commands (public functions)
+  local commands
+  commands="$(__gash_public_functions)"
   
   case "${previous_word}" in
     # For gadd_tag and gdel_tag, check if in git repo and suggest tags accordingly
     gadd_tag | gdel_tag)
-      if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        COMPREPLY=($(compgen -W "$(git tag)" -- "${current_word}"))
+      if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        # git tags are whitespace-free in normal usage; compgen uses $IFS splitting.
+        COMPREPLY=($(compgen -W "$(git tag -l 2>/dev/null)" -- "${current_word}"))
       else
         COMPREPLY=()
       fi
@@ -32,11 +71,39 @@ __gash_complete() {
   esac
 }
 
-# Activate completion for each Gash function
-complete -o default -F __gash_complete gadd_tag
-complete -o default -F __gash_complete gdel_tag
-complete -o default -F __gash_complete disk_usage_fs
-complete -o default -F __gash_complete largest_files
-complete -o default -F __gash_complete largest_dirs
-complete -o default -F __gash_complete find_large_dirs
-complete -o default -F __gash_complete hgrep
+# Activate completion for each public Gash function
+__gash_enable_completion() {
+  local fn
+  local IFS=$'\n'
+
+  # Prefer the precise list if available.
+  if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
+    for fn in ${__GASH_ADDED_FUNCS}; do
+      [[ -z "${fn-}" ]] && continue
+
+      case "$fn" in
+        __*|_*)
+          continue
+          ;;
+        needs_help|needs_confirm_prompt|print_error)
+          continue
+          ;;
+      esac
+
+      complete -o default -F __gash_complete "$fn"
+    done
+    return 0
+  fi
+
+  # Fallback registration.
+  complete -o default -F __gash_complete gadd_tag
+  complete -o default -F __gash_complete gdel_tag
+  complete -o default -F __gash_complete disk_usage_fs
+  complete -o default -F __gash_complete largest_files
+  complete -o default -F __gash_complete largest_dirs
+  complete -o default -F __gash_complete find_large_dirs
+  complete -o default -F __gash_complete hgrep
+}
+
+__gash_enable_completion
+unset -f __gash_enable_completion

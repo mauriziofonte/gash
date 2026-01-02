@@ -19,9 +19,9 @@
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.0.7
+# Version: 1.0.9
 # Release Date: 2024-10-24
-# Last Update: 2024-10-28
+# Last Update: 2026-01-02
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
@@ -33,6 +33,57 @@
 # Exit early if we don't have a ~/.gash/ directory (why are we here?)
 if [ ! -d "$HOME/.gash" ]; then
     return
+fi
+
+# Snapshot state before Gash mutates the shell (used by gash_unload).
+# This must be safe under `set -u` and must not `exit`.
+if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+    __GASH_SNAPSHOT_TAKEN=1
+
+    __GASH_ORIG_PS1_SET=0
+    if [[ -n "${PS1+x}" ]]; then __GASH_ORIG_PS1_SET=1; __GASH_ORIG_PS1="$PS1"; fi
+
+    __GASH_ORIG_PS2_SET=0
+    if [[ -n "${PS2+x}" ]]; then __GASH_ORIG_PS2_SET=1; __GASH_ORIG_PS2="$PS2"; fi
+
+    __GASH_ORIG_PROMPT_COMMAND_SET=0
+    if [[ -n "${PROMPT_COMMAND+x}" ]]; then __GASH_ORIG_PROMPT_COMMAND_SET=1; __GASH_ORIG_PROMPT_COMMAND="$PROMPT_COMMAND"; fi
+
+    __GASH_ORIG_HISTCONTROL_SET=0
+    if [[ -n "${HISTCONTROL+x}" ]]; then __GASH_ORIG_HISTCONTROL_SET=1; __GASH_ORIG_HISTCONTROL="$HISTCONTROL"; fi
+
+    __GASH_ORIG_HISTTIMEFORMAT_SET=0
+    if [[ -n "${HISTTIMEFORMAT+x}" ]]; then __GASH_ORIG_HISTTIMEFORMAT_SET=1; __GASH_ORIG_HISTTIMEFORMAT="$HISTTIMEFORMAT"; fi
+
+    __GASH_ORIG_HISTSIZE_SET=0
+    if [[ -n "${HISTSIZE+x}" ]]; then __GASH_ORIG_HISTSIZE_SET=1; __GASH_ORIG_HISTSIZE="$HISTSIZE"; fi
+
+    __GASH_ORIG_HISTFILESIZE_SET=0
+    if [[ -n "${HISTFILESIZE+x}" ]]; then __GASH_ORIG_HISTFILESIZE_SET=1; __GASH_ORIG_HISTFILESIZE="$HISTFILESIZE"; fi
+
+    shopt -q histappend; __GASH_ORIG_SHOPT_HISTAPPEND=$?
+    shopt -q checkwinsize; __GASH_ORIG_SHOPT_CHECKWINSIZE=$?
+
+    __GASH_ORIG_UMASK="$(umask)"
+
+    __GASH_PRE_FUNCS=""
+    while IFS= read -r __gash_line; do
+        set -- $__gash_line
+        __gash_name="${!#}"
+        [[ -n "${__gash_name-}" ]] && __GASH_PRE_FUNCS+="$__gash_name"$'\n'
+    done < <(declare -F)
+    unset __gash_line __gash_name
+
+    __GASH_PRE_ALIASES=""
+    while IFS= read -r __gash_line; do
+        __gash_line="${__gash_line#alias }"
+        __gash_name="${__gash_line%%=*}"
+        [[ -n "${__gash_name-}" ]] && __GASH_PRE_ALIASES+="$__gash_name"$'\n'
+    done < <(alias -p 2>/dev/null)
+    unset __gash_line __gash_name
+
+    __GASH_ADDED_FUNCS=""
+    __GASH_ADDED_ALIASES=""
 fi
 
 # "local" warning, quote expansion warning, sed warning, `local` warning
@@ -265,28 +316,47 @@ umask 022
 if [ -f "$GASH_DIR/lib/functions.sh" ]; then
     source "$GASH_DIR/lib/functions.sh"
 else
-    echo -e "${Red}Warning: Gash 'functions.sh' not found.${Color_Off}"
+    echo -e "${Red}Warning: lib/functions.sh not found; skipping.${Color_Off}"
+fi
+
+# Compute functions introduced by Gash (best-effort). Keep this list stable for gash_unload.
+if [[ -n "${__GASH_SNAPSHOT_TAKEN-}" && -z "${__GASH_ADDED_FUNCS-}" ]]; then
+    while IFS= read -r __gash_line; do
+        set -- $__gash_line
+        __gash_name="${!#}"
+        [[ -z "${__gash_name-}" ]] && continue
+        if [[ $'\n'"${__GASH_PRE_FUNCS-}" != *$'\n'"$__gash_name"$'\n'* ]]; then
+            __GASH_ADDED_FUNCS+="$__gash_name"$'\n'
+        fi
+    done < <(declare -F)
+    unset __gash_line __gash_name
 fi
 
 # Load Aliases
 if [ -f "$GASH_DIR/lib/aliases.sh" ]; then
     source "$GASH_DIR/lib/aliases.sh"
 else
-    echo -e "${Red}Warning: Gash 'aliases.sh' not found.${Color_Off}"
+    echo -e "${Red}Warning: lib/aliases.sh not found; skipping.${Color_Off}"
 fi
 
-# Load Telemetry Disabler
-if [ -f "$GASH_DIR/lib/telemetryoff.sh" ]; then
-    source "$GASH_DIR/lib/telemetryoff.sh"
-else
-    echo -e "${Red}Warning: Gash 'telemetryoff.sh' not found.${Color_Off}"
+# Compute aliases introduced by Gash (best-effort). Keep this list stable for gash_unload.
+if [[ -n "${__GASH_SNAPSHOT_TAKEN-}" && -z "${__GASH_ADDED_ALIASES-}" ]]; then
+    while IFS= read -r __gash_line; do
+        __gash_line="${__gash_line#alias }"
+        __gash_name="${__gash_line%%=*}"
+        [[ -z "${__gash_name-}" ]] && continue
+        if [[ $'\n'"${__GASH_PRE_ALIASES-}" != *$'\n'"$__gash_name"$'\n'* ]]; then
+            __GASH_ADDED_ALIASES+="$__gash_name"$'\n'
+        fi
+    done < <(alias -p 2>/dev/null)
+    unset __gash_line __gash_name
 fi
 
 # Load the Prompt
 if [ -f "$GASH_DIR/lib/prompt.sh" ]; then
     source "$GASH_DIR/lib/prompt.sh"
 else
-    echo -e "${Red}Warning: Gash 'prompt.sh' not found.${Color_Off}"
+    echo -e "${Red}Warning: lib/prompt.sh not found; skipping.${Color_Off}"
 fi
 
 # Load custom aliases from ~/.bash_aliases if it exists.

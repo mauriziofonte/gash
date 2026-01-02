@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# Minimal numfmt mock for find_large_dirs.
+# Supports: numfmt --from=auto <SIZE>
+# Returns BYTES as an integer (GNU coreutils-like behavior).
+
+if [[ "${1:-}" != "--from=auto" ]]; then
+  echo "unsupported" >&2
+  exit 2
+fi
+
+val="${2:-}"
+if [[ -z "$val" ]]; then
+  echo "0"
+  exit 0
+fi
+
+# Extract number + suffix
+num="${val%[KkMmGgTt]*}"
+suf="${val#$num}"
+
+# Default suffix-less input treated as bytes
+case "$suf" in
+  '' ) mul=1 ;;
+  K|k) mul=1024 ;;
+  M|m) mul=$((1024*1024)) ;;
+  G|g) mul=$((1024*1024*1024)) ;;
+  T|t) mul=$((1024*1024*1024*1024)) ;;
+  *) mul=1 ;;
+esac
+
+# Support simple integers only
+if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+  echo "0"
+  exit 0
+fi
+
+echo $((num * mul))

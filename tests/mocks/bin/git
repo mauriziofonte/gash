@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Use real git if available; this mock exists only if tests override PATH.
+# We forward to system git.
+
+real_git="$(command -v git)"
+if [[ -z "$real_git" ]]; then
+	echo "git not found" >&2
+	exit 127
+fi
+
+exec "$real_git" "$@"

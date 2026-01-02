@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Minimal dircolors mock outputting a safe LS_COLORS assignment.
+# The aliases file runs: eval "$(dircolors -b ...)"
+
+if [[ "${1:-}" == "-b" ]]; then
+  echo "LS_COLORS='di=01;34:fi=0:'; export LS_COLORS"
+  exit 0
+fi
+
+echo "LS_COLORS='di=01;34:fi=0:'; export LS_COLORS"
