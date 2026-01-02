@@ -229,6 +229,13 @@ This feature is implemented by `gash_ssh_auto_unlock` and requires:
 * `ssh-agent` running and reachable (`ssh-add -l` must work)
 * `expect` installed (used to provide passphrases non-interactively)
 
+By default, Gash will NOT start `ssh-agent` for you (to avoid spawning extra agents unexpectedly).
+If you want Gash to auto-start an agent when this file exists, enable it explicitly:
+
+```sh
+export GASH_SSH_AUTO_START_AGENT=1
+```
+
 Format: one key per line as `PATH_TO_PRIVATE_KEY:PASS_PHRASE`.
 Empty lines and lines starting with `#` are ignored.
 

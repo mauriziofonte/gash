@@ -7,10 +7,25 @@
 # - any other args -> succeed silently
 
 if [[ "${1:-}" == "-l" ]]; then
-  if [[ "${MOCK_SSH_AGENT:-1}" == "0" ]]; then
+  agent_present=1
+
+  # If MOCK_SSH_AGENT is set, it forces the simulated state.
+  # Otherwise, infer from SSH_AUTH_SOCK (closer to real ssh-add behavior).
+  if [[ -n "${MOCK_SSH_AGENT+x}" ]]; then
+    if [[ "${MOCK_SSH_AGENT}" == "0" ]]; then
+      agent_present=0
+    fi
+  else
+    if [[ -z "${SSH_AUTH_SOCK-}" ]]; then
+      agent_present=0
+    fi
+  fi
+
+  if [[ "$agent_present" == "0" ]]; then
     echo "Could not open a connection to your authentication agent." >&2
     exit 2
   fi
+
   echo "The agent has no identities."
   exit 1
 fi

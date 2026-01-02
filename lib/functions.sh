@@ -202,17 +202,43 @@ function __gash_read_ssh_credentials_file() {
     done < "$credentials_file"
 }
 
+function __gash_try_start_ssh_agent() {
+    # Best-effort start of ssh-agent in the current shell.
+    # Only call this from an interactive, sourced context.
+    # Returns 0 if SSH_AUTH_SOCK becomes available.
+    if ! command -v ssh-agent >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local agent_out
+    # Strip the trailing "echo Agent pid ..." to avoid noisy startup output.
+    agent_out="$(ssh-agent -s 2>/dev/null | sed '/^echo Agent pid /d' || true)"
+    if [[ -z "${agent_out-}" ]]; then
+        return 1
+    fi
+
+    # shellcheck disable=SC1090
+    eval "$agent_out" >/dev/null 2>&1 || true
+
+    if [[ -n "${SSH_AUTH_SOCK-}" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
 gash_ssh_auto_unlock() {
     # Auto-add SSH keys listed in ~/.gash_ssh_credentials using `expect`.
     # This is designed to be safe when sourced at shell startup.
-    # Run once per shell session
-    if [[ -n "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]]; then
-        return 0
-    fi
-    export GASH_SSH_AUTOUNLOCK_RAN=1
-
     local credentials_file="${GASH_SSH_CREDENTIALS_FILE:-$HOME/.gash_ssh_credentials}"
     if [[ ! -f "$credentials_file" ]]; then
+        # No credentials configured; no need to keep retrying.
+        export GASH_SSH_AUTOUNLOCK_RAN=1
+        return 0
+    fi
+
+    # Run once per shell session (but only after we actually have something to do).
+    if [[ -n "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]]; then
         return 0
     fi
 
@@ -225,8 +251,16 @@ gash_ssh_auto_unlock() {
     local ssh_add_list
     ssh_add_list="$(ssh-add -l 2>&1 || true)"
     if [[ "$ssh_add_list" == *"Could not open a connection to your authentication agent"* ]]; then
-        print_error "ssh-agent is not running. Start it (e.g. eval \"\$(ssh-agent -s)\"), then retry."
-        return 0
+        # Optional: auto-start ssh-agent when credentials are present.
+        if [[ "${GASH_SSH_AUTO_START_AGENT-0}" == "1" ]]; then
+            __gash_try_start_ssh_agent || true
+            ssh_add_list="$(ssh-add -l 2>&1 || true)"
+        fi
+
+        if [[ "$ssh_add_list" == *"Could not open a connection to your authentication agent"* ]]; then
+            print_error "ssh-agent is not running. Start it (e.g. eval \"\$(ssh-agent -s)\"), then retry."
+            return 0
+        fi
     fi
 
     if ! command -v expect >/dev/null 2>&1; then
@@ -314,6 +348,9 @@ EOF
     rm -f "$expect_script" >/dev/null 2>&1
 
     echo "$expect_output" | __gash_format_expect_output
+
+    # Mark as done only after we actually attempted to unlock.
+    export GASH_SSH_AUTOUNLOCK_RAN=1
 
     return 0
 }

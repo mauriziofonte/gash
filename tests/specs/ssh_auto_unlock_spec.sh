@@ -81,6 +81,67 @@ EOF
   [[ "$out" == *"ssh-agent is not running"* ]]
 '
 
+it "does not mark ran when agent missing; can rerun after agent starts" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/lib/functions.sh"
+
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir -p "$tmp/.ssh"
+  : > "$tmp/.ssh/key1"
+
+  cat > "$tmp/.gash_ssh_credentials" <<EOF
+~/.ssh/key1:pw
+EOF
+
+  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  export HOME="$tmp"
+
+  unset GASH_SSH_AUTOUNLOCK_RAN || true
+
+  export MOCK_SSH_AGENT=0
+  out1f="$(mktemp)"; trap "rm -f $out1f" EXIT
+  gash_ssh_auto_unlock >"$out1f" 2>&1
+  out1="$(cat "$out1f")"
+  [[ "$out1" == *"ssh-agent is not running"* ]]
+  [[ -z "${GASH_SSH_AUTOUNLOCK_RAN-}" ]]
+
+  export MOCK_SSH_AGENT=1
+  out2f="$(mktemp)"; trap "rm -f $out2f" EXIT
+  gash_ssh_auto_unlock >"$out2f" 2>&1
+  out2="$(cat "$out2f")"
+  [[ "$out2" == *"SSH:"*"Identity added"* ]]
+  [[ -n "${GASH_SSH_AUTOUNLOCK_RAN-}" ]]
+'
+
+it "can auto-start ssh-agent when enabled" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/lib/functions.sh"
+
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir -p "$tmp/.ssh"
+  : > "$tmp/.ssh/key1"
+
+  cat > "$tmp/.gash_ssh_credentials" <<EOF
+~/.ssh/key1:pw
+EOF
+
+  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  export HOME="$tmp"
+
+  unset SSH_AUTH_SOCK SSH_AGENT_PID GASH_SSH_AUTOUNLOCK_RAN MOCK_SSH_AGENT || true
+  export GASH_SSH_AUTO_START_AGENT=1
+
+  outf="$(mktemp)"; trap "rm -f $outf" EXIT
+  gash_ssh_auto_unlock >"$outf" 2>&1
+  out="$(cat "$outf")"
+  [[ -n "${SSH_AUTH_SOCK-}" ]]
+  [[ "$out" != *"ssh-agent is not running"* ]]
+  [[ "$out" == *"SSH:"*"Identity added"* ]]
+  [[ -n "${GASH_SSH_AUTOUNLOCK_RAN-}" ]]
+'
+
 it "formats expect output using gash style" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"

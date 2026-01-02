@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+# Minimal ssh-agent mock.
+# The real code calls: ssh-agent -s
+# We print env exports compatible with `eval`.
+
+if [[ "${1:-}" == "-s" || -z "${1:-}" ]]; then
+  cat <<'OUT'
+SSH_AUTH_SOCK=/tmp/gash-test-ssh-agent.sock; export SSH_AUTH_SOCK;
+SSH_AGENT_PID=424242; export SSH_AGENT_PID;
+echo Agent pid 424242;
+OUT
+  exit 0
+fi
+
+# Fallback for other flags
+cat <<'OUT'
+SSH_AUTH_SOCK=/tmp/gash-test-ssh-agent.sock; export SSH_AUTH_SOCK;
+SSH_AGENT_PID=424242; export SSH_AGENT_PID;
+echo Agent pid 424242;
+OUT
+exit 0

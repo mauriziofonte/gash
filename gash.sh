@@ -269,7 +269,8 @@ function __construct_ps1() {
     done
 
     # git branch
-    if [ -x "`which git 2>&1`" ]; then
+    # Use an external-path-only lookup: `which` can emit alias/function text.
+    if type -P git >/dev/null 2>&1; then
         local branch="$(git name-rev --name-only HEAD 2>/dev/null)"
 
         if [ -n "${branch}" ]; then

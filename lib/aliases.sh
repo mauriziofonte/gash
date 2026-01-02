@@ -169,7 +169,10 @@ function __add_alias_if_supported() {
     local alias_command="$3"
 
     local BINARY
-    BINARY=$(command -v "$binary_name" 2>/dev/null)
+    # We only want an external binary path here.
+    # `command -v` can return aliases/functions (e.g. "alias composer='...'"),
+    # which would break our generated aliases.
+    BINARY=$(type -P "$binary_name" 2>/dev/null)
 
     # If BINARY exists, then, create an alias replacing __CMD_BINARY with the binary path
     if [ -n "$BINARY" ]; then
@@ -233,8 +236,8 @@ if command -v php &> /dev/null; then
     # Default PHP version
     alias php="/usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M"
 
-    if command -v composer &> /dev/null; then
-        COMPOSER_BINARY=$(command -v composer)
+    if type -P composer >/dev/null 2>&1; then
+        COMPOSER_BINARY=$(type -P composer)
         for version in 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
             version_alias=${version//./}
             __add_alias_if_supported "php$version" "composer$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
@@ -250,8 +253,8 @@ if command -v php &> /dev/null; then
         alias composer-self-update="sudo $COMPOSER_BINARY self-update"
     fi
 
-    if command -v composer1 &> /dev/null; then
-        COMPOSER_BINARY=$(command -v composer1)
+    if type -P composer1 >/dev/null 2>&1; then
+        COMPOSER_BINARY=$(type -P composer1)
         for version in  7.2 7.1 7.0 5.6; do
             version_alias=${version//./}
             __add_alias_if_supported "php$version" "1composer$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
