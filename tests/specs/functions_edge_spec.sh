@@ -2,28 +2,29 @@
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# shellcheck source=lib/functions.sh
-source "$ROOT_DIR/lib/functions.sh"
+# shellcheck source=tests/gash-test.sh
+source "$ROOT_DIR/tests/gash-test.sh"
+gash_source_all "$ROOT_DIR"
 
 describe "Functions (edge)"
 
-it "largest_files handles paths with spaces" bash -c '
+it "files_largest handles paths with spaces" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   dd if=/dev/zero of="$tmp/file with space.txt" bs=1024 count=1 status=none
   dd if=/dev/zero of="$tmp/normal.txt" bs=1024 count=2 status=none
 
-  out="$(largest_files "$tmp" 2>/dev/null)"
+  out="$(files_largest "$tmp" 2>/dev/null)"
   [[ "$out" == *"file with space.txt"* ]]
 '
 
-it "largest_dirs handles spaces and lists only directories" bash -c '
+it "dirs_largest handles spaces and lists only directories" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/dir one" "$tmp/dir_two"
@@ -31,29 +32,29 @@ it "largest_dirs handles spaces and lists only directories" bash -c '
   dd if=/dev/zero of="$tmp/dir_two/small" bs=1024 count=1 status=none
   : > "$tmp/top file.txt"
 
-  out="$(largest_dirs "$tmp" 2>/dev/null)"
+  out="$(dirs_largest "$tmp" 2>/dev/null)"
   [[ "$out" == *"dir one"* ]]
   [[ "$out" == *"dir_two"* ]]
   [[ "$out" != *"top file.txt"* ]]
 '
 
-it "largest_dirs lists subdirectories" bash -c '
+it "dirs_largest lists subdirectories" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/a" "$tmp/b"
   dd if=/dev/zero of="$tmp/a/file" bs=1024 count=10 status=none
 
-  out="$(largest_dirs "$tmp" 2>/dev/null)"
+  out="$(dirs_largest "$tmp" 2>/dev/null)"
   [[ "$out" == *"$tmp/a"* || "$out" == *"/a"* ]]
 '
 
-it "hgrep filters history output" bash -c '
+it "history_grep filters history output" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   # Override history builtin with a function
   history() {
@@ -64,29 +65,29 @@ it "hgrep filters history output" bash -c '
 EOF
   }
 
-  out="$(hgrep echo 2>/dev/null)"
+  out="$(history_grep echo 2>/dev/null)"
   [[ "$out" == *"hello"* ]]
   [[ "$out" == *"world"* ]]
 '
 
-it "hgrep fails gracefully when missing arg under nounset" bash -c '
+it "history_grep fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
-  out="$(hgrep 2>&1)"
+  out="$(history_grep 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
-it "pskill calls kill for matching processes" bash -c '
+it "process_kill calls kill for matching processes" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   export MOCK_KILL_LOG="$tmp/kill.log"
@@ -98,29 +99,29 @@ it "pskill calls kill for matching processes" bash -c '
   }
 
   export PATH="$ROOT/tests/mocks/bin:$PATH"
-  pskill my-proc >/dev/null
+  process_kill my-proc >/dev/null
 
   grep -q -- "-9 2222" "$MOCK_KILL_LOG"
 '
 
-it "psgrep fails gracefully when missing arg under nounset" bash -c '
+it "process_find fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
-  out="$(psgrep 2>&1)"
+  out="$(process_find 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
-it "pskill fails without calling kill when missing arg" bash -c '
+it "process_kill fails without calling kill when missing arg" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   export MOCK_KILL_LOG="$tmp/kill.log"
@@ -131,95 +132,95 @@ it "pskill fails without calling kill when missing arg" bash -c '
   }
 
   set +e
-  out="$(pskill 2>&1)"
+  out="$(process_kill 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
   [[ ! -f "$MOCK_KILL_LOG" || ! -s "$MOCK_KILL_LOG" ]]
 '
 
-it "please runs sudo for explicit command" bash -c '
+it "sudo_last runs sudo for explicit command" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   export PATH="$ROOT/tests/mocks/bin:$PATH"
-  out="$(please echo ok)"
+  out="$(sudo_last echo ok)"
   [[ "$out" == "ok" ]]
 '
 
-it "mkcd creates dir and cds" bash -c '
+it "mkdir_cd creates dir and cds" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
-  mkcd "$tmp/newdir"
+  mkdir_cd "$tmp/newdir"
   [[ "$PWD" == "$tmp/newdir" ]]
 '
 
-it "mkcd fails gracefully when missing arg under nounset" bash -c '
+it "mkdir_cd fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
-  out="$(mkcd 2>&1)"
+  out="$(mkdir_cd 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
-it "extract fails gracefully when missing arg under nounset" bash -c '
+it "archive_extract fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
-  out="$(extract 2>&1)"
+  out="$(archive_extract 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
-it "backup_file fails gracefully when missing arg under nounset" bash -c '
+it "file_backup fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
-  out="$(backup_file 2>&1)"
+  out="$(file_backup 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
-it "portkill fails gracefully when missing arg under nounset" bash -c '
+it "port_kill fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
-  out="$(portkill 2>&1)"
+  out="$(port_kill 2>&1)"
   rc=$?
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
 it "docker_prune_all returns 0 when user declines" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   export PATH="$ROOT/tests/mocks/bin:/usr/bin:/bin"
 
@@ -237,7 +238,7 @@ it "docker_prune_all returns 0 when user declines" bash -c '
 it "git_dump_revisions writes per-commit files" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   cd "$tmp"
@@ -265,7 +266,7 @@ it "git_dump_revisions writes per-commit files" bash -c '
 it "git_dump_revisions fails gracefully when missing arg under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   set +e
   out="$(git_dump_revisions 2>&1)"
@@ -273,13 +274,13 @@ it "git_dump_revisions fails gracefully when missing arg under nounset" bash -c 
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Please specify"* ]]
+  [[ "$out" == *"Missing"* ]]
 '
 
-it "git_apply_feature_patch fails gracefully when missing args under nounset" bash -c '
+it "git_apply_patch fails gracefully when missing args under nounset" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   cd "$tmp"
@@ -289,7 +290,7 @@ it "git_apply_feature_patch fails gracefully when missing args under nounset" ba
   git config user.name Test
 
   set +e
-  out="$(git_apply_feature_patch 2>&1)"
+  out="$(git_apply_patch 2>&1)"
   rc=$?
   set -e
 
@@ -297,22 +298,22 @@ it "git_apply_feature_patch fails gracefully when missing args under nounset" ba
   [[ "$out" == *"Usage:"* ]]
 '
 
-it "git_apply_feature_patch errors outside git repo" bash -c '
+it "git_apply_patch errors outside git repo" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   cd "$tmp"
 
-  out="$({ git_apply_feature_patch main feat 123; } 2>&1 || true)"
-  [[ "$out" == *"Not in a Git repository"* ]]
+  out="$({ git_apply_patch main feat 123; } 2>&1 || true)"
+  [[ "$out" == *"Not in a git repository"* ]]
 '
 
 it "gash_uninstall returns error when not installed" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   out="$({ HOME="$tmp" gash_uninstall; } 2>&1 || true)"

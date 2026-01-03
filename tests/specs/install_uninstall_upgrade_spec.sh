@@ -2,6 +2,9 @@
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# shellcheck source=tests/gash-test.sh
+source "$ROOT_DIR/tests/gash-test.sh"
+
 describe "Install / Uninstall / Upgrade"
 
 it "install.sh installs into HOME and updates profile" bash -c '
@@ -16,7 +19,7 @@ it "install.sh installs into HOME and updates profile" bash -c '
   HOME="$tmp_home" \
   PROFILE="$profile" \
   GASH_INSTALL_GIT_REPO="$ROOT" \
-  bash "$ROOT/install.sh" --assume-yes --quiet >/dev/null
+  bash "$ROOT/install.sh" --assume-yes --quiet >/dev/null 2>&1
 
   [[ -d "$tmp_home/.gash" ]]
   [[ -f "$tmp_home/.gashrc" ]]
@@ -28,7 +31,7 @@ it "install.sh installs into HOME and updates profile" bash -c '
 it "gash_uninstall removes gash and cleans profile" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
   mkdir -p "$tmp_home/.gash"
@@ -63,7 +66,7 @@ EOF
 it "gash_upgrade updates from older tag to latest tag" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
-  source "$ROOT/lib/functions.sh"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
 
@@ -96,12 +99,12 @@ it "gash_upgrade updates from older tag to latest tag" bash -c '
   # Clone into HOME/.gash and checkout older tag.
   tmp_home="$tmp/home"
   mkdir -p "$tmp_home"
-  git clone -q "$origin" "$tmp_home/.gash"
+  git clone -q "$origin" "$tmp_home/.gash" 2>/dev/null
   cd "$tmp_home/.gash"
-  git checkout -q v1
+  git -c advice.detachedHead=false checkout -q v1 2>/dev/null
 
   # Now upgrade should move to v2.
-  HOME="$tmp_home" GASH_DIR="$tmp_home/.gash" gash_upgrade >/dev/null
+  HOME="$tmp_home" GASH_DIR="$tmp_home/.gash" gash_upgrade >/dev/null 2>&1
 
   cd "$tmp_home/.gash"
   current_tag="$(git describe --tags --abbrev=0 2>/dev/null)"

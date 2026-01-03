@@ -313,11 +313,20 @@ unset color_prompt
 # Set default file creation permissions to be readable by everyone.
 umask 022
 
-# Load Functions
-if [ -f "$GASH_DIR/lib/functions.sh" ]; then
-    source "$GASH_DIR/lib/functions.sh"
-else
-    echo -e "${Red}Warning: lib/functions.sh not found; skipping.${Color_Off}"
+# Load Core Modules
+if [ -d "$GASH_DIR/lib/core" ]; then
+    for __gash_core_file in "$GASH_DIR/lib/core"/*.sh; do
+        [ -f "$__gash_core_file" ] && source "$__gash_core_file"
+    done
+    unset __gash_core_file
+fi
+
+# Load Functional Modules
+if [ -d "$GASH_DIR/lib/modules" ]; then
+    for __gash_module_file in "$GASH_DIR/lib/modules"/*.sh; do
+        [ -f "$__gash_module_file" ] && source "$__gash_module_file"
+    done
+    unset __gash_module_file
 fi
 
 # Compute functions introduced by Gash (best-effort). Keep this list stable for gash_unload.

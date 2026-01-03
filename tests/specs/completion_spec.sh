@@ -35,7 +35,7 @@ EOF
   out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
 
   # Includes public functions
-  [[ "$out" == *"largest_files"* ]]
+  [[ "$out" == *"files_largest"* ]]
   [[ "$out" == *"gash_unload"* ]]
 
   # Excludes internal helpers

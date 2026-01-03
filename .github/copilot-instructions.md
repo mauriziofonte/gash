@@ -1,145 +1,344 @@
-# Copilot instructions (Gash)
+# Gash - Project Overview
 
-## Project overview
+## Architecture
 
--   Gash is a Bash configuration framework intended to be **sourced** (not executed) in interactive shells.
--   Entry flow: user shell sources `~/.gashrc` (template in [.gashrc](../.gashrc)), which sources `~/.gash/gash.sh` and loads completion from [bash_completion](../bash_completion).
--   `gash.sh` is the main orchestrator: it exits early for non-interactive shells and if `$HOME/.gash` is missing, then sources:
-    -   Helpers/functions: [lib/functions.sh](../lib/functions.sh)
-    -   Aliases/env: [lib/aliases.sh](../lib/aliases.sh)
-    -   Greeting/extras: [lib/prompt.sh](../lib/prompt.sh)
-    -   User hooks: `~/.bash_aliases` then `~/.bash_local`
+Gash is a **sourced** Bash framework for interactive shells.
 
-Additional runtime features:
+```
+~/.gashrc → ~/.gash/gash.sh → lib/core/*.sh → lib/modules/*.sh → lib/aliases.sh → lib/prompt.sh
+```
 
--   `gash.sh` snapshots the original shell state before mutating it (prompt/history/shopt/umask plus pre-existing functions and aliases). This snapshot is used by `gash_unload`.
--   `gash.sh` computes `__GASH_ADDED_FUNCS` and `__GASH_ADDED_ALIASES` (best-effort) so we can:
-    -   Unload only what Gash introduced (without touching user shell symbols)
-    -   Drive completion from a stable list of “public” Gash functions
+### Directory Structure
 
-## Development workflow (how to safely test changes)
+```
+lib/
+├── core/           # Internal libraries (prefixed __gash_*)
+│   ├── config.sh   # ~/.gash_env parser (__gash_load_env, __gash_get_db_url, __gash_parse_db_url)
+│   ├── output.sh   # __gash_info, __gash_error, __gash_success, __gash_warning, __gash_step
+│   ├── validation.sh # __gash_require_*, argument/file/git checks
+│   └── utils.sh    # needs_help, needs_confirm_prompt, __gash_tty_width, __gash_trim_ws
+├── modules/        # Feature modules (LONG name + short alias)
+│   ├── docker.sh   # docker_stop_all (dsa), docker_start_all (daa), docker_prune_all (dpa)
+│   ├── files.sh    # files_largest (flf), dirs_largest (dld), dirs_find_large (dfl),
+│   │               # dirs_list_empty (dle), archive_extract (axe), file_backup (fbk)
+│   ├── gash.sh     # gash_help, gash_upgrade, gash_uninstall, gash_unload, gash_inspiring_quote
+│   ├── git.sh      # git_list_tags (glt), git_add_tag (gat), git_delete_tag (gdt),
+│   │               # git_dump_revisions (gdr), git_apply_patch (gap)
+│   ├── llm.sh      # LLM utilities (llm_exec, llm_tree, llm_find, llm_grep, llm_db_*, etc.)
+│   │               # NO short aliases - designed for AI agents, excludes from bash history
+│   ├── ssh.sh      # gash_ssh_auto_unlock
+│   └── system.sh   # disk_usage (du2), history_grep (hg), ip_public (myip),
+│                   # process_find (pf), process_kill (pk), port_kill (ptk),
+│                   # services_stop (svs), sudo_last (plz), mkdir_cd (mkcd)
+├── aliases.sh      # Aliases and environment setup
+└── prompt.sh       # Greeting banner
+```
 
--   Preferred: install to `~/.gash` and test by opening a fresh terminal (matches real usage).
-    -   Install/update uses tags via git: [install.sh](../install.sh) and `gash_upgrade` in [lib/functions.sh](../lib/functions.sh).
--   If testing from a working copy, mirror the real layout (because [gash.sh](../gash.sh) hard-codes `GASH_DIR="$HOME/.gash"` and returns if it doesn’t exist).
-    -   Common approach: `ln -s "$PWD" "$HOME/.gash"` (or copy) then restart shell.
+## Coding Standards
 
-## Codebase conventions (Bash-specific)
+### Strict Mode Compatibility
 
--   **Never `exit` from sourced code** (it would terminate the user’s shell). Prefer `return` from functions and guard blocks. Example: [gash.sh](../gash.sh) uses `return` for early exits.
--   Be strict-mode friendly:
-    -   Assume callers/tests may use `set -euo pipefail`.
-    -   Under `set -u`, never read raw positional parameters (`$1`, `$2`, …) unless you’ve validated the argument count; prefer `${1-}`, `${2-}`, etc.
-    -   Prefer explicit “missing argument” errors (via `print_error`) over letting tools fail with cryptic messages.
--   Avoid leaking globals into the user shell:
-    -   Prefer `local` variables inside functions.
-    -   Don’t leave temporary variables defined at file scope unless they are intended configuration.
--   Keep startup safe/fast:
-    -   Guard optional tooling with `command -v …` (pattern used throughout [lib/aliases.sh](../lib/aliases.sh) and [lib/functions.sh](../lib/functions.sh)).
-    -   Avoid output in non-interactive contexts; `gash.sh` already checks `[[ $- != *i* ]] && return`.
--   Help/UX pattern for new functions:
-    -   Use `needs_help "name" "usage" "description" "${1-}" && return` and print errors via `print_error` (see [lib/functions.sh](../lib/functions.sh)).
--   Cross-platform behavior is intentional:
-    -   macOS tweaks live in [lib/aliases.sh](../lib/aliases.sh) (`LSCOLORS`, BSD `ls`).
-    -   WSL-only aliases are gated by `/proc/version` and `$WSLENV`.
+All code must work with `set -euo pipefail`:
 
-## Key integration points
+```bash
+# ALWAYS use ${1-} for optional params
+local arg="${1-}"
 
--   Installer modifies user profiles to source `~/.gashrc`: [install.sh](../install.sh).
--   Completion relies on functions being loaded first (it checks `declare -f gadd_tag`): [bash_completion](../bash_completion).
-    -   Completion prefers `__GASH_ADDED_FUNCS` (computed by [gash.sh](../gash.sh)) to suggest all public Gash functions and avoid user-defined ones.
-    -   Internal helpers are filtered (name prefix `__*`/`_*` plus a small denylist like `needs_help`).
--   Quotes are data-driven from [quotes/list.txt](../quotes/list.txt) and rendered by `gash_inspiring_quote`.
--   SSH auto-unlock is invoked during prompt startup (in [lib/prompt.sh](../lib/prompt.sh)) if `gash_ssh_auto_unlock` is defined.
-    -   Credentials file: defaults to `~/.gash_ssh_credentials`, configurable via `GASH_SSH_CREDENTIALS_FILE`.
-    -   The function is designed to be safe at shell startup (no `exit`, tolerant parsing, early return if `ssh-agent`/`expect` aren’t available).
--   `gash_unload` is implemented in [lib/functions.sh](../lib/functions.sh) and restores the snapshot created by [gash.sh](../gash.sh) (best-effort).
+# ALWAYS use || true for commands that may fail
+BINARY=$(type -P "$cmd" 2>/dev/null) || true
 
-## Making changes
+# NEVER exit from sourced code - use return
+__gash_error "Failed"; return 1
+```
 
--   Prompt behavior is split:
-    -   PS1 construction/title logic is in [gash.sh](../gash.sh) (`PROMPT_COMMAND`, `__construct_ps1`).
-    -   The greeting banner + quote runs at load time in [lib/prompt.sh](../lib/prompt.sh) (interactive-only).
-        -   Optional system info is gated by `GASH_SHOW_INXI=1`.
--   Aliases and env defaults belong in [lib/aliases.sh](../lib/aliases.sh); reusable commands belong in [lib/functions.sh](../lib/functions.sh).
+### Function Naming
 
-## Unit tests (Bash)
+| Pattern         | Scope           | Example                              |
+| --------------- | --------------- | ------------------------------------ |
+| `long_name`     | Public API      | `git_add_tag`, `files_largest`       |
+| `short`         | Public alias    | `gat`, `flf`                         |
+| `__gash_*`      | Internal helper | `__gash_require_arg`, `__gash_info`  |
+| `__function_*`  | Module-private  | `__gash_generate_expect_script`      |
 
-### How to run
+### Output Functions (lib/core/output.sh)
 
--   Run the whole suite: `bash tests/run.sh`
--   Specs live in `tests/specs/*_spec.sh` and are sourced by the runner.
+```bash
+__gash_info "message"      # Cyan "Info:" prefix
+__gash_error "message"     # Red "Error:" to stderr, returns 1
+__gash_success "message"   # Green "OK:" prefix
+__gash_warning "message"   # Yellow "Warning:" prefix
+__gash_step 1 5 "message"  # "[1/5]" step indicator
+```
 
-### Test harness DSL
+### Validation Functions (lib/core/validation.sh)
 
--   The minimal test framework is in `tests/gash-test.sh`.
--   Core primitives:
-    -   `describe "Suite name"` prints a suite header.
-    -   `it "test name" <command...>` runs a single test and records pass/fail.
-    -   `expects <actual> <op> <expected>` supports `==`, `!=`, `=~`.
-    -   `expects_contains <haystack> <needle>` and `expects_status <code> <cmd...>`.
+```bash
+__gash_require_arg "$value" "name" "usage hint" || return 1
+__gash_require_file "$path" || return 1
+__gash_require_dir "$path" || return 1
+__gash_require_command "cmd" "error msg" || return 1
+__gash_require_git_repo || return 1
+__gash_require_git_repo_with_remote || return 1
+__gash_require_docker || return 1
+```
 
-Most tests are written as `it "..." bash -c '...'
-` so they run in a clean subshell with strict mode.
+### Standard Function Template
 
-### Conventions used by specs
+```bash
+function_name() {
+    needs_help "function_name" "function_name ARG" \
+        "Description of what this does." \
+        "${1-}" && return
 
--   Prefer `set -euo pipefail` inside each `bash -c` body.
--   When a spec needs nested shells (especially `bash -i -c`), build the inner script via heredoc/variables to avoid quoting pitfalls and “wrong-shell” expansions.
--   Use `GASH_TEST_ROOT` (exported by `tests/run.sh`) to locate the repo root inside subshells.
--   Use temporary directories for filesystem effects:
-    -   `tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT`
--   Avoid depending on user state (real `~/.gash`, real history, real ssh-agent, etc).
--   Prefer edge tests that verify “safe failure” behavior:
-    -   Missing args should return non-zero and print a helpful error.
-    -   Destructive operations should avoid side effects when invoked incorrectly.
+    local arg="${1-}"
+    __gash_require_arg "$arg" "argument" "function_name <arg>" || return 1
 
-### Mocking strategy (critical)
+    # Implementation...
+    __gash_info "Doing something..."
+}
+```
 
--   Deterministic tests rely on mock binaries in `tests/mocks/bin/`.
--   Specs commonly do: `export PATH="$ROOT/tests/mocks/bin:$PATH"` or even set a minimal PATH like `...:/usr/bin:/bin`.
--   If you add a new mock file, ensure it is executable.
--   Bash builtins cannot be overridden via PATH; override them with shell functions inside the test when needed.
-    -   Example: `pskill` uses the `kill` builtin, so tests override `kill()` to record calls.
+## Testing
 
-### Unload behavior (important)
+### Run Tests
 
--   `gash_unload` must never `exit` (it’s sourced code) and should be safe under `set -u`.
--   If you add new aliases/functions during startup, they should be discoverable via `__GASH_ADDED_FUNCS` / `__GASH_ADDED_ALIASES` so unload and completion stay correct.
+```bash
+bash tests/run.sh
+```
 
-### Writing tests that “break” things (then fixing)
+### Test Structure
 
--   Prefer exercising error paths first (missing binaries, missing config files, invalid args).
--   When a test reveals a real robustness issue, fix production code (not just the test).
-    -   Example: prompt helpers returning non-zero can trip `set -e` callers; use `if ! needs_confirm_prompt ...; then ...; fi` to be errexit-safe.
--   Keep fixes minimal and consistent with Gash conventions:
-    -   No `exit` from sourced code; use `return`.
-    -   Guard optional tools with `command -v`.
-    -   Keep messages in English and in Gash style.
+Tests use `gash_source_all "$ROOT"` to load all modules:
 
-### Testing install/uninstall/upgrade (happy paths)
+```bash
+it "test name" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
--   Tests for installer/upgrader should be network-free and must not touch the user’s real shell config.
--   Pattern used in this repo:
-    -   Set `HOME` to a temp dir.
-    -   Set `PROFILE` to a temp profile file (e.g. `$HOME/.bashrc`).
-    -   Point `GASH_INSTALL_GIT_REPO` to a local path (no network).
-    -   Use `--assume-yes` for `install.sh`.
--   If you add `--quiet` coverage, ensure “data-returning” helpers are not silenced by QUIET (profile detection must still return a filepath).
+  # Test code...
+'
+```
 
-### Debugging workflow for failures
+### Mocking
 
--   Re-run the suite: `bash tests/run.sh`.
--   If a spec is flaky or hard to debug, run only the suite by sourcing a single spec:
-    -   `bash -c 'set -uo pipefail; export GASH_TEST_ROOT="$PWD"; source tests/gash-test.sh; source tests/specs/<file>_spec.sh; gash_test_summary'`
--   Watch for common Bash pitfalls:
-    -   Single quotes inside `bash -c '...'` strings can terminate the script unexpectedly.
-    -   `grep -q "-pattern"` treats `-pattern` as an option; use `grep -q -- "-pattern"`.
-    -   Under `set -u`, always use `${1-}` (not `$1`) when args may be missing.
+-   Mock binaries: `tests/mocks/bin/`
+-   Set PATH: `export PATH="$ROOT/tests/mocks/bin:$PATH"`
+-   Bash builtins: override with functions inside test
 
-## Practical patterns already used in this repo
+## Key Behaviors
 
--   For user-facing commands, prefer the pattern:
-    -   `needs_help ... "${1-}" && return`
-    -   Then validate args (`[[ $# -eq 0 ]]` or `[[ -z "${1-}" ]]`) and call `print_error` with a clear usage hint.
--   When wrapping tools that might prompt or return non-zero in normal flows (e.g. confirmation prompts), make the code `errexit`-safe using `if ! ...; then ...; fi` blocks.
+### Shell State Management
+
+`gash.sh` snapshots shell state before modifications. `gash_unload` restores:
+
+-   PS1, PS2, PROMPT_COMMAND
+-   HISTCONTROL, HISTSIZE, HISTFILESIZE
+-   shopt settings (histappend, checkwinsize)
+-   Functions and aliases added by Gash
+
+### Configuration System (`~/.gash_env`)
+
+Unified config file for SSH keys and database credentials. Parsed by `lib/core/config.sh`.
+
+#### File Format
+
+```bash
+# SSH keys: SSH:keypath=passphrase
+SSH:~/.ssh/id_ed25519=my passphrase
+
+# Database: DB:name=driver://user:password@host:port/database
+DB:default=mysql://root:pass@localhost:3306/myapp
+DB:postgres=pgsql://pguser:secret@dbhost:5432/analytics
+```
+
+#### Config Functions (lib/core/config.sh)
+
+```bash
+__gash_load_env()          # Load and cache ~/.gash_env
+__gash_get_ssh_keys()      # Get SSH key entries (TAB-separated keypath\tpassphrase)
+__gash_get_db_url()        # Get DB URL by connection name
+__gash_parse_db_url()      # Parse URL into driver/user/pass/host/port/db
+__gash_url_decode()        # Decode %XX sequences
+__gash_url_encode()        # Encode special characters
+
+# Public helpers
+gash_db_list()             # List available DB connections
+gash_db_test()             # Test a DB connection
+gash_env_init()            # Create ~/.gash_env from template
+```
+
+#### Environment Variables
+
+```bash
+GASH_ENV_FILE              # Override config file path (default: ~/.gash_env)
+```
+
+### SSH Auto-Unlock
+
+Invoked from `lib/prompt.sh` if SSH keys configured in `~/.gash_env`:
+
+-   Config: `~/.gash_env` with `SSH:keypath=passphrase` entries
+-   Auto-start agent: automatic when SSH keys are configured
+
+### Completion
+
+`bash_completion` uses `__GASH_ADDED_FUNCS` to suggest public Gash functions.
+Internal functions (`__*`, `_*`) are filtered.
+
+## Common Patterns
+
+```bash
+# Command availability check
+if type -P cmd >/dev/null 2>&1; then ...
+
+# errexit-safe prompt
+if ! needs_confirm_prompt "Continue?"; then return 0; fi
+
+# Temp directory with cleanup
+tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+
+# Local variables always
+local var="value"
+```
+
+## Defensive Programming
+
+### errexit-safe External Commands
+
+```bash
+# Network calls that may fail
+ip=$(curl -s https://api.example.com 2>/dev/null) || true
+if [[ -z "$ip" ]]; then __gash_error "Failed"; return 1; fi
+
+# Commands with fallbacks
+user_name=$(whoami 2>/dev/null) || true
+if [[ -z "$user_name" ]]; then user_name="UNKNOWN"; fi
+```
+
+### Case Statements with Fallback
+
+```bash
+local rc=0
+case "$file" in
+    *.tar.gz) tar xzf "$file" || rc=1 ;;
+    *)        __gash_error "Unsupported"; rc=1 ;;
+esac
+return $rc
+```
+
+### Validation Before Operations
+
+Always validate inputs before performing operations:
+
+```bash
+function_name() {
+    __gash_require_arg "$1" "filename" "function_name <file>" || return 1
+    __gash_require_file "$1" || return 1
+    # Now safe to use $1
+}
+```
+
+## Don'ts
+
+-   Never `exit` from sourced code
+-   Never read `$1` directly - use `${1-}`
+-   Never leave temp variables at file scope
+-   Never use `command -v` for binary detection (returns aliases) - use `type -P`
+-   Never hardcode ANSI colors - use `__gash_*` output functions
+-   Never assume commands succeed - always handle failures with `|| true` or `|| return 1`
+
+## LLM Module (lib/modules/llm.sh)
+
+The LLM module provides utilities optimized for AI coding assistants. It has special requirements.
+
+### LLM Module Design Principles
+
+| Principle | Reason |
+| --------- | ------ |
+| **JSON output** | Machine-parseable, minimal token overhead |
+| **No short aliases** | LLMs don't need quick typing - only `llm_*` names |
+| **No bash history** | Use `__llm_no_history` wrapper to exclude from history |
+| **Read-only default** | DB queries, file operations are non-destructive |
+| **Defensive** | Validate all inputs, block dangerous commands |
+
+### LLM Function Template
+
+```bash
+llm_function_name() {
+    __llm_no_history  # Exclude from bash history
+
+    needs_help "llm_function_name" "llm_function_name [OPTIONS] ARG" \
+        "Description of what this does. Output: JSON" \
+        "${1-}" && return
+
+    local arg="${1-}"
+    __gash_require_arg "$arg" "argument" "llm_function_name <arg>" || return 1
+
+    # Validate/sanitize input
+    arg=$(__llm_validate_path "$arg") || return 1
+
+    # Implementation - output JSON or compact text
+    echo '{"result":"value"}'
+}
+# NO short alias for LLM functions
+```
+
+### Security Helpers (Internal)
+
+```bash
+__llm_no_history              # Disable history for current command
+__llm_validate_path "$path"   # Sanitize path, block traversal/dangerous paths
+__llm_validate_command "$cmd" # Check against dangerous pattern blacklist
+__llm_is_secret_file "$file"  # Check if file contains secrets
+```
+
+### Dangerous Pattern Blacklist
+
+The `__LLM_DANGEROUS_PATTERNS` array blocks commands like:
+
+-   Filesystem destruction: `rm -rf /`, `rm -rf ~`, `rm -rf *`
+-   Disk operations: `dd if=`, `mkfs`, `> /dev/sd*`
+-   System destruction: fork bombs, `shutdown`, `reboot`
+-   Privilege escalation: `chmod -R 777 /`, `chown -R`
+-   Remote code execution: `curl|bash`, `wget|sh`
+-   Obfuscation attempts: backticks, `$()`, extra spaces, chained `cd /; rm`
+
+### Secret File Detection
+
+Files matching these patterns are blocked:
+
+-   `.env`, `.env.*` (environment files)
+-   `*.pem`, `*.key`, `*_rsa`, `*_dsa`, `*_ed25519` (keys)
+-   `credentials*`, `secrets*`, `*password*`, `*token*`
+-   `~/.ssh/*`, `~/.aws/*`, `~/.gash_env`
+
+### Database Security
+
+-   Credentials from `~/.gash_env` (never hardcoded)
+-   Connection selected via `-c CONNECTION` parameter (default: `default`)
+-   Only `SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN` allowed
+-   `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER` blocked
+-   SQL injection patterns detected and rejected
+
+### Database Functions Usage
+
+```bash
+# Use default connection
+llm_db_query "SELECT * FROM users"
+llm_db_tables
+llm_db_schema users
+
+# Use specific connection
+llm_db_query "SELECT * FROM orders" -c legacy
+llm_db_tables -c postgres
+llm_db_schema products -c remote
+```
+
+### Adding New LLM Functions
+
+1. Use `llm_` prefix (no short alias)
+2. Call `__llm_no_history` at function start
+3. Validate all user inputs with `__llm_validate_*` helpers
+4. Output JSON or newline-separated compact text (no ANSI colors)
+5. Add tests in `tests/specs/llm_spec.sh` including security tests

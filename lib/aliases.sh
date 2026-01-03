@@ -172,7 +172,7 @@ function __add_alias_if_supported() {
     # We only want an external binary path here.
     # `command -v` can return aliases/functions (e.g. "alias composer='...'"),
     # which would break our generated aliases.
-    BINARY=$(type -P "$binary_name" 2>/dev/null)
+    BINARY=$(type -P "$binary_name" 2>/dev/null) || true
 
     # If BINARY exists, then, create an alias replacing __CMD_BINARY with the binary path
     if [ -n "$BINARY" ]; then

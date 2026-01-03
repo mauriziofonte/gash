@@ -10,12 +10,14 @@
 * **Colorful output**: Command-line information that stands out and helps you focus.
 * **Smarter shell**: Aliases, functions, and an informative prompt that simplifies tasks.
 * **Lightweight**: No bloat—just the tools you need.
+* **Memorable commands**: Each function has a **long descriptive name** AND a **short alias** - use what suits you.
 
 ## Features At A Glance
 
 * **Intelligent Prompt**: See everything you need (username, Git branch, jobs, etc.) at a glance.
 * **Productivity Aliases**: Shortcuts for file operations, Git commands, and service management.
 * **Convenient Functions**: One-liners to extract archives, list the largest files, or kill processes by port.
+* **Dual Naming**: Every function has a descriptive LONG name and a memorable SHORT alias.
 * **Bash Completion**: Tab-complete Gash functions (and Git tags for tag helpers).
 * **Unload / Restore Session**: Turn off Gash in the current shell and restore the previous state.
 * **Colorful Output**: Enhanced color schemes for better visibility (with `LS_COLORS`, Git status, etc.).
@@ -64,7 +66,7 @@ Your new prompt shows:
 * **Background jobs** and **last command exit code** for easy debugging.
 
 ```sh
-# Example: 
+# Example:
 [maurizio@server]:~/projects (main*)[j2] $  # Git branch, jobs, exit code
 ```
 
@@ -75,21 +77,23 @@ Gash improves everyday commands:
 * **`..`**: Go up one directory, **`...`** for two, etc.
 * **`ll`**, **`la`**, **`lash`**: Enhanced directory listings.
 * **`g`**: Shortcut for `git`, with **`ga`**, **`gst`**, **`gl`** for common actions.
-* **`hgrep`**: Search Bash history with color-coded output.
+* **`hg`** (or `history_grep`): Search Bash history with color-coded output.
 
 And [many more](#aliases)!
 
 ### Useful Functions
 
-Save time with these built-in utilities:
+Save time with these built-in utilities. Each has a **long** descriptive name AND a **short** memorable alias:
 
-* **`mkcd dir_name`**: Make a directory and `cd` into it.
-* **`extract file.tar.gz [output_dir]`**: Extract almost any archive to a directory.
-* **`largest_files [path]`**: Show the largest files in a directory.
-* **`pskill process_name`**: Kill all processes by name.
-* **`portkill port_number`**: Kill processes running on a specific port.
-* **`stop_services`**: Stop well-known services like Apache, MySQL, Redis, Docker, etc.
-* **`gash_unload`**: Restore your shell state and remove Gash (current session only).
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `mkdir_cd` | `mkcd` | Make a directory and `cd` into it |
+| `archive_extract` | `axe` | Extract almost any archive to a directory |
+| `files_largest` | `flf` | Show the largest files in a directory |
+| `process_kill` | `pk` | Kill all processes by name |
+| `port_kill` | `ptk` | Kill processes running on a specific port |
+| `services_stop` | `svs` | Stop well-known services like Apache, MySQL, Redis, Docker |
+| `gash_unload` | - | Restore your shell state and remove Gash (current session only) |
 
 And [many more](#helpers-functions)!
 
@@ -98,7 +102,7 @@ And [many more](#helpers-functions)!
 Gash ships with a dedicated completion script (`bash_completion`). Once sourced (see `~/.gashrc`), it:
 
 * Suggests all public Gash functions (excluding internal helpers)
-* For `gadd_tag` / `gdel_tag`, suggests Git tags when you are inside a Git repository
+* For `git_add_tag` / `git_delete_tag`, suggests Git tags when you are inside a Git repository
 
 ### Unload Gash (session-only)
 
@@ -221,46 +225,101 @@ alias kns='kubectl config set-context --current --namespace'
 
 Note: prefer keeping secrets out of `~/.bash_local` (use your OS keychain/credential helpers where possible).
 
-#### `~/.gash_ssh_credentials` (optional: SSH key auto-unlock)
+#### `~/.gash_env` (optional: SSH keys and database credentials)
 
-If this file exists, Gash may attempt to add SSH keys to your running `ssh-agent` at shell startup.
-This feature is implemented by `gash_ssh_auto_unlock` and requires:
+This is the **unified configuration file** for sensitive credentials. It supports:
 
-* `ssh-agent` running and reachable (`ssh-add -l` must work)
+* SSH key auto-unlock (replaces the old `~/.gash_ssh_credentials`)
+* Database connection strings (for LLM utilities)
+
+##### Quick Setup
+
+```sh
+# Create from template
+gash_env_init
+
+# Or manually
+cp ~/.gash/.gash_env.template ~/.gash_env
+chmod 600 ~/.gash_env
+```
+
+##### SSH Keys Configuration
+
+SSH key entries follow the format `SSH:keypath=passphrase`:
+
+```sh
+# ~/.gash_env
+SSH:~/.ssh/id_ed25519=correct horse battery staple
+SSH:~/.ssh/work_rsa=my-work-passphrase
+```
+
+SSH auto-unlock requires:
+
 * `expect` installed (used to provide passphrases non-interactively)
 
-By default, Gash will NOT start `ssh-agent` for you (to avoid spawning extra agents unexpectedly).
-If you want Gash to auto-start an agent when this file exists, enable it explicitly:
+Gash will automatically start `ssh-agent` if it's not running and SSH keys are configured in `~/.gash_env`.
+
+##### Database Connections Configuration
+
+Database entries follow URL-style format `DB:name=driver://user:password@host:port/database`:
 
 ```sh
-export GASH_SSH_AUTO_START_AGENT=1
+# ~/.gash_env
+DB:default=mysql://root:password@localhost:3306/myapp
+DB:legacy=mysql://admin:oldpass@localhost:3307/legacy_db
+DB:postgres=pgsql://pguser:secret@localhost:5432/analytics
+DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
 ```
 
-Format: one key per line as `PATH_TO_PRIVATE_KEY:PASS_PHRASE`.
-Empty lines and lines starting with `#` are ignored.
+Supported drivers: `mysql`, `mariadb`, `pgsql`
+
+**Password URL encoding:** If your password contains special characters, URL-encode them:
+
+| Character | Encoded |
+|-----------|---------|
+| `@`       | `%40`   |
+| `:`       | `%3A`   |
+| `/`       | `%2F`   |
+| `#`       | `%23`   |
+| `%`       | `%25`   |
+
+Example: password `p@ss:word` becomes `p%40ss%3Aword`
+
+##### Database Helper Commands
 
 ```sh
-# ~/.gash_ssh_credentials
-# Format: /path/to/key:passphrase
-~/.ssh/id_ed25519:correct horse battery staple
-~/.ssh/work_id_rsa:my-work-passphrase
+# List all configured connections
+gash_db_list
+
+# Test a connection
+gash_db_test default
+gash_db_test postgres
+
+# Create config from template
+gash_env_init
 ```
 
-You can also change the location of this file:
+##### Security Note
+
+This file contains sensitive data in plain text. **Always set restrictive permissions:**
 
 ```sh
-# ~/.bash_local
-export GASH_SSH_CREDENTIALS_FILE="$HOME/.config/gash/ssh_credentials"
+chmod 600 ~/.gash_env
 ```
 
-Security note: this file contains sensitive data in plain text.
-If you use it, strongly consider setting permissions to owner-read only (e.g. `chmod 600 ~/.gash_ssh_credentials`) and prefer agent/keychain-based flows when available.
+Gash will warn you at startup if the permissions are too open.
+
+You can override the config file location:
+
+```sh
+export GASH_ENV_FILE="$HOME/.config/gash/env"
+```
 
 ### Create a `~/.bash_local` file
 
 ```sh
-# ~/.bash_local example: 
-alias cls='clear'  # Custom alias  
+# ~/.bash_local example:
+alias cls='clear'  # Custom alias
 greet() {   echo "Hello, $USER!" }
 ```
 
@@ -292,6 +351,131 @@ Remember to restart your terminal to apply the changes.
 
 ## Full Features List
 
+### Helpers (Functions)
+
+All functions have a **long descriptive name** and a **short alias**. Use whichever you prefer!
+
+#### File and Directory Operations
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `files_largest` | `flf` | Lists the top 100 largest files in a directory |
+| `dirs_largest` | `dld` | Lists the top 100 largest directories |
+| `dirs_find_large` | `dfl` | Finds directories larger than a specified size |
+| `dirs_list_empty` | `dle` | Lists all empty directories in the specified path |
+| `archive_extract` | `axe` | Extracts archive files (`.tar.gz`, `.zip`, `.7z`, etc.) |
+| `file_backup` | `fbk` | Creates a backup of a file with a timestamp suffix |
+
+#### System Operations
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `disk_usage` | `du2` | Displays disk usage for specific filesystem types |
+| `history_grep` | `hg` | Searches Bash history for a pattern (removes duplicates) |
+| `ip_public` | `myip` | Displays your public IP address |
+| `process_find` | `pf` | Searches for processes by name |
+| `process_kill` | `pk` | Kills all processes matching a given name |
+| `port_kill` | `ptk` | Kills processes running on a specified port |
+| `services_stop` | `svs` | Stops well-known services (Apache, MySQL, Redis, Docker, etc.) |
+| `sudo_last` | `plz` | Runs the last command or a given command with `sudo` |
+| `mkdir_cd` | `mkcd` | Creates a directory and changes into it |
+
+#### Git Operations
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `git_list_tags` | `glt` | Lists all local and remote tags |
+| `git_add_tag` | `gat` | Creates an annotated tag and pushes it to remote |
+| `git_delete_tag` | `gdt` | Deletes a tag both locally and on remote |
+| `git_dump_revisions` | `gdr` | Dumps all revisions of a Git-tracked file into separate files |
+| `git_apply_patch` | `gap` | Creates and applies patches from a feature branch to main |
+
+#### Docker Operations
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `docker_stop_all` | `dsa` | Stops all running Docker containers |
+| `docker_start_all` | `daa` | Starts all stopped Docker containers |
+| `docker_prune_all` | `dpa` | Removes all Docker containers, images, volumes, and networks |
+
+#### Gash Management
+
+| Function | Description |
+|----------|-------------|
+| `gash_help` | Displays a list of available Gash commands |
+| `gash_upgrade` | Upgrades Gash to the latest version |
+| `gash_uninstall` | Uninstalls Gash and cleans up configurations |
+| `gash_unload` | Unloads Gash from the current shell session (best-effort restore) |
+| `gash_inspiring_quote` | Displays an inspiring quote |
+
+#### LLM Utilities (for AI Agents)
+
+Gash includes a specialized module for LLM (Large Language Model) agents like Claude Code, GitHub Copilot, and similar AI coding assistants. These functions are designed to **minimize token usage** with machine-readable output (JSON/compact text).
+
+**Key Features:**
+
+* **No short aliases** - Only long names (`llm_tree`, not `lt`) since LLMs don't need quick typing
+* **No bash history** - All commands are excluded from history to avoid pollution
+* **Security hardened** - Dangerous commands are blocked, paths are sanitized, DB is read-only
+* **JSON output** - Machine-parseable output minimizes token overhead
+
+| Function | Description | Output |
+|----------|-------------|--------|
+| `llm_exec` | Execute command safely (validated, no history) | Command stdout |
+| `llm_tree` | Compact directory tree | JSON structure |
+| `llm_find` | Find files by pattern | Newline-separated paths |
+| `llm_grep` | Search with structured output | file:line:content |
+| `llm_structure` | Project structure (ignores node_modules, vendor, .git) | Tree-like text |
+| `llm_recent` | Recently modified files | Path + timestamp |
+| `llm_big` | Largest files in directory | Size + path |
+| `llm_def` | Find function/class definitions | file:line:signature |
+| `llm_refs` | Find references/usages | file:line:context |
+| `llm_imports` | Analyze imports/require statements | JSON dependencies |
+| `llm_db_query` | Read-only database queries (`-c CONNECTION`) | JSON array |
+| `llm_db_tables` | List database tables (`-c CONNECTION`) | JSON array |
+| `llm_db_schema` | Show table schema (`-c CONNECTION`) | JSON structure |
+| `llm_db_sample` | Sample rows from table (`-c CONNECTION`) | JSON array |
+| `llm_project` | Detect project type and info | JSON |
+| `llm_deps` | List project dependencies | JSON |
+| `llm_config` | Read config files (no .env for security) | JSON |
+| `llm_routes` | Extract routes (Laravel/Express) | JSON |
+| `llm_git_status` | Compact git status | JSON |
+| `llm_git_diff` | Diff with stats | JSON or unified |
+| `llm_git_log` | Recent commit log | JSON |
+| `llm_git_blame` | Blame on line range | JSON |
+| `llm_ports` | Ports in use | JSON |
+| `llm_procs` | Processes by name/port | JSON |
+| `llm_env` | Filtered env vars (no secrets) | JSON |
+
+**Security Protections:**
+
+* Commands like `rm -rf /`, `dd`, `mkfs`, fork bombs are blocked
+* Path traversal (`..`) and dangerous paths (`/root`, `/boot`) are rejected
+* Secret files (`.env`, `*.pem`, `*_rsa`) cannot be accessed
+* SQL injection patterns (DROP, DELETE, TRUNCATE) are blocked
+* All database operations are read-only
+
+**Example Usage:**
+
+```bash
+# Get project structure (ignores noise directories)
+llm_structure
+
+# Find all PHP files containing "Controller"
+llm_grep "Controller" --ext php
+
+# Query database safely (uses 'default' connection from ~/.gash_env)
+llm_db_query "SELECT id, name FROM users WHERE active = 1"
+
+# Query a specific connection
+llm_db_query "SELECT * FROM orders LIMIT 10" -c legacy
+llm_db_tables -c postgres
+
+# Get compact git status
+llm_git_status
+# {"branch":"main","ahead":0,"behind":0,"staged":[],"modified":["README.md"],"untracked":[]}
+```
+
 ### Aliases
 
 * **Directory Navigation**:
@@ -305,9 +489,6 @@ Remember to restart your terminal to apply the changes.
   * `g`, `ga`, `gst`, `gco`, `gb`, `gd`, `gl`, `gcm`, `gp`: Common Git commands, shortened for convenience.
   * `gl`, `glog`: A more visual and color-enhanced log of commits.
   * `gst`, `gstatus`: Colorized and compact view of the repository's status.
-  * `gadd_tag`, `gdel_tag`, `gtags`: Tag management commands.
-  * `ga`, `gadd`: Quickly adds files to staging.
-  * `gc`, `gcommit`: Shortcut for committing changes.
 * **Network Utilities**:
   * `ping`, `traceroute`, `tracepath`: Aliased with `-c 5` for a limited number of packets.
   * `mtr`: Launches `mtr` with the `-c 5` option for a limited number of packets.
@@ -322,51 +503,13 @@ Remember to restart your terminal to apply the changes.
   * `dstop`, `dstart`: Stops or starts a Docker container.
   * `dexec`, `drm`, `drmi`: Executes a command, removes a container, or an image.
   * `dlogs`, `dinspect`, `dnetls`: Shows logs, inspects an object, or lists networks.
-  * `docker_stop_all`, `dstopall`, `dstartall`: Stops or starts all Docker containers.
-  * `dpruneall`, `docker_prune_all`: Removes all Docker containers, images, volumes, and networks.
 * **Miscellaneous**:
   * `ll`, `la`, `lash`: Enhanced directory listings with color-coded output.
-  * `hgrep`: Searches Bash history for a pattern and removes duplicates.
-  * `myip`: Displays your public IP address.
-  * `stop_services`: Stops well-known services like Apache, MySQL, Redis, Docker, etc.
+  * `ports`: Lists open network ports.
+  * `all_colors`: Prints all available terminal colors with ANSI escape codes.
 * **Cross-Platform Commands**:
   * `explorer`, `taskmanager`: For Windows WSL users, opens Windows Explorer and Task Manager.
   * `wslrestart`, `wslshutdown`: Restarts or shuts down WSL.
-* **System Commands**:
-  * `cls`: Clears the terminal screen.
-  * `quit`: Stops well-known services (`apache2`, `nginx`, `mysql`, etc.) with the `--force` flag.
-  * `ports`: Lists open network ports.
-  * `all_colors`: Prints all available terminal colors with ANSI escape codes.
-* **Gash Helper Functions**:
-  * `gash_help`: Displays a list of available Gash commands. (Also, help is shown if you type `help`, at the end of the prompt.)
-  * `gash_unload`: Unloads Gash from the current shell session and restores the previous shell state (best-effort).
-  * `gash_upgrade`: Upgrades Gash to the latest version.
-  * `gash_inspiring_quote`: Displays an inspiring quote.
-  * `gash_uninstall`: Uninstalls Gash and cleans up configurations.
-
-### Helpers (Functions)
-
-* **File and Directory Management**:
-  * `mkcd`: Creates a directory and changes into it.
-  * `extract`: Extracts archive files (`.tar.gz`, `.zip`, `.7z`, etc.) into the current or specified output directory.
-  * `backup_file`: Creates a backup of a file with a timestamp suffix.
-  * `list_empty_dirs`: Lists all empty directories in the specified path.
-* **System Monitoring**:
-  * `largest_files`: Lists the top 100 largest files in a directory.
-  * `largest_dirs`: Lists the top 100 largest directories.
-  * `find_large_dirs`: Finds directories larger than a specified size and lists their largest file's modification time.
-  * `disk_usage_fs`: Displays disk usage for specific filesystem types, formatted for readability.
-  * `all_colors`: Prints all available terminal colors with ANSI escape codes.
-* **Process Management**:
-  * `pskill`: Kills all processes matching a given name.
-  * `portkill`: Kills processes running on a specified port.
-  * `psgrep`: Searches for processes by name and displays details with color-coded output.
-* **Git Utilities**:
-  * `git_dump_revisions`: Dumps all revisions of a Git-tracked file into separate files.
-  * `git_apply_feature_patch`: Creates and applies patches from a feature branch to the main branch.
-* **History and Permissions**:
-  * `hgrep`: Searches Bash history for a pattern and removes duplicates, only showing the last occurrence.
-  * `please`: Runs the last command or a given command with `sudo`.
 
 ### Swap-ins (Command Replacements)
 

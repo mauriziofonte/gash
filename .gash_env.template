@@ -1,0 +1,46 @@
+# ~/.gash_env - Gash Environment Configuration
+# Copy this file to ~/.gash_env and edit with your values
+# IMPORTANT: Set permissions with: chmod 600 ~/.gash_env
+#
+# Quick setup:
+#   cp ~/.gash/.gash_env.template ~/.gash_env
+#   chmod 600 ~/.gash_env
+#   nano ~/.gash_env
+#
+# Or use: gash_env_init
+
+# ============================================
+# SSH Keys
+# ============================================
+# Format: SSH:keypath=passphrase
+# The key file must exist, otherwise the entry is skipped.
+#
+# Examples:
+# SSH:~/.ssh/id_ed25519=my-passphrase
+# SSH:~/.ssh/work_rsa=work-passphrase
+
+# ============================================
+# Database Connections (URL format)
+# ============================================
+# Format: DB:name=driver://user:password@host:port/database
+#
+# Supported drivers: mysql, mariadb, pgsql
+#
+# The 'default' connection is used when no -c option is specified.
+# Database name in URL is optional (can be specified per-query with -d).
+#
+# Special characters in password must be URL-encoded:
+#   @  →  %40
+#   :  →  %3A
+#   /  →  %2F
+#   #  →  %23
+#   %  →  %25
+#
+# Examples:
+# DB:default=mysql://root:password@localhost:3306/myapp
+# DB:legacy=mysql://admin:p%40ssw0rd@localhost:3307/old_db
+# DB:analytics=pgsql://pguser:secret@localhost:5432/analytics
+# DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
+#
+# To test a connection: gash_db_test [connection_name]
+# To list connections:  gash_db_list
