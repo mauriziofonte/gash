@@ -19,16 +19,48 @@
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.2.0
+# Version: 1.3.0
 # Release Date: 2024-10-24
-# Last Update: 2026-01-02
+# Last Update: 2026-01-06
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
 #
 
-# Exit early if not running interactively.
-[[ $- != *i* ]] && return
+# Exit early if not running interactively (unless in GASH_HEADLESS mode).
+if [[ $- != *i* ]] && [[ "${GASH_HEADLESS-}" != "1" ]]; then
+    return
+fi
+
+# GASH_HEADLESS mode: Load only core modules for LLM/scripting use.
+# When GASH_HEADLESS=1:
+#   - Loads core/*.sh and modules/*.sh (all functions available)
+#   - Skips: prompt customization, aliases, ~/.bash_aliases, ~/.bash_local
+#   - Produces NO terminal output
+if [[ "${GASH_HEADLESS-}" == "1" ]]; then
+    BASH_NAME="Gash"
+    GASH_VERSION="1.3.0"
+    GASH_DIR="${GASH_DIR:-$HOME/.gash}"
+
+    # Load Core Modules (output, config, utils, validation)
+    if [[ -d "$GASH_DIR/lib/core" ]]; then
+        for __gash_core_file in "$GASH_DIR/lib/core"/*.sh; do
+            [[ -f "$__gash_core_file" ]] && source "$__gash_core_file" 2>/dev/null
+        done
+        unset __gash_core_file
+    fi
+
+    # Load Functional Modules (llm.sh, git.sh, docker.sh, etc.)
+    if [[ -d "$GASH_DIR/lib/modules" ]]; then
+        for __gash_module_file in "$GASH_DIR/lib/modules"/*.sh; do
+            [[ -f "$__gash_module_file" ]] && source "$__gash_module_file" 2>/dev/null
+        done
+        unset __gash_module_file
+    fi
+
+    # Exit early - no prompt, no aliases, no user files
+    return 0
+fi
 
 # Exit early if we don't have a ~/.gash/ directory (why are we here?)
 if [ ! -d "$HOME/.gash" ]; then
@@ -91,7 +123,7 @@ fi
 
 # define some constants
 BASH_NAME="Gash"
-GASH_VERSION="1.0.0"
+GASH_VERSION="1.3.0"
 GASH_DIR="$HOME/.gash"
 
 
@@ -137,25 +169,25 @@ fi
 #                    Color Definitions                    #
 ###########################################################
 
-# Reset
-Color_Off='\033[0m'       # Text Reset
+# PS1 Colors - prefixed to avoid conflicts with other bash plugins
+__GASH_PS1_OFF='\033[0m'
 
 # Regular Colors
-Red='\e[0;31m'          # Red
-Green='\e[0;32m'        # Green
-Yellow='\e[0;33m'       # Yellow
-Blue='\e[0;34m'         # Blue
-Purple='\e[0;35m'       # Purple
-Cyan='\e[0;36m'         # Cyan
-White='\e[0;37m'        # White
+__GASH_PS1_RED='\e[0;31m'
+__GASH_PS1_GREEN='\e[0;32m'
+__GASH_PS1_YELLOW='\e[0;33m'
+__GASH_PS1_BLUE='\e[0;34m'
+__GASH_PS1_PURPLE='\e[0;35m'
+__GASH_PS1_CYAN='\e[0;36m'
+__GASH_PS1_WHITE='\e[0;37m'
 
-# Bold
-BRed='\e[1;31m'         # Bold Red
-BGreen='\e[1;32m'       # Bold Green
-BYellow='\e[1;33m'      # Bold Yellow
-BBlue='\e[1;34m'        # Bold Blue
-BPurple='\e[1;35m'      # Bold Purple
-BWhite='\e[1;37m'       # Bold White
+# Bold Colors
+__GASH_PS1_BRED='\e[1;31m'
+__GASH_PS1_BGREEN='\e[1;32m'
+__GASH_PS1_BYELLOW='\e[1;33m'
+__GASH_PS1_BBLUE='\e[1;34m'
+__GASH_PS1_BPURPLE='\e[1;35m'
+__GASH_PS1_BWHITE='\e[1;37m'
 
 ###########################################################
 #                  Prompt Customization                   #
@@ -208,6 +240,51 @@ function __get_machine_id() {
     fi
 }
 
+# Check if we're in a git repository that should show status in PS1.
+# Returns 1 (skip) if:
+#   - Not in a git repo
+#   - Git root is too far up (>5 levels, likely home dir repo)
+#   - Git root is in GASH_GIT_EXCLUDE list
+function __gash_in_git_repo() {
+    local git_dir
+    git_dir="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --git-dir 2>/dev/null)" || return 1
+
+    case "$git_dir" in
+        .git)
+            # Repo in current directory - always show
+            ;;
+        ../*)
+            # Count how many levels up
+            local depth=0
+            local path="$git_dir"
+            while [[ "$path" == ../* ]]; do
+                path="${path#../}"
+                ((depth++))
+            done
+            # Skip if more than 5 levels up (likely home dir repo)
+            [[ $depth -gt 5 ]] && return 1
+            ;;
+        /*)
+            # Absolute path - verify PWD is under git root
+            local toplevel="${git_dir%/.git}"
+            [[ "$PWD" != "$toplevel" && "$PWD" != "$toplevel/"* ]] && return 1
+            ;;
+    esac
+
+    # Check exclusion list from .gash_env (colon-separated paths)
+    if [[ -n "${GASH_GIT_EXCLUDE-}" ]]; then
+        local git_root
+        git_root="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --show-toplevel 2>/dev/null)"
+        local IFS=':'
+        local excluded
+        for excluded in $GASH_GIT_EXCLUDE; do
+            [[ "$git_root" == "$excluded" ]] && return 1
+        done
+    fi
+
+    return 0
+}
+
 # Function to construct the PS1 prompt.
 function __construct_ps1() {
     local exit_code="$1"  # Pass the saved exit code from PROMPT_COMMAND
@@ -224,31 +301,31 @@ function __construct_ps1() {
     # virtualenv
     if [ -n "${VIRTUAL_ENV}" ]; then
         local VENV=`basename $VIRTUAL_ENV`
-        PS1+="\[${BWhite}\](${VENV}) \[${Color_Off}\]"
+        PS1+="\[${__GASH_PS1_BWHITE}\](${VENV}) \[${__GASH_PS1_OFF}\]"
     fi
 
     # user
     if [ ${USER} == root ]; then
-        PS1+="\[${Red}\]" # root
+        PS1+="\[${__GASH_PS1_RED}\]" # root
     elif [ ${USER} != ${LOGNAME} ]; then
-        PS1+="\[${Blue}\]" # normal user
+        PS1+="\[${__GASH_PS1_BLUE}\]" # normal user
     else
-        PS1+="\[${Green}\]" # normal user
+        PS1+="\[${__GASH_PS1_GREEN}\]" # normal user
     fi
-    PS1+="\u\[${Color_Off}\]"
+    PS1+="\u\[${__GASH_PS1_OFF}\]"
 
     if [ -n "${SSH_CONNECTION}" ]; then
-        PS1+="\[${BWhite}\]@"
-        PS1+="\[${UWhite}${HOST_COLOR}\]\h\[${Color_Off}\]"
+        PS1+="\[${__GASH_PS1_BWHITE}\]@"
+        PS1+="\[${HOST_COLOR}\]\h\[${__GASH_PS1_OFF}\]"
     fi
 
     # current directory
-    PS1+=":\[${BYellow}\]\w"
+    PS1+=":\[${__GASH_PS1_BYELLOW}\]\w"
 
     # background jobs
     local NO_JOBS=`jobs -p | wc -w`
     if [ ${NO_JOBS} != 0 ]; then
-        PS1+=" \[${BGreen}\][j${NO_JOBS}]\[${Color_Off}\]"
+        PS1+=" \[${__GASH_PS1_BGREEN}\][j${NO_JOBS}]\[${__GASH_PS1_OFF}\]"
     fi
 
     # screen sessions
@@ -262,36 +339,37 @@ function __construct_ps1() {
                 if [ -n "${current_screen}" ]; then
                     current_screen=":${current_screen}"
                 fi
-                PS1+=" \[${BGreen}\][s${SCREEN_JOBS}${current_screen}]\[${Color_Off}\]"
+                PS1+=" \[${__GASH_PS1_BGREEN}\][s${SCREEN_JOBS}${current_screen}]\[${__GASH_PS1_OFF}\]"
             fi
             break
         fi
     done
 
-    # git branch
-    # Use an external-path-only lookup: `which` can emit alias/function text.
-    if type -P git >/dev/null 2>&1; then
-        local branch="$(git name-rev --name-only HEAD 2>/dev/null)"
+    # git branch - optimized detection
+    if type -P git >/dev/null 2>&1 && __gash_in_git_repo; then
+        local branch
+        # Fast: symbolic-ref for normal branches
+        branch="$(GIT_OPTIONAL_LOCKS=0 git symbolic-ref --short HEAD 2>/dev/null)" \
+            || branch="$(GIT_OPTIONAL_LOCKS=0 git describe --tags --exact-match HEAD 2>/dev/null)" \
+            || branch="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --short HEAD 2>/dev/null)"
 
-        if [ -n "${branch}" ]; then
-            local git_status="$(git status --porcelain -b 2>/dev/null)"
-            local letters="$( echo "${git_status}" | grep --regexp=' \w ' | sed -e 's/^\s\?\(\w\)\s.*$/\1/' )"
-            local untracked="$( echo "${git_status}" | grep -F '?? ' | sed -e 's/^\?\(\?\)\s.*$/\1/' )"
-            local status_line="$( echo -e "${letters}\n${untracked}" | sort | uniq | tr -d '[:space:]' )"
-            PS1+=" \[${BBlue}\](${branch}"
-            if [ -n "${status_line}" ]; then
-                PS1+=" ${status_line}"
+        if [[ -n "${branch}" ]]; then
+            # Quick dirty check (ignore untracked for speed)
+            local dirty=""
+            if [[ -n "$(GIT_OPTIONAL_LOCKS=0 git status --porcelain --untracked-files=no 2>/dev/null | head -1)" ]]; then
+                dirty="*"
             fi
-            PS1+=")\[${Color_Off}\]"
+
+            PS1+=" \[${__GASH_PS1_BBLUE}\](${branch}${dirty})\[${__GASH_PS1_OFF}\]"
         fi
     fi
 
     # exit code
     if [ ${exit_code} != 0 ]; then
-        PS1+=" \[${BRed}\][!${exit_code}]\[${Color_Off}\]"
+        PS1+=" \[${__GASH_PS1_BRED}\][!${exit_code}]\[${__GASH_PS1_OFF}\]"
     fi
 
-    PS1+=" \[${BPurple}\]\\$\[${Color_Off}\] " # prompt
+    PS1+=" \[${__GASH_PS1_BPURPLE}\]\\$\[${__GASH_PS1_OFF}\] " # prompt
 
     __set_terminal_title
 }
@@ -299,7 +377,7 @@ function __construct_ps1() {
 # Set the prompt command to construct PS1 before each prompt and update history immediately.
 if [ "$color_prompt" = yes ]; then
     PROMPT_COMMAND='EXIT_CODE=$?; history -a; history -c; history -r; __construct_ps1 $EXIT_CODE'
-    PS2="\[${BPurple}\]>\[${Color_Off}\] "  # Continuation prompt.
+    PS2="\[${__GASH_PS1_BPURPLE}\]>\[${__GASH_PS1_OFF}\] "  # Continuation prompt.
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi
@@ -342,11 +420,13 @@ if [[ -n "${__GASH_SNAPSHOT_TAKEN-}" && -z "${__GASH_ADDED_FUNCS-}" ]]; then
     unset __gash_line __gash_name
 fi
 
-# Load Aliases
-if [ -f "$GASH_DIR/lib/aliases.sh" ]; then
+# Load Aliases (prefer modular loader, fallback to monolithic file)
+if [[ -f "$GASH_DIR/lib/aliases/_loader.sh" ]]; then
+    source "$GASH_DIR/lib/aliases/_loader.sh"
+elif [[ -f "$GASH_DIR/lib/aliases.sh" ]]; then
     source "$GASH_DIR/lib/aliases.sh"
 else
-    echo -e "${Red}Warning: lib/aliases.sh not found; skipping.${Color_Off}"
+    echo -e "${__GASH_PS1_RED}Warning: No aliases found; skipping.${__GASH_PS1_OFF}"
 fi
 
 # Compute aliases introduced by Gash (best-effort). Keep this list stable for gash_unload.
@@ -366,7 +446,7 @@ fi
 if [ -f "$GASH_DIR/lib/prompt.sh" ]; then
     source "$GASH_DIR/lib/prompt.sh"
 else
-    echo -e "${Red}Warning: lib/prompt.sh not found; skipping.${Color_Off}"
+    echo -e "${__GASH_PS1_RED}Warning: lib/prompt.sh not found; skipping.${__GASH_PS1_OFF}"
 fi
 
 # Load custom aliases from ~/.bash_aliases if it exists.

@@ -6,9 +6,9 @@
 # Installation script for Gash. It clones the Gash repository and updates the shell configuration files.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.2.0
+# Version: 1.3.0
 # Release Date: 2024-10-24
-# Last Update: 2026-01-02
+# Last Update: 2026-01-06
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
@@ -195,7 +195,7 @@ gashinst_do_install() {
   local PROFILE_INSTALL_DIR
   PROFILE_INSTALL_DIR="$(gashinst_install_dir | command sed "s:^$HOME:\$HOME:")"
 
-  SOURCE_STR="\n# Load Gash Bash\n# This loads the Gash customized Bash.\nif [ -f \"\$HOME/.gashrc\" ]; then\n  source \"\$HOME/.gashrc\"\nfi\n"
+  SOURCE_STR="\n# >>> GASH START >>>\n# Load Gash Bash - Do not edit this block, it is managed by Gash installer\nif [ -f \"\$HOME/.gashrc\" ]; then\n  source \"\$HOME/.gashrc\"\nfi\n# <<< GASH END <<<\n"
 
   if [ -z "$GASH_PROFILE" ]; then
     gashinst_info "Profile not found. Tried ~/.bashrc, ~/.bash_profile, and ~/.profile."

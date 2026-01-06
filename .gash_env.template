@@ -44,3 +44,15 @@
 #
 # To test a connection: gash_db_test [connection_name]
 # To list connections:  gash_db_list
+
+# ============================================
+# PS1 Prompt Configuration
+# ============================================
+# GASH_GIT_EXCLUDE: Colon-separated list of git repository roots to exclude
+# from the PS1 prompt. Useful when your home directory is a git repo or for
+# very large repositories that cause prompt latency.
+#
+# Example:
+# GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo
+#
+# GASH_GIT_EXCLUDE=

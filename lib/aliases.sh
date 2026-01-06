@@ -228,7 +228,7 @@ if command -v php &> /dev/null; then
     PHP_LV=$(ls -1 /usr/bin/php* | grep -oP '\d+\.\d+' | sort -V | tail -n1)
 
     # PHP & Composer version-specific aliases
-    for version in 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
+    for version in 8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
         version_alias=${version//./}
         __add_alias_if_supported "php$version" "php$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M"
     done
@@ -238,7 +238,7 @@ if command -v php &> /dev/null; then
 
     if type -P composer >/dev/null 2>&1; then
         COMPOSER_BINARY=$(type -P composer)
-        for version in 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
+        for version in 8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
             version_alias=${version//./}
             __add_alias_if_supported "php$version" "composer$version_alias" "__CMD_BINARY -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
         done

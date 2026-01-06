@@ -62,13 +62,20 @@ Your new prompt shows:
 
 * **Username** (colored by user type)
 * **Current directory** (shortened to `~` for home)
-* **Git branch & status** if you're inside a Git repo (shows unstaged changes, ahead/behind status)
+* **Git branch & status** if you're inside a Git repo (shows `*` for dirty state)
 * **Background jobs** and **last command exit code** for easy debugging.
 
 ```sh
 # Example:
-[maurizio@server]:~/projects (main*)[j2] $  # Git branch, jobs, exit code
+maurizio:~/projects (main*) $  # Git branch with dirty indicator
 ```
+
+**Performance Optimizations:**
+
+* Uses `git symbolic-ref` instead of `git name-rev` (faster branch detection)
+* Limits git detection depth (avoids slowdown when home directory is a git repo)
+* Uses `GIT_OPTIONAL_LOCKS=0` to prevent lock file creation
+* Supports `GASH_GIT_EXCLUDE` in `~/.gash_env` to exclude specific repositories from prompt
 
 ### Built-in Aliases
 
@@ -76,7 +83,8 @@ Gash improves everyday commands:
 
 * **`..`**: Go up one directory, **`...`** for two, etc.
 * **`ll`**, **`la`**, **`lash`**: Enhanced directory listings.
-* **`g`**: Shortcut for `git`, with **`ga`**, **`gst`**, **`gl`** for common actions.
+* **`gl`**: Professional git log with graph visualization (run `gl --help` for all variants).
+* **`ga`**, **`gst`**, **`gc`**, **`gp`**: Common git operations.
 * **`hg`** (or `history_grep`): Search Bash history with color-coded output.
 
 And [many more](#aliases)!
@@ -272,6 +280,16 @@ DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
 ```
 
 Supported drivers: `mysql`, `mariadb`, `pgsql`
+
+##### PS1 Prompt Configuration
+
+You can exclude specific git repositories from the prompt (useful for large repos or when your home directory is a git repo):
+
+```sh
+# ~/.gash_env
+# Colon-separated list of repository roots to exclude
+GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo
+```
 
 **Password URL encoding:** If your password contains special characters, URL-encode them:
 
@@ -485,10 +503,19 @@ llm_git_status
   * `cp`, `mv`, `rm`: Aliased with safer interactive options (`-iv`, `-I`) to prevent accidental overwrites or deletions.
   * `mkdir`: Aliased with `-pv` to create parent directories and show verbose output.
   * `bc`: Launches `bc` with the `-l` option for floating point calculations.
-* **Git Shortcuts**:
-  * `g`, `ga`, `gst`, `gco`, `gb`, `gd`, `gl`, `gcm`, `gp`: Common Git commands, shortened for convenience.
-  * `gl`, `glog`: A more visual and color-enhanced log of commits.
-  * `gst`, `gstatus`: Colorized and compact view of the repository's status.
+* **Git Shortcuts** (run `gl --help` for full list):
+  * **Log**: `gl` (graph), `gla` (all branches), `glo` (oneline), `glg` (first-parent), `gls` (with stats), `glf` (file history)
+  * **Status**: `gst` (full), `gs` (short with branch)
+  * **Add**: `ga`, `gaa` (all), `gap` (interactive patch)
+  * **Commit**: `gc`, `gcm` (with message), `gca` (amend), `gcan` (amend no-edit)
+  * **Push/Pull**: `gp`, `gpf` (force-with-lease), `gpl`, `gplr` (rebase)
+  * **Branch**: `gb`, `gba` (all), `gcb` (create+switch), `gbd`/`gbD` (delete)
+  * **Checkout/Switch**: `gco`, `gsw`, `gswc` (create)
+  * **Diff**: `gd`, `gds` (staged), `gdw` (word-diff)
+  * **Stash**: `gsh`, `gshp` (pop), `gshl` (list), `gsha` (apply)
+  * **Remote**: `gf` (fetch), `gfa` (fetch all+prune), `gr` (remote -v)
+  * **Reset**: `grh`, `grh1` (undo last commit), `grhh` (hard)
+  * **Rebase**: `grb`, `grbc` (continue), `grba` (abort)
 * **Network Utilities**:
   * `ping`, `traceroute`, `tracepath`: Aliased with `-c 5` for a limited number of packets.
   * `mtr`: Launches `mtr` with the `-c 5` option for a limited number of packets.
@@ -523,10 +550,9 @@ llm_git_status
 * **PHP & Composer Versions**:
   * `php83`, `composer83`, `php82`, `composer82`, etc.: Aliases for specific versions of PHP and Composer, allowing easy switching between different environments. Uses memory limits and `allow_url_fopen` enabled for Composer.
 * **Git Enhancements**:
-  * **git log** → `gl`: A more visual and color-enhanced log of commits.
-  * **git status** → `gst`: Colorized and compact view of the repository's status.
-  * **git add** → `ga`: Quickly adds files to staging.
-  * **git commit** → `gc`: Shortcut for committing changes.
+  * **git log** → `gl`: Professional log with graph, colors, and variants (`gl --help` for all options).
+  * **git status** → `gst`/`gs`: Full or compact status view.
+  * See [Git Shortcuts](#aliases) for the complete list of 40+ git aliases.
 
 ## License
 

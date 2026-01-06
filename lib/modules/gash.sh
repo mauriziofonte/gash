@@ -182,7 +182,9 @@ gash_upgrade() {
 # Uninstall Gash and clean up configurations.
 # Usage: gash_uninstall
 gash_uninstall() {
-    if [ ! -d "$HOME/.gash" ]; then
+    local gash_dir="${GASH_DIR:-$HOME/.gash}"
+
+    if [ ! -d "$gash_dir" ]; then
         __gash_error "Gash is not installed on this system."
         return 1
     fi
@@ -196,11 +198,19 @@ gash_uninstall() {
     local profile_files=( "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" )
 
     # Remove Gash sourcing lines from profiles
+    # Uses unique delimiters to avoid matching other if/fi blocks
     for profile_file in "${profile_files[@]}"; do
         if [ -f "$profile_file" ]; then
             if command grep -qc 'source.*[./]gashrc' "$profile_file"; then
                 __gash_info "Removing Gash block from: $profile_file"
-                sed -i.bak '/# Load Gash Bash/,/^fi$/d' "$profile_file"
+                # Try new format with delimiters first
+                if grep -q '# >>> GASH START >>>' "$profile_file"; then
+                    sed -i.bak '/# >>> GASH START >>>/,/# <<< GASH END <<</d' "$profile_file"
+                # Fallback: old format - use more specific pattern to avoid catching other fi's
+                elif grep -q '# Load Gash Bash' "$profile_file"; then
+                    # Remove exactly: comment + if block + fi (4 lines total)
+                    sed -i.bak '/# Load Gash Bash/{N;N;N;N;d}' "$profile_file"
+                fi
             else
                 __gash_info "No Gash block found in: $profile_file; skipping."
             fi
@@ -210,37 +220,35 @@ gash_uninstall() {
     # Remove ~/.gashrc
     if [ -f "$HOME/.gashrc" ]; then
         __gash_info "Removing ~/.gashrc..."
-        rm -f "$HOME/.gashrc" >/dev/null 2>&1
-
-        if [ -f "$HOME/.gashrc" ]; then
-            __gash_warning "Failed to remove ~/.gashrc; trying with sudo..."
-            sudo rm -f "$HOME/.gashrc" >/dev/null 2>&1
-
-            if [ -f "$HOME/.gashrc" ]; then
-                __gash_error "Failed to remove ~/.gashrc; please remove it manually."
-            fi
+        if ! rm -f "$HOME/.gashrc" 2>/dev/null; then
+            __gash_error "Failed to remove ~/.gashrc; please remove it manually."
         fi
     else
         __gash_info "~/.gashrc not found; skipping."
     fi
 
     # Remove Gash directory
-    local gash_dir="${GASH_DIR:-$HOME/.gash}"
-
     if [ -d "$gash_dir" ]; then
-        __gash_info "Removing Gash at ~/.gash..."
-        rm -rf "$gash_dir" > /dev/null 2>&1
-
-        if [ -d "$gash_dir" ]; then
-            __gash_warning "Failed to remove ~/.gash; trying with sudo..."
-            sudo rm -rf "$gash_dir" >/dev/null 2>&1
-
-            if [ -d "$gash_dir" ]; then
-                __gash_error "Failed to remove ~/.gash; please remove it manually."
-            fi
+        __gash_info "Removing Gash at $gash_dir..."
+        if ! rm -rf "$gash_dir" 2>/dev/null; then
+            __gash_error "Failed to remove $gash_dir; please remove it manually."
         fi
     else
-        __gash_info "~/.gash not found; skipping."
+        __gash_info "$gash_dir not found; skipping."
+    fi
+
+    # Handle ~/.gash_env (contains credentials - ask user)
+    if [ -f "$HOME/.gash_env" ]; then
+        __gash_warning "Found ~/.gash_env (may contain database credentials)."
+        if needs_confirm_prompt "Remove ~/.gash_env?"; then
+            if rm -f "$HOME/.gash_env" 2>/dev/null; then
+                __gash_info "Removed ~/.gash_env"
+            else
+                __gash_error "Failed to remove ~/.gash_env; please remove it manually."
+            fi
+        else
+            __gash_info "Kept ~/.gash_env"
+        fi
     fi
 
     __gash_success "Gash uninstalled."
