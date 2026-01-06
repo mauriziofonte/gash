@@ -157,3 +157,73 @@ it ".gash_env.template documents GASH_GIT_EXCLUDE" bash -c '
     grep -q "GASH_GIT_EXCLUDE" "$ROOT/.gash_env.template"
     grep -q "PS1 Prompt Configuration" "$ROOT/.gash_env.template"
 '
+
+it "__gash_in_git_repo returns failure when git root is HOME" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
+
+    # Initialize HOME as a git repo (simulating the problem scenario)
+    (cd "$tmp" && git init -q)
+
+    # Create a subdirectory (not a git repo itself)
+    mkdir -p "$tmp/projects/myapp"
+
+    inner_cmd="$(cat <<EOF
+set -u
+source "\$HOME/.gash/gash.sh" >/dev/null 2>&1 || true
+
+# Test from HOME itself - should skip
+cd "\$HOME"
+__gash_in_git_repo && echo "home:in_repo" || echo "home:not_in_repo"
+
+# Test from subdirectory - should also skip since git root is HOME
+cd "\$HOME/projects/myapp"
+__gash_in_git_repo && echo "subdir:in_repo" || echo "subdir:not_in_repo"
+EOF
+)"
+
+    out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    # Both should report not_in_repo because git root is HOME
+    [[ "$out" == *"home:not_in_repo"* ]]
+    [[ "$out" == *"subdir:not_in_repo"* ]]
+'
+
+it "__gash_in_git_repo works correctly with nested repos" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
+
+    # Initialize HOME as a git repo
+    (cd "$tmp" && git init -q)
+
+    # Create a REAL project with its own git repo inside HOME
+    mkdir -p "$tmp/projects/realproject"
+    (cd "$tmp/projects/realproject" && git init -q)
+
+    inner_cmd="$(cat <<EOF
+set -u
+source "\$HOME/.gash/gash.sh" >/dev/null 2>&1 || true
+
+# Test from realproject - should show git info (has its own .git)
+cd "\$HOME/projects/realproject"
+__gash_in_git_repo && echo "realproject:in_repo" || echo "realproject:not_in_repo"
+
+# Test from projects dir (no .git, parent is HOME) - should NOT show git info
+cd "\$HOME/projects"
+__gash_in_git_repo && echo "projects:in_repo" || echo "projects:not_in_repo"
+EOF
+)"
+
+    out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    # realproject has its own .git - should show
+    [[ "$out" == *"realproject:in_repo"* ]]
+    # projects dir inherits from HOME - should NOT show
+    [[ "$out" == *"projects:not_in_repo"* ]]
+'

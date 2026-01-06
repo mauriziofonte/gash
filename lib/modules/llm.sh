@@ -739,14 +739,24 @@ __llm_db_tables_impl() {
     [[ -n "$database" ]] && args+=(-d "$database")
     args+=(-c "$connection")
 
+    local result
     case "$db_driver" in
         mysql|mariadb)
-            __llm_db_query_impl "SHOW TABLES" "${args[@]}" 2>/dev/null | \
-                __llm_has_jq && jq -c '[.[].[] | values]' || \
-                sed 's/^\[{[^}]*:"\([^"]*\)"}\(,\|]\)/"\1"\2/g'
+            result=$(__llm_db_query_impl "SHOW TABLES" "${args[@]}" 2>/dev/null) || return 1
+            if __llm_has_jq; then
+                printf '%s' "$result" | jq -c '[.[].[] | values]'
+            else
+                # Fallback: extract table names without jq
+                printf '%s' "$result" | sed 's/^\[{[^}]*:"\([^"]*\)"}\(,\|]\)/"\1"\2/g'
+            fi
             ;;
         pgsql)
-            __llm_db_query_impl "SELECT tablename FROM pg_tables WHERE schemaname='public'" "${args[@]}"
+            result=$(__llm_db_query_impl "SELECT tablename FROM pg_tables WHERE schemaname='public'" "${args[@]}" 2>/dev/null) || return 1
+            if __llm_has_jq; then
+                printf '%s' "$result" | jq -c '[.[].tablename]'
+            else
+                printf '%s\n' "$result"
+            fi
             ;;
         *)
             __llm_error "unknown_db_type" "$db_driver"

@@ -19,7 +19,7 @@
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.3.0
+# Version: 1.3.1
 # Release Date: 2024-10-24
 # Last Update: 2026-01-06
 # License: Apache License
@@ -39,7 +39,7 @@ fi
 #   - Produces NO terminal output
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     BASH_NAME="Gash"
-    GASH_VERSION="1.3.0"
+    GASH_VERSION="1.3.1"
     GASH_DIR="${GASH_DIR:-$HOME/.gash}"
 
     # Load Core Modules (output, config, utils, validation)
@@ -123,7 +123,7 @@ fi
 
 # define some constants
 BASH_NAME="Gash"
-GASH_VERSION="1.3.0"
+GASH_VERSION="1.3.1"
 GASH_DIR="$HOME/.gash"
 
 
@@ -243,38 +243,20 @@ function __get_machine_id() {
 # Check if we're in a git repository that should show status in PS1.
 # Returns 1 (skip) if:
 #   - Not in a git repo
-#   - Git root is too far up (>5 levels, likely home dir repo)
+#   - Git root is $HOME (home directory as repo)
 #   - Git root is in GASH_GIT_EXCLUDE list
 function __gash_in_git_repo() {
-    local git_dir
-    git_dir="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --git-dir 2>/dev/null)" || return 1
+    # Quick check: are we in a git repo at all?
+    local git_root
+    git_root="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --show-toplevel 2>/dev/null)" || return 1
 
-    case "$git_dir" in
-        .git)
-            # Repo in current directory - always show
-            ;;
-        ../*)
-            # Count how many levels up
-            local depth=0
-            local path="$git_dir"
-            while [[ "$path" == ../* ]]; do
-                path="${path#../}"
-                ((depth++))
-            done
-            # Skip if more than 5 levels up (likely home dir repo)
-            [[ $depth -gt 5 ]] && return 1
-            ;;
-        /*)
-            # Absolute path - verify PWD is under git root
-            local toplevel="${git_dir%/.git}"
-            [[ "$PWD" != "$toplevel" && "$PWD" != "$toplevel/"* ]] && return 1
-            ;;
-    esac
+    # CRITICAL: Skip if git root is the home directory
+    # This prevents showing git status for subdirs when $HOME is a repo
+    # but allows showing for repos that happen to be inside $HOME
+    [[ "$git_root" == "$HOME" ]] && return 1
 
     # Check exclusion list from .gash_env (colon-separated paths)
     if [[ -n "${GASH_GIT_EXCLUDE-}" ]]; then
-        local git_root
-        git_root="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --show-toplevel 2>/dev/null)"
         local IFS=':'
         local excluded
         for excluded in $GASH_GIT_EXCLUDE; do

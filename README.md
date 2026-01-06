@@ -408,6 +408,19 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 | `git_dump_revisions` | `gdr` | Dumps all revisions of a Git-tracked file into separate files |
 | `git_apply_patch` | `gap` | Creates and applies patches from a feature branch to main |
 
+#### Git Log Functions
+
+Professional git log visualization with multiple variants. Run `gl --help` for full documentation.
+
+| Function | Description |
+|----------|-------------|
+| `gl` | Compact log with graph (current branch) |
+| `gla` | All branches with graph |
+| `glo` | Ultra-compact oneline format |
+| `glg` | Graph focused (first-parent only) |
+| `gls` | Log with file statistics |
+| `glf FILE` | File history with patches |
+
 #### Docker Operations
 
 | Long Name | Short | Description |
@@ -425,6 +438,10 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 | `gash_uninstall` | Uninstalls Gash and cleans up configurations |
 | `gash_unload` | Unloads Gash from the current shell session (best-effort restore) |
 | `gash_inspiring_quote` | Displays an inspiring quote |
+| `gash_env_init` | Creates `~/.gash_env` from template |
+| `gash_db_list` | Lists all configured database connections |
+| `gash_db_test` | Tests a database connection |
+| `gash_ssh_auto_unlock` | Auto-unlock SSH keys configured in `~/.gash_env` |
 
 #### LLM Utilities (for AI Agents)
 
@@ -443,24 +460,16 @@ Gash includes a specialized module for LLM (Large Language Model) agents like Cl
 | `llm_tree` | Compact directory tree | JSON structure |
 | `llm_find` | Find files by pattern | Newline-separated paths |
 | `llm_grep` | Search with structured output | file:line:content |
-| `llm_structure` | Project structure (ignores node_modules, vendor, .git) | Tree-like text |
-| `llm_recent` | Recently modified files | Path + timestamp |
-| `llm_big` | Largest files in directory | Size + path |
-| `llm_def` | Find function/class definitions | file:line:signature |
-| `llm_refs` | Find references/usages | file:line:context |
-| `llm_imports` | Analyze imports/require statements | JSON dependencies |
 | `llm_db_query` | Read-only database queries (`-c CONNECTION`) | JSON array |
 | `llm_db_tables` | List database tables (`-c CONNECTION`) | JSON array |
-| `llm_db_schema` | Show table schema (`-c CONNECTION`) | JSON structure |
-| `llm_db_sample` | Sample rows from table (`-c CONNECTION`) | JSON array |
+| `llm_db_schema` | Show table schema (`TABLE -c CONNECTION`) | JSON structure |
+| `llm_db_sample` | Sample rows from table (`TABLE -c CONNECTION`) | JSON array |
 | `llm_project` | Detect project type and info | JSON |
 | `llm_deps` | List project dependencies | JSON |
 | `llm_config` | Read config files (no .env for security) | JSON |
-| `llm_routes` | Extract routes (Laravel/Express) | JSON |
 | `llm_git_status` | Compact git status | JSON |
 | `llm_git_diff` | Diff with stats | JSON or unified |
 | `llm_git_log` | Recent commit log | JSON |
-| `llm_git_blame` | Blame on line range | JSON |
 | `llm_ports` | Ports in use | JSON |
 | `llm_procs` | Processes by name/port | JSON |
 | `llm_env` | Filtered env vars (no secrets) | JSON |

@@ -413,7 +413,7 @@ gash_help() {
         echo
 
         # Git operations
-        echo -e "\e[1;37m--- Git Operations ---\033[0m"
+        echo -e "\e[1;37m--- Git Functions ---\033[0m"
         echo -e " > \e[0;33mgit_list_tags\033[0m (\e[0;32mglt\033[0m) - \e[1;37mLists all local and remote tags.\033[0m"
         echo -e " > \e[0;33mgit_add_tag\033[0m (\e[0;32mgat\033[0m) \e[0;36m<tag> \"<msg>\"\033[0m - \e[1;37mCreates and pushes a tag.\033[0m"
         echo -e " > \e[0;33mgit_delete_tag\033[0m (\e[0;32mgdt\033[0m) \e[0;36m<tag>\033[0m - \e[1;37mDeletes a tag locally and on remote.\033[0m"
@@ -422,7 +422,7 @@ gash_help() {
         echo
 
         # Docker operations
-        echo -e "\e[1;37m--- Docker Operations ---\033[0m"
+        echo -e "\e[1;37m--- Docker Functions ---\033[0m"
         echo -e " > \e[0;33mdocker_stop_all\033[0m (\e[0;32mdsa\033[0m) - \e[1;37mStop all Docker containers.\033[0m"
         echo -e " > \e[0;33mdocker_start_all\033[0m (\e[0;32mdaa\033[0m) - \e[1;37mStart all Docker containers.\033[0m"
         echo -e " > \e[0;33mdocker_prune_all\033[0m (\e[0;32mdpa\033[0m) - \e[1;37mRemove all Docker resources.\033[0m"
@@ -435,12 +435,27 @@ gash_help() {
         echo -e " > \e[0;33mgash_uninstall\033[0m - \e[1;37mUninstall Gash.\033[0m"
         echo -e " > \e[0;33mgash_unload\033[0m - \e[1;37mRestore shell state before Gash.\033[0m"
         echo -e " > \e[0;33mgash_inspiring_quote\033[0m - \e[1;37mDisplay an inspiring quote.\033[0m"
+        echo -e " > \e[0;33mgash_env_init\033[0m - \e[1;37mCreate ~/.gash_env from template.\033[0m"
+        echo -e " > \e[0;33mgash_db_list\033[0m - \e[1;37mList configured database connections.\033[0m"
+        echo -e " > \e[0;33mgash_db_test\033[0m \e[0;36mNAME\033[0m - \e[1;37mTest a database connection.\033[0m"
+        echo -e " > \e[0;33mgash_ssh_auto_unlock\033[0m - \e[1;37mAuto-unlock SSH keys from ~/.gash_env.\033[0m"
+        echo
+
+        # Listing aliases
+        echo -e "\e[1;37m--- Listing Aliases ---\033[0m"
+        echo -e " > \e[0;33mll\033[0m - \e[1;37mLong listing (ls -l).\033[0m"
+        echo -e " > \e[0;33mla\033[0m - \e[1;37mList all including hidden (ls -la).\033[0m"
+        echo -e " > \e[0;33mlash\033[0m - \e[1;37mDetailed listing with sizes (ls -lash).\033[0m"
+        echo -e " > \e[0;33ml\033[0m - \e[1;37mCompact listing (ls -CF).\033[0m"
+        echo -e " > \e[0;33msl\033[0m - \e[1;37mTypo correction for ls.\033[0m"
         echo
 
         # Navigation aliases
         echo -e "\e[1;37m--- Navigation Aliases ---\033[0m"
-        echo -e " > \e[0;33m..\033[0m, \e[0;33m...\033[0m, \e[0;33m....\033[0m, \e[0;33m.....\033[0m - \e[1;37mChange up 1-4 directories.\033[0m"
+        echo -e " > \e[0;33m..\033[0m, \e[0;33m...\033[0m, \e[0;33m....\033[0m, \e[0;33m.....\033[0m, \e[0;33m.4\033[0m, \e[0;33m.5\033[0m - \e[1;37mChange up 1-5 directories.\033[0m"
         echo -e " > \e[0;33mports\033[0m - \e[1;37mDisplay listening ports.\033[0m"
+        echo -e " > \e[0;33mpath\033[0m - \e[1;37mShow PATH entries one per line.\033[0m"
+        echo -e " > \e[0;33mcls\033[0m - \e[1;37mClear the screen.\033[0m"
 
         # WSL-specific aliases
         if grep -qi "microsoft" /proc/version 2>/dev/null && [ -n "${WSLENV-}" ]; then
@@ -451,35 +466,57 @@ gash_help() {
 
         # Git aliases
         if command -v git >/dev/null 2>&1; then
+            echo -e "\e[1;37m--- Git Log (run 'gl --help' for details) ---\033[0m"
+            echo -e " > \e[0;33mgl\033[0m - \e[1;37mCompact log with graph (current branch).\033[0m"
+            echo -e " > \e[0;33mgla\033[0m - \e[1;37mAll branches with graph.\033[0m"
+            echo -e " > \e[0;33mglo\033[0m - \e[1;37mUltra-compact oneline format.\033[0m"
+            echo -e " > \e[0;33mglg\033[0m - \e[1;37mGraph focused (first-parent only).\033[0m"
+            echo -e " > \e[0;33mgls\033[0m - \e[1;37mLog with file statistics.\033[0m"
+            echo -e " > \e[0;33mglf\033[0m \e[0;36mFILE\033[0m - \e[1;37mFile history with patches.\033[0m"
+            echo
             echo -e "\e[1;37m--- Git Aliases ---\033[0m"
-            echo -e " > \e[0;33mgl\033[0m/\e[0;33mglog\033[0m, \e[0;33mgst\033[0m/\e[0;33mgstatus\033[0m, \e[0;33mga\033[0m/\e[0;33mgadd\033[0m, \e[0;33mgc\033[0m/\e[0;33mgcommit\033[0m"
-            echo -e " > \e[0;33mgp\033[0m/\e[0;33mgpush\033[0m, \e[0;33mgco\033[0m/\e[0;33mgcheckout\033[0m, \e[0;33mgb\033[0m/\e[0;33mgbranch\033[0m, \e[0;33mgd\033[0m/\e[0;33mgdiff\033[0m"
+            echo -e " > \e[0;33mStatus:\033[0m gst (full), gs (short with branch)"
+            echo -e " > \e[0;33mAdd:\033[0m ga, gaa (all), gap (interactive patch)"
+            echo -e " > \e[0;33mCommit:\033[0m gc, gcm (with msg), gca (amend), gcan (amend no-edit)"
+            echo -e " > \e[0;33mPush/Pull:\033[0m gp, gpf (force-with-lease), gpl, gplr (rebase)"
+            echo -e " > \e[0;33mBranch:\033[0m gb, gba (all), gcb (create+switch), gbd/gbD (delete)"
+            echo -e " > \e[0;33mCheckout:\033[0m gco, gsw (switch), gswc (switch -c)"
+            echo -e " > \e[0;33mDiff:\033[0m gd, gds (staged), gdw (word-diff)"
+            echo -e " > \e[0;33mStash:\033[0m gsh, gshp (pop), gshl (list), gsha (apply)"
+            echo -e " > \e[0;33mRemote:\033[0m gf (fetch), gfa (fetch all+prune), gr (remote -v)"
+            echo -e " > \e[0;33mReset:\033[0m grh, grh1 (undo last commit), grhh (hard)"
+            echo -e " > \e[0;33mRebase:\033[0m grb, grbc (continue), grba (abort)"
             echo
         fi
 
         # Docker aliases
         if command -v docker >/dev/null 2>&1; then
             echo -e "\e[1;37m--- Docker Aliases ---\033[0m"
-            echo -e " > \e[0;33mdcls\033[0m/\e[0;33mdclsr\033[0m, \e[0;33mdils\033[0m, \e[0;33mdstop\033[0m/\e[0;33mdstart\033[0m, \e[0;33mdexec\033[0m, \e[0;33mdlogs\033[0m"
+            echo -e " > \e[0;33mContainers:\033[0m dcls (list), dclsr (running), dstop, dstart, dexec, drm"
+            echo -e " > \e[0;33mImages:\033[0m dils (list), drmi (remove)"
+            echo -e " > \e[0;33mLogs/Info:\033[0m dlogs, dinspect, dnetls (networks)"
             echo
         fi
 
         # LLM Utilities (for AI agents)
         echo -e "\e[1;37m--- LLM Utilities (for AI agents) ---\033[0m"
-        echo -e "\e[0;36mNote: No short aliases. Commands excluded from bash history.\033[0m"
-        echo -e " > \e[0;33mllm_exec\033[0m \e[0;36mCMD\033[0m - \e[1;37mExecute command safely (validated, no history).\033[0m"
-        echo -e " > \e[0;33mllm_tree\033[0m \e[0;36m[--text] [PATH]\033[0m - \e[1;37mCompact directory tree (JSON).\033[0m"
+        echo -e "\e[0;36mNo short aliases. Commands excluded from bash history.\033[0m"
+        echo -e " > \e[0;33mllm_exec\033[0m \e[0;36mCMD\033[0m - \e[1;37mExecute command safely.\033[0m"
+        echo -e " > \e[0;33mllm_tree\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mDirectory tree (JSON).\033[0m"
         echo -e " > \e[0;33mllm_find\033[0m \e[0;36mPATTERN [PATH]\033[0m - \e[1;37mFind files by pattern.\033[0m"
         echo -e " > \e[0;33mllm_grep\033[0m \e[0;36mPATTERN [PATH]\033[0m - \e[1;37mSearch code (file:line:content).\033[0m"
-        echo -e " > \e[0;33mllm_db_query\033[0m \e[0;36mQUERY [-d DB]\033[0m - \e[1;37mRead-only DB query (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_db_tables\033[0m \e[0;36m[-d DB]\033[0m - \e[1;37mList database tables.\033[0m"
-        echo -e " > \e[0;33mllm_db_schema\033[0m \e[0;36mTABLE [-d DB]\033[0m - \e[1;37mShow table schema.\033[0m"
+        echo -e " > \e[0;33mllm_db_query\033[0m \e[0;36mSQL -c CONN\033[0m - \e[1;37mRead-only DB query (JSON).\033[0m"
+        echo -e " > \e[0;33mllm_db_tables\033[0m \e[0;36m-c CONN\033[0m - \e[1;37mList database tables.\033[0m"
+        echo -e " > \e[0;33mllm_db_schema\033[0m \e[0;36mTABLE -c CONN\033[0m - \e[1;37mShow table schema.\033[0m"
+        echo -e " > \e[0;33mllm_db_sample\033[0m \e[0;36mTABLE -c CONN\033[0m - \e[1;37mSample rows from table.\033[0m"
         echo -e " > \e[0;33mllm_project\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mDetect project type (JSON).\033[0m"
         echo -e " > \e[0;33mllm_deps\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mList dependencies (JSON).\033[0m"
+        echo -e " > \e[0;33mllm_config\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mRead config files (JSON).\033[0m"
         echo -e " > \e[0;33mllm_git_status\033[0m - \e[1;37mCompact git status (JSON).\033[0m"
         echo -e " > \e[0;33mllm_git_log\033[0m \e[0;36m[--limit N]\033[0m - \e[1;37mRecent commits (JSON).\033[0m"
+        echo -e " > \e[0;33mllm_git_diff\033[0m - \e[1;37mDiff with stats (JSON).\033[0m"
         echo -e " > \e[0;33mllm_ports\033[0m - \e[1;37mList ports in use (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_procs\033[0m \e[0;36m[--name N] [--port P]\033[0m - \e[1;37mList processes (JSON).\033[0m"
+        echo -e " > \e[0;33mllm_procs\033[0m \e[0;36m[--name N]\033[0m - \e[1;37mList processes (JSON).\033[0m"
         echo -e " > \e[0;33mllm_env\033[0m - \e[1;37mFiltered env vars (no secrets).\033[0m"
     fi
 }
