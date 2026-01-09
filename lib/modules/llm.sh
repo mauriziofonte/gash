@@ -524,7 +524,7 @@ __llm_grep_impl() {
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
     if __llm_has_rg; then
-        local rg_args=(-n --no-heading --color=never --no-ignore)
+        local rg_args=(-n --no-heading --color=never)
         rg_args+=(--glob '!node_modules' --glob '!vendor' --glob '!.git')
 
         if [[ -n "$extensions" ]]; then
@@ -660,12 +660,31 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            # Execute query with JSON output
-            "$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
+            # Execute query with JSON output, capturing stderr for error handling
+            local mysql_output mysql_stderr mysql_exit
+            mysql_stderr=$(mktemp)
+            mysql_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
                 --default-character-set=utf8mb4 \
                 -e "$query" \
-                --batch --raw 2>/dev/null | \
-                awk -F'\t' '
+                --batch --raw 2>"$mysql_stderr")
+            mysql_exit=$?
+
+            # Check for MySQL errors
+            if [[ $mysql_exit -ne 0 ]] || [[ -s "$mysql_stderr" ]]; then
+                local err_msg
+                err_msg=$(<"$mysql_stderr")
+                rm -f "$mysql_stderr"
+                # Clean up error message for JSON (remove password warning, escape quotes)
+                err_msg=$(echo "$err_msg" | grep -v "Using a password on the command line" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                if [[ -n "$err_msg" ]]; then
+                    __llm_error "mysql_error" "$err_msg"
+                    return 1
+                fi
+            fi
+            rm -f "$mysql_stderr"
+
+            # Convert output to JSON
+            echo "$mysql_output" | awk -F'\t' '
                     NR==1 {
                         n=NF;
                         for(i=1;i<=NF;i++) cols[i]=$i;
@@ -691,9 +710,28 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
-                -t -A -F $'\t' -c "$query" 2>/dev/null | \
-                head -n "$max_rows"
+            # Execute query, capturing stderr for error handling
+            local psql_output psql_stderr psql_exit
+            psql_stderr=$(mktemp)
+            psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
+                -t -A -F $'\t' -c "$query" 2>"$psql_stderr")
+            psql_exit=$?
+
+            # Check for PostgreSQL errors
+            if [[ $psql_exit -ne 0 ]] || [[ -s "$psql_stderr" ]]; then
+                local err_msg
+                err_msg=$(<"$psql_stderr")
+                rm -f "$psql_stderr"
+                # Clean up error message for JSON
+                err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                if [[ -n "$err_msg" ]]; then
+                    __llm_error "pgsql_error" "$err_msg"
+                    return 1
+                fi
+            fi
+            rm -f "$psql_stderr"
+
+            echo "$psql_output" | head -n "$max_rows"
             ;;
         *)
             __llm_error "unknown_db_type" "$db_driver"
@@ -956,18 +994,6 @@ __llm_project_impl() {
         project_type="rust"
         package_manager="cargo"
         [[ -d "$safe_path/tests" ]] && has_tests="true"
-
-    elif [[ -f "$safe_path/Makefile" ]] || [[ -f "$safe_path/CMakeLists.txt" ]]; then
-        project_type="c"
-        package_manager="make"
-        [[ -d "$safe_path/tests" ]] && has_tests="true"
-
-    elif [[ -f "$safe_path/gash.sh" ]] || [[ $(find "$safe_path" -maxdepth 1 -name "*.sh" -type f 2>/dev/null | wc -l) -gt 0 ]]; then
-        project_type="bash"
-        [[ -d "$safe_path/tests" ]] && has_tests="true"
-
-    elif [[ $(find "$safe_path" -maxdepth 1 -name "*.md" -type f 2>/dev/null | wc -l) -gt 2 ]]; then
-        project_type="documentation"
     fi
 
     # Output JSON
@@ -1146,27 +1172,14 @@ __llm_git_status_impl() {
         esac
     done < <(git -C "$safe_path" status --porcelain 2>/dev/null)
 
-    # Build JSON - helper to format arrays without empty strings
-    __json_array() {
-        local arr=("$@")
-        local result=""
-        local first=1
-        for item in "${arr[@]}"; do
-            [[ -z "$item" ]] && continue
-            [[ $first -eq 0 ]] && result+=","
-            result+="\"$item\""
-            first=0
-        done
-        echo "$result"
-    }
-
+    # Build JSON
     echo "{"
     echo "  \"branch\": \"$branch\","
     echo "  \"ahead\": $ahead,"
     echo "  \"behind\": $behind,"
-    printf '  "staged": [%s],\n' "$(__json_array "${staged[@]}")"
-    printf '  "modified": [%s],\n' "$(__json_array "${modified[@]}")"
-    printf '  "untracked": [%s]\n' "$(__json_array "${untracked[@]}")"
+    printf '  "staged": [%s],\n' "$(printf '"%s",' "${staged[@]}" | sed 's/,$//')"
+    printf '  "modified": [%s],\n' "$(printf '"%s",' "${modified[@]}" | sed 's/,$//')"
+    printf '  "untracked": [%s]\n' "$(printf '"%s",' "${untracked[@]}" | sed 's/,$//')"
     echo "}"
 }
 
@@ -1321,13 +1334,12 @@ __llm_procs_impl() {
             done | sed '$ s/,$//'
         fi
     elif [[ -n "$name" ]]; then
-        # Find process by name - consolidated by process name with count
+        # Find process by name
         pgrep -f "$name" 2>/dev/null | while read -r pid; do
-            ps -p "$pid" -o comm= 2>/dev/null
-        done | sort | uniq -c | sort -rn | while read -r count proc; do
-            [[ -z "$proc" ]] && continue
-            printf '{"name":"%s","count":%d}\n' "$proc" "$count"
-        done | paste -sd',' | sed 's/$//'
+            local cmd
+            cmd="$(ps -p "$pid" -o comm= 2>/dev/null)"
+            echo "{\"pid\":$pid,\"name\":\"$cmd\"},"
+        done | sed '$ s/,$//'
     else
         # List all (limited)
         ps aux --no-headers 2>/dev/null | head -n 20 | \
@@ -1335,7 +1347,6 @@ __llm_procs_impl() {
             sed '$ s/,$//'
     fi
 
-    echo ""
     echo "]"
 }
 
@@ -1352,7 +1363,7 @@ llm_env() {
 __llm_env_impl() {
     local filter="${1-}"
 
-    # Secret patterns to exclude (also excludes large useless vars for token efficiency)
+    # Secret patterns to exclude
     local -a secret_patterns=(
         'PASSWORD'
         'SECRET'
@@ -1365,10 +1376,6 @@ __llm_env_impl() {
         'API_KEY'
         'DATABASE_URL'
         'DB_PASS'
-        'LS_COLORS'
-        'LESSOPEN'
-        'LESSCLOSE'
-        'TERMCAP'
     )
 
     echo "{"

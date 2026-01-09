@@ -12,7 +12,7 @@ fi
 
 # Startup banner (minimal)
 GASH_USER_NAME=$(gash_username)
-echo -e "\033[0;36mGash\033[0m \033[1;37m—\033[0m \033[1;32m$GASH_USER_NAME\033[0m"
+echo -e "\033[0;36mGash $GASH_VERSION\033[0m \033[1;37m—\033[0m \033[1;32m$GASH_USER_NAME\033[0m"
 gash_inspiring_quote || true
 
 # Auto-unlock SSH keys if configured in ~/.gash_env
