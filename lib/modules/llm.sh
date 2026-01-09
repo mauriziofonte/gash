@@ -654,7 +654,7 @@ __llm_db_query_impl() {
     case "$db_driver" in
         mysql|mariadb)
             local mysql_bin
-            mysql_bin=$(type -P mysql 2>/dev/null) || mysql_bin=$(type -P mariadb 2>/dev/null) || true
+            mysql_bin=$(type -P mariadb 2>/dev/null) || mysql_bin=$(type -P mysql 2>/dev/null) || true
             if [[ -z "$mysql_bin" ]]; then
                 __llm_error "mysql_not_found"
                 return 1
@@ -675,7 +675,7 @@ __llm_db_query_impl() {
                 err_msg=$(<"$mysql_stderr")
                 rm -f "$mysql_stderr"
                 # Clean up error message for JSON (remove password warning, escape quotes)
-                err_msg=$(echo "$err_msg" | grep -v "Using a password on the command line" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                err_msg=$(echo "$err_msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
                 if [[ -n "$err_msg" ]]; then
                     __llm_error "mysql_error" "$err_msg"
                     return 1
