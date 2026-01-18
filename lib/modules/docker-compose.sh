@@ -218,6 +218,31 @@ __gash_dockerhub_token() {
     [[ -n "$token" && "$token" != "{" ]] && echo "$token"
 }
 
+# Get authentication token for GHCR (GitHub Container Registry).
+# GHCR requires a token even for public images.
+# Usage: __gash_ghcr_token <image_name>
+__gash_ghcr_token() {
+    local image="$1"
+    local token
+
+    # If user has GITHUB_TOKEN, use it; otherwise get anonymous token
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        echo "$GITHUB_TOKEN"
+        return 0
+    fi
+
+    # Get anonymous token from GHCR
+    token=$(curl -fsSL --connect-timeout 10 --max-time 15 \
+        "https://ghcr.io/token?service=ghcr.io&scope=repository:${image}:pull" \
+        2>/dev/null)
+
+    # Extract token using parameter expansion (no jq dependency)
+    token="${token##*\"token\":\"}"
+    token="${token%%\"*}"
+
+    [[ -n "$token" && "$token" != "{" ]] && echo "$token"
+}
+
 # Get remote image digest from registry.
 # Usage: __gash_get_remote_digest <registry> <name> <tag>
 # Output: sha256:... or empty on error
@@ -246,11 +271,12 @@ __gash_get_remote_digest() {
             ;;
 
         ghcr.io)
-            local auth_header=""
-            [[ -n "${GITHUB_TOKEN:-}" ]] && auth_header="Authorization: Bearer $GITHUB_TOKEN"
+            local ghcr_token
+            ghcr_token=$(__gash_ghcr_token "$name") || return 1
+            [[ -z "$ghcr_token" ]] && return 1
 
             headers=$(curl -fsSL -I --connect-timeout 10 --max-time 20 \
-                ${auth_header:+-H "$auth_header"} \
+                -H "Authorization: Bearer $ghcr_token" \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
                 "https://ghcr.io/v2/${name}/manifests/${tag}" 2>/dev/null)
@@ -390,31 +416,38 @@ EOF
 
         # Get local digest
         local local_digest=""
-        local_digest=$(__gash_get_local_digest "$resolved_image")
-
-        # Get remote digest
         local remote_digest=""
         local status="UNKNOWN"
         local error_msg=""
 
-        remote_digest=$(__gash_get_remote_digest "$registry" "$name" "$tag" 2>/dev/null)
-
-        if [[ -z "$remote_digest" ]]; then
-            status="ERROR"
-            error_msg="registry_unreachable"
-            ((errors++))
-        elif [[ -z "$local_digest" ]]; then
-            status="NOT_PULLED"
-            ((updates++))
-        elif [[ "$upgradeable" -eq 0 ]]; then
+        # For digest-pinned images, extract digest directly (no registry call needed)
+        if [[ "$tag" == @sha256:* ]]; then
             status="PINNED"
+            local_digest="${tag#@}"
+            remote_digest="$local_digest"
             ((pinned++))
-        elif [[ "$local_digest" == "$remote_digest" ]]; then
-            status="CURRENT"
-            ((current++))
         else
-            status="UPDATE"
-            ((updates++))
+            # Get local and remote digests
+            local_digest=$(__gash_get_local_digest "$resolved_image")
+            remote_digest=$(__gash_get_remote_digest "$registry" "$name" "$tag" 2>/dev/null)
+
+            if [[ -z "$remote_digest" ]]; then
+                status="ERROR"
+                error_msg="registry_unreachable"
+                ((errors++))
+            elif [[ -z "$local_digest" ]]; then
+                status="NOT_PULLED"
+                ((updates++))
+            elif [[ "$upgradeable" -eq 0 ]]; then
+                status="PINNED"
+                ((pinned++))
+            elif [[ "$local_digest" == "$remote_digest" ]]; then
+                status="CURRENT"
+                ((current++))
+            else
+                status="UPDATE"
+                ((updates++))
+            fi
         fi
 
         # Store result
@@ -478,6 +511,44 @@ EOF
         [[ $pinned -gt 0 ]] && printf "${__GASH_BOLD_CYAN}%d pinned${__GASH_COLOR_OFF} " "$pinned"
         [[ $errors -gt 0 ]] && printf "${__GASH_BOLD_RED}%d error(s)${__GASH_COLOR_OFF}" "$errors"
         echo ""
+
+        # Show error details if any
+        if [[ $errors -gt 0 ]]; then
+            echo ""
+            printf "${__GASH_BOLD_RED}Errors:${__GASH_COLOR_OFF}\n"
+            for r in "${results[@]}"; do
+                IFS='|' read -r svc img local_d remote_d stat upgr err <<< "$r"
+                if [[ "$stat" == "ERROR" ]]; then
+                    # Parse registry info for better error message
+                    local normalized
+                    normalized=$(__gash_normalize_image "$img")
+                    IFS='|' read -r reg nm tg <<< "$normalized"
+
+                    printf "  ${__GASH_BOLD_WHITE}%s${__GASH_COLOR_OFF} (%s)\n" "$svc" "$img"
+                    printf "    Registry: %s\n" "$reg"
+
+                    case "$err" in
+                        registry_unreachable)
+                            printf "    Error: Could not reach registry or get manifest\n"
+                            case "$reg" in
+                                ghcr.io)
+                                    printf "    Hint: Try setting GITHUB_TOKEN for authenticated access\n"
+                                    ;;
+                                docker.io)
+                                    printf "    Hint: Check network or Docker Hub rate limits\n"
+                                    ;;
+                                *)
+                                    printf "    Hint: Registry may require authentication\n"
+                                    ;;
+                            esac
+                            ;;
+                        *)
+                            printf "    Error: %s\n" "${err:-unknown}"
+                            ;;
+                    esac
+                fi
+            done
+        fi
 
         if [[ $updates -gt 0 ]]; then
             echo ""
