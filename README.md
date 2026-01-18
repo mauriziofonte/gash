@@ -390,6 +390,7 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 |-----------|-------|-------------|
 | `disk_usage` | `du2` | Displays disk usage for specific filesystem types |
 | `history_grep` | `hg` | Searches Bash history for a pattern (removes duplicates) |
+| `hgrep` | - | Smart history search with timestamps, deduplication, and options (`-n`, `-j`, `-E`, `-c`, etc.) |
 | `ip_public` | `myip` | Displays your public IP address |
 | `process_find` | `pf` | Searches for processes by name |
 | `process_kill` | `pk` | Kills all processes matching a given name |

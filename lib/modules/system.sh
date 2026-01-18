@@ -61,6 +61,238 @@ history_grep() {
     return 0
 }
 
+# Smart history search with timestamps and deduplication.
+# Shows only the LAST execution of each unique command.
+# Usage: hgrep PATTERN [OPTIONS]
+# Options:
+#   -n, --limit N       Show only last N results (default: unlimited)
+#   -a, --all           Include commands with hgrep/history_grep
+#   -r, --reverse       Show oldest first (default: newest last)
+#   -j, --json          Output as JSON array
+#   -H, --no-highlight  Disable pattern highlighting
+#   -E, --regex         Use extended regex (default: fixed string)
+#   -c, --count         Only show count of matching commands
+hgrep() {
+    # Custom help (more detailed than needs_help)
+    if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
+        cat <<'EOF'
+hgrep - Smart history search with timestamps and deduplication
+
+USAGE:
+  hgrep PATTERN [OPTIONS]
+
+OPTIONS:
+  -n, --limit N       Show only last N results
+  -a, --all           Include hgrep/history_grep in results
+  -r, --reverse       Show oldest first (default: newest last)
+  -j, --json          Output as JSON array
+  -H, --no-highlight  Disable pattern highlighting in output
+  -E, --regex         Use extended regex (default: fixed string match)
+  -c, --count         Only show count of unique matching commands
+
+EXAMPLES:
+  hgrep git                    Search for "git" commands
+  hgrep "composer.*install"    Search with pattern
+  hgrep docker -n 10           Last 10 docker commands
+  hgrep -E "^git (push|pull)"  Regex: git push or pull at start
+  hgrep npm -j                 JSON output for scripting
+  hgrep make -c                Count unique make commands
+
+OUTPUT FORMAT:
+  [2025-01-15 14:32:01] git push origin main
+  [2025-01-15 15:10:22] git commit -m "fix"
+
+  With --json:
+  [{"timestamp":"2025-01-15 14:32:01","command":"git push origin main"},...]
+EOF
+        return 0
+    fi
+
+    local pattern=""
+    local limit=0
+    local include_self=0
+    local reverse=0
+    local json_output=0
+    local use_regex=0
+    local count_only=0
+
+    # Disable colors automatically in HEADLESS mode (for LLM agents)
+    local no_highlight=0
+    [[ "${GASH_HEADLESS-}" == "1" ]] && no_highlight=1
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--limit)
+                if [[ -z "${2-}" || ! "${2-}" =~ ^[0-9]+$ ]]; then
+                    __gash_error "Option -n requires a numeric argument"
+                    return 1
+                fi
+                limit="$2"; shift 2
+                ;;
+            -a|--all) include_self=1; shift ;;
+            -r|--reverse) reverse=1; shift ;;
+            -j|--json) json_output=1; shift ;;
+            -H|--no-highlight) no_highlight=1; shift ;;
+            -E|--regex) use_regex=1; shift ;;
+            -c|--count) count_only=1; shift ;;
+            -*)
+                __gash_error "Unknown option: $1. Use -h for help."
+                return 1
+                ;;
+            *)
+                if [[ -z "$pattern" ]]; then
+                    pattern="$1"
+                else
+                    __gash_error "Multiple patterns not supported: $1"
+                    return 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$pattern" ]]; then
+        __gash_error "Missing required argument: pattern"
+        echo "Usage: hgrep <pattern> [options]. Use -h for help." >&2
+        return 1
+    fi
+
+    local histfile="${HISTFILE:-$HOME/.bash_history}"
+    if [[ ! -r "$histfile" ]]; then
+        __gash_error "Cannot read history file: $histfile"
+        return 1
+    fi
+
+    # Flush current session history to file
+    history -a 2>/dev/null || true
+
+    # Process history file with awk
+    local awk_result
+    awk_result=$(awk -v pattern="$pattern" \
+                     -v include_self="$include_self" \
+                     -v use_regex="$use_regex" '
+    BEGIN {
+        IGNORECASE = 1
+    }
+    /^#[0-9]+$/ {
+        timestamp = substr($0, 2)
+        if (getline cmd > 0) {
+            # Skip empty commands
+            if (cmd == "") next
+            # Skip self-references unless -a flag
+            if (include_self == 0 && (cmd ~ /hgrep/ || cmd ~ /history_grep/)) next
+            # Match pattern (regex or fixed string)
+            matched = 0
+            if (use_regex == 1) {
+                if (cmd ~ pattern) matched = 1
+            } else {
+                if (index(tolower(cmd), tolower(pattern)) > 0) matched = 1
+            }
+            if (matched) {
+                # Store: last occurrence wins (dedup)
+                commands[cmd] = timestamp
+            }
+        }
+    }
+    END {
+        # Build array for sorting by timestamp
+        n = 0
+        for (cmd in commands) {
+            n++
+            ts[n] = commands[cmd]
+            cm[n] = cmd
+        }
+        # Sort by timestamp ascending (bubble sort)
+        for (i = 1; i <= n; i++) {
+            for (j = i + 1; j <= n; j++) {
+                if (ts[i] > ts[j]) {
+                    tmp = ts[i]; ts[i] = ts[j]; ts[j] = tmp
+                    tmp = cm[i]; cm[i] = cm[j]; cm[j] = tmp
+                }
+            }
+        }
+        # Output: timestamp<TAB>command
+        for (i = 1; i <= n; i++) {
+            print ts[i] "\t" cm[i]
+        }
+    }
+    ' "$histfile") || return 1
+
+    # Handle empty results
+    if [[ -z "$awk_result" ]]; then
+        if [[ "$count_only" -eq 1 ]]; then
+            echo "0"
+        elif [[ "$json_output" -eq 1 ]]; then
+            echo "[]"
+        fi
+        return 0
+    fi
+
+    # Apply reverse if requested
+    if [[ "$reverse" -eq 1 ]]; then
+        awk_result=$(echo "$awk_result" | tac)
+    fi
+
+    # Apply limit if requested
+    if [[ "$limit" -gt 0 ]]; then
+        awk_result=$(echo "$awk_result" | tail -n "$limit")
+    fi
+
+    # Count mode
+    if [[ "$count_only" -eq 1 ]]; then
+        echo "$awk_result" | wc -l | tr -d ' '
+        return 0
+    fi
+
+    # JSON output mode
+    if [[ "$json_output" -eq 1 ]]; then
+        echo -n '['
+        local first=1
+        while IFS=$'\t' read -r ts cmd; do
+            local date_str
+            date_str=$(date -d "@$ts" '+%Y-%m-%d %H:%M:%S' 2>/dev/null) || date_str="unknown"
+            # Escape JSON special chars in command
+            cmd="${cmd//\\/\\\\}"
+            cmd="${cmd//\"/\\\"}"
+            cmd="${cmd//$'\n'/\\n}"
+            cmd="${cmd//$'\t'/\\t}"
+            if [[ "$first" -eq 1 ]]; then
+                first=0
+            else
+                echo -n ','
+            fi
+            printf '{"timestamp":"%s","epoch":%s,"command":"%s"}' "$date_str" "$ts" "$cmd"
+        done <<< "$awk_result"
+        echo ']'
+        return 0
+    fi
+
+    # Standard output with optional highlighting
+    while IFS=$'\t' read -r ts cmd; do
+        local date_str
+        date_str=$(date -d "@$ts" '+%Y-%m-%d %H:%M:%S' 2>/dev/null) || date_str="unknown"
+
+        if [[ "$no_highlight" -eq 0 ]]; then
+            # Highlight pattern in command (case-insensitive)
+            local highlighted_cmd
+            if [[ "$use_regex" -eq 1 ]]; then
+                # For regex, use sed with case-insensitive flag
+                highlighted_cmd=$(echo "$cmd" | sed -E "s/($pattern)/\\\\033[1;33m\\1\\\\033[1;37m/gi" 2>/dev/null) || highlighted_cmd="$cmd"
+            else
+                # For fixed string, escape regex special chars and highlight
+                local escaped_pattern
+                escaped_pattern=$(printf '%s' "$pattern" | sed 's/[[\.*^$()+?{|]/\\&/g')
+                highlighted_cmd=$(echo "$cmd" | sed -E "s/($escaped_pattern)/\\\\033[1;33m\\1\\\\033[1;37m/gi" 2>/dev/null) || highlighted_cmd="$cmd"
+            fi
+            printf '\033[0;36m[%s]\033[0m \033[1;37m%b\033[0m\n' "$date_str" "$highlighted_cmd"
+        else
+            # Plain output without colors (for -H flag or GASH_HEADLESS mode)
+            printf '[%s] %s\n' "$date_str" "$cmd"
+        fi
+    done <<< "$awk_result"
+}
+
 # -----------------------------------------------------------------------------
 # Network
 # -----------------------------------------------------------------------------

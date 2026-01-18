@@ -403,6 +403,7 @@ gash_help() {
         echo -e "\e[1;37m--- System Operations ---\033[0m"
         echo -e " > \e[0;33mdisk_usage\033[0m (\e[0;32mdu2\033[0m) - \e[1;37mDisplays disk usage for specific filesystem types.\033[0m"
         echo -e " > \e[0;33mhistory_grep\033[0m (\e[0;32mhg\033[0m) \e[0;36mPATTERN\033[0m - \e[1;37mSearches bash history for PATTERN.\033[0m"
+        echo -e " > \e[0;33mhgrep\033[0m \e[0;36mPATTERN [OPTIONS]\033[0m - \e[1;37mSmart history search with timestamps and deduplication.\033[0m"
         echo -e " > \e[0;33mip_public\033[0m (\e[0;32mmyip\033[0m) - \e[1;37mGet your public IP address.\033[0m"
         echo -e " > \e[0;33mprocess_find\033[0m (\e[0;32mpf\033[0m) \e[0;36mNAME\033[0m - \e[1;37mSearch for a process by name.\033[0m"
         echo -e " > \e[0;33mprocess_kill\033[0m (\e[0;32mpk\033[0m) \e[0;36mNAME\033[0m - \e[1;37mKill all processes by name.\033[0m"
