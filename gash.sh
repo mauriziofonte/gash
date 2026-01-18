@@ -19,7 +19,7 @@
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.3.4
+# Version: 1.3.5
 # Release Date: 2024-10-24
 # Last Update: 2026-01-06
 # License: Apache License
@@ -39,7 +39,7 @@ fi
 #   - Produces NO terminal output
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     BASH_NAME="Gash"
-    GASH_VERSION="1.3.4"
+    GASH_VERSION="1.3.5"
     GASH_DIR="${GASH_DIR:-$HOME/.gash}"
 
     # Load Core Modules (output, config, utils, validation)
@@ -123,7 +123,7 @@ fi
 
 # define some constants
 BASH_NAME="Gash"
-GASH_VERSION="1.3.4"
+GASH_VERSION="1.3.5"
 GASH_DIR="$HOME/.gash"
 
 

@@ -24,6 +24,8 @@ __GASH_WHITE='\033[0;37m'
 __GASH_BOLD_RED='\033[1;31m'
 __GASH_BOLD_GREEN='\033[1;32m'
 __GASH_BOLD_YELLOW='\033[1;33m'
+__GASH_BOLD_BLUE='\033[1;34m'
+__GASH_BOLD_CYAN='\033[1;36m'
 __GASH_BOLD_WHITE='\033[1;37m'
 
 # -----------------------------------------------------------------------------

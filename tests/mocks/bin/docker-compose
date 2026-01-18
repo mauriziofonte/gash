@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+# Mock docker-compose (v1) for testing.
+# Simulates docker-compose commands.
+
+# Track calls for verification (optional)
+if [[ -n "${MOCK_DOCKER_LOG:-}" ]]; then
+    echo "docker-compose $*" >> "$MOCK_DOCKER_LOG"
+fi
+
+case "${1:-}" in
+    version|--version)
+        echo "docker-compose version 1.29.2"
+        exit 0
+        ;;
+    pull)
+        shift
+        for svc in "$@"; do
+            echo "Pulling $svc..."
+        done
+        exit 0
+        ;;
+    up)
+        shift
+        echo "Starting services..."
+        exit 0
+        ;;
+    down)
+        echo "Stopping services..."
+        exit 0
+        ;;
+    stop)
+        shift
+        for svc in "$@"; do
+            echo "Stopping $svc..."
+        done
+        exit 0
+        ;;
+    ps)
+        echo "NAME        IMAGE                   STATUS"
+        echo "test_web    nginx:latest            running"
+        exit 0
+        ;;
+    config)
+        if [[ "${2:-}" == "--services" ]]; then
+            echo "web"
+            echo "db"
+        fi
+        exit 0
+        ;;
+    *)
+        exit 0
+        ;;
+esac

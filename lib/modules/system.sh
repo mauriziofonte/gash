@@ -178,6 +178,8 @@ EOF
     /^#[0-9]+$/ {
         timestamp = substr($0, 2)
         if (getline cmd > 0) {
+            # Normalize: trim leading/trailing whitespace
+            gsub(/^[ \t]+|[ \t]+$/, "", cmd)
             # Skip empty commands
             if (cmd == "") next
             # Skip self-references unless -a flag

@@ -547,7 +547,7 @@ gash() {
         __gash_ref_alias "drmi" "docker rmi"
         __gash_ref_alias "dirm" "docker image prune -a"
 
-        echo -e "  ${W}Compose:${R}"
+        echo -e "  ${W}Compose (basic):${R}"
         __gash_ref_alias "dc" "docker-compose"
         __gash_ref_alias "dcup" "docker-compose up -d"
         __gash_ref_alias "dcdown" "docker-compose down"
@@ -555,6 +555,12 @@ gash() {
         __gash_ref_alias "dcps" "docker-compose ps"
         __gash_ref_alias "dcb" "docker-compose build"
         __gash_ref_alias "dcrestart" "docker-compose restart"
+
+        echo -e "  ${W}Compose (smart upgrade):${R}"
+        __gash_ref_fn "docker_compose_check" "dcc" "[PATH]" "Check for updates"
+        __gash_ref_fn "docker_compose_upgrade" "dcup2" "[PATH] [--dry-run]" "Upgrade services"
+        __gash_ref_fn "docker_compose_scan" "dcscan" "[PATH] [--depth N]" "Scan for compose files"
+        echo -e "    ${D}Only upgrades mutable tags (latest, main). Use --force for pinned.${R}"
     }
 
     # Navigation section
@@ -628,6 +634,9 @@ gash() {
         __gash_ref_fn "llm_ports" "" "" "Listening ports"
         __gash_ref_fn "llm_procs" "" "[--name N]" "Processes"
         __gash_ref_fn "llm_env" "" "" "Env vars (no secrets)"
+
+        echo -e "  ${W}Docker:${R}"
+        __gash_ref_fn "llm_docker_check" "" "[PATH]" "Compose update check (JSON)"
     }
 
     # PHP section

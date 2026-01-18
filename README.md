@@ -430,6 +430,27 @@ Professional git log visualization with multiple variants. Run `gl --help` for f
 | `docker_start_all` | `daa` | Starts all stopped Docker containers |
 | `docker_prune_all` | `dpa` | Removes all Docker containers, images, volumes, and networks |
 
+**Docker Compose Smart Upgrade:**
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `docker_compose_check` | `dcc` | Check for available updates (compares local vs registry) |
+| `docker_compose_upgrade` | `dcup2` | Upgrade services with mutable tags (latest, main, dev) |
+| `docker_compose_scan` | `dcscan` | Scan directories for docker-compose files |
+
+The smart upgrade system queries Docker Hub and GHCR registries to compare local image digests with remote ones. It only upgrades services with mutable tags (like `latest`, `main`, `dev`) and skips pinned versions (like `nginx:1.25.3`). Use `--force` to override this behavior.
+
+```bash
+# Check for updates in current directory
+docker_compose_check
+
+# Preview what would be upgraded (dry-run)
+docker_compose_upgrade --dry-run
+
+# Scan for all compose files in a directory tree
+docker_compose_scan /path/to/projects --depth 3
+```
+
 #### Gash Management
 
 | Function | Description |
@@ -474,6 +495,7 @@ Gash includes a specialized module for LLM (Large Language Model) agents like Cl
 | `llm_ports` | Ports in use | JSON |
 | `llm_procs` | Processes by name/port | JSON |
 | `llm_env` | Filtered env vars (no secrets) | JSON |
+| `llm_docker_check` | Docker Compose update check | JSON |
 
 **Security Protections:**
 

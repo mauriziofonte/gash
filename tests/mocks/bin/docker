@@ -1,7 +1,148 @@
 #!/usr/bin/env bash
 
-# Minimal docker mock. Default: no containers.
-if [[ "${1:-}" == "ps" ]]; then
-  exit 0
+# Mock docker for testing docker-compose module.
+# Simulates docker and docker compose commands.
+
+# Track calls for verification (optional)
+if [[ -n "${MOCK_DOCKER_LOG:-}" ]]; then
+    echo "docker $*" >> "$MOCK_DOCKER_LOG"
 fi
-exit 0
+
+# Handle "docker compose" subcommand (v2 style)
+if [[ "${1:-}" == "compose" ]]; then
+    shift
+    case "${1:-}" in
+        version)
+            echo "Docker Compose version v2.24.0"
+            exit 0
+            ;;
+        pull)
+            shift
+            # Simulate pulling images
+            for svc in "$@"; do
+                echo "Pulling $svc..."
+            done
+            exit 0
+            ;;
+        up)
+            shift
+            echo "Starting services..."
+            exit 0
+            ;;
+        down)
+            echo "Stopping services..."
+            exit 0
+            ;;
+        stop)
+            shift
+            for svc in "$@"; do
+                echo "Stopping $svc..."
+            done
+            exit 0
+            ;;
+        ps)
+            # Output mock service status
+            echo "NAME        IMAGE                   STATUS"
+            echo "test_web    nginx:latest            running"
+            exit 0
+            ;;
+        config)
+            # If --services flag, list services
+            if [[ "${1:-}" == "--services" ]]; then
+                echo "web"
+                echo "db"
+            fi
+            exit 0
+            ;;
+        *)
+            exit 0
+            ;;
+    esac
+fi
+
+# Handle regular docker commands
+case "${1:-}" in
+    ps)
+        # docker ps - list containers
+        if [[ "${MOCK_DOCKER_CONTAINERS:-}" == "1" ]]; then
+            echo "abc123"
+        fi
+        exit 0
+        ;;
+    inspect)
+        shift
+        # docker inspect --format
+        if [[ "${1:-}" == "--format" ]]; then
+            shift
+            format="$1"
+            shift
+            image="$1"
+
+            # Return mock digest based on image
+            if [[ "$format" == *"RepoDigests"* ]]; then
+                case "$image" in
+                    *nginx*)
+                        echo "nginx@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+                        ;;
+                    *postgres*)
+                        echo "postgres@sha256:def456abc123def456abc123def456abc123def456abc123def456abc123defg"
+                        ;;
+                    *redis*)
+                        echo "redis@sha256:789abc123def456abc123def456abc123def456abc123def456abc123def4567"
+                        ;;
+                    *ollama*)
+                        echo "ollama/ollama@sha256:oll123def456abc123def456abc123def456abc123def456abc123def456olla"
+                        ;;
+                    *open-webui*)
+                        echo "ghcr.io/open-webui/open-webui@sha256:owu123def456abc123def456abc123def456abc123def456abc123def456owui"
+                        ;;
+                    *)
+                        # Unknown image - return empty (not pulled)
+                        echo ""
+                        ;;
+                esac
+            fi
+        fi
+        exit 0
+        ;;
+    images)
+        # docker images --digests
+        echo "REPOSITORY    TAG       DIGEST                                                                    SIZE"
+        echo "nginx         latest    sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abcd   180MB"
+        exit 0
+        ;;
+    image)
+        # docker image prune
+        if [[ "${2:-}" == "prune" ]]; then
+            echo "Deleted images..."
+        fi
+        exit 0
+        ;;
+    stop|start|rm|rmi)
+        # Container operations - silent success
+        exit 0
+        ;;
+    network)
+        if [[ "${2:-}" == "ls" ]]; then
+            echo "bridge"
+            echo "host"
+            echo "none"
+        fi
+        exit 0
+        ;;
+    volume)
+        if [[ "${2:-}" == "ls" ]]; then
+            echo ""
+        fi
+        exit 0
+        ;;
+    system)
+        if [[ "${2:-}" == "prune" ]]; then
+            echo "Total reclaimed space: 0B"
+        fi
+        exit 0
+        ;;
+    *)
+        exit 0
+        ;;
+esac

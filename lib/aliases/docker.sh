@@ -43,7 +43,7 @@ if declare -f docker_prune_all >/dev/null 2>&1; then
     __gash_add_docker_alias "docker" "dpruneall" "docker_prune_all"
 fi
 
-# Docker Compose aliases
+# Docker Compose aliases (v1 - docker-compose binary)
 __gash_add_docker_alias "docker-compose" "dc" "docker-compose"
 __gash_add_docker_alias "docker-compose" "dcup" "docker-compose up -d"
 __gash_add_docker_alias "docker-compose" "dcdown" "docker-compose down"
@@ -52,6 +52,17 @@ __gash_add_docker_alias "docker-compose" "dcb" "docker-compose build"
 __gash_add_docker_alias "docker-compose" "dcrestart" "docker-compose restart"
 __gash_add_docker_alias "docker-compose" "dcps" "docker-compose ps"
 __gash_add_docker_alias "docker-compose" "dcpull" "docker-compose pull"
+
+# Docker Compose smart upgrade functions (from docker-compose.sh module)
+if declare -f docker_compose_check >/dev/null 2>&1; then
+    alias dcc='docker_compose_check'
+fi
+if declare -f docker_compose_upgrade >/dev/null 2>&1; then
+    alias dcup2='docker_compose_upgrade'
+fi
+if declare -f docker_compose_scan >/dev/null 2>&1; then
+    alias dcscan='docker_compose_scan'
+fi
 
 # Cleanup helper function
 unset -f __gash_add_docker_alias
