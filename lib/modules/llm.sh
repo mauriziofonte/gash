@@ -157,7 +157,7 @@ __llm_validate_path() {
 
     # Block path traversal attempts
     if [[ "$path" == *".."* ]]; then
-        echo '{"error":"path_traversal_blocked"}' >&2
+        echo '{"error":"path_traversal_blocked","action":"FATAL","recoverable":false,"hint":"Path traversal (..) is not allowed for security reasons"}' >&2
         return 1
     fi
 
@@ -172,7 +172,7 @@ __llm_validate_path() {
     local forbidden
     for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
         if [[ "$normalized" == "$forbidden"* ]]; then
-            echo '{"error":"forbidden_path","path":"'"$normalized"'"}' >&2
+            echo '{"error":"forbidden_path","details":"'"$normalized"'","action":"FATAL","recoverable":false,"hint":"This path is protected and cannot be accessed"}' >&2
             return 1
         fi
     done
@@ -192,7 +192,7 @@ __llm_validate_command() {
     local pattern
     for pattern in "${__LLM_DANGEROUS_PATTERNS[@]}"; do
         if [[ "$cmd" =~ $pattern ]]; then
-            echo '{"error":"dangerous_command_blocked","pattern":"'"$pattern"'"}' >&2
+            echo '{"error":"dangerous_command_blocked","details":"Command matches dangerous pattern","action":"FATAL","recoverable":false,"hint":"This command is blocked for safety. Do not attempt to bypass"}' >&2
             return 1
         fi
     done
@@ -219,17 +219,40 @@ __llm_is_secret_file() {
     return 1
 }
 
-# Output JSON error message to stderr.
-# Usage: __llm_error <error_type> [<details>]
+# Output JSON error message to stderr with behavioral directives for LLM clients.
+#
+# Actions:
+#   STOP     - Stop immediately and ask user for guidance
+#   RETRY    - Can retry once with corrected input
+#   CONTINUE - Warning only, can proceed
+#   FATAL    - Unrecoverable, terminate operation
+#
+# Usage: __llm_error <error_type> [<details>] [<action>] [<recoverable>] [<hint>]
+# Example: __llm_error "no_db_config" "Connection 'x' not found" "STOP" "true" "Ask user for connection name"
 __llm_error() {
     local error_type="${1-unknown_error}"
     local details="${2-}"
+    local action="${3-STOP}"
+    local recoverable="${4-false}"
+    local hint="${5-}"
 
-    if [[ -n "$details" ]]; then
-        echo "{\"error\":\"$error_type\",\"details\":\"$details\"}" >&2
-    else
-        echo "{\"error\":\"$error_type\"}" >&2
-    fi
+    # Build JSON - escape special characters in details and hint
+    local escaped_details="${details//\\/\\\\}"
+    escaped_details="${escaped_details//\"/\\\"}"
+    escaped_details="${escaped_details//$'\n'/\\n}"
+
+    local escaped_hint="${hint//\\/\\\\}"
+    escaped_hint="${escaped_hint//\"/\\\"}"
+    escaped_hint="${escaped_hint//$'\n'/\\n}"
+
+    local json="{\"error\":\"$error_type\""
+    [[ -n "$details" ]] && json+=",\"details\":\"$escaped_details\""
+    json+=",\"action\":\"$action\""
+    json+=",\"recoverable\":$recoverable"
+    [[ -n "$hint" ]] && json+=",\"hint\":\"$escaped_hint\""
+    json+="}"
+
+    echo "$json" >&2
     return 1
 }
 
@@ -265,7 +288,7 @@ llm_exec() {
     local cmd="${1-}"
 
     if [[ -z "$cmd" ]]; then
-        __llm_error "empty_command"
+        __llm_error "empty_command" "" "RETRY" "true" "Provide a command to execute"
         return 1
     fi
 
@@ -308,7 +331,7 @@ __llm_tree_impl() {
                 shift 2
                 ;;
             -*)
-                __llm_error "unknown_option" "$1"
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --text or --depth N"
                 return 1
                 ;;
             *)
@@ -323,7 +346,7 @@ __llm_tree_impl() {
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
     if [[ ! -d "$safe_path" ]]; then
-        __llm_error "not_a_directory" "$safe_path"
+        __llm_error "not_a_directory" "$safe_path" "RETRY" "true" "Provide a valid directory path"
         return 1
     fi
 
@@ -424,7 +447,7 @@ __llm_find_impl() {
                 shift 2
                 ;;
             -*)
-                __llm_error "unknown_option" "$1"
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --type, --contains, or --limit"
                 return 1
                 ;;
             *)
@@ -500,7 +523,7 @@ __llm_grep_impl() {
                 shift 2
                 ;;
             -*)
-                __llm_error "unknown_option" "$1"
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --ext, --context, or --limit"
                 return 1
                 ;;
             *)
@@ -515,7 +538,7 @@ __llm_grep_impl() {
     done
 
     if [[ -z "$pattern" ]]; then
-        __llm_error "missing_pattern"
+        __llm_error "missing_pattern" "" "RETRY" "true" "Provide a search pattern as first argument"
         return 1
     fi
 
@@ -558,12 +581,90 @@ __llm_grep_impl() {
 # Database Functions (Read-Only)
 # -----------------------------------------------------------------------------
 
+# Check if sqlite3 is available.
+# Usage: __llm_has_sqlite
+__llm_has_sqlite() {
+    type -P sqlite3 >/dev/null 2>&1
+}
+
+# Execute a SQLite query with JSON output.
+# Usage: __llm_sqlite_query <query> <sqlite_file> [max_rows]
+__llm_sqlite_query() {
+    local query="${1-}"
+    local sqlite_file="${2-}"
+    local max_rows="${3-100}"
+
+    # Check sqlite3 is installed
+    if ! __llm_has_sqlite; then
+        __llm_error "sqlite_not_found" "SQLite3 CLI not installed" "FATAL" "false" "sqlite3 binary not found. Install with: sudo apt install sqlite3"
+        return 1
+    fi
+
+    # Validate file path
+    if [[ -z "$sqlite_file" ]]; then
+        __llm_error "missing_sqlite_file" "" "RETRY" "true" "Provide SQLite file path with -f option"
+        return 1
+    fi
+
+    local safe_path
+    safe_path="$(__llm_validate_path "$sqlite_file")" || return 1
+
+    if [[ ! -f "$safe_path" ]]; then
+        __llm_error "sqlite_file_not_found" "$safe_path" "RETRY" "true" "SQLite file does not exist. Check the path"
+        return 1
+    fi
+
+    # Verify it's a valid SQLite file
+    if ! file "$safe_path" 2>/dev/null | grep -q "SQLite"; then
+        __llm_error "invalid_sqlite_file" "$safe_path is not a valid SQLite database" "RETRY" "true" "Provide a valid SQLite database file"
+        return 1
+    fi
+
+    # Block semicolon (multiple statements)
+    if [[ "$query" == *";"* ]]; then
+        __llm_error "multiple_statements_blocked" "Only single SQL statements allowed" "FATAL" "false" "Remove semicolons - only one statement per query"
+        return 1
+    fi
+
+    # Add LIMIT if not present in SELECT queries
+    local upper_query
+    upper_query="$(echo "$query" | tr '[:lower:]' '[:upper:]')"
+    if [[ "$upper_query" =~ ^[[:space:]]*SELECT ]] && [[ ! "$upper_query" =~ LIMIT ]]; then
+        query="$query LIMIT $max_rows"
+    fi
+
+    # Execute query with JSON output
+    local sqlite_output sqlite_stderr sqlite_exit
+    sqlite_stderr=$(mktemp)
+    sqlite_output=$(sqlite3 -json -readonly "$safe_path" "$query" 2>"$sqlite_stderr")
+    sqlite_exit=$?
+
+    # Check for errors
+    if [[ $sqlite_exit -ne 0 ]]; then
+        local err_msg=""
+        if [[ -s "$sqlite_stderr" ]]; then
+            err_msg=$(<"$sqlite_stderr")
+        fi
+        rm -f "$sqlite_stderr"
+        err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+        if [[ -n "$err_msg" ]]; then
+            __llm_error "sqlite_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
+        else
+            __llm_error "sqlite_error" "Query failed with exit code $sqlite_exit" "RETRY" "true" "Query failed. Check SQL syntax and retry"
+        fi
+        return 1
+    fi
+    rm -f "$sqlite_stderr"
+
+    echo "$sqlite_output"
+}
+
 # Execute a read-only database query with JSON output.
-# Usage: llm_db_query <query> [-d DATABASE] [-c CONNECTION]
-# Example: llm_db_query "SELECT * FROM users LIMIT 5"
-# Example: llm_db_query "SELECT * FROM users" -c legacy
+# Usage: llm_db_query <query> [-d DATABASE] [-c CONNECTION] [-f SQLITE_FILE]
+# Example: llm_db_query "SELECT * FROM users LIMIT 5" -c myconn
+# Example: llm_db_query "SELECT * FROM users" -f /path/to/db.sqlite
 llm_db_query() {
-    if needs_help "llm_db_query" "llm_db_query <query> [-d DATABASE] [-c CONNECTION]" "Execute read-only database query (JSON output). Configure connections in ~/.gash_env" "${1-}"; then
+    if needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE]" "Execute read-only database query (JSON output). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
@@ -574,6 +675,7 @@ __llm_db_query_impl() {
     local query=""
     local database=""
     local connection="default"
+    local sqlite_file=""
     local max_rows=100
 
     # Parse arguments
@@ -587,12 +689,16 @@ __llm_db_query_impl() {
                 connection="${2-default}"
                 shift 2
                 ;;
+            -f|--file)
+                sqlite_file="${2-}"
+                shift 2
+                ;;
             -r|--rows)
                 max_rows="${2-100}"
                 shift 2
                 ;;
             -*)
-                __llm_error "unknown_option" "$1"
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use -d DATABASE, -c CONNECTION, -f SQLITE_FILE, or -r ROWS"
                 return 1
                 ;;
             *)
@@ -603,7 +709,7 @@ __llm_db_query_impl() {
     done
 
     if [[ -z "$query" ]]; then
-        __llm_error "missing_query"
+        __llm_error "missing_query" "" "RETRY" "true" "Provide a SQL query as first argument"
         return 1
     fi
 
@@ -613,14 +719,26 @@ __llm_db_query_impl() {
 
     # Block write operations
     if [[ "$upper_query" =~ ^[[:space:]]*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE) ]]; then
-        __llm_error "write_operation_blocked" "Only SELECT, SHOW, DESCRIBE, EXPLAIN allowed"
+        __llm_error "write_operation_blocked" "Only SELECT, SHOW, DESCRIBE, EXPLAIN allowed" "FATAL" "false" "Write operations are blocked for safety"
         return 1
+    fi
+
+    # Block semicolon (multiple statements)
+    if [[ "$query" == *";"* ]]; then
+        __llm_error "multiple_statements_blocked" "Only single SQL statements allowed" "FATAL" "false" "Remove semicolons - only one statement per query"
+        return 1
+    fi
+
+    # SQLite mode: use -f option
+    if [[ -n "$sqlite_file" ]]; then
+        __llm_sqlite_query "$query" "$sqlite_file" "$max_rows"
+        return $?
     fi
 
     # Get database URL from config
     local db_url
     db_url=$(__gash_get_db_url "$connection") || {
-        __llm_error "no_db_config" "Connection '$connection' not found. Configure ~/.gash_env with: DB:$connection=mysql://user:pass@host:port/db"
+        __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use. Connections are configured in ~/.gash_env"
         return 1
     }
 
@@ -642,7 +760,7 @@ __llm_db_query_impl() {
     fi
 
     if [[ -z "$database" ]]; then
-        __llm_error "no_database" "Specify with -d, in connection URL, or create .target-database file"
+        __llm_error "no_database" "Database name not specified" "STOP" "true" "Ask user for database name. Use -d option or specify in connection URL"
         return 1
     fi
 
@@ -656,7 +774,7 @@ __llm_db_query_impl() {
             local mysql_bin
             mysql_bin=$(type -P mariadb 2>/dev/null) || mysql_bin=$(type -P mysql 2>/dev/null) || true
             if [[ -z "$mysql_bin" ]]; then
-                __llm_error "mysql_not_found"
+                __llm_error "mysql_not_found" "MySQL/MariaDB client not installed" "FATAL" "false" "mysql/mariadb binary not found. User must install: sudo apt install mariadb-client"
                 return 1
             fi
 
@@ -669,19 +787,32 @@ __llm_db_query_impl() {
                 --batch --raw 2>"$mysql_stderr")
             mysql_exit=$?
 
-            # Check for MySQL errors
-            if [[ $mysql_exit -ne 0 ]] || [[ -s "$mysql_stderr" ]]; then
-                local err_msg
+            # Read stderr and clean up temp file
+            local err_msg=""
+            if [[ -s "$mysql_stderr" ]]; then
                 err_msg=$(<"$mysql_stderr")
-                rm -f "$mysql_stderr"
-                # Clean up error message for JSON (remove password warning, escape quotes)
-                err_msg=$(echo "$err_msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
-                if [[ -n "$err_msg" ]]; then
-                    __llm_error "mysql_error" "$err_msg"
-                    return 1
-                fi
             fi
             rm -f "$mysql_stderr"
+
+            # Filter out warnings (not errors)
+            local filtered_err
+            filtered_err=$(echo "$err_msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+
+            # If mysql exited with error, always return structured error
+            if [[ $mysql_exit -ne 0 ]]; then
+                if [[ -n "$filtered_err" ]]; then
+                    __llm_error "mysql_error" "$filtered_err" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
+                else
+                    __llm_error "mysql_error" "Query failed with exit code $mysql_exit" "RETRY" "true" "Query failed. Check SQL syntax and retry"
+                fi
+                return 1
+            fi
+
+            # If there's a real error message (not just warnings), report it
+            if [[ -n "$filtered_err" ]]; then
+                __llm_error "mysql_error" "$filtered_err" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
+                return 1
+            fi
 
             # Convert output to JSON
             echo "$mysql_output" | awk -F'\t' '
@@ -706,7 +837,7 @@ __llm_db_query_impl() {
             ;;
         pgsql)
             if ! type -P psql >/dev/null 2>&1; then
-                __llm_error "psql_not_found"
+                __llm_error "psql_not_found" "PostgreSQL client not installed" "FATAL" "false" "psql binary not found. User must install: sudo apt install postgresql-client"
                 return 1
             fi
 
@@ -725,7 +856,7 @@ __llm_db_query_impl() {
                 # Clean up error message for JSON
                 err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
                 if [[ -n "$err_msg" ]]; then
-                    __llm_error "pgsql_error" "$err_msg"
+                    __llm_error "pgsql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
                     return 1
                 fi
             fi
@@ -734,16 +865,16 @@ __llm_db_query_impl() {
             echo "$psql_output" | head -n "$max_rows"
             ;;
         *)
-            __llm_error "unknown_db_type" "$db_driver"
+            __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver. Only mysql, mariadb, pgsql are supported"
             return 1
             ;;
     esac
 }
 
 # List all tables in the database.
-# Usage: llm_db_tables [-d DATABASE] [-c CONNECTION]
+# Usage: llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]
 llm_db_tables() {
-    if needs_help "llm_db_tables" "llm_db_tables [-d DATABASE] [-c CONNECTION]" "List database tables (JSON array). Configure connections in ~/.gash_env" "${1-}"; then
+    if needs_help "llm_db_tables" "llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]" "List database tables (JSON array). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
@@ -753,20 +884,34 @@ llm_db_tables() {
 __llm_db_tables_impl() {
     local database=""
     local connection="default"
+    local sqlite_file=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -d|--database) database="${2-}"; shift 2 ;;
             -c|--connection) connection="${2-default}"; shift 2 ;;
+            -f|--file) sqlite_file="${2-}"; shift 2 ;;
             *) shift ;;
         esac
     done
 
+    # SQLite mode
+    if [[ -n "$sqlite_file" ]]; then
+        local result
+        result=$(__llm_sqlite_query "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name" "$sqlite_file" 1000) || return 1
+        if __llm_has_jq; then
+            printf '%s' "$result" | jq -c '[.[].name]'
+        else
+            printf '%s\n' "$result"
+        fi
+        return 0
+    fi
+
     # Get driver from connection to determine query type
     local db_url
     db_url=$(__gash_get_db_url "$connection") || {
-        __llm_error "no_db_config" "Connection '$connection' not found"
+        __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use"
         return 1
     }
 
@@ -797,16 +942,16 @@ __llm_db_tables_impl() {
             fi
             ;;
         *)
-            __llm_error "unknown_db_type" "$db_driver"
+            __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver"
             return 1
             ;;
     esac
 }
 
 # Show schema for a table.
-# Usage: llm_db_schema <table> [-d DATABASE] [-c CONNECTION]
+# Usage: llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]
 llm_db_schema() {
-    if needs_help "llm_db_schema" "llm_db_schema <table> [-d DATABASE] [-c CONNECTION]" "Show table schema (JSON). Configure connections in ~/.gash_env" "${1-}"; then
+    if needs_help "llm_db_schema" "llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]" "Show table schema (JSON). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
@@ -817,32 +962,40 @@ __llm_db_schema_impl() {
     local table=""
     local database=""
     local connection="default"
+    local sqlite_file=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -d|--database) database="${2-}"; shift 2 ;;
             -c|--connection) connection="${2-default}"; shift 2 ;;
+            -f|--file) sqlite_file="${2-}"; shift 2 ;;
             -*) shift ;;
             *) table="$1"; shift ;;
         esac
     done
 
     if [[ -z "$table" ]]; then
-        __llm_error "missing_table"
+        __llm_error "missing_table" "" "RETRY" "true" "Provide table name as first argument"
         return 1
     fi
 
     # Sanitize table name (alphanumeric and underscore only)
     if [[ ! "$table" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-        __llm_error "invalid_table_name"
+        __llm_error "invalid_table_name" "Table name must be alphanumeric with underscores" "RETRY" "true" "Use only letters, numbers, and underscores"
         return 1
+    fi
+
+    # SQLite mode
+    if [[ -n "$sqlite_file" ]]; then
+        __llm_sqlite_query "SELECT cid, name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('$table')" "$sqlite_file" 1000
+        return $?
     fi
 
     # Get driver from connection
     local db_url
     db_url=$(__gash_get_db_url "$connection") || {
-        __llm_error "no_db_config" "Connection '$connection' not found"
+        __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use"
         return 1
     }
 
@@ -861,16 +1014,16 @@ __llm_db_schema_impl() {
             __llm_db_query_impl "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name='$table'" "${args[@]}"
             ;;
         *)
-            __llm_error "unknown_db_type" "$db_driver"
+            __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver"
             return 1
             ;;
     esac
 }
 
 # Get sample rows from a table.
-# Usage: llm_db_sample <table> [-d DATABASE] [-c CONNECTION] [--limit N]
+# Usage: llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [--limit N]
 llm_db_sample() {
-    if needs_help "llm_db_sample" "llm_db_sample <table> [-d DATABASE] [-c CONNECTION] [--limit N]" "Get sample rows from table (default 5 rows). Configure connections in ~/.gash_env" "${1-}"; then
+    if needs_help "llm_db_sample" "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [--limit N]" "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
@@ -881,6 +1034,7 @@ __llm_db_sample_impl() {
     local table=""
     local database=""
     local connection="default"
+    local sqlite_file=""
     local limit=5
 
     # Parse arguments
@@ -888,6 +1042,7 @@ __llm_db_sample_impl() {
         case "$1" in
             -d|--database) database="${2-}"; shift 2 ;;
             -c|--connection) connection="${2-default}"; shift 2 ;;
+            -f|--file) sqlite_file="${2-}"; shift 2 ;;
             --limit) limit="${2-5}"; shift 2 ;;
             -*) shift ;;
             *) table="$1"; shift ;;
@@ -895,14 +1050,20 @@ __llm_db_sample_impl() {
     done
 
     if [[ -z "$table" ]]; then
-        __llm_error "missing_table"
+        __llm_error "missing_table" "" "RETRY" "true" "Provide table name as first argument"
         return 1
     fi
 
     # Sanitize table name
     if [[ ! "$table" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-        __llm_error "invalid_table_name"
+        __llm_error "invalid_table_name" "Table name must be alphanumeric with underscores" "RETRY" "true" "Use only letters, numbers, and underscores"
         return 1
+    fi
+
+    # SQLite mode
+    if [[ -n "$sqlite_file" ]]; then
+        __llm_sqlite_query "SELECT * FROM $table LIMIT $limit" "$sqlite_file" "$limit"
+        return $?
     fi
 
     local args=()
@@ -910,6 +1071,246 @@ __llm_db_sample_impl() {
     args+=(-c "$connection")
 
     __llm_db_query_impl "SELECT * FROM $table LIMIT $limit" "${args[@]}"
+}
+
+# Explain a query execution plan.
+# Usage: llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]
+llm_db_explain() {
+    if needs_help "llm_db_explain" "llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]" "Analyze query execution plan (EXPLAIN). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+        return 0
+    fi
+
+    __llm_no_history __llm_db_explain_impl "$@"
+}
+
+__llm_db_explain_impl() {
+    local query=""
+    local database=""
+    local connection="default"
+    local sqlite_file=""
+    local analyze=0
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--database)
+                database="${2-}"
+                shift 2
+                ;;
+            -c|--connection)
+                connection="${2-default}"
+                shift 2
+                ;;
+            -f|--file)
+                sqlite_file="${2-}"
+                shift 2
+                ;;
+            --analyze)
+                analyze=1
+                shift
+                ;;
+            -*)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use -c CONNECTION, -f SQLITE_FILE, or --analyze"
+                return 1
+                ;;
+            *)
+                query="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$query" ]]; then
+        __llm_error "missing_query" "" "RETRY" "true" "Provide a SQL query to analyze as first argument"
+        return 1
+    fi
+
+    # Security: Only allow read-only queries
+    local upper_query
+    upper_query="$(echo "$query" | tr '[:lower:]' '[:upper:]')"
+
+    # Block write operations
+    if [[ "$upper_query" =~ ^[[:space:]]*(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE) ]]; then
+        __llm_error "write_operation_blocked" "Only SELECT queries can be explained" "FATAL" "false" "EXPLAIN only works with SELECT queries for safety"
+        return 1
+    fi
+
+    # Block semicolon (multiple statements)
+    if [[ "$query" == *";"* ]]; then
+        __llm_error "multiple_statements_blocked" "Only single SQL statements allowed" "FATAL" "false" "Remove semicolons - only one statement per query"
+        return 1
+    fi
+
+    # SQLite mode
+    if [[ -n "$sqlite_file" ]]; then
+        # Check sqlite3 is installed
+        if ! __llm_has_sqlite; then
+            __llm_error "sqlite_not_found" "SQLite3 CLI not installed" "FATAL" "false" "sqlite3 binary not found. Install with: sudo apt install sqlite3"
+            return 1
+        fi
+
+        # Validate file path
+        local safe_path
+        safe_path="$(__llm_validate_path "$sqlite_file")" || return 1
+
+        if [[ ! -f "$safe_path" ]]; then
+            __llm_error "sqlite_file_not_found" "$safe_path" "RETRY" "true" "SQLite file does not exist. Check the path"
+            return 1
+        fi
+
+        # SQLite EXPLAIN QUERY PLAN is always available
+        local explain_cmd="EXPLAIN QUERY PLAN"
+
+        local sqlite_output sqlite_stderr sqlite_exit
+        sqlite_stderr=$(mktemp)
+        sqlite_output=$(sqlite3 -json -readonly "$safe_path" "$explain_cmd $query" 2>"$sqlite_stderr")
+        sqlite_exit=$?
+
+        if [[ $sqlite_exit -ne 0 ]]; then
+            local err_msg=""
+            if [[ -s "$sqlite_stderr" ]]; then
+                err_msg=$(<"$sqlite_stderr")
+            fi
+            rm -f "$sqlite_stderr"
+            err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+            if [[ -n "$err_msg" ]]; then
+                __llm_error "sqlite_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
+            else
+                __llm_error "sqlite_error" "Query failed with exit code $sqlite_exit" "RETRY" "true" "Query failed. Check SQL syntax and retry"
+            fi
+            return 1
+        fi
+        rm -f "$sqlite_stderr"
+
+        echo "$sqlite_output"
+        return 0
+    fi
+
+    # Get database URL from config
+    local db_url
+    db_url=$(__gash_get_db_url "$connection") || {
+        __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use. Connections are configured in ~/.gash_env"
+        return 1
+    }
+
+    # Parse URL components
+    local db_driver db_user db_pass db_host db_port db_database
+    __gash_parse_db_url "$db_url" db_driver db_user db_pass db_host db_port db_database
+
+    # URL-decode password
+    db_pass=$(__gash_url_decode "$db_pass")
+
+    # Determine database
+    if [[ -z "$database" ]]; then
+        if [[ -n "$db_database" ]]; then
+            database="$db_database"
+        elif [[ -f ".target-database" ]]; then
+            database="$(<.target-database)"
+            database="${database%%[[:space:]]*}"
+        fi
+    fi
+
+    if [[ -z "$database" ]]; then
+        __llm_error "no_database" "Database name not specified" "STOP" "true" "Ask user for database name. Use -d option or specify in connection URL"
+        return 1
+    fi
+
+    # Build EXPLAIN prefix based on driver and options
+    local explain_prefix
+
+    case "$db_driver" in
+        mysql|mariadb)
+            local mysql_bin
+            mysql_bin=$(type -P mariadb 2>/dev/null) || mysql_bin=$(type -P mysql 2>/dev/null) || true
+            if [[ -z "$mysql_bin" ]]; then
+                __llm_error "mysql_not_found" "MySQL/MariaDB client not installed" "FATAL" "false" "mysql/mariadb binary not found. User must install: sudo apt install mariadb-client"
+                return 1
+            fi
+
+            # Detect if it's MariaDB or MySQL (MariaDB uses ANALYZE, MySQL uses EXPLAIN ANALYZE)
+            local is_mariadb=0
+            local version_output
+            version_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
+                --default-character-set=utf8mb4 -N -e "SELECT VERSION()" 2>/dev/null)
+            [[ "$version_output" == *"MariaDB"* ]] && is_mariadb=1
+
+            if [[ $analyze -eq 1 ]]; then
+                if [[ $is_mariadb -eq 1 ]]; then
+                    # MariaDB: ANALYZE FORMAT=JSON <query>
+                    explain_prefix="ANALYZE FORMAT=JSON"
+                else
+                    # MySQL 8.0.18+: EXPLAIN ANALYZE <query>
+                    explain_prefix="EXPLAIN ANALYZE"
+                fi
+            else
+                explain_prefix="EXPLAIN FORMAT=JSON"
+            fi
+
+            # Execute EXPLAIN query
+            local mysql_output mysql_stderr mysql_exit
+            mysql_stderr=$(mktemp)
+            mysql_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
+                --default-character-set=utf8mb4 \
+                -e "$explain_prefix $query" 2>"$mysql_stderr")
+            mysql_exit=$?
+
+            # Check for errors (filter out password warning)
+            if [[ $mysql_exit -ne 0 ]]; then
+                local err_msg
+                err_msg=$(<"$mysql_stderr")
+                rm -f "$mysql_stderr"
+                err_msg=$(echo "$err_msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                if [[ -n "$err_msg" ]]; then
+                    __llm_error "mysql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
+                    return 1
+                fi
+            fi
+            rm -f "$mysql_stderr"
+
+            # Output result (skip header line for JSON format)
+            echo "$mysql_output" | tail -n +2
+            ;;
+
+        pgsql)
+            if ! type -P psql >/dev/null 2>&1; then
+                __llm_error "psql_not_found" "PostgreSQL client not installed" "FATAL" "false" "psql binary not found. User must install: sudo apt install postgresql-client"
+                return 1
+            fi
+
+            if [[ $analyze -eq 1 ]]; then
+                explain_prefix="EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)"
+            else
+                explain_prefix="EXPLAIN (FORMAT JSON)"
+            fi
+
+            # Execute EXPLAIN query
+            local psql_output psql_stderr psql_exit
+            psql_stderr=$(mktemp)
+            psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
+                -t -c "$explain_prefix $query" 2>"$psql_stderr")
+            psql_exit=$?
+
+            # Check for errors
+            if [[ $psql_exit -ne 0 ]] || [[ -s "$psql_stderr" ]]; then
+                local err_msg
+                err_msg=$(<"$psql_stderr")
+                rm -f "$psql_stderr"
+                err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                if [[ -n "$err_msg" ]]; then
+                    __llm_error "pgsql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
+                    return 1
+                fi
+            fi
+            rm -f "$psql_stderr"
+
+            echo "$psql_output"
+            ;;
+
+        *)
+            __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver. Only mysql, mariadb, pgsql are supported"
+            return 1
+            ;;
+    esac
 }
 
 # -----------------------------------------------------------------------------
@@ -1062,7 +1463,7 @@ __llm_deps_impl() {
             awk '{printf "\"%s\",", $1}' | sed 's/,$//'
         echo ']}'
     else
-        __llm_error "no_package_file"
+        __llm_error "no_package_file" "No composer.json, package.json, or requirements.txt found" "CONTINUE" "false" "Not a package-managed project"
         return 1
     fi
 }
@@ -1082,13 +1483,13 @@ __llm_config_impl() {
     local file="${1-}"
 
     if [[ -z "$file" ]]; then
-        __llm_error "missing_file"
+        __llm_error "missing_file" "" "RETRY" "true" "Provide a file path as argument"
         return 1
     fi
 
     # Security: Block .env files
     if __llm_is_secret_file "$file"; then
-        __llm_error "secret_file_blocked" "Cannot read .env or credential files"
+        __llm_error "secret_file_blocked" "Cannot read .env or credential files" "FATAL" "false" "This file contains secrets and cannot be read"
         return 1
     fi
 
@@ -1096,7 +1497,7 @@ __llm_config_impl() {
     safe_path="$(__llm_validate_path "$file")" || return 1
 
     if [[ ! -f "$safe_path" ]]; then
-        __llm_error "file_not_found" "$safe_path"
+        __llm_error "file_not_found" "$safe_path" "RETRY" "true" "Check the file path and try again"
         return 1
     fi
 
@@ -1138,12 +1539,12 @@ __llm_git_status_impl() {
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
     if ! type -P git >/dev/null 2>&1; then
-        __llm_error "git_not_found"
+        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
         return 1
     fi
 
     if ! git -C "$safe_path" rev-parse --git-dir >/dev/null 2>&1; then
-        __llm_error "not_a_git_repo"
+        __llm_error "not_a_git_repo" "$safe_path is not a git repository" "CONTINUE" "false" "Not inside a git repository. Skip git operations"
         return 1
     fi
 
@@ -1208,7 +1609,7 @@ __llm_git_diff_impl() {
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
     if ! type -P git >/dev/null 2>&1; then
-        __llm_error "git_not_found"
+        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
         return 1
     fi
 
@@ -1243,7 +1644,7 @@ __llm_git_log_impl() {
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
     if ! type -P git >/dev/null 2>&1; then
-        __llm_error "git_not_found"
+        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
         return 1
     fi
 
