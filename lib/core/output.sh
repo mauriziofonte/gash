@@ -233,26 +233,23 @@ __gash_spinner_start() {
     # Spinner characters (ASCII compatible)
     local frames='|/-\'
 
-    # Disable job control notifications to prevent "[1] 870779" output
-    local job_control_was_on=0
-    if [[ $- == *m* ]]; then
-        job_control_was_on=1
-        set +m
-    fi
-
-    (
-        local i=0
-        local len=${#frames}
-        while true; do
-            printf "\r${__GASH_COLOR_PRIMARY}%s${__GASH_COLOR_OFF} %s " "${frames:i:1}" "$message"
-            i=$(( (i + 1) % len ))
-            sleep 0.1
-        done
-    ) &
-    __GASH_SPINNER_PID=$!
-
-    # Re-enable job control if it was on
-    [[ $job_control_was_on -eq 1 ]] && set -m
+    # Start spinner in background, suppressing job notifications
+    # Method: disable job control, start process, disown it, re-enable
+    {
+        set +m  # Disable job control to suppress "[1] PID" notification
+        (
+            local i=0
+            local len=${#frames}
+            while true; do
+                printf "\r${__GASH_COLOR_PRIMARY}%s${__GASH_COLOR_OFF} %s " "${frames:i:1}" "$message"
+                i=$(( (i + 1) % len ))
+                sleep 0.1
+            done
+        ) &
+        __GASH_SPINNER_PID=$!
+        disown "$__GASH_SPINNER_PID" 2>/dev/null  # Remove from job table
+        set -m 2>/dev/null  # Re-enable job control (may fail in non-interactive)
+    } 2>/dev/null
 
     # Ensure cleanup on script exit
     trap '__gash_spinner_stop' EXIT

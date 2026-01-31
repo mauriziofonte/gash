@@ -100,6 +100,16 @@ fi
 # INTERNAL HELPERS
 # =============================================================================
 
+# Debug output (enabled with GASH_AI_DEBUG=1)
+# Usage: __ai_debug "label" "content"
+__ai_debug() {
+    [[ "${GASH_AI_DEBUG:-0}" != "1" ]] && return 0
+    local label="${1-}"
+    local content="${2-}"
+    echo -e "\n${__GASH_CYAN}[AI DEBUG] ${label}:${__GASH_COLOR_OFF}" >&2
+    echo "$content" >&2
+}
+
 # Check if jq is available
 __ai_require_jq() {
     if ! type -P jq >/dev/null 2>&1; then
@@ -286,6 +296,8 @@ __ai_call_claude() {
             }
         }')
 
+    __ai_debug "Claude Request Body" "$(echo "$body" | jq -C . 2>/dev/null || echo "$body")"
+
     # Make API call
     local response http_code curl_exit
     local tmp_file tmp_err
@@ -309,6 +321,10 @@ __ai_call_claude() {
     response=$(<"$tmp_file")
     local curl_error=$(<"$tmp_err")
     rm -f "$tmp_file" "$tmp_err"
+
+    __ai_debug "Claude HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
+    __ai_debug "Claude Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+    [[ -n "$curl_error" ]] && __ai_debug "Claude Curl Stderr" "$curl_error"
 
     # Handle curl failures first
     if [[ -n "${curl_exit:-}" ]]; then
@@ -354,8 +370,11 @@ __ai_call_claude() {
     local text
     text=$(echo "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
 
+    __ai_debug "Claude Extracted JSON" "$(echo "$text" | jq -C . 2>/dev/null || echo "$text")"
+
     if [[ -z "$text" ]]; then
         __gash_error "Failed to parse Claude response"
+        __ai_debug "Claude Parse Error" "Could not extract .content[0].text from response"
         return 1
     fi
 
@@ -390,6 +409,8 @@ __ai_call_gemini() {
             }
         }')
 
+    __ai_debug "Gemini Request Body" "$(echo "$body" | jq -C . 2>/dev/null || echo "$body")"
+
     # Make API call (token in query param)
     local response http_code curl_exit
     local tmp_file tmp_err
@@ -411,6 +432,10 @@ __ai_call_gemini() {
     response=$(<"$tmp_file")
     local curl_error=$(<"$tmp_err")
     rm -f "$tmp_file" "$tmp_err"
+
+    __ai_debug "Gemini HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
+    __ai_debug "Gemini Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+    [[ -n "$curl_error" ]] && __ai_debug "Gemini Curl Stderr" "$curl_error"
 
     # Handle curl failures first
     if [[ -n "${curl_exit:-}" ]]; then
@@ -456,8 +481,11 @@ __ai_call_gemini() {
     local text
     text=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text // empty' 2>/dev/null)
 
+    __ai_debug "Gemini Extracted JSON" "$(echo "$text" | jq -C . 2>/dev/null || echo "$text")"
+
     if [[ -z "$text" ]]; then
         __gash_error "Failed to parse Gemini response"
+        __ai_debug "Gemini Parse Error" "Could not extract .candidates[0].content.parts[0].text from response"
         return 1
     fi
 
