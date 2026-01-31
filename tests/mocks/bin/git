@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
 
-# Use real git if available; this mock exists only if tests override PATH.
-# We forward to system git.
+# Mock git that forwards to system git.
+# Finds the real git by searching PATH excluding our mock directory.
 
-real_git="$(command -v git)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Find real git by searching PATH, excluding our mock directory
+real_git=""
+IFS=':' read -ra path_parts <<< "$PATH"
+for dir in "${path_parts[@]}"; do
+    # Skip our mock directory
+    [[ "$dir" == "$script_dir" ]] && continue
+    # Check if git exists in this directory
+    if [[ -x "$dir/git" ]]; then
+        real_git="$dir/git"
+        break
+    fi
+done
+
 if [[ -z "$real_git" ]]; then
-	echo "git not found" >&2
-	exit 127
+    echo "git not found" >&2
+    exit 127
 fi
 
 exec "$real_git" "$@"

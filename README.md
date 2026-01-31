@@ -281,6 +281,33 @@ DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
 
 Supported drivers: `mysql`, `mariadb`, `pgsql`
 
+**Note:** SQLite databases don't require configuration in `~/.gash_env`. Use the `-f` flag directly:
+
+```bash
+llm_db_query "SELECT * FROM users" -f /path/to/database.sqlite
+llm_db_tables -f ./app.db
+```
+
+##### AI Providers Configuration
+
+AI provider entries follow the format `AI:provider=API_KEY`:
+
+```sh
+# ~/.gash_env
+AI:claude=sk-ant-api03-xxxxxxxxxxxxx
+AI:gemini=AIzaSyxxxxxxxxxxxxx
+```
+
+Supported providers: `claude` (Anthropic), `gemini` (Google)
+
+The first configured provider is used by default. You can specify a provider explicitly:
+
+```bash
+ai_query "how to list files?"           # Uses first available provider
+ai_query claude "explain kubernetes"     # Uses Claude specifically
+ai_query gemini "write a backup script"  # Uses Gemini specifically
+```
+
 ##### PS1 Prompt Configuration
 
 You can exclude specific git repositories from the prompt (useful for large repos or when your home directory is a git repo):
@@ -451,6 +478,72 @@ docker_compose_upgrade --dry-run
 docker_compose_scan /path/to/projects --depth 3
 ```
 
+#### AI Chat Integration
+
+Gash includes an AI module for interacting with Claude and Gemini directly from your terminal. Get instant help with bash commands, troubleshoot errors, and generate scripts.
+
+| Function | Alias | Description |
+|----------|-------|-------------|
+| `ai_query [provider] "query"` | - | Non-interactive AI query |
+| `ai_ask [provider]` | `ask` | Interactive AI chat session |
+| `gash_ai_list` | - | List configured AI providers |
+
+**Response Types:**
+
+The AI module automatically detects the type of request and formats output accordingly:
+
+| Type | Trigger | Output Format |
+|------|---------|---------------|
+| `command` | "how to...", "how do I..." | `Command:` + `Explanation:` |
+| `explanation` | "what is...", "explain..." | `Explanation:` only |
+| `code` | "write a script...", "write code..." | Description + code block |
+| `troubleshoot` | Pipe input detected | `Issue:` + `Suggestion:` |
+| `fallback` | Everything else (greetings, etc.) | Direct text, no labels |
+
+**Examples:**
+
+```bash
+# Get a command suggestion
+ai_query "how to find files larger than 100MB?"
+# Command: `find . -type f -size +100M`
+# Explanation: Finds all files larger than 100MB in current directory.
+
+# Get an explanation
+ai_query "what is systemd?"
+# Explanation: systemd is a system and service manager for Linux...
+
+# Generate code
+ai_query "write a script to backup my home directory"
+# Creates a compressed backup of your home directory.
+# # bash
+# #!/bin/bash
+# tar -czf ~/backup-$(date +%Y%m%d).tar.gz ~/
+
+# Troubleshoot errors (pipe input)
+tail -50 /var/log/apache2/error.log | ai_query "what's wrong?"
+# Issue: PHP Fatal error - undefined function mysql_connect()
+# Suggestion: mysql_connect() was removed in PHP 7. Use mysqli_connect() or PDO.
+
+# Interactive mode
+ask
+# claude: how to list files by size?
+# Command: `ls -lhS`
+# Explanation: Lists files sorted by size in descending order.
+
+# Use specific provider
+ai_query gemini "explain kubernetes"
+```
+
+**Features:**
+
+* **Smart response types** - Automatically detects intent and formats output appropriately
+* **Pipe support** - Pipe error logs or command output for troubleshooting
+* **Auto-truncation** - Piped content is truncated to 4KB to avoid token waste
+* **Rich context** - Includes cwd, shell type, distro, package manager, git branch, and last exit code
+* **Clear error messages** - Specific feedback for network issues, timeouts, and API errors
+
+**Configuration:** See [AI Providers Configuration](#ai-providers-configuration) in the `~/.gash_env` section.
+
 #### Gash Management
 
 | Function | Description |
@@ -463,6 +556,7 @@ docker_compose_scan /path/to/projects --depth 3
 | `gash_env_init` | Creates `~/.gash_env` from template |
 | `gash_db_list` | Lists all configured database connections |
 | `gash_db_test` | Tests a database connection |
+| `gash_ai_list` | Lists configured AI providers (claude, gemini) |
 | `gash_ssh_auto_unlock` | Auto-unlock SSH keys configured in `~/.gash_env` |
 
 #### LLM Utilities (for AI Agents)
@@ -482,10 +576,11 @@ Gash includes a specialized module for LLM (Large Language Model) agents like Cl
 | `llm_tree` | Compact directory tree | JSON structure |
 | `llm_find` | Find files by pattern | Newline-separated paths |
 | `llm_grep` | Search with structured output | file:line:content |
-| `llm_db_query` | Read-only database queries (`-c CONNECTION`) | JSON array |
-| `llm_db_tables` | List database tables (`-c CONNECTION`) | JSON array |
-| `llm_db_schema` | Show table schema (`TABLE -c CONNECTION`) | JSON structure |
-| `llm_db_sample` | Sample rows from table (`TABLE -c CONNECTION`) | JSON array |
+| `llm_db_query` | Read-only database queries (`-c CONNECTION` or `-f FILE`) | JSON array |
+| `llm_db_tables` | List database tables (`-c CONNECTION` or `-f FILE`) | JSON array |
+| `llm_db_schema` | Show table schema (`TABLE -c CONNECTION` or `-f FILE`) | JSON structure |
+| `llm_db_sample` | Sample rows from table (`TABLE -c CONNECTION` or `-f FILE`) | JSON array |
+| `llm_db_explain` | Query execution plan (`-c CONNECTION` or `-f FILE`) | JSON structure |
 | `llm_project` | Detect project type and info | JSON |
 | `llm_deps` | List project dependencies | JSON |
 | `llm_config` | Read config files (no .env for security) | JSON |
@@ -520,6 +615,13 @@ llm_db_query "SELECT id, name FROM users WHERE active = 1"
 # Query a specific connection
 llm_db_query "SELECT * FROM orders LIMIT 10" -c legacy
 llm_db_tables -c postgres
+
+# SQLite databases (use -f instead of -c)
+llm_db_query "SELECT * FROM users" -f ./data/app.db
+llm_db_tables -f /path/to/database.sqlite
+
+# Query execution plan
+llm_db_explain "SELECT * FROM users WHERE id = 1" -c default
 
 # Get compact git status
 llm_git_status

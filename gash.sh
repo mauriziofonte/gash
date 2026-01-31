@@ -19,7 +19,7 @@
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.3.7
+# Version: 1.4.0
 # Release Date: 2024-10-24
 # Last Update: 2026-01-06
 # License: Apache License
@@ -39,7 +39,7 @@ fi
 #   - Produces NO terminal output
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     BASH_NAME="Gash"
-    GASH_VERSION="1.3.7"
+    GASH_VERSION="1.4.0"
     GASH_DIR="${GASH_DIR:-$HOME/.gash}"
 
     # Load Core Modules (output, config, utils, validation)
@@ -123,7 +123,7 @@ fi
 
 # define some constants
 BASH_NAME="Gash"
-GASH_VERSION="1.3.7"
+GASH_VERSION="1.4.0"
 GASH_DIR="$HOME/.gash"
 
 
@@ -357,8 +357,9 @@ function __construct_ps1() {
 }
 
 # Set the prompt command to construct PS1 before each prompt and update history immediately.
+# __AI_LAST_EXIT captures exit code for AI module troubleshooting context.
 if [ "$color_prompt" = yes ]; then
-    PROMPT_COMMAND='EXIT_CODE=$?; history -a; history -c; history -r; __construct_ps1 $EXIT_CODE'
+    PROMPT_COMMAND='__AI_LAST_EXIT=$?; EXIT_CODE=$__AI_LAST_EXIT; history -a; history -c; history -r; __construct_ps1 $EXIT_CODE'
     PS2="\[${__GASH_PS1_BPURPLE}\]>\[${__GASH_PS1_OFF}\] "  # Continuation prompt.
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '

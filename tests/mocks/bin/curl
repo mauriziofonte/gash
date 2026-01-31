@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+
+# Mock curl for testing AI module.
+# Simulates Claude and Gemini API responses with 5 response types.
+
+# Track calls for verification (optional)
+if [[ -n "${MOCK_CURL_LOG:-}" ]]; then
+    echo "curl $*" >> "$MOCK_CURL_LOG"
+fi
+
+# Parse arguments - look for URL and body in all arguments
+url=""
+http_code_output=""
+output_file=""
+request_body=""
+
+# Store all args for scanning
+all_args=("$@")
+
+# Scan for specific args
+i=0
+while [[ $i -lt ${#all_args[@]} ]]; do
+    arg="${all_args[$i]}"
+    case "$arg" in
+        -w)
+            ((i++))
+            http_code_output="${all_args[$i]:-}"
+            ;;
+        -o)
+            ((i++))
+            output_file="${all_args[$i]:-}"
+            ;;
+        -d)
+            ((i++))
+            request_body="${all_args[$i]:-}"
+            ;;
+        http*|https*)
+            url="$arg"
+            ;;
+    esac
+    ((i++))
+done
+
+# Determine response type based on query content in body
+# Priority: troubleshoot > command > explanation > code > fallback
+# Note: We extract only the user query (after Context JSON) to avoid matching system prompt text
+detect_response_type() {
+    local body="$1"
+
+    # Extract user query: it comes after "}\\n\\n" (end of context JSON + double newline)
+    # The pattern in the JSON is: "content": "Context: {...}\n\nUSER_QUERY"
+    local user_query
+    user_query=$(echo "$body" | sed -n 's/.*}\\n\\n\([^"]*\)".*/\1/p' | head -1)
+    local lower_query
+    lower_query=$(echo "$user_query" | tr '[:upper:]' '[:lower:]')
+
+    # Only "[PIPE INPUT" triggers troubleshoot
+    if [[ "$lower_query" == *"[pipe input"* ]]; then
+        echo "troubleshoot"
+    elif [[ "$lower_query" == *"how to"* ]] || [[ "$lower_query" == *"come faccio"* ]] || [[ "$lower_query" == *"how do i"* ]]; then
+        echo "command"
+    elif [[ "$lower_query" == *"what is"* ]] || [[ "$lower_query" == *"cos'è"* ]] || [[ "$lower_query" == *"explain"* ]] || [[ "$lower_query" == *"spiega"* ]]; then
+        echo "explanation"
+    elif [[ "$lower_query" == *"write a script"* ]] || [[ "$lower_query" == *"scrivi uno script"* ]] || [[ "$lower_query" == *"write code"* ]]; then
+        echo "code"
+    else
+        echo "fallback"
+    fi
+}
+
+# Generate inner JSON based on response type
+generate_inner_json() {
+    local resp_type="$1"
+    case "$resp_type" in
+        troubleshoot)
+            echo '{"type":"troubleshoot","issue":"PHP Fatal error - undefined variable","suggestion":"Check variable initialization before use","text":"Analysis complete"}'
+            ;;
+        command)
+            echo '{"type":"command","command":"ls -lhS","text":"Lists files sorted by size in descending order."}'
+            ;;
+        explanation)
+            echo '{"type":"explanation","text":"This is a conceptual explanation of the topic."}'
+            ;;
+        code)
+            echo '{"type":"code","text":"Creates a backup script.","code":"#!/bin/bash\\ntar -czf backup.tar.gz ~/","lang":"bash"}'
+            ;;
+        fallback|*)
+            echo '{"type":"fallback","text":"I am a bash/linux terminal assistant. How can I help?"}'
+            ;;
+    esac
+}
+
+# Determine response based on URL
+response=""
+http_code="200"
+
+# Check for simulated errors
+if [[ -n "${MOCK_CURL_ERROR:-}" ]]; then
+    http_code="500"
+    response='{"error":{"message":"Simulated error"}}'
+elif [[ -n "${MOCK_CURL_TIMEOUT:-}" ]]; then
+    # Simulate timeout - exit with curl timeout code
+    exit 28
+elif [[ "$url" == *"api.anthropic.com"* ]]; then
+    # Claude API response with structured JSON output
+    resp_type=$(detect_response_type "$request_body")
+    inner_json=$(generate_inner_json "$resp_type")
+    # Escape inner JSON for embedding
+    escaped_inner=$(echo "$inner_json" | sed 's/"/\\"/g')
+    response='{"content":[{"text":"'"$escaped_inner"'"}],"model":"claude-haiku-4-5-20251001","stop_reason":"end_turn"}'
+elif [[ "$url" == *"generativelanguage.googleapis.com"* ]]; then
+    # Gemini API response with structured JSON output
+    resp_type=$(detect_response_type "$request_body")
+    inner_json=$(generate_inner_json "$resp_type")
+    # Escape inner JSON for embedding
+    escaped_inner=$(echo "$inner_json" | sed 's/"/\\"/g')
+    response='{"candidates":[{"content":{"parts":[{"text":"'"$escaped_inner"'"}]}}]}'
+else
+    # Unknown URL - still return something for debugging
+    http_code="404"
+    response='{"error":"Unknown endpoint","url":"'"$url"'"}'
+fi
+
+# Write response to output file if specified
+if [[ -n "$output_file" ]]; then
+    echo "$response" > "$output_file"
+fi
+
+# Output HTTP code if requested
+if [[ "$http_code_output" == "%{http_code}" ]]; then
+    echo "$http_code"
+fi
+
+exit 0

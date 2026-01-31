@@ -46,6 +46,27 @@
 # To list connections:  gash_db_list
 
 # ============================================
+# AI Providers
+# ============================================
+# Format: AI:provider=api_token
+#
+# Supported providers: claude, gemini
+#
+# Get your API keys:
+#   Claude: https://console.anthropic.com/settings/keys
+#   Gemini: https://aistudio.google.com/app/apikey
+#
+# Examples:
+# AI:claude=sk-ant-api03-xxxxxxxxxxxx
+# AI:gemini=AIzaSyxxxxxxxxxxxxxxxxxx
+#
+# Usage:
+#   ask                  # Interactive chat (uses first provider)
+#   ask claude           # Interactive chat with Claude
+#   ai_query "question"  # Non-interactive query
+#   gash_ai_list         # List configured providers
+
+# ============================================
 # PS1 Prompt Configuration
 # ============================================
 # GASH_GIT_EXCLUDE: Colon-separated list of git repository roots to exclude

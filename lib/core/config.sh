@@ -4,25 +4,29 @@
 # Gash Core: Configuration Parser
 # =============================================================================
 #
-# Parses ~/.gash_env for SSH keys and database connections.
+# Parses ~/.gash_env for SSH keys, database connections and AI providers.
 #
 # File format:
 #   SSH:keypath=passphrase
 #   DB:name=driver://user:password@host:port/database
+#   AI:provider=api_token
 #
 # Internal functions:
-#   __gash_load_env()          - Load and cache ~/.gash_env
-#   __gash_get_ssh_keys()      - Get SSH key entries
-#   __gash_get_db_url()        - Get database URL by connection name
-#   __gash_parse_db_url()      - Parse URL into components
-#   __gash_url_decode()        - Decode %XX sequences
-#   __gash_url_encode()        - Encode special characters
-#   __gash_check_env_perms()   - Check file permissions
+#   __gash_load_env()            - Load and cache ~/.gash_env
+#   __gash_get_ssh_keys()        - Get SSH key entries
+#   __gash_get_db_url()          - Get database URL by connection name
+#   __gash_parse_db_url()        - Parse URL into components
+#   __gash_url_decode()          - Decode %XX sequences
+#   __gash_url_encode()          - Encode special characters
+#   __gash_check_env_perms()     - Check file permissions
+#   __gash_get_ai_token()        - Get AI provider token
+#   __gash_get_first_ai_provider() - Get first available AI provider
 #
 # Public functions:
 #   gash_db_list()             - List available DB connections
 #   gash_db_test()             - Test a DB connection
 #   gash_env_init()            - Create ~/.gash_env from template
+#   gash_ai_list()             - List available AI providers
 #
 # =============================================================================
 
@@ -30,6 +34,7 @@
 declare -g __GASH_ENV_LOADED=""
 declare -g __GASH_ENV_SSH_KEYS=""
 declare -g __GASH_ENV_DB_ENTRIES=""
+declare -g __GASH_ENV_AI_PROVIDERS=""
 
 # =============================================================================
 # URL Encoding/Decoding
@@ -113,6 +118,7 @@ __gash_load_env() {
         __GASH_ENV_LOADED="1"
         __GASH_ENV_SSH_KEYS=""
         __GASH_ENV_DB_ENTRIES=""
+        __GASH_ENV_AI_PROVIDERS=""
         return 0
     fi
 
@@ -121,6 +127,7 @@ __gash_load_env() {
 
     local ssh_keys=""
     local db_entries=""
+    local ai_providers=""
     local line
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -173,6 +180,24 @@ __gash_load_env() {
             continue
         fi
 
+        # Parse AI entries: AI:provider=api_token
+        if [[ "$line" == AI:* ]]; then
+            local ai_rest="${line#AI:}"
+            local provider="${ai_rest%%=*}"
+            local token="${ai_rest#*=}"
+
+            # Validate provider name
+            if [[ ! "$provider" =~ ^(claude|gemini)$ ]]; then
+                __gash_warning "Unknown AI provider '$provider' (only claude/gemini supported)"
+                continue
+            fi
+
+            # Store as TAB-separated: provider\ttoken
+            [[ -n "$ai_providers" ]] && ai_providers+=$'\n'
+            ai_providers+="${provider}"$'\t'"${token}"
+            continue
+        fi
+
         # Unknown line format
         __gash_warning "Unknown config line format: $line (skipping)"
 
@@ -181,6 +206,7 @@ __gash_load_env() {
     __GASH_ENV_LOADED="1"
     __GASH_ENV_SSH_KEYS="$ssh_keys"
     __GASH_ENV_DB_ENTRIES="$db_entries"
+    __GASH_ENV_AI_PROVIDERS="$ai_providers"
 }
 
 # Force reload of config
@@ -188,6 +214,7 @@ __gash_reload_env() {
     __GASH_ENV_LOADED=""
     __GASH_ENV_SSH_KEYS=""
     __GASH_ENV_DB_ENTRIES=""
+    __GASH_ENV_AI_PROVIDERS=""
     __gash_load_env
 }
 
@@ -439,4 +466,79 @@ gash_env_init() {
 
     __gash_success "Created $target"
     __gash_info "Edit with your SSH keys and database credentials"
+}
+
+# =============================================================================
+# AI Provider Functions
+# =============================================================================
+
+# Get AI provider token by provider name
+# Returns token or empty string if not found
+__gash_get_ai_token() {
+    local provider="${1-}"
+
+    [[ -z "$provider" ]] && return 1
+
+    __gash_load_env
+
+    [[ -z "$__GASH_ENV_AI_PROVIDERS" ]] && return 1
+
+    local line
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local entry_provider="${line%%$'\t'*}"
+        local entry_token="${line#*$'\t'}"
+
+        if [[ "$entry_provider" == "$provider" ]]; then
+            printf '%s' "$entry_token"
+            return 0
+        fi
+    done <<< "$__GASH_ENV_AI_PROVIDERS"
+
+    return 1
+}
+
+# Get first available AI provider name
+# Returns provider name or empty if none configured
+__gash_get_first_ai_provider() {
+    __gash_load_env
+
+    [[ -z "$__GASH_ENV_AI_PROVIDERS" ]] && return 1
+
+    local first_line
+    first_line=$(head -n1 <<< "$__GASH_ENV_AI_PROVIDERS")
+    [[ -z "$first_line" ]] && return 1
+
+    printf '%s' "${first_line%%$'\t'*}"
+    return 0
+}
+
+# List available AI providers
+gash_ai_list() {
+    needs_help "gash_ai_list" "gash_ai_list" \
+        "List available AI providers from ~/.gash_env" \
+        "${1-}" && return
+
+    __gash_load_env
+
+    if [[ -z "$__GASH_ENV_AI_PROVIDERS" ]]; then
+        __gash_info "No AI providers configured in ~/.gash_env"
+        __gash_info "Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY"
+        return 0
+    fi
+
+    __gash_info "Available AI providers:"
+    echo
+
+    local line
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local provider="${line%%$'\t'*}"
+        local token="${line#*$'\t'}"
+
+        # Mask token for display (show first 8 chars)
+        local masked_token="${token:0:8}..."
+
+        printf "  %-10s %s\n" "$provider" "$masked_token"
+    done <<< "$__GASH_ENV_AI_PROVIDERS"
 }
