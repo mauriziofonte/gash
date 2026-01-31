@@ -292,6 +292,10 @@ __ai_call_claude() {
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
 
+    # Track start time for timeout differentiation
+    local start_time elapsed_time
+    start_time=$(date +%s)
+
     http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
         --connect-timeout "$__AI_CONNECT_TIMEOUT" \
         --max-time "$__AI_RESPONSE_TIMEOUT" \
@@ -301,6 +305,7 @@ __ai_call_claude() {
         -d "$body" \
         "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
+    elapsed_time=$(( $(date +%s) - start_time ))
     response=$(<"$tmp_file")
     local curl_error=$(<"$tmp_err")
     rm -f "$tmp_file" "$tmp_err"
@@ -313,7 +318,14 @@ __ai_call_claude() {
             7)  __gash_error "Claude API: Failed to connect (server unreachable)" ;;
             18) __gash_error "Claude API: Partial response received (transfer interrupted)" ;;
             22) __gash_error "Claude API: HTTP error returned" ;;
-            28) __gash_error "Claude API: Request timed out (${__AI_RESPONSE_TIMEOUT}s)" ;;
+            28)
+                # Distinguish connection timeout vs response timeout based on elapsed time
+                if [[ $elapsed_time -le $(( __AI_CONNECT_TIMEOUT + 2 )) ]]; then
+                    __gash_error "Claude API: Connection timed out after ${elapsed_time}s (server unreachable)"
+                else
+                    __gash_error "Claude API: Response timed out after ${elapsed_time}s (max: ${__AI_RESPONSE_TIMEOUT}s)"
+                fi
+                ;;
             35) __gash_error "Claude API: SSL/TLS handshake failed" ;;
             47) __gash_error "Claude API: Too many redirects" ;;
             52) __gash_error "Claude API: Server returned empty response" ;;
@@ -384,6 +396,10 @@ __ai_call_gemini() {
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
 
+    # Track start time for timeout differentiation
+    local start_time elapsed_time
+    start_time=$(date +%s)
+
     http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
         --connect-timeout "$__AI_CONNECT_TIMEOUT" \
         --max-time "$__AI_RESPONSE_TIMEOUT" \
@@ -391,6 +407,7 @@ __ai_call_gemini() {
         -d "$body" \
         "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
 
+    elapsed_time=$(( $(date +%s) - start_time ))
     response=$(<"$tmp_file")
     local curl_error=$(<"$tmp_err")
     rm -f "$tmp_file" "$tmp_err"
@@ -403,7 +420,14 @@ __ai_call_gemini() {
             7)  __gash_error "Gemini API: Failed to connect (server unreachable)" ;;
             18) __gash_error "Gemini API: Partial response received (transfer interrupted)" ;;
             22) __gash_error "Gemini API: HTTP error returned" ;;
-            28) __gash_error "Gemini API: Request timed out (${__AI_RESPONSE_TIMEOUT}s)" ;;
+            28)
+                # Distinguish connection timeout vs response timeout based on elapsed time
+                if [[ $elapsed_time -le $(( __AI_CONNECT_TIMEOUT + 2 )) ]]; then
+                    __gash_error "Gemini API: Connection timed out after ${elapsed_time}s (server unreachable)"
+                else
+                    __gash_error "Gemini API: Response timed out after ${elapsed_time}s (max: ${__AI_RESPONSE_TIMEOUT}s)"
+                fi
+                ;;
             35) __gash_error "Gemini API: SSL/TLS handshake failed" ;;
             47) __gash_error "Gemini API: Too many redirects" ;;
             52) __gash_error "Gemini API: Server returned empty response" ;;

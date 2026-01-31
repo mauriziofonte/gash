@@ -233,6 +233,13 @@ __gash_spinner_start() {
     # Spinner characters (ASCII compatible)
     local frames='|/-\'
 
+    # Disable job control notifications to prevent "[1] 870779" output
+    local job_control_was_on=0
+    if [[ $- == *m* ]]; then
+        job_control_was_on=1
+        set +m
+    fi
+
     (
         local i=0
         local len=${#frames}
@@ -243,6 +250,9 @@ __gash_spinner_start() {
         done
     ) &
     __GASH_SPINNER_PID=$!
+
+    # Re-enable job control if it was on
+    [[ $job_control_was_on -eq 1 ]] && set -m
 
     # Ensure cleanup on script exit
     trap '__gash_spinner_stop' EXIT
