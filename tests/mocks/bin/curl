@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Mock curl for testing AI module.
-# Simulates Claude and Gemini API responses with 5 response types.
+# Mock curl for testing AI module and Docker registry API.
+# Simulates Claude/Gemini API responses and Docker registry endpoints.
 
 # Track calls for verification (optional)
 if [[ -n "${MOCK_CURL_LOG:-}" ]]; then
@@ -13,6 +13,7 @@ url=""
 http_code_output=""
 output_file=""
 request_body=""
+is_head_request=0
 
 # Store all args for scanning
 all_args=("$@")
@@ -33,6 +34,9 @@ while [[ $i -lt ${#all_args[@]} ]]; do
         -d)
             ((i++))
             request_body="${all_args[$i]:-}"
+            ;;
+        -I)
+            is_head_request=1
             ;;
         http*|https*)
             url="$arg"
@@ -94,13 +98,62 @@ generate_inner_json() {
 response=""
 http_code="200"
 
-# Check for simulated errors
+# Check for simulated errors (global, applies to any URL)
 if [[ -n "${MOCK_CURL_ERROR:-}" ]]; then
     http_code="500"
     response='{"error":{"message":"Simulated error"}}'
 elif [[ -n "${MOCK_CURL_TIMEOUT:-}" ]]; then
     # Simulate timeout - exit with curl timeout code
     exit 28
+
+# --- Docker Registry Endpoints ---
+elif [[ "$url" == *"auth.docker.io/token"* ]]; then
+    # Docker Hub auth token endpoint
+    if [[ "${MOCK_CURL_REGISTRY_AUTH_FAIL:-}" == "1" ]]; then
+        http_code="500"
+        response='{"error":"internal_error"}'
+    elif [[ "${MOCK_CURL_REGISTRY_UNAUTHORIZED:-}" == "1" ]]; then
+        http_code="401"
+        response='{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}'
+    else
+        response='{"token":"mock-dockerhub-token-abc123","access_token":"mock-dockerhub-token-abc123"}'
+        http_code="200"
+    fi
+
+elif [[ "$url" == *"ghcr.io/token"* ]]; then
+    # GHCR auth token endpoint
+    if [[ "${MOCK_CURL_REGISTRY_AUTH_FAIL:-}" == "1" ]]; then
+        http_code="500"
+        response='{"error":"internal_error"}'
+    else
+        response='{"token":"mock-ghcr-token-xyz789"}'
+        http_code="200"
+    fi
+
+elif [[ "$url" == *"/v2/"*"/manifests/"* ]]; then
+    # Registry manifest endpoint (Docker Hub, GHCR, or generic)
+    if [[ "${MOCK_CURL_REGISTRY_TIMEOUT:-}" == "1" ]]; then
+        exit 28
+    elif [[ "${MOCK_CURL_REGISTRY_RATE_LIMITED:-}" == "1" ]]; then
+        http_code="429"
+        response='{"errors":[{"code":"TOOMANYREQUESTS","message":"rate limit exceeded"}]}'
+    elif [[ "${MOCK_CURL_REGISTRY_NOT_FOUND:-}" == "1" ]]; then
+        http_code="404"
+        response='{"errors":[{"code":"MANIFEST_UNKNOWN","message":"manifest unknown"}]}'
+    elif [[ "${MOCK_CURL_REGISTRY_UNAUTHORIZED:-}" == "1" ]]; then
+        http_code="401"
+        response='{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}'
+    else
+        # Success: return mock digest in headers (for HEAD requests) or body
+        http_code="200"
+        if [[ $is_head_request -eq 1 ]]; then
+            response=$'HTTP/2 200\r\ncontent-type: application/vnd.docker.distribution.manifest.v2+json\r\ndocker-content-digest: sha256:newdigest456abc123def456abc123def456abc123def456abc123def456newdig\r\n'
+        else
+            response='{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}'
+        fi
+    fi
+
+# --- AI API Endpoints ---
 elif [[ "$url" == *"api.anthropic.com"* ]]; then
     # Claude API response with structured JSON output
     resp_type=$(detect_response_type "$request_body")
@@ -129,6 +182,11 @@ fi
 # Output HTTP code if requested
 if [[ "$http_code_output" == "%{http_code}" ]]; then
     echo "$http_code"
+fi
+
+# If no output file and no http_code_output, print response to stdout
+if [[ -z "$output_file" && -z "$http_code_output" ]]; then
+    echo "$response"
 fi
 
 exit 0

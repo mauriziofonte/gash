@@ -47,63 +47,57 @@ __gash_public_functions() {
     fi
 
     # Fallback: keep a minimal set if we can't detect the added functions.
-    printf '%s' "disk_usage files_largest dirs_largest dirs_find_large history_grep git_add_tag git_delete_tag"
-}
-
-# Build a whitespace-separated list of short aliases for Gash functions.
-__gash_short_aliases() {
-    local out=""
-    local al
-
-    if [[ -n "${__GASH_ADDED_ALIASES-}" ]]; then
-        local IFS=$'\n'
-        for al in ${__GASH_ADDED_ALIASES}; do
-            [[ -z "${al-}" ]] && continue
-            out+="$al "
-        done
-
-        printf '%s' "${out% }"
-        return 0
-    fi
-
-    # Fallback: short aliases for common functions
-    printf '%s' "du2 flf dld dfl hg gat gdt glt gdr gap dsa daa dpa pf pk ptk svs plz mkcd axe fbk dle myip"
+    printf '%s' "disk_usage files_largest dirs_largest dirs_find_large history_grep git_add_tag git_delete_tag gash_doctor gash archive_extract file_backup"
 }
 
 # -----------------------------------------------------------------------------
 # Completion Function
 # -----------------------------------------------------------------------------
 
-# Completion function for Gash
+# Completion handler for Gash functions.
+# Dispatches to per-function completion based on COMP_WORDS[0].
 __gash_complete() {
-    local current_word previous_word
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local cmd="${COMP_WORDS[0]}"
 
-    current_word="${COMP_WORDS[COMP_CWORD]}"
-
-    # COMP_CWORD can be 0 in some edge cases; avoid negative indexes (bash 3 compatibility).
-    if (( COMP_CWORD > 0 )); then
-        previous_word="${COMP_WORDS[COMP_CWORD - 1]}"
-    else
-        previous_word=""
-    fi
-
-    # Define Gash commands (public functions + short aliases)
-    local commands
-    commands="$(__gash_public_functions) $(__gash_short_aliases)"
-
-    case "${previous_word}" in
-        # For git tag functions, check if in git repo and suggest tags accordingly
-        git_add_tag|git_delete_tag|git_list_tags|gat|gdt|glt)
+    case "$cmd" in
+        # Git tag completion
+        git_add_tag|git_delete_tag|git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-                # git tags are whitespace-free in normal usage; compgen uses $IFS splitting.
-                COMPREPLY=($(compgen -W "$(git tag -l 2>/dev/null)" -- "${current_word}"))
+                COMPREPLY=($(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur"))
             else
                 COMPREPLY=()
             fi
             ;;
-        # For Gash commands, suggest available functions
+
+        # Directory completion
+        files_largest|dirs_largest|dirs_find_large|dirs_list_empty|\
+        docker_compose_check|docker_compose_upgrade|docker_compose_scan|mkdir_cd)
+            COMPREPLY=($(compgen -d -- "$cur"))
+            ;;
+
+        # File completion
+        archive_extract|file_backup|git_dump_revisions)
+            COMPREPLY=($(compgen -f -- "$cur"))
+            ;;
+
+        # Gash reference card sections
+        gash)
+            COMPREPLY=($(compgen -W "git files system docker nav navigation llm php gash management all help" -- "$cur"))
+            ;;
+
+        # AI provider completion (first argument only)
+        ai_ask|ai_query)
+            if (( COMP_CWORD == 1 )); then
+                COMPREPLY=($(compgen -W "claude gemini" -- "$cur"))
+            else
+                COMPREPLY=()
+            fi
+            ;;
+
+        # Everything else: empty COMPREPLY lets -o default provide file completion
         *)
-            COMPREPLY=($(compgen -W "${commands}" -- "${current_word}"))
+            COMPREPLY=()
             ;;
     esac
 }
@@ -112,12 +106,15 @@ __gash_complete() {
 # Enable Completion
 # -----------------------------------------------------------------------------
 
-# Activate completion for each public Gash function and alias
+# Activate completion for each public Gash function.
+#
+# NOTE: Completion is NOT registered for bash aliases (dsa, gat, flf, etc.).
+# Bash expands aliases BEFORE consulting completion specs, so
+# `complete -F handler alias_name` is silently ignored. This is a bash
+# limitation, not a Gash bug. Alias users get default readline completion.
 __gash_enable_completion() {
     local fn
-    local al
 
-    # Register completion for public functions
     if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
         local IFS=$'\n'
         for fn in ${__GASH_ADDED_FUNCS}; do
@@ -125,29 +122,10 @@ __gash_enable_completion() {
             complete -o default -F __gash_complete "$fn"
         done
     else
-        # Fallback registration for functions
-        complete -o default -F __gash_complete git_add_tag
-        complete -o default -F __gash_complete git_delete_tag
-        complete -o default -F __gash_complete git_list_tags
-        complete -o default -F __gash_complete disk_usage
-        complete -o default -F __gash_complete files_largest
-        complete -o default -F __gash_complete dirs_largest
-        complete -o default -F __gash_complete dirs_find_large
-        complete -o default -F __gash_complete history_grep
-    fi
-
-    # Register completion for short aliases
-    if [[ -n "${__GASH_ADDED_ALIASES-}" ]]; then
-        local IFS=$'\n'
-        for al in ${__GASH_ADDED_ALIASES}; do
-            [[ -z "${al-}" ]] && continue
-            complete -o default -F __gash_complete "$al"
-        done
-    else
-        # Fallback registration for aliases
-        local alias_list="du2 flf dld dfl hg gat gdt glt gdr gap dsa daa dpa pf pk ptk svs plz mkcd axe fbk dle myip"
-        for al in $alias_list; do
-            complete -o default -F __gash_complete "$al"
+        # Fallback registration for common functions
+        local fn_list="git_add_tag git_delete_tag git_list_tags disk_usage files_largest dirs_largest dirs_find_large history_grep gash_doctor gash archive_extract file_backup"
+        for fn in $fn_list; do
+            complete -o default -F __gash_complete "$fn"
         done
     fi
 }

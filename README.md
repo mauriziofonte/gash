@@ -41,18 +41,18 @@ curl -fsSL https://raw.githubusercontent.com/mauriziofonte/gash/refs/heads/main/
 wget -qO- https://raw.githubusercontent.com/mauriziofonte/gash/refs/heads/main/install.sh | bash
 ```
 
-The automated installer will add a new section to your `.bash_profile` with:
+The automated installer will add a new section to your shell profile (`.bashrc` or `.bash_profile`) with:
 
 ```sh
-...
-# Load the Gash Environment
-if [ -f ~/.gashrc ]; then
-    source ~/.gashrc
+# >>> GASH START >>>
+# Load Gash Bash - Do not edit this block, it is managed by Gash installer
+if [ -f "$HOME/.gashrc" ]; then
+  source "$HOME/.gashrc"
 fi
-...
+# <<< GASH END <<<
 ```
 
-If no `.bash_profile` is found, the installer will create one for you.
+If no shell profile is found, the installer will print instructions for you to add the sourcing block manually.
 
 ## Features Breakdown
 
@@ -75,7 +75,7 @@ maurizio:~/projects (main*) $  # Git branch with dirty indicator
 * Uses `git symbolic-ref` instead of `git name-rev` (faster branch detection)
 * Limits git detection depth (avoids slowdown when home directory is a git repo)
 * Uses `GIT_OPTIONAL_LOCKS=0` to prevent lock file creation
-* Supports `GASH_GIT_EXCLUDE` in `~/.gash_env` to exclude specific repositories from prompt
+* Supports `GASH_GIT_EXCLUDE` environment variable to exclude specific repositories from prompt (set in `~/.bash_local`)
 
 ### Built-in Aliases
 
@@ -107,10 +107,16 @@ And [many more](#helpers-functions)!
 
 ### Bash completion
 
-Gash ships with a dedicated completion script (`bash_completion`). Once sourced (see `~/.gashrc`), it:
+Gash ships with a dedicated completion script (`bash_completion`). Once sourced (see `~/.gashrc`), it provides context-aware tab completion for all public Gash functions:
 
-* Suggests all public Gash functions (excluding internal helpers)
-* For `git_add_tag` / `git_delete_tag`, suggests Git tags when you are inside a Git repository
+* **Git tag functions** (`git_add_tag`, `git_delete_tag`, `git_list_tags`): suggests Git tags
+* **Directory functions** (`files_largest`, `dirs_largest`, `docker_compose_check`, etc.): suggests directories
+* **File functions** (`archive_extract`, `file_backup`, `git_dump_revisions`): suggests files
+* **`gash`**: suggests reference card sections (`git`, `files`, `system`, `docker`, etc.)
+* **AI functions** (`ai_ask`, `ai_query`): suggests providers (`claude`, `gemini`)
+* **All other functions**: falls back to default file completion
+
+**Note:** Completion is registered for function names only (e.g., `docker_stop_all`), not short aliases (e.g., `dsa`). This is a Bash limitation: Bash expands aliases before consulting completion specs, so `complete -F handler alias_name` is silently ignored.
 
 ### Unload Gash (session-only)
 
@@ -172,10 +178,8 @@ export GASH_BASH="$HOME/.gash/gash.sh"
 export GASH_COMPLETION="$HOME/.gash/bash_completion"
 
 if [ -f "$GASH_BASH" ]; then
-  # Loads Gash (functions, aliases, prompt)
-  source "$GASH_BASH"
-  # Loads bash completion for Gash functions
-  source "$GASH_COMPLETION"
+  source "$GASH_BASH" # This loads Gash
+  [ -f "$GASH_COMPLETION" ] && source "$GASH_COMPLETION" # This loads Gash completion
 fi
 ```
 
@@ -310,12 +314,14 @@ ai_query gemini "write a backup script"  # Uses Gemini specifically
 
 ##### PS1 Prompt Configuration
 
-You can exclude specific git repositories from the prompt (useful for large repos or when your home directory is a git repo):
+You can exclude specific git repositories from the prompt (useful for large repos or when your home directory is a git repo).
+
+Add this to your `~/.bash_local` file (not `~/.gash_env`):
 
 ```sh
-# ~/.gash_env
-# Colon-separated list of repository roots to exclude
-GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo
+# ~/.bash_local
+# Colon-separated list of repository roots to exclude from PS1 prompt
+export GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo
 ```
 
 **Password URL encoding:** If your password contains special characters, URL-encode them:
@@ -434,7 +440,7 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 | `git_add_tag` | `gat` | Creates an annotated tag and pushes it to remote |
 | `git_delete_tag` | `gdt` | Deletes a tag both locally and on remote |
 | `git_dump_revisions` | `gdr` | Dumps all revisions of a Git-tracked file into separate files |
-| `git_apply_patch` | `gap` | Creates and applies patches from a feature branch to main |
+| `git_apply_patch` | `gpatch` | Creates and applies patches from a feature branch to main |
 
 #### Git Log Functions
 
@@ -548,7 +554,9 @@ ai_query gemini "explain kubernetes"
 
 | Function | Description |
 |----------|-------------|
+| `gash` | Interactive reference card with sections (`gash all` for complete list) |
 | `gash_help` | Displays a list of available Gash commands |
+| `gash_doctor` / `gdoctor` | Run health checks on Gash installation (core files, modules, config, tools) |
 | `gash_upgrade` | Upgrades Gash to the latest version |
 | `gash_uninstall` | Uninstalls Gash and cleans up configurations |
 | `gash_unload` | Unloads Gash from the current shell session (best-effort restore) |
@@ -585,7 +593,7 @@ Gash includes a specialized module for LLM (Large Language Model) agents like Cl
 | `llm_deps` | List project dependencies | JSON |
 | `llm_config` | Read config files (no .env for security) | JSON |
 | `llm_git_status` | Compact git status | JSON |
-| `llm_git_diff` | Diff with stats | JSON or unified |
+| `llm_git_diff` | Diff with stats | Text (stat format) |
 | `llm_git_log` | Recent commit log | JSON |
 | `llm_ports` | Ports in use | JSON |
 | `llm_procs` | Processes by name/port | JSON |
@@ -604,7 +612,7 @@ Gash includes a specialized module for LLM (Large Language Model) agents like Cl
 
 ```bash
 # Get project structure (ignores noise directories)
-llm_structure
+llm_tree
 
 # Find all PHP files containing "Controller"
 llm_grep "Controller" --ext php
@@ -651,23 +659,21 @@ llm_git_status
   * **Reset**: `grh`, `grh1` (undo last commit), `grhh` (hard)
   * **Rebase**: `grb`, `grbc` (continue), `grba` (abort)
 * **Network Utilities**:
-  * `ping`, `traceroute`, `tracepath`: Aliased with `-c 5` for a limited number of packets.
-  * `mtr`: Launches `mtr` with the `-c 5` option for a limited number of packets.
+  * `traceroute`, `tracepath`: Replaced with `mtr` (if installed) for interactive network diagnostics.
 * **System Monitoring**:
-  * `df`, `du`, `free`, `ps`, `top`: Aliased with human-readable output and color-coded columns.
-  * `htop`: Launches `htop` with color-coded output for better process monitoring.
-  * `pydf`: Displays disk usage with color-coded output.
+  * `df` → `pydf`: Replaced with color-coded disk usage (if installed).
+  * `top` → `htop`: Replaced with interactive process viewer (if installed).
 * **Docker**:
   * `dcls`, `dclsr`: Lists all or running Docker containers.
   * `dils`: Lists all Docker images.
-  * `dcrm`, `dirm`: Removes all Docker containers or images.
+  * `dcrm`: Removes a Docker container. `dirm`: Prunes all Docker images.
   * `dstop`, `dstart`: Stops or starts a Docker container.
   * `dexec`, `drm`, `drmi`: Executes a command, removes a container, or an image.
   * `dlogs`, `dinspect`, `dnetls`: Shows logs, inspects an object, or lists networks.
 * **Miscellaneous**:
   * `ll`, `la`, `lash`: Enhanced directory listings with color-coded output.
   * `ports`: Lists open network ports.
-  * `all_colors`: Prints all available terminal colors with ANSI escape codes.
+  * `all_colors`: Function that prints all available terminal colors with ANSI escape codes.
 * **Cross-Platform Commands**:
   * `explorer`, `taskmanager`: For Windows WSL users, opens Windows Explorer and Task Manager.
   * `wslrestart`, `wslshutdown`: Restarts or shuts down WSL.
@@ -682,7 +688,7 @@ llm_git_status
   * **traceroute**/**tracepath** → `mtr`: A network diagnostic tool combining the functionality of traceroute and ping.
   * **diff** → `colordiff`: Colorizes the output of `diff` for easier readability.
 * **PHP & Composer Versions**:
-  * `php83`, `composer83`, `php82`, `composer82`, etc.: Aliases for specific versions of PHP and Composer, allowing easy switching between different environments. Uses memory limits and `allow_url_fopen` enabled for Composer.
+  * `php85`, `composer85`, `php84`, `composer84`, `php83`, `composer83`, `php82`, `composer82`, etc.: Aliases for specific versions of PHP (5.6-8.5) and Composer, allowing easy switching between different environments. Uses memory limits and `allow_url_fopen` enabled for Composer.
 * **Git Enhancements**:
   * **git log** → `gl`: Professional log with graph, colors, and variants (`gl --help` for all options).
   * **git status** → `gst`/`gs`: Full or compact status view.

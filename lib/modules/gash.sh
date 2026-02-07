@@ -373,6 +373,84 @@ gash_unload() {
 }
 
 # -----------------------------------------------------------------------------
+# Health Check
+# -----------------------------------------------------------------------------
+
+# Run health checks on the Gash installation.
+# Verifies core files, modules, config permissions, and external tools.
+# Usage: gash_doctor
+gash_doctor() {
+    needs_help "gash_doctor" "gash_doctor" "Run health checks on your Gash installation." "${1-}" && return
+
+    local gash_dir="${GASH_DIR:-$HOME/.gash}"
+    local issues=0
+
+    __gash_info "Gash Doctor — checking installation (v${GASH_VERSION:-unknown})..."
+    echo ""
+
+    # 1. Core files
+    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Core Files:${__GASH_COLOR_OFF:-\033[0m}"
+    local core_files=("$gash_dir/gash.sh" "$gash_dir/lib/core/config.sh" "$gash_dir/lib/core/output.sh" "$gash_dir/lib/core/utils.sh" "$gash_dir/lib/core/validation.sh")
+    for f in "${core_files[@]}"; do
+        if [[ -f "$f" ]]; then
+            __gash_success "  $(basename "$f")"
+        else
+            __gash_error "  $(basename "$f") — MISSING"
+            ((issues++))
+        fi
+    done
+
+    # 2. Modules
+    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Modules:${__GASH_COLOR_OFF:-\033[0m}"
+    local expected_modules=(gash git ssh files docker docker-compose system llm ai)
+    for mod in "${expected_modules[@]}"; do
+        if [[ -f "$gash_dir/lib/modules/${mod}.sh" ]]; then
+            __gash_success "  ${mod}"
+        else
+            __gash_warning "  ${mod} — not found"
+            ((issues++))
+        fi
+    done
+
+    # 3. Config file
+    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Configuration:${__GASH_COLOR_OFF:-\033[0m}"
+    local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    if [[ -f "$env_file" ]]; then
+        local perms
+        perms=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null || echo "unknown")
+        if [[ "$perms" == "600" ]]; then
+            __gash_success "  $env_file (permissions: $perms)"
+        else
+            __gash_warning "  $env_file (permissions: $perms — should be 600)"
+            ((issues++))
+        fi
+    else
+        __gash_info "  $env_file — not found (optional, run gash_env_init to create)"
+    fi
+
+    # 4. External tools
+    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}External Tools:${__GASH_COLOR_OFF:-\033[0m}"
+    local tools=(git curl jq sqlite3 docker)
+    for tool in "${tools[@]}"; do
+        if type -P "$tool" >/dev/null 2>&1; then
+            __gash_success "  $tool ($(type -P "$tool"))"
+        else
+            __gash_warning "  $tool — not found (some features may be unavailable)"
+        fi
+    done
+
+    # 5. Summary
+    echo ""
+    if [[ $issues -eq 0 ]]; then
+        __gash_success "All checks passed."
+    else
+        __gash_warning "$issues issue(s) found."
+    fi
+}
+
+alias gdoctor='gash_doctor'
+
+# -----------------------------------------------------------------------------
 # Reference Card
 # -----------------------------------------------------------------------------
 
@@ -598,6 +676,7 @@ gash() {
         __gash_ref_fn "gash_help" "" "[TOPIC]" "Bash help + Gash commands"
         __gash_ref_fn "gash_upgrade" "" "" "Upgrade to latest version"
         __gash_ref_fn "gash_uninstall" "" "" "Uninstall Gash"
+        __gash_ref_fn "gash_doctor" "gdoctor" "" "Health check installation"
         __gash_ref_fn "gash_unload" "" "" "Restore pre-Gash shell state"
         __gash_ref_fn "gash_inspiring_quote" "" "" "Display inspiring quote"
         __gash_ref_fn "gash_env_init" "" "" "Create ~/.gash_env template"
@@ -775,6 +854,7 @@ gash_help() {
         # Gash management
         echo -e "\e[1;37m--- Gash Management ---\033[0m"
         echo -e " > \e[0;33mgash_help\033[0m - \e[1;37mDisplay this help.\033[0m"
+        echo -e " > \e[0;33mgash_doctor\033[0m (\e[0;32mgdoctor\033[0m) - \e[1;37mHealth check installation.\033[0m"
         echo -e " > \e[0;33mgash_upgrade\033[0m - \e[1;37mUpgrade Gash to the latest version.\033[0m"
         echo -e " > \e[0;33mgash_uninstall\033[0m - \e[1;37mUninstall Gash.\033[0m"
         echo -e " > \e[0;33mgash_unload\033[0m - \e[1;37mRestore shell state before Gash.\033[0m"

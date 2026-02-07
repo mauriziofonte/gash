@@ -160,7 +160,7 @@ git_add_tag() {
     local tag_message="${2:-"Release $tag_name"}"
 
     # Check if tag already exists
-    if git rev-parse "$tag_name" >/dev/null 2>&1 || git ls-remote --tags origin | grep -q "refs/tags/$tag_name"; then
+    if git rev-parse "$tag_name" >/dev/null 2>&1 || git ls-remote --tags origin | grep -qF "refs/tags/$tag_name"; then
         __gash_error "Tag '$tag_name' already exists."
         return 1
     fi
@@ -200,7 +200,7 @@ git_delete_tag() {
     fi
 
     # Delete remote tag if exists
-    if git ls-remote --tags origin | grep -q "refs/tags/$tag_name"; then
+    if git ls-remote --tags origin | grep -qF "refs/tags/$tag_name"; then
         git push origin --delete "$tag_name" && __gash_success "Remote tag '$tag_name' deleted."
     fi
 
@@ -214,4 +214,4 @@ alias glt='git_list_tags'
 alias gat='git_add_tag'
 alias gdt='git_delete_tag'
 alias gdr='git_dump_revisions'
-alias gap='git_apply_patch'
+alias gpatch='git_apply_patch'

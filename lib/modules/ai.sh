@@ -128,17 +128,51 @@ __ai_require_curl() {
     return 0
 }
 
-# Escape string for JSON
-# Usage: __ai_json_escape "string"
-__ai_json_escape() {
-    local str="${1-}"
-    # Escape backslashes first, then other special chars
-    str="${str//\\/\\\\}"
-    str="${str//\"/\\\"}"
-    str="${str//$'\n'/\\n}"
-    str="${str//$'\r'/\\r}"
-    str="${str//$'\t'/\\t}"
-    printf '%s' "$str"
+# Handle curl exit codes and HTTP errors for AI API calls.
+# Returns: 0 if no error, 1 if error (with message printed).
+# Usage: __ai_handle_curl_error <provider> <curl_exit> <http_code> <elapsed_time> <response> <curl_error>
+__ai_handle_curl_error() {
+    local provider="$1" curl_exit="${2:-}" http_code="$3"
+    local elapsed_time="$4" response="$5" curl_error="${6:-}"
+
+    if [[ -n "$curl_exit" ]]; then
+        case "$curl_exit" in
+            5)  __gash_error "$provider API: Couldn't resolve proxy" ;;
+            6)  __gash_error "$provider API: Could not resolve host (check DNS/internet)" ;;
+            7)  __gash_error "$provider API: Failed to connect (server unreachable)" ;;
+            18) __gash_error "$provider API: Partial response received (transfer interrupted)" ;;
+            22) __gash_error "$provider API: HTTP error returned" ;;
+            28)
+                if [[ $elapsed_time -le $(( __AI_CONNECT_TIMEOUT + 2 )) ]]; then
+                    __gash_error "$provider API: Connection timed out after ${elapsed_time}s (server unreachable)"
+                else
+                    __gash_error "$provider API: Response timed out after ${elapsed_time}s (max: ${__AI_RESPONSE_TIMEOUT}s)"
+                fi
+                ;;
+            35) __gash_error "$provider API: SSL/TLS handshake failed" ;;
+            47) __gash_error "$provider API: Too many redirects" ;;
+            52) __gash_error "$provider API: Server returned empty response" ;;
+            55) __gash_error "$provider API: Failed sending data to server" ;;
+            56) __gash_error "$provider API: Failed receiving data from server" ;;
+            60) __gash_error "$provider API: SSL certificate problem (verify failed)" ;;
+            *)  __gash_error "$provider API: curl failed (exit $curl_exit)${curl_error:+: $curl_error}" ;;
+        esac
+        return 1
+    fi
+
+    if [[ -z "$http_code" || "$http_code" == "000" ]]; then
+        __gash_error "$provider API: No response received (network error)"
+        return 1
+    fi
+
+    if [[ "$http_code" != "200" ]]; then
+        local error_msg
+        error_msg=$(echo "$response" | jq -r '.error.message // .error // "Unknown error"' 2>/dev/null)
+        __gash_error "$provider API error ($http_code): $error_msg"
+        return 1
+    fi
+
+    return 0
 }
 
 # Gather context information (~80 tokens)
@@ -199,26 +233,6 @@ __ai_gather_context() {
         --argjson files "$files_json" \
         --argjson exit "$exit_code" \
         '{cwd:$cwd,shell:$shell,distro:$distro,pkg:$pkg,git:($git|if . == "" then null else . end),files:$files,exit:$exit}'
-}
-
-# Execute without recording in history
-# Usage: __ai_no_history <function_name> [args...]
-__ai_no_history() {
-    local hist_was_enabled=0
-
-    if [[ -o history ]]; then
-        hist_was_enabled=1
-        set +o history
-    fi
-
-    "$@"
-    local rc=$?
-
-    if [[ $hist_was_enabled -eq 1 ]]; then
-        set -o history
-    fi
-
-    return $rc
 }
 
 # Format and display AI response based on type
@@ -303,6 +317,7 @@ __ai_call_claude() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
+    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
 
     # Track start time for timeout differentiation
     local start_time elapsed_time
@@ -320,51 +335,13 @@ __ai_call_claude() {
     elapsed_time=$(( $(date +%s) - start_time ))
     response=$(<"$tmp_file")
     local curl_error=$(<"$tmp_err")
-    rm -f "$tmp_file" "$tmp_err"
 
     __ai_debug "Claude HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
     __ai_debug "Claude Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
     [[ -n "$curl_error" ]] && __ai_debug "Claude Curl Stderr" "$curl_error"
 
-    # Handle curl failures first
-    if [[ -n "${curl_exit:-}" ]]; then
-        case "$curl_exit" in
-            5)  __gash_error "Claude API: Couldn't resolve proxy" ;;
-            6)  __gash_error "Claude API: Could not resolve host (check DNS/internet)" ;;
-            7)  __gash_error "Claude API: Failed to connect (server unreachable)" ;;
-            18) __gash_error "Claude API: Partial response received (transfer interrupted)" ;;
-            22) __gash_error "Claude API: HTTP error returned" ;;
-            28)
-                # Distinguish connection timeout vs response timeout based on elapsed time
-                if [[ $elapsed_time -le $(( __AI_CONNECT_TIMEOUT + 2 )) ]]; then
-                    __gash_error "Claude API: Connection timed out after ${elapsed_time}s (server unreachable)"
-                else
-                    __gash_error "Claude API: Response timed out after ${elapsed_time}s (max: ${__AI_RESPONSE_TIMEOUT}s)"
-                fi
-                ;;
-            35) __gash_error "Claude API: SSL/TLS handshake failed" ;;
-            47) __gash_error "Claude API: Too many redirects" ;;
-            52) __gash_error "Claude API: Server returned empty response" ;;
-            55) __gash_error "Claude API: Failed sending data to server" ;;
-            56) __gash_error "Claude API: Failed receiving data from server" ;;
-            60) __gash_error "Claude API: SSL certificate problem (verify failed)" ;;
-            *)  __gash_error "Claude API: curl failed (exit $curl_exit)${curl_error:+: $curl_error}" ;;
-        esac
-        return 1
-    fi
-
-    # Check HTTP status
-    if [[ -z "$http_code" || "$http_code" == "000" ]]; then
-        __gash_error "Claude API: No response received (network error)"
-        return 1
-    fi
-
-    if [[ "$http_code" != "200" ]]; then
-        local error_msg
-        error_msg=$(echo "$response" | jq -r '.error.message // .error // "Unknown error"' 2>/dev/null)
-        __gash_error "Claude API error ($http_code): $error_msg"
-        return 1
-    fi
+    # Handle curl/HTTP errors
+    __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
 
     # Extract response text (contains structured JSON)
     local text
@@ -416,6 +393,7 @@ __ai_call_gemini() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
+    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
 
     # Track start time for timeout differentiation
     local start_time elapsed_time
@@ -431,51 +409,13 @@ __ai_call_gemini() {
     elapsed_time=$(( $(date +%s) - start_time ))
     response=$(<"$tmp_file")
     local curl_error=$(<"$tmp_err")
-    rm -f "$tmp_file" "$tmp_err"
 
     __ai_debug "Gemini HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
     __ai_debug "Gemini Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
     [[ -n "$curl_error" ]] && __ai_debug "Gemini Curl Stderr" "$curl_error"
 
-    # Handle curl failures first
-    if [[ -n "${curl_exit:-}" ]]; then
-        case "$curl_exit" in
-            5)  __gash_error "Gemini API: Couldn't resolve proxy" ;;
-            6)  __gash_error "Gemini API: Could not resolve host (check DNS/internet)" ;;
-            7)  __gash_error "Gemini API: Failed to connect (server unreachable)" ;;
-            18) __gash_error "Gemini API: Partial response received (transfer interrupted)" ;;
-            22) __gash_error "Gemini API: HTTP error returned" ;;
-            28)
-                # Distinguish connection timeout vs response timeout based on elapsed time
-                if [[ $elapsed_time -le $(( __AI_CONNECT_TIMEOUT + 2 )) ]]; then
-                    __gash_error "Gemini API: Connection timed out after ${elapsed_time}s (server unreachable)"
-                else
-                    __gash_error "Gemini API: Response timed out after ${elapsed_time}s (max: ${__AI_RESPONSE_TIMEOUT}s)"
-                fi
-                ;;
-            35) __gash_error "Gemini API: SSL/TLS handshake failed" ;;
-            47) __gash_error "Gemini API: Too many redirects" ;;
-            52) __gash_error "Gemini API: Server returned empty response" ;;
-            55) __gash_error "Gemini API: Failed sending data to server" ;;
-            56) __gash_error "Gemini API: Failed receiving data from server" ;;
-            60) __gash_error "Gemini API: SSL certificate problem (verify failed)" ;;
-            *)  __gash_error "Gemini API: curl failed (exit $curl_exit)${curl_error:+: $curl_error}" ;;
-        esac
-        return 1
-    fi
-
-    # Check HTTP status
-    if [[ -z "$http_code" || "$http_code" == "000" ]]; then
-        __gash_error "Gemini API: No response received (network error)"
-        return 1
-    fi
-
-    if [[ "$http_code" != "200" ]]; then
-        local error_msg
-        error_msg=$(echo "$response" | jq -r '.error.message // .error // "Unknown error"' 2>/dev/null)
-        __gash_error "Gemini API error ($http_code): $error_msg"
-        return 1
-    fi
+    # Handle curl/HTTP errors
+    __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
 
     # Extract response text (contains structured JSON)
     local text
@@ -506,7 +446,7 @@ ai_ask() {
         "Interactive AI chat. Provider: claude or gemini (default: first available)" \
         "${1-}" && return
 
-    __ai_no_history __ai_ask_impl "$@"
+    __gash_no_history __ai_ask_impl "$@"
 }
 
 __ai_ask_impl() {
@@ -593,7 +533,7 @@ ai_query() {
         "Non-interactive AI query. Provider is optional (uses first available)" \
         "${1-}" && return
 
-    __ai_no_history __ai_query_impl "$@"
+    __gash_no_history __ai_query_impl "$@"
 }
 
 __ai_query_impl() {

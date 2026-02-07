@@ -19,8 +19,16 @@
 docker_stop_all() {
     __gash_require_docker || return 1
 
+    local containers
+    containers=$(docker ps -q 2>/dev/null)
+
+    if [[ -z "$containers" ]]; then
+        __gash_info "No running containers to stop."
+        return 0
+    fi
+
     __gash_info "Stopping Docker containers..."
-    docker stop $(docker ps -aq) 2>/dev/null || true
+    docker stop $containers 2>/dev/null || true
 }
 
 # Start all stopped Docker containers.
@@ -28,8 +36,16 @@ docker_stop_all() {
 docker_start_all() {
     __gash_require_docker || return 1
 
+    local containers
+    containers=$(docker ps -aq --filter "status=exited" --filter "status=created" 2>/dev/null)
+
+    if [[ -z "$containers" ]]; then
+        __gash_info "No stopped containers to start."
+        return 0
+    fi
+
     __gash_info "Starting Docker containers..."
-    docker start $(docker ps -aq) 2>/dev/null || true
+    docker start $containers 2>/dev/null || true
 }
 
 # -----------------------------------------------------------------------------
@@ -46,20 +62,28 @@ docker_prune_all() {
         return 0
     fi
 
+    local ids
+
     __gash_step 1 6 "Stopping Docker containers..."
-    docker stop $(docker ps -aq) 2>/dev/null || true
+    ids=$(docker ps -q 2>/dev/null)
+    [[ -n "$ids" ]] && docker stop $ids 2>/dev/null || true
 
     __gash_step 2 6 "Removing Docker containers..."
-    docker rm $(docker ps -aq) 2>/dev/null || true
+    ids=$(docker ps -aq 2>/dev/null)
+    [[ -n "$ids" ]] && docker rm $ids 2>/dev/null || true
 
     __gash_step 3 6 "Removing Docker images..."
-    docker rmi $(docker images -q) 2>/dev/null || true
+    ids=$(docker images -q 2>/dev/null)
+    [[ -n "$ids" ]] && docker rmi $ids 2>/dev/null || true
 
     __gash_step 4 6 "Removing Docker volumes..."
-    docker volume rm $(docker volume ls -q) 2>/dev/null || true
+    ids=$(docker volume ls -q 2>/dev/null)
+    [[ -n "$ids" ]] && docker volume rm $ids 2>/dev/null || true
 
     __gash_step 5 6 "Removing Docker networks..."
-    docker network rm $(docker network ls -q | grep -v "bridge\|host\|none") 2>/dev/null || true
+    docker network ls --format '{{.Name}}' 2>/dev/null | grep -ivF -e bridge -e host -e none | while IFS= read -r net; do
+        docker network rm "$net" 2>/dev/null || true
+    done
 
     __gash_step 6 6 "Cleaning Docker environment..."
     docker system prune --volumes -a --force

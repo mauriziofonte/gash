@@ -196,7 +196,7 @@ it "gash_ai_list shows help on -h" bash -c '
 
 describe "AI Module - Helper Functions"
 
-it "__ai_json_escape escapes quotes correctly" bash -c '
+it "__gash_json_escape escapes quotes correctly" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
@@ -204,11 +204,11 @@ it "__ai_json_escape escapes quotes correctly" bash -c '
     source "$ROOT/lib/core/config.sh"
     source "$ROOT/lib/modules/ai.sh"
 
-    result="$(__ai_json_escape "hello \"world\"")"
+    result="$(__gash_json_escape "hello \"world\"")"
     [[ "$result" == "hello \\\"world\\\"" ]]
 '
 
-it "__ai_json_escape escapes newlines" bash -c '
+it "__gash_json_escape escapes newlines" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
@@ -218,11 +218,11 @@ it "__ai_json_escape escapes newlines" bash -c '
 
     input=$'"'"'line1
 line2'"'"'
-    result="$(__ai_json_escape "$input")"
+    result="$(__gash_json_escape "$input")"
     [[ "$result" == "line1\\nline2" ]]
 '
 
-it "__ai_json_escape escapes backslashes" bash -c '
+it "__gash_json_escape escapes backslashes" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
@@ -230,7 +230,7 @@ it "__ai_json_escape escapes backslashes" bash -c '
     source "$ROOT/lib/core/config.sh"
     source "$ROOT/lib/modules/ai.sh"
 
-    result="$(__ai_json_escape "path\\to\\file")"
+    result="$(__gash_json_escape "path\\to\\file")"
     [[ "$result" == "path\\\\to\\\\file" ]]
 '
 
@@ -616,4 +616,57 @@ it "ask alias is defined" bash -c '
     # Check alias exists
     alias_def="$(alias ask 2>/dev/null)"
     [[ "$alias_def" == *"ai_ask"* ]]
+'
+
+# =============================================================================
+# __ai_handle_curl_error Tests
+# =============================================================================
+
+describe "AI Module - Curl Error Handler"
+
+it "__ai_handle_curl_error returns 0 on success (HTTP 200, no curl error)" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/ai.sh"
+
+    __ai_handle_curl_error "Test" "" "200" "1" "{}" ""
+    rc=$?
+    [[ $rc -eq 0 ]]
+'
+
+it "__ai_handle_curl_error returns 1 on curl exit code 28 (timeout)" bash -c '
+    set -uo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/ai.sh"
+
+    set +e
+    out=$(__ai_handle_curl_error "Test" "28" "" "3" "" "" 2>&1)
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"timed out"* ]]
+'
+
+it "__ai_handle_curl_error returns 1 on HTTP 401" bash -c '
+    set -uo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/ai.sh"
+
+    set +e
+    out=$(__ai_handle_curl_error "Test" "" "401" "1" "{\"error\":\"invalid_api_key\"}" "" 2>&1)
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"401"* ]]
 '

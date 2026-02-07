@@ -98,6 +98,47 @@ __gash_trim_ws() {
     printf '%s' "$s"
 }
 
+# Escape string for safe embedding in JSON values.
+# Handles: backslashes, double quotes, newlines, carriage returns, tabs.
+# Usage: escaped=$(__gash_json_escape "string with \"quotes\"")
+__gash_json_escape() {
+    local str="${1-}"
+    str="${str//\\/\\\\}"
+    str="${str//\"/\\\"}"
+    str="${str//$'\n'/\\n}"
+    str="${str//$'\r'/\\r}"
+    str="${str//$'\t'/\\t}"
+    printf '%s' "$str"
+}
+
+# -----------------------------------------------------------------------------
+# Shell Utilities
+# -----------------------------------------------------------------------------
+
+# Execute a command with shell history temporarily disabled.
+# Saves and restores the history state around the wrapped command.
+# Usage: __gash_no_history <function_name> [args...]
+__gash_no_history() {
+    local hist_was_enabled=0
+
+    # Check if history is currently enabled
+    if [[ -o history ]]; then
+        hist_was_enabled=1
+        set +o history
+    fi
+
+    # Execute the passed function/command
+    "$@"
+    local rc=$?
+
+    # Restore history if it was enabled
+    if [[ $hist_was_enabled -eq 1 ]]; then
+        set -o history
+    fi
+
+    return $rc
+}
+
 # -----------------------------------------------------------------------------
 # Path Utilities
 # -----------------------------------------------------------------------------

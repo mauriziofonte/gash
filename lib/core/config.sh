@@ -279,10 +279,11 @@ __gash_parse_db_url() {
     local hostinfo=""
     local database=""
 
-    # Split by @ to get userinfo and hostinfo
+    # Split by LAST @ to get userinfo and hostinfo
+    # Using %@* (shortest suffix match) instead of %%@* to handle @ in passwords
     if [[ "$rest" == *@* ]]; then
-        userinfo="${rest%%@*}"
-        rest="${rest#*@}"
+        userinfo="${rest%@*}"
+        rest="${rest##*@}"
     fi
 
     # Split remaining by / to get hostinfo and database

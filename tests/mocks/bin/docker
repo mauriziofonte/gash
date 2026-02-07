@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Mock docker for testing docker-compose module.
+# Mock docker for testing docker-compose module and docker.sh functions.
 # Simulates docker and docker compose commands.
 
 # Track calls for verification (optional)
@@ -63,9 +63,20 @@ fi
 # Handle regular docker commands
 case "${1:-}" in
     ps)
+        shift
         # docker ps - list containers
         if [[ "${MOCK_DOCKER_CONTAINERS:-}" == "1" ]]; then
-            echo "abc123"
+            # Check for --filter flags (used by docker_start_all for stopped containers)
+            if [[ " $* " == *" --filter "* ]]; then
+                echo "stopped123"
+            elif [[ " $* " == *"-a"* ]] || [[ " $* " == *"-aq"* ]]; then
+                # All containers (running + stopped)
+                echo "abc123"
+                echo "stopped123"
+            else
+                # Running containers only (docker ps -q)
+                echo "abc123"
+            fi
         fi
         exit 0
         ;;
@@ -123,11 +134,44 @@ case "${1:-}" in
         exit 0
         ;;
     network)
-        if [[ "${2:-}" == "ls" ]]; then
-            echo "bridge"
-            echo "host"
-            echo "none"
-        fi
+        shift
+        case "${1:-}" in
+            ls)
+                shift
+                # Check for --format flag (used by fixed docker_prune_all)
+                if [[ " $* " == *"--format"* ]]; then
+                    echo "bridge"
+                    echo "host"
+                    echo "none"
+                    if [[ "${MOCK_DOCKER_CUSTOM_NETWORKS:-}" == "1" ]]; then
+                        echo "my_app_network"
+                        echo "test_network"
+                    fi
+                elif [[ " $* " == *"-q"* ]]; then
+                    # IDs only (old behavior)
+                    echo "abc123def456"
+                    echo "789ghi012jkl"
+                    echo "345mno678pqr"
+                    if [[ "${MOCK_DOCKER_CUSTOM_NETWORKS:-}" == "1" ]]; then
+                        echo "cust1234abcd"
+                        echo "cust5678efgh"
+                    fi
+                else
+                    echo "bridge"
+                    echo "host"
+                    echo "none"
+                fi
+                ;;
+            rm)
+                shift
+                # Track network removals
+                if [[ -n "${MOCK_DOCKER_LOG:-}" ]]; then
+                    for n in "$@"; do
+                        echo "network rm $n" >> "$MOCK_DOCKER_LOG"
+                    done
+                fi
+                ;;
+        esac
         exit 0
         ;;
     volume)

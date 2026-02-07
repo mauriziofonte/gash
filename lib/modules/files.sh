@@ -157,14 +157,14 @@ archive_extract() {
     local rc=0
     shopt -s nocasematch
     case "$archive_file" in
-        *.tar.bz2)   tar xvjf "$archive_file" -C "$output_dir" || rc=1 ;;
-        *.tar.gz)    tar xvzf "$archive_file" -C "$output_dir" || rc=1 ;;
+        *.tar.bz2)   tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tar.gz)    tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
         *.bz2)       bunzip2 -c "$archive_file" > "$output_dir/$(basename "$archive_file" .bz2)" || rc=1 ;;
         *.rar)       unrar x "$archive_file" "$output_dir" || rc=1 ;;
         *.gz)        gunzip -c "$archive_file" > "$output_dir/$(basename "$archive_file" .gz)" || rc=1 ;;
-        *.tar)       tar xvf "$archive_file" -C "$output_dir" || rc=1 ;;
-        *.tbz2)      tar xvjf "$archive_file" -C "$output_dir" || rc=1 ;;
-        *.tgz)       tar xvzf "$archive_file" -C "$output_dir" || rc=1 ;;
+        *.tar)       tar xvf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tbz2)      tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tgz)       tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
         *.zip)       unzip "$archive_file" -d "$output_dir" || rc=1 ;;
         *.z)         uncompress "$archive_file" -c > "$output_dir/$(basename "$archive_file" .z)" || rc=1 ;;
         *.7z)        7z x "$archive_file" -o"$output_dir" || rc=1 ;;

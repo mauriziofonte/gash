@@ -544,3 +544,48 @@ it "gash_env_init creates config with --force" bash -c '
     perms="$(stat -c %a "$tmp_home/.gash_env")"
     [[ "$perms" == "600" ]]
 '
+
+# =============================================================================
+# DB URL Parsing Edge Cases
+# =============================================================================
+
+it "__gash_parse_db_url handles @ in password (URL-encoded)" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/config.sh"
+
+    t_drv="" t_usr="" t_pw="" t_hst="" t_prt="" t_dbn=""
+    __gash_parse_db_url "mysql://admin:p%40ss%3Aword@dbhost:3306/mydb" \
+        t_drv t_usr t_pw t_hst t_prt t_dbn
+
+    [[ "$t_drv" == "mysql" ]]
+    [[ "$t_usr" == "admin" ]]
+    [[ "$t_hst" == "dbhost" ]]
+    [[ "$t_prt" == "3306" ]]
+    [[ "$t_dbn" == "mydb" ]]
+
+    # Decode password and verify
+    decoded="$(__gash_url_decode "$t_pw")"
+    [[ "$decoded" == "p@ss:word" ]]
+'
+
+it "__gash_parse_db_url handles raw @ in password (split on last @)" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/config.sh"
+
+    t_drv="" t_usr="" t_pw="" t_hst="" t_prt="" t_dbn=""
+    __gash_parse_db_url "mysql://user:p@ss@localhost:3306/db" \
+        t_drv t_usr t_pw t_hst t_prt t_dbn
+
+    [[ "$t_drv" == "mysql" ]]
+    [[ "$t_usr" == "user" ]]
+    [[ "$t_pw" == "p@ss" ]]
+    [[ "$t_hst" == "localhost" ]]
+    [[ "$t_prt" == "3306" ]]
+    [[ "$t_dbn" == "db" ]]
+'

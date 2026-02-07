@@ -557,3 +557,362 @@ it "llm_db_schema validates table name" bash -c '
     [[ $rc -ne 0 ]]
     [[ "$out" == *"invalid_table_name"* ]]
 '
+
+# =============================================================================
+# Whitespace Bypass Tests (CRITICAL - regression tests for pattern matching)
+# =============================================================================
+
+it "__llm_validate_command blocks rm -rf / with extra spaces" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(__llm_validate_command "rm  -rf  /" 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"dangerous_command_blocked"* ]]
+'
+
+it "__llm_validate_command blocks rm -rf / with tabs" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    cmd="$(printf "rm\t-rf\t/")"
+    out="$(__llm_validate_command "$cmd" 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"dangerous_command_blocked"* ]]
+'
+
+it "__llm_validate_command blocks rm -rf / with leading/trailing spaces" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(__llm_validate_command "  rm -rf /  " 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"dangerous_command_blocked"* ]]
+'
+
+# =============================================================================
+# SQL Semicolon Injection Tests
+# =============================================================================
+
+it "llm_db_query blocks semicolon injection" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(llm_db_query "SELECT 1; DROP TABLE users" -d test 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"multiple_statements_blocked"* ]]
+'
+
+it "llm_db_query blocks UPDATE" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(llm_db_query "UPDATE users SET name = 1" -d test 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"write_operation_blocked"* ]]
+'
+
+it "llm_db_query blocks TRUNCATE" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(llm_db_query "TRUNCATE TABLE users" -d test 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"write_operation_blocked"* ]]
+'
+
+# =============================================================================
+# llm_deps Tests
+# =============================================================================
+
+it "llm_deps detects PHP project dependencies" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+
+    echo "{\"require\":{\"php\":\">=8.0\",\"laravel/framework\":\"^10.0\"}}" > "$tmp/composer.json"
+
+    out="$(llm_deps "$tmp" 2>/dev/null)"
+    [[ "$out" == *"laravel"* ]]
+'
+
+it "llm_deps detects Node.js project dependencies" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+
+    echo "{\"dependencies\":{\"express\":\"^4.18.0\"}}" > "$tmp/package.json"
+
+    out="$(llm_deps "$tmp" 2>/dev/null)"
+    [[ "$out" == *"express"* ]]
+'
+
+it "llm_deps shows help on -h" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    out="$(llm_deps -h)"
+    [[ "$out" == *"llm_deps"* ]]
+'
+
+# =============================================================================
+# llm_git_diff Tests
+# =============================================================================
+
+it "llm_git_diff shows diff stats" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+    cd "$tmp"
+    git init -q
+    git config user.email "test@example.com"
+    git config user.name "Test"
+    echo "line1" > f
+    git add f
+    git commit -q -m init
+    echo "line2" >> f
+
+    out="$(llm_git_diff "$tmp" 2>/dev/null)"
+    [[ -n "$out" ]]
+'
+
+it "llm_git_diff shows help on -h" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    out="$(llm_git_diff -h)"
+    [[ "$out" == *"llm_git_diff"* ]]
+'
+
+# =============================================================================
+# llm_procs Tests
+# =============================================================================
+
+it "llm_procs shows help on -h" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    out="$(llm_procs -h)"
+    [[ "$out" == *"llm_procs"* ]]
+'
+
+# =============================================================================
+# llm_db_tables Tests
+# =============================================================================
+
+it "llm_db_tables shows help on -h" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    out="$(llm_db_tables -h)"
+    [[ "$out" == *"llm_db_tables"* ]]
+'
+
+# =============================================================================
+# llm_db_sample Tests
+# =============================================================================
+
+it "llm_db_sample validates table name" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(llm_db_sample "users; DROP TABLE users" -d test 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"invalid_table_name"* ]]
+'
+
+it "llm_db_sample shows help on -h" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    out="$(llm_db_sample -h)"
+    [[ "$out" == *"llm_db_sample"* ]]
+'
+
+# =============================================================================
+# llm_db_explain Tests
+# =============================================================================
+
+it "llm_db_explain shows help on -h" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    out="$(llm_db_explain -h)"
+    [[ "$out" == *"llm_db_explain"* ]]
+'
+
+it "llm_db_explain blocks semicolon injection" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    set +e
+    out="$(llm_db_explain "SELECT 1; DROP TABLE users" -d test 2>&1)"
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$out" == *"multiple_statements_blocked"* ]]
+'
+
+# =============================================================================
+# __llm_clean_error_msg Tests
+# =============================================================================
+
+it "__llm_clean_error_msg collapses whitespace and escapes quotes" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    result=$(__llm_clean_error_msg "Error:  too   many  spaces")
+    [[ "$result" == "Error: too many spaces" ]]
+'
+
+it "__llm_clean_error_msg with --mysql filters password warning" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    input="Using a password on the command line
+ERROR 1045 (28000): Access denied"
+    result=$(__llm_clean_error_msg "$input" --mysql)
+    [[ "$result" != *"Using a password"* ]]
+    [[ "$result" == *"Access denied"* ]]
+'
+
+it "__llm_clean_error_msg handles empty input" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    result=$(__llm_clean_error_msg "")
+    [[ -z "$result" ]]
+'
+
+# =============================================================================
+# __llm_resolve_db Tests
+# =============================================================================
+
+it "__llm_resolve_db returns error for missing connection" bash -c '
+    set -uo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/llm.sh"
+
+    # Use empty config file
+    tmp="$(mktemp)"
+    trap "rm -f $tmp" EXIT
+    echo "" > "$tmp"
+    export GASH_ENV_FILE="$tmp"
+    __GASH_ENV_LOADED=""
+    __gash_load_env
+
+    set +e
+    out_drv="" out_usr="" out_pw="" out_hst="" out_prt="" out_dbn=""
+    err=$(__llm_resolve_db "nonexistent" "" out_drv out_usr out_pw out_hst out_prt out_dbn 2>&1)
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ "$err" == *"no_db_config"* ]]
+'

@@ -146,7 +146,7 @@ __gash_normalize_image() {
     if [[ "$image" == */* ]]; then
         local first_part="${image%%/*}"
         # Check if first part looks like a registry (has dot or colon)
-        if [[ "$first_part" == *.* || "$first_part" == *:* ]]; then
+        if [[ "$first_part" == *.* || "$first_part" == *:* || "$first_part" == "localhost" ]]; then
             registry="$first_part"
             name="${image#*/}"
         else
@@ -201,99 +201,179 @@ __gash_is_upgradeable() {
 # REGISTRY API FUNCTIONS
 # =============================================================================
 
+# Centralized registry HTTP call with error classification.
+# Captures response body/headers and HTTP status code.
+# Sets: __gash_registry_curl_body (response), __gash_registry_curl_http_code,
+#       __gash_registry_curl_error (error type on failure)
+# Returns: 0 on success (2xx), 1 on error
+# Usage: __gash_registry_curl [CURL_OPTIONS...] URL
+__gash_registry_curl() {
+    local tmpfile
+    tmpfile=$(mktemp) || return 1
+    # shellcheck disable=SC2064
+    trap "rm -f '${tmpfile}'" RETURN
+
+    # Reset state
+    __gash_registry_curl_body=""
+    __gash_registry_curl_http_code=""
+    __gash_registry_curl_error=""
+
+    local http_code=""
+    local _curl_rc=0
+    http_code=$(curl -sSL --connect-timeout 10 --max-time 20 \
+        -w '%{http_code}' -o "$tmpfile" "$@" 2>/dev/null) || _curl_rc=$?
+
+    if [[ $_curl_rc -ne 0 ]]; then
+        case $_curl_rc in
+            6)  __gash_registry_curl_error="dns_error" ;;
+            7)  __gash_registry_curl_error="connection_refused" ;;
+            28) __gash_registry_curl_error="timeout" ;;
+            35|60) __gash_registry_curl_error="ssl_error" ;;
+            *)  __gash_registry_curl_error="curl_error_${_curl_rc}" ;;
+        esac
+        return 1
+    fi
+
+    if [[ -z "$http_code" ]]; then
+        __gash_registry_curl_error="no_response"
+        return 1
+    fi
+
+    __gash_registry_curl_http_code="$http_code"
+    __gash_registry_curl_body=$(<"$tmpfile")
+
+    case "$http_code" in
+        2??) return 0 ;;
+        401) __gash_registry_curl_error="unauthorized" ;;
+        403) __gash_registry_curl_error="forbidden" ;;
+        404) __gash_registry_curl_error="not_found" ;;
+        429) __gash_registry_curl_error="rate_limited" ;;
+        5??) __gash_registry_curl_error="server_error" ;;
+        *)   __gash_registry_curl_error="http_${http_code}" ;;
+    esac
+
+    return 1
+}
+
 # Get authentication token for Docker Hub.
+# Sets: __gash_auth_token (token string on success)
 # Usage: __gash_dockerhub_token <image_name>
 __gash_dockerhub_token() {
     local image="$1"
-    local token
+    __gash_auth_token=""
 
-    token=$(curl -fsSL --connect-timeout 10 --max-time 15 \
+    __gash_registry_curl \
         "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${image}:pull" \
-        2>/dev/null)
+        || return 1
 
     # Extract token using parameter expansion (no jq dependency)
+    local token="${__gash_registry_curl_body}"
     token="${token##*\"token\":\"}"
     token="${token%%\"*}"
 
-    [[ -n "$token" && "$token" != "{" ]] && echo "$token"
+    if [[ -n "$token" && "$token" != "{" && "$token" != "$__gash_registry_curl_body" ]]; then
+        __gash_auth_token="$token"
+        echo "$token"
+        return 0
+    fi
+
+    __gash_registry_curl_error="malformed_token"
+    return 1
 }
 
 # Get authentication token for GHCR (GitHub Container Registry).
 # GHCR requires a token even for public images.
+# Sets: __gash_auth_token (token string on success)
 # Usage: __gash_ghcr_token <image_name>
 __gash_ghcr_token() {
     local image="$1"
-    local token
+    __gash_auth_token=""
 
     # If user has GITHUB_TOKEN, use it; otherwise get anonymous token
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        __gash_auth_token="$GITHUB_TOKEN"
         echo "$GITHUB_TOKEN"
         return 0
     fi
 
-    # Get anonymous token from GHCR
-    token=$(curl -fsSL --connect-timeout 10 --max-time 15 \
+    __gash_registry_curl \
         "https://ghcr.io/token?service=ghcr.io&scope=repository:${image}:pull" \
-        2>/dev/null)
+        || return 1
 
     # Extract token using parameter expansion (no jq dependency)
+    local token="${__gash_registry_curl_body}"
     token="${token##*\"token\":\"}"
     token="${token%%\"*}"
 
-    [[ -n "$token" && "$token" != "{" ]] && echo "$token"
+    if [[ -n "$token" && "$token" != "{" && "$token" != "$__gash_registry_curl_body" ]]; then
+        __gash_auth_token="$token"
+        echo "$token"
+        return 0
+    fi
+
+    __gash_registry_curl_error="malformed_token"
+    return 1
 }
 
 # Get remote image digest from registry.
 # Usage: __gash_get_remote_digest <registry> <name> <tag>
-# Output: sha256:... or empty on error
+# Output: sha256:... digest on success (stdout)
+# Returns: 0 on success, 1 on error (check __gash_registry_curl_error)
 __gash_get_remote_digest() {
     local registry="$1"
     local name="$2"
     local tag="$3"
+    __gash_remote_digest=""
 
     # Skip digest-pinned images
-    [[ "$tag" == @sha256:* ]] && { echo "${tag#@}"; return 0; }
-
-    local digest=""
-    local headers=""
+    [[ "$tag" == @sha256:* ]] && { __gash_remote_digest="${tag#@}"; echo "${tag#@}"; return 0; }
 
     case "$registry" in
         docker.io)
-            local token
-            token=$(__gash_dockerhub_token "$name") || return 1
-            [[ -z "$token" ]] && return 1
+            __gash_dockerhub_token "$name" >/dev/null 2>&1 || return 1
+            [[ -z "$__gash_auth_token" ]] && return 1
 
-            headers=$(curl -fsSL -I --connect-timeout 10 --max-time 20 \
-                -H "Authorization: Bearer $token" \
+            __gash_registry_curl -I \
+                -H "Authorization: Bearer $__gash_auth_token" \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
-                "https://registry-1.docker.io/v2/${name}/manifests/${tag}" 2>/dev/null)
+                "https://registry-1.docker.io/v2/${name}/manifests/${tag}" \
+                || return 1
             ;;
 
         ghcr.io)
-            local ghcr_token
-            ghcr_token=$(__gash_ghcr_token "$name") || return 1
-            [[ -z "$ghcr_token" ]] && return 1
+            __gash_ghcr_token "$name" >/dev/null 2>&1 || return 1
+            [[ -z "$__gash_auth_token" ]] && return 1
 
-            headers=$(curl -fsSL -I --connect-timeout 10 --max-time 20 \
-                -H "Authorization: Bearer $ghcr_token" \
+            __gash_registry_curl -I \
+                -H "Authorization: Bearer $__gash_auth_token" \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
-                "https://ghcr.io/v2/${name}/manifests/${tag}" 2>/dev/null)
+                "https://ghcr.io/v2/${name}/manifests/${tag}" \
+                || return 1
             ;;
 
         *)
-            # Generic registry - try without auth first
-            headers=$(curl -fsSL -I --connect-timeout 10 --max-time 20 \
+            # Generic registry - try without auth
+            __gash_registry_curl -I \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-                "https://${registry}/v2/${name}/manifests/${tag}" 2>/dev/null)
+                "https://${registry}/v2/${name}/manifests/${tag}" \
+                || return 1
             ;;
     esac
 
-    # Extract digest from Docker-Content-Digest header
-    digest=$(echo "$headers" | grep -i "docker-content-digest:" | awk '{print $2}' | tr -d '\r\n')
+    # Extract digest from Docker-Content-Digest header in response
+    local digest
+    digest=$(echo "$__gash_registry_curl_body" | grep -i "docker-content-digest:" | awk '{print $2}' | tr -d '\r\n')
 
-    echo "$digest"
+    if [[ -n "$digest" ]]; then
+        __gash_remote_digest="$digest"
+        echo "$digest"
+        return 0
+    fi
+
+    __gash_registry_curl_error="no_digest_in_response"
+    return 1
 }
 
 # Get local image digest.
@@ -371,7 +451,7 @@ EOF
 
     if [[ -z "$compose_file" ]]; then
         if [[ $json_output -eq 1 ]]; then
-            echo '{"error":"compose_not_found","path":"'"$path"'"}'
+            echo '{"error":"compose_not_found","path":"'"$(__gash_json_escape "$path")"'"}'
         else
             __gash_error "No docker-compose.yml found in $path"
         fi
@@ -384,7 +464,7 @@ EOF
 
     if [[ -z "$services" ]]; then
         if [[ $json_output -eq 1 ]]; then
-            echo '{"error":"no_services","path":"'"$path"'"}'
+            echo '{"error":"no_services","path":"'"$(__gash_json_escape "$path")"'"}'
         else
             __gash_error "No services with images found in $compose_file"
         fi
@@ -429,11 +509,13 @@ EOF
         else
             # Get local and remote digests
             local_digest=$(__gash_get_local_digest "$resolved_image")
-            remote_digest=$(__gash_get_remote_digest "$registry" "$name" "$tag" 2>/dev/null)
+            __gash_remote_digest=""
+            __gash_get_remote_digest "$registry" "$name" "$tag" >/dev/null 2>&1 || true
+            remote_digest="$__gash_remote_digest"
 
             if [[ -z "$remote_digest" ]]; then
                 status="ERROR"
-                error_msg="registry_unreachable"
+                error_msg="${__gash_registry_curl_error:-registry_unreachable}"
                 ((errors++))
             elif [[ -z "$local_digest" ]]; then
                 status="NOT_PULLED"
@@ -458,20 +540,18 @@ EOF
     # Output
     if [[ $json_output -eq 1 ]]; then
         # JSON output
-        echo -n '{"path":"'"$path"'","compose_file":"'"$(basename "$compose_file")"'","services":['
+        echo -n '{"path":"'"$(__gash_json_escape "$path")"'","compose_file":"'"$(__gash_json_escape "$(basename "$compose_file")")"'","services":['
         local first=1
         for r in "${results[@]}"; do
             IFS='|' read -r svc img local_d remote_d stat upgr err <<< "$r"
             [[ $first -eq 0 ]] && echo -n ','
             first=0
-            # Escape special chars in image name
-            img="${img//\"/\\\"}"
-            echo -n '{"name":"'"$svc"'","image":"'"$img"'"'
+            echo -n '{"name":"'"$(__gash_json_escape "$svc")"'","image":"'"$(__gash_json_escape "$img")"'"'
             echo -n ',"local_digest":"'"${local_d:-null}"'"'
             echo -n ',"remote_digest":"'"${remote_d:-null}"'"'
             echo -n ',"status":"'"$stat"'"'
             echo -n ',"upgradeable":'"$([[ $upgr -eq 1 ]] && echo 'true' || echo 'false')"
-            [[ -n "$err" ]] && echo -n ',"error":"'"$err"'"'
+            [[ -n "$err" ]] && echo -n ',"error":"'"$(__gash_json_escape "$err")"'"'
             echo -n '}'
         done
         echo '],"summary":{"total":'"$total"',"updates":'"$updates"',"current":'"$current"',"pinned":'"$pinned"',"errors":'"$errors"'}}'
@@ -528,7 +608,57 @@ EOF
                     printf "    Registry: %s\n" "$reg"
 
                     case "$err" in
-                        registry_unreachable)
+                        timeout)
+                            printf "    Error: Connection timed out\n"
+                            printf "    Hint: Registry may be slow or unreachable\n"
+                            ;;
+                        dns_error)
+                            printf "    Error: DNS resolution failed\n"
+                            printf "    Hint: Check network connectivity and registry hostname\n"
+                            ;;
+                        connection_refused)
+                            printf "    Error: Connection refused\n"
+                            printf "    Hint: Registry may be down or port blocked\n"
+                            ;;
+                        ssl_error)
+                            printf "    Error: SSL/TLS handshake failed\n"
+                            printf "    Hint: Check certificate validity\n"
+                            ;;
+                        unauthorized)
+                            printf "    Error: Authentication required (401)\n"
+                            case "$reg" in
+                                ghcr.io)
+                                    printf "    Hint: Set GITHUB_TOKEN for authenticated access\n"
+                                    ;;
+                                *)
+                                    printf "    Hint: Registry requires authentication\n"
+                                    ;;
+                            esac
+                            ;;
+                        forbidden)
+                            printf "    Error: Access denied (403)\n"
+                            printf "    Hint: Check credentials and repository permissions\n"
+                            ;;
+                        not_found)
+                            printf "    Error: Image not found (404)\n"
+                            printf "    Hint: Check image name and tag are correct\n"
+                            ;;
+                        rate_limited)
+                            printf "    Error: Rate limit exceeded (429)\n"
+                            case "$reg" in
+                                docker.io)
+                                    printf "    Hint: Docker Hub limits unauthenticated pulls. Try logging in.\n"
+                                    ;;
+                                *)
+                                    printf "    Hint: Wait and retry, or authenticate for higher limits\n"
+                                    ;;
+                            esac
+                            ;;
+                        server_error)
+                            printf "    Error: Registry server error (5xx)\n"
+                            printf "    Hint: Temporary issue, retry later\n"
+                            ;;
+                        registry_unreachable|*)
                             printf "    Error: Could not reach registry or get manifest\n"
                             case "$reg" in
                                 ghcr.io)
@@ -541,9 +671,6 @@ EOF
                                     printf "    Hint: Registry may require authentication\n"
                                     ;;
                             esac
-                            ;;
-                        *)
-                            printf "    Error: %s\n" "${err:-unknown}"
                             ;;
                     esac
                 fi
@@ -771,7 +898,7 @@ EOF
 
     if [[ -z "$compose_files" ]]; then
         if [[ $json_output -eq 1 ]]; then
-            echo '{"base_path":"'"$basedir"'","compose_files":[],"total_found":0}'
+            echo '{"base_path":"'"$(__gash_json_escape "$basedir")"'","compose_files":[],"total_found":0}'
         else
             echo "No docker-compose files found in $basedir (depth: $depth)"
         fi
@@ -780,7 +907,7 @@ EOF
 
     if [[ $json_output -eq 1 ]]; then
         # JSON output
-        echo -n '{"base_path":"'"$basedir"'","depth":'"$depth"',"compose_files":['
+        echo -n '{"base_path":"'"$(__gash_json_escape "$basedir")"'","depth":'"$depth"',"compose_files":['
         local first=1
         local total=0
         while IFS= read -r file; do
@@ -796,7 +923,7 @@ EOF
 
             [[ $first -eq 0 ]] && echo -n ','
             first=0
-            echo -n '{"path":"'"$dir"'","file":"'"$fname"'","services":["'
+            echo -n '{"path":"'"$(__gash_json_escape "$dir")"'","file":"'"$(__gash_json_escape "$fname")"'","services":["'
             echo -n "${services//,/\",\"}"
             echo -n '"]}'
         done <<< "$compose_files"

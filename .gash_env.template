@@ -73,7 +73,7 @@
 # from the PS1 prompt. Useful when your home directory is a git repo or for
 # very large repositories that cause prompt latency.
 #
-# Example:
-# GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo
+# NOTE: This is an environment variable, NOT a .gash_env config entry.
+# Add it to ~/.bash_local (not here) as an export:
 #
-# GASH_GIT_EXCLUDE=
+#   export GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo

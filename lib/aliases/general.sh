@@ -6,8 +6,8 @@
 # Override help command with Gash help
 alias help=gash_help
 
-# Add alias for "stop_services" with --force flag
-alias quit='stop_services --force'
+# Add alias for "services_stop" with --force flag
+alias quit='services_stop --force'
 
 # WSL specific aliases
 if grep -qi "microsoft" /proc/version 2>/dev/null && [[ -n "${WSLENV-}" ]]; then

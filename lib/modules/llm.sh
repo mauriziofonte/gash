@@ -123,29 +123,6 @@ __LLM_SECRET_PATTERNS=(
     '.gash_env'
 )
 
-# Execute a function without recording in bash history.
-# Usage: __llm_no_history <function_name> [args...]
-__llm_no_history() {
-    local hist_was_enabled=0
-
-    # Check if history is currently enabled
-    if [[ -o history ]]; then
-        hist_was_enabled=1
-        set +o history
-    fi
-
-    # Execute the passed function/command
-    "$@"
-    local rc=$?
-
-    # Restore history if it was enabled
-    if [[ $hist_was_enabled -eq 1 ]]; then
-        set -o history
-    fi
-
-    return $rc
-}
-
 # Validate and sanitize a path.
 # Returns sanitized path on stdout, returns 1 if path is forbidden.
 # Usage: __llm_validate_path <path>
@@ -189,9 +166,16 @@ __llm_validate_command() {
 
     [[ -z "$cmd" ]] && return 1
 
+    # Normalize whitespace: collapse multiple spaces/tabs to single space, trim
+    # This prevents bypassing patterns via extra whitespace (e.g., "rm  -rf  /")
+    local normalized_cmd
+    normalized_cmd="$(printf '%s' "$cmd" | tr -s '[:space:]' ' ')"
+    normalized_cmd="${normalized_cmd# }"
+    normalized_cmd="${normalized_cmd% }"
+
     local pattern
     for pattern in "${__LLM_DANGEROUS_PATTERNS[@]}"; do
-        if [[ "$cmd" =~ $pattern ]]; then
+        if [[ "$normalized_cmd" =~ $pattern ]]; then
             echo '{"error":"dangerous_command_blocked","details":"Command matches dangerous pattern","action":"FATAL","recoverable":false,"hint":"This command is blocked for safety. Do not attempt to bypass"}' >&2
             return 1
         fi
@@ -237,13 +221,9 @@ __llm_error() {
     local hint="${5-}"
 
     # Build JSON - escape special characters in details and hint
-    local escaped_details="${details//\\/\\\\}"
-    escaped_details="${escaped_details//\"/\\\"}"
-    escaped_details="${escaped_details//$'\n'/\\n}"
-
-    local escaped_hint="${hint//\\/\\\\}"
-    escaped_hint="${escaped_hint//\"/\\\"}"
-    escaped_hint="${escaped_hint//$'\n'/\\n}"
+    local escaped_details escaped_hint
+    escaped_details=$(__gash_json_escape "$details")
+    escaped_hint=$(__gash_json_escape "$hint")
 
     local json="{\"error\":\"$error_type\""
     [[ -n "$details" ]] && json+=",\"details\":\"$escaped_details\""
@@ -254,6 +234,22 @@ __llm_error() {
 
     echo "$json" >&2
     return 1
+}
+
+# Clean error message for JSON embedding.
+# Collapses newlines/whitespace, escapes quotes, trims.
+# Optional --mysql flag filters known MySQL warnings.
+# Usage: cleaned=$(__llm_clean_error_msg "$raw_msg" [--mysql])
+__llm_clean_error_msg() {
+    local msg="${1-}"
+    local filter_mysql=0
+    [[ "${2-}" == "--mysql" ]] && filter_mysql=1
+
+    if [[ $filter_mysql -eq 1 ]]; then
+        msg=$(printf '%s' "$msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name")
+    fi
+
+    printf '%s' "$msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//'
 }
 
 # Check if jq is available for JSON formatting.
@@ -298,7 +294,7 @@ llm_exec() {
     fi
 
     # Execute without history
-    __llm_no_history eval "$cmd"
+    __gash_no_history eval "$cmd"
 }
 
 # -----------------------------------------------------------------------------
@@ -314,7 +310,7 @@ llm_tree() {
         return 0
     fi
 
-    __llm_no_history __llm_tree_impl "$@"
+    __gash_no_history __llm_tree_impl "$@"
 }
 
 __llm_tree_impl() {
@@ -421,7 +417,7 @@ llm_find() {
         return 0
     fi
 
-    __llm_no_history __llm_find_impl "$@"
+    __gash_no_history __llm_find_impl "$@"
 }
 
 __llm_find_impl() {
@@ -497,7 +493,7 @@ llm_grep() {
         return 0
     fi
 
-    __llm_no_history __llm_grep_impl "$@"
+    __gash_no_history __llm_grep_impl "$@"
 }
 
 __llm_grep_impl() {
@@ -581,6 +577,38 @@ __llm_grep_impl() {
 # Database Functions (Read-Only)
 # -----------------------------------------------------------------------------
 
+# Resolve a named database connection to its components via namerefs.
+# Fetches the URL from config, parses it, decodes password, resolves database name.
+# Usage: __llm_resolve_db <connection> <database> <out_drv> <out_usr> <out_pw> <out_hst> <out_prt> <out_dbn>
+__llm_resolve_db() {
+    local conn="$1" db_name="$2"
+    local -n _rd_drv="$3" _rd_usr="$4" _rd_pw="$5" _rd_hst="$6" _rd_prt="$7" _rd_dbn="$8"
+
+    local db_url
+    db_url=$(__gash_get_db_url "$conn") || {
+        __llm_error "no_db_config" "Connection '$conn' not found" "STOP" "true" "Ask user which database connection to use. Connections are configured in ~/.gash_env"
+        return 1
+    }
+
+    __gash_parse_db_url "$db_url" _rd_drv _rd_usr _rd_pw _rd_hst _rd_prt _rd_dbn
+    _rd_pw=$(__gash_url_decode "$_rd_pw")
+
+    # Use explicit database name if provided, otherwise fall back to URL or .target-database
+    if [[ -n "$db_name" ]]; then
+        _rd_dbn="$db_name"
+    elif [[ -z "$_rd_dbn" ]]; then
+        if [[ -f ".target-database" ]]; then
+            _rd_dbn="$(<.target-database)"
+            _rd_dbn="${_rd_dbn%%[[:space:]]*}"
+        fi
+    fi
+
+    if [[ -z "$_rd_dbn" ]]; then
+        __llm_error "no_database" "Database name not specified" "STOP" "true" "Ask user for database name. Use -d option or specify in connection URL"
+        return 1
+    fi
+}
+
 # Check if sqlite3 is available.
 # Usage: __llm_has_sqlite
 __llm_has_sqlite() {
@@ -646,7 +674,7 @@ __llm_sqlite_query() {
             err_msg=$(<"$sqlite_stderr")
         fi
         rm -f "$sqlite_stderr"
-        err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+        err_msg=$(__llm_clean_error_msg "$err_msg")
         if [[ -n "$err_msg" ]]; then
             __llm_error "sqlite_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
         else
@@ -668,7 +696,7 @@ llm_db_query() {
         return 0
     fi
 
-    __llm_no_history __llm_db_query_impl "$@"
+    __gash_no_history __llm_db_query_impl "$@"
 }
 
 __llm_db_query_impl() {
@@ -735,34 +763,10 @@ __llm_db_query_impl() {
         return $?
     fi
 
-    # Get database URL from config
-    local db_url
-    db_url=$(__gash_get_db_url "$connection") || {
-        __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use. Connections are configured in ~/.gash_env"
-        return 1
-    }
-
-    # Parse URL components
+    # Resolve database connection
     local db_driver db_user db_pass db_host db_port db_database
-    __gash_parse_db_url "$db_url" db_driver db_user db_pass db_host db_port db_database
-
-    # URL-decode password
-    db_pass=$(__gash_url_decode "$db_pass")
-
-    # Use database from URL if not specified via -d, fall back to auto-detection
-    if [[ -z "$database" ]]; then
-        if [[ -n "$db_database" ]]; then
-            database="$db_database"
-        elif [[ -f ".target-database" ]]; then
-            database="$(<.target-database)"
-            database="${database%%[[:space:]]*}"
-        fi
-    fi
-
-    if [[ -z "$database" ]]; then
-        __llm_error "no_database" "Database name not specified" "STOP" "true" "Ask user for database name. Use -d option or specify in connection URL"
-        return 1
-    fi
+    __llm_resolve_db "$connection" "$database" db_driver db_user db_pass db_host db_port db_database || return 1
+    database="$db_database"
 
     # Add LIMIT if not present in SELECT queries
     if [[ "$upper_query" =~ ^[[:space:]]*SELECT ]] && [[ ! "$upper_query" =~ LIMIT ]]; then
@@ -796,7 +800,7 @@ __llm_db_query_impl() {
 
             # Filter out warnings (not errors)
             local filtered_err
-            filtered_err=$(echo "$err_msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+            filtered_err=$(__llm_clean_error_msg "$err_msg" --mysql)
 
             # If mysql exited with error, always return structured error
             if [[ $mysql_exit -ne 0 ]]; then
@@ -853,8 +857,7 @@ __llm_db_query_impl() {
                 local err_msg
                 err_msg=$(<"$psql_stderr")
                 rm -f "$psql_stderr"
-                # Clean up error message for JSON
-                err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                err_msg=$(__llm_clean_error_msg "$err_msg")
                 if [[ -n "$err_msg" ]]; then
                     __llm_error "pgsql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
                     return 1
@@ -878,7 +881,7 @@ llm_db_tables() {
         return 0
     fi
 
-    __llm_no_history __llm_db_tables_impl "$@"
+    __gash_no_history __llm_db_tables_impl "$@"
 }
 
 __llm_db_tables_impl() {
@@ -955,7 +958,7 @@ llm_db_schema() {
         return 0
     fi
 
-    __llm_no_history __llm_db_schema_impl "$@"
+    __gash_no_history __llm_db_schema_impl "$@"
 }
 
 __llm_db_schema_impl() {
@@ -1027,7 +1030,7 @@ llm_db_sample() {
         return 0
     fi
 
-    __llm_no_history __llm_db_sample_impl "$@"
+    __gash_no_history __llm_db_sample_impl "$@"
 }
 
 __llm_db_sample_impl() {
@@ -1080,7 +1083,7 @@ llm_db_explain() {
         return 0
     fi
 
-    __llm_no_history __llm_db_explain_impl "$@"
+    __gash_no_history __llm_db_explain_impl "$@"
 }
 
 __llm_db_explain_impl() {
@@ -1172,7 +1175,7 @@ __llm_db_explain_impl() {
                 err_msg=$(<"$sqlite_stderr")
             fi
             rm -f "$sqlite_stderr"
-            err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+            err_msg=$(__llm_clean_error_msg "$err_msg")
             if [[ -n "$err_msg" ]]; then
                 __llm_error "sqlite_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
             else
@@ -1186,34 +1189,10 @@ __llm_db_explain_impl() {
         return 0
     fi
 
-    # Get database URL from config
-    local db_url
-    db_url=$(__gash_get_db_url "$connection") || {
-        __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use. Connections are configured in ~/.gash_env"
-        return 1
-    }
-
-    # Parse URL components
+    # Resolve database connection
     local db_driver db_user db_pass db_host db_port db_database
-    __gash_parse_db_url "$db_url" db_driver db_user db_pass db_host db_port db_database
-
-    # URL-decode password
-    db_pass=$(__gash_url_decode "$db_pass")
-
-    # Determine database
-    if [[ -z "$database" ]]; then
-        if [[ -n "$db_database" ]]; then
-            database="$db_database"
-        elif [[ -f ".target-database" ]]; then
-            database="$(<.target-database)"
-            database="${database%%[[:space:]]*}"
-        fi
-    fi
-
-    if [[ -z "$database" ]]; then
-        __llm_error "no_database" "Database name not specified" "STOP" "true" "Ask user for database name. Use -d option or specify in connection URL"
-        return 1
-    fi
+    __llm_resolve_db "$connection" "$database" db_driver db_user db_pass db_host db_port db_database || return 1
+    database="$db_database"
 
     # Build EXPLAIN prefix based on driver and options
     local explain_prefix
@@ -1259,7 +1238,7 @@ __llm_db_explain_impl() {
                 local err_msg
                 err_msg=$(<"$mysql_stderr")
                 rm -f "$mysql_stderr"
-                err_msg=$(echo "$err_msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                err_msg=$(__llm_clean_error_msg "$err_msg" --mysql)
                 if [[ -n "$err_msg" ]]; then
                     __llm_error "mysql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
                     return 1
@@ -1295,7 +1274,7 @@ __llm_db_explain_impl() {
                 local err_msg
                 err_msg=$(<"$psql_stderr")
                 rm -f "$psql_stderr"
-                err_msg=$(echo "$err_msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//')
+                err_msg=$(__llm_clean_error_msg "$err_msg")
                 if [[ -n "$err_msg" ]]; then
                     __llm_error "pgsql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
                     return 1
@@ -1324,7 +1303,7 @@ llm_project() {
         return 0
     fi
 
-    __llm_no_history __llm_project_impl "$@"
+    __gash_no_history __llm_project_impl "$@"
 }
 
 __llm_project_impl() {
@@ -1417,7 +1396,7 @@ llm_deps() {
         return 0
     fi
 
-    __llm_no_history __llm_deps_impl "$@"
+    __gash_no_history __llm_deps_impl "$@"
 }
 
 __llm_deps_impl() {
@@ -1476,7 +1455,7 @@ llm_config() {
         return 0
     fi
 
-    __llm_no_history __llm_config_impl "$@"
+    __gash_no_history __llm_config_impl "$@"
 }
 
 __llm_config_impl() {
@@ -1529,7 +1508,7 @@ llm_git_status() {
         return 0
     fi
 
-    __llm_no_history __llm_git_status_impl "$@"
+    __gash_no_history __llm_git_status_impl "$@"
 }
 
 __llm_git_status_impl() {
@@ -1591,7 +1570,7 @@ llm_git_diff() {
         return 0
     fi
 
-    __llm_no_history __llm_git_diff_impl "$@"
+    __gash_no_history __llm_git_diff_impl "$@"
 }
 
 __llm_git_diff_impl() {
@@ -1626,7 +1605,7 @@ llm_git_log() {
         return 0
     fi
 
-    __llm_no_history __llm_git_log_impl "$@"
+    __gash_no_history __llm_git_log_impl "$@"
 }
 
 __llm_git_log_impl() {
@@ -1665,7 +1644,7 @@ llm_ports() {
         return 0
     fi
 
-    __llm_no_history __llm_ports_impl "$@"
+    __gash_no_history __llm_ports_impl "$@"
 }
 
 __llm_ports_impl() {
@@ -1708,7 +1687,7 @@ llm_procs() {
         return 0
     fi
 
-    __llm_no_history __llm_procs_impl "$@"
+    __gash_no_history __llm_procs_impl "$@"
 }
 
 __llm_procs_impl() {
@@ -1758,7 +1737,7 @@ llm_env() {
         return 0
     fi
 
-    __llm_no_history __llm_env_impl "$@"
+    __gash_no_history __llm_env_impl "$@"
 }
 
 __llm_env_impl() {

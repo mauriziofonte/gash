@@ -258,3 +258,84 @@ EOF
 
     [[ "$out" == *"ll:0"* ]]
 '
+
+# =============================================================================
+# Alias Conflict & Bug Fix Tests
+# =============================================================================
+
+it "gap alias resolves to git add --patch (not git_apply_patch)" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
+
+    inner_cmd="$(cat <<\EOF
+set -u
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1
+alias gap 2>/dev/null
+EOF
+)"
+
+    out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    [[ "$out" == *"git add --patch"* ]]
+'
+
+it "gpatch alias resolves to git_apply_patch" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
+
+    inner_cmd="$(cat <<\EOF
+set -u
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1
+alias gpatch 2>/dev/null
+EOF
+)"
+
+    out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    [[ "$out" == *"git_apply_patch"* ]]
+'
+
+it "quit alias resolves to services_stop --force" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
+
+    inner_cmd="$(cat <<\EOF
+set -u
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1
+alias quit 2>/dev/null
+EOF
+)"
+
+    out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    [[ "$out" == *"services_stop --force"* ]]
+'
+
+it "dcrm alias is defined when docker is available" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    MOCK_BIN="$ROOT/tests/mocks/bin"
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
+
+    inner_cmd="$(cat <<\EOF
+set -u
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1
+alias dcrm 2>/dev/null
+EOF
+)"
+
+    out="$(HOME="$tmp" PATH="$MOCK_BIN:$PATH" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    [[ "$out" == *"docker container rm"* ]]
+'

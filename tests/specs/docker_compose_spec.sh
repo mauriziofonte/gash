@@ -746,3 +746,341 @@ EOF
 
     [[ "$out" == *"no_services"* ]]
 '
+
+# =============================================================================
+# Registry API Helper Tests (uses mocks)
+# =============================================================================
+
+it "__gash_registry_curl returns 0 on HTTP 200" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    __gash_registry_curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/nginx:pull"
+    [[ $? -eq 0 ]] || exit 1
+    [[ "$__gash_registry_curl_http_code" == "200" ]]
+    [[ -n "$__gash_registry_curl_body" ]]
+    [[ -z "$__gash_registry_curl_error" ]]
+'
+
+it "__gash_registry_curl returns 1 + unauthorized on HTTP 401" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_UNAUTHORIZED=1
+
+    set +e
+    __gash_registry_curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/nginx:pull"
+    rc=$?
+    set -e
+
+    [[ $rc -eq 1 ]]
+    [[ "$__gash_registry_curl_error" == "unauthorized" ]]
+    [[ "$__gash_registry_curl_http_code" == "401" ]]
+'
+
+it "__gash_registry_curl returns 1 + rate_limited on HTTP 429" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_RATE_LIMITED=1
+
+    set +e
+    __gash_registry_curl -I "https://registry-1.docker.io/v2/library/nginx/manifests/latest"
+    rc=$?
+    set -e
+
+    [[ $rc -eq 1 ]]
+    [[ "$__gash_registry_curl_error" == "rate_limited" ]]
+'
+
+it "__gash_registry_curl returns 1 + timeout on curl exit 28" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_TIMEOUT=1
+
+    set +e
+    __gash_registry_curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/nginx:pull"
+    rc=$?
+    set -e
+
+    [[ $rc -eq 1 ]]
+    [[ "$__gash_registry_curl_error" == "timeout" ]]
+'
+
+it "__gash_registry_curl returns 1 + server_error on HTTP 500" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_ERROR=1
+
+    set +e
+    __gash_registry_curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/nginx:pull"
+    rc=$?
+    set -e
+
+    [[ $rc -eq 1 ]]
+    [[ "$__gash_registry_curl_error" == "server_error" ]]
+'
+
+# =============================================================================
+# Token Function Tests (uses mocks)
+# =============================================================================
+
+it "__gash_dockerhub_token returns token on success" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    token=$(__gash_dockerhub_token "library/nginx")
+    [[ "$token" == "mock-dockerhub-token-abc123" ]]
+'
+
+it "__gash_dockerhub_token returns 1 on auth failure" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_AUTH_FAIL=1
+
+    set +e
+    token=$(__gash_dockerhub_token "library/nginx")
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ -z "$token" ]]
+'
+
+it "__gash_ghcr_token returns token on success" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    token=$(__gash_ghcr_token "open-webui/open-webui")
+    [[ "$token" == "mock-ghcr-token-xyz789" ]]
+'
+
+it "__gash_ghcr_token uses GITHUB_TOKEN when available" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export GITHUB_TOKEN="my-custom-gh-token"
+
+    token=$(__gash_ghcr_token "some/image")
+    [[ "$token" == "my-custom-gh-token" ]]
+'
+
+it "__gash_ghcr_token returns 1 on auth failure" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_AUTH_FAIL=1
+
+    set +e
+    token=$(__gash_ghcr_token "open-webui/open-webui")
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ -z "$token" ]]
+'
+
+# =============================================================================
+# Remote Digest Tests (uses mocks)
+# =============================================================================
+
+it "__gash_get_remote_digest succeeds for Docker Hub" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    digest=$(__gash_get_remote_digest "docker.io" "library/nginx" "latest")
+    [[ -n "$digest" ]]
+    [[ "$digest" == sha256:* ]]
+'
+
+it "__gash_get_remote_digest succeeds for GHCR" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    digest=$(__gash_get_remote_digest "ghcr.io" "open-webui/open-webui" "main")
+    [[ -n "$digest" ]]
+    [[ "$digest" == sha256:* ]]
+'
+
+it "__gash_get_remote_digest returns 1 on auth failure" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_AUTH_FAIL=1
+
+    set +e
+    digest=$(__gash_get_remote_digest "docker.io" "library/nginx" "latest")
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ -z "$digest" ]]
+'
+
+it "__gash_get_remote_digest returns 1 on rate limit" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_RATE_LIMITED=1
+
+    set +e
+    digest=$(__gash_get_remote_digest "docker.io" "library/nginx" "latest")
+    rc=$?
+    set -e
+
+    [[ $rc -ne 0 ]]
+    [[ -z "$digest" ]]
+'
+
+it "__gash_get_remote_digest handles digest-pinned images" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    # No mock needed - digest-pinned returns immediately
+    digest=$(__gash_get_remote_digest "docker.io" "library/nginx" "@sha256:abc123def456")
+    [[ "$digest" == "sha256:abc123def456" ]]
+'
+
+it "__gash_get_remote_digest sets __gash_remote_digest variable" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    __gash_remote_digest=""
+    __gash_get_remote_digest "docker.io" "library/nginx" "latest" >/dev/null 2>&1
+    [[ -n "$__gash_remote_digest" ]]
+    [[ "$__gash_remote_digest" == sha256:* ]]
+'
+
+# =============================================================================
+# Error Classification in docker_compose_check (uses mocks)
+# =============================================================================
+
+it "docker_compose_check --json shows specific error type for rate limit" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_RATE_LIMITED=1
+
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+
+    cat > "$tmpdir/docker-compose.yml" << EOF
+services:
+  web:
+    image: nginx:latest
+EOF
+
+    out=$(docker_compose_check "$tmpdir" --json 2>/dev/null) || true
+
+    # Should contain specific error type, not generic registry_unreachable
+    [[ "$out" == *"\"error\":"* ]]
+    [[ "$out" == *"rate_limited"* ]]
+'
+
+it "docker_compose_check --json shows unauthorized for auth failure" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_CURL_REGISTRY_UNAUTHORIZED=1
+
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+
+    cat > "$tmpdir/docker-compose.yml" << EOF
+services:
+  web:
+    image: nginx:latest
+EOF
+
+    out=$(docker_compose_check "$tmpdir" --json 2>/dev/null) || true
+
+    [[ "$out" == *"unauthorized"* ]]
+'
+
+# =============================================================================
+# JSON Escaping Tests
+# =============================================================================
+
+it "docker_compose_check --json escapes special chars in path" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+
+    # Create a path with characters that need JSON escaping
+    mkdir -p "$tmpdir/my project"
+    cat > "$tmpdir/my project/docker-compose.yml" << EOF
+services:
+  web:
+    image: nginx:latest
+EOF
+
+    out=$(docker_compose_check "$tmpdir/my project" --json 2>/dev/null) || true
+
+    # Should be valid JSON (path should contain the space, properly escaped)
+    [[ "$out" == "{"* ]]
+    [[ "$out" == *"\"services\":"* ]]
+'
+
+# =============================================================================
+# Localhost Registry Detection
+# =============================================================================
+
+it "__gash_normalize_image handles localhost registry" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    out=$(__gash_normalize_image "localhost:5000/myapp:latest")
+    [[ "$out" == "localhost:5000|myapp|latest" ]]
+
+    out=$(__gash_normalize_image "localhost/myapp:v1")
+    [[ "$out" == "localhost|myapp|v1" ]]
+'
