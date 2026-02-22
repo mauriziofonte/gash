@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-# Minimal systemctl mock.
-# Used by stop_services: systemctl is-active --quiet <service>
+# Systemctl mock for testing.
+# Handles: is-active, stop, start, cat, status, list-units, list-timers
 
 if [[ "${1:-}" == "is-active" && "${2:-}" == "--quiet" ]]; then
-  # If MOCK_SYSTEMCTL_ACTIVE is set to a service name, report active.
   svc="${3:-}"
   if [[ -n "${MOCK_SYSTEMCTL_ACTIVE:-}" && "$svc" == "$MOCK_SYSTEMCTL_ACTIVE" ]]; then
     exit 0
@@ -12,10 +11,58 @@ if [[ "${1:-}" == "is-active" && "${2:-}" == "--quiet" ]]; then
   exit 3
 fi
 
-# Accept stop/start to avoid touching the host system.
 if [[ "${1:-}" == "stop" || "${1:-}" == "start" ]]; then
   exit 0
 fi
 
-echo "unexpected systemctl invocation: $*" >&2
-exit 2
+if [[ "${1:-}" == "cat" ]]; then
+  unit="${2:-unknown}"
+  echo "# /etc/systemd/system/${unit}"
+  echo "[Unit]"
+  echo "Description=Mock ${unit%.service} service"
+  echo ""
+  echo "[Service]"
+  echo "Type=simple"
+  echo "ExecStart=/usr/bin/mock-${unit%.service}"
+  echo "Restart=on-failure"
+  echo "WorkingDirectory=/opt/mock"
+  echo ""
+  echo "[Install]"
+  echo "WantedBy=multi-user.target"
+  exit 0
+fi
+
+if [[ "${1:-}" == "status" ]]; then
+  # Strip --no-pager if present
+  shift
+  unit=""
+  for arg in "$@"; do
+    [[ "$arg" != --* ]] && unit="$arg" && break
+  done
+  unit="${unit:-unknown}"
+  echo "● ${unit} - Mock ${unit%.service} service"
+  echo "     Loaded: loaded (/etc/systemd/system/${unit}; enabled; preset: enabled)"
+  echo "     Active: active (running) since Mon 2026-02-22 10:00:00 CET; 2h ago"
+  echo "   Main PID: 12345 (mock-proc)"
+  echo "      Tasks: 3 (limit: 4915)"
+  echo "     Memory: 24.0M"
+  echo "        CPU: 1.234s"
+  echo "     CGroup: /system.slice/${unit}"
+  exit 0
+fi
+
+if [[ "${1:-}" == "list-units" ]]; then
+  echo "apache2.service          loaded active running Apache HTTP Server"
+  echo "mariadb.service          loaded active running MariaDB database server"
+  echo "redis-server.service     loaded active running Redis In-Memory Data Store"
+  exit 0
+fi
+
+if [[ "${1:-}" == "list-timers" ]]; then
+  echo "NEXT                         LEFT          LAST                         PASSED  UNIT                         ACTIVATES"
+  echo "Mon 2026-02-23 06:00:00 CET  15h left      Sun 2026-02-22 06:00:00 CET  9h ago  apt-daily-upgrade.timer      apt-daily-upgrade.service"
+  exit 0
+fi
+
+# Fallback: accept silently instead of failing (other subcommands used in collectors)
+exit 0

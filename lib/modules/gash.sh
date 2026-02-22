@@ -402,7 +402,7 @@ gash_doctor() {
 
     # 2. Modules
     echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Modules:${__GASH_COLOR_OFF:-\033[0m}"
-    local expected_modules=(gash git ssh files docker docker-compose system llm ai)
+    local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo)
     for mod in "${expected_modules[@]}"; do
         if [[ -f "$gash_dir/lib/modules/${mod}.sh" ]]; then
             __gash_success "  ${mod}"
@@ -718,6 +718,22 @@ gash() {
         __gash_ref_fn "llm_docker_check" "" "[PATH]" "Compose update check (JSON)"
     }
 
+    # AI section
+    __gash_ref_ai() {
+        __gash_ref_section "AI-POWERED"
+
+        echo -e "  ${W}Interactive:${R}"
+        __gash_ref_fn "ai_ask" "ask" "[provider]" "Interactive AI chat"
+        __gash_ref_fn "ai_query" "ask" "[provider] \"query\"" "Non-interactive AI query"
+
+        echo -e "  ${W}System Analysis:${R}"
+        __gash_ref_fn "ai_sysinfo" "sysinfo_ai" "[provider] [--raw]" "AI system analysis"
+        __gash_ref_fn "sysinfo" "si" "[section] [--llm]" "System enumeration"
+        echo -e "    ${D}Sections: identity storage services auth network security webstack mail infra system all${R}"
+        echo -e "    ${D}--llm: compact output for AI token minimization${R}"
+        echo -e "    ${D}--raw: dump collected data without API call${R}"
+    }
+
     # PHP section
     __gash_ref_php() {
         __gash_ref_section "PHP & COMPOSER"
@@ -742,6 +758,7 @@ gash() {
         echo -e "    ${Y}docker${R}   Container management + compose"
         echo -e "    ${Y}nav${R}      Navigation aliases (ls, cd)"
         echo -e "    ${Y}llm${R}      LLM/AI agent utilities"
+        echo -e "    ${Y}ai${R}       AI chat + system analysis"
         echo -e "    ${Y}php${R}      PHP & Composer version aliases"
         echo -e "    ${Y}gash${R}     Gash management functions"
         echo -e "    ${Y}all${R}      Show everything"
@@ -765,6 +782,7 @@ gash() {
         docker) __gash_ref_header; __gash_ref_docker ;;
         nav|navigation) __gash_ref_header; __gash_ref_nav ;;
         llm)    __gash_ref_header; __gash_ref_llm ;;
+        ai)     __gash_ref_header; __gash_ref_ai ;;
         php)    __gash_ref_header; __gash_ref_php ;;
         gash|management) __gash_ref_header; __gash_ref_gash ;;
         all)
@@ -776,6 +794,7 @@ gash() {
             __gash_ref_nav
             __gash_ref_php
             __gash_ref_llm
+            __gash_ref_ai
             __gash_ref_gash
             ;;
         -h|--help|help)
@@ -942,5 +961,13 @@ gash_help() {
         echo -e " > \e[0;33mllm_ports\033[0m - \e[1;37mList ports in use (JSON).\033[0m"
         echo -e " > \e[0;33mllm_procs\033[0m \e[0;36m[--name N]\033[0m - \e[1;37mList processes (JSON).\033[0m"
         echo -e " > \e[0;33mllm_env\033[0m - \e[1;37mFiltered env vars (no secrets).\033[0m"
+        echo
+
+        # AI-powered
+        echo -e "\e[1;37m--- AI-Powered ---\033[0m"
+        echo -e " > \e[0;33mai_query\033[0m (\e[0;32mask\033[0m) \e[0;36m[provider] \"query\"\033[0m - \e[1;37mNon-interactive AI query.\033[0m"
+        echo -e " > \e[0;33mai_ask\033[0m (\e[0;32mask\033[0m) \e[0;36m[provider]\033[0m - \e[1;37mInteractive AI chat.\033[0m"
+        echo -e " > \e[0;33mai_sysinfo\033[0m (\e[0;32msysinfo_ai\033[0m) \e[0;36m[provider] [--raw]\033[0m - \e[1;37mAI system analysis.\033[0m"
+        echo -e " > \e[0;33msysinfo\033[0m (\e[0;32msi\033[0m) \e[0;36m[section] [--llm]\033[0m - \e[1;37mSystem enumeration (10 sections).\033[0m"
     fi
 }

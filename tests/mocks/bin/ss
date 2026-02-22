@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Mock ss for testing.
+# Returns fake listening socket output.
+
+echo "State    Recv-Q Send-Q  Local Address:Port   Peer Address:Port  Process"
+echo "LISTEN   0      128     127.0.0.1:80         0.0.0.0:*          users:((\"apache2\",pid=1001,fd=3))"
+echo "LISTEN   0      128     127.0.0.1:443        0.0.0.0:*          users:((\"apache2\",pid=1001,fd=4))"
+echo "LISTEN   0      128     127.0.0.1:3306       0.0.0.0:*          users:((\"mariadbd\",pid=2001,fd=5))"
+echo "LISTEN   0      128     127.0.0.1:5432       0.0.0.0:*          users:((\"postgres\",pid=3001,fd=6))"
+echo "LISTEN   0      128     127.0.0.1:6379       0.0.0.0:*          users:((\"redis-server\",pid=4001,fd=7))"
+exit 0

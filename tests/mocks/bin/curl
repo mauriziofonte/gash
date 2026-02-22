@@ -51,6 +51,27 @@ done
 detect_response_type() {
     local body="$1"
 
+    local lower_body
+    lower_body=$(echo "$body" | tr '[:upper:]' '[:lower:]')
+
+    # Check for drilldown request (body contains "section:" and "initial findings")
+    if [[ "$lower_body" == *"section:"* ]] && [[ "$lower_body" == *"initial findings"* ]]; then
+        echo "drilldown"
+        return
+    fi
+
+    # Check for freetext question (body contains "initial server analysis" and "user question")
+    if [[ "$lower_body" == *"initial server analysis"* ]] && [[ "$lower_body" == *"user question"* ]]; then
+        echo "drilldown"
+        return
+    fi
+
+    # Check for sysinfo analysis request (body contains "analyze this system enumeration")
+    if [[ "$lower_body" == *"analyze this system enumeration"* ]]; then
+        echo "sysinfo"
+        return
+    fi
+
     # Extract user query: it comes after "}\\n\\n" (end of context JSON + double newline)
     # The pattern in the JSON is: "content": "Context: {...}\n\nUSER_QUERY"
     local user_query
@@ -87,6 +108,12 @@ generate_inner_json() {
             ;;
         code)
             echo '{"type":"code","text":"Creates a backup script.","code":"#!/bin/bash\\ntar -czf backup.tar.gz ~/","lang":"bash"}'
+            ;;
+        sysinfo)
+            echo '{"hostname":"testhost","platform":"Debian 12 | 6.1.0-amd64 | bare-metal","sections":[{"title":"Services Detected","findings":[{"severity":"ok","text":"Apache2 running with 3 vhosts"},{"severity":"info","text":"PHP 8.1 FPM with 2 pools"}]},{"title":"Security Posture","findings":[{"severity":"warning","text":"No firewall detected"},{"severity":"info","text":"SSH key-only auth enabled"}]},{"title":"Recommendations","findings":[{"severity":"warning","text":"Install ufw or firewalld for perimeter protection"}]}]}'
+            ;;
+        drilldown)
+            echo '{"title":"Services Detected","summary":"Detailed analysis of detected services on this server.","components":[{"name":"Apache2","status":"running","config_highlights":["3 vhosts in sites-enabled","MPM: event","Listen: *:80, *:443"],"issues":[{"severity":"ok","text":"ProxyPassMatch configured for PHP-FPM"}]},{"name":"PHP-FPM 8.1","status":"running","config_highlights":["pool www: pm=dynamic, max_children=5","memory_limit=256M"],"issues":[{"severity":"warning","text":"max_children=5 is low for production"}]},{"name":"Viper-backup","status":"running","config_highlights":["Custom systemd service","ExecStart=/opt/viper/backup.sh","WorkingDirectory=/opt/viper"],"issues":[{"severity":"info","text":"Backup orchestration service running as root"}]}]}'
             ;;
         fallback|*)
             echo '{"type":"fallback","text":"I am a bash/linux terminal assistant. How can I help?"}'

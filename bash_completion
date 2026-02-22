@@ -83,7 +83,7 @@ __gash_complete() {
 
         # Gash reference card sections
         gash)
-            COMPREPLY=($(compgen -W "git files system docker nav navigation llm php gash management all help" -- "$cur"))
+            COMPREPLY=($(compgen -W "git files system docker nav navigation llm php gash management ai all help" -- "$cur"))
             ;;
 
         # AI provider completion (first argument only)
@@ -93,6 +93,16 @@ __gash_complete() {
             else
                 COMPREPLY=()
             fi
+            ;;
+
+        # AI sysinfo: provider + --raw
+        ai_sysinfo)
+            COMPREPLY=($(compgen -W "claude gemini --raw" -- "$cur"))
+            ;;
+
+        # System info sections
+        sysinfo)
+            COMPREPLY=($(compgen -W "identity storage services auth network security webstack mail infra system all --llm" -- "$cur"))
             ;;
 
         # Everything else: empty COMPREPLY lets -o default provide file completion

@@ -17,6 +17,8 @@
 * **Intelligent Prompt**: See everything you need (username, Git branch, jobs, etc.) at a glance.
 * **Productivity Aliases**: Shortcuts for file operations, Git commands, and service management.
 * **Convenient Functions**: One-liners to extract archives, list the largest files, or kill processes by port.
+* **System Intelligence**: AI-powered server analysis with deep drill-downs and interactive Q&A (`ai_sysinfo`).
+* **AI Chat**: Ask questions, troubleshoot errors, or pipe configuration files to Claude/Gemini from your terminal.
 * **Dual Naming**: Every function has a descriptive LONG name and a memorable SHORT alias.
 * **Bash Completion**: Tab-complete Gash functions (and Git tags for tag helpers).
 * **Unload / Restore Session**: Turn off Gash in the current shell and restore the previous state.
@@ -112,8 +114,10 @@ Gash ships with a dedicated completion script (`bash_completion`). Once sourced 
 * **Git tag functions** (`git_add_tag`, `git_delete_tag`, `git_list_tags`): suggests Git tags
 * **Directory functions** (`files_largest`, `dirs_largest`, `docker_compose_check`, etc.): suggests directories
 * **File functions** (`archive_extract`, `file_backup`, `git_dump_revisions`): suggests files
-* **`gash`**: suggests reference card sections (`git`, `files`, `system`, `docker`, etc.)
+* **`gash`**: suggests reference card sections (`git`, `files`, `system`, `docker`, `ai`, etc.)
 * **AI functions** (`ai_ask`, `ai_query`): suggests providers (`claude`, `gemini`)
+* **System intelligence** (`ai_sysinfo`): suggests providers (`claude`, `gemini`) and `--raw` flag
+* **System enumeration** (`sysinfo`): suggests sections (`identity`, `storage`, `services`, etc.) and `--llm` flag
 * **All other functions**: falls back to default file completion
 
 **Note:** Completion is registered for function names only (e.g., `docker_stop_all`), not short aliases (e.g., `dsa`). This is a Bash limitation: Bash expands aliases before consulting completion specs, so `complete -F handler alias_name` is silently ignored.
@@ -486,12 +490,14 @@ docker_compose_scan /path/to/projects --depth 3
 
 #### AI Chat Integration
 
-Gash includes an AI module for interacting with Claude and Gemini directly from your terminal. Get instant help with bash commands, troubleshoot errors, and generate scripts.
+Gash includes an AI module for interacting with Claude and Gemini directly from your terminal. Get instant help with bash commands, troubleshoot errors, pipe configuration files for analysis, and generate scripts.
 
 | Function | Alias | Description |
 |----------|-------|-------------|
 | `ai_query [provider] "query"` | - | Non-interactive AI query |
 | `ai_ask [provider]` | `ask` | Interactive AI chat session |
+| `ai_sysinfo [provider] [--raw]` | `sysinfo_ai` | AI-powered system analysis with interactive drill-downs |
+| `sysinfo [section] [--llm]` | `si` | System enumeration (10 sections, verbose or LLM-compact output) |
 | `gash_ai_list` | - | List configured AI providers |
 
 **Response Types:**
@@ -540,15 +546,128 @@ ask
 ai_query gemini "explain kubernetes"
 ```
 
+**Pipe Support for `ai_ask` and `ai_query`:**
+
+Both `ai_ask` (alias `ask`) and `ai_query` accept piped input via stdin. When input is piped, the AI automatically enters **troubleshoot mode**: it receives the piped content as context and uses your question to diagnose issues, review configurations, or explain what's happening. Piped content is auto-truncated to 4KB to avoid token waste.
+
+This is especially powerful for sending configuration files, log snippets, or command output directly to the AI for analysis:
+
+```bash
+# Review an Apache vhost configuration
+cat /etc/apache2/sites-enabled/mysite.conf | ai_query "is this vhost correct? any security issues?"
+
+# Analyze a PHP-FPM pool configuration
+cat /etc/php/8.2/fpm/pool.d/www.conf | ai_query "optimize this pool for a server with 8GB RAM"
+
+# Debug a failing systemd service
+systemctl status my-app.service | ai_query "why is this service failing?"
+
+# Review a Docker Compose file
+cat docker-compose.yml | ai_query "any best practice violations?"
+
+# Analyze Nginx configuration
+cat /etc/nginx/sites-enabled/default | ai_query "add rate limiting and security headers"
+
+# Troubleshoot MySQL slow queries
+cat /var/log/mysql/slow-query.log | ai_query "what queries need optimization?"
+
+# Review SSH hardening
+cat /etc/ssh/sshd_config | ai_query "is this SSH config secure for a production server?"
+
+# Analyze a crontab
+crontab -l | ai_query "are there any overlapping or problematic schedules?"
+
+# Inspect firewall rules
+sudo iptables -L -n | ai_query "is this firewall properly configured?"
+
+# Review Postfix configuration
+cat /etc/postfix/main.cf | ai_query "is this mail relay configured correctly for outbound-only?"
+
+# Pipe multiple files for comparison
+diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf | ai_query "what changed between PHP 8.1 and 8.2 pool configs?"
+
+# Analyze a Bash script
+cat my-backup-script.sh | ai_query "review this script for bugs and improvements"
+```
+
 **Features:**
 
 * **Smart response types** - Automatically detects intent and formats output appropriately
-* **Pipe support** - Pipe error logs or command output for troubleshooting
+* **Pipe support** - Pipe config files, error logs, or command output for troubleshooting and review
 * **Auto-truncation** - Piped content is truncated to 4KB to avoid token waste
 * **Rich context** - Includes cwd, shell type, distro, package manager, git branch, and last exit code
 * **Clear error messages** - Specific feedback for network issues, timeouts, and API errors
 
 **Configuration:** See [AI Providers Configuration](#ai-providers-configuration) in the `~/.gash_env` section.
+
+#### AI System Intelligence (`ai_sysinfo`)
+
+`ai_sysinfo` is an AI-powered system analysis tool for headless Debian/Ubuntu servers. It collects comprehensive system data (with optional `sudo` for full visibility), sends it to Claude or Gemini for structured analysis, and provides an interactive drill-down interface.
+
+**What it does:**
+
+1. **Collects** system data across 10 categories (identity, storage, services, auth, network, security, webstack, mail, infrastructure, system config)
+2. **Analyzes** the data via AI, producing a structured report with severity-coded findings (critical/warning/info/ok)
+3. **Drills down** interactively into 6 detail sections (Services, Security, Network, Storage, Performance, Maintenance) using deep collectors that read full configuration files
+4. **Answers questions** with smart context collection: asks about a specific service, file, or port, and the tool automatically gathers targeted data before querying the AI
+5. **Exports** the full analysis (including all drill-downs and Q&A) as a Markdown report
+
+```bash
+# Run AI-powered system analysis
+ai_sysinfo
+
+# Use a specific provider
+ai_sysinfo claude
+ai_sysinfo gemini
+
+# Dump raw collected data (no API call, useful for debugging)
+ai_sysinfo --raw
+```
+
+**Interactive drill-down menu:**
+
+After the initial analysis, an interactive menu lets you explore in detail:
+
+```text
+Drill down for details:
+  1) Services    2) Security    3) Network
+  4) Storage     5) Performance 6) Maintenance
+  ?) Ask a question              s) Save report  q) Quit
+```
+
+* **Options 1-6**: Runs deep collectors that read full config files, service status, runtime data. The AI then provides per-component analysis with config highlights and issues.
+* **Option `?`** (Ask a question): Type any question about your system. The tool intelligently detects entities in your question and collects targeted data before sending to the AI:
+  * Systemd units (e.g., "analyze viper-backup.service") - reads unit file, status, and journal
+  * File paths (e.g., "what's in /etc/postfix/main.cf?") - reads the file contents
+  * Port numbers (e.g., "what's on port 3306?") - reads socket listeners
+  * Known services (e.g., "tell me about apache") - reads service-specific configs
+  * Custom service names (e.g., "explain viper-backup") - detects and collects even without `.service` suffix
+* **Option `s`** (Save): Exports the full session (initial analysis + all drill-downs + all Q&A) to a timestamped Markdown file (`gash-ai-sysinfo-YYYYMMDD-HHMMSS.md`)
+
+**Knowledge base:**
+
+The system prompt includes an embedded knowledge base covering 40+ service families: Apache, Nginx, PHP-FPM, MySQL/MariaDB, PostgreSQL, Redis, Postfix, Dovecot, BIND, fail2ban, CrowdSec, UFW, Docker, OpenVPN, WireGuard, Samba, ZFS, Sanoid, LVM, RAID, Let's Encrypt, Collectd, Monit, Webmin, Virtualmin, and many more. It knows about Debian/Ubuntu file layout conventions (`.d/` directories, `available/enabled` symlink patterns, `.dpkg-old`/`.dpkg-dist` markers).
+
+**Standalone system enumeration (`sysinfo`):**
+
+The underlying data collection is also available as a standalone command, independent from the AI analysis:
+
+```bash
+# Full system enumeration (colored verbose output)
+sysinfo
+
+# Specific section only
+sysinfo services
+sysinfo security
+sysinfo webstack
+
+# LLM-compact output (token-efficient, for piping to AI tools)
+sysinfo --llm
+sysinfo services --llm
+
+# Available sections:
+# identity storage services auth network security webstack mail infra system all
+```
 
 #### Gash Management
 
@@ -566,6 +685,7 @@ ai_query gemini "explain kubernetes"
 | `gash_db_test` | Tests a database connection |
 | `gash_ai_list` | Lists configured AI providers (claude, gemini) |
 | `gash_ssh_auto_unlock` | Auto-unlock SSH keys configured in `~/.gash_env` |
+| `sysinfo` / `si` | System enumeration for Debian/Ubuntu servers (10 sections, `--llm` for compact output) |
 
 #### LLM Utilities (for AI Agents)
 

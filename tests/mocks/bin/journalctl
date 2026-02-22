@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# Mock journalctl for testing.
+# Returns fake log lines for any unit requested.
+
+unit=""
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "-u" ]]; then
+        unit="$arg"
+    fi
+    prev="$arg"
+done
+
+unit="${unit:-unknown}"
+svc="${unit%.service}"
+
+echo "-- Journal for ${unit} --"
+echo "Feb 22 10:00:01 mockhost ${svc}[12345]: Service started successfully"
+echo "Feb 22 10:00:02 mockhost ${svc}[12345]: Listening on /run/${svc}.sock"
+echo "Feb 22 10:01:00 mockhost ${svc}[12345]: Processing request from client"
+echo "Feb 22 10:05:00 mockhost ${svc}[12345]: Health check passed"
+exit 0
