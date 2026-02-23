@@ -662,9 +662,10 @@ gash() {
 
         if grep -qi "microsoft" /proc/version 2>/dev/null; then
             echo -e "  ${W}WSL:${R}"
-            __gash_ref_alias "explorer" "Open in Windows Explorer"
-            __gash_ref_alias "wslrestart" "Restart WSL"
-            __gash_ref_alias "wslshutdown" "Shutdown WSL"
+            __gash_ref_fn "wsl_restart" "wr" "" "Restart WSL (saves history)"
+            __gash_ref_fn "wsl_shutdown" "wsd" "" "Shutdown WSL (saves history)"
+            __gash_ref_fn "wsl_explorer" "wex" "[PATH]" "Open Windows Explorer"
+            __gash_ref_fn "wsl_taskmanager" "wtm" "" "Open Windows Task Manager"
         fi
     }
 

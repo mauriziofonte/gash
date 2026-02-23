@@ -117,3 +117,98 @@ it "docker_stop_all errors when docker missing" bash -c '
   out="$({ docker_stop_all; } 2>&1 || true)"
   [[ "$out" == *"Docker is not installed"* ]]
 '
+
+describe "WSL Functions"
+
+it "wsl_restart shows help on -h" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  out="$(wsl_restart -h 2>&1)"
+  [[ "$out" == *"wsl_restart"* ]]
+'
+
+it "wsl_shutdown shows help on -h" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  out="$(wsl_shutdown -h 2>&1)"
+  [[ "$out" == *"wsl_shutdown"* ]]
+'
+
+it "wsl_explorer shows help on -h" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  out="$(wsl_explorer -h 2>&1)"
+  [[ "$out" == *"wsl_explorer"* ]]
+'
+
+it "wsl_taskmanager shows help on -h" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  out="$(wsl_taskmanager -h 2>&1)"
+  [[ "$out" == *"wsl_taskmanager"* ]]
+'
+
+it "wsl_restart fails outside WSL with mocked detection" bash -c '
+  set -uo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  # Override WSL detection to always fail
+  __gash_require_wsl() {
+      __gash_error "This command requires WSL (Windows Subsystem for Linux)."
+      return 1
+  }
+
+  set +e
+  out="$(wsl_restart 2>&1)"
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]]
+  [[ "$out" == *"WSL"* ]]
+'
+
+it "wsl_explorer fails outside WSL with mocked detection" bash -c '
+  set -uo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  __gash_require_wsl() {
+      __gash_error "This command requires WSL (Windows Subsystem for Linux)."
+      return 1
+  }
+
+  set +e
+  out="$(wsl_explorer 2>&1)"
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]]
+  [[ "$out" == *"WSL"* ]]
+'
+
+it "wr alias points to wsl_restart" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  alias_def="$(alias wr 2>/dev/null)"
+  [[ "$alias_def" == *"wsl_restart"* ]]
+'
+
+it "wex alias points to wsl_explorer" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  alias_def="$(alias wex 2>/dev/null)"
+  [[ "$alias_def" == *"wsl_explorer"* ]]
+'

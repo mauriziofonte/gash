@@ -447,6 +447,66 @@ mkdir_cd() {
 }
 
 # -----------------------------------------------------------------------------
+# WSL (Windows Subsystem for Linux)
+# -----------------------------------------------------------------------------
+
+# Restart WSL by saving bash history and triggering wsl --shutdown.
+# WSL restarts automatically when a new terminal is opened.
+# Alias: wr
+wsl_restart() {
+    needs_help "wsl_restart" "wsl_restart" \
+        "Restart WSL (saves bash history first). Alias: wr" \
+        "${1-}" && return
+
+    __gash_require_wsl || return 1
+
+    __gash_info "Saving bash history..."
+    history -a
+    __gash_info "Shutting down WSL (will restart on next launch)..."
+    cmd.exe /C wsl --shutdown
+}
+
+# Shutdown WSL by saving bash history and triggering wsl --shutdown.
+# Alias: wsd
+wsl_shutdown() {
+    needs_help "wsl_shutdown" "wsl_shutdown" \
+        "Shutdown WSL (saves bash history first). Alias: wsd" \
+        "${1-}" && return
+
+    __gash_require_wsl || return 1
+
+    __gash_info "Saving bash history..."
+    history -a
+    __gash_info "Shutting down WSL..."
+    cmd.exe /C wsl --shutdown
+}
+
+# Open Windows Explorer in the current or specified directory.
+# Alias: wex
+wsl_explorer() {
+    needs_help "wsl_explorer" "wsl_explorer [PATH]" \
+        "Open Windows Explorer in the current or specified directory. Alias: wex" \
+        "${1-}" && return
+
+    __gash_require_wsl || return 1
+
+    local target="${1:-.}"
+    explorer.exe "$target"
+}
+
+# Open Windows Task Manager from WSL.
+# Alias: wtm
+wsl_taskmanager() {
+    needs_help "wsl_taskmanager" "wsl_taskmanager" \
+        "Open Windows Task Manager from WSL. Alias: wtm" \
+        "${1-}" && return
+
+    __gash_require_wsl || return 1
+
+    (cd /mnt/c && cmd.exe /C taskmgr &)
+}
+
+# -----------------------------------------------------------------------------
 # Short Aliases
 # -----------------------------------------------------------------------------
 alias du2='disk_usage'
@@ -458,6 +518,10 @@ alias ptk='port_kill'
 alias svs='services_stop'
 alias plz='sudo_last'
 alias mkcd='mkdir_cd'
+alias wr='wsl_restart'
+alias wsd='wsl_shutdown'
+alias wex='wsl_explorer'
+alias wtm='wsl_taskmanager'
 
 # =============================================================================
 # Help Registration
@@ -676,6 +740,86 @@ EXAMPLES
 
   # Create nested directories and enter
   mkcd ~/projects/client/frontend
+HELP
+
+__gash_register_help "wsl_restart" \
+    --aliases "wr" \
+    --module "system" \
+    --short "Restart WSL (saves history, runs wsl --shutdown)" \
+    --see-also "wsl_shutdown" \
+    <<'HELP'
+USAGE
+  wsl_restart
+
+EXAMPLES
+  # Restart WSL (saves bash history first)
+  wsl_restart
+
+NOTES
+  Saves bash history before shutdown so no commands are lost.
+  WSL will restart automatically when you open a new terminal.
+  Only works inside WSL (Windows Subsystem for Linux).
+HELP
+
+__gash_register_help "wsl_shutdown" \
+    --aliases "wsd" \
+    --module "system" \
+    --short "Shutdown WSL (saves history, runs wsl --shutdown)" \
+    --see-also "wsl_restart" \
+    <<'HELP'
+USAGE
+  wsl_shutdown
+
+EXAMPLES
+  # Shutdown WSL (saves bash history first)
+  wsd
+
+NOTES
+  Saves bash history before shutdown so no commands are lost.
+  Only works inside WSL (Windows Subsystem for Linux).
+HELP
+
+__gash_register_help "wsl_explorer" \
+    --aliases "wex" \
+    --module "system" \
+    --short "Open Windows Explorer from WSL" \
+    --see-also "wsl_taskmanager" \
+    <<'HELP'
+USAGE
+  wsl_explorer [PATH]
+
+EXAMPLES
+  # Open Explorer in current directory
+  wex
+
+  # Open Explorer in a specific path
+  wex /home/user/projects
+
+  # Open Explorer in Windows user folder
+  wex /mnt/c/Users
+
+NOTES
+  Defaults to current directory if no path specified.
+  Only works inside WSL (Windows Subsystem for Linux).
+HELP
+
+__gash_register_help "wsl_taskmanager" \
+    --aliases "wtm" \
+    --module "system" \
+    --short "Open Windows Task Manager from WSL" \
+    --see-also "wsl_explorer process_find" \
+    <<'HELP'
+USAGE
+  wsl_taskmanager
+
+EXAMPLES
+  # Open Windows Task Manager
+  wtm
+
+NOTES
+  Launches Task Manager in the background.
+  Does not change your current working directory.
+  Only works inside WSL (Windows Subsystem for Linux).
 HELP
 
 fi  # end help registration guard

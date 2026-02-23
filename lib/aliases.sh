@@ -122,13 +122,8 @@ alias bc='bc -l'
 # Ports
 alias ports='netstat -tulanp'
 
-# WSL specific alias
-if grep -qi "microsoft" /proc/version && [ -n "${WSLENV-}" ]; then
-    alias wslrestart="history -a && cmd.exe /C wsl --shutdown"
-    alias wslshutdown="history -a && cmd.exe /C wsl --shutdown"
-    alias explorer="explorer.exe ."
-    alias taskmanager="cd /mnt/c && cmd.exe /C taskmgr &"
-fi
+# WSL aliases: now proper functions in lib/modules/system.sh
+# Short aliases (wr, wsd, wex, wtm) registered there.
 
 # Git aliases
 if command -v git >/dev/null 2>&1; then

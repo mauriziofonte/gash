@@ -242,3 +242,19 @@ __gash_require_args_min() {
 __gash_require_docker() {
     __gash_require_command "docker" "Docker is not installed."
 }
+
+# -----------------------------------------------------------------------------
+# WSL Validation
+# -----------------------------------------------------------------------------
+
+# Verify we are running inside WSL (Windows Subsystem for Linux).
+# Usage: __gash_require_wsl
+# Returns: 0 if inside WSL, 1 otherwise
+__gash_require_wsl() {
+    if ! grep -qi "microsoft" /proc/version 2>/dev/null; then
+        __gash_error "This command requires WSL (Windows Subsystem for Linux)."
+        return 1
+    fi
+
+    return 0
+}

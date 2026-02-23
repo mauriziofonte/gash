@@ -9,13 +9,8 @@ alias help=gash_help
 # Add alias for "services_stop" with --force flag
 alias quit='services_stop --force'
 
-# WSL specific aliases
-if grep -qi "microsoft" /proc/version 2>/dev/null && [[ -n "${WSLENV-}" ]]; then
-    alias wslrestart="history -a && cmd.exe /C wsl --shutdown"
-    alias wslshutdown="history -a && cmd.exe /C wsl --shutdown"
-    alias explorer="explorer.exe ."
-    alias taskmanager="cd /mnt/c && cmd.exe /C taskmgr &"
-fi
+# WSL aliases: now proper functions in lib/modules/system.sh
+# Short aliases (wr, wsd, wex, wtm) registered there.
 
 # Replace less with most if installed
 if command -v most >/dev/null 2>&1; then

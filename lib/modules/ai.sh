@@ -1775,14 +1775,49 @@ __ai_ask_impl() {
         return 1
     }
 
+    # Check for piped input BEFORE interactive prompt
+    local piped_content=""
+    if [[ ! -t 0 ]]; then
+        piped_content=$(head -c 4096)
+        local piped_size=${#piped_content}
+        if [[ $piped_size -ge 4096 ]]; then
+            piped_content="${piped_content}
+[... truncated to 4KB]"
+        fi
+    fi
+
     # Show prompt and read query
     local query
-    printf "%s: " "$provider"
-    read -r query
+    if [[ -n "$piped_content" ]]; then
+        # Pipe detected: inform user and read query from terminal
+        local piped_lines
+        piped_lines=$(echo "$piped_content" | wc -l)
+        local piped_bytes=${#piped_content}
+        __gash_info "Piped input received (${piped_lines} lines, ${piped_bytes} bytes)"
+        printf "%s (or Enter for auto-analysis): " "$provider"
+        read -r query </dev/tty || query=""
+    else
+        printf "%s: " "$provider"
+        read -r query
+    fi
 
-    if [[ -z "$query" ]]; then
+    if [[ -z "$query" && -z "$piped_content" ]]; then
         __gash_warning "Empty query, aborting"
         return 1
+    fi
+
+    # Default query for piped content when user presses Enter
+    if [[ -z "$query" && -n "$piped_content" ]]; then
+        query="Analyze this content: explain what it does, identify any issues or errors, and suggest improvements."
+    fi
+
+    # Prepend piped content to query for troubleshoot mode
+    if [[ -n "$piped_content" ]]; then
+        query="[PIPE INPUT - TROUBLESHOOT MODE]
+---
+${piped_content}
+---
+User question: ${query}"
     fi
 
     # Show spinner with provider name
@@ -2226,11 +2261,25 @@ EXAMPLES
   #   Command: find . -type f -size +100M
   #   Explanation: Finds all files larger than 100MB.
 
-  # Pipe a config file and then chat about it
-  cat /etc/nginx/nginx.conf | ask
-  #   claude: is this config secure?
+  # Pipe a config file and ask about it
+  cat /etc/nginx/nginx.conf | ask claude
+  #   claude (or Enter for auto-analysis): is this config secure?
   #   Issue: ...
   #   Suggestion: ...
+
+  # Pipe content and press Enter for auto-analysis
+  cat my-script.sh | ask
+  #   (auto-analyzes: explains, identifies issues, suggests improvements)
+
+  # Pipe multiple files for combined analysis
+  cat /usr/local/bin/backup.sh /etc/systemd/system/backup.service | ask claude
+  #   claude (or Enter for auto-analysis): <your question>
+
+PIPE SUPPORT
+  When stdin is piped, ai_ask reads the piped content first and
+  then prompts for a question via the terminal. Press Enter
+  without typing to auto-analyze the content (explains what it
+  does, identifies issues, suggests improvements).
 
 RESPONSE TYPES
   The AI automatically detects your intent:

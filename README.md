@@ -470,6 +470,15 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 | `sudo_last` | `plz` | Runs the last command or a given command with `sudo` |
 | `mkdir_cd` | `mkcd` | Creates a directory and changes into it |
 
+#### WSL (Windows Subsystem for Linux)
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `wsl_restart` | `wr` | Restart WSL (saves bash history, runs wsl --shutdown) |
+| `wsl_shutdown` | `wsd` | Shutdown WSL (saves bash history, runs wsl --shutdown) |
+| `wsl_explorer` | `wex` | Open Windows Explorer in current or specified directory |
+| `wsl_taskmanager` | `wtm` | Open Windows Task Manager from WSL |
+
 #### Git Operations
 
 | Long Name | Short | Description |
@@ -830,9 +839,9 @@ llm_git_status
   * `ll`, `la`, `lash`: Enhanced directory listings with color-coded output.
   * `ports`: Lists open network ports.
   * `all_colors`: Function that prints all available terminal colors with ANSI escape codes.
-* **Cross-Platform Commands**:
-  * `explorer`, `taskmanager`: For Windows WSL users, opens Windows Explorer and Task Manager.
-  * `wslrestart`, `wslshutdown`: Restarts or shuts down WSL.
+* **Cross-Platform Commands** (WSL):
+  * `wsl_explorer` (`wex`), `wsl_taskmanager` (`wtm`): For Windows WSL users, opens Windows Explorer and Task Manager.
+  * `wsl_restart` (`wr`), `wsl_shutdown` (`wsd`): Restarts or shuts down WSL. Saves bash history first.
 
 ### Swap-ins (Command Replacements)
 
