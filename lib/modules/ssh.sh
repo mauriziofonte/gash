@@ -239,3 +239,38 @@ gash_ssh_auto_unlock() {
 
     return 0
 }
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "gash_ssh_auto_unlock" \
+    --module "ssh" \
+    --short "Auto-unlock SSH keys from ~/.gash_env on shell startup" \
+    --see-also "gash_env_init" \
+    <<'HELP'
+USAGE
+  gash_ssh_auto_unlock
+
+EXAMPLES
+  # Runs automatically on shell startup if SSH keys are configured.
+  # Manual invocation:
+  gash_ssh_auto_unlock
+
+CONFIGURATION
+  Add SSH keys to ~/.gash_env:
+    SSH:~/.ssh/id_ed25519=your_passphrase
+    SSH:~/.ssh/work_rsa=work-passphrase
+
+REQUIREMENTS
+  - expect (for non-interactive passphrase entry)
+  - ssh-agent (auto-started if not running)
+
+NOTES
+  Runs once per session (tracked by GASH_SSH_AUTOUNLOCK_RAN).
+  Only unlocks keys that are not already loaded in the agent.
+HELP
+
+fi  # end help registration guard

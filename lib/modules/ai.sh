@@ -307,7 +307,7 @@ __ai_require_curl() {
 }
 
 # Handle curl exit codes and HTTP errors for AI API calls.
-# Returns: 0 if no error, 1 if error (with message printed).
+# Returns: 0 if no error, 1 if fatal error, 2 if retryable (429 rate-limit, already slept).
 # Usage: __ai_handle_curl_error <provider> <curl_exit> <http_code> <elapsed_time> <response> <curl_error>
 __ai_handle_curl_error() {
     local provider="$1" curl_exit="${2:-}" http_code="$3"
@@ -344,6 +344,33 @@ __ai_handle_curl_error() {
     fi
 
     if [[ "$http_code" != "200" ]]; then
+        # 429 rate-limited: extract retry delay, let caller decide
+        if [[ "$http_code" == "429" ]]; then
+            local retry_delay=""
+            # Gemini: .error.details[].retryDelay ("30s", "3.9s", "633.4ms")
+            retry_delay=$(echo "$response" | jq -r '
+                .error.details[]? | select(."@type" // "" | contains("RetryInfo")) | .retryDelay // empty
+            ' 2>/dev/null | head -1)
+            # Parse duration: "30s" → 30, "633ms" → 0.633
+            if [[ "$retry_delay" =~ ^([0-9.]+)ms$ ]]; then
+                retry_delay=$(awk "BEGIN{printf \"%.1f\", ${BASH_REMATCH[1]}/1000}")
+            else
+                retry_delay="${retry_delay%s}"
+            fi
+            # Validate numeric, default 5s
+            if ! [[ "${retry_delay:-}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                retry_delay=5
+            fi
+            # Floor: at least 1s to avoid rapid-fire retries
+            if [[ ${retry_delay%%.*} -lt 1 ]]; then
+                retry_delay=1
+            fi
+            # Store for caller to sleep/retry
+            __AI_RETRY_DELAY="$retry_delay"
+            __AI_RETRY_PROVIDER="$provider"
+            return 2
+        fi
+
         local error_msg
         error_msg=$(echo "$response" | jq -r '.error.message // .error // "Unknown error"' 2>/dev/null)
         __gash_error "$provider API error ($http_code): $error_msg"
@@ -495,31 +522,45 @@ __ai_call_claude() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
     # Track start time for timeout differentiation
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -H "x-api-key: $token" \
-        -H "anthropic-version: 2023-06-01" \
-        -d "$body" \
-        "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $token" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$body" \
+            "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Claude HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
-    __ai_debug "Claude Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
-    [[ -n "$curl_error" ]] && __ai_debug "Claude Curl Stderr" "$curl_error"
+        __ai_debug "Claude HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
+        __ai_debug "Claude Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        [[ -n "$curl_error" ]] && __ai_debug "Claude Curl Stderr" "$curl_error"
 
-    # Handle curl/HTTP errors
-    __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        # Handle curl/HTTP errors (rc=2 means 429 rate-limited, retry once)
+        __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     # Extract response text (contains structured JSON)
     local text
@@ -571,29 +612,43 @@ __ai_call_gemini() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
     # Track start time for timeout differentiation
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -d "$body" \
-        "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Gemini HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
-    __ai_debug "Gemini Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
-    [[ -n "$curl_error" ]] && __ai_debug "Gemini Curl Stderr" "$curl_error"
+        __ai_debug "Gemini HTTP Code" "$http_code (elapsed: ${elapsed_time}s)"
+        __ai_debug "Gemini Raw Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        [[ -n "$curl_error" ]] && __ai_debug "Gemini Curl Stderr" "$curl_error"
 
-    # Handle curl/HTTP errors
-    __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        # Handle curl/HTTP errors (rc=2 means 429 rate-limited, retry once)
+        __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     # Extract response text (contains structured JSON)
     local text
@@ -647,28 +702,42 @@ __sysinfo_call_claude() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -H "x-api-key: $token" \
-        -H "anthropic-version: 2023-06-01" \
-        -d "$body" \
-        "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $token" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$body" \
+            "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Sysinfo Claude HTTP" "$http_code (${elapsed_time}s)"
-    __ai_debug "Sysinfo Claude Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        __ai_debug "Sysinfo Claude HTTP" "$http_code (${elapsed_time}s)"
+        __ai_debug "Sysinfo Claude Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
 
-    __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     local text
     text=$(echo "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
@@ -693,15 +762,13 @@ __sysinfo_call_gemini() {
         --arg system "$__AI_SYSINFO_SYSTEM_PROMPT" \
         --arg data "$data" \
         --argjson max_tokens "$__AI_SYSINFO_MAX_TOKENS" \
-        --argjson schema "$__AI_SYSINFO_RESPONSE_SCHEMA" \
         '{
             contents: [{
                 parts: [{text: ($system + "\n\nAnalyze this system enumeration:\n\n" + $data)}]
             }],
             generationConfig: {
                 maxOutputTokens: $max_tokens,
-                responseMimeType: "application/json",
-                responseJsonSchema: $schema
+                responseMimeType: "application/json"
             }
         }')
 
@@ -711,26 +778,40 @@ __sysinfo_call_gemini() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -d "$body" \
-        "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Sysinfo Gemini HTTP" "$http_code (${elapsed_time}s)"
-    __ai_debug "Sysinfo Gemini Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        __ai_debug "Sysinfo Gemini HTTP" "$http_code (${elapsed_time}s)"
+        __ai_debug "Sysinfo Gemini Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
 
-    __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     local text
     text=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text // empty' 2>/dev/null)
@@ -781,28 +862,42 @@ __sysinfo_call_drilldown_claude() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -H "x-api-key: $token" \
-        -H "anthropic-version: 2023-06-01" \
-        -d "$body" \
-        "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $token" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$body" \
+            "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Drilldown Claude HTTP" "$http_code (${elapsed_time}s)"
-    __ai_debug "Drilldown Claude Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        __ai_debug "Drilldown Claude HTTP" "$http_code (${elapsed_time}s)"
+        __ai_debug "Drilldown Claude Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
 
-    __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     local text
     text=$(echo "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
@@ -828,15 +923,13 @@ __sysinfo_call_drilldown_gemini() {
         --arg system "$__AI_SYSINFO_DRILLDOWN_PROMPT" \
         --arg user "$user_msg" \
         --argjson max_tokens "$__AI_SYSINFO_MAX_TOKENS" \
-        --argjson schema "$__AI_SYSINFO_DRILLDOWN_SCHEMA" \
         '{
             contents: [{
                 parts: [{text: ($system + "\n\n" + $user)}]
             }],
             generationConfig: {
                 maxOutputTokens: $max_tokens,
-                responseMimeType: "application/json",
-                responseJsonSchema: $schema
+                responseMimeType: "application/json"
             }
         }')
 
@@ -846,26 +939,40 @@ __sysinfo_call_drilldown_gemini() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -d "$body" \
-        "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Drilldown Gemini HTTP" "$http_code (${elapsed_time}s)"
-    __ai_debug "Drilldown Gemini Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        __ai_debug "Drilldown Gemini HTTP" "$http_code (${elapsed_time}s)"
+        __ai_debug "Drilldown Gemini Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
 
-    __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     local text
     text=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text // empty' 2>/dev/null)
@@ -1168,28 +1275,42 @@ __sysinfo_call_freetext_claude() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -H "x-api-key: $token" \
-        -H "anthropic-version: 2023-06-01" \
-        -d "$body" \
-        "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $token" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$body" \
+            "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Freetext Claude HTTP" "$http_code (${elapsed_time}s)"
-    __ai_debug "Freetext Claude Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        __ai_debug "Freetext Claude HTTP" "$http_code (${elapsed_time}s)"
+        __ai_debug "Freetext Claude Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
 
-    __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     local text
     text=$(echo "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
@@ -1219,15 +1340,13 @@ __sysinfo_call_freetext_gemini() {
         --arg system "$__AI_SYSINFO_DRILLDOWN_PROMPT" \
         --arg user "$user_msg" \
         --argjson max_tokens "$__AI_SYSINFO_MAX_TOKENS" \
-        --argjson schema "$__AI_SYSINFO_DRILLDOWN_SCHEMA" \
         '{
             contents: [{
                 parts: [{text: ($system + "\n\n" + $user)}]
             }],
             generationConfig: {
                 maxOutputTokens: $max_tokens,
-                responseMimeType: "application/json",
-                responseJsonSchema: $schema
+                responseMimeType: "application/json"
             }
         }')
 
@@ -1237,26 +1356,40 @@ __sysinfo_call_freetext_gemini() {
     local tmp_file tmp_err
     tmp_file=$(mktemp)
     tmp_err=$(mktemp)
-    trap 'rm -f "$tmp_file" "$tmp_err"' RETURN
+    trap 'rm -f "$tmp_file" "$tmp_err" >/dev/null 2>&1' RETURN
 
-    local start_time elapsed_time
-    start_time=$(date +%s)
+    local start_time elapsed_time curl_error __retry_count=0 __max_retries=3 __rc
+    while true; do
+        curl_exit=""
+        start_time=$(date +%s)
 
-    http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
-        --connect-timeout "$__AI_CONNECT_TIMEOUT" \
-        --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
-        -H "Content-Type: application/json" \
-        -d "$body" \
-        "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+        http_code=$(curl -s -w "%{http_code}" -o "$tmp_file" \
+            --connect-timeout "$__AI_CONNECT_TIMEOUT" \
+            --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
 
-    elapsed_time=$(( $(date +%s) - start_time ))
-    response=$(<"$tmp_file")
-    local curl_error=$(<"$tmp_err")
+        elapsed_time=$(( $(date +%s) - start_time ))
+        response=$(<"$tmp_file")
+        curl_error=$(<"$tmp_err")
 
-    __ai_debug "Freetext Gemini HTTP" "$http_code (${elapsed_time}s)"
-    __ai_debug "Freetext Gemini Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
+        __ai_debug "Freetext Gemini HTTP" "$http_code (${elapsed_time}s)"
+        __ai_debug "Freetext Gemini Response" "$(echo "$response" | jq -C . 2>/dev/null || echo "$response")"
 
-    __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}" || return 1
+        __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
+        __rc=$?
+        if [[ $__rc -eq 0 ]]; then break
+        elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
+            (( __retry_count++ ))
+            __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
+            sleep "${__AI_RETRY_DELAY:-5}"
+            continue
+        elif [[ $__rc -eq 2 ]]; then
+            __gash_error "${__AI_RETRY_PROVIDER} API: Rate limit exceeded after ${__max_retries} retries"
+            return 1
+        else return 1; fi
+    done
 
     local text
     text=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text // empty' 2>/dev/null)
@@ -2064,3 +2197,153 @@ __ai_sysinfo_impl() {
 
 alias ask='ai_ask'
 alias sysinfo_ai='ai_sysinfo'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "ai_ask" \
+    --aliases "ask" \
+    --module "ai" \
+    --short "Interactive AI chat from the terminal" \
+    --see-also "ai_query ai_sysinfo gash_ai_list" \
+    <<'HELP'
+USAGE
+  ai_ask [provider]
+
+EXAMPLES
+  # Start an interactive chat (uses first configured provider)
+  ask
+
+  # Use a specific provider
+  ask claude
+  ask gemini
+
+  # Type your questions interactively:
+  #   claude: how to find files larger than 100MB?
+  #   Command: find . -type f -size +100M
+  #   Explanation: Finds all files larger than 100MB.
+
+  # Pipe a config file and then chat about it
+  cat /etc/nginx/nginx.conf | ask
+  #   claude: is this config secure?
+  #   Issue: ...
+  #   Suggestion: ...
+
+RESPONSE TYPES
+  The AI automatically detects your intent:
+    "how to..."      -> Command + Explanation
+    "what is..."     -> Explanation
+    "write a..."     -> Code block
+    (with piped data) -> Troubleshoot (Issue + Suggestion)
+
+NOTES
+  Type 'exit' or 'quit' or press Ctrl+C to end the session.
+  Piped content is auto-truncated to 4KB to save tokens.
+HELP
+
+__gash_register_help "ai_query" \
+    --module "ai" \
+    --short "Non-interactive AI query with optional piped input" \
+    --see-also "ai_ask ai_sysinfo gash_ai_list" \
+    <<'HELP'
+USAGE
+  ai_query [provider] "query"
+  command | ai_query "question about this output"
+
+EXAMPLES
+  # Ask a question (uses first configured provider)
+  ai_query "how do I find files larger than 100MB?"
+
+  # Use a specific provider
+  ai_query claude "explain the difference between grep and rg"
+
+  # Pipe a config file for analysis
+  cat /etc/nginx/nginx.conf | ai_query "any security issues?"
+
+  # Pipe error logs for troubleshooting
+  tail -50 /var/log/apache2/error.log | ai_query "what is wrong?"
+
+  # Pipe command output
+  docker logs myapp 2>&1 | ai_query "why is this crashing?"
+
+  # Review a script
+  cat deploy.sh | ai_query "review this for bugs"
+
+  # Pipe a diff for summary
+  git diff | ai_query "summarize these changes"
+
+MULTI-SOURCE PIPING
+  # Combine multiple files for comparative analysis
+  {
+    echo "=== Apache Config ==="
+    cat /etc/apache2/apache2.conf
+    echo "=== Ports ==="
+    cat /etc/apache2/ports.conf
+  } | ai_query "is this Apache setup correct?"
+
+  # Combine config and its test output
+  {
+    cat /etc/nginx/nginx.conf
+    echo "---"
+    nginx -t 2>&1
+  } | ai_query "fix the nginx configuration errors"
+
+  # Compare PHP-FPM pools
+  diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf \
+    | ai_query "what changed between PHP 8.1 and 8.2 pool configs?"
+
+  # Analyze multiple log sources
+  {
+    echo "=== System Log ==="
+    tail -20 /var/log/syslog
+    echo "=== App Log ==="
+    tail -20 /var/log/myapp/error.log
+  } | ai_query "correlate these errors"
+
+NOTES
+  Piped content is auto-truncated to 4KB to save tokens.
+  When input is piped, the AI enters troubleshoot mode automatically.
+HELP
+
+__gash_register_help "ai_sysinfo" \
+    --aliases "sysinfo_ai" \
+    --module "ai" \
+    --short "AI-powered system security and configuration analysis" \
+    --see-also "sysinfo ai_query" \
+    <<'HELP'
+USAGE
+  ai_sysinfo [provider] [--raw]
+
+EXAMPLES
+  # Run AI-powered system analysis
+  ai_sysinfo
+
+  # Use a specific provider
+  ai_sysinfo claude
+  ai_sysinfo gemini
+
+  # Dump raw collected data (no API call, useful for debugging)
+  ai_sysinfo --raw
+
+INTERACTIVE DRILL-DOWN
+  After the initial analysis, an interactive menu appears:
+    1) Services    2) Security    3) Network
+    4) Storage     5) Performance 6) Maintenance
+    ?) Ask a question              s) Save report  q) Quit
+
+  Options 1-6 run deep collectors that read full config files.
+  Option ? lets you ask about specific services, files, or ports.
+  Option s exports the full session as a Markdown report.
+
+SMART QUESTIONS
+  The ? option detects entities in your question:
+    "analyze viper-backup.service" -> reads unit file + journal
+    "what's in /etc/postfix/main.cf?" -> reads the file
+    "what's on port 3306?" -> reads socket listeners
+    "tell me about apache" -> reads service configs
+HELP
+
+fi  # end help registration guard

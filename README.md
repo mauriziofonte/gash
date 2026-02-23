@@ -19,6 +19,7 @@
 * **Convenient Functions**: One-liners to extract archives, list the largest files, or kill processes by port.
 * **System Intelligence**: AI-powered server analysis with deep drill-downs and interactive Q&A (`ai_sysinfo`).
 * **AI Chat**: Ask questions, troubleshoot errors, or pipe configuration files to Claude/Gemini from your terminal.
+* **Built-in Help System**: Type `gash_help function_name` for rich, example-driven help on any function.
 * **Dual Naming**: Every function has a descriptive LONG name and a memorable SHORT alias.
 * **Bash Completion**: Tab-complete Gash functions (and Git tags for tag helpers).
 * **Unload / Restore Session**: Turn off Gash in the current shell and restore the previous state.
@@ -42,6 +43,8 @@ curl -fsSL https://raw.githubusercontent.com/mauriziofonte/gash/refs/heads/main/
 ```sh
 wget -qO- https://raw.githubusercontent.com/mauriziofonte/gash/refs/heads/main/install.sh | bash
 ```
+
+Once installed, type `gash_help` to explore all available functions, or `gash_help function_name` for detailed help with examples on any specific function.
 
 The automated installer will add a new section to your shell profile (`.bashrc` or `.bash_profile`) with:
 
@@ -107,6 +110,36 @@ Save time with these built-in utilities. Each has a **long** descriptive name AN
 
 And [many more](#helpers-functions)!
 
+### Help System
+
+Gash includes a rich, example-driven help system. Every public function has detailed help with usage patterns, real-world examples, and cross-references.
+
+```bash
+# See all available functions grouped by module
+gash_help
+
+# Get detailed help for any function (with examples)
+gash_help ai_query
+gash_help files_largest
+
+# Works with aliases too - automatically resolves to the parent function
+gash_help flf        # Shows help for files_largest
+gash_help dsa        # Shows help for docker_stop_all
+
+# Search across all functions by keyword
+gash_help --search docker
+gash_help --search pipe
+
+# List all functions with short descriptions
+gash_help --list
+
+# Get a one-line description (useful for scripting)
+gash_help --short files_largest
+
+# Access bash builtin help
+gash_help --bash cd
+```
+
 ### Bash completion
 
 Gash ships with a dedicated completion script (`bash_completion`). Once sourced (see `~/.gashrc`), it provides context-aware tab completion for all public Gash functions:
@@ -118,6 +151,7 @@ Gash ships with a dedicated completion script (`bash_completion`). Once sourced 
 * **AI functions** (`ai_ask`, `ai_query`): suggests providers (`claude`, `gemini`)
 * **System intelligence** (`ai_sysinfo`): suggests providers (`claude`, `gemini`) and `--raw` flag
 * **System enumeration** (`sysinfo`): suggests sections (`identity`, `storage`, `services`, etc.) and `--llm` flag
+* **Help system** (`gash_help`): suggests function names, aliases, and flags (`--list`, `--search`, `--short`, `--bash`)
 * **All other functions**: falls back to default file completion
 
 **Note:** Completion is registered for function names only (e.g., `docker_stop_all`), not short aliases (e.g., `dsa`). This is a Bash limitation: Bash expands aliases before consulting completion specs, so `complete -F handler alias_name` is silently ignored.
@@ -598,6 +632,8 @@ cat my-backup-script.sh | ai_query "review this script for bugs and improvements
 * **Rich context** - Includes cwd, shell type, distro, package manager, git branch, and last exit code
 * **Clear error messages** - Specific feedback for network issues, timeouts, and API errors
 
+**Tip:** Run `gash_help ai_query` for more examples, including multi-source piping patterns.
+
 **Configuration:** See [AI Providers Configuration](#ai-providers-configuration) in the `~/.gash_env` section.
 
 #### AI System Intelligence (`ai_sysinfo`)
@@ -674,7 +710,7 @@ sysinfo services --llm
 | Function | Description |
 |----------|-------------|
 | `gash` | Interactive reference card with sections (`gash all` for complete list) |
-| `gash_help` | Displays a list of available Gash commands |
+| `gash_help` | Rich help system: `gash_help func`, `--search`, `--list`, `--short` |
 | `gash_doctor` / `gdoctor` | Run health checks on Gash installation (core files, modules, config, tools) |
 | `gash_upgrade` | Upgrades Gash to the latest version |
 | `gash_uninstall` | Uninstalls Gash and cleans up configurations |

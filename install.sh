@@ -6,9 +6,9 @@
 # Installation script for Gash. It clones the Gash repository and updates the shell configuration files.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.4.4
+# Version: 1.4.5
 # Release Date: 2024-10-24
-# Last Update: 2026-02-22
+# Last Update: 2026-02-23
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues

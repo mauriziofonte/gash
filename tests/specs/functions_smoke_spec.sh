@@ -8,20 +8,18 @@ gash_source_all "$ROOT_DIR"
 
 describe "Functions (smoke)"
 
-it "gash_help displays custom commands section" bash -c '
+it "gash_help displays grouped overview" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  export GASH_VERSION="test"
 
-  # Override builtin help to avoid actual bash help output
-  help() { :; }
-
-  out="$(gash_help 2>/dev/null)"
-  [[ "$out" == *"Custom Commands"* ]]
+  out="$(gash_help 2>&1)"
+  [[ "$out" == *"Gash"* ]]
+  [[ "$out" == *"FILES"* ]]
+  [[ "$out" == *"GIT"* ]]
   [[ "$out" == *"files_largest"* ]]
-  [[ "$out" == *"flf"* ]]
   [[ "$out" == *"git_add_tag"* ]]
-  [[ "$out" == *"gat"* ]]
 '
 
 it "needs_help prints usage on -h" bash -c '

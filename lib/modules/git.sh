@@ -215,3 +215,115 @@ alias gat='git_add_tag'
 alias gdt='git_delete_tag'
 alias gdr='git_dump_revisions'
 alias gpatch='git_apply_patch'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "git_list_tags" \
+    --aliases "glt" \
+    --module "git" \
+    --short "List all local and remote tags" \
+    --see-also "git_add_tag git_delete_tag" \
+    <<'HELP'
+USAGE
+  git_list_tags
+
+EXAMPLES
+  # List all tags in the current repo
+  glt
+
+  # Check existing tags before creating a new release
+  glt && gat v2.0.0 "Major release"
+HELP
+
+__gash_register_help "git_add_tag" \
+    --aliases "gat" \
+    --module "git" \
+    --short "Create an annotated tag and push to remote" \
+    --see-also "git_list_tags git_delete_tag" \
+    <<'HELP'
+USAGE
+  git_add_tag TAG_NAME ["TAG_MESSAGE"]
+
+EXAMPLES
+  # Create a tag with auto-generated message
+  gat v1.0.0
+
+  # Create a tag with a custom message
+  gat v2.0.0 "Major release with breaking changes"
+
+  # Release workflow: commit, tag, done
+  gcm "prepare release" && gat v1.2.3 "Bugfix release"
+
+NOTES
+  Creates an annotated tag and pushes it to the remote
+  in one step. Requires a clean git repo with a remote.
+HELP
+
+__gash_register_help "git_delete_tag" \
+    --aliases "gdt" \
+    --module "git" \
+    --short "Delete a tag locally and on remote" \
+    --see-also "git_list_tags git_add_tag" \
+    <<'HELP'
+USAGE
+  git_delete_tag TAG_NAME
+
+EXAMPLES
+  # Remove a mis-tagged release
+  gdt v1.0.0-beta
+
+  # Fix a tag: delete and recreate
+  gdt v1.0.0 && gat v1.0.0 "Fixed release"
+
+NOTES
+  Deletes the tag both locally and on the remote origin.
+HELP
+
+__gash_register_help "git_dump_revisions" \
+    --aliases "gdr" \
+    --module "git" \
+    --short "Dump all revisions of a file into separate files" \
+    --see-also "git_apply_patch" \
+    <<'HELP'
+USAGE
+  git_dump_revisions FILENAME
+
+EXAMPLES
+  # Trace how a config file evolved over time
+  gdr path/to/config.yml
+
+  # Dump revisions of a deployment script
+  gdr scripts/deploy.sh
+
+NOTES
+  Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg
+  Each revision is dumped with its commit log message alongside.
+HELP
+
+__gash_register_help "git_apply_patch" \
+    --aliases "gpatch" \
+    --module "git" \
+    --short "Apply a patch from a feature branch to main" \
+    --see-also "git_dump_revisions" \
+    <<'HELP'
+USAGE
+  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH
+
+EXAMPLES
+  # Cherry-pick a commit from feature to main via patch
+  gpatch main feature-auth abc1234
+
+  # Apply a specific fix from an old branch
+  gpatch develop hotfix-db e5f6a7b
+
+NOTES
+  Steps: checks out main, creates a patch from the specified commit
+  on the feature branch, applies it, and returns you to main.
+  The commit hash must exist on the feature branch.
+HELP
+
+fi  # end help registration guard

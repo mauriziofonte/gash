@@ -171,3 +171,26 @@ all_colors() {
         printf "\x1b[38;5;%smcolour%s\x1b[0m\n" "$i" "$i"
     done
 }
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "all_colors" \
+    --module "utils" \
+    --short "Display all 256 terminal colors" \
+    <<'HELP'
+USAGE
+  all_colors
+
+EXAMPLES
+  # Test your terminal's color support
+  all_colors
+
+  # Pipe to less for scrolling
+  all_colors | less -R
+HELP
+
+fi  # end help registration guard

@@ -458,3 +458,224 @@ alias ptk='port_kill'
 alias svs='services_stop'
 alias plz='sudo_last'
 alias mkcd='mkdir_cd'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "disk_usage" \
+    --aliases "du2" \
+    --module "system" \
+    --short "Display disk usage for real filesystem types" \
+    --see-also "dirs_largest dirs_find_large" \
+    <<'HELP'
+USAGE
+  disk_usage
+
+EXAMPLES
+  # Show disk usage for ext4, xfs, btrfs, zfs, etc.
+  du2
+
+NOTES
+  Filters out virtual filesystems (tmpfs, devtmpfs, overlay).
+  Shows only real disk partitions with human-readable sizes.
+HELP
+
+__gash_register_help "history_grep" \
+    --aliases "hg" \
+    --module "system" \
+    --short "Search command history with colored output" \
+    --see-also "hgrep" \
+    <<'HELP'
+USAGE
+  history_grep PATTERN
+
+EXAMPLES
+  # Find all git commands in history
+  hg git
+
+  # Find docker-compose commands
+  hg "docker compose"
+
+  # Find SSH connections
+  hg "ssh "
+
+NOTES
+  Simple and fast. For advanced features (timestamps,
+  deduplication, JSON output), use hgrep instead.
+HELP
+
+__gash_register_help "hgrep" \
+    --module "system" \
+    --short "Smart history search with timestamps and deduplication" \
+    --see-also "history_grep" \
+    <<'HELP'
+USAGE
+  hgrep PATTERN [OPTIONS]
+
+OPTIONS
+  -n LIMIT        Show only last N results (default: all)
+  -a, --all       Include the hgrep command itself in results
+  -r, --reverse   Reverse order (oldest first)
+  -j, --json      Output as JSON array
+  -H, --no-highlight  Disable color highlighting of matches
+  -E, --regex     Treat PATTERN as extended regex
+  -c, --count     Only show count of matching commands
+
+EXAMPLES
+  # Search for git push commands
+  hgrep "git push"
+
+  # Last 10 docker commands
+  hgrep docker -n 10
+
+  # Export history as JSON
+  hgrep deploy -j
+
+  # Count how many times you ran a command
+  hgrep "npm install" -c
+
+  # Regex: find git push or pull
+  hgrep -E "git (push|pull)"
+
+  # Reverse order (oldest first)
+  hgrep kubectl -r
+HELP
+
+__gash_register_help "ip_public" \
+    --aliases "myip" \
+    --module "system" \
+    --short "Get your public IP address" \
+    <<'HELP'
+USAGE
+  ip_public
+
+EXAMPLES
+  # Show your public IP
+  myip
+
+  # Use in a script
+  MY_IP=$(myip) && echo "Server IP: $MY_IP"
+HELP
+
+__gash_register_help "process_find" \
+    --aliases "pf" \
+    --module "system" \
+    --short "Search for a process by name" \
+    --see-also "process_kill port_kill" \
+    <<'HELP'
+USAGE
+  process_find PROCESS_NAME
+
+EXAMPLES
+  # Find nginx processes
+  pf nginx
+
+  # Find node processes
+  pf node
+
+  # Check if a service is running
+  pf mysql
+HELP
+
+__gash_register_help "process_kill" \
+    --aliases "pk" \
+    --module "system" \
+    --short "Kill all processes matching a name" \
+    --see-also "process_find port_kill" \
+    <<'HELP'
+USAGE
+  process_kill PROCESS_NAME
+
+EXAMPLES
+  # Kill all node processes
+  pk node
+
+  # Kill a stuck service
+  pk webpack-dev-server
+HELP
+
+__gash_register_help "port_kill" \
+    --aliases "ptk" \
+    --module "system" \
+    --short "Kill processes listening on a specific port" \
+    --see-also "process_find process_kill" \
+    <<'HELP'
+USAGE
+  port_kill PORT
+
+EXAMPLES
+  # Kill whatever is on port 3000
+  ptk 3000
+
+  # Free up port 8080 before starting a dev server
+  ptk 8080
+
+  # Clear port 5432 (PostgreSQL default)
+  ptk 5432
+
+NOTES
+  Requires lsof. Uses kill -9 (SIGKILL).
+HELP
+
+__gash_register_help "services_stop" \
+    --aliases "svs" \
+    --module "system" \
+    --short "Stop well-known services (Apache, MySQL, Redis, Docker, etc.)" \
+    --see-also "process_kill" \
+    <<'HELP'
+USAGE
+  services_stop [--force]
+
+EXAMPLES
+  # Stop services with confirmation prompt
+  svs
+
+  # Skip confirmation
+  svs --force
+
+SERVICES STOPPED
+  apache2, nginx, mysql, mariadb, postgresql,
+  mongodb, redis, memcached, docker
+
+NOTES
+  Only stops services that are currently active.
+  Uses systemctl, so it requires systemd.
+HELP
+
+__gash_register_help "sudo_last" \
+    --aliases "plz" \
+    --module "system" \
+    --short "Re-run last command with sudo" \
+    <<'HELP'
+USAGE
+  sudo_last [command]
+
+EXAMPLES
+  # Oops, forgot sudo? Re-run with sudo
+  apt update        # -> Permission denied
+  plz               # -> sudo apt update
+
+  # Run a specific command with sudo
+  plz systemctl restart nginx
+HELP
+
+__gash_register_help "mkdir_cd" \
+    --aliases "mkcd" \
+    --module "system" \
+    --short "Create a directory and cd into it" \
+    <<'HELP'
+USAGE
+  mkdir_cd DIRECTORY
+
+EXAMPLES
+  # Create and enter a new project directory
+  mkcd my-new-project
+
+  # Create nested directories and enter
+  mkcd ~/projects/client/frontend
+HELP
+
+fi  # end help registration guard

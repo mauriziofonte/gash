@@ -42,7 +42,7 @@ if [[ "${1:-}" == "status" ]]; then
   unit="${unit:-unknown}"
   echo "● ${unit} - Mock ${unit%.service} service"
   echo "     Loaded: loaded (/etc/systemd/system/${unit}; enabled; preset: enabled)"
-  echo "     Active: active (running) since Mon 2026-02-22 10:00:00 CET; 2h ago"
+  echo "     Active: active (running) since Mon 2026-02-23 10:00:00 CET; 2h ago"
   echo "   Main PID: 12345 (mock-proc)"
   echo "      Tasks: 3 (limit: 4915)"
   echo "     Memory: 24.0M"
@@ -60,7 +60,7 @@ fi
 
 if [[ "${1:-}" == "list-timers" ]]; then
   echo "NEXT                         LEFT          LAST                         PASSED  UNIT                         ACTIVATES"
-  echo "Mon 2026-02-23 06:00:00 CET  15h left      Sun 2026-02-22 06:00:00 CET  9h ago  apt-daily-upgrade.timer      apt-daily-upgrade.service"
+  echo "Mon 2026-02-23 06:00:00 CET  15h left      Sun 2026-02-23 06:00:00 CET  9h ago  apt-daily-upgrade.timer      apt-daily-upgrade.service"
   exit 0
 fi
 

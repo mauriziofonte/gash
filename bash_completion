@@ -105,6 +105,30 @@ __gash_complete() {
             COMPREPLY=($(compgen -W "identity storage services auth network security webstack mail infra system all --llm" -- "$cur"))
             ;;
 
+        # Help system: function names, aliases, and flags
+        gash_help)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--list --search --short --bash" -- "$cur"))
+            elif [[ "${COMP_WORDS[1]-}" == "--search" ]] && (( COMP_CWORD == 2 )); then
+                # After --search, user types keyword freely
+                COMPREPLY=()
+            elif (( COMP_CWORD == 1 )); then
+                # Build list from help registry: function names + their aliases
+                local funcs=""
+                if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+                    funcs="${!__GASH_HELP_REGISTRY[*]}"
+                    local fn
+                    for fn in ${!__GASH_HELP_ALIASES[*]}; do
+                        local aliases="${__GASH_HELP_ALIASES[$fn]}"
+                        funcs+=" ${aliases//,/ }"
+                    done
+                fi
+                COMPREPLY=($(compgen -W "$funcs --list --search --short --bash" -- "$cur"))
+            else
+                COMPREPLY=()
+            fi
+            ;;
+
         # Everything else: empty COMPREPLY lets -o default provide file completion
         *)
             COMPREPLY=()

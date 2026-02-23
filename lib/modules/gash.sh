@@ -817,157 +817,367 @@ gash() {
 # Help
 # -----------------------------------------------------------------------------
 
-# Display Gash help with all available commands.
-# Usage: gash_help [TOPIC]
+# Gash help system with examples, search, and discovery.
+# Usage: gash_help [FUNCTION|ALIAS|--list|--search KEYWORD|--short FUNCTION|--bash TOPIC]
 gash_help() {
-    # Display the built-in Bash help
-    builtin help "$@"
+    local arg="${1-}"
 
-    # If no specific help topic is requested, show Gash-specific help
-    if [[ -z "${1-}" ]]; then
-        echo
-        echo -e "\e[1;37m===\033[0m \033[0;36mG\033[0;33ma\033[38;5;214ms\033[0;32mh \033[1;37mGash, Another SHell!\033[0m - \e[1;37mCustom Commands ===\033[0m"
-        echo -e "\e[0;36mFormat: LONG_NAME (SHORT_ALIAS)\033[0m"
-        echo
+    # Colors
+    local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
+    local W="${__GASH_BOLD_WHITE-\033[1;37m}"
+    local C="${__GASH_CYAN-\033[0;36m}"
+    local G="${__GASH_GREEN-\033[0;32m}"
+    local M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
+    local Y="${__GASH_YELLOW-\033[0;33m}"
+    local R="${__GASH_COLOR_OFF-\033[0m}"
 
-        # File operations
-        echo -e "\e[1;37m--- File Operations ---\033[0m"
-        echo -e " > \e[0;33mfiles_largest\033[0m (\e[0;32mflf\033[0m) \e[0;36m[PATH]\033[0m - \e[1;37mLists the top 100 largest files.\033[0m"
-        echo -e " > \e[0;33mdirs_largest\033[0m (\e[0;32mdld\033[0m) \e[0;36m[PATH]\033[0m - \e[1;37mLists the top 100 largest directories.\033[0m"
-        echo -e " > \e[0;33mdirs_find_large\033[0m (\e[0;32mdfl\033[0m) \e[0;36m[--size SIZE] [DIR]\033[0m - \e[1;37mFinds directories larger than SIZE.\033[0m"
-        echo -e " > \e[0;33mdirs_list_empty\033[0m (\e[0;32mdle\033[0m) \e[0;36m[PATH]\033[0m - \e[1;37mList all empty directories.\033[0m"
-        echo -e " > \e[0;33marchive_extract\033[0m (\e[0;32maxe\033[0m) \e[0;36mFILE [DIR]\033[0m - \e[1;37mExtracts the archive file.\033[0m"
-        echo -e " > \e[0;33mfile_backup\033[0m (\e[0;32mfbk\033[0m) \e[0;36mFILE\033[0m - \e[1;37mCreates a backup with timestamp.\033[0m"
-        echo
-
-        # System operations
-        echo -e "\e[1;37m--- System Operations ---\033[0m"
-        echo -e " > \e[0;33mdisk_usage\033[0m (\e[0;32mdu2\033[0m) - \e[1;37mDisplays disk usage for specific filesystem types.\033[0m"
-        echo -e " > \e[0;33mhistory_grep\033[0m (\e[0;32mhg\033[0m) \e[0;36mPATTERN\033[0m - \e[1;37mSearches bash history for PATTERN.\033[0m"
-        echo -e " > \e[0;33mhgrep\033[0m \e[0;36mPATTERN [OPTIONS]\033[0m - \e[1;37mSmart history search with timestamps and deduplication.\033[0m"
-        echo -e " > \e[0;33mip_public\033[0m (\e[0;32mmyip\033[0m) - \e[1;37mGet your public IP address.\033[0m"
-        echo -e " > \e[0;33mprocess_find\033[0m (\e[0;32mpf\033[0m) \e[0;36mNAME\033[0m - \e[1;37mSearch for a process by name.\033[0m"
-        echo -e " > \e[0;33mprocess_kill\033[0m (\e[0;32mpk\033[0m) \e[0;36mNAME\033[0m - \e[1;37mKill all processes by name.\033[0m"
-        echo -e " > \e[0;33mport_kill\033[0m (\e[0;32mptk\033[0m) \e[0;36mPORT\033[0m - \e[1;37mKill all processes by port.\033[0m"
-        echo -e " > \e[0;33mservices_stop\033[0m (\e[0;32msvs\033[0m) \e[0;36m[--force]\033[0m - \e[1;37mStop well-known services.\033[0m"
-        echo -e " > \e[0;33msudo_last\033[0m (\e[0;32mplz\033[0m) - \e[1;37mRe-runs the previous command with sudo.\033[0m"
-        echo -e " > \e[0;33mmkdir_cd\033[0m (\e[0;32mmkcd\033[0m) \e[0;36mDIRECTORY\033[0m - \e[1;37mCreates a directory and cd into it.\033[0m"
-        echo
-
-        # Git operations
-        echo -e "\e[1;37m--- Git Functions ---\033[0m"
-        echo -e " > \e[0;33mgit_list_tags\033[0m (\e[0;32mglt\033[0m) - \e[1;37mLists all local and remote tags.\033[0m"
-        echo -e " > \e[0;33mgit_add_tag\033[0m (\e[0;32mgat\033[0m) \e[0;36m<tag> \"<msg>\"\033[0m - \e[1;37mCreates and pushes a tag.\033[0m"
-        echo -e " > \e[0;33mgit_delete_tag\033[0m (\e[0;32mgdt\033[0m) \e[0;36m<tag>\033[0m - \e[1;37mDeletes a tag locally and on remote.\033[0m"
-        echo -e " > \e[0;33mgit_dump_revisions\033[0m (\e[0;32mgdr\033[0m) \e[0;36mFILE\033[0m - \e[1;37mDump all revisions of a file.\033[0m"
-        echo -e " > \e[0;33mgit_apply_patch\033[0m (\e[0;32mgap\033[0m) \e[0;36mMAIN FEAT COMMIT\033[0m - \e[1;37mApply a feature patch.\033[0m"
-        echo
-
-        # Docker operations
-        echo -e "\e[1;37m--- Docker Functions ---\033[0m"
-        echo -e " > \e[0;33mdocker_stop_all\033[0m (\e[0;32mdsa\033[0m) - \e[1;37mStop all Docker containers.\033[0m"
-        echo -e " > \e[0;33mdocker_start_all\033[0m (\e[0;32mdaa\033[0m) - \e[1;37mStart all Docker containers.\033[0m"
-        echo -e " > \e[0;33mdocker_prune_all\033[0m (\e[0;32mdpa\033[0m) - \e[1;37mRemove all Docker resources.\033[0m"
-        echo
-
-        # Gash management
-        echo -e "\e[1;37m--- Gash Management ---\033[0m"
-        echo -e " > \e[0;33mgash_help\033[0m - \e[1;37mDisplay this help.\033[0m"
-        echo -e " > \e[0;33mgash_doctor\033[0m (\e[0;32mgdoctor\033[0m) - \e[1;37mHealth check installation.\033[0m"
-        echo -e " > \e[0;33mgash_upgrade\033[0m - \e[1;37mUpgrade Gash to the latest version.\033[0m"
-        echo -e " > \e[0;33mgash_uninstall\033[0m - \e[1;37mUninstall Gash.\033[0m"
-        echo -e " > \e[0;33mgash_unload\033[0m - \e[1;37mRestore shell state before Gash.\033[0m"
-        echo -e " > \e[0;33mgash_inspiring_quote\033[0m - \e[1;37mDisplay an inspiring quote.\033[0m"
-        echo -e " > \e[0;33mgash_env_init\033[0m - \e[1;37mCreate ~/.gash_env from template.\033[0m"
-        echo -e " > \e[0;33mgash_db_list\033[0m - \e[1;37mList configured database connections.\033[0m"
-        echo -e " > \e[0;33mgash_db_test\033[0m \e[0;36mNAME\033[0m - \e[1;37mTest a database connection.\033[0m"
-        echo -e " > \e[0;33mgash_ssh_auto_unlock\033[0m - \e[1;37mAuto-unlock SSH keys from ~/.gash_env.\033[0m"
-        echo
-
-        # Listing aliases
-        echo -e "\e[1;37m--- Listing Aliases ---\033[0m"
-        echo -e " > \e[0;33mll\033[0m - \e[1;37mLong listing (ls -l).\033[0m"
-        echo -e " > \e[0;33mla\033[0m - \e[1;37mList all including hidden (ls -la).\033[0m"
-        echo -e " > \e[0;33mlash\033[0m - \e[1;37mDetailed listing with sizes (ls -lash).\033[0m"
-        echo -e " > \e[0;33ml\033[0m - \e[1;37mCompact listing (ls -CF).\033[0m"
-        echo -e " > \e[0;33msl\033[0m - \e[1;37mTypo correction for ls.\033[0m"
-        echo
-
-        # Navigation aliases
-        echo -e "\e[1;37m--- Navigation Aliases ---\033[0m"
-        echo -e " > \e[0;33m..\033[0m, \e[0;33m...\033[0m, \e[0;33m....\033[0m, \e[0;33m.....\033[0m, \e[0;33m.4\033[0m, \e[0;33m.5\033[0m - \e[1;37mChange up 1-5 directories.\033[0m"
-        echo -e " > \e[0;33mports\033[0m - \e[1;37mDisplay listening ports.\033[0m"
-        echo -e " > \e[0;33mpath\033[0m - \e[1;37mShow PATH entries one per line.\033[0m"
-        echo -e " > \e[0;33mcls\033[0m - \e[1;37mClear the screen.\033[0m"
-
-        # WSL-specific aliases
-        if grep -qi "microsoft" /proc/version 2>/dev/null && [ -n "${WSLENV-}" ]; then
-            echo -e " > \e[0;33mwslrestart\033[0m, \e[0;33mwslshutdown\033[0m - \e[1;37mWSL restart/shutdown.\033[0m"
-            echo -e " > \e[0;33mexplorer\033[0m - \e[1;37mOpen current directory in Windows Explorer.\033[0m"
-        fi
-        echo
-
-        # Git aliases
-        if command -v git >/dev/null 2>&1; then
-            echo -e "\e[1;37m--- Git Log (run 'gl --help' for details) ---\033[0m"
-            echo -e " > \e[0;33mgl\033[0m - \e[1;37mCompact log with graph (current branch).\033[0m"
-            echo -e " > \e[0;33mgla\033[0m - \e[1;37mAll branches with graph.\033[0m"
-            echo -e " > \e[0;33mglo\033[0m - \e[1;37mUltra-compact oneline format.\033[0m"
-            echo -e " > \e[0;33mglg\033[0m - \e[1;37mGraph focused (first-parent only).\033[0m"
-            echo -e " > \e[0;33mgls\033[0m - \e[1;37mLog with file statistics.\033[0m"
-            echo -e " > \e[0;33mglf\033[0m \e[0;36mFILE\033[0m - \e[1;37mFile history with patches.\033[0m"
-            echo
-            echo -e "\e[1;37m--- Git Aliases ---\033[0m"
-            echo -e " > \e[0;33mStatus:\033[0m gst (full), gs (short with branch)"
-            echo -e " > \e[0;33mAdd:\033[0m ga, gaa (all), gap (interactive patch)"
-            echo -e " > \e[0;33mCommit:\033[0m gc, gcm (with msg), gca (amend), gcan (amend no-edit)"
-            echo -e " > \e[0;33mPush/Pull:\033[0m gp, gpf (force-with-lease), gpl, gplr (rebase)"
-            echo -e " > \e[0;33mBranch:\033[0m gb, gba (all), gcb (create+switch), gbd/gbD (delete)"
-            echo -e " > \e[0;33mCheckout:\033[0m gco, gsw (switch), gswc (switch -c)"
-            echo -e " > \e[0;33mDiff:\033[0m gd, gds (staged), gdw (word-diff)"
-            echo -e " > \e[0;33mStash:\033[0m gsh, gshp (pop), gshl (list), gsha (apply)"
-            echo -e " > \e[0;33mRemote:\033[0m gf (fetch), gfa (fetch all+prune), gr (remote -v)"
-            echo -e " > \e[0;33mReset:\033[0m grh, grh1 (undo last commit), grhh (hard)"
-            echo -e " > \e[0;33mRebase:\033[0m grb, grbc (continue), grba (abort)"
-            echo
-        fi
-
-        # Docker aliases
-        if command -v docker >/dev/null 2>&1; then
-            echo -e "\e[1;37m--- Docker Aliases ---\033[0m"
-            echo -e " > \e[0;33mContainers:\033[0m dcls (list), dclsr (running), dstop, dstart, dexec, drm"
-            echo -e " > \e[0;33mImages:\033[0m dils (list), drmi (remove)"
-            echo -e " > \e[0;33mLogs/Info:\033[0m dlogs, dinspect, dnetls (networks)"
-            echo
-        fi
-
-        # LLM Utilities (for AI agents)
-        echo -e "\e[1;37m--- LLM Utilities (for AI agents) ---\033[0m"
-        echo -e "\e[0;36mNo short aliases. Commands excluded from bash history.\033[0m"
-        echo -e " > \e[0;33mllm_exec\033[0m \e[0;36mCMD\033[0m - \e[1;37mExecute command safely.\033[0m"
-        echo -e " > \e[0;33mllm_tree\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mDirectory tree (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_find\033[0m \e[0;36mPATTERN [PATH]\033[0m - \e[1;37mFind files by pattern.\033[0m"
-        echo -e " > \e[0;33mllm_grep\033[0m \e[0;36mPATTERN [PATH]\033[0m - \e[1;37mSearch code (file:line:content).\033[0m"
-        echo -e " > \e[0;33mllm_db_query\033[0m \e[0;36mSQL -c CONN\033[0m - \e[1;37mRead-only DB query (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_db_tables\033[0m \e[0;36m-c CONN\033[0m - \e[1;37mList database tables.\033[0m"
-        echo -e " > \e[0;33mllm_db_schema\033[0m \e[0;36mTABLE -c CONN\033[0m - \e[1;37mShow table schema.\033[0m"
-        echo -e " > \e[0;33mllm_db_sample\033[0m \e[0;36mTABLE -c CONN\033[0m - \e[1;37mSample rows from table.\033[0m"
-        echo -e " > \e[0;33mllm_project\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mDetect project type (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_deps\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mList dependencies (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_config\033[0m \e[0;36m[PATH]\033[0m - \e[1;37mRead config files (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_git_status\033[0m - \e[1;37mCompact git status (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_git_log\033[0m \e[0;36m[--limit N]\033[0m - \e[1;37mRecent commits (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_git_diff\033[0m - \e[1;37mDiff with stats (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_ports\033[0m - \e[1;37mList ports in use (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_procs\033[0m \e[0;36m[--name N]\033[0m - \e[1;37mList processes (JSON).\033[0m"
-        echo -e " > \e[0;33mllm_env\033[0m - \e[1;37mFiltered env vars (no secrets).\033[0m"
-        echo
-
-        # AI-powered
-        echo -e "\e[1;37m--- AI-Powered ---\033[0m"
-        echo -e " > \e[0;33mai_query\033[0m (\e[0;32mask\033[0m) \e[0;36m[provider] \"query\"\033[0m - \e[1;37mNon-interactive AI query.\033[0m"
-        echo -e " > \e[0;33mai_ask\033[0m (\e[0;32mask\033[0m) \e[0;36m[provider]\033[0m - \e[1;37mInteractive AI chat.\033[0m"
-        echo -e " > \e[0;33mai_sysinfo\033[0m (\e[0;32msysinfo_ai\033[0m) \e[0;36m[provider] [--raw]\033[0m - \e[1;37mAI system analysis.\033[0m"
-        echo -e " > \e[0;33msysinfo\033[0m (\e[0;32msi\033[0m) \e[0;36m[section] [--llm]\033[0m - \e[1;37mSystem enumeration (10 sections).\033[0m"
+    # --bash: delegate to builtin help
+    if [[ "$arg" == "--bash" ]]; then
+        shift
+        builtin help "$@"
+        return $?
     fi
+
+    # --list: grouped listing
+    if [[ "$arg" == "--list" ]]; then
+        echo
+        echo -e "  ${W}Gash Functions${R} ${M}(use 'gash_help FUNCTION' for details)${R}"
+        __gash_help_list
+        echo
+        return 0
+    fi
+
+    # --search: keyword search
+    if [[ "$arg" == "--search" ]]; then
+        local keyword="${2-}"
+        if [[ -z "$keyword" ]]; then
+            __gash_error "Usage: gash_help --search KEYWORD"
+            return 1
+        fi
+        echo
+        echo -e "  ${W}Search results for '${keyword}':${R}"
+        echo
+        __gash_help_search "$keyword"
+        echo
+        return $?
+    fi
+
+    # --short: one-line description
+    if [[ "$arg" == "--short" ]]; then
+        local func="${2-}"
+        if [[ -z "$func" ]]; then
+            __gash_error "Usage: gash_help --short FUNCTION"
+            return 1
+        fi
+        # Try direct lookup
+        if [[ -n "${__GASH_HELP_SHORT[$func]+x}" ]]; then
+            printf '%s\n' "${__GASH_HELP_SHORT[$func]}"
+            return 0
+        fi
+        # Try alias reverse lookup
+        local resolved
+        resolved="$(__gash_help_find_by_alias "$func")" || true
+        if [[ -n "$resolved" && -n "${__GASH_HELP_SHORT[$resolved]+x}" ]]; then
+            printf '%s\n' "${__GASH_HELP_SHORT[$resolved]}"
+            return 0
+        fi
+        __gash_error "No help found for '$func'."
+        return 1
+    fi
+
+    # -h / --help: show self-help
+    if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
+        echo
+        echo -e "  ${A}gash_help${R}${M}  (module: gash)${R}"
+        echo
+        echo -e "  ${W}Gash help system with examples, search, and discovery.${R}"
+        echo
+        echo -e "  ${W}USAGE${R}"
+        echo -e "    ${C}gash_help${R}                   ${M}Overview of all functions${R}"
+        echo -e "    ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
+        echo -e "    ${C}gash_help ALIAS${R}             ${M}Lookup by short alias name${R}"
+        echo -e "    ${C}gash_help --list${R}            ${M}List all functions by module${R}"
+        echo -e "    ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
+        echo -e "    ${C}gash_help --short FUNCTION${R}  ${M}One-line description only${R}"
+        echo -e "    ${C}gash_help --bash TOPIC${R}      ${M}Bash builtin help${R}"
+        echo
+        return 0
+    fi
+
+    # No args: show overview
+    if [[ -z "$arg" ]]; then
+        echo
+        echo -e "  ${W}Gash${R} ${M}v${GASH_VERSION:-?}${R} ${M}- Gash, Another SHell!${R}"
+        echo
+        echo -e "  ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
+        echo -e "  ${C}gash_help ALIAS${R}             ${M}Lookup by short alias (e.g. flf, dsa, ask)${R}"
+        echo -e "  ${C}gash_help --list${R}            ${M}List all functions by module${R}"
+        echo -e "  ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
+        echo -e "  ${C}gash${R}                        ${M}Reference card with aliases${R}"
+        echo -e "  ${C}FUNCTION --help${R}             ${M}Quick usage reminder${R}"
+
+        # Show grouped list
+        __gash_help_list
+        echo
+        echo -e "  ${M}Tip: Every function supports -h/--help for a quick usage reminder.${R}"
+        echo -e "  ${M}     Use gash_help FUNCTION for detailed help with real-world examples.${R}"
+        echo
+        return 0
+    fi
+
+    # Specific function/alias lookup
+    # Try direct lookup first
+    if [[ -n "${__GASH_HELP_REGISTRY[$arg]+x}" ]]; then
+        __gash_help_display "$arg"
+        return 0
+    fi
+
+    # Try alias reverse lookup
+    local resolved
+    resolved="$(__gash_help_find_by_alias "$arg")" || true
+    if [[ -n "$resolved" ]]; then
+        echo -e "\n  ${M}'${arg}' is an alias for '${resolved}'${R}"
+        __gash_help_display "$resolved"
+        return 0
+    fi
+
+    # Not found
+    __gash_error "No help found for '$arg'."
+    echo -e "  ${M}Try: gash_help --list  or  gash_help --search ${arg}${R}" >&2
+    return 1
 }
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "gash" \
+    --module "gash" \
+    --short "Gash reference card with all functions and aliases" \
+    --see-also "gash_help gash_doctor" \
+    <<'HELP'
+USAGE
+  gash                 Show summary overview
+  gash SECTION         Show a specific section
+  gash all             Show everything
+
+SECTIONS
+  git, files, system, docker, nav, llm, ai, php, gash
+
+EXAMPLES
+  # Quick reminder of all git aliases
+  gash git
+
+  # See what Docker functions are available
+  gash docker
+
+  # See every function and alias in Gash
+  gash all
+
+  # Check AI-related functions
+  gash ai
+HELP
+
+__gash_register_help "gash_help" \
+    --module "gash" \
+    --short "Help system with examples, search, and discovery" \
+    --see-also "gash" \
+    <<'HELP'
+USAGE
+  gash_help                    Overview of all functions
+  gash_help FUNCTION           Detailed help with real-world examples
+  gash_help ALIAS              Lookup by short alias name
+  gash_help --list             List all functions grouped by module
+  gash_help --search KEYWORD   Search across all help text
+  gash_help --short FUNCTION   One-line description (for scripting)
+  gash_help --bash TOPIC       Bash builtin help (e.g. cd, export)
+
+EXAMPLES
+  # Get detailed help for a function
+  gash_help ai_query
+
+  # Don't remember the long name? Use the alias
+  gash_help flf
+
+  # Find all Docker-related functions
+  gash_help --search docker
+
+  # Find functions that work with pipes
+  gash_help --search pipe
+
+  # Get just the description for scripting
+  gash_help --short files_largest
+
+  # Access bash builtin help
+  gash_help --bash cd
+HELP
+
+__gash_register_help "gash_doctor" \
+    --aliases "gdoctor" \
+    --module "gash" \
+    --short "Run health checks on the Gash installation" \
+    --see-also "gash_upgrade gash" \
+    <<'HELP'
+USAGE
+  gash_doctor
+
+EXAMPLES
+  # Run a full health check
+  gash_doctor
+
+NOTES
+  Checks: core files, modules, config file permissions,
+  external tools (pydf, most, htop, mtr, colordiff, expect).
+  Reports missing or misconfigured components.
+HELP
+
+__gash_register_help "gash_upgrade" \
+    --module "gash" \
+    --short "Upgrade Gash to the latest version" \
+    --see-also "gash_doctor gash_uninstall" \
+    <<'HELP'
+USAGE
+  gash_upgrade
+
+EXAMPLES
+  # Upgrade to latest version
+  gash_upgrade
+  # Then restart your terminal to apply changes
+
+NOTES
+  Fetches the latest git tag, checks out that version,
+  and cleans up. Restart your shell after upgrading.
+HELP
+
+__gash_register_help "gash_uninstall" \
+    --module "gash" \
+    --short "Uninstall Gash and clean up configurations" \
+    --see-also "gash_upgrade gash_unload" \
+    <<'HELP'
+USAGE
+  gash_uninstall
+
+EXAMPLES
+  # Remove Gash completely (interactive confirmation)
+  gash_uninstall
+
+NOTES
+  Removes the Gash sourcing block from your shell profile,
+  deletes the installation directory, and cleans up.
+  Restart your terminal after uninstalling.
+HELP
+
+__gash_register_help "gash_unload" \
+    --module "gash" \
+    --short "Restore shell state to before Gash was loaded" \
+    --see-also "gash_uninstall" \
+    <<'HELP'
+USAGE
+  gash_unload
+
+EXAMPLES
+  # Temporarily disable Gash in the current terminal
+  gash_unload
+
+  # Re-enable Gash without restarting
+  source ~/.gashrc
+
+NOTES
+  Removes all functions, aliases, and settings introduced by Gash.
+  Restores PS1, PROMPT_COMMAND, history settings, and shopt options
+  to the state captured before Gash loaded. Session-only: does not
+  modify any files.
+HELP
+
+__gash_register_help "gash_inspiring_quote" \
+    --module "gash" \
+    --short "Display a random inspiring quote" \
+    <<'HELP'
+USAGE
+  gash_inspiring_quote
+
+EXAMPLES
+  gash_inspiring_quote
+HELP
+
+__gash_register_help "gash_env_init" \
+    --module "gash" \
+    --short "Create ~/.gash_env configuration template" \
+    --see-also "gash_db_list gash_ai_list gash_ssh_auto_unlock" \
+    <<'HELP'
+USAGE
+  gash_env_init [--force]
+
+EXAMPLES
+  # Create config from template (will not overwrite existing)
+  gash_env_init
+
+  # Overwrite existing config with fresh template
+  gash_env_init --force
+
+NOTES
+  Creates ~/.gash_env with template sections for:
+    SSH:~/.ssh/id_ed25519=your_passphrase
+    DB:default=mysql://user:pass@host:port/db
+    AI:claude=sk-ant-api03-xxxxx
+  Always set permissions: chmod 600 ~/.gash_env
+HELP
+
+__gash_register_help "gash_db_list" \
+    --module "gash" \
+    --short "List configured database connections" \
+    --see-also "gash_db_test gash_env_init" \
+    <<'HELP'
+USAGE
+  gash_db_list
+
+EXAMPLES
+  # Show all database connections from ~/.gash_env
+  gash_db_list
+
+NOTES
+  Passwords are masked in output.
+  Configure connections in ~/.gash_env with:
+    DB:name=driver://user:pass@host:port/database
+  Supported drivers: mysql, mariadb, pgsql
+HELP
+
+__gash_register_help "gash_db_test" \
+    --module "gash" \
+    --short "Test a database connection" \
+    --see-also "gash_db_list gash_env_init" \
+    <<'HELP'
+USAGE
+  gash_db_test [CONNECTION_NAME]
+
+EXAMPLES
+  # Test the default connection
+  gash_db_test
+
+  # Test a named connection
+  gash_db_test postgres
+  gash_db_test legacy
+HELP
+
+__gash_register_help "gash_ai_list" \
+    --module "gash" \
+    --short "List configured AI providers" \
+    --see-also "ai_ask ai_query gash_env_init" \
+    <<'HELP'
+USAGE
+  gash_ai_list
+
+EXAMPLES
+  # Show configured AI providers
+  gash_ai_list
+
+NOTES
+  Configure providers in ~/.gash_env with:
+    AI:claude=sk-ant-api03-xxxxx
+    AI:gemini=AIzaSyxxxxx
+  The first configured provider is used by default.
+HELP
+
+fi  # end help registration guard

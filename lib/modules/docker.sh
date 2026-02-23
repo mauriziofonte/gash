@@ -95,3 +95,69 @@ docker_prune_all() {
 alias dsa='docker_stop_all'
 alias daa='docker_start_all'
 alias dpa='docker_prune_all'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "docker_stop_all" \
+    --aliases "dsa" \
+    --module "docker" \
+    --short "Stop all running Docker containers" \
+    --see-also "docker_start_all docker_prune_all" \
+    <<'HELP'
+USAGE
+  docker_stop_all
+
+EXAMPLES
+  # Stop every running container
+  dsa
+
+  # Restart all containers: stop then start
+  dsa && daa
+HELP
+
+__gash_register_help "docker_start_all" \
+    --aliases "daa" \
+    --module "docker" \
+    --short "Start all stopped Docker containers" \
+    --see-also "docker_stop_all" \
+    <<'HELP'
+USAGE
+  docker_start_all
+
+EXAMPLES
+  # Start all stopped containers
+  daa
+
+  # Restart everything
+  dsa && daa
+HELP
+
+__gash_register_help "docker_prune_all" \
+    --aliases "dpa" \
+    --module "docker" \
+    --short "Remove ALL Docker containers, images, volumes, and networks" \
+    --see-also "docker_stop_all" \
+    <<'HELP'
+USAGE
+  docker_prune_all
+
+EXAMPLES
+  # Nuclear cleanup (interactive confirmation)
+  dpa
+
+NOTES
+  WARNING: This is destructive. It will:
+    1. Stop all running containers
+    2. Remove all containers
+    3. Remove all images
+    4. Remove all volumes (DATA LOSS)
+    5. Remove all networks
+    6. Run docker system prune
+  You will be asked for confirmation before proceeding.
+HELP
+
+fi  # end help registration guard

@@ -968,3 +968,112 @@ llm_docker_check() {
 alias dcc='docker_compose_check'
 alias dcup2='docker_compose_upgrade'
 alias dcscan='docker_compose_scan'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "docker_compose_check" \
+    --aliases "dcc" \
+    --module "docker-compose" \
+    --short "Check for available Docker Compose image updates" \
+    --see-also "docker_compose_upgrade docker_compose_scan" \
+    <<'HELP'
+USAGE
+  docker_compose_check [PATH] [--json]
+
+EXAMPLES
+  # Check for updates in current directory
+  dcc
+
+  # Check a specific project
+  dcc /opt/myapp
+
+  # JSON output for scripting
+  dcc --json
+
+STATUS CODES
+  UPDATE     New image available on registry
+  UP-TO-DATE Image matches remote digest
+  PINNED     Version is pinned (e.g. nginx:1.25.3), skipped
+  ERROR      Could not reach registry
+
+NOTES
+  Queries Docker Hub and GHCR registries to compare
+  local image digests with remote ones.
+HELP
+
+__gash_register_help "docker_compose_upgrade" \
+    --aliases "dcup2" \
+    --module "docker-compose" \
+    --short "Upgrade Docker Compose services to latest images" \
+    --see-also "docker_compose_check docker_compose_scan" \
+    <<'HELP'
+USAGE
+  docker_compose_upgrade [PATH] [--dry-run] [--force]
+
+EXAMPLES
+  # Upgrade services with mutable tags (latest, main, dev)
+  dcup2
+
+  # Preview what would be upgraded without doing it
+  dcup2 --dry-run
+
+  # Force upgrade even for pinned versions
+  dcup2 --force
+
+  # Upgrade a specific project
+  dcup2 /opt/myapp
+
+NOTES
+  Only upgrades services with mutable tags (latest, main, dev, etc.).
+  Pinned versions (e.g. nginx:1.25.3) are skipped unless --force is used.
+  Pulls new images, recreates affected containers, removes old images.
+HELP
+
+__gash_register_help "docker_compose_scan" \
+    --aliases "dcscan" \
+    --module "docker-compose" \
+    --short "Scan directories for Docker Compose projects" \
+    --see-also "docker_compose_check docker_compose_upgrade" \
+    <<'HELP'
+USAGE
+  docker_compose_scan [BASEDIR] [--depth N] [--json]
+
+EXAMPLES
+  # Scan current directory for compose files
+  dcscan
+
+  # Scan /opt with limited depth
+  dcscan /opt --depth 2
+
+  # JSON output for scripting
+  dcscan /home/deploy --json
+
+  # Full audit: scan then check each project
+  dcscan /opt --depth 3
+HELP
+
+__gash_register_help "llm_docker_check" \
+    --module "docker-compose" \
+    --short "Docker Compose update check (JSON output for AI agents)" \
+    --see-also "docker_compose_check" \
+    <<'HELP'
+USAGE
+  llm_docker_check [PATH]
+
+EXAMPLES
+  # Check for updates (JSON output)
+  llm_docker_check
+
+  # Check a specific path
+  llm_docker_check /opt/myapp
+
+NOTES
+  Wrapper around docker_compose_check --json.
+  Designed for LLM/AI agent consumption.
+HELP
+
+fi  # end help registration guard

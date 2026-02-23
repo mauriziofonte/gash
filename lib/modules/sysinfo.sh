@@ -1600,3 +1600,51 @@ Flags: --llm (compact token-efficient output for AI). Alias: si" \
 # =============================================================================
 
 alias si='sysinfo'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "sysinfo" \
+    --aliases "si" \
+    --module "sysinfo" \
+    --short "Comprehensive system information enumeration" \
+    --see-also "ai_sysinfo" \
+    <<'HELP'
+USAGE
+  sysinfo [section] [--llm]
+
+SECTIONS
+  identity   OS, kernel, virtualization, cloud provider, WSL detection
+  storage    Disk usage, filesystems, mount points
+  services   Running systemd services, custom units
+  auth       PAM, sudoers, SSH config, LDAP
+  network    Interfaces, DNS, DHCP, hostname
+  security   Firewall rules, SSH hardening, fail2ban/crowdsec
+  webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies
+  mail       Postfix, Dovecot, DKIM, virtual domains
+  infra      Docker, containers, monitoring, backup systems
+  system     Cron jobs, systemd timers, custom hooks
+  all        All sections combined
+
+EXAMPLES
+  # Full system enumeration (colored verbose output)
+  sysinfo
+
+  # Check just network configuration
+  sysinfo network
+
+  # Audit the web stack
+  sysinfo webstack
+
+  # LLM-compact output (token-efficient, pipe to AI)
+  sysinfo --llm
+  sysinfo services --llm
+
+  # Combine with AI for instant analysis
+  sysinfo webstack --llm | ai_query "audit this web stack"
+HELP
+
+fi  # end help registration guard

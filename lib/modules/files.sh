@@ -206,3 +206,141 @@ alias dfl='dirs_find_large'
 alias dle='dirs_list_empty'
 alias axe='archive_extract'
 alias fbk='file_backup'
+
+# =============================================================================
+# Help Registration
+# =============================================================================
+
+if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+
+__gash_register_help "files_largest" \
+    --aliases "flf" \
+    --module "files" \
+    --short "List top 100 largest files in a directory" \
+    --see-also "dirs_largest dirs_find_large" \
+    <<'HELP'
+USAGE
+  files_largest [PATH]
+
+EXAMPLES
+  # Find the biggest files in the current directory
+  files_largest
+
+  # Audit /var/log for space hogs
+  files_largest /var/log
+
+  # Show only the top 20
+  files_largest /home | head -20
+HELP
+
+__gash_register_help "dirs_largest" \
+    --aliases "dld" \
+    --module "files" \
+    --short "List top 100 largest directories" \
+    --see-also "files_largest dirs_find_large disk_usage" \
+    <<'HELP'
+USAGE
+  dirs_largest [PATH]
+
+EXAMPLES
+  # Find the biggest directories here
+  dirs_largest
+
+  # Find which user's home is eating disk space
+  dirs_largest /home
+
+  # Identify bloated node_modules or vendor dirs
+  dirs_largest ~/projects
+HELP
+
+__gash_register_help "dirs_find_large" \
+    --aliases "dfl" \
+    --module "files" \
+    --short "Find directories exceeding a size threshold" \
+    --see-also "dirs_largest files_largest disk_usage" \
+    <<'HELP'
+USAGE
+  dirs_find_large [--size SIZE] [DIRECTORY]
+
+EXAMPLES
+  # Find directories larger than 20MB (default) in current path
+  dirs_find_large
+
+  # Find directories larger than 1GB
+  dirs_find_large --size 1G
+
+  # Audit /var for directories over 500MB
+  dirs_find_large --size 500M /var
+
+NOTES
+  SIZE format: 20M, 1G, 500K, etc.
+  Output shows: size, path, and modification time of the largest file.
+HELP
+
+__gash_register_help "dirs_list_empty" \
+    --aliases "dle" \
+    --module "files" \
+    --short "List all empty directories" \
+    --see-also "files_largest" \
+    <<'HELP'
+USAGE
+  dirs_list_empty [PATH]
+
+EXAMPLES
+  # Find empty directories in current path
+  dirs_list_empty
+
+  # Find and remove empty directories
+  dirs_list_empty /var/www | xargs rmdir
+
+  # Check a deployment directory for missing content
+  dirs_list_empty /opt/app/uploads
+HELP
+
+__gash_register_help "archive_extract" \
+    --aliases "axe" \
+    --module "files" \
+    --short "Extract archives (tar, zip, gz, bz2, rar, 7z)" \
+    --see-also "file_backup" \
+    <<'HELP'
+USAGE
+  archive_extract ARCHIVE_FILE [OUTPUT_DIR]
+
+EXAMPLES
+  # Extract a tar.gz in the current directory
+  axe backup.tar.gz
+
+  # Extract a zip to a specific folder
+  axe release.zip /opt/app
+
+  # Extract a 7z archive
+  axe data.7z /tmp/extracted
+
+SUPPORTED FORMATS
+  .tar.gz, .tar.bz2, .tar, .gz, .bz2,
+  .tgz, .tbz2, .zip, .rar, .7z, .z
+  (case-insensitive)
+HELP
+
+__gash_register_help "file_backup" \
+    --aliases "fbk" \
+    --module "files" \
+    --short "Create a timestamped backup of a file" \
+    --see-also "archive_extract" \
+    <<'HELP'
+USAGE
+  file_backup FILE
+
+EXAMPLES
+  # Backup a config before editing
+  fbk /etc/nginx/nginx.conf
+  # Creates: /etc/nginx/nginx.conf_backup_20240115143022
+
+  # Backup-then-edit workflow
+  fbk /etc/apache2/apache2.conf && vim /etc/apache2/apache2.conf
+
+  # Backup a script before refactoring
+  fbk my-deploy-script.sh
+HELP
+
+fi  # end help registration guard
