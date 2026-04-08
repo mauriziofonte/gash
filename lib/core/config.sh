@@ -387,15 +387,19 @@ gash_db_test() {
         return 1
     }
 
-    local driver user pass host port db
-    __gash_parse_db_url "$url" driver user pass host port db
+    # NOTE: use prefixed names to avoid bash nameref shadowing inside
+    # __gash_parse_db_url — local vars with unprefixed names (driver, user...)
+    # would collide with the function's own locals and assignments would be
+    # lost to the shadow scope.
+    local _db_driver _db_user _db_pass _db_host _db_port _db_name
+    __gash_parse_db_url "$url" _db_driver _db_user _db_pass _db_host _db_port _db_name
 
     # Decode password
-    pass=$(__gash_url_decode "$pass")
+    _db_pass=$(__gash_url_decode "$_db_pass")
 
-    __gash_info "Testing connection '$name' ($driver://$user@$host:$port/$db)..."
+    __gash_info "Testing connection '$name' ($_db_driver://$_db_user@$_db_host:$_db_port/$_db_name)..."
 
-    case "$driver" in
+    case "$_db_driver" in
         mysql|mariadb)
             local mysql_bin
             mysql_bin=$(type -P mysql 2>/dev/null) || mysql_bin=$(type -P mariadb 2>/dev/null) || true
@@ -404,7 +408,7 @@ gash_db_test() {
                 return 1
             fi
 
-            if "$mysql_bin" -u"$user" -p"$pass" -h"$host" -P"$port" ${db:+-D "$db"} -e "SELECT 1" >/dev/null 2>&1; then
+            if "$mysql_bin" -u"$_db_user" -p"$_db_pass" -h"$_db_host" -P"$_db_port" ${_db_name:+-D "$_db_name"} -e "SELECT 1" >/dev/null 2>&1; then
                 __gash_success "Connection successful!"
                 return 0
             else
@@ -418,7 +422,7 @@ gash_db_test() {
                 return 1
             fi
 
-            if PGPASSWORD="$pass" psql -U "$user" -h "$host" -p "$port" ${db:+-d "$db"} -c "SELECT 1" >/dev/null 2>&1; then
+            if PGPASSWORD="$_db_pass" psql -U "$_db_user" -h "$_db_host" -p "$_db_port" ${_db_name:+-d "$_db_name"} -c "SELECT 1" >/dev/null 2>&1; then
                 __gash_success "Connection successful!"
                 return 0
             else
@@ -427,7 +431,7 @@ gash_db_test() {
             fi
             ;;
         *)
-            __gash_error "Unknown driver: $driver"
+            __gash_error "Unknown driver: $_db_driver"
             return 1
             ;;
     esac

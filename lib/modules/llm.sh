@@ -237,7 +237,9 @@ __llm_error() {
 }
 
 # Clean error message for JSON embedding.
-# Collapses newlines/whitespace, escapes quotes, trims.
+# Collapses newlines and runs of whitespace, then trims.
+# Does NOT JSON-escape — that is __gash_json_escape's job, invoked by
+# __llm_error. Escaping here would double-escape downstream.
 # Optional --mysql flag filters known MySQL warnings.
 # Usage: cleaned=$(__llm_clean_error_msg "$raw_msg" [--mysql])
 __llm_clean_error_msg() {
@@ -249,7 +251,7 @@ __llm_clean_error_msg() {
         msg=$(printf '%s' "$msg" | grep -v "Using a password on the command line" | grep -v "Deprecated program name")
     fi
 
-    printf '%s' "$msg" | tr '\n' ' ' | sed 's/"/\\"/g; s/[[:space:]]\+/ /g; s/^ //; s/ $//'
+    printf '%s' "$msg" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//'
 }
 
 # Check if jq is available for JSON formatting.
@@ -262,6 +264,53 @@ __llm_has_jq() {
 # Usage: __llm_has_rg
 __llm_has_rg() {
     type -P rg >/dev/null 2>&1
+}
+
+# Convert tab-separated input (first row = headers, subsequent rows = data)
+# into a JSON array of objects. Escapes backslashes and double quotes in
+# values and headers. Emits "[]" for empty input or header-only input.
+#
+# Limitation: assumes no literal TAB or NEWLINE characters inside cell
+# values (both MySQL --raw and psql -A preserve them raw, which would
+# corrupt parsing). DB-side control chars are documented as unsupported.
+#
+# Usage: printf '%s\n' "$tsv" | __llm_tsv_to_json
+__llm_tsv_to_json() {
+    awk -F'\t' '
+        BEGIN { started = 0; n = 0 }
+        NR == 1 {
+            n = NF
+            for (i = 1; i <= NF; i++) {
+                h = $i
+                gsub(/\\/, "\\\\", h)
+                gsub(/"/, "\\\"", h)
+                cols[i] = h
+            }
+            next
+        }
+        NF == 0 { next }
+        {
+            if (started == 0) {
+                printf "["
+                started = 1
+            } else {
+                printf ","
+            }
+            printf "{"
+            for (i = 1; i <= n; i++) {
+                if (i > 1) printf ","
+                val = $i
+                gsub(/\\/, "\\\\", val)
+                gsub(/"/, "\\\"", val)
+                printf "\"%s\":\"%s\"", cols[i], val
+            }
+            printf "}"
+        }
+        END {
+            if (started == 0) print "[]"
+            else print "]"
+        }
+    '
 }
 
 # =============================================================================
@@ -818,26 +867,8 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            # Convert output to JSON
-            echo "$mysql_output" | awk -F'\t' '
-                    NR==1 {
-                        n=NF;
-                        for(i=1;i<=NF;i++) cols[i]=$i;
-                        printf "["
-                    }
-                    NR>1 {
-                        if(NR>2) printf ",";
-                        printf "{";
-                        for(i=1;i<=n;i++) {
-                            if(i>1) printf ",";
-                            gsub(/"/, "\\\"", $i);
-                            gsub(/\n/, "\\n", $i);
-                            printf "\"%s\":\"%s\"", cols[i], $i;
-                        }
-                        printf "}";
-                    }
-                    END { printf "]\n" }
-                '
+            # Convert TSV output to JSON array (shared helper, symmetric with pgsql)
+            printf '%s\n' "$mysql_output" | __llm_tsv_to_json
             ;;
         pgsql)
             if ! type -P psql >/dev/null 2>&1; then
@@ -845,11 +876,12 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            # Execute query, capturing stderr for error handling
+            # Execute query with header row + no footer, tab-separated.
+            # Matches MySQL's --batch layout for symmetric JSON conversion.
             local psql_output psql_stderr psql_exit
             psql_stderr=$(mktemp)
             psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
-                -t -A -F $'\t' -c "$query" 2>"$psql_stderr")
+                -P footer=off -A -F $'\t' -c "$query" 2>"$psql_stderr")
             psql_exit=$?
 
             # Check for PostgreSQL errors
@@ -865,7 +897,8 @@ __llm_db_query_impl() {
             fi
             rm -f "$psql_stderr"
 
-            echo "$psql_output" | head -n "$max_rows"
+            # Convert TSV output to JSON array (shared helper, symmetric with mysql)
+            printf '%s\n' "$psql_output" | __llm_tsv_to_json
             ;;
         *)
             __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver. Only mysql, mariadb, pgsql are supported"
@@ -1014,7 +1047,7 @@ __llm_db_schema_impl() {
             __llm_db_query_impl "DESCRIBE $table" "${args[@]}"
             ;;
         pgsql)
-            __llm_db_query_impl "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name='$table'" "${args[@]}"
+            __llm_db_query_impl "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name='$table' AND table_schema='public' ORDER BY ordinal_position" "${args[@]}"
             ;;
         *)
             __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver"
@@ -1262,11 +1295,14 @@ __llm_db_explain_impl() {
                 explain_prefix="EXPLAIN (FORMAT JSON)"
             fi
 
-            # Execute EXPLAIN query
+            # Execute EXPLAIN query.
+            # -A unaligned + -t tuples-only: emit raw JSON text with no
+            # column wrapping, no "+" continuations and no trailing footer —
+            # required for the output to parse as valid JSON.
             local psql_output psql_stderr psql_exit
             psql_stderr=$(mktemp)
             psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
-                -t -c "$explain_prefix $query" 2>"$psql_stderr")
+                -At -c "$explain_prefix $query" 2>"$psql_stderr")
             psql_exit=$?
 
             # Check for errors
