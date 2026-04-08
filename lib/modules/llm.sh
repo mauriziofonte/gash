@@ -267,25 +267,51 @@ __llm_has_rg() {
 }
 
 # Convert tab-separated input (first row = headers, subsequent rows = data)
-# into a JSON array of objects. Escapes backslashes and double quotes in
-# values and headers. Emits "[]" for empty input or header-only input.
+# into a JSON array of objects. Emits "[]" for empty input or header-only input.
 #
-# Limitation: assumes no literal TAB or NEWLINE characters inside cell
-# values (both MySQL --raw and psql -A preserve them raw, which would
-# corrupt parsing). DB-side control chars are documented as unsupported.
+# Modes:
+#   raw   — default. Assumes field values contain literal bytes (no escape
+#           sequences). Escapes backslashes and quotes for JSON. Used for
+#           psql -A output and anywhere else where the stream is byte-faithful.
+#   mysql — Assumes field values come from `mysql --batch` WITHOUT `--raw`,
+#           which pre-escapes `\\`, `\t`, `\n`, `\r`, `\0`, `\Z`. These happen
+#           to coincide 1:1 with JSON string escape sequences (except `\0`/`\Z`
+#           which we remap to \u escapes), so the backslash pass-through is
+#           correct and tabs/newlines inside cell values stay safe.
 #
-# Usage: printf '%s\n' "$tsv" | __llm_tsv_to_json
+# Limitation (raw mode): assumes no literal TAB or NEWLINE characters inside
+# cell values — they would corrupt row/field parsing. Use mysql mode or the
+# jsonb_agg wrapper (pgsql branch) when data may contain control chars.
+#
+# Usage: printf '%s\n' "$tsv" | __llm_tsv_to_json [raw|mysql]
 __llm_tsv_to_json() {
-    awk -F'\t' '
+    local mode="${1-raw}"
+    awk -F'\t' -v mode="$mode" '
+        function esc_raw(s,   r) {
+            r = s
+            gsub(/\\/, "\\\\", r)
+            gsub(/"/, "\\\"", r)
+            return r
+        }
+        function esc_mysql(s,   r) {
+            # mysql --batch (no --raw) emits \\, \t, \n, \r as 2-char
+            # escape sequences — identical to JSON string escapes, so
+            # pass through. Only remap \0 and \Z (not valid JSON) and
+            # escape any unescaped double quotes.
+            r = s
+            gsub(/\\0/, "\\\\u0000", r)
+            gsub(/\\Z/, "\\\\u001a", r)
+            gsub(/"/, "\\\"", r)
+            return r
+        }
+        function esc(s) {
+            if (mode == "mysql") return esc_mysql(s)
+            return esc_raw(s)
+        }
         BEGIN { started = 0; n = 0 }
         NR == 1 {
             n = NF
-            for (i = 1; i <= NF; i++) {
-                h = $i
-                gsub(/\\/, "\\\\", h)
-                gsub(/"/, "\\\"", h)
-                cols[i] = h
-            }
+            for (i = 1; i <= NF; i++) cols[i] = esc($i)
             next
         }
         NF == 0 { next }
@@ -299,10 +325,7 @@ __llm_tsv_to_json() {
             printf "{"
             for (i = 1; i <= n; i++) {
                 if (i > 1) printf ","
-                val = $i
-                gsub(/\\/, "\\\\", val)
-                gsub(/"/, "\\\"", val)
-                printf "\"%s\":\"%s\"", cols[i], val
+                printf "\"%s\":\"%s\"", cols[i], esc($i)
             }
             printf "}"
         }
@@ -831,13 +854,17 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            # Execute query with JSON output, capturing stderr for error handling
+            # Execute query with TSV output, capturing stderr for errors.
+            # Intentionally NOT --raw: mysql --batch without --raw escapes
+            # tab/newline/backslash/NUL as \t \n \\ \0 — these are 1:1
+            # JSON-compatible (handled by __llm_tsv_to_json mysql mode),
+            # so cell values with embedded control chars survive round-trip.
             local mysql_output mysql_stderr mysql_exit
             mysql_stderr=$(mktemp)
             mysql_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
                 --default-character-set=utf8mb4 \
                 -e "$query" \
-                --batch --raw 2>"$mysql_stderr")
+                --batch 2>"$mysql_stderr")
             mysql_exit=$?
 
             # Read stderr and clean up temp file
@@ -867,8 +894,9 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            # Convert TSV output to JSON array (shared helper, symmetric with pgsql)
-            printf '%s\n' "$mysql_output" | __llm_tsv_to_json
+            # Convert TSV output to JSON array (shared helper, mysql mode
+            # preserves \t/\n/\\ pre-escaped sequences from --batch)
+            printf '%s\n' "$mysql_output" | __llm_tsv_to_json mysql
             ;;
         pgsql)
             if ! type -P psql >/dev/null 2>&1; then
@@ -876,29 +904,53 @@ __llm_db_query_impl() {
                 return 1
             fi
 
-            # Execute query with header row + no footer, tab-separated.
-            # Matches MySQL's --batch layout for symmetric JSON conversion.
-            local psql_output psql_stderr psql_exit
+            # Strategy: for SELECT/WITH/VALUES/TABLE (wrappable) queries, wrap
+            # with `jsonb_agg(to_jsonb(...))` so PostgreSQL itself serializes
+            # the result as native JSON. This preserves PG types (int, bool,
+            # null, arrays, nested jsonb) and — crucially — handles tabs,
+            # newlines and backslashes inside cell values without any TSV
+            # parsing fragility. Non-wrappable statements (SHOW, etc.) fall
+            # back to the shared TSV helper.
+            local psql_output psql_stderr psql_exit use_jsonb=0 exec_query
             psql_stderr=$(mktemp)
-            psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
-                -P footer=off -A -F $'\t' -c "$query" 2>"$psql_stderr")
+
+            if [[ "$upper_query" =~ ^[[:space:]]*(SELECT|WITH|VALUES|TABLE)[[:space:]] ]]; then
+                use_jsonb=1
+                exec_query="SELECT COALESCE(jsonb_agg(to_jsonb(__gash_row)), '[]'::jsonb) FROM (${query}) __gash_row"
+                psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
+                    -At -c "$exec_query" 2>"$psql_stderr")
+            else
+                # Fallback: header row + no footer, tab-separated.
+                psql_output=$(PGPASSWORD="$db_pass" psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" \
+                    -P footer=off -A -F $'\t' -c "$query" 2>"$psql_stderr")
+            fi
             psql_exit=$?
 
-            # Check for PostgreSQL errors
-            if [[ $psql_exit -ne 0 ]] || [[ -s "$psql_stderr" ]]; then
-                local err_msg
-                err_msg=$(<"$psql_stderr")
+            # Check for PostgreSQL errors. Only exit code failures count as
+            # errors — NOTICE/WARNING lines also land on stderr but do not
+            # fail the query (e.g. identifier truncation, deprecated feature
+            # warnings), so ignore stderr when psql_exit == 0.
+            if [[ $psql_exit -ne 0 ]]; then
+                local err_msg=""
+                [[ -s "$psql_stderr" ]] && err_msg=$(<"$psql_stderr")
                 rm -f "$psql_stderr"
                 err_msg=$(__llm_clean_error_msg "$err_msg")
                 if [[ -n "$err_msg" ]]; then
                     __llm_error "pgsql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
-                    return 1
+                else
+                    __llm_error "pgsql_error" "Query failed with exit code $psql_exit" "RETRY" "true" "Query failed. Check SQL syntax and retry"
                 fi
+                return 1
             fi
             rm -f "$psql_stderr"
 
-            # Convert TSV output to JSON array (shared helper, symmetric with mysql)
-            printf '%s\n' "$psql_output" | __llm_tsv_to_json
+            if [[ $use_jsonb -eq 1 ]]; then
+                # psql -At emitted the jsonb_agg result as raw JSON text
+                printf '%s\n' "$psql_output"
+            else
+                # TSV fallback (shared helper, symmetric with mysql)
+                printf '%s\n' "$psql_output" | __llm_tsv_to_json raw
+            fi
             ;;
         *)
             __llm_error "unknown_db_type" "$db_driver" "STOP" "false" "Unsupported database driver. Only mysql, mariadb, pgsql are supported"
