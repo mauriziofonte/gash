@@ -266,6 +266,96 @@ __llm_has_rg() {
     type -P rg >/dev/null 2>&1
 }
 
+# Compute elapsed microseconds between two $EPOCHREALTIME values (bash 5.0+).
+# Pure integer arithmetic — zero forks. Returns 0 if either timestamp is empty.
+# Usage: local us=$(__llm_elapsed_us "$start" "$end")
+__llm_elapsed_us() {
+    local t0="${1:-}" t1="${2:-}"
+    [[ -z "$t0" || -z "$t1" ]] && { echo 0; return; }
+
+    local s0="${t0%%.*}" f0="${t0#*.}" s1="${t1%%.*}" f1="${t1#*.}"
+    # Pad fractional part to 6 digits (EPOCHREALTIME gives 6)
+    while [[ ${#f0} -lt 6 ]]; do f0="${f0}0"; done
+    while [[ ${#f1} -lt 6 ]]; do f1="${f1}0"; done
+    # Force base-10 (leading zeros would trigger octal)
+    local us=$(( (10#$s1 - 10#$s0) * 1000000 + 10#$f1 - 10#$f0 ))
+    [[ $us -lt 0 ]] && us=0
+    echo "$us"
+}
+
+# Format microseconds to a human-readable query time string.
+# <1ms → "842µs", <1s → "12.3ms", ≥1s → "1.23s".
+# Pure bash arithmetic — zero forks.
+# Usage: local qt=$(__llm_format_query_time "$us")
+__llm_format_query_time() {
+    local us="${1:-0}"
+    if [[ $us -lt 1000 ]]; then
+        printf '%dµs' "$us"
+    elif [[ $us -lt 1000000 ]]; then
+        printf '%d.%dms' "$(( us / 1000 ))" "$(( (us % 1000) / 100 ))"
+    else
+        printf '%d.%02ds' "$(( us / 1000000 ))" "$(( (us % 1000000) / 10000 ))"
+    fi
+}
+
+# Execute a DB _impl function, measure execution time, and wrap the result
+# in a JSON envelope with timing metadata.
+#
+# Success → stdout:  {"data": <result>, "rows": N, "query_time": "12.3ms"}
+# Error   → stderr:  original error JSON + injected "query_time" field
+#
+# Slow-query auto-explain (llm_db_query only):
+#   Set __GASH_DB_SLOW_QUERY=1 and __GASH_DB_EXPLAIN_ARGS=(filtered args)
+#   in the caller's scope. When query_time ≥ 100ms, the envelope includes
+#   a "slow_query_explain" field with the EXPLAIN output.
+#
+# Usage: __llm_db_envelope <impl_func> [args...]
+__llm_db_envelope() {
+    local _dbenv_func="$1"; shift
+    local _dbenv_ts=${EPOCHREALTIME:-}
+
+    local _dbenv_out _dbenv_rc _dbenv_stderr
+    _dbenv_stderr=$(mktemp)
+    _dbenv_out=$("$_dbenv_func" "$@" 2>"$_dbenv_stderr")
+    _dbenv_rc=$?
+
+    local _dbenv_t1=${EPOCHREALTIME:-}
+    local _dbenv_us _dbenv_qt
+    _dbenv_us=$(__llm_elapsed_us "$_dbenv_ts" "$_dbenv_t1")
+    _dbenv_qt=$(__llm_format_query_time "$_dbenv_us")
+
+    if [[ $_dbenv_rc -eq 0 ]]; then
+        rm -f "$_dbenv_stderr"
+        if __llm_has_jq; then
+            if [[ "${__GASH_DB_SLOW_QUERY-}" == "1" ]] && [[ $_dbenv_us -ge 100000 ]]; then
+                # >100ms: auto-explain for slow query
+                local _dbenv_xpl
+                _dbenv_xpl=$(__llm_db_explain_impl "${__GASH_DB_EXPLAIN_ARGS[@]}" 2>/dev/null) || true
+                [[ -z "$_dbenv_xpl" ]] && _dbenv_xpl='[]'
+                printf '%s' "$_dbenv_out" | jq -c \
+                    --arg qt "$_dbenv_qt" \
+                    --argjson xpl "$_dbenv_xpl" \
+                    '{data: ., rows: length, query_time: $qt, slow_query_explain: $xpl}'
+            else
+                printf '%s' "$_dbenv_out" | jq -c \
+                    --arg qt "$_dbenv_qt" \
+                    '{data: ., rows: length, query_time: $qt}'
+            fi
+        else
+            printf '%s\n' "$_dbenv_out"
+        fi
+    else
+        # Error path: inject query_time into error JSON, preserve stderr channel
+        if __llm_has_jq && [[ -s "$_dbenv_stderr" ]]; then
+            jq -c --arg qt "$_dbenv_qt" '. + {query_time: $qt}' < "$_dbenv_stderr" >&2
+        elif [[ -s "$_dbenv_stderr" ]]; then
+            cat "$_dbenv_stderr" >&2
+        fi
+        rm -f "$_dbenv_stderr"
+        return $_dbenv_rc
+    fi
+}
+
 # Convert tab-separated input (first row = headers, subsequent rows = data)
 # into a JSON array of objects. Emits "[]" for empty input or header-only input.
 #
@@ -764,11 +854,22 @@ __llm_sqlite_query() {
 # Example: llm_db_query "SELECT * FROM users LIMIT 5" -c myconn
 # Example: llm_db_query "SELECT * FROM users" -f /path/to/db.sqlite
 llm_db_query() {
-    if needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE]" "Execute read-only database query (JSON output). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-r ROWS]" "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
-    __gash_no_history __llm_db_query_impl "$@"
+    # Build explain args: copy "$@" but strip -r/--rows (not accepted by explain)
+    local __GASH_DB_EXPLAIN_ARGS=()
+    local _qw_args=("$@") _qw_i=0
+    while [[ $_qw_i -lt ${#_qw_args[@]} ]]; do
+        case "${_qw_args[$_qw_i]}" in
+            -r|--rows) (( _qw_i += 2 )) ;;
+            *) __GASH_DB_EXPLAIN_ARGS+=("${_qw_args[$_qw_i]}"); (( _qw_i += 1 )) ;;
+        esac
+    done
+    local __GASH_DB_SLOW_QUERY=1
+
+    __gash_no_history __llm_db_envelope __llm_db_query_impl "$@"
 }
 
 __llm_db_query_impl() {
@@ -966,7 +1067,7 @@ llm_db_tables() {
         return 0
     fi
 
-    __gash_no_history __llm_db_tables_impl "$@"
+    __gash_no_history __llm_db_envelope __llm_db_tables_impl "$@"
 }
 
 __llm_db_tables_impl() {
@@ -1043,7 +1144,7 @@ llm_db_schema() {
         return 0
     fi
 
-    __gash_no_history __llm_db_schema_impl "$@"
+    __gash_no_history __llm_db_envelope __llm_db_schema_impl "$@"
 }
 
 __llm_db_schema_impl() {
@@ -1115,7 +1216,7 @@ llm_db_sample() {
         return 0
     fi
 
-    __gash_no_history __llm_db_sample_impl "$@"
+    __gash_no_history __llm_db_envelope __llm_db_sample_impl "$@"
 }
 
 __llm_db_sample_impl() {
@@ -1168,7 +1269,7 @@ llm_db_explain() {
         return 0
     fi
 
-    __gash_no_history __llm_db_explain_impl "$@"
+    __gash_no_history __llm_db_envelope __llm_db_explain_impl "$@"
 }
 
 __llm_db_explain_impl() {
@@ -1357,16 +1458,19 @@ __llm_db_explain_impl() {
                 -At -c "$explain_prefix $query" 2>"$psql_stderr")
             psql_exit=$?
 
-            # Check for errors
-            if [[ $psql_exit -ne 0 ]] || [[ -s "$psql_stderr" ]]; then
-                local err_msg
-                err_msg=$(<"$psql_stderr")
+            # Check for errors. Only exit code failures count — NOTICE/WARNING
+            # on stderr (identifier truncation, etc.) are ignored when exit=0.
+            if [[ $psql_exit -ne 0 ]]; then
+                local err_msg=""
+                [[ -s "$psql_stderr" ]] && err_msg=$(<"$psql_stderr")
                 rm -f "$psql_stderr"
                 err_msg=$(__llm_clean_error_msg "$err_msg")
                 if [[ -n "$err_msg" ]]; then
                     __llm_error "pgsql_error" "$err_msg" "RETRY" "true" "Query syntax error. Fix the SQL and retry"
-                    return 1
+                else
+                    __llm_error "pgsql_error" "EXPLAIN failed with exit code $psql_exit" "RETRY" "true" "Query failed. Check SQL syntax and retry"
                 fi
+                return 1
             fi
             rm -f "$psql_stderr"
 
