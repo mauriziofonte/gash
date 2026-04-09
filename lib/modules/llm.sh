@@ -1411,12 +1411,17 @@ __llm_db_explain_impl() {
                 explain_prefix="EXPLAIN FORMAT=JSON"
             fi
 
-            # Execute EXPLAIN query
+            # Execute EXPLAIN query. Use --batch --raw here: EXPLAIN FORMAT=JSON
+            # returns multiline JSON, and --batch (without --raw) would escape
+            # newlines to literal \n, corrupting the JSON for downstream parsers.
+            # This is safe because EXPLAIN output goes directly to jq, not
+            # through the TSV helper.
             local mysql_output mysql_stderr mysql_exit
             mysql_stderr=$(mktemp)
             mysql_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
                 --default-character-set=utf8mb4 \
-                -e "$explain_prefix $query" 2>"$mysql_stderr")
+                -e "$explain_prefix $query" \
+                --batch --raw 2>"$mysql_stderr")
             mysql_exit=$?
 
             # Check for errors (filter out password warning)
