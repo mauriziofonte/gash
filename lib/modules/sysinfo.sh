@@ -1539,29 +1539,37 @@ __sysinfo_deep_maintenance() {
 # Sections: identity storage services auth network security webstack mail infra system all
 # Alias: si
 sysinfo() {
-    needs_help "sysinfo" "sysinfo [section] [--llm]" \
+    needs_help "sysinfo" "sysinfo [section] [--llm] [--no-color]" \
         "System information enumeration for headless Debian/Ubuntu servers.
 Sections: identity storage services auth network security webstack mail infra system all
-Flags: --llm (compact token-efficient output for AI). Alias: si" \
+Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si" \
         "${1-}" && return
 
     local section="all"
+    local no_color=0
     __SYSINFO_MODE="verbose"
 
     # Parse args
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --llm) __SYSINFO_MODE="llm"; shift ;;
+            --no-color) no_color=1; shift ;;
             identity|storage|services|auth|network|security|webstack|mail|infra|system|all)
                 section="$1"; shift ;;
             *)
                 __gash_error "Unknown argument: $1"
                 __gash_info "Sections: identity storage services auth network security webstack mail infra system all"
-                __gash_info "Flags: --llm"
+                __gash_info "Flags: --llm, --no-color"
                 return 1
                 ;;
         esac
     done
+
+    # --llm implies --no-color (token efficiency; no ANSI in AI context)
+    [[ "$__SYSINFO_MODE" == "llm" ]] && no_color=1
+
+    # Local color scope (propagates to __sysinfo_collect_* via dynamic scoping)
+    eval "$(__gash_color_scope "$no_color")"
 
     # Sudo caching (single prompt)
     __sysinfo_ensure_sudo

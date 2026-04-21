@@ -406,12 +406,13 @@ docker_compose_check() {
 docker_compose_check - Check for Docker Compose image updates
 
 USAGE:
-  docker_compose_check [PATH] [--json]
+  docker_compose_check [PATH] [--json] [--no-color]
 
 OPTIONS:
-  PATH      Directory containing docker-compose.yml (default: current dir)
-  --json    Output in JSON format for scripting
-  -h        Show this help
+  PATH        Directory containing docker-compose.yml (default: current dir)
+  --json      Output in JSON format for scripting
+  --no-color  Disable ANSI colors (auto-off on pipe / NO_COLOR / GASH_HEADLESS)
+  -h          Show this help
 
 OUTPUT:
   Shows each service with current local digest, remote digest, and update status.
@@ -430,15 +431,20 @@ EOF
 
     local path="."
     local json_output=0
+    local no_color=0
 
     # Parse arguments
     for arg in "$@"; do
         case "$arg" in
-            --json|-j) json_output=1 ;;
+            --json|-j)  json_output=1 ;;
+            --no-color) no_color=1 ;;
             -*) ;;
             *) path="$arg" ;;
         esac
     done
+
+    # Local color scope (ignored when --json since JSON path doesn't emit ANSI)
+    eval "$(__gash_color_scope "$no_color")"
 
     # Resolve path
     path="$(realpath -m "$path" 2>/dev/null)" || path="$PWD"
@@ -703,6 +709,7 @@ OPTIONS:
   PATH        Directory containing docker-compose.yml (default: current dir)
   --dry-run   Show what would be done without executing
   --force     Force upgrade even for pinned versions
+  --no-color  Disable ANSI colors
   -h          Show this help
 
 BEHAVIOR:
@@ -724,16 +731,21 @@ EOF
     local path="."
     local dry_run=0
     local force=0
+    local no_color=0
 
     # Parse arguments
     for arg in "$@"; do
         case "$arg" in
             --dry-run|-n) dry_run=1 ;;
-            --force|-f) force=1 ;;
+            --force|-f)   force=1 ;;
+            --no-color)   no_color=1 ;;
             -*) ;;
             *) path="$arg" ;;
         esac
     done
+
+    # Local color scope
+    eval "$(__gash_color_scope "$no_color")"
 
     # Resolve path
     path="$(realpath -m "$path" 2>/dev/null)" || path="$PWD"
@@ -862,6 +874,7 @@ OPTIONS:
   BASEDIR     Base directory to scan (default: current dir)
   --depth N   Maximum search depth (default: 3)
   --json      Output in JSON format
+  --no-color  Disable ANSI colors
   -h          Show this help
 
 EXAMPLES:
@@ -875,16 +888,21 @@ EOF
     local basedir="."
     local depth=3
     local json_output=0
+    local no_color=0
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --depth|-d) depth="$2"; shift 2 ;;
-            --json|-j) json_output=1; shift ;;
+            --json|-j)  json_output=1; shift ;;
+            --no-color) no_color=1; shift ;;
             -*) shift ;;
             *) basedir="$1"; shift ;;
         esac
     done
+
+    # Local color scope
+    eval "$(__gash_color_scope "$no_color")"
 
     # Resolve basedir
     basedir="$(realpath -m "$basedir" 2>/dev/null)" || basedir="$PWD"

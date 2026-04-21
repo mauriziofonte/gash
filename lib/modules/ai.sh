@@ -1970,11 +1970,11 @@ User question: ${query}"
 }
 
 # AI-powered system analysis.
-# Usage: ai_sysinfo [provider] [--raw]
+# Usage: ai_sysinfo [provider] [--raw] [--no-color]
 # Alias: sysinfo_ai
 ai_sysinfo() {
-    needs_help "ai_sysinfo" "ai_sysinfo [provider] [--raw]" \
-        "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. Alias: sysinfo_ai" \
+    needs_help "ai_sysinfo" "ai_sysinfo [provider] [--raw] [--no-color]" \
+        "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai" \
         "${1-}" && return
 
     __gash_no_history __ai_sysinfo_impl "$@"
@@ -1986,19 +1986,27 @@ __ai_sysinfo_impl() {
 
     local provider=""
     local raw_mode=0
+    local no_color=0
 
     # Parse args
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --raw) raw_mode=1; shift ;;
+            --no-color) no_color=1; shift ;;
             claude|gemini) provider="$1"; shift ;;
             *)
                 __gash_error "Unknown argument: $1"
-                __gash_info "Usage: ai_sysinfo [claude|gemini] [--raw]"
+                __gash_info "Usage: ai_sysinfo [claude|gemini] [--raw] [--no-color]"
                 return 1
                 ;;
         esac
     done
+
+    # --raw implies plain text (no ANSI in LLM-consumed data dump)
+    [[ "$raw_mode" -eq 1 ]] && no_color=1
+
+    # Local color scope (propagates to the interactive report formatter below)
+    eval "$(__gash_color_scope "$no_color")"
 
     # Check dependencies
     __ai_require_curl || return 1

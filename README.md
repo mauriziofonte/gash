@@ -1,32 +1,43 @@
 # Gash - Gash, Another SHell
 
 > Oh Gash, was it _really_ necessary?
+>
+> **Dual-mode by design**: fluent for humans, machine-readable for LLM agents.
 
-**Gash** is a no-fuss, colorful, and feature-rich replacement for your standard Bash configuration files. It packs everything you need to make your terminal experience faster, prettier, and more productive—all while keeping it simple and minimalistic.
+**Gash** is a no-fuss, colorful, and feature-rich replacement for your standard
+Bash configuration files. It packs everything you need to make your terminal
+experience faster, prettier, and more productive — while also exposing a
+**first-class contract for LLM coding agents** (Claude Code, OpenAI Codex, Kimi,
+Gemini, Cursor, Windsurf, Aider, local LLMs…): JSON envelopes, zero-ANSI output
+in headless/pipe mode, read-only safeguards, path/command validation, and
+structured error messages with behavioral actions.
 
 ## Why Gash?
 
-* **Faster workflows**: Jump between directories, manage Git repos, and stop services in one-liners.
-* **Colorful output**: Command-line information that stands out and helps you focus.
+* **Faster workflows**: Jump between directories, manage Git repos, stop services in one-liners.
+* **LLM-friendly**: A dedicated `llm_*` API + `--json` envelopes + auto-off ANSI when stdout is a pipe. See [AGENTS.md](AGENTS.md) for the agent integration guide.
+* **Safe by default**: Blocks destructive commands (`rm -rf /`, `dd`, `mkfs`, fork bombs), secret files (`.env`, `*.pem`, `*_rsa`), protected paths (`/proc`, `/sys`, `/dev`, `/boot`, `/root`), and DDL/DML on databases. Read-only DB queries, validated command exec.
+* **Colorful output for humans, plain text for pipes**: Hybrid color policy honors `NO_COLOR`, `GASH_NO_COLOR`, `GASH_HEADLESS`, and automatic TTY detection.
 * **Smarter shell**: Aliases, functions, and an informative prompt that simplifies tasks.
-* **Lightweight**: No bloat—just the tools you need.
-* **Memorable commands**: Each function has a **long descriptive name** AND a **short alias** - use what suits you.
+* **Lightweight**: No bloat — just the tools you need.
+* **Memorable commands**: Each function has a **long descriptive name** AND a **short alias**.
 
 ## Features At A Glance
 
-* **Intelligent Prompt**: See everything you need (username, Git branch, jobs, etc.) at a glance.
-* **Productivity Aliases**: Shortcuts for file operations, Git commands, and service management.
-* **Convenient Functions**: One-liners to extract archives, list the largest files, or kill processes by port.
+* **LLM / Agent integration**: `llm_*` API (exec, tree, find, grep, db_*, git_*, ports, procs, env, project, deps, docker_check), `--json` envelopes on all filesystem scanners, `GASH_HEADLESS=1` one-liner auto-config, structured error contract. See [AGENTS.md](AGENTS.md).
+* **Filesystem audit (v1.5+)**: `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats` — all with `--json`, `--null`, `--xdev`, `--exclude`, `--min-size`, `--depth`, and O(N) single-walk aggregation.
+* **AI Chat**: Ask questions, troubleshoot errors, or pipe configuration files to Claude/Gemini from your terminal (`ai_query`, `ai_ask`).
 * **System Intelligence**: AI-powered server analysis with deep drill-downs and interactive Q&A (`ai_sysinfo`).
-* **AI Chat**: Ask questions, troubleshoot errors, or pipe configuration files to Claude/Gemini from your terminal.
-* **Built-in Help System**: Type `gash_help function_name` for rich, example-driven help on any function.
+* **Intelligent Prompt**: Username, Git branch, jobs, last exit code — at a glance.
+* **Productivity Aliases**: Shortcuts for file operations, Git commands, and service management.
+* **Built-in Help System**: `gash_help function_name` for rich, example-driven help.
 * **Dual Naming**: Every function has a descriptive LONG name and a memorable SHORT alias.
-* **Bash Completion**: Tab-complete Gash functions (and Git tags for tag helpers).
+* **Bash Completion**: Context-aware tab completion (git tags, directories, flags, AI providers, help topics).
 * **Unload / Restore Session**: Turn off Gash in the current shell and restore the previous state.
-* **Colorful Output**: Enhanced color schemes for better visibility (with `LS_COLORS`, Git status, etc.).
+* **Hybrid color policy**: ANSI in interactive terminals, plain text in pipes/headless/`NO_COLOR` — no parser breakage for agents.
 * **Cross-platform**: Works seamlessly on Linux, macOS, and Windows (WSL).
 
-Check out the [full features list](#full-features-list) for a detailed breakdown.
+Check out the [full features list](#full-features-list) for a detailed breakdown, or jump to [LLM / Agent Integration](#for-llm-agents).
 
 ## Quickstart
 
@@ -58,6 +69,81 @@ fi
 ```
 
 If no shell profile is found, the installer will print instructions for you to add the sourcing block manually.
+
+## For LLM Agents
+
+> Target: Claude Code, OpenAI Codex, Kimi, Gemini, Cursor, Windsurf, Aider, local LLMs.
+
+Gash was built to coexist cleanly with LLM coding agents. It ships with a
+stable `llm_*` API, JSON envelopes for every structured output, automatic
+ANSI-off in non-interactive contexts, and a documented error contract.
+
+### Drop-in auto-configuration
+
+Any agent can get the full Gash toolkit with **one line**:
+
+```bash
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <function> [args]'
+```
+
+That invocation guarantees:
+
+* ✅ All `llm_*` functions loaded (exec, tree, find, grep, db_*, git_*, ports, procs, env, project, deps, docker_check)
+* ✅ All v1.5 filesystem scanners with `--json` envelopes
+* ✅ **Zero ANSI color pollution** on stdout and stderr — no parser breakage
+* ✅ **No Bash history pollution** — `__gash_no_history` wraps every call path
+* ✅ **No user-profile mutation** — skips aliases, PS1, `~/.bash_aliases`, `~/.bash_local`
+
+### Example agent invocations
+
+```bash
+# Structured filesystem audit (JSON envelope)
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; files_largest --json --min-size 50M /var/log'
+# {"data":[{"size":...,"size_human":"...","mtime":"...","path":"..."}],"count":N,"total_size":N,...}
+
+# One-shot project stats (top extensions by size/count, depth, empty dirs)
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; tree_stats --json .'
+
+# Read-only database query with auto-EXPLAIN on slow queries
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_db_query "SELECT id, name FROM users WHERE active=1" -c default'
+
+# Compact git context
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_git_status; llm_git_diff --staged'
+
+# Nested directory tree with per-node size + children_count
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_tree --depth 3 --stats src/'
+```
+
+### Error contract (all `llm_*` + filesystem scanners)
+
+Errors arrive on **stderr** as JSON:
+
+```json
+{"error":"<type>","action":"STOP|RETRY|CONTINUE|FATAL","recoverable":true,"details":"...","hint":"..."}
+```
+
+Branch on `.action`: `STOP` → ask user; `RETRY` → fix input, retry once; `CONTINUE` → proceed; `FATAL` → surface `hint`, stop.
+
+### Safety rails (can't be bypassed)
+
+* **Blocked commands**: `rm -rf /`, `dd`, `mkfs`, fork bombs, `curl|sh`, `wget|bash`, `chmod 777 /`, shutdown/reboot.
+* **Blocked paths**: `/proc`, `/sys`, `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/passwd`, `/etc/sudoers`; `..` traversal. Scanning `/` requires `--allow-root`.
+* **Blocked secret files**: `.env*`, `*.pem`, `*.key`, `*_rsa`, `id_rsa*`, `id_ed25519*`, `credentials*`, `secrets*`, `.gash_env`.
+* **Database**: read-only, DDL/DML blocked at parse time, multi-statement blocked, table-name allowlist.
+
+### Full reference
+
+See **[AGENTS.md](AGENTS.md)** for:
+
+* Complete function catalog with argument shapes
+* JSON envelope schemas for every structured output
+* Error action semantics with branching examples
+* Copy-paste drop-ins for `CLAUDE.md`, `AGENTS.md`, Kimi/Gemini system prompts
+* Version compatibility notes
+
+Agents and projects that want Gash-aware behavior should embed the relevant
+section of `AGENTS.md` into their own configuration file (`CLAUDE.md`,
+`AGENTS.md`, `.cursorrules`, system prompt, etc.).
 
 ## Features Breakdown
 
@@ -194,6 +280,58 @@ sudo apt install most multitail pydf mtr htop colordiff
 
 ```sh
 brew install most multitail pydf mtr htop colordiff
+```
+
+## Color policy
+
+Gash follows a **hybrid color gating model** (v1.5+) designed so output is
+always clean when consumed by scripts, LLM agents, or anything that isn't an
+interactive terminal.
+
+### When colors are emitted
+
+Gash emits ANSI color codes **only if ALL of these are true**:
+
+1. `GASH_HEADLESS` is **not** set to `1`.
+2. `NO_COLOR` environment variable is **not** set (honors [no-color.org](https://no-color.org) standard).
+3. `GASH_NO_COLOR` environment variable is **not** set (Gash-specific override).
+4. `stdout` is a TTY (automatic off in pipes / redirects / captured output).
+
+If any of those conditions is false, Gash emits plain text — including
+`Error:`, `Warning:`, help pages, `gash_doctor`, `docker_compose_check`,
+`sysinfo`, the entire `files_largest` / `dirs_largest` / `tree_stats` family,
+and every inline colored print across the codebase.
+
+### Per-command override
+
+Several functions accept an explicit `--no-color` flag to force plain output
+for a single invocation (useful when you want colors globally on but a
+specific command to be script-friendly):
+
+```text
+files_largest --no-color         dirs_largest --no-color
+dirs_find_large --no-color       dirs_list_empty --json
+tree_stats --no-color            disk_usage --no-color
+ip_public --no-color             gash_doctor --no-color
+gash_help --no-color             docker_compose_check --no-color
+docker_compose_upgrade --no-color  docker_compose_scan --no-color
+sysinfo --no-color               sysinfo --llm      # --llm implies --no-color
+ai_sysinfo --no-color            ai_sysinfo --raw   # --raw implies --no-color
+```
+
+### LLM / scripting use
+
+If you integrate Gash in an LLM pipeline or automation script, prefer either
+`GASH_HEADLESS=1` (skips prompt/alias loading too) or `GASH_NO_COLOR=1` (only
+disables colors, keeps the rest of the shell experience). Both guarantee zero
+ANSI escape sequences in stdout and stderr.
+
+```bash
+# Typical Claude Code / agent invocation
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; files_largest /var/log'
+
+# Keep interactive extras, disable colors only
+export GASH_NO_COLOR=1
 ```
 
 ## Customization
@@ -448,12 +586,47 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 
 | Long Name | Short | Description |
 |-----------|-------|-------------|
-| `files_largest` | `flf` | Lists the top 100 largest files in a directory |
-| `dirs_largest` | `dld` | Lists the top 100 largest directories |
-| `dirs_find_large` | `dfl` | Finds directories larger than a specified size |
-| `dirs_list_empty` | `dle` | Lists all empty directories in the specified path |
+| `files_largest` | `flf` | List the largest files with size/exclude/json/depth filters |
+| `dirs_largest` | `dld` | List the largest directories with depth and filter control |
+| `dirs_find_large` | `dfl` | Find directories exceeding a size threshold (single-walk aggregation) |
+| `dirs_list_empty` | `dle` | List empty directories with min-depth / exclude / count / null |
+| `tree_stats` | `tls` | Compact filesystem stats: totals, top extensions, depth, empty dirs |
 | `archive_extract` | `axe` | Extracts archive files (`.tar.gz`, `.zip`, `.7z`, etc.) |
 | `file_backup` | `fbk` | Creates a backup of a file with a timestamp suffix |
+
+**Disk usage tools (v1.5+):** the four scanners share a common flag surface —
+`--limit N`, `--min-size SIZE`, `--depth N`, `--exclude GLOB`, `--xdev`,
+`--allow-root`, `--json`, `--null`, `--human`, `--no-color`. They auto-prune
+`node_modules`, `vendor`, `.git`, `__pycache__`, `.cache` (disable with
+`--no-ignore`), refuse to scan `/` without `--allow-root`, reject forbidden
+prefixes (`/proc`, `/sys`, `/dev`, `/boot`, `/root`), and emit a JSON envelope
+`{data, count, total_size, total_size_human, scan_time, errors}` in `--json`
+mode. `dirs_find_large` was rewritten in v1.5 to use a **single `du -k` pass +
+awk filtering** (O(N) instead of O(N²) for nested trees), removed the hard
+dependency on `numfmt` (pure-bash IEC fallback), and added `--with-mtime` for
+per-directory newest-file timestamps. `tree_stats` is a new one-shot audit:
+file/dir counts, cumulative size, top extensions by count and by size, max
+depth, empty-dir count, all from a single `find -printf` walk.
+
+```bash
+# Top 20 files larger than 50MB, JSON envelope for scripting
+files_largest --limit 20 --min-size 50M --xdev --json /var/log | jq '.data'
+
+# Drill two levels deep into projects, ignoring vendored dirs
+dirs_largest --depth 2 --min-size 100M ~/projects
+
+# Find 1GB+ directories with newest-file mtime, capped at depth 6
+dirs_find_large --size 1G --depth 6 --with-mtime /var
+
+# Count empty directories, excluding hidden ones
+dirs_list_empty --ignore-dotfiles --count /opt/app
+
+# One-shot stats on a codebase (top-10 extensions by size + count)
+tree_stats --top 10 ~/projects
+
+# NUL-delimited paths for safe xargs pipelines
+files_largest --min-size 100M --null /tmp | xargs -0 rm -i
+```
 
 #### System Operations
 
@@ -734,71 +907,117 @@ sysinfo services --llm
 
 #### LLM Utilities (for AI Agents)
 
-Gash includes a specialized module for LLM (Large Language Model) agents like Claude Code, GitHub Copilot, and similar AI coding assistants. These functions are designed to **minimize token usage** with machine-readable output (JSON/compact text).
+Gash exposes a first-class API for LLM coding agents — **Claude Code**,
+**OpenAI Codex**, **Kimi**, **Gemini**, Cursor, Windsurf, Aider, local models.
+All functions are designed to **minimize token usage** (machine-readable
+output) and **eliminate integration friction** (no ANSI pollution, no history
+pollution, no profile mutation).
 
-**Key Features:**
+> 📘 **Full agent integration guide: [AGENTS.md](AGENTS.md)** — function
+> catalog, JSON envelope schemas, error contract, version compatibility, and
+> copy-paste drop-ins for `CLAUDE.md`, `AGENTS.md`, and generic system prompts.
 
-* **No short aliases** - Only long names (`llm_tree`, not `lt`) since LLMs don't need quick typing
-* **No bash history** - All commands are excluded from history to avoid pollution
-* **Security hardened** - Dangerous commands are blocked, paths are sanitized, DB is read-only
-* **JSON output** - Machine-parseable output minimizes token overhead
+**Key features:**
+
+* **Single-line auto-config**: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <fn>'`
+* **Stable contract**: `llm_*` names and JSON envelope shapes are considered public API; changes require a minor bump.
+* **Zero ANSI pollution**: Auto-off on pipe / `NO_COLOR` / `GASH_NO_COLOR` / `GASH_HEADLESS`.
+* **No short aliases** — Only long names; LLMs don't need quick typing.
+* **No bash history**: Every call path wraps through `__gash_no_history`.
+* **Security hardened**: Validated commands, sanitized paths, read-only DB, rejected secret files.
+* **Machine-parseable output**: JSON envelopes with `{data, count, query_time|scan_time, errors, ...}`.
+
+##### Filesystem & tree (v1.5+)
 
 | Function | Description | Output |
 |----------|-------------|--------|
-| `llm_exec` | Execute command safely (validated, no history) | Command stdout |
-| `llm_tree` | Compact directory tree | JSON structure |
-| `llm_find` | Find files by pattern | Newline-separated paths |
-| `llm_grep` | Search with structured output | file:line:content |
-| `llm_db_query` | Read-only database queries (`-c CONNECTION` or `-f FILE`) | JSON array |
-| `llm_db_tables` | List database tables (`-c CONNECTION` or `-f FILE`) | JSON array |
-| `llm_db_schema` | Show table schema (`TABLE -c CONNECTION` or `-f FILE`) | JSON structure |
-| `llm_db_sample` | Sample rows from table (`TABLE -c CONNECTION` or `-f FILE`) | JSON array |
-| `llm_db_explain` | Query execution plan (`-c CONNECTION` or `-f FILE`) | JSON structure |
-| `llm_project` | Detect project type and info | JSON |
-| `llm_deps` | List project dependencies | JSON |
-| `llm_config` | Read config files (no .env for security) | JSON |
-| `llm_git_status` | Compact git status | JSON |
-| `llm_git_diff` | Diff with stats | Text (stat format) |
-| `llm_git_log` | Recent commit log | JSON |
-| `llm_ports` | Ports in use | JSON |
-| `llm_procs` | Processes by name/port | JSON |
-| `llm_env` | Filtered env vars (no secrets) | JSON |
-| `llm_docker_check` | Docker Compose update check | JSON |
+| `files_largest --json [PATH]` | Largest files by size | Size-list envelope |
+| `dirs_largest --json [PATH]` | Largest dirs by cumulative size, `--depth N` to drill | Size-list envelope |
+| `dirs_find_large --json [PATH]` | Dirs over `--size SIZE` threshold, single-walk O(N) | Size-list envelope |
+| `dirs_list_empty --json [PATH]` | Empty directories with `--count`, `--null`, `--ignore-dotfiles` | `{data:[], count, path, errors}` |
+| `tree_stats --json [PATH]` | One-shot audit: totals, top extensions, depth, empty dirs | Nested `data` object |
+| `llm_tree --depth N --stats` | Nested directory tree with per-node size + children_count | Nested JSON tree |
 
-**Security Protections:**
+##### Code & project exploration
 
-* Commands like `rm -rf /`, `dd`, `mkfs`, fork bombs are blocked
-* Path traversal (`..`) and dangerous paths (`/root`, `/boot`) are rejected
-* Secret files (`.env`, `*.pem`, `*_rsa`) cannot be accessed
-* SQL injection patterns (DROP, DELETE, TRUNCATE) are blocked
-* All database operations are read-only
+| Function | Description | Output |
+|----------|-------------|--------|
+| `llm_exec "<cmd>"` | Execute command safely (validated, no history) | Command stdout |
+| `llm_find <pattern> [PATH] [--contains REGEX]` | Find files by name or content | Newline-separated paths |
+| `llm_grep <pattern> [PATH] [--ext a,b,c]` | Search with structured output | `file:line:content` |
+| `llm_config <FILE>` | Read config files (blocks secrets) | Raw / YAML→JSON via `yq` |
+| `llm_project [PATH]` | Detect project type (node/php/python/go/rust/...) | JSON |
+| `llm_deps [PATH] [--dev]` | List project dependencies from package files | JSON |
+| `llm_docker_check [PATH]` | Docker Compose image-update check | JSON |
 
-**Example Usage:**
+##### Database (read-only, enveloped)
+
+All return `{"data": ..., "rows": N, "query_time": "Xms"}`. Drivers: `mysql`, `mariadb`, `pgsql`, SQLite via `-f`.
+
+| Function | Description |
+|----------|-------------|
+| `llm_db_query "<SQL>" [-c CONN \| -f FILE]` | Read-only SELECT with auto-EXPLAIN on slow queries (≥100ms) |
+| `llm_db_tables [-c CONN \| -f FILE]` | List tables |
+| `llm_db_schema <TABLE> [-c CONN \| -f FILE]` | Column info |
+| `llm_db_sample <TABLE> [--limit N] [-c CONN \| -f FILE]` | Sample rows |
+| `llm_db_explain "<SQL>" [--analyze] [-c CONN \| -f FILE]` | Execution plan |
+
+##### Git / system
+
+| Function | Description | Output |
+|----------|-------------|--------|
+| `llm_git_status [PATH]` | Branch, ahead/behind, staged/modified/untracked | JSON |
+| `llm_git_diff [--staged] [PATH]` | Diff with stats | Text (stat format) |
+| `llm_git_log [--limit N] [PATH]` | Recent commit log | JSON |
+| `llm_ports [--listen]` | Ports in use (via `ss` or `netstat`) | JSON |
+| `llm_procs [--name X \| --port N]` | Processes by name/port | JSON |
+| `llm_env [--filter PATTERN]` | Filtered env vars (secrets redacted) | JSON |
+
+##### Security protections (always enforced)
+
+* **Commands blocked**: `rm -rf /`, `rm -rf ~`, `dd if=`, `mkfs.*`, fork bombs, `curl|sh`, `wget|bash`, `chmod 777 /`, shutdown/reboot, `/etc/shadow`/`/etc/passwd` reads.
+* **Path traversal** (`..`) rejected; **protected prefixes** (`/proc`, `/sys`, `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/sudoers`) blocked.
+* **Scanning `/`** requires explicit `--allow-root`.
+* **Secret files** (`.env*`, `*.pem`, `*.key`, `*_rsa`, `id_*`, `credentials*`, `secrets*`, `.gash_env`) cannot be accessed.
+* **SQL**: write keywords (`INSERT/UPDATE/DELETE/DROP/CREATE/ALTER/TRUNCATE/GRANT/REVOKE`) blocked at statement start; multi-statement (`;`) blocked; table-name allowlist `[A-Za-z0-9_]+`.
+
+##### Error contract (stderr JSON)
+
+```json
+{"error":"<type>","action":"STOP|RETRY|CONTINUE|FATAL","recoverable":true,"details":"...","hint":"..."}
+```
+
+Branch on `.action`: `STOP` → ask user; `RETRY` → fix input, retry once; `CONTINUE` → proceed; `FATAL` → surface `hint`, stop. See [AGENTS.md §5](AGENTS.md) for exhaustive semantics.
+
+##### Example usage
 
 ```bash
-# Get project structure (ignores noise directories)
-llm_tree
+# Always prefix with GASH_HEADLESS=1 for agents
+export GASH_HEADLESS=1
+source ~/.gash/gash.sh
+
+# Project structure (ignores noise dirs: node_modules, vendor, .git, __pycache__, .cache)
+llm_tree --depth 3 --stats
 
 # Find all PHP files containing "Controller"
 llm_grep "Controller" --ext php
 
-# Query database safely (uses 'default' connection from ~/.gash_env)
-llm_db_query "SELECT id, name FROM users WHERE active = 1"
+# Database: safe read-only, with auto-EXPLAIN on slow queries
+llm_db_query "SELECT id, name FROM users WHERE active = 1" -c default
+# {"data":[{"id":1,"name":"alice"},...],"rows":1,"query_time":"3ms"}
 
-# Query a specific connection
-llm_db_query "SELECT * FROM orders LIMIT 10" -c legacy
-llm_db_tables -c postgres
-
-# SQLite databases (use -f instead of -c)
+# SQLite
 llm_db_query "SELECT * FROM users" -f ./data/app.db
-llm_db_tables -f /path/to/database.sqlite
 
-# Query execution plan
-llm_db_explain "SELECT * FROM users WHERE id = 1" -c default
-
-# Get compact git status
+# Compact git status (branch + ahead/behind + change lists)
 llm_git_status
 # {"branch":"main","ahead":0,"behind":0,"staged":[],"modified":["README.md"],"untracked":[]}
+
+# Filesystem audit — largest files under /var/log, >50MB, JSON envelope
+files_largest --json --min-size 50M /var/log | jq '.data[:5]'
+
+# One-shot stats on the current codebase
+tree_stats --json | jq '.data | {files_total, size_total_human, top_by_size}'
 ```
 
 ### Aliases

@@ -12,6 +12,10 @@
 # Print help message for a function if requested.
 # Usage: needs_help "program" "usage" "description" "$1" && return
 # Returns: 0 if help was requested (and printed), 1 otherwise
+#
+# Colors are gated via __gash_use_color when available (load+runtime), so
+# the help blob is plain text under GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR,
+# or when stdout is not a TTY.
 needs_help() {
     local program="${1-}"
     local usage="${2-}"
@@ -19,9 +23,15 @@ needs_help() {
     local user_input="${4-}"
 
     if [[ "$user_input" == "--help" || "$user_input" == "-h" ]]; then
-        echo -e "\033[38;5;214m${program}\033[0m"
-        echo -e "\033[1;97mUsage:\033[0m \033[1;96m${usage}\033[0m"
-        echo -e "\033[1;97m${help}\033[0m"
+        if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
+            echo -e "\033[38;5;214m${program}\033[0m"
+            echo -e "\033[1;97mUsage:\033[0m \033[1;96m${usage}\033[0m"
+            echo -e "\033[1;97m${help}\033[0m"
+        else
+            printf '%s\n' "$program"
+            printf 'Usage: %s\n' "$usage"
+            printf '%s\n' "$help"
+        fi
         return 0
     fi
 
@@ -37,7 +47,10 @@ needs_help() {
 # Returns: 0 if user confirms (y/Y), 1 otherwise
 needs_confirm_prompt() {
     local prompt="${1-}"
-    command printf '%b' "$prompt ${__GASH_BOLD_WHITE:=\e[1;37m}(y/N):${__GASH_COLOR_OFF:=\033[0m} "
+    # Use `${VAR-fallback}` (not `:=` / `:-`) so that empty color vars set by
+    # the output.sh load-time gate are honored instead of being replaced with
+    # ANSI fallbacks. The fallback only triggers if the var is completely unset.
+    command printf '%b' "$prompt ${__GASH_BOLD_WHITE-\e[1;37m}(y/N):${__GASH_COLOR_OFF-\033[0m} "
     read -r REPLY < /dev/tty
     if [[ "$REPLY" =~ ^[Yy]$ ]]; then
         return 0

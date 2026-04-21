@@ -21,17 +21,32 @@
 # -----------------------------------------------------------------------------
 
 # Display disk usage for specific filesystem types.
-# Usage: disk_usage
+# Usage: disk_usage [--no-color]
 # Alias: du2
 disk_usage() {
-    needs_help "disk_usage" "disk_usage" \
-        "Displays disk usage for specific filesystem types, formatted for easy reading. Alias: du2" \
+    needs_help "disk_usage" "disk_usage [--no-color]" \
+        "Displays disk usage for real filesystem types, formatted for easy reading. Alias: du2" \
         "${1-}" && return
 
-    df -hT | awk '
+    local no_color=0
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --no-color) no_color=1 ;;
+        esac
+    done
+
+    local use_color=1
+    __gash_want_colors "$no_color" || use_color=0
+
+    df -hT | awk -v c="$use_color" '
     BEGIN {printf "%-20s %-8s %-8s %-8s %-8s %-6s %-20s\n", "Filesystem", "Type", "Size", "Used", "Avail", "Use%", "Mountpoint"}
     $2 ~ /(ext[2-4]|xfs|btrfs|zfs|f2fs|fat|vfat|ntfs)/ {
-        printf "\033[1;33m%-20s\033[0m \033[0;36m%-8s\033[0m \033[1;37m%-8s\033[0m \033[1;37m%-8s\033[0m \033[1;37m%-8s\033[0m \033[38;5;214m%-6s\033[0m %-20s\n", $1, $2, $3, $4, $5, $6, $7
+        if (c == 1) {
+            printf "\033[1;33m%-20s\033[0m \033[0;36m%-8s\033[0m \033[1;37m%-8s\033[0m \033[1;37m%-8s\033[0m \033[1;37m%-8s\033[0m \033[38;5;214m%-6s\033[0m %-20s\n", $1, $2, $3, $4, $5, $6, $7
+        } else {
+            printf "%-20s %-8s %-8s %-8s %-8s %-6s %-20s\n", $1, $2, $3, $4, $5, $6, $7
+        }
     }'
 
     return 0
@@ -300,9 +315,21 @@ EOF
 # -----------------------------------------------------------------------------
 
 # Get your public IP address.
-# Usage: ip_public
+# Usage: ip_public [--no-color]
 # Alias: myip
 ip_public() {
+    local no_color=0
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --no-color) no_color=1 ;;
+            -h|--help)
+                needs_help "ip_public" "ip_public [--no-color]" \
+                    "Displays your public IP address (via ipinfo.io). Alias: myip" \
+                    "--help" && return 0 ;;
+        esac
+    done
+
     local ip=""
 
     if command -v wget >/dev/null 2>&1; then
@@ -319,6 +346,8 @@ ip_public() {
         return 1
     fi
 
+    # Local color scope (respects env, TTY, --no-color)
+    eval "$(__gash_color_scope "$no_color")"
     echo -e "${__GASH_BOLD_WHITE}Public IP:${__GASH_COLOR_OFF} ${__GASH_CYAN}${ip}${__GASH_COLOR_OFF}"
 }
 

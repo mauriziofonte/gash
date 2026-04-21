@@ -378,9 +378,20 @@ gash_unload() {
 
 # Run health checks on the Gash installation.
 # Verifies core files, modules, config permissions, and external tools.
-# Usage: gash_doctor
+# Usage: gash_doctor [--no-color]
 gash_doctor() {
-    needs_help "gash_doctor" "gash_doctor" "Run health checks on your Gash installation." "${1-}" && return
+    needs_help "gash_doctor" "gash_doctor [--no-color]" "Run health checks on your Gash installation." "${1-}" && return
+
+    local no_color=0
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --no-color) no_color=1 ;;
+        esac
+    done
+
+    # Local color scope (respects env, TTY, --no-color)
+    eval "$(__gash_color_scope "$no_color")"
 
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
     local issues=0
@@ -389,7 +400,7 @@ gash_doctor() {
     echo ""
 
     # 1. Core files
-    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Core Files:${__GASH_COLOR_OFF:-\033[0m}"
+    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Core Files:${__GASH_COLOR_OFF-\033[0m}"
     local core_files=("$gash_dir/gash.sh" "$gash_dir/lib/core/config.sh" "$gash_dir/lib/core/output.sh" "$gash_dir/lib/core/utils.sh" "$gash_dir/lib/core/validation.sh")
     for f in "${core_files[@]}"; do
         if [[ -f "$f" ]]; then
@@ -401,7 +412,7 @@ gash_doctor() {
     done
 
     # 2. Modules
-    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Modules:${__GASH_COLOR_OFF:-\033[0m}"
+    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Modules:${__GASH_COLOR_OFF-\033[0m}"
     local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo)
     for mod in "${expected_modules[@]}"; do
         if [[ -f "$gash_dir/lib/modules/${mod}.sh" ]]; then
@@ -413,7 +424,7 @@ gash_doctor() {
     done
 
     # 3. Config file
-    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}Configuration:${__GASH_COLOR_OFF:-\033[0m}"
+    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Configuration:${__GASH_COLOR_OFF-\033[0m}"
     local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
     if [[ -f "$env_file" ]]; then
         local perms
@@ -429,7 +440,7 @@ gash_doctor() {
     fi
 
     # 4. External tools
-    echo -e "${__GASH_BOLD_WHITE:-\e[1;37m}External Tools:${__GASH_COLOR_OFF:-\033[0m}"
+    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}External Tools:${__GASH_COLOR_OFF-\033[0m}"
     local tools=(git curl jq sqlite3 docker)
     for tool in "${tools[@]}"; do
         if type -P "$tool" >/dev/null 2>&1; then
@@ -819,11 +830,27 @@ gash() {
 # -----------------------------------------------------------------------------
 
 # Gash help system with examples, search, and discovery.
-# Usage: gash_help [FUNCTION|ALIAS|--list|--search KEYWORD|--short FUNCTION|--bash TOPIC]
+# Usage: gash_help [--no-color] [FUNCTION|ALIAS|--list|--search KEYWORD|--short FUNCTION|--bash TOPIC]
 gash_help() {
+    # Extract --no-color from anywhere in the arg list; leave other args intact.
+    local no_color=0
+    local -a filtered=()
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --no-color) no_color=1 ;;
+            *)          filtered+=("$a") ;;
+        esac
+    done
+    set -- "${filtered[@]}"
+
     local arg="${1-}"
 
-    # Colors
+    # If colors must be suppressed (env, TTY, or --no-color flag), locally
+    # shadow the module-wide __GASH_* vars to empty. Propagates via dynamic
+    # scoping to __gash_help_display / _search / _list called below.
+    eval "$(__gash_color_scope "$no_color")"
+
     local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
     local W="${__GASH_BOLD_WHITE-\033[1;37m}"
     local C="${__GASH_CYAN-\033[0;36m}"

@@ -47,7 +47,7 @@ __gash_public_functions() {
     fi
 
     # Fallback: keep a minimal set if we can't detect the added functions.
-    printf '%s' "disk_usage files_largest dirs_largest dirs_find_large history_grep git_add_tag git_delete_tag gash_doctor gash archive_extract file_backup"
+    printf '%s' "disk_usage files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats history_grep git_add_tag git_delete_tag gash_doctor gash archive_extract file_backup"
 }
 
 # -----------------------------------------------------------------------------
@@ -58,6 +58,7 @@ __gash_public_functions() {
 # Dispatches to per-function completion based on COMP_WORDS[0].
 __gash_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]-}"
     local cmd="${COMP_WORDS[0]}"
 
     case "$cmd" in
@@ -70,9 +71,53 @@ __gash_complete() {
             fi
             ;;
 
-        # Directory completion
-        files_largest|dirs_largest|dirs_find_large|dirs_list_empty|\
-        docker_compose_check|docker_compose_upgrade|docker_compose_scan|mkdir_cd)
+        # files_largest: directories + flags
+        files_largest)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--limit --min-size --exclude --depth --no-ignore --xdev --follow-symlinks --allow-root --json --null --human --no-human --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        # dirs_largest: directories + flags
+        dirs_largest)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--limit --depth --min-size --exclude --no-ignore --xdev --allow-root --json --null --human --no-human --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        # dirs_find_large: directories + flags
+        dirs_find_large)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--size --depth --limit --exclude --no-ignore --xdev --allow-root --with-mtime --json --null --human --no-human --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        # dirs_list_empty: directories + flags
+        dirs_list_empty)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--min-depth --depth --exclude --ignore-dotfiles --no-ignore --xdev --allow-root --null --count --json --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        # tree_stats: directories + flags
+        tree_stats)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--depth --top --exclude --no-ignore --xdev --follow-symlinks --allow-root --json --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        # Directory completion (other)
+        mkdir_cd)
             COMPREPLY=($(compgen -d -- "$cur"))
             ;;
 
@@ -95,20 +140,59 @@ __gash_complete() {
             fi
             ;;
 
-        # AI sysinfo: provider + --raw
+        # AI sysinfo: provider + --raw + --no-color
         ai_sysinfo)
-            COMPREPLY=($(compgen -W "claude gemini --raw" -- "$cur"))
+            COMPREPLY=($(compgen -W "claude gemini --raw --no-color" -- "$cur"))
             ;;
 
-        # System info sections
+        # System info sections + flags
         sysinfo)
-            COMPREPLY=($(compgen -W "identity storage services auth network security webstack mail infra system all --llm" -- "$cur"))
+            COMPREPLY=($(compgen -W "identity storage services auth network security webstack mail infra system all --llm --no-color" -- "$cur"))
+            ;;
+
+        # disk_usage / ip_public — just --no-color
+        disk_usage|ip_public)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--no-color --help" -- "$cur"))
+            fi
+            ;;
+
+        # Docker compose check/upgrade/scan: dirs + flags (incl. --no-color)
+        docker_compose_check)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--json --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        docker_compose_upgrade)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--dry-run --force --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        docker_compose_scan)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--depth --json --no-color --help" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -d -- "$cur"))
+            fi
+            ;;
+
+        # gash_doctor — --no-color
+        gash_doctor)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "--no-color --help" -- "$cur"))
+            fi
             ;;
 
         # Help system: function names, aliases, and flags
         gash_help)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--list --search --short --bash" -- "$cur"))
+                COMPREPLY=($(compgen -W "--list --search --short --bash --no-color" -- "$cur"))
             elif [[ "${COMP_WORDS[1]-}" == "--search" ]] && (( COMP_CWORD == 2 )); then
                 # After --search, user types keyword freely
                 COMPREPLY=()
@@ -123,7 +207,7 @@ __gash_complete() {
                         funcs+=" ${aliases//,/ }"
                     done
                 fi
-                COMPREPLY=($(compgen -W "$funcs --list --search --short --bash" -- "$cur"))
+                COMPREPLY=($(compgen -W "$funcs --list --search --short --bash --no-color" -- "$cur"))
             else
                 COMPREPLY=()
             fi
@@ -157,7 +241,7 @@ __gash_enable_completion() {
         done
     else
         # Fallback registration for common functions
-        local fn_list="git_add_tag git_delete_tag git_list_tags disk_usage files_largest dirs_largest dirs_find_large history_grep gash_doctor gash archive_extract file_backup"
+        local fn_list="git_add_tag git_delete_tag git_list_tags disk_usage files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats history_grep gash_doctor gash archive_extract file_backup"
         for fn in $fn_list; do
             complete -o default -F __gash_complete "$fn"
         done

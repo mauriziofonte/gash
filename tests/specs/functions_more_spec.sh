@@ -21,16 +21,28 @@ it "disk_usage formats filtered filesystem types" bash -c '
   [[ "$out" == *"xfs"*"/data"* ]]
 '
 
-it "dirs_find_large errors when numfmt missing" bash -c '
+it "dirs_find_large works without numfmt (pure-bash IEC fallback)" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
+  # Shadow numfmt with a failing stub at the front of PATH.
+  # The pure-bash fallback in __gash_fs_parse_size must kick in transparently.
   tmpbin="$(mktemp -d)"; trap "/bin/rm -rf $tmpbin" EXIT
-  export PATH="$tmpbin"
+  cat > "$tmpbin/numfmt" <<STUB
+#!/usr/bin/env bash
+exit 127
+STUB
+  chmod +x "$tmpbin/numfmt"
+  export PATH="$tmpbin:$PATH"
 
-  out="$({ dirs_find_large --size 1M /tmp; } 2>&1 || true)"
-  [[ "$out" == *"requires"*numfmt* ]]
+  tmp="$(mktemp -d)"
+  mkdir -p "$tmp/d1"
+  dd if=/dev/zero of="$tmp/d1/big" bs=1024 count=64 status=none
+
+  out="$(dirs_find_large --size 1K "$tmp" 2>/dev/null || true)"
+  /bin/rm -rf "$tmp"
+  [[ "$out" == *"d1"* ]]
 '
 
 it "dirs_find_large lists a directory over threshold" bash -c '
