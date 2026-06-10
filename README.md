@@ -91,6 +91,7 @@ That invocation guarantees:
 * ✅ All `llm_*` functions loaded (exec, tree, find, grep, db_*, git_*, ports, procs, env, project, deps, docker_check)
 * ✅ All v1.5 filesystem scanners with `--json` envelopes
 * ✅ **Zero ANSI color pollution** on stdout and stderr — no parser breakage
+* ✅ **Clean streams** — data on stdout, every diagnostic (`Info:`/`Warning:`/`Error:`) on stderr
 * ✅ **No Bash history pollution** — `__gash_no_history` wraps every call path
 * ✅ **No user-profile mutation** — skips aliases, PS1, `~/.bash_aliases`, `~/.bash_local`
 
@@ -189,8 +190,8 @@ Save time with these built-in utilities. Each has a **long** descriptive name AN
 | `mkdir_cd` | `mkcd` | Make a directory and `cd` into it |
 | `archive_extract` | `axe` | Extract almost any archive to a directory |
 | `files_largest` | `flf` | Show the largest files in a directory |
-| `process_kill` | `pk` | Kill all processes by name |
-| `port_kill` | `ptk` | Kill processes running on a specific port |
+| `process_kill` | `pk` | Kill processes by exact name (SIGTERM first, SIGKILL for survivors) |
+| `port_kill` | `ptk` | Kill processes on a specific port (SIGTERM first, SIGKILL for survivors) |
 | `services_stop` | `svs` | Stop well-known services like Apache, MySQL, Redis, Docker |
 | `gash_unload` | - | Restore your shell state and remove Gash (current session only) |
 
@@ -250,7 +251,7 @@ If you want to temporarily disable Gash in your current terminal (without uninst
 gash_unload
 ```
 
-This performs a best-effort restore of the previous shell state (prompt variables, history settings, plus aliases/functions introduced by Gash).
+This restores the previous shell state (prompt variables, history settings) and removes everything Gash introduced: aliases, functions, and `GASH_*`/`__GASH_*` variables — including any credentials cached from `~/.gash_env`.
 To re-enable Gash in the same terminal:
 
 ```sh
@@ -301,6 +302,15 @@ If any of those conditions is false, Gash emits plain text — including
 `Error:`, `Warning:`, help pages, `gash_doctor`, `docker_compose_check`,
 `sysinfo`, the entire `files_largest` / `dirs_largest` / `tree_stats` family,
 and every inline colored print across the codebase.
+
+### Streams: data vs diagnostics
+
+Structured data goes to **stdout**; every diagnostic message (`Info:`, `OK:`,
+`Warning:`, `Error:`, step indicators, confirmation prompts) goes to
+**stderr**. Capturing a function's output with `$(...)`, piping it to `jq`,
+or redirecting it to a file never picks up warnings — a permission notice
+emitted while loading `~/.gash_env` can never end up glued to a captured
+token or DB URL.
 
 ### Per-command override
 
@@ -354,8 +364,11 @@ export GASH_BASH="$HOME/.gash/gash.sh"
 export GASH_COMPLETION="$HOME/.gash/bash_completion"
 
 if [ -f "$GASH_BASH" ]; then
-  source "$GASH_BASH" # This loads Gash
-  [ -f "$GASH_COMPLETION" ] && source "$GASH_COMPLETION" # This loads Gash completion
+    source "$GASH_BASH" # This loads Gash
+    # Completion only matters interactively; skip the work in headless mode.
+    if [ "${GASH_HEADLESS-}" != "1" ] && [ -f "$GASH_COMPLETION" ]; then
+        source "$GASH_COMPLETION" # This loads Gash completion
+    fi
 fi
 ```
 
@@ -594,14 +607,20 @@ All functions have a **long descriptive name** and a **short alias**. Use whiche
 | `archive_extract` | `axe` | Extracts archive files (`.tar.gz`, `.zip`, `.7z`, etc.) |
 | `file_backup` | `fbk` | Creates a backup of a file with a timestamp suffix |
 
-**Disk usage tools (v1.5+):** the four scanners share a common flag surface —
-`--limit N`, `--min-size SIZE`, `--depth N`, `--exclude GLOB`, `--xdev`,
-`--allow-root`, `--json`, `--null`, `--human`, `--no-color`. They auto-prune
+**Disk usage tools (v1.5+):** the size scanners (`files_largest`,
+`dirs_largest`, `dirs_find_large`) share a common flag surface —
+`--limit N`, `--min-size SIZE` (or `--size SIZE` for `dirs_find_large`),
+`--depth N`, `--exclude GLOB`, `--xdev`, `--allow-root`, `--json`, `--null`,
+`--human`, `--no-color`; `dirs_list_empty` and `tree_stats` accept the subset
+shown in their `--help`. All five auto-prune
 `node_modules`, `vendor`, `.git`, `__pycache__`, `.cache` (disable with
 `--no-ignore`), refuse to scan `/` without `--allow-root`, reject forbidden
 prefixes (`/proc`, `/sys`, `/dev`, `/boot`, `/root`), and emit a JSON envelope
-`{data, count, total_size, total_size_human, scan_time, errors}` in `--json`
-mode. `dirs_find_large` was rewritten in v1.5 to use a **single `du -k` pass +
+(`{data, count, total_size, total_size_human, scan_time, errors}` for the
+size scanners) in `--json` mode. Paths containing literal tab or newline
+characters are excluded from results by design (they cannot be represented
+safely in TSV/line-oriented output), so `--null` records are always intact,
+complete paths. `dirs_find_large` was rewritten in v1.5 to use a **single `du -k` pass +
 awk filtering** (O(N) instead of O(N²) for nested trees), removed the hard
 dependency on `numfmt` (pure-bash IEC fallback), and added `--with-mtime` for
 per-directory newest-file timestamps. `tree_stats` is a new one-shot audit:
@@ -637,10 +656,10 @@ files_largest --min-size 100M --null /tmp | xargs -0 rm -i
 | `hgrep` | - | Smart history search with timestamps, deduplication, and options (`-n`, `-j`, `-E`, `-c`, etc.) |
 | `ip_public` | `myip` | Displays your public IP address |
 | `process_find` | `pf` | Searches for processes by name |
-| `process_kill` | `pk` | Kills all processes matching a given name |
-| `port_kill` | `ptk` | Kills processes running on a specified port |
+| `process_kill` | `pk` | Kills processes whose executable name matches exactly (SIGTERM, then SIGKILL; asks confirmation on multiple matches) |
+| `port_kill` | `ptk` | Kills processes on a specified port (SIGTERM first, SIGKILL for survivors) |
 | `services_stop` | `svs` | Stops well-known services (Apache, MySQL, Redis, Docker, etc.) |
-| `sudo_last` | `plz` | Runs the last command or a given command with `sudo` |
+| `sudo_last` | `plz` | Re-runs the last command (or a given command) with `sudo`; shows the command and asks confirmation first |
 | `mkdir_cd` | `mkcd` | Creates a directory and changes into it |
 
 #### WSL (Windows Subsystem for Linux)
@@ -693,12 +712,17 @@ Professional git log visualization with multiple variants. Run `gl --help` for f
 
 The smart upgrade system queries Docker Hub and GHCR registries to compare local image digests with remote ones. It only upgrades services with mutable tags (like `latest`, `main`, `dev`) and skips pinned versions (like `nginx:1.25.3`). Use `--force` to override this behavior.
 
+Before pulling images and restarting containers, `docker_compose_upgrade` asks for confirmation; pass `--yes` to skip it. In headless mode (`GASH_HEADLESS=1`) the upgrade **refuses to run without an explicit `--yes`** — automation must opt in, a stack is never restarted as a silent side effect.
+
 ```bash
 # Check for updates in current directory
 docker_compose_check
 
 # Preview what would be upgraded (dry-run)
 docker_compose_upgrade --dry-run
+
+# Non-interactive upgrade (required in headless/automation contexts)
+docker_compose_upgrade --yes
 
 # Scan for all compose files in a directory tree
 docker_compose_scan /path/to/projects --depth 3
@@ -896,7 +920,7 @@ sysinfo services --llm
 | `gash_doctor` / `gdoctor` | Run health checks on Gash installation (core files, modules, config, tools) |
 | `gash_upgrade` | Upgrades Gash to the latest version |
 | `gash_uninstall` | Uninstalls Gash and cleans up configurations |
-| `gash_unload` | Unloads Gash from the current shell session (best-effort restore) |
+| `gash_unload` | Unloads Gash from the current shell session (full teardown: functions, aliases, variables, cached credentials) |
 | `gash_inspiring_quote` | Displays an inspiring quote |
 | `gash_env_init` | Creates `~/.gash_env` from template |
 | `gash_db_list` | Lists all configured database connections |

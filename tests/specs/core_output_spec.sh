@@ -21,7 +21,7 @@ it "__gash_info prints cyan Info prefix" bash -c '
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
 
-    out="$(__gash_info "test message")"
+    out="$(__gash_info "test message" 2>&1)"
     [[ "$out" == *"Info:"* ]]
     [[ "$out" == *"test message"* ]]
 '
@@ -41,7 +41,7 @@ it "__gash_success prints green OK prefix" bash -c '
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
 
-    out="$(__gash_success "done")"
+    out="$(__gash_success "done" 2>&1)"
     [[ "$out" == *"OK:"* ]]
     [[ "$out" == *"done"* ]]
 '
@@ -51,7 +51,7 @@ it "__gash_warning prints yellow Warning prefix" bash -c '
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
 
-    out="$(__gash_warning "careful")"
+    out="$(__gash_warning "careful" 2>&1)"
     [[ "$out" == *"Warning:"* ]]
     [[ "$out" == *"careful"* ]]
 '
@@ -61,10 +61,10 @@ it "__gash_ssh prints SSH prefix with color variants" bash -c '
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
 
-    out1="$(__gash_ssh "connected")"
-    out2="$(__gash_ssh "key added" success)"
-    out3="$(__gash_ssh "warning msg" warning)"
-    out4="$(__gash_ssh "failed" error)"
+    out1="$(__gash_ssh "connected" 2>&1)"
+    out2="$(__gash_ssh "key added" success 2>&1)"
+    out3="$(__gash_ssh "warning msg" warning 2>&1)"
+    out4="$(__gash_ssh "failed" error 2>&1)"
 
     [[ "$out1" == *"SSH:"* ]]
     [[ "$out2" == *"SSH:"* ]]
@@ -77,7 +77,7 @@ it "__gash_step prints step indicator" bash -c '
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/lib/core/output.sh"
 
-    out="$(__gash_step 1 3 "Installing...")"
+    out="$(__gash_step 1 3 "Installing..." 2>&1)"
     [[ "$out" == *"[1/3]"* ]]
     [[ "$out" == *"Installing..."* ]]
 '
@@ -113,10 +113,10 @@ it "all output functions handle empty messages" bash -c '
     source "$ROOT/lib/core/output.sh"
 
     # Should not fail with empty args
-    __gash_info "" >/dev/null
+    __gash_info "" >/dev/null 2>&1
     __gash_error "" 2>/dev/null
-    __gash_success "" >/dev/null
-    __gash_warning "" >/dev/null
-    __gash_ssh "" >/dev/null
-    __gash_step "" "" "" >/dev/null
+    __gash_success "" >/dev/null 2>&1
+    __gash_warning "" >/dev/null 2>&1
+    __gash_ssh "" >/dev/null 2>&1
+    __gash_step "" "" "" >/dev/null 2>&1
 '

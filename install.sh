@@ -6,9 +6,9 @@
 # Installation script for Gash. It clones the Gash repository and updates the shell configuration files.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.4.6
+# Version: 1.5.1
 # Release Date: 2024-10-24
-# Last Update: 2026-02-23
+# Last Update: 2026-06-10
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
@@ -202,11 +202,13 @@ gashinst_do_install() {
     gashinst_info "Create one of them and run this script again."
     gashinst_info "OR"
     gashinst_info "Append the following lines to the correct file yourself:"
-    command printf "${SOURCE_STR}"
+    command printf '%b' "${SOURCE_STR}"
   else
-    if ! command grep -qc 'source.*\.gashrc' "$GASH_PROFILE"; then
+    # -q only (-c with -q is a no-op) and anchor to a NON-commented source
+    # line: a commented-out '# source ~/.gashrc' must not skip installation.
+    if ! command grep -Eq '^[[:space:]]*source.*[/.]gashrc' "$GASH_PROFILE"; then
       gashinst_info "Appending Gash source string to $GASH_PROFILE"
-      command printf "${SOURCE_STR}" >> "$GASH_PROFILE"
+      command printf '%b' "${SOURCE_STR}" >> "$GASH_PROFILE"
     else
       gashinst_info "Gash source string already in ${GASH_PROFILE}"
     fi
@@ -288,8 +290,9 @@ gashinst_echo "${CYAN}Welcome to the Gash installation script${NC}"
 # Prompt user for confirmation before proceeding
 gashinst_echo
 gashinst_warning "This script will install Gash. This will modify your shell configuration files."
-gashinst_confirm "${YELLOW}Do you want to continue?${NC}"
-if [ $? -eq 1 ]; then
+# `if !` (not a post-hoc $? check): under `set -e` a non-zero return from
+# gashinst_confirm would abort the script BEFORE ever reaching the check.
+if ! gashinst_confirm "${YELLOW}Do you want to continue?${NC}"; then
   gashinst_info "Sorry to see you go... Installation aborted."
   exit 0
 fi

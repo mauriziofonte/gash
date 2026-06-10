@@ -68,11 +68,11 @@ __gash_parse_compose_services() {
         gsub(/:.*/, "")
         current_service = $0
     }
-    in_services && /^\s+image:/ {
-        gsub(/^\s+image:\s*/, "")
+    in_services && /^[[:space:]]+image:/ {
+        gsub(/^[[:space:]]+image:[[:space:]]*/, "")
         gsub(/["'"'"']/, "")
-        gsub(/\s*#.*/, "")
-        gsub(/\s+$/, "")
+        gsub(/[[:space:]]*#.*/, "")
+        gsub(/[[:space:]]+$/, "")
         if (current_service != "" && $0 != "") {
             print current_service "|" $0
         }
@@ -106,8 +106,18 @@ __gash_resolve_env_vars() {
         done < "$env_file"
     fi
 
-    # Replace ${VAR:-default} and ${VAR} patterns
+    # Replace ${VAR:-default} and ${VAR} patterns.
+    # Iteration cap: a self-referential value (VAR=${VAR}) or a circular
+    # chain would otherwise loop forever.
+    local iterations=0
+    local max_iterations=50
     while [[ "$result" =~ \$\{([A-Za-z_][A-Za-z0-9_]*)((:?-)([^}]*))?\} ]]; do
+        if (( iterations >= max_iterations )); then
+            __gash_warning "Unresolvable variable reference (circular?) in: $value"
+            break
+        fi
+        iterations=$((iterations + 1))
+
         local var_name="${BASH_REMATCH[1]}"
         local default_val="${BASH_REMATCH[4]:-}"
         local full_match="${BASH_REMATCH[0]}"
@@ -136,8 +146,11 @@ __gash_normalize_image() {
         tag="@$digest"
     fi
 
-    # Extract tag if present
-    if [[ "$image" == *:* && ! "$image" == *@* ]]; then
+    # Extract tag if present: only a colon AFTER the last slash is a tag
+    # separator. A registry port (localhost:5000/img, reg.example.com:443/ns/img)
+    # must never be mistaken for a tag.
+    local last_seg="${image##*/}"
+    if [[ "$last_seg" == *:* && ! "$image" == *@* ]]; then
         tag="${image##*:}"
         image="${image%:*}"
     fi
@@ -266,12 +279,19 @@ __gash_dockerhub_token() {
         "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${image}:pull" \
         || return 1
 
-    # Extract token using parameter expansion (no jq dependency)
-    local token="${__gash_registry_curl_body}"
-    token="${token##*\"token\":\"}"
-    token="${token%%\"*}"
+    local token=""
+    if command -v jq >/dev/null 2>&1; then
+        # Robust extraction: handles "token" or "access_token", any spacing
+        token=$(jq -r '.token // .access_token // empty' <<< "$__gash_registry_curl_body" 2>/dev/null) || token=""
+    else
+        # Fallback: parameter expansion (assumes compact "token":"..." form)
+        token="${__gash_registry_curl_body}"
+        token="${token##*\"token\":\"}"
+        token="${token%%\"*}"
+        [[ "$token" == "$__gash_registry_curl_body" || "$token" == "{" ]] && token=""
+    fi
 
-    if [[ -n "$token" && "$token" != "{" && "$token" != "$__gash_registry_curl_body" ]]; then
+    if [[ -n "$token" ]]; then
         __gash_auth_token="$token"
         echo "$token"
         return 0
@@ -300,12 +320,17 @@ __gash_ghcr_token() {
         "https://ghcr.io/token?service=ghcr.io&scope=repository:${image}:pull" \
         || return 1
 
-    # Extract token using parameter expansion (no jq dependency)
-    local token="${__gash_registry_curl_body}"
-    token="${token##*\"token\":\"}"
-    token="${token%%\"*}"
+    local token=""
+    if command -v jq >/dev/null 2>&1; then
+        token=$(jq -r '.token // .access_token // empty' <<< "$__gash_registry_curl_body" 2>/dev/null) || token=""
+    else
+        token="${__gash_registry_curl_body}"
+        token="${token##*\"token\":\"}"
+        token="${token%%\"*}"
+        [[ "$token" == "$__gash_registry_curl_body" || "$token" == "{" ]] && token=""
+    fi
 
-    if [[ -n "$token" && "$token" != "{" && "$token" != "$__gash_registry_curl_body" ]]; then
+    if [[ -n "$token" ]]; then
         __gash_auth_token="$token"
         echo "$token"
         return 0
@@ -333,8 +358,9 @@ __gash_get_remote_digest() {
             __gash_dockerhub_token "$name" >/dev/null 2>&1 || return 1
             [[ -z "$__gash_auth_token" ]] && return 1
 
+            # Bearer token via --config fd, never in argv (/proc/<pid>/cmdline)
             __gash_registry_curl -I \
-                -H "Authorization: Bearer $__gash_auth_token" \
+                --config <(printf 'header = "Authorization: Bearer %s"\n' "$__gash_auth_token") \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
                 "https://registry-1.docker.io/v2/${name}/manifests/${tag}" \
@@ -345,8 +371,9 @@ __gash_get_remote_digest() {
             __gash_ghcr_token "$name" >/dev/null 2>&1 || return 1
             [[ -z "$__gash_auth_token" ]] && return 1
 
+            # Bearer token via --config fd, never in argv (/proc/<pid>/cmdline)
             __gash_registry_curl -I \
-                -H "Authorization: Bearer $__gash_auth_token" \
+                --config <(printf 'header = "Authorization: Bearer %s"\n' "$__gash_auth_token") \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
                 "https://ghcr.io/v2/${name}/manifests/${tag}" \
@@ -485,7 +512,7 @@ EOF
     local total=0 updates=0 current=0 pinned=0 errors=0
 
     while IFS='|' read -r service_name image_ref; do
-        ((total++))
+        total=$((total + 1))
 
         # Resolve env vars in image reference
         local resolved_image
@@ -511,7 +538,7 @@ EOF
             status="PINNED"
             local_digest="${tag#@}"
             remote_digest="$local_digest"
-            ((pinned++))
+            pinned=$((pinned + 1))
         else
             # Get local and remote digests
             local_digest=$(__gash_get_local_digest "$resolved_image")
@@ -522,19 +549,19 @@ EOF
             if [[ -z "$remote_digest" ]]; then
                 status="ERROR"
                 error_msg="${__gash_registry_curl_error:-registry_unreachable}"
-                ((errors++))
+                errors=$((errors + 1))
             elif [[ -z "$local_digest" ]]; then
                 status="NOT_PULLED"
-                ((updates++))
+                updates=$((updates + 1))
             elif [[ "$upgradeable" -eq 0 ]]; then
                 status="PINNED"
-                ((pinned++))
+                pinned=$((pinned + 1))
             elif [[ "$local_digest" == "$remote_digest" ]]; then
                 status="CURRENT"
-                ((current++))
+                current=$((current + 1))
             else
                 status="UPDATE"
-                ((updates++))
+                updates=$((updates + 1))
             fi
         fi
 
@@ -709,6 +736,7 @@ OPTIONS:
   PATH        Directory containing docker-compose.yml (default: current dir)
   --dry-run   Show what would be done without executing
   --force     Force upgrade even for pinned versions
+  --yes       Skip the interactive confirmation (REQUIRED in headless mode)
   --no-color  Disable ANSI colors
   -h          Show this help
 
@@ -716,6 +744,9 @@ BEHAVIOR:
   Only upgrades services with mutable tags (latest, main, dev, etc.).
   Services with pinned versions (e.g., nginx:1.25.3) are skipped.
   Use --force to override and upgrade all services.
+  In headless mode (GASH_HEADLESS=1) the upgrade refuses to run without
+  an explicit --yes: pulling images and restarting a stack must never
+  happen as a silent side effect of automation.
 
 EXAMPLES:
   docker_compose_upgrade                  Upgrade in current directory
@@ -731,6 +762,7 @@ EOF
     local path="."
     local dry_run=0
     local force=0
+    local assume_yes=0
     local no_color=0
 
     # Parse arguments
@@ -738,6 +770,7 @@ EOF
         case "$arg" in
             --dry-run|-n) dry_run=1 ;;
             --force|-f)   force=1 ;;
+            --yes|-y)     assume_yes=1 ;;
             --no-color)   no_color=1 ;;
             -*) ;;
             *) path="$arg" ;;
@@ -811,8 +844,14 @@ EOF
         return 0
     fi
 
-    # Safety confirmation (skip in HEADLESS mode for automation)
-    if [[ "${GASH_HEADLESS:-}" != "1" ]]; then
+    # Safety confirmation. --yes skips it explicitly; in headless mode the
+    # upgrade REFUSES without --yes (an agent must opt in, never restart a
+    # stack as a silent default).
+    if [[ $assume_yes -ne 1 ]]; then
+        if [[ "${GASH_HEADLESS:-}" == "1" ]]; then
+            __gash_error "Refusing to upgrade in headless mode without --yes (pull + restart is destructive)."
+            return 1
+        fi
         printf "\n${__GASH_BOLD_YELLOW}This will pull new images and restart containers.${__GASH_COLOR_OFF}\n"
         if ! needs_confirm_prompt "Proceed with upgrade?"; then
             printf "Upgrade cancelled.\n"
@@ -929,7 +968,7 @@ EOF
         local first=1
         local total=0
         while IFS= read -r file; do
-            ((total++))
+            total=$((total + 1))
             local dir
             dir=$(dirname "$file")
             local fname
@@ -954,7 +993,7 @@ EOF
 
         local total=0
         while IFS= read -r file; do
-            ((total++))
+            total=$((total + 1))
             local dir
             dir=$(dirname "$file")
 

@@ -45,6 +45,12 @@ __sysinfo_ensure_sudo() {
     if sudo -n true 2>/dev/null; then
         __SYSINFO_HAS_SUDO=1
     else
+        # Headless or no tty: never attempt `sudo -v` (it would prompt for
+        # a password with stderr suppressed and hang the caller).
+        if [[ "${GASH_HEADLESS-}" == "1" ]] || [[ ! -t 0 ]]; then
+            __SYSINFO_HAS_SUDO=0
+            return 1
+        fi
         if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
             __gash_info "Elevated privileges needed for full system enumeration."
         fi
@@ -191,6 +197,7 @@ __sysinfo_collect_identity() {
 
     # Cloud provider markers
     [[ -f /etc/hetzner-build ]] && __sysinfo_kv "Cloud" "Hetzner"
+    return 0
 }
 
 # =============================================================================
@@ -252,6 +259,7 @@ __sysinfo_collect_storage() {
         grep -Ev "^(#|$)" /etc/exports 2>/dev/null | __sysinfo_raw
     fi
     [[ -f /etc/nfs.conf ]] && __sysinfo_kv "NFS conf" "present"
+    return 0
 }
 
 # =============================================================================
@@ -356,6 +364,7 @@ __sysinfo_collect_services() {
         __sysinfo_sub "timers.target.wants"
         ls /etc/systemd/system/timers.target.wants/ 2>/dev/null | __sysinfo_raw
     fi
+    return 0
 }
 
 # =============================================================================
@@ -384,6 +393,7 @@ __sysinfo_collect_auth() {
         __sysinfo_item "--- ${f}:"
         __sysinfo_sudo grep -Ev "^(#|$)" "$f" 2>/dev/null | __sysinfo_raw
     done
+    return 0
 }
 
 # =============================================================================
@@ -418,6 +428,7 @@ __sysinfo_collect_network() {
         __sysinfo_sub "dhcpcd"
         grep -Ev "^(#|$)" /etc/dhcpcd.conf 2>/dev/null | __sysinfo_raw
     fi
+    return 0
 }
 
 # =============================================================================
@@ -465,6 +476,7 @@ __sysinfo_collect_security() {
     if [[ -d /etc/apparmor.d ]]; then
         __sysinfo_kv "AppArmor" "present"
     fi
+    return 0
 }
 
 # =============================================================================
@@ -535,6 +547,7 @@ __sysinfo_collect_webstack() {
         __sysinfo_sub "PostgreSQL"
         ls /etc/postgresql/*/main/*.conf 2>/dev/null | __sysinfo_raw
     fi
+    return 0
 }
 
 # =============================================================================
@@ -601,6 +614,7 @@ __sysinfo_collect_mail() {
         __sysinfo_sub "Unbound"
         find /etc/unbound -name "*.conf" -exec cat {} \; 2>/dev/null | __sysinfo_raw
     fi
+    return 0
 }
 
 # =============================================================================
@@ -685,6 +699,7 @@ __sysinfo_collect_infra() {
         [[ -d /etc/webmin/virtual-server ]] && __sysinfo_item "Virtualmin: installed"
     fi
     [[ -d /etc/usermin ]] && __sysinfo_kv "Usermin" "installed"
+    return 0
 }
 
 # =============================================================================
@@ -780,6 +795,7 @@ __sysinfo_collect_system() {
         __sysinfo_kv "etckeeper" "git tracked"
     fi
     [[ -f /etc/.etckeeper ]] && __sysinfo_kv "etckeeper metadata" "present"
+    return 0
 }
 
 # =============================================================================
@@ -1146,6 +1162,7 @@ __sysinfo_deep_services() {
 
     echo "--- Listening UDP"
     ss -ulnp 2>/dev/null | tail -n +2 | head -30
+    return 0
 }
 
 # Deep: Security — full firewall rules, IDS configs, auth, logs.
@@ -1240,6 +1257,7 @@ __sysinfo_deep_security() {
 
     echo "--- Auth log (recent)"
     __sysinfo_sudo tail -30 /var/log/auth.log 2>/dev/null | head -30
+    return 0
 }
 
 # Deep: Network — interfaces, routes, DNS, full configs.
@@ -1289,6 +1307,7 @@ __sysinfo_deep_network() {
 
     echo "--- Listening UDP"
     ss -ulnp 2>/dev/null | tail -n +2 | head -30
+    return 0
 }
 
 # Deep: Storage — disk usage, LVM, RAID, ZFS, SMART, NFS.
@@ -1357,6 +1376,7 @@ __sysinfo_deep_storage() {
 
     # hdparm
     [[ -f /etc/hdparm.conf ]] && { echo "--- hdparm"; grep -Ev "^(#|$)" /etc/hdparm.conf 2>/dev/null | head -20; }
+    return 0
 }
 
 # Deep: Performance — memory, CPU, processes, DB tuning, PHP FPM, sysctl.
@@ -1367,7 +1387,7 @@ __sysinfo_deep_performance() {
     free -h 2>/dev/null
 
     echo "--- CPU"
-    lscpu 2>/dev/null | grep -iE "model name|cpu\(s\)|thread|core|socket|mhz" | head -10
+    LC_ALL=C lscpu 2>/dev/null | grep -iE "model name|cpu\(s\)|thread|core|socket|mhz" | head -10
 
     echo "--- Load"
     uptime 2>/dev/null
@@ -1426,6 +1446,7 @@ __sysinfo_deep_performance() {
         [[ -f "$sched" ]] || continue
         echo "$(dirname "$sched" | xargs basename): $(cat "$sched" 2>/dev/null)"
     done
+    return 0
 }
 
 # Deep: Maintenance — cron, logrotate, certs, packages, etckeeper, cloud.
@@ -1528,6 +1549,7 @@ __sysinfo_deep_maintenance() {
     # Service defaults
     echo "--- Service defaults"
     ls /etc/default/ 2>/dev/null | head -30
+    return 0
 }
 
 # =============================================================================
@@ -1571,36 +1593,42 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # Local color scope (propagates to __sysinfo_collect_* via dynamic scoping)
     eval "$(__gash_color_scope "$no_color")"
 
-    # Sudo caching (single prompt)
-    __sysinfo_ensure_sudo
+    # Sudo caching (single prompt). `|| true`: missing sudo must never kill
+    # a `set -e` caller. The RETURN trap guarantees the keep-alive loop is
+    # reaped even if a collector aborts mid-way.
+    trap '__sysinfo_release_sudo' RETURN
+    __sysinfo_ensure_sudo || true
 
-    # Dispatch
+    # Dispatch. `|| true` suppresses errexit inside the collectors too: a
+    # missing binary or a zero-match grep in one probe must not abort the
+    # whole enumeration under `set -euo pipefail`.
     case "$section" in
-        identity)  __sysinfo_collect_identity ;;
-        storage)   __sysinfo_collect_storage ;;
-        services)  __sysinfo_collect_services ;;
-        auth)      __sysinfo_collect_auth ;;
-        network)   __sysinfo_collect_network ;;
-        security)  __sysinfo_collect_security ;;
-        webstack)  __sysinfo_collect_webstack ;;
-        mail)      __sysinfo_collect_mail ;;
-        infra)     __sysinfo_collect_infra ;;
-        system)    __sysinfo_collect_system ;;
+        identity)  __sysinfo_collect_identity || true ;;
+        storage)   __sysinfo_collect_storage || true ;;
+        services)  __sysinfo_collect_services || true ;;
+        auth)      __sysinfo_collect_auth || true ;;
+        network)   __sysinfo_collect_network || true ;;
+        security)  __sysinfo_collect_security || true ;;
+        webstack)  __sysinfo_collect_webstack || true ;;
+        mail)      __sysinfo_collect_mail || true ;;
+        infra)     __sysinfo_collect_infra || true ;;
+        system)    __sysinfo_collect_system || true ;;
         all)
-            __sysinfo_collect_identity
-            __sysinfo_collect_storage
-            __sysinfo_collect_services
-            __sysinfo_collect_auth
-            __sysinfo_collect_network
-            __sysinfo_collect_security
-            __sysinfo_collect_webstack
-            __sysinfo_collect_mail
-            __sysinfo_collect_infra
-            __sysinfo_collect_system
+            __sysinfo_collect_identity || true
+            __sysinfo_collect_storage || true
+            __sysinfo_collect_services || true
+            __sysinfo_collect_auth || true
+            __sysinfo_collect_network || true
+            __sysinfo_collect_security || true
+            __sysinfo_collect_webstack || true
+            __sysinfo_collect_mail || true
+            __sysinfo_collect_infra || true
+            __sysinfo_collect_system || true
             ;;
     esac
 
     __sysinfo_release_sudo
+    return 0
 }
 
 # =============================================================================
@@ -1622,13 +1650,13 @@ __gash_register_help "sysinfo" \
     --see-also "ai_sysinfo" \
     <<'HELP'
 USAGE
-  sysinfo [section] [--llm]
+  sysinfo [section] [--llm] [--no-color]
 
 SECTIONS
   identity   OS, kernel, virtualization, cloud provider, WSL detection
-  storage    Disk usage, filesystems, mount points
+  storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)
   services   Running systemd services, custom units
-  auth       PAM, sudoers, SSH config, LDAP
+  auth       Sudoers, SSH config (PAM details via deep drill-down)
   network    Interfaces, DNS, DHCP, hostname
   security   Firewall rules, SSH hardening, fail2ban/crowdsec
   webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies

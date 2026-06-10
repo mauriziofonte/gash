@@ -527,7 +527,7 @@ it "docker_compose_upgrade executes commands in correct order" bash -c '
     source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
     export PATH="$ROOT/tests/mocks/bin:$PATH"
-    export GASH_HEADLESS=1  # Skip confirmation prompt
+    export GASH_HEADLESS=1  # Headless: requires explicit --yes
 
     tmpdir=$(mktemp -d)
     trap "rm -rf $tmpdir" EXIT
@@ -542,7 +542,7 @@ services:
 EOF
 
     # Run upgrade
-    docker_compose_upgrade "$tmpdir" >/dev/null 2>&1 || true
+    docker_compose_upgrade "$tmpdir" --yes >/dev/null 2>&1 || true
 
     # Check that commands were called in order
     [[ -f "$MOCK_DOCKER_LOG" ]] || exit 1

@@ -30,9 +30,8 @@ if [[ -z "${__AI_CLAUDE_API:-}" ]]; then
     readonly __AI_CLAUDE_API="https://api.anthropic.com/v1/messages"
     readonly __AI_GEMINI_API="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
-    # Models
+    # Models (the Gemini model is part of __AI_GEMINI_API above)
     readonly __AI_CLAUDE_MODEL="claude-haiku-4-5-20251001"
-    readonly __AI_GEMINI_MODEL="gemini-2.0-flash"
 
     # Timeouts (seconds)
     readonly __AI_CONNECT_TIMEOUT=5   # Connection timeout (quick fail if unreachable)
@@ -353,7 +352,9 @@ __ai_handle_curl_error() {
             ' 2>/dev/null | head -1)
             # Parse duration: "30s" → 30, "633ms" → 0.633
             if [[ "$retry_delay" =~ ^([0-9.]+)ms$ ]]; then
-                retry_delay=$(awk "BEGIN{printf \"%.1f\", ${BASH_REMATCH[1]}/1000}")
+                # LC_NUMERIC=C: a comma-decimal locale would print "0,6" and
+                # fail the numeric validation below (silently defaulting to 5s)
+                retry_delay=$(LC_NUMERIC=C awk "BEGIN{printf \"%.1f\", ${BASH_REMATCH[1]}/1000}")
             else
                 retry_delay="${retry_delay%s}"
             fi
@@ -534,7 +535,7 @@ __ai_call_claude() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
-            -H "x-api-key: $token" \
+            --config <(printf 'header = "x-api-key: %s"\n' "$token") \
             -H "anthropic-version: 2023-06-01" \
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
@@ -552,7 +553,7 @@ __ai_call_claude() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -624,8 +625,9 @@ __ai_call_gemini() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
+            --config <(printf 'header = "x-goog-api-key: %s"\n' "$token") \
             -d "$body" \
-            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+            "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
         elapsed_time=$(( $(date +%s) - start_time ))
         response=$(<"$tmp_file")
@@ -640,7 +642,7 @@ __ai_call_gemini() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -713,7 +715,7 @@ __sysinfo_call_claude() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
-            -H "x-api-key: $token" \
+            --config <(printf 'header = "x-api-key: %s"\n' "$token") \
             -H "anthropic-version: 2023-06-01" \
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
@@ -729,7 +731,7 @@ __sysinfo_call_claude() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -789,8 +791,9 @@ __sysinfo_call_gemini() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
+            --config <(printf 'header = "x-goog-api-key: %s"\n' "$token") \
             -d "$body" \
-            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+            "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
         elapsed_time=$(( $(date +%s) - start_time ))
         response=$(<"$tmp_file")
@@ -803,7 +806,7 @@ __sysinfo_call_gemini() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -873,7 +876,7 @@ __sysinfo_call_drilldown_claude() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
-            -H "x-api-key: $token" \
+            --config <(printf 'header = "x-api-key: %s"\n' "$token") \
             -H "anthropic-version: 2023-06-01" \
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
@@ -889,7 +892,7 @@ __sysinfo_call_drilldown_claude() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -950,8 +953,9 @@ __sysinfo_call_drilldown_gemini() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
+            --config <(printf 'header = "x-goog-api-key: %s"\n' "$token") \
             -d "$body" \
-            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+            "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
         elapsed_time=$(( $(date +%s) - start_time ))
         response=$(<"$tmp_file")
@@ -964,7 +968,7 @@ __sysinfo_call_drilldown_gemini() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -1286,7 +1290,7 @@ __sysinfo_call_freetext_claude() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
-            -H "x-api-key: $token" \
+            --config <(printf 'header = "x-api-key: %s"\n' "$token") \
             -H "anthropic-version: 2023-06-01" \
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
@@ -1302,7 +1306,7 @@ __sysinfo_call_freetext_claude() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -1367,8 +1371,9 @@ __sysinfo_call_freetext_gemini() {
             --connect-timeout "$__AI_CONNECT_TIMEOUT" \
             --max-time "$__AI_SYSINFO_RESPONSE_TIMEOUT" \
             -H "Content-Type: application/json" \
+            --config <(printf 'header = "x-goog-api-key: %s"\n' "$token") \
             -d "$body" \
-            "${__AI_GEMINI_API}?key=${token}" 2>"$tmp_err") || curl_exit=$?
+            "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
         elapsed_time=$(( $(date +%s) - start_time ))
         response=$(<"$tmp_file")
@@ -1381,7 +1386,7 @@ __sysinfo_call_freetext_gemini() {
         __rc=$?
         if [[ $__rc -eq 0 ]]; then break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
-            (( __retry_count++ ))
+            __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
             sleep "${__AI_RETRY_DELAY:-5}"
             continue
@@ -1568,7 +1573,7 @@ __sysinfo_md_initial() {
     ok_count=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="ok")] | length')
 
     local provider_cap
-    provider_cap="$(echo "$provider" | sed 's/.*/\u&/')"
+    provider_cap="${provider^}"
 
     md+="# System Analysis Report"$'\n\n'
     md+="**Generated:** $(date '+%Y-%m-%d %H:%M:%S') | **Provider:** ${provider_cap}"$'\n\n'
@@ -1822,7 +1827,7 @@ User question: ${query}"
 
     # Show spinner with provider name
     local provider_display
-    provider_display="$(echo "$provider" | sed 's/.*/\u&/')"  # Capitalize first letter
+    provider_display="${provider^}"  # Capitalize first letter
     __gash_spinner_start "${provider_display} is thinking..."
 
     # Call API
@@ -1936,7 +1941,7 @@ User question: ${query}"
 
     # Show spinner with provider name
     local provider_display
-    provider_display="$(echo "$provider" | sed 's/.*/\u&/')"  # Capitalize first letter
+    provider_display="${provider^}"  # Capitalize first letter
     __gash_spinner_start "${provider_display} is thinking..."
 
     # Call API
@@ -2079,7 +2084,7 @@ __ai_sysinfo_impl() {
 
     # Show spinner for analysis
     local provider_display
-    provider_display="$(echo "$provider" | sed 's/.*/\u&/')"
+    provider_display="${provider^}"
     __gash_spinner_start "${provider_display} is analyzing system..."
 
     # Call API

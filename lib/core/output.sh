@@ -22,6 +22,12 @@
 #
 #   Standards respected: https://no-color.org (NO_COLOR env var).
 #   Gash-specific: GASH_NO_COLOR, GASH_HEADLESS.
+#
+# STREAM POLICY (v1.5.1+):
+#   Structured data goes to stdout. ALL diagnostics (info/success/warning/
+#   error/step/ssh/debug/prompts) go to stderr. This keeps values captured
+#   via $(...) clean: a permission warning emitted during a config load must
+#   never end up prefixed to an API token or a DB URL.
 
 # -----------------------------------------------------------------------------
 # Color Definitions
@@ -167,9 +173,9 @@ EOS
 __gash_info() {
     local message="${1-}"
     if __gash_use_color; then
-        echo -e "${__GASH_CYAN}Info:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}"
+        echo -e "${__GASH_CYAN}Info:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
     else
-        printf 'Info: %s\n' "$message"
+        printf 'Info: %s\n' "$message" >&2
     fi
 }
 
@@ -189,9 +195,9 @@ __gash_error() {
 __gash_success() {
     local message="${1-}"
     if __gash_use_color; then
-        echo -e "${__GASH_BOLD_GREEN}OK:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}"
+        echo -e "${__GASH_BOLD_GREEN}OK:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
     else
-        printf 'OK: %s\n' "$message"
+        printf 'OK: %s\n' "$message" >&2
     fi
 }
 
@@ -200,9 +206,9 @@ __gash_success() {
 __gash_warning() {
     local message="${1-}"
     if __gash_use_color; then
-        echo -e "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}"
+        echo -e "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
     else
-        printf 'Warning: %s\n' "$message"
+        printf 'Warning: %s\n' "$message" >&2
     fi
 }
 
@@ -221,9 +227,9 @@ __gash_ssh() {
             error)   msg_color="${__GASH_BOLD_RED}" ;;
             *)       msg_color="${__GASH_BOLD_WHITE}" ;;
         esac
-        echo -e "${__GASH_CYAN}SSH:${__GASH_COLOR_OFF} ${msg_color}${message}${__GASH_COLOR_OFF}"
+        echo -e "${__GASH_CYAN}SSH:${__GASH_COLOR_OFF} ${msg_color}${message}${__GASH_COLOR_OFF}" >&2
     else
-        printf 'SSH: %s\n' "$message"
+        printf 'SSH: %s\n' "$message" >&2
     fi
 }
 
@@ -234,9 +240,9 @@ __gash_step() {
     local total="${2-}"
     local message="${3-}"
     if __gash_use_color; then
-        echo -e "${__GASH_CYAN}[${current}/${total}]${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}"
+        echo -e "${__GASH_CYAN}[${current}/${total}]${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
     else
-        printf '[%s/%s] %s\n' "$current" "$total" "$message"
+        printf '[%s/%s] %s\n' "$current" "$total" "$message" >&2
     fi
 }
 
@@ -276,6 +282,8 @@ __gash_print() {
         bold_red)    color_code="${__GASH_BOLD_RED}" ;;
         bold_green)  color_code="${__GASH_BOLD_GREEN}" ;;
         bold_yellow) color_code="${__GASH_BOLD_YELLOW}" ;;
+        bold_blue)   color_code="${__GASH_BOLD_BLUE}" ;;
+        bold_cyan)   color_code="${__GASH_BOLD_CYAN}" ;;
         bold_white)  color_code="${__GASH_BOLD_WHITE}" ;;
         *)      color_code="${__GASH_COLOR_OFF}" ;;
     esac
@@ -287,50 +295,14 @@ __gash_print() {
 # Enhanced Output Functions
 # -----------------------------------------------------------------------------
 
-# Get caller context (module::function or just function name)
-# Usage: ctx=$(__gash_caller_context)
-__gash_caller_context() {
-    local caller_func="${FUNCNAME[2]-}"
-    local caller_file="${BASH_SOURCE[2]-}"
-
-    # Extract module name from filename
-    local module=""
-    if [[ -n "$caller_file" ]]; then
-        module="$(basename "$caller_file" .sh)"
-        # Skip if called from output.sh itself
-        [[ "$module" == "output" ]] && module=""
-    fi
-
-    if [[ -n "$module" && -n "$caller_func" ]]; then
-        printf '%s' "${module}::${caller_func}"
-    elif [[ -n "$caller_func" ]]; then
-        printf '%s' "$caller_func"
-    else
-        printf '%s' "gash"
-    fi
-}
-
-# Enhanced info with optional context
-# Usage: __gash_info_ctx "message"
-__gash_info_ctx() {
-    local message="${1-}"
-    local ctx
-    ctx="$(__gash_caller_context)"
-    if __gash_use_color; then
-        echo -e "${__GASH_COLOR_INFO}${__GASH_SYMBOL_INFO}${__GASH_COLOR_OFF} ${__GASH_COLOR_MUTED}[${ctx}]${__GASH_COLOR_OFF} ${message}"
-    else
-        printf '%s [%s] %s\n' "$__GASH_SYMBOL_INFO" "$ctx" "$message"
-    fi
-}
-
 # Enhanced success with symbol
 # Usage: __gash_success_v2 "message"
 __gash_success_v2() {
     local message="${1-}"
     if __gash_use_color; then
-        echo -e "${__GASH_COLOR_SUCCESS}${__GASH_SYMBOL_OK}${__GASH_COLOR_OFF} ${message}"
+        echo -e "${__GASH_COLOR_SUCCESS}${__GASH_SYMBOL_OK}${__GASH_COLOR_OFF} ${message}" >&2
     else
-        printf '%s %s\n' "$__GASH_SYMBOL_OK" "$message"
+        printf '%s %s\n' "$__GASH_SYMBOL_OK" "$message" >&2
     fi
 }
 
@@ -339,9 +311,9 @@ __gash_success_v2() {
 __gash_warning_v2() {
     local message="${1-}"
     if __gash_use_color; then
-        echo -e "${__GASH_COLOR_WARNING}${__GASH_SYMBOL_WARN}${__GASH_COLOR_OFF} ${message}"
+        echo -e "${__GASH_COLOR_WARNING}${__GASH_SYMBOL_WARN}${__GASH_COLOR_OFF} ${message}" >&2
     else
-        printf '%s %s\n' "$__GASH_SYMBOL_WARN" "$message"
+        printf '%s %s\n' "$__GASH_SYMBOL_WARN" "$message" >&2
     fi
 }
 
@@ -363,6 +335,8 @@ __gash_error_v2() {
 # Global spinner state
 declare -g __GASH_SPINNER_PID=""
 declare -g __GASH_SPINNER_MSG=""
+declare -g __GASH_SPINNER_PREV_TRAP=""
+declare -g __GASH_SPINNER_TRAP_SET=""
 
 # Start a spinner for long-running operations
 # Usage: __gash_spinner_start "Loading..."
@@ -377,6 +351,13 @@ __gash_spinner_start() {
     # Spinner characters (ASCII compatible)
     local frames='|/-\'
 
+    # Honor the runtime color gate (NO_COLOR exported after source, etc.)
+    local frame_on="" frame_off=""
+    if __gash_use_color; then
+        frame_on="${__GASH_COLOR_PRIMARY}"
+        frame_off="${__GASH_COLOR_OFF}"
+    fi
+
     # Start spinner in background, suppressing job notifications
     # Method: disable job control, start process, disown it, re-enable
     {
@@ -385,7 +366,7 @@ __gash_spinner_start() {
             local i=0
             local len=${#frames}
             while true; do
-                printf "\r${__GASH_COLOR_PRIMARY}%s${__GASH_COLOR_OFF} %s " "${frames:i:1}" "$message"
+                printf "\r${frame_on}%s${frame_off} %s " "${frames:i:1}" "$message"
                 i=$(( (i + 1) % len ))
                 sleep 0.1
             done
@@ -395,8 +376,13 @@ __gash_spinner_start() {
         set -m 2>/dev/null  # Re-enable job control (may fail in non-interactive)
     } 2>/dev/null
 
-    # Ensure cleanup on script exit
+    # Ensure cleanup on script exit, preserving any pre-existing EXIT trap
+    # so a caller's cleanup (temp files, locks) is restored on stop.
+    __GASH_SPINNER_PREV_TRAP="$(trap -p EXIT)"
+    __GASH_SPINNER_TRAP_SET="1"
     trap '__gash_spinner_stop' EXIT
+
+    return 0
 }
 
 # Stop the spinner
@@ -420,7 +406,18 @@ __gash_spinner_stop() {
         esac
     fi
 
-    trap - EXIT
+    # Only touch the EXIT trap if we set it; restore what was there before.
+    if [[ -n "${__GASH_SPINNER_TRAP_SET-}" ]]; then
+        if [[ -n "${__GASH_SPINNER_PREV_TRAP-}" ]]; then
+            eval "$__GASH_SPINNER_PREV_TRAP"
+        else
+            trap - EXIT
+        fi
+        __GASH_SPINNER_PREV_TRAP=""
+        __GASH_SPINNER_TRAP_SET=""
+    fi
+
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -454,62 +451,20 @@ __gash_progress() {
     [[ $filled -lt $width ]] && bar+=">"
     for ((i=0; i<empty-1 && i>=0; i++)); do bar+=" "; done
 
+    # Honor the runtime color gate
+    local bar_on="" bar_off=""
+    if __gash_use_color; then
+        bar_on="${__GASH_COLOR_PRIMARY}"
+        bar_off="${__GASH_COLOR_OFF}"
+    fi
+
     # Print progress
-    printf "\r${__GASH_COLOR_PRIMARY}[%-${width}s]${__GASH_COLOR_OFF} %3d%% %s" "$bar" "$percent" "$message"
+    printf "\r${bar_on}[%-${width}s]${bar_off} %3d%% %s" "$bar" "$percent" "$message"
 
     # Print newline when complete
     [[ $current -ge $total ]] && echo
-}
 
-# -----------------------------------------------------------------------------
-# Table Formatting Helper
-# -----------------------------------------------------------------------------
-
-# Print a formatted table row
-# Usage: __gash_table_row "col1" "col2" "col3" ...
-__gash_table_row() {
-    local -a cols=("$@")
-    local output=""
-    local col
-
-    for col in "${cols[@]}"; do
-        output+="$(printf '%-20s' "$col")"
-    done
-
-    if __gash_use_color; then
-        echo -e "$output"
-    else
-        printf '%s\n' "$output"
-    fi
-}
-
-# Print a table header with separator
-# Usage: __gash_table_header "col1" "col2" "col3" ...
-__gash_table_header() {
-    local -a cols=("$@")
-
-    if __gash_use_color; then
-        # Print header row in bold
-        echo -e "${__GASH_BOLD_WHITE}"
-        __gash_table_row "${cols[@]}"
-        echo -e "${__GASH_COLOR_OFF}"
-
-        # Print separator
-        local sep=""
-        local col
-        for col in "${cols[@]}"; do
-            sep+="$(printf '%-20s' '--------------------')"
-        done
-        echo -e "${__GASH_COLOR_MUTED}${sep}${__GASH_COLOR_OFF}"
-    else
-        __gash_table_row "${cols[@]}"
-        local sep=""
-        local col
-        for col in "${cols[@]}"; do
-            sep+="$(printf '%-20s' '--------------------')"
-        done
-        printf '%s\n' "$sep"
-    fi
+    return 0
 }
 
 # -----------------------------------------------------------------------------

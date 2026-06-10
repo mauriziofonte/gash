@@ -95,6 +95,13 @@ git_apply_patch() {
         return 1
     fi
 
+    # Refuse to start over a dirty working tree: a failed 3-way apply would
+    # mix conflict markers with pre-existing local changes, with no way back.
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        __gash_error "Working tree is not clean. Commit or stash your changes before applying a patch."
+        return 1
+    fi
+
     # Start patching process
     __gash_step 1 4 "Checking out to main branch '$main_branch'..."
     git checkout "$main_branch" && git pull origin "$main_branch" || {
@@ -112,15 +119,26 @@ git_apply_patch() {
     local patch_file="${feature_branch}.patch"
     git diff-index "$commit_hash" --binary > "$patch_file" || {
         __gash_error "Failed to create patch file."
+        rm -f "$patch_file"
         return 1
     }
 
     __gash_step 4 4 "Applying patch to '$main_branch'..."
-    git checkout "$main_branch" && git apply --3way "$patch_file" || {
-        __gash_error "Failed to apply the patch."
+    git checkout "$main_branch" || {
+        __gash_error "Failed to checkout the main branch."
+        rm -f "$patch_file"
         return 1
     }
+    if ! git apply --3way "$patch_file"; then
+        # Roll back: the tree was clean at entry, so a hard reset restores
+        # exactly the pre-apply state (no user changes can be lost here).
+        __gash_error "Failed to apply the patch. Rolling back working tree."
+        git reset --hard HEAD >/dev/null 2>&1 || true
+        __gash_info "Patch file kept for inspection: $patch_file"
+        return 1
+    fi
 
+    rm -f "$patch_file"
     __gash_success "Patch applied successfully from '$feature_branch' to '$main_branch'."
 }
 

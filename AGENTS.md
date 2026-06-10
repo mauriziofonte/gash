@@ -6,7 +6,7 @@
 > agent's system prompt / `CLAUDE.md` / `AGENTS.md` / `.cursorrules` to give
 > it safe, structured access to Gash.
 >
-> **Applies to:** Gash `v1.5.0+`.
+> **Applies to:** Gash `v1.5.1+`.
 > **Stability:** The `llm_*` contract, the `--json` envelope, and the error
 > shape are considered stable API. Breaking changes require a minor bump.
 
@@ -106,11 +106,13 @@ All `llm_*` functions are designed for agent consumption: machine-readable outpu
 | `dirs_list_empty [PATH]` | `--json` | Empty dirs, with `--count` and `--null` |
 | `tree_stats [PATH]` | `--json` | Totals + top extensions + depth + empty-dir count |
 
-Common flags (accepted by all five):
+Common flags for the size scanners (`files_largest`, `dirs_largest`,
+`dirs_find_large`; `dirs_list_empty` and `tree_stats` accept the subset
+listed in their `--help`):
 
 ```
 --limit N                # cap results (default 100)
---min-size SIZE          # bytes / K / M / G / T / IEC suffixes
+--min-size SIZE          # bytes / K / M / G / T / IEC suffixes (dirs_find_large: --size SIZE)
 --depth N                # max-depth cap
 --exclude GLOB           # prune matching paths (repeatable)
 --no-ignore              # disable default prune (node_modules/.git/vendor/__pycache__/.cache)
@@ -121,6 +123,10 @@ Common flags (accepted by all five):
 --human / --no-human     # size formatting (auto-on on TTY)
 --no-color               # force plain output
 ```
+
+Paths containing literal tab or newline characters are excluded from scanner
+results by design (they cannot be represented safely in TSV/line-oriented
+output), so `--null` records are always intact, complete paths.
 
 ### 3.2 File & code search (zero-ANSI, prune-aware)
 
@@ -546,7 +552,7 @@ Most agents accept either a `CLAUDE.md`-like or `AGENTS.md`-like file. Use the C
 
 ## 9. Version compatibility
 
-This document tracks Gash **v1.5.0+**.
+This document tracks Gash **v1.5.1+**.
 
 ### Pre-1.5 differences (avoid if possible)
 
@@ -561,7 +567,7 @@ This document tracks Gash **v1.5.0+**.
 
 ```bash
 GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'
-# -> 1.5.0
+# -> 1.5.1
 ```
 
 ### Future compatibility

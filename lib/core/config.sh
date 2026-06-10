@@ -46,19 +46,22 @@ __gash_url_decode() {
     local decoded=""
     local i=0
     local len=${#encoded}
+    local char hex
 
     while ((i < len)); do
-        local char="${encoded:i:1}"
+        char="${encoded:i:1}"
         if [[ "$char" == "%" ]] && ((i + 2 < len)); then
-            local hex="${encoded:i+1:2}"
+            hex="${encoded:i+1:2}"
             if [[ "$hex" =~ ^[0-9A-Fa-f]{2}$ ]]; then
-                decoded+=$(printf "\\x$hex")
-                ((i += 3))
+                # printf -v (not $(...)) so decoded newlines are preserved
+                printf -v char "\\x$hex"
+                decoded+="$char"
+                i=$((i + 3))
                 continue
             fi
         fi
         decoded+="$char"
-        ((i++))
+        i=$((i + 1))
     done
 
     printf '%s' "$decoded"
@@ -68,16 +71,20 @@ __gash_url_decode() {
 __gash_url_encode() {
     local string="${1-}"
     local encoded=""
-    local i
+    local i char
+    # Iterate BYTES, not codepoints: a multi-byte UTF-8 char must produce
+    # one %XX per byte (e.g. "è" -> %C3%A8, never %E8).
+    local LC_ALL=C
 
     for ((i = 0; i < ${#string}; i++)); do
-        local char="${string:i:1}"
+        char="${string:i:1}"
         case "$char" in
             [a-zA-Z0-9._~-])
                 encoded+="$char"
                 ;;
             *)
-                encoded+=$(printf '%%%02X' "'$char")
+                printf -v char '%%%02X' "'$char"
+                encoded+="$char"
                 ;;
         esac
     done
@@ -258,78 +265,82 @@ __gash_get_db_url() {
 
 # Parse database URL into components
 # Usage: __gash_parse_db_url "mysql://user:pass@host:port/db" VAR_DRIVER VAR_USER VAR_PASS VAR_HOST VAR_PORT VAR_DB
+#
+# All locals carry the __pdu_ prefix so callers can pass any reasonable
+# variable name without hitting bash nameref shadowing (a caller var named
+# like one of our locals would silently lose the assignment).
 __gash_parse_db_url() {
-    local url="${1-}"
-    local -n out_driver="${2-_gash_dummy}"
-    local -n out_user="${3-_gash_dummy}"
-    local -n out_pass="${4-_gash_dummy}"
-    local -n out_host="${5-_gash_dummy}"
-    local -n out_port="${6-_gash_dummy}"
-    local -n out_db="${7-_gash_dummy}"
+    local __pdu_url="${1-}"
+    local -n __pdu_out_driver="${2-__gash_pdu_dummy}"
+    local -n __pdu_out_user="${3-__gash_pdu_dummy}"
+    local -n __pdu_out_pass="${4-__gash_pdu_dummy}"
+    local -n __pdu_out_host="${5-__gash_pdu_dummy}"
+    local -n __pdu_out_port="${6-__gash_pdu_dummy}"
+    local -n __pdu_out_db="${7-__gash_pdu_dummy}"
 
     # Extract driver: mysql://... -> mysql
-    local driver="${url%%://*}"
-    out_driver="$driver"
+    local __pdu_driver="${__pdu_url%%://*}"
+    __pdu_out_driver="$__pdu_driver"
 
     # Remove driver prefix
-    local rest="${url#*://}"
+    local __pdu_rest="${__pdu_url#*://}"
 
     # Extract user:pass@host:port/database
-    local userinfo=""
-    local hostinfo=""
-    local database=""
+    local __pdu_userinfo=""
+    local __pdu_hostinfo=""
+    local __pdu_database=""
 
     # Split by LAST @ to get userinfo and hostinfo
     # Using %@* (shortest suffix match) instead of %%@* to handle @ in passwords
-    if [[ "$rest" == *@* ]]; then
-        userinfo="${rest%@*}"
-        rest="${rest##*@}"
+    if [[ "$__pdu_rest" == *@* ]]; then
+        __pdu_userinfo="${__pdu_rest%@*}"
+        __pdu_rest="${__pdu_rest##*@}"
     fi
 
     # Split remaining by / to get hostinfo and database
-    if [[ "$rest" == */* ]]; then
-        hostinfo="${rest%%/*}"
-        database="${rest#*/}"
+    if [[ "$__pdu_rest" == */* ]]; then
+        __pdu_hostinfo="${__pdu_rest%%/*}"
+        __pdu_database="${__pdu_rest#*/}"
     else
-        hostinfo="$rest"
-        database=""
+        __pdu_hostinfo="$__pdu_rest"
+        __pdu_database=""
     fi
 
     # Parse userinfo: user:pass
-    local user=""
-    local pass=""
-    if [[ -n "$userinfo" ]]; then
-        if [[ "$userinfo" == *:* ]]; then
-            user="${userinfo%%:*}"
-            pass="${userinfo#*:}"
+    local __pdu_user=""
+    local __pdu_pass=""
+    if [[ -n "$__pdu_userinfo" ]]; then
+        if [[ "$__pdu_userinfo" == *:* ]]; then
+            __pdu_user="${__pdu_userinfo%%:*}"
+            __pdu_pass="${__pdu_userinfo#*:}"
         else
-            user="$userinfo"
+            __pdu_user="$__pdu_userinfo"
         fi
     fi
 
     # Parse hostinfo: host:port
-    local host=""
-    local port=""
-    if [[ -n "$hostinfo" ]]; then
-        if [[ "$hostinfo" == *:* ]]; then
-            host="${hostinfo%%:*}"
-            port="${hostinfo#*:}"
+    local __pdu_host=""
+    local __pdu_port=""
+    if [[ -n "$__pdu_hostinfo" ]]; then
+        if [[ "$__pdu_hostinfo" == *:* ]]; then
+            __pdu_host="${__pdu_hostinfo%%:*}"
+            __pdu_port="${__pdu_hostinfo#*:}"
         else
-            host="$hostinfo"
+            __pdu_host="$__pdu_hostinfo"
             # Default ports
-            case "$driver" in
-                mysql|mariadb) port="3306" ;;
-                pgsql) port="5432" ;;
-                *) port="" ;;
+            case "$__pdu_driver" in
+                mysql|mariadb) __pdu_port="3306" ;;
+                pgsql) __pdu_port="5432" ;;
+                *) __pdu_port="" ;;
             esac
         fi
     fi
 
-    out_user="$user"
-    out_pass="$pass"
-    out_host="$host"
-    out_port="$port"
-    out_db="$database"
+    __pdu_out_user="$__pdu_user"
+    __pdu_out_pass="$__pdu_pass"
+    __pdu_out_host="$__pdu_host"
+    __pdu_out_port="$__pdu_port"
+    __pdu_out_db="$__pdu_database"
 
     return 0
 }
@@ -361,9 +372,10 @@ gash_db_list() {
         local name="${line%%$'\t'*}"
         local url="${line#*$'\t'}"
 
-        # Mask password in URL for display
+        # Mask password in URL for display (greedy .+ extends to the LAST @,
+        # so passwords containing @ are fully masked)
         local display_url
-        if [[ "$url" =~ ^([^:]+://[^:]+:)[^@]+(@.*)$ ]]; then
+        if [[ "$url" =~ ^([^:]+://[^:]+:).+(@[^@]*)$ ]]; then
             display_url="${BASH_REMATCH[1]}****${BASH_REMATCH[2]}"
         else
             display_url="$url"
@@ -408,7 +420,11 @@ gash_db_test() {
                 return 1
             fi
 
-            if "$mysql_bin" -u"$_db_user" -p"$_db_pass" -h"$_db_host" -P"$_db_port" ${_db_name:+-D "$_db_name"} -e "SELECT 1" >/dev/null 2>&1; then
+            # Credentials via --defaults-extra-file on a process-substitution
+            # fd, never in argv (/proc/<pid>/cmdline is world-readable).
+            local _db_pass_ini="${_db_pass//\\/\\\\}"
+            _db_pass_ini="${_db_pass_ini//\"/\\\"}"
+            if "$mysql_bin" --defaults-extra-file=<(printf '[client]\nuser=%s\npassword="%s"\nhost=%s\nport=%s\n' "$_db_user" "$_db_pass_ini" "$_db_host" "$_db_port") ${_db_name:+-D "$_db_name"} -e "SELECT 1" >/dev/null 2>&1; then
                 __gash_success "Connection successful!"
                 return 0
             else

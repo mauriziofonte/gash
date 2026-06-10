@@ -118,16 +118,23 @@ proc b64decode {s} {
 
 set timeout 20
 
-if {([llength $argv] % 2) != 0} {
-  puts "Invalid arguments (expected pairs of key/password)"
+# Key/passphrase pairs arrive on STDIN as alternating base64 lines.
+# argv is deliberately NOT used: /proc/<pid>/cmdline is world-readable,
+# so secrets passed as arguments would be visible to any local process.
+set pairs {}
+while {[gets stdin line] >= 0} {
+  if {$line eq ""} { continue }
+  lappend pairs $line
+}
+
+if {([llength $pairs] % 2) != 0} {
+  puts "Invalid input (expected pairs of key/password lines)"
   exit 2
 }
 
-for {set i 0} {$i < [llength $argv]} {incr i 2} {
-  set key_b64 [lindex $argv $i]
-  set pass_b64 [lindex $argv [expr {$i+1}]]
-  set keyfile [b64decode $key_b64]
-  set pass [b64decode $pass_b64]
+for {set i 0} {$i < [llength $pairs]} {incr i 2} {
+  set keyfile [b64decode [lindex $pairs $i]]
+  set pass [b64decode [lindex $pairs [expr {$i+1}]]]
 
   spawn ssh-add -- $keyfile
   expect {
@@ -202,7 +209,10 @@ gash_ssh_auto_unlock() {
         return 0
     fi
 
-    local -a args=()
+    # Secrets travel to expect over STDIN (alternating base64 lines), never
+    # in argv: /proc/<pid>/cmdline is world-readable for the lifetime of
+    # the expect process.
+    local stdin_payload=""
     local IFS=$'\n'
     local row
 
@@ -212,14 +222,14 @@ gash_ssh_auto_unlock() {
         local keyfile="${row%%$'\t'*}"
         local password="${row#*$'\t'}"
 
-        # Encode values to safely pass special characters through argv
+        # Encode values to safely carry special characters (incl. newlines)
         local key_b64 pass_b64
         key_b64="$(printf '%s' "$keyfile" | base64 | tr -d '\n')"
         pass_b64="$(printf '%s' "$password" | base64 | tr -d '\n')"
-        args+=("$key_b64" "$pass_b64")
+        stdin_payload+="$key_b64"$'\n'"$pass_b64"$'\n'
     done
 
-    if [[ ${#args[@]} -eq 0 ]]; then
+    if [[ -z "$stdin_payload" ]]; then
         export GASH_SSH_AUTOUNLOCK_RAN=1
         return 0
     fi
@@ -229,7 +239,7 @@ gash_ssh_auto_unlock() {
     __gash_generate_expect_script > "$expect_script"
 
     local expect_output
-    expect_output="$(expect -f "$expect_script" -- "${args[@]}" 2>&1)"
+    expect_output="$(printf '%s' "$stdin_payload" | expect -f "$expect_script" 2>&1)"
     rm -f "$expect_script" >/dev/null 2>&1
 
     echo "$expect_output" | __gash_format_expect_output

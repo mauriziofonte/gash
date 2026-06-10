@@ -120,7 +120,7 @@ it "NO_COLOR=1 produces no ANSI in __gash_info" bash -c '
   out="$(NO_COLOR=1 bash -c "
     source \"$ROOT/lib/core/output.sh\"
     __gash_info \"hello\"
-  ")"
+  " 2>&1)"
   [[ "$out" == *"Info: hello"* ]]
   [[ "$out" != *$'"'"'\033['"'"'* ]]
 '
@@ -157,7 +157,7 @@ it "pipe context (non-TTY stdout) produces no ANSI in __gash_info" bash -c '
   ROOT="${GASH_TEST_ROOT}"
   # Capture via $(...) forces stdout to a pipe; runtime gate should kick in
   source "$ROOT/lib/core/output.sh"
-  out="$(__gash_info "piped")"
+  out="$(__gash_info "piped" 2>&1)"
   [[ "$out" == *"Info: piped"* ]]
   [[ "$out" != *$'"'"'\033['"'"'* ]]
 '

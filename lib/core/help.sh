@@ -103,13 +103,17 @@ __gash_help_display() {
     local module="${__GASH_HELP_MODULE[$func_name]-}"
     local see_also="${__GASH_HELP_SEE_ALSO[$func_name]-}"
 
-    # Colors (defined in output.sh, available at display time)
-    local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"   # Orange - function name
-    local W="${__GASH_BOLD_WHITE-\033[1;37m}"          # Bold white - section headers
-    local G="${__GASH_GREEN-\033[0;32m}"               # Green - aliases
-    local M="${__GASH_COLOR_MUTED-\033[38;5;245m}"     # Dim gray - comments/module
-    local C="${__GASH_CYAN-\033[0;36m}"                # Cyan - commands
-    local R="${__GASH_COLOR_OFF-\033[0m}"               # Reset
+    # Colors gated through __gash_use_color at runtime (no hardcoded ANSI
+    # fallbacks): piping help output must never leak escape sequences.
+    local A='' W='' G='' M='' C='' R=''
+    if __gash_use_color; then
+        A="${__GASH_COLOR_ACCENT}"   # Orange - function name
+        W="${__GASH_BOLD_WHITE}"     # Bold white - section headers
+        G="${__GASH_GREEN}"          # Green - aliases
+        M="${__GASH_COLOR_MUTED}"    # Dim gray - comments/module
+        C="${__GASH_CYAN}"           # Cyan - commands
+        R="${__GASH_COLOR_OFF}"      # Reset
+    fi
 
     # Header: function name + module tag
     echo
@@ -211,11 +215,14 @@ __gash_help_search() {
     local keyword="${1-}"
     [[ -z "$keyword" ]] && return 1
 
-    local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
-    local G="${__GASH_GREEN-\033[0;32m}"
-    local W="${__GASH_BOLD_WHITE-\033[1;37m}"
-    local M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
-    local R="${__GASH_COLOR_OFF-\033[0m}"
+    local A='' G='' W='' M='' R=''
+    if __gash_use_color; then
+        A="${__GASH_COLOR_ACCENT}"
+        G="${__GASH_GREEN}"
+        W="${__GASH_BOLD_WHITE}"
+        M="${__GASH_COLOR_MUTED}"
+        R="${__GASH_COLOR_OFF}"
+    fi
 
     local lc_keyword
     lc_keyword="$(printf '%s' "$keyword" | tr '[:upper:]' '[:lower:]')"
@@ -269,11 +276,14 @@ __gash_help_search() {
 # List all registered functions grouped by module.
 # Usage: __gash_help_list
 __gash_help_list() {
-    local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
-    local G="${__GASH_GREEN-\033[0;32m}"
-    local W="${__GASH_BOLD_WHITE-\033[1;37m}"
-    local M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
-    local R="${__GASH_COLOR_OFF-\033[0m}"
+    local A='' G='' W='' M='' R=''
+    if __gash_use_color; then
+        A="${__GASH_COLOR_ACCENT}"
+        G="${__GASH_GREEN}"
+        W="${__GASH_BOLD_WHITE}"
+        M="${__GASH_COLOR_MUTED}"
+        R="${__GASH_COLOR_OFF}"
+    fi
 
     # Collect unique module names, sorted
     local -A seen_modules=()

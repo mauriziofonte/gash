@@ -66,12 +66,13 @@ history_grep() {
 
     __gash_require_arg "${1-}" "pattern" "history_grep <pattern>" || return 1
 
-    # Extract the relevant parts (ignoring history line numbers), remove duplicates, and avoid self-call
+    # Extract the relevant parts (ignoring history line numbers), remove duplicates, and avoid self-call.
+    # `|| true`: zero matches is a valid outcome, not a pipefail death sentence.
     history | grep -i -- "$@" | grep -v "history_grep" | \
         awk '{ $1=""; seen[$0]++; if (seen[$0]==1) print $0 }' | \
         awk '{
             printf "\033[1;32m%-5s\033[0m \033[0;36m%-20s\033[0m \033[1;37m%s\033[0m\n", NR, $1" "$2, substr($0, index($0,$3));
-        }'
+        }' || true
 
     return 0
 }
@@ -381,24 +382,61 @@ process_find() {
 # Usage: process_kill PROCESS_NAME
 # Alias: pk
 process_kill() {
-    needs_help "process_kill" "process_kill PROCESS_NAME" \
-        "Kill all processes by name. Alias: pk" \
+    needs_help "process_kill" "process_kill PROCESS_NAME [--force]" \
+        "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors). Alias: pk" \
         "${1-}" && return
 
     local process_name="${1-}"
+    local force_flag="${2-}"
     __gash_require_arg "$process_name" "process name" "process_kill <process_name>" || return 1
 
+    # Exact, case-insensitive match on the executable name: a loose
+    # `ps | grep -i` would also hit redis-sentinel when asked for redis,
+    # or an editor with the name anywhere in its argv.
     local pids
-    pids=$(ps aux | grep -i -- "$process_name" | grep -v grep | awk '{print $2}')
+    pids=$(pgrep -ix "$process_name" 2>/dev/null || true)
 
-    if [ -n "$pids" ]; then
-        for pid in $pids; do
-            kill -9 "$pid"
-            __gash_info "Process with PID $pid killed."
-        done
-    else
-        __gash_error "No process found with name '$process_name'."
+    if [[ -z "$pids" ]]; then
+        __gash_error "No process found with exact name '$process_name'. Use process_find (pf) to inspect candidates."
+        return 1
     fi
+
+    local count
+    count=$(wc -w <<< "$pids")
+    if [[ "$count" -gt 1 && "$force_flag" != "--force" ]]; then
+        __gash_warning "$count processes match '$process_name': $(tr '\n' ' ' <<< "$pids")"
+        if ! needs_confirm_prompt "Kill all of them?"; then
+            __gash_info "Aborted."
+            return 0
+        fi
+    fi
+
+    # Graceful shutdown first: SIGTERM, brief wait, SIGKILL only survivors
+    # (a straight kill -9 gives databases no chance to flush to disk).
+    local pid
+    for pid in $pids; do
+        kill "$pid" 2>/dev/null || true
+    done
+
+    local waited=0
+    while (( waited < 30 )); do
+        local alive=0
+        for pid in $pids; do
+            kill -0 "$pid" 2>/dev/null && alive=1
+        done
+        [[ $alive -eq 0 ]] && break
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+
+    for pid in $pids; do
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null || true
+            __gash_info "Process $pid ignored SIGTERM; killed with SIGKILL."
+        else
+            __gash_info "Process $pid terminated."
+        fi
+    done
 }
 
 # Kill all processes by port.
@@ -414,9 +452,28 @@ port_kill() {
     pids=$(lsof -t -i:"$port" 2>/dev/null || true)
 
     if [ -n "$pids" ]; then
+        # SIGTERM first, SIGKILL only for survivors
+        local pid
         for pid in $pids; do
-            kill -9 "$pid"
-            __gash_info "Process on port $port with PID $pid killed."
+            kill "$pid" 2>/dev/null || true
+        done
+        local waited=0
+        while (( waited < 30 )); do
+            local alive=0
+            for pid in $pids; do
+                kill -0 "$pid" 2>/dev/null && alive=1
+            done
+            [[ $alive -eq 0 ]] && break
+            sleep 0.1
+            waited=$((waited + 1))
+        done
+        for pid in $pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+                __gash_info "Process $pid on port $port ignored SIGTERM; killed with SIGKILL."
+            else
+                __gash_info "Process $pid on port $port terminated."
+            fi
         done
     else
         __gash_error "No process found on port $port."
@@ -459,8 +516,19 @@ sudo_last() {
     if [[ -n "${1-}" ]]; then
         sudo "$@"
     else
-        # shellcheck disable=SC2046
-        sudo $(fc -ln -1)
+        # Re-run the last command VERBATIM via `bash -c` (an unquoted
+        # `sudo $(fc -ln -1)` would re-split words and re-expand globs,
+        # potentially running something different as root). Show it first.
+        local last_cmd
+        last_cmd=$(fc -ln -1)
+        last_cmd="${last_cmd#"${last_cmd%%[![:space:]]*}"}"
+        __gash_warning "About to run as root: $last_cmd"
+        if needs_confirm_prompt "Proceed?"; then
+            sudo bash -c "$last_cmd"
+        else
+            __gash_info "Aborted."
+            return 0
+        fi
     fi
 }
 

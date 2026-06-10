@@ -132,8 +132,9 @@ __llm_validate_path() {
     # Empty path defaults to current directory
     [[ -z "$path" ]] && { echo "."; return 0; }
 
-    # Block path traversal attempts
-    if [[ "$path" == *".."* ]]; then
+    # Block path traversal attempts: ".." only counts when it is a whole
+    # path component ("/tmp/../etc"), not a substring ("file..bak", "v1.2..3")
+    if [[ "/$path/" == *"/../"* || "$path" == ".." || "$path" == "../"* || "$path" == *"/.." ]]; then
         echo '{"error":"path_traversal_blocked","action":"FATAL","recoverable":false,"hint":"Path traversal (..) is not allowed for security reasons"}' >&2
         return 1
     fi
@@ -149,12 +150,38 @@ __llm_validate_path() {
     local forbidden
     for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
         if [[ "$normalized" == "$forbidden"* ]]; then
-            echo '{"error":"forbidden_path","details":"'"$normalized"'","action":"FATAL","recoverable":false,"hint":"This path is protected and cannot be accessed"}' >&2
+            echo '{"error":"forbidden_path","details":"'"$(__gash_json_escape "$normalized")"'","action":"FATAL","recoverable":false,"hint":"This path is protected and cannot be accessed"}' >&2
             return 1
         fi
     done
 
     echo "$normalized"
+    return 0
+}
+
+# Print a [client] INI block for mysql --defaults-extra-file consumption.
+# Keeps credentials off argv: /proc/<pid>/cmdline is world-readable, so
+# -p"$pass" would expose the password to any local process for the whole
+# duration of the query.
+# Usage: "$mysql_bin" --defaults-extra-file=<(__llm_mysql_client_ini U P H PORT) ...
+__llm_mysql_client_ini() {
+    local user="${1-}" pass="${2-}" host="${3-}" port="${4-}"
+    pass="${pass//\\/\\\\}"
+    pass="${pass//\"/\\\"}"
+    printf '[client]\nuser=%s\npassword="%s"\nhost=%s\nport=%s\n' "$user" "$pass" "$host" "$port"
+}
+
+# Validate that a flag value is a plain positive integer.
+# Values interpolated into SQL LIMIT clauses or `head -n` MUST pass this
+# guard: a crafted "-r '5; DROP TABLE x'" would otherwise reach the engine.
+# Usage: __llm_validate_uint <flag_name> <value> || return 1
+__llm_validate_uint() {
+    local name="${1-}"
+    local value="${2-}"
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+        __llm_error "invalid_${name}" "Value '$value' is not a positive integer" "RETRY" "true" "Provide a plain integer for ${name}"
+        return 1
+    fi
     return 0
 }
 
@@ -557,6 +584,13 @@ __llm_tree_impl() {
     # then awk builds the hierarchy in a single END-phase recursive emission.
     # Cap the raw entry set at 500 (internal safety) so pathological trees
     # cannot exhaust memory; the tree is still correct for the subset.
+    # Paths containing tab/newline would corrupt the TSV transport (wrong
+    # names silently attributed): exclude them instead of emitting bad data.
+    # `|| true`: an unreadable subdir or SIGPIPE from head must not kill a
+    # `set -euo pipefail` caller.
+    local nl_glob tab_glob
+    nl_glob=$(printf '*\n*')
+    tab_glob=$(printf '*\t*')
     local raw
     raw=$(
         find "$safe_path" -mindepth 1 -maxdepth "$max_depth" \
@@ -566,9 +600,10 @@ __llm_tree_impl() {
             -name '__pycache__' -prune -o \
             -name '.cache' -prune -o \
             \( -type f -o -type d -o -type l \) \
+            ! -path "$nl_glob" ! -path "$tab_glob" \
             -printf '%P\t%y\t%s\n' 2>/dev/null | \
             head -n 500
-    )
+    ) || true
 
     local esc_root
     esc_root=$(__gash_json_escape "$safe_path")
@@ -715,32 +750,40 @@ __llm_find_impl() {
         esac
     done
 
+    __llm_validate_uint "limit" "$limit" || return 1
+
     # Validate path
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
+    # Zero matches (or SIGPIPE from head) is a valid outcome, not an error:
+    # never let pipefail+errexit kill a headless caller.
     if [[ -n "$contains_regex" ]]; then
         # Search by content
         if __llm_has_rg; then
             rg -l --no-heading --color=never \
                 --glob '!node_modules' --glob '!vendor' --glob '!.git' \
-                "$contains_regex" "$safe_path" 2>/dev/null | head -n "$limit"
+                "$contains_regex" "$safe_path" 2>/dev/null | head -n "$limit" || true
         else
             grep -rl --include='*.php' --include='*.js' --include='*.ts' \
                 --include='*.py' --include='*.go' --include='*.java' \
                 --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git \
-                "$contains_regex" "$safe_path" 2>/dev/null | head -n "$limit"
+                "$contains_regex" "$safe_path" 2>/dev/null | head -n "$limit" || true
         fi
     else
-        # Search by filename pattern
+        # Search by filename pattern. Paths with embedded newlines would be
+        # unparseable in line-oriented output: exclude them.
+        local nl_glob
+        nl_glob=$(printf '*\n*')
         find "$safe_path" \
             -name 'node_modules' -prune -o \
             -name 'vendor' -prune -o \
             -name '.git' -prune -o \
             -name '__pycache__' -prune -o \
-            -type "$file_type" -name "$pattern" -print 2>/dev/null | \
-            head -n "$limit"
+            -type "$file_type" -name "$pattern" ! -path "$nl_glob" -print 2>/dev/null | \
+            head -n "$limit" || true
     fi
+    return 0
 }
 
 # Grep with structured output, optimized for code search.
@@ -796,6 +839,8 @@ __llm_grep_impl() {
         return 1
     fi
 
+    __llm_validate_uint "limit" "$limit" || return 1
+
     # Validate path
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
@@ -813,7 +858,10 @@ __llm_grep_impl() {
 
         [[ $context -gt 0 ]] && rg_args+=(-C "$context")
 
-        rg "${rg_args[@]}" "$pattern" "$safe_path" 2>/dev/null | head -n "$limit"
+        # Zero matches (or SIGPIPE from head) is a valid outcome, not an
+        # error: never let pipefail+errexit kill a headless caller.
+        rg "${rg_args[@]}" "$pattern" "$safe_path" 2>/dev/null | head -n "$limit" || true
+        return 0
     else
         local grep_args=(-rn --color=never)
         grep_args+=(--exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git)
@@ -827,7 +875,8 @@ __llm_grep_impl() {
 
         [[ $context -gt 0 ]] && grep_args+=(-C "$context")
 
-        grep "${grep_args[@]}" "$pattern" "$safe_path" 2>/dev/null | head -n "$limit"
+        grep "${grep_args[@]}" "$pattern" "$safe_path" 2>/dev/null | head -n "$limit" || true
+        return 0
     fi
 }
 
@@ -879,6 +928,8 @@ __llm_sqlite_query() {
     local query="${1-}"
     local sqlite_file="${2-}"
     local max_rows="${3-100}"
+
+    __llm_validate_uint "rows" "$max_rows" || return 1
 
     # Check sqlite3 is installed
     if ! __llm_has_sqlite; then
@@ -959,8 +1010,8 @@ llm_db_query() {
     local _qw_args=("$@") _qw_i=0
     while [[ $_qw_i -lt ${#_qw_args[@]} ]]; do
         case "${_qw_args[$_qw_i]}" in
-            -r|--rows) (( _qw_i += 2 )) ;;
-            *) __GASH_DB_EXPLAIN_ARGS+=("${_qw_args[$_qw_i]}"); (( _qw_i += 1 )) ;;
+            -r|--rows) _qw_i=$((_qw_i + 2)) ;;
+            *) __GASH_DB_EXPLAIN_ARGS+=("${_qw_args[$_qw_i]}"); _qw_i=$((_qw_i + 1)) ;;
         esac
     done
     local __GASH_DB_SLOW_QUERY=1
@@ -1026,6 +1077,10 @@ __llm_db_query_impl() {
         return 1
     fi
 
+    # -r/--rows is interpolated into the LIMIT clause AFTER the semicolon
+    # check above: it must be a plain integer or it becomes an injection.
+    __llm_validate_uint "rows" "$max_rows" || return 1
+
     # SQLite mode: use -f option
     if [[ -n "$sqlite_file" ]]; then
         __llm_sqlite_query "$query" "$sqlite_file" "$max_rows"
@@ -1058,7 +1113,7 @@ __llm_db_query_impl() {
             # so cell values with embedded control chars survive round-trip.
             local mysql_output mysql_stderr mysql_exit
             mysql_stderr=$(mktemp)
-            mysql_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
+            mysql_output=$("$mysql_bin" --defaults-extra-file=<(__llm_mysql_client_ini "$db_user" "$db_pass" "$db_host" "$db_port") "$database" \
                 --default-character-set=utf8mb4 \
                 -e "$query" \
                 --batch 2>"$mysql_stderr")
@@ -1345,6 +1400,9 @@ __llm_db_sample_impl() {
         return 1
     fi
 
+    # --limit is interpolated into the LIMIT clause: integers only
+    __llm_validate_uint "limit" "$limit" || return 1
+
     # SQLite mode
     if [[ -n "$sqlite_file" ]]; then
         __llm_sqlite_query "SELECT * FROM $table LIMIT $limit" "$sqlite_file" "$limit"
@@ -1491,7 +1549,7 @@ __llm_db_explain_impl() {
             # Detect if it's MariaDB or MySQL (MariaDB uses ANALYZE, MySQL uses EXPLAIN ANALYZE)
             local is_mariadb=0
             local version_output
-            version_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
+            version_output=$("$mysql_bin" --defaults-extra-file=<(__llm_mysql_client_ini "$db_user" "$db_pass" "$db_host" "$db_port") "$database" \
                 --default-character-set=utf8mb4 -N -e "SELECT VERSION()" 2>/dev/null)
             [[ "$version_output" == *"MariaDB"* ]] && is_mariadb=1
 
@@ -1514,7 +1572,7 @@ __llm_db_explain_impl() {
             # through the TSV helper.
             local mysql_output mysql_stderr mysql_exit
             mysql_stderr=$(mktemp)
-            mysql_output=$("$mysql_bin" -u"$db_user" -p"$db_pass" -h"$db_host" -P"$db_port" "$database" \
+            mysql_output=$("$mysql_bin" --defaults-extra-file=<(__llm_mysql_client_ini "$db_user" "$db_pass" "$db_host" "$db_port") "$database" \
                 --default-character-set=utf8mb4 \
                 -e "$explain_prefix $query" \
                 --batch --raw 2>"$mysql_stderr")
@@ -1669,7 +1727,7 @@ __llm_project_impl() {
         [[ -d "$safe_path/tests" ]] && has_tests="true"
     fi
 
-    # Output JSON
+    # Output JSON (path is user-controlled: escape it)
     cat <<EOF
 {
   "type": "$project_type",
@@ -1677,7 +1735,7 @@ __llm_project_impl() {
   "package_manager": "$package_manager",
   "has_tests": $has_tests,
   "entry_point": "$entry_point",
-  "path": "$safe_path"
+  "path": "$(__gash_json_escape "$safe_path")"
 }
 EOF
 }
@@ -1732,7 +1790,7 @@ __llm_deps_impl() {
         echo '{"manager":"pip","dependencies":['
         grep -v '^#' "$safe_path/requirements.txt" | grep -v '^$' | \
             sed 's/[<>=].*//' | \
-            awk '{printf "\"%s\",", $1}' | sed 's/,$//'
+            awk '{printf "\"%s\",", $1}' | sed 's/,$//' || true
         echo ']}'
     else
         __llm_error "no_package_file" "No composer.json, package.json, or requirements.txt found" "CONTINUE" "false" "Not a package-managed project"
@@ -1833,26 +1891,36 @@ __llm_git_status_impl() {
 
     local staged=() modified=() untracked=()
 
-    while IFS= read -r line; do
-        local status="${line:0:2}"
-        local file="${line:3}"
+    # -z: NUL-delimited records, no core.quotePath mangling, rename entries
+    # carry the new name as a separate NUL field (consumed and skipped).
+    local line status file
+    while IFS= read -r -d '' line; do
+        status="${line:0:2}"
+        file="${line:3}"
 
         case "$status" in
-            "A "*|"M "*|"D "*|"R "*) staged+=("$file") ;;
+            "R "*|"C "*)
+                # Rename/copy: this field is the NEW name; the next NUL
+                # field is the old name - consume and discard it.
+                staged+=("$file")
+                IFS= read -r -d '' _ || true
+                ;;
+            "A "*|"M "*|"D "*) staged+=("$file") ;;
             " M"|" D") modified+=("$file") ;;
             "??") untracked+=("$file") ;;
             "AM"|"MM") staged+=("$file"); modified+=("$file") ;;
         esac
-    done < <(git -C "$safe_path" status --porcelain 2>/dev/null)
+    done < <(git -C "$safe_path" status --porcelain -z 2>/dev/null)
 
-    # Build JSON
+    # Build JSON: every value goes through jq-backed escaping; empty arrays
+    # render as [] (never [""]).
     echo "{"
-    echo "  \"branch\": \"$branch\","
+    printf '  "branch": %s,\n' "$(__gash_json_str "$branch")"
     echo "  \"ahead\": $ahead,"
     echo "  \"behind\": $behind,"
-    printf '  "staged": [%s],\n' "$(printf '"%s",' "${staged[@]}" | sed 's/,$//')"
-    printf '  "modified": [%s],\n' "$(printf '"%s",' "${modified[@]}" | sed 's/,$//')"
-    printf '  "untracked": [%s]\n' "$(printf '"%s",' "${untracked[@]}" | sed 's/,$//')"
+    printf '  "staged": %s,\n' "$(__gash_json_arr ${staged[@]+"${staged[@]}"})"
+    printf '  "modified": %s,\n' "$(__gash_json_arr ${modified[@]+"${modified[@]}"})"
+    printf '  "untracked": %s\n' "$(__gash_json_arr ${untracked[@]+"${untracked[@]}"})"
     echo "}"
 }
 
@@ -1912,6 +1980,8 @@ __llm_git_log_impl() {
         esac
     done
 
+    __llm_validate_uint "limit" "$limit" || return 1
+
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
@@ -1920,10 +1990,16 @@ __llm_git_log_impl() {
         return 1
     fi
 
-    echo "["
-    git -C "$safe_path" log --oneline -n "$limit" --format='{"hash":"%h","subject":"%s","author":"%an","date":"%ci"},' 2>/dev/null | \
-        sed '$ s/,$//'
-    echo "]"
+    if ! __llm_has_jq; then
+        __llm_error "jq_not_found" "jq is required for JSON output" "FATAL" "false" "Install jq: sudo apt install jq"
+        return 1
+    fi
+
+    # Unit/record separators (US/RS) as field delimiters, JSON built by jq:
+    # a quote in a commit subject must never invalidate the array.
+    git -C "$safe_path" log -n "$limit" --format='%h%x1f%s%x1f%an%x1f%ci%x1e' 2>/dev/null | \
+        jq -cRs 'split("\u001e") | map(select(length > 0) | ltrimstr("\n") | split("\u001f") | select(length == 4) | {hash: .[0], subject: .[1], author: .[2], date: .[3]})' || true
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -1998,26 +2074,34 @@ __llm_procs_impl() {
     echo "["
 
     if [[ -n "$port" ]]; then
-        # Find process by port
+        __llm_validate_uint "port" "$port" || { echo "]"; return 1; }
+        # Find process by port (no matches is a valid outcome: || true)
         if type -P lsof >/dev/null 2>&1; then
             lsof -i :"$port" -t 2>/dev/null | while read -r pid; do
                 local cmd
                 cmd="$(ps -p "$pid" -o comm= 2>/dev/null)"
-                echo "{\"pid\":$pid,\"name\":\"$cmd\",\"port\":$port},"
-            done | sed '$ s/,$//'
+                echo "{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\",\"port\":$port},"
+            done | sed '$ s/,$//' || true
         fi
     elif [[ -n "$name" ]]; then
-        # Find process by name
+        # Find process by name (pgrep returns 1 on zero matches: || true)
         pgrep -f "$name" 2>/dev/null | while read -r pid; do
             local cmd
             cmd="$(ps -p "$pid" -o comm= 2>/dev/null)"
-            echo "{\"pid\":$pid,\"name\":\"$cmd\"},"
-        done | sed '$ s/,$//'
+            echo "{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\"},"
+        done | sed '$ s/,$//' || true
     else
-        # List all (limited)
-        ps aux --no-headers 2>/dev/null | head -n 20 | \
-            awk '{printf "{\"pid\":%s,\"user\":\"%s\",\"cpu\":%s,\"mem\":%s,\"name\":\"%s\"},\n", $2, $1, $3, $4, $11}' | \
-            sed '$ s/,$//'
+        # List all (limited). LC_ALL=C forces dot-decimal %CPU/%MEM (an
+        # it_IT locale would emit "0,5" and invalidate the JSON); the name
+        # field is escaped for quotes/backslashes.
+        LC_ALL=C ps aux --no-headers 2>/dev/null | head -n 20 | \
+            awk '{
+                name = $11
+                gsub(/\\/, "\\\\", name); gsub(/"/, "\\\"", name)
+                user = $1
+                gsub(/\\/, "\\\\", user); gsub(/"/, "\\\"", user)
+                printf "{\"pid\":%s,\"user\":\"%s\",\"cpu\":%s,\"mem\":%s,\"name\":\"%s\"},\n", $2, user, $3, $4, name
+            }' | sed '$ s/,$//' || true
     fi
 
     echo "]"
@@ -2053,8 +2137,10 @@ __llm_env_impl() {
 
     echo "{"
 
+    # env -0: NUL-delimited entries so multi-line values stay attached to
+    # their own variable instead of being parsed as bogus extra entries.
     local first=1
-    while IFS='=' read -r name value; do
+    while IFS='=' read -r -d '' name value; do
         # Skip empty names
         [[ -z "$name" ]] && continue
 
@@ -2073,15 +2159,10 @@ __llm_env_impl() {
         done
         [[ $is_secret -eq 1 ]] && continue
 
-        # Escape value for JSON
-        value="${value//\\/\\\\}"
-        value="${value//\"/\\\"}"
-        value="${value//$'\n'/\\n}"
-
         [[ $first -eq 0 ]] && echo ","
         first=0
-        printf '  "%s": "%s"' "$name" "$value"
-    done < <(env | sort)
+        printf '  "%s": "%s"' "$(__gash_json_escape "$name")" "$(__gash_json_escape "$value")"
+    done < <(env -0 2>/dev/null | sort -z)
 
     echo ""
     echo "}"

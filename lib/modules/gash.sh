@@ -121,6 +121,14 @@ gash_upgrade() {
     __gash_info "Upgrading Gash in $install_dir..."
     cd "$install_dir" || { __gash_error "Failed to change directory to $install_dir"; return 1; }
 
+    # Refuse to proceed over local modifications: the checkout+reset below
+    # would silently destroy them.
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        __gash_error "Working tree at $install_dir has local modifications. Commit, stash, or discard them before upgrading."
+        cd "$current_dir" || true
+        return 1
+    fi
+
     if ! command git fetch --tags origin; then
         cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
         __gash_error "Failed to fetch updates. Please check your network connection and try manually with 'git fetch'."
@@ -201,7 +209,7 @@ gash_uninstall() {
     # Uses unique delimiters to avoid matching other if/fi blocks
     for profile_file in "${profile_files[@]}"; do
         if [ -f "$profile_file" ]; then
-            if command grep -qc 'source.*[./]gashrc' "$profile_file"; then
+            if command grep -q 'source.*[./]gashrc' "$profile_file"; then
                 __gash_info "Removing Gash block from: $profile_file"
                 # Try new format with delimiters first
                 if grep -q '# >>> GASH START >>>' "$profile_file"; then
@@ -357,6 +365,26 @@ gash_unload() {
         done <<< "${__GASH_ADDED_FUNCS}"
     fi
 
+    # Per-prefix function sweep: the load-time snapshot misses functions
+    # defined AFTER it was taken (alias loader, prompt.sh, completion,
+    # helpers created at runtime). Anything gash_* / __gash_* goes.
+    local __gash_fn
+    while IFS= read -r __gash_fn; do
+        [[ -z "${__gash_fn}" ]] && continue
+        [[ "${__gash_fn}" == "gash_unload" ]] && continue
+        unset -f "${__gash_fn}" >/dev/null 2>&1 || true
+    done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
+
+    # Per-prefix variable sweep: includes the cached secrets
+    # (__GASH_ENV_SSH_KEYS, __GASH_ENV_AI_PROVIDERS) which must never
+    # survive an unload, plus colors, PS1 caches, help registry.
+    local __gash_var
+    while IFS= read -r __gash_var; do
+        [[ -z "${__gash_var}" ]] && continue
+        unset "${__gash_var}" >/dev/null 2>&1 || true
+    done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
+    unset BASH_NAME FQDN >/dev/null 2>&1 || true
+
     # Clear internal snapshot variables
     unset __GASH_SNAPSHOT_TAKEN __GASH_PRE_FUNCS __GASH_PRE_ALIASES __GASH_ADDED_FUNCS __GASH_ADDED_ALIASES \
         __GASH_ORIG_PS1_SET __GASH_ORIG_PS1 __GASH_ORIG_PS2_SET __GASH_ORIG_PS2 __GASH_ORIG_PROMPT_COMMAND_SET __GASH_ORIG_PROMPT_COMMAND \
@@ -407,7 +435,7 @@ gash_doctor() {
             __gash_success "  $(basename "$f")"
         else
             __gash_error "  $(basename "$f") — MISSING"
-            ((issues++))
+            issues=$((issues + 1))
         fi
     done
 
@@ -419,7 +447,7 @@ gash_doctor() {
             __gash_success "  ${mod}"
         else
             __gash_warning "  ${mod} — not found"
-            ((issues++))
+            issues=$((issues + 1))
         fi
     done
 
@@ -433,7 +461,7 @@ gash_doctor() {
             __gash_success "  $env_file (permissions: $perms)"
         else
             __gash_warning "  $env_file (permissions: $perms — should be 600)"
-            ((issues++))
+            issues=$((issues + 1))
         fi
     else
         __gash_info "  $env_file — not found (optional, run gash_env_init to create)"
@@ -477,6 +505,18 @@ gash() {
     local M='\033[0;35m'    # Magenta
     local D='\033[0;90m'    # Dark gray
     local R='\033[0m'       # Reset
+
+    # Honor the runtime color gate (headless, NO_COLOR, pipe)
+    if ! __gash_use_color; then
+        W=''; C=''; Y=''; G=''; M=''; D=''; R=''
+    fi
+
+    # bash has no local functions: the __gash_ref_* helpers below become
+    # global on every call. Drop them on return so they never leak into the
+    # caller's namespace (and gash_unload has nothing stale to chase).
+    trap 'unset -f __gash_ref_header __gash_ref_section __gash_ref_fn __gash_ref_alias \
+        __gash_ref_git __gash_ref_files __gash_ref_system __gash_ref_docker __gash_ref_nav \
+        __gash_ref_gash __gash_ref_llm __gash_ref_ai __gash_ref_php __gash_ref_summary 2>/dev/null' RETURN
 
     # Header
     __gash_ref_header() {
@@ -1057,7 +1097,7 @@ EXAMPLES
 
 NOTES
   Checks: core files, modules, config file permissions,
-  external tools (pydf, most, htop, mtr, colordiff, expect).
+  external tools (git, curl, jq, sqlite3, docker).
   Reports missing or misconfigured components.
 HELP
 

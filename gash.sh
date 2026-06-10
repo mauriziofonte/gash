@@ -19,9 +19,9 @@
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
-# Version: 1.5.0
+# Version: 1.5.1
 # Release Date: 2024-10-24
-# Last Update: 2026-04-21
+# Last Update: 2026-06-10
 # License: Apache License
 #
 # If you find any issue, please report it on GitHub: https://github.com/mauriziofonte/gash/issues
@@ -39,13 +39,22 @@ fi
 #   - Produces NO terminal output
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     BASH_NAME="Gash"
-    GASH_VERSION="1.5.0"
+    GASH_VERSION="1.5.1"
     GASH_DIR="${GASH_DIR:-$HOME/.gash}"
 
-    # Load Core Modules (output, config, utils, validation)
+    # Load Core Modules (output, config, utils, validation).
+    # `|| true`: a module whose last statement returns non-zero must not
+    # kill a `set -e` wrapper. stderr is suppressed unless GASH_DEBUG=1
+    # (so load-time errors are diagnosable on demand).
     if [[ -d "$GASH_DIR/lib/core" ]]; then
         for __gash_core_file in "$GASH_DIR/lib/core"/*.sh; do
-            [[ -f "$__gash_core_file" ]] && source "$__gash_core_file" 2>/dev/null
+            if [[ -f "$__gash_core_file" ]]; then
+                if [[ "${GASH_DEBUG-0}" == "1" ]]; then
+                    source "$__gash_core_file" || true
+                else
+                    source "$__gash_core_file" 2>/dev/null || true
+                fi
+            fi
         done
         unset __gash_core_file
     fi
@@ -53,7 +62,13 @@ if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     # Load Functional Modules (llm.sh, git.sh, docker.sh, etc.)
     if [[ -d "$GASH_DIR/lib/modules" ]]; then
         for __gash_module_file in "$GASH_DIR/lib/modules"/*.sh; do
-            [[ -f "$__gash_module_file" ]] && source "$__gash_module_file" 2>/dev/null
+            if [[ -f "$__gash_module_file" ]]; then
+                if [[ "${GASH_DEBUG-0}" == "1" ]]; then
+                    source "$__gash_module_file" || true
+                else
+                    source "$__gash_module_file" 2>/dev/null || true
+                fi
+            fi
         done
         unset __gash_module_file
     fi
@@ -100,8 +115,9 @@ if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
 
     __GASH_PRE_FUNCS=""
     while IFS= read -r __gash_line; do
-        set -- $__gash_line
-        __gash_name="${!#}"
+        # NEVER `set -- $__gash_line` here: this file is sourced at shell
+        # top-level and would clobber the caller's positional parameters.
+        __gash_name="${__gash_line##* }"
         [[ -n "${__gash_name-}" ]] && __GASH_PRE_FUNCS+="$__gash_name"$'\n'
     done < <(declare -F)
     unset __gash_line __gash_name
@@ -123,7 +139,7 @@ fi
 
 # define some constants
 BASH_NAME="Gash"
-GASH_VERSION="1.5.0"
+GASH_VERSION="1.5.1"
 GASH_DIR="$HOME/.gash"
 
 
@@ -161,7 +177,7 @@ fi
 ###########################################################
 
 # Set variable identifying the chroot you work in (used in the prompt below).
-if [ -z "${debian_chroot}" ] && [ -r /etc/debian_chroot ]; then
+if [ -z "${debian_chroot-}" ] && [ -r /etc/debian_chroot ]; then
     debian_chroot=$(< /etc/debian_chroot)
 fi
 
@@ -212,7 +228,7 @@ function __set_terminal_title() {
     local title=""
     local current_dir="${PWD/#$HOME/~}"
 
-    if [ -n "${SSH_CONNECTION}" ]; then
+    if [ -n "${SSH_CONNECTION-}" ]; then
         title="$(whoami)@${FQDN}:${current_dir}"
     else
         title="${current_dir} [$(whoami)]"
@@ -271,7 +287,7 @@ function __gash_in_git_repo() {
 function __construct_ps1() {
     local exit_code="$1"  # Pass the saved exit code from PROMPT_COMMAND
 
-    if [ ! -n "${HOST_COLOR}" ]; then
+    if [ -z "${HOST_COLOR-}" ]; then
         local H=$(__get_machine_id)
         HOST_COLOR=$(tput setaf $((H%5 + 2)))
     fi
@@ -281,22 +297,22 @@ function __construct_ps1() {
     PS1+="${debian_chroot:+($debian_chroot)}"
 
     # virtualenv
-    if [ -n "${VIRTUAL_ENV}" ]; then
+    if [ -n "${VIRTUAL_ENV-}" ]; then
         local VENV=`basename $VIRTUAL_ENV`
         PS1+="\[${__GASH_PS1_BWHITE}\](${VENV}) \[${__GASH_PS1_OFF}\]"
     fi
 
     # user
-    if [ ${USER} == root ]; then
+    if [ "${USER-}" == "root" ]; then
         PS1+="\[${__GASH_PS1_RED}\]" # root
-    elif [ ${USER} != ${LOGNAME} ]; then
+    elif [ "${USER-}" != "${LOGNAME-}" ]; then
         PS1+="\[${__GASH_PS1_BLUE}\]" # normal user
     else
         PS1+="\[${__GASH_PS1_GREEN}\]" # normal user
     fi
     PS1+="\u\[${__GASH_PS1_OFF}\]"
 
-    if [ -n "${SSH_CONNECTION}" ]; then
+    if [ -n "${SSH_CONNECTION-}" ]; then
         PS1+="\[${__GASH_PS1_BWHITE}\]@"
         PS1+="\[${HOST_COLOR}\]\h\[${__GASH_PS1_OFF}\]"
     fi
@@ -313,11 +329,12 @@ function __construct_ps1() {
     # screen sessions
     local SCREEN_PATHS="/var/run/screens/S-`whoami` /var/run/screen/S-`whoami` /var/run/uscreens/S-`whoami`"
 
+    local screen_path SCREEN_JOBS
     for screen_path in ${SCREEN_PATHS}; do
         if [ -d ${screen_path} ]; then
             SCREEN_JOBS=`ls ${screen_path} | wc -w`
             if [ ${SCREEN_JOBS} != 0 ]; then
-                local current_screen="$(echo ${STY} | cut -d '.' -f 1)"
+                local current_screen="$(echo ${STY-} | cut -d '.' -f 1)"
                 if [ -n "${current_screen}" ]; then
                     current_screen=":${current_screen}"
                 fi
@@ -393,8 +410,8 @@ fi
 # Compute functions introduced by Gash (best-effort). Keep this list stable for gash_unload.
 if [[ -n "${__GASH_SNAPSHOT_TAKEN-}" && -z "${__GASH_ADDED_FUNCS-}" ]]; then
     while IFS= read -r __gash_line; do
-        set -- $__gash_line
-        __gash_name="${!#}"
+        # NEVER `set --` at sourced top-level (clobbers caller's $1..$N)
+        __gash_name="${__gash_line##* }"
         [[ -z "${__gash_name-}" ]] && continue
         if [[ $'\n'"${__GASH_PRE_FUNCS-}" != *$'\n'"$__gash_name"$'\n'* ]]; then
             __GASH_ADDED_FUNCS+="$__gash_name"$'\n'
@@ -409,7 +426,7 @@ if [[ -f "$GASH_DIR/lib/aliases/_loader.sh" ]]; then
 elif [[ -f "$GASH_DIR/lib/aliases.sh" ]]; then
     source "$GASH_DIR/lib/aliases.sh"
 else
-    echo -e "${__GASH_PS1_RED}Warning: No aliases found; skipping.${__GASH_PS1_OFF}"
+    echo -e "${__GASH_PS1_RED}Warning: No aliases found; skipping.${__GASH_PS1_OFF}" >&2
 fi
 
 # Compute aliases introduced by Gash (best-effort). Keep this list stable for gash_unload.
@@ -429,7 +446,7 @@ fi
 if [ -f "$GASH_DIR/lib/prompt.sh" ]; then
     source "$GASH_DIR/lib/prompt.sh"
 else
-    echo -e "${__GASH_PS1_RED}Warning: lib/prompt.sh not found; skipping.${__GASH_PS1_OFF}"
+    echo -e "${__GASH_PS1_RED}Warning: lib/prompt.sh not found; skipping.${__GASH_PS1_OFF}" >&2
 fi
 
 # Load custom aliases from ~/.bash_aliases if it exists.

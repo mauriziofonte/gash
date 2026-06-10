@@ -65,7 +65,7 @@ __gash_complete() {
         # Git tag completion
         git_add_tag|git_delete_tag|git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-                COMPREPLY=($(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
             else
                 COMPREPLY=()
             fi
@@ -74,67 +74,67 @@ __gash_complete() {
         # files_largest: directories + flags
         files_largest)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--limit --min-size --exclude --depth --no-ignore --xdev --follow-symlinks --allow-root --json --null --human --no-human --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--limit --min-size --exclude --depth --no-ignore --xdev --follow-symlinks --allow-root --json --null --human --no-human --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         # dirs_largest: directories + flags
         dirs_largest)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--limit --depth --min-size --exclude --no-ignore --xdev --allow-root --json --null --human --no-human --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--limit --depth --min-size --exclude --no-ignore --xdev --allow-root --json --null --human --no-human --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         # dirs_find_large: directories + flags
         dirs_find_large)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--size --depth --limit --exclude --no-ignore --xdev --allow-root --with-mtime --json --null --human --no-human --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--size --depth --limit --exclude --no-ignore --xdev --allow-root --with-mtime --json --null --human --no-human --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         # dirs_list_empty: directories + flags
         dirs_list_empty)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--min-depth --depth --exclude --ignore-dotfiles --no-ignore --xdev --allow-root --null --count --json --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--min-depth --depth --exclude --ignore-dotfiles --no-ignore --xdev --allow-root --null --count --json --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         # tree_stats: directories + flags
         tree_stats)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--depth --top --exclude --no-ignore --xdev --follow-symlinks --allow-root --json --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--depth --top --exclude --no-ignore --xdev --follow-symlinks --allow-root --json --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         # Directory completion (other)
         mkdir_cd)
-            COMPREPLY=($(compgen -d -- "$cur"))
+            mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             ;;
 
         # File completion
         archive_extract|file_backup|git_dump_revisions)
-            COMPREPLY=($(compgen -f -- "$cur"))
+            mapfile -t COMPREPLY < <(compgen -f -- "$cur")
             ;;
 
         # Gash reference card sections
         gash)
-            COMPREPLY=($(compgen -W "git files system docker nav navigation llm php gash management ai all help" -- "$cur"))
+            mapfile -t COMPREPLY < <(compgen -W "git files system docker nav navigation llm php gash management ai all help" -- "$cur")
             ;;
 
         # AI provider completion (first argument only)
         ai_ask|ai_query)
             if (( COMP_CWORD == 1 )); then
-                COMPREPLY=($(compgen -W "claude gemini" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "claude gemini" -- "$cur")
             else
                 COMPREPLY=()
             fi
@@ -142,64 +142,64 @@ __gash_complete() {
 
         # AI sysinfo: provider + --raw + --no-color
         ai_sysinfo)
-            COMPREPLY=($(compgen -W "claude gemini --raw --no-color" -- "$cur"))
+            mapfile -t COMPREPLY < <(compgen -W "claude gemini --raw --no-color" -- "$cur")
             ;;
 
         # System info sections + flags
         sysinfo)
-            COMPREPLY=($(compgen -W "identity storage services auth network security webstack mail infra system all --llm --no-color" -- "$cur"))
+            mapfile -t COMPREPLY < <(compgen -W "identity storage services auth network security webstack mail infra system all --llm --no-color" -- "$cur")
             ;;
 
         # disk_usage / ip_public — just --no-color
         disk_usage|ip_public)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
             fi
             ;;
 
         # Docker compose check/upgrade/scan: dirs + flags (incl. --no-color)
         docker_compose_check)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--json --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--json --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         docker_compose_upgrade)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--dry-run --force --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         docker_compose_scan)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--depth --json --no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--depth --json --no-color --help" -- "$cur")
             else
-                COMPREPLY=($(compgen -d -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
             ;;
 
         # gash_doctor — --no-color
         gash_doctor)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--no-color --help" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
             fi
             ;;
 
         # Help system: function names, aliases, and flags
         gash_help)
             if [[ "$cur" == -* ]]; then
-                COMPREPLY=($(compgen -W "--list --search --short --bash --no-color" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "--list --search --short --bash --no-color" -- "$cur")
             elif [[ "${COMP_WORDS[1]-}" == "--search" ]] && (( COMP_CWORD == 2 )); then
                 # After --search, user types keyword freely
                 COMPREPLY=()
             elif (( COMP_CWORD == 1 )); then
                 # Build list from help registry: function names + their aliases
                 local funcs=""
-                if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
+                if declare -p __GASH_HELP_REGISTRY &>/dev/null; then
                     funcs="${!__GASH_HELP_REGISTRY[*]}"
                     local fn
                     for fn in ${!__GASH_HELP_ALIASES[*]}; do
@@ -207,7 +207,7 @@ __gash_complete() {
                         funcs+=" ${aliases//,/ }"
                     done
                 fi
-                COMPREPLY=($(compgen -W "$funcs --list --search --short --bash --no-color" -- "$cur"))
+                mapfile -t COMPREPLY < <(compgen -W "$funcs --list --search --short --bash --no-color" -- "$cur")
             else
                 COMPREPLY=()
             fi

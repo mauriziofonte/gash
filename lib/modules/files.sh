@@ -50,10 +50,11 @@ __gash_fs_parse_size() {
     local input="${1-}"
     [[ -z "$input" ]] && return 1
 
-    # Try numfmt first (handles "1.5G" decimals that pure-bash can't)
+    # Try numfmt first (handles "1.5G" decimals that pure-bash can't).
+    # LC_ALL=C: the decimal separator must be "." regardless of user locale.
     if command -v numfmt >/dev/null 2>&1; then
         local nf
-        nf="$(numfmt --from=iec "$input" 2>/dev/null)" || nf=""
+        nf="$(LC_ALL=C numfmt --from=iec "$input" 2>/dev/null)" || nf=""
         if [[ "$nf" =~ ^[0-9]+$ ]]; then
             printf '%s' "$nf"
             return 0
@@ -149,8 +150,13 @@ __gash_fs_safe_path() {
 
     [[ -z "$input" ]] && input="."
 
-    # Expand tilde
-    input="${input/#\~/$HOME}"
+    # Expand tilde ("~" and "~/..." only: "~user" would expand to a bogus
+    # "$HOMEuser" path, so leave it untouched)
+    if [[ "$input" == "~" ]]; then
+        input="$HOME"
+    elif [[ "$input" == "~/"* ]]; then
+        input="$HOME/${input#\~/}"
+    fi
 
     # Distinguish "does not exist" from "exists but is not a directory" to give
     # users accurate feedback. cd only succeeds on real directories, so a cd
@@ -340,7 +346,10 @@ files_largest() {
     # (e.g. unknown flag) still produce the JSON envelope expected by callers
     # that pass --json along with a bad flag.
     local __a
-    for __a in "$@"; do [[ "$__a" == "--json" ]] && { json_mode=1; break; }; done
+    for __a in "$@"; do
+        [[ "$__a" == "--" ]] && break
+        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+    done
 
     # Parse arguments (defer semantic validation until after the loop so
     # $json_mode and friends are fully known).
@@ -361,7 +370,7 @@ files_largest() {
             --no-color)         no_color=1; shift ;;
             -h|--help)
                 needs_help "files_largest" "see usage" "" "--help" && return 0 ;;
-            --) shift; break ;;
+            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
                 return 1 ;;
@@ -407,7 +416,12 @@ files_largest() {
 
     # Action: match only regular files. Apply min-size filter post-hoc in awk
     # to avoid fragile `-size +<N-1>c` arithmetic (N=0 -> invalid predicate).
-    find_cmd+=(-type f -printf '%s\t%TY-%Tm-%Td %TH:%TM\t%p\n')
+    # Paths containing tab/newline would corrupt the TSV transport (and make
+    # --null emit truncated records): exclude them rather than emit bad data.
+    local nl_glob tab_glob
+    nl_glob=$(printf '*\n*')
+    tab_glob=$(printf '*\t*')
+    find_cmd+=(-type f ! -path "$nl_glob" ! -path "$tab_glob" -printf '%s\t%TY-%Tm-%Td %TH:%TM\t%p\n')
 
     local t0 t1 elapsed
     t0=$(__gash_fs_now_ms)
@@ -415,18 +429,21 @@ files_largest() {
     # Capture find stderr (permission denials) to count
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
+    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
 
+    # `|| true`: an unreadable subdir (find rc!=0) or SIGPIPE from `head`
+    # closing the pipe early must not kill a `set -euo pipefail` caller.
     local sorted
     if [[ -n "$err_tmp" ]]; then
         sorted=$("${find_cmd[@]}" 2>"$err_tmp" \
             | awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' \
             | sort -nr -k1,1 -t$'\t' \
-            | head -n "$limit")
+            | head -n "$limit") || true
     else
         sorted=$("${find_cmd[@]}" 2>/dev/null \
             | awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' \
             | sort -nr -k1,1 -t$'\t' \
-            | head -n "$limit")
+            | head -n "$limit") || true
     fi
 
     t1=$(__gash_fs_now_ms)
@@ -444,8 +461,9 @@ files_largest() {
     if [[ "$json_mode" -eq 1 ]]; then
         __gash_fs_render_size_list_json "$sorted" "$elapsed" "$err_count" "files"
     elif [[ "$null_mode" -eq 1 ]]; then
-        # NUL-delimited paths only (for xargs -0)
-        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { printf "%s\0", $3 }'
+        # NUL-delimited paths only (for xargs -0); rejoin fields 3..NF so a
+        # path is never truncated at an embedded tab
+        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\0", p }'
     else
         __gash_fs_render_size_list_text "$sorted" "$human_mode" "$no_color" "files"
         __gash_fs_scan_warn "$err_count" 0
@@ -480,7 +498,10 @@ dirs_largest() {
     local -a excludes=()
 
     local __a
-    for __a in "$@"; do [[ "$__a" == "--json" ]] && { json_mode=1; break; }; done
+    for __a in "$@"; do
+        [[ "$__a" == "--" ]] && break
+        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+    done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -498,7 +519,7 @@ dirs_largest() {
             --no-color)         no_color=1; shift ;;
             -h|--help)
                 needs_help "dirs_largest" "see usage" "" "--help" && return 0 ;;
-            --) shift; break ;;
+            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
                 return 1 ;;
@@ -544,6 +565,12 @@ dirs_largest() {
         done
     fi
 
+    # Exclude paths with embedded newlines (they would corrupt the
+    # line-oriented du output); tabs are reconstructed by the awk filter.
+    if [[ "$gnu_exclude" -eq 1 ]]; then
+        du_cmd+=(--exclude=$'*\n*')
+    fi
+
     du_cmd+=(-- "$safe_path")
 
     local t0 t1 elapsed
@@ -551,14 +578,16 @@ dirs_largest() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
+    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
 
-    # du output: <kb>\t<path>\n (assumption: no tab/newline in path).
-    # Convert to bytes and filter excluded patterns in awk when GNU exclude unavailable.
+    # du output: <kb>\t<path>\n. Convert to bytes and filter excluded
+    # patterns in awk when GNU exclude unavailable. `|| true`: unreadable
+    # subdirs must not kill a `set -euo pipefail` caller.
     local raw
     if [[ -n "$err_tmp" ]]; then
-        raw=$("${du_cmd[@]}" 2>"$err_tmp")
+        raw=$("${du_cmd[@]}" 2>"$err_tmp") || true
     else
-        raw=$("${du_cmd[@]}" 2>/dev/null)
+        raw=$("${du_cmd[@]}" 2>/dev/null) || true
     fi
 
     # Post-filter in awk:
@@ -624,12 +653,12 @@ dirs_largest() {
     fi
 
     local sorted
-    sorted=$(printf '%s\n' "$filtered" | sort -nr -k1,1 -t$'\t' | head -n "$limit")
+    sorted=$(printf '%s\n' "$filtered" | sort -nr -k1,1 -t$'\t' | head -n "$limit") || true
 
     if [[ "$json_mode" -eq 1 ]]; then
         __gash_fs_render_size_list_json "$sorted" "$elapsed" "$err_count" "directories"
     elif [[ "$null_mode" -eq 1 ]]; then
-        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { printf "%s\0", $3 }'
+        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\0", p }'
     else
         __gash_fs_render_size_list_text "$sorted" "$human_mode" "$no_color" "directories"
         __gash_fs_scan_warn "$err_count" 0
@@ -664,7 +693,10 @@ dirs_find_large() {
     local -a excludes=()
 
     local __a
-    for __a in "$@"; do [[ "$__a" == "--json" ]] && { json_mode=1; break; }; done
+    for __a in "$@"; do
+        [[ "$__a" == "--" ]] && break
+        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+    done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -683,7 +715,7 @@ dirs_find_large() {
             --no-color)         no_color=1; shift ;;
             -h|--help)
                 needs_help "dirs_find_large" "see usage" "" "--help" && return 0 ;;
-            --) shift; break ;;
+            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
                 return 1 ;;
@@ -732,6 +764,11 @@ dirs_find_large() {
         done
     fi
 
+    # Exclude paths with embedded newlines (corrupt line-oriented du output)
+    if [[ "$gnu_exclude" -eq 1 ]]; then
+        du_cmd+=(--exclude=$'*\n*')
+    fi
+
     du_cmd+=(-- "$safe_path")
 
     local t0 t1 elapsed
@@ -739,12 +776,14 @@ dirs_find_large() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
+    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
 
+    # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local raw
     if [[ -n "$err_tmp" ]]; then
-        raw=$("${du_cmd[@]}" 2>"$err_tmp")
+        raw=$("${du_cmd[@]}" 2>"$err_tmp") || true
     else
-        raw=$("${du_cmd[@]}" 2>/dev/null)
+        raw=$("${du_cmd[@]}" 2>/dev/null) || true
     fi
 
     # Filter by threshold and exclude patterns. Emit bytes\t(optional mtime)\tpath.
@@ -782,12 +821,12 @@ dirs_find_large() {
                 path = $2
                 for (i = 3; i <= NF; i++) path = path "\t" $i
                 if (kb < th_kb) next
-                if (path == self && NR == 1) next   # skip self-root on first line when descending
+                if (path == self) next   # du prints the root LAST: never gate on NR
                 if (path_blocked(path)) next
                 printf "%d\t%s\n", kb * 1024, path
             }
             ' | sort -nr -k1,1 -t$'\t' | head -n "$limit"
-    )
+    ) || true
 
     # Enrich with mtime if requested (post-filter, only for matching rows).
     local enriched="$filtered"
@@ -797,7 +836,7 @@ dirs_find_large() {
                 [[ -z "$path" ]] && continue
                 local mtime
                 mtime=$(find "$path" -maxdepth 10 -type f -printf '%T@\t%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null \
-                        | sort -nr -k1,1 -t$'\t' | head -n1 | cut -f2)
+                        | sort -nr -k1,1 -t$'\t' | head -n1 | cut -f2) || true
                 printf '%s\t%s\t%s\n' "$bytes" "${mtime:-N/A}" "$path"
             done
         )
@@ -819,7 +858,7 @@ dirs_find_large() {
     if [[ "$json_mode" -eq 1 ]]; then
         __gash_fs_render_size_list_json "$enriched" "$elapsed" "$err_count" "directories"
     elif [[ "$null_mode" -eq 1 ]]; then
-        printf '%s' "$enriched" | awk -F'\t' 'NF>=3 { printf "%s\0", $3 }'
+        printf '%s' "$enriched" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\0", p }'
     else
         __gash_fs_render_size_list_text "$enriched" "$human_mode" "$no_color" "directories"
         __gash_fs_scan_warn "$err_count" 0
@@ -852,7 +891,10 @@ dirs_list_empty() {
     local -a excludes=()
 
     local __a
-    for __a in "$@"; do [[ "$__a" == "--json" ]] && { json_mode=1; break; }; done
+    for __a in "$@"; do
+        [[ "$__a" == "--" ]] && break
+        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+    done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -868,7 +910,7 @@ dirs_list_empty() {
             --json)             json_mode=1; shift ;;
             -h|--help)
                 needs_help "dirs_list_empty" "see usage" "" "--help" && return 0 ;;
-            --) shift; break ;;
+            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
                 return 1 ;;
@@ -902,16 +944,22 @@ dirs_list_empty() {
 
     find_cmd+=(-type d -empty)
     [[ "$ignore_dotfiles" -eq 1 ]] && find_cmd+=(! -name '.*')
-    find_cmd+=(-print)
+    # Paths with embedded newlines are unrepresentable in line/NUL-per-line
+    # output: exclude them.
+    local nl_glob
+    nl_glob=$(printf '*\n*')
+    find_cmd+=(! -path "$nl_glob" -print)
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
+    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
 
+    # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local output
     if [[ -n "$err_tmp" ]]; then
-        output=$("${find_cmd[@]}" 2>"$err_tmp")
+        output=$("${find_cmd[@]}" 2>"$err_tmp") || true
     else
-        output=$("${find_cmd[@]}" 2>/dev/null)
+        output=$("${find_cmd[@]}" 2>/dev/null) || true
     fi
 
     local err_count=0
@@ -991,7 +1039,10 @@ tree_stats() {
     local -a excludes=()
 
     local __a
-    for __a in "$@"; do [[ "$__a" == "--json" ]] && { json_mode=1; break; }; done
+    for __a in "$@"; do
+        [[ "$__a" == "--" ]] && break
+        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+    done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1006,7 +1057,7 @@ tree_stats() {
             --no-color)         no_color=1; shift ;;
             -h|--help)
                 needs_help "tree_stats" "see usage" "" "--help" && return 0 ;;
-            --) shift; break ;;
+            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
                 return 1 ;;
@@ -1037,19 +1088,25 @@ tree_stats() {
 
     # Emit per-entry: type\tsize\tdepth\tpath_relative
     # %y = single-char type, %s = size, %P = relative path
-    find_cmd+=(\( -type f -o -type d \) -printf '%y\t%s\t%P\n')
+    # Exclude paths with embedded newlines (tabs are reconstructed by awk,
+    # a newline would split one entry into two bogus records).
+    local nl_glob
+    nl_glob=$(printf '*\n*')
+    find_cmd+=(\( -type f -o -type d \) ! -path "$nl_glob" -printf '%y\t%s\t%P\n')
 
     local t0 t1 elapsed
     t0=$(__gash_fs_now_ms)
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
+    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
 
+    # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local raw
     if [[ -n "$err_tmp" ]]; then
-        raw=$("${find_cmd[@]}" 2>"$err_tmp")
+        raw=$("${find_cmd[@]}" 2>"$err_tmp") || true
     else
-        raw=$("${find_cmd[@]}" 2>/dev/null)
+        raw=$("${find_cmd[@]}" 2>/dev/null) || true
     fi
 
     t1=$(__gash_fs_now_ms)
@@ -1190,8 +1247,16 @@ tree_stats() {
     done <<< "$stats_ndjson"
 
     # Count empty dirs (separate pass — cheap enough and stays accurate).
+    # Honors the same xdev/depth/prune/exclude scope as the main walk
+    # (a bare ${xdev:+-xdev} would always expand: xdev is "0"/"1", never empty).
+    local -a empty_find=(find "$safe_path")
+    [[ "$xdev" -eq 1 ]] && empty_find+=(-xdev)
+    [[ -n "$max_depth" ]] && empty_find+=(-maxdepth "$max_depth")
+    while IFS= read -r prune_line; do
+        [[ -n "$prune_line" ]] && empty_find+=("$prune_line")
+    done < <(__gash_fs_find_prune_args "$no_ignore" "${excludes[@]}")
     local empty_count=0
-    empty_count=$(find "$safe_path" ${xdev:+-xdev} -type d -empty 2>/dev/null | wc -l)
+    empty_count=$("${empty_find[@]}" -type d -empty 2>/dev/null | wc -l) || true
 
     if [[ "$json_mode" -eq 1 ]]; then
         local esc_path; esc_path=$(__gash_json_escape "$safe_path")
@@ -1425,6 +1490,13 @@ archive_extract() {
         }
     fi
 
+    # A leading-dash filename must never be parsed as an option by the
+    # extraction tools (unzip/unrar have no portable "--" support).
+    [[ "$archive_file" == -* ]] && archive_file="./$archive_file"
+
+    # Save/restore nocasematch instead of clobbering the user's shell option
+    local nocase_restore
+    nocase_restore=$(shopt -p nocasematch) || nocase_restore="shopt -u nocasematch"
     local rc=0
     shopt -s nocasematch
     case "$archive_file" in
@@ -1441,7 +1513,7 @@ archive_extract() {
         *.7z)        7z x "$archive_file" -o"$output_dir" || rc=1 ;;
         *)           __gash_error "Cannot extract '$archive_file', unsupported file type."; rc=1 ;;
     esac
-    shopt -u nocasematch
+    eval "$nocase_restore"
 
     return $rc
 }
@@ -1460,7 +1532,7 @@ file_backup() {
     __gash_require_file "$file" || return 1
 
     local backup="${file}_backup_$(date +%Y%m%d%H%M%S)"
-    cp -v "$file" "$backup"
+    cp -v -- "$file" "$backup"
 
     if [ ! -f "$backup" ]; then
         __gash_error "Failed to create backup file."
@@ -1527,8 +1599,9 @@ OPTIONS
   --no-color             Disable ANSI colors (also honors NO_COLOR)
 
 NOTES
-  Paths containing literal tab or newline characters are emitted verbatim
-  but may confuse downstream awk/cut consumers. Use --null for safety.
+  Paths containing literal tab or newline characters are excluded from
+  results (they cannot be represented safely in TSV/line-oriented output).
+  --null records are therefore always intact, complete paths.
 HELP
 
 __gash_register_help "dirs_largest" \

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# Minimal pgrep mock for process_kill tests.
+# Emits the fixed PID matching the mock `ps` table for the "my-proc"
+# pattern; any other pattern yields no match (exit 1), mirroring pgrep.
+
+for arg in "$@"; do
+  case "$arg" in
+    my-proc)
+      echo 2222
+      exit 0
+      ;;
+  esac
+done
+
+exit 1

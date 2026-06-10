@@ -45,17 +45,28 @@ needs_help() {
 # Prompt user for yes/no confirmation.
 # Usage: needs_confirm_prompt "Are you sure?" && do_thing
 # Returns: 0 if user confirms (y/Y), 1 otherwise
+#
+# Headless contract: when no controlling terminal is available (or
+# GASH_HEADLESS=1), the prompt always refuses. REPLY is local so a stale
+# value inherited from the environment can never ghost-confirm a
+# destructive operation. The prompt goes to stderr so callers captured via
+# $(...) never see the prompt text in the value.
 needs_confirm_prompt() {
     local prompt="${1-}"
-    # Use `${VAR-fallback}` (not `:=` / `:-`) so that empty color vars set by
-    # the output.sh load-time gate are honored instead of being replaced with
-    # ANSI fallbacks. The fallback only triggers if the var is completely unset.
-    command printf '%b' "$prompt ${__GASH_BOLD_WHITE-\e[1;37m}(y/N):${__GASH_COLOR_OFF-\033[0m} "
-    read -r REPLY < /dev/tty
-    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-        return 0
+    local REPLY=""
+
+    [[ "${GASH_HEADLESS-}" == "1" ]] && return 1
+
+    if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
+        printf '%b' "$prompt ${__GASH_BOLD_WHITE}(y/N):${__GASH_COLOR_OFF} " >&2
+    else
+        printf '%s (y/N): ' "$prompt" >&2
     fi
-    return 1
+
+    # A failed read (no tty, EOF) must refuse, never reuse a previous REPLY.
+    read -r REPLY < /dev/tty 2>/dev/null || return 1
+
+    [[ "$REPLY" =~ ^[Yy]$ ]]
 }
 
 # -----------------------------------------------------------------------------
@@ -124,9 +135,34 @@ __gash_json_escape() {
     printf '%s' "$str"
 }
 
+# Render a single string as a quoted, fully escaped JSON string (via jq).
+# Usage: json=$(__gash_json_str "raw value")
+__gash_json_str() {
+    jq -cn --arg s "${1-}" '$s'
+}
+
+# Render an argument list as a JSON array of strings ([] when empty).
+# NUL-delimited transport: values may contain newlines, tabs, quotes.
+# Usage: json=$(__gash_json_arr "${files[@]}")
+__gash_json_arr() {
+    if (($# == 0)); then
+        printf '[]'
+        return 0
+    fi
+    printf '%s\0' "$@" | jq -cRs 'split("\u0000")[:-1]'
+}
+
 # -----------------------------------------------------------------------------
 # Shell Utilities
 # -----------------------------------------------------------------------------
+
+# Run curl with a sensitive header passed via --config on a file descriptor,
+# never in argv (argv is world-readable through /proc/<pid>/cmdline).
+# Usage: __gash_curl_auth "x-api-key: $token" [curl args...]
+__gash_curl_auth() {
+    local hdr="${1-}"; shift
+    curl --config <(printf 'header = "%s"\n' "$hdr") "$@"
+}
 
 # Execute a command with shell history temporarily disabled.
 # Saves and restores the history state around the wrapped command.
@@ -180,6 +216,7 @@ __gash_expand_tilde_path() {
 all_colors() {
     needs_help "all_colors" "all_colors" "Displays all available terminal colors (256 colors)." "${1-}" && return
 
+    local i
     for i in {0..255}; do
         printf "\x1b[38;5;%smcolour%s\x1b[0m\n" "$i" "$i"
     done
