@@ -432,6 +432,8 @@ This is the **unified configuration file** for sensitive credentials. It support
 
 * SSH key auto-unlock (replaces the old `~/.gash_ssh_credentials`)
 * Database connection strings (for LLM utilities)
+* AI provider API keys
+* Named remote hosts (for `remote_exec`/`remote_push`/`remote_pull`/`remote_sync_push`/`remote_sync_pull`)
 
 ##### Quick Setup
 
@@ -500,6 +502,18 @@ ai_query "how to list files?"           # Uses first available provider
 ai_query claude "explain kubernetes"     # Uses Claude specifically
 ai_query gemini "write a backup script"  # Uses Gemini specifically
 ```
+
+##### Remote Hosts Configuration
+
+Named remote host entries follow the format `HOST:alias=user@host`:
+
+```sh
+# ~/.gash_env
+HOST:web=root@web.example.com
+HOST:db=deploy@10.0.0.5
+```
+
+Used by `remote_exec`/`remote_push`/`remote_pull`/`remote_sync_push`/`remote_sync_pull` (see [Remote Host Operations](#remote-host-operations) above). Interactively you can also target any `user@host` directly without registering it here; a registered alias is required when Gash runs headless (`GASH_HEADLESS=1`, e.g. driven by an agent). List configured hosts with `remote_hosts`.
 
 ##### PS1 Prompt Configuration
 
@@ -680,6 +694,7 @@ files_largest --min-size 100M --null /tmp | xargs -0 rm -i
 | `git_delete_tag` | `gdt` | Deletes a tag both locally and on remote |
 | `git_dump_revisions` | `gdr` | Dumps all revisions of a Git-tracked file into separate files |
 | `git_apply_patch` | `gpatch` | Creates and applies patches from a feature branch to main |
+| `git_repair` | `gheal` | Repairs a repo with corrupted 0-byte loose objects by re-fetching from origin |
 
 #### Git Log Functions
 
@@ -693,6 +708,40 @@ Professional git log visualization with multiple variants. Run `gl --help` for f
 | `glg` | Graph focused (first-parent only) |
 | `gls` | Log with file statistics |
 | `glf FILE` | File history with patches |
+
+#### PHP Version Detection
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `php_detect_version` | — | Detects which PHP version a project wants (`.target-php-version`, `composer.json`, repo instructions), resolves the matching binary/gash-exec function names. JSON under `--llm`/`GASH_HEADLESS=1`, human-readable text otherwise |
+
+#### Node.js / NVM Operations
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `nvm_prune_versions` | `nvmp` | Removes duplicate/older NVM patch versions, keeping the latest per major (dry-run by default, `--force` to apply) |
+| `node_detect_version` | — | Detects which Node.js version a project wants (`.nvmrc`, `.node-version`, `package.json` `engines.node`), resolves the matching gash-exec function names. Same dual-mode output as `php_detect_version` |
+
+#### Remote Host Operations
+
+SSH command execution and scp/rsync file transfer against named remote hosts, with multiplexed connections (ControlMaster) and remote-path safety classification (DENY/ASK/ALLOW). Host aliases are configured as `HOST:alias=user@host` entries in `~/.gash_env` (see [`~/.gash_env`](#gash_env-optional-ssh-keys-and-database-credentials) below). Interactively, any function here also accepts a raw `user@host` target directly; under `GASH_HEADLESS=1` only a registered alias is accepted — a whitelist that keeps an unsupervised caller confined to hosts you explicitly registered.
+
+| Long Name | Short | Description |
+|-----------|-------|-------------|
+| `remote_hosts` | `rh` | Lists configured remote host aliases |
+| `remote_exec` | `rex` | Runs a command or script on a remote host via multiplexed SSH |
+| `remote_push` | `rpush` | Copies a local file/dir to a remote host via scp |
+| `remote_pull` | `rpull` | Copies a remote file/dir to the local machine via scp |
+| `remote_sync_push` | `rspush` | Syncs a local directory to a remote host via rsync |
+| `remote_sync_pull` | `rspull` | Syncs a remote directory to the local machine via rsync |
+
+Remote path safety (scp/rsync destinations/sources):
+
+| Class | Behavior | Paths |
+|-------|----------|-------|
+| **DENY** | Always blocked, even `--force` | `/`, `/bin`, `/sbin`, `/lib*`, `/boot`, `/sys`, `/proc`, `/dev`, `/usr/bin`, `/usr/sbin`, `/usr/lib*`, `/etc/ssh`, `/etc/sudoers*`, `/etc/passwd`, `/etc/shadow*`, `/etc/gshadow*`, `/etc/pam.d`, any path with `..` |
+| **ASK** | Interactive: real y/n prompt. Headless: refused unless `--force` | `/etc/*` (non-DENY subpaths, includes `/etc/systemd`, `/etc/cron.*`), `/var/*` (except `/var/tmp`), `/usr/local/*`, `/root/*` |
+| **ALLOW** | No check | Relative paths, `/tmp/*`, `/var/tmp/*`, `/home/<user>/*`, any absolute path not in DENY or ASK |
 
 #### Docker Operations
 
@@ -1058,7 +1107,7 @@ tree_stats --json | jq '.data | {files_total, size_total_human, top_by_size}'
   * **Status**: `gst` (full), `gs` (short with branch)
   * **Add**: `ga`, `gaa` (all), `gap` (interactive patch)
   * **Commit**: `gc`, `gcm` (with message), `gca` (amend), `gcan` (amend no-edit)
-  * **Push/Pull**: `gp`, `gpf` (force-with-lease), `gpl`, `gplr` (rebase)
+  * **Push/Pull**: `gp` (pull), `gpr` (pull --rebase), `gpsh` (push), `gpf` (push --force-with-lease)
   * **Branch**: `gb`, `gba` (all), `gcb` (create+switch), `gbd`/`gbD` (delete)
   * **Checkout/Switch**: `gco`, `gsw`, `gswc` (create)
   * **Diff**: `gd`, `gds` (staged), `gdw` (word-diff)

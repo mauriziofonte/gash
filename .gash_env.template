@@ -67,6 +67,22 @@
 #   gash_ai_list         # List configured providers
 
 # ============================================
+# Remote Hosts
+# ============================================
+# Format: HOST:alias=user@host
+#
+# Named shortcuts for remote_exec/remote_push/remote_pull/remote_sync_push/
+# remote_sync_pull. Interactively you can also target any user@host directly
+# without registering it here; a registered alias is required when Gash runs
+# headless (GASH_HEADLESS=1, e.g. driven by an agent).
+#
+# Examples:
+# HOST:web=root@web.example.com
+# HOST:db=deploy@10.0.0.5
+#
+# To list configured hosts: remote_hosts
+
+# ============================================
 # PS1 Prompt Configuration
 # ============================================
 # GASH_GIT_EXCLUDE: Colon-separated list of git repository roots to exclude

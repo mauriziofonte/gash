@@ -258,3 +258,18 @@ __gash_require_wsl() {
 
     return 0
 }
+
+# -----------------------------------------------------------------------------
+# Headless Capability Gating
+# -----------------------------------------------------------------------------
+
+# Centralizes the "human interactive = unrestricted, headless = restricted"
+# asymmetry so gates on a mutation/capability don't each re-derive the same
+# GASH_HEADLESS check. Returns 0 (gate ACTIVE, caller must perform its own
+# capability check) under GASH_HEADLESS=1; returns 1 (gate NOT active, human
+# interactive use, unrestricted) otherwise.
+# Usage: __gash_headless_gate_active && { ...perform capability check...; }
+# Returns: 0 if the gate applies (headless), 1 if it does not (interactive)
+__gash_headless_gate_active() {
+    [[ "${GASH_HEADLESS-}" == "1" ]]
+}

@@ -130,10 +130,10 @@ EOF
     # =========================================================================
     # Push / Pull
     # =========================================================================
-    alias gp='git push'
+    alias gp='git pull'
+    alias gpr='git pull --rebase'
+    alias gpsh='git push'
     alias gpf='git push --force-with-lease'  # Safer force push
-    alias gpl='git pull'
-    alias gplr='git pull --rebase'
 
     # =========================================================================
     # Checkout / Switch

@@ -4,12 +4,14 @@
 # Gash Core: Configuration Parser
 # =============================================================================
 #
-# Parses ~/.gash_env for SSH keys, database connections and AI providers.
+# Parses ~/.gash_env for SSH keys, database connections, AI providers and
+# named remote hosts.
 #
 # File format:
 #   SSH:keypath=passphrase
 #   DB:name=driver://user:password@host:port/database
 #   AI:provider=api_token
+#   HOST:alias=user@host
 #
 # Internal functions:
 #   __gash_load_env()            - Load and cache ~/.gash_env
@@ -21,6 +23,8 @@
 #   __gash_check_env_perms()     - Check file permissions
 #   __gash_get_ai_token()        - Get AI provider token
 #   __gash_get_first_ai_provider() - Get first available AI provider
+#   __gash_get_host_target()     - Get user@host by alias
+#   __gash_get_host_entries()    - Get all alias/target host entries
 #
 # Public functions:
 #   gash_db_list()             - List available DB connections
@@ -35,6 +39,7 @@ declare -g __GASH_ENV_LOADED=""
 declare -g __GASH_ENV_SSH_KEYS=""
 declare -g __GASH_ENV_DB_ENTRIES=""
 declare -g __GASH_ENV_AI_PROVIDERS=""
+declare -g __GASH_ENV_HOST_ENTRIES=""
 
 # =============================================================================
 # URL Encoding/Decoding
@@ -126,6 +131,7 @@ __gash_load_env() {
         __GASH_ENV_SSH_KEYS=""
         __GASH_ENV_DB_ENTRIES=""
         __GASH_ENV_AI_PROVIDERS=""
+        __GASH_ENV_HOST_ENTRIES=""
         return 0
     fi
 
@@ -135,6 +141,7 @@ __gash_load_env() {
     local ssh_keys=""
     local db_entries=""
     local ai_providers=""
+    local host_entries=""
     local line
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -205,6 +212,24 @@ __gash_load_env() {
             continue
         fi
 
+        # Parse HOST entries: HOST:alias=user@host
+        if [[ "$line" == HOST:* ]]; then
+            local host_rest="${line#HOST:}"
+            local host_alias="${host_rest%%=*}"
+            local host_target="${host_rest#*=}"
+
+            # Validate target shape: user@host, non-empty on both sides.
+            if [[ ! "$host_target" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]; then
+                __gash_warning "Invalid HOST target for '$host_alias': $host_target (expected user@host, skipping)"
+                continue
+            fi
+
+            # Store as TAB-separated: alias\ttarget
+            [[ -n "$host_entries" ]] && host_entries+=$'\n'
+            host_entries+="${host_alias}"$'\t'"${host_target}"
+            continue
+        fi
+
         # Unknown line format
         __gash_warning "Unknown config line format: $line (skipping)"
 
@@ -214,6 +239,7 @@ __gash_load_env() {
     __GASH_ENV_SSH_KEYS="$ssh_keys"
     __GASH_ENV_DB_ENTRIES="$db_entries"
     __GASH_ENV_AI_PROVIDERS="$ai_providers"
+    __GASH_ENV_HOST_ENTRIES="$host_entries"
 }
 
 # Force reload of config
@@ -222,6 +248,7 @@ __gash_reload_env() {
     __GASH_ENV_SSH_KEYS=""
     __GASH_ENV_DB_ENTRIES=""
     __GASH_ENV_AI_PROVIDERS=""
+    __GASH_ENV_HOST_ENTRIES=""
     __gash_load_env
 }
 
@@ -343,6 +370,42 @@ __gash_parse_db_url() {
     __pdu_out_db="$__pdu_database"
 
     return 0
+}
+
+# =============================================================================
+# Remote Host Functions
+# =============================================================================
+
+# Get remote target (user@host) by alias
+# Returns target or empty string (rc 1) if not found
+__gash_get_host_target() {
+    local alias_name="${1-}"
+
+    [[ -z "$alias_name" ]] && return 1
+
+    __gash_load_env
+
+    [[ -z "$__GASH_ENV_HOST_ENTRIES" ]] && return 1
+
+    local line
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local entry_alias="${line%%$'\t'*}"
+        local entry_target="${line#*$'\t'}"
+
+        if [[ "$entry_alias" == "$alias_name" ]]; then
+            printf '%s' "$entry_target"
+            return 0
+        fi
+    done <<< "$__GASH_ENV_HOST_ENTRIES"
+
+    return 1
+}
+
+# Get all host entries as "alias\ttarget" lines
+__gash_get_host_entries() {
+    __gash_load_env
+    printf '%s' "$__GASH_ENV_HOST_ENTRIES"
 }
 
 # =============================================================================

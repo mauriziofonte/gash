@@ -11,6 +11,7 @@
 #   git_delete_tag (gdt)      - Delete tag locally and on remote
 #   git_dump_revisions (gdr)  - Dump all revisions of a file
 #   git_apply_patch (gap)     - Apply patch from feature branch
+#   git_repair (gheal)        - Repair a repo with corrupted 0-byte loose objects
 
 # -----------------------------------------------------------------------------
 # File History
@@ -226,6 +227,57 @@ git_delete_tag() {
 }
 
 # -----------------------------------------------------------------------------
+# Repository Maintenance
+# -----------------------------------------------------------------------------
+
+# Repair a repo with corrupted (0-byte) loose objects by re-fetching them from
+# the 'origin' remote through a temporary bare clone.
+# Usage: git_repair
+# Alias: gheal
+git_repair() {
+    needs_help "git_repair" "git_repair" \
+        "Repair a repo with corrupted 0-byte loose objects by re-fetching them from origin. Alias: gheal" \
+        "${1-}" && return
+
+    __gash_require_git_repo_with_remote || return 1
+
+    local repo_root
+    repo_root="$(git rev-parse --show-toplevel)"
+
+    local origin_url
+    origin_url="$(git remote get-url origin)"
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d) || { __gash_error "Failed to create temporary directory."; return 1; }
+    trap 'rm -rf "$tmp_dir" >/dev/null 2>&1' RETURN
+
+    __gash_step 1 5 "Removing corrupted (0-byte) loose objects..."
+    local removed
+    removed=$(find "$repo_root/.git/objects" -type f -empty -print -delete | wc -l)
+    __gash_info "Removed $removed corrupted object(s)."
+
+    __gash_step 2 5 "Cloning '$origin_url' into a temporary bare repo..."
+    if ! git clone --quiet --bare "$origin_url" "$tmp_dir/recovery.git"; then
+        __gash_error "Failed to clone '$origin_url'."
+        return 1
+    fi
+
+    __gash_step 3 5 "Copying recovered objects back into the repo..."
+    cp -rn "$tmp_dir/recovery.git"/objects/. "$repo_root/.git/objects/" 2>/dev/null
+
+    __gash_step 4 5 "Running garbage collection..."
+    git -C "$repo_root" gc --prune=now --quiet
+
+    __gash_step 5 5 "Verifying repo integrity..."
+    if git -C "$repo_root" fsck --full; then
+        __gash_success "Repo repaired and verified clean."
+    else
+        __gash_error "Repo still reports issues after repair. Manual inspection needed."
+        return 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Short Aliases
 # -----------------------------------------------------------------------------
 alias glt='git_list_tags'
@@ -233,6 +285,7 @@ alias gat='git_add_tag'
 alias gdt='git_delete_tag'
 alias gdr='git_dump_revisions'
 alias gpatch='git_apply_patch'
+alias gheal='git_repair'
 
 # =============================================================================
 # Help Registration
@@ -342,6 +395,25 @@ NOTES
   Steps: checks out main, creates a patch from the specified commit
   on the feature branch, applies it, and returns you to main.
   The commit hash must exist on the feature branch.
+HELP
+
+__gash_register_help "git_repair" \
+    --aliases "gheal" \
+    --module "git" \
+    --short "Repair a repo with corrupted 0-byte loose objects" \
+    --see-also "git_list_tags" \
+    <<'HELP'
+USAGE
+  git_repair
+
+EXAMPLES
+  # Fix a repo after a crash/OOM left empty loose object files
+  gheal
+
+NOTES
+  Deletes 0-byte loose objects, re-fetches them from 'origin' via a
+  temporary bare clone, then runs 'git gc --prune=now' and 'git fsck
+  --full' to verify. Requires a git repo with a configured remote.
 HELP
 
 fi  # end help registration guard
