@@ -1411,8 +1411,10 @@ __sysinfo_call_freetext_gemini() {
 # Usage: __sysinfo_format_ai_response <json>
 __sysinfo_format_ai_response() {
     local json="$1"
-    local MUTED='\033[0;90m'
-    local BOLD_RED='\033[1;31m'
+    # Derive from the centralized palette so NO_COLOR/GASH_HEADLESS/pipe zero
+    # these too (previously hardcoded literals leaked ANSI in headless output).
+    local MUTED="${__GASH_COLOR_MUTED-}"
+    local BOLD_RED="${__GASH_BOLD_RED-}"
 
     # Validate JSON
     if ! echo "$json" | jq empty 2>/dev/null; then
@@ -1479,8 +1481,10 @@ __sysinfo_format_ai_response() {
 # Usage: __sysinfo_format_drilldown_response <json>
 __sysinfo_format_drilldown_response() {
     local json="$1"
-    local MUTED='\033[0;90m'
-    local BOLD_RED='\033[1;31m'
+    # Derive from the centralized palette so NO_COLOR/GASH_HEADLESS/pipe zero
+    # these too (previously hardcoded literals leaked ANSI in headless output).
+    local MUTED="${__GASH_COLOR_MUTED-}"
+    local BOLD_RED="${__GASH_BOLD_RED-}"
 
     # Validate JSON
     if ! echo "$json" | jq empty 2>/dev/null; then

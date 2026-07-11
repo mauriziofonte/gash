@@ -567,7 +567,7 @@ This document tracks Gash **v1.5.1+**.
 
 ```bash
 GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'
-# -> 1.5.2
+# -> 1.5.3
 ```
 
 ### Future compatibility
