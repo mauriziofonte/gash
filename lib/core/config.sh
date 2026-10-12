@@ -12,6 +12,10 @@
 #   DB:name=driver://user:password@host:port/database
 #   AI:provider=api_token
 #   HOST:alias=user@host
+#   GASH_SETTING=value          (see __GASH_SETTINGS_KNOWN)
+#
+# Diagnostics never echo a line's value: a malformed entry may hold a
+# token or a password, so warnings name the line number and the key only.
 #
 # Internal functions:
 #   __gash_load_env()            - Load and cache ~/.gash_env
@@ -40,6 +44,12 @@ declare -g __GASH_ENV_SSH_KEYS=""
 declare -g __GASH_ENV_DB_ENTRIES=""
 declare -g __GASH_ENV_AI_PROVIDERS=""
 declare -g __GASH_ENV_HOST_ENTRIES=""
+declare -g __GASH_ENV_SETTINGS=""
+
+# Settings accepted as `NAME=value` lines in ~/.gash_env. A variable already
+# set in the environment always wins over the file, so a one-off
+# `GASH_BANNER=0 bash` keeps working.
+declare -g __GASH_SETTINGS_KNOWN=" GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_HISTORY_SYNC GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_GIT_EXCLUDE GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM "
 
 # =============================================================================
 # URL Encoding/Decoding
@@ -104,51 +114,57 @@ __gash_url_encode() {
 # Config File Parsing
 # =============================================================================
 
-# Check file permissions (should be 600)
+# Check that the config file is private: owned by the current user and not
+# readable by group/others (600 or 400). Symlinks are followed (dotfile
+# managers commonly symlink ~/.gash_env).
 __gash_check_env_perms() {
     local file="${1-}"
     [[ ! -f "$file" ]] && return 0
 
-    local perms
-    if [[ "$(uname)" == "Darwin" ]]; then
-        perms=$(stat -f %Lp "$file" 2>/dev/null) || true
+    local perms="" owner=""
+    if [[ "${OSTYPE-}" == darwin* || "${OSTYPE-}" == *bsd* ]]; then
+        read -r perms owner < <(stat -L -f '%Lp %u' "$file" 2>/dev/null) || true
     else
-        perms=$(stat -c %a "$file" 2>/dev/null) || true
+        read -r perms owner < <(stat -L -c '%a %u' "$file" 2>/dev/null) || true
     fi
 
-    if [[ -n "$perms" && "$perms" != "600" ]]; then
-        __gash_warning "\$HOME/.gash_env has insecure permissions ($perms). Run: chmod 600 \$HOME/.gash_env"
+    if [[ -n "$perms" && "$perms" != "600" && "$perms" != "400" ]]; then
+        __gash_warning "${file/#$HOME/\~} is readable by other users (mode $perms). Run: chmod 600 ${file/#$HOME/\~}"
     fi
+    if [[ -n "$owner" && "$owner" != "${EUID-}" ]]; then
+        __gash_warning "${file/#$HOME/\~} is owned by uid $owner, not by you (uid ${EUID-}). Gash will still read it."
+    fi
+    return 0
 }
 
-# Load and parse ~/.gash_env
+# Load and parse ~/.gash_env (cached in globals for the life of the shell).
+# Callers that read values through $(...) should call __gash_load_env first,
+# so the cache is filled in the parent shell and not rebuilt per subshell.
 __gash_load_env() {
     # Return cached if already loaded
     [[ -n "$__GASH_ENV_LOADED" ]] && return 0
 
     local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
 
+    __GASH_ENV_SSH_KEYS=""
+    __GASH_ENV_DB_ENTRIES=""
+    __GASH_ENV_AI_PROVIDERS=""
+    __GASH_ENV_HOST_ENTRIES=""
+    __GASH_ENV_SETTINGS=""
+
     # File doesn't exist - not an error, just empty config
     if [[ ! -f "$env_file" ]]; then
         __GASH_ENV_LOADED="1"
-        __GASH_ENV_SSH_KEYS=""
-        __GASH_ENV_DB_ENTRIES=""
-        __GASH_ENV_AI_PROVIDERS=""
-        __GASH_ENV_HOST_ENTRIES=""
         return 0
     fi
 
-    # Check permissions
     __gash_check_env_perms "$env_file"
 
-    local ssh_keys=""
-    local db_entries=""
-    local ai_providers=""
-    local host_entries=""
-    local line
+    local ssh_keys="" db_entries="" ai_providers="" host_entries="" settings=""
+    local line lineno=0 key value rest
 
     while IFS= read -r line || [[ -n "$line" ]]; do
-        # Remove CRLF
+        lineno=$((lineno + 1))
         line="${line%$'\r'}"
 
         # Trim whitespace
@@ -158,84 +174,86 @@ __gash_load_env() {
         # Skip empty lines and comments
         [[ -z "$line" || "$line" == \#* ]] && continue
 
-        # Parse SSH entries: SSH:keypath=passphrase
-        if [[ "$line" == SSH:* ]]; then
-            local ssh_rest="${line#SSH:}"
-            local keypath="${ssh_rest%%=*}"
-            local passphrase="${ssh_rest#*=}"
-
-            # Expand tilde
-            keypath="${keypath/#\~/$HOME}"
-
-            # Validate key file exists
-            if [[ ! -f "$keypath" ]]; then
-                __gash_warning "SSH key not found: $keypath (skipping)"
+        case "$line" in
+            SSH:* | DB:* | AI:* | HOST:*)
+                rest="${line#*:}"
+                if [[ "$rest" != *=* ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: '${line%%:*}:' entry has no '=' (expected ${line%%:*}:name=value), skipping"
+                    continue
+                fi
+                key="${rest%%=*}"
+                value="${rest#*=}"
+                if [[ -z "$key" ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: '${line%%:*}:' entry has an empty name, skipping"
+                    continue
+                fi
+                ;;
+            GASH_*=*)
+                key="${line%%=*}"
+                value="${line#*=}"
+                # Strip one level of matching quotes: GASH_X="a b"
+                if [[ "$value" == \"*\" || "$value" == \'*\' ]]; then
+                    value="${value:1:${#value}-2}"
+                fi
+                if [[ ! "$key" =~ ^GASH_[A-Z0-9_]+$ || "$__GASH_SETTINGS_KNOWN" != *" $key "* ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: unknown setting '$key', skipping"
+                    continue
+                fi
+                [[ -n "$settings" ]] && settings+=$'\n'
+                settings+="${key}"$'\t'"${value}"
                 continue
-            fi
-
-            # Store as TAB-separated: keypath\tpassphrase
-            [[ -n "$ssh_keys" ]] && ssh_keys+=$'\n'
-            ssh_keys+="${keypath}"$'\t'"${passphrase}"
-            continue
-        fi
-
-        # Parse DB entries: DB:name=driver://user:pass@host:port/database
-        if [[ "$line" == DB:* ]]; then
-            local db_rest="${line#DB:}"
-            local db_name="${db_rest%%=*}"
-            local db_url="${db_rest#*=}"
-
-            # Validate URL format
-            if [[ ! "$db_url" =~ ^(mysql|mariadb|pgsql):// ]]; then
-                __gash_warning "Invalid DB URL format for '$db_name': $db_url (skipping)"
+                ;;
+            *)
+                # Report only what precedes ':' or '=' (never a value).
+                key="${line%%[:=]*}"
+                __gash_warning "Line $lineno of ~/.gash_env: unrecognized entry '${key:0:24}', skipping"
                 continue
-            fi
+                ;;
+        esac
 
-            # Store as TAB-separated: name\turl
-            [[ -n "$db_entries" ]] && db_entries+=$'\n'
-            db_entries+="${db_name}"$'\t'"${db_url}"
-            continue
-        fi
-
-        # Parse AI entries: AI:provider=api_token
-        if [[ "$line" == AI:* ]]; then
-            local ai_rest="${line#AI:}"
-            local provider="${ai_rest%%=*}"
-            local token="${ai_rest#*=}"
-
-            # Validate provider name
-            if [[ ! "$provider" =~ ^(claude|gemini)$ ]]; then
-                __gash_warning "Unknown AI provider '$provider' (only claude/gemini supported)"
-                continue
-            fi
-
-            # Store as TAB-separated: provider\ttoken
-            [[ -n "$ai_providers" ]] && ai_providers+=$'\n'
-            ai_providers+="${provider}"$'\t'"${token}"
-            continue
-        fi
-
-        # Parse HOST entries: HOST:alias=user@host
-        if [[ "$line" == HOST:* ]]; then
-            local host_rest="${line#HOST:}"
-            local host_alias="${host_rest%%=*}"
-            local host_target="${host_rest#*=}"
-
-            # Validate target shape: user@host, non-empty on both sides.
-            if [[ ! "$host_target" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]; then
-                __gash_warning "Invalid HOST target for '$host_alias': $host_target (expected user@host, skipping)"
-                continue
-            fi
-
-            # Store as TAB-separated: alias\ttarget
-            [[ -n "$host_entries" ]] && host_entries+=$'\n'
-            host_entries+="${host_alias}"$'\t'"${host_target}"
-            continue
-        fi
-
-        # Unknown line format
-        __gash_warning "Unknown config line format: $line (skipping)"
-
+        case "$line" in
+            SSH:*)
+                # SSH:keypath=passphrase (empty passphrase is allowed)
+                key="${key/#\~/$HOME}"
+                if [[ ! -f "$key" ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: SSH key not found: ${key/#$HOME/\~} (skipping)"
+                    continue
+                fi
+                [[ -n "$ssh_keys" ]] && ssh_keys+=$'\n'
+                ssh_keys+="${key}"$'\t'"${value}"
+                ;;
+            DB:*)
+                # DB:name=driver://user:pass@host:port/database
+                if [[ ! "$value" =~ ^(mysql|mariadb|pgsql):// ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: DB '$key' must start with mysql://, mariadb:// or pgsql:// (skipping)"
+                    continue
+                fi
+                [[ -n "$db_entries" ]] && db_entries+=$'\n'
+                db_entries+="${key}"$'\t'"${value}"
+                ;;
+            AI:*)
+                # AI:provider=api_token
+                if [[ ! "$key" =~ ^(claude|gemini)$ ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: unknown AI provider '${key:0:24}' (supported: claude, gemini)"
+                    continue
+                fi
+                if [[ -z "$value" ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: AI provider '$key' has an empty token (skipping)"
+                    continue
+                fi
+                [[ -n "$ai_providers" ]] && ai_providers+=$'\n'
+                ai_providers+="${key}"$'\t'"${value}"
+                ;;
+            HOST:*)
+                # HOST:alias=user@host
+                if [[ ! "$value" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]; then
+                    __gash_warning "Line $lineno of ~/.gash_env: HOST '$key' must be user@host (skipping)"
+                    continue
+                fi
+                [[ -n "$host_entries" ]] && host_entries+=$'\n'
+                host_entries+="${key}"$'\t'"${value}"
+                ;;
+        esac
     done <"$env_file"
 
     __GASH_ENV_LOADED="1"
@@ -243,15 +261,41 @@ __gash_load_env() {
     __GASH_ENV_DB_ENTRIES="$db_entries"
     __GASH_ENV_AI_PROVIDERS="$ai_providers"
     __GASH_ENV_HOST_ENTRIES="$host_entries"
+    __GASH_ENV_SETTINGS="$settings"
+}
+
+# Apply settings read from ~/.gash_env as shell variables. A variable that
+# is already set (environment, ~/.bashrc before Gash) is left untouched.
+__gash_apply_settings() {
+    __gash_load_env
+    [[ -z "$__GASH_ENV_SETTINGS" ]] && return 0
+    local line key value
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        key="${line%%$'\t'*}"
+        value="${line#*$'\t'}"
+        [[ -n "${!key+x}" ]] && continue
+        printf -v "$key" '%s' "$value"
+    done <<<"$__GASH_ENV_SETTINGS"
+    return 0
+}
+
+# Read a setting from ~/.gash_env without applying it.
+# Usage: __gash_get_setting NAME  (prints value, rc 1 when absent)
+__gash_get_setting() {
+    local name="${1-}" line
+    __gash_load_env
+    while IFS= read -r line; do
+        [[ "${line%%$'\t'*}" == "$name" ]] || continue
+        printf '%s' "${line#*$'\t'}"
+        return 0
+    done <<<"$__GASH_ENV_SETTINGS"
+    return 1
 }
 
 # Force reload of config
 __gash_reload_env() {
     __GASH_ENV_LOADED=""
-    __GASH_ENV_SSH_KEYS=""
-    __GASH_ENV_DB_ENTRIES=""
-    __GASH_ENV_AI_PROVIDERS=""
-    __GASH_ENV_HOST_ENTRIES=""
     __gash_load_env
 }
 
@@ -460,6 +504,7 @@ gash_db_test() {
     local name="${1:-default}"
 
     local url
+    __gash_load_env
     url=$(__gash_get_db_url "$name") || {
         __gash_error "Connection '$name' not found in ~/.gash_env"
         return 1
@@ -592,8 +637,7 @@ __gash_get_first_ai_provider() {
 
     [[ -z "$__GASH_ENV_AI_PROVIDERS" ]] && return 1
 
-    local first_line
-    first_line=$(head -n1 <<<"$__GASH_ENV_AI_PROVIDERS")
+    local first_line="${__GASH_ENV_AI_PROVIDERS%%$'\n'*}"
     [[ -z "$first_line" ]] && return 1
 
     printf '%s' "${first_line%%$'\t'*}"

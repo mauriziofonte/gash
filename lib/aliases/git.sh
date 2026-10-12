@@ -14,8 +14,10 @@ if command -v git >/dev/null 2>&1; then
     __GASH_GIT_LOG_FORMAT='%C(auto)%h%d %s %C(dim)(%cr) %C(cyan)<%an>%C(reset)'
     __GASH_GIT_LOG_FORMAT_FULL='%C(auto)%h %C(bold blue)%an%C(reset) %C(dim)%ar%C(reset)%C(auto)%d%C(reset)%n  %s%n'
 
-    # Main git log function with help and variants
-    gl() {
+    # Main git log function with help and variants. Defined with the
+    # `function` keyword: a user alias with the same name would otherwise be
+    # expanded inside `name() {` and break the whole file.
+    function gl {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             cat <<'EOF'
 Git Log Aliases - Professional log visualization
@@ -55,7 +57,7 @@ EOF
     }
 
     # All branches
-    gla() {
+    function gla {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             gl --help
             return 0
@@ -64,7 +66,7 @@ EOF
     }
 
     # Ultra-compact oneline
-    glo() {
+    function glo {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             gl --help
             return 0
@@ -73,7 +75,7 @@ EOF
     }
 
     # Graph focused (first-parent for cleaner merge view)
-    glg() {
+    function glg {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             gl --help
             return 0
@@ -82,7 +84,7 @@ EOF
     }
 
     # With file statistics
-    gls() {
+    function gls {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             gl --help
             return 0
@@ -91,7 +93,7 @@ EOF
     }
 
     # File-specific log with patches
-    glf() {
+    function glf {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             gl --help
             return 0
@@ -111,7 +113,10 @@ EOF
     # Status
     # =========================================================================
     alias gst='git status'
-    alias gs='git status -sb' # Short status with branch info
+    # Short status with branch info; skipped when Ghostscript owns `gs`.
+    if ! type -P gs >/dev/null 2>&1; then
+        alias gs='git status -sb'
+    fi
 
     # =========================================================================
     # Add
@@ -187,18 +192,5 @@ EOF
     alias grb='git rebase'
     alias grbc='git rebase --continue'
     alias grba='git rebase --abort'
-
-    # =========================================================================
-    # Tags (link to gash functions if available)
-    # =========================================================================
-    if declare -f gtags >/dev/null 2>&1; then
-        alias gt='gtags'
-    fi
-    if declare -f gadd_tag >/dev/null 2>&1; then
-        alias gta='gadd_tag'
-    fi
-    if declare -f gdel_tag >/dev/null 2>&1; then
-        alias gtd='gdel_tag'
-    fi
 
 fi

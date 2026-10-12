@@ -249,15 +249,7 @@ __gash_fs_error() {
     local is_machine="${5-0}"
 
     if [[ "$is_machine" -eq 1 ]]; then
-        local esc_details esc_hint
-        esc_details=$(__gash_json_escape "$details")
-        esc_hint=$(__gash_json_escape "$hint")
-        local json="{\"error\":\"$err_type\""
-        [[ -n "$details" ]] && json+=",\"details\":\"$esc_details\""
-        json+=",\"action\":\"$action\",\"recoverable\":false"
-        [[ -n "$hint" ]] && json+=",\"hint\":\"$esc_hint\""
-        json+="}"
-        printf '%s\n' "$json" >&2
+        __gash_json_error "$err_type" "$details" "$action" "$hint"
     else
         local msg="$err_type"
         [[ -n "$details" ]] && msg="$msg: $details"
@@ -363,19 +355,31 @@ files_largest() {
         case "$1" in
             --limit)
                 limit="${2-100}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --min-size)
                 min_size_input="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --exclude)
                 excludes+=("${2-}")
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --depth | --max-depth)
                 max_depth="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --no-ignore)
                 no_ignore=1
@@ -566,19 +570,31 @@ dirs_largest() {
         case "$1" in
             --limit)
                 limit="${2-100}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --depth | --max-depth)
                 max_depth="${2-1}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --min-size)
                 min_size_input="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --exclude)
                 excludes+=("${2-}")
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --no-ignore)
                 no_ignore=1
@@ -820,19 +836,31 @@ dirs_find_large() {
         case "$1" in
             --size)
                 size_threshold="${2-20M}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --depth | --max-depth)
                 max_depth="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --limit)
                 limit="${2-1000}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --exclude)
                 excludes+=("${2-}")
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --no-ignore)
                 no_ignore=1
@@ -1077,15 +1105,24 @@ dirs_list_empty() {
         case "$1" in
             --min-depth)
                 min_depth="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --depth | --max-depth)
                 max_depth="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --exclude)
                 excludes+=("${2-}")
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --ignore-dotfiles)
                 ignore_dotfiles=1
@@ -1266,15 +1303,24 @@ tree_stats() {
         case "$1" in
             --depth | --max-depth)
                 max_depth="${2-}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --top)
                 top_n="${2-5}"
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --exclude)
                 excludes+=("${2-}")
-                shift 2
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
                 ;;
             --no-ignore)
                 no_ignore=1

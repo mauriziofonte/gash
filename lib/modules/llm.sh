@@ -244,26 +244,9 @@ __llm_is_secret_file() {
 # Usage: __llm_error <error_type> [<details>] [<action>] [<recoverable>] [<hint>]
 # Example: __llm_error "no_db_config" "Connection 'x' not found" "STOP" "true" "Ask user for connection name"
 __llm_error() {
-    local error_type="${1-unknown_error}"
-    local details="${2-}"
-    local action="${3-STOP}"
-    local recoverable="${4-false}"
-    local hint="${5-}"
-
-    # Build JSON - escape special characters in details and hint
-    local escaped_details escaped_hint
-    escaped_details=$(__gash_json_escape "$details")
-    escaped_hint=$(__gash_json_escape "$hint")
-
-    local json="{\"error\":\"$error_type\""
-    [[ -n "$details" ]] && json+=",\"details\":\"$escaped_details\""
-    json+=",\"action\":\"$action\""
-    json+=",\"recoverable\":$recoverable"
-    [[ -n "$hint" ]] && json+=",\"hint\":\"$escaped_hint\""
-    json+="}"
-
-    echo "$json" >&2
-    return 1
+    # The 4th argument (recoverable) is kept for call-site compatibility;
+    # __gash_json_error derives it from the action.
+    __gash_json_error "${1-}" "${2-}" "${3-STOP}" "${5-}"
 }
 
 # Clean error message for JSON embedding.
@@ -529,7 +512,10 @@ __llm_tree_impl() {
                 ;;
             --depth | --max-depth)
                 max_depth="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --stats)
                 with_stats=1
@@ -738,15 +724,24 @@ __llm_find_impl() {
         case "$1" in
             --type)
                 file_type="${2-f}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --contains)
                 contains_regex="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --limit)
                 limit="${2-100}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -*)
                 __llm_error "unknown_option" "$1" "RETRY" "true" "Use --type, --contains, or --limit"
@@ -822,15 +817,24 @@ __llm_grep_impl() {
         case "$1" in
             --ext)
                 extensions="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --context | -C)
                 context="${2-0}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --limit)
                 limit="${2-100}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -*)
                 __llm_error "unknown_option" "$1" "RETRY" "true" "Use --ext, --context, or --limit"
@@ -905,6 +909,7 @@ __llm_resolve_db() {
     local -n _rd_drv="$3" _rd_usr="$4" _rd_pw="$5" _rd_hst="$6" _rd_prt="$7" _rd_dbn="$8"
 
     local db_url
+    __gash_load_env
     db_url=$(__gash_get_db_url "$conn") || {
         __llm_error "no_db_config" "Connection '$conn' not found" "STOP" "true" "Ask user which database connection to use. Connections are configured in ~/.gash_env"
         return 1
@@ -1047,19 +1052,31 @@ __llm_db_query_impl() {
         case "$1" in
             -d | --database)
                 database="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -c | --connection)
                 connection="${2-default}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -f | --file)
                 sqlite_file="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -r | --rows)
                 max_rows="${2-100}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -*)
                 __llm_error "unknown_option" "$1" "RETRY" "true" "Use -d DATABASE, -c CONNECTION, -f SQLITE_FILE, or -r ROWS"
@@ -1247,15 +1264,24 @@ __llm_db_tables_impl() {
         case "$1" in
             -d | --database)
                 database="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -c | --connection)
                 connection="${2-default}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -f | --file)
                 sqlite_file="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             *) shift ;;
         esac
@@ -1275,6 +1301,7 @@ __llm_db_tables_impl() {
 
     # Get driver from connection to determine query type
     local db_url
+    __gash_load_env
     db_url=$(__gash_get_db_url "$connection") || {
         __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use"
         return 1
@@ -1334,15 +1361,24 @@ __llm_db_schema_impl() {
         case "$1" in
             -d | --database)
                 database="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -c | --connection)
                 connection="${2-default}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -f | --file)
                 sqlite_file="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -*) shift ;;
             *)
@@ -1371,6 +1407,7 @@ __llm_db_schema_impl() {
 
     # Get driver from connection
     local db_url
+    __gash_load_env
     db_url=$(__gash_get_db_url "$connection") || {
         __llm_error "no_db_config" "Connection '$connection' not found" "STOP" "true" "Ask user which database connection to use"
         return 1
@@ -1419,19 +1456,31 @@ __llm_db_sample_impl() {
         case "$1" in
             -d | --database)
                 database="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -c | --connection)
                 connection="${2-default}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -f | --file)
                 sqlite_file="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --limit)
                 limit="${2-5}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -*) shift ;;
             *)
@@ -1490,15 +1539,24 @@ __llm_db_explain_impl() {
         case "$1" in
             -d | --database)
                 database="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -c | --connection)
                 connection="${2-default}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             -f | --file)
                 sqlite_file="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --analyze)
                 analyze=1
@@ -2044,7 +2102,10 @@ __llm_git_log_impl() {
         case "$1" in
             --limit)
                 limit="${2-10}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             *)
                 target_path="$1"
@@ -2140,11 +2201,17 @@ __llm_procs_impl() {
         case "$1" in
             --name)
                 name="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             --port)
                 port="${2-}"
-                shift 2
+                shift 2 || {
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                }
                 ;;
             *) shift ;;
         esac

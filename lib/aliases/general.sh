@@ -2,52 +2,48 @@
 # shellcheck disable=SC2139 # aliases intentionally expand values at definition time
 
 # Gash Aliases: General
-# Miscellaneous aliases, command replacements, and Gash-specific shortcuts.
+# Miscellaneous aliases and Gash shortcuts.
 
-# Override help command with Gash help
-alias help=gash_help
-
-# Add alias for "services_stop" with --force flag
-alias quit='services_stop --force'
-
-# WSL aliases: now proper functions in lib/modules/system.sh
-# Short aliases (wr, wsd, wex, wtm) registered there.
-
-# Replace less with most if installed
-if command -v most >/dev/null 2>&1; then
-    alias less='most'
-    export PAGER='most'
-fi
-
-# Set default editor
-if command -v nano >/dev/null 2>&1; then
-    export EDITOR='nano'
-elif command -v vim >/dev/null 2>&1; then
-    export EDITOR='vim'
-fi
-
-# Helper function to replace commands with better alternatives
-__gash_add_command_replace_alias() {
-    if command -v "$2" >/dev/null 2>&1; then
-        alias "$1"="$2"
+# `help` shows Gash help for Gash commands and falls back to the Bash
+# builtin for everything else (`help cd`, `help -d read`, ...).
+function help {
+    if [[ $# -eq 0 ]]; then
+        gash_help
+    elif [[ "$1" == -* ]] || [[ "$(type -t "$1" 2>/dev/null)" == "builtin" || "$(type -t "$1" 2>/dev/null)" == "keyword" ]]; then
+        builtin help "$@"
+    else
+        gash_help "$@"
     fi
 }
 
-# Replace commands with better alternatives if available
-__gash_add_command_replace_alias 'tail' 'multitail'
-__gash_add_command_replace_alias 'df' 'pydf'
-__gash_add_command_replace_alias 'top' 'htop'
+# Stop common local services (web servers, databases) quickly.
+alias quit='services_stop --force'
 
-# Use mtr for traceroute and tracepath if installed
-if command -v mtr >/dev/null 2>&1; then
-    alias traceroute='mtr'
-    alias tracepath='mtr'
+# -----------------------------------------------------------------------------
+# Tool replacements (opt-in: GASH_REPLACE_TOOLS=1 in ~/.gash_env)
+#
+# These swap standard commands for alternatives with different flags and
+# output, which surprises scripts and muscle memory, so Gash 2 leaves them
+# off unless asked.
+# -----------------------------------------------------------------------------
+
+if [[ "${GASH_REPLACE_TOOLS:-0}" == "1" ]]; then
+    __gash_add_command_replace_alias() {
+        if type -P "$2" >/dev/null 2>&1; then
+            alias "$1"="$2"
+        fi
+    }
+
+    if type -P most >/dev/null 2>&1; then
+        alias less='most'
+        export PAGER='most'
+    fi
+    __gash_add_command_replace_alias 'tail' 'multitail'
+    __gash_add_command_replace_alias 'df' 'pydf'
+    __gash_add_command_replace_alias 'top' 'htop'
+    __gash_add_command_replace_alias 'traceroute' 'mtr'
+    __gash_add_command_replace_alias 'tracepath' 'mtr'
+    __gash_add_command_replace_alias 'diff' 'colordiff'
+
+    unset -f __gash_add_command_replace_alias
 fi
-
-# Colorize output of diff if colordiff is installed
-if command -v colordiff >/dev/null 2>&1; then
-    alias diff='colordiff'
-fi
-
-# Cleanup helper function
-unset -f __gash_add_command_replace_alias

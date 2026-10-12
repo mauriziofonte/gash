@@ -57,6 +57,7 @@ __remote_resolve_target() {
     local -n __rrt_out="${2:-__gash_rrt_dummy}"
 
     local resolved
+    __gash_load_env
     if resolved="$(__gash_get_host_target "$input")"; then
         __rrt_out="$resolved"
         return 0
@@ -218,6 +219,7 @@ remote_hosts() {
         "${1-}" && return
 
     local entries
+    __gash_load_env
     entries="$(__gash_get_host_entries)"
 
     if [[ -z "$entries" ]]; then

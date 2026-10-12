@@ -25,14 +25,16 @@ it "defines core navigation and safety aliases" bash -c '
   aDots4="$(alias .....)"
   a2="$(alias ll)"
   a3="$(alias rm)"
-  a4="$(alias help)"
+  a4="$(declare -f help)"
 
   [[ "$a1" == *"cd .."* ]]
   [[ "$aDots2" == *"cd ../.."* ]]
   [[ "$aDots3" == *"cd ../../.."* ]]
   [[ "$aDots4" == *"cd ../../../.."* ]]
   [[ "$a2" == *"ls"* ]]
-  [[ "$a3" == *"--preserve-root"* ]]
+  if [[ "$(command rm --version 2>/dev/null)" == *GNU* ]]; then
+    [[ "$a3" == *"--preserve-root"* ]]
+  fi
   [[ "$a4" == *"gash_help"* ]]
 
   # Must remain unset (no pollution).

@@ -12,9 +12,9 @@ it "loads gash.sh in an interactive shell and builds PS1" bash -c '
   mkdir -p "$tmp"
   ln -s "$ROOT" "$tmp/.gash"
 
-  out="$(HOME="$tmp" bash --noprofile --norc -i -c "source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1; __construct_ps1 0; printf \"%s\\n\" \"\${PROMPT_COMMAND-}\"; printf \"%s\\n\" \"\${PS1-}\"" 2>/dev/null)"
+  out="$(HOME="$tmp" bash --noprofile --norc -i -c "source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1; __gash_ps1_build 0; printf \"%s\\n\" \"\${PROMPT_COMMAND-}\"; printf \"%s\\n\" \"\${PS1-}\"" 2>/dev/null)"
 
-  [[ "$out" == *"__construct_ps1"* ]]
+  [[ "$out" == *"__gash_prompt_command"* ]]
   [[ "$out" == *"\\u"* ]]
   [[ "$out" == *"\\w"* ]]
 '
@@ -42,13 +42,10 @@ it "uses __GASH_PS1_* color variables instead of generic names" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
 
-    # Check that gash.sh uses prefixed color variables
-    grep -q "__GASH_PS1_OFF" "$ROOT/gash.sh"
-    grep -q "__GASH_PS1_RED" "$ROOT/gash.sh"
-    grep -q "__GASH_PS1_BBLUE" "$ROOT/gash.sh"
-
-    # Check that old unprefixed names are NOT used in PS1 context
-    ! grep -E "^\s*PS1\+.*\\\$\{(Color_Off|Red|Green|Blue|BBlue)\}" "$ROOT/gash.sh"
+    # The prompt uses prefixed color variables
+    grep -q "__GASH_PS1_OFF" "$ROOT/lib/shell/prompt.sh"
+    grep -q "__GASH_PS1_RED" "$ROOT/lib/shell/prompt.sh"
+    grep -q "__GASH_PS1_BBLUE" "$ROOT/lib/shell/prompt.sh"
 '
 
 it "__gash_in_git_repo returns success in a git repo" bash -c '
@@ -134,19 +131,40 @@ it "uses optimized git commands with GIT_OPTIONAL_LOCKS=0" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
 
-    # Check that gash.sh uses GIT_OPTIONAL_LOCKS=0 for performance
-    grep -q "GIT_OPTIONAL_LOCKS=0" "$ROOT/gash.sh"
+    # The prompt never takes git index locks
+    grep -q "GIT_OPTIONAL_LOCKS=0" "$ROOT/lib/shell/prompt.sh"
 '
 
-it "uses git symbolic-ref instead of git name-rev for branch detection" bash -c '
+it "git segment shows branch, dirty marker and ahead count from one git status" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
 
-    # Check that gash.sh uses symbolic-ref (faster)
-    grep -q "git symbolic-ref --short HEAD" "$ROOT/gash.sh"
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    ln -s "$ROOT" "$tmp/.gash"
 
-    # Check that it does NOT use git name-rev (slower)
-    ! grep -q "git name-rev" "$ROOT/gash.sh"
+    git init -q --bare "$tmp/remote.git"
+    git clone -q "$tmp/remote.git" "$tmp/project" 2>/dev/null
+    (
+        cd "$tmp/project"
+        git checkout -q -b feature
+        echo one > f && git add f && git commit -qm one
+        git push -q -u origin feature 2>/dev/null
+        echo two > f && git commit -qam two
+        echo dirty >> f
+    )
+
+    inner_cmd="source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1 || true
+cd \"\$HOME/project\"
+__gash_ps1_build 0
+printf \"%s\\n\" \"\$PS1\""
+
+    out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+
+    [[ "$out" == *"(feature"* ]]
+    [[ "$out" == *"*"* ]]
+    [[ "$out" == *"↑1"* || "$out" == *"+1"* ]]
+    # one git process per prompt: no symbolic-ref / rev-parse round trips
+    ! grep -q "symbolic-ref\|rev-parse" "$ROOT/lib/shell/prompt.sh"
 '
 
 it ".gash_env.template documents GASH_GIT_EXCLUDE" bash -c '

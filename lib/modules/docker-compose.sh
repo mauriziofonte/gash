@@ -944,7 +944,10 @@ EOF
         case "$1" in
             --depth | -d)
                 depth="$2"
-                shift 2
+                shift 2 || {
+                    __gash_error "$1 needs a value"
+                    return 1
+                }
                 ;;
             --json | -j)
                 json_output=1

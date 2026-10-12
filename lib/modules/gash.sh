@@ -85,7 +85,7 @@ gash_inspiring_quote() {
         wrap_width=80
     fi
 
-    local first=1
+    local first=1 qline
     while IFS= read -r qline; do
         if ((first)); then
             printf '%b%s\n' "${__GASH_CYAN}Quote:${__GASH_COLOR_OFF} " "$qline"
@@ -313,65 +313,31 @@ gash_unload() {
         return 1
     fi
 
-    # Restore prompt-related variables
-    if [[ "${__GASH_ORIG_PROMPT_COMMAND_SET-0}" -eq 1 ]]; then
-        PROMPT_COMMAND="${__GASH_ORIG_PROMPT_COMMAND-}"
-    else
-        unset PROMPT_COMMAND
+    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
+    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
+        __gash_prompt_uninstall
     fi
 
-    if [[ "${__GASH_ORIG_PS1_SET-0}" -eq 1 ]]; then
-        PS1="${__GASH_ORIG_PS1-}"
-    else
-        unset PS1
-    fi
-
-    if [[ "${__GASH_ORIG_PS2_SET-0}" -eq 1 ]]; then
-        PS2="${__GASH_ORIG_PS2-}"
-    else
-        unset PS2
-    fi
-
-    # Restore history-related settings
-    if [[ "${__GASH_ORIG_HISTCONTROL_SET-0}" -eq 1 ]]; then
-        HISTCONTROL="${__GASH_ORIG_HISTCONTROL-}"
-    else
-        unset HISTCONTROL
-    fi
-
-    if [[ "${__GASH_ORIG_HISTTIMEFORMAT_SET-0}" -eq 1 ]]; then
-        HISTTIMEFORMAT="${__GASH_ORIG_HISTTIMEFORMAT-}"
-    else
-        unset HISTTIMEFORMAT
-    fi
-
-    if [[ "${__GASH_ORIG_HISTSIZE_SET-0}" -eq 1 ]]; then
-        HISTSIZE="${__GASH_ORIG_HISTSIZE-}"
-    else
-        unset HISTSIZE
-    fi
-
-    if [[ "${__GASH_ORIG_HISTFILESIZE_SET-0}" -eq 1 ]]; then
-        HISTFILESIZE="${__GASH_ORIG_HISTFILESIZE-}"
-    else
-        unset HISTFILESIZE
-    fi
-
-    if [[ "${__GASH_ORIG_SHOPT_HISTAPPEND-1}" -eq 0 ]]; then
-        shopt -s histappend
-    else
-        shopt -u histappend
-    fi
-
-    if [[ "${__GASH_ORIG_SHOPT_CHECKWINSIZE-1}" -eq 0 ]]; then
-        shopt -s checkwinsize
-    else
-        shopt -u checkwinsize
-    fi
-
-    if [[ -n "${__GASH_ORIG_UMASK-}" ]]; then
-        umask "${__GASH_ORIG_UMASK}"
-    fi
+    # Restore variables, shell options and umask from the load-time snapshot.
+    local __gash_entry __gash_key
+    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
+        case "$__gash_entry" in
+            shopt:*)
+                __gash_key="${__gash_entry#shopt:}"
+                if [[ "$__gash_entry" == *=1 ]]; then
+                    shopt -s "${__gash_key%=*}" 2>/dev/null
+                else
+                    shopt -u "${__gash_key%=*}" 2>/dev/null
+                fi
+                ;;
+            umask=*) umask "${__gash_entry#umask=}" ;;
+            *=*)
+                __gash_key="${__gash_entry%%=*}"
+                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
+                ;;
+            *) unset "$__gash_entry" ;;
+        esac
+    done
 
     # Remove aliases introduced by Gash
     if [[ -n "${__GASH_ADDED_ALIASES-}" ]]; then
@@ -410,14 +376,7 @@ gash_unload() {
         [[ -z "${__gash_var}" ]] && continue
         unset "${__gash_var}" >/dev/null 2>&1 || true
     done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
-    unset FQDN >/dev/null 2>&1 || true
-
-    # Clear internal snapshot variables
-    unset __GASH_SNAPSHOT_TAKEN __GASH_PRE_FUNCS __GASH_PRE_ALIASES __GASH_ADDED_FUNCS __GASH_ADDED_ALIASES \
-        __GASH_ORIG_PS1_SET __GASH_ORIG_PS1 __GASH_ORIG_PS2_SET __GASH_ORIG_PS2 __GASH_ORIG_PROMPT_COMMAND_SET __GASH_ORIG_PROMPT_COMMAND \
-        __GASH_ORIG_HISTCONTROL_SET __GASH_ORIG_HISTCONTROL __GASH_ORIG_HISTTIMEFORMAT_SET __GASH_ORIG_HISTTIMEFORMAT \
-        __GASH_ORIG_HISTSIZE_SET __GASH_ORIG_HISTSIZE __GASH_ORIG_HISTFILESIZE_SET __GASH_ORIG_HISTFILESIZE \
-        __GASH_ORIG_SHOPT_HISTAPPEND __GASH_ORIG_SHOPT_CHECKWINSIZE __GASH_ORIG_UMASK
+    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
 
     unset __gash_name
 
@@ -449,26 +408,46 @@ gash_doctor() {
     eval "$(__gash_color_scope "$no_color")"
 
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
-    local issues=0
+    local issues=0 f mod tool name
+    local H="${__GASH_BOLD_WHITE-}" O="${__GASH_COLOR_OFF-}"
 
     __gash_info "Gash Doctor — checking installation (v${GASH_VERSION:-unknown})..."
     echo ""
 
-    # 1. Core files
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Core Files:${__GASH_COLOR_OFF-\033[0m}"
-    local core_files=("$gash_dir/gash.sh" "$gash_dir/lib/core/config.sh" "$gash_dir/lib/core/output.sh" "$gash_dir/lib/core/utils.sh" "$gash_dir/lib/core/validation.sh")
+    # 1. Runtime
+    printf '%s\n' "${H}Runtime:${O}"
+    if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4))); then
+        __gash_success "  bash ${BASH_VERSION}"
+    else
+        __gash_error "  bash ${BASH_VERSION} — Gash needs 4.4 or newer"
+        issues=$((issues + 1))
+    fi
+    local -a load_errors=(${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"})
+    if ((${#load_errors[@]} == 0)); then
+        __gash_success "  all files loaded"
+    else
+        for f in "${load_errors[@]}"; do
+            __gash_error "  failed to load ${f}"
+            issues=$((issues + 1))
+        done
+    fi
+
+    # 2. Core files
+    printf '%s\n' "${H}Core Files:${O}"
+    local core_files=(gash.sh lib/core/output.sh lib/core/help.sh lib/core/utils.sh lib/core/validation.sh lib/core/config.sh
+        lib/shell/terminal.sh lib/shell/history.sh lib/shell/prompt.sh lib/shell/banner.sh lib/aliases/_loader.sh)
     for f in "${core_files[@]}"; do
-        if [[ -f "$f" ]]; then
-            __gash_success "  $(basename "$f")"
+        if [[ -f "$gash_dir/$f" ]]; then
+            __gash_success "  $f"
         else
-            __gash_error "  $(basename "$f") — MISSING"
+            __gash_error "  $f — MISSING"
             issues=$((issues + 1))
         fi
     done
 
-    # 2. Modules
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Modules:${__GASH_COLOR_OFF-\033[0m}"
-    local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo)
+    # 3. Modules
+    printf '%s\n' "${H}Modules:${O}"
+    local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo remote node php)
     for mod in "${expected_modules[@]}"; do
         if [[ -f "$gash_dir/lib/modules/${mod}.sh" ]]; then
             __gash_success "  ${mod}"
@@ -478,13 +457,13 @@ gash_doctor() {
         fi
     done
 
-    # 3. Config file
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Configuration:${__GASH_COLOR_OFF-\033[0m}"
+    # 4. Config file and settings
+    printf '%s\n' "${H}Configuration:${O}"
     local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
     if [[ -f "$env_file" ]]; then
         local perms
-        perms=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null || echo "unknown")
-        if [[ "$perms" == "600" ]]; then
+        perms=$(stat -L -c '%a' "$env_file" 2>/dev/null || stat -L -f '%Lp' "$env_file" 2>/dev/null || echo "unknown")
+        if [[ "$perms" == "600" || "$perms" == "400" ]]; then
             __gash_success "  $env_file (permissions: $perms)"
         else
             __gash_warning "  $env_file (permissions: $perms — should be 600)"
@@ -493,9 +472,12 @@ gash_doctor() {
     else
         __gash_info "  $env_file — not found (optional, run gash_env_init to create)"
     fi
+    for name in ${__GASH_SETTINGS_KNOWN-}; do
+        [[ -n "${!name+x}" ]] && printf '    %s=%s\n' "$name" "${!name}"
+    done
 
-    # 4. External tools
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}External Tools:${__GASH_COLOR_OFF-\033[0m}"
+    # 5. External tools
+    printf '%s\n' "${H}External Tools:${O}"
     local tools=(git curl jq sqlite3 docker)
     for tool in "${tools[@]}"; do
         if type -P "$tool" >/dev/null 2>&1; then
@@ -505,7 +487,7 @@ gash_doctor() {
         fi
     done
 
-    # 5. Summary
+    # 6. Summary
     echo ""
     if [[ $issues -eq 0 ]]; then
         __gash_success "All checks passed."

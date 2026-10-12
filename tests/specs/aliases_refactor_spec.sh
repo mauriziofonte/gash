@@ -102,7 +102,9 @@ EOF
     [[ "$out" == *"mv:0"* ]]
     [[ "$out" == *"rm:0"* ]]
     [[ "$out" == *"mkdir:0"* ]]
-    [[ "$out" == *"ports:0"* ]]
+    if type -P ss >/dev/null 2>&1 || type -P netstat >/dev/null 2>&1; then
+        [[ "$out" == *"ports:0"* ]]
+    fi
 '
 
 it "git.sh defines git aliases and functions when git is available" bash -c '
@@ -201,7 +203,7 @@ EOF
     [[ "$out" == *"dstop:0"* ]]
 '
 
-it "general.sh defines help and quit aliases" bash -c '
+it "general.sh defines the help function and quit alias" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
 
@@ -218,7 +220,7 @@ stop_services() { :; }
 
 source "\$HOME/.gash/lib/aliases/general.sh"
 
-alias help >/dev/null 2>&1; echo "help:\$?"
+declare -f help >/dev/null 2>&1; echo "help:\$?"
 alias quit >/dev/null 2>&1; echo "quit:\$?"
 EOF
 )"

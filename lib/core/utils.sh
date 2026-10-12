@@ -122,8 +122,10 @@ __gash_trim_ws() {
     printf '%s' "$s"
 }
 
-# Escape string for safe embedding in JSON values.
-# Handles: backslashes, double quotes, newlines, carriage returns, tabs.
+# Escape string for safe embedding in JSON values (RFC 8259): backslash,
+# double quote and every control character U+0000..U+001F. Pure bash; the
+# per-character loop only runs for the rare strings that carry other
+# control characters than \n \r \t.
 # Usage: escaped=$(__gash_json_escape "string with \"quotes\"")
 __gash_json_escape() {
     local str="${1-}"
@@ -132,7 +134,45 @@ __gash_json_escape() {
     str="${str//$'\n'/\\n}"
     str="${str//$'\r'/\\r}"
     str="${str//$'\t'/\\t}"
+    str="${str//$'\b'/\\b}"
+    str="${str//$'\f'/\\f}"
+    if [[ "$str" == *[$'\001'-$'\037']* ]]; then
+        local LC_ALL=C out="" ch code i
+        for ((i = 0; i < ${#str}; i++)); do
+            ch="${str:i:1}"
+            if [[ "$ch" == [$'\001'-$'\037'] ]]; then
+                printf -v code '%d' "'$ch"
+                printf -v ch '\\u%04x' "$((code & 255))"
+            fi
+            out+="$ch"
+        done
+        str="$out"
+    fi
     printf '%s' "$str"
+}
+
+# Print the machine error envelope shared by llm_* and the filesystem
+# scanners to stderr (see AGENTS.md, "Error contract"):
+#   {"error":TYPE,"details":..,"action":ACTION,"recoverable":BOOL,"hint":..}
+# `recoverable` follows from the action: only FATAL is unrecoverable.
+# details and hint are omitted when empty. Always returns 1.
+# Usage: __gash_json_error TYPE [DETAILS] [ACTION] [HINT]
+__gash_json_error() {
+    local type="${1:-unknown_error}" details="${2-}" action="${3:-STOP}" hint="${4-}"
+    case "$action" in
+        RETRY | CONTINUE | STOP | FATAL) ;;
+        *) action="STOP" ;;
+    esac
+    local recoverable=true
+    [[ "$action" == "FATAL" ]] && recoverable=false
+
+    local json
+    json="{\"error\":\"$(__gash_json_escape "$type")\""
+    [[ -n "$details" ]] && json+=",\"details\":\"$(__gash_json_escape "$details")\""
+    json+=",\"action\":\"$action\",\"recoverable\":$recoverable"
+    [[ -n "$hint" ]] && json+=",\"hint\":\"$(__gash_json_escape "$hint")\""
+    printf '%s}\n' "$json" >&2
+    return 1
 }
 
 # Render a single string as a quoted, fully escaped JSON string (via jq).

@@ -175,6 +175,7 @@ gash_ssh_auto_unlock() {
 
     # Get SSH keys from config
     local ssh_keys
+    __gash_load_env
     ssh_keys="$(__gash_get_ssh_keys)"
 
     if [[ -z "$ssh_keys" ]]; then

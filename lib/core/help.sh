@@ -64,27 +64,30 @@ __gash_register_help() {
         case "$1" in
             --aliases)
                 aliases="${2-}"
-                shift 2
+                shift 2 || break
                 ;;
             --module)
                 module="${2-}"
-                shift 2
+                shift 2 || break
                 ;;
             --short)
                 short="${2-}"
-                shift 2
+                shift 2 || break
                 ;;
             --see-also)
                 see_also="${2-}"
-                shift 2
+                shift 2 || break
                 ;;
             *) shift ;;
         esac
     done
 
-    # Read help body from stdin (heredoc)
+    # Read help body from stdin (heredoc) without forking `cat`: Gash
+    # registers ~80 entries at load time, one subprocess each was the
+    # single largest startup cost.
     local body=""
-    body="$(cat)"
+    IFS= read -r -d '' body || true
+    while [[ "$body" == *$'\n' ]]; do body="${body%$'\n'}"; done
 
     __GASH_HELP_REGISTRY["$func_name"]="$body"
     [[ -n "$short" ]] && __GASH_HELP_SHORT["$func_name"]="$short"
@@ -145,9 +148,10 @@ __gash_help_display() {
     if [[ -n "$aliases" ]]; then
         echo
         echo -e "  ${W}ALIASES${R}"
-        local IFS=','
-        local alias_list=""
-        for a in $aliases; do
+        local alias_list="" a
+        local -a alias_arr=()
+        IFS=',' read -r -a alias_arr <<<"$aliases"
+        for a in "${alias_arr[@]}"; do
             [[ -n "$alias_list" ]] && alias_list+=", "
             alias_list+="${G}${a}${R}"
         done
@@ -179,8 +183,10 @@ __gash_help_display() {
     if [[ -n "$see_also" ]]; then
         echo
         echo -e "  ${W}SEE ALSO${R}"
-        local sa_list=""
-        for sa in $see_also; do
+        local sa_list="" sa
+        local -a sa_arr=()
+        read -r -a sa_arr <<<"$see_also"
+        for sa in "${sa_arr[@]}"; do
             [[ -n "$sa_list" ]] && sa_list+=", "
             sa_list+="${A}${sa}${R}"
         done
@@ -201,11 +207,11 @@ __gash_help_find_by_alias() {
     local target="${1-}"
     [[ -z "$target" ]] && return 1
 
-    local func_name aliases
+    local func_name a
+    local -a alias_arr=()
     for func_name in "${!__GASH_HELP_ALIASES[@]}"; do
-        aliases="${__GASH_HELP_ALIASES[$func_name]}"
-        local IFS=','
-        for a in $aliases; do
+        IFS=',' read -r -a alias_arr <<<"${__GASH_HELP_ALIASES[$func_name]}"
+        for a in "${alias_arr[@]}"; do
             if [[ "$a" == "$target" ]]; then
                 printf '%s' "$func_name"
                 return 0
@@ -236,8 +242,7 @@ __gash_help_search() {
         R="${__GASH_COLOR_OFF}"
     fi
 
-    local lc_keyword
-    lc_keyword="$(printf '%s' "$keyword" | tr '[:upper:]' '[:lower:]')"
+    local lc_keyword="${keyword,,}"
 
     local found=0
     local func_name
@@ -249,11 +254,11 @@ __gash_help_search() {
     while IFS= read -r func_name; do
         [[ -z "$func_name" ]] && continue
 
-        local lc_name lc_aliases lc_short lc_body
-        lc_name="$(printf '%s' "$func_name" | tr '[:upper:]' '[:lower:]')"
-        lc_aliases="$(printf '%s' "${__GASH_HELP_ALIASES[$func_name]-}" | tr '[:upper:]' '[:lower:]')"
-        lc_short="$(printf '%s' "${__GASH_HELP_SHORT[$func_name]-}" | tr '[:upper:]' '[:lower:]')"
-        lc_body="$(printf '%s' "${__GASH_HELP_REGISTRY[$func_name]-}" | tr '[:upper:]' '[:lower:]')"
+        local lc_name="${func_name,,}"
+        local lc_aliases="${__GASH_HELP_ALIASES[$func_name]-}"
+        local lc_short="${__GASH_HELP_SHORT[$func_name]-}"
+        local lc_body="${__GASH_HELP_REGISTRY[$func_name]-}"
+        lc_aliases="${lc_aliases,,}" lc_short="${lc_short,,}" lc_body="${lc_body,,}"
 
         if [[ "$lc_name" == *"$lc_keyword"* ]] ||
             [[ "$lc_aliases" == *"$lc_keyword"* ]] ||
@@ -336,8 +341,7 @@ __gash_help_list() {
         sorted="$(printf '%s\n' "${module_funcs[@]}" | sort)"
 
         # Print module header
-        local uc_module
-        uc_module="$(printf '%s' "$module" | tr '[:lower:]' '[:upper:]')"
+        local uc_module="${module^^}"
         echo
         echo -e "  ${W}${uc_module}${R}"
 

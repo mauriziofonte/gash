@@ -1771,6 +1771,7 @@ __ai_ask_impl() {
 
     # Determine provider
     if [[ -z "$provider" ]]; then
+        __gash_load_env
         provider=$(__gash_get_first_ai_provider) || {
             __gash_error "No AI provider configured in ~/.gash_env"
             __gash_info "Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY"
@@ -1786,6 +1787,7 @@ __ai_ask_impl() {
 
     # Get token
     local token
+    __gash_load_env
     token=$(__gash_get_ai_token "$provider") || {
         __gash_error "No token configured for '$provider' in ~/.gash_env"
         __gash_info "Add: AI:$provider=YOUR_API_KEY"
@@ -1937,6 +1939,7 @@ User question: ${query}"
 
     # Determine provider
     if [[ -z "$provider" ]]; then
+        __gash_load_env
         provider=$(__gash_get_first_ai_provider) || {
             __gash_error "No AI provider configured in ~/.gash_env"
             __gash_info "Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY"
@@ -1946,6 +1949,7 @@ User question: ${query}"
 
     # Get token
     local token
+    __gash_load_env
     token=$(__gash_get_ai_token "$provider") || {
         __gash_error "No token configured for '$provider' in ~/.gash_env"
         return 1
@@ -2083,6 +2087,7 @@ __ai_sysinfo_impl() {
 
     # Determine provider
     if [[ -z "$provider" ]]; then
+        __gash_load_env
         provider=$(__gash_get_first_ai_provider) || {
             __gash_error "No AI provider configured in ~/.gash_env"
             __gash_info "Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY"
@@ -2098,6 +2103,7 @@ __ai_sysinfo_impl() {
 
     # Get token
     local token
+    __gash_load_env
     token=$(__gash_get_ai_token "$provider") || {
         __gash_error "No token configured for '$provider' in ~/.gash_env"
         return 1
