@@ -102,12 +102,12 @@ alias dpa='docker_prune_all'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "docker_stop_all" \
-    --aliases "dsa" \
-    --module "docker" \
-    --short "Stop all running Docker containers" \
-    --see-also "docker_start_all docker_prune_all" \
-    <<'HELP'
+    __gash_register_help "docker_stop_all" \
+        --aliases "dsa" \
+        --module "docker" \
+        --short "Stop all running Docker containers" \
+        --see-also "docker_start_all docker_prune_all" \
+        <<'HELP'
 USAGE
   docker_stop_all
 
@@ -119,12 +119,12 @@ EXAMPLES
   dsa && daa
 HELP
 
-__gash_register_help "docker_start_all" \
-    --aliases "daa" \
-    --module "docker" \
-    --short "Start all stopped Docker containers" \
-    --see-also "docker_stop_all" \
-    <<'HELP'
+    __gash_register_help "docker_start_all" \
+        --aliases "daa" \
+        --module "docker" \
+        --short "Start all stopped Docker containers" \
+        --see-also "docker_stop_all" \
+        <<'HELP'
 USAGE
   docker_start_all
 
@@ -136,12 +136,12 @@ EXAMPLES
   dsa && daa
 HELP
 
-__gash_register_help "docker_prune_all" \
-    --aliases "dpa" \
-    --module "docker" \
-    --short "Remove ALL Docker containers, images, volumes, and networks" \
-    --see-also "docker_stop_all" \
-    <<'HELP'
+    __gash_register_help "docker_prune_all" \
+        --aliases "dpa" \
+        --module "docker" \
+        --short "Remove ALL Docker containers, images, volumes, and networks" \
+        --see-also "docker_stop_all" \
+        <<'HELP'
 USAGE
   docker_prune_all
 
@@ -160,4 +160,4 @@ NOTES
   You will be asked for confirmation before proceeding.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

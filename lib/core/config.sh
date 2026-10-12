@@ -76,7 +76,7 @@ __gash_url_decode() {
 __gash_url_encode() {
     local string="${1-}"
     local encoded=""
-    local i char
+    local i char code
     # Iterate BYTES, not codepoints: a multi-byte UTF-8 char must produce
     # one %XX per byte (e.g. "è" -> %C3%A8, never %E8).
     local LC_ALL=C
@@ -88,7 +88,10 @@ __gash_url_encode() {
                 encoded+="$char"
                 ;;
             *)
-                printf -v char '%%%02X' "'$char"
+                # Mask to one byte: some libcs (musl) map high bytes in the
+                # C locale to U+DF80+byte, so "'x" can exceed 255.
+                printf -v code '%d' "'$char"
+                printf -v char '%%%02X' "$((code & 255))"
                 encoded+="$char"
                 ;;
         esac
@@ -114,7 +117,7 @@ __gash_check_env_perms() {
     fi
 
     if [[ -n "$perms" && "$perms" != "600" ]]; then
-        __gash_warning "~/.gash_env has insecure permissions ($perms). Run: chmod 600 ~/.gash_env"
+        __gash_warning "\$HOME/.gash_env has insecure permissions ($perms). Run: chmod 600 \$HOME/.gash_env"
     fi
 }
 
@@ -233,7 +236,7 @@ __gash_load_env() {
         # Unknown line format
         __gash_warning "Unknown config line format: $line (skipping)"
 
-    done < "$env_file"
+    done <"$env_file"
 
     __GASH_ENV_LOADED="1"
     __GASH_ENV_SSH_KEYS="$ssh_keys"
@@ -285,7 +288,7 @@ __gash_get_db_url() {
             printf '%s' "$entry_url"
             return 0
         fi
-    done <<< "$__GASH_ENV_DB_ENTRIES"
+    done <<<"$__GASH_ENV_DB_ENTRIES"
 
     return 1
 }
@@ -356,7 +359,7 @@ __gash_parse_db_url() {
             __pdu_host="$__pdu_hostinfo"
             # Default ports
             case "$__pdu_driver" in
-                mysql|mariadb) __pdu_port="3306" ;;
+                mysql | mariadb) __pdu_port="3306" ;;
                 pgsql) __pdu_port="5432" ;;
                 *) __pdu_port="" ;;
             esac
@@ -397,7 +400,7 @@ __gash_get_host_target() {
             printf '%s' "$entry_target"
             return 0
         fi
-    done <<< "$__GASH_ENV_HOST_ENTRIES"
+    done <<<"$__GASH_ENV_HOST_ENTRIES"
 
     return 1
 }
@@ -445,7 +448,7 @@ gash_db_list() {
         fi
 
         printf "  %-15s %s\n" "$name" "$display_url"
-    done <<< "$__GASH_ENV_DB_ENTRIES"
+    done <<<"$__GASH_ENV_DB_ENTRIES"
 }
 
 # Test a database connection
@@ -475,7 +478,7 @@ gash_db_test() {
     __gash_info "Testing connection '$name' ($_db_driver://$_db_user@$_db_host:$_db_port/$_db_name)..."
 
     case "$_db_driver" in
-        mysql|mariadb)
+        mysql | mariadb)
             local mysql_bin
             mysql_bin=$(type -P mysql 2>/dev/null) || mysql_bin=$(type -P mariadb 2>/dev/null) || true
             if [[ -z "$mysql_bin" ]]; then
@@ -577,7 +580,7 @@ __gash_get_ai_token() {
             printf '%s' "$entry_token"
             return 0
         fi
-    done <<< "$__GASH_ENV_AI_PROVIDERS"
+    done <<<"$__GASH_ENV_AI_PROVIDERS"
 
     return 1
 }
@@ -590,7 +593,7 @@ __gash_get_first_ai_provider() {
     [[ -z "$__GASH_ENV_AI_PROVIDERS" ]] && return 1
 
     local first_line
-    first_line=$(head -n1 <<< "$__GASH_ENV_AI_PROVIDERS")
+    first_line=$(head -n1 <<<"$__GASH_ENV_AI_PROVIDERS")
     [[ -z "$first_line" ]] && return 1
 
     printf '%s' "${first_line%%$'\t'*}"
@@ -624,5 +627,5 @@ gash_ai_list() {
         local masked_token="${token:0:8}..."
 
         printf "  %-10s %s\n" "$provider" "$masked_token"
-    done <<< "$__GASH_ENV_AI_PROVIDERS"
+    done <<<"$__GASH_ENV_AI_PROVIDERS"
 }

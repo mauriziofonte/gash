@@ -63,34 +63,23 @@ echo composer-mock
 EOF
   chmod +x "$tmp/bin/composer"
 
-  # Mock ls so PHP version detection is deterministic and does not touch /usr/bin.
-  cat > "$tmp/bin/ls" <<"EOF"
-#!/usr/bin/env bash
-
-if [[ "${1-}" == "-1" && "${2-}" == "/usr/bin/php*" ]]; then
-  printf '%s\n' "/usr/bin/php8.4" "/usr/bin/php8.3"
-  exit 0
-fi
-
-exec /bin/ls "$@"
-EOF
-  chmod +x "$tmp/bin/ls"
+  # Provide versioned PHP binaries so detection is deterministic and
+  # does not depend on what is installed under /usr/bin.
+  for v in 8.4 8.3; do
+    printf "#!/usr/bin/env bash\nexit 0\n" > "$tmp/bin/php$v"
+    chmod +x "$tmp/bin/php$v"
+  done
 
   export PATH="$tmp/bin:$ROOT/tests/mocks/bin:/usr/bin:/bin"
 
   # Simulate the user having defined composer as an alias.
   alias composer="echo should-not-be-used"
 
-  # Disable glob expansion so /usr/bin/php* is passed literally to our mocked ls.
-  set -f
-
   # Keep LS_COLORS empty so aliases.sh initializes it.
   export LS_COLORS=""
 
   # shellcheck source=lib/aliases.sh
   source "$ROOT/lib/aliases.sh"
-
-  set +f
 
     q="$(printf '\\047')"
     line="$(alias composer)"

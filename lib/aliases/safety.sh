@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2139 # aliases intentionally expand values at definition time
 
 # Gash Aliases: Safety
 # Safer versions of common commands and system utilities.

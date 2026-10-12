@@ -80,7 +80,7 @@ php_detect_version() {
     for arg in "$@"; do
         case "$arg" in
             --llm) llm_mode=1 ;;
-            *)     project_dir="$arg" ;;
+            *) project_dir="$arg" ;;
         esac
     done
 
@@ -136,10 +136,10 @@ php_detect_version() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "php_detect_version" \
-    --module "php" \
-    --short "Detect the PHP version a project wants" \
-    <<'HELP'
+    __gash_register_help "php_detect_version" \
+        --module "php" \
+        --short "Detect the PHP version a project wants" \
+        <<'HELP'
 USAGE
   php_detect_version [project_dir] [--llm]
 
@@ -156,4 +156,4 @@ NOTES
   emitted automatically under GASH_HEADLESS=1, --llm is not required there.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

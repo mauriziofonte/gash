@@ -23,9 +23,9 @@
 # GLOBALS
 # =============================================================================
 
-__SYSINFO_MODE="verbose"             # "verbose" or "llm"
-__SYSINFO_HAS_SUDO=0                 # 1 if sudo credentials are cached
-__SYSINFO_SUDO_KEEPALIVE_PID=""      # PID of sudo keep-alive background process
+__SYSINFO_MODE="verbose"        # "verbose" or "llm"
+__SYSINFO_HAS_SUDO=0            # 1 if sudo credentials are cached
+__SYSINFO_SUDO_KEEPALIVE_PID="" # PID of sudo keep-alive background process
 
 # =============================================================================
 # SUDO CACHING
@@ -66,7 +66,10 @@ __sysinfo_ensure_sudo() {
     fi
 
     # Keep-alive: refresh sudo every 50s (default sudo timeout = 5min)
-    (while true; do sudo -n true 2>/dev/null; sleep 50; done) &
+    (while true; do
+        sudo -n true 2>/dev/null
+        sleep 50
+    done) &
     __SYSINFO_SUDO_KEEPALIVE_PID=$!
     disown "$__SYSINFO_SUDO_KEEPALIVE_PID" 2>/dev/null
     return 0
@@ -137,6 +140,18 @@ __sysinfo_sub() {
 }
 
 # Pipe raw command output (indented in verbose, raw in llm).
+# List basenames of DIR/*SUFFIX, one per line, stripping SUFFIX unless the
+# third argument is "keep". Safe with spaces; prints nothing if none match.
+__sysinfo_basenames() {
+    local dir="$1" suffix="$2" keep="${3-}" f name
+    for f in "$dir"/*"$suffix"; do
+        [[ -e "$f" ]] || continue
+        name="${f##*/}"
+        [[ "$keep" == "keep" ]] || name="${name%"$suffix"}"
+        printf '%s\n' "$name"
+    done
+}
+
 __sysinfo_raw() {
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         sed 's/^/    /'
@@ -500,7 +515,7 @@ __sysinfo_collect_webstack() {
         fi
         if [[ -d /etc/apache2/mods-enabled ]]; then
             __sysinfo_item "mods-enabled:"
-            ls /etc/apache2/mods-enabled/*.load 2>/dev/null | xargs -I{} basename {} .load | __sysinfo_raw
+            __sysinfo_basenames /etc/apache2/mods-enabled .load | __sysinfo_raw
         fi
     fi
 
@@ -652,7 +667,7 @@ __sysinfo_collect_infra() {
         __sysinfo_sub "OpenMediaVault"
         __sysinfo_kv "OMV" "installed"
         if [[ -f /etc/openmediavault/config.xml ]]; then
-            __sysinfo_kv "config.xml" "$(wc -c < /etc/openmediavault/config.xml 2>/dev/null) bytes"
+            __sysinfo_kv "config.xml" "$(wc -c </etc/openmediavault/config.xml 2>/dev/null) bytes"
         fi
     fi
 
@@ -682,7 +697,7 @@ __sysinfo_collect_infra() {
     # Phase 17: Monitoring
     if [[ -d /etc/collectd ]]; then
         __sysinfo_sub "Collectd"
-        find /etc/collectd/collectd.conf.d -name "*.conf" 2>/dev/null | xargs -I{} basename {} | __sysinfo_raw
+        __sysinfo_basenames /etc/collectd/collectd.conf.d .conf keep | __sysinfo_raw
     fi
     if [[ -d /etc/monit ]]; then
         __sysinfo_sub "Monit"
@@ -818,7 +833,7 @@ __sysinfo_deep_services() {
             grep -Ev "^(#|$)" /etc/apache2/ports.conf 2>/dev/null
         }
         echo "--- mods-enabled"
-        ls /etc/apache2/mods-enabled/*.load 2>/dev/null | xargs -I{} basename {} .load
+        __sysinfo_basenames /etc/apache2/mods-enabled .load
         if [[ -d /etc/apache2/sites-enabled ]]; then
             for vhost in /etc/apache2/sites-enabled/*.conf; do
                 [[ -f "$vhost" ]] || continue
@@ -871,7 +886,7 @@ __sysinfo_deep_services() {
             # Modules
             if [[ -d "${phpver}mods-available" ]]; then
                 echo "--- modules"
-                ls "${phpver}mods-available/"*.ini 2>/dev/null | xargs -I{} basename {} .ini | paste -sd, -
+                __sysinfo_basenames "${phpver}mods-available" .ini | paste -sd, -
             fi
         done
     fi
@@ -954,16 +969,31 @@ __sysinfo_deep_services() {
     if [[ -f /etc/default/opendkim ]] || [[ -d /etc/opendkim ]]; then
         echo "--- OpenDKIM"
         [[ -f /etc/default/opendkim ]] && grep -Ev "^(#|$)" /etc/default/opendkim 2>/dev/null
-        [[ -f /etc/opendkim/TrustedHosts ]] && { echo "--- TrustedHosts"; cat /etc/opendkim/TrustedHosts 2>/dev/null | head -20; }
-        [[ -f /etc/opendkim/KeyTable ]] && { echo "--- KeyTable"; cat /etc/opendkim/KeyTable 2>/dev/null | head -20; }
-        [[ -f /etc/opendkim/SigningTable ]] && { echo "--- SigningTable"; cat /etc/opendkim/SigningTable 2>/dev/null | head -20; }
+        [[ -f /etc/opendkim/TrustedHosts ]] && {
+            echo "--- TrustedHosts"
+            cat /etc/opendkim/TrustedHosts 2>/dev/null | head -20
+        }
+        [[ -f /etc/opendkim/KeyTable ]] && {
+            echo "--- KeyTable"
+            cat /etc/opendkim/KeyTable 2>/dev/null | head -20
+        }
+        [[ -f /etc/opendkim/SigningTable ]] && {
+            echo "--- SigningTable"
+            cat /etc/opendkim/SigningTable 2>/dev/null | head -20
+        }
     fi
 
     # --- DNS ---
     if [[ -d /etc/bind ]]; then
         echo "--- BIND"
-        [[ -f /etc/bind/named.conf.local ]] && { echo "--- named.conf.local"; cat /etc/bind/named.conf.local 2>/dev/null | head -50; }
-        [[ -f /etc/bind/named.conf.options ]] && { echo "--- named.conf.options"; grep -Ev "^(//|$)" /etc/bind/named.conf.options 2>/dev/null | head -50; }
+        [[ -f /etc/bind/named.conf.local ]] && {
+            echo "--- named.conf.local"
+            cat /etc/bind/named.conf.local 2>/dev/null | head -50
+        }
+        [[ -f /etc/bind/named.conf.options ]] && {
+            echo "--- named.conf.options"
+            grep -Ev "^(//|$)" /etc/bind/named.conf.options 2>/dev/null | head -50
+        }
     fi
 
     if [[ -d /etc/unbound ]]; then
@@ -999,7 +1029,7 @@ __sysinfo_deep_services() {
     if [[ -d /etc/openmediavault ]]; then
         echo "--- OpenMediaVault"
         echo "OMV=installed"
-        [[ -f /etc/openmediavault/config.xml ]] && echo "config.xml=$(wc -c < /etc/openmediavault/config.xml 2>/dev/null) bytes"
+        [[ -f /etc/openmediavault/config.xml ]] && echo "config.xml=$(wc -c </etc/openmediavault/config.xml 2>/dev/null) bytes"
     fi
 
     if [[ -f /etc/exports ]]; then
@@ -1203,7 +1233,10 @@ __sysinfo_deep_security() {
     if [[ -d /etc/crowdsec ]]; then
         echo "--- CrowdSec"
         [[ -f /etc/crowdsec/config.yaml ]] && grep -Ev "^(#|$)" /etc/crowdsec/config.yaml 2>/dev/null | head -30
-        [[ -f /etc/crowdsec/acquis.yaml ]] && { echo "--- acquis.yaml"; cat /etc/crowdsec/acquis.yaml 2>/dev/null | head -30; }
+        [[ -f /etc/crowdsec/acquis.yaml ]] && {
+            echo "--- acquis.yaml"
+            cat /etc/crowdsec/acquis.yaml 2>/dev/null | head -30
+        }
         echo "--- scenarios"
         ls /etc/crowdsec/hub/scenarios/ 2>/dev/null | head -20
     fi
@@ -1346,7 +1379,10 @@ __sysinfo_deep_storage() {
         echo "--- mdadm"
         grep -Ev "^(#|$)" /etc/mdadm/mdadm.conf 2>/dev/null
     fi
-    [[ -f /proc/mdstat ]] && { echo "--- mdstat"; cat /proc/mdstat 2>/dev/null | head -30; }
+    [[ -f /proc/mdstat ]] && {
+        echo "--- mdstat"
+        cat /proc/mdstat 2>/dev/null | head -30
+    }
 
     # ZFS
     if command -v zpool >/dev/null 2>&1; then
@@ -1355,10 +1391,16 @@ __sysinfo_deep_storage() {
         echo "--- ZFS datasets"
         zfs list 2>/dev/null | head -30
     fi
-    [[ -f /etc/zfs/zed.rc ]] && { echo "--- zed.rc"; grep -Ev "^(#|$)" /etc/zfs/zed.rc 2>/dev/null; }
+    [[ -f /etc/zfs/zed.rc ]] && {
+        echo "--- zed.rc"
+        grep -Ev "^(#|$)" /etc/zfs/zed.rc 2>/dev/null
+    }
 
     # Sanoid
-    [[ -f /etc/sanoid/sanoid.conf ]] && { echo "--- Sanoid"; cat /etc/sanoid/sanoid.conf 2>/dev/null | head -30; }
+    [[ -f /etc/sanoid/sanoid.conf ]] && {
+        echo "--- Sanoid"
+        cat /etc/sanoid/sanoid.conf 2>/dev/null | head -30
+    }
 
     # SMART
     if command -v smartctl >/dev/null 2>&1; then
@@ -1371,11 +1413,20 @@ __sysinfo_deep_storage() {
     fi
 
     # NFS
-    [[ -f /etc/exports ]] && { echo "--- NFS exports"; cat /etc/exports 2>/dev/null | head -30; }
-    [[ -f /etc/nfs.conf ]] && { echo "--- nfs.conf"; grep -Ev "^(#|$)" /etc/nfs.conf 2>/dev/null | head -20; }
+    [[ -f /etc/exports ]] && {
+        echo "--- NFS exports"
+        cat /etc/exports 2>/dev/null | head -30
+    }
+    [[ -f /etc/nfs.conf ]] && {
+        echo "--- nfs.conf"
+        grep -Ev "^(#|$)" /etc/nfs.conf 2>/dev/null | head -20
+    }
 
     # hdparm
-    [[ -f /etc/hdparm.conf ]] && { echo "--- hdparm"; grep -Ev "^(#|$)" /etc/hdparm.conf 2>/dev/null | head -20; }
+    [[ -f /etc/hdparm.conf ]] && {
+        echo "--- hdparm"
+        grep -Ev "^(#|$)" /etc/hdparm.conf 2>/dev/null | head -20
+    }
     return 0
 }
 
@@ -1437,7 +1488,10 @@ __sysinfo_deep_performance() {
     [[ -f /etc/sysctl.conf ]] && {
         local content
         content=$(grep -Ev "^(#|$)" /etc/sysctl.conf 2>/dev/null)
-        [[ -n "$content" ]] && { echo "--- sysctl.conf"; echo "$content"; }
+        [[ -n "$content" ]] && {
+            echo "--- sysctl.conf"
+            echo "$content"
+        }
     }
 
     # I/O scheduler
@@ -1505,7 +1559,10 @@ __sysinfo_deep_maintenance() {
             __sysinfo_sudo cat "$f" 2>/dev/null | head -20
         done
 
-        [[ -f /etc/letsencrypt/cli.ini ]] && { echo "--- cli.ini"; grep -Ev "^(#|$)" /etc/letsencrypt/cli.ini 2>/dev/null; }
+        [[ -f /etc/letsencrypt/cli.ini ]] && {
+            echo "--- cli.ini"
+            grep -Ev "^(#|$)" /etc/letsencrypt/cli.ini 2>/dev/null
+        }
     fi
 
     # Package management
@@ -1527,7 +1584,10 @@ __sysinfo_deep_maintenance() {
     # Legacy backups
     local orgs
     orgs=$(ls /etc/*.org 2>/dev/null)
-    [[ -n "$orgs" ]] && { echo "--- Legacy .org backups"; echo "$orgs"; }
+    [[ -n "$orgs" ]] && {
+        echo "--- Legacy .org backups"
+        echo "$orgs"
+    }
 
     # etckeeper
     if [[ -d /etc/.git ]]; then
@@ -1544,7 +1604,10 @@ __sysinfo_deep_maintenance() {
     # Profile + Environment
     echo "--- Profile scripts"
     ls /etc/profile.d/ 2>/dev/null
-    [[ -f /etc/environment ]] && { echo "--- environment"; cat /etc/environment 2>/dev/null; }
+    [[ -f /etc/environment ]] && {
+        echo "--- environment"
+        cat /etc/environment 2>/dev/null
+    }
 
     # Service defaults
     echo "--- Service defaults"
@@ -1574,10 +1637,18 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # Parse args
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --llm) __SYSINFO_MODE="llm"; shift ;;
-            --no-color) no_color=1; shift ;;
-            identity|storage|services|auth|network|security|webstack|mail|infra|system|all)
-                section="$1"; shift ;;
+            --llm)
+                __SYSINFO_MODE="llm"
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            identity | storage | services | auth | network | security | webstack | mail | infra | system | all)
+                section="$1"
+                shift
+                ;;
             *)
                 __gash_error "Unknown argument: $1"
                 __gash_info "Sections: identity storage services auth network security webstack mail infra system all"
@@ -1603,16 +1674,16 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # missing binary or a zero-match grep in one probe must not abort the
     # whole enumeration under `set -euo pipefail`.
     case "$section" in
-        identity)  __sysinfo_collect_identity || true ;;
-        storage)   __sysinfo_collect_storage || true ;;
-        services)  __sysinfo_collect_services || true ;;
-        auth)      __sysinfo_collect_auth || true ;;
-        network)   __sysinfo_collect_network || true ;;
-        security)  __sysinfo_collect_security || true ;;
-        webstack)  __sysinfo_collect_webstack || true ;;
-        mail)      __sysinfo_collect_mail || true ;;
-        infra)     __sysinfo_collect_infra || true ;;
-        system)    __sysinfo_collect_system || true ;;
+        identity) __sysinfo_collect_identity || true ;;
+        storage) __sysinfo_collect_storage || true ;;
+        services) __sysinfo_collect_services || true ;;
+        auth) __sysinfo_collect_auth || true ;;
+        network) __sysinfo_collect_network || true ;;
+        security) __sysinfo_collect_security || true ;;
+        webstack) __sysinfo_collect_webstack || true ;;
+        mail) __sysinfo_collect_mail || true ;;
+        infra) __sysinfo_collect_infra || true ;;
+        system) __sysinfo_collect_system || true ;;
         all)
             __sysinfo_collect_identity || true
             __sysinfo_collect_storage || true
@@ -1643,12 +1714,12 @@ alias si='sysinfo'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "sysinfo" \
-    --aliases "si" \
-    --module "sysinfo" \
-    --short "Comprehensive system information enumeration" \
-    --see-also "ai_sysinfo" \
-    <<'HELP'
+    __gash_register_help "sysinfo" \
+        --aliases "si" \
+        --module "sysinfo" \
+        --short "Comprehensive system information enumeration" \
+        --see-also "ai_sysinfo" \
+        <<'HELP'
 USAGE
   sysinfo [section] [--llm] [--no-color]
 
@@ -1683,4 +1754,4 @@ EXAMPLES
   sysinfo webstack --llm | ai_query "audit this web stack"
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

@@ -64,7 +64,7 @@ needs_confirm_prompt() {
     fi
 
     # A failed read (no tty, EOF) must refuse, never reuse a previous REPLY.
-    read -r REPLY < /dev/tty 2>/dev/null || return 1
+    read -r REPLY </dev/tty 2>/dev/null || return 1
 
     [[ "$REPLY" =~ ^[Yy]$ ]]
 }
@@ -80,7 +80,7 @@ __gash_tty_width() {
     local w=""
 
     # Try $COLUMNS first
-    if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]] && (( COLUMNS > 0 )); then
+    if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]] && ((COLUMNS > 0)); then
         printf '%s' "$COLUMNS"
         return 0
     fi
@@ -88,7 +88,7 @@ __gash_tty_width() {
     # Try tput
     if command -v tput >/dev/null 2>&1; then
         w="$(tput cols 2>/dev/null || true)"
-        if [[ "$w" =~ ^[0-9]+$ ]] && (( w > 0 )); then
+        if [[ "$w" =~ ^[0-9]+$ ]] && ((w > 0)); then
             printf '%s' "$w"
             return 0
         fi
@@ -97,7 +97,7 @@ __gash_tty_width() {
     # Try stty
     if command -v stty >/dev/null 2>&1; then
         w="$(stty size 2>/dev/null | awk '{print $2}' || true)"
-        if [[ "$w" =~ ^[0-9]+$ ]] && (( w > 0 )); then
+        if [[ "$w" =~ ^[0-9]+$ ]] && ((w > 0)); then
             printf '%s' "$w"
             return 0
         fi
@@ -160,7 +160,8 @@ __gash_json_arr() {
 # never in argv (argv is world-readable through /proc/<pid>/cmdline).
 # Usage: __gash_curl_auth "x-api-key: $token" [curl args...]
 __gash_curl_auth() {
-    local hdr="${1-}"; shift
+    local hdr="${1-}"
+    shift
     curl --config <(printf 'header = "%s"\n' "$hdr") "$@"
 }
 
@@ -196,7 +197,7 @@ __gash_no_history() {
 # Usage: expanded=$(__gash_expand_tilde_path "~/file")
 __gash_expand_tilde_path() {
     local p="${1-}"
-    if [[ "$p" == "~/"* ]]; then
+    if [[ "$p" == \~/* ]]; then
         printf '%s' "$HOME/${p:2}"
         return 0
     fi
@@ -228,10 +229,10 @@ all_colors() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "all_colors" \
-    --module "utils" \
-    --short "Display all 256 terminal colors" \
-    <<'HELP'
+    __gash_register_help "all_colors" \
+        --module "utils" \
+        --short "Display all 256 terminal colors" \
+        <<'HELP'
 USAGE
   all_colors
 
@@ -243,4 +244,4 @@ EXAMPLES
   all_colors | less -R
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

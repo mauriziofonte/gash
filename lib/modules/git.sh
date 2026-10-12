@@ -42,12 +42,12 @@ git_dump_revisions() {
         __gash_info "Saving version $index to file $out for commit $commit"
 
         # Save commit log message in a separate log file
-        echo "*******************************************************" > "$log"
-        git log -1 --pretty=format:"%s%nAuthored by %an at %ai%n%n%b%n" "$commit" >> "$log"
-        echo "*******************************************************" >> "$log"
+        echo "*******************************************************" >"$log"
+        git log -1 --pretty=format:"%s%nAuthored by %an at %ai%n%n%b%n" "$commit" >>"$log"
+        echo "*******************************************************" >>"$log"
 
         # Save the actual file content for the commit
-        git show "$commit:./$file" > "$out"
+        git show "$commit:./$file" >"$out"
 
         index=$((index + 1))
     done
@@ -118,7 +118,7 @@ git_apply_patch() {
 
     __gash_step 3 4 "Generating patch from '$feature_branch' since commit '$commit_hash'..."
     local patch_file="${feature_branch}.patch"
-    git diff-index "$commit_hash" --binary > "$patch_file" || {
+    git diff-index "$commit_hash" --binary >"$patch_file" || {
         __gash_error "Failed to create patch file."
         rm -f "$patch_file"
         return 1
@@ -248,7 +248,10 @@ git_repair() {
     origin_url="$(git remote get-url origin)"
 
     local tmp_dir
-    tmp_dir=$(mktemp -d) || { __gash_error "Failed to create temporary directory."; return 1; }
+    tmp_dir=$(mktemp -d) || {
+        __gash_error "Failed to create temporary directory."
+        return 1
+    }
     trap 'rm -rf "$tmp_dir" >/dev/null 2>&1' RETURN
 
     __gash_step 1 5 "Removing corrupted (0-byte) loose objects..."
@@ -293,12 +296,12 @@ alias gheal='git_repair'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "git_list_tags" \
-    --aliases "glt" \
-    --module "git" \
-    --short "List all local and remote tags" \
-    --see-also "git_add_tag git_delete_tag" \
-    <<'HELP'
+    __gash_register_help "git_list_tags" \
+        --aliases "glt" \
+        --module "git" \
+        --short "List all local and remote tags" \
+        --see-also "git_add_tag git_delete_tag" \
+        <<'HELP'
 USAGE
   git_list_tags
 
@@ -310,12 +313,12 @@ EXAMPLES
   glt && gat v2.0.0 "Major release"
 HELP
 
-__gash_register_help "git_add_tag" \
-    --aliases "gat" \
-    --module "git" \
-    --short "Create an annotated tag and push to remote" \
-    --see-also "git_list_tags git_delete_tag" \
-    <<'HELP'
+    __gash_register_help "git_add_tag" \
+        --aliases "gat" \
+        --module "git" \
+        --short "Create an annotated tag and push to remote" \
+        --see-also "git_list_tags git_delete_tag" \
+        <<'HELP'
 USAGE
   git_add_tag TAG_NAME ["TAG_MESSAGE"]
 
@@ -334,12 +337,12 @@ NOTES
   in one step. Requires a clean git repo with a remote.
 HELP
 
-__gash_register_help "git_delete_tag" \
-    --aliases "gdt" \
-    --module "git" \
-    --short "Delete a tag locally and on remote" \
-    --see-also "git_list_tags git_add_tag" \
-    <<'HELP'
+    __gash_register_help "git_delete_tag" \
+        --aliases "gdt" \
+        --module "git" \
+        --short "Delete a tag locally and on remote" \
+        --see-also "git_list_tags git_add_tag" \
+        <<'HELP'
 USAGE
   git_delete_tag TAG_NAME
 
@@ -354,12 +357,12 @@ NOTES
   Deletes the tag both locally and on the remote origin.
 HELP
 
-__gash_register_help "git_dump_revisions" \
-    --aliases "gdr" \
-    --module "git" \
-    --short "Dump all revisions of a file into separate files" \
-    --see-also "git_apply_patch" \
-    <<'HELP'
+    __gash_register_help "git_dump_revisions" \
+        --aliases "gdr" \
+        --module "git" \
+        --short "Dump all revisions of a file into separate files" \
+        --see-also "git_apply_patch" \
+        <<'HELP'
 USAGE
   git_dump_revisions FILENAME
 
@@ -375,12 +378,12 @@ NOTES
   Each revision is dumped with its commit log message alongside.
 HELP
 
-__gash_register_help "git_apply_patch" \
-    --aliases "gpatch" \
-    --module "git" \
-    --short "Apply a patch from a feature branch to main" \
-    --see-also "git_dump_revisions" \
-    <<'HELP'
+    __gash_register_help "git_apply_patch" \
+        --aliases "gpatch" \
+        --module "git" \
+        --short "Apply a patch from a feature branch to main" \
+        --see-also "git_dump_revisions" \
+        <<'HELP'
 USAGE
   git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH
 
@@ -397,12 +400,12 @@ NOTES
   The commit hash must exist on the feature branch.
 HELP
 
-__gash_register_help "git_repair" \
-    --aliases "gheal" \
-    --module "git" \
-    --short "Repair a repo with corrupted 0-byte loose objects" \
-    --see-also "git_list_tags" \
-    <<'HELP'
+    __gash_register_help "git_repair" \
+        --aliases "gheal" \
+        --module "git" \
+        --short "Repair a repo with corrupted 0-byte loose objects" \
+        --see-also "git_list_tags" \
+        <<'HELP'
 USAGE
   git_repair
 
@@ -416,4 +419,4 @@ NOTES
   --full' to verify. Requires a git repo with a configured remote.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

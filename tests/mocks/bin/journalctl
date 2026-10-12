@@ -6,10 +6,10 @@
 unit=""
 prev=""
 for arg in "$@"; do
-    if [[ "$prev" == "-u" ]]; then
-        unit="$arg"
-    fi
-    prev="$arg"
+	if [[ "$prev" == "-u" ]]; then
+		unit="$arg"
+	fi
+	prev="$arg"
 done
 
 unit="${unit:-unknown}"

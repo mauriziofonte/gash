@@ -103,7 +103,7 @@ __gash_resolve_env_vars() {
                 val="${val#\'}" && val="${val%\'}"
                 env_vars["$key"]="$val"
             fi
-        done < "$env_file"
+        done <"$env_file"
     fi
 
     # Replace ${VAR:-default} and ${VAR} patterns.
@@ -112,7 +112,7 @@ __gash_resolve_env_vars() {
     local iterations=0
     local max_iterations=50
     while [[ "$result" =~ \$\{([A-Za-z_][A-Za-z0-9_]*)((:?-)([^}]*))?\} ]]; do
-        if (( iterations >= max_iterations )); then
+        if ((iterations >= max_iterations)); then
             __gash_warning "Unresolvable variable reference (circular?) in: $value"
             break
         fi
@@ -185,7 +185,7 @@ __gash_is_upgradeable() {
 
     # Explicit "latest" or common mutable tags: upgradeable
     case "$tag" in
-        latest|main|master|dev|develop|edge|nightly|canary)
+        latest | main | master | dev | develop | edge | nightly | canary)
             return 0
             ;;
     esac
@@ -238,11 +238,11 @@ __gash_registry_curl() {
 
     if [[ $_curl_rc -ne 0 ]]; then
         case $_curl_rc in
-            6)  __gash_registry_curl_error="dns_error" ;;
-            7)  __gash_registry_curl_error="connection_refused" ;;
+            6) __gash_registry_curl_error="dns_error" ;;
+            7) __gash_registry_curl_error="connection_refused" ;;
             28) __gash_registry_curl_error="timeout" ;;
-            35|60) __gash_registry_curl_error="ssl_error" ;;
-            *)  __gash_registry_curl_error="curl_error_${_curl_rc}" ;;
+            35 | 60) __gash_registry_curl_error="ssl_error" ;;
+            *) __gash_registry_curl_error="curl_error_${_curl_rc}" ;;
         esac
         return 1
     fi
@@ -262,7 +262,7 @@ __gash_registry_curl() {
         404) __gash_registry_curl_error="not_found" ;;
         429) __gash_registry_curl_error="rate_limited" ;;
         5??) __gash_registry_curl_error="server_error" ;;
-        *)   __gash_registry_curl_error="http_${http_code}" ;;
+        *) __gash_registry_curl_error="http_${http_code}" ;;
     esac
 
     return 1
@@ -276,13 +276,13 @@ __gash_dockerhub_token() {
     __gash_auth_token=""
 
     __gash_registry_curl \
-        "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${image}:pull" \
-        || return 1
+        "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${image}:pull" ||
+        return 1
 
     local token=""
     if command -v jq >/dev/null 2>&1; then
         # Robust extraction: handles "token" or "access_token", any spacing
-        token=$(jq -r '.token // .access_token // empty' <<< "$__gash_registry_curl_body" 2>/dev/null) || token=""
+        token=$(jq -r '.token // .access_token // empty' <<<"$__gash_registry_curl_body" 2>/dev/null) || token=""
     else
         # Fallback: parameter expansion (assumes compact "token":"..." form)
         token="${__gash_registry_curl_body}"
@@ -317,12 +317,12 @@ __gash_ghcr_token() {
     fi
 
     __gash_registry_curl \
-        "https://ghcr.io/token?service=ghcr.io&scope=repository:${image}:pull" \
-        || return 1
+        "https://ghcr.io/token?service=ghcr.io&scope=repository:${image}:pull" ||
+        return 1
 
     local token=""
     if command -v jq >/dev/null 2>&1; then
-        token=$(jq -r '.token // .access_token // empty' <<< "$__gash_registry_curl_body" 2>/dev/null) || token=""
+        token=$(jq -r '.token // .access_token // empty' <<<"$__gash_registry_curl_body" 2>/dev/null) || token=""
     else
         token="${__gash_registry_curl_body}"
         token="${token##*\"token\":\"}"
@@ -351,7 +351,11 @@ __gash_get_remote_digest() {
     __gash_remote_digest=""
 
     # Skip digest-pinned images
-    [[ "$tag" == @sha256:* ]] && { __gash_remote_digest="${tag#@}"; echo "${tag#@}"; return 0; }
+    [[ "$tag" == @sha256:* ]] && {
+        __gash_remote_digest="${tag#@}"
+        echo "${tag#@}"
+        return 0
+    }
 
     case "$registry" in
         docker.io)
@@ -363,8 +367,8 @@ __gash_get_remote_digest() {
                 --config <(printf 'header = "Authorization: Bearer %s"\n' "$__gash_auth_token") \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
-                "https://registry-1.docker.io/v2/${name}/manifests/${tag}" \
-                || return 1
+                "https://registry-1.docker.io/v2/${name}/manifests/${tag}" ||
+                return 1
             ;;
 
         ghcr.io)
@@ -376,16 +380,16 @@ __gash_get_remote_digest() {
                 --config <(printf 'header = "Authorization: Bearer %s"\n' "$__gash_auth_token") \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                 -H "Accept: application/vnd.oci.image.index.v1+json" \
-                "https://ghcr.io/v2/${name}/manifests/${tag}" \
-                || return 1
+                "https://ghcr.io/v2/${name}/manifests/${tag}" ||
+                return 1
             ;;
 
         *)
             # Generic registry - try without auth
             __gash_registry_curl -I \
                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-                "https://${registry}/v2/${name}/manifests/${tag}" \
-                || return 1
+                "https://${registry}/v2/${name}/manifests/${tag}" ||
+                return 1
             ;;
     esac
 
@@ -411,8 +415,8 @@ __gash_get_local_digest() {
 
     # Try to get digest from RepoDigests
     local digest
-    digest=$(docker inspect --format '{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}' "$image" 2>/dev/null | \
-             head -1 | grep -o 'sha256:[a-f0-9]\{64\}')
+    digest=$(docker inspect --format '{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}' "$image" 2>/dev/null |
+        head -1 | grep -o 'sha256:[a-f0-9]\{64\}')
 
     [[ -n "$digest" ]] && echo "$digest"
 }
@@ -463,7 +467,7 @@ EOF
     # Parse arguments
     for arg in "$@"; do
         case "$arg" in
-            --json|-j)  json_output=1 ;;
+            --json | -j) json_output=1 ;;
             --no-color) no_color=1 ;;
             -*) ;;
             *) path="$arg" ;;
@@ -479,7 +483,10 @@ EOF
     # Find compose file
     local compose_file=""
     for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
-        [[ -f "$path/$f" ]] && { compose_file="$path/$f"; break; }
+        [[ -f "$path/$f" ]] && {
+            compose_file="$path/$f"
+            break
+        }
     done
 
     if [[ -z "$compose_file" ]]; then
@@ -521,7 +528,7 @@ EOF
         # Normalize image
         local normalized
         normalized=$(__gash_normalize_image "$resolved_image")
-        IFS='|' read -r registry name tag <<< "$normalized"
+        IFS='|' read -r registry name tag <<<"$normalized"
 
         # Check if upgradeable
         local upgradeable=0
@@ -568,7 +575,7 @@ EOF
         # Store result
         results+=("$service_name|$resolved_image|$local_digest|$remote_digest|$status|$upgradeable|$error_msg")
 
-    done <<< "$services"
+    done <<<"$services"
 
     # Output
     if [[ $json_output -eq 1 ]]; then
@@ -576,7 +583,7 @@ EOF
         echo -n '{"path":"'"$(__gash_json_escape "$path")"'","compose_file":"'"$(__gash_json_escape "$(basename "$compose_file")")"'","services":['
         local first=1
         for r in "${results[@]}"; do
-            IFS='|' read -r svc img local_d remote_d stat upgr err <<< "$r"
+            IFS='|' read -r svc img local_d remote_d stat upgr err <<<"$r"
             [[ $first -eq 0 ]] && echo -n ','
             first=0
             echo -n '{"name":"'"$(__gash_json_escape "$svc")"'","image":"'"$(__gash_json_escape "$img")"'"'
@@ -599,7 +606,7 @@ EOF
         printf "%s\n" "────────────────────────────────────────────────────────────────────"
 
         for r in "${results[@]}"; do
-            IFS='|' read -r svc img local_d remote_d stat upgr err <<< "$r"
+            IFS='|' read -r svc img local_d remote_d stat upgr err <<<"$r"
 
             # Truncate long image names
             local display_img="$img"
@@ -608,10 +615,10 @@ EOF
             # Color-coded status
             local status_color=""
             case "$stat" in
-                UPDATE|NOT_PULLED) status_color="${__GASH_BOLD_YELLOW}" ;;
+                UPDATE | NOT_PULLED) status_color="${__GASH_BOLD_YELLOW}" ;;
                 CURRENT) status_color="${__GASH_BOLD_GREEN}" ;;
                 PINNED) status_color="${__GASH_BOLD_CYAN}" ;;
-                ERROR|UNKNOWN) status_color="${__GASH_BOLD_RED}" ;;
+                ERROR | UNKNOWN) status_color="${__GASH_BOLD_RED}" ;;
             esac
 
             printf "%-15s %-40s ${status_color}%-12s${__GASH_COLOR_OFF}\n" "$svc" "$display_img" "$stat"
@@ -630,12 +637,12 @@ EOF
             echo ""
             printf "${__GASH_BOLD_RED}Errors:${__GASH_COLOR_OFF}\n"
             for r in "${results[@]}"; do
-                IFS='|' read -r svc img local_d remote_d stat upgr err <<< "$r"
+                IFS='|' read -r svc img local_d remote_d stat upgr err <<<"$r"
                 if [[ "$stat" == "ERROR" ]]; then
                     # Parse registry info for better error message
                     local normalized
                     normalized=$(__gash_normalize_image "$img")
-                    IFS='|' read -r reg nm tg <<< "$normalized"
+                    IFS='|' read -r reg _ _ <<<"$normalized"
 
                     printf "  ${__GASH_BOLD_WHITE}%s${__GASH_COLOR_OFF} (%s)\n" "$svc" "$img"
                     printf "    Registry: %s\n" "$reg"
@@ -691,7 +698,7 @@ EOF
                             printf "    Error: Registry server error (5xx)\n"
                             printf "    Hint: Temporary issue, retry later\n"
                             ;;
-                        registry_unreachable|*)
+                        registry_unreachable | *)
                             printf "    Error: Could not reach registry or get manifest\n"
                             case "$reg" in
                                 ghcr.io)
@@ -768,10 +775,10 @@ EOF
     # Parse arguments
     for arg in "$@"; do
         case "$arg" in
-            --dry-run|-n) dry_run=1 ;;
-            --force|-f)   force=1 ;;
-            --yes|-y)     assume_yes=1 ;;
-            --no-color)   no_color=1 ;;
+            --dry-run | -n) dry_run=1 ;;
+            --force | -f) force=1 ;;
+            --yes | -y) assume_yes=1 ;;
+            --no-color) no_color=1 ;;
             -*) ;;
             *) path="$arg" ;;
         esac
@@ -786,7 +793,10 @@ EOF
     # Find compose file
     local compose_file=""
     for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
-        [[ -f "$path/$f" ]] && { compose_file="$path/$f"; break; }
+        [[ -f "$path/$f" ]] && {
+            compose_file="$path/$f"
+            break
+        }
     done
 
     if [[ -z "$compose_file" ]]; then
@@ -817,7 +827,7 @@ EOF
 
         local normalized
         normalized=$(__gash_normalize_image "$resolved_image")
-        IFS='|' read -r registry name tag <<< "$normalized"
+        IFS='|' read -r registry name tag <<<"$normalized"
 
         if [[ $force -eq 1 ]] || __gash_is_upgradeable "$tag"; then
             upgradeable_services+=("$service_name")
@@ -825,7 +835,7 @@ EOF
         else
             printf "  ${__GASH_BOLD_CYAN}[SKIP]${__GASH_COLOR_OFF} %s (%s) - pinned version\n" "$service_name" "$resolved_image"
         fi
-    done <<< "$services"
+    done <<<"$services"
 
     echo ""
 
@@ -932,11 +942,23 @@ EOF
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --depth|-d) depth="$2"; shift 2 ;;
-            --json|-j)  json_output=1; shift ;;
-            --no-color) no_color=1; shift ;;
+            --depth | -d)
+                depth="$2"
+                shift 2
+                ;;
+            --json | -j)
+                json_output=1
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
             -*) shift ;;
-            *) basedir="$1"; shift ;;
+            *)
+                basedir="$1"
+                shift
+                ;;
         esac
     done
 
@@ -950,7 +972,7 @@ EOF
     local compose_files
     compose_files=$(find "$basedir" -maxdepth "$depth" -type f \
         \( -name "docker-compose.yml" -o -name "docker-compose.yaml" \
-           -o -name "compose.yml" -o -name "compose.yaml" \) \
+        -o -name "compose.yml" -o -name "compose.yaml" \) \
         2>/dev/null | sort)
 
     if [[ -z "$compose_files" ]]; then
@@ -983,7 +1005,7 @@ EOF
             echo -n '{"path":"'"$(__gash_json_escape "$dir")"'","file":"'"$(__gash_json_escape "$fname")"'","services":["'
             echo -n "${services//,/\",\"}"
             echo -n '"]}'
-        done <<< "$compose_files"
+        done <<<"$compose_files"
         echo '],"total_found":'"$total"'}'
     else
         # Human-readable output
@@ -1004,9 +1026,9 @@ EOF
             services=$(__gash_parse_compose_services "$file")
             while IFS='|' read -r svc img; do
                 printf "  - %s: %s\n" "$svc" "$img"
-            done <<< "$services"
+            done <<<"$services"
             echo ""
-        done <<< "$compose_files"
+        done <<<"$compose_files"
 
         printf "Found ${__GASH_BOLD_WHITE}%d${__GASH_COLOR_OFF} compose file(s)\n" "$total"
     fi
@@ -1032,12 +1054,12 @@ alias dcscan='docker_compose_scan'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "docker_compose_check" \
-    --aliases "dcc" \
-    --module "docker-compose" \
-    --short "Check for available Docker Compose image updates" \
-    --see-also "docker_compose_upgrade docker_compose_scan" \
-    <<'HELP'
+    __gash_register_help "docker_compose_check" \
+        --aliases "dcc" \
+        --module "docker-compose" \
+        --short "Check for available Docker Compose image updates" \
+        --see-also "docker_compose_upgrade docker_compose_scan" \
+        <<'HELP'
 USAGE
   docker_compose_check [PATH] [--json]
 
@@ -1062,12 +1084,12 @@ NOTES
   local image digests with remote ones.
 HELP
 
-__gash_register_help "docker_compose_upgrade" \
-    --aliases "dcup2" \
-    --module "docker-compose" \
-    --short "Upgrade Docker Compose services to latest images" \
-    --see-also "docker_compose_check docker_compose_scan" \
-    <<'HELP'
+    __gash_register_help "docker_compose_upgrade" \
+        --aliases "dcup2" \
+        --module "docker-compose" \
+        --short "Upgrade Docker Compose services to latest images" \
+        --see-also "docker_compose_check docker_compose_scan" \
+        <<'HELP'
 USAGE
   docker_compose_upgrade [PATH] [--dry-run] [--force]
 
@@ -1090,12 +1112,12 @@ NOTES
   Pulls new images, recreates affected containers, removes old images.
 HELP
 
-__gash_register_help "docker_compose_scan" \
-    --aliases "dcscan" \
-    --module "docker-compose" \
-    --short "Scan directories for Docker Compose projects" \
-    --see-also "docker_compose_check docker_compose_upgrade" \
-    <<'HELP'
+    __gash_register_help "docker_compose_scan" \
+        --aliases "dcscan" \
+        --module "docker-compose" \
+        --short "Scan directories for Docker Compose projects" \
+        --see-also "docker_compose_check docker_compose_upgrade" \
+        <<'HELP'
 USAGE
   docker_compose_scan [BASEDIR] [--depth N] [--json]
 
@@ -1113,11 +1135,11 @@ EXAMPLES
   dcscan /opt --depth 3
 HELP
 
-__gash_register_help "llm_docker_check" \
-    --module "docker-compose" \
-    --short "Docker Compose update check (JSON output for AI agents)" \
-    --see-also "docker_compose_check" \
-    <<'HELP'
+    __gash_register_help "llm_docker_check" \
+        --module "docker-compose" \
+        --short "Docker Compose update check (JSON output for AI agents)" \
+        --see-also "docker_compose_check" \
+        <<'HELP'
 USAGE
   llm_docker_check [PATH]
 
@@ -1133,4 +1155,4 @@ NOTES
   Designed for LLM/AI agent consumption.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

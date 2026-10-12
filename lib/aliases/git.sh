@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2139 # aliases intentionally expand values at definition time
 
 # Gash Aliases: Git
 # Git workflow aliases for common operations.
@@ -110,14 +111,14 @@ EOF
     # Status
     # =========================================================================
     alias gst='git status'
-    alias gs='git status -sb'  # Short status with branch info
+    alias gs='git status -sb' # Short status with branch info
 
     # =========================================================================
     # Add
     # =========================================================================
     alias ga='git add'
     alias gaa='git add --all'
-    alias gap='git add --patch'  # Interactive staging
+    alias gap='git add --patch' # Interactive staging
 
     # =========================================================================
     # Commit
@@ -133,30 +134,30 @@ EOF
     alias gp='git pull'
     alias gpr='git pull --rebase'
     alias gpsh='git push'
-    alias gpf='git push --force-with-lease'  # Safer force push
+    alias gpf='git push --force-with-lease' # Safer force push
 
     # =========================================================================
     # Checkout / Switch
     # =========================================================================
     alias gco='git checkout'
-    alias gcb='git checkout -b'  # Create and switch to new branch
-    alias gsw='git switch'       # Modern branch switching
-    alias gswc='git switch -c'   # Create and switch (modern)
+    alias gcb='git checkout -b' # Create and switch to new branch
+    alias gsw='git switch'      # Modern branch switching
+    alias gswc='git switch -c'  # Create and switch (modern)
 
     # =========================================================================
     # Branch
     # =========================================================================
     alias gb='git branch'
-    alias gba='git branch -a'    # All branches (including remote)
-    alias gbd='git branch -d'    # Delete branch (safe)
-    alias gbD='git branch -D'    # Force delete branch
+    alias gba='git branch -a' # All branches (including remote)
+    alias gbd='git branch -d' # Delete branch (safe)
+    alias gbD='git branch -D' # Force delete branch
 
     # =========================================================================
     # Diff
     # =========================================================================
     alias gd='git diff'
-    alias gds='git diff --staged'  # Diff staged changes
-    alias gdw='git diff --word-diff'  # Word-level diff
+    alias gds='git diff --staged'    # Diff staged changes
+    alias gdw='git diff --word-diff' # Word-level diff
 
     # =========================================================================
     # Stash
@@ -177,7 +178,7 @@ EOF
     # Reset
     # =========================================================================
     alias grh='git reset HEAD'
-    alias grh1='git reset HEAD~1'  # Undo last commit (keep changes)
+    alias grh1='git reset HEAD~1' # Undo last commit (keep changes)
     alias grhh='git reset --hard HEAD'
 
     # =========================================================================

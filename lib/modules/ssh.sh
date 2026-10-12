@@ -236,7 +236,7 @@ gash_ssh_auto_unlock() {
 
     local expect_script
     expect_script="$(mktemp -t gash-ssh-expect.XXXXXX)"
-    __gash_generate_expect_script > "$expect_script"
+    __gash_generate_expect_script >"$expect_script"
 
     local expect_output
     expect_output="$(printf '%s' "$stdin_payload" | expect -f "$expect_script" 2>&1)"
@@ -256,11 +256,11 @@ gash_ssh_auto_unlock() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "gash_ssh_auto_unlock" \
-    --module "ssh" \
-    --short "Auto-unlock SSH keys from ~/.gash_env on shell startup" \
-    --see-also "gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_ssh_auto_unlock" \
+        --module "ssh" \
+        --short "Auto-unlock SSH keys from ~/.gash_env on shell startup" \
+        --see-also "gash_env_init" \
+        <<'HELP'
 USAGE
   gash_ssh_auto_unlock
 
@@ -283,4 +283,4 @@ NOTES
   Only unlocks keys that are not already loaded in the agent.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

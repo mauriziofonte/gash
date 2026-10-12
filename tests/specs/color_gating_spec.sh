@@ -21,9 +21,10 @@ describe "Color gating (v1.5)"
 # -----------------------------------------------------------------------------
 
 __ansi_leak() {
-    # Returns 0 if ANSI escape sequences are present in stdin, 1 otherwise.
-    local data; data="$(cat)"
-    [[ "$data" == *$'\033['* ]]
+  # Returns 0 if ANSI escape sequences are present in stdin, 1 otherwise.
+  local data
+  data="$(cat)"
+  [[ "$data" == *$'\033['* ]]
 }
 
 # -----------------------------------------------------------------------------

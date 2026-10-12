@@ -130,7 +130,10 @@ __llm_validate_path() {
     local path="${1-}"
 
     # Empty path defaults to current directory
-    [[ -z "$path" ]] && { echo "."; return 0; }
+    [[ -z "$path" ]] && {
+        echo "."
+        return 0
+    }
 
     # Block path traversal attempts: ".." only counts when it is a whole
     # path component ("/tmp/../etc"), not a substring ("file..bak", "v1.2..3")
@@ -298,14 +301,17 @@ __llm_has_rg() {
 # Usage: local us=$(__llm_elapsed_us "$start" "$end")
 __llm_elapsed_us() {
     local t0="${1:-}" t1="${2:-}"
-    [[ -z "$t0" || -z "$t1" ]] && { echo 0; return; }
+    [[ -z "$t0" || -z "$t1" ]] && {
+        echo 0
+        return
+    }
 
     local s0="${t0%%.*}" f0="${t0#*.}" s1="${t1%%.*}" f1="${t1#*.}"
     # Pad fractional part to 6 digits (EPOCHREALTIME gives 6)
     while [[ ${#f0} -lt 6 ]]; do f0="${f0}0"; done
     while [[ ${#f1} -lt 6 ]]; do f1="${f1}0"; done
     # Force base-10 (leading zeros would trigger octal)
-    local us=$(( (10#$s1 - 10#$s0) * 1000000 + 10#$f1 - 10#$f0 ))
+    local us=$(((10#$s1 - 10#$s0) * 1000000 + 10#$f1 - 10#$f0))
     [[ $us -lt 0 ]] && us=0
     echo "$us"
 }
@@ -319,9 +325,9 @@ __llm_format_query_time() {
     if [[ $us -lt 1000 ]]; then
         printf '%dµs' "$us"
     elif [[ $us -lt 1000000 ]]; then
-        printf '%d.%dms' "$(( us / 1000 ))" "$(( (us % 1000) / 100 ))"
+        printf '%d.%dms' "$((us / 1000))" "$(((us % 1000) / 100))"
     else
-        printf '%d.%02ds' "$(( us / 1000000 ))" "$(( (us % 1000000) / 10000 ))"
+        printf '%d.%02ds' "$((us / 1000000))" "$(((us % 1000000) / 10000))"
     fi
 }
 
@@ -338,7 +344,8 @@ __llm_format_query_time() {
 #
 # Usage: __llm_db_envelope <impl_func> [args...]
 __llm_db_envelope() {
-    local _dbenv_func="$1"; shift
+    local _dbenv_func="$1"
+    shift
     local _dbenv_ts=${EPOCHREALTIME:-}
 
     local _dbenv_out _dbenv_rc _dbenv_stderr
@@ -374,7 +381,7 @@ __llm_db_envelope() {
     else
         # Error path: inject query_time into error JSON, preserve stderr channel
         if __llm_has_jq && [[ -s "$_dbenv_stderr" ]]; then
-            jq -c --arg qt "$_dbenv_qt" '. + {query_time: $qt}' < "$_dbenv_stderr" >&2
+            jq -c --arg qt "$_dbenv_qt" '. + {query_time: $qt}' <"$_dbenv_stderr" >&2
         elif [[ -s "$_dbenv_stderr" ]]; then
             cat "$_dbenv_stderr" >&2
         fi
@@ -510,18 +517,24 @@ llm_tree() {
 
 __llm_tree_impl() {
     local text_mode=0
-    local max_depth=""     # empty = default per mode (text=3, JSON=1)
+    local max_depth="" # empty = default per mode (text=3, JSON=1)
     local with_stats=0
     local target_path="."
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --text) text_mode=1; shift ;;
-            --depth|--max-depth)
+            --text)
+                text_mode=1
+                shift
+                ;;
+            --depth | --max-depth)
                 max_depth="${2-}"
                 shift 2
                 ;;
-            --stats) with_stats=1; shift ;;
+            --stats)
+                with_stats=1
+                shift
+                ;;
             -*)
                 __llm_error "unknown_option" "$1" "RETRY" "true" "Use --text, --depth N, or --stats"
                 return 1
@@ -558,16 +571,16 @@ __llm_tree_impl() {
             -name '.git' -prune -o \
             -name '__pycache__' -prune -o \
             -name '.cache' -prune -o \
-            -type f -print -o -type d -print 2>/dev/null | \
-            sort | \
-            head -n 200 | \
+            -type f -print -o -type d -print 2>/dev/null |
+            sort |
+            head -n 200 |
             while IFS= read -r item; do
                 local rel="${item#$safe_path}"
                 rel="${rel#/}"
                 local depth
                 depth=$(echo "$rel" | tr -cd '/' | wc -c)
                 local indent=""
-                for ((i=0; i<depth; i++)); do indent+="  "; done
+                for ((i = 0; i < depth; i++)); do indent+="  "; done
                 local name
                 name="$(basename "$item")"
                 if [[ -d "$item" ]]; then
@@ -601,7 +614,7 @@ __llm_tree_impl() {
             -name '.cache' -prune -o \
             \( -type f -o -type d -o -type l \) \
             ! -path "$nl_glob" ! -path "$tab_glob" \
-            -printf '%P\t%y\t%s\n' 2>/dev/null | \
+            -printf '%P\t%y\t%s\n' 2>/dev/null |
             head -n 500
     ) || true
 
@@ -780,7 +793,7 @@ __llm_find_impl() {
             -name 'vendor' -prune -o \
             -name '.git' -prune -o \
             -name '__pycache__' -prune -o \
-            -type "$file_type" -name "$pattern" ! -path "$nl_glob" -print 2>/dev/null | \
+            -type "$file_type" -name "$pattern" ! -path "$nl_glob" -print 2>/dev/null |
             head -n "$limit" || true
     fi
     return 0
@@ -811,7 +824,7 @@ __llm_grep_impl() {
                 extensions="${2-}"
                 shift 2
                 ;;
-            --context|-C)
+            --context | -C)
                 context="${2-0}"
                 shift 2
                 ;;
@@ -850,7 +863,7 @@ __llm_grep_impl() {
         rg_args+=(--glob '!node_modules' --glob '!vendor' --glob '!.git')
 
         if [[ -n "$extensions" ]]; then
-            IFS=',' read -ra exts <<< "$extensions"
+            IFS=',' read -ra exts <<<"$extensions"
             for ext in "${exts[@]}"; do
                 rg_args+=(--glob "*.$ext")
             done
@@ -867,7 +880,7 @@ __llm_grep_impl() {
         grep_args+=(--exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git)
 
         if [[ -n "$extensions" ]]; then
-            IFS=',' read -ra exts <<< "$extensions"
+            IFS=',' read -ra exts <<<"$extensions"
             for ext in "${exts[@]}"; do
                 grep_args+=(--include="*.$ext")
             done
@@ -1010,8 +1023,11 @@ llm_db_query() {
     local _qw_args=("$@") _qw_i=0
     while [[ $_qw_i -lt ${#_qw_args[@]} ]]; do
         case "${_qw_args[$_qw_i]}" in
-            -r|--rows) _qw_i=$((_qw_i + 2)) ;;
-            *) __GASH_DB_EXPLAIN_ARGS+=("${_qw_args[$_qw_i]}"); _qw_i=$((_qw_i + 1)) ;;
+            -r | --rows) _qw_i=$((_qw_i + 2)) ;;
+            *)
+                __GASH_DB_EXPLAIN_ARGS+=("${_qw_args[$_qw_i]}")
+                _qw_i=$((_qw_i + 1))
+                ;;
         esac
     done
     local __GASH_DB_SLOW_QUERY=1
@@ -1029,19 +1045,19 @@ __llm_db_query_impl() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -d|--database)
+            -d | --database)
                 database="${2-}"
                 shift 2
                 ;;
-            -c|--connection)
+            -c | --connection)
                 connection="${2-default}"
                 shift 2
                 ;;
-            -f|--file)
+            -f | --file)
                 sqlite_file="${2-}"
                 shift 2
                 ;;
-            -r|--rows)
+            -r | --rows)
                 max_rows="${2-100}"
                 shift 2
                 ;;
@@ -1098,7 +1114,7 @@ __llm_db_query_impl() {
     fi
 
     case "$db_driver" in
-        mysql|mariadb)
+        mysql | mariadb)
             local mysql_bin
             mysql_bin=$(type -P mariadb 2>/dev/null) || mysql_bin=$(type -P mysql 2>/dev/null) || true
             if [[ -z "$mysql_bin" ]]; then
@@ -1229,9 +1245,18 @@ __llm_db_tables_impl() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -d|--database) database="${2-}"; shift 2 ;;
-            -c|--connection) connection="${2-default}"; shift 2 ;;
-            -f|--file) sqlite_file="${2-}"; shift 2 ;;
+            -d | --database)
+                database="${2-}"
+                shift 2
+                ;;
+            -c | --connection)
+                connection="${2-default}"
+                shift 2
+                ;;
+            -f | --file)
+                sqlite_file="${2-}"
+                shift 2
+                ;;
             *) shift ;;
         esac
     done
@@ -1264,7 +1289,7 @@ __llm_db_tables_impl() {
 
     local result
     case "$db_driver" in
-        mysql|mariadb)
+        mysql | mariadb)
             result=$(__llm_db_query_impl "SHOW TABLES" "${args[@]}" 2>/dev/null) || return 1
             if __llm_has_jq; then
                 printf '%s' "$result" | jq -c '[.[].[] | values]'
@@ -1307,11 +1332,23 @@ __llm_db_schema_impl() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -d|--database) database="${2-}"; shift 2 ;;
-            -c|--connection) connection="${2-default}"; shift 2 ;;
-            -f|--file) sqlite_file="${2-}"; shift 2 ;;
+            -d | --database)
+                database="${2-}"
+                shift 2
+                ;;
+            -c | --connection)
+                connection="${2-default}"
+                shift 2
+                ;;
+            -f | --file)
+                sqlite_file="${2-}"
+                shift 2
+                ;;
             -*) shift ;;
-            *) table="$1"; shift ;;
+            *)
+                table="$1"
+                shift
+                ;;
         esac
     done
 
@@ -1347,7 +1384,7 @@ __llm_db_schema_impl() {
     args+=(-c "$connection")
 
     case "$db_driver" in
-        mysql|mariadb)
+        mysql | mariadb)
             __llm_db_query_impl "DESCRIBE $table" "${args[@]}"
             ;;
         pgsql)
@@ -1380,12 +1417,27 @@ __llm_db_sample_impl() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -d|--database) database="${2-}"; shift 2 ;;
-            -c|--connection) connection="${2-default}"; shift 2 ;;
-            -f|--file) sqlite_file="${2-}"; shift 2 ;;
-            --limit) limit="${2-5}"; shift 2 ;;
+            -d | --database)
+                database="${2-}"
+                shift 2
+                ;;
+            -c | --connection)
+                connection="${2-default}"
+                shift 2
+                ;;
+            -f | --file)
+                sqlite_file="${2-}"
+                shift 2
+                ;;
+            --limit)
+                limit="${2-5}"
+                shift 2
+                ;;
             -*) shift ;;
-            *) table="$1"; shift ;;
+            *)
+                table="$1"
+                shift
+                ;;
         esac
     done
 
@@ -1436,15 +1488,15 @@ __llm_db_explain_impl() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -d|--database)
+            -d | --database)
                 database="${2-}"
                 shift 2
                 ;;
-            -c|--connection)
+            -c | --connection)
                 connection="${2-default}"
                 shift 2
                 ;;
-            -f|--file)
+            -f | --file)
                 sqlite_file="${2-}"
                 shift 2
                 ;;
@@ -1538,7 +1590,7 @@ __llm_db_explain_impl() {
     local explain_prefix
 
     case "$db_driver" in
-        mysql|mariadb)
+        mysql | mariadb)
             local mysql_bin
             mysql_bin=$(type -P mariadb 2>/dev/null) || mysql_bin=$(type -P mysql 2>/dev/null) || true
             if [[ -z "$mysql_bin" ]]; then
@@ -1756,8 +1808,14 @@ __llm_deps_impl() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dev) include_dev=1; shift ;;
-            *) target_path="$1"; shift ;;
+            --dev)
+                include_dev=1
+                shift
+                ;;
+            *)
+                target_path="$1"
+                shift
+                ;;
         esac
     done
 
@@ -1788,8 +1846,8 @@ __llm_deps_impl() {
 
     elif [[ -f "$safe_path/requirements.txt" ]]; then
         echo '{"manager":"pip","dependencies":['
-        grep -v '^#' "$safe_path/requirements.txt" | grep -v '^$' | \
-            sed 's/[<>=].*//' | \
+        grep -v '^#' "$safe_path/requirements.txt" | grep -v '^$' |
+            sed 's/[<>=].*//' |
             awk '{printf "\"%s\",", $1}' | sed 's/,$//' || true
         echo ']}'
     else
@@ -1835,7 +1893,7 @@ __llm_config_impl() {
         *.json)
             cat "$safe_path"
             ;;
-        *.yaml|*.yml)
+        *.yaml | *.yml)
             if __llm_has_jq && type -P yq >/dev/null 2>&1; then
                 yq -o=json "$safe_path"
             else
@@ -1899,16 +1957,19 @@ __llm_git_status_impl() {
         file="${line:3}"
 
         case "$status" in
-            "R "*|"C "*)
+            "R "* | "C "*)
                 # Rename/copy: this field is the NEW name; the next NUL
                 # field is the old name - consume and discard it.
                 staged+=("$file")
                 IFS= read -r -d '' _ || true
                 ;;
-            "A "*|"M "*|"D "*) staged+=("$file") ;;
-            " M"|" D") modified+=("$file") ;;
+            "A "* | "M "* | "D "*) staged+=("$file") ;;
+            " M" | " D") modified+=("$file") ;;
             "??") untracked+=("$file") ;;
-            "AM"|"MM") staged+=("$file"); modified+=("$file") ;;
+            "AM" | "MM")
+                staged+=("$file")
+                modified+=("$file")
+                ;;
         esac
     done < <(git -C "$safe_path" status --porcelain -z 2>/dev/null)
 
@@ -1935,13 +1996,19 @@ llm_git_diff() {
 }
 
 __llm_git_diff_impl() {
-    local staged=0
+    local staged_only=0
     local target_path="."
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --staged) staged=1; shift ;;
-            *) target_path="$1"; shift ;;
+            --staged)
+                staged_only=1
+                shift
+                ;;
+            *)
+                target_path="$1"
+                shift
+                ;;
         esac
     done
 
@@ -1954,7 +2021,7 @@ __llm_git_diff_impl() {
     fi
 
     local diff_args=(--stat --no-color)
-    [[ $staged -eq 1 ]] && diff_args+=(--staged)
+    [[ $staged_only -eq 1 ]] && diff_args+=(--staged)
 
     git -C "$safe_path" diff "${diff_args[@]}" 2>/dev/null
 }
@@ -1975,8 +2042,14 @@ __llm_git_log_impl() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --limit) limit="${2-10}"; shift 2 ;;
-            *) target_path="$1"; shift ;;
+            --limit)
+                limit="${2-10}"
+                shift 2
+                ;;
+            *)
+                target_path="$1"
+                shift
+                ;;
         esac
     done
 
@@ -1997,7 +2070,7 @@ __llm_git_log_impl() {
 
     # Unit/record separators (US/RS) as field delimiters, JSON built by jq:
     # a quote in a commit subject must never invalidate the array.
-    git -C "$safe_path" log -n "$limit" --format='%h%x1f%s%x1f%an%x1f%ci%x1e' 2>/dev/null | \
+    git -C "$safe_path" log -n "$limit" --format='%h%x1f%s%x1f%an%x1f%ci%x1e' 2>/dev/null |
         jq -cRs 'split("\u001e") | map(select(length > 0) | ltrimstr("\n") | split("\u001f") | select(length == 4) | {hash: .[0], subject: .[1], author: .[2], date: .[3]})' || true
     return 0
 }
@@ -2025,7 +2098,7 @@ __llm_ports_impl() {
 
     if type -P ss >/dev/null 2>&1; then
         local ss_args=(-tuln)
-        ss "${ss_args[@]}" 2>/dev/null | tail -n +2 | \
+        ss "${ss_args[@]}" 2>/dev/null | tail -n +2 |
             awk '{
                 split($5, a, ":");
                 port = a[length(a)];
@@ -2035,7 +2108,7 @@ __llm_ports_impl() {
                 }
             }' | sort -t: -k2 -n -u | sed '$ s/,$//'
     elif type -P netstat >/dev/null 2>&1; then
-        netstat -tuln 2>/dev/null | tail -n +3 | \
+        netstat -tuln 2>/dev/null | tail -n +3 |
             awk '{
                 split($4, a, ":");
                 port = a[length(a)];
@@ -2065,8 +2138,14 @@ __llm_procs_impl() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --name) name="${2-}"; shift 2 ;;
-            --port) port="${2-}"; shift 2 ;;
+            --name)
+                name="${2-}"
+                shift 2
+                ;;
+            --port)
+                port="${2-}"
+                shift 2
+                ;;
             *) shift ;;
         esac
     done
@@ -2074,7 +2153,10 @@ __llm_procs_impl() {
     echo "["
 
     if [[ -n "$port" ]]; then
-        __llm_validate_uint "port" "$port" || { echo "]"; return 1; }
+        __llm_validate_uint "port" "$port" || {
+            echo "]"
+            return 1
+        }
         # Find process by port (no matches is a valid outcome: || true)
         if type -P lsof >/dev/null 2>&1; then
             lsof -i :"$port" -t 2>/dev/null | while read -r pid; do
@@ -2094,7 +2176,7 @@ __llm_procs_impl() {
         # List all (limited). LC_ALL=C forces dot-decimal %CPU/%MEM (an
         # it_IT locale would emit "0,5" and invalidate the JSON); the name
         # field is escaped for quotes/backslashes.
-        LC_ALL=C ps aux --no-headers 2>/dev/null | head -n 20 | \
+        LC_ALL=C ps aux --no-headers 2>/dev/null | head -n 20 |
             awk '{
                 name = $11
                 gsub(/\\/, "\\\\", name); gsub(/"/, "\\\"", name)
@@ -2179,10 +2261,10 @@ __llm_env_impl() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "llm_exec" \
-    --module "llm" \
-    --short "Safe command execution wrapper for AI agents" \
-    <<'HELP'
+    __gash_register_help "llm_exec" \
+        --module "llm" \
+        --short "Safe command execution wrapper for AI agents" \
+        <<'HELP'
 USAGE
   llm_exec "command"
 
@@ -2197,10 +2279,10 @@ NOTES
   fork bombs, and other destructive operations.
 HELP
 
-__gash_register_help "llm_tree" \
-    --module "llm" \
-    --short "Compact directory tree (JSON or text output)" \
-    <<'HELP'
+    __gash_register_help "llm_tree" \
+        --module "llm" \
+        --short "Compact directory tree (JSON or text output)" \
+        <<'HELP'
 USAGE
   llm_tree [--text] [--depth N] [PATH]
 
@@ -2218,10 +2300,10 @@ NOTES
   Ignores noise directories: node_modules, vendor, .git, __pycache__
 HELP
 
-__gash_register_help "llm_find" \
-    --module "llm" \
-    --short "Find files by pattern (ignores noise directories)" \
-    <<'HELP'
+    __gash_register_help "llm_find" \
+        --module "llm" \
+        --short "Find files by pattern (ignores noise directories)" \
+        <<'HELP'
 USAGE
   llm_find PATTERN [PATH] [--type f|d] [--contains REGEX]
 
@@ -2236,10 +2318,10 @@ EXAMPLES
   llm_find "src*" . --type d
 HELP
 
-__gash_register_help "llm_grep" \
-    --module "llm" \
-    --short "Search code with structured file:line:content output" \
-    <<'HELP'
+    __gash_register_help "llm_grep" \
+        --module "llm" \
+        --short "Search code with structured file:line:content output" \
+        <<'HELP'
 USAGE
   llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N]
 
@@ -2254,11 +2336,11 @@ EXAMPLES
   llm_grep "class.*Controller" . --ext php --context 3
 HELP
 
-__gash_register_help "llm_db_query" \
-    --module "llm" \
-    --short "Read-only SQL query (JSON output)" \
-    --see-also "llm_db_tables llm_db_schema llm_db_sample llm_db_explain" \
-    <<'HELP'
+    __gash_register_help "llm_db_query" \
+        --module "llm" \
+        --short "Read-only SQL query (JSON output)" \
+        --see-also "llm_db_tables llm_db_schema llm_db_sample llm_db_explain" \
+        <<'HELP'
 USAGE
   llm_db_query "SQL" [-c CONNECTION] [-f SQLITE_FILE]
 
@@ -2278,11 +2360,11 @@ NOTES
   Output format: JSON array of objects.
 HELP
 
-__gash_register_help "llm_db_tables" \
-    --module "llm" \
-    --short "List database tables (JSON array)" \
-    --see-also "llm_db_query llm_db_schema" \
-    <<'HELP'
+    __gash_register_help "llm_db_tables" \
+        --module "llm" \
+        --short "List database tables (JSON array)" \
+        --see-also "llm_db_query llm_db_schema" \
+        <<'HELP'
 USAGE
   llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]
 
@@ -2292,11 +2374,11 @@ EXAMPLES
   llm_db_tables -f ./app.db
 HELP
 
-__gash_register_help "llm_db_schema" \
-    --module "llm" \
-    --short "Show table schema (columns, types, keys)" \
-    --see-also "llm_db_tables llm_db_query" \
-    <<'HELP'
+    __gash_register_help "llm_db_schema" \
+        --module "llm" \
+        --short "Show table schema (columns, types, keys)" \
+        --see-also "llm_db_tables llm_db_query" \
+        <<'HELP'
 USAGE
   llm_db_schema TABLE [-c CONNECTION] [-f SQLITE_FILE]
 
@@ -2306,11 +2388,11 @@ EXAMPLES
   llm_db_schema sessions -f ./app.db
 HELP
 
-__gash_register_help "llm_db_sample" \
-    --module "llm" \
-    --short "Sample rows from a table (default 5 rows)" \
-    --see-also "llm_db_query llm_db_schema" \
-    <<'HELP'
+    __gash_register_help "llm_db_sample" \
+        --module "llm" \
+        --short "Sample rows from a table (default 5 rows)" \
+        --see-also "llm_db_query llm_db_schema" \
+        <<'HELP'
 USAGE
   llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [--limit N]
 
@@ -2320,11 +2402,11 @@ EXAMPLES
   llm_db_sample logs -f ./app.db --limit 3
 HELP
 
-__gash_register_help "llm_db_explain" \
-    --module "llm" \
-    --short "Show query execution plan (EXPLAIN)" \
-    --see-also "llm_db_query" \
-    <<'HELP'
+    __gash_register_help "llm_db_explain" \
+        --module "llm" \
+        --short "Show query execution plan (EXPLAIN)" \
+        --see-also "llm_db_query" \
+        <<'HELP'
 USAGE
   llm_db_explain "QUERY" [-c CONNECTION] [-f SQLITE_FILE] [--analyze]
 
@@ -2333,11 +2415,11 @@ EXAMPLES
   llm_db_explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c legacy --analyze
 HELP
 
-__gash_register_help "llm_project" \
-    --module "llm" \
-    --short "Detect project type and framework (JSON)" \
-    --see-also "llm_deps" \
-    <<'HELP'
+    __gash_register_help "llm_project" \
+        --module "llm" \
+        --short "Detect project type and framework (JSON)" \
+        --see-also "llm_deps" \
+        <<'HELP'
 USAGE
   llm_project [PATH]
 
@@ -2346,11 +2428,11 @@ EXAMPLES
   llm_project /var/www/myapp
 HELP
 
-__gash_register_help "llm_deps" \
-    --module "llm" \
-    --short "List project dependencies (JSON)" \
-    --see-also "llm_project" \
-    <<'HELP'
+    __gash_register_help "llm_deps" \
+        --module "llm" \
+        --short "List project dependencies (JSON)" \
+        --see-also "llm_project" \
+        <<'HELP'
 USAGE
   llm_deps [PATH] [--dev]
 
@@ -2359,10 +2441,10 @@ EXAMPLES
   llm_deps /var/www/myapp --dev
 HELP
 
-__gash_register_help "llm_config" \
-    --module "llm" \
-    --short "Read config files (JSON/YAML, excludes .env)" \
-    <<'HELP'
+    __gash_register_help "llm_config" \
+        --module "llm" \
+        --short "Read config files (JSON/YAML, excludes .env)" \
+        <<'HELP'
 USAGE
   llm_config FILE
 
@@ -2374,11 +2456,11 @@ NOTES
   Refuses to read .env files and other secret files for security.
 HELP
 
-__gash_register_help "llm_git_status" \
-    --module "llm" \
-    --short "Compact git status (JSON)" \
-    --see-also "llm_git_diff llm_git_log" \
-    <<'HELP'
+    __gash_register_help "llm_git_status" \
+        --module "llm" \
+        --short "Compact git status (JSON)" \
+        --see-also "llm_git_diff llm_git_log" \
+        <<'HELP'
 USAGE
   llm_git_status [PATH]
 
@@ -2387,11 +2469,11 @@ EXAMPLES
   # {"branch":"main","ahead":0,"behind":0,"staged":[],"modified":["README.md"],"untracked":[]}
 HELP
 
-__gash_register_help "llm_git_diff" \
-    --module "llm" \
-    --short "Git diff with statistics" \
-    --see-also "llm_git_status llm_git_log" \
-    <<'HELP'
+    __gash_register_help "llm_git_diff" \
+        --module "llm" \
+        --short "Git diff with statistics" \
+        --see-also "llm_git_status llm_git_log" \
+        <<'HELP'
 USAGE
   llm_git_diff [--staged] [PATH]
 
@@ -2400,11 +2482,11 @@ EXAMPLES
   llm_git_diff --staged
 HELP
 
-__gash_register_help "llm_git_log" \
-    --module "llm" \
-    --short "Recent commits (JSON)" \
-    --see-also "llm_git_status llm_git_diff" \
-    <<'HELP'
+    __gash_register_help "llm_git_log" \
+        --module "llm" \
+        --short "Recent commits (JSON)" \
+        --see-also "llm_git_status llm_git_diff" \
+        <<'HELP'
 USAGE
   llm_git_log [--limit N] [PATH]
 
@@ -2413,11 +2495,11 @@ EXAMPLES
   llm_git_log --limit 20
 HELP
 
-__gash_register_help "llm_ports" \
-    --module "llm" \
-    --short "List ports in use (JSON)" \
-    --see-also "llm_procs" \
-    <<'HELP'
+    __gash_register_help "llm_ports" \
+        --module "llm" \
+        --short "List ports in use (JSON)" \
+        --see-also "llm_procs" \
+        <<'HELP'
 USAGE
   llm_ports [--listen]
 
@@ -2426,11 +2508,11 @@ EXAMPLES
   llm_ports --listen
 HELP
 
-__gash_register_help "llm_procs" \
-    --module "llm" \
-    --short "List processes by name or port (JSON)" \
-    --see-also "llm_ports" \
-    <<'HELP'
+    __gash_register_help "llm_procs" \
+        --module "llm" \
+        --short "List processes by name or port (JSON)" \
+        --see-also "llm_ports" \
+        <<'HELP'
 USAGE
   llm_procs [--name NAME] [--port PORT]
 
@@ -2440,10 +2522,10 @@ EXAMPLES
   llm_procs --port 3306
 HELP
 
-__gash_register_help "llm_env" \
-    --module "llm" \
-    --short "Filtered environment variables (secrets excluded)" \
-    <<'HELP'
+    __gash_register_help "llm_env" \
+        --module "llm" \
+        --short "Filtered environment variables (secrets excluded)" \
+        <<'HELP'
 USAGE
   llm_env [--filter PATTERN]
 
@@ -2456,4 +2538,4 @@ NOTES
   SECRET, KEY, API_KEY, CREDENTIAL, etc.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

@@ -42,7 +42,7 @@ nvm_prune_versions() {
     local force=0
     for arg in "$@"; do
         case "$arg" in
-            --force|-f) force=1 ;;
+            --force | -f) force=1 ;;
         esac
     done
 
@@ -99,11 +99,11 @@ __node_parse_version_to_major() {
     if [[ "$version_str" =~ ^lts/ ]]; then
         local lts_name="${version_str#lts/}"
         case "$lts_name" in
-            jod)      echo "22" ;;
-            iron)     echo "20" ;;
+            jod) echo "22" ;;
+            iron) echo "20" ;;
             hydrogen) echo "18" ;;
-            gallium)  echo "16" ;;
-            fermium)  echo "14" ;;
+            gallium) echo "16" ;;
+            fermium) echo "14" ;;
             *)
                 local latest
                 latest="$(__node_latest_installed)"
@@ -146,7 +146,10 @@ __node_detect_version_major() {
         if [[ -n "$nvmrc_content" ]]; then
             local major
             major=$(__node_parse_version_to_major "$nvmrc_content")
-            [[ -n "$major" ]] && { echo "$major"; return 0; }
+            [[ -n "$major" ]] && {
+                echo "$major"
+                return 0
+            }
         fi
     fi
 
@@ -156,7 +159,10 @@ __node_detect_version_major() {
         if [[ -n "$nodeversion_content" ]]; then
             local major
             major=$(__node_parse_version_to_major "$nodeversion_content")
-            [[ -n "$major" ]] && { echo "$major"; return 0; }
+            [[ -n "$major" ]] && {
+                echo "$major"
+                return 0
+            }
         fi
     fi
 
@@ -166,7 +172,10 @@ __node_detect_version_major() {
         if [[ -n "$engines_node" ]]; then
             local major
             major=$(__node_parse_version_to_major "$engines_node")
-            [[ -n "$major" ]] && { echo "$major"; return 0; }
+            [[ -n "$major" ]] && {
+                echo "$major"
+                return 0
+            }
         fi
     fi
 
@@ -199,7 +208,7 @@ node_detect_version() {
     for arg in "$@"; do
         case "$arg" in
             --llm) llm_mode=1 ;;
-            *)     project_dir="$arg" ;;
+            *) project_dir="$arg" ;;
         esac
     done
 
@@ -251,11 +260,11 @@ alias nvmp='nvm_prune_versions'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "nvm_prune_versions" \
-    --aliases "nvmp" \
-    --module "node" \
-    --short "Remove duplicate/older NVM patch versions" \
-    <<'HELP'
+    __gash_register_help "nvm_prune_versions" \
+        --aliases "nvmp" \
+        --module "node" \
+        --short "Remove duplicate/older NVM patch versions" \
+        <<'HELP'
 USAGE
   nvm_prune_versions [--force]
 
@@ -272,10 +281,10 @@ NOTES
   even if it is not the latest patch for its major.
 HELP
 
-__gash_register_help "node_detect_version" \
-    --module "node" \
-    --short "Detect the Node.js version a project wants" \
-    <<'HELP'
+    __gash_register_help "node_detect_version" \
+        --module "node" \
+        --short "Detect the Node.js version a project wants" \
+        <<'HELP'
 USAGE
   node_detect_version [project_dir] [--llm]
 
@@ -292,4 +301,4 @@ NOTES
   GASH_HEADLESS=1, --llm is not required there.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

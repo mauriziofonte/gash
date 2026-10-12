@@ -314,13 +314,13 @@ __ai_handle_curl_error() {
 
     if [[ -n "$curl_exit" ]]; then
         case "$curl_exit" in
-            5)  __gash_error "$provider API: Couldn't resolve proxy" ;;
-            6)  __gash_error "$provider API: Could not resolve host (check DNS/internet)" ;;
-            7)  __gash_error "$provider API: Failed to connect (server unreachable)" ;;
+            5) __gash_error "$provider API: Couldn't resolve proxy" ;;
+            6) __gash_error "$provider API: Could not resolve host (check DNS/internet)" ;;
+            7) __gash_error "$provider API: Failed to connect (server unreachable)" ;;
             18) __gash_error "$provider API: Partial response received (transfer interrupted)" ;;
             22) __gash_error "$provider API: HTTP error returned" ;;
             28)
-                if [[ $elapsed_time -le $(( __AI_CONNECT_TIMEOUT + 2 )) ]]; then
+                if [[ $elapsed_time -le $((__AI_CONNECT_TIMEOUT + 2)) ]]; then
                     __gash_error "$provider API: Connection timed out after ${elapsed_time}s (server unreachable)"
                 else
                     __gash_error "$provider API: Response timed out after ${elapsed_time}s (max: ${__AI_RESPONSE_TIMEOUT}s)"
@@ -332,7 +332,7 @@ __ai_handle_curl_error() {
             55) __gash_error "$provider API: Failed sending data to server" ;;
             56) __gash_error "$provider API: Failed receiving data from server" ;;
             60) __gash_error "$provider API: SSL certificate problem (verify failed)" ;;
-            *)  __gash_error "$provider API: curl failed (exit $curl_exit)${curl_error:+: $curl_error}" ;;
+            *) __gash_error "$provider API: curl failed (exit $curl_exit)${curl_error:+: $curl_error}" ;;
         esac
         return 1
     fi
@@ -410,10 +410,10 @@ __ai_gather_context() {
     fi
 
     case "$distro" in
-        ubuntu|debian|pop|mint) pkg_mgr="apt" ;;
-        fedora|rhel|centos|rocky|alma) pkg_mgr="dnf" ;;
-        arch|manjaro|endeavouros) pkg_mgr="pacman" ;;
-        opensuse*|suse) pkg_mgr="zypper" ;;
+        ubuntu | debian | pop | mint) pkg_mgr="apt" ;;
+        fedora | rhel | centos | rocky | alma) pkg_mgr="dnf" ;;
+        arch | manjaro | endeavouros) pkg_mgr="pacman" ;;
+        opensuse* | suse) pkg_mgr="zypper" ;;
         alpine) pkg_mgr="apk" ;;
         macos) pkg_mgr="brew" ;;
         *) pkg_mgr="unknown" ;;
@@ -474,7 +474,7 @@ __ai_format_response() {
             echo -e "${__GASH_CYAN}# ${lang}${__GASH_COLOR_OFF}"
             [[ -n "$code" ]] && echo "$code"
             ;;
-        fallback|*)
+        fallback | *)
             # Direct output, no labels
             [[ -n "$text" ]] && echo "$text"
             ;;
@@ -540,7 +540,7 @@ __ai_call_claude() {
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -551,7 +551,8 @@ __ai_call_claude() {
         # Handle curl/HTTP errors (rc=2 means 429 rate-limited, retry once)
         __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -629,7 +630,7 @@ __ai_call_gemini() {
             -d "$body" \
             "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -640,7 +641,8 @@ __ai_call_gemini() {
         # Handle curl/HTTP errors (rc=2 means 429 rate-limited, retry once)
         __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -720,7 +722,7 @@ __sysinfo_call_claude() {
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -729,7 +731,8 @@ __sysinfo_call_claude() {
 
         __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -795,7 +798,7 @@ __sysinfo_call_gemini() {
             -d "$body" \
             "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -804,7 +807,8 @@ __sysinfo_call_gemini() {
 
         __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -881,7 +885,7 @@ __sysinfo_call_drilldown_claude() {
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -890,7 +894,8 @@ __sysinfo_call_drilldown_claude() {
 
         __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -957,7 +962,7 @@ __sysinfo_call_drilldown_gemini() {
             -d "$body" \
             "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -966,7 +971,8 @@ __sysinfo_call_drilldown_gemini() {
 
         __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -1008,8 +1014,8 @@ __sysinfo_collect_question_context() {
     while [[ "$remaining" =~ ($unit_regex) ]]; do
         local unit="${BASH_REMATCH[1]}"
         remaining="${remaining#*"$unit"}"
-        [[ -n "${seen[$unit]-}" ]] && continue
-        seen[$unit]=1
+        [[ -n "${seen["$unit"]-}" ]] && continue
+        seen["$unit"]=1
 
         context+="=== SYSTEMD UNIT: ${unit} ==="$'\n'
         context+="--- Unit file ---"$'\n'
@@ -1030,8 +1036,8 @@ __sysinfo_collect_question_context() {
         # Strip trailing punctuation (common in natural language questions)
         fpath="${fpath%%[?.!,:;)\"\']+([?.!,:;)\"\'])}"
         fpath="${fpath%[?.!,:;\)\"\']}"
-        [[ -n "${seen[$fpath]-}" ]] && continue
-        seen[$fpath]=1
+        [[ -n "${seen["$fpath"]-}" ]] && continue
+        seen["$fpath"]=1
 
         if [[ -f "$fpath" ]]; then
             context+="=== FILE: ${fpath} ==="$'\n'
@@ -1050,8 +1056,8 @@ __sysinfo_collect_question_context() {
     while [[ "$remaining" =~ ($port_regex) ]]; do
         local port="${BASH_REMATCH[3]}"
         remaining="${remaining#*"${BASH_REMATCH[1]}"}"
-        [[ -z "$port" || -n "${seen[port:$port]-}" ]] && continue
-        seen[port:$port]=1
+        [[ -z "$port" || -n "${seen["port:$port"]-}" ]] && continue
+        seen["port:$port"]=1
 
         context+="=== PORT: ${port} ==="$'\n'
         context+="$(ss -tlnp 2>/dev/null | grep -F ":${port}" | head -10)"$'\n'
@@ -1059,8 +1065,8 @@ __sysinfo_collect_question_context() {
     done
 
     # Pattern 4: Known service keywords → targeted collection
-    if [[ "$lower_q" =~ apache|httpd ]] && [[ -z "${seen[svc:apache]-}" ]]; then
-        seen[svc:apache]=1
+    if [[ "$lower_q" =~ apache|httpd ]] && [[ -z "${seen["svc:apache"]-}" ]]; then
+        seen["svc:apache"]=1
         context+="=== SERVICE: Apache2 ==="$'\n'
         context+="--- Status ---"$'\n'
         context+="$(systemctl status apache2 --no-pager 2>/dev/null | head -20)"$'\n'
@@ -1074,13 +1080,13 @@ __sysinfo_collect_question_context() {
         fi
         if [[ -d /etc/apache2/mods-enabled ]]; then
             context+="--- mods-enabled ---"$'\n'
-            context+="$(ls -1 /etc/apache2/mods-enabled/*.load 2>/dev/null | xargs -I{} basename {} .load)"$'\n'
+            context+="$(for __f in /etc/apache2/mods-enabled/*.load; do [[ -e "$__f" ]] && basename "$__f" .load; done)"$'\n'
         fi
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ nginx ]] && [[ -z "${seen[svc:nginx]-}" ]]; then
-        seen[svc:nginx]=1
+    if [[ "$lower_q" =~ nginx ]] && [[ -z "${seen["svc:nginx"]-}" ]]; then
+        seen["svc:nginx"]=1
         context+="=== SERVICE: Nginx ==="$'\n'
         context+="$(systemctl status nginx --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -f /etc/nginx/nginx.conf ]]; then
@@ -1090,8 +1096,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ mysql|mariadb ]] && [[ -z "${seen[svc:mysql]-}" ]]; then
-        seen[svc:mysql]=1
+    if [[ "$lower_q" =~ mysql|mariadb ]] && [[ -z "${seen["svc:mysql"]-}" ]]; then
+        seen["svc:mysql"]=1
         context+="=== SERVICE: MariaDB/MySQL ==="$'\n'
         context+="$(systemctl status mariadb --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -d /etc/mysql ]]; then
@@ -1106,8 +1112,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ redis ]] && [[ -z "${seen[svc:redis]-}" ]]; then
-        seen[svc:redis]=1
+    if [[ "$lower_q" =~ redis ]] && [[ -z "${seen["svc:redis"]-}" ]]; then
+        seen["svc:redis"]=1
         context+="=== SERVICE: Redis ==="$'\n'
         context+="$(systemctl status redis-server --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -f /etc/redis/redis.conf ]]; then
@@ -1117,8 +1123,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ php|fpm ]] && [[ -z "${seen[svc:php]-}" ]]; then
-        seen[svc:php]=1
+    if [[ "$lower_q" =~ php|fpm ]] && [[ -z "${seen["svc:php"]-}" ]]; then
+        seen["svc:php"]=1
         context+="=== SERVICE: PHP-FPM ==="$'\n'
         local phpver
         for phpver in /etc/php/*/fpm; do
@@ -1139,8 +1145,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ postfix|mail ]] && [[ -z "${seen[svc:postfix]-}" ]]; then
-        seen[svc:postfix]=1
+    if [[ "$lower_q" =~ postfix|mail ]] && [[ -z "${seen["svc:postfix"]-}" ]]; then
+        seen["svc:postfix"]=1
         context+="=== SERVICE: Postfix ==="$'\n'
         context+="$(systemctl status postfix --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -f /etc/postfix/main.cf ]]; then
@@ -1150,8 +1156,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ ssh|sshd ]] && [[ -z "${seen[svc:ssh]-}" ]]; then
-        seen[svc:ssh]=1
+    if [[ "$lower_q" =~ ssh|sshd ]] && [[ -z "${seen["svc:ssh"]-}" ]]; then
+        seen["svc:ssh"]=1
         context+="=== SERVICE: SSH ==="$'\n'
         context+="$(systemctl status sshd --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -f /etc/ssh/sshd_config ]]; then
@@ -1165,8 +1171,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ fail2ban ]] && [[ -z "${seen[svc:fail2ban]-}" ]]; then
-        seen[svc:fail2ban]=1
+    if [[ "$lower_q" =~ fail2ban ]] && [[ -z "${seen["svc:fail2ban"]-}" ]]; then
+        seen["svc:fail2ban"]=1
         context+="=== SERVICE: Fail2ban ==="$'\n'
         context+="$(systemctl status fail2ban --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -f /etc/fail2ban/jail.local ]]; then
@@ -1176,8 +1182,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ docker ]] && [[ -z "${seen[svc:docker]-}" ]]; then
-        seen[svc:docker]=1
+    if [[ "$lower_q" =~ docker ]] && [[ -z "${seen["svc:docker"]-}" ]]; then
+        seen["svc:docker"]=1
         context+="=== SERVICE: Docker ==="$'\n'
         context+="$(systemctl status docker --no-pager 2>/dev/null | head -20)"$'\n'
         if [[ -f /etc/docker/daemon.json ]]; then
@@ -1187,8 +1193,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ postgres ]] && [[ -z "${seen[svc:postgres]-}" ]]; then
-        seen[svc:postgres]=1
+    if [[ "$lower_q" =~ postgres ]] && [[ -z "${seen["svc:postgres"]-}" ]]; then
+        seen["svc:postgres"]=1
         context+="=== SERVICE: PostgreSQL ==="$'\n'
         context+="$(systemctl status postgresql --no-pager 2>/dev/null | head -20)"$'\n'
         local pgconf
@@ -1200,8 +1206,8 @@ __sysinfo_collect_question_context() {
         context+=$'\n'
     fi
 
-    if [[ "$lower_q" =~ cron ]] && [[ -z "${seen[svc:cron]-}" ]]; then
-        seen[svc:cron]=1
+    if [[ "$lower_q" =~ cron ]] && [[ -z "${seen["svc:cron"]-}" ]]; then
+        seen["svc:cron"]=1
         context+="=== SERVICE: Cron ==="$'\n'
         context+="$(crontab -l 2>/dev/null || echo '(no user crontab)')"$'\n'
         if [[ -d /etc/cron.d ]]; then
@@ -1219,14 +1225,14 @@ __sysinfo_collect_question_context() {
         local svc_name="${BASH_REMATCH[1]}"
         remaining="${remaining#*"$svc_name"}"
         # Skip if already collected as a systemd unit or known service
-        [[ -n "${seen[${svc_name}.service]-}" ]] && continue
-        [[ -n "${seen[svc:${svc_name,,}]-}" ]] && continue
+        [[ -n "${seen["${svc_name}.service"]-}" ]] && continue
+        [[ -n "${seen["svc:${svc_name,,}"]-}" ]] && continue
 
         # Try as a systemd service — only collect if the unit actually exists
         local unit_output
         unit_output=$(systemctl cat "${svc_name}.service" 2>/dev/null | head -60) || true
         if [[ -n "$unit_output" ]]; then
-            seen[${svc_name}.service]=1
+            seen["${svc_name}.service"]=1
             context+="=== SYSTEMD UNIT: ${svc_name}.service ==="$'\n'
             context+="--- Unit file ---"$'\n'
             context+="$unit_output"$'\n'
@@ -1295,7 +1301,7 @@ __sysinfo_call_freetext_claude() {
             -d "$body" \
             "$__AI_CLAUDE_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -1304,7 +1310,8 @@ __sysinfo_call_freetext_claude() {
 
         __ai_handle_curl_error "Claude" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -1375,7 +1382,7 @@ __sysinfo_call_freetext_gemini() {
             -d "$body" \
             "$__AI_GEMINI_API" 2>"$tmp_err") || curl_exit=$?
 
-        elapsed_time=$(( $(date +%s) - start_time ))
+        elapsed_time=$(($(date +%s) - start_time))
         response=$(<"$tmp_file")
         curl_error=$(<"$tmp_err")
 
@@ -1384,7 +1391,8 @@ __sysinfo_call_freetext_gemini() {
 
         __ai_handle_curl_error "Gemini" "${curl_exit:-}" "$http_code" "$elapsed_time" "$response" "${curl_error:-}"
         __rc=$?
-        if [[ $__rc -eq 0 ]]; then break
+        if [[ $__rc -eq 0 ]]; then
+            break
         elif [[ $__rc -eq 2 && $__retry_count -lt $__max_retries ]]; then
             __retry_count=$((__retry_count + 1))
             __gash_warning "${__AI_RETRY_PROVIDER} API: Rate limited, waiting ${__AI_RETRY_DELAY:-5}s (retry ${__retry_count}/${__max_retries})..."
@@ -1464,9 +1472,9 @@ __sysinfo_format_ai_response() {
 
             case "$sev" in
                 critical) echo -e "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                warning)  echo -e "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                ok)       echo -e "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
-                *)        echo -e "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
+                warning) echo -e "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
+                ok) echo -e "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
+                *) echo -e "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
             esac
 
             j=$((j + 1))
@@ -1515,11 +1523,11 @@ __sysinfo_format_drilldown_response() {
         # Status color
         local status_color
         case "$status" in
-            running)   status_color="${__GASH_GREEN}" ;;
+            running) status_color="${__GASH_GREEN}" ;;
             installed) status_color="${__GASH_CYAN}" ;;
-            stopped)   status_color="${__GASH_BOLD_YELLOW}" ;;
-            eol|error) status_color="${BOLD_RED}" ;;
-            *)         status_color="${MUTED}" ;;
+            stopped) status_color="${__GASH_BOLD_YELLOW}" ;;
+            eol | error) status_color="${BOLD_RED}" ;;
+            *) status_color="${MUTED}" ;;
         esac
 
         echo -e "${__GASH_BOLD_WHITE}${name}${__GASH_COLOR_OFF} (${status_color}${status}${__GASH_COLOR_OFF})"
@@ -1546,9 +1554,9 @@ __sysinfo_format_drilldown_response() {
 
             case "$sev" in
                 critical) echo -e "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                warning)  echo -e "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                ok)       echo -e "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
-                *)        echo -e "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
+                warning) echo -e "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
+                ok) echo -e "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
+                *) echo -e "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
             esac
 
             j=$((j + 1))
@@ -1603,9 +1611,9 @@ __sysinfo_md_initial() {
             sev=$(echo "$json" | jq -r ".sections[$i].findings[$j].severity")
             text=$(echo "$json" | jq -r ".sections[$i].findings[$j].text")
             case "$sev" in
-                critical|warning) icon="[!]" ;;
-                ok)               icon="[+]" ;;
-                *)                icon="[i]" ;;
+                critical | warning) icon="[!]" ;;
+                ok) icon="[+]" ;;
+                *) icon="[i]" ;;
             esac
             md+="- **${icon}** ${text}"$'\n'
             j=$((j + 1))
@@ -1663,9 +1671,9 @@ __sysinfo_md_drilldown() {
             sev=$(echo "$json" | jq -r ".components[$i].issues[$j].severity")
             text=$(echo "$json" | jq -r ".components[$i].issues[$j].text")
             case "$sev" in
-                critical|warning) icon="[!]" ;;
-                ok)               icon="[+]" ;;
-                *)                icon="[i]" ;;
+                critical | warning) icon="[!]" ;;
+                ok) icon="[+]" ;;
+                *) icon="[i]" ;;
             esac
             md+="- **${icon}** ${text}"$'\n'
             j=$((j + 1))
@@ -1722,9 +1730,9 @@ __sysinfo_md_freetext() {
             sev=$(echo "$json" | jq -r ".components[$i].issues[$j].severity")
             text=$(echo "$json" | jq -r ".components[$i].issues[$j].text")
             case "$sev" in
-                critical|warning) icon="[!]" ;;
-                ok)               icon="[+]" ;;
-                *)                icon="[i]" ;;
+                critical | warning) icon="[!]" ;;
+                ok) icon="[+]" ;;
+                *) icon="[i]" ;;
             esac
             md+="- **${icon}** ${text}"$'\n'
             j=$((j + 1))
@@ -1831,7 +1839,7 @@ User question: ${query}"
 
     # Show spinner with provider name
     local provider_display
-    provider_display="${provider^}"  # Capitalize first letter
+    provider_display="${provider^}" # Capitalize first letter
     __gash_spinner_start "${provider_display} is thinking..."
 
     # Call API
@@ -1945,7 +1953,7 @@ User question: ${query}"
 
     # Show spinner with provider name
     local provider_display
-    provider_display="${provider^}"  # Capitalize first letter
+    provider_display="${provider^}" # Capitalize first letter
     __gash_spinner_start "${provider_display} is thinking..."
 
     # Call API
@@ -2000,9 +2008,18 @@ __ai_sysinfo_impl() {
     # Parse args
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --raw) raw_mode=1; shift ;;
-            --no-color) no_color=1; shift ;;
-            claude|gemini) provider="$1"; shift ;;
+            --raw)
+                raw_mode=1
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            claude | gemini)
+                provider="$1"
+                shift
+                ;;
             *)
                 __gash_error "Unknown argument: $1"
                 __gash_info "Usage: ai_sysinfo [claude|gemini] [--raw] [--no-color]"
@@ -2133,22 +2150,43 @@ __ai_sysinfo_impl() {
         echo "  ?) Ask a question              s) Save report  q) Quit"
         echo
         local choice
-        read -rp "> " choice || break   # Ctrl+D exits
+        read -rp "> " choice || break # Ctrl+D exits
 
         local section_title="" deep_fn=""
         case "$choice" in
-            q|Q|quit|exit) break ;;
-            1) section_title="Services Detected";  deep_fn="__sysinfo_deep_services" ;;
-            2) section_title="Security Posture";   deep_fn="__sysinfo_deep_security" ;;
-            3) section_title="Network";            deep_fn="__sysinfo_deep_network" ;;
-            4) section_title="Storage";            deep_fn="__sysinfo_deep_storage" ;;
-            5) section_title="Performance Tuning"; deep_fn="__sysinfo_deep_performance" ;;
-            6) section_title="Maintenance";        deep_fn="__sysinfo_deep_maintenance" ;;
-            "?"|ask)
+            q | Q | quit | exit) break ;;
+            1)
+                section_title="Services Detected"
+                deep_fn="__sysinfo_deep_services"
+                ;;
+            2)
+                section_title="Security Posture"
+                deep_fn="__sysinfo_deep_security"
+                ;;
+            3)
+                section_title="Network"
+                deep_fn="__sysinfo_deep_network"
+                ;;
+            4)
+                section_title="Storage"
+                deep_fn="__sysinfo_deep_storage"
+                ;;
+            5)
+                section_title="Performance Tuning"
+                deep_fn="__sysinfo_deep_performance"
+                ;;
+            6)
+                section_title="Maintenance"
+                deep_fn="__sysinfo_deep_maintenance"
+                ;;
+            "?" | ask)
                 echo
                 local user_question
                 read -rp "Question: " user_question || continue
-                [[ -z "$user_question" ]] && { __gash_warning "Empty question."; continue; }
+                [[ -z "$user_question" ]] && {
+                    __gash_warning "Empty question."
+                    continue
+                }
 
                 # Phase 1: collect targeted context based on entities in the question
                 __gash_spinner_start "Collecting context..."
@@ -2187,13 +2225,17 @@ __ai_sysinfo_impl() {
                 __sysinfo_md_buffer+=$(__sysinfo_md_freetext "$user_question" "$freetext_response")
                 continue
                 ;;
-            s|S|save)
-                local filename="gash-ai-sysinfo-$(date +%Y%m%d-%H%M%S).md"
-                printf '%s' "$__sysinfo_md_buffer" > "$filename"
+            s | S | save)
+                local filename
+                filename="gash-ai-sysinfo-$(date +%Y%m%d-%H%M%S).md"
+                printf '%s' "$__sysinfo_md_buffer" >"$filename"
                 __gash_success "Report saved to ${filename}"
                 continue
                 ;;
-            *) __gash_warning "Invalid choice. Enter 1-6, ?, s, or q."; continue ;;
+            *)
+                __gash_warning "Invalid choice. Enter 1-6, ?, s, or q."
+                continue
+                ;;
         esac
 
         # Extract initial findings for context
@@ -2256,12 +2298,12 @@ alias sysinfo_ai='ai_sysinfo'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "ai_ask" \
-    --aliases "ask" \
-    --module "ai" \
-    --short "Interactive AI chat from the terminal" \
-    --see-also "ai_query ai_sysinfo gash_ai_list" \
-    <<'HELP'
+    __gash_register_help "ai_ask" \
+        --aliases "ask" \
+        --module "ai" \
+        --short "Interactive AI chat from the terminal" \
+        --see-also "ai_query ai_sysinfo gash_ai_list" \
+        <<'HELP'
 USAGE
   ai_ask [provider]
 
@@ -2310,11 +2352,11 @@ NOTES
   Piped content is auto-truncated to 4KB to save tokens.
 HELP
 
-__gash_register_help "ai_query" \
-    --module "ai" \
-    --short "Non-interactive AI query with optional piped input" \
-    --see-also "ai_ask ai_sysinfo gash_ai_list" \
-    <<'HELP'
+    __gash_register_help "ai_query" \
+        --module "ai" \
+        --short "Non-interactive AI query with optional piped input" \
+        --see-also "ai_ask ai_sysinfo gash_ai_list" \
+        <<'HELP'
 USAGE
   ai_query [provider] "query"
   command | ai_query "question about this output"
@@ -2374,12 +2416,12 @@ NOTES
   When input is piped, the AI enters troubleshoot mode automatically.
 HELP
 
-__gash_register_help "ai_sysinfo" \
-    --aliases "sysinfo_ai" \
-    --module "ai" \
-    --short "AI-powered system security and configuration analysis" \
-    --see-also "sysinfo ai_query" \
-    <<'HELP'
+    __gash_register_help "ai_sysinfo" \
+        --aliases "sysinfo_ai" \
+        --module "ai" \
+        --short "AI-powered system security and configuration analysis" \
+        --see-also "sysinfo ai_query" \
+        <<'HELP'
 USAGE
   ai_sysinfo [provider] [--raw]
 
@@ -2412,4 +2454,4 @@ SMART QUESTIONS
     "tell me about apache" -> reads service configs
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

@@ -69,25 +69,25 @@ gash_inspiring_quote() {
     fi
 
     local -a quotes
-    mapfile -t quotes < "$quotes_file"
+    mapfile -t quotes <"$quotes_file"
 
     if [[ ${#quotes[@]} -eq 0 ]]; then
         return 1
     fi
 
-    local idx=$(( RANDOM % ${#quotes[@]} ))
+    local idx=$((RANDOM % ${#quotes[@]}))
     local quote="${quotes[$idx]}"
 
     local visible_prefix="Quote: "
     local prefix_len=${#visible_prefix}
-    local wrap_width=$(( tty_width - prefix_len ))
-    if (( wrap_width < 20 )); then
+    local wrap_width=$((tty_width - prefix_len))
+    if ((wrap_width < 20)); then
         wrap_width=80
     fi
 
     local first=1
     while IFS= read -r qline; do
-        if (( first )); then
+        if ((first)); then
             printf '%b%s\n' "${__GASH_CYAN}Quote:${__GASH_COLOR_OFF} " "$qline"
             first=0
         else
@@ -119,7 +119,10 @@ gash_upgrade() {
     current_dir=$(pwd)
 
     __gash_info "Upgrading Gash in $install_dir..."
-    cd "$install_dir" || { __gash_error "Failed to change directory to $install_dir"; return 1; }
+    cd "$install_dir" || {
+        __gash_error "Failed to change directory to $install_dir"
+        return 1
+    }
 
     # Refuse to proceed over local modifications: the checkout+reset below
     # would silently destroy them.
@@ -130,7 +133,10 @@ gash_upgrade() {
     fi
 
     if ! command git fetch --tags origin; then
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         __gash_error "Failed to fetch updates. Please check your network connection and try manually with 'git fetch'."
         return 1
     fi
@@ -140,7 +146,10 @@ gash_upgrade() {
 
     if [ -z "$latest_tag" ]; then
         __gash_warning "No tags found. Using the latest commit on the default branch."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         return 0
     fi
 
@@ -151,19 +160,28 @@ gash_upgrade() {
         local release_date
         release_date="$(git log -1 --format=%ai "$current_tag")"
         __gash_success "Gash is already up-to-date ($current_tag, released on $release_date)."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         return 0
     fi
 
     if ! git checkout "$latest_tag" >/dev/null 2>&1; then
         __gash_error "Failed to checkout tag $latest_tag."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         return 1
     fi
 
     if ! git reset --hard "$latest_tag" >/dev/null 2>&1; then
         __gash_error "Failed to reset to $latest_tag."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         return 1
     fi
 
@@ -171,15 +189,24 @@ gash_upgrade() {
 
     __gash_info "Cleaning up Git repository..."
     if ! git reflog expire --expire=now --all; then
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         __gash_error "Your version of git is out of date. Please update it!"
     fi
     if ! git gc --auto --aggressive --prune=now; then
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+        cd "$current_dir" || {
+            __gash_error "Failed to change directory to $current_dir"
+            return 1
+        }
         __gash_error "Your version of git is out of date. Please update it!"
     fi
 
-    cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+    cd "$current_dir" || {
+        __gash_error "Failed to change directory to $current_dir"
+        return 1
+    }
     __gash_success "Gash upgrade completed."
 }
 
@@ -203,7 +230,7 @@ gash_uninstall() {
         return 0
     fi
 
-    local profile_files=( "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" )
+    local profile_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile")
 
     # Remove Gash sourcing lines from profiles
     # Uses unique delimiters to avoid matching other if/fi blocks
@@ -232,7 +259,7 @@ gash_uninstall() {
             __gash_error "Failed to remove ~/.gashrc; please remove it manually."
         fi
     else
-        __gash_info "~/.gashrc not found; skipping."
+        __gash_info "$HOME/.gashrc not found; skipping."
     fi
 
     # Remove Gash directory
@@ -352,7 +379,7 @@ gash_unload() {
         while IFS= read -r __gash_name; do
             [[ -z "${__gash_name-}" ]] && continue
             unalias "${__gash_name}" >/dev/null 2>&1 || true
-        done <<< "${__GASH_ADDED_ALIASES}"
+        done <<<"${__GASH_ADDED_ALIASES}"
     fi
 
     # Remove functions introduced by Gash
@@ -362,7 +389,7 @@ gash_unload() {
             [[ -z "${__gash_name-}" ]] && continue
             [[ "${__gash_name}" == "gash_unload" ]] && continue
             unset -f "${__gash_name}" >/dev/null 2>&1 || true
-        done <<< "${__GASH_ADDED_FUNCS}"
+        done <<<"${__GASH_ADDED_FUNCS}"
     fi
 
     # Per-prefix function sweep: the load-time snapshot misses functions
@@ -383,7 +410,7 @@ gash_unload() {
         [[ -z "${__gash_var}" ]] && continue
         unset "${__gash_var}" >/dev/null 2>&1 || true
     done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
-    unset BASH_NAME FQDN >/dev/null 2>&1 || true
+    unset FQDN >/dev/null 2>&1 || true
 
     # Clear internal snapshot variables
     unset __GASH_SNAPSHOT_TAKEN __GASH_PRE_FUNCS __GASH_PRE_ALIASES __GASH_ADDED_FUNCS __GASH_ADDED_ALIASES \
@@ -498,17 +525,23 @@ alias gdoctor='gash_doctor'
 # Sections: git, files, system, docker, nav, llm, all (default: summary)
 gash() {
     local section="${1:-}"
-    local W='\033[1;37m'    # White bold
-    local C='\033[0;36m'    # Cyan
-    local Y='\033[0;33m'    # Yellow
-    local G='\033[0;32m'    # Green
-    local M='\033[0;35m'    # Magenta
-    local D='\033[0;90m'    # Dark gray
-    local R='\033[0m'       # Reset
+    local W='\033[1;37m' # White bold
+    local C='\033[0;36m' # Cyan
+    local Y='\033[0;33m' # Yellow
+    local G='\033[0;32m' # Green
+    local M='\033[0;35m' # Magenta
+    local D='\033[0;90m' # Dark gray
+    local R='\033[0m'    # Reset
 
     # Honor the runtime color gate (headless, NO_COLOR, pipe)
     if ! __gash_use_color; then
-        W=''; C=''; Y=''; G=''; M=''; D=''; R=''
+        W=''
+        C=''
+        Y=''
+        G=''
+        M=''
+        D=''
+        R=''
     fi
 
     # bash has no local functions: the __gash_ref_* helpers below become
@@ -828,15 +861,42 @@ gash() {
 
     # Main dispatch
     case "$section" in
-        git)    __gash_ref_header; __gash_ref_git ;;
-        files)  __gash_ref_header; __gash_ref_files ;;
-        system) __gash_ref_header; __gash_ref_system ;;
-        docker) __gash_ref_header; __gash_ref_docker ;;
-        nav|navigation) __gash_ref_header; __gash_ref_nav ;;
-        llm)    __gash_ref_header; __gash_ref_llm ;;
-        ai)     __gash_ref_header; __gash_ref_ai ;;
-        php)    __gash_ref_header; __gash_ref_php ;;
-        gash|management) __gash_ref_header; __gash_ref_gash ;;
+        git)
+            __gash_ref_header
+            __gash_ref_git
+            ;;
+        files)
+            __gash_ref_header
+            __gash_ref_files
+            ;;
+        system)
+            __gash_ref_header
+            __gash_ref_system
+            ;;
+        docker)
+            __gash_ref_header
+            __gash_ref_docker
+            ;;
+        nav | navigation)
+            __gash_ref_header
+            __gash_ref_nav
+            ;;
+        llm)
+            __gash_ref_header
+            __gash_ref_llm
+            ;;
+        ai)
+            __gash_ref_header
+            __gash_ref_ai
+            ;;
+        php)
+            __gash_ref_header
+            __gash_ref_php
+            ;;
+        gash | management)
+            __gash_ref_header
+            __gash_ref_gash
+            ;;
         all)
             __gash_ref_header
             __gash_ref_git
@@ -849,7 +909,7 @@ gash() {
             __gash_ref_ai
             __gash_ref_gash
             ;;
-        -h|--help|help)
+        -h | --help | help)
             __gash_ref_summary
             ;;
         "")
@@ -879,7 +939,7 @@ gash_help() {
     for a in "$@"; do
         case "$a" in
             --no-color) no_color=1 ;;
-            *)          filtered+=("$a") ;;
+            *) filtered+=("$a") ;;
         esac
     done
     set -- "${filtered[@]}"
@@ -925,9 +985,10 @@ gash_help() {
         echo
         echo -e "  ${W}Search results for '${keyword}':${R}"
         echo
-        __gash_help_search "$keyword"
+        local rc=0
+        __gash_help_search "$keyword" || rc=$?
         echo
-        return $?
+        return "$rc"
     fi
 
     # --short: one-line description
@@ -1021,11 +1082,11 @@ gash_help() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "gash" \
-    --module "gash" \
-    --short "Gash reference card with all functions and aliases" \
-    --see-also "gash_help gash_doctor" \
-    <<'HELP'
+    __gash_register_help "gash" \
+        --module "gash" \
+        --short "Gash reference card with all functions and aliases" \
+        --see-also "gash_help gash_doctor" \
+        <<'HELP'
 USAGE
   gash                 Show summary overview
   gash SECTION         Show a specific section
@@ -1048,11 +1109,11 @@ EXAMPLES
   gash ai
 HELP
 
-__gash_register_help "gash_help" \
-    --module "gash" \
-    --short "Help system with examples, search, and discovery" \
-    --see-also "gash" \
-    <<'HELP'
+    __gash_register_help "gash_help" \
+        --module "gash" \
+        --short "Help system with examples, search, and discovery" \
+        --see-also "gash" \
+        <<'HELP'
 USAGE
   gash_help                    Overview of all functions
   gash_help FUNCTION           Detailed help with real-world examples
@@ -1082,12 +1143,12 @@ EXAMPLES
   gash_help --bash cd
 HELP
 
-__gash_register_help "gash_doctor" \
-    --aliases "gdoctor" \
-    --module "gash" \
-    --short "Run health checks on the Gash installation" \
-    --see-also "gash_upgrade gash" \
-    <<'HELP'
+    __gash_register_help "gash_doctor" \
+        --aliases "gdoctor" \
+        --module "gash" \
+        --short "Run health checks on the Gash installation" \
+        --see-also "gash_upgrade gash" \
+        <<'HELP'
 USAGE
   gash_doctor
 
@@ -1101,11 +1162,11 @@ NOTES
   Reports missing or misconfigured components.
 HELP
 
-__gash_register_help "gash_upgrade" \
-    --module "gash" \
-    --short "Upgrade Gash to the latest version" \
-    --see-also "gash_doctor gash_uninstall" \
-    <<'HELP'
+    __gash_register_help "gash_upgrade" \
+        --module "gash" \
+        --short "Upgrade Gash to the latest version" \
+        --see-also "gash_doctor gash_uninstall" \
+        <<'HELP'
 USAGE
   gash_upgrade
 
@@ -1119,11 +1180,11 @@ NOTES
   and cleans up. Restart your shell after upgrading.
 HELP
 
-__gash_register_help "gash_uninstall" \
-    --module "gash" \
-    --short "Uninstall Gash and clean up configurations" \
-    --see-also "gash_upgrade gash_unload" \
-    <<'HELP'
+    __gash_register_help "gash_uninstall" \
+        --module "gash" \
+        --short "Uninstall Gash and clean up configurations" \
+        --see-also "gash_upgrade gash_unload" \
+        <<'HELP'
 USAGE
   gash_uninstall
 
@@ -1137,11 +1198,11 @@ NOTES
   Restart your terminal after uninstalling.
 HELP
 
-__gash_register_help "gash_unload" \
-    --module "gash" \
-    --short "Restore shell state to before Gash was loaded" \
-    --see-also "gash_uninstall" \
-    <<'HELP'
+    __gash_register_help "gash_unload" \
+        --module "gash" \
+        --short "Restore shell state to before Gash was loaded" \
+        --see-also "gash_uninstall" \
+        <<'HELP'
 USAGE
   gash_unload
 
@@ -1159,10 +1220,10 @@ NOTES
   modify any files.
 HELP
 
-__gash_register_help "gash_inspiring_quote" \
-    --module "gash" \
-    --short "Display a random inspiring quote" \
-    <<'HELP'
+    __gash_register_help "gash_inspiring_quote" \
+        --module "gash" \
+        --short "Display a random inspiring quote" \
+        <<'HELP'
 USAGE
   gash_inspiring_quote
 
@@ -1170,11 +1231,11 @@ EXAMPLES
   gash_inspiring_quote
 HELP
 
-__gash_register_help "gash_env_init" \
-    --module "gash" \
-    --short "Create ~/.gash_env configuration template" \
-    --see-also "gash_db_list gash_ai_list gash_ssh_auto_unlock" \
-    <<'HELP'
+    __gash_register_help "gash_env_init" \
+        --module "gash" \
+        --short "Create ~/.gash_env configuration template" \
+        --see-also "gash_db_list gash_ai_list gash_ssh_auto_unlock" \
+        <<'HELP'
 USAGE
   gash_env_init [--force]
 
@@ -1193,11 +1254,11 @@ NOTES
   Always set permissions: chmod 600 ~/.gash_env
 HELP
 
-__gash_register_help "gash_db_list" \
-    --module "gash" \
-    --short "List configured database connections" \
-    --see-also "gash_db_test gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_db_list" \
+        --module "gash" \
+        --short "List configured database connections" \
+        --see-also "gash_db_test gash_env_init" \
+        <<'HELP'
 USAGE
   gash_db_list
 
@@ -1212,11 +1273,11 @@ NOTES
   Supported drivers: mysql, mariadb, pgsql
 HELP
 
-__gash_register_help "gash_db_test" \
-    --module "gash" \
-    --short "Test a database connection" \
-    --see-also "gash_db_list gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_db_test" \
+        --module "gash" \
+        --short "Test a database connection" \
+        --see-also "gash_db_list gash_env_init" \
+        <<'HELP'
 USAGE
   gash_db_test [CONNECTION_NAME]
 
@@ -1229,11 +1290,11 @@ EXAMPLES
   gash_db_test legacy
 HELP
 
-__gash_register_help "gash_ai_list" \
-    --module "gash" \
-    --short "List configured AI providers" \
-    --see-also "ai_ask ai_query gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_ai_list" \
+        --module "gash" \
+        --short "List configured AI providers" \
+        --see-also "ai_ask ai_query gash_env_init" \
+        <<'HELP'
 USAGE
   gash_ai_list
 
@@ -1248,4 +1309,4 @@ NOTES
   The first configured provider is used by default.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

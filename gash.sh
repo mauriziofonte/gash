@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 
 #
-#     _____           _                              _   _                  _____ _          _ _ _ 
+#     _____           _                              _   _                  _____ _          _ _ _
 #   / ____|         | |           /\               | | | |                / ____| |        | | | |
 #  | |  __  __ _ ___| |__        /  \   _ __   ___ | |_| |__   ___ _ __  | (___ | |__   ___| | | |
 #  | | |_ |/ _` / __| '_ \      / /\ \ | '_ \ / _ \| __| '_ \ / _ \ '__|  \___ \| '_ \ / _ \ | | |
 #  | |__| | (_| \__ \ | | |_   / ____ \| | | | (_) | |_| | | |  __/ |     ____) | | | |  __/ | |_|
 #  \_____|\__,_|___/_| |_( ) /_/    \_\_| |_|\___/ \__|_| |_|\___|_|    |_____/|_| |_|\___|_|_(_)
-#                        |/                                                                      
+#                        |/
 #
-# GASH (Gash, Another SHell) – your terminal's new best friend! It's a lean, mean, Bash-enhancing machine 
-# that sprinkles your shell with colorful prompts, smart aliases, and handy functions, 
-# all without the bloated fluff. Think of it as the "Oh My Zsh" for Bash, 
-# but with fewer hipster vibes and way less get-stuff-done power. 
-# Minimalistic, extendable, and designed to make your terminal feel like home. 
+# GASH (Gash, Another SHell) – your terminal's new best friend! It's a lean, mean, Bash-enhancing machine
+# that sprinkles your shell with colorful prompts, smart aliases, and handy functions,
+# all without the bloated fluff. Think of it as the "Oh My Zsh" for Bash,
+# but with fewer hipster vibes and way less get-stuff-done power.
+# Minimalistic, extendable, and designed to make your terminal feel like home.
 # Get ready to love your shell again!
-# 
+#
 # This script is the main entry point for Gash. It is intended to be sourced from your ~/.gashrc file.
 #
 # Author: Maurizio Fonte (https://www.mauriziofonte.it)
@@ -38,7 +38,6 @@ fi
 #   - Skips: prompt customization, aliases, ~/.bash_aliases, ~/.bash_local
 #   - Produces NO terminal output
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
-    BASH_NAME="Gash"
     GASH_VERSION="1.5.3"
     GASH_DIR="${GASH_DIR:-$HOME/.gash}"
 
@@ -88,28 +87,51 @@ if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
     __GASH_SNAPSHOT_TAKEN=1
 
     __GASH_ORIG_PS1_SET=0
-    if [[ -n "${PS1+x}" ]]; then __GASH_ORIG_PS1_SET=1; __GASH_ORIG_PS1="$PS1"; fi
+    if [[ -n "${PS1+x}" ]]; then
+        __GASH_ORIG_PS1_SET=1
+        __GASH_ORIG_PS1="$PS1"
+    fi
 
     __GASH_ORIG_PS2_SET=0
-    if [[ -n "${PS2+x}" ]]; then __GASH_ORIG_PS2_SET=1; __GASH_ORIG_PS2="$PS2"; fi
+    if [[ -n "${PS2+x}" ]]; then
+        __GASH_ORIG_PS2_SET=1
+        __GASH_ORIG_PS2="$PS2"
+    fi
 
     __GASH_ORIG_PROMPT_COMMAND_SET=0
-    if [[ -n "${PROMPT_COMMAND+x}" ]]; then __GASH_ORIG_PROMPT_COMMAND_SET=1; __GASH_ORIG_PROMPT_COMMAND="$PROMPT_COMMAND"; fi
+    if [[ -n "${PROMPT_COMMAND+x}" ]]; then
+        __GASH_ORIG_PROMPT_COMMAND_SET=1
+        __GASH_ORIG_PROMPT_COMMAND="$PROMPT_COMMAND"
+    fi
 
     __GASH_ORIG_HISTCONTROL_SET=0
-    if [[ -n "${HISTCONTROL+x}" ]]; then __GASH_ORIG_HISTCONTROL_SET=1; __GASH_ORIG_HISTCONTROL="$HISTCONTROL"; fi
+    if [[ -n "${HISTCONTROL+x}" ]]; then
+        __GASH_ORIG_HISTCONTROL_SET=1
+        __GASH_ORIG_HISTCONTROL="$HISTCONTROL"
+    fi
 
     __GASH_ORIG_HISTTIMEFORMAT_SET=0
-    if [[ -n "${HISTTIMEFORMAT+x}" ]]; then __GASH_ORIG_HISTTIMEFORMAT_SET=1; __GASH_ORIG_HISTTIMEFORMAT="$HISTTIMEFORMAT"; fi
+    if [[ -n "${HISTTIMEFORMAT+x}" ]]; then
+        __GASH_ORIG_HISTTIMEFORMAT_SET=1
+        __GASH_ORIG_HISTTIMEFORMAT="$HISTTIMEFORMAT"
+    fi
 
     __GASH_ORIG_HISTSIZE_SET=0
-    if [[ -n "${HISTSIZE+x}" ]]; then __GASH_ORIG_HISTSIZE_SET=1; __GASH_ORIG_HISTSIZE="$HISTSIZE"; fi
+    if [[ -n "${HISTSIZE+x}" ]]; then
+        __GASH_ORIG_HISTSIZE_SET=1
+        __GASH_ORIG_HISTSIZE="$HISTSIZE"
+    fi
 
     __GASH_ORIG_HISTFILESIZE_SET=0
-    if [[ -n "${HISTFILESIZE+x}" ]]; then __GASH_ORIG_HISTFILESIZE_SET=1; __GASH_ORIG_HISTFILESIZE="$HISTFILESIZE"; fi
+    if [[ -n "${HISTFILESIZE+x}" ]]; then
+        __GASH_ORIG_HISTFILESIZE_SET=1
+        __GASH_ORIG_HISTFILESIZE="$HISTFILESIZE"
+    fi
 
-    shopt -q histappend; __GASH_ORIG_SHOPT_HISTAPPEND=$?
-    shopt -q checkwinsize; __GASH_ORIG_SHOPT_CHECKWINSIZE=$?
+    shopt -q histappend
+    __GASH_ORIG_SHOPT_HISTAPPEND=$?
+    shopt -q checkwinsize
+    __GASH_ORIG_SHOPT_CHECKWINSIZE=$?
 
     __GASH_ORIG_UMASK="$(umask)"
 
@@ -138,10 +160,8 @@ fi
 # shellcheck disable=SC2039,SC2016,SC2001,SC3043
 
 # define some constants
-BASH_NAME="Gash"
 GASH_VERSION="1.5.3"
 GASH_DIR="$HOME/.gash"
-
 
 ###########################################################
 #                    History Configuration                #
@@ -161,7 +181,7 @@ HISTFILESIZE=
 export HISTTIMEFORMAT='%F %T '
 
 ###########################################################
-#                    Terminal Settings                    #         
+#                    Terminal Settings                    #
 ###########################################################
 
 # Check the window size after each command and update LINES and COLUMNS if necessary.
@@ -178,7 +198,7 @@ fi
 
 # Set variable identifying the chroot you work in (used in the prompt below).
 if [ -z "${debian_chroot-}" ] && [ -r /etc/debian_chroot ]; then
-    debian_chroot=$(< /etc/debian_chroot)
+    debian_chroot=$(</etc/debian_chroot)
 fi
 
 ###########################################################
@@ -252,7 +272,7 @@ function __get_machine_id() {
     elif command -v hostid >/dev/null 2>&1; then
         echo $((0x$(hostid)))
     else
-        echo $(( $(hostname | cksum | awk '{print $1}') % 256 ))
+        echo $(($(hostname | cksum | awk '{print $1}') % 256))
     fi
 }
 
@@ -285,11 +305,12 @@ function __gash_in_git_repo() {
 
 # Function to construct the PS1 prompt.
 function __construct_ps1() {
-    local exit_code="$1"  # Pass the saved exit code from PROMPT_COMMAND
+    local exit_code="$1" # Pass the saved exit code from PROMPT_COMMAND
 
     if [ -z "${HOST_COLOR-}" ]; then
-        local H=$(__get_machine_id)
-        HOST_COLOR=$(tput setaf $((H%5 + 2)))
+        local H
+        H=$(__get_machine_id)
+        HOST_COLOR=$(tput setaf $((H % 5 + 2)))
     fi
 
     PS1=''
@@ -298,7 +319,8 @@ function __construct_ps1() {
 
     # virtualenv
     if [ -n "${VIRTUAL_ENV-}" ]; then
-        local VENV=`basename $VIRTUAL_ENV`
+        local VENV
+        VENV=$(basename "$VIRTUAL_ENV")
         PS1+="\[${__GASH_PS1_BWHITE}\](${VENV}) \[${__GASH_PS1_OFF}\]"
     fi
 
@@ -321,20 +343,22 @@ function __construct_ps1() {
     PS1+=":\[${__GASH_PS1_BYELLOW}\]\w"
 
     # background jobs
-    local NO_JOBS=`jobs -p | wc -w`
+    local NO_JOBS
+    NO_JOBS=$(jobs -p | wc -w)
     if [ ${NO_JOBS} != 0 ]; then
         PS1+=" \[${__GASH_PS1_BGREEN}\][j${NO_JOBS}]\[${__GASH_PS1_OFF}\]"
     fi
 
     # screen sessions
-    local SCREEN_PATHS="/var/run/screens/S-`whoami` /var/run/screen/S-`whoami` /var/run/uscreens/S-`whoami`"
+    local SCREEN_PATHS="/var/run/screens/S-${USER-} /var/run/screen/S-${USER-} /var/run/uscreens/S-${USER-}"
 
     local screen_path SCREEN_JOBS
     for screen_path in ${SCREEN_PATHS}; do
         if [ -d ${screen_path} ]; then
-            SCREEN_JOBS=`ls ${screen_path} | wc -w`
+            SCREEN_JOBS=$(ls "${screen_path}" | wc -w)
             if [ ${SCREEN_JOBS} != 0 ]; then
-                local current_screen="$(echo ${STY-} | cut -d '.' -f 1)"
+                local current_screen="${STY-}"
+                current_screen="${current_screen%%.*}"
                 if [ -n "${current_screen}" ]; then
                     current_screen=":${current_screen}"
                 fi
@@ -348,9 +372,9 @@ function __construct_ps1() {
     if type -P git >/dev/null 2>&1 && __gash_in_git_repo; then
         local branch
         # Fast: symbolic-ref for normal branches
-        branch="$(GIT_OPTIONAL_LOCKS=0 git symbolic-ref --short HEAD 2>/dev/null)" \
-            || branch="$(GIT_OPTIONAL_LOCKS=0 git describe --tags --exact-match HEAD 2>/dev/null)" \
-            || branch="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --short HEAD 2>/dev/null)"
+        branch="$(GIT_OPTIONAL_LOCKS=0 git symbolic-ref --short HEAD 2>/dev/null)" ||
+            branch="$(GIT_OPTIONAL_LOCKS=0 git describe --tags --exact-match HEAD 2>/dev/null)" ||
+            branch="$(GIT_OPTIONAL_LOCKS=0 git rev-parse --short HEAD 2>/dev/null)"
 
         if [[ -n "${branch}" ]]; then
             # Quick dirty check (ignore untracked for speed)
@@ -377,7 +401,7 @@ function __construct_ps1() {
 # __AI_LAST_EXIT captures exit code for AI module troubleshooting context.
 if [ "$color_prompt" = yes ]; then
     PROMPT_COMMAND='__AI_LAST_EXIT=$?; EXIT_CODE=$__AI_LAST_EXIT; history -a; history -c; history -r; __construct_ps1 $EXIT_CODE'
-    PS2="\[${__GASH_PS1_BPURPLE}\]>\[${__GASH_PS1_OFF}\] "  # Continuation prompt.
+    PS2="\[${__GASH_PS1_BPURPLE}\]>\[${__GASH_PS1_OFF}\] " # Continuation prompt.
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi

@@ -24,19 +24,19 @@
 # context (e.g. gash_source_all in test harness).
 
 if ! declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
-    declare -gA __GASH_HELP_REGISTRY=()   # func_name -> full help body
+    declare -gA __GASH_HELP_REGISTRY=() # func_name -> full help body
 fi
 if ! declare -p __GASH_HELP_SHORT &>/dev/null 2>&1; then
-    declare -gA __GASH_HELP_SHORT=()      # func_name -> one-line description
+    declare -gA __GASH_HELP_SHORT=() # func_name -> one-line description
 fi
 if ! declare -p __GASH_HELP_ALIASES &>/dev/null 2>&1; then
-    declare -gA __GASH_HELP_ALIASES=()    # func_name -> comma-separated aliases
+    declare -gA __GASH_HELP_ALIASES=() # func_name -> comma-separated aliases
 fi
 if ! declare -p __GASH_HELP_MODULE &>/dev/null 2>&1; then
-    declare -gA __GASH_HELP_MODULE=()     # func_name -> module name
+    declare -gA __GASH_HELP_MODULE=() # func_name -> module name
 fi
 if ! declare -p __GASH_HELP_SEE_ALSO &>/dev/null 2>&1; then
-    declare -gA __GASH_HELP_SEE_ALSO=()   # func_name -> space-separated related funcs
+    declare -gA __GASH_HELP_SEE_ALSO=() # func_name -> space-separated related funcs
 fi
 
 # -----------------------------------------------------------------------------
@@ -62,10 +62,22 @@ __gash_register_help() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --aliases)  aliases="${2-}"; shift 2 ;;
-            --module)   module="${2-}"; shift 2 ;;
-            --short)    short="${2-}"; shift 2 ;;
-            --see-also) see_also="${2-}"; shift 2 ;;
+            --aliases)
+                aliases="${2-}"
+                shift 2
+                ;;
+            --module)
+                module="${2-}"
+                shift 2
+                ;;
+            --short)
+                short="${2-}"
+                shift 2
+                ;;
+            --see-also)
+                see_also="${2-}"
+                shift 2
+                ;;
             *) shift ;;
         esac
     done
@@ -75,9 +87,9 @@ __gash_register_help() {
     body="$(cat)"
 
     __GASH_HELP_REGISTRY["$func_name"]="$body"
-    [[ -n "$short" ]]    && __GASH_HELP_SHORT["$func_name"]="$short"
-    [[ -n "$aliases" ]]  && __GASH_HELP_ALIASES["$func_name"]="$aliases"
-    [[ -n "$module" ]]   && __GASH_HELP_MODULE["$func_name"]="$module"
+    [[ -n "$short" ]] && __GASH_HELP_SHORT["$func_name"]="$short"
+    [[ -n "$aliases" ]] && __GASH_HELP_ALIASES["$func_name"]="$aliases"
+    [[ -n "$module" ]] && __GASH_HELP_MODULE["$func_name"]="$module"
     [[ -n "$see_also" ]] && __GASH_HELP_SEE_ALSO["$func_name"]="$see_also"
     return 0
 }
@@ -107,12 +119,12 @@ __gash_help_display() {
     # fallbacks): piping help output must never leak escape sequences.
     local A='' W='' G='' M='' C='' R=''
     if __gash_use_color; then
-        A="${__GASH_COLOR_ACCENT}"   # Orange - function name
-        W="${__GASH_BOLD_WHITE}"     # Bold white - section headers
-        G="${__GASH_GREEN}"          # Green - aliases
-        M="${__GASH_COLOR_MUTED}"    # Dim gray - comments/module
-        C="${__GASH_CYAN}"           # Cyan - commands
-        R="${__GASH_COLOR_OFF}"      # Reset
+        A="${__GASH_COLOR_ACCENT}" # Orange - function name
+        W="${__GASH_BOLD_WHITE}"   # Bold white - section headers
+        G="${__GASH_GREEN}"        # Green - aliases
+        M="${__GASH_COLOR_MUTED}"  # Dim gray - comments/module
+        C="${__GASH_CYAN}"         # Cyan - commands
+        R="${__GASH_COLOR_OFF}"    # Reset
     fi
 
     # Header: function name + module tag
@@ -160,7 +172,7 @@ __gash_help_display() {
             else
                 echo -e "  ${C}${line}${R}"
             fi
-        done <<< "$body"
+        done <<<"$body"
     fi
 
     # See Also
@@ -243,10 +255,10 @@ __gash_help_search() {
         lc_short="$(printf '%s' "${__GASH_HELP_SHORT[$func_name]-}" | tr '[:upper:]' '[:lower:]')"
         lc_body="$(printf '%s' "${__GASH_HELP_REGISTRY[$func_name]-}" | tr '[:upper:]' '[:lower:]')"
 
-        if [[ "$lc_name" == *"$lc_keyword"* ]] || \
-           [[ "$lc_aliases" == *"$lc_keyword"* ]] || \
-           [[ "$lc_short" == *"$lc_keyword"* ]] || \
-           [[ "$lc_body" == *"$lc_keyword"* ]]; then
+        if [[ "$lc_name" == *"$lc_keyword"* ]] ||
+            [[ "$lc_aliases" == *"$lc_keyword"* ]] ||
+            [[ "$lc_short" == *"$lc_keyword"* ]] ||
+            [[ "$lc_body" == *"$lc_keyword"* ]]; then
 
             local aliases="${__GASH_HELP_ALIASES[$func_name]-}"
             local short="${__GASH_HELP_SHORT[$func_name]-}"
@@ -259,7 +271,7 @@ __gash_help_search() {
             printf '  %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
             found=1
         fi
-    done <<< "$sorted_funcs"
+    done <<<"$sorted_funcs"
 
     if [[ $found -eq 0 ]]; then
         echo -e "  ${M}No results for '${keyword}'.${R}"
@@ -343,7 +355,7 @@ __gash_help_list() {
 
             printf '    %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
             displayed=1
-        done <<< "$sorted"
+        done <<<"$sorted"
     done
 
     # Handle functions with no module
@@ -368,7 +380,7 @@ __gash_help_list() {
                 alias_display=" ${G}(${aliases})${R}"
             fi
             printf '    %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
-        done <<< "$sorted"
+        done <<<"$sorted"
     fi
 
     if [[ $displayed -eq 0 && ${#no_module_funcs[@]} -eq 0 ]]; then

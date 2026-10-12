@@ -57,16 +57,16 @@ __GASH_BOLD_WHITE='\033[1;37m'
 # -----------------------------------------------------------------------------
 
 # Semantic colors for consistent theming
-__GASH_COLOR_PRIMARY='\033[38;5;39m'      # Bright blue
-__GASH_COLOR_SECONDARY='\033[38;5;243m'   # Gray
-__GASH_COLOR_ACCENT='\033[38;5;214m'      # Orange
-__GASH_COLOR_MUTED='\033[38;5;245m'       # Dim gray
+__GASH_COLOR_PRIMARY='\033[38;5;39m'    # Bright blue
+__GASH_COLOR_SECONDARY='\033[38;5;243m' # Gray
+__GASH_COLOR_ACCENT='\033[38;5;214m'    # Orange
+__GASH_COLOR_MUTED='\033[38;5;245m'     # Dim gray
 
 # Status colors (256-color variants)
-__GASH_COLOR_SUCCESS='\033[38;5;82m'      # Bright green
-__GASH_COLOR_WARNING='\033[38;5;220m'     # Yellow/gold
-__GASH_COLOR_ERROR='\033[38;5;196m'       # Bright red
-__GASH_COLOR_INFO='\033[38;5;75m'         # Sky blue
+__GASH_COLOR_SUCCESS='\033[38;5;82m'  # Bright green
+__GASH_COLOR_WARNING='\033[38;5;220m' # Yellow/gold
+__GASH_COLOR_ERROR='\033[38;5;196m'   # Bright red
+__GASH_COLOR_INFO='\033[38;5;75m'     # Sky blue
 
 # Unicode symbols with ASCII fallback
 __GASH_SYMBOL_OK='OK'
@@ -106,14 +106,26 @@ __gash_color_env_ok() {
 # will emit empty strings instead of ANSI sequences.
 if ! __gash_color_env_ok; then
     __GASH_COLOR_OFF=''
-    __GASH_RED=''      ; __GASH_GREEN=''       ; __GASH_YELLOW=''
-    __GASH_BLUE=''     ; __GASH_CYAN=''        ; __GASH_WHITE=''
-    __GASH_BOLD_RED='' ; __GASH_BOLD_GREEN=''  ; __GASH_BOLD_YELLOW=''
-    __GASH_BOLD_BLUE=''; __GASH_BOLD_CYAN=''   ; __GASH_BOLD_WHITE=''
-    __GASH_COLOR_PRIMARY=''   ; __GASH_COLOR_SECONDARY=''
-    __GASH_COLOR_ACCENT=''    ; __GASH_COLOR_MUTED=''
-    __GASH_COLOR_SUCCESS=''   ; __GASH_COLOR_WARNING=''
-    __GASH_COLOR_ERROR=''     ; __GASH_COLOR_INFO=''
+    __GASH_RED=''
+    __GASH_GREEN=''
+    __GASH_YELLOW=''
+    __GASH_BLUE=''
+    __GASH_CYAN=''
+    __GASH_WHITE=''
+    __GASH_BOLD_RED=''
+    __GASH_BOLD_GREEN=''
+    __GASH_BOLD_YELLOW=''
+    __GASH_BOLD_BLUE=''
+    __GASH_BOLD_CYAN=''
+    __GASH_BOLD_WHITE=''
+    __GASH_COLOR_PRIMARY=''
+    __GASH_COLOR_SECONDARY=''
+    __GASH_COLOR_ACCENT=''
+    __GASH_COLOR_MUTED=''
+    __GASH_COLOR_SUCCESS=''
+    __GASH_COLOR_WARNING=''
+    __GASH_COLOR_ERROR=''
+    __GASH_COLOR_INFO=''
 fi
 
 # Runtime gate for core emitters and color-aware helpers.
@@ -224,8 +236,8 @@ __gash_ssh() {
         case "$color" in
             success) msg_color="${__GASH_BOLD_GREEN}" ;;
             warning) msg_color="${__GASH_BOLD_YELLOW}" ;;
-            error)   msg_color="${__GASH_BOLD_RED}" ;;
-            *)       msg_color="${__GASH_BOLD_WHITE}" ;;
+            error) msg_color="${__GASH_BOLD_RED}" ;;
+            *) msg_color="${__GASH_BOLD_WHITE}" ;;
         esac
         echo -e "${__GASH_CYAN}SSH:${__GASH_COLOR_OFF} ${msg_color}${message}${__GASH_COLOR_OFF}" >&2
     else
@@ -273,19 +285,19 @@ __gash_print() {
 
     local color_code
     case "$color" in
-        red)    color_code="${__GASH_RED}" ;;
-        green)  color_code="${__GASH_GREEN}" ;;
+        red) color_code="${__GASH_RED}" ;;
+        green) color_code="${__GASH_GREEN}" ;;
         yellow) color_code="${__GASH_YELLOW}" ;;
-        blue)   color_code="${__GASH_BLUE}" ;;
-        cyan)   color_code="${__GASH_CYAN}" ;;
-        white)  color_code="${__GASH_WHITE}" ;;
-        bold_red)    color_code="${__GASH_BOLD_RED}" ;;
-        bold_green)  color_code="${__GASH_BOLD_GREEN}" ;;
+        blue) color_code="${__GASH_BLUE}" ;;
+        cyan) color_code="${__GASH_CYAN}" ;;
+        white) color_code="${__GASH_WHITE}" ;;
+        bold_red) color_code="${__GASH_BOLD_RED}" ;;
+        bold_green) color_code="${__GASH_BOLD_GREEN}" ;;
         bold_yellow) color_code="${__GASH_BOLD_YELLOW}" ;;
-        bold_blue)   color_code="${__GASH_BOLD_BLUE}" ;;
-        bold_cyan)   color_code="${__GASH_BOLD_CYAN}" ;;
-        bold_white)  color_code="${__GASH_BOLD_WHITE}" ;;
-        *)      color_code="${__GASH_COLOR_OFF}" ;;
+        bold_blue) color_code="${__GASH_BOLD_BLUE}" ;;
+        bold_cyan) color_code="${__GASH_BOLD_CYAN}" ;;
+        bold_white) color_code="${__GASH_BOLD_WHITE}" ;;
+        *) color_code="${__GASH_COLOR_OFF}" ;;
     esac
 
     echo -e "${color_code}${message}${__GASH_COLOR_OFF}"
@@ -361,19 +373,19 @@ __gash_spinner_start() {
     # Start spinner in background, suppressing job notifications
     # Method: disable job control, start process, disown it, re-enable
     {
-        set +m  # Disable job control to suppress "[1] PID" notification
+        set +m # Disable job control to suppress "[1] PID" notification
         (
             local i=0
             local len=${#frames}
             while true; do
                 printf "\r${frame_on}%s${frame_off} %s " "${frames:i:1}" "$message"
-                i=$(( (i + 1) % len ))
+                i=$(((i + 1) % len))
                 sleep 0.1
             done
         ) &
         __GASH_SPINNER_PID=$!
-        disown "$__GASH_SPINNER_PID" 2>/dev/null  # Remove from job table
-        set -m 2>/dev/null  # Re-enable job control (may fail in non-interactive)
+        disown "$__GASH_SPINNER_PID" 2>/dev/null # Remove from job table
+        set -m 2>/dev/null                       # Re-enable job control (may fail in non-interactive)
     } 2>/dev/null
 
     # Ensure cleanup on script exit, preserving any pre-existing EXIT trap
@@ -401,7 +413,7 @@ __gash_spinner_stop() {
         # Print final status
         case "$status" in
             success) __gash_success_v2 "${__GASH_SPINNER_MSG}" ;;
-            error)   __gash_error_v2 "${__GASH_SPINNER_MSG}" ;;
+            error) __gash_error_v2 "${__GASH_SPINNER_MSG}" ;;
             warning) __gash_warning_v2 "${__GASH_SPINNER_MSG}" ;;
         esac
     fi
@@ -439,17 +451,17 @@ __gash_progress() {
     [[ "$total" -eq 0 ]] && total=1
 
     # Calculate percentage and bar width
-    local percent=$(( current * 100 / total ))
+    local percent=$((current * 100 / total))
     local width=30
-    local filled=$(( percent * width / 100 ))
-    local empty=$(( width - filled ))
+    local filled=$((percent * width / 100))
+    local empty=$((width - filled))
 
     # Build the bar
     local bar=""
     local i
-    for ((i=0; i<filled; i++)); do bar+="="; done
+    for ((i = 0; i < filled; i++)); do bar+="="; done
     [[ $filled -lt $width ]] && bar+=">"
-    for ((i=0; i<empty-1 && i>=0; i++)); do bar+=" "; done
+    for ((i = 0; i < empty - 1 && i >= 0; i++)); do bar+=" "; done
 
     # Honor the runtime color gate
     local bar_on="" bar_off=""
@@ -480,7 +492,7 @@ __gash_section() {
     # Build separator line
     local line=""
     local i
-    for ((i=0; i<width; i++)); do line+="-"; done
+    for ((i = 0; i < width; i++)); do line+="-"; done
 
     echo
     if __gash_use_color; then

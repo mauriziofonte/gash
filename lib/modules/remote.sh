@@ -192,11 +192,17 @@ __remote_check_delete_safety() {
 }
 
 __remote_require_scp() {
-    command -v scp >/dev/null 2>&1 || { __gash_error "scp is not installed."; return 1; }
+    command -v scp >/dev/null 2>&1 || {
+        __gash_error "scp is not installed."
+        return 1
+    }
 }
 
 __remote_require_rsync() {
-    command -v rsync >/dev/null 2>&1 || { __gash_error "rsync is not installed."; return 1; }
+    command -v rsync >/dev/null 2>&1 || {
+        __gash_error "rsync is not installed."
+        return 1
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -229,7 +235,7 @@ remote_hosts() {
         local alias_name="${line%%$'\t'*}"
         local target="${line#*$'\t'}"
         printf "  %-15s %s\n" "$alias_name" "$target"
-    done <<< "$entries"
+    done <<<"$entries"
 }
 
 # -----------------------------------------------------------------------------
@@ -301,7 +307,7 @@ remote_exec() {
         if [[ ${#script_args[@]} -gt 0 ]]; then
             remote_args=" $(printf '%q ' "${script_args[@]}")"
         fi
-        ssh "${ssh_opts[@]}" "$ssh_target" "unset HISTFILE HISTSIZE; bash -s --${remote_args}" <<< "$script_content" || exit_code=$?
+        ssh "${ssh_opts[@]}" "$ssh_target" "unset HISTFILE HISTSIZE; bash -s --${remote_args}" <<<"$script_content" || exit_code=$?
     else
         ssh "${ssh_opts[@]}" "$ssh_target" "unset HISTFILE HISTSIZE; $remote_cmd" || exit_code=$?
     fi
@@ -343,10 +349,10 @@ remote_push() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            -r|--recursive)  recursive=1 ;;
-            -p|--preserve)   preserve=1 ;;
-            --no-progress)   no_progress=1 ;;
-            --force)         force=1 ;;
+            -r | --recursive) recursive=1 ;;
+            -p | --preserve) preserve=1 ;;
+            --no-progress) no_progress=1 ;;
+            --force) force=1 ;;
         esac
     done
 
@@ -356,8 +362,8 @@ remote_push() {
     __remote_require_scp || return 1
 
     local scp_args=(-o ConnectTimeout=10 -o BatchMode=yes)
-    [[ $recursive   -eq 1 ]] && scp_args+=(-r)
-    [[ $preserve    -eq 1 ]] && scp_args+=(-p)
+    [[ $recursive -eq 1 ]] && scp_args+=(-r)
+    [[ $preserve -eq 1 ]] && scp_args+=(-p)
     [[ $no_progress -eq 1 ]] && scp_args+=(-q)
 
     scp "${scp_args[@]}" -- "$src" "${ssh_target}:${dst}"
@@ -381,10 +387,10 @@ remote_pull() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            -r|--recursive)  recursive=1 ;;
-            -p|--preserve)   preserve=1 ;;
-            --no-progress)   no_progress=1 ;;
-            --force)         force=1 ;;
+            -r | --recursive) recursive=1 ;;
+            -p | --preserve) preserve=1 ;;
+            --no-progress) no_progress=1 ;;
+            --force) force=1 ;;
         esac
     done
 
@@ -394,8 +400,8 @@ remote_pull() {
     __remote_require_scp || return 1
 
     local scp_args=(-o ConnectTimeout=10 -o BatchMode=yes)
-    [[ $recursive   -eq 1 ]] && scp_args+=(-r)
-    [[ $preserve    -eq 1 ]] && scp_args+=(-p)
+    [[ $recursive -eq 1 ]] && scp_args+=(-r)
+    [[ $preserve -eq 1 ]] && scp_args+=(-p)
     [[ $no_progress -eq 1 ]] && scp_args+=(-q)
 
     scp "${scp_args[@]}" -- "${ssh_target}:${src}" "$dst"
@@ -420,11 +426,11 @@ remote_sync_push() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            --delete)      delete=1 ;;
-            --dry-run)     dry_run=1 ;;
+            --delete) delete=1 ;;
+            --dry-run) dry_run=1 ;;
             --no-progress) no_progress=1 ;;
-            --force)       force=1 ;;
-            --exclude=*)   excludes+=("${arg#--exclude=}") ;;
+            --force) force=1 ;;
+            --exclude=*) excludes+=("${arg#--exclude=}") ;;
         esac
     done
 
@@ -437,8 +443,8 @@ remote_sync_push() {
     local rsync_rsh="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o ControlPath=${HOME}/.ssh/cm-%C -o ControlPersist=60s"
     local rsync_args=(-az -e "$rsync_rsh")
     [[ $no_progress -eq 1 ]] || rsync_args+=(--info=progress2)
-    [[ $delete      -eq 1 ]] && rsync_args+=(--delete)
-    [[ $dry_run     -eq 1 ]] && rsync_args+=(--dry-run)
+    [[ $delete -eq 1 ]] && rsync_args+=(--delete)
+    [[ $dry_run -eq 1 ]] && rsync_args+=(--dry-run)
     local pat
     for pat in "${excludes[@]}"; do rsync_args+=(--exclude="$pat"); done
 
@@ -464,11 +470,11 @@ remote_sync_pull() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            --delete)      delete=1 ;;
-            --dry-run)     dry_run=1 ;;
+            --delete) delete=1 ;;
+            --dry-run) dry_run=1 ;;
             --no-progress) no_progress=1 ;;
-            --force)       force=1 ;;
-            --exclude=*)   excludes+=("${arg#--exclude=}") ;;
+            --force) force=1 ;;
+            --exclude=*) excludes+=("${arg#--exclude=}") ;;
         esac
     done
 
@@ -484,8 +490,8 @@ remote_sync_pull() {
     local rsync_rsh="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o ControlPath=${HOME}/.ssh/cm-%C -o ControlPersist=60s"
     local rsync_args=(-az -e "$rsync_rsh")
     [[ $no_progress -eq 1 ]] || rsync_args+=(--info=progress2)
-    [[ $delete      -eq 1 ]] && rsync_args+=(--delete)
-    [[ $dry_run     -eq 1 ]] && rsync_args+=(--dry-run)
+    [[ $delete -eq 1 ]] && rsync_args+=(--delete)
+    [[ $dry_run -eq 1 ]] && rsync_args+=(--dry-run)
     local pat
     for pat in "${excludes[@]}"; do rsync_args+=(--exclude="$pat"); done
 
@@ -508,12 +514,12 @@ alias rspull='remote_sync_pull'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "remote_hosts" \
-    --aliases "rh" \
-    --module "remote" \
-    --short "List configured remote host aliases" \
-    --see-also "remote_exec remote_push remote_pull" \
-    <<'HELP'
+    __gash_register_help "remote_hosts" \
+        --aliases "rh" \
+        --module "remote" \
+        --short "List configured remote host aliases" \
+        --see-also "remote_exec remote_push remote_pull" \
+        <<'HELP'
 USAGE
   remote_hosts
 
@@ -525,12 +531,12 @@ NOTES
   Reads HOST:alias=user@host entries from ~/.gash_env.
 HELP
 
-__gash_register_help "remote_exec" \
-    --aliases "rex" \
-    --module "remote" \
-    --short "Run a command or script on a remote host via multiplexed SSH" \
-    --see-also "remote_hosts remote_push remote_pull" \
-    <<'HELP'
+    __gash_register_help "remote_exec" \
+        --aliases "rex" \
+        --module "remote" \
+        --short "Run a command or script on a remote host via multiplexed SSH" \
+        --see-also "remote_hosts remote_push remote_pull" \
+        <<'HELP'
 USAGE
   remote_exec <alias|user@host> "command"
   remote_exec <alias|user@host> --script FILE [-- arg1 arg2 ...]
@@ -549,12 +555,12 @@ NOTES
   alias (~/.gash_env HOST:) is accepted, never a raw user@host target.
 HELP
 
-__gash_register_help "remote_push" \
-    --aliases "rpush" \
-    --module "remote" \
-    --short "Copy a local file/dir to a remote host via scp" \
-    --see-also "remote_pull remote_sync_push" \
-    <<'HELP'
+    __gash_register_help "remote_push" \
+        --aliases "rpush" \
+        --module "remote" \
+        --short "Copy a local file/dir to a remote host via scp" \
+        --see-also "remote_pull remote_sync_push" \
+        <<'HELP'
 USAGE
   remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]
 
@@ -566,12 +572,12 @@ EXAMPLES
   rpush hnas ./dist /tmp/dist -r
 HELP
 
-__gash_register_help "remote_pull" \
-    --aliases "rpull" \
-    --module "remote" \
-    --short "Copy a remote file/dir to the local machine via scp" \
-    --see-also "remote_push remote_sync_pull" \
-    <<'HELP'
+    __gash_register_help "remote_pull" \
+        --aliases "rpull" \
+        --module "remote" \
+        --short "Copy a remote file/dir to the local machine via scp" \
+        --see-also "remote_push remote_sync_pull" \
+        <<'HELP'
 USAGE
   remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]
 
@@ -580,12 +586,12 @@ EXAMPLES
   rpull viper /tmp/backup.tar.gz ./backup.tar.gz
 HELP
 
-__gash_register_help "remote_sync_push" \
-    --aliases "rspush" \
-    --module "remote" \
-    --short "Sync a local directory to a remote host via rsync" \
-    --see-also "remote_sync_pull remote_push" \
-    <<'HELP'
+    __gash_register_help "remote_sync_push" \
+        --aliases "rspush" \
+        --module "remote" \
+        --short "Sync a local directory to a remote host via rsync" \
+        --see-also "remote_sync_pull remote_push" \
+        <<'HELP'
 USAGE
   remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]
 
@@ -594,12 +600,12 @@ EXAMPLES
   rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'
 HELP
 
-__gash_register_help "remote_sync_pull" \
-    --aliases "rspull" \
-    --module "remote" \
-    --short "Sync a remote directory to the local machine via rsync" \
-    --see-also "remote_sync_push remote_pull" \
-    <<'HELP'
+    __gash_register_help "remote_sync_pull" \
+        --aliases "rspull" \
+        --module "remote" \
+        --short "Sync a remote directory to the local machine via rsync" \
+        --see-also "remote_sync_push remote_pull" \
+        <<'HELP'
 USAGE
   remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]
 
@@ -608,4 +614,4 @@ EXAMPLES
   rspull viper /home/maurizio/projects/foo/ ./foo/
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

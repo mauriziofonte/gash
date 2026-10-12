@@ -72,8 +72,8 @@ history_grep() {
 
     # Extract the relevant parts (ignoring history line numbers), remove duplicates, and avoid self-call.
     # `|| true`: zero matches is a valid outcome, not a pipefail death sentence.
-    history | grep -i -- "$@" | grep -v "history_grep" | \
-        awk '{ $1=""; seen[$0]++; if (seen[$0]==1) print $0 }' | \
+    history | grep -i -- "$@" | grep -v "history_grep" |
+        awk '{ $1=""; seen[$0]++; if (seen[$0]==1) print $0 }' |
         awk -v c="$use_color" '{
             if (c == 1)
                 printf "\033[1;32m%-5s\033[0m \033[0;36m%-20s\033[0m \033[1;37m%s\033[0m\n", NR, $1" "$2, substr($0, index($0,$3));
@@ -171,22 +171,50 @@ EOF
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -n|--limit)
+            -n | --limit)
                 if [[ -z "${2-}" || ! "${2-}" =~ ^[0-9]+$ ]]; then
                     __gash_error "Option -n requires a numeric argument"
                     return 1
                 fi
-                limit="$2"; shift 2
+                limit="$2"
+                shift 2
                 ;;
-            -a|--all) include_self=1; shift ;;
-            -r|--reverse) reverse=1; shift ;;
-            -j|--json) json_output=1; shift ;;
-            -H|--no-highlight) no_highlight=1; shift ;;
-            -E|--regex) use_regex=1; shift ;;
-            -c|--count) count_only=1; shift ;;
-            -g|--group) group=1; shift ;;
-            --pick) pick=1; shift ;;
-            --no-color) no_color_flag=1; shift ;;
+            -a | --all)
+                include_self=1
+                shift
+                ;;
+            -r | --reverse)
+                reverse=1
+                shift
+                ;;
+            -j | --json)
+                json_output=1
+                shift
+                ;;
+            -H | --no-highlight)
+                no_highlight=1
+                shift
+                ;;
+            -E | --regex)
+                use_regex=1
+                shift
+                ;;
+            -c | --count)
+                count_only=1
+                shift
+                ;;
+            -g | --group)
+                group=1
+                shift
+                ;;
+            --pick)
+                pick=1
+                shift
+                ;;
+            --no-color)
+                no_color_flag=1
+                shift
+                ;;
             -*)
                 __gash_error "Unknown option: $1. Use -h for help."
                 return 1
@@ -219,28 +247,30 @@ EOF
     history -a 2>/dev/null || true
 
     # -------------------------------------------------------------------------
-    # DATA PLANE: single gawk pass -> "epoch \t count \t command", already
-    # deduplicated (last-wins), sorted ascending by last epoch, with reverse
-    # and limit applied. No per-line subprocesses.
+    # DATA PLANE: one awk pass (POSIX awk: works with gawk, mawk, BSD awk)
+    # extracts, matches and dedups (last-wins) -> "epoch \t count \t command";
+    # sort orders by last epoch (honoring --reverse), tail applies --limit.
+    # No per-line subprocesses.
     # -------------------------------------------------------------------------
+    local sort_order="-k1,1n"
+    [[ "$reverse" -eq 1 ]] && sort_order="-k1,1nr"
     local records
     records=$(awk -v pattern="$pattern" \
-                  -v include_self="$include_self" \
-                  -v use_regex="$use_regex" \
-                  -v reverse="$reverse" \
-                  -v limit="$limit" '
-    BEGIN { IGNORECASE = 1 }
+        -v include_self="$include_self" \
+        -v use_regex="$use_regex" '
+    BEGIN { lpattern = tolower(pattern) }
     /^#[0-9]+$/ {
         timestamp = substr($0, 2)
         if ((getline cmd) > 0) {
             gsub(/^[ \t]+|[ \t]+$/, "", cmd)
             if (cmd == "") next
             if (include_self == 0 && (cmd ~ /hgrep/ || cmd ~ /history_grep/)) next
+            lcmd = tolower(cmd)
             matched = 0
             if (use_regex == 1) {
-                if (cmd ~ pattern) matched = 1
+                if (lcmd ~ lpattern) matched = 1
             } else {
-                if (index(tolower(cmd), tolower(pattern)) > 0) matched = 1
+                if (index(lcmd, lpattern) > 0) matched = 1
             }
             if (matched) {
                 last[cmd] = timestamp   # last occurrence wins (dedup)
@@ -248,26 +278,9 @@ EOF
             }
         }
     }
-    END {
-        # Iterate commands ordered by their last epoch (ascending).
-        n = 0
-        PROCINFO["sorted_in"] = "@val_num_asc"
-        for (c in last) { n++; oc[n] = c; ots[n] = last[c] }
-        # Build output sequence honoring --reverse.
-        m = 0
-        if (reverse == 1) {
-            for (i = n; i >= 1; i--) { m++; sc[m] = oc[i]; sts[m] = ots[i] }
-        } else {
-            for (i = 1; i <= n; i++) { m++; sc[m] = oc[i]; sts[m] = ots[i] }
-        }
-        # --limit keeps the last N of the current sequence (matches old tail -n).
-        start = 1
-        if (limit > 0 && m > limit) start = m - limit + 1
-        for (i = start; i <= m; i++) {
-            printf "%s\t%s\t%s\n", sts[i], cnt[sc[i]], sc[i]
-        }
-    }
-    ' "$histfile") || return 1
+    END { for (c in last) printf "%s\t%s\t%s\n", last[c], cnt[c], c }
+    ' "$histfile" | LC_ALL=C sort -t "$(printf '\t')" -s $sort_order |
+        if [[ "$limit" -gt 0 ]]; then tail -n "$limit"; else cat; fi) || return 1
 
     # Handle empty results
     if [[ -z "$records" ]]; then
@@ -327,8 +340,8 @@ EOF
     local c_off='' c_ts='' c_hl='' c_grp='' c_cnt='' c_cmd=''
     if [[ "$want_color" -eq 1 ]]; then
         printf -v c_off '%b' "$__GASH_COLOR_OFF"
-        printf -v c_ts  '%b' "$__GASH_CYAN"
-        printf -v c_hl  '%b' "$__GASH_BOLD_YELLOW"
+        printf -v c_ts '%b' "$__GASH_CYAN"
+        printf -v c_hl '%b' "$__GASH_BOLD_YELLOW"
         printf -v c_grp '%b' "$__GASH_BOLD_GREEN"
         printf -v c_cnt '%b' "$__GASH_COLOR_MUTED"
         printf -v c_cmd '%b' "$__GASH_BOLD_WHITE"
@@ -358,7 +371,7 @@ EOF
                 i2 = index(rest, "\t"); cmd = substr(rest, i2 + 1)
                 printf "[%s] %s\n", strftime("%Y-%m-%d %H:%M:%S", ep), cmd
             }' | fzf --height=40% --reverse --no-sort \
-                     --prompt="hgrep> " --tiebreak=index) || return 0
+            --prompt="hgrep> " --tiebreak=index) || return 0
         [[ -z "$sel" ]] && return 0
         # Strip the "[timestamp] " prefix, emit the bare command.
         printf '%s\n' "${sel#*] }"
@@ -491,10 +504,11 @@ ip_public() {
     for a in "$@"; do
         case "$a" in
             --no-color) no_color=1 ;;
-            -h|--help)
+            -h | --help)
                 needs_help "ip_public" "ip_public [--no-color]" \
                     "Displays your public IP address (via ipinfo.io). Alias: myip" \
-                    "--help" && return 0 ;;
+                    "--help" && return 0
+                ;;
         esac
     done
 
@@ -577,9 +591,9 @@ process_kill() {
     fi
 
     local count
-    count=$(wc -w <<< "$pids")
+    count=$(wc -w <<<"$pids")
     if [[ "$count" -gt 1 && "$force_flag" != "--force" ]]; then
-        __gash_warning "$count processes match '$process_name': $(tr '\n' ' ' <<< "$pids")"
+        __gash_warning "$count processes match '$process_name': $(tr '\n' ' ' <<<"$pids")"
         if ! needs_confirm_prompt "Kill all of them?"; then
             __gash_info "Aborted."
             return 0
@@ -594,7 +608,7 @@ process_kill() {
     done
 
     local waited=0
-    while (( waited < 30 )); do
+    while ((waited < 30)); do
         local alive=0
         for pid in $pids; do
             kill -0 "$pid" 2>/dev/null && alive=1
@@ -633,7 +647,7 @@ port_kill() {
             kill "$pid" 2>/dev/null || true
         done
         local waited=0
-        while (( waited < 30 )); do
+        while ((waited < 30)); do
             local alive=0
             for pid in $pids; do
                 kill -0 "$pid" 2>/dev/null && alive=1
@@ -801,12 +815,12 @@ alias wtm='wsl_taskmanager'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "disk_usage" \
-    --aliases "du2" \
-    --module "system" \
-    --short "Display disk usage for real filesystem types" \
-    --see-also "dirs_largest dirs_find_large" \
-    <<'HELP'
+    __gash_register_help "disk_usage" \
+        --aliases "du2" \
+        --module "system" \
+        --short "Display disk usage for real filesystem types" \
+        --see-also "dirs_largest dirs_find_large" \
+        <<'HELP'
 USAGE
   disk_usage
 
@@ -819,12 +833,12 @@ NOTES
   Shows only real disk partitions with human-readable sizes.
 HELP
 
-__gash_register_help "history_grep" \
-    --aliases "hg" \
-    --module "system" \
-    --short "Search command history with colored output" \
-    --see-also "hgrep" \
-    <<'HELP'
+    __gash_register_help "history_grep" \
+        --aliases "hg" \
+        --module "system" \
+        --short "Search command history with colored output" \
+        --see-also "hgrep" \
+        <<'HELP'
 USAGE
   history_grep PATTERN
 
@@ -843,11 +857,11 @@ NOTES
   deduplication, JSON output), use hgrep instead.
 HELP
 
-__gash_register_help "hgrep" \
-    --module "system" \
-    --short "Smart history search with timestamps and deduplication" \
-    --see-also "history_grep" \
-    <<'HELP'
+    __gash_register_help "hgrep" \
+        --module "system" \
+        --short "Smart history search with timestamps and deduplication" \
+        --see-also "history_grep" \
+        <<'HELP'
 USAGE
   hgrep PATTERN [OPTIONS]
 
@@ -880,11 +894,11 @@ EXAMPLES
   hgrep kubectl -r
 HELP
 
-__gash_register_help "ip_public" \
-    --aliases "myip" \
-    --module "system" \
-    --short "Get your public IP address" \
-    <<'HELP'
+    __gash_register_help "ip_public" \
+        --aliases "myip" \
+        --module "system" \
+        --short "Get your public IP address" \
+        <<'HELP'
 USAGE
   ip_public
 
@@ -896,12 +910,12 @@ EXAMPLES
   MY_IP=$(myip) && echo "Server IP: $MY_IP"
 HELP
 
-__gash_register_help "process_find" \
-    --aliases "pf" \
-    --module "system" \
-    --short "Search for a process by name" \
-    --see-also "process_kill port_kill" \
-    <<'HELP'
+    __gash_register_help "process_find" \
+        --aliases "pf" \
+        --module "system" \
+        --short "Search for a process by name" \
+        --see-also "process_kill port_kill" \
+        <<'HELP'
 USAGE
   process_find PROCESS_NAME
 
@@ -916,12 +930,12 @@ EXAMPLES
   pf mysql
 HELP
 
-__gash_register_help "process_kill" \
-    --aliases "pk" \
-    --module "system" \
-    --short "Kill all processes matching a name" \
-    --see-also "process_find port_kill" \
-    <<'HELP'
+    __gash_register_help "process_kill" \
+        --aliases "pk" \
+        --module "system" \
+        --short "Kill all processes matching a name" \
+        --see-also "process_find port_kill" \
+        <<'HELP'
 USAGE
   process_kill PROCESS_NAME
 
@@ -933,12 +947,12 @@ EXAMPLES
   pk webpack-dev-server
 HELP
 
-__gash_register_help "port_kill" \
-    --aliases "ptk" \
-    --module "system" \
-    --short "Kill processes listening on a specific port" \
-    --see-also "process_find process_kill" \
-    <<'HELP'
+    __gash_register_help "port_kill" \
+        --aliases "ptk" \
+        --module "system" \
+        --short "Kill processes listening on a specific port" \
+        --see-also "process_find process_kill" \
+        <<'HELP'
 USAGE
   port_kill PORT
 
@@ -956,12 +970,12 @@ NOTES
   Requires lsof. Uses kill -9 (SIGKILL).
 HELP
 
-__gash_register_help "services_stop" \
-    --aliases "svs" \
-    --module "system" \
-    --short "Stop well-known services (Apache, MySQL, Redis, Docker, etc.)" \
-    --see-also "process_kill" \
-    <<'HELP'
+    __gash_register_help "services_stop" \
+        --aliases "svs" \
+        --module "system" \
+        --short "Stop well-known services (Apache, MySQL, Redis, Docker, etc.)" \
+        --see-also "process_kill" \
+        <<'HELP'
 USAGE
   services_stop [--force]
 
@@ -981,11 +995,11 @@ NOTES
   Uses systemctl, so it requires systemd.
 HELP
 
-__gash_register_help "sudo_last" \
-    --aliases "plz" \
-    --module "system" \
-    --short "Re-run last command with sudo" \
-    <<'HELP'
+    __gash_register_help "sudo_last" \
+        --aliases "plz" \
+        --module "system" \
+        --short "Re-run last command with sudo" \
+        <<'HELP'
 USAGE
   sudo_last [command]
 
@@ -998,11 +1012,11 @@ EXAMPLES
   plz systemctl restart nginx
 HELP
 
-__gash_register_help "mkdir_cd" \
-    --aliases "mkcd" \
-    --module "system" \
-    --short "Create a directory and cd into it" \
-    <<'HELP'
+    __gash_register_help "mkdir_cd" \
+        --aliases "mkcd" \
+        --module "system" \
+        --short "Create a directory and cd into it" \
+        <<'HELP'
 USAGE
   mkdir_cd DIRECTORY
 
@@ -1014,12 +1028,12 @@ EXAMPLES
   mkcd ~/projects/client/frontend
 HELP
 
-__gash_register_help "wsl_restart" \
-    --aliases "wr" \
-    --module "system" \
-    --short "Restart WSL (saves history, runs wsl --shutdown)" \
-    --see-also "wsl_shutdown" \
-    <<'HELP'
+    __gash_register_help "wsl_restart" \
+        --aliases "wr" \
+        --module "system" \
+        --short "Restart WSL (saves history, runs wsl --shutdown)" \
+        --see-also "wsl_shutdown" \
+        <<'HELP'
 USAGE
   wsl_restart
 
@@ -1033,12 +1047,12 @@ NOTES
   Only works inside WSL (Windows Subsystem for Linux).
 HELP
 
-__gash_register_help "wsl_shutdown" \
-    --aliases "wsd" \
-    --module "system" \
-    --short "Shutdown WSL (saves history, runs wsl --shutdown)" \
-    --see-also "wsl_restart" \
-    <<'HELP'
+    __gash_register_help "wsl_shutdown" \
+        --aliases "wsd" \
+        --module "system" \
+        --short "Shutdown WSL (saves history, runs wsl --shutdown)" \
+        --see-also "wsl_restart" \
+        <<'HELP'
 USAGE
   wsl_shutdown
 
@@ -1051,12 +1065,12 @@ NOTES
   Only works inside WSL (Windows Subsystem for Linux).
 HELP
 
-__gash_register_help "wsl_explorer" \
-    --aliases "wex" \
-    --module "system" \
-    --short "Open Windows Explorer from WSL" \
-    --see-also "wsl_taskmanager" \
-    <<'HELP'
+    __gash_register_help "wsl_explorer" \
+        --aliases "wex" \
+        --module "system" \
+        --short "Open Windows Explorer from WSL" \
+        --see-also "wsl_taskmanager" \
+        <<'HELP'
 USAGE
   wsl_explorer [PATH]
 
@@ -1075,12 +1089,12 @@ NOTES
   Only works inside WSL (Windows Subsystem for Linux).
 HELP
 
-__gash_register_help "wsl_taskmanager" \
-    --aliases "wtm" \
-    --module "system" \
-    --short "Open Windows Task Manager from WSL" \
-    --see-also "wsl_explorer process_find" \
-    <<'HELP'
+    __gash_register_help "wsl_taskmanager" \
+        --aliases "wtm" \
+        --module "system" \
+        --short "Open Windows Task Manager from WSL" \
+        --see-also "wsl_explorer process_find" \
+        <<'HELP'
 USAGE
   wsl_taskmanager
 
@@ -1094,4 +1108,4 @@ NOTES
   Only works inside WSL (Windows Subsystem for Linux).
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

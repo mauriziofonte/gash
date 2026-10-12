@@ -1,0 +1,24 @@
+# https://editorconfig.org — also read by shfmt
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[{*.sh,bash_completion,.gashrc}]
+indent_style = space
+indent_size = 4
+shell_variant = bash
+switch_case_indent = true
+
+[{install.sh,tests/**.sh,tests/mocks/bin/*}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2

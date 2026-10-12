@@ -18,10 +18,10 @@ __gash_is_internal_function() {
     [[ -z "$fn" ]] && return 0
 
     case "$fn" in
-        __*|_*)
+        __* | _*)
             return 0
             ;;
-        needs_help|needs_confirm_prompt|print_error)
+        needs_help | needs_confirm_prompt | print_error)
             return 0
             ;;
     esac
@@ -58,12 +58,11 @@ __gash_public_functions() {
 # Dispatches to per-function completion based on COMP_WORDS[0].
 __gash_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local prev="${COMP_WORDS[COMP_CWORD-1]-}"
     local cmd="${COMP_WORDS[0]}"
 
     case "$cmd" in
         # Git tag completion
-        git_add_tag|git_delete_tag|git_list_tags)
+        git_add_tag | git_delete_tag | git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
                 mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
             else
@@ -122,7 +121,7 @@ __gash_complete() {
             ;;
 
         # File completion
-        archive_extract|file_backup|git_dump_revisions)
+        archive_extract | file_backup | git_dump_revisions)
             mapfile -t COMPREPLY < <(compgen -f -- "$cur")
             ;;
 
@@ -132,8 +131,8 @@ __gash_complete() {
             ;;
 
         # AI provider completion (first argument only)
-        ai_ask|ai_query)
-            if (( COMP_CWORD == 1 )); then
+        ai_ask | ai_query)
+            if ((COMP_CWORD == 1)); then
                 mapfile -t COMPREPLY < <(compgen -W "claude gemini" -- "$cur")
             else
                 COMPREPLY=()
@@ -151,7 +150,7 @@ __gash_complete() {
             ;;
 
         # disk_usage / ip_public — just --no-color
-        disk_usage|ip_public)
+        disk_usage | ip_public)
             if [[ "$cur" == -* ]]; then
                 mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
             fi
@@ -193,10 +192,10 @@ __gash_complete() {
         gash_help)
             if [[ "$cur" == -* ]]; then
                 mapfile -t COMPREPLY < <(compgen -W "--list --search --short --bash --no-color" -- "$cur")
-            elif [[ "${COMP_WORDS[1]-}" == "--search" ]] && (( COMP_CWORD == 2 )); then
+            elif [[ "${COMP_WORDS[1]-}" == "--search" ]] && ((COMP_CWORD == 2)); then
                 # After --search, user types keyword freely
                 COMPREPLY=()
-            elif (( COMP_CWORD == 1 )); then
+            elif ((COMP_CWORD == 1)); then
                 # Build list from help registry: function names + their aliases
                 local funcs=""
                 if declare -p __GASH_HELP_REGISTRY &>/dev/null; then

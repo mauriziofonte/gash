@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2139 # aliases intentionally expand values at definition time
 
 # Gash Aliases: PHP & Composer
 # PHP version-specific and Composer aliases.
@@ -19,8 +20,11 @@ __gash_add_php_alias() {
 }
 
 if command -v php >/dev/null 2>&1; then
-    # Detect latest PHP version available
-    PHP_LV=$(ls -1 /usr/bin/php* 2>/dev/null | grep -oP '\d+\.\d+' | sort -V | tail -n1)
+    # Detect the latest versioned PHP binary on PATH (php8.5, php8.4, ...)
+    PHP_LV_BIN=""
+    for version in 8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
+        PHP_LV_BIN=$(type -P "php$version" 2>/dev/null) && break
+    done
 
     # PHP version-specific aliases
     for version in 8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
@@ -29,8 +33,8 @@ if command -v php >/dev/null 2>&1; then
     done
 
     # Default PHP version alias
-    if [[ -n "$PHP_LV" && -f "/usr/bin/php$PHP_LV" ]]; then
-        alias php="/usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M"
+    if [[ -n "$PHP_LV_BIN" ]]; then
+        alias php="$PHP_LV_BIN -d allow_url_fopen=1 -d memory_limit=2048M"
     fi
 
     # Composer aliases (using Composer 2)
@@ -43,8 +47,8 @@ if command -v php >/dev/null 2>&1; then
         done
 
         # Default composer on latest PHP
-        if [[ -n "$PHP_LV" && -f "/usr/bin/php$PHP_LV" ]]; then
-            alias composer="/usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
+        if [[ -n "$PHP_LV_BIN" ]]; then
+            alias composer="$PHP_LV_BIN -d allow_url_fopen=1 -d memory_limit=2048M $COMPOSER_BINARY"
         fi
 
         # Composer global update
@@ -68,15 +72,15 @@ if command -v php >/dev/null 2>&1; then
     fi
 
     # hte-cli aliases (if installed via Composer global)
-    if [[ -f ~/.config/composer/vendor/bin/hte-cli && -n "$PHP_LV" ]]; then
-        alias hte="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli create"
-        alias hte-create="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli create"
-        alias hte-remove="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli remove"
-        alias hte-details="sudo /usr/bin/php$PHP_LV -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli details"
+    if [[ -f ~/.config/composer/vendor/bin/hte-cli && -n "$PHP_LV_BIN" ]]; then
+        alias hte="sudo $PHP_LV_BIN -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli create"
+        alias hte-create="sudo $PHP_LV_BIN -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli create"
+        alias hte-remove="sudo $PHP_LV_BIN -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli remove"
+        alias hte-details="sudo $PHP_LV_BIN -d allow_url_fopen=1 -d memory_limit=2048M ~/.config/composer/vendor/bin/hte-cli details"
     fi
 
     # Cleanup temporary variables
-    unset PHP_LV COMPOSER_BINARY COMPOSER1_BINARY version_alias
+    unset PHP_LV_BIN COMPOSER_BINARY version COMPOSER1_BINARY version_alias
 fi
 
 # Cleanup helper function

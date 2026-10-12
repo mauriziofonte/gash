@@ -110,7 +110,7 @@ it "git.sh defines git aliases and functions when git is available" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if git not available
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 0; }
+    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -151,7 +151,7 @@ it "gl --help shows usage information" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if git not available
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 0; }
+    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -178,7 +178,7 @@ it "docker.sh defines docker aliases when docker is available" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if docker not available
-    type -P docker >/dev/null 2>&1 || { echo "SKIP: docker not available"; exit 0; }
+    type -P docker >/dev/null 2>&1 || { echo "SKIP: docker not available"; exit 77; }
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
