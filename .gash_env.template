@@ -113,3 +113,10 @@
 #
 # Agents (llm_* functions)
 # GASH_DB_TIMEOUT=30       # PostgreSQL statement timeout for llm_db_*, seconds
+# GASH_LLM_EXEC=           # unrestricted = llm_exec runs any command line
+#                          #     (the dangerous-pattern blocklist still applies)
+# GASH_LLM_EXEC_ALLOW=     # extra commands for llm_exec, e.g. "make npm"
+# GASH_LLM_SANDBOX=0       # 1 = llm_exec runs inside bwrap: read-only
+#                          #     filesystem, no network
+#                          # These three are read from this file only, never
+#                          # from the environment.

@@ -67,33 +67,37 @@ __LLM_DANGEROUS_PATTERNS=(
     '> /dev/kmem'
 )
 
-# Paths that are never allowed
+# Paths that are never allowed: the path itself and everything below it.
 __LLM_FORBIDDEN_PATHS=(
+    '/proc'
+    '/sys'
+    '/dev'
+    '/boot'
+    '/root'
     '/etc/shadow'
+    '/etc/gshadow'
     '/etc/passwd'
     '/etc/sudoers'
-    '/root'
-    '/boot'
-    '/dev/sd'
-    '/dev/nvme'
-    '/dev/vd'
-    '/dev/mem'
-    '/dev/kmem'
+    '/etc/sudoers.d'
 )
 
-# Secret file patterns - never read these
+# Secret files, matched case-insensitively against the base name (of the
+# path as given and of its symlink target). Never read, never searched.
 __LLM_SECRET_PATTERNS=(
-    '.env'
-    '.env.*'
-    '*.pem'
-    '*.key'
-    '*_rsa'
-    'id_rsa*'
-    'id_ed25519*'
-    'credentials*'
-    'secrets*'
-    '.gash_env'
+    '.env' '.env.*' '*.env'
+    '*.pem' '*.key' '*.p12' '*.pfx' '*.jks' '*.keystore' '*.kdbx' '*.ppk'
+    'id_rsa*' 'id_dsa*' 'id_ecdsa*' 'id_ed25519*' '*_rsa' '*_dsa' '*_ecdsa' '*_ed25519'
+    'credentials' 'credentials.*' 'secrets' 'secrets.*' '.gash_env'
+    '.pgpass' '.netrc' '_netrc' '.git-credentials' '.npmrc' '.pypirc' '.htpasswd'
+    '.my.cnf' '.boto' '.s3cfg' '.dockercfg' '.vault-token'
+    'kubeconfig' '*.kubeconfig' '*.tfstate' '*.tfstate.*' '*.tfvars'
 )
+
+# Templates that share a secret name but hold no secrets.
+__LLM_SECRET_EXCEPTIONS=('*.pub' '.env.example' '.env.sample' '.env.dist' '.env.template' '*.env.example')
+
+# Directories whose whole content is secret (matched on the full path).
+__LLM_SECRET_DIRS=('.ssh' '.gnupg' '.aws' '.azure' '.kube' '.docker' '.config/gcloud')
 
 # Validate and sanitize a path.
 # Returns sanitized path on stdout, returns 1 if path is forbidden.
@@ -121,10 +125,10 @@ __llm_validate_path() {
     local normalized
     normalized="$(realpath -m "$path" 2>/dev/null)" || normalized="$path"
 
-    # Check against forbidden paths
+    # Check against forbidden paths (whole components: /root, not /rootfs)
     local forbidden
     for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
-        if [[ "$normalized" == "$forbidden"* ]]; then
+        if [[ "$normalized" == "$forbidden" || "$normalized" == "$forbidden"/* ]]; then
             echo '{"error":"forbidden_path","details":"'"$(__gash_json_escape "$normalized")"'","action":"FATAL","recoverable":false,"hint":"This path is protected and cannot be accessed"}' >&2
             return 1
         fi
@@ -170,10 +174,9 @@ __llm_validate_command() {
 
     # Normalize whitespace: collapse multiple spaces/tabs to single space, trim
     # This prevents bypassing patterns via extra whitespace (e.g., "rm  -rf  /")
-    local normalized_cmd
-    normalized_cmd="$(printf '%s' "$cmd" | tr -s '[:space:]' ' ')"
-    normalized_cmd="${normalized_cmd# }"
-    normalized_cmd="${normalized_cmd% }"
+    local -a words=()
+    IFS=$' \t\n' read -r -d '' -a words <<<"$cmd" || true
+    local normalized_cmd="${words[*]}"
 
     local pattern
     for pattern in "${__LLM_DANGEROUS_PATTERNS[@]}"; do
@@ -186,23 +189,76 @@ __llm_validate_command() {
     return 0
 }
 
-# Check if a file matches secret patterns.
+# Check if a file is secret: its base name matches __LLM_SECRET_PATTERNS
+# (case-insensitively, templates excepted) or it lives in one of
+# __LLM_SECRET_DIRS. A symlink is judged by its target as well.
 # Returns 0 if it's a secret file (should not be read), 1 otherwise.
 # Usage: __llm_is_secret_file <filename>
 __llm_is_secret_file() {
-    local file="${1-}"
-    local basename
-    basename="$(basename "$file")"
+    local file="${1-}" resolved=""
+    [[ -z "$file" ]] && return 1
+    __llm_secret_name "$file" && return 0
+    if [[ -e "$file" || -L "$file" ]]; then
+        resolved="$(realpath -m -- "$file" 2>/dev/null)" || resolved=""
+        [[ -n "$resolved" ]] && __llm_secret_name "$resolved" && return 0
+    fi
+    return 1
+}
 
-    local pattern
+# Name-only part of __llm_is_secret_file (no filesystem access).
+__llm_secret_name() {
+    local path="${1%/}" base pattern dir
+    base="${path##*/}"
+    base="${base,,}"
+    for pattern in "${__LLM_SECRET_EXCEPTIONS[@]}"; do
+        # shellcheck disable=SC2053
+        [[ "$base" == $pattern ]] && return 1
+    done
     for pattern in "${__LLM_SECRET_PATTERNS[@]}"; do
         # shellcheck disable=SC2053
-        if [[ "$basename" == $pattern ]]; then
-            return 0
+        [[ "$base" == $pattern ]] && return 0
+    done
+    for dir in "${__LLM_SECRET_DIRS[@]}"; do
+        [[ "/${path,,}/" == *"/$dir/"* ]] && return 0
+    done
+    return 1
+}
+
+# Turn a glob into a case-insensitive one for tools without -iname
+# (grep --exclude): ".env" -> ".[eE][nN][vV]".
+__llm_icase_glob() {
+    local in="$1" out="" c i
+    for ((i = 0; i < ${#in}; i++)); do
+        c="${in:i:1}"
+        if [[ "$c" == [a-zA-Z] ]]; then
+            out+="[${c,,}${c^^}]"
+        else
+            out+="$c"
         fi
     done
+    printf '%s' "$out"
+}
 
-    return 1
+# Exclusion arguments that keep secret files out of content searches.
+# Usage: __llm_secret_excludes rg|grep OUT_ARRAY
+__llm_secret_excludes() {
+    local -n __se_out="$2"
+    local pattern dir
+    __se_out=()
+    for pattern in "${__LLM_SECRET_PATTERNS[@]}"; do
+        if [[ "$1" == rg ]]; then
+            __se_out+=(--iglob "!$pattern")
+        else
+            __se_out+=("--exclude=$(__llm_icase_glob "$pattern")")
+        fi
+    done
+    for dir in "${__LLM_SECRET_DIRS[@]}"; do
+        if [[ "$1" == rg ]]; then
+            __se_out+=(--iglob "!**/$dir/**")
+        elif [[ "$dir" != */* ]]; then
+            __se_out+=("--exclude-dir=$(__llm_icase_glob "$dir")")
+        fi
+    done
 }
 
 # Output JSON error message to stderr with behavioral directives for LLM clients.

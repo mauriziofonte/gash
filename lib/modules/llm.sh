@@ -60,13 +60,25 @@ USAGE
 
 EXAMPLES
   llm_exec "ls -la /var/log"
-  llm_exec "df -h"
+  llm_exec "git log --oneline -5 && git status --short"
+  llm_exec "grep -rn TODO src | head -20"
   llm_exec "systemctl status nginx"
 
 NOTES
-  Validates commands against a dangerous-pattern blacklist.
-  Excluded from bash history. Blocks: rm -rf /, dd, mkfs,
-  fork bombs, and other destructive operations.
+  Runs in a child shell (never the caller's), excluded from history.
+  Read-only allowlist: ls, cat, head, tail, grep, rg, find, tree, wc,
+  sort, jq, diff, du, df, ps, ss, git (status, log, diff, show, ...),
+  systemctl/journalctl/docker (read subcommands) and similar.
+  Commands joined by |, &&, || and ; only: no $ or backtick expansion,
+  no subshells, no redirections except >/dev/null, 2>&1 and >&2.
+  Writing options are refused (find -delete, sort -o, sed -i,
+  git branch -D, ...); sed and awk run sandboxed (GNU sed, gawk).
+  Secret files (.env, keys, credentials) are refused, also via globs.
+
+SETTINGS (~/.gash_env only)
+  GASH_LLM_EXEC_ALLOW="make npm"   extra commands, any arguments
+  GASH_LLM_EXEC=unrestricted       skip the allowlist
+  GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)
 HELP
 
     __gash_register_help "llm_tree" \

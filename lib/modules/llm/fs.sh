@@ -295,16 +295,23 @@ __llm_find_impl() {
     # Zero matches (or SIGPIPE from head) is a valid outcome, not an error:
     # never let pipefail+errexit kill a headless caller.
     if [[ -n "$contains_regex" ]]; then
-        # Search by content
+        # Search by content; secret files are never opened.
+        if __llm_is_secret_file "$safe_path"; then
+            __llm_error "secret_file_blocked" "$safe_path" "FATAL" "false" "This file contains secrets and cannot be searched"
+            return 1
+        fi
+        local -a secret_ex=()
         if __llm_has_rg; then
+            __llm_secret_excludes rg secret_ex
             rg -l --no-heading --color=never \
-                --glob '!node_modules' --glob '!vendor' --glob '!.git' \
-                "$contains_regex" "$safe_path" 2>/dev/null | head -n "$limit" || true
+                --glob '!node_modules' --glob '!vendor' --glob '!.git' "${secret_ex[@]}" \
+                -e "$contains_regex" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         else
+            __llm_secret_excludes grep secret_ex
             grep -rl --include='*.php' --include='*.js' --include='*.ts' \
                 --include='*.py' --include='*.go' --include='*.java' \
-                --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git \
-                "$contains_regex" "$safe_path" 2>/dev/null | head -n "$limit" || true
+                --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git "${secret_ex[@]}" \
+                -e "$contains_regex" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         fi
     else
         # Search by filename pattern. Paths with embedded newlines would be
@@ -389,10 +396,17 @@ __llm_grep_impl() {
     # Validate path
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
+    if __llm_is_secret_file "$safe_path"; then
+        __llm_error "secret_file_blocked" "$safe_path" "FATAL" "false" "This file contains secrets and cannot be searched"
+        return 1
+    fi
 
     if __llm_has_rg; then
         local rg_args=(-n --no-heading --color=never)
         rg_args+=(--glob '!node_modules' --glob '!vendor' --glob '!.git')
+        local -a secret_ex=()
+        __llm_secret_excludes rg secret_ex
+        rg_args+=("${secret_ex[@]}")
 
         if [[ -n "$extensions" ]]; then
             IFS=',' read -ra exts <<<"$extensions"
@@ -405,11 +419,14 @@ __llm_grep_impl() {
 
         # Zero matches (or SIGPIPE from head) is a valid outcome, not an
         # error: never let pipefail+errexit kill a headless caller.
-        rg "${rg_args[@]}" "$pattern" "$safe_path" 2>/dev/null | head -n "$limit" || true
+        rg "${rg_args[@]}" -e "$pattern" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         return 0
     else
         local grep_args=(-rn --color=never)
         grep_args+=(--exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git)
+        local -a secret_ex=()
+        __llm_secret_excludes grep secret_ex
+        grep_args+=("${secret_ex[@]}")
 
         if [[ -n "$extensions" ]]; then
             IFS=',' read -ra exts <<<"$extensions"
@@ -420,7 +437,7 @@ __llm_grep_impl() {
 
         [[ $context -gt 0 ]] && grep_args+=(-C "$context")
 
-        grep "${grep_args[@]}" "$pattern" "$safe_path" 2>/dev/null | head -n "$limit" || true
+        grep "${grep_args[@]}" -e "$pattern" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         return 0
     fi
 }
