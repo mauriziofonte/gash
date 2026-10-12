@@ -33,58 +33,85 @@
 # Color Definitions
 # -----------------------------------------------------------------------------
 
+# Colors hold real escape bytes, so they work the same with printf '%s',
+# printf '%b', echo -e and awk -v.
+
 # Reset
-__GASH_COLOR_OFF='\033[0m'
+__GASH_COLOR_OFF=$'\e[0m'
 
 # Regular Colors
-__GASH_RED='\033[0;31m'
-__GASH_GREEN='\033[0;32m'
-__GASH_YELLOW='\033[0;33m'
-__GASH_BLUE='\033[0;34m'
-__GASH_CYAN='\033[0;36m'
-__GASH_WHITE='\033[0;37m'
+__GASH_RED=$'\e[0;31m'
+__GASH_GREEN=$'\e[0;32m'
+__GASH_YELLOW=$'\e[0;33m'
+__GASH_BLUE=$'\e[0;34m'
+__GASH_CYAN=$'\e[0;36m'
+__GASH_WHITE=$'\e[0;37m'
 
 # Bold Colors
-__GASH_BOLD_RED='\033[1;31m'
-__GASH_BOLD_GREEN='\033[1;32m'
-__GASH_BOLD_YELLOW='\033[1;33m'
-__GASH_BOLD_BLUE='\033[1;34m'
-__GASH_BOLD_CYAN='\033[1;36m'
-__GASH_BOLD_WHITE='\033[1;37m'
+__GASH_BOLD_RED=$'\e[1;31m'
+__GASH_BOLD_GREEN=$'\e[1;32m'
+__GASH_BOLD_YELLOW=$'\e[1;33m'
+__GASH_BOLD_BLUE=$'\e[1;34m'
+__GASH_BOLD_CYAN=$'\e[1;36m'
+__GASH_BOLD_WHITE=$'\e[1;37m'
+
+# Text attributes
+__GASH_BOLD=$'\e[1m'
+__GASH_DIM=$'\e[2m'
+__GASH_UNDERLINE=$'\e[4m'
 
 # -----------------------------------------------------------------------------
 # Extended Color Palette (256-color support)
 # -----------------------------------------------------------------------------
 
 # Semantic colors for consistent theming
-__GASH_COLOR_PRIMARY='\033[38;5;39m'    # Bright blue
-__GASH_COLOR_SECONDARY='\033[38;5;243m' # Gray
-__GASH_COLOR_ACCENT='\033[38;5;214m'    # Orange
-__GASH_COLOR_MUTED='\033[38;5;245m'     # Dim gray
+__GASH_COLOR_PRIMARY=$'\e[38;5;39m'    # Bright blue
+__GASH_COLOR_SECONDARY=$'\e[38;5;243m' # Gray
+__GASH_COLOR_ACCENT=$'\e[38;5;214m'    # Orange
+__GASH_COLOR_MUTED=$'\e[38;5;245m'     # Dim gray
 
 # Status colors (256-color variants)
-__GASH_COLOR_SUCCESS='\033[38;5;82m'  # Bright green
-__GASH_COLOR_WARNING='\033[38;5;220m' # Yellow/gold
-__GASH_COLOR_ERROR='\033[38;5;196m'   # Bright red
-__GASH_COLOR_INFO='\033[38;5;75m'     # Sky blue
+__GASH_COLOR_SUCCESS=$'\e[38;5;82m'  # Bright green
+__GASH_COLOR_WARNING=$'\e[38;5;220m' # Yellow/gold
+__GASH_COLOR_ERROR=$'\e[38;5;196m'   # Bright red
+__GASH_COLOR_INFO=$'\e[38;5;75m'     # Sky blue
 
-# Unicode symbols with ASCII fallback
-__GASH_SYMBOL_OK='OK'
-__GASH_SYMBOL_ERR='ERR'
-__GASH_SYMBOL_WARN='WARN'
-__GASH_SYMBOL_INFO='INFO'
-__GASH_SYMBOL_ARROW='->'
-__GASH_SYMBOL_BULLET='-'
+# -----------------------------------------------------------------------------
+# Glyphs (Unicode when the locale is UTF-8, ASCII otherwise)
+# -----------------------------------------------------------------------------
 
-# Detect unicode support and upgrade symbols
-if [[ "${LANG-}" == *UTF-8* ]] || [[ "${LC_ALL-}" == *UTF-8* ]]; then
-    __GASH_SYMBOL_OK='[OK]'
-    __GASH_SYMBOL_ERR='[X]'
-    __GASH_SYMBOL_WARN='[!]'
-    __GASH_SYMBOL_INFO='[i]'
-    __GASH_SYMBOL_ARROW='->'
-    __GASH_SYMBOL_BULLET='*'
+__gash_locale_utf8() {
+    local loc="${LC_ALL:-${LC_CTYPE:-${LANG-}}}"
+    [[ "$loc" == *[Uu][Tt][Ff]-8* || "$loc" == *[Uu][Tt][Ff]8* ]]
+}
+
+if __gash_locale_utf8; then
+    __GASH_GLYPH_OK='✓'
+    __GASH_GLYPH_ERR='✗'
+    __GASH_GLYPH_WARN='!'
+    __GASH_GLYPH_INFO='•'
+    __GASH_GLYPH_ARROW='→'
+    __GASH_GLYPH_BULLET='•'
+    __GASH_GLYPH_HLINE='─'
+    __GASH_SPINNER_FRAMES='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+else
+    __GASH_GLYPH_OK='+'
+    __GASH_GLYPH_ERR='x'
+    __GASH_GLYPH_WARN='!'
+    __GASH_GLYPH_INFO='*'
+    __GASH_GLYPH_ARROW='->'
+    __GASH_GLYPH_BULLET='*'
+    __GASH_GLYPH_HLINE='-'
+    __GASH_SPINNER_FRAMES='|/-\'
 fi
+
+# Older names, kept for modules and user scripts that use them.
+__GASH_SYMBOL_OK="$__GASH_GLYPH_OK"
+__GASH_SYMBOL_ERR="$__GASH_GLYPH_ERR"
+__GASH_SYMBOL_WARN="$__GASH_GLYPH_WARN"
+__GASH_SYMBOL_INFO="$__GASH_GLYPH_INFO"
+__GASH_SYMBOL_ARROW="$__GASH_GLYPH_ARROW"
+__GASH_SYMBOL_BULLET="$__GASH_GLYPH_BULLET"
 
 # -----------------------------------------------------------------------------
 # Color Gating (Load-time + Runtime)
@@ -118,6 +145,9 @@ if ! __gash_color_env_ok; then
     __GASH_BOLD_BLUE=''
     __GASH_BOLD_CYAN=''
     __GASH_BOLD_WHITE=''
+    __GASH_BOLD=''
+    __GASH_DIM=''
+    __GASH_UNDERLINE=''
     __GASH_COLOR_PRIMARY=''
     __GASH_COLOR_SECONDARY=''
     __GASH_COLOR_ACCENT=''
@@ -169,6 +199,7 @@ local __GASH_RED='' __GASH_GREEN='' __GASH_YELLOW=''
 local __GASH_BLUE='' __GASH_CYAN='' __GASH_WHITE=''
 local __GASH_BOLD_RED='' __GASH_BOLD_GREEN='' __GASH_BOLD_YELLOW=''
 local __GASH_BOLD_BLUE='' __GASH_BOLD_CYAN='' __GASH_BOLD_WHITE=''
+local __GASH_BOLD='' __GASH_DIM='' __GASH_UNDERLINE=''
 local __GASH_COLOR_PRIMARY='' __GASH_COLOR_SECONDARY=''
 local __GASH_COLOR_ACCENT='' __GASH_COLOR_MUTED=''
 local __GASH_COLOR_SUCCESS='' __GASH_COLOR_WARNING=''
@@ -179,67 +210,61 @@ EOS
 # -----------------------------------------------------------------------------
 # Core Output Functions
 # -----------------------------------------------------------------------------
+#
+# Messages are printed with printf '%s', never echo -e: a path such as
+# C:\new or a message containing "\c" is shown exactly as given.
+#
+# Plain output (pipes, NO_COLOR, headless) keeps the stable word prefixes
+# "Info:", "OK:", "Warning:", "Error:" that scripts may grep for. A color
+# terminal gets a colored glyph instead.
+
+# Usage: __gash_emit COLOR GLYPH PLAIN_PREFIX MESSAGE   (to stderr)
+# Color terminal: "<COLOR>GLYPH<OFF> MESSAGE". Otherwise: "PLAIN_PREFIX MESSAGE".
+__gash_emit() {
+    if __gash_use_color; then
+        printf '%s%s%s %s\n' "${1-}" "${2-}" "$__GASH_COLOR_OFF" "${4-}" >&2
+    else
+        printf '%s %s\n' "${3-}" "${4-}" >&2
+    fi
+}
 
 # Print an informational message.
 # Usage: __gash_info "message"
 __gash_info() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_CYAN}Info:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
-    else
-        printf 'Info: %s\n' "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_INFO" "$__GASH_GLYPH_INFO" "Info:" "${1-}"
 }
 
 # Print an error message to stderr.
 # Usage: __gash_error "message"
 __gash_error() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_BOLD_RED}Error:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
-    else
-        printf 'Error: %s\n' "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_ERROR" "$__GASH_GLYPH_ERR Error:" "Error:" "${1-}"
 }
 
 # Print a success message.
 # Usage: __gash_success "message"
 __gash_success() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_BOLD_GREEN}OK:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
-    else
-        printf 'OK: %s\n' "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_SUCCESS" "$__GASH_GLYPH_OK" "OK:" "${1-}"
 }
 
 # Print a warning message.
 # Usage: __gash_warning "message"
 __gash_warning() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
-    else
-        printf 'Warning: %s\n' "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_WARNING" "$__GASH_GLYPH_WARN Warning:" "Warning:" "${1-}"
 }
 
 # Print an SSH-related message with optional color variant.
 # Usage: __gash_ssh "message" [color]
 # Colors: info (default), success, warning, error
 __gash_ssh() {
-    local message="${1-}"
-    local color="${2:-info}"
-
+    local message="${1-}" color="${2:-info}"
     if __gash_use_color; then
-        local msg_color
+        local msg_color=""
         case "$color" in
-            success) msg_color="${__GASH_BOLD_GREEN}" ;;
-            warning) msg_color="${__GASH_BOLD_YELLOW}" ;;
-            error) msg_color="${__GASH_BOLD_RED}" ;;
-            *) msg_color="${__GASH_BOLD_WHITE}" ;;
+            success) msg_color="$__GASH_COLOR_SUCCESS" ;;
+            warning) msg_color="$__GASH_COLOR_WARNING" ;;
+            error) msg_color="$__GASH_COLOR_ERROR" ;;
         esac
-        echo -e "${__GASH_CYAN}SSH:${__GASH_COLOR_OFF} ${msg_color}${message}${__GASH_COLOR_OFF}" >&2
+        printf '%sSSH:%s %s%s%s\n' "$__GASH_CYAN" "$__GASH_COLOR_OFF" "$msg_color" "$message" "$__GASH_COLOR_OFF" >&2
     else
         printf 'SSH: %s\n' "$message" >&2
     fi
@@ -248,42 +273,34 @@ __gash_ssh() {
 # Print a step indicator for multi-step operations.
 # Usage: __gash_step current total "message"
 __gash_step() {
-    local current="${1-}"
-    local total="${2-}"
-    local message="${3-}"
     if __gash_use_color; then
-        echo -e "${__GASH_CYAN}[${current}/${total}]${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${message}${__GASH_COLOR_OFF}" >&2
+        printf '%s[%s/%s]%s %s\n' "$__GASH_COLOR_PRIMARY" "${1-}" "${2-}" "$__GASH_COLOR_OFF" "${3-}" >&2
     else
-        printf '[%s/%s] %s\n' "$current" "$total" "$message" >&2
+        printf '[%s/%s] %s\n' "${1-}" "${2-}" "${3-}" >&2
     fi
 }
 
 # Print a debug message (only if GASH_DEBUG=1).
 # Usage: __gash_debug "message"
 __gash_debug() {
-    if [[ "${GASH_DEBUG:-0}" == "1" ]]; then
-        local message="${1-}"
-        if __gash_use_color; then
-            echo -e "${__GASH_BLUE}Debug:${__GASH_COLOR_OFF} ${message}" >&2
-        else
-            printf 'Debug: %s\n' "$message" >&2
-        fi
+    [[ "${GASH_DEBUG:-0}" == "1" ]] || return 0
+    if __gash_use_color; then
+        printf '%sDebug:%s %s\n' "$__GASH_COLOR_MUTED" "$__GASH_COLOR_OFF" "${1-}" >&2
+    else
+        printf 'Debug: %s\n' "${1-}" >&2
     fi
 }
 
-# Print raw colored text without prefix.
+# Print colored text without prefix (stdout).
 # Usage: __gash_print color "message"
-# Colors: red, green, yellow, blue, cyan, white, bold_* variants
+# Colors: red, green, yellow, blue, cyan, white, bold_* variants, muted, dim
 __gash_print() {
-    local color="${1-}"
-    local message="${2-}"
-
+    local color="${1-}" message="${2-}"
     if ! __gash_use_color; then
         printf '%s\n' "$message"
         return 0
     fi
-
-    local color_code
+    local color_code=""
     case "$color" in
         red) color_code="${__GASH_RED}" ;;
         green) color_code="${__GASH_GREEN}" ;;
@@ -297,108 +314,83 @@ __gash_print() {
         bold_blue) color_code="${__GASH_BOLD_BLUE}" ;;
         bold_cyan) color_code="${__GASH_BOLD_CYAN}" ;;
         bold_white) color_code="${__GASH_BOLD_WHITE}" ;;
-        *) color_code="${__GASH_COLOR_OFF}" ;;
+        muted) color_code="${__GASH_COLOR_MUTED}" ;;
+        dim) color_code="${__GASH_DIM}" ;;
     esac
-
-    echo -e "${color_code}${message}${__GASH_COLOR_OFF}"
+    printf '%s%s%s\n' "$color_code" "$message" "$__GASH_COLOR_OFF"
 }
 
 # -----------------------------------------------------------------------------
-# Enhanced Output Functions
+# Glyph-only status lines (no word prefix, also in plain mode)
 # -----------------------------------------------------------------------------
 
-# Enhanced success with symbol
 # Usage: __gash_success_v2 "message"
 __gash_success_v2() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_COLOR_SUCCESS}${__GASH_SYMBOL_OK}${__GASH_COLOR_OFF} ${message}" >&2
-    else
-        printf '%s %s\n' "$__GASH_SYMBOL_OK" "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_SUCCESS" "$__GASH_GLYPH_OK" "$__GASH_GLYPH_OK" "${1-}"
 }
 
-# Enhanced warning with symbol
 # Usage: __gash_warning_v2 "message"
 __gash_warning_v2() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_COLOR_WARNING}${__GASH_SYMBOL_WARN}${__GASH_COLOR_OFF} ${message}" >&2
-    else
-        printf '%s %s\n' "$__GASH_SYMBOL_WARN" "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_WARNING" "$__GASH_GLYPH_WARN" "$__GASH_GLYPH_WARN" "${1-}"
 }
 
-# Enhanced error with symbol
 # Usage: __gash_error_v2 "message"
 __gash_error_v2() {
-    local message="${1-}"
-    if __gash_use_color; then
-        echo -e "${__GASH_COLOR_ERROR}${__GASH_SYMBOL_ERR}${__GASH_COLOR_OFF} ${message}" >&2
-    else
-        printf '%s %s\n' "$__GASH_SYMBOL_ERR" "$message" >&2
-    fi
+    __gash_emit "$__GASH_COLOR_ERROR" "$__GASH_GLYPH_ERR" "$__GASH_GLYPH_ERR" "${1-}"
 }
 
 # -----------------------------------------------------------------------------
 # Spinner for Long Operations
 # -----------------------------------------------------------------------------
+#
+# Drawn on stderr, only when stderr is a terminal and not in headless mode,
+# so captured stdout never contains spinner frames. Job control is left as
+# the caller had it.
 
-# Global spinner state
 declare -g __GASH_SPINNER_PID=""
 declare -g __GASH_SPINNER_MSG=""
 declare -g __GASH_SPINNER_PREV_TRAP=""
 declare -g __GASH_SPINNER_TRAP_SET=""
 
-# Start a spinner for long-running operations
 # Usage: __gash_spinner_start "Loading..."
 __gash_spinner_start() {
     local message="${1-Working...}"
     __GASH_SPINNER_MSG="$message"
 
-    # Don't start spinner if not in a terminal or in headless mode
-    [[ ! -t 1 ]] && return 0
-    [[ "${GASH_HEADLESS-}" == "1" ]] && return 0
+    [[ -t 2 && "${GASH_HEADLESS-}" != "1" ]] || return 0
+    [[ -n "$__GASH_SPINNER_PID" ]] && __gash_spinner_stop none
 
-    # Spinner characters (ASCII compatible)
-    local frames='|/-\'
-
-    # Honor the runtime color gate (NO_COLOR exported after source, etc.)
-    local frame_on="" frame_off=""
-    if __gash_use_color; then
-        frame_on="${__GASH_COLOR_PRIMARY}"
-        frame_off="${__GASH_COLOR_OFF}"
+    local on="" off="" frames="$__GASH_SPINNER_FRAMES"
+    if __gash_color_env_ok; then
+        on="$__GASH_COLOR_PRIMARY" off="$__GASH_COLOR_OFF"
     fi
 
-    # Start spinner in background, suppressing job notifications
-    # Method: disable job control, start process, disown it, re-enable
-    {
-        set +m # Disable job control to suppress "[1] PID" notification
-        (
-            local i=0
-            local len=${#frames}
-            while true; do
-                printf "\r${frame_on}%s${frame_off} %s " "${frames:i:1}" "$message"
-                i=$(((i + 1) % len))
-                sleep 0.1
-            done
-        ) &
-        __GASH_SPINNER_PID=$!
-        disown "$__GASH_SPINNER_PID" 2>/dev/null # Remove from job table
-        set -m 2>/dev/null                       # Re-enable job control (may fail in non-interactive)
-    } 2>/dev/null
+    # Without monitor mode bash prints no "[1] PID" line for the background
+    # job; restore whatever the caller had right after.
+    local had_monitor=0
+    [[ $- == *m* ]] && had_monitor=1
+    set +m
+    (
+        n=${#frames} i=0
+        printf '\e[?25l' >&2
+        while :; do
+            printf '\r%s%s%s %s' "$on" "${frames:i:1}" "$off" "$message" >&2
+            i=$(((i + 1) % n))
+            sleep 0.1
+        done
+    ) &
+    __GASH_SPINNER_PID=$!
+    disown "$__GASH_SPINNER_PID" 2>/dev/null || true
+    ((had_monitor)) && set -m
 
-    # Ensure cleanup on script exit, preserving any pre-existing EXIT trap
-    # so a caller's cleanup (temp files, locks) is restored on stop.
+    # Stop the spinner if the script exits, keeping the caller's EXIT trap.
     __GASH_SPINNER_PREV_TRAP="$(trap -p EXIT)"
     __GASH_SPINNER_TRAP_SET="1"
     trap '__gash_spinner_stop' EXIT
-
     return 0
 }
 
-# Stop the spinner
-# Usage: __gash_spinner_stop [success|error|warning]
+# Usage: __gash_spinner_stop [success|error|warning|none]
 __gash_spinner_stop() {
     local status="${1-success}"
 
@@ -406,11 +398,7 @@ __gash_spinner_stop() {
         kill "$__GASH_SPINNER_PID" 2>/dev/null || true
         wait "$__GASH_SPINNER_PID" 2>/dev/null || true
         __GASH_SPINNER_PID=""
-
-        # Clear the spinner line
-        printf "\r\033[K"
-
-        # Print final status
+        printf '\r\e[K\e[?25h' >&2
         case "$status" in
             success) __gash_success_v2 "${__GASH_SPINNER_MSG}" ;;
             error) __gash_error_v2 "${__GASH_SPINNER_MSG}" ;;
@@ -428,54 +416,36 @@ __gash_spinner_stop() {
         __GASH_SPINNER_PREV_TRAP=""
         __GASH_SPINNER_TRAP_SET=""
     fi
-
     return 0
 }
 
 # -----------------------------------------------------------------------------
-# Progress Bar for Multi-Step Operations
+# Progress Bar
 # -----------------------------------------------------------------------------
 
-# Display a progress bar
-# Usage: __gash_progress current total "message"
+# Usage: __gash_progress current total "message"   (stderr, terminals only)
 __gash_progress() {
-    local current="${1-0}"
-    local total="${2-100}"
-    local message="${3-}"
+    local current="${1-0}" total="${2-100}" message="${3-}"
+    [[ -t 2 && "${GASH_HEADLESS-}" != "1" ]] || return 0
+    ((total > 0)) || total=1
+    ((current > total)) && current=$total
 
-    # Don't show progress bar if not in a terminal or in headless mode
-    [[ ! -t 1 ]] && return 0
-    [[ "${GASH_HEADLESS-}" == "1" ]] && return 0
-
-    # Avoid division by zero
-    [[ "$total" -eq 0 ]] && total=1
-
-    # Calculate percentage and bar width
-    local percent=$((current * 100 / total))
-    local width=30
-    local filled=$((percent * width / 100))
-    local empty=$((width - filled))
-
-    # Build the bar
-    local bar=""
-    local i
-    for ((i = 0; i < filled; i++)); do bar+="="; done
-    [[ $filled -lt $width ]] && bar+=">"
-    for ((i = 0; i < empty - 1 && i >= 0; i++)); do bar+=" "; done
-
-    # Honor the runtime color gate
-    local bar_on="" bar_off=""
-    if __gash_use_color; then
-        bar_on="${__GASH_COLOR_PRIMARY}"
-        bar_off="${__GASH_COLOR_OFF}"
+    local width=30 percent filled bar="" i full="#" empty="."
+    if __gash_locale_utf8; then
+        full="█" empty="░"
     fi
+    percent=$((current * 100 / total))
+    filled=$((percent * width / 100))
+    for ((i = 0; i < width; i++)); do
+        if ((i < filled)); then bar+="$full"; else bar+="$empty"; fi
+    done
 
-    # Print progress
-    printf "\r${bar_on}[%-${width}s]${bar_off} %3d%% %s" "$bar" "$percent" "$message"
-
-    # Print newline when complete
-    [[ $current -ge $total ]] && echo
-
+    local on="" off=""
+    if __gash_color_env_ok; then
+        on="$__GASH_COLOR_PRIMARY" off="$__GASH_COLOR_OFF"
+    fi
+    printf '\r%s%s%s %3d%% %s\e[K' "$on" "$bar" "$off" "$percent" "$message" >&2
+    ((current >= total)) && printf '\n' >&2
     return 0
 }
 
@@ -483,24 +453,112 @@ __gash_progress() {
 # Section Headers
 # -----------------------------------------------------------------------------
 
-# Print a section header
-# Usage: __gash_section "Section Title"
+# Usage: __gash_section "Section Title"   (stdout)
 __gash_section() {
-    local title="${1-}"
-    local width=60
+    local title="${1-}" width="${COLUMNS:-80}" line="" i
+    ((width > 60)) && width=60
+    for ((i = 0; i < width; i++)); do line+="$__GASH_GLYPH_HLINE"; done
 
-    # Build separator line
-    local line=""
-    local i
-    for ((i = 0; i < width; i++)); do line+="-"; done
-
-    echo
+    printf '\n'
     if __gash_use_color; then
-        echo -e "${__GASH_COLOR_PRIMARY}${line}${__GASH_COLOR_OFF}"
-        echo -e "${__GASH_COLOR_PRIMARY}--${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
+        printf '%s%s%s\n' "$__GASH_COLOR_PRIMARY" "$line" "$__GASH_COLOR_OFF"
+        printf '%s%s%s\n' "$__GASH_BOLD" "$title" "$__GASH_COLOR_OFF"
     else
-        printf '%s\n' "$line"
-        printf -- '-- %s\n' "$title"
+        printf '%s\n%s\n' "$line" "$title"
     fi
-    echo
+    printf '\n'
+}
+
+# -----------------------------------------------------------------------------
+# Tables
+# -----------------------------------------------------------------------------
+
+# Split LINE on every tab into the array named ARRAY, keeping empty fields
+# (read -a would merge consecutive tabs).
+# Usage: __gash_split_tabs ARRAY LINE
+__gash_split_tabs() {
+    local -n __gst_out="$1"
+    local rest="${2-}"
+    __gst_out=()
+    while [[ "$rest" == *$'\t'* ]]; do
+        __gst_out+=("${rest%%$'\t'*}")
+        rest="${rest#*$'\t'}"
+    done
+    __gst_out+=("$rest")
+}
+
+# Render tab-separated rows from stdin as an aligned table on stdout. The
+# first row is the header (bold and underlined on a color terminal, followed
+# by a rule otherwise). Cells must be plain text: width is counted in
+# characters, so color codes inside cells would break the alignment.
+#
+# Usage: printf 'NAME\tSIZE\na\t1\n' | __gash_table [--right 2,3] [--indent N] [--no-header]
+__gash_table() {
+    local right="" indent=0 header=1
+    while (($# > 0)); do
+        case "$1" in
+            --right)
+                right=",${2-},"
+                shift 2 || break
+                ;;
+            --indent)
+                indent="${2-0}"
+                shift 2 || break
+                ;;
+            --no-header)
+                header=0
+                shift
+                ;;
+            *) shift ;;
+        esac
+    done
+    [[ "$indent" =~ ^[0-9]+$ ]] || indent=0
+
+    local -a rows=() widths=() cells=()
+    local line c ncols=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        rows+=("$line")
+        __gash_split_tabs cells "$line"
+        for c in "${!cells[@]}"; do
+            ((${#cells[c]} > ${widths[c]:-0})) && widths[c]=${#cells[c]}
+        done
+        ((${#cells[@]} > ncols)) && ncols=${#cells[@]}
+    done
+    ((${#rows[@]} > 0)) || return 0
+
+    local color=0
+    __gash_use_color && color=1
+    local pad r out cell
+    printf -v pad '%*s' "$indent" ''
+    for r in "${!rows[@]}"; do
+        __gash_split_tabs cells "${rows[r]}"
+        out=""
+        for ((c = 0; c < ncols; c++)); do
+            cell="${cells[c]-}"
+            if ((c == ncols - 1)) && [[ "$right" != *",$((c + 1)),"* ]]; then
+                out+="$cell"
+            elif [[ "$right" == *",$((c + 1)),"* ]]; then
+                printf -v cell '%*s' "${widths[c]}" "$cell"
+                out+="$cell"
+            else
+                printf -v cell '%-*s' "${widths[c]}" "$cell"
+                out+="$cell"
+            fi
+            ((c < ncols - 1)) && out+="  "
+        done
+        if ((r == 0 && header)); then
+            if ((color)); then
+                printf '%s%s%s%s%s\n' "$pad" "$__GASH_BOLD" "$__GASH_UNDERLINE" "$out" "$__GASH_COLOR_OFF"
+            else
+                printf '%s%s\n' "$pad" "$out"
+                local rule="" total=0 i
+                for c in "${!widths[@]}"; do total=$((total + widths[c])); done
+                total=$((total + 2 * (ncols - 1)))
+                for ((i = 0; i < total; i++)); do rule+="$__GASH_GLYPH_HLINE"; done
+                printf '%s%s\n' "$pad" "$rule"
+            fi
+        else
+            printf '%s%s\n' "$pad" "$out"
+        fi
+    done
 }

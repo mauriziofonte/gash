@@ -153,19 +153,11 @@ fi
 
 __gash_source "$GASH_DIR/lib/shell/banner.sh"
 
-# Record what Gash added, so `gash_unload` can remove exactly that.
-if [[ -z "${__GASH_ADDED_FUNCS-}" ]]; then
-    __GASH_ADDED_FUNCS=""
-    while IFS= read -r __gash_name; do
-        [[ -n "$__gash_name" && "$__GASH_PRE_FUNCS" != *$'\n'"$__gash_name"$'\n'* ]] &&
-            __GASH_ADDED_FUNCS+="$__gash_name"$'\n'
-    done < <(compgen -A function)
-    __GASH_ADDED_ALIASES=""
-    while IFS= read -r __gash_name; do
-        [[ -n "$__gash_name" && "$__GASH_PRE_ALIASES" != *$'\n'"$__gash_name"$'\n'* ]] &&
-            __GASH_ADDED_ALIASES+="$__gash_name"$'\n'
-    done < <(compgen -a)
-    unset __gash_name
+# Record what exists after loading; `gash_unload` removes what is here but
+# was not in the snapshot taken before (the diff is computed only then).
+if [[ -z "${__GASH_POST_FUNCS-}" ]]; then
+    __GASH_POST_FUNCS=$'\n'"$(compgen -A function || true)"$'\n'
+    __GASH_POST_ALIASES=$'\n'"$(compgen -a || true)"$'\n'
 fi
 
 # User customizations, last so they can override anything above.

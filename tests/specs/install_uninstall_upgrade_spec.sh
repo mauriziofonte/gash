@@ -328,3 +328,105 @@ it "install.sh uses new delimited format" bash -c '
   grep -q ">>> GASH START >>>" "$profile"
   grep -q "<<< GASH END <<<" "$profile"
 '
+
+it "install.sh refuses to update a checkout with local modifications" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  : >"$tmp_home/.bashrc"
+  run() { HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_INSTALL_GIT_REPO="$ROOT" bash "$ROOT/install.sh" --assume-yes --quiet; }
+
+  run >/dev/null 2>&1
+  echo "# local edit" >>"$tmp_home/.gash/gash.sh"
+  rc=0; out="$(run 2>&1)" || rc=$?
+  [[ $rc -ne 0 ]]
+  [[ "$out" == *"local modifications"* ]]
+  grep -q "# local edit" "$tmp_home/.gash/gash.sh"
+'
+
+it "install.sh without a terminal and without --assume-yes fails instead of silently aborting" bash -c '
+  set -euo pipefail
+  command -v setsid >/dev/null 2>&1 || exit 77
+  ROOT="${GASH_TEST_ROOT}"
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  : >"$tmp_home/.bashrc"
+
+  rc=0
+  out="$(HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_INSTALL_GIT_REPO="$ROOT" setsid -w bash "$ROOT/install.sh" </dev/null 2>&1)" || rc=$?
+  [[ $rc -eq 1 ]]
+  [[ "$out" == *"--assume-yes"* ]]
+  [[ ! -e "$tmp_home/.gash" ]]
+  [[ ! -s "$tmp_home/.bashrc" ]]
+'
+
+it "install.sh rejects unknown options" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  rc=0; out="$(bash "$ROOT/install.sh" --bogus 2>&1)" || rc=$?
+  [[ $rc -eq 2 ]]
+  [[ "$out" == *"Unknown option: --bogus"* ]]
+'
+
+it "install.sh into a custom GASH_DIR writes that location into ~/.gashrc" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  : >"$tmp_home/.bashrc"
+  custom="$tmp_home/opt dir/gash"
+
+  HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_DIR="$custom" GASH_INSTALL_GIT_REPO="$ROOT" \
+    bash "$ROOT/install.sh" --assume-yes --quiet >/dev/null 2>&1
+  [[ -f "$custom/gash.sh" ]]
+
+  # A new shell without GASH_DIR in its environment finds the custom location.
+  out="$(env -u GASH_DIR HOME="$tmp_home" GASH_HEADLESS=1 bash -c "source \"\$HOME/.gashrc\"; printf %s \"\$GASH_DIR\"")"
+  [[ "$out" == "$custom" ]]
+'
+
+it "install.sh installs a specific ref with GASH_INSTALL_REF" bash -c '
+  set -euo pipefail
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  repo="$tmp/repo"
+  mkdir -p "$repo"
+  # This working tree (uncommitted changes included), in a fresh repository.
+  tar -C "$GASH_TEST_ROOT" --exclude=./.git -cf - . | tar -C "$repo" -xf -
+  git init -q "$repo"
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m base
+  git -C "$repo" tag v1.0.0
+  echo "marker" >"$repo/MARKER"
+  git -C "$repo" add MARKER
+  git -C "$repo" commit -q -m next
+  git -C "$repo" branch feature
+
+  mkdir -p "$tmp/home"; : >"$tmp/home/.bashrc"
+  HOME="$tmp/home" PROFILE="$tmp/home/.bashrc" GASH_INSTALL_GIT_REPO="$repo" \
+    bash "$repo/install.sh" --assume-yes --quiet >/dev/null 2>&1
+  [[ ! -e "$tmp/home/.gash/MARKER" ]]   # latest release tag by default
+
+  /bin/rm -rf "$tmp/home/.gash"
+  HOME="$tmp/home" PROFILE="$tmp/home/.bashrc" GASH_INSTALL_GIT_REPO="$repo" GASH_INSTALL_REF=feature \
+    bash "$repo/install.sh" --assume-yes --quiet >/dev/null 2>&1
+  [[ -e "$tmp/home/.gash/MARKER" ]]
+'
+
+it "gash_upgrade picks the highest version, not the newest tag" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+
+  work="$tmp/work"; origin="$tmp/origin.git"
+  git init -q "$work"; cd "$work"
+  for v in v1.9.0 v1.10.0 v1.9.1 v2.0.0-rc1; do
+    echo "$v" >f; git add f; git commit -q -m "$v"; git tag -a "$v" -m "$v"
+  done
+  git init -q --bare "$origin"
+  git remote add origin "$origin"
+  git push -q origin --all; git push -q origin --tags
+
+  git clone -q "$origin" "$tmp/home/.gash" 2>/dev/null
+  git -C "$tmp/home/.gash" -c advice.detachedHead=false checkout -q v1.9.0
+  HOME="$tmp/home" GASH_DIR="$tmp/home/.gash" gash_upgrade >/dev/null 2>&1
+  [[ "$(git -C "$tmp/home/.gash" describe --tags --exact-match HEAD)" == "v1.10.0" ]]
+'

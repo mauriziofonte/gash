@@ -74,8 +74,10 @@ EOF
 
   export PATH="$tmp/bin:$ROOT/tests/mocks/bin:/usr/bin:/bin"
 
-  # Simulate the user having defined composer as an alias.
+  # Simulate the user having defined composer as an alias; the override
+  # of `composer` itself only happens with GASH_REPLACE_TOOLS=1.
   alias composer="echo should-not-be-used"
+  export GASH_REPLACE_TOOLS=1
 
   # Keep LS_COLORS empty so aliases.sh initializes it.
   export LS_COLORS=""
@@ -100,4 +102,6 @@ EOF
     body2="${body2#${q}}"
     body2="${body2%${q}}"
   [[ "$body2" == *"$tmp/bin/composer"* ]]
+
+  [[ "$(alias composer84)" == *"$tmp/bin/php8.4"*"$tmp/bin/composer"* ]]
 '

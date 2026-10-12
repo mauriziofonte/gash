@@ -5,6 +5,16 @@
 #
 # All functions are errexit-safe and can be used with `set -e`.
 
+# awk used where the implementation matters (hgrep: strftime, IGNORECASE):
+# GASH_AWK when set, else gawk when installed, else the system awk.
+if [[ -n "${GASH_AWK-}" ]]; then
+    __GASH_AWK="$GASH_AWK"
+elif type -P gawk >/dev/null 2>&1; then
+    __GASH_AWK="gawk"
+else
+    __GASH_AWK="awk"
+fi
+
 # -----------------------------------------------------------------------------
 # Help System
 # -----------------------------------------------------------------------------
@@ -24,9 +34,9 @@ needs_help() {
 
     if [[ "$user_input" == "--help" || "$user_input" == "-h" ]]; then
         if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
-            echo -e "\033[38;5;214m${program}\033[0m"
-            echo -e "\033[1;97mUsage:\033[0m \033[1;96m${usage}\033[0m"
-            echo -e "\033[1;97m${help}\033[0m"
+            printf '\e[38;5;214m%s\e[0m\n' "$program"
+            printf '\e[1;97mUsage:\e[0m \e[1;96m%s\e[0m\n' "$usage"
+            printf '%s\n' "$help"
         else
             printf '%s\n' "$program"
             printf 'Usage: %s\n' "$usage"

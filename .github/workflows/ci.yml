@@ -114,10 +114,17 @@ jobs:
 
       - name: Install from this checkout into a clean HOME
         run: |
+          # The installer clones the repository; a local branch makes this
+          # exact commit installable with GASH_INSTALL_REF.
+          git branch -f ci-under-test HEAD
           export HOME="$RUNNER_TEMP/home"
           mkdir -p "$HOME"
           touch "$HOME/.bashrc"
-          GASH_INSTALL_GIT_REPO="$GITHUB_WORKSPACE" bash install.sh --assume-yes --quiet
+          GASH_INSTALL_GIT_REPO="$GITHUB_WORKSPACE" GASH_INSTALL_REF=ci-under-test \
+            bash install.sh --assume-yes --quiet
           test -f "$HOME/.gash/gash.sh"
           grep -q '>>> GASH START >>>' "$HOME/.bashrc"
-          GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; echo "loaded Gash $GASH_VERSION"'
+          version="$(GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; echo "$GASH_VERSION"')"
+          test "$version" = "$(cat VERSION)"
+          echo "loaded Gash $version"
+          bash --norc -i -c 'source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null

@@ -173,7 +173,7 @@ it ".gash_env.template documents GASH_GIT_EXCLUDE" bash -c '
 
     # Check that the template includes GASH_GIT_EXCLUDE documentation
     grep -q "GASH_GIT_EXCLUDE" "$ROOT/.gash_env.template"
-    grep -q "PS1 Prompt Configuration" "$ROOT/.gash_env.template"
+    grep -q "Shell Settings" "$ROOT/.gash_env.template"
 '
 
 it "__gash_in_git_repo returns failure when git root is HOME" bash -c '

@@ -255,7 +255,7 @@ EOF
     local sort_order="-k1,1n"
     [[ "$reverse" -eq 1 ]] && sort_order="-k1,1nr"
     local records
-    records=$(awk -v pattern="$pattern" \
+    records=$("${__GASH_AWK:-awk}" -v pattern="$pattern" \
         -v include_self="$include_self" \
         -v use_regex="$use_regex" '
     BEGIN { lpattern = tolower(pattern) }
@@ -300,7 +300,7 @@ EOF
 
     # JSON output mode: single gawk pass, strftime instead of per-line `date`.
     if [[ "$json_output" -eq 1 ]]; then
-        printf '%s\n' "$records" | awk '
+        printf '%s\n' "$records" | "${__GASH_AWK:-awk}" '
         BEGIN { printf "["; first = 1 }
         function jesc(s) {
             gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
@@ -364,7 +364,7 @@ EOF
             return 1
         fi
         local sel
-        sel=$(printf '%s\n' "$records" | awk '
+        sel=$(printf '%s\n' "$records" | "${__GASH_AWK:-awk}" '
             {
                 i1 = index($0, "\t"); ep = substr($0, 1, i1 - 1)
                 rest = substr($0, i1 + 1)
@@ -382,7 +382,7 @@ EOF
     # &&/||/;/| operator) into one header with ranked sub-rows. TTY only:
     # non-interactive callers get the flat data-plane rendering instead.
     if [[ "$group" -eq 1 && "$interactive" -eq 1 ]]; then
-        printf '%s\n' "$records" | awk \
+        printf '%s\n' "$records" | "${__GASH_AWK:-awk}" \
             -v c_off="$c_off" -v c_ts="$c_ts" -v c_hl="$c_hl" \
             -v c_grp="$c_grp" -v c_cnt="$c_cnt" -v c_cmd="$c_cmd" \
             -v hlpat="$hlpat" -v want_color="$want_color" '
@@ -471,7 +471,7 @@ EOF
     # gawk pass. When non-interactive this collapses to the classic plain
     # "[date] command" format (byte-identical to the previous behavior).
     # -------------------------------------------------------------------------
-    printf '%s\n' "$records" | awk \
+    printf '%s\n' "$records" | "${__GASH_AWK:-awk}" \
         -v c_off="$c_off" -v c_ts="$c_ts" -v c_hl="$c_hl" \
         -v c_cnt="$c_cnt" -v c_cmd="$c_cmd" \
         -v hlpat="$hlpat" -v want_color="$want_color" -v show_count="$interactive" '

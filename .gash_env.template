@@ -83,13 +83,30 @@
 # To list configured hosts: remote_hosts
 
 # ============================================
-# PS1 Prompt Configuration
+# Shell Settings
 # ============================================
-# GASH_GIT_EXCLUDE: Colon-separated list of git repository roots to exclude
-# from the PS1 prompt. Useful when your home directory is a git repo or for
-# very large repositories that cause prompt latency.
+# Format: GASH_NAME=value   (quotes optional: GASH_NAME="a b")
 #
-# NOTE: This is an environment variable, NOT a .gash_env config entry.
-# Add it to ~/.bash_local (not here) as an export:
+# Only the names below are accepted; anything else is reported with its
+# line number and skipped. A variable already set in your environment wins
+# over this file, so `GASH_PROMPT=0 bash` works for a one-off shell.
 #
-#   export GASH_GIT_EXCLUDE=/home/user:/path/to/huge/repo
+# Prompt
+# GASH_PROMPT=1            # 0 = keep your own PS1 (history and $? hooks still run)
+# GASH_GIT_EXCLUDE=        # colon-separated repository roots without a git
+#                          # segment in the prompt (huge repos, dotfile repos)
+#
+# Startup
+# GASH_BANNER=1            # 0 = no banner and quote when a shell opens
+# GASH_SHOW_INXI=0         # 1 = short `inxi` system summary at startup
+#
+# History
+# GASH_HISTORY=1           # 0 = leave HISTSIZE/HISTCONTROL/histappend alone
+# GASH_HISTORY_SYNC=0      # 1 = share history live between open terminals
+#
+# Commands
+# GASH_SAFETY_ALIASES=1    # 0 = no interactive cp/mv/rm aliases
+# GASH_REPLACE_TOOLS=0     # 1 = top->htop, df->pydf, diff->colordiff,
+#                          #     less->most, tail->multitail when installed,
+#                          #     php/composer -> newest phpX.Y
+# GASH_UMASK=              # e.g. 027; empty = keep the system umask

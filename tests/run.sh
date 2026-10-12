@@ -121,6 +121,8 @@ if [[ -n "$awk_impl" ]]; then
   mkdir -p "$workdir/awkbin"
   ln -s "$awk_bin" "$workdir/awkbin/awk"
   path_prefix="$workdir/awkbin:"
+  # Gash prefers gawk when installed; GASH_AWK pins the one under test.
+  export GASH_TEST_AWK="$awk_bin"
 fi
 if [[ -n "$bash_impl" ]]; then
   [[ -x "$bash_impl" ]] || {
@@ -144,6 +146,7 @@ run_spec() {
   )
   [[ -n "${NO_COLOR-}" ]] && envv+=("NO_COLOR=1")
   [[ -t 1 || -n "${GASH_TEST_COLOR-}" ]] && [[ -z "${NO_COLOR-}" ]] && envv+=("GASH_TEST_COLOR=1")
+  [[ -n "${GASH_TEST_AWK-}" ]] && envv+=("GASH_AWK=$GASH_TEST_AWK")
 
   local script='source "$GASH_TEST_ROOT/tests/gash-test.sh"; source "$1"; gash_test_summary'
   if ((hermetic)); then

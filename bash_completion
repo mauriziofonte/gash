@@ -30,18 +30,17 @@ __gash_is_internal_function() {
 }
 
 # Build a whitespace-separated list of "public" Gash functions.
-# Prefer __GASH_ADDED_FUNCS (computed by gash.sh) so we don't include user-defined functions.
+# Prefer the functions gash.sh recorded as its own, so user-defined
+# functions are not included.
 __gash_public_functions() {
-    local out=""
-    local fn
+    local out="" fn added=""
+    declare -F __gash_added_symbols >/dev/null && added="$(__gash_added_symbols functions)"
 
-    if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
-        local IFS=$'\n'
-        for fn in ${__GASH_ADDED_FUNCS}; do
+    if [[ -n "$added" ]]; then
+        while IFS= read -r fn; do
             __gash_is_internal_function "$fn" && continue
             out+="$fn "
-        done
-
+        done <<<"$added"
         printf '%s' "${out% }"
         return 0
     fi
@@ -230,14 +229,14 @@ __gash_complete() {
 # `complete -F handler alias_name` is silently ignored. This is a bash
 # limitation, not a Gash bug. Alias users get default readline completion.
 __gash_enable_completion() {
-    local fn
+    local fn added=""
+    declare -F __gash_added_symbols >/dev/null && added="$(__gash_added_symbols functions)"
 
-    if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
-        local IFS=$'\n'
-        for fn in ${__GASH_ADDED_FUNCS}; do
+    if [[ -n "$added" ]]; then
+        while IFS= read -r fn; do
             __gash_is_internal_function "$fn" && continue
             complete -o default -F __gash_complete "$fn"
-        done
+        done <<<"$added"
     else
         # Fallback registration for common functions
         local fn_list="git_add_tag git_delete_tag git_list_tags disk_usage files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats history_grep gash_doctor gash archive_extract file_backup"

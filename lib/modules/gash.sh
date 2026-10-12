@@ -100,114 +100,86 @@ gash_inspiring_quote() {
 # Upgrade
 # -----------------------------------------------------------------------------
 
-# Upgrade Gash to the latest version.
+# Highest release tag in a checkout: vX.Y.Z or X.Y, no pre-release suffix,
+# compared as versions (same rule as install.sh).
+# Usage: __gash_latest_tag DIR
+__gash_latest_tag() {
+    git -C "${1:-.}" tag --list --sort=v:refname 2>/dev/null |
+        grep -E '^v?[0-9]+(\.[0-9]+)*$' |
+        tail -n 1
+}
+
+# Report a release tag's signature when it has one. With
+# GASH_REQUIRE_SIGNED=1 an unsigned or unverifiable tag returns 1.
+# Usage: __gash_verify_tag DIR TAG
+__gash_verify_tag() {
+    local dir="$1" tag="$2"
+    if git -C "$dir" cat-file -p "refs/tags/$tag" 2>/dev/null | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----'; then
+        if git -C "$dir" verify-tag "$tag" >/dev/null 2>&1; then
+            __gash_success "Signature of $tag verified."
+            return 0
+        fi
+        __gash_warning "$tag is signed, but the signature could not be verified (is the key in your keyring?)."
+    elif [[ "${GASH_REQUIRE_SIGNED-0}" == "1" ]]; then
+        __gash_warning "$tag is not signed."
+    else
+        return 0
+    fi
+    [[ "${GASH_REQUIRE_SIGNED-0}" == "1" ]] && return 1
+    return 0
+}
+
+# Upgrade Gash to the latest release tag.
 # Usage: gash_upgrade
 gash_upgrade() {
+    needs_help "gash_upgrade" "gash_upgrade" "Upgrade Gash to the latest release (refuses to touch local modifications)." "${1-}" && return
+
     local install_dir="${GASH_DIR:-$HOME/.gash}"
 
-    if [ ! -d "$install_dir" ]; then
-        __gash_error "Failed to change directory to $install_dir"
+    if [[ ! -d "$install_dir/.git" ]]; then
+        __gash_error "Gash is not installed in $install_dir as a git checkout. See https://github.com/mauriziofonte/gash."
         return 1
     fi
 
-    if [ ! -d "$install_dir/.git" ]; then
-        __gash_error "Gash is not installed. Please refer to https://github.com/mauriziofonte/gash."
-        return 1
-    fi
-
-    local current_dir
-    current_dir=$(pwd)
-
-    __gash_info "Upgrading Gash in $install_dir..."
-    cd "$install_dir" || {
-        __gash_error "Failed to change directory to $install_dir"
-        return 1
-    }
-
-    # Refuse to proceed over local modifications: the checkout+reset below
-    # would silently destroy them.
-    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+    # The checkout below would overwrite local edits: refuse instead.
+    if [[ -n "$(git -C "$install_dir" status --porcelain 2>/dev/null)" ]]; then
         __gash_error "Working tree at $install_dir has local modifications. Commit, stash, or discard them before upgrading."
-        cd "$current_dir" || true
         return 1
     fi
 
-    if ! command git fetch --tags origin; then
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
-        __gash_error "Failed to fetch updates. Please check your network connection and try manually with 'git fetch'."
+    __gash_info "Checking for a new release in $install_dir..."
+    if ! git -C "$install_dir" fetch --quiet --tags origin; then
+        __gash_error "Failed to fetch updates. Check your network connection, or run 'git fetch' in $install_dir."
         return 1
     fi
 
-    local latest_tag
-    latest_tag="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | head -n1)"
-
-    if [ -z "$latest_tag" ]; then
-        __gash_warning "No tags found. Using the latest commit on the default branch."
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
+    local latest_tag current_tag
+    latest_tag="$(__gash_latest_tag "$install_dir")"
+    if [[ -z "$latest_tag" ]]; then
+        __gash_warning "No release tags found; leaving $install_dir as it is."
         return 0
     fi
 
-    local current_tag
-    current_tag="$(git describe --tags --abbrev=0 2>/dev/null)"
-
-    if [ "$current_tag" = "$latest_tag" ]; then
+    current_tag="$(git -C "$install_dir" describe --tags --exact-match HEAD 2>/dev/null)" || current_tag=""
+    if [[ "$current_tag" == "$latest_tag" ]]; then
         local release_date
-        release_date="$(git log -1 --format=%ai "$current_tag")"
+        release_date="$(git -C "$install_dir" log -1 --format=%as "$current_tag" 2>/dev/null)"
         __gash_success "Gash is already up-to-date ($current_tag, released on $release_date)."
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
         return 0
     fi
 
-    if ! git checkout "$latest_tag" >/dev/null 2>&1; then
-        __gash_error "Failed to checkout tag $latest_tag."
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
-        return 1
-    fi
-
-    if ! git reset --hard "$latest_tag" >/dev/null 2>&1; then
-        __gash_error "Failed to reset to $latest_tag."
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
-        return 1
-    fi
-
-    __gash_success "Upgraded Gash to version $latest_tag."
-
-    __gash_info "Cleaning up Git repository..."
-    if ! git reflog expire --expire=now --all; then
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
-        __gash_error "Your version of git is out of date. Please update it!"
-    fi
-    if ! git gc --auto --aggressive --prune=now; then
-        cd "$current_dir" || {
-            __gash_error "Failed to change directory to $current_dir"
-            return 1
-        }
-        __gash_error "Your version of git is out of date. Please update it!"
-    fi
-
-    cd "$current_dir" || {
-        __gash_error "Failed to change directory to $current_dir"
+    __gash_verify_tag "$install_dir" "$latest_tag" || {
+        __gash_error "GASH_REQUIRE_SIGNED=1 is set; not upgrading to $latest_tag."
         return 1
     }
-    __gash_success "Gash upgrade completed."
+
+    if ! git -C "$install_dir" -c advice.detachedHead=false checkout --quiet "$latest_tag"; then
+        __gash_error "Failed to check out $latest_tag."
+        return 1
+    fi
+
+    __gash_success "Upgraded Gash ${current_tag:+from $current_tag }to $latest_tag."
+    __gash_info "Open a new terminal (or run 'source ~/.gashrc') to load it."
 }
 
 # -----------------------------------------------------------------------------
@@ -301,6 +273,22 @@ gash_uninstall() {
 # Unload
 # -----------------------------------------------------------------------------
 
+# Names Gash defined while loading: present right after it loaded, absent
+# from the snapshot taken before (interactive mode only).
+# Usage: __gash_added_symbols functions|aliases
+__gash_added_symbols() {
+    local post pre name
+    if [[ "${1-}" == "aliases" ]]; then
+        post="${__GASH_POST_ALIASES-}" pre="${__GASH_PRE_ALIASES-}"
+    else
+        post="${__GASH_POST_FUNCS-}" pre="${__GASH_PRE_FUNCS-}"
+    fi
+    while IFS= read -r name; do
+        [[ -n "$name" && "$pre" != *$'\n'"$name"$'\n'* ]] && printf '%s\n' "$name"
+    done <<<"$post"
+    return 0
+}
+
 # Restore the shell state saved before Gash was loaded (best-effort).
 # Usage: gash_unload
 gash_unload() {
@@ -339,24 +327,15 @@ gash_unload() {
         esac
     done
 
-    # Remove aliases introduced by Gash
-    if [[ -n "${__GASH_ADDED_ALIASES-}" ]]; then
-        local __gash_name
-        while IFS= read -r __gash_name; do
-            [[ -z "${__gash_name-}" ]] && continue
-            unalias "${__gash_name}" >/dev/null 2>&1 || true
-        done <<<"${__GASH_ADDED_ALIASES}"
-    fi
-
-    # Remove functions introduced by Gash
-    if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
-        local __gash_name
-        while IFS= read -r __gash_name; do
-            [[ -z "${__gash_name-}" ]] && continue
-            [[ "${__gash_name}" == "gash_unload" ]] && continue
-            unset -f "${__gash_name}" >/dev/null 2>&1 || true
-        done <<<"${__GASH_ADDED_FUNCS}"
-    fi
+    # Remove aliases and functions introduced by Gash.
+    local __gash_name
+    while IFS= read -r __gash_name; do
+        [[ -n "$__gash_name" ]] && { unalias "$__gash_name" >/dev/null 2>&1 || true; }
+    done < <(__gash_added_symbols aliases)
+    while IFS= read -r __gash_name; do
+        [[ -z "$__gash_name" || "$__gash_name" == "gash_unload" ]] && continue
+        unset -f "$__gash_name" >/dev/null 2>&1 || true
+    done < <(__gash_added_symbols functions)
 
     # Per-prefix function sweep: the load-time snapshot misses functions
     # defined AFTER it was taken (alias loader, prompt.sh, completion,

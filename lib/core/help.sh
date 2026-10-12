@@ -133,21 +133,21 @@ __gash_help_display() {
     # Header: function name + module tag
     echo
     if [[ -n "$module" ]]; then
-        echo -e "  ${A}${func_name}${R}${M}  (module: ${module})${R}"
+        printf '%s\n' "  ${A}${func_name}${R}${M}  (module: ${module})${R}"
     else
-        echo -e "  ${A}${func_name}${R}"
+        printf '%s\n' "  ${A}${func_name}${R}"
     fi
 
     # Short description
     if [[ -n "$short" ]]; then
         echo
-        echo -e "  ${W}${short}${R}"
+        printf '%s\n' "  ${W}${short}${R}"
     fi
 
     # Aliases
     if [[ -n "$aliases" ]]; then
         echo
-        echo -e "  ${W}ALIASES${R}"
+        printf '%s\n' "  ${W}ALIASES${R}"
         local alias_list="" a
         local -a alias_arr=()
         IFS=',' read -r -a alias_arr <<<"$aliases"
@@ -155,7 +155,7 @@ __gash_help_display() {
             [[ -n "$alias_list" ]] && alias_list+=", "
             alias_list+="${G}${a}${R}"
         done
-        echo -e "    ${alias_list}"
+        printf '%s\n' "    ${alias_list}"
     fi
 
     # Body (colorize sections and examples)
@@ -165,16 +165,16 @@ __gash_help_display() {
         while IFS= read -r line; do
             # Section headers: USAGE, EXAMPLES, OPTIONS, NOTES, etc.
             if [[ "$line" =~ ^[A-Z][A-Z\ ]+$ ]]; then
-                echo -e "  ${W}${line}${R}"
+                printf '%s\n' "  ${W}${line}${R}"
             # Comment lines (# ...)
             elif [[ "$line" =~ ^[[:space:]]*# ]]; then
-                echo -e "  ${M}${line}${R}"
+                printf '%s\n' "  ${M}${line}${R}"
             # Empty lines
             elif [[ -z "$line" ]]; then
                 echo
             # Regular content (commands/text)
             else
-                echo -e "  ${C}${line}${R}"
+                printf '%s\n' "  ${C}${line}${R}"
             fi
         done <<<"$body"
     fi
@@ -182,7 +182,7 @@ __gash_help_display() {
     # See Also
     if [[ -n "$see_also" ]]; then
         echo
-        echo -e "  ${W}SEE ALSO${R}"
+        printf '%s\n' "  ${W}SEE ALSO${R}"
         local sa_list="" sa
         local -a sa_arr=()
         read -r -a sa_arr <<<"$see_also"
@@ -190,7 +190,7 @@ __gash_help_display() {
             [[ -n "$sa_list" ]] && sa_list+=", "
             sa_list+="${A}${sa}${R}"
         done
-        echo -e "    ${sa_list}"
+        printf '%s\n' "    ${sa_list}"
     fi
 
     echo
@@ -279,7 +279,7 @@ __gash_help_search() {
     done <<<"$sorted_funcs"
 
     if [[ $found -eq 0 ]]; then
-        echo -e "  ${M}No results for '${keyword}'.${R}"
+        printf '%s\n' "  ${M}No results for '${keyword}'.${R}"
         return 1
     fi
 
@@ -343,7 +343,7 @@ __gash_help_list() {
         # Print module header
         local uc_module="${module^^}"
         echo
-        echo -e "  ${W}${uc_module}${R}"
+        printf '%s\n' "  ${W}${uc_module}${R}"
 
         # Print each function
         while IFS= read -r func_name; do
@@ -372,7 +372,7 @@ __gash_help_list() {
 
     if [[ ${#no_module_funcs[@]} -gt 0 ]]; then
         echo
-        echo -e "  ${W}OTHER${R}"
+        printf '%s\n' "  ${W}OTHER${R}"
         local sorted
         sorted="$(printf '%s\n' "${no_module_funcs[@]}" | sort)"
         while IFS= read -r func_name; do
@@ -388,6 +388,6 @@ __gash_help_list() {
     fi
 
     if [[ $displayed -eq 0 && ${#no_module_funcs[@]} -eq 0 ]]; then
-        echo -e "  ${M}No help entries registered.${R}"
+        printf '%s\n' "  ${M}No help entries registered.${R}"
     fi
 }

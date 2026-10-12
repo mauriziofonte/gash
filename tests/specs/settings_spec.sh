@@ -131,3 +131,36 @@ it "safety aliases can be turned off with GASH_SAFETY_ALIASES=0" bash -c '
   chmod 600 "$tmp/.gash_env"
   [[ "$(run)" == "no-rm" ]]
 '
+
+it "every setting documented in .gash_env.template is accepted by the parser" bash -c '
+  set -euo pipefail
+  source "$GASH_TEST_ROOT/lib/core/output.sh"
+  source "$GASH_TEST_ROOT/lib/core/utils.sh"
+  source "$GASH_TEST_ROOT/lib/core/config.sh"
+  n=0
+  while IFS= read -r name; do
+    n=$((n + 1))
+    [[ "$__GASH_SETTINGS_KNOWN" == *" $name "* ]] || { echo "not accepted: $name"; exit 1; }
+  done < <(grep -oE "^# (GASH_[A-Z0-9_]+)=" "$GASH_TEST_ROOT/.gash_env.template" | sed "s/^# //; s/=\$//")
+  ((n >= 9))
+'
+
+it "php and composer are only redirected to phpX.Y with GASH_REPLACE_TOOLS=1" bash -c '
+  set -euo pipefail
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  ln -s "$GASH_TEST_ROOT" "$tmp/.gash"
+  mkdir -p "$tmp/bin"
+  for t in php php8.3 composer; do printf "#!/bin/sh\n" >"$tmp/bin/$t"; chmod +x "$tmp/bin/$t"; done
+
+  run() {
+    HOME="$tmp" PATH="$tmp/bin:$PATH" bash --noprofile --norc -i -c "
+      source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1
+      for a in php composer php83 composer83; do alias \$a >/dev/null 2>&1 && printf \"%s \" \$a; done
+      true
+    " 2>/dev/null
+  }
+  [[ "$(run)" == "php83 composer83 " ]]
+  printf "%s\n" "GASH_REPLACE_TOOLS=1" >"$tmp/.gash_env"
+  chmod 600 "$tmp/.gash_env"
+  [[ "$(run)" == "php composer php83 composer83 " ]]
+'
