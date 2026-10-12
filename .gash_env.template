@@ -110,3 +110,6 @@
 #                          #     less->most, tail->multitail when installed,
 #                          #     php/composer -> newest phpX.Y
 # GASH_UMASK=              # e.g. 027; empty = keep the system umask
+#
+# Agents (llm_* functions)
+# GASH_DB_TIMEOUT=30       # PostgreSQL statement timeout for llm_db_*, seconds

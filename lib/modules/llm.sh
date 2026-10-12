@@ -145,9 +145,12 @@ EXAMPLES
   llm_db_query "SELECT * FROM users" -f ./data/app.db
 
 NOTES
-  Read-only: only SELECT, SHOW, DESCRIBE, EXPLAIN are allowed.
-  INSERT, UPDATE, DELETE, DROP, TRUNCATE, ALTER are blocked.
-  Output format: JSON array of objects.
+  Read-only, enforced twice: one statement starting with SELECT, WITH,
+  VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA, with no write
+  keywords or file/program functions; then a read-only client session
+  (sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL
+  default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).
+  -r caps the rows (default 100). Output: {data, rows, query_time}.
 HELP
 
     __gash_register_help "llm_db_tables" \
