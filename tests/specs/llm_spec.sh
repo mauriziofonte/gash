@@ -111,7 +111,7 @@ it "__llm_validate_path allows safe paths" bash -c '
     source "$ROOT/lib/modules/llm.sh"
 
     result="$(__llm_validate_path "/tmp")"
-    [[ "$result" == "/tmp" ]]
+    [[ "$result" == "$(cd /tmp && pwd -P)" ]]
 
     result="$(__llm_validate_path ".")"
     [[ -n "$result" ]]

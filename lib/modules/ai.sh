@@ -1051,7 +1051,7 @@ __sysinfo_collect_question_context() {
     done
 
     # Pattern 3: Port numbers (port 3306, port:3306, :3306)
-    local port_regex='(port[: ]+|:)([0-9]{1,5})\b'
+    local port_regex='(port[: ]+|:)([0-9]{1,5})([^0-9]|$)'
     remaining="$lower_q"
     while [[ "$remaining" =~ ($port_regex) ]]; do
         local port="${BASH_REMATCH[3]}"

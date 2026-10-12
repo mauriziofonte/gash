@@ -19,7 +19,7 @@ it "interactive load leaks no unprefixed globals" bash -c '
 
   # Variables Gash owns, plus the shell settings it is documented to set.
   allowed="^(__GASH_|__gash_|GASH_|__AI_|__LLM_|__REMOTE_|__SYSINFO_|__t_before$)"
-  allowed+="|^(PIPESTATUS|PS1|PS2|PROMPT_COMMAND|EDITOR|LS_COLORS|LESSOPEN|LESSCLOSE)$"
+  allowed+="|^(LSCOLORS|PIPESTATUS|PS1|PS2|PROMPT_COMMAND|EDITOR|LS_COLORS|LESSOPEN|LESSCLOSE)$"
   allowed+="|^(HISTCONTROL|HISTSIZE|HISTFILESIZE|HISTTIMEFORMAT)$"
   leaked="$(grep -Ev "$allowed" <<<"$out" || true)"
   if [[ -n "$leaked" ]]; then

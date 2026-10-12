@@ -106,7 +106,9 @@ else
   done
 fi
 
-workdir="$(mktemp -d "${TMPDIR:-/tmp}/gash-run.XXXXXX")"
+# Physical path: on macOS /var is a symlink to /private/var, and tests
+# compare $PWD with resolved paths.
+workdir="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/gash-run.XXXXXX")" && pwd -P)"
 trap 'rm -rf "$workdir"' EXIT
 results="$workdir/results"
 : >"$results"

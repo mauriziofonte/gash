@@ -374,7 +374,16 @@ it "install.sh into a custom GASH_DIR writes that location into ~/.gashrc" bash 
   : >"$tmp_home/.bashrc"
   custom="$tmp_home/opt dir/gash"
 
-  HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_DIR="$custom" GASH_INSTALL_GIT_REPO="$ROOT" \
+  # Install this working tree (not the latest release tag of the checkout,
+  # which predates the feature): snapshot it into a tag-less repository.
+  repo="$tmp_home/repo"
+  mkdir -p "$repo"
+  tar -C "$ROOT" --exclude=./.git -cf - . | tar -C "$repo" -xf -
+  git init -q "$repo"
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m snapshot
+
+  HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_DIR="$custom" GASH_INSTALL_GIT_REPO="$repo" \
     bash "$ROOT/install.sh" --assume-yes --quiet >/dev/null 2>&1
   [[ -f "$custom/gash.sh" ]]
 

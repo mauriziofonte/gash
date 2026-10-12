@@ -144,6 +144,21 @@ __gash_fs_du_has_exclude() {
 #   - paths under /proc, /sys, /dev, /boot, /root, /etc/shadow-like
 #   - non-directories
 #
+
+# Succeeds when PATH is, or is under, a protected location (virtual
+# filesystems, devices, boot and root's home). Collapses "//" and "/./".
+# Usage: __gash_fs_forbidden ABSOLUTE_PATH
+__gash_fs_forbidden() {
+    local p="${1-}" forbidden
+    while [[ "$p" == *//* ]]; do p="${p//\/\//\/}"; done
+    while [[ "$p" == */./* ]]; do p="${p//\/.\//\/}"; done
+    p="${p%/.}"
+    for forbidden in /proc /sys /dev /boot /root; do
+        [[ "$p" == "$forbidden" || "$p" == "$forbidden"/* ]] && return 0
+    done
+    return 1
+}
+
 # Prints the resolved absolute path on stdout. Returns 1 on rejection.
 # Usage: resolved=$(__gash_fs_safe_path "$input" "$allow_root" "$is_machine") || return 1
 __gash_fs_safe_path() {
@@ -159,6 +174,16 @@ __gash_fs_safe_path() {
         input="$HOME"
     elif [[ "$input" == \~/* ]]; then
         input="$HOME/${input#\~/}"
+    fi
+
+    # Protected locations are refused before any existence check, so the
+    # answer does not depend on the platform having /proc or /sys.
+    local lexical="$input"
+    [[ "$lexical" == /* ]] || lexical="$PWD/$lexical"
+    if __gash_fs_forbidden "$lexical"; then
+        __gash_fs_error "forbidden_path" "$lexical" "FATAL" \
+            "This path is protected and cannot be scanned" "$is_machine"
+        return 1
     fi
 
     # Distinguish "does not exist" from "exists but is not a directory" to give
@@ -191,15 +216,12 @@ __gash_fs_safe_path() {
         return 1
     fi
 
-    # Forbidden prefixes (match llm.sh forbidden paths)
-    local forbidden
-    for forbidden in /proc /sys /dev /boot /root; do
-        if [[ "$resolved" == "$forbidden" || "$resolved" == "$forbidden"/* ]]; then
-            __gash_fs_error "forbidden_path" "$resolved" "FATAL" \
-                "This path is protected and cannot be scanned" "$is_machine"
-            return 1
-        fi
-    done
+    # Also check where symlinks lead.
+    if __gash_fs_forbidden "$resolved"; then
+        __gash_fs_error "forbidden_path" "$resolved" "FATAL" \
+            "This path is protected and cannot be scanned" "$is_machine"
+        return 1
+    fi
 
     printf '%s' "$resolved"
     return 0
