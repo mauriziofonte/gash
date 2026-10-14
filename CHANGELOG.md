@@ -6,7 +6,7 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-10-14
 
 A rebuild for quality: a quieter and reversible bootstrap, read-only
 guarantees for agents that hold under adversarial input, a reference that
@@ -208,7 +208,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
-[2.0.0]: https://github.com/mauriziofonte/gash/compare/v1.5.3...HEAD
+[2.0.0]: https://github.com/mauriziofonte/gash/compare/v1.5.3...v2.0.0
 [1.5.3]: https://github.com/mauriziofonte/gash/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/mauriziofonte/gash/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/mauriziofonte/gash/compare/v1.5.0...v1.5.1
