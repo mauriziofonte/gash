@@ -1,251 +1,749 @@
-"Talk is cheap. Show me the code." — Linus Torvalds
-"Programs must be written for people to read, and only incidentally for machines to execute." — Harold Abelson
-"Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live." — John Woods
-"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." — Martin Fowler
-"First, solve the problem. Then, write the code." — John Johnson
-"Experience is the name everyone gives to their mistakes." — Oscar Wilde
-"Java is to JavaScript what car is to Carpet." — Chris Heilmann
-"Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday's code." — Dan Salomon
-"Code never lies, comments sometimes do." — Ron Jeffries
-"The only way to go fast, is to go well." — Robert C. Martin
-"Simplicity is the soul of efficiency." — Austin Freeman
-"Programming isn't about what you know; it's about what you can figure out." — Chris Pine
-"If debugging is the process of removing bugs, then programming must be the process of putting them in." — Edsger Dijkstra
-"The most disastrous thing that you can ever learn is your first programming language." — Alan Kay
-"Walking on water and developing software from a specification are easy if both are frozen." — Edward V. Berard
-"I'm not a great programmer; I'm just a good programmer with great habits." — Kent Beck
-"It's not a bug — it's an undocumented feature." — Anonymous
-"A good programmer is someone who always looks both ways before crossing a one-way street." — Doug Linder
-"There are only two kinds of programming languages: those people always bitch about and those nobody uses." — Bjarne Stroustrup
-"Software is like entropy: It is difficult to grasp, weighs nothing, and obeys the Second Law of Thermodynamics; i.e., it always increases." — Norman Augustine
-"The function of good software is to make the complex appear to be simple." — Grady Booch
-"There is no place like 127.0.0.1." — Anonymous
-"The most important property of a program is whether it accomplishes the intention of its user." — C.A.R. Hoare
-"Any sufficiently advanced technology is indistinguishable from magic." — Arthur C. Clarke
-"To iterate is human, to recurse divine." — L. Peter Deutsch
-"The best thing about a boolean is even if you are wrong, you are only off by a bit." — Anonymous
-"Weeks of coding can save you hours of planning." — Anonymous
-"Before software can be reusable it first has to be usable." — Ralph Johnson
-"One man's crappy software is another man's full-time job." — Jessica Gaston
-"Make it work, make it right, make it fast." — Kent Beck
-"Computers are good at following instructions, but not at reading your mind." — Donald Knuth
-"Good code is its own best documentation." — Steve McConnell
-"It's hardware that makes a machine fast. It's software that makes a fast machine slow." — Craig Bruce
-"If builders built buildings the way programmers wrote programs, then the first woodpecker that came along would destroy civilization." — Gerald Weinberg
-"Real programmers don't comment their code. If it was hard to write, it should be hard to understand." — Anonymous
-"A primary cause of complexity is that software vendors uncritically adopt almost any feature that users want." — Niklaus Wirth
-"It always takes longer than you expect, even when you take into account Hofstadter's Law." — Douglas Hofstadter
-"Premature optimization is the root of all evil." — Donald Knuth
-"The best performance improvement is the transition from the nonworking state to the working state." — John Ousterhout
-"The key to performance is elegance, not battalions of special cases." — Jon Bentley
-"Simple things should be simple, complex things should be possible." — Alan Kay
-"A language that doesn't affect the way you think about programming is not worth knowing." — Alan Perlis
-"The trouble with programmers is that you can never tell what a programmer is doing until it's too late." — Seymour Cray
-"In theory, there is no difference between theory and practice. But, in practice, there is." — Jan L.A. van de Snepscheut
-"Programming is not about typing, it's about thinking." — Rich Hickey
-"Good judgment comes from experience, and experience comes from bad judgment." — Fred Brooks
-"If you think it's simple, then you have misunderstood the problem." — Bjarne Stroustrup
-"Good software, like good wine, takes time." — Joel Spolsky
-"Everything should be made as simple as possible, but not simpler." — Albert Einstein
-"You can't have great software without a great team, and most software teams behave like dysfunctional families." — Jim McCarthy
-"The purpose of software engineering is to control complexity, not to create it." — Pamela Zave
-"The most effective debugging tool is still careful thought, coupled with judiciously placed print statements." — Brian Kernighan
-"The only way to learn a new programming language is by writing programs in it." — Dennis Ritchie
-"The best error message is the one that never shows up." — Thomas Fuchs
-"If you automate a mess, you get an automated mess." — Rod Michael
-"A language that doesn't have everything is actually easier to program in than some that do." — Dennis Ritchie
-"Good specifications will always improve programmer productivity far better than any programming tool or technique." — Milt Bryce
-"You can't trust code that you did not totally create yourself." — Ken Thompson
-"Deleted code is debugged code." — Jeff Sickel
-"People think that computer science is the art of geniuses but the actual reality is the opposite, just many people doing things that build on each other, like a wall of mini stones." — Donald Knuth
-"I don't care if it works on your machine! We are not shipping your machine!" — Vidiu Platon
-"There is no silver bullet in software development." — Fred Brooks
-"Programming is the art of telling another human what one wants the computer to do." — Donald Knuth
-"If you think your users are idiots, only idiots will use it." — Linus Torvalds
-"The fastest algorithm can frequently be replaced by one that is almost as fast and much easier to understand." — Douglas Crockford
-"If you optimize everything, you will always be unhappy." — Donald Knuth
-"Sometimes the elegant implementation is just a function. Not a method. Not a class. Not a framework. Just a function." — John Carmack
-"Simplicity is prerequisite for reliability." — Edsger W. Dijkstra
-"If you don't work on important problems, it's not likely that you'll do important work." — Richard Hamming
-"All parts should go together without forcing. You must remember that the parts you are reassembled were disassembled by you. Therefore, if you can't get them together again, there must be a reason. By all means, do not use a hammer." — IBM Manual, 1925
-"To understand recursion, one must first understand recursion." — Anonymous
-"Programming is like sex: one mistake and you have to support it for the rest of your life." — Michael Sinz
-"Programming today is a race between software engineers striving to build bigger and better idiot-proof programs, and the universe trying to produce bigger and better idiots. So far, the universe is winning." — Rick Cook
-"Adding manpower to a late software project makes it later." — Fred Brooks
-"Computer science is no more about computers than astronomy is about telescopes." — Edsger W. Dijkstra
-"All problems in computer science can be solved by another level of indirection." — David Wheeler
-"There are only two hard things in Computer Science: cache invalidation and naming things." — Phil Karlton
-"Program testing can be used to show the presence of bugs, but never to show their absence!" — Edsger W. Dijkstra
-"The best code is no code at all." — Jeff Atwood
-"Beware of bugs in the above code; I have only proved it correct, not tried it." — Donald Knuth
-"Copy and paste is a design error." — David Parnas
-"Any sufficiently advanced bug is indistinguishable from a feature." — Rich Kulawiec
-"The question of whether a computer can think is no more interesting than whether a submarine can swim." — Edsger W. Dijkstra
-"I think Microsoft named .Net so it wouldn't show up in a Unix directory listing." — Oktal
-"If the code and the comments disagree, then both are probably wrong." — Norm Schryer
-"Programming is like writing a book... except if you miss a single comma on page 126, the whole thing makes no sense." — Anonymous
-"Programming can be fun, so can cryptography; however they should not be combined." — Kreitzberg and Shneiderman
-"A computer once beat me at chess, but it was no match for me at kickboxing." — Emo Philips
-"When I wrote this code, only God and I understood what I did. Now only God knows." — Anonymous
-"One of my most productive days was throwing away 1000 lines of code." — Ken Thompson
-"In C++ it's harder to shoot yourself in the foot, but when you do, you blow off your whole leg." — Bjarne Stroustrup
-"The hardest part of design is keeping features out." — Donald Norman
-"The future is already here — it's just not evenly distributed." — William Gibson
-"The cheapest, fastest, and most reliable components are those that aren't there." — Gordon Bell
-"To err is human, but to really foul things up you need a computer." — Paul Ehrlich
-"An API that isn't comprehensible isn't usable." — James Gosling
-"Optimism is an occupational hazard of programming; feedback is the treatment." — Kent Beck
-"Controlling complexity is the essence of computer programming." — Brian Kernighan
-"Simplicity is the ultimate sophistication." — Leonardo da Vinci
-"If it works, don't touch it." — Anonymous
-"Software and cathedrals are much the same — first we build them, then we pray." — Anonymous
-"Most software today is very much like an Egyptian pyramid with millions of bricks piled on top of each other, with no structural integrity." — Alan Kay
-"Computers are like Old Testament gods; lots of rules and no mercy." — Joseph Campbell
-"Without requirements or design, programming is the art of adding bugs to an empty text file." — Louis Srygley
-"The best method for accelerating a computer is the one that boosts it by 9.8 m/s²." — Anonymous
-"I think there is a world market for maybe five computers." — Thomas Watson
-"Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away." — Antoine de Saint-Exupéry
-"Computers are useless. They can only give you answers." — Pablo Picasso
-"Any code of your own that you haven't looked at for six or more months might as well have been written by someone else." — Eagleson's Law
-"Computers make it easier to do a lot of things, but most of the things they make it easier to do don't need to be done." — Andy Rooney
-"Software is eating the world." — Marc Andreessen
-"The best way to predict the future is to invent it." — Alan Kay
-"Code is like humor. When you have to explain it, it's bad." — Cory House
-"In God we trust. All others must bring data." — W. Edwards Deming
-"The computing scientist's main challenge is not to get confused by the complexities of his own making." — Edsger W. Dijkstra
-"Software is a gas; it expands to fill its container." — Nathan Myhrvold
-"The best way to get accurate information on Usenet is to post something wrong and wait for corrections." — Matthew Austern
-"The first 90% of the code accounts for the first 90% of the development time." — Tom Cargill
-"A good way to stay flexible is to write less code." — The Pragmatic Programmer
-"As soon as we started programming, we found to our surprise that it wasn't as easy to get programs right as we had thought." — Maurice Wilkes
-"If you have any trouble sounding condescending, find a Unix user to show you how it's done." — Scott Adams
-"Perl — The only language that looks the same before and after RSA encryption." — Keith Bostic
-"The purpose of abstraction is not to be vague, but to create a new semantic level in which one can be absolutely precise." — Edsger W. Dijkstra
-"A code base is never finished, only abandoned." — Paul Graham
-"It is easier to optimize correct code than to correct optimized code." — Bill Harlan
-"Making things simple is complicated work." — Brian Kernighan
-"Don't document the problem, fix it." — Atli Björgvin Oddsson
-"Time is an illusion. Debugging time doubly so." — Anonymous
-"Every complex problem has a simple, easy-to-understand wrong answer." — H. L. Mencken
-"If you think good architecture is expensive, try bad architecture." — Brian Foote
-"Every program has two purposes: the one for which it was written and another for which it wasn't." — Alan J. Perlis
-"Errors should never pass silently, unless explicitly silenced." — Tim Peters
-"Don't try to solve a problem until you're sure you understand it." — Brian Kernighan
-"Complexity kills. It sucks the life out of developers, it makes products hard to plan, build, and test." — Ray Ozzie
-"Data is a precious thing and will last longer than the systems themselves." — Tim Berners-Lee
-"In the long run, every program becomes rococo — then rubble." — Alan Perlis
-"Don't comment bad code — rewrite it." — Brian Kernighan
-"Code is read more often than it is written." — Guido van Rossum
-"A complex system that works is invariably found to have evolved from a simple system that worked." — John Gall
-"Computer science education cannot make anybody an expert programmer any more than studying brushes and pigment can make somebody an expert painter." — Eric S. Raymond
-"Given enough eyeballs, all bugs are shallow." — Linus Torvalds
-"Java: Write Once, Debug Everywhere." — Unknown
-"I invented the term Object-Oriented, and I can tell you I did not have C++ in mind." — Alan Kay
-"Debugging is anticipated with distaste, performed with reluctance, and bragged about forever." — Dan Kaminsky
-"Memory is like an orgasm. It's a lot better if you don't have to fake it." — Seymour Cray
-"The most exciting phrase to hear in science, the one that heralds new discoveries, is not 'Eureka!' but 'That's funny...'" — Isaac Asimov
-"A computer lets you make more mistakes faster than any other invention in human history, with the possible exceptions of handguns and tequila." — Mitch Ratcliffe
-"Vi is a subset of evil." — Unknown
-"Debuggers don't remove bugs. They only show them in slow motion." — Unknown
-"The best thing about standards is that there are so many to choose from." — Andrew Tanenbaum
-"Foolproof systems don't take into account the ingenuity of fools." — Gene Brown
-"Go ahead and do it, it is easier to apologize than to get permission." — Admiral Grace Hopper
-"Most people don't even know what sysadmins do, but trust me, if they all took a lunch break at the same time they wouldn't make it to the deli before you ran out of bullets protecting your canned goods from roving bands of mutants." — Unknown
-"I haven't lost my mind, it's backed up on tape… somewhere." — Unknown
-"Jesus saves! The rest of us better make backups." — Unknown
-"There are 10 kinds of people in this world, those who understand binary, and those who don't." — Unknown
-"Passwords are like underwear. You shouldn't leave them out where people can see them. You should change them regularly. And you shouldn't loan them out to strangers." — Unknown
-"Conceptual integrity is the most important consideration in system design." — Fred Brooks
-"As a rule, software systems do not work well until they have been used, and have failed repeatedly, in real applications." — Dave Parnas
-"It's not at all important to get it right the first time. It's vitally important to get it right the last time." — Andrew Hunt and David Thomas
-"First do it, then do it right, then do it better." — Addy Osmani
-"Fix the cause, not the symptom." — Steve Maguire
-"Security is a state of mind." — Kevin Mitnick
-"Security is not a product, but a process." — Bruce Schneier
-"There are only two types of companies: those that have been breached and know it, and those that have been breached and don't know it yet." — Ted Schlein
-"If you think tech will solve your security problems, you don't understand either." — Bruce Schneier
-"Even garbage can become intel — hackers look everywhere." — Kevin Mitnick
-"Millions on firewalls and encryption mean nothing if humans are the weakest link." — Kevin Mitnick
-"Phishing remains unsolvable — there's no patch for human gullibility." — Mike Danseglio
-"Dismissing privacy because you have 'nothing to hide' is like dismissing free speech because you have nothing to say." — Edward Snowden
-"Attackers think in graphs, defenders think in lists. As long as this is true, attackers win." — John Lambert
-"The only truly secure system is one that is powered off, cast in a block of concrete and sealed in a lead-lined room with armed guards." — Gene Spafford
-"Give a man a zero-day and he'll have access for a day. Teach a man to phish and he'll have access for life." — The Grugq
-"Stop thinking about your servers as pets, and start thinking about them as cattle." — Unknown
-"You build it, you run it." — Werner Vogels
-"DevOps is a cultural and professional movement focused on how we build and operate high-velocity organizations." — Jez Humble
-"DevOps is not a goal, but a never-ending process of continual improvement." — Jez Humble
-"There is no compression algorithm for experience." — Werner Vogels
-"Simple models and a lot of data trump more elaborate models based on less data." — Peter Norvig
-"AI will not replace you. A person using AI might." — Unknown
-"Garbage in. Confident nonsense out." — Unknown
-"Machine intelligence is the last invention that humanity will ever need to make." — Nick Bostrom
-"Without big data, you are blind and deaf and in the middle of a freeway." — Geoffrey Moore
-"Torture the data, and it will confess to anything." — Ronald Coase
-"If we have data, let's look at data. If all we have are opinions, let's go with mine." — Jim Barksdale
-"I visualize a time when we will be to robots what dogs are to humans, and I'm rooting for the machines." — Claude Shannon
-"Testing is like cleaning. It's only visible when you don't do it." — Anonymous
-"Test automation isn't automatic; it requires a lot more thought and design than just recording a test script." — Michael Bolton
-"Testing is not a phase, it's a way of life." — Elisabeth Hendrickson
-"Correctness is clearly the prime quality. If a system does not do what it is supposed to do, then everything else about it matters little." — Bertrand Meyer
-"Be clear about the difference between your role as a programmer and as a tester. The tester in you must be suspicious, uncompromising, hostile." — Boris Beizer
-"More than the act of testing, the act of designing tests is one of the best bug preventers known." — Boris Beizer
-"Never allow the same bug to bite you twice." — Steve Maguire
-"Software bugs are like cockroaches; there are probably dozens hiding in difficult to reach places for every one you find and fix." — Donald G. Firesmith
-"If you don't care about quality, you can meet any other requirement." — Gerald M. Weinberg
-"Trying to improve software quality by increasing the amount of testing is like trying to lose weight by weighing yourself more often." — Steve McConnell
-"Everything is broken. Steps to reproduce: do anything. Expected result: it should work." — Felipe Knorr Kuhn
-"When debugging, novices insert corrective code; experts remove defective code." — Richard Pattis
-"Testers don't like to break things; they like to dispel the illusion that things work." — Kaner, Bach, Pettichord
-"To an optimist, the glass is half full. To a pessimist, the glass is half empty. To a good tester, the glass is twice as big as it needs to be." — Anonymous
-"Developer: There is no I in TEAM. Tester: We can't spell BUGS without U." — Dima Al-Adham
-"Every tester has the heart of a developer … in a jar on their desk." — Prasad Aldangadi
-"As ironic as it seems, the challenge of a tester is to test as little as possible. Test less, but test smarter." — Federico Toledo
-"Automation does not do what testers used to do; it extends the reach of the tester's work." — James Bach
-"It's automation, not automagic." — Jim Hazen
-"Irreproducible bugs become highly reproducible right after delivery to the customer." — Michael Stahl
-"Q: How many testers does it take to change a lightbulb? A: None, they just tell you the room is dark." — Anonymous
-"All code is guilty until proven innocent." — Anonymous
-"Blame doesn't fix bugs." — Anonymous
-"Debugging is twice as hard as writing the code in the first place. Therefore, if you write the code as cleverly as possible, you are, by definition, not smart enough to debug it." — Brian Kernighan
-"We can only see a short distance ahead, but we can see plenty there that needs to be done." — Alan Turing
-"The programmer, like the poet, works only slightly removed from pure thought-stuff. He builds his castles in the air, from air, creating by exertion of the imagination." — Fred Brooks
-"Plan to throw one away; you will, anyhow." — Fred Brooks
-"On two occasions I have been asked, 'Pray, Mr. Babbage, if you put into the machine wrong figures, will the right answers come out?' I am not able rightly to apprehend the kind of confusion of ideas that could provoke such a question." — Charles Babbage
-"Any organization that designs a system will produce a design whose structure is a copy of the organization's communication structure." — Melvin Conway
-"The purpose of computing is insight, not numbers." — Richard Hamming
-"UNIX was not designed to stop its users from doing stupid things, as that would also stop them from doing clever things." — Doug Gwyn
-"The most dangerous phrase in the language is, 'We've always done it this way.'" — Grace Hopper
-"Rules of Optimization: Rule 1: Don't do it. Rule 2 (for experts only): Don't do it yet." — Michael A. Jackson
-"When in doubt, use brute force." — Ken Thompson
-"Fools ignore complexity. Pragmatists suffer it. Some can avoid it. Geniuses remove it." — Alan Perlis
-"The cost of adding a feature isn't just the time it takes to code it. The cost also includes the addition of an obstacle to future expansion." — John Carmack
-"Real artists ship." — Steve Jobs
-"The street finds its own uses for things." — William Gibson
-"The best minds of my generation are thinking about how to make people click ads. That sucks." — Jeff Hammerbacher
-"There are only two industries that refer to their customers as 'users'." — Edward Tufte
-"I object to doing things that computers can do." — Olin Shivers
-"The art of programming is the art of organizing complexity." — Edsger Dijkstra
-"Civilization advances by extending the number of important operations which we can perform without thinking of them." — Alfred North Whitehead
-"Everybody has a testing environment. Some people are lucky enough to have a totally separate environment to run production in." — Unknown
-"There are two ways of constructing a software design: One way is to make it so simple that there are obviously no deficiencies, and the other way is to make it so complicated that there are no obvious deficiencies. The first method is far more difficult." — C.A.R. Hoare
-"People who are really serious about software should make their own hardware." — Alan Kay
-"Free software is a matter of liberty, not price. To understand the concept, you should think of 'free' as in 'free speech,' not as in 'free beer.'" — Richard Stallman
-"With software there are only two possibilities: either the users control the programme or the programme controls the users." — Richard Stallman
-"I could have made money this way, and perhaps amused myself writing code. But I knew that at the end of my career, I would look back on years of building walls to divide people, and feel I had spent my life making the world a worse place." — Richard Stallman
-"The three chief virtues of a programmer are: Laziness, Impatience, and Hubris." — Larry Wall
-"I'm not a real programmer. I throw together things until it works then I move on. The real programmers will say 'Yeah it works but you're leaking memory everywhere. Perhaps we should fix that.' I'll just restart Apache every 10 requests." — Rasmus Lerdorf
-"A little copying is better than a little dependency." — Rob Pike
-"Data dominates. If you've chosen the right data structures and organized things well, the algorithms will almost always be self-evident." — Rob Pike
-"No matter who you are, most of the smartest people work for someone else." — Bill Joy
+# Gash quotes: one per line, "Text." — Author, with its source on the
+# comment line above it. See CONTRIBUTING.md before adding one.
+
+# Guerilla Open Access Manifesto, 2008, https://cs.gettysburg.edu/~duncjo01/assets/writings/library/open_access_manifesto.html
 "Information is power. But like all power, there are those who want to keep it for themselves." — Aaron Swartz
+# Guerilla Open Access Manifesto, 2008, https://cs.gettysburg.edu/~duncjo01/assets/writings/library/open_access_manifesto.html
+"But sharing isn't immoral -- it's a moral imperative." — Aaron Swartz
+# ChefConf keynote, 2015, https://www.chef.io/blog/devops-you-keep-using-that-word
+"DevOps is a cultural and professional movement, focused on how we build and operate high velocity organizations, born from the experiences of its practitioners." — Adam Jacob
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"A language that doesn't affect the way you think about programming, is not worth knowing." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Every program has (at least) two purposes: the one for which it was written and another for which it wasn't." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"In the long run every program becomes rococo - then rubble." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Fools ignore complexity. Pragmatists suffer it. Some can avoid it. Geniuses remove it." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"In software systems it is often the early bird that makes the worm." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Beware of the Turing tar-pit in which everything is possible but nothing of interest is easy." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"One man's constant is another man's variable." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"If you have a procedure with 10 parameters, you probably missed some." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"There are two ways to write error-free programs; only the third one works." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Some programming languages manage to absorb change, but withstand progress." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"A programming language is low level when its programs require attention to the irrelevant." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Simplicity does not precede complexity, but follows it." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"It is easier to write an incorrect program than understand a correct one." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Optimization hinders evolution." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"It is better to have 100 functions operate on one data structure than 10 functions on 10 data structures." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Everything should be built top-down, except the first time." — Alan J. Perlis
+# Epigrams on Programming, ACM SIGPLAN Notices, 1982, https://www.gwern.net/docs/www/www-pu.informatik.uni-tuebingen.de/cf25e0e93c6141800493cfc6615a7f0a17eaf56b.html
+"Adapting old programs to fit new machines usually means adapting new machines to behave like old ones." — Alan J. Perlis
+# Foreword to Structure and Interpretation of Computer Programs, 1985, https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-5.html
+"Every computer program is a model, hatched in the mind, of a real or mental process." — Alan J. Perlis
+# Foreword to Structure and Interpretation of Computer Programs, 1985, https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-5.html
+"Pascal is for building pyramids -- imposing, breathtaking, static structures built by armies pushing heavy blocks into place." — Alan J. Perlis
+# Epigraph to Structure and Interpretation of Computer Programs, 1985, https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-3.html
+"I think that it's extraordinarily important that we in computer science keep fun in computing." — Alan J. Perlis
+# Epigraph to Structure and Interpretation of Computer Programs, 1985, https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-3.html
+"I hope the field of computer science never loses its sense of fun." — Alan J. Perlis
+# Wikiquote (Sourced section), https://en.m.wikiquote.org/wiki/Alan_Kay
+"Simple things should be simple, complex things should be possible." — Alan Kay
+# A Conversation with Alan Kay, ACM Queue, 2004 (sentence continues: "but just done by brute force and thousands of slaves"), https://www.khoury.northeastern.edu/home/wand/research/queue-12-04/alan%20kay%20interview.pdf
+"Most software today is very much like an Egyptian pyramid with millions of bricks piled on top of each other, with no structural integrity." — Alan Kay
+# Xerox PARC meeting, 1971 (per Quote Investigator), https://quoteinvestigator.com/2012/09/27/invent-the-future/
+"The best way to predict the future is to invent it." — Alan Kay
+# The Computer Revolution Hasn't Happened Yet, OOPSLA keynote, 1997, https://erlang.org/pipermail/erlang-questions/2003-March/008222.html
+"I made up the term 'object-oriented', and I can tell you I didn't have C++ in mind." — Alan Kay
+# Creative Think seminar, 1982, https://www.thurrott.com/?p=145606
+"People who are really serious about software should make their own hardware." — Alan Kay
+# A Conversation with Alan Kay, ACM Queue, 2004, https://www.khoury.northeastern.edu/home/wand/research/queue-12-04/alan%20kay%20interview.pdf
+"There should be a half-life on software so old software just melts away over 10 or 15 years." — Alan Kay
+# A Conversation with Alan Kay, ACM Queue, 2004, https://www.khoury.northeastern.edu/home/wand/research/queue-12-04/alan%20kay%20interview.pdf
+"Computing spread out much, much faster than educating unsophisticated people can happen." — Alan Kay
+# Computing Machinery and Intelligence, Mind, 1950 (closing sentence), https://mathshistory.st-andrews.ac.uk/Biographies/Turing/quotations
+"We can only see a short distance ahead, but we can see plenty there that needs to be done." — Alan Turing
+# An Introduction to Mathematics, 1911, ch. 5, https://en.m.wikiquote.org/wiki/Alfred_North_Whitehead
+"Civilization advances by extending the number of important operations which we can perform without thinking about them." — Alfred North Whitehead
+# The Unreasonable Effectiveness of Data, IEEE Intelligent Systems, 2009, https://www.cs.bu.edu/fac/snyder/cs505/Readings/UnreasonableEffectivenessOfData.pdf
+"Simple models and a lot of data trump more elaborate models based on less data." — Alon Halevy, Peter Norvig and Fernando Pereira
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Care About Your Craft. Why spend your life developing software unless you care about doing it well?" — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Think! About Your Work. Turn off the autopilot and take control. Constantly critique and appraise your work." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Provide Options, Don't Make Lame Excuses. Instead of excuses, provide options. Don't say it can't be done; explain what can be done." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Don't Live with Broken Windows. Fix bad designs, wrong decisions, and poor code when you see them." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Invest Regularly in Your Knowledge Portfolio. Make learning a habit." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"DRY -- Don't Repeat Yourself. Every piece of knowledge must have a single, unambiguous, authoritative representation within a system." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"There Are No Final Decisions. No decision is cast in stone. Instead, consider each as being written in the sand at the beach, and plan for change." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Prototype to Learn. Prototyping is a learning experience. Its value lies not in the code you produce, but in the lessons you learn." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Keep Knowledge in Plain Text. Plain text won't become obsolete. It helps leverage your work and simplifies debugging and testing." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Use the Power of Command Shells. Use the shell when graphical user interfaces don't cut it." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Always Use Version Control. Version control is a time machine for your work; you can go back." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Fix the Problem, Not the Blame. It doesn't really matter whether the bug is your fault or someone else's -- it is still your problem." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Read the Damn Error Message." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"'select' Isn't Broken. It is rare to find a bug in the OS or the compiler, or even a third-party product or library." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Crash Early. A dead program normally does a lot less damage than a crippled one." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Don't Program by Coincidence. Rely only on reliable things." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Test Your Software, or Your Users Will. Test ruthlessly. Don't make your users find bugs for you." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"A Test Is the First User of Your Code." — Andrew Hunt and David Thomas
+# The Pragmatic Programmer, 20th Anniversary Edition, 2019, https://pragprog.com/tips/
+"Shared State Is Incorrect State." — Andrew Hunt and David Thomas
+# Computer Networks, 2nd ed., 1988, p. 254, https://en.m.wikiquote.org/wiki/Andrew_S._Tanenbaum
+"The nice thing about standards is that you have so many to choose from." — Andrew S. Tanenbaum
+# Some Notes on the "Who Wrote Linux" Kerfuffle, 2004, https://en.m.wikiquote.org/wiki/Andrew_S._Tanenbaum
+"The only way to make software secure, reliable, and fast is to make it small." — Andrew S. Tanenbaum
+# Wind, Sand and Stars (Terre des hommes), 1939, tr. Lewis Galantiere, p. 66, https://todayinsci.com/S/SaintExupery_Antoine/SaintExuperyAntoine-Quotations.htm
+"Perfection is finally attained not when there is no longer anything to add, but when there is no longer anything to take away." — Antoine de Saint-Exupery
+# Yale Literary Magazine, February 1882, https://quoteinvestigator.com/2018/04/14/theory/
+"In theory there is no difference between theory and practice, while in practice there is." — Benjamin Brewster
+# Object-Oriented Software Construction, 2nd ed., 1997, ch. 1
+"Correctness is clearly the prime quality. If a system does not do what it is supposed to do, then everything else about it matters little." — Bertrand Meyer
+# Joy's Law, as cited by Lakhani and Panetta, 2007, https://en.wikipedia.org/wiki/Joy%27s_law_(management)
+"No matter who you are, most of the smartest people work for someone else." — Bill Joy
+# Column as "Senator Soaper", Free Lance-Star, 2 April 1969, https://quoteinvestigator.com/2010/12/07/foul-computer/
+"To err is human, to really foul things up requires a computer." — Bill Vaughan
+# Bjarne Stroustrup's quotes page (stroustrup.com), https://www.stroustrup.com/quotes.html
+"There are only two kinds of languages: the ones people complain about and the ones nobody uses." — Bjarne Stroustrup
+# Bjarne Stroustrup's quotes page (stroustrup.com), https://www.stroustrup.com/quotes.html
+"If you think it's simple, then you have misunderstood the problem." — Bjarne Stroustrup
+# Bjarne Stroustrup's quotes page (stroustrup.com), https://www.stroustrup.com/quotes.html
+"C makes it easy to shoot yourself in the foot; C++ makes it harder, but when you do it blows your whole leg off." — Bjarne Stroustrup
+# Software Testing Techniques, 2nd ed., 1990, https://oreilly.com/library/view/creating-a-software/9780133489279/ch13.html
+"More than the act of testing, the act of designing tests is one of the best bug preventers known." — Boris Beizer
+# Seven habits of effective text editing, 2000, https://www.moolenaar.net/habits.html
+"While you are editing, keep an eye out for actions you repeat and/or spend quite a bit of time on." — Bram Moolenaar
+# Seven habits of effective text editing, 2000, https://www.moolenaar.net/habits.html
+"Train using the command. Do this until your fingers type it without thinking." — Bram Moolenaar
+# Internet Archive 25th anniversary keynote, 2021, https://blog.archive.org/2021/10/22/turns-out-its-not-the-technology-its-the-people/
+"Universal Access to All Knowledge has been the dream for millennia, from the Library of Alexandria on forward." — Brewster Kahle
+# Internet Archive 25th anniversary keynote, 2021, https://blog.archive.org/2021/10/22/turns-out-its-not-the-technology-its-the-people/
+"It turns out that it's mostly a people process." — Brewster Kahle
+# Big Ball of Mud, PLoP, 1997, https://www.laputan.org/mud/mud.html
+"If you think good architecture is expensive, try bad architecture." — Brian Foote and Joseph Yoder
+# Unix for Beginners, 1979, https://en.m.wikiquote.org/wiki/Brian_Kernighan
+"The most effective debugging tool is still careful thought, coupled with judiciously placed print statements." — Brian Kernighan
+# The C Programming Language, 1978, section 1.1, https://ftp.math.utah.edu/pub/mirrors/minnie.tuhs.org/UA_Documentation/Books/Draft-KandR-C-Book.pdf
+"The only way to learn a new programming language is by writing programs in it." — Brian Kernighan and Dennis Ritchie
+# Software Tools, 1976, p. 319, https://en.m.wikiquote.org/wiki/Brian_Kernighan
+"Controlling complexity is the essence of computer programming." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Don't comment bad code -- rewrite it." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 2nd ed., 1978, ch. 2, https://en.m.wikiquote.org/wiki/Brian_Kernighan
+"Everyone knows that debugging is twice as hard as writing a program in the first place. So if you're as clever as you can be when you write it, how will you ever debug it?" — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Write clearly -- don't be too clever." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Say what you mean, simply and directly." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Make it right before you make it faster." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Make it clear before you make it faster." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Don't patch bad code -- rewrite it." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Let the machine do the dirty work." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Make sure comments and code agree." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Don't just echo the code with comments -- make every comment count." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Write and test a big program in small pieces." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Make sure your code does "nothing" gracefully." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Don't diddle code to make it faster -- find a better algorithm." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Instrument your programs. Measure before making efficiency changes." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Choose a data representation that makes the program simple." — Brian Kernighan and P. J. Plauger
+# The Elements of Programming Style, 1974, https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style
+"Don't strain to re-use code; reorganize instead." — Brian Kernighan and P. J. Plauger
+# Software Tools, 1976, https://en.m.wikiquote.org/wiki/Brian_Kernighan
+"Mechanical rules are never a substitute for clarity of thought." — Brian Kernighan and P. J. Plauger
+# The Practice of Programming, 1999, https://en.m.wikiquote.org/wiki/Brian_Kernighan
+"C is a razor-sharp tool, with which one can create an elegant and efficient program or a bloody mess." — Brian Kernighan and Rob Pike
+# Wikiquote, sourced quote, https://en.m.wikiquote.org/wiki/Bruce_Perens
+"It [Open Source] is a massively parallel drunkards' walk filtered by a Darwinian process." — Bruce Perens
+# The Process of Security, Crypto-Gram, May 2000, https://www.schneier.com/crypto-gram/archives/2000/0515.html
+"Security is a process, not a product." — Bruce Schneier
+# Secrets and Lies, preface, 2000, https://www.schneier.com/news/archives/2001/06/secrets-lies-digital-security-in-a-networked-world-review.html
+"If you think technology can solve your security problems, then you don't understand the problems and you don't understand the technology." — Bruce Schneier
+# Memo to the Amateur Cipher Designer, Crypto-Gram, October 1998, https://www.schneier.com/crypto-gram/archives/1998/1015.html
+"Anyone, from the most clueless amateur to the best cryptographer, can create an algorithm that he himself can't break." — Bruce Schneier
+# The Futility of Digital Copy Prevention, Crypto-Gram, May 2001, https://www.schneier.com/crypto-gram/archives/2001/0515.html
+"Digital files cannot be made uncopyable, any more than water can be made not wet." — Bruce Schneier
+# Secrets and Lies, 2000, p. 53, https://en.m.wikiquote.org/wiki/Bruce_Schneier
+"It is poor civic hygiene to install technologies that could someday facilitate a police state." — Bruce Schneier
+# An Axiomatic Basis for Computer Programming, Communications of the ACM, October 1969, https://www.oreilly.com/library/view/cloud-native-go/9781492076322/ch06.html
+"The most important property of a program is whether it accomplishes the intention of its user." — C. A. R. Hoare
+# The Emperor's Old Clothes, ACM Turing Award Lecture, 1980, https://en.m.wikiquote.org/wiki/C._A._R._Hoare
+"There are two ways of constructing a software design: One way is to make it so simple that there are obviously no deficiencies, and the other way is to make it so complicated that there are no obvious deficiencies. The first method is far more difficult." — C. A. R. Hoare
+# The Emperor's Old Clothes, ACM Turing Award Lecture, 1980, https://en.m.wikiquote.org/wiki/C._A._R._Hoare
+"The price of reliability is the pursuit of the utmost simplicity." — C. A. R. Hoare
+# The Emperor's Old Clothes, ACM Turing Award Lecture, 1980, https://en.m.wikiquote.org/wiki/C._A._R._Hoare
+"I have regarded it as the highest goal of programming language design to enable good ideas to be elegantly expressed." — C. A. R. Hoare
+# The Emperor's Old Clothes, ACM Turing Award Lecture, 1980, https://en.m.wikiquote.org/wiki/C._A._R._Hoare
+"I have learned more from my failures than can ever be revealed in the cold print of a scientific article." — C. A. R. Hoare
+# The Emperor's Old Clothes, ACM Turing Award Lecture, 1980, https://en.m.wikiquote.org/wiki/C._A._R._Hoare
+"Almost anything in software can be implemented, sold, and even used given enough determination." — C. A. R. Hoare
+# Passages from the Life of a Philosopher, 1864, ch. 5, https://en.m.wikiquote.org/wiki/Charles_Babbage
+"On two occasions I have been asked, 'Pray, Mr. Babbage, if you put into the machine wrong figures, will the right answers come out?' I am not able rightly to apprehend the kind of confusion of ideas that could provoke such a question." — Charles Babbage
+# Interview, Omni, 1987, https://diyhpl.us/~bryan/irc/extropians/www.lucifer.com/exi-lists/extropians.2Q01/0006.html
+"I visualize a time when we will be to robots what dogs are to humans. I am rooting for the machines." — Claude Shannon
+# DRM talk at Microsoft Research, June 2004, https://www.cs.ucdavis.edu/~rogaway/classes/188/materials/doctorow.pdf
+"A computer is a machine for rearranging bits." — Cory Doctorow
+# DRM talk at Microsoft Research, June 2004, https://www.cs.ucdavis.edu/~rogaway/classes/188/materials/doctorow.pdf
+"Whenever a new technology has disrupted copyright, we've changed copyright." — Cory Doctorow
+# DRM talk at Microsoft Research, June 2004, https://www.cs.ucdavis.edu/~rogaway/classes/188/materials/doctorow.pdf
+"Keeping an honest user honest is like keeping a tall user tall." — Cory Doctorow
+# The SQLite blessing, in place of a license in SQLite's source code, https://cobalt.googlesource.com/cobalt/+/6c3b32a7dc6eaf2946073e6fa29281b8cb58f1e3/src/third_party/sqlite/LICENSE
+"May you do good and not evil. May you find forgiveness for yourself and forgive others. May you share freely, never taking more than you give." — D. Richard Hipp
+# Keynote, FOSDEM, 2024, https://thenewstack.io/you-too-could-have-made-curl-daniel-stenberg-at-fosdem/
+"There's no genius or magic trick behind successful open source." — Daniel Stenberg
+# Keynote, FOSDEM, 2024, https://thenewstack.io/you-too-could-have-made-curl-daniel-stenberg-at-fosdem/
+"Start small. Do whatever you want to do. Give it a lot of time and have fun." — Daniel Stenberg
+# Keynote, FOSDEM, 2024, https://thenewstack.io/you-too-could-have-made-curl-daniel-stenberg-at-fosdem/
+"Make it easy for others to help." — Daniel Stenberg
+# The Rails Doctrine, 2016, https://rubyonrails.org/doctrine
+"Constraints liberate even the most able minds." — David Heinemeier Hansson
+# The Rails Doctrine, 2016, https://rubyonrails.org/doctrine
+"Programmers who haven't learned to wield sharp knives just aren't going to make meringues yet." — David Heinemeier Hansson
+# The Rails Doctrine, 2016, https://rubyonrails.org/doctrine
+"Progress is ultimately mostly about people and their willingness to push change." — David Heinemeier Hansson
+# The Rails Doctrine, 2016, https://rubyonrails.org/doctrine
+"We need disagreement. We need dialects. We need diversity of thought and people." — David Heinemeier Hansson
+# The Rails Doctrine, 2016, https://rubyonrails.org/doctrine
+"Optimizing for happiness is perhaps the most formative key to Ruby on Rails." — David Heinemeier Hansson
+# Credited to Wheeler by Butler Lampson, Turing Award lecture, 1992, https://en.wikipedia.org/wiki/Fundamental_theorem_of_software_engineering
+"All problems in computer science can be solved by another level of indirection." — David Wheeler
+# The Evolution of the Unix Time-sharing System, 1979, https://www.nokia.com/bell-labs/about/dennis-m-ritchie/hist.html
+"What we wanted to preserve was not just a good environment in which to do programming, but a system around which a fellowship could form." — Dennis Ritchie
+# The Evolution of the Unix Time-sharing System, 1979, https://www.nokia.com/bell-labs/about/dennis-m-ritchie/hist.html
+"The essence of communal computing, as supplied by remote-access, time-shared machines, is not just to type programs into a terminal instead of a keypunch, but to encourage close communication." — Dennis Ritchie
+# The Evolution of the Unix Time-sharing System, 1979, https://www.nokia.com/bell-labs/about/dennis-m-ritchie/hist.html
+"One of the comforting things about old memories is their tendency to take on a rosy glow." — Dennis Ritchie
+# The TeXbook, 1984, https://prog.school.ioffe.ru/tex/Knuth._Texbook_(eng).pdf
+"Computers are good at following instructions, but not at reading your mind." — Donald Knuth
+# Computer Programming as an Art, ACM Turing Award Lecture, 1974 (fragment of a longer sentence), https://en.wikiquote.org/wiki/Donald_Knuth
+"Premature optimization is the root of all evil." — Donald Knuth
+# Literate Programming, The Computer Journal, 1984, https://en.wikiquote.org/wiki/Donald_Knuth
+"Let us change our traditional attitude to the construction of programs: Instead of imagining that our main task is to instruct a computer what to do, let us concentrate rather on explaining to human beings what we want a computer to do." — Donald Knuth
+# Memo to Peter van Emde Boas, 1977 (per Knuth's home page), https://en.wikiquote.org/wiki/Donald_Knuth
+"Beware of bugs in the above code; I have only proved it correct, not tried it." — Donald Knuth
+# Computer Programming as an Art, ACM Turing Award Lecture, 1974, https://en.wikiquote.org/wiki/Donald_Knuth
+"We have seen that computer programming is an art, because it applies accumulated knowledge to the world, because it requires skill and ingenuity, and especially because it produces objects of beauty." — Donald Knuth
+# Foreword to A=B (Petkovsek, Wilf, Zeilberger), 1996, https://en.wikiquote.org/wiki/Donald_Knuth
+"Science is what we understand well enough to explain to a computer. Art is everything else we do." — Donald Knuth
+# The Art of Computer Programming, Vol. 1, Sec. 1.1, 1968, https://en.wikiquote.org/wiki/Donald_Knuth
+"An algorithm must be seen to be believed." — Donald Knuth
+# The Art of Computer Programming, Vol. 2, Seminumerical Algorithms, https://en.wikiquote.org/wiki/Donald_Knuth
+"Random numbers should not be generated with a method chosen at random." — Donald Knuth
+# The Art of Computer Programming, Vol. 2, Sec. 4.2.2, https://en.wikiquote.org/wiki/Donald_Knuth
+"The enjoyment of one's tools is an essential ingredient of successful work." — Donald Knuth
+# Knuth versus Email, Stanford home page, https://en.wikiquote.org/wiki/Donald_Knuth
+"Email is a wonderful thing for people whose role in life is to be on top of things. But not for me; my role is to be on the bottom of things." — Donald Knuth
+# Digital Typography, ch. 33, 1999, https://en.wikiquote.org/wiki/Donald_Knuth
+"I define UNIX as 30 definitions of regular expressions living under one roof." — Donald Knuth
+# Usenet; quoted as epigraph in The Art of Unix Programming (variant wording in the Linux Users' Guide), https://www.cse.unr.edu/~sushil/class/cs202/help/man/LUG/node144.html
+"UNIX was not designed to stop its users from doing stupid things, as that would also stop them from doing clever things." — Doug Gwyn
+# As summarized by Peter H. Salus, A Quarter Century of Unix, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Write programs that do one thing and do it well. Write programs to work together. Write programs to handle text streams, because that is a universal interface." — Doug McIlroy
+# Unix Time-Sharing System: Foreword, Bell System Technical Journal, 1978, https://en.wikipedia.org/wiki/Unix_philosophy
+"Make each program do one thing well. To do a new job, build afresh rather than complicate old programs by adding new features." — Doug McIlroy
+# Unix Time-Sharing System: Foreword, Bell System Technical Journal, 1978, https://en.wikipedia.org/wiki/Unix_philosophy
+"Expect the output of every program to become the input to another, as yet unknown, program." — Doug McIlroy
+# Unix Time-Sharing System: Foreword, Bell System Technical Journal, 1978, https://en.wikipedia.org/wiki/Unix_philosophy
+"Design and build software, even operating systems, to be tried early, ideally within weeks." — Doug McIlroy
+# Godel, Escher, Bach, 1979, https://en.wikipedia.org/wiki/Hofstadter%27s_law
+"It always takes longer than you expect, even when you take into account Hofstadter's Law." — Douglas Hofstadter
+# How do we tell truths that might hurt? (EWD498), 1975, https://en.m.wikiquote.org/wiki/Edsger_W._Dijkstra
+"Simplicity is prerequisite for reliability." — Edsger W. Dijkstra
+# Notes on Structured Programming (EWD249), 1970, https://en.m.wikiquote.org/wiki/Edsger_W._Dijkstra
+"Program testing can be used to show the presence of bugs, but never to show their absence!" — Edsger W. Dijkstra
+# The threats to computing science (EWD898), 1984, https://www.cs.utexas.edu/~EWD/transcriptions/EWD08xx/EWD898.html
+"The question of whether Machines Can Think ... is about as relevant as the question of whether Submarines Can Swim." — Edsger W. Dijkstra
+# The Humble Programmer (EWD340), ACM Turing Award Lecture, 1972, https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD340.html
+"The purpose of abstracting is not to be vague, but to create a new semantic level in which one can be absolutely precise." — Edsger W. Dijkstra
+# Notes on Structured Programming (EWD249), 1970 (sentence continues), https://en.m.wikiquote.org/wiki/Edsger_W._Dijkstra
+"The art of programming is the art of organizing complexity." — Edsger W. Dijkstra
+# The Humble Programmer (EWD340), ACM Turing Award Lecture, 1972, https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD340.html
+"The competent programmer is fully aware of the strictly limited size of his own skull; therefore he approaches the programming task in full humility, and among other things he avoids clever tricks like the plague." — Edsger W. Dijkstra
+# The Humble Programmer (EWD340), ACM Turing Award Lecture, 1972, https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD340.html
+"If you want more effective programmers, you will discover that they should not waste their time debugging, they should not introduce the bugs to start with." — Edsger W. Dijkstra
+# The Humble Programmer (EWD340), ACM Turing Award Lecture, 1972, https://www.cs.utexas.edu/~EWD/transcriptions/EWD03xx/EWD340.html
+"Program testing can be a very effective way to show the presence of bugs, but is hopelessly inadequate for showing their absence." — Edsger W. Dijkstra
+# How do we tell truths that might hurt? (EWD498), 1975, https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD498.html
+"The tools we use have a profound (and devious!) influence on our thinking habits, and, therefore, on our thinking abilities." — Edsger W. Dijkstra
+# How do we tell truths that might hurt? (EWD498), 1975, https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD498.html
+"Besides a mathematical inclination, an exceptionally good mastery of one's native tongue is the most vital asset of a competent programmer." — Edsger W. Dijkstra
+# How do we tell truths that might hurt? (EWD498), 1975, https://www.cs.utexas.edu/~EWD/transcriptions/EWD04xx/EWD498.html
+"The use of anthropomorphic terminology when dealing with computing systems is a symptom of professional immaturity." — Edsger W. Dijkstra
+# On the nature of Computing Science (EWD896), 1984, https://www.cs.utexas.edu/~EWD/transcriptions/EWD08xx/EWD896.html
+"Simplicity is a great virtue but it requires hard work to achieve it and education to appreciate it. And to make matters worse: complexity sells better." — Edsger W. Dijkstra
+# On the cruelty of really teaching computing science (EWD1036), 1988, https://www.cs.utexas.edu/~EWD/transcriptions/EWD10xx/EWD1036.html
+"If we wish to count lines of code, we should not regard them as "lines produced" but as "lines spent"." — Edsger W. Dijkstra
+# On the cruelty of really teaching computing science (EWD1036), 1988, https://www.cs.utexas.edu/~EWD/transcriptions/EWD10xx/EWD1036.html
+"A program is no more than half a conjecture." — Edsger W. Dijkstra
+# EWD648, 1982, https://en.m.wikiquote.org/wiki/Edsger_W._Dijkstra
+"How do we convince people that in programming simplicity and clarity -- in short: what mathematicians call "elegance" -- are not a dispensable luxury, but a crucial matter that decides between success and failure?" — Edsger W. Dijkstra
+# Reddit AMA, May 2015, https://netzpolitik.org/2015/edward-snowden-ueber-ich-hab-nichts-zu-verbergen/
+"Arguing that you don't care about the right to privacy because you have nothing to hide is no different than saying you don't care about free speech because you have nothing to say." — Edward Snowden
+# The Cathedral and the Bazaar, 1997 (named "Linus's Law" by Raymond), https://www.catb.org/~esr/writings/cathedral-bazaar/cathedral-bazaar/ar01s04.html
+"Given enough eyeballs, all bugs are shallow." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Every good work of software starts by scratching a developer's personal itch." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Good programmers know what to write. Great ones know what to rewrite (and reuse)." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"If you have the right attitude, interesting problems will find you." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"When you lose interest in a program, your last duty to it is to hand it off to a competent successor." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Treating your users as co-developers is your least-hassle route to rapid code improvement and effective debugging." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Release early. Release often. And listen to your customers." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Smart data structures and dumb code works a lot better than the other way around." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"If you treat your beta-testers as if they're your most valuable resource, they will respond by becoming your most valuable resource." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"The next best thing to having good ideas is recognizing good ideas from your users. Sometimes the latter is better." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Often, the most striking and innovative solutions come from realizing that your concept of the problem was wrong." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"Any tool should be useful in the expected way, but a great tool lends itself to uses you never expected." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"To solve an interesting problem, start by finding a problem that is interesting to you." — Eric S. Raymond
+# The Cathedral and the Bazaar, 1997, https://alamut.com/subj/economics/misc/bazaarLessons.html
+"A security system is only as secure as its secret. Beware of pseudo-secrets." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Modularity: Write simple parts connected by clean interfaces." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Clarity: Clarity is better than cleverness." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Simplicity: Design for simplicity; add complexity only where you must." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Silence: When a program has nothing surprising to say, it should say nothing." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Repair: Repair what you can -- but when you must fail, fail noisily and as soon as possible." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Economy: Programmer time is expensive; conserve it in preference to machine time." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Optimization: Prototype before polishing. Get it working before you optimize it." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Extensibility: Design for the future, because it will be here sooner than you think." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Least Surprise: In interface design, always do the least surprising thing." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Representation: Fold knowledge into data, so program logic can be stupid and robust." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Generation: Avoid hand-hacking; write programs to write programs when you can." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Parsimony: Write a big program only when it is clear by demonstration that nothing else will do." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Transparency: Design for visibility to make inspection and debugging easier." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Robustness: Robustness is the child of transparency and simplicity." — Eric S. Raymond
+# The Art of Unix Programming, 2003, https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Rule of Separation: Separate policy from mechanism; separate interfaces from engines." — Eric S. Raymond
+# How To Become A Hacker, 2001, https://lrc.sourceforge.net/download/other/hacker-howto.html
+"The world is full of fascinating problems waiting to be solved." — Eric S. Raymond
+# How To Become A Hacker, 2001, https://lrc.sourceforge.net/download/other/hacker-howto.html
+"No problem should ever have to be solved twice." — Eric S. Raymond
+# How To Become A Hacker, 2001, https://lrc.sourceforge.net/download/other/hacker-howto.html
+"Boredom and drudgery are evil." — Eric S. Raymond
+# How To Become A Hacker, 2001, https://lrc.sourceforge.net/download/other/hacker-howto.html
+"Attitude is no substitute for competence." — Eric S. Raymond
+# How To Become A Hacker, https://www.catb.org/~esr/faqs/hacker-howto.html
+"As with all creative arts, the most effective way to become a master is to imitate the mind-set of masters." — Eric S. Raymond
+# No Silver Bullet, 1986, http://worrydream.com/refs/Brooks-NoSilverBullet.pdf
+"There is no single development, in either technology or management technique, which by itself promises even one order-of-magnitude improvement within a decade in productivity, in reliability, in simplicity." — Fred Brooks
+# The Mythical Man-Month, 1975, p. 25 (Brooks's Law), https://en.m.wikiquote.org/wiki/Fred_Brooks
+"Adding manpower to a late software project makes it later." — Fred Brooks
+# The Mythical Man-Month, 1975, ch. 4 ("I will contend that conceptual integrity is..."), https://en.m.wikiquote.org/wiki/Fred_Brooks
+"Conceptual integrity is the most important consideration in system design." — Fred Brooks
+# The Mythical Man-Month, 1975, p. 7, https://en.m.wikiquote.org/wiki/Fred_Brooks
+"The programmer, like the poet, works only slightly removed from pure thought-stuff. He builds his castles in the air, from air, creating by exertion of the imagination." — Fred Brooks
+# The Mythical Man-Month, 1975, p. 116 ("Hence plan to throw one away..."), https://en.m.wikiquote.org/wiki/Fred_Brooks
+"Plan to throw one away; you will, anyhow." — Fred Brooks
+# The Mythical Man-Month, 1975, https://en.m.wikiquote.org/wiki/Fred_Brooks
+"Show me your flowcharts and conceal your tables, and I shall continue to be mystified. Show me your tables, and I won't usually need your flowcharts; they'll be obvious." — Fred Brooks
+# The Mythical Man-Month, 1975, https://en.m.wikiquote.org/wiki/Fred_Brooks
+"The bearing of a child takes nine months, no matter how many women are assigned." — Fred Brooks
+# The Mythical Man-Month, 1975, https://en.m.wikiquote.org/wiki/Fred_Brooks
+"How does a project get to be a year late? ... One day at a time." — Fred Brooks
+# The Mythical Man-Month, 1975 (The Second-System Effect), https://en.m.wikiquote.org/wiki/Fred_Brooks
+"This second is the most dangerous system a man ever designs." — Fred Brooks
+# No Silver Bullet, 1986, http://worrydream.com/refs/Brooks-NoSilverBullet.pdf
+"The hardest single part of building a software system is deciding precisely what to build." — Fred Brooks
+# No Silver Bullet, 1986, http://worrydream.com/refs/Brooks-NoSilverBullet.pdf
+"Great designs come from great designers." — Fred Brooks
+# No Silver Bullet, 1986, http://worrydream.com/refs/Brooks-NoSilverBullet.pdf
+"Software construction is a creative process." — Fred Brooks
+# Epigraph in A. K. Dewdney, Computer Recreations, Scientific American, March 1989, https://todayinsci.com/S/Spafford_Gene/SpaffordGene-Quotations.htm
+"The only truly secure system is one that is powered off, cast in a block of concrete and sealed in a lead-lined room with armed guards." — Gene Spafford
+# Quoted in Jon Bentley, Bumper-Sticker Computer Science, More Programming Pearls, 1988, https://web.bowdoin.edu/~ltoma/teaching/cs340/spring05/coursestuff/Bentley_BumperSticker.pdf
+"The cheapest, fastest, and most reliable components of a computer system are those that aren't there." — Gordon Bell
+# Quoted in Chips Ahoy (U.S. Navy), July 1986, https://en.m.wikiquote.org/wiki/Grace_Hopper
+"It's easier to ask forgiveness than it is to get permission." — Grace Hopper
+# Quoted in Philip Schieber, The Wit and Wisdom of Grace Hopper, OCLC Newsletter, 1987, https://en.m.wikiquote.org/wiki/Grace_Hopper
+"Humans are allergic to change. They love to say, 'We've always done it this way.' I try to fight that." — Grace Hopper
+# Quoted in Philip Schieber, The Wit and Wisdom of Grace Hopper, OCLC Newsletter, 1987, https://en.m.wikiquote.org/wiki/Grace_Hopper
+"You manage things, you lead people." — Grace Hopper
+# Interview, 60 Minutes, 24 August 1986, https://en.m.wikiquote.org/wiki/Grace_Hopper
+"Please cut off a nanosecond and send it over to me." — Grace Hopper
+# PEP 8, 2001 ("One of Guido's key insights is that code is read much more often than it is written."), https://peps.python.org/pep-0008/
+"Code is read much more often than it is written." — Guido van Rossum
+# PEP 8 -- Style Guide for Python Code, 2001, https://peps.python.org/pep-0008/
+"A style guide is about consistency. Consistency with this style guide is important. Consistency within a project is more important." — Guido van Rossum, Barry Warsaw and Nick Coghlan
+# PEP 8 -- Style Guide for Python Code, 2001, https://peps.python.org/pep-0008/
+"However, know when to be inconsistent -- sometimes style guide recommendations just aren't applicable." — Guido van Rossum, Barry Warsaw and Nick Coghlan
+# Structure and Interpretation of Computer Programs, preface to the first edition, 1985, https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-7.html
+"Programs must be written for people to read, and only incidentally for machines to execute." — Harold Abelson and Gerald Jay Sussman
+# Structure and Interpretation of Computer Programs, preface to the first edition, 1985, https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/full-text/book/book-Z-H-7.html
+"The computer revolution is a revolution in the way we think and in the way we express what we think." — Harold Abelson and Gerald Jay Sussman
+# Usenet signature, November 1987 (quoted in The Art of Unix Programming), https://www.catb.org/~esr/writings/taoup/html/philosophychapter.html
+"Those who do not understand Unix are condemned to reinvent it, poorly." — Henry Spencer
+# The Debian Manifesto, 1994, https://www.debian.org/doc/manuals/project-history/manifesto.en.html
+"Debian is being carefully and conscientiously put together and will be maintained and supported with similar care." — Ian Murdock
+# The Debian Manifesto, 1994, https://www.debian.org/doc/manuals/project-history/manifesto.en.html
+"Debian is being developed openly in the spirit of Linux and GNU." — Ian Murdock
+# The Best Code is No Code At All, Coding Horror, 30 May 2007, https://blog.codinghorror.com/the-best-code-is-no-code-at-all/
+"The best code is no code at all." — Jeff Atwood
+# Quoted by Ashlee Vance, This Tech Bubble Is Different, Bloomberg Businessweek, April 2011, https://quoteinvestigator.com/2017/06/12/click/
+"The best minds of my generation are thinking about how to make people click ads. That sucks." — Jeff Hammerbacher
+# "DevOps is" series (soos.io), quoting Humble, https://hub.soos.io/devops-is-jez-humble
+"DevOps is not a goal, but a never-ending process of continual improvement." — Jez Humble
+# Interview, Slashdot, 28 July 2004, https://webcf.waybackmachine.org/web/20220916162532/https://en.wikiquote.org/wiki/Jimmy_Wales
+"Imagine a world in which every single person on the planet is given free access to the sum of all human knowledge. That's what we're doing." — Jimmy Wales
+# Email to the WikiEN-l mailing list, 16 May 2006, https://webcf.waybackmachine.org/web/20220916162532/https://en.wikiquote.org/wiki/Jimmy_Wales
+"Zero information is preferred to misleading or false information." — Jimmy Wales
+# Functional Programming in C++, #AltDevBlogADay, 2012, https://www.gamedeveloper.com/programming/in-depth-functional-programming-in-c-
+"No matter what language you work in, programming in a functional style provides benefits." — John Carmack
+# Functional Programming in C++, #AltDevBlogADay, 2012, https://www.gamedeveloper.com/programming/in-depth-functional-programming-in-c-
+"A large fraction of the flaws in software development are due to programmers not fully understanding all the possible states their code may execute in." — John Carmack
+# Usenet post, comp.lang.c++, 1991, https://isocpp.org/blog/tag/refactoring
+"Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live." — John F. Woods
+# Systemantics, 1975, p. 71, https://en.wikipedia.org/wiki/John_Gall_(author)
+"A complex system that works is invariably found to have evolved from a simple system that worked." — John Gall
+# Blog post title, Microsoft TechNet, 26 April 2015, https://learn.microsoft.com/ru-ru/archive/blogs/johnla/defenders-think-in-lists-attackers-think-in-graphs-as-long-as-this-is-true-attackers-win
+"Defenders think in lists. Attackers think in graphs. As long as this is true, attackers win." — John Lambert
+# My Favorite Sayings (Ousterhout's Stanford page), quoted on the Tcl wiki, https://wiki.tcl-lang.org/page/JO
+"The greatest performance improvement of all is when a system goes from not-working to working." — John Ousterhout
+# Engineering a Sort Function, Software: Practice and Experience, 1993, https://justine.lol/dox/sort.pdf
+"The key to performance is elegance, not battalions of special cases." — Jon Bentley and M. Douglas McIlroy
+# A debugging manifesto, jvns.ca, 2022, https://jvns.ca/blog/2022/12/08/a-debugging-manifesto/
+"Inspect, don't squash. Being stuck is temporary. Trust nobody and nothing." — Julia Evans
+# A debugging manifesto, jvns.ca, 2022, https://jvns.ca/blog/2022/12/08/a-debugging-manifesto/
+"It's probably your code. Don't go it alone. There's always a reason." — Julia Evans
+# A debugging manifesto, jvns.ca, 2022, https://jvns.ca/blog/2022/12/08/a-debugging-manifesto/
+"I really think of debugging as an investment in my future knowledge." — Julia Evans
+# Producing Open Source Software, 2005, https://www.oreilly.com/library/view/producing-open-source/0596007590/ch01.html
+"Most free software projects fail." — Karl Fogel
+# Producing Open Source Software, 2005, https://www.oreilly.com/library/view/producing-open-source/0596007590/ch01.html
+"There is no single moment when a project ceases to be viable; people just sort of drift away and stop working on it." — Karl Fogel
+# Reflections on Trusting Trust, ACM Turing Award Lecture, 1984, https://crysp.uwaterloo.ca/courses/cs458/F08-lectures/local/www.acm.org/classics/sep95/
+"You can't trust code that you did not totally create yourself." — Ken Thompson
+# Computer History Museum profile of Ken Thompson, https://computerhistory.org/profile/ken-thompson/
+"One of my most productive days was throwing away 1000 lines of code." — Ken Thompson
+# The Jargon File, "brute force" entry, https://www.catb.org/~esr/jargon/html/B/brute-force.html
+"When in doubt, use brute force." — Ken Thompson
+# Reflections on Trusting Trust, ACM Turing Award Lecture, 1984, https://crysp.uwaterloo.ca/courses/cs458/F08-lectures/local/www.acm.org/classics/sep95/
+"No amount of source-level verification or scrutiny will protect you from using untrusted code." — Ken Thompson
+# Quoted in Fowler et al., Refactoring, https://en.m.wikiquote.org/wiki/Kent_Beck
+"I'm not a great programmer; I'm just a good programmer with great habits." — Kent Beck
+# Extreme Programming Explained, 2000, p. 31, https://en.m.wikiquote.org/wiki/Kent_Beck
+"Optimism is an occupational hazard of programming: feedback is the treatment." — Kent Beck
+# Extreme Programming Explained, 2000, p. 28, https://en.m.wikiquote.org/wiki/Kent_Beck
+"The business changes. The technology changes. The team changes. The team members change." — Kent Beck
+# Epigraph of chapter 4 of Stroustrup's The C++ Programming Language (as "to recurse is divine"), https://en.wikipedia.org/wiki/L._Peter_Deutsch
+"To iterate is human, to recurse divine." — L. Peter Deutsch
+# Programming Perl, 1st ed., glossary, 1991, https://en.m.wikiquote.org/wiki/Larry_Wall
+"The three chief virtues of a programmer are: Laziness, Impatience and Hubris." — Larry Wall
+# perlstyle manual page, https://en.m.wikiquote.org/wiki/Larry_Wall
+"Perl is designed to give you several ways to do anything, so consider picking the most readable one." — Larry Wall
+# perlstyle manual page, https://en.m.wikiquote.org/wiki/Larry_Wall
+"Even if you aren't in doubt, consider the mental welfare of the person who has to maintain the code after you." — Larry Wall
+# Usenet posting, https://en.m.wikiquote.org/wiki/Larry_Wall
+"There's often more than one correct thing." — Larry Wall
+# Present Continuous - Future Perfect, talk, https://en.m.wikiquote.org/wiki/Larry_Wall
+"I simultaneously believe that languages are wonderful and awful. You have to hold both of those." — Larry Wall
+# Code Is Law: On Liberty in Cyberspace, Harvard Magazine, January 2000, https://www.harvardmagazine.com/2000/01/code-is-law-html
+"This code, or architecture, sets the terms on which life in cyberspace is experienced." — Lawrence Lessig
+# Code Is Law: On Liberty in Cyberspace, Harvard Magazine, January 2000, https://www.harvardmagazine.com/2000/01/code-is-law-html
+"We should interrogate the architecture of cyberspace as we interrogate the code of Congress." — Lawrence Lessig
+# Code Is Law: On Liberty in Cyberspace, Harvard Magazine, January 2000, https://www.harvardmagazine.com/2000/01/code-is-law-html
+"The choice about code and law will be a choice about values." — Lawrence Lessig
+# Message to the linux-kernel mailing list, 25 August 2000, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Talk is cheap. Show me the code." — Linus Torvalds
+# Mailing list message, 12 December 2005, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"If you think your users are idiots, only idiots will use it." — Linus Torvalds
+# Message to the Git mailing list, 27 June 2006, https://en.m.wikiquote.org/wiki/Linus_Torvalds
 "Bad programmers worry about the code. Good programmers worry about data structures and their relationships." — Linus Torvalds
-"Software is like sex: it's better when it's free." — Linus Torvalds
+# FSF conference, 1996 (video), https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Software is like sex; it's better when it's free." — Linus Torvalds
+# Message to the linux-kernel mailing list, 25 March 2009, https://en.m.wikiquote.org/wiki/Linus_Torvalds
 "Theory and practice sometimes clash. And when that happens, theory loses. Every single time." — Linus Torvalds
-"My crime is that of curiosity." — The Mentor, Hacker Manifesto, Phrack, 1986
-"If it's smart, it's vulnerable." — Mikko Hyppönen
-"Artificial intelligence is no match for natural stupidity." — Marcus Ranum
-"Security needs to be built in, not bolted on." — Window Snyder
-"We could take down the Internet in 30 minutes." — Mudge (Peiter Zatko), L0pht, US Senate Testimony, 1998
-"Know your enemy and know yourself and you can fight a hundred battles without disaster." — Sun Tzu
-"All warfare is based on deception." — Sun Tzu
+# Post to comp.os.minix, 25 August 1991, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"I'm doing a (free) operating system (just a hobby, won't be big and professional like gnu) for 386(486) AT clones." — Linus Torvalds
+# Message to the linux-kernel mailing list, 20 July 1996, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Only wimps use tape backup: real men just upload their important stuff on ftp, and let the rest of the world mirror it ;)" — Linus Torvalds
+# Interview, Linux Times, 25 October 2004, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Nobody should start to undertake a large project. You start with a small trivial project, and you should never expect it to get large." — Linus Torvalds
+# Interview by Hiroo Yamagata, The Pragmatist of Free Software, 1997, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Making Linux GPL'd was definitely the best thing I ever did." — Linus Torvalds
+# First Monday interview by Rishab Aiyer Ghosh, 1998, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Most of the good programmers do programming not because they expect to get paid or get adulation by the public, but because it is fun to program." — Linus Torvalds
+# Interview with The Linux Foundation, 15 September 2008, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Real quality means making sure that people are proud of the code they write, that they're involved and taking it personally." — Linus Torvalds
+# Tech Talk on git at Google, 7 February 2007, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Nobody actually creates perfect code the first time around, except me. But there's only one of me." — Linus Torvalds
+# Linux kernel CodingStyle, 1995, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"If you need more than 3 levels of indentation, you're screwed anyway, and should fix your program." — Linus Torvalds
+# Linux kernel CodingStyle, 1995, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"You know you're brilliant, but maybe you'd like to understand what you did 2 weeks from now." — Linus Torvalds
+# Linux kernel CodingStyle, 1995, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"An infinite number of monkeys typing into GNU emacs would never make a good program." — Linus Torvalds
+# Post to comp.os.minix, 29 January 1992, https://en.m.wikiquote.org/wiki/Linus_Torvalds
+"Portability is for people who cannot write new programs." — Linus Torvalds
+# Why Software Is Eating the World, The Wall Street Journal, 20 August 2011, https://a16z.com/2011/08/20/why-software-is-eating-the-world/
+"Software is eating the world." — Marc Andreessen
+# Refactoring: Improving the Design of Existing Code, 1999, p. 15, https://en.m.wikiquote.org/wiki/Martin_Fowler
+"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." — Martin Fowler
+# Refactoring: Improving the Design of Existing Code, 1999, p. 88, https://en.m.wikiquote.org/wiki/Martin_Fowler
+"When you feel the need to write a comment, first try to refactor the code so that any comment becomes superfluous." — Martin Fowler
+# Analysis Patterns, 1997, p. 2, https://en.m.wikiquote.org/wiki/Martin_Fowler
+"Models are not right or wrong; they are more or less useful." — Martin Fowler
+# UML Distilled, 3rd ed., 2004, p. 32, https://en.m.wikiquote.org/wiki/Martin_Fowler
+"Comprehensiveness is the enemy of comprehensibility." — Martin Fowler
+# Talk at the Computer Museum, 1979 (recalling 1949), https://www.spinellis.gr/blog/20181116
+"As soon as we started programming, we found to our surprise that it wasn't as easy to get programs right as we had thought." — Maurice Wilkes
+# How Do Committees Invent?, Datamation, 1968, https://en.wikipedia.org/wiki/Conway%27s_law
+"Organizations which design systems ... are constrained to produce designs which are copies of the communication structures of these organizations." — Melvin Conway
+# Quoted in Jon Bentley, Bumper-Sticker Computer Science, More Programming Pearls, 1988, https://web.bowdoin.edu/~ltoma/teaching/cs340/spring05/coursestuff/Bentley_BumperSticker.pdf
+"The First Rule of Program Optimization: Don't do it. The Second Rule of Program Optimization -- For experts only: Don't do it yet." — Michael A. Jackson
+# The UNIX Philosophy, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Small is beautiful." — Mike Gancarz
+# The UNIX Philosophy, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Build a prototype as soon as possible." — Mike Gancarz
+# The UNIX Philosophy, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Choose portability over efficiency." — Mike Gancarz
+# The UNIX Philosophy, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Store data in flat text files." — Mike Gancarz
+# The UNIX Philosophy, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Avoid captive user interfaces." — Mike Gancarz
+# The UNIX Philosophy, 1994, https://en.wikipedia.org/wiki/Unix_philosophy
+"Make every program a filter." — Mike Gancarz
+# Hypponen's Law, first tweeted December 2016, https://blog.f-secure.com/hypponens-law-smart-vulnerable
+"If it's smart, it's vulnerable." — Mikko Hypponen
+# Roads and Bridges: The Unseen Labor Behind Our Digital Infrastructure, Ford Foundation, 2016, https://fordfoundation.org/media/2976/roads-and-bridges-the-unseen-labor-behind-our-digital-infrastructure.pdf
+"Just like physical infrastructure, digital infrastructure needs regular upkeep and maintenance." — Nadia Eghbal
+# Roads and Bridges: The Unseen Labor Behind Our Digital Infrastructure, Ford Foundation, 2016, https://fordfoundation.org/media/2976/roads-and-bridges-the-unseen-labor-behind-our-digital-infrastructure.pdf
+"Most of us take opening a software application for granted, the way we take turning on the lights for granted." — Nadia Eghbal
+# A Plea for Lean Software, IEEE Computer, 1995, https://berthub.eu/articles/LeanSoftware_text.pdf
+"A primary cause of complexity is that software vendors uncritically adopt almost any feature that users want." — Niklaus Wirth
+# A Plea for Lean Software, IEEE Computer, 1995, https://berthub.eu/articles/LeanSoftware_text.pdf
+"Reducing complexity and size must be the goal in every step -- in system specification, design, and in detailed programming." — Niklaus Wirth
+# Quoted in Jon Bentley, Bumper-Sticker Computer Science, More Programming Pearls, 1988, https://web.bowdoin.edu/~ltoma/teaching/cs340/spring05/coursestuff/Bentley_BumperSticker.pdf
+"If the code and the comments disagree, then both are probably wrong." — Norm Schryer
+# Augustine's Laws, Law XVI (6th ed., 1997, p. 114), https://todayinsci.com/QuotationsCategories/E_Cat/Entropy-Quotations.htm
+"Software is like entropy: It is difficult to grasp, weighs nothing, and obeys the Second Law of Thermodynamics; i.e., it always increases." — Norman Augustine
+# Quoted by Martin Fowler (TwoHardThings), via Tim Bray, https://martinfowler.com/bliki/TwoHardThings.html
+"There are only two hard things in Computer Science: cache invalidation and naming things." — Phil Karlton
+# Wikiquote "Quotes" section (no dated citation; Lerdorf replied to it on Twitter in 2010), https://en.m.wikiquote.org/wiki/Rasmus_Lerdorf
+"I'm not a real programmer. I throw together things until it works then I move on. The real programmers will say "Yeah it works but you're leaking memory everywhere. Perhaps we should fix that." I'll just restart Apache every 10 requests." — Rasmus Lerdorf
+# The Internet Services Disruption, Microsoft internal memo, 2005, https://sriramk.com/memos/ray_ozzie_services.pdf
+"Complexity kills. It sucks the life out of developers, it makes products difficult to plan, build and test, it introduces security challenges, and it causes end-user and administrator frustration." — Ray Ozzie
+# Simple Made Easy, Strange Loop, 2011, https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/SimpleMadeEasy.md
+"How can we possibly make things that are reliable that we don't understand?" — Rich Hickey
+# Simple Made Easy, Strange Loop, 2011, https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/SimpleMadeEasy.md
+"The bottom line is simplicity is a choice." — Rich Hickey
+# Simple Made Easy, Strange Loop, 2011, https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/SimpleMadeEasy.md
+"So simple is actually an objective notion." — Rich Hickey
+# Hammock Driven Development, Clojure Conj, 2010, https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/HammockDrivenDev.md
+"Most of the big problems we have with software are problems of misconception." — Rich Hickey
+# Hammock Driven Development, Clojure Conj, 2010, https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/HammockDrivenDev.md
+"Problem solving is definitely a skill." — Rich Hickey
+# You and Your Research, Bellcore seminar, 1986, https://www.cs.virginia.edu/~robins/YouAndYourResearch.html
+"If you do not work on an important problem, it's unlikely you'll do important work." — Richard Hamming
+# Numerical Methods for Scientists and Engineers, 1962, preface, https://en.m.wikiquote.org/wiki/Richard_Hamming
+"The purpose of computing is insight, not numbers." — Richard Hamming
+# Quoted in Kemeny and Kurtz, Structured BASIC Programming, 1987, https://en.m.wikiquote.org/wiki/Richard_Hamming
+"Typing is no substitute for thinking." — Richard Hamming
+# You and Your Research, Bellcore seminar, 1986, https://www.cs.virginia.edu/~robins/YouAndYourResearch.html
+"Knowledge and productivity are like compound interest." — Richard Hamming
+# The Art of Doing Science and Engineering, 1997, https://en.m.wikiquote.org/wiki/Richard_Hamming
+"Teachers should prepare the student for the student's future, not for the teacher's past." — Richard Hamming
+# The Free Software Definition, FSF, https://www.oreilly.com/library/view/a-practical-guide/9780137063543/app04.html
+""Free software" is a matter of liberty, not price. To understand the concept, you should think of "free" as in "free speech," not as in "free beer."" — Richard Stallman
+# Free Software, Free Society, TEDxGeneva, 2014, https://singjupost.com/richard-stallman-on-free-software-free-society-full-transcript/
+"With software, there are two possibilities: either the users control the program, or the program controls the users." — Richard Stallman
+# Quoted in Free as in Freedom (Sam Williams), 2002, https://en.wikiquote.org/wiki/Richard_Stallman
+"I could have made money this way, and perhaps amused myself writing code. But I knew that at the end of my career, I would look back on years of building walls to divide people, and feel I had spent my life making the world a worse place." — Richard Stallman
+# The GNU Manifesto, 1985, https://en.wikiquote.org/wiki/Richard_Stallman
+"I consider that the golden rule requires that if I like a program I must share it with other people who like it." — Richard Stallman
+# The GNU Manifesto, 1985, https://en.wikiquote.org/wiki/Richard_Stallman
+"Copying all or parts of a program is as natural to a programmer as breathing, and as productive. It ought to be as free." — Richard Stallman
+# The GNU Manifesto, 1985, https://en.wikiquote.org/wiki/Richard_Stallman
+"Once GNU is written, everyone will be able to obtain good system software free, just like air." — Richard Stallman
+# The GNU Manifesto, 1985, https://en.wikiquote.org/wiki/Richard_Stallman
+"In any intellectual field, one can reach greater heights by standing on the shoulders of others." — Richard Stallman
+# The GNU Manifesto, 1985, https://en.wikiquote.org/wiki/Richard_Stallman
+"Software sellers want to divide the users and conquer them, making each user agree not to share with others." — Richard Stallman
+# Free Software and Beyond: Human Rights in the Use of Software, Goteborg, 2007, https://en.wikiquote.org/wiki/Richard_Stallman
+"Freedom means not having a master." — Richard Stallman
+# Copyleft: Pragmatic Idealism, 1998, https://en.wikiquote.org/wiki/Richard_Stallman
+"Stand for something, or you will fall for nothing." — Richard Stallman
+# Sayings, stallman.org, https://en.wikiquote.org/wiki/Richard_Stallman
+"Value your freedom or you will lose it, teaches history." — Richard Stallman
+# Interview in Hackers: Wizards of the Electronic Age, 1985, https://en.wikiquote.org/wiki/Richard_Stallman
+"What they had in common was mainly love of excellence and programming." — Richard Stallman
+# Interview, The Guardian, 2008, https://en.wikiquote.org/wiki/Richard_Stallman
+"Do your own computing on your own computer with your copy of a freedom-respecting program." — Richard Stallman
+# Why "Free Software" is better than "Open Source", 1998, https://en.wikiquote.org/wiki/Richard_Stallman
+"Attracting users to free software is not the whole job, just the first step." — Richard Stallman
+# Free Software, Free Society, TEDxGeneva, 2014, https://singjupost.com/richard-stallman-on-free-software-free-society-full-transcript/
+"Free software is the first battle in the liberation of cyberspace." — Richard Stallman
+# The Wizardry Compiled, 1989 (epigraph), https://www.ecb.torontomu.ca/~elf/hack/wizardry.html
+"Applications programming is a race between software engineers, who strive to produce idiot-proof programs, and the Universe which strives to produce bigger idiots." — Rick Cook
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"A little copying is better than a little dependency." — Rob Pike
+# Notes on Programming in C, 1989 (Rule 5), https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Data dominates. If you've chosen the right data structures and organized things well, the algorithms will almost always be self-evident." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Don't communicate by sharing memory, share memory by communicating." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Concurrency is not parallelism." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Channels orchestrate; mutexes serialize." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"The bigger the interface, the weaker the abstraction." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Make the zero value useful." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Gofmt's style is no one's favorite, yet gofmt is everyone's favorite." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Clear is better than clever." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Reflection is never clear." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Errors are values." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Don't just check errors, handle them gracefully." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Design the architecture, name the components, document the details." — Rob Pike
+# Go Proverbs, Gopherfest talk, 2015, https://go-proverbs.github.io/
+"Documentation is for users." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"You can't tell where a program is going to spend its time. Bottlenecks occur in surprising places, so don't try to second guess and put in a speed hack until you've proven that's where the bottleneck is." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Measure. Don't tune for speed until you've measured, and even then don't unless one part of the code overwhelms the rest." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Fancy algorithms are slow when n is small, and n is usually small." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Fancy algorithms are buggier than simple ones, and they're much harder to implement. Use simple algorithms as well as simple data structures." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"A program is a sort of publication. It's meant to be read by the programmer, another programmer (perhaps yourself a few days, weeks or years later), and lastly a machine." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Algorithms, or details of algorithms, can often be encoded compactly, efficiently and expressively as data rather than, say, as lots of if statements." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Length is not a virtue in a name; clarity of expression is." — Rob Pike
+# Notes on Programming in C, 1989, https://www.cs.princeton.edu/courses/archive/spr01/cs217/pike.html
+"Procedure names should reflect what they do; function names should reflect what they return." — Rob Pike
+# Clean Architecture, 2017 (front matter), https://www.goodreads.com/notes/36239393-clean-architecture/29536501-osvaldo-santana-neto?page=1
+"The only way to go fast, is to go well." — Robert C. Martin
+# Lecture, 1981 (published 1982), https://quoteinvestigator.com/2021/01/18/confess/
+"If you torture the data enough, nature will always confess." — Ronald Coase
+# The Redis Manifesto, 2011, https://fossies.org/linux/redis/MANIFESTO
+"Code is like a poem; it's not just something we write to reach some practical result." — Salvatore Sanfilippo (antirez)
+# The Redis Manifesto, 2011, https://fossies.org/linux/redis/MANIFESTO
+"We're against complexity. We believe designing systems is a fight against complexity." — Salvatore Sanfilippo (antirez)
+# The Redis Manifesto, 2011, https://fossies.org/linux/redis/MANIFESTO
+"We'll accept to fight the complexity when it's worthwhile but we'll try hard to recognize when a small feature is not worth 1000s of lines of code." — Salvatore Sanfilippo (antirez)
+# The Redis Manifesto, 2011, https://fossies.org/linux/redis/MANIFESTO
+"We believe writing code is a lot of hard work, and the only way it can be worth is by enjoying it. When there is no longer joy in writing code, the best thing to do is stop." — Salvatore Sanfilippo (antirez)
+# The C Language and Models for Systems Programming, Byte, August 1983, https://www.sicpers.info/?p=2873
+"First make it work, then make it right, and, finally, make it fast." — Stephen C. Johnson and Brian Kernighan
+# Recounted by Andy Hertzfeld, "Real Artists Ship", folklore.org (January 1984), https://www.folklore.org/Real_Artists_Ship.html
+"Real artists ship." — Steve Jobs
+# Code Complete, 1993 (chapter on self-documenting code)
+"Good code is its own best documentation." — Steve McConnell
+# Code Complete, 2nd ed., 2004, ch. 20
+"Trying to improve software quality by increasing the amount of testing is like trying to lose weight by weighing yourself more often." — Steve McConnell
+# The Conscience of a Hacker, Phrack vol. 1 issue 7, 8 January 1986, https://en.wikipedia.org/wiki/Hacker_Manifesto
+"My crime is that of curiosity." — The Mentor (Loyd Blankenship)
+# W3C press release launching the Web Accessibility Initiative, 22 October 1997, https://lists.w3.org/Archives/Public/w3c-wai-ig/1997OctDec/0083.html
+"The power of the Web is in its universality. Access by everyone regardless of disability is an essential aspect." — Tim Berners-Lee
+# Hypertext Style: Cool URIs don't change, W3C, 1998, https://www.w3.org/Provider/Style/URI
+"Cool URIs don't change." — Tim Berners-Lee
+# Weaving the Web, 1999, https://en.m.wikiquote.org/wiki/Tim_Berners-Lee
+"The web is more a social creation than a technical one." — Tim Berners-Lee
+# Interview, Fresh Air, NPR, 1996, https://en.m.wikiquote.org/wiki/Tim_Berners-Lee
+"It's no good having something which will run on any platform if, in fact, there is a proprietary hold on it." — Tim Berners-Lee
+# Interview, Sunday Tribune, 25 September 2005, https://en.m.wikiquote.org/wiki/Tim_O%27Reilly
+"For a typical author, obscurity is a far greater threat than piracy." — Tim O'Reilly
+# TIME, 24 October 2005, https://en.m.wikiquote.org/wiki/Tim_O%27Reilly
+"We're entering an era in which software learns from its users and all of the users are connected." — Tim O'Reilly
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Errors should never pass silently. Unless explicitly silenced." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Beautiful is better than ugly. Explicit is better than implicit." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Simple is better than complex. Complex is better than complicated." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Flat is better than nested. Sparse is better than dense." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Readability counts." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Special cases aren't special enough to break the rules. Although practicality beats purity." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"In the face of ambiguity, refuse the temptation to guess." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"There should be one-- and preferably only one --obvious way to do it." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Now is better than never. Although never is often better than right now." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"If the implementation is hard to explain, it's a bad idea. If the implementation is easy to explain, it may be a good idea." — Tim Peters
+# The Zen of Python, PEP 20, 2004, https://peps.python.org/pep-0020/
+"Namespaces are one honking great idea -- let's do more of those!" — Tim Peters
+# Quoted by Jon Bentley, Programming Pearls, Communications of the ACM, September 1985, https://en.wikipedia.org/wiki/Ninety%E2%80%93ninety_rule
+"The first 90 percent of the code accounts for the first 90 percent of the development time. The remaining 10 percent of the code accounts for the other 90 percent of the development time." — Tom Cargill
+# Conrad Schneiker, An Abridged Collection of Interdisciplinary Laws, CoEvolution Quarterly, 1975, https://quoteinvestigator.com/2019/09/19/woodpecker/
+"If builders built buildings the way programmers wrote programs, then the first woodpecker that came along would destroy civilization." — Weinberg's Second Law (attributed to Gerald Weinberg)
+# Interview with Jim Gray, ACM Queue, 2006, https://aws.amazon.com/blogs/aws/acm_queue_inter
+"You build it, you run it." — Werner Vogels
+# Said in interviews in the 1990s (e.g. NPR, 1999), https://en.m.wikiquote.org/wiki/William_Gibson
+"The future is already here -- it's just not very evenly distributed." — William Gibson
+# Burning Chrome, 1982, https://en.m.wikiquote.org/wiki/William_Gibson
+"The street finds its own uses for things." — William Gibson
+# Message to the ruby-talk mailing list, 12 May 2000, https://www.ruby-lang.org/en/about/
+"Ruby is simple in appearance, but is very complex inside, just like our human body." — Yukihiro Matsumoto
+# Interview, 29 November 2001, https://www.ruby-lang.org/en/about/
+"I wanted a scripting language that was more powerful than Perl, and more object-oriented than Python." — Yukihiro Matsumoto
+# The Philosophy of Ruby, interview by Bill Venners, Artima, 2003, https://www.artima.com/articles/the-philosophy-of-ruby
+"I want to make Ruby users free. I want to give them the freedom to choose." — Yukihiro Matsumoto
+# The Philosophy of Ruby, interview by Bill Venners, Artima, 2003, https://www.artima.com/articles/the-philosophy-of-ruby
+"We humans care about the effort we pay. The computers don't care." — Yukihiro Matsumoto
+# The Philosophy of Ruby, interview by Bill Venners, Artima, 2003, https://www.artima.com/articles/the-philosophy-of-ruby
+"I want to have fun in programming myself." — Yukihiro Matsumoto
+# The Philosophy of Ruby, interview by Bill Venners, Artima, 2003, https://www.artima.com/articles/the-philosophy-of-ruby
+"The principle of least surprise means principle of least my surprise." — Yukihiro Matsumoto
