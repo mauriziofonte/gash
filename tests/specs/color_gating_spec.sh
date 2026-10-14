@@ -300,3 +300,36 @@ EOF
   out="$(HOME="$tmp" bash --noprofile --norc -c "$inner" 2>&1)"
   [[ "$out" != *$'"'"'\033['"'"'* ]]
 '
+
+it "GASH_NO_COLOR=0 keeps colors on; NO_COLOR=0 still turns them off" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  probe() { env "$@" bash -c "source \"$ROOT/lib/core/output.sh\"; __gash_color_env_ok && echo ok || echo no; printf %s \"\$__GASH_RED\" | od -An -c | tr -d \" \""; }
+  [[ "$(probe GASH_NO_COLOR=0)" == "ok"*"033"* ]]
+  [[ "$(probe GASH_NO_COLOR=)" == "ok"*"033"* ]]
+  [[ "$(probe GASH_NO_COLOR=1)" == "no" ]]
+  [[ "$(probe GASH_NO_COLOR=yes)" == "no" ]]
+  # no-color.org: any non-empty NO_COLOR disables, even "0".
+  [[ "$(probe NO_COLOR=0)" == "no" ]]
+'
+
+it "the --no-color scope tests the TTY in the caller: colors on a terminal, none in a pipe" bash -c '
+  set -euo pipefail
+  command -v script >/dev/null 2>&1 && script -qec true /dev/null >/dev/null 2>&1 || exit 77
+  ROOT="${GASH_TEST_ROOT}"
+  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  load="unset GASH_HEADLESS NO_COLOR GASH_NO_COLOR; source \"$ROOT/tests/gash-test.sh\"; gash_source_all \"$ROOT\""
+  for cmd in disk_usage gash; do
+    # Under a pty (stdout is a terminal): escapes present.
+    tty_out="$(script -qec "bash --norc --noprofile -c '"'"'$load; $cmd'"'"'" /dev/null </dev/null 2>&1)"
+    [[ "$tty_out" == *$'"'"'\033['"'"'* ]] || { echo "no colors on a tty: $cmd"; exit 1; }
+    # Same command, stdout a pipe: none.
+    pipe_out="$(script -qec "bash --norc --noprofile -c '"'"'$load; $cmd | cat'"'"'" /dev/null </dev/null 2>&1)"
+    [[ -n "$pipe_out" && "$pipe_out" != *$'"'"'\033['"'"'* ]] || { echo "colors in a pipe: $cmd"; exit 1; }
+  done
+  # The blanking block shadows the palette for one call only.
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  f() { eval "$__GASH_COLOR_OFF_LOCALS"; [[ -z "$__GASH_RED$__GASH_COLOR_INFO" ]]; }
+  f
+  [[ -n "$__GASH_RED" ]]
+'

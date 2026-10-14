@@ -403,9 +403,11 @@ __llm_pgsql_run() {
     fi
 
     err="$(mktemp)"
-    out="$(PGPASSWORD="$db_pass" PGCONNECT_TIMEOUT=10 \
+    # SQL on stdin (-f -), never argv: /proc/<pid>/cmdline is world-readable.
+    # A ";" on its own line ends the statement even after a -- comment.
+    out="$(printf '%s\n;\n' "$sql" | PGPASSWORD="$db_pass" PGCONNECT_TIMEOUT=10 \
         PGOPTIONS="-c default_transaction_read_only=on -c standard_conforming_strings=on -c statement_timeout=${timeout}s" \
-        psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" "${flags[@]}" -c "$sql" 2>"$err")" || rc=$?
+        psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" "${flags[@]}" -f - 2>"$err")" || rc=$?
     # NOTICE/WARNING lines also land on stderr: only the exit status counts.
     if ((rc != 0)); then
         local msg
@@ -480,7 +482,7 @@ __llm_db_parse_args() {
                     -d | --database) database="$2" ;;
                     -c | --connection) connection="$2" ;;
                     -f | --file) sqlite_file="$2" ;;
-                    -r | --rows | --limit) rows="$2" ;;
+                    -r | --rows | -n | --limit) rows="$2" ;;
                 esac
                 shift 2
                 ;;
@@ -524,20 +526,20 @@ __llm_db_guard_driver() {
 # -----------------------------------------------------------------------------
 
 # Execute a read-only database query with JSON output.
-# Usage: llm_db_query <query> [-d DATABASE] [-c CONNECTION] [-f SQLITE_FILE] [-r ROWS]
+# Usage: llm_db_query <query> [-d DATABASE] [-c CONNECTION] [-f SQLITE_FILE] [-r|-n|--limit ROWS]
 # Example: llm_db_query "SELECT * FROM users" -c myconn
 # Example: llm_db_query "SELECT * FROM users" -f /path/to/db.sqlite
 llm_db_query() {
-    if needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-r ROWS]" "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]" "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
-    # Build explain args: copy "$@" but strip -r/--rows (not accepted by explain)
+    # Build explain args: copy "$@" but strip the row cap (not accepted by explain)
     local __GASH_DB_EXPLAIN_ARGS=()
     local _qw_args=("$@") _qw_i=0
     while [[ $_qw_i -lt ${#_qw_args[@]} ]]; do
         case "${_qw_args[$_qw_i]}" in
-            -r | --rows) _qw_i=$((_qw_i + 2)) ;;
+            -r | --rows | -n | --limit) _qw_i=$((_qw_i + 2)) ;;
             *)
                 __GASH_DB_EXPLAIN_ARGS+=("${_qw_args[$_qw_i]}")
                 _qw_i=$((_qw_i + 1))
@@ -551,7 +553,7 @@ llm_db_query() {
 
 __llm_db_query_impl() {
     local positional="" database="" connection="default" sqlite_file="" rows=100 analyze=0
-    __llm_db_parse_args "-r --rows" "$@" || return 1
+    __llm_db_parse_args "-r --rows -n --limit" "$@" || return 1
 
     if [[ -z "$positional" ]]; then
         __llm_error "missing_query" "" "RETRY" "true" "Provide a SQL query as first argument"
@@ -648,9 +650,9 @@ __llm_db_schema_impl() {
 }
 
 # Get sample rows from a table.
-# Usage: llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [--limit N]
+# Usage: llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n|--limit N]
 llm_db_sample() {
-    if needs_help "llm_db_sample" "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [--limit N]" "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if needs_help "llm_db_sample" "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n N]" "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
         return 0
     fi
 
@@ -659,7 +661,7 @@ llm_db_sample() {
 
 __llm_db_sample_impl() {
     local positional="" database="" connection="default" sqlite_file="" rows=5 analyze=0
-    __llm_db_parse_args "--limit" "$@" || return 1
+    __llm_db_parse_args "-n --limit" "$@" || return 1
     __llm_db_check_table "$positional" || return 1
     __llm_validate_uint "limit" "$rows" || return 1
 

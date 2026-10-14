@@ -53,6 +53,9 @@ __llm_ports_impl() {
             state = (proto == "udp") ? "LISTEN" : $6
             if (port ~ /^[0-9]+$/) printf "%s\t%s\t%s\t%s\n", port, proto, state, addr
         }')"
+    else
+        __llm_error "ports_tool_not_found" "Neither ss nor netstat is installed" "CONTINUE" "false" "Install iproute2 (ss) or net-tools (netstat) to list ports. Skip this check"
+        return 1
     fi
 
     printf '%s\n' "$rows" | sort -t $'\t' -k1,1n -k2,2 -u | "${__GASH_AWK:-awk}" -F '\t' '
@@ -95,7 +98,10 @@ __llm_procs_impl() {
                     return 1
                 }
                 ;;
-            *) shift ;;
+            *)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --name NAME, --port PORT or no option"
+                return 1
+                ;;
         esac
     done
 

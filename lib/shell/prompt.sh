@@ -9,7 +9,9 @@
 # up from $PWD in bash).
 #
 # GASH_PROMPT=0 keeps your own PS1; the hook still runs for history and for
-# the exit status that the AI module reads.
+# the exit status that the AI module reads. NO_COLOR / GASH_NO_COLOR (same
+# rules as the rest of Gash, read at every prompt) keep the layout and drop
+# the color escapes.
 
 # -----------------------------------------------------------------------------
 # Palette (real escape bytes, wrapped in \[ \] when placed in PS1)
@@ -89,6 +91,8 @@ __gash_in_git_repo() {
 
 # Set __GASH_PS1_GIT_SEG to the git segment " (branch*↑1↓2)" with PS1
 # escapes, or to nothing. A variable, not output: no subshell per prompt.
+# Uses the palette and the \[ \] wrappers (ps1_o, ps1_c) of its caller,
+# __gash_ps1_build.
 __gash_ps1_git() {
     __GASH_PS1_GIT_SEG=""
     type -P git >/dev/null 2>&1 || return 0
@@ -122,15 +126,16 @@ __gash_ps1_git() {
         behind="${behind#-}"
     fi
 
-    local seg="\[${__GASH_PS1_BBLUE}\](${branch}"
-    [[ -n "$dirty" ]] && seg+="\[${__GASH_PS1_BYELLOW}\]*\[${__GASH_PS1_BBLUE}\]"
+    local o="${ps1_o-\\[}" c="${ps1_c-\\]}"
+    local seg="${o}${__GASH_PS1_BBLUE}${c}(${branch}"
+    [[ -n "$dirty" ]] && seg+="${o}${__GASH_PS1_BYELLOW}${c}*${o}${__GASH_PS1_BBLUE}${c}"
     if [[ "$ahead" != "0" || "$behind" != "0" ]]; then
-        seg+="\[${__GASH_PS1_DIM}\]"
+        seg+="${o}${__GASH_PS1_DIM}${c}"
         [[ "$ahead" != "0" ]] && seg+="${__GASH_PS1_AHEAD}${ahead}"
         [[ "$behind" != "0" ]] && seg+="${__GASH_PS1_BEHIND}${behind}"
-        seg+="\[${__GASH_PS1_OFF}${__GASH_PS1_BBLUE}\]"
+        seg+="${o}${__GASH_PS1_OFF}${__GASH_PS1_BBLUE}${c}"
     fi
-    seg+=")\[${__GASH_PS1_OFF}\]"
+    seg+=")${o}${__GASH_PS1_OFF}${c}"
     __GASH_PS1_GIT_SEG=" $seg"
 }
 
@@ -140,41 +145,63 @@ __gash_ps1_git() {
 
 __gash_ps1_build() {
     local exit_code="${1:-0}"
-    local R="\[${__GASH_PS1_OFF}\]"
+
+    # \[ \] wrappers and palette, all empty when NO_COLOR / GASH_NO_COLOR
+    # turn colors off: checked here, at every prompt, so toggling either one
+    # takes effect at the next prompt. The locals shadow the palette for
+    # __gash_ps1_git too.
+    local ps1_o='\[' ps1_c='\]'
+    if ! __gash_color_env_ok; then
+        ps1_o='' ps1_c=''
+        local __GASH_PS1_OFF='' __GASH_PS1_RED='' __GASH_PS1_GREEN='' __GASH_PS1_BLUE=''
+        local __GASH_PS1_BRED='' __GASH_PS1_BGREEN='' __GASH_PS1_BYELLOW='' __GASH_PS1_BBLUE=''
+        local __GASH_PS1_BPURPLE='' __GASH_PS1_BWHITE='' __GASH_PS1_DIM=''
+    fi
+    local o="$ps1_o" c="$ps1_c"
+    local R="${o}${__GASH_PS1_OFF}${c}"
     local ps1=""
 
     [[ -n "${debian_chroot-}" ]] && ps1+="(${debian_chroot})"
 
     if [[ -n "${VIRTUAL_ENV-}" ]]; then
-        ps1+="\[${__GASH_PS1_BWHITE}\](${VIRTUAL_ENV##*/})${R} "
+        ps1+="${o}${__GASH_PS1_BWHITE}${c}(${VIRTUAL_ENV##*/})${R} "
     fi
 
     # user: red for root, blue under sudo/su, green otherwise
     if [[ "${EUID-}" == "0" ]]; then
-        ps1+="\[${__GASH_PS1_RED}\]"
+        ps1+="${o}${__GASH_PS1_RED}${c}"
     elif [[ "${USER-}" != "${LOGNAME-}" ]]; then
-        ps1+="\[${__GASH_PS1_BLUE}\]"
+        ps1+="${o}${__GASH_PS1_BLUE}${c}"
     else
-        ps1+="\[${__GASH_PS1_GREEN}\]"
+        ps1+="${o}${__GASH_PS1_GREEN}${c}"
     fi
     ps1+="\u${R}"
 
     if [[ -n "${SSH_CONNECTION-}" ]]; then
-        [[ -z "${__GASH_PS1_HOST_COLOR-}" ]] && __GASH_PS1_HOST_COLOR="$(__gash_ps1_host_color)"
-        ps1+="\[${__GASH_PS1_BWHITE}\]@\[${__GASH_PS1_HOST_COLOR}\]\h${R}"
+        local host_color=""
+        if [[ -n "$o" ]]; then
+            [[ -z "${__GASH_PS1_HOST_COLOR-}" ]] && __GASH_PS1_HOST_COLOR="$(__gash_ps1_host_color)"
+            host_color="$__GASH_PS1_HOST_COLOR"
+        fi
+        ps1+="${o}${__GASH_PS1_BWHITE}${c}@${o}${host_color}${c}\h${R}"
     fi
 
-    ps1+=":\[${__GASH_PS1_BYELLOW}\]\w${R}"
+    ps1+=":${o}${__GASH_PS1_BYELLOW}${c}\w${R}"
 
     __gash_ps1_git
     ps1+="$__GASH_PS1_GIT_SEG"
 
-    # background jobs (one subshell; `jobs` is a builtin)
+    # Running and stopped jobs (one subshell; `jobs` is a builtin). Not
+    # finished ones: bash < 5.3 keeps a finished entry for any program run
+    # by a RETURN trap, which would show as a phantom job.
     local jobs_out
-    jobs_out="$(jobs -p)"
+    jobs_out="$(
+        jobs -pr
+        jobs -ps
+    )"
     if [[ -n "$jobs_out" ]]; then
         local nl="${jobs_out//[!$'\n']/}"
-        ps1+=" \[${__GASH_PS1_BGREEN}\][j$((${#nl} + 1))]${R}"
+        ps1+=" ${o}${__GASH_PS1_BGREEN}${c}[j$((${#nl} + 1))]${R}"
     fi
 
     # GNU screen sessions
@@ -185,16 +212,16 @@ __gash_ps1_build() {
         if [[ -e "${sessions[0]}" ]]; then
             local current="${STY-}"
             current="${current%%.*}"
-            ps1+=" \[${__GASH_PS1_BGREEN}\][s${#sessions[@]}${current:+:$current}]${R}"
+            ps1+=" ${o}${__GASH_PS1_BGREEN}${c}[s${#sessions[@]}${current:+:$current}]${R}"
         fi
         break
     done
 
-    [[ "$exit_code" != "0" ]] && ps1+=" \[${__GASH_PS1_BRED}\][!${exit_code}]${R}"
+    [[ "$exit_code" != "0" ]] && ps1+=" ${o}${__GASH_PS1_BRED}${c}[!${exit_code}]${R}"
 
-    ps1+=" \[${__GASH_PS1_BPURPLE}\]\\\$${R} "
+    ps1+=" ${o}${__GASH_PS1_BPURPLE}${c}\\\$${R} "
     PS1="$ps1"
-    PS2="\[${__GASH_PS1_BPURPLE}\]>${R} "
+    PS2="${o}${__GASH_PS1_BPURPLE}${c}>${R} "
 }
 
 # Window title: "cwd [user]" locally, "user@host:cwd" over SSH.

@@ -125,7 +125,7 @@ __gash_migrate_env_problems() {
     [[ -f "$env_file" ]] || return 0
     while IFS= read -r msg; do
         [[ "$msg" =~ Line\ ([0-9]+)\ of\ [^:]+:\ (.*)$ ]] || continue
-        [[ "${BASH_REMATCH[2]}" == "SSH key not found"* ]] && continue
+        [[ "${BASH_REMATCH[2]}" == "SSH key file not found"* ]] && continue
         printf '%s\t%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
     done < <(
         __GASH_ENV_LOADED=""

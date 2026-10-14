@@ -27,12 +27,17 @@
 #           system-breaking targets (auth databases, boot, kernel interfaces,
 #           system binaries/libraries, PAM, SSH server config).
 #   ASK   — risky but legitimate (most of /etc, /var, /usr/local, /root,
-#           and SSH keys: ~/.ssh, /home/<user>/.ssh):
+#           and any path with a .ssh component, at any depth):
 #           interactively a real y/n prompt (needs_confirm_prompt); headless,
 #           refused unless --force is passed explicitly.
 #   ALLOW — /tmp, /var/tmp, /home/<user>/*, relative paths, everything else.
 # Paths are normalized first (//, /./, trailing /, ~/ and ~user/ prefixes),
 # so //etc/shadow is /etc/shadow; any ".." segment is refused.
+#
+# rsync --delete runs without asking only below /tmp, /var/tmp, /home/<user>/
+# and the remote home (relative paths): never on the remote home itself,
+# however it is written (~, ~/, /home/<user>, /Users/<user>, /root), and
+# never on a path with a sensitive component.
 
 # -----------------------------------------------------------------------------
 # Path safety tables
@@ -46,6 +51,9 @@ __REMOTE_DENY_PREFIXES=(
     "/usr/bin" "/usr/sbin" "/usr/lib" "/usr/lib64"
 )
 __REMOTE_ASK_PREFIXES=("/etc" "/var" "/usr/local" "/root")
+# Path components that are sensitive wherever they appear (any depth, any
+# home, absolute or relative): ASK, and never safe for rsync --delete.
+__REMOTE_ASK_COMPONENTS=(".ssh")
 __REMOTE_DELETE_SAFE_PREFIXES=("/tmp" "/var/tmp")
 
 # -----------------------------------------------------------------------------
@@ -81,16 +89,30 @@ __remote_resolve_target() {
 }
 
 # Canonical spelling of a remote path for the safety tables: repeated
-# slashes collapsed, "." segments and trailing slashes dropped, "~/" and
-# "~user/" home prefixes reduced to a relative path ("~" alone -> ".").
+# slashes collapsed, "." segments and trailing slashes dropped, the "~/"
+# prefix reduced to a relative path ("~" alone -> "."). Another user's home
+# is spelled out: "~root" is /root, "~NAME" /home/NAME.
 # Usage: __remote_normalize_path PATH   (prints the normalized path)
 __remote_normalize_path() {
-    local p="${1-}"
-    if [[ "$p" == "~" || "$p" =~ ^~[^/]*$ ]]; then
-        printf '.'
-        return
+    local p="${1-}" user rest
+    # shellcheck disable=SC2088 # a literal "~": the remote side expands it
+    if [[ "$p" == "~" || "$p" == "~/"* ]]; then
+        p="${p#"~"}"
+        p="${p#/}"
+        [[ -z "$p" ]] && p="."
+    elif [[ "$p" == "~"* ]]; then
+        user="${p#"~"}"
+        rest=""
+        if [[ "$user" == */* ]]; then
+            rest="/${user#*/}"
+            user="${user%%/*}"
+        fi
+        if [[ "$user" == root ]]; then
+            p="/root$rest"
+        else
+            p="/home/$user$rest"
+        fi
     fi
-    [[ "$p" =~ ^~[^/]*/ ]] && p="${p#"${BASH_REMATCH[0]}"}"
     while [[ "$p" == *//* ]]; do p="${p//\/\//\/}"; done
     while [[ "$p" == */./* ]]; do p="${p//\/.\//\/}"; done
     [[ "$p" == ./* ]] && p="${p#./}"
@@ -100,7 +122,22 @@ __remote_normalize_path() {
     printf '%s' "${p:-.}"
 }
 
-# Classify a remote path: prints "allow", "deny:<prefix>", or "ask:<prefix>".
+# Print the first __REMOTE_ASK_COMPONENTS entry that is a whole component of
+# a normalized path, compared case-insensitively (macOS homes are).
+# Usage: __remote_sensitive_component PATH   (fails when there is none)
+__remote_sensitive_component() {
+    local lowered="/${1,,}/" comp
+    for comp in "${__REMOTE_ASK_COMPONENTS[@]}"; do
+        if [[ "$lowered" == *"/${comp,,}/"* ]]; then
+            printf '%s' "$comp"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Classify a remote path: prints "allow", "deny:<prefix>", or "ask:<prefix>"
+# ("ask:<component>" for a sensitive component such as .ssh).
 __remote_classify_path() {
     local raw="$1"
     local path
@@ -110,27 +147,32 @@ __remote_classify_path() {
         printf 'deny:path_traversal'
         return
     fi
-    # SSH keys and authorized_keys, in the remote home or any user's.
-    if [[ "$path" == ".ssh" || "$path" == .ssh/* || "$path" =~ ^/home/[^/]+/\.ssh(/|$) ]]; then
-        printf 'ask:~/.ssh'
+
+    local prefix
+    if [[ "$path" == /* ]]; then
+        if [[ "$path" == "/" ]]; then
+            printf 'deny:/'
+            return
+        fi
+        for prefix in "${__REMOTE_DENY_PREFIXES[@]}"; do
+            if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
+                printf 'deny:%s' "$prefix"
+                return
+            fi
+        done
+    fi
+
+    # SSH keys and authorized_keys live in any home, and a git or service
+    # account's home can be anywhere (/srv/git/.ssh, /Users/x/.ssh).
+    local comp
+    if comp="$(__remote_sensitive_component "$path")"; then
+        printf 'ask:%s' "$comp"
         return
     fi
     if [[ "$path" != /* ]]; then
         printf 'allow'
         return
     fi
-    if [[ "$path" == "/" ]]; then
-        printf 'deny:/'
-        return
-    fi
-
-    local prefix
-    for prefix in "${__REMOTE_DENY_PREFIXES[@]}"; do
-        if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
-            printf 'deny:%s' "$prefix"
-            return
-        fi
-    done
 
     for prefix in "${__REMOTE_DELETE_SAFE_PREFIXES[@]}"; do
         if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
@@ -187,9 +229,11 @@ __remote_is_safe_for_delete() {
     path="$(__remote_normalize_path "$1")"
 
     [[ "/$path/" == *"/../"* ]] && return 1
-    [[ "$path" == ".ssh" || "$path" == .ssh/* || "$path" =~ ^/home/[^/]+/\.ssh(/|$) ]] && return 1
-    # The home directory itself: --delete there would mirror over all of it.
-    [[ "$path" == "." ]] && return 1
+    __remote_sensitive_component "$path" >/dev/null && return 1
+    # The home directory itself, however it is written (~, ~/ and ~user
+    # normalize to "."): --delete there would mirror over all of it.
+    [[ "$path" == "." || "$path" == "/root" ]] && return 1
+    [[ "$path" =~ ^/(home|Users)/[^/]+$ ]] && return 1
     [[ "$path" != /* ]] && return 0
 
     local prefix
@@ -199,7 +243,8 @@ __remote_is_safe_for_delete() {
         fi
     done
 
-    [[ "$path" =~ ^/home/[^/]+(/|$) ]] && return 0
+    # Below /home/<user>/ (normalized: no trailing slash, so not the home).
+    [[ "$path" =~ ^/home/[^/]+/ ]] && return 0
 
     return 1
 }
@@ -213,7 +258,7 @@ __remote_check_delete_safety() {
     [[ "$force" -eq 1 ]] && return 0
 
     if __gash_headless_gate_active; then
-        __gash_error "rsync --delete targeting '$remote_path' is outside the safe set (/tmp, /var/tmp, /home/<user>/). Refused in headless mode without --force."
+        __gash_error "rsync --delete targeting '$remote_path' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home; never the home itself or .ssh). Refused in headless mode without --force."
         return 1
     fi
     if needs_confirm_prompt "rsync --delete targeting '$remote_path' can remove files on the remote. Proceed?"; then

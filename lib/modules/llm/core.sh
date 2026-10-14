@@ -99,6 +99,17 @@ __LLM_SECRET_EXCEPTIONS=('*.pub' '.env.example' '.env.sample' '.env.dist' '.env.
 # Directories whose whole content is secret (matched on the full path).
 __LLM_SECRET_DIRS=('.ssh' '.gnupg' '.aws' '.azure' '.kube' '.docker' '.config/gcloud')
 
+# git options that keep a repository's own configuration from running
+# programs or paging: fsmonitor hook, hooks (post-index-change), external
+# diff, pager. Used by llm_git_* and by the git wrapper inside llm_exec.
+__LLM_GIT_SAFE_CONFIG=(-c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.external= -c core.pager=cat)
+
+# Run git with __LLM_GIT_SAFE_CONFIG (never a shell function named git).
+# Usage: __llm_git ARGS...
+__llm_git() {
+    command git "${__LLM_GIT_SAFE_CONFIG[@]}" "$@"
+}
+
 # Validate and sanitize a path.
 # Returns sanitized path on stdout, returns 1 if path is forbidden.
 # Usage: __llm_validate_path <path>
@@ -125,22 +136,32 @@ __llm_validate_path() {
     local normalized
     normalized="$(realpath -m "$path" 2>/dev/null)" || normalized="$path"
 
-    # Check against forbidden paths (whole components: /root, not /rootfs),
-    # both as written and as resolved. macOS resolves /etc, /tmp and /var
-    # to /private/...: check that form without the prefix too.
-    local forbidden candidate lexical
-    lexical="$(realpath -m -s "$path" 2>/dev/null)" || lexical="$path"
-    for candidate in "$normalized" "${normalized#/private}" "$lexical"; do
-        for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
-            if [[ "$candidate" == "$forbidden" || "$candidate" == "$forbidden"/* ]]; then
-                __gash_json_error "forbidden_path" "$normalized" "FATAL" "This path is protected and cannot be accessed"
-                return 1
-            fi
-        done
-    done
+    if __llm_path_forbidden "$path" "$normalized"; then
+        __gash_json_error "forbidden_path" "$normalized" "FATAL" "This path is protected and cannot be accessed"
+        return 1
+    fi
 
     echo "$normalized"
     return 0
+}
+
+# Whether a path is in __LLM_FORBIDDEN_PATHS (whole components: /root, not
+# /rootfs), both as written and as resolved. macOS resolves /etc, /tmp and
+# /var to /private/...: that form is checked without the prefix too.
+# NORMALIZED is the `realpath -m` form when the caller already has it.
+# Usage: __llm_path_forbidden PATH [NORMALIZED]
+__llm_path_forbidden() {
+    local path="${1-}" normalized="${2-}" lexical forbidden candidate
+    [[ -n "$normalized" ]] || normalized="$(realpath -m -- "$path" 2>/dev/null)" || normalized="$path"
+    lexical="$(realpath -m -s -- "$path" 2>/dev/null)" || lexical="$path"
+    for candidate in "$normalized" "${normalized#/private}" "$lexical"; do
+        for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
+            if [[ "$candidate" == "$forbidden" || "$candidate" == "$forbidden"/* ]]; then
+                return 0
+            fi
+        done
+    done
+    return 1
 }
 
 # Print a [client] INI block for mysql --defaults-extra-file consumption.

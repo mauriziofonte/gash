@@ -707,7 +707,7 @@ __ai_sysinfo_impl() {
     [[ "$raw_mode" -eq 1 ]] && no_color=1
 
     # Local color scope (propagates to the interactive report formatter below)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # Check dependencies
     __ai_require_curl || return 1

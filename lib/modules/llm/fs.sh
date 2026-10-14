@@ -303,6 +303,10 @@ __llm_find_impl() {
             rg -l --no-heading --color=never \
                 --glob '!node_modules' --glob '!vendor' --glob '!.git' "${secret_ex[@]}" \
                 -e "$contains_regex" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
+        elif [[ -d "$safe_path" ]]; then
+            __llm_secret_excludes grep secret_ex
+            __llm_grep_tree "$safe_path" "php,js,ts,py,go,java" -l "${secret_ex[@]}" \
+                -e "$contains_regex" | head -n "$limit" || true
         else
             __llm_secret_excludes grep secret_ex
             grep -rl --include='*.php' --include='*.js' --include='*.ts' \
@@ -434,9 +438,44 @@ __llm_grep_impl() {
 
         [[ $context -gt 0 ]] && grep_args+=(-C "$context")
 
-        grep "${grep_args[@]}" -e "$pattern" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
+        if [[ -d "$safe_path" ]]; then
+            local -a tree_args=(-n --color=never "${secret_ex[@]}")
+            [[ $context -gt 0 ]] && tree_args+=(-C "$context")
+            __llm_grep_tree "$safe_path" "$extensions" "${tree_args[@]}" -e "$pattern" | head -n "$limit" || true
+        else
+            grep "${grep_args[@]}" -e "$pattern" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
+        fi
         return 0
     fi
+}
+
+# grep fallback for a directory when rg is missing. find walks the tree and
+# prunes noise and secret directories by path: grep --exclude-dir matches
+# one name only, so a rule such as ".config/gcloud" needs find. Secret file
+# names are skipped here and by the caller's --exclude arguments.
+# Usage: __llm_grep_tree DIR EXTS(comma list, may be empty) GREP_ARG...
+__llm_grep_tree() {
+    local root="$1" ext_csv="$2" dir pattern ext
+    shift 2
+    local -a prune=(-name node_modules -o -name vendor -o -name .git) names=() skip=() list=()
+    for dir in "${__LLM_SECRET_DIRS[@]}"; do
+        prune+=(-o -ipath "*/$dir")
+    done
+    for pattern in "${__LLM_SECRET_PATTERNS[@]}"; do
+        skip+=(! -iname "$pattern")
+    done
+    if [[ -n "$ext_csv" ]]; then
+        IFS=',' read -ra list <<<"$ext_csv"
+        for ext in "${list[@]}"; do
+            ((${#names[@]} == 0)) || names+=(-o)
+            names+=(-name "*.$ext")
+        done
+        names=(\( "${names[@]}" \))
+    fi
+    # /dev/null keeps grep from reading stdin when nothing was found and
+    # makes it print file names (as grep -r does).
+    find "$root" -mindepth 1 \( "${prune[@]}" \) -prune -o -type f ${names[@]+"${names[@]}"} "${skip[@]}" -print0 2>/dev/null |
+        xargs -0 grep "$@" -- /dev/null 2>/dev/null
 }
 
 # Read a config file (NOT .env for security).

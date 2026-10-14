@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mauriziofonte/gash/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.
+  - name: Documentation
+    url: https://github.com/mauriziofonte/gash/tree/main/docs
+    about: Function reference, configuration, security model and troubleshooting.

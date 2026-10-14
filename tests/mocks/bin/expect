@@ -2,7 +2,12 @@
 
 # Minimal expect mock.
 # The real code calls: expect -f <script> -- <args...>
-# We ignore the script and print deterministic output.
+# We ignore the script and print deterministic output; MOCK_EXPECT_STDIN
+# names a file that receives what Gash sent on stdin.
+
+if [[ -n "${MOCK_EXPECT_STDIN-}" ]]; then
+	cat >"$MOCK_EXPECT_STDIN"
+fi
 
 cat <<'OUT'
 spawn ssh-add -- /home/user/.ssh/key1

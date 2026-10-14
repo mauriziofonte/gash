@@ -38,7 +38,7 @@ disk_usage() {
                 ;;
         esac
     done
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # POSIX output in KiB: one line per filesystem, mount point last. GNU df
     # adds the type with -T; BSD/macOS df has no -T, so keep /dev devices.
@@ -593,7 +593,7 @@ ip_public() {
     fi
 
     # Local color scope (respects env, TTY, --no-color)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
     echo -e "${__GASH_BOLD_WHITE}Public IP:${__GASH_COLOR_OFF} ${__GASH_CYAN}${ip}${__GASH_COLOR_OFF}"
 }
 
@@ -631,17 +631,29 @@ process_find() {
     fi
 }
 
-# Kill all processes by name.
-# Usage: process_kill PROCESS_NAME
+# Kill all processes by name. Interactively a single match is killed
+# directly and several are confirmed first; without a terminal to ask
+# (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless --force/-f.
+# Usage: process_kill [--force] PROCESS_NAME
 # Alias: pk
 process_kill() {
-    needs_help "process_kill" "process_kill PROCESS_NAME [--force]" \
-        "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors). Alias: pk" \
+    needs_help "process_kill" "process_kill [--force] PROCESS_NAME" \
+        "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors). Without a terminal, needs --force. Alias: pk" \
         "${1-}" && return
 
-    local process_name="${1-}"
-    local force_flag="${2-}"
-    __gash_require_arg "$process_name" "process name" "process_kill <process_name>" || return 1
+    local process_name="" force=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f | --force) force=1 ;;
+            -*)
+                __gash_error "Unknown option: $1"
+                return 1
+                ;;
+            *) process_name="$1" ;;
+        esac
+        shift
+    done
+    __gash_require_arg "$process_name" "process name" "process_kill [--force] <process_name>" || return 1
 
     # Exact, case-insensitive match on the executable name: a loose
     # `ps | grep -i` would also hit redis-sentinel when asked for redis,
@@ -655,12 +667,21 @@ process_kill() {
     fi
 
     local count
-    count=$(wc -w <<<"$pids")
-    if [[ "$count" -gt 1 && "$force_flag" != "--force" ]]; then
-        __gash_warning "$count processes match '$process_name': $(tr '\n' ' ' <<<"$pids")"
-        if ! needs_confirm_prompt "Kill all of them?"; then
-            __gash_info "Aborted."
-            return 0
+    count=$(($(wc -w <<<"$pids")))
+    if [[ $force -eq 0 ]]; then
+        # Same rule as port_kill: nobody to ask means no kill without --force.
+        if [[ "${GASH_HEADLESS-}" == "1" ]] || ! { : </dev/tty; } 2>/dev/null; then
+            local pid_list
+            pid_list="$(tr '\n' ' ' <<<"$pids")"
+            __gash_error "$count process(es) match '$process_name' (PID ${pid_list% }). Refusing to kill without a terminal to confirm; pass --force."
+            return 1
+        fi
+        if [[ "$count" -gt 1 ]]; then
+            __gash_warning "$count processes match '$process_name': $(tr '\n' ' ' <<<"$pids")"
+            if ! needs_confirm_prompt "Kill all of them?"; then
+                __gash_info "Aborted."
+                return 0
+            fi
         fi
     fi
 
@@ -1040,14 +1061,24 @@ HELP
         --see-also "process_find port_kill" \
         <<'HELP'
 USAGE
-  process_kill PROCESS_NAME
+  process_kill [--force] PROCESS_NAME
 
 EXAMPLES
-  # Kill all node processes
+  # Kill all node processes (asks first when several match)
   pk node
 
   # Kill a stuck service
   pk webpack-dev-server
+
+  # No confirmation (scripts, agents)
+  pk --force webpack-dev-server
+
+NOTES
+  Matches the executable name exactly, ignoring case. Interactively a single
+  match is killed directly and several are confirmed first. Without a
+  terminal to ask (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless
+  --force is given, whatever the number of matches. SIGTERM first, SIGKILL
+  for processes still alive after about 3 seconds.
 HELP
 
     __gash_register_help "port_kill" \

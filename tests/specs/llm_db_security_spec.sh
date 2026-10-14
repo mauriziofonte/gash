@@ -122,7 +122,7 @@ MOCK
   ! grep -q "p@ss" "$tmp/args"
 '
 
-it "llm_db_query runs PostgreSQL read-only with a timeout and standard strings" bash -c '
+it "llm_db_query runs PostgreSQL read-only with a timeout and standard strings, SQL on stdin" bash -c '
   set -euo pipefail
   command -v jq >/dev/null 2>&1 || exit 77
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
@@ -131,6 +131,7 @@ it "llm_db_query runs PostgreSQL read-only with a timeout and standard strings" 
 #!/usr/bin/env bash
 printf "%s\n" "$@" >"$MOCK_DIR/args"
 printf "%s\n" "$PGOPTIONS" >"$MOCK_DIR/pgoptions"
+cat >"$MOCK_DIR/stdin"
 printf "[{\"id\": 1, \"ok\": true}]\n"
 MOCK
   chmod +x "$tmp/bin/psql"
@@ -143,8 +144,12 @@ MOCK
   grep -q "default_transaction_read_only=on" "$tmp/pgoptions"
   grep -q "standard_conforming_strings=on" "$tmp/pgoptions"
   grep -q "statement_timeout=30s" "$tmp/pgoptions"
-  grep -q "LIMIT 3" "$tmp/args"
+  grep -q "LIMIT 3" "$tmp/stdin"
+  grep -qx "SELECT 1 AS id, true AS ok" "$tmp/stdin"
+  [[ "$(tail -n 1 "$tmp/stdin")" == ";" ]]
   grep -qx "ON_ERROR_STOP=1" "$tmp/args"
+  # Neither the SQL nor the password ever reach argv.
+  ! grep -q "SELECT" "$tmp/args"
   ! grep -q "secret" "$tmp/args"
 '
 

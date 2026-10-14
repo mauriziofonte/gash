@@ -253,17 +253,20 @@ gash_uninstall() {
         __gash_error "Failed to remove $real_dir; please remove it manually."
     fi
 
-    # Handle ~/.gash_env (contains credentials - ask user)
-    if [ -f "$HOME/.gash_env" ]; then
-        __gash_warning "Found ~/.gash_env (may contain database credentials)."
-        if needs_confirm_prompt "Remove ~/.gash_env?"; then
-            if rm -f "$HOME/.gash_env" 2>/dev/null; then
-                __gash_info "Removed ~/.gash_env"
+    # Handle the settings file, ~/.gash_env or GASH_ENV_FILE (contains
+    # credentials - ask user)
+    local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    local env_shown="${env_file/#$HOME/\~}"
+    if [ -f "$env_file" ]; then
+        __gash_warning "Found $env_shown (may contain database credentials)."
+        if needs_confirm_prompt "Remove $env_shown?"; then
+            if rm -f -- "$env_file" 2>/dev/null; then
+                __gash_info "Removed $env_shown"
             else
-                __gash_error "Failed to remove ~/.gash_env; please remove it manually."
+                __gash_error "Failed to remove $env_shown; please remove it manually."
             fi
         else
-            __gash_info "Kept ~/.gash_env"
+            __gash_info "Kept $env_shown"
         fi
     fi
 
@@ -392,7 +395,7 @@ gash_doctor() {
     done
 
     # Local color scope (respects env, TTY, --no-color)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
     local issues=0 f mod tool name
@@ -565,7 +568,7 @@ __gash_card_functions() {
     local mod fn
     for fn in "${!__GASH_HELP_MODULE[@]}"; do
         for mod in $1; do
-            [[ "${__GASH_HELP_MODULE[$fn]}" == "$mod" ]] && printf '%s\n' "$fn"
+            if [[ "${__GASH_HELP_MODULE[$fn]}" == "$mod" ]]; then printf '%s\n' "$fn"; fi
         done
     done | sort
 }
@@ -645,7 +648,7 @@ gash() {
             *) topic="$a" ;;
         esac
     done
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
     [[ "$topic" == "--help" ]] && {
         __gash_help_display gash
         return 0
@@ -740,7 +743,7 @@ gash_help() {
     # If colors must be suppressed (env, TTY, or --no-color flag), locally
     # shadow the module-wide __GASH_* vars to empty. Propagates via dynamic
     # scoping to __gash_help_display / _search / _list called below.
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
     local W="${__GASH_BOLD_WHITE-\033[1;37m}"

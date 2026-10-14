@@ -218,11 +218,29 @@ gash_ssh_auto_unlock() {
     local IFS=$'\n'
     local row
 
+    # Fingerprints already in the agent: those keys are skipped.
+    local loaded="" fp
+    [[ "$ssh_add_list" == *SHA256:* || "$ssh_add_list" == *MD5:* ]] && loaded="$ssh_add_list"
+
     for row in $ssh_keys; do
         [[ -z "$row" ]] && continue
 
         local keyfile="${row%%$'\t'*}"
         local password="${row#*$'\t'}"
+
+        if [[ -n "$loaded" ]] && command -v ssh-keygen >/dev/null 2>&1; then
+            fp=""
+            if [[ -f "$keyfile.pub" ]]; then
+                fp="$(ssh-keygen -lf "$keyfile.pub" 2>/dev/null)" || fp=""
+            else
+                fp="$(ssh-keygen -lf "$keyfile" 2>/dev/null)" || fp=""
+            fi
+            fp="${fp#* }"
+            fp="${fp%% *}"
+            if [[ -n "$fp" && "$loaded" == *" $fp "* ]]; then
+                continue
+            fi
+        fi
 
         # Encode values to safely carry special characters (incl. newlines)
         local key_b64 pass_b64

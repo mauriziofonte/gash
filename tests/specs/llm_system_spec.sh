@@ -29,7 +29,7 @@ SS
   jq -e "length == 3 and (map(.state) | index(\"ESTAB\") != null)" <<<"$out" >/dev/null
 '
 
-it "llm_ports returns an empty array without ss or netstat" bash -c '
+it "llm_ports reports a missing ss and netstat as a CONTINUE error" bash -c '
   set -euo pipefail
   command -v jq >/dev/null 2>&1 || exit 77
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
@@ -39,8 +39,11 @@ it "llm_ports returns an empty array without ss or netstat" bash -c '
   done
   export GASH_HEADLESS=1
   source "$GASH_TEST_ROOT/gash.sh"
-  out="$(PATH="$tmp" llm_ports)"
-  [[ "$out" == "[]" ]]
+  rc=0
+  out="$(PATH="$tmp" llm_ports 2>"$tmp/err")" || rc=$?
+  [[ $rc -eq 1 && -z "$out" ]]
+  jq -e ".error == \"ports_tool_not_found\" and .action == \"CONTINUE\" and .recoverable == true
+    and (.hint | test(\"iproute2\") and test(\"net-tools\"))" "$tmp/err" >/dev/null
 '
 
 it "llm_project reports has_tests=false for a Go module without tests" bash -c '
@@ -108,4 +111,41 @@ it "llm_deps reads requirements.txt and go.mod into the same JSON shape" bash -c
   source "$GASH_TEST_ROOT/gash.sh"
   [[ "$(llm_deps "$tmp/py" | jq -c .dependencies)" == "[\"requests\",\"flask\",\"numpy\"]" ]]
   [[ "$(llm_deps "$tmp/go" --dev | jq -c "[.prod, .dev]")" == "[[\"github.com/a/b\",\"example.com/z\"],[]]" ]]
+'
+
+it "llm_git_* never run programs named by the repository config" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  command -v git >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp" GIT_CONFIG_NOSYSTEM=1
+  git config --global user.email t@example.com
+  git config --global user.name T
+  git init -q "$tmp/r"; cd "$tmp/r"
+  printf "a\n" >a.txt; printf "*.txt diff=evil\n" >.gitattributes
+  git add .; git commit -qm one
+  printf "b\n" >>a.txt; git add a.txt; printf "c\n" >>a.txt
+  # An untrusted checkout: every hook that git would run writes a marker.
+  printf "#!/bin/sh\necho \"\$0 \$*\" >>\"%s/ran\"\nexit 1\n" "$tmp" >"$tmp/evil.sh"
+  chmod +x "$tmp/evil.sh"
+  mkdir hooks; cp "$tmp/evil.sh" hooks/post-index-change
+  git config core.fsmonitor "$tmp/evil.sh"
+  git config core.hooksPath "$tmp/r/hooks"
+  git config diff.external "$tmp/evil.sh"
+  git config diff.evil.command "$tmp/evil.sh"
+  git config diff.evil.textconv "$tmp/evil.sh"
+  git config core.pager "$tmp/evil.sh"
+  git config log.showSignature true
+  git config gpg.program "$tmp/evil.sh"
+  # Sanity: plain git does run them here (otherwise the test proves nothing).
+  git status >/dev/null 2>&1 || true
+  [[ -e "$tmp/ran" ]] || exit 77
+  rm -f "$tmp/ran"
+
+  source "$GASH_TEST_ROOT/gash.sh"
+  llm_git_status | jq -e ".staged == [\"a.txt\"] and .modified == [\"a.txt\"]" >/dev/null
+  [[ "$(llm_git_diff)" == *"a.txt"* ]]
+  [[ "$(llm_git_diff --staged)" == *"a.txt"* ]]
+  llm_git_log | jq -e "length == 1 and .[0].subject == \"one\"" >/dev/null
+  [[ ! -e "$tmp/ran" ]] || { cat "$tmp/ran"; exit 1; }
 '

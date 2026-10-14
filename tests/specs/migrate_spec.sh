@@ -10,6 +10,9 @@ __migrate_fixture='
   set -euo pipefail
   command -v diff >/dev/null 2>&1 || exit 77
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  # On failure, say where and show what gash migrate printed.
+  __diag() { echo "failed at line $1: $2" >&2; [[ -f "$tmp/out" ]] && tail -n 40 "$tmp/out" >&2; return 0; }
+  trap "__diag \$LINENO \"\$BASH_COMMAND\"" ERR
   H="$tmp/home"; mkdir -p "$H" "$tmp/bin"
   ln -s "$GASH_TEST_ROOT" "$H/.gash"
   cat >"$H/.gashrc" <<"V1"
@@ -95,28 +98,28 @@ it "each screen choice lands in ~/.gash_env as the matching setting" bash -c "$_
   cmp "$H/.gashrc" "$tmp/gashrc.orig"
   grep -qx "FOO BAR" "$H/.gash_env"
   cmp "$H/.bash_local" "$tmp/local.orig"
-  grep -q "Gash 2.0 migration . 7 of 7" "$tmp/out"
+  grep -q "Gash 2.0 migration.* 7 of 7" "$tmp/out"
   # The settings are read back by Gash 2.
   [[ "$(__gash_reload_env; __gash_get_setting GASH_UMASK)" == 022 ]]
 '
 
 it "nothing is written on cancel, on later, or with a settings file to create" bash -c "$__migrate_fixture"'
   # Cancel at the diff preview.
-  printf "1\n1\n1\n1\n1\n1\n1\n1\n2\n" | gash migrate --plain >/dev/null 2>&1
+  printf "1\n1\n1\n1\n1\n1\n1\n1\n2\n" | gash migrate --plain >"$tmp/out" 2>&1
   cmp "$H/.gashrc" "$tmp/gashrc.orig"
   __gash_migrate_needed
   [[ ! -d "$XDG_STATE_HOME/gash/backups" ]]
   # "Remind me next time" from the automatic start.
-  printf "2\n" | gash_migrate --auto --plain >/dev/null
+  printf "2\n" | gash_migrate --auto --plain >"$tmp/out" 2>&1
   __gash_migrate_needed
   # "Don'"'"'t ask again" records the schema and changes no file.
-  printf "3\n" | gash_migrate --auto --plain >/dev/null
+  printf "3\n" | gash_migrate --auto --plain >"$tmp/out" 2>&1
   ! __gash_migrate_needed
   cmp "$H/.gashrc" "$tmp/gashrc.orig"
 
   # No ~/.gash_env yet: a chosen setting creates it, private.
   rm -rf "$XDG_STATE_HOME" "$H/.gash_env" "$H/.bash_local"
-  printf "1\n1\n2\n2\n1\n1\n" | gash migrate --plain >/dev/null 2>&1
+  printf "1\n1\n2\n2\n1\n1\n" | gash migrate --plain >"$tmp/out" 2>&1
   grep -qx "GASH_REPLACE_TOOLS=1" "$H/.gash_env"
   grep -qx "GASH_UMASK=022" "$H/.gash_env"
   [[ "$(stat -c %a "$H/.gash_env" 2>/dev/null || stat -f %Lp "$H/.gash_env")" == 600 ]]
@@ -152,4 +155,11 @@ it "__gash_choose follows arrow keys, j/k and digits on a terminal" bash -c '
   [[ "$(run "\033[A\r")" == 4 ]]
   [[ "$(run "4k\r")" == 3 ]]
   [[ "$(run "q")" == none ]]
+'
+
+it "a missing SSH key is not a line to comment out" bash -c "$__migrate_fixture"'
+  printf "SSH:~/.ssh/gone=pw\nFOO BAR\n" >"$H/.gash_env"
+  problems="$(__gash_migrate_env_problems)"
+  [[ "$problems" == 2$'\''\t'\''* ]]
+  [[ "$(grep -c . <<<"$problems")" -eq 1 ]]
 '

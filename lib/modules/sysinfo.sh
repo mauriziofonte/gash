@@ -311,6 +311,7 @@ __sysinfo_collect_overview() {
     [[ -n "$ip" ]] && lines+=("${M}Address${R} $ip")
     echo
     __gash_box --color "${__GASH_COLOR_PRIMARY-}" "${lines[@]}"
+    echo
 }
 
 # =============================================================================
@@ -1815,7 +1816,7 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     [[ "$__SYSINFO_MODE" == "llm" ]] && no_color=1
 
     # Local color scope (propagates to __sysinfo_collect_* via dynamic scoping)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # Sudo caching (single prompt). `|| true`: missing sudo must never kill
     # a `set -e` caller. The RETURN trap guarantees the keep-alive loop is

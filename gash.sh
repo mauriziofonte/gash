@@ -111,6 +111,16 @@ __gash_load_modules() {
 
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     __gash_load_core
+    # Settings from ~/.gash_env that change what functions do; the ones
+    # that shape the interactive shell (prompt, history, umask, aliases)
+    # mean nothing here. Read quietly, environment first, no forks.
+    if declare -F __gash_apply_settings >/dev/null; then
+        if [[ "${GASH_DEBUG-}" == "1" ]]; then
+            __gash_apply_settings GASH_DB_TIMEOUT GASH_AI_CONFIRM GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI
+        else
+            __gash_apply_settings GASH_DB_TIMEOUT GASH_AI_CONFIRM GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI 2>/dev/null
+        fi
+    fi
     __gash_load_modules
     declare -F __gash_migrate_autostart >/dev/null && __gash_migrate_autostart
     return 0

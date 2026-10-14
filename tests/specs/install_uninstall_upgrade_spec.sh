@@ -200,6 +200,25 @@ it "gash_uninstall removes custom GASH_DIR location" bash -c '
   [[ ! -d "$custom_dir" ]]
 '
 
+it "gash_uninstall removes the settings file named by GASH_ENV_FILE" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  custom_dir="$tmp/custom_gash"
+  mkdir -p "$custom_dir/lib/core" "$tmp/conf"; : >"$custom_dir/gash.sh"
+  : > "$tmp/.gashrc"
+  : > "$tmp/.bashrc"
+  printf "DB:x=mysql://u:p@h/d\n" >"$tmp/conf/gash.env"
+
+  needs_confirm_prompt() { return 0; }
+  out="$(HOME="$tmp" GASH_DIR="$custom_dir" GASH_ENV_FILE="$tmp/conf/gash.env" gash_uninstall 2>&1)" || true
+
+  [[ ! -e "$tmp/conf/gash.env" ]]
+  [[ "$out" == *"Removed ~/conf/gash.env"* ]]
+'
+
 it "gash_uninstall cleans all profile files" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"

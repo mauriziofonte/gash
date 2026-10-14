@@ -120,9 +120,7 @@ __gash_fs_color_ok() {
     local is_machine="${2-0}"
     [[ "$no_color" -eq 1 ]] && return 1
     [[ "$is_machine" -eq 1 ]] && return 1
-    [[ -n "${NO_COLOR-}" ]] && return 1
-    [[ -t 1 ]] || return 1
-    return 0
+    __gash_use_color
 }
 
 # Check whether GNU du supports --exclude (BSD du does not).
@@ -513,19 +511,21 @@ files_largest() {
     err_tmp="$(mktemp)" || err_tmp=""
     [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
-    # `|| true`: an unreadable subdir (find rc!=0) or SIGPIPE from `head`
-    # closing the pipe early must not kill a `set -euo pipefail` caller.
+    # `|| true`: an unreadable subdir (find rc!=0) must not kill a
+    # `set -euo pipefail` caller. The limit is applied by awk, which reads
+    # to the end: `head` closing the pipe early makes sort print "write
+    # failed: Broken pipe" wherever SIGPIPE is ignored.
     local sorted
     if [[ -n "$err_tmp" ]]; then
         sorted=$("${find_cmd[@]}" 2>"$err_tmp" |
             awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' |
             sort -nr -k1,1 -t$'\t' |
-            head -n "$limit") || true
+            awk -v n="$limit" 'NR <= n') || true
     else
         sorted=$("${find_cmd[@]}" 2>/dev/null |
             awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' |
             sort -nr -k1,1 -t$'\t' |
-            head -n "$limit") || true
+            awk -v n="$limit" 'NR <= n') || true
     fi
 
     t1=$(__gash_fs_now_ms)
@@ -806,7 +806,7 @@ dirs_largest() {
     fi
 
     local sorted
-    sorted=$(printf '%s\n' "$filtered" | sort -nr -k1,1 -t$'\t' | head -n "$limit") || true
+    sorted=$(printf '%s\n' "$filtered" | sort -nr -k1,1 -t$'\t' | awk -v n="$limit" 'NR <= n') || true
 
     if [[ "$json_mode" -eq 1 ]]; then
         __gash_fs_render_size_list_json "$sorted" "$elapsed" "$err_count" "directories"
@@ -1049,7 +1049,7 @@ dirs_find_large() {
                 if (path_blocked(path)) next
                 printf "%d\t%s\n", kb * 1024, path
             }
-            ' | sort -nr -k1,1 -t$'\t' | head -n "$limit"
+            ' | sort -nr -k1,1 -t$'\t' | awk -v n="$limit" 'NR <= n'
     ) || true
 
     # Enrich with mtime if requested (post-filter, only for matching rows).
@@ -1060,7 +1060,7 @@ dirs_find_large() {
                 [[ -z "$path" ]] && continue
                 local mtime
                 mtime=$(find "$path" -maxdepth 10 -type f -printf '%T@\t%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null |
-                    sort -nr -k1,1 -t$'\t' | head -n1 | cut -f2) || true
+                    sort -nr -k1,1 -t$'\t' | awk -F'\t' 'NR == 1 { print $2 }') || true
                 printf '%s\t%s\t%s\n' "$bytes" "${mtime:-N/A}" "$path"
             done
         )

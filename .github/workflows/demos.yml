@@ -1,0 +1,57 @@
+name: Demos
+
+# Re-records the README GIFs from docs/tapes/*.tape with vhs and commits
+# them when they change. Runs on main when a tape or a rendering module
+# changes, or by hand.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/tapes/**"
+      - "lib/core/output.sh"
+      - "lib/modules/files.sh"
+      - "lib/modules/gash.sh"
+      - "lib/modules/system.sh"
+      - "lib/modules/sysinfo.sh"
+      - "lib/shell/prompt.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: demos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Render GIFs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq and sqlite3
+        run: sudo apt-get update -q && sudo apt-get install -y -q jq sqlite3
+
+      - name: Render docs/tapes/demo.tape
+        uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/tapes/demo.tape
+
+      - name: Render docs/tapes/agents.tape
+        uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/tapes/agents.tape
+
+      - name: Commit changed GIFs
+        run: |
+          git add docs/assets/*.gif
+          if git diff --cached --quiet; then
+            echo "GIFs unchanged"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "docs: re-record demo GIFs [skip ci]"
+          git push

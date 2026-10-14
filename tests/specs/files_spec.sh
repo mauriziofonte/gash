@@ -374,3 +374,17 @@ it "llm_tree rejects --depth 0 (invalid)" bash -c '
   err="$({ llm_tree --depth 0 /tmp 2>&1 >/dev/null; } || true)"
   [[ "$err" == *"invalid_depth"* ]]
 '
+
+it "size scanners print nothing on stderr when SIGPIPE is ignored" bash -c '
+  set -euo pipefail
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir -p "$tmp/d"
+  for i in $(seq 1 3000); do printf "%${i}s" x >"$tmp/d/f$i"; done
+  # Terminals started by some tools (and services) ignore SIGPIPE: a reader
+  # that stops early then makes sort fail with "write error".
+  trap "" PIPE
+  err="$( { files_largest -n 1 "$tmp" >/dev/null; dirs_largest -n 1 "$tmp" >/dev/null; dirs_find_large --size 1 -n 1 "$tmp" >/dev/null; } 2>&1 )"
+  [[ -z "$err" ]] || { printf "%s\n" "$err" >&2; exit 1; }
+'

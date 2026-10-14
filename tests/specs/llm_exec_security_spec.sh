@@ -208,3 +208,78 @@ it "__llm_validate_path blocks whole system trees, not look-alike names" bash -c
   [[ "$(__llm_validate_path /rootfs/x 2>/dev/null)" == /rootfs/x ]]
   [[ "$(__llm_validate_path /devices 2>/dev/null)" == /devices ]]
 '
+
+it "llm_exec refuses forbidden system paths in arguments, globs and after cd" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp"
+  source "$GASH_TEST_ROOT/gash.sh"
+  cd "$tmp"
+  ln -s /proc/self "$tmp/me"
+  verdict() { llm_exec "$1" 2>&1 >/dev/null | jq -r .error; }
+
+  rel="$(realpath --relative-to="$tmp" /proc 2>/dev/null)" || rel="../../../../../../../../proc"
+  for line in "head -c 50 /proc/self/environ" "cat /proc/self/cmdline" "ls /sys" "cat /root/.bashrc" \
+      "head /etc/shadow" "cat $rel/self/environ" "cat /pro?/self/environ" "cat me/environ" \
+      "cd / && cat proc/self/environ" "cd / && ls proc" "cd /etc && cat shadow" \
+      "grep -f/proc/self/environ x" "ls --directory=/sys" "git -C /root status" \
+      "cat ~root/.profile" "wc -c /dev/sda"; do
+    [[ "$(verdict "$line")" == forbidden_path ]] || { echo "not refused: $line"; exit 1; }
+  done
+  # The envelope is the one the other llm_* functions use.
+  err="$(llm_exec "cat /proc/self/environ" 2>&1 >/dev/null || true)"
+  jq -e ".action == \"FATAL\" and .recoverable == false and .details == \"/proc/self/environ\"" <<<"$err" >/dev/null
+
+  # /dev/null stays usable, as an argument and in redirections; patterns
+  # and plain text that merely mention a path are not paths.
+  [[ "$(llm_exec "cat /dev/null && echo ok")" == ok ]]
+  [[ "$(llm_exec "ls nothing 2>/dev/null || echo none")" == none ]]
+  [[ "$(llm_exec "echo /proc/x")" == /proc/x ]]
+  printf "see /proc/cpuinfo\n" >notes.txt
+  [[ "$(llm_exec "grep /proc/ notes.txt")" == "see /proc/cpuinfo" ]]
+  [[ "$(llm_exec "cat ./notes.txt")" == "see /proc/cpuinfo" ]]
+'
+
+it "llm_exec reads ~/.gash_env once per call and prints each warning once" bash -c '
+  set -euo pipefail
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  printf "%s\n" "garbage line" "GASH_LLM_EXEC_ALLOW=seq" >"$tmp/.gash_env"
+  chmod 600 "$tmp/.gash_env"
+  export HOME="$tmp"
+  cd "$tmp"
+  # Headless: parsed quietly at startup, nothing on stderr.
+  out="$(GASH_HEADLESS=1 bash --noprofile --norc -c "source \"$GASH_TEST_ROOT/gash.sh\"; llm_exec \"seq 2\"" 2>"$tmp/err")"
+  [[ "$out" == $'"'"'1\n2'"'"' && ! -s "$tmp/err" ]]
+  # Modules alone (no startup parse): the first call parses once, warns once.
+  out="$(bash --noprofile --norc -c "source \"$GASH_TEST_ROOT/tests/gash-test.sh\"; gash_source_all \"$GASH_TEST_ROOT\"; llm_exec \"seq 2\"; llm_exec \"seq 1\"" 2>"$tmp/err")"
+  [[ "$out" == $'"'"'1\n2\n1'"'"' ]]
+  [[ "$(grep -c "Line 1" "$tmp/err")" == 1 ]] || { cat "$tmp/err"; exit 1; }
+'
+
+it "the grep fallback (no rg on PATH) skips nested secret directories" bash -c '
+  set -euo pipefail
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir -p "$tmp/bin" "$tmp/p/.config/gcloud" "$tmp/p/src" "$tmp/p/node_modules" "$tmp/p/sp ace" "$tmp/p/a/.kube"
+  for t in bash grep find xargs head realpath sed tr cat sort awk mkdir rm mktemp dirname basename; do
+    p="$(type -P "$t")" && ln -s "$p" "$tmp/bin/$t"
+  done
+  printf "needle\n" >"$tmp/p/.config/gcloud/creds.py"
+  printf "needle\n" >"$tmp/p/a/.kube/config.py"
+  printf "needle\n" >"$tmp/p/node_modules/x.js"
+  printf "needle\n" >"$tmp/p/.env"
+  printf "needle\n" >"$tmp/p/src/app.py"
+  printf "needle\n" >"$tmp/p/sp ace/b.js"
+  export GASH_HEADLESS=1 HOME="$tmp"
+  source "$GASH_TEST_ROOT/gash.sh"
+  export PATH="$tmp/bin"
+  ! type -P rg >/dev/null
+  out="$(llm_grep needle "$tmp/p")"
+  [[ "$out" == *"src/app.py:1:needle"* && "$out" == *"sp ace/b.js:1:needle"* ]]
+  [[ "$out" != *gcloud* && "$out" != *.kube* && "$out" != *node_modules* && "$out" != *.env* ]]
+  [[ "$(llm_grep needle "$tmp/p" --ext py)" == "$tmp/p/src/app.py:1:needle" ]]
+  out="$(llm_find "*" "$tmp/p" --contains needle)"
+  [[ "$out" == *src/app.py* && "$out" != *gcloud* && "$out" != *.kube* ]]
+  # Nothing found is still a success, and stdin is never read.
+  [[ -z "$(llm_grep zzz "$tmp/p" </dev/null)" ]]
+'

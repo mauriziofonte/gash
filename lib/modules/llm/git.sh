@@ -8,6 +8,21 @@
 # Git Functions
 # -----------------------------------------------------------------------------
 
+# Check that git exists and PATH is inside a work tree or repository;
+# otherwise print the git_not_found / not_a_git_repo envelope (CONTINUE).
+# Usage: __llm_git_repo PATH
+__llm_git_repo() {
+    if ! type -P git >/dev/null 2>&1; then
+        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
+        return 1
+    fi
+    if ! __llm_git -C "$1" rev-parse --git-dir >/dev/null 2>&1; then
+        __llm_error "not_a_git_repo" "$1 is not a git repository" "CONTINUE" "false" "Not inside a git repository. Skip git operations"
+        return 1
+    fi
+    return 0
+}
+
 # Compact git status as JSON.
 # Usage: llm_git_status [PATH]
 llm_git_status() {
@@ -23,16 +38,7 @@ __llm_git_status_impl() {
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
-
-    if ! type -P git >/dev/null 2>&1; then
-        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
-        return 1
-    fi
-
-    if ! git -C "$safe_path" rev-parse --git-dir >/dev/null 2>&1; then
-        __llm_error "not_a_git_repo" "$safe_path is not a git repository" "CONTINUE" "false" "Not inside a git repository. Skip git operations"
-        return 1
-    fi
+    __llm_git_repo "$safe_path" || return 1
 
     # One porcelain v2 call: branch, ahead/behind and every entry, NUL
     # separated so any file name survives. X (index) != "." means staged,
@@ -70,7 +76,7 @@ __llm_git_status_impl() {
                 ;;
             "? "*) untracked+=("${rec#"? "}") ;;
         esac
-    done < <(git -C "$safe_path" status --porcelain=v2 --branch -z 2>/dev/null)
+    done < <(__llm_git -C "$safe_path" status --porcelain=v2 --branch -z 2>/dev/null)
     [[ "$ahead" =~ ^[0-9]+$ ]] || ahead=0
     [[ "$behind" =~ ^[0-9]+$ ]] || behind=0
 
@@ -120,16 +126,12 @@ __llm_git_diff_impl() {
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
+    __llm_git_repo "$safe_path" || return 1
 
-    if ! type -P git >/dev/null 2>&1; then
-        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
-        return 1
-    fi
-
-    local diff_args=(--stat --no-color)
+    local diff_args=(--stat --no-color --no-ext-diff --no-textconv)
     [[ $staged_only -eq 1 ]] && diff_args+=(--staged)
 
-    git -C "$safe_path" diff "${diff_args[@]}" 2>/dev/null
+    __llm_git -C "$safe_path" diff "${diff_args[@]}" 2>/dev/null
 }
 
 # Recent git log as JSON.
@@ -170,11 +172,7 @@ __llm_git_log_impl() {
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
-
-    if ! type -P git >/dev/null 2>&1; then
-        __llm_error "git_not_found" "Git is not installed" "CONTINUE" "false" "Git binary not found. Skip git operations"
-        return 1
-    fi
+    __llm_git_repo "$safe_path" || return 1
 
     if ! __llm_has_jq; then
         __llm_error "jq_not_found" "jq is required for JSON output" "FATAL" "false" "Install jq: sudo apt install jq"
@@ -183,7 +181,7 @@ __llm_git_log_impl() {
 
     # Unit/record separators (US/RS) as field delimiters, JSON built by jq:
     # a quote in a commit subject must never invalidate the array.
-    git -C "$safe_path" log -n "$limit" --format='%h%x1f%s%x1f%an%x1f%ci%x1e' 2>/dev/null |
+    __llm_git -C "$safe_path" log -n "$limit" --no-ext-diff --no-textconv --no-show-signature --format='%h%x1f%s%x1f%an%x1f%ci%x1e' 2>/dev/null |
         jq -cRs 'split("\u001e") | map(select(length > 0) | ltrimstr("\n") | split("\u001f") | select(length == 4) | {hash: .[0], subject: .[1], author: .[2], date: .[3]})' || true
     return 0
 }

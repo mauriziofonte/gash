@@ -71,3 +71,79 @@ it "flags mean one thing: -n is a limit, --json is JSON, unknown flags fail" bas
   docker_compose_upgrade "$tmp" -n >/dev/null 2>&1 && exit 1
   exit 0
 '
+
+it "the DB functions take -n as the row limit too" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  command -v sqlite3 >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
+  sqlite3 "$tmp/t.db" "CREATE TABLE t (id INTEGER); WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 10) INSERT INTO t SELECT x FROM c;"
+  export GASH_HEADLESS=1 HOME="$tmp"
+  source "$GASH_TEST_ROOT/gash.sh"
+  [[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" -n 3 | jq .rows)" == 3 ]]
+  [[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" --limit 2 | jq .rows)" == 2 ]]
+  [[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" -r 4 | jq .rows)" == 4 ]]
+  [[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" --rows 5 | jq .rows)" == 5 ]]
+  [[ "$(llm_db_sample t -f "$tmp/t.db" -n 2 | jq .rows)" == 2 ]]
+  [[ "$(llm_db_sample t -f "$tmp/t.db" --limit 6 | jq .rows)" == 6 ]]
+  [[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" -n x 2>&1 >/dev/null | jq -r .error)" == invalid_rows ]]
+  [[ "$(llm_db_sample t -f "$tmp/t.db" -n 2>&1 >/dev/null | jq -r .error)" == missing_value ]]
+  [[ "$(llm_db_query -h)" == *"-n, --limit N"* ]]
+  [[ "$(llm_db_sample -h)" == *"-n, --limit N"* ]]
+'
+
+it "llm_procs rejects unknown options with the unknown_option envelope" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  for args in "--bogus" "--pid 1" "nginx"; do
+    rc=0
+    out="$(llm_procs $args 2>"$HOME/err")" || rc=$?
+    [[ $rc -eq 1 && -z "$out" ]] || { echo "$args: rc=$rc out=$out"; exit 1; }
+    jq -e ".error == \"unknown_option\" and .action == \"RETRY\" and .recoverable == true" "$HOME/err" >/dev/null
+  done
+'
+
+it "llm_git_status, llm_git_diff and llm_git_log agree outside a repository" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  command -v git >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp" GIT_CEILING_DIRECTORIES="$tmp"
+  source "$GASH_TEST_ROOT/gash.sh"
+  mkdir "$tmp/plain"; cd "$tmp/plain"
+  for fn in llm_git_status llm_git_diff "llm_git_diff --staged" llm_git_log "llm_git_log --limit 3"; do
+    rc=0
+    out="$($fn 2>"$tmp/err")" || rc=$?
+    [[ $rc -eq 1 && -z "$out" ]] || { echo "$fn: rc=$rc out=$out"; exit 1; }
+    jq -e ".error == \"not_a_git_repo\" and .action == \"CONTINUE\" and .recoverable == true
+      and .details == \"$tmp/plain is not a git repository\"" "$tmp/err" >/dev/null || { echo "$fn:"; cat "$tmp/err"; exit 1; }
+  done
+'
+
+it "llm_docker_check errors follow the contract and unknown digests are null" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp" PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
+  source "$GASH_TEST_ROOT/gash.sh"
+  mkdir "$tmp/none" "$tmp/nosvc" "$tmp/app"
+  check() { # DIR ERROR ACTION
+    local rc=0 out
+    out="$(llm_docker_check "$1" 2>"$tmp/err")" || rc=$?
+    [[ $rc -eq 1 && -z "$out" ]] || { echo "$1: rc=$rc out=$out"; return 1; }
+    jq -e ".error == \"$2\" and .action == \"$3\" and .recoverable == true and (.details | length > 0)
+      and (keys - [\"error\",\"action\",\"recoverable\",\"details\",\"hint\"] == [])" "$tmp/err" >/dev/null ||
+      { cat "$tmp/err"; return 1; }
+  }
+  check "$tmp/none" compose_not_found RETRY
+  printf "services:\n  x:\n    build: .\n" >"$tmp/nosvc/compose.yml"
+  check "$tmp/nosvc" no_services CONTINUE
+
+  # An image that was never pulled has no local digest: null, not "null".
+  printf "services:\n  app:\n    image: ghcr.io/nobody/none:dev\n" >"$tmp/app/compose.yml"
+  out="$(llm_docker_check "$tmp/app")"
+  jq -e ".services[0].local_digest == null and .services[0].status == \"NOT_PULLED\"
+    and (.services[0].remote_digest | type == \"string\")" <<<"$out" >/dev/null
+'

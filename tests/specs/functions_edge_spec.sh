@@ -99,7 +99,7 @@ it "process_kill calls kill for matching processes" bash -c '
   }
 
   export PATH="$ROOT/tests/mocks/bin:$PATH"
-  process_kill my-proc >/dev/null
+  process_kill my-proc --force >/dev/null
 
   grep -q -- "-9 2222" "$MOCK_KILL_LOG"
 '

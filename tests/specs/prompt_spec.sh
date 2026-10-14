@@ -245,3 +245,47 @@ EOF
     # projects dir inherits from HOME - should NOT show
     [[ "$out" == *"projects:not_in_repo"* ]]
 '
+
+it "the job counter shows running and stopped jobs, not finished ones" bash -c '
+  set -euo pipefail
+  command -v script >/dev/null 2>&1 && script -qc true /dev/null >/dev/null 2>&1 || exit 77
+  cd "$GASH_TEST_ROOT"
+  run() { printf "export GASH_BANNER=0; source ./gash.sh\n%s\ntrue\nexit\n" "$1" | script -qc "bash --norc -i" /dev/null 2>&1; }
+  # bash < 5.3 keeps a finished job for a program run by a RETURN trap.
+  out="$(run "f() { trap \"env true; trap - RETURN\" RETURN; return 0; }; f")"
+  [[ "$out" != *"[j1]"* ]]
+  out="$(run "sleep 3 &")"
+  [[ "$out" == *"[j1]"* ]]
+'
+
+it "NO_COLOR / GASH_NO_COLOR drop the prompt colors at the next prompt, same layout" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  ln -s "$ROOT" "$tmp/.gash"
+  git init -q "$tmp/project"
+  cat >"$tmp/inner.sh" <<"EOF"
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1 || true
+cd "$HOME/project"
+SSH_CONNECTION="1 2 3 4" VIRTUAL_ENV=/x/venv TERM=dumb debian_chroot=
+esc="$(printf "\033")"
+# One prompt per call, after a failing command; ESC shown as <E>.
+show() { false || __gash_prompt_command; printf "%s=%s\n" "$1" "${PS1//$esc/<E>}"; }
+show color
+NO_COLOR=1 show nocolor
+GASH_NO_COLOR=1 show gashnocolor
+GASH_NO_COLOR=0 show gashzero
+show again
+EOF
+  out="$(HOME="$tmp" bash --noprofile --norc -i "$tmp/inner.sh" 2>/dev/null)"
+  get() { sed -n "s/^$1=//p" <<<"$out"; }
+  color="$(get color)"
+  [[ "$color" == *"<E>["* && "$color" == *"\\["* ]]
+  [[ "$(get gashzero)" == "$color" && "$(get again)" == "$color" ]]
+  # The colored prompt with every \[...\] removed is the plain prompt.
+  stripped="$(sed "s/\\\\\\[[^]]*\\\\\\]//g" <<<"$color")"
+  [[ "$stripped" == "(venv) \\u@\\h:\\w ("*") [!1] \\\$ " ]] || { echo "layout: [$stripped]"; exit 1; }
+  for v in nocolor gashnocolor; do
+    [[ "$(get "$v")" == "$stripped" ]] || { echo "$v: [$(get "$v")] vs [$stripped]"; exit 1; }
+  done
+'

@@ -144,7 +144,7 @@ HELP
         --see-also "llm_db_tables llm_db_schema llm_db_sample llm_db_explain" \
         <<'HELP'
 USAGE
-  llm_db_query "SQL" [-c CONNECTION] [-f SQLITE_FILE]
+  llm_db_query "SQL" [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]
 
 EXAMPLES
   # Query using the default connection
@@ -154,7 +154,13 @@ EXAMPLES
   llm_db_query "SELECT * FROM orders WHERE status='pending'" -c legacy
 
   # Query a SQLite database (no connection config needed)
-  llm_db_query "SELECT * FROM users" -f ./data/app.db
+  llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
+
+OPTIONS
+  -c, --connection NAME  Connection from ~/.gash_env (default: default)
+  -d, --database NAME    Database name (overrides the connection's)
+  -f, --file PATH        SQLite database file
+  -n, --limit N          Row cap (default 100; also -r, --rows)
 
 NOTES
   Read-only, enforced twice: one statement starting with SELECT, WITH,
@@ -162,7 +168,7 @@ NOTES
   keywords or file/program functions; then a read-only client session
   (sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL
   default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).
-  -r caps the rows (default 100). Output: {data, rows, query_time}.
+  Output: {data, rows, query_time}.
 HELP
 
     __gash_register_help "llm_db_tables" \
@@ -199,12 +205,18 @@ HELP
         --see-also "llm_db_query llm_db_schema" \
         <<'HELP'
 USAGE
-  llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [--limit N]
+  llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [-n N]
 
 EXAMPLES
   llm_db_sample users -c default
   llm_db_sample orders -c legacy --limit 10
-  llm_db_sample logs -f ./app.db --limit 3
+  llm_db_sample logs -f ./app.db -n 3
+
+OPTIONS
+  -c, --connection NAME  Connection from ~/.gash_env (default: default)
+  -d, --database NAME    Database name (overrides the connection's)
+  -f, --file PATH        SQLite database file
+  -n, --limit N          Rows to return (default 5)
 HELP
 
     __gash_register_help "llm_db_explain" \

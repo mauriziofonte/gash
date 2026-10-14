@@ -425,7 +425,7 @@ it "llm_ports outputs JSON array" bash -c '
     source "$ROOT/lib/core/utils.sh"
     source "$ROOT/lib/modules/llm.sh"
 
-    out="$(llm_ports 2>/dev/null)"
+    out="$(PATH="$ROOT/tests/mocks/bin:$PATH" llm_ports 2>/dev/null)"
     [[ "$out" == "["* ]]
     [[ "$out" == *"]"* ]]
 '

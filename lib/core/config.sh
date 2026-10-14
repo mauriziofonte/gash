@@ -114,12 +114,15 @@ __gash_url_encode() {
 # Config File Parsing
 # =============================================================================
 
-# Check that the config file is private: owned by the current user and not
-# readable by group/others (600 or 400). Symlinks are followed (dotfile
+# Check that the config file is private: owned by the current user and with
+# no group or other permission bits (600, 400, 700 are all fine). Symlinks are followed (dotfile
 # managers commonly symlink ~/.gash_env).
 __gash_check_env_perms() {
     local file="${1-}"
     [[ ! -f "$file" ]] && return 0
+    # Headless output is for programs: a warning line would break the JSON
+    # on stderr, and nobody reads it (GASH_DEBUG=1 still checks).
+    [[ "${GASH_HEADLESS-}" == "1" && "${GASH_DEBUG-}" != "1" ]] && return 0
 
     local perms="" owner=""
     if [[ "${OSTYPE-}" == darwin* || "${OSTYPE-}" == *bsd* ]]; then
@@ -128,8 +131,8 @@ __gash_check_env_perms() {
         read -r perms owner < <(stat -L -c '%a %u' "$file" 2>/dev/null) || true
     fi
 
-    if [[ -n "$perms" && "$perms" != "600" && "$perms" != "400" ]]; then
-        __gash_warning "${file/#$HOME/\~} is readable by other users (mode $perms). Run: chmod 600 ${file/#$HOME/\~}"
+    if [[ "$perms" =~ ^[0-7]{1,4}$ ]] && (((8#$perms) & 8#077)); then
+        __gash_warning "${file/#$HOME/\~} is accessible by other users (mode $perms). Run: chmod 600 ${file/#$HOME/\~}"
     fi
     if [[ -n "$owner" && "$owner" != "${EUID-}" ]]; then
         __gash_warning "${file/#$HOME/\~} is owned by uid $owner, not by you (uid ${EUID-}). Gash will still read it."
@@ -160,8 +163,11 @@ __gash_load_env() {
 
     __gash_check_env_perms "$env_file"
 
+    # Warnings name the file and the line number, never the line's content:
+    # a malformed line may be a pasted token or password.
+    local shown="${env_file/#$HOME/\~}"
     local ssh_keys="" db_entries="" ai_providers="" host_entries="" settings=""
-    local line lineno=0 key value rest
+    local line lineno=0 key value rest q inner
 
     while IFS= read -r line || [[ -n "$line" ]]; do
         lineno=$((lineno + 1))
@@ -178,25 +184,37 @@ __gash_load_env() {
             SSH:* | DB:* | AI:* | HOST:*)
                 rest="${line#*:}"
                 if [[ "$rest" != *=* ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: '${line%%:*}:' entry has no '=' (expected ${line%%:*}:name=value), skipping"
+                    __gash_warning "Line $lineno of $shown: ${line%%:*}: entry has no '=' (expected ${line%%:*}:name=value), skipping"
                     continue
                 fi
                 key="${rest%%=*}"
                 value="${rest#*=}"
                 if [[ -z "$key" ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: '${line%%:*}:' entry has an empty name, skipping"
+                    __gash_warning "Line $lineno of $shown: ${line%%:*}: entry has an empty name, skipping"
                     continue
                 fi
                 ;;
             GASH_*=*)
                 key="${line%%=*}"
                 value="${line#*=}"
-                # Strip one level of matching quotes: GASH_X="a b"
-                if [[ "$value" == \"*\" || "$value" == \'*\' ]]; then
-                    value="${value:1:${#value}-2}"
+                if [[ "$value" == [\"\']* ]]; then
+                    # Quoted: GASH_X="a b" (# inside the quotes is kept),
+                    # optionally followed by a "# comment".
+                    q="${value:0:1}"
+                    inner="${value:1}"
+                    if [[ "$inner" == *"$q"* ]]; then
+                        rest="${inner#*"$q"}"
+                        rest="${rest#"${rest%%[![:space:]]*}"}"
+                        [[ -z "$rest" || "$rest" == \#* ]] && value="${inner%%"$q"*}"
+                    fi
+                else
+                    # Unquoted: a "# comment" after whitespace is not part
+                    # of the value (GASH_BANNER=1   # 0 = no banner).
+                    value="${value%%[[:space:]]#*}"
+                    value="${value%"${value##*[![:space:]]}"}"
                 fi
                 if [[ ! "$key" =~ ^GASH_[A-Z0-9_]+$ || "$__GASH_SETTINGS_KNOWN" != *" $key "* ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: unknown setting '$key', skipping"
+                    __gash_warning "Line $lineno of $shown: unknown GASH_ setting, skipping"
                     continue
                 fi
                 [[ -n "$settings" ]] && settings+=$'\n'
@@ -204,9 +222,7 @@ __gash_load_env() {
                 continue
                 ;;
             *)
-                # Report only what precedes ':' or '=' (never a value).
-                key="${line%%[:=]*}"
-                __gash_warning "Line $lineno of ~/.gash_env: unrecognized entry '${key:0:24}', skipping"
+                __gash_warning "Line $lineno of $shown: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"
                 continue
                 ;;
         esac
@@ -216,7 +232,7 @@ __gash_load_env() {
                 # SSH:keypath=passphrase (empty passphrase is allowed)
                 key="${key/#\~/$HOME}"
                 if [[ ! -f "$key" ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: SSH key not found: ${key/#$HOME/\~} (skipping)"
+                    __gash_warning "Line $lineno of $shown: SSH key file not found (skipping)"
                     continue
                 fi
                 [[ -n "$ssh_keys" ]] && ssh_keys+=$'\n'
@@ -225,7 +241,7 @@ __gash_load_env() {
             DB:*)
                 # DB:name=driver://user:pass@host:port/database
                 if [[ ! "$value" =~ ^(mysql|mariadb|pgsql):// ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: DB '$key' must start with mysql://, mariadb:// or pgsql:// (skipping)"
+                    __gash_warning "Line $lineno of $shown: DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)"
                     continue
                 fi
                 [[ -n "$db_entries" ]] && db_entries+=$'\n'
@@ -234,11 +250,11 @@ __gash_load_env() {
             AI:*)
                 # AI:provider=api_token
                 if [[ ! "$key" =~ ^(claude|gemini)$ ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: unknown AI provider '${key:0:24}' (supported: claude, gemini)"
+                    __gash_warning "Line $lineno of $shown: unknown AI provider (supported: claude, gemini), skipping"
                     continue
                 fi
                 if [[ -z "$value" ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: AI provider '$key' has an empty token (skipping)"
+                    __gash_warning "Line $lineno of $shown: AI provider $key has an empty token (skipping)"
                     continue
                 fi
                 [[ -n "$ai_providers" ]] && ai_providers+=$'\n'
@@ -247,7 +263,7 @@ __gash_load_env() {
             HOST:*)
                 # HOST:alias=user@host
                 if [[ ! "$value" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]; then
-                    __gash_warning "Line $lineno of ~/.gash_env: HOST '$key' must be user@host (skipping)"
+                    __gash_warning "Line $lineno of $shown: HOST target must be user@host (skipping)"
                     continue
                 fi
                 [[ -n "$host_entries" ]] && host_entries+=$'\n'
@@ -266,14 +282,18 @@ __gash_load_env() {
 
 # Apply settings read from ~/.gash_env as shell variables. A variable that
 # is already set (environment, ~/.bashrc before Gash) is left untouched.
+# With NAMEs, only those settings are applied (headless mode skips the
+# ones that only shape the interactive shell).
+# Usage: __gash_apply_settings [NAME...]
 __gash_apply_settings() {
     __gash_load_env
     [[ -z "$__GASH_ENV_SETTINGS" ]] && return 0
-    local line key value
+    local line key value only=" $* "
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         key="${line%%$'\t'*}"
         value="${line#*$'\t'}"
+        [[ $# -eq 0 || "$only" == *" $key "* ]] || continue
         [[ -n "${!key+x}" ]] && continue
         printf -v "$key" '%s' "$value"
     done <<<"$__GASH_ENV_SETTINGS"
@@ -573,7 +593,7 @@ gash_env_init() {
     local force=""
     [[ "${1-}" == "--force" ]] && force="1"
 
-    local target="$HOME/.gash_env"
+    local target="${GASH_ENV_FILE:-$HOME/.gash_env}"
     local template="$GASH_DIR/.gash_env.template"
 
     if [[ -f "$target" && -z "$force" ]]; then

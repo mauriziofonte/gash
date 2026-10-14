@@ -110,5 +110,5 @@ it "system and project envelopes: llm_project, llm_procs, llm_ports" bash -c "$_
   llm_deps "$tmp" | schema deps "keys == [\"dependencies\",\"manager\"] and .dependencies == [\"left-pad\"]"
   llm_deps "$tmp" --dev | schema deps_dev "keys == [\"dev\",\"manager\",\"prod\"] and .dev == [\"jest\"]"
   llm_procs --name bash | schema procs "type == \"array\" and all(.[]; (.pid | type == \"number\") and (.name | type == \"string\"))"
-  llm_ports | schema ports "type == \"array\" and all(.[]; (.port | type == \"number\") and (.proto | type == \"string\"))"
+  PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH" llm_ports | schema ports "type == \"array\" and all(.[]; (.port | type == \"number\") and (.proto | type == \"string\"))"
 '

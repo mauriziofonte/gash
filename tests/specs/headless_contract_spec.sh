@@ -93,7 +93,7 @@ it "llm_procs emits valid JSON under it-style locale input" bash -c "
 
 it "llm_ports emits valid JSON" bash -c "
   $__hc_preamble
-  llm_ports | jq -e . >/dev/null
+  PATH=\"\$ROOT/tests/mocks/bin:\$PATH\" llm_ports | jq -e . >/dev/null
 "
 
 it "llm_git_status emits valid JSON with hostile filenames (C5)" bash -c "

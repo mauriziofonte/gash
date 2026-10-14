@@ -3,7 +3,7 @@
 # Minimal ssh-add mock.
 # - `ssh-add -l`:
 #   - if MOCK_SSH_AGENT=0 -> simulate no agent
-#   - else -> simulate agent present but empty
+#   - else -> simulate agent present, empty or holding MOCK_SSH_LOADED
 # - any other args -> succeed silently
 
 if [[ "${1:-}" == "-l" ]]; then
@@ -24,6 +24,14 @@ if [[ "${1:-}" == "-l" ]]; then
 	if [[ "$agent_present" == "0" ]]; then
 		echo "Could not open a connection to your authentication agent." >&2
 		exit 2
+	fi
+
+	# MOCK_SSH_LOADED: space-separated fingerprints already in the agent.
+	if [[ -n "${MOCK_SSH_LOADED-}" ]]; then
+		for fp in $MOCK_SSH_LOADED; do
+			echo "256 $fp loaded (ED25519)"
+		done
+		exit 0
 	fi
 
 	echo "The agent has no identities."

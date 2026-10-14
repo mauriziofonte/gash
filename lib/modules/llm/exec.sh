@@ -344,9 +344,23 @@ __llm_exec_check_simple() {
         __llm_exec_check_args "${__le_words[@]}" || return 1
     fi
 
-    # Arguments and glob matches: no secret files, no matches that a
-    # command would take as an option (a file named "-delete").
-    local i w m
+    # Arguments and glob matches: no secret files, no paths under the
+    # forbidden trees (/proc, /sys, /dev, /root, ...), no matches that a
+    # command would take as an option (a file named "-delete"). Relative
+    # names resolve against the directory a `cd` earlier in the line moved
+    # to; globs expand there too.
+    local i w m cwd="${__le_cwd:-$PWD}" skip_first=0 seen_pos=0 plain=0
+    [[ "$cwd" != "$PWD" ]] && plain=1
+    # The first operand of these is a pattern, script or filter, not a
+    # file, unless -e/-f supply it.
+    if [[ " grep egrep fgrep zgrep rg sed awk gawk jq yq " == *" $name "* ]]; then
+        skip_first=1
+        for w in "${__le_words[@]:1}"; do
+            case "$w" in
+                -e* | -f* | --regexp* | --file* | --expression* | --from-file*) skip_first=0 ;;
+            esac
+        done
+    fi
     for ((i = 1; i < ${#__le_words[@]}; i++)); do
         w="${__le_words[i]}"
         if [[ -n "${__le_globs[i]}" ]]; then
@@ -360,13 +374,75 @@ __llm_exec_check_simple() {
                     __llm_error "secret_file_blocked" "$m" "FATAL" "false" "Secret files cannot be read through llm_exec"
                     return 1
                 fi
-            done < <(compgen -G "${__le_globs[i]}" 2>/dev/null)
+                __llm_exec_check_path "$m" "$cwd" 1 || return 1
+            done < <(cd -- "$cwd" 2>/dev/null && compgen -G "${__le_globs[i]}" 2>/dev/null)
         fi
         if __llm_is_secret_file "$w" || { [[ "$w" == *=* ]] && __llm_is_secret_file "${w#*=}"; }; then
             __llm_error "secret_file_blocked" "$w" "FATAL" "false" "Secret files cannot be read through llm_exec"
             return 1
         fi
+        if [[ "$w" != -* ]] && ((skip_first && ! seen_pos)); then
+            seen_pos=1
+            continue
+        fi
+        [[ " echo printf basename dirname " == *" $name "* ]] && continue
+        case "$w" in
+            --*=*) __llm_exec_check_path "${w#*=}" "$cwd" "$plain" || return 1 ;;
+            --*) ;;
+            -?*) __llm_exec_check_path "${w:2}" "$cwd" 0 || return 1 ;;
+            *=*)
+                __llm_exec_check_path "$w" "$cwd" "$plain" || return 1
+                __llm_exec_check_path "${w#*=}" "$cwd" "$plain" || return 1
+                ;;
+            *) __llm_exec_check_path "$w" "$cwd" "$plain" || return 1 ;;
+        esac
     done
+
+    # Later commands in the line run where this cd went (unknown targets,
+    # such as `cd -`, keep the current guess).
+    if [[ "$name" == cd ]]; then
+        local target=""
+        for w in "${__le_words[@]:1}"; do
+            [[ "$w" == -? ]] || target="$w"
+        done
+        case "$target" in
+            "") __le_cwd="$HOME" ;;
+            -) ;;
+            \~ | \~/*) __le_cwd="$HOME${target#\~}" ;;
+            /*) __le_cwd="$target" ;;
+            *) __le_cwd="${cwd%/}/$target" ;;
+        esac
+    fi
+    return 0
+}
+
+# Refuse a path under __LLM_FORBIDDEN_PATHS (/dev/null excepted). Words
+# that do not look like paths (no "/", "~", "." or "..") are checked only
+# when PLAIN is 1.
+# Usage: __llm_exec_check_path WORD CWD PLAIN
+__llm_exec_check_path() {
+    local p="$1" cwd="$2" user home
+    [[ -z "$p" ]] && return 0
+    if [[ "$3" != 1 && "$p" != */* && "$p" != "~"* && "$p" != . && "$p" != .. ]]; then
+        return 0
+    fi
+    case "$p" in
+        \~ | \~/*) p="$HOME${p#\~}" ;;
+        \~*)
+            user="${p%%/*}"
+            user="${user#"~"}"
+            if [[ -n "$user" && "$user" != *[!A-Za-z0-9._-]* ]]; then
+                eval "home=~$user"
+                [[ "$home" == /* ]] && p="$home${p#"~$user"}"
+            fi
+            ;;
+    esac
+    [[ "$p" == /* ]] || p="${cwd%/}/$p"
+    [[ "$p" == /dev/null ]] && return 0
+    if __llm_path_forbidden "$p"; then
+        __gash_json_error "forbidden_path" "$1" "FATAL" "This path is protected and cannot be accessed"
+        return 1
+    fi
     return 0
 }
 
@@ -406,7 +482,7 @@ __llm_exec_end_simple() {
 # Parse a command line and check every simple command in it.
 # Usage: __llm_exec_check_line CMD EXTRA_ALLOWED
 __llm_exec_check_line() {
-    local cmd="$1" extra="$2"
+    local cmd="$1" extra="$2" __le_cwd="$PWD"
     local -a __le_words=() __le_globs=()
     local word="" pat="" uq="" inword=0 globby=0
     local i n=${#cmd} c next j
@@ -536,11 +612,18 @@ __llm_exec_prelude() {
     # shellcheck disable=SC2086 # word-split on purpose: one name per word
     names="$(printf '%s ' $__LLM_EXEC_ALLOWED $extra)"
     printf 'unset -f %s 2>/dev/null\n' "$names"
+    # CDPATH would make `cd proc` land somewhere the path checks did not see.
+    printf 'unset CDPATH\n'
     [[ "${2-}" == unrestricted ]] && return 0
     [[ "$extra" == *" sed "* ]] || printf 'sed() { command sed --sandbox "$@"; }\n'
     [[ "$extra" == *" awk "* ]] || printf 'awk() { command gawk --sandbox "$@"; }\n'
     [[ "$extra" == *" gawk "* ]] || printf 'gawk() { command gawk --sandbox "$@"; }\n'
-    [[ "$extra" == *" git "* ]] || printf 'git() { command git -c core.fsmonitor=false -c core.pager=cat "$@"; }\n'
+    if [[ "$extra" != *" git "* ]]; then
+        local safe
+        printf -v safe '%q ' "${__LLM_GIT_SAFE_CONFIG[@]}"
+        printf 'git() { command git %s"$@"; }\n' "$safe"
+    fi
+    return 0
 }
 
 # Probe once whether bwrap can start a read-only sandbox here.
@@ -591,6 +674,10 @@ __llm_exec_impl() {
 
     local extra=" " mode sandbox w
     local allow
+    # Parse ~/.gash_env once, here: the reads below run in subshells.
+    if declare -F __gash_load_env >/dev/null 2>&1; then
+        __gash_load_env
+    fi
     allow="$(__llm_exec_setting GASH_LLM_EXEC_ALLOW)"
     for w in ${allow//[,:]/ }; do
         [[ "$w" =~ ^[A-Za-z0-9._+-]+$ ]] && extra+="$w "

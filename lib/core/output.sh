@@ -8,7 +8,8 @@
 # COLOR POLICY (v1.5+):
 #   Gash follows a hybrid color gating model:
 #
-#   1. Load-time: if any of GASH_HEADLESS=1, NO_COLOR, GASH_NO_COLOR is set,
+#   1. Load-time: if GASH_HEADLESS=1, NO_COLOR (any non-empty value) or
+#      GASH_NO_COLOR (non-empty and not 0) is set,
 #      all color variables are zeroed at source time. This disables ANSI
 #      across every call site (core emitters, inline printfs, help system).
 #
@@ -95,8 +96,8 @@ if __gash_locale_utf8; then
     __GASH_GLYPH_HLINE='─'
     __GASH_GLYPH_VLINE='│'
     __GASH_GLYPH_CORNERS='╭╮╰╯'
-    __GASH_GLYPH_BAR_FULL='█'
-    __GASH_GLYPH_BAR_EMPTY='░'
+    __GASH_GLYPH_BAR_FULL='━'
+    __GASH_GLYPH_BAR_EMPTY='─'
     __GASH_GLYPH_DOT='·'
     __GASH_GLYPH_ELLIPSIS='…'
     __GASH_GLYPH_POINTER='❯'
@@ -134,10 +135,12 @@ __GASH_SYMBOL_BULLET="$__GASH_GLYPH_BULLET"
 # Environment-level check: returns 0 if colors are permitted by env, 1 if any
 # disable signal is set (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR).
 # This is evaluated both at load time and at runtime.
+#   NO_COLOR       any non-empty value disables (https://no-color.org)
+#   GASH_NO_COLOR  any non-empty value other than 0 disables (0 = colors on)
 __gash_color_env_ok() {
     [[ "${GASH_HEADLESS-}" == "1" ]] && return 1
     [[ -n "${NO_COLOR-}" ]] && return 1
-    [[ -n "${GASH_NO_COLOR-}" ]] && return 1
+    [[ -n "${GASH_NO_COLOR-}" && "${GASH_NO_COLOR}" != "0" ]] && return 1
     return 0
 }
 
@@ -194,21 +197,15 @@ __gash_want_colors() {
     __gash_use_color
 }
 
-# Emit a block of `local VAR=''` declarations that, when eval'd inside a
-# caller function, locally shadow all Gash color vars to empty. Used by
-# functions that want to conditionally disable colors for a single invocation.
+# A block of `local VAR=''` declarations that, eval'd inside a function,
+# shadows every Gash color variable with an empty one for that call (and,
+# through bash dynamic scoping, for every function it calls).
 #
 # Usage pattern (inside a function body):
-#   eval "$(__gash_color_scope "$no_color")"
-# When colors should be ON, returns nothing -> eval is a no-op.
-# When colors should be OFF, returns the `local ...` block -> shadows the vars
-# inside the caller's scope, propagating via bash dynamic scoping to any
-# child function called thereafter.
-__gash_color_scope() {
-    local no_color="${1-0}"
-    __gash_want_colors "$no_color" && return 0
-    cat <<'EOS'
-local __GASH_COLOR_OFF=''
+#   __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
+# The TTY test must run in the function itself: inside a command
+# substitution stdout is the substitution's pipe, never the terminal.
+__GASH_COLOR_OFF_LOCALS="local __GASH_COLOR_OFF=''
 local __GASH_RED='' __GASH_GREEN='' __GASH_YELLOW=''
 local __GASH_BLUE='' __GASH_CYAN='' __GASH_WHITE=''
 local __GASH_BOLD_RED='' __GASH_BOLD_GREEN='' __GASH_BOLD_YELLOW=''
@@ -217,8 +214,15 @@ local __GASH_BOLD='' __GASH_DIM='' __GASH_UNDERLINE=''
 local __GASH_COLOR_PRIMARY='' __GASH_COLOR_SECONDARY=''
 local __GASH_COLOR_ACCENT='' __GASH_COLOR_MUTED=''
 local __GASH_COLOR_SUCCESS='' __GASH_COLOR_WARNING=''
-local __GASH_COLOR_ERROR='' __GASH_COLOR_INFO=''
-EOS
+local __GASH_COLOR_ERROR='' __GASH_COLOR_INFO=''"
+
+# Deprecated: run as `eval "$(__gash_color_scope ...)"` its TTY test sees
+# the command substitution's pipe, so it always blanks the colors. Kept for
+# external callers; use the __GASH_COLOR_OFF_LOCALS pattern above.
+__gash_color_scope() {
+    local no_color="${1-0}"
+    __gash_want_colors "$no_color" && return 0
+    printf '%s\n' "$__GASH_COLOR_OFF_LOCALS"
 }
 
 # -----------------------------------------------------------------------------

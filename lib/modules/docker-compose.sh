@@ -502,28 +502,45 @@ EOF
         return 0
     fi
 
-    __gash_require_docker || return 1
-    __gash_require_compose || return 1
-
     local path="."
     local json_output=0
     local no_color=0
 
     # Parse arguments
+    local arg
     for arg in "$@"; do
         case "$arg" in
             --json | -j) json_output=1 ;;
             --no-color) no_color=1 ;;
             -*)
-                __gash_error "Unknown option: $arg"
+                if [[ " $* " == *" --json "* || " $* " == *" -j "* ]]; then
+                    __gash_json_error "unknown_option" "$arg" "RETRY" "Use a path and --json"
+                else
+                    __gash_error "Unknown option: $arg"
+                fi
                 return 1
                 ;;
             *) path="$arg" ;;
         esac
     done
 
+    # --json errors follow the agent error contract (stderr envelope).
+    if [[ $json_output -eq 1 ]]; then
+        if ! type -P docker >/dev/null 2>&1; then
+            __gash_json_error "docker_not_found" "Docker is not installed" "CONTINUE" "Skip the image update check"
+            return 1
+        fi
+        if ! __gash_compose_cmd &>/dev/null; then
+            __gash_json_error "compose_not_installed" "Docker Compose is not installed" "CONTINUE" "Skip the image update check"
+            return 1
+        fi
+    else
+        __gash_require_docker || return 1
+        __gash_require_compose || return 1
+    fi
+
     # Local color scope (ignored when --json since JSON path doesn't emit ANSI)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # Resolve path
     path="$(realpath -m "$path" 2>/dev/null)" || path="$PWD"
@@ -539,7 +556,7 @@ EOF
 
     if [[ -z "$compose_file" ]]; then
         if [[ $json_output -eq 1 ]]; then
-            echo '{"error":"compose_not_found","path":"'"$(__gash_json_escape "$path")"'"}'
+            __gash_json_error "compose_not_found" "$path" "RETRY" "Pass the directory that holds docker-compose.yml, docker-compose.yaml, compose.yml or compose.yaml"
         else
             __gash_error "No docker-compose.yml found in $path"
         fi
@@ -552,7 +569,7 @@ EOF
 
     if [[ -z "$services" ]]; then
         if [[ $json_output -eq 1 ]]; then
-            echo '{"error":"no_services","path":"'"$(__gash_json_escape "$path")"'"}'
+            __gash_json_error "no_services" "$compose_file" "CONTINUE" "The compose file has no service with an image: nothing to check"
         else
             __gash_error "No services with images found in $compose_file"
         fi
@@ -635,8 +652,17 @@ EOF
             [[ $first -eq 0 ]] && echo -n ','
             first=0
             echo -n '{"name":"'"$(__gash_json_escape "$svc")"'","image":"'"$(__gash_json_escape "$img")"'"'
-            echo -n ',"local_digest":"'"${local_d:-null}"'"'
-            echo -n ',"remote_digest":"'"${remote_d:-null}"'"'
+            # Unknown digests are JSON null, never the string "null".
+            if [[ -n "$local_d" ]]; then
+                echo -n ',"local_digest":"'"$(__gash_json_escape "$local_d")"'"'
+            else
+                echo -n ',"local_digest":null'
+            fi
+            if [[ -n "$remote_d" ]]; then
+                echo -n ',"remote_digest":"'"$(__gash_json_escape "$remote_d")"'"'
+            else
+                echo -n ',"remote_digest":null'
+            fi
             echo -n ',"status":"'"$stat"'"'
             echo -n ',"upgradeable":'"$([[ $upgr -eq 1 ]] && echo 'true' || echo 'false')"
             [[ -n "$err" ]] && echo -n ',"error":"'"$(__gash_json_escape "$err")"'"'
@@ -841,7 +867,7 @@ EOF
     done
 
     # Local color scope
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # Resolve path
     path="$(realpath -m "$path" 2>/dev/null)" || path="$PWD"
@@ -1028,7 +1054,7 @@ EOF
     done
 
     # Local color scope
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # Resolve basedir
     basedir="$(realpath -m "$basedir" 2>/dev/null)" || basedir="$PWD"

@@ -107,7 +107,8 @@
 # Commands
 # GASH_SAFETY_ALIASES=1    # 0 = no interactive cp/mv/rm aliases
 # GASH_REPLACE_TOOLS=0     # 1 = top->htop, df->pydf, diff->colordiff,
-#                          #     less->most, tail->multitail when installed,
+#                          #     less->most (and PAGER=most), tail->multitail,
+#                          #     traceroute/tracepath->mtr, when installed;
 #                          #     php/composer -> newest phpX.Y
 # GASH_UMASK=              # e.g. 027; empty = keep the system umask
 #
