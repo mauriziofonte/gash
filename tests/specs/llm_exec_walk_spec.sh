@@ -104,13 +104,16 @@ it "git commands that print contents leave secret files out" bash -c '
   verdict() { llm_exec "$1" 2>&1 >/dev/null | jq -r .error; }
 
   for line in "git grep PASSWORD" "git grep -h PASSWORD HEAD~1" "git grep PASSWORD -- ." "git log -p" \
-      "git log --all -p --format=%s" "git show" "git show HEAD~1" "git diff HEAD~1 HEAD" "git whatchanged -p" \
+      "git log --all -p --format=%s" "git show" "git show HEAD~1" "git diff HEAD~1 HEAD" \
       "git reflog -p" "git -C $tmp/r log -p"; do
     out="$(llm_exec "$line" 2>&1)"
     [[ "$out" == *PASSWORD=ok* ]] || { echo "nothing found: $line: $out"; exit 1; }
     [[ "$out" != *PASSWORD=env* && "$out" != *PASSWORD=local* && "$out" != *PASSWORD=key* ]] ||
       { echo "leak: $line: $out"; exit 1; }
   done
+  # git 2.51+ refuses whatchanged without --i-still-use-this: only check for leaks.
+  out="$(llm_exec "git whatchanged -p" 2>&1 || true)"
+  [[ "$out" != *PASSWORD=env* && "$out" != *PASSWORD=local* && "$out" != *PASSWORD=key* ]]
   # Listings keep every commit; a REV:PATH is checked like a file name.
   [[ "$(llm_exec "git log --oneline" | wc -l)" -eq 2 ]]
   [[ "$(llm_exec "git show HEAD:app.txt")" == PASSWORD=ok2 ]]
