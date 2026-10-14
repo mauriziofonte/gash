@@ -134,7 +134,7 @@ fi
 if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
     __GASH_SNAPSHOT_TAKEN=1
     __GASH_SNAPSHOT=()
-    for __gash_var in PS1 PS2 HISTCONTROL HISTTIMEFORMAT HISTSIZE HISTFILESIZE EDITOR; do
+    for __gash_var in PS1 PS2 HISTCONTROL HISTTIMEFORMAT HISTSIZE HISTFILESIZE EDITOR PATH; do
         if [[ -n "${!__gash_var+x}" ]]; then
             __GASH_SNAPSHOT+=("$__gash_var=${!__gash_var}")
         else
@@ -158,6 +158,7 @@ declare -f __gash_apply_settings >/dev/null && __gash_apply_settings
 __gash_source "$GASH_DIR/lib/shell/terminal.sh"
 __gash_source "$GASH_DIR/lib/shell/history.sh"
 __gash_source "$GASH_DIR/lib/shell/prompt.sh"
+__gash_source "$GASH_DIR/lib/shell/toolchains.sh"
 
 __gash_load_modules
 

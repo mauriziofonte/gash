@@ -112,6 +112,15 @@
 #                          #     php/composer -> newest phpX.Y
 # GASH_UMASK=              # e.g. 027; empty = keep the system umask
 #
+# Toolchains
+# GASH_PATH_ADD=           # directories put first on PATH, in this order,
+#                          #     when they exist, e.g.
+#                          #     "~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"
+# GASH_NVM=off             # lazy = node/npm of nvm's default version on PATH
+#                          #     at once, nvm.sh loaded on the first `nvm`
+#                          #     (faster shells); on = load nvm.sh now;
+#                          #     off = Gash leaves nvm alone
+#
 # Agents (llm_* functions)
 # GASH_DB_TIMEOUT=30       # PostgreSQL statement timeout for llm_db_*, seconds
 # GASH_LLM_EXEC=           # unrestricted = llm_exec runs any command line

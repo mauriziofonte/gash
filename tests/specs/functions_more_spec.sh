@@ -225,3 +225,53 @@ it "process_kill without a terminal refuses unless --force, whatever the number 
     [[ "$out" == *"pass --force"* && ! -s "$MOCK_KILL_LOG" ]]
   fi
 '
+
+it "gash_inspiring_quote skips source comments and shows them with --source" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  mkdir -p "$tmp/quotes"
+  printf "%s\n" "# Header comment" "" "# A Book, 1999" "\"Only quote.\" — Someone" > "$tmp/quotes/list.txt"
+  export GASH_DIR="$tmp"
+  for _ in 1 2 3 4 5; do
+    out="$(gash_inspiring_quote)"
+    [[ "$out" == "Quote: \"Only quote.\" — Someone" ]]
+  done
+  out="$(gash_inspiring_quote --source)"
+  [[ "$out" == *"Source: A Book, 1999"* ]]
+  ! gash_inspiring_quote --bogus 2>/dev/null
+'
+
+describe "Quotes file (quotes/list.txt)"
+
+it "every quote has a source line, the right shape, and no duplicate" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  file="$ROOT/quotes/list.txt"
+  prev="" n=0 bad=0
+  declare -A seen=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      "" | "#"*) ;;
+      *)
+        n=$((n + 1))
+        if [[ "$prev" != "# "?* || "$prev" == "# Gash"* ]]; then
+          echo "no source line above: $line"; bad=1
+        fi
+        if [[ ! "$line" =~ ^\".+\"\ —\ [^\ ].*[^\ ]$ ]]; then
+          echo "not \"Text.\" — Author: $line"; bad=1
+        fi
+        key="${line%%\" — *}"; key="${key,,}"
+        if [[ -n "${seen[$key]-}" ]]; then
+          echo "duplicate: $line"; bad=1
+        fi
+        seen[$key]=1
+        ;;
+    esac
+    prev="$line"
+  done <"$file"
+  (( n >= 300 )) || { echo "only $n quotes"; bad=1; }
+  (( bad == 0 ))
+'

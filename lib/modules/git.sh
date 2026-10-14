@@ -309,6 +309,112 @@ git_repair() {
 }
 
 # -----------------------------------------------------------------------------
+# Sync
+# -----------------------------------------------------------------------------
+
+# Stage every change (new, modified, deleted files), commit it and push the
+# current branch: the "save everything and send it" step of a personal repo.
+# Refuses on a detached HEAD and in the middle of a merge, rebase,
+# cherry-pick or revert. The first push of a branch sets its upstream on
+# origin.
+# Usage: git_sync [-m MESSAGE] [--no-push] [--dry-run]
+# Alias: gsync
+git_sync() {
+    needs_help "git_sync" "git_sync [-m MESSAGE] [--no-push] [--dry-run]" \
+        "Stage everything, commit it and push the current branch. Alias: gsync" \
+        "${1-}" && return
+
+    local msg="chore: sync" push=1 dry_run=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -m | --message)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    __gash_error "$1 needs a message."
+                    return 1
+                fi
+                msg="$2"
+                shift
+                ;;
+            --no-push) push=0 ;;
+            --dry-run) dry_run=1 ;;
+            *)
+                __gash_error "Unknown option: $1 (usage: git_sync [-m MESSAGE] [--no-push] [--dry-run])"
+                return 1
+                ;;
+        esac
+        shift
+    done
+
+    __gash_require_git_repo || return 1
+
+    local branch
+    branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" || {
+        __gash_error "Detached HEAD: check out a branch first."
+        return 1
+    }
+
+    local state what
+    for state in MERGE_HEAD:merge CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert rebase-merge:rebase rebase-apply:rebase; do
+        what="${state#*:}"
+        if [[ -e "$(git rev-parse --git-path "${state%%:*}")" ]]; then
+            __gash_error "A $what is in progress: finish or abort it first (git $what --continue or --abort)."
+            return 1
+        fi
+    done
+
+    local upstream="" remote=""
+    upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || upstream=""
+    if ((push)) && [[ -z "$upstream" ]]; then
+        if ! git remote get-url origin >/dev/null 2>&1; then
+            __gash_error "Branch '$branch' has no upstream and there is no 'origin' remote: use --no-push or add a remote."
+            return 1
+        fi
+        remote=origin
+    fi
+
+    local changes
+    changes="$(git status --porcelain --untracked-files=all)"
+
+    if ((dry_run)); then
+        if [[ -n "$changes" ]]; then
+            printf 'Would commit on %s with message "%s":\n' "$branch" "$msg"
+            git status --short --untracked-files=all
+        else
+            printf 'Nothing to commit on %s.\n' "$branch"
+        fi
+        if ((push)); then
+            if [[ -n "$upstream" ]]; then
+                printf 'Would push %s to %s.\n' "$branch" "$upstream"
+            else
+                printf 'Would push %s to origin/%s and set it as upstream.\n' "$branch" "$branch"
+            fi
+        fi
+        return 0
+    fi
+
+    if [[ -n "$changes" ]]; then
+        git add --all || return 1
+        git commit --quiet -m "$msg" || return 1
+        __gash_success "Committed $(git rev-parse --short HEAD) on $branch: $msg"
+    else
+        __gash_info "Nothing to commit on $branch."
+    fi
+
+    ((push)) || return 0
+    if [[ -n "$upstream" ]]; then
+        if [[ "$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null)" == "0" ]]; then
+            __gash_info "$branch is already on $upstream."
+            return 0
+        fi
+        git push --quiet || return 1
+        __gash_success "Pushed $branch to $upstream."
+    else
+        git push --quiet -u "$remote" "$branch" || return 1
+        __gash_success "Pushed $branch to $remote/$branch (upstream set)."
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Short Aliases
 # -----------------------------------------------------------------------------
 alias glt='git_list_tags'
@@ -317,6 +423,7 @@ alias gdt='git_delete_tag'
 alias gdr='git_dump_revisions'
 alias gpatch='git_apply_patch'
 alias gheal='git_repair'
+alias gsync='git_sync'
 
 # =============================================================================
 # Help Registration
@@ -445,6 +552,34 @@ NOTES
   Deletes 0-byte loose objects, re-fetches them from 'origin' via a
   temporary bare clone, then runs 'git gc --prune=now' and 'git fsck
   --full' to verify. Requires a git repo with a configured remote.
+HELP
+
+    __gash_register_help "git_sync" \
+        --aliases "gsync" \
+        --module "git" \
+        --short "Stage everything, commit and push the current branch" \
+        --see-also "git_repair" \
+        <<'HELP'
+USAGE
+  git_sync [-m MESSAGE] [--no-push] [--dry-run]
+
+EXAMPLES
+  # Save everything with the default message "chore: sync" and push
+  gsync
+
+  # With a real message
+  gsync -m "docs: notes from the meeting"
+
+  # What would be committed and where it would go
+  gsync --dry-run
+
+NOTES
+  Stages new, modified and deleted files of the whole work tree
+  (git add --all), commits only when there is something to commit, then
+  pushes the current branch to its upstream. A branch without upstream is
+  pushed to origin and the upstream is set. Refuses on a detached HEAD
+  and during a merge, rebase, cherry-pick or revert. .gitignore applies:
+  check `git status` first in repositories without one.
 HELP
 
 fi # end help registration guard

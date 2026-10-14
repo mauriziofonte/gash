@@ -55,47 +55,65 @@ gash_username() {
 # Quotes
 # -----------------------------------------------------------------------------
 
-# Display an inspiring quote from the quotes file.
-# Usage: gash_inspiring_quote
+# Display a random quote from quotes/list.txt. Each quote is one line,
+# `"Text." — Author`, under a `# source` comment line naming where it was
+# said or written; --source prints that line too.
+# Usage: gash_inspiring_quote [--source]
 gash_inspiring_quote() {
-    needs_help "gash_inspiring_quote" "gash_inspiring_quote" "Print a random quote." "${1-}" && return
-    local tty_width
-    tty_width="$(__gash_tty_width)"
+    needs_help "gash_inspiring_quote" "gash_inspiring_quote [--source]" "Print a random quote (with --source: where it comes from)." "${1-}" && return
 
-    local gash_dir
-    gash_dir="${GASH_DIR:-$HOME/.gash}"
-    local quotes_file="$gash_dir/quotes/list.txt"
+    local show_source=0
+    case "${1-}" in
+        "") ;;
+        --source) show_source=1 ;;
+        *)
+            __gash_error "Unknown option: $1 (usage: gash_inspiring_quote [--source])"
+            return 1
+            ;;
+    esac
 
-    if [[ ! -r "$quotes_file" ]]; then
-        return 1
-    fi
+    local quotes_file="${GASH_DIR:-$HOME/.gash}/quotes/list.txt"
+    [[ -r "$quotes_file" ]] || return 1
 
-    local -a quotes
-    mapfile -t quotes <"$quotes_file"
-
-    if [[ ${#quotes[@]} -eq 0 ]]; then
-        return 1
-    fi
+    local -a quotes=() sources=()
+    local line src=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            "") src="" ;;
+            "#"*) src="${line#\#}" src="${src# }" ;;
+            *)
+                quotes+=("$line")
+                sources+=("$src")
+                src=""
+                ;;
+        esac
+    done <"$quotes_file"
+    ((${#quotes[@]})) || return 1
 
     local idx=$((RANDOM % ${#quotes[@]}))
-    local quote="${quotes[$idx]}"
+    local wrap_width
+    wrap_width=$(($(__gash_tty_width) - 7))
+    ((wrap_width < 20)) && wrap_width=80
 
-    local visible_prefix="Quote: "
-    local prefix_len=${#visible_prefix}
-    local wrap_width=$((tty_width - prefix_len))
-    if ((wrap_width < 20)); then
-        wrap_width=80
+    local label="Quote:" on="" off="" first=1 qline
+    if __gash_use_color; then
+        on="$__GASH_CYAN" off="$__GASH_COLOR_OFF"
     fi
-
-    local first=1 qline
     while IFS= read -r qline; do
         if ((first)); then
-            printf '%b%s\n' "${__GASH_CYAN}Quote:${__GASH_COLOR_OFF} " "$qline"
+            printf '%s%s%s %s\n' "$on" "$label" "$off" "$qline"
             first=0
         else
-            printf '%s%s\n' "       " "$qline"
+            printf '       %s\n' "$qline"
         fi
-    done < <(printf '%s\n' "$quote" | fold -s -w "$wrap_width")
+    done < <(printf '%s\n' "${quotes[$idx]}" | fold -s -w "$wrap_width")
+
+    if ((show_source)) && [[ -n "${sources[$idx]}" ]]; then
+        while IFS= read -r qline; do
+            printf '       %s\n' "$qline"
+        done < <(printf 'Source: %s\n' "${sources[$idx]}" | fold -s -w "$wrap_width")
+    fi
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -499,10 +517,10 @@ __GASH_CARD_TOPICS=(
     "files|files||Largest files and folders, tree stats, archives, backups"
     "system|system sysinfo utils|safety colors general|Processes, ports, services, disks, history, WSL"
     "nav||navigation|Directory navigation and listings"
-    "git|git|git|Tags, patches, repository repair, git shortcuts"
+    "git|git|git|Sync, tags, patches, repository repair, git shortcuts"
     "docker|docker docker-compose|docker|Containers and Compose stacks"
     "remote|remote ssh||Hosts from ~/.gash_env: exec, push, pull, sync"
-    "dev|php node|php|PHP and Node.js versions per project"
+    "dev|php node chrome|php|PHP and Node.js versions, headless Chrome"
     "llm|llm||Read-only JSON tools for AI agents"
     "ai|ai||Ask Claude or Gemini from the terminal"
     "gash|gash||Help, doctor, configuration, upgrade"
@@ -1022,13 +1040,23 @@ HELP
 
     __gash_register_help "gash_inspiring_quote" \
         --module "gash" \
-        --short "Display a random inspiring quote" \
+        --short "Display a random quote, optionally with its source" \
         <<'HELP'
 USAGE
-  gash_inspiring_quote
+  gash_inspiring_quote [--source]
 
 EXAMPLES
+  # The quote shown under the banner
   gash_inspiring_quote
+
+  # Where it was said or written
+  gash_inspiring_quote --source
+
+NOTES
+  Quotes live in quotes/list.txt: one `"Text." — Author` line each,
+  under a `# ` line with the source (book, essay, talk, mail; a link
+  where one exists). New quotes need a source that can be checked;
+  see CONTRIBUTING.md.
 HELP
 
     __gash_register_help "gash_env_init" \

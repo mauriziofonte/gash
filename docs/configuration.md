@@ -161,6 +161,8 @@ of them (the prompt, history and aliases are already set up). Use
 | `GASH_SAFETY_ALIASES` | `1` | `cp -iv`, `mv -iv`, `mkdir -pv`, and `rm -Iv --one-file-system --preserve-root` plus `--preserve-root` for `chown`, `chmod`, `chgrp` with GNU tools (`rm -iv` otherwise). `0` turns them off |
 | `GASH_REPLACE_TOOLS` | `0` | `1` aliases `less` to `most` (and sets `PAGER`), `tail` to `multitail`, `df` to `pydf`, `top` to `htop`, `traceroute` and `tracepath` to `mtr`, `diff` to `colordiff` when installed, and `php`/`composer` to the newest `phpX.Y` |
 | `GASH_UMASK` | empty | Octal mask such as `027`, applied at startup. Empty keeps the system umask |
+| `GASH_PATH_ADD` | empty | Directories put first on `PATH`, in the order given, when they exist (`~` is expanded), e.g. `"~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"`. Re-sourcing never adds them twice. The same as `path_add` |
+| `GASH_NVM` | `off` | `lazy` puts `node`, `npm`, `npx` and the global packages of nvm's default version on `PATH` at once and loads `nvm.sh` the first time `nvm` runs: it saves the 0.2 to 0.5 s that sourcing `nvm.sh` adds to every shell. `on` sources `nvm.sh` and its completion at startup. `off` leaves nvm to your own files. `NVM_DIR` defaults to `~/.nvm` |
 | `GASH_DB_TIMEOUT` | `30` | PostgreSQL statement timeout for `llm_db_*`, in seconds. Not applied to MySQL, MariaDB or SQLite |
 | `GASH_LLM_EXEC` | empty | `unrestricted` skips the `llm_exec` parser and allowlist. The dangerous-pattern blocklist still applies. File only |
 | `GASH_LLM_EXEC_ALLOW` | empty | Extra commands for `llm_exec`, separated by spaces, commas or colons (`"make npm"`). They run with any arguments. File only |
@@ -188,6 +190,7 @@ These are not accepted in `~/.gash_env`.
 | `XDG_STATE_HOME` | Parent of the migration state directory (default `~/.local/state`) |
 | `GASH_REQUIRE_SIGNED=1` | The installer and `gash_upgrade` refuse a release tag without a verified signature |
 | `GASH_INSTALL_GIT_REPO`, `GASH_INSTALL_REF`, `PROFILE` | Installer only: repository to clone, ref to check out instead of the latest tag, profile file to edit (`/dev/null` for none) |
+| `GASH_CHROME_ROOT`, `GASH_CHROME_LINK` | Where `chrome_headless_update` installs (default `/opt/chrome-headless-shell`) and the symlink it maintains (default `/usr/local/bin/chrome-headless-shell`) |
 | `GASH_VERSION` | Set by Gash (not by you): the loaded version, for scripts |
 
 ## Your own shell files
@@ -205,8 +208,9 @@ not overwritten later; keep your own code in `~/.bash_local` rather than there.
   shell variables, and whether `git`, `curl`, `jq`, `sqlite3` and `docker` are
   installed.
 * `gash_unload`: in an interactive shell, restores `PS1`, `PS2`, history
-  variables, `EDITOR`, `histappend`, `checkwinsize` and the umask as they were
-  before Gash loaded, removes the prompt hook and every Gash function, alias
+  variables, `EDITOR`, `PATH`, `histappend`, `checkwinsize` and the umask as
+  they were before Gash loaded (so `GASH_PATH_ADD` and `GASH_NVM=lazy`
+  entries go away), removes the prompt hook and every Gash function, alias
   and `GASH_*` variable. Nothing on disk changes; `source ~/.gashrc` loads Gash
   again. It does not work in headless mode.
 * `gash_help NAME` and `gash` (the reference card) list every function. The

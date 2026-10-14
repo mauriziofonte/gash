@@ -914,6 +914,83 @@ wsl_taskmanager() {
     (cd /mnt/c && cmd.exe /C taskmgr &)
 }
 
+# One line "MemFree|SReclaimable|free blocks of 512 KiB or more per zone",
+# from /proc/meminfo and /proc/buddyinfo (orders 7 and up).
+__gash_wsl_mem_snapshot() {
+    local free slab blocks
+    free="$(awk '/^MemFree:/ { printf "%d MiB", $2 / 1024 }' /proc/meminfo)"
+    slab="$(awk '/^SReclaimable:/ { printf "%d MiB", $2 / 1024 }' /proc/meminfo)"
+    blocks="$(awk '{ n = 0; for (i = 12; i <= NF; i++) n += $i * 2 ^ (i - 12); printf "%s%s=%d", sep, $4, n; sep = " " }' /proc/buddyinfo 2>/dev/null)"
+    printf '%s|%s|%s\n' "$free" "$slab" "$blocks"
+}
+
+# Unblock Windows interop on WSL2 when memory is fragmented: drop the page
+# cache and slab, compact memory, then check that a Windows program starts.
+#
+# Symptom: code ., explorer.exe or cmd.exe fail with
+#   ERROR: UtilAcceptVsock:...: accept4 failed 110
+# Each interop launch opens an hv_sock channel whose ring buffer needs a
+# contiguous order-7 (512 KiB) block; on fragmented RAM the allocation fails
+# (dmesg: "page allocation failure: order:7" under vmbus_alloc_ring) and the
+# Windows side never connects back (110 = ETIMEDOUT).
+# Usage: wsl_compact [--status]
+# Alias: wslc
+wsl_compact() {
+    needs_help "wsl_compact" "wsl_compact [--status]" \
+        "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc" \
+        "${1-}" && return
+
+    local status_only=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            --status) status_only=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: wsl_compact [--status])"
+                return 1
+                ;;
+        esac
+    done
+
+    __gash_require_wsl || return 1
+
+    local fails last
+    fails="$(dmesg 2>/dev/null | grep -c 'page allocation failure: order:7' || true)"
+    last="$(dmesg -T 2>/dev/null | grep 'page allocation failure: order:7' | tail -n 1 | sed -E 's/^\[([^]]+)\].*/\1/')"
+    printf 'order-7 allocation failures since the VM started: %s%s\n' "${fails:-0}" "${last:+ (last: $last)}"
+
+    local before after b_free b_slab b_blocks a_free a_slab a_blocks
+    before="$(__gash_wsl_mem_snapshot)"
+    if ((status_only)); then
+        IFS='|' read -r b_free b_slab b_blocks <<<"$before"
+        printf '%-22s %s\n' "MemFree" "$b_free" "SReclaimable (slab)" "$b_slab" "free >=512KiB blocks" "$b_blocks"
+        return 0
+    fi
+
+    __gash_info "Dropping the page cache and slab, then compacting memory (sudo)..."
+    if ! sudo sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory'; then
+        __gash_error "drop_caches/compact_memory failed."
+        return 1
+    fi
+    after="$(__gash_wsl_mem_snapshot)"
+
+    IFS='|' read -r b_free b_slab b_blocks <<<"$before"
+    IFS='|' read -r a_free a_slab a_blocks <<<"$after"
+    printf '%-22s %-26s %s\n' "" "before" "after"
+    printf '%-22s %-26s %s\n' "MemFree" "$b_free" "$a_free"
+    printf '%-22s %-26s %s\n' "SReclaimable (slab)" "$b_slab" "$a_slab"
+    printf '%-22s %-26s %s\n' "free >=512KiB blocks" "$b_blocks" "$a_blocks"
+
+    local cmd=/mnt/c/Windows/System32/cmd.exe
+    if [[ -x "$cmd" ]]; then
+        if timeout 20 "$cmd" /c exit 0 >/dev/null 2>&1; then
+            __gash_success "Windows interop works."
+        else
+            __gash_error "Windows interop still fails. Last resort, from Windows: wsl --shutdown"
+            return 1
+        fi
+    fi
+}
+
 # -----------------------------------------------------------------------------
 # Short Aliases
 # -----------------------------------------------------------------------------
@@ -930,6 +1007,7 @@ alias wr='wsl_restart'
 alias wsd='wsl_shutdown'
 alias wex='wsl_explorer'
 alias wtm='wsl_taskmanager'
+alias wslc='wsl_compact'
 
 # =============================================================================
 # Help Registration
@@ -1239,6 +1317,31 @@ NOTES
   Launches Task Manager in the background.
   Does not change your current working directory.
   Only works inside WSL (Windows Subsystem for Linux).
+HELP
+
+    __gash_register_help "wsl_compact" \
+        --aliases "wslc" \
+        --module "system" \
+        --short "Fix Windows interop on a WSL2 VM with fragmented memory" \
+        --see-also "wsl_restart wsl_shutdown" \
+        <<'HELP'
+USAGE
+  wsl_compact [--status]
+
+EXAMPLES
+  # code . or explorer.exe fail with "UtilAcceptVsock ... accept4 failed 110"
+  wslc
+
+  # Only show the failures and the free large blocks, change nothing
+  wslc --status
+
+NOTES
+  Every Windows program started from WSL needs a contiguous 512 KiB block
+  of guest memory for its hv_sock channel. When memory is fragmented the
+  allocation fails (dmesg: "page allocation failure: order:7") and the
+  launch times out. wsl_compact drops the page cache and slab, compacts
+  memory (sudo), prints the free blocks before and after, and checks that
+  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.
 HELP
 
 fi # end help registration guard

@@ -39,10 +39,14 @@ nvm_prune_versions() {
 
     __gash_require_nvm || return 1
 
-    local force=0
+    local force=0 arg
     for arg in "$@"; do
         case "$arg" in
             --force | -f) force=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [--force])"
+                return 1
+                ;;
         esac
     done
 
@@ -50,16 +54,18 @@ nvm_prune_versions() {
     current="$(nvm current)"
 
     local -A latest=()
-    local duplicates=()
+    local duplicates=() ver major
 
+    # Oldest first: each newer patch of a major pushes the previous one out.
+    # (grep -E, not -P: BSD and busybox grep have no -P.)
     while read -r ver; do
         [[ "$ver" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || continue
-        local major="${BASH_REMATCH[1]}"
+        major="${BASH_REMATCH[1]}"
         if [[ -n "${latest[$major]-}" ]]; then
             duplicates+=("${latest[$major]}")
         fi
         latest[$major]="$ver"
-    done < <(nvm ls --no-colors --no-alias | grep -oP 'v\d+\.\d+\.\d+' | sort -t. -k1,1n -k2,2n -k3,3n)
+    done < <(nvm ls --no-colors --no-alias | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u | sort -V)
 
     if [[ ${#duplicates[@]} -eq 0 ]]; then
         __gash_success "No duplicate NVM versions found."
@@ -87,6 +93,143 @@ nvm_prune_versions() {
     fi
 }
 
+# Installed versions as vX.Y.Z, oldest first (filesystem, no nvm call).
+__node_installed_tags() {
+    local dir="${NVM_DIR:-$HOME/.nvm}/versions/node" d
+    for d in "$dir"/v*; do
+        d="${d##*/}"
+        [[ "$d" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && printf '%s\n' "$d"
+    done | sort -V
+}
+
+# Bring every installed Node.js major to its newest patch, the way apt
+# upgrades packages: print the plan, ask once, then install the new patch
+# with the global packages of the old one and remove the old patches.
+# Majors that are not installed are never added, and a major is never
+# removed as a whole.
+# Usage: node_upgrade [-y] [--dry-run]
+# Alias: nvmc
+node_upgrade() {
+    needs_help "node_upgrade" "node_upgrade [-y] [--dry-run]" \
+        "Upgrade each installed Node.js major to its newest patch and remove the old patches. Alias: nvmc" \
+        "${1-}" && return
+
+    local assume_yes=0 dry_run=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            -y | --yes | --force) assume_yes=1 ;;
+            --dry-run) dry_run=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: node_upgrade [-y] [--dry-run])"
+                return 1
+                ;;
+        esac
+    done
+
+    __gash_require_nvm || return 1
+
+    local installed
+    installed="$(__node_installed_tags)"
+    if [[ -z "$installed" ]]; then
+        __gash_info "No Node.js version is installed with nvm."
+        return 0
+    fi
+
+    local remote
+    __gash_task "Reading the remote index from nodejs.org" __node_read_remote_index remote || {
+        __gash_error "Unable to read the remote index (network?). Nothing changed."
+        return 1
+    }
+
+    local latest_lts
+    latest_lts="$(grep 'Latest LTS' <<<"$remote" | tail -1 | sed -E 's/.*(v[0-9]+)\.[0-9]+\.[0-9]+.*Latest LTS: ([^)]+)\).*/\1 (\2)/')"
+
+    local -a installs=() sources=() removes=() keeps=()
+    local major target ver
+    for major in $(sed -E 's/^v([0-9]+)\..*/\1/' <<<"$installed" | sort -un); do
+        target="$(grep -oE "v${major}\.[0-9]+\.[0-9]+" <<<"$remote" | sort -V | tail -1)"
+        if [[ -z "$target" ]]; then
+            __gash_warning "v${major}: no release in the remote index, left as it is."
+            continue
+        fi
+        if grep -qx "$target" <<<"$installed"; then
+            keeps+=("$target")
+        else
+            installs+=("$target")
+            sources+=("$(grep -E "^v${major}\." <<<"$installed" | tail -1)")
+        fi
+        for ver in $(grep -E "^v${major}\." <<<"$installed"); do
+            [[ "$ver" != "$target" ]] && removes+=("$ver")
+        done
+    done
+
+    [[ -n "$latest_lts" ]] && printf 'Latest LTS: %s\n' "$latest_lts"
+    local i
+    if ((${#installs[@]})); then
+        printf 'The following NEW versions will be installed:\n'
+        for i in "${!installs[@]}"; do
+            printf '  %s  (replaces %s, global packages carried over)\n' "${installs[$i]}" "${sources[$i]}"
+        done
+    fi
+    if ((${#removes[@]})); then
+        printf 'The following versions will be REMOVED:\n  %s\n' "${removes[*]}"
+    fi
+    if ((${#keeps[@]})); then
+        printf 'Already the newest patch:\n  %s\n' "${keeps[*]}"
+    fi
+    printf '%d newly installed, %d to remove, %d up to date.\n' "${#installs[@]}" "${#removes[@]}" "${#keeps[@]}"
+
+    ((${#installs[@]} + ${#removes[@]} == 0)) && return 0
+    ((dry_run)) && return 0
+    __gash_confirm_plan "$assume_yes" || return 1
+
+    local current failed=" "
+    current="$(nvm current 2>/dev/null)"
+
+    for i in "${!installs[@]}"; do
+        __gash_info "Installing ${installs[$i]}..."
+        if ! nvm install "${installs[$i]}" --reinstall-packages-from="${sources[$i]}"; then
+            major="${installs[$i]#v}"
+            major="${major%%.*}"
+            __gash_error "Installing ${installs[$i]} failed: the v$major patches are kept."
+            failed+="$major "
+        fi
+    done
+
+    # nvm refuses to remove the active version: move to the new patch of the
+    # same major first.
+    local current_major="${current#v}"
+    current_major="${current_major%%.*}"
+    if [[ " ${removes[*]} " == *" $current "* && "$failed" != *" $current_major "* ]]; then
+        nvm use "$(grep -oE "v${current_major}\.[0-9]+\.[0-9]+" <<<"$remote" | sort -V | tail -1)" >/dev/null
+    else
+        nvm use "$current" >/dev/null 2>&1 || true
+    fi
+
+    local rc=0
+    for ver in "${removes[@]}"; do
+        major="${ver#v}"
+        major="${major%%.*}"
+        if [[ "$failed" == *" $major "* ]]; then
+            __gash_warning "$ver kept (installing the new v$major failed)."
+            continue
+        fi
+        __gash_info "Removing $ver..."
+        nvm uninstall "$ver" >/dev/null || rc=1
+    done
+
+    __gash_success "Active version: $(nvm current)"
+    return "$rc"
+}
+
+# Read `nvm ls-remote` into the variable named by $1; fails when the output
+# holds no version (offline, rate limited).
+__node_read_remote_index() {
+    local -n __nrri_out="$1"
+    __nrri_out="$(nvm ls-remote --no-colors 2>/dev/null)"
+    [[ "$__nrri_out" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]
+}
+
 # -----------------------------------------------------------------------------
 # Version Detection
 # -----------------------------------------------------------------------------
@@ -97,8 +240,17 @@ __node_parse_version_to_major() {
     local version_str="$1"
 
     if [[ "$version_str" =~ ^lts/ ]]; then
-        local lts_name="${version_str#lts/}"
-        case "$lts_name" in
+        # nvm records every LTS line it has seen as alias/lts/<codename>
+        # (and lts/* for the newest), so new codenames need no table here.
+        local lts_name="${version_str#lts/}" alias_file target
+        alias_file="${NVM_DIR:-$HOME/.nvm}/alias/lts/${lts_name,,}"
+        if [[ "$lts_name" != */* && -r "$alias_file" ]] && IFS= read -r target <"$alias_file" &&
+            [[ "$target" =~ ^v?([0-9]+) ]]; then
+            echo "${BASH_REMATCH[1]}"
+            return 0
+        fi
+        case "${lts_name,,}" in
+            krypton) echo "24" ;;
             jod) echo "22" ;;
             iron) echo "20" ;;
             hydrogen) echo "18" ;;
@@ -257,6 +409,7 @@ node_detect_version() {
 # Short Aliases
 # -----------------------------------------------------------------------------
 alias nvmp='nvm_prune_versions'
+alias nvmc='node_upgrade'
 
 # =============================================================================
 # Help Registration
@@ -303,6 +456,36 @@ NOTES
   Priority: .nvmrc -> .node-version -> package.json engines.node -> latest
   installed. JSON output is also emitted automatically under
   GASH_HEADLESS=1, --json is not required there.
+HELP
+
+    __gash_register_help "node_upgrade" \
+        --aliases "nvmc" \
+        --module "node" \
+        --short "Upgrade each installed Node.js major to its newest patch" \
+        --see-also "nvm_prune_versions node_detect_version" \
+        <<'HELP'
+USAGE
+  node_upgrade [-y] [--dry-run]
+
+EXAMPLES
+  # See the plan, change nothing
+  nvmc --dry-run
+
+  # Upgrade: plan, one question, then install and clean up
+  nvmc
+
+  # Unattended
+  nvmc -y
+
+NOTES
+  For each major already installed (v18, v20, v22...) installs the newest
+  published patch with the global packages of the patch it replaces
+  (nvm install --reinstall-packages-from), then removes the older patches
+  of that major. Majors that are not installed are never added and a
+  major is never removed. When an install fails, that major keeps its
+  patches. The active version moves to the new patch of its major.
+  Needs nvm loaded (GASH_NVM=lazy or on does it) and network access to
+  nodejs.org. Without a terminal the question is refused: pass -y.
 HELP
 
 fi # end help registration guard

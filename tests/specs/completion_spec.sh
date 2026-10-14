@@ -185,7 +185,7 @@ EOF
   [[ "$out" != *"gemini"* ]]
 '
 
-it "completion is registered for functions not aliases" bash -c '
+it "completion is registered for functions and their aliases" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
 
@@ -200,12 +200,39 @@ source "\$HOME/.gash/bash_completion" >/dev/null 2>&1
 # Function completion should be registered
 complete -p docker_stop_all >/dev/null 2>&1 || { echo "FAIL_FUNC"; exit 1; }
 
-# Alias completion should NOT be registered (bash expands aliases first)
-if complete -p dsa >/dev/null 2>&1; then
-    echo "FAIL_ALIAS"
-    exit 1
-fi
+# Bash looks completion up by the word typed: aliases need their own spec.
+complete -p dsa >/dev/null 2>&1 || { echo "FAIL_ALIAS"; exit 1; }
 
+echo "PASS"
+EOF
+)"
+
+  out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
+  [[ "$out" == *"PASS"* ]]
+'
+
+it "aliases complete like their function, and gash lists the real topics" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  ln -s "$ROOT" "$tmp/.gash"
+
+  inner_cmd="$(cat <<EOF
+set -u
+source "\$HOME/.gash/gash.sh" >/dev/null 2>&1
+source "\$HOME/.gash/bash_completion" >/dev/null 2>&1
+
+complete -p gsync | grep -q __gash_complete || exit 1
+COMP_WORDS=("gsync" "--d")
+COMP_CWORD=1
+__gash_complete
+[[ "\${COMPREPLY[*]}" == "--dry-run" ]] || exit 1
+
+COMP_WORDS=("gash" "d")
+COMP_CWORD=1
+__gash_complete
+[[ " \${COMPREPLY[*]} " == *" dev "* && " \${COMPREPLY[*]} " == *" docker "* ]] || exit 1
 echo "PASS"
 EOF
 )"

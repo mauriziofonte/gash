@@ -87,27 +87,7 @@ __gash_fs_parse_size() {
 #
 # Usage: __gash_fs_human_size 1048576
 __gash_fs_human_size() {
-    local bytes="${1-0}"
-    [[ "$bytes" =~ ^[0-9]+$ ]] || {
-        printf '0 B'
-        return 0
-    }
-
-    local -a units=(B KiB MiB GiB TiB PiB EiB)
-    local i=0
-    local size="$bytes"
-    local rem=0
-    while ((size >= 1024 && i < ${#units[@]} - 1)); do
-        rem=$(((size * 10 / 1024) % 10))
-        size=$((size / 1024))
-        i=$((i + 1))
-    done
-
-    if ((i == 0)); then
-        printf '%d %s' "$size" "${units[$i]}"
-    else
-        printf '%d.%d %s' "$size" "$rem" "${units[$i]}"
-    fi
+    __gash_human_size "${1-0}"
 }
 
 # Decide whether ANSI colors should be emitted.

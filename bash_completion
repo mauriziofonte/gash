@@ -59,6 +59,13 @@ __gash_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local cmd="${COMP_WORDS[0]}"
 
+    # A Gash alias (gsync, chri, flf...) completes like its function.
+    local expansion
+    if expansion="$(alias "$cmd" 2>/dev/null)"; then
+        expansion="${expansion#*=\'}"
+        cmd="${expansion%%[\' ]*}"
+    fi
+
     case "$cmd" in
         # Git tag completion
         git_add_tag | git_delete_tag | git_list_tags)
@@ -124,9 +131,32 @@ __gash_complete() {
             mapfile -t COMPREPLY < <(compgen -f -- "$cur")
             ;;
 
-        # Gash reference card sections
+        # Gash reference card topics
         gash)
-            mapfile -t COMPREPLY < <(compgen -W "git files system docker nav navigation llm php gash management ai all help" -- "$cur")
+            local topics="all help" entry
+            for entry in "${__GASH_CARD_TOPICS[@]}"; do topics+=" ${entry%%|*}"; done
+            mapfile -t COMPREPLY < <(compgen -W "$topics" -- "$cur")
+            ;;
+
+        # Upgrades with a plan and one question
+        node_upgrade | chrome_headless_update)
+            mapfile -t COMPREPLY < <(compgen -W "--yes --dry-run --help" -- "$cur")
+            ;;
+
+        git_sync)
+            mapfile -t COMPREPLY < <(compgen -W "--message --no-push --dry-run --help" -- "$cur")
+            ;;
+
+        wsl_compact)
+            mapfile -t COMPREPLY < <(compgen -W "--status --help" -- "$cur")
+            ;;
+
+        path_add)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--append --help" -- "$cur")
+            else
+                mapfile -t COMPREPLY < <(compgen -d -- "$cur")
+            fi
             ;;
 
         # AI provider completion (first argument only)
@@ -222,12 +252,9 @@ __gash_complete() {
 # Enable Completion
 # -----------------------------------------------------------------------------
 
-# Activate completion for each public Gash function.
-#
-# NOTE: Completion is NOT registered for bash aliases (dsa, gat, flf, etc.).
-# Bash expands aliases BEFORE consulting completion specs, so
-# `complete -F handler alias_name` is silently ignored. This is a bash
-# limitation, not a Gash bug. Alias users get default readline completion.
+# Activate completion for each public Gash function and for the short
+# aliases of the help registry (bash looks completion up by the word typed,
+# so an alias needs its own registration).
 __gash_enable_completion() {
     local fn added=""
     declare -F __gash_added_symbols >/dev/null && added="$(__gash_added_symbols functions)"
@@ -237,6 +264,14 @@ __gash_enable_completion() {
             __gash_is_internal_function "$fn" && continue
             complete -o default -F __gash_complete "$fn"
         done <<<"$added"
+        if declare -p __GASH_HELP_ALIASES &>/dev/null; then
+            local a
+            for fn in "${!__GASH_HELP_ALIASES[@]}"; do
+                for a in ${__GASH_HELP_ALIASES[$fn]//,/ }; do
+                    alias "$a" >/dev/null 2>&1 && complete -o default -F __gash_complete "$a"
+                done
+            done
+        fi
     else
         # Fallback registration for common functions
         local fn_list="git_add_tag git_delete_tag git_list_tags disk_usage files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats history_grep gash_doctor gash archive_extract file_backup"
