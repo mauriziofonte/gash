@@ -553,7 +553,14 @@ __gash_card_aliases() {
             line = $0; sub(/^[ \t]*alias /, "", line)
             n = line; sub(/=.*/, "", n)
             v = line; sub(/^[^=]*=/, "", v); sub(/[ \t]+#.*$/, "", v)
-            v = unq(v); gsub(/ ?\$__gash_[A-Za-z_]+/, "", v)
+            v = unq(v)
+            # Variables the file sets at load time, shown by what they hold.
+            gsub(/\$__gash_hte/, "sudo phpX.Y hte-cli", v)
+            gsub(/\$__gash_composer1/, "composer1", v)
+            gsub(/\$__gash_composer/, "composer", v)
+            gsub(/\$__gash_(php_latest|bin)/, "phpX.Y", v)
+            gsub(/ ?\$__gash_[A-Za-z_]+/, "", v)
+            if (n ~ /\$/ || v == "") next
             if (!(n in seen)) { seen[n] = 1; print n "\t" v }
             comment = ""; next
         }
