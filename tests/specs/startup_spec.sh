@@ -92,12 +92,13 @@ it "an alias named like a program on PATH is not defined; wrappers and earlier a
   ln -s "$GASH_TEST_ROOT" "$tmp/.gash"
   mkdir "$tmp/bin"
   for p in gp gst gc; do printf "#!/bin/sh\n" >"$tmp/bin/$p"; chmod +x "$tmp/bin/$p"; done
-  show="for a in gp gst gc gpr ls; do printf \"%s=%s\n\" \"\$a\" \"\${BASH_ALIASES[\$a]-none}\"; done"
+  show="for a in gp gst gc gaa ls; do printf \"%s=%s\n\" \"\$a\" \"\${BASH_ALIASES[\$a]-none}\"; done"
 
   out="$(HOME="$tmp" PATH="$tmp/bin:$PATH" bash --noprofile --norc -i -c "set -euo pipefail; alias gc=\"echo mine\"; source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1; $show" 2>/dev/null </dev/null)"
-  grep -qx "gp=none" <<<"$out"
+  # (gaa, not gpr: Homebrew coreutils installs a gpr program on macOS.)
+  grep -qx "gp=none" <<<"$out" || { echo "$out"; exit 1; }
   grep -qx "gst=none" <<<"$out"
-  grep -qx "gpr=git pull --rebase" <<<"$out"
+  grep -qx "gaa=git add --all" <<<"$out"
   # Defined before Gash: left to Gash as before (not dropped).
   grep -qx "gc=git commit" <<<"$out"
   grep -q "^ls=ls" <<<"$out"
