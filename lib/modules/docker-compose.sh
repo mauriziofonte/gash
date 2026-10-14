@@ -1129,6 +1129,7 @@ EOF
 # Always outputs JSON, no colors, minimal tokens.
 # Usage: llm_docker_check [PATH]
 llm_docker_check() {
+    needs_help "llm_docker_check" "llm_docker_check [PATH]" "Compose image update check as JSON" "${1-}" && return
     docker_compose_check "${1:-.}" --json
 }
 

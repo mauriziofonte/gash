@@ -19,7 +19,7 @@
 # Example: llm_tree --text --depth 2 .
 # Example: llm_tree --depth 3 --stats lib/    # nested JSON with per-node size
 llm_tree() {
-    if needs_help "llm_tree" "llm_tree [--text] [--depth N] [--stats] [PATH]" "Compact directory tree (JSON default, --text for indented, --stats for size/count)" "${1-}"; then
+    if __llm_needs_help "llm_tree" "llm_tree [--text] [--depth N] [--stats] [PATH]" "Compact directory tree (JSON default, --text for indented, --stats for size/count)" "$@"; then
         return 0
     fi
 
@@ -30,7 +30,8 @@ __llm_tree_impl() {
     local text_mode=0
     local max_depth="" # empty = default per mode (text=3, JSON=1)
     local with_stats=0
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -54,7 +55,7 @@ __llm_tree_impl() {
                 return 1
                 ;;
             *)
-                target_path="$1"
+                __llm_take_path target_path path_set "$1" || return 1
                 shift
                 ;;
         esac
@@ -64,10 +65,12 @@ __llm_tree_impl() {
     if [[ -z "$max_depth" ]]; then
         [[ $text_mode -eq 1 ]] && max_depth=3 || max_depth=1
     fi
-    if ! [[ "$max_depth" =~ ^[0-9]+$ ]] || [[ "$max_depth" -lt 1 ]]; then
+    __llm_validate_uint "depth" "$max_depth" || return 1
+    if ((10#$max_depth < 1)); then
         __llm_error "invalid_depth" "$max_depth" "RETRY" "true" "Provide a positive integer"
         return 1
     fi
+    max_depth=$((10#$max_depth))
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
@@ -225,12 +228,12 @@ __llm_tree_impl() {
         '
 }
 
-# Find files by pattern, optimized for common use cases.
+# Find files by name pattern, optionally only those whose content matches.
 # Usage: llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]
 # Example: llm_find "*.php" src/
-# Example: llm_find --contains "class.*Controller" .
+# Example: llm_find "*.php" . --contains "class.*Controller"
 llm_find() {
-    if needs_help "llm_find" "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]" "Find files by pattern (ignores node_modules, vendor, .git)" "${1-}"; then
+    if __llm_needs_help "llm_find" "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]" "Find files by pattern (ignores node_modules, vendor, .git)" "$@"; then
         return 0
     fi
 
@@ -239,7 +242,8 @@ llm_find() {
 
 __llm_find_impl() {
     local pattern=""
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
     local file_type="f"
     local contains_regex=""
     local limit=100
@@ -276,13 +280,25 @@ __llm_find_impl() {
                 if [[ -z "$pattern" ]]; then
                     pattern="$1"
                 else
-                    target_path="$1"
+                    __llm_take_path target_path path_set "$1" || return 1
                 fi
                 shift
                 ;;
         esac
     done
 
+    if [[ -z "$pattern" ]]; then
+        __llm_error "missing_pattern" "" "RETRY" "true" "Provide a name pattern as first argument, e.g. '*.php' or '*'"
+        return 1
+    fi
+    if [[ "$file_type" != f && "$file_type" != d ]]; then
+        __llm_error "invalid_type" "$file_type" "RETRY" "true" "Use --type f (files) or --type d (directories)"
+        return 1
+    fi
+    if [[ -n "$contains_regex" && "$file_type" == d ]]; then
+        __llm_error "invalid_type" "--type d with --contains" "RETRY" "true" "--contains searches file contents; drop --type d"
+        return 1
+    fi
     __llm_validate_uint "limit" "$limit" || return 1
 
     # Validate path
@@ -292,27 +308,30 @@ __llm_find_impl() {
     # Zero matches (or SIGPIPE from head) is a valid outcome, not an error:
     # never let pipefail+errexit kill a headless caller.
     if [[ -n "$contains_regex" ]]; then
-        # Search by content; secret files are never opened.
+        # Search by content, in the files the name search would list: the
+        # same pattern, prunes and policy (hidden and gitignored files
+        # included) with rg and with the grep fallback. Secret files are
+        # never opened.
         if __llm_is_secret_file "$safe_path"; then
             __llm_error "secret_file_blocked" "$safe_path" "FATAL" "false" "This file contains secrets and cannot be searched"
             return 1
         fi
+        if [[ -f "$safe_path" ]]; then
+            # shellcheck disable=SC2053 # PATTERN is a glob on purpose
+            [[ "${safe_path##*/}" == $pattern ]] || return 0
+        fi
         local -a secret_ex=()
         if __llm_has_rg; then
             __llm_secret_excludes rg secret_ex
-            rg -l --no-heading --color=never \
-                --glob '!node_modules' --glob '!vendor' --glob '!.git' "${secret_ex[@]}" \
+            rg -l --no-heading --color=never --no-messages --no-ignore --hidden --glob "$pattern" \
+                --glob '!node_modules' --glob '!vendor' --glob '!.git' --glob '!__pycache__' "${secret_ex[@]}" \
                 -e "$contains_regex" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         elif [[ -d "$safe_path" ]]; then
             __llm_secret_excludes grep secret_ex
-            __llm_grep_tree "$safe_path" "php,js,ts,py,go,java" -l "${secret_ex[@]}" \
+            __llm_grep_tree "$safe_path" "" "$pattern" -l -I "${secret_ex[@]}" \
                 -e "$contains_regex" | head -n "$limit" || true
         else
-            __llm_secret_excludes grep secret_ex
-            grep -rl --include='*.php' --include='*.js' --include='*.ts' \
-                --include='*.py' --include='*.go' --include='*.java' \
-                --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=.git "${secret_ex[@]}" \
-                -e "$contains_regex" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
+            grep -l -I -e "$contains_regex" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         fi
     else
         # Search by filename pattern. Paths with embedded newlines would be
@@ -334,7 +353,7 @@ __llm_find_impl() {
 # Usage: llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]
 # Example: llm_grep "TODO|FIXME" src/ --ext php,js
 llm_grep() {
-    if needs_help "llm_grep" "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]" "Search code with file:line:content output" "${1-}"; then
+    if __llm_needs_help "llm_grep" "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]" "Search code with file:line:content output" "$@"; then
         return 0
     fi
 
@@ -343,7 +362,8 @@ llm_grep() {
 
 __llm_grep_impl() {
     local pattern=""
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
     local extensions=""
     local context=0
     local limit=100
@@ -380,7 +400,7 @@ __llm_grep_impl() {
                 if [[ -z "$pattern" ]]; then
                     pattern="$1"
                 else
-                    target_path="$1"
+                    __llm_take_path target_path path_set "$1" || return 1
                 fi
                 shift
                 ;;
@@ -441,7 +461,7 @@ __llm_grep_impl() {
         if [[ -d "$safe_path" ]]; then
             local -a tree_args=(-n --color=never "${secret_ex[@]}")
             [[ $context -gt 0 ]] && tree_args+=(-C "$context")
-            __llm_grep_tree "$safe_path" "$extensions" "${tree_args[@]}" -e "$pattern" | head -n "$limit" || true
+            __llm_grep_tree "$safe_path" "$extensions" "" "${tree_args[@]}" -e "$pattern" | head -n "$limit" || true
         else
             grep "${grep_args[@]}" -e "$pattern" -- "$safe_path" 2>/dev/null | head -n "$limit" || true
         fi
@@ -452,12 +472,18 @@ __llm_grep_impl() {
 # grep fallback for a directory when rg is missing. find walks the tree and
 # prunes noise and secret directories by path: grep --exclude-dir matches
 # one name only, so a rule such as ".config/gcloud" needs find. Secret file
-# names are skipped here and by the caller's --exclude arguments.
-# Usage: __llm_grep_tree DIR EXTS(comma list, may be empty) GREP_ARG...
+# names are skipped here and by the caller's --exclude arguments. NAME is
+# a -name glob (llm_find), which also prunes __pycache__ as its name
+# search does.
+# Usage: __llm_grep_tree DIR EXTS(comma list, may be empty) NAME(may be empty) GREP_ARG...
 __llm_grep_tree() {
-    local root="$1" ext_csv="$2" dir pattern ext
-    shift 2
+    local root="$1" ext_csv="$2" name_glob="$3" dir pattern ext
+    shift 3
     local -a prune=(-name node_modules -o -name vendor -o -name .git) names=() skip=() list=()
+    if [[ -n "$name_glob" ]]; then
+        prune+=(-o -name __pycache__)
+        names=(-name "$name_glob")
+    fi
     for dir in "${__LLM_SECRET_DIRS[@]}"; do
         prune+=(-o -ipath "*/$dir")
     done
@@ -479,10 +505,10 @@ __llm_grep_tree() {
 }
 
 # Read a config file (NOT .env for security).
-# Usage: llm_config <file>
-# Supports: .json, .yaml, .yml
+# Usage: llm_config <file> [--max-bytes N]
+# Supports: .json, .yaml, .yml (YAML as JSON when yq is installed)
 llm_config() {
-    if needs_help "llm_config" "llm_config <file>" "Read config file (JSON/YAML, NOT .env)" "${1-}"; then
+    if __llm_needs_help "llm_config" "llm_config <file> [--max-bytes N]" "Read config file (JSON/YAML, NOT .env); files over 1 MiB need --max-bytes" "$@"; then
         return 0
     fi
 
@@ -490,12 +516,38 @@ llm_config() {
 }
 
 __llm_config_impl() {
-    local file="${1-}"
+    local file="" max_bytes=1048576
+
+    while (($# > 0)); do
+        case "$1" in
+            --max-bytes)
+                if (($# < 2)); then
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
+                    return 1
+                fi
+                max_bytes="$2"
+                shift 2
+                ;;
+            -*)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use a file path and --max-bytes N"
+                return 1
+                ;;
+            *)
+                if [[ -n "$file" ]]; then
+                    __llm_error "unexpected_argument" "$1" "RETRY" "true" "Pass one file per call"
+                    return 1
+                fi
+                file="$1"
+                shift
+                ;;
+        esac
+    done
 
     if [[ -z "$file" ]]; then
         __llm_error "missing_file" "" "RETRY" "true" "Provide a file path as argument"
         return 1
     fi
+    __llm_validate_uint "size" "$max_bytes" || return 1
 
     # Security: Block .env files
     if __llm_is_secret_file "$file"; then
@@ -510,20 +562,55 @@ __llm_config_impl() {
         __llm_error "file_not_found" "$safe_path" "RETRY" "true" "Check the file path and try again"
         return 1
     fi
+    if [[ ! -r "$safe_path" ]]; then
+        __llm_error "path_unreadable" "$safe_path" "RETRY" "true" "The file is not readable by this user"
+        return 1
+    fi
 
+    local size
+    size="$(wc -c <"$safe_path" 2>/dev/null)" || size=""
+    size="${size//[[:space:]]/}"
+    if [[ "$size" =~ ^[0-9]+$ ]] && ((size > 10#$max_bytes)); then
+        __llm_error "file_too_large" "$safe_path is $size bytes" "RETRY" "true" "Over the --max-bytes limit ($max_bytes): raise --max-bytes, or read part of it with llm_exec \"head -c 65536 FILE\""
+        return 1
+    fi
+
+    # YAML as JSON when yq can convert it; the raw text otherwise (no yq,
+    # an unknown yq, or a file it cannot parse).
+    local json=""
     case "$safe_path" in
-        *.json)
-            cat "$safe_path"
-            ;;
         *.yaml | *.yml)
-            if __llm_has_jq && type -P yq >/dev/null 2>&1; then
-                yq -o=json "$safe_path"
-            else
-                cat "$safe_path"
-            fi
+            json="$(__llm_yaml_to_json "$safe_path")" || json=""
             ;;
-        *)
-            cat "$safe_path"
-            ;;
+    esac
+    if [[ -n "$json" ]]; then
+        printf '%s\n' "$json"
+        return 0
+    fi
+    if ! cat -- "$safe_path" 2>/dev/null; then
+        __llm_error "path_unreadable" "$safe_path" "RETRY" "true" "The file could not be read"
+        return 1
+    fi
+}
+
+# Convert a YAML file to JSON with whichever yq is installed: mikefarah's
+# (Go, `yq eval -o=json`) or kislyuk's (Python, a jq wrapper: `yq .`, the
+# Debian/Ubuntu package). Prints nothing and fails for anything else.
+# Usage: __llm_yaml_to_json FILE
+__llm_yaml_to_json() {
+    type -P yq >/dev/null 2>&1 || return 1
+    if [[ -z "${__LLM_YQ_FLAVOUR-}" ]]; then
+        local version
+        version="$(yq --version 2>&1 </dev/null)" || version=""
+        case "$version" in
+            *mikefarah*) __LLM_YQ_FLAVOUR=mikefarah ;;
+            "yq "[0-9]*) __LLM_YQ_FLAVOUR=kislyuk ;;
+            *) __LLM_YQ_FLAVOUR=none ;;
+        esac
+    fi
+    case "$__LLM_YQ_FLAVOUR" in
+        mikefarah) yq eval -o=json . "$1" </dev/null 2>/dev/null ;;
+        kislyuk) __llm_has_jq && yq . "$1" </dev/null 2>/dev/null ;;
+        *) return 1 ;;
     esac
 }

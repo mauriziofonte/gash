@@ -12,12 +12,14 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | [`history_grep`](#history-grep) | `hg` | Search command history with colored output |
 | [`ip_public`](#ip-public) | `myip` | Get your public IP address |
 | [`mkdir_cd`](#mkdir-cd) | `mkcd` | Create a directory and cd into it |
+| [`path_add`](#path-add) |  | Add directories to PATH once each |
 | [`port_kill`](#port-kill) | `ptk` | Kill processes listening on a specific port |
 | [`process_find`](#process-find) | `pf` | Search for a process by name |
 | [`process_kill`](#process-kill) | `pk` | Kill all processes matching a name |
 | [`services_stop`](#services-stop) | `svs` | Stop well-known services (Apache, MySQL, Redis, Docker, etc.) |
 | [`sudo_last`](#sudo-last) | `plz` | Re-run last command with sudo |
 | [`sysinfo`](#sysinfo) | `si` | Comprehensive system information enumeration |
+| [`wsl_compact`](#wsl-compact) | `wslc` | Fix Windows interop on a WSL2 VM with fragmented memory |
 | [`wsl_explorer`](#wsl-explorer) | `wex` | Open Windows Explorer from WSL |
 | [`wsl_restart`](#wsl-restart) | `wr` | Restart WSL (saves history, runs wsl --shutdown) |
 | [`wsl_shutdown`](#wsl-shutdown) | `wsd` | Shutdown WSL (saves history, runs wsl --shutdown) |
@@ -197,6 +199,34 @@ mkcd my-new-project
 mkcd ~/projects/client/frontend
 ```
 
+## path_add
+
+Add directories to PATH once each
+
+#### Usage
+
+```text
+path_add [--append] DIR...
+```
+
+#### Examples
+
+```bash
+# Toolchains first, in this order, only those that exist
+path_add ~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin
+
+# At the end of PATH instead
+path_add --append /opt/tools/bin
+```
+
+#### Notes
+
+```text
+Directories that do not exist are skipped and one already in PATH stays
+where it is, so running it again (or re-sourcing ~/.gashrc) never makes
+PATH grow. GASH_PATH_ADD in ~/.gash_env does this for every new shell.
+```
+
 ## port_kill
 
 Kill processes listening on a specific port
@@ -206,7 +236,7 @@ Alias: `ptk`
 #### Usage
 
 ```text
-port_kill [--force] PORT
+port_kill [-y] PORT
 ```
 
 #### Examples
@@ -216,13 +246,13 @@ port_kill [--force] PORT
 ptk 3000
 
 # No confirmation (scripts, agents)
-ptk --force 3000
+ptk -y 3000
 ```
 
 #### Notes
 
 ```text
-Requires lsof. Only listeners are targeted: a browser or ssh session
+--force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session
 connected to that port elsewhere is left alone. SIGTERM first,
 SIGKILL for processes still alive after about 3 seconds.
 ```
@@ -265,30 +295,27 @@ Alias: `pk`
 #### Usage
 
 ```text
-process_kill [--force] PROCESS_NAME
+process_kill [-y] PROCESS_NAME
 ```
 
 #### Examples
 
 ```bash
-# Kill all node processes (asks first when several match)
+# Kill all node processes (lists them and asks first)
 pk node
 
-# Kill a stuck service
-pk webpack-dev-server
-
 # No confirmation (scripts, agents)
-pk --force webpack-dev-server
+pk -y webpack-dev-server
 ```
 
 #### Notes
 
 ```text
-Matches the executable name exactly, ignoring case. Interactively a single
-match is killed directly and several are confirmed first. Without a
-terminal to ask (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless
---force is given, whatever the number of matches. SIGTERM first, SIGKILL
-for processes still alive after about 3 seconds.
+Matches the executable name exactly, ignoring case, lists the matches
+with their command lines and asks. Without a terminal to ask
+(GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.
+--force is the same as -y. SIGTERM first, SIGKILL for processes still
+alive after about 3 seconds. Declining returns 1.
 ```
 
 See also: `process_find`, `port_kill`
@@ -302,31 +329,36 @@ Alias: `svs`
 #### Usage
 
 ```text
-services_stop [--force]
+services_stop [-y] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
-# Stop services with confirmation prompt
+# List the running ones and ask before stopping them
 svs
 
+# Only list them
+svs --dry-run
+
 # Skip confirmation
-svs --force
+svs -y
 ```
 
 #### Services stopped
 
 ```text
 apache2, nginx, mysql, mariadb, postgresql,
-mongodb, redis, memcached, docker
+mongodb, redis, redis-server, memcached, docker
 ```
 
 #### Notes
 
 ```text
-Only stops services that are currently active.
-Uses systemctl, so it requires systemd.
+Only stops services that are currently active, through systemd when it
+runs, else through `service` (WSL without systemd, containers).
+--force is the same as -y. Returns 1 when declined or when a stop
+fails.
 ```
 
 See also: `process_kill`
@@ -405,6 +437,41 @@ sysinfo webstack --llm | ai_query "audit this web stack"
 
 See also: `ai_sysinfo`
 
+## wsl_compact
+
+Fix Windows interop on a WSL2 VM with fragmented memory
+
+Alias: `wslc`
+
+#### Usage
+
+```text
+wsl_compact [--status]
+```
+
+#### Examples
+
+```bash
+# code . or explorer.exe fail with "UtilAcceptVsock ... accept4 failed 110"
+wslc
+
+# Only show the failures and the free large blocks, change nothing
+wslc --status
+```
+
+#### Notes
+
+```text
+Every Windows program started from WSL needs a contiguous 512 KiB block
+of guest memory for its hv_sock channel. When memory is fragmented the
+allocation fails (dmesg: "page allocation failure: order:7") and the
+launch times out. wsl_compact drops the page cache and slab, compacts
+memory (sudo), prints the free blocks before and after, and checks that
+cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.
+```
+
+See also: `wsl_restart`, `wsl_shutdown`
+
 ## wsl_explorer
 
 Open Windows Explorer from WSL
@@ -448,22 +515,25 @@ Alias: `wr`
 #### Usage
 
 ```text
-wsl_restart
+wsl_restart [-y]
 ```
 
 #### Examples
 
 ```bash
-# Restart WSL (saves bash history first)
-wsl_restart
+# Restart WSL (asks, saves bash history first)
+wr
+
+# Without the question
+wr -y
 ```
 
 #### Notes
 
 ```text
-Saves bash history before shutdown so no commands are lost.
-WSL will restart automatically when you open a new terminal.
-Only works inside WSL (Windows Subsystem for Linux).
+Runs `wsl --shutdown`: every distro stops, Docker Desktop's included,
+with the servers running in them. WSL starts again with the next
+terminal. Asks first; -y skips the question. Same as wsl_shutdown.
 ```
 
 See also: `wsl_shutdown`
@@ -477,21 +547,21 @@ Alias: `wsd`
 #### Usage
 
 ```text
-wsl_shutdown
+wsl_shutdown [-y]
 ```
 
 #### Examples
 
 ```bash
-# Shutdown WSL (saves bash history first)
+# Shut down WSL (asks, saves bash history first)
 wsd
 ```
 
 #### Notes
 
 ```text
-Saves bash history before shutdown so no commands are lost.
-Only works inside WSL (Windows Subsystem for Linux).
+Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.
+Asks first; -y skips the question.
 ```
 
 See also: `wsl_restart`
@@ -541,6 +611,6 @@ See also: `wsl_explorer`, `process_find`
 | `reboot` | `sudo /sbin/reboot` |
 | `shutdown` | `sudo /sbin/shutdown` |
 | `grep` | `grep --color=auto` |
-| `quit` | `services_stop --force` |
+| `quit` | `services_stop` |
 | `less` | `most` |
 

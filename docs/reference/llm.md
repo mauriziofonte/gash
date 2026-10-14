@@ -32,7 +32,7 @@ Read config files (JSON/YAML, excludes .env)
 #### Usage
 
 ```text
-llm_config FILE
+llm_config FILE [--max-bytes N]
 ```
 
 #### Examples
@@ -40,12 +40,16 @@ llm_config FILE
 ```bash
 llm_config package.json
 llm_config docker-compose.yml
+llm_config big.json --max-bytes 5000000
 ```
 
 #### Notes
 
 ```text
 Refuses to read .env files and other secret files for security.
+YAML comes out as JSON when yq (mikefarah's or the Python yq) is
+installed, as the raw text otherwise. Files over --max-bytes
+(default 1 MiB) fail with file_too_large.
 ```
 
 ## llm_db_explain
@@ -94,7 +98,8 @@ llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
 
 ```text
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
--d, --database NAME    Database name (overrides the connection's)
+-d, --database NAME    Database name (overrides the connection's;
+                       letters, digits, _ $ . - only)
 -f, --file PATH        SQLite database file
 -n, --limit N          Row cap (default 100; also -r, --rows)
 ```
@@ -220,8 +225,10 @@ llm_env --filter PATH
 #### Notes
 
 ```text
-Excludes variables matching secret patterns: PASSWORD, TOKEN,
-SECRET, KEY, API_KEY, CREDENTIAL, etc.
+Excludes variables matching secret patterns: PASSWORD, PASSPHRASE,
+TOKEN, SECRET, KEY, CREDENTIAL, AUTH, SESSION, JWT, WEBHOOK, *_PWD,
+*_PAT, etc. In the others, URL passwords and known token formats
+(AKIA..., ghp_..., sk-..., xox?-..., AIza...) are shown as ***.
 ```
 
 ## llm_exec
@@ -254,7 +261,12 @@ Commands joined by |, &&, || and ; only: no $ or backtick expansion,
 no subshells, no redirections except >/dev/null, 2>&1 and >&2.
 Writing options are refused (find -delete, sort -o, sed -i,
 git branch -D, ...); sed and awk run sandboxed (GNU sed, gawk).
-Secret files (.env, keys, credentials) are refused, also via globs.
+Secret files (.env, keys, credentials) are refused, also via globs;
+grep -r, rg, diff -r and git grep/log -p/show/diff leave them out.
+Recursive commands cannot follow symlinks (grep -R, find -L, ...)
+or start at / or above /proc, /sys, /dev, /boot, /root (content
+searches: also /etc). The child gets a short environment (PATH,
+HOME, USER, locale, TERM, TZ, TMPDIR, ...), never the caller's tokens.
 
 SETTINGS (~/.gash_env only)
 GASH_LLM_EXEC_ALLOW="make npm"   extra commands, any arguments
@@ -269,7 +281,7 @@ Find files by pattern (ignores noise directories)
 #### Usage
 
 ```text
-llm_find PATTERN [PATH] [--type f|d] [--contains REGEX]
+llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
 ```
 
 #### Examples
@@ -283,6 +295,15 @@ llm_find "*.conf" /etc --contains "database"
 
 # Find directories only
 llm_find "src*" . --type d
+```
+
+#### Notes
+
+```text
+PATTERN is a file name glob (find -name). With --contains only the
+files it matches are searched, hidden and gitignored ones included,
+with or without ripgrep. Skips node_modules, vendor, .git and
+__pycache__; --contains also skips secret files. Default limit 100.
 ```
 
 ## llm_git_diff

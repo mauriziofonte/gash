@@ -145,7 +145,8 @@ __ai_redact() {
         { print }' |
         sed -E \
             -e 's#([A-Za-z][A-Za-z0-9+.-]*://[^/:@[:space:]]*):[^/@[:space:]]+@#\1:[REDACTED]@#g' \
-            -e "s/(([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])?|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][Ss]?)[A-Za-z0-9_.-]*[\"']?[[:space:]]*(=|:|[[:space:]])[[:space:]]*)(\"[^\"]*\"|'[^']*'|[^[:space:],;]+)/\\1[REDACTED]/g" \
+            -e "s/(([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])?|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][Ss]?)[A-Za-z0-9_.-]*[\"']?[[:space:]]*[=:][[:space:]]*)(\"[^\"]*\"|'[^']*'|[^[:space:],;]+)/\\1[REDACTED]/g" \
+            -e "s/(([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])?|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][Ss]?)[[:space:]]+)[A-Za-z0-9_+\/=.-]{16,}/\\1[REDACTED]/g" \
             -e 's/AKIA[0-9A-Z]{16}/[REDACTED]/g' \
             -e 's/(gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}/[REDACTED]/g' \
             -e 's/(sk-ant-|sk-)[A-Za-z0-9_-]{20,}/[REDACTED]/g' \
@@ -221,11 +222,16 @@ __ai_request_send() {
 
     local body
     if [[ "$provider" == claude ]]; then
+        # Claude 5 models think by default; terminal answers need little of
+        # it, so effort is low there (older models reject the field).
+        local effort=""
+        [[ "$model" =~ ^claude-[a-z]+-5([-.]|$) ]] && effort="low"
         body=$(jq -cn --arg model "$model" --arg system "$system" --arg user "$user" \
-            --argjson max_tokens "$max_tokens" --argjson schema "$schema" \
+            --argjson max_tokens "$max_tokens" --argjson schema "$schema" --arg effort "$effort" \
             '{model: $model, max_tokens: $max_tokens, system: $system,
               messages: [{role: "user", content: $user}],
-              output_config: {format: {type: "json_schema", schema: $schema}}}') || return 1
+              output_config: ({format: {type: "json_schema", schema: $schema}}
+                              + (if $effort == "" then {} else {effort: $effort} end))}') || return 1
     else
         body=$(jq -cn --arg system "$system" --arg user "$user" \
             --argjson max_tokens "$max_tokens" --argjson schema "$schema" \

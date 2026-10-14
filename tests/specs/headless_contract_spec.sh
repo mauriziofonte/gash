@@ -124,6 +124,7 @@ it "llm_git_log emits valid JSON with quotes in subject (C6)" bash -c "
 
 it "llm_db_query -r injection payload is rejected before the engine" bash -c "
   $__hc_preamble
+  gash_require sqlite3
   db=\"\$(mktemp -u).db\"
   trap 'rm -f \"\$db\"' EXIT
   sqlite3 \"\$db\" 'CREATE TABLE t(x); INSERT INTO t VALUES (1)'
@@ -137,6 +138,7 @@ it "llm_db_query -r injection payload is rejected before the engine" bash -c "
 
 it "llm_db_sample rejects non-integer --limit" bash -c "
   $__hc_preamble
+  gash_require sqlite3
   db=\"\$(mktemp -u).db\"
   trap 'rm -f \"\$db\"' EXIT
   sqlite3 \"\$db\" 'CREATE TABLE t(x)'

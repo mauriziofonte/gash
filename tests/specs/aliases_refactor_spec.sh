@@ -303,7 +303,7 @@ EOF
     [[ "$out" == *"git_apply_patch"* ]]
 '
 
-it "quit alias resolves to services_stop --force" bash -c '
+it "quit alias resolves to services_stop, which asks" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
 
@@ -319,7 +319,7 @@ EOF
 
     out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
 
-    [[ "$out" == *"services_stop --force"* ]]
+    [[ "$out" == *"="*"services_stop"* && "$out" != *"--force"* ]]
 '
 
 it "dcrm alias is defined when docker is available" bash -c '

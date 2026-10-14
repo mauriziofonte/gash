@@ -162,6 +162,28 @@ it "docker_prune_all removes custom networks but preserves built-in" bash -c '
     [[ "$log" != *"docker network rm none"* ]]
 '
 
+it "docker_prune_all --dry-run counts and removes nothing; -y skips the question" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_DOCKER_CONTAINERS=1
+    export MOCK_DOCKER_CUSTOM_NETWORKS=1
+    tmpdir=$(mktemp -d)
+    trap "rm -rf $tmpdir" EXIT
+    export MOCK_DOCKER_LOG="$tmpdir/docker.log"
+
+    out="$(docker_prune_all --dry-run 2>&1)"
+    [[ "$out" == *"To remove:"*"network(s)"* ]]
+    ! grep -qE "docker (rm|rmi|stop|system prune)" "$MOCK_DOCKER_LOG"
+    needs_confirm_prompt() { echo asked >&2; return 1; }
+    out="$(docker_prune_all -y 2>&1)"
+    [[ "$out" != *asked* ]]
+    grep -q "system prune" "$MOCK_DOCKER_LOG"
+    ! docker_prune_all --bogus 2>/dev/null
+'
+
 it "docker_prune_all guards empty container lists" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"

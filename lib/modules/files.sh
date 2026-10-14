@@ -87,27 +87,7 @@ __gash_fs_parse_size() {
 #
 # Usage: __gash_fs_human_size 1048576
 __gash_fs_human_size() {
-    local bytes="${1-0}"
-    [[ "$bytes" =~ ^[0-9]+$ ]] || {
-        printf '0 B'
-        return 0
-    }
-
-    local -a units=(B KiB MiB GiB TiB PiB EiB)
-    local i=0
-    local size="$bytes"
-    local rem=0
-    while ((size >= 1024 && i < ${#units[@]} - 1)); do
-        rem=$(((size * 10 / 1024) % 10))
-        size=$((size / 1024))
-        i=$((i + 1))
-    done
-
-    if ((i == 0)); then
-        printf '%d %s' "$size" "${units[$i]}"
-    else
-        printf '%d.%d %s' "$size" "$rem" "${units[$i]}"
-    fi
+    __gash_human_size "${1-0}"
 }
 
 # Decide whether ANSI colors should be emitted.
@@ -302,11 +282,12 @@ __gash_fs_scan_warn() {
 }
 
 # Current monotonic milliseconds (best-effort). Uses EPOCHREALTIME if available
-# (bash 5.0+), falls back to `date +%s%N`.
+# (bash 5.0+), falls back to `date +%s%N`. EPOCHREALTIME uses the locale's
+# decimal point: "." or "," (it_IT, de_DE).
 __gash_fs_now_ms() {
     if [[ -n "${EPOCHREALTIME-}" ]]; then
-        local s="${EPOCHREALTIME%%.*}"
-        local f="${EPOCHREALTIME#*.}"
+        local s="${EPOCHREALTIME%%[.,]*}"
+        local f="${EPOCHREALTIME#*[.,]}"
         while [[ ${#f} -lt 6 ]]; do f="${f}0"; done
         printf '%s' $((10#$s * 1000 + 10#${f:0:3}))
         return 0
@@ -1996,6 +1977,22 @@ archive_extract() {
     case "$archive_file" in
         *.tar.bz2) tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
         *.tar.gz) tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tar.xz | *.txz) tar xvJf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tar.zst | *.tzst)
+            if __gash_require_command zstd "Extracting .zst needs zstd."; then
+                zstd -dc -- "$archive_file" | tar xvf - -C "$output_dir" --no-same-owner --no-same-permissions || rc=1
+            else
+                rc=1
+            fi
+            ;;
+        *.xz) xz -dc -- "$archive_file" >"$output_dir/$(basename "$archive_file" .xz)" || rc=1 ;;
+        *.zst)
+            if __gash_require_command zstd "Extracting .zst needs zstd."; then
+                zstd -dc -- "$archive_file" >"$output_dir/$(basename "$archive_file" .zst)" || rc=1
+            else
+                rc=1
+            fi
+            ;;
         *.bz2) bunzip2 -c "$archive_file" >"$output_dir/$(basename "$archive_file" .bz2)" || rc=1 ;;
         *.rar) unrar x "$archive_file" "$output_dir" || rc=1 ;;
         *.gz) gunzip -c "$archive_file" >"$output_dir/$(basename "$archive_file" .gz)" || rc=1 ;;
@@ -2280,7 +2277,7 @@ HELP
     __gash_register_help "archive_extract" \
         --aliases "axe" \
         --module "files" \
-        --short "Extract archives (tar, zip, gz, bz2, rar, 7z)" \
+        --short "Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z)" \
         --see-also "file_backup" \
         <<'HELP'
 USAGE
@@ -2297,7 +2294,8 @@ EXAMPLES
   axe data.7z /tmp/extracted
 
 SUPPORTED FORMATS
-  .tar.gz, .tar.bz2, .tar, .gz, .bz2,
+  .tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar,
+  .gz, .bz2, .xz, .zst,
   .tgz, .tbz2, .zip, .rar, .7z, .z
   (case-insensitive)
 HELP

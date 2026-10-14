@@ -89,9 +89,28 @@ __gash_try_start_ssh_agent() {
         return 1
     fi
 
+    # One agent per user on a fixed socket, reused by every new shell
+    # instead of a new agent per terminal (they were never stopped).
+    local dir sock rc=0
+    dir="${XDG_RUNTIME_DIR:-$HOME/.ssh}"
+    [[ -d "$dir" && -w "$dir" ]] || dir="$HOME/.ssh"
+    mkdir -p "$dir" 2>/dev/null && chmod 700 "$dir" 2>/dev/null
+    sock="$dir/gash-ssh-agent.sock"
+
+    if [[ -S "$sock" ]]; then
+        # ssh-add -l: 0 = keys, 1 = no keys (agent alive), 2 = no agent.
+        SSH_AUTH_SOCK="$sock" ssh-add -l >/dev/null 2>&1 || rc=$?
+        if ((rc != 2)); then
+            export SSH_AUTH_SOCK="$sock"
+            return 0
+        fi
+        rm -f "$sock"
+    fi
+
     local agent_out
     # Strip the trailing "echo Agent pid ..." to avoid noisy startup output.
-    agent_out="$(ssh-agent -s 2>/dev/null | sed '/^echo Agent pid /d' || true)"
+    agent_out="$(ssh-agent -a "$sock" -s 2>/dev/null | sed '/^echo Agent pid /d' || true)"
+    [[ -n "${agent_out-}" ]] || agent_out="$(ssh-agent -s 2>/dev/null | sed '/^echo Agent pid /d' || true)"
     if [[ -z "${agent_out-}" ]]; then
         return 1
     fi

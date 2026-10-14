@@ -13,7 +13,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | [`gash_doctor`](#gash-doctor) | `gdoctor` | Run health checks on the Gash installation |
 | [`gash_env_init`](#gash-env-init) |  | Create ~/.gash_env configuration template |
 | [`gash_help`](#gash-help) |  | Help system with examples, search, and discovery |
-| [`gash_inspiring_quote`](#gash-inspiring-quote) |  | Display a random inspiring quote |
+| [`gash_inspiring_quote`](#gash-inspiring-quote) |  | Display a random quote, optionally with its source |
 | [`gash_migrate`](#gash-migrate) |  | Guided migration of a Gash 1.x configuration to 2.0 |
 | [`gash_uninstall`](#gash-uninstall) |  | Uninstall Gash and clean up configurations |
 | [`gash_unload`](#gash-unload) |  | Restore shell state to before Gash was loaded |
@@ -150,7 +150,14 @@ Alias: `gdoctor`
 #### Usage
 
 ```text
-gash_doctor
+gash_doctor [--timing] [--no-color]
+```
+
+#### Options
+
+```text
+--timing    What each file and step costs when a shell starts
+--no-color  Plain output
 ```
 
 #### Examples
@@ -158,6 +165,9 @@ gash_doctor
 ```bash
 # Run a full health check
 gash_doctor
+
+# Find what makes new shells slow
+gash_doctor --timing
 ```
 
 #### Notes
@@ -166,6 +176,12 @@ gash_doctor
 Checks: core files, modules, config file permissions,
 external tools (git, curl, jq, sqlite3, docker).
 Reports missing or misconfigured components.
+
+--timing loads Gash in a new interactive shell and lists the
+milliseconds each file and step takes (5 ms or more stands out),
+then times whole new shells: with your ~/.bashrc, and bash alone.
+Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
+the same figures in its __GASH_LOAD_TIMES array.
 ```
 
 See also: `gash_upgrade`, `gash`
@@ -244,18 +260,31 @@ See also: `gash`
 
 ## gash_inspiring_quote
 
-Display a random inspiring quote
+Display a random quote, optionally with its source
 
 #### Usage
 
 ```text
-gash_inspiring_quote
+gash_inspiring_quote [--source]
 ```
 
 #### Examples
 
 ```bash
+# The quote shown under the banner
 gash_inspiring_quote
+
+# Where it was said or written
+gash_inspiring_quote --source
+```
+
+#### Notes
+
+```text
+Quotes live in quotes/list.txt: one `"Text." — Author` line each,
+under a `# ` line with the source (book, essay, talk, mail; a link
+where one exists). New quotes need a source that can be checked;
+see CONTRIBUTING.md.
 ```
 
 ## gash_migrate

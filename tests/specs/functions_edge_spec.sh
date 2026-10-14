@@ -217,7 +217,7 @@ it "port_kill fails gracefully when missing arg under nounset" bash -c '
   [[ "$out" == *"Missing"* ]]
 '
 
-it "docker_prune_all returns 0 when user declines" bash -c '
+it "docker_prune_all returns 1 when the user declines, and removes nothing" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
@@ -228,11 +228,14 @@ it "docker_prune_all returns 0 when user declines" bash -c '
   needs_confirm_prompt() { return 1; }
 
   # docker_prune_all uses a prompt helper that returns non-zero on "No"; avoid errexit.
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export MOCK_DOCKER_LOG="$tmp/docker.log"
   set +e
   docker_prune_all
   rc=$?
   set -e
-  [[ $rc -eq 0 ]]
+  [[ $rc -eq 1 ]]
+  ! grep -qE "docker (rm|rmi|stop|system prune)" "$MOCK_DOCKER_LOG" 2>/dev/null
 '
 
 it "git_dump_revisions writes per-commit files" bash -c '

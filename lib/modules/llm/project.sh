@@ -11,7 +11,7 @@
 # Detect project type and return info as JSON.
 # Usage: llm_project [PATH]
 llm_project() {
-    if needs_help "llm_project" "llm_project [PATH]" "Detect project type and info (JSON)" "${1-}"; then
+    if __llm_needs_help "llm_project" "llm_project [PATH]" "Detect project type and info (JSON)" "$@"; then
         return 0
     fi
 
@@ -19,10 +19,19 @@ llm_project() {
 }
 
 __llm_project_impl() {
-    local target_path="${1-.}"
+    local target_path
+    __llm_path_arg target_path "Use a project directory or no argument" "$@" || return 1
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
+    if [[ ! -e "$safe_path" ]]; then
+        __llm_error "path_not_found" "$safe_path" "RETRY" "true" "Provide an existing project directory"
+        return 1
+    fi
+    if [[ ! -d "$safe_path" ]]; then
+        __llm_error "not_a_directory" "$safe_path" "RETRY" "true" "Provide a project directory"
+        return 1
+    fi
 
     local project_type="unknown"
     local framework=""
@@ -105,7 +114,7 @@ EOF
 # List project dependencies.
 # Usage: llm_deps [PATH] [--dev]
 llm_deps() {
-    if needs_help "llm_deps" "llm_deps [PATH] [--dev]" "List project dependencies (JSON)" "${1-}"; then
+    if __llm_needs_help "llm_deps" "llm_deps [PATH] [--dev]" "List project dependencies (JSON)" "$@"; then
         return 0
     fi
 
@@ -113,7 +122,8 @@ llm_deps() {
 }
 
 __llm_deps_impl() {
-    local target_path="." include_dev=0
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set="" include_dev=0
     while (($# > 0)); do
         case "$1" in
             --dev) include_dev=1 ;;
@@ -121,7 +131,7 @@ __llm_deps_impl() {
                 __llm_error "unknown_option" "$1" "RETRY" "true" "Use --dev or a path"
                 return 1
                 ;;
-            *) target_path="$1" ;;
+            *) __llm_take_path target_path path_set "$1" || return 1 ;;
         esac
         shift
     done

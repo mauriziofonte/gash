@@ -134,7 +134,7 @@ Alias: `dpa`
 #### Usage
 
 ```text
-docker_prune_all
+docker_prune_all [-y] [--dry-run]
 ```
 
 #### Examples
@@ -142,6 +142,9 @@ docker_prune_all
 ```bash
 # Nuclear cleanup (interactive confirmation)
 dpa
+
+# Only count what would go
+dpa --dry-run
 ```
 
 #### Notes
@@ -154,7 +157,8 @@ WARNING: This is destructive. It will:
   4. Remove all volumes (DATA LOSS)
   5. Remove all networks
   6. Run docker system prune
-You will be asked for confirmation before proceeding.
+You will be asked for confirmation before proceeding; -y skips it.
+Declining returns 1. Built-in networks (bridge, host, none) stay.
 ```
 
 See also: `docker_stop_all`

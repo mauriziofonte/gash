@@ -32,8 +32,8 @@ mode of `llm_exec`). To contain an agent, use a container or VM.
 
 ## llm_exec
 
-`llm_exec "LINE"` runs in a child `bash --noprofile --norc` with `BASH_ENV` and
-`ENV` cleared, never in the caller's shell, after three checks:
+`llm_exec "LINE"` runs in a child `bash --noprofile --norc`, never in the
+caller's shell, after three checks:
 
 1. **Blocklist** (always on): the whitespace-collapsed line must not match
    `rm -rf /` and variants, `dd if=`, `mkfs.`, `> /dev/sd*`, `chmod 777 /`,
@@ -53,8 +53,10 @@ mode of `llm_exec`). To contain an agent, use a container or VM.
 |---|---|
 | `find`, `fd`, `rg` | `-exec`, `-execdir`, `-ok`, `-delete`, `-fprint*`, `-fls`; `fd -x/-X`; `rg --pre` |
 | `sort`, `tree` | `-o`, `--output`, `--compress-program` |
-| `sed`, `yq` | `-i`, `--in-place` |
-| `git` | global options other than `-C`, `--no-pager` and a few read-only ones (so no `-c`); subcommands outside a read-only list; `--output`, `--ext-diff`, `--textconv`; creating or deleting branches and tags; `remote` other than `show`/`get-url`; `config` without `--get`/`--list`; `stash` other than `list`/`show` |
+| `sed`, `yq` | `-i`, `--in-place`; `yq` also `-s`/`--split-exp` (writes files) and `load()` (reads any file) |
+| `git` | global options other than `-C`, `--no-pager` and a few read-only ones (so no `-c`, no `--literal-pathspecs`); subcommands outside a read-only list; `--output`, `--ext-diff`, `--textconv`, `--no-index`, `cat-file --batch*`; blobs named by id (`show SHA`, `cat-file -p SHA`); `REV:PATH` naming a secret file; creating or deleting branches and tags; `remote` other than `show -n`/`get-url`; `config` without `--get`/`--list`; `stash` other than `list`/`show` (summary options only) |
+| `ps`, `getent` | BSD `ps e` (other processes' environments); `getent shadow`, `getent gshadow` |
+| `diff` | `-r` where `diff` has no `--no-dereference` |
 | `docker` | subcommands other than `ps`, `images`, `logs`, `inspect`, `stats`, `top` and other read-only ones |
 | `systemctl`, `journalctl` | anything but `status`, `show`, `cat`, `is-*`, `list-*`; `journalctl --vacuum*`, `--rotate`, `--flush` |
 | `php`, `node`, `python`, `ruby`, `java`, `composer` | anything but `--version` |
@@ -64,12 +66,25 @@ Arguments naming a secret file (see below), also as `NAME=path`, are refused.
 Unquoted globs are expanded first; a match that is a secret file or starts with
 `-` is refused. In the child shell, functions shadowing allowed commands are
 removed, `sed` runs as GNU `sed --sandbox`, `awk` as `gawk --sandbox` (both
-refused where unavailable), and `git` as described in [Git](#git).
+refused where unavailable), and `git` as described in [Git](#git). `grep`,
+`egrep`, `fgrep`, `rg` and `diff` get exclusions for the secret-file patterns
+(GNU grep: after the caller's own `--include`, so they win; `diff -r` also
+`--no-dereference`); `git diff`, `show`, `grep`, `diff-*` and `log`/`reflog`
+with a patch option get `:(exclude)` pathspecs for them (not with `--follow`
+or `-L`, where git takes no extra pathspecs).
+
+The child starts from `env -i` plus an allowlist: `PATH`, `HOME`, `USER`,
+`LOGNAME`, `LANG`, `LANGUAGE`, `LC_*`, `TERM`, `TZ`, `TMPDIR`, `NO_COLOR`,
+`XDG_RUNTIME_DIR`, `DOCKER_HOST`, `DOCKER_CONTEXT` and `PWD`, with
+`GIT_OPTIONAL_LOCKS=0` and `GIT_TERMINAL_PROMPT=0`. Tokens, `GIT_*`,
+`LD_*`, `BASH_ENV` and exported functions do not reach it. In `unrestricted`
+mode it inherits the caller's environment with `BASH_ENV` and `ENV` empty.
 
 Settings, read from `~/.gash_env` only (never from the environment):
 
 * `GASH_LLM_EXEC_ALLOW="make npm"`: extra commands with any arguments, without
-  per-command rules; listing `sed`, `awk`, `gawk` or `git` drops its wrapper.
+  per-command rules; listing `sed`, `awk`, `gawk`, `grep`, `rg`, `diff` or
+  `git` drops its wrapper.
 * `GASH_LLM_EXEC=unrestricted`: skips checks 2 and 3 (secret-file checks
   included) and the wrappers. Only the blocklist remains.
 * `GASH_LLM_SANDBOX=1`: runs under `bwrap --ro-bind / / --dev /dev --proc /proc
@@ -83,6 +98,14 @@ Not checked: `/dev/null`, the arguments of `echo`, `printf`, `basename` and
 `dirname`, and the pattern operand of `grep`, `rg`, `sed`, `awk`, `jq` and
 `yq`. An allowed command can still read any other file your user can read
 whose name is not secret.
+
+Recursive commands (`grep -r`, `rg`, `find`, `fd`, `tree`, `du`, `ls -R`,
+`diff -r`) may not start at `/` or at an ancestor of `/proc`, `/sys`, `/dev`,
+`/boot`, `/root` or root's home (`forbidden_path`); content searches (`grep`,
+`rg`, `diff`) also not above `/etc`. Walks that follow symlinks are refused
+(`option_not_allowed`): `grep -R`, `--dereference-recursive`, `rg -L`,
+`find -L`/`-follow`, `fd -L`, `tree -l`, `du -L`, `ls -RL`, and starting
+points read from a file (`find -files0-from`, `--files0-from`).
 
 ## llm_db_*
 
@@ -101,13 +124,15 @@ Then the **session is read-only**:
 | Engine | Session | Credentials |
 |---|---|---|
 | SQLite (`-f FILE`) | `sqlite3 -readonly -bail`, plus `-safe` on 3.37+; SQL on stdin | The file must pass the forbidden-path check and start with `SQLite format 3` |
-| MySQL, MariaDB | `SET SESSION TRANSACTION READ ONLY`; rows capped with `sql_select_limit` | `--defaults-extra-file` on a process substitution, never argv |
-| PostgreSQL | `default_transaction_read_only=on`, `statement_timeout` from `GASH_DB_TIMEOUT` (30 s), 10 s connect timeout, `psql -X`; SQL on stdin | `PGPASSWORD` in the environment of `psql` only |
+| MySQL, MariaDB | `SET SESSION TRANSACTION READ ONLY`; rows capped with `sql_select_limit`; database as `--database=NAME` | `--defaults-extra-file` on a process substitution, never argv |
+| PostgreSQL | `default_transaction_read_only=on`, `statement_timeout` from `GASH_DB_TIMEOUT` (30 s), 10 s connect timeout, `psql -X`; SQL on stdin; database in `PGDATABASE` (libpq would read a `-d` value holding `=` as a conninfo string) | `PGPASSWORD` in the environment of `psql` only |
 
 Row caps are applied by the engine (outer `LIMIT` or `sql_select_limit`):
 `llm_db_query -r N` (default 100), `llm_db_sample --limit N` (default 5). Table
-names must match `[A-Za-z_][A-Za-z0-9_]*`. `llm_db_explain --analyze` runs the
-query, in the same read-only session.
+names must match `[A-Za-z_][A-Za-z0-9_]*`; database names given with `-d` or
+read from `.target-database` must match `[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}`
+(`invalid_database_name`). `llm_db_explain --analyze` runs the query, in the
+same read-only session.
 
 Nothing stops a query from reading what the database account can see: give
 Gash an account with read-only grants.
@@ -127,7 +152,7 @@ A symlink is judged by its own name and by its target's.
 
 | Function | Effect |
 |---|---|
-| `llm_exec` | Refuses secret arguments and glob matches (not in `unrestricted` mode) |
+| `llm_exec` | Refuses secret arguments, glob matches and `git` `REV:PATH`; `grep`, `rg`, `diff` and `git` diff/show/grep/patch logs skip secret files (not in `unrestricted` mode, nor for commands in `GASH_LLM_EXEC_ALLOW`) |
 | `llm_config` | Refuses a secret file |
 | `llm_grep`, `llm_find --contains` | Refuse a secret path; skip secret files and directories in recursive searches, with `rg` and with the `grep` fallback alike |
 | `llm_tree`, `llm_find`, filesystem scanners | List names and sizes only, secret files included |
@@ -138,8 +163,9 @@ A symlink is judged by its own name and by its target's.
 `/etc/passwd`, `/etc/sudoers`, `/etc/sudoers.d` and everything below them,
 matched per path component (`/rootfs` is allowed), plus root's home where it
 is not `/root` (macOS: `/var/root`). A `..` component is refused.
-The path is checked as written, after `realpath -m` (symlinks resolved) and,
-for macOS, without a `/private` prefix. Applies to `llm_tree`, `llm_find`,
+The path is checked as written, after `realpath -m` (symlinks resolved; a
+Bash walk where `realpath -m` is missing) and, for macOS, without a
+`/private` prefix. Applies to `llm_tree`, `llm_find`,
 `llm_grep`, `llm_config`, `llm_git_*`, `llm_project`, `llm_deps`, SQLite
 files of `llm_db_*` and the arguments of `llm_exec`. The filesystem scanners (`files_largest`, `dirs_largest`,
 `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse `/proc`, `/sys`,
@@ -151,8 +177,11 @@ files of `llm_db_*` and the arguments of `llm_exec`. The filesystem scanners (`f
 A cloned repository can carry configuration that names programs: an
 fsmonitor, hooks, an external diff, textconv drivers, a pager. `llm_git_*` and
 the `git` of `llm_exec` run with `-c core.fsmonitor=false -c
-core.hooksPath=/dev/null -c diff.external= -c core.pager=cat`, and diff or log
-with `--no-ext-diff --no-textconv` (log also `--no-show-signature`). Clean and
+core.hooksPath=/dev/null -c diff.external= -c core.pager=cat` and
+`GIT_OPTIONAL_LOCKS=0` (no index refresh written by `status`), and diff or log
+with `--no-ext-diff --no-textconv` (log also `--no-show-signature`). In
+`llm_exec`, `GIT_TERMINAL_PROMPT=0` keeps git from asking for credentials,
+and `git remote show` needs `-n` (no network). Clean and
 smudge filters named in `.gitattributes` and defined in the repository's
 configuration can still run during `status` and `diff`: inspect an untrusted
 repository's `.git/config` before pointing an agent at it.
@@ -163,7 +192,10 @@ repository's `.git/config` before pointing an agent at it.
   is filtered first: private key blocks, URL passwords, values of names like
   `password`, `secret`, `token`, `api_key`, `access_key`, `private_key`,
   `credentials`, and `AKIA...`, `ghp_`/`github_pat_`, `sk-`/`sk-ant-`, `xox?-`,
-  `AIza...` tokens. It is pattern based: a secret in another format is sent.
+  `AIza...` tokens. A name followed by `=` or `:` loses its value; a name
+  followed only by a space loses the next word only when it looks like a
+  token (16 or more characters), so "token expired" stays readable. It is
+  pattern based: a secret in another format is sent.
 * **Transport.** The body goes through a temporary file created with umask 077
   and then deleted; the API key reaches `curl` through `--config` on a pipe,
   never argv. Control characters are stripped from replies.
@@ -199,14 +231,20 @@ to it.
 ## Confirmations
 
 `needs_confirm_prompt` reads the answer from `/dev/tty`, accepts only `y` or
-`Y`, and always refuses in headless mode or without a terminal.
+`Y`, and always refuses in headless mode or without a terminal. The 2.1
+commands that show a plan first ask "Do you want to continue? [Y/n]" the same
+way. Answering no returns 1. `port_kill`, `process_kill`, `services_stop`
+and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 
 | Function | Interactive | Headless |
 |---|---|---|
-| `port_kill PORT` | Lists the listening processes and asks; `--force` skips | Refused unless `--force` |
-| `process_kill NAME` | Asks only when several processes match; `--force` skips | Refused unless `--force`, whatever the number of matches |
-| `services_stop` | Asks; `--force` skips (the `quit` alias passes `--force`) | Nothing happens unless `--force` |
-| `docker_prune_all` | Asks, no override | Nothing happens |
+| `port_kill PORT` | Lists the listening processes and asks; `-y` skips | Refused unless `-y` |
+| `process_kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
+| `services_stop` (alias `quit`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
+| `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
+| `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
+| `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
+| `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
 | `sudo_last` (no argument) | Shows the command and asks | Refused |
 | `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |

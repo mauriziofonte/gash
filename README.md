@@ -91,12 +91,12 @@ shows one topic; `gash_help --search WORD` searches every help page.
 | Topic | Highlights |
 |---|---|
 | [files](docs/reference/files.md) | `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats`, `archive_extract`, `file_backup` |
-| [system](docs/reference/system.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `history_grep`, WSL helpers |
+| [system](docs/reference/system.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `history_grep`, `wsl_compact` and other WSL helpers |
 | [nav](docs/reference/nav.md) | `..`, `...`, `ll`, `la` and friends |
-| [git](docs/reference/git.md) | `git_add_tag`, `git_delete_tag`, `git_list_tags`, `git_dump_revisions`, and 44 short aliases |
+| [git](docs/reference/git.md) | `git_sync` (add, commit, push), `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, and 44 short aliases |
 | [docker](docs/reference/docker.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
 | [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
-| [dev](docs/reference/dev.md) | `php_detect_version`, `node_detect_version` per project, `php84`-style aliases |
+| [dev](docs/reference/dev.md) | `node_upgrade` (newest patch of every Node major), `chrome_headless_update` (Chrome for Puppeteer/Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
 | [llm](docs/reference/llm.md) | Eighteen read-only JSON functions for agents |
 | [ai](docs/reference/ai.md) | `ai_query` and `ai_sysinfo`: Claude or Gemini from the terminal, with secrets redacted |
 | [gash](docs/reference/gash.md) | `gash_help`, `gash_doctor`, `gash_upgrade`, `gash_unload`, `gash migrate` |
@@ -135,6 +135,8 @@ SSH keys to unlock, database connections, AI tokens and remote hosts
 GASH_PROMPT=0            # keep your own PS1
 GASH_REPLACE_TOOLS=1     # top->htop, df->pydf, diff->colordiff... when installed
 GASH_HISTORY_SYNC=1      # share history live between terminals
+GASH_PATH_ADD="~/.local/bin ~/.cargo/bin"   # put these on PATH if they exist
+GASH_NVM=lazy            # node on PATH now, nvm.sh loaded on first use
 DB:default=pgsql://reader:secret@localhost:5432/app
 ```
 

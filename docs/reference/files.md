@@ -6,7 +6,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 | Function | Alias | Description |
 |---|---|---|
-| [`archive_extract`](#archive-extract) | `axe` | Extract archives (tar, zip, gz, bz2, rar, 7z) |
+| [`archive_extract`](#archive-extract) | `axe` | Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z) |
 | [`dirs_find_large`](#dirs-find-large) | `dfl` | Find directories exceeding a size threshold (single-walk aggregation) |
 | [`dirs_largest`](#dirs-largest) | `dld` | List the largest directories with depth and filter control |
 | [`dirs_list_empty`](#dirs-list-empty) | `dle` | List empty directories with depth, prune and count options |
@@ -16,7 +16,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 ## archive_extract
 
-Extract archives (tar, zip, gz, bz2, rar, 7z)
+Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z)
 
 Alias: `axe`
 
@@ -42,7 +42,8 @@ axe data.7z /tmp/extracted
 #### Supported formats
 
 ```text
-.tar.gz, .tar.bz2, .tar, .gz, .bz2,
+.tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar,
+.gz, .bz2, .xz, .zst,
 .tgz, .tbz2, .zip, .rar, .7z, .z
 (case-insensitive)
 ```

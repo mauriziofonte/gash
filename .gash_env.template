@@ -112,6 +112,15 @@
 #                          #     php/composer -> newest phpX.Y
 # GASH_UMASK=              # e.g. 027; empty = keep the system umask
 #
+# Toolchains
+# GASH_PATH_ADD=           # directories put first on PATH, in this order,
+#                          #     when they exist, e.g.
+#                          #     "~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"
+# GASH_NVM=off             # lazy = node/npm of nvm's default version on PATH
+#                          #     at once, nvm.sh loaded on the first `nvm`
+#                          #     (faster shells); on = load nvm.sh now;
+#                          #     off = Gash leaves nvm alone
+#
 # Agents (llm_* functions)
 # GASH_DB_TIMEOUT=30       # PostgreSQL statement timeout for llm_db_*, seconds
 # GASH_LLM_EXEC=           # unrestricted = llm_exec runs any command line
@@ -126,5 +135,5 @@
 # GASH_AI_CONFIRM=auto     # auto = ask before sending data Gash collected
 #                          #     (ai_sysinfo); 1 = ask before every request;
 #                          #     0 = never ask. Secrets are redacted either way.
-# GASH_AI_MODEL_CLAUDE=    # default claude-haiku-4-5
-# GASH_AI_MODEL_GEMINI=    # default gemini-2.0-flash
+# GASH_AI_MODEL_CLAUDE=    # default claude-haiku-5-5
+# GASH_AI_MODEL_GEMINI=    # default gemini-2.5-flash

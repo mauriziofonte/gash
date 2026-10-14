@@ -388,3 +388,26 @@ it "size scanners print nothing on stderr when SIGPIPE is ignored" bash -c '
   err="$( { files_largest -n 1 "$tmp" >/dev/null; dirs_largest -n 1 "$tmp" >/dev/null; dirs_find_large --size 1 -n 1 "$tmp" >/dev/null; } 2>&1 )"
   [[ -z "$err" ]] || { printf "%s\n" "$err" >&2; exit 1; }
 '
+
+describe "archive_extract formats"
+
+it "extracts .tar.xz and .xz, and .tar.zst when zstd is installed" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  command -v xz >/dev/null 2>&1 || gash_skip "xz not installed"
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  cd "$tmp"
+  mkdir src; echo hello > src/a.txt
+  tar cJf t.tar.xz src
+  archive_extract t.tar.xz out1 >/dev/null
+  [[ "$(cat out1/src/a.txt)" == hello ]]
+  echo solo > s.txt; xz -k s.txt
+  archive_extract s.txt.xz out2 >/dev/null
+  [[ "$(cat out2/s.txt)" == solo ]]
+  if command -v zstd >/dev/null 2>&1; then
+    tar cf - src | zstd -q -o t.tar.zst
+    archive_extract t.tar.zst out3 >/dev/null
+    [[ "$(cat out3/src/a.txt)" == hello ]]
+  fi
+'

@@ -87,6 +87,31 @@ needs_confirm_prompt() {
 # Terminal Utilities
 # -----------------------------------------------------------------------------
 
+# Path of the program NAME runs as, like `type -P NAME` (first executable
+# file on PATH), into REPLY, without a subshell. Returns 1 when none.
+# Usage: __gash_path_of NAME
+__gash_path_of() {
+    # No `local -` (set -f): Bash 4.4 and 5.0 crash at exit after it runs
+    # in an interactive shell; read -a splits without globbing.
+    local dir
+    local -a dirs=()
+    REPLY=""
+    [[ -n "${1-}" && "$1" != */* ]] || return 1
+    # Bash's own search answers "none" faster than the loop below.
+    type -P "$1" >/dev/null 2>&1 || return 1
+    # An empty entry, trailing ones included, is the current directory.
+    IFS=: read -r -a dirs <<<"${PATH-}"
+    [[ "${PATH-}" == *: ]] && dirs+=("")
+    for dir in ${dirs[@]+"${dirs[@]}"}; do
+        [[ -z "$dir" ]] && dir="."
+        if [[ -f "$dir/$1" && -x "$dir/$1" ]]; then
+            REPLY="$dir/$1"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Get terminal width (best-effort, errexit-safe).
 # Usage: width=$(__gash_tty_width)
 # Returns: Terminal width in columns (default 80)
@@ -96,6 +121,12 @@ __gash_tty_width() {
     # Try $COLUMNS first
     if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]] && ((COLUMNS > 0)); then
         printf '%s' "$COLUMNS"
+        return 0
+    fi
+
+    # No terminal to ask: skip the tput and stty forks.
+    if [[ ! -t 0 && ! -t 1 && ! -t 2 ]]; then
+        printf '80'
         return 0
     fi
 
@@ -278,6 +309,197 @@ __gash_expand_tilde_path() {
     printf '%s' "$p"
 }
 
+# Put directories at the front of PATH (or the end with --append), once
+# each and in the order given. Directories that do not exist are skipped (a
+# toolchain installed later appears in the next shell); one already in PATH
+# keeps its place.
+# Usage: path_add [--append] DIR...
+path_add() {
+    needs_help "path_add" "path_add [--append] DIR..." \
+        "Add directories to PATH once each, skipping missing ones." "${1-}" && return
+
+    local append=0 dir i
+    local -a dirs=()
+    if [[ "${1-}" == "--append" ]]; then
+        append=1
+        shift
+    fi
+    # Prepending in reverse keeps the order given: path_add a b -> a:b:PATH.
+    if ((append)); then
+        dirs=("$@")
+    else
+        for ((i = $#; i >= 1; i--)); do dirs+=("${!i}"); done
+    fi
+    for dir in "${dirs[@]}"; do
+        dir="$(__gash_expand_tilde_path "$dir")"
+        dir="${dir%/}"
+        [[ -n "$dir" && -d "$dir" ]] || continue
+        [[ ":$PATH:" == *":$dir:"* ]] && continue
+        if ((append)); then
+            PATH="${PATH:+$PATH:}$dir"
+        else
+            PATH="$dir${PATH:+:$PATH}"
+        fi
+    done
+    export PATH
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Plans, steps and downloads (apt-style)
+# -----------------------------------------------------------------------------
+#
+# Commands that change the system (node_upgrade, chrome_headless_update)
+# print a plan, ask once and then report each step on one line, the way apt
+# does. Everything here writes to stderr: stdout stays for data.
+
+# Bytes to IEC units with one decimal: 0 B, 1.5 KiB, 142.3 MiB.
+# Usage: __gash_human_size BYTES
+__gash_human_size() {
+    local size="${1-0}" rem=0 i=0
+    local -a units=(B KiB MiB GiB TiB PiB EiB)
+    [[ "$size" =~ ^[0-9]+$ ]] || size=0
+    while ((size >= 1024 && i < ${#units[@]} - 1)); do
+        rem=$(((size * 10 / 1024) % 10))
+        size=$((size / 1024))
+        i=$((i + 1))
+    done
+    if ((i == 0)); then
+        printf '%d %s' "$size" "${units[0]}"
+    else
+        printf '%d.%d %s' "$size" "$rem" "${units[$i]}"
+    fi
+}
+
+# Ask "Do you want to continue? [Y/n]" after a plan has been printed (Enter
+# means yes). ASSUME_YES=1, from a -y flag, skips the question. Without a
+# terminal, or in headless mode, it refuses instead of waiting for input.
+# Usage: __gash_confirm_plan ASSUME_YES
+__gash_confirm_plan() {
+    local assume_yes="${1-0}" answer=""
+    [[ "$assume_yes" == "1" ]] && return 0
+    if [[ "${GASH_HEADLESS-}" == "1" ]] || ! { : </dev/tty; } 2>/dev/null; then
+        __gash_error "No terminal to ask for confirmation: pass -y to go ahead."
+        return 1
+    fi
+    printf 'Do you want to continue? [Y/n] ' >&2
+    if ! read -r answer </dev/tty 2>/dev/null; then
+        printf '\n' >&2
+        return 1
+    fi
+    [[ -z "$answer" || "$answer" =~ ^[Yy]([Ee][Ss])?$ ]] && return 0
+    __gash_info "Aborted."
+    return 1
+}
+
+# "Message... done" around a command; its stdout passes through, and the
+# line ends in "failed" with the command's status when it fails.
+# Usage: __gash_task "Reading the remote index" command [args...]
+__gash_task() {
+    local msg="${1-}" rc=0
+    shift
+    printf '%s... ' "$msg" >&2
+    "$@" || rc=$?
+    if ((rc == 0)); then
+        if __gash_color_env_ok 2>/dev/null && [[ -t 2 ]]; then
+            printf '%sdone%s\n' "$__GASH_COLOR_SUCCESS" "$__GASH_COLOR_OFF" >&2
+        else
+            printf 'done\n' >&2
+        fi
+    else
+        if __gash_color_env_ok 2>/dev/null && [[ -t 2 ]]; then
+            printf '%sfailed%s\n' "$__GASH_COLOR_ERROR" "$__GASH_COLOR_OFF" >&2
+        else
+            printf 'failed\n' >&2
+        fi
+    fi
+    return "$rc"
+}
+
+# Content-Length of URL after redirects, 0 when the server does not say.
+# Usage: __gash_remote_size URL
+__gash_remote_size() {
+    curl -fsIL "${1-}" 2>/dev/null | tr -d '\r' |
+        awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }'
+}
+
+# Download URL to DEST with a live progress line on a terminal (percent,
+# size, speed, time left) and a summary at the end. Ctrl-C stops curl too
+# and removes the partial file.
+# Usage: __gash_download URL DEST
+__gash_download() {
+    local url="${1-}" dest="${2-}"
+    __gash_require_command curl "Downloads need curl." || return 1
+    [[ -n "$url" && -n "$dest" ]] || {
+        __gash_error "Usage: __gash_download URL DEST"
+        return 1
+    }
+
+    local total
+    total="$(__gash_remote_size "$url")"
+    if ((total > 0)); then
+        printf 'Get: %s [%s]\n' "$url" "$(__gash_human_size "$total")" >&2
+    else
+        printf 'Get: %s\n' "$url" >&2
+    fi
+
+    local errf t0=$SECONDS pid rc=0 prev_int
+    errf="$(mktemp "${TMPDIR:-/tmp}/gash-download.XXXXXX")" || return 1
+    prev_int="$(trap -p INT)"
+    # The group's stderr swallows an interactive shell's "[1] PID" notice.
+    { curl -fsSL -o "$dest" "$url" 2>"$errf" & } 2>/dev/null
+    pid=$!
+    # shellcheck disable=SC2064 # expand now: the trap must name this pid
+    trap "kill $pid 2>/dev/null; wait $pid 2>/dev/null; command rm -f '$errf' '$dest'; printf '\nAborted.\n' >&2; ${prev_int:-trap - INT}; return 130" INT
+
+    if [[ -t 2 && "${GASH_HEADLESS-}" != "1" ]]; then
+        local done_b=0 prev_b=0 speed=0 tick=0 pct filled bar eta i
+        while kill -0 "$pid" 2>/dev/null; do
+            done_b="$(wc -c <"$dest" 2>/dev/null || echo 0)"
+            done_b="${done_b//[[:space:]]/}"
+            # Speed over the last second (4 ticks of 250 ms).
+            if ((++tick % 4 == 0)); then
+                speed=$((done_b - prev_b))
+                prev_b=$done_b
+            fi
+            if ((total > 0)); then
+                pct=$((done_b * 100 / total))
+                ((pct > 100)) && pct=100
+                filled=$((pct * 30 / 100))
+                bar=""
+                for ((i = 0; i < 30; i++)); do
+                    if ((i < filled)); then bar+="$__GASH_GLYPH_BAR_FULL"; else bar+="$__GASH_GLYPH_BAR_EMPTY"; fi
+                done
+                eta="--"
+                ((speed > 0)) && eta="$(((total - done_b) / speed))s"
+                printf '\r%3d%% %s %10s / %-10s %10s/s %6s\e[K' "$pct" "$bar" \
+                    "$(__gash_human_size "$done_b")" "$(__gash_human_size "$total")" \
+                    "$(__gash_human_size "$speed")" "$eta" >&2
+            else
+                printf '\r%10s %10s/s\e[K' "$(__gash_human_size "$done_b")" "$(__gash_human_size "$speed")" >&2
+            fi
+            sleep 0.25
+        done
+        printf '\r\e[K' >&2
+    fi
+
+    wait "$pid" 2>/dev/null || rc=$?
+    if [[ -n "$prev_int" ]]; then eval "$prev_int"; else trap - INT; fi
+    if ((rc != 0)); then
+        __gash_error "Download failed ($url): $(tr -d '\n' <"$errf")"
+        command rm -f "$errf" "$dest"
+        return "$rc"
+    fi
+    command rm -f "$errf"
+
+    local elapsed=$((SECONDS - t0)) size
+    ((elapsed > 0)) || elapsed=1
+    size="$(wc -c <"$dest")"
+    size="${size//[[:space:]]/}"
+    printf 'Fetched %s in %ss (%s/s)\n' "$(__gash_human_size "$size")" "$elapsed" \
+        "$(__gash_human_size $((size / elapsed)))" >&2
+}
+
 # -----------------------------------------------------------------------------
 # Miscellaneous
 # -----------------------------------------------------------------------------
@@ -312,6 +534,26 @@ EXAMPLES
 
   # Pipe to less for scrolling
   all_colors | less -R
+HELP
+
+    __gash_register_help "path_add" \
+        --module "utils" \
+        --short "Add directories to PATH once each" \
+        <<'HELP'
+USAGE
+  path_add [--append] DIR...
+
+EXAMPLES
+  # Toolchains first, in this order, only those that exist
+  path_add ~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin
+
+  # At the end of PATH instead
+  path_add --append /opt/tools/bin
+
+NOTES
+  Directories that do not exist are skipped and one already in PATH stays
+  where it is, so running it again (or re-sourcing ~/.gashrc) never makes
+  PATH grow. GASH_PATH_ADD in ~/.gash_env does this for every new shell.
 HELP
 
 fi # end help registration guard

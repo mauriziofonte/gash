@@ -245,13 +245,20 @@ __llm_resolve_db() {
     __gash_parse_db_url "$db_url" _rd_drv _rd_usr _rd_pw _rd_hst _rd_prt _rd_dbn
     _rd_pw=$(__gash_url_decode "$_rd_pw")
 
-    # Use explicit database name if provided, otherwise fall back to URL or .target-database
+    # Explicit -d first, then the URL, then the first word of a
+    # .target-database file in the current directory. -d and the file can
+    # come from an agent or a cloned repository: both must be plain names.
     if [[ -n "$db_name" ]]; then
+        __llm_validate_db_name "$db_name" "-d" || return 1
         _rd_dbn="$db_name"
     elif [[ -z "$_rd_dbn" ]]; then
         if [[ -f ".target-database" ]]; then
             _rd_dbn="$(<.target-database)"
+            _rd_dbn="${_rd_dbn#"${_rd_dbn%%[![:space:]]*}"}"
             _rd_dbn="${_rd_dbn%%[[:space:]]*}"
+            if [[ -n "$_rd_dbn" ]]; then
+                __llm_validate_db_name "$_rd_dbn" ".target-database" || return 1
+            fi
         fi
     fi
 
@@ -362,9 +369,10 @@ __llm_mysql_run() {
     [[ "$mode" == "raw" ]] && flags+=(--raw --skip-column-names)
 
     err="$(mktemp)"
-    # Credentials through a process-substitution file, never argv.
+    # Credentials through a process-substitution file, never argv. The
+    # database as --database=NAME: a bare word could read as an option.
     out="$(printf '%s' "$script" | "$bin" --defaults-extra-file=<(__llm_mysql_client_ini "$db_user" "$db_pass" "$db_host" "$db_port") \
-        "${flags[@]}" "$database" 2>"$err")" || rc=$?
+        "${flags[@]}" "--database=$database" 2>"$err")" || rc=$?
     local msg
     msg="$(__llm_clean_error_msg "$(<"$err")" --mysql)"
     rm -f "$err"
@@ -405,9 +413,11 @@ __llm_pgsql_run() {
     err="$(mktemp)"
     # SQL on stdin (-f -), never argv: /proc/<pid>/cmdline is world-readable.
     # A ";" on its own line ends the statement even after a -- comment.
-    out="$(printf '%s\n;\n' "$sql" | PGPASSWORD="$db_pass" PGCONNECT_TIMEOUT=10 \
+    # The database through PGDATABASE, not -d: libpq reads a -d value
+    # holding "=" or a URI as a connection string (another host, options).
+    out="$(printf '%s\n;\n' "$sql" | PGPASSWORD="$db_pass" PGCONNECT_TIMEOUT=10 PGDATABASE="$database" \
         PGOPTIONS="-c default_transaction_read_only=on -c standard_conforming_strings=on -c statement_timeout=${timeout}s" \
-        psql -U "$db_user" -h "$db_host" -p "$db_port" -d "$database" "${flags[@]}" -f - 2>"$err")" || rc=$?
+        psql -U "$db_user" -h "$db_host" -p "$db_port" "${flags[@]}" -f - 2>"$err")" || rc=$?
     # NOTICE/WARNING lines also land on stderr: only the exit status counts.
     if ((rc != 0)); then
         local msg
@@ -530,7 +540,7 @@ __llm_db_guard_driver() {
 # Example: llm_db_query "SELECT * FROM users" -c myconn
 # Example: llm_db_query "SELECT * FROM users" -f /path/to/db.sqlite
 llm_db_query() {
-    if needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]" "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if __llm_needs_help "llm_db_query" "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]" "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite" "$@"; then
         return 0
     fi
 
@@ -576,7 +586,7 @@ __llm_db_query_impl() {
 # List all tables in the database.
 # Usage: llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]
 llm_db_tables() {
-    if needs_help "llm_db_tables" "llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]" "List database tables (JSON array). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if __llm_needs_help "llm_db_tables" "llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]" "List database tables (JSON array). Use -c for MySQL/PostgreSQL, -f for SQLite" "$@"; then
         return 0
     fi
 
@@ -608,7 +618,7 @@ __llm_db_tables_impl() {
 # Show schema for a table.
 # Usage: llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]
 llm_db_schema() {
-    if needs_help "llm_db_schema" "llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]" "Show table schema (JSON). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if __llm_needs_help "llm_db_schema" "llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]" "Show table schema (JSON). Use -c for MySQL/PostgreSQL, -f for SQLite" "$@"; then
         return 0
     fi
 
@@ -652,7 +662,7 @@ __llm_db_schema_impl() {
 # Get sample rows from a table.
 # Usage: llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n|--limit N]
 llm_db_sample() {
-    if needs_help "llm_db_sample" "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n N]" "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if __llm_needs_help "llm_db_sample" "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n N]" "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite" "$@"; then
         return 0
     fi
 
@@ -676,7 +686,7 @@ __llm_db_sample_impl() {
 # Explain a query execution plan.
 # Usage: llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]
 llm_db_explain() {
-    if needs_help "llm_db_explain" "llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]" "Analyze query execution plan (EXPLAIN). Use -c for MySQL/PostgreSQL, -f for SQLite" "${1-}"; then
+    if __llm_needs_help "llm_db_explain" "llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]" "Analyze query execution plan (EXPLAIN). Use -c for MySQL/PostgreSQL, -f for SQLite" "$@"; then
         return 0
     fi
 

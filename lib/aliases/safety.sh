@@ -10,7 +10,12 @@ if [[ "${GASH_SAFETY_ALIASES:-1}" == "1" ]]; then
     alias mv='mv -iv'
     alias mkdir='mkdir -pv'
 
-    if [[ "$(command rm --version 2>/dev/null)" == *GNU* ]]; then
+    # GNU rm? (or the answer from the probe cache)
+    if [[ -z "${__GASH_PROBE_RM_GNU-}" ]]; then
+        __GASH_PROBE_RM_GNU=0 __GASH_PROBE_DIRTY=1
+        [[ "$(command rm --version 2>/dev/null)" == *GNU* ]] && __GASH_PROBE_RM_GNU=1
+    fi
+    if [[ "$__GASH_PROBE_RM_GNU" == "1" ]]; then
         alias rm='rm -Iv --one-file-system --preserve-root'
         alias chown='chown --preserve-root'
         alias chmod='chmod --preserve-root'
