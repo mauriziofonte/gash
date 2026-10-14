@@ -120,3 +120,10 @@
 #                          #     filesystem, no network
 #                          # These three are read from this file only, never
 #                          # from the environment.
+#
+# AI (ask, ai_query, ai_sysinfo)
+# GASH_AI_CONFIRM=auto     # auto = ask before sending data Gash collected
+#                          #     (ai_sysinfo); 1 = ask before every request;
+#                          #     0 = never ask. Secrets are redacted either way.
+# GASH_AI_MODEL_CLAUDE=    # default claude-haiku-4-5
+# GASH_AI_MODEL_GEMINI=    # default gemini-2.0-flash

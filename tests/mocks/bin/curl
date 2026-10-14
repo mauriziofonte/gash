@@ -12,6 +12,8 @@ fi
 url=""
 http_code_output=""
 output_file=""
+header_file=""
+extra_headers=""
 request_body=""
 is_head_request=0
 
@@ -31,19 +33,34 @@ while [[ $i -lt ${#all_args[@]} ]]; do
 		((i++))
 		output_file="${all_args[$i]:-}"
 		;;
-	-d)
+	-D | --dump-header)
+		((i++))
+		header_file="${all_args[$i]:-}"
+		;;
+	-d | --data | --data-binary)
 		((i++))
 		request_body="${all_args[$i]:-}"
+		# @FILE: the body is read from that file (@- = stdin)
+		if [[ "$request_body" == @- ]]; then
+			request_body="$(cat)"
+		elif [[ "$request_body" == @* ]]; then
+			request_body="$(cat "${request_body#@}")"
+		fi
 		;;
 	-I)
 		is_head_request=1
 		;;
-	http* | https*)
+	http*)
 		url="$arg"
 		;;
 	esac
 	((i++))
 done
+
+# Log the body too: real requests pass it as @FILE, never in argv.
+if [[ -n "${MOCK_CURL_LOG:-}" && -n "$request_body" ]]; then
+	printf 'body: %s\n' "$request_body" >>"$MOCK_CURL_LOG"
+fi
 
 # Determine response type based on query content in body
 # Priority: troubleshoot > command > explanation > code > fallback
@@ -127,7 +144,7 @@ http_code="200"
 
 # Check for simulated errors (global, applies to any URL)
 if [[ -n "${MOCK_CURL_ERROR:-}" ]]; then
-	http_code="500"
+	http_code="${MOCK_CURL_ERROR_CODE:-500}"
 	response='{"error":{"message":"Simulated error"}}'
 elif [[ -n "${MOCK_CURL_TIMEOUT:-}" ]]; then
 	# Simulate timeout - exit with curl timeout code
@@ -187,7 +204,7 @@ elif [[ "$url" == *"api.anthropic.com"* ]]; then
 	inner_json=$(generate_inner_json "$resp_type")
 	# Escape inner JSON for embedding
 	escaped_inner=$(echo "$inner_json" | sed 's/"/\\"/g')
-	response='{"content":[{"text":"'"$escaped_inner"'"}],"model":"claude-haiku-4-5-20251001","stop_reason":"end_turn"}'
+	response='{"content":[{"type":"text","text":"'"$escaped_inner"'"}],"model":"claude-haiku-4-5","stop_reason":"end_turn"}'
 elif [[ "$url" == *"generativelanguage.googleapis.com"* ]]; then
 	# Gemini API response with structured JSON output
 	resp_type=$(detect_response_type "$request_body")
@@ -199,6 +216,23 @@ else
 	# Unknown URL - still return something for debugging
 	http_code="404"
 	response='{"error":"Unknown endpoint","url":"'"$url"'"}'
+fi
+
+# AI knobs: MOCK_CURL_AI_RESPONSE replaces the API reply verbatim;
+# MOCK_CURL_AI_BUSY_ONCE=CODE fails the first call (per MOCK_CURL_STATE
+# file) with that code and "retry-after: 1".
+if [[ "$url" == *"api.anthropic.com"* || "$url" == *"generativelanguage.googleapis.com"* ]]; then
+	[[ -n "${MOCK_CURL_AI_RESPONSE:-}" ]] && response="$MOCK_CURL_AI_RESPONSE"
+	if [[ -n "${MOCK_CURL_AI_BUSY_ONCE:-}" && ! -e "${MOCK_CURL_STATE:?MOCK_CURL_STATE required}" ]]; then
+		: >"$MOCK_CURL_STATE"
+		http_code="$MOCK_CURL_AI_BUSY_ONCE"
+		response='{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}'
+		extra_headers=$'retry-after: 1\r\n'
+	fi
+fi
+
+if [[ -n "$header_file" ]]; then
+	printf 'HTTP/2 %s\r\ncontent-type: application/json\r\n%s\r\n' "$http_code" "$extra_headers" >"$header_file"
 fi
 
 # Write response to output file if specified

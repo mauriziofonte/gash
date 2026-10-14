@@ -174,8 +174,8 @@ __llm_env_impl() {
 
     if [[ -n "$filter" ]]; then
         local rc=0
-        # shellcheck disable=SC2319 # the [[ ]] status itself: 2 = invalid regex
-        [[ "" =~ $filter ]] || rc=$?
+        # shellcheck disable=SC2319 # the [[ ]] status itself: 2 = invalid regex (bash 5.3 also prints why)
+        [[ "" =~ $filter ]] 2>/dev/null || rc=$?
         if ((rc == 2)); then
             __llm_error "invalid_filter" "$filter" "RETRY" "true" "--filter takes an extended regular expression, e.g. '^PATH$' or 'NODE|NPM'"
             return 1

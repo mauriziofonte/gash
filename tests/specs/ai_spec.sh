@@ -358,7 +358,7 @@ it "__ai_call_claude handles API error" bash -c '
 
     # Use mock curl with error simulation
     export PATH="${ROOT}/tests/mocks/bin:$PATH"
-    export MOCK_CURL_ERROR=1
+    export MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=400
 
     source "$ROOT/lib/core/output.sh"
     source "$ROOT/lib/core/utils.sh"

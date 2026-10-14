@@ -1048,4 +1048,7 @@ ExecStart=/usr/bin/test-svc"
     # Verify the curl was called with context data in the body
     curl_log=$(cat "$MOCK_CURL_LOG")
     [[ "$curl_log" == *"claude"* ]]
+    [[ "$curl_log" == *"ExecStart=/usr/bin/test-svc"* ]]
+    # The token travels in a curl config, never in argv
+    [[ "$curl_log" != *"test-token"* ]]
 '
