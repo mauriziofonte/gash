@@ -91,14 +91,18 @@ needs_confirm_prompt() {
 # file on PATH), into REPLY, without a subshell. Returns 1 when none.
 # Usage: __gash_path_of NAME
 __gash_path_of() {
-    local - dir IFS=:
+    # No `local -` (set -f): Bash 4.4 and 5.0 crash at exit after it runs
+    # in an interactive shell; read -a splits without globbing.
+    local dir
+    local -a dirs=()
     REPLY=""
-    set -f
     [[ -n "${1-}" && "$1" != */* ]] || return 1
     # Bash's own search answers "none" faster than the loop below.
     type -P "$1" >/dev/null 2>&1 || return 1
     # An empty entry, trailing ones included, is the current directory.
-    for dir in ${PATH-} ${PATH:+${PATH##*[!:]}}; do
+    IFS=: read -r -a dirs <<<"${PATH-}"
+    [[ "${PATH-}" == *: ]] && dirs+=("")
+    for dir in ${dirs[@]+"${dirs[@]}"}; do
         [[ -z "$dir" ]] && dir="."
         if [[ -f "$dir/$1" && -x "$dir/$1" ]]; then
             REPLY="$dir/$1"

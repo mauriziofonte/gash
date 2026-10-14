@@ -39,11 +39,13 @@ __GASH_PROBE_FIELDS="rm_gnu grep_color ls_flag ls_colors shadow_before shadow_af
 
 # Usage: __gash_probe_cache_key  (sets __GASH_PROBE_KEY and __GASH_PROBE_DEPS)
 __gash_probe_cache_key() {
-    local - dir IFS=:
-    set -f
+    # read -a, not `local -` and set -f (Bash 4.4/5.0 crash at exit).
+    local dir
+    local -a dirs=()
     __GASH_PROBE_KEY="2|${GASH_VERSION-}|${OSTYPE-}|${TERM-}|${COLORTERM-}|${PATH-}"
     __GASH_PROBE_DEPS=()
-    for dir in ${PATH-}; do
+    IFS=: read -r -a dirs <<<"${PATH-}"
+    for dir in ${dirs[@]+"${dirs[@]}"}; do
         [[ "$dir" == /* && -d "$dir" ]] && __GASH_PROBE_DEPS+=("$dir")
     done
     for dir in "${HOME-}/.dircolors" /etc/DIR_COLORS; do
@@ -117,10 +119,11 @@ __gash_probe_cache_write() {
 # on purpose (ls, rm, grep, the GASH_REPLACE_TOOLS ones...).
 # Usage: __gash_probe_shadowed BEFORE
 __gash_probe_shadowed() {
-    local - name IFS=$' \t\n'
-    set -f
+    local name
+    local -a names=()
     local -A before=()
-    for name in $1; do
+    IFS=$' \t\n' read -r -a names <<<"$1"
+    for name in ${names[@]+"${names[@]}"}; do
         before["$name"]=1
     done
     __GASH_PROBE_SHADOWED=""

@@ -88,6 +88,8 @@ quote collection where every line has a source.
   resolve through nvm, including `lts/krypton`.
 - `llm_docker_check --help` shows help instead of scanning.
 - `llm_exec` works when `POSIXLY_CORRECT` is exported (Bash before 5.1).
+- No `local -` anywhere: on Bash 4.4 and 5.0 it makes an interactive shell
+  crash when it exits.
 - `wsl_restart`, `wsl_shutdown` no longer fail where history is off.
 
 ### Security

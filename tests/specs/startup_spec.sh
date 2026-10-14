@@ -53,6 +53,8 @@ it "a new shell runs no probe program once the cache is warm" bash -c '
     printf "#!/bin/sh\necho %s >>\"%s/calls\"\nexec %s \"\$@\"\n" "$p" "$tmp" "$real" >"$tmp/bin/$p"
     chmod +x "$tmp/bin/$p"
   done
+  # Older than the cache for sure: Bash before 5.1 compares whole seconds.
+  touch -t 202001010000 "$tmp/bin"
   load="source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1; alias ls; alias rm 2>/dev/null; printf \"LS_COLORS=%s\n\" \"\${LS_COLORS-}\""
 
   first="$(HOME="$tmp" PATH="$tmp/bin:$PATH" bash --noprofile --norc -i -c "$load" 2>/dev/null </dev/null)"
