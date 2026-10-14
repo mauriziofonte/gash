@@ -4,8 +4,9 @@
 #
 # Layout:  [chroot][(venv) ]user[@host]:cwd [(branch*↑1↓2)] [j2] [s1] [!127] $
 #
-# Cost per prompt: one `git status` inside a repository, zero subprocesses
-# elsewhere (the repository root is found by walking up from $PWD in bash).
+# Cost per prompt: one `git status` inside a repository plus one subshell
+# for `jobs`; nothing else forks (the repository root is found by walking
+# up from $PWD in bash).
 #
 # GASH_PROMPT=0 keeps your own PS1; the hook still runs for history and for
 # the exit status that the AI module reads.
@@ -86,8 +87,10 @@ __gash_in_git_repo() {
     return 0
 }
 
-# Print the git segment " (branch*↑1↓2)" with PS1 escapes, or nothing.
+# Set __GASH_PS1_GIT_SEG to the git segment " (branch*↑1↓2)" with PS1
+# escapes, or to nothing. A variable, not output: no subshell per prompt.
 __gash_ps1_git() {
+    __GASH_PS1_GIT_SEG=""
     type -P git >/dev/null 2>&1 || return 0
     __gash_in_git_repo || return 0
 
@@ -128,7 +131,7 @@ __gash_ps1_git() {
         seg+="\[${__GASH_PS1_OFF}${__GASH_PS1_BBLUE}\]"
     fi
     seg+=")\[${__GASH_PS1_OFF}\]"
-    printf ' %s' "$seg"
+    __GASH_PS1_GIT_SEG=" $seg"
 }
 
 # -----------------------------------------------------------------------------
@@ -163,7 +166,8 @@ __gash_ps1_build() {
 
     ps1+=":\[${__GASH_PS1_BYELLOW}\]\w${R}"
 
-    ps1+="$(__gash_ps1_git)"
+    __gash_ps1_git
+    ps1+="$__GASH_PS1_GIT_SEG"
 
     # background jobs (one subshell; `jobs` is a builtin)
     local jobs_out

@@ -15,7 +15,7 @@
 # Public functions:
 #   sysinfo (si) [section] [--llm] - System information enumeration
 #
-# Sections: identity storage services auth network security webstack mail infra system all
+# Sections: overview identity storage services auth network security webstack mail infra system all
 #
 # =============================================================================
 
@@ -98,9 +98,30 @@ __sysinfo_sudo() {
 # DUAL OUTPUT HELPERS
 # =============================================================================
 
+# Headers are printed lazily: a sub-header shows up only when something is
+# printed under it, and a section that found nothing says so. The state
+# lives in files under __SYSINFO_STATE (a temp dir set by sysinfo) because
+# collectors print from pipelines, i.e. from subshells. Without a state dir
+# (collectors called directly) every header prints at once.
+#   $__SYSINFO_STATE/sub   pending sub-header text
+#   $__SYSINFO_STATE/sec   a section is open
+#   $__SYSINFO_STATE/out   the open section printed something
+
+# Close the open section: say so when it found nothing.
+__sysinfo_section_close() {
+    local d="${__SYSINFO_STATE-}"
+    [[ -n "$d" && -e "$d/sec" ]] || return 0
+    if [[ ! -e "$d/out" && "$__SYSINFO_MODE" == "verbose" ]]; then
+        printf '  %snothing found%s\n' "${__GASH_COLOR_MUTED-}" "${__GASH_COLOR_OFF-}"
+    fi
+    rm -f "$d/sec" "$d/out" "$d/sub"
+}
+
 # Print a section header.
 __sysinfo_section() {
     local title="$1"
+    __sysinfo_section_close
+    [[ -n "${__SYSINFO_STATE-}" ]] && : >"$__SYSINFO_STATE/sec"
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         __gash_section "$title"
     else
@@ -108,10 +129,22 @@ __sysinfo_section() {
     fi
 }
 
+# Print a pending sub-header, if any, and mark the section as non-empty.
+__sysinfo_flush() {
+    local d="${__SYSINFO_STATE-}" t
+    [[ -n "$d" ]] || return 0
+    [[ -e "$d/out" ]] || : >"$d/out"
+    [[ -s "$d/sub" ]] || return 0
+    t="$(<"$d/sub")"
+    : >"$d/sub"
+    __sysinfo_sub_print "$t"
+}
+
 # Print a key-value pair. Skipped if value is empty.
 __sysinfo_kv() {
     local key="$1" value="$2"
     [[ -z "$value" ]] && return 0
+    __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         printf "  ${__GASH_BOLD_WHITE}%-24s${__GASH_COLOR_OFF} %s\n" "${key}:" "$value"
     else
@@ -122,6 +155,7 @@ __sysinfo_kv() {
 # Print a list item.
 __sysinfo_item() {
     local text="$1"
+    __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         echo -e "  ${__GASH_CYAN}-${__GASH_COLOR_OFF} ${text}"
     else
@@ -129,8 +163,16 @@ __sysinfo_item() {
     fi
 }
 
-# Print a sub-header within a section.
+# Print a sub-header within a section (deferred until it has content).
 __sysinfo_sub() {
+    if [[ -n "${__SYSINFO_STATE-}" ]]; then
+        printf '%s' "$1" >"$__SYSINFO_STATE/sub"
+        return 0
+    fi
+    __sysinfo_sub_print "$1"
+}
+
+__sysinfo_sub_print() {
     local title="$1"
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         echo -e "  ${__GASH_BOLD_YELLOW}${title}${__GASH_COLOR_OFF}"
@@ -153,11 +195,122 @@ __sysinfo_basenames() {
 }
 
 __sysinfo_raw() {
-    if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        sed 's/^/    /'
-    else
-        cat
+    local line first=1 indent="    "
+    [[ "$__SYSINFO_MODE" == "verbose" ]] || indent=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if ((first)); then
+            __sysinfo_flush
+            first=0
+        fi
+        printf '%s%s\n' "$indent" "$line"
+    done
+}
+
+# =============================================================================
+# OVERVIEW: one card with host, load, CPU, memory, disk and address
+# =============================================================================
+
+# KiB to a short human size: 16479424 -> 15.7 GiB.
+__sysinfo_human_kib() {
+    "${__GASH_AWK:-awk}" -v k="${1-0}" 'BEGIN {
+        split("KiB MiB GiB TiB PiB", u, " "); i = 1
+        while (k >= 1024 && i < 5) { k /= 1024; i++ }
+        printf(k < 10 ? "%.1f %s" : "%.0f %s", k, u[i])
+    }'
+}
+
+# Usage row of the overview card: "LABEL  bar  used / total  pct%".
+__sysinfo_usage_row() {
+    local label="$1" used="$2" total="$3" bar pct=0 pc
+    ((total > 0)) && pct=$((used * 100 / total))
+    __gash_bar bar "$used" "$total" 10
+    pc="${__GASH_GREEN-}"
+    ((pct >= 75)) && pc="${__GASH_YELLOW-}"
+    ((pct >= 90)) && pc="${__GASH_BOLD_RED-}"
+    printf '%s%-7s%s %s%s%s%s%s%s  %s / %s  %s%d%%%s' \
+        "${__GASH_COLOR_MUTED-}" "$label" "${__GASH_COLOR_OFF-}" \
+        "$pc" "${bar%%$'\t'*}" "${__GASH_COLOR_OFF-}" "${__GASH_COLOR_MUTED-}" "${bar#*$'\t'}" "${__GASH_COLOR_OFF-}" \
+        "$(__sysinfo_human_kib "$used")" "$(__sysinfo_human_kib "$total")" "$pc" "$pct" "${__GASH_COLOR_OFF-}"
+}
+
+__sysinfo_collect_overview() {
+    local host os="" kernel arch up="" load="" cpu="" cores="" ip=""
+    local mem_total=0 mem_avail=0 swap_total=0 swap_free=0 disk_total=0 disk_used=0
+    host="$(hostname 2>/dev/null || uname -n)"
+    if [[ -r /etc/os-release ]]; then
+        os="$(. /etc/os-release 2>/dev/null && printf '%s' "${PRETTY_NAME:-$NAME}")" || os=""
+    elif command -v sw_vers >/dev/null 2>&1; then
+        os="$(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null)"
     fi
+    kernel="$(uname -sr 2>/dev/null)"
+    arch="$(uname -m 2>/dev/null)"
+
+    if [[ -r /proc/uptime ]]; then
+        local secs
+        read -r secs _ </proc/uptime
+        secs="${secs%%.*}"
+        if ((secs >= 86400)); then
+            up="$((secs / 86400))d $((secs % 86400 / 3600))h"
+        else
+            up="$((secs / 3600))h $((secs % 3600 / 60))m"
+        fi
+    fi
+    if [[ -r /proc/loadavg ]]; then
+        local l1 l5 l15
+        read -r l1 l5 l15 _ </proc/loadavg
+        load="$l1 $l5 $l15"
+    elif command -v sysctl >/dev/null 2>&1; then
+        load="$(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1, $2, $3}')"
+    fi
+
+    if [[ -r /proc/cpuinfo ]]; then
+        cpu="$(awk -F': *' '/^model name/ { print $2; exit }' /proc/cpuinfo 2>/dev/null)"
+    elif command -v sysctl >/dev/null 2>&1; then
+        cpu="$(sysctl -n machdep.cpu.brand_string 2>/dev/null)"
+    fi
+    cpu="$(printf '%s' "$cpu" | tr -s ' ')"
+    cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"
+
+    if [[ -r /proc/meminfo ]]; then
+        local k v
+        while read -r k v _; do
+            case "$k" in
+                MemTotal:) mem_total=$v ;;
+                MemAvailable:) mem_avail=$v ;;
+                SwapTotal:) swap_total=$v ;;
+                SwapFree:) swap_free=$v ;;
+            esac
+        done </proc/meminfo
+    fi
+    local dfl
+    dfl="$(df -Pk / 2>/dev/null | awk 'NR == 2 { print $2, $3 }')"
+    [[ -n "$dfl" ]] && read -r disk_total disk_used <<<"$dfl"
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+
+    if [[ "$__SYSINFO_MODE" != "verbose" ]]; then
+        echo "=== OVERVIEW ==="
+        __sysinfo_kv "Host" "$host"
+        __sysinfo_kv "Uptime" "$up"
+        __sysinfo_kv "Load" "$load"
+        __sysinfo_kv "CPU" "${cpu}${cores:+ x$cores}"
+        ((mem_total > 0)) && __sysinfo_kv "Memory KiB" "used=$((mem_total - mem_avail)) total=$mem_total"
+        ((swap_total > 0)) && __sysinfo_kv "Swap KiB" "used=$((swap_total - swap_free)) total=$swap_total"
+        ((disk_total > 0)) && __sysinfo_kv "Disk / KiB" "used=$disk_used total=$disk_total"
+        return 0
+    fi
+
+    local M="${__GASH_COLOR_MUTED-}" B="${__GASH_BOLD-}" R="${__GASH_COLOR_OFF-}" dot="$__GASH_GLYPH_DOT"
+    local -a lines=()
+    lines+=("${B}${host}${R}${os:+ $dot $os}")
+    lines+=("${M}${kernel} ${arch}${up:+ $dot up $up}${load:+ $dot load $load}${R}")
+    lines+=("")
+    [[ -n "$cpu" || -n "$cores" ]] && lines+=("${M}CPU    ${R} ${cpu:-?}${cores:+ $dot $cores cores}")
+    ((mem_total > 0)) && lines+=("$(__sysinfo_usage_row Memory $((mem_total - mem_avail)) "$mem_total")")
+    ((swap_total > 0)) && lines+=("$(__sysinfo_usage_row Swap $((swap_total - swap_free)) "$swap_total")")
+    ((disk_total > 0)) && lines+=("$(__sysinfo_usage_row "Disk /" "$disk_used" "$disk_total")")
+    [[ -n "$ip" ]] && lines+=("${M}Address${R} $ip")
+    echo
+    __gash_box --color "${__GASH_COLOR_PRIMARY-}" "${lines[@]}"
 }
 
 # =============================================================================
@@ -1621,12 +1774,12 @@ __sysinfo_deep_maintenance() {
 
 # System information enumeration.
 # Usage: sysinfo [section] [--llm]
-# Sections: identity storage services auth network security webstack mail infra system all
+# Sections: overview identity storage services auth network security webstack mail infra system all
 # Alias: si
 sysinfo() {
     needs_help "sysinfo" "sysinfo [section] [--llm] [--no-color]" \
         "System information enumeration for headless Debian/Ubuntu servers.
-Sections: identity storage services auth network security webstack mail infra system all
+Sections: overview identity storage services auth network security webstack mail infra system all
 Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si" \
         "${1-}" && return
 
@@ -1645,13 +1798,13 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
                 no_color=1
                 shift
                 ;;
-            identity | storage | services | auth | network | security | webstack | mail | infra | system | all)
+            overview | identity | storage | services | auth | network | security | webstack | mail | infra | system | all)
                 section="$1"
                 shift
                 ;;
             *)
                 __gash_error "Unknown argument: $1"
-                __gash_info "Sections: identity storage services auth network security webstack mail infra system all"
+                __gash_info "Sections: overview identity storage services auth network security webstack mail infra system all"
                 __gash_info "Flags: --llm, --no-color"
                 return 1
                 ;;
@@ -1667,7 +1820,9 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # Sudo caching (single prompt). `|| true`: missing sudo must never kill
     # a `set -e` caller. The RETURN trap guarantees the keep-alive loop is
     # reaped even if a collector aborts mid-way.
-    trap '__sysinfo_release_sudo; trap - RETURN' RETURN
+    local __SYSINFO_STATE=""
+    __SYSINFO_STATE="$(mktemp -d "${TMPDIR:-/tmp}/gash-sysinfo.XXXXXX" 2>/dev/null)" || __SYSINFO_STATE=""
+    trap '__sysinfo_release_sudo; [[ -n "${__SYSINFO_STATE-}" ]] && rm -rf -- "$__SYSINFO_STATE"; trap - RETURN' RETURN
     __sysinfo_ensure_sudo || true
 
     # Dispatch. `|| true` suppresses errexit inside the collectors too: a
@@ -1684,7 +1839,9 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
         mail) __sysinfo_collect_mail || true ;;
         infra) __sysinfo_collect_infra || true ;;
         system) __sysinfo_collect_system || true ;;
+        overview) __sysinfo_collect_overview || true ;;
         all)
+            __sysinfo_collect_overview || true
             __sysinfo_collect_identity || true
             __sysinfo_collect_storage || true
             __sysinfo_collect_services || true
@@ -1697,6 +1854,7 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
             __sysinfo_collect_system || true
             ;;
     esac
+    __sysinfo_section_close
 
     __sysinfo_release_sudo
     return 0
@@ -1724,6 +1882,7 @@ USAGE
   sysinfo [section] [--llm] [--no-color]
 
 SECTIONS
+  overview   Host, load, CPU, memory, swap, root disk and address at a glance
   identity   OS, kernel, virtualization, cloud provider, WSL detection
   storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)
   services   Running systemd services, custom units
@@ -1734,7 +1893,7 @@ SECTIONS
   mail       Postfix, Dovecot, DKIM, virtual domains
   infra      Docker, containers, monitoring, backup systems
   system     Cron jobs, systemd timers, custom hooks
-  all        All sections combined
+  all        Overview, then every section (default)
 
 EXAMPLES
   # Full system enumeration (colored verbose output)

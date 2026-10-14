@@ -366,6 +366,70 @@ it "sysinfo all --llm outputs all 10 section headers" bash -c '
     [[ "$result" == *"=== SYSTEM ==="* ]]
 '
 
+it "sysinfo opens with an overview: a card on screen, key=value for --llm" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/validation.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/sysinfo.sh"
+    __sysinfo_ensure_sudo() { __SYSINFO_HAS_SUDO=0; return 0; }
+    __sysinfo_release_sudo() { return 0; }
+
+    out="$(sysinfo overview --llm)"
+    [[ "$out" == "=== OVERVIEW ==="* ]]
+    [[ "$out" == *"Host="* ]]
+    if [[ -r /proc/meminfo ]]; then
+        grep -qE "^Memory KiB=used=[0-9]+ total=[0-9]+$" <<<"$out"
+    fi
+    out="$(sysinfo overview --no-color)"
+    [[ "$out" == *"Disk /"* && "$out" == *"%"* ]]
+    # Box lines line up (ASCII glyphs under LC_ALL=C at load time are not
+    # guaranteed here, so compare character counts in the current locale).
+    widths="$(grep -E "^[|│╭╰+]" <<<"$out" | while IFS= read -r l; do echo "${#l}"; done | sort -u | wc -l)"
+    [[ "$widths" -eq 1 ]]
+    [[ "$(sysinfo all --llm)" == "=== OVERVIEW ==="* ]]
+'
+
+it "sysinfo prints a sub-header only when something follows it" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/validation.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/sysinfo.sh"
+    __sysinfo_ensure_sudo() { __SYSINFO_HAS_SUDO=0; return 0; }
+    __sysinfo_release_sudo() { return 0; }
+    # A collector shaped like the real ones: an empty sub, items printed
+    # from a pipeline (a subshell), raw output, then an empty section.
+    __sysinfo_collect_storage() {
+        __sysinfo_section "STORAGE"
+        __sysinfo_sub "Empty one"
+        true | __sysinfo_raw
+        __sysinfo_sub "Filled"
+        printf "a\nb\n" | while IFS= read -r x; do __sysinfo_item "$x"; done
+        __sysinfo_sub "Raw"
+        printf "line\n" | __sysinfo_raw
+        __sysinfo_kv "Key" "value"
+    }
+    __sysinfo_collect_mail() { __sysinfo_section "MAIL"; __sysinfo_sub "Postfix"; }
+
+    out="$(sysinfo storage --llm)"
+    [[ "$out" != *"Empty one"* ]]
+    [[ "$(grep -c "^--- Filled$" <<<"$out")" -eq 1 ]]
+    [[ "$(grep -c "^--- Raw$" <<<"$out")" -eq 1 ]]
+    [[ "$out" == *$'"'"'--- Filled\na\nb\n--- Raw\nline\nKey=value'"'"'* ]]
+
+    out="$(sysinfo mail --no-color)"
+    [[ "$out" != *"Postfix"* ]]
+    [[ "$out" == *"nothing found"* ]]
+    # The state directory is gone afterwards.
+    tmpd="$(mktemp -d)"
+    TMPDIR="$tmpd" sysinfo mail >/dev/null
+    [[ -z "$(ls -A "$tmpd")" ]]
+    rmdir "$tmpd"
+'
+
 # =============================================================================
 # AI Integration
 # =============================================================================
