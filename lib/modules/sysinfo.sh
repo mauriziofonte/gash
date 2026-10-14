@@ -1822,7 +1822,7 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # reaped even if a collector aborts mid-way.
     local __SYSINFO_STATE=""
     __SYSINFO_STATE="$(mktemp -d "${TMPDIR:-/tmp}/gash-sysinfo.XXXXXX" 2>/dev/null)" || __SYSINFO_STATE=""
-    trap '__sysinfo_release_sudo; [[ -n "${__SYSINFO_STATE-}" ]] && rm -rf -- "$__SYSINFO_STATE"; trap - RETURN' RETURN
+    trap '__sysinfo_release_sudo; [[ -n "${__SYSINFO_STATE-}" ]] && command rm -rf -- "$__SYSINFO_STATE"; trap - RETURN' RETURN
     __sysinfo_ensure_sudo || true
 
     # Dispatch. `|| true` suppresses errexit inside the collectors too: a

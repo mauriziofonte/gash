@@ -632,6 +632,11 @@ __gash_card_topic() {
 # Gash reference card, generated from the help registry and the alias files.
 # Usage: gash [TOPIC|all] [--no-color]
 gash() {
+    if [[ "${1-}" == migrate ]]; then
+        shift
+        gash_migrate "$@"
+        return
+    fi
     local no_color=0 topic="" a
     for a in "$@"; do
         case "$a" in
@@ -874,6 +879,7 @@ if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
         <<'HELP'
 USAGE
   gash [TOPIC|all] [--no-color]
+  gash migrate [...]   Same as gash_migrate (Gash 1.x configuration)
 
   gash                 Overview: topics with function and alias counts
   gash TOPIC           Functions (alias, usage, description) and aliases of a topic

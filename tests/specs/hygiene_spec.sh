@@ -181,3 +181,10 @@ it "commands leave no RETURN trap and keep the caller EXIT trap" bash -c '
   done
   [[ "$(trap -p EXIT)" == "$before" ]]
 '
+
+it "cleanup traps call command rm, so the user's rm alias never applies" bash -c '
+  set -euo pipefail
+  # Trap strings are parsed when they run, where interactive aliases such
+  # as the safety alias rm="rm -Iv" expand.
+  ! grep -rn "trap " "$GASH_TEST_ROOT/lib" | grep -E "[^[:alnum:]_ ] *rm "
+'

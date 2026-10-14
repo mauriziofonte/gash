@@ -511,7 +511,7 @@ files_largest() {
     # Capture find stderr (permission denials) to count
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"; trap - RETURN' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: an unreadable subdir (find rc!=0) or SIGPIPE from `head`
     # closing the pipe early must not kill a `set -euo pipefail` caller.
@@ -725,7 +725,7 @@ dirs_largest() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"; trap - RETURN' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # du output: <kb>\t<path>\n. Convert to bytes and filter excluded
     # patterns in awk when GNU exclude unavailable. `|| true`: unreadable
@@ -994,7 +994,7 @@ dirs_find_large() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"; trap - RETURN' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local raw
@@ -1227,7 +1227,7 @@ dirs_list_empty() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"; trap - RETURN' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local output
@@ -1424,7 +1424,7 @@ tree_stats() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"; trap - RETURN' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local raw

@@ -66,16 +66,21 @@ fi
 __GASH_LOAD_ERRORS=()
 
 __gash_source() {
-    local file="$1" rc=0
+    local file="$1" rc=0 aliases_on=0
     if [[ ! -r "$file" ]]; then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: missing")
         return 1
     fi
+    # Aliases expand when a function body is parsed: on a re-source in an
+    # interactive shell, `cp` would be baked in as the user's `cp -iv`.
+    shopt -q expand_aliases && aliases_on=1
+    shopt -u expand_aliases
     if [[ "${GASH_HEADLESS-}" == "1" && "${GASH_DEBUG-}" != "1" ]]; then
         source "$file" 2>/dev/null || rc=$?
     else
         source "$file" || rc=$?
     fi
+    ((aliases_on)) && shopt -s expand_aliases
     if ((rc != 0)); then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: exit $rc")
     fi
@@ -107,6 +112,7 @@ __gash_load_modules() {
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     __gash_load_core
     __gash_load_modules
+    declare -F __gash_migrate_autostart >/dev/null && __gash_migrate_autostart
     return 0
 fi
 
@@ -148,7 +154,12 @@ __gash_load_modules
 # Aliases and user files are sourced at top level (not inside a function),
 # so `declare` and `local`-free code in them behaves exactly as in .bashrc.
 if [[ -f "$GASH_DIR/lib/aliases/_loader.sh" ]]; then
+    __GASH_ALIASES_ON=0
+    shopt -q expand_aliases && __GASH_ALIASES_ON=1
+    shopt -u expand_aliases
     source "$GASH_DIR/lib/aliases/_loader.sh" || __GASH_LOAD_ERRORS+=("lib/aliases/_loader.sh: exit $?")
+    ((__GASH_ALIASES_ON)) && shopt -s expand_aliases
+    unset __GASH_ALIASES_ON
 fi
 
 __gash_source "$GASH_DIR/lib/shell/banner.sh"
@@ -163,6 +174,10 @@ fi
 # User customizations, last so they can override anything above.
 [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
+
+# A Gash 1.x configuration: guided migration (interactive terminal) or a
+# one-line reminder (anywhere else).
+declare -F __gash_migrate_autostart >/dev/null && __gash_migrate_autostart
 
 # Keep the file's status 0: a `set -e` caller sourcing ~/.gashrc must not
 # die because the last optional file was missing.

@@ -280,7 +280,7 @@ git_repair() {
         __gash_error "Failed to create temporary directory."
         return 1
     }
-    trap 'rm -rf "$tmp_dir" >/dev/null 2>&1; trap - RETURN' RETURN
+    trap 'command rm -rf "$tmp_dir" >/dev/null 2>&1; trap - RETURN' RETURN
 
     __gash_step 1 5 "Removing corrupted (0-byte) loose objects..."
     local removed

@@ -99,6 +99,7 @@ if __gash_locale_utf8; then
     __GASH_GLYPH_BAR_EMPTY='░'
     __GASH_GLYPH_DOT='·'
     __GASH_GLYPH_ELLIPSIS='…'
+    __GASH_GLYPH_POINTER='❯'
     __GASH_SPINNER_FRAMES='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 else
     __GASH_GLYPH_OK='+'
@@ -114,6 +115,7 @@ else
     __GASH_GLYPH_BAR_EMPTY='.'
     __GASH_GLYPH_DOT='-'
     __GASH_GLYPH_ELLIPSIS='~'
+    __GASH_GLYPH_POINTER='>'
     __GASH_SPINNER_FRAMES='|/-\'
 fi
 
@@ -517,6 +519,114 @@ __gash_bar() {
     for ((__gb_i = 0; __gb_i < __gb_f; __gb_i++)); do __gb_full+="$__GASH_GLYPH_BAR_FULL"; done
     for ((__gb_i = __gb_f; __gb_i < __gb_w; __gb_i++)); do __gb_empty+="$__GASH_GLYPH_BAR_EMPTY"; done
     __gb_out="$__gb_full"$'\t'"$__gb_empty"
+}
+
+# Word-wrap TEXT to WIDTH columns into the array VAR. Newlines in TEXT start
+# new lines (an empty line stays empty); a line starting with "- " wraps
+# with a two-space hanging indent.
+# Usage: __gash_wrap VAR WIDTH TEXT
+__gash_wrap() {
+    local -n __gw_out="$1"
+    local __gw_w="${2-72}" __gw_text="${3-}" __gw_para __gw_word __gw_line __gw_ind __gw_lead
+    local -a __gw_words
+    __gw_out=()
+    while IFS= read -r __gw_para || [[ -n "$__gw_para" ]]; do
+        if [[ -z "$__gw_para" ]]; then
+            __gw_out+=("")
+            continue
+        fi
+        # Keep the paragraph's indent; a "- " bullet hangs two more.
+        __gw_lead="${__gw_para%%[! ]*}"
+        __gw_ind="$__gw_lead"
+        [[ "${__gw_para#"$__gw_lead"}" == "- "* ]] && __gw_ind+="  "
+        __gw_line=""
+        read -ra __gw_words <<<"$__gw_para"
+        for __gw_word in "${__gw_words[@]}"; do
+            if [[ -z "$__gw_line" ]]; then
+                __gw_line="$__gw_lead$__gw_word"
+            elif ((${#__gw_line} + 1 + ${#__gw_word} > __gw_w)); then
+                __gw_out+=("$__gw_line")
+                __gw_line="$__gw_ind$__gw_word"
+            else
+                __gw_line+=" $__gw_word"
+            fi
+        done
+        __gw_out+=("$__gw_line")
+    done <<<"$__gw_text"
+}
+
+# Let the user pick one of OPTIONS. On a terminal: arrow keys (or j/k, or
+# the option's number) move, Enter confirms, q or Esc cancels. Otherwise
+# (GASH_TUI=plain, TERM=dumb, or input/output not a terminal) a numbered
+# prompt that reads a line; an empty answer takes DEFAULT.
+# Usage: __gash_choose VAR DEFAULT OPTION...   (VAR gets the 1-based index)
+# Returns 1 on cancel or end of input.
+__gash_choose() {
+    local -n __gc_out="$1"
+    local __gc_sel="${2-1}"
+    shift 2
+    local -a __gc_opts=("$@")
+    local __gc_n=${#__gc_opts[@]} __gc_i __gc_key __gc_rest __gc_line __gc_try
+    ((__gc_n > 0)) || return 1
+    ((__gc_sel >= 1 && __gc_sel <= __gc_n)) || __gc_sel=1
+    local __gc_on="" __gc_off=""
+    if __gash_use_color; then
+        __gc_on="${__GASH_COLOR_PRIMARY}${__GASH_BOLD}" __gc_off="$__GASH_COLOR_OFF"
+    fi
+
+    if [[ "${GASH_TUI-}" == plain || "${TERM-}" == dumb || ! -t 0 || ! -t 1 ]]; then
+        for ((__gc_i = 0; __gc_i < __gc_n; __gc_i++)); do
+            printf '  %d) %s\n' $((__gc_i + 1)) "${__gc_opts[__gc_i]}"
+        done
+        for __gc_try in 1 2 3; do
+            printf '  Choice [%d]: ' "$__gc_sel"
+            IFS= read -r __gc_line || {
+                echo
+                return 1
+            }
+            __gc_line="${__gc_line//[[:space:]]/}"
+            [[ -z "$__gc_line" ]] && __gc_line="$__gc_sel"
+            [[ "$__gc_line" == q ]] && return 1
+            if [[ "$__gc_line" =~ ^[0-9]+$ ]] && ((10#$__gc_line >= 1 && 10#$__gc_line <= __gc_n)); then
+                __gc_out=$((10#$__gc_line))
+                return 0
+            fi
+            printf '  Type a number from 1 to %d (attempt %d of 3).\n' "$__gc_n" "$__gc_try"
+        done
+        return 1
+    fi
+
+    local __gc_first=1
+    while :; do
+        ((__gc_first)) || printf '\e[%dA' "$__gc_n"
+        __gc_first=0
+        for ((__gc_i = 0; __gc_i < __gc_n; __gc_i++)); do
+            if ((__gc_i + 1 == __gc_sel)); then
+                printf '\r\e[K  %s%s %s%s\n' "$__gc_on" "$__GASH_GLYPH_POINTER" "${__gc_opts[__gc_i]}" "$__gc_off"
+            else
+                printf '\r\e[K    %s\n' "${__gc_opts[__gc_i]}"
+            fi
+        done
+        IFS= read -rsn1 __gc_key || return 1
+        case "$__gc_key" in
+            $'\e')
+                __gc_rest=""
+                IFS= read -rsn2 -t 0.05 __gc_rest || true
+                case "$__gc_rest" in
+                    '[A' | 'OA') ((__gc_sel = __gc_sel > 1 ? __gc_sel - 1 : __gc_n)) ;;
+                    '[B' | 'OB') ((__gc_sel = __gc_sel < __gc_n ? __gc_sel + 1 : 1)) ;;
+                    '') return 1 ;;
+                esac
+                ;;
+            k) ((__gc_sel = __gc_sel > 1 ? __gc_sel - 1 : __gc_n)) ;;
+            j) ((__gc_sel = __gc_sel < __gc_n ? __gc_sel + 1 : 1)) ;;
+            [1-9]) ((__gc_key <= __gc_n)) && __gc_sel=$__gc_key ;;
+            q) return 1 ;;
+            '') break ;;
+        esac
+    done
+    __gc_out=$__gc_sel
+    return 0
 }
 
 # Draw a rounded box around lines (stdout), sized to the longest line and

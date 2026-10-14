@@ -249,7 +249,7 @@ __gash_registry_curl() {
     local tmpfile
     tmpfile=$(mktemp) || return 1
     # shellcheck disable=SC2064
-    trap "rm -f '${tmpfile}'; trap - RETURN" RETURN
+    trap "command rm -f '${tmpfile}'; trap - RETURN" RETURN
 
     # Reset state
     __gash_registry_curl_body=""
