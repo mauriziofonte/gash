@@ -17,6 +17,7 @@ if command -v git >/dev/null 2>&1; then
     # Main git log function with help and variants. Defined with the
     # `function` keyword: a user alias with the same name would otherwise be
     # expanded inside `name() {` and break the whole file.
+    # Compact log with graph (gl --help: all variants)
     function gl {
         if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
             cat <<'EOF'

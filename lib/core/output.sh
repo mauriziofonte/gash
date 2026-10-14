@@ -93,6 +93,12 @@ if __gash_locale_utf8; then
     __GASH_GLYPH_ARROW='→'
     __GASH_GLYPH_BULLET='•'
     __GASH_GLYPH_HLINE='─'
+    __GASH_GLYPH_VLINE='│'
+    __GASH_GLYPH_CORNERS='╭╮╰╯'
+    __GASH_GLYPH_BAR_FULL='█'
+    __GASH_GLYPH_BAR_EMPTY='░'
+    __GASH_GLYPH_DOT='·'
+    __GASH_GLYPH_ELLIPSIS='…'
     __GASH_SPINNER_FRAMES='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 else
     __GASH_GLYPH_OK='+'
@@ -102,6 +108,12 @@ else
     __GASH_GLYPH_ARROW='->'
     __GASH_GLYPH_BULLET='*'
     __GASH_GLYPH_HLINE='-'
+    __GASH_GLYPH_VLINE='|'
+    __GASH_GLYPH_CORNERS='++++'
+    __GASH_GLYPH_BAR_FULL='#'
+    __GASH_GLYPH_BAR_EMPTY='.'
+    __GASH_GLYPH_DOT='-'
+    __GASH_GLYPH_ELLIPSIS='~'
     __GASH_SPINNER_FRAMES='|/-\'
 fi
 
@@ -469,6 +481,58 @@ __gash_section() {
     printf '\n'
 }
 
+# Visible length of a string: ANSI color sequences removed.
+# Usage: __gash_visible_len VAR "string"
+__gash_visible_len() {
+    local -n __gvl_out="$1"
+    local s="${2-}"
+    while [[ "$s" =~ $'\e'\[[0-9\;]*m ]]; do
+        s="${s//"${BASH_REMATCH[0]}"/}"
+    done
+    __gvl_out=${#s}
+}
+
+# Draw a rounded box around lines (stdout), sized to the longest line and
+# capped at the terminal width. Lines may carry color codes. The border
+# takes BORDER_COLOR when colors are on.
+# Usage: __gash_box [--color ESC] LINE...
+__gash_box() {
+    local bcolor=""
+    if [[ "${1-}" == "--color" ]]; then
+        bcolor="${2-}"
+        shift 2
+    fi
+    local on="" off=""
+    if __gash_use_color && [[ -n "$bcolor" ]]; then
+        on="$bcolor" off="$__GASH_COLOR_OFF"
+    fi
+    local line len inner=0
+    for line in "$@"; do
+        __gash_visible_len len "$line"
+        ((len > inner)) && inner=$len
+    done
+    local max=$(($(__gash_tty_width) - 6))
+    ((max < 20)) && max=20
+    ((inner > max)) && inner=$max
+
+    local corners="$__GASH_GLYPH_CORNERS" v="$__GASH_GLYPH_VLINE" rule="" i
+    for ((i = 0; i < inner + 4; i++)); do rule+="$__GASH_GLYPH_HLINE"; done
+    printf '%s%s%s%s%s\n' "$on" "${corners:0:1}" "$rule" "${corners:1:1}" "$off"
+    for line in "$@"; do
+        __gash_visible_len len "$line"
+        if ((len > inner)); then
+            # Too wide for the terminal: drop the colors, cut, mark the cut.
+            while [[ "$line" =~ $'\e'\[[0-9\;]*m ]]; do
+                line="${line//"${BASH_REMATCH[0]}"/}"
+            done
+            line="${line:0:inner-1}${__GASH_GLYPH_ELLIPSIS}"
+            len=$inner
+        fi
+        printf '%s%s%s  %s%*s  %s%s%s\n' "$on" "$v" "$off" "$line" $((inner - len)) '' "$on" "$v" "$off"
+    done
+    printf '%s%s%s%s%s\n' "$on" "${corners:2:1}" "$rule" "${corners:3:1}" "$off"
+}
+
 # -----------------------------------------------------------------------------
 # Tables
 # -----------------------------------------------------------------------------
@@ -492,11 +556,24 @@ __gash_split_tabs() {
 # by a rule otherwise). Cells must be plain text: width is counted in
 # characters, so color codes inside cells would break the alignment.
 #
+# --color N:ESC colors column N (repeatable; only on a color terminal).
+# --fit truncates the last column so rows fit the terminal width.
+#
 # Usage: printf 'NAME\tSIZE\na\t1\n' | __gash_table [--right 2,3] [--indent N] [--no-header]
+#                                                   [--color 1:"$ESC"] [--fit]
 __gash_table() {
-    local right="" indent=0 header=1
+    local right="" indent=0 header=1 fit=0
+    local -A colcolor=()
     while (($# > 0)); do
         case "$1" in
+            --color)
+                [[ "${2-}" == [0-9]*:* ]] && colcolor[${2%%:*}]="${2#*:}"
+                shift 2 || break
+                ;;
+            --fit)
+                fit=1
+                shift
+                ;;
             --right)
                 right=",${2-},"
                 shift 2 || break
@@ -528,31 +605,51 @@ __gash_table() {
 
     local color=0
     __gash_use_color && color=1
-    local pad r out cell
+    # Room left for the last column when it must fit the terminal.
+    local last_max=-1
+    if ((fit && ncols > 0)); then
+        local used=$indent
+        for ((c = 0; c < ncols - 1; c++)); do used=$((used + ${widths[c]:-0} + 2)); done
+        last_max=$(($(__gash_tty_width) - used))
+        ((last_max < 10)) && last_max=10
+    fi
+    local pad r out cell plain esc
     printf -v pad '%*s' "$indent" ''
     for r in "${!rows[@]}"; do
         __gash_split_tabs cells "${rows[r]}"
-        out=""
+        out="" plain=""
         for ((c = 0; c < ncols; c++)); do
             cell="${cells[c]-}"
+            if ((c == ncols - 1)) && ((last_max > 0 && ${#cell} > last_max)); then
+                cell="${cell:0:last_max-1}${__GASH_GLYPH_ELLIPSIS}"
+            fi
             if ((c == ncols - 1)) && [[ "$right" != *",$((c + 1)),"* ]]; then
-                out+="$cell"
+                :
             elif [[ "$right" == *",$((c + 1)),"* ]]; then
                 printf -v cell '%*s' "${widths[c]}" "$cell"
-                out+="$cell"
             else
                 printf -v cell '%-*s' "${widths[c]}" "$cell"
+            fi
+            plain+="$cell"
+            esc="${colcolor[$((c + 1))]-}"
+            if ((color)) && [[ -n "$esc" ]] && ! ((r == 0 && header)); then
+                out+="${esc}${cell}${__GASH_COLOR_OFF}"
+            else
                 out+="$cell"
             fi
-            ((c < ncols - 1)) && out+="  "
+            ((c < ncols - 1)) && out+="  " && plain+="  "
         done
         if ((r == 0 && header)); then
+            out="$plain"
             if ((color)); then
                 printf '%s%s%s%s%s\n' "$pad" "$__GASH_BOLD" "$__GASH_UNDERLINE" "$out" "$__GASH_COLOR_OFF"
             else
                 printf '%s%s\n' "$pad" "$out"
                 local rule="" total=0 i
                 for c in "${!widths[@]}"; do total=$((total + widths[c])); done
+                if ((last_max > 0 && ${widths[ncols - 1]:-0} > last_max)); then
+                    total=$((total - widths[ncols - 1] + last_max))
+                fi
                 total=$((total + 2 * (ncols - 1)))
                 for ((i = 0; i < total; i++)); do rule+="$__GASH_GLYPH_HLINE"; done
                 printf '%s%s\n' "$pad" "$rule"
