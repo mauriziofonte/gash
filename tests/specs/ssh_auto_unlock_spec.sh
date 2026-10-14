@@ -180,7 +180,8 @@ it "reuses the agent on the fixed socket instead of starting another" bash -c '
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
   command -v python3 >/dev/null 2>&1 || gash_skip "python3 needed to create a socket"
-  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  # Short path: macOS limits a socket path to 104 bytes.
+  tmp="$(mktemp -d /tmp/gs.XXXXXX)"; trap "rm -rf $tmp" EXIT
   export XDG_RUNTIME_DIR="$tmp/run"; mkdir -p "$XDG_RUNTIME_DIR"
   python3 -c "import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])" "$XDG_RUNTIME_DIR/gash-ssh-agent.sock"
   mkdir "$tmp/bin"

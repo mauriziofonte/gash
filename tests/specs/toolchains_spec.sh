@@ -27,9 +27,9 @@ it "--append adds at the end and ~ is expanded" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
   HOME="$(mktemp -d)"; trap "rm -rf $HOME" EXIT
   mkdir -p "$HOME/.cargo/bin"
-  PATH="/usr/bin"
+  PATH="/usr/bin:/bin"
   path_add --append "~/.cargo/bin"
-  [[ "$PATH" == "/usr/bin:$HOME/.cargo/bin" ]]
+  [[ "$PATH" == "/usr/bin:/bin:$HOME/.cargo/bin" ]]
 '
 
 describe "GASH_PATH_ADD and GASH_NVM (lib/shell/toolchains.sh)"

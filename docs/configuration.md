@@ -49,7 +49,8 @@ and the calculator, `gs` and Ghostscript), the alias is not defined and the
 program runs. The aliases that wrap the program of the same name on purpose
 stay (`ls`, `cp`, `mv`, `rm`, `mkdir`, `grep`, `bc`, `reboot`, `shutdown`,
 `sl`, and the `GASH_REPLACE_TOOLS` ones), and so does an alias you defined
-before Gash loaded. To get a dropped alias back, define it in
+before Gash loaded. The `hg` alias of `history_grep` follows the same rule
+when Mercurial is installed. To get a dropped alias back, define it in
 `~/.bash_aliases`.
 
 Which options `ls`, `grep` and `rm` accept, `dircolors`' `LS_COLORS` and the

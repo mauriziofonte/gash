@@ -150,7 +150,14 @@ Alias: `gdoctor`
 #### Usage
 
 ```text
-gash_doctor
+gash_doctor [--timing] [--no-color]
+```
+
+#### Options
+
+```text
+--timing    What each file and step costs when a shell starts
+--no-color  Plain output
 ```
 
 #### Examples
@@ -158,6 +165,9 @@ gash_doctor
 ```bash
 # Run a full health check
 gash_doctor
+
+# Find what makes new shells slow
+gash_doctor --timing
 ```
 
 #### Notes
@@ -166,6 +176,12 @@ gash_doctor
 Checks: core files, modules, config file permissions,
 external tools (git, curl, jq, sqlite3, docker).
 Reports missing or misconfigured components.
+
+--timing loads Gash in a new interactive shell and lists the
+milliseconds each file and step takes (5 ms or more stands out),
+then times whole new shells: with your ~/.bashrc, and bash alone.
+Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
+the same figures in its __GASH_LOAD_TIMES array.
 ```
 
 See also: `gash_upgrade`, `gash`

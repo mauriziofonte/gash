@@ -934,7 +934,7 @@ __gash_wsl_stop_vm() {
         __gash_info "Aborted."
         return 1
     fi
-    history -a
+    history -a 2>/dev/null || true
     __gash_info "History saved. Shutting down WSL (it starts again with the next terminal)..."
     __gash_wsl_cmd wsl --shutdown
 }
@@ -1069,7 +1069,8 @@ wsl_compact() {
 # Short Aliases
 # -----------------------------------------------------------------------------
 alias du2='disk_usage'
-alias hg='history_grep'
+# Mercurial is hg too: keep the alias off when it is installed.
+type -P hg >/dev/null 2>&1 || alias hg='history_grep'
 alias myip='ip_public'
 alias pf='process_find'
 alias pk='process_kill'

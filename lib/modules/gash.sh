@@ -583,7 +583,7 @@ gash_doctor() {
     # 2. Core files
     printf '%s\n' "${H}Core Files:${O}"
     local core_files=(gash.sh lib/core/output.sh lib/core/help.sh lib/core/utils.sh lib/core/validation.sh lib/core/config.sh
-        lib/shell/terminal.sh lib/shell/history.sh lib/shell/prompt.sh lib/shell/banner.sh lib/aliases/_loader.sh)
+        lib/shell/terminal.sh lib/shell/history.sh lib/shell/prompt.sh lib/shell/banner.sh lib/shell/toolchains.sh lib/aliases/_loader.sh)
     for f in "${core_files[@]}"; do
         if [[ -f "$gash_dir/$f" ]]; then
             __gash_success "  $f"

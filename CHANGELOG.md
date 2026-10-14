@@ -36,9 +36,20 @@ quote collection where every line has a source.
 - Completion for short aliases (`flf<Tab>` completes like `files_largest`)
   and for the new functions.
 - `llm_config --max-bytes N` (default 1 MiB).
+- `gash_doctor --timing`: load time of every file, and of the whole shell
+  against bare bash; `GASH_TIMING=1` records it while loading.
 
 ### Changed
 
+- Interactive startup is about 40% faster (about 155 ms to 90 ms on the
+  reference machine): capability probes are cached in
+  `~/.cache/gash/probes` (or `$XDG_CACHE_HOME/gash`), lesspipe, tput, fold
+  and the prompt's first git status no longer run while loading.
+- A Gash alias no longer hides a program of the same name on PATH (`gp`,
+  `gc`, `dc`, `gs`, `hg` when Mercurial is installed); the deliberate
+  wrappers (`ls`, `rm`, `grep`...) stay.
+- The banner quote wraps by characters, so accented text wraps right;
+  `mesg n` runs only on a terminal.
 - Quotes: 373 quotes from people who shaped open computing, each with its
   book, paper, talk or mailing list post. Misattributed, anonymous and
   off-topic lines were removed or corrected.
@@ -76,6 +87,8 @@ quote collection where every line has a source.
 - `nvm_prune_versions` no longer needs `grep -P`; `lts/<name>` aliases
   resolve through nvm, including `lts/krypton`.
 - `llm_docker_check --help` shows help instead of scanning.
+- `llm_exec` works when `POSIXLY_CORRECT` is exported (Bash before 5.1).
+- `wsl_restart`, `wsl_shutdown` no longer fail where history is off.
 
 ### Security
 

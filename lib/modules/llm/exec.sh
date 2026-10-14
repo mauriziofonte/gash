@@ -1062,15 +1062,18 @@ __llm_cx_git() {
 # Usage: __llm_exec_env OUT
 __llm_exec_env() {
     local -n __ee_out="$1"
-    local name
+    local name names
     __ee_out=()
+    # No process substitution: an exported POSIXLY_CORRECT turns it off
+    # before bash 5.1.
+    names="$(compgen -e)"
     while IFS= read -r name; do
         case "$name" in
             PATH | HOME | USER | LOGNAME | LANG | LANGUAGE | LC_* | TERM | TZ | TMPDIR | NO_COLOR | XDG_RUNTIME_DIR | DOCKER_HOST | DOCKER_CONTEXT)
                 __ee_out+=("$name=${!name-}")
                 ;;
         esac
-    done < <(compgen -e)
+    done <<<"$names"
     __ee_out+=("PWD=$PWD" GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0)
 }
 

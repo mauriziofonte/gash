@@ -77,7 +77,8 @@ it "database envelope: every llm_db_* returns {data, rows, query_time}" bash -c 
   command -v sqlite3 >/dev/null 2>&1 || exit 77
   db="$tmp/app.db"
   sqlite3 "$db" "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT); INSERT INTO users(name) VALUES (\"alice\"), (\"bob\");"
-  env="(keys == [\"data\",\"query_time\",\"rows\"]) and (.data | type == \"array\")
+  # slow_query_explain appears when a query takes 100 ms (slow CI runners).
+  env="((keys - [\"slow_query_explain\"]) == [\"data\",\"query_time\",\"rows\"]) and (.data | type == \"array\")
     and .rows == (.data | length) and (.query_time | test(\"^[0-9]+(\\\\.[0-9]+)?(µs|ms|s)$\") and . != \"0µs\")"
 
   llm_db_tables -f "$db" | schema tables "$env and .data == [\"users\"]"
