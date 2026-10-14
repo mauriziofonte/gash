@@ -62,6 +62,23 @@ locally.
 - **Docs**: `docs/reference/` is generated; a test fails when it is stale or
   when a page cites a function or setting that does not exist.
 
+## Quotes
+
+`quotes/list.txt` feeds `gash_inspiring_quote` and the banner. Every quote
+needs a source a reader can check: a book, essay, talk, interview or mailing
+list post where the person said or wrote it, not a quote site. Put the source
+on the `# ` comment line right above the quote, with a URL when there is one:
+
+```text
+# Linus Torvalds, linux-kernel mailing list, 2000-08-25, https://lkml.org/lkml/2000/8/25/132
+"Talk is cheap. Show me the code." — Linus Torvalds
+```
+
+Quote exactly, in English, and name the person who said it (a law named after
+someone is attributed to whoever wrote it down). When Wikiquote lists a line
+as disputed or misattributed, leave it out. `bash tests/run.sh -f Quotes`
+checks the format and duplicates.
+
 ## Commits and pull requests
 
 Small, focused pull requests are easiest to review. Describe what a user
