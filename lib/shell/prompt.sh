@@ -37,7 +37,7 @@ else
 fi
 
 # Stable per-machine color for @host (only shown over SSH), computed once
-# without subprocesses.
+# into __GASH_PS1_HOST_COLOR without subprocesses.
 __gash_ps1_host_color() {
     local seed="" id_file n=0 c i
     for id_file in /etc/machine-id /var/lib/dbus/machine-id; do
@@ -52,7 +52,7 @@ __gash_ps1_host_color() {
         n=$(((n * 31 + c) % 1000003))
     done
     # 31..36 = red..cyan; skip 30 (black) and 37 (white).
-    printf '\e[1;%dm' "$((31 + n % 6))"
+    printf -v __GASH_PS1_HOST_COLOR '\e[1;%dm' "$((31 + n % 6))"
 }
 
 # -----------------------------------------------------------------------------
@@ -143,8 +143,12 @@ __gash_ps1_git() {
 # PS1 builder
 # -----------------------------------------------------------------------------
 
+# Usage: __gash_ps1_build EXIT_CODE [static]
+# "static" leaves out the parts that fork (git status, the jobs count): the
+# PS1 set at load time, which the hook replaces before the first prompt.
 __gash_ps1_build() {
-    local exit_code="${1:-0}"
+    local exit_code="${1:-0}" static=0
+    [[ "${2-}" == "static" ]] && static=1
 
     # \[ \] wrappers and palette, all empty when NO_COLOR / GASH_NO_COLOR
     # turn colors off: checked here, at every prompt, so toggling either one
@@ -180,7 +184,7 @@ __gash_ps1_build() {
     if [[ -n "${SSH_CONNECTION-}" ]]; then
         local host_color=""
         if [[ -n "$o" ]]; then
-            [[ -z "${__GASH_PS1_HOST_COLOR-}" ]] && __GASH_PS1_HOST_COLOR="$(__gash_ps1_host_color)"
+            [[ -z "${__GASH_PS1_HOST_COLOR-}" ]] && __gash_ps1_host_color
             host_color="$__GASH_PS1_HOST_COLOR"
         fi
         ps1+="${o}${__GASH_PS1_BWHITE}${c}@${o}${host_color}${c}\h${R}"
@@ -188,14 +192,16 @@ __gash_ps1_build() {
 
     ps1+=":${o}${__GASH_PS1_BYELLOW}${c}\w${R}"
 
-    __gash_ps1_git
-    ps1+="$__GASH_PS1_GIT_SEG"
+    if ((static == 0)); then
+        __gash_ps1_git
+        ps1+="$__GASH_PS1_GIT_SEG"
+    fi
 
     # Running and stopped jobs (one subshell; `jobs` is a builtin). Not
     # finished ones: bash < 5.3 keeps a finished entry for any program run
     # by a RETURN trap, which would show as a phantom job.
-    local jobs_out
-    jobs_out="$(
+    local jobs_out=""
+    ((static)) || jobs_out="$(
         jobs -pr
         jobs -ps
     )"
@@ -258,11 +264,18 @@ __gash_prompt_command() {
 # Add the hook in front of any existing PROMPT_COMMAND (string or, on bash
 # 5.1+, array form) instead of replacing it: direnv, VTE, bash-preexec and
 # friends keep working.
+#
+# __gash_prompt_is_array: PROMPT_COMMAND is an indexed array with element 0
+# set (without the subshell of `declare -p`). An array without element 0
+# takes the string path: assigning the string sets element 0, an entry
+# that bash runs first, as the array path would.
+__gash_prompt_is_array() {
+    [[ -n "${PROMPT_COMMAND+x}" && "${PROMPT_COMMAND@a}" == *a* ]]
+}
+
 # shellcheck disable=SC2128,SC2178 # PROMPT_COMMAND is a string or an array
 __gash_prompt_install() {
-    local decl
-    decl="$(declare -p PROMPT_COMMAND 2>/dev/null)" || decl=""
-    if [[ "$decl" == "declare -a"* ]]; then
+    if __gash_prompt_is_array; then
         local entry
         for entry in "${PROMPT_COMMAND[@]}"; do
             [[ "$entry" == "__gash_prompt_command" ]] && return 0
@@ -277,9 +290,8 @@ __gash_prompt_install() {
 # Remove the hook (used by gash_unload).
 # shellcheck disable=SC2178
 __gash_prompt_uninstall() {
-    local decl
-    decl="$(declare -p PROMPT_COMMAND 2>/dev/null)" || return 0
-    if [[ "$decl" == "declare -a"* ]]; then
+    [[ -n "${PROMPT_COMMAND+x}" ]] || return 0
+    if __gash_prompt_is_array; then
         local -a kept=()
         local entry
         for entry in "${PROMPT_COMMAND[@]}"; do
@@ -294,6 +306,9 @@ __gash_prompt_uninstall() {
 
 __gash_prompt_install
 
+# A PS1 right away, for code that reads it at startup and for a later
+# PROMPT_COMMAND assignment that drops the hook; the hook builds the full
+# one (git status included) before the first prompt.
 if [[ "${GASH_PROMPT:-1}" == "1" ]]; then
-    __gash_ps1_build 0
+    __gash_ps1_build 0 static
 fi

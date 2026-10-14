@@ -4,13 +4,16 @@
 # Gash Aliases: Navigation
 # Directory navigation and listing aliases.
 
-# Detect ls color flag based on platform
-__gash_ls_color_flag=''
-if ls --color=auto . >/dev/null 2>&1; then
-    __gash_ls_color_flag='--color=auto'
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    __gash_ls_color_flag='-G'
+# Detect ls color flag based on platform (or take it from the probe cache)
+if [[ -z "${__GASH_PROBE_LS_FLAG+x}" ]]; then
+    __GASH_PROBE_LS_FLAG='' __GASH_PROBE_DIRTY=1
+    if ls --color=auto . >/dev/null 2>&1; then
+        __GASH_PROBE_LS_FLAG='--color=auto'
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        __GASH_PROBE_LS_FLAG='-G'
+    fi
 fi
+__gash_ls_color_flag="$__GASH_PROBE_LS_FLAG"
 
 # Directory listing aliases
 if [[ -n "$__gash_ls_color_flag" ]]; then

@@ -65,8 +65,25 @@ fi
 # stderr quiet (GASH_DEBUG=1 shows it) but never loses the failure itself.
 __GASH_LOAD_ERRORS=()
 
+# Load timing for `gash_doctor --timing`: with GASH_TIMING=1 at load, each
+# step's cost goes to __GASH_LOAD_TIMES as "MICROSECONDS LABEL". Needs
+# $EPOCHREALTIME (Bash 5.0+); otherwise, and by default, nothing is timed.
+__GASH_LOAD_TIMES=()
+__GASH_TIMING=0
+if [[ "${GASH_TIMING-}" == "1" && -n "${EPOCHREALTIME-}" ]]; then
+    __GASH_TIMING=1
+    __GASH_T0="$EPOCHREALTIME"
+fi
+
+# Usage: __gash_time_record LABEL START  (START: an $EPOCHREALTIME value)
+__gash_time_record() {
+    local now="${EPOCHREALTIME//[!0-9]/}" start="${2//[!0-9]/}"
+    __GASH_LOAD_TIMES+=("$((10#$now - 10#$start)) $1")
+}
+
 __gash_source() {
-    local file="$1" rc=0 aliases_on=0
+    local file="$1" rc=0 aliases_on=0 t0=""
+    ((${__GASH_TIMING:-0})) && t0="$EPOCHREALTIME"
     if [[ ! -r "$file" ]]; then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: missing")
         return 1
@@ -84,6 +101,7 @@ __gash_source() {
     if ((rc != 0)); then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: exit $rc")
     fi
+    [[ -n "$t0" ]] && __gash_time_record "${file#"$GASH_DIR"/}" "$t0"
     return 0
 }
 
@@ -130,7 +148,27 @@ fi
 # Interactive mode
 # -----------------------------------------------------------------------------
 
-# Snapshot the state Gash is about to change, for `gash_unload`.
+# The names of functions not starting with _, of the other functions and of
+# aliases, three lists separated by \x01 lines, into the variable named $1:
+# what tells, later, which ones Gash defined (`__gash_added_symbols_to`).
+# One subshell for all three, none when there is nothing to list (Gash's
+# own loader functions do not count).
+__gash_symbols_now() {
+    if compgen -A function -X '__gash_*' >/dev/null || compgen -a >/dev/null; then
+        printf -v "$1" '%s' "$(
+            compgen -A function -X '_*' || true
+            printf '\001\n'
+            compgen -A function -X '!_*' || true
+            printf '\001\n'
+            compgen -a || true
+        )"
+    else
+        printf -v "$1" '\001\n\001'
+    fi
+}
+
+# Snapshot the state Gash is about to change, for `gash_unload`. The umask
+# is recorded by terminal.sh, and only when GASH_UMASK changes it.
 if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
     __GASH_SNAPSHOT_TAKEN=1
     __GASH_SNAPSHOT=()
@@ -143,17 +181,19 @@ if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
     done
     shopt -q histappend && __GASH_SNAPSHOT+=("shopt:histappend=1") || __GASH_SNAPSHOT+=("shopt:histappend=0")
     shopt -q checkwinsize && __GASH_SNAPSHOT+=("shopt:checkwinsize=1") || __GASH_SNAPSHOT+=("shopt:checkwinsize=0")
-    __GASH_SNAPSHOT+=("umask=$(umask)")
-    __GASH_PRE_FUNCS=$'\n'"$(compgen -A function || true)"$'\n'
-    __GASH_PRE_ALIASES=$'\n'"$(compgen -a || true)"$'\n'
+    __gash_symbols_now __GASH_PRE_SYMBOLS
     unset __gash_var
 fi
+
+((__GASH_TIMING)) && __gash_time_record "gash.sh: snapshot" "$__GASH_T0"
 
 __gash_load_core
 
 # Settings from ~/.gash_env (GASH_PROMPT, GASH_HISTORY, ...). Variables
 # already set in the environment take precedence.
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 declare -f __gash_apply_settings >/dev/null && __gash_apply_settings
+((__GASH_TIMING)) && __gash_time_record "settings (~/.gash_env)" "$__GASH_T1"
 
 __gash_source "$GASH_DIR/lib/shell/terminal.sh"
 __gash_source "$GASH_DIR/lib/shell/history.sh"
@@ -165,30 +205,38 @@ __gash_load_modules
 # Aliases and user files are sourced at top level (not inside a function),
 # so `declare` and `local`-free code in them behaves exactly as in .bashrc.
 if [[ -f "$GASH_DIR/lib/aliases/_loader.sh" ]]; then
+    ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
     __GASH_ALIASES_ON=0
     shopt -q expand_aliases && __GASH_ALIASES_ON=1
     shopt -u expand_aliases
     source "$GASH_DIR/lib/aliases/_loader.sh" || __GASH_LOAD_ERRORS+=("lib/aliases/_loader.sh: exit $?")
     ((__GASH_ALIASES_ON)) && shopt -s expand_aliases
     unset __GASH_ALIASES_ON
+    ((__GASH_TIMING)) && __gash_time_record "lib/aliases/*.sh" "$__GASH_T1"
 fi
 
 __gash_source "$GASH_DIR/lib/shell/banner.sh"
 
 # Record what exists after loading; `gash_unload` removes what is here but
-# was not in the snapshot taken before (the diff is computed only then).
-if [[ -z "${__GASH_POST_FUNCS-}" ]]; then
-    __GASH_POST_FUNCS=$'\n'"$(compgen -A function || true)"$'\n'
-    __GASH_POST_ALIASES=$'\n'"$(compgen -a || true)"$'\n'
+# was not in the snapshot taken before (the difference is computed only
+# when needed).
+if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
+    ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+    __gash_symbols_now __GASH_POST_SYMBOLS
+    ((__GASH_TIMING)) && __gash_time_record "gash.sh: symbol list" "$__GASH_T1"
 fi
 
 # User customizations, last so they can override anything above.
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
+((__GASH_TIMING)) && __gash_time_record "user files: ~/.bash_aliases, ~/.bash_local" "$__GASH_T1"
 
 # A Gash 1.x configuration: guided migration (interactive terminal) or a
 # one-line reminder (anywhere else).
 declare -F __gash_migrate_autostart >/dev/null && __gash_migrate_autostart
+
+((__GASH_TIMING)) && __gash_time_record "gash.sh (total)" "$__GASH_T0"
 
 # Keep the file's status 0: a `set -e` caller sourcing ~/.gashrc must not
 # die because the last optional file was missing.

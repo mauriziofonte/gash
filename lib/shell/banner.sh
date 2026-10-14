@@ -5,8 +5,9 @@
 # GASH_BANNER=0     no banner and no quote at startup
 # GASH_SHOW_INXI=1  print a short `inxi` system summary at startup
 
-# Refuse `write`/`talk` messages from other users on this terminal.
-if type -P mesg >/dev/null 2>&1; then
+# Refuse `write`/`talk` messages from other users on this terminal (`mesg`
+# acts on the terminal on standard input: without one there is nothing to do).
+if [[ -t 0 ]] && type -P mesg >/dev/null 2>&1; then
     mesg n 2>/dev/null || true
 fi
 
@@ -19,7 +20,12 @@ if [[ "${GASH_BANNER:-1}" == "1" ]]; then
     gash_inspiring_quote || true
 fi
 
-# Auto-unlock SSH keys configured in ~/.gash_env
-if declare -f gash_ssh_auto_unlock >/dev/null 2>&1; then
-    gash_ssh_auto_unlock
+# Auto-unlock SSH keys configured in ~/.gash_env. With none configured
+# (already known from loading ~/.gash_env), only its run-once marker is set.
+if declare -F gash_ssh_auto_unlock >/dev/null 2>&1; then
+    if [[ -z "${GASH_SSH_AUTOUNLOCK_RAN-}" && -n "${__GASH_ENV_LOADED-}" && -z "${__GASH_ENV_SSH_KEYS-}" ]]; then
+        export GASH_SSH_AUTOUNLOCK_RAN=1
+    else
+        gash_ssh_auto_unlock
+    fi
 fi

@@ -75,43 +75,65 @@ gash_inspiring_quote() {
     local quotes_file="${GASH_DIR:-$HOME/.gash}/quotes/list.txt"
     [[ -r "$quotes_file" ]] || return 1
 
-    local -a quotes=() sources=()
-    local line src=""
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        case "$line" in
-            "") src="" ;;
-            "#"*) src="${line#\#}" src="${src# }" ;;
-            *)
-                quotes+=("$line")
-                sources+=("$src")
-                src=""
-                ;;
-        esac
-    done <"$quotes_file"
+    # No subprocess on this path: it runs in every new shell (banner).
+    local IFS=$' \t\n'
+    local -a lines=() quotes=() sources=()
+    local line src="" n try
+    mapfile -t lines <"$quotes_file"
+    n=${#lines[@]}
+    # Without --source: random lines until one is a quote, which picks
+    # each quote with the same chance and reads no other line.
+    if ((show_source == 0 && n > 0)); then
+        for ((try = 0; try < 64; try++)); do
+            line="${lines[RANDOM % n]}"
+            [[ -z "$line" || "$line" == "#"* ]] && continue
+            quotes=("$line")
+            break
+        done
+    fi
+    if ((${#quotes[@]} == 0)); then
+        for line in ${lines[@]+"${lines[@]}"}; do
+            case "$line" in
+                "") src="" ;;
+                "#"*) src="${line#\#}" src="${src# }" ;;
+                *)
+                    quotes+=("$line")
+                    sources+=("$src")
+                    src=""
+                    ;;
+            esac
+        done
+    fi
     ((${#quotes[@]})) || return 1
 
     local idx=$((RANDOM % ${#quotes[@]}))
-    local wrap_width
-    wrap_width=$(($(__gash_tty_width) - 7))
+    local wrap_width=""
+    # A glob, not =~: BASH_REMATCH would be left behind in the shell.
+    [[ -n "${COLUMNS-}" && "$COLUMNS" != *[!0-9]* ]] && ((10#$COLUMNS > 0)) && wrap_width="$COLUMNS"
+    [[ -n "$wrap_width" ]] || wrap_width="$(__gash_tty_width)"
+    wrap_width=$((wrap_width - 7))
     ((wrap_width < 20)) && wrap_width=80
 
     local label="Quote:" on="" off="" first=1 qline
+    local -a wrapped=()
     if __gash_use_color; then
         on="$__GASH_CYAN" off="$__GASH_COLOR_OFF"
     fi
-    while IFS= read -r qline; do
+    __gash_wrap wrapped "$wrap_width" "${quotes[$idx]}"
+    for qline in "${wrapped[@]}"; do
         if ((first)); then
             printf '%s%s%s %s\n' "$on" "$label" "$off" "$qline"
             first=0
         else
             printf '       %s\n' "$qline"
         fi
-    done < <(printf '%s\n' "${quotes[$idx]}" | fold -s -w "$wrap_width")
+    done
 
     if ((show_source)) && [[ -n "${sources[$idx]}" ]]; then
-        while IFS= read -r qline; do
+        __gash_wrap wrapped "$wrap_width" "Source: ${sources[$idx]}"
+        for qline in "${wrapped[@]}"; do
             printf '       %s\n' "$qline"
-        done < <(printf 'Source: %s\n' "${sources[$idx]}" | fold -s -w "$wrap_width")
+        done
     fi
     return 0
 }
@@ -302,19 +324,58 @@ gash_uninstall() {
 # Unload
 # -----------------------------------------------------------------------------
 
-# Names Gash defined while loading: present right after it loaded, absent
-# from the snapshot taken before (interactive mode only).
+# From a list made by __gash_symbols_now (gash.sh), the part that holds
+# functions (public: those not starting with _) or aliases, into VAR.
+# Usage: __gash_symbols_pick VAR LIST functions|aliases [public]
+__gash_symbols_pick() {
+    # Bytes, not characters (\x01 never occurs inside a UTF-8 character),
+    # and offsets instead of ${list#*X}, which is quadratic in bash.
+    local LC_ALL=C
+    local list="$2" public internal aliases
+    public="${list%%$'\001'*}"
+    list="${list:${#public}+1}"
+    internal="${list%%$'\001'*}"
+    aliases="${list:${#internal}+1}"
+    case "$3|${4-}" in
+        aliases*) printf -v "$1" '%s' "$aliases" ;;
+        *"|public") printf -v "$1" '%s' "$public" ;;
+        *) printf -v "$1" '%s\n%s' "$public" "$internal" ;;
+    esac
+}
+
+# Names Gash defined while loading, into the array VAR: present right after
+# it loaded, absent from the snapshot taken before (interactive mode only;
+# gash.sh records both lists). "public" leaves out names starting with _.
+# Usage: __gash_added_symbols_to VAR functions|aliases [public]
+__gash_added_symbols_to() {
+    local -n __gas_out="$1"
+    local - __gas_name __gas_pre __gas_post
+    set -f
+    local IFS=$'\n' LC_ALL=C
+    __gash_symbols_pick __gas_pre "${__GASH_PRE_SYMBOLS-}" "${2-}" "${3-}"
+    __gash_symbols_pick __gas_post "${__GASH_POST_SYMBOLS-}" "${2-}" "${3-}"
+    # shellcheck disable=SC2206 # split on newlines, globbing is off
+    __gas_out=($__gas_post)
+    # Usually little or nothing existed before: one lookup per name.
+    [[ -n "${__gas_pre//$'\n'/}" && ${#__gas_out[@]} -gt 0 ]] || return 0
+    local -A __gas_before=()
+    for __gas_name in $__gas_pre; do
+        __gas_before["$__gas_name"]=1
+    done
+    local -a __gas_kept=()
+    for __gas_name in "${__gas_out[@]}"; do
+        [[ -n "${__gas_before["$__gas_name"]+x}" ]] || __gas_kept+=("$__gas_name")
+    done
+    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
+    return 0
+}
+
+# The same names, one per line.
 # Usage: __gash_added_symbols functions|aliases
 __gash_added_symbols() {
-    local post pre name
-    if [[ "${1-}" == "aliases" ]]; then
-        post="${__GASH_POST_ALIASES-}" pre="${__GASH_PRE_ALIASES-}"
-    else
-        post="${__GASH_POST_FUNCS-}" pre="${__GASH_PRE_FUNCS-}"
-    fi
-    while IFS= read -r name; do
-        [[ -n "$name" && "$pre" != *$'\n'"$name"$'\n'* ]] && printf '%s\n' "$name"
-    done <<<"$post"
+    local -a names=()
+    __gash_added_symbols_to names "${1-functions}"
+    ((${#names[@]})) && printf '%s\n' "${names[@]}"
     return 0
 }
 
@@ -358,13 +419,16 @@ gash_unload() {
 
     # Remove aliases and functions introduced by Gash.
     local __gash_name
-    while IFS= read -r __gash_name; do
-        [[ -n "$__gash_name" ]] && { unalias "$__gash_name" >/dev/null 2>&1 || true; }
-    done < <(__gash_added_symbols aliases)
-    while IFS= read -r __gash_name; do
-        [[ -z "$__gash_name" || "$__gash_name" == "gash_unload" ]] && continue
+    local -a __gash_names=()
+    __gash_added_symbols_to __gash_names aliases
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        unalias "$__gash_name" >/dev/null 2>&1 || true
+    done
+    __gash_added_symbols_to __gash_names functions
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        [[ "$__gash_name" == "gash_unload" ]] && continue
         unset -f "$__gash_name" >/dev/null 2>&1 || true
-    done < <(__gash_added_symbols functions)
+    done
 
     # Per-prefix function sweep: the load-time snapshot misses functions
     # defined AFTER it was taken (alias loader, prompt.sh, completion,
@@ -398,22 +462,98 @@ gash_unload() {
 # Health Check
 # -----------------------------------------------------------------------------
 
+# Microseconds as milliseconds with one decimal, into VAR (no floats: any
+# locale). Usage: __gash_us_to_ms VAR MICROSECONDS
+__gash_us_to_ms() {
+    printf -v "$1" '%d.%d' "$(($2 / 1000))" "$(($2 % 1000 / 100))"
+}
+
+# Startup cost, for `gash_doctor --timing`. A new interactive shell loads
+# Gash from GASH_DIR as ~/.gashrc does, with GASH_TIMING=1, and hands back
+# __GASH_LOAD_TIMES on fd 3 (its banner and other output are dropped; SSH
+# key unlocking is marked done so it never starts an agent). Then whole new
+# shells are timed: `bash -i` with your ~/.bashrc, and bash alone (median of
+# 3). Needs $EPOCHREALTIME (Bash 5.0+).
+__gash_doctor_timing() {
+    if [[ -z "${EPOCHREALTIME-}" ]]; then
+        __gash_error "gash_doctor --timing needs Bash 5.0 or newer (\$EPOCHREALTIME); this is ${BASH_VERSION}."
+        return 1
+    fi
+    local gash_dir="${GASH_DIR:-$HOME/.gash}" bash_bin="${BASH:-bash}"
+    local H="${__GASH_BOLD_WHITE-}" W="${__GASH_YELLOW-}" O="${__GASH_COLOR_OFF-}"
+    local out us label ms on i t0 t1
+    # shellcheck disable=SC2016 # expanded by the child shell
+    out="$(GASH_TIMING=1 GASH_HEADLESS='' GASH_SSH_AUTOUNLOCK_RAN=1 "$bash_bin" --noprofile --norc -i -c '
+        source "$1/gash.sh"
+        [[ -f "$1/bash_completion" ]] && source "$1/bash_completion"
+        printf "%s\n" "${__GASH_LOAD_TIMES[@]}" >&3
+    ' gash-timing "$gash_dir" 3>&1 >/dev/null 2>&1 </dev/null)"
+    if [[ -z "$out" ]]; then
+        __gash_error "No timings: a new shell did not load $gash_dir/gash.sh."
+        return 1
+    fi
+
+    printf '%s\n' "${H}Startup timing${O} — Gash ${GASH_VERSION:-unknown}, bash ${BASH_VERSION}, in a new interactive shell"
+    printf '  %7s  %s\n' "ms" "step"
+    while read -r us label; do
+        [[ "$us" =~ ^[0-9]+$ ]] || continue
+        __gash_us_to_ms ms "$us"
+        on=""
+        [[ "$label" == *"(total)" ]] && on="$H"
+        ((us >= 5000)) && on="$W"
+        printf '  %s%7s%s  %s\n' "$on" "$ms" "$O" "$label"
+    done <<<"$out"
+
+    # Whole shells, median of three runs each.
+    local -a whole=() bare=()
+    for i in 1 2 3; do
+        t0="$EPOCHREALTIME"
+        GASH_SSH_AUTOUNLOCK_RAN=1 "$bash_bin" -i -c exit </dev/null >/dev/null 2>&1
+        t1="$EPOCHREALTIME"
+        whole+=("$((${t1//[!0-9]/} - ${t0//[!0-9]/}))")
+        t0="$EPOCHREALTIME"
+        "$bash_bin" --noprofile --norc -i -c exit </dev/null >/dev/null 2>&1
+        t1="$EPOCHREALTIME"
+        bare+=("$((${t1//[!0-9]/} - ${t0//[!0-9]/}))")
+    done
+    local whole_ms bare_ms
+    __gash_us_to_ms whole_ms "$(__gash_median3 "${whole[@]}")"
+    __gash_us_to_ms bare_ms "$(__gash_median3 "${bare[@]}")"
+    printf '\n  New shell with your ~/.bashrc: %s ms (bash alone: %s ms; median of 3)\n' "$whole_ms" "$bare_ms"
+    printf '  GASH_TIMING=1 when a shell starts keeps its own figures in __GASH_LOAD_TIMES.\n'
+    return 0
+}
+
+# Usage: __gash_median3 A B C  (prints the middle value)
+__gash_median3() {
+    local a="$1" b="$2" c="$3" lo hi
+    lo=$((a < b ? a : b)) lo=$((lo < c ? lo : c))
+    hi=$((a > b ? a : b)) hi=$((hi > c ? hi : c))
+    printf '%s' "$((a + b + c - lo - hi))"
+}
+
 # Run health checks on the Gash installation.
 # Verifies core files, modules, config permissions, and external tools.
 # Usage: gash_doctor [--no-color]
 gash_doctor() {
-    needs_help "gash_doctor" "gash_doctor [--no-color]" "Run health checks on your Gash installation." "${1-}" && return
+    needs_help "gash_doctor" "gash_doctor [--timing] [--no-color]" "Run health checks on your Gash installation (--timing: what each file costs at startup)." "${1-}" && return
 
-    local no_color=0
+    local no_color=0 timing=0
     local a
     for a in "$@"; do
         case "$a" in
             --no-color) no_color=1 ;;
+            --timing) timing=1 ;;
         esac
     done
 
     # Local color scope (respects env, TTY, --no-color)
     __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
+
+    if ((timing)); then
+        __gash_doctor_timing
+        return
+    fi
 
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
     local issues=0 f mod tool name
@@ -975,16 +1115,29 @@ HELP
         --see-also "gash_upgrade gash" \
         <<'HELP'
 USAGE
-  gash_doctor
+  gash_doctor [--timing] [--no-color]
+
+OPTIONS
+  --timing    What each file and step costs when a shell starts
+  --no-color  Plain output
 
 EXAMPLES
   # Run a full health check
   gash_doctor
 
+  # Find what makes new shells slow
+  gash_doctor --timing
+
 NOTES
   Checks: core files, modules, config file permissions,
   external tools (git, curl, jq, sqlite3, docker).
   Reports missing or misconfigured components.
+
+  --timing loads Gash in a new interactive shell and lists the
+  milliseconds each file and step takes (5 ms or more stands out),
+  then times whole new shells: with your ~/.bashrc, and bash alone.
+  Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
+  the same figures in its __GASH_LOAD_TIMES array.
 HELP
 
     __gash_register_help "gash_upgrade" \
