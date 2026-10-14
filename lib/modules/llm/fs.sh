@@ -30,7 +30,8 @@ __llm_tree_impl() {
     local text_mode=0
     local max_depth="" # empty = default per mode (text=3, JSON=1)
     local with_stats=0
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -54,7 +55,7 @@ __llm_tree_impl() {
                 return 1
                 ;;
             *)
-                target_path="$1"
+                __llm_take_path target_path path_set "$1" || return 1
                 shift
                 ;;
         esac
@@ -241,6 +242,7 @@ llm_find() {
 
 __llm_find_impl() {
     local pattern=""
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
     local target_path="." path_set=""
     local file_type="f"
     local contains_regex=""
@@ -277,12 +279,8 @@ __llm_find_impl() {
             *)
                 if [[ -z "$pattern" ]]; then
                     pattern="$1"
-                elif [[ -z "$path_set" ]]; then
-                    target_path="$1"
-                    path_set=1
                 else
-                    __llm_error "unexpected_argument" "$1" "RETRY" "true" "Pass one PATTERN and at most one PATH"
-                    return 1
+                    __llm_take_path target_path path_set "$1" || return 1
                 fi
                 shift
                 ;;
@@ -364,7 +362,8 @@ llm_grep() {
 
 __llm_grep_impl() {
     local pattern=""
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
     local extensions=""
     local context=0
     local limit=100
@@ -401,7 +400,7 @@ __llm_grep_impl() {
                 if [[ -z "$pattern" ]]; then
                     pattern="$1"
                 else
-                    target_path="$1"
+                    __llm_take_path target_path path_set "$1" || return 1
                 fi
                 shift
                 ;;

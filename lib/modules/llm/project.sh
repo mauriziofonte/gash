@@ -122,7 +122,8 @@ llm_deps() {
 }
 
 __llm_deps_impl() {
-    local target_path="." include_dev=0
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set="" include_dev=0
     while (($# > 0)); do
         case "$1" in
             --dev) include_dev=1 ;;
@@ -130,7 +131,7 @@ __llm_deps_impl() {
                 __llm_error "unknown_option" "$1" "RETRY" "true" "Use --dev or a path"
                 return 1
                 ;;
-            *) target_path="$1" ;;
+            *) __llm_take_path target_path path_set "$1" || return 1 ;;
         esac
         shift
     done

@@ -41,6 +41,9 @@ it "functions without options reject them; extra arguments are refused" bash -c 
   [[ "$(verdict llm_config c.json --max-bytes)" == missing_value ]]
   [[ "$(verdict llm_find)" == missing_pattern ]]
   [[ "$(verdict llm_find "*" . extra)" == unexpected_argument ]]
+  for fn in llm_tree "llm_grep x" llm_git_diff llm_git_log llm_deps; do
+    [[ "$(verdict $fn . other)" == unexpected_argument ]] || { echo "second path accepted: $fn"; exit 1; }
+  done
   [[ "$(verdict llm_find "*" --type x)" == invalid_type ]]
   [[ "$(verdict llm_find "*" --type d --contains x)" == invalid_type ]]
   # Integers are capped at 9 digits (no arithmetic overflow).

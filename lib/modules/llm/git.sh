@@ -106,7 +106,8 @@ llm_git_diff() {
 
 __llm_git_diff_impl() {
     local staged_only=0
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -119,7 +120,7 @@ __llm_git_diff_impl() {
                 return 1
                 ;;
             *)
-                target_path="$1"
+                __llm_take_path target_path path_set "$1" || return 1
                 shift
                 ;;
         esac
@@ -147,7 +148,8 @@ llm_git_log() {
 
 __llm_git_log_impl() {
     local limit=10
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -163,7 +165,7 @@ __llm_git_log_impl() {
                 return 1
                 ;;
             *)
-                target_path="$1"
+                __llm_take_path target_path path_set "$1" || return 1
                 shift
                 ;;
         esac

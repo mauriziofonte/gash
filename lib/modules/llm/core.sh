@@ -412,6 +412,19 @@ __llm_needs_help() {
     return 1
 }
 
+# Store a positional PATH in OUT; SEEN (a caller variable, empty at first)
+# remembers one was given, so a second is unexpected_argument.
+# Usage: __llm_take_path OUT SEEN VALUE || return 1
+__llm_take_path() {
+    local -n __tp_out="$1" __tp_seen="$2"
+    if [[ -n "$__tp_seen" ]]; then
+        __llm_error "unexpected_argument" "$3" "RETRY" "true" "Pass at most one PATH"
+        return 1
+    fi
+    __tp_out="$3"
+    __tp_seen=1
+}
+
 # Argument parsing for functions that take at most one PATH and no
 # options: stores it in OUT ("." when absent); an option is
 # unknown_option, a second path unexpected_argument.
