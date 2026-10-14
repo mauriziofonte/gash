@@ -98,6 +98,8 @@ cat >"$MOCK_DIR/stdin"
 printf "id\tname\n1\ta\n"
 MOCK
   chmod +x "$tmp/bin/mysql"
+  # mariadb is preferred when installed (macOS runners have it): mock both.
+  cp "$tmp/bin/mysql" "$tmp/bin/mariadb"
   printf "DB:default=mysql://u:p%%40ss@127.0.0.1:3306/app\n" >"$tmp/.gash_env"
   export PATH="$tmp/bin:$PATH" GASH_HEADLESS=1 HOME="$tmp" MOCK_DIR="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
