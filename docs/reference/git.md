@@ -1,6 +1,6 @@
 # git
 
-Tags, patches, repository repair, git shortcuts.
+Sync, tags, patches, repository repair, git shortcuts.
 
 _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
@@ -12,6 +12,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | [`git_dump_revisions`](#git-dump-revisions) | `gdr` | Dump all revisions of a file into separate files |
 | [`git_list_tags`](#git-list-tags) | `glt` | List all local and remote tags |
 | [`git_repair`](#git-repair) | `gheal` | Repair a repo with corrupted 0-byte loose objects |
+| [`git_sync`](#git-sync) | `gsync` | Stage everything, commit and push the current branch |
 
 ## git_add_tag
 
@@ -173,7 +174,7 @@ Alias: `gheal`
 #### Usage
 
 ```text
-git_repair
+git_repair [-y] [--dry-run]
 ```
 
 #### Examples
@@ -181,17 +182,61 @@ git_repair
 ```bash
 # Fix a repo after a crash/OOM left empty loose object files
 gheal
+
+# Only count the empty objects and show the plan
+gheal --dry-run
 ```
 
 #### Notes
 
 ```text
-Deletes 0-byte loose objects, re-fetches them from 'origin' via a
-temporary bare clone, then runs 'git gc --prune=now' and 'git fsck
---full' to verify. Requires a git repo with a configured remote.
+Deletes 0-byte loose objects, copies the packs of a temporary bare
+clone of 'origin' into the object store, then runs 'git gc' and
+'git fsck --full' to verify. A plain 'git fetch' cannot do this: the
+refs already match, so git believes it has the objects. Works in
+linked worktrees and submodules. Shows the plan and asks first; -y
+skips the question. Requires a git repo with an 'origin' remote.
 ```
 
 See also: `git_list_tags`
+
+## git_sync
+
+Stage everything, commit and push the current branch
+
+Alias: `gsync`
+
+#### Usage
+
+```text
+git_sync [-m MESSAGE] [--no-push] [--dry-run]
+```
+
+#### Examples
+
+```bash
+# Save everything with the default message "chore: sync" and push
+gsync
+
+# With a real message
+gsync -m "docs: notes from the meeting"
+
+# What would be committed and where it would go
+gsync --dry-run
+```
+
+#### Notes
+
+```text
+Stages new, modified and deleted files of the whole work tree
+(git add --all), commits only when there is something to commit, then
+pushes the current branch to its upstream. A branch without upstream is
+pushed to origin and the upstream is set. Refuses on a detached HEAD
+and during a merge, rebase, cherry-pick or revert. .gitignore applies:
+check `git status` first in repositories without one.
+```
+
+See also: `git_repair`
 
 ## Aliases
 

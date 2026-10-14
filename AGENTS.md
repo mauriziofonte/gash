@@ -452,6 +452,16 @@ FATAL (report the hint, stop). Do not try to get around refusals.
 ## 9. Version compatibility
 
 Version: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'`.
+Changes in 2.1 that affect agents:
+
+* **New error codes** (RETRY): `invalid_database_name`, `invalid_type`,
+  `file_too_large`.
+* **Stricter arguments**: a second PATH fails with `unexpected_argument`;
+  `llm_git_status`, `llm_project` and `llm_config` reject unknown options;
+  `llm_find` needs a pattern; `--help` works anywhere on the line.
+* **`llm_exec`** runs with a minimal environment and refuses more (6.3).
+* **`llm_find --contains`** honours PATTERN; `llm_procs` prints one line.
+
 Changes from 1.x that affect agents (the full list for people, with upgrade
 steps, is in `docs/migration.md`):
 

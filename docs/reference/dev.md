@@ -1,14 +1,62 @@
 # dev
 
-PHP and Node.js versions per project.
+PHP and Node.js versions, headless Chrome.
 
 _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 | Function | Alias | Description |
 |---|---|---|
+| [`chrome_headless_update`](#chrome-headless-update) | `chri` | Install or upgrade chrome-headless-shell (Chrome for Testing) |
 | [`node_detect_version`](#node-detect-version) |  | Detect the Node.js version a project wants |
+| [`node_upgrade`](#node-upgrade) | `nvmc` | Upgrade each installed Node.js major to its newest patch |
 | [`nvm_prune_versions`](#nvm-prune-versions) | `nvmp` | Remove duplicate/older NVM patch versions |
 | [`php_detect_version`](#php-detect-version) |  | Detect the PHP version a project wants |
+
+## chrome_headless_update
+
+Install or upgrade chrome-headless-shell (Chrome for Testing)
+
+Alias: `chri`
+
+#### Usage
+
+```text
+chrome_headless_update [-y] [--dry-run]
+```
+
+#### Examples
+
+```bash
+# Show what would change, touch nothing
+chri --dry-run
+
+# After upgrading Playwright: bring the shared browser to the same build
+chri
+
+# Unattended (CI, provisioning scripts)
+chri -y
+```
+
+#### Notes
+
+```text
+The version is the chromium-headless-shell build listed in browsers.json
+of the latest playwright-core release, downloaded from Chrome for Testing
+(exact version, never "latest stable"). Linux x86_64 only.
+Layout: /opt/chrome-headless-shell/<version>/ with the symlink
+/usr/local/bin/chrome-headless-shell (GASH_CHROME_ROOT and
+GASH_CHROME_LINK change them). The outgoing version is kept for
+rollback, older ones are removed. Installing needs sudo.
+Missing shared libraries are reported with the apt packages to install.
+Point your tools at the shared binary and stop npm from downloading
+browsers of its own:
+  export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 PUPPETEER_SKIP_DOWNLOAD=1
+  Playwright: launchOptions: { executablePath: '/usr/local/bin/chrome-headless-shell' }
+  Puppeteer:  { headless: 'shell', executablePath: '/usr/local/bin/chrome-headless-shell' }
+Without a terminal the question is refused: pass -y.
+```
+
+See also: `node_upgrade`
 
 ## node_detect_version
 
@@ -37,6 +85,46 @@ Priority: .nvmrc -> .node-version -> package.json engines.node -> latest
 installed. JSON output is also emitted automatically under
 GASH_HEADLESS=1, --json is not required there.
 ```
+
+## node_upgrade
+
+Upgrade each installed Node.js major to its newest patch
+
+Alias: `nvmc`
+
+#### Usage
+
+```text
+node_upgrade [-y] [--dry-run]
+```
+
+#### Examples
+
+```bash
+# See the plan, change nothing
+nvmc --dry-run
+
+# Upgrade: plan, one question, then install and clean up
+nvmc
+
+# Unattended
+nvmc -y
+```
+
+#### Notes
+
+```text
+For each major already installed (v18, v20, v22...) installs the newest
+published patch with the global packages of the patch it replaces
+(nvm install --reinstall-packages-from), then removes the older patches
+of that major. Majors that are not installed are never added and a
+major is never removed. When an install fails, that major keeps its
+patches. The active version moves to the new patch of its major.
+Needs nvm loaded (GASH_NVM=lazy or on does it) and network access to
+nodejs.org. Without a terminal the question is refused: pass -y.
+```
+
+See also: `nvm_prune_versions`, `node_detect_version`
 
 ## nvm_prune_versions
 
@@ -100,11 +188,11 @@ emitted automatically under GASH_HEADLESS=1, --json is not required there.
 
 | Alias | Runs |
 |---|---|
-| `php` | `` |
-| `composer-packages-update` | ` global update` |
-| `composer-self-update` | `sudo self-update` |
-| `hte` | ` create` |
-| `hte-create` | ` create` |
-| `hte-remove` | ` remove` |
-| `hte-details` | ` details` |
+| `php` | `phpX.Y` |
+| `composer-packages-update` | `composer global update` |
+| `composer-self-update` | `sudo composer self-update` |
+| `hte` | `sudo phpX.Y hte-cli create` |
+| `hte-create` | `sudo phpX.Y hte-cli create` |
+| `hte-remove` | `sudo phpX.Y hte-cli remove` |
+| `hte-details` | `sudo phpX.Y hte-cli details` |
 

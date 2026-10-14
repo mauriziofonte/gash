@@ -6,6 +6,103 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [2.1.0] - 2026-10-14
+
+Everyday tools from a long-lived `.gashrc`, commands that show what they
+will do before they do it, a harder read-only boundary for agents, and a
+quote collection where every line has a source.
+
+### Added
+
+- `node_upgrade` (alias `nvmc`): installs the newest patch of every
+  installed Node major, moves global packages, removes the old patches.
+- `chrome_headless_update` (alias `chri`): keeps a headless Chrome for
+  Puppeteer and Playwright up to date under `GASH_CHROME_ROOT`, with
+  rollback to the previous build and the missing system libraries listed.
+- `git_sync` (alias `gsync`): add, commit and push in one step; refuses a
+  detached HEAD or a merge or rebase in progress.
+- `wsl_compact` (alias `wslc`): drops caches and compacts memory so WSL
+  hands RAM back to Windows; `--status` only reports.
+- `path_add [--append] DIR...` and the `GASH_PATH_ADD` setting: put
+  directories on PATH once, only when they exist.
+- `GASH_NVM=lazy`: node, npm and global packages of nvm's default version
+  are on PATH at once and nvm.sh loads on the first `nvm` call. `on`
+  sources nvm as its installer would; `off` (default) leaves nvm alone.
+- `-y`/`--yes` and `--dry-run` on the commands that change things; they show
+  a plan and ask "Do you want to continue? [Y/n]".
+- `archive_extract` opens `.tar.xz`, `.txz`, `.tar.zst`, `.tzst`, `.xz`
+  and `.zst`.
+- `gash_inspiring_quote --source` shows where a quote comes from.
+- Completion for short aliases (`flf<Tab>` completes like `files_largest`)
+  and for the new functions.
+- `llm_config --max-bytes N` (default 1 MiB).
+
+### Changed
+
+- Quotes: 373 quotes from people who shaped open computing, each with its
+  book, paper, talk or mailing list post. Misattributed, anonymous and
+  off-topic lines were removed or corrected.
+- `process_kill` always lists the matches and asks, even for one process.
+- `services_stop` lists the running services and asks; the `quit` alias no
+  longer passes `--force`. Without systemd it uses `service`. `redis-server`
+  is in the list.
+- `docker_prune_all` counts what it would remove before asking.
+- `wsl_restart` and `wsl_shutdown` ask first and save history before
+  stopping WSL; `wsl_explorer` converts the path with `wslpath`.
+- Declining a confirmation returns 1 everywhere (was 0 in some commands).
+  `--force` still works where it did.
+- One ssh-agent per user on a fixed socket, reused by every shell, instead
+  of a new agent per shell.
+- AI defaults: `claude-haiku-5-5` (with low effort) and `gemini-2.5-flash`.
+- AI redaction keeps ordinary words: "token expired" is sent as is; a long
+  token after "token" or "secret" is still hidden.
+- `llm_env` hides more names (PASSPHRASE, `*_PWD`, `*_PAT`, JWT, SESSION,
+  COOKIE, DSN...) and masks tokens and private keys inside values.
+- `llm_find PATTERN --contains RE` filters by PATTERN, searches hidden and
+  gitignored files, and every extension without ripgrep.
+- `llm_config` converts YAML with either yq (mikefarah or the Python one)
+  and falls back to the raw text.
+- `llm_procs` prints one compact JSON line.
+- `--help`/`-h` work anywhere on an `llm_*` line (alone for `llm_exec`).
+
+### Fixed
+
+- `git_repair` works in worktrees and submodules, says when there is
+  nothing to repair, and asks before changing the object store.
+- Timings in comma-decimal locales (`de_DE`, `it_IT`): `query_time` and
+  `scan_time` were wrong and each database query ran twice.
+- MySQL output: `\\0` after an escaped backslash is no longer read as NUL.
+- `llm_*` path checks work where `realpath -m` is missing (macOS).
+- `nvm_prune_versions` no longer needs `grep -P`; `lts/<name>` aliases
+  resolve through nvm, including `lts/krypton`.
+- `llm_docker_check --help` shows help instead of scanning.
+
+### Security
+
+- `llm_db_*`: `-d` and `.target-database` must be plain database names
+  (`invalid_database_name`); a crafted name could send the stored password
+  to another host or reopen a writable session.
+- `llm_exec` runs in a minimal environment (`env -i` plus PATH, HOME,
+  locale and a few others), so tokens in the caller's environment do not
+  reach it.
+- `llm_exec` refuses walks from `/` or above protected trees, walks that
+  follow symlinks, `ps e`, `getent shadow`, yq `load()`, and git commands
+  that read arbitrary objects (`--no-index`, `cat-file --batch`, blob ids,
+  `REV:PATH` of a secret file); grep, rg, diff and git skip secret files.
+- git runs with `GIT_OPTIONAL_LOCKS=0`, so `git status` no longer writes
+  the index.
+
+### Agents (contract)
+
+- New error codes, all RETRY: `invalid_database_name`, `invalid_type`,
+  `file_too_large`.
+- A second PATH argument fails with `unexpected_argument` (`llm_tree`,
+  `llm_find`, `llm_grep`, `llm_git_*`, `llm_project`, `llm_deps`,
+  `llm_config`); `llm_git_status`, `llm_project` and `llm_config` reject
+  unknown options; `llm_find` without a pattern fails with
+  `missing_pattern`; `llm_project` on a missing path fails with
+  `path_not_found`; numbers have at most 9 digits.
+
 ## [2.0.0] - 2026-10-14
 
 A rebuild for quality: a quieter and reversible bootstrap, read-only
@@ -208,6 +305,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/mauriziofonte/gash/compare/v1.5.3...v2.0.0
 [1.5.3]: https://github.com/mauriziofonte/gash/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/mauriziofonte/gash/compare/v1.5.1...v1.5.2
