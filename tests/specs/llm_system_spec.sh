@@ -55,3 +55,57 @@ it "llm_project reports has_tests=false for a Go module without tests" bash -c '
   printf "package main\n" >"$tmp/main_test.go"
   [[ "$(llm_project "$tmp" | jq -r .has_tests)" == "true" ]]
 '
+
+it "llm_git_status reports renames, odd names, conflicts and ahead/behind" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp" GIT_CONFIG_NOSYSTEM=1
+  git config --global user.email t@example.com
+  git config --global user.name T
+  git config --global init.defaultBranch main
+  source "$GASH_TEST_ROOT/gash.sh"
+  git init -q "$tmp/up"; cd "$tmp/up"
+  printf "a\n" >a.txt; printf "b\n" >b.txt; git add .; git commit -qm one
+  git clone -q "$tmp/up" "$tmp/r"; cd "$tmp/r"
+  printf "c\n" >c.txt; git add c.txt; git commit -qm two
+  git mv a.txt "renamed a.txt"
+  printf "x\n" >>b.txt
+  printf "n\n" >"$(printf "new\nline.txt")"
+  out="$(llm_git_status)"
+  jq -e ".branch == \"main\" and .ahead == 1 and .behind == 0" <<<"$out" >/dev/null
+  jq -e ".staged == [\"renamed a.txt\"] and .modified == [\"b.txt\"]" <<<"$out" >/dev/null
+  jq -e ".untracked == [\"new\nline.txt\"] and .conflicted == []" <<<"$out" >/dev/null
+
+  # A merge conflict lands in "conflicted", not in staged/modified.
+  git reset -q --hard; git clean -qfd
+  git checkout -qb side HEAD~1; printf "side\n" >b.txt; git commit -qam side
+  git checkout -q main; printf "main\n" >b.txt; git commit -qam main
+  git merge -q side >/dev/null 2>&1 || true
+  out="$(llm_git_status)"
+  jq -e ".conflicted == [\"b.txt\"] and (.staged | index(\"b.txt\")) == null" <<<"$out" >/dev/null
+'
+
+it "llm_env honors --filter, redacts URL passwords and hides secret names" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  export GASH_HEADLESS=1 DB_URL="mysql://app:s3cret@db:3306/x" GITHUB_TOKEN=t MY_VAR=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  out="$(llm_env --filter "^(DB_URL|GITHUB_TOKEN|MY_VAR)$")"
+  jq -e "keys == [\"DB_URL\", \"MY_VAR\"]" <<<"$out" >/dev/null
+  jq -e ".DB_URL == \"mysql://app:***@db:3306/x\"" <<<"$out" >/dev/null
+  [[ "$(llm_env --filter "(" 2>&1 >/dev/null | jq -r .error)" == invalid_filter ]]
+'
+
+it "llm_deps reads requirements.txt and go.mod into the same JSON shape" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir "$tmp/py" "$tmp/go"
+  printf "# c\nrequests>=2\nflask[async]==3 ; python_version>\"3\"\n-r more.txt\n  numpy\n" >"$tmp/py/requirements.txt"
+  printf "module x\n\nrequire (\n\tgithub.com/a/b v1.0.0\n)\nrequire example.com/z v1.2.3\n" >"$tmp/go/go.mod"
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  [[ "$(llm_deps "$tmp/py" | jq -c .dependencies)" == "[\"requests\",\"flask\",\"numpy\"]" ]]
+  [[ "$(llm_deps "$tmp/go" --dev | jq -c "[.prod, .dev]")" == "[[\"github.com/a/b\",\"example.com/z\"],[]]" ]]
+'

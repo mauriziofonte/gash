@@ -381,7 +381,7 @@ __llm_db_envelope() {
                 # >100ms: auto-explain for slow query
                 local _dbenv_xpl
                 _dbenv_xpl=$(__llm_db_explain_impl "${__GASH_DB_EXPLAIN_ARGS[@]}" 2>/dev/null) || true
-                [[ -z "$_dbenv_xpl" ]] && _dbenv_xpl='[]'
+                jq -e . >/dev/null 2>&1 <<<"$_dbenv_xpl" || _dbenv_xpl='[]'
                 printf '%s' "$_dbenv_out" | jq -c \
                     --arg qt "$_dbenv_qt" \
                     --argjson xpl "$_dbenv_xpl" \

@@ -271,7 +271,7 @@ USAGE
 
 EXAMPLES
   llm_git_status
-  # {"branch":"main","ahead":0,"behind":0,"staged":[],"modified":["README.md"],"untracked":[]}
+  # {"branch":"main","ahead":0,"behind":0,"staged":[],"modified":["README.md"],"untracked":[],"conflicted":[]}
 HELP
 
     __gash_register_help "llm_git_diff" \

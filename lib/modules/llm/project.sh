@@ -113,55 +113,47 @@ llm_deps() {
 }
 
 __llm_deps_impl() {
-    local target_path="."
-    local include_dev=0
-
-    while [[ $# -gt 0 ]]; do
+    local target_path="." include_dev=0
+    while (($# > 0)); do
         case "$1" in
-            --dev)
-                include_dev=1
-                shift
+            --dev) include_dev=1 ;;
+            -*)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --dev or a path"
+                return 1
                 ;;
-            *)
-                target_path="$1"
-                shift
-                ;;
+            *) target_path="$1" ;;
         esac
+        shift
     done
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
 
+    if ! __llm_has_jq; then
+        __llm_error "jq_not_found" "jq is required for JSON output" "FATAL" "false" "Install jq: sudo apt install jq"
+        return 1
+    fi
+
+    # Output: {manager, dependencies} or, with --dev, {manager, prod, dev}.
+    local shape='{manager: $m, dependencies: $prod}'
+    ((include_dev)) && shape='{manager: $m, prod: $prod, dev: $dev}'
+
     if [[ -f "$safe_path/composer.json" ]]; then
-        if __llm_has_jq; then
-            if [[ $include_dev -eq 1 ]]; then
-                jq '{manager:"composer",prod:.require|keys,dev:."require-dev"|keys}' "$safe_path/composer.json"
-            else
-                jq '{manager:"composer",dependencies:.require|keys}' "$safe_path/composer.json"
-            fi
-        else
-            echo '{"manager":"composer","note":"install jq for detailed output"}'
-        fi
-
+        jq -c --arg m composer "(.require // {} | keys) as \$prod | (.\"require-dev\" // {} | keys) as \$dev | $shape" "$safe_path/composer.json"
     elif [[ -f "$safe_path/package.json" ]]; then
-        if __llm_has_jq; then
-            if [[ $include_dev -eq 1 ]]; then
-                jq '{manager:"npm",prod:.dependencies|keys,dev:.devDependencies|keys}' "$safe_path/package.json"
-            else
-                jq '{manager:"npm",dependencies:.dependencies|keys}' "$safe_path/package.json"
-            fi
-        else
-            echo '{"manager":"npm","note":"install jq for detailed output"}'
-        fi
-
+        jq -c --arg m npm "(.dependencies // {} | keys) as \$prod | (.devDependencies // {} | keys) as \$dev | $shape" "$safe_path/package.json"
     elif [[ -f "$safe_path/requirements.txt" ]]; then
-        echo '{"manager":"pip","dependencies":['
-        grep -v '^#' "$safe_path/requirements.txt" | grep -v '^$' |
-            sed 's/[<>=].*//' |
-            awk '{printf "\"%s\",", $1}' | sed 's/,$//' || true
-        echo ']}'
+        # Package name: up to the first version, extra or marker character.
+        jq -cRn --arg m pip "[inputs | sub(\"#.*\"; \"\") | gsub(\"^\\\\s+|\\\\s+$\"; \"\") | select(length > 0 and (startswith(\"-\") | not)) | sub(\"[ <>=!~;\\\\[@].*\"; \"\")] as \$prod | [] as \$dev | $shape" <"$safe_path/requirements.txt"
+    elif [[ -f "$safe_path/go.mod" ]]; then
+        "${__GASH_AWK:-awk}" '
+            /^require[[:space:]]*\(/ { block = 1; next }
+            block && /^\)/ { block = 0; next }
+            block && NF >= 2 { print $1 }
+            /^require[[:space:]]+[^(]/ { print $2 }' "$safe_path/go.mod" |
+            jq -cRn --arg m go "[inputs | select(length > 0)] as \$prod | [] as \$dev | $shape"
     else
-        __llm_error "no_package_file" "No composer.json, package.json, or requirements.txt found" "CONTINUE" "false" "Not a package-managed project"
+        __llm_error "no_package_file" "No composer.json, package.json, requirements.txt or go.mod found" "CONTINUE" "true" "Not a package-managed project"
         return 1
     fi
 }

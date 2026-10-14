@@ -149,52 +149,61 @@ llm_env() {
 }
 
 __llm_env_impl() {
-    local filter="${1-}"
+    local filter=""
+    while (($# > 0)); do
+        case "$1" in
+            --filter | -f)
+                if (($# < 2)); then
+                    __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a regular expression"
+                    return 1
+                fi
+                filter="$2"
+                shift 2
+                ;;
+            -*)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --filter PATTERN"
+                return 1
+                ;;
+            *)
+                # Bare pattern: accepted for compatibility with v1.
+                filter="$1"
+                shift
+                ;;
+        esac
+    done
 
-    # Secret patterns to exclude
-    local -a secret_patterns=(
-        'PASSWORD'
-        'SECRET'
-        'TOKEN'
-        'KEY'
-        'CREDENTIAL'
-        'AUTH'
-        'PRIVATE'
-        'AWS_'
-        'API_KEY'
-        'DATABASE_URL'
-        'DB_PASS'
-    )
+    if [[ -n "$filter" ]]; then
+        local rc=0
+        # shellcheck disable=SC2319 # the [[ ]] status itself: 2 = invalid regex
+        [[ "" =~ $filter ]] || rc=$?
+        if ((rc == 2)); then
+            __llm_error "invalid_filter" "$filter" "RETRY" "true" "--filter takes an extended regular expression, e.g. '^PATH$' or 'NODE|NPM'"
+            return 1
+        fi
+    fi
 
-    echo "{"
-
+    # Names that hold secrets (case-insensitive substring match).
+    local secret_re='(PASSWORD|PASSWD|PASS$|SECRET|TOKEN|KEY|CREDENTIAL|AUTH|PRIVATE|COOKIE|SIGNATURE|AWS_|DATABASE_URL|DSN|CONN(ECTION)?_?STRING)'
+    local name value first=1 upper
+    printf '{'
     # env -0: NUL-delimited entries so multi-line values stay attached to
     # their own variable instead of being parsed as bogus extra entries.
-    local first=1
-    while IFS='=' read -r -d '' name value; do
-        # Skip empty names
+    while IFS= read -r -d '' name; do
+        value="${name#*=}"
+        name="${name%%=*}"
         [[ -z "$name" ]] && continue
-
-        # Apply filter if specified
-        if [[ -n "$filter" ]] && [[ ! "$name" =~ $filter ]]; then
+        if [[ -n "$filter" ]] && ! [[ "$name" =~ $filter ]]; then
             continue
         fi
-
-        # Skip secrets
-        local is_secret=0
-        for pattern in "${secret_patterns[@]}"; do
-            if [[ "$name" =~ $pattern ]]; then
-                is_secret=1
-                break
-            fi
-        done
-        [[ $is_secret -eq 1 ]] && continue
-
-        [[ $first -eq 0 ]] && echo ","
+        upper="${name^^}"
+        [[ "$upper" =~ $secret_re && "$upper" != "PWD" && "$upper" != "OLDPWD" ]] && continue
+        # Credentials embedded in URLs: scheme://user:pass@host -> user:***@host
+        if [[ "$value" =~ ^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):[^/@]*@(.*)$ ]]; then
+            value="${BASH_REMATCH[1]}:***@${BASH_REMATCH[2]}"
+        fi
+        ((first)) || printf ','
         first=0
-        printf '  "%s": "%s"' "$(__gash_json_escape "$name")" "$(__gash_json_escape "$value")"
-    done < <(env -0 2>/dev/null | sort -z)
-
-    echo ""
-    echo "}"
+        printf '\n  "%s": "%s"' "$(__gash_json_escape "$name")" "$(__gash_json_escape "$value")"
+    done < <(env -0 2>/dev/null | LC_ALL=C sort -z)
+    printf '\n}\n'
 }

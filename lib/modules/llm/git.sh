@@ -34,42 +34,45 @@ __llm_git_status_impl() {
         return 1
     fi
 
-    local branch
-    branch="$(git -C "$safe_path" branch --show-current 2>/dev/null)"
-
-    local ahead=0 behind=0
-    local tracking
-    tracking="$(git -C "$safe_path" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)"
-    if [[ -n "$tracking" ]]; then
-        ahead="$(git -C "$safe_path" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)"
-        behind="$(git -C "$safe_path" rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo 0)"
-    fi
-
-    local staged=() modified=() untracked=()
-
-    # -z: NUL-delimited records, no core.quotePath mangling, rename entries
-    # carry the new name as a separate NUL field (consumed and skipped).
-    local line status file
-    while IFS= read -r -d '' line; do
-        status="${line:0:2}"
-        file="${line:3}"
-
-        case "$status" in
-            "R "* | "C "*)
-                # Rename/copy: this field is the NEW name; the next NUL
-                # field is the old name - consume and discard it.
-                staged+=("$file")
-                IFS= read -r -d '' _ || true
+    # One porcelain v2 call: branch, ahead/behind and every entry, NUL
+    # separated so any file name survives. X (index) != "." means staged,
+    # Y (worktree) != "." means modified; unmerged entries are conflicted.
+    local branch="" ahead=0 behind=0
+    local staged=() modified=() untracked=() conflicted=()
+    local rec xy rest f
+    while IFS= read -r -d '' rec; do
+        case "$rec" in
+            "# branch.head "*)
+                branch="${rec#"# branch.head "}"
+                [[ "$branch" == "(detached)" ]] && branch=""
                 ;;
-            "A "* | "M "* | "D "*) staged+=("$file") ;;
-            " M" | " D") modified+=("$file") ;;
-            "??") untracked+=("$file") ;;
-            "AM" | "MM")
-                staged+=("$file")
-                modified+=("$file")
+            "# branch.ab "*)
+                rest="${rec#"# branch.ab +"}"
+                ahead="${rest%% *}"
+                behind="${rest##*-}"
                 ;;
+            "1 "* | "2 "*)
+                xy="${rec:2:2}"
+                # Path follows 8 fields (type 1) or 9 fields (type 2).
+                rest="$rec"
+                local skip=8
+                [[ "$rec" == "2 "* ]] && skip=9
+                for ((f = 0; f < skip; f++)); do rest="${rest#* }"; done
+                [[ "${xy:0:1}" != "." ]] && staged+=("$rest")
+                [[ "${xy:1:1}" != "." ]] && modified+=("$rest")
+                # Renames/copies carry the original path as the next record.
+                [[ "$rec" == "2 "* ]] && { IFS= read -r -d '' _ || true; }
+                ;;
+            "u "*)
+                rest="$rec"
+                for ((f = 0; f < 10; f++)); do rest="${rest#* }"; done
+                conflicted+=("$rest")
+                ;;
+            "? "*) untracked+=("${rec#"? "}") ;;
         esac
-    done < <(git -C "$safe_path" status --porcelain -z 2>/dev/null)
+    done < <(git -C "$safe_path" status --porcelain=v2 --branch -z 2>/dev/null)
+    [[ "$ahead" =~ ^[0-9]+$ ]] || ahead=0
+    [[ "$behind" =~ ^[0-9]+$ ]] || behind=0
 
     # Build JSON: every value goes through jq-backed escaping; empty arrays
     # render as [] (never [""]).
@@ -79,7 +82,8 @@ __llm_git_status_impl() {
     echo "  \"behind\": $behind,"
     printf '  "staged": %s,\n' "$(__gash_json_arr ${staged[@]+"${staged[@]}"})"
     printf '  "modified": %s,\n' "$(__gash_json_arr ${modified[@]+"${modified[@]}"})"
-    printf '  "untracked": %s\n' "$(__gash_json_arr ${untracked[@]+"${untracked[@]}"})"
+    printf '  "untracked": %s,\n' "$(__gash_json_arr ${untracked[@]+"${untracked[@]}"})"
+    printf '  "conflicted": %s\n' "$(__gash_json_arr ${conflicted[@]+"${conflicted[@]}"})"
     echo "}"
 }
 
@@ -99,9 +103,13 @@ __llm_git_diff_impl() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --staged)
+            --staged | --cached)
                 staged_only=1
                 shift
+                ;;
+            -*)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --staged or a path"
+                return 1
                 ;;
             *)
                 target_path="$1"
@@ -146,6 +154,10 @@ __llm_git_log_impl() {
                     __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
                     return 1
                 }
+                ;;
+            -*)
+                __llm_error "unknown_option" "$1" "RETRY" "true" "Use --limit N or a path"
+                return 1
                 ;;
             *)
                 target_path="$1"
