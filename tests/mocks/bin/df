@@ -4,11 +4,11 @@
 # with MOCK_DF_NO_TYPE=1, behaves like BSD df (no -T, `df -Pk` only).
 
 if [[ " $* " == *" -PTk "* ]]; then
-    [[ -n "${MOCK_DF_NO_TYPE-}" ]] && {
-        echo "df: illegal option -- T" >&2
-        exit 1
-    }
-    cat <<'OUT'
+	[[ -n "${MOCK_DF_NO_TYPE-}" ]] && {
+		echo "df: illegal option -- T" >&2
+		exit 1
+	}
+	cat <<'OUT'
 Filesystem     Type    1024-blocks     Used Available Capacity Mounted on
 /dev/sda1      ext4       52428800 10485760  39845888      21% /
 tmpfs          tmpfs      16777216        0  16777216       0% /run/user/1000
@@ -16,7 +16,7 @@ tmpfs          tmpfs      16777216        0  16777216       0% /run/user/1000
 C:\            9p        497008636 400000000 97008636     81% /mnt/c
 /dev/sdc1      ext4        1048576   524288    524288      50% /media/my disk
 OUT
-    exit 0
+	exit 0
 fi
 cat <<'OUT'
 Filesystem     1024-blocks     Used Available Capacity Mounted on

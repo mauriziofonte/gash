@@ -94,6 +94,10 @@ it "llm_db_query sends MySQL a read-only session with a row cap, SQL on stdin" b
   cat >"$tmp/bin/mysql" <<"MOCK"
 #!/usr/bin/env bash
 printf "%s\n" "$@" >"$MOCK_DIR/args"
+# Read the credentials file like the real client does (it is a pipe).
+for a in "$@"; do
+  case "$a" in --defaults-extra-file=*) cat "${a#*=}" >"$MOCK_DIR/ini" ;; esac
+done
 cat >"$MOCK_DIR/stdin"
 printf "id\tname\n1\ta\n"
 MOCK
@@ -104,8 +108,11 @@ MOCK
   export PATH="$tmp/bin:$PATH" GASH_HEADLESS=1 HOME="$tmp" MOCK_DIR="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
 
+  # On failure, show what the client saw.
+  trap '"'"'echo "out: ${out-}"; for f in args ini stdin; do echo "--- $f"; cat "$tmp/$f" 2>&1; done'"'"' ERR
   out="$(llm_db_query "SELECT id, name FROM t -- note" -r 7)"
   jq -e ".rows == 1 and .data[0].name == \"a\"" <<<"$out" >/dev/null
+  grep -q "p@ss" "$tmp/ini"
   grep -qx "SET SESSION TRANSACTION READ ONLY;" "$tmp/stdin"
   grep -qx "SET SESSION sql_select_limit = 7;" "$tmp/stdin"
   grep -qx "SELECT id, name FROM t -- note" "$tmp/stdin"
