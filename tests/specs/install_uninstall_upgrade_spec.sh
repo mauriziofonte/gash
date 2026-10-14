@@ -34,7 +34,7 @@ it "gash_uninstall removes gash and cleans profile" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   # Create a fake profile containing the install block.
@@ -117,7 +117,7 @@ it "gash_uninstall preserves other if/fi blocks in profile" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   # Profile with Gash block + another if/fi block
@@ -154,7 +154,7 @@ it "gash_uninstall removes new format with delimiters" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   # Profile with new delimited format
@@ -190,7 +190,7 @@ it "gash_uninstall removes custom GASH_DIR location" bash -c '
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   custom_dir="$tmp/custom_gash"
-  mkdir -p "$custom_dir"
+  mkdir -p "$custom_dir/lib/core"; : >"$custom_dir/gash.sh"
   : > "$tmp/.gashrc"
   : > "$tmp/.bashrc"
 
@@ -206,7 +206,7 @@ it "gash_uninstall cleans all profile files" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   gash_block="# Load Gash Bash
@@ -235,7 +235,7 @@ it "gash_uninstall handles missing profile files gracefully" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
   # NO profile files created
 
@@ -244,6 +244,27 @@ it "gash_uninstall handles missing profile files gracefully" bash -c '
 
   # Should succeed
   [[ ! -d "$tmp_home/.gash" ]]
+'
+
+it "gash_uninstall refuses a GASH_DIR that is not a Gash checkout" bash -c '
+  set -uo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  mkdir -p "$tmp_home/data"; : >"$tmp_home/data/keep"; : >"$tmp_home/.gashrc"
+  printf "keep me\n" >"$tmp_home/.bashrc.bak"
+  needs_confirm_prompt() { return 0; }
+
+  for d in "$tmp_home" "$tmp_home/data" /; do
+    HOME="$tmp_home" GASH_DIR="$d" gash_uninstall >/dev/null 2>&1 && exit 1
+  done
+  [[ -f "$tmp_home/data/keep" && -f "$tmp_home/.gashrc" ]] || exit 1
+
+  # A real-looking checkout is removed; the user'"'"'s own .bak survives.
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
+  HOME="$tmp_home" gash_uninstall >/dev/null 2>&1 || exit 1
+  [[ ! -d "$tmp_home/.gash" && -f "$tmp_home/.bashrc.bak" ]]
 '
 
 it "install then uninstall leaves system clean" bash -c '

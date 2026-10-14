@@ -198,8 +198,18 @@ gash_uninstall() {
         __gash_error "Gash is not installed on this system."
         return 1
     fi
+    # rm -rf only a directory that is unmistakably a Gash checkout, never
+    # / or $HOME (a stray GASH_DIR must not turn into a wipe).
+    local real_dir real_home
+    real_dir="$(cd -- "$gash_dir" 2>/dev/null && pwd -P)" || real_dir=""
+    real_home="$(cd -- "$HOME" 2>/dev/null && pwd -P)" || real_home="$HOME"
+    if [[ -z "$real_dir" || "$real_dir" == "/" || "$real_dir" == "$real_home" ||
+        ! -f "$real_dir/gash.sh" || ! -d "$real_dir/lib/core" ]]; then
+        __gash_error "$gash_dir does not look like a Gash installation (no gash.sh and lib/core); refusing to remove it."
+        return 1
+    fi
 
-    __gash_warning "This will remove Gash and its configuration from this account."
+    __gash_warning "This will remove Gash ($real_dir) and its configuration from this account."
     if ! needs_confirm_prompt "Continue?"; then
         __gash_info "Uninstall cancelled."
         return 0
@@ -215,11 +225,11 @@ gash_uninstall() {
                 __gash_info "Removing Gash block from: $profile_file"
                 # Try new format with delimiters first
                 if grep -q '# >>> GASH START >>>' "$profile_file"; then
-                    sed -i.bak '/# >>> GASH START >>>/,/# <<< GASH END <<</d' "$profile_file"
+                    sed -i.gash-uninstall.bak '/# >>> GASH START >>>/,/# <<< GASH END <<</d' "$profile_file"
                 # Fallback: old format - use more specific pattern to avoid catching other fi's
                 elif grep -q '# Load Gash Bash' "$profile_file"; then
                     # Remove exactly: comment + if block + fi (4 lines total)
-                    sed -i.bak '/# Load Gash Bash/{N;N;N;N;d}' "$profile_file"
+                    sed -i.gash-uninstall.bak '/# Load Gash Bash/{N;N;N;N;d}' "$profile_file"
                 fi
             else
                 __gash_info "No Gash block found in: $profile_file; skipping."
@@ -237,14 +247,10 @@ gash_uninstall() {
         __gash_info "$HOME/.gashrc not found; skipping."
     fi
 
-    # Remove Gash directory
-    if [ -d "$gash_dir" ]; then
-        __gash_info "Removing Gash at $gash_dir..."
-        if ! rm -rf "$gash_dir" 2>/dev/null; then
-            __gash_error "Failed to remove $gash_dir; please remove it manually."
-        fi
-    else
-        __gash_info "$gash_dir not found; skipping."
+    # Remove Gash directory (verified above)
+    __gash_info "Removing Gash at $real_dir..."
+    if ! rm -rf -- "$real_dir" 2>/dev/null; then
+        __gash_error "Failed to remove $real_dir; please remove it manually."
     fi
 
     # Handle ~/.gash_env (contains credentials - ask user)
@@ -264,11 +270,10 @@ gash_uninstall() {
     __gash_success "Gash uninstalled."
     __gash_info "Restart your terminal to apply changes."
 
-    # Clean up backup files
+    # Clean up the backups sed made above (only ours: a user's own
+    # ~/.bashrc.bak is left alone).
     for profile_file in "${profile_files[@]}"; do
-        if [ -f "${profile_file}.bak" ]; then
-            rm -f "${profile_file}.bak"
-        fi
+        rm -f -- "${profile_file}.gash-uninstall.bak"
     done
 }
 

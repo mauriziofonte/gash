@@ -52,29 +52,54 @@ __gash_require_compose() {
     return 0
 }
 
-# Extract service names and images from docker-compose.yml.
+# Extract service names and images from a compose file.
 # Output: service_name|image_reference (one per line)
+# Preferred source: `docker compose config --format json`, which applies
+# the compose spec itself (any indentation, anchors, extends, include,
+# .env interpolation). Without Compose v2 or jq, or when config fails, a
+# YAML-subset reader takes over: block-style services at any indentation.
 # Usage: __gash_parse_compose_services <compose_file>
 __gash_parse_compose_services() {
     local file="$1"
     [[ ! -f "$file" ]] && return 1
 
-    # Parse YAML using awk - handles indentation-based structure
-    awk '
-    /^services:/ { in_services = 1; next }
-    /^[a-zA-Z]/ && !/^services:/ { in_services = 0 }
-    in_services && /^  [a-zA-Z_-]+:/ {
-        gsub(/^  /, "")
-        gsub(/:.*/, "")
-        current_service = $0
+    local compose_cmd json out
+    if type -P jq >/dev/null 2>&1 && compose_cmd=$(__gash_compose_cmd 2>/dev/null) && [[ "$compose_cmd" == "docker compose" ]]; then
+        if json=$(docker compose -f "$file" --project-directory "$(dirname -- "$file")" config --format json 2>/dev/null) &&
+            out=$(jq -r '.services // {} | to_entries[] | select(.value.image != null) | "\(.key)|\(.value.image)"' <<<"$json" 2>/dev/null); then
+            [[ -n "$out" ]] && printf '%s\n' "$out"
+            return 0
+        fi
+    fi
+
+    "${__GASH_AWK:-awk}" '
+    function indent_of(s) { match(s, /^ */); return RLENGTH }
+    function unquote(s) {
+        sub(/^[ \t]+/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/[ \t\r]+$/, "", s)
+        if (s ~ /^".*"$/ || s ~ /^\047.*\047$/) s = substr(s, 2, length(s) - 2)
+        return s
     }
-    in_services && /^[[:space:]]+image:/ {
-        gsub(/^[[:space:]]+image:[[:space:]]*/, "")
-        gsub(/["'"'"']/, "")
-        gsub(/[[:space:]]*#.*/, "")
-        gsub(/[[:space:]]+$/, "")
-        if (current_service != "" && $0 != "") {
-            print current_service "|" $0
+    /^services:[ \t]*(#.*)?\r?$/ { in_services = 1; svc_ind = -1; next }
+    in_services && /^[^ \t#\r]/ { in_services = 0 }
+    !in_services { next }
+    /^[ \t]*(#.*)?\r?$/ { next }
+    {
+        ind = indent_of($0)
+        if (svc_ind < 0) svc_ind = ind
+        if (ind == svc_ind) {
+            name = $0
+            sub(/^ +/, "", name); sub(/:.*$/, "", name)
+            current = unquote(name)
+            child_ind = -1
+            next
+        }
+        if (current == "" || ind < svc_ind) next
+        if (child_ind < 0) child_ind = ind
+        if (ind == child_ind && $0 ~ /^ *image:/) {
+            img = $0
+            sub(/^ *image:/, "", img)
+            img = unquote(img)
+            if (img != "") print current "|" img
         }
     }
     ' "$file"
@@ -340,6 +365,17 @@ __gash_ghcr_token() {
     return 1
 }
 
+# Manifest media types accepted from registries. The index/list types come
+# first: a multi-arch image pulled by tag records the digest of its index
+# in RepoDigests, so asking only for a single-platform manifest yields a
+# different digest and a permanent false "update available".
+__GASH_MANIFEST_ACCEPT=(
+    -H "Accept: application/vnd.oci.image.index.v1+json"
+    -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json"
+    -H "Accept: application/vnd.oci.image.manifest.v1+json"
+    -H "Accept: application/vnd.docker.distribution.manifest.v2+json"
+)
+
 # Get remote image digest from registry.
 # Usage: __gash_get_remote_digest <registry> <name> <tag>
 # Output: sha256:... digest on success (stdout)
@@ -365,8 +401,7 @@ __gash_get_remote_digest() {
             # Bearer token via --config fd, never in argv (/proc/<pid>/cmdline)
             __gash_registry_curl -I \
                 --config <(printf 'header = "Authorization: Bearer %s"\n' "$__gash_auth_token") \
-                -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-                -H "Accept: application/vnd.oci.image.index.v1+json" \
+                "${__GASH_MANIFEST_ACCEPT[@]}" \
                 "https://registry-1.docker.io/v2/${name}/manifests/${tag}" ||
                 return 1
             ;;
@@ -378,8 +413,7 @@ __gash_get_remote_digest() {
             # Bearer token via --config fd, never in argv (/proc/<pid>/cmdline)
             __gash_registry_curl -I \
                 --config <(printf 'header = "Authorization: Bearer %s"\n' "$__gash_auth_token") \
-                -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-                -H "Accept: application/vnd.oci.image.index.v1+json" \
+                "${__GASH_MANIFEST_ACCEPT[@]}" \
                 "https://ghcr.io/v2/${name}/manifests/${tag}" ||
                 return 1
             ;;
@@ -387,7 +421,7 @@ __gash_get_remote_digest() {
         *)
             # Generic registry - try without auth
             __gash_registry_curl -I \
-                -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+                "${__GASH_MANIFEST_ACCEPT[@]}" \
                 "https://${registry}/v2/${name}/manifests/${tag}" ||
                 return 1
             ;;
@@ -413,10 +447,21 @@ __gash_get_remote_digest() {
 __gash_get_local_digest() {
     local image="$1"
 
-    # Try to get digest from RepoDigests
-    local digest
-    digest=$(docker inspect --format '{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}' "$image" 2>/dev/null |
-        head -1 | grep -o 'sha256:[a-f0-9]\{64\}')
+    # RepoDigests: prefer the entry of this repository (an image tagged
+    # under several names carries one per repository), else the first.
+    local repo="${image%@*}" digests digest=""
+    [[ "${repo##*/}" == *:* ]] && repo="${repo%:*}"
+    digests=$(docker inspect --format '{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}' "$image" 2>/dev/null) || digests=""
+    local line
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "${line%@*}" == "$repo" || "${line%@*}" == "docker.io/$repo" || "${line%@*}" == "docker.io/library/$repo" ]]; then
+            digest="${line#*@}"
+            break
+        fi
+        [[ -z "$digest" ]] && digest="${line#*@}"
+    done <<<"$digests"
+    [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || digest=""
 
     [[ -n "$digest" ]] && echo "$digest"
 }

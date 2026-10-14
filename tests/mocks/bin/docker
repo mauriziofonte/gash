@@ -11,6 +11,13 @@ fi
 # Handle "docker compose" subcommand (v2 style)
 if [[ "${1:-}" == "compose" ]]; then
 	shift
+	# Global options before the subcommand
+	while [[ "${1:-}" == -* ]]; do
+		case "$1" in
+		-f | --file | -p | --project-name | --project-directory | --env-file) shift 2 ;;
+		*) shift ;;
+		esac
+	done
 	case "${1:-}" in
 	version)
 		echo "Docker Compose version v2.24.0"
@@ -47,6 +54,14 @@ if [[ "${1:-}" == "compose" ]]; then
 		exit 0
 		;;
 	config)
+		shift
+		# --format json: MOCK_COMPOSE_CONFIG_JSON, else fail like Compose
+		# versions without it.
+		if [[ " $* " == *" --format json "* ]]; then
+			[[ -n "${MOCK_COMPOSE_CONFIG_JSON:-}" ]] || exit 1
+			printf '%s\n' "$MOCK_COMPOSE_CONFIG_JSON"
+			exit 0
+		fi
 		# If --services flag, list services
 		if [[ "${1:-}" == "--services" ]]; then
 			echo "web"

@@ -177,21 +177,26 @@ git_add_tag() {
 
     local tag_name="${1-}"
     local tag_message="${2:-"Release $tag_name"}"
+    __gash_git_check_tag_name "$tag_name" || return 1
 
-    # Check if tag already exists
-    if git rev-parse "$tag_name" >/dev/null 2>&1 || git ls-remote --tags origin | grep -qF "refs/tags/$tag_name"; then
+    # Exact ref matches only: "v1.0" must not collide with "v1.0.1" or a
+    # branch called v1.0.
+    if __gash_git_local_tag "$tag_name" || __gash_git_remote_tag "$tag_name"; then
         __gash_error "Tag '$tag_name' already exists."
         return 1
     fi
 
-    # Create and push the tag
-    git tag -a "$tag_name" -m "$tag_message"
+    git tag -a "$tag_name" -m "$tag_message" || {
+        __gash_error "Could not create tag '$tag_name'."
+        return 1
+    }
     __gash_success "Tag '$tag_name' created."
 
-    git push origin "$tag_name"
+    git push origin "refs/tags/$tag_name" || {
+        __gash_error "Tag '$tag_name' was created locally but could not be pushed."
+        return 1
+    }
     __gash_success "Tag '$tag_name' pushed to remote."
-
-    return 0
 }
 
 # Delete a tag locally and on the remote.
@@ -206,24 +211,47 @@ git_delete_tag() {
     __gash_require_arg "${1-}" "tag name" "git_delete_tag <tag_name>" || return 1
 
     local tag_name="${1-}"
+    __gash_git_check_tag_name "$tag_name" || return 1
 
-    # Check if tag exists
-    if ! git rev-parse "$tag_name" >/dev/null 2>&1 && ! git ls-remote --tags origin | grep -q "refs/tags/$tag_name"; then
+    local local_tag=0 remote_tag=0
+    __gash_git_local_tag "$tag_name" && local_tag=1
+    __gash_git_remote_tag "$tag_name" && remote_tag=1
+    if ((local_tag == 0 && remote_tag == 0)); then
         __gash_error "Tag '$tag_name' does not exist."
         return 1
     fi
 
-    # Delete local tag if exists
-    if git rev-parse "$tag_name" >/dev/null 2>&1; then
-        git tag -d "$tag_name" && __gash_success "Local tag '$tag_name' deleted."
+    local rc=0
+    if ((local_tag)); then
+        if git tag -d "$tag_name" >/dev/null; then
+            __gash_success "Local tag '$tag_name' deleted."
+        else
+            rc=1
+        fi
     fi
-
-    # Delete remote tag if exists
-    if git ls-remote --tags origin | grep -qF "refs/tags/$tag_name"; then
-        git push origin --delete "$tag_name" && __gash_success "Remote tag '$tag_name' deleted."
+    if ((remote_tag)); then
+        if git push origin --delete "refs/tags/$tag_name"; then
+            __gash_success "Remote tag '$tag_name' deleted."
+        else
+            __gash_error "Could not delete remote tag '$tag_name'."
+            rc=1
+        fi
     fi
+    return "$rc"
+}
 
-    return 0
+# Tag helpers: exact ref checks, never substring or pattern matches.
+__gash_git_check_tag_name() {
+    if ! git check-ref-format "refs/tags/${1-}" 2>/dev/null; then
+        __gash_error "Invalid tag name: '${1-}'."
+        return 1
+    fi
+}
+__gash_git_local_tag() {
+    git rev-parse -q --verify "refs/tags/${1-}" >/dev/null 2>&1
+}
+__gash_git_remote_tag() {
+    git ls-remote --exit-code --tags origin "refs/tags/${1-}" >/dev/null 2>&1
 }
 
 # -----------------------------------------------------------------------------
