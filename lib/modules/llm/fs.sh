@@ -107,20 +107,27 @@ __llm_tree_impl() {
     fi
 
     # JSON mode: nested tree via awk aggregation.
-    # Collect entries up to max_depth as `<relpath>\t<type>\t<size>` lines,
-    # then awk builds the hierarchy in a single END-phase recursive emission.
-    # Cap the raw entry set at 500 (internal safety) so pathological trees
-    # cannot exhaust memory; the tree is still correct for the subset.
+    # find emits `<relpath>\t<type>\t<size>` lines; awk lists the entries
+    # down to max_depth (at most 500 of them, flagged with "truncated") and
+    # nests them in one END-phase recursive emission.
+    # With --stats the walk has no depth limit, so a directory's size and
+    # children_count are its real cumulative size and direct-child count,
+    # also where the listing stops (depth limit or entry cap).
     # Paths containing tab/newline would corrupt the TSV transport (wrong
     # names silently attributed): exclude them instead of emitting bad data.
-    # `|| true`: an unreadable subdir or SIGPIPE from head must not kill a
-    # `set -euo pipefail` caller.
+    # `|| true`: an unreadable subdir must not kill a `set -euo pipefail`
+    # caller.
     local nl_glob tab_glob
     nl_glob=$(printf '*\n*')
     tab_glob=$(printf '*\t*')
-    local raw
-    raw=$(
-        find "$safe_path" -mindepth 1 -maxdepth "$max_depth" \
+    local -a depth_args=(-maxdepth "$max_depth")
+    [[ $with_stats -eq 1 ]] && depth_args=()
+
+    local esc_root
+    esc_root=$(__gash_json_escape "$safe_path")
+
+    {
+        find "$safe_path" -mindepth 1 "${depth_args[@]}" \
             -name 'node_modules' -prune -o \
             -name 'vendor' -prune -o \
             -name '.git' -prune -o \
@@ -128,17 +135,12 @@ __llm_tree_impl() {
             -name '.cache' -prune -o \
             \( -type f -o -type d -o -type l \) \
             ! -path "$nl_glob" ! -path "$tab_glob" \
-            -printf '%P\t%y\t%s\n' 2>/dev/null |
-            head -n 500
-    ) || true
-
-    local esc_root
-    esc_root=$(__gash_json_escape "$safe_path")
-
-    printf '%s\n' "$raw" | awk -F'\t' \
+            -printf '%P\t%y\t%s\n' 2>/dev/null || true
+    } | "${__GASH_AWK:-awk}" -F'\t' \
         -v root="$esc_root" \
         -v max_depth="$max_depth" \
         -v with_stats="$with_stats" \
+        -v cap=500 \
         '
         function esc(s,   r) {
             r = s
@@ -154,47 +156,41 @@ __llm_tree_impl() {
             n = split(p, a, "/")
             return a[n]
         }
-        function parent_of(p,   n, a, i, out) {
-            n = split(p, a, "/")
-            if (n <= 1) return ""
-            out = a[1]
-            for (i = 2; i < n; i++) out = out "/" a[i]
-            return out
-        }
         NF < 3 { next }
         {
             rel = $1
-            t   = $2
-            s   = $3 + 0
-            # Normalize type: gawk %y emits f/d/l, treat l as file
-            if (t == "d") type_str = "directory"
-            else if (t == "l") type_str = "link"
-            else type_str = "file"
+            n = split(rel, part, "/")
+            par = ""
+            for (i = 1; i < n; i++) par = (i == 1 ? part[1] : par "/" part[i])
 
-            types[rel]  = type_str
-            sizes[rel]  = s
-            seen[rel]   = 1
-            par = parent_of(rel)
+            # Real totals: every non-directory adds its size to each listed
+            # ancestor; every entry counts as a child of its parent.
+            if ($2 != "d") {
+                sz = $3 + 0
+                total[""] += sz
+                anc = ""
+                for (i = 1; i < n && i <= max_depth; i++) {
+                    anc = (i == 1 ? part[1] : anc "/" part[i])
+                    total[anc] += sz
+                }
+            }
+            nchild[par]++
+
+            if (n > max_depth) next
+            if (listed >= cap) { truncated = 1; next }
+            listed++
+            # %y: f/d/l (anything else is reported as a file)
+            types[rel] = ($2 == "d" ? "directory" : ($2 == "l" ? "link" : "file"))
+            sizes[rel] = $3 + 0
             child_list[par, ++child_cnt[par]] = rel
         }
-        function cum_size(p,   i, n, tot, c) {
-            # Root sentinel "" is always treated as a directory (no types[] entry).
-            if (p != "" && types[p] != "directory") return sizes[p] + 0
-            tot = 0
-            n = child_cnt[p]
-            for (i = 1; i <= n; i++) {
-                c = child_list[p, i]
-                tot += cum_size(c)
-            }
-            return tot
-        }
-        function emit_node(rel, depth_rem,   i, n, first, c) {
+        function emit_node(rel, depth_rem,   i, n, first) {
             printf "{\"name\":\"%s\",\"type\":\"%s\"", esc(basename_of(rel)), types[rel]
             if (with_stats) {
                 if (types[rel] == "directory") {
-                    printf ",\"size\":%d,\"children_count\":%d", cum_size(rel), child_cnt[rel] + 0
+                    printf ",\"size\":%.0f,\"children_count\":%d", total[rel], nchild[rel]
                 } else {
-                    printf ",\"size\":%d", sizes[rel] + 0
+                    printf ",\"size\":%.0f", sizes[rel]
                 }
             }
             if (types[rel] == "directory" && depth_rem > 1 && child_cnt[rel] > 0) {
@@ -213,8 +209,9 @@ __llm_tree_impl() {
         END {
             printf "{\"path\":\"%s\",\"type\":\"directory\"", root
             if (with_stats) {
-                printf ",\"size\":%d,\"children_count\":%d", cum_size(""), child_cnt[""] + 0
+                printf ",\"size\":%.0f,\"children_count\":%d", total[""], nchild[""]
             }
+            if (truncated) printf ",\"truncated\":true"
             printf ",\"children\":["
             n = child_cnt[""]
             first = 1

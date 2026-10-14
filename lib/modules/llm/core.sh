@@ -312,7 +312,7 @@ __llm_has_rg() {
     type -P rg >/dev/null 2>&1
 }
 
-# Compute elapsed microseconds between two $EPOCHREALTIME values (bash 5.0+).
+# Compute elapsed microseconds between two $EPOCHREALTIME values.
 # Pure integer arithmetic — zero forks. Returns 0 if either timestamp is empty.
 # Usage: local us=$(__llm_elapsed_us "$start" "$end")
 __llm_elapsed_us() {
@@ -330,6 +330,15 @@ __llm_elapsed_us() {
     local us=$(((10#$s1 - 10#$s0) * 1000000 + 10#$f1 - 10#$f0))
     [[ $us -lt 0 ]] && us=0
     echo "$us"
+}
+
+# $EPOCHREALTIME stand-in for bash < 5.0: GNU date with microseconds,
+# empty when unavailable (the elapsed time then reads 0).
+__llm_epoch_fallback() {
+    local t
+    t=$(date +%s.%6N 2>/dev/null) || return 0
+    [[ "$t" =~ ^[0-9]+\.[0-9]{6}$ ]] && printf '%s' "$t"
+    return 0
 }
 
 # Format microseconds to a human-readable query time string.
@@ -363,6 +372,7 @@ __llm_db_envelope() {
     local _dbenv_func="$1"
     shift
     local _dbenv_ts=${EPOCHREALTIME:-}
+    [[ -n "$_dbenv_ts" ]] || _dbenv_ts=$(__llm_epoch_fallback)
 
     local _dbenv_out _dbenv_rc _dbenv_stderr
     _dbenv_stderr=$(mktemp)
@@ -370,6 +380,7 @@ __llm_db_envelope() {
     _dbenv_rc=$?
 
     local _dbenv_t1=${EPOCHREALTIME:-}
+    [[ -n "$_dbenv_t1" ]] || _dbenv_t1=$(__llm_epoch_fallback)
     local _dbenv_us _dbenv_qt
     _dbenv_us=$(__llm_elapsed_us "$_dbenv_ts" "$_dbenv_t1")
     _dbenv_qt=$(__llm_format_query_time "$_dbenv_us")
