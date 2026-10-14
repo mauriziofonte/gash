@@ -99,7 +99,7 @@ it "process_kill calls kill for matching processes" bash -c '
   }
 
   export PATH="$ROOT/tests/mocks/bin:$PATH"
-  process_kill my-proc >/dev/null
+  process_kill my-proc --force >/dev/null
 
   grep -q -- "-9 2222" "$MOCK_KILL_LOG"
 '
@@ -295,7 +295,7 @@ it "git_apply_patch fails gracefully when missing args under nounset" bash -c '
   set -e
 
   [[ $rc -ne 0 ]]
-  [[ "$out" == *"Usage:"* ]]
+  [[ "$out" == *"Usage:"* || "$out" == *"USAGE"* ]]
 '
 
 it "git_apply_patch errors outside git repo" bash -c '

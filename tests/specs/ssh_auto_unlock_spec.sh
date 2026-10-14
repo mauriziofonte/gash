@@ -151,3 +151,26 @@ EOF
   [[ "$out" == *"SSH:"*"Identity added"* ]]
   [[ "$out" == *"no identities"* ]]
 '
+
+it "skips keys the agent already holds" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir -p "$tmp/.ssh"
+  : > "$tmp/.ssh/key1"
+  : > "$tmp/.ssh/key2"
+  printf "SSH:~/.ssh/key1=pw\nSSH:~/.ssh/key2=pw2\n" > "$tmp/.gash_env"
+
+  export PATH="$ROOT/tests/mocks/bin:$PATH" MOCK_SSH_AGENT=1 MOCK_SSH_LOADED="SHA256:fp-key1"
+  export MOCK_EXPECT_STDIN="$tmp/sent"
+  HOME="$tmp" GASH_ENV_FILE="$tmp/.gash_env" __GASH_ENV_LOADED="" GASH_SSH_AUTOUNLOCK_RAN= gash_ssh_auto_unlock >/dev/null 2>&1
+  sent="$(base64 -d <"$tmp/sent" 2>/dev/null || base64 -D <"$tmp/sent")"
+  [[ "$sent" == *key2* && "$sent" != *key1* ]]
+
+  # Everything loaded: expect is not run at all.
+  : > "$tmp/sent"
+  MOCK_SSH_LOADED="SHA256:fp-key1 SHA256:fp-key2" HOME="$tmp" GASH_ENV_FILE="$tmp/.gash_env" __GASH_ENV_LOADED="" GASH_SSH_AUTOUNLOCK_RAN= gash_ssh_auto_unlock >/dev/null 2>&1
+  [[ ! -s "$tmp/sent" ]]
+'

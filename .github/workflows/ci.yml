@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHELLCHECK_VERSION: v0.11.0
+  SHFMT_VERSION: v3.14.1
+
+jobs:
+  lint:
+    name: Lint (shellcheck + shfmt)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck and shfmt
+        run: |
+          bin="$HOME/.local/bin"
+          mkdir -p "$bin"
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            | tar -xJ --strip-components=1 -C "$bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          curl -fsSL -o "$bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
+          chmod +x "$bin/shfmt"
+          echo "$bin" >> "$GITHUB_PATH"
+          export PATH="$bin:$PATH"
+          shellcheck --version
+          shfmt --version
+
+      - name: shellcheck (warning and above)
+        run: shellcheck -s bash -S warning $(git ls-files '*.sh' bash_completion .gashrc)
+
+      - name: shfmt (formatting follows .editorconfig)
+        run: shfmt -d $(git ls-files '*.sh' bash_completion .gashrc tests/mocks/bin)
+
+  test:
+    name: Tests (${{ matrix.os }}, ${{ matrix.awk }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+        awk: [gawk, mawk]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk mawk jq sqlite3
+
+      - name: Run test suite
+        run: bash tests/run.sh --awk ${{ matrix.awk }}
+
+  bash-versions:
+    name: Tests (bash ${{ matrix.bash }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        bash: ["4.4", "5.0", "5.1", "5.3"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3 patchelf
+
+      - name: Fetch bash ${{ matrix.bash }}
+        run: bash tests/ci/fetch-bash.sh "${{ matrix.bash }}" "$RUNNER_TEMP/bash-${{ matrix.bash }}"
+
+      - name: Run test suite
+        run: bash tests/run.sh --bash "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash"
+
+  macos:
+    name: Tests (macOS, best effort)
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Homebrew bash and GNU tools
+        run: brew install bash coreutils findutils gnu-sed grep gawk jq
+
+      - name: Run test suite
+        run: |
+          prefix="$(brew --prefix)"
+          gnu="$prefix/opt/coreutils/libexec/gnubin:$prefix/opt/findutils/libexec/gnubin"
+          gnu="$gnu:$prefix/opt/gnu-sed/libexec/gnubin:$prefix/opt/grep/libexec/gnubin"
+          export GASH_TEST_PATH="$gnu:$prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          PATH="$GASH_TEST_PATH" "$prefix/bin/bash" tests/run.sh --bash "$prefix/bin/bash"
+
+  install:
+    name: Installer smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install from this checkout into a clean HOME
+        run: |
+          # The installer clones the repository; a local branch makes this
+          # exact commit installable with GASH_INSTALL_REF.
+          git branch -f ci-under-test HEAD
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          touch "$HOME/.bashrc"
+          GASH_INSTALL_GIT_REPO="$GITHUB_WORKSPACE" GASH_INSTALL_REF=ci-under-test \
+            bash install.sh --assume-yes --quiet
+          test -f "$HOME/.gash/gash.sh"
+          grep -q '>>> GASH START >>>' "$HOME/.bashrc"
+          version="$(GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; echo "$GASH_VERSION"')"
+          test "$version" = "$(cat VERSION)"
+          echo "loaded Gash $version"
+          bash --norc -i -c 'source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null

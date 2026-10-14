@@ -26,10 +26,18 @@
 #   DENY  — always refused, human or headless, no override: irreversible or
 #           system-breaking targets (auth databases, boot, kernel interfaces,
 #           system binaries/libraries, PAM, SSH server config).
-#   ASK   — risky but legitimate (most of /etc, /var, /usr/local, /root):
+#   ASK   — risky but legitimate (most of /etc, /var, /usr/local, /root,
+#           and any path with a .ssh component, at any depth):
 #           interactively a real y/n prompt (needs_confirm_prompt); headless,
 #           refused unless --force is passed explicitly.
 #   ALLOW — /tmp, /var/tmp, /home/<user>/*, relative paths, everything else.
+# Paths are normalized first (//, /./, trailing /, ~/ and ~user/ prefixes),
+# so //etc/shadow is /etc/shadow; any ".." segment is refused.
+#
+# rsync --delete runs without asking only below /tmp, /var/tmp, /home/<user>/
+# and the remote home (relative paths): never on the remote home itself,
+# however it is written (~, ~/, /home/<user>, /Users/<user>, /root), and
+# never on a path with a sensitive component.
 
 # -----------------------------------------------------------------------------
 # Path safety tables
@@ -43,6 +51,9 @@ __REMOTE_DENY_PREFIXES=(
     "/usr/bin" "/usr/sbin" "/usr/lib" "/usr/lib64"
 )
 __REMOTE_ASK_PREFIXES=("/etc" "/var" "/usr/local" "/root")
+# Path components that are sensitive wherever they appear (any depth, any
+# home, absolute or relative): ASK, and never safe for rsync --delete.
+__REMOTE_ASK_COMPONENTS=(".ssh")
 __REMOTE_DELETE_SAFE_PREFIXES=("/tmp" "/var/tmp")
 
 # -----------------------------------------------------------------------------
@@ -57,6 +68,7 @@ __remote_resolve_target() {
     local -n __rrt_out="${2:-__gash_rrt_dummy}"
 
     local resolved
+    __gash_load_env
     if resolved="$(__gash_get_host_target "$input")"; then
         __rrt_out="$resolved"
         return 0
@@ -76,32 +88,91 @@ __remote_resolve_target() {
     return 1
 }
 
-# Classify a remote path: prints "allow", "deny:<prefix>", or "ask:<prefix>".
+# Canonical spelling of a remote path for the safety tables: repeated
+# slashes collapsed, "." segments and trailing slashes dropped, the "~/"
+# prefix reduced to a relative path ("~" alone -> "."). Another user's home
+# is spelled out: "~root" is /root, "~NAME" /home/NAME.
+# Usage: __remote_normalize_path PATH   (prints the normalized path)
+__remote_normalize_path() {
+    local p="${1-}" user rest
+    # shellcheck disable=SC2088 # a literal "~": the remote side expands it
+    if [[ "$p" == "~" || "$p" == "~/"* ]]; then
+        p="${p#"~"}"
+        p="${p#/}"
+        [[ -z "$p" ]] && p="."
+    elif [[ "$p" == "~"* ]]; then
+        user="${p#"~"}"
+        rest=""
+        if [[ "$user" == */* ]]; then
+            rest="/${user#*/}"
+            user="${user%%/*}"
+        fi
+        if [[ "$user" == root ]]; then
+            p="/root$rest"
+        else
+            p="/home/$user$rest"
+        fi
+    fi
+    while [[ "$p" == *//* ]]; do p="${p//\/\//\/}"; done
+    while [[ "$p" == */./* ]]; do p="${p//\/.\//\/}"; done
+    [[ "$p" == ./* ]] && p="${p#./}"
+    [[ "$p" == */. ]] && p="${p%/.}"
+    [[ "$p" == /. ]] && p="/"
+    while [[ "$p" != "/" && "$p" == */ ]]; do p="${p%/}"; done
+    printf '%s' "${p:-.}"
+}
+
+# Print the first __REMOTE_ASK_COMPONENTS entry that is a whole component of
+# a normalized path, compared case-insensitively (macOS homes are).
+# Usage: __remote_sensitive_component PATH   (fails when there is none)
+__remote_sensitive_component() {
+    local lowered="/${1,,}/" comp
+    for comp in "${__REMOTE_ASK_COMPONENTS[@]}"; do
+        if [[ "$lowered" == *"/${comp,,}/"* ]]; then
+            printf '%s' "$comp"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Classify a remote path: prints "allow", "deny:<prefix>", or "ask:<prefix>"
+# ("ask:<component>" for a sensitive component such as .ssh).
 __remote_classify_path() {
     local raw="$1"
-    local path="$raw"
-    [[ "$path" != "/" ]] && path="${path%/}"
+    local path
+    path="$(__remote_normalize_path "$raw")"
 
-    if [[ "$raw" == *".."* ]]; then
+    if [[ "/$path/" == *"/../"* ]]; then
         printf 'deny:path_traversal'
+        return
+    fi
+
+    local prefix
+    if [[ "$path" == /* ]]; then
+        if [[ "$path" == "/" ]]; then
+            printf 'deny:/'
+            return
+        fi
+        for prefix in "${__REMOTE_DENY_PREFIXES[@]}"; do
+            if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
+                printf 'deny:%s' "$prefix"
+                return
+            fi
+        done
+    fi
+
+    # SSH keys and authorized_keys live in any home, and a git or service
+    # account's home can be anywhere (/srv/git/.ssh, /Users/x/.ssh).
+    local comp
+    if comp="$(__remote_sensitive_component "$path")"; then
+        printf 'ask:%s' "$comp"
         return
     fi
     if [[ "$path" != /* ]]; then
         printf 'allow'
         return
     fi
-    if [[ "$path" == "/" ]]; then
-        printf 'deny:/'
-        return
-    fi
-
-    local prefix
-    for prefix in "${__REMOTE_DENY_PREFIXES[@]}"; do
-        if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
-            printf 'deny:%s' "$prefix"
-            return
-        fi
-    done
 
     for prefix in "${__REMOTE_DELETE_SAFE_PREFIXES[@]}"; do
         if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then
@@ -154,10 +225,15 @@ __remote_check_safety() {
 
 # Returns 0 if a path is safe for rsync --delete without extra confirmation.
 __remote_is_safe_for_delete() {
-    local raw="$1"
-    local path="$raw"
-    [[ "$path" != "/" ]] && path="${path%/}"
+    local path
+    path="$(__remote_normalize_path "$1")"
 
+    [[ "/$path/" == *"/../"* ]] && return 1
+    __remote_sensitive_component "$path" >/dev/null && return 1
+    # The home directory itself, however it is written (~, ~/ and ~user
+    # normalize to "."): --delete there would mirror over all of it.
+    [[ "$path" == "." || "$path" == "/root" ]] && return 1
+    [[ "$path" =~ ^/(home|Users)/[^/]+$ ]] && return 1
     [[ "$path" != /* ]] && return 0
 
     local prefix
@@ -167,7 +243,8 @@ __remote_is_safe_for_delete() {
         fi
     done
 
-    [[ "$path" =~ ^/home/[^/]+(/|$) ]] && return 0
+    # Below /home/<user>/ (normalized: no trailing slash, so not the home).
+    [[ "$path" =~ ^/home/[^/]+/ ]] && return 0
 
     return 1
 }
@@ -181,7 +258,7 @@ __remote_check_delete_safety() {
     [[ "$force" -eq 1 ]] && return 0
 
     if __gash_headless_gate_active; then
-        __gash_error "rsync --delete targeting '$remote_path' is outside the safe set (/tmp, /var/tmp, /home/<user>/). Refused in headless mode without --force."
+        __gash_error "rsync --delete targeting '$remote_path' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home; never the home itself or .ssh). Refused in headless mode without --force."
         return 1
     fi
     if needs_confirm_prompt "rsync --delete targeting '$remote_path' can remove files on the remote. Proceed?"; then
@@ -192,11 +269,17 @@ __remote_check_delete_safety() {
 }
 
 __remote_require_scp() {
-    command -v scp >/dev/null 2>&1 || { __gash_error "scp is not installed."; return 1; }
+    command -v scp >/dev/null 2>&1 || {
+        __gash_error "scp is not installed."
+        return 1
+    }
 }
 
 __remote_require_rsync() {
-    command -v rsync >/dev/null 2>&1 || { __gash_error "rsync is not installed."; return 1; }
+    command -v rsync >/dev/null 2>&1 || {
+        __gash_error "rsync is not installed."
+        return 1
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -212,6 +295,7 @@ remote_hosts() {
         "${1-}" && return
 
     local entries
+    __gash_load_env
     entries="$(__gash_get_host_entries)"
 
     if [[ -z "$entries" ]]; then
@@ -229,7 +313,7 @@ remote_hosts() {
         local alias_name="${line%%$'\t'*}"
         local target="${line#*$'\t'}"
         printf "  %-15s %s\n" "$alias_name" "$target"
-    done <<< "$entries"
+    done <<<"$entries"
 }
 
 # -----------------------------------------------------------------------------
@@ -301,7 +385,7 @@ remote_exec() {
         if [[ ${#script_args[@]} -gt 0 ]]; then
             remote_args=" $(printf '%q ' "${script_args[@]}")"
         fi
-        ssh "${ssh_opts[@]}" "$ssh_target" "unset HISTFILE HISTSIZE; bash -s --${remote_args}" <<< "$script_content" || exit_code=$?
+        ssh "${ssh_opts[@]}" "$ssh_target" "unset HISTFILE HISTSIZE; bash -s --${remote_args}" <<<"$script_content" || exit_code=$?
     else
         ssh "${ssh_opts[@]}" "$ssh_target" "unset HISTFILE HISTSIZE; $remote_cmd" || exit_code=$?
     fi
@@ -343,10 +427,10 @@ remote_push() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            -r|--recursive)  recursive=1 ;;
-            -p|--preserve)   preserve=1 ;;
-            --no-progress)   no_progress=1 ;;
-            --force)         force=1 ;;
+            -r | --recursive) recursive=1 ;;
+            -p | --preserve) preserve=1 ;;
+            --no-progress) no_progress=1 ;;
+            --force) force=1 ;;
         esac
     done
 
@@ -356,8 +440,8 @@ remote_push() {
     __remote_require_scp || return 1
 
     local scp_args=(-o ConnectTimeout=10 -o BatchMode=yes)
-    [[ $recursive   -eq 1 ]] && scp_args+=(-r)
-    [[ $preserve    -eq 1 ]] && scp_args+=(-p)
+    [[ $recursive -eq 1 ]] && scp_args+=(-r)
+    [[ $preserve -eq 1 ]] && scp_args+=(-p)
     [[ $no_progress -eq 1 ]] && scp_args+=(-q)
 
     scp "${scp_args[@]}" -- "$src" "${ssh_target}:${dst}"
@@ -381,10 +465,10 @@ remote_pull() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            -r|--recursive)  recursive=1 ;;
-            -p|--preserve)   preserve=1 ;;
-            --no-progress)   no_progress=1 ;;
-            --force)         force=1 ;;
+            -r | --recursive) recursive=1 ;;
+            -p | --preserve) preserve=1 ;;
+            --no-progress) no_progress=1 ;;
+            --force) force=1 ;;
         esac
     done
 
@@ -394,8 +478,8 @@ remote_pull() {
     __remote_require_scp || return 1
 
     local scp_args=(-o ConnectTimeout=10 -o BatchMode=yes)
-    [[ $recursive   -eq 1 ]] && scp_args+=(-r)
-    [[ $preserve    -eq 1 ]] && scp_args+=(-p)
+    [[ $recursive -eq 1 ]] && scp_args+=(-r)
+    [[ $preserve -eq 1 ]] && scp_args+=(-p)
     [[ $no_progress -eq 1 ]] && scp_args+=(-q)
 
     scp "${scp_args[@]}" -- "${ssh_target}:${src}" "$dst"
@@ -420,11 +504,11 @@ remote_sync_push() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            --delete)      delete=1 ;;
-            --dry-run)     dry_run=1 ;;
+            --delete) delete=1 ;;
+            --dry-run) dry_run=1 ;;
             --no-progress) no_progress=1 ;;
-            --force)       force=1 ;;
-            --exclude=*)   excludes+=("${arg#--exclude=}") ;;
+            --force) force=1 ;;
+            --exclude=*) excludes+=("${arg#--exclude=}") ;;
         esac
     done
 
@@ -437,8 +521,8 @@ remote_sync_push() {
     local rsync_rsh="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o ControlPath=${HOME}/.ssh/cm-%C -o ControlPersist=60s"
     local rsync_args=(-az -e "$rsync_rsh")
     [[ $no_progress -eq 1 ]] || rsync_args+=(--info=progress2)
-    [[ $delete      -eq 1 ]] && rsync_args+=(--delete)
-    [[ $dry_run     -eq 1 ]] && rsync_args+=(--dry-run)
+    [[ $delete -eq 1 ]] && rsync_args+=(--delete)
+    [[ $dry_run -eq 1 ]] && rsync_args+=(--dry-run)
     local pat
     for pat in "${excludes[@]}"; do rsync_args+=(--exclude="$pat"); done
 
@@ -464,11 +548,11 @@ remote_sync_pull() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            --delete)      delete=1 ;;
-            --dry-run)     dry_run=1 ;;
+            --delete) delete=1 ;;
+            --dry-run) dry_run=1 ;;
             --no-progress) no_progress=1 ;;
-            --force)       force=1 ;;
-            --exclude=*)   excludes+=("${arg#--exclude=}") ;;
+            --force) force=1 ;;
+            --exclude=*) excludes+=("${arg#--exclude=}") ;;
         esac
     done
 
@@ -484,8 +568,8 @@ remote_sync_pull() {
     local rsync_rsh="ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o ControlPath=${HOME}/.ssh/cm-%C -o ControlPersist=60s"
     local rsync_args=(-az -e "$rsync_rsh")
     [[ $no_progress -eq 1 ]] || rsync_args+=(--info=progress2)
-    [[ $delete      -eq 1 ]] && rsync_args+=(--delete)
-    [[ $dry_run     -eq 1 ]] && rsync_args+=(--dry-run)
+    [[ $delete -eq 1 ]] && rsync_args+=(--delete)
+    [[ $dry_run -eq 1 ]] && rsync_args+=(--dry-run)
     local pat
     for pat in "${excludes[@]}"; do rsync_args+=(--exclude="$pat"); done
 
@@ -508,12 +592,12 @@ alias rspull='remote_sync_pull'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "remote_hosts" \
-    --aliases "rh" \
-    --module "remote" \
-    --short "List configured remote host aliases" \
-    --see-also "remote_exec remote_push remote_pull" \
-    <<'HELP'
+    __gash_register_help "remote_hosts" \
+        --aliases "rh" \
+        --module "remote" \
+        --short "List configured remote host aliases" \
+        --see-also "remote_exec remote_push remote_pull" \
+        <<'HELP'
 USAGE
   remote_hosts
 
@@ -525,12 +609,12 @@ NOTES
   Reads HOST:alias=user@host entries from ~/.gash_env.
 HELP
 
-__gash_register_help "remote_exec" \
-    --aliases "rex" \
-    --module "remote" \
-    --short "Run a command or script on a remote host via multiplexed SSH" \
-    --see-also "remote_hosts remote_push remote_pull" \
-    <<'HELP'
+    __gash_register_help "remote_exec" \
+        --aliases "rex" \
+        --module "remote" \
+        --short "Run a command or script on a remote host via multiplexed SSH" \
+        --see-also "remote_hosts remote_push remote_pull" \
+        <<'HELP'
 USAGE
   remote_exec <alias|user@host> "command"
   remote_exec <alias|user@host> --script FILE [-- arg1 arg2 ...]
@@ -549,12 +633,12 @@ NOTES
   alias (~/.gash_env HOST:) is accepted, never a raw user@host target.
 HELP
 
-__gash_register_help "remote_push" \
-    --aliases "rpush" \
-    --module "remote" \
-    --short "Copy a local file/dir to a remote host via scp" \
-    --see-also "remote_pull remote_sync_push" \
-    <<'HELP'
+    __gash_register_help "remote_push" \
+        --aliases "rpush" \
+        --module "remote" \
+        --short "Copy a local file/dir to a remote host via scp" \
+        --see-also "remote_pull remote_sync_push" \
+        <<'HELP'
 USAGE
   remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]
 
@@ -566,12 +650,12 @@ EXAMPLES
   rpush hnas ./dist /tmp/dist -r
 HELP
 
-__gash_register_help "remote_pull" \
-    --aliases "rpull" \
-    --module "remote" \
-    --short "Copy a remote file/dir to the local machine via scp" \
-    --see-also "remote_push remote_sync_pull" \
-    <<'HELP'
+    __gash_register_help "remote_pull" \
+        --aliases "rpull" \
+        --module "remote" \
+        --short "Copy a remote file/dir to the local machine via scp" \
+        --see-also "remote_push remote_sync_pull" \
+        <<'HELP'
 USAGE
   remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]
 
@@ -580,12 +664,12 @@ EXAMPLES
   rpull viper /tmp/backup.tar.gz ./backup.tar.gz
 HELP
 
-__gash_register_help "remote_sync_push" \
-    --aliases "rspush" \
-    --module "remote" \
-    --short "Sync a local directory to a remote host via rsync" \
-    --see-also "remote_sync_pull remote_push" \
-    <<'HELP'
+    __gash_register_help "remote_sync_push" \
+        --aliases "rspush" \
+        --module "remote" \
+        --short "Sync a local directory to a remote host via rsync" \
+        --see-also "remote_sync_pull remote_push" \
+        <<'HELP'
 USAGE
   remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]
 
@@ -594,12 +678,12 @@ EXAMPLES
   rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'
 HELP
 
-__gash_register_help "remote_sync_pull" \
-    --aliases "rspull" \
-    --module "remote" \
-    --short "Sync a remote directory to the local machine via rsync" \
-    --see-also "remote_sync_push remote_pull" \
-    <<'HELP'
+    __gash_register_help "remote_sync_pull" \
+        --aliases "rspull" \
+        --module "remote" \
+        --short "Sync a remote directory to the local machine via rsync" \
+        --see-also "remote_sync_push remote_pull" \
+        <<'HELP'
 USAGE
   remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]
 
@@ -608,4 +692,4 @@ EXAMPLES
   rspull viper /home/maurizio/projects/foo/ ./foo/
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

@@ -21,6 +21,7 @@
 # Usage: gash_username
 # Returns: username string (never empty, falls back to UNKNOWN_USERNAME)
 gash_username() {
+    needs_help "gash_username" "gash_username" "Print the current user name." "${1-}" && return
     local user_name=""
 
     # Try whoami first (most common)
@@ -57,6 +58,7 @@ gash_username() {
 # Display an inspiring quote from the quotes file.
 # Usage: gash_inspiring_quote
 gash_inspiring_quote() {
+    needs_help "gash_inspiring_quote" "gash_inspiring_quote" "Print a random quote." "${1-}" && return
     local tty_width
     tty_width="$(__gash_tty_width)"
 
@@ -69,25 +71,25 @@ gash_inspiring_quote() {
     fi
 
     local -a quotes
-    mapfile -t quotes < "$quotes_file"
+    mapfile -t quotes <"$quotes_file"
 
     if [[ ${#quotes[@]} -eq 0 ]]; then
         return 1
     fi
 
-    local idx=$(( RANDOM % ${#quotes[@]} ))
+    local idx=$((RANDOM % ${#quotes[@]}))
     local quote="${quotes[$idx]}"
 
     local visible_prefix="Quote: "
     local prefix_len=${#visible_prefix}
-    local wrap_width=$(( tty_width - prefix_len ))
-    if (( wrap_width < 20 )); then
+    local wrap_width=$((tty_width - prefix_len))
+    if ((wrap_width < 20)); then
         wrap_width=80
     fi
 
-    local first=1
+    local first=1 qline
     while IFS= read -r qline; do
-        if (( first )); then
+        if ((first)); then
             printf '%b%s\n' "${__GASH_CYAN}Quote:${__GASH_COLOR_OFF} " "$qline"
             first=0
         else
@@ -100,87 +102,86 @@ gash_inspiring_quote() {
 # Upgrade
 # -----------------------------------------------------------------------------
 
-# Upgrade Gash to the latest version.
+# Highest release tag in a checkout: vX.Y.Z or X.Y, no pre-release suffix,
+# compared as versions (same rule as install.sh).
+# Usage: __gash_latest_tag DIR
+__gash_latest_tag() {
+    git -C "${1:-.}" tag --list --sort=v:refname 2>/dev/null |
+        grep -E '^v?[0-9]+(\.[0-9]+)*$' |
+        tail -n 1
+}
+
+# Report a release tag's signature when it has one. With
+# GASH_REQUIRE_SIGNED=1 an unsigned or unverifiable tag returns 1.
+# Usage: __gash_verify_tag DIR TAG
+__gash_verify_tag() {
+    local dir="$1" tag="$2"
+    if git -C "$dir" cat-file -p "refs/tags/$tag" 2>/dev/null | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----'; then
+        if git -C "$dir" verify-tag "$tag" >/dev/null 2>&1; then
+            __gash_success "Signature of $tag verified."
+            return 0
+        fi
+        __gash_warning "$tag is signed, but the signature could not be verified (is the key in your keyring?)."
+    elif [[ "${GASH_REQUIRE_SIGNED-0}" == "1" ]]; then
+        __gash_warning "$tag is not signed."
+    else
+        return 0
+    fi
+    [[ "${GASH_REQUIRE_SIGNED-0}" == "1" ]] && return 1
+    return 0
+}
+
+# Upgrade Gash to the latest release tag.
 # Usage: gash_upgrade
 gash_upgrade() {
+    needs_help "gash_upgrade" "gash_upgrade" "Upgrade Gash to the latest release (refuses to touch local modifications)." "${1-}" && return
+
     local install_dir="${GASH_DIR:-$HOME/.gash}"
 
-    if [ ! -d "$install_dir" ]; then
-        __gash_error "Failed to change directory to $install_dir"
+    if [[ ! -d "$install_dir/.git" ]]; then
+        __gash_error "Gash is not installed in $install_dir as a git checkout. See https://github.com/mauriziofonte/gash."
         return 1
     fi
 
-    if [ ! -d "$install_dir/.git" ]; then
-        __gash_error "Gash is not installed. Please refer to https://github.com/mauriziofonte/gash."
-        return 1
-    fi
-
-    local current_dir
-    current_dir=$(pwd)
-
-    __gash_info "Upgrading Gash in $install_dir..."
-    cd "$install_dir" || { __gash_error "Failed to change directory to $install_dir"; return 1; }
-
-    # Refuse to proceed over local modifications: the checkout+reset below
-    # would silently destroy them.
-    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+    # The checkout below would overwrite local edits: refuse instead.
+    if [[ -n "$(git -C "$install_dir" status --porcelain 2>/dev/null)" ]]; then
         __gash_error "Working tree at $install_dir has local modifications. Commit, stash, or discard them before upgrading."
-        cd "$current_dir" || true
         return 1
     fi
 
-    if ! command git fetch --tags origin; then
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
-        __gash_error "Failed to fetch updates. Please check your network connection and try manually with 'git fetch'."
+    __gash_info "Checking for a new release in $install_dir..."
+    if ! git -C "$install_dir" fetch --quiet --tags origin; then
+        __gash_error "Failed to fetch updates. Check your network connection, or run 'git fetch' in $install_dir."
         return 1
     fi
 
-    local latest_tag
-    latest_tag="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | head -n1)"
-
-    if [ -z "$latest_tag" ]; then
-        __gash_warning "No tags found. Using the latest commit on the default branch."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+    local latest_tag current_tag
+    latest_tag="$(__gash_latest_tag "$install_dir")"
+    if [[ -z "$latest_tag" ]]; then
+        __gash_warning "No release tags found; leaving $install_dir as it is."
         return 0
     fi
 
-    local current_tag
-    current_tag="$(git describe --tags --abbrev=0 2>/dev/null)"
-
-    if [ "$current_tag" = "$latest_tag" ]; then
+    current_tag="$(git -C "$install_dir" describe --tags --exact-match HEAD 2>/dev/null)" || current_tag=""
+    if [[ "$current_tag" == "$latest_tag" ]]; then
         local release_date
-        release_date="$(git log -1 --format=%ai "$current_tag")"
+        release_date="$(git -C "$install_dir" log -1 --format=%as "$current_tag" 2>/dev/null)"
         __gash_success "Gash is already up-to-date ($current_tag, released on $release_date)."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
         return 0
     fi
 
-    if ! git checkout "$latest_tag" >/dev/null 2>&1; then
-        __gash_error "Failed to checkout tag $latest_tag."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
+    __gash_verify_tag "$install_dir" "$latest_tag" || {
+        __gash_error "GASH_REQUIRE_SIGNED=1 is set; not upgrading to $latest_tag."
+        return 1
+    }
+
+    if ! git -C "$install_dir" -c advice.detachedHead=false checkout --quiet "$latest_tag"; then
+        __gash_error "Failed to check out $latest_tag."
         return 1
     fi
 
-    if ! git reset --hard "$latest_tag" >/dev/null 2>&1; then
-        __gash_error "Failed to reset to $latest_tag."
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
-        return 1
-    fi
-
-    __gash_success "Upgraded Gash to version $latest_tag."
-
-    __gash_info "Cleaning up Git repository..."
-    if ! git reflog expire --expire=now --all; then
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
-        __gash_error "Your version of git is out of date. Please update it!"
-    fi
-    if ! git gc --auto --aggressive --prune=now; then
-        cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
-        __gash_error "Your version of git is out of date. Please update it!"
-    fi
-
-    cd "$current_dir" || { __gash_error "Failed to change directory to $current_dir"; return 1; }
-    __gash_success "Gash upgrade completed."
+    __gash_success "Upgraded Gash ${current_tag:+from $current_tag }to $latest_tag."
+    __gash_info "Open a new terminal (or run 'source ~/.gashrc') to load it."
 }
 
 # -----------------------------------------------------------------------------
@@ -190,20 +191,31 @@ gash_upgrade() {
 # Uninstall Gash and clean up configurations.
 # Usage: gash_uninstall
 gash_uninstall() {
+    needs_help "gash_uninstall" "gash_uninstall" "Remove Gash and its startup block from this account (asks first)." "${1-}" && return
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
 
     if [ ! -d "$gash_dir" ]; then
         __gash_error "Gash is not installed on this system."
         return 1
     fi
+    # rm -rf only a directory that is unmistakably a Gash checkout, never
+    # / or $HOME (a stray GASH_DIR must not turn into a wipe).
+    local real_dir real_home
+    real_dir="$(cd -- "$gash_dir" 2>/dev/null && pwd -P)" || real_dir=""
+    real_home="$(cd -- "$HOME" 2>/dev/null && pwd -P)" || real_home="$HOME"
+    if [[ -z "$real_dir" || "$real_dir" == "/" || "$real_dir" == "$real_home" ||
+        ! -f "$real_dir/gash.sh" || ! -d "$real_dir/lib/core" ]]; then
+        __gash_error "$gash_dir does not look like a Gash installation (no gash.sh and lib/core); refusing to remove it."
+        return 1
+    fi
 
-    __gash_warning "This will remove Gash and its configuration from this account."
+    __gash_warning "This will remove Gash ($real_dir) and its configuration from this account."
     if ! needs_confirm_prompt "Continue?"; then
         __gash_info "Uninstall cancelled."
         return 0
     fi
 
-    local profile_files=( "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" )
+    local profile_files=("$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile")
 
     # Remove Gash sourcing lines from profiles
     # Uses unique delimiters to avoid matching other if/fi blocks
@@ -213,11 +225,11 @@ gash_uninstall() {
                 __gash_info "Removing Gash block from: $profile_file"
                 # Try new format with delimiters first
                 if grep -q '# >>> GASH START >>>' "$profile_file"; then
-                    sed -i.bak '/# >>> GASH START >>>/,/# <<< GASH END <<</d' "$profile_file"
+                    sed -i.gash-uninstall.bak '/# >>> GASH START >>>/,/# <<< GASH END <<</d' "$profile_file"
                 # Fallback: old format - use more specific pattern to avoid catching other fi's
                 elif grep -q '# Load Gash Bash' "$profile_file"; then
                     # Remove exactly: comment + if block + fi (4 lines total)
-                    sed -i.bak '/# Load Gash Bash/{N;N;N;N;d}' "$profile_file"
+                    sed -i.gash-uninstall.bak '/# Load Gash Bash/{N;N;N;N;d}' "$profile_file"
                 fi
             else
                 __gash_info "No Gash block found in: $profile_file; skipping."
@@ -232,47 +244,61 @@ gash_uninstall() {
             __gash_error "Failed to remove ~/.gashrc; please remove it manually."
         fi
     else
-        __gash_info "~/.gashrc not found; skipping."
+        __gash_info "$HOME/.gashrc not found; skipping."
     fi
 
-    # Remove Gash directory
-    if [ -d "$gash_dir" ]; then
-        __gash_info "Removing Gash at $gash_dir..."
-        if ! rm -rf "$gash_dir" 2>/dev/null; then
-            __gash_error "Failed to remove $gash_dir; please remove it manually."
-        fi
-    else
-        __gash_info "$gash_dir not found; skipping."
+    # Remove Gash directory (verified above)
+    __gash_info "Removing Gash at $real_dir..."
+    if ! rm -rf -- "$real_dir" 2>/dev/null; then
+        __gash_error "Failed to remove $real_dir; please remove it manually."
     fi
 
-    # Handle ~/.gash_env (contains credentials - ask user)
-    if [ -f "$HOME/.gash_env" ]; then
-        __gash_warning "Found ~/.gash_env (may contain database credentials)."
-        if needs_confirm_prompt "Remove ~/.gash_env?"; then
-            if rm -f "$HOME/.gash_env" 2>/dev/null; then
-                __gash_info "Removed ~/.gash_env"
+    # Handle the settings file, ~/.gash_env or GASH_ENV_FILE (contains
+    # credentials - ask user)
+    local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    local env_shown="${env_file/#$HOME/\~}"
+    if [ -f "$env_file" ]; then
+        __gash_warning "Found $env_shown (may contain database credentials)."
+        if needs_confirm_prompt "Remove $env_shown?"; then
+            if rm -f -- "$env_file" 2>/dev/null; then
+                __gash_info "Removed $env_shown"
             else
-                __gash_error "Failed to remove ~/.gash_env; please remove it manually."
+                __gash_error "Failed to remove $env_shown; please remove it manually."
             fi
         else
-            __gash_info "Kept ~/.gash_env"
+            __gash_info "Kept $env_shown"
         fi
     fi
 
     __gash_success "Gash uninstalled."
     __gash_info "Restart your terminal to apply changes."
 
-    # Clean up backup files
+    # Clean up the backups sed made above (only ours: a user's own
+    # ~/.bashrc.bak is left alone).
     for profile_file in "${profile_files[@]}"; do
-        if [ -f "${profile_file}.bak" ]; then
-            rm -f "${profile_file}.bak"
-        fi
+        rm -f -- "${profile_file}.gash-uninstall.bak"
     done
 }
 
 # -----------------------------------------------------------------------------
 # Unload
 # -----------------------------------------------------------------------------
+
+# Names Gash defined while loading: present right after it loaded, absent
+# from the snapshot taken before (interactive mode only).
+# Usage: __gash_added_symbols functions|aliases
+__gash_added_symbols() {
+    local post pre name
+    if [[ "${1-}" == "aliases" ]]; then
+        post="${__GASH_POST_ALIASES-}" pre="${__GASH_PRE_ALIASES-}"
+    else
+        post="${__GASH_POST_FUNCS-}" pre="${__GASH_PRE_FUNCS-}"
+    fi
+    while IFS= read -r name; do
+        [[ -n "$name" && "$pre" != *$'\n'"$name"$'\n'* ]] && printf '%s\n' "$name"
+    done <<<"$post"
+    return 0
+}
 
 # Restore the shell state saved before Gash was loaded (best-effort).
 # Usage: gash_unload
@@ -286,84 +312,41 @@ gash_unload() {
         return 1
     fi
 
-    # Restore prompt-related variables
-    if [[ "${__GASH_ORIG_PROMPT_COMMAND_SET-0}" -eq 1 ]]; then
-        PROMPT_COMMAND="${__GASH_ORIG_PROMPT_COMMAND-}"
-    else
-        unset PROMPT_COMMAND
+    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
+    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
+        __gash_prompt_uninstall
     fi
 
-    if [[ "${__GASH_ORIG_PS1_SET-0}" -eq 1 ]]; then
-        PS1="${__GASH_ORIG_PS1-}"
-    else
-        unset PS1
-    fi
+    # Restore variables, shell options and umask from the load-time snapshot.
+    local __gash_entry __gash_key
+    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
+        case "$__gash_entry" in
+            shopt:*)
+                __gash_key="${__gash_entry#shopt:}"
+                if [[ "$__gash_entry" == *=1 ]]; then
+                    shopt -s "${__gash_key%=*}" 2>/dev/null
+                else
+                    shopt -u "${__gash_key%=*}" 2>/dev/null
+                fi
+                ;;
+            umask=*) umask "${__gash_entry#umask=}" ;;
+            *=*)
+                __gash_key="${__gash_entry%%=*}"
+                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
+                ;;
+            *) unset "$__gash_entry" ;;
+        esac
+    done
 
-    if [[ "${__GASH_ORIG_PS2_SET-0}" -eq 1 ]]; then
-        PS2="${__GASH_ORIG_PS2-}"
-    else
-        unset PS2
-    fi
-
-    # Restore history-related settings
-    if [[ "${__GASH_ORIG_HISTCONTROL_SET-0}" -eq 1 ]]; then
-        HISTCONTROL="${__GASH_ORIG_HISTCONTROL-}"
-    else
-        unset HISTCONTROL
-    fi
-
-    if [[ "${__GASH_ORIG_HISTTIMEFORMAT_SET-0}" -eq 1 ]]; then
-        HISTTIMEFORMAT="${__GASH_ORIG_HISTTIMEFORMAT-}"
-    else
-        unset HISTTIMEFORMAT
-    fi
-
-    if [[ "${__GASH_ORIG_HISTSIZE_SET-0}" -eq 1 ]]; then
-        HISTSIZE="${__GASH_ORIG_HISTSIZE-}"
-    else
-        unset HISTSIZE
-    fi
-
-    if [[ "${__GASH_ORIG_HISTFILESIZE_SET-0}" -eq 1 ]]; then
-        HISTFILESIZE="${__GASH_ORIG_HISTFILESIZE-}"
-    else
-        unset HISTFILESIZE
-    fi
-
-    if [[ "${__GASH_ORIG_SHOPT_HISTAPPEND-1}" -eq 0 ]]; then
-        shopt -s histappend
-    else
-        shopt -u histappend
-    fi
-
-    if [[ "${__GASH_ORIG_SHOPT_CHECKWINSIZE-1}" -eq 0 ]]; then
-        shopt -s checkwinsize
-    else
-        shopt -u checkwinsize
-    fi
-
-    if [[ -n "${__GASH_ORIG_UMASK-}" ]]; then
-        umask "${__GASH_ORIG_UMASK}"
-    fi
-
-    # Remove aliases introduced by Gash
-    if [[ -n "${__GASH_ADDED_ALIASES-}" ]]; then
-        local __gash_name
-        while IFS= read -r __gash_name; do
-            [[ -z "${__gash_name-}" ]] && continue
-            unalias "${__gash_name}" >/dev/null 2>&1 || true
-        done <<< "${__GASH_ADDED_ALIASES}"
-    fi
-
-    # Remove functions introduced by Gash
-    if [[ -n "${__GASH_ADDED_FUNCS-}" ]]; then
-        local __gash_name
-        while IFS= read -r __gash_name; do
-            [[ -z "${__gash_name-}" ]] && continue
-            [[ "${__gash_name}" == "gash_unload" ]] && continue
-            unset -f "${__gash_name}" >/dev/null 2>&1 || true
-        done <<< "${__GASH_ADDED_FUNCS}"
-    fi
+    # Remove aliases and functions introduced by Gash.
+    local __gash_name
+    while IFS= read -r __gash_name; do
+        [[ -n "$__gash_name" ]] && { unalias "$__gash_name" >/dev/null 2>&1 || true; }
+    done < <(__gash_added_symbols aliases)
+    while IFS= read -r __gash_name; do
+        [[ -z "$__gash_name" || "$__gash_name" == "gash_unload" ]] && continue
+        unset -f "$__gash_name" >/dev/null 2>&1 || true
+    done < <(__gash_added_symbols functions)
 
     # Per-prefix function sweep: the load-time snapshot misses functions
     # defined AFTER it was taken (alias loader, prompt.sh, completion,
@@ -383,14 +366,7 @@ gash_unload() {
         [[ -z "${__gash_var}" ]] && continue
         unset "${__gash_var}" >/dev/null 2>&1 || true
     done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
-    unset BASH_NAME FQDN >/dev/null 2>&1 || true
-
-    # Clear internal snapshot variables
-    unset __GASH_SNAPSHOT_TAKEN __GASH_PRE_FUNCS __GASH_PRE_ALIASES __GASH_ADDED_FUNCS __GASH_ADDED_ALIASES \
-        __GASH_ORIG_PS1_SET __GASH_ORIG_PS1 __GASH_ORIG_PS2_SET __GASH_ORIG_PS2 __GASH_ORIG_PROMPT_COMMAND_SET __GASH_ORIG_PROMPT_COMMAND \
-        __GASH_ORIG_HISTCONTROL_SET __GASH_ORIG_HISTCONTROL __GASH_ORIG_HISTTIMEFORMAT_SET __GASH_ORIG_HISTTIMEFORMAT \
-        __GASH_ORIG_HISTSIZE_SET __GASH_ORIG_HISTSIZE __GASH_ORIG_HISTFILESIZE_SET __GASH_ORIG_HISTFILESIZE \
-        __GASH_ORIG_SHOPT_HISTAPPEND __GASH_ORIG_SHOPT_CHECKWINSIZE __GASH_ORIG_UMASK
+    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
 
     unset __gash_name
 
@@ -419,29 +395,49 @@ gash_doctor() {
     done
 
     # Local color scope (respects env, TTY, --no-color)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
-    local issues=0
+    local issues=0 f mod tool name
+    local H="${__GASH_BOLD_WHITE-}" O="${__GASH_COLOR_OFF-}"
 
     __gash_info "Gash Doctor — checking installation (v${GASH_VERSION:-unknown})..."
     echo ""
 
-    # 1. Core files
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Core Files:${__GASH_COLOR_OFF-\033[0m}"
-    local core_files=("$gash_dir/gash.sh" "$gash_dir/lib/core/config.sh" "$gash_dir/lib/core/output.sh" "$gash_dir/lib/core/utils.sh" "$gash_dir/lib/core/validation.sh")
+    # 1. Runtime
+    printf '%s\n' "${H}Runtime:${O}"
+    if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4))); then
+        __gash_success "  bash ${BASH_VERSION}"
+    else
+        __gash_error "  bash ${BASH_VERSION} — Gash needs 4.4 or newer"
+        issues=$((issues + 1))
+    fi
+    local -a load_errors=(${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"})
+    if ((${#load_errors[@]} == 0)); then
+        __gash_success "  all files loaded"
+    else
+        for f in "${load_errors[@]}"; do
+            __gash_error "  failed to load ${f}"
+            issues=$((issues + 1))
+        done
+    fi
+
+    # 2. Core files
+    printf '%s\n' "${H}Core Files:${O}"
+    local core_files=(gash.sh lib/core/output.sh lib/core/help.sh lib/core/utils.sh lib/core/validation.sh lib/core/config.sh
+        lib/shell/terminal.sh lib/shell/history.sh lib/shell/prompt.sh lib/shell/banner.sh lib/aliases/_loader.sh)
     for f in "${core_files[@]}"; do
-        if [[ -f "$f" ]]; then
-            __gash_success "  $(basename "$f")"
+        if [[ -f "$gash_dir/$f" ]]; then
+            __gash_success "  $f"
         else
-            __gash_error "  $(basename "$f") — MISSING"
+            __gash_error "  $f — MISSING"
             issues=$((issues + 1))
         fi
     done
 
-    # 2. Modules
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Modules:${__GASH_COLOR_OFF-\033[0m}"
-    local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo)
+    # 3. Modules
+    printf '%s\n' "${H}Modules:${O}"
+    local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo remote node php)
     for mod in "${expected_modules[@]}"; do
         if [[ -f "$gash_dir/lib/modules/${mod}.sh" ]]; then
             __gash_success "  ${mod}"
@@ -451,13 +447,13 @@ gash_doctor() {
         fi
     done
 
-    # 3. Config file
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}Configuration:${__GASH_COLOR_OFF-\033[0m}"
+    # 4. Config file and settings
+    printf '%s\n' "${H}Configuration:${O}"
     local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
     if [[ -f "$env_file" ]]; then
         local perms
-        perms=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file" 2>/dev/null || echo "unknown")
-        if [[ "$perms" == "600" ]]; then
+        perms=$(stat -L -c '%a' "$env_file" 2>/dev/null || stat -L -f '%Lp' "$env_file" 2>/dev/null || echo "unknown")
+        if [[ "$perms" == "600" || "$perms" == "400" ]]; then
             __gash_success "  $env_file (permissions: $perms)"
         else
             __gash_warning "  $env_file (permissions: $perms — should be 600)"
@@ -466,9 +462,12 @@ gash_doctor() {
     else
         __gash_info "  $env_file — not found (optional, run gash_env_init to create)"
     fi
+    for name in ${__GASH_SETTINGS_KNOWN-}; do
+        [[ -n "${!name+x}" ]] && printf '    %s=%s\n' "$name" "${!name}"
+    done
 
-    # 4. External tools
-    echo -e "${__GASH_BOLD_WHITE-\e[1;37m}External Tools:${__GASH_COLOR_OFF-\033[0m}"
+    # 5. External tools
+    printf '%s\n' "${H}External Tools:${O}"
     local tools=(git curl jq sqlite3 docker)
     for tool in "${tools[@]}"; do
         if type -P "$tool" >/dev/null 2>&1; then
@@ -478,7 +477,7 @@ gash_doctor() {
         fi
     done
 
-    # 5. Summary
+    # 6. Summary
     echo ""
     if [[ $issues -eq 0 ]]; then
         __gash_success "All checks passed."
@@ -493,375 +492,230 @@ alias gdoctor='gash_doctor'
 # Reference Card
 # -----------------------------------------------------------------------------
 
-# Display comprehensive Gash reference card with all functions and aliases.
-# Usage: gash [SECTION]
-# Sections: git, files, system, docker, nav, llm, all (default: summary)
-gash() {
-    local section="${1:-}"
-    local W='\033[1;37m'    # White bold
-    local C='\033[0;36m'    # Cyan
-    local Y='\033[0;33m'    # Yellow
-    local G='\033[0;32m'    # Green
-    local M='\033[0;35m'    # Magenta
-    local D='\033[0;90m'    # Dark gray
-    local R='\033[0m'       # Reset
+# Topics of the reference card, generated from the help registry (functions)
+# and from lib/aliases/*.sh (aliases), so the card cannot drift from the code.
+# Format: topic|help modules|alias files|description
+__GASH_CARD_TOPICS=(
+    "files|files||Largest files and folders, tree stats, archives, backups"
+    "system|system sysinfo utils|safety colors general|Processes, ports, services, disks, history, WSL"
+    "nav||navigation|Directory navigation and listings"
+    "git|git|git|Tags, patches, repository repair, git shortcuts"
+    "docker|docker docker-compose|docker|Containers and Compose stacks"
+    "remote|remote ssh||Hosts from ~/.gash_env: exec, push, pull, sync"
+    "dev|php node|php|PHP and Node.js versions per project"
+    "llm|llm||Read-only JSON tools for AI agents"
+    "ai|ai||Ask Claude or Gemini from the terminal"
+    "gash|gash||Help, doctor, configuration, upgrade"
+)
 
-    # Honor the runtime color gate (headless, NO_COLOR, pipe)
-    if ! __gash_use_color; then
-        W=''; C=''; Y=''; G=''; M=''; D=''; R=''
+# Static alias list of one lib/aliases file: "name<TAB>expansion" lines.
+# The expansion of an alias defined in this shell is taken from the shell
+# (it shows the real flags); functions use the comment line above them.
+__gash_card_aliases() {
+    local file="${GASH_DIR:-$HOME/.gash}/lib/aliases/${1-}.sh"
+    [[ -r "$file" ]] || return 0
+    local name value
+    while IFS=$'\t' read -r name value; do
+        [[ -n "${BASH_ALIASES[$name]+x}" ]] && value="${BASH_ALIASES[$name]}"
+        # "ls -> ls" (color flags off) teaches nothing.
+        [[ "$value" == "$name" ]] && continue
+        printf '%s\t%s\n' "$name" "$value"
+    done < <("${__GASH_AWK:-awk}" '
+        function unq(s) {
+            if (s ~ /^".*"$/ || s ~ /^\047.*\047$/) s = substr(s, 2, length(s) - 2)
+            return s
+        }
+        /^[ \t]*#/ { comment = $0; sub(/^[ \t]*#[ \t]*/, "", comment); next }
+        /^[ \t]*function [A-Za-z0-9_.-]+ \{/ {
+            n = $0; sub(/^[ \t]*function /, "", n); sub(/ .*/, "", n)
+            if (!(n in seen) && n != "help") { seen[n] = 1; print n "\t" comment }
+            comment = ""; next
+        }
+        /^[ \t]*alias [^$"\047=]+=/ {
+            line = $0; sub(/^[ \t]*alias /, "", line)
+            n = line; sub(/=.*/, "", n)
+            v = line; sub(/^[^=]*=/, "", v); sub(/[ \t]+#.*$/, "", v)
+            v = unq(v); gsub(/ ?\$__gash_[A-Za-z_]+/, "", v)
+            if (!(n in seen)) { seen[n] = 1; print n "\t" v }
+            comment = ""; next
+        }
+        /__gash_add_docker_alias "[^"]*" "[^"]*" "[^"]*"/ {
+            split($0, q, "\"")
+            if (!(q[4] in seen)) { seen[q[4]] = 1; print q[4] "\t" q[6] }
+            next
+        }
+        { comment = "" }
+    ' "$file")
+}
+
+# Usage line of a registered function, without the function name.
+__gash_card_usage() {
+    local fn="$1" body="${__GASH_HELP_REGISTRY[$1]-}" line found=0
+    while IFS= read -r line; do
+        if ((found)); then
+            line="${line#"${line%%[![:space:]]*}"}"
+            [[ -z "$line" ]] && continue
+            [[ "$line" == "$fn"* ]] && line="${line#"$fn"}" && line="${line# }"
+            printf '%s' "$line"
+            return 0
+        fi
+        [[ "$line" == USAGE* ]] && found=1
+    done <<<"$body"
+}
+
+# Functions of the help modules MODULES (space separated), sorted.
+__gash_card_functions() {
+    local mod fn
+    for fn in "${!__GASH_HELP_MODULE[@]}"; do
+        for mod in $1; do
+            if [[ "${__GASH_HELP_MODULE[$fn]}" == "$mod" ]]; then printf '%s\n' "$fn"; fi
+        done
+    done | sort
+}
+
+# Print one topic: functions table, then the alias grid.
+__gash_card_topic() {
+    local topic="$1" modules="$2" alias_files="$3" desc="$4"
+    local A="${__GASH_COLOR_ACCENT}" G="${__GASH_GREEN}" M="${__GASH_COLOR_MUTED}" B="${__GASH_BOLD}" R="${__GASH_COLOR_OFF}"
+    __gash_use_color || { A="" G="" M="" B="" R=""; }
+
+    printf '\n  %s%s%s  %s%s%s\n\n' "$B" "${topic^^}" "$R" "$M" "$desc" "$R"
+
+    local fns fn usage al
+    fns="$(__gash_card_functions "$modules")"
+    if [[ -n "$fns" ]]; then
+        {
+            printf 'FUNCTION\tALIAS\tUSAGE\tDESCRIPTION\n'
+            while IFS= read -r fn; do
+                usage="$(__gash_card_usage "$fn")"
+                ((${#usage} > 30)) && usage="${usage:0:29}${__GASH_GLYPH_ELLIPSIS}"
+                al="${__GASH_HELP_ALIASES[$fn]-}"
+                printf '%s\t%s\t%s\t%s\n' "$fn" "${al// /, }" "$usage" "${__GASH_HELP_SHORT[$fn]-}"
+            done <<<"$fns"
+        } | __gash_table --indent 2 --fit --color 1:"$A" --color 2:"$G" --color 3:"$M"
     fi
 
-    # bash has no local functions: the __gash_ref_* helpers below become
-    # global on every call. Drop them on return so they never leak into the
-    # caller's namespace (and gash_unload has nothing stale to chase).
-    trap 'unset -f __gash_ref_header __gash_ref_section __gash_ref_fn __gash_ref_alias \
-        __gash_ref_git __gash_ref_files __gash_ref_system __gash_ref_docker __gash_ref_nav \
-        __gash_ref_gash __gash_ref_llm __gash_ref_ai __gash_ref_php __gash_ref_summary 2>/dev/null' RETURN
+    local f entries=() name value
+    for f in $alias_files; do
+        while IFS=$'\t' read -r name value; do
+            [[ -n "$name" ]] && entries+=("$name"$'\t'"$value")
+        done < <(__gash_card_aliases "$f")
+    done
+    ((${#entries[@]} > 0)) || return 0
 
-    # Header
-    __gash_ref_header() {
-        echo
-        echo -e "${W}╔══════════════════════════════════════════════════════════════════════════════╗${R}"
-        echo -e "${W}║${R}  ${C}G${Y}a${M}s${G}h${R} ${W}Reference Card${R}                                        ${D}v${GASH_VERSION:-1.3.3}${R}  ${W}║${R}"
-        echo -e "${W}╚══════════════════════════════════════════════════════════════════════════════╝${R}"
-    }
+    # Grid: as many "name  expansion" columns as the terminal holds.
+    local namew=0 valw=0 e
+    for e in "${entries[@]}"; do
+        name="${e%%$'\t'*}" value="${e#*$'\t'}"
+        ((${#name} > namew)) && namew=${#name}
+        ((${#value} > valw)) && valw=${#value}
+    done
+    ((valw > 26)) && valw=26
+    local cellw=$((namew + 2 + valw + 3)) cols
+    cols=$((($(__gash_tty_width) - 2) / cellw))
+    ((cols < 1)) && cols=1
+    ((cols > 3)) && cols=3
 
-    # Section header
-    __gash_ref_section() {
-        echo
-        echo -e "${W}━━━ $1 ━━━${R}"
-    }
-
-    # Function entry: name (alias) args - description
-    __gash_ref_fn() {
-        local name="$1" alias="$2" args="$3" desc="$4"
-        if [[ -n "$alias" ]]; then
-            printf "  ${Y}%-18s${R} ${G}%-6s${R} ${C}%-20s${R} ${D}%s${R}\n" "$name" "($alias)" "$args" "$desc"
+    [[ -n "$fns" ]] && echo
+    printf '  %sAliases%s\n' "$B" "$R"
+    local i=0
+    for e in "${entries[@]}"; do
+        name="${e%%$'\t'*}" value="${e#*$'\t'}"
+        ((${#value} > valw)) && value="${value:0:valw-1}${__GASH_GLYPH_ELLIPSIS}"
+        ((i % cols == 0)) && printf '  '
+        i=$((i + 1))
+        if ((i % cols == 0 || i == ${#entries[@]})); then
+            printf '%s%-*s%s  %s%s%s\n' "$G" "$namew" "$name" "$R" "$M" "$value" "$R"
         else
-            printf "  ${Y}%-18s${R} ${D}%-6s${R} ${C}%-20s${R} ${D}%s${R}\n" "$name" "" "$args" "$desc"
+            printf '%s%-*s%s  %s%-*s%s   ' "$G" "$namew" "$name" "$R" "$M" "$valw" "$value" "$R"
         fi
+    done
+}
+
+# Gash reference card, generated from the help registry and the alias files.
+# Usage: gash [TOPIC|all] [--no-color]
+gash() {
+    if [[ "${1-}" == migrate ]]; then
+        shift
+        gash_migrate "$@"
+        return
+    fi
+    local no_color=0 topic="" a
+    for a in "$@"; do
+        case "$a" in
+            --no-color) no_color=1 ;;
+            -h | --help) topic="--help" ;;
+            *) topic="$a" ;;
+        esac
+    done
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
+    [[ "$topic" == "--help" ]] && {
+        __gash_help_display gash
+        return 0
     }
-
-    # Alias entry: alias - description
-    __gash_ref_alias() {
-        local name="$1" desc="$2"
-        printf "  ${G}%-12s${R} ${D}%s${R}\n" "$name" "$desc"
-    }
-
-    # Git section
-    __gash_ref_git() {
-        __gash_ref_section "GIT"
-
-        echo -e "  ${W}Functions:${R}"
-        __gash_ref_fn "git_list_tags" "glt" "" "List all local and remote tags"
-        __gash_ref_fn "git_add_tag" "gat" "TAG [MSG]" "Create and push annotated tag"
-        __gash_ref_fn "git_delete_tag" "gdt" "TAG" "Delete tag locally and remote"
-        __gash_ref_fn "git_dump_revisions" "gdr" "FILE" "Dump all revisions of a file"
-        __gash_ref_fn "git_apply_patch" "gap" "MAIN FEAT COMMIT" "Apply patch from feature branch"
-
-        echo -e "  ${W}Log (run gl --help):${R}"
-        __gash_ref_alias "gl" "Compact log with graph"
-        __gash_ref_alias "gla" "All branches with graph"
-        __gash_ref_alias "glo" "Ultra-compact oneline"
-        __gash_ref_alias "glg" "Graph focused (first-parent)"
-        __gash_ref_alias "gls" "Log with file statistics"
-        __gash_ref_alias "glf FILE" "File history with patches"
-
-        echo -e "  ${W}Status & Diff:${R}"
-        __gash_ref_alias "gst" "git status"
-        __gash_ref_alias "gs" "git status -sb (short)"
-        __gash_ref_alias "gd" "git diff"
-        __gash_ref_alias "gds" "git diff --staged"
-        __gash_ref_alias "gdw" "git diff --word-diff"
-
-        echo -e "  ${W}Add & Commit:${R}"
-        __gash_ref_alias "ga" "git add"
-        __gash_ref_alias "gaa" "git add --all"
-        __gash_ref_alias "gc" "git commit"
-        __gash_ref_alias "gcm" "git commit -m"
-        __gash_ref_alias "gca" "git commit --amend"
-        __gash_ref_alias "gcan" "git commit --amend --no-edit"
-
-        echo -e "  ${W}Push & Pull:${R}"
-        __gash_ref_alias "gp" "git push"
-        __gash_ref_alias "gpf" "git push --force-with-lease"
-        __gash_ref_alias "gpl" "git pull"
-        __gash_ref_alias "gplr" "git pull --rebase"
-
-        echo -e "  ${W}Branch:${R}"
-        __gash_ref_alias "gb" "git branch"
-        __gash_ref_alias "gba" "git branch -a"
-        __gash_ref_alias "gbd" "git branch -d"
-        __gash_ref_alias "gbD" "git branch -D (force)"
-        __gash_ref_alias "gco" "git checkout"
-        __gash_ref_alias "gcb" "git checkout -b"
-        __gash_ref_alias "gsw" "git switch"
-        __gash_ref_alias "gswc" "git switch -c"
-
-        echo -e "  ${W}Stash:${R}"
-        __gash_ref_alias "gsh" "git stash"
-        __gash_ref_alias "gshp" "git stash pop"
-        __gash_ref_alias "gshl" "git stash list"
-        __gash_ref_alias "gsha" "git stash apply"
-
-        echo -e "  ${W}Reset & Rebase:${R}"
-        __gash_ref_alias "grh" "git reset HEAD"
-        __gash_ref_alias "grh1" "git reset HEAD~1"
-        __gash_ref_alias "grhh" "git reset --hard HEAD"
-        __gash_ref_alias "grb" "git rebase"
-        __gash_ref_alias "grbc" "git rebase --continue"
-        __gash_ref_alias "grba" "git rebase --abort"
-
-        echo -e "  ${W}Remote:${R}"
-        __gash_ref_alias "gf" "git fetch"
-        __gash_ref_alias "gfa" "git fetch --all --prune"
-        __gash_ref_alias "gr" "git remote -v"
-    }
-
-    # Files section
-    __gash_ref_files() {
-        __gash_ref_section "FILES"
-
-        __gash_ref_fn "files_largest" "flf" "[PATH]" "List top 100 largest files"
-        __gash_ref_fn "dirs_largest" "dld" "[PATH]" "List top 100 largest directories"
-        __gash_ref_fn "dirs_find_large" "dfl" "[--size S] [DIR]" "Find dirs larger than SIZE"
-        __gash_ref_fn "dirs_list_empty" "dle" "[PATH]" "List all empty directories"
-        __gash_ref_fn "archive_extract" "axe" "FILE [DIR]" "Extract archives (tar/zip/gz/...)"
-        __gash_ref_fn "file_backup" "fbk" "FILE" "Create timestamped backup"
-    }
-
-    # System section
-    __gash_ref_system() {
-        __gash_ref_section "SYSTEM"
-
-        echo -e "  ${W}Process & Ports:${R}"
-        __gash_ref_fn "process_find" "pf" "NAME" "Search for process by name"
-        __gash_ref_fn "process_kill" "pk" "NAME" "Kill all processes by name"
-        __gash_ref_fn "port_kill" "ptk" "PORT" "Kill processes on port"
-        __gash_ref_fn "services_stop" "svs" "[--force]" "Stop Apache/MySQL/Redis/Docker"
-
-        echo -e "  ${W}History:${R}"
-        __gash_ref_fn "history_grep" "hg" "PATTERN" "Search history (colored)"
-        __gash_ref_fn "hgrep" "" "PATTERN [OPTS]" "Smart search: -n -j -E -c -r"
-        echo -e "    ${D}Options: -n LIMIT  -j JSON  -E regex  -c count  -r reverse  -H no-color${R}"
-
-        echo -e "  ${W}Info & Utils:${R}"
-        __gash_ref_fn "disk_usage" "du2" "" "Disk usage by filesystem type"
-        __gash_ref_fn "ip_public" "myip" "" "Get public IP address"
-        __gash_ref_fn "sudo_last" "plz" "[CMD]" "Run last/given command with sudo"
-        __gash_ref_fn "mkdir_cd" "mkcd" "DIR" "Create directory and cd into it"
-    }
-
-    # Docker section
-    __gash_ref_docker() {
-        __gash_ref_section "DOCKER"
-
-        echo -e "  ${W}Functions:${R}"
-        __gash_ref_fn "docker_stop_all" "dsa" "" "Stop all containers"
-        __gash_ref_fn "docker_start_all" "daa" "" "Start all containers"
-        __gash_ref_fn "docker_prune_all" "dpa" "" "Remove all resources"
-
-        echo -e "  ${W}Container:${R}"
-        __gash_ref_alias "dcls" "docker container ls -a"
-        __gash_ref_alias "dclsr" "docker container ls (running)"
-        __gash_ref_alias "dstop" "docker stop"
-        __gash_ref_alias "dstart" "docker start"
-        __gash_ref_alias "dexec" "docker exec -it"
-        __gash_ref_alias "drm" "docker rm"
-        __gash_ref_alias "dlogs" "docker logs -f"
-        __gash_ref_alias "dinspect" "docker inspect"
-
-        echo -e "  ${W}Image:${R}"
-        __gash_ref_alias "dils" "docker image ls"
-        __gash_ref_alias "drmi" "docker rmi"
-        __gash_ref_alias "dirm" "docker image prune -a"
-
-        echo -e "  ${W}Compose (basic):${R}"
-        __gash_ref_alias "dc" "docker-compose"
-        __gash_ref_alias "dcup" "docker-compose up -d"
-        __gash_ref_alias "dcdown" "docker-compose down"
-        __gash_ref_alias "dclogs" "docker-compose logs -f"
-        __gash_ref_alias "dcps" "docker-compose ps"
-        __gash_ref_alias "dcb" "docker-compose build"
-        __gash_ref_alias "dcrestart" "docker-compose restart"
-
-        echo -e "  ${W}Compose (smart upgrade):${R}"
-        __gash_ref_fn "docker_compose_check" "dcc" "[PATH]" "Check for updates"
-        __gash_ref_fn "docker_compose_upgrade" "dcup2" "[PATH] [--dry-run]" "Upgrade services"
-        __gash_ref_fn "docker_compose_scan" "dcscan" "[PATH] [--depth N]" "Scan for compose files"
-        echo -e "    ${D}Only upgrades mutable tags (latest, main). Use --force for pinned.${R}"
-    }
-
-    # Navigation section
-    __gash_ref_nav() {
-        __gash_ref_section "NAVIGATION"
-
-        echo -e "  ${W}Listing:${R}"
-        __gash_ref_alias "ll" "ls -l (long)"
-        __gash_ref_alias "la" "ls -la (all)"
-        __gash_ref_alias "lash" "ls -lash (detailed)"
-        __gash_ref_alias "l" "ls -CF (compact)"
-        __gash_ref_alias "sl" "ls (typo fix)"
-
-        echo -e "  ${W}Directory:${R}"
-        __gash_ref_alias ".." "cd .."
-        __gash_ref_alias "..." "cd ../.."
-        __gash_ref_alias "...." "cd ../../.."
-        __gash_ref_alias ".4 / .5" "cd up 4/5 levels"
-        __gash_ref_alias "cls" "clear"
-        __gash_ref_alias "path" "Show PATH entries"
-
-        if grep -qi "microsoft" /proc/version 2>/dev/null; then
-            echo -e "  ${W}WSL:${R}"
-            __gash_ref_fn "wsl_restart" "wr" "" "Restart WSL (saves history)"
-            __gash_ref_fn "wsl_shutdown" "wsd" "" "Shutdown WSL (saves history)"
-            __gash_ref_fn "wsl_explorer" "wex" "[PATH]" "Open Windows Explorer"
-            __gash_ref_fn "wsl_taskmanager" "wtm" "" "Open Windows Task Manager"
-        fi
-    }
-
-    # Gash management section
-    __gash_ref_gash() {
-        __gash_ref_section "GASH MANAGEMENT"
-
-        __gash_ref_fn "gash" "" "[SECTION]" "This reference card"
-        __gash_ref_fn "gash_help" "" "[TOPIC]" "Bash help + Gash commands"
-        __gash_ref_fn "gash_upgrade" "" "" "Upgrade to latest version"
-        __gash_ref_fn "gash_uninstall" "" "" "Uninstall Gash"
-        __gash_ref_fn "gash_doctor" "gdoctor" "" "Health check installation"
-        __gash_ref_fn "gash_unload" "" "" "Restore pre-Gash shell state"
-        __gash_ref_fn "gash_inspiring_quote" "" "" "Display inspiring quote"
-        __gash_ref_fn "gash_env_init" "" "" "Create ~/.gash_env template"
-        __gash_ref_fn "gash_db_list" "" "" "List database connections"
-        __gash_ref_fn "gash_db_test" "" "NAME" "Test database connection"
-        __gash_ref_fn "gash_ssh_auto_unlock" "" "" "Auto-unlock SSH keys"
-    }
-
-    # LLM section
-    __gash_ref_llm() {
-        __gash_ref_section "LLM UTILITIES (for AI Agents)"
-        echo -e "  ${D}All output JSON. No short aliases. Use via gash-exec.sh${R}"
-
-        echo -e "  ${W}Files:${R}"
-        __gash_ref_fn "llm_tree" "" "[--text] [PATH]" "Directory tree (JSON)"
-        __gash_ref_fn "llm_find" "" "PATTERN [PATH]" "Find files"
-        __gash_ref_fn "llm_grep" "" "PATTERN [PATH]" "Search code"
-        __gash_ref_fn "llm_project" "" "[PATH]" "Detect project type"
-        __gash_ref_fn "llm_config" "" "[PATH]" "Read config (no .env)"
-
-        echo -e "  ${W}Database:${R}"
-        __gash_ref_fn "llm_db_query" "" "\"SQL\" -c CONN" "Read-only SQL"
-        __gash_ref_fn "llm_db_tables" "" "-c CONN" "List tables"
-        __gash_ref_fn "llm_db_schema" "" "TABLE -c CONN" "Table schema"
-        __gash_ref_fn "llm_db_sample" "" "TABLE -c CONN" "Sample rows"
-
-        echo -e "  ${W}Git:${R}"
-        __gash_ref_fn "llm_git_status" "" "" "Status (JSON)"
-        __gash_ref_fn "llm_git_diff" "" "" "Diff stats (JSON)"
-        __gash_ref_fn "llm_git_log" "" "[--limit N]" "Commits (JSON)"
-
-        echo -e "  ${W}System:${R}"
-        __gash_ref_fn "llm_exec" "" "COMMAND" "Safe command execution"
-        __gash_ref_fn "llm_ports" "" "" "Listening ports"
-        __gash_ref_fn "llm_procs" "" "[--name N]" "Processes"
-        __gash_ref_fn "llm_env" "" "" "Env vars (no secrets)"
-
-        echo -e "  ${W}Docker:${R}"
-        __gash_ref_fn "llm_docker_check" "" "[PATH]" "Compose update check (JSON)"
-    }
-
-    # AI section
-    __gash_ref_ai() {
-        __gash_ref_section "AI-POWERED"
-
-        echo -e "  ${W}Interactive:${R}"
-        __gash_ref_fn "ai_ask" "ask" "[provider]" "Interactive AI chat"
-        __gash_ref_fn "ai_query" "ask" "[provider] \"query\"" "Non-interactive AI query"
-
-        echo -e "  ${W}System Analysis:${R}"
-        __gash_ref_fn "ai_sysinfo" "sysinfo_ai" "[provider] [--raw]" "AI system analysis"
-        __gash_ref_fn "sysinfo" "si" "[section] [--llm]" "System enumeration"
-        echo -e "    ${D}Sections: identity storage services auth network security webstack mail infra system all${R}"
-        echo -e "    ${D}--llm: compact output for AI token minimization${R}"
-        echo -e "    ${D}--raw: dump collected data without API call${R}"
-    }
-
-    # PHP section
-    __gash_ref_php() {
-        __gash_ref_section "PHP & COMPOSER"
-        echo -e "  ${D}Aliases: php[VERSION] composer[VERSION] (e.g., php81, composer82)${R}"
-        echo -e "  ${D}Versions: 5.6, 7.0-7.4, 8.0-8.4 (if installed)${R}"
-        echo -e "  ${D}Flags: -d allow_url_fopen=1 -d memory_limit=2048M${R}"
-
-        __gash_ref_alias "composer-packages-update" "Global package update"
-        __gash_ref_alias "composer-self-update" "Composer self-update"
-    }
-
-    # Summary (default)
-    __gash_ref_summary() {
-        __gash_ref_header
-        echo
-        echo -e "  ${W}Usage:${R} gash [section]"
-        echo
-        echo -e "  ${W}Sections:${R}"
-        echo -e "    ${Y}git${R}      Git functions + 40+ aliases"
-        echo -e "    ${Y}files${R}    File operations (find, backup, extract)"
-        echo -e "    ${Y}system${R}   Process, ports, history, services"
-        echo -e "    ${Y}docker${R}   Container management + compose"
-        echo -e "    ${Y}nav${R}      Navigation aliases (ls, cd)"
-        echo -e "    ${Y}llm${R}      LLM/AI agent utilities"
-        echo -e "    ${Y}ai${R}       AI chat + system analysis"
-        echo -e "    ${Y}php${R}      PHP & Composer version aliases"
-        echo -e "    ${Y}gash${R}     Gash management functions"
-        echo -e "    ${Y}all${R}      Show everything"
-        echo
-        echo -e "  ${W}Quick Reference:${R}"
-        echo -e "    ${G}gl${R}       Git log          ${G}gst${R}      Git status"
-        echo -e "    ${G}gaa${R}      Git add all      ${G}gcm${R}      Git commit -m"
-        echo -e "    ${G}gp${R}       Git push         ${G}gpl${R}      Git pull"
-        echo -e "    ${G}hgrep${R}    Smart history    ${G}pf${R}       Process find"
-        echo -e "    ${G}flf${R}      Largest files    ${G}axe${R}      Extract archive"
-        echo -e "    ${G}dsa${R}      Docker stop all  ${G}dcup${R}     Compose up"
-        echo
-        echo -e "  ${D}Tip: Run 'gash all' for complete reference${R}"
-    }
-
-    # Main dispatch
-    case "$section" in
-        git)    __gash_ref_header; __gash_ref_git ;;
-        files)  __gash_ref_header; __gash_ref_files ;;
-        system) __gash_ref_header; __gash_ref_system ;;
-        docker) __gash_ref_header; __gash_ref_docker ;;
-        nav|navigation) __gash_ref_header; __gash_ref_nav ;;
-        llm)    __gash_ref_header; __gash_ref_llm ;;
-        ai)     __gash_ref_header; __gash_ref_ai ;;
-        php)    __gash_ref_header; __gash_ref_php ;;
-        gash|management) __gash_ref_header; __gash_ref_gash ;;
-        all)
-            __gash_ref_header
-            __gash_ref_git
-            __gash_ref_files
-            __gash_ref_system
-            __gash_ref_docker
-            __gash_ref_nav
-            __gash_ref_php
-            __gash_ref_llm
-            __gash_ref_ai
-            __gash_ref_gash
-            ;;
-        -h|--help|help)
-            __gash_ref_summary
-            ;;
-        "")
-            __gash_ref_summary
-            ;;
-        *)
-            echo -e "${Y}Unknown section:${R} $section"
-            echo -e "Run ${G}gash${R} to see available sections."
-            return 1
-            ;;
+    case "$topic" in
+        navigation) topic="nav" ;;
+        management) topic="gash" ;;
+        php | node) topic="dev" ;;
     esac
 
+    local P="${__GASH_COLOR_PRIMARY}" B="${__GASH_BOLD}" M="${__GASH_COLOR_MUTED}" G="${__GASH_GREEN}" A="${__GASH_COLOR_ACCENT}" R="${__GASH_COLOR_OFF}"
+    __gash_use_color || { P="" B="" M="" G="" A="" R=""; }
+    local dot="$__GASH_GLYPH_DOT" entry t mods files desc
+
+    if [[ -n "$topic" && "$topic" != all ]]; then
+        for entry in "${__GASH_CARD_TOPICS[@]}"; do
+            IFS='|' read -r t mods files desc <<<"$entry"
+            [[ "$t" == "$topic" ]] && break
+            t=""
+        done
+        if [[ -z "$t" ]]; then
+            local names=() e
+            for e in "${__GASH_CARD_TOPICS[@]}"; do names+=("${e%%|*}"); done
+            __gash_error "Unknown topic: $topic. Topics: ${names[*]}, all"
+            return 1
+        fi
+    fi
+
+    local nfn=${#__GASH_HELP_REGISTRY[@]}
+    echo
+    __gash_box --color "$P" \
+        "${B}Gash${R} ${GASH_VERSION-} ${M}${dot} Bash for humans and AI agents${R}" \
+        "${M}${nfn} functions ${dot} gash <topic> ${dot} gash_help <name>${R}"
+
+    if [[ -n "$topic" && "$topic" != all ]]; then
+        __gash_card_topic "$t" "$mods" "$files" "$desc"
+        echo
+        return 0
+    fi
+    if [[ "$topic" == all ]]; then
+        for entry in "${__GASH_CARD_TOPICS[@]}"; do
+            IFS='|' read -r t mods files desc <<<"$entry"
+            __gash_card_topic "$t" "$mods" "$files" "$desc"
+        done
+        echo
+        return 0
+    fi
+
+    # Overview: one row per topic, then where to go next.
+    echo
+    {
+        printf 'TOPIC\tFUNCTIONS\tALIASES\tWHAT\n'
+        local nf na f
+        for entry in "${__GASH_CARD_TOPICS[@]}"; do
+            IFS='|' read -r t mods files desc <<<"$entry"
+            nf=$(__gash_card_functions "$mods" | grep -c .)
+            na=0
+            for f in $files; do na=$((na + $(__gash_card_aliases "$f" | grep -c .))); done
+            printf '%s\t%s\t%s\t%s\n' "$t" "$nf" "$na" "$desc"
+        done
+    } | __gash_table --indent 2 --right 2,3 --fit --color 1:"$A"
+    echo
+    printf '  %sgash <topic>%s        functions and aliases of a topic, e.g. %sgash git%s\n' "$G" "$R" "$G" "$R"
+    printf '  %sgash all%s            the whole card\n' "$G" "$R"
+    printf '  %sgash_help <name>%s    full help with examples, e.g. %sgash_help flf%s\n' "$G" "$R" "$G" "$R"
+    printf '  %sgash_help --search%s  search every help page\n' "$G" "$R"
+    printf '  %sgash_doctor%s         check the installation\n' "$G" "$R"
     echo
 }
 
@@ -879,7 +733,7 @@ gash_help() {
     for a in "$@"; do
         case "$a" in
             --no-color) no_color=1 ;;
-            *)          filtered+=("$a") ;;
+            *) filtered+=("$a") ;;
         esac
     done
     set -- "${filtered[@]}"
@@ -889,14 +743,13 @@ gash_help() {
     # If colors must be suppressed (env, TTY, or --no-color flag), locally
     # shadow the module-wide __GASH_* vars to empty. Propagates via dynamic
     # scoping to __gash_help_display / _search / _list called below.
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
     local W="${__GASH_BOLD_WHITE-\033[1;37m}"
     local C="${__GASH_CYAN-\033[0;36m}"
     local G="${__GASH_GREEN-\033[0;32m}"
     local M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
-    local Y="${__GASH_YELLOW-\033[0;33m}"
     local R="${__GASH_COLOR_OFF-\033[0m}"
 
     # --bash: delegate to builtin help
@@ -925,9 +778,10 @@ gash_help() {
         echo
         echo -e "  ${W}Search results for '${keyword}':${R}"
         echo
-        __gash_help_search "$keyword"
+        local rc=0
+        __gash_help_search "$keyword" || rc=$?
         echo
-        return $?
+        return "$rc"
     fi
 
     # --short: one-line description
@@ -1021,18 +875,25 @@ gash_help() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "gash" \
-    --module "gash" \
-    --short "Gash reference card with all functions and aliases" \
-    --see-also "gash_help gash_doctor" \
-    <<'HELP'
+    __gash_register_help "gash" \
+        --module "gash" \
+        --short "Gash reference card with all functions and aliases" \
+        --see-also "gash_help gash_doctor" \
+        <<'HELP'
 USAGE
-  gash                 Show summary overview
-  gash SECTION         Show a specific section
-  gash all             Show everything
+  gash [TOPIC|all] [--no-color]
+  gash migrate [...]   Same as gash_migrate (Gash 1.x configuration)
 
-SECTIONS
-  git, files, system, docker, nav, llm, ai, php, gash
+  gash                 Overview: topics with function and alias counts
+  gash TOPIC           Functions (alias, usage, description) and aliases of a topic
+  gash all             The whole card, every topic
+
+TOPICS
+  files, system, nav, git, docker, remote, dev, llm, ai, gash
+  (navigation, management, php and node still work as old names)
+
+  The card is built from the help registry and the alias files, so it
+  always lists exactly what this Gash ships.
 
 EXAMPLES
   # Quick reminder of all git aliases
@@ -1041,18 +902,18 @@ EXAMPLES
   # See what Docker functions are available
   gash docker
 
-  # See every function and alias in Gash
-  gash all
+  # See every function and alias in Gash, plain text for a file
+  gash all --no-color > gash-card.txt
 
   # Check AI-related functions
   gash ai
 HELP
 
-__gash_register_help "gash_help" \
-    --module "gash" \
-    --short "Help system with examples, search, and discovery" \
-    --see-also "gash" \
-    <<'HELP'
+    __gash_register_help "gash_help" \
+        --module "gash" \
+        --short "Help system with examples, search, and discovery" \
+        --see-also "gash" \
+        <<'HELP'
 USAGE
   gash_help                    Overview of all functions
   gash_help FUNCTION           Detailed help with real-world examples
@@ -1082,12 +943,12 @@ EXAMPLES
   gash_help --bash cd
 HELP
 
-__gash_register_help "gash_doctor" \
-    --aliases "gdoctor" \
-    --module "gash" \
-    --short "Run health checks on the Gash installation" \
-    --see-also "gash_upgrade gash" \
-    <<'HELP'
+    __gash_register_help "gash_doctor" \
+        --aliases "gdoctor" \
+        --module "gash" \
+        --short "Run health checks on the Gash installation" \
+        --see-also "gash_upgrade gash" \
+        <<'HELP'
 USAGE
   gash_doctor
 
@@ -1101,11 +962,11 @@ NOTES
   Reports missing or misconfigured components.
 HELP
 
-__gash_register_help "gash_upgrade" \
-    --module "gash" \
-    --short "Upgrade Gash to the latest version" \
-    --see-also "gash_doctor gash_uninstall" \
-    <<'HELP'
+    __gash_register_help "gash_upgrade" \
+        --module "gash" \
+        --short "Upgrade Gash to the latest version" \
+        --see-also "gash_doctor gash_uninstall" \
+        <<'HELP'
 USAGE
   gash_upgrade
 
@@ -1119,11 +980,11 @@ NOTES
   and cleans up. Restart your shell after upgrading.
 HELP
 
-__gash_register_help "gash_uninstall" \
-    --module "gash" \
-    --short "Uninstall Gash and clean up configurations" \
-    --see-also "gash_upgrade gash_unload" \
-    <<'HELP'
+    __gash_register_help "gash_uninstall" \
+        --module "gash" \
+        --short "Uninstall Gash and clean up configurations" \
+        --see-also "gash_upgrade gash_unload" \
+        <<'HELP'
 USAGE
   gash_uninstall
 
@@ -1137,11 +998,11 @@ NOTES
   Restart your terminal after uninstalling.
 HELP
 
-__gash_register_help "gash_unload" \
-    --module "gash" \
-    --short "Restore shell state to before Gash was loaded" \
-    --see-also "gash_uninstall" \
-    <<'HELP'
+    __gash_register_help "gash_unload" \
+        --module "gash" \
+        --short "Restore shell state to before Gash was loaded" \
+        --see-also "gash_uninstall" \
+        <<'HELP'
 USAGE
   gash_unload
 
@@ -1159,10 +1020,10 @@ NOTES
   modify any files.
 HELP
 
-__gash_register_help "gash_inspiring_quote" \
-    --module "gash" \
-    --short "Display a random inspiring quote" \
-    <<'HELP'
+    __gash_register_help "gash_inspiring_quote" \
+        --module "gash" \
+        --short "Display a random inspiring quote" \
+        <<'HELP'
 USAGE
   gash_inspiring_quote
 
@@ -1170,11 +1031,11 @@ EXAMPLES
   gash_inspiring_quote
 HELP
 
-__gash_register_help "gash_env_init" \
-    --module "gash" \
-    --short "Create ~/.gash_env configuration template" \
-    --see-also "gash_db_list gash_ai_list gash_ssh_auto_unlock" \
-    <<'HELP'
+    __gash_register_help "gash_env_init" \
+        --module "gash" \
+        --short "Create ~/.gash_env configuration template" \
+        --see-also "gash_db_list gash_ai_list gash_ssh_auto_unlock" \
+        <<'HELP'
 USAGE
   gash_env_init [--force]
 
@@ -1193,11 +1054,11 @@ NOTES
   Always set permissions: chmod 600 ~/.gash_env
 HELP
 
-__gash_register_help "gash_db_list" \
-    --module "gash" \
-    --short "List configured database connections" \
-    --see-also "gash_db_test gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_db_list" \
+        --module "gash" \
+        --short "List configured database connections" \
+        --see-also "gash_db_test gash_env_init" \
+        <<'HELP'
 USAGE
   gash_db_list
 
@@ -1212,11 +1073,11 @@ NOTES
   Supported drivers: mysql, mariadb, pgsql
 HELP
 
-__gash_register_help "gash_db_test" \
-    --module "gash" \
-    --short "Test a database connection" \
-    --see-also "gash_db_list gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_db_test" \
+        --module "gash" \
+        --short "Test a database connection" \
+        --see-also "gash_db_list gash_env_init" \
+        <<'HELP'
 USAGE
   gash_db_test [CONNECTION_NAME]
 
@@ -1229,11 +1090,11 @@ EXAMPLES
   gash_db_test legacy
 HELP
 
-__gash_register_help "gash_ai_list" \
-    --module "gash" \
-    --short "List configured AI providers" \
-    --see-also "ai_ask ai_query gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_ai_list" \
+        --module "gash" \
+        --short "List configured AI providers" \
+        --see-also "ai_ask ai_query gash_env_init" \
+        <<'HELP'
 USAGE
   gash_ai_list
 
@@ -1248,4 +1109,4 @@ NOTES
   The first configured provider is used by default.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

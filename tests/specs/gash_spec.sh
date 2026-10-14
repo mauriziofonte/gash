@@ -51,6 +51,21 @@ it "gash_doctor detects missing modules gracefully" bash -c '
     [[ "$out" == *"MISSING"* ]] || [[ "$out" == *"not found"* ]]
 '
 
+it "gash_doctor reports files that failed to load" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/modules/gash.sh"
+    export GASH_DIR="$ROOT"
+    __GASH_LOAD_ERRORS=("lib/modules/broken.sh: exit 2")
+
+    out="$(gash_doctor --no-color 2>&1)"
+    [[ "$out" == *"failed to load lib/modules/broken.sh: exit 2"* ]]
+    [[ "$out" == *"issue(s) found"* ]]
+    [[ "$out" == *"bash ${BASH_VERSION}"* ]]
+'
+
 it "gdoctor alias resolves to gash_doctor" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"

@@ -71,13 +71,13 @@ __gash_fs_parse_size() {
     unit="${unit%B}"
     unit="${unit%i}"
     case "${unit^^}" in
-        "")         printf '%s' "$num" ;;
-        K)          printf '%s' $(( num * 1024 )) ;;
-        M)          printf '%s' $(( num * 1024 * 1024 )) ;;
-        G)          printf '%s' $(( num * 1024 * 1024 * 1024 )) ;;
-        T)          printf '%s' $(( num * 1024 * 1024 * 1024 * 1024 )) ;;
-        P)          printf '%s' $(( num * 1024 * 1024 * 1024 * 1024 * 1024 )) ;;
-        *)          return 1 ;;
+        "") printf '%s' "$num" ;;
+        K) printf '%s' $((num * 1024)) ;;
+        M) printf '%s' $((num * 1024 * 1024)) ;;
+        G) printf '%s' $((num * 1024 * 1024 * 1024)) ;;
+        T) printf '%s' $((num * 1024 * 1024 * 1024 * 1024)) ;;
+        P) printf '%s' $((num * 1024 * 1024 * 1024 * 1024 * 1024)) ;;
+        *) return 1 ;;
     esac
 }
 
@@ -88,19 +88,22 @@ __gash_fs_parse_size() {
 # Usage: __gash_fs_human_size 1048576
 __gash_fs_human_size() {
     local bytes="${1-0}"
-    [[ "$bytes" =~ ^[0-9]+$ ]] || { printf '0 B'; return 0; }
+    [[ "$bytes" =~ ^[0-9]+$ ]] || {
+        printf '0 B'
+        return 0
+    }
 
     local -a units=(B KiB MiB GiB TiB PiB EiB)
     local i=0
     local size="$bytes"
     local rem=0
-    while (( size >= 1024 && i < ${#units[@]} - 1 )); do
-        rem=$(( (size * 10 / 1024) % 10 ))
-        size=$(( size / 1024 ))
-        i=$(( i + 1 ))
+    while ((size >= 1024 && i < ${#units[@]} - 1)); do
+        rem=$(((size * 10 / 1024) % 10))
+        size=$((size / 1024))
+        i=$((i + 1))
     done
 
-    if (( i == 0 )); then
+    if ((i == 0)); then
         printf '%d %s' "$size" "${units[$i]}"
     else
         printf '%d.%d %s' "$size" "$rem" "${units[$i]}"
@@ -117,9 +120,7 @@ __gash_fs_color_ok() {
     local is_machine="${2-0}"
     [[ "$no_color" -eq 1 ]] && return 1
     [[ "$is_machine" -eq 1 ]] && return 1
-    [[ -n "${NO_COLOR-}" ]] && return 1
-    [[ -t 1 ]] || return 1
-    return 0
+    __gash_use_color
 }
 
 # Check whether GNU du supports --exclude (BSD du does not).
@@ -141,6 +142,21 @@ __gash_fs_du_has_exclude() {
 #   - paths under /proc, /sys, /dev, /boot, /root, /etc/shadow-like
 #   - non-directories
 #
+
+# Succeeds when PATH is, or is under, a protected location (virtual
+# filesystems, devices, boot and root's home). Collapses "//" and "/./".
+# Usage: __gash_fs_forbidden ABSOLUTE_PATH
+__gash_fs_forbidden() {
+    local p="${1-}" forbidden
+    while [[ "$p" == *//* ]]; do p="${p//\/\//\/}"; done
+    while [[ "$p" == */./* ]]; do p="${p//\/.\//\/}"; done
+    p="${p%/.}"
+    for forbidden in /proc /sys /dev /boot /root; do
+        [[ "$p" == "$forbidden" || "$p" == "$forbidden"/* ]] && return 0
+    done
+    return 1
+}
+
 # Prints the resolved absolute path on stdout. Returns 1 on rejection.
 # Usage: resolved=$(__gash_fs_safe_path "$input" "$allow_root" "$is_machine") || return 1
 __gash_fs_safe_path() {
@@ -154,8 +170,18 @@ __gash_fs_safe_path() {
     # "$HOMEuser" path, so leave it untouched)
     if [[ "$input" == "~" ]]; then
         input="$HOME"
-    elif [[ "$input" == "~/"* ]]; then
+    elif [[ "$input" == \~/* ]]; then
         input="$HOME/${input#\~/}"
+    fi
+
+    # Protected locations are refused before any existence check, so the
+    # answer does not depend on the platform having /proc or /sys.
+    local lexical="$input"
+    [[ "$lexical" == /* ]] || lexical="$PWD/$lexical"
+    if __gash_fs_forbidden "$lexical"; then
+        __gash_fs_error "forbidden_path" "$lexical" "FATAL" \
+            "This path is protected and cannot be scanned" "$is_machine"
+        return 1
     fi
 
     # Distinguish "does not exist" from "exists but is not a directory" to give
@@ -188,15 +214,12 @@ __gash_fs_safe_path() {
         return 1
     fi
 
-    # Forbidden prefixes (match llm.sh forbidden paths)
-    local forbidden
-    for forbidden in /proc /sys /dev /boot /root; do
-        if [[ "$resolved" == "$forbidden" || "$resolved" == "$forbidden"/* ]]; then
-            __gash_fs_error "forbidden_path" "$resolved" "FATAL" \
-                "This path is protected and cannot be scanned" "$is_machine"
-            return 1
-        fi
-    done
+    # Also check where symlinks lead.
+    if __gash_fs_forbidden "$resolved"; then
+        __gash_fs_error "forbidden_path" "$resolved" "FATAL" \
+            "This path is protected and cannot be scanned" "$is_machine"
+        return 1
+    fi
 
     printf '%s' "$resolved"
     return 0
@@ -246,15 +269,7 @@ __gash_fs_error() {
     local is_machine="${5-0}"
 
     if [[ "$is_machine" -eq 1 ]]; then
-        local esc_details esc_hint
-        esc_details=$(__gash_json_escape "$details")
-        esc_hint=$(__gash_json_escape "$hint")
-        local json="{\"error\":\"$err_type\""
-        [[ -n "$details" ]] && json+=",\"details\":\"$esc_details\""
-        json+=",\"action\":\"$action\",\"recoverable\":false"
-        [[ -n "$hint" ]] && json+=",\"hint\":\"$esc_hint\""
-        json+="}"
-        printf '%s\n' "$json" >&2
+        __gash_json_error "$err_type" "$details" "$action" "$hint"
     else
         local msg="$err_type"
         [[ -n "$details" ]] && msg="$msg: $details"
@@ -293,7 +308,7 @@ __gash_fs_now_ms() {
         local s="${EPOCHREALTIME%%.*}"
         local f="${EPOCHREALTIME#*.}"
         while [[ ${#f} -lt 6 ]]; do f="${f}0"; done
-        printf '%s' $(( 10#$s * 1000 + 10#${f:0:3} ))
+        printf '%s' $((10#$s * 1000 + 10#${f:0:3}))
         return 0
     fi
     date +%s%3N 2>/dev/null || echo 0
@@ -302,12 +317,12 @@ __gash_fs_now_ms() {
 # Format elapsed milliseconds to a compact string: "42ms", "1.23s", "2m3s".
 __gash_fs_format_elapsed() {
     local ms="${1-0}"
-    if (( ms < 1000 )); then
+    if ((ms < 1000)); then
         printf '%dms' "$ms"
-    elif (( ms < 60000 )); then
-        printf '%d.%02ds' $(( ms / 1000 )) $(( (ms % 1000) / 10 ))
+    elif ((ms < 60000)); then
+        printf '%d.%02ds' $((ms / 1000)) $(((ms % 1000) / 10))
     else
-        printf '%dm%ds' $(( ms / 60000 )) $(( (ms % 60000) / 1000 ))
+        printf '%dm%ds' $((ms / 60000)) $(((ms % 60000) / 1000))
     fi
 }
 
@@ -348,39 +363,104 @@ files_largest() {
     local __a
     for __a in "$@"; do
         [[ "$__a" == "--" ]] && break
-        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+        [[ "$__a" == "--json" ]] && {
+            json_mode=1
+            break
+        }
     done
 
     # Parse arguments (defer semantic validation until after the loop so
     # $json_mode and friends are fully known).
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --limit)            limit="${2-100}"; shift 2 ;;
-            --min-size)         min_size_input="${2-}"; shift 2 ;;
-            --exclude)          excludes+=("${2-}"); shift 2 ;;
-            --depth|--max-depth) max_depth="${2-}"; shift 2 ;;
-            --no-ignore)        no_ignore=1; shift ;;
-            --xdev|--one-filesystem) xdev=1; shift ;;
-            --follow-symlinks|-L) follow=1; shift ;;
-            --allow-root)       allow_root=1; shift ;;
-            --json)             json_mode=1; shift ;;
-            --null|-0)          null_mode=1; shift ;;
-            --human)            human_mode=1; shift ;;
-            --no-human)         human_mode=0; shift ;;
-            --no-color)         no_color=1; shift ;;
-            -h|--help)
-                needs_help "files_largest" "see usage" "" "--help" && return 0 ;;
-            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
+            -n | --limit)
+                limit="${2-100}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --min-size)
+                min_size_input="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --exclude)
+                excludes+=("${2-}")
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --depth | --max-depth)
+                max_depth="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --no-ignore)
+                no_ignore=1
+                shift
+                ;;
+            --xdev | --one-filesystem)
+                xdev=1
+                shift
+                ;;
+            --follow-symlinks | -L)
+                follow=1
+                shift
+                ;;
+            --allow-root)
+                allow_root=1
+                shift
+                ;;
+            --json)
+                json_mode=1
+                shift
+                ;;
+            --null | -0)
+                null_mode=1
+                shift
+                ;;
+            --human)
+                human_mode=1
+                shift
+                ;;
+            --no-human)
+                human_mode=0
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            -h | --help)
+                needs_help "files_largest" "see usage" "" "--help" && return 0
+                ;;
+            --)
+                shift
+                [[ $# -gt 0 ]] && dir="$1"
+                break
+                ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
-                return 1 ;;
+                return 1
+                ;;
             *)
-                dir="$1"; shift ;;
+                dir="$1"
+                shift
+                ;;
         esac
     done
 
     # Semantic validation (after parse, with $json_mode known)
-    [[ "$limit" =~ ^[0-9]+$ ]] || { __gash_fs_error "invalid_limit" "$limit" "RETRY" "Provide a positive integer" "$json_mode"; return 1; }
+    [[ "$limit" =~ ^[0-9]+$ ]] || {
+        __gash_fs_error "invalid_limit" "$limit" "RETRY" "Provide a positive integer" "$json_mode"
+        return 1
+    }
     if [[ -n "$max_depth" && ! "$max_depth" =~ ^[0-9]+$ ]]; then
         __gash_fs_error "invalid_depth" "$max_depth" "RETRY" "Provide a non-negative integer" "$json_mode"
         return 1
@@ -429,29 +509,31 @@ files_largest() {
     # Capture find stderr (permission denials) to count
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
-    # `|| true`: an unreadable subdir (find rc!=0) or SIGPIPE from `head`
-    # closing the pipe early must not kill a `set -euo pipefail` caller.
+    # `|| true`: an unreadable subdir (find rc!=0) must not kill a
+    # `set -euo pipefail` caller. The limit is applied by awk, which reads
+    # to the end: `head` closing the pipe early makes sort print "write
+    # failed: Broken pipe" wherever SIGPIPE is ignored.
     local sorted
     if [[ -n "$err_tmp" ]]; then
-        sorted=$("${find_cmd[@]}" 2>"$err_tmp" \
-            | awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' \
-            | sort -nr -k1,1 -t$'\t' \
-            | head -n "$limit") || true
+        sorted=$("${find_cmd[@]}" 2>"$err_tmp" |
+            awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' |
+            sort -nr -k1,1 -t$'\t' |
+            awk -v n="$limit" 'NR <= n') || true
     else
-        sorted=$("${find_cmd[@]}" 2>/dev/null \
-            | awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' \
-            | sort -nr -k1,1 -t$'\t' \
-            | head -n "$limit") || true
+        sorted=$("${find_cmd[@]}" 2>/dev/null |
+            awk -F'\t' -v min_b="$min_size_bytes" 'NF >= 3 && ($1 + 0) >= min_b' |
+            sort -nr -k1,1 -t$'\t' |
+            awk -v n="$limit" 'NR <= n') || true
     fi
 
     t1=$(__gash_fs_now_ms)
-    elapsed=$(__gash_fs_format_elapsed $(( t1 - t0 )))
+    elapsed=$(__gash_fs_format_elapsed $((t1 - t0)))
 
     local err_count=0
     if [[ -n "$err_tmp" && -s "$err_tmp" ]]; then
-        err_count=$(wc -l < "$err_tmp")
+        err_count=$(wc -l <"$err_tmp")
         rm -f "$err_tmp"
     else
         [[ -n "$err_tmp" ]] && rm -f "$err_tmp"
@@ -463,9 +545,9 @@ files_largest() {
     elif [[ "$null_mode" -eq 1 ]]; then
         # NUL-delimited paths only (for xargs -0); rejoin fields 3..NF so a
         # path is never truncated at an embedded tab
-        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\0", p }'
+        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\n", p }' | tr '\n' '\0'
     else
-        __gash_fs_render_size_list_text "$sorted" "$human_mode" "$no_color" "files"
+        __gash_fs_render_size_list_text "$sorted" "$human_mode" "$no_color" "files" "$elapsed" "$safe_path"
         __gash_fs_scan_warn "$err_count" 0
     fi
 
@@ -500,36 +582,101 @@ dirs_largest() {
     local __a
     for __a in "$@"; do
         [[ "$__a" == "--" ]] && break
-        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+        [[ "$__a" == "--json" ]] && {
+            json_mode=1
+            break
+        }
     done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --limit)            limit="${2-100}"; shift 2 ;;
-            --depth|--max-depth) max_depth="${2-1}"; shift 2 ;;
-            --min-size)         min_size_input="${2-}"; shift 2 ;;
-            --exclude)          excludes+=("${2-}"); shift 2 ;;
-            --no-ignore)        no_ignore=1; shift ;;
-            --xdev|--one-filesystem) xdev=1; shift ;;
-            --allow-root)       allow_root=1; shift ;;
-            --json)             json_mode=1; shift ;;
-            --null|-0)          null_mode=1; shift ;;
-            --human)            human_mode=1; shift ;;
-            --no-human)         human_mode=0; shift ;;
-            --no-color)         no_color=1; shift ;;
-            -h|--help)
-                needs_help "dirs_largest" "see usage" "" "--help" && return 0 ;;
-            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
+            -n | --limit)
+                limit="${2-100}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --depth | --max-depth)
+                max_depth="${2-1}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --min-size)
+                min_size_input="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --exclude)
+                excludes+=("${2-}")
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --no-ignore)
+                no_ignore=1
+                shift
+                ;;
+            --xdev | --one-filesystem)
+                xdev=1
+                shift
+                ;;
+            --allow-root)
+                allow_root=1
+                shift
+                ;;
+            --json)
+                json_mode=1
+                shift
+                ;;
+            --null | -0)
+                null_mode=1
+                shift
+                ;;
+            --human)
+                human_mode=1
+                shift
+                ;;
+            --no-human)
+                human_mode=0
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            -h | --help)
+                needs_help "dirs_largest" "see usage" "" "--help" && return 0
+                ;;
+            --)
+                shift
+                [[ $# -gt 0 ]] && dir="$1"
+                break
+                ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
-                return 1 ;;
+                return 1
+                ;;
             *)
-                dir="$1"; shift ;;
+                dir="$1"
+                shift
+                ;;
         esac
     done
 
-    [[ "$limit" =~ ^[0-9]+$ ]] || { __gash_fs_error "invalid_limit" "$limit" "RETRY" "Provide a positive integer" "$json_mode"; return 1; }
-    [[ "$max_depth" =~ ^[0-9]+$ ]] || { __gash_fs_error "invalid_depth" "$max_depth" "RETRY" "Provide a positive integer" "$json_mode"; return 1; }
+    [[ "$limit" =~ ^[0-9]+$ ]] || {
+        __gash_fs_error "invalid_limit" "$limit" "RETRY" "Provide a positive integer" "$json_mode"
+        return 1
+    }
+    [[ "$max_depth" =~ ^[0-9]+$ ]] || {
+        __gash_fs_error "invalid_depth" "$max_depth" "RETRY" "Provide a positive integer" "$json_mode"
+        return 1
+    }
     [[ "$max_depth" -lt 1 ]] && max_depth=1
     if [[ -n "$min_size_input" ]]; then
         if ! min_size_bytes=$(__gash_fs_parse_size "$min_size_input"); then
@@ -578,7 +725,7 @@ dirs_largest() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # du output: <kb>\t<path>\n. Convert to bytes and filter excluded
     # patterns in awk when GNU exclude unavailable. `|| true`: unreadable
@@ -603,8 +750,14 @@ dirs_largest() {
             -v self="$safe_path" \
             -v min_b="$min_size_bytes" \
             -v fallback_prune="$([[ "$gnu_exclude" -eq 0 && "$no_ignore" -ne 1 ]] && printf 1 || printf 0)" \
-            -v fallback_prune_list="$(IFS='|'; echo "${__GASH_FS_DEFAULT_PRUNE[*]}")" \
-            -v user_excludes="$(IFS='|'; echo "${excludes[*]}")" \
+            -v fallback_prune_list="$(
+                IFS='|'
+                echo "${__GASH_FS_DEFAULT_PRUNE[*]}"
+            )" \
+            -v user_excludes="$(
+                IFS='|'
+                echo "${excludes[*]}"
+            )" \
             '
             BEGIN {
                 if (fallback_prune) {
@@ -642,25 +795,25 @@ dirs_largest() {
     )
 
     t1=$(__gash_fs_now_ms)
-    elapsed=$(__gash_fs_format_elapsed $(( t1 - t0 )))
+    elapsed=$(__gash_fs_format_elapsed $((t1 - t0)))
 
     local err_count=0
     if [[ -n "$err_tmp" && -s "$err_tmp" ]]; then
-        err_count=$(wc -l < "$err_tmp")
+        err_count=$(wc -l <"$err_tmp")
         rm -f "$err_tmp"
     else
         [[ -n "$err_tmp" ]] && rm -f "$err_tmp"
     fi
 
     local sorted
-    sorted=$(printf '%s\n' "$filtered" | sort -nr -k1,1 -t$'\t' | head -n "$limit") || true
+    sorted=$(printf '%s\n' "$filtered" | sort -nr -k1,1 -t$'\t' | awk -v n="$limit" 'NR <= n') || true
 
     if [[ "$json_mode" -eq 1 ]]; then
         __gash_fs_render_size_list_json "$sorted" "$elapsed" "$err_count" "directories"
     elif [[ "$null_mode" -eq 1 ]]; then
-        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\0", p }'
+        printf '%s' "$sorted" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\n", p }' | tr '\n' '\0'
     else
-        __gash_fs_render_size_list_text "$sorted" "$human_mode" "$no_color" "directories"
+        __gash_fs_render_size_list_text "$sorted" "$human_mode" "$no_color" "directories" "$elapsed" "$safe_path"
         __gash_fs_scan_warn "$err_count" 0
     fi
 
@@ -695,32 +848,94 @@ dirs_find_large() {
     local __a
     for __a in "$@"; do
         [[ "$__a" == "--" ]] && break
-        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+        [[ "$__a" == "--json" ]] && {
+            json_mode=1
+            break
+        }
     done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --size)             size_threshold="${2-20M}"; shift 2 ;;
-            --depth|--max-depth) max_depth="${2-}"; shift 2 ;;
-            --limit)            limit="${2-1000}"; shift 2 ;;
-            --exclude)          excludes+=("${2-}"); shift 2 ;;
-            --no-ignore)        no_ignore=1; shift ;;
-            --xdev|--one-filesystem) xdev=1; shift ;;
-            --allow-root)       allow_root=1; shift ;;
-            --with-mtime)       with_mtime=1; shift ;;
-            --json)             json_mode=1; shift ;;
-            --null|-0)          null_mode=1; shift ;;
-            --human)            human_mode=1; shift ;;
-            --no-human)         human_mode=0; shift ;;
-            --no-color)         no_color=1; shift ;;
-            -h|--help)
-                needs_help "dirs_find_large" "see usage" "" "--help" && return 0 ;;
-            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
+            --size)
+                size_threshold="${2-20M}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --depth | --max-depth)
+                max_depth="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            -n | --limit)
+                limit="${2-1000}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --exclude)
+                excludes+=("${2-}")
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --no-ignore)
+                no_ignore=1
+                shift
+                ;;
+            --xdev | --one-filesystem)
+                xdev=1
+                shift
+                ;;
+            --allow-root)
+                allow_root=1
+                shift
+                ;;
+            --with-mtime)
+                with_mtime=1
+                shift
+                ;;
+            --json)
+                json_mode=1
+                shift
+                ;;
+            --null | -0)
+                null_mode=1
+                shift
+                ;;
+            --human)
+                human_mode=1
+                shift
+                ;;
+            --no-human)
+                human_mode=0
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            -h | --help)
+                needs_help "dirs_find_large" "see usage" "" "--help" && return 0
+                ;;
+            --)
+                shift
+                [[ $# -gt 0 ]] && dir="$1"
+                break
+                ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
-                return 1 ;;
+                return 1
+                ;;
             *)
-                dir="$1"; shift ;;
+                dir="$1"
+                shift
+                ;;
         esac
     done
 
@@ -729,7 +944,10 @@ dirs_find_large() {
         __gash_fs_error "invalid_size" "$size_threshold" "RETRY" "Use a size like 20M, 1G, 500K" "$json_mode"
         return 1
     fi
-    [[ "$limit" =~ ^[0-9]+$ ]] || { __gash_fs_error "invalid_limit" "$limit" "RETRY" "Provide a positive integer" "$json_mode"; return 1; }
+    [[ "$limit" =~ ^[0-9]+$ ]] || {
+        __gash_fs_error "invalid_limit" "$limit" "RETRY" "Provide a positive integer" "$json_mode"
+        return 1
+    }
     if [[ -n "$max_depth" && ! "$max_depth" =~ ^[0-9]+$ ]]; then
         __gash_fs_error "invalid_depth" "$max_depth" "RETRY" "Provide a non-negative integer" "$json_mode"
         return 1
@@ -742,7 +960,7 @@ dirs_find_large() {
         if [[ "$json_mode" -eq 1 || "$null_mode" -eq 1 ]]; then human_mode=0; else human_mode=1; fi
     fi
 
-    local threshold_kb=$(( (threshold_bytes + 1023) / 1024 ))
+    local threshold_kb=$(((threshold_bytes + 1023) / 1024))
 
     # Build du command. Default depth = unbounded (matches legacy).
     local -a du_cmd=(du -k)
@@ -776,7 +994,7 @@ dirs_find_large() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local raw
@@ -794,8 +1012,14 @@ dirs_find_large() {
             -v th_kb="$threshold_kb" \
             -v self="$safe_path" \
             -v fallback_prune="$([[ "$gnu_exclude" -eq 0 && "$no_ignore" -ne 1 ]] && printf 1 || printf 0)" \
-            -v fallback_prune_list="$(IFS='|'; echo "${__GASH_FS_DEFAULT_PRUNE[*]}")" \
-            -v user_excludes="$(IFS='|'; echo "${excludes[*]}")" \
+            -v fallback_prune_list="$(
+                IFS='|'
+                echo "${__GASH_FS_DEFAULT_PRUNE[*]}"
+            )" \
+            -v user_excludes="$(
+                IFS='|'
+                echo "${excludes[*]}"
+            )" \
             '
             BEGIN {
                 if (fallback_prune) n_prune = split(fallback_prune_list, prune_arr, "|")
@@ -825,7 +1049,7 @@ dirs_find_large() {
                 if (path_blocked(path)) next
                 printf "%d\t%s\n", kb * 1024, path
             }
-            ' | sort -nr -k1,1 -t$'\t' | head -n "$limit"
+            ' | sort -nr -k1,1 -t$'\t' | awk -v n="$limit" 'NR <= n'
     ) || true
 
     # Enrich with mtime if requested (post-filter, only for matching rows).
@@ -835,8 +1059,8 @@ dirs_find_large() {
             printf '%s\n' "$filtered" | while IFS=$'\t' read -r bytes path; do
                 [[ -z "$path" ]] && continue
                 local mtime
-                mtime=$(find "$path" -maxdepth 10 -type f -printf '%T@\t%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null \
-                        | sort -nr -k1,1 -t$'\t' | head -n1 | cut -f2) || true
+                mtime=$(find "$path" -maxdepth 10 -type f -printf '%T@\t%TY-%Tm-%Td %TH:%TM\n' 2>/dev/null |
+                    sort -nr -k1,1 -t$'\t' | awk -F'\t' 'NR == 1 { print $2 }') || true
                 printf '%s\t%s\t%s\n' "$bytes" "${mtime:-N/A}" "$path"
             done
         )
@@ -845,11 +1069,11 @@ dirs_find_large() {
     fi
 
     t1=$(__gash_fs_now_ms)
-    elapsed=$(__gash_fs_format_elapsed $(( t1 - t0 )))
+    elapsed=$(__gash_fs_format_elapsed $((t1 - t0)))
 
     local err_count=0
     if [[ -n "$err_tmp" && -s "$err_tmp" ]]; then
-        err_count=$(wc -l < "$err_tmp")
+        err_count=$(wc -l <"$err_tmp")
         rm -f "$err_tmp"
     else
         [[ -n "$err_tmp" ]] && rm -f "$err_tmp"
@@ -858,9 +1082,10 @@ dirs_find_large() {
     if [[ "$json_mode" -eq 1 ]]; then
         __gash_fs_render_size_list_json "$enriched" "$elapsed" "$err_count" "directories"
     elif [[ "$null_mode" -eq 1 ]]; then
-        printf '%s' "$enriched" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\0", p }'
+        printf '%s' "$enriched" | awk -F'\t' 'NF>=3 { p = $3; for (i = 4; i <= NF; i++) p = p "\t" $i; printf "%s\n", p }' | tr '\n' '\0'
     else
-        __gash_fs_render_size_list_text "$enriched" "$human_mode" "$no_color" "directories"
+        __gash_fs_render_size_list_text "$enriched" "$human_mode" "$no_color" "directories" "$elapsed" "$safe_path" \
+            "Directories over $size_threshold in $safe_path"
         __gash_fs_scan_warn "$err_count" 0
     fi
 
@@ -893,29 +1118,79 @@ dirs_list_empty() {
     local __a
     for __a in "$@"; do
         [[ "$__a" == "--" ]] && break
-        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+        [[ "$__a" == "--json" ]] && {
+            json_mode=1
+            break
+        }
     done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --min-depth)        min_depth="${2-}"; shift 2 ;;
-            --depth|--max-depth) max_depth="${2-}"; shift 2 ;;
-            --exclude)          excludes+=("${2-}"); shift 2 ;;
-            --ignore-dotfiles)  ignore_dotfiles=1; shift ;;
-            --no-ignore)        no_ignore=1; shift ;;
-            --xdev|--one-filesystem) xdev=1; shift ;;
-            --allow-root)       allow_root=1; shift ;;
-            --null|-0)          null_mode=1; shift ;;
-            --count|-c)         count_only=1; shift ;;
-            --json)             json_mode=1; shift ;;
-            -h|--help)
-                needs_help "dirs_list_empty" "see usage" "" "--help" && return 0 ;;
-            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
+            --min-depth)
+                min_depth="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --depth | --max-depth)
+                max_depth="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --exclude)
+                excludes+=("${2-}")
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --ignore-dotfiles)
+                ignore_dotfiles=1
+                shift
+                ;;
+            --no-ignore)
+                no_ignore=1
+                shift
+                ;;
+            --xdev | --one-filesystem)
+                xdev=1
+                shift
+                ;;
+            --allow-root)
+                allow_root=1
+                shift
+                ;;
+            --null | -0)
+                null_mode=1
+                shift
+                ;;
+            --count | -c)
+                count_only=1
+                shift
+                ;;
+            --json)
+                json_mode=1
+                shift
+                ;;
+            -h | --help)
+                needs_help "dirs_list_empty" "see usage" "" "--help" && return 0
+                ;;
+            --)
+                shift
+                [[ $# -gt 0 ]] && dir="$1"
+                break
+                ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
-                return 1 ;;
+                return 1
+                ;;
             *)
-                dir="$1"; shift ;;
+                dir="$1"
+                shift
+                ;;
         esac
     done
 
@@ -952,7 +1227,7 @@ dirs_list_empty() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local output
@@ -964,7 +1239,7 @@ dirs_list_empty() {
 
     local err_count=0
     if [[ -n "$err_tmp" && -s "$err_tmp" ]]; then
-        err_count=$(wc -l < "$err_tmp")
+        err_count=$(wc -l <"$err_tmp")
         rm -f "$err_tmp"
     else
         [[ -n "$err_tmp" ]] && rm -f "$err_tmp"
@@ -1007,7 +1282,7 @@ dirs_list_empty() {
     fi
 
     if [[ "$null_mode" -eq 1 ]]; then
-        printf '%s' "$output" | awk 'NF { printf "%s\0", $0 }'
+        printf '%s' "$output" | awk 'NF { printf "%s\n", $0 }' | tr '\n' '\0'
     else
         printf '%s\n' "$output"
     fi
@@ -1041,28 +1316,75 @@ tree_stats() {
     local __a
     for __a in "$@"; do
         [[ "$__a" == "--" ]] && break
-        [[ "$__a" == "--json" ]] && { json_mode=1; break; }
+        [[ "$__a" == "--json" ]] && {
+            json_mode=1
+            break
+        }
     done
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --depth|--max-depth) max_depth="${2-}"; shift 2 ;;
-            --top)              top_n="${2-5}"; shift 2 ;;
-            --exclude)          excludes+=("${2-}"); shift 2 ;;
-            --no-ignore)        no_ignore=1; shift ;;
-            --xdev|--one-filesystem) xdev=1; shift ;;
-            --follow-symlinks|-L) follow=1; shift ;;
-            --allow-root)       allow_root=1; shift ;;
-            --json)             json_mode=1; shift ;;
-            --no-color)         no_color=1; shift ;;
-            -h|--help)
-                needs_help "tree_stats" "see usage" "" "--help" && return 0 ;;
-            --) shift; [[ $# -gt 0 ]] && dir="$1"; break ;;
+            --depth | --max-depth)
+                max_depth="${2-}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --top)
+                top_n="${2-5}"
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --exclude)
+                excludes+=("${2-}")
+                shift 2 || {
+                    __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
+                    return 1
+                }
+                ;;
+            --no-ignore)
+                no_ignore=1
+                shift
+                ;;
+            --xdev | --one-filesystem)
+                xdev=1
+                shift
+                ;;
+            --follow-symlinks | -L)
+                follow=1
+                shift
+                ;;
+            --allow-root)
+                allow_root=1
+                shift
+                ;;
+            --json)
+                json_mode=1
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            -h | --help)
+                needs_help "tree_stats" "see usage" "" "--help" && return 0
+                ;;
+            --)
+                shift
+                [[ $# -gt 0 ]] && dir="$1"
+                break
+                ;;
             -*)
                 __gash_fs_error "unknown_option" "$1" "RETRY" "Use --help to see valid flags" "$json_mode"
-                return 1 ;;
+                return 1
+                ;;
             *)
-                dir="$1"; shift ;;
+                dir="$1"
+                shift
+                ;;
         esac
     done
 
@@ -1070,7 +1392,10 @@ tree_stats() {
         __gash_fs_error "invalid_depth" "$max_depth" "RETRY" "Provide a non-negative integer" "$json_mode"
         return 1
     fi
-    [[ "$top_n" =~ ^[0-9]+$ ]] || { __gash_fs_error "invalid_top" "$top_n" "RETRY" "Provide a positive integer" "$json_mode"; return 1; }
+    [[ "$top_n" =~ ^[0-9]+$ ]] || {
+        __gash_fs_error "invalid_top" "$top_n" "RETRY" "Provide a positive integer" "$json_mode"
+        return 1
+    }
 
     local safe_path
     safe_path="$(__gash_fs_safe_path "$dir" "$allow_root" "$json_mode")" || return 1
@@ -1099,7 +1424,7 @@ tree_stats() {
 
     local err_tmp
     err_tmp="$(mktemp)" || err_tmp=""
-    [[ -n "$err_tmp" ]] && trap 'rm -f "$err_tmp"' RETURN
+    [[ -n "$err_tmp" ]] && trap 'command rm -f "$err_tmp"; trap - RETURN' RETURN
 
     # `|| true`: unreadable subdirs must not kill a `set -euo pipefail` caller
     local raw
@@ -1110,11 +1435,11 @@ tree_stats() {
     fi
 
     t1=$(__gash_fs_now_ms)
-    elapsed=$(__gash_fs_format_elapsed $(( t1 - t0 )))
+    elapsed=$(__gash_fs_format_elapsed $((t1 - t0)))
 
     local err_count=0
     if [[ -n "$err_tmp" && -s "$err_tmp" ]]; then
-        err_count=$(wc -l < "$err_tmp")
+        err_count=$(wc -l <"$err_tmp")
         rm -f "$err_tmp"
     else
         [[ -n "$err_tmp" ]] && rm -f "$err_tmp"
@@ -1230,11 +1555,11 @@ tree_stats() {
     local key rest
     while IFS=$'\t' read -r key rest; do
         case "$key" in
-            files_total)    files_total="$rest" ;;
-            dirs_total)     dirs_total="$rest" ;;
-            size_total)     size_total="$rest" ;;
-            max_depth)      max_depth_val="$rest" ;;
-            avg_file_size)  avg_file_size="$rest" ;;
+            files_total) files_total="$rest" ;;
+            dirs_total) dirs_total="$rest" ;;
+            size_total) size_total="$rest" ;;
+            max_depth) max_depth_val="$rest" ;;
+            avg_file_size) avg_file_size="$rest" ;;
             top_count)
                 # rest still tab-separated: ext\tcount\tsize
                 top_count_rows+=("$rest")
@@ -1244,7 +1569,7 @@ tree_stats() {
                 top_size_rows+=("$rest")
                 ;;
         esac
-    done <<< "$stats_ndjson"
+    done <<<"$stats_ndjson"
 
     # Count empty dirs (separate pass — cheap enough and stays accurate).
     # Honors the same xdev/depth/prune/exclude scope as the main walk
@@ -1259,13 +1584,15 @@ tree_stats() {
     empty_count=$("${empty_find[@]}" -type d -empty 2>/dev/null | wc -l) || true
 
     if [[ "$json_mode" -eq 1 ]]; then
-        local esc_path; esc_path=$(__gash_json_escape "$safe_path")
+        local esc_path
+        esc_path=$(__gash_json_escape "$safe_path")
         # Build top_by_count array
         local tc_json="["
         local first=1 row ext cnt sz
         for row in "${top_count_rows[@]}"; do
-            IFS=$'\t' read -r ext cnt sz <<< "$row"
-            local esc_ext; esc_ext=$(__gash_json_escape "$ext")
+            IFS=$'\t' read -r ext cnt sz <<<"$row"
+            local esc_ext
+            esc_ext=$(__gash_json_escape "$ext")
             [[ $first -eq 0 ]] && tc_json+=","
             first=0
             tc_json+="{\"ext\":\"$esc_ext\",\"count\":${cnt:-0},\"size\":${sz:-0}}"
@@ -1275,8 +1602,9 @@ tree_stats() {
         local ts_json="["
         first=1
         for row in "${top_size_rows[@]}"; do
-            IFS=$'\t' read -r ext sz <<< "$row"
-            local esc_ext; esc_ext=$(__gash_json_escape "$ext")
+            IFS=$'\t' read -r ext sz <<<"$row"
+            local esc_ext
+            esc_ext=$(__gash_json_escape "$ext")
             [[ $first -eq 0 ]] && ts_json+=","
             first=0
             ts_json+="{\"ext\":\"$esc_ext\",\"size\":${sz:-0}}"
@@ -1296,8 +1624,18 @@ tree_stats() {
     # Human-readable rendering
     local W="" G="" Y="" C="" M="" R=""
     if __gash_fs_color_ok "$no_color" 0; then
-        W="${__GASH_BOLD_WHITE-}"; G="${__GASH_GREEN-}"; Y="${__GASH_BOLD_YELLOW-}"
-        C="${__GASH_CYAN-}"; M="${__GASH_COLOR_MUTED-\033[38;5;245m}"; R="${__GASH_COLOR_OFF-}"
+        W="${__GASH_BOLD_WHITE-}"
+        G="${__GASH_GREEN-}"
+        Y="${__GASH_BOLD_YELLOW-}"
+        C="${__GASH_CYAN-}"
+        M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
+        R="${__GASH_COLOR_OFF-}"
+    fi
+
+    if __gash_fs_rich_ok; then
+        __gash_fs_tree_stats_rich
+        __gash_fs_scan_warn "$err_count" 0
+        return 0
     fi
 
     echo -e "${W}Tree statistics for${R} ${C}${safe_path}${R}"
@@ -1314,7 +1652,7 @@ tree_stats() {
         echo -e "  ${W}Top ${top_n} extensions by count:${R}"
         local ext cnt sz
         for row in "${top_count_rows[@]}"; do
-            IFS=$'\t' read -r ext cnt sz <<< "$row"
+            IFS=$'\t' read -r ext cnt sz <<<"$row"
             printf '    %s%-12s%s %s%6d%s files  %s%s%s\n' \
                 "$C" "$ext" "$R" "$Y" "$cnt" "$R" "$G" "$(__gash_fs_human_size "${sz:-0}")" "$R"
         done
@@ -1324,7 +1662,7 @@ tree_stats() {
         echo
         echo -e "  ${W}Top ${top_n} extensions by size:${R}"
         for row in "${top_size_rows[@]}"; do
-            IFS=$'\t' read -r ext sz <<< "$row"
+            IFS=$'\t' read -r ext sz <<<"$row"
             printf '    %s%-12s%s %s%s%s\n' \
                 "$C" "$ext" "$R" "$G" "$(__gash_fs_human_size "${sz:-0}")" "$R"
         done
@@ -1332,6 +1670,64 @@ tree_stats() {
 
     __gash_fs_scan_warn "$err_count" 0
     return 0
+}
+
+# Terminal layout of tree_stats: a summary grid, then the top extensions by
+# size and by count with share bars. Reads the caller's locals (dynamic
+# scope): safe_path, files_total, dirs_total, size_total, avg_file_size,
+# max_depth_val, empty_count, elapsed, top_count_rows, top_size_rows, and
+# the colors W G Y C M R.
+__gash_fs_tree_stats_rich() {
+    local B="" A="" off=""
+    if [[ -n "$R" ]]; then B="${__GASH_BOLD-}" A="${__GASH_COLOR_ACCENT-}" off="$R"; fi
+    local nf nd ns ne
+    __gash_group_digits nf "$files_total"
+    __gash_group_digits nd "$dirs_total"
+    __gash_group_digits ns "$size_total"
+    __gash_group_digits ne "$empty_count"
+
+    printf '\n  %sTree statistics for %s%s\n\n' "$B" "$safe_path" "$off"
+    printf '  %s%-12s%s %s%-10s%s  %s%-11s%s %s%s%s %s(%s bytes)%s\n' \
+        "$M" "Files" "$off" "$Y" "$nf" "$off" "$M" "Total size" "$off" "$G" "$(__gash_fs_human_size "$size_total")" "$off" "$M" "$ns" "$off"
+    printf '  %s%-12s%s %s%-10s%s  %s%-11s%s %s%s%s\n' \
+        "$M" "Directories" "$off" "$Y" "$nd" "$off" "$M" "Avg file" "$off" "$G" "$(__gash_fs_human_size "$avg_file_size")" "$off"
+    printf '  %s%-12s%s %s%-10s%s  %s%-11s%s %s%s%s\n' \
+        "$M" "Empty dirs" "$off" "$Y" "$ne" "$off" "$M" "Max depth" "$off" "$Y" "$max_depth_val" "$off"
+
+    local row ext cnt sz bar pct hs n w=0
+    for row in "${top_size_rows[@]}" "${top_count_rows[@]}"; do
+        ext="${row%%$'\t'*}"
+        ((${#ext} > w)) && w=${#ext}
+    done
+    ((w < 8)) && w=8
+
+    if ((${#top_size_rows[@]} > 0)); then
+        printf '\n  %sBy size%s\n' "$B" "$off"
+        for row in "${top_size_rows[@]}"; do
+            IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_bar bar "${sz:-0}" "$size_total" 20
+            pct=0
+            ((size_total > 0)) && pct=$((sz * 1000 / size_total))
+            hs="$(__gash_fs_human_size "${sz:-0}")"
+            printf '  %s%-*s%s  %s%10s%s  %s%s%s%s%s%s  %s%3d.%d%%%s\n' \
+                "$C" "$w" "$ext" "$off" "$G" "$hs" "$off" \
+                "$A" "${bar%%$'\t'*}" "$off" "$M" "${bar#*$'\t'}" "$off" "$M" $((pct / 10)) $((pct % 10)) "$off"
+        done
+    fi
+    if ((${#top_count_rows[@]} > 0)); then
+        printf '\n  %sBy count%s\n' "$B" "$off"
+        for row in "${top_count_rows[@]}"; do
+            IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_bar bar "${cnt:-0}" "$files_total" 20
+            pct=0
+            ((files_total > 0)) && pct=$((cnt * 1000 / files_total))
+            __gash_group_digits n "${cnt:-0}"
+            printf '  %s%-*s%s  %s%10s%s  %s%s%s%s%s%s  %s%3d.%d%%%s\n' \
+                "$C" "$w" "$ext" "$off" "$Y" "$n" "$off" \
+                "$A" "${bar%%$'\t'*}" "$off" "$M" "${bar#*$'\t'}" "$off" "$M" $((pct / 10)) $((pct % 10)) "$off"
+        done
+    fi
+    printf '\n  %sScanned in %s%s\n\n' "$M" "$elapsed" "$off"
 }
 
 # =============================================================================
@@ -1407,15 +1803,113 @@ __gash_fs_render_size_list_json() {
         "$arr_body" "$count" "$total" "$(__gash_fs_human_size "$total")" "$kind" "$scan_time" "$err_count"
 }
 
+# Rich layout only on a terminal: pipes keep the plain "SIZE  PATH" lines.
+__gash_fs_rich_ok() {
+    [[ -t 1 ]]
+}
+
+# Render a size list for a terminal: rank, size, a bar proportional to the
+# largest entry, mtime, the path relative to the scanned root (directory
+# part dimmed, name highlighted), then a footer with count, total and time.
+# Usage: __gash_fs_render_size_list_rich <data> <human_mode> <no_color> <kind> <scan_time> <root> [title]
+__gash_fs_render_size_list_rich() {
+    local data="$1" human_mode="$2" no_color="$3" kind="$4" scan_time="${5-}" root="${6-}" title="${7-}"
+    local c_size="" c_bar="" c_mute="" c_name="" c_head="" c_off=""
+    if __gash_fs_color_ok "$no_color" 0; then
+        c_size="$__GASH_BOLD_YELLOW" c_bar="$__GASH_COLOR_ACCENT" c_mute="$__GASH_COLOR_MUTED"
+        c_head="$__GASH_BOLD" c_off="$__GASH_COLOR_OFF"
+        if [[ "$kind" == directories ]]; then c_name="$__GASH_BOLD_BLUE"; else c_name="$__GASH_BOLD"; fi
+    fi
+    [[ -n "$data" ]] || {
+        printf '\n  %sNo %s matched.%s\n\n' "$c_mute" "$kind" "$c_off"
+        return 0
+    }
+    [[ -n "$title" ]] || title="Largest $kind in $root"
+    printf '\n  %s%s%s\n\n' "$c_head" "$title" "$c_off"
+
+    printf '%s\n' "$data" | "${__GASH_AWK:-awk}" -F'\t' \
+        -v human="$human_mode" -v kind="$kind" -v root="$root" -v elapsed="$scan_time" \
+        -v width="$(__gash_tty_width)" -v full="$__GASH_GLYPH_BAR_FULL" -v empty="$__GASH_GLYPH_BAR_EMPTY" \
+        -v hline="$__GASH_GLYPH_HLINE" -v dot="$__GASH_GLYPH_DOT" -v ell="$__GASH_GLYPH_ELLIPSIS" \
+        -v cs="$c_size" -v cb="$c_bar" -v cm="$c_mute" -v cn="$c_name" -v ch="$c_head" -v co="$c_off" '
+        function hbytes(b,   units, i, sz, rem) {
+            units[0]="B"; units[1]="KiB"; units[2]="MiB"; units[3]="GiB"
+            units[4]="TiB"; units[5]="PiB"
+            i=0; sz=b; rem=0
+            while (sz >= 1024 && i < 5) {
+                rem = int((sz * 10 / 1024)) % 10
+                sz = int(sz / 1024)
+                i++
+            }
+            if (i == 0) return sprintf("%d %s", sz, units[i])
+            return sprintf("%d.%d %s", sz, rem, units[i])
+        }
+        function rep(g, n,   s, i) { s = ""; for (i = 0; i < n; i++) s = s g; return s }
+        NF < 3 { next }
+        {
+            n++
+            size[n] = $1 + 0; mt[n] = $2; p = $3
+            for (i = 4; i <= NF; i++) p = p "\t" $i
+            if (root != "/" && index(p, root "/") == 1) p = substr(p, length(root) + 2)
+            else if (p == root) p = "."
+            path[n] = p
+            if (size[n] > max) max = size[n]
+            total += size[n]
+            if (mt[n] != "") has_mt = 1
+            s = human ? hbytes(size[n]) : size[n] ""
+            sz[n] = s
+            if (length(s) > szw) szw = length(s)
+        }
+        END {
+            barw = 16
+            rankw = length(n "")
+            if (szw < 4) szw = 4
+            fixed = 2 + rankw + 2 + szw + 2 + barw + 2 + (has_mt ? 18 : 0)
+            room = width - fixed; if (room < 20) room = 20
+            hdr = sprintf("  %" rankw "s  %" szw "s  %-" barw "s  ", "#", "SIZE", "SHARE")
+            if (has_mt) hdr = hdr sprintf("%-16s  ", "MODIFIED")
+            printf "%s%sPATH%s\n", ch, hdr, co
+            for (i = 1; i <= n; i++) {
+                f = max > 0 ? int(size[i] * barw / max + 0.5) : 0
+                if (f < 1 && size[i] > 0) f = 1
+                bar = cb rep(full, f) co cm rep(empty, barw - f) co
+                p = path[i]
+                if (length(p) > room) p = ell substr(p, length(p) - room + 2)
+                if (length(p) > maxp) maxp = length(p)
+                d = ""; b = p
+                k = match(p, /.*\//)
+                if (k && RLENGTH < length(p)) { d = substr(p, 1, RLENGTH); b = substr(p, RLENGTH + 1) }
+                printf "  %s%" rankw "d%s  %s%" szw "s%s  %s  ", cm, i, co, cs, sz[i], co, bar
+                if (has_mt) printf "%s%-16s%s  ", cm, mt[i], co
+                printf "%s%s%s%s%s%s\n", cm, d, co, cn, b, co
+            }
+            noun = kind
+            if (n == 1) noun = (kind == "files") ? "file" : "directory"
+            line = n " " noun
+            if (kind == "files") line = line " " dot " " (human ? hbytes(total) : total " B") " total"
+            else line = line " " dot " largest " sz[1]
+            if (elapsed != "") line = line " " dot " " elapsed
+            rw = fixed - 2 + maxp
+            if (length(line) > rw) rw = length(line)
+            printf "  %s%s%s\n", cm, rep(hline, rw), co
+            printf "  %s%s%s\n\n", cm, line, co
+        }
+    '
+}
+
 # Render a size-list in human-readable text (with optional colors).
 # Input format on stdin: "<bytes>\t<mtime_or_empty>\t<path>\n" lines.
-# Usage: __gash_fs_render_size_list_text <data> <human_mode> <no_color> <kind>
+# On a terminal the rich layout takes over (see __gash_fs_render_size_list_rich).
+# Usage: __gash_fs_render_size_list_text <data> <human_mode> <no_color> <kind> [scan_time] [root]
 __gash_fs_render_size_list_text() {
     local data="$1"
     local human_mode="$2"
     local no_color="$3"
-    # shellcheck disable=SC2034
     local kind="$4"
+    if __gash_fs_rich_ok; then
+        __gash_fs_render_size_list_rich "$@"
+        return 0
+    fi
 
     local color_on=0
     if __gash_fs_color_ok "$no_color" 0; then color_on=1; fi
@@ -1500,18 +1994,21 @@ archive_extract() {
     local rc=0
     shopt -s nocasematch
     case "$archive_file" in
-        *.tar.bz2)   tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
-        *.tar.gz)    tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
-        *.bz2)       bunzip2 -c "$archive_file" > "$output_dir/$(basename "$archive_file" .bz2)" || rc=1 ;;
-        *.rar)       unrar x "$archive_file" "$output_dir" || rc=1 ;;
-        *.gz)        gunzip -c "$archive_file" > "$output_dir/$(basename "$archive_file" .gz)" || rc=1 ;;
-        *.tar)       tar xvf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
-        *.tbz2)      tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
-        *.tgz)       tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
-        *.zip)       unzip "$archive_file" -d "$output_dir" || rc=1 ;;
-        *.z)         uncompress "$archive_file" -c > "$output_dir/$(basename "$archive_file" .z)" || rc=1 ;;
-        *.7z)        7z x "$archive_file" -o"$output_dir" || rc=1 ;;
-        *)           __gash_error "Cannot extract '$archive_file', unsupported file type."; rc=1 ;;
+        *.tar.bz2) tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tar.gz) tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.bz2) bunzip2 -c "$archive_file" >"$output_dir/$(basename "$archive_file" .bz2)" || rc=1 ;;
+        *.rar) unrar x "$archive_file" "$output_dir" || rc=1 ;;
+        *.gz) gunzip -c "$archive_file" >"$output_dir/$(basename "$archive_file" .gz)" || rc=1 ;;
+        *.tar) tar xvf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tbz2) tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tgz) tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.zip) unzip "$archive_file" -d "$output_dir" || rc=1 ;;
+        *.z) uncompress "$archive_file" -c >"$output_dir/$(basename "$archive_file" .z)" || rc=1 ;;
+        *.7z) 7z x "$archive_file" -o"$output_dir" || rc=1 ;;
+        *)
+            __gash_error "Cannot extract '$archive_file', unsupported file type."
+            rc=1
+            ;;
     esac
     eval "$nocase_restore"
 
@@ -1526,12 +2023,14 @@ archive_extract() {
 # Usage: file_backup FILE
 # Alias: fbk
 file_backup() {
+    needs_help "file_backup" "file_backup FILE" "Copy FILE to FILE_backup_YYYYMMDDHHMMSS. Alias: fbk" "${1-}" && return
     local file="${1-}"
 
     __gash_require_arg "$file" "file" "file_backup <file>" || return 1
     __gash_require_file "$file" || return 1
 
-    local backup="${file}_backup_$(date +%Y%m%d%H%M%S)"
+    local backup
+    backup="${file}_backup_$(date +%Y%m%d%H%M%S)"
     cp -v -- "$file" "$backup"
 
     if [ ! -f "$backup" ]; then
@@ -1557,12 +2056,12 @@ alias fbk='file_backup'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "files_largest" \
-    --aliases "flf" \
-    --module "files" \
-    --short "List the largest files under a path with size/exclude/json filters" \
-    --see-also "dirs_largest dirs_find_large tree_stats" \
-    <<'HELP'
+    __gash_register_help "files_largest" \
+        --aliases "flf" \
+        --module "files" \
+        --short "List the largest files under a path with size/exclude/json filters" \
+        --see-also "dirs_largest dirs_find_large tree_stats" \
+        <<'HELP'
 USAGE
   files_largest [PATH] [--limit N] [--min-size SIZE] [--exclude GLOB]
                 [--depth N] [--no-ignore] [--xdev] [--follow-symlinks]
@@ -1585,7 +2084,7 @@ EXAMPLES
   files_largest --no-ignore ~/projects
 
 OPTIONS
-  --limit N              Cap results (default 100)
+  -n, --limit N          Cap results (default 100)
   --min-size SIZE        Ignore files smaller than SIZE (e.g. 10M, 1G, 500K)
   --exclude GLOB         Prune matching paths (repeatable, substring match)
   --depth N              Limit scan depth (default: unbounded)
@@ -1604,12 +2103,12 @@ NOTES
   --null records are therefore always intact, complete paths.
 HELP
 
-__gash_register_help "dirs_largest" \
-    --aliases "dld" \
-    --module "files" \
-    --short "List the largest directories with depth and filter control" \
-    --see-also "files_largest dirs_find_large tree_stats disk_usage" \
-    <<'HELP'
+    __gash_register_help "dirs_largest" \
+        --aliases "dld" \
+        --module "files" \
+        --short "List the largest directories with depth and filter control" \
+        --see-also "files_largest dirs_find_large tree_stats disk_usage" \
+        <<'HELP'
 USAGE
   dirs_largest [PATH] [--limit N] [--depth N] [--min-size SIZE]
                [--exclude GLOB] [--no-ignore] [--xdev]
@@ -1629,7 +2128,7 @@ EXAMPLES
   dirs_largest --null --depth 3 ~/projects | xargs -0 du -sh
 
 OPTIONS
-  --limit N              Cap results (default 100)
+  -n, --limit N          Cap results (default 100)
   --depth N              Depth limit (default 1, top-level only). Use higher values
                          to reveal nested offenders (node_modules, vendor/, target/).
   --min-size SIZE        Ignore directories smaller than SIZE
@@ -1648,12 +2147,12 @@ NOTES
   to narrow the view.
 HELP
 
-__gash_register_help "dirs_find_large" \
-    --aliases "dfl" \
-    --module "files" \
-    --short "Find directories exceeding a size threshold (single-walk aggregation)" \
-    --see-also "dirs_largest files_largest tree_stats disk_usage" \
-    <<'HELP'
+    __gash_register_help "dirs_find_large" \
+        --aliases "dfl" \
+        --module "files" \
+        --short "Find directories exceeding a size threshold (single-walk aggregation)" \
+        --see-also "dirs_largest files_largest tree_stats disk_usage" \
+        <<'HELP'
 USAGE
   dirs_find_large [DIRECTORY] [--size SIZE] [--depth N] [--limit N]
                   [--exclude GLOB] [--no-ignore] [--xdev]
@@ -1676,7 +2175,7 @@ EXAMPLES
 OPTIONS
   --size SIZE            Size threshold (default 20M; formats: 20M, 1G, 500K, bytes)
   --depth N              Depth limit (default unbounded; use to cap very deep trees)
-  --limit N              Cap results (default 1000)
+  -n, --limit N          Cap results (default 1000)
   --exclude GLOB         Prune matching paths (repeatable)
   --no-ignore            Disable default pruning
   --xdev                 Stay on a single filesystem
@@ -1696,12 +2195,12 @@ NOTES
   numfmt is optional: a pure-bash IEC-suffix parser provides fallback.
 HELP
 
-__gash_register_help "dirs_list_empty" \
-    --aliases "dle" \
-    --module "files" \
-    --short "List empty directories with depth, prune and count options" \
-    --see-also "files_largest dirs_largest tree_stats" \
-    <<'HELP'
+    __gash_register_help "dirs_list_empty" \
+        --aliases "dle" \
+        --module "files" \
+        --short "List empty directories with depth, prune and count options" \
+        --see-also "files_largest dirs_largest tree_stats" \
+        <<'HELP'
 USAGE
   dirs_list_empty [PATH] [--min-depth N] [--depth N] [--exclude GLOB]
                   [--ignore-dotfiles] [--no-ignore] [--xdev]
@@ -1737,12 +2236,12 @@ NOTES
   containing only a prune-excluded subdirectory is NOT empty.
 HELP
 
-__gash_register_help "tree_stats" \
-    --aliases "tls" \
-    --module "files" \
-    --short "Compact filesystem stats: totals, top extensions, depth, empty dirs" \
-    --see-also "files_largest dirs_largest dirs_find_large" \
-    <<'HELP'
+    __gash_register_help "tree_stats" \
+        --aliases "tls" \
+        --module "files" \
+        --short "Compact filesystem stats: totals, top extensions, depth, empty dirs" \
+        --see-also "files_largest dirs_largest dirs_find_large" \
+        <<'HELP'
 USAGE
   tree_stats [PATH] [--depth N] [--top N] [--exclude GLOB]
              [--no-ignore] [--xdev] [--follow-symlinks]
@@ -1778,12 +2277,12 @@ NOTES
   or hidden-only dot (.env) are grouped as "(no ext)".
 HELP
 
-__gash_register_help "archive_extract" \
-    --aliases "axe" \
-    --module "files" \
-    --short "Extract archives (tar, zip, gz, bz2, rar, 7z)" \
-    --see-also "file_backup" \
-    <<'HELP'
+    __gash_register_help "archive_extract" \
+        --aliases "axe" \
+        --module "files" \
+        --short "Extract archives (tar, zip, gz, bz2, rar, 7z)" \
+        --see-also "file_backup" \
+        <<'HELP'
 USAGE
   archive_extract ARCHIVE_FILE [OUTPUT_DIR]
 
@@ -1803,12 +2302,12 @@ SUPPORTED FORMATS
   (case-insensitive)
 HELP
 
-__gash_register_help "file_backup" \
-    --aliases "fbk" \
-    --module "files" \
-    --short "Create a timestamped backup of a file" \
-    --see-also "archive_extract" \
-    <<'HELP'
+    __gash_register_help "file_backup" \
+        --aliases "fbk" \
+        --module "files" \
+        --short "Create a timestamped backup of a file" \
+        --see-also "archive_extract" \
+        <<'HELP'
 USAGE
   file_backup FILE
 
@@ -1824,4 +2323,4 @@ EXAMPLES
   fbk my-deploy-script.sh
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

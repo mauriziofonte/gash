@@ -111,7 +111,7 @@ it "__llm_validate_path allows safe paths" bash -c '
     source "$ROOT/lib/modules/llm.sh"
 
     result="$(__llm_validate_path "/tmp")"
-    [[ "$result" == "/tmp" ]]
+    [[ "$result" == "$(cd /tmp && pwd -P)" ]]
 
     result="$(__llm_validate_path ".")"
     [[ -n "$result" ]]
@@ -425,7 +425,7 @@ it "llm_ports outputs JSON array" bash -c '
     source "$ROOT/lib/core/utils.sh"
     source "$ROOT/lib/modules/llm.sh"
 
-    out="$(llm_ports 2>/dev/null)"
+    out="$(PATH="$ROOT/tests/mocks/bin:$PATH" llm_ports 2>/dev/null)"
     [[ "$out" == "["* ]]
     [[ "$out" == *"]"* ]]
 '

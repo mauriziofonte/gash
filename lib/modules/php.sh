@@ -67,11 +67,11 @@ __php_detect_version_string() {
 }
 
 # Detect the PHP version a project wants, and resolve the matching binary /
-# gash-exec function names. JSON output under --llm or GASH_HEADLESS=1,
+# gash-exec function names. JSON output under --json or GASH_HEADLESS=1,
 # human-readable text otherwise.
-# Usage: php_detect_version [project_dir] [--llm]
+# Usage: php_detect_version [project_dir] [--json]
 php_detect_version() {
-    needs_help "php_detect_version" "php_detect_version [project_dir] [--llm]" \
+    needs_help "php_detect_version" "php_detect_version [project_dir] [--json]" \
         "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names." \
         "${1-}" && return
 
@@ -79,8 +79,12 @@ php_detect_version() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            --llm) llm_mode=1 ;;
-            *)     project_dir="$arg" ;;
+            --json | --llm) llm_mode=1 ;; # --llm: 1.x spelling, kept as alias
+            -*)
+                __gash_error "Unknown option: $arg"
+                return 1
+                ;;
+            *) project_dir="$arg" ;;
         esac
     done
 
@@ -136,24 +140,24 @@ php_detect_version() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "php_detect_version" \
-    --module "php" \
-    --short "Detect the PHP version a project wants" \
-    <<'HELP'
+    __gash_register_help "php_detect_version" \
+        --module "php" \
+        --short "Detect the PHP version a project wants" \
+        <<'HELP'
 USAGE
-  php_detect_version [project_dir] [--llm]
+  php_detect_version [project_dir] [--json]
 
 EXAMPLES
   # Human-readable, current directory
   php_detect_version
 
   # JSON, specific project
-  php_detect_version /path/to/project --llm
+  php_detect_version /path/to/project --json
 
 NOTES
   Priority: .target-php-version (walk-up) -> composer.json .require.php ->
   .github/copilot-instructions.md -> fallback 8.4. JSON output is also
-  emitted automatically under GASH_HEADLESS=1, --llm is not required there.
+  emitted automatically under GASH_HEADLESS=1, --json is not required there.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

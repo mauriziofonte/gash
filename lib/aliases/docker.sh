@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2139 # aliases intentionally expand values at definition time
 
 # Gash Aliases: Docker
 # Docker and Docker Compose aliases.
@@ -10,10 +11,7 @@ __gash_add_docker_alias() {
     local alias_name="$2"
     local alias_command="$3"
 
-    local BINARY
-    BINARY=$(type -P "$binary_name" 2>/dev/null) || true
-
-    if [[ -n "$BINARY" ]]; then
+    if type -P "$binary_name" >/dev/null 2>&1; then
         alias "$alias_name"="$alias_command"
     fi
 }

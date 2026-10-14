@@ -15,7 +15,7 @@
 # Public functions:
 #   sysinfo (si) [section] [--llm] - System information enumeration
 #
-# Sections: identity storage services auth network security webstack mail infra system all
+# Sections: overview identity storage services auth network security webstack mail infra system all
 #
 # =============================================================================
 
@@ -23,9 +23,9 @@
 # GLOBALS
 # =============================================================================
 
-__SYSINFO_MODE="verbose"             # "verbose" or "llm"
-__SYSINFO_HAS_SUDO=0                 # 1 if sudo credentials are cached
-__SYSINFO_SUDO_KEEPALIVE_PID=""      # PID of sudo keep-alive background process
+__SYSINFO_MODE="verbose"        # "verbose" or "llm"
+__SYSINFO_HAS_SUDO=0            # 1 if sudo credentials are cached
+__SYSINFO_SUDO_KEEPALIVE_PID="" # PID of sudo keep-alive background process
 
 # =============================================================================
 # SUDO CACHING
@@ -66,7 +66,10 @@ __sysinfo_ensure_sudo() {
     fi
 
     # Keep-alive: refresh sudo every 50s (default sudo timeout = 5min)
-    (while true; do sudo -n true 2>/dev/null; sleep 50; done) &
+    (while true; do
+        sudo -n true 2>/dev/null
+        sleep 50
+    done) &
     __SYSINFO_SUDO_KEEPALIVE_PID=$!
     disown "$__SYSINFO_SUDO_KEEPALIVE_PID" 2>/dev/null
     return 0
@@ -95,9 +98,30 @@ __sysinfo_sudo() {
 # DUAL OUTPUT HELPERS
 # =============================================================================
 
+# Headers are printed lazily: a sub-header shows up only when something is
+# printed under it, and a section that found nothing says so. The state
+# lives in files under __SYSINFO_STATE (a temp dir set by sysinfo) because
+# collectors print from pipelines, i.e. from subshells. Without a state dir
+# (collectors called directly) every header prints at once.
+#   $__SYSINFO_STATE/sub   pending sub-header text
+#   $__SYSINFO_STATE/sec   a section is open
+#   $__SYSINFO_STATE/out   the open section printed something
+
+# Close the open section: say so when it found nothing.
+__sysinfo_section_close() {
+    local d="${__SYSINFO_STATE-}"
+    [[ -n "$d" && -e "$d/sec" ]] || return 0
+    if [[ ! -e "$d/out" && "$__SYSINFO_MODE" == "verbose" ]]; then
+        printf '  %snothing found%s\n' "${__GASH_COLOR_MUTED-}" "${__GASH_COLOR_OFF-}"
+    fi
+    rm -f "$d/sec" "$d/out" "$d/sub"
+}
+
 # Print a section header.
 __sysinfo_section() {
     local title="$1"
+    __sysinfo_section_close
+    [[ -n "${__SYSINFO_STATE-}" ]] && : >"$__SYSINFO_STATE/sec"
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         __gash_section "$title"
     else
@@ -105,10 +129,22 @@ __sysinfo_section() {
     fi
 }
 
+# Print a pending sub-header, if any, and mark the section as non-empty.
+__sysinfo_flush() {
+    local d="${__SYSINFO_STATE-}" t
+    [[ -n "$d" ]] || return 0
+    [[ -e "$d/out" ]] || : >"$d/out"
+    [[ -s "$d/sub" ]] || return 0
+    t="$(<"$d/sub")"
+    : >"$d/sub"
+    __sysinfo_sub_print "$t"
+}
+
 # Print a key-value pair. Skipped if value is empty.
 __sysinfo_kv() {
     local key="$1" value="$2"
     [[ -z "$value" ]] && return 0
+    __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         printf "  ${__GASH_BOLD_WHITE}%-24s${__GASH_COLOR_OFF} %s\n" "${key}:" "$value"
     else
@@ -119,6 +155,7 @@ __sysinfo_kv() {
 # Print a list item.
 __sysinfo_item() {
     local text="$1"
+    __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         echo -e "  ${__GASH_CYAN}-${__GASH_COLOR_OFF} ${text}"
     else
@@ -126,8 +163,16 @@ __sysinfo_item() {
     fi
 }
 
-# Print a sub-header within a section.
+# Print a sub-header within a section (deferred until it has content).
 __sysinfo_sub() {
+    if [[ -n "${__SYSINFO_STATE-}" ]]; then
+        printf '%s' "$1" >"$__SYSINFO_STATE/sub"
+        return 0
+    fi
+    __sysinfo_sub_print "$1"
+}
+
+__sysinfo_sub_print() {
     local title="$1"
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
         echo -e "  ${__GASH_BOLD_YELLOW}${title}${__GASH_COLOR_OFF}"
@@ -137,12 +182,136 @@ __sysinfo_sub() {
 }
 
 # Pipe raw command output (indented in verbose, raw in llm).
+# List basenames of DIR/*SUFFIX, one per line, stripping SUFFIX unless the
+# third argument is "keep". Safe with spaces; prints nothing if none match.
+__sysinfo_basenames() {
+    local dir="$1" suffix="$2" keep="${3-}" f name
+    for f in "$dir"/*"$suffix"; do
+        [[ -e "$f" ]] || continue
+        name="${f##*/}"
+        [[ "$keep" == "keep" ]] || name="${name%"$suffix"}"
+        printf '%s\n' "$name"
+    done
+}
+
 __sysinfo_raw() {
-    if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        sed 's/^/    /'
-    else
-        cat
+    local line first=1 indent="    "
+    [[ "$__SYSINFO_MODE" == "verbose" ]] || indent=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if ((first)); then
+            __sysinfo_flush
+            first=0
+        fi
+        printf '%s%s\n' "$indent" "$line"
+    done
+}
+
+# =============================================================================
+# OVERVIEW: one card with host, load, CPU, memory, disk and address
+# =============================================================================
+
+# KiB to a short human size: 16479424 -> 15.7 GiB.
+__sysinfo_human_kib() {
+    "${__GASH_AWK:-awk}" -v k="${1-0}" 'BEGIN {
+        split("KiB MiB GiB TiB PiB", u, " "); i = 1
+        while (k >= 1024 && i < 5) { k /= 1024; i++ }
+        printf(k < 10 ? "%.1f %s" : "%.0f %s", k, u[i])
+    }'
+}
+
+# Usage row of the overview card: "LABEL  bar  used / total  pct%".
+__sysinfo_usage_row() {
+    local label="$1" used="$2" total="$3" bar pct=0 pc
+    ((total > 0)) && pct=$((used * 100 / total))
+    __gash_bar bar "$used" "$total" 10
+    pc="${__GASH_GREEN-}"
+    ((pct >= 75)) && pc="${__GASH_YELLOW-}"
+    ((pct >= 90)) && pc="${__GASH_BOLD_RED-}"
+    printf '%s%-7s%s %s%s%s%s%s%s  %s / %s  %s%d%%%s' \
+        "${__GASH_COLOR_MUTED-}" "$label" "${__GASH_COLOR_OFF-}" \
+        "$pc" "${bar%%$'\t'*}" "${__GASH_COLOR_OFF-}" "${__GASH_COLOR_MUTED-}" "${bar#*$'\t'}" "${__GASH_COLOR_OFF-}" \
+        "$(__sysinfo_human_kib "$used")" "$(__sysinfo_human_kib "$total")" "$pc" "$pct" "${__GASH_COLOR_OFF-}"
+}
+
+__sysinfo_collect_overview() {
+    local host os="" kernel arch up="" load="" cpu="" cores="" ip=""
+    local mem_total=0 mem_avail=0 swap_total=0 swap_free=0 disk_total=0 disk_used=0
+    host="$(hostname 2>/dev/null || uname -n)"
+    if [[ -r /etc/os-release ]]; then
+        os="$(. /etc/os-release 2>/dev/null && printf '%s' "${PRETTY_NAME:-$NAME}")" || os=""
+    elif command -v sw_vers >/dev/null 2>&1; then
+        os="$(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null)"
     fi
+    kernel="$(uname -sr 2>/dev/null)"
+    arch="$(uname -m 2>/dev/null)"
+
+    if [[ -r /proc/uptime ]]; then
+        local secs
+        read -r secs _ </proc/uptime
+        secs="${secs%%.*}"
+        if ((secs >= 86400)); then
+            up="$((secs / 86400))d $((secs % 86400 / 3600))h"
+        else
+            up="$((secs / 3600))h $((secs % 3600 / 60))m"
+        fi
+    fi
+    if [[ -r /proc/loadavg ]]; then
+        local l1 l5 l15
+        read -r l1 l5 l15 _ </proc/loadavg
+        load="$l1 $l5 $l15"
+    elif command -v sysctl >/dev/null 2>&1; then
+        load="$(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1, $2, $3}')"
+    fi
+
+    if [[ -r /proc/cpuinfo ]]; then
+        cpu="$(awk -F': *' '/^model name/ { print $2; exit }' /proc/cpuinfo 2>/dev/null)"
+    elif command -v sysctl >/dev/null 2>&1; then
+        cpu="$(sysctl -n machdep.cpu.brand_string 2>/dev/null)"
+    fi
+    cpu="$(printf '%s' "$cpu" | tr -s ' ')"
+    cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null)"
+
+    if [[ -r /proc/meminfo ]]; then
+        local k v
+        while read -r k v _; do
+            case "$k" in
+                MemTotal:) mem_total=$v ;;
+                MemAvailable:) mem_avail=$v ;;
+                SwapTotal:) swap_total=$v ;;
+                SwapFree:) swap_free=$v ;;
+            esac
+        done </proc/meminfo
+    fi
+    local dfl
+    dfl="$(df -Pk / 2>/dev/null | awk 'NR == 2 { print $2, $3 }')"
+    [[ -n "$dfl" ]] && read -r disk_total disk_used <<<"$dfl"
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+
+    if [[ "$__SYSINFO_MODE" != "verbose" ]]; then
+        echo "=== OVERVIEW ==="
+        __sysinfo_kv "Host" "$host"
+        __sysinfo_kv "Uptime" "$up"
+        __sysinfo_kv "Load" "$load"
+        __sysinfo_kv "CPU" "${cpu}${cores:+ x$cores}"
+        ((mem_total > 0)) && __sysinfo_kv "Memory KiB" "used=$((mem_total - mem_avail)) total=$mem_total"
+        ((swap_total > 0)) && __sysinfo_kv "Swap KiB" "used=$((swap_total - swap_free)) total=$swap_total"
+        ((disk_total > 0)) && __sysinfo_kv "Disk / KiB" "used=$disk_used total=$disk_total"
+        return 0
+    fi
+
+    local M="${__GASH_COLOR_MUTED-}" B="${__GASH_BOLD-}" R="${__GASH_COLOR_OFF-}" dot="$__GASH_GLYPH_DOT"
+    local -a lines=()
+    lines+=("${B}${host}${R}${os:+ $dot $os}")
+    lines+=("${M}${kernel} ${arch}${up:+ $dot up $up}${load:+ $dot load $load}${R}")
+    lines+=("")
+    [[ -n "$cpu" || -n "$cores" ]] && lines+=("${M}CPU    ${R} ${cpu:-?}${cores:+ $dot $cores cores}")
+    ((mem_total > 0)) && lines+=("$(__sysinfo_usage_row Memory $((mem_total - mem_avail)) "$mem_total")")
+    ((swap_total > 0)) && lines+=("$(__sysinfo_usage_row Swap $((swap_total - swap_free)) "$swap_total")")
+    ((disk_total > 0)) && lines+=("$(__sysinfo_usage_row "Disk /" "$disk_used" "$disk_total")")
+    [[ -n "$ip" ]] && lines+=("${M}Address${R} $ip")
+    echo
+    __gash_box --color "${__GASH_COLOR_PRIMARY-}" "${lines[@]}"
+    echo
 }
 
 # =============================================================================
@@ -500,7 +669,7 @@ __sysinfo_collect_webstack() {
         fi
         if [[ -d /etc/apache2/mods-enabled ]]; then
             __sysinfo_item "mods-enabled:"
-            ls /etc/apache2/mods-enabled/*.load 2>/dev/null | xargs -I{} basename {} .load | __sysinfo_raw
+            __sysinfo_basenames /etc/apache2/mods-enabled .load | __sysinfo_raw
         fi
     fi
 
@@ -652,7 +821,7 @@ __sysinfo_collect_infra() {
         __sysinfo_sub "OpenMediaVault"
         __sysinfo_kv "OMV" "installed"
         if [[ -f /etc/openmediavault/config.xml ]]; then
-            __sysinfo_kv "config.xml" "$(wc -c < /etc/openmediavault/config.xml 2>/dev/null) bytes"
+            __sysinfo_kv "config.xml" "$(wc -c </etc/openmediavault/config.xml 2>/dev/null) bytes"
         fi
     fi
 
@@ -682,7 +851,7 @@ __sysinfo_collect_infra() {
     # Phase 17: Monitoring
     if [[ -d /etc/collectd ]]; then
         __sysinfo_sub "Collectd"
-        find /etc/collectd/collectd.conf.d -name "*.conf" 2>/dev/null | xargs -I{} basename {} | __sysinfo_raw
+        __sysinfo_basenames /etc/collectd/collectd.conf.d .conf keep | __sysinfo_raw
     fi
     if [[ -d /etc/monit ]]; then
         __sysinfo_sub "Monit"
@@ -818,7 +987,7 @@ __sysinfo_deep_services() {
             grep -Ev "^(#|$)" /etc/apache2/ports.conf 2>/dev/null
         }
         echo "--- mods-enabled"
-        ls /etc/apache2/mods-enabled/*.load 2>/dev/null | xargs -I{} basename {} .load
+        __sysinfo_basenames /etc/apache2/mods-enabled .load
         if [[ -d /etc/apache2/sites-enabled ]]; then
             for vhost in /etc/apache2/sites-enabled/*.conf; do
                 [[ -f "$vhost" ]] || continue
@@ -871,7 +1040,7 @@ __sysinfo_deep_services() {
             # Modules
             if [[ -d "${phpver}mods-available" ]]; then
                 echo "--- modules"
-                ls "${phpver}mods-available/"*.ini 2>/dev/null | xargs -I{} basename {} .ini | paste -sd, -
+                __sysinfo_basenames "${phpver}mods-available" .ini | paste -sd, -
             fi
         done
     fi
@@ -954,16 +1123,31 @@ __sysinfo_deep_services() {
     if [[ -f /etc/default/opendkim ]] || [[ -d /etc/opendkim ]]; then
         echo "--- OpenDKIM"
         [[ -f /etc/default/opendkim ]] && grep -Ev "^(#|$)" /etc/default/opendkim 2>/dev/null
-        [[ -f /etc/opendkim/TrustedHosts ]] && { echo "--- TrustedHosts"; cat /etc/opendkim/TrustedHosts 2>/dev/null | head -20; }
-        [[ -f /etc/opendkim/KeyTable ]] && { echo "--- KeyTable"; cat /etc/opendkim/KeyTable 2>/dev/null | head -20; }
-        [[ -f /etc/opendkim/SigningTable ]] && { echo "--- SigningTable"; cat /etc/opendkim/SigningTable 2>/dev/null | head -20; }
+        [[ -f /etc/opendkim/TrustedHosts ]] && {
+            echo "--- TrustedHosts"
+            cat /etc/opendkim/TrustedHosts 2>/dev/null | head -20
+        }
+        [[ -f /etc/opendkim/KeyTable ]] && {
+            echo "--- KeyTable"
+            cat /etc/opendkim/KeyTable 2>/dev/null | head -20
+        }
+        [[ -f /etc/opendkim/SigningTable ]] && {
+            echo "--- SigningTable"
+            cat /etc/opendkim/SigningTable 2>/dev/null | head -20
+        }
     fi
 
     # --- DNS ---
     if [[ -d /etc/bind ]]; then
         echo "--- BIND"
-        [[ -f /etc/bind/named.conf.local ]] && { echo "--- named.conf.local"; cat /etc/bind/named.conf.local 2>/dev/null | head -50; }
-        [[ -f /etc/bind/named.conf.options ]] && { echo "--- named.conf.options"; grep -Ev "^(//|$)" /etc/bind/named.conf.options 2>/dev/null | head -50; }
+        [[ -f /etc/bind/named.conf.local ]] && {
+            echo "--- named.conf.local"
+            cat /etc/bind/named.conf.local 2>/dev/null | head -50
+        }
+        [[ -f /etc/bind/named.conf.options ]] && {
+            echo "--- named.conf.options"
+            grep -Ev "^(//|$)" /etc/bind/named.conf.options 2>/dev/null | head -50
+        }
     fi
 
     if [[ -d /etc/unbound ]]; then
@@ -999,7 +1183,7 @@ __sysinfo_deep_services() {
     if [[ -d /etc/openmediavault ]]; then
         echo "--- OpenMediaVault"
         echo "OMV=installed"
-        [[ -f /etc/openmediavault/config.xml ]] && echo "config.xml=$(wc -c < /etc/openmediavault/config.xml 2>/dev/null) bytes"
+        [[ -f /etc/openmediavault/config.xml ]] && echo "config.xml=$(wc -c </etc/openmediavault/config.xml 2>/dev/null) bytes"
     fi
 
     if [[ -f /etc/exports ]]; then
@@ -1203,7 +1387,10 @@ __sysinfo_deep_security() {
     if [[ -d /etc/crowdsec ]]; then
         echo "--- CrowdSec"
         [[ -f /etc/crowdsec/config.yaml ]] && grep -Ev "^(#|$)" /etc/crowdsec/config.yaml 2>/dev/null | head -30
-        [[ -f /etc/crowdsec/acquis.yaml ]] && { echo "--- acquis.yaml"; cat /etc/crowdsec/acquis.yaml 2>/dev/null | head -30; }
+        [[ -f /etc/crowdsec/acquis.yaml ]] && {
+            echo "--- acquis.yaml"
+            cat /etc/crowdsec/acquis.yaml 2>/dev/null | head -30
+        }
         echo "--- scenarios"
         ls /etc/crowdsec/hub/scenarios/ 2>/dev/null | head -20
     fi
@@ -1346,7 +1533,10 @@ __sysinfo_deep_storage() {
         echo "--- mdadm"
         grep -Ev "^(#|$)" /etc/mdadm/mdadm.conf 2>/dev/null
     fi
-    [[ -f /proc/mdstat ]] && { echo "--- mdstat"; cat /proc/mdstat 2>/dev/null | head -30; }
+    [[ -f /proc/mdstat ]] && {
+        echo "--- mdstat"
+        cat /proc/mdstat 2>/dev/null | head -30
+    }
 
     # ZFS
     if command -v zpool >/dev/null 2>&1; then
@@ -1355,10 +1545,16 @@ __sysinfo_deep_storage() {
         echo "--- ZFS datasets"
         zfs list 2>/dev/null | head -30
     fi
-    [[ -f /etc/zfs/zed.rc ]] && { echo "--- zed.rc"; grep -Ev "^(#|$)" /etc/zfs/zed.rc 2>/dev/null; }
+    [[ -f /etc/zfs/zed.rc ]] && {
+        echo "--- zed.rc"
+        grep -Ev "^(#|$)" /etc/zfs/zed.rc 2>/dev/null
+    }
 
     # Sanoid
-    [[ -f /etc/sanoid/sanoid.conf ]] && { echo "--- Sanoid"; cat /etc/sanoid/sanoid.conf 2>/dev/null | head -30; }
+    [[ -f /etc/sanoid/sanoid.conf ]] && {
+        echo "--- Sanoid"
+        cat /etc/sanoid/sanoid.conf 2>/dev/null | head -30
+    }
 
     # SMART
     if command -v smartctl >/dev/null 2>&1; then
@@ -1371,11 +1567,20 @@ __sysinfo_deep_storage() {
     fi
 
     # NFS
-    [[ -f /etc/exports ]] && { echo "--- NFS exports"; cat /etc/exports 2>/dev/null | head -30; }
-    [[ -f /etc/nfs.conf ]] && { echo "--- nfs.conf"; grep -Ev "^(#|$)" /etc/nfs.conf 2>/dev/null | head -20; }
+    [[ -f /etc/exports ]] && {
+        echo "--- NFS exports"
+        cat /etc/exports 2>/dev/null | head -30
+    }
+    [[ -f /etc/nfs.conf ]] && {
+        echo "--- nfs.conf"
+        grep -Ev "^(#|$)" /etc/nfs.conf 2>/dev/null | head -20
+    }
 
     # hdparm
-    [[ -f /etc/hdparm.conf ]] && { echo "--- hdparm"; grep -Ev "^(#|$)" /etc/hdparm.conf 2>/dev/null | head -20; }
+    [[ -f /etc/hdparm.conf ]] && {
+        echo "--- hdparm"
+        grep -Ev "^(#|$)" /etc/hdparm.conf 2>/dev/null | head -20
+    }
     return 0
 }
 
@@ -1437,7 +1642,10 @@ __sysinfo_deep_performance() {
     [[ -f /etc/sysctl.conf ]] && {
         local content
         content=$(grep -Ev "^(#|$)" /etc/sysctl.conf 2>/dev/null)
-        [[ -n "$content" ]] && { echo "--- sysctl.conf"; echo "$content"; }
+        [[ -n "$content" ]] && {
+            echo "--- sysctl.conf"
+            echo "$content"
+        }
     }
 
     # I/O scheduler
@@ -1505,7 +1713,10 @@ __sysinfo_deep_maintenance() {
             __sysinfo_sudo cat "$f" 2>/dev/null | head -20
         done
 
-        [[ -f /etc/letsencrypt/cli.ini ]] && { echo "--- cli.ini"; grep -Ev "^(#|$)" /etc/letsencrypt/cli.ini 2>/dev/null; }
+        [[ -f /etc/letsencrypt/cli.ini ]] && {
+            echo "--- cli.ini"
+            grep -Ev "^(#|$)" /etc/letsencrypt/cli.ini 2>/dev/null
+        }
     fi
 
     # Package management
@@ -1527,7 +1738,10 @@ __sysinfo_deep_maintenance() {
     # Legacy backups
     local orgs
     orgs=$(ls /etc/*.org 2>/dev/null)
-    [[ -n "$orgs" ]] && { echo "--- Legacy .org backups"; echo "$orgs"; }
+    [[ -n "$orgs" ]] && {
+        echo "--- Legacy .org backups"
+        echo "$orgs"
+    }
 
     # etckeeper
     if [[ -d /etc/.git ]]; then
@@ -1544,7 +1758,10 @@ __sysinfo_deep_maintenance() {
     # Profile + Environment
     echo "--- Profile scripts"
     ls /etc/profile.d/ 2>/dev/null
-    [[ -f /etc/environment ]] && { echo "--- environment"; cat /etc/environment 2>/dev/null; }
+    [[ -f /etc/environment ]] && {
+        echo "--- environment"
+        cat /etc/environment 2>/dev/null
+    }
 
     # Service defaults
     echo "--- Service defaults"
@@ -1558,12 +1775,12 @@ __sysinfo_deep_maintenance() {
 
 # System information enumeration.
 # Usage: sysinfo [section] [--llm]
-# Sections: identity storage services auth network security webstack mail infra system all
+# Sections: overview identity storage services auth network security webstack mail infra system all
 # Alias: si
 sysinfo() {
     needs_help "sysinfo" "sysinfo [section] [--llm] [--no-color]" \
         "System information enumeration for headless Debian/Ubuntu servers.
-Sections: identity storage services auth network security webstack mail infra system all
+Sections: overview identity storage services auth network security webstack mail infra system all
 Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si" \
         "${1-}" && return
 
@@ -1574,13 +1791,21 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # Parse args
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --llm) __SYSINFO_MODE="llm"; shift ;;
-            --no-color) no_color=1; shift ;;
-            identity|storage|services|auth|network|security|webstack|mail|infra|system|all)
-                section="$1"; shift ;;
+            --llm)
+                __SYSINFO_MODE="llm"
+                shift
+                ;;
+            --no-color)
+                no_color=1
+                shift
+                ;;
+            overview | identity | storage | services | auth | network | security | webstack | mail | infra | system | all)
+                section="$1"
+                shift
+                ;;
             *)
                 __gash_error "Unknown argument: $1"
-                __gash_info "Sections: identity storage services auth network security webstack mail infra system all"
+                __gash_info "Sections: overview identity storage services auth network security webstack mail infra system all"
                 __gash_info "Flags: --llm, --no-color"
                 return 1
                 ;;
@@ -1591,29 +1816,33 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     [[ "$__SYSINFO_MODE" == "llm" ]] && no_color=1
 
     # Local color scope (propagates to __sysinfo_collect_* via dynamic scoping)
-    eval "$(__gash_color_scope "$no_color")"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     # Sudo caching (single prompt). `|| true`: missing sudo must never kill
     # a `set -e` caller. The RETURN trap guarantees the keep-alive loop is
     # reaped even if a collector aborts mid-way.
-    trap '__sysinfo_release_sudo' RETURN
+    local __SYSINFO_STATE=""
+    __SYSINFO_STATE="$(mktemp -d "${TMPDIR:-/tmp}/gash-sysinfo.XXXXXX" 2>/dev/null)" || __SYSINFO_STATE=""
+    trap '__sysinfo_release_sudo; [[ -n "${__SYSINFO_STATE-}" ]] && command rm -rf -- "$__SYSINFO_STATE"; trap - RETURN' RETURN
     __sysinfo_ensure_sudo || true
 
     # Dispatch. `|| true` suppresses errexit inside the collectors too: a
     # missing binary or a zero-match grep in one probe must not abort the
     # whole enumeration under `set -euo pipefail`.
     case "$section" in
-        identity)  __sysinfo_collect_identity || true ;;
-        storage)   __sysinfo_collect_storage || true ;;
-        services)  __sysinfo_collect_services || true ;;
-        auth)      __sysinfo_collect_auth || true ;;
-        network)   __sysinfo_collect_network || true ;;
-        security)  __sysinfo_collect_security || true ;;
-        webstack)  __sysinfo_collect_webstack || true ;;
-        mail)      __sysinfo_collect_mail || true ;;
-        infra)     __sysinfo_collect_infra || true ;;
-        system)    __sysinfo_collect_system || true ;;
+        identity) __sysinfo_collect_identity || true ;;
+        storage) __sysinfo_collect_storage || true ;;
+        services) __sysinfo_collect_services || true ;;
+        auth) __sysinfo_collect_auth || true ;;
+        network) __sysinfo_collect_network || true ;;
+        security) __sysinfo_collect_security || true ;;
+        webstack) __sysinfo_collect_webstack || true ;;
+        mail) __sysinfo_collect_mail || true ;;
+        infra) __sysinfo_collect_infra || true ;;
+        system) __sysinfo_collect_system || true ;;
+        overview) __sysinfo_collect_overview || true ;;
         all)
+            __sysinfo_collect_overview || true
             __sysinfo_collect_identity || true
             __sysinfo_collect_storage || true
             __sysinfo_collect_services || true
@@ -1626,6 +1855,7 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
             __sysinfo_collect_system || true
             ;;
     esac
+    __sysinfo_section_close
 
     __sysinfo_release_sudo
     return 0
@@ -1643,16 +1873,17 @@ alias si='sysinfo'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "sysinfo" \
-    --aliases "si" \
-    --module "sysinfo" \
-    --short "Comprehensive system information enumeration" \
-    --see-also "ai_sysinfo" \
-    <<'HELP'
+    __gash_register_help "sysinfo" \
+        --aliases "si" \
+        --module "sysinfo" \
+        --short "Comprehensive system information enumeration" \
+        --see-also "ai_sysinfo" \
+        <<'HELP'
 USAGE
   sysinfo [section] [--llm] [--no-color]
 
 SECTIONS
+  overview   Host, load, CPU, memory, swap, root disk and address at a glance
   identity   OS, kernel, virtualization, cloud provider, WSL detection
   storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)
   services   Running systemd services, custom units
@@ -1663,7 +1894,7 @@ SECTIONS
   mail       Postfix, Dovecot, DKIM, virtual domains
   infra      Docker, containers, monitoring, backup systems
   system     Cron jobs, systemd timers, custom hooks
-  all        All sections combined
+  all        Overview, then every section (default)
 
 EXAMPLES
   # Full system enumeration (colored verbose output)
@@ -1683,4 +1914,4 @@ EXAMPLES
   sysinfo webstack --llm | ai_query "audit this web stack"
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

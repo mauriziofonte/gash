@@ -1,0 +1,4 @@
+# ShellCheck configuration for Gash.
+# Modules are sourced dynamically from $GASH_DIR, so SC1090/SC1091 are noise.
+external-sources=true
+disable=SC1090,SC1091

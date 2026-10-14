@@ -102,7 +102,9 @@ EOF
     [[ "$out" == *"mv:0"* ]]
     [[ "$out" == *"rm:0"* ]]
     [[ "$out" == *"mkdir:0"* ]]
-    [[ "$out" == *"ports:0"* ]]
+    if type -P ss >/dev/null 2>&1 || type -P netstat >/dev/null 2>&1; then
+        [[ "$out" == *"ports:0"* ]]
+    fi
 '
 
 it "git.sh defines git aliases and functions when git is available" bash -c '
@@ -110,7 +112,7 @@ it "git.sh defines git aliases and functions when git is available" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if git not available
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 0; }
+    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -151,7 +153,7 @@ it "gl --help shows usage information" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if git not available
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 0; }
+    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -178,7 +180,7 @@ it "docker.sh defines docker aliases when docker is available" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if docker not available
-    type -P docker >/dev/null 2>&1 || { echo "SKIP: docker not available"; exit 0; }
+    type -P docker >/dev/null 2>&1 || { echo "SKIP: docker not available"; exit 77; }
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -201,7 +203,7 @@ EOF
     [[ "$out" == *"dstop:0"* ]]
 '
 
-it "general.sh defines help and quit aliases" bash -c '
+it "general.sh defines the help function and quit alias" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
 
@@ -218,7 +220,7 @@ stop_services() { :; }
 
 source "\$HOME/.gash/lib/aliases/general.sh"
 
-alias help >/dev/null 2>&1; echo "help:\$?"
+declare -f help >/dev/null 2>&1; echo "help:\$?"
 alias quit >/dev/null 2>&1; echo "quit:\$?"
 EOF
 )"

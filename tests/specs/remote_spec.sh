@@ -45,6 +45,27 @@ it "classifies ALLOW paths correctly" bash -c '
   [[ "$(__remote_classify_path /opt/myapp)" == "allow" ]]
 '
 
+it "normalizes paths before classifying: no slash or dot tricks, ~/.ssh asks" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  for p in //etc/shadow /etc//shadow /./etc/shadow /etc/./ssh/ /etc/shadow/ ///usr//bin/sh //; do
+    [[ "$(__remote_classify_path "$p")" == deny:* ]] || { echo "not denied: $p"; exit 1; }
+  done
+  for p in "~/.ssh/authorized_keys" .ssh/id_ed25519 "~root/.ssh/x" /home/bob/.ssh/ ./.ssh; do
+    [[ "$(__remote_classify_path "$p")" == "ask:.ssh" ]] || { echo "not asked: $p"; exit 1; }
+    ! __remote_is_safe_for_delete "$p" || { echo "delete-safe: $p"; exit 1; }
+  done
+  [[ "$(__remote_classify_path "~/notes.txt")" == allow ]]
+  [[ "$(__remote_classify_path ..config)" == allow ]]
+  [[ "$(__remote_classify_path "a/../../etc")" == "deny:path_traversal" ]]
+  # rsync --delete into the remote home itself is not "safe".
+  ! __remote_is_safe_for_delete "~"
+  ! __remote_is_safe_for_delete "~/"
+  __remote_is_safe_for_delete "~/project"
+'
+
 it "resolve_target accepts a raw user@host interactively" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
@@ -116,4 +137,55 @@ it "remote_sync_push refuses an ASK path under GASH_HEADLESS=1 without --force" 
 
   out="$(remote_sync_push hnas ./dir /etc/systemd/system/myapp 2>&1 || true)"
   [[ "$out" == *"refused in headless mode without --force"* ]]
+'
+
+it "a .ssh component anywhere asks; /boot/.ssh stays denied" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  for p in /srv/git/.ssh/authorized_keys /Users/x/.ssh /Users/x/.SSH/authorized_keys \
+    /opt/app/.ssh /tmp/x/.ssh /var/tmp/.ssh/id_rsa /root/.ssh "~/a/.ssh/b" "~bob/.ssh" a/.ssh; do
+    [[ "$(__remote_classify_path "$p")" == "ask:.ssh" ]] || { echo "not asked: $p"; exit 1; }
+    ! __remote_is_safe_for_delete "$p" || { echo "delete-safe: $p"; exit 1; }
+  done
+  [[ "$(__remote_classify_path /boot/.ssh)" == "deny:/boot" ]]
+  [[ "$(__remote_classify_path /home/u/.sshx)" == allow ]]
+  [[ "$(__remote_classify_path /srv/git/ssh)" == allow ]]
+
+  # Headless: refused without --force, whatever home it is in.
+  tmp="$(mktemp)"; trap "rm -f $tmp" EXIT
+  echo "HOST:git=git@git.example.com" > "$tmp"
+  export GASH_ENV_FILE="$tmp" GASH_HEADLESS=1
+  out="$(remote_push git ./f /srv/git/.ssh/authorized_keys 2>&1 || true)"
+  [[ "$out" == *"(matched: .ssh)"*"refused in headless mode without --force"* ]]
+  __remote_check_safety /srv/git/.ssh/authorized_keys push 1
+'
+
+it "rsync --delete never treats the remote home itself as safe, however it is written" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  for p in "~" "~/" "~bob" "~bob/" /home/u /home/u/ /home/u/. //home//u// /Users/u /Users/u/ /root /root/; do
+    ! __remote_is_safe_for_delete "$p" || { echo "delete-safe: $p"; exit 1; }
+  done
+  for p in "~/project" project /home/u/project /home/u/project/ /tmp /tmp/x /var/tmp/x; do
+    __remote_is_safe_for_delete "$p" || { echo "not delete-safe: $p"; exit 1; }
+  done
+
+  export GASH_HEADLESS=1
+  out="$(__remote_check_delete_safety /home/u 0 2>&1 || true)"
+  [[ "$out" == *"Refused in headless mode without --force"* ]]
+  __remote_check_delete_safety /home/u 1
+'
+
+it "another user's home is spelled out before the safety tables" bash -c '
+  set -euo pipefail
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  [[ "$(__remote_normalize_path "~root/x")" == /root/x ]]
+  [[ "$(__remote_normalize_path "~bob/.bashrc")" == /home/bob/.bashrc ]]
+  [[ "$(__remote_normalize_path "~/a//b/")" == a/b ]]
+  [[ "$(__remote_classify_path "~root/x")" == ask:* ]]
 '

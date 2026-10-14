@@ -212,3 +212,31 @@ it "wex alias points to wsl_explorer" bash -c '
   alias_def="$(alias wex 2>/dev/null)"
   [[ "$alias_def" == *"wsl_explorer"* ]]
 '
+
+describe "Functions (smoke) - port_kill"
+
+it "port_kill targets listeners only, validates the port and asks first" bash -c '
+  set -uo pipefail
+  tmp="$(mktemp -d)"; trap "kill \$victim 2>/dev/null; /bin/rm -rf \"$tmp\"" EXIT
+  sleep 30 & victim=$!
+  # lsof mock: answers only the listener queries, logging every call.
+  printf "#!/bin/sh\necho \"\$*\" >>\"%s/lsof.log\"\ncase \"\$*\" in *-sTCP:LISTEN*) echo %s ;; esac\n" "$tmp" "$victim" >"$tmp/lsof"
+  chmod +x "$tmp/lsof"
+  export PATH="$tmp:$PATH" GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+
+  port_kill 70000 2>/dev/null && exit 1
+  port_kill 80x 2>/dev/null && exit 1
+  [[ ! -e "$tmp/lsof.log" ]] || exit 1
+
+  # Headless without --force: lists, refuses, kills nothing.
+  port_kill 8080 2>/dev/null && exit 1
+  kill -0 "$victim" || exit 1
+  grep -q -- "-iTCP:8080 -sTCP:LISTEN" "$tmp/lsof.log" || exit 1
+  grep -q -- "-i:8080" "$tmp/lsof.log" && exit 1
+
+  port_kill --force 8080 >/dev/null 2>&1 || exit 1
+  wait "$victim" 2>/dev/null
+  kill -0 "$victim" 2>/dev/null && exit 1
+  exit 0
+'

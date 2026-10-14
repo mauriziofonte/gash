@@ -59,6 +59,35 @@ EOF
     [[ "$out" == *"api|my-registry.io/api:latest"* ]]
 '
 
+it "__gash_parse_compose_services reads any indentation without Compose v2" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+    tmp=$(mktemp); stub=$(mktemp -d); trap "rm -rf $tmp $stub" EXIT
+    # A docker without Compose v2: the YAML-subset reader takes over.
+    printf "#!/bin/sh\nexit 1\n" >"$stub/docker"; chmod +x "$stub/docker"
+    export PATH="$stub:$PATH"
+
+    printf "%s\n" "services:" "    web:   # front" "        image: \"nginx:1.25\"   # pinned" \
+        "        labels:" "            image: not-this" "    \"db\":" "        build: ." \
+        "    cache:" "        image: redis:latest" "volumes:" "    data:" "        image: nope" >"$tmp"
+    out=$(__gash_parse_compose_services "$tmp")
+    [[ "$out" == $'"'"'web|nginx:1.25\ncache|redis:latest'"'"' ]] || { echo "$out"; exit 1; }
+'
+
+it "__gash_parse_compose_services prefers docker compose config --format json" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+    command -v jq >/dev/null 2>&1 || exit 77
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    export MOCK_COMPOSE_CONFIG_JSON="{\"services\":{\"web\":{\"image\":\"nginx:1.27\"},\"app\":{\"build\":{\"context\":\".\"}}}}"
+
+    tmp=$(mktemp); trap "rm -f $tmp" EXIT
+    printf "services:\n  web:\n    image: \${TAG}\n" >"$tmp"
+    [[ "$(__gash_parse_compose_services "$tmp")" == "web|nginx:1.27" ]]
+'
+
 it "__gash_parse_compose_services handles services without image (build)" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
@@ -542,15 +571,17 @@ services:
 EOF
 
     # Run upgrade
+    start="$PWD"
     docker_compose_upgrade "$tmpdir" --yes >/dev/null 2>&1 || true
 
-    # Check that commands were called in order
-    [[ -f "$MOCK_DOCKER_LOG" ]] || exit 1
-    log=$(cat "$MOCK_DOCKER_LOG")
+    # The caller'"'"'s working directory is never changed.
+    [[ "$PWD" == "$start" ]] || exit 1
 
-    [[ "$log" == *"compose pull"* ]] || exit 1
-    [[ "$log" == *"compose stop"* ]] || exit 1
-    [[ "$log" == *"compose up"* ]] || exit 1
+    # pull, stop, up, in that order, each naming the project explicitly
+    [[ -f "$MOCK_DOCKER_LOG" ]] || exit 1
+    log=$(tr "\n" " " <"$MOCK_DOCKER_LOG")
+    proj="compose -f $tmpdir/docker-compose.yml --project-directory $tmpdir"
+    [[ "$log" == *"$proj pull web"*"$proj stop web"*"$proj up -d --remove-orphans web"* ]] || { echo "$log"; exit 1; }
 '
 
 # =============================================================================
@@ -919,6 +950,22 @@ it "__gash_get_remote_digest succeeds for Docker Hub" bash -c '
     digest=$(__gash_get_remote_digest "docker.io" "library/nginx" "latest")
     [[ -n "$digest" ]]
     [[ "$digest" == sha256:* ]]
+'
+
+it "__gash_get_remote_digest asks for multi-arch indexes on every registry" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+    export PATH="$ROOT/tests/mocks/bin:$PATH"
+    tmp=$(mktemp -d); trap "rm -rf $tmp" EXIT
+    export MOCK_CURL_LOG="$tmp/log"
+
+    __gash_get_remote_digest "docker.io" "library/nginx" "latest" >/dev/null
+    __gash_get_remote_digest "registry.example.com" "team/app" "latest" >/dev/null || true
+    for host in registry-1.docker.io registry.example.com; do
+        line=$(grep "manifests" "$MOCK_CURL_LOG" | grep "$host")
+        [[ "$line" == *"manifest.list.v2+json"* && "$line" == *"oci.image.index.v1+json"* ]] || { echo "$line"; exit 1; }
+    done
 '
 
 it "__gash_get_remote_digest succeeds for GHCR" bash -c '

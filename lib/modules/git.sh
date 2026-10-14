@@ -42,12 +42,12 @@ git_dump_revisions() {
         __gash_info "Saving version $index to file $out for commit $commit"
 
         # Save commit log message in a separate log file
-        echo "*******************************************************" > "$log"
-        git log -1 --pretty=format:"%s%nAuthored by %an at %ai%n%n%b%n" "$commit" >> "$log"
-        echo "*******************************************************" >> "$log"
+        echo "*******************************************************" >"$log"
+        git log -1 --pretty=format:"%s%nAuthored by %an at %ai%n%n%b%n" "$commit" >>"$log"
+        echo "*******************************************************" >>"$log"
 
         # Save the actual file content for the commit
-        git show "$commit:./$file" > "$out"
+        git show "$commit:./$file" >"$out"
 
         index=$((index + 1))
     done
@@ -118,7 +118,7 @@ git_apply_patch() {
 
     __gash_step 3 4 "Generating patch from '$feature_branch' since commit '$commit_hash'..."
     local patch_file="${feature_branch}.patch"
-    git diff-index "$commit_hash" --binary > "$patch_file" || {
+    git diff-index "$commit_hash" --binary >"$patch_file" || {
         __gash_error "Failed to create patch file."
         rm -f "$patch_file"
         return 1
@@ -177,21 +177,26 @@ git_add_tag() {
 
     local tag_name="${1-}"
     local tag_message="${2:-"Release $tag_name"}"
+    __gash_git_check_tag_name "$tag_name" || return 1
 
-    # Check if tag already exists
-    if git rev-parse "$tag_name" >/dev/null 2>&1 || git ls-remote --tags origin | grep -qF "refs/tags/$tag_name"; then
+    # Exact ref matches only: "v1.0" must not collide with "v1.0.1" or a
+    # branch called v1.0.
+    if __gash_git_local_tag "$tag_name" || __gash_git_remote_tag "$tag_name"; then
         __gash_error "Tag '$tag_name' already exists."
         return 1
     fi
 
-    # Create and push the tag
-    git tag -a "$tag_name" -m "$tag_message"
+    git tag -a "$tag_name" -m "$tag_message" || {
+        __gash_error "Could not create tag '$tag_name'."
+        return 1
+    }
     __gash_success "Tag '$tag_name' created."
 
-    git push origin "$tag_name"
+    git push origin "refs/tags/$tag_name" || {
+        __gash_error "Tag '$tag_name' was created locally but could not be pushed."
+        return 1
+    }
     __gash_success "Tag '$tag_name' pushed to remote."
-
-    return 0
 }
 
 # Delete a tag locally and on the remote.
@@ -206,24 +211,47 @@ git_delete_tag() {
     __gash_require_arg "${1-}" "tag name" "git_delete_tag <tag_name>" || return 1
 
     local tag_name="${1-}"
+    __gash_git_check_tag_name "$tag_name" || return 1
 
-    # Check if tag exists
-    if ! git rev-parse "$tag_name" >/dev/null 2>&1 && ! git ls-remote --tags origin | grep -q "refs/tags/$tag_name"; then
+    local local_tag=0 remote_tag=0
+    __gash_git_local_tag "$tag_name" && local_tag=1
+    __gash_git_remote_tag "$tag_name" && remote_tag=1
+    if ((local_tag == 0 && remote_tag == 0)); then
         __gash_error "Tag '$tag_name' does not exist."
         return 1
     fi
 
-    # Delete local tag if exists
-    if git rev-parse "$tag_name" >/dev/null 2>&1; then
-        git tag -d "$tag_name" && __gash_success "Local tag '$tag_name' deleted."
+    local rc=0
+    if ((local_tag)); then
+        if git tag -d "$tag_name" >/dev/null; then
+            __gash_success "Local tag '$tag_name' deleted."
+        else
+            rc=1
+        fi
     fi
-
-    # Delete remote tag if exists
-    if git ls-remote --tags origin | grep -qF "refs/tags/$tag_name"; then
-        git push origin --delete "$tag_name" && __gash_success "Remote tag '$tag_name' deleted."
+    if ((remote_tag)); then
+        if git push origin --delete "refs/tags/$tag_name"; then
+            __gash_success "Remote tag '$tag_name' deleted."
+        else
+            __gash_error "Could not delete remote tag '$tag_name'."
+            rc=1
+        fi
     fi
+    return "$rc"
+}
 
-    return 0
+# Tag helpers: exact ref checks, never substring or pattern matches.
+__gash_git_check_tag_name() {
+    if ! git check-ref-format "refs/tags/${1-}" 2>/dev/null; then
+        __gash_error "Invalid tag name: '${1-}'."
+        return 1
+    fi
+}
+__gash_git_local_tag() {
+    git rev-parse -q --verify "refs/tags/${1-}" >/dev/null 2>&1
+}
+__gash_git_remote_tag() {
+    git ls-remote --exit-code --tags origin "refs/tags/${1-}" >/dev/null 2>&1
 }
 
 # -----------------------------------------------------------------------------
@@ -248,8 +276,11 @@ git_repair() {
     origin_url="$(git remote get-url origin)"
 
     local tmp_dir
-    tmp_dir=$(mktemp -d) || { __gash_error "Failed to create temporary directory."; return 1; }
-    trap 'rm -rf "$tmp_dir" >/dev/null 2>&1' RETURN
+    tmp_dir=$(mktemp -d) || {
+        __gash_error "Failed to create temporary directory."
+        return 1
+    }
+    trap 'command rm -rf "$tmp_dir" >/dev/null 2>&1; trap - RETURN' RETURN
 
     __gash_step 1 5 "Removing corrupted (0-byte) loose objects..."
     local removed
@@ -293,12 +324,12 @@ alias gheal='git_repair'
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "git_list_tags" \
-    --aliases "glt" \
-    --module "git" \
-    --short "List all local and remote tags" \
-    --see-also "git_add_tag git_delete_tag" \
-    <<'HELP'
+    __gash_register_help "git_list_tags" \
+        --aliases "glt" \
+        --module "git" \
+        --short "List all local and remote tags" \
+        --see-also "git_add_tag git_delete_tag" \
+        <<'HELP'
 USAGE
   git_list_tags
 
@@ -310,12 +341,12 @@ EXAMPLES
   glt && gat v2.0.0 "Major release"
 HELP
 
-__gash_register_help "git_add_tag" \
-    --aliases "gat" \
-    --module "git" \
-    --short "Create an annotated tag and push to remote" \
-    --see-also "git_list_tags git_delete_tag" \
-    <<'HELP'
+    __gash_register_help "git_add_tag" \
+        --aliases "gat" \
+        --module "git" \
+        --short "Create an annotated tag and push to remote" \
+        --see-also "git_list_tags git_delete_tag" \
+        <<'HELP'
 USAGE
   git_add_tag TAG_NAME ["TAG_MESSAGE"]
 
@@ -334,12 +365,12 @@ NOTES
   in one step. Requires a clean git repo with a remote.
 HELP
 
-__gash_register_help "git_delete_tag" \
-    --aliases "gdt" \
-    --module "git" \
-    --short "Delete a tag locally and on remote" \
-    --see-also "git_list_tags git_add_tag" \
-    <<'HELP'
+    __gash_register_help "git_delete_tag" \
+        --aliases "gdt" \
+        --module "git" \
+        --short "Delete a tag locally and on remote" \
+        --see-also "git_list_tags git_add_tag" \
+        <<'HELP'
 USAGE
   git_delete_tag TAG_NAME
 
@@ -354,12 +385,12 @@ NOTES
   Deletes the tag both locally and on the remote origin.
 HELP
 
-__gash_register_help "git_dump_revisions" \
-    --aliases "gdr" \
-    --module "git" \
-    --short "Dump all revisions of a file into separate files" \
-    --see-also "git_apply_patch" \
-    <<'HELP'
+    __gash_register_help "git_dump_revisions" \
+        --aliases "gdr" \
+        --module "git" \
+        --short "Dump all revisions of a file into separate files" \
+        --see-also "git_apply_patch" \
+        <<'HELP'
 USAGE
   git_dump_revisions FILENAME
 
@@ -375,12 +406,12 @@ NOTES
   Each revision is dumped with its commit log message alongside.
 HELP
 
-__gash_register_help "git_apply_patch" \
-    --aliases "gpatch" \
-    --module "git" \
-    --short "Apply a patch from a feature branch to main" \
-    --see-also "git_dump_revisions" \
-    <<'HELP'
+    __gash_register_help "git_apply_patch" \
+        --aliases "gpatch" \
+        --module "git" \
+        --short "Apply a patch from a feature branch to main" \
+        --see-also "git_dump_revisions" \
+        <<'HELP'
 USAGE
   git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH
 
@@ -397,12 +428,12 @@ NOTES
   The commit hash must exist on the feature branch.
 HELP
 
-__gash_register_help "git_repair" \
-    --aliases "gheal" \
-    --module "git" \
-    --short "Repair a repo with corrupted 0-byte loose objects" \
-    --see-also "git_list_tags" \
-    <<'HELP'
+    __gash_register_help "git_repair" \
+        --aliases "gheal" \
+        --module "git" \
+        --short "Repair a repo with corrupted 0-byte loose objects" \
+        --see-also "git_list_tags" \
+        <<'HELP'
 USAGE
   git_repair
 
@@ -416,4 +447,4 @@ NOTES
   --full' to verify. Requires a git repo with a configured remote.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

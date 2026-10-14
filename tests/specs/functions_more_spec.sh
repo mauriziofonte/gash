@@ -16,9 +16,35 @@ it "disk_usage formats filtered filesystem types" bash -c '
   export PATH="$ROOT/tests/mocks/bin:$PATH"
   out="$(disk_usage 2>/dev/null)"
 
-  # Should include only ext*/xfs/btrfs/... lines, so ext4 and xfs from mock df
-  [[ "$out" == *"ext4"*"/"* ]]
-  [[ "$out" == *"xfs"*"/data"* ]]
+  # Disk-backed filesystems only: ext4 and xfs, the WSL drive, not tmpfs.
+  grep -qE "^  /  +/dev/sda1 +ext4 +50 GiB +10 GiB +38 GiB +[^ ]+ +21%$" <<<"$out"
+  grep -qE "^  /data +/dev/sdb1 +xfs .* 92%$" <<<"$out"
+  grep -qE "^  /mnt/c +C:.* 9p .* 81%$" <<<"$out"
+  grep -qE "^  /media/my disk +/dev/sdc1 " <<<"$out"
+  [[ "$out" != *tmpfs* && "$out" != *"/run/user"* ]]
+'
+
+it "disk_usage falls back to df -Pk without types (BSD/macOS)" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  export PATH="$ROOT/tests/mocks/bin:$PATH" MOCK_DF_NO_TYPE=1
+  out="$(disk_usage 2>/dev/null)"
+  grep -qE "^  /  +/dev/disk3s1 +- .* 5%$" <<<"$out"
+  [[ "$out" != *devfs* ]]
+  ! disk_usage --bogus 2>/dev/null
+'
+
+it "disk_usage colors the bar by fill: green, yellow from 75%, red from 90%" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  __gash_use_color() { return 0; }
+  out="$(disk_usage 2>/dev/null)"
+  [[ "$(grep " 21%" <<<"$out")" == *"${__GASH_GREEN}"* ]]
+  [[ "$(grep " 81%" <<<"$out")" == *"${__GASH_YELLOW}"* ]]
+  [[ "$(grep " 92%" <<<"$out")" == *"${__GASH_BOLD_RED}"* ]]
 '
 
 it "dirs_find_large works without numfmt (pure-bash IEC fallback)" bash -c '
@@ -162,4 +188,40 @@ it "gash_username returns a non-empty string" bash -c '
 
   u="$(gash_username)"
   [[ -n "$u" ]]
+'
+
+it "process_kill without a terminal refuses unless --force, whatever the number of matches" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  # pgrep mock: one match for my-proc, two for many-proc.
+  printf "#!/bin/sh\ncase \"\$*\" in *many-proc*) printf \"3333\\\\n4444\\\\n\" ;; *my-proc*) echo 2222 ;; *) exit 1 ;; esac\n" >"$tmp/pgrep"
+  chmod +x "$tmp/pgrep"
+  export PATH="$tmp:$PATH" MOCK_KILL_LOG="$tmp/kill.log"
+  kill() { printf "%s\n" "$*" >>"$MOCK_KILL_LOG"; return 1; }
+
+  export GASH_HEADLESS=1
+  for name in my-proc many-proc; do
+    out="$(process_kill "$name" 2>&1)" && { echo "killed without --force: $name"; exit 1; }
+    [[ "$out" == *"pass --force"* ]]
+  done
+  [[ ! -e "$MOCK_KILL_LOG" ]]
+
+  process_kill my-proc --force >/dev/null 2>&1
+  process_kill --force many-proc >/dev/null 2>&1
+  process_kill -f my-proc >/dev/null 2>&1
+  grep -qx 2222 "$MOCK_KILL_LOG"
+  grep -qx 3333 "$MOCK_KILL_LOG"
+  grep -qx 4444 "$MOCK_KILL_LOG"
+  ! process_kill --bogus my-proc 2>/dev/null
+
+  # Not headless but no controlling terminal: same refusal.
+  if setsid -w true </dev/null >/dev/null 2>&1; then
+    : >"$MOCK_KILL_LOG"
+    unset GASH_HEADLESS
+    out="$(setsid -w bash -c "source \"$ROOT/tests/gash-test.sh\"; gash_source_all \"$ROOT\"; kill() { echo \"\$*\" >>\"$MOCK_KILL_LOG\"; }; process_kill my-proc" </dev/null 2>&1)" && exit 1
+    [[ "$out" == *"pass --force"* && ! -s "$MOCK_KILL_LOG" ]]
+  fi
 '

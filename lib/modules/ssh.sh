@@ -168,6 +168,7 @@ EOF
 #
 # Usage: gash_ssh_auto_unlock
 gash_ssh_auto_unlock() {
+    needs_help "gash_ssh_auto_unlock" "gash_ssh_auto_unlock" "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)." "${1-}" && return
     # Run once per shell session
     if [[ -n "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]]; then
         return 0
@@ -175,6 +176,7 @@ gash_ssh_auto_unlock() {
 
     # Get SSH keys from config
     local ssh_keys
+    __gash_load_env
     ssh_keys="$(__gash_get_ssh_keys)"
 
     if [[ -z "$ssh_keys" ]]; then
@@ -216,11 +218,29 @@ gash_ssh_auto_unlock() {
     local IFS=$'\n'
     local row
 
+    # Fingerprints already in the agent: those keys are skipped.
+    local loaded="" fp
+    [[ "$ssh_add_list" == *SHA256:* || "$ssh_add_list" == *MD5:* ]] && loaded="$ssh_add_list"
+
     for row in $ssh_keys; do
         [[ -z "$row" ]] && continue
 
         local keyfile="${row%%$'\t'*}"
         local password="${row#*$'\t'}"
+
+        if [[ -n "$loaded" ]] && command -v ssh-keygen >/dev/null 2>&1; then
+            fp=""
+            if [[ -f "$keyfile.pub" ]]; then
+                fp="$(ssh-keygen -lf "$keyfile.pub" 2>/dev/null)" || fp=""
+            else
+                fp="$(ssh-keygen -lf "$keyfile" 2>/dev/null)" || fp=""
+            fi
+            fp="${fp#* }"
+            fp="${fp%% *}"
+            if [[ -n "$fp" && "$loaded" == *" $fp "* ]]; then
+                continue
+            fi
+        fi
 
         # Encode values to safely carry special characters (incl. newlines)
         local key_b64 pass_b64
@@ -236,7 +256,7 @@ gash_ssh_auto_unlock() {
 
     local expect_script
     expect_script="$(mktemp -t gash-ssh-expect.XXXXXX)"
-    __gash_generate_expect_script > "$expect_script"
+    __gash_generate_expect_script >"$expect_script"
 
     local expect_output
     expect_output="$(printf '%s' "$stdin_payload" | expect -f "$expect_script" 2>&1)"
@@ -256,11 +276,11 @@ gash_ssh_auto_unlock() {
 
 if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
 
-__gash_register_help "gash_ssh_auto_unlock" \
-    --module "ssh" \
-    --short "Auto-unlock SSH keys from ~/.gash_env on shell startup" \
-    --see-also "gash_env_init" \
-    <<'HELP'
+    __gash_register_help "gash_ssh_auto_unlock" \
+        --module "ssh" \
+        --short "Auto-unlock SSH keys from ~/.gash_env on shell startup" \
+        --see-also "gash_env_init" \
+        <<'HELP'
 USAGE
   gash_ssh_auto_unlock
 
@@ -283,4 +303,4 @@ NOTES
   Only unlocks keys that are not already loaded in the agent.
 HELP
 
-fi  # end help registration guard
+fi # end help registration guard

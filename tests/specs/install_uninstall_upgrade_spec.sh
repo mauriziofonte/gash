@@ -34,7 +34,7 @@ it "gash_uninstall removes gash and cleans profile" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   # Create a fake profile containing the install block.
@@ -117,7 +117,7 @@ it "gash_uninstall preserves other if/fi blocks in profile" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   # Profile with Gash block + another if/fi block
@@ -154,7 +154,7 @@ it "gash_uninstall removes new format with delimiters" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   # Profile with new delimited format
@@ -190,7 +190,7 @@ it "gash_uninstall removes custom GASH_DIR location" bash -c '
 
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   custom_dir="$tmp/custom_gash"
-  mkdir -p "$custom_dir"
+  mkdir -p "$custom_dir/lib/core"; : >"$custom_dir/gash.sh"
   : > "$tmp/.gashrc"
   : > "$tmp/.bashrc"
 
@@ -200,13 +200,32 @@ it "gash_uninstall removes custom GASH_DIR location" bash -c '
   [[ ! -d "$custom_dir" ]]
 '
 
+it "gash_uninstall removes the settings file named by GASH_ENV_FILE" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  custom_dir="$tmp/custom_gash"
+  mkdir -p "$custom_dir/lib/core" "$tmp/conf"; : >"$custom_dir/gash.sh"
+  : > "$tmp/.gashrc"
+  : > "$tmp/.bashrc"
+  printf "DB:x=mysql://u:p@h/d\n" >"$tmp/conf/gash.env"
+
+  needs_confirm_prompt() { return 0; }
+  out="$(HOME="$tmp" GASH_DIR="$custom_dir" GASH_ENV_FILE="$tmp/conf/gash.env" gash_uninstall 2>&1)" || true
+
+  [[ ! -e "$tmp/conf/gash.env" ]]
+  [[ "$out" == *"Removed ~/conf/gash.env"* ]]
+'
+
 it "gash_uninstall cleans all profile files" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
 
   gash_block="# Load Gash Bash
@@ -235,7 +254,7 @@ it "gash_uninstall handles missing profile files gracefully" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
-  mkdir -p "$tmp_home/.gash"
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
   : > "$tmp_home/.gashrc"
   # NO profile files created
 
@@ -244,6 +263,27 @@ it "gash_uninstall handles missing profile files gracefully" bash -c '
 
   # Should succeed
   [[ ! -d "$tmp_home/.gash" ]]
+'
+
+it "gash_uninstall refuses a GASH_DIR that is not a Gash checkout" bash -c '
+  set -uo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  mkdir -p "$tmp_home/data"; : >"$tmp_home/data/keep"; : >"$tmp_home/.gashrc"
+  printf "keep me\n" >"$tmp_home/.bashrc.bak"
+  needs_confirm_prompt() { return 0; }
+
+  for d in "$tmp_home" "$tmp_home/data" /; do
+    HOME="$tmp_home" GASH_DIR="$d" gash_uninstall >/dev/null 2>&1 && exit 1
+  done
+  [[ -f "$tmp_home/data/keep" && -f "$tmp_home/.gashrc" ]] || exit 1
+
+  # A real-looking checkout is removed; the user'"'"'s own .bak survives.
+  mkdir -p "$tmp_home/.gash/lib/core"; : >"$tmp_home/.gash/gash.sh"
+  HOME="$tmp_home" gash_uninstall >/dev/null 2>&1 || exit 1
+  [[ ! -d "$tmp_home/.gash" && -f "$tmp_home/.bashrc.bak" ]]
 '
 
 it "install then uninstall leaves system clean" bash -c '
@@ -327,4 +367,115 @@ it "install.sh uses new delimited format" bash -c '
   # Check for new delimiters
   grep -q ">>> GASH START >>>" "$profile"
   grep -q "<<< GASH END <<<" "$profile"
+'
+
+it "install.sh refuses to update a checkout with local modifications" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  : >"$tmp_home/.bashrc"
+  run() { HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_INSTALL_GIT_REPO="$ROOT" bash "$ROOT/install.sh" --assume-yes --quiet; }
+
+  run >/dev/null 2>&1
+  echo "# local edit" >>"$tmp_home/.gash/gash.sh"
+  rc=0; out="$(run 2>&1)" || rc=$?
+  [[ $rc -ne 0 ]]
+  [[ "$out" == *"local modifications"* ]]
+  grep -q "# local edit" "$tmp_home/.gash/gash.sh"
+'
+
+it "install.sh without a terminal and without --assume-yes fails instead of silently aborting" bash -c '
+  set -euo pipefail
+  command -v setsid >/dev/null 2>&1 || exit 77
+  ROOT="${GASH_TEST_ROOT}"
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  : >"$tmp_home/.bashrc"
+
+  rc=0
+  out="$(HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_INSTALL_GIT_REPO="$ROOT" setsid -w bash "$ROOT/install.sh" </dev/null 2>&1)" || rc=$?
+  [[ $rc -eq 1 ]]
+  [[ "$out" == *"--assume-yes"* ]]
+  [[ ! -e "$tmp_home/.gash" ]]
+  [[ ! -s "$tmp_home/.bashrc" ]]
+'
+
+it "install.sh rejects unknown options" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  rc=0; out="$(bash "$ROOT/install.sh" --bogus 2>&1)" || rc=$?
+  [[ $rc -eq 2 ]]
+  [[ "$out" == *"Unknown option: --bogus"* ]]
+'
+
+it "install.sh into a custom GASH_DIR writes that location into ~/.gashrc" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
+  : >"$tmp_home/.bashrc"
+  custom="$tmp_home/opt dir/gash"
+
+  # Install this working tree (not the latest release tag of the checkout,
+  # which predates the feature): snapshot it into a tag-less repository.
+  repo="$tmp_home/repo"
+  mkdir -p "$repo"
+  tar -C "$ROOT" --exclude=./.git -cf - . | tar -C "$repo" -xf -
+  git init -q "$repo"
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m snapshot
+
+  HOME="$tmp_home" PROFILE="$tmp_home/.bashrc" GASH_DIR="$custom" GASH_INSTALL_GIT_REPO="$repo" \
+    bash "$ROOT/install.sh" --assume-yes --quiet >/dev/null 2>&1
+  [[ -f "$custom/gash.sh" ]]
+
+  # A new shell without GASH_DIR in its environment finds the custom location.
+  out="$(env -u GASH_DIR HOME="$tmp_home" GASH_HEADLESS=1 bash -c "source \"\$HOME/.gashrc\"; printf %s \"\$GASH_DIR\"")"
+  [[ "$out" == "$custom" ]]
+'
+
+it "install.sh installs a specific ref with GASH_INSTALL_REF" bash -c '
+  set -euo pipefail
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  repo="$tmp/repo"
+  mkdir -p "$repo"
+  # This working tree (uncommitted changes included), in a fresh repository.
+  tar -C "$GASH_TEST_ROOT" --exclude=./.git -cf - . | tar -C "$repo" -xf -
+  git init -q "$repo"
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m base
+  git -C "$repo" tag v1.0.0
+  echo "marker" >"$repo/MARKER"
+  git -C "$repo" add MARKER
+  git -C "$repo" commit -q -m next
+  git -C "$repo" branch feature
+
+  mkdir -p "$tmp/home"; : >"$tmp/home/.bashrc"
+  HOME="$tmp/home" PROFILE="$tmp/home/.bashrc" GASH_INSTALL_GIT_REPO="$repo" \
+    bash "$repo/install.sh" --assume-yes --quiet >/dev/null 2>&1
+  [[ ! -e "$tmp/home/.gash/MARKER" ]]   # latest release tag by default
+
+  /bin/rm -rf "$tmp/home/.gash"
+  HOME="$tmp/home" PROFILE="$tmp/home/.bashrc" GASH_INSTALL_GIT_REPO="$repo" GASH_INSTALL_REF=feature \
+    bash "$repo/install.sh" --assume-yes --quiet >/dev/null 2>&1
+  [[ -e "$tmp/home/.gash/MARKER" ]]
+'
+
+it "gash_upgrade picks the highest version, not the newest tag" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+
+  work="$tmp/work"; origin="$tmp/origin.git"
+  git init -q "$work"; cd "$work"
+  for v in v1.9.0 v1.10.0 v1.9.1 v2.0.0-rc1; do
+    echo "$v" >f; git add f; git commit -q -m "$v"; git tag -a "$v" -m "$v"
+  done
+  git init -q --bare "$origin"
+  git remote add origin "$origin"
+  git push -q origin --all; git push -q origin --tags
+
+  git clone -q "$origin" "$tmp/home/.gash" 2>/dev/null
+  git -C "$tmp/home/.gash" -c advice.detachedHead=false checkout -q v1.9.0
+  HOME="$tmp/home" GASH_DIR="$tmp/home/.gash" gash_upgrade >/dev/null 2>&1
+  [[ "$(git -C "$tmp/home/.gash" describe --tags --exact-match HEAD)" == "v1.10.0" ]]
 '

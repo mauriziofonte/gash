@@ -25,14 +25,16 @@ it "defines core navigation and safety aliases" bash -c '
   aDots4="$(alias .....)"
   a2="$(alias ll)"
   a3="$(alias rm)"
-  a4="$(alias help)"
+  a4="$(declare -f help)"
 
   [[ "$a1" == *"cd .."* ]]
   [[ "$aDots2" == *"cd ../.."* ]]
   [[ "$aDots3" == *"cd ../../.."* ]]
   [[ "$aDots4" == *"cd ../../../.."* ]]
   [[ "$a2" == *"ls"* ]]
-  [[ "$a3" == *"--preserve-root"* ]]
+  if [[ "$(command rm --version 2>/dev/null)" == *GNU* ]]; then
+    [[ "$a3" == *"--preserve-root"* ]]
+  fi
   [[ "$a4" == *"gash_help"* ]]
 
   # Must remain unset (no pollution).
@@ -63,34 +65,25 @@ echo composer-mock
 EOF
   chmod +x "$tmp/bin/composer"
 
-  # Mock ls so PHP version detection is deterministic and does not touch /usr/bin.
-  cat > "$tmp/bin/ls" <<"EOF"
-#!/usr/bin/env bash
-
-if [[ "${1-}" == "-1" && "${2-}" == "/usr/bin/php*" ]]; then
-  printf '%s\n' "/usr/bin/php8.4" "/usr/bin/php8.3"
-  exit 0
-fi
-
-exec /bin/ls "$@"
-EOF
-  chmod +x "$tmp/bin/ls"
+  # Provide versioned PHP binaries so detection is deterministic and
+  # does not depend on what is installed under /usr/bin.
+  for v in 8.4 8.3; do
+    printf "#!/usr/bin/env bash\nexit 0\n" > "$tmp/bin/php$v"
+    chmod +x "$tmp/bin/php$v"
+  done
 
   export PATH="$tmp/bin:$ROOT/tests/mocks/bin:/usr/bin:/bin"
 
-  # Simulate the user having defined composer as an alias.
+  # Simulate the user having defined composer as an alias; the override
+  # of `composer` itself only happens with GASH_REPLACE_TOOLS=1.
   alias composer="echo should-not-be-used"
-
-  # Disable glob expansion so /usr/bin/php* is passed literally to our mocked ls.
-  set -f
+  export GASH_REPLACE_TOOLS=1
 
   # Keep LS_COLORS empty so aliases.sh initializes it.
   export LS_COLORS=""
 
   # shellcheck source=lib/aliases.sh
   source "$ROOT/lib/aliases.sh"
-
-  set +f
 
     q="$(printf '\\047')"
     line="$(alias composer)"
@@ -109,4 +102,6 @@ EOF
     body2="${body2#${q}}"
     body2="${body2%${q}}"
   [[ "$body2" == *"$tmp/bin/composer"* ]]
+
+  [[ "$(alias composer84)" == *"$tmp/bin/php8.4"*"$tmp/bin/composer"* ]]
 '

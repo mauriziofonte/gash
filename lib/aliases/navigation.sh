@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2139 # aliases intentionally expand values at definition time
 
 # Gash Aliases: Navigation
 # Directory navigation and listing aliases.
@@ -18,7 +19,7 @@ if [[ -n "$__gash_ls_color_flag" ]]; then
     alias la="ls -la $__gash_ls_color_flag"
     alias l="ls -CF $__gash_ls_color_flag"
     alias lash="ls -lash $__gash_ls_color_flag"
-    alias sl="ls $__gash_ls_color_flag"  # Correct common typo
+    alias sl="ls $__gash_ls_color_flag" # Correct common typo
 
     if command -v dir >/dev/null 2>&1; then
         alias dir="dir $__gash_ls_color_flag"
@@ -31,7 +32,7 @@ else
     alias la='ls -la'
     alias l='ls -CF'
     alias lash='ls -lash'
-    alias sl='ls'  # Correct common typo
+    alias sl='ls' # Correct common typo
 fi
 
 unset __gash_ls_color_flag

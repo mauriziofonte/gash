@@ -1,0 +1,24 @@
+name: Feature request
+description: A function, option or behaviour Gash should have
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and why the current functions fall short.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How you would call it and what it would print (text and, for agents, JSON).
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who is it for
+      options:
+        - People at a terminal
+        - LLM agents and scripts
+        - Both

@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in Gash does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran, what you expected and what you got.
+      placeholder: |
+        $ files_largest --json /srv
+        expected ..., got ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The smallest steps that show the problem, ideally in a fresh shell.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Gash version
+      description: Output of `echo $GASH_VERSION`
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: gash_doctor output
+      description: Output of `gash_doctor` (it shows no secrets).
+      render: text
+  - type: dropdown
+    id: os
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - WSL
+        - macOS (Homebrew Bash)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How Gash was loaded
+      options:
+        - Interactive shell
+        - Headless (GASH_HEADLESS=1, scripts or agents)
