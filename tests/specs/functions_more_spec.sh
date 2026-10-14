@@ -16,9 +16,35 @@ it "disk_usage formats filtered filesystem types" bash -c '
   export PATH="$ROOT/tests/mocks/bin:$PATH"
   out="$(disk_usage 2>/dev/null)"
 
-  # Should include only ext*/xfs/btrfs/... lines, so ext4 and xfs from mock df
-  [[ "$out" == *"ext4"*"/"* ]]
-  [[ "$out" == *"xfs"*"/data"* ]]
+  # Disk-backed filesystems only: ext4 and xfs, the WSL drive, not tmpfs.
+  grep -qE "^  /  +/dev/sda1 +ext4 +50 GiB +10 GiB +38 GiB +[^ ]+ +21%$" <<<"$out"
+  grep -qE "^  /data +/dev/sdb1 +xfs .* 92%$" <<<"$out"
+  grep -qE "^  /mnt/c +C:.* 9p .* 81%$" <<<"$out"
+  grep -qE "^  /media/my disk +/dev/sdc1 " <<<"$out"
+  [[ "$out" != *tmpfs* && "$out" != *"/run/user"* ]]
+'
+
+it "disk_usage falls back to df -Pk without types (BSD/macOS)" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  export PATH="$ROOT/tests/mocks/bin:$PATH" MOCK_DF_NO_TYPE=1
+  out="$(disk_usage 2>/dev/null)"
+  grep -qE "^  /  +/dev/disk3s1 +- .* 5%$" <<<"$out"
+  [[ "$out" != *devfs* ]]
+  ! disk_usage --bogus 2>/dev/null
+'
+
+it "disk_usage colors the bar by fill: green, yellow from 75%, red from 90%" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  __gash_use_color() { return 0; }
+  out="$(disk_usage 2>/dev/null)"
+  [[ "$(grep " 21%" <<<"$out")" == *"${__GASH_GREEN}"* ]]
+  [[ "$(grep " 81%" <<<"$out")" == *"${__GASH_YELLOW}"* ]]
+  [[ "$(grep " 92%" <<<"$out")" == *"${__GASH_BOLD_RED}"* ]]
 '
 
 it "dirs_find_large works without numfmt (pure-bash IEC fallback)" bash -c '

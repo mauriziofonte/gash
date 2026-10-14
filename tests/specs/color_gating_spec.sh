@@ -207,7 +207,7 @@ it "disk_usage --no-color strips ANSI from awk output" bash -c '
   out="$(disk_usage --no-color 2>/dev/null)"
   [[ "$out" != *$'"'"'\033['"'"'* ]]
   # Header should still be printed
-  [[ "$out" == *"Filesystem"* ]]
+  [[ "$out" == *"MOUNT"* ]]
 '
 
 it "sysinfo --llm implies no ANSI (LLM-compact mode)" bash -c '

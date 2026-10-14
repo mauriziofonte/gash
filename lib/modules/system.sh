@@ -20,7 +20,7 @@
 # Disk Usage
 # -----------------------------------------------------------------------------
 
-# Display disk usage for specific filesystem types.
+# Display disk usage for real (disk-backed) filesystems.
 # Usage: disk_usage [--no-color]
 # Alias: du2
 disk_usage() {
@@ -28,27 +28,91 @@ disk_usage() {
         "Displays disk usage for real filesystem types, formatted for easy reading. Alias: du2" \
         "${1-}" && return
 
-    local no_color=0
-    local a
+    local no_color=0 a
     for a in "$@"; do
         case "$a" in
             --no-color) no_color=1 ;;
+            *)
+                __gash_error "disk_usage: unknown option '$a'"
+                return 1
+                ;;
         esac
     done
+    eval "$(__gash_color_scope "$no_color")"
 
-    local use_color=1
-    __gash_want_colors "$no_color" || use_color=0
+    # POSIX output in KiB: one line per filesystem, mount point last. GNU df
+    # adds the type with -T; BSD/macOS df has no -T, so keep /dev devices.
+    local raw typed=1
+    raw="$(df -PTk 2>/dev/null)" || raw=""
+    if [[ -z "$raw" ]]; then
+        typed=0
+        raw="$(df -Pk 2>/dev/null)" || raw=""
+    fi
+    [[ -n "$raw" ]] || {
+        __gash_error "disk_usage: df failed"
+        return 1
+    }
 
-    df -hT | awk -v c="$use_color" '
-    BEGIN {printf "%-20s %-8s %-8s %-8s %-8s %-6s %-20s\n", "Filesystem", "Type", "Size", "Used", "Avail", "Use%", "Mountpoint"}
-    $2 ~ /(ext[2-4]|xfs|btrfs|zfs|f2fs|fat|vfat|ntfs)/ {
-        if (c == 1) {
-            printf "\033[1;33m%-20s\033[0m \033[0;36m%-8s\033[0m \033[1;37m%-8s\033[0m \033[1;37m%-8s\033[0m \033[1;37m%-8s\033[0m \033[38;5;214m%-6s\033[0m %-20s\n", $1, $2, $3, $4, $5, $6, $7
-        } else {
-            printf "%-20s %-8s %-8s %-8s %-8s %-6s %-20s\n", $1, $2, $3, $4, $5, $6, $7
+    local rows
+    rows="$(printf '%s\n' "$raw" | "${__GASH_AWK:-awk}" -v typed="$typed" '
+        function h(k,   u, i) {
+            split("KiB MiB GiB TiB PiB", u, " ")
+            i = 1
+            while (k >= 1024 && i < 5) { k /= 1024; i++ }
+            return sprintf(k < 10 ? "%.1f %s" : "%.0f %s", k, u[i])
         }
-    }'
+        NR == 1 { next }
+        {
+            if (typed) { type = $2; f = 3 } else { type = "-"; f = 2 }
+            size = $f; used = $(f + 1); avail = $(f + 2); pct = $(f + 3)
+            mnt = $(f + 4); for (i = f + 5; i <= NF; i++) mnt = mnt " " $i
+            if (typed) {
+                if (type !~ /^(ext[2-4]|xfs|btrfs|zfs|f2fs|fat|vfat|exfat|msdos|ntfs|ntfs3|fuseblk|apfs|hfs|reiserfs|jfs)$/ &&
+                    !(type ~ /^(drvfs|9p)$/ && mnt ~ /^\/mnt\/[a-z]$/)) next
+            } else if ($1 !~ /^\/dev\//) next
+            if (seen[mnt]++) next
+            sub(/%$/, "", pct)
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%d\n", mnt, $1, type, h(size), h(used), h(avail), pct + 0
+        }
+    ')"
+    if [[ -z "$rows" ]]; then
+        __gash_info "No disk-backed filesystems found (df lists only virtual ones)."
+        return 0
+    fi
 
+    local B="${__GASH_BOLD}" M="${__GASH_COLOR_MUTED}" C="${__GASH_CYAN}" R="${__GASH_COLOR_OFF}"
+    __gash_use_color || { B="" M="" C="" R=""; }
+
+    # Column widths from the data.
+    local mnt dev type size used avail pct
+    local wm=5 wd=6 wt=4 ws=4 wu=4 wa=4
+    while IFS=$'\t' read -r mnt dev type size used avail pct; do
+        ((${#mnt} > wm)) && wm=${#mnt}
+        ((${#dev} > wd)) && wd=${#dev}
+        ((${#type} > wt)) && wt=${#type}
+        ((${#size} > ws)) && ws=${#size}
+        ((${#used} > wu)) && wu=${#used}
+        ((${#avail} > wa)) && wa=${#avail}
+    done <<<"$rows"
+    ((wd > 28)) && wd=28
+
+    echo
+    printf '  %s%-*s  %-*s  %-*s  %*s  %*s  %*s  %s%s\n' "$B" \
+        "$wm" "MOUNT" "$wd" "DEVICE" "$wt" "TYPE" "$ws" "SIZE" "$wu" "USED" "$wa" "FREE" "USE" "$R"
+    local bar pc
+    while IFS=$'\t' read -r mnt dev type size used avail pct; do
+        ((${#dev} > wd)) && dev="${__GASH_GLYPH_ELLIPSIS}${dev: -$((wd - 1))}"
+        pc="${__GASH_GREEN}"
+        ((pct >= 75)) && pc="${__GASH_YELLOW}"
+        ((pct >= 90)) && pc="${__GASH_BOLD_RED}"
+        __gash_use_color || pc=""
+        __gash_bar bar "$pct" 100 10
+        printf '  %s%-*s%s  %s%-*s%s  %-*s  %*s  %*s  %*s  %s%s%s%s%s%s %s%3d%%%s\n' \
+            "$C" "$wm" "$mnt" "$R" "$M" "$wd" "$dev" "$R" "$wt" "$type" \
+            "$ws" "$size" "$wu" "$used" "$wa" "$avail" \
+            "$pc" "${bar%%$'\t'*}" "$R" "$M" "${bar#*$'\t'}" "$R" "$pc" "$pct" "$R"
+    done <<<"$rows"
+    echo
     return 0
 }
 
@@ -859,15 +923,17 @@ if declare -p __GASH_HELP_REGISTRY &>/dev/null 2>&1; then
         --see-also "dirs_largest dirs_find_large" \
         <<'HELP'
 USAGE
-  disk_usage
+  disk_usage [--no-color]
 
 EXAMPLES
   # Show disk usage for ext4, xfs, btrfs, zfs, etc.
   du2
 
 NOTES
-  Filters out virtual filesystems (tmpfs, devtmpfs, overlay).
-  Shows only real disk partitions with human-readable sizes.
+  Filters out virtual filesystems (tmpfs, devtmpfs, overlay, fuse).
+  Windows drives under WSL (/mnt/c, ...) are shown.
+  The bar turns yellow at 75% and red at 90%.
+  On macOS (no df -T) every /dev device is listed, without a type.
 HELP
 
     __gash_register_help "history_grep" \

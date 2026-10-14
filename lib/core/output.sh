@@ -485,11 +485,38 @@ __gash_section() {
 # Usage: __gash_visible_len VAR "string"
 __gash_visible_len() {
     local -n __gvl_out="$1"
-    local s="${2-}"
-    while [[ "$s" =~ $'\e'\[[0-9\;]*m ]]; do
-        s="${s//"${BASH_REMATCH[0]}"/}"
+    local __gvl_s="${2-}"
+    while [[ "$__gvl_s" =~ $'\e'\[[0-9\;]*m ]]; do
+        __gvl_s="${__gvl_s//"${BASH_REMATCH[0]}"/}"
     done
-    __gvl_out=${#s}
+    __gvl_out=${#__gvl_s}
+}
+
+# Group the digits of an integer by thousands: 1234567 -> 1,234,567.
+# Usage: __gash_group_digits VAR NUMBER
+__gash_group_digits() {
+    local -n __ggd_out="$1"
+    local __ggd_n="${2-0}" __ggd_sign="" __ggd_res=""
+    [[ "$__ggd_n" == -* ]] && __ggd_sign="-" __ggd_n="${__ggd_n#-}"
+    while ((${#__ggd_n} > 3)); do
+        __ggd_res=",${__ggd_n: -3}$__ggd_res"
+        __ggd_n="${__ggd_n:0:${#__ggd_n}-3}"
+    done
+    __ggd_out="$__ggd_sign$__ggd_n$__ggd_res"
+}
+
+# A bar of WIDTH cells, VALUE/MAX of them full (at least one when VALUE > 0).
+# The full and empty parts are split by a tab so callers can color each.
+# Usage: __gash_bar VAR VALUE MAX WIDTH
+__gash_bar() {
+    local -n __gb_out="$1"
+    local __gb_v="${2-0}" __gb_max="${3-0}" __gb_w="${4-10}" __gb_f=0 __gb_i __gb_full="" __gb_empty=""
+    ((__gb_max > 0)) && __gb_f=$(((__gb_v * __gb_w + __gb_max / 2) / __gb_max))
+    ((__gb_f < 1 && __gb_v > 0 && __gb_max > 0)) && __gb_f=1
+    ((__gb_f > __gb_w)) && __gb_f=$__gb_w
+    for ((__gb_i = 0; __gb_i < __gb_f; __gb_i++)); do __gb_full+="$__GASH_GLYPH_BAR_FULL"; done
+    for ((__gb_i = __gb_f; __gb_i < __gb_w; __gb_i++)); do __gb_empty+="$__GASH_GLYPH_BAR_EMPTY"; done
+    __gb_out="$__gb_full"$'\t'"$__gb_empty"
 }
 
 # Draw a rounded box around lines (stdout), sized to the longest line and
