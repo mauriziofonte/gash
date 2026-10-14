@@ -125,13 +125,18 @@ __llm_validate_path() {
     local normalized
     normalized="$(realpath -m "$path" 2>/dev/null)" || normalized="$path"
 
-    # Check against forbidden paths (whole components: /root, not /rootfs)
-    local forbidden
-    for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
-        if [[ "$normalized" == "$forbidden" || "$normalized" == "$forbidden"/* ]]; then
-            echo '{"error":"forbidden_path","details":"'"$(__gash_json_escape "$normalized")"'","action":"FATAL","recoverable":false,"hint":"This path is protected and cannot be accessed"}' >&2
-            return 1
-        fi
+    # Check against forbidden paths (whole components: /root, not /rootfs),
+    # both as written and as resolved. macOS resolves /etc, /tmp and /var
+    # to /private/...: check that form without the prefix too.
+    local forbidden candidate lexical
+    lexical="$(realpath -m -s "$path" 2>/dev/null)" || lexical="$path"
+    for candidate in "$normalized" "${normalized#/private}" "$lexical"; do
+        for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
+            if [[ "$candidate" == "$forbidden" || "$candidate" == "$forbidden"/* ]]; then
+                __gash_json_error "forbidden_path" "$normalized" "FATAL" "This path is protected and cannot be accessed"
+                return 1
+            fi
+        done
     done
 
     echo "$normalized"
