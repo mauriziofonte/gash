@@ -137,8 +137,10 @@ __gash_trim_ws() {
 # per-character loop only runs for the rare strings that carry other
 # control characters than \n \r \t.
 # Usage: escaped=$(__gash_json_escape "string with \"quotes\"")
-__gash_json_escape() {
-    local str="${1-}"
+#        __gash_json_escape_to VAR "string"   (no subshell; VAR must not be
+#        named str, out, ch, code or i)
+__gash_json_escape_to() {
+    local str="${2-}"
     str="${str//\\/\\\\}"
     str="${str//\"/\\\"}"
     str="${str//$'\n'/\\n}"
@@ -158,7 +160,13 @@ __gash_json_escape() {
         done
         str="$out"
     fi
-    printf '%s' "$str"
+    printf -v "$1" '%s' "$str"
+}
+
+__gash_json_escape() {
+    local __gash_esc_out
+    __gash_json_escape_to __gash_esc_out "${1-}"
+    printf '%s' "$__gash_esc_out"
 }
 
 # Print the machine error envelope shared by llm_* and the filesystem
@@ -192,14 +200,22 @@ __gash_json_str() {
 }
 
 # Render an argument list as a JSON array of strings ([] when empty).
-# NUL-delimited transport: values may contain newlines, tabs, quotes.
+# Values may contain newlines, tabs, quotes and control characters: each
+# is escaped in bash, then jq normalizes the array (invalid UTF-8 becomes
+# U+FFFD). No NUL transport: jq 1.6 cuts raw input at the first NUL.
 # Usage: json=$(__gash_json_arr "${files[@]}")
 __gash_json_arr() {
     if (($# == 0)); then
         printf '[]'
         return 0
     fi
-    printf '%s\0' "$@" | jq -cRs 'split("\u0000")[:-1]'
+    local out="" v e sep=""
+    for v in "$@"; do
+        __gash_json_escape_to e "$v"
+        out+="${sep}\"${e}\""
+        sep=","
+    done
+    jq -c . <<<"[$out]"
 }
 
 # -----------------------------------------------------------------------------
