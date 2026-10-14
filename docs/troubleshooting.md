@@ -38,6 +38,15 @@ own `PS1`.
 repository root to `GASH_GIT_EXCLUDE` (absolute paths joined by `:`, matched
 exactly, no `~`) or set `GASH_PROMPT=0`. A repository at `$HOME` is skipped.
 
+## New terminals open slowly
+
+**Cause:** something in the startup takes long: a large `~/.bash_history`
+(Gash keeps history unlimited), `GASH_NVM=on`, your own `~/.bash_local`, or a
+slow filesystem. **Fix:** run `gash_doctor --timing`. It lists what each Gash
+file and step costs in a new shell (5 ms or more stands out), then the time of
+a whole new shell with your `~/.bashrc` next to bash alone, so you can tell
+Gash from the rest.
+
 ## Warnings about ~/.gash_env
 
 They repeat at every interactive shell start until the line is fixed. They

@@ -3,51 +3,11 @@
 # Bash completion for Gash functions
 
 # Ensure that Gash functions are available by checking for one core Gash function.
-if ! declare -f git_add_tag >/dev/null 2>&1; then
+if ! declare -F git_add_tag >/dev/null 2>&1; then
     return
 fi
 
-# -----------------------------------------------------------------------------
-# Internal Helpers
-# -----------------------------------------------------------------------------
-
-# Check if a function name should be excluded from public list.
-# Returns 0 (true) if should be excluded, 1 (false) if should be included.
-__gash_is_internal_function() {
-    local fn="${1-}"
-    [[ -z "$fn" ]] && return 0
-
-    case "$fn" in
-        __* | _*)
-            return 0
-            ;;
-        needs_help | needs_confirm_prompt | print_error)
-            return 0
-            ;;
-    esac
-
-    return 1
-}
-
-# Build a whitespace-separated list of "public" Gash functions.
-# Prefer the functions gash.sh recorded as its own, so user-defined
-# functions are not included.
-__gash_public_functions() {
-    local out="" fn added=""
-    declare -F __gash_added_symbols >/dev/null && added="$(__gash_added_symbols functions)"
-
-    if [[ -n "$added" ]]; then
-        while IFS= read -r fn; do
-            __gash_is_internal_function "$fn" && continue
-            out+="$fn "
-        done <<<"$added"
-        printf '%s' "${out% }"
-        return 0
-    fi
-
-    # Fallback: keep a minimal set if we can't detect the added functions.
-    printf '%s' "disk_usage files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats history_grep git_add_tag git_delete_tag gash_doctor gash archive_extract file_backup"
-}
+((${__GASH_TIMING:-0})) && __gash_completion_t0="$EPOCHREALTIME"
 
 # -----------------------------------------------------------------------------
 # Completion Function
@@ -210,10 +170,10 @@ __gash_complete() {
             fi
             ;;
 
-        # gash_doctor — --no-color
+        # gash_doctor: --timing, --no-color
         gash_doctor)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "--timing --no-color --help" -- "$cur")
             fi
             ;;
 
@@ -256,22 +216,27 @@ __gash_complete() {
 # aliases of the help registry (bash looks completion up by the word typed,
 # so an alias needs its own registration).
 __gash_enable_completion() {
-    local fn added=""
-    declare -F __gash_added_symbols >/dev/null && added="$(__gash_added_symbols functions)"
+    local fn
+    local -a added=() names=()
+    declare -F __gash_added_symbols_to >/dev/null && __gash_added_symbols_to added functions public
 
-    if [[ -n "$added" ]]; then
-        while IFS= read -r fn; do
-            __gash_is_internal_function "$fn" && continue
-            complete -o default -F __gash_complete "$fn"
-        done <<<"$added"
+    if ((${#added[@]})); then
+        for fn in "${added[@]}"; do
+            case "$fn" in
+                needs_help | needs_confirm_prompt | print_error) ;;
+                *) names+=("$fn") ;;
+            esac
+        done
         if declare -p __GASH_HELP_ALIASES &>/dev/null; then
             local a
             for fn in "${!__GASH_HELP_ALIASES[@]}"; do
                 for a in ${__GASH_HELP_ALIASES[$fn]//,/ }; do
-                    alias "$a" >/dev/null 2>&1 && complete -o default -F __gash_complete "$a"
+                    [[ -n "${BASH_ALIASES[$a]+x}" ]] && names+=("$a")
                 done
             done
         fi
+        # One call for every name.
+        ((${#names[@]})) && complete -o default -F __gash_complete "${names[@]}"
     else
         # Fallback registration for common functions
         local fn_list="git_add_tag git_delete_tag git_list_tags disk_usage files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats history_grep gash_doctor gash archive_extract file_backup"
@@ -283,3 +248,8 @@ __gash_enable_completion() {
 
 __gash_enable_completion
 unset -f __gash_enable_completion
+
+if [[ -n "${__gash_completion_t0-}" ]]; then
+    __gash_time_record "bash_completion" "$__gash_completion_t0"
+    unset __gash_completion_t0
+fi

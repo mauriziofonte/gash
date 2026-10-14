@@ -87,6 +87,27 @@ needs_confirm_prompt() {
 # Terminal Utilities
 # -----------------------------------------------------------------------------
 
+# Path of the program NAME runs as, like `type -P NAME` (first executable
+# file on PATH), into REPLY, without a subshell. Returns 1 when none.
+# Usage: __gash_path_of NAME
+__gash_path_of() {
+    local - dir IFS=:
+    REPLY=""
+    set -f
+    [[ -n "${1-}" && "$1" != */* ]] || return 1
+    # Bash's own search answers "none" faster than the loop below.
+    type -P "$1" >/dev/null 2>&1 || return 1
+    # An empty entry, trailing ones included, is the current directory.
+    for dir in ${PATH-} ${PATH:+${PATH##*[!:]}}; do
+        [[ -z "$dir" ]] && dir="."
+        if [[ -f "$dir/$1" && -x "$dir/$1" ]]; then
+            REPLY="$dir/$1"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Get terminal width (best-effort, errexit-safe).
 # Usage: width=$(__gash_tty_width)
 # Returns: Terminal width in columns (default 80)
@@ -96,6 +117,12 @@ __gash_tty_width() {
     # Try $COLUMNS first
     if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]] && ((COLUMNS > 0)); then
         printf '%s' "$COLUMNS"
+        return 0
+    fi
+
+    # No terminal to ask: skip the tput and stty forks.
+    if [[ ! -t 0 && ! -t 1 && ! -t 2 ]]; then
+        printf '80'
         return 0
     fi
 

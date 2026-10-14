@@ -12,6 +12,7 @@ environment variables. This page lists them, their load order and every setting.
 | `~/.gash_env` | you (`gash_env_init` creates it) | SSH keys, database connections, AI tokens, remote hosts, settings |
 | `~/.bash_aliases`, `~/.bash_local` | you | Your own aliases and shell code, loaded after Gash |
 | `~/.local/state/gash/` | `gash migrate` | Migration state and backups (`$XDG_STATE_HOME/gash` when that is set) |
+| `~/.cache/gash/probes` | Gash, at startup | What the alias files learned about your tools (see [Aliases](#aliases)); safe to delete (`$XDG_CACHE_HOME/gash` when that is set) |
 
 The installer adds a block between `# >>> GASH START >>>` and `# <<< GASH END <<<`
 to `~/.bashrc` (or the profile it detects) that sources `~/.gashrc`.
@@ -37,6 +38,25 @@ directory it lives in. It does nothing in a non-interactive shell unless
 migration check only. No prompt, history policy, aliases, banner, completion,
 `~/.bash_aliases`, `~/.bash_local` or colors. Only the settings functions
 need are applied from `~/.gash_env`; see [Precedence](#precedence).
+
+`gash_doctor --timing` shows what each of these steps costs in a new shell.
+
+### Aliases
+
+A Gash alias never hides a program: when an alias name from `lib/aliases/`
+is also a program on your `PATH` (`gp` and PARI/GP, `gc` and Graphviz, `dc`
+and the calculator, `gs` and Ghostscript), the alias is not defined and the
+program runs. The aliases that wrap the program of the same name on purpose
+stay (`ls`, `cp`, `mv`, `rm`, `mkdir`, `grep`, `bc`, `reboot`, `shutdown`,
+`sl`, and the `GASH_REPLACE_TOOLS` ones), and so does an alias you defined
+before Gash loaded. To get a dropped alias back, define it in
+`~/.bash_aliases`.
+
+Which options `ls`, `grep` and `rm` accept, `dircolors`' `LS_COLORS` and the
+list of dropped aliases are worked out once and kept in
+`~/.cache/gash/probes`. Gash works them out again after a day, or sooner
+when Gash, `PATH`, `TERM`, `COLORTERM` or `~/.dircolors` changes or a
+program is installed in a `PATH` directory.
 
 ## ~/.gash_env
 
@@ -182,6 +202,8 @@ These are not accepted in `~/.gash_env`.
 | `GASH_HEADLESS=1` | Headless mode (see above). Only the value `1` counts |
 | `NO_COLOR`, `GASH_NO_COLOR` | Turn ANSI colors off in Gash output and in the prompt (from the next prompt). `NO_COLOR`: any non-empty value; `GASH_NO_COLOR`: any value but empty or `0` |
 | `GASH_DEBUG=1` | In headless mode, shows what modules and the `~/.gash_env` parser print on stderr while loading (hidden otherwise) |
+| `GASH_TIMING=1` | When a shell starts: records how long each file and step takes, in the `__GASH_LOAD_TIMES` array (Bash 5.0+). `gash_doctor --timing` shows the same in a new shell |
+| `XDG_CACHE_HOME` | Parent of the probe cache directory (default `~/.cache`) |
 | `GASH_AI_DEBUG=1` | Prints AI request bodies and raw responses on stderr |
 | `GASH_AWK` | awk program for the functions that need specific awk features. Default: `gawk` when installed, else `awk`. Read at load time |
 | `GASH_TUI=plain` | Numbered prompts instead of arrow-key menus (`gash migrate`) |
@@ -206,7 +228,8 @@ not overwritten later; keep your own code in `~/.bash_local` rather than there.
 * `gash_doctor` (alias `gdoctor`): Bash version, files that failed to load,
   core files and modules, the `~/.gash_env` mode, settings currently set as
   shell variables, and whether `git`, `curl`, `jq`, `sqlite3` and `docker` are
-  installed.
+  installed. `gash_doctor --timing` lists what each file and step costs when a
+  shell starts, then times a whole new shell (Bash 5.0+).
 * `gash_unload`: in an interactive shell, restores `PS1`, `PS2`, history
   variables, `EDITOR`, `PATH`, `histappend`, `checkwinsize` and the umask as
   they were before Gash loaded (so `GASH_PATH_ADD` and `GASH_NVM=lazy`

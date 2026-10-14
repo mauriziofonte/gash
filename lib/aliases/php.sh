@@ -10,17 +10,28 @@
 # pointed at the newest installed phpX.Y with the same settings.
 
 if type -P php >/dev/null 2>&1; then
+    # Path of a program into __gash_bin ("" when missing): without a
+    # subshell when the core helper is loaded.
+    __gash_php_path_of() {
+        local REPLY
+        __gash_bin=""
+        if declare -F __gash_path_of >/dev/null; then
+            __gash_path_of "$1" && __gash_bin="$REPLY"
+        elif type -P "$1" >/dev/null 2>&1; then
+            __gash_bin="$(type -P "$1")"
+        fi
+        [[ -n "$__gash_bin" ]]
+    }
     __gash_php_opts="-d allow_url_fopen=1 -d memory_limit=2048M"
     __gash_php_latest=""
-    __gash_composer=""
-    __gash_composer1=""
-    type -P composer >/dev/null 2>&1 && __gash_composer="$(type -P composer)"
-    type -P composer1 >/dev/null 2>&1 && __gash_composer1="$(type -P composer1)"
+    __gash_php_path_of composer || true
+    __gash_composer="$__gash_bin"
+    __gash_php_path_of composer1 || true
+    __gash_composer1="$__gash_bin"
 
     # Newest first, so the first one found is the latest.
     for __gash_v in 8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6; do
-        type -P "php$__gash_v" >/dev/null 2>&1 || continue
-        __gash_bin="$(type -P "php$__gash_v")"
+        __gash_php_path_of "php$__gash_v" || continue
         [[ -z "$__gash_php_latest" ]] && __gash_php_latest="$__gash_bin"
         alias "php${__gash_v//./}"="$__gash_bin $__gash_php_opts"
         [[ -n "$__gash_composer" ]] &&
@@ -54,4 +65,5 @@ if type -P php >/dev/null 2>&1; then
     fi
 
     unset __gash_php_opts __gash_php_latest __gash_composer __gash_composer1 __gash_v __gash_bin __gash_hte
+    unset -f __gash_php_path_of
 fi
