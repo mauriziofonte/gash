@@ -17,7 +17,7 @@ function help {
 }
 
 # Stop common local services (web servers, databases) quickly.
-alias quit='services_stop --force'
+alias quit='services_stop'
 
 # -----------------------------------------------------------------------------
 # Tool replacements (opt-in: GASH_REPLACE_TOOLS=1 in ~/.gash_env)

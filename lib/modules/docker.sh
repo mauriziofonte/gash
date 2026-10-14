@@ -58,11 +58,32 @@ docker_start_all() {
 # Usage: docker_prune_all
 # Warning: This is a destructive operation!
 docker_prune_all() {
-    needs_help "docker_prune_all" "docker_prune_all" "Remove all Docker containers, images, volumes and networks (asks first)." "${1-}" && return
+    needs_help "docker_prune_all" "docker_prune_all [-y] [--dry-run]" "Remove all Docker containers, images, volumes and networks (asks first)." "${1-}" && return
+
+    local assume_yes=0 dry_run=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            -y | --yes) assume_yes=1 ;;
+            --dry-run) dry_run=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: docker_prune_all [-y] [--dry-run])"
+                return 1
+                ;;
+        esac
+    done
     __gash_require_docker || return 1
 
-    if ! needs_confirm_prompt "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}Remove all Docker containers, images, volumes, and networks?${__GASH_COLOR_OFF}"; then
-        return 0
+    local n_cont n_img n_vol n_net
+    n_cont=$(docker ps -aq 2>/dev/null | wc -l)
+    n_img=$(docker images -q 2>/dev/null | sort -u | wc -l)
+    n_vol=$(docker volume ls -q 2>/dev/null | wc -l)
+    n_net=$(__gash_docker_user_networks | wc -l)
+    __gash_info "To remove: $((n_cont)) container(s), $((n_img)) image(s), $((n_vol)) volume(s), $((n_net)) network(s), plus the build cache."
+    ((dry_run)) && return 0
+
+    if ((assume_yes == 0)) && ! needs_confirm_prompt "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}Remove all Docker containers, images, volumes, and networks?${__GASH_COLOR_OFF}"; then
+        __gash_info "Aborted."
+        return 1
     fi
 
     local ids
@@ -84,12 +105,18 @@ docker_prune_all() {
     [[ -n "$ids" ]] && docker volume rm $ids 2>/dev/null || true
 
     __gash_step 5 6 "Removing Docker networks..."
-    docker network ls --format '{{.Name}}' 2>/dev/null | grep -ivF -e bridge -e host -e none | while IFS= read -r net; do
+    __gash_docker_user_networks | while IFS= read -r net; do
         docker network rm "$net" 2>/dev/null || true
     done
 
     __gash_step 6 6 "Cleaning Docker environment..."
     docker system prune --volumes -a --force
+}
+
+# Networks other than Docker's built-in bridge, host and none (matched by
+# whole name: a user network called backend-host is still removed).
+__gash_docker_user_networks() {
+    docker network ls --format '{{.Name}}' 2>/dev/null | grep -vxE 'bridge|host|none' || true
 }
 
 # -----------------------------------------------------------------------------
@@ -146,11 +173,14 @@ HELP
         --see-also "docker_stop_all" \
         <<'HELP'
 USAGE
-  docker_prune_all
+  docker_prune_all [-y] [--dry-run]
 
 EXAMPLES
   # Nuclear cleanup (interactive confirmation)
   dpa
+
+  # Only count what would go
+  dpa --dry-run
 
 NOTES
   WARNING: This is destructive. It will:
@@ -160,7 +190,8 @@ NOTES
     4. Remove all volumes (DATA LOSS)
     5. Remove all networks
     6. Run docker system prune
-  You will be asked for confirmation before proceeding.
+  You will be asked for confirmation before proceeding; -y skips it.
+  Declining returns 1. Built-in networks (bridge, host, none) stay.
 HELP
 
 fi # end help registration guard

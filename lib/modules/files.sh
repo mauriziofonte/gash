@@ -1976,6 +1976,22 @@ archive_extract() {
     case "$archive_file" in
         *.tar.bz2) tar xvjf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
         *.tar.gz) tar xvzf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tar.xz | *.txz) tar xvJf "$archive_file" -C "$output_dir" --no-same-owner --no-same-permissions || rc=1 ;;
+        *.tar.zst | *.tzst)
+            if __gash_require_command zstd "Extracting .zst needs zstd."; then
+                zstd -dc -- "$archive_file" | tar xvf - -C "$output_dir" --no-same-owner --no-same-permissions || rc=1
+            else
+                rc=1
+            fi
+            ;;
+        *.xz) xz -dc -- "$archive_file" >"$output_dir/$(basename "$archive_file" .xz)" || rc=1 ;;
+        *.zst)
+            if __gash_require_command zstd "Extracting .zst needs zstd."; then
+                zstd -dc -- "$archive_file" >"$output_dir/$(basename "$archive_file" .zst)" || rc=1
+            else
+                rc=1
+            fi
+            ;;
         *.bz2) bunzip2 -c "$archive_file" >"$output_dir/$(basename "$archive_file" .bz2)" || rc=1 ;;
         *.rar) unrar x "$archive_file" "$output_dir" || rc=1 ;;
         *.gz) gunzip -c "$archive_file" >"$output_dir/$(basename "$archive_file" .gz)" || rc=1 ;;
@@ -2260,7 +2276,7 @@ HELP
     __gash_register_help "archive_extract" \
         --aliases "axe" \
         --module "files" \
-        --short "Extract archives (tar, zip, gz, bz2, rar, 7z)" \
+        --short "Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z)" \
         --see-also "file_backup" \
         <<'HELP'
 USAGE
@@ -2277,7 +2293,8 @@ EXAMPLES
   axe data.7z /tmp/extracted
 
 SUPPORTED FORMATS
-  .tar.gz, .tar.bz2, .tar, .gz, .bz2,
+  .tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar,
+  .gz, .bz2, .xz, .zst,
   .tgz, .tbz2, .zip, .rar, .7z, .z
   (case-insensitive)
 HELP

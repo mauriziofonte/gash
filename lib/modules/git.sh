@@ -259,21 +259,59 @@ __gash_git_remote_tag() {
 # -----------------------------------------------------------------------------
 
 # Repair a repo with corrupted (0-byte) loose objects by re-fetching them from
-# the 'origin' remote through a temporary bare clone.
-# Usage: git_repair
+# the 'origin' remote through a temporary bare clone. Works in linked
+# worktrees and submodules (the object store is asked of git, not assumed
+# at .git/objects).
+# Usage: git_repair [-y] [--dry-run]
 # Alias: gheal
 git_repair() {
-    needs_help "git_repair" "git_repair" \
+    needs_help "git_repair" "git_repair [-y] [--dry-run]" \
         "Repair a repo with corrupted 0-byte loose objects by re-fetching them from origin. Alias: gheal" \
         "${1-}" && return
 
+    local assume_yes=0 dry_run=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            -y | --yes) assume_yes=1 ;;
+            --dry-run) dry_run=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: git_repair [-y] [--dry-run])"
+                return 1
+                ;;
+        esac
+    done
+
     __gash_require_git_repo_with_remote || return 1
 
-    local repo_root
-    repo_root="$(git rev-parse --show-toplevel)"
-
-    local origin_url
+    local objects origin_url
+    objects="$(git rev-parse --path-format=absolute --git-path objects 2>/dev/null)" ||
+        objects="$(cd "$(git rev-parse --git-path objects)" && pwd -P)" || {
+        __gash_error "Cannot locate the object store of this repository."
+        return 1
+    }
     origin_url="$(git remote get-url origin)"
+
+    local -a empty=()
+    mapfile -t empty < <(find "$objects" -type f -empty 2>/dev/null)
+
+    printf 'Object store: %s
+' "$objects"
+    printf 'Empty (corrupted) object files: %d
+' "${#empty[@]}"
+    if ((${#empty[@]} == 0)); then
+        if git fsck --connectivity-only >/dev/null 2>&1; then
+            __gash_success "No empty objects and the history is connected: nothing to repair."
+            return 0
+        fi
+        printf 'git fsck reports problems that are not empty files; trying the repair anyway.
+'
+    fi
+    printf 'Plan: delete the empty files, copy the packs of a fresh bare clone of %s,
+' "$origin_url"
+    printf '      run git gc and git fsck --full.
+'
+    ((dry_run)) && return 0
+    __gash_confirm_plan "$assume_yes" || return 1
 
     local tmp_dir
     tmp_dir=$(mktemp -d) || {
@@ -282,10 +320,8 @@ git_repair() {
     }
     trap 'command rm -rf "$tmp_dir" >/dev/null 2>&1; trap - RETURN' RETURN
 
-    __gash_step 1 5 "Removing corrupted (0-byte) loose objects..."
-    local removed
-    removed=$(find "$repo_root/.git/objects" -type f -empty -print -delete | wc -l)
-    __gash_info "Removed $removed corrupted object(s)."
+    __gash_step 1 5 "Removing ${#empty[@]} corrupted (0-byte) loose object(s)..."
+    ((${#empty[@]})) && { rm -f -- "${empty[@]}" || return 1; }
 
     __gash_step 2 5 "Cloning '$origin_url' into a temporary bare repo..."
     if ! git clone --quiet --bare "$origin_url" "$tmp_dir/recovery.git"; then
@@ -293,14 +329,37 @@ git_repair() {
         return 1
     fi
 
-    __gash_step 3 5 "Copying recovered objects back into the repo..."
-    cp -rn "$tmp_dir/recovery.git"/objects/. "$repo_root/.git/objects/" 2>/dev/null
+    # A fresh clone keeps its objects in packs; pack names are content
+    # hashes, so a pack already present is the same pack.
+    __gash_step 3 5 "Copying the recovered packs into the repo..."
+    local f copied=0
+    mkdir -p "$objects/pack" || return 1
+    for f in "$tmp_dir/recovery.git/objects/pack"/pack-*; do
+        [[ -f "$f" ]] || continue
+        [[ -e "$objects/pack/${f##*/}" ]] && continue
+        cp "$f" "$objects/pack/" || {
+            __gash_error "Copying ${f##*/} into $objects/pack failed."
+            return 1
+        }
+        copied=$((copied + 1))
+    done
+    # A local clone may keep loose objects (hard links): copy those too.
+    for f in "$tmp_dir/recovery.git/objects"/??/*; do
+        [[ -f "$f" ]] || continue
+        f="${f#"$tmp_dir/recovery.git/objects/"}"
+        [[ -e "$objects/$f" ]] && continue
+        mkdir -p "$objects/${f%/*}" && cp "$tmp_dir/recovery.git/objects/$f" "$objects/$f" || {
+            __gash_error "Copying object $f failed."
+            return 1
+        }
+    done
+    __gash_info "Copied $copied pack file(s)."
 
     __gash_step 4 5 "Running garbage collection..."
-    git -C "$repo_root" gc --prune=now --quiet
+    git gc --quiet || __gash_warning "git gc reported a problem; checking integrity anyway."
 
     __gash_step 5 5 "Verifying repo integrity..."
-    if git -C "$repo_root" fsck --full; then
+    if git fsck --full; then
         __gash_success "Repo repaired and verified clean."
     else
         __gash_error "Repo still reports issues after repair. Manual inspection needed."
@@ -542,16 +601,22 @@ HELP
         --see-also "git_list_tags" \
         <<'HELP'
 USAGE
-  git_repair
+  git_repair [-y] [--dry-run]
 
 EXAMPLES
   # Fix a repo after a crash/OOM left empty loose object files
   gheal
 
+  # Only count the empty objects and show the plan
+  gheal --dry-run
+
 NOTES
-  Deletes 0-byte loose objects, re-fetches them from 'origin' via a
-  temporary bare clone, then runs 'git gc --prune=now' and 'git fsck
-  --full' to verify. Requires a git repo with a configured remote.
+  Deletes 0-byte loose objects, copies the packs of a temporary bare
+  clone of 'origin' into the object store, then runs 'git gc' and
+  'git fsck --full' to verify. A plain 'git fetch' cannot do this: the
+  refs already match, so git believes it has the objects. Works in
+  linked worktrees and submodules. Shows the plan and asks first; -y
+  skips the question. Requires a git repo with an 'origin' remote.
 HELP
 
     __gash_register_help "git_sync" \

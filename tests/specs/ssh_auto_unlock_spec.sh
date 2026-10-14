@@ -174,3 +174,26 @@ it "skips keys the agent already holds" bash -c '
   MOCK_SSH_LOADED="SHA256:fp-key1 SHA256:fp-key2" HOME="$tmp" GASH_ENV_FILE="$tmp/.gash_env" __GASH_ENV_LOADED="" GASH_SSH_AUTOUNLOCK_RAN= gash_ssh_auto_unlock >/dev/null 2>&1
   [[ ! -s "$tmp/sent" ]]
 '
+
+it "reuses the agent on the fixed socket instead of starting another" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  command -v python3 >/dev/null 2>&1 || gash_skip "python3 needed to create a socket"
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export XDG_RUNTIME_DIR="$tmp/run"; mkdir -p "$XDG_RUNTIME_DIR"
+  python3 -c "import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])" "$XDG_RUNTIME_DIR/gash-ssh-agent.sock"
+  mkdir "$tmp/bin"
+  printf "#!/bin/sh\necho started >> $tmp/log\n" > "$tmp/bin/ssh-agent"
+  printf "#!/bin/sh\n[ -n \"\$ALIVE\" ] && exit 1\nexit 2\n" > "$tmp/bin/ssh-add"
+  chmod +x "$tmp/bin"/*
+  PATH="$tmp/bin:$PATH"
+  unset SSH_AUTH_SOCK
+  ALIVE=1 __gash_try_start_ssh_agent
+  [[ "$SSH_AUTH_SOCK" == "$XDG_RUNTIME_DIR/gash-ssh-agent.sock" && ! -e "$tmp/log" ]]
+  # A dead socket is removed and a new agent is started on the same path.
+  unset SSH_AUTH_SOCK
+  __gash_try_start_ssh_agent || true
+  grep -q started "$tmp/log"
+  [[ ! -S "$XDG_RUNTIME_DIR/gash-ssh-agent.sock" ]]
+'

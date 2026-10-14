@@ -163,7 +163,10 @@ repository's `.git/config` before pointing an agent at it.
   is filtered first: private key blocks, URL passwords, values of names like
   `password`, `secret`, `token`, `api_key`, `access_key`, `private_key`,
   `credentials`, and `AKIA...`, `ghp_`/`github_pat_`, `sk-`/`sk-ant-`, `xox?-`,
-  `AIza...` tokens. It is pattern based: a secret in another format is sent.
+  `AIza...` tokens. A name followed by `=` or `:` loses its value; a name
+  followed only by a space loses the next word only when it looks like a
+  token (16 or more characters), so "token expired" stays readable. It is
+  pattern based: a secret in another format is sent.
 * **Transport.** The body goes through a temporary file created with umask 077
   and then deleted; the API key reaches `curl` through `--config` on a pipe,
   never argv. Control characters are stripped from replies.
@@ -199,14 +202,20 @@ to it.
 ## Confirmations
 
 `needs_confirm_prompt` reads the answer from `/dev/tty`, accepts only `y` or
-`Y`, and always refuses in headless mode or without a terminal.
+`Y`, and always refuses in headless mode or without a terminal. The 2.1
+commands that show a plan first ask "Do you want to continue? [Y/n]" the same
+way. Answering no returns 1. `port_kill`, `process_kill`, `services_stop`
+and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 
 | Function | Interactive | Headless |
 |---|---|---|
-| `port_kill PORT` | Lists the listening processes and asks; `--force` skips | Refused unless `--force` |
-| `process_kill NAME` | Asks only when several processes match; `--force` skips | Refused unless `--force`, whatever the number of matches |
-| `services_stop` | Asks; `--force` skips (the `quit` alias passes `--force`) | Nothing happens unless `--force` |
-| `docker_prune_all` | Asks, no override | Nothing happens |
+| `port_kill PORT` | Lists the listening processes and asks; `-y` skips | Refused unless `-y` |
+| `process_kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
+| `services_stop` (alias `quit`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
+| `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
+| `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
+| `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
+| `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
 | `sudo_last` (no argument) | Shows the command and asks | Refused |
 | `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |

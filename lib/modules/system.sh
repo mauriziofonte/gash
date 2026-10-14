@@ -631,20 +631,20 @@ process_find() {
     fi
 }
 
-# Kill all processes by name. Interactively a single match is killed
-# directly and several are confirmed first; without a terminal to ask
-# (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless --force/-f.
-# Usage: process_kill [--force] PROCESS_NAME
+# Kill all processes by name, after listing them and asking (-y skips the
+# question). Without a terminal to ask (GASH_HEADLESS=1, no /dev/tty)
+# nothing is killed unless -y.
+# Usage: process_kill [-y] PROCESS_NAME
 # Alias: pk
 process_kill() {
-    needs_help "process_kill" "process_kill [--force] PROCESS_NAME" \
-        "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors). Without a terminal, needs --force. Alias: pk" \
+    needs_help "process_kill" "process_kill [-y] PROCESS_NAME" \
+        "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk" \
         "${1-}" && return
 
     local process_name="" force=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -f | --force) force=1 ;;
+            -y | --yes | -f | --force) force=1 ;;
             -*)
                 __gash_error "Unknown option: $1"
                 return 1
@@ -653,7 +653,7 @@ process_kill() {
         esac
         shift
     done
-    __gash_require_arg "$process_name" "process name" "process_kill [--force] <process_name>" || return 1
+    __gash_require_arg "$process_name" "process name" "process_kill [-y] <process_name>" || return 1
 
     # Exact, case-insensitive match on the executable name: a loose
     # `ps | grep -i` would also hit redis-sentinel when asked for redis,
@@ -669,19 +669,22 @@ process_kill() {
     local count
     count=$(($(wc -w <<<"$pids")))
     if [[ $force -eq 0 ]]; then
-        # Same rule as port_kill: nobody to ask means no kill without --force.
+        # Same rule as port_kill: nobody to ask means no kill without -y.
         if [[ "${GASH_HEADLESS-}" == "1" ]] || ! { : </dev/tty; } 2>/dev/null; then
             local pid_list
             pid_list="$(tr '\n' ' ' <<<"$pids")"
-            __gash_error "$count process(es) match '$process_name' (PID ${pid_list% }). Refusing to kill without a terminal to confirm; pass --force."
+            __gash_error "$count process(es) match '$process_name' (PID ${pid_list% }). Refusing to kill without a terminal to confirm; pass -y."
             return 1
         fi
-        if [[ "$count" -gt 1 ]]; then
-            __gash_warning "$count processes match '$process_name': $(tr '\n' ' ' <<<"$pids")"
-            if ! needs_confirm_prompt "Kill all of them?"; then
-                __gash_info "Aborted."
-                return 0
-            fi
+        local pid cmd
+        __gash_info "Matching '$process_name':"
+        for pid in $pids; do
+            cmd=$(ps -o args= -p "$pid" 2>/dev/null) || cmd="?"
+            printf '  %s  %s\n' "$pid" "${cmd:0:100}" >&2
+        done
+        if ! needs_confirm_prompt "Kill $( ((count > 1)) && echo "all $count" || echo it)?"; then
+            __gash_info "Aborted."
+            return 1
         fi
     fi
 
@@ -719,12 +722,12 @@ process_kill() {
 # Usage: port_kill [--force] PORT
 # Alias: ptk
 port_kill() {
-    needs_help "port_kill" "port_kill [--force] PORT" "Terminate the processes listening on PORT. Alias: ptk" "${1-}" && return
+    needs_help "port_kill" "port_kill [-y] PORT" "Terminate the processes listening on PORT. Alias: ptk" "${1-}" && return
 
     local force=0 port=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -f | --force) force=1 ;;
+            -y | --yes | -f | --force) force=1 ;;
             -*)
                 __gash_error "Unknown option: $1"
                 return 1
@@ -734,7 +737,7 @@ port_kill() {
         shift
     done
 
-    __gash_require_arg "$port" "port" "port_kill [--force] <port>" || return 1
+    __gash_require_arg "$port" "port" "port_kill [-y] <port>" || return 1
     if ! [[ "$port" =~ ^[0-9]+$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
         __gash_error "Invalid port: $port (expected 1-65535)."
         return 1
@@ -796,22 +799,64 @@ port_kill() {
 # Usage: services_stop [--force]
 # Alias: svs
 services_stop() {
-    needs_help "services_stop" "services_stop [--force]" "Stop well-known services (web servers, databases, docker). Alias: svs" "${1-}" && return
-    local services=("apache2" "nginx" "mysql" "mariadb" "postgresql" "mongodb" "redis" "memcached" "docker")
-    local force_flag="${1-}"
+    needs_help "services_stop" "services_stop [-y] [--dry-run]" "Stop well-known services (web servers, databases, docker). Alias: svs" "${1-}" && return
 
-    if [[ "$force_flag" != "--force" ]]; then
-        if ! needs_confirm_prompt "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}Stop all well-known services?${__GASH_COLOR_OFF}"; then
-            return 0
-        fi
+    local assume_yes=0 dry_run=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            -y | --yes | -f | --force) assume_yes=1 ;;
+            --dry-run) dry_run=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: services_stop [-y] [--dry-run])"
+                return 1
+                ;;
+        esac
+    done
+
+    # systemd when it is PID 1; the SysV `service` wrapper otherwise (WSL
+    # without systemd, containers).
+    local manager=""
+    if [[ -d "${__GASH_SYSTEMD_RUNDIR:-/run/systemd/system}" ]] && command -v systemctl >/dev/null 2>&1; then
+        manager=systemd
+    elif command -v service >/dev/null 2>&1; then
+        manager=service
+    else
+        __gash_error "No service manager found (systemd or service)."
+        return 1
     fi
 
+    local services=("apache2" "nginx" "mysql" "mariadb" "postgresql" "mongodb" "redis" "redis-server" "memcached" "docker")
+    local -a running=()
+    local service
     for service in "${services[@]}"; do
-        if systemctl is-active --quiet "$service"; then
-            __gash_info "Stopping $service service..."
-            sudo systemctl stop "$service"
+        if [[ "$manager" == systemd ]]; then
+            systemctl is-active --quiet "$service" 2>/dev/null && running+=("$service")
+        else
+            service "$service" status >/dev/null 2>&1 && running+=("$service")
         fi
     done
+
+    if ((${#running[@]} == 0)); then
+        __gash_info "None of the known services is running."
+        return 0
+    fi
+    __gash_info "Running: ${running[*]}"
+    ((dry_run)) && return 0
+    if ((assume_yes == 0)) && ! needs_confirm_prompt "Stop these services?"; then
+        __gash_info "Aborted."
+        return 1
+    fi
+
+    local rc=0
+    for service in "${running[@]}"; do
+        __gash_info "Stopping $service..."
+        if [[ "$manager" == systemd ]]; then
+            sudo systemctl stop "$service" || rc=1
+        else
+            sudo service "$service" stop || rc=1
+        fi
+    done
+    return "$rc"
 }
 
 # -----------------------------------------------------------------------------
@@ -858,35 +903,56 @@ mkdir_cd() {
 # WSL (Windows Subsystem for Linux)
 # -----------------------------------------------------------------------------
 
-# Restart WSL by saving bash history and triggering wsl --shutdown.
-# WSL restarts automatically when a new terminal is opened.
-# Alias: wr
-wsl_restart() {
-    needs_help "wsl_restart" "wsl_restart" \
-        "Restart WSL (saves bash history first). Alias: wr" \
-        "${1-}" && return
-
-    __gash_require_wsl || return 1
-
-    __gash_info "Saving bash history..."
-    history -a
-    __gash_info "Shutting down WSL (will restart on next launch)..."
-    cmd.exe /C wsl --shutdown
+# Run a Windows command from a Windows directory, so cmd.exe does not
+# complain about a \\wsl$ UNC working directory.
+__gash_wsl_cmd() {
+    (
+        cd /mnt/c 2>/dev/null || cd /
+        cmd.exe /C "$@"
+    )
 }
 
-# Shutdown WSL by saving bash history and triggering wsl --shutdown.
-# Alias: wsd
-wsl_shutdown() {
-    needs_help "wsl_shutdown" "wsl_shutdown" \
-        "Shutdown WSL (saves bash history first). Alias: wsd" \
-        "${1-}" && return
+# Stop the WSL VM (every distro, Docker Desktop's included) after saving
+# this shell's history; WSL starts again with the next terminal. Asks
+# first unless -y.
+__gash_wsl_stop_vm() {
+    local name="$1" assume_yes=0 arg
+    shift
+    for arg in "$@"; do
+        case "$arg" in
+            -y | --yes) assume_yes=1 ;;
+            *)
+                __gash_error "Unknown option: $arg (usage: $name [-y])"
+                return 1
+                ;;
+        esac
+    done
 
     __gash_require_wsl || return 1
 
-    __gash_info "Saving bash history..."
+    if ((assume_yes == 0)) && ! needs_confirm_prompt "Shut down WSL: every distro, Docker Desktop and running servers stop?"; then
+        __gash_info "Aborted."
+        return 1
+    fi
     history -a
-    __gash_info "Shutting down WSL..."
-    cmd.exe /C wsl --shutdown
+    __gash_info "History saved. Shutting down WSL (it starts again with the next terminal)..."
+    __gash_wsl_cmd wsl --shutdown
+}
+
+# Alias: wr
+wsl_restart() {
+    needs_help "wsl_restart" "wsl_restart [-y]" \
+        "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr" \
+        "${1-}" && return
+    __gash_wsl_stop_vm wsl_restart "$@"
+}
+
+# Alias: wsd
+wsl_shutdown() {
+    needs_help "wsl_shutdown" "wsl_shutdown [-y]" \
+        "Shut down WSL (saves bash history first). Alias: wsd" \
+        "${1-}" && return
+    __gash_wsl_stop_vm wsl_shutdown "$@"
 }
 
 # Open Windows Explorer in the current or specified directory.
@@ -898,8 +964,16 @@ wsl_explorer() {
 
     __gash_require_wsl || return 1
 
-    local target="${1:-.}"
-    explorer.exe "$target"
+    local target="${1:-.}" win
+    if [[ ! -e "$target" ]]; then
+        __gash_error "No such file or directory: $target"
+        return 1
+    fi
+    # Explorer understands Windows paths only (\\wsl.localhost\... for
+    # Linux files); a Linux path makes it open Documents instead.
+    win="$(wslpath -w "$target" 2>/dev/null)" || win="$target"
+    # explorer.exe exits 1 even when the window opened.
+    explorer.exe "$win" || true
 }
 
 # Open Windows Task Manager from WSL.
@@ -911,7 +985,7 @@ wsl_taskmanager() {
 
     __gash_require_wsl || return 1
 
-    (cd /mnt/c && cmd.exe /C taskmgr &)
+    (__gash_wsl_cmd taskmgr &)
 }
 
 # One line "MemFree|SReclaimable|free blocks of 512 KiB or more per zone",
@@ -1139,24 +1213,21 @@ HELP
         --see-also "process_find port_kill" \
         <<'HELP'
 USAGE
-  process_kill [--force] PROCESS_NAME
+  process_kill [-y] PROCESS_NAME
 
 EXAMPLES
-  # Kill all node processes (asks first when several match)
+  # Kill all node processes (lists them and asks first)
   pk node
 
-  # Kill a stuck service
-  pk webpack-dev-server
-
   # No confirmation (scripts, agents)
-  pk --force webpack-dev-server
+  pk -y webpack-dev-server
 
 NOTES
-  Matches the executable name exactly, ignoring case. Interactively a single
-  match is killed directly and several are confirmed first. Without a
-  terminal to ask (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless
-  --force is given, whatever the number of matches. SIGTERM first, SIGKILL
-  for processes still alive after about 3 seconds.
+  Matches the executable name exactly, ignoring case, lists the matches
+  with their command lines and asks. Without a terminal to ask
+  (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.
+  --force is the same as -y. SIGTERM first, SIGKILL for processes still
+  alive after about 3 seconds. Declining returns 1.
 HELP
 
     __gash_register_help "port_kill" \
@@ -1166,17 +1237,17 @@ HELP
         --see-also "process_find process_kill" \
         <<'HELP'
 USAGE
-  port_kill [--force] PORT
+  port_kill [-y] PORT
 
 EXAMPLES
   # Stop whatever listens on port 3000 (lists it and asks first)
   ptk 3000
 
   # No confirmation (scripts, agents)
-  ptk --force 3000
+  ptk -y 3000
 
 NOTES
-  Requires lsof. Only listeners are targeted: a browser or ssh session
+  --force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session
   connected to that port elsewhere is left alone. SIGTERM first,
   SIGKILL for processes still alive after about 3 seconds.
 HELP
@@ -1188,22 +1259,27 @@ HELP
         --see-also "process_kill" \
         <<'HELP'
 USAGE
-  services_stop [--force]
+  services_stop [-y] [--dry-run]
 
 EXAMPLES
-  # Stop services with confirmation prompt
+  # List the running ones and ask before stopping them
   svs
 
+  # Only list them
+  svs --dry-run
+
   # Skip confirmation
-  svs --force
+  svs -y
 
 SERVICES STOPPED
   apache2, nginx, mysql, mariadb, postgresql,
-  mongodb, redis, memcached, docker
+  mongodb, redis, redis-server, memcached, docker
 
 NOTES
-  Only stops services that are currently active.
-  Uses systemctl, so it requires systemd.
+  Only stops services that are currently active, through systemd when it
+  runs, else through `service` (WSL without systemd, containers).
+  --force is the same as -y. Returns 1 when declined or when a stop
+  fails.
 HELP
 
     __gash_register_help "sudo_last" \
@@ -1246,16 +1322,19 @@ HELP
         --see-also "wsl_shutdown" \
         <<'HELP'
 USAGE
-  wsl_restart
+  wsl_restart [-y]
 
 EXAMPLES
-  # Restart WSL (saves bash history first)
-  wsl_restart
+  # Restart WSL (asks, saves bash history first)
+  wr
+
+  # Without the question
+  wr -y
 
 NOTES
-  Saves bash history before shutdown so no commands are lost.
-  WSL will restart automatically when you open a new terminal.
-  Only works inside WSL (Windows Subsystem for Linux).
+  Runs `wsl --shutdown`: every distro stops, Docker Desktop's included,
+  with the servers running in them. WSL starts again with the next
+  terminal. Asks first; -y skips the question. Same as wsl_shutdown.
 HELP
 
     __gash_register_help "wsl_shutdown" \
@@ -1265,15 +1344,15 @@ HELP
         --see-also "wsl_restart" \
         <<'HELP'
 USAGE
-  wsl_shutdown
+  wsl_shutdown [-y]
 
 EXAMPLES
-  # Shutdown WSL (saves bash history first)
+  # Shut down WSL (asks, saves bash history first)
   wsd
 
 NOTES
-  Saves bash history before shutdown so no commands are lost.
-  Only works inside WSL (Windows Subsystem for Linux).
+  Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.
+  Asks first; -y skips the question.
 HELP
 
     __gash_register_help "wsl_explorer" \

@@ -132,15 +132,48 @@ it "process_find prints error when no match" bash -c '
   [[ "$out" == *"Error:"*"No process found"* ]]
 '
 
-it "services_stop --force runs without prompting" bash -c '
+it "services_stop -y with nothing running succeeds quietly" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
   export PATH="$ROOT/tests/mocks/bin:$PATH"
+  export __GASH_SYSTEMD_RUNDIR="$(mktemp -d)"
   export MOCK_SYSTEMCTL_ACTIVE=
-  # No service is active in mock => should be silent and succeed.
-  services_stop --force
+  out="$(services_stop -y 2>&1)"
+  [[ "$out" == *"None of the known services is running"* ]]
+'
+
+it "services_stop lists, refuses without a terminal, stops with -y" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  export __GASH_SYSTEMD_RUNDIR="$(mktemp -d)"
+  export MOCK_SYSTEMCTL_ACTIVE=mysql
+  out="$(services_stop --dry-run 2>&1)"
+  [[ "$out" == *"Running: mysql"* && "$out" != *"Stopping"* ]]
+  rc=0; out="$(GASH_HEADLESS=1 services_stop 2>&1)" || rc=$?
+  [[ $rc -eq 1 && "$out" != *"Stopping"* ]]
+  out="$(services_stop -y 2>&1)"
+  [[ "$out" == *"Stopping mysql"* ]]
+  ! services_stop --bogus 2>/dev/null
+'
+
+it "services_stop falls back to service without systemd" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export __GASH_SYSTEMD_RUNDIR="$tmp/none"
+  printf "#!/bin/sh\n[ \"\$1 \$2\" = \"redis status\" ] && exit 0\n[ \"\$2\" = status ] && exit 3\necho \"\$@\" >> $tmp/log\n" > "$tmp/service"
+  printf "#!/bin/sh\n\"\$@\"\n" > "$tmp/sudo"
+  chmod +x "$tmp/service" "$tmp/sudo"
+  export PATH="$tmp:$PATH"
+  services_stop -y >/dev/null 2>&1
+  [[ "$(cat "$tmp/log")" == "redis stop" ]]
 '
 
 it "docker_start_all errors when docker missing" bash -c '
@@ -205,11 +238,12 @@ it "process_kill without a terminal refuses unless --force, whatever the number 
   export GASH_HEADLESS=1
   for name in my-proc many-proc; do
     out="$(process_kill "$name" 2>&1)" && { echo "killed without --force: $name"; exit 1; }
-    [[ "$out" == *"pass --force"* ]]
+    [[ "$out" == *"pass -y"* ]]
   done
   [[ ! -e "$MOCK_KILL_LOG" ]]
 
   process_kill my-proc --force >/dev/null 2>&1
+  process_kill -y my-proc >/dev/null 2>&1
   process_kill --force many-proc >/dev/null 2>&1
   process_kill -f my-proc >/dev/null 2>&1
   grep -qx 2222 "$MOCK_KILL_LOG"
@@ -222,7 +256,7 @@ it "process_kill without a terminal refuses unless --force, whatever the number 
     : >"$MOCK_KILL_LOG"
     unset GASH_HEADLESS
     out="$(setsid -w bash -c "source \"$ROOT/tests/gash-test.sh\"; gash_source_all \"$ROOT\"; kill() { echo \"\$*\" >>\"$MOCK_KILL_LOG\"; }; process_kill my-proc" </dev/null 2>&1)" && exit 1
-    [[ "$out" == *"pass --force"* && ! -s "$MOCK_KILL_LOG" ]]
+    [[ "$out" == *"pass -y"* && ! -s "$MOCK_KILL_LOG" ]]
   fi
 '
 

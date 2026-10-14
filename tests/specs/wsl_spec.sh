@@ -34,3 +34,26 @@ it "the memory snapshot has free memory, slab and per-zone blocks" bash -c '
   snap="$(__gash_wsl_mem_snapshot)"
   [[ "$snap" =~ ^[0-9]+\ MiB\|[0-9]+\ MiB\|[A-Za-z0-9]+=[0-9]+ ]]
 '
+
+describe "WSL helpers"
+
+it "wsl_restart asks first and refuses without a terminal; explorer gets a Windows path" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  __gash_require_wsl() { return 0; }
+  printf "#!/bin/sh\necho \"cmd \$*\" >> $tmp/log\n" > "$tmp/cmd.exe"
+  printf "#!/bin/sh\necho \"explorer \$*\" >> $tmp/log; exit 1\n" > "$tmp/explorer.exe"
+  printf "#!/bin/sh\necho \"WIN:\$2\"\n" > "$tmp/wslpath"
+  chmod +x "$tmp"/*
+  PATH="$tmp:$PATH"
+  rc=0; GASH_HEADLESS=1 wsl_restart >/dev/null 2>&1 || rc=$?
+  [[ $rc -eq 1 && ! -e "$tmp/log" ]]
+  ! wsl_shutdown --now 2>/dev/null
+  wsl_shutdown -y >/dev/null 2>&1
+  grep -q "^cmd /C wsl --shutdown" "$tmp/log"
+  wsl_explorer "$tmp"
+  grep -qx "explorer WIN:$tmp" "$tmp/log"
+  ! wsl_explorer "$tmp/missing" 2>/dev/null
+'

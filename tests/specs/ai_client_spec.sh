@@ -31,6 +31,19 @@ EOF
     [[ "$out" == *"postgres://app:"* ]]
 '
 
+it "redaction keeps ordinary words after password/token/secret" bash -c '
+    set -euo pipefail
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    source "$GASH_TEST_ROOT/lib/core/utils.sh"
+    source "$GASH_TEST_ROOT/lib/core/config.sh"
+    source "$GASH_TEST_ROOT/lib/modules/ai.sh"
+
+    out="$(printf "%s\n" "token expired at login" "my secret is safe" "token Zk29dLq8Pz7Wm4Rt1xYv" | __ai_redact)"
+    [[ "$out" == *"token expired at login"* ]]
+    [[ "$out" == *"my secret is safe"* ]]
+    [[ "$out" != *"Zk29dLq8Pz7Wm4Rt1xYv"* ]]
+'
+
 it "the request body and API key never appear in curl argv" bash -c '
     set -euo pipefail
     command -v jq >/dev/null 2>&1 || exit 77
