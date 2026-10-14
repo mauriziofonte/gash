@@ -163,3 +163,15 @@ it "a missing SSH key is not a line to comment out" bash -c "$__migrate_fixture"
   [[ "$problems" == 2$'\''\t'\''* ]]
   [[ "$(grep -c . <<<"$problems")" -eq 1 ]]
 '
+
+it "the inventory helpers succeed when they find nothing (set -e callers)" bash -c '
+  set -euo pipefail
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export HOME="$tmp" GASH_HEADLESS=1 PATH="/usr/bin:/bin"
+  : >"$HOME/.gashrc"; : >"$HOME/.gash_env"
+  source "$GASH_TEST_ROOT/gash.sh" 2>/dev/null
+  # No user files, no replacements, no problems: every helper prints nothing.
+  out="$(__gash_migrate_user_files)$(__gash_migrate_scan_scripts)$(__gash_migrate_gashrc_extras)$(__gash_migrate_env_problems)"
+  [[ -z "$out" ]]
+  __gash_migrate_tool_swaps >/dev/null
+'

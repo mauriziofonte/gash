@@ -221,12 +221,16 @@ it "llm_exec refuses forbidden system paths in arguments, globs and after cd" ba
 
   rel="$(realpath --relative-to="$tmp" /proc 2>/dev/null)" || rel="../../../../../../../../proc"
   for line in "head -c 50 /proc/self/environ" "cat /proc/self/cmdline" "ls /sys" "cat /root/.bashrc" \
-      "head /etc/shadow" "cat $rel/self/environ" "cat /pro?/self/environ" "cat me/environ" \
+      "head /etc/shadow" "cat $rel/self/environ" "cat me/environ" \
       "cd / && cat proc/self/environ" "cd / && ls proc" "cd /etc && cat shadow" \
       "grep -f/proc/self/environ x" "ls --directory=/sys" "git -C /root status" \
       "cat ~root/.profile" "wc -c /dev/sda"; do
     [[ "$(verdict "$line")" == forbidden_path ]] || { echo "not refused: $line"; exit 1; }
   done
+  # A glob is checked by what it matches (macOS has no /proc to match).
+  if [[ -d /proc/self ]]; then
+    [[ "$(verdict "cat /pro?/self/environ")" == forbidden_path ]]
+  fi
   # The envelope is the one the other llm_* functions use.
   err="$(llm_exec "cat /proc/self/environ" 2>&1 >/dev/null || true)"
   jq -e ".action == \"FATAL\" and .recoverable == false and .details == \"/proc/self/environ\"" <<<"$err" >/dev/null

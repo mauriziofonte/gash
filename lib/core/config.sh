@@ -124,11 +124,13 @@ __gash_check_env_perms() {
     # on stderr, and nobody reads it (GASH_DEBUG=1 still checks).
     [[ "${GASH_HEADLESS-}" == "1" && "${GASH_DEBUG-}" != "1" ]] && return 0
 
-    local perms="" owner=""
-    if [[ "${OSTYPE-}" == darwin* || "${OSTYPE-}" == *bsd* ]]; then
-        read -r perms owner < <(stat -L -f '%Lp %u' "$file" 2>/dev/null) || true
-    else
-        read -r perms owner < <(stat -L -c '%a %u' "$file" 2>/dev/null) || true
+    # GNU stat first, BSD stat second, whatever the OS: macOS users often
+    # have GNU coreutils first on PATH, where `stat -f` means something else.
+    local perms="" owner="" out
+    if out="$(stat -L -c '%a %u' "$file" 2>/dev/null)" && [[ "$out" =~ ^[0-7]+\ [0-9]+$ ]]; then
+        read -r perms owner <<<"$out"
+    elif out="$(stat -L -f '%Lp %u' "$file" 2>/dev/null)" && [[ "$out" =~ ^[0-7]+\ [0-9]+$ ]]; then
+        read -r perms owner <<<"$out"
     fi
 
     if [[ "$perms" =~ ^[0-7]{1,4}$ ]] && (((8#$perms) & 8#077)); then

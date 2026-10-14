@@ -93,6 +93,8 @@ it "llm_db_query sends MySQL a read-only session with a row cap, SQL on stdin" b
   mkdir -p "$tmp/bin"
   cat >"$tmp/bin/mysql" <<"MOCK"
 #!/usr/bin/env bash
+# Record the first call only: a slow run adds an EXPLAIN call after it.
+if [[ -e "$MOCK_DIR/args" ]]; then cat >/dev/null; printf "id\tname\n1\ta\n"; exit 0; fi
 printf "%s\n" "$@" >"$MOCK_DIR/args"
 # Read the credentials file like the real client does (it is a pipe).
 for a in "$@"; do

@@ -80,6 +80,7 @@ __gash_migrate_user_files() {
     for f in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.bash_aliases" "$HOME/.bash_local"; do
         [[ -f "$f" ]] && printf '%s\n' "$f"
     done
+    return 0
 }
 
 # A setting configured in the environment or in ~/.gash_env.
@@ -116,6 +117,7 @@ __gash_migrate_gashrc_extras() {
         [[ $'\n'"$__GASH_MIGRATE_V1_GASHRC"$'\n' == *$'\n'"$trimmed"$'\n'* ]] && continue
         printf '%s\n' "$line"
     done <"$HOME/.gashrc"
+    return 0
 }
 
 # Lines of ~/.gash_env that Gash 2 skips: "NUMBER<TAB>reason" (missing SSH
@@ -131,6 +133,7 @@ __gash_migrate_env_problems() {
         __GASH_ENV_LOADED=""
         GASH_ENV_FILE="$env_file" GASH_NO_COLOR=1 __gash_load_env 2>&1 >/dev/null
     )
+    return 0
 }
 
 # ~/.gash_env readable by group or others.
@@ -155,6 +158,7 @@ __gash_migrate_tool_swaps() {
             break
         }
     done
+    return 0
 }
 
 # Lines in the user's files that 2.0 reads differently:
@@ -181,6 +185,7 @@ __gash_migrate_scan_scripts() {
             [[ -n "$rule" ]] && printf '%s\t%s\t%s\t%s\n' "$f" "$n" "$rule" "$trimmed"
         done <"$f"
     done < <(__gash_migrate_user_files)
+    return 0
 }
 
 # -----------------------------------------------------------------------------
