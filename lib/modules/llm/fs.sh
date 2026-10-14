@@ -261,7 +261,7 @@ __llm_find_impl() {
                     return 1
                 }
                 ;;
-            --limit)
+            -n | --limit)
                 limit="${2-100}"
                 shift 2 || {
                     __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
@@ -361,7 +361,7 @@ __llm_grep_impl() {
                     return 1
                 }
                 ;;
-            --limit)
+            -n | --limit)
                 limit="${2-100}"
                 shift 2 || {
                     __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"

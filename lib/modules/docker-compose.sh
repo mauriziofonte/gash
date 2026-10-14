@@ -823,7 +823,12 @@ EOF
     # Parse arguments
     for arg in "$@"; do
         case "$arg" in
-            --dry-run | -n) dry_run=1 ;;
+            --dry-run) dry_run=1 ;;
+            -n)
+                # -n means "limit N" across Gash 2.x; dry-run is spelled out.
+                __gash_error "-n is not --dry-run anymore; use --dry-run"
+                return 1
+                ;;
             --force | -f) force=1 ;;
             --yes | -y) assume_yes=1 ;;
             --no-color) no_color=1 ;;

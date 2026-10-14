@@ -189,11 +189,11 @@ __node_detect_version_major() {
 }
 
 # Detect the Node.js version a project wants, and resolve the matching
-# gash-exec function names. JSON output under --llm or GASH_HEADLESS=1,
+# gash-exec function names. JSON output under --json or GASH_HEADLESS=1,
 # human-readable text otherwise.
-# Usage: node_detect_version [project_dir] [--llm]
+# Usage: node_detect_version [project_dir] [--json]
 node_detect_version() {
-    needs_help "node_detect_version" "node_detect_version [project_dir] [--llm]" \
+    needs_help "node_detect_version" "node_detect_version [project_dir] [--json]" \
         "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names." \
         "${1-}" && return
 
@@ -207,7 +207,11 @@ node_detect_version() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            --llm) llm_mode=1 ;;
+            --json | --llm) llm_mode=1 ;; # --llm: 1.x spelling, kept as alias
+            -*)
+                __gash_error "Unknown option: $arg"
+                return 1
+                ;;
             *) project_dir="$arg" ;;
         esac
     done
@@ -286,19 +290,19 @@ HELP
         --short "Detect the Node.js version a project wants" \
         <<'HELP'
 USAGE
-  node_detect_version [project_dir] [--llm]
+  node_detect_version [project_dir] [--json]
 
 EXAMPLES
   # Human-readable, current directory
   node_detect_version
 
   # JSON, specific project
-  node_detect_version /path/to/project --llm
+  node_detect_version /path/to/project --json
 
 NOTES
   Priority: .nvmrc -> .node-version -> package.json engines.node -> latest
   installed. JSON output is also emitted automatically under
-  GASH_HEADLESS=1, --llm is not required there.
+  GASH_HEADLESS=1, --json is not required there.
 HELP
 
 fi # end help registration guard

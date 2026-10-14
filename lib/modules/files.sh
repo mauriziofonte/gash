@@ -375,7 +375,7 @@ files_largest() {
     # $json_mode and friends are fully known).
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --limit)
+            -n | --limit)
                 limit="${2-100}"
                 shift 2 || {
                     __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
@@ -590,7 +590,7 @@ dirs_largest() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --limit)
+            -n | --limit)
                 limit="${2-100}"
                 shift 2 || {
                     __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
@@ -870,7 +870,7 @@ dirs_find_large() {
                     return 1
                 }
                 ;;
-            --limit)
+            -n | --limit)
                 limit="${2-1000}"
                 shift 2 || {
                     __gash_fs_error "missing_value" "$1" "RETRY" "$1 needs a value" "$json_mode"
@@ -1921,7 +1921,7 @@ EXAMPLES
   files_largest --no-ignore ~/projects
 
 OPTIONS
-  --limit N              Cap results (default 100)
+  -n, --limit N          Cap results (default 100)
   --min-size SIZE        Ignore files smaller than SIZE (e.g. 10M, 1G, 500K)
   --exclude GLOB         Prune matching paths (repeatable, substring match)
   --depth N              Limit scan depth (default: unbounded)
@@ -1965,7 +1965,7 @@ EXAMPLES
   dirs_largest --null --depth 3 ~/projects | xargs -0 du -sh
 
 OPTIONS
-  --limit N              Cap results (default 100)
+  -n, --limit N          Cap results (default 100)
   --depth N              Depth limit (default 1, top-level only). Use higher values
                          to reveal nested offenders (node_modules, vendor/, target/).
   --min-size SIZE        Ignore directories smaller than SIZE
@@ -2012,7 +2012,7 @@ EXAMPLES
 OPTIONS
   --size SIZE            Size threshold (default 20M; formats: 20M, 1G, 500K, bytes)
   --depth N              Depth limit (default unbounded; use to cap very deep trees)
-  --limit N              Cap results (default 1000)
+  -n, --limit N          Cap results (default 1000)
   --exclude GLOB         Prune matching paths (repeatable)
   --no-ignore            Disable default pruning
   --xdev                 Stay on a single filesystem

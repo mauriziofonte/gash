@@ -53,3 +53,21 @@ it "a value flag at the end of the line errors instead of hanging" bash -c '
     [[ "$(jq -r .error <<<"$err")" == "missing_value" ]] || { echo "$call -> $err"; exit 1; }
   done
 '
+
+it "flags mean one thing: -n is a limit, --json is JSON, unknown flags fail" bash -c '
+  set -uo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
+  for i in 1 2 3; do head -c $((i * 100)) /dev/zero >"$tmp/f$i"; done
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  [[ "$(files_largest -n 2 --json "$tmp" | jq .count)" == 2 ]] || exit 1
+  [[ "$(dirs_largest -n 1 --json "$tmp" | jq .count)" -le 1 ]] || exit 1
+  printf "8.3\n" >"$tmp/.target-php-version"
+  php_detect_version "$tmp" --json | jq -e .version >/dev/null || exit 1
+  php_detect_version "$tmp" --llm | jq -e .version >/dev/null || exit 1
+  php_detect_version "$tmp" --bogus >/dev/null 2>&1 && exit 1
+  printf "services:\n  web:\n    image: nginx\n" >"$tmp/compose.yml"
+  docker_compose_upgrade "$tmp" -n >/dev/null 2>&1 && exit 1
+  exit 0
+'

@@ -148,7 +148,7 @@ __llm_git_log_impl() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --limit)
+            -n | --limit)
                 limit="${2-10}"
                 shift 2 || {
                     __llm_error "missing_value" "$1" "RETRY" "true" "$1 needs a value"
