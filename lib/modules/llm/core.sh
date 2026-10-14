@@ -80,6 +80,12 @@ __LLM_FORBIDDEN_PATHS=(
     '/etc/sudoers'
     '/etc/sudoers.d'
 )
+# Root's home also where it is not /root (macOS: /var/root).
+__llm_root_home=~root
+if [[ "$__llm_root_home" == /?* && "$__llm_root_home" != /root ]]; then
+    __LLM_FORBIDDEN_PATHS+=("$__llm_root_home")
+fi
+unset __llm_root_home
 
 # Secret files, matched case-insensitively against the base name (of the
 # path as given and of its symlink target). Never read, never searched.

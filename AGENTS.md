@@ -247,7 +247,8 @@ every check below.
 * `llm_*` path arguments: a `..` component is refused; `/proc`, `/sys`,
   `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/gshadow`, `/etc/passwd`,
   `/etc/sudoers` and everything below them are refused, checked as written
-  and after resolving symlinks.
+  and after resolving symlinks. Root's home is refused also where it is not
+  `/root` (macOS: `/var/root`).
 * Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root`, need
   `--allow-root` for `/`, and do not refuse `..`.
 * `llm_exec` applies the same forbidden-path rules to every argument of

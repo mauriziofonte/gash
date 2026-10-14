@@ -39,7 +39,8 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
   repository; `llm_ports` returns `ports_tool_not_found` instead of `[]`;
   `llm_docker_check` reports errors on stderr in the standard envelope (the
   path moved to `details`) and unknown digests as `null`.
-- `llm_exec` refuses arguments under the forbidden paths (`forbidden_path`).
+- `llm_exec` refuses arguments under the forbidden paths (`forbidden_path`),
+  which also cover root's home where it is not `/root` (macOS: `/var/root`).
 - `GASH_NO_COLOR=0` no longer turns colors off.
 - Error envelopes: `recoverable` follows `action` (false only for `FATAL`).
 - `php_detect_version` and `node_detect_version` take `--json` (`--llm`

@@ -136,7 +136,8 @@ A symlink is judged by its own name and by its target's.
 
 `/proc`, `/sys`, `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/gshadow`,
 `/etc/passwd`, `/etc/sudoers`, `/etc/sudoers.d` and everything below them,
-matched per path component (`/rootfs` is allowed). A `..` component is refused.
+matched per path component (`/rootfs` is allowed), plus root's home where it
+is not `/root` (macOS: `/var/root`). A `..` component is refused.
 The path is checked as written, after `realpath -m` (symlinks resolved) and,
 for macOS, without a `/private` prefix. Applies to `llm_tree`, `llm_find`,
 `llm_grep`, `llm_config`, `llm_git_*`, `llm_project`, `llm_deps`, SQLite
