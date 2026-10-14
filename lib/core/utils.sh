@@ -33,6 +33,10 @@ needs_help() {
     local user_input="${4-}"
 
     if [[ "$user_input" == "--help" || "$user_input" == "-h" ]]; then
+        # The full registered help (examples, notes) when there is one.
+        if declare -f __gash_help_display >/dev/null 2>&1 && __gash_help_display "$program"; then
+            return 0
+        fi
         if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
             printf '\e[38;5;214m%s\e[0m\n' "$program"
             printf '\e[1;97mUsage:\e[0m \e[1;96m%s\e[0m\n' "$usage"

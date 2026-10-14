@@ -234,13 +234,7 @@ User question: ${query}"
     local rc=$?
 
     # Stop spinner (no status message)
-    if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-        kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-        wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-        __GASH_SPINNER_PID=""
-        printf "\r\033[K"
-        trap - EXIT
-    fi
+    __gash_spinner_stop none
 
     if [[ $rc -ne 0 ]]; then
         return 1
@@ -352,13 +346,7 @@ User question: ${query}"
     local rc=$?
 
     # Stop spinner (no status message)
-    if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-        kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-        wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-        __GASH_SPINNER_PID=""
-        printf "\r\033[K"
-        trap - EXIT
-    fi
+    __gash_spinner_stop none
 
     if [[ $rc -ne 0 ]]; then
         return 1

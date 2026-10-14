@@ -21,6 +21,7 @@
 # Usage: gash_username
 # Returns: username string (never empty, falls back to UNKNOWN_USERNAME)
 gash_username() {
+    needs_help "gash_username" "gash_username" "Print the current user name." "${1-}" && return
     local user_name=""
 
     # Try whoami first (most common)
@@ -57,6 +58,7 @@ gash_username() {
 # Display an inspiring quote from the quotes file.
 # Usage: gash_inspiring_quote
 gash_inspiring_quote() {
+    needs_help "gash_inspiring_quote" "gash_inspiring_quote" "Print a random quote." "${1-}" && return
     local tty_width
     tty_width="$(__gash_tty_width)"
 
@@ -189,6 +191,7 @@ gash_upgrade() {
 # Uninstall Gash and clean up configurations.
 # Usage: gash_uninstall
 gash_uninstall() {
+    needs_help "gash_uninstall" "gash_uninstall" "Remove Gash and its startup block from this account (asks first)." "${1-}" && return
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
 
     if [ ! -d "$gash_dir" ]; then

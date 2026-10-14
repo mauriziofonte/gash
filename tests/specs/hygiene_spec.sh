@@ -140,3 +140,44 @@ it "non-Bash shells get a clear message instead of a parse error" bash -c '
   [[ $rc -ne 0 ]]
   [[ "$out" == *"requires Bash 4.4"* ]]
 '
+
+it "every public function answers --help without side effects" bash -c '
+  set -uo pipefail
+  stubs="$(mktemp -d)"; trap "/bin/rm -rf \"$stubs\"" EXIT
+  log="$stubs/calls.log"
+  for b in docker git sudo rm curl wget ssh scp rsync systemctl apt apt-get npm composer \
+           lsof fuser mv cp chmod chown tar crontab kill pkill php node mysql psql sqlite3 ln mkdir touch; do
+    printf "#!/bin/sh\necho \"%s \$*\" >>\"%s\"\n" "$b" "$log" >"$stubs/$b"
+    /bin/chmod +x "$stubs/$b"
+  done
+  before="$(declare -F | cut -d" " -f3)"
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  fails=0 n=0
+  for f in $(declare -F | cut -d" " -f3 | grep -v "^_"); do
+    grep -qx "$f" <<<"$before" && continue
+    case "$f" in needs_help | needs_confirm_prompt) continue ;; esac
+    n=$((n + 1))
+    : >"$log"
+    out="$( (PATH="$stubs:$PATH"; "$f" --help) </dev/null 2>&1 )"; rc=$?
+    if [[ $rc -ne 0 || -s "$log" || -z "$out" ]]; then
+      echo "$f --help: rc=$rc calls=$(tr "\n" ";" <"$log")" >&2
+      fails=$((fails + 1))
+    fi
+  done
+  ((n > 60)) && ((fails == 0))
+'
+
+it "commands leave no RETURN trap and keep the caller EXIT trap" bash -c '
+  set -uo pipefail
+  tmp="$(mktemp -d)"; mkdir -p "$tmp/d/e"; echo x >"$tmp/d/f"
+  trap "/bin/rm -rf \"$tmp\"" EXIT
+  before="$(trap -p EXIT)"
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  for c in files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats; do
+    "$c" --json "$tmp/d" >/dev/null 2>&1
+    [[ -z "$(trap -p RETURN)" ]] || { echo "$c left: $(trap -p RETURN)"; exit 1; }
+  done
+  [[ "$(trap -p EXIT)" == "$before" ]]
+'

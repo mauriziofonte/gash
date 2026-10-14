@@ -628,45 +628,79 @@ process_kill() {
     done
 }
 
-# Kill all processes by port.
-# Usage: port_kill PORT
+# Terminate the processes listening on a port (TCP listeners and UDP
+# sockets bound to it; clients connected to that port are left alone).
+# Lists them and asks first unless --force/-f.
+# Usage: port_kill [--force] PORT
 # Alias: ptk
 port_kill() {
-    local port="${1-}"
+    needs_help "port_kill" "port_kill [--force] PORT" "Terminate the processes listening on PORT. Alias: ptk" "${1-}" && return
 
-    __gash_require_arg "$port" "port" "port_kill <port>" || return 1
+    local force=0 port=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f | --force) force=1 ;;
+            -*)
+                __gash_error "Unknown option: $1"
+                return 1
+                ;;
+            *) port="$1" ;;
+        esac
+        shift
+    done
+
+    __gash_require_arg "$port" "port" "port_kill [--force] <port>" || return 1
+    if ! [[ "$port" =~ ^[0-9]+$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+        __gash_error "Invalid port: $port (expected 1-65535)."
+        return 1
+    fi
+    port=$((10#$port))
     __gash_require_command "lsof" "This function requires 'lsof', which is not available." || return 1
 
     local pids
-    pids=$(lsof -t -i:"$port" 2>/dev/null || true)
+    pids=$({
+        lsof -t -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null
+        lsof -t -nP -iUDP:"$port" 2>/dev/null
+    } | sort -un)
 
-    if [ -n "$pids" ]; then
-        # SIGTERM first, SIGKILL only for survivors
-        local pid
-        for pid in $pids; do
-            kill "$pid" 2>/dev/null || true
-        done
-        local waited=0
-        while ((waited < 30)); do
-            local alive=0
-            for pid in $pids; do
-                kill -0 "$pid" 2>/dev/null && alive=1
-            done
-            [[ $alive -eq 0 ]] && break
-            sleep 0.1
-            waited=$((waited + 1))
-        done
-        for pid in $pids; do
-            if kill -0 "$pid" 2>/dev/null; then
-                kill -9 "$pid" 2>/dev/null || true
-                __gash_info "Process $pid on port $port ignored SIGTERM; killed with SIGKILL."
-            else
-                __gash_info "Process $pid on port $port terminated."
-            fi
-        done
-    else
-        __gash_error "No process found on port $port."
+    if [[ -z "$pids" ]]; then
+        __gash_error "Nothing is listening on port $port."
+        return 1
     fi
+
+    local pid cmd
+    __gash_info "Listening on port $port:"
+    for pid in $pids; do
+        cmd=$(ps -o comm= -p "$pid" 2>/dev/null) || cmd="?"
+        printf '  %s  %s\n' "$pid" "${cmd:-?}" >&2
+    done
+    if [[ $force -eq 0 ]] && ! needs_confirm_prompt "Terminate these processes?"; then
+        __gash_info "Aborted."
+        return 1
+    fi
+
+    # SIGTERM first, SIGKILL only for survivors after ~3s
+    for pid in $pids; do
+        kill "$pid" 2>/dev/null || true
+    done
+    local waited=0 alive
+    while ((waited < 30)); do
+        alive=0
+        for pid in $pids; do
+            kill -0 "$pid" 2>/dev/null && alive=1
+        done
+        [[ $alive -eq 0 ]] && break
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    for pid in $pids; do
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null || true
+            __gash_info "Process $pid on port $port ignored SIGTERM; killed with SIGKILL."
+        else
+            __gash_info "Process $pid on port $port terminated."
+        fi
+    done
 }
 
 # -----------------------------------------------------------------------------
@@ -677,6 +711,7 @@ port_kill() {
 # Usage: services_stop [--force]
 # Alias: svs
 services_stop() {
+    needs_help "services_stop" "services_stop [--force]" "Stop well-known services (web servers, databases, docker). Alias: svs" "${1-}" && return
     local services=("apache2" "nginx" "mysql" "mariadb" "postgresql" "mongodb" "redis" "memcached" "docker")
     local force_flag="${1-}"
 
@@ -702,6 +737,7 @@ services_stop() {
 # Usage: sudo_last [command]
 # Alias: plz
 sudo_last() {
+    needs_help "sudo_last" "sudo_last [COMMAND...]" "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz" "${1-}" && return
     if [[ -n "${1-}" ]]; then
         sudo "$@"
     else
@@ -725,6 +761,7 @@ sudo_last() {
 # Usage: mkdir_cd DIRECTORY
 # Alias: mkcd
 mkdir_cd() {
+    needs_help "mkdir_cd" "mkdir_cd DIRECTORY" "Create DIRECTORY and cd into it. Alias: mkcd" "${1-}" && return
     local dir="${1-}"
 
     __gash_require_arg "$dir" "directory" "mkdir_cd <directory>" || return 1
@@ -954,20 +991,19 @@ HELP
         --see-also "process_find process_kill" \
         <<'HELP'
 USAGE
-  port_kill PORT
+  port_kill [--force] PORT
 
 EXAMPLES
-  # Kill whatever is on port 3000
+  # Stop whatever listens on port 3000 (lists it and asks first)
   ptk 3000
 
-  # Free up port 8080 before starting a dev server
-  ptk 8080
-
-  # Clear port 5432 (PostgreSQL default)
-  ptk 5432
+  # No confirmation (scripts, agents)
+  ptk --force 3000
 
 NOTES
-  Requires lsof. Uses kill -9 (SIGKILL).
+  Requires lsof. Only listeners are targeted: a browser or ssh session
+  connected to that port elsewhere is left alone. SIGTERM first,
+  SIGKILL for processes still alive after about 3 seconds.
 HELP
 
     __gash_register_help "services_stop" \

@@ -542,15 +542,17 @@ services:
 EOF
 
     # Run upgrade
+    start="$PWD"
     docker_compose_upgrade "$tmpdir" --yes >/dev/null 2>&1 || true
 
-    # Check that commands were called in order
-    [[ -f "$MOCK_DOCKER_LOG" ]] || exit 1
-    log=$(cat "$MOCK_DOCKER_LOG")
+    # The caller'"'"'s working directory is never changed.
+    [[ "$PWD" == "$start" ]] || exit 1
 
-    [[ "$log" == *"compose pull"* ]] || exit 1
-    [[ "$log" == *"compose stop"* ]] || exit 1
-    [[ "$log" == *"compose up"* ]] || exit 1
+    # pull, stop, up, in that order, each naming the project explicitly
+    [[ -f "$MOCK_DOCKER_LOG" ]] || exit 1
+    log=$(tr "\n" " " <"$MOCK_DOCKER_LOG")
+    proj="compose -f $tmpdir/docker-compose.yml --project-directory $tmpdir"
+    [[ "$log" == *"$proj pull web"*"$proj stop web"*"$proj up -d --remove-orphans web"* ]] || { echo "$log"; exit 1; }
 '
 
 # =============================================================================

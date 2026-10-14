@@ -674,7 +674,7 @@ ai_sysinfo() {
 
 __ai_sysinfo_impl() {
     # Ensure sudo cleanup on any exit path
-    trap '__sysinfo_release_sudo' RETURN
+    trap '__sysinfo_release_sudo; trap - RETURN' RETURN
 
     local provider=""
     local raw_mode=0
@@ -742,13 +742,7 @@ __ai_sysinfo_impl() {
     __SYSINFO_MODE="verbose"
 
     # Stop spinner (no status message)
-    if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-        kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-        wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-        __GASH_SPINNER_PID=""
-        printf "\r\033[K"
-        trap - EXIT
-    fi
+    __gash_spinner_stop none
 
     # Raw mode: dump data without API call
     if [[ "$raw_mode" -eq 1 ]]; then
@@ -799,13 +793,7 @@ __ai_sysinfo_impl() {
     local rc=$?
 
     # Stop spinner
-    if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-        kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-        wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-        __GASH_SPINNER_PID=""
-        printf "\r\033[K"
-        trap - EXIT
-    fi
+    __gash_spinner_stop none
 
     if [[ $rc -ne 0 ]]; then
         return 1
@@ -874,13 +862,7 @@ __ai_sysinfo_impl() {
                 local question_context
                 question_context=$(__sysinfo_collect_question_context "$user_question")
 
-                if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-                    kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-                    wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-                    __GASH_SPINNER_PID=""
-                    printf "\r\033[K"
-                    trap - EXIT
-                fi
+                __gash_spinner_stop none
 
                 # Phase 2: call AI with initial analysis + collected context
                 __gash_spinner_start "${provider_display} is thinking..."
@@ -892,13 +874,7 @@ __ai_sysinfo_impl() {
                 esac
                 local ft_rc=$?
 
-                if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-                    kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-                    wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-                    __GASH_SPINNER_PID=""
-                    printf "\r\033[K"
-                    trap - EXIT
-                fi
+                __gash_spinner_stop none
 
                 if [[ $ft_rc -ne 0 ]]; then continue; fi
 
@@ -930,13 +906,7 @@ __ai_sysinfo_impl() {
         deep_data=$("$deep_fn" 2>/dev/null)
 
         # Stop spinner
-        if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-            kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-            wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-            __GASH_SPINNER_PID=""
-            printf "\r\033[K"
-            trap - EXIT
-        fi
+        __gash_spinner_stop none
 
         # API call
         __gash_spinner_start "${provider_display} is analyzing ${section_title}..."
@@ -949,13 +919,7 @@ __ai_sysinfo_impl() {
         local drill_rc=$?
 
         # Stop spinner
-        if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-            kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-            wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-            __GASH_SPINNER_PID=""
-            printf "\r\033[K"
-            trap - EXIT
-        fi
+        __gash_spinner_stop none
 
         if [[ $drill_rc -ne 0 ]]; then
             continue

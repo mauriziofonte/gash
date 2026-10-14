@@ -26,10 +26,13 @@
 #   DENY  — always refused, human or headless, no override: irreversible or
 #           system-breaking targets (auth databases, boot, kernel interfaces,
 #           system binaries/libraries, PAM, SSH server config).
-#   ASK   — risky but legitimate (most of /etc, /var, /usr/local, /root):
+#   ASK   — risky but legitimate (most of /etc, /var, /usr/local, /root,
+#           and SSH keys: ~/.ssh, /home/<user>/.ssh):
 #           interactively a real y/n prompt (needs_confirm_prompt); headless,
 #           refused unless --force is passed explicitly.
 #   ALLOW — /tmp, /var/tmp, /home/<user>/*, relative paths, everything else.
+# Paths are normalized first (//, /./, trailing /, ~/ and ~user/ prefixes),
+# so //etc/shadow is /etc/shadow; any ".." segment is refused.
 
 # -----------------------------------------------------------------------------
 # Path safety tables
@@ -77,14 +80,39 @@ __remote_resolve_target() {
     return 1
 }
 
+# Canonical spelling of a remote path for the safety tables: repeated
+# slashes collapsed, "." segments and trailing slashes dropped, "~/" and
+# "~user/" home prefixes reduced to a relative path ("~" alone -> ".").
+# Usage: __remote_normalize_path PATH   (prints the normalized path)
+__remote_normalize_path() {
+    local p="${1-}"
+    if [[ "$p" == "~" || "$p" =~ ^~[^/]*$ ]]; then
+        printf '.'
+        return
+    fi
+    [[ "$p" =~ ^~[^/]*/ ]] && p="${p#"${BASH_REMATCH[0]}"}"
+    while [[ "$p" == *//* ]]; do p="${p//\/\//\/}"; done
+    while [[ "$p" == */./* ]]; do p="${p//\/.\//\/}"; done
+    [[ "$p" == ./* ]] && p="${p#./}"
+    [[ "$p" == */. ]] && p="${p%/.}"
+    [[ "$p" == /. ]] && p="/"
+    while [[ "$p" != "/" && "$p" == */ ]]; do p="${p%/}"; done
+    printf '%s' "${p:-.}"
+}
+
 # Classify a remote path: prints "allow", "deny:<prefix>", or "ask:<prefix>".
 __remote_classify_path() {
     local raw="$1"
-    local path="$raw"
-    [[ "$path" != "/" ]] && path="${path%/}"
+    local path
+    path="$(__remote_normalize_path "$raw")"
 
-    if [[ "$raw" == *".."* ]]; then
+    if [[ "/$path/" == *"/../"* ]]; then
         printf 'deny:path_traversal'
+        return
+    fi
+    # SSH keys and authorized_keys, in the remote home or any user's.
+    if [[ "$path" == ".ssh" || "$path" == .ssh/* || "$path" =~ ^/home/[^/]+/\.ssh(/|$) ]]; then
+        printf 'ask:~/.ssh'
         return
     fi
     if [[ "$path" != /* ]]; then
@@ -155,10 +183,13 @@ __remote_check_safety() {
 
 # Returns 0 if a path is safe for rsync --delete without extra confirmation.
 __remote_is_safe_for_delete() {
-    local raw="$1"
-    local path="$raw"
-    [[ "$path" != "/" ]] && path="${path%/}"
+    local path
+    path="$(__remote_normalize_path "$1")"
 
+    [[ "/$path/" == *"/../"* ]] && return 1
+    [[ "$path" == ".ssh" || "$path" == .ssh/* || "$path" =~ ^/home/[^/]+/\.ssh(/|$) ]] && return 1
+    # The home directory itself: --delete there would mirror over all of it.
+    [[ "$path" == "." ]] && return 1
     [[ "$path" != /* ]] && return 0
 
     local prefix

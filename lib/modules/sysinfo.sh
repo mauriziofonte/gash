@@ -1667,7 +1667,7 @@ Flags: --llm (compact token-efficient output for AI), --no-color (disable ANSI).
     # Sudo caching (single prompt). `|| true`: missing sudo must never kill
     # a `set -e` caller. The RETURN trap guarantees the keep-alive loop is
     # reaped even if a collector aborts mid-way.
-    trap '__sysinfo_release_sudo' RETURN
+    trap '__sysinfo_release_sudo; trap - RETURN' RETURN
     __sysinfo_ensure_sudo || true
 
     # Dispatch. `|| true` suppresses errexit inside the collectors too: a

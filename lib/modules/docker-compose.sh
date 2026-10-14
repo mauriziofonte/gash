@@ -224,7 +224,7 @@ __gash_registry_curl() {
     local tmpfile
     tmpfile=$(mktemp) || return 1
     # shellcheck disable=SC2064
-    trap "rm -f '${tmpfile}'" RETURN
+    trap "rm -f '${tmpfile}'; trap - RETURN" RETURN
 
     # Reset state
     __gash_registry_curl_body=""
@@ -469,7 +469,10 @@ EOF
         case "$arg" in
             --json | -j) json_output=1 ;;
             --no-color) no_color=1 ;;
-            -*) ;;
+            -*)
+                __gash_error "Unknown option: $arg"
+                return 1
+                ;;
             *) path="$arg" ;;
         esac
     done
@@ -779,7 +782,10 @@ EOF
             --force | -f) force=1 ;;
             --yes | -y) assume_yes=1 ;;
             --no-color) no_color=1 ;;
-            -*) ;;
+            -*)
+                __gash_error "Unknown option: $arg"
+                return 1
+                ;;
             *) path="$arg" ;;
         esac
     done
@@ -806,6 +812,11 @@ EOF
 
     local compose_cmd
     compose_cmd=$(__gash_compose_cmd)
+    # Every compose call names the project explicitly: no cd in the
+    # caller's shell.
+    local -a dc
+    read -ra dc <<<"$compose_cmd"
+    dc+=(-f "$compose_file" --project-directory "$path")
 
     echo ""
     printf "${__GASH_BOLD_WHITE}=== Docker Compose Upgrade ===${__GASH_COLOR_OFF}\n"
@@ -847,9 +858,9 @@ EOF
 
     if [[ $dry_run -eq 1 ]]; then
         printf "Would run:\n"
-        printf "  cd %s\n" "$path"
-        printf "  %s pull %s\n" "$compose_cmd" "${upgradeable_services[*]}"
-        printf "  %s up -d --remove-orphans %s\n" "$compose_cmd" "${upgradeable_services[*]}"
+        printf "  %s pull %s\n" "${dc[*]}" "${upgradeable_services[*]}"
+        printf "  %s stop %s\n" "${dc[*]}" "${upgradeable_services[*]}"
+        printf "  %s up -d --remove-orphans %s\n" "${dc[*]}" "${upgradeable_services[*]}"
         printf "  docker image prune -f\n"
         return 0
     fi
@@ -862,19 +873,20 @@ EOF
             __gash_error "Refusing to upgrade in headless mode without --yes (pull + restart is destructive)."
             return 1
         fi
-        printf "\n${__GASH_BOLD_YELLOW}This will pull new images and restart containers.${__GASH_COLOR_OFF}\n"
+        printf "\n${__GASH_BOLD_YELLOW}This will:${__GASH_COLOR_OFF}\n"
+        printf "  - pull new images for: %s\n" "${upgradeable_services[*]}"
+        printf "  - stop and recreate those containers\n"
+        printf "  - remove containers of this project no longer in %s (--remove-orphans)\n" "${compose_file##*/}"
+        printf "  - remove dangling images on this host, from any project (docker image prune -f)\n"
         if ! needs_confirm_prompt "Proceed with upgrade?"; then
             printf "Upgrade cancelled.\n"
             return 0
         fi
     fi
 
-    # Execute upgrade with error handling
-    cd "$path" || return 1
-
     local pull_failed=0
     __gash_step 1 4 "Pulling updated images..."
-    if ! $compose_cmd pull "${upgradeable_services[@]}"; then
+    if ! "${dc[@]}" pull "${upgradeable_services[@]}"; then
         __gash_error "Failed to pull images. Aborting upgrade."
         pull_failed=1
     fi
@@ -882,11 +894,11 @@ EOF
     # Only proceed if pull succeeded
     if [[ $pull_failed -eq 0 ]]; then
         __gash_step 2 4 "Stopping old containers..."
-        $compose_cmd stop "${upgradeable_services[@]}" 2>/dev/null || true
+        "${dc[@]}" stop "${upgradeable_services[@]}" 2>/dev/null || true
 
         __gash_step 3 4 "Starting updated containers..."
-        if ! $compose_cmd up -d --remove-orphans "${upgradeable_services[@]}"; then
-            __gash_error "Failed to start containers. Check logs with: $compose_cmd logs"
+        if ! "${dc[@]}" up -d --remove-orphans "${upgradeable_services[@]}"; then
+            __gash_error "Failed to start containers. Check logs with: ${dc[*]} logs"
             return 1
         fi
 
@@ -898,7 +910,7 @@ EOF
         echo ""
 
         # Show status
-        $compose_cmd ps
+        "${dc[@]}" ps
     else
         return 1
     fi

@@ -45,6 +45,27 @@ it "classifies ALLOW paths correctly" bash -c '
   [[ "$(__remote_classify_path /opt/myapp)" == "allow" ]]
 '
 
+it "normalizes paths before classifying: no slash or dot tricks, ~/.ssh asks" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+
+  for p in //etc/shadow /etc//shadow /./etc/shadow /etc/./ssh/ /etc/shadow/ ///usr//bin/sh //; do
+    [[ "$(__remote_classify_path "$p")" == deny:* ]] || { echo "not denied: $p"; exit 1; }
+  done
+  for p in "~/.ssh/authorized_keys" .ssh/id_ed25519 "~root/.ssh/x" /home/bob/.ssh/ ./.ssh; do
+    [[ "$(__remote_classify_path "$p")" == "ask:~/.ssh" ]] || { echo "not asked: $p"; exit 1; }
+    ! __remote_is_safe_for_delete "$p" || { echo "delete-safe: $p"; exit 1; }
+  done
+  [[ "$(__remote_classify_path "~/notes.txt")" == allow ]]
+  [[ "$(__remote_classify_path ..config)" == allow ]]
+  [[ "$(__remote_classify_path "a/../../etc")" == "deny:path_traversal" ]]
+  # rsync --delete into the remote home itself is not "safe".
+  ! __remote_is_safe_for_delete "~"
+  ! __remote_is_safe_for_delete "~/"
+  __remote_is_safe_for_delete "~/project"
+'
+
 it "resolve_target accepts a raw user@host interactively" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"

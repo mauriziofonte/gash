@@ -168,6 +168,7 @@ EOF
 #
 # Usage: gash_ssh_auto_unlock
 gash_ssh_auto_unlock() {
+    needs_help "gash_ssh_auto_unlock" "gash_ssh_auto_unlock" "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)." "${1-}" && return
     # Run once per shell session
     if [[ -n "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]]; then
         return 0
