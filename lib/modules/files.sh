@@ -282,11 +282,12 @@ __gash_fs_scan_warn() {
 }
 
 # Current monotonic milliseconds (best-effort). Uses EPOCHREALTIME if available
-# (bash 5.0+), falls back to `date +%s%N`.
+# (bash 5.0+), falls back to `date +%s%N`. EPOCHREALTIME uses the locale's
+# decimal point: "." or "," (it_IT, de_DE).
 __gash_fs_now_ms() {
     if [[ -n "${EPOCHREALTIME-}" ]]; then
-        local s="${EPOCHREALTIME%%.*}"
-        local f="${EPOCHREALTIME#*.}"
+        local s="${EPOCHREALTIME%%[.,]*}"
+        local f="${EPOCHREALTIME#*[.,]}"
         while [[ ${#f} -lt 6 ]]; do f="${f}0"; done
         printf '%s' $((10#$s * 1000 + 10#${f:0:3}))
         return 0

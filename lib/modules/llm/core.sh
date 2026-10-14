@@ -111,9 +111,10 @@ __LLM_SECRET_DIRS=('.ssh' '.gnupg' '.aws' '.azure' '.kube' '.docker' '.config/gc
 __LLM_GIT_SAFE_CONFIG=(-c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.external= -c core.pager=cat)
 
 # Run git with __LLM_GIT_SAFE_CONFIG (never a shell function named git).
+# GIT_OPTIONAL_LOCKS=0: status does not refresh (write) the index.
 # Usage: __llm_git ARGS...
 __llm_git() {
-    command git "${__LLM_GIT_SAFE_CONFIG[@]}" "$@"
+    GIT_OPTIONAL_LOCKS=0 command git "${__LLM_GIT_SAFE_CONFIG[@]}" "$@"
 }
 
 # Validate and sanitize a path.
@@ -140,7 +141,7 @@ __llm_validate_path() {
 
     # Normalize path (resolve symlinks, remove double slashes)
     local normalized
-    normalized="$(realpath -m "$path" 2>/dev/null)" || normalized="$path"
+    normalized="$(__llm_realpath "$path")" || normalized="$path"
 
     if __llm_path_forbidden "$path" "$normalized"; then
         __gash_json_error "forbidden_path" "$normalized" "FATAL" "This path is protected and cannot be accessed"
@@ -154,12 +155,12 @@ __llm_validate_path() {
 # Whether a path is in __LLM_FORBIDDEN_PATHS (whole components: /root, not
 # /rootfs), both as written and as resolved. macOS resolves /etc, /tmp and
 # /var to /private/...: that form is checked without the prefix too.
-# NORMALIZED is the `realpath -m` form when the caller already has it.
+# NORMALIZED is the __llm_realpath form when the caller already has it.
 # Usage: __llm_path_forbidden PATH [NORMALIZED]
 __llm_path_forbidden() {
     local path="${1-}" normalized="${2-}" lexical forbidden candidate
-    [[ -n "$normalized" ]] || normalized="$(realpath -m -- "$path" 2>/dev/null)" || normalized="$path"
-    lexical="$(realpath -m -s -- "$path" 2>/dev/null)" || lexical="$path"
+    [[ -n "$normalized" ]] || normalized="$(__llm_realpath "$path")" || normalized="$path"
+    lexical="$(__llm_realpath -s "$path")" || lexical="$path"
     for candidate in "$normalized" "${normalized#/private}" "$lexical"; do
         for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
             if [[ "$candidate" == "$forbidden" || "$candidate" == "$forbidden"/* ]]; then
@@ -168,6 +169,95 @@ __llm_path_forbidden() {
         done
     done
     return 1
+}
+
+# Whether a walk starting at PATH would enter a protected tree: PATH is /
+# or a directory above one of them. MODE "content" counts every forbidden
+# path (grep -r /etc would read /etc/shadow), MODE "names" only the trees
+# a listing could enter (/proc, /sys, /dev, /boot, /root, root's home).
+# Usage: __llm_path_above_forbidden PATH content|names
+__llm_path_above_forbidden() {
+    local path="${1-}" mode="${2-content}" normalized forbidden candidate
+    normalized="$(__llm_realpath "$path")" || normalized="$path"
+    for candidate in "$normalized" "${normalized#/private}"; do
+        candidate="${candidate%/}"
+        [[ -z "$candidate" ]] && return 0
+        for forbidden in "${__LLM_FORBIDDEN_PATHS[@]}"; do
+            [[ "$mode" == names && "$forbidden" == /etc/* ]] && continue
+            [[ "$forbidden" == "$candidate"/* ]] && return 0
+        done
+    done
+    return 1
+}
+
+# Canonical absolute form of PATH, missing components allowed: what
+# `realpath -m` prints (with -s: `realpath -m -s`, symlinks kept). Where
+# realpath has no -m (BSD, older macOS, busybox) and fails, a pure-bash
+# walk resolves the symlinks itself, so the path guards still see their
+# targets. __LLM_REALPATH_M=0 skips realpath (tests).
+# Usage: __llm_realpath [-s] PATH
+__llm_realpath() {
+    local lexical=0
+    if [[ "${1-}" == -s ]]; then
+        lexical=1
+        shift
+    fi
+    local path="${1-}"
+    [[ -z "$path" ]] && return 1
+    if [[ "${__LLM_REALPATH_M-}" != 0 ]]; then
+        if ((lexical)); then
+            realpath -m -s -- "$path" 2>/dev/null && return 0
+        else
+            realpath -m -- "$path" 2>/dev/null && return 0
+        fi
+    fi
+    __llm_realpath_walk "$lexical" "$path"
+}
+
+# Pure-bash part of __llm_realpath: one component at a time, following
+# symlinks (plain readlink exists everywhere) unless LEXICAL is 1. Fails
+# after 40 links (a loop).
+# Usage: __llm_realpath_walk LEXICAL PATH
+__llm_realpath_walk() {
+    local lexical="$1" path="$2" out="" comp link hops=0 i=0
+    [[ "$path" == /* ]] || path="${PWD%/}/$path"
+    local -a todo=() more=()
+    __llm_split_path todo "$path"
+    while ((i < ${#todo[@]})); do
+        comp="${todo[i]}"
+        ((i += 1))
+        case "$comp" in
+            "" | .) continue ;;
+            ..)
+                out="${out%/*}"
+                continue
+                ;;
+        esac
+        if ((! lexical)) && [[ -L "$out/$comp" ]]; then
+            ((++hops > 40)) && return 1
+            link="$(readlink -- "$out/$comp")" || return 1
+            [[ "$link" == /* ]] && out=""
+            __llm_split_path more "$link"
+            todo=("${more[@]}" "${todo[@]:i}")
+            i=0
+            continue
+        fi
+        out+="/$comp"
+    done
+    printf '%s\n' "${out:-/}"
+}
+
+# Split PATH on "/" into OUT (no word splitting, newlines kept).
+# Usage: __llm_split_path OUT PATH
+__llm_split_path() {
+    local -n __sp_out="$1"
+    local p="$2"
+    __sp_out=()
+    while [[ "$p" == */* ]]; do
+        __sp_out+=("${p%%/*}")
+        p="${p#*/}"
+    done
+    __sp_out+=("$p")
 }
 
 # Print a [client] INI block for mysql --defaults-extra-file consumption.
@@ -185,12 +275,26 @@ __llm_mysql_client_ini() {
 # Validate that a flag value is a plain positive integer.
 # Values interpolated into SQL LIMIT clauses or `head -n` MUST pass this
 # guard: a crafted "-r '5; DROP TABLE x'" would otherwise reach the engine.
+# At most 9 digits: a longer value overflows bash or find arithmetic.
 # Usage: __llm_validate_uint <flag_name> <value> || return 1
 __llm_validate_uint() {
     local name="${1-}"
     local value="${2-}"
-    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-        __llm_error "invalid_${name}" "Value '$value' is not a positive integer" "RETRY" "true" "Provide a plain integer for ${name}"
+    if [[ ! "$value" =~ ^[0-9]{1,9}$ ]]; then
+        __llm_error "invalid_${name}" "Value '$value' is not a positive integer below 1000000000" "RETRY" "true" "Provide a plain integer for ${name}"
+        return 1
+    fi
+    return 0
+}
+
+# Database names reach the client as --database=NAME (MySQL) or PGDATABASE
+# (PostgreSQL), never as a bare word; still, only plain names are accepted,
+# so a value can never read as an option or a connection string.
+# Usage: __llm_validate_db_name NAME SOURCE || return 1
+__llm_validate_db_name() {
+    local re='^[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}$'
+    if [[ ! "${1-}" =~ $re ]]; then
+        __llm_error "invalid_database_name" "${2-}: '${1-}'" "RETRY" "true" "A database name holds letters, digits, _ \$ . and - (64 at most, not starting with -); pass a valid -d NAME"
         return 1
     fi
     return 0
@@ -231,7 +335,7 @@ __llm_is_secret_file() {
     [[ -z "$file" ]] && return 1
     __llm_secret_name "$file" && return 0
     if [[ -e "$file" || -L "$file" ]]; then
-        resolved="$(realpath -m -- "$file" 2>/dev/null)" || resolved=""
+        resolved="$(__llm_realpath "$file")" || resolved=""
         [[ -n "$resolved" ]] && __llm_secret_name "$resolved" && return 0
     fi
     return 1
@@ -293,6 +397,47 @@ __llm_secret_excludes() {
     done
 }
 
+# --help or -h anywhere among ARGS: print the help (the full registered
+# help when there is one) and return 0; otherwise return 1.
+# Usage: if __llm_needs_help NAME USAGE DESCRIPTION "$@"; then return 0; fi
+__llm_needs_help() {
+    local program="$1" usage="$2" help="$3" arg
+    shift 3
+    for arg in "$@"; do
+        if [[ "$arg" == --help || "$arg" == -h ]]; then
+            needs_help "$program" "$usage" "$help" --help
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Argument parsing for functions that take at most one PATH and no
+# options: stores it in OUT ("." when absent); an option is
+# unknown_option, a second path unexpected_argument.
+# Usage: __llm_path_arg OUT HINT "$@" || return 1
+__llm_path_arg() {
+    local -n __pa_out="$1"
+    local hint="$2"
+    shift 2
+    __pa_out="."
+    local seen=0
+    while (($# > 0)); do
+        if [[ "$1" == -* ]]; then
+            __llm_error "unknown_option" "$1" "RETRY" "true" "$hint"
+            return 1
+        fi
+        if ((seen)); then
+            __llm_error "unexpected_argument" "$1" "RETRY" "true" "$hint"
+            return 1
+        fi
+        __pa_out="$1"
+        seen=1
+        shift
+    done
+    return 0
+}
+
 # Output JSON error message to stderr with behavioral directives for LLM clients.
 #
 # Actions:
@@ -349,7 +494,8 @@ __llm_elapsed_us() {
         return
     }
 
-    local s0="${t0%%.*}" f0="${t0#*.}" s1="${t1%%.*}" f1="${t1#*.}"
+    # The separator is the locale's decimal point: "." or "," (it_IT, de_DE).
+    local s0="${t0%%[.,]*}" f0="${t0#*[.,]}" s1="${t1%%[.,]*}" f1="${t1#*[.,]}"
     # Pad fractional part to 6 digits (EPOCHREALTIME gives 6)
     while [[ ${#f0} -lt 6 ]]; do f0="${f0}0"; done
     while [[ ${#f1} -lt 6 ]]; do f1="${f1}0"; done
@@ -471,15 +617,35 @@ __llm_tsv_to_json() {
             gsub(/"/, "\\\"", r)
             return r
         }
-        function esc_mysql(s,   r) {
+        function esc_mysql(s,   r, i, n, c, d) {
             # mysql --batch (no --raw) emits \\, \t, \n, \r as 2-char
-            # escape sequences — identical to JSON string escapes, so
-            # pass through. Only remap \0 and \Z (not valid JSON) and
-            # escape any unescaped double quotes.
-            r = s
-            gsub(/\\0/, "\\\\u0000", r)
-            gsub(/\\Z/, "\\\\u001a", r)
-            gsub(/"/, "\\\"", r)
+            # escape sequences, identical to JSON string escapes, so they
+            # pass through. \0 and \Z (not valid JSON) become \u escapes,
+            # any other backslash a literal one. Scanned left to right: the
+            # "\0" inside "\\0" is an escaped backslash and a digit.
+            if (index(s, "\\") == 0) {
+                r = s
+                gsub(/"/, "\\\"", r)
+                return r
+            }
+            r = ""
+            n = length(s)
+            for (i = 1; i <= n; i++) {
+                c = substr(s, i, 1)
+                if (c == "\"") {
+                    r = r "\\\""
+                } else if (c != "\\") {
+                    r = r c
+                } else if (i == n) {
+                    r = r "\\\\"
+                } else {
+                    d = substr(s, ++i, 1)
+                    if (d == "0") r = r "\\u0000"
+                    else if (d == "Z") r = r "\\u001a"
+                    else if (d == "n" || d == "t" || d == "r" || d == "\\") r = r "\\" d
+                    else r = r "\\\\" d
+                }
+            }
             return r
         }
         function esc(s) {
