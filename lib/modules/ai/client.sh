@@ -221,11 +221,16 @@ __ai_request_send() {
 
     local body
     if [[ "$provider" == claude ]]; then
+        # Claude 5 models think by default; terminal answers need little of
+        # it, so effort is low there (older models reject the field).
+        local effort=""
+        [[ "$model" =~ ^claude-[a-z]+-5([-.]|$) ]] && effort="low"
         body=$(jq -cn --arg model "$model" --arg system "$system" --arg user "$user" \
-            --argjson max_tokens "$max_tokens" --argjson schema "$schema" \
+            --argjson max_tokens "$max_tokens" --argjson schema "$schema" --arg effort "$effort" \
             '{model: $model, max_tokens: $max_tokens, system: $system,
               messages: [{role: "user", content: $user}],
-              output_config: {format: {type: "json_schema", schema: $schema}}}') || return 1
+              output_config: ({format: {type: "json_schema", schema: $schema}}
+                              + (if $effort == "" then {} else {effort: $effort} end))}') || return 1
     else
         body=$(jq -cn --arg system "$system" --arg user "$user" \
             --argjson max_tokens "$max_tokens" --argjson schema "$schema" \

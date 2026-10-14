@@ -146,3 +146,26 @@ it "GASH_AI_MODEL_CLAUDE overrides the model sent" bash -c '
     __ai_call_claude "test-token" "what is bash?" >/dev/null
     grep -q "\"model\":\"claude-haiku-5-5\"" "$MOCK_CURL_LOG"
 '
+
+describe "AI client - request shape"
+
+it "Claude 5 models get effort low, older ones no effort field" bash -c '
+    set -euo pipefail
+    command -v jq >/dev/null 2>&1 || exit 77
+    export PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
+    export GASH_HEADLESS=1
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    source "$GASH_TEST_ROOT/lib/core/utils.sh"
+    source "$GASH_TEST_ROOT/lib/core/config.sh"
+    source "$GASH_TEST_ROOT/lib/modules/ai.sh"
+    tmp=$(mktemp -d); trap "rm -rf $tmp" EXIT
+    export MOCK_CURL_LOG="$tmp/log"
+
+    __ai_call_claude "tok" "hello" >/dev/null
+    body="$(sed -n "s/^body: //p" "$MOCK_CURL_LOG" | tail -1)"
+    jq -e ".model == \"claude-haiku-5-5\" and .output_config.effort == \"low\" and .output_config.format.type == \"json_schema\"" <<<"$body" >/dev/null
+
+    GASH_AI_MODEL_CLAUDE=claude-haiku-4-5 __ai_call_claude "tok" "hello" >/dev/null
+    body="$(sed -n "s/^body: //p" "$MOCK_CURL_LOG" | tail -1)"
+    jq -e ".model == \"claude-haiku-4-5\" and (.output_config | has(\"effort\") | not)" <<<"$body" >/dev/null
+'

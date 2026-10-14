@@ -10,7 +10,7 @@
 # Gemini endpoint base and default model (GASH_AI_MODEL_GEMINI overrides
 # it): the request URL is ${__AI_GEMINI_BASE}/${model}:generateContent.
 __AI_GEMINI_BASE="https://generativelanguage.googleapis.com/v1beta/models"
-__AI_GEMINI_MODEL="gemini-2.0-flash"
+__AI_GEMINI_MODEL="gemini-2.5-flash"
 
 # Guard against re-sourcing (readonly variables cannot be redefined)
 if [[ -z "${__AI_CLAUDE_API:-}" ]]; then
@@ -18,7 +18,7 @@ if [[ -z "${__AI_CLAUDE_API:-}" ]]; then
     readonly __AI_CLAUDE_API="https://api.anthropic.com/v1/messages"
 
     # Default Claude model (GASH_AI_MODEL_CLAUDE overrides it)
-    readonly __AI_CLAUDE_MODEL="claude-haiku-4-5"
+    readonly __AI_CLAUDE_MODEL="claude-haiku-5-5"
 
     # Timeouts (seconds)
     readonly __AI_CONNECT_TIMEOUT=5   # Connection timeout (quick fail if unreachable)
