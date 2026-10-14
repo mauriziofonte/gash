@@ -41,22 +41,24 @@ one of them if you parse text.
 
 Flags: where a function takes `-n`, it means `--limit`; `--json` is the
 machine-output flag; functions that parse options reject unknown ones with
-`unknown_option`; a value flag at the end of the
-line fails with `missing_value`.
+`unknown_option` and a second PATH with `unexpected_argument`; a value flag
+at the end of the line fails with `missing_value`; integers have at most 9
+digits. `--help` or `-h` anywhere on an `llm_*` line prints its help
+(`llm_exec`: as the only argument).
 
 ### 3.1 Files and code
 
 | Function | Output |
 |---|---|
 | `llm_tree [--depth N] [--stats] [--text] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list, 200 lines max |
-| `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N]` | Paths, one per line (default 100) |
+| `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches |
 | `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N]` | `file:line:content` lines (default 100) |
-| `llm_config FILE` | File content; YAML converted to JSON when `yq` and `jq` are installed |
+| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON when a `yq` (mikefarah's, or the Python one with `jq`) can, raw text otherwise; files over 1 MiB (default) fail with `file_too_large` |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
-\_\_pycache\_\_ and .cache, `llm_find` name searches also \_\_pycache\_\_) and use
-ripgrep when installed. Without ripgrep, `llm_find --contains` searches only
-.php, .js, .ts, .py, .go and .java files. Zero matches: exit 0, no output.
+\_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_) and use ripgrep when
+installed. `llm_find --contains` searches hidden and gitignored files too,
+with or without ripgrep. Zero matches: exit 0, no output.
 
 ### 3.2 Filesystem scanners
 
@@ -87,7 +89,10 @@ llm_db_explain "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [--analyze]
 Connections live in `~/.gash_env` as `DB:name=driver://user:pass@host:port/db`
 (mysql, mariadb, pgsql); without `-c` the one named `default` is used.
 `gash_db_list` prints the names with masked passwords. SQLite needs only
-`-f FILE`. The row limit is `-n` (also `--limit`, and `-r`/`--rows` on
+`-f FILE`. The database is `-d`, else the connection's, else the first word
+of a `.target-database` file in the current directory; `-d` and that file
+must hold a plain name (`[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}`, otherwise
+`invalid_database_name`). The row limit is `-n` (also `--limit`, and `-r`/`--rows` on
 `llm_db_query`). SQLite and PostgreSQL return native JSON types,
 MySQL/MariaDB return every value as a string. `llm_db_query` adds a
 slow_query_explain field (the plan) when a query takes 100 ms or more.
@@ -100,10 +105,10 @@ slow_query_explain field (the plan) when a query takes 100 ms or more.
 | `llm_git_status [PATH]` | JSON object (4.6) |
 | `llm_git_log [-n N] [PATH]` | JSON array of `{hash, subject, author, date}` (default 10) |
 | `llm_git_diff [--staged] [PATH]` | `git diff --stat` text |
-| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out, URL passwords shown as `***` |
+| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords and known token formats in values shown as `***` |
 | `llm_ports [--listen]` | `[{port, proto, state, address}]`; needs `ss` or `netstat` (`ports_tool_not_found` without) |
 | `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines |
-| `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}` |
+| `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries); an unknown digest is `null` |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
@@ -221,8 +226,8 @@ Each code always carries the action shown:
 
 | Area | Codes |
 |---|---|
-| Arguments (RETRY) | `unknown_option` `missing_value` `unexpected_argument` `invalid_limit` `invalid_depth` `invalid_size` `invalid_top` `invalid_filter` `missing_pattern` `missing_query` `missing_table` `invalid_table_name` `missing_file` `empty_command` |
-| Paths | `path_traversal_blocked` `forbidden_path` `root_scan_blocked` `secret_file_blocked` (FATAL); `path_not_found` `not_a_directory` `path_unreadable` `file_not_found` (RETRY) |
+| Arguments (RETRY) | `unknown_option` `missing_value` `unexpected_argument` `invalid_limit` `invalid_depth` `invalid_size` `invalid_top` `invalid_filter` `invalid_type` `invalid_database_name` `missing_pattern` `missing_query` `missing_table` `invalid_table_name` `missing_file` `empty_command` |
+| Paths | `path_traversal_blocked` `forbidden_path` `root_scan_blocked` `secret_file_blocked` (FATAL); `path_not_found` `not_a_directory` `path_unreadable` `file_not_found` `file_too_large` (RETRY) |
 | `llm_exec` | `dangerous_command_blocked` `option_not_allowed` (FATAL); `command_not_allowed` `sandbox_unavailable` (STOP); `construct_not_allowed` `unterminated_quote` `glob_matches_option` (RETRY) |
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
 | Database | `no_db_config` `no_database` `unknown_db_type` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
@@ -256,6 +261,13 @@ every check below.
   relative paths after a `cd` in the line), except `/dev/null`, the
   arguments of `echo`/`printf`/`basename`/`dirname` and the pattern operand
   of `grep`/`rg`/`sed`/`awk`/`jq`/`yq`. Not in `unrestricted` mode.
+* `llm_exec` walks (`grep -r`, `rg`, `find`, `fd`, `tree`, `du`, `ls -R`,
+  `diff -r`) may not start at `/` or at a directory above a protected tree
+  (content searches: also above `/etc`), and may not follow symlinks
+  (`grep -R`, `rg -L`, `find -L`/`-follow`/`-files0-from`, `fd -L`,
+  `tree -l`, `du -L`, `ls -RL`, `--dereference-recursive`).
+* Paths resolve with `realpath -m`, or a Bash fallback where it is missing
+  (BusyBox, older macOS).
 
 ### 6.2 Secret files
 
@@ -266,9 +278,15 @@ Matched case-insensitively on the base name, and on the target of a symlink:
 `.pypirc`, `.htpasswd`, `.my.cnf`, kubeconfig, `*.tfstate`, `*.tfvars`, and
 anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`,
 `.config/gcloud`. Templates such as `.env.example` and `*.pub` are allowed.
-`llm_config` and `llm_exec` refuse them; `llm_grep` and `llm_find --contains`
-skip them. Their names still appear in `llm_tree` and `llm_find` name
-searches. Detection is by name only: a password inside `config.php` is not.
+`llm_config` and `llm_exec` refuse them as arguments; `llm_grep`,
+`llm_find --contains` and, inside `llm_exec`, `grep`, `rg`, `diff` and
+`git diff`/`show`/`grep`/`log -p` skip them (`git log` with `--follow` or
+`-L` does not; nor do commands named in `GASH_LLM_EXEC_ALLOW` or
+`unrestricted` mode). `llm_exec` also refuses `git show REV:PATH` for a
+secret PATH and git blobs named by id (`git show SHA`, `git cat-file -p
+SHA`, `--batch`). Their names still appear in `llm_tree` and `llm_find`
+name searches. Detection is by name only: a password inside `config.php` is
+not.
 
 ### 6.3 `llm_exec`
 
@@ -284,10 +302,18 @@ searches. Detection is by name only: a password inside `config.php` is not.
    `git branch -D`, `git -c`, `docker rm`, `systemctl stop`, ...). php, node,
    python and similar run only with `--version`. sed and awk run as GNU
    `sed --sandbox` / `gawk --sandbox`, refused where those are missing.
-   Arguments and glob matches that are secret files are refused.
+   Arguments and glob matches that are secret files are refused. Also
+   refused: `ps e`, `getent shadow`/`gshadow`, `yq` `load()` and `-s`,
+   `diff -r` without GNU `--no-dereference`, git `--literal-pathspecs`,
+   `--no-index`, `cat-file --batch`, `stash show -p` and `remote show`
+   without `-n` (it contacts the network).
 
-The child Bash runs with `--noprofile --norc`, an empty `BASH_ENV`, and
-without exported functions that shadow allowed commands; it cannot change the
+The child Bash runs with `--noprofile --norc` and a short environment:
+PATH, HOME, USER, LOGNAME, LANG, LANGUAGE, `LC_*`, TERM, TZ, TMPDIR,
+NO_COLOR, XDG_RUNTIME_DIR, DOCKER_HOST, DOCKER_CONTEXT, PWD, plus
+`GIT_OPTIONAL_LOCKS=0` and `GIT_TERMINAL_PROMPT=0` (in `unrestricted` mode:
+the caller's environment, with BASH_ENV and ENV empty). No exported
+functions or other variables reach it; it cannot change the
 caller's directory or variables. There is **no timeout**: avoid `tail -f`,
 `journalctl -f`, `docker logs -f`. Allowed commands can still expose data
 (`docker inspect` shows container environments, `ps` shows command lines).
@@ -327,7 +353,11 @@ which file is read. On `command_not_allowed`, ask the user; never edit
 
 Neither passwords nor the SQL reach the client's command line: all three
 clients read the SQL from stdin. Table names for `llm_db_schema` and `llm_db_sample` must match
-`[A-Za-z_][A-Za-z0-9_]*`. Read-only is not harmless: a heavy SELECT still
+`[A-Za-z_][A-Za-z0-9_]*`; database names from `-d` or `.target-database`
+must match `[A-Za-z0-9_][A-Za-z0-9_$.-]*`, 64 characters at most
+(`invalid_database_name`). MySQL gets the database as `--database=NAME`,
+psql through PGDATABASE, so no name is read as an option or a conninfo
+string. Read-only is not harmless: a heavy SELECT still
 loads the server, and the database user decides what is readable. Prefer a
 read-only database user in `~/.gash_env`.
 

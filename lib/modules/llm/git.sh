@@ -26,7 +26,7 @@ __llm_git_repo() {
 # Compact git status as JSON.
 # Usage: llm_git_status [PATH]
 llm_git_status() {
-    if needs_help "llm_git_status" "llm_git_status [PATH]" "Compact git status (JSON)" "${1-}"; then
+    if __llm_needs_help "llm_git_status" "llm_git_status [PATH]" "Compact git status (JSON)" "$@"; then
         return 0
     fi
 
@@ -34,7 +34,8 @@ llm_git_status() {
 }
 
 __llm_git_status_impl() {
-    local target_path="${1-.}"
+    local target_path
+    __llm_path_arg target_path "Use a path or no argument" "$@" || return 1
 
     local safe_path
     safe_path="$(__llm_validate_path "$target_path")" || return 1
@@ -96,7 +97,7 @@ __llm_git_status_impl() {
 # Git diff with stats.
 # Usage: llm_git_diff [--staged] [PATH]
 llm_git_diff() {
-    if needs_help "llm_git_diff" "llm_git_diff [--staged] [PATH]" "Git diff with stats" "${1-}"; then
+    if __llm_needs_help "llm_git_diff" "llm_git_diff [--staged] [PATH]" "Git diff with stats" "$@"; then
         return 0
     fi
 
@@ -105,7 +106,8 @@ llm_git_diff() {
 
 __llm_git_diff_impl() {
     local staged_only=0
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -118,7 +120,7 @@ __llm_git_diff_impl() {
                 return 1
                 ;;
             *)
-                target_path="$1"
+                __llm_take_path target_path path_set "$1" || return 1
                 shift
                 ;;
         esac
@@ -137,7 +139,7 @@ __llm_git_diff_impl() {
 # Recent git log as JSON.
 # Usage: llm_git_log [--limit N] [PATH]
 llm_git_log() {
-    if needs_help "llm_git_log" "llm_git_log [--limit N] [PATH]" "Recent git log (JSON)" "${1-}"; then
+    if __llm_needs_help "llm_git_log" "llm_git_log [--limit N] [PATH]" "Recent git log (JSON)" "$@"; then
         return 0
     fi
 
@@ -146,7 +148,8 @@ llm_git_log() {
 
 __llm_git_log_impl() {
     local limit=10
-    local target_path="."
+    # shellcheck disable=SC2034 # path_set: written through __llm_take_path's nameref
+    local target_path="." path_set=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -162,7 +165,7 @@ __llm_git_log_impl() {
                 return 1
                 ;;
             *)
-                target_path="$1"
+                __llm_take_path target_path path_set "$1" || return 1
                 shift
                 ;;
         esac

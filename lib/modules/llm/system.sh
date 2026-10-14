@@ -11,7 +11,7 @@
 # List ports in use.
 # Usage: llm_ports [--listen]
 llm_ports() {
-    if needs_help "llm_ports" "llm_ports [--listen]" "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only" "${1-}"; then
+    if __llm_needs_help "llm_ports" "llm_ports [--listen]" "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only" "$@"; then
         return 0
     fi
 
@@ -71,7 +71,7 @@ __llm_ports_impl() {
 # List processes by name or port.
 # Usage: llm_procs [--name NAME] [--port PORT]
 llm_procs() {
-    if needs_help "llm_procs" "llm_procs [--name NAME] [--port PORT]" "List processes (JSON)" "${1-}"; then
+    if __llm_needs_help "llm_procs" "llm_procs [--name NAME] [--port PORT]" "List processes (JSON)" "$@"; then
         return 0
     fi
 
@@ -105,49 +105,52 @@ __llm_procs_impl() {
         esac
     done
 
-    echo "["
-
     if [[ -n "$port" ]]; then
-        __llm_validate_uint "port" "$port" || {
-            echo "]"
-            return 1
-        }
-        # Find process by port (no matches is a valid outcome: || true)
+        __llm_validate_uint "port" "$port" || return 1
+    fi
+
+    # One compact JSON array, like every other llm_* function. No matches
+    # (pgrep/lsof exit 1) is a valid outcome: || true.
+    local -a items=()
+    local pid cmd line
+    if [[ -n "$port" ]]; then
         if type -P lsof >/dev/null 2>&1; then
-            lsof -i :"$port" -t 2>/dev/null | while read -r pid; do
-                local cmd
-                cmd="$(ps -p "$pid" -o comm= 2>/dev/null)"
-                echo "{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\",\"port\":$port},"
-            done | sed '$ s/,$//' || true
+            while read -r pid; do
+                [[ "$pid" =~ ^[0-9]+$ ]] || continue
+                cmd="$(ps -p "$pid" -o comm= 2>/dev/null)" || true
+                items+=("{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\",\"port\":$port}")
+            done < <(lsof -i :"$port" -t 2>/dev/null || true)
         fi
     elif [[ -n "$name" ]]; then
-        # Find process by name (pgrep returns 1 on zero matches: || true)
-        pgrep -f "$name" 2>/dev/null | while read -r pid; do
-            local cmd
-            cmd="$(ps -p "$pid" -o comm= 2>/dev/null)"
-            echo "{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\"},"
-        done | sed '$ s/,$//' || true
+        while read -r pid; do
+            [[ "$pid" =~ ^[0-9]+$ ]] || continue
+            cmd="$(ps -p "$pid" -o comm= 2>/dev/null)" || true
+            items+=("{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\"}")
+        done < <(pgrep -f "$name" 2>/dev/null || true)
     else
         # List all (limited). LC_ALL=C forces dot-decimal %CPU/%MEM (an
         # it_IT locale would emit "0,5" and invalidate the JSON); the name
         # field is escaped for quotes/backslashes.
-        LC_ALL=C ps aux --no-headers 2>/dev/null | head -n 20 |
+        while IFS= read -r line; do
+            items+=("$line")
+        done < <(LC_ALL=C ps aux --no-headers 2>/dev/null | head -n 20 |
             awk '{
                 name = $11
                 gsub(/\\/, "\\\\", name); gsub(/"/, "\\\"", name)
                 user = $1
                 gsub(/\\/, "\\\\", user); gsub(/"/, "\\\"", user)
-                printf "{\"pid\":%s,\"user\":\"%s\",\"cpu\":%s,\"mem\":%s,\"name\":\"%s\"},\n", $2, user, $3, $4, name
-            }' | sed '$ s/,$//' || true
+                printf "{\"pid\":%s,\"user\":\"%s\",\"cpu\":%s,\"mem\":%s,\"name\":\"%s\"}\n", $2, user, $3, $4, name
+            }' || true)
     fi
 
-    echo "]"
+    local IFS=,
+    printf '[%s]\n' "${items[*]}"
 }
 
 # List environment variables (filtered, no secrets).
 # Usage: llm_env [--filter PATTERN]
 llm_env() {
-    if needs_help "llm_env" "llm_env [--filter PATTERN]" "List env vars (filtered, no secrets)" "${1-}"; then
+    if __llm_needs_help "llm_env" "llm_env [--filter PATTERN]" "List env vars (filtered, no secrets)" "$@"; then
         return 0
     fi
 
@@ -188,28 +191,53 @@ __llm_env_impl() {
         fi
     fi
 
-    # Names that hold secrets (case-insensitive substring match).
-    local secret_re='(PASSWORD|PASSWD|PASS$|SECRET|TOKEN|KEY|CREDENTIAL|AUTH|PRIVATE|COOKIE|SIGNATURE|AWS_|DATABASE_URL|DSN|CONN(ECTION)?_?STRING)'
-    local name value first=1 upper
+    local name value first=1
     printf '{'
-    # env -0: NUL-delimited entries so multi-line values stay attached to
-    # their own variable instead of being parsed as bogus extra entries.
-    while IFS= read -r -d '' name; do
-        value="${name#*=}"
-        name="${name%%=*}"
-        [[ -z "$name" ]] && continue
+    # Exported variables of this shell, which is what env would print:
+    # compgen and ${!name} need no `env -0` (BSD env has no -0) and keep
+    # multi-line values whole.
+    while IFS= read -r name; do
+        [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
         if [[ -n "$filter" ]] && ! [[ "$name" =~ $filter ]]; then
             continue
         fi
-        upper="${name^^}"
-        [[ "$upper" =~ $secret_re && "$upper" != "PWD" && "$upper" != "OLDPWD" ]] && continue
-        # Credentials embedded in URLs: scheme://user:pass@host -> user:***@host
-        if [[ "$value" =~ ^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):[^/@]*@(.*)$ ]]; then
-            value="${BASH_REMATCH[1]}:***@${BASH_REMATCH[2]}"
-        fi
+        __llm_env_secret_name "$name" && continue
+        value="${!name-}"
+        __llm_env_redact value
         ((first)) || printf ','
         first=0
         printf '\n  "%s": "%s"' "$(__gash_json_escape "$name")" "$(__gash_json_escape "$value")"
-    done < <(env -0 2>/dev/null | LC_ALL=C sort -z)
+    done < <(compgen -e | LC_ALL=C sort -u)
     printf '\n}\n'
+}
+
+# Whether a variable name looks like it holds a secret (case-insensitive
+# substring match; PWD and OLDPWD are directories).
+# Usage: __llm_env_secret_name NAME
+__llm_env_secret_name() {
+    local upper="${1^^}"
+    local re='(PASSWORD|PASSWD|PASSPHRASE|PASS$|_PWD$|SECRET|TOKEN|KEY|CREDENTIAL|AUTH|PRIVATE|COOKIE|SIGNATURE|SESSION|BEARER|JWT|WEBHOOK|SALT|ENCRYPT|(^|_)PAT$|AWS_|DATABASE_URL|DSN|CONN(ECTION)?_?STRING)'
+    [[ "$upper" =~ $re ]]
+}
+
+# Mask secrets inside a value whose name looked harmless: the password of
+# a URL (scheme://user:***@host) and known token formats (the ones the AI
+# module redacts: AWS keys, GitHub, OpenAI/Anthropic, Slack, Google).
+# Usage: __llm_env_redact VAR_NAME
+__llm_env_redact() {
+    local -n __er_value="$1"
+    if [[ "$__er_value" =~ ^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):[^/@]*@(.*)$ ]]; then
+        __er_value="${BASH_REMATCH[1]}:***@${BASH_REMATCH[2]}"
+    fi
+    local re='-----BEGIN [[:upper:][:digit:] ]*PRIVATE KEY'
+    if [[ "$__er_value" =~ $re ]]; then
+        __er_value="***"
+        return 0
+    fi
+    for re in 'AKIA[[:upper:][:digit:]]{16}' '(gh[pousr]_|github_pat_)[[:alnum:]_]{20,}' \
+        'sk-(ant-)?[[:alnum:]_-]{20,}' 'xox[abposr]-[[:alnum:]-]{10,}' 'AIza[[:alnum:]_-]{35}'; do
+        while [[ "$__er_value" =~ $re ]]; do
+            __er_value="${__er_value//"${BASH_REMATCH[0]}"/***}"
+        done
+    done
 }
