@@ -1877,9 +1877,10 @@ __gash_fs_render_size_list_text() {
     ')"
     [[ -n "$tsv" ]] || return 0
     # One write: a reader that stops early (grep -q) must not leave the
-    # rest of the rows to a closed pipe (SIGPIPE under pipefail).
+    # rest of the rows to a closed pipe (SIGPIPE under pipefail). Bash's
+    # own printf flushes every line, so cat writes the table.
     tsv="$(printf '%s\n' "$tsv" | __gash_table --no-header --min 1:12 --color 2:accent)"
-    printf '%s\n' "$tsv"
+    cat <<<"$tsv"
 }
 
 # -----------------------------------------------------------------------------
