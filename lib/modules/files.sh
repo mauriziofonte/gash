@@ -90,19 +90,6 @@ __gash_fs_human_size() {
     __gash_human_size "${1-0}"
 }
 
-# Decide whether ANSI colors should be emitted.
-# Honors: --no-color flag (passed as $1), NO_COLOR env, TTY check on stdout,
-# and --json / --null modes (forced off).
-#
-# Usage: if __gash_fs_color_ok "$no_color" "$is_machine"; then ...
-__gash_fs_color_ok() {
-    local no_color="${1-0}"
-    local is_machine="${2-0}"
-    [[ "$no_color" -eq 1 ]] && return 1
-    [[ "$is_machine" -eq 1 ]] && return 1
-    __gash_use_color
-}
-
 # Check whether GNU du supports --exclude (BSD du does not).
 # Result cached in __GASH_FS_DU_HAS_EXCLUDE.
 __gash_fs_du_has_exclude() {
@@ -137,12 +124,14 @@ __gash_fs_forbidden() {
     return 1
 }
 
-# Prints the resolved absolute path on stdout. Returns 1 on rejection.
-# Usage: resolved=$(__gash_fs_safe_path "$input" "$allow_root" "$is_machine") || return 1
+# Stores the resolved absolute path in VAR. Returns 1 on rejection. No
+# command substitution: the error lines see the caller's terminal.
+# Usage: __gash_fs_safe_path VAR "$input" "$allow_root" "$is_machine" || return 1
 __gash_fs_safe_path() {
-    local input="${1-}"
-    local allow_root="${2-0}"
-    local is_machine="${3-0}"
+    local -n __gfsp_out="$1"
+    local input="${2-}"
+    local allow_root="${3-0}"
+    local is_machine="${4-0}"
 
     [[ -z "$input" ]] && input="."
 
@@ -201,7 +190,7 @@ __gash_fs_safe_path() {
         return 1
     fi
 
-    printf '%s' "$resolved"
+    __gfsp_out="$resolved"
     return 0
 }
 
@@ -254,15 +243,7 @@ __gash_fs_error() {
         local msg="$err_type"
         [[ -n "$details" ]] && msg="$msg: $details"
         __gash_error "$msg"
-        # Hint line: honor the same gate as __gash_error (stdout TTY + env).
-        # Use __gash_use_color to keep styling consistent across the two lines.
-        if [[ -n "$hint" ]]; then
-            if __gash_use_color; then
-                printf '%s\n' "${__GASH_COLOR_MUTED}Hint: ${hint}${__GASH_COLOR_OFF}" >&2
-            else
-                printf 'Hint: %s\n' "$hint" >&2
-            fi
-        fi
+        [[ -z "$hint" ]] || __gash_hint "$hint"
     fi
     return 1
 }
@@ -272,10 +253,12 @@ __gash_fs_error() {
 __gash_fs_scan_warn() {
     local err_count="${1-0}"
     local is_machine="${2-0}"
-    [[ "$err_count" -le 0 ]] && return 0
+    # BSD wc -l pads the count with spaces.
+    err_count="${err_count//[[:space:]]/}"
+    [[ "$err_count" =~ ^[0-9]+$ ]] || err_count=0
+    ((err_count > 0)) || return 0
     if [[ "$is_machine" -eq 1 ]]; then
-        printf '{"warning":"partial_results","skipped_entries":%d,"hint":"Some paths were unreadable (permissions)"}\n' \
-            "$err_count" >&2
+        __gash_json_warning partial_results "Some paths were unreadable (permissions)" skipped_entries "$err_count"
     else
         __gash_warning "Scan completed with ${err_count} unreadable path(s) (permission denied)."
     fi
@@ -455,7 +438,7 @@ files_largest() {
 
     # Resolve path
     local safe_path
-    safe_path="$(__gash_fs_safe_path "$dir" "$allow_root" "$json_mode")" || return 1
+    __gash_fs_safe_path safe_path "$dir" "$allow_root" "$json_mode" || return 1
 
     # Auto-decide human mode
     if [[ -z "$human_mode" ]]; then
@@ -667,7 +650,7 @@ dirs_largest() {
     fi
 
     local safe_path
-    safe_path="$(__gash_fs_safe_path "$dir" "$allow_root" "$json_mode")" || return 1
+    __gash_fs_safe_path safe_path "$dir" "$allow_root" "$json_mode" || return 1
 
     if [[ -z "$human_mode" ]]; then
         if [[ "$json_mode" -eq 1 || "$null_mode" -eq 1 ]]; then human_mode=0; else human_mode=1; fi
@@ -935,7 +918,7 @@ dirs_find_large() {
     fi
 
     local safe_path
-    safe_path="$(__gash_fs_safe_path "$dir" "$allow_root" "$json_mode")" || return 1
+    __gash_fs_safe_path safe_path "$dir" "$allow_root" "$json_mode" || return 1
 
     if [[ -z "$human_mode" ]]; then
         if [[ "$json_mode" -eq 1 || "$null_mode" -eq 1 ]]; then human_mode=0; else human_mode=1; fi
@@ -1185,7 +1168,7 @@ dirs_list_empty() {
     fi
 
     local safe_path
-    safe_path="$(__gash_fs_safe_path "$dir" "$allow_root" "$json_mode")" || return 1
+    __gash_fs_safe_path safe_path "$dir" "$allow_root" "$json_mode" || return 1
 
     # find -type d -empty, with prunes.
     local -a find_cmd=(find "$safe_path")
@@ -1379,7 +1362,7 @@ tree_stats() {
     }
 
     local safe_path
-    safe_path="$(__gash_fs_safe_path "$dir" "$allow_root" "$json_mode")" || return 1
+    __gash_fs_safe_path safe_path "$dir" "$allow_root" "$json_mode" || return 1
 
     local -a find_cmd=(find)
     [[ "$follow" -eq 1 ]] && find_cmd+=(-L)
@@ -1603,15 +1586,7 @@ tree_stats() {
     fi
 
     # Human-readable rendering
-    local W="" G="" Y="" C="" M="" R=""
-    if __gash_fs_color_ok "$no_color" 0; then
-        W="${__GASH_BOLD_WHITE-}"
-        G="${__GASH_GREEN-}"
-        Y="${__GASH_BOLD_YELLOW-}"
-        C="${__GASH_CYAN-}"
-        M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
-        R="${__GASH_COLOR_OFF-}"
-    fi
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
     if __gash_fs_rich_ok; then
         __gash_fs_tree_stats_rich
@@ -1619,34 +1594,33 @@ tree_stats() {
         return 0
     fi
 
-    printf '%s\n' "${W}Tree statistics for${R} ${C}${safe_path}${R}"
-    printf '  %sFiles:%s       %s%d%s\n' "$W" "$R" "$Y" "$files_total" "$R"
-    printf '  %sDirectories:%s %s%d%s\n' "$W" "$R" "$Y" "$dirs_total" "$R"
-    printf '  %sTotal size:%s  %s%s%s (%d bytes)\n' "$W" "$R" "$G" "$(__gash_fs_human_size "$size_total")" "$R" "$size_total"
-    printf '  %sAvg file:%s    %s%s%s\n' "$W" "$R" "$G" "$(__gash_fs_human_size "$avg_file_size")" "$R"
-    printf '  %sMax depth:%s   %s%d%s\n' "$W" "$R" "$Y" "$max_depth_val" "$R"
-    printf '  %sEmpty dirs:%s  %s%d%s\n' "$W" "$R" "$Y" "$empty_count" "$R"
-    printf '  %sScan time:%s   %s%s%s\n' "$W" "$R" "$M" "$elapsed" "$R"
+    __gash_heading "Tree statistics for $safe_path"
+    __gash_kv --indent 2 \
+        "Files:" "$files_total" \
+        "Directories:" "$dirs_total" \
+        "Total size:" "$(__gash_fs_human_size "$size_total") ($size_total bytes)" \
+        "Avg file:" "$(__gash_fs_human_size "$avg_file_size")" \
+        "Max depth:" "$max_depth_val" \
+        "Empty dirs:" "$empty_count" \
+        "Scan time:" "$elapsed"
 
+    local row ext cnt sz
     if [[ ${#top_count_rows[@]} -gt 0 ]]; then
-        echo
-        printf '%s\n' "  ${W}Top ${top_n} extensions by count:${R}"
-        local ext cnt sz
+        printf '\n'
+        __gash_heading --indent 2 "Top ${top_n} extensions by count:"
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
-            printf '    %s%-12s%s %s%6d%s files  %s%s%s\n' \
-                "$C" "$ext" "$R" "$Y" "$cnt" "$R" "$G" "$(__gash_fs_human_size "${sz:-0}")" "$R"
-        done
+            printf '%s\t%s\tfiles\t%s\n' "$ext" "${cnt:-0}" "$(__gash_fs_human_size "${sz:-0}")"
+        done | __gash_table --no-header --indent 4 --gap 1 --min 1:12 --right 2 --min 2:6 --min 3:6 --color 1:accent
     fi
 
     if [[ ${#top_size_rows[@]} -gt 0 ]]; then
-        echo
-        printf '%s\n' "  ${W}Top ${top_n} extensions by size:${R}"
+        printf '\n'
+        __gash_heading --indent 2 "Top ${top_n} extensions by size:"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
-            printf '    %s%-12s%s %s%s%s\n' \
-                "$C" "$ext" "$R" "$G" "$(__gash_fs_human_size "${sz:-0}")" "$R"
-        done
+            printf '%s\t%s\n' "$ext" "$(__gash_fs_human_size "${sz:-0}")"
+        done | __gash_table --no-header --indent 4 --gap 1 --min 1:12 --color 1:accent
     fi
 
     __gash_fs_scan_warn "$err_count" 0
@@ -1656,59 +1630,58 @@ tree_stats() {
 # Terminal layout of tree_stats: a summary grid, then the top extensions by
 # size and by count with share bars. Reads the caller's locals (dynamic
 # scope): safe_path, files_total, dirs_total, size_total, avg_file_size,
-# max_depth_val, empty_count, elapsed, top_count_rows, top_size_rows, and
-# the colors W G Y C M R.
+# max_depth_val, empty_count, elapsed, top_count_rows, top_size_rows.
 __gash_fs_tree_stats_rich() {
-    local B="" A="" off=""
-    if [[ -n "$R" ]]; then B="${__GASH_BOLD-}" A="${__GASH_COLOR_ACCENT-}" off="$R"; fi
     local nf nd ns ne
     __gash_group_digits nf "$files_total"
     __gash_group_digits nd "$dirs_total"
     __gash_group_digits ns "$size_total"
     __gash_group_digits ne "$empty_count"
 
-    printf '\n  %sTree statistics for %s%s\n\n' "$B" "$safe_path" "$off"
-    printf '  %s%-12s%s %s%-10s%s  %s%-11s%s %s%s%s %s(%s bytes)%s\n' \
-        "$M" "Files" "$off" "$Y" "$nf" "$off" "$M" "Total size" "$off" "$G" "$(__gash_fs_human_size "$size_total")" "$off" "$M" "$ns" "$off"
-    printf '  %s%-12s%s %s%-10s%s  %s%-11s%s %s%s%s\n' \
-        "$M" "Directories" "$off" "$Y" "$nd" "$off" "$M" "Avg file" "$off" "$G" "$(__gash_fs_human_size "$avg_file_size")" "$off"
-    printf '  %s%-12s%s %s%-10s%s  %s%-11s%s %s%s%s\n' \
-        "$M" "Empty dirs" "$off" "$Y" "$ne" "$off" "$M" "Max depth" "$off" "$Y" "$max_depth_val" "$off"
+    printf '\n'
+    __gash_heading --indent 2 "Tree statistics for $safe_path"
+    printf '\n'
+    printf '%s\t%s\t%s\t%s\n' \
+        "Files" "$nf" "Total size" "$(__gash_fs_human_size "$size_total") ($ns bytes)" \
+        "Directories" "$nd" "Avg file" "$(__gash_fs_human_size "$avg_file_size")" \
+        "Empty dirs" "$ne" "Max depth" "$max_depth_val" |
+        __gash_table --no-header --indent 2 --min 1:12 --min 2:10 --color 1:bold --color 3:bold
 
-    local row ext cnt sz bar pct hs n w=0
+    # Extension column as wide in both lists, at least 8.
+    local row ext cnt sz pct n w=0
     for row in "${top_size_rows[@]}" "${top_count_rows[@]}"; do
         ext="${row%%$'\t'*}"
-        ((${#ext} > w)) && w=${#ext}
+        if ((${#ext} > w)); then w=${#ext}; fi
     done
     ((w < 8)) && w=8
+    local -a topts=(--no-header --indent 2 --min "1:$w" --right "2,4" --min 2:10 --bar 3:20 --min 4:6
+        --color 1:accent --color 4:muted)
 
     if ((${#top_size_rows[@]} > 0)); then
-        printf '\n  %sBy size%s\n' "$B" "$off"
+        printf '\n'
+        __gash_heading --indent 2 "By size"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
-            __gash_bar bar "${sz:-0}" "$size_total" 20
             pct=0
-            ((size_total > 0)) && pct=$((sz * 1000 / size_total))
-            hs="$(__gash_fs_human_size "${sz:-0}")"
-            printf '  %s%-*s%s  %s%10s%s  %s%s%s%s%s%s  %s%3d.%d%%%s\n' \
-                "$C" "$w" "$ext" "$off" "$G" "$hs" "$off" \
-                "$A" "${bar%%$'\t'*}" "$off" "$M" "${bar#*$'\t'}" "$off" "$M" $((pct / 10)) $((pct % 10)) "$off"
-        done
+            ((size_total > 0)) && pct=$((${sz:-0} * 1000 / size_total))
+            printf '%s\t%s\t%s/%s\t%d.%d%%\n' "$ext" "$(__gash_fs_human_size "${sz:-0}")" \
+                "${sz:-0}" "$size_total" $((pct / 10)) $((pct % 10))
+        done | __gash_table "${topts[@]}"
     fi
     if ((${#top_count_rows[@]} > 0)); then
-        printf '\n  %sBy count%s\n' "$B" "$off"
+        printf '\n'
+        __gash_heading --indent 2 "By count"
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
-            __gash_bar bar "${cnt:-0}" "$files_total" 20
             pct=0
-            ((files_total > 0)) && pct=$((cnt * 1000 / files_total))
+            ((files_total > 0)) && pct=$((${cnt:-0} * 1000 / files_total))
             __gash_group_digits n "${cnt:-0}"
-            printf '  %s%-*s%s  %s%10s%s  %s%s%s%s%s%s  %s%3d.%d%%%s\n' \
-                "$C" "$w" "$ext" "$off" "$Y" "$n" "$off" \
-                "$A" "${bar%%$'\t'*}" "$off" "$M" "${bar#*$'\t'}" "$off" "$M" $((pct / 10)) $((pct % 10)) "$off"
-        done
+            printf '%s\t%s\t%s/%s\t%d.%d%%\n' "$ext" "$n" "${cnt:-0}" "$files_total" $((pct / 10)) $((pct % 10))
+        done | __gash_table "${topts[@]}"
     fi
-    printf '\n  %sScanned in %s%s\n\n' "$M" "$elapsed" "$off"
+    printf '\n'
+    __gash_print muted "  Scanned in $elapsed"
+    printf '\n'
 }
 
 # =============================================================================
@@ -1784,160 +1757,129 @@ __gash_fs_render_size_list_json() {
         "$arr_body" "$count" "$total" "$(__gash_fs_human_size "$total")" "$kind" "$scan_time" "$err_count"
 }
 
-# Rich layout only on a terminal: pipes keep the plain "SIZE  PATH" lines.
+# Rich layout only on a color terminal: pipes and NO_COLOR keep the plain
+# "SIZE  PATH" lines.
 __gash_fs_rich_ok() {
-    [[ -t 1 ]]
+    __gash_use_color
 }
 
+# awk function: bytes to IEC units with one decimal (as __gash_human_size).
+__GASH_FS_AWK_HBYTES='
+function hbytes(b,   units, i, sz, rem) {
+    units[0]="B"; units[1]="KiB"; units[2]="MiB"; units[3]="GiB"
+    units[4]="TiB"; units[5]="PiB"
+    i=0; sz=b; rem=0
+    while (sz >= 1024 && i < 5) {
+        rem = int((sz * 10 / 1024)) % 10
+        sz = int(sz / 1024)
+        i++
+    }
+    if (i == 0) return sprintf("%d %s", sz, units[i])
+    return sprintf("%d.%d %s", sz, rem, units[i])
+}
+'
+
 # Render a size list for a terminal: rank, size, a bar proportional to the
-# largest entry, mtime, the path relative to the scanned root (directory
-# part dimmed, name highlighted), then a footer with count, total and time.
+# largest entry, mtime, the path relative to the scanned root, then a footer
+# with count, total and time.
 # Usage: __gash_fs_render_size_list_rich <data> <human_mode> <no_color> <kind> <scan_time> <root> [title]
 __gash_fs_render_size_list_rich() {
     local data="$1" human_mode="$2" no_color="$3" kind="$4" scan_time="${5-}" root="${6-}" title="${7-}"
-    local c_size="" c_bar="" c_mute="" c_name="" c_head="" c_off=""
-    if __gash_fs_color_ok "$no_color" 0; then
-        c_size="$__GASH_BOLD_YELLOW" c_bar="$__GASH_COLOR_ACCENT" c_mute="$__GASH_COLOR_MUTED"
-        c_head="$__GASH_BOLD" c_off="$__GASH_COLOR_OFF"
-        if [[ "$kind" == directories ]]; then c_name="$__GASH_BOLD_BLUE"; else c_name="$__GASH_BOLD"; fi
-    fi
-    [[ -n "$data" ]] || {
-        printf '\n  %sNo %s matched.%s\n\n' "$c_mute" "$kind" "$c_off"
+    __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
+    if [[ -z "$data" ]]; then
+        printf '\n'
+        __gash_print muted "  No $kind matched."
+        printf '\n'
         return 0
-    }
+    fi
     [[ -n "$title" ]] || title="Largest $kind in $root"
-    printf '\n  %s%s%s\n\n' "$c_head" "$title" "$c_off"
 
-    printf '%s\n' "$data" | "${__GASH_AWK:-awk}" -F'\t' \
+    # First line: the footer; then one TSV row per entry (header included).
+    local out
+    out="$(printf '%s\n' "$data" | awk -F'\t' \
         -v human="$human_mode" -v kind="$kind" -v root="$root" -v elapsed="$scan_time" \
-        -v width="$(__gash_tty_width)" -v full="$__GASH_GLYPH_BAR_FULL" -v empty="$__GASH_GLYPH_BAR_EMPTY" \
-        -v hline="$__GASH_GLYPH_HLINE" -v dot="$__GASH_GLYPH_DOT" -v ell="$__GASH_GLYPH_ELLIPSIS" \
-        -v cs="$c_size" -v cb="$c_bar" -v cm="$c_mute" -v cn="$c_name" -v ch="$c_head" -v co="$c_off" '
-        function hbytes(b,   units, i, sz, rem) {
-            units[0]="B"; units[1]="KiB"; units[2]="MiB"; units[3]="GiB"
-            units[4]="TiB"; units[5]="PiB"
-            i=0; sz=b; rem=0
-            while (sz >= 1024 && i < 5) {
-                rem = int((sz * 10 / 1024)) % 10
-                sz = int(sz / 1024)
-                i++
-            }
-            if (i == 0) return sprintf("%d %s", sz, units[i])
-            return sprintf("%d.%d %s", sz, rem, units[i])
-        }
-        function rep(g, n,   s, i) { s = ""; for (i = 0; i < n; i++) s = s g; return s }
+        -v dot="$__GASH_GLYPH_DOT" "$__GASH_FS_AWK_HBYTES"'
         NF < 3 { next }
         {
             n++
-            size[n] = $1 + 0; mt[n] = $2; p = $3
-            for (i = 4; i <= NF; i++) p = p "\t" $i
+            size[n] = $1 + 0; raw[n] = $1; mt[n] = $2; p = $3
+            for (i = 4; i <= NF; i++) p = p " " $i
             if (root != "/" && index(p, root "/") == 1) p = substr(p, length(root) + 2)
             else if (p == root) p = "."
             path[n] = p
-            if (size[n] > max) max = size[n]
+            if (n == 1 || size[n] > max) { max = size[n]; rawmax = $1 }
             total += size[n]
             if (mt[n] != "") has_mt = 1
-            s = human ? hbytes(size[n]) : size[n] ""
-            sz[n] = s
-            if (length(s) > szw) szw = length(s)
+            sz[n] = human ? hbytes(size[n]) : raw[n]
         }
         END {
-            barw = 16
-            rankw = length(n "")
-            if (szw < 4) szw = 4
-            fixed = 2 + rankw + 2 + szw + 2 + barw + 2 + (has_mt ? 18 : 0)
-            room = width - fixed; if (room < 20) room = 20
-            hdr = sprintf("  %" rankw "s  %" szw "s  %-" barw "s  ", "#", "SIZE", "SHARE")
-            if (has_mt) hdr = hdr sprintf("%-16s  ", "MODIFIED")
-            printf "%s%sPATH%s\n", ch, hdr, co
-            for (i = 1; i <= n; i++) {
-                f = max > 0 ? int(size[i] * barw / max + 0.5) : 0
-                if (f < 1 && size[i] > 0) f = 1
-                bar = cb rep(full, f) co cm rep(empty, barw - f) co
-                p = path[i]
-                if (length(p) > room) p = ell substr(p, length(p) - room + 2)
-                if (length(p) > maxp) maxp = length(p)
-                d = ""; b = p
-                k = match(p, /.*\//)
-                if (k && RLENGTH < length(p)) { d = substr(p, 1, RLENGTH); b = substr(p, RLENGTH + 1) }
-                printf "  %s%" rankw "d%s  %s%" szw "s%s  %s  ", cm, i, co, cs, sz[i], co, bar
-                if (has_mt) printf "%s%-16s%s  ", cm, mt[i], co
-                printf "%s%s%s%s%s%s\n", cm, d, co, cn, b, co
-            }
             noun = kind
             if (n == 1) noun = (kind == "files") ? "file" : "directory"
             line = n " " noun
             if (kind == "files") line = line " " dot " " (human ? hbytes(total) : total " B") " total"
             else line = line " " dot " largest " sz[1]
             if (elapsed != "") line = line " " dot " " elapsed
-            rw = fixed - 2 + maxp
-            if (length(line) > rw) rw = length(line)
-            printf "  %s%s%s\n", cm, rep(hline, rw), co
-            printf "  %s%s%s\n\n", cm, line, co
+            print line
+            hdr = "#\tSIZE\tSHARE"
+            if (has_mt) hdr = hdr "\tMODIFIED"
+            print hdr "\tPATH"
+            for (i = 1; i <= n; i++) {
+                row = i "\t" sz[i] "\t" raw[i] "/" rawmax
+                if (has_mt) row = row "\t" mt[i]
+                print row "\t" path[i]
+            }
         }
-    '
+    ')"
+    local footer="${out%%$'\n'*}" rows="${out#*$'\n'}"
+    [[ "$rows" == *$'\n'* ]] || {
+        printf '\n'
+        __gash_print muted "  No $kind matched."
+        printf '\n'
+        return 0
+    }
+    local pcol=4
+    [[ "${rows%%$'\n'*}" == *MODIFIED* ]] && pcol=5
+
+    printf '\n'
+    __gash_heading --indent 2 "$title"
+    printf '\n'
+    printf '%s\n' "$rows" | __gash_table --indent 2 --right 1,2 --bar 3:16 \
+        --color 1:muted --color 4:muted --color "$pcol:accent" \
+        --max-left "$pcol:$(__gash_tty_width)" --fit "$pcol"
+    __gash_print muted "  $footer"
+    printf '\n'
 }
 
-# Render a size-list in human-readable text (with optional colors).
+# Render a size-list in human-readable text.
 # Input format on stdin: "<bytes>\t<mtime_or_empty>\t<path>\n" lines.
-# On a terminal the rich layout takes over (see __gash_fs_render_size_list_rich).
+# On a color terminal the rich layout takes over (see
+# __gash_fs_render_size_list_rich); otherwise "SIZE  PATH[  MTIME]" lines,
+# the size column at least 12 wide.
 # Usage: __gash_fs_render_size_list_text <data> <human_mode> <no_color> <kind> [scan_time] [root]
 __gash_fs_render_size_list_text() {
-    local data="$1"
-    local human_mode="$2"
-    local no_color="$3"
-    local kind="$4"
     if __gash_fs_rich_ok; then
         __gash_fs_render_size_list_rich "$@"
         return 0
     fi
-
-    local color_on=0
-    if __gash_fs_color_ok "$no_color" 0; then color_on=1; fi
-
-    printf '%s\n' "$data" | awk -F'\t' -v human="$human_mode" -v color="$color_on" '
-        function hbytes(b,   units, i, sz, rem) {
-            units[0]="B"; units[1]="KiB"; units[2]="MiB"; units[3]="GiB"
-            units[4]="TiB"; units[5]="PiB"
-            i=0; sz=b; rem=0
-            while (sz >= 1024 && i < 5) {
-                rem = int((sz * 10 / 1024)) % 10
-                sz = int(sz / 1024)
-                i++
-            }
-            if (i == 0) return sprintf("%d %s", sz, units[i])
-            return sprintf("%d.%d %s", sz, rem, units[i])
-        }
-        function pad(s, n,   l) {
-            l = length(s)
-            if (l >= n) return s
-            return s sprintf("%*s", n - l, "")
-        }
+    local data="$1" human_mode="$2" tsv
+    # The mtime follows the path in the last cell: the path column is
+    # never padded.
+    tsv="$(printf '%s\n' "$data" | awk -F'\t' -v human="$human_mode" "$__GASH_FS_AWK_HBYTES"'
         NF < 3 { next }
         {
             bytes = $1 + 0
-            mtime = $2
             path = $3
             for (i = 4; i <= NF; i++) path = path "\t" $i
-
-            if (human) sz_str = hbytes(bytes)
-            else sz_str = bytes " B"
-
-            # Variable-width size column to avoid truncating long paths
-            sz_col = pad(sz_str, 12)
-
-            if (color) {
-                # Yellow size, cyan path, muted mtime
-                printf "\033[1;33m%s\033[0m  \033[0;36m%s\033[0m", sz_col, path
-                if (length(mtime) > 0) printf "  \033[38;5;245m%s\033[0m", mtime
-                printf "\n"
-            } else {
-                printf "%s  %s", sz_col, path
-                if (length(mtime) > 0) printf "  %s", mtime
-                printf "\n"
-            }
+            sz_str = human ? hbytes(bytes) : bytes " B"
+            if (length($2) > 0) path = path "  " $2
+            print sz_str "\t" path
         }
-    '
+    ')"
+    [[ -n "$tsv" ]] || return 0
+    # One write: a reader that stops early (grep -q) must not leave the
+    # rest of the rows to a closed pipe (SIGPIPE under pipefail).
+    tsv="$(printf '%s\n' "$tsv" | __gash_table --no-header --min 1:12 --color 2:accent)"
+    printf '%s\n' "$tsv"
 }
 
 # -----------------------------------------------------------------------------

@@ -112,7 +112,7 @@ __sysinfo_section_close() {
     local d="${__SYSINFO_STATE-}"
     [[ -n "$d" && -e "$d/sec" ]] || return 0
     if [[ ! -e "$d/out" && "$__SYSINFO_MODE" == "verbose" ]]; then
-        printf '  %snothing found%s\n' "${__GASH_COLOR_MUTED-}" "${__GASH_COLOR_OFF-}"
+        __gash_print muted "  nothing found"
     fi
     rm -f "$d/sec" "$d/out" "$d/sub"
 }
@@ -146,7 +146,7 @@ __sysinfo_kv() {
     [[ -z "$value" ]] && return 0
     __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        printf "  ${__GASH_BOLD_WHITE}%-24s${__GASH_COLOR_OFF} %s\n" "${key}:" "$value"
+        __gash_kv --indent 2 --width 24 "${key}:" "$value"
     else
         echo "${key}=${value}"
     fi
@@ -157,7 +157,7 @@ __sysinfo_item() {
     local text="$1"
     __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        printf '%s\n' "  ${__GASH_CYAN}-${__GASH_COLOR_OFF} ${text}"
+        __gash_list --indent 2 "$text"
     else
         echo "$text"
     fi
@@ -175,7 +175,7 @@ __sysinfo_sub() {
 __sysinfo_sub_print() {
     local title="$1"
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        printf '%s\n' "  ${__GASH_BOLD_YELLOW}${title}${__GASH_COLOR_OFF}"
+        __gash_heading --indent 2 "$title"
     else
         echo "--- ${title}"
     fi
@@ -219,18 +219,17 @@ __sysinfo_human_kib() {
     }'
 }
 
-# Usage row of the overview card: "LABEL  bar  used / total  pct%".
+# One usage row for the overview table: LABEL, USED/TOTAL (the bar), the
+# human sizes, the percentage and its status style (success, warning from
+# 75%, error from 90%), tab separated.
+# Usage: __sysinfo_usage_row LABEL USED TOTAL
 __sysinfo_usage_row() {
-    local label="$1" used="$2" total="$3" bar pct=0 pc
+    local label="$1" used="$2" total="$3" pct=0 style=success
     ((total > 0)) && pct=$((used * 100 / total))
-    __gash_bar bar "$used" "$total" 10
-    pc="${__GASH_GREEN-}"
-    ((pct >= 75)) && pc="${__GASH_YELLOW-}"
-    ((pct >= 90)) && pc="${__GASH_BOLD_RED-}"
-    printf '%s%-7s%s %s%s%s%s%s%s  %s / %s  %s%d%%%s' \
-        "${__GASH_COLOR_MUTED-}" "$label" "${__GASH_COLOR_OFF-}" \
-        "$pc" "${bar%%$'\t'*}" "${__GASH_COLOR_OFF-}" "${__GASH_COLOR_MUTED-}" "${bar#*$'\t'}" "${__GASH_COLOR_OFF-}" \
-        "$(__sysinfo_human_kib "$used")" "$(__sysinfo_human_kib "$total")" "$pc" "$pct" "${__GASH_COLOR_OFF-}"
+    ((pct >= 75)) && style=warning
+    ((pct >= 90)) && style=error
+    printf '%s\t%s/%s\t%s / %s\t%d%%\t%s\n' "$label" "$used" "$total" \
+        "$(__sysinfo_human_kib "$used")" "$(__sysinfo_human_kib "$total")" "$pct" "$style"
 }
 
 __sysinfo_collect_overview() {
@@ -299,18 +298,36 @@ __sysinfo_collect_overview() {
         return 0
     fi
 
-    local M="${__GASH_COLOR_MUTED-}" B="${__GASH_BOLD-}" R="${__GASH_COLOR_OFF-}" dot="$__GASH_GLYPH_DOT"
-    local -a lines=()
+    local M="" B="" R="" dot="$__GASH_GLYPH_DOT"
+    if __gash_use_color; then
+        M="$__GASH_COLOR_MUTED" B="$__GASH_BOLD" R="$__GASH_COLOR_OFF"
+    fi
+    local -a lines=() part=()
     lines+=("${B}${host}${R}${os:+ $dot $os}")
     lines+=("${M}${kernel} ${arch}${up:+ $dot up $up}${load:+ $dot load $load}${R}")
     lines+=("")
-    [[ -n "$cpu" || -n "$cores" ]] && lines+=("${M}CPU    ${R} ${cpu:-?}${cores:+ $dot $cores cores}")
-    ((mem_total > 0)) && lines+=("$(__sysinfo_usage_row Memory $((mem_total - mem_avail)) "$mem_total")")
-    ((swap_total > 0)) && lines+=("$(__sysinfo_usage_row Swap $((swap_total - swap_free)) "$swap_total")")
-    ((disk_total > 0)) && lines+=("$(__sysinfo_usage_row "Disk /" "$disk_used" "$disk_total")")
-    [[ -n "$ip" ]] && lines+=("${M}Address${R} $ip")
+    # Labels muted and 7 wide in every block, so the three tables line up;
+    # bars and percentages in the status color of their usage.
+    if [[ -n "$cpu" || -n "$cores" ]]; then
+        __gash_table_into part --no-header --min 1:7 --color 1:muted \
+            < <(printf 'CPU\t%s\n' "${cpu:-?}${cores:+ $dot $cores cores}")
+        lines+=("${part[@]}")
+    fi
+    part=()
+    __gash_table_into part --no-header --min 1:7 --color 1:muted --bar 2:10 \
+        --cell-color 2:5 --cell-color 4:5 < <(
+            ((mem_total > 0)) && __sysinfo_usage_row "Memory" $((mem_total - mem_avail)) "$mem_total"
+            ((swap_total > 0)) && __sysinfo_usage_row "Swap" $((swap_total - swap_free)) "$swap_total"
+            ((disk_total > 0)) && __sysinfo_usage_row "Disk /" "$disk_used" "$disk_total"
+            :
+        )
+    lines+=(${part[@]+"${part[@]}"})
+    if [[ -n "$ip" ]]; then
+        __gash_table_into part --no-header --min 1:7 --color 1:muted < <(printf 'Address\t%s\n' "$ip")
+        lines+=("${part[@]}")
+    fi
     echo
-    __gash_box --color "${__GASH_COLOR_PRIMARY-}" "${lines[@]}"
+    __gash_box --color "$__GASH_COLOR_PRIMARY" "${lines[@]}"
     echo
 }
 

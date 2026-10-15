@@ -499,22 +499,24 @@ gash_db_list() {
     echo
 
     local line
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local name="${line%%$'\t'*}"
-        local url="${line#*$'\t'}"
+    {
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            local name="${line%%$'\t'*}"
+            local url="${line#*$'\t'}"
 
-        # Mask password in URL for display (greedy .+ extends to the LAST @,
-        # so passwords containing @ are fully masked)
-        local display_url
-        if [[ "$url" =~ ^([^:]+://[^:]+:).+(@[^@]*)$ ]]; then
-            display_url="${BASH_REMATCH[1]}****${BASH_REMATCH[2]}"
-        else
-            display_url="$url"
-        fi
+            # Mask password in URL for display (greedy .+ extends to the LAST @,
+            # so passwords containing @ are fully masked)
+            local display_url
+            if [[ "$url" =~ ^([^:]+://[^:]+:).+(@[^@]*)$ ]]; then
+                display_url="${BASH_REMATCH[1]}****${BASH_REMATCH[2]}"
+            else
+                display_url="$url"
+            fi
 
-        printf "  %-15s %s\n" "$name" "$display_url"
-    done <<<"$__GASH_ENV_DB_ENTRIES"
+            printf '%s\t%s\n' "$name" "$display_url"
+        done <<<"$__GASH_ENV_DB_ENTRIES"
+    } | __gash_table --no-header --indent 2 --gap 1 --min 1:15 --color 1:accent
 }
 
 # Test a database connection
@@ -683,15 +685,11 @@ gash_ai_list() {
     __gash_info "Available AI providers:"
     echo
 
-    local line
+    # Tokens masked: the first 8 characters only.
+    local line token
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
-        local provider="${line%%$'\t'*}"
-        local token="${line#*$'\t'}"
-
-        # Mask token for display (show first 8 chars)
-        local masked_token="${token:0:8}..."
-
-        printf "  %-10s %s\n" "$provider" "$masked_token"
-    done <<<"$__GASH_ENV_AI_PROVIDERS"
+        token="${line#*$'\t'}"
+        printf '%s\t%s...\n' "${line%%$'\t'*}" "${token:0:8}"
+    done <<<"$__GASH_ENV_AI_PROVIDERS" | __gash_table --no-header --indent 2 --gap 1 --min 1:10 --color 1:accent
 }

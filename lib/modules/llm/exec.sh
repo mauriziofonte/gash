@@ -908,7 +908,8 @@ __llm_exec_prelude() {
         [[ "$dir" == */* ]] && ex+=("--exclude-dir=$(__llm_icase_glob "${dir##*/}")")
     done
     __llm_secret_excludes rg rgex
-    declare -f __llm_cx_run __llm_cx_grep __llm_cx_git
+    declare -f __llm_cx_run __llm_cx_grep __llm_cx_git \
+        __gash_json_error __gash_json_escape __gash_json_escape_to
     printf '__LLM_CX_GREP=(%s)\n' "$(printf '%q ' "${ex[@]}")"
     printf '__LLM_CX_RG=(%s)\n' "$(printf '%q ' "${rgex[@]}")"
     __llm_exec_gnu_grep && printf '__LLM_CX_GREP_LAST=1\n'
@@ -1039,15 +1040,13 @@ __llm_cx_git() {
     done
     case "$sub" in
         show | diff | cat-file)
-            local o
             for w in "$@"; do
                 [[ "$w" == -- ]] && break
                 [[ "$w" == -* || "$w" == *:* ]] && continue
                 [[ "$sub" == cat-file && " $* " == *" -"[tse]" "* ]] && break
                 if [[ "$(command git "${__LLM_CX_GITCFG[@]}" "${pre[@]}" cat-file -t "$w^{}" 2>/dev/null)" == blob ]]; then
-                    o="${w//\\/\\\\}"
-                    o="${o//\"/\\\"}"
-                    printf '{"error":"option_not_allowed","details":"git %s %s","action":"FATAL","recoverable":false,"hint":"llm_exec prints a file from git only as REV:PATH (e.g. HEAD:src/app.php), so that the path can be checked"}\n' "$sub" "$o" >&2
+                    __gash_json_error "option_not_allowed" "git $sub $w" "FATAL" \
+                        "llm_exec prints a file from git only as REV:PATH (e.g. HEAD:src/app.php), so that the path can be checked"
                     return 1
                 fi
             done

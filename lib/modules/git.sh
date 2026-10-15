@@ -74,8 +74,7 @@ git_apply_patch() {
     # Validate arguments
     if [ -z "$main_branch" ] || [ -z "$feature_branch" ] || [ -z "$commit_hash" ]; then
         __gash_error "Missing arguments."
-        needs_help "git_apply_patch" "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH" \
-            "Create and apply a patch from a feature branch to the main branch." "--help"
+        __gash_usage "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH"
         return 1
     fi
 
@@ -155,11 +154,13 @@ git_list_tags() {
 
     __gash_require_git_repo_with_remote || return 1
 
-    __gash_print "bold_blue" "Local tags:"
-    git tag -l
+    # One tag per line, as git prints them: tag names never hold a tab.
+    __gash_heading "Local tags:"
+    git tag -l | __gash_table --no-header --color 1:accent
 
-    __gash_print "bold_blue" "Remote tags:"
-    git ls-remote --tags origin | awk '{print $2}' | sed 's|refs/tags/||'
+    __gash_heading "Remote tags:"
+    git ls-remote --tags origin | awk '{print $2}' | sed 's|refs/tags/||' |
+        __gash_table --no-header --color 1:accent
 
     return 0
 }
@@ -294,22 +295,18 @@ git_repair() {
     local -a empty=()
     mapfile -t empty < <(find "$objects" -type f -empty 2>/dev/null)
 
-    printf 'Object store: %s
-' "$objects"
-    printf 'Empty (corrupted) object files: %d
-' "${#empty[@]}"
+    __gash_kv --width 0 "Object store:" "$objects"
+    __gash_kv --width 0 "Empty (corrupted) object files:" "${#empty[@]}"
     if ((${#empty[@]} == 0)); then
         if git fsck --connectivity-only >/dev/null 2>&1; then
             __gash_success "No empty objects and the history is connected: nothing to repair."
             return 0
         fi
-        printf 'git fsck reports problems that are not empty files; trying the repair anyway.
-'
+        printf 'git fsck reports problems that are not empty files; trying the repair anyway.\n'
     fi
-    printf 'Plan: delete the empty files, copy the packs of a fresh bare clone of %s,
-' "$origin_url"
-    printf '      run git gc and git fsck --full.
-'
+    # "Plan:" and an unlabeled continuation line, values aligned.
+    __gash_kv --width 5 "Plan:" "delete the empty files, copy the packs of a fresh bare clone of $origin_url," \
+        "" "run git gc and git fsck --full."
     ((dry_run)) && return 0
     __gash_confirm_plan "$assume_yes" || return 1
 
@@ -436,7 +433,7 @@ git_sync() {
 
     if ((dry_run)); then
         if [[ -n "$changes" ]]; then
-            printf 'Would commit on %s with message "%s":\n' "$branch" "$msg"
+            __gash_heading "Would commit on $branch with message \"$msg\":"
             git status --short --untracked-files=all
         else
             printf 'Nothing to commit on %s.\n' "$branch"

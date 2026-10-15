@@ -117,7 +117,7 @@ gash_inspiring_quote() {
     local label="Quote:" on="" off="" first=1 qline
     local -a wrapped=()
     if __gash_use_color; then
-        on="$__GASH_CYAN" off="$__GASH_COLOR_OFF"
+        on="$__GASH_COLOR_PRIMARY" off="$__GASH_COLOR_OFF"
     fi
     __gash_wrap wrapped "$wrap_width" "${quotes[$idx]}"
     for qline in "${wrapped[@]}"; do
@@ -156,7 +156,7 @@ __gash_latest_tag() {
 # Usage: __gash_verify_tag DIR TAG
 __gash_verify_tag() {
     local dir="$1" tag="$2"
-    if git -C "$dir" cat-file -p "refs/tags/$tag" 2>/dev/null | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----'; then
+    if git -C "$dir" cat-file -p "refs/tags/$tag" 2>/dev/null | grep -Eq -- '-{5}BEGIN (PGP|SSH) SIGNATURE-{5}'; then
         if git -C "$dir" verify-tag "$tag" >/dev/null 2>&1; then
             __gash_success "Signature of $tag verified."
             return 0
@@ -485,8 +485,7 @@ __gash_doctor_timing() {
         return 1
     fi
     local gash_dir="${GASH_DIR:-$HOME/.gash}" bash_bin="${BASH:-bash}"
-    local H="${__GASH_BOLD_WHITE-}" W="${__GASH_YELLOW-}" O="${__GASH_COLOR_OFF-}"
-    local out us label ms on i t0 t1
+    local out us label ms style i t0 t1
     # shellcheck disable=SC2016 # expanded by the child shell
     out="$(GASH_TIMING=1 GASH_HEADLESS='' GASH_SSH_AUTOUNLOCK_RAN=1 "$bash_bin" --noprofile --norc -i -c '
         source "$1/gash.sh"
@@ -498,16 +497,20 @@ __gash_doctor_timing() {
         return 1
     fi
 
-    printf '%s\n' "${H}Startup timing${O} — Gash ${GASH_VERSION:-unknown}, bash ${BASH_VERSION}, in a new interactive shell"
-    printf '  %7s  %s\n' "ms" "step"
-    while read -r us label; do
-        [[ "$us" =~ ^[0-9]+$ ]] || continue
-        __gash_us_to_ms ms "$us"
-        on=""
-        [[ "$label" == *"(total)" ]] && on="$H"
-        ((us >= 5000)) && on="$W"
-        printf '  %s%7s%s  %s\n' "$on" "$ms" "$O" "$label"
-    done <<<"$out"
+    __gash_heading --note "Gash ${GASH_VERSION:-unknown}, bash ${BASH_VERSION}, in a new interactive shell" "Startup timing"
+    # Milliseconds right-aligned, the total bold, slow steps (5 ms or
+    # more) in the warning color.
+    {
+        printf 'ms\tstep\t\n'
+        while read -r us label; do
+            [[ "$us" =~ ^[0-9]+$ ]] || continue
+            __gash_us_to_ms ms "$us"
+            style=""
+            [[ "$label" == *"(total)" ]] && style=bold
+            ((us >= 5000)) && style=warning
+            printf '%s\t%s\t%s\n' "$ms" "$label" "$style"
+        done <<<"$out"
+    } | __gash_table --no-header --indent 2 --right 1 --min 1:7 --cell-color 1:3
 
     # Whole shells, median of three runs each.
     local -a whole=() bare=()
@@ -562,13 +565,12 @@ gash_doctor() {
 
     local gash_dir="${GASH_DIR:-$HOME/.gash}"
     local issues=0 f mod tool name
-    local H="${__GASH_BOLD_WHITE-}" O="${__GASH_COLOR_OFF-}"
 
     __gash_info "Gash Doctor — checking installation (v${GASH_VERSION:-unknown})..."
     echo ""
 
     # 1. Runtime
-    printf '%s\n' "${H}Runtime:${O}"
+    __gash_heading "Runtime:"
     if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4))); then
         __gash_success "  bash ${BASH_VERSION}"
     else
@@ -586,7 +588,7 @@ gash_doctor() {
     fi
 
     # 2. Core files
-    printf '%s\n' "${H}Core Files:${O}"
+    __gash_heading "Core Files:"
     local core_files=(gash.sh lib/core/output.sh lib/core/help.sh lib/core/utils.sh lib/core/validation.sh lib/core/config.sh
         lib/shell/terminal.sh lib/shell/history.sh lib/shell/prompt.sh lib/shell/banner.sh lib/shell/toolchains.sh lib/aliases/_loader.sh)
     for f in "${core_files[@]}"; do
@@ -599,7 +601,7 @@ gash_doctor() {
     done
 
     # 3. Modules
-    printf '%s\n' "${H}Modules:${O}"
+    __gash_heading "Modules:"
     local expected_modules=(gash git ssh files docker docker-compose system llm ai sysinfo remote node php)
     for mod in "${expected_modules[@]}"; do
         if [[ -f "$gash_dir/lib/modules/${mod}.sh" ]]; then
@@ -611,7 +613,7 @@ gash_doctor() {
     done
 
     # 4. Config file and settings
-    printf '%s\n' "${H}Configuration:${O}"
+    __gash_heading "Configuration:"
     local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
     if [[ -f "$env_file" ]]; then
         local perms
@@ -626,11 +628,11 @@ gash_doctor() {
         __gash_info "  $env_file — not found (optional, run gash_env_init to create)"
     fi
     for name in ${__GASH_SETTINGS_KNOWN-}; do
-        [[ -n "${!name+x}" ]] && printf '    %s=%s\n' "$name" "${!name}"
+        [[ -n "${!name+x}" ]] && __gash_kv --indent 4 --width 0 --sep = "$name" "${!name}"
     done
 
     # 5. External tools
-    printf '%s\n' "${H}External Tools:${O}"
+    __gash_heading "External Tools:"
     local tools=(git curl jq sqlite3 docker)
     for tool in "${tools[@]}"; do
         if type -P "$tool" >/dev/null 2>&1; then
@@ -746,10 +748,9 @@ __gash_card_functions() {
 # Print one topic: functions table, then the alias grid.
 __gash_card_topic() {
     local topic="$1" modules="$2" alias_files="$3" desc="$4"
-    local A="${__GASH_COLOR_ACCENT}" G="${__GASH_GREEN}" M="${__GASH_COLOR_MUTED}" B="${__GASH_BOLD}" R="${__GASH_COLOR_OFF}"
-    __gash_use_color || { A="" G="" M="" B="" R=""; }
-
-    printf '\n  %s%s%s  %s%s%s\n\n' "$B" "${topic^^}" "$R" "$M" "$desc" "$R"
+    printf '\n'
+    __gash_heading --indent 2 --note "$desc" "${topic^^}"
+    printf '\n'
 
     local fns fn usage al
     fns="$(__gash_card_functions "$modules")"
@@ -762,7 +763,7 @@ __gash_card_topic() {
                 al="${__GASH_HELP_ALIASES[$fn]-}"
                 printf '%s\t%s\t%s\t%s\n' "$fn" "${al// /, }" "$usage" "${__GASH_HELP_SHORT[$fn]-}"
             done <<<"$fns"
-        } | __gash_table --indent 2 --fit --color 1:"$A" --color 2:"$G" --color 3:"$M"
+        } | __gash_table --indent 2 --fit --color 1:accent --color 2:accent --color 3:muted
     fi
 
     local f entries=() name value
@@ -773,7 +774,8 @@ __gash_card_topic() {
     done
     ((${#entries[@]} > 0)) || return 0
 
-    # Grid: as many "name  expansion" columns as the terminal holds.
+    # Grid: as many "name  expansion" pairs per row as the terminal holds,
+    # names accent, expansions muted (cut at 26 characters).
     local namew=0 valw=0 e
     for e in "${entries[@]}"; do
         name="${e%%$'\t'*}" value="${e#*$'\t'}"
@@ -787,19 +789,20 @@ __gash_card_topic() {
     ((cols > 3)) && cols=3
 
     [[ -n "$fns" ]] && echo
-    printf '  %sAliases%s\n' "$B" "$R"
-    local i=0
+    __gash_heading --indent 2 "Aliases"
+    # Pairs are columns 1-2, 4-5, 7-8; 3 and 6 stay empty, as spacers.
+    local i=0 row="" k opts=()
+    for ((k = 0; k < cols; k++)); do
+        opts+=(--color "$((3 * k + 1)):accent" --color "$((3 * k + 2)):muted" --max "$((3 * k + 2)):$valw")
+    done
     for e in "${entries[@]}"; do
-        name="${e%%$'\t'*}" value="${e#*$'\t'}"
-        ((${#value} > valw)) && value="${value:0:valw-1}${__GASH_GLYPH_ELLIPSIS}"
-        ((i % cols == 0)) && printf '  '
+        row+="${row:+$'\t\t'}$e"
         i=$((i + 1))
         if ((i % cols == 0 || i == ${#entries[@]})); then
-            printf '%s%-*s%s  %s%s%s\n' "$G" "$namew" "$name" "$R" "$M" "$value" "$R"
-        else
-            printf '%s%-*s%s  %s%-*s%s   ' "$G" "$namew" "$name" "$R" "$M" "$valw" "$value" "$R"
+            printf '%s\n' "$row"
+            row=""
         fi
-    done
+    done | __gash_table --no-header --indent 2 "${opts[@]}"
 }
 
 # Gash reference card, generated from the help registry and the alias files.
@@ -829,8 +832,10 @@ gash() {
         php | node) topic="dev" ;;
     esac
 
-    local P="${__GASH_COLOR_PRIMARY}" B="${__GASH_BOLD}" M="${__GASH_COLOR_MUTED}" G="${__GASH_GREEN}" A="${__GASH_COLOR_ACCENT}" R="${__GASH_COLOR_OFF}"
-    __gash_use_color || { P="" B="" M="" G="" A="" R=""; }
+    local P="" B="" M="" R=""
+    if __gash_use_color; then
+        P="$__GASH_COLOR_PRIMARY" B="$__GASH_BOLD" M="$__GASH_COLOR_MUTED" R="$__GASH_COLOR_OFF"
+    fi
     local dot="$__GASH_GLYPH_DOT" entry t mods files desc
 
     if [[ -n "$topic" && "$topic" != all ]]; then
@@ -879,13 +884,15 @@ gash() {
             for f in $files; do na=$((na + $(__gash_card_aliases "$f" | grep -c .))); done
             printf '%s\t%s\t%s\t%s\n' "$t" "$nf" "$na" "$desc"
         done
-    } | __gash_table --indent 2 --right 2,3 --fit --color 1:"$A"
+    } | __gash_table --indent 2 --right 2,3 --fit --color 1:accent
     echo
-    printf '  %sgash <topic>%s        functions and aliases of a topic, e.g. %sgash git%s\n' "$G" "$R" "$G" "$R"
-    printf '  %sgash all%s            the whole card\n' "$G" "$R"
-    printf '  %sgash_help <name>%s    full help with examples, e.g. %sgash_help flf%s\n' "$G" "$R" "$G" "$R"
-    printf '  %sgash_help --search%s  search every help page\n' "$G" "$R"
-    printf '  %sgash_doctor%s         check the installation\n' "$G" "$R"
+    printf '%s\t%s\n' \
+        "gash <topic>" "functions and aliases of a topic, e.g. gash git" \
+        "gash all" "the whole card" \
+        "gash_help <name>" "full help with examples, e.g. gash_help flf" \
+        "gash_help --search" "search every help page" \
+        "gash_doctor" "check the installation" |
+        __gash_table --no-header --indent 2 --color 1:accent
     echo
 }
 
@@ -915,12 +922,10 @@ gash_help() {
     # scoping to __gash_help_display / _search / _list called below.
     __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
 
-    local A="${__GASH_COLOR_ACCENT-\033[38;5;214m}"
-    local W="${__GASH_BOLD_WHITE-\033[1;37m}"
-    local C="${__GASH_CYAN-\033[0;36m}"
-    local G="${__GASH_GREEN-\033[0;32m}"
-    local M="${__GASH_COLOR_MUTED-\033[38;5;245m}"
-    local R="${__GASH_COLOR_OFF-\033[0m}"
+    local A="" M="" R=""
+    if __gash_use_color; then
+        A="$__GASH_COLOR_ACCENT" M="$__GASH_COLOR_MUTED" R="$__GASH_COLOR_OFF"
+    fi
 
     # --bash: delegate to builtin help
     if [[ "$arg" == "--bash" ]]; then
@@ -932,7 +937,7 @@ gash_help() {
     # --list: grouped listing
     if [[ "$arg" == "--list" ]]; then
         echo
-        printf '%s\n' "  ${W}Gash Functions${R} ${M}(use 'gash_help FUNCTION' for details)${R}"
+        __gash_heading --indent 2 --note "(use 'gash_help FUNCTION' for details)" "Gash Functions"
         __gash_help_list
         echo
         return 0
@@ -942,11 +947,11 @@ gash_help() {
     if [[ "$arg" == "--search" ]]; then
         local keyword="${2-}"
         if [[ -z "$keyword" ]]; then
-            __gash_error "Usage: gash_help --search KEYWORD"
+            __gash_usage "gash_help --search KEYWORD"
             return 1
         fi
         echo
-        printf '%s\n' "  ${W}Search results for '${keyword}':${R}"
+        __gash_heading --indent 2 "Search results for '${keyword}':"
         echo
         local rc=0
         __gash_help_search "$keyword" || rc=$?
@@ -958,7 +963,7 @@ gash_help() {
     if [[ "$arg" == "--short" ]]; then
         local func="${2-}"
         if [[ -z "$func" ]]; then
-            __gash_error "Usage: gash_help --short FUNCTION"
+            __gash_usage "gash_help --short FUNCTION"
             return 1
         fi
         # Try direct lookup
@@ -982,16 +987,18 @@ gash_help() {
         echo
         printf '%s\n' "  ${A}gash_help${R}${M}  (module: gash)${R}"
         echo
-        printf '%s\n' "  ${W}Gash help system with examples, search, and discovery.${R}"
+        __gash_heading --indent 2 "Gash help system with examples, search, and discovery."
         echo
-        printf '%s\n' "  ${W}USAGE${R}"
-        printf '%s\n' "    ${C}gash_help${R}                   ${M}Overview of all functions${R}"
-        printf '%s\n' "    ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
-        printf '%s\n' "    ${C}gash_help ALIAS${R}             ${M}Lookup by short alias name${R}"
-        printf '%s\n' "    ${C}gash_help --list${R}            ${M}List all functions by module${R}"
-        printf '%s\n' "    ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
-        printf '%s\n' "    ${C}gash_help --short FUNCTION${R}  ${M}One-line description only${R}"
-        printf '%s\n' "    ${C}gash_help --bash TOPIC${R}      ${M}Bash builtin help${R}"
+        __gash_heading --indent 2 "USAGE"
+        printf '%s\t%s\n' \
+            "gash_help" "Overview of all functions" \
+            "gash_help FUNCTION" "Detailed help with examples" \
+            "gash_help ALIAS" "Lookup by short alias name" \
+            "gash_help --list" "List all functions by module" \
+            "gash_help --search KEYWORD" "Search across all help text" \
+            "gash_help --short FUNCTION" "One-line description only" \
+            "gash_help --bash TOPIC" "Bash builtin help" |
+            __gash_table --no-header --indent 4 --color 1:accent --color 2:muted
         echo
         return 0
     fi
@@ -999,14 +1006,16 @@ gash_help() {
     # No args: show overview
     if [[ -z "$arg" ]]; then
         echo
-        printf '%s\n' "  ${W}Gash${R} ${M}v${GASH_VERSION:-?}${R} ${M}- Gash, Another SHell!${R}"
+        __gash_heading --indent 2 --note "v${GASH_VERSION:-?} - Gash, Another SHell!" "Gash"
         echo
-        printf '%s\n' "  ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
-        printf '%s\n' "  ${C}gash_help ALIAS${R}             ${M}Lookup by short alias (e.g. flf, dsa, ask)${R}"
-        printf '%s\n' "  ${C}gash_help --list${R}            ${M}List all functions by module${R}"
-        printf '%s\n' "  ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
-        printf '%s\n' "  ${C}gash${R}                        ${M}Reference card with aliases${R}"
-        printf '%s\n' "  ${C}FUNCTION --help${R}             ${M}Quick usage reminder${R}"
+        printf '%s\t%s\n' \
+            "gash_help FUNCTION" "Detailed help with examples" \
+            "gash_help ALIAS" "Lookup by short alias (e.g. flf, dsa, ask)" \
+            "gash_help --list" "List all functions by module" \
+            "gash_help --search KEYWORD" "Search across all help text" \
+            "gash" "Reference card with aliases" \
+            "FUNCTION --help" "Quick usage reminder" |
+            __gash_table --no-header --indent 2 --color 1:accent --color 2:muted
 
         # Show grouped list
         __gash_help_list
@@ -1035,7 +1044,7 @@ gash_help() {
 
     # Not found
     __gash_error "No help found for '$arg'."
-    printf '%s\n' "  ${M}Try: gash_help --list  or  gash_help --search ${arg}${R}" >&2
+    __gash_hint "Try: gash_help --list  or  gash_help --search ${arg}"
     return 1
 }
 
@@ -1201,6 +1210,22 @@ NOTES
   Restores PS1, PROMPT_COMMAND, history settings, and shopt options
   to the state captured before Gash loaded. Session-only: does not
   modify any files.
+HELP
+
+    __gash_register_help "gash_username" \
+        --module "gash" \
+        --short "Print the current user name" \
+        <<'HELP'
+USAGE
+  gash_username
+
+EXAMPLES
+  # The name the banner and the prompt show
+  gash_username
+
+NOTES
+  Tries whoami, then id -un, then the /etc/passwd entry of the
+  current user id; prints UNKNOWN_USERNAME when all of them fail.
 HELP
 
     __gash_register_help "gash_inspiring_quote" \

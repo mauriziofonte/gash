@@ -100,8 +100,8 @@ EOF
             return 0
         fi
         if [[ -z "${1-}" ]]; then
-            echo "Usage: glf <file> [options]" >&2
-            echo "Shows commit history for a specific file with patches" >&2
+            __gash_usage "glf <file> [options]"
+            __gash_note "Shows commit history for a specific file with patches"
             return 1
         fi
         git log --follow -p -- "$@"

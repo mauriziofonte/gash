@@ -553,20 +553,33 @@ __gash_section() {
     printf '\n'
 }
 
-# A bold line without rules, for a title inside a block (stdout).
-# Usage: __gash_heading [--indent N] "Title"
+# A bold line without rules, for a title inside a block (stdout). --note
+# adds secondary text after the title, two spaces apart, muted.
+# Usage: __gash_heading [--indent N] [--note TEXT] "Title"
 __gash_heading() {
-    local indent=0
-    if [[ "${1-}" == "--indent" ]]; then
-        indent="${2-0}"
-        shift 2
-    fi
+    local indent=0 note=""
+    while (($# > 1)); do
+        case "$1" in
+            --indent)
+                indent="${2-0}"
+                shift 2
+                ;;
+            --note)
+                note="${2-}"
+                shift 2
+                ;;
+            *) break ;;
+        esac
+    done
     [[ "$indent" =~ ^[0-9]+$ ]] || indent=0
     if __gash_use_color; then
-        printf '%*s%s%s%s\n' "$indent" '' "$__GASH_BOLD" "${1-}" "$__GASH_COLOR_OFF"
+        printf '%*s%s%s%s' "$indent" '' "$__GASH_BOLD" "${1-}" "$__GASH_COLOR_OFF"
+        [[ -z "$note" ]] || printf '  %s%s%s' "$__GASH_COLOR_MUTED" "$note" "$__GASH_COLOR_OFF"
     else
-        printf '%*s%s\n' "$indent" '' "${1-}"
+        printf '%*s%s' "$indent" '' "${1-}"
+        [[ -z "$note" ]] || printf '  %s' "$note"
     fi
+    printf '\n'
 }
 
 # Key/value lines (stdout): "KEY VALUE", keys padded to the longest one (or
@@ -675,10 +688,19 @@ __gash_mark() {
     fi
 }
 
-# Clear the terminal (stdout is a terminal only; nothing otherwise).
+# True when input and output are both a terminal, so a screen can be
+# cleared and keys read from the user (menus, guided screens).
+# Usage: __gash_tty_io && __gash_clear_screen
+__gash_tty_io() {
+    [[ -t 0 && -t 1 ]]
+}
+
+# Clear the terminal: only where escape sequences may be printed (stdout a
+# terminal, colors on, not headless); nothing otherwise, so NO_COLOR and
+# piped output stay free of escape bytes.
 # Usage: __gash_clear_screen
 __gash_clear_screen() {
-    [[ -t 1 && "${GASH_HEADLESS-}" != "1" ]] || return 0
+    [[ "${GASH_HEADLESS-}" != "1" ]] && __gash_use_color || return 0
     printf '%s' "$__GASH_CLEAR_SCREEN"
 }
 
@@ -800,8 +822,9 @@ __gash_wrap() {
     done <<<"$__gw_text"
 }
 
-# Let the user pick one of OPTIONS. On a terminal: arrow keys (or j/k, or
-# the option's number) move, Enter confirms, q or Esc cancels. Otherwise
+# Let the user pick one of OPTIONS. On a terminal: the numbered options,
+# then a selection line that arrow keys (or j/k, or the option's number)
+# move, Enter confirms, q or Esc cancels. Otherwise
 # (GASH_TUI=plain, TERM=dumb, or input/output not a terminal) a numbered
 # prompt that reads a line; an empty answer takes DEFAULT.
 # Usage: __gash_choose VAR DEFAULT OPTION...   (VAR gets the 1-based index)
@@ -841,18 +864,24 @@ __gash_choose() {
         return 1
     fi
 
-    local __gc_first=1
+    # The options once, then one selection line redrawn in place (carriage
+    # return, then erase-line on a color terminal or spaces otherwise).
+    for ((__gc_i = 0; __gc_i < __gc_n; __gc_i++)); do
+        printf '    %d) %s\n' $((__gc_i + 1)) "${__gc_opts[__gc_i]}"
+    done
+    local __gc_el="" __gc_text __gc_prev=0 __gc_rc=0
+    __gash_use_color && __gc_el="$__GASH_ERASE_EOL"
     while :; do
-        ((__gc_first)) || printf '\e[%dA' "$__gc_n"
-        __gc_first=0
-        for ((__gc_i = 0; __gc_i < __gc_n; __gc_i++)); do
-            if ((__gc_i + 1 == __gc_sel)); then
-                printf '\r\e[K  %s%s %s%s\n' "$__gc_on" "$__GASH_GLYPH_POINTER" "${__gc_opts[__gc_i]}" "$__gc_off"
-            else
-                printf '\r\e[K    %s\n' "${__gc_opts[__gc_i]}"
-            fi
-        done
-        IFS= read -rsn1 __gc_key || return 1
+        __gc_text="$__GASH_GLYPH_POINTER $__gc_sel) ${__gc_opts[__gc_sel - 1]}"
+        printf '\r  %s%s%s%s' "$__gc_on" "$__gc_text" "$__gc_off" "$__gc_el"
+        if [[ -z "$__gc_el" ]] && ((${#__gc_text} < __gc_prev)); then
+            printf '%*s' $((__gc_prev - ${#__gc_text})) ''
+        fi
+        __gc_prev=${#__gc_text}
+        IFS= read -rsn1 __gc_key || {
+            __gc_rc=1
+            break
+        }
         case "$__gc_key" in
             $'\e')
                 __gc_rest=""
@@ -860,16 +889,24 @@ __gash_choose() {
                 case "$__gc_rest" in
                     '[A' | 'OA') ((__gc_sel = __gc_sel > 1 ? __gc_sel - 1 : __gc_n)) ;;
                     '[B' | 'OB') ((__gc_sel = __gc_sel < __gc_n ? __gc_sel + 1 : 1)) ;;
-                    '') return 1 ;;
+                    '')
+                        __gc_rc=1
+                        break
+                        ;;
                 esac
                 ;;
             k) ((__gc_sel = __gc_sel > 1 ? __gc_sel - 1 : __gc_n)) ;;
             j) ((__gc_sel = __gc_sel < __gc_n ? __gc_sel + 1 : 1)) ;;
             [1-9]) ((__gc_key <= __gc_n)) && __gc_sel=$__gc_key ;;
-            q) return 1 ;;
+            q)
+                __gc_rc=1
+                break
+                ;;
             '') break ;;
         esac
     done
+    printf '\n'
+    ((__gc_rc == 0)) || return 1
     __gc_out=$__gc_sel
     return 0
 }
@@ -919,6 +956,18 @@ __gash_box() {
 # Tables
 # -----------------------------------------------------------------------------
 
+# __gash_table into the array named ARRAY instead of stdout (to put a
+# table inside __gash_box), styled as it would print here: the color
+# decision is this shell's, not the capturing subshell's. Rows on stdin.
+# Usage: __gash_table_into ARRAY [table options] < <(printf ...)
+__gash_table_into() {
+    local -n __gti_out="$1"
+    shift
+    local __gti_color=0
+    __gash_use_color && __gti_color=1
+    mapfile -t __gti_out < <(__GASH_TABLE_COLOR=$__gti_color __gash_table "$@")
+}
+
 # Split LINE on every tab into the array named ARRAY, keeping empty fields
 # (read -a would merge consecutive tabs).
 # Usage: __gash_split_tabs ARRAY LINE
@@ -949,7 +998,7 @@ __gash_split_tabs() {
 #                     (a style name, or empty); column M is not shown
 #   --bar N:W         column N holds VALUE/MAX: drawn as a W-cell bar, the
 #                     full part in the column's style (primary by default),
-#                     the empty part muted
+#                     the empty part muted; any other cell prints as text
 #   --min N:W         column N at least W wide
 #   --max N:W         cut column N to W characters, ellipsis at the end
 #   --max-left N:W    cut column N to W characters, keeping the end
@@ -959,6 +1008,7 @@ __gash_split_tabs() {
 # Usage: printf 'NAME\tSIZE\na\t1\n' | __gash_table [options]
 __gash_table() {
     local right="" indent=0 header=1 fit=0 fitcol=0 gap=2
+    local -a emitted=()
     local -A colcolor=() cellcolor=() barw=() minw=() maxw=() maxleft=() hidden=()
     while (($# > 0)); do
         case "$1" in
@@ -1035,12 +1085,16 @@ __gash_table() {
 
     # Cut cells, then measure.
     local r cell lim joined
+    for c in "${vis[@]}"; do widths[c]=0; done
+    local nc
     for r in "${!rows[@]}"; do
         __gash_split_tabs cells "${rows[r]}"
+        nc=${#cells[@]}
         for c in "${vis[@]}"; do
+            ((c < nc)) || break
             n=$((c + 1))
             cell="${cells[c]-}"
-            if [[ -n "${barw[$n]-}" ]] && ! ((r == 0 && header)); then
+            if [[ -n "${barw[$n]-}" && "$cell" =~ ^[0-9]+/[0-9]+$ ]] && ! ((r == 0 && header)); then
                 w=${barw[$n]}
             else
                 lim="${maxw[$n]-}"
@@ -1079,16 +1133,24 @@ __gash_table() {
     fi
 
     local color=0
-    __gash_use_color && color=1
+    if [[ "${__GASH_TABLE_COLOR-}" == 1 ]] || __gash_use_color; then color=1; fi
     local pad sep r out plain esc style full empty bar v mx
     printf -v pad '%*s' "$indent" ''
     printf -v sep '%*s' "$gap" ''
     local muted="" off=""
     ((color)) && muted="$__GASH_COLOR_MUTED" off="$__GASH_COLOR_OFF"
+    local rlast
     for r in "${!rows[@]}"; do
         __gash_split_tabs cells "${rows[r]}"
         out="" plain=""
+        # A short row ends at its own last cell: no padding after it.
+        rlast=$last
+        if ((${#cells[@]} <= last)); then
+            rlast=${vis[0]}
+            for c in "${vis[@]}"; do ((c < ${#cells[@]})) && rlast=$c; done
+        fi
         for c in "${vis[@]}"; do
+            ((c > rlast)) && break
             n=$((c + 1))
             cell="${cells[c]-}"
             # Style of this cell: its row's style column, else the column's.
@@ -1096,7 +1158,7 @@ __gash_table() {
             [[ -n "${cellcolor[$n]-}" ]] && style="${cells[${cellcolor[$n]} - 1]-}"
             esc=""
             ((color)) && __gash_color_of esc "$style"
-            if [[ -n "${barw[$n]-}" ]] && ! ((r == 0 && header)); then
+            if [[ -n "${barw[$n]-}" && "$cell" =~ ^[0-9]+/[0-9]+$ ]] && ! ((r == 0 && header)); then
                 v="${cell%%/*}" mx="${cell#*/}"
                 [[ "$v" =~ ^[0-9]+$ ]] || v=0
                 [[ "$mx" =~ ^[0-9]+$ ]] || mx=0
@@ -1112,7 +1174,7 @@ __gash_table() {
                 fi
                 printf -v cell '%*s' $((widths[c] - barw[$n])) ''
                 plain+="$cell" out+="$cell"
-                ((c == last)) || plain+="$sep" out+="$sep"
+                ((c == rlast)) || plain+="$sep" out+="$sep"
                 continue
             fi
             if ((c == fc && fit_max > 0 && ${#cell} > widths[c])); then
@@ -1124,7 +1186,7 @@ __gash_table() {
             fi
             if [[ "$right" == *",$n,"* ]]; then
                 printf -v cell '%*s' "${widths[c]}" "$cell"
-            elif ((c != last)); then
+            elif ((c != rlast)); then
                 printf -v cell '%-*s' "${widths[c]}" "$cell"
             fi
             plain+="$cell"
@@ -1133,21 +1195,22 @@ __gash_table() {
             else
                 out+="$cell"
             fi
-            ((c == last)) || plain+="$sep" out+="$sep"
+            ((c == rlast)) || plain+="$sep" out+="$sep"
         done
         if ((r == 0 && header)); then
             if ((color)); then
-                printf '%s%s%s%s%s\n' "$pad" "$__GASH_BOLD" "$__GASH_UNDERLINE" "$plain" "$__GASH_COLOR_OFF"
+                emitted+=("${pad}${__GASH_BOLD}${__GASH_UNDERLINE}${plain}${__GASH_COLOR_OFF}")
             else
-                printf '%s%s\n' "$pad" "$plain"
+                emitted+=("${pad}${plain}")
                 local rule="" total=0 i
                 for c in "${vis[@]}"; do total=$((total + widths[c])); done
                 total=$((total + gap * (${#vis[@]} - 1)))
                 for ((i = 0; i < total; i++)); do rule+="$__GASH_GLYPH_HLINE"; done
-                printf '%s%s\n' "$pad" "$rule"
+                emitted+=("${pad}${rule}")
             fi
         else
-            printf '%s%s\n' "$pad" "$out"
+            emitted+=("${pad}${out}")
         fi
     done
+    printf '%s\n' "${emitted[@]}"
 }

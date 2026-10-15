@@ -307,13 +307,13 @@ remote_hosts() {
     __gash_info "Configured remote hosts:"
     echo
 
-    local line
+    # Entries are "alias<TAB>target" lines: aliases padded to 15 at least.
+    local line rows=""
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
-        local alias_name="${line%%$'\t'*}"
-        local target="${line#*$'\t'}"
-        printf "  %-15s %s\n" "$alias_name" "$target"
+        rows+="${line%%$'\t'*}"$'\t'"${line#*$'\t'}"$'\n'
     done <<<"$entries"
+    printf '%s' "$rows" | __gash_table --no-header --indent 2 --gap 1 --min 1:15 --color 1:accent
 }
 
 # -----------------------------------------------------------------------------

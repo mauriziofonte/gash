@@ -134,6 +134,25 @@ it "__gash_color_of maps semantic names to the palette" bash -c '
     __gash_color_of v "$__GASH_COLOR_ERROR" && [[ "$v" == "$__GASH_COLOR_ERROR" ]]
 '
 
+it "__gash_table: an all-empty column is a spacer, also under set -u" bash -c '
+    set -euo pipefail
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    out="$(printf "a\t1\t\tb\t2\nccc\t3\n" | __gash_table --no-header)"
+    [[ "$out" == "$(printf "a    1    b  2\nccc  3")" ]]
+'
+
+it "__gash_table_into: lines into an array, styled by the caller's color decision" bash -c '
+    set -euo pipefail
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    __gash_table_into lines --no-header --color 1:accent < <(printf "a\t1\nbb\t2\n")
+    [[ "${#lines[@]}" -eq 2 && "${lines[0]}" == "a   1" && "${lines[1]}" == "bb  2" ]]
+    # Colors on in this shell only, off in any subshell (as a capture is).
+    __gash_use_color() { [[ "$BASHPID" == "$$" ]]; }
+    [[ "$(printf "a\t1\n" | __gash_table --no-header --color 1:accent)" == "a  1" ]]
+    __gash_table_into lines --no-header --color 1:accent < <(printf "a\t1\n")
+    [[ "${lines[0]}" == "${__GASH_COLOR_ACCENT}a${__GASH_COLOR_OFF}  1" ]]
+'
+
 it "__gash_table: --gap and --min reproduce a fixed-width layout" bash -c '
     set -euo pipefail
     source "$GASH_TEST_ROOT/lib/core/utils.sh"; source "$GASH_TEST_ROOT/lib/core/output.sh"
@@ -164,6 +183,14 @@ it "__gash_table: --bar draws VALUE/MAX, full part in the cell style, empty part
     __gash_use_color() { return 0; }
     out="$(__gash_table --bar 2:4 --color 2:warning <<<"$rows")"
     [[ "$out" == *"${__GASH_COLOR_WARNING}${__GASH_GLYPH_BAR_FULL}${__GASH_GLYPH_BAR_FULL}${__GASH_COLOR_OFF}${__GASH_COLOR_MUTED}${__GASH_GLYPH_BAR_EMPTY}${__GASH_GLYPH_BAR_EMPTY}${__GASH_COLOR_OFF}"* ]]
+'
+
+it "__gash_table --bar: a cell that is not VALUE/MAX prints as text (a header row given as data)" bash -c '
+    set -euo pipefail
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    out="$(printf "NAME\tUSE\na\t5/10\n" | __gash_table --no-header --bar 2:4)"
+    [[ "$(head -n 1 <<<"$out")" == "NAME  USE" ]]
+    [[ "$(tail -n 1 <<<"$out")" == "a     ${__GASH_GLYPH_BAR_FULL}${__GASH_GLYPH_BAR_FULL}${__GASH_GLYPH_BAR_EMPTY}${__GASH_GLYPH_BAR_EMPTY}" ]]
 '
 
 it "__gash_table: --max cuts the end, --max-left keeps it" bash -c '
@@ -204,6 +231,25 @@ it "__gash_heading: bold title on a color terminal, plain text otherwise" bash -
     [[ "$(__gash_heading "USAGE")" == "${__GASH_BOLD}USAGE${__GASH_COLOR_OFF}" ]]
 '
 
+it "__gash_tty_io: true only when stdin and stdout are terminals" bash -c '
+    set -euo pipefail
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    ! __gash_tty_io </dev/null
+    if script -qec true /dev/null >/dev/null 2>&1; then
+        out="$(script -qec "bash -c \"source $GASH_TEST_ROOT/lib/core/output.sh; __gash_tty_io && echo yes\"" /dev/null </dev/null)"
+        [[ "$out" == yes* ]]
+    fi
+'
+
+it "__gash_heading --note: secondary text after the title, muted in color" bash -c '
+    set -euo pipefail
+    source "$GASH_TEST_ROOT/lib/core/output.sh"
+    [[ "$(__gash_heading --indent 2 --note "(module: git)" "GIT")" == "  GIT  (module: git)" ]]
+    [[ "$(__gash_heading --note "" "GIT")" == "GIT" ]]
+    __gash_use_color() { return 0; }
+    [[ "$(__gash_heading --note "x" "T")" == "${__GASH_BOLD}T${__GASH_COLOR_OFF}  ${__GASH_COLOR_MUTED}x${__GASH_COLOR_OFF}" ]]
+'
+
 it "__gash_usage, __gash_note and __gash_debug keep their plain prefixes and get a glyph in color" bash -c '
     set -euo pipefail
     source "$GASH_TEST_ROOT/lib/core/output.sh"
@@ -233,10 +279,15 @@ it "__gash_read_line reads a line and prompts only on a terminal" bash -c '
     [[ "$out" == "[hello]" ]]
 '
 
-it "__gash_clear_screen prints nothing when stdout is not a terminal" bash -c '
+it "__gash_clear_screen prints nothing when stdout is not a terminal, with NO_COLOR or headless" bash -c '
     set -euo pipefail
     source "$GASH_TEST_ROOT/lib/core/output.sh"
     [[ -z "$(__gash_clear_screen)" ]]
+    __gash_use_color() { return 1; }
+    [[ -z "$(__gash_clear_screen)" ]]
+    __gash_use_color() { return 0; }
+    [[ "$(__gash_clear_screen)" == "$__GASH_CLEAR_SCREEN" ]]
+    [[ -z "$(GASH_HEADLESS=1 __gash_clear_screen)" ]]
     [[ "$__GASH_CLEAR_SCREEN" == $'"'"'\e[H\e[2J'"'"' ]]
 '
 

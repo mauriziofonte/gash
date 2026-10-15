@@ -15,10 +15,21 @@ if [[ "${GASH_SHOW_INXI-0}" == "1" ]] && type -P inxi >/dev/null 2>&1; then
     inxi -IpRS -v0 -c5
 fi
 
+# "Gash VERSION — USER": the product in the primary color, the user as the
+# accent, colors only where output.sh allows them.
+__gash_banner_line() {
+    local P="" M="" A="" R=""
+    if __gash_use_color; then
+        P="$__GASH_COLOR_PRIMARY" M="$__GASH_COLOR_MUTED" A="$__GASH_COLOR_ACCENT" R="$__GASH_COLOR_OFF"
+    fi
+    printf '%sGash %s%s %s—%s %s%s%s\n' "$P" "$GASH_VERSION" "$R" "$M" "$R" "$A" "${USER:-$(gash_username)}" "$R"
+}
+
 if [[ "${GASH_BANNER:-1}" == "1" ]]; then
-    printf '%s\n' "${__GASH_CYAN-}Gash ${GASH_VERSION}${__GASH_COLOR_OFF-} ${__GASH_BOLD_WHITE-}—${__GASH_COLOR_OFF-} ${__GASH_BOLD_GREEN-}${USER:-$(gash_username)}${__GASH_COLOR_OFF-}"
+    __gash_banner_line
     gash_inspiring_quote || true
 fi
+unset -f __gash_banner_line
 
 # Auto-unlock SSH keys configured in ~/.gash_env. With none configured
 # (already known from loading ~/.gash_env), only its run-once marker is set.

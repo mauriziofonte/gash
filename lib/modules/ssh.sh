@@ -226,7 +226,12 @@ gash_ssh_auto_unlock() {
 
     if ! command -v expect >/dev/null 2>&1; then
         __gash_warning "'expect' is not installed."
-        printf '%s\n' "${__GASH_BOLD_WHITE}Install it to enable SSH key auto-unlock:${__GASH_COLOR_OFF} ${__GASH_CYAN}$(__gash_os_expect_install_hint)${__GASH_COLOR_OFF}"
+        local hint B="" A="" R=""
+        hint="$(__gash_os_expect_install_hint)"
+        if __gash_use_color; then
+            B="$__GASH_BOLD" A="$__GASH_COLOR_ACCENT" R="$__GASH_COLOR_OFF"
+        fi
+        printf '%s%s%s %s%s%s\n' "$B" "Install it to enable SSH key auto-unlock:" "$R" "$A" "$hint" "$R"
         return 0
     fi
 

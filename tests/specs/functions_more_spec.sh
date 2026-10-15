@@ -42,9 +42,9 @@ it "disk_usage colors the bar by fill: green, yellow from 75%, red from 90%" bas
   export PATH="$ROOT/tests/mocks/bin:$PATH"
   __gash_use_color() { return 0; }
   out="$(disk_usage 2>/dev/null)"
-  [[ "$(grep " 21%" <<<"$out")" == *"${__GASH_GREEN}"* ]]
-  [[ "$(grep " 81%" <<<"$out")" == *"${__GASH_YELLOW}"* ]]
-  [[ "$(grep " 92%" <<<"$out")" == *"${__GASH_BOLD_RED}"* ]]
+  [[ "$(grep "21%" <<<"$out")" == *"${__GASH_COLOR_SUCCESS}"* ]]
+  [[ "$(grep "81%" <<<"$out")" == *"${__GASH_COLOR_WARNING}"* ]]
+  [[ "$(grep "92%" <<<"$out")" == *"${__GASH_COLOR_ERROR}"* ]]
 '
 
 it "dirs_find_large works without numfmt (pure-bash IEC fallback)" bash -c '

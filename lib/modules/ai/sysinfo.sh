@@ -327,72 +327,75 @@ __sysinfo_call_freetext_gemini() {
     __ai_request gemini "$token" "$__AI_SYSINFO_DRILLDOWN_PROMPT" "$user_msg" "$__AI_SYSINFO_DRILLDOWN_SCHEMA" "$__AI_SYSINFO_MAX_TOKENS" "$__AI_SYSINFO_RESPONSE_TIMEOUT"
 }
 
+# The __gash_mark status of a finding's severity: critical -> error,
+# warning, ok, anything else -> info.
+# Usage: __sysinfo_severity_status SEVERITY
+__sysinfo_severity_status() {
+    case "${1-}" in
+        critical) printf 'error' ;;
+        warning) printf 'warning' ;;
+        ok) printf 'ok' ;;
+        *) printf 'info' ;;
+    esac
+}
+
+# Print the findings at PATH (a jq path to an array of {severity, text})
+# of JSON, one __gash_mark line each, indented by 2. Model text is printed
+# as given.
+# Usage: __sysinfo_print_findings JSON PATH
+__sysinfo_print_findings() {
+    local json="$1" path="$2" n j sev text
+    n=$(jq "($path // []) | length" <<<"$json")
+    for ((j = 0; j < n; j++)); do
+        sev=$(jq -r "${path}[$j].severity" <<<"$json")
+        text=$(jq -r "${path}[$j].text" <<<"$json")
+        __gash_mark --indent 2 "$(__sysinfo_severity_status "$sev")" "$text"
+    done
+}
+
 # Format and display AI sysinfo analysis response.
 # Usage: __sysinfo_format_ai_response <json>
 __sysinfo_format_ai_response() {
     local json="$1"
-    # Derive from the centralized palette so NO_COLOR/GASH_HEADLESS/pipe zero
-    # these too (previously hardcoded literals leaked ANSI in headless output).
-    local MUTED="${__GASH_COLOR_MUTED-}"
-    local BOLD_RED="${__GASH_BOLD_RED-}"
 
     # Validate JSON
-    if ! echo "$json" | jq empty 2>/dev/null; then
+    if ! jq empty <<<"$json" 2>/dev/null; then
         __gash_error "Invalid JSON response from AI"
         __ai_debug "Invalid JSON" "$json"
         return 1
     fi
 
     local hostname platform
-    hostname=$(echo "$json" | jq -r '.hostname // "unknown"')
-    platform=$(echo "$json" | jq -r '.platform // "unknown"')
+    hostname=$(jq -r '.hostname // "unknown"' <<<"$json")
+    platform=$(jq -r '.platform // "unknown"' <<<"$json")
 
-    echo
-    printf '%s\n' "${__GASH_BOLD_WHITE}Server: ${hostname}${__GASH_COLOR_OFF}"
-    printf '%s\n' "${MUTED}${platform}${__GASH_COLOR_OFF}"
-    printf '%s\n' "${MUTED}$(printf '%.0s-' {1..60})${__GASH_COLOR_OFF}"
+    __gash_section "Server: ${hostname}"
+    __gash_print muted "$platform"
 
     # Count totals
     local critical warning info ok_count
-    critical=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="critical")] | length')
-    warning=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="warning")] | length')
-    info=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="info")] | length')
-    ok_count=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="ok")] | length')
+    critical=$(jq '[.sections[].findings[] | select(.severity=="critical")] | length' <<<"$json")
+    warning=$(jq '[.sections[].findings[] | select(.severity=="warning")] | length' <<<"$json")
+    info=$(jq '[.sections[].findings[] | select(.severity=="info")] | length' <<<"$json")
+    ok_count=$(jq '[.sections[].findings[] | select(.severity=="ok")] | length' <<<"$json")
 
-    printf '%s\n' "${BOLD_RED}${critical} critical${__GASH_COLOR_OFF}  ${__GASH_BOLD_YELLOW}${warning} warnings${__GASH_COLOR_OFF}  ${__GASH_CYAN}${info} info${__GASH_COLOR_OFF}  ${__GASH_GREEN}${ok_count} ok${__GASH_COLOR_OFF}"
+    local E="" W="" I="" S="" R=""
+    if __gash_use_color; then
+        E="$__GASH_COLOR_ERROR" W="$__GASH_COLOR_WARNING" I="$__GASH_COLOR_INFO" S="$__GASH_COLOR_SUCCESS" R="$__GASH_COLOR_OFF"
+    fi
+    printf '%s%s critical%s  %s%s warnings%s  %s%s info%s  %s%s ok%s\n' \
+        "$E" "$critical" "$R" "$W" "$warning" "$R" "$I" "$info" "$R" "$S" "$ok_count" "$R"
     echo
 
     # Iterate sections
     local section_count
-    section_count=$(echo "$json" | jq '.sections | length')
+    section_count=$(jq '.sections | length' <<<"$json")
 
     local i=0
     while [[ $i -lt $section_count ]]; do
-        local title
-        title=$(echo "$json" | jq -r ".sections[$i].title")
-
-        printf '%s\n' "${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
-
-        local findings_count
-        findings_count=$(echo "$json" | jq ".sections[$i].findings | length")
-
-        local j=0
-        while [[ $j -lt $findings_count ]]; do
-            local sev text
-            sev=$(echo "$json" | jq -r ".sections[$i].findings[$j].severity")
-            text=$(echo "$json" | jq -r ".sections[$i].findings[$j].text")
-
-            case "$sev" in
-                critical) printf '%s\n' "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                warning) printf '%s\n' "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                ok) printf '%s\n' "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
-                *) printf '%s\n' "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
-            esac
-
-            j=$((j + 1))
-        done
+        __gash_heading "$(jq -r ".sections[$i].title" <<<"$json")"
+        __sysinfo_print_findings "$json" ".sections[$i].findings"
         echo
-
         i=$((i + 1))
     done
 }
@@ -401,82 +404,72 @@ __sysinfo_format_ai_response() {
 # Usage: __sysinfo_format_drilldown_response <json>
 __sysinfo_format_drilldown_response() {
     local json="$1"
-    # Derive from the centralized palette so NO_COLOR/GASH_HEADLESS/pipe zero
-    # these too (previously hardcoded literals leaked ANSI in headless output).
-    local MUTED="${__GASH_COLOR_MUTED-}"
-    local BOLD_RED="${__GASH_BOLD_RED-}"
 
     # Validate JSON
-    if ! echo "$json" | jq empty 2>/dev/null; then
+    if ! jq empty <<<"$json" 2>/dev/null; then
         __gash_error "Invalid JSON response from AI"
         __ai_debug "Invalid JSON" "$json"
         return 1
     fi
 
     local title summary
-    title=$(echo "$json" | jq -r '.title // "Analysis"')
-    summary=$(echo "$json" | jq -r '.summary // ""')
+    title=$(jq -r '.title // "Analysis"' <<<"$json")
+    summary=$(jq -r '.summary // ""' <<<"$json")
 
-    echo
-    printf '%s\n' "${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
-    [[ -n "$summary" ]] && printf '%s\n' "${MUTED}${summary}${__GASH_COLOR_OFF}"
-    printf '%s\n' "${MUTED}$(printf '%.0s-' {1..60})${__GASH_COLOR_OFF}"
-    echo
+    __gash_section "$title"
+    if [[ -n "$summary" ]]; then
+        __gash_print muted "$summary"
+        echo
+    fi
+
+    local B="" M="" R="" color=0
+    if __gash_use_color; then
+        B="$__GASH_BOLD" M="$__GASH_COLOR_MUTED" R="$__GASH_COLOR_OFF" color=1
+    fi
 
     local comp_count
-    comp_count=$(echo "$json" | jq '.components | length')
+    comp_count=$(jq '.components | length' <<<"$json")
 
-    local i=0
+    local i=0 name status status_color highlight
     while [[ $i -lt $comp_count ]]; do
-        local name status
-        name=$(echo "$json" | jq -r ".components[$i].name")
-        status=$(echo "$json" | jq -r ".components[$i].status")
+        name=$(jq -r ".components[$i].name" <<<"$json")
+        status=$(jq -r ".components[$i].status" <<<"$json")
 
         # Status color
-        local status_color
-        case "$status" in
-            running) status_color="${__GASH_GREEN}" ;;
-            installed) status_color="${__GASH_CYAN}" ;;
-            stopped) status_color="${__GASH_BOLD_YELLOW}" ;;
-            eol | error) status_color="${BOLD_RED}" ;;
-            *) status_color="${MUTED}" ;;
-        esac
-
-        printf '%s\n' "${__GASH_BOLD_WHITE}${name}${__GASH_COLOR_OFF} (${status_color}${status}${__GASH_COLOR_OFF})"
+        status_color=""
+        if ((color)); then
+            case "$status" in
+                running) status_color="$__GASH_COLOR_SUCCESS" ;;
+                installed) status_color="$__GASH_COLOR_INFO" ;;
+                stopped) status_color="$__GASH_COLOR_WARNING" ;;
+                eol | error) status_color="$__GASH_COLOR_ERROR" ;;
+                *) status_color="$M" ;;
+            esac
+        fi
+        printf '%s%s%s (%s%s%s)\n' "$B" "$name" "$R" "$status_color" "$status" "$R"
 
         # Config highlights
-        local highlights_count
-        highlights_count=$(echo "$json" | jq ".components[$i].config_highlights | length")
-        local h=0
-        while [[ $h -lt $highlights_count ]]; do
-            local highlight
-            highlight=$(echo "$json" | jq -r ".components[$i].config_highlights[$h]")
-            printf '%s\n' "  ${MUTED}${highlight}${__GASH_COLOR_OFF}"
-            h=$((h + 1))
-        done
+        while IFS= read -r highlight; do
+            printf '  %s%s%s\n' "$M" "$highlight" "$R"
+        done < <(jq -r ".components[$i].config_highlights[]?" <<<"$json")
 
         # Issues
-        local issues_count
-        issues_count=$(echo "$json" | jq ".components[$i].issues | length")
-        local j=0
-        while [[ $j -lt $issues_count ]]; do
-            local sev text
-            sev=$(echo "$json" | jq -r ".components[$i].issues[$j].severity")
-            text=$(echo "$json" | jq -r ".components[$i].issues[$j].text")
-
-            case "$sev" in
-                critical) printf '%s\n' "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                warning) printf '%s\n' "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                ok) printf '%s\n' "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
-                *) printf '%s\n' "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
-            esac
-
-            j=$((j + 1))
-        done
+        __sysinfo_print_findings "$json" ".components[$i].issues"
         echo
 
         i=$((i + 1))
     done
+}
+
+# The Markdown label of a finding's severity in a saved report.
+# Usage: __sysinfo_md_label SEVERITY
+__sysinfo_md_label() {
+    case "${1-}" in
+        critical) printf 'Critical:' ;;
+        warning) printf 'Warning:' ;;
+        ok) printf 'OK:' ;;
+        *) printf 'Info:' ;;
+    esac
 }
 
 # Generate markdown for the initial AI sysinfo analysis.
@@ -522,11 +515,7 @@ __sysinfo_md_initial() {
             local sev text icon
             sev=$(echo "$json" | jq -r ".sections[$i].findings[$j].severity")
             text=$(echo "$json" | jq -r ".sections[$i].findings[$j].text")
-            case "$sev" in
-                critical | warning) icon="[!]" ;;
-                ok) icon="[+]" ;;
-                *) icon="[i]" ;;
-            esac
+            icon="$(__sysinfo_md_label "$sev")"
             md+="- **${icon}** ${text}"$'\n'
             j=$((j + 1))
         done
@@ -582,11 +571,7 @@ __sysinfo_md_drilldown() {
             local sev text icon
             sev=$(echo "$json" | jq -r ".components[$i].issues[$j].severity")
             text=$(echo "$json" | jq -r ".components[$i].issues[$j].text")
-            case "$sev" in
-                critical | warning) icon="[!]" ;;
-                ok) icon="[+]" ;;
-                *) icon="[i]" ;;
-            esac
+            icon="$(__sysinfo_md_label "$sev")"
             md+="- **${icon}** ${text}"$'\n'
             j=$((j + 1))
         done
@@ -641,11 +626,7 @@ __sysinfo_md_freetext() {
             local sev text icon
             sev=$(echo "$json" | jq -r ".components[$i].issues[$j].severity")
             text=$(echo "$json" | jq -r ".components[$i].issues[$j].text")
-            case "$sev" in
-                critical | warning) icon="[!]" ;;
-                ok) icon="[+]" ;;
-                *) icon="[i]" ;;
-            esac
+            icon="$(__sysinfo_md_label "$sev")"
             md+="- **${icon}** ${text}"$'\n'
             j=$((j + 1))
         done
@@ -697,7 +678,7 @@ __ai_sysinfo_impl() {
                 ;;
             *)
                 __gash_error "Unknown argument: $1"
-                __gash_info "Usage: ai_sysinfo [claude|gemini] [--raw] [--no-color]"
+                __gash_usage "ai_sysinfo [claude|gemini] [--raw] [--no-color]"
                 return 1
                 ;;
         esac
@@ -746,7 +727,7 @@ __ai_sysinfo_impl() {
 
     # Raw mode: dump data without API call
     if [[ "$raw_mode" -eq 1 ]]; then
-        echo "$sysinfo_data"
+        printf '%s\n' "$sysinfo_data"
         return 0
     fi
 
@@ -783,14 +764,13 @@ __ai_sysinfo_impl() {
     provider_display="${provider^}"
     __gash_spinner_start "${provider_display} is analyzing system..."
 
-    # Call API
-    local response
+    # Call API, outside a command substitution so that its diagnostics see
+    # the terminal; replies come back in __AI_REPLY.
+    local __AI_REPLY_TO_VAR=1 __AI_REPLY="" rc=0
     case "$provider" in
-        claude) response=$(__sysinfo_call_claude "$token" "$sysinfo_data") ;;
-        gemini) response=$(__sysinfo_call_gemini "$token" "$sysinfo_data") ;;
+        claude) __sysinfo_call_claude "$token" "$sysinfo_data" || rc=$? ;;
+        gemini) __sysinfo_call_gemini "$token" "$sysinfo_data" || rc=$? ;;
     esac
-
-    local rc=$?
 
     # Stop spinner
     __gash_spinner_stop none
@@ -798,6 +778,7 @@ __ai_sysinfo_impl() {
     if [[ $rc -ne 0 ]]; then
         return 1
     fi
+    local response="$__AI_REPLY"
 
     # Display formatted response
     __sysinfo_format_ai_response "$response"
@@ -813,13 +794,15 @@ __ai_sysinfo_impl() {
 
     while true; do
         echo
-        printf '%s\n' "${__GASH_BOLD_WHITE}Drill down for details:${__GASH_COLOR_OFF}"
-        echo "  1) Services    2) Security    3) Network"
-        echo "  4) Storage     5) Performance 6) Maintenance"
-        echo "  ?) Ask a question              s) Save report  q) Quit"
+        __gash_heading "Drill down for details:"
+        __gash_table --no-header --indent 2 <<'MENU'
+1) Services	2) Security	3) Network
+4) Storage	5) Performance	6) Maintenance
+?) Ask a question	s) Save report	q) Quit
+MENU
         echo
         local choice
-        read -rp "> " choice || break # Ctrl+D exits
+        __gash_read_line choice "> " || break # Ctrl+D exits
 
         local section_title="" deep_fn=""
         case "$choice" in
@@ -851,7 +834,7 @@ __ai_sysinfo_impl() {
             "?" | ask)
                 echo
                 local user_question
-                read -rp "Question: " user_question || continue
+                __gash_read_line user_question "Question: " || continue
                 [[ -z "$user_question" ]] && {
                     __gash_warning "Empty question."
                     continue
@@ -867,16 +850,17 @@ __ai_sysinfo_impl() {
                 # Phase 2: call AI with initial analysis + collected context
                 __gash_spinner_start "${provider_display} is thinking..."
 
-                local freetext_response
+                local freetext_response ft_rc=0
+                __AI_REPLY=""
                 case "$provider" in
-                    claude) freetext_response=$(__sysinfo_call_freetext_claude "$token" "$user_question" "$initial_json" "$question_context") ;;
-                    gemini) freetext_response=$(__sysinfo_call_freetext_gemini "$token" "$user_question" "$initial_json" "$question_context") ;;
+                    claude) __sysinfo_call_freetext_claude "$token" "$user_question" "$initial_json" "$question_context" || ft_rc=$? ;;
+                    gemini) __sysinfo_call_freetext_gemini "$token" "$user_question" "$initial_json" "$question_context" || ft_rc=$? ;;
                 esac
-                local ft_rc=$?
 
                 __gash_spinner_stop none
 
                 if [[ $ft_rc -ne 0 ]]; then continue; fi
+                freetext_response="$__AI_REPLY"
 
                 __sysinfo_format_drilldown_response "$freetext_response"
                 __sysinfo_md_buffer+=$(__sysinfo_md_freetext "$user_question" "$freetext_response")
@@ -911,12 +895,12 @@ __ai_sysinfo_impl() {
         # API call
         __gash_spinner_start "${provider_display} is analyzing ${section_title}..."
 
-        local drill_response
+        local drill_response drill_rc=0
+        __AI_REPLY=""
         case "$provider" in
-            claude) drill_response=$(__sysinfo_call_drilldown_claude "$token" "$section_title" "$initial_findings" "$deep_data") ;;
-            gemini) drill_response=$(__sysinfo_call_drilldown_gemini "$token" "$section_title" "$initial_findings" "$deep_data") ;;
+            claude) __sysinfo_call_drilldown_claude "$token" "$section_title" "$initial_findings" "$deep_data" || drill_rc=$? ;;
+            gemini) __sysinfo_call_drilldown_gemini "$token" "$section_title" "$initial_findings" "$deep_data" || drill_rc=$? ;;
         esac
-        local drill_rc=$?
 
         # Stop spinner
         __gash_spinner_stop none
@@ -924,6 +908,7 @@ __ai_sysinfo_impl() {
         if [[ $drill_rc -ne 0 ]]; then
             continue
         fi
+        drill_response="$__AI_REPLY"
 
         __sysinfo_format_drilldown_response "$drill_response"
         __sysinfo_md_buffer+=$(__sysinfo_md_drilldown "$drill_response")

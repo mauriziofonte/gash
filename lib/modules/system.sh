@@ -80,38 +80,26 @@ disk_usage() {
         return 0
     fi
 
-    local B="${__GASH_BOLD}" M="${__GASH_COLOR_MUTED}" C="${__GASH_CYAN}" R="${__GASH_COLOR_OFF}"
-    __gash_use_color || { B="" M="" C="" R=""; }
-
-    # Column widths from the data.
-    local mnt dev type size used avail pct
-    local wm=5 wd=6 wt=4 ws=4 wu=4 wa=4
-    while IFS=$'\t' read -r mnt dev type size used avail pct; do
-        ((${#mnt} > wm)) && wm=${#mnt}
-        ((${#dev} > wd)) && wd=${#dev}
-        ((${#type} > wt)) && wt=${#type}
-        ((${#size} > ws)) && ws=${#size}
-        ((${#used} > wu)) && wu=${#used}
-        ((${#avail} > wa)) && wa=${#avail}
-    done <<<"$rows"
-    ((wd > 28)) && wd=28
-
+    # One row per filesystem; the bar and the percentage take the status
+    # color of the fill (hidden column 9): success, warning from 75%, error
+    # from 90%.
+    # Plain output keeps the header as an ordinary first line (no rule
+    # under it), as scripts reading df-like output expect.
+    local mnt dev type size used avail pct style
+    local -a head=()
+    __gash_use_color || head=(--no-header)
     echo
-    printf '  %s%-*s  %-*s  %-*s  %*s  %*s  %*s  %s%s\n' "$B" \
-        "$wm" "MOUNT" "$wd" "DEVICE" "$wt" "TYPE" "$ws" "SIZE" "$wu" "USED" "$wa" "FREE" "USE" "$R"
-    local bar pc
-    while IFS=$'\t' read -r mnt dev type size used avail pct; do
-        ((${#dev} > wd)) && dev="${__GASH_GLYPH_ELLIPSIS}${dev: -$((wd - 1))}"
-        pc="${__GASH_GREEN}"
-        ((pct >= 75)) && pc="${__GASH_YELLOW}"
-        ((pct >= 90)) && pc="${__GASH_BOLD_RED}"
-        __gash_use_color || pc=""
-        __gash_bar bar "$pct" 100 10
-        printf '  %s%-*s%s  %s%-*s%s  %-*s  %*s  %*s  %*s  %s%s%s%s%s%s %s%3d%%%s\n' \
-            "$C" "$wm" "$mnt" "$R" "$M" "$wd" "$dev" "$R" "$wt" "$type" \
-            "$ws" "$size" "$wu" "$used" "$wa" "$avail" \
-            "$pc" "${bar%%$'\t'*}" "$R" "$M" "${bar#*$'\t'}" "$R" "$pc" "$pct" "$R"
-    done <<<"$rows"
+    {
+        printf 'MOUNT\tDEVICE\tTYPE\tSIZE\tUSED\tFREE\tUSE\n'
+        while IFS=$'\t' read -r mnt dev type size used avail pct; do
+            style=success
+            ((pct >= 75)) && style=warning
+            ((pct >= 90)) && style=error
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s/100\t%s%%\t%s\n' \
+                "$mnt" "$dev" "$type" "$size" "$used" "$avail" "$pct" "$pct" "$style"
+        done <<<"$rows"
+    } | __gash_table ${head[@]+"${head[@]}"} --indent 2 --right 4,5,6,8 --max-left 2:28 \
+        --color 1:accent --color 2:muted --bar 7:10 --cell-color 7:9 --cell-color 8:9
     echo
     return 0
 }
@@ -130,20 +118,14 @@ history_grep() {
 
     __gash_require_arg "${1-}" "pattern" "history_grep <pattern>" || return 1
 
-    # Honor the runtime color gate (headless, NO_COLOR, non-TTY pipe).
-    local use_color=1
-    __gash_use_color || use_color=0
-
     # Extract the relevant parts (ignoring history line numbers), remove duplicates, and avoid self-call.
-    # `|| true`: zero matches is a valid outcome, not a pipefail death sentence.
+    # Rows: number, first two words, the rest (a table: colors follow the
+    # runtime gate). `|| true`: zero matches is a valid outcome, not a
+    # pipefail death sentence.
     history | grep -i -- "$@" | grep -v "history_grep" |
         awk '{ $1=""; seen[$0]++; if (seen[$0]==1) print $0 }' |
-        awk -v c="$use_color" '{
-            if (c == 1)
-                printf "\033[1;32m%-5s\033[0m \033[0;36m%-20s\033[0m \033[1;37m%s\033[0m\n", NR, $1" "$2, substr($0, index($0,$3));
-            else
-                printf "%-5s %-20s %s\n", NR, $1" "$2, substr($0, index($0,$3));
-        }' || true
+        awk '{ printf "%s\t%s\t%s\n", NR, $1" "$2, substr($0, index($0,$3)) }' |
+        __gash_table --no-header --gap 1 --min 1:5 --min 2:20 --color 1:muted --color 2:accent || true
 
     return 0
 }
@@ -297,7 +279,7 @@ EOF
 
     if [[ -z "$pattern" ]]; then
         __gash_error "Missing required argument: pattern"
-        echo "Usage: hgrep <pattern> [options]. Use -h for help." >&2
+        __gash_usage "hgrep <pattern> [options]. Use -h for help."
         return 1
     fi
 
@@ -386,11 +368,12 @@ EOF
     fi
 
     # -------------------------------------------------------------------------
-    # PRESENTATION PLANE (TTY + interactive only). Non-TTY / headless callers
-    # fall through to the plain data-plane rendering below.
+    # PRESENTATION PLANE (color terminal only, through the runtime color
+    # gate: headless, NO_COLOR and a piped stdout all turn it off). Other
+    # callers fall through to the plain data-plane rendering below.
     # -------------------------------------------------------------------------
     local interactive=0
-    if [[ -t 1 && "${GASH_HEADLESS-}" != "1" && "$no_highlight" -eq 0 ]]; then
+    if [[ "$no_highlight" -eq 0 ]] && __gash_use_color; then
         interactive=1
     fi
 
@@ -400,15 +383,16 @@ EOF
         want_color=1
     fi
 
-    # Resolve color values from the centralized palette (byte-real ANSI).
-    local c_off='' c_ts='' c_hl='' c_grp='' c_cnt='' c_cmd=''
+    # Semantic palette: timestamps and counts muted, matches accent, group
+    # prefixes bold, tree branches primary; the command itself plain.
+    local c_off='' c_ts='' c_hl='' c_grp='' c_cnt='' c_tree=''
     if [[ "$want_color" -eq 1 ]]; then
         c_off="$__GASH_COLOR_OFF"
-        c_ts="$__GASH_CYAN"
-        c_hl="$__GASH_BOLD_YELLOW"
-        c_grp="$__GASH_BOLD_GREEN"
+        c_ts="$__GASH_COLOR_MUTED"
+        c_hl="$__GASH_COLOR_ACCENT"
+        c_grp="$__GASH_BOLD"
         c_cnt="$__GASH_COLOR_MUTED"
-        c_cmd="$__GASH_BOLD_WHITE"
+        c_tree="$__GASH_COLOR_PRIMARY"
     fi
 
     # Highlight regex: raw pattern in regex mode, escaped in fixed-string mode.
@@ -417,9 +401,10 @@ EOF
         hlpat=$(printf '%s' "$pattern" | sed 's/[][\.*^$()+?{}|]/\\&/g')
     fi
 
-    # --pick: fuzzy navigation via fzf. Requires a TTY on both ends + fzf.
+    # --pick: fuzzy navigation via fzf. Requires a terminal on stdin (fzf
+    # draws on /dev/tty, the pick goes to stdout, colors or not) + fzf.
     if [[ "$pick" -eq 1 ]]; then
-        if [[ "$interactive" -eq 0 || ! -t 0 ]]; then
+        if [[ "${GASH_HEADLESS-}" == "1" || "$no_highlight" -eq 1 || ! -t 0 ]]; then
             __gash_error "--pick requires an interactive terminal"
             return 1
         fi
@@ -448,7 +433,8 @@ EOF
     if [[ "$group" -eq 1 && "$interactive" -eq 1 ]]; then
         printf '%s\n' "$records" | "${__GASH_AWK:-awk}" \
             -v c_off="$c_off" -v c_ts="$c_ts" -v c_hl="$c_hl" \
-            -v c_grp="$c_grp" -v c_cnt="$c_cnt" -v c_cmd="$c_cmd" \
+            -v c_grp="$c_grp" -v c_cnt="$c_cnt" -v c_tree="$c_tree" \
+            -v g_mid="$__GASH_GLYPH_TREE_MID" -v g_end="$__GASH_GLYPH_TREE_END" \
             -v hlpat="$hlpat" -v want_color="$want_color" '
         BEGIN { IGNORECASE = 1; nr = 0 }
         # Position (1-based) of the first chain operator, or 0 if none.
@@ -507,25 +493,25 @@ EOF
                     }
                 for (x = 1; x <= nm; x++) {
                     idx = mi[x]
-                    glyph = (x == nm) ? "  \xe2\x94\x94\xe2\x94\x80 " : "  \xe2\x94\x9c\xe2\x94\x80 "
+                    glyph = "  " c_tree ((x == nm) ? g_end : g_mid) c_off " "
                     suffix = substr(r_cmd[idx], length(k) + 1)
                     gsub(/^[ \t]+/, "", suffix)
                     badge = (r_cn[idx] + 0 > 1) ? sprintf(" %s(x%d)%s", c_cnt, r_cn[idx], c_off) : ""
                     ts = strftime("%H:%M:%S", r_ep[idx])
-                    printf "%s%s%s%s%s%s%s%s\n", glyph, c_ts, ts, c_off, c_cmd, hl(suffix), c_off, badge
+                    printf "%s%s%s%s %s%s\n", glyph, c_ts, ts, c_off, hl(suffix), badge
                 }
             }
         }
         # Highlight the pattern inside a string (in-place gsub, case-insensitive).
         function hl(s) {
-            if (want_color == 1 && hlpat != "") gsub(hlpat, c_hl "&" c_off c_cmd, s)
+            if (want_color == 1 && hlpat != "") gsub(hlpat, c_hl "&" c_off, s)
             return s
         }
         # Flat single-row renderer, shared by singleton groups.
         function render_row(ep, cn, cmd,   ts, badge) {
             ts = strftime("%Y-%m-%d %H:%M:%S", ep)
             badge = (cn + 0 > 1) ? sprintf(" %s(x%d)%s", c_cnt, cn, c_off) : ""
-            printf "%s[%s]%s %s%s%s%s\n", c_ts, ts, c_off, c_cmd, hl(cmd), c_off, badge
+            printf "%s[%s]%s %s%s\n", c_ts, ts, c_off, hl(cmd), badge
         }'
         return 0
     fi
@@ -537,11 +523,11 @@ EOF
     # -------------------------------------------------------------------------
     printf '%s\n' "$records" | "${__GASH_AWK:-awk}" \
         -v c_off="$c_off" -v c_ts="$c_ts" -v c_hl="$c_hl" \
-        -v c_cnt="$c_cnt" -v c_cmd="$c_cmd" \
+        -v c_cnt="$c_cnt" \
         -v hlpat="$hlpat" -v want_color="$want_color" -v show_count="$interactive" '
     BEGIN { IGNORECASE = 1 }
     function hl(s) {
-        if (want_color == 1 && hlpat != "") gsub(hlpat, c_hl "&" c_off c_cmd, s)
+        if (want_color == 1 && hlpat != "") gsub(hlpat, c_hl "&" c_off, s)
         return s
     }
     {
@@ -551,7 +537,7 @@ EOF
         cmd = substr(rest, i2 + 1)
         ts = strftime("%Y-%m-%d %H:%M:%S", ep)
         badge = (show_count == 1 && cn + 0 > 1) ? sprintf(" %s(x%d)%s", c_cnt, cn, c_off) : ""
-        printf "%s[%s]%s %s%s%s%s\n", c_ts, ts, c_off, c_cmd, hl(cmd), c_off, badge
+        printf "%s[%s]%s %s%s\n", c_ts, ts, c_off, hl(cmd), badge
     }'
 }
 
@@ -594,7 +580,7 @@ ip_public() {
 
     # Local color scope (respects env, TTY, --no-color)
     __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
-    printf '%s\n' "${__GASH_BOLD_WHITE}Public IP:${__GASH_COLOR_OFF} ${__GASH_CYAN}${ip}${__GASH_COLOR_OFF}"
+    __gash_kv --value-color accent "Public IP:" "$ip"
 }
 
 # -----------------------------------------------------------------------------
@@ -613,19 +599,14 @@ process_find() {
     __gash_require_arg "$process_name" "process name" "process_find <process_name>" || return 1
 
     local result
-    result=$(ps aux | grep -i -- "$process_name" | grep -v grep)
+    result=$(ps aux | grep -i -- "$process_name" | grep -v grep) || result=""
 
     if [ -n "$result" ]; then
         __gash_info "Processes matching $process_name:"
-        # Honor the runtime color gate (headless, NO_COLOR, non-TTY pipe).
-        local use_color=1
-        __gash_use_color || use_color=0
-        echo "$result" | awk -v c="$use_color" '{
-            if (c == 1)
-                printf "   \033[1;33m%-8s\033[0m \033[0;36m%-12s\033[0m %-4s \033[1;37m%-40s\033[0m\n", $2, $1, $3, $11
-            else
-                printf "   %-8s %-12s %-4s %-40s\n", $2, $1, $3, $11
-        }'
+        # PID, user, %CPU, command.
+        printf '%s\n' "$result" | awk '{ printf "%s\t%s\t%s\t%s\n", $2, $1, $3, $11 }' |
+            __gash_table --no-header --indent 3 --gap 1 --min 1:8 --min 2:12 --min 3:4 \
+                --color 1:accent --color 2:muted
     else
         __gash_error "No process found with name '$process_name'."
     fi
@@ -678,10 +659,15 @@ process_kill() {
         fi
         local pid cmd
         __gash_info "Matching '$process_name':"
+        # The plan shown before the question: diagnostics, so on stderr (PIDs in
+        # accent only when stderr may carry colors, as the emitters).
+        local -a plan_color=()
+        __gash_stderr_fancy && plan_color=(--color 1:accent)
         for pid in $pids; do
             cmd=$(ps -o args= -p "$pid" 2>/dev/null) || cmd="?"
-            printf '  %s  %s\n' "$pid" "${cmd:0:100}" >&2
-        done
+            cmd="${cmd:0:100}"
+            printf '%s\t%s\n' "$pid" "${cmd//$'\t'/ }"
+        done | __gash_table --no-header --indent 2 ${plan_color[@]+"${plan_color[@]}"} >&2
         if ! needs_confirm_prompt "Kill $( ((count > 1)) && echo "all $count" || echo it)?"; then
             __gash_info "Aborted."
             return 1
@@ -749,7 +735,7 @@ port_kill() {
     pids=$({
         lsof -t -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null
         lsof -t -nP -iUDP:"$port" 2>/dev/null
-    } | sort -un)
+    } | sort -un) || true
 
     if [[ -z "$pids" ]]; then
         __gash_error "Nothing is listening on port $port."
@@ -758,10 +744,15 @@ port_kill() {
 
     local pid cmd
     __gash_info "Listening on port $port:"
+    # The plan shown before the question: diagnostics, so on stderr (PIDs in
+    # accent only when stderr may carry colors, as the emitters).
+    local -a plan_color=()
+    __gash_stderr_fancy && plan_color=(--color 1:accent)
     for pid in $pids; do
         cmd=$(ps -o comm= -p "$pid" 2>/dev/null) || cmd="?"
-        printf '  %s  %s\n' "$pid" "${cmd:-?}" >&2
-    done
+        cmd="${cmd:-?}"
+        printf '%s\t%s\n' "$pid" "${cmd//$'\t'/ }"
+    done | __gash_table --no-header --indent 2 ${plan_color[@]+"${plan_color[@]}"} >&2
     if [[ $force -eq 0 ]] && ! needs_confirm_prompt "Terminate these processes?"; then
         __gash_info "Aborted."
         return 1
@@ -1029,14 +1020,14 @@ wsl_compact() {
 
     local fails last
     fails="$(dmesg 2>/dev/null | grep -c 'page allocation failure: order:7' || true)"
-    last="$(dmesg -T 2>/dev/null | grep 'page allocation failure: order:7' | tail -n 1 | sed -E 's/^\[([^]]+)\].*/\1/')"
-    printf 'order-7 allocation failures since the VM started: %s%s\n' "${fails:-0}" "${last:+ (last: $last)}"
+    last="$(dmesg -T 2>/dev/null | grep 'page allocation failure: order:7' | tail -n 1 | sed -E 's/^\[([^]]+)\].*/\1/')" || last=""
+    __gash_kv --width 0 "order-7 allocation failures since the VM started:" "${fails:-0}${last:+ (last: $last)}"
 
     local before after b_free b_slab b_blocks a_free a_slab a_blocks
     before="$(__gash_wsl_mem_snapshot)"
     if ((status_only)); then
         IFS='|' read -r b_free b_slab b_blocks <<<"$before"
-        printf '%-22s %s\n' "MemFree" "$b_free" "SReclaimable (slab)" "$b_slab" "free >=512KiB blocks" "$b_blocks"
+        __gash_kv --width 22 "MemFree" "$b_free" "SReclaimable (slab)" "$b_slab" "free >=512KiB blocks" "$b_blocks"
         return 0
     fi
 
@@ -1049,10 +1040,13 @@ wsl_compact() {
 
     IFS='|' read -r b_free b_slab b_blocks <<<"$before"
     IFS='|' read -r a_free a_slab a_blocks <<<"$after"
-    printf '%-22s %-26s %s\n' "" "before" "after"
-    printf '%-22s %-26s %s\n' "MemFree" "$b_free" "$a_free"
-    printf '%-22s %-26s %s\n' "SReclaimable (slab)" "$b_slab" "$a_slab"
-    printf '%-22s %-26s %s\n' "free >=512KiB blocks" "$b_blocks" "$a_blocks"
+    local -a head=()
+    __gash_use_color || head=(--no-header)
+    printf '%s\t%s\t%s\n' "" "before" "after" \
+        "MemFree" "$b_free" "$a_free" \
+        "SReclaimable (slab)" "$b_slab" "$a_slab" \
+        "free >=512KiB blocks" "$b_blocks" "$a_blocks" |
+        __gash_table ${head[@]+"${head[@]}"} --gap 1 --min 1:22 --min 2:26
 
     local cmd=/mnt/c/Windows/System32/cmd.exe
     if [[ -x "$cmd" ]]; then
