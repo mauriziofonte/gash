@@ -94,6 +94,15 @@ it "llm_procs prints one compact JSON array" bash -c '
   [[ "$(llm_procs --port 1x 2>&1 >/dev/null | jq -r .error)" == invalid_port ]]
 '
 
+it "llm_procs --name leaves out the calling shell, its parents and their subshells" bash -c '
+  set -euo pipefail
+  out="$(GASH_HEADLESS=1 bash -c "source \"\$GASH_TEST_ROOT/gash.sh\"; llm_procs --name no-such-process-zq7")"
+  [[ "$out" == "[]" ]] || { echo "$out"; exit 1; }
+  # A real match, child of the calling shell, is still listed.
+  out="$(GASH_HEADLESS=1 bash -c "source \"\$GASH_TEST_ROOT/gash.sh\"; sleep 30 & p=\$!; llm_procs --name \"sleep 30\"; kill \$p")"
+  [[ "$out" == "[{\"pid\":"*",\"name\":\"sleep\"}]" ]] || { echo "$out"; exit 1; }
+'
+
 it "llm_env hides secret names and masks token values" bash -c '
   set -euo pipefail
   command -v jq >/dev/null 2>&1 || exit 77
