@@ -38,8 +38,8 @@ needs_help() {
             return 0
         fi
         if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
-            printf '\e[38;5;214m%s\e[0m\n' "$program"
-            printf '\e[1;97mUsage:\e[0m \e[1;96m%s\e[0m\n' "$usage"
+            printf '%s%s%s\n' "$__GASH_COLOR_ACCENT" "$program" "$__GASH_COLOR_OFF"
+            printf '%sUsage:%s %s\n' "$__GASH_BOLD" "$__GASH_COLOR_OFF" "$usage"
             printf '%s\n' "$help"
         else
             printf '%s\n' "$program"
@@ -56,7 +56,7 @@ needs_help() {
 # User Prompts
 # -----------------------------------------------------------------------------
 
-# Prompt user for yes/no confirmation.
+# Prompt user for yes/no confirmation: "QUESTION [y/N] " (No by default).
 # Usage: needs_confirm_prompt "Are you sure?" && do_thing
 # Returns: 0 if user confirms (y/Y), 1 otherwise
 #
@@ -71,11 +71,7 @@ needs_confirm_prompt() {
 
     [[ "${GASH_HEADLESS-}" == "1" ]] && return 1
 
-    if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
-        printf '%s %s(y/N):%s ' "$prompt" "${__GASH_BOLD_WHITE}" "${__GASH_COLOR_OFF}" >&2
-    else
-        printf '%s (y/N): ' "$prompt" >&2
-    fi
+    __gash_ask_render "$prompt" "y/N"
 
     # A failed read (no tty, EOF) must refuse, never reuse a previous REPLY.
     read -r REPLY </dev/tty 2>/dev/null || return 1
@@ -228,6 +224,22 @@ __gash_json_error() {
     return 1
 }
 
+# Print a machine warning to stderr, one JSON line in the shape of the
+# error contract: {"warning":TYPE,KEY:NUMBER...,"hint":..}. Always returns 0.
+# Usage: __gash_json_warning TYPE HINT [KEY NUMBER]...
+__gash_json_warning() {
+    local json hint="${2-}"
+    json="{\"warning\":\"$(__gash_json_escape "${1-}")\""
+    shift 2 || shift $#
+    while (($# >= 2)); do
+        [[ "$2" =~ ^-?[0-9]+$ ]] && json+=",\"$(__gash_json_escape "$1")\":$2"
+        shift 2
+    done
+    [[ -n "$hint" ]] && json+=",\"hint\":\"$(__gash_json_escape "$hint")\""
+    printf '%s}\n' "$json" >&2
+    return 0
+}
+
 # Render a single string as a quoted, fully escaped JSON string (via jq).
 # Usage: json=$(__gash_json_str "raw value")
 __gash_json_str() {
@@ -371,8 +383,8 @@ __gash_human_size() {
     fi
 }
 
-# Ask "Do you want to continue? [Y/n]" after a plan has been printed (Enter
-# means yes). ASSUME_YES=1, from a -y flag, skips the question. Without a
+# Ask "Do you want to continue? [Y/n] " after a plan has been printed (Enter
+# means yes), rendered like needs_confirm_prompt. ASSUME_YES=1, from a -y flag, skips the question. Without a
 # terminal, or in headless mode, it refuses instead of waiting for input.
 # Usage: __gash_confirm_plan ASSUME_YES
 __gash_confirm_plan() {
@@ -382,7 +394,7 @@ __gash_confirm_plan() {
         __gash_error "No terminal to ask for confirmation: pass -y to go ahead."
         return 1
     fi
-    printf 'Do you want to continue? [Y/n] ' >&2
+    __gash_ask_render "Do you want to continue?" "Y/n"
     if ! read -r answer </dev/tty 2>/dev/null; then
         printf '\n' >&2
         return 1
@@ -398,16 +410,20 @@ __gash_confirm_plan() {
 __gash_task() {
     local msg="${1-}" rc=0
     shift
-    printf '%s... ' "$msg" >&2
+    if __gash_stderr_fancy; then
+        printf '%s%s%s %s... ' "$__GASH_COLOR_INFO" "$__GASH_GLYPH_INFO" "$__GASH_COLOR_OFF" "$msg" >&2
+    else
+        printf '%s... ' "$msg" >&2
+    fi
     "$@" || rc=$?
     if ((rc == 0)); then
-        if __gash_color_env_ok 2>/dev/null && [[ -t 2 ]]; then
+        if __gash_stderr_fancy; then
             printf '%sdone%s\n' "$__GASH_COLOR_SUCCESS" "$__GASH_COLOR_OFF" >&2
         else
             printf 'done\n' >&2
         fi
     else
-        if __gash_color_env_ok 2>/dev/null && [[ -t 2 ]]; then
+        if __gash_stderr_fancy; then
             printf '%sfailed%s\n' "$__GASH_COLOR_ERROR" "$__GASH_COLOR_OFF" >&2
         else
             printf 'failed\n' >&2
@@ -438,9 +454,9 @@ __gash_download() {
     local total
     total="$(__gash_remote_size "$url")"
     if ((total > 0)); then
-        printf 'Get: %s [%s]\n' "$url" "$(__gash_human_size "$total")" >&2
+        __gash_note "Get: $url [$(__gash_human_size "$total")]"
     else
-        printf 'Get: %s\n' "$url" >&2
+        __gash_note "Get: $url"
     fi
 
     local errf t0=$SECONDS pid rc=0 prev_int
@@ -453,7 +469,8 @@ __gash_download() {
     trap "kill $pid 2>/dev/null; wait $pid 2>/dev/null; command rm -f '$errf' '$dest'; printf '\nAborted.\n' >&2; ${prev_int:-trap - INT}; return 130" INT
 
     if [[ -t 2 && "${GASH_HEADLESS-}" != "1" ]]; then
-        local done_b=0 prev_b=0 speed=0 tick=0 pct filled bar eta i
+        local done_b=0 prev_b=0 speed=0 tick=0 pct filled bar eta i el=""
+        __gash_stderr_fancy && el="$__GASH_ERASE_EOL"
         while kill -0 "$pid" 2>/dev/null; do
             done_b="$(wc -c <"$dest" 2>/dev/null || echo 0)"
             done_b="${done_b//[[:space:]]/}"
@@ -472,15 +489,15 @@ __gash_download() {
                 done
                 eta="--"
                 ((speed > 0)) && eta="$(((total - done_b) / speed))s"
-                printf '\r%3d%% %s %10s / %-10s %10s/s %6s\e[K' "$pct" "$bar" \
+                printf '\r%3d%% %s %10s / %-10s %10s/s %6s%s' "$pct" "$bar" \
                     "$(__gash_human_size "$done_b")" "$(__gash_human_size "$total")" \
-                    "$(__gash_human_size "$speed")" "$eta" >&2
+                    "$(__gash_human_size "$speed")" "$eta" "$el" >&2
             else
-                printf '\r%10s %10s/s\e[K' "$(__gash_human_size "$done_b")" "$(__gash_human_size "$speed")" >&2
+                printf '\r%10s %10s/s%s' "$(__gash_human_size "$done_b")" "$(__gash_human_size "$speed")" "$el" >&2
             fi
             sleep 0.25
         done
-        printf '\r\e[K' >&2
+        if [[ -n "$el" ]]; then printf '\r%s' "$el" >&2; else printf '\r%*s\r' 72 '' >&2; fi
     fi
 
     wait "$pid" 2>/dev/null || rc=$?
@@ -496,8 +513,7 @@ __gash_download() {
     ((elapsed > 0)) || elapsed=1
     size="$(wc -c <"$dest")"
     size="${size//[[:space:]]/}"
-    printf 'Fetched %s in %ss (%s/s)\n' "$(__gash_human_size "$size")" "$elapsed" \
-        "$(__gash_human_size $((size / elapsed)))" >&2
+    __gash_note "Fetched $(__gash_human_size "$size") in ${elapsed}s ($(__gash_human_size $((size / elapsed)))/s)"
 }
 
 # -----------------------------------------------------------------------------
@@ -509,10 +525,7 @@ __gash_download() {
 all_colors() {
     needs_help "all_colors" "all_colors" "Displays all available terminal colors (256 colors)." "${1-}" && return
 
-    local i
-    for i in {0..255}; do
-        printf "\x1b[38;5;%smcolour%s\x1b[0m\n" "$i" "$i"
-    done
+    __gash_color_chart
 }
 
 # =============================================================================
@@ -532,8 +545,9 @@ EXAMPLES
   # Test your terminal's color support
   all_colors
 
-  # Pipe to less for scrolling
-  all_colors | less -R
+NOTES
+  Colors only on a color terminal: piped, or with NO_COLOR set, it prints
+  the color names alone.
 HELP
 
     __gash_register_help "path_add" \
