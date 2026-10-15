@@ -932,7 +932,7 @@ gash_help() {
     # --list: grouped listing
     if [[ "$arg" == "--list" ]]; then
         echo
-        echo -e "  ${W}Gash Functions${R} ${M}(use 'gash_help FUNCTION' for details)${R}"
+        printf '%s\n' "  ${W}Gash Functions${R} ${M}(use 'gash_help FUNCTION' for details)${R}"
         __gash_help_list
         echo
         return 0
@@ -946,7 +946,7 @@ gash_help() {
             return 1
         fi
         echo
-        echo -e "  ${W}Search results for '${keyword}':${R}"
+        printf '%s\n' "  ${W}Search results for '${keyword}':${R}"
         echo
         local rc=0
         __gash_help_search "$keyword" || rc=$?
@@ -980,18 +980,18 @@ gash_help() {
     # -h / --help: show self-help
     if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
         echo
-        echo -e "  ${A}gash_help${R}${M}  (module: gash)${R}"
+        printf '%s\n' "  ${A}gash_help${R}${M}  (module: gash)${R}"
         echo
-        echo -e "  ${W}Gash help system with examples, search, and discovery.${R}"
+        printf '%s\n' "  ${W}Gash help system with examples, search, and discovery.${R}"
         echo
-        echo -e "  ${W}USAGE${R}"
-        echo -e "    ${C}gash_help${R}                   ${M}Overview of all functions${R}"
-        echo -e "    ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
-        echo -e "    ${C}gash_help ALIAS${R}             ${M}Lookup by short alias name${R}"
-        echo -e "    ${C}gash_help --list${R}            ${M}List all functions by module${R}"
-        echo -e "    ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
-        echo -e "    ${C}gash_help --short FUNCTION${R}  ${M}One-line description only${R}"
-        echo -e "    ${C}gash_help --bash TOPIC${R}      ${M}Bash builtin help${R}"
+        printf '%s\n' "  ${W}USAGE${R}"
+        printf '%s\n' "    ${C}gash_help${R}                   ${M}Overview of all functions${R}"
+        printf '%s\n' "    ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
+        printf '%s\n' "    ${C}gash_help ALIAS${R}             ${M}Lookup by short alias name${R}"
+        printf '%s\n' "    ${C}gash_help --list${R}            ${M}List all functions by module${R}"
+        printf '%s\n' "    ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
+        printf '%s\n' "    ${C}gash_help --short FUNCTION${R}  ${M}One-line description only${R}"
+        printf '%s\n' "    ${C}gash_help --bash TOPIC${R}      ${M}Bash builtin help${R}"
         echo
         return 0
     fi
@@ -999,20 +999,20 @@ gash_help() {
     # No args: show overview
     if [[ -z "$arg" ]]; then
         echo
-        echo -e "  ${W}Gash${R} ${M}v${GASH_VERSION:-?}${R} ${M}- Gash, Another SHell!${R}"
+        printf '%s\n' "  ${W}Gash${R} ${M}v${GASH_VERSION:-?}${R} ${M}- Gash, Another SHell!${R}"
         echo
-        echo -e "  ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
-        echo -e "  ${C}gash_help ALIAS${R}             ${M}Lookup by short alias (e.g. flf, dsa, ask)${R}"
-        echo -e "  ${C}gash_help --list${R}            ${M}List all functions by module${R}"
-        echo -e "  ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
-        echo -e "  ${C}gash${R}                        ${M}Reference card with aliases${R}"
-        echo -e "  ${C}FUNCTION --help${R}             ${M}Quick usage reminder${R}"
+        printf '%s\n' "  ${C}gash_help FUNCTION${R}          ${M}Detailed help with examples${R}"
+        printf '%s\n' "  ${C}gash_help ALIAS${R}             ${M}Lookup by short alias (e.g. flf, dsa, ask)${R}"
+        printf '%s\n' "  ${C}gash_help --list${R}            ${M}List all functions by module${R}"
+        printf '%s\n' "  ${C}gash_help --search KEYWORD${R}  ${M}Search across all help text${R}"
+        printf '%s\n' "  ${C}gash${R}                        ${M}Reference card with aliases${R}"
+        printf '%s\n' "  ${C}FUNCTION --help${R}             ${M}Quick usage reminder${R}"
 
         # Show grouped list
         __gash_help_list
         echo
-        echo -e "  ${M}Tip: Every function supports -h/--help for a quick usage reminder.${R}"
-        echo -e "  ${M}     Use gash_help FUNCTION for detailed help with real-world examples.${R}"
+        printf '%s\n' "  ${M}Tip: Every function supports -h/--help for a quick usage reminder.${R}"
+        printf '%s\n' "  ${M}     Use gash_help FUNCTION for detailed help with real-world examples.${R}"
         echo
         return 0
     fi
@@ -1028,14 +1028,14 @@ gash_help() {
     local resolved
     resolved="$(__gash_help_find_by_alias "$arg")" || true
     if [[ -n "$resolved" ]]; then
-        echo -e "\n  ${M}'${arg}' is an alias for '${resolved}'${R}"
+        printf '\n%s\n' "  ${M}'${arg}' is an alias for '${resolved}'${R}"
         __gash_help_display "$resolved"
         return 0
     fi
 
     # Not found
     __gash_error "No help found for '$arg'."
-    echo -e "  ${M}Try: gash_help --list  or  gash_help --search ${arg}${R}" >&2
+    printf '%s\n' "  ${M}Try: gash_help --list  or  gash_help --search ${arg}${R}" >&2
     return 1
 }
 

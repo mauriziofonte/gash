@@ -403,12 +403,12 @@ EOF
     # Resolve color values from the centralized palette (byte-real ANSI).
     local c_off='' c_ts='' c_hl='' c_grp='' c_cnt='' c_cmd=''
     if [[ "$want_color" -eq 1 ]]; then
-        printf -v c_off '%b' "$__GASH_COLOR_OFF"
-        printf -v c_ts '%b' "$__GASH_CYAN"
-        printf -v c_hl '%b' "$__GASH_BOLD_YELLOW"
-        printf -v c_grp '%b' "$__GASH_BOLD_GREEN"
-        printf -v c_cnt '%b' "$__GASH_COLOR_MUTED"
-        printf -v c_cmd '%b' "$__GASH_BOLD_WHITE"
+        c_off="$__GASH_COLOR_OFF"
+        c_ts="$__GASH_CYAN"
+        c_hl="$__GASH_BOLD_YELLOW"
+        c_grp="$__GASH_BOLD_GREEN"
+        c_cnt="$__GASH_COLOR_MUTED"
+        c_cmd="$__GASH_BOLD_WHITE"
     fi
 
     # Highlight regex: raw pattern in regex mode, escaped in fixed-string mode.
@@ -594,7 +594,7 @@ ip_public() {
 
     # Local color scope (respects env, TTY, --no-color)
     __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS"
-    echo -e "${__GASH_BOLD_WHITE}Public IP:${__GASH_COLOR_OFF} ${__GASH_CYAN}${ip}${__GASH_COLOR_OFF}"
+    printf '%s\n' "${__GASH_BOLD_WHITE}Public IP:${__GASH_COLOR_OFF} ${__GASH_CYAN}${ip}${__GASH_COLOR_OFF}"
 }
 
 # -----------------------------------------------------------------------------

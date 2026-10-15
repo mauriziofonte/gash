@@ -13,7 +13,7 @@ __ai_debug() {
     [[ "${GASH_AI_DEBUG:-0}" != "1" ]] && return 0
     local label="${1-}"
     local content="${2-}"
-    echo -e "\n${__GASH_CYAN}[AI DEBUG] ${label}:${__GASH_COLOR_OFF}" >&2
+    printf '\n%s\n' "${__GASH_CYAN}[AI DEBUG] ${label}:${__GASH_COLOR_OFF}" >&2
     echo "$content" >&2
 }
 

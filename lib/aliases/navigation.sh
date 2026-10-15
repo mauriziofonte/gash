@@ -53,4 +53,4 @@ alias .5='cd ../../../../..'
 alias cls='clear'
 
 # Show PATH entries one per line
-alias path='echo -e ${PATH//:/\\n}'
+alias path='tr ":" "\n" <<<"$PATH"'

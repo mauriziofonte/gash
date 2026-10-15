@@ -79,21 +79,21 @@ __ai_format_response() {
 
     case "$resp_type" in
         command)
-            [[ -n "$command" ]] && echo -e "${__GASH_CYAN}Command:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}\`${command}\`${__GASH_COLOR_OFF}"
-            [[ -n "$text" ]] && echo -e "${__GASH_GREEN}Explanation:${__GASH_COLOR_OFF} ${text}"
+            [[ -n "$command" ]] && printf '%s\n' "${__GASH_CYAN}Command:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}\`${command}\`${__GASH_COLOR_OFF}"
+            [[ -n "$text" ]] && printf '%s\n' "${__GASH_GREEN}Explanation:${__GASH_COLOR_OFF} ${text}"
             ;;
         explanation)
-            [[ -n "$text" ]] && echo -e "${__GASH_GREEN}Explanation:${__GASH_COLOR_OFF} ${text}"
+            [[ -n "$text" ]] && printf '%s\n' "${__GASH_GREEN}Explanation:${__GASH_COLOR_OFF} ${text}"
             ;;
         troubleshoot)
-            [[ -n "$issue" ]] && echo -e "${__GASH_RED}Issue:${__GASH_COLOR_OFF} ${issue}"
-            [[ -n "$suggestion" ]] && echo -e "${__GASH_YELLOW}Suggestion:${__GASH_COLOR_OFF} ${suggestion}"
+            [[ -n "$issue" ]] && printf '%s\n' "${__GASH_RED}Issue:${__GASH_COLOR_OFF} ${issue}"
+            [[ -n "$suggestion" ]] && printf '%s\n' "${__GASH_YELLOW}Suggestion:${__GASH_COLOR_OFF} ${suggestion}"
             # Show text only if no issue (as summary)
             { [[ -n "$text" && -z "$issue" ]] && echo "$text"; } || true
             ;;
         code)
-            [[ -n "$text" ]] && echo -e "${__GASH_GREEN}${text}${__GASH_COLOR_OFF}"
-            echo -e "${__GASH_CYAN}# ${lang}${__GASH_COLOR_OFF}"
+            [[ -n "$text" ]] && printf '%s\n' "${__GASH_GREEN}${text}${__GASH_COLOR_OFF}"
+            printf '%s\n' "${__GASH_CYAN}# ${lang}${__GASH_COLOR_OFF}"
             [[ -n "$code" ]] && echo "$code"
             ;;
         fallback | *)

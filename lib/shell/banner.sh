@@ -16,7 +16,7 @@ if [[ "${GASH_SHOW_INXI-0}" == "1" ]] && type -P inxi >/dev/null 2>&1; then
 fi
 
 if [[ "${GASH_BANNER:-1}" == "1" ]]; then
-    printf '%b\n' "${__GASH_CYAN-}Gash ${GASH_VERSION}${__GASH_COLOR_OFF-} ${__GASH_BOLD_WHITE-}—${__GASH_COLOR_OFF-} ${__GASH_BOLD_GREEN-}${USER:-$(gash_username)}${__GASH_COLOR_OFF-}"
+    printf '%s\n' "${__GASH_CYAN-}Gash ${GASH_VERSION}${__GASH_COLOR_OFF-} ${__GASH_BOLD_WHITE-}—${__GASH_COLOR_OFF-} ${__GASH_BOLD_GREEN-}${USER:-$(gash_username)}${__GASH_COLOR_OFF-}"
     gash_inspiring_quote || true
 fi
 

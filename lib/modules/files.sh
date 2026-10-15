@@ -258,7 +258,7 @@ __gash_fs_error() {
         # Use __gash_use_color to keep styling consistent across the two lines.
         if [[ -n "$hint" ]]; then
             if __gash_use_color; then
-                echo -e "${__GASH_COLOR_MUTED}Hint: ${hint}${__GASH_COLOR_OFF}" >&2
+                printf '%s\n' "${__GASH_COLOR_MUTED}Hint: ${hint}${__GASH_COLOR_OFF}" >&2
             else
                 printf 'Hint: %s\n' "$hint" >&2
             fi
@@ -1619,7 +1619,7 @@ tree_stats() {
         return 0
     fi
 
-    echo -e "${W}Tree statistics for${R} ${C}${safe_path}${R}"
+    printf '%s\n' "${W}Tree statistics for${R} ${C}${safe_path}${R}"
     printf '  %sFiles:%s       %s%d%s\n' "$W" "$R" "$Y" "$files_total" "$R"
     printf '  %sDirectories:%s %s%d%s\n' "$W" "$R" "$Y" "$dirs_total" "$R"
     printf '  %sTotal size:%s  %s%s%s (%d bytes)\n' "$W" "$R" "$G" "$(__gash_fs_human_size "$size_total")" "$R" "$size_total"
@@ -1630,7 +1630,7 @@ tree_stats() {
 
     if [[ ${#top_count_rows[@]} -gt 0 ]]; then
         echo
-        echo -e "  ${W}Top ${top_n} extensions by count:${R}"
+        printf '%s\n' "  ${W}Top ${top_n} extensions by count:${R}"
         local ext cnt sz
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
@@ -1641,7 +1641,7 @@ tree_stats() {
 
     if [[ ${#top_size_rows[@]} -gt 0 ]]; then
         echo
-        echo -e "  ${W}Top ${top_n} extensions by size:${R}"
+        printf '%s\n' "  ${W}Top ${top_n} extensions by size:${R}"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
             printf '    %s%-12s%s %s%s%s\n' \

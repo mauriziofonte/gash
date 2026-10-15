@@ -72,7 +72,7 @@ needs_confirm_prompt() {
     [[ "${GASH_HEADLESS-}" == "1" ]] && return 1
 
     if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
-        printf '%b' "$prompt ${__GASH_BOLD_WHITE}(y/N):${__GASH_COLOR_OFF} " >&2
+        printf '%s %s(y/N):%s ' "$prompt" "${__GASH_BOLD_WHITE}" "${__GASH_COLOR_OFF}" >&2
     else
         printf '%s (y/N): ' "$prompt" >&2
     fi

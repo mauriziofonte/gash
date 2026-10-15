@@ -157,7 +157,7 @@ __sysinfo_item() {
     local text="$1"
     __sysinfo_flush
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        echo -e "  ${__GASH_CYAN}-${__GASH_COLOR_OFF} ${text}"
+        printf '%s\n' "  ${__GASH_CYAN}-${__GASH_COLOR_OFF} ${text}"
     else
         echo "$text"
     fi
@@ -175,7 +175,7 @@ __sysinfo_sub() {
 __sysinfo_sub_print() {
     local title="$1"
     if [[ "$__SYSINFO_MODE" == "verbose" ]]; then
-        echo -e "  ${__GASH_BOLD_YELLOW}${title}${__GASH_COLOR_OFF}"
+        printf '%s\n' "  ${__GASH_BOLD_YELLOW}${title}${__GASH_COLOR_OFF}"
     else
         echo "--- ${title}"
     fi

@@ -348,9 +348,9 @@ __sysinfo_format_ai_response() {
     platform=$(echo "$json" | jq -r '.platform // "unknown"')
 
     echo
-    echo -e "${__GASH_BOLD_WHITE}Server: ${hostname}${__GASH_COLOR_OFF}"
-    echo -e "${MUTED}${platform}${__GASH_COLOR_OFF}"
-    echo -e "${MUTED}$(printf '%.0s-' {1..60})${__GASH_COLOR_OFF}"
+    printf '%s\n' "${__GASH_BOLD_WHITE}Server: ${hostname}${__GASH_COLOR_OFF}"
+    printf '%s\n' "${MUTED}${platform}${__GASH_COLOR_OFF}"
+    printf '%s\n' "${MUTED}$(printf '%.0s-' {1..60})${__GASH_COLOR_OFF}"
 
     # Count totals
     local critical warning info ok_count
@@ -359,7 +359,7 @@ __sysinfo_format_ai_response() {
     info=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="info")] | length')
     ok_count=$(echo "$json" | jq '[.sections[].findings[] | select(.severity=="ok")] | length')
 
-    echo -e "${BOLD_RED}${critical} critical${__GASH_COLOR_OFF}  ${__GASH_BOLD_YELLOW}${warning} warnings${__GASH_COLOR_OFF}  ${__GASH_CYAN}${info} info${__GASH_COLOR_OFF}  ${__GASH_GREEN}${ok_count} ok${__GASH_COLOR_OFF}"
+    printf '%s\n' "${BOLD_RED}${critical} critical${__GASH_COLOR_OFF}  ${__GASH_BOLD_YELLOW}${warning} warnings${__GASH_COLOR_OFF}  ${__GASH_CYAN}${info} info${__GASH_COLOR_OFF}  ${__GASH_GREEN}${ok_count} ok${__GASH_COLOR_OFF}"
     echo
 
     # Iterate sections
@@ -371,7 +371,7 @@ __sysinfo_format_ai_response() {
         local title
         title=$(echo "$json" | jq -r ".sections[$i].title")
 
-        echo -e "${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
+        printf '%s\n' "${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
 
         local findings_count
         findings_count=$(echo "$json" | jq ".sections[$i].findings | length")
@@ -383,10 +383,10 @@ __sysinfo_format_ai_response() {
             text=$(echo "$json" | jq -r ".sections[$i].findings[$j].text")
 
             case "$sev" in
-                critical) echo -e "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                warning) echo -e "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                ok) echo -e "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
-                *) echo -e "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
+                critical) printf '%s\n' "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
+                warning) printf '%s\n' "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
+                ok) printf '%s\n' "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
+                *) printf '%s\n' "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
             esac
 
             j=$((j + 1))
@@ -418,9 +418,9 @@ __sysinfo_format_drilldown_response() {
     summary=$(echo "$json" | jq -r '.summary // ""')
 
     echo
-    echo -e "${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
-    [[ -n "$summary" ]] && echo -e "${MUTED}${summary}${__GASH_COLOR_OFF}"
-    echo -e "${MUTED}$(printf '%.0s-' {1..60})${__GASH_COLOR_OFF}"
+    printf '%s\n' "${__GASH_BOLD_WHITE}${title}${__GASH_COLOR_OFF}"
+    [[ -n "$summary" ]] && printf '%s\n' "${MUTED}${summary}${__GASH_COLOR_OFF}"
+    printf '%s\n' "${MUTED}$(printf '%.0s-' {1..60})${__GASH_COLOR_OFF}"
     echo
 
     local comp_count
@@ -442,7 +442,7 @@ __sysinfo_format_drilldown_response() {
             *) status_color="${MUTED}" ;;
         esac
 
-        echo -e "${__GASH_BOLD_WHITE}${name}${__GASH_COLOR_OFF} (${status_color}${status}${__GASH_COLOR_OFF})"
+        printf '%s\n' "${__GASH_BOLD_WHITE}${name}${__GASH_COLOR_OFF} (${status_color}${status}${__GASH_COLOR_OFF})"
 
         # Config highlights
         local highlights_count
@@ -451,7 +451,7 @@ __sysinfo_format_drilldown_response() {
         while [[ $h -lt $highlights_count ]]; do
             local highlight
             highlight=$(echo "$json" | jq -r ".components[$i].config_highlights[$h]")
-            echo -e "  ${MUTED}${highlight}${__GASH_COLOR_OFF}"
+            printf '%s\n' "  ${MUTED}${highlight}${__GASH_COLOR_OFF}"
             h=$((h + 1))
         done
 
@@ -465,10 +465,10 @@ __sysinfo_format_drilldown_response() {
             text=$(echo "$json" | jq -r ".components[$i].issues[$j].text")
 
             case "$sev" in
-                critical) echo -e "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                warning) echo -e "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
-                ok) echo -e "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
-                *) echo -e "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
+                critical) printf '%s\n' "  ${BOLD_RED}[!]${__GASH_COLOR_OFF} ${text}" ;;
+                warning) printf '%s\n' "  ${__GASH_BOLD_YELLOW}[!]${__GASH_COLOR_OFF} ${text}" ;;
+                ok) printf '%s\n' "  ${__GASH_GREEN}[+]${__GASH_COLOR_OFF} ${text}" ;;
+                *) printf '%s\n' "  ${__GASH_CYAN}[i]${__GASH_COLOR_OFF} ${text}" ;;
             esac
 
             j=$((j + 1))
@@ -813,7 +813,7 @@ __ai_sysinfo_impl() {
 
     while true; do
         echo
-        echo -e "${__GASH_BOLD_WHITE}Drill down for details:${__GASH_COLOR_OFF}"
+        printf '%s\n' "${__GASH_BOLD_WHITE}Drill down for details:${__GASH_COLOR_OFF}"
         echo "  1) Services    2) Security    3) Network"
         echo "  4) Storage     5) Performance 6) Maintenance"
         echo "  ?) Ask a question              s) Save report  q) Quit"

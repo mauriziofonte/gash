@@ -273,7 +273,7 @@ __gash_help_search() {
                 alias_display=" ${G}(${aliases})${R}"
             fi
 
-            printf '  %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
+            printf '  %s%-24s%s %s%s%s\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
             found=1
         fi
     done <<<"$sorted_funcs"
@@ -357,7 +357,7 @@ __gash_help_list() {
                 alias_display=" ${G}(${aliases})${R}"
             fi
 
-            printf '    %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
+            printf '    %s%-24s%s %s%s%s\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
             displayed=1
         done <<<"$sorted"
     done
@@ -383,7 +383,7 @@ __gash_help_list() {
             if [[ -n "$aliases" ]]; then
                 alias_display=" ${G}(${aliases})${R}"
             fi
-            printf '    %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
+            printf '    %s%-24s%s %s%s%s\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
         done <<<"$sorted"
     fi
 
