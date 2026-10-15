@@ -22,6 +22,10 @@
 #   CODE runs in bash after Gash is loaded, in a fresh directory that is
 #   also HOME. INPUT is typed on the terminal (e.g. "n" answers a
 #   confirmation); end of input follows, so a further read gets EOF.
+#
+# About 8 minutes on 4 CPUs: tests/run.sh runs it only with --slow or when
+# named, and CI runs it once, in its own job.
+# gash-test: slow
 
 describe "Output style: rendering on a terminal"
 

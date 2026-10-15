@@ -42,6 +42,15 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
 - `hgrep` groups and highlights only when colors are on (before: whenever
   stdout was a terminal), and `hgrep --pick` also works when its output is
   captured.
+- `docker_compose_upgrade` marks each service with a status glyph on a
+  terminal and `OK:` (upgrade) or `Info:` (pinned, skipped) when piped,
+  instead of `[UPGRADE]` and `[SKIP]`; the dry-run notice reads
+  `Dry run: ...` here and in `nvm_prune_versions` (before: `[DRY-RUN]`).
+- `gl`, `gla`, `glo`, `glg`, `gls` color the log with the Gash palette:
+  hash in the accent color, branches and tags in the primary color, date
+  and author muted. Their plain text is unchanged, they print no colors
+  with `NO_COLOR`, and graph lanes alternate primary and muted unless
+  `log.graphColors` is configured.
 
 ### Fixed
 
@@ -56,6 +65,11 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
   `docker_compose_check` without a local digest stopped early under
   `set -e` before printing their message.
 - `gash_username` has a help page.
+
+### Tests
+
+- `tests/run.sh` skips the terminal rendering fixtures unless given
+  `--slow` or the spec by name; CI runs them once, in their own job.
 
 ## [2.1.0] - 2026-10-14
 

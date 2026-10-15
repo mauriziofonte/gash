@@ -21,7 +21,8 @@ To try a working copy as your shell, point `~/.gashrc` at it with
 ## Before you open a pull request
 
 ```bash
-bash tests/run.sh                                   # all specs
+bash tests/run.sh                                   # all specs but the slow one
+bash tests/run.sh --slow                            # with the rendering fixtures (~8 min)
 bash tests/run.sh -f 'files_largest'                # only matching tests
 bash tests/run.sh --awk mawk                        # with mawk as awk
 bash tests/run.sh --bash /path/to/bash-4.4/bin/bash # an older Bash
@@ -62,7 +63,9 @@ locally.
   `tests/specs/output_style_lint_spec.sh` enforces these rules on the source;
   `tests/specs/output_style_render_spec.sh` runs every public function on a
   real terminal, piped and with `NO_COLOR`, so a new function needs a
-  fixture there.
+  fixture there. It is slow, so `tests/run.sh` runs it only with `--slow`
+  (or `bash tests/run.sh specs/output_style_render_spec.sh`), and CI in a
+  job of its own.
 - **Settings** are `GASH_*` lines in `~/.gash_env`, listed in
   `.gash_env.template` and in `__GASH_SETTINGS_KNOWN`; the environment
   wins over the file, except for the `llm_exec` permissions.

@@ -9,14 +9,18 @@
 #   -v, --verbose      stream every test's output
 #       --awk NAME     run with NAME (mawk, gawk, busybox awk...) as `awk`
 #       --bash PATH    run specs with the bash binary at PATH (version matrix)
+#       --slow         also run the slow specs (see below)
 #       --no-hermetic  keep the caller's environment (debugging only)
 #   -h, --help         show this help
 #
 # SPEC can be a path or a name relative to tests/ (e.g. specs/files_spec.sh).
-# By default every tests/specs/*_spec.sh runs in its own process, under a
-# scrubbed environment (env -i, temporary HOME, fixed PATH and locale), so
-# results don't depend on the developer's shell or tokens. Set GASH_TEST_PATH
-# to change the base PATH of that environment (e.g. GNU tools on macOS).
+# By default every tests/specs/*_spec.sh but the slow ones (below) runs in
+# its own process, under a scrubbed environment (env -i, temporary HOME,
+# fixed PATH and locale), so results don't depend on the developer's shell
+# or tokens. Set GASH_TEST_PATH to change the base PATH of that environment
+# (e.g. GNU tools on macOS).
+# A spec with a "# gash-test: slow" line (the terminal rendering fixtures)
+# runs only with --slow or when named as SPEC; CI runs it in its own job.
 
 set -uo pipefail
 
@@ -28,6 +32,7 @@ verbose=""
 hermetic=1
 awk_impl=""
 bash_impl=""
+slow=0
 specs=()
 
 while [[ $# -gt 0 ]]; do
@@ -68,12 +73,16 @@ while [[ $# -gt 0 ]]; do
       bash_impl="$2"
       shift 2
       ;;
+    --slow)
+      slow=1
+      shift
+      ;;
     --no-hermetic)
       hermetic=0
       shift
       ;;
     -h | --help)
-      sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     --)
@@ -92,8 +101,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+slow_skipped=()
 if [[ ${#specs[@]} -eq 0 ]]; then
-  specs=("$ROOT_DIR"/tests/specs/*_spec.sh)
+  for spec in "$ROOT_DIR"/tests/specs/*_spec.sh; do
+    if ((! slow)) && grep -q '^# gash-test: slow$' "$spec"; then
+      slow_skipped+=("${spec#"$ROOT_DIR"/tests/}")
+      continue
+    fi
+    specs+=("$spec")
+  done
 else
   for i in "${!specs[@]}"; do
     if [[ ! -f "${specs[$i]}" && -f "$ROOT_DIR/tests/${specs[$i]}" ]]; then
@@ -205,6 +221,9 @@ passed=$((total - failed - skipped))
 elapsed=$((SECONDS - start))
 
 echo
+for spec in "${slow_skipped[@]}"; do
+  printf 'INFO Not run (slow, use --slow): %s\n' "$spec"
+done
 if [[ $failed -eq 0 && $status -eq 0 ]]; then
   printf 'PASS %d passed, %d failed, %d skipped (%d total) in %ds\n' "$passed" "$failed" "$skipped" "$total" "$elapsed"
 else
