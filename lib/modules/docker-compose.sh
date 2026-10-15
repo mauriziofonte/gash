@@ -887,12 +887,17 @@ EOF
     echo ""
 
     if [[ $dry_run -eq 1 ]]; then
-        __gash_print warning "[DRY-RUN] No changes will be made"
+        __gash_mark warning "Dry run: no changes will be made"
         echo ""
     fi
 
-    # Check what needs updating: one plan row per service (label, name,
-    # image; the label's status color in hidden column 4).
+    # Check what needs updating: one plan row per service (status mark,
+    # name, image; the mark's status color in hidden column 4). The marks
+    # are __gash_mark's: glyphs on a terminal, OK:/Info: otherwise.
+    local mark_up="OK:" mark_skip="Info:"
+    if __gash_use_color; then
+        mark_up="$__GASH_GLYPH_OK" mark_skip="$__GASH_GLYPH_INFO"
+    fi
     local services upgradeable_services=() plan_rows=()
     services=$(__gash_parse_compose_services "$compose_file")
     local env_file="$path/.env"
@@ -907,9 +912,9 @@ EOF
 
         if [[ $force -eq 1 ]] || __gash_is_upgradeable "$tag"; then
             upgradeable_services+=("$service_name")
-            plan_rows+=("[UPGRADE]"$'\t'"$service_name"$'\t'"($resolved_image)"$'\t'"success")
+            plan_rows+=("$mark_up"$'\t'"$service_name"$'\t'"($resolved_image)"$'\t'"success")
         else
-            plan_rows+=("[SKIP]"$'\t'"$service_name"$'\t'"($resolved_image) - pinned version"$'\t'"info")
+            plan_rows+=("$mark_skip"$'\t'"$service_name"$'\t'"($resolved_image) - pinned version"$'\t'"info")
         fi
     done <<<"$services"
     printf '%s\n' "${plan_rows[@]}" |

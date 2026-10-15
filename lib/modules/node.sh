@@ -82,7 +82,7 @@ nvm_prune_versions() {
             __gash_info "Uninstalling $ver..."
             nvm uninstall "$ver"
         else
-            __gash_warning "[DRY-RUN] Would uninstall $ver. Re-run with --force to apply."
+            __gash_warning "Dry run: would uninstall $ver. Re-run with --force to apply."
         fi
     done
 

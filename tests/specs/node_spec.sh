@@ -39,7 +39,7 @@ it "dry-run (default) lists duplicates without uninstalling" bash -c '
   }
 
   out="$(nvm_prune_versions 2>&1)"
-  [[ "$out" == *"DRY-RUN"* ]]
+  [[ "$out" == *"Dry run: would uninstall"* ]]
   [[ "$out" == *"v18.18.0"* ]]
   [[ "$out" == *"v20.9.0"* ]]
   [[ "$out" == *"v20.11.0"* ]]
