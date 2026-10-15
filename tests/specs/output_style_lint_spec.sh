@@ -111,9 +111,11 @@ export __style_re_s10='(^|[^A-Za-z0-9_])(echo|printf)([^A-Za-z0-9_].*)?(>&2|>[ ]
 export __style_re_s11='(\[|test)[ ].*-t[ ]+[12]([^0-9]|$)'
 export __style_re_s12='(^|[^A-Za-z0-9_])read[ ]([^;|&]*[ ])?-[A-Za-z]*p'
 
-# The closed exception list (brief section 4.3). Do not extend.
+# The closed exception list (brief section 4.3, plus the Bash-version
+# message of gash.sh for S10, approved 2026-10-15). Do not extend.
 export __style_exempt_output="lib/core/output.sh"
 export __style_exempt_core="lib/core/"
+export __style_exempt_s10="lib/core/ gash.sh@__gash_require_bash_message"
 export __style_exempt_s3="lib/core/output.sh lib/shell/prompt.sh lib/aliases/colors.sh lib/core/utils.sh@all_colors"
 
 # Run a rule over the scan. FIELD is code or str, ERE the pattern, EXEMPT a
@@ -167,6 +169,6 @@ it "S9: no hand-drawn rules" bash -c '
     __style_rule str "$__style_re_s9b" "$__style_exempt_output" || rc=1
     exit "$rc"
 '
-it "S10: no echo or printf to stderr outside lib/core" bash -c '__style_rule code "$__style_re_s10" "$__style_exempt_core"'
+it "S10: no echo or printf to stderr outside lib/core" bash -c '__style_rule code "$__style_re_s10" "$__style_exempt_s10"'
 it "S11: no private TTY tests outside lib/core" bash -c '__style_rule code "$__style_re_s11" "$__style_exempt_core"'
 it "S12: no read -p prompts outside lib/core" bash -c '__style_rule code "$__style_re_s12" "$__style_exempt_core"'
