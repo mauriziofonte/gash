@@ -21,5 +21,5 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | `.4` | `cd ../../../..` |
 | `.5` | `cd ../../../../..` |
 | `cls` | `clear` |
-| `path` | `echo -e ${PATH//:/\\n}` |
+| `path` | `tr ":" "\n" <<<"$PATH"` |
 

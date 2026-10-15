@@ -23,13 +23,20 @@
 
 # Bash 4.4 or newer (associative arrays, namerefs, ${var,,}). Written in
 # plain sh syntax so that older shells reach the message instead of a parse
-# error.
-if [ -z "${BASH_VERSINFO-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
-    { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
+# error. The message is the only output Gash prints without lib/core (which
+# such a shell cannot load): the one exception to the "no echo to stderr"
+# rule of tests/specs/output_style_lint_spec.sh.
+__gash_require_bash_message() {
     echo "Gash requires Bash 4.4 or newer (this is ${BASH_VERSION:-not Bash})." >&2
     echo "On macOS: brew install bash, then use $(brew --prefix 2>/dev/null || echo /opt/homebrew)/bin/bash." >&2
+}
+if [ -z "${BASH_VERSINFO-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
+    { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
+    __gash_require_bash_message
+    unset -f __gash_require_bash_message
     return 1 2>/dev/null || exit 1
 fi
+unset -f __gash_require_bash_message
 
 # Only interactive shells get Gash, unless headless mode is requested.
 if [[ $- != *i* && "${GASH_HEADLESS-}" != "1" ]]; then

@@ -28,7 +28,10 @@ Messages go to stderr but follow stdout, so `cmd 2>log` at a terminal writes
 colors into `log`. **Fix:** `NO_COLOR=1`, or `--no-color` where accepted
 (`files_largest`, `tree_stats`, `gash_doctor`, `gash`, `disk_usage`, ...). The
 prompt drops its colors too, from the next prompt; `GASH_PROMPT=0` keeps your
-own `PS1`.
+own `PS1`. Without colors no escape code is printed at all: no screen clear,
+spinners redraw with carriage returns, and tables, bars and menus print as
+plain text, with `Info:`, `OK:`, `Warning:` and `Error:` in place of the
+status glyphs.
 
 ## Slow prompt in a large repository
 

@@ -588,9 +588,10 @@ it "__sysinfo_format_ai_response shows severity icons correctly" bash -c '
     result="$(__sysinfo_format_ai_response "$json")"
 
     # Check all severity types produce output
-    [[ "$result" == *"[!]"* ]]
-    [[ "$result" == *"[+]"* ]]
-    [[ "$result" == *"[i]"* ]]
+    [[ "$result" == *"Error: Root login enabled"* ]]
+    [[ "$result" == *"Warning: No fail2ban"* ]]
+    [[ "$result" == *"OK: Key auth enabled"* ]]
+    [[ "$result" == *"Info: Port 22 open"* ]]
     [[ "$result" == *"1 critical"* ]]
     [[ "$result" == *"1 warnings"* ]]
     [[ "$result" == *"1 info"* ]]
@@ -876,8 +877,8 @@ it "__sysinfo_md_initial generates markdown with hostname and sections" bash -c 
     [[ "$result" == *"Debian 12"* ]]
     [[ "$result" == *"Gemini"* ]]
     [[ "$result" == *"### Security Posture"* ]]
-    [[ "$result" == *"**[!]** No firewall"* ]]
-    [[ "$result" == *"**[+]** SSH hardened"* ]]
+    [[ "$result" == *"**Warning:** No firewall"* ]]
+    [[ "$result" == *"**OK:** SSH hardened"* ]]
     [[ "$result" == *"1 warnings"* ]]
     [[ "$result" == *"1 ok"* ]]
 '
@@ -899,7 +900,7 @@ it "__sysinfo_md_drilldown generates markdown with components" bash -c '
     [[ "$result" == *"### Apache2"* ]]
     [[ "$result" == *"running"* ]]
     [[ "$result" == *"3 vhosts"* ]]
-    [[ "$result" == *"**[+]** ProxyPass OK"* ]]
+    [[ "$result" == *"**OK:** ProxyPass OK"* ]]
 '
 
 it "__sysinfo_md_freetext generates markdown with question header" bash -c '
@@ -919,7 +920,7 @@ it "__sysinfo_md_freetext generates markdown with question header" bash -c '
     [[ "$result" == *"### OpenSSH"* ]]
     [[ "$result" == *"running"* ]]
     [[ "$result" == *"Port 22"* ]]
-    [[ "$result" == *"**[!]** Root login enabled"* ]]
+    [[ "$result" == *"**Warning:** Root login enabled"* ]]
 '
 
 # =============================================================================

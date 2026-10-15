@@ -158,8 +158,9 @@ chrome_headless_update() {
         return 1
     }
 
-    printf 'Latest Playwright: playwright-core %s (chromium-headless-shell %s, revision %s)\n' "$pw" "$target" "${rev:-?}"
-    printf 'Installed: %s\n' "${current:-none}"
+    __gash_kv --width 0 \
+        "Latest Playwright:" "playwright-core $pw (chromium-headless-shell $target, revision ${rev:-?})" \
+        "Installed:" "${current:-none}"
 
     if [[ "$current" == "$target" ]]; then
         printf 'chrome-headless-shell is already the newest version (%s).\n' "$target"
@@ -180,13 +181,16 @@ chrome_headless_update() {
     done
 
     if [[ -z "$current" ]]; then
-        printf 'The following NEW packages will be installed:\n  chrome-headless-shell %s (from playwright-core %s)\n' "$target" "$pw"
+        __gash_heading "The following NEW packages will be installed:"
+        printf '  chrome-headless-shell %s (from playwright-core %s)\n' "$target" "$pw"
     else
-        printf 'The following packages will be upgraded:\n  chrome-headless-shell (%s => %s, from playwright-core %s)\n' "$current" "$target" "$pw"
-        printf 'Kept for rollback: %s\n' "$current"
+        __gash_heading "The following packages will be upgraded:"
+        printf '  chrome-headless-shell (%s => %s, from playwright-core %s)\n' "$current" "$target" "$pw"
+        __gash_kv --width 0 "Kept for rollback:" "$current"
     fi
     if ((${#prune[@]})); then
-        printf 'The following versions will be REMOVED:\n  %s\n' "${prune[*]}"
+        __gash_heading "The following versions will be REMOVED:"
+        printf '  %s\n' "${prune[*]}"
     fi
     printf 'Need to get %s of archives from %s\n' "$(__gash_human_size "$size")" "$url"
 

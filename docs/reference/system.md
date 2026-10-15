@@ -40,9 +40,13 @@ all_colors
 ```bash
 # Test your terminal's color support
 all_colors
+```
 
-# Pipe to less for scrolling
-all_colors | less -R
+#### Notes
+
+```text
+Colors only on a color terminal: piped, or with NO_COLOR set, it prints
+the color names alone.
 ```
 
 ## disk_usage

@@ -7,14 +7,14 @@
 # INTERNAL HELPERS
 # =============================================================================
 
-# Debug output (enabled with GASH_AI_DEBUG=1)
+# Debug output (enabled with GASH_AI_DEBUG=1), through the debug emitter:
+# "Debug: AI LABEL:" and the content on the lines below it (stderr). The
+# content is a reply from outside: control characters are dropped.
 # Usage: __ai_debug "label" "content"
 __ai_debug() {
-    [[ "${GASH_AI_DEBUG:-0}" != "1" ]] && return 0
-    local label="${1-}"
-    local content="${2-}"
-    echo -e "\n${__GASH_CYAN}[AI DEBUG] ${label}:${__GASH_COLOR_OFF}" >&2
-    echo "$content" >&2
+    [[ "${GASH_AI_DEBUG:-0}" == "1" ]] || return 0
+    __gash_spinner_stop none
+    GASH_DEBUG=1 __gash_debug "AI ${1-}:"$'\n'"$(__ai_sanitize_text "${2-}")"
 }
 
 # Check if jq is available
@@ -44,6 +44,11 @@ __ai_require_curl() {
 __ai_handle_curl_error() {
     local provider="$1" curl_exit="${2:-}" http_code="$3"
     local elapsed_time="$4" response="$5" curl_error="${6:-}" headers="${7:-}"
+
+    # A message must not land on the spinner's line.
+    if [[ -n "$curl_exit" || "$http_code" != 200 ]]; then
+        __gash_spinner_stop none
+    fi
 
     if [[ -n "$curl_exit" ]]; then
         case "$curl_exit" in
@@ -140,8 +145,8 @@ __ai_sanitize_json() {
 # well-known token formats. Reads stdin, writes stdout.
 __ai_redact() {
     "${__GASH_AWK:-awk}" '
-        /-----BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----/ { print "[REDACTED PRIVATE KEY]"; skip = 1; next }
-        skip { if ($0 ~ /-----END [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-----/) skip = 0; next }
+        /-+BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-+/ { print "[REDACTED PRIVATE KEY]"; skip = 1; next }
+        skip { if ($0 ~ /-+END [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-+/) skip = 0; next }
         { print }' |
         sed -E \
             -e 's#([A-Za-z][A-Za-z0-9+.-]*://[^/:@[:space:]]*):[^/@[:space:]]+@#\1:[REDACTED]@#g' \
@@ -173,9 +178,17 @@ __ai_confirm_send() {
         return 1
     fi
     local answer=""
-    printf '%s' "Send $what ($size, secrets redacted) to $provider ($(__ai_model "$provider"))? [y/N] " >/dev/tty
+    __gash_ask_render "Send $what ($size, secrets redacted) to $provider ($(__ai_model "$provider"))?" "y/N"
     IFS= read -r answer </dev/tty || answer=""
     [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]]
+}
+
+# Stop the spinner, print an error, return 1.
+# Usage: __ai_fail "message"
+__ai_fail() {
+    __gash_spinner_stop none
+    __gash_error "${1-}"
+    return 1
 }
 
 # Send one structured-output request and print the model's JSON reply.
@@ -183,6 +196,11 @@ __ai_confirm_send() {
 # private temp file (never argv) and the API key through a curl config
 # read from a pipe. Rate limits, overloads and transient 5xx are retried
 # up to three times, honoring Retry-After.
+#
+# With __AI_REPLY_TO_VAR=1 (a local of the caller) the reply goes into
+# __AI_REPLY instead of stdout: the caller then runs the request outside a
+# command substitution, so its diagnostics see the terminal (glyphs, not
+# word prefixes). Diagnostics stop the caller's spinner first.
 # Usage: __ai_request PROVIDER TOKEN SYSTEM USER SCHEMA MAX_TOKENS TIMEOUT
 __ai_request() {
     local __ai_tmp_body __ai_tmp_out __ai_tmp_err __ai_tmp_hdr rc=0
@@ -213,7 +231,7 @@ __ai_request_send() {
             key_header="x-goog-api-key"
             ;;
         *)
-            __gash_error "Unknown AI provider: $provider"
+            __ai_fail "Unknown AI provider: $provider"
             return 1
             ;;
     esac
@@ -241,7 +259,7 @@ __ai_request_send() {
                                  responseMimeType: "application/json",
                                  responseJsonSchema: $schema}}') || return 1
     fi
-    __ai_debug "$label Request Body" "$(jq -C . <<<"$body" 2>/dev/null || printf '%s' "$body")"
+    __ai_debug "$label Request Body" "$(jq . <<<"$body" 2>/dev/null || printf '%s' "$body")"
 
     local tmp_body="$__ai_tmp_body" tmp_out="$__ai_tmp_out" tmp_err="$__ai_tmp_err" tmp_hdr="$__ai_tmp_hdr"
     printf '%s' "$body" >"$tmp_body"
@@ -249,8 +267,9 @@ __ai_request_send() {
     local -a extra=()
     [[ "$provider" == claude ]] && extra=(-H "anthropic-version: 2023-06-01")
 
-    local http_code curl_exit curl_error response start elapsed rc attempt=0 max_retries=3
+    local http_code curl_exit curl_error response start elapsed rc attempt=0 max_retries=3 spinning
     while true; do
+        spinning="${__GASH_SPINNER_PID-}"
         curl_exit=""
         start=$(date +%s)
         http_code=$(curl -sS -w "%{http_code}" -o "$tmp_out" -D "$tmp_hdr" \
@@ -264,7 +283,7 @@ __ai_request_send() {
         curl_error=$(<"$tmp_err")
 
         __ai_debug "$label HTTP Code" "$http_code (elapsed: ${elapsed}s)"
-        __ai_debug "$label Raw Response" "$(jq -C . <<<"$response" 2>/dev/null || printf '%s' "$response")"
+        __ai_debug "$label Raw Response" "$(jq . <<<"$response" 2>/dev/null || printf '%s' "$response")"
         [[ -n "$curl_error" ]] && __ai_debug "$label Curl Stderr" "$curl_error"
 
         rc=0
@@ -275,6 +294,7 @@ __ai_request_send() {
             attempt=$((attempt + 1))
             __gash_warning "$label API busy (HTTP $http_code), retrying in ${__AI_RETRY_DELAY}s (${attempt}/${max_retries})..."
             sleep "$__AI_RETRY_DELAY"
+            [[ -z "$spinning" ]] || __gash_spinner_start "$__GASH_SPINNER_MSG"
         elif ((rc == 2)); then
             __gash_error "$label API still busy (HTTP $http_code) after ${max_retries} retries"
             return 1
@@ -291,11 +311,11 @@ __ai_request_send() {
         stop=$(jq -r '.stop_reason // empty' <<<"$response" 2>/dev/null)
         case "$stop" in
             refusal)
-                __gash_error "Claude declined this request"
+                __ai_fail "Claude declined this request"
                 return 1
                 ;;
             max_tokens)
-                __gash_error "Claude's answer was cut off (max_tokens $max_tokens reached)"
+                __ai_fail "Claude's answer was cut off (max_tokens $max_tokens reached)"
                 return 1
                 ;;
         esac
@@ -304,20 +324,24 @@ __ai_request_send() {
         stop=$(jq -r '.candidates[0].finishReason // empty' <<<"$response" 2>/dev/null)
         case "$stop" in
             SAFETY | PROHIBITED_CONTENT | BLOCKLIST | SPII)
-                __gash_error "Gemini declined this request ($stop)"
+                __ai_fail "Gemini declined this request ($stop)"
                 return 1
                 ;;
             MAX_TOKENS)
-                __gash_error "Gemini's answer was cut off (maxOutputTokens $max_tokens reached)"
+                __ai_fail "Gemini's answer was cut off (maxOutputTokens $max_tokens reached)"
                 return 1
                 ;;
         esac
     fi
 
-    __ai_debug "$label Extracted JSON" "$(jq -C . <<<"$text" 2>/dev/null || printf '%s' "$text")"
+    __ai_debug "$label Extracted JSON" "$(jq . <<<"$text" 2>/dev/null || printf '%s' "$text")"
     if [[ -z "$text" ]] || ! jq -e . >/dev/null 2>&1 <<<"$text"; then
-        __gash_error "Failed to parse $label response"
+        __ai_fail "Failed to parse $label response"
         return 1
     fi
-    __ai_sanitize_json <<<"$text"
+    if [[ "${__AI_REPLY_TO_VAR-}" == 1 ]]; then
+        __AI_REPLY="$(__ai_sanitize_json <<<"$text")"
+    else
+        __ai_sanitize_json <<<"$text"
+    fi
 }

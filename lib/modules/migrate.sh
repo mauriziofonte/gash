@@ -55,7 +55,7 @@ __gash_migrate_mark_done() {
 # at most once a day, and nothing else.
 __gash_migrate_autostart() {
     __gash_migrate_needed || return 0
-    if [[ "${GASH_HEADLESS-}" != "1" && $- == *i* && -t 0 && -t 1 ]]; then
+    if [[ "${GASH_HEADLESS-}" != "1" && $- == *i* ]] && __gash_tty_io; then
         gash_migrate --auto
         return 0
     fi
@@ -66,7 +66,7 @@ __gash_migrate_autostart() {
     last="${last//[^0-9]/}"
     [[ -n "$last" ]] && ((now - last < 86400)) && return 0
     mkdir -p "$dir" 2>/dev/null && printf '%s\n' "$now" >"$dir/notice" 2>/dev/null
-    printf 'gash: your configuration is from Gash 1.x; open a terminal and run "gash migrate" to review the changes in 2.0\n' >&2
+    __gash_note 'gash: your configuration is from Gash 1.x; open a terminal and run "gash migrate" to review the changes in 2.0'
     return 0
 }
 
@@ -261,7 +261,7 @@ __gash_migrate_new_gashrc() {
 # -----------------------------------------------------------------------------
 
 __gash_migrate_tui() {
-    [[ "${GASH_TUI-}" != plain && "${TERM-}" != dumb && -t 0 && -t 1 ]]
+    [[ "${GASH_TUI-}" != plain && "${TERM-}" != dumb ]] && __gash_tty_io
 }
 
 # Draw one screen: a title line, then BODY wrapped in a box.
@@ -271,25 +271,27 @@ __gash_migrate_screen() {
     width=$(($(__gash_tty_width) - 8))
     ((width > 72)) && width=72
     ((width < 30)) && width=30
-    __gash_migrate_tui && printf '\e[H\e[2J'
-    local B="${__GASH_BOLD-}" M="${__GASH_COLOR_MUTED-}" P="${__GASH_COLOR_PRIMARY-}" R="${__GASH_COLOR_OFF-}"
-    __gash_use_color || { B="" M="" P="" R=""; }
+    if __gash_migrate_tui; then __gash_clear_screen; fi
+    local B="" P="" R=""
+    if __gash_use_color; then
+        B="$__GASH_BOLD" P="$__GASH_COLOR_PRIMARY" R="$__GASH_COLOR_OFF"
+    fi
     local -a lines=()
     __gash_wrap lines "$width" "$body"
     echo
-    if [[ -n "$step" ]]; then
-        printf '  %sGash 2.0 migration%s %s%s %s of %s%s\n\n' "$P" "$R" "$M" "$__GASH_GLYPH_DOT" "$step" "$total" "$R"
-    else
-        printf '  %sGash 2.0 migration%s\n\n' "$P" "$R"
-    fi
+    __gash_heading --indent 2 --note "${step:+$__GASH_GLYPH_DOT $step of $total}" "Gash 2.0 migration"
+    echo
     __gash_box --color "$P" "${B}${title}${R}" "" "${lines[@]}"
     echo
 }
 
 # Colored unified diff of OLD (or nothing) against NEW, labelled PATH.
 __gash_migrate_diff() {
-    local old="$1" new="$2" label="$3" G="${__GASH_GREEN-}" Rd="${__GASH_RED-}" C="${__GASH_CYAN-}" R="${__GASH_COLOR_OFF-}"
-    __gash_use_color || { G="" Rd="" C="" R=""; }
+    # Headers in the structure color, added lines success, removed error.
+    local old="$1" new="$2" label="$3" G="" Rd="" C="" R=""
+    if __gash_use_color; then
+        G="$__GASH_COLOR_SUCCESS" Rd="$__GASH_COLOR_ERROR" C="$__GASH_COLOR_PRIMARY" R="$__GASH_COLOR_OFF"
+    fi
     [[ -f "$old" ]] || old=/dev/null
     # diff exits 1 when the files differ: never let that reach `set -e`.
     { diff -u --label "$label" --label "$label (new)" "$old" "$new" 2>/dev/null || true; } |
@@ -323,9 +325,9 @@ __gash_migrate_rollback() {
     printf '  Restoring the files saved on %s:\n' "${backup##*/}"
     while IFS=$'\t' read -r state path name; do
         if [[ "$state" == present ]]; then
-            printf '    %s %s\n' "$__GASH_GLYPH_BULLET" "${path/#$HOME/\~} (restored)"
+            __gash_list --indent 4 "${path/#$HOME/\~} (restored)"
         else
-            printf '    %s %s\n' "$__GASH_GLYPH_BULLET" "${path/#$HOME/\~} (removed, it did not exist before)"
+            __gash_list --indent 4 "${path/#$HOME/\~} (removed, it did not exist before)"
         fi
     done <"$backup/manifest"
     echo
@@ -354,20 +356,21 @@ __gash_migrate_status() {
     dir="$(__gash_migrate_state_dir)"
     __gash_migrate_slurp schema "$dir/schema" || true
     schema="${schema//[[:space:]]/}"
-    echo
-    printf '  Configuration schema: %s\n' "${schema:-1 (not migrated)}"
+    local -a kv=("Configuration schema:" "${schema:-1 (not migrated)}")
     if __gash_migrate_needed; then
-        printf '  Migration: pending, run "gash migrate"\n'
+        kv+=("Migration:" 'pending, run "gash migrate"')
     else
-        printf '  Migration: nothing pending\n'
+        kv+=("Migration:" "nothing pending")
     fi
     for b in "$dir"/backups/*/manifest; do
         [[ -f "$b" ]] || continue
         n=$((n + 1))
         b="${b%/manifest}"
-        printf '  Backup: %s\n' "${b/#$HOME/\~}"
+        kv+=("Backup:" "${b/#$HOME/\~}")
     done
-    ((n)) || printf '  Backups: none\n'
+    ((n)) || kv+=("Backups:" "none")
+    echo
+    __gash_kv --indent 2 --width 0 "${kv[@]}"
     echo
 }
 
@@ -440,8 +443,6 @@ gash_migrate() {
     fi
 
     local total=${#items[@]} pick=""
-    local B="${__GASH_BOLD-}" R="${__GASH_COLOR_OFF-}"
-    __gash_use_color || { B="" R=""; }
 
     # Welcome
     __gash_migrate_screen "" "" "Welcome to Gash 2.0" \
@@ -586,12 +587,14 @@ gash_migrate() {
     fi
 
     # Preview and confirm.
-    __gash_migrate_tui && printf '\e[H\e[2J'
+    if __gash_migrate_tui; then __gash_clear_screen; fi
     echo
     if ((${#touched[@]} == 0)); then
-        printf '  %sNo file needs to change.%s\n\n' "$B" "$R"
+        __gash_heading --indent 2 "No file needs to change."
+        echo
     else
-        printf '  %sThese changes will be written:%s\n\n' "$B" "$R"
+        __gash_heading --indent 2 "These changes will be written:"
+        echo
         local t path
         for t in "${touched[@]}"; do
             if cmp -s "${t%%|*}" "${t#*|}"; then
@@ -654,23 +657,20 @@ gash_migrate() {
     if [[ -n "$backup" ]]; then
         for t in "${touched[@]}"; do
             path="${t%%|*}"
-            printf '    %s %s\n' "$__GASH_GLYPH_BULLET" "${path/#$HOME/\~}"
+            __gash_list --indent 4 "${path/#$HOME/\~}"
         done
         printf '  Backups in %s; undo with: gash migrate --rollback\n' "${backup/#$HOME/\~}"
     fi
-    cat <<'EOF'
-
-  Also new in 2.0, nothing to configure:
-    - port_kill stops only listening processes and asks first (--force skips).
-    - remote_* commands ask before touching ~/.ssh on the other side.
-    - -n means --limit everywhere; dry runs are --dry-run.
-    - llm_git_status reports conflicted files; llm_tree marks truncated output.
-    - Your EDITOR, HISTCONTROL and PROMPT_COMMAND are respected.
-    - Every command answers --help without side effects; 'gash' shows the card.
-
-  Open a new terminal to load the new configuration.
-
-EOF
+    echo
+    __gash_heading --indent 2 "Also new in 2.0, nothing to configure:"
+    __gash_list --indent 4 \
+        "port_kill stops only listening processes and asks first (--force skips)." \
+        "remote_* commands ask before touching ~/.ssh on the other side." \
+        "-n means --limit everywhere; dry runs are --dry-run." \
+        "llm_git_status reports conflicted files; llm_tree marks truncated output." \
+        "Your EDITOR, HISTCONTROL and PROMPT_COMMAND are respected." \
+        "Every command answers --help without side effects; 'gash' shows the card."
+    printf '\n  %s\n\n' "Open a new terminal to load the new configuration."
     return 0
 }
 

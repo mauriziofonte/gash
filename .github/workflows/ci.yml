@@ -65,6 +65,22 @@ jobs:
       - name: Run test suite
         run: bash tests/run.sh --awk ${{ matrix.awk }}
 
+  render:
+    name: Tests (terminal rendering)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3
+
+      # The slow spec: every human-facing function on a pseudo-terminal,
+      # piped and with NO_COLOR. The other test jobs leave it out.
+      - name: Run rendering fixtures
+        run: bash tests/run.sh specs/output_style_render_spec.sh
+
   bash-versions:
     name: Tests (bash ${{ matrix.bash }})
     runs-on: ubuntu-24.04

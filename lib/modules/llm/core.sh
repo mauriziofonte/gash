@@ -132,7 +132,7 @@ __llm_validate_path() {
     # Block path traversal attempts: ".." only counts when it is a whole
     # path component ("/tmp/../etc"), not a substring ("file..bak", "v1.2..3")
     if [[ "/$path/" == *"/../"* || "$path" == ".." || "$path" == "../"* || "$path" == *"/.." ]]; then
-        echo '{"error":"path_traversal_blocked","action":"FATAL","recoverable":false,"hint":"Path traversal (..) is not allowed for security reasons"}' >&2
+        __gash_json_error "path_traversal_blocked" "" "FATAL" "Path traversal (..) is not allowed for security reasons"
         return 1
     fi
 
@@ -317,7 +317,7 @@ __llm_validate_command() {
     local pattern
     for pattern in "${__LLM_DANGEROUS_PATTERNS[@]}"; do
         if [[ "$normalized_cmd" =~ $pattern ]]; then
-            echo '{"error":"dangerous_command_blocked","details":"Command matches dangerous pattern","action":"FATAL","recoverable":false,"hint":"This command is blocked for safety. Do not attempt to bypass"}' >&2
+            __gash_json_error "dangerous_command_blocked" "Command matches dangerous pattern" "FATAL" "This command is blocked for safety. Do not attempt to bypass"
             return 1
         fi
     done

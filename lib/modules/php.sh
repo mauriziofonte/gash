@@ -127,10 +127,11 @@ php_detect_version() {
             "$(__gash_json_escape "$composer_command")"
     else
         __gash_info "PHP version for '$project_dir': $version"
-        printf "  %-20s %s\n" "php_raw_binary" "$php_raw_binary"
-        printf "  %-20s %s\n" "php_command" "$php_command"
-        printf "  %-20s %s\n" "composer_raw_binary" "${composer_raw_binary:-<none>}"
-        printf "  %-20s %s\n" "composer_command" "$composer_command"
+        __gash_kv --indent 2 --width 20 --value-color accent \
+            "php_raw_binary" "$php_raw_binary" \
+            "php_command" "$php_command" \
+            "composer_raw_binary" "${composer_raw_binary:-<none>}" \
+            "composer_command" "$composer_command"
     fi
 }
 

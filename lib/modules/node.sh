@@ -82,7 +82,7 @@ nvm_prune_versions() {
             __gash_info "Uninstalling $ver..."
             nvm uninstall "$ver"
         else
-            __gash_warning "[DRY-RUN] Would uninstall $ver. Re-run with --force to apply."
+            __gash_warning "Dry run: would uninstall $ver. Re-run with --force to apply."
         fi
     done
 
@@ -163,19 +163,21 @@ node_upgrade() {
         done
     done
 
-    [[ -n "$latest_lts" ]] && printf 'Latest LTS: %s\n' "$latest_lts"
+    [[ -n "$latest_lts" ]] && __gash_kv --width 0 "Latest LTS:" "$latest_lts"
     local i
     if ((${#installs[@]})); then
-        printf 'The following NEW versions will be installed:\n'
+        __gash_heading "The following NEW versions will be installed:"
         for i in "${!installs[@]}"; do
-            printf '  %s  (replaces %s, global packages carried over)\n' "${installs[$i]}" "${sources[$i]}"
-        done
+            printf '%s\t(replaces %s, global packages carried over)\n' "${installs[$i]}" "${sources[$i]}"
+        done | __gash_table --no-header --indent 2 --color 1:accent --color 2:muted
     fi
     if ((${#removes[@]})); then
-        printf 'The following versions will be REMOVED:\n  %s\n' "${removes[*]}"
+        __gash_heading "The following versions will be REMOVED:"
+        printf '%s\n' "${removes[*]}" | __gash_table --no-header --indent 2 --color 1:accent
     fi
     if ((${#keeps[@]})); then
-        printf 'Already the newest patch:\n  %s\n' "${keeps[*]}"
+        __gash_heading "Already the newest patch:"
+        printf '%s\n' "${keeps[*]}" | __gash_table --no-header --indent 2 --color 1:accent
     fi
     printf '%d newly installed, %d to remove, %d up to date.\n' "${#installs[@]}" "${#removes[@]}" "${#keeps[@]}"
 
@@ -399,9 +401,10 @@ node_detect_version() {
             "$(__gash_json_escape "$npx_command")"
     else
         __gash_info "Node.js version for '$project_dir': $full_version (major $major_version)"
-        printf "  %-15s %s\n" "node_command" "$node_command"
-        printf "  %-15s %s\n" "npm_command" "$npm_command"
-        printf "  %-15s %s\n" "npx_command" "$npx_command"
+        __gash_kv --indent 2 --width 15 --value-color accent \
+            "node_command" "$node_command" \
+            "npm_command" "$npm_command" \
+            "npx_command" "$npx_command"
     fi
 }
 

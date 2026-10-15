@@ -495,9 +495,9 @@ EOF
     out=$(docker_compose_upgrade "$tmpdir" --dry-run 2>&1)
 
     # Should show web as upgradeable
-    [[ "$out" == *"[UPGRADE]"*"web"* ]]
+    [[ "$out" == *"OK:"*"web"* ]]
     # Should show db as skipped (pinned)
-    [[ "$out" == *"[SKIP]"*"db"* ]]
+    [[ "$out" == *"Info:"*"db"*"pinned version"* ]]
     # Should show "Would run" (dry-run)
     [[ "$out" == *"Would run"* ]]
     [[ "$out" == *"pull"* ]]
@@ -546,7 +546,7 @@ EOF
     out=$(docker_compose_upgrade "$tmpdir" --dry-run --force 2>&1)
 
     # Should show web as upgradeable with --force
-    [[ "$out" == *"[UPGRADE]"*"web"* ]]
+    [[ "$out" == *"OK:"*"web"* ]]
     [[ "$out" == *"Would run"* ]]
 '
 

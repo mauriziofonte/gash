@@ -21,7 +21,8 @@ To try a working copy as your shell, point `~/.gashrc` at it with
 ## Before you open a pull request
 
 ```bash
-bash tests/run.sh                                   # all specs
+bash tests/run.sh                                   # all specs but the slow one
+bash tests/run.sh --slow                            # with the rendering fixtures (~8 min)
 bash tests/run.sh -f 'files_largest'                # only matching tests
 bash tests/run.sh --awk mawk                        # with mawk as awk
 bash tests/run.sh --bash /path/to/bash-4.4/bin/bash # an older Bash
@@ -50,8 +51,21 @@ locally.
 - **Agent-facing functions** print JSON on stdout and errors through
   `__gash_json_error` on stderr, with an `action` the agent can branch on.
   New keys may be added to an envelope; existing keys never change type.
-- **Output** goes through the helpers in `lib/core/output.sh`; colors only
-  when `__gash_use_color` says so, glyphs with an ASCII fallback.
+- **Output** goes through the helpers in `lib/core/output.sh`: the semantic
+  palette (`__GASH_COLOR_PRIMARY` for structure, `ACCENT` for the names the
+  user looks for, `MUTED` for secondary data, the status colors for status
+  only), emitters for diagnostics (`__gash_info`, `__gash_error`,
+  `__gash_usage`, `__gash_hint`, ...), `__gash_table` for columns, `__gash_kv`
+  for key/value lines, `__gash_section` or `__gash_heading` for titles,
+  `__gash_list`, `__gash_box`, `__gash_bar`, and `needs_confirm_prompt` or
+  `__gash_confirm_plan` for questions. Colors only when `__gash_use_color`
+  says so, glyphs with an ASCII fallback, outside text with `printf '%s'`.
+  `tests/specs/output_style_lint_spec.sh` enforces these rules on the source;
+  `tests/specs/output_style_render_spec.sh` runs every public function on a
+  real terminal, piped and with `NO_COLOR`, so a new function needs a
+  fixture there. It is slow, so `tests/run.sh` runs it only with `--slow`
+  (or `bash tests/run.sh specs/output_style_render_spec.sh`), and CI in a
+  job of its own.
 - **Settings** are `GASH_*` lines in `~/.gash_env`, listed in
   `.gash_env.template` and in `__GASH_SETTINGS_KNOWN`; the environment
   wins over the file, except for the `llm_exec` permissions.

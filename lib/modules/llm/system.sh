@@ -122,8 +122,29 @@ __llm_procs_impl() {
             done < <(lsof -i :"$port" -t 2>/dev/null || true)
         fi
     elif [[ -n "$name" ]]; then
+        # pgrep -f also matches the caller: this shell, the shells above it
+        # (their command lines hold NAME) and the subshells they forked
+        # (same command line as their parent, like the one running pgrep).
+        # Those are left out, and so is a process gone before it was read.
+        local -A self=()
+        local p="$BASHPID" i ppid args
+        self[$$]=1
+        for ((i = 0; i < 64; i++)); do
+            [[ "$p" =~ ^[0-9]+$ ]] && ((p > 1)) || break
+            self[$p]=1
+            p="$(ps -o ppid= -p "$p" 2>/dev/null)" || break
+            p="${p//[[:space:]]/}"
+        done
         while read -r pid; do
-            [[ "$pid" =~ ^[0-9]+$ ]] || continue
+            [[ "$pid" =~ ^[0-9]+$ && -z "${self[$pid]+x}" ]] || continue
+            line="$(ps -o ppid=,args= -p "$pid" 2>/dev/null)" || true
+            read -r ppid args <<<"$line"
+            [[ "$ppid" =~ ^[0-9]+$ ]] || continue
+            if [[ -n "${self[$ppid]+x}" ]]; then
+                line="$(ps -o args= -p "$ppid" 2>/dev/null)" || true
+                read -r line <<<"$line"
+                [[ "$args" == "$line" ]] && continue
+            fi
             cmd="$(ps -p "$pid" -o comm= 2>/dev/null)" || true
             items+=("{\"pid\":$pid,\"name\":\"$(__gash_json_escape "$cmd")\"}")
         done < <(pgrep -f "$name" 2>/dev/null || true)
@@ -229,7 +250,7 @@ __llm_env_redact() {
     if [[ "$__er_value" =~ ^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):[^/@]*@(.*)$ ]]; then
         __er_value="${BASH_REMATCH[1]}:***@${BASH_REMATCH[2]}"
     fi
-    local re='-----BEGIN [[:upper:][:digit:] ]*PRIVATE KEY'
+    local re='-{5}BEGIN [[:upper:][:digit:] ]*PRIVATE KEY'
     if [[ "$__er_value" =~ $re ]]; then
         __er_value="***"
         return 0

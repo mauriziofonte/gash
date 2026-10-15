@@ -118,16 +118,15 @@ __gash_help_display() {
     local module="${__GASH_HELP_MODULE[$func_name]-}"
     local see_also="${__GASH_HELP_SEE_ALSO[$func_name]-}"
 
-    # Colors gated through __gash_use_color at runtime (no hardcoded ANSI
-    # fallbacks): piping help output must never leak escape sequences.
-    local A='' W='' G='' M='' C='' R=''
+    # Semantic palette, gated through __gash_use_color at runtime: piping
+    # help output must never leak escape sequences. Names (function,
+    # aliases, see also) are accent, headings bold, comments muted.
+    local A='' B='' M='' R=''
     if __gash_use_color; then
-        A="${__GASH_COLOR_ACCENT}" # Orange - function name
-        W="${__GASH_BOLD_WHITE}"   # Bold white - section headers
-        G="${__GASH_GREEN}"        # Green - aliases
-        M="${__GASH_COLOR_MUTED}"  # Dim gray - comments/module
-        C="${__GASH_CYAN}"         # Cyan - commands
-        R="${__GASH_COLOR_OFF}"    # Reset
+        A="${__GASH_COLOR_ACCENT}"
+        B="${__GASH_BOLD}"
+        M="${__GASH_COLOR_MUTED}"
+        R="${__GASH_COLOR_OFF}"
     fi
 
     # Header: function name + module tag
@@ -141,19 +140,19 @@ __gash_help_display() {
     # Short description
     if [[ -n "$short" ]]; then
         echo
-        printf '%s\n' "  ${W}${short}${R}"
+        printf '%s\n' "  ${B}${short}${R}"
     fi
 
     # Aliases
     if [[ -n "$aliases" ]]; then
         echo
-        printf '%s\n' "  ${W}ALIASES${R}"
+        __gash_heading --indent 2 "ALIASES"
         local alias_list="" a
         local -a alias_arr=()
         IFS=',' read -r -a alias_arr <<<"$aliases"
         for a in "${alias_arr[@]}"; do
             [[ -n "$alias_list" ]] && alias_list+=", "
-            alias_list+="${G}${a}${R}"
+            alias_list+="${A}${a}${R}"
         done
         printf '%s\n' "    ${alias_list}"
     fi
@@ -165,7 +164,7 @@ __gash_help_display() {
         while IFS= read -r line; do
             # Section headers: USAGE, EXAMPLES, OPTIONS, NOTES, etc.
             if [[ "$line" =~ ^[A-Z][A-Z\ ]+$ ]]; then
-                printf '%s\n' "  ${W}${line}${R}"
+                __gash_heading --indent 2 "$line"
             # Comment lines (# ...)
             elif [[ "$line" =~ ^[[:space:]]*# ]]; then
                 printf '%s\n' "  ${M}${line}${R}"
@@ -174,7 +173,7 @@ __gash_help_display() {
                 echo
             # Regular content (commands/text)
             else
-                printf '%s\n' "  ${C}${line}${R}"
+                printf '%s\n' "  ${line}"
             fi
         done <<<"$body"
     fi
@@ -182,7 +181,7 @@ __gash_help_display() {
     # See Also
     if [[ -n "$see_also" ]]; then
         echo
-        printf '%s\n' "  ${W}SEE ALSO${R}"
+        __gash_heading --indent 2 "SEE ALSO"
         local sa_list="" sa
         local -a sa_arr=()
         read -r -a sa_arr <<<"$see_also"
@@ -226,6 +225,38 @@ __gash_help_find_by_alias() {
 # Search
 # -----------------------------------------------------------------------------
 
+# One table row per function: name, aliases in parentheses, short
+# description (tab separated, for __gash_help_rows).
+# Usage: __gash_help_row FUNCTION
+__gash_help_row() {
+    local aliases="${__GASH_HELP_ALIASES[$1]-}"
+    printf '%s\t%s\t%s\n' "$1" "${aliases:+($aliases)}" "${__GASH_HELP_SHORT[$1]-}"
+}
+
+# Render rows from __gash_help_row as a table: names accent, aliases accent,
+# descriptions muted, first two columns at least WIDTH1 and WIDTH2 wide (so
+# that consecutive tables line up).
+# Usage: ... | __gash_help_rows INDENT WIDTH1 WIDTH2
+__gash_help_rows() {
+    __gash_table --no-header --indent "${1-2}" --min "1:${2-24}" --min "2:${3-0}" --fit \
+        --color 1:accent --color 2:accent --color 3:muted
+}
+
+# Widths of the name and alias columns over every registered function,
+# into the variables named NAMEVAR and ALIASVAR.
+# Usage: __gash_help_widths NAMEVAR ALIASVAR
+__gash_help_widths() {
+    local -n __ghw_n="$1" __ghw_a="$2"
+    local f a
+    __ghw_n=0 __ghw_a=0
+    for f in "${!__GASH_HELP_REGISTRY[@]}"; do
+        ((${#f} > __ghw_n)) && __ghw_n=${#f}
+        a="${__GASH_HELP_ALIASES[$f]-}"
+        [[ -n "$a" ]] && ((${#a} + 2 > __ghw_a)) && __ghw_a=$((${#a} + 2))
+    done
+    return 0
+}
+
 # Search registry for keyword matches (case-insensitive).
 # Searches: function names, aliases, short descriptions, full body.
 # Usage: __gash_help_search "keyword"
@@ -233,56 +264,33 @@ __gash_help_search() {
     local keyword="${1-}"
     [[ -z "$keyword" ]] && return 1
 
-    local A='' G='' W='' M='' R=''
-    if __gash_use_color; then
-        A="${__GASH_COLOR_ACCENT}"
-        G="${__GASH_GREEN}"
-        W="${__GASH_BOLD_WHITE}"
-        M="${__GASH_COLOR_MUTED}"
-        R="${__GASH_COLOR_OFF}"
-    fi
-
-    local lc_keyword="${keyword,,}"
-
-    local found=0
-    local func_name
-
-    # Collect and sort function names
-    local sorted_funcs
+    local lc_keyword="${keyword,,}" func_name rows="" wn wa
+    local lc_name lc_aliases lc_short lc_body sorted_funcs
     sorted_funcs="$(printf '%s\n' "${!__GASH_HELP_REGISTRY[@]}" | sort)"
 
     while IFS= read -r func_name; do
         [[ -z "$func_name" ]] && continue
-
-        local lc_name="${func_name,,}"
-        local lc_aliases="${__GASH_HELP_ALIASES[$func_name]-}"
-        local lc_short="${__GASH_HELP_SHORT[$func_name]-}"
-        local lc_body="${__GASH_HELP_REGISTRY[$func_name]-}"
+        lc_name="${func_name,,}"
+        lc_aliases="${__GASH_HELP_ALIASES[$func_name]-}"
+        lc_short="${__GASH_HELP_SHORT[$func_name]-}"
+        lc_body="${__GASH_HELP_REGISTRY[$func_name]-}"
         lc_aliases="${lc_aliases,,}" lc_short="${lc_short,,}" lc_body="${lc_body,,}"
-
-        if [[ "$lc_name" == *"$lc_keyword"* ]] ||
-            [[ "$lc_aliases" == *"$lc_keyword"* ]] ||
-            [[ "$lc_short" == *"$lc_keyword"* ]] ||
-            [[ "$lc_body" == *"$lc_keyword"* ]]; then
-
-            local aliases="${__GASH_HELP_ALIASES[$func_name]-}"
-            local short="${__GASH_HELP_SHORT[$func_name]-}"
-            local alias_display=""
-
-            if [[ -n "$aliases" ]]; then
-                alias_display=" ${G}(${aliases})${R}"
-            fi
-
-            printf '  %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
-            found=1
+        if [[ "$lc_name" == *"$lc_keyword"* || "$lc_aliases" == *"$lc_keyword"* ||
+            "$lc_short" == *"$lc_keyword"* || "$lc_body" == *"$lc_keyword"* ]]; then
+            rows+="$(__gash_help_row "$func_name")"$'\n'
         fi
     done <<<"$sorted_funcs"
 
-    if [[ $found -eq 0 ]]; then
-        printf '%s\n' "  ${M}No results for '${keyword}'.${R}"
+    if [[ -z "$rows" ]]; then
+        if __gash_use_color; then
+            printf '  %s%s%s\n' "$__GASH_COLOR_MUTED" "No results for '${keyword}'." "$__GASH_COLOR_OFF"
+        else
+            printf '  %s\n' "No results for '${keyword}'."
+        fi
         return 1
     fi
-
+    __gash_help_widths wn wa
+    printf '%s' "$rows" | __gash_help_rows 2 "$wn" "$wa"
     return 0
 }
 
@@ -293,101 +301,72 @@ __gash_help_search() {
 # List all registered functions grouped by module.
 # Usage: __gash_help_list
 __gash_help_list() {
-    local A='' G='' W='' M='' R=''
-    if __gash_use_color; then
-        A="${__GASH_COLOR_ACCENT}"
-        G="${__GASH_GREEN}"
-        W="${__GASH_BOLD_WHITE}"
-        M="${__GASH_COLOR_MUTED}"
-        R="${__GASH_COLOR_OFF}"
-    fi
-
     # Collect unique module names, sorted
     local -A seen_modules=()
-    local func_name module
+    local func_name module wn wa
     for func_name in "${!__GASH_HELP_MODULE[@]}"; do
         module="${__GASH_HELP_MODULE[$func_name]}"
         seen_modules["$module"]=1
     done
+    __gash_help_widths wn wa
 
     # Define display order for modules
     local -a module_order=(files system git docker docker-compose ai sysinfo gash ssh llm utils)
 
     # Add any modules not in the predefined order
+    local in_order m
     for module in "${!seen_modules[@]}"; do
-        local in_order=0
-        local m
+        in_order=0
         for m in "${module_order[@]}"; do
             [[ "$m" == "$module" ]] && in_order=1 && break
         done
-        [[ $in_order -eq 0 ]] && module_order+=("$module")
+        ((in_order)) || module_order+=("$module")
     done
 
-    local displayed=0
-
+    local displayed=0 sorted
+    local -a module_funcs=()
     for module in "${module_order[@]}"; do
         [[ -z "${seen_modules[$module]+x}" ]] && continue
 
-        # Collect functions for this module
-        local -a module_funcs=()
+        module_funcs=()
         for func_name in "${!__GASH_HELP_MODULE[@]}"; do
             if [[ "${__GASH_HELP_MODULE[$func_name]}" == "$module" ]]; then
                 module_funcs+=("$func_name")
             fi
         done
-
-        # Sort functions
-        local sorted
         sorted="$(printf '%s\n' "${module_funcs[@]}" | sort)"
 
-        # Print module header
-        local uc_module="${module^^}"
         echo
-        printf '%s\n' "  ${W}${uc_module}${R}"
-
-        # Print each function
+        __gash_heading --indent 2 "${module^^}"
         while IFS= read -r func_name; do
-            [[ -z "$func_name" ]] && continue
-
-            local aliases="${__GASH_HELP_ALIASES[$func_name]-}"
-            local short="${__GASH_HELP_SHORT[$func_name]-}"
-            local alias_display=""
-
-            if [[ -n "$aliases" ]]; then
-                alias_display=" ${G}(${aliases})${R}"
-            fi
-
-            printf '    %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
-            displayed=1
-        done <<<"$sorted"
+            [[ -n "$func_name" ]] && __gash_help_row "$func_name"
+        done <<<"$sorted" | __gash_help_rows 4 "$wn" "$wa"
+        displayed=1
     done
 
     # Handle functions with no module
     local -a no_module_funcs=()
     for func_name in "${!__GASH_HELP_REGISTRY[@]}"; do
-        if [[ -z "${__GASH_HELP_MODULE[$func_name]+x}" ]] || [[ -z "${__GASH_HELP_MODULE[$func_name]}" ]]; then
+        if [[ -z "${__GASH_HELP_MODULE[$func_name]-}" ]]; then
             no_module_funcs+=("$func_name")
         fi
     done
 
-    if [[ ${#no_module_funcs[@]} -gt 0 ]]; then
+    if ((${#no_module_funcs[@]} > 0)); then
         echo
-        printf '%s\n' "  ${W}OTHER${R}"
-        local sorted
+        __gash_heading --indent 2 "OTHER"
         sorted="$(printf '%s\n' "${no_module_funcs[@]}" | sort)"
         while IFS= read -r func_name; do
-            [[ -z "$func_name" ]] && continue
-            local aliases="${__GASH_HELP_ALIASES[$func_name]-}"
-            local short="${__GASH_HELP_SHORT[$func_name]-}"
-            local alias_display=""
-            if [[ -n "$aliases" ]]; then
-                alias_display=" ${G}(${aliases})${R}"
-            fi
-            printf '    %b%-24s%b %b%s%b\n' "$A" "$func_name" "$R${alias_display}" "$M" "$short" "$R"
-        done <<<"$sorted"
+            [[ -n "$func_name" ]] && __gash_help_row "$func_name"
+        done <<<"$sorted" | __gash_help_rows 4 "$wn" "$wa"
     fi
 
-    if [[ $displayed -eq 0 && ${#no_module_funcs[@]} -eq 0 ]]; then
-        printf '%s\n' "  ${M}No help entries registered.${R}"
+    if ((displayed == 0 && ${#no_module_funcs[@]} == 0)); then
+        if __gash_use_color; then
+            printf '  %s%s%s\n' "$__GASH_COLOR_MUTED" "No help entries registered." "$__GASH_COLOR_OFF"
+        else
+            printf '  %s\n' "No help entries registered."
+        fi
     fi
+    return 0
 }

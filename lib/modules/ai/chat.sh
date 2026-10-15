@@ -63,44 +63,64 @@ __ai_gather_context() {
         '{cwd:$cwd,shell:$shell,distro:$distro,pkg:$pkg,git:($git|if . == "" then null else . end),files:$files,exit:$exit}'
 }
 
-# Format and display AI response based on type
+# Format and display AI response based on type. Model text is printed as
+# given (printf '%s', never escape-expanded); labels are __gash_kv keys.
 # Usage: __ai_format_response "json_response"
 __ai_format_response() {
     local json="${1-}"
 
     local resp_type text command code lang issue suggestion
-    resp_type=$(echo "$json" | jq -r '.type // "fallback"' 2>/dev/null)
-    text=$(echo "$json" | jq -r '.text // ""' 2>/dev/null)
-    command=$(echo "$json" | jq -r '.command // ""' 2>/dev/null)
-    code=$(echo "$json" | jq -r '.code // ""' 2>/dev/null)
-    lang=$(echo "$json" | jq -r '.lang // "bash"' 2>/dev/null)
-    issue=$(echo "$json" | jq -r '.issue // ""' 2>/dev/null)
-    suggestion=$(echo "$json" | jq -r '.suggestion // ""' 2>/dev/null)
+    resp_type=$(jq -r '.type // "fallback"' <<<"$json" 2>/dev/null)
+    text=$(jq -r '.text // ""' <<<"$json" 2>/dev/null)
+    command=$(jq -r '.command // ""' <<<"$json" 2>/dev/null)
+    code=$(jq -r '.code // ""' <<<"$json" 2>/dev/null)
+    lang=$(jq -r '.lang // "bash"' <<<"$json" 2>/dev/null)
+    issue=$(jq -r '.issue // ""' <<<"$json" 2>/dev/null)
+    suggestion=$(jq -r '.suggestion // ""' <<<"$json" 2>/dev/null)
 
     case "$resp_type" in
         command)
-            [[ -n "$command" ]] && echo -e "${__GASH_CYAN}Command:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}\`${command}\`${__GASH_COLOR_OFF}"
-            [[ -n "$text" ]] && echo -e "${__GASH_GREEN}Explanation:${__GASH_COLOR_OFF} ${text}"
+            if [[ -n "$command" ]]; then
+                __gash_kv --width 0 --value-color accent "Command:" "\`${command}\`"
+            fi
+            if [[ -n "$text" ]]; then
+                __gash_kv --width 0 "Explanation:" "$text"
+            fi
             ;;
         explanation)
-            [[ -n "$text" ]] && echo -e "${__GASH_GREEN}Explanation:${__GASH_COLOR_OFF} ${text}"
+            if [[ -n "$text" ]]; then
+                __gash_kv --width 0 "Explanation:" "$text"
+            fi
             ;;
         troubleshoot)
-            [[ -n "$issue" ]] && echo -e "${__GASH_RED}Issue:${__GASH_COLOR_OFF} ${issue}"
-            [[ -n "$suggestion" ]] && echo -e "${__GASH_YELLOW}Suggestion:${__GASH_COLOR_OFF} ${suggestion}"
+            if [[ -n "$issue" ]]; then
+                __gash_kv --width 0 "Issue:" "$issue"
+            fi
+            if [[ -n "$suggestion" ]]; then
+                __gash_kv --width 0 "Suggestion:" "$suggestion"
+            fi
             # Show text only if no issue (as summary)
-            { [[ -n "$text" && -z "$issue" ]] && echo "$text"; } || true
+            if [[ -n "$text" && -z "$issue" ]]; then
+                printf '%s\n' "$text"
+            fi
             ;;
         code)
-            [[ -n "$text" ]] && echo -e "${__GASH_GREEN}${text}${__GASH_COLOR_OFF}"
-            echo -e "${__GASH_CYAN}# ${lang}${__GASH_COLOR_OFF}"
-            [[ -n "$code" ]] && echo "$code"
+            if [[ -n "$text" ]]; then
+                printf '%s\n' "$text"
+            fi
+            __gash_print muted "# ${lang}"
+            if [[ -n "$code" ]]; then
+                printf '%s\n' "$code"
+            fi
             ;;
         fallback | *)
             # Direct output, no labels
-            [[ -n "$text" ]] && echo "$text"
+            if [[ -n "$text" ]]; then
+                printf '%s\n' "$text"
+            fi
             ;;
     esac
+    return 0
 }
 
 # =============================================================================
@@ -184,14 +204,12 @@ __ai_ask_impl() {
     if [[ -n "$piped_content" ]]; then
         # Pipe detected: inform user and read query from terminal
         local piped_lines
-        piped_lines=$(echo "$piped_content" | wc -l)
+        piped_lines=$(printf '%s\n' "$piped_content" | wc -l)
         local piped_bytes=${#piped_content}
         __gash_info "Piped input received (${piped_lines} lines, ${piped_bytes} bytes)"
-        printf "%s (or Enter for auto-analysis): " "$provider"
-        read -r query </dev/tty || query=""
+        __gash_read_line query "$provider (or Enter for auto-analysis): " </dev/tty || query=""
     else
-        printf "%s: " "$provider"
-        read -r query
+        __gash_read_line query "$provider: " || query=""
     fi
 
     if [[ -z "$query" && -z "$piped_content" ]]; then
@@ -220,18 +238,13 @@ User question: ${query}"
     provider_display="${provider^}" # Capitalize first letter
     __gash_spinner_start "${provider_display} is thinking..."
 
-    # Call API
-    local response
+    # Call API, outside a command substitution so that its diagnostics see
+    # the terminal; the reply comes back in __AI_REPLY.
+    local __AI_REPLY_TO_VAR=1 __AI_REPLY="" rc=0
     case "$provider" in
-        claude)
-            response=$(__ai_call_claude "$token" "$query")
-            ;;
-        gemini)
-            response=$(__ai_call_gemini "$token" "$query")
-            ;;
+        claude) __ai_call_claude "$token" "$query" || rc=$? ;;
+        gemini) __ai_call_gemini "$token" "$query" || rc=$? ;;
     esac
-
-    local rc=$?
 
     # Stop spinner (no status message)
     __gash_spinner_stop none
@@ -241,7 +254,7 @@ User question: ${query}"
     fi
 
     # Display formatted response
-    __ai_format_response "$response"
+    __ai_format_response "$__AI_REPLY"
 }
 
 # Non-interactive AI query
@@ -332,18 +345,13 @@ User question: ${query}"
     provider_display="${provider^}" # Capitalize first letter
     __gash_spinner_start "${provider_display} is thinking..."
 
-    # Call API
-    local response
+    # Call API, outside a command substitution so that its diagnostics see
+    # the terminal; the reply comes back in __AI_REPLY.
+    local __AI_REPLY_TO_VAR=1 __AI_REPLY="" rc=0
     case "$provider" in
-        claude)
-            response=$(__ai_call_claude "$token" "$query")
-            ;;
-        gemini)
-            response=$(__ai_call_gemini "$token" "$query")
-            ;;
+        claude) __ai_call_claude "$token" "$query" || rc=$? ;;
+        gemini) __ai_call_gemini "$token" "$query" || rc=$? ;;
     esac
-
-    local rc=$?
 
     # Stop spinner (no status message)
     __gash_spinner_stop none
@@ -353,5 +361,5 @@ User question: ${query}"
     fi
 
     # Display formatted response
-    __ai_format_response "$response"
+    __ai_format_response "$__AI_REPLY"
 }

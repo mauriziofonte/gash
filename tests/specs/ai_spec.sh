@@ -518,6 +518,31 @@ it "__ai_format_response type=command shows Command and Explanation" bash -c '
     [[ "$result" == *"Lists all files"* ]]
 '
 
+it "__ai_format_response prints model text verbatim: no \\n or \\c expansion" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    source "$ROOT/lib/core/output.sh"
+    source "$ROOT/lib/core/utils.sh"
+    source "$ROOT/lib/core/config.sh"
+    source "$ROOT/lib/modules/ai.sh"
+
+    # A suggested command with a literal backslash-n, and a \c that echo -e
+    # would treat as "stop printing here".
+    json="$(jq -cn --arg c "printf \"a\\nb\"" --arg t "use printf \"a\\nb\" then \\c the rest" \
+        "{type:\"command\",command:\$c,text:\$t}")"
+    result="$(__ai_format_response "$json"; echo "[end]")"
+    [[ "$result" == *"printf \"a\\nb\""* ]]
+    [[ "$result" == *"then \\c the rest"* ]]
+    [[ "$(grep -c . <<<"$result")" == 3 ]]
+    [[ "$result" == *"[end]" ]]
+
+    for type in explanation code troubleshoot; do
+        json="$(jq -cn --arg t "x \\c y" --arg ty "$type" "{type:\$ty,text:\$t,issue:\$t,suggestion:\$t,code:\$t}")"
+        result="$(__ai_format_response "$json")"
+        [[ "$result" == *"x \\c y"* ]] || { echo "type $type: $result"; exit 1; }
+    done
+'
+
 it "__ai_format_response type=explanation shows only Explanation" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"

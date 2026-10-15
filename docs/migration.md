@@ -33,8 +33,9 @@ upgrade. It shows only the screens that concern your setup:
 | llm_exec | always, unless `GASH_LLM_EXEC` is set | read-only allowlist | `GASH_LLM_EXEC=unrestricted` |
 | AI consent | `AI:` keys in `~/.gash_env` | ask before sending collected data | `GASH_AI_CONFIRM=1` (always ask) or `0` (never) |
 
-On a terminal each screen has an arrow-key menu (`↑`/`↓`, `j`/`k` or the
-option's number, Enter to confirm, `q` to stop). `--plain` uses numbered
+On a terminal each screen lists its options with a selection line under
+them (`↑`/`↓`, `j`/`k` or the option's number moves it, Enter confirms, `q`
+stops). `--plain` uses numbered
 prompts instead. Nothing is written until you confirm the final diff.
 
 At startup the first screen also offers **Remind me next time** and

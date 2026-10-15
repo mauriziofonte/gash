@@ -81,9 +81,12 @@ docker_prune_all() {
     __gash_info "To remove: $((n_cont)) container(s), $((n_img)) image(s), $((n_vol)) volume(s), $((n_net)) network(s), plus the build cache."
     ((dry_run)) && return 0
 
-    if ((assume_yes == 0)) && ! needs_confirm_prompt "${__GASH_BOLD_YELLOW}Warning:${__GASH_COLOR_OFF} ${__GASH_BOLD_WHITE}Remove all Docker containers, images, volumes, and networks?${__GASH_COLOR_OFF}"; then
-        __gash_info "Aborted."
-        return 1
+    if ((assume_yes == 0)); then
+        __gash_warning "This cannot be undone: volume data is lost."
+        if ! needs_confirm_prompt "Remove all Docker containers, images, volumes, and networks?"; then
+            __gash_info "Aborted."
+            return 1
+        fi
     fi
 
     local ids

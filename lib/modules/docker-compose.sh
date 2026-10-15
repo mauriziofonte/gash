@@ -463,7 +463,7 @@ __gash_get_local_digest() {
     done <<<"$digests"
     [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || digest=""
 
-    [[ -n "$digest" ]] && echo "$digest"
+    if [[ -n "$digest" ]]; then echo "$digest"; fi
 }
 
 # =============================================================================
@@ -671,129 +671,117 @@ EOF
         echo '],"summary":{"total":'"$total"',"updates":'"$updates"',"current":'"$current"',"pinned":'"$pinned"',"errors":'"$errors"'}}'
     else
         # Human-readable output
+        local W="" S="" I="" E="" B="" M="" A="" R=""
+        if __gash_use_color; then
+            W="$__GASH_COLOR_WARNING" S="$__GASH_COLOR_SUCCESS" I="$__GASH_COLOR_INFO"
+            E="$__GASH_COLOR_ERROR" B="$__GASH_BOLD" M="$__GASH_COLOR_MUTED"
+            A="$__GASH_COLOR_ACCENT" R="$__GASH_COLOR_OFF"
+        fi
         echo ""
-        printf "${__GASH_BOLD_WHITE}Checking ${__GASH_BOLD_CYAN}%s${__GASH_COLOR_OFF}\n" "$compose_file"
+        __gash_heading "Checking $compose_file"
         echo ""
 
-        # Table header
-        printf "${__GASH_BOLD_WHITE}%-15s %-40s %-12s${__GASH_COLOR_OFF}\n" "SERVICE" "IMAGE" "STATUS"
-        printf "%s\n" "────────────────────────────────────────────────────────────────────"
-
-        for r in "${results[@]}"; do
-            IFS='|' read -r svc img local_d remote_d stat upgr err <<<"$r"
-
-            # Truncate long image names
-            local display_img="$img"
-            [[ ${#display_img} -gt 38 ]] && display_img="${display_img:0:35}..."
-
-            # Color-coded status
-            local status_color=""
-            case "$stat" in
-                UPDATE | NOT_PULLED) status_color="${__GASH_BOLD_YELLOW}" ;;
-                CURRENT) status_color="${__GASH_BOLD_GREEN}" ;;
-                PINNED) status_color="${__GASH_BOLD_CYAN}" ;;
-                ERROR | UNKNOWN) status_color="${__GASH_BOLD_RED}" ;;
-            esac
-
-            printf "%-15s %-40s ${status_color}%-12s${__GASH_COLOR_OFF}\n" "$svc" "$display_img" "$stat"
-        done
+        # One row per service; the status takes its status color (hidden
+        # column 4).
+        local style
+        {
+            printf 'SERVICE\tIMAGE\tSTATUS\t\n'
+            for r in "${results[@]}"; do
+                IFS='|' read -r svc img local_d remote_d stat upgr err <<<"$r"
+                case "$stat" in
+                    UPDATE | NOT_PULLED) style=warning ;;
+                    CURRENT) style=success ;;
+                    PINNED) style=info ;;
+                    *) style=error ;;
+                esac
+                printf '%s\t%s\t%s\t%s\n' "$svc" "$img" "$stat" "$style"
+            done
+        } | __gash_table --gap 1 --min 1:15 --min 2:40 --max 2:38 --color 1:accent --cell-color 3:4
 
         echo ""
-        printf "Summary: "
-        [[ $updates -gt 0 ]] && printf "${__GASH_BOLD_YELLOW}%d update(s)${__GASH_COLOR_OFF} " "$updates"
-        [[ $current -gt 0 ]] && printf "${__GASH_BOLD_GREEN}%d current${__GASH_COLOR_OFF} " "$current"
-        [[ $pinned -gt 0 ]] && printf "${__GASH_BOLD_CYAN}%d pinned${__GASH_COLOR_OFF} " "$pinned"
-        [[ $errors -gt 0 ]] && printf "${__GASH_BOLD_RED}%d error(s)${__GASH_COLOR_OFF}" "$errors"
+        printf '%sSummary:%s ' "$B" "$R"
+        if ((updates > 0)); then printf '%s%d update(s)%s ' "$W" "$updates" "$R"; fi
+        if ((current > 0)); then printf '%s%d current%s ' "$S" "$current" "$R"; fi
+        if ((pinned > 0)); then printf '%s%d pinned%s ' "$I" "$pinned" "$R"; fi
+        if ((errors > 0)); then printf '%s%d error(s)%s' "$E" "$errors" "$R"; fi
         echo ""
 
         # Show error details if any
         if [[ $errors -gt 0 ]]; then
             echo ""
-            printf "${__GASH_BOLD_RED}Errors:${__GASH_COLOR_OFF}\n"
+            __gash_heading "Errors:"
+            local reg msg hint
             for r in "${results[@]}"; do
                 IFS='|' read -r svc img local_d remote_d stat upgr err <<<"$r"
-                if [[ "$stat" == "ERROR" ]]; then
-                    # Parse registry info for better error message
-                    local normalized
-                    normalized=$(__gash_normalize_image "$img")
-                    IFS='|' read -r reg _ _ <<<"$normalized"
+                [[ "$stat" == "ERROR" ]] || continue
+                # Parse registry info for better error message
+                local normalized
+                normalized=$(__gash_normalize_image "$img")
+                IFS='|' read -r reg _ _ <<<"$normalized"
 
-                    printf "  ${__GASH_BOLD_WHITE}%s${__GASH_COLOR_OFF} (%s)\n" "$svc" "$img"
-                    printf "    Registry: %s\n" "$reg"
+                case "$err" in
+                    timeout)
+                        msg="Connection timed out"
+                        hint="Registry may be slow or unreachable"
+                        ;;
+                    dns_error)
+                        msg="DNS resolution failed"
+                        hint="Check network connectivity and registry hostname"
+                        ;;
+                    connection_refused)
+                        msg="Connection refused"
+                        hint="Registry may be down or port blocked"
+                        ;;
+                    ssl_error)
+                        msg="SSL/TLS handshake failed"
+                        hint="Check certificate validity"
+                        ;;
+                    unauthorized)
+                        msg="Authentication required (401)"
+                        case "$reg" in
+                            ghcr.io) hint="Set GITHUB_TOKEN for authenticated access" ;;
+                            *) hint="Registry requires authentication" ;;
+                        esac
+                        ;;
+                    forbidden)
+                        msg="Access denied (403)"
+                        hint="Check credentials and repository permissions"
+                        ;;
+                    not_found)
+                        msg="Image not found (404)"
+                        hint="Check image name and tag are correct"
+                        ;;
+                    rate_limited)
+                        msg="Rate limit exceeded (429)"
+                        case "$reg" in
+                            docker.io) hint="Docker Hub limits unauthenticated pulls. Try logging in." ;;
+                            *) hint="Wait and retry, or authenticate for higher limits" ;;
+                        esac
+                        ;;
+                    server_error)
+                        msg="Registry server error (5xx)"
+                        hint="Temporary issue, retry later"
+                        ;;
+                    registry_unreachable | *)
+                        msg="Could not reach registry or get manifest"
+                        case "$reg" in
+                            ghcr.io) hint="Try setting GITHUB_TOKEN for authenticated access" ;;
+                            docker.io) hint="Check network or Docker Hub rate limits" ;;
+                            *) hint="Registry may require authentication" ;;
+                        esac
+                        ;;
+                esac
 
-                    case "$err" in
-                        timeout)
-                            printf "    Error: Connection timed out\n"
-                            printf "    Hint: Registry may be slow or unreachable\n"
-                            ;;
-                        dns_error)
-                            printf "    Error: DNS resolution failed\n"
-                            printf "    Hint: Check network connectivity and registry hostname\n"
-                            ;;
-                        connection_refused)
-                            printf "    Error: Connection refused\n"
-                            printf "    Hint: Registry may be down or port blocked\n"
-                            ;;
-                        ssl_error)
-                            printf "    Error: SSL/TLS handshake failed\n"
-                            printf "    Hint: Check certificate validity\n"
-                            ;;
-                        unauthorized)
-                            printf "    Error: Authentication required (401)\n"
-                            case "$reg" in
-                                ghcr.io)
-                                    printf "    Hint: Set GITHUB_TOKEN for authenticated access\n"
-                                    ;;
-                                *)
-                                    printf "    Hint: Registry requires authentication\n"
-                                    ;;
-                            esac
-                            ;;
-                        forbidden)
-                            printf "    Error: Access denied (403)\n"
-                            printf "    Hint: Check credentials and repository permissions\n"
-                            ;;
-                        not_found)
-                            printf "    Error: Image not found (404)\n"
-                            printf "    Hint: Check image name and tag are correct\n"
-                            ;;
-                        rate_limited)
-                            printf "    Error: Rate limit exceeded (429)\n"
-                            case "$reg" in
-                                docker.io)
-                                    printf "    Hint: Docker Hub limits unauthenticated pulls. Try logging in.\n"
-                                    ;;
-                                *)
-                                    printf "    Hint: Wait and retry, or authenticate for higher limits\n"
-                                    ;;
-                            esac
-                            ;;
-                        server_error)
-                            printf "    Error: Registry server error (5xx)\n"
-                            printf "    Hint: Temporary issue, retry later\n"
-                            ;;
-                        registry_unreachable | *)
-                            printf "    Error: Could not reach registry or get manifest\n"
-                            case "$reg" in
-                                ghcr.io)
-                                    printf "    Hint: Try setting GITHUB_TOKEN for authenticated access\n"
-                                    ;;
-                                docker.io)
-                                    printf "    Hint: Check network or Docker Hub rate limits\n"
-                                    ;;
-                                *)
-                                    printf "    Hint: Registry may require authentication\n"
-                                    ;;
-                            esac
-                            ;;
-                    esac
-                fi
+                printf '  %s%s%s (%s)\n' "$A" "$svc" "$R" "$img"
+                __gash_kv --indent 4 "Registry:" "$reg"
+                __gash_mark --indent 4 error "$msg"
+                printf '    %sHint: %s%s\n' "$M" "$hint" "$R"
             done
         fi
 
         if [[ $updates -gt 0 ]]; then
             echo ""
-            printf "${__GASH_BOLD_WHITE}Run 'docker_compose_upgrade' to update services with mutable tags.${__GASH_COLOR_OFF}\n"
+            __gash_print bold "Run 'docker_compose_upgrade' to update services with mutable tags."
         fi
     fi
 }
@@ -894,17 +882,23 @@ EOF
     read -ra dc <<<"$compose_cmd"
     dc+=(-f "$compose_file" --project-directory "$path")
 
-    echo ""
-    printf "${__GASH_BOLD_WHITE}=== Docker Compose Upgrade ===${__GASH_COLOR_OFF}\n"
-    printf "Path: ${__GASH_BOLD_CYAN}%s${__GASH_COLOR_OFF}\n" "$path"
+    __gash_section "Docker Compose Upgrade"
+    __gash_kv --value-color accent "Path:" "$path"
     echo ""
 
     if [[ $dry_run -eq 1 ]]; then
-        printf "${__GASH_BOLD_YELLOW}[DRY-RUN] No changes will be made${__GASH_COLOR_OFF}\n\n"
+        __gash_mark warning "Dry run: no changes will be made"
+        echo ""
     fi
 
-    # Check what needs updating
-    local services upgradeable_services=()
+    # Check what needs updating: one plan row per service (status mark,
+    # name, image; the mark's status color in hidden column 4). The marks
+    # are __gash_mark's: glyphs on a terminal, OK:/Info: otherwise.
+    local mark_up="OK:" mark_skip="Info:"
+    if __gash_use_color; then
+        mark_up="$__GASH_GLYPH_OK" mark_skip="$__GASH_GLYPH_INFO"
+    fi
+    local services upgradeable_services=() plan_rows=()
     services=$(__gash_parse_compose_services "$compose_file")
     local env_file="$path/.env"
 
@@ -918,22 +912,24 @@ EOF
 
         if [[ $force -eq 1 ]] || __gash_is_upgradeable "$tag"; then
             upgradeable_services+=("$service_name")
-            printf "  ${__GASH_BOLD_GREEN}[UPGRADE]${__GASH_COLOR_OFF} %s (%s)\n" "$service_name" "$resolved_image"
+            plan_rows+=("$mark_up"$'\t'"$service_name"$'\t'"($resolved_image)"$'\t'"success")
         else
-            printf "  ${__GASH_BOLD_CYAN}[SKIP]${__GASH_COLOR_OFF} %s (%s) - pinned version\n" "$service_name" "$resolved_image"
+            plan_rows+=("$mark_skip"$'\t'"$service_name"$'\t'"($resolved_image) - pinned version"$'\t'"info")
         fi
     done <<<"$services"
+    printf '%s\n' "${plan_rows[@]}" |
+        __gash_table --no-header --indent 2 --gap 1 --cell-color 1:4 --color 2:accent --color 3:muted
 
     echo ""
 
     if [[ ${#upgradeable_services[@]} -eq 0 ]]; then
-        printf "${__GASH_BOLD_YELLOW}No services to upgrade (all pinned).${__GASH_COLOR_OFF}\n"
-        printf "Use --force to upgrade pinned versions.\n"
+        __gash_print warning "No services to upgrade (all pinned)."
+        __gash_print muted "Use --force to upgrade pinned versions."
         return 0
     fi
 
     if [[ $dry_run -eq 1 ]]; then
-        printf "Would run:\n"
+        __gash_heading "Would run:"
         printf "  %s pull %s\n" "${dc[*]}" "${upgradeable_services[*]}"
         printf "  %s stop %s\n" "${dc[*]}" "${upgradeable_services[*]}"
         printf "  %s up -d --remove-orphans %s\n" "${dc[*]}" "${upgradeable_services[*]}"
@@ -949,13 +945,14 @@ EOF
             __gash_error "Refusing to upgrade in headless mode without --yes (pull + restart is destructive)."
             return 1
         fi
-        printf "\n${__GASH_BOLD_YELLOW}This will:${__GASH_COLOR_OFF}\n"
-        printf "  - pull new images for: %s\n" "${upgradeable_services[*]}"
-        printf "  - stop and recreate those containers\n"
-        printf "  - remove containers of this project no longer in %s (--remove-orphans)\n" "${compose_file##*/}"
-        printf "  - remove dangling images on this host, from any project (docker image prune -f)\n"
+        echo ""
+        __gash_heading "This will:"
+        __gash_list "pull new images for: ${upgradeable_services[*]}" \
+            "stop and recreate those containers" \
+            "remove containers of this project no longer in ${compose_file##*/} (--remove-orphans)" \
+            "remove dangling images on this host, from any project (docker image prune -f)"
         if ! needs_confirm_prompt "Proceed with upgrade?"; then
-            printf "Upgrade cancelled.\n"
+            __gash_info "Upgrade cancelled."
             return 0
         fi
     fi
@@ -982,7 +979,7 @@ EOF
         docker image prune -f >/dev/null 2>&1 || true
 
         echo ""
-        printf "${__GASH_BOLD_GREEN}=== Upgrade Complete ===${__GASH_COLOR_OFF}\n"
+        __gash_mark ok "Upgrade Complete"
         echo ""
 
         # Show status
@@ -1064,7 +1061,7 @@ EOF
     compose_files=$(find "$basedir" -maxdepth "$depth" -type f \
         \( -name "docker-compose.yml" -o -name "docker-compose.yaml" \
         -o -name "compose.yml" -o -name "compose.yaml" \) \
-        2>/dev/null | sort)
+        2>/dev/null | sort) || compose_files=""
 
     if [[ -z "$compose_files" ]]; then
         if [[ $json_output -eq 1 ]]; then
@@ -1100,8 +1097,12 @@ EOF
         echo '],"total_found":'"$total"'}'
     else
         # Human-readable output
+        local B="" R=""
+        if __gash_use_color; then
+            B="$__GASH_BOLD" R="$__GASH_COLOR_OFF"
+        fi
         echo ""
-        printf "${__GASH_BOLD_WHITE}Scanning for Docker Compose files in %s (depth: %d)${__GASH_COLOR_OFF}\n" "$basedir" "$depth"
+        __gash_heading "Scanning for Docker Compose files in $basedir (depth: $depth)"
         echo ""
 
         local total=0
@@ -1110,18 +1111,22 @@ EOF
             local dir
             dir=$(dirname "$file")
 
-            printf "${__GASH_BOLD_CYAN}%s${__GASH_COLOR_OFF}\n" "$dir"
+            __gash_print accent "$dir"
 
-            # List services
-            local services
+            # List services ("name: image"), none for a file without images.
+            local services svc img
+            local -a items=()
             services=$(__gash_parse_compose_services "$file")
             while IFS='|' read -r svc img; do
-                printf "  - %s: %s\n" "$svc" "$img"
+                if [[ -n "$svc" ]]; then items+=("$svc: $img"); fi
             done <<<"$services"
+            if ((${#items[@]} > 0)); then
+                __gash_list "${items[@]}"
+            fi
             echo ""
         done <<<"$compose_files"
 
-        printf "Found ${__GASH_BOLD_WHITE}%d${__GASH_COLOR_OFF} compose file(s)\n" "$total"
+        printf 'Found %s%d%s compose file(s)\n' "$B" "$total" "$R"
     fi
 }
 
