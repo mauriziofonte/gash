@@ -10,9 +10,26 @@ if command -v git >/dev/null 2>&1; then
     # Git Log - Professional visualization with multiple variants
     # =========================================================================
 
-    # Pretty format definitions (reusable)
-    __GASH_GIT_LOG_FORMAT='%C(auto)%h%d %s %C(dim)(%cr) %C(cyan)<%an>%C(reset)'
-    __GASH_GIT_LOG_FORMAT_FULL='%C(auto)%h %C(bold blue)%an%C(reset) %C(dim)%ar%C(reset)%C(auto)%d%C(reset)%n  %s%n'
+    # Pretty formats in the Gash palette (256-color numbers of
+    # lib/core/output.sh): hash accent (214), refs primary (39), date and
+    # author muted (245), bold for emphasis. Git drops them when its output
+    # is not a terminal; __gash_git_log drops them for NO_COLOR too.
+    __GASH_GIT_LOG_FORMAT='%C(214)%h%C(reset)%C(39)%d%C(reset) %s %C(245)(%cr) <%an>%C(reset)'
+    __GASH_GIT_LOG_FORMAT_FULL='%C(214)%h%C(reset) %C(bold)%an%C(reset) %C(245)%ar%C(reset)%C(39)%d%C(reset)%n  %s%n'
+    __GASH_GIT_LOG_FORMAT_ONELINE='%C(214)%h%C(reset)%C(39)%d%C(reset) %s'
+
+    # git log with the Gash palette: graph lanes alternate primary and muted
+    # unless the user configured log.graphColors; no colors at all when
+    # NO_COLOR or GASH_NO_COLOR is set.
+    __gash_git_log() {
+        local -a pre=() post=()
+        if ! __gash_color_env_ok; then
+            post=(--no-color)
+        elif ! git config --get log.graphColors >/dev/null 2>&1; then
+            pre=(-c "log.graphColors=39,245")
+        fi
+        git "${pre[@]}" log "${post[@]}" "$@"
+    }
 
     # Main git log function with help and variants. Defined with the
     # `function` keyword: a user alias with the same name would otherwise be
@@ -54,7 +71,7 @@ TIPS:
 EOF
             return 0
         fi
-        git log --graph --pretty=format:"$__GASH_GIT_LOG_FORMAT" --abbrev-commit "$@"
+        __gash_git_log --graph --pretty=format:"$__GASH_GIT_LOG_FORMAT" --abbrev-commit "$@"
     }
 
     # All branches
@@ -63,7 +80,7 @@ EOF
             gl --help
             return 0
         fi
-        git log --graph --pretty=format:"$__GASH_GIT_LOG_FORMAT" --abbrev-commit --all "$@"
+        __gash_git_log --graph --pretty=format:"$__GASH_GIT_LOG_FORMAT" --abbrev-commit --all "$@"
     }
 
     # Ultra-compact oneline
@@ -72,7 +89,7 @@ EOF
             gl --help
             return 0
         fi
-        git log --oneline --decorate --graph "$@"
+        __gash_git_log --graph --pretty=tformat:"$__GASH_GIT_LOG_FORMAT_ONELINE" "$@"
     }
 
     # Graph focused (first-parent for cleaner merge view)
@@ -81,7 +98,7 @@ EOF
             gl --help
             return 0
         fi
-        git log --graph --pretty=format:"$__GASH_GIT_LOG_FORMAT" --abbrev-commit --first-parent "$@"
+        __gash_git_log --graph --pretty=format:"$__GASH_GIT_LOG_FORMAT" --abbrev-commit --first-parent "$@"
     }
 
     # With file statistics
@@ -90,7 +107,7 @@ EOF
             gl --help
             return 0
         fi
-        git log --pretty=format:"$__GASH_GIT_LOG_FORMAT_FULL" --stat "$@"
+        __gash_git_log --pretty=format:"$__GASH_GIT_LOG_FORMAT_FULL" --stat "$@"
     }
 
     # File-specific log with patches
@@ -104,7 +121,7 @@ EOF
             __gash_note "Shows commit history for a specific file with patches"
             return 1
         fi
-        git log --follow -p -- "$@"
+        __gash_git_log --follow -p -- "$@"
     }
 
     # Legacy alias (backward compatibility)

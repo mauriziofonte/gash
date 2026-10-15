@@ -175,6 +175,39 @@ EOF
     [[ "$out" == *"EXAMPLES"* ]]
 '
 
+it "git log aliases use the Gash palette, keep git's plain text and honour NO_COLOR" bash -c '
+    set -euo pipefail
+    ROOT="${GASH_TEST_ROOT}"
+    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
+
+    source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
+    source "$ROOT/lib/aliases/git.sh"
+    export GIT_PAGER=cat PAGER=cat
+
+    tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+    cd "$tmp"
+    git init -q
+    git commit -q --allow-empty -m one
+    git commit -q --allow-empty -m two
+    git tag v1
+
+    # Plain text: glo prints exactly what git log --oneline --decorate does.
+    [[ "$(glo)" == "$(git log --oneline --decorate --graph)" ]]
+    [[ "$(gl)" == *" (HEAD -> "*"tag: v1) two ("*"<Gash Test>"* ]]
+
+    # Colors forced on: palette accent (214) on the hash, primary (39) on refs.
+    out="$(git -c color.ui=always log -1 --pretty=format:"$__GASH_GIT_LOG_FORMAT")"
+    [[ "$out" == *$'"'"'\e[38;5;214m'"'"'* ]]
+    [[ "$out" == *$'"'"'\e[38;5;39m (HEAD'"'"'* ]]
+
+    # NO_COLOR wins even over color.ui=always.
+    git config color.ui always
+    out="$(NO_COLOR=1 gl)"
+    [[ "$out" != *$'"'"'\e'"'"'* ]]
+    out="$(gl)"
+    [[ "$out" == *$'"'"'\e[38;5;214m'"'"'* ]]
+'
+
 it "docker.sh defines docker aliases when docker is available" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
