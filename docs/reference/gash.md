@@ -18,6 +18,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | [`gash_uninstall`](#gash-uninstall) |  | Uninstall Gash and clean up configurations |
 | [`gash_unload`](#gash-unload) |  | Restore shell state to before Gash was loaded |
 | [`gash_upgrade`](#gash-upgrade) |  | Upgrade Gash to the latest version |
+| [`gash_username`](#gash-username) |  | Print the current user name |
 
 ## gash
 
@@ -423,4 +424,28 @@ and cleans up. Restart your shell after upgrading.
 ```
 
 See also: `gash_doctor`, `gash_uninstall`
+
+## gash_username
+
+Print the current user name
+
+#### Usage
+
+```text
+gash_username
+```
+
+#### Examples
+
+```bash
+# The name the banner and the prompt show
+gash_username
+```
+
+#### Notes
+
+```text
+Tries whoami, then id -un, then the /etc/passwd entry of the
+current user id; prints UNKNOWN_USERNAME when all of them fail.
+```
 

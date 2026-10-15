@@ -14,4 +14,4 @@ In a shell, `gash <topic>` shows the same card and `gash_help <name>` any entry.
 | [dev](dev.md) | 5 | 7 | PHP and Node.js versions, headless Chrome |
 | [llm](llm.md) | 18 | 0 | Read-only JSON tools for AI agents |
 | [ai](ai.md) | 3 | 0 | Ask Claude or Gemini from the terminal |
-| [gash](gash.md) | 12 | 0 | Help, doctor, configuration, upgrade |
+| [gash](gash.md) | 13 | 0 | Help, doctor, configuration, upgrade |

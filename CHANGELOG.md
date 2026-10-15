@@ -6,6 +6,57 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [Unreleased]
+
+Every function now looks the same on a terminal: one palette, one set of
+glyphs, one way to draw tables, titles, key/value blocks, lists and
+questions. Piped and `NO_COLOR` output carries no escape code at all.
+
+### Changed
+
+- Colors mean the same thing everywhere: structure (rules, borders,
+  labels) in the primary color, the names you look for (functions, mount
+  points, PIDs, hosts) in the accent color, secondary data muted, green,
+  yellow and red only for status. Before, each module had its own mix of
+  cyan, green, yellow and bold white.
+- Columns are aligned by one table renderer: `disk_usage`, `process_find`,
+  `history_grep`, `docker_compose_check`, `remote_hosts`, `git_list_tags`,
+  the scanners, `gash` and `gash_help` no longer pad by hand, so long values
+  widen their column instead of breaking the row. Usage bars (`disk_usage`,
+  `tree_stats`, `sysinfo overview`) take the status color of their fill.
+- Key/value output (`ip_public`, `php_detect_version`,
+  `node_detect_version`, `wsl_compact`, `sysinfo`, `gash_doctor` settings,
+  `gash migrate --status`) goes through one renderer; plain text is the same.
+- Questions look alike: `Question? [y/N]` (default No) or
+  `Do you want to continue? [Y/n]` (default Yes), on stderr. Before,
+  confirmations read `(y/N): `.
+- Usage reminders after a wrong call are one `Usage: ...` line on stderr
+  (before: `Error: Usage: ...`, or the whole help page on stdout for
+  `git_apply_patch`).
+- `ai_sysinfo` findings read `Error:`, `Warning:`, `OK:`, `Info:` when piped
+  or saved (before: `[!]`, `[+]`, `[i]`); on a terminal they are glyphs.
+- `gash migrate` lists the options of each screen and moves a selection
+  line under them; with `NO_COLOR` it no longer clears the screen.
+- Spinners and progress lines draw escape codes only when stdout and stderr
+  are both color terminals; otherwise they redraw with carriage returns.
+- `hgrep` groups and highlights only when colors are on (before: whenever
+  stdout was a terminal), and `hgrep --pick` also works when its output is
+  captured.
+
+### Fixed
+
+- `llm_procs --name NAME` no longer lists the shell that runs it, its
+  parent shells or their subshells (their command lines contain NAME):
+  `llm_procs --name no-such-process` returns `[]`.
+- Model answers, paths and command lines are printed verbatim: a `\n` or
+  `\c` in them is no longer interpreted (`echo -e` and `printf %b` are gone).
+- `gash_ssh_auto_unlock` no longer writes escape codes into a pipe.
+- `process_find` with no match, `port_kill` with nothing listening,
+  `wsl_compact`, `docker_compose_scan` on a missing directory and
+  `docker_compose_check` without a local digest stopped early under
+  `set -e` before printing their message.
+- `gash_username` has a help page.
+
 ## [2.1.0] - 2026-10-14
 
 Everyday tools from a long-lived `.gashrc`, commands that show what they
