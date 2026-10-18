@@ -556,7 +556,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 | `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
 | `php versions`, `php ini get\|set\|unset --domain D KEY [VALUE]`, `php global get\|set\|unset --version X.Y KEY [VALUE]` | |
-| `apache config path`, `apache modules list\|enable\|disable NAME` | The global overlay the user edits (generations include a copy of it); modules within the userland list |
+| `apache config path`, `apache modules list\|enable\|disable NAME` | The global overlay the user edits (generations include a copy of it). `modules list`: every module of the userland list (`base`), the extra modules of `hte.toml` (`enabled`), then the other `mod_<name>.so` files of the system module directory (`available`), each with `builtin` (compiled in, no `LoadModule`), its path, and `missing` for a base or enabled module without a file. `modules enable NAME` adds a module of the system module directory to `hte.toml` (`apache_module_missing` when the directory has no `mod_NAME.so`; a base or already enabled module changes nothing) and `disable NAME` removes an extra one (`conflicting_options` for a base module); either moves the stack to a generation that loads exactly those modules, and a failure puts `hte.toml` back |
 | `service start\|stop\|restart\|reload\|status\|logs` | Section 5 |
 | `cert show\|renew --domain D` | |
 | `hosts list\|apply\|check\|windows` | |
