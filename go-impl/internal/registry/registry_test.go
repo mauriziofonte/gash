@@ -150,3 +150,24 @@ func TestDelegated(t *testing.T) {
 	}
 	require.Equal(t, []string{"gash", "help", "needs_confirm_prompt", "needs_help", "nvm", "path_add"}, not)
 }
+
+// help_spec.sh "Help System - Registry" against the static registry: an
+// entry stores the help text, the short description, the aliases, the
+// module and the see-also list, and the full load has more than 40.
+func TestHelpRegistryAsHelpSpec(t *testing.T) {
+	f, ok := Lookup("files_largest")
+	require.True(t, ok)
+	require.True(t, f.HasHelp)
+	require.NotEmpty(t, f.Help.Body)
+	require.NotEmpty(t, f.Help.Short)
+	require.Contains(t, f.Help.Aliases, "flf")
+	require.Equal(t, "files", f.Help.Module)
+	require.NotEmpty(t, f.Help.SeeAlso)
+	n := 0
+	for _, f := range Functions() {
+		if f.HasHelp {
+			n++
+		}
+	}
+	require.Greater(t, n, 40)
+}
