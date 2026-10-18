@@ -88,19 +88,22 @@ it "process_kill calls kill for matching processes" bash -c '
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
-  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
-  export MOCK_KILL_LOG="$tmp/kill.log"
+  tmp="$(mktemp -d)"
+  trap "kill -9 \$(cat \"$tmp/pid\" 2>/dev/null) 2>/dev/null || true; /bin/rm -rf $tmp" EXIT
 
-  # Override bash builtin kill with a function we can observe.
-  kill() {
-    printf "%s\n" "$*" >> "$MOCK_KILL_LOG"
-    return 0
-  }
+  # A real victim that ignores SIGTERM (TEST-04), reaped by its own sh: only
+  # the SIGKILL for survivors ends it. The pgrep mock prints its PID.
+  sh -c "trap \"\" TERM; sleep 300 & echo \$! >\"$tmp/pid\"; wait" &
+  while [[ ! -s "$tmp/pid" ]]; do sleep 0.1; done
+  victim="$(cat "$tmp/pid")"
+  printf "#!/bin/sh\necho %s\n" "$victim" >"$tmp/pgrep"
+  chmod +x "$tmp/pgrep"
 
-  export PATH="$ROOT/tests/mocks/bin:$PATH"
+  export PATH="$tmp:$ROOT/tests/mocks/bin:$PATH"
   process_kill my-proc --force >/dev/null
 
-  grep -q -- "-9 2222" "$MOCK_KILL_LOG"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$victim" 2>/dev/null || break; sleep 0.1; done
+  ! kill -0 "$victim" 2>/dev/null
 '
 
 it "process_find fails gracefully when missing arg under nounset" bash -c '

@@ -1,0 +1,6 @@
+=== SERVICES DEEP ===
+--- Custom systemd units
+--- Running services
+--- Active timers
+--- Listening TCP
+--- Listening UDP

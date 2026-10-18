@@ -1,0 +1,28 @@
+=== NETWORK DEEP ===
+--- Interfaces
+1: lo: <LOOPBACK>
+    inet 127.0.0.1/8 scope host lo
+2: eth0: <UP>
+    inet 10.0.0.5/24
+--- Routes
+default via 10.0.0.1 dev eth0
+--- Neighbors
+10.0.0.1 dev eth0 lladdr aa:bb:cc:dd:ee:ff REACHABLE
+--- resolv.conf
+nameserver 1.1.1.1
+--- systemd-resolved
+Global
+  Protocols: +LLMNR--- hosts
+127.0.0.1 localhost
+--- Netplan
+--- 01.yaml
+network:
+  version: 2
+--- interfaces (legacy)
+auto lo
+--- dhcpcd
+hostname
+--- Listening TCP
+LISTEN 0 128 0.0.0.0:22 0.0.0.0:*
+--- Listening UDP
+LISTEN 0 128 0.0.0.0:22 0.0.0.0:*
