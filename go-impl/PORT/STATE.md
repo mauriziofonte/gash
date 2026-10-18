@@ -23,7 +23,19 @@ rc.A implementation. S1 was approved by the operator in the session on 2026-10-1
 
 ## Next step
 
-M0 (worker on `wt/m0`) and the HTE remainder (`wt/hte`) are in progress; the SQL guard's strictest-of-both-locales reading (DB-13) is in progress on `wt/cfg`. Then M1.
+M0 is merged (76310d1): Bash reference 807/0, Go mode 202 passed of 807. The module wave runs in parallel worktrees, each owning its packages (shared packages belong to `wt/core`):
+
+| Worktree | Slice |
+|---|---|
+| `wt/core` (M1) | output primitives and compat operations first, then lib/core, gash_help and the card, TEST-03/07, Bash 4.4 load check of the generated Bash in CI |
+| `wt/llm` (M2) | llm_*, llm_exec wiring, internal/db native drivers, gash_db_test |
+| `wt/files` (M3) | lib/modules/files.sh |
+| `wt/devops` (M4b) | docker, compose, git, remote |
+| `wt/sys` (M4a) | system, sysinfo, ssh, chrome |
+| `wt/cfg` | SQL guard DB-13 (strictest of both locales) |
+| `wt/hte` | HTE remainder (certs, hosts, supervision, receipt, migrate --apply, doctor, E2E) |
+
+Still to start: php/node/ai (M5), self-management (gash.sh upgrade/uninstall/unload/doctor, gash_env_init, the gash_migrate pointer), shell layer (M6), HTE CLI wiring (M7), cutover (M8). Spec changes are allowed only for TEST-03..07 as the LEDGER says, expectations unchanged.
 
 Wiring notes for M1 and later:
 - llm_exec's registry entry lists `BASH` among the shell variables it reads, so the stub exports the caller's `$BASH` (named in `GASH__ADDED`, kept out of children); `llmexec` uses it as `Environ.BashPath` and falls back to a PATH lookup, because 2.x ran `${BASH:-bash}` and bash prefixes its errors with that path.
