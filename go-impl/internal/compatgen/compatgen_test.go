@@ -358,3 +358,17 @@ func TestStage(t *testing.T) {
 	_, err = Stage(root, filepath.Join(root, "tests", "x"), bin)
 	require.ErrorContains(t, err, "inside the checkout")
 }
+
+// LEDGER SYS-34: __gash_section takes COLUMNS only when it is a run of
+// digits; anything else is 80 (a 60-glyph rule) and is never evaluated.
+func TestLedger_SYS34(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	mark := filepath.Join(t.TempDir(), "MARK")
+	for cols, rule := range map[string]int{"a[$(touch " + mark + ")]": 60, "abc": 60, "": 60, "30": 30, "010": 8, "99": 60} {
+		out, err := bash(t, []string{"LC_ALL=C"}, "source '"+dir+"/lib/core/output.sh'; COLUMNS='"+cols+"' __gash_section T")
+		require.NoError(t, err)
+		require.Equal(t, "\n"+strings.Repeat("-", rule)+"\nT\n\n", out, cols)
+	}
+	require.NoFileExists(t, mark)
+}

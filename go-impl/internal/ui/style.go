@@ -31,6 +31,15 @@ type Style struct {
 	Width int
 	// Debug is GASH_DEBUG=1, for the Debug emitter.
 	Debug bool
+	// Columns is ${COLUMNS:-80} as __gash_section reads it: COLUMNS when
+	// it is a run of digits, else 80, never evaluated (LEDGER SYS-34).
+	Columns int
+	// UTF8 is __gash_locale_utf8 (the progress bar's own glyphs).
+	UTF8 bool
+	// Headless is GASH_HEADLESS=1.
+	Headless bool
+	// StderrTTY is [[ -t 2 ]]; with Color it is __gash_stderr_fancy.
+	StderrTTY bool
 }
 
 // StyleOf returns the style of a call on t. noColor is a --no-color flag
@@ -41,8 +50,26 @@ func StyleOf(t *term.Term, noColor bool) Style {
 	if noColor {
 		p = term.NoColors
 	}
-	return Style{Color: t.UseColor(), P: p, G: t.Glyphs(), Width: t.Width(), Debug: t.Getenv("GASH_DEBUG") == "1"}
+	return Style{
+		Color: t.UseColor(), P: p, G: t.Glyphs(), Width: t.Width(), Debug: t.Getenv("GASH_DEBUG") == "1",
+		Columns: Columns(t.Getenv("COLUMNS")), UTF8: t.Glyphs() == term.UnicodeGlyphs,
+		Headless: t.Headless(), StderrTTY: t.StderrTTY(),
+	}
 }
+
+// Columns is the width ${COLUMNS:-80} gives 2.x arithmetic, for a COLUMNS
+// that is a run of digits (a leading 0 is octal, as in Bash); any other
+// value, empty included, is 80 and is never evaluated (LEDGER SYS-34).
+func Columns(v string) int {
+	if !isDigits(v) {
+		return 80
+	}
+	return Int(v)
+}
+
+// StderrFancy is __gash_stderr_fancy: stderr is a terminal and colors are
+// on.
+func (s Style) StderrFancy() bool { return s.StderrTTY && s.Color }
 
 // Printer returns the message emitters writing to w with this style.
 func (s Style) Printer(w io.Writer) Printer {
@@ -114,7 +141,7 @@ func PadLeft(s string, width int) string {
 	return s
 }
 
-// Spaces is printf '%*s' N ”: |N| spaces.
+// Spaces is printf '%*s' N with an empty string: |N| spaces.
 func Spaces(n int) string {
 	if n < 0 {
 		n = -n
