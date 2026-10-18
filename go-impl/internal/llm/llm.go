@@ -43,6 +43,8 @@ func Register(t *invoke.Table) { New().Register(t) }
 // Register binds the functions of m to t.
 func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_tree", m.tree)
+	t.Handle("llm_find", m.find)
+	t.Handle("llm_grep", m.grep)
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the

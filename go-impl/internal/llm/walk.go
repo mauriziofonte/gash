@@ -73,6 +73,8 @@ type findWalker struct {
 	// directory (false is -prune).
 	visit     func(e findEntry) bool
 	withStart bool
+	// stop, once set by visit, ends the walk (head closed the pipe).
+	stop bool
 }
 
 func (w *findWalker) walk(start string) {
@@ -97,6 +99,9 @@ func (w *findWalker) dir(path, rel string, depth int) {
 	ents, _ := f.ReadDir(-1)
 	_ = f.Close()
 	for _, d := range ents {
+		if w.stop {
+			return
+		}
 		name := d.Name()
 		info, err := d.Info()
 		if err != nil {
