@@ -80,6 +80,11 @@ func (f *fixture) write(sys, content string, mode os.FileMode) {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		f.t.Fatal(err)
 	}
+	// A read-only file of the fixture is replaced, as root would (the
+	// tests also run as an unprivileged user).
+	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		f.t.Fatal(err)
+	}
 	if err := os.WriteFile(p, []byte(content), mode); err != nil {
 		f.t.Fatal(err)
 	}
