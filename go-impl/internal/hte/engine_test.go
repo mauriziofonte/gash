@@ -259,3 +259,56 @@ func TestNotInstalled(t *testing.T) {
 		t.Errorf("uninstall: %v", err)
 	}
 }
+
+// php ini and php global: the site's [php_ini] reaches its pool; the
+// global overlay is a file of key lines, edited in place.
+func TestPHPCommands(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	v := f.install(t)
+	if _, err := f.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: ptr(f.docroot(t)), HTTPS: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.e.PHPIniSet(ctx, "app.test", "memory_limit", `5"M`); code(err) != hteerr.InvalidState {
+		t.Errorf("a quote in a value: %v", err)
+	}
+	res, err := f.e.PHPIniSet(ctx, "app.test", "memory_limit", "321M")
+	if err != nil || !res.Changed {
+		t.Fatalf("php ini set: %+v %v", res, err)
+	}
+	pool, err := os.ReadFile(filepath.Join(v.paths.RenderDir(), "current", "fpm", "8.3", "pools", "app.test.conf"))
+	if err != nil || !strings.Contains(string(pool), `php_admin_value[memory_limit] = "321M"`) {
+		t.Errorf("pool after php ini set (%v):\n%s", err, pool)
+	}
+	if val, ok, _ := f.e.PHPIniGet(ctx, "app.test", "memory_limit"); !ok || val != "321M" {
+		t.Errorf("php ini get: %q %v", val, ok)
+	}
+	if res, err := f.e.PHPIniSet(ctx, "app.test", "memory_limit", "321M"); err != nil || res.Changed {
+		t.Errorf("the same value again: %+v %v", res, err)
+	}
+	if res, err := f.e.PHPIniUnset(ctx, "app.test", "memory_limit"); err != nil || !res.Changed || res.Site.PHPIni != nil {
+		t.Errorf("php ini unset: %+v %v", res, err)
+	}
+
+	if _, err := f.e.PHPGlobalSet(ctx, "7.4", "max_input_vars", "1"); code(err) != hteerr.PHPVersionNotInstalled {
+		t.Errorf("an absent version: %v", err)
+	}
+	for _, kv := range [][2]string{{"max_input_vars", "1234"}, {"display_errors", "On"}, {"max_input_vars", "4321"}} {
+		if _, err := f.e.PHPGlobalSet(ctx, "8.3", kv[0], kv[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(v.paths.PHPOverlay("8.3"))
+	if string(data) != "max_input_vars = \"4321\"\ndisplay_errors = On\n" {
+		t.Errorf("overlay:\n%s", data)
+	}
+	if val, ok, _ := f.e.PHPGlobalGet(ctx, "8.3", "max_input_vars"); !ok || val != "4321" {
+		t.Errorf("php global get: %q %v", val, ok)
+	}
+	if _, err := f.e.PHPGlobalUnset(ctx, "8.3", "max_input_vars"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(v.paths.PHPOverlay("8.3")); string(data) != "display_errors = On\n" {
+		t.Errorf("overlay after unset:\n%s", data)
+	}
+}

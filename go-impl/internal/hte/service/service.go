@@ -467,6 +467,28 @@ func (s *Supervisor) Graceful(ctx context.Context) error {
 	return nil
 }
 
+// ReloadFPM makes the running FPM master of version re-read its ini
+// files (SIGUSR2): a change of the global overlay, which the rendering
+// does not see. A master that is not running is left alone.
+func (s *Supervisor) ReloadFPM(ctx context.Context, version string) error {
+	_, m, ok, err := s.Current()
+	if err != nil || !ok {
+		return err
+	}
+	for _, f := range m.FPM {
+		if f.Version != version {
+			continue
+		}
+		if _, up := s.pid(s.fpm(f)); !up {
+			return nil
+		}
+		if err := s.signalReady(ctx, s.fpm(f), syscall.SIGUSR2); err != nil {
+			return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+		}
+	}
+	return nil
+}
+
 // Stop stops Apache, then every FPM master: those of the current
 // generation and any other gash master whose PID file is in the runtime
 // directory (a version dropped by a failed reload).
