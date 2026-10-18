@@ -4,6 +4,10 @@ package sqlguard
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -311,5 +315,44 @@ func TestGuardDriver(t *testing.T) {
 		if got := GuardDriver(in); got != want {
 			t.Errorf("GuardDriver(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The word lists are those of lib/modules/llm/db.sh, in their order.
+func TestWordListsAre2x(t *testing.T) {
+	src := repoFile(t, filepath.Join("lib", "modules", "llm", "db.sh"))
+	list := func(name string) []string {
+		m := regexp.MustCompile(`(?m)^` + name + `="([^"]*)"$`).FindStringSubmatch(src)
+		if m == nil {
+			t.Fatalf("%s not found in db.sh", name)
+		}
+		return strings.Fields(m[1])
+	}
+	if got := list("__LLM_SQL_ALLOWED_FIRST"); !reflect.DeepEqual(got, allowedFirstWords) {
+		t.Errorf("allowed first words differ from db.sh: %q", got)
+	}
+	if got := list("__LLM_SQL_FORBIDDEN_WORDS"); !reflect.DeepEqual(got, forbiddenWords) {
+		t.Errorf("forbidden words differ from db.sh: %q", got)
+	}
+}
+
+// repoFile reads a file of the 2.x tree, found by walking up from the
+// package directory.
+func repoFile(t *testing.T, rel string) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err == nil {
+			return string(data)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("%s not found above the package directory", rel)
+		}
+		dir = parent
 	}
 }
