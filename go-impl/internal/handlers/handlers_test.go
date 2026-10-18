@@ -26,7 +26,7 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_doctor", "gash_env_init", "gash_help", "gash_inspiring_quote", "gash_migrate", "gash_uninstall", "gash_upgrade", "gash_username", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree"}, tbl.Names())
+	require.Equal(t, []string{"all_colors", "archive_extract", "dirs_find_large", "dirs_largest", "dirs_list_empty", "docker_compose_check", "docker_compose_scan", "docker_compose_upgrade", "docker_prune_all", "docker_start_all", "docker_stop_all", "file_backup", "files_largest", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_doctor", "gash_env_init", "gash_help", "gash_inspiring_quote", "gash_migrate", "gash_uninstall", "gash_upgrade", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag", "git_dump_revisions", "git_list_tags", "git_repair", "git_sync", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree", "remote_exec", "remote_hosts", "remote_pull", "remote_push", "remote_sync_pull", "remote_sync_push", "tree_stats"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
