@@ -11,10 +11,11 @@ import (
 
 // fakeTTY is the controlling terminal of a test term: none (the open
 // fails with ENXIO, as without a controlling terminal), or one whose
-// keyboard types input.
+// keyboard types input. Every open reads on from where the last read
+// stopped, as successive `read </dev/tty` get successive lines.
 type fakeTTY struct {
 	ok    bool
-	input string
+	input *strings.Reader
 }
 
 // OpenTTY opens the controlling terminal for reading, as `read
@@ -26,7 +27,7 @@ func (t *Term) OpenTTY() (io.ReadCloser, error) {
 		if !t.tty.ok {
 			return nil, &os.PathError{Op: "open", Path: "/dev/tty", Err: syscall.ENXIO}
 		}
-		return io.NopCloser(strings.NewReader(t.tty.input)), nil
+		return io.NopCloser(t.tty.input), nil
 	}
 	return os.Open("/dev/tty")
 }
@@ -35,7 +36,7 @@ func (t *Term) OpenTTY() (io.ReadCloser, error) {
 // input (then end of input), for tests.
 func (t *Term) WithTTY(input string) *Term {
 	c := *t
-	c.tty = &fakeTTY{ok: true, input: input}
+	c.tty = &fakeTTY{ok: true, input: strings.NewReader(input)}
 	return &c
 }
 
