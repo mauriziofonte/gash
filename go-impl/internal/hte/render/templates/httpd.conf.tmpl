@@ -1,0 +1,55 @@
+{{- /* Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com> */ -}}
+# Managed by gash hte: rendered from the site state, never edit this file.
+# Server-level directives go in the overlay included below.
+ServerRoot {{q .RunDir}}
+PidFile {{q .PidFile}}
+DefaultRuntimeDir {{q .RunDir}}
+Mutex {{q .MutexArg}} default
+ServerName localhost
+ErrorLog {{q .ErrorLog}}
+LogLevel warn
+{{- if .Modules}}
+{{range .Modules}}
+LoadModule {{.Name}}_module {{q .Path}}
+{{- end}}
+{{- end}}
+{{range .Listen}}
+Listen {{.}}
+{{- end}}
+
+<Directory "/">
+    AllowOverride None
+    Require all denied
+</Directory>
+
+<FilesMatch "^\.ht">
+    Require all denied
+</FilesMatch>
+
+DirectoryIndex index.html index.cgi index.pl index.php index.xhtml index.htm
+
+LogFormat "%v:%p %h %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" vhost_combined
+LogFormat "%h %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" combined
+LogFormat "%h %l %u %t \"%r\" %>s %O" common
+LogFormat "%{Referer}i -> %U" referer
+LogFormat "%{User-agent}i" agent
+
+TypesConfig {{q .MimeTypes}}
+AddDefaultCharset Off
+
+ServerTokens OS
+ServerSignature On
+TraceEnable Off
+
+Protocols h2 h2c http/1.1
+
+SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+SSLCipherSuite HIGH:!aNULL
+SSLHonorCipherOrder off
+SSLSessionCache {{q .SessionCache}}
+SSLSessionCacheTimeout 300
+
+IncludeOptional {{q .Overlay}}
+{{- range .SiteConfs}}
+IncludeOptional {{q .}}
+{{- end}}

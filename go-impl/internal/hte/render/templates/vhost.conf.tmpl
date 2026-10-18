@@ -1,0 +1,87 @@
+{{- /* Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com> */ -}}
+{{define "head"}}    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay below.
+    ServerName {{.Domain}}
+{{- if .Aliases}}
+    ServerAlias {{join .Aliases " "}}
+{{- end}}
+    DocumentRoot {{q .Docroot}}
+    ServerAdmin admin@localhost.net
+    UseCanonicalName Off
+    Options -ExecCGI -Includes
+    RemoveHandler cgi-script .cgi .pl .plx .ppl .perl
+{{- end -}}
+{{define "php"}}    <FilesMatch \.php$>
+        SetHandler {{q .Handler}}
+    </FilesMatch>
+{{- end -}}
+{{define "brotli"}}    <IfModule mod_brotli.c>
+        AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml text/css text/javascript application/x-javascript application/javascript application/json application/x-font-ttf application/vnd.ms-fontobject image/x-icon
+    </IfModule>
+{{- end -}}
+{{define "directory"}}    <Directory {{q .DirectoryPath}}>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+{{- end -}}
+<VirtualHost {{.HTTPAddrs}}>
+{{template "head" .}}
+    ErrorLog {{q .ErrorLog}}
+    CustomLog {{q .AccessLog}} combined
+    CustomLog {{q .BytesLog}} "%{%s}t %I .\n%{%s}t %O ."
+
+    Protocols {{.HTTPProtocols}}
+{{- if .Handler}}
+
+{{template "php" .}}
+{{- end}}
+
+{{template "brotli" .}}
+
+{{template "directory" .}}
+{{- if .ForceHTTPS}}
+{{if .Bypass}}
+    # Force HTTPS, except for requests from 127.0.0.1 and ::1 (force_https_bypass_loopback = true).
+{{- else}}
+    # Force HTTPS: every plain-HTTP request is redirected (force_https = true).
+{{- end}}
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+{{- if .Bypass}}
+    RewriteCond %{REMOTE_ADDR} !^127\.0\.0\.1$
+    RewriteCond %{REMOTE_ADDR} !^::1$
+{{- end}}
+    RewriteRule ^/(.*) {{.RedirectTarget}} [R=307,L]
+{{- end}}
+
+    IncludeOptional {{q .Overlay}}
+</VirtualHost>
+{{- if .HTTPS}}
+
+<VirtualHost {{.HTTPSAddrs}}>
+{{template "head" .}}
+    ErrorLog {{q .ErrorLog}}
+    CustomLog {{q .SSLAccessLog}} combined
+    CustomLog {{q .SSLBytesLog}} "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
+
+    Protocols {{.HTTPSProtocols}}
+
+    <FilesMatch "\.(cgi|shtml|phtml|php)$">
+        SSLOptions +StdEnvVars
+    </FilesMatch>
+
+{{template "directory" .}}
+
+{{template "brotli" .}}
+{{- if .Handler}}
+
+{{template "php" .}}
+{{- end}}
+
+    SSLEngine on
+    SSLCertificateFile {{q .CertFile}}
+    SSLCertificateKeyFile {{q .KeyFile}}
+
+    IncludeOptional {{q .Overlay}}
+</VirtualHost>
+{{- end}}

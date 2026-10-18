@@ -1,0 +1,9 @@
+{{- /* Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com> */ -}}
+; Managed by gash hte: the PHP-FPM {{.Version}} master, rendered from the site state; never edit this file.
+[global]
+pid = {{iq .PidFile}}
+error_log = {{iq .ErrorLog}}
+daemonize = yes
+{{range .Pools}}
+include = {{iq .}}
+{{- end}}
