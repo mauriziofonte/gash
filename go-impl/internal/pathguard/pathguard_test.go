@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -142,9 +143,10 @@ func TestIsSecretFile_SymlinkTarget(t *testing.T) {
 	require.True(t, g.IsSecretFile(link), "settings.json resolves to .env, a secret")
 }
 
-// TestLedger_portability_realpath replicates llm_portability_spec.sh:48 — the
-// walk (what rc.A always uses) equals realpath -m and realpath -m -s on a
-// fixture tree with relative, absolute and looping symlinks.
+// TestLedger_portability_realpath replicates llm_portability_spec.sh:48:
+// Realpath equals realpath -m and realpath -m -s on a fixture tree with
+// relative, absolute and looping symlinks. Unlike the 2.x walk the spec
+// tests (a realpath without -m), a loop resolves as GNU -m resolves it.
 func TestLedger_portability_realpath(t *testing.T) {
 	rp, err := exec.LookPath("realpath")
 	if err != nil {
@@ -158,12 +160,20 @@ func TestLedger_portability_realpath(t *testing.T) {
 	sym("../..", "a/b/up")
 	sym("loop2", "loop1")
 	sym("loop1", "loop2")
+	sym("self", "self")
+	sym("../"+filepath.Base(dir)+"/back", "back")
 	sym("/root", "rootlink")
+	sym("c1", "c0")
+	for i := 1; i <= 60; i++ {
+		sym("c"+strconv.Itoa(i+1), "c"+strconv.Itoa(i))
+	}
+	mk("c61")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env"), []byte("S=1\n"), 0o600))
 	sym(".env", "settings.json")
 
 	g := guardAt(dir, dir)
-	cases := []string{"l", "l/../x", "a/b/up/x", "/etc//x/./y/../z", ".", "a/./b/", "/", "a/new line", "missing/x"}
+	cases := []string{"l", "l/../x", "a/b/up/x", "/etc//x/./y/../z", ".", "a/./b/", "/", "a/new line", "missing/x",
+		"loop1", "loop1/x", "loop2/x/../y", "loop1/../l/x", "self", "self/self/x", "back", "back/x", "c0/x", "l/up/loop1/z"}
 	for _, c := range cases {
 		wantM := realpathRun(t, rp, dir, "-m", c)
 		gotM, err := g.Realpath(absIn(dir, c), false)
@@ -175,9 +185,14 @@ func TestLedger_portability_realpath(t *testing.T) {
 		require.NoErrorf(t, err, "Realpath -s (%q)", c)
 		require.Equalf(t, wantS, gotS, "realpath -m -s %q", c)
 	}
-	// A symlink loop fails, as in 2.x (! __llm_realpath loop1).
-	_, err = g.Realpath(filepath.Join(dir, "loop1"), false)
-	require.Error(t, err)
+	// A link to itself/.. expands without end (GNU realpath -m never
+	// returns): an error, so callers use the path as given.
+	sym("grow/..", "grow")
+	_, err = g.Realpath(filepath.Join(dir, "grow", "x"), false)
+	require.ErrorIs(t, err, errSymlinkLoop)
+	normalized, err := g.ValidatePath(filepath.Join(dir, "grow", "x"))
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(dir, "grow", "x"), normalized)
 	// rootlink/x resolves to /root/x and is forbidden.
 	_, err = g.ValidatePath(filepath.Join(dir, "rootlink", "x"))
 	r, ok := err.(*Refusal)
