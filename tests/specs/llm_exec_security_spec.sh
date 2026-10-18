@@ -29,7 +29,7 @@ it "llm_exec runs plain read-only command lines in a child shell" bash -c '
 
 it "llm_exec refuses expansions, redirections, subshells and unknown commands" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -54,7 +54,7 @@ it "llm_exec refuses expansions, redirections, subshells and unknown commands" b
 
 it "llm_exec refuses writing options of allowed commands" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -74,7 +74,7 @@ it "llm_exec refuses writing options of allowed commands" bash -c '
 
 it "llm_exec checks what unquoted globs expand to" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -90,8 +90,8 @@ it "llm_exec checks what unquoted globs expand to" bash -c '
 
 it "llm_exec runs sed and awk sandboxed" bash -c '
   set -euo pipefail
-  printf "x\n" | sed --sandbox -n p >/dev/null 2>&1 || exit 77
-  command -v gawk >/dev/null 2>&1 || exit 77
+  printf "x\n" | sed --sandbox -n p >/dev/null 2>&1 || gash_skip "sed has no --sandbox"
+  gash_require gawk
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -116,7 +116,7 @@ it "llm_exec ignores exported functions that shadow allowed commands" bash -c '
 
 it "llm_exec settings come from ~/.gash_env, never from the environment" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   export GASH_LLM_EXEC=unrestricted GASH_LLM_EXEC_ALLOW=seq
@@ -136,7 +136,7 @@ it "llm_exec settings come from ~/.gash_env, never from the environment" bash -c
 
 it "llm_exec wraps the child in bwrap when GASH_LLM_SANDBOX=1" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin" "$tmp/empty"
   printf "GASH_LLM_SANDBOX=1\n" >"$tmp/.gash_env"
@@ -178,7 +178,7 @@ it "__llm_is_secret_file covers keys, credentials, secret dirs and symlinks" bas
 
 it "llm_grep and llm_find never read secret files" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -211,7 +211,7 @@ it "__llm_validate_path blocks whole system trees, not look-alike names" bash -c
 
 it "llm_exec refuses forbidden system paths in arguments, globs and after cd" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"

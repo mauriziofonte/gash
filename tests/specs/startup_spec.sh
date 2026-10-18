@@ -117,7 +117,7 @@ it "an alias named like a program on PATH is not defined; wrappers and earlier a
 
 it "LESSOPEN and LESSCLOSE match what eval \"\$(lesspipe)\" sets" bash -c '
   set -euo pipefail
-  command -v lesspipe >/dev/null 2>&1 || { echo "SKIP: lesspipe not available"; exit 77; }
+  gash_require lesspipe
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   ln -s "$GASH_TEST_ROOT" "$tmp/.gash"
   want="$(unset LESSOPEN LESSCLOSE; SHELL=/bin/bash; eval "$(lesspipe)"; printf "%s|%s" "$LESSOPEN" "$LESSCLOSE")"
@@ -149,7 +149,7 @@ it "__gash_path_of finds what type -P finds, without a subshell" bash -c '
 
 it "the hook builds the prompt; the PS1 set at load runs no git status" bash -c '
   set -euo pipefail
-  command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
+  gash_require git
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   ln -s "$GASH_TEST_ROOT" "$tmp/.gash"
   git init -q "$tmp/repo" 2>&1

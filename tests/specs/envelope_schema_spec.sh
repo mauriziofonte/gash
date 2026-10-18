@@ -7,7 +7,7 @@ describe "Envelope schemas"
 
 # Shared fixture: t/{a/{x.txt, b/big.bin}, empty/} and a sqlite database.
 __envelope_fixture='
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
   mkdir -p "$tmp/t/a/b" "$tmp/t/empty"
   head -c 70000 /dev/zero >"$tmp/t/a/b/big.bin"
@@ -74,7 +74,7 @@ it "llm_tree flags a listing cut at 500 entries" bash -c "$__envelope_fixture"'
 
 it "database envelope: every llm_db_* returns {data, rows, query_time}" bash -c "$__envelope_fixture"'
   set -euo pipefail
-  command -v sqlite3 >/dev/null 2>&1 || exit 77
+  gash_require sqlite3
   db="$tmp/app.db"
   sqlite3 "$db" "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT); INSERT INTO users(name) VALUES (\"alice\"), (\"bob\");"
   # slow_query_explain appears when a query takes 100 ms (slow CI runners).
@@ -90,7 +90,7 @@ it "database envelope: every llm_db_* returns {data, rows, query_time}" bash -c 
 
 it "git envelopes: llm_git_status keys and llm_git_log records" bash -c "$__envelope_fixture"'
   set -euo pipefail
-  command -v git >/dev/null 2>&1 || exit 77
+  gash_require git
   repo="$tmp/repo"; mkdir "$repo"; cd "$repo"
   git init -q -b main . && git config user.email t@t && git config user.name T
   echo a >a && git add a && git commit -qm "first \"quoted\""

@@ -108,6 +108,10 @@ gash_require() {
   done
 }
 
+# Test bodies run in their own `bash -c`: both helpers go along, so a body
+# skips with `gash_require X` (TEST-03) without sourcing this file.
+export -f gash_skip gash_require
+
 # The reason of a skip that printed no SKIP: line (TEST-03): the first
 # command that a `command -v NAME ... exit 77` or `type -P NAME ... exit 77`
 # line of the test body tests for and that is not available here, else

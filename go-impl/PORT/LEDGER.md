@@ -119,11 +119,11 @@ Conventions for this section:
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
 | Defects | 1 | 25 | 76 | 76 | 178 | 116 |
-| Forced divergences | 2 | 4 | 26 | 71 | 103 | 46 |
+| Forced divergences | 3 | 4 | 26 | 71 | 104 | 47 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
-| **All** | 3 | 36 | 131 | 259 | **429** | 254 |
+| **All** | 4 | 36 | 131 | 259 | **430** | 255 |
 
 Critical and high items:
 
@@ -132,6 +132,7 @@ Critical and high items:
 | [LLM-01](#llm-01) | llm_grep --context is evaluated as Bash arithmetic | Forced divergences | critical |
 | [DB-01](#db-01) | PostgreSQL E-string mislex lets a backslash line slip past the SQL guard | Defects | critical |
 | [SHELL-01](#shell-01) | The prompt re-expands the git branch name, VIRTUAL_ENV, debian_chroot and STY as code | Forced divergences | critical |
+| [FS-50](#fs-50) | tree_stats evaluates text from a scanned file name as Bash arithmetic | Forced divergences | critical |
 | [LLM-02](#llm-02) | llm_env URL password masking fails on @ or / in the password, or a non-leading URL | Defects | high |
 | [LLM-09](#llm-09) | llm_grep / llm_find / llm_tree walks enter protected trees | Defects | high |
 | [LLM-10](#llm-10) | forbidden-path and secret-file lists have gaps | Defects | high |
@@ -3558,7 +3559,7 @@ Critical and high items:
 | Section | Defects |
 | Origin | New finding (rc.A port of llm_* and internal/db) |
 | Area | Test harness |
-| Bash location | `llm_spec.sh` (`__llm_validate_command`, `__llm_validate_path`, `__llm_is_secret_file`, `__llm_clean_error_msg`, `__llm_resolve_db`), `llm_exec_security_spec.sh` (two tests), `llm_db_security_spec.sh` (`__llm_sql_guard`, two tests), `llm_db_names_spec.sh` (`__llm_tsv_to_json`), `llm_portability_spec.sh` (`__llm_elapsed_us`, `__llm_realpath`), `llm_flags_spec.sh` (overrides `__llm_has_rg` and sources `lib/modules/llm/core.sh`), `help_spec.sh` (the seven `__gash_register_help` registry tests; core pins the registry in `internal/registry`) |
+| Bash location | `llm_spec.sh` (`__llm_validate_command`, `__llm_validate_path`, `__llm_is_secret_file`, `__llm_clean_error_msg`, `__llm_resolve_db`), `llm_exec_security_spec.sh` (two tests), `llm_db_security_spec.sh` (`__llm_sql_guard`, two tests), `llm_db_names_spec.sh` (`__llm_tsv_to_json`), `llm_portability_spec.sh` (`__llm_elapsed_us`, `__llm_realpath`), `llm_flags_spec.sh` (overrides `__llm_has_rg` and sources `lib/modules/llm/core.sh`), `help_spec.sh` (the seven `__gash_register_help` registry tests; core pins the registry in `internal/registry`), `files_spec.sh` (four tests calling `__gash_fs_parse_size` and `__gash_fs_human_size`; `TestParseSize` in `internal/fsscan`), `fs_render_spec.sh` (three tests overriding `__gash_fs_rich_ok` and `__gash_use_color` to force the terminal layout) |
 | Observed behavior | These tests call or override `__llm_*` helpers of the Bash implementation. MATRIX lists them as moot internals (PRD 5.5): the generated shims do not define them, so the tests cannot run in Go mode. |
 | Reproduction | `bash tests/run.sh --impl go specs/llm_spec.sh` |
 | Severity | low |
@@ -3671,6 +3672,7 @@ Critical and high items:
 | [FS-28](#fs-28) | The order of equal entries depends on the locale and the awk implementation | Portability | low | yes |
 | [FS-29](#fs-29) | Non-ASCII digits pass integer and size validation in UTF-8 locales | Portability | medium | yes |
 | [FS-30](#fs-30) | An unusable TMPDIR forces errors to 0 and leaks a mktemp message | Portability | low | no |
+| [FS-50](#fs-50) | tree_stats evaluates text from a scanned file name as Bash arithmetic | Security | critical | yes |
 | [FILE-16](#file-16) | `nocasematch` stays on in the caller's shell after Ctrl-C | Contract | low | no |
 | [FILE-17](#file-17) | `.tar.zst` exit status depends on the caller's `pipefail` | Correctness | medium | yes |
 | [FILE-18](#file-18) | The caller's `noclobber` makes single-file extraction fail | Correctness | low | no |
@@ -5170,6 +5172,24 @@ Critical and high items:
 | rc.A behavior | No temp file: errors are counted in-process (FS-15 rule) and no mktemp line is printed; TMPDIR is not read. The temp file is Bash stderr transport, so its failure mode depends on the environment rather than on the contract. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS30` in `testdata/script/fsscan_tmpdir.txtar`: with `TMPDIR=/nonexistent` the envelope still says `"errors":1` and stderr is empty. |
+| Status | open |
+
+<a id="fs-50"></a>
+#### FS-50 · tree_stats evaluates text from a scanned file name as Bash arithmetic
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of lib/modules/files.sh, files worker; confirmed by the lead on a 2.1.0 copy) |
+| Area | Security |
+| Bash location | `lib/modules/files.sh:1664-1666` and `:1675-1677` (terminal renderer of tree_stats) |
+| Observed behavior | The "By size" and "By count" rows are split with `IFS=$'\t' read -r ext cnt sz`, and the count and size fields go straight into `$((${sz:-0} * 1000 / ...))` and `$((${cnt:-0} * 1000 / ...))`. An extension that holds a tab shifts the split (FS-17), so text from a file name in the scanned tree reaches Bash arithmetic evaluation, which runs command substitutions inside array subscripts. Anyone who can create a file in a tree the user later runs `tree_stats` on (a cloned repository, an extracted archive, a shared directory) can run commands as that user. The `--json` output does not take this path. |
+| Reproduction | the reproduction kept outside the repository: a file whose extension holds a tab followed by an array subscript with a command substitution that creates an empty marker file; `tree_stats DIR` on a terminal and the marker appears in the current directory |
+| Severity | critical |
+| Public-contract impact | yes |
+| rc.A behavior | Never evaluated: the fields are read as digits only (`ui.Int`, CORE-02), anything else counts as 0, and the rows keep the 2.x layout for every ordinary name. |
+| Fix recipe (3.0) | Same as rc.A. 2.x patch (for a 2.1.x release, D-7): check `cnt` and `sz` against `^[0-9]+$` before the arithmetic and treat anything else as 0, as `__gash_fs_parse_size` already does for its input. |
+| Proving test | `TestLedger_FS50` in `internal/fsscan` (a name with a tab and an arithmetic payload: no command runs, the row reads 0); in a 2.1.1 series, a regression spec that fails on 2.1.0. |
 | Status | open |
 
 ### archive_extract and file_backup

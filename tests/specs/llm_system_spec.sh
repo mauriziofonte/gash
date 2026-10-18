@@ -6,7 +6,7 @@ describe "LLM system and project"
 
 it "llm_ports parses ss output with a Netid column and honors --listen" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin"
   cat >"$tmp/bin/ss" <<"SS"
@@ -31,7 +31,7 @@ SS
 
 it "llm_ports reports a missing ss and netstat as a CONTINUE error" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   # A PATH with the text tools but neither ss nor netstat.
   for t in sort awk gawk mawk; do
@@ -48,7 +48,7 @@ it "llm_ports reports a missing ss and netstat as a CONTINUE error" bash -c '
 
 it "llm_project reports has_tests=false for a Go module without tests" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   printf "module x\n" >"$tmp/go.mod"
   printf "package main\n" >"$tmp/main.go"
@@ -61,7 +61,7 @@ it "llm_project reports has_tests=false for a Go module without tests" bash -c '
 
 it "llm_git_status reports renames, odd names, conflicts and ahead/behind" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp" GIT_CONFIG_NOSYSTEM=1
   git config --global user.email t@example.com
@@ -91,7 +91,7 @@ it "llm_git_status reports renames, odd names, conflicts and ahead/behind" bash 
 
 it "llm_env honors --filter, redacts URL passwords and hides secret names" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   export GASH_HEADLESS=1 DB_URL="mysql://app:s3cret@db:3306/x" GITHUB_TOKEN=t MY_VAR=1
   source "$GASH_TEST_ROOT/gash.sh"
   out="$(llm_env --filter "^(DB_URL|GITHUB_TOKEN|MY_VAR)$")"
@@ -102,7 +102,7 @@ it "llm_env honors --filter, redacts URL passwords and hides secret names" bash 
 
 it "llm_deps reads requirements.txt and go.mod into the same JSON shape" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir "$tmp/py" "$tmp/go"
   printf "# c\nrequests>=2\nflask[async]==3 ; python_version>\"3\"\n-r more.txt\n  numpy\n" >"$tmp/py/requirements.txt"
@@ -115,8 +115,8 @@ it "llm_deps reads requirements.txt and go.mod into the same JSON shape" bash -c
 
 it "llm_git_* never run programs named by the repository config" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
-  command -v git >/dev/null 2>&1 || exit 77
+  gash_require jq
+  gash_require git
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp" GIT_CONFIG_NOSYSTEM=1
   git config --global user.email t@example.com
@@ -139,7 +139,7 @@ it "llm_git_* never run programs named by the repository config" bash -c '
   git config gpg.program "$tmp/evil.sh"
   # Sanity: plain git does run them here (otherwise the test proves nothing).
   git status >/dev/null 2>&1 || true
-  [[ -e "$tmp/ran" ]] || exit 77
+  [[ -e "$tmp/ran" ]] || gash_skip "git does not run the configured commands here"
   rm -f "$tmp/ran"
 
   source "$GASH_TEST_ROOT/gash.sh"

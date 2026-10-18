@@ -24,7 +24,7 @@ it "timings work when EPOCHREALTIME uses a decimal comma (it_IT, de_DE)" bash -c
 
 it "a slow-looking clock never makes llm_db_query run twice" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin"
   cat >"$tmp/bin/mysql" <<"MOCK"
@@ -78,7 +78,7 @@ it "path guards resolve symlinks without realpath -m (BSD, older macOS)" bash -c
 
 it "llm_env works where env has no -0 (BSD)" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin"
   printf "#!/bin/sh\necho \"env: illegal option -- 0\" >&2\nexit 1\n" >"$tmp/bin/env"
@@ -91,7 +91,7 @@ it "llm_env works where env has no -0 (BSD)" bash -c '
 
 it "llm_config converts YAML with either yq flavour and falls back to the raw text" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin"
   printf "a: 1\n" >"$tmp/c.yml"
@@ -119,7 +119,7 @@ it "llm_config converts YAML with either yq flavour and falls back to the raw te
 
 it "llm_config refuses files over --max-bytes (1 MiB by default) with a JSON error" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
