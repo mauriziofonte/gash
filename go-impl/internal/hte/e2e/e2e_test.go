@@ -512,3 +512,103 @@ func mustDirs(t *testing.T) platform.Dirs {
 	}
 	return d
 }
+
+// TestE2EReinstall runs after TestE2E in the same container: install on
+// the high ports next to the system Apache that uninstall restored,
+// taking the migrated sites back from the uninstall stage, then a
+// certificate renewal, the shell autostart, and a second uninstall.
+func TestE2EReinstall(t *testing.T) {
+	if os.Getenv("GASH_HTE_E2E") != "1" || !inContainer() {
+		t.Skip("runs only inside the E2E container: testdata/hte/e2e/run.sh")
+	}
+	ctx := context.Background()
+	e, err := hte.ProcessEngine(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := state.NewPaths(mustDirs(t), os.Getuid())
+	stages, _ := filepath.Glob(paths.Stage("*"))
+	if len(stages) != 1 {
+		t.Fatalf("stages %v: TestE2E runs first", stages)
+	}
+	step := func(name string, fn func(t *testing.T)) {
+		if !t.Run(name, fn) {
+			t.FailNow()
+		}
+	}
+	opt := hte.InstallOptions{Ports: "high", Autostart: "shell"}
+
+	step("install offers the stage", func(t *testing.T) {
+		_, err := e.Install(ctx, opt)
+		if code(err) != hteerr.MissingValue || !strings.Contains(err.Error(), stages[0]) {
+			t.Fatalf("%v, want missing_value naming %s", err, stages[0])
+		}
+	})
+
+	step("install --ports high --restore-stage", func(t *testing.T) {
+		opt.RestoreStage = stages[0]
+		res, err := e.Install(ctx, opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("plan: %s", strings.Join(res.Plan, " | "))
+		if !res.Started || res.Restored != stages[0] || exists(stages[0]) {
+			t.Fatalf("install: %+v", res)
+		}
+		if slices.ContainsFunc(res.Plan, func(l string) bool { return strings.Contains(l, rootops.PortSysctl) }) {
+			t.Error("the high ports need no sysctl")
+		}
+		if !systemApacheRuns() {
+			t.Error("the system Apache stopped")
+		}
+		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 || a.body != "legacy:http.test:fpm-fcgi" {
+			t.Errorf("http.test on 8080: %+v", a)
+		}
+		if a := mustGet(t, "http", "http.test", 80); a.status != 200 {
+			t.Errorf("the system Apache on 80: %+v", a)
+		}
+	})
+
+	step("cert renew", func(t *testing.T) {
+		before := mustGet(t, "https", "https.test", 8443)
+		if before.cert == nil || before.cert.PublicKeyAlgorithm != x509.RSA {
+			t.Fatalf("before: %+v", before.cert)
+		}
+		if _, err := e.CertRenew(ctx, "https.test"); err != nil {
+			t.Fatal(err)
+		}
+		after := mustGet(t, "https", "https.test", 8443)
+		if after.cert == nil || after.cert.PublicKeyAlgorithm != x509.ECDSA || after.status != 200 {
+			t.Errorf("after: %+v", after)
+		}
+	})
+
+	step("shell autostart", func(t *testing.T) {
+		if _, err := e.ServiceStop(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Autostart(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 {
+			t.Errorf("after autostart: %+v", a)
+		}
+		if err := e.Autostart(ctx); err != nil {
+			t.Errorf("autostart on a running stack: %v", err)
+		}
+	})
+
+	step("uninstall", func(t *testing.T) {
+		res, err := e.Uninstall(ctx, hte.UninstallOptions{Yes: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := get("http", "http.test", 8080); err == nil {
+			t.Error("port 8080 answers after uninstall")
+		}
+		if !systemApacheRuns() {
+			t.Error("the system Apache stopped")
+		}
+		t.Logf("stage %s", res.Stage)
+	})
+}
