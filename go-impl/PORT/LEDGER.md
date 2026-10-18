@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 65 | 166 | 114 |
-| Forced divergences | 2 | 3 | 23 | 61 | 89 | 34 |
+| Defects | 1 | 25 | 75 | 66 | 167 | 114 |
+| Forced divergences | 2 | 4 | 23 | 61 | 90 | 35 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 35 | 124 | 234 | **396** | 237 |
+| **All** | 3 | 36 | 124 | 235 | **398** | 238 |
 
 Critical and high items:
 
@@ -138,6 +138,7 @@ Critical and high items:
 | [LLM-20](#llm-20) | llm_docker_check applies no path guard and interpolates .env and caller-env secrets into output | Defects | high |
 | [EXEC-01](#exec-01) | attached short-option values and clusters skip the secret-file and forbidden-path checks | Defects | high |
 | [EXEC-02](#exec-02) | `git stash list -p` leaks secret files | Defects | high |
+| [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Forced divergences | high |
 | [SYS-01](#sys-01) | process_kill takes NAME as a pgrep regex: `.*` matches every process | Defects | high |
 | [SYS-35](#sys-35) | gash_ssh_auto_unlock glob-expands each key/passphrase row: keys dropped, passphrase printed | Forced divergences | high |
 | [DOCK-02](#dock-02) | A realpath without -m (BSD, macOS, BusyBox) makes the compose functions act on the current directory's stack | Forced divergences | high |
@@ -191,6 +192,7 @@ Critical and high items:
 | [DB-06](#db-06) | the slow-query threshold includes client spawn and connect time | Correctness | medium | yes |
 | [EXEC-01](#exec-01) | attached short-option values and clusters skip the secret-file and forbidden-path checks | Security | high | yes |
 | [EXEC-02](#exec-02) | `git stash list -p` leaks secret files | Security | high | yes |
+| [EXEC-08](#exec-08) | A line continuation between two `\|` is checked as two pipes, run as `\|\|` | Correctness | low | no |
 | [SYS-01](#sys-01) | process_kill takes NAME as a pgrep regex: `.*` matches every process | Security | high | yes |
 | [SYS-02](#sys-02) | process_kill and port_kill report a process they may not signal as "terminated" | Correctness | medium | yes |
 | [SYS-03](#sys-03) | port_kill also targets UDP clients whose remote port is PORT | Correctness | medium | yes |
@@ -685,6 +687,24 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A allows `git stash list -p` and applies no exclude pathspecs, leaking the same files. |
 | Fix recipe (3.0) | In `internal/llmexec` treat `git stash list` like `log`: when a patch option is present, apply the `:(exclude,icase,glob)**/PATTERN` and `**/DIR/**` secret pathspecs and `--no-ext-diff --no-textconv`; or refuse patch options on `stash list`. Also gate other `stash list` options (NF2) the same way `log` is gated. |
 | Proving test | `TestLedger_EXEC02` asserts `git stash list -p` shows the non-secret line and never the secret file, in `llm_exec_walk_spec.sh`'s Go form. |
+| Status | open |
+
+<a id="exec-08"></a>
+#### EXEC-08 · A line continuation between two `|` is checked as two pipes, run as `||`
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of the llm_exec renderer) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/exec.sh:847-852` |
+| Observed behavior | The 2.x parser looks at the next character before it handles a backslash-newline, so `\|`, a line continuation, then `\|` is checked as two pipes around an empty command, while bash joins the continuation and reads `\|\|`. The words checked are the same either way; only the operator differs. |
+| Reproduction | two allowed commands joined by `\|`, backslash-newline, `\|`: 2.x checks a pipeline and bash runs an or-list (temp cwd) |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced: the canonical script keeps the continuation, so bash runs what 2.x ran. |
+| Fix recipe (3.0) | In `internal/llmexec`, consume backslash-newline before looking at the next character, so the checked operator is the one bash reads. |
+| Proving test | `TestLedger_EXEC08` pins the rc.A output against 2.x for this line. |
 | Status | open |
 
 ### system, sysinfo, ssh, chrome
@@ -3375,6 +3395,7 @@ Critical and high items:
 | [DB-08](#db-08) | the SQLite EXPLAIN QUERY PLAN text tree must be rebuilt from plan rows | Contract | medium | yes |
 | [DB-09](#db-09) | psql client meta-commands and PGPASSWORD-in-child are unreachable with the native driver | Security | medium | no |
 | [EXEC-06](#exec-06) | glob expansion order differs under non-C collation | Portability | low | yes |
+| [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Security | high | yes |
 | [SYS-28](#sys-28) | hgrep passes PATTERN through awk `-v`: backslashes are rewritten and the regex dialect depends on the awk | Portability | medium | yes |
 | [SYS-29](#sys-29) | hgrep prints a gawk warning for fixed patterns containing regex metacharacters | Portability | low | no |
 | [SYS-30](#sys-30) | hgrep -n is compared with Bash arithmetic | Contract | low | yes |
@@ -3707,6 +3728,24 @@ Critical and high items:
 | rc.A behavior | Go expands globs itself against the same cwd tracking it validated, in byte (C) order; this differs from 2.x only under non-C collation. Go must never hand an unexpanded or re-globbable word to the shell, so the locale-dependent order cannot be reproduced. |
 | Fix recipe (3.0) | Document byte-order glob expansion in `internal/llmexec`; the canonical single-quoted script (operator decision D-1 option A) carries the already-expanded words so bash does no globbing. |
 | Proving test | `TestLedger_EXEC06` asserts glob expansion is byte-ordered and stable regardless of `LC_COLLATE`. |
+| Status | open |
+
+<a id="exec-07"></a>
+#### EXEC-07 · A trailing backslash makes llm_exec check one word and run another
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of the llm_exec renderer) |
+| Area | Security |
+| Bash location | `lib/modules/llm/exec.sh:834-837` |
+| Observed behavior | When the command line ends with a backslash, the 2.x parser drops it and checks the word without it, but bash keeps the backslash as a literal character. The path and secret-file checks therefore run on one name and the command opens another, which can reach a file the rules refuse (for example through a link whose name ends with a backslash). |
+| Reproduction | in a temp dir, a link whose name ends with a backslash points at a secret-pattern marker; a read command naming the link with the backslash last prints the marker (input shapes only, no working line) |
+| Severity | high |
+| Public-contract impact | yes |
+| rc.A behavior | Go never runs a word it did not check (PRD 10.7), so 2.x cannot be reproduced. A command line that ends with a backslash is refused with `construct_not_allowed` (RETRY), the error contract 2.x already uses for constructs it does not handle. A backslash before a newline stays a line continuation, as in 2.x. |
+| Fix recipe (3.0) | Keep the refusal. For 2.x, the same refusal at the end-of-input branch of the parser. |
+| Proving test | `TestLedger_EXEC07` asserts a line ending with a backslash gives `construct_not_allowed` and runs nothing. |
 | Status | open |
 
 ### system, sysinfo, ssh, chrome
