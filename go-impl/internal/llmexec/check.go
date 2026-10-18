@@ -36,34 +36,35 @@ var literalArgCmds = map[string]bool{
 
 // checkSimple is __llm_exec_check_simple: the command-name gate, the allowlist
 // (with per-command and walk rules, skipped for GASH_LLM_EXEC_ALLOW commands,
-// EXEC-05), and the per-argument secret, glob and path checks. It returns the
-// canonical rendering of the command (single-quoted words plus the recorded
-// redirections) for the D-1 A script.
-func (lc *lineChecker) checkSimple(words []pword) (string, error) {
+// EXEC-05), and the per-argument secret, glob and path checks. It returns,
+// for each parsed word in order, the validated words it stands for (one, or
+// a glob's matches), which the D-1 A script renders single-quoted.
+func (lc *lineChecker) checkSimple(words []pword) ([][]string, error) {
 	name := words[0].lit
 	if words[0].globby || !nameRE.MatchString(name) {
 		if strings.Contains(name, "=") {
-			return "", refuse("construct_not_allowed", name[:strings.IndexByte(name, '=')]+"=...", "RETRY",
+			return nil, refuse("construct_not_allowed", name[:strings.IndexByte(name, '=')]+"=...", "RETRY",
 				"Variable assignments are not allowed; pass values as arguments")
 		}
-		return "", refuse("command_not_allowed", name, "STOP",
+		return nil, refuse("command_not_allowed", name, "STOP",
 			"Run commands by plain name; paths, globs and keywords are not allowed")
 	}
 
 	if !lc.extra[name] {
 		if !allowedSet[name] {
-			return "", refuse("command_not_allowed", name, "STOP",
+			return nil, refuse("command_not_allowed", name, "STOP",
 				"llm_exec runs read-only commands (ls, cat, grep, find, git status, ...). Ask the user to add '"+name+"' to GASH_LLM_EXEC_ALLOW in ~/.gash_env if it is needed")
 		}
 		if err := lc.checkArgs(words); err != nil {
-			return "", err
+			return nil, err
 		}
 		if err := lc.checkWalk(words); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
 	plain := []string{name}
+	perWord := [][]string{{name}}
 
 	cwd := lc.cwd
 	plainArg := cwd != lc.env.Cwd
@@ -86,15 +87,15 @@ func (lc *lineChecker) checkSimple(words []pword) (string, error) {
 			matches := globExpand(words[i].glob, cwd)
 			for _, m := range matches {
 				if strings.HasPrefix(m, "-") {
-					return "", refuse("glob_matches_option", m, "RETRY",
+					return nil, refuse("glob_matches_option", m, "RETRY",
 						"A file name matched by the glob starts with '-'; prefix the pattern with ./")
 				}
 				if lc.guard.IsSecretFile(m) {
-					return "", refuse("secret_file_blocked", m, "FATAL",
+					return nil, refuse("secret_file_blocked", m, "FATAL",
 						"Secret files cannot be read through llm_exec")
 				}
 				if err := lc.checkPath(m, cwd, true); err != nil {
-					return "", err
+					return nil, err
 				}
 			}
 			if len(matches) > 0 {
@@ -116,54 +117,53 @@ func (lc *lineChecker) checkSimple(words []pword) (string, error) {
 			secret = pathguard.SecretName(w[strings.LastIndexByte(w, ':')+1:])
 		}
 		if secret {
-			return "", refuse("secret_file_blocked", w, "FATAL",
+			return nil, refuse("secret_file_blocked", w, "FATAL",
 				"Secret files cannot be read through llm_exec")
 		}
 
 		if !strings.HasPrefix(w, "-") && skipFirst && !seenPos {
 			seenPos = true
 			plain = append(plain, renderedForWord...)
+			perWord = append(perWord, renderedForWord)
 			continue
 		}
 		if literalArgCmds[name] {
 			plain = append(plain, renderedForWord...)
+			perWord = append(perWord, renderedForWord)
 			continue
 		}
 
 		switch {
 		case strings.HasPrefix(w, "--") && strings.Contains(w, "="):
 			if err := lc.checkPath(w[strings.IndexByte(w, '=')+1:], cwd, plainArg); err != nil {
-				return "", err
+				return nil, err
 			}
 		case strings.HasPrefix(w, "--"):
 			// no path check
 		case strings.HasPrefix(w, "-") && len(w) >= 2:
 			// EXEC-01: strip exactly two characters, forbidden-path check only.
 			if err := lc.checkPath(w[2:], cwd, false); err != nil {
-				return "", err
+				return nil, err
 			}
 		case strings.Contains(w, "="):
 			if err := lc.checkPath(w, cwd, plainArg); err != nil {
-				return "", err
+				return nil, err
 			}
 			if err := lc.checkPath(w[strings.IndexByte(w, '=')+1:], cwd, plainArg); err != nil {
-				return "", err
+				return nil, err
 			}
 		default:
 			if err := lc.checkPath(w, cwd, plainArg); err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 		plain = append(plain, renderedForWord...)
+		perWord = append(perWord, renderedForWord)
 	}
 
 	lc.cmdWords = append(lc.cmdWords, plain)
 	lc.cmdRedirs = append(lc.cmdRedirs, append([]string(nil), lc.redirs...))
-	quoted := make([]string, len(plain))
-	for i, w := range plain {
-		quoted[i] = singleQuote(w)
-	}
-	return renderCmd(quoted, lc.redirs), nil
+	return perWord, nil
 }
 
 func isPatternOptWord(w string) bool {

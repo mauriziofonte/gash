@@ -6,9 +6,10 @@
 // with its per-command and walk rules, the argument path and secret checks,
 // glob expansion (by Go, in byte order), the restricted child environment,
 // the git hardening flags, sed --sandbox / gawk --sandbox and the bwrap argv,
-// and renders the validated parse as a canonical script of single-quoted
-// words that bash re-reads without parsing anything of its own (MUST NOT 7:
-// one parser decides).
+// and renders the validated parse as a canonical script: every word single
+// quoted, the operators and allowed redirections where the parser found them,
+// so bash re-reads it without parsing anything of its own (MUST NOT 7: one
+// parser decides).
 //
 // Build validates a line and returns the argv and environment to run; it
 // never runs anything. The library prints nothing; a refusal is a

@@ -78,12 +78,35 @@ func run2x(t *testing.T, line, cwd, home string) (string, int) {
 	return string(out), exitOf(err)
 }
 
+var (
+	bashOnce sync.Once
+	bashPath string
+)
+
+// bash2x is $BASH in the shell run2x starts: the path 2.x runs its child
+// with ("${BASH:-bash}"), which bash prints at the start of a syntax error.
+func bash2x(t *testing.T) string {
+	t.Helper()
+	bashOnce.Do(func() {
+		cmd := exec.Command("bash", "--noprofile", "--norc", "-c", `printf '%s' "$BASH"`)
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
+		if out, err := cmd.Output(); err == nil {
+			bashPath = string(out)
+		}
+	})
+	if bashPath == "" {
+		t.Skip("cannot read $BASH")
+	}
+	return bashPath
+}
+
 // runMineCombined builds the plan for line and runs it, returning combined
 // output and exit code.
 func runMineCombined(t *testing.T, line, cwd, home string) (string, int, error) {
 	t.Helper()
 	env := testEnv(cwd)
 	env.Home = home
+	env.BashPath = bash2x(t)
 	env.Vars = map[string]string{"PATH": os.Getenv("PATH"), "HOME": home}
 	plan, err := Build(line, Settings{}, env, permissiveProbe())
 	if err != nil {
@@ -143,6 +166,126 @@ func TestRun_Parity(t *testing.T) {
 		refOut, refExit := run2x(t, line, cwd, home)
 		if mineOut != refOut || mineExit != refExit {
 			t.Errorf("%q:\n  mine  = %q (exit %d)\n  2.x   = %q (exit %d)", line, mineOut, mineExit, refOut, refExit)
+		}
+	}
+}
+
+// TestRun_DanglingOperators: a line that 2.x handed to bash with a dangling
+// operator, an empty command between operators or only redirections runs the
+// same way from the canonical script: the same syntax error on the same line
+// with status 2 and no word run, or the same output (point 3 of the review).
+// Output and status are compared byte for byte with 2.x llm_exec.
+func TestRun_DanglingOperators(t *testing.T) {
+	if !bash52(t) {
+		t.Skip("line numbers follow the bash 5.2 declare -f layout")
+	}
+	cwd := t.TempDir()
+	home := cwd
+	mustWrite(t, filepath.Join(cwd, "list.txt"), "b\na\n")
+
+	lines := []string{
+		// The cases of the review.
+		"ls |",
+		"ls &&",
+		"ls ||",
+		"ls;",
+		"2>/dev/null",
+		// More dangling operators: no word of the line runs.
+		"echo ran |",
+		"echo ran &&",
+		"echo ran ||",
+		"ls 2>/dev/null |",
+		"ls ||\n",
+		"ls |  ",
+		// Trailing separators: the line runs.
+		"ls ;",
+		"ls\n",
+		"ls;\n",
+		"ls ; ",
+		// Redirection-only commands, alone and joined.
+		">/dev/null",
+		"&>/dev/null",
+		"2>&1",
+		">&2",
+		"1>&2",
+		"2>/dev/null >&2",
+		"ls | 2>/dev/null",
+		"ls && >/dev/null",
+		"2>/dev/null; ls",
+		// An operator alone on a later line: the earlier lines run first,
+		// then bash stops on the same line with the same message.
+		"ls\n;",
+		"ls\n|",
+		"ls\n&&",
+		"ls\n;;",
+		"ls\n; ;",
+		"ls\n;&&",
+		";",
+		"|",
+		";;",
+		// Operators joined across a newline keep bash's grouping.
+		"ls |\nls",
+		"ls &&\nls",
+		"ls ||\nls",
+		// A line continuation between two operators merges them for bash
+		// (|\<newline>| is ||), in 2.x and in the canonical script alike.
+		"ls |\\\n| wc -l",
+		// Line numbers survive continuations, comments and quoted newlines.
+		"echo a\\\nb\n;",
+		"echo a \\\n b\n;",
+		"echo \"a\\\nb\"\n;",
+		"echo 'a\nb'\n;",
+		"echo a # note\n;",
+		"echo a\necho b\n;",
+	}
+	for _, line := range lines {
+		mineOut, mineExit, err := runMineCombined(t, line, cwd, home)
+		if err != nil {
+			t.Errorf("%q: Build refused: %v", line, err)
+			continue
+		}
+		refOut, refExit := run2x(t, line, cwd, home)
+		if mineOut != refOut || mineExit != refExit {
+			t.Errorf("%q:\n  mine  = %q (exit %d)\n  2.x   = %q (exit %d)", line, mineOut, mineExit, refOut, refExit)
+		}
+	}
+}
+
+// TestRun_SyntaxErrorEchoesCanonicalLine: when bash refuses a token on a line
+// that also has words, it echoes that line; the canonical script shows the
+// words single-quoted, so only that echoed line differs from 2.x. The error
+// line, the token, the status and what ran are the same.
+func TestRun_SyntaxErrorEchoesCanonicalLine(t *testing.T) {
+	if !bash52(t) {
+		t.Skip("line numbers follow the bash 5.2 declare -f layout")
+	}
+	cwd := t.TempDir()
+	mustWrite(t, filepath.Join(cwd, "list.txt"), "b\na\n")
+	for _, tc := range []struct{ line, echoed string }{
+		{"| ls", "`| 'ls''"},
+		{"; ls", "`; 'ls''"},
+		{"ls ;; ls", "`'ls' ;; 'ls''"},
+		{"ls | | ls", "`'ls' | | 'ls''"},
+		{"ls\n; ls", "`; 'ls''"},
+	} {
+		mineOut, mineExit, err := runMineCombined(t, tc.line, cwd, cwd)
+		if err != nil {
+			t.Errorf("%q: Build refused: %v", tc.line, err)
+			continue
+		}
+		refOut, refExit := run2x(t, tc.line, cwd, cwd)
+		mine, ref := strings.Split(mineOut, "\n"), strings.Split(refOut, "\n")
+		if mineExit != 2 || refExit != 2 || len(mine) != len(ref) || len(mine) < 3 {
+			t.Errorf("%q:\n  mine  = %q (exit %d)\n  2.x   = %q (exit %d)", tc.line, mineOut, mineExit, refOut, refExit)
+			continue
+		}
+		n := len(mine)
+		// All but the echoed line (the last non-empty one) are identical.
+		if strings.Join(mine[:n-2], "\n") != strings.Join(ref[:n-2], "\n") {
+			t.Errorf("%q: output before the echoed line differs:\n  mine = %q\n  2.x  = %q", tc.line, mineOut, refOut)
+		}
+		if !strings.HasSuffix(mine[n-2], tc.echoed) {
+			t.Errorf("%q: echoed line = %q, want suffix %q", tc.line, mine[n-2], tc.echoed)
 		}
 	}
 }

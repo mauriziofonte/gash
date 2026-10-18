@@ -11,12 +11,24 @@ import (
 
 // pword is one parsed word: its literal value (quotes removed, no expansion),
 // the glob pattern when the word is an unquoted glob, the unquoted-only
-// accumulation uq (for brace detection and the leading-~ test), and globby.
+// accumulation uq (for brace detection and the leading-~ test), globby, and
+// cont, the line continuations (backslash-newline) the parser dropped inside
+// it.
 type pword struct {
 	lit    string
 	glob   string
 	uq     string
 	globby bool
+	cont   int
+}
+
+// item is one token of the current simple command in source order: a word
+// (an index into words) or an allowed redirection (word < 0), with the gap
+// before it.
+type item struct {
+	gap   string
+	word  int
+	redir string
 }
 
 // lineChecker holds the parser state, the environment, the tool probes and
@@ -33,16 +45,20 @@ type lineChecker struct {
 	uq     string
 	inword bool
 	globby bool
+	cont   int
 
 	// current simple command being built
 	words  []pword
 	redirs []string
+	items  []item
+
+	// gap is the raw text since the last token, kept for the rendering:
+	// blanks and line continuations only (comment text is dropped).
+	gap string
 
 	// output
-	cwd        string
-	script     strings.Builder
-	firstCmd   bool
-	pendingSep string
+	cwd    string
+	script strings.Builder
 
 	// captured for the re-parse property test: the validated (expanded,
 	// unquoted) words and the redirections of each emitted simple command.
@@ -52,12 +68,11 @@ type lineChecker struct {
 
 func newLineChecker(env Environ, pr Probe, extra map[string]bool) *lineChecker {
 	return &lineChecker{
-		env:      env,
-		pr:       pr,
-		guard:    pathguard.NewGuard(env.fs(), env.Cwd, env.Home, env.RootHome),
-		extra:    extra,
-		cwd:      env.Cwd,
-		firstCmd: true,
+		env:   env,
+		pr:    pr,
+		guard: pathguard.NewGuard(env.fs(), env.Cwd, env.Home, env.RootHome),
+		extra: extra,
+		cwd:   env.Cwd,
 	}
 }
 
@@ -77,6 +92,20 @@ var redirRE = regexp.MustCompile(`^(2>&1|1?>&2|[12]?>[[:space:]]*/dev/null|&>[[:
 // single-quoted script to run. It mirrors __llm_exec_check_line: each simple
 // command is checked as soon as it is parsed, so refusals keep the 2.x
 // left-to-right order.
+//
+// The script keeps the parsed token structure exactly: every operator
+// (|, ||, &&, ; and newline) in place, including a dangling one at the end
+// or around an empty command, every redirection in place (also in a
+// command that has only redirections), and the blanks and line
+// continuations between tokens. Only the words change (each is its
+// validated value, single-quoted; a glob is its matches) and comments go.
+// Bash therefore groups the commands as it grouped the raw line in 2.x, and a line that bash rejected with a syntax error (and
+// status 2) is rejected the same way, on the same line, running no word of
+// it. Adjacent operators stay adjacent, so ";;" is still the token bash
+// refuses as ";;". So does a line continuation between two operators: bash
+// drops it before reading tokens, so "|\<newline>|" is "||" to bash, as it
+// was in 2.x, while the parser saw two pipes around an empty command (the
+// words, all validated, are the same either way).
 func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 	n := len(cmd)
 	for i := 0; i < n; i++ {
@@ -85,6 +114,8 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 		if !lc.inword && (c == '1' || c == '2' || c == '>' || c == '&') {
 			if m := redirRE.FindStringSubmatch(cmd[i:]); m != nil {
 				lc.redirs = append(lc.redirs, m[1])
+				lc.items = append(lc.items, item{gap: lc.gap, word: -1, redir: m[1]})
+				lc.gap = ""
 				i += len(m[1]) - 1
 				continue
 			}
@@ -95,6 +126,7 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 			if err := lc.flushWord(); err != nil {
 				return "", err
 			}
+			lc.gap += string(c)
 		case '\n':
 			if err := lc.endSimple("\n"); err != nil {
 				return "", err
@@ -140,6 +172,7 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 					j++
 					ch = cmd[j]
 					if ch == '\n' {
+						lc.cont++
 						continue
 					}
 				}
@@ -157,6 +190,13 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 			}
 			ch := cmd[i]
 			if ch == '\n' {
+				// A line continuation: inside a word it is counted on the
+				// word, between tokens it stays in the gap.
+				if lc.inword {
+					lc.cont++
+				} else {
+					lc.gap += "\\\n"
+				}
 				continue
 			}
 			lc.inword = true
@@ -208,6 +248,7 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 	if err := lc.endSimple(""); err != nil {
 		return "", err
 	}
+	lc.script.WriteString(lc.gap)
 	return lc.script.String(), nil
 }
 
@@ -238,48 +279,54 @@ func (lc *lineChecker) flushWord() error {
 		if strings.HasPrefix(pat, "~/") {
 			pat = lc.env.Home + "/" + pat[len("~/"):]
 		}
-		w := pword{lit: lc.word, uq: lc.uq, globby: lc.globby}
+		w := pword{lit: lc.word, uq: lc.uq, globby: lc.globby, cont: lc.cont}
 		if lc.globby {
 			w.glob = pat
 		}
 		lc.words = append(lc.words, w)
+		lc.items = append(lc.items, item{gap: lc.gap, word: len(lc.words) - 1})
+		lc.gap = ""
 	}
-	lc.word, lc.pat, lc.uq, lc.inword, lc.globby = "", "", "", false, false
+	lc.word, lc.pat, lc.uq, lc.inword, lc.globby, lc.cont = "", "", "", false, false, 0
 	return nil
 }
 
-// endSimple is __llm_exec_end_simple: flush the current word, check and render
-// the simple command (when it has words), advance the tracked cwd, and reset.
-// sep is the operator that ended the command, recorded for rendering.
+// endSimple is __llm_exec_end_simple: flush the current word, check the
+// simple command when it has words (a command with no words, only
+// redirections or nothing, is not checked, as in 2.x), advance the tracked
+// cwd, and render it followed by sep, the operator that ended it ("" at the
+// end of the line).
 func (lc *lineChecker) endSimple(sep string) error {
 	if err := lc.flushWord(); err != nil {
 		return err
 	}
+	var perWord [][]string
 	if len(lc.words) > 0 {
-		rendered, err := lc.checkSimple(lc.words)
+		var err error
+		perWord, err = lc.checkSimple(lc.words)
 		if err != nil {
 			return err
 		}
-		if !lc.firstCmd {
-			lc.script.WriteString(joiner(lc.pendingSep))
-		}
-		lc.script.WriteString(rendered)
-		lc.firstCmd = false
 		lc.cwd = lc.updateCwd(lc.words, lc.cwd)
 	}
-	lc.pendingSep = sep
+	for _, it := range lc.items {
+		lc.script.WriteString(it.gap)
+		if it.word < 0 {
+			lc.script.WriteString(it.redir)
+			continue
+		}
+		lc.script.WriteString(renderWords(perWord[it.word]))
+		// Continuations dropped inside the word go right after it, so
+		// later lines keep their line numbers.
+		lc.script.WriteString(strings.Repeat("\\\n", lc.words[it.word].cont))
+	}
+	if sep != "" {
+		lc.script.WriteString(lc.gap)
+		lc.script.WriteString(sep)
+		lc.gap = ""
+	}
 	lc.words = nil
 	lc.redirs = nil
+	lc.items = nil
 	return nil
-}
-
-// joiner renders the operator between two simple commands.
-func joiner(sep string) string {
-	if sep == "\n" {
-		return "\n"
-	}
-	if sep == "" {
-		return " "
-	}
-	return " " + sep + " "
 }

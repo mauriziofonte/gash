@@ -11,11 +11,12 @@ func singleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// renderCmd renders one simple command: the single-quoted words followed by
-// the recorded redirection tokens, which stay unquoted so bash applies them.
-func renderCmd(words, redirs []string) string {
-	parts := make([]string, 0, len(words)+len(redirs))
-	parts = append(parts, words...)
-	parts = append(parts, redirs...)
+// renderWords renders the validated words of one parsed word (one word, or
+// the matches of a glob) as single-quoted words separated by one space.
+func renderWords(words []string) string {
+	parts := make([]string, len(words))
+	for i, w := range words {
+		parts[i] = singleQuote(w)
+	}
 	return strings.Join(parts, " ")
 }

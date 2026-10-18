@@ -36,6 +36,23 @@ func TestRenderRoundTrip(t *testing.T) {
 		"grep -n x ./*.log",
 		"echo /proc/x",
 		"printf '%s-%s' a b",
+		// Redirections stay in place, also in a command with no words.
+		"2>/dev/null; echo a",
+		"echo a 2>/dev/null b",
+		"ls | 2>/dev/null",
+		// Line continuations and comments between and inside words.
+		"echo a \\\n b",
+		"echo a\\\nb c",
+		"echo \"a\\\nb\" c",
+		// Not here: "ls |\\\n| wc -l". Bash drops a line continuation
+		// before it reads tokens, so |\<newline>| is || to bash (and was
+		// in 2.x); this parser keeps the two | apart. TestRun_DanglingOperators
+		// runs that line against bash and 2.x instead.
+		"echo a # note\necho b",
+		// Operators across newlines.
+		"ls |\nwc -l",
+		"ls &&\necho b",
+		"echo a;\n",
 	}
 	for _, line := range lines {
 		lc := newLineChecker(testEnv(cwd), permissiveProbe(), map[string]bool{})
@@ -51,6 +68,28 @@ func TestRenderRoundTrip(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, lc.cmdWords) {
 			t.Errorf("%q:\n  validated = %v\n  re-parsed = %v\n  script = %q", line, lc.cmdWords, got, script)
+		}
+	}
+}
+
+// TestRenderRoundTrip_SyntaxErrors: a line 2.x handed to bash with a
+// dangling operator or an empty command between operators renders to a script
+// the independent parser rejects too, so bash rejects it as it rejected the
+// raw line and runs none of its words.
+func TestRenderRoundTrip_SyntaxErrors(t *testing.T) {
+	cwd := t.TempDir()
+	for _, line := range []string{
+		"ls |", "ls &&", "ls ||", "echo a |  ", "ls 2>/dev/null |",
+		"| ls", "&& ls", "; ls", "ls ;; ls", "ls | | ls", "ls ; ; ls", "ls\n;",
+	} {
+		lc := newLineChecker(testEnv(cwd), permissiveProbe(), map[string]bool{})
+		script, err := lc.checkAndRender(line)
+		if err != nil {
+			t.Errorf("%q: validate/render refused: %v", line, err)
+			continue
+		}
+		if _, err := syntax.NewParser().Parse(strings.NewReader(script), ""); err == nil {
+			t.Errorf("%q: script %q parses, want a syntax error", line, script)
 		}
 	}
 }
