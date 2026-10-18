@@ -1,0 +1,60 @@
+{
+    "installed_php_versions": [
+        "7.4",
+        "8.3"
+    ],
+    "vhosts": [
+        {
+            "index": 23,
+            "conf": "/etc/apache2/sites-available/023-nocert.test.conf",
+            "name": "023-nocert.test.conf",
+            "phpver": "8.3",
+            "domain": "nocert.test",
+            "docroot": "/home/dev/sites/nocert/public",
+            "enabled": false,
+            "ssl": false,
+            "forcedssl": false,
+            "sslcertfile": null,
+            "sslkeyfile": null,
+            "needs_localhost_bypass_fix": false,
+            "pool": "/etc/php/8.3/fpm/pool.d/nocert.test.conf",
+            "pool_phpver": "8.3",
+            "profile": "hardened"
+        },
+        {
+            "index": 24,
+            "conf": "/etc/apache2/sites-available/024-quoted.test.conf",
+            "name": "024-quoted.test.conf",
+            "phpver": "8.3",
+            "domain": "quoted.test",
+            "docroot": "/home/dev/sites/my quoted/public",
+            "enabled": true,
+            "ssl": false,
+            "forcedssl": false,
+            "sslcertfile": null,
+            "sslkeyfile": null,
+            "needs_localhost_bypass_fix": false,
+            "pool": "/etc/php/8.3/fpm/pool.d/quoted.test.conf",
+            "pool_phpver": "8.3",
+            "profile": "dev"
+        },
+        {
+            "index": 25,
+            "conf": "/etc/apache2/sites-available/025-valid.test.conf",
+            "name": "025-valid.test.conf",
+            "phpver": "8.3",
+            "domain": "valid.test",
+            "docroot": "/home/dev/sites/valid/public",
+            "enabled": true,
+            "ssl": false,
+            "forcedssl": false,
+            "sslcertfile": null,
+            "sslkeyfile": null,
+            "needs_localhost_bypass_fix": false,
+            "pool": "/etc/php/7.4/fpm/pool.d/aaa-notes.conf",
+            "pool_phpver": "7.4",
+            "profile": "dev"
+        }
+    ],
+    "next_index": "026"
+}

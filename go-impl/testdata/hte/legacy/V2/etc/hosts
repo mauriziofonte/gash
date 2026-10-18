@@ -1,0 +1,8 @@
+127.0.0.1 localhost
+::1 localhost ip6-localhost ip6-loopback
+
+127.0.0.1    http.test www.http.test # hte-cli
+
+127.0.0.1    https.test www.https.test # hte-cli
+
+127.0.0.1    forced.test www.forced.test # hte-cli

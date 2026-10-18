@@ -1,0 +1,60 @@
+{
+    "installed_php_versions": [
+        "7.4",
+        "8.3"
+    ],
+    "vhosts": [
+        {
+            "index": 1,
+            "conf": "/etc/apache2/sites-available/001-http.test.conf",
+            "name": "001-http.test.conf",
+            "phpver": "8.3",
+            "domain": "http.test",
+            "docroot": "/home/dev/sites/http/public",
+            "enabled": true,
+            "ssl": false,
+            "forcedssl": false,
+            "sslcertfile": null,
+            "sslkeyfile": null,
+            "needs_localhost_bypass_fix": false,
+            "pool": "/etc/php/8.3/fpm/pool.d/http.test.conf",
+            "pool_phpver": "8.3",
+            "profile": "dev"
+        },
+        {
+            "index": 2,
+            "conf": "/etc/apache2/sites-available/002-https.test.conf",
+            "name": "002-https.test.conf",
+            "phpver": "7.4",
+            "domain": "https.test",
+            "docroot": "/home/dev/sites/https/public",
+            "enabled": true,
+            "ssl": true,
+            "forcedssl": false,
+            "sslcertfile": "/etc/apache2/certs-selfsigned/https.test.crt",
+            "sslkeyfile": "/etc/apache2/certs-selfsigned/https.test.key",
+            "needs_localhost_bypass_fix": false,
+            "pool": "/etc/php/7.4/fpm/pool.d/https.test.conf",
+            "pool_phpver": "7.4",
+            "profile": "dev"
+        },
+        {
+            "index": 3,
+            "conf": "/etc/apache2/sites-available/003-forced.test.conf",
+            "name": "003-forced.test.conf",
+            "phpver": "8.3",
+            "domain": "forced.test",
+            "docroot": "/home/dev/sites/forced/public",
+            "enabled": true,
+            "ssl": true,
+            "forcedssl": true,
+            "sslcertfile": "/etc/apache2/certs-selfsigned/forced.test.crt",
+            "sslkeyfile": "/etc/apache2/certs-selfsigned/forced.test.key",
+            "needs_localhost_bypass_fix": false,
+            "pool": "/etc/php/8.3/fpm/pool.d/forced.test.conf",
+            "pool_phpver": "8.3",
+            "profile": "dev"
+        }
+    ],
+    "next_index": "004"
+}

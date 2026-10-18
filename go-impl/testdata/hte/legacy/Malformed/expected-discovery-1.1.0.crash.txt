@@ -1,0 +1,5 @@
+PHP Fatal error:  Uncaught TypeError: Mfonte\HteCli\Services\PhpFpmManager::getConfByDomain(): Argument #1 ($domain) must be of type string, null given, called in render/parse.php on line 14 and defined in phar-a195f84/app/Services/PhpFpmManager.php:70
+Stack trace:
+#0 render/parse.php(14): Mfonte\HteCli\Services\PhpFpmManager->getConfByDomain()
+#1 {main}
+  thrown in phar-a195f84/app/Services/PhpFpmManager.php on line 70

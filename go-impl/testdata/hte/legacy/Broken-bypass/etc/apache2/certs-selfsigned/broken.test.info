@@ -1,0 +1,57 @@
+SHA1 Fingerprint=EB:2E:F8:5C:B3:7E:F5:08:2B:B5:0F:82:61:E8:35:42:9E:14:A1:A7
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            2d:77:fb:1b:58:48:0e:61:a7:0f:c9:77:0f:f4:1f:25:e7:14:8b:7f
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C = IT, ST = Italy, L = Italy, O = Acme Corp, OU = The Dev Team, emailAddress = webmaster@broken.test, CN = broken.test
+        Validity
+            Not Before: Oct 18 09:02:04 2026 GMT
+            Not After : Oct 10 09:02:04 2056 GMT
+        Subject: C = IT, ST = Italy, L = Italy, O = Acme Corp, OU = The Dev Team, emailAddress = webmaster@broken.test, CN = broken.test
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:dd:10:c4:c1:d2:3d:98:2f:56:34:23:aa:89:89:
+                    e5:e3:18:2e:9f:f8:89:e1:e7:0c:d6:85:9f:40:e8:
+                    7f:52:6e:e8:08:4c:b3:1e:7d:9f:bd:d7:6e:ee:24:
+                    89:ae:cc:cd:20:c4:9e:ea:82:1d:cf:76:82:d6:63:
+                    e3:c4:71:ab:65:3a:99:59:8a:54:47:ef:6a:eb:ef:
+                    17:db:81:69:45:2f:43:65:7b:16:10:93:8c:2f:a2:
+                    f3:5b:71:76:33:b5:ce:a4:39:69:95:e9:4c:ae:d7:
+                    91:38:02:1e:52:26:d7:e5:64:76:0b:ba:58:57:96:
+                    7b:4b:43:d3:33:69:8f:7f:c0:f1:ed:bd:1e:4d:1e:
+                    2e:e7:ce:67:ff:6b:25:eb:21:e2:4b:2b:66:26:26:
+                    47:84:b2:21:7f:86:f6:a5:e8:7d:d3:62:75:c8:b1:
+                    4c:c3:bf:a1:d4:f3:d6:7d:01:91:c0:8e:f5:b9:ee:
+                    26:84:69:f8:5d:7b:d1:42:2d:47:81:aa:0a:81:d4:
+                    32:58:ca:7c:05:70:f1:87:cf:1b:5f:46:8d:e2:a0:
+                    73:11:14:32:ca:e5:70:a4:d2:78:d3:35:08:53:8d:
+                    d7:ad:e9:59:3b:a1:7d:da:ce:50:da:c7:00:a4:d6:
+                    1e:c3:bc:07:3a:69:54:75:79:49:a7:fd:eb:f6:ea:
+                    aa:81
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Alternative Name: 
+                DNS:*.broken.test, DNS:broken.test
+            X509v3 Subject Key Identifier: 
+                94:2E:EA:37:FA:85:C6:60:53:40:65:DF:60:E0:7C:A1:EA:65:F8:8E
+    Signature Algorithm: sha256WithRSAEncryption
+    Signature Value:
+        d8:10:28:c4:50:ca:c4:69:9d:5a:9a:e8:de:c1:8a:7a:e1:29:
+        c5:2c:f8:9b:72:1e:b5:b9:41:d7:4b:4b:4a:64:61:b0:5c:1f:
+        07:84:ec:f2:e4:f6:16:c9:0f:76:f2:3e:9b:b3:8b:d6:2b:b2:
+        e0:1a:ca:17:df:9d:7a:a3:76:11:18:9c:36:ad:c4:1b:86:2d:
+        fc:70:e5:b5:4d:1c:c8:4e:07:28:c3:e2:58:53:aa:ea:59:57:
+        ad:2c:94:86:4c:9c:44:31:00:5c:26:c0:7e:b2:ff:9f:82:cd:
+        c9:f4:35:5a:e6:9f:8b:68:fd:f1:6e:05:e1:35:35:4d:08:5e:
+        a9:ae:e1:fe:cd:8f:f2:79:d2:80:f0:80:7a:14:59:d3:4f:af:
+        a9:a8:86:af:2e:10:59:44:ab:f6:3a:19:57:1b:ac:da:79:f9:
+        be:c6:91:45:c9:e1:d7:6d:45:af:0a:9e:8a:f1:de:e2:71:4f:
+        e1:c6:89:3c:b1:69:52:0a:84:41:57:72:c1:fa:ed:2d:38:6e:
+        e4:04:75:0c:43:42:9e:de:08:ce:c6:ca:98:d3:48:66:37:37:
+        88:6d:ad:74:dd:94:a4:74:96:db:fb:7e:39:a2:b6:a0:4a:f7:
+        a0:d8:ef:94:47:a1:66:4a:93:bc:88:ae:e0:6b:ff:8b:72:0c:
+        28:4b:b0:1c

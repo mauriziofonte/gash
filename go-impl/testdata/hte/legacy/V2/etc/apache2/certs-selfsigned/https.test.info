@@ -1,0 +1,57 @@
+SHA1 Fingerprint=41:BF:75:C4:16:2A:B1:43:21:BF:4C:A9:E7:B5:C5:5E:57:81:1E:77
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            67:03:88:07:19:1e:1b:5b:5f:53:f9:4a:5e:aa:d6:ca:7d:ee:8e:81
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C = IT, ST = Italy, L = Italy, O = Acme Corp, OU = The Dev Team, emailAddress = webmaster@https.test, CN = https.test
+        Validity
+            Not Before: Oct 18 09:02:03 2026 GMT
+            Not After : Oct 10 09:02:03 2056 GMT
+        Subject: C = IT, ST = Italy, L = Italy, O = Acme Corp, OU = The Dev Team, emailAddress = webmaster@https.test, CN = https.test
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:c8:8d:c1:97:eb:70:d8:dd:00:88:d1:1d:f2:04:
+                    b7:4a:9b:70:db:71:dc:ed:27:f3:8c:3d:91:96:f4:
+                    85:e8:f0:7f:9b:01:bf:a1:d3:8c:89:41:57:86:bb:
+                    bd:b7:04:17:13:56:b2:2d:55:96:6b:88:1a:dd:6c:
+                    66:23:e4:72:1d:21:b9:b6:9b:8d:57:e7:dc:09:11:
+                    94:66:1c:56:55:71:39:bd:a5:38:c5:f4:3a:06:fc:
+                    da:d7:a0:ee:b9:85:dc:ae:23:81:71:d0:e4:45:03:
+                    82:c4:41:45:ac:f2:9d:8f:ca:96:b3:f0:49:f0:d6:
+                    b2:da:de:37:77:04:84:c1:62:8e:07:38:30:a7:e1:
+                    a8:06:23:13:05:31:35:2f:8e:e7:92:55:da:a4:29:
+                    95:75:4e:95:76:3e:a6:fd:23:9f:fc:6b:e3:e3:b2:
+                    b7:9b:e8:66:83:73:97:87:cc:e7:e6:bf:f4:d8:46:
+                    33:13:54:da:d0:5a:c6:6d:92:25:a3:fc:63:b7:e5:
+                    a2:4c:32:3d:7e:c0:d2:6f:58:96:03:d6:5e:41:4c:
+                    eb:96:65:ed:47:b5:36:ef:c1:96:f6:4b:95:df:40:
+                    0c:c5:0c:9e:a2:46:ca:6d:80:fb:82:3b:b9:3e:6b:
+                    2e:b5:fc:32:5b:55:00:e7:1c:48:0f:d5:9f:34:b3:
+                    51:f1
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Alternative Name: 
+                DNS:*.https.test, DNS:https.test
+            X509v3 Subject Key Identifier: 
+                6A:72:19:98:7D:0A:E1:80:6D:9C:0C:96:E2:6D:91:C4:C2:7E:1E:B1
+    Signature Algorithm: sha256WithRSAEncryption
+    Signature Value:
+        98:61:71:98:61:69:3e:b7:8b:05:d6:c0:da:1c:a9:26:82:a8:
+        d8:31:e2:8f:db:12:bf:ec:04:3c:1b:a8:54:05:f0:93:44:4c:
+        c6:e1:e7:d6:60:ba:15:7d:e8:f1:78:a6:74:c3:26:5f:5e:0c:
+        70:00:86:8f:48:71:35:b4:36:5e:26:23:e1:76:98:23:5f:fd:
+        7f:95:2d:d1:ab:95:85:d6:c7:61:a4:9b:b7:b0:58:aa:8a:b1:
+        87:fa:85:a3:e8:a5:93:d6:17:d2:61:2f:e4:f1:c2:dd:4c:c9:
+        45:af:64:ec:b7:8e:b1:35:8d:9f:fd:d5:4e:d6:1f:04:69:7b:
+        7e:ca:5c:0f:fb:8c:81:80:e2:a7:36:26:11:93:d7:69:9a:a8:
+        28:10:f7:83:dd:45:2d:8f:08:4d:a4:3c:ea:2e:be:60:3e:9f:
+        58:6f:45:f6:31:f6:e9:4f:c8:e2:5e:1b:35:45:a9:d8:0d:17:
+        43:5e:39:2f:a3:bb:aa:20:0a:13:44:43:b4:e5:63:34:d2:e4:
+        51:49:44:95:9b:61:fa:fb:99:47:1c:17:1f:ad:bd:44:73:fb:
+        e1:f2:5a:19:7a:d1:74:94:ce:32:4c:c5:1b:c9:57:99:b0:27:
+        69:a3:b6:36:0d:16:63:97:da:fb:62:45:51:6c:07:b9:22:e6:
+        b4:81:5b:cb
