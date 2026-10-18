@@ -39,7 +39,7 @@ it "grep -r, egrep, rg and diff -r leave secret files out" bash -c '
 
 it "walks that follow symlinks are refused" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -56,7 +56,7 @@ it "walks that follow symlinks are refused" bash -c '
 
 it "walks cannot start at / or above a protected tree" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -81,8 +81,8 @@ it "walks cannot start at / or above a protected tree" bash -c '
 
 it "git commands that print contents leave secret files out" bash -c '
   set -euo pipefail
-  command -v git >/dev/null 2>&1 || exit 77
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require git
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -134,7 +134,7 @@ it "git commands that print contents leave secret files out" bash -c '
 
 it "git in llm_exec takes no optional locks: status does not write the index" bash -c '
   set -euo pipefail
-  command -v git >/dev/null 2>&1 || exit 77
+  gash_require git
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -153,7 +153,7 @@ it "git in llm_exec takes no optional locks: status does not write the index" ba
 
 it "the llm_exec child gets a short allowlisted environment" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -175,7 +175,7 @@ it "the llm_exec child gets a short allowlisted environment" bash -c '
 
 it "yq load functions and split files, getent shadow are refused" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"

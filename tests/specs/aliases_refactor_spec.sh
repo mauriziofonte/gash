@@ -112,7 +112,7 @@ it "git.sh defines git aliases and functions when git is available" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if git not available
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
+    gash_require git
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -153,7 +153,7 @@ it "gl --help shows usage information" bash -c '
     ROOT="${GASH_TEST_ROOT}"
 
     # Skip if git not available
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
+    gash_require git
 
     tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
     ln -s "$ROOT" "$tmp/.gash"
@@ -178,7 +178,7 @@ EOF
 it "git log aliases use the Gash palette, keep git's plain text and honour NO_COLOR" bash -c '
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
-    command -v git >/dev/null 2>&1 || { echo "SKIP: git not available"; exit 77; }
+    gash_require git
 
     source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
     source "$ROOT/lib/aliases/git.sh"

@@ -314,7 +314,8 @@ it "GASH_NO_COLOR=0 keeps colors on; NO_COLOR=0 still turns them off" bash -c '
 
 it "the --no-color scope tests the TTY in the caller: colors on a terminal, none in a pipe" bash -c '
   set -euo pipefail
-  command -v script >/dev/null 2>&1 && script -qec true /dev/null >/dev/null 2>&1 || exit 77
+  gash_require script
+  script -qec true /dev/null >/dev/null 2>&1 || gash_skip "script cannot open a terminal"
   ROOT="${GASH_TEST_ROOT}"
   export PATH="$ROOT/tests/mocks/bin:$PATH"
   load="unset GASH_HEADLESS NO_COLOR GASH_NO_COLOR; source \"$ROOT/tests/gash-test.sh\"; gash_source_all \"$ROOT\""

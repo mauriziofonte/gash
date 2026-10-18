@@ -61,7 +61,7 @@ it "existing PROMPT_COMMAND string is kept and the hook is added once" bash -c '
 it "existing PROMPT_COMMAND array is kept (bash 5.1+)" bash -c '
   set -euo pipefail
   if (( BASH_VERSINFO[0] < 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] < 1) )); then
-    exit 77
+    gash_skip "needs Bash 5.1 or later"
   fi
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   ln -s "$GASH_TEST_ROOT" "$tmp/.gash"
@@ -134,7 +134,7 @@ it "headless mode prints nothing and leaves the prompt untouched" bash -c '
 
 it "non-Bash shells get a clear message instead of a parse error" bash -c '
   set -euo pipefail
-  command -v dash >/dev/null 2>&1 || exit 77
+  gash_require dash
   rc=0
   out="$(dash -c ". \"$GASH_TEST_ROOT/gash.sh\"" 2>&1)" || rc=$?
   [[ $rc -ne 0 ]]
