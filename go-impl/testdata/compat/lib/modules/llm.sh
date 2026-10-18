@@ -21,14 +21,32 @@ fi
 unset __gash_here
 
 llm_config() { __gash_call llm_config "$@"; }
-llm_db_explain() { __gash_call llm_db_explain "$@"; }
-llm_db_query() { __gash_call llm_db_query "$@"; }
-llm_db_sample() { __gash_call llm_db_sample "$@"; }
-llm_db_schema() { __gash_call llm_db_schema "$@"; }
-llm_db_tables() { __gash_call llm_db_tables "$@"; }
+llm_db_explain() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_explain "$@"
+}
+llm_db_query() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_query "$@"
+}
+llm_db_sample() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_sample "$@"
+}
+llm_db_schema() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_schema "$@"
+}
+llm_db_tables() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_tables "$@"
+}
 llm_deps() { __gash_call llm_deps "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
-llm_exec() { __gash_call llm_exec "$@"; }
+llm_exec() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_exec "$@"
+}
 llm_find() { __gash_call llm_find "$@"; }
 llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }

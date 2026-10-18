@@ -7,10 +7,13 @@ trailing newlines trimmed) replaces the stub wherever the function is
 defined (gash.sh, the module shims, the core shims). A shell-mutating
 function (MATRIX class `shell-mutating`) uses one to keep its parent-shell
 part (cd, history, eval of quoted exports) in Bash and call the binary
-for the rest. Example:
+for the rest. The override of a function whose 2.x body loads the
+settings file (registry LoadsEnv) starts with {{% loadenv %}} (LEDGER
+CORE-18). Example:
 
 {{% define "stub/NAME" %}}
 NAME() {
+    {{% if .LoadsEnv %}}{{% loadenv %}}{{% end %}}
     ...
     __gash_call {{% .Name %}} "$@"
 }
