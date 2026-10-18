@@ -50,7 +50,8 @@ internal/
   files/        archive_extract, file_backup
   system/       disk_usage, ports, processes, services, history, WSL helpers
   sysinfo/      sysinfo sections (gopsutil + /proc + tools)
-  dev/          php_detect_version, node_*, chrome_headless_update
+  dev/          php_detect_version, node_*
+  chrome/       chrome_* and chrome_headless_update (moved from dev/ during rc.A to keep the module slices apart)
   ai/           ai_ask, ai_query, ai_sysinfo, redaction
   ssh/          gash_ssh_auto_unlock (PTY driver for ssh-add)
   selfmgmt/     version store, binary fetch, update/upgrade, uninstall, doctor, unload data, 1.x pointer (D-6)

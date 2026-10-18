@@ -27,6 +27,8 @@ MOCK
     "DB:myn=mysql://u:secret@127.0.0.1:3306" "DB:pgn=pgsql://u:secret@127.0.0.1:5432" >"$tmp/.gash_env"
   export PATH="$tmp/bin:$PATH" GASH_HEADLESS=1 HOME="$tmp" MOCK_DIR="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
+  # Pin the clock: on a slow runner the 100 ms slow-query rule (DB-06) runs the mock a second time (TEST-10).
+  unset EPOCHREALTIME; EPOCHREALTIME="1792007131.734850"
 '
 
 it "-d must be a plain database name" bash -c '
