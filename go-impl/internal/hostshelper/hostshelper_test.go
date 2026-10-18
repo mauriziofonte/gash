@@ -308,3 +308,17 @@ func must(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
+
+func TestStrip(t *testing.T) {
+	hosts := []byte("127.0.0.1 localhost\n" + BeginMarker + "\n127.0.0.1 a.test\n" + EndMarker + "\n::1 localhost\n")
+	out, err := Strip(hosts)
+	if err != nil || string(out) != "127.0.0.1 localhost\n::1 localhost\n" {
+		t.Fatalf("%v %q", err, out)
+	}
+	if out, err := Strip([]byte("x\n")); err != nil || string(out) != "x\n" {
+		t.Fatalf("no region: %v %q", err, out)
+	}
+	if _, err := Strip([]byte(BeginMarker + "\n")); err != ErrCorruptBlock {
+		t.Fatalf("corrupt: %v", err)
+	}
+}

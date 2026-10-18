@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/htaccess"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
@@ -47,6 +48,8 @@ type Env struct {
 	Listen    []string
 	Installed []string     // discovered PHP-FPM versions
 	Existing  []state.Site // sites already managed (migrate is idempotent)
+	// HostsExtra are the names of hosts.toml (an earlier migrate kept them).
+	HostsExtra []string
 	// Stat checks document roots; nil means os.Stat.
 	Stat func(string) (fs.FileInfo, error)
 	// ReadFile reads a document root's .htaccess; nil means os.ReadFile.
@@ -144,8 +147,11 @@ type Report struct {
 
 // Hosts is the hosts part of the plan (design step 7, LEDGER HTE-45).
 type Hosts struct {
-	Entries []hostshelper.Entry `json:"entries"` // the managed block
+	Entries []hostshelper.Entry `json:"entries"` // the managed block after --apply
 	Block   string              `json:"block"`
+	// Extra are the legacy names no site serves: --apply keeps them in
+	// hosts.toml, so they stay in the block.
+	Extra []string `json:"extra_names"`
 	// Legacy are the "# hte-cli" lines; they stay untouched.
 	Legacy []legacy.HostsLine `json:"legacy_lines"`
 }
@@ -765,29 +771,34 @@ func (b *builder) reportSystem() {
 	}
 }
 
-// hosts builds the managed block: one line per imported site, then the
-// names of "# hte-cli" lines no imported site covers. The legacy lines
-// stay as they are.
+// hosts builds the managed block after --apply: the sites already
+// managed and the imported ones (enabled only, as hosts.Desired), then the
+// names of "# hte-cli" lines no site covers, kept in hosts.toml. The legacy
+// lines stay as they are.
 func (b *builder) hosts(cands []*candidate) {
 	h := &b.plan.Hosts
 	h.Legacy = b.inv.Hosts
 	if h.Legacy == nil {
 		h.Legacy = []legacy.HostsLine{}
 	}
-	h.Entries = []hostshelper.Entry{}
-	covered := map[string]bool{}
+	sites := slices.Clone(b.env.Existing)
 	for _, c := range cands {
-		s := c.plan.Site
-		if s == nil {
-			continue
+		if c.plan.Site != nil {
+			sites = append(sites, *c.plan.Site)
 		}
-		names := s.Names()
-		h.Entries = append(h.Entries, hostshelper.Entry{Address: state.LoopbackIPv4, Names: names})
-		for _, n := range names {
+	}
+	covered := map[string]bool{}
+	for _, s := range sites {
+		for _, n := range s.Names() {
 			covered[n] = true
 		}
 	}
-	var rest []string
+	h.Extra = []string{}
+	for _, n := range b.env.HostsExtra {
+		if !covered[n] && !slices.Contains(h.Extra, n) {
+			h.Extra = append(h.Extra, n)
+		}
+	}
 	for _, l := range b.inv.Hosts {
 		if l.Addr != state.LoopbackIPv4 {
 			b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportHostsLine, Paths: []string{b.env.Layout.Hosts},
@@ -800,13 +811,11 @@ func (b *builder) hosts(cands []*candidate) {
 			case !hostshelper.ValidHostname(n):
 				b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportHostsLine, Paths: []string{b.env.Layout.Hosts},
 					Message: "line " + strconv.Itoa(l.Line) + ": " + n + " is not a hostname; not taken"})
-			case !covered[n] && !slices.Contains(rest, n):
-				rest = append(rest, n)
+			case !covered[n] && !slices.Contains(h.Extra, n):
+				h.Extra = append(h.Extra, n)
 			}
 		}
 	}
-	if len(rest) > 0 {
-		h.Entries = append(h.Entries, hostshelper.Entry{Address: state.LoopbackIPv4, Names: rest})
-	}
+	h.Entries = hosts.Desired(sites, h.Extra)
 	h.Block = string(hostshelper.FormatBlock(h.Entries))
 }

@@ -7264,9 +7264,9 @@ Critical and high items:
 | Reproduction | `grep -n 'VirtualHost\|::1' go-impl/testdata/hte/legacy/templates/v2-vhost-forced.conf` |
 | Severity | low |
 | Public-contract impact | yes (addresses) |
-| rc.A behavior | When IPv6 loopback exists, both vhosts of a site also bind `[::1]:<http>`/`[::1]:<https>` and the `::1` bypass condition is live. The helper accepts `::1` lines, but the design does not say whether the block contains them |
+| rc.A behavior | When IPv6 loopback exists, both vhosts of a site also bind `[::1]:<http>`/`[::1]:<https>` and the `::1` bypass condition is live. The helper accepts `::1` lines; the block holds `127.0.0.1` lines only, option (a) (lead decision, 2026-10-18) |
 | Fix recipe (3.0) | Operator choice: (a) the block lists `127.0.0.1` lines only (hte-cli parity); (b) it also lists `::1` lines, only while the `[::1]` listener is configured (recommended: clients that prefer IPv6 then hit a live vhost instead of falling back) |
-| Proving test | `TestLedger_HTE37` in `internal/hte/render` (golden vhosts with and without IPv6 loopback on the platform fake); `internal/hte/hosts` (the chosen block content) |
+| Proving test | `TestLedger_HTE37` in `internal/hte/render` (golden vhosts with and without IPv6 loopback on the platform fake) and in `internal/hte/hosts` (only `127.0.0.1` lines) |
 | Status | open |
 
 <a id="hte-38"></a>
@@ -7408,7 +7408,7 @@ Critical and high items:
 | Reproduction | `cat -A go-impl/testdata/hte/legacy/V2/etc/hosts` |
 | Severity | low |
 | Public-contract impact | yes (hosts file) |
-| rc.A behavior | migrate takes the names from the marked lines into the managed block and never deletes or rewrites a line outside it. The names then resolve twice to the same address, and keep resolving after `site remove` or `uninstall` |
+| rc.A behavior | migrate takes the names from the marked lines into the managed block (the names no imported site serves are kept in `hosts.toml`, so later applies keep them) and never deletes or rewrites a line outside it. The names then resolve twice to the same address, and keep resolving after `site remove` or `uninstall` |
 | Fix recipe (3.0) | Options: (a) leave them untouched (design today); (b) also report, in `doctor`, legacy `# hte-cli` lines whose name is no longer a site, with the line to delete (recommended addition to (a)); (c) a root operation of `migrate --apply` removes them, recorded in the receipt with the prior bytes so that `uninstall` restores them |
 | Proving test | `TestLedger_HTE45` in `internal/hte/migrate` (V2 hosts: block holds the three names, the legacy lines byte-identical); `internal/hte/doctor` for (b) |
 | Status | open |

@@ -252,6 +252,18 @@ func Splice(hosts, block []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// Strip returns hosts without the managed region (both markers included),
+// every other byte kept. Uninstall uses it when no block existed before
+// install; hosts without a region is returned unchanged.
+func Strip(hosts []byte) ([]byte, error) {
+	start, end, found, err := region(hosts)
+	if err != nil || !found {
+		return hosts, err
+	}
+	out := append([]byte{}, hosts[:start]...)
+	return append(out, hosts[end:]...), nil
+}
+
 // readHosts reads the hosts file, refusing a symlink or a non-regular file
 // (renaming over a symlink would replace it with a file).
 func readHosts(path string) ([]byte, os.FileInfo, error) {

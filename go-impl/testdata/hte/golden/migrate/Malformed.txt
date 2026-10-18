@@ -25,7 +25,6 @@ Sites
                   pool: /etc/php/8.3/fpm/pool.d/valid.test.conf
 
 Hosts block
-  127.0.0.1 nocert.test www.nocert.test
   127.0.0.1 quoted.test www.quoted.test
   127.0.0.1 valid.test www.valid.test
 

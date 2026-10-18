@@ -431,9 +431,9 @@ func TestLedger_HTE45(t *testing.T) {
 	before := snapshot(t, root)
 	p := mustPlan(t, envAt(t, root), Options{})
 	want := []hostshelper.Entry{
+		{Address: "127.0.0.1", Names: []string{"forced.test", "www.forced.test"}},
 		{Address: "127.0.0.1", Names: []string{"http.test", "www.http.test"}},
 		{Address: "127.0.0.1", Names: []string{"https.test", "www.https.test"}},
-		{Address: "127.0.0.1", Names: []string{"forced.test", "www.forced.test"}},
 	}
 	if diff := cmp.Diff(want, p.Hosts.Entries); diff != "" {
 		t.Fatal(diff)
@@ -453,6 +453,9 @@ func TestLedger_HTE45(t *testing.T) {
 	p = mustPlan(t, envAt(t, root), Options{})
 	if last := p.Hosts.Entries[len(p.Hosts.Entries)-1]; !slices.Equal(last.Names, []string{"gone.test", "www.gone.test"}) {
 		t.Fatalf("leftover legacy names: %+v", last)
+	}
+	if !slices.Equal(p.Hosts.Extra, []string{"gone.test", "www.gone.test"}) {
+		t.Fatalf("extra names for hosts.toml: %v", p.Hosts.Extra)
 	}
 	if r := reports(p, ReportHostsLine); len(r) != 1 || !strings.Contains(r[0].Message, "10.0.0.1") {
 		t.Fatalf("non-loopback legacy line: %+v", r)

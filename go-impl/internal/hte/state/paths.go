@@ -61,6 +61,10 @@ func (p Paths) PHPOverlay(version string) string {
 	return filepath.Join(p.PHPOverlayDir(version), "global.ini")
 }
 
+// HostsState names the extra hosts names of the managed block (the
+// legacy "# hte-cli" names migrate carried over).
+func (p Paths) HostsState() string { return filepath.Join(p.ConfigDir, "hosts.toml") }
+
 // RenderDir holds the rendered generations and the current symlink.
 func (p Paths) RenderDir() string { return filepath.Join(p.StateDir, "render") }
 

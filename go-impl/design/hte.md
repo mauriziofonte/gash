@@ -37,6 +37,7 @@ and emits `LoadModule` only for modules that are not built in.
 | Site state | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.toml` | One file per site; the domain is the identity (no numbering, no identity from socket names) |
 | Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, included inside every vhost of the site, never rewritten |
 | Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, included at server level, never rewritten |
+| Hosts names | `$XDG_CONFIG_HOME/gash/hte/hosts.toml` | `names = [...]`: names kept in the managed hosts block beyond the sites' own (the legacy `# hte-cli` names `migrate` carries over); missing means none |
 | Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/` | Per PHP version, a directory of `*.ini` files (`php global set` edits `global.ini` in it) that the version's FPM master reads after the system ones through `PHP_INI_SCAN_DIR` (section 4); never rendered into pools |
 | Rendered config | `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` and the symlink `render/current` | Generations; `current` swaps atomically; the previous generation is kept for rollback |
 | Certificates | `$XDG_DATA_HOME/gash/hte/certs/<domain>/{cert.pem,key.pem}` | Key 0600, directory 0700 |
@@ -409,7 +410,13 @@ Root is used only by:
 
 Any TLD is allowed for local sites. gash keeps the desired hosts block in its
 state and applies it through the helper on every site change, on `service
-start` and on `doctor`.
+start` and on `doctor`. The block is one `127.0.0.1` line per enabled site
+with every name it serves (domain order), then one line with the names of
+`hosts.toml` that no site serves; never a `::1` line (lead decision,
+2026-10-18, LEDGER HTE-37: Apache still answers on `[::1]` for a client that
+resolves `::1` another way). The drift check reads `/etc/hosts` as the user
+(it is world-readable) and compares the region byte for byte with the
+desired block, naming the missing and the unexpected names.
 
 | Platform | Mechanism |
 |---|---|
