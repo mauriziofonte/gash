@@ -9,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/google/renameio/v2"
 
@@ -43,6 +46,9 @@ type InstallResult struct {
 	Settings state.Settings   `json:"settings"`
 	Restored string           `json:"restored_stage,omitempty"`
 	Started  bool             `json:"started"`
+	// Redirect is "pf" when clients reach ports 80 and 443 through the
+	// macOS pf redirect to the stack's ports (settings.ports).
+	Redirect string `json:"redirect,omitempty"`
 	// Blocking are the enabled system vhosts that keep the system Apache
 	// running (install never stops it while any is left; migrate does).
 	// Install then succeeds without starting the stack, and Next names the
@@ -50,6 +56,32 @@ type InstallResult struct {
 	Blocking []string `json:"blocking"`
 	Next     string   `json:"next,omitempty"`
 	Warnings []string `json:"warnings"`
+}
+
+// RedirectPF is InstallResult.Redirect for the macOS pf redirect.
+const RedirectPF = "pf"
+
+// canBindLow reports whether this process may bind 127.0.0.1:80 and :443
+// (a real bind; macOS since 10.14 allows it). Only a refusal of the
+// privilege counts: a port in use is the stack's start to report.
+func (e *Engine) canBindLow() bool {
+	bind := e.BindLow
+	if bind == nil {
+		bind = func(addr string) error {
+			l, err := net.Listen("tcp4", addr)
+			if err == nil {
+				l.Close()
+			}
+			return err
+		}
+	}
+	for _, p := range []int{state.StandardPorts.HTTP, state.StandardPorts.HTTPS} {
+		err := bind(net.JoinHostPort(state.LoopbackIPv4, strconv.Itoa(p)))
+		if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+			return false
+		}
+	}
+	return true
 }
 
 func sha256File(p string) (string, error) {
@@ -198,9 +230,12 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 	default:
 		return hteerr.InvalidValue(hteerr.InvalidPorts, "ports", opt.Ports, "standard", "high")
 	}
-	if v.os.GOOS == "darwin" && ports == state.StandardPorts {
-		return hteerr.New(hteerr.PlatformUnsupported, "ports 80 and 443 on macOS (the pf redirect) are not implemented yet",
-			"use gash hte install --ports high")
+	// macOS: a direct bind when the kernel allows it, else the pf
+	// redirect to the high ports (design/hte.md 6).
+	pf := false
+	if v.os.GOOS == "darwin" && ports == state.StandardPorts && !e.canBindLow() {
+		ports, pf = state.HighPorts, true
+		res.Redirect = RedirectPF
 	}
 	autostart, err := e.resolveAutostart(v, opt.Autostart)
 	if err != nil {
@@ -241,6 +276,9 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 	}
 	if ports == state.StandardPorts && v.os.GOOS == "linux" {
 		plan = append(plan, rootops.Op{Op: rootops.OpSysctlPorts, Value: ports.HTTP})
+	}
+	if pf {
+		plan = append(plan, rootops.Op{Op: rootops.OpPFRedirect, Ports: []int{ports.HTTP, ports.HTTPS}})
 	}
 	if autostart == service.AutostartSystemd {
 		plan = append(plan, rootops.Op{Op: rootops.OpLinger})

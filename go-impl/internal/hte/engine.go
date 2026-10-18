@@ -24,6 +24,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
+	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/hte/render"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
@@ -62,6 +63,9 @@ type Engine struct {
 	// Probe replaces the HTTP probe of a site (migrate's verification)
 	// in tests.
 	Probe func(ctx context.Context, e render.Endpoint) service.SiteStatus
+	// BindLow replaces install's bind of 127.0.0.1:80 and :443 on macOS
+	// (net.Listen) in tests.
+	BindLow func(addr string) error
 }
 
 func (e *Engine) now() time.Time {
@@ -182,13 +186,45 @@ func (e *Engine) input(v *env, m *machine, set state.Settings, sites []state.Sit
 		php[p.Version] = pv
 	}
 	return render.Input{
-		Paths:  v.paths,
-		Apache: render.Apache{Binary: m.apache.Binary, Modules: m.modules.Load, MimeTypes: m.apache.MimeTypes},
-		Ports:  set.Ports,
-		Listen: listenAddrs(set),
-		PHP:    php,
-		Sites:  sites,
+		Paths:             v.paths,
+		Apache:            render.Apache{Binary: m.apache.Binary, Modules: m.modules.Load, MimeTypes: m.apache.MimeTypes},
+		Ports:             set.Ports,
+		RedirectHTTPSPort: e.redirectHTTPSPort(v, set),
+		Listen:            listenAddrs(set),
+		PHP:               php,
+		Sites:             sites,
 	}
+}
+
+// redirectHTTPSPort is 443 on macOS while the root receipt holds the pf
+// redirect to the stack's ports (clients then reach HTTPS on 443), else 0.
+// The root copy is read: root alone writes it.
+func (e *Engine) redirectHTTPSPort(v *env, set state.Settings) int {
+	if v.os.GOOS != "darwin" {
+		return 0
+	}
+	if to, ok := e.pfRedirect(); ok && to.HTTP == set.Ports.HTTP && to.HTTPS == set.Ports.HTTPS {
+		return state.StandardPorts.HTTPS
+	}
+	return 0
+}
+
+// pfRedirect is the pf redirect of the root receipt, if any.
+func (e *Engine) pfRedirect() (receipt.Redirect, bool) {
+	var to receipt.Redirect
+	data, err := e.Sysroot.ReadFile(receipt.RootPath(e.User))
+	if err != nil {
+		return to, false
+	}
+	r, err := receipt.Parse(data, receipt.RootPath(e.User))
+	if err != nil {
+		return to, false
+	}
+	c, ok := r.Find(receipt.PFRedirect, "")
+	if !ok || c.Pending || receipt.Decode(c.Applied, &to) != nil {
+		return to, false
+	}
+	return to, true
 }
 
 func (e *Engine) supervisor(v *env) *service.Supervisor {

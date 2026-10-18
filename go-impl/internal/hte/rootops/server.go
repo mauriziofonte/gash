@@ -187,6 +187,8 @@ func (s *server) exec(ctx context.Context, o Op) ([]string, error) {
 		return s.writeSudoers(ctx)
 	case OpSysctlPorts:
 		return s.sysctlPorts(ctx, o.Value)
+	case OpPFRedirect:
+		return s.pfRedirect(ctx, o)
 	case OpLinger:
 		return s.linger(ctx)
 	case OpUnitStop:

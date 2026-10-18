@@ -37,6 +37,12 @@ const (
 	// OpSysctlPorts sets net.ipv4.ip_unprivileged_port_start to Value
 	// unless it is already that or lower.
 	OpSysctlPorts = "sysctl_ports"
+	// OpPFRedirect (macOS) redirects ports 80 and 443 of the loopback to
+	// Ports (the stack's HTTP and HTTPS ports): the anchor file
+	// PFAnchorFile, checked with pfctl -n, the LaunchDaemon PFDaemonPath
+	// that loads it at boot, checked with plutil -lint, and the anchor
+	// loaded now.
+	OpPFRedirect = "pf_redirect"
 	// OpLinger enables systemd linger for the user.
 	OpLinger = "linger"
 	// OpUnitStop stops and disables a system unit (Name).
@@ -74,7 +80,7 @@ const (
 	OpFinish = "finish_uninstall"
 )
 
-var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpLinger, OpUnitStop, OpUndoUnitStop, OpUnitReload, OpHostsSnapshot,
+var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpPFRedirect, OpLinger, OpUnitStop, OpUndoUnitStop, OpUnitReload, OpHostsSnapshot,
 	OpArchiveVhost, OpArchivePool, OpCopyKey, OpRecordAutostart, OpRestore, OpFinish}
 
 // Op is one operation of a plan.
@@ -89,6 +95,7 @@ type Op struct {
 	Value  int    `json:"value,omitempty"`
 	Mode   string `json:"mode,omitempty"`
 	Change int    `json:"change,omitempty"`
+	Ports  []int  `json:"ports,omitempty"` // pf_redirect: the HTTP and HTTPS targets
 }
 
 // String is the plan line shown to the user before sudo asks.
@@ -100,6 +107,9 @@ func (o Op) String() string {
 		return "write " + SudoersPath + " (NOPASSWD for the hosts helper only), validated with visudo -c -f"
 	case OpSysctlPorts:
 		return fmt.Sprintf("set %s to %d in %s (every local user may then bind ports %d to 1023)", PortSysctl, o.Value, SysctlFile, o.Value)
+	case OpPFRedirect:
+		return fmt.Sprintf("redirect ports 80 and 443 of the loopback to %d and %d with the pf anchor %s (%s), loaded now and at boot by %s",
+			o.Ports[0], o.Ports[1], PFAnchor, PFAnchorFile, PFDaemonPath)
 	case OpLinger:
 		return "enable systemd linger (loginctl enable-linger), so the stack starts at boot"
 	case OpUnitStop:
@@ -174,6 +184,10 @@ func (o Op) Check() error {
 	case OpSysctlPorts:
 		if o.Value < 0 || o.Value > 1024 {
 			return bad("port %d", o.Value)
+		}
+	case OpPFRedirect:
+		if len(o.Ports) != 2 || o.Ports[0] == o.Ports[1] || slices.ContainsFunc(o.Ports, func(p int) bool { return p < 1024 || p > 65535 }) {
+			return bad("ports %v are not two unprivileged ports", o.Ports)
 		}
 	case OpUnitStop, OpUndoUnitStop, OpUnitReload:
 		if !unitRE.MatchString(o.Name) {

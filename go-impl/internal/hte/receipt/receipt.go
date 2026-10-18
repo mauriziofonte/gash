@@ -50,6 +50,7 @@ const (
 	FileModified Kind = "file_modified" // path, sha256, backup (the prior content), prior_sha256, mode
 	DirCreated   Kind = "dir_created"   // path
 	Sysctl       Kind = "sysctl"        // key, prior, applied, file
+	PFRedirect   Kind = "pf_redirect"   // name (the anchor), path (its rules file), applied: a Redirect
 	Linger       Kind = "linger"        // prior, applied
 	Unit         Kind = "unit"          // name, prior, applied
 	HostsBlock   Kind = "hosts_block"   // prior: the block before, null when there was none
@@ -58,12 +59,18 @@ const (
 	Autostart    Kind = "autostart"     // mode, path (a user file)
 )
 
-var kinds = []Kind{FileCreated, FileModified, DirCreated, Sysctl, Linger, Unit, HostsBlock, LegacyVhost, LegacyPool, Autostart}
+var kinds = []Kind{FileCreated, FileModified, DirCreated, Sysctl, PFRedirect, Linger, Unit, HostsBlock, LegacyVhost, LegacyPool, Autostart}
 
 // UnitState is the state of a system unit.
 type UnitState struct {
 	Enabled bool `json:"enabled"`
 	Active  bool `json:"active"`
+}
+
+// Redirect is where the pf redirect sends ports 80 and 443 (macOS).
+type Redirect struct {
+	HTTP  int `json:"http"`
+	HTTPS int `json:"https"`
 }
 
 // VhostState is whether a legacy vhost was enabled.
@@ -232,6 +239,11 @@ func (r *Receipt) Validate() error {
 			}
 			if c.File != nil && (!absClean(c.File.Path) || (c.File.Prior != nil && !inRoot(*c.File.Prior))) {
 				return bad("change %d: sysctl file %+v", c.ID, *c.File)
+			}
+		case PFRedirect:
+			var to Redirect
+			if c.Name == "" || c.Path == "" || Decode(c.Applied, &to) != nil || to.HTTP <= 0 || to.HTTPS <= 0 {
+				return bad("change %d (pf_redirect) lacks its anchor, file or ports", c.ID)
 			}
 		case Linger:
 			var prior, applied bool

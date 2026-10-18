@@ -88,6 +88,8 @@ func (s *server) undo(ctx context.Context, c receipt.Change) ([]string, error) {
 			return nil, s.mustCmd(ctx, "sysctl", "-w", c.Key+"="+prior)
 		}
 		return nil, nil
+	case receipt.PFRedirect:
+		return s.pfUndo(ctx)
 	case receipt.Linger:
 		var prior bool
 		receipt.Decode(c.Prior, &prior)
