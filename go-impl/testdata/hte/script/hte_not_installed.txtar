@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# Before install, every command that needs it fails with
+# hte_not_installed (STOP), in text and JSON alike. As root they are
+# root_not_allowed first (hte_refusals.txtar).
+
+[root] skip 'as root these commands are root_not_allowed'
+
+! exec gash hte site list
+! stdout .
+stderr '^\{"error":"hte_not_installed","details":"'${WORK@R}'/home/\.config/gash/hte/hte\.toml does not exist","action":"STOP","recoverable":true,"hint":"run gash hte install"\}$'
+
+! exec gash hte --json service status
+! stdout .
+stderr '^\{"error":"hte_not_installed",'
+
+! exec gash hte apache config path
+stderr '^\{"error":"hte_not_installed",'
+
+! exec gash hte hosts check --json
+stderr '^\{"error":"hte_not_installed",'
+
+# The hidden root step refuses to run as anyone but root: its session
+# answers with the error, and stderr says it.
+! exec gash hte __root
+stdout '^\{"id":0,"ok":false,.*"error":\{"code":"privileged_step_required"'
+stderr '^privileged_step_required: the root step must run as root$'
