@@ -19,18 +19,17 @@ func (m *Module) username(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	path := c.Env.Get("PATH")
 	name := ""
 	// if command -v whoami; then user_name=$(whoami 2>/dev/null) || true
-	if m.proc.found(path, "whoami") {
-		name = m.proc.output(c, path, "whoami")
+	if _, ok := m.lookPath(c, "whoami"); ok {
+		name = m.output(c, "whoami")
 	}
-	hasID := m.proc.found(path, "id")
+	_, hasID := m.lookPath(c, "id")
 	if name == "" && hasID {
-		name = m.proc.output(c, path, "id", "-un")
+		name = m.output(c, "id", "-un")
 	}
 	if name == "" && hasID {
-		uid := m.proc.output(c, path, "id", "-u")
+		uid := m.output(c, "id", "-u")
 		if uid != "" {
 			if b, err := m.readFile(m.passwd); err == nil {
 				name = passwdNames(string(b), uid)

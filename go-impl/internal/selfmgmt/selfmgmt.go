@@ -8,20 +8,23 @@ import (
 	"math/rand/v2"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Module is the selfmgmt handler set with its process and file seams.
 type Module struct {
-	proc     procs
-	readFile func(string) ([]byte, error)
-	passwd   string
+	run runner.Runner
+	// lookPathFn replaces the PATH search in tests.
+	lookPathFn func(name string) (string, bool)
+	readFile   func(string) ([]byte, error)
+	passwd     string
 	// intn picks the quote: a uniform int in [0, n).
 	intn func(n int) int
 }
 
 // New returns the module wired to the real system.
 func New() *Module {
-	return &Module{proc: osProcs{}, readFile: readFileOS, passwd: "/etc/passwd", intn: rand.IntN}
+	return &Module{run: runner.Exec{}, readFile: readFileOS, passwd: "/etc/passwd", intn: rand.IntN}
 }
 
 // Register binds the selfmgmt functions to t.
