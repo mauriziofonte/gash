@@ -22,10 +22,31 @@ unset __gash_here
 
 gash() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
-    __gash_call gash "$@"
+    # The card shows the value this shell gives an alias of the card, as
+    # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
+    # backslash and newline escaped (LEDGER SELF-12).
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card=""
+    for __gash_n in .. ... .... ..... .4 .5 bc cd.. chgrp chmod chown cls composer-packages-update composer-self-update cp dc dcb dcc dcdown dclogs dcls dclsr dcps dcpull dcrestart dcrm dcscan dcup dcup2 dexec dils dinspect dir dirm dlogs dnetls dpruneall drm drmi dstart dstartall dstop dstopall ga gaa gap gb gbD gba gbd gc gca gcan gcb gcm gco gd gds gdw gf gfa gl gla glf glg glo glog gls gp gpf gpr gpsh gr grb grba grbc grep grh grh1 grhh gs gsh gsha gshl gshp gst gsw gswc hte hte-create hte-details hte-remove l la lash less ll ls mkdir mv path php ports quit reboot rm shutdown sl vdir; do
+        [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
+        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
 }
 gash_doctor() { __gash_call gash_doctor "$@"; }
-gash_help() { __gash_call gash_help "$@"; }
+gash_help() {
+    # --bash TOPIC is Bash's builtin help, which only the shell has.
+    local __gash_a
+    local -a __gash_rest=()
+    for __gash_a in "$@"; do
+        [[ "$__gash_a" == --no-color ]] || __gash_rest+=("$__gash_a")
+    done
+    if [[ "${__gash_rest[0]-}" == --bash ]]; then
+        builtin help "${__gash_rest[@]:1}"
+        return
+    fi
+    __gash_call gash_help "$@"
+}
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 gash_uninstall() { __gash_call gash_uninstall "$@"; }
 gash_unload() { __gash_call gash_unload "$@"; }

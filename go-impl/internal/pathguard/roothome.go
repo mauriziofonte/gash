@@ -13,3 +13,7 @@ func lookupRootHome() string {
 	}
 	return ""
 }
+
+// RootHome is root's home directory as core.sh reads ~root (the rootHome
+// argument of NewGuard).
+func RootHome() string { return lookupRootHome() }

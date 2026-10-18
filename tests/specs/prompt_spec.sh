@@ -248,7 +248,8 @@ EOF
 
 it "the job counter shows running and stopped jobs, not finished ones" bash -c '
   set -euo pipefail
-  command -v script >/dev/null 2>&1 && script -qc true /dev/null >/dev/null 2>&1 || exit 77
+  gash_require script
+  script -qc true /dev/null >/dev/null 2>&1 || gash_skip "script cannot open a terminal"
   cd "$GASH_TEST_ROOT"
   run() { printf "export GASH_BANNER=0; source ./gash.sh\n%s\ntrue\nexit\n" "$1" | script -qc "bash --norc -i" /dev/null 2>&1; }
   # bash < 5.3 keeps a finished job for a program run by a RETURN trap.

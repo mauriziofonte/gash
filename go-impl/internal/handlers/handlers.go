@@ -7,7 +7,9 @@ package handlers
 
 import (
 	"github.com/mauriziofonte/gash/internal/chrome"
+	"github.com/mauriziofonte/gash/internal/db"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 	"github.com/mauriziofonte/gash/internal/ssh"
 	"github.com/mauriziofonte/gash/internal/sysinfo"
@@ -20,8 +22,12 @@ import (
 func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	t := invoke.NewTable()
 	registerCore(t)
+	registerConfig(t)
+	registerHelp(t)
 	registerOutput(t)
 	selfmgmt.Register(t)
+	llm.Register(t)
+	db.Register(t)
 	system.Register(t)
 	ssh.Register(t)
 	chrome.Register(t)

@@ -8,7 +8,7 @@ describe "Migration from Gash 1.x"
 # A home that looks like a Gash 1.x user's, with Gash itself at ~/.gash.
 __migrate_fixture='
   set -euo pipefail
-  command -v diff >/dev/null 2>&1 || exit 77
+  gash_require diff
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   # On failure, say where and show what gash migrate printed.
   __diag() { echo "failed at line $1: $2" >&2; [[ -f "$tmp/out" ]] && tail -n 40 "$tmp/out" >&2; return 0; }
@@ -149,7 +149,7 @@ it "__gash_choose reads a number, takes the default, and gives up on bad input" 
 
 it "__gash_choose follows arrow keys, j/k and digits on a terminal" bash -c '
   set -euo pipefail
-  script --version 2>&1 | grep -q util-linux || exit 77
+  script --version 2>&1 | grep -q util-linux || gash_skip "script is not the util-linux one"
   run() { printf "%b" "$1" | script -qec "bash -c '"'"'GASH_HEADLESS=1 source \"$GASH_TEST_ROOT/gash.sh\"; __gash_choose r 1 a b c d && echo RESULT=\$r || echo RESULT=none'"'"'" /dev/null | tr -d "\r" | sed -n "s/^RESULT=//p"; }
   [[ "$(run "\033[B\033[B\033[Aj\r")" == 3 ]]
   [[ "$(run "\033[A\r")" == 4 ]]

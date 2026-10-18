@@ -60,8 +60,10 @@ it "unknown settings and malformed lines warn with a line number, never any cont
   for n in 1 2 3 5 6 7 8 9; do
     [[ "$out" == *"Line $n of $tmp/env:"* ]] || { echo "no warning for line $n: $out"; exit 1; }
   done
+  # The random temp path is not content: a name like tmp.zw8oyhboxu holds "box" (TEST-12).
+  shown="${out//"$tmp"/TMP}"
   for leak in GASH_NOPE topsecret PASSWORD hunter2 sk-ant PASTED prod ftp pw@ openai sk-zzz box nohost missing_key pass; do
-    [[ "$out" != *"$leak"* ]] || { echo "leaked $leak: $out"; exit 1; }
+    [[ "$shown" != *"$leak"* ]] || { echo "leaked $leak: $out"; exit 1; }
   done
   [[ "$out" != *"~/.gash_env"* ]]
   [[ "$(__gash_get_setting GASH_PROMPT 2>/dev/null)" == "1" ]]

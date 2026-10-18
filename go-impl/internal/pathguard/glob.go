@@ -99,6 +99,17 @@ func matchClass(pat []byte, c byte) (matched bool, rest []byte, ok bool) {
 			return found != negate, pat[i+1:], true
 		}
 		first = false
+		if pat[i] == '[' && i+1 < len(pat) && pat[i+1] == ':' {
+			// [:name:]; an unknown name is a member that matches nothing,
+			// as in bash.
+			if end := strings.Index(string(pat[i+2:]), ":]"); end >= 0 {
+				if posixClass(string(pat[i+2:i+2+end]), c) {
+					found = true
+				}
+				i += 2 + end + 2
+				continue
+			}
+		}
 		lo := pat[i]
 		if lo == '\\' && i+1 < len(pat) {
 			i++
@@ -123,6 +134,42 @@ func matchClass(pat []byte, c byte) (matched bool, rest []byte, ok bool) {
 		i++
 	}
 	return false, nil, false
+}
+
+// posixClass reports whether c is in the bracket class [:name:] (C locale);
+// false for an unknown name.
+func posixClass(name string, c byte) bool {
+	upper := c >= 'A' && c <= 'Z'
+	lower := c >= 'a' && c <= 'z'
+	digit := c >= '0' && c <= '9'
+	punct := c >= '!' && c <= '~' && !upper && !lower && !digit
+	switch name {
+	case "alpha":
+		return upper || lower
+	case "digit":
+		return digit
+	case "alnum":
+		return upper || lower || digit
+	case "upper":
+		return upper
+	case "lower":
+		return lower
+	case "space":
+		return c == ' ' || (c >= '\t' && c <= '\r')
+	case "blank":
+		return c == ' ' || c == '\t'
+	case "punct":
+		return punct
+	case "print":
+		return c >= ' ' && c <= '~'
+	case "graph":
+		return c > ' ' && c <= '~'
+	case "cntrl":
+		return c < ' ' || c == 0x7f
+	case "xdigit":
+		return digit || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+	}
+	return false
 }
 
 // IcaseGlob turns a glob into a case-insensitive one for tools without

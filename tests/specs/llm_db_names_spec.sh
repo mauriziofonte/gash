@@ -33,7 +33,7 @@ MOCK
 
 it "-d must be a plain database name" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   '"$__dbn_mocks"'
   for conn in my pg; do
@@ -49,7 +49,7 @@ it "-d must be a plain database name" bash -c '
 
 it "MySQL gets --database=NAME, PostgreSQL gets PGDATABASE (never -d)" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   '"$__dbn_mocks"'
   llm_db_query "SELECT 1" -c my -d "other_db-2.x" >/dev/null
@@ -66,7 +66,7 @@ it "MySQL gets --database=NAME, PostgreSQL gets PGDATABASE (never -d)" bash -c '
 
 it ".target-database is read only when it holds a plain name" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   '"$__dbn_mocks"'
   mkdir "$tmp/repo"
@@ -93,7 +93,7 @@ it ".target-database is read only when it holds a plain name" bash -c '
 
 it "MySQL TSV escapes decode left to right (an escaped backslash before 0)" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   export GASH_HEADLESS=1
   source "$GASH_TEST_ROOT/gash.sh"
   # mysql --batch writes C:\0dir as C:\\0dir, a NUL as \0, a newline as \n.
