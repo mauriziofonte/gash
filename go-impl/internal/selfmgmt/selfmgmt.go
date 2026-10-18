@@ -36,4 +36,5 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("gash_username", m.username)
 	t.Handle("gash_inspiring_quote", m.quote)
 	t.Handle("gash_migrate", m.migrate)
+	t.Handle("gash_env_init", m.envInit)
 }

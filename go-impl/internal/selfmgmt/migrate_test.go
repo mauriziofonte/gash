@@ -20,6 +20,12 @@ func call(t *testing.T, name string, env map[string]string, args ...string) (str
 	t.Helper()
 	m := New()
 	m.run = runner.NewFake(t)
+	return callModule(t, m, name, env, args...)
+}
+
+// callModule runs one function of m: stdout, stderr and the status.
+func callModule(t *testing.T, m *Module, name string, env map[string]string, args ...string) (string, string, int) {
+	t.Helper()
 	tbl := invoke.NewTable()
 	m.Register(tbl)
 	var out, errb bytes.Buffer
