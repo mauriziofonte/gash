@@ -118,8 +118,10 @@ func TestExecBashPath(t *testing.T) {
 	require.Equal(t, "/opt/bash", rec.calls[1].Bash)
 }
 
-// recorder is a Runner that records RunBash calls and answers them.
+// recorder is a Runner that records RunBash calls and answers them (the
+// other methods are not used).
 type recorder struct {
+	runner.Runner
 	calls  []runner.Bash
 	status int
 	out    string

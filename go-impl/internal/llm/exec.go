@@ -14,20 +14,6 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// loadConfig reads ~/.gash_env as __gash_load_env did.
-// TODO(core): use the shared loader once it is in a leaf package
-// (handlers.LoadConfig cannot be imported from here).
-func loadConfig(c *invoke.Call) *config.File {
-	home := c.Env.Get("HOME")
-	return config.Load(config.Options{
-		Path:     config.FilePath(home, c.Env.Get("GASH_ENV_FILE")),
-		Home:     home,
-		Headless: c.Env.Get("GASH_HEADLESS") == "1",
-		Debug:    c.Env.Get("GASH_DEBUG") == "1",
-		EUID:     os.Geteuid(),
-	})
-}
-
 // exec is llm_exec (exec.sh __llm_exec_impl): the line is checked and
 // rendered by internal/llmexec and run as its canonical script (D-1 A).
 func (m *Module) exec(c *invoke.Call) int {
@@ -37,9 +23,9 @@ func (m *Module) exec(c *invoke.Call) int {
 	if len(c.Args) > 1 {
 		return fail(c, "unexpected_argument", c.Args[1], "Pass the whole command line as one quoted argument")
 	}
-	// Settings come from the file only, never the environment. The stub
-	// override parsed the file in the caller's shell (warnings, cache).
-	f := loadConfig(c)
+	// Settings come from the file only, never the environment. The
+	// caller's shell printed the file's warnings when it loaded it.
+	f := config.LoadCaller(c.Env.Get)
 	setting := func(name string) string {
 		v, _ := f.Setting(name)
 		return v
