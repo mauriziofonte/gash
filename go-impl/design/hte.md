@@ -414,7 +414,9 @@ Root is used only by:
    (`internal/hte/rootops`: install helper, write sudoers drop-in, set
    sysctl, write pf anchor, enable linger, stop and disable a named system
    unit, start it again when this session stopped it and nothing changed
-   since (`undo_unit_stop`, the migrate rollback), reload one, record the
+   since (`undo_unit_stop`, the migrate rollback), reload one (for the
+   system Apache first `apachectl configtest`, and on a failure the vhosts
+   archived earlier in the same session put back), record the
    hosts block, archive a legacy vhost or pool, hand a legacy key file to
    `openssl pkey` running as the user, record the autostart, undo the last
    change of the receipt, remove the receipt), each run at most once, only
@@ -682,6 +684,18 @@ How `--apply` does it (`internal/hte/migrate.go`):
   (`undo_unit_stop`, which root runs only when the stop is the last change
   of its receipt and was made in the same session); the imported sites
   stay, and the next run completes the move.
+* High ports (`install --ports high`, neither port 80 nor 443, HTE-70): the
+  system Apache keeps running and keeps the ports it listens on. The plan
+  (`system_apache`) names those ports (its `Listen` directives and the
+  addresses of the enabled vhosts that are not imported) and the vhosts and
+  snippets it still serves, which then neither block nor count as "no longer
+  served". `--apply` stops nothing: it imports and verifies the sites,
+  archives their vhosts, then runs one `unit_reload` of the system Apache,
+  which tests the system configuration first. A failed test puts the
+  archived vhosts back, reloads nothing and fails with `config_test_failed`;
+  the imported sites stay. System FPM units left without pools stop as with
+  standard ports. `uninstall` re-enables the archived vhosts and reloads the
+  system Apache when the receipt never stopped it.
 * Archived: every imported or already managed vhost, and the exact hte-cli
   pool of a marked one (parsing step 5 above); the pools of raw vhosts are never
   archived (the default `www.conf` may serve them). A system FPM unit left
