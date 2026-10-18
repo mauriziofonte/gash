@@ -402,3 +402,52 @@ func TestMigrateRootSteps(t *testing.T) {
 		t.Errorf("dry run as euid 0: %v", err)
 	}
 }
+
+// TestLedger_HTE72: a missing openssl is openssl_not_found (FATAL, the
+// platform's install command as hint), a value outside an enum flag is
+// its invalid_<flag> (RETRY, the details name the value and the accepted
+// ones), a PHP command on a site without PHP is php_not_enabled (RETRY,
+// hint site modify --php).
+func TestLedger_HTE72(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t) // the Debian sysroot has no openssl
+	type want struct {
+		code    hteerr.Code
+		action  hteerr.Action
+		details string
+		hint    string
+	}
+	check := func(name string, err error, w want) {
+		t.Helper()
+		he, ok := hteerr.As(err)
+		if !ok || he.Code != w.code || he.Action() != w.action || !strings.Contains(he.Details, w.details) || !strings.Contains(he.Hint, w.hint) {
+			t.Errorf("%s: %#v, want %+v", name, err, w)
+		}
+	}
+	_, err := f.e.Install(ctx, InstallOptions{Ports: "bogus"})
+	check("install --ports bogus", err, want{hteerr.InvalidPorts, hteerr.Retry, `--ports takes standard or high, not "bogus"`, "standard, high"})
+	_, err = f.e.Install(ctx, InstallOptions{Autostart: "cron"})
+	check("install --autostart cron", err, want{hteerr.InvalidAutostart, hteerr.Retry,
+		`--autostart takes auto, systemd, launchd, shell or none, not "cron"`, "auto, systemd, launchd, shell, none"})
+	_, err = f.e.Install(ctx, InstallOptions{Ports: "high", Autostart: "none"})
+	check("install without openssl", err, want{hteerr.OpenSSLNotFound, hteerr.Fatal, "openssl is not installed", "sudo apt install openssl"})
+
+	v := f.install(t)
+	root := f.docroot(t)
+	_, err = f.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: ptr(root), Profile: ptr("prod")})
+	check("site create --profile prod", err, want{hteerr.InvalidProfile, hteerr.Retry, `--profile takes dev, staging or hardened, not "prod"`, "dev, staging, hardened"})
+	_, err = f.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: ptr(root)})
+	check("site create with HTTPS, without openssl", err, want{hteerr.OpenSSLNotFound, hteerr.Fatal, "openssl is not installed", "sudo apt install openssl"})
+
+	raw := state.Site{Domain: "raw.test", Aliases: []string{}, Kind: state.KindRaw, Enabled: true,
+		RawConf: "<VirtualHost 127.0.0.1:8080>\n    ServerName raw.test\n</VirtualHost>\n"}
+	if err := v.store.SaveSite(raw); err != nil {
+		t.Fatal(err)
+	}
+	for name, run := range map[string]func() error{
+		"php ini set":   func() error { _, err := f.e.PHPIniSet(ctx, "raw.test", "memory_limit", "1G"); return err },
+		"php ini unset": func() error { _, err := f.e.PHPIniUnset(ctx, "raw.test", "memory_limit"); return err },
+	} {
+		check(name+" on a site without PHP", run(), want{hteerr.PHPNotEnabled, hteerr.Retry, "raw.test has no PHP", "gash hte site modify --domain raw.test --php VERSION"})
+	}
+}
