@@ -92,6 +92,7 @@ func debianStandard() Input {
 			site("forced.test", func(s *state.Site) {
 				s.PHP, s.Profile, s.ForceHTTPS = "8.4", string(profiles.Staging), true
 				s.Aliases = []string{"www.forced.test", "api.forced.test"}
+				s.ExtraHTTPPorts, s.ExtraHTTPSPorts = []int{3000}, []int{3443}
 			}),
 			site("bypass.test", func(s *state.Site) {
 				s.Profile, s.ForceHTTPS, s.ForceHTTPSBypassLoopback, s.HTTP2 = string(profiles.Hardened), true, true, false
@@ -100,7 +101,8 @@ func debianStandard() Input {
 			site("plain.test", func(s *state.Site) { s.HTTPS, s.Aliases = false, []string{} }),
 			{
 				Domain: "proxy.test", Aliases: []string{}, Kind: state.KindRaw, Enabled: true,
-				RawConf: "<VirtualHost 127.0.0.1:80>\n    ServerName proxy.test\n    ProxyPass / http://127.0.0.1:3000/\n</VirtualHost>",
+				RawConf:        "<VirtualHost 127.0.0.1:80 127.0.0.1:8081>\n    ServerName proxy.test\n    ProxyPass / http://127.0.0.1:3000/\n</VirtualHost>",
+				ExtraHTTPPorts: []int{8081, 3000},
 			},
 			site("off.test", func(s *state.Site) { s.Enabled, s.PHP = false, "8.4" }),
 		},
@@ -717,7 +719,8 @@ func TestLedger_HTE36(t *testing.T) {
 	listen := regexp.MustCompile(`(?m)^Listen (.*)$`)
 	allCases(t, func(t *testing.T, in Input, g *Generation) {
 		got := listen.FindAllStringSubmatch(string(g.File("httpd.conf")), -1)
-		if len(got) != 2*len(in.Listen) {
+		h, hs := extraPorts(in.Sites)
+		if len(got) != (2+len(h)+len(hs))*len(in.Listen) {
 			t.Fatalf("Listen lines: %v", got)
 		}
 		for _, m := range got {
@@ -729,7 +732,7 @@ func TestLedger_HTE36(t *testing.T) {
 }
 
 func TestLedger_HTE37(t *testing.T) {
-	v6 := string(mustRender(t, debianStandard()).File("sites/forced.test.conf"))
+	v6 := string(mustRender(t, debianStandard()).File("sites/shop.test.conf"))
 	for _, want := range []string{"<VirtualHost 127.0.0.1:80 [::1]:80>", "<VirtualHost 127.0.0.1:443 [::1]:443>"} {
 		if !strings.Contains(v6, want) {
 			t.Errorf("IPv6 platform: missing %s", want)
@@ -935,6 +938,42 @@ func TestLedger_HTE59(t *testing.T) {
 // lines with the same admin kind; other keys are php_value or php_flag; a
 // boolean word is a bare flag, any other value is double-quoted. The global
 // overlay is never in a pool.
+// TestExtraListen: extra ports become Listen lines on loopback (ascending,
+// once, TLS ones naming https) and addresses of the site's vhosts only.
+func TestExtraListen(t *testing.T) {
+	g := mustRender(t, debianStandard())
+	httpd := string(g.File("httpd.conf"))
+	want := "Listen 127.0.0.1:80\nListen [::1]:80\nListen 127.0.0.1:3000\nListen [::1]:3000\nListen 127.0.0.1:8081\nListen [::1]:8081\n" +
+		"Listen 127.0.0.1:443\nListen [::1]:443\nListen 127.0.0.1:3443 https\nListen [::1]:3443 https\n"
+	if !strings.Contains(httpd, want) {
+		t.Fatalf("Listen lines:\n%s", httpd)
+	}
+	forced := string(g.File("sites/forced.test.conf"))
+	if !strings.Contains(forced, "<VirtualHost 127.0.0.1:80 [::1]:80 127.0.0.1:3000 [::1]:3000>\n") ||
+		!strings.Contains(forced, "<VirtualHost 127.0.0.1:443 [::1]:443 127.0.0.1:3443 [::1]:3443>\n") {
+		t.Fatalf("forced vhost:\n%s", forced)
+	}
+	if strings.Contains(string(g.File("sites/shop.test.conf")), "3000") {
+		t.Fatal("another site's extra port leaked")
+	}
+	// A disabled site's ports are not listened on; a port of the stack is refused.
+	in := debianStandard()
+	in.Sites[1].Enabled = false
+	if strings.Contains(string(mustRender(t, in).File("httpd.conf")), ":3443") {
+		t.Fatal("disabled site's port listened")
+	}
+	in = fedoraHigh()
+	in.Sites[0].ExtraHTTPPorts = []int{8443}
+	if _, err := Render(in); code(err) != hteerr.ConflictingOptions {
+		t.Fatalf("stack port: %v", err)
+	}
+	in = debianStandard()
+	in.Sites[0].ExtraHTTPSPorts = []int{3000}
+	if _, err := Render(in); code(err) != hteerr.ConflictingOptions {
+		t.Fatalf("protocol clash: %v", err)
+	}
+}
+
 func TestPoolPHPIni(t *testing.T) {
 	pool := string(mustRender(t, debianStandard()).File("fpm/8.3/pools/shop.test.conf"))
 	for _, want := range []string{
@@ -985,7 +1024,7 @@ func TestManifest(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(dir, ManifestFile), g.File(ManifestFile), 0o600))
 	m, err := ReadManifest(dir)
 	must(t, err)
-	if m.Apache.Binary != "/usr/sbin/apache2" || m.Apache.Config != "httpd.conf" || len(m.Apache.Listen) != 4 {
+	if m.Apache.Binary != "/usr/sbin/apache2" || m.Apache.Config != "httpd.conf" || len(m.Apache.Listen) != 10 {
 		t.Fatalf("apache: %+v", m.Apache)
 	}
 	f, ok := m.Master("8.3")
@@ -999,6 +1038,9 @@ func TestManifest(t *testing.T) {
 	}
 	if len(m.Sites) != 5 || m.Sites[0].Domain != "bypass.test" {
 		t.Fatalf("sites: %+v", m.Sites)
+	}
+	if e := m.Sites[1]; e.Domain != "forced.test" || len(e.HTTP) != 4 || e.HTTPS[3] != "[::1]:3443" {
+		t.Fatalf("forced.test endpoint: %+v", e)
 	}
 	// No system scan directory: only the overlay directory.
 	if v := ScanDirEnv(in.Paths, PHPVersion{}, "8.4"); v != "/home/me/.config/gash/hte/php/8.4" {

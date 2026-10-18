@@ -695,8 +695,11 @@ func TestLedger_HTE68(t *testing.T) {
 	if tool.Action != ActionImportRaw || tool.Site.PHP != "8.3" || !strings.Contains(tool.Site.RawConf, "proxy:unix:"+sock+"|") {
 		t.Fatalf("tool: %+v", tool)
 	}
-	if ports := reports(p, ReportCustomPort); len(ports) != 1 || !strings.Contains(ports[0].Message, "port 8081") {
+	if ports := reports(p, ReportCustomPort); len(ports) != 1 || !strings.Contains(ports[0].Message, "port 8081; kept as an extra HTTP port") {
 		t.Fatalf("custom ports: %+v", ports)
+	}
+	if port := site(t, p, sa+"007-port.test.conf"); port.Action != ActionImport || !slices.Equal(port.Site.ExtraHTTPPorts, []int{8081}) {
+		t.Fatalf("port.test: %+v", port.Site)
 	}
 	var orphans []string
 	for _, r := range p.Reports {
@@ -757,8 +760,11 @@ func TestPlanRefusals(t *testing.T) {
 
 func TestRawRefusals(t *testing.T) {
 	for name, tc := range map[string]struct{ conf, reason string }{
-		"custom port": {"<VirtualHost *:8080>\n    ServerName r.test\n</VirtualHost>\n", "listens on a port other than 80 and 443"},
-		"listen":      {"Listen 8080\n<VirtualHost *:80>\n    ServerName r.test\n</VirtualHost>\n", "Listen in a vhost file"},
+		"no port": {"<VirtualHost *>\n    ServerName r.test\n</VirtualHost>\n", "names no port"},
+		"port of both protocols": {"<VirtualHost *:9000>\n    ServerName r.test\n</VirtualHost>\n<VirtualHost *:9000>\n    ServerName r.test\n" +
+			"    SSLEngine on\n    SSLCertificateFile /etc/ssl/r.pem\n    SSLCertificateKeyFile /etc/ssl/r.key\n</VirtualHost>\n", "serves both HTTP and HTTPS"},
+		"TLS port without a certificate": {"<VirtualHost *:9443>\n    ServerName r.test\n    SSLEngine on\n</VirtualHost>\n", "names no certificate"},
+		"listen":                         {"Listen 8080\n<VirtualHost *:80>\n    ServerName r.test\n</VirtualHost>\n", "Listen in a vhost file"},
 		"two names": {"<VirtualHost *:80>\n    ServerName r.test\n</VirtualHost>\n<VirtualHost *:80>\n    ServerName s.test\n</VirtualHost>\n",
 			"several ServerName values"},
 		"no php version": {"<VirtualHost *:80>\n    ServerName r.test\n    DocumentRoot /srv/r\n    SetHandler \"proxy:unix:/run/php/custom.sock|fcgi://localhost/\"\n</VirtualHost>\n",
@@ -789,6 +795,39 @@ func TestHtaccessWarning(t *testing.T) {
 		return strings.HasPrefix(w, "/home/dev/sites/http/public/.htaccess:3 redirects to HTTPS")
 	}) {
 		t.Fatalf("%+v", s.Warnings)
+	}
+}
+
+// TestRawCustomPorts: a raw vhost on other ports keeps them as the site's
+// extra ports, its addresses rewritten to the loopback listeners of each
+// port (decision on HTE-68: custom ports are proven, raw ones included).
+func TestRawCustomPorts(t *testing.T) {
+	root := copyVariant(t, "V2")
+	write(t, root, "/etc/ssl/r.pem", "cert\n")
+	write(t, root, "/etc/ssl/r.key", "key\n")
+	write(t, root, sa+"050-r.test.conf", "<VirtualHost *:80 *:3000>\n    ServerName r.test\n    ProxyPass / http://127.0.0.1:3001/\n</VirtualHost>\n"+
+		"<VirtualHost 0.0.0.0:3443>\n    ServerName r.test\n    SSLEngine on\n    SSLCertificateFile /etc/ssl/r.pem\n    SSLCertificateKeyFile /etc/ssl/r.key\n</VirtualHost>\n"+
+		"<VirtualHost *:80>\n    ServerName r.test\n</VirtualHost>\n")
+	enable(t, root, "050-r.test.conf")
+	p := mustPlan(t, envAt(t, root), Options{})
+	s := site(t, p, sa+"050-r.test.conf")
+	if s.Action != ActionImportRaw || !slices.Equal(s.Site.ExtraHTTPPorts, []int{3000}) || !slices.Equal(s.Site.ExtraHTTPSPorts, []int{3443}) {
+		t.Fatalf("%s %q %+v", s.Action, s.Reason, s.Site)
+	}
+	for _, want := range []string{"<VirtualHost 127.0.0.1:80 [::1]:80 127.0.0.1:3000 [::1]:3000>", "<VirtualHost 127.0.0.1:3443 [::1]:3443>"} {
+		if !strings.Contains(s.Site.RawConf, want) {
+			t.Errorf("missing %s in\n%s", want, s.Site.RawConf)
+		}
+	}
+	if n := len(reports(p, ReportCustomPort)); n != 2 {
+		t.Fatalf("%d custom port reports", n)
+	}
+	// The stack's own ports map to its listeners, never to an extra port.
+	env := envAt(t, root)
+	env.Ports = state.Ports{HTTP: 3000, HTTPS: 3443}
+	s = site(t, mustPlan(t, env, Options{}), sa+"050-r.test.conf")
+	if len(s.Site.ExtraHTTPPorts)+len(s.Site.ExtraHTTPSPorts) != 0 || !strings.Contains(s.Site.RawConf, "<VirtualHost 127.0.0.1:3443 [::1]:3443>") {
+		t.Fatalf("stack ports: %+v", s.Site)
 	}
 }
 

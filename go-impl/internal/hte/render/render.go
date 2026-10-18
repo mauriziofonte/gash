@@ -224,6 +224,15 @@ func (in Input) validate() error {
 		if err := state.CheckUnique(s, in.Sites[i+1:]); err != nil {
 			return err
 		}
+		if err := state.CheckPortProtocols(s, in.Sites[i+1:]); err != nil {
+			return err
+		}
+		for _, p := range append(slices.Clone(s.ExtraHTTPPorts), s.ExtraHTTPSPorts...) {
+			if p == in.Ports.HTTP || p == in.Ports.HTTPS {
+				return hteerr.Newf(hteerr.ConflictingOptions, "change the site with gash hte site modify",
+					"site %s lists the stack's port %d as an extra port", s.Domain, p)
+			}
+		}
 		if !s.Enabled || !s.HasPool() {
 			continue
 		}
@@ -317,12 +326,19 @@ func Render(in Input) (*Generation, error) {
 	}
 	// Listen names the protocol of a TLS port other than 443, where
 	// Apache would otherwise assume http (it matters for accept filters).
+	// The enabled sites' extra ports follow, ascending.
+	extraHTTP, extraHTTPS := extraPorts(sites)
 	listen := addrList(in.Listen, in.Ports.HTTP)
-	for _, a := range addrList(in.Listen, in.Ports.HTTPS) {
-		if in.Ports.HTTPS != 443 {
-			a += " https"
+	for _, p := range extraHTTP {
+		listen = append(listen, addrList(in.Listen, p)...)
+	}
+	for _, p := range append([]int{in.Ports.HTTPS}, extraHTTPS...) {
+		for _, a := range addrList(in.Listen, p) {
+			if p != 443 {
+				a += " https"
+			}
+			listen = append(listen, a)
 		}
-		listen = append(listen, a)
 	}
 	httpd, err := execute("httpd.conf.tmpl", map[string]any{
 		"RunDir":       in.Paths.RuntimeDir,
@@ -346,7 +362,10 @@ func Render(in Input) (*Generation, error) {
 			enabled = append(enabled, s)
 		}
 	}
-	listenAddrs := append(addrList(in.Listen, in.Ports.HTTP), addrList(in.Listen, in.Ports.HTTPS)...)
+	var listenAddrs []string
+	for _, p := range append(append([]int{in.Ports.HTTP}, extraHTTP...), append([]int{in.Ports.HTTPS}, extraHTTPS...)...) {
+		listenAddrs = append(listenAddrs, addrList(in.Listen, p)...)
+	}
 	manifest, err := in.manifest(enabled, slices.Sorted(maps.Keys(pools)), listenAddrs)
 	if err != nil {
 		return nil, err
@@ -354,6 +373,33 @@ func Render(in Input) (*Generation, error) {
 	files = append(files, File{ManifestFile, manifest})
 	slices.SortFunc(files, func(a, b File) int { return strings.Compare(a.Path, b.Path) })
 	return &Generation{Files: files}, nil
+}
+
+// extraPorts returns the extra HTTP and HTTPS ports of the enabled
+// sites, each ascending and without repeats.
+func extraPorts(sites []state.Site) (httpPorts, httpsPorts []int) {
+	for _, s := range sites {
+		if !s.Enabled {
+			continue
+		}
+		httpPorts = append(httpPorts, s.ExtraHTTPPorts...)
+		if s.HTTPS {
+			httpsPorts = append(httpsPorts, s.ExtraHTTPSPorts...)
+		}
+	}
+	slices.Sort(httpPorts)
+	slices.Sort(httpsPorts)
+	return slices.Compact(httpPorts), slices.Compact(httpsPorts)
+}
+
+// siteAddrs are the addresses of a site's HTTP or HTTPS vhost: the stack's
+// port, then the site's extra ports.
+func (in Input) siteAddrs(stack int, extra []int) []string {
+	out := addrList(in.Listen, stack)
+	for _, p := range extra {
+		out = append(out, addrList(in.Listen, p)...)
+	}
+	return out
 }
 
 func execute(name string, data any) ([]byte, error) {
@@ -396,8 +442,8 @@ func (in Input) vhost(s state.Site) ([]byte, error) {
 		"Aliases":        s.Aliases,
 		"Docroot":        s.Docroot,
 		"DirectoryPath":  dir,
-		"HTTPAddrs":      strings.Join(addrList(in.Listen, in.Ports.HTTP), " "),
-		"HTTPSAddrs":     strings.Join(addrList(in.Listen, in.Ports.HTTPS), " "),
+		"HTTPAddrs":      strings.Join(in.siteAddrs(in.Ports.HTTP, s.ExtraHTTPPorts), " "),
+		"HTTPSAddrs":     strings.Join(in.siteAddrs(in.Ports.HTTPS, s.ExtraHTTPSPorts), " "),
 		"ErrorLog":       filepath.Join(logs, "error.log"),
 		"AccessLog":      filepath.Join(logs, "access.log"),
 		"BytesLog":       filepath.Join(logs, "bytes.log"),

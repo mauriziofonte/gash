@@ -64,14 +64,6 @@ type Endpoint struct {
 	Socket string     `json:"socket,omitempty"`
 }
 
-func hostPorts(addrs []string, ports ...int) []string {
-	var out []string
-	for _, p := range ports {
-		out = append(out, addrList(addrs, p)...)
-	}
-	return out
-}
-
 func (in Input) manifest(sites []state.Site, versions []string, listen []string) ([]byte, error) {
 	m := Manifest{
 		Schema: manifestSchema,
@@ -87,9 +79,9 @@ func (in Input) manifest(sites []state.Site, versions []string, listen []string)
 	}
 	sockets := map[string][]string{}
 	for _, s := range sites {
-		e := Endpoint{Domain: s.Domain, Kind: s.Kind, HTTP: hostPorts(in.Listen, in.Ports.HTTP), HTTPS: []string{}}
+		e := Endpoint{Domain: s.Domain, Kind: s.Kind, HTTP: in.siteAddrs(in.Ports.HTTP, s.ExtraHTTPPorts), HTTPS: []string{}}
 		if s.HTTPS {
-			e.HTTPS = hostPorts(in.Listen, in.Ports.HTTPS)
+			e.HTTPS = in.siteAddrs(in.Ports.HTTPS, s.ExtraHTTPSPorts)
 		}
 		if s.HasPool() {
 			e.Socket = SocketPath(in.Paths.RuntimeDir, s.PHP, s.Domain)

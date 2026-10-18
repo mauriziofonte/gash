@@ -65,6 +65,8 @@ https       = true
 force_https = false
 force_https_bypass_loopback = false   # true: no redirect for 127.0.0.1 and ::1 (hte-cli 1.1.x behavior, D-2)
 http2       = true
+extra_http_ports  = []             # more loopback ports for the HTTP vhost (--extra-http-port N)
+extra_https_ports = []             # more loopback ports for the HTTPS vhost (--extra-https-port N)
 enabled     = true
 kind        = "managed"            # managed | raw (imported non-HTE vhost, section 10)
 raw_conf    = ""                   # kind = raw: the imported vhost file, kept verbatim after path rewriting
@@ -92,7 +94,8 @@ files:
   modules enable NAME` adds a module from the system module directory only;
   the list is validated against the files that exist there.
 * `Listen 127.0.0.1:<http>` and `Listen 127.0.0.1:<https>`, plus `[::1]` when
-  IPv6 loopback is available. Never a wildcard address.
+  IPv6 loopback is available, then the same for every extra port of an
+  enabled site, ascending. Never a wildcard address.
 * TLS defaults equivalent to Debian `ssl.conf` (`SSLProtocol all -SSLv3
   -TLSv1 -TLSv1.1`, `SSLCipherSuite HIGH:!aNULL`, `SSLHonorCipherOrder off`,
   `SSLSessionCache shmcb:<run>/ssl_scache(512000)`, `SSLSessionCacheTimeout
@@ -113,6 +116,13 @@ files:
   (`Listen 127.0.0.1:8443 https`).
 * `IncludeOptional` of the global overlay, then of every enabled site's
   rendered vhosts.
+
+A site's `extra_http_ports` and `extra_https_ports` (1 to 65535, never 80,
+443 or the stack's own ports, never in both lists, the HTTPS ones only on an
+HTTPS site, and a port has one protocol across all sites: else
+`conflicting_options`) add `Listen` lines and the addresses
+`127.0.0.1:<port>` (and `[::1]:<port>`) to that site's HTTP or HTTPS
+`<VirtualHost>`. They keep the custom ports of migrated vhosts (section 10).
 
 Per managed site (`render/current/sites/<domain>.conf`). The directives are
 hte-cli 1.1.1's (`ApacheManager.php:386-497`, fixture
@@ -445,7 +455,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 | `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix |
 | `migrate [--apply] [--site D]... [--exclude D]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
-| `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2]` | New managed site; fails on any invalid value |
+| `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2] [--extra-http-port N]... [--extra-https-port N]...` | New managed site; fails on any invalid value |
 | `site modify --domain D [same flags]` | Changes the state; overlays untouched |
 | `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
@@ -508,11 +518,12 @@ directory and `.info` files, the hosts file) and classifies every vhost:
 A raw import rewrites only what cannot work in userland and refuses the
 rest: `${APACHE_LOG_DIR}` and the system log directory become the site's log
 directory; `<VirtualHost>` addresses on 80 and 443 become the loopback
-listeners; a PHP-FPM socket becomes the site's own pool (profile `dev`);
+listeners, addresses on other ports the loopback addresses of that port
+(an extra port of the site); a PHP-FPM socket becomes the site's own pool (profile `dev`);
 `SSLCertificateFile`/`SSLCertificateKeyFile` become the site's userland pair
 (copied). A file with `Listen`, several `ServerName` values, half a
-certificate pair or a socket without a PHP version stays in the system and
-is reported. Raw vhosts get no `IncludeOptional` of the site overlay: the
+certificate pair, a section without a port, a port of both protocols or a
+socket without a PHP version stays in the system and is reported. Raw vhosts get no `IncludeOptional` of the site overlay: the
 imported text is the site's configuration, kept in `raw_conf`.
 
 Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
@@ -553,9 +564,11 @@ Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
 
 Also handled: duplicate domains (both reported; the user picks one with
 `--site` or excludes the other), a vhost using another site's pool socket
-(both sites get their own pool; reported), custom `Listen` ports (kept on the
-site as extra listen ports in the high range, reported when below 1024 and not
-80/443), unmarked vhosts using HTE certificates (imported as raw, certificate
+(both sites get their own pool; reported), custom ports (every
+`<VirtualHost>` port other than 80, 443 and the stack's own becomes an extra
+port of the site, HTTP or HTTPS by the section's `SSLEngine on`, raw vhosts
+included; reported, with a note below 1024), unmarked vhosts using HTE
+certificates (imported as raw, certificate
 copied), orphan pools, certificates and `.info` files and index gaps
 (reported, never deleted), IP addresses used as domains by hte-cli 1.0.8+
 (reported, not imported: a site name must be a hostname), a system Apache whose

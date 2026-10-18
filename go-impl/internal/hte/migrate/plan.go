@@ -373,12 +373,18 @@ func (b *builder) build(c *candidate) {
 	} else {
 		b.buildRaw(c)
 	}
-	if c.plan.Site != nil {
-		b.planned = append(b.planned, *c.plan.Site)
-		for _, p := range c.v.Ports {
-			if p != 80 && p != 443 {
-				b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportCustomPort, Paths: []string{c.v.Path},
-					Message: c.domain + " listens on port " + strconv.Itoa(p) + "; gash hte has no per-site listen ports, so it is not kept"})
+	if s := c.plan.Site; s != nil {
+		b.planned = append(b.planned, *s)
+		for _, l := range []struct {
+			proto string
+			ports []int
+		}{{"HTTP", s.ExtraHTTPPorts}, {"HTTPS", s.ExtraHTTPSPorts}} {
+			for _, p := range l.ports {
+				msg := c.domain + " listens on port " + strconv.Itoa(p) + "; kept as an extra " + l.proto + " port of the site"
+				if p < 1024 {
+					msg += " (below 1024: binding it needs net.ipv4.ip_unprivileged_port_start at most " + strconv.Itoa(p) + ")"
+				}
+				b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportCustomPort, Paths: []string{c.v.Path}, Message: msg})
 			}
 		}
 	}
@@ -401,13 +407,22 @@ func (b *builder) buildManaged(c *candidate) {
 			extra = append(extra, a)
 		}
 	}
+	ports, err := customPorts(v.Conf, env)
+	if err != nil {
+		b.skip(c, err.Error())
+		return
+	}
+	if len(ports.https) > 0 && !https {
+		c.plan.Warnings = append(c.plan.Warnings, "the HTTPS ports "+joinInts(ports.https)+" are not kept: the site has no usable HTTPS vhost")
+		ports.https = nil
+	}
 	docroot := v.Docroot
 	f := state.Flags{
 		Domain: c.domain, Docroot: &docroot, PHP: &php, Profile: &profile,
 		HTTPS: &https, ForceHTTPS: &force, ForceHTTPSBypass: &bypass, HTTP2: &http2,
-		Aliases: extra, NoWWW: noWWW,
+		Aliases: extra, NoWWW: noWWW, ExtraHTTPPorts: &ports.http, ExtraHTTPSPorts: &ports.https,
 	}
-	site, err := state.NewSite(f, state.Env{Cwd: "/", Installed: env.Installed, Stat: env.Stat}, b.existing())
+	site, err := state.NewSite(f, state.Env{Cwd: "/", Installed: env.Installed, Ports: env.Ports, Stat: env.Stat}, b.existing())
 	if err != nil {
 		b.skipErr(c, err)
 		return
@@ -459,6 +474,14 @@ func (b *builder) htaccess(c *candidate) {
 	for _, r := range redirects {
 		c.plan.Warnings = append(c.plan.Warnings, r.Warning())
 	}
+}
+
+func joinInts(in []int) string {
+	out := make([]string, len(in))
+	for i, n := range in {
+		out[i] = strconv.Itoa(n)
+	}
+	return strings.Join(out, ", ")
 }
 
 // iniText returns the value an INI line means: the text inside a leading
@@ -578,7 +601,8 @@ func (b *builder) buildRaw(c *candidate) {
 		return
 	}
 	site := state.Site{Domain: c.domain, Aliases: aliases, Kind: state.KindRaw, Enabled: v.Enabled,
-		RawConf: res.conf, HTTPS: res.certFile != ""}
+		RawConf: res.conf, HTTPS: res.certFile != "",
+		ExtraHTTPPorts: append([]int{}, res.ports.http...), ExtraHTTPSPorts: append([]int{}, res.ports.https...)}
 	if aliases == nil {
 		site.Aliases = []string{}
 	}
@@ -598,6 +622,10 @@ func (b *builder) buildRaw(c *candidate) {
 		return
 	}
 	if err := state.CheckUnique(site, b.existing()); err != nil {
+		b.skipErr(c, err)
+		return
+	}
+	if err := state.CheckPortProtocols(site, b.existing()); err != nil {
 		b.skipErr(c, err)
 		return
 	}
