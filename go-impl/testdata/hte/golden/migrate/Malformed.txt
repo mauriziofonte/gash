@@ -1,0 +1,44 @@
+gash hte migrate: plan for ubuntu-24.04 (dry run: nothing is changed)
+
+Sites
+  skip            -                    Raw           /etc/apache2/sites-available/000-default.conf
+                  no ServerName: nothing names the site
+  skip            -                    Malformed     /etc/apache2/sites-available/020-.conf
+                  no SetHandler to a PHP-FPM socket
+  skip            -                    Malformed     /etc/apache2/sites-available/021-.conf
+                  empty domain in the socket /var/run/php/php8.3-fpm-.sock
+  skip            -                    Malformed     /etc/apache2/sites-available/022-default-socket.test.conf
+                  default socket /var/run/php/php8.3-fpm.sock (the distribution's pool, no domain)
+  import          nocert.test          V1            /etc/apache2/sites-available/023-nocert.test.conf
+                  PHP 8.3, profile hardened (marker), HTTP only, disabled
+                  aliases: www.nocert.test
+                  pool: /etc/php/8.3/fpm/pool.d/nocert.test.conf
+                  warning: a :443 vhost without both SSLCertificateFile and SSLCertificateKeyFile; imported as HTTP only
+  import          quoted.test          V2            /etc/apache2/sites-available/024-quoted.test.conf
+                  PHP 8.3, profile dev (default), HTTP only, enabled
+                  aliases: www.quoted.test
+                  pool: /etc/php/8.3/fpm/pool.d/quoted.test.conf
+                  warning: unknown profile "custom" in the pool; dev is used
+  import          valid.test           V2            /etc/apache2/sites-available/025-valid.test.conf
+                  PHP 8.3, profile dev (marker), HTTP only, enabled
+                  aliases: www.valid.test
+                  pool: /etc/php/8.3/fpm/pool.d/valid.test.conf
+
+Hosts block
+  127.0.0.1 nocert.test www.nocert.test
+  127.0.0.1 quoted.test www.quoted.test
+  127.0.0.1 valid.test www.valid.test
+
+Reported
+  orphan_pool: pool [notes] belongs to no vhost; left in place
+    /etc/php/7.4/fpm/pool.d/aaa-notes.conf
+  orphan_pool: pool [orphan.test] belongs to no vhost; left in place
+    /etc/php/custom/fpm/pool.d/orphan.test.conf
+  index_gap: unused NNN- numbers 001-019 (information only: gash names files by domain)
+    /etc/apache2/sites-available
+
+No longer served after --apply
+  /etc/apache2/sites-available/000-default.conf
+
+Blocking --apply (import or exclude each one first)
+  /etc/apache2/sites-available/000-default.conf

@@ -1,0 +1,23 @@
+gash hte migrate: plan for ubuntu-24.04 (dry run: nothing is changed)
+
+Sites
+  import          broken.test          Broken-bypass /etc/apache2/sites-available/001-broken.test.conf
+                  PHP 8.3, profile dev (marker), HTTPS forced (307, loopback bypass on), enabled
+                  aliases: www.broken.test
+                  pool: /etc/php/8.3/fpm/pool.d/broken.test.conf
+                  certificate: copy /etc/apache2/certs-selfsigned/broken.test.crt and /etc/apache2/certs-selfsigned/broken.test.key (the key by the root step)
+                  note: force-HTTPS with the loopback bypass, as hte-cli 1.1.x: requests from 127.0.0.1 and ::1 are not redirected; 301 becomes 307
+  import          broken0.test         Broken-bypass /etc/apache2/sites-available/002-broken0.test.conf
+                  PHP 8.3, profile dev (marker), HTTPS forced (307, loopback bypass on), enabled
+                  aliases: www.broken0.test
+                  pool: /etc/php/8.3/fpm/pool.d/broken0.test.conf
+                  certificate: copy /etc/apache2/certs-selfsigned/broken0.test.crt and /etc/apache2/certs-selfsigned/broken0.test.key (the key by the root step)
+                  note: force-HTTPS with the loopback bypass, as hte-cli 1.1.x: requests from 127.0.0.1 and ::1 are not redirected; 301 becomes 307
+
+Hosts block
+  127.0.0.1 broken.test www.broken.test
+  127.0.0.1 broken0.test www.broken0.test
+
+Root steps (one sudo for --apply)
+  copy_key /etc/apache2/certs-selfsigned/broken.test.key -> /home/dev/.local/share/gash/hte/certs/broken.test/key.pem
+  copy_key /etc/apache2/certs-selfsigned/broken0.test.key -> /home/dev/.local/share/gash/hte/certs/broken0.test/key.pem
