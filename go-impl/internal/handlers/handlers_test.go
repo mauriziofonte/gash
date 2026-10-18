@@ -26,7 +26,7 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_help", "gash_inspiring_quote", "gash_username", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree"}, tbl.Names())
+	require.Equal(t, []string{"all_colors", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_help", "gash_inspiring_quote", "gash_migrate", "gash_username", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
@@ -90,7 +90,7 @@ func TestCardUnknownTopic(t *testing.T) {
 
 	_, errOut, rc = run(t, "gash", nil, false, "migrate", "--x")
 	require.Equal(t, 1, rc)
-	require.Contains(t, errOut, `"details":"gash_migrate is not implemented in this gash build"`)
+	require.Contains(t, errOut, "Error: gash_migrate: Gash 3 does not migrate a Gash 1.x configuration;")
 }
 
 func TestUsername(t *testing.T) {

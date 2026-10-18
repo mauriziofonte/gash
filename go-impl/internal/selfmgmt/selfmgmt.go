@@ -35,4 +35,5 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("gash", m.card)
 	t.Handle("gash_username", m.username)
 	t.Handle("gash_inspiring_quote", m.quote)
+	t.Handle("gash_migrate", m.migrate)
 }
