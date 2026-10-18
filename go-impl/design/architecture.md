@@ -162,6 +162,9 @@ LEDGER item (forced divergence or defect):
 | kill | `kill(2)` | No output of its own to preserve; specs that faked `kill` are rewritten (`testing.md` 2.3) |
 | nvm | Bash (it is a shell function), through the generated shim | `nvm use` changes the caller's PATH |
 | curl | `net/http` | Secrets (API keys, registry tokens) stay in-process instead of reaching a child through a config descriptor; no dependency on curl or `~/.curlrc`. Proxies and CA from the environment (`HTTPS_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`); 2.x timeouts and error taxonomy kept |
+| openssl (`gash hte`) | The CLI: `genpkey`, `req -x509`, `x509`, `pkey`, found in the fixed system PATH; its absence is `openssl_not_found` (FATAL, hint with the platform's install command) | Private keys go only through `openssl`: gash never reads, parses or holds one (MUST NOT 6); a legacy root-owned key reaches `openssl pkey` running as the user as an open file (`design/hte.md` 3.1, 7) |
+| sudo, visudo (`gash hte`) | The CLIs: one `sudo [-n] -- <gash> hte __root` session per install, uninstall and `migrate --apply`, `sudo -n` for the hosts helper (the only NOPASSWD rule); the drop-in is checked with `visudo -c -f` before it is moved into `/etc/sudoers.d` | sudo is the user's own privilege policy and authentication; a drop-in that `visudo` refuses never lands (`design/hte.md` 7) |
+| Apache: `apache2`/`httpd`, `apachectl` (`gash hte`) | The distro or Homebrew binaries, started as the user with explicit argv (`-f <generation>/httpd.conf -k start`, `-t`, `-l`); `apachectl configtest` (or `apache2ctl`) only as root, before the system Apache is reloaded; `apache_not_found` (FATAL) when missing | Nothing is compiled or bundled: the stack reuses the platform's Apache and modules (`design/hte.md` 1, 3) |
 
 ## 8. Safety core
 
