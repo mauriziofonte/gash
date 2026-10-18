@@ -116,6 +116,7 @@ func (c *catalog) build() ([]registry.Function, error) {
 				f.Aliases = append(f.Aliases, a.name)
 			}
 		}
+		f.LoadsEnv = c.reaches(name, "__gash_load_env")
 		read := c.closure(name)
 		if read[allSettings] {
 			for _, s := range c.settings {
@@ -206,6 +207,31 @@ func (c *catalog) closure(name string) map[string]bool {
 	return read
 }
 
+// reaches reports whether name's body calls target, directly or through
+// the functions it calls.
+func (c *catalog) reaches(name, target string) bool {
+	seen := map[string]bool{}
+	var visit func(n string) bool
+	visit = func(n string) bool {
+		if seen[n] {
+			return false
+		}
+		seen[n] = true
+		for _, d := range c.defs[n] {
+			for callee := range d.calls {
+				if callee == target {
+					return true
+				}
+				if _, ok := c.defs[callee]; ok && visit(callee) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(name)
+}
+
 func (c *catalog) render() ([]byte, error) {
 	fns, err := c.build()
 	if err != nil {
@@ -250,6 +276,9 @@ func (c *catalog) render() ([]byte, error) {
 		}
 		if len(f.Settings) > 0 {
 			field(&b, "Settings", strs(f.Settings))
+		}
+		if f.LoadsEnv {
+			field(&b, "LoadsEnv", "true")
 		}
 		if len(f.ShellVars) > 0 {
 			field(&b, "ShellVars", strs(f.ShellVars))

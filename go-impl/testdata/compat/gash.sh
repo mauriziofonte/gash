@@ -116,9 +116,18 @@ __gash_source "$GASH_DIR/lib/core/config.sh"
 # -----------------------------------------------------------------------------
 
 # ai
-ai_ask() { __gash_call ai_ask "$@"; }
-ai_query() { __gash_call ai_query "$@"; }
-ai_sysinfo() { __gash_call ai_sysinfo "$@"; }
+ai_ask() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call ai_ask "$@"
+}
+ai_query() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call ai_query "$@"
+}
+ai_sysinfo() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call ai_sysinfo "$@"
+}
 
 # chrome
 chrome_headless_update() { __gash_call chrome_headless_update "$@"; }
@@ -144,7 +153,10 @@ files_largest() { __gash_call files_largest "$@"; }
 tree_stats() { __gash_call tree_stats "$@"; }
 
 # gash
-gash() { __gash_call gash "$@"; }
+gash() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash "$@"
+}
 gash_doctor() { __gash_call gash_doctor "$@"; }
 gash_help() { __gash_call gash_help "$@"; }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
@@ -164,14 +176,32 @@ git_sync() { __gash_call git_sync "$@"; }
 
 # llm
 llm_config() { __gash_call llm_config "$@"; }
-llm_db_explain() { __gash_call llm_db_explain "$@"; }
-llm_db_query() { __gash_call llm_db_query "$@"; }
-llm_db_sample() { __gash_call llm_db_sample "$@"; }
-llm_db_schema() { __gash_call llm_db_schema "$@"; }
-llm_db_tables() { __gash_call llm_db_tables "$@"; }
+llm_db_explain() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_explain "$@"
+}
+llm_db_query() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_query "$@"
+}
+llm_db_sample() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_sample "$@"
+}
+llm_db_schema() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_schema "$@"
+}
+llm_db_tables() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_tables "$@"
+}
 llm_deps() { __gash_call llm_deps "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
-llm_exec() { __gash_call llm_exec "$@"; }
+llm_exec() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_exec "$@"
+}
 llm_find() { __gash_call llm_find "$@"; }
 llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
@@ -191,15 +221,36 @@ nvm_prune_versions() { __gash_call nvm_prune_versions "$@"; }
 php_detect_version() { __gash_call php_detect_version "$@"; }
 
 # remote
-remote_exec() { __gash_call remote_exec "$@"; }
-remote_hosts() { __gash_call remote_hosts "$@"; }
-remote_pull() { __gash_call remote_pull "$@"; }
-remote_push() { __gash_call remote_push "$@"; }
-remote_sync_pull() { __gash_call remote_sync_pull "$@"; }
-remote_sync_push() { __gash_call remote_sync_push "$@"; }
+remote_exec() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_exec "$@"
+}
+remote_hosts() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_hosts "$@"
+}
+remote_pull() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_pull "$@"
+}
+remote_push() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_push "$@"
+}
+remote_sync_pull() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_sync_pull "$@"
+}
+remote_sync_push() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_sync_push "$@"
+}
 
 # ssh
-gash_ssh_auto_unlock() { __gash_call gash_ssh_auto_unlock "$@"; }
+gash_ssh_auto_unlock() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash_ssh_auto_unlock "$@"
+}
 
 # sysinfo
 sysinfo() { __gash_call sysinfo "$@"; }
@@ -222,7 +273,10 @@ wsl_shutdown() { __gash_call wsl_shutdown "$@"; }
 wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
 
 # migrate
-gash_migrate() { __gash_call gash_migrate "$@"; }
+gash_migrate() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash_migrate "$@"
+}
 
 # -----------------------------------------------------------------------------
 # Module short aliases (defined in headless mode too: agent contract)
