@@ -8,6 +8,7 @@ package handlers
 import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
+	"github.com/mauriziofonte/gash/internal/system"
 )
 
 // Table returns the table of every ported function and compat operation.
@@ -18,6 +19,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	registerCore(t)
 	registerOutput(t)
 	selfmgmt.Register(t)
+	system.Register(t)
 	for _, r := range extra {
 		r(t)
 	}
