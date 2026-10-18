@@ -538,10 +538,6 @@ func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r 
 		for _, w := range h.Warnings {
 			r.add(name, CheckWarn, w, "run gash hte cert renew --domain "+s.Domain)
 		}
-		if h.Info != nil && h.Info.Legacy {
-			r.add(name, CheckWarn, "a copied hte-cli certificate ("+h.Info.Algorithm+")",
-				"run gash hte cert renew --domain "+s.Domain+" for an ECDSA one")
-		}
 		if len(h.Problems) == 0 && len(h.Warnings) == 0 && h.Info != nil {
 			r.add(name, CheckOK, "valid until "+h.Info.NotAfter.UTC().Format("2006-01-02"), "")
 		}
