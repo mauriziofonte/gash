@@ -9,7 +9,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # shellcheck source=tests/gash-test.sh
 source "$ROOT_DIR/tests/gash-test.sh"
-gash_source_all "$ROOT_DIR"
 
 describe "Color gating (v1.5)"
 
