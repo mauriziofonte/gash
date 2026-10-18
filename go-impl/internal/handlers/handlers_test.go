@@ -26,7 +26,7 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "disk_usage", "gash", "gash_ssh_auto_unlock", "gash_username", "hgrep", "history_grep",
+	require.Equal(t, []string{"all_colors", "chrome_headless_update", "disk_usage", "gash", "gash_ssh_auto_unlock", "gash_username", "hgrep", "history_grep",
 		"ip_public", "mkdir_cd", "port_kill", "process_find", "process_kill", "services_stop", "sudo_last",
 		"wsl_compact", "wsl_explorer", "wsl_restart", "wsl_shutdown", "wsl_taskmanager"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",

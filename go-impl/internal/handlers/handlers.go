@@ -6,6 +6,7 @@
 package handlers
 
 import (
+	"github.com/mauriziofonte/gash/internal/chrome"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 	"github.com/mauriziofonte/gash/internal/ssh"
@@ -22,6 +23,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	selfmgmt.Register(t)
 	system.Register(t)
 	ssh.Register(t)
+	chrome.Register(t)
 	for _, r := range extra {
 		r(t)
 	}
