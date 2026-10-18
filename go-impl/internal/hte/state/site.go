@@ -267,6 +267,9 @@ func (s Site) Validate() error {
 		return hteerr.Newf(hteerr.InvalidState, "", "kind %q is not managed or raw", s.Kind)
 	}
 	if s.HasPool() {
+		if s.Docroot == "" {
+			return hteerr.New(hteerr.InvalidState, "a site with a PHP pool has no docroot", "")
+		}
 		if _, ok := profiles.Parse(s.Profile); !ok {
 			return hteerr.Newf(hteerr.InvalidProfile, "profiles: dev, staging, hardened", "unknown profile %q", s.Profile)
 		}

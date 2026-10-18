@@ -450,6 +450,14 @@ func TestSiteRoundTripAndStrictDecode(t *testing.T) {
 	if _, err := EncodeSite(raw); err != nil {
 		t.Fatalf("raw site: %v", err)
 	}
+	raw.PHP, raw.Profile = "8.3", "dev"
+	if _, err := EncodeSite(raw); code(err) != hteerr.InvalidState {
+		t.Fatalf("raw pool without docroot: %v", err)
+	}
+	raw.Docroot = "/srv/proxy"
+	if _, err := EncodeSite(raw); err != nil {
+		t.Fatalf("raw pool: %v", err)
+	}
 	raw.RawConf = " \n"
 	if _, err := EncodeSite(raw); code(err) != hteerr.InvalidState {
 		t.Fatalf("empty raw: %v", err)
