@@ -3743,7 +3743,7 @@ Critical and high items:
 | Reproduction | in a temp dir, a link whose name ends with a backslash points at a secret-pattern marker; a read command naming the link with the backslash last prints the marker (input shapes only, no working line) |
 | Severity | high |
 | Public-contract impact | yes |
-| rc.A behavior | Go never runs a word it did not check (PRD 10.7), so 2.x cannot be reproduced. A command line that ends with a backslash is refused with `construct_not_allowed` (RETRY), the error contract 2.x already uses for constructs it does not handle. A backslash before a newline stays a line continuation, as in 2.x. |
+| rc.A behavior | Go never runs a word it did not check (PRD 10.7), so 2.x cannot be reproduced. A command line that ends with an unquoted backslash is refused with `construct_not_allowed` (RETRY), the error contract 2.x already uses for constructs it does not handle. The refusal comes after the other checks of the line, so a line 2.x refused for another reason keeps that refusal. A backslash before a newline stays a line continuation, and a backslash inside quotes or a comment behaves as in 2.x. Unrestricted mode validates nothing and is unchanged. |
 | Fix recipe (3.0) | Keep the refusal. For 2.x, the same refusal at the end-of-input branch of the parser. |
 | Proving test | `TestLedger_EXEC07` asserts a line ending with a backslash gives `construct_not_allowed` and runs nothing. |
 | Status | open |
