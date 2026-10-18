@@ -106,6 +106,10 @@ func debianStandard() Input {
 			},
 			site("off.test", func(s *state.Site) { s.Enabled, s.PHP = false, "8.4" }),
 		},
+		Overlays: map[string][]byte{
+			p.ApacheOverlay():            []byte("LogLevel info\n"),
+			p.SiteOverlay("forced.test"): []byte("Header set X-Forced 1\n"),
+		},
 	}
 }
 
@@ -564,6 +568,8 @@ func TestLedger_HTE11(t *testing.T) {
 		n, err := layout.Next()
 		must(t, err)
 		in.GenDir = layout.GenDir(n)
+		in.Overlays, err = ReadOverlays(in.Paths, in.Sites)
+		must(t, err)
 		g := mustRender(t, in)
 		_, err = layout.Write(n, g)
 		must(t, err)
@@ -581,13 +587,79 @@ func TestLedger_HTE11(t *testing.T) {
 			if s.HTTPS {
 				want = 2
 			}
-			if got := strings.Count(vhost, `IncludeOptional "`+in.Paths.SiteOverlay(s.Domain)+`"`); got != want {
+			if got := strings.Count(vhost, `IncludeOptional "`+in.abs(siteOverlayRel(s.Domain))+`"`); got != want {
 				t.Fatalf("modification %d: site overlay included %d times, want %d", i, got, want)
+			}
+			if got := strings.Count(vhost, `# Site overlay: "`+in.Paths.SiteOverlay(s.Domain)+`"`); got != want {
+				t.Fatalf("modification %d: site overlay named %d times, want %d", i, got, want)
+			}
+			if !bytes.Equal(g.File(siteOverlayRel(s.Domain)), overlays[in.Paths.SiteOverlay(s.Domain)]) {
+				t.Fatalf("modification %d: no copy of the site overlay", i)
+			}
+		} else if g.File(siteOverlayRel(in.Sites[0].Domain)) != nil {
+			t.Fatalf("modification %d: a disabled site's overlay was copied", i)
+		}
+		httpd := string(g.File("httpd.conf"))
+		if !strings.Contains(httpd, `IncludeOptional "`+in.abs(globalOverlayRel)+`"`) ||
+			!bytes.Equal(g.File(globalOverlayRel), overlays[in.Paths.ApacheOverlay()]) {
+			t.Fatalf("modification %d: the global overlay copy is not included", i)
+		}
+	}
+}
+
+// TestOverlayCopies: a generation holds a copy of each overlay that
+// exists and includes the copies, never the user's files; a missing
+// overlay has no copy, a raw site none at all (LEDGER HTE-71).
+func TestOverlayCopies(t *testing.T) {
+	in := debianStandard()
+	in.Overlays = map[string][]byte{
+		in.Paths.SiteOverlay("forced.test"): []byte("Listen 127.0.0.1:3001\n"),
+		in.Paths.SiteOverlay("proxy.test"):  []byte("Header set X-Raw 1\n"),
+		in.Paths.SiteOverlay("off.test"):    []byte("Header set X-Off 1\n"),
+	}
+	g := mustRender(t, in)
+	var copies []string
+	for _, f := range g.Files {
+		if strings.HasPrefix(f.Path, "overlays/") {
+			copies = append(copies, f.Path)
+		}
+	}
+	if !slices.Equal(copies, []string{"overlays/sites/forced.test.apache.conf"}) {
+		t.Fatalf("copies %v", copies)
+	}
+	for _, f := range g.Files {
+		for _, user := range []string{in.Paths.ApacheOverlay(), in.Paths.SiteOverlay("forced.test"), in.Paths.SiteOverlay("shop.test")} {
+			if strings.Contains(string(f.Data), "IncludeOptional \""+user+"\"") {
+				t.Errorf("%s includes the user's %s", f.Path, user)
 			}
 		}
 	}
-	if !strings.Contains(string(mustRender(t, in).File("httpd.conf")), `IncludeOptional "`+in.Paths.ApacheOverlay()+`"`) {
-		t.Fatal("global overlay not included")
+	if strings.Contains(string(g.File("sites/proxy.test.conf")), "IncludeOptional") {
+		t.Error("the raw site includes an overlay")
+	}
+}
+
+// ReadOverlays reads the overlays that exist, refuses one that is not a
+// regular file, and never writes them.
+func TestReadOverlays(t *testing.T) {
+	root := t.TempDir()
+	p := paths(root, root+"/run")
+	sites := []state.Site{site("a.test", nil), site("b.test", nil), site("off.test", func(s *state.Site) { s.Enabled = false }),
+		{Domain: "raw.test", Kind: state.KindRaw, Enabled: true}}
+	must(t, os.MkdirAll(p.SitesDir(), 0o700))
+	must(t, os.WriteFile(p.SiteOverlay("a.test"), []byte("Header set X-A 1\n"), 0o400))
+	must(t, os.WriteFile(p.SiteOverlay("off.test"), []byte("x\n"), 0o600))
+	must(t, os.WriteFile(p.SiteOverlay("raw.test"), []byte("x\n"), 0o600))
+	must(t, os.WriteFile(p.ApacheOverlay(), nil, 0o600))
+	got, err := ReadOverlays(p, sites)
+	must(t, err)
+	want := map[string][]byte{p.ApacheOverlay(): {}, p.SiteOverlay("a.test"): []byte("Header set X-A 1\n")}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("(-want +got):\n%s", diff)
+	}
+	must(t, os.Mkdir(p.SiteOverlay("b.test"), 0o700))
+	if _, err := ReadOverlays(p, sites); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("a directory overlay: %v", err)
 	}
 }
 
@@ -686,7 +758,7 @@ func TestLedger_HTE34(t *testing.T) {
 			}
 		}
 		for d, v := range managedVhosts(in, g) {
-			if !strings.Contains(v, "    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay below.\n") {
+			if !strings.Contains(v, "    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay named below.\n") {
 				t.Errorf("%s: no managed header", d)
 			}
 		}

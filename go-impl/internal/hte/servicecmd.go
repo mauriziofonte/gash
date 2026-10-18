@@ -164,7 +164,8 @@ func (e *Engine) ServiceReload(ctx context.Context) (*ServiceResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		// The same rendering: the overlays may have changed.
+		// The same rendering (Apache overlays included): the masters
+		// still read their files again, as a reload promises.
 		if !applied.Changed {
 			if applied.Reloaded, err = e.supervisor(v).Reload(ctx); err != nil {
 				return nil, err

@@ -294,6 +294,9 @@ func (e *Engine) applyStack(ctx context.Context, v *env, set state.Settings, sit
 		return out, err
 	}
 	in := e.input(v, m, set, sites)
+	if in.Overlays, err = render.ReadOverlays(v.paths, sites); err != nil {
+		return out, err
+	}
 	if err := e.prepare(v, in); err != nil {
 		return out, err
 	}

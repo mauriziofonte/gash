@@ -466,10 +466,11 @@ func (s *Supervisor) Graceful(ctx context.Context) error {
 	return nil
 }
 
-// Reload makes the running stack read the current generation and the
-// overlays it includes again (they are the user's files, outside the
-// rendering): config test first, then FPM SIGUSR2, then Apache graceful.
-// A failed test changes nothing; it reports whether anything ran.
+// Reload makes the running stack read the current generation again
+// (the Apache overlays are copies inside it; the global PHP overlay
+// directories are read by the FPM masters, outside the rendering):
+// config test first, then FPM SIGUSR2, then Apache graceful. A failed
+// test changes nothing; it reports whether anything ran.
 func (s *Supervisor) Reload(ctx context.Context) (bool, error) {
 	_, m, ok, err := s.Current()
 	if err != nil || !ok {
@@ -488,7 +489,7 @@ func (s *Supervisor) Reload(ctx context.Context) (bool, error) {
 	}
 	if u.apache {
 		if err := s.signalReady(ctx, s.apache(m.Apache), syscall.SIGUSR1); err != nil {
-			return true, hteerr.Newf(hteerr.ReloadFailed, "fix the overlay named in the log, then run gash hte service start", "%v", err)
+			return true, hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs, then gash hte service start", "%v", err)
 		}
 	}
 	return u.any(), nil
