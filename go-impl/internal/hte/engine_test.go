@@ -312,3 +312,85 @@ func TestPHPCommands(t *testing.T) {
 		t.Errorf("overlay after unset:\n%s", data)
 	}
 }
+
+// newLegacyFixture is the Debian fixture plus the hte-cli V2 tree.
+func newLegacyFixture(t *testing.T) *fixture {
+	t.Helper()
+	f := newFixture(t)
+	dir := t.TempDir()
+	for _, src := range []string{filepath.Join(sysroots, "debian"), "../../testdata/hte/legacy/V2"} {
+		if err := os.CopyFS(dir, os.DirFS(src)); err != nil && !errors.Is(err, fs.ErrExist) {
+			t.Fatal(err)
+		}
+	}
+	for _, s := range []string{"http", "https", "forced"} {
+		if err := os.MkdirAll(filepath.Join(dir, "home/dev/sites", s, "public"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sr, err := platform.NewSysroot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.e.Sysroot = sr
+	return f
+}
+
+// migrate --apply decides its root steps from the plan: copies first, the
+// stop and its conditional rollback, the archives, then the FPM units; a
+// blocking vhost leaves only the copies; the stop and archives need --yes.
+func TestMigrateRootSteps(t *testing.T) {
+	ctx := context.Background()
+	f := newLegacyFixture(t)
+	v := f.install(t)
+	set, err := f.e.installed(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// https.test uses PHP 7.4, which the fixture lacks: it blocks the stop.
+	w, err := f.e.planMigration(ctx, v, set, MigrateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.blocking {
+		t.Fatalf("not blocking: %+v", w.plan.Blocking)
+	}
+	if got := w.lines(); len(got) != 1 || !strings.Contains(got[0], "forced.test.key") {
+		t.Errorf("blocked root steps: %v", got)
+	}
+
+	https := "/etc/apache2/sites-available/002-https.test.conf"
+	w, err = f.e.planMigration(ctx, v, set, MigrateOptions{Exclude: []string{https}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, o := range w.ops(nil) {
+		kinds = append(kinds, o.Op+" "+o.Path+o.Name)
+	}
+	want := []string{
+		"copy_key ",
+		"archive_vhost /etc/apache2/sites-available/001-http.test.conf",
+		"archive_vhost /etc/apache2/sites-available/003-forced.test.conf",
+		"archive_pool /etc/php/8.3/fpm/pool.d/http.test.conf",
+		"archive_pool /etc/php/8.3/fpm/pool.d/forced.test.conf",
+		"unit_stop php8.3-fpm",
+	}
+	if !slices.Equal(kinds, want) {
+		t.Errorf("root steps:\n%s\nwant\n%s", strings.Join(kinds, "\n"), strings.Join(want, "\n"))
+	}
+	_, err = f.e.Migrate(ctx, MigrateOptions{Apply: true, Exclude: []string{https}})
+	if code(err) != hteerr.ConfirmationRequired {
+		t.Errorf("apply without --yes: %v", err)
+	}
+	if sites, _, _ := v.store.LoadSites(); len(sites) != 0 {
+		t.Errorf("a refused apply created %d sites", len(sites))
+	}
+	f.e.EUID = 0
+	if _, err := f.e.Migrate(ctx, MigrateOptions{Apply: true}); code(err) != hteerr.RootNotAllowed {
+		t.Errorf("apply as euid 0: %v", err)
+	}
+	if _, err := f.e.Migrate(ctx, MigrateOptions{}); err != nil {
+		t.Errorf("dry run as euid 0: %v", err)
+	}
+}
