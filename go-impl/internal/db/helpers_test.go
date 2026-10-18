@@ -83,8 +83,19 @@ func baseEnv(home string, extra map[string]string) map[string]string {
 // (EPOCHREALTIME pinned after the load: query_time 0µs, never slow).
 func run2x(t *testing.T, cwd string, env map[string]string, fn string, args ...string) result {
 	t.Helper()
+	return run2xScript(t, `unset EPOCHREALTIME; EPOCHREALTIME=1792007131.734850; `, cwd, env, fn, args...)
+}
+
+// run2xLive runs the 2.x function fn in cwd with the real clock.
+func run2xLive(t *testing.T, cwd string, env map[string]string, fn string, args ...string) result {
+	t.Helper()
+	return run2xScript(t, "", cwd, env, fn, args...)
+}
+
+func run2xScript(t *testing.T, clock, cwd string, env map[string]string, fn string, args ...string) result {
+	t.Helper()
 	dir := archive2x(t)
-	script := `source "$1/gash.sh" >/dev/null 2>&1 || exit 98; unset EPOCHREALTIME; EPOCHREALTIME=1792007131.734850; cd "$2" || exit 99; shift 2; "$@"`
+	script := `source "$1/gash.sh" >/dev/null 2>&1 || exit 98; ` + clock + `cd "$2" || exit 99; shift 2; "$@"`
 	cmd := exec.Command("bash", append([]string{"--noprofile", "--norc", "-c", script, "bash", dir, cwd, fn}, args...)...)
 	cmd.Env = []string{}
 	for k, v := range env {
