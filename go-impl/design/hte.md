@@ -446,6 +446,11 @@ Root is used only by:
 * Effect: replaces only the region between `# >>> gash hte >>>` and `# <<<
   gash hte <<<` in `/etc/hosts` (appended when absent), written to a temporary
   file in `/etc`, fsynced, renamed over the original with its owner and mode.
+  When the rename fails with EBUSY or EXDEV (a container bind-mounts
+  `/etc/hosts`), the temporary file is removed and the same validated content
+  is written in place: opened without truncation and without following a
+  symlink, checked to be the file that was read, written, truncated to the
+  new length, fsynced (HTE-69).
   On macOS it then flushes the resolver cache with two fixed commands.
 * Sudoers drop-in `/etc/sudoers.d/gash-hte`, 0440 root:root, one line:
   `<user> ALL=(root) NOPASSWD: /usr/local/libexec/gash/gash-hosts-helper apply`
@@ -713,7 +718,7 @@ the hosts helper, and runs them in a disposable container (`--network none`,
 no systemd) whose system Apache and PHP-FPM serve the hte-cli V2 tree. The
 binary runs as an unprivileged user and is also the root step, through one
 sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
-`/usr/local` and `/var/lib/gash-hte` with their state before install. Docker
-bind-mounts `/etc/hosts`, which the helper's rename cannot replace, so the
-container swaps the mount for a plain file first (`--cap-add SYS_ADMIN`).
-So far it runs on Ubuntu 24.04 with the distro PHP 8.3.
+`/usr/local` and `/var/lib/gash-hte` with their state before install.
+`/etc/hosts` stays Docker's bind mount, so the helper writes it in place
+(`setup.sh` checks that first). So far it runs on Ubuntu 24.04 with the
+distro PHP 8.3.
