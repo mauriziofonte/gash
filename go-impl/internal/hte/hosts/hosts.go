@@ -21,10 +21,11 @@ import (
 	"github.com/google/renameio/v2"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // HelperPath is where install puts the helper (design/hte.md 7.1).
@@ -185,7 +186,7 @@ func Check(sr platform.Sysroot, desired []hostshelper.Entry) Drift {
 
 // Applier writes the block through the helper.
 type Applier struct {
-	Runner proc.Runner
+	Runner runner.Runner
 	Sudo   string // absolute path of sudo
 	Helper string // HelperPath, or a test path
 }
@@ -195,20 +196,22 @@ type Applier struct {
 // without a password; without it the step is privileged_step_required.
 func (a Applier) Apply(ctx context.Context, desired []hostshelper.Entry) error {
 	block := hostshelper.FormatBlock(desired)
-	res, err := a.Runner.Run(ctx, proc.Cmd{Path: a.Sudo, Args: []string{"-n", a.Helper, "apply"}, Stdin: block, Setsid: true})
+	c := child.Cmd(a.Sudo, nil, "-n", a.Helper, "apply")
+	c.Stdin = bytes.NewReader(block)
+	res, err := child.Run(ctx, a.Runner, c)
 	if err != nil {
 		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte doctor", "running the hosts helper: %v", err)
 	}
 	switch {
-	case res.OK():
+	case res.Success():
 		return nil
 	case res.ExitCode == hostshelper.ExitRefused:
-		return hteerr.Newf(hteerr.InvalidState, "", "the hosts helper refused the block: %s", res.Output())
+		return hteerr.Newf(hteerr.InvalidState, "", "the hosts helper refused the block: %s", child.Output(res))
 	case strings.Contains(string(res.Stderr), "gash-hosts-helper:"):
-		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte doctor", "the hosts helper failed: %s", res.Output())
+		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte doctor", "the hosts helper failed: %s", child.Output(res))
 	}
 	return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte install: it installs the helper and its sudoers line",
-		"sudo -n %s apply: %s", a.Helper, res.Output())
+		"sudo -n %s apply: %s", a.Helper, child.Output(res))
 }
 
 // WindowsLines are the lines to add to C:\Windows\System32\drivers\etc\hosts
@@ -227,17 +230,18 @@ const windowsScript = `$input | ForEach-Object { $n = $_.Trim(); if ($n) { try {
 
 // WindowsUnresolved asks Windows, through WSL interop, which names it
 // cannot resolve.
-func WindowsUnresolved(ctx context.Context, r proc.Runner, powershell string, names []string) ([]string, error) {
+func WindowsUnresolved(ctx context.Context, r runner.Runner, powershell string, names []string) ([]string, error) {
 	if len(names) == 0 {
 		return nil, nil
 	}
-	res, err := r.Run(ctx, proc.Cmd{Path: powershell, Args: []string{"-NoProfile", "-NonInteractive", "-Command", windowsScript},
-		Stdin: []byte(strings.Join(names, "\n") + "\n"), Setsid: true})
+	c := child.Cmd(powershell, nil, "-NoProfile", "-NonInteractive", "-Command", windowsScript)
+	c.Stdin = strings.NewReader(strings.Join(names, "\n") + "\n")
+	res, err := child.Run(ctx, r, c)
 	if err != nil {
 		return nil, err
 	}
-	if !res.OK() {
-		return nil, errors.New("powershell.exe: " + res.Output())
+	if !res.Success() {
+		return nil, errors.New("powershell.exe: " + child.Output(res))
 	}
 	resolved := map[string]bool{}
 	for _, line := range strings.Split(string(res.Stdout), "\n") {

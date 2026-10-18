@@ -19,15 +19,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/hte/rootops"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Check statuses.
@@ -242,8 +243,8 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 	if !e.Sysroot.Exists(rootops.SudoersPath) {
 		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash hte install")
 	} else if sudo := e.find("sudo"); sudo != "" {
-		res, err := e.Runner.Run(ctx, rootopsListCmd(sudo))
-		if err != nil || !res.OK() {
+		res, err := child.Run(ctx, e.Runner, rootopsListCmd(sudo))
+		if err != nil || !res.Success() {
 			r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash hte install")
 		} else {
 			r.add("sudoers", CheckOK, rootops.SudoersPath, "")
@@ -546,6 +547,8 @@ func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r 
 
 // rootopsListCmd asks sudo, without a password, whether the drop-in
 // allows the helper's check command.
-func rootopsListCmd(sudo string) proc.Cmd {
-	return proc.Cmd{Path: sudo, Args: []string{"-n", "-l", rootops.HelperPath, "check"}, Setsid: true, Timeout: 10 * time.Second}
+func rootopsListCmd(sudo string) runner.Cmd {
+	c := child.Cmd(sudo, nil, "-n", "-l", rootops.HelperPath, "check")
+	c.Timeout = 10 * time.Second
+	return c
 }

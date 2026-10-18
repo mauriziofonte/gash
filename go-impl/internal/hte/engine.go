@@ -20,14 +20,15 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
 	"github.com/mauriziofonte/gash/internal/hte/certs"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/render"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Engine holds the process facts every command needs. The CLI fills it
@@ -46,8 +47,8 @@ type Engine struct {
 	// the autostart units run it. Helper is the hosts helper install copies
 	// (gash-hosts-helper next to Self).
 	Self, Helper string
-	Runner       proc.Runner
-	Starter      proc.Starter
+	Runner       runner.Runner
+	Starter      runner.SessionStarter
 	Procs        service.Procs
 	// Interactive allows sudo to prompt (a terminal, not headless).
 	Interactive bool
@@ -103,12 +104,14 @@ func (e *Engine) resolve() (*env, error) {
 // probe runs a system binary with fixed arguments for discovery.
 func (e *Engine) probe(ctx context.Context) discover.Probe {
 	return func(bin string, args ...string) (string, error) {
-		res, err := e.Runner.Run(ctx, proc.Cmd{Path: bin, Args: args, Timeout: 20 * time.Second, Setsid: true})
+		c := child.Cmd(bin, nil, args...)
+		c.Timeout = 20 * time.Second
+		res, err := child.Run(ctx, e.Runner, c)
 		if err != nil {
 			return "", err
 		}
-		if !res.OK() {
-			return "", fmt.Errorf("%s %s: exit %d: %s", bin, strings.Join(args, " "), res.ExitCode, res.Output())
+		if !res.Success() {
+			return "", fmt.Errorf("%s %s: exit %d: %s", bin, strings.Join(args, " "), res.ExitCode, child.Output(res))
 		}
 		return string(res.Stdout), nil
 	}
@@ -191,17 +194,17 @@ func (e *Engine) input(v *env, m *machine, set state.Settings, sites []state.Sit
 func (e *Engine) supervisor(v *env) *service.Supervisor {
 	return &service.Supervisor{
 		Runner: e.Runner, Layout: render.Layout{Dir: v.paths.RenderDir()}, Procs: e.Procs,
-		Env: proc.BaseEnv(v.dirs.Home), Dial: e.Dial, Sleep: e.Sleep, StartTimeout: e.StartTimeout,
+		Env: child.BaseEnv(v.dirs.Home), Dial: e.Dial, Sleep: e.Sleep, StartTimeout: e.StartTimeout,
 	}
 }
 
 func (e *Engine) certs(v *env) certs.Manager {
-	return certs.Manager{Runner: e.Runner, OpenSSL: e.find("openssl"), Paths: v.paths, Env: proc.BaseEnv(v.dirs.Home), Now: e.Now}
+	return certs.Manager{Runner: e.Runner, OpenSSL: e.find("openssl"), Paths: v.paths, Env: child.BaseEnv(v.dirs.Home), Now: e.Now}
 }
 
 // find returns a system binary in the base PATH, as seen through the
 // sysroot ("" when absent).
-func (e *Engine) find(name string) string { return proc.Find(name, e.Sysroot.IsRegular) }
+func (e *Engine) find(name string) string { return child.Find(name, e.Sysroot.IsRegular) }
 
 // prepare creates the directories a generation names: the runtime
 // directory (0700, owner checked), the logs, the per-site log

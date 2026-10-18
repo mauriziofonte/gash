@@ -12,10 +12,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 const sysroots = "../../testdata/hte/sysroot"
@@ -25,7 +26,7 @@ const sysroots = "../../testdata/hte/sysroot"
 // every config test passes unless failTest names the binary.
 type fixture struct {
 	e        *Engine
-	run      *proc.Fake
+	run      *runner.Fake
 	home     string
 	failTest string
 	env      map[string]string
@@ -42,21 +43,22 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	f := &fixture{home: t.TempDir()}
-	f.run = &proc.Fake{Handler: func(c proc.Cmd) (proc.Result, error) {
+	f.run = child.Fake(t, func(c runner.Call) runner.Expect {
+		bin, args := filepath.Base(c.Argv[0]), c.Argv[1:]
 		switch {
-		case strings.HasPrefix(filepath.Base(c.Path), "php-fpm") && slices.Equal(c.Args, []string{"-v"}):
-			v := strings.TrimPrefix(filepath.Base(c.Path), "php-fpm")
-			return proc.Result{Stdout: []byte("PHP " + v + ".6 (fpm-fcgi) (built: Oct  1 2026 10:00:00)\n")}, nil
-		case strings.HasPrefix(filepath.Base(c.Path), "php-fpm") && slices.Equal(c.Args, []string{"-i"}):
-			v := strings.TrimPrefix(filepath.Base(c.Path), "php-fpm")
-			return proc.Result{Stdout: []byte("Scan this dir for additional .ini files => /etc/php/" + v + "/fpm/conf.d\n")}, nil
-		case filepath.Base(c.Path) == "apache2" && slices.Equal(c.Args, []string{"-l"}):
-			return proc.Result{Stdout: []byte("Compiled in modules:\n  core.c\n  mod_so.c\n  mod_watchdog.c\n  http_core.c\n  mod_log_config.c\n  mod_logio.c\n  mod_version.c\n  mod_unixd.c\n")}, nil
-		case len(c.Args) > 0 && c.Args[0] == "-t" && f.failTest != "" && filepath.Base(c.Path) == f.failTest:
-			return proc.Result{ExitCode: 1, Stderr: []byte("AH00526: Syntax error on line 1")}, nil
+		case strings.HasPrefix(bin, "php-fpm") && slices.Equal(args, []string{"-v"}):
+			v := strings.TrimPrefix(bin, "php-fpm")
+			return runner.Expect{Stdout: "PHP " + v + ".6 (fpm-fcgi) (built: Oct  1 2026 10:00:00)\n"}
+		case strings.HasPrefix(bin, "php-fpm") && slices.Equal(args, []string{"-i"}):
+			v := strings.TrimPrefix(bin, "php-fpm")
+			return runner.Expect{Stdout: "Scan this dir for additional .ini files => /etc/php/" + v + "/fpm/conf.d\n"}
+		case bin == "apache2" && slices.Equal(args, []string{"-l"}):
+			return runner.Expect{Stdout: "Compiled in modules:\n  core.c\n  mod_so.c\n  mod_watchdog.c\n  http_core.c\n  mod_log_config.c\n  mod_logio.c\n  mod_version.c\n  mod_unixd.c\n"}
+		case len(args) > 0 && args[0] == "-t" && f.failTest != "" && bin == f.failTest:
+			return runner.Expect{Status: 1, Stderr: "AH00526: Syntax error on line 1"}
 		}
-		return proc.Result{}, nil
-	}}
+		return runner.Expect{}
+	})
 	f.env = map[string]string{
 		"HOME": f.home, "XDG_RUNTIME_DIR": filepath.Join(f.home, "run"),
 		// Who the user is never comes from these (LEDGER HTE-19).
@@ -156,7 +158,7 @@ func TestLedger_HTE19(t *testing.T) {
 		t.Errorf("a refused command wrote under HOME: %v", entries)
 	}
 	if len(f.run.Calls()) != 0 {
-		t.Errorf("a refused command ran %v", f.run.Lines())
+		t.Errorf("a refused command ran %v", child.Lines(f.run.Calls()))
 	}
 	if he, _ := hteerr.As(f.e.CheckIdentity("site list")); he == nil || he.Action() != hteerr.Fatal {
 		t.Errorf("root_not_allowed is not FATAL: %v", he)

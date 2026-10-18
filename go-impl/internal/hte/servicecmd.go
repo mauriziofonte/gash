@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 )
@@ -30,7 +30,7 @@ func (e *Engine) systemdUnit(v *env, set state.Settings) bool {
 // userEnv is the environment of systemctl --user: the base one plus what
 // it needs to reach the user manager.
 func (e *Engine) userEnv(v *env) []string {
-	out := proc.BaseEnv(v.dirs.Home)
+	out := child.BaseEnv(v.dirs.Home)
 	if v.dirs.RuntimeDir != "" {
 		out = append(out, "XDG_RUNTIME_DIR="+v.dirs.RuntimeDir)
 	}
@@ -45,13 +45,14 @@ func (e *Engine) systemctlUser(ctx context.Context, v *env, args ...string) erro
 	if bin == "" {
 		return hteerr.New(hteerr.PlatformUnsupported, "systemctl is not installed", "")
 	}
-	res, err := e.Runner.Run(ctx, proc.Cmd{Path: bin, Args: append([]string{"--user"}, args...), Env: e.userEnv(v), Setsid: true,
-		Timeout: 3 * time.Minute})
+	c := child.Cmd(bin, e.userEnv(v), append([]string{"--user"}, args...)...)
+	c.Timeout = 3 * time.Minute
+	res, err := child.Run(ctx, e.Runner, c)
 	if err != nil {
 		return err
 	}
-	if !res.OK() {
-		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "systemctl --user %v: %s", args, res.Output())
+	if !res.Success() {
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "systemctl --user %v: %s", args, child.Output(res))
 	}
 	return nil
 }

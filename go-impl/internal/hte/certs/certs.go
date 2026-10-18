@@ -29,9 +29,10 @@ import (
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 const (
@@ -48,10 +49,10 @@ const (
 
 // Manager issues, inspects and removes the certificates of the sites.
 type Manager struct {
-	Runner  proc.Runner
+	Runner  runner.Runner
 	OpenSSL string      // absolute path of the openssl binary
 	Paths   state.Paths // where certs/<domain>/ lives
-	Env     []string    // the child environment; nil means proc.BaseEnv("")
+	Env     []string    // the child environment; nil means child.BaseEnv("")
 	Now     func() time.Time
 }
 
@@ -102,17 +103,17 @@ func opensslConfig(names []string) []byte {
 	return b.Bytes()
 }
 
-func (m Manager) run(ctx context.Context, args ...string) (proc.Result, error) {
+func (m Manager) run(ctx context.Context, args ...string) (runner.Result, error) {
 	if m.OpenSSL == "" {
-		return proc.Result{}, hteerr.New(hteerr.PlatformUnsupported, "openssl is not installed",
+		return runner.Result{}, hteerr.New(hteerr.PlatformUnsupported, "openssl is not installed",
 			"install openssl with the system package manager")
 	}
-	res, err := m.Runner.Run(ctx, proc.Cmd{Path: m.OpenSSL, Args: args, Env: m.Env, Setsid: true})
+	res, err := child.Run(ctx, m.Runner, child.Cmd(m.OpenSSL, m.Env, args...))
 	if err != nil {
 		return res, err
 	}
-	if !res.OK() {
-		return res, fmt.Errorf("openssl %s: %s", args[0], res.Output())
+	if !res.Success() {
+		return res, fmt.Errorf("openssl %s: %s", args[0], child.Output(res))
 	}
 	return res, nil
 }

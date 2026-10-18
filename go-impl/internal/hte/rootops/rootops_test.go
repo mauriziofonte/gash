@@ -20,11 +20,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 const helperBytes = "#!helper binary\n"
@@ -98,14 +99,21 @@ func (f *fixture) read(sys string) string {
 	return string(data)
 }
 
-// Run plays the tools the root step runs.
-func (f *fixture) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
+// answer plays the tools the root step runs.
+func (f *fixture) answer(call runner.Call) runner.Expect {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	c := struct {
+		Path string
+		Args []string
+	}{call.Argv[0], call.Argv[1:]}
+	if !call.Setsid {
+		f.t.Errorf("%q without a new session", call.Argv)
+	}
 	line := filepath.Base(c.Path) + " " + strings.Join(c.Args, " ")
 	f.lines = append(f.lines, line)
 	if f.failOn != "" && strings.HasPrefix(line, f.failOn) {
-		return proc.Result{ExitCode: 1, Stderr: []byte("simulated failure")}, nil
+		return runner.Expect{Status: 1, Stderr: "simulated failure"}
 	}
 	switch filepath.Base(c.Path) {
 	case "visudo":
@@ -122,7 +130,7 @@ func (f *fixture) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 		switch c.Args[1] {
 		case "status":
 			if !f.active[c.Args[0]] {
-				return proc.Result{ExitCode: 3}, nil
+				return runner.Expect{Status: 3}
 			}
 		case "stop":
 			f.active[c.Args[0]] = false
@@ -139,18 +147,18 @@ func (f *fixture) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 			os.Rename(filepath.Join(dir, from+"01"+c.Args[0]), filepath.Join(dir, to+"01"+c.Args[0]))
 		}
 	case "openssl":
-		if c.StdinFile == nil || c.Credential == nil || c.Credential.UID != 1000 || c.Stdin != nil {
-			f.t.Errorf("openssl without the open key or the user's credential: %+v", c)
+		if len(call.Stdin) == 0 || call.Credential == nil || call.Credential.UID != 1000 || call.Credential.GID != 1000 ||
+			!slices.Contains(call.Env, "HOME=/home/me") {
+			f.t.Errorf("openssl without the open key or the user's credential: %+v", call)
 		}
-		data, _ := io.ReadAll(c.StdinFile)
-		os.WriteFile(c.Args[2], data, 0o600)
+		os.WriteFile(c.Args[2], call.Stdin, 0o600)
 	}
-	return proc.Result{}, nil
+	return runner.Expect{}
 }
 
 func (f *fixture) env() Env {
 	return Env{
-		Sysroot: f.sr, Runner: f, Euid: 0,
+		Sysroot: f.sr, Runner: child.Fake(f.t, f.answer), Euid: 0,
 		Getenv: func(k string) string {
 			return map[string]string{"SUDO_USER": "me", "SUDO_UID": "1000", "SUDO_GID": "1000"}[k]
 		},
@@ -170,48 +178,16 @@ func mustLayout(t *testing.T) legacy.Layout {
 	return l
 }
 
-// pipeStarter runs Serve in-process behind a Session.
-type pipeStarter struct{ env Env }
-
-type pipeSession struct {
-	stdin  io.WriteCloser
-	stdout io.Reader
-	done   chan error
-}
-
-func (p *pipeSession) Stdin() io.WriteCloser { return p.stdin }
-func (p *pipeSession) Stdout() io.Reader     { return p.stdout }
-func (p *pipeSession) Wait() (proc.Result, error) {
-	if err := <-p.done; err != nil {
-		return proc.Result{ExitCode: 1, Stderr: []byte(err.Error())}, nil
-	}
-	return proc.Result{}, nil
-}
-
-func (s pipeStarter) Start(ctx context.Context, _ proc.Cmd) (proc.Session, error) {
-	// Kernel pipes, buffered as sudo's are (io.Pipe is not).
-	inR, inW, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	ps := &pipeSession{stdin: inW, stdout: outR, done: make(chan error, 1)}
-	go func() {
-		err := Serve(ctx, inR, outW, s.env)
-		outW.Close()
-		io.Copy(io.Discard, inR)
-		inR.Close()
-		ps.done <- err
-	}()
-	return ps, nil
+// pipeStarter runs Serve in-process behind a session of the runner Fake.
+func pipeStarter(t *testing.T, env Env) runner.SessionStarter {
+	return child.Fake(t, func(runner.Call) runner.Expect {
+		return runner.Expect{Serve: func(in io.Reader, out io.Writer) error { return Serve(context.Background(), in, out, env) }}
+	})
 }
 
 func session(t *testing.T, env Env, plan []Op) *Client {
 	t.Helper()
-	c, err := Open(context.Background(), pipeStarter{env}, SudoCmd("/usr/bin/sudo", "/usr/local/bin/gash", false), plan)
+	c, err := Open(context.Background(), pipeStarter(t, env), SudoCmd("/usr/bin/sudo", "/usr/local/bin/gash", false), plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +444,7 @@ func TestLedger_HTE17(t *testing.T) {
 		{{ID: 1, Op: OpArchiveVhost, Path: "/etc/apache2/../shadow.conf"}},
 		{{ID: 1, Op: OpHostsSnapshot}, {ID: 1, Op: OpHostsSnapshot}},
 	} {
-		if _, err := Open(context.Background(), pipeStarter{f.env()}, proc.Cmd{Path: "/usr/bin/sudo"}, bad); hteerr.CodeOf(err) != hteerr.InvalidState {
+		if _, err := Open(context.Background(), pipeStarter(t, f.env()), runner.Cmd{Path: "/usr/bin/sudo"}, bad); hteerr.CodeOf(err) != hteerr.InvalidState {
 			t.Errorf("%+v: %v", bad, err)
 		}
 	}
@@ -478,14 +454,14 @@ func TestIdentity(t *testing.T) {
 	f := newFixture(t)
 	env := f.env()
 	env.Euid = 1000
-	if _, err := Open(context.Background(), pipeStarter{env}, proc.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
+	if _, err := Open(context.Background(), pipeStarter(t, env), runner.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
 		t.Fatalf("not root: %v", err)
 	}
 	env = f.env()
 	env.Getenv = func(k string) string {
 		return map[string]string{"SUDO_USER": "root", "SUDO_UID": "0", "SUDO_GID": "0"}[k]
 	}
-	if _, err := Open(context.Background(), pipeStarter{env}, proc.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
+	if _, err := Open(context.Background(), pipeStarter(t, env), runner.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
 		t.Fatalf("root as the user: %v", err)
 	}
 }

@@ -18,16 +18,19 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/render"
 	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// fakeStack plays Apache and PHP-FPM: it is the runner of their commands
-// and the process table, and it writes PID files and log lines the way
-// the real masters do (verified in the Ubuntu 24.04 container).
+// fakeStack plays Apache and PHP-FPM: it answers their commands through
+// its runner Fake, is the process table, and writes PID files and log
+// lines the way the real masters do (verified in the Ubuntu 24.04
+// container).
 type fakeStack struct {
+	*runner.Fake
 	t      *testing.T
 	mu     sync.Mutex
 	procs  map[int]string // pid -> command line
@@ -42,7 +45,9 @@ type fakeStack struct {
 }
 
 func newStack(t *testing.T) *fakeStack {
-	return &fakeStack{t: t, procs: map[int]string{}, next: 100}
+	f := &fakeStack{t: t, procs: map[int]string{}, next: 100}
+	f.Fake = child.Fake(t, f.answer)
+	return f
 }
 
 func (f *fakeStack) event(format string, args ...any) {
@@ -91,9 +96,17 @@ func (f *fakeStack) spawn(cmdline, pidFile string) int {
 	return f.next
 }
 
-func (f *fakeStack) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
+func (f *fakeStack) answer(call runner.Call) runner.Expect {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	c := struct {
+		Path string
+		Args []string
+		Env  []string
+	}{call.Argv[0], call.Argv[1:], call.Env}
+	if !call.Setsid {
+		f.t.Errorf("%q without a new session", call.Argv)
+	}
 	apache := strings.HasSuffix(c.Path, "apache2")
 	switch {
 	case c.Args[0] == "-t":
@@ -103,18 +116,18 @@ func (f *fakeStack) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 		}
 		f.event("test %s", name)
 		if f.failTest == name {
-			return proc.Result{ExitCode: 1, Stderr: []byte("AH00526: Syntax error on line 3")}, nil
+			return runner.Expect{Status: 1, Stderr: "AH00526: Syntax error on line 3"}
 		}
 		if !apache && !slices.ContainsFunc(c.Env, func(e string) bool { return strings.HasPrefix(e, "PHP_INI_SCAN_DIR=") }) {
 			f.t.Errorf("fpm -t without PHP_INI_SCAN_DIR: %v", c.Env)
 		}
-		return proc.Result{}, nil
+		return runner.Expect{}
 	case apache:
 		m := f.manifestOf(c.Args[1])
 		f.event("start apache")
 		f.spawn(c.Path+" "+strings.Join(c.Args, " "), m.Apache.PidFile)
 		appendLog(f.t, m.Apache.ErrorLog, "AH00489: Apache/2.4.58 configured -- resuming normal operations")
-		return proc.Result{}, nil
+		return runner.Expect{}
 	default:
 		m := f.manifestOf(c.Args[1])
 		v := filepath.Base(filepath.Dir(c.Args[1]))
@@ -125,7 +138,7 @@ func (f *fakeStack) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 		}
 		f.spawn("php-fpm: master process ("+c.Args[1]+")", fm.PidFile)
 		appendLog(f.t, fm.ErrorLog, "NOTICE: ready to handle connections")
-		return proc.Result{}, nil
+		return runner.Expect{}
 	}
 }
 
@@ -437,12 +450,12 @@ func TestStartFailureNamesTheCause(t *testing.T) {
 	if _, err := s.Apply(context.Background(), input(p, site("a.test", "8.3"))); err != nil {
 		t.Fatal(err)
 	}
-	s.Runner = &proc.Fake{Handler: func(c proc.Cmd) (proc.Result, error) {
-		if strings.HasSuffix(c.Path, "apache2") {
-			return proc.Result{ExitCode: 1, Stderr: []byte("(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:8080")}, nil
+	s.Runner = child.Fake(t, func(c runner.Call) runner.Expect {
+		if strings.HasSuffix(c.Argv[0], "apache2") {
+			return runner.Expect{Status: 1, Stderr: "(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:8080"}
 		}
-		return f.Run(context.Background(), c)
-	}}
+		return f.answer(c)
+	})
 	if err := s.Start(context.Background()); hteerr.CodeOf(err) != hteerr.PortInUse {
 		t.Fatalf("%v", err)
 	}

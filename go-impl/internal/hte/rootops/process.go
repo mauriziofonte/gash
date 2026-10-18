@@ -11,8 +11,8 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // ProcessEnv is the root side's Env of the running process (gash hte
@@ -26,7 +26,7 @@ func ProcessEnv() Env {
 	}
 	layout, _ := legacy.LayoutFor(o.Family, prefix)
 	return Env{
-		Sysroot: sr, Runner: proc.OS{}, Getenv: os.Getenv, Euid: os.Geteuid(), Now: time.Now, OS: o, Layout: layout,
+		Sysroot: sr, Runner: runner.Exec{}, Getenv: os.Getenv, Euid: os.Geteuid(), Now: time.Now, OS: o, Layout: layout,
 		Systemd: sr.IsDir("/run/systemd/system"),
 		Groups: func(name string) ([]uint32, error) {
 			u, err := user.Lookup(name)

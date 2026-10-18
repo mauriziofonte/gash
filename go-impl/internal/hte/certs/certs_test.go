@@ -18,9 +18,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 func paths(t *testing.T) state.Paths {
@@ -34,11 +35,21 @@ func paths(t *testing.T) state.Paths {
 // skip without one. openssl works only inside the temporary directory.
 func manager(t *testing.T) Manager {
 	t.Helper()
-	bin := proc.Find("openssl", func(p string) bool { _, err := os.Stat(p); return err == nil })
+	bin := child.Find("openssl", func(p string) bool { _, err := os.Stat(p); return err == nil })
 	if bin == "" {
 		t.Skip("no openssl")
 	}
-	return Manager{Runner: proc.OS{}, OpenSSL: bin, Paths: paths(t)}
+	return Manager{Runner: runner.Exec{}, OpenSSL: bin, Paths: paths(t)}
+}
+
+// failReq runs openssl for real, except that req fails.
+type failReq struct{ runner.Exec }
+
+func (f failReq) Run(ctx context.Context, c runner.Cmd) (runner.Result, error) {
+	if c.Args[0] == "req" {
+		return runner.Result{ExitCode: 1, Stderr: []byte("req: boom")}, nil
+	}
+	return f.Exec.Run(ctx, c)
 }
 
 func site(domain string, aliases ...string) state.Site {
@@ -163,12 +174,7 @@ func TestLedger_HTE40(t *testing.T) {
 	// temporary directory.
 	before, _ := os.ReadFile(m.Paths.CertFile("shop.test"))
 	failing := m
-	failing.Runner = &proc.Fake{Handler: func(c proc.Cmd) (proc.Result, error) {
-		if c.Args[0] == "req" {
-			return proc.Result{ExitCode: 1, Stderr: []byte("req: boom")}, nil
-		}
-		return proc.OS{}.Run(context.Background(), c)
-	}}
+	failing.Runner = failReq{}
 	if err := failing.Issue(ctx, site("shop.test")); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("failure: %v", err)
 	}
@@ -323,30 +329,30 @@ func TestCheck(t *testing.T) {
 // TestOpenSSLArgv: no key material and no secret in any argv, the child
 // environment is the base one, and openssl never prompts (new session).
 func TestOpenSSLArgv(t *testing.T) {
-	f := &proc.Fake{Handler: func(c proc.Cmd) (proc.Result, error) {
-		if c.Args[0] == "req" {
-			return proc.Result{ExitCode: 1, Stderr: []byte("stop here")}, nil
+	f := child.Fake(t, func(c runner.Call) runner.Expect {
+		if c.Argv[1] == "req" {
+			return runner.Expect{Status: 1, Stderr: "stop here"}
 		}
-		return proc.Result{}, nil
-	}}
+		return runner.Expect{}
+	})
 	m := Manager{Runner: f, OpenSSL: "/usr/bin/openssl", Paths: paths(t)}
 	_ = m.Issue(context.Background(), site("a.test"))
 	calls := f.Calls()
 	if len(calls) != 2 {
-		t.Fatalf("calls %v", f.Lines())
+		t.Fatalf("calls %v", child.Lines(calls))
 	}
 	for _, c := range calls {
-		if !c.Setsid || c.Env != nil || c.Stdin != nil {
-			t.Errorf("%s: setsid %v env %v", c, c.Setsid, c.Env)
+		if !c.Setsid || !slices.Equal(c.Env, child.BaseEnv("")) || c.Stdin != nil {
+			t.Errorf("%q: setsid %v env %v", c.Argv, c.Setsid, c.Env)
 		}
-		for _, a := range c.Args {
+		for _, a := range c.Argv {
 			if strings.HasPrefix(a, "pass:") || strings.Contains(a, "PRIVATE") {
-				t.Errorf("%s: secret in argv", c)
+				t.Errorf("%q: secret in argv", c.Argv)
 			}
 		}
 	}
-	if !slices.Equal(calls[0].Args[:5], []string{"genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256"}) {
-		t.Fatalf("genpkey: %s", calls[0])
+	if !slices.Equal(calls[0].Argv[1:6], []string{"genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256"}) {
+		t.Fatalf("genpkey: %q", calls[0].Argv)
 	}
 	if m := (Manager{Runner: f, Paths: paths(t)}); hteerr.CodeOf(m.Issue(context.Background(), site("a.test"))) != hteerr.PlatformUnsupported {
 		t.Fatal("no openssl accepted")
@@ -386,8 +392,10 @@ func TestCopiedPair(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer keyIn.Close()
-	if res, err := (proc.OS{}).Run(ctx, proc.Cmd{Path: m.OpenSSL, Args: []string{"pkey", "-out", tmp}, StdinFile: keyIn, Setsid: true}); err != nil || !res.OK() {
-		t.Fatalf("%v %s", err, res.Output())
+	c := child.Cmd(m.OpenSSL, nil, "pkey", "-out", tmp)
+	c.Stdin = keyIn
+	if res, err := child.Run(ctx, runner.Exec{}, c); err != nil || !res.Success() {
+		t.Fatalf("%v %s", err, child.Output(res))
 	}
 	if err := m.Finish(ctx, "legacy.test", certPEM, tmp); err != nil {
 		t.Fatal(err)

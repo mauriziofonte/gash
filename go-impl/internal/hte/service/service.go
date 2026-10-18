@@ -25,9 +25,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/render"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Log markers, verified on Apache 2.4.58 and PHP-FPM 8.3 (Ubuntu 24.04):
@@ -60,10 +61,10 @@ const (
 // that changes something, and create the runtime and log directories the
 // generation names before Apply and Start.
 type Supervisor struct {
-	Runner proc.Runner
+	Runner runner.Runner
 	Layout render.Layout
 	Procs  Procs
-	// Env is the environment of the masters (proc.BaseEnv(home)); FPM
+	// Env is the environment of the masters (child.BaseEnv(home)); FPM
 	// masters get PHP_INI_SCAN_DIR on top of it.
 	Env []string
 	// Dial reports whether addr accepts connections; nil dials for real.
@@ -270,13 +271,12 @@ func (s *Supervisor) startApache(ctx context.Context, a render.ApacheMaster) err
 		return err
 	}
 	offset := logSize(m.log)
-	res, err := s.Runner.Run(ctx, proc.Cmd{Path: a.Binary, Args: []string{"-f", s.currentPath(a.Config), "-k", "start"},
-		Env: s.Env, Setsid: true})
+	res, err := child.Run(ctx, s.Runner, child.Cmd(a.Binary, s.Env, "-f", s.currentPath(a.Config), "-k", "start"))
 	if err != nil {
 		return fmt.Errorf("apache: %w", err)
 	}
-	if !res.OK() {
-		return fmt.Errorf("apache did not start: %s", firstNonEmpty(res.Output(), lastLines(logSince(m.log, offset), 3)))
+	if !res.Success() {
+		return fmt.Errorf("apache did not start: %s", firstNonEmpty(child.Output(res), lastLines(logSince(m.log, offset), 3)))
 	}
 	return s.waitReady(ctx, m, offset)
 }
@@ -291,7 +291,7 @@ func firstNonEmpty(a, b string) string {
 func (s *Supervisor) fpmEnv(f render.FPMMaster) []string {
 	env := slices.Clone(s.Env)
 	if env == nil {
-		env = proc.BaseEnv("")
+		env = child.BaseEnv("")
 	}
 	return append(env, f.Env()...)
 }
@@ -302,13 +302,12 @@ func (s *Supervisor) startFPM(ctx context.Context, f render.FPMMaster) error {
 		return err
 	}
 	offset := logSize(m.log)
-	res, err := s.Runner.Run(ctx, proc.Cmd{Path: f.Binary, Args: []string{"--fpm-config", s.currentPath(f.Config), "-c", f.INI},
-		Env: s.fpmEnv(f), Setsid: true})
+	res, err := child.Run(ctx, s.Runner, child.Cmd(f.Binary, s.fpmEnv(f), "--fpm-config", s.currentPath(f.Config), "-c", f.INI))
 	if err != nil {
 		return fmt.Errorf("%s: %w", m.name, err)
 	}
-	if !res.OK() {
-		return fmt.Errorf("%s did not start: %s", m.name, firstNonEmpty(res.Output(), lastLines(logSince(m.log, offset), 3)))
+	if !res.Success() {
+		return fmt.Errorf("%s did not start: %s", m.name, firstNonEmpty(child.Output(res), lastLines(logSince(m.log, offset), 3)))
 	}
 	return s.waitReady(ctx, m, offset)
 }
@@ -558,24 +557,22 @@ func (s *Supervisor) allFPM(m *render.Manifest) []render.FPMMaster {
 // Test runs the config tests of the generation in dir: httpd -t, and
 // php-fpm -t for each master with its php.ini and PHP_INI_SCAN_DIR.
 func (s *Supervisor) Test(ctx context.Context, dir string, m *render.Manifest) error {
-	res, err := s.Runner.Run(ctx, proc.Cmd{Path: m.Apache.Binary, Args: []string{"-t", "-f", filepath.Join(dir, m.Apache.Config)},
-		Env: s.Env, Setsid: true})
+	res, err := child.Run(ctx, s.Runner, child.Cmd(m.Apache.Binary, s.Env, "-t", "-f", filepath.Join(dir, m.Apache.Config)))
 	if err != nil {
 		return err
 	}
-	if !res.OK() {
+	if !res.Success() {
 		return hteerr.Newf(hteerr.ConfigTestFailed, "fix the site state or the overlay named in the message",
-			"apache: %s", res.Output())
+			"apache: %s", child.Output(res))
 	}
 	for _, f := range m.FPM {
-		res, err := s.Runner.Run(ctx, proc.Cmd{Path: f.Binary,
-			Args: []string{"-t", "--fpm-config", filepath.Join(dir, f.Config), "-c", f.INI}, Env: s.fpmEnv(f), Setsid: true})
+		res, err := child.Run(ctx, s.Runner, child.Cmd(f.Binary, s.fpmEnv(f), "-t", "--fpm-config", filepath.Join(dir, f.Config), "-c", f.INI))
 		if err != nil {
 			return err
 		}
-		if !res.OK() {
+		if !res.Success() {
 			return hteerr.Newf(hteerr.ConfigTestFailed, "fix the php_ini values or the global PHP overlay named in the message",
-				"php-fpm %s: %s", f.Version, res.Output())
+				"php-fpm %s: %s", f.Version, child.Output(res))
 		}
 	}
 	return nil

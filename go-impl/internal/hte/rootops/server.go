@@ -24,17 +24,18 @@ import (
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Env is the root side's view of the system.
 type Env struct {
 	Sysroot platform.Sysroot // the real root; a fixture tree in tests
-	Runner  proc.Runner
+	Runner  runner.Runner
 	Getenv  func(string) string // SUDO_USER, SUDO_UID, SUDO_GID
 	Euid    int
 	Now     func() time.Time
@@ -216,19 +217,21 @@ func (s *server) exec(ctx context.Context, o Op) ([]string, error) {
 func (s *server) host(sys string) string { return s.env.Sysroot.Path(sys) }
 
 func (s *server) find(name string) (string, error) {
-	p := proc.Find(name, s.env.Sysroot.Exists)
+	p := child.Find(name, s.env.Sysroot.Exists)
 	if p == "" {
 		return "", hteerr.Newf(hteerr.PrivilegedStepRequired, "install "+name, "%s is not installed", name)
 	}
 	return p, nil
 }
 
-func (s *server) cmd(ctx context.Context, name string, args ...string) (proc.Result, error) {
+func (s *server) cmd(ctx context.Context, name string, args ...string) (runner.Result, error) {
 	bin, err := s.find(name)
 	if err != nil {
-		return proc.Result{}, err
+		return runner.Result{}, err
 	}
-	return s.env.Runner.Run(ctx, proc.Cmd{Path: bin, Args: args, Setsid: true, Timeout: 2 * time.Minute})
+	c := child.Cmd(bin, nil, args...)
+	c.Timeout = 2 * time.Minute
+	return child.Run(ctx, s.env.Runner, c)
 }
 
 func (s *server) mustCmd(ctx context.Context, name string, args ...string) error {
@@ -236,8 +239,8 @@ func (s *server) mustCmd(ctx context.Context, name string, args ...string) error
 	if err != nil {
 		return err
 	}
-	if !res.OK() {
-		return hteerr.Newf(hteerr.PrivilegedStepRequired, "", "%s %s: %s", name, strings.Join(args, " "), res.Output())
+	if !res.Success() {
+		return hteerr.Newf(hteerr.PrivilegedStepRequired, "", "%s %s: %s", name, strings.Join(args, " "), child.Output(res))
 	}
 	return nil
 }
@@ -458,8 +461,8 @@ func (s *server) writeSudoers(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if !res.OK() {
-			return hteerr.Newf(hteerr.PrivilegedStepRequired, "", "visudo refused the drop-in: %s", res.Output())
+		if !res.Success() {
+			return hteerr.Newf(hteerr.PrivilegedStepRequired, "", "visudo refused the drop-in: %s", child.Output(res))
 		}
 		return nil
 	})
@@ -553,12 +556,12 @@ func (s *server) unitState(ctx context.Context, name string) (receipt.UnitState,
 		if err != nil {
 			return st, err
 		}
-		st.Enabled = res.OK() && strings.TrimSpace(string(res.Stdout)) == "enabled"
+		st.Enabled = res.Success() && strings.TrimSpace(string(res.Stdout)) == "enabled"
 		res, err = s.cmd(ctx, "systemctl", "is-active", name+".service")
 		if err != nil {
 			return st, err
 		}
-		st.Active = res.OK()
+		st.Active = res.Success()
 		return st, nil
 	}
 	links, _ := filepath.Glob(s.host("/etc") + "/rc[2-5].d/S[0-9][0-9]" + name)
@@ -567,7 +570,7 @@ func (s *server) unitState(ctx context.Context, name string) (receipt.UnitState,
 	if err != nil {
 		return st, err
 	}
-	st.Active = res.OK()
+	st.Active = res.Success()
 	return st, nil
 }
 
@@ -722,14 +725,18 @@ func (s *server) copyKey(ctx context.Context, o Op) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.env.Runner.Run(ctx, proc.Cmd{Path: bin, Args: []string{"pkey", "-out", o.Dst}, StdinFile: f, Setsid: true,
-		Env: proc.BaseEnv(home), Credential: &proc.Credential{UID: uint32(s.uid), GID: uint32(s.gid), Groups: groups}})
+	// The key reaches openssl, running as the user, as its standard input:
+	// it never passes through this process.
+	c := child.Cmd(bin, child.BaseEnv(home), "pkey", "-out", o.Dst)
+	c.Stdin = f
+	c.Credential = &runner.Credential{UID: uint32(s.uid), GID: uint32(s.gid), Groups: groups}
+	res, err := child.Run(ctx, s.env.Runner, c)
 	if err != nil {
 		return nil, err
 	}
-	if !res.OK() {
+	if !res.Success() {
 		return nil, hteerr.Newf(hteerr.PrivilegedStepRequired, "migrate with --reissue-certs makes a new pair instead",
-			"openssl could not copy %s: %s", o.Src, res.Output())
+			"openssl could not copy %s: %s", o.Src, child.Output(res))
 	}
 	return nil, nil
 }
