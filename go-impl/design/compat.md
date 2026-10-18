@@ -64,7 +64,12 @@ harnesses):
 
 * mode and output: `GASH_HEADLESS`, `NO_COLOR`, `GASH_NO_COLOR`, `GASH_DEBUG`,
   `GASH_TUI`, `COLUMNS`;
-* locations: `GASH_DIR`, `GASH_ENV_FILE`, `HISTFILE` (history functions);
+* locations: `GASH_DIR`, `GASH_ENV_FILE`, `HISTFILE` (history functions),
+  `NVM_DIR` (node functions);
+* shell state read by single functions: `__AI_LAST_EXIT` (the exit status
+  the prompt hook saved, read by the `ai_*` functions), `GASH_AI_DEBUG`;
+  the registry entry of each function lists the shell variables its 2.x
+  code read, and the generated stub passes exactly those;
 * every setting of `__GASH_SETTINGS_KNOWN` that the 2.x function would have
   read from the shell (the environment-wins rule), with a companion
   `GASH__SET` list naming the ones that are set, so "set to empty" and "unset"
