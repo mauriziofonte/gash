@@ -77,21 +77,47 @@ type Term struct {
 	stdinTTY  bool
 	stdoutTTY bool
 	stderrTTY bool
+	// The standard streams, for the window size and the key reader; nil in
+	// a Fixed term.
+	stdin, stdout, stderr *os.File
+	// size answers the window size question in tests (Fixed terms).
+	size int
+	// keys is the key source of a Fixed term (WithKeys).
+	keys []byte
+	// color is the caller shell's __gash_use_color answer (GASH__COLOR),
+	// 0 when not given.
+	color int8
 }
 
 // New returns the Term of a process whose standard streams are the given
 // files (nil means not a terminal). GASH__TTY_OUT, set by the shim when it
 // captures the binary's stdout (gash init bash), overrides the stdout test
-// with the answer the caller's shell gave ("1" or "0").
+// with the answer the caller's shell gave ("1" or "0"); GASH__TTY_IN does
+// the same for stdin when the shim pipes data into the binary
+// (__gash_box). GASH__COLOR ("1" or "0") is the answer the caller's
+// __gash_use_color gave, for a compat operation whose streams the shim
+// redirected: UseColor returns it.
 func New(env Env, stdin, stdout, stderr *os.File) *Term {
 	t := &Term{
 		env:       env,
 		stdinTTY:  isTTY(stdin),
 		stdoutTTY: isTTY(stdout),
 		stderrTTY: isTTY(stderr),
+		stdin:     stdin,
+		stdout:    stdout,
+		stderr:    stderr,
 	}
 	if v, ok := lookup(env, "GASH__TTY_OUT"); ok && (v == "0" || v == "1") {
 		t.stdoutTTY = v == "1"
+	}
+	if v, ok := lookup(env, "GASH__TTY_IN"); ok && (v == "0" || v == "1") {
+		t.stdinTTY = v == "1"
+	}
+	switch v, _ := lookup(env, "GASH__COLOR"); v {
+	case "1":
+		t.color = 1
+	case "0":
+		t.color = -1
 	}
 	return t
 }
@@ -112,6 +138,9 @@ func isTTY(f *os.File) bool {
 	return f != nil && xterm.IsTerminal(int(f.Fd()))
 }
 
+// Getenv returns the caller's value of name, or "" when unset.
+func (t *Term) Getenv(name string) string { return get(t.env, name) }
+
 // StdinTTY reports [[ -t 0 ]].
 func (t *Term) StdinTTY() bool { return t.stdinTTY }
 
@@ -129,7 +158,12 @@ func (t *Term) ColorEnvOK() bool { return ColorEnvOK(t.env) }
 
 // UseColor is the runtime gate of the emitters (__gash_use_color): the
 // environment permits colors and stdout is a terminal.
-func (t *Term) UseColor() bool { return t.ColorEnvOK() && t.stdoutTTY }
+func (t *Term) UseColor() bool {
+	if t.color != 0 {
+		return t.color > 0
+	}
+	return t.ColorEnvOK() && t.stdoutTTY
+}
 
 // WantColors is the gate of functions that take --no-color
 // (__gash_want_colors): off when the flag is given, else UseColor.

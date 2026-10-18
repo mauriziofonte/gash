@@ -172,8 +172,11 @@ __gash_load_env() {
 
     # The binary parses the file (warnings on stderr) and prints the cache
     # as quoted assignments; the values travel on the pipe only.
-    local __gle_out
-    if __gash_compat_ready && __gle_out="$(__gash_compat env load)"; then
+    # GASH__COLOR: the warnings take this shell's color decision, not the
+    # one of the command substitution.
+    local __gle_out __gle_c=0
+    if __gash_compat_ready && __gash_color_now __gle_c &&
+        __gle_out="$(GASH__COLOR=$__gle_c __gash_compat env load)"; then
         eval "$__gle_out"
         return 0
     fi

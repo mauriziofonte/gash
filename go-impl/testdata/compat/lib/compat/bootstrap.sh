@@ -135,6 +135,18 @@ __gash_int() {
     fi
 }
 
+# The caller's color decision for a compat operation whose streams the
+# shim redirects: 1 when __gash_use_color (the caller's own definition, if
+# it has one) says colors, else 0. The binary takes it from GASH__COLOR.
+# Usage: __gash_color_now VAR
+__gash_color_now() {
+    printf -v "$1" '%s' 0
+    if declare -F __gash_use_color >/dev/null && __gash_use_color; then
+        printf -v "$1" '%s' 1
+    fi
+    return 0
+}
+
 # Sets __GASH_BIN to the binary of this checkout; status 1 when it is not
 # installed.
 __gash_bin_resolve() {

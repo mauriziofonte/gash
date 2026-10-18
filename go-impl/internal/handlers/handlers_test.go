@@ -27,7 +27,8 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
 	require.Equal(t, []string{"all_colors", "gash", "gash_username", "llm_tree"}, tbl.Names())
-	require.Equal(t, []string{"help"}, tbl.CompatOps())
+	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
+		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
 
 func TestAllColors(t *testing.T) {
