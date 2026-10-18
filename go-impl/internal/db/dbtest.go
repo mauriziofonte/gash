@@ -50,7 +50,7 @@ func (m *Module) dbTest(c *invoke.Call) int {
 
 func (m *Module) pingMySQL(c *invoke.Call, t target) bool {
 	ctx := ctxOf(c)
-	db, err := m.openMySQL(mysqlConfig(t))
+	db, err := m.openMySQL(m.mysqlConfig(c, t))
 	if err != nil {
 		return false
 	}

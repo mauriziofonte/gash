@@ -35,6 +35,10 @@ type Module struct {
 	openSQLite func(dsn string) (*sql.DB, error)
 	openMySQL  func(cfg *mysql.Config) (*sql.DB, error)
 	connectPG  func(ctx context.Context, cfg *pgx.ConnConfig) (pgConn, error)
+	// myCnfFiles are the system option files read for the MySQL socket,
+	// socketDefaults the built-in socket paths (LEDGER DB-16).
+	myCnfFiles     []string
+	socketDefaults []string
 }
 
 // pgConn is the part of *pgx.Conn the module uses.
@@ -62,6 +66,8 @@ func New() *Module {
 		connectPG: func(ctx context.Context, cfg *pgx.ConnConfig) (pgConn, error) {
 			return pgx.ConnectConfig(ctx, cfg)
 		},
+		myCnfFiles:     mysqlSystemFiles,
+		socketDefaults: mysqlSocketDefaults,
 	}
 }
 

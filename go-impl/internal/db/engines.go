@@ -57,14 +57,20 @@ type quietLogger struct{}
 
 func (quietLogger) Print(...any) {}
 
-// mysqlConfig is the connection of t: TCP to HOST:PORT, the database by
-// name, the password to the driver only (never argv, a file or a child).
-func mysqlConfig(t target) *mysql.Config {
+// mysqlConfig is the connection of t: TCP to HOST:PORT, or for host
+// localhost the Unix socket the mysql client used (LEDGER DB-16); the
+// database by name, the password to the driver only (never argv, a file
+// or a child).
+func (m *Module) mysqlConfig(c *invoke.Call, t target) *mysql.Config {
 	cfg := mysql.NewConfig()
 	cfg.User = t.user
 	cfg.Passwd = t.pass
 	cfg.Net = "tcp"
 	cfg.Addr = net.JoinHostPort(t.host, t.port)
+	if t.host == "localhost" {
+		cfg.Net = "unix"
+		cfg.Addr = m.mysqlSocket(c.Env.Get("HOME"))
+	}
 	cfg.DBName = t.database
 	cfg.Logger = quietLogger{}
 	return cfg
@@ -80,7 +86,7 @@ func mysqlError(err error) output {
 // objects of strings, NULL as "NULL" (LEDGER DB-02).
 func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap string) output {
 	ctx := ctxOf(c)
-	db, err := m.openMySQL(mysqlConfig(t))
+	db, err := m.openMySQL(m.mysqlConfig(c, t))
 	if err != nil {
 		return mysqlError(err)
 	}
