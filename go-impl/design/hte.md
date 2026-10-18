@@ -600,6 +600,25 @@ for destructive steps (else `confirmation_required`, RETRY).
 Every command needs `install` first except `install`, `doctor`, `migrate`
 (dry-run) and `php versions`; others fail with `hte_not_installed` (STOP).
 
+Output (`internal/hte/htecmd`): with `--json` a command prints one compact
+JSON object on stdout, the engine's result; the commands whose result is a
+single value wrap it: `php ini get` and `php global get` print `{"domain"`
+or `"version", "key", "value", "set"}`, `apache config path` `{"path"}`,
+`service logs` `{"logs": [{"path", "lines"}]}`, `hosts list`
+`{"entries": [{"address", "names"}]}`, `hosts windows` `{"lines"}`. Without
+`--json` the data goes to stdout as text (key-value blocks and tables) and
+the messages (OK, warnings, hints) to stderr. An error is one envelope on
+stderr and exit 1; a command that did part of its work (root steps that
+ran, sites imported) prints that part first. `doctor` with a `fail`, and
+`hosts check` or `hosts apply` with a block that still differs, exit 1
+without an envelope. Before sudo starts, the root steps are listed on
+stderr, numbered, so that they stand above sudo's password prompt (not
+with `--json` without a terminal: the result carries them). Command-line
+errors map as for the other 3.x commands: an unknown flag is
+`unknown_option`, a flag or positional argument missing its value
+`missing_value`, an extra word or unknown command `unexpected_argument`,
+each with the hint `Run: gash hte <command> --help`.
+
 New error codes (registered in the contract catalog with fixed actions):
 `hte_not_installed` (STOP), `site_not_found` (RETRY), `site_exists` (RETRY),
 `invalid_domain` (RETRY), `invalid_docroot` (RETRY), `docroot_not_found`
