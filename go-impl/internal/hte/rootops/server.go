@@ -476,6 +476,12 @@ func (s *server) sysctlPorts(ctx context.Context, value int) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %q", sysctlProc, cur)
 	}
+	// A second install finds its own change: nothing to record.
+	if s.r != nil && n <= value {
+		if _, ok := s.r.Find(receipt.Sysctl, ""); ok {
+			return nil, nil
+		}
+	}
 	if n <= value {
 		c, err := s.record(receipt.Change{Kind: receipt.Sysctl, Key: PortSysctl, Prior: receipt.Raw(cur), Applied: receipt.Raw(cur)})
 		if err != nil {
@@ -515,6 +521,11 @@ func (s *server) sysctlPorts(ctx context.Context, value int) ([]string, error) {
 func (s *server) linger(ctx context.Context) ([]string, error) {
 	if !s.env.Systemd {
 		return nil, hteerr.New(hteerr.PlatformUnsupported, "linger needs systemd", "use --autostart shell or none")
+	}
+	if s.r != nil {
+		if _, ok := s.r.Find(receipt.Linger, ""); ok {
+			return nil, nil
+		}
 	}
 	if _, err := os.Lstat(s.host(path.Join(lingerDir, s.user))); err == nil {
 		c, err := s.record(receipt.Change{Kind: receipt.Linger, Prior: receipt.Raw(true), Applied: receipt.Raw(true)})

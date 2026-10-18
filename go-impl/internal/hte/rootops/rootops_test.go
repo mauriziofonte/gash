@@ -557,3 +557,22 @@ func TestUndoUnitStop(t *testing.T) {
 		t.Errorf("receipt changes left: %+v", r.Changes)
 	}
 }
+
+// A second install records nothing: every step finds its own change.
+func TestReinstallRecordsNothing(t *testing.T) {
+	f := newFixture(t)
+	plan := []Op{installPlan()[0], installPlan()[1], installPlan()[2], installPlan()[3], {ID: 9, Op: OpRecordAutostart, Mode: "shell"}}
+	for round := range 2 {
+		c := session(t, f.env(), plan)
+		for _, o := range plan {
+			resp, err := c.Run(o.ID)
+			if err != nil {
+				t.Fatalf("round %d, %s: %v", round, o, err)
+			}
+			if round == 1 && (len(resp.Changes) != 0 || len(resp.Warnings) != 0) {
+				t.Errorf("second install, %s: changes %+v, warnings %v", o, resp.Changes, resp.Warnings)
+			}
+		}
+		c.Close()
+	}
+}
