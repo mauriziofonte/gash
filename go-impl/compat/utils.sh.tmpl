@@ -482,7 +482,9 @@ __gash_download() {
         __gash_missing __gash_download
         return 1
     }
-    __gash_compat output download "$@"
+    local __gd_c
+    __gash_color_now __gd_c
+    GASH__COLOR=$__gd_c __gash_compat output download "$@"
 }
 
 # -----------------------------------------------------------------------------
