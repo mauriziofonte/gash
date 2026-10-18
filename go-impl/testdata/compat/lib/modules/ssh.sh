@@ -20,7 +20,21 @@ if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
 fi
 unset __gash_here
 
-gash_ssh_auto_unlock() { __gash_call gash_ssh_auto_unlock "$@"; }
+gash_ssh_auto_unlock() {
+    case "${1-}" in
+        -h | --help)
+            __gash_call gash_ssh_auto_unlock "$@"
+            return
+            ;;
+    esac
+    [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call gash_ssh_auto_unlock "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ -z "$__gash_go" ]] || eval "$__gash_go"
+    return "$__gash_rc"
+}
 
 # Sourcing never fails: the status of this file is 0.
 true

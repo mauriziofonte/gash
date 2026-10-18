@@ -84,3 +84,25 @@ sudo_last() {
     sudo bash -c "$last_cmd"
 }
 {{% end %}}
+
+{{%/* The ssh slice (internal/ssh). The binary hands back quoted export
+lines of SSH_AUTH_SOCK, SSH_AGENT_PID and GASH_SSH_AUTOUNLOCK_RAN, only
+those names, values quoted with mvdan.cc/sh/v3/syntax (LEDGER SYS-39). */%}}
+
+{{% define "stub/gash_ssh_auto_unlock" %}}
+gash_ssh_auto_unlock() {
+    case "${1-}" in
+        -h | --help)
+            __gash_call {{% .Name %}} "$@"
+            return
+            ;;
+    esac
+    [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call {{% .Name %}} "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ -z "$__gash_go" ]] || eval "$__gash_go"
+    return "$__gash_rc"
+}
+{{% end %}}
