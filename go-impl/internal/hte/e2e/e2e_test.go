@@ -699,6 +699,41 @@ func TestE2EReinstall(t *testing.T) {
 		}
 	})
 
+	step("migrate on the high ports keeps the system Apache", func(t *testing.T) {
+		// HTE-70: the managed sites' vhosts are archived and the system
+		// Apache reloaded, never stopped; the excluded vhost stays its.
+		// which.txt tells the document roots apart (index.php prints the
+		// Host header, whichever vhost serves it).
+		for _, d := range []string{"http", "https"} {
+			if err := os.WriteFile("/home/dev/sites/"+d+"/public/which.txt", []byte(d), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := e.Migrate(ctx, hte.MigrateOptions{Apply: true, Yes: true, Exclude: []string{"https.test"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("root plan: %s", strings.Join(res.RootPlan, " | "))
+		if sa := res.Plan.SystemApache; sa == nil || !slices.Contains(sa.Ports, 80) || !slices.Contains(sa.Ports, 443) {
+			t.Errorf("plan: %+v", res.Plan.SystemApache)
+		}
+		if !systemApacheRuns() || len(res.Archived) == 0 {
+			t.Fatalf("system Apache running %v, archived %v", systemApacheRuns(), res.Archived)
+		}
+		if a := mustGet(t, "http", "https.test", 80); a.status != 200 || a.body != "legacy:https.test:fpm-fcgi" {
+			t.Errorf("the excluded https.test on 80: %+v", a)
+		}
+		if a, err := getPath("http", "http.test", 80, "/which.txt", nil); err != nil || a.body == "http" {
+			t.Errorf("the archived http.test is still served on 80: %+v %v", a, err)
+		}
+		if a, err := getPath("http", "http.test", 8080, "/which.txt", nil); err != nil || a.body != "http" {
+			t.Errorf("http.test on 8080: %+v %v", a, err)
+		}
+		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 || a.body != "legacy:http.test:fpm-fcgi" {
+			t.Errorf("http.test on 8080: %+v", a)
+		}
+	})
+
 	step("cert renew", func(t *testing.T) {
 		before := mustGet(t, "https", "https.test", 8443)
 		if before.cert == nil || before.cert.PublicKeyAlgorithm != x509.RSA {
@@ -738,6 +773,13 @@ func TestE2EReinstall(t *testing.T) {
 		}
 		if !systemApacheRuns() {
 			t.Error("the system Apache stopped")
+		}
+		// The vhosts are back and the system Apache was reloaded.
+		if a, err := getPath("http", "http.test", 80, "/which.txt", nil); err != nil || a.body != "http" {
+			t.Errorf("http.test on 80 after uninstall: %+v %v", a, err)
+		}
+		for _, d := range []string{"http", "https"} {
+			os.Remove("/home/dev/sites/" + d + "/public/which.txt")
 		}
 		t.Logf("stage %s", res.Stage)
 	})
