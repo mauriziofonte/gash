@@ -139,25 +139,27 @@ func TestModuleAliasesMatch2x(t *testing.T) {
 }
 
 // Every expansion form of a shell variable is a read, and the variables
-// naming the calling Bash reach the stubs of the functions that read them
-// (llm_exec runs its child with ${BASH:-bash}).
+// naming the calling shell, which Bash sets without exporting them, reach
+// the stubs of the functions that read them (MATRIX row "BASH
+// BASH_VERSION ZSH_VERSION"; llm_exec runs its child with ${BASH:-bash}).
 func TestCallerShellVars(t *testing.T) {
 	needs2x(t)
 	c, err := extract(repoRoot)
 	require.NoError(t, err)
 	fns, err := c.build()
 	require.NoError(t, err)
+	shell := map[string]bool{"BASH": true, "BASH_VERSION": true, "ZSH_VERSION": true}
 	got := map[string][]string{}
 	for _, f := range fns {
 		for _, v := range f.ShellVars {
-			if callerShellVars[v] {
+			if shell[v] {
 				got[f.Name] = append(got[f.Name], v)
 			}
 		}
 	}
 	require.Equal(t, map[string][]string{
-		"ai_ask":      {"BASH_VERSION"},
-		"ai_query":    {"BASH_VERSION"},
+		"ai_ask":      {"BASH_VERSION", "ZSH_VERSION"},
+		"ai_query":    {"BASH_VERSION", "ZSH_VERSION"},
 		"gash_doctor": {"BASH", "BASH_VERSION"},
 		"llm_exec":    {"BASH"},
 	}, got)
@@ -168,5 +170,32 @@ func TestCallerShellVars(t *testing.T) {
 	r.collect(f)
 	for _, v := range []string{"A", "B", "C", "D", "E"} {
 		require.True(t, r.vars[v], v)
+	}
+}
+
+// A MATRIX Name cell is a list of variable names, or prose that names
+// none (its words, such as git or in, are not variables).
+func TestMatrixNames(t *testing.T) {
+	require.Equal(t, []string{"LANG", "LC_ALL", "LC_CTYPE"}, names("LANG LC_ALL LC_CTYPE"))
+	require.Equal(t, []string{"HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"}, names("HTTPS_PROXY/https_proxy, NO_PROXY/no_proxy"))
+	require.Equal(t, []string{"GASH_HEADLESS"}, names("GASH_HEADLESS (node_upgrade, ai_ask)"))
+	require.Equal(t, []string{"HTTPS_PROXY", "ALL_PROXY"}, names("HTTPS_PROXY, ALL_PROXY (and lowercase)"))
+	require.Nil(t, names("GIT_* environment and git config"))
+	require.Nil(t, names("${VAR} in compose image references"))
+	require.Nil(t, names("__GASH_GLYPH_* and __GASH_SYMBOL_*"))
+}
+
+// catalog_gen.go is what gen writes from the 2.x sources and MATRIX.md
+// today: run `go generate ./internal/registry` after changing either.
+func TestCatalogIsCurrent(t *testing.T) {
+	needs2x(t)
+	c, err := extract(repoRoot)
+	require.NoError(t, err)
+	want, err := c.render()
+	require.NoError(t, err)
+	got, err := os.ReadFile("../catalog_gen.go")
+	require.NoError(t, err)
+	if !bytes.Equal(want, got) {
+		t.Fatal("internal/registry/catalog_gen.go is stale: run `go generate ./internal/registry`")
 	}
 }
