@@ -1,3 +1,4 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 # Server text of FLOAT and DOUBLE values (mysql --batch), the same on
 # MySQL 8.0.46 and MariaDB 11.8.9-MariaDB-ubu2404: TYPE, fixed decimals (-1: none), TEXT.
 DOUBLE	-1	1e-30
