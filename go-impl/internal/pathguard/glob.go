@@ -14,6 +14,13 @@ func matchGlob(pat, name string) bool {
 	return globMatch([]byte(pat), []byte(name))
 }
 
+// MatchGlobSegment reports whether name matches the shell pattern pat (the
+// same fnmatch rules matchGlob uses). Exported for llm_exec glob expansion so
+// one matcher decides for both packages.
+func MatchGlobSegment(pat, name string) bool {
+	return matchGlob(pat, name)
+}
+
 func globMatch(pat, s []byte) bool {
 	for len(pat) > 0 {
 		switch pat[0] {
