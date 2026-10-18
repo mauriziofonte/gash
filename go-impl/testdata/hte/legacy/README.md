@@ -13,7 +13,7 @@ that hte-cli wrote, one per legacy format of PRD 6.6:
 | `Broken-bypass/` | the force block that `fix` repairs (blank lines between directives); no tagged release wrote it, the shape comes from hte-cli's own regression test |
 | `Malformed/` | marker present, domain or socket missing, and other inputs 1.1.1 skips |
 | `templates/` | every vhost and pool template, tokenized |
-| `cert-script/` | the certificate script hte-cli runs as root |
+| `cert-script/` | the certificate script hte-cli runs as root (suffix `.fixture`, so the repository's shell lint skips the verbatim copy) |
 
 Every file was produced at S1 by running the real hte-cli code (the v1.0.12
 phar sources for V1, the v1.1.1 sources for V2, `fix` and discovery) through
