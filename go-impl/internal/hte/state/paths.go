@@ -101,6 +101,10 @@ func (p Paths) Audit() string { return filepath.Join(p.StateDir, "audit.jsonl") 
 // Lock is the mutation lock file.
 func (p Paths) Lock() string { return filepath.Join(p.StateDir, "lock") }
 
+// UnitLease names the command that holds the lock and waits for a job of
+// the systemd user unit (LEDGER HTE-73).
+func (p Paths) UnitLease() string { return filepath.Join(p.StateDir, "unit.lease") }
+
 // PHPCache caches PHP-FPM discovery by binary path, size and mtime.
 func (p Paths) PHPCache() string { return filepath.Join(p.StateDir, "php-versions.json") }
 

@@ -162,13 +162,6 @@ func (e *Engine) Migrate(ctx context.Context, opt MigrateOptions) (*MigrateResul
 	if _, err := e.locked(v, "migrate", "", func() (any, error) { return res, e.migrateApply(ctx, v, set, opt, res) }); err != nil {
 		return res, err
 	}
-	// The unit becomes active once the lock is released: its start finds
-	// the stack running.
-	if res.Switched && e.systemdUnit(v, set) {
-		if err := e.systemctlUser(ctx, v, "start", service.UnitName); err != nil {
-			res.Warnings = append(res.Warnings, err.Error())
-		}
-	}
 	return res, nil
 }
 
@@ -496,7 +489,8 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 
 	// 4. The switch: the system Apache stops (unless it keeps running next
 	// to a stack on other ports), the stack serves every site on its own
-	// ports; a site that does not answer starts it again.
+	// ports (started through the systemd unit when it is in use, HTE-73);
+	// a site that does not answer starts the system Apache again.
 	if !w.keep {
 		if err := run(rootops.OpUnitStop, w.apache); err != nil {
 			return err
@@ -506,7 +500,7 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 		if _, err := e.applyStack(ctx, v, set, next); err != nil {
 			return err
 		}
-		if err := sup.Start(ctx); err != nil {
+		if err := e.startStack(ctx, v, set); err != nil {
 			return err
 		}
 		return e.verify(ctx, v, enabledDomains(next), res)
@@ -514,7 +508,7 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 	if switchErr != nil {
 		errs := []error{switchErr}
 		if !running {
-			errs = append(errs, sup.Stop(ctx))
+			errs = append(errs, e.stopStack(ctx, v, set))
 		}
 		after := "the system Apache was started again"
 		if w.keep {
@@ -578,7 +572,10 @@ func enabledDomains(sites []state.Site) []string {
 
 // staging verifies the sites on a staging generation: the stack's state on
 // two free loopback ports, IPv4 only, without the extra ports (the system
-// Apache may hold them), started, probed, stopped.
+// Apache may hold them), started, probed, stopped. Its masters are started
+// and stopped directly, also with the systemd unit: they are not the stack
+// the unit starts (the unit renders the stored settings), and the stack is
+// down meanwhile.
 func (e *Engine) staging(ctx context.Context, v *env, set state.Settings, sites []state.Site, domains []string, res *MigrateResult) error {
 	ports, err := freePorts()
 	if err != nil {

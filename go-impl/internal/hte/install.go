@@ -413,8 +413,10 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 	// The stack and autostart.
 	set, _ := v.store.LoadSettings()
 	if e.systemdUnit(v, set) {
-		if err := e.systemctlUser(ctx, v, "disable", "--now", service.UnitName); err != nil {
-			res.Warnings = append(res.Warnings, err.Error())
+		for _, verb := range []string{"stop", "disable"} {
+			if err := e.unitJob(ctx, v, verb, service.UnitName); err != nil {
+				res.Warnings = append(res.Warnings, err.Error())
+			}
 		}
 		os.Remove(service.UnitPath(v.dirs.ConfigHome))
 		e.systemctlUser(ctx, v, "daemon-reload")

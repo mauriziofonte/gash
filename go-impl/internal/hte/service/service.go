@@ -415,6 +415,21 @@ func (s *Supervisor) Running() (bool, error) {
 	return s.running(m).any(), nil
 }
 
+// AllRunning reports whether every master of the current generation runs.
+func (s *Supervisor) AllRunning() (bool, error) {
+	_, m, ok, err := s.Current()
+	if err != nil || !ok {
+		return false, err
+	}
+	u := s.running(m)
+	for _, f := range m.FPM {
+		if !u.fpm[f.Version] {
+			return false, nil
+		}
+	}
+	return u.apache, nil
+}
+
 // Start starts every master of the current generation that is not
 // running: FPM first, then Apache.
 func (s *Supervisor) Start(ctx context.Context) error {
