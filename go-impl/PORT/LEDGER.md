@@ -122,8 +122,8 @@ Conventions for this section:
 | Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
-| HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 245 | **408** | 241 |
+| HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
+| **All** | 3 | 36 | 128 | 249 | **416** | 244 |
 
 Critical and high items:
 
@@ -6848,6 +6848,13 @@ Critical and high items:
 | [HTE-66](#hte-66) | migrate finds the pool by exact path; pool values, profile and owner are reconciled | Correctness | medium | yes |
 | [HTE-67](#hte-67) | migrate copies the legacy certificate pair through the root step, or reissues it | Contract | low | yes |
 | [HTE-68](#hte-68) | migrate reports duplicates, shared sockets, custom ports and orphans that hte-cli never noticed | Correctness | low | yes |
+| [HTE-69](#hte-69) | The hosts helper cannot rename over a bind-mounted /etc/hosts (containers) | Platform | low | no |
+| [HTE-70](#hte-70) | migrate --apply with --ports high keeps the system Apache running | Correctness | medium | yes |
+| [HTE-71](#hte-71) | A reload after an overlay edit could not roll back | Correctness | medium | no |
+| [HTE-72](#hte-72) | Error codes for a missing openssl, a bad flag value and PHP settings on a site without PHP | Contract | low | yes |
+| [HTE-73](#hte-73) | With systemd autostart the stack has one supervisor | Correctness | low | no |
+| [HTE-74](#hte-74) | A root operation restarts the system Apache when migrate fails after the switch | Security | medium | no |
+| [HTE-75](#hte-75) | install next to a system Apache it may not stop exits 0 with the stack not started | Contract | low | yes |
 
 ### HTE (design delta vs hte-cli)
 
@@ -6990,9 +6997,9 @@ Critical and high items:
 | Reproduction | `mkdir -p "$SB/x$(printf '\n')Header set X-Injected yes" && work/hte/run.sh $SB create --domain=inj.test --docroot="$SB/x$(printf '\n')Header set X-Injected yes" --phpver=8.3 --ssl=n --forcessl=n --hosts=n --profile=staging -n` |
 | Severity | high |
 | Public-contract impact | no |
-| rc.A behavior | Validation refuses a docroot with any control character, newline included (`invalid_docroot`, RETRY). Apache paths go through `quoteApacheArg` (double quotes, `"` and `\` escaped), so spaces work. Two gaps the design does not cover yet (inferred from Apache and PHP INI rules, not run): Apache expands `${NAME}` inside quoted arguments, and `<Directory>` treats `*`, `?`, `[` as wildcards; php-fpm's INI parser treats `;` as a comment start and expands `${NAME}` in the `open_basedir` value of staging/hardened pools |
+| rc.A behavior | Validation refuses a docroot with any control character, newline included (`invalid_docroot`, RETRY). Apache paths go through `quoteApacheArg` (double quotes, `"` and `\` escaped), so spaces work. The characters Apache or php-fpm would read as syntax are refused too, with `invalid_docroot` naming the character: `$` (Apache and the INI parser expand `${NAME}`), `*`, `?`, `[`, `]` (`<Directory>` wildcards), `;` (INI comment), `"` and `\` (INI quoting), besides `:` (the `open_basedir` separator); migrate reports a legacy vhost with such a root and leaves it in the system. Apache 2.4.58 `mod_proxy_fcgi` sends `SCRIPT_FILENAME` percent-encoded, so a root with a space gave "File not found.": the vhost sets `ProxyFCGISetEnvIf "true" SCRIPT_FILENAME "%{unescape:%{reqenv:SCRIPT_FILENAME}}"`, which gives FPM the path Apache resolved (lead decision, 2026-10-18) |
 | Fix recipe (3.0) | Design addition: `invalid_docroot` also for a docroot containing `$`, `*`, `?`, `[`, `;`, `:`, `"` or `\` (hint: "rename the directory or use a symlink without these characters"); `:` because it separates the `open_basedir` list (lead decision, 2026-10-18); pool values double-quoted. Prove with `httpd -t` and `php-fpm -t` on the rendered files |
-| Proving test | `TestLedger_HTE08` in `internal/hte/render` (table of docroots: spaces accepted and rendered quoted; each refused character → `invalid_docroot`; fuzz `quoteApacheArg` so that the output never has a newline); `hte-e2e`: a docroot with a space serves `index.php`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "a document root with a space": it reproduces a defect (Apache 2.4.58 `mod_proxy_fcgi` sends `SCRIPT_FILENAME` percent-encoded, FPM answers "File not found."), reported to the lead; the step skips while the defect stands. |
+| Proving test | `TestLedger_HTE08` in `internal/hte/render` (table of docroots: spaces accepted and rendered quoted; each refused character → `invalid_docroot`; fuzz `quoteApacheArg` so that the output never has a newline); `hte-e2e`: a docroot with a space serves `index.php`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "a document root with a space" (`/index.php` and `/index.php/extra?q=a%20b`). |
 | Status | open |
 
 <a id="hte-09"></a>
@@ -8073,6 +8080,132 @@ Critical and high items:
 | rc.A behavior | Duplicates (case-insensitive): both reported, one picked with `--site` or the other excluded. Shared socket: both sites get their own pool, reported. Custom ports: the ports of a vhost's `<VirtualHost>` sections other than 80, 443 and the stack's own become the site's `extra_http_ports` / `extra_https_ports` (by the section's `SSLEngine on`), for managed and raw imports alike, rendered as `Listen` on the loopback addresses plus addresses of the site's vhosts; each is reported, with a note when it is below 1024 (binding needs `ip_unprivileged_port_start` at most that port). A section without a port, a port used for both protocols, or a TLS port without a certificate keeps the vhost in the system (lead decision, 2026-10-18: `site create|modify --extra-http-port N` and `--extra-https-port N`, repeatable, 1 to 65535, never 80, 443 or the stack's ports; one port has one protocol across sites). Orphan pools, certificates, `.info` files and index gaps: reported, never deleted. `APACHE_RUN_USER` set to the user in `envvars`: reported (the master is still root). IP-named vhosts: HTE-21 |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE68` and `TestRawCustomPorts` in `internal/hte/migrate` (one sysroot fixture per case → the exact plan entries; tree bytes unchanged by a dry run); `TestExtraPorts` in `internal/hte/state`, `TestExtraListen` in `internal/hte/render`; `hte-e2e`: a site answers on its extra port. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "an extra port". |
+| Status | open |
+
+<a id="hte-69"></a>
+#### HTE-69 · The hosts helper cannot rename over a bind-mounted /etc/hosts (containers)
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE E2E |
+| Area | Platform |
+| hte-cli location | `internal/hostshelper` (`Rewrite`); design 7.1 ("renamed over the original") |
+| Observed behavior | Docker bind-mounts `/etc/hosts`, so `rename(2)` of the helper's temporary file over it fails with EBUSY: `rename /etc/.hosts.gash-hte-* /etc/hosts: device or resource busy`. Containers are a listed platform. |
+| Reproduction | `printf '127.0.0.1 repro.test\n' \| gash-hosts-helper apply` in a stock container |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | When the rename fails with EBUSY or EXDEV, the helper removes its temporary file and writes the same validated content in place (open without truncation, write, truncate to the new length, fsync). Same file, same content checks, same single sudoers line: no new surface. Elsewhere the rename stays (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestRewriteInPlace` in `internal/hostshelper` (a rename that fails with EBUSY gives the same bytes in place and leaves no temporary file); container run without the mount swap in `setup.sh`. |
+| Status | open |
+
+<a id="hte-70"></a>
+#### HTE-70 · migrate --apply with --ports high keeps the system Apache running
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Correctness |
+| hte-cli location | design 9, `--apply` step 2 (written for standard ports) |
+| Observed behavior | Step 2 stops and disables the system Apache to free 80/443. With `--ports high` the stack does not use 80/443, so the stop only takes away what the system Apache still serves: excluded vhosts and the default site. |
+| Reproduction | `install --ports high`, then `migrate --apply --yes` with an excluded vhost: 80/443 go unanswered |
+| Severity | medium |
+| Public-contract impact | yes |
+| rc.A behavior | With high ports the system Apache is not stopped. Each migrated vhost is disabled and archived, the system configuration is tested (`apachectl configtest` as root), and the system Apache gets a graceful reload; a failed test re-enables the vhosts, nothing is reloaded, and the command reports `config_test_failed`. System FPM units left without pools stop as with standard ports. The plan says which ports stay with the system Apache (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE70` in `internal/hte` (plan with `--ports high`: no unit stop, disable, configtest and reload steps; a failed configtest undoes the disable); container run: the excluded vhost still answers on 80. |
+| Status | open |
+
+<a id="hte-71"></a>
+#### HTE-71 · A reload after an overlay edit could not roll back
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Correctness |
+| hte-cli location | design 5 (vhost `IncludeOptional` of the user's overlay), 10 (generations) |
+| Observed behavior | The vhost included the user's overlay file directly. When a graceful reload passed the config test but failed at run time (a busy port), the previous generation included the same, new overlay, so it could not come back as it was. |
+| Reproduction | edit an overlay to `Listen` a busy port, `gash hte service reload` |
+| Severity | medium |
+| Public-contract impact | no |
+| rc.A behavior | Each generation holds a copy of every site overlay it includes, and the vhost includes the copy. `service reload` copies the overlays into the new generation, tests, reloads, and on failure brings back the previous generation with its own copies. The user's overlay file is never modified; `apache config path` still names it (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE71` in `internal/hte` (an overlay whose reload fails leaves the previous generation running and the overlay file unchanged); container run: step "a busy extra port" repeated through an overlay. |
+| Status | open |
+
+<a id="hte-72"></a>
+#### HTE-72 · Error codes for a missing openssl, a bad flag value and PHP settings on a site without PHP
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Contract |
+| hte-cli location | design 11 (error codes) |
+| Observed behavior | The engine answered a missing openssl with `platform_unsupported`, a bad value of an enum flag with `conflicting_options`, and `php ini set` on a site without PHP with `conflicting_options`. Those codes mean an unsupported system and a flag pair that contradicts itself. |
+| Reproduction | `gash hte site create x.test --ports bogus`; `gash hte php ini set` on a `--no-php` site; PATH without openssl |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | `openssl_not_found` (FATAL, hint with the platform's install command, like `apache_not_found`); `invalid_<flag>` (RETRY, details the value and the accepted ones) for every enum flag, like the existing `invalid_profile`; `php_not_enabled` (RETRY, hint `site modify --php VERSION`). Registered in the contract catalog (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE72` in `internal/hte` (each case → its code and action). |
+| Status | open |
+
+<a id="hte-73"></a>
+#### HTE-73 · With systemd autostart the stack has one supervisor
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Correctness |
+| hte-cli location | `internal/hte/service`, `internal/hte/migrate.go` |
+| Observed behavior | With `--autostart systemd`, `migrate --apply` started the masters directly and then ran `systemctl --user start`, whose ExecStart found the stack already running: the unit and the processes it should own diverge. |
+| Reproduction | not reproduced: no systemd in the E2E containers |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | When the autostart is a systemd user unit, every start, stop and restart of the stack (install, migrate, service commands) goes through `systemctl --user`; the direct start is used only for the other autostart kinds. Proven with the runner fake; a container with systemd as PID 1 proves it when the environment allows one (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE73` in `internal/hte` (with systemd autostart the only lifecycle children are `systemctl --user start\|stop\|restart gash-hte.service`). |
+| Status | open |
+
+<a id="hte-74"></a>
+#### HTE-74 · A root operation restarts the system Apache when migrate fails after the switch
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Security |
+| hte-cli location | `internal/hte/rootops` (`undo_unit_stop`); design 7, 9 |
+| Observed behavior | The S1 set of root operations had no way to give the system Apache back when a site does not answer after the switch, short of a full uninstall. |
+| Reproduction | a site that answers on staging but not after the switch |
+| Severity | medium |
+| Public-contract impact | no |
+| rc.A behavior | `undo_unit_stop`: a conditional step of the plan, run only when a site does not answer after the switch, and only when the unit stop is the last change of the root receipt and was made in the same session; it starts and re-enables that unit, recorded in the receipt. The imported sites stay and the next run completes the move (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE74` in `internal/hte/rootops` (refused when the stop is not the receipt's last change, or comes from another session; runs once). |
+| Status | open |
+
+<a id="hte-75"></a>
+#### HTE-75 · install next to a system Apache it may not stop exits 0 with the stack not started
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Contract |
+| hte-cli location | `internal/hte/install.go` |
+| Observed behavior | With standard ports and enabled vhosts that block the stop (MUST NOT 13), install completes every step but cannot start the stack on 80/443. |
+| Reproduction | install on a machine whose system Apache serves an enabled vhost |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | Exit 0: install did what it can do before `migrate`. The JSON has `started: false` and `next: "gash hte migrate"`, the human output a warning naming the blocking vhosts and the command. A scripted `install && migrate` works (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE75` in `internal/hte` (blocking vhosts → exit 0, started false, next set). |
 | Status | open |
 
 ## Seed index
