@@ -249,3 +249,25 @@ func TestTreeCaps(t *testing.T) {
 	same(t, m, d, env, "llm_tree", "--depth", "2")
 	same(t, m, d, env, "llm_tree", "--text")
 }
+
+// TestLedger_LLM36: llm_tree --text lists in bytewise (C) order whatever
+// the locale: upper case before lower, punctuation by its byte, UTF-8
+// after ASCII; 2.x's order under LC_ALL=C.
+func TestLedger_LLM36(t *testing.T) {
+	archive2x(t) // before runGo changes the directory
+	m := New()
+	d := physTemp(t)
+	names := []string{"é", "e", "ab", "a_b", "a.b", "a-b", "a", "_u", "Z1", "B", "b"}
+	for _, n := range names {
+		mustWrite(t, filepath.Join(d, n), "x")
+	}
+	want := "B\nZ1\n_u\na\na-b\na.b\na_b\nab\nb\ne\né\n"
+	for _, loc := range []string{"C", "C.UTF-8", "en_US.UTF-8", "de_DE.UTF-8"} {
+		env := baseEnv(physTemp(t), map[string]string{"LC_ALL": loc, "LANG": loc})
+		r := runGo(t, m, d, env, "llm_tree", "--text")
+		require.Equal(t, 0, r.RC)
+		_, body, _ := strings.Cut(r.Stdout, "\n") // the root line
+		require.Equal(t, want, body, loc)
+	}
+	same(t, m, d, baseEnv(physTemp(t), map[string]string{"LC_ALL": "C"}), "llm_tree", "--text")
+}

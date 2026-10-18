@@ -277,3 +277,23 @@ func TestSearchTreeSize(t *testing.T) {
 	r := same(t, m, d, env, "llm_grep", "hit")
 	require.Equal(t, 12, strings.Count(r.Stdout, "\n"))
 }
+
+// TestLedger_LLM38: a file with a NUL anywhere (its first byte, the middle,
+// past rg's first 64 KiB buffer) is binary and skipped whole, by llm_grep
+// and llm_find --contains alike.
+func TestLedger_LLM38(t *testing.T) {
+	archive2x(t) // before runGo changes the directory
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "start"), "\x00needle\n")
+	mustWrite(t, filepath.Join(d, "middle"), "needle\n\x00\nneedle\n")
+	mustWrite(t, filepath.Join(d, "end"), "needle\n"+strings.Repeat("pad\n", 40000)+"\x00")
+	mustWrite(t, filepath.Join(d, "text"), "needle\n")
+	env := baseEnv(physTemp(t), map[string]string{"PATH": ""})
+	require.Equal(t, result{d + "/text:1:needle\n", "", 0}, runGo(t, m, d, env, "llm_grep", "needle", d))
+	require.Equal(t, result{d + "/text\n", "", 0}, runGo(t, m, d, env, "llm_find", "*", d, "--contains", "needle"))
+	if _, err := exec.LookPath("rg"); err == nil {
+		// 2.x: rg reported the match before a NUL past its first buffer.
+		require.Contains(t, run2x(t, d, rgEnv(t, physTemp(t)), "llm_grep", "needle", d).Stdout, d+"/end:1:needle")
+	}
+}
