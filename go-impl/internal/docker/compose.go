@@ -42,12 +42,19 @@ func (x *call) requireCompose() bool {
 
 // resolveDir is `realpath -m "$path" 2>/dev/null || path="$PWD"`: the
 // GNU realpath -m form of the argument (LEDGER DOCK-02), the caller's
-// $PWD for the one argument it refuses, "" (DOCK-01, kept). A symlink
-// loop is refused too.
+// $PWD for the one argument it refuses, "" (DOCK-01, kept). GNU -m keeps
+// a looping symlink as a plain name where the walk refuses it, so a path
+// through a loop takes its lexical form and never the caller's $PWD.
 func (x *call) resolveDir(p string) string {
+	if p == "" {
+		return x.pwd()
+	}
 	wd, _ := os.Getwd()
 	g := pathguard.NewGuard(pathguard.OSFS{}, wd, x.Env.Get("HOME"), "")
 	if r, err := g.Realpath(p, false); err == nil {
+		return r
+	}
+	if r, err := g.Realpath(p, true); err == nil {
 		return r
 	}
 	return x.pwd()
