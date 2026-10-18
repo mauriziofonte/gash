@@ -4,6 +4,7 @@ package contract
 
 import (
 	"bytes"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -120,4 +121,34 @@ func TestEnvelopeWrite(t *testing.T) {
 	require.NoError(t, New("binary_not_found", "d", "h").Write(&buf))
 	require.Equal(t, `{"error":"binary_not_found","details":"d","action":"STOP","recoverable":true,"hint":"h"}`+"\n", buf.String())
 	require.Equal(t, `{"error":"binary_not_found","details":"d","action":"STOP","recoverable":true,"hint":"h"}`, New("binary_not_found", "d", "h").String())
+}
+
+// The jq encoding of invalid UTF-8, sequence by sequence, against the jq
+// on PATH (jq 1.7 replaces each bad sequence the way jvp_utf8_next reads
+// it) and against the pinned bytes.
+func TestLedger_CORE09_JQBytes(t *testing.T) {
+	vectors := map[string]string{
+		"\xed\xa0\x80":         "\"�\"",
+		"\xc0\x80":             "\"��\"",
+		"\xe2\x82":             "\"�\"",
+		"\xe2\x82x":            "\"�x\"",
+		"\xe2x":                "\"�\"",
+		"\xf8\x88\x80\x80\x80": "\"�����\"",
+		"\xf4\x90\x80\x80":     "\"�\"",
+		"ab\xf0\x9fc":          "\"ab�\"",
+		"\xe0\x80\x80":         "\"�\"",
+		"\xef\xbf\xbf\x7f\x01": "\"￿\\u007f\\u0001\"",
+		"ok é   <&>":           "\"ok é   <&>\"",
+	}
+	jq, err := exec.LookPath("jq")
+	for in, want := range vectors {
+		require.Equal(t, want+"\n", JQString(in), "%q", in)
+		if err == nil {
+			got, jerr := exec.Command(jq, "-cn", "--arg", "s", in, "$s").Output()
+			require.NoError(t, jerr)
+			require.Equal(t, string(got), JQString(in), "jq %q", in)
+		}
+	}
+	require.Equal(t, "[\"a\",\"�\"]\n", JQArray("a", "\xe2\x82"))
+	require.Equal(t, "[]", JQArray())
 }

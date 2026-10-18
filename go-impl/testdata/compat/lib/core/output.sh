@@ -858,7 +858,9 @@ __gash_choose() {
     shift 2
     # The menu draws on the terminal; the 1-based index comes back on fd 3.
     if __gash_compat_ready; then
-        { __gc_res="$(__gash_compat output choose "$__gc_sel" "$@" 3>&1 1>&4 4>&-)"; } 4>&1 || __gc_rc=$?
+        local __gc_c
+        __gash_color_now __gc_c
+        { __gc_res="$(GASH__COLOR=$__gc_c __gash_compat output choose "$__gc_sel" "$@" 3>&1 1>&4 4>&-)"; } 4>&1 || __gc_rc=$?
         ((__gc_rc == 0)) || return 1
         [[ "$__gc_res" =~ ^[0-9]+$ ]] || return 1
         __gc_out=$__gc_res
@@ -900,9 +902,15 @@ __gash_box() {
         __gbx_args=(--color "${2-}")
         shift 2
     fi
-    # Lines go to the binary NUL-terminated on stdin.
+    # Lines go to the binary NUL-terminated on stdin; GASH__TTY_IN tells
+    # it whether this shell's stdin is a terminal (the width comes from it)
+    # and GASH__COLOR what __gash_use_color says here.
     if __gash_compat_ready; then
-        printf '%s\0' "$@" | __gash_compat output box "${__gbx_args[@]}"
+        local __gbx_in=0 __gbx_c
+        [[ -t 0 ]] && __gbx_in=1
+        __gash_color_now __gbx_c
+        { (($# == 0)) || printf '%s\0' "$@"; } |
+            GASH__TTY_IN=$__gbx_in GASH__COLOR=$__gbx_c __gash_compat output box "${__gbx_args[@]}"
         return
     fi
     # No binary: the lines as they are.
@@ -965,9 +973,11 @@ __gash_split_tabs() {
 # Usage: printf 'NAME\tSIZE\na\t1\n' | __gash_table [options]
 __gash_table() {
     # Rows on stdin; the color decision of __gash_table_into travels in
-    # GASH__TABLE_COLOR.
+    # GASH__TABLE_COLOR, the one of this shell in GASH__COLOR.
     if __gash_compat_ready; then
-        GASH__TABLE_COLOR="${__GASH_TABLE_COLOR-}" __gash_compat output table "$@"
+        local __gt_c
+        __gash_color_now __gt_c
+        GASH__TABLE_COLOR="${__GASH_TABLE_COLOR-}" GASH__COLOR=$__gt_c __gash_compat output table "$@"
         return
     fi
     # No binary: the tab-separated rows as they are.

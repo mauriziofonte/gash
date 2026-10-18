@@ -84,9 +84,13 @@ func TestCompatOps(t *testing.T) {
 	require.Equal(t, 4, rc)
 	require.Equal(t, "--x|y\n", out)
 
-	_, errOut, rc := run("__compat", "output", "table", "--indent", "2")
+	_, errOut, rc := run("__compat", "output", "nope", "--indent", "2")
 	require.Equal(t, 1, rc)
-	require.Contains(t, errOut, `"details":"__compat output table is not implemented in this gash build"`)
+	require.Contains(t, errOut, `"details":"__compat output nope is not implemented in this gash build"`)
+
+	out, _, rc = run("__compat", "output", "wrap", "7")
+	require.Equal(t, 0, rc)
+	require.Equal(t, "\n", out)
 
 	out, _, rc = run("__compat", "help", "gash_username")
 	require.Equal(t, 0, rc)
