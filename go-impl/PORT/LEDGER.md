@@ -119,11 +119,11 @@ Conventions for this section:
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
 | Defects | 1 | 25 | 76 | 76 | 178 | 116 |
-| Forced divergences | 2 | 4 | 26 | 70 | 102 | 45 |
+| Forced divergences | 2 | 4 | 26 | 71 | 103 | 46 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
-| **All** | 3 | 36 | 131 | 258 | **428** | 253 |
+| **All** | 3 | 36 | 131 | 259 | **429** | 254 |
 
 Critical and high items:
 
@@ -3612,6 +3612,7 @@ Critical and high items:
 | [DB-15](#db-15) | sqlite3's JSON mode mangles bytes that are not UTF-8 and cuts text at a NUL | Correctness | yes | The driver returns the stored bytes and the contract encoder writes valid JSON (one U+FFFD per invalid sequence, `\u0000` for NUL), as DB-03 does for the TSV transport. |
 | [DB-16](#db-16) | MySQL on localhost: the client uses the Unix socket and lets ~/.my.cnf override the URL | Correctness | yes | Host `localhost` connects through the Unix socket: the `socket=` of the `[client]` group of the option files the client reads (`/etc/my.cnf`, `/etc/mysql/my.cnf` with its `!include`/`!includedir`, `~/.my.cnf`), else the first existing platform default (`/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`, `/var/lib/mysql/mysql.sock`). No other option-file setting applies: the `DB:` URL is the connection (lead decision, 2026-10-18). Any other host uses TCP. |
 | [DB-17](#db-17) | Table and database names are checked with locale-dependent character ranges | Portability | yes | ASCII ranges in every locale, the stricter reading (as DB-13 does for the guard). |
+| [DB-18](#db-18) | MySQL ZEROFILL columns lose their padding | Contract | low | yes |
 | [EXEC-06](#exec-06) | glob expansion order differs under non-C collation | Portability | low | yes |
 | [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Security | high | yes |
 | [SYS-28](#sys-28) | hgrep passes PATTERN through awk `-v`: backslashes are rewritten and the regex dialect depends on the awk | Portability | medium | yes |
@@ -4091,6 +4092,24 @@ Critical and high items:
 | rc.A behavior | ASCII ranges in every locale, the stricter reading (as DB-13 does for the guard). |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_DB17` in `internal/db`. |
+| Status | open |
+
+<a id="db-18"></a>
+#### DB-18 · MySQL ZEROFILL columns lose their padding
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of internal/db, go-sql-driver/mysql v1.10.1) |
+| Area | Contract |
+| Bash location | `lib/modules/llm/db.sh` MySQL path (`mysql --batch` prints the server's text) |
+| Observed behavior | A `ZEROFILL` integer column comes back padded (`00042`), as the server sends it. |
+| Reproduction | `CREATE TABLE t (n INT(5) ZEROFILL); INSERT INTO t VALUES (42);` then `llm_db_query "SELECT n FROM t"` |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | `"42"`: the driver parses the column to an integer before Gash sees it, and the zerofill flag is not exposed, so the padding cannot be rebuilt. The other numeric types keep the client's text (DB-02). `ZEROFILL` is deprecated since MySQL 8.0.17. The alternatives were pinning the driver to v1.7.1 (no ed25519 authentication, three years of fixes missing) or carrying a patched fork (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | Same as rc.A, unless DB-02's operator decision makes MySQL values typed, which removes the question. |
+| Proving test | `TestLedger_DB18` in `internal/db` (in-process fake sending `00042` for a zerofill column → `"42"`; YEAR `0000` → `"0000"`; DOUBLE `1e20` → `"1e20"`; FLOAT `1234570` → `"1234570"`). |
 | Status | open |
 
 ### llm_exec
@@ -5682,7 +5701,7 @@ Critical and high items:
 | Reproduction | `printf 'a\tb\nNULL\t1\n' | __llm_tsv_to_json mysql` -> `[{"a":"NULL","b":"1"}]` (temp dir) |
 | Severity | low |
 | Public-contract impact | yes |
-| rc.A behavior | Kept: the native go-sql-driver/mysql path stringifies all values and renders NULL as the string `"NULL"` to preserve the documented contract (the driver returns typed values and real null, which rc.A deliberately coerces). |
+| rc.A behavior | Kept: the native go-sql-driver/mysql path stringifies all values and renders NULL as the string `"NULL"` to preserve the documented contract (the driver returns typed values and real null, which rc.A deliberately coerces). Each value is the text the mysql client printed: integers in decimal, `YEAR` zero-padded to four digits, `FLOAT` and `DOUBLE` rebuilt from the parsed value with the server's own formatting (shortest digits, `1e20` exponent form), `DECIMAL`, strings and dates as sent. go-sql-driver/mysql parses numeric columns even on the text protocol (since v1.8.0), so the server's bytes are not available; `ZEROFILL` padding is the one loss (DB-18). |
 | Fix recipe (3.0) | Operator decision: keep all-strings + NULL->"NULL" (matches AGENTS.md section 3.3), or switch MySQL to typed values and real JSON `null` (a documented contract change). |
 | Proving test | `TestLedger_DB02` pins MySQL values as strings and NULL as the chosen representation. |
 | Status | open |
