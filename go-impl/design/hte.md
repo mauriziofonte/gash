@@ -47,9 +47,11 @@ and emits `LoadModule` only for modules that are not built in.
 | Lock | `$XDG_STATE_HOME/gash/hte/lock` | |
 | Uninstall stage | `$XDG_STATE_HOME/gash/hte-stage-<UTC timestamp>/` | Section 9 |
 
-Paths come from `github.com/adrg/xdg`; macOS uses the same XDG layout
-(`~/.config`, `~/.local/state`, `~/.local/share`) rather than
-`~/Library`, so the tree is identical on every platform and in tests.
+Paths are resolved by `internal/platform` from the environment snapshot
+with the XDG rules (`github.com/adrg/xdg` only cross-checks it in a Linux
+test: on macOS the library would answer `~/Library`); macOS uses the same
+XDG layout (`~/.config`, `~/.local/state`, `~/.local/share`), so the tree is
+identical on every platform and in tests.
 
 Site state (TOML, `github.com/BurntSushi/toml`):
 
@@ -102,6 +104,13 @@ files:
   denied`, `<FilesMatch "^\.ht"> Require all denied` (so `.htaccess` and
   `.htpasswd` are never served), and `DirectoryIndex index.html index.cgi
   index.pl index.php index.xhtml index.htm` (LEDGER HTE-59).
+* Debian's five `LogFormat` lines (`vhost_combined`, `combined`, `common`,
+  `referer`, `agent`; the vhosts use `combined`), and `unixd` in the module
+  list (built into Debian's `apache2`, a loadable module elsewhere). The TLS
+  directives are not wrapped in `<IfModule mod_ssl.c>`: `ssl` is in the
+  list, so a missing module fails the start instead of silently serving no
+  HTTPS. A `Listen` on a TLS port other than 443 names the protocol
+  (`Listen 127.0.0.1:8443 https`).
 * `IncludeOptional` of the global overlay, then of every enabled site's
   rendered vhosts.
 
@@ -152,6 +161,12 @@ paths, logs outside the document root, 307 instead of 301:
     IncludeOptional "/home/me/.config/gash/hte/sites/shop.test.apache.conf"
 </VirtualHost>
 ```
+
+The redirect target is `https://%{HTTP_HOST}%{REQUEST_URI}` when clients
+reach HTTPS on 443 (standard ports, and the macOS `pf` redirect); with any
+other HTTPS port (`install --ports high`) it is
+`https://%{SERVER_NAME}:<https port>%{REQUEST_URI}`, since `HTTP_HOST`
+carries the HTTP port.
 
 The HTTPS vhost is the same block on `127.0.0.1:443` with hte-cli's
 `<FilesMatch "\.(cgi|shtml|phtml|php)$"> SSLOptions +StdEnvVars`, its
@@ -467,6 +482,16 @@ directory and `.info` files, the hosts file) and classifies every vhost:
 | Broken-bypass | What hte-cli `fix` recognizes (blank lines between the directives) | Import as managed, normalized, bypass on |
 | Malformed | Marker present, domain or socket missing | Not imported; reported |
 | Raw | No marker (reverse proxies, hand-written vhosts) | Import as `kind = raw`: system paths and `${APACHE_LOG_DIR}` rewritten, certificates copied, validated by the config test; failures stay in the system and are reported |
+
+A raw import rewrites only what cannot work in userland and refuses the
+rest: `${APACHE_LOG_DIR}` and the system log directory become the site's log
+directory; `<VirtualHost>` addresses on 80 and 443 become the loopback
+listeners; a PHP-FPM socket becomes the site's own pool (profile `dev`);
+`SSLCertificateFile`/`SSLCertificateKeyFile` become the site's userland pair
+(copied). A file with `Listen`, several `ServerName` values, half a
+certificate pair or a socket without a PHP version stays in the system and
+is reported. Raw vhosts get no `IncludeOptional` of the site overlay: the
+imported text is the site's configuration, kept in `raw_conf`.
 
 Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
 1.1.1, `ApacheManager.php:50-143`), made strict:

@@ -6690,7 +6690,7 @@ Critical and high items:
 | Public-contract impact | no |
 | rc.A behavior | The identity is the `domain` key of `sites/<domain>.toml` (file name and key must agree, else the site is reported invalid by `doctor`). Rendered files and sockets are derived from it; nothing is parsed back from rendered config. migrate uses the exact pool path plus the `[<domain>]` first section (HTE-66) |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE05` in `internal/hte/migrate` (on `Malformed/`, `valid.test` gets no pool and `aaa-notes.conf` is untouched) and in `internal/hte/state` (a TOML whose `domain` differs from its file name is refused) |
+| Proving test | `TestLedger_HTE05` in `internal/hte/migrate` (on `Malformed/`, `valid.test` gets its exact-path pool `/etc/php/8.3/fpm/pool.d/valid.test.conf`, `aaa-notes.conf` is reported as an orphan pool and left untouched, and a pool at the exact path whose first section names another site is not taken) and in `internal/hte/state` (a TOML whose `domain` differs from its file name is refused) |
 | Status | open |
 
 <a id="hte-06"></a>
@@ -6726,7 +6726,7 @@ Critical and high items:
 | Public-contract impact | yes (log locations) |
 | rc.A behavior | `slowlog = $XDG_STATE_HOME/gash/hte/logs/<domain>/php-slow.log`, `php_admin_value[error_log] = .../logs/<domain>/php-error.log`, FPM master log `logs/php-fpm-<X.Y>.log`; nothing is ever written under a document root. `service logs --site D` shows them. migrate never deletes files, so old `php*-fpm-*.log` files stay in the docroot |
 | Fix recipe (3.0) | none: the delta is the design. Recommended addition to migrate: list the legacy log files found in each docroot in the plan, with a note that they may be served |
-| Proving test | `TestLedger_HTE07` in `internal/hte/fpm` (golden pools per profile: no rendered path starts with the docroot except `open_basedir`); `hte-e2e`: a PHP warning lands in `logs/<domain>/php-error.log` and the docroot listing is unchanged |
+| Proving test | `TestLedger_HTE07` in `internal/hte/render` (golden pools per profile: no rendered path starts with the docroot except `open_basedir`); `hte-e2e`: a PHP warning lands in `logs/<domain>/php-error.log` and the docroot listing is unchanged |
 | Status | open |
 
 <a id="hte-08"></a>
@@ -6924,7 +6924,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | Pools have no `user`, `group`, `listen.owner` or `listen.group`: the FPM master runs as the user, so workers and socket belong to the user; `listen.mode = 0660` kept. The userland Apache runs as the same user and reaches the socket without group tricks |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE18` in `internal/hte/fpm` (golden pools per profile: none of the four directives); `hte-e2e`: `stat` of the socket shows the user and 0660, `ps` shows workers as the user |
+| Proving test | `TestLedger_HTE18` in `internal/hte/render` (golden pools per profile: none of the four directives); `hte-e2e`: `stat` of the socket shows the user and 0660, `ps` shows workers as the user |
 | Status | open |
 
 <a id="hte-19"></a>
@@ -6942,7 +6942,7 @@ Critical and high items:
 | Public-contract impact | yes (no sudo for site commands) |
 | rc.A behavior | Site, service, php, apache, cert and hosts commands run as the user with no sudo; the user is the process's own uid (`os.Getuid`) and XDG directories. Root is reached only through `sudo <gash binary> hte __root <op>` (HTE-17) and the hosts helper, whose sudoers line names the user. The design does not say what `gash hte site ...` does when euid is 0 |
 | Fix recipe (3.0) | Operator choice for euid 0: (a) refuse every `gash hte` command except `install`, `uninstall`, `migrate` and `doctor` with a new code `root_not_allowed` (FATAL, hint: "Run gash hte as your own user; it asks for sudo itself when a step needs root") (recommended); (b) let root keep its own userland stack under `/root` |
-| Proving test | `TestLedger_HTE19` in `internal/hte/platform` (identity from the uid fake, environment variables ignored; euid 0 → the chosen outcome) |
+| Proving test | `TestLedger_HTE19` in `internal/hte` (identity from the uid fake, environment variables ignored; euid 0 → the chosen outcome) |
 | Status | open |
 
 <a id="hte-20"></a>
@@ -6996,7 +6996,7 @@ Critical and high items:
 | Public-contract impact | yes (which versions are offered) |
 | rc.A behavior | A version 5.6 to 8.5 counts only when its FPM binary runs and `<bin> -v` reports that version, and its `php.ini` exists. Probed layouts: Debian/Ubuntu (`/usr/sbin/php-fpmX.Y`), Fedora distro and Remi, Arch `php`/`php-legacy` and AUR, Homebrew `php@X.Y`. Cached by binary path, size and mtime. `php versions` lists them; `doctor` prints the platform's install command for a missing one |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE22` in `internal/hte/fpm` (sysroot with `etc/php/8.4/cli` only → 8.4 not listed; fake binary answering `PHP 8.3.x (fpm-fcgi)` → 8.3 listed; cache invalidated by an mtime change) |
+| Proving test | `TestLedger_HTE22` in `internal/hte/discover` (sysroot with `etc/php/8.4/cli` only → 8.4 not listed; fake binary answering `PHP 8.3.x (fpm-fcgi)` → 8.3 listed; cache invalidated by an mtime change) |
 | Status | open |
 
 <a id="hte-23"></a>
@@ -7068,7 +7068,7 @@ Critical and high items:
 | Public-contract impact | yes (new warnings on stderr and in `--json`) |
 | rc.A behavior | `site create`, `site modify`, `site show`, `doctor` and `migrate` warn on stderr, and add a `warnings` array in `--json`, when the docroot's `.htaccess` has a `RewriteRule` or `Redirect`/`RedirectMatch` to `https://`, including the `%{HTTP:X-Forwarded-Proto}` form. The warning names the file and line. Never an error |
 | Fix recipe (3.0) | none: the delta is the design. Implementation note: match per rule (the `RewriteCond` lines directly above one `RewriteRule`), not with a multi-line `.*` |
-| Proving test | `TestLedger_HTE26` in `internal/hte/doctor` (table: the hte-cli forms, the X-Forwarded-Proto form, `Redirect permanent / https://...`, an unrelated `RewriteCond` followed later by an unrelated rule → no warning) |
+| Proving test | `TestLedger_HTE26` in `internal/hte/htaccess` (table: the hte-cli forms, the X-Forwarded-Proto form, `Redirect permanent / https://...`, an unrelated `RewriteCond` followed later by an unrelated rule → no warning) |
 | Status | open |
 
 <a id="hte-27"></a>
@@ -7230,7 +7230,7 @@ Critical and high items:
 | Public-contract impact | yes (anything else pointing at the socket breaks) |
 | rc.A behavior | `<runtime>/gash-hte/<X.Y>-<first 10 hex of sha256(domain)>.sock`, to stay under the 104-byte `sun_path` limit of macOS. The name is never parsed (identity is the TOML). migrate rewrites socket paths in raw vhosts it imports; a raw vhost that used another site's socket gets its own pool (reported) |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE35` in `internal/hte/fpm` (socket path length ≤ 103 bytes for a 253-byte domain under a 60-byte runtime directory; vhost and pool name the same path) |
+| Proving test | `TestLedger_HTE35` in `internal/hte/render` (socket path length ≤ 103 bytes for a 253-byte domain under a 60-byte runtime directory; vhost and pool name the same path) |
 | Status | open |
 
 <a id="hte-36"></a>
@@ -7338,7 +7338,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | When the platform default is not writable by the user (Fedora's `/var/lib/php/session` is group `apache`), the pool sets `session.save_path` to `$XDG_STATE_HOME/gash/hte/php/<X.Y>/sessions` and appends that directory to `open_basedir` in staging and hardened. Debian and Ubuntu pools are unchanged |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE41` in `internal/hte/fpm` (sysroot fakes: Debian → no `session.save_path`; Fedora → the per-version directory, also in `open_basedir`); `hte-e2e` Fedora: a session survives two requests |
+| Proving test | `TestLedger_HTE41` in `internal/hte/render` (sysroot fakes: Debian → no `session.save_path`; Fedora → the per-version directory, also in `open_basedir`); `hte-e2e` Fedora: a session survives two requests |
 | Status | open |
 
 <a id="hte-42"></a>
@@ -7356,7 +7356,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | The design copies the list verbatim to every platform (plus HTE-41's session directory). On Fedora, Arch and Homebrew the PEAR and include directories live elsewhere (`/usr/share/pear`, `<prefix>/share/pear`, inferred), so code that includes from them fails under staging/hardened there. Logs outside the docroot need no entry: PHP checks `error_log` against `open_basedir` only when it is set at runtime, and writes it without the check (inferred from PHP's source; verified by the proving test) |
 | Fix recipe (3.0) | Options: (a) keep the list verbatim on every platform (design today; same text as hte-cli); (b) keep the Debian list on Debian/Ubuntu and substitute each platform's include directories (read from the platform `php.ini` `include_path`) elsewhere (recommended: the profiles then mean the same thing everywhere) |
-| Proving test | `TestLedger_HTE42` in `internal/hte/fpm` (golden staging pool per platform fake); `hte-e2e`: staging profile, a PHP warning reaches `logs/<domain>/php-error.log` |
+| Proving test | `TestLedger_HTE42` in `internal/hte/render` (golden staging pool per platform fake); `hte-e2e`: staging profile, a PHP warning reaches `logs/<domain>/php-error.log` |
 | Status | open |
 
 <a id="hte-43"></a>
@@ -7374,7 +7374,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings, log contents) |
 | rc.A behavior | The design keeps the inert setting (path moved to `logs/<domain>/php-slow.log`, HTE-07), so the profile values stay identical to hte-cli's |
 | Fix recipe (3.0) | Options: (a) keep it inert (design today; exact hte-cli values); (b) add `request_slowlog_timeout = 5s` to every profile so the log works (php-fpm then traces slow workers with ptrace, which a master running as the same user may do on its own children, inferred; check under Docker's default seccomp); (c) drop the `slowlog` line |
-| Proving test | `TestLedger_HTE43` in `internal/hte/fpm` (golden pools hold the chosen lines); for (b) `hte-e2e`: a `sleep(6)` script leaves a backtrace in `php-slow.log` |
+| Proving test | `TestLedger_HTE43` in `internal/hte/render` (golden pools hold the chosen lines); for (b) `hte-e2e`: a `sleep(6)` script leaves a backtrace in `php-slow.log` |
 | Status | open |
 
 <a id="hte-44"></a>
@@ -7392,7 +7392,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | Every pool sets `security.limit_extensions = .php`. Managed vhosts only pass `\.php$` to FPM, so this matters for raw imported vhosts and overlays that route other extensions to the socket |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE44` in `internal/hte/fpm` (golden pools) |
+| Proving test | `TestLedger_HTE44` in `internal/hte/render` (golden pools) |
 | Status | open |
 
 <a id="hte-45"></a>
@@ -7644,7 +7644,7 @@ Critical and high items:
 | Public-contract impact | yes |
 | rc.A behavior | Debian/Ubuntu (`apache2`, `/usr/lib/apache2/modules`), Fedora (`httpd`, `/usr/lib64/httpd/modules`, distro PHP and Remi), Arch (`httpd`, `php`, `php-legacy`), Homebrew `httpd` on macOS, WSL2 with a manual checklist. `install` and `doctor` check prerequisites per platform: `apache_not_found`, `platform_unsupported` (FATAL). No `SHELL` requirement |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE58` in `internal/hte/platform` (sysroot fakes per platform → binary, module directory, PHP layouts); `hte-e2e` matrix (Debian, Ubuntu, Fedora, Arch, macOS) |
+| Proving test | `TestLedger_HTE58` in `internal/hte/discover` (sysroot fakes per platform → binary, module directory, PHP layouts); `hte-e2e` matrix (Debian, Ubuntu, Fedora, Arch, macOS) |
 | Status | open |
 
 <a id="hte-59"></a>
