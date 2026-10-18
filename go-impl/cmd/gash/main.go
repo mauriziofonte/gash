@@ -3,4 +3,12 @@
 // Command gash is the Gash 3.x binary.
 package main
 
-func main() {}
+import (
+	"os"
+
+	"github.com/mauriziofonte/gash/internal/app"
+)
+
+func main() {
+	os.Exit(app.Main(os.Args[1:], os.Environ(), os.Stdin, os.Stdout, os.Stderr))
+}

@@ -1,0 +1,18 @@
+{{%/* Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+Stub overrides. A delegated function gets the one-line stub
+`NAME() { __gash_call NAME "$@"; }` unless this file defines a template
+named "stub/NAME": its text (the registry Function as data, leading and
+trailing newlines trimmed) replaces the stub wherever the function is
+defined (gash.sh, the module shims, the core shims). A shell-mutating
+function (MATRIX class `shell-mutating`) uses one to keep its parent-shell
+part (cd, history, eval of quoted exports) in Bash and call the binary
+for the rest. Example:
+
+{{% define "stub/NAME" %}}
+NAME() {
+    ...
+    __gash_call {{% .Name %}} "$@"
+}
+{{% end %}}
+*/%}}

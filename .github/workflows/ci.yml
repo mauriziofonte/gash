@@ -44,6 +44,67 @@ jobs:
       - name: shfmt (formatting follows .editorconfig)
         run: shfmt -d $(git ls-files '*.sh' bash_completion .gashrc tests/mocks/bin)
 
+  go:
+    name: Go port (vet, test, build, specs in go mode)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: go-impl
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.2
+          cache-dependency-path: go-impl/go.sum
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3 strace
+          bin="$HOME/.local/bin"
+          mkdir -p "$bin"
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            | tar -xJ --strip-components=1 -C "$bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          curl -fsSL -o "$bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
+          chmod +x "$bin/shfmt"
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would change:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # Includes the generated Bash goldens and their bash -n, shellcheck
+      # and shfmt checks (internal/compatgen).
+      - name: go test
+        run: go test ./...
+
+      - name: Build
+        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+
+      # The 2.x specs against the binary through the generated Bash. Not a
+      # gate until the port is complete (go-impl/PORT/PARITY.md).
+      - name: Specs in go mode
+        continue-on-error: true
+        working-directory: .
+        run: bash tests/run.sh --impl go --gash-bin "$RUNNER_TEMP/gash"
+
+      - name: Upload the per-test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-mode-results
+          path: tests/.results/go.tsv
+          if-no-files-found: ignore
+
   test:
     name: Tests (${{ matrix.os }}, ${{ matrix.awk }})
     runs-on: ${{ matrix.os }}
