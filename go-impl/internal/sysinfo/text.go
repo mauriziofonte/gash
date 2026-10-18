@@ -241,3 +241,71 @@ func pathLess(a, b string) bool {
 func sortPaths(ps []string) {
 	sort.SliceStable(ps, func(i, j int) bool { return pathLess(ps[i], ps[j]) })
 }
+
+// headN is `head -N` over a byte stream: the first N lines, the last one
+// as it is when the input ends without a newline.
+func headN(b []byte, n int) []byte {
+	i := 0
+	for k := 0; k < n; k++ {
+		j := bytes.IndexByte(b[i:], '\n')
+		if j < 0 {
+			return b
+		}
+		i += j + 1
+	}
+	return b[:i]
+}
+
+// tailN is `tail -n N` over a byte stream: a last line without newline
+// counts as a line.
+func tailN(b []byte, n int) []byte {
+	if n <= 0 {
+		return nil
+	}
+	pos := len(b)
+	if pos > 0 && b[pos-1] == '\n' {
+		pos--
+	}
+	for k := 0; k < n; k++ {
+		j := bytes.LastIndexByte(b[:pos], '\n')
+		if j < 0 {
+			return b
+		}
+		pos = j
+	}
+	return b[pos+1:]
+}
+
+// skipLine is `tail -n +2`: everything after the first line.
+func skipLine(b []byte) []byte {
+	if i := bytes.IndexByte(b, '\n'); i >= 0 {
+		return b[i+1:]
+	}
+	return nil
+}
+
+// grepOAll is `grep -oP RE` over lines for an expression whose printed
+// part is group 1 (a \K expression): empty matches are not printed.
+func grepOAll(ls []string, re *regexp.Regexp) []string {
+	var out []string
+	for _, l := range ls {
+		for _, m := range re.FindAllStringSubmatch(l, -1) {
+			if m[1] != "" {
+				out = append(out, m[1])
+			}
+		}
+	}
+	return out
+}
+
+// withEnv is env with NAME=VALUE set (an earlier NAME dropped).
+func withEnv(env []string, kv string) []string {
+	name := kv[:strings.IndexByte(kv, '=')+1]
+	out := make([]string, 0, len(env)+1)
+	for _, e := range env {
+		if !strings.HasPrefix(e, name) {
+			out = append(out, e)
+		}
+	}
+	return append(out, kv)
+}

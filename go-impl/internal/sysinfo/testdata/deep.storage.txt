@@ -1,0 +1,42 @@
+=== STORAGE DEEP ===
+--- Disk usage
+Filesystem Type Size Used Avail Use% Mounted on
+/dev/vda1 ext4 100G 50G 50G 50% /
+--- Block devices
+NAME FSTYPE LABEL UUID
+vda
+`-vda1 ext4 root abc
+--- Mounts
+proc on /proc type proc (rw)
+/dev/vda1 on / type ext4 (rw)
+--- fstab
+UUID=abc / ext4 defaults 0 1
+--- crypttab
+cryptroot UUID=x none luks
+--- LVM PVs
+  PV /dev/vda2 VG vg0
+--- LVM VGs
+  VG vg0
+--- LVM LVs
+  LV root vg0
+--- mdadm
+ARRAY /dev/md0
+--- ZFS pools
+  pool: tank
+ state: ONLINE
+--- ZFS datasets
+NAME USED
+tank 1G
+--- zed.rc
+ZED_EMAIL_ADDR="root"
+--- Sanoid
+[tank]
+--- SMART
+--- NFS exports
+# e
+/srv *(rw)
+--- nfs.conf
+[nfsd]
+--- hdparm
+/dev/sda {
+}

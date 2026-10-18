@@ -1,0 +1,55 @@
+=== MAINTENANCE DEEP ===
+--- crontab
+SHELL=/bin/sh
+--- cron.d contents
+--- certbot
+0 */12 * * * root certbot -q renew
+--- cron.daily
+logrotate
+--- cron.hourly
+--- cron.weekly
+--- cron.monthly
+--- User crontabs
+alice
+--- Logrotate configs
+--- apache2
+/var/log/apache2/*.log {
+  daily
+}
+--- Let's Encrypt
+--- Live domains
+example.com
+--- Cert expiry
+example.com: notAfter=Jan  1 00:00:00 2027 GMT
+--- Renewal configs
+--- example.com.conf
+version = 2.1
+--- cli.ini
+max-log-backups = 0
+--- Upgradable packages
+bash/stable 5.2 amd64 [upgradable from: 5.1]
+--- dpkg log (recent)
+1 install a
+2 install b
+3 status c--- unattended-upgrades
+Unattended-Upgrade::Origins-Pattern {
+};
+--- Pending config merges
+/etc/apt/x.dpkg-dist
+/etc/foo.conf.dpkg-old
+--- Legacy .org backups
+/etc/hosts.org
+--- etckeeper log
+abc123 daily autocommit
+--- Cloud-init
+distro: debian
+manage_etc_hosts: true
+--- Profile scripts
+locale.sh
+--- environment
+PATH="/usr/bin"
+--- Service defaults
+custom
+grub
+opendkim
+sysstat

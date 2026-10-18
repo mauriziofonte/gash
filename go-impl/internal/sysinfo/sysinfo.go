@@ -2,7 +2,8 @@
 
 // Package sysinfo holds sysinfo of lib/modules/sysinfo.sh: the overview
 // card and the ten /etc enumerations, verbose or compact (--llm), with
-// lazy sub-headers, and the collectors ai_sysinfo reuses (Session). Files
+// lazy sub-headers, and the collectors ai_sysinfo reuses through a
+// Session (Begin, Collect, Deep for the six drill-downs, Sudo, Release). Files
 // are read through a platform.Sysroot; the tools whose text 2.x showed
 // (hostname, uname, df, uptime, systemctl, ss, systemd-detect-virt, sudo)
 // stay CLIs. Defects of 2.x are reproduced (LEDGER SYS-15 to SYS-20).

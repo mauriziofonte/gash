@@ -3,8 +3,12 @@
 package sysinfo
 
 import (
+	"bytes"
+	"io"
 	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -140,11 +144,85 @@ func (f files) lsPaths(words ...string) []string {
 	return out
 }
 
+// globIn is the Bash glob "PREFIX"PATTERN: the visible names of the
+// directory PREFIX (taken literally) that match one-component PATTERN,
+// in byte order, PREFIX joined; nil when nothing matches.
+func (f files) globIn(prefix, pattern string) []string {
+	dir := prefix
+	if dir == "" {
+		dir = "."
+	}
+	ents, err := f.sys.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range ents {
+		if !strings.HasPrefix(e.Name(), ".") && fnmatch(pattern, e.Name()) {
+			out = append(out, prefix+e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// isBlock is [[ -b P ]].
+func (f files) isBlock(p string) bool {
+	st, err := f.sys.Stat(p)
+	return err == nil && st.Mode()&fs.ModeDevice != 0 && st.Mode()&fs.ModeCharDevice == 0
+}
+
+// abs is a path a test operator gets: a relative one is the working
+// directory's.
+func (f files) abs(p string) string {
+	if path.IsAbs(p) {
+		return p
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "/" + p
+	}
+	return filepath.Join(wd, p)
+}
+
+// tail is `tail -n N FILE`, read from the end of a regular file.
+func (f files) tail(p string, n int) []byte {
+	r, err := f.sys.Resolve(p)
+	if err != nil {
+		return nil
+	}
+	fh, err := os.Open(f.sys.Path(r))
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = fh.Close() }()
+	st, err := fh.Stat()
+	if err != nil {
+		return nil
+	}
+	if !st.Mode().IsRegular() {
+		b, _ := io.ReadAll(fh)
+		return tailN(b, n)
+	}
+	size, chunk := st.Size(), int64(64<<10)
+	for {
+		off := max(size-chunk, 0)
+		buf := make([]byte, size-off)
+		if _, err := fh.ReadAt(buf, off); err != nil && err != io.EOF {
+			return nil
+		}
+		if off == 0 || bytes.Count(buf, []byte{'\n'}) > n {
+			return tailN(buf, n)
+		}
+		chunk *= 4
+	}
+}
+
 // basenames is __sysinfo_basenames DIR SUFFIX [keep]: the names of
 // DIR/*SUFFIX that exist, SUFFIX stripped unless keep.
 func (f files) basenames(dir, suffix string, keep bool) []string {
 	var out []string
-	for _, p := range f.glob(dir + "/*" + suffix) {
+	for _, p := range f.globIn(dir+"/", "*"+suffix) {
 		if !f.sys.Exists(p) {
 			continue
 		}
