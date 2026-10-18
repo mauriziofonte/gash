@@ -390,9 +390,21 @@ Autostart, chosen by `install` and recorded in the receipt:
 
 | Platform | Mechanism |
 |---|---|
-| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because `service start|stop|restart` go through `systemctl --user` while the unit is in use), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
+| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because every start, stop and restart of the stack goes through `systemctl --user` while the unit is in use: `service start\|stop\|restart`, the stack start of `install` and of the `migrate --apply` switch, the stop of `uninstall` (HTE-73)), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
 | Linux without systemd (containers, WSL without systemd) | No boot hook (`/etc/wsl.conf` is never touched). Optional `autostart = "shell"`: the first interactive shell that loads `gash init bash` starts the stack when it is down (one background `gash hte service start`, no output on success) |
 | macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad` |
+
+With the systemd unit, a `systemctl --user start` that leaves a master
+down (the unit stayed active while its masters ended) is followed by a
+`restart`. A command that holds the state lock and runs a unit job writes
+`$XDG_STATE_HOME/gash/hte/unit.lease` (its PID) for the job's duration;
+the hidden command, which systemd runs meanwhile, then works under that
+command's lock instead of waiting for it (a lease whose process is gone,
+or with the lock free, does not count). The masters of `migrate`'s staging
+generation (two run-time loopback ports, while the stack is down) are
+still started and stopped directly: the unit always starts the stored
+settings. Masters a reload starts (a PHP version that comes into use, the
+rollback's restart) are started directly too.
 
 ## 6. Ports 80/443 without root at runtime
 
