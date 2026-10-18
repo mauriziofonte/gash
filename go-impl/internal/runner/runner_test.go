@@ -58,6 +58,15 @@ func helper(mode string, args []string) int {
 		signal.Ignore(syscall.SIGTERM)
 		fmt.Print("ready")
 		time.Sleep(10 * time.Second)
+	case "touch":
+		time.Sleep(200 * time.Millisecond)
+		_ = os.WriteFile(args[0], []byte("started"), 0o600)
+	case "prompt":
+		fmt.Print("Passphrase: ")
+		var line string
+		_, _ = fmt.Scanln(&line)
+		fmt.Printf("got %s\n", line)
+		return 3
 	case "daemon":
 		// A grandchild keeps stdout open after this process exits.
 		cmd := exec.Command(os.Args[0])

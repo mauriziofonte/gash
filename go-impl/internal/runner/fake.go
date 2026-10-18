@@ -24,8 +24,12 @@ type TB interface {
 
 // Call is one start as the Fake saw it.
 type Call struct {
-	// Use is the Bash use for RunBash, 0 for Run.
+	// Use is the Bash use for RunBash, 0 otherwise.
 	Use BashUse
+	// Script is the constant script of RunScript, 0 otherwise.
+	Script ConstScript
+	// Background is a Start, PTY a StartPTY.
+	Background, PTY bool
 	// Argv is the whole command line, program first, as given (not looked
 	// up); for RunBash the bash -c line RunBash builds.
 	Argv []string
@@ -42,6 +46,14 @@ type Call struct {
 type Expect struct {
 	// Use is the expected Bash use: 0 for Run.
 	Use BashUse
+	// Script is the expected constant script of RunScript.
+	Script ConstScript
+	// Background expects a Start, PTY a StartPTY.
+	Background, PTY bool
+	// Dialog is the conversation of a StartPTY child, in order: what it
+	// prints (reads of the PTY return it) and what the code must type
+	// (writes must match it). After the last step reads get io.EOF.
+	Dialog []DialogStep
 	// Argv must match exactly.
 	Argv []string
 	// Env, when not nil, must match exactly, order included.
@@ -139,7 +151,7 @@ func (f *Fake) Run(ctx context.Context, c Cmd) (Result, error) {
 		f.fail("%v", err)
 		return Result{ExitCode: 126}, err
 	}
-	return f.start(ctx, 0, argv, c.Options)
+	return f.start(ctx, Call{Argv: argv}, c.Options)
 }
 
 // RunBash implements Runner.
@@ -149,7 +161,48 @@ func (f *Fake) RunBash(ctx context.Context, b Bash) (Result, error) {
 		f.fail("%v", err)
 		return Result{ExitCode: 126}, err
 	}
-	return f.start(ctx, b.Use, argv, b.Options)
+	return f.start(ctx, Call{Use: b.Use, Argv: argv}, b.Options)
+}
+
+// RunScript implements Runner.
+func (f *Fake) RunScript(ctx context.Context, sc Script) (Result, error) {
+	argv, err := sc.argv()
+	if err != nil {
+		f.fail("%v", err)
+		return Result{ExitCode: 126}, err
+	}
+	return f.start(ctx, Call{Script: sc.Name, Argv: argv}, sc.Options)
+}
+
+// Start implements Runner: the expectation's Err is the start error; its
+// output and status are not used.
+func (f *Fake) Start(ctx context.Context, c Cmd) error {
+	argv := append([]string{c.Path}, c.Args...)
+	if err := checkNoShell(argv); err != nil {
+		f.fail("%v", err)
+		return err
+	}
+	_, err := f.start(ctx, Call{Background: true, Argv: argv}, Options{Env: c.Env, Dir: c.Dir, Stdin: c.Stdin})
+	return err
+}
+
+// StartPTY implements Runner: the child follows the expectation's Dialog,
+// then ends with its Status or Signal.
+func (f *Fake) StartPTY(ctx context.Context, c Cmd) (PTY, error) {
+	argv := append([]string{c.Path}, c.Args...)
+	if err := checkNoShell(argv); err != nil {
+		f.fail("%v", err)
+		return nil, err
+	}
+	e, err := f.next(ctx, Call{PTY: true, Argv: argv}, Options{Env: c.Env, Dir: c.Dir, Timeout: c.Timeout})
+	if err != nil {
+		return nil, err
+	}
+	res := Result{ExitCode: e.Status, TimedOut: e.TimedOut}
+	if e.Signal != 0 {
+		res.Signal, res.ExitCode = e.Signal, 128+int(e.Signal)
+	}
+	return &fakePTY{f: f, argv: argv, steps: slices.Clone(e.Dialog), res: res}, nil
 }
 
 func (f *Fake) fail(format string, args ...any) {
@@ -159,15 +212,17 @@ func (f *Fake) fail(format string, args ...any) {
 	}
 }
 
-func (f *Fake) start(ctx context.Context, use BashUse, argv []string, o Options) (Result, error) {
+// next records call and matches it against the next expectation.
+func (f *Fake) next(ctx context.Context, call Call, o Options) (Expect, error) {
 	if err := ctx.Err(); err != nil {
-		return Result{ExitCode: 1}, err
+		return Expect{}, err
 	}
-	call := Call{Use: use, Argv: argv, Env: normalizeEnv(o.Env), Dir: o.Dir, Timeout: o.Timeout}
+	argv := call.Argv
+	call.Env, call.Dir, call.Timeout = normalizeEnv(o.Env), o.Dir, o.Timeout
 	if o.Stdin != nil {
 		in, err := io.ReadAll(o.Stdin)
 		if err != nil {
-			return Result{ExitCode: 1}, err
+			return Expect{}, err
 		}
 		call.Stdin = in
 	}
@@ -184,21 +239,36 @@ func (f *Fake) start(ctx context.Context, use BashUse, argv []string, o Options)
 
 	if !have {
 		f.fail("runner: unexpected start %q", argv)
-		return Result{ExitCode: 127}, fmt.Errorf("%w: %q", ErrUnexpected, argv)
+		return Expect{}, fmt.Errorf("%w: %q", ErrUnexpected, argv)
 	}
 	if why := e.mismatch(call); why != "" {
 		f.fail("runner: start %q: %s", argv, why)
-		return Result{ExitCode: 127}, fmt.Errorf("%w: %q: %s", ErrUnexpected, argv, why)
+		return Expect{}, fmt.Errorf("%w: %q: %s", ErrUnexpected, argv, why)
+	}
+	var se *StartError
+	if errors.As(e.Err, &se) || (e.Err != nil && (call.Background || call.PTY)) {
+		return e, e.Err
+	}
+	return e, nil
+}
+
+func (f *Fake) start(ctx context.Context, call Call, o Options) (Result, error) {
+	e, err := f.next(ctx, call, o)
+	if err != nil {
+		var se *StartError
+		switch {
+		case errors.As(err, &se):
+			return Result{ExitCode: se.Status}, err
+		case errors.Is(err, ErrUnexpected):
+			return Result{ExitCode: 127}, err
+		}
+		return Result{ExitCode: 1}, err
 	}
 
 	res := Result{ExitCode: e.Status, TimedOut: e.TimedOut}
 	if e.Signal != 0 {
 		res.Signal = e.Signal
 		res.ExitCode = 128 + int(e.Signal)
-	}
-	var se *StartError
-	if errors.As(e.Err, &se) {
-		return Result{ExitCode: se.Status}, e.Err
 	}
 	if e.Err != nil {
 		return res, e.Err
@@ -228,6 +298,10 @@ func (e Expect) mismatch(c Call) string {
 	switch {
 	case e.Use != c.Use:
 		return fmt.Sprintf("use %s, want %s", c.Use, e.Use)
+	case e.Script != c.Script:
+		return fmt.Sprintf("script %s, want %s", c.Script, e.Script)
+	case e.Background != c.Background || e.PTY != c.PTY:
+		return fmt.Sprintf("kind background=%t pty=%t, want background=%t pty=%t", c.Background, c.PTY, e.Background, e.PTY)
 	case !slices.Equal(e.Argv, c.Argv):
 		return fmt.Sprintf("want argv %q", e.Argv)
 	case e.Env != nil && !slices.Equal(normalizeEnv(e.Env), c.Env):
@@ -249,3 +323,73 @@ func (e Expect) mismatch(c Call) string {
 	}
 	return ""
 }
+
+// DialogStep is one turn of a Fake PTY's conversation: Out is printed by
+// the child, In must be typed by the code; exactly one is set.
+type DialogStep struct {
+	Out, In string
+}
+
+// fakePTY plays a Dialog.
+type fakePTY struct {
+	mu    sync.Mutex
+	f     *Fake
+	argv  []string
+	steps []DialogStep
+	typed string // the part of the current In step typed so far
+	res   Result
+}
+
+// Read returns the output of the current Out step; at the end of the
+// dialog io.EOF. A read while the child waits for input fails the test.
+func (p *fakePTY) Read(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.steps) == 0 {
+		return 0, io.EOF
+	}
+	st := &p.steps[0]
+	if st.Out == "" {
+		p.f.fail("runner: PTY %q: read while the child waits for %q", p.argv, st.In)
+		return 0, fmt.Errorf("%w: read while the child waits for input", ErrUnexpected)
+	}
+	n := copy(b, st.Out)
+	st.Out = st.Out[n:]
+	if st.Out == "" {
+		p.steps = p.steps[1:]
+	}
+	return n, nil
+}
+
+// Write must type the current In step (in one or more writes).
+func (p *fakePTY) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.steps) == 0 || p.steps[0].In == "" {
+		p.f.fail("runner: PTY %q: unexpected input %q", p.argv, b)
+		return 0, fmt.Errorf("%w: unexpected input", ErrUnexpected)
+	}
+	typed := p.typed + string(b)
+	want := p.steps[0].In
+	if !strings.HasPrefix(want, typed) {
+		p.f.fail("runner: PTY %q: typed %q, want %q", p.argv, typed, want)
+		return 0, fmt.Errorf("%w: unexpected input", ErrUnexpected)
+	}
+	p.typed = typed
+	if typed == want {
+		p.typed, p.steps = "", p.steps[1:]
+	}
+	return len(b), nil
+}
+
+// Wait reports the scripted end; a dialog left unfinished fails the test.
+func (p *fakePTY) Wait() (Result, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.steps) > 0 {
+		p.f.fail("runner: PTY %q ended with %d dialog steps left", p.argv, len(p.steps))
+	}
+	return p.res, nil
+}
+
+func (p *fakePTY) Close() error { return nil }
