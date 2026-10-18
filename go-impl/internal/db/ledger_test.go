@@ -299,3 +299,62 @@ func TestLedger_CORE05(t *testing.T) {
 	require.Equal(t, 0, got.RC)
 	require.Contains(t, got.Stderr, "Connection successful!")
 }
+
+// TestLedger_DB14_2x: an EXPLAIN on SQLite fails as 2.x failed, its text
+// table refused by jq: the jq message, exit 5, nothing on stdout.
+func TestLedger_DB14_2x(t *testing.T) {
+	d := physTemp(t)
+	home := filepath.Join(d, "home")
+	require.NoError(t, os.Mkdir(home, 0o755))
+	db := sqliteFixture(t, d, "CREATE TABLE u(id INTEGER PRIMARY KEY, name TEXT);")
+	m := frozen(New())
+	env := baseEnv(home, nil)
+	for _, q := range []string{"EXPLAIN SELECT 1", "EXPLAIN QUERY PLAN SELECT * FROM u WHERE id = 1", "explain select name from u"} {
+		got := same(t, m, d, env, "llm_db_query", q, "-f", db)
+		require.Equal(t, 5, got.RC, q)
+		require.Empty(t, got.Stdout, q)
+		require.Regexp(t, `^jq: parse error: Invalid numeric literal at line 1, column [0-9]+\n$`, got.Stderr, q)
+	}
+}
+
+// TestLedger_DB15: SQLite text that is not UTF-8, or holds a NUL, comes
+// back whole as valid JSON: one U+FFFD per invalid sequence as jq 1.7
+// decodes it, \u0000 for NUL (2.x: ￿ffff escapes, text cut at NUL).
+func TestLedger_DB15(t *testing.T) {
+	d := physTemp(t)
+	db := sqliteFixture(t, d, "CREATE TABLE b(v TEXT); INSERT INTO b VALUES "+
+		"(CAST(x'ff00' AS TEXT)), (CAST(x'e28278' AS TEXT)), ('a' || char(0) || 'b'), "+
+		"(CAST(x'c0af' AS TEXT)), (CAST(x'eda080' AS TEXT)), (CAST(x'f4908080' AS TEXT)), (CAST(x'e282ac' AS TEXT));")
+	m := frozen(New())
+	env := baseEnv(d, nil)
+	got := runGo(t, m, d, env, "llm_db_query", "SELECT v FROM b", "-f", db)
+	require.Equal(t, 0, got.RC, got.Stderr)
+	require.True(t, json.Valid([]byte(got.Stdout)), got.Stdout)
+	require.Equal(t, `{"data":[{"v":"�\u0000"},{"v":"�x"},{"v":"a\u0000b"},{"v":"��"},`+
+		`{"v":"�"},{"v":"�"},{"v":"€"}],"rows":7,"query_time":"0µs"}`+"\n",
+		strings.NewReplacer("�", `�`, "€", `€`).Replace(got.Stdout))
+}
+
+// TestLedger_DB17: table and database names take ASCII letters and digits
+// only, whatever the locale (2.x's bracket ranges followed collation).
+func TestLedger_DB17(t *testing.T) {
+	d, _, env := mysqlHome(t)
+	db := sqliteFixture(t, d, "CREATE TABLE ok_1(id INTEGER);")
+	m := frozen(New())
+	m.openMySQL = (&fakeMySQL{}).open
+	for _, loc := range []string{"C", "C.UTF-8", "en_US.UTF-8", "tr_TR.UTF-8"} {
+		env["LC_ALL"], env["LANG"] = loc, loc
+		for _, name := range []string{"té", "ß", "ıd", "ａ", "Ǆ", "á", "٣"} {
+			got := runGo(t, m, d, env, "llm_db_schema", name, "-f", db)
+			require.Equal(t, 1, got.RC, "%s %q", loc, name)
+			require.Contains(t, got.Stderr, `"error":"invalid_table_name"`, "%s %q", loc, name)
+			got = runGo(t, m, d, env, "llm_db_tables", "-d", name)
+			require.Contains(t, got.Stderr, `"error":"invalid_database_name"`, "%s %q", loc, name)
+			mustWrite(t, filepath.Join(d, ".target-database"), name+"\n", 0o644)
+			got = runGo(t, m, d, env, "llm_db_tables", "-c", "maria")
+			require.Contains(t, got.Stderr, `"error":"invalid_database_name"`, "%s %q", loc, name)
+		}
+		got := runGo(t, m, d, env, "llm_db_schema", "ok_1", "-f", db)
+		require.Equal(t, 0, got.RC, got.Stderr)
+	}
+}
