@@ -62,9 +62,9 @@ func in2x(mode, body string) string {
 
 // modeStyle is the Go style of a color mode.
 func modeStyle(mode string, utf8 bool, width int) Style {
-	s := Style{Width: width, G: term.ASCIIGlyphs}
+	s := Style{Width: width, Columns: width, G: term.ASCIIGlyphs}
 	if utf8 {
-		s.G = term.UnicodeGlyphs
+		s.G, s.UTF8 = term.UnicodeGlyphs, true
 	}
 	switch mode {
 	case "on":

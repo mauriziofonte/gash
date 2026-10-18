@@ -569,8 +569,11 @@ __gash_progress() {
 
 # Usage: __gash_section "Section Title"   (stdout)
 __gash_section() {
-    local title="${1-}" width line="" i
-    __gash_int width "${COLUMNS:-80}"
+    local title="${1-}" width=80 line="" i
+    # COLUMNS only when it is a run of digits, never evaluated (SYS-34).
+    if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]]; then
+        width=$COLUMNS
+    fi
     ((width > 60)) && width=60
     for ((i = 0; i < width; i++)); do line+="$__GASH_GLYPH_HLINE"; done
 

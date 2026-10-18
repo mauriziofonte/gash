@@ -87,6 +87,9 @@ type Term struct {
 	// color is the caller shell's __gash_use_color answer (GASH__COLOR),
 	// 0 when not given.
 	color int8
+	// tty is the controlling terminal of a test term (Fixed, WithTTY);
+	// nil opens /dev/tty.
+	tty *fakeTTY
 }
 
 // New returns the Term of a process whose standard streams are the given
@@ -124,7 +127,7 @@ func New(env Env, stdin, stdout, stderr *os.File) *Term {
 
 // Fixed returns a Term with the given answers, for tests.
 func Fixed(env Env, stdin, stdout, stderr bool) *Term {
-	return &Term{env: env, stdinTTY: stdin, stdoutTTY: stdout, stderrTTY: stderr}
+	return &Term{env: env, stdinTTY: stdin, stdoutTTY: stdout, stderrTTY: stderr, tty: &fakeTTY{}}
 }
 
 func lookup(env Env, name string) (string, bool) {
