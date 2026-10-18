@@ -263,6 +263,31 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 			r.add("ports setting", CheckOK, fmt.Sprintf("%s = %d", rootops.PortSysctl, n), "")
 		}
 	}
+	if v.os.GOOS == "darwin" {
+		e.doctorPF(set, r)
+	}
+}
+
+// doctorPF checks the macOS pf redirect the receipt holds: its files as
+// install wrote them, and its targets the stack's ports. (Whether the
+// anchor is loaded only root can read.)
+func (e *Engine) doctorPF(set state.Settings, r *report) {
+	to, ok := e.pfRedirect()
+	if !ok {
+		return
+	}
+	anchor, _ := e.Sysroot.ReadFile(rootops.PFAnchorFile)
+	daemon, _ := e.Sysroot.ReadFile(rootops.PFDaemonPath)
+	switch {
+	case to.HTTP != set.Ports.HTTP || to.HTTPS != set.Ports.HTTPS:
+		r.add("ports setting", CheckFail, fmt.Sprintf("the pf redirect sends ports 80 and 443 to %d and %d, but the stack listens on %d and %d",
+			to.HTTP, to.HTTPS, set.Ports.HTTP, set.Ports.HTTPS), "set the ports in hte.toml back, or run gash hte uninstall and install again")
+	case string(anchor) != string(rootops.PFRules(to.HTTP, to.HTTPS)) || string(daemon) != string(rootops.PFDaemon()):
+		r.add("ports setting", CheckFail, rootops.PFAnchorFile+" or "+rootops.PFDaemonPath+" is missing or changed", "run gash hte uninstall, then gash hte install")
+	default:
+		r.add("ports setting", CheckOK, fmt.Sprintf("pf redirects ports 80 and 443 of the loopback to %d and %d (anchor %s, loaded at boot by %s)",
+			to.HTTP, to.HTTPS, rootops.PFAnchor, rootops.PFDaemonPath), "")
+	}
 }
 
 func sumBytes(b []byte) string {
