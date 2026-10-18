@@ -516,16 +516,8 @@ func TestCheckPerms(t *testing.T) {
 			t.Errorf("mode %o: %q, want %q", mode, texts(w), want)
 		}
 	}
-	// The setuid, setgid and sticky bits are part of the printed mode.
-	p := write(t, "env", "", 0o600)
-	if err := os.Chmod(p, os.ModeSetuid|0o644); err != nil {
-		t.Fatal(err)
-	}
-	if w := CheckPerms(p, "/h", euid); len(w) != 1 || !strings.Contains(w[0].Text, "(mode 4644)") {
-		t.Errorf("setuid: %q", texts(w))
-	}
 	// Owner check against another uid.
-	p = write(t, "env", "", 0o600)
+	p := write(t, "env", "", 0o600)
 	w := CheckPerms(p, filepath.Dir(p), euid+1)
 	want := "~/env is owned by uid " + itoa(euid) + ", not by you (uid " + itoa(euid+1) + "). Gash will still read it."
 	if len(w) != 1 || w[0].Text != want {
@@ -567,6 +559,36 @@ func itoa(n int) string {
 		b = append([]byte{'-'}, b...)
 	}
 	return string(b)
+}
+
+// LEDGER CORE-17: the mode in the warning is always GNU stat -c %a: octal
+// without leading zeros, the setuid, setgid and sticky digit included (2.x
+// printed BSD stat -f %Lp where GNU stat was missing).
+func TestLedger_CORE17(t *testing.T) {
+	euid := os.Geteuid()
+	tests := []struct {
+		mode os.FileMode
+		want string
+	}{
+		{0o644, "644"},
+		{0o044, "44"},
+		{0o640, "640"},
+		{os.ModeSetuid | 0o644, "4644"},
+		{os.ModeSetgid | 0o640, "2640"},
+		{os.ModeSticky | 0o604, "1604"},
+		{os.ModeSetuid | os.ModeSetgid | 0o755, "6755"},
+	}
+	for _, tt := range tests {
+		p := write(t, "env", "", 0o600)
+		if err := os.Chmod(p, tt.mode); err != nil {
+			t.Fatal(err)
+		}
+		w := CheckPerms(p, filepath.Dir(p), euid)
+		want := "~/env is accessible by other users (mode " + tt.want + "). Run: chmod 600 ~/env"
+		if len(w) != 1 || w[0].Text != want {
+			t.Errorf("mode %v: %q, want %q", tt.mode, texts(w), want)
+		}
+	}
 }
 
 // The permission check runs before the line warnings, and is skipped in
@@ -655,6 +677,41 @@ func TestShownPath(t *testing.T) {
 	for _, tt := range tests {
 		if got := ShownPath(tt.path, tt.home); got != tt.want {
 			t.Errorf("ShownPath(%q, HOME=%q) = %q, want %q", tt.path, tt.home, got, tt.want)
+		}
+	}
+}
+
+// LEDGER CORE-14, reproduced: ${file/#$HOME/\~} takes HOME as an unquoted
+// glob pattern matched against any prefix, not a path component.
+func TestLedger_CORE14_2x(t *testing.T) {
+	tests := []struct{ path, home, want string }{
+		{"/home/ab/.gash_env", "/home/a", "~b/.gash_env"},
+		{"/home/a/.gash_env", "/home/a", "~/.gash_env"},
+		{"/home/a", "/home/a", "~"},
+		{"/home/bob/.gash_env", "/home/*", "~"},
+		{"/home/b/.gash_env", "/home/[ab]", "~/.gash_env"},
+	}
+	for _, tt := range tests {
+		if got := ShownPath(tt.path, tt.home); got != tt.want {
+			t.Errorf("ShownPath(%q, HOME=%q) = %q, want %q", tt.path, tt.home, got, tt.want)
+		}
+	}
+}
+
+// LEDGER CORE-15, reproduced: ${key/#\~/$HOME} replaces only the "~", so
+// ~user/k becomes $HOME followed by "user/k", and under Bash 5.2
+// patsub_replacement an "&" in HOME stands for the matched "~".
+func TestLedger_CORE15_2x(t *testing.T) {
+	tests := []struct{ key, home, want string }{
+		{"~user/k", "/home/u", "/home/uuser/k"},
+		{"~root/.ssh/id", "/home/u", "/home/uroot/.ssh/id"},
+		{"~/k", "/srv/a&b", "/srv/a~b/k"},
+		{"~/k", "/srv/a\\&b", "/srv/a&b/k"},
+		{"~/k", "/home/u", "/home/u/k"},
+	}
+	for _, tt := range tests {
+		if got := ExpandTilde(tt.key, tt.home); got != tt.want {
+			t.Errorf("ExpandTilde(%q, HOME=%q) = %q, want %q", tt.key, tt.home, got, tt.want)
 		}
 	}
 }
