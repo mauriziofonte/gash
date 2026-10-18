@@ -44,7 +44,7 @@ internal/
   llmexec/      llm_exec: lexer, parser, allowlist, blocklist, child environment, bwrap
   sqlguard/     per-engine SQL lexers and the read-only rules
   db/           llm_db_* and gash_db_*: sessions, envelopes, timing, EXPLAIN
-  gitx/         git CLI runner with the hardening flags; git module functions
+  gitx/         git CLI runner (hardening flags for the llm_* callers only); git module functions
   docker/       docker and compose functions (docker CLI), registry digests
   remote/       remote_* (ssh/scp/rsync CLI), host whitelist, deny list
   files/        archive_extract, file_backup
