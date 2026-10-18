@@ -140,15 +140,18 @@ func TestLedger_HTE19(t *testing.T) {
 			_, err := f.e.SiteCreate(ctx, state.Flags{Domain: "a.test", Docroot: ptr(f.home)})
 			return err
 		},
-		"site modify":    func() error { _, err := f.e.SiteModify(ctx, state.Flags{Domain: "a.test"}); return err },
-		"site remove":    func() error { _, err := f.e.SiteRemove(ctx, "a.test", false); return err },
-		"site list":      func() error { _, err := f.e.SiteList(ctx); return err },
-		"site show":      func() error { _, err := f.e.SiteShow(ctx, "a.test"); return err },
-		"service start":  func() error { _, err := f.e.ServiceStart(ctx); return err },
-		"service status": func() error { _, err := f.e.ServiceStatus(ctx); return err },
-		"service logs":   func() error { _, err := f.e.ServiceLogs(ctx, "", 10); return err },
-		"cert renew":     func() error { _, err := f.e.CertRenew(ctx, "a.test"); return err },
-		"hosts apply":    func() error { _, err := f.e.HostsApply(ctx); return err },
+		"site modify":            func() error { _, err := f.e.SiteModify(ctx, state.Flags{Domain: "a.test"}); return err },
+		"site remove":            func() error { _, err := f.e.SiteRemove(ctx, "a.test", false); return err },
+		"site list":              func() error { _, err := f.e.SiteList(ctx); return err },
+		"site show":              func() error { _, err := f.e.SiteShow(ctx, "a.test"); return err },
+		"service start":          func() error { _, err := f.e.ServiceStart(ctx); return err },
+		"service status":         func() error { _, err := f.e.ServiceStatus(ctx); return err },
+		"service logs":           func() error { _, err := f.e.ServiceLogs(ctx, "", 10); return err },
+		"cert renew":             func() error { _, err := f.e.CertRenew(ctx, "a.test"); return err },
+		"hosts apply":            func() error { _, err := f.e.HostsApply(ctx); return err },
+		"apache modules list":    func() error { _, err := f.e.ApacheModulesList(ctx); return err },
+		"apache modules enable":  func() error { _, err := f.e.ApacheModuleEnable(ctx, "status"); return err },
+		"apache modules disable": func() error { _, err := f.e.ApacheModuleDisable(ctx, "status"); return err },
 	}
 	for name, call := range calls {
 		if err := call(); code(err) != hteerr.RootNotAllowed {
@@ -265,6 +268,9 @@ func TestNotInstalled(t *testing.T) {
 	}
 	if _, err := f.e.Uninstall(ctx, UninstallOptions{Yes: true}); code(err) != hteerr.HTENotInstalled {
 		t.Errorf("uninstall: %v", err)
+	}
+	if _, err := f.e.ApacheModuleEnable(ctx, "status"); code(err) != hteerr.HTENotInstalled {
+		t.Errorf("apache modules enable: %v", err)
 	}
 }
 
@@ -449,5 +455,99 @@ func TestLedger_HTE72(t *testing.T) {
 		"php ini unset": func() error { _, err := f.e.PHPIniUnset(ctx, "raw.test", "memory_limit"); return err },
 	} {
 		check(name+" on a site without PHP", run(), want{hteerr.PHPNotEnabled, hteerr.Retry, "raw.test has no PHP", "gash hte site modify --domain raw.test --php VERSION"})
+	}
+}
+
+// apache modules list, enable and disable: the userland list, the extra
+// modules of hte.toml and the other modules of the system directory; an
+// enable or disable moves to a generation that loads exactly them, and a
+// failed one puts hte.toml back.
+func TestApacheModules(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	v := f.install(t)
+	list := func() map[string]ModuleInfo {
+		t.Helper()
+		res, err := f.e.ApacheModulesList(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]ModuleInfo{}
+		for _, m := range res.Modules {
+			out[m.Name] = m
+		}
+		if res.Dir != "/usr/lib/apache2/modules" || len(out) != len(res.Modules) {
+			t.Fatalf("dir %s, %d modules, %d names", res.Dir, len(res.Modules), len(out))
+		}
+		return out
+	}
+	loads := func(name string) bool {
+		t.Helper()
+		httpd, err := os.ReadFile(filepath.Join(v.paths.RenderDir(), "current", "httpd.conf"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Contains(string(httpd), "LoadModule "+name+"_module ")
+	}
+	settings := func() []string {
+		t.Helper()
+		set, err := v.store.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return set.Modules
+	}
+
+	got := list()
+	if m := got["ssl"]; m.State != ModuleBase || m.Builtin || m.Path != "/usr/lib/apache2/modules/mod_ssl.so" {
+		t.Errorf("ssl: %+v", m)
+	}
+	if m := got["log_config"]; m.State != ModuleBase || !m.Builtin || m.Path != "" {
+		t.Errorf("log_config: %+v", m)
+	}
+	if m := got["status"]; m.State != ModuleAvailable || m.Path != "/usr/lib/apache2/modules/mod_status.so" {
+		t.Errorf("status: %+v", m)
+	}
+
+	res, err := f.e.ApacheModuleEnable(ctx, "status")
+	if err != nil || !res.Changed || res.Applied == nil || !res.Applied.Changed {
+		t.Fatalf("enable status: %+v %v", res, err)
+	}
+	if !loads("status") || !slices.Equal(settings(), []string{"status"}) || list()["status"].State != ModuleEnabled {
+		t.Errorf("after enable: loads %v, modules %v", loads("status"), settings())
+	}
+	if res, err := f.e.ApacheModuleEnable(ctx, "status"); err != nil || res.Changed {
+		t.Errorf("enable status again: %+v %v", res, err)
+	}
+	if res, err := f.e.ApacheModuleEnable(ctx, "ssl"); err != nil || res.Changed || len(res.Warnings) != 1 {
+		t.Errorf("enable ssl: %+v %v", res, err)
+	}
+	for _, bad := range []string{"nosuch", "../ssl", "Status"} {
+		if _, err := f.e.ApacheModuleEnable(ctx, bad); code(err) != hteerr.ApacheModuleMissing || hteerr.ActionOf(code(err)) != hteerr.Stop {
+			t.Errorf("enable %q: %v", bad, err)
+		}
+	}
+	if _, err := f.e.ApacheModuleDisable(ctx, "ssl"); code(err) != hteerr.ConflictingOptions {
+		t.Errorf("disable ssl: %v", err)
+	}
+	if res, err := f.e.ApacheModuleDisable(ctx, "cgi"); err != nil || res.Changed {
+		t.Errorf("disable cgi (not enabled): %+v %v", res, err)
+	}
+
+	// A config test that fails puts hte.toml back.
+	f.failTest = "apache2"
+	if _, err := f.e.ApacheModuleEnable(ctx, "cgi"); code(err) != hteerr.ConfigTestFailed {
+		t.Errorf("enable cgi with a failing test: %v", err)
+	}
+	f.failTest = ""
+	if !slices.Equal(settings(), []string{"status"}) || loads("cgi") {
+		t.Errorf("after the failed enable: modules %v, loads cgi %v", settings(), loads("cgi"))
+	}
+
+	if res, err := f.e.ApacheModuleDisable(ctx, "status"); err != nil || !res.Changed || res.Applied == nil {
+		t.Fatalf("disable status: %+v %v", res, err)
+	}
+	if loads("status") || len(settings()) != 0 || list()["status"].State != ModuleAvailable {
+		t.Errorf("after disable: loads %v, modules %v", loads("status"), settings())
 	}
 }

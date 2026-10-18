@@ -568,6 +568,43 @@ func TestE2E(t *testing.T) {
 		}
 	})
 
+	step("apache modules enable and disable", func(t *testing.T) {
+		// The global overlay tells whether mod_status is loaded.
+		overlay := paths.ApacheOverlay()
+		if err := os.WriteFile(overlay, []byte("<IfModule status_module>\n    Header set X-Status-Module on\n</IfModule>\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(overlay)
+		if _, err := e.ServiceReload(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if a := mustGet(t, "http", appDomain, 80); a.header.Get("X-Status-Module") != "" {
+			t.Fatalf("mod_status is loaded before enable: %+v", a)
+		}
+		res, err := e.ApacheModuleEnable(ctx, "status")
+		if err != nil || !res.Changed || res.Applied == nil || !res.Applied.Reloaded {
+			t.Fatalf("enable status: %+v %v", res, err)
+		}
+		if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get("X-Status-Module") != "on" {
+			t.Errorf("after enable: %+v", a)
+		}
+		if _, err := e.ApacheModuleEnable(ctx, "no_such_module"); code(err) != hteerr.ApacheModuleMissing {
+			t.Errorf("enable no_such_module: %v", err)
+		}
+		if res, err = e.ApacheModuleDisable(ctx, "status"); err != nil || !res.Changed {
+			t.Fatalf("disable status: %+v %v", res, err)
+		}
+		if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get("X-Status-Module") != "" {
+			t.Errorf("after disable: %+v", a)
+		}
+		if err := os.Remove(overlay); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.ServiceReload(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	step("an extra port", func(t *testing.T) {
 		if _, err := e.SiteModify(ctx, state.Flags{Domain: appDomain, ExtraHTTPPorts: &[]int{9099}}); err != nil {
 			t.Fatal(err)
