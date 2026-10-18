@@ -227,9 +227,6 @@ func TestRun_DanglingOperators(t *testing.T) {
 		"ls |\nls",
 		"ls &&\nls",
 		"ls ||\nls",
-		// A line continuation between two operators merges them for bash
-		// (|\<newline>| is ||), in 2.x and in the canonical script alike.
-		"ls |\\\n| wc -l",
 		// Line numbers survive continuations, comments and quoted newlines.
 		"echo a\\\nb\n;",
 		"echo a \\\n b\n;",
@@ -287,27 +284,6 @@ func TestRun_SyntaxErrorEchoesCanonicalLine(t *testing.T) {
 		if !strings.HasSuffix(mine[n-2], tc.echoed) {
 			t.Errorf("%q: echoed line = %q, want suffix %q", tc.line, mine[n-2], tc.echoed)
 		}
-	}
-}
-
-// TestRun_TrailingBackslash pins a 2.x divergence that rc.A does not
-// reproduce. The 2.x parser drops a backslash at the very end of the line,
-// but bash keeps it as a literal character, so 2.x validated the word x and
-// bash ran x\ (a different file, never checked). The canonical script runs
-// only the validated word (D-1 A), so here the two outputs differ on purpose.
-func TestRun_TrailingBackslash(t *testing.T) {
-	cwd := t.TempDir()
-	mustWrite(t, filepath.Join(cwd, "x"), "validated\n")
-	mustWrite(t, filepath.Join(cwd, "x\\"), "unchecked\n")
-	line := "cat x\\"
-
-	refOut, refExit := run2x(t, line, cwd, cwd)
-	if refOut != "unchecked\n" || refExit != 0 {
-		t.Errorf("2.x: got %q (exit %d), want the unchecked file", refOut, refExit)
-	}
-	mineOut, mineExit, err := runMineCombined(t, line, cwd, cwd)
-	if err != nil || mineOut != "validated\n" || mineExit != 0 {
-		t.Errorf("mine: got %q (exit %d, err %v), want the validated word", mineOut, mineExit, err)
 	}
 }
 

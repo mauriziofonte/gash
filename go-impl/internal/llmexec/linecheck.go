@@ -105,9 +105,10 @@ var redirRE = regexp.MustCompile(`^(2>&1|1?>&2|[12]?>[[:space:]]*/dev/null|&>[[:
 // refuses as ";;". So does a line continuation between two operators: bash
 // drops it before reading tokens, so "|\<newline>|" is "||" to bash, as it
 // was in 2.x, while the parser saw two pipes around an empty command (the
-// words, all validated, are the same either way).
+// words, all validated, are the same either way; EXEC-08, reproduced).
 func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 	n := len(cmd)
+	trailingBackslash := false
 	for i := 0; i < n; i++ {
 		c := cmd[i]
 
@@ -186,6 +187,9 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 		case '\\':
 			i++
 			if i >= n {
+				// A backslash at the end of the input: refused below,
+				// once the rest of the line has passed (EXEC-07).
+				trailingBackslash = true
 				continue
 			}
 			ch := cmd[i]
@@ -247,6 +251,17 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 	}
 	if err := lc.endSimple(""); err != nil {
 		return "", err
+	}
+	// EXEC-07 (forced divergence): 2.x dropped a backslash at the end of the
+	// input, but bash keeps it as a literal character, so bash ran a word the
+	// checks never saw. The line is refused instead. The refusal comes after
+	// the rest of the line passed, so a line 2.x refused for another reason
+	// keeps that refusal. A backslash-newline stays a continuation, an
+	// escaped backslash (two of them) is a word character, and a backslash in
+	// a comment or inside quotes is not affected.
+	if trailingBackslash {
+		return "", refuse("construct_not_allowed", `\`, "RETRY",
+			"Remove the trailing backslash or quote it")
 	}
 	lc.script.WriteString(lc.gap)
 	return lc.script.String(), nil

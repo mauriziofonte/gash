@@ -44,10 +44,10 @@ func TestRenderRoundTrip(t *testing.T) {
 		"echo a \\\n b",
 		"echo a\\\nb c",
 		"echo \"a\\\nb\" c",
-		// Not here: "ls |\\\n| wc -l". Bash drops a line continuation
-		// before it reads tokens, so |\<newline>| is || to bash (and was
-		// in 2.x); this parser keeps the two | apart. TestRun_DanglingOperators
-		// runs that line against bash and 2.x instead.
+		// Not here: "ls |\\\n| wc -l" (EXEC-08). Bash drops a line
+		// continuation before it reads tokens, so |\<newline>| is || to
+		// bash (and was in 2.x); this parser keeps the two | apart.
+		// TestLedger_EXEC08 runs such lines against bash and 2.x instead.
 		"echo a # note\necho b",
 		// Operators across newlines.
 		"ls |\nwc -l",
