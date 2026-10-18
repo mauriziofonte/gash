@@ -35,6 +35,12 @@ type Stack struct {
 	FailTest string
 	// FailUSR1 makes Apache exit during a graceful restart (a busy port).
 	FailUSR1 bool
+	// Busy is a Listen address another process holds, Unopenable a log
+	// file the user cannot open: an Apache whose configuration (httpd.conf
+	// and the files it includes, read as Apache reads them) listens on
+	// Busy, or logs to Unopenable, passes the config test, fails to start
+	// and exits during a graceful restart, as Apache 2.4.58 does.
+	Busy, Unopenable string
 	// Deaf masters ignore SIGTERM.
 	Deaf bool
 }
@@ -151,6 +157,14 @@ func (f *Stack) Answer(call runner.Call) (runner.Expect, bool) {
 		if f.FailTest == name {
 			return runner.Expect{Status: 1, Stderr: "AH00526: Syntax error on line 3"}, true
 		}
+		if apache {
+			for _, d := range ReadConf(args[1]) {
+				if d.Name == "Listen" && d.VirtualHost {
+					return runner.Expect{Status: 1, Stderr: "AH00526: Syntax error on line " + strconv.Itoa(d.Line) + " of " + d.File +
+						":\nListen cannot occur within <VirtualHost> section"}, true
+				}
+			}
+		}
 		if !apache && !slices.ContainsFunc(env, func(e string) bool { return strings.HasPrefix(e, "PHP_INI_SCAN_DIR=") }) {
 			f.t.Errorf("fpm -t without PHP_INI_SCAN_DIR: %v", env)
 		}
@@ -158,6 +172,12 @@ func (f *Stack) Answer(call runner.Call) (runner.Expect, bool) {
 	case apache:
 		m := f.manifestOf(args[1])
 		f.event("start apache")
+		if lines := f.fails(args[1]); lines != nil {
+			for _, l := range lines {
+				appendLog(f.t, m.Apache.ErrorLog, l)
+			}
+			return runner.Expect{Status: 1, Stderr: strings.Join(lines, "\n") + "\n"}, true
+		}
 		f.spawn(path+" "+strings.Join(args, " "), m.Apache.PidFile)
 		appendLog(f.t, m.Apache.ErrorLog, "AH00489: Apache/2.4.58 configured -- resuming normal operations")
 		return runner.Expect{}, true
@@ -173,6 +193,99 @@ func (f *Stack) Answer(call runner.Call) (runner.Expect, bool) {
 		appendLog(f.t, fm.ErrorLog, "NOTICE: ready to handle connections")
 		return runner.Expect{}, true
 	}
+}
+
+// fails returns the log lines of an Apache that cannot start on conf
+// (Busy, Unopenable), or nil.
+func (f *Stack) fails(conf string) []string {
+	for _, d := range ReadConf(conf) {
+		switch {
+		case f.Busy != "" && d.Name == "Listen" && !d.VirtualHost && d.Arg == f.Busy:
+			return []string{"(98)Address already in use: AH00072: make_sock: could not bind to address " + f.Busy,
+				"no listening sockets available, shutting down", "AH00015: Unable to open logs"}
+		case f.Unopenable != "" && (d.Name == "CustomLog" || d.Name == "ErrorLog") && d.Arg == f.Unopenable:
+			return []string{"(13)Permission denied: AH00649: could not open transfer log file " + f.Unopenable + ".",
+				"AH00015: Unable to open logs"}
+		}
+	}
+	return nil
+}
+
+// Directive is one directive line of a configuration tree.
+type Directive struct {
+	File        string
+	Line        int
+	Name        string // the first word
+	Arg         string // the first argument, unquoted
+	VirtualHost bool   // inside a <VirtualHost> section
+}
+
+// ReadConf returns the directives of conf and of the files its Include
+// and IncludeOptional lines name (a missing file is skipped, as
+// IncludeOptional does), in the order Apache reads them; a symlink in a
+// path is resolved when the file is opened.
+func ReadConf(conf string) []Directive {
+	var out []Directive
+	seen := map[string]bool{}
+	var walk func(path string, vhost bool)
+	walk = func(path string, vhost bool) {
+		if seen[path] {
+			return
+		}
+		seen[path] = true
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			name, rest := line, ""
+			if i := strings.IndexAny(line, " \t"); i >= 0 {
+				name, rest = line[:i], line[i+1:]
+			}
+			switch {
+			case name == "" || strings.HasPrefix(name, "#"):
+				continue
+			case strings.EqualFold(name, "<VirtualHost"):
+				vhost = true
+				continue
+			case strings.EqualFold(name, "</VirtualHost>"):
+				vhost = false
+				continue
+			}
+			d := Directive{File: path, Line: i + 1, Name: name, Arg: firstArg(strings.TrimSpace(rest)), VirtualHost: vhost}
+			out = append(out, d)
+			if name == "Include" || name == "IncludeOptional" {
+				walk(d.Arg, vhost)
+			}
+		}
+	}
+	walk(conf, false)
+	return out
+}
+
+// firstArg is the first argument of a directive's arguments: a quoted
+// one with \" and \\ unescaped (ap_getword_conf), or the first word.
+func firstArg(rest string) string {
+	if !strings.HasPrefix(rest, `"`) {
+		if words := strings.Fields(rest); len(words) > 0 {
+			return words[0]
+		}
+		return ""
+	}
+	var b strings.Builder
+	for i := 1; i < len(rest); i++ {
+		switch c := rest[i]; {
+		case c == '\\' && i+1 < len(rest) && (rest[i+1] == '"' || rest[i+1] == '\\'):
+			b.WriteByte(rest[i+1])
+			i++
+		case c == '"':
+			return b.String()
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // Cmdline implements service.Procs.
@@ -211,10 +324,16 @@ func (f *Stack) Signal(pid int, sig syscall.Signal) error {
 	switch sig {
 	case syscall.SIGUSR1:
 		f.event("graceful apache")
+		lines := f.fails(conf)
 		if f.FailUSR1 {
+			lines = []string{"(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:3000",
+				"no listening sockets available, shutting down"}
+		}
+		if lines != nil {
 			delete(f.procs, pid)
-			appendLog(f.t, m.Apache.ErrorLog, "(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:3000")
-			appendLog(f.t, m.Apache.ErrorLog, "no listening sockets available, shutting down")
+			for _, l := range lines {
+				appendLog(f.t, m.Apache.ErrorLog, l)
+			}
 			return nil
 		}
 		appendLog(f.t, m.Apache.ErrorLog, "AH00489: resuming normal operations")

@@ -26,6 +26,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/rootops"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/service/servicetest"
+	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -418,4 +419,78 @@ func (m *rig) snapshot() map[string]string {
 		})
 	}
 	return out
+}
+
+// TestLedger_HTE71: a generation includes copies of the overlays. An
+// overlay edit whose reload fails at run time, which the config test does
+// not see (in the global overlay a Listen on a port another process
+// holds, in a site overlay a log file the user cannot open), leaves the
+// previous generation running with its own copies; the user's overlay
+// file is never written, and apache config path still names the global
+// one.
+func TestLedger_HTE71(t *testing.T) {
+	ctx := context.Background()
+	for _, global := range []bool{false, true} {
+		m := newRig(t)
+		v := m.install(t)
+		docroot := m.docroot(t)
+		if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: &docroot, HTTPS: ptr(false)}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := m.e.ServiceStart(ctx); err != nil {
+			t.Fatal(err)
+		}
+		overlay, copyRel := v.paths.SiteOverlay("app.test"), "overlays/sites/app.test.apache.conf"
+		edit := []byte("Header set X-Gen 2\nCustomLog \"/etc/app-access.log\" combined\n")
+		m.stack.Unopenable = "/etc/app-access.log"
+		if global {
+			overlay, copyRel = v.paths.ApacheOverlay(), "overlays/apache.conf"
+			edit = []byte("Header set X-Gen 2\nListen 127.0.0.1:3000\n")
+			m.stack.Unopenable, m.stack.Busy = "", "127.0.0.1:3000"
+		}
+		must(t, os.MkdirAll(filepath.Dir(overlay), 0o700))
+		must(t, os.WriteFile(overlay, []byte("Header set X-Gen 1\n"), 0o600))
+		if res, err := m.e.ServiceReload(ctx); err != nil || !res.Applied.Changed {
+			t.Fatalf("global=%v: first overlay: %+v %v", global, res, err)
+		}
+		layout := render.Layout{Dir: v.paths.RenderDir()}
+		good, _, err := layout.Current()
+		must(t, err)
+
+		must(t, os.WriteFile(overlay, edit, 0o600))
+		before, err := os.Stat(overlay)
+		must(t, err)
+		_, err = m.e.ServiceReload(ctx)
+		if code(err) != hteerr.ReloadFailed || !strings.Contains(err.Error(), "rolled back to the previous generation, which is running") {
+			t.Fatalf("global=%v: reload: %v", global, err)
+		}
+		cur, _, err := layout.Current()
+		must(t, err)
+		current := filepath.Join(v.paths.RenderDir(), "current")
+		if cur != good || m.stack.Running() != 2 {
+			t.Errorf("global=%v: current gen-%d (want gen-%d), %d masters", global, cur, good, m.stack.Running())
+		}
+		if data, _ := os.ReadFile(filepath.Join(current, copyRel)); string(data) != "Header set X-Gen 1\n" {
+			t.Errorf("global=%v: the running generation's copy is %q", global, data)
+		}
+		failed, _ := os.ReadFile(filepath.Join(layout.GenDir(good+1), copyRel))
+		if !bytes.Equal(failed, edit) {
+			t.Errorf("global=%v: the failed generation's copy is %q", global, failed)
+		}
+		after, err := os.Stat(overlay)
+		must(t, err)
+		if data, _ := os.ReadFile(overlay); !bytes.Equal(data, edit) || !after.ModTime().Equal(before.ModTime()) || after.Mode() != before.Mode() {
+			t.Errorf("global=%v: the overlay file changed: %q", global, data)
+		}
+		if p, err := m.e.ApacheConfigPath(ctx); err != nil || p != v.paths.ApacheOverlay() {
+			t.Errorf("apache config path: %q %v", p, err)
+		}
+	}
+}
+
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
