@@ -104,8 +104,8 @@ func checkTable(name string) *contract.Envelope {
 
 // target is a resolved llm_db_* target: an SQLite file or a connection.
 type target struct {
-	driver                               string // sqlite, mysql, mariadb or pgsql
-	file                                 string
+	driver                           string // sqlite, mysql, mariadb or pgsql
+	file                             string
 	user, pass, host, port, database string
 }
 
