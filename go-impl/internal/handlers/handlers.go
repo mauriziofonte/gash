@@ -10,6 +10,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 	"github.com/mauriziofonte/gash/internal/ssh"
+	"github.com/mauriziofonte/gash/internal/sysinfo"
 	"github.com/mauriziofonte/gash/internal/system"
 )
 
@@ -24,6 +25,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	system.Register(t)
 	ssh.Register(t)
 	chrome.Register(t)
+	sysinfo.Register(t)
 	for _, r := range extra {
 		r(t)
 	}
