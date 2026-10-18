@@ -353,8 +353,20 @@ remote_sync_push() {
 # ssh
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash_ssh_auto_unlock() {
+    case "${1-}" in
+        -h | --help)
+            __gash_call gash_ssh_auto_unlock "$@"
+            return
+            ;;
+    esac
+    [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
-    __gash_call gash_ssh_auto_unlock "$@"
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call gash_ssh_auto_unlock "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ -z "$__gash_go" ]] || eval "$__gash_go"
+    return "$__gash_rc"
 }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
@@ -366,19 +378,79 @@ sysinfo() { __gash_call sysinfo "$@"; }
 # system
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 disk_usage() { __gash_call disk_usage "$@"; }
-hgrep() { __gash_call hgrep "$@"; }
-history_grep() { __gash_call history_grep "$@"; }
+hgrep() {
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call hgrep "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
+    history -a 2>/dev/null || true
+    GASH__RESUME=1 __gash_call hgrep "$@"
+}
+history_grep() {
+    case "${1-}" in
+        -h | --help | "")
+            __gash_call history_grep "$@"
+            return
+            ;;
+    esac
+    history | __gash_call history_grep "$@"
+}
 ip_public() { __gash_call ip_public "$@"; }
-mkdir_cd() { __gash_call mkdir_cd "$@"; }
+mkdir_cd() {
+    case "${1-}" in
+        -h | --help | "")
+            __gash_call mkdir_cd "$@"
+            return
+            ;;
+    esac
+    local dir="${1-}"
+    mkdir -p "$dir" && cd "$dir" || return 1
+}
 port_kill() { __gash_call port_kill "$@"; }
 process_find() { __gash_call process_find "$@"; }
 process_kill() { __gash_call process_kill "$@"; }
 services_stop() { __gash_call services_stop "$@"; }
-sudo_last() { __gash_call sudo_last "$@"; }
+sudo_last() {
+    case "${1-}" in
+        -h | --help)
+            __gash_call sudo_last "$@"
+            return
+            ;;
+    esac
+    if [[ -n "${1-}" ]]; then
+        sudo "$@"
+        return
+    fi
+    local last_cmd __gash_go="" __gash_rc=0
+    last_cmd=$(fc -ln -1)
+    last_cmd="${last_cmd#"${last_cmd%%[![:space:]]*}"}"
+    {
+        __gash_go="$(printf '%s' "$last_cmd" | GASH__HANDOFF=3 __gash_call sudo_last 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
+    sudo bash -c "$last_cmd"
+}
 wsl_compact() { __gash_call wsl_compact "$@"; }
 wsl_explorer() { __gash_call wsl_explorer "$@"; }
-wsl_restart() { __gash_call wsl_restart "$@"; }
-wsl_shutdown() { __gash_call wsl_shutdown "$@"; }
+wsl_restart() {
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_restart "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
+    history -a 2>/dev/null || true
+    GASH__RESUME=1 __gash_call wsl_restart "$@"
+}
+wsl_shutdown() {
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call wsl_shutdown "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
+    history -a 2>/dev/null || true
+    GASH__RESUME=1 __gash_call wsl_shutdown "$@"
+}
 wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/system.sh" "$__GASH_T1"
 

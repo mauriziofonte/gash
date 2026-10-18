@@ -1,0 +1,198 @@
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package sysinfo
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/term"
+)
+
+// LEDGER SYS-15 (reproduced): a normal user on a terminal is asked for
+// sudo before any section, overview and network included, which never
+// read as root.
+func TestLedger_SYS15(t *testing.T) {
+	for _, args := range [][]string{{"overview", "--llm"}, {"network", "--llm"}, {"network"}, {"auth", "--llm"}} {
+		fx := newFixture(t, etcTree, procTree)
+		fx.uid = 1000
+		r := fx.call(t, term.Fixed(invoke.EnvMap(fx.env), true, false, false), args...)
+		require.Equal(t, 0, r.rc, args)
+		require.Equal(t, "sudo -n true\nsudo -v\n", fx.sudo(t), args)
+		if args[len(args)-1] == "--llm" {
+			require.Empty(t, r.err, args)
+		} else {
+			require.Equal(t, "Info: Elevated privileges needed for full system enumeration.\n"+
+				"Warning: Could not obtain sudo. Some data will be limited.\n", r.err, args)
+		}
+	}
+}
+
+// LEDGER SYS-16 (reproduced): systemd-detect-virt prints none and fails on
+// bare metal, and `|| echo none` adds a second none.
+func TestLedger_SYS16(t *testing.T) {
+	fx := newFixture(t)
+	fx.env["MOCK_VIRT"] = "none"
+	fx.env["MOCK_VIRT_RC"] = "1"
+	r := fx.call(t, nil, "identity", "--llm")
+	require.Contains(t, r.out, "\nVirtualization=none\nnone\n")
+	r = fx.call(t, nil, "identity")
+	require.Contains(t, r.out, "  Virtualization:          none\nnone\n")
+
+	// A tool that prints nothing and fails gives the one none.
+	fx.stub(t, "systemd-detect-virt", "exit 1")
+	require.Contains(t, fx.call(t, nil, "identity", "--llm").out, "\nVirtualization=none\n")
+	// No tool, no row.
+	require.NoError(t, os.Remove(filepath.Join(fx.bin, "systemd-detect-virt")))
+	require.NotContains(t, fx.call(t, nil, "identity", "--llm").out, "Virtualization")
+}
+
+// LEDGER SYS-17 (reproduced): a pending sub-header lands on the next line
+// of any block.
+func TestLedger_SYS17(t *testing.T) {
+	fx := newFixture(t, tree{"etc/docker/": "", "etc/containerd/": ""})
+	require.Equal(t, result{"=== INFRA ===\n--- Docker\ncontainerd=present\n", "", 0}, fx.call(t, nil, "infra", "--llm"))
+	// Without a line after it the heading never shows.
+	fx = newFixture(t, tree{"etc/docker/": ""})
+	require.Equal(t, result{"=== INFRA ===\n", "", 0}, fx.call(t, nil, "infra", "--llm"))
+
+	// The key names of /etc/ssl/private run on under the last cron item.
+	fx = newFixture(t, tree{"etc/ssl/private/b.key": "", "etc/ssl/private/a.pem": "", "etc/ssl/private/c.txt": ""})
+	r := fx.call(t, nil, "system", "--llm")
+	require.True(t, strings.HasPrefix(r.out, "=== SYSTEM ===\n--- Cron\ncron.d:\ncron.daily:\ncron.hourly:\ncron.weekly:\ncron.monthly:\n"+
+		"/etc/ssl/private/a.pem\n/etc/ssl/private/b.key\n"), r.out)
+}
+
+// LEDGER SYS-18 (reproduced): the GNU grep -P expressions of 2.x over
+// os-release: ID takes \w only unquoted, VERSION_ID and PRETTY_NAME only
+// double-quoted. The values are never evaluated.
+func TestLedger_SYS18(t *testing.T) {
+	for name, c := range map[string]struct{ release, want string }{
+		"debian": {"PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"12\"\nID=debian\n",
+			"OS=Debian GNU/Linux 12 (bookworm)\nOS ID=debian\nVersion=12\n"},
+		"ubuntu": {"PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nVERSION_ID=\"24.04\"\nID=ubuntu\nID_LIKE=debian\n",
+			"OS=Ubuntu 24.04.1 LTS\nOS ID=ubuntu\nVersion=24.04\n"},
+		"rhel": {"NAME=\"Red Hat Enterprise Linux\"\nID=\"rhel\"\nVERSION_ID=\"9.4\"\nPRETTY_NAME=\"Red Hat Enterprise Linux 9.4 (Plow)\"\n",
+			"OS=Red Hat Enterprise Linux 9.4 (Plow)\nVersion=9.4\n"},
+		"fedora": {"NAME=\"Fedora Linux\"\nVERSION_ID=39\nID=fedora\nPRETTY_NAME=\"Fedora Linux 39 (Workstation Edition)\"\n",
+			"OS=Fedora Linux 39 (Workstation Edition)\nOS ID=fedora\n"},
+		"tumbleweed": {"NAME=\"openSUSE Tumbleweed\"\nID=opensuse-tumbleweed\nVERSION_ID=\"20241001\"\nPRETTY_NAME=\"openSUSE Tumbleweed\"\n",
+			"OS=openSUSE Tumbleweed\nOS ID=opensuse\nVersion=20241001\n"},
+		"leap": {"NAME=\"openSUSE Leap\"\nID=\"opensuse-leap\"\nVERSION_ID=\"15.6\"\nPRETTY_NAME=\"openSUSE Leap 15.6\"\n",
+			"OS=openSUSE Leap 15.6\nVersion=15.6\n"},
+		"alpine": {"NAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.19.1\nPRETTY_NAME=\"Alpine Linux v3.19\"\n",
+			"OS=Alpine Linux v3.19\nOS ID=alpine\n"},
+		"single quotes": {"PRETTY_NAME='Some OS'\nID='x'\nVERSION_ID='1'\n", ""},
+		"command": {"PRETTY_NAME=\"$(echo INJECTED) `id`\"\nID=a$(b)\n",
+			"OS=$(echo INJECTED) `id`\nOS ID=a\n"},
+	} {
+		fx := newFixture(t, tree{"etc/os-release": c.release})
+		r := fx.call(t, nil, "identity", "--llm")
+		var got strings.Builder
+		for _, l := range strings.SplitAfter(r.out, "\n") {
+			if strings.HasPrefix(l, "OS=") || strings.HasPrefix(l, "OS ID=") || strings.HasPrefix(l, "Version=") {
+				got.WriteString(l)
+			}
+		}
+		require.Equal(t, c.want, got.String(), name)
+		require.Empty(t, r.err, name)
+	}
+}
+
+// LEDGER SYS-19 (reproduced): the user expands the /etc/ssl/private
+// globs; unmatched, they reach the root-side ls as literal words, and the
+// names it prints are listed.
+func TestLedger_SYS19(t *testing.T) {
+	fx := newFixture(t, tree{"etc/ssl/private/": ""})
+	fx.uid = 1000
+	fx.env["SUDO_CACHED"] = "0"
+	fx.env["SUDO_ROOT"] = fx.root
+	fx.stub(t, "sudo", `printf 'sudo %s\n' "$*" >>"$SUDO_LOG"
+case "$1" in
+-n) exit 0 ;;
+ls) [ "$2" = "$SUDO_ROOT/etc/ssl/private/*.pem" ] && printf '%s\n' "$SUDO_ROOT/etc/ssl/private/z.key" "$SUDO_ROOT/etc/ssl/private/k.pem" ; exit 2 ;;
+esac
+exec "$@"`)
+	r := fx.call(t, nil, "system", "--llm")
+	require.Contains(t, r.out, "cron.monthly:\n/etc/ssl/private/k.pem\n/etc/ssl/private/z.key\n--- Profile\n")
+	require.Contains(t, fx.sudo(t), "\nsudo ls R/etc/ssl/private/*.pem R/etc/ssl/private/*.key R/etc/ssl/private/*.crt\n")
+	require.Equal(t, 1, strings.Count(fx.sudo(t), "sudo ls "))
+
+	// A match the user can see is passed expanded.
+	fx = newFixture(t, tree{"etc/ssl/private/a.key": ""})
+	fx.uid = 1000
+	fx.env["SUDO_CACHED"] = "0"
+	fx.call(t, nil, "system", "--llm")
+	require.Contains(t, fx.sudo(t), "\nsudo ls R/etc/ssl/private/*.pem R/etc/ssl/private/a.key R/etc/ssl/private/*.crt\n")
+}
+
+// LEDGER SYS-20 (reproduced): the last section wins; help only as the
+// first word.
+func TestLedger_SYS20(t *testing.T) {
+	fx := newFixture(t, etcTree)
+	require.Equal(t, result{llmWant["storage"], "", 0}, fx.call(t, nil, "identity", "storage", "--llm"))
+	unknown := "Info: Sections: overview identity storage services auth network security webstack mail infra system all\nInfo: Flags: --llm, --no-color\n"
+	require.Equal(t, result{"", "Error: Unknown argument: --help\n" + unknown, 1}, fx.call(t, nil, "--llm", "--help"))
+	require.Equal(t, result{"", "Error: Unknown argument: -h\n" + unknown, 1}, fx.call(t, nil, "mail", "-h"))
+	require.Equal(t, result{"", "Error: Unknown argument: bogus\n" + unknown, 1}, fx.call(t, nil, "mail", "bogus", "--llm"))
+	for _, h := range []string{"--help", "-h"} {
+		r := fx.call(t, nil, h, "bogus")
+		require.Equal(t, 0, r.rc)
+		require.Contains(t, r.out, "  sysinfo  (module: sysinfo)\n")
+	}
+	require.Empty(t, fx.sudo(t))
+}
+
+// LEDGER SYS-34: COLUMNS is a width only as a run of digits (a leading 0
+// is octal); anything else is 80 and never evaluated.
+func TestLedger_SYS34(t *testing.T) {
+	fx := newFixture(t)
+	marker := filepath.Join(fx.root, "INJECTED")
+	rule := func(n int) string { return "\n" + strings.Repeat("─", n) + "\nMAIL\n\n  nothing found\n" }
+	for cols, n := range map[string]int{"abc": 60, "a[$(touch " + marker + ")]": 60, "$(touch " + marker + ")": 60, "": 60,
+		"040": 32, "50": 50, "200": 60, " 40": 60} {
+		fx.env["COLUMNS"] = cols
+		require.Equal(t, result{rule(n), "", 0}, fx.call(t, nil, "mail"), cols)
+	}
+	_, err := os.Stat(marker)
+	require.True(t, os.IsNotExist(err))
+}
+
+// LEDGER SYS-41: byte order for every listing, whatever the locale and
+// the directory order.
+func TestLedger_SYS41(t *testing.T) {
+	fx := newFixture(t)
+	for _, p := range []string{"etc/sysctl.d/a.conf", "etc/sysctl.d/B.conf", "etc/cron.d/a-job", "etc/cron.d/B-job", "etc/cron.d/_x"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(fx.root, filepath.Dir(p)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(fx.root, p), []byte("k = "+filepath.Base(p)+"\n"), 0o644))
+	}
+	want := "--- Cron\ncron.d:\nB-job\n_x\na-job\n"
+	tuning := "--- Kernel tuning\n--- /etc/sysctl.d/B.conf:\nk = B.conf\n--- /etc/sysctl.d/a.conf:\nk = a.conf\n"
+	for _, lang := range []string{"C.UTF-8", "en_US.UTF-8", "C"} {
+		fx.env["LANG"] = lang
+		r := fx.call(t, nil, "system", "--llm")
+		require.Contains(t, r.out, want, lang)
+		require.Contains(t, r.out, tuning, lang)
+	}
+}
+
+// LEDGER SYS-48 (reproduced): the help keeps the 2.x section
+// descriptions, wrong as they are.
+func TestLedger_SYS48(t *testing.T) {
+	r := newFixture(t).call(t, nil, "--help")
+	require.Equal(t, 0, r.rc)
+	for _, l := range []string{
+		"    storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)\n",
+		"    network    Interfaces, DNS, DHCP, hostname\n",
+		"    security   Firewall rules, SSH hardening, fail2ban/crowdsec\n",
+		"    infra      Docker, containers, monitoring, backup systems\n",
+		"    system     Cron jobs, systemd timers, custom hooks\n",
+	} {
+		require.Contains(t, r.out, l)
+	}
+}
