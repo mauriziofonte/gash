@@ -11,6 +11,7 @@ package compatgen
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"sort"
 	"strings"
 	"text/template"
@@ -37,8 +38,12 @@ var coreFiles = []string{"output", "validation", "utils", "config"}
 // cutover), in path order. With stage, it adds a module shim for every
 // module.
 func Generate(stage bool) ([]File, error) {
+	return generate(compat.FS, stage)
+}
+
+func generate(fsys fs.FS, stage bool) ([]File, error) {
 	d := buildData()
-	t, err := parse()
+	t, err := parse(fsys)
 	if err != nil {
 		return nil, err
 	}
@@ -96,21 +101,47 @@ func committedModule(name string) bool {
 	return false
 }
 
-func parse() (*template.Template, error) {
-	return template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
+// overridePrefix names the templates (in compat/stubs.tmpl) that replace
+// the one-line stub of a function: {{% define "stub/NAME" %}}.
+const overridePrefix = "stub/"
+
+func parse(fsys fs.FS) (*template.Template, error) {
+	var t *template.Template
+	// stub is the function a delegated function gets: its override when
+	// one is defined (a shell-mutating function keeps its parent-shell
+	// part in Bash), else the one-line call into the binary.
+	stub := func(name string) (string, error) {
+		f, ok := registry.Lookup(name)
+		if !ok || !f.HasStub() {
+			return "", fmt.Errorf("stub: %q has no stub in the registry", name)
+		}
+		if o := t.Lookup(overridePrefix + name); o != nil {
+			var b strings.Builder
+			if err := o.Execute(&b, f); err != nil {
+				return "", err
+			}
+			return strings.Trim(b.String(), "\n"), nil
+		}
+		return name + `() { __gash_call ` + name + ` "$@"; }`, nil
+	}
+	t, err := template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
 		"stub":   stub,
 		"join":   strings.Join,
 		"indent": indent,
-	}).ParseFS(compat.FS, "*.tmpl")
-}
-
-// stub is the one-line function of a delegated function.
-func stub(name string) (string, error) {
-	f, ok := registry.Lookup(name)
-	if !ok || !f.HasStub() {
-		return "", fmt.Errorf("stub: %q has no stub in the registry", name)
+	}).ParseFS(fsys, "*.tmpl")
+	if err != nil {
+		return nil, err
 	}
-	return name + `() { __gash_call ` + name + ` "$@"; }`, nil
+	for _, o := range t.Templates() {
+		name, ok := strings.CutPrefix(o.Name(), overridePrefix)
+		if !ok {
+			continue
+		}
+		if f, found := registry.Lookup(name); !found || !f.HasStub() {
+			return nil, fmt.Errorf("compatgen: override %q: %q has no stub in the registry", o.Name(), name)
+		}
+	}
+	return t, nil
 }
 
 // indent prefixes every non-empty line of s with n spaces.

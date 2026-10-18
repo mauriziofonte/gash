@@ -5,14 +5,18 @@ package compatgen
 import (
 	"bytes"
 	"flag"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/compat"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden copies in testdata/compat")
@@ -59,6 +63,38 @@ func TestCommittedSet(t *testing.T) {
 		"lib/core/config.sh", "lib/core/output.sh", "lib/core/utils.sh", "lib/core/validation.sh",
 		"lib/modules/node.sh", "lib/modules/php.sh", "lib/modules/remote.sh",
 	}, paths)
+}
+
+// A "stub/NAME" template replaces the one-line stub of NAME everywhere it
+// is defined; an override of a name without a stub is refused.
+func TestStubOverride(t *testing.T) {
+	overlay := func(stubs string) fstest.MapFS {
+		m := fstest.MapFS{}
+		entries, err := fs.ReadDir(compat.FS, ".")
+		require.NoError(t, err)
+		for _, e := range entries {
+			b, err := fs.ReadFile(compat.FS, e.Name())
+			require.NoError(t, err)
+			m[e.Name()] = &fstest.MapFile{Data: b}
+		}
+		m["stubs.tmpl"] = &fstest.MapFile{Data: []byte(stubs)}
+		return m
+	}
+	files, err := generate(overlay(`{{% define "stub/mkdir_cd" %}}
+{{% .Name %}}() {
+    __gash_call {{% .Name %}} "$@" && cd -- "$1"
+}
+{{% end %}}`), true)
+	require.NoError(t, err)
+	want := "mkdir_cd() {\n    __gash_call mkdir_cd \"$@\" && cd -- \"$1\"\n}\n"
+	for _, f := range files {
+		if f.Path == "gash.sh" || f.Path == "lib/modules/system.sh" {
+			require.Contains(t, string(f.Data), want, f.Path)
+			require.NotContains(t, string(f.Data), "mkdir_cd() { __gash_call", f.Path)
+		}
+	}
+	_, err = generate(overlay(`{{% define "stub/needs_help" %}}x{{% end %}}`), true)
+	require.ErrorContains(t, err, `"needs_help" has no stub`)
 }
 
 // tree writes the stage set with the repository's lint configuration.
