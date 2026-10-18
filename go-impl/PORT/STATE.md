@@ -72,6 +72,8 @@ bash tests/run.sh --impl go               # same specs against the Go port behin
 (cd go-impl && GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0 go vet ./... && GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0 go test ./...)
 ```
 
+After any edit of `MATRIX.md`, run `go generate ./internal/registry` and commit `catalog_gen.go` and the compat goldens it changes in the same push: `TestCatalogIsCurrent` renders the catalog from the 2.x sources and MATRIX and fails on a stale file.
+
 ## Environment blockers (cloud session)
 
 | Blocker | Workaround |

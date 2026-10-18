@@ -92,15 +92,19 @@ var identRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // names returns the variable names of a Name cell ("LANG LC_ALL LC_CTYPE",
 // "HTTPS_PROXY/https_proxy, NO_PROXY/no_proxy", "GASH_HEADLESS (node...)").
+// A cell that is not a list of names, such as a pattern with its prose
+// ("GIT_* environment and git config", "${VAR} in compose image
+// references"), names no variable: its words are not variables.
 func names(cell string) []string {
 	if i := strings.Index(cell, "("); i >= 0 {
 		cell = cell[:i]
 	}
 	var out []string
 	for _, f := range strings.FieldsFunc(cell, func(c rune) bool { return c == ' ' || c == ',' || c == '/' }) {
-		if identRe.MatchString(f) {
-			out = append(out, f)
+		if !identRe.MatchString(f) {
+			return nil
 		}
+		out = append(out, f)
 	}
 	return out
 }
