@@ -451,6 +451,22 @@ func startError(err error, a render.ApacheMaster) error {
 	return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
 }
 
+// Graceful makes a running Apache read its configuration and
+// certificates again (a renewed pair under the same paths).
+func (s *Supervisor) Graceful(ctx context.Context) error {
+	_, m, ok, err := s.Current()
+	if err != nil || !ok {
+		return err
+	}
+	if _, up := s.pid(s.apache(m.Apache)); !up {
+		return nil
+	}
+	if err := s.signalReady(ctx, s.apache(m.Apache), syscall.SIGUSR1); err != nil {
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+	}
+	return nil
+}
+
 // Stop stops Apache, then every FPM master: those of the current
 // generation and any other gash master whose PID file is in the runtime
 // directory (a version dropped by a failed reload).
