@@ -163,6 +163,12 @@ func (e *Engine) ServiceReload(ctx context.Context) (*ServiceResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		// The same rendering: the overlays may have changed.
+		if !applied.Changed {
+			if applied.Reloaded, err = e.supervisor(v).Reload(ctx); err != nil {
+				return nil, err
+			}
+		}
 		running, err := e.supervisor(v).Running()
 		return &ServiceResult{Via: "direct", Applied: &applied, Running: running}, err
 	})

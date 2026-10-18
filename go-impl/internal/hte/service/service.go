@@ -467,6 +467,34 @@ func (s *Supervisor) Graceful(ctx context.Context) error {
 	return nil
 }
 
+// Reload makes the running stack read the current generation and the
+// overlays it includes again (they are the user's files, outside the
+// rendering): config test first, then FPM SIGUSR2, then Apache graceful.
+// A failed test changes nothing; it reports whether anything ran.
+func (s *Supervisor) Reload(ctx context.Context) (bool, error) {
+	_, m, ok, err := s.Current()
+	if err != nil || !ok {
+		return false, err
+	}
+	if err := s.Test(ctx, filepath.Join(s.Layout.Dir, "current"), m); err != nil {
+		return false, err
+	}
+	u := s.running(m)
+	for _, f := range m.FPM {
+		if u.fpm[f.Version] {
+			if err := s.signalReady(ctx, s.fpm(f), syscall.SIGUSR2); err != nil {
+				return true, hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "%v", err)
+			}
+		}
+	}
+	if u.apache {
+		if err := s.signalReady(ctx, s.apache(m.Apache), syscall.SIGUSR1); err != nil {
+			return true, hteerr.Newf(hteerr.ReloadFailed, "fix the overlay named in the log, then run gash hte service start", "%v", err)
+		}
+	}
+	return u.any(), nil
+}
+
 // ReloadFPM makes the running FPM master of version re-read its ini
 // files (SIGUSR2): a change of the global overlay, which the rendering
 // does not see. A master that is not running is left alone.

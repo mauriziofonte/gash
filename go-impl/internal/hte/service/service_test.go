@@ -554,3 +554,26 @@ func TestLedger_HTE57(t *testing.T) {
 		t.Fatal("newline accepted")
 	}
 }
+
+// Reload re-reads the overlays of an unchanged rendering: test first,
+// then FPM, then Apache; a failed test signals nothing.
+func TestReloadSameRendering(t *testing.T) {
+	f, p := newStack(t), testPaths(t)
+	s := running(t, f, p, site("a.test", "8.3"))
+	ctx := context.Background()
+	f.failTest = "apache"
+	if _, err := s.Reload(ctx); hteerr.CodeOf(err) != hteerr.ConfigTestFailed {
+		t.Fatalf("broken overlay: %v", err)
+	}
+	if diff := cmp.Diff([]string{"test apache"}, f.Events()); diff != "" {
+		t.Fatalf("a failed test signalled: %s", diff)
+	}
+	f.failTest = ""
+	ran, err := s.Reload(ctx)
+	if err != nil || !ran {
+		t.Fatalf("reload: %v %v", ran, err)
+	}
+	if diff := cmp.Diff([]string{"test apache", "test fpm", "reload fpm 8.3", "graceful apache"}, f.Events()); diff != "" {
+		t.Fatalf("order: %s", diff)
+	}
+}
