@@ -414,19 +414,26 @@ if [[ "$jobs" -le 1 ]]; then
   done
 else
   # Run in parallel, buffer each spec's log, print logs in spec order.
-  pids=()
+  # Each job records its own exit status in the run directory: the
+  # throttle's `wait -n` may already have reaped a job, whose status a
+  # later `wait PID` could no longer report (TEST-09).
   idx=0
   for spec in "${specs[@]}"; do
     while [[ $(jobs -rp | wc -l) -ge $jobs ]]; do
       wait -n 2>/dev/null || true
     done
-    run_spec "$spec" >"$workdir/log.$idx" 2>&1 &
-    pids+=($!)
+    (
+      run_spec "$spec" >"$workdir/log.$idx" 2>&1
+      echo "$?" >"$workdir/status.$idx"
+    ) &
     idx=$((idx + 1))
   done
-  for i in "${!pids[@]}"; do
-    wait "${pids[$i]}" || status=1
+  wait
+  for ((i = 0; i < idx; i++)); do
     cat "$workdir/log.$i"
+    spec_status=""
+    [[ -r "$workdir/status.$i" ]] && read -r spec_status <"$workdir/status.$i"
+    [[ "$spec_status" == 0 ]] || status=1
   done
 fi
 
