@@ -52,6 +52,10 @@ func DefaultSettings(ports Ports, autostart string) Settings {
 
 var moduleNameRE = regexp.MustCompile(`^[a-z0-9_]+$`)
 
+// ModuleName reports an Apache module name as hte.toml takes it: the
+// file mod_<name>.so without its prefix and suffix ("ssl", "proxy_fcgi").
+func ModuleName(name string) bool { return moduleNameRE.MatchString(name) }
+
 func invalidSettings(format string, a ...any) error {
 	return hteerr.Newf(hteerr.InvalidState, "fix hte.toml or run gash hte install again", format, a...)
 }
