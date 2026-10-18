@@ -7,6 +7,7 @@ package handlers
 
 import (
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 )
 
@@ -17,6 +18,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	t := invoke.NewTable()
 	registerCore(t)
 	selfmgmt.Register(t)
+	llm.Register(t)
 	for _, r := range extra {
 		r(t)
 	}

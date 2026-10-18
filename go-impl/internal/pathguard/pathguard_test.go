@@ -238,4 +238,8 @@ func TestRootHomeAppended(t *testing.T) {
 	// With rootHome == /root the extra entry is not added.
 	g2 := NewGuard(OSFS{}, "/tmp", "/home/u", "/root")
 	require.Len(t, g2.Forbidden, len(ForbiddenBasePaths))
+	// core.sh appends only a home matching /?* : not "/", "" or a relative one.
+	for _, h := range []string{"/", "", "root"} {
+		require.Len(t, NewGuard(OSFS{}, "/tmp", "/home/u", h).Forbidden, len(ForbiddenBasePaths), h)
+	}
 }

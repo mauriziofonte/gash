@@ -38,11 +38,11 @@ type Guard struct {
 }
 
 // NewGuard builds a guard. rootHome is the value of ~root; when it is an
-// absolute path other than /root it is appended to the forbidden list, as
-// core.sh does for macOS (/var/root).
+// absolute path other than / and /root (core.sh: == /?* && != /root) it is
+// appended to the forbidden list, as core.sh does for macOS (/var/root).
 func NewGuard(filesystem FS, cwd, home, rootHome string) *Guard {
 	forbidden := append([]string{}, ForbiddenBasePaths...)
-	if strings.HasPrefix(rootHome, "/") && rootHome != "/root" {
+	if len(rootHome) > 1 && rootHome[0] == '/' && rootHome != "/root" {
 		forbidden = append(forbidden, rootHome)
 	}
 	return &Guard{FS: filesystem, Cwd: cwd, Home: home, Forbidden: forbidden}

@@ -26,7 +26,7 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "gash", "gash_username"}, tbl.Names())
+	require.Equal(t, []string{"all_colors", "gash", "gash_username", "llm_tree"}, tbl.Names())
 	require.Equal(t, []string{"help"}, tbl.CompatOps())
 }
 
