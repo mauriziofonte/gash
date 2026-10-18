@@ -96,6 +96,27 @@ func TestMacOSInstall(t *testing.T) {
 				t.Errorf("redirect of the vhost:\n%s", vhost)
 			}
 
+			// doctor reports the redirect, and a changed anchor file.
+			pfCheck := func() *Check {
+				res, err := m.e.Doctor(ctx)
+				must(t, err)
+				if i := slices.IndexFunc(res.Checks, func(c Check) bool { return c.Name == "ports setting" }); i >= 0 {
+					return &res.Checks[i]
+				}
+				return nil
+			}
+			if c := pfCheck(); refused != (c != nil && c.Status == CheckOK && strings.Contains(c.Details, "to 8080 and 8443")) {
+				t.Errorf("doctor: %+v", c)
+			}
+			if refused {
+				anchor := m.read(rootops.PFAnchorFile)
+				m.write(rootops.PFAnchorFile, anchor+"pass all\n", 0o644)
+				if c := pfCheck(); c == nil || c.Status != CheckFail {
+					t.Errorf("doctor with a changed anchor: %+v", c)
+				}
+				m.write(rootops.PFAnchorFile, anchor, 0o644)
+			}
+
 			if _, err := m.e.Uninstall(ctx, UninstallOptions{Yes: true}); err != nil {
 				t.Fatal(err)
 			}
