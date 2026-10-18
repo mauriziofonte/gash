@@ -4422,7 +4422,7 @@ Critical and high items:
 | Public-contract impact | no |
 | rc.A behavior | Nothing is left in the caller (a child process cannot set them); the stub defines no such variable. `ai_sysinfo`, the only reader of `__SYSINFO_MODE`, is ported inside the binary. |
 | Fix recipe (3.0) | None beyond rc.A. |
-| Proving test | `TestLedger_SYS42` as `testdata/script/ledger_sys42.txtar` (after the two calls through the shim, `declare -p __SYSINFO_MODE BASH_REMATCH` fails) |
+| Proving test | `TestLedger_SYS42` as `testdata/script/TestLedger_SYS42.txtar` (after the two calls through the shim, `declare -p __SYSINFO_MODE BASH_REMATCH` fails) |
 | Status | open |
 
 ### docker and compose
