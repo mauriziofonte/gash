@@ -762,4 +762,10 @@ sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
 `/usr/local` and `/var/lib/gash-hte` with their state before install.
 `/etc/hosts` stays Docker's bind mount, so the helper writes it in place
 (`setup.sh` checks that first). So far it runs on Ubuntu 24.04 with the
-distro PHP 8.3.
+distro PHP 8.3. `GASH_HTE_E2E_SYSTEMD=1 run.sh` runs `TestE2ESystemd` in a
+container with systemd as PID 1 (`Dockerfile.systemd`: logind and the user
+D-Bus added, the units that touch the kernel or devices masked; started
+with a private cgroup namespace and `CAP_SYS_ADMIN`, which systemd needs to
+mount its cgroup hierarchy): in a login session of the user, install with
+`--autostart systemd`, the service commands, the migrate switch and
+uninstall, each master checked to run in the unit's cgroup (HTE-73).
