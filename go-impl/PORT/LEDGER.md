@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 71 | 172 | 115 |
+| Defects | 1 | 25 | 75 | 72 | 173 | 115 |
 | Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 243 | **406** | 241 |
+| **All** | 3 | 36 | 125 | 244 | **407** | 241 |
 
 Critical and high items:
 
@@ -345,6 +345,7 @@ Critical and high items:
 | [TEST-06](#test-06) | `llm_spec.sh` uses the repository's own `lib/` as a fixture tree | Test harness | low | no |
 | [TEST-07](#test-07) | 18 specs source Gash at top level in the runner process | Test harness | low | no |
 | [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
+| [TEST-10](#test-10) | Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice | Test harness | low | no |
 
 ### llm_* agent functions
 
@@ -3470,6 +3471,24 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness: each spec process records its own exit status in the run directory, and the summary reads those files instead of the `wait` status. |
 | Fix recipe (3.0) | n/a after cutover (testscript). |
 | Proving test | The summary status follows the recorded statuses; a run with every spec passing never ends in FAIL. |
+| Status | open |
+
+<a id="test-10"></a>
+#### TEST-10 · Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A CI, macOS runner) |
+| Area | Test harness |
+| Bash location | `tests/specs/llm_db_security_spec.sh` (MySQL and PostgreSQL client tests), `tests/specs/llm_db_names_spec.sh` (`__dbn_mocks`); the rule is `lib/modules/llm/core.sh:577` |
+| Observed behavior | The specs record what a mock `mysql`/`psql` received (argv, stdin, options) and assert on it. When the call takes 100 ms or more, which on a slow runner the client spawn alone can (DB-06), `llm_db_query` runs the auto-EXPLAIN through the same mock, which overwrites the recorded files, and the assertions fail. Seen once on the macOS job. |
+| Reproduction | the PostgreSQL client test on a loaded runner, or with a mock that sleeps 150 ms |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the specs: after sourcing they pin `EPOCHREALTIME` to a constant, as `llm_portability_spec.sh` already does, so the elapsed time is 0 and the mock runs once. Assertions unchanged. |
+| Fix recipe (3.0) | n/a after cutover (testscript, with the clock injected in `internal/db`). |
+| Proving test | The three tests pass with a mock client that sleeps 150 ms. |
 | Status | open |
 
 ## Forced divergences
