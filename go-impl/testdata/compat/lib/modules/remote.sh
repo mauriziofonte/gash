@@ -20,12 +20,30 @@ if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
 fi
 unset __gash_here
 
-remote_exec() { __gash_call remote_exec "$@"; }
-remote_hosts() { __gash_call remote_hosts "$@"; }
-remote_pull() { __gash_call remote_pull "$@"; }
-remote_push() { __gash_call remote_push "$@"; }
-remote_sync_pull() { __gash_call remote_sync_pull "$@"; }
-remote_sync_push() { __gash_call remote_sync_push "$@"; }
+remote_exec() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_exec "$@"
+}
+remote_hosts() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_hosts "$@"
+}
+remote_pull() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_pull "$@"
+}
+remote_push() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_push "$@"
+}
+remote_sync_pull() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_sync_pull "$@"
+}
+remote_sync_push() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call remote_sync_push "$@"
+}
 
 alias rh='remote_hosts'
 alias rex='remote_exec'

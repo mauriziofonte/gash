@@ -49,6 +49,16 @@ func (v VirtualHost) Find(name string) []Directive {
 	return out
 }
 
+// TLS reports whether the section turns SSLEngine on.
+func (v VirtualHost) TLS() bool {
+	for _, d := range v.Directives {
+		if d.Is("SSLEngine") && len(d.Args) == 1 && strings.EqualFold(d.Args[0], "on") {
+			return true
+		}
+	}
+	return false
+}
+
 // Ports returns the port of each address; an address without a port is 0.
 func (v VirtualHost) Ports() []int {
 	out := make([]int, 0, len(v.Addrs))

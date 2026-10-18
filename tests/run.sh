@@ -19,6 +19,8 @@
 #                      go mode writes tests/.results/go.tsv by default;
 #                      both writes FILE.bash and FILE.go
 #       --gash-bin PATH  go mode: use this binary instead of building one
+#       --fake-bin PATH  go mode: the HTTPS fake (go-impl/internal/tools/
+#                      httpsfake) instead of building it
 #       --no-isolate   go mode: do not run in PID and network namespaces
 #       --network      go mode: keep the host network (no network namespace)
 #   -h, --help         show this help
@@ -36,7 +38,9 @@
 # checkout with `gash __compat stage` and runs the unchanged specs from the
 # staged tree. When unshare(1) allows it, the run happens in its own PID
 # and network namespaces: no test can signal a process it did not start or
-# reach the network past a missed fake. Update the PARITY Go column with
+# reach the network past a missed fake. The binary's HTTP goes to a local
+# fake (HTTPS_PROXY, its CA in SSL_CERT_FILE) that answers as
+# tests/mocks/bin/curl does. Update the PARITY Go column with
 # `go run ./internal/tools/parity` in go-impl.
 
 set -uo pipefail
@@ -53,6 +57,7 @@ slow=0
 impl=bash
 results_file=""
 gash_bin=""
+fake_bin=""
 isolate=1
 network=0
 in_namespace=0
@@ -125,6 +130,14 @@ while [[ $# -gt 0 ]]; do
         exit 2
       }
       gash_bin="$2"
+      shift 2
+      ;;
+    --fake-bin)
+      [[ $# -ge 2 ]] || {
+        echo "run.sh: $1 needs a value" >&2
+        exit 2
+      }
+      fake_bin="$2"
       shift 2
       ;;
     --no-isolate)
@@ -238,6 +251,17 @@ build_gash() {
   }
 }
 
+# Build the HTTPS fake of go mode into DEST; without Go the run goes on
+# without it.
+# Usage: build_fake DEST
+build_fake() {
+  command -v go >/dev/null 2>&1 || return 1
+  (cd "$ROOT_DIR/go-impl" && CGO_ENABLED=0 go build -o "$1" ./internal/tools/httpsfake) || {
+    echo "run.sh: go build of the HTTPS fake failed" >&2
+    return 2
+  }
+}
+
 # Go mode runs in its own PID and network namespaces (PID only with
 # --network, or when a network namespace is refused) when unshare allows
 # it: as root directly, otherwise in a user namespace that maps the
@@ -265,6 +289,17 @@ if [[ "$impl" == go ]] && ((isolate && ! in_namespace)) && command -v unshare >/
         exit 2
       }
       ns_args=(--gash-bin "$ns_build/gash")
+    fi
+    if [[ -z "$fake_bin" ]]; then
+      [[ -n "$ns_build" ]] || ns_build="$(mktemp -d "${TMPDIR:-/tmp}/gash-build.XXXXXX")" || exit 2
+      build_fake "$ns_build/httpsfake"
+      case $? in
+        0) ns_args+=(--fake-bin "$ns_build/httpsfake") ;;
+        2)
+          rm -rf "$ns_build"
+          exit 2
+          ;;
+      esac
     fi
     unshare "${ns[@]}" bash "${BASH_SOURCE[0]}" --in-namespace="$ns_kind" ${ns_args[@]+"${ns_args[@]}"} "${orig_args[@]}"
     ns_status=$?
@@ -298,7 +333,8 @@ fi
 # Physical path: on macOS /var is a symlink to /private/var, and tests
 # compare $PWD with resolved paths.
 workdir="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/gash-run.XXXXXX")" && pwd -P)"
-trap 'rm -rf "$workdir"' EXIT
+fake_pid=""
+trap '[[ -n "$fake_pid" ]] && kill "$fake_pid" 2>/dev/null; rm -rf "$workdir"' EXIT
 results="$workdir/results"
 : >"$results"
 
@@ -342,6 +378,36 @@ if [[ "$impl" == go ]]; then
     *) ns_note="" ;;
   esac
   echo "INFO Implementation: go (${gash_env[0]}${ns_note})"
+
+  # The HTTPS fake: every request of the binary goes to it.
+  if [[ -z "$fake_bin" ]]; then
+    build_fake "$workdir/httpsfake"
+    case $? in
+      0) fake_bin="$workdir/httpsfake" ;;
+      2) exit 2 ;;
+    esac
+  fi
+  if [[ -n "$fake_bin" ]]; then
+    fake_args=(-ca "$workdir/fake-ca.pem" -addr "$workdir/fake-addr")
+    [[ "$ns_kind" == pid+net ]] && fake_args+=(-lo-up)
+    "$fake_bin" "${fake_args[@]}" 2>"$workdir/fake.log" &
+    fake_pid=$!
+    for ((i = 0; i < 100; i++)); do
+      [[ -s "$workdir/fake-addr" ]] && break
+      kill -0 "$fake_pid" 2>/dev/null || break
+      sleep 0.05
+    done
+    fake_addr=""
+    [[ -s "$workdir/fake-addr" ]] && read -r fake_addr <"$workdir/fake-addr"
+    if [[ -z "$fake_addr" ]]; then
+      echo "run.sh: the HTTPS fake did not start: $(cat "$workdir/fake.log" 2>/dev/null)" >&2
+      exit 2
+    fi
+    gash_env+=("HTTPS_PROXY=http://$fake_addr" "HTTP_PROXY=http://$fake_addr" "SSL_CERT_FILE=$workdir/fake-ca.pem")
+    echo "INFO HTTPS fake: $fake_addr"
+  else
+    echo "INFO No Go to build the HTTPS fake: the binary's HTTP requests are not faked" >&2
+  fi
 fi
 
 # Optional awk override: a shim dir placed first on PATH.
@@ -414,19 +480,33 @@ if [[ "$jobs" -le 1 ]]; then
   done
 else
   # Run in parallel, buffer each spec's log, print logs in spec order.
+  # Each job records its own exit status in the run directory: the
+  # throttle's `wait -n` may already have reaped a job, whose status a
+  # later `wait PID` could no longer report (TEST-09).
+  # The HTTPS fake is a job too: the throttle leaves room for it, and the
+  # final wait names the spec jobs.
+  limit=$jobs
+  [[ -n "$fake_pid" ]] && limit=$((jobs + 1))
   pids=()
   idx=0
   for spec in "${specs[@]}"; do
-    while [[ $(jobs -rp | wc -l) -ge $jobs ]]; do
+    while [[ $(jobs -rp | wc -l) -ge $limit ]]; do
       wait -n 2>/dev/null || true
     done
-    run_spec "$spec" >"$workdir/log.$idx" 2>&1 &
+    (
+      run_spec "$spec" >"$workdir/log.$idx" 2>&1
+      echo "$?" >"$workdir/status.$idx"
+    ) &
     pids+=($!)
     idx=$((idx + 1))
   done
-  for i in "${!pids[@]}"; do
-    wait "${pids[$i]}" || status=1
+  wait "${pids[@]}" 2>/dev/null
+  # Every spec must have recorded its status: a missing one fails.
+  for ((i = 0; i < ${#specs[@]}; i++)); do
     cat "$workdir/log.$i"
+    spec_status=""
+    [[ -r "$workdir/status.$i" ]] && read -r spec_status <"$workdir/status.$i"
+    [[ "$spec_status" == 0 ]] || status=1
   done
 fi
 

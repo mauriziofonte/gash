@@ -5,8 +5,10 @@ package ui
 import (
 	"bytes"
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,4 +115,43 @@ func TestLedger_CORE10(t *testing.T) {
 	require.NoFileExists(t, dest)
 	require.NoFileExists(t, filepath.Join(dir, "MARK"))
 	require.True(t, strings.HasSuffix(errb.String(), "\nAborted.\n"), errb.String())
+}
+
+// A proxy that refuses the tunnel and a server that closes without an
+// answer get curl's exit codes and messages: 56 and 52.
+func TestDownloadConnectionFailures(t *testing.T) {
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodConnect, r.Method)
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer proxy.Close()
+	pu, _ := url.Parse(proxy.URL)
+	tt := term.Fixed(nil, false, false, false)
+	s := Style{G: term.ASCIIGlyphs}
+	dir := t.TempDir()
+	var errb bytes.Buffer
+	d := Downloader{Client: &http.Client{Transport: proxyTransport(http.ProxyURL(pu))}}
+	rc := d.Run(t.Context(), s, tt, &errb, "https://down.test/f", filepath.Join(dir, "f"))
+	require.Equal(t, 56, rc)
+	require.Equal(t, "Get: https://down.test/f\nError: Download failed (https://down.test/f): curl: (56) CONNECT tunnel failed, response 502\n", errb.String())
+	require.NoFileExists(t, filepath.Join(dir, "f"))
+
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = c.Read(make([]byte, 4096))
+			_ = c.Close()
+		}
+	}()
+	errb.Reset()
+	target := "http://" + ln.Addr().String() + "/f"
+	rc = Downloader{Client: &http.Client{Transport: proxyTransport(nil)}}.Run(t.Context(), s, tt, &errb, target, filepath.Join(dir, "g"))
+	require.Equal(t, 52, rc)
+	require.Equal(t, "Get: "+target+"\nError: Download failed ("+target+"): curl: (52) Empty reply from server\n", errb.String())
 }

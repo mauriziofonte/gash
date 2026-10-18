@@ -27,7 +27,7 @@ const (
 type Code string
 
 // Codes of design/hte.md section 9, plus missing_value of the general
-// contract and the two provisional codes marked below.
+// contract.
 const (
 	HTENotInstalled        Code = "hte_not_installed"
 	SiteNotFound           Code = "site_not_found"
@@ -44,18 +44,19 @@ const (
 	ConfigTestFailed       Code = "config_test_failed"
 	ReloadFailed           Code = "reload_failed"
 	ApacheNotFound         Code = "apache_not_found"
+	ApacheModuleMissing    Code = "apache_module_missing"
 	PlatformUnsupported    Code = "platform_unsupported"
 	ReceiptMismatch        Code = "receipt_mismatch"
 	RootNotAllowed         Code = "root_not_allowed"
 	MissingValue           Code = "missing_value"
 
-	// ConflictingOptions is provisional (not in design/hte.md 9): a flag
-	// pair that contradicts itself, such as --force-https with --no-https
-	// (LEDGER HTE-01 says "fails (RETRY)" without naming the code).
+	// ConflictingOptions is a flag pair that contradicts itself, such as
+	// --force-https with --no-https (LEDGER HTE-01).
 	ConflictingOptions Code = "conflicting_options"
-	// InvalidState is provisional (not in design/hte.md 9): a site TOML or
-	// hte.toml that does not parse, has unknown or missing keys, or holds
-	// a value the strict validation refuses. A human must fix the file.
+	// InvalidState is a site TOML or hte.toml that does not parse, has
+	// unknown or missing keys, or holds a value the strict validation
+	// refuses, and a php_ini value that cannot be written into a pool. A
+	// human must fix the file.
 	InvalidState Code = "invalid_state"
 )
 
@@ -75,6 +76,7 @@ var actions = map[Code]Action{
 	ConfigTestFailed:       Stop,
 	ReloadFailed:           Stop,
 	ApacheNotFound:         Fatal,
+	ApacheModuleMissing:    Stop,
 	PlatformUnsupported:    Fatal,
 	ReceiptMismatch:        Fatal,
 	RootNotAllowed:         Fatal,

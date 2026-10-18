@@ -93,6 +93,11 @@ type Function struct {
 	// Env are the MATRIX environment variables its 2.x code reads
 	// (informational: what the Go port must honor).
 	Env []string
+	// LoadsEnv reports that its 2.x body reaches __gash_load_env (directly
+	// or through the config.sh helpers): its stub runs the shim's cached
+	// __gash_load_env first, so the settings warnings come once per shell
+	// from the shell, as in 2.x (LEDGER CORE-18).
+	LoadsEnv bool
 	// Completion is the body of its 2.x __gash_complete case branch
 	// (Bash, dedented), empty when 2.x completed it with the default.
 	Completion string
