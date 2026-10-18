@@ -358,7 +358,10 @@ var update = flag.Bool("update", false, "rewrite the golden files under testdata
 // with the program quoted for systemd and escaped for XML.
 func TestLedger_HTE57(t *testing.T) {
 	dir := "../../../testdata/hte/golden/autostart"
-	for name, gen := range map[string]func(string) ([]byte, error){UnitName: SystemdUnit, LaunchAgentLabel + ".plist": LaunchAgent} {
+	agent := func(gash string) ([]byte, error) {
+		return LaunchAgent(gash, AgentEnv("/Users/me/.config", "/Users/me/.local/state", "/Users/me/.local/share", ""))
+	}
+	for name, gen := range map[string]func(string) ([]byte, error){UnitName: SystemdUnit, LaunchAgentLabel + ".plist": agent} {
 		got, err := gen("/home/me/.local/bin/gash")
 		if err != nil {
 			t.Fatal(err)
@@ -391,9 +394,16 @@ func TestLedger_HTE57(t *testing.T) {
 			t.Errorf("unit lacks %q:\n%s", want, unit)
 		}
 	}
-	plist, err := LaunchAgent("/Users/me/bin/gash&<x>")
-	if err != nil || !strings.Contains(string(plist), "<string>/Users/me/bin/gash&amp;&lt;x&gt;</string>") || !strings.Contains(string(plist), "<key>RunAtLoad</key>\n  <true/>") {
+	plist, err := LaunchAgent("/Users/me/bin/gash&<x>", AgentEnv("/Users/me/c&d", "/s", "/d", "/r"))
+	if err != nil || !strings.Contains(string(plist), "<string>/Users/me/bin/gash&amp;&lt;x&gt;</string>") || !strings.Contains(string(plist), "<key>RunAtLoad</key>\n  <true/>") ||
+		!strings.Contains(string(plist), "<key>XDG_CONFIG_HOME</key>\n    <string>/Users/me/c&amp;d</string>") ||
+		!strings.Contains(string(plist), "<key>XDG_RUNTIME_DIR</key>\n    <string>/r</string>") {
 		t.Fatalf("%s %v", plist, err)
+	}
+	for _, env := range [][]string{{"PATH=/bin"}, {"XDG_CONFIG_HOME=relative"}, {"XDG_STATE_HOME=/a\nb"}} {
+		if _, err := LaunchAgent("/Users/me/bin/gash", env); hteerr.CodeOf(err) != hteerr.PlatformUnsupported {
+			t.Errorf("%q accepted: %v", env, err)
+		}
 	}
 	if _, err := SystemdUnit("gash"); hteerr.CodeOf(err) != hteerr.PlatformUnsupported {
 		t.Fatal("relative program accepted")

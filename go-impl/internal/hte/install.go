@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/renameio/v2"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
@@ -253,8 +254,11 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 		}
 	}
 	unitFile := ""
-	if autostart == service.AutostartSystemd {
+	switch autostart {
+	case service.AutostartSystemd:
 		unitFile = service.UnitPath(v.dirs.ConfigHome)
+	case service.AutostartLaunchd:
+		unitFile = service.LaunchAgentPath(v.dirs.Home)
 	}
 	plan = append(plan, rootops.Op{Op: rootops.OpRecordAutostart, Mode: autostart, Path: unitFile})
 	for i := range plan {
@@ -335,27 +339,77 @@ func (e *Engine) systemApacheInstalled(v *env) bool {
 	return false
 }
 
-// setupAutostart writes and enables the user unit (systemd); the other
-// modes need no file.
+// setupAutostart writes and enables the user unit (systemd) or the
+// LaunchAgent (launchd); the other modes need no file.
 func (e *Engine) setupAutostart(ctx context.Context, v *env, mode string) error {
-	if mode != service.AutostartSystemd {
-		return nil
+	switch mode {
+	case service.AutostartSystemd:
+		unit, err := service.SystemdUnit(e.Self)
+		if err != nil {
+			return err
+		}
+		p := service.UnitPath(v.dirs.ConfigHome)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := renameio.WriteFile(p, unit, 0o644); err != nil {
+			return err
+		}
+		if err := e.systemctlUser(ctx, v, "daemon-reload"); err != nil {
+			return err
+		}
+		return e.systemctlUser(ctx, v, "enable", service.UnitName)
+	case service.AutostartLaunchd:
+		agent, err := service.LaunchAgent(e.Self, service.AgentEnv(v.dirs.ConfigHome, v.dirs.StateHome, v.dirs.DataHome, v.dirs.RuntimeDir))
+		if err != nil {
+			return err
+		}
+		p := service.LaunchAgentPath(v.dirs.Home)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := renameio.WriteFile(p, agent, 0o644); err != nil {
+			return err
+		}
+		// launchd loads the agent at the next login (install starts the
+		// stack itself); enable clears a disable an earlier one left.
+		_, err = e.launchctl(ctx, v, "enable", e.agentTarget())
+		return err
 	}
-	unit, err := service.SystemdUnit(e.Self)
+	return nil
+}
+
+// agentTarget is the LaunchAgent's service target in the user's GUI
+// domain.
+func (e *Engine) agentTarget() string {
+	return fmt.Sprintf("gui/%d/%s", e.UID, service.LaunchAgentLabel)
+}
+
+// launchctl runs launchctl as the user.
+func (e *Engine) launchctl(ctx context.Context, v *env, args ...string) (string, error) {
+	bin := e.find("launchctl")
+	if bin == "" {
+		return "", hteerr.New(hteerr.PlatformUnsupported, "launchctl is not installed", "use --autostart none")
+	}
+	res, err := child.Run(ctx, e.Runner, child.Cmd(bin, child.BaseEnv(v.dirs.Home), args...))
 	if err != nil {
-		return err
+		return "", err
 	}
-	p := service.UnitPath(v.dirs.ConfigHome)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return err
+	if !res.Success() {
+		return "", hteerr.Newf(hteerr.PlatformUnsupported, "use --autostart none", "launchctl %s: %s", strings.Join(args, " "), child.Output(res))
 	}
-	if err := renameio.WriteFile(p, unit, 0o644); err != nil {
-		return err
+	return string(res.Stdout), nil
+}
+
+// removeAgent unloads the LaunchAgent (it is loaded since the last
+// login, or not at all) and removes its file.
+func (e *Engine) removeAgent(ctx context.Context, v *env) {
+	p := service.LaunchAgentPath(v.dirs.Home)
+	if _, err := os.Lstat(p); err != nil {
+		return
 	}
-	if err := e.systemctlUser(ctx, v, "daemon-reload"); err != nil {
-		return err
-	}
-	return e.systemctlUser(ctx, v, "enable", service.UnitName)
+	e.launchctl(ctx, v, "bootout", e.agentTarget()) // not loaded is fine
+	os.Remove(p)
 }
 
 // UninstallOptions are the flags of uninstall.
@@ -425,6 +479,9 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 		}
 		os.Remove(service.UnitPath(v.dirs.ConfigHome))
 		e.systemctlUser(ctx, v, "daemon-reload")
+	}
+	if set.Autostart == service.AutostartLaunchd {
+		e.removeAgent(ctx, v)
 	}
 	if err := e.supervisor(v).Stop(ctx); err != nil {
 		return err

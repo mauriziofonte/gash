@@ -12,6 +12,15 @@
     <string>__unit</string>
     <string>start</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>XDG_CONFIG_HOME</key>
+    <string>/Users/me/.config</string>
+    <key>XDG_DATA_HOME</key>
+    <string>/Users/me/.local/share</string>
+    <key>XDG_STATE_HOME</key>
+    <string>/Users/me/.local/state</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
 </dict>
