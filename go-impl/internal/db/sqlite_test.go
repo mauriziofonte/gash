@@ -112,7 +112,7 @@ func TestSQLiteErrorsKeepTheContract(t *testing.T) {
 		got := runGo(t, m, d, env, "llm_db_query", q, "-f", db)
 		require.Equal(t, want.RC, got.RC, q)
 		require.Empty(t, got.Stdout)
-		require.Regexp(t, `^\{"error":"sqlite_error","details":"[^"]+","action":"RETRY","recoverable":true,"hint":"Fix the SQL and retry","query_time":"0µs"\}`+"\n$", got.Stderr, q)
-		require.Regexp(t, `^\{"error":"sqlite_error","details":"[^"]+","action":"RETRY","recoverable":true,"hint":"Fix the SQL and retry","query_time":"0µs"\}`+"\n$", want.Stderr, q)
+		require.Regexp(t, `^\{"error":"sqlite_error","details":"(\\.|[^"\\])+","action":"RETRY","recoverable":true,"hint":"Fix the SQL and retry","query_time":"0µs"\}`+"\n$", got.Stderr, q)
+		require.Regexp(t, `^\{"error":"sqlite_error","details":"(\\.|[^"\\])+","action":"RETRY","recoverable":true,"hint":"Fix the SQL and retry","query_time":"0µs"\}`+"\n$", want.Stderr, q)
 	}
 }
