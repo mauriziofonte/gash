@@ -1,0 +1,40 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# The reference card through the shim, plain when piped. Headless loads no
+# alias pack: the nav topic shows the values the alias file writes, the
+# identity alias (ls -> ls) left out. The box (version, function count)
+# is left out of the comparison.
+
+env GASH_HEADLESS=1 COLUMNS=80
+exec bash -c 'source "$GASH_SH"; gash nav | tail -n +6'
+cmp stdout nav.txt
+! stderr .
+
+# An alias of the caller's shell shows its value, an identity one stays
+# out (LEDGER SELF-12: the stub passes the values).
+exec bash -c 'source "$GASH_SH"; alias ll="ls -l --si" la=la; gash nav'
+stdout '(^|  )ll +ls -l --si( |$)'
+! stdout '(^|  )la +la( |$)'
+! stdout '(^|  )ls +ls( |$)'
+
+# The binary answers directly too.
+exec gash gash_help --short gash
+stdout '^Gash reference card with all functions and aliases$'
+
+! exec bash -c 'source "$GASH_SH"; gash bogus'
+! stdout .
+stderr '^Error: Unknown topic: bogus\. Topics: files system nav git docker remote dev llm ai gash, all$'
+
+-- nav.txt --
+
+  NAV  Directory navigation and listings
+
+  Aliases
+  ll    ls -l             la     ls -la
+  l     ls -CF            lash   ls -lash
+  sl    ls                ..     cd ..
+  ...   cd ../..          cd..   cd ..
+  ....  cd ../../..       .....  cd ../../../..
+  .4    cd ../../../..    .5     cd ../../../../..
+  cls   clear             path   tr ":" "\n" <<<"$PATH"
+

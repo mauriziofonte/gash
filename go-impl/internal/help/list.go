@@ -17,8 +17,9 @@ import (
 // (CORE-07), where 2.x used sort(1) in the caller's locale and Bash's
 // hash order.
 
-// registered returns the functions with a registered help page, sorted.
-func registered() []*registry.Function {
+// Registered returns the functions with a registered help page, sorted
+// by bytes: the keys of __GASH_HELP_REGISTRY.
+func Registered() []*registry.Function {
 	var out []*registry.Function
 	fns := registry.Functions()
 	for i := range fns {
@@ -26,9 +27,13 @@ func registered() []*registry.Function {
 			out = append(out, &fns[i])
 		}
 	}
-	slices.SortFunc(out, func(a, b *registry.Function) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out, byName)
 	return out
 }
+
+// byName orders functions by the bytes of their names, as sort(1) under
+// LC_ALL=C, whatever the caller's locale (LEDGER SELF-11).
+func byName(a, b *registry.Function) int { return strings.Compare(a.Name, b.Name) }
 
 // FindByAlias is __gash_help_find_by_alias ALIAS: the function whose
 // registered aliases include alias.
@@ -36,7 +41,7 @@ func FindByAlias(alias string) (*registry.Function, bool) {
 	if alias == "" {
 		return nil, false
 	}
-	for _, f := range registered() {
+	for _, f := range Registered() {
 		if slices.Contains(splitComma(f.Help.Aliases), alias) {
 			return f, true
 		}
@@ -57,7 +62,7 @@ func Row(f *registry.Function) string {
 // Widths is __gash_help_widths: the widest name and "(aliases)" of every
 // registered function, so that consecutive tables line up.
 func Widths() (name, aliases int) {
-	for _, f := range registered() {
+	for _, f := range Registered() {
 		name = max(name, ui.Len(f.Name))
 		if f.Help.Aliases != "" {
 			aliases = max(aliases, ui.Len(f.Help.Aliases)+2)
@@ -93,7 +98,7 @@ func Search(s ui.Style, w io.Writer, keyword string) bool {
 	}
 	kw := strings.ToLower(keyword)
 	var rows []string
-	for _, f := range registered() {
+	for _, f := range Registered() {
 		h := f.Help
 		if strings.Contains(strings.ToLower(f.Name), kw) || strings.Contains(strings.ToLower(h.Aliases), kw) ||
 			strings.Contains(strings.ToLower(h.Short), kw) || strings.Contains(strings.ToLower(h.Body), kw) {
@@ -115,7 +120,7 @@ func List(s ui.Style, w io.Writer) {
 	wn, wa := Widths()
 	byModule := map[string][]string{}
 	var other []string
-	for _, f := range registered() {
+	for _, f := range Registered() {
 		if f.Help.Module == "" {
 			other = append(other, Row(f))
 			continue

@@ -14,7 +14,7 @@ __docs_pages='
 
 it "docs/reference is generated from the current help registry" bash -c '
   set -euo pipefail
-  command -v diff >/dev/null 2>&1 || exit 77
+  gash_require diff
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   bash "$GASH_TEST_ROOT/tools/gen-docs.sh" "$tmp" >/dev/null 2>&1
   diff -ru "$GASH_TEST_ROOT/docs/reference" "$tmp" >&2 || {

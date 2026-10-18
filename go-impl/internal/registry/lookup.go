@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -47,6 +48,23 @@ func Settings() []Setting { return settings }
 
 // Topics returns the reference card topics in card order.
 func Topics() []Topic { return topics }
+
+// CardAliases returns the reference card entries of the alias file FILE
+// (lib/aliases/FILE.sh) in file order; nil for a file no topic lists.
+func CardAliases(file string) []CardAlias { return cardAliases[file] }
+
+// CardAliasNames returns the names of every card entry, sorted, each
+// once: the names whose live alias value the gash stub passes.
+func CardAliasNames() []string {
+	var out []string
+	for _, list := range cardAliases {
+		for _, a := range list {
+			out = append(out, a.Name)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
 
 // Modules returns the distinct modules, sorted.
 func Modules() []string {

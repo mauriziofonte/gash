@@ -150,6 +150,15 @@ type Topic struct {
 	Description string
 }
 
+// CardAlias is one entry of the reference card for an alias file: an
+// alias with its value as the file writes it (unquoted, load-time
+// variables shown by what they hold), or a function with the comment
+// above it, as __gash_card_aliases parsed lib/aliases/FILE.sh.
+type CardAlias struct {
+	Name  string
+	Value string
+}
+
 // CommonShellVars are passed by every stub (compat.md 3): mode and
 // output, locations, and the locale that selects the glyph set.
 var CommonShellVars = []string{

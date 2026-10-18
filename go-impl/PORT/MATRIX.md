@@ -780,7 +780,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | GASH_SSH_AUTOUNLOCK_RAN | shell-mutating | port | Exported once per session so nested shells skip the SSH auto-unlock; set by doctor --timing children. | shim | shell, system | ssh_auto_unlock_spec.sh, output_style_render_spec.sh |
 | GASH_TIMING | - | port | =1 records per-file load times in __GASH_LOAD_TIMES; set by gash_doctor --timing in child shells. | shim | shell | startup_spec.sh |
 | GASH_TUI | interactive | port | =plain gives numbered prompts instead of arrow-key menus. | binary (passed by the shim) | shell | output_style_render_spec.sh |
-| GASH_VERSION | - | port | Public version string from VERSION, read by modules, scripts and agents; unknown when VERSION is missing. | shim | shell | help_spec.sh, gash_spec.sh, functions_smoke_spec.sh |
+| GASH_VERSION | - | port | Public version string from VERSION, read by modules, scripts and agents; unknown when VERSION is missing. | shim; binary (passed by the shim): gash, gash_help and the other lib/modules/gash.sh functions that print it | shell, selfmgmt | help_spec.sh, gash_spec.sh, functions_smoke_spec.sh |
 | GIT_* environment and git config | pure output | port | git module functions run git with the caller's environment, config, hooks, signing and credential helpers (no hardening flags): kept, see GIT-10. | binary (inherited by the git child) | devops | none (add TestLedger_GIT10 in internal/gitx) |
 | GIT_DIR/GIT_WORK_TREE/GIT_CONFIG_* | pure output | port | inherited by __llm_git for llm_git_* (inferred) | binary | llm | llm_system_spec.sh |
 | GITHUB_TOKEN | pure output | port | ghcr registry auth token for llm_docker_check | binary | llm, devops | docker_compose_spec.sh, llm_system_spec.sh |

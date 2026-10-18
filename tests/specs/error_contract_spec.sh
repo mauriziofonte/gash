@@ -7,7 +7,7 @@ describe "Error contract"
 
 it "__gash_json_error emits the documented shape and derives recoverable" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   source "$GASH_TEST_ROOT/lib/core/output.sh"
   source "$GASH_TEST_ROOT/lib/core/utils.sh"
 
@@ -24,7 +24,7 @@ it "__gash_json_error emits the documented shape and derives recoverable" bash -
 
 it "llm_* and scanners agree: recoverable is false exactly for FATAL" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   export GASH_HEADLESS=1
   source "$GASH_TEST_ROOT/gash.sh"
 
@@ -39,8 +39,8 @@ it "llm_* and scanners agree: recoverable is false exactly for FATAL" bash -c '
 
 it "a value flag at the end of the line errors instead of hanging" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
-  command -v timeout >/dev/null 2>&1 || exit 77
+  gash_require jq
+  gash_require timeout
   cd "$(mktemp -d)"
 
   for call in "files_largest --json --limit" "dirs_largest --json --depth" "dirs_find_large --json --size" \
@@ -56,7 +56,7 @@ it "a value flag at the end of the line errors instead of hanging" bash -c '
 
 it "flags mean one thing: -n is a limit, --json is JSON, unknown flags fail" bash -c '
   set -uo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
   for i in 1 2 3; do head -c $((i * 100)) /dev/zero >"$tmp/f$i"; done
   export GASH_HEADLESS=1
@@ -74,8 +74,8 @@ it "flags mean one thing: -n is a limit, --json is JSON, unknown flags fail" bas
 
 it "the DB functions take -n as the row limit too" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
-  command -v sqlite3 >/dev/null 2>&1 || exit 77
+  gash_require jq
+  gash_require sqlite3
   tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
   sqlite3 "$tmp/t.db" "CREATE TABLE t (id INTEGER); WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 10) INSERT INTO t SELECT x FROM c;"
   export GASH_HEADLESS=1 HOME="$tmp"
@@ -94,7 +94,7 @@ it "the DB functions take -n as the row limit too" bash -c '
 
 it "llm_procs rejects unknown options with the unknown_option envelope" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   export GASH_HEADLESS=1
   source "$GASH_TEST_ROOT/gash.sh"
   for args in "--bogus" "--pid 1" "nginx"; do
@@ -107,8 +107,8 @@ it "llm_procs rejects unknown options with the unknown_option envelope" bash -c 
 
 it "llm_git_status, llm_git_diff and llm_git_log agree outside a repository" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
-  command -v git >/dev/null 2>&1 || exit 77
+  gash_require jq
+  gash_require git
   tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
   export GASH_HEADLESS=1 HOME="$tmp" GIT_CEILING_DIRECTORIES="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -124,7 +124,7 @@ it "llm_git_status, llm_git_diff and llm_git_log agree outside a repository" bas
 
 it "llm_docker_check errors follow the contract and unknown digests are null" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf \"$tmp\"" EXIT
   export GASH_HEADLESS=1 HOME="$tmp" PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
   source "$GASH_TEST_ROOT/gash.sh"

@@ -46,7 +46,7 @@ it "redaction keeps ordinary words after password/token/secret" bash -c '
 
 it "the request body and API key never appear in curl argv" bash -c '
     set -euo pipefail
-    command -v jq >/dev/null 2>&1 || exit 77
+    gash_require jq
     export PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
     source "$GASH_TEST_ROOT/lib/core/output.sh"
     source "$GASH_TEST_ROOT/lib/core/utils.sh"
@@ -101,7 +101,7 @@ describe "AI client - what comes back"
 
 it "terminal escapes in a reply are stripped" bash -c '
     set -euo pipefail
-    command -v jq >/dev/null 2>&1 || exit 77
+    gash_require jq
     export PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
     source "$GASH_TEST_ROOT/lib/core/output.sh"
     source "$GASH_TEST_ROOT/lib/core/utils.sh"
@@ -118,7 +118,7 @@ it "terminal escapes in a reply are stripped" bash -c '
 
 it "a 529 overload is retried after Retry-After" bash -c '
     set -euo pipefail
-    command -v jq >/dev/null 2>&1 || exit 77
+    gash_require jq
     export PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
     source "$GASH_TEST_ROOT/lib/core/output.sh"
     source "$GASH_TEST_ROOT/lib/core/utils.sh"
@@ -164,7 +164,7 @@ describe "AI client - request shape"
 
 it "Claude 5 models get effort low, older ones no effort field" bash -c '
     set -euo pipefail
-    command -v jq >/dev/null 2>&1 || exit 77
+    gash_require jq
     export PATH="$GASH_TEST_ROOT/tests/mocks/bin:$PATH"
     export GASH_HEADLESS=1
     source "$GASH_TEST_ROOT/lib/core/output.sh"

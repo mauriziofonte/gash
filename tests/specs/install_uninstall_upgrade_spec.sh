@@ -386,7 +386,7 @@ it "install.sh refuses to update a checkout with local modifications" bash -c '
 
 it "install.sh without a terminal and without --assume-yes fails instead of silently aborting" bash -c '
   set -euo pipefail
-  command -v setsid >/dev/null 2>&1 || exit 77
+  gash_require setsid
   ROOT="${GASH_TEST_ROOT}"
   tmp_home="$(mktemp -d)"; trap "/bin/rm -rf $tmp_home" EXIT
   : >"$tmp_home/.bashrc"

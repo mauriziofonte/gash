@@ -8,7 +8,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # shellcheck source=tests/gash-test.sh
 source "$ROOT_DIR/tests/gash-test.sh"
-gash_source_all "$ROOT_DIR"
 
 describe "Files module (v1.5)"
 
@@ -96,7 +95,7 @@ it "files_largest --json emits a valid envelope" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   dd if=/dev/zero of="$tmp/a.bin" bs=1024 count=8 status=none
   echo x > "$tmp/b.txt"
@@ -163,7 +162,7 @@ it "dirs_largest --json envelope is valid" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/a" "$tmp/b"
   dd if=/dev/zero of="$tmp/a/f" bs=1024 count=32 status=none
@@ -191,7 +190,7 @@ it "dirs_find_large --json envelope is valid" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/d1"
   dd if=/dev/zero of="$tmp/d1/big" bs=1024 count=64 status=none
@@ -229,7 +228,7 @@ it "dirs_list_empty --json envelope is valid" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/e1" "$tmp/e2"
   out="$(dirs_list_empty "$tmp" --json)"
@@ -260,7 +259,7 @@ it "safe_path emits JSON error when --json is active" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   err="$({ files_largest --json /proc 2>&1 >/dev/null; } || true)"
   printf "%s" "$err" | jq -e ".error == \"forbidden_path\" and .action == \"FATAL\"" >/dev/null
 '
@@ -269,7 +268,7 @@ it "invalid size returns JSON error under --json" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   err="$({ files_largest --json --min-size notasize 2>&1 >/dev/null; } || true)"
   printf "%s" "$err" | jq -e ".error == \"invalid_size\"" >/dev/null
 '
@@ -300,7 +299,7 @@ it "tree_stats --json envelope is valid and has stats fields" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/sub"
   dd if=/dev/zero of="$tmp/a.bin" bs=1024 count=32 status=none
@@ -323,7 +322,7 @@ it "llm_tree JSON default depth 1 stays flat (backward-compat)" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/a/b"
   echo x > "$tmp/a/b/deep.txt"
@@ -337,7 +336,7 @@ it "llm_tree --depth 3 produces nested JSON" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/a/b"
   echo x > "$tmp/a/b/deep.txt"
@@ -354,7 +353,7 @@ it "llm_tree --stats adds size and children_count" bash -c '
   set -euo pipefail
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-  command -v jq >/dev/null 2>&1 || { echo "jq missing, skipping"; exit 77; }
+  gash_require jq
   tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
   mkdir -p "$tmp/a"
   dd if=/dev/zero of="$tmp/a/big" bs=1024 count=16 status=none
