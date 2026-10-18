@@ -1,0 +1,33 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# LEDGER CORE-05: gash_db_test connects through the native drivers. With
+# no mysql, mariadb or psql on PATH and a host that refuses the
+# connection it prints "Connection failed", never "client not found".
+
+env GASH_HEADLESS=1
+mkdir empty-bin
+cp gash_env home/.gash_env
+chmod 600 home/.gash_env
+
+! exec /bin/bash -c 'PATH=$PWD/empty-bin; source "$GASH_SH"; gash_db_test my'
+! stdout .
+cmp stderr my.txt
+
+! exec /bin/bash -c 'PATH=$PWD/empty-bin; source "$GASH_SH"; gash_db_test pg'
+! stdout .
+cmp stderr pg.txt
+
+! exec /bin/bash -c 'PATH=$PWD/empty-bin; source "$GASH_SH"; gash_db_test maria'
+! stderr 'not found'
+stderr '^Error: Connection failed$'
+
+-- gash_env --
+DB:my=mysql://u:secret@127.0.0.1:1/app
+DB:pg=pgsql://u:secret@127.0.0.1:1/app
+DB:maria=mariadb://u:secret@127.0.0.1:1
+-- my.txt --
+Info: Testing connection 'my' (mysql://u@127.0.0.1:1/app)...
+Error: Connection failed
+-- pg.txt --
+Info: Testing connection 'pg' (pgsql://u@127.0.0.1:1/app)...
+Error: Connection failed
