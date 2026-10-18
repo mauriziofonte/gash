@@ -8,8 +8,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -32,6 +34,10 @@ type fakeAnswer struct {
 	cols []string
 	rows [][]driver.Value
 	err  error
+	// types and scales are the column metadata (DatabaseTypeName and the
+	// decimals; -1 for none), when given.
+	types  []string
+	scales []int64
 }
 
 func (f *fakeMySQL) open(cfg *mysql.Config) (*sql.DB, error) {
@@ -97,7 +103,21 @@ type fakeRows struct {
 }
 
 func (r *fakeRows) Columns() []string { return r.a.cols }
-func (r *fakeRows) Close() error      { return nil }
+
+func (r *fakeRows) ColumnTypeDatabaseTypeName(i int) string {
+	if i < len(r.a.types) {
+		return r.a.types[i]
+	}
+	return ""
+}
+
+func (r *fakeRows) ColumnTypePrecisionScale(i int) (int64, int64, bool) {
+	if i < len(r.a.scales) && r.a.scales[i] >= 0 {
+		return math.MaxInt64, r.a.scales[i], true
+	}
+	return 0, 0, false
+}
+func (r *fakeRows) Close() error { return nil }
 func (r *fakeRows) Next(dest []driver.Value) error {
 	if r.i >= len(r.a.rows) {
 		return io.EOF
@@ -245,4 +265,54 @@ func TestLedger_DB07(t *testing.T) {
 	got = runGo(t, m, d, env, "llm_db_query", "SELECT 1")
 	require.Equal(t, `{"error":"mysql_error","details":"dial tcp 127.0.0.1:3306: connect: connection refused","action":"RETRY","recoverable":true,"hint":"Fix the SQL and retry","query_time":"0µs"}`+"\n", got.Stderr)
 	require.True(t, strings.HasPrefix(got.Stderr, `{"error":"mysql_error"`))
+}
+
+// TestMySQLFloatText: the FLOAT and DOUBLE text of MySQL 8.0 and MariaDB
+// 11 (testdata, from mysql --batch) comes back unchanged through the
+// driver's parsing and mysqlText.
+func TestMySQLFloatText(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "mysql_float_text.tsv"))
+	require.NoError(t, err)
+	n := 0
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		require.Len(t, f, 3, line)
+		dec, err := strconv.Atoi(f[1])
+		require.NoError(t, err)
+		col := mysqlColumn{typeName: f[0], decimals: dec}
+		var v any
+		if f[0] == "FLOAT" {
+			x, err := strconv.ParseFloat(f[2], 32)
+			require.NoError(t, err)
+			v = float32(x)
+		} else {
+			x, err := strconv.ParseFloat(f[2], 64)
+			require.NoError(t, err)
+			v = x
+		}
+		require.Equal(t, f[2], mysqlText(v, col), line)
+		n++
+	}
+	require.Greater(t, n, 1500)
+}
+
+// TestLedger_DB18: the driver's parsed integers lose ZEROFILL padding;
+// YEAR, DOUBLE and FLOAT keep the client's text (DB-02).
+func TestLedger_DB18(t *testing.T) {
+	d, _, env := mysqlHome(t)
+	f := &fakeMySQL{}
+	m := frozen(New())
+	m.openMySQL = f.open
+	// The server sent 00042, 0000, 1e20, 1234570, 1.5000 and 12.30.
+	f.answers = map[string]fakeAnswer{"SELECT * FROM t": {
+		cols:   []string{"zf", "y", "d", "f", "dd", "dec"},
+		types:  []string{"INT", "YEAR", "DOUBLE", "FLOAT", "DOUBLE", "DECIMAL"},
+		scales: []int64{-1, -1, -1, -1, 4, 2},
+		rows:   [][]driver.Value{{int64(42), int64(0), float64(1e20), float32(1234570), float64(1.5), []byte("12.30")}},
+	}}
+	got := runGo(t, m, d, env, "llm_db_query", "SELECT * FROM t")
+	require.Equal(t, `{"data":[{"zf":"42","y":"0000","d":"1e20","f":"1234570","dd":"1.5000","dec":"12.30"}],"rows":1,"query_time":"0µs"}`+"\n", got.Stdout)
 }
