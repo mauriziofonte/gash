@@ -3783,9 +3783,9 @@ Critical and high items:
 | Reproduction | the same harmless query under `LC_ALL=C` and `LC_ALL=C.UTF-8` gets different verdicts (temp SQLite) |
 | Severity | medium |
 | Public-contract impact | yes |
-| rc.A behavior | The libc tables cannot be reproduced, and PRD 10.5 forbids loosening the rail, so the guard checks every query under both readings (C, and a UTF-8 reading with Unicode case folding to ASCII and Unicode spaces) and refuses when either refuses. A query passes only when 2.x would pass it in both locales; the error reported is the C reading's when both refuse. |
+| rc.A behavior | The libc tables cannot be reproduced, and PRD 10.5 forbids loosening the rail, so the guard checks every query under three readings in a fixed order (C; UTF-8 with the case mappings glibc makes to ASCII, `ſ` and `ı`; UTF-8 that also folds runes whose case orbit holds an ASCII letter, such as the Kelvin sign) and refuses with the first refusal. Blanks in the UTF-8 readings are Unicode spaces plus ASCII, except in the MySQL `--` comment rule, where a wider set would hide text: there they are glibc's exact `iswspace` set. A query passes only when every reading accepts, so nothing 2.x refuses in C or UTF-8 is accepted; a few queries no 2.x locale refuses (an NBSP or Kelvin sign inside a keyword) are refused. |
 | Fix recipe (3.0) | Same as rc.A. |
-| Proving test | `TestLedger_DB13` in `internal/sqlguard`, with a property test that a refusal under either reading is a refusal. |
+| Proving test | `TestLedger_DB13` (19 vectors checked against 2.x in both locales) and `TestLedger_DB13_Monotonic` (a refusal under any reading is a refusal) in `internal/sqlguard`. |
 | Status | open |
 
 ### llm_exec
