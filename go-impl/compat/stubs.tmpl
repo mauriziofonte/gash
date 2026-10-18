@@ -35,3 +35,19 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 {{% end %}}
+
+{{% define "stub/gash" %}}
+gash() {
+    {{% if .LoadsEnv %}}{{% loadenv %}}{{% end %}}
+    # The card shows the value this shell gives an alias of the card, as
+    # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
+    # backslash and newline escaped (LEDGER SELF-12).
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card=""
+    for __gash_n in {{% cardAliasNames %}}; do
+        [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
+        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
+}
+{{% end %}}

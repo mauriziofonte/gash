@@ -139,6 +139,9 @@ func parse(fsys fs.FS) (*template.Template, error) {
 		"loadenv": func() string { return LoadEnvLine },
 		"join":    strings.Join,
 		"indent":  indent,
+		// cardAliasNames is the names of the card entries as shell words,
+		// for the gash stub.
+		"cardAliasNames": func() string { return shellWords(registry.CardAliasNames()) },
 	}).ParseFS(fsys, "*.tmpl")
 	if err != nil {
 		return nil, err
@@ -153,6 +156,25 @@ func parse(fsys fs.FS) (*template.Template, error) {
 		}
 	}
 	return t, nil
+}
+
+// shellWords joins words as Bash words: a word with a byte outside
+// [A-Za-z0-9_.,:/=+@%-], or starting with ~, is single-quoted.
+func shellWords(words []string) string {
+	out := make([]string, len(words))
+	for i, w := range words {
+		safe := w != "" && w[0] != '~'
+		for j := 0; j < len(w) && safe; j++ {
+			c := w[j]
+			safe = 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("_.,:/=+@%-~", c) >= 0
+		}
+		if safe {
+			out[i] = w
+			continue
+		}
+		out[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+	}
+	return strings.Join(out, " ")
 }
 
 // indent prefixes every non-empty line of s with n spaces.

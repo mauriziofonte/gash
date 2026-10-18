@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -95,4 +96,29 @@ func TestNeedsOfRegistryState(t *testing.T) {
 	c, out = call(map[string]string{"GASH__HELP": "0"}, false, "all_colors")
 	require.True(t, NeedsOf(c, "-h"))
 	require.Equal(t, "all_colors\nUsage: all_colors\nDisplays all available terminal colors (256 colors).\n", out.String())
+}
+
+// LEDGER SELF-11: the card and help lists sort names by bytes, the order
+// of sort(1) under LC_ALL=C, in every locale: a_b a_c ab, where
+// collations that ignore "_" give a_b ab a_c.
+func TestLedger_SELF11(t *testing.T) {
+	fns := []*registry.Function{{Name: "ab"}, {Name: "a_c"}, {Name: "a_b"}}
+	slices.SortFunc(fns, byName)
+	require.Equal(t, "a_b", fns[0].Name)
+	require.Equal(t, "a_c", fns[1].Name)
+	require.Equal(t, "ab", fns[2].Name)
+
+	var names []string
+	for _, f := range Registered() {
+		names = append(names, f.Name)
+	}
+	if _, err := exec.LookPath("sort"); err != nil {
+		t.Skip("sort not available")
+	}
+	cmd := exec.Command("sort")
+	cmd.Env = []string{"LC_ALL=C"}
+	cmd.Stdin = strings.NewReader(strings.Join(names, "\n") + "\n")
+	out, err := cmd.Output()
+	require.NoError(t, err)
+	require.Equal(t, string(out), strings.Join(names, "\n")+"\n")
 }
