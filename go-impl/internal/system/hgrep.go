@@ -261,7 +261,7 @@ func (h *histMatcher) compile() {
 	switch {
 	case h.regex:
 		re, err := regexp.Compile("(?i)" + h.pattern)
-		if err != nil {
+		if err != nil || wordAnchors(h.pattern) {
 			h.invalid = true
 			return
 		}
@@ -271,6 +271,21 @@ func (h *histMatcher) compile() {
 	default:
 		h.ascii = asciiLower(h.pattern)
 	}
+}
+
+// wordAnchors reports gawk's \< or \> in a regex: Go reads them as the
+// characters < and >, so rc.A refuses them as Go regexp syntax it lacks
+// (SYS-28).
+func wordAnchors(p string) bool {
+	for i := 0; i+1 < len(p); i++ {
+		if p[i] == '\\' {
+			if p[i+1] == '<' || p[i+1] == '>' {
+				return true
+			}
+			i++
+		}
+	}
+	return false
 }
 
 // match tests a command.

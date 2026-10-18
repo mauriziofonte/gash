@@ -54,12 +54,15 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		p.Error("No service manager found (systemd or service).")
 		return 1
 	}
-	quiet := runner.Options{Env: c.Env.Child(), Stdout: io.Discard, Stderr: io.Discard}
+	// `systemctl is-active --quiet S 2>/dev/null`; `service S status
+	// >/dev/null 2>&1`.
 	var running []string
 	for _, s := range knownServices {
-		cmd := runner.Cmd{Path: "systemctl", Args: []string{"is-active", "--quiet", s}, Options: quiet}
+		cmd := runner.Cmd{Path: "systemctl", Args: []string{"is-active", "--quiet", s},
+			Options: runner.Options{Env: c.Env.Child(), Stdout: c.Stdout, Stderr: io.Discard}}
 		if manager == "service" {
-			cmd = runner.Cmd{Path: "service", Args: []string{s, "status"}, Options: quiet}
+			cmd = runner.Cmd{Path: "service", Args: []string{s, "status"},
+				Options: runner.Options{Env: c.Env.Child(), Stdout: io.Discard, Stderr: io.Discard}}
 		}
 		if res, err := m.run.Run(ctx(c), cmd); err == nil && res.ExitCode == 0 {
 			running = append(running, s)
