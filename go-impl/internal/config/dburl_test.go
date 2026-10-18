@@ -30,13 +30,18 @@ func TestURLDecode(t *testing.T) {
 	}
 }
 
-func TestDecodePassword(t *testing.T) {
-	// The callers capture __gash_url_decode with $(...): trailing newlines go.
+// LEDGER CORE-13, reproduced: the callers capture __gash_url_decode with
+// $(...) (db.sh:246, config.sh:545), so a password loses its trailing
+// newlines, and %00 decodes to nothing (a Bash string holds no NUL).
+func TestLedger_CORE13_2x(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"ab%0A%0A", "ab"},
 		{"a%0Ab", "a\nb"},
 		{"p%40ss", "p@ss"},
 		{"%0A", ""},
+		{"pw%00x", "pwx"},
+		{"pw%0A%00", "pw"},
+		{"%00%0A%00", ""},
 	}
 	for _, tt := range tests {
 		if got := DecodePassword(tt.in); got != tt.want {
@@ -164,12 +169,17 @@ func TestLedger_LLM02_2x(t *testing.T) {
 	}
 }
 
-func TestMaskAIToken(t *testing.T) {
+// LEDGER CORE-16: ${token:0:8} counts characters as a UTF-8 locale does
+// (LC_ALL=C would count bytes and could cut a character); an invalid byte
+// counts as one character and is kept.
+func TestLedger_CORE16(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"sk-ant-api03-xxxx", "sk-ant-a..."},
 		{"short", "short..."},
 		{"", "..."},
 		{"ééééééééé", "éééééééé..."},
+		{"ab\xffcdefghij", "ab\xffcdefg..."},
+		{"日本語のトークンです", "日本語のトークン..."},
 	}
 	for _, tt := range tests {
 		if got := MaskAIToken(tt.in); got != tt.want {
