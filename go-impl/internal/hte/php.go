@@ -75,7 +75,8 @@ func (e *Engine) phpIni(ctx context.Context, command, domain string, edit func(m
 			return nil, nil, false, err
 		}
 		if !cur.HasPool() {
-			return nil, nil, false, hteerr.Newf(hteerr.ConflictingOptions, "", "%s has no PHP pool", cur.Domain)
+			return nil, nil, false, hteerr.Newf(hteerr.PHPNotEnabled, "gash hte site modify --domain "+cur.Domain+" --php VERSION",
+				"%s has no PHP", cur.Domain)
 		}
 		next := cur
 		next.PHPIni = maps.Clone(cur.PHPIni)

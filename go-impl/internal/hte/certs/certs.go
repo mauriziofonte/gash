@@ -10,6 +10,7 @@ package certs
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
@@ -50,10 +51,13 @@ const (
 // Manager issues, inspects and removes the certificates of the sites.
 type Manager struct {
 	Runner  runner.Runner
-	OpenSSL string      // absolute path of the openssl binary
-	Paths   state.Paths // where certs/<domain>/ lives
-	Env     []string    // the child environment; nil means child.BaseEnv("")
-	Now     func() time.Time
+	OpenSSL string // absolute path of the openssl binary
+	// OpenSSLHint is the platform's install command, the hint of
+	// openssl_not_found when OpenSSL is "".
+	OpenSSLHint string
+	Paths       state.Paths // where certs/<domain>/ lives
+	Env         []string    // the child environment; nil means child.BaseEnv("")
+	Now         func() time.Time
 }
 
 func (m Manager) now() time.Time {
@@ -105,8 +109,8 @@ func opensslConfig(names []string) []byte {
 
 func (m Manager) run(ctx context.Context, args ...string) (runner.Result, error) {
 	if m.OpenSSL == "" {
-		return runner.Result{}, hteerr.New(hteerr.PlatformUnsupported, "openssl is not installed",
-			"install openssl with the system package manager")
+		return runner.Result{}, hteerr.New(hteerr.OpenSSLNotFound, "openssl is not installed",
+			cmp.Or(m.OpenSSLHint, "install openssl with the system package manager"))
 	}
 	res, err := child.Run(ctx, m.Runner, child.Cmd(m.OpenSSL, m.Env, args...))
 	if err != nil {

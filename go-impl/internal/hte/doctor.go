@@ -178,7 +178,7 @@ func (e *Engine) doctorMachine(ctx context.Context, v *env, set state.Settings, 
 		r.add("php", CheckWarn, p, "")
 	}
 	if e.find("openssl") == "" {
-		r.add("openssl", CheckFail, "openssl is not installed", "install openssl with the system package manager")
+		r.add("openssl", CheckFail, "openssl is not installed", discover.OpenSSLInstallHint(v.os.Family))
 	} else {
 		r.add("openssl", CheckOK, e.find("openssl"), "")
 	}

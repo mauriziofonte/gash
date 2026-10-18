@@ -91,7 +91,7 @@ func (e *Engine) resolveAutostart(v *env, want string) (string, error) {
 	case service.AutostartShell, service.AutostartNone:
 		return want, nil
 	}
-	return "", hteerr.Newf(hteerr.ConflictingOptions, "", "--autostart takes auto, systemd, launchd, shell or none, not %q", want)
+	return "", hteerr.InvalidValue(hteerr.InvalidAutostart, "autostart", want, "auto", "systemd", "launchd", "shell", "none")
 }
 
 // stages lists the uninstall stage directories.
@@ -192,7 +192,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 	case "high":
 		ports = state.HighPorts
 	default:
-		return hteerr.Newf(hteerr.ConflictingOptions, "", "--ports takes standard or high, not %q", opt.Ports)
+		return hteerr.InvalidValue(hteerr.InvalidPorts, "ports", opt.Ports, "standard", "high")
 	}
 	if v.os.GOOS == "darwin" && ports == state.StandardPorts {
 		return hteerr.New(hteerr.PlatformUnsupported, "ports 80 and 443 on macOS (the pf redirect) are not implemented yet",
@@ -211,7 +211,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 		res.Warnings = append(res.Warnings, "no PHP-FPM version is installed: site create needs one (install php-fpm, then run gash hte doctor)")
 	}
 	if e.find("openssl") == "" {
-		return hteerr.New(hteerr.PlatformUnsupported, "openssl is not installed", "install openssl with the system package manager")
+		return hteerr.New(hteerr.OpenSSLNotFound, "openssl is not installed", discover.OpenSSLInstallHint(v.os.Family))
 	}
 	if !filepath.IsAbs(e.Self) || !filepath.IsAbs(e.Helper) {
 		return fmt.Errorf("hte: the gash binary and the hosts helper need absolute paths")

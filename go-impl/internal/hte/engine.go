@@ -199,7 +199,8 @@ func (e *Engine) supervisor(v *env) *service.Supervisor {
 }
 
 func (e *Engine) certs(v *env) certs.Manager {
-	return certs.Manager{Runner: e.Runner, OpenSSL: e.find("openssl"), Paths: v.paths, Env: child.BaseEnv(v.dirs.Home), Now: e.Now}
+	return certs.Manager{Runner: e.Runner, OpenSSL: e.find("openssl"), OpenSSLHint: discover.OpenSSLInstallHint(v.os.Family),
+		Paths: v.paths, Env: child.BaseEnv(v.dirs.Home), Now: e.Now}
 }
 
 // find returns a system binary in the base PATH, as seen through the

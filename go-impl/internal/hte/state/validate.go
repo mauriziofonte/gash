@@ -171,7 +171,7 @@ func ParseProfile(flag *string) (profiles.Name, error) {
 	}
 	n, ok := profiles.Parse(*flag)
 	if !ok {
-		return "", hteerr.Newf(hteerr.InvalidProfile, "profiles: dev, staging, hardened", "unknown profile %q", *flag)
+		return "", hteerr.InvalidValue(hteerr.InvalidProfile, "profile", *flag, "dev", "staging", "hardened")
 	}
 	return n, nil
 }

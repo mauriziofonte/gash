@@ -354,8 +354,9 @@ func TestOpenSSLArgv(t *testing.T) {
 	if !slices.Equal(calls[0].Argv[1:6], []string{"genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256"}) {
 		t.Fatalf("genpkey: %q", calls[0].Argv)
 	}
-	if m := (Manager{Runner: f, Paths: paths(t)}); hteerr.CodeOf(m.Issue(context.Background(), site("a.test"))) != hteerr.PlatformUnsupported {
-		t.Fatal("no openssl accepted")
+	m = Manager{Runner: f, Paths: paths(t), OpenSSLHint: "sudo apt install openssl"}
+	if he, ok := hteerr.As(m.Issue(context.Background(), site("a.test"))); !ok || he.Code != hteerr.OpenSSLNotFound || he.Hint != m.OpenSSLHint {
+		t.Fatalf("no openssl: %v", he)
 	}
 }
 
