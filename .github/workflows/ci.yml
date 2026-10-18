@@ -163,6 +163,27 @@ jobs:
       - name: Run test suite
         run: bash tests/run.sh --bash "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash"
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.27.2
+          cache-dependency-path: go-impl/go.sum
+
+      - name: Build the Gash 3 binary
+        working-directory: go-impl
+        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+
+      # The generated Bash must load on every supported Bash, 4.4 included:
+      # a staged tree sourced headless under set -euo pipefail prints
+      # nothing, returns 0 and defines the 2.x functions and aliases.
+      - name: Generated Bash loads (bash ${{ matrix.bash }})
+        run: bash tests/ci/compat-load.sh "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash" "$RUNNER_TEMP/gash"
+
+      # The 2.x specs against the binary through the generated Bash on this
+      # Bash. Not a gate until the port is complete (go-impl/PORT/PARITY.md).
+      - name: Specs in go mode (bash ${{ matrix.bash }})
+        continue-on-error: true
+        run: bash tests/run.sh --impl go --gash-bin "$RUNNER_TEMP/gash" --bash "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash"
+
   macos:
     name: Tests (macOS, best effort)
     runs-on: macos-latest
