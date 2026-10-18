@@ -15,7 +15,7 @@ section "HTE design delta", for triage.
 | Who runs the stack | The user. One Apache master (`apache2`/`httpd` from the distro or Homebrew) and one `php-fpm` master per PHP version in use, all started by `gash hte service start` as the user. No root process at runtime |
 | What is reused | System binaries and modules: Debian/Ubuntu `apache2` + `/usr/lib/apache2/modules`, Fedora `httpd` + `/usr/lib64/httpd/modules`, Arch `httpd` + `/usr/lib/httpd/modules`, Homebrew `httpd` + `$(brew --prefix)/lib/httpd/modules`; versioned `php-fpm` binaries. Nothing is compiled |
 | What is rendered | Apache and FPM config files, from declarative per-site state. Rendered files are artifacts, never edited by hand and never the source of truth |
-| Where user edits go | Per-site and global overlay files that the renderer includes and never rewrites (fixes "modify loses manual edits") |
+| Where user edits go | Per-site and global overlay files that every generation copies and includes, and gash never rewrites (fixes "modify loses manual edits") |
 | Privilege | Root only in `install`, `uninstall`, `migrate --apply` (interactive sudo) and in the hosts helper (the only NOPASSWD entry). See section 7 |
 | Change protocol | Render into a new generation, config test (`httpd -t`, `php-fpm -t`), swap, graceful reload, health check, automatic rollback to the previous generation on any failure |
 | Concurrency | Every mutation takes an exclusive lock (`github.com/gofrs/flock`) on `$XDG_STATE_HOME/gash/hte/lock`; reads take none. Lock wait 30 s, then `lock_timeout` (RETRY) |
@@ -35,8 +35,8 @@ and emits `LoadModule` only for modules that are not built in.
 |---|---|---|
 | Global settings | `$XDG_CONFIG_HOME/gash/hte/hte.toml` | Ports, listen addresses, default PHP, enabled extra modules, autostart mode |
 | Site state | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.toml` | One file per site; the domain is the identity (no numbering, no identity from socket names) |
-| Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, included inside every vhost of the site, never rewritten |
-| Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, included at server level, never rewritten |
+| Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, a regular file, never rewritten; each generation holds a copy (`overlays/sites/<domain>.apache.conf`) that every vhost of the site includes (HTE-71) |
+| Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, a regular file, never rewritten; each generation holds a copy (`overlays/apache.conf`) included at server level (HTE-71) |
 | Hosts names | `$XDG_CONFIG_HOME/gash/hte/hosts.toml` | `names = [...]`: names kept in the managed hosts block beyond the sites' own (the legacy `# hte-cli` names `migrate` carries over); missing means none |
 | Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/` | Per PHP version, a directory of `*.ini` files (`php global set` edits `global.ini` in it) that the version's FPM master reads after the system ones through `PHP_INI_SCAN_DIR` (section 4); never rendered into pools |
 | Rendered config | `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` and the symlink `render/current` | Generations; `current` swaps atomically; the previous generation is kept for rollback |
@@ -115,7 +115,8 @@ files:
   list, so a missing module fails the start instead of silently serving no
   HTTPS. A `Listen` on a TLS port other than 443 names the protocol
   (`Listen 127.0.0.1:8443 https`).
-* `IncludeOptional` of the global overlay, then of every enabled site's
+* `IncludeOptional` of the generation's copy of the global overlay (a
+  comment above it names the user's file), then of every enabled site's
   rendered vhosts.
 
 A site's `extra_http_ports` and `extra_https_ports` (1 to 65535, never 80,
@@ -133,7 +134,7 @@ paths, logs outside the document root, 307 instead of 301:
 
 ```apache
 <VirtualHost 127.0.0.1:80>
-    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay below.
+    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay named below.
     ServerName shop.test
     ServerAlias www.shop.test
     DocumentRoot "/home/me/src/shop/public"
@@ -171,9 +172,18 @@ paths, logs outside the document root, 307 instead of 301:
     #   RewriteCond %{REMOTE_ADDR} !^::1$
     #   RewriteRule ^/(.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=307,L]
 
-    IncludeOptional "/home/me/.config/gash/hte/sites/shop.test.apache.conf"
+    # Site overlay: "/home/me/.config/gash/hte/sites/shop.test.apache.conf", copied into this generation (run `gash hte service reload` after editing it).
+    IncludeOptional "/home/me/.local/state/gash/hte/render/gen-7/overlays/sites/shop.test.apache.conf"
 </VirtualHost>
 ```
+
+A generation holds a copy of every overlay it includes, made when it is
+rendered, and includes the copies, never the user's files (HTE-71): an
+overlay edit is a change of the rendering, tested, swapped and rolled back
+like any other, and a rollback brings back the overlays the previous
+generation ran with. The copy exists only when the user's file does
+(`IncludeOptional` skips the missing path); a path that is not a regular
+file is `invalid_state`.
 
 The redirect target is `https://%{HTTP_HOST}%{REQUEST_URI}` when clients
 reach HTTPS on 443 (standard ports, and the macOS `pf` redirect); with any
@@ -356,7 +366,7 @@ PID files and never runs a supervisor process of its own.
 | `service start` | Render if stale, config test, start each FPM master in use, then Apache; wait until the sockets and ports answer |
 | `service stop` | `SIGTERM` (Apache `-k stop`), wait, `SIGKILL` after a timeout. A PID is acted on only when `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p` (macOS) names our config path, so a recycled PID is never signalled |
 | `service restart` | stop + start |
-| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts. When the rendering is unchanged (only an overlay was edited: overlays are included by path, outside the rendering), the current generation is config-tested and the running masters reload in the same order; a failed test changes nothing. `php global set\|unset` reloads that version's master, and puts the previous overlay back when it does not come back |
+| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts. An Apache overlay edit is a change of the rendering (the generation holds copies of the overlays, section 3), so a failure at run time that the config test does not see, such as a `Listen` on a busy port in the global overlay, rolls back to the previous generation and its own copies (HTE-71). When the rendering is unchanged, the current generation is config-tested and the running masters reload in the same order (they read the global PHP overlay directories themselves); a failed test changes nothing. `php global set\|unset` reloads that version's master, and puts the previous overlay back when it does not come back |
 | `service status` | Per master: running, PID, uptime, listening addresses; per site: answers on HTTP and HTTPS. `--json` |
 | `service logs` | Tail of the global, per-site Apache and PHP logs (`--site`, `--lines N`; no follow mode, so agents never hang) |
 
@@ -534,7 +544,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 | `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
 | `php versions`, `php ini get\|set\|unset --domain D KEY [VALUE]`, `php global get\|set\|unset --version X.Y KEY [VALUE]` | |
-| `apache config path`, `apache modules list\|enable\|disable NAME` | Global overlay; modules within the userland list |
+| `apache config path`, `apache modules list\|enable\|disable NAME` | The global overlay the user edits (generations include a copy of it); modules within the userland list |
 | `service start\|stop\|restart\|reload\|status\|logs` | Section 5 |
 | `cert show\|renew --domain D` | |
 | `hosts list\|apply\|check\|windows` | |
