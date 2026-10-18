@@ -4,6 +4,7 @@ package config
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -733,6 +734,23 @@ func TestExpandTilde(t *testing.T) {
 	for _, tt := range tests {
 		if got := ExpandTilde(tt.key, tt.home); got != tt.want {
 			t.Errorf("ExpandTilde(%q, HOME=%q) = %q, want %q", tt.key, tt.home, got, tt.want)
+		}
+	}
+}
+
+// ValidHostTarget answers as the 2.x regex does in bash.
+func TestValidHostTargetMatches2x(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
+	}
+	for _, v := range []string{"u@h", "root@web.example.com", "u@h:22", "-oProxyCommand=x@h", "@h", "u@", "@",
+		"u@@h", "u@h@x", "u h@x", "u@h\tx", "u@h\n", "\vu@h", "u@h\r", "u@h\f", "uh", "", "ü@h", "u@h x"} {
+		cmd := exec.Command(bash, "--noprofile", "--norc", "-c", `[[ $1 =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]`, "_", v)
+		cmd.Env = []string{"LC_ALL=C"}
+		want := cmd.Run() == nil
+		if got := ValidHostTarget(v); got != want {
+			t.Errorf("ValidHostTarget(%q) = %v, bash says %v", v, got, want)
 		}
 	}
 }

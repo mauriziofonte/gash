@@ -193,7 +193,7 @@ func (f *File) parseLine(lineno int, raw, home string) {
 		}
 		f.AI = append(f.AI, entry(key, value, lineno))
 	case "HOST":
-		if !validHostTarget(value) {
+		if !ValidHostTarget(value) {
 			f.warnLine(lineno, "HOST target must be user@host (skipping)")
 			return
 		}
@@ -253,8 +253,12 @@ func validSettingName(key string) bool {
 	return true
 }
 
-// validHostTarget is ^[^@[:space:]]+@[^@[:space:]]+$.
-func validHostTarget(v string) bool {
+// ValidHostTarget is the 2.x user@host test, [[ V =~
+// ^[^@[:space:]]+@[^@[:space:]]+$ ]]: one @ with text on both sides and no
+// blank (C-locale [:space:]) anywhere. Option-like and host:port values
+// pass (LEDGER REM-02, REM-08). It checks HOST: entries and remote_*'s
+// raw targets.
+func ValidHostTarget(v string) bool {
 	at := strings.IndexByte(v, '@')
 	if at <= 0 || at == len(v)-1 || strings.IndexByte(v[at+1:], '@') >= 0 {
 		return false
