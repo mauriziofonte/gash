@@ -23,6 +23,15 @@ import (
 
 const repoRoot = "../../.."
 
+// absRoot is the checkout, resolved before any test changes directory.
+var absRoot = func() string {
+	p, err := filepath.Abs(repoRoot)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}()
+
 // scene is a git scenario rebuilt from its setup script for every run, at
 // the same path, so the 2.x function and the handler see the same tree
 // and the same hashes (fixed identities and dates).
@@ -62,14 +71,13 @@ func newScene(t *testing.T, setup string, extra ...string) *scene {
 		"TMPDIR=" + tmp, "GIT_CONFIG_NOSYSTEM=1", "GIT_CEILING_DIRECTORIES=" + base,
 		"GIT_AUTHOR_DATE=1700000000 +0000", "GIT_COMMITTER_DATE=1700000000 +0000",
 	}
-	root, err := filepath.Abs(repoRoot)
-	require.NoError(t, err)
+	root := absRoot
 	return &scene{t: t, root: root, setup: setup, base: base, dir: filepath.Join(base, "s"), env: append(env, extra...)}
 }
 
 func need2x(t *testing.T) {
 	t.Helper()
-	if _, err := os.Stat(filepath.Join(repoRoot, "lib/modules/git.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(absRoot, "lib/modules/git.sh")); err != nil {
 		t.Skip("the 2.x sources are not in this tree")
 	}
 	for _, p := range []string{"bash", "git"} {
