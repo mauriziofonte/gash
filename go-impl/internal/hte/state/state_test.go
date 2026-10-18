@@ -60,7 +60,7 @@ func TestPaths(t *testing.T) {
 		p.SessionDir("8.3"), p.Receipt(), p.Audit(), p.Lock(), p.RuntimeDir, p.Stage("20261018T100000Z")}
 	want := []string{"/home/me/.config/gash/hte/hte.toml", "/home/me/.config/gash/hte/sites/shop.test.toml",
 		"/home/me/.config/gash/hte/sites/shop.test.apache.conf", "/home/me/.config/gash/hte/apache.conf",
-		"/home/me/.config/gash/hte/php/8.3.ini", "/home/me/.local/state/gash/hte/render",
+		"/home/me/.config/gash/hte/php/8.3/global.ini", "/home/me/.local/state/gash/hte/render",
 		"/home/me/.local/state/gash/hte/logs/shop.test", "/home/me/.local/share/gash/hte/certs/shop.test/cert.pem",
 		"/home/me/.local/share/gash/hte/certs/shop.test/key.pem", "/home/me/.local/state/gash/hte/php/8.3/sessions",
 		"/home/me/.local/state/gash/hte/receipt.json", "/home/me/.local/state/gash/hte/audit.jsonl",

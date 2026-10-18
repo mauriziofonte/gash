@@ -40,6 +40,10 @@ type PHP struct {
 	// NeedsSessionDir is true when SessionPath is set and not writable by
 	// the user: the pools then get a per-version directory (LEDGER HTE-41).
 	NeedsSessionDir bool `json:"needs_session_dir"`
+	// ScanDir is the system directory of additional .ini files the binary
+	// was built with ("" for none): the userland master gets it back in
+	// PHP_INI_SCAN_DIR, ahead of the global overlay directory.
+	ScanDir string `json:"scan_dir"`
 }
 
 // PHPEnv is what PHP discovery reads.
@@ -84,6 +88,7 @@ type candidate struct {
 	fpm     string
 	ini     string // versionToken stands for the version -v reports
 	version string // "" for an unversioned binary
+	scan    string // the layout's scan directory, used when -i does not name one
 }
 
 const versionToken = "{version}"
@@ -95,30 +100,33 @@ func candidates(sr platform.Sysroot, o platform.OS) []candidate {
 	switch o.Family {
 	case platform.FamilyDebian:
 		for _, v := range state.SupportedPHP {
-			out = append(out, candidate{LayoutDebian, "/usr/sbin/php-fpm" + v, "/etc/php/" + v + "/fpm/php.ini", v})
+			out = append(out, candidate{LayoutDebian, "/usr/sbin/php-fpm" + v, "/etc/php/" + v + "/fpm/php.ini", v, "/etc/php/" + v + "/fpm/conf.d"})
 		}
 	case platform.FamilyFedora:
-		out = append(out, candidate{LayoutFedora, "/usr/sbin/php-fpm", "/etc/php.ini", ""})
+		out = append(out, candidate{LayoutFedora, "/usr/sbin/php-fpm", "/etc/php.ini", "", "/etc/php.d"})
 		for _, v := range state.SupportedPHP {
 			xy := nodot(v)
-			out = append(out, candidate{LayoutRemi, "/opt/remi/php" + xy + "/root/usr/sbin/php-fpm", "/etc/opt/remi/php" + xy + "/php.ini", v})
+			out = append(out, candidate{LayoutRemi, "/opt/remi/php" + xy + "/root/usr/sbin/php-fpm", "/etc/opt/remi/php" + xy + "/php.ini", v,
+				"/etc/opt/remi/php" + xy + "/php.d"})
 		}
 	case platform.FamilyArch:
 		out = append(out,
-			candidate{LayoutArch, "/usr/bin/php-fpm", "/etc/php/php.ini", ""},
-			candidate{LayoutArchLegacy, "/usr/bin/php-fpm-legacy", "/etc/php-legacy/php.ini", ""})
+			candidate{LayoutArch, "/usr/bin/php-fpm", "/etc/php/php.ini", "", "/etc/php/conf.d"},
+			candidate{LayoutArchLegacy, "/usr/bin/php-fpm-legacy", "/etc/php-legacy/php.ini", "", "/etc/php-legacy/conf.d"})
 		for _, v := range state.SupportedPHP {
 			xy := nodot(v)
-			out = append(out, candidate{LayoutAUR, "/usr/bin/php-fpm" + xy, "/etc/php" + xy + "/php.ini", v})
+			out = append(out, candidate{LayoutAUR, "/usr/bin/php-fpm" + xy, "/etc/php" + xy + "/php.ini", v, "/etc/php" + xy + "/conf.d"})
 		}
 	case platform.FamilyDarwin:
 		prefix, ok := HomebrewPrefix(sr)
 		if !ok {
 			return nil
 		}
-		out = append(out, candidate{LayoutHomebrew, prefix + "/opt/php/sbin/php-fpm", prefix + "/etc/php/" + versionToken + "/php.ini", ""})
+		out = append(out, candidate{LayoutHomebrew, prefix + "/opt/php/sbin/php-fpm", prefix + "/etc/php/" + versionToken + "/php.ini", "",
+			prefix + "/etc/php/" + versionToken + "/conf.d"})
 		for _, v := range state.SupportedPHP {
-			out = append(out, candidate{LayoutHomebrew, prefix + "/opt/php@" + v + "/sbin/php-fpm", prefix + "/etc/php/" + v + "/php.ini", v})
+			out = append(out, candidate{LayoutHomebrew, prefix + "/opt/php@" + v + "/sbin/php-fpm", prefix + "/etc/php/" + v + "/php.ini", v,
+				prefix + "/etc/php/" + v + "/conf.d"})
 		}
 	}
 	return out
@@ -203,18 +211,32 @@ func DiscoverPHP(env PHPEnv) PHPResult {
 			res.Problems = append(res.Problems, c.fpm+" is not an executable file")
 			continue
 		}
-		out, cached := env.Cache.lookup(c.fpm, fi)
+		entry, cached := env.Cache.lookup(c.fpm, fi)
 		if !cached {
-			out, err = env.Probe(c.fpm, "-v")
+			out, err := env.Probe(c.fpm, "-v")
 			if err != nil {
 				res.Problems = append(res.Problems, fmt.Sprintf("%s -v failed: %v", c.fpm, err))
 				continue
 			}
-			first, _, _ := strings.Cut(out, "\n")
-			env.Cache.store(c.fpm, fi, first)
-			out = first
+			entry = CacheEntry{Output: firstLine(out)}
 		}
+		out := entry.Output
 		short, full, ok := ParseFPMVersion(out)
+		if ok && !entry.Info {
+			// -i names the compiled-in scan directory; a binary that
+			// cannot answer keeps the layout's default.
+			entry.Info = true
+			entry.ScanDir = strings.ReplaceAll(c.scan, versionToken, short)
+			if info, err := env.Probe(c.fpm, "-i"); err == nil {
+				if dir, found := ParseScanDir(info); found {
+					entry.ScanDir = dir
+				}
+			}
+			cached = false
+		}
+		if !cached {
+			env.Cache.store(c.fpm, fi, entry)
+		}
 		switch {
 		case !ok:
 			res.Problems = append(res.Problems, fmt.Sprintf("%s -v does not report a PHP-FPM version: %q", c.fpm, firstLine(out)))
@@ -245,10 +267,28 @@ func DiscoverPHP(env PHPEnv) PHPResult {
 			Version: short, Full: full, FPM: c.fpm, INI: ini, Layout: c.layout,
 			SessionPath:     sess,
 			NeedsSessionDir: sess != "" && !writable(sess),
+			ScanDir:         entry.ScanDir,
 		})
 	}
 	slices.SortFunc(res.Versions, func(a, b PHP) int { return state.ComparePHP(a.Version, b.Version) })
 	return res
+}
+
+// ParseScanDir returns the "Scan this dir for additional .ini files" value
+// of `php-fpm -i`: "" for (none), found false when the line is absent.
+func ParseScanDir(info string) (dir string, found bool) {
+	for _, line := range strings.Split(info, "\n") {
+		rest, ok := strings.CutPrefix(line, "Scan this dir for additional .ini files => ")
+		if !ok {
+			continue
+		}
+		rest = strings.TrimSpace(rest)
+		if rest == "(none)" {
+			return "", true
+		}
+		return rest, true
+	}
+	return "", false
 }
 
 func firstLine(s string) string {

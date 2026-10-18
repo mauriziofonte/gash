@@ -197,9 +197,14 @@ func renderSite(t *testing.T, s state.Site) string {
 	t.Helper()
 	in := render.Input{
 		GenDir: userPaths.RenderDir() + "/gen-1", Paths: userPaths,
-		Apache: render.Apache{Modules: []render.Module{{Name: "ssl", Path: "/usr/lib/apache2/modules/mod_ssl.so"}}, MimeTypes: "/etc/mime.types"},
-		Ports:  state.StandardPorts, Listen: []string{state.LoopbackIPv4, state.LoopbackIPv6},
-		PHP: map[string]render.PHPVersion{"7.4": {}, "8.3": {}}, Sites: []state.Site{s},
+		Apache: render.Apache{Binary: "/usr/sbin/apache2", Modules: []render.Module{{Name: "ssl", Path: "/usr/lib/apache2/modules/mod_ssl.so"}},
+			MimeTypes: "/etc/mime.types"},
+		Ports: state.StandardPorts, Listen: []string{state.LoopbackIPv4, state.LoopbackIPv6},
+		PHP: map[string]render.PHPVersion{
+			"7.4": {FPM: "/usr/sbin/php-fpm7.4", INI: "/etc/php/7.4/fpm/php.ini"},
+			"8.3": {FPM: "/usr/sbin/php-fpm8.3", INI: "/etc/php/8.3/fpm/php.ini"},
+		},
+		Sites: []state.Site{s},
 	}
 	g, err := render.Render(in)
 	if err != nil {
@@ -784,5 +789,15 @@ func TestHtaccessWarning(t *testing.T) {
 		return strings.HasPrefix(w, "/home/dev/sites/http/public/.htaccess:3 redirects to HTTPS")
 	}) {
 		t.Fatalf("%+v", s.Warnings)
+	}
+}
+
+func TestINIText(t *testing.T) {
+	for raw, want := range map[string]string{
+		`"512M"`: "512M", `512M ; note`: "512M", `""`: "", ` "a;b" ; c`: "a;b", `"open`: `"open`, `on`: "on",
+	} {
+		if got := iniText(raw); got != want {
+			t.Errorf("%q: %q, want %q", raw, got, want)
+		}
 	}
 }

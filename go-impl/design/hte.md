@@ -37,7 +37,7 @@ and emits `LoadModule` only for modules that are not built in.
 | Site state | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.toml` | One file per site; the domain is the identity (no numbering, no identity from socket names) |
 | Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, included inside every vhost of the site, never rewritten |
 | Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, included at server level, never rewritten |
-| Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>.ini` | Per PHP version, rendered into every pool of that version |
+| Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/` | Per PHP version, a directory of `*.ini` files (`php global set` edits `global.ini` in it) that the version's FPM master reads after the system ones through `PHP_INI_SCAN_DIR` (section 4); never rendered into pools |
 | Rendered config | `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` and the symlink `render/current` | Generations; `current` swaps atomically; the previous generation is kept for rollback |
 | Certificates | `$XDG_DATA_HOME/gash/hte/certs/<domain>/{cert.pem,key.pem}` | Key 0600, directory 0700 |
 | Logs | `$XDG_STATE_HOME/gash/hte/logs/` (`error.log`, `<domain>/access.log`, `<domain>/error.log`, `<domain>/php-error.log`, `php-fpm-<X.Y>.log`) | Never inside a document root |
@@ -68,7 +68,7 @@ http2       = true
 enabled     = true
 kind        = "managed"            # managed | raw (imported non-HTE vhost, section 10)
 raw_conf    = ""                   # kind = raw: the imported vhost file, kept verbatim after path rewriting
-[php_ini]                          # per-site overrides, rendered as php_value / php_admin_value
+[php_ini]                          # per-site overrides (section 4): a profile key replaces the profile's line(s)
 memory_limit = "512M"
 ```
 
@@ -251,8 +251,20 @@ files when creating `shop.test`).
   ; ...the profile block, verbatim from hte-cli (below)...
   slowlog = /home/me/.local/state/gash/hte/logs/shop.test/php-slow.log
   php_admin_value[error_log] = /home/me/.local/state/gash/hte/logs/shop.test/php-error.log
-  ; ...then the global overlay of 8.3, then the site's [php_ini]
+  ; ...then the site's [php_ini] keys the profile does not set
   ```
+
+  The site's `[php_ini]` (lead decision, 2026-10-18): a key the profile also
+  sets (or the per-version `session.save_path` below) is written in place of
+  the profile's line, with the profile directive's admin kind
+  (`memory_limit = "512M"` replaces both `php_admin_value[memory_limit]` and
+  `php_value[memory_limit]`); any other key is `php_value`/`php_flag`, so
+  `ini_set` can still change it. A boolean word (`on`, `off`, `yes`, `no`,
+  `true`, `false`, any case) becomes a bare `*_flag` (FPM refuses a quoted
+  flag: "invalid boolean value"); any other value is a `*_value` written in
+  double quotes, so `;` is text and INI constants are not evaluated
+  (`error_reporting` takes a number). A value with a control character, `"`,
+  `\` or `${` is refused (`invalid_state`).
 
   No `user`, `group`, `listen.owner` or `listen.group`: the master runs as the
   user, so the socket and the workers are the user's (php-fpm ignores those
@@ -290,10 +302,20 @@ files when creating `shop.test`).
   hte-cli (an inert setting, listed as a decision item).
 * The global FPM master per version, `render/current/fpm/<X.Y>/php-fpm.conf`:
   `[global]` with `pid`, `error_log` in the logs directory, `daemonize = yes`,
-  then `include=` of that version's pools. It uses the platform's `php.ini`
-  for that version (discovered above) and the global overlay
-  `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>.ini`, passed with `-c`/`PHP_INI_SCAN_DIR`
-  so the system files are read, never written.
+  then `include=` of that version's pools. It runs with `-c` the platform's
+  `php.ini` for that version and `PHP_INI_SCAN_DIR=<system scan
+  dir>:<overlay dir>` (lead decision, 2026-10-18): the system directory of
+  additional `.ini` files the binary was built with (discovery reads it from
+  `php-fpm -i`, "Scan this dir for additional .ini files", cached with the
+  version; the layout's default when `-i` does not name one), then
+  `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/`, both written out in full (an empty
+  element meaning "the compiled-in directory" needs PHP 7.x; the full list
+  works on 5.6 to 8.5), so the system files are read, never written, and the
+  overlay's values win. A directory containing `:` cannot be passed and is
+  refused (`platform_unsupported`). Each generation carries a
+  `manifest.json` with the binaries, `php.ini`, `PHP_INI_SCAN_DIR`, PID
+  files, sockets and site addresses it was tested with; supervision runs the
+  generation from it.
 
 ## 5. Lifecycle and supervision
 

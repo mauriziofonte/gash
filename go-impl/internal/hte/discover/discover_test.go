@@ -69,6 +69,11 @@ func (p *fakeProbe) run(bin string, args ...string) (string, error) {
 	return "", errors.New("exit status 127")
 }
 
+func fpmInfo(scan string) string {
+	return "phpinfo()\nPHP Version => 8.3.6\n\nConfiguration File (php.ini) Path => /etc/php\n" +
+		"Scan this dir for additional .ini files => " + scan + "\nAdditional .ini files parsed => (none)\n"
+}
+
 func fpmV(full string) string {
 	return "PHP " + full + " (fpm-fcgi) (built: Oct  1 2026 10:00:00)\nCopyright (c) The PHP Group\nZend Engine v4\n"
 }
@@ -96,11 +101,12 @@ func platformCases() []platformCase {
 			builtins: debianBuiltins,
 			probe: map[string]string{
 				"/usr/sbin/php-fpm8.3 -v": fpmV("8.3.6"),
+				"/usr/sbin/php-fpm8.3 -i": fpmInfo("/etc/php/8.3/fpm/conf.d"),
 				"/usr/sbin/php-fpm8.2 -v": "PHP 8.2.20 (cli) (built: Jun  1 2026)\n",
 				"/usr/sbin/php-fpm7.4 -v": fpmV("7.4.33"),
 			},
 			versions: []PHP{{Version: "8.3", Full: "8.3.6", FPM: "/usr/sbin/php-fpm8.3", INI: "/etc/php/8.3/fpm/php.ini",
-				Layout: LayoutDebian, SessionPath: "/var/lib/php/sessions"}},
+				Layout: LayoutDebian, SessionPath: "/var/lib/php/sessions", ScanDir: "/etc/php/8.3/fpm/conf.d"}},
 			problems: []string{
 				"/usr/sbin/php-fpm7.4 has no php.ini at /etc/php/7.4/fpm/php.ini",
 				`/usr/sbin/php-fpm8.2 -v does not report a PHP-FPM version: "PHP 8.2.20 (cli) (built: Jun  1 2026)"`,
@@ -112,14 +118,16 @@ func platformCases() []platformCase {
 			builtins: plainBuiltins,
 			probe: map[string]string{
 				"/usr/sbin/php-fpm -v":                     fpmV("8.3.12"),
+				"/usr/sbin/php-fpm -i":                     fpmInfo("/etc/php.d"),
 				"/opt/remi/php74/root/usr/sbin/php-fpm -v": fpmV("7.4.33"),
 				"/opt/remi/php83/root/usr/sbin/php-fpm -v": fpmV("8.3.13"),
 			},
 			versions: []PHP{
 				{Version: "7.4", Full: "7.4.33", FPM: "/opt/remi/php74/root/usr/sbin/php-fpm", INI: "/etc/opt/remi/php74/php.ini",
-					Layout: LayoutRemi, SessionPath: "/var/opt/remi/php74/lib/php/session", NeedsSessionDir: true},
+					Layout: LayoutRemi, SessionPath: "/var/opt/remi/php74/lib/php/session", NeedsSessionDir: true,
+					ScanDir: "/etc/opt/remi/php74/php.d"},
 				{Version: "8.3", Full: "8.3.12", FPM: "/usr/sbin/php-fpm", INI: "/etc/php.ini",
-					Layout: LayoutFedora, SessionPath: "/var/lib/php/session", NeedsSessionDir: true},
+					Layout: LayoutFedora, SessionPath: "/var/lib/php/session", NeedsSessionDir: true, ScanDir: "/etc/php.d"},
 			},
 			problems: []string{"PHP 8.3 is also at /opt/remi/php83/root/usr/sbin/php-fpm; using /usr/sbin/php-fpm"},
 		},
@@ -133,9 +141,10 @@ func platformCases() []platformCase {
 				"/usr/bin/php-fpm74 -v":      fpmV("7.4.33"),
 			},
 			versions: []PHP{
-				{Version: "7.4", Full: "7.4.33", FPM: "/usr/bin/php-fpm74", INI: "/etc/php74/php.ini", Layout: LayoutAUR},
-				{Version: "8.2", Full: "8.2.27", FPM: "/usr/bin/php-fpm-legacy", INI: "/etc/php-legacy/php.ini", Layout: LayoutArchLegacy},
-				{Version: "8.4", Full: "8.4.2", FPM: "/usr/bin/php-fpm", INI: "/etc/php/php.ini", Layout: LayoutArch},
+				{Version: "7.4", Full: "7.4.33", FPM: "/usr/bin/php-fpm74", INI: "/etc/php74/php.ini", Layout: LayoutAUR, ScanDir: "/etc/php74/conf.d"},
+				{Version: "8.2", Full: "8.2.27", FPM: "/usr/bin/php-fpm-legacy", INI: "/etc/php-legacy/php.ini", Layout: LayoutArchLegacy,
+					ScanDir: "/etc/php-legacy/conf.d"},
+				{Version: "8.4", Full: "8.4.2", FPM: "/usr/bin/php-fpm", INI: "/etc/php/php.ini", Layout: LayoutArch, ScanDir: "/etc/php/conf.d"},
 			},
 		},
 		{
@@ -148,8 +157,10 @@ func platformCases() []platformCase {
 				"/opt/homebrew/opt/php@8.3/sbin/php-fpm -v": fpmV("8.3.14"),
 			},
 			versions: []PHP{
-				{Version: "8.3", Full: "8.3.14", FPM: "/opt/homebrew/opt/php@8.3/sbin/php-fpm", INI: "/opt/homebrew/etc/php/8.3/php.ini", Layout: LayoutHomebrew},
-				{Version: "8.4", Full: "8.4.1", FPM: "/opt/homebrew/opt/php/sbin/php-fpm", INI: "/opt/homebrew/etc/php/8.4/php.ini", Layout: LayoutHomebrew},
+				{Version: "8.3", Full: "8.3.14", FPM: "/opt/homebrew/opt/php@8.3/sbin/php-fpm", INI: "/opt/homebrew/etc/php/8.3/php.ini", Layout: LayoutHomebrew,
+					ScanDir: "/opt/homebrew/etc/php/8.3/conf.d"},
+				{Version: "8.4", Full: "8.4.1", FPM: "/opt/homebrew/opt/php/sbin/php-fpm", INI: "/opt/homebrew/etc/php/8.4/php.ini", Layout: LayoutHomebrew,
+					ScanDir: "/opt/homebrew/etc/php/8.4/conf.d"},
 			},
 		},
 	}
@@ -246,8 +257,11 @@ func TestLedger_HTE22(t *testing.T) {
 	}
 
 	discover()
-	if n := probe.calls["/usr/sbin/php-fpm8.3 -v"]; n != 1 {
-		t.Fatalf("cached binary probed %d times", n)
+	if n, i := probe.calls["/usr/sbin/php-fpm8.3 -v"], probe.calls["/usr/sbin/php-fpm8.3 -i"]; n != 1 || i != 1 {
+		t.Fatalf("cached binary probed %d times (-i %d)", n, i)
+	}
+	if p, _ := discover().Find("8.3"); p.ScanDir != "/etc/php/8.3/fpm/conf.d" {
+		t.Fatalf("cached scan dir %q", p.ScanDir)
 	}
 	// An upgrade changes the mtime: probed again, new version seen.
 	probe.out["/usr/sbin/php-fpm8.3 -v"] = fpmV("8.3.7")
@@ -264,7 +278,7 @@ func TestLedger_HTE22(t *testing.T) {
 	}
 
 	// A corrupt or foreign cache is an empty one.
-	for _, bad := range []string{"{", `{"schema":2,"entries":{}}`, `{"schema":1,"entries":{},"x":1}`} {
+	for _, bad := range []string{"{", `{"schema":1,"entries":{}}`, `{"schema":2,"entries":{},"x":1}`} {
 		if err := os.WriteFile(cachePath, []byte(bad), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -415,6 +429,21 @@ func TestSessionPath(t *testing.T) {
 		got, set := iniSessionPath([]byte(tc.ini))
 		if got != tc.want || set != tc.set {
 			t.Errorf("%q: %q %v, want %q %v", tc.ini, got, set, tc.want, tc.set)
+		}
+	}
+}
+
+func TestParseScanDir(t *testing.T) {
+	for _, tc := range []struct {
+		info, dir string
+		found     bool
+	}{
+		{fpmInfo("/etc/php/8.3/fpm/conf.d"), "/etc/php/8.3/fpm/conf.d", true},
+		{fpmInfo("(none)"), "", true},
+		{"PHP Version => 8.3.6\n", "", false},
+	} {
+		if dir, found := ParseScanDir(tc.info); dir != tc.dir || found != tc.found {
+			t.Errorf("%q: %q %v", tc.info, dir, found)
 		}
 	}
 }

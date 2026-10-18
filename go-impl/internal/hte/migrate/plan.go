@@ -415,11 +415,14 @@ func (b *builder) buildManaged(c *candidate) {
 	site.Enabled = v.Enabled
 	if b.opt.KeepPoolValues && pp.Match != nil {
 		for _, d := range pp.Diffs {
-			if k, ok := legacy.INIKey(d.Key); ok && d.Pool != "" && state.CheckINI(k, d.Pool) == nil {
+			k, ok := legacy.INIKey(d.Key)
+			val := iniText(d.Pool)
+			// Line is 0 for a profile value the pool lacks: nothing to keep.
+			if ok && d.Line > 0 && state.CheckINI(k, val) == nil {
 				if site.PHPIni == nil {
 					site.PHPIni = map[string]string{}
 				}
-				site.PHPIni[k] = d.Pool
+				site.PHPIni[k] = val
 				pp.Kept = append(pp.Kept, k)
 			} else {
 				pp.NotKept = append(pp.NotKept, d.Key)
@@ -456,6 +459,20 @@ func (b *builder) htaccess(c *candidate) {
 	for _, r := range redirects {
 		c.plan.Warnings = append(c.plan.Warnings, r.Warning())
 	}
+}
+
+// iniText returns the value an INI line means: the text inside a leading
+// pair of double quotes, else the text before a ";" comment, trimmed.
+func iniText(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if rest, ok := strings.CutPrefix(raw, `"`); ok {
+		if v, _, closed := strings.Cut(rest, `"`); closed {
+			return v
+		}
+		return raw
+	}
+	v, _, _ := strings.Cut(raw, ";")
+	return strings.TrimSpace(v)
 }
 
 func lower(in []string) []string {
