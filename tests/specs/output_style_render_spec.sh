@@ -287,22 +287,23 @@ fx git_sync pushed 'git config --global user.name T && git config --global user.
 fx git_sync nothing 'git config --global user.name T && git config --global user.email t@e.x && git config --global color.ui false && git config --global init.defaultBranch main && git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main; git_sync'
 fx git_sync detached 'git config --global user.name T && git config --global user.email t@e.x && git config --global color.ui false && git config --global init.defaultBranch main && git init -q w && cd w && echo a >f && git add f && git commit -qm init && git checkout -q --detach; git_sync'
 
-# remote.sh: ssh, scp and rsync are stub functions (no network).
+# remote.sh: ssh, scp and rsync are PATH stubs in $HOME/bin (no network;
+# TEST-05: a function fake never reaches the binary's children).
 fx remote_hosts list 'printf "HOST:web=deploy@web.example.com\nHOST:db=admin@10.0.0.5\n" >.gash_env && chmod 600 .gash_env; __GASH_ENV_LOADED=""; remote_hosts'
 fx remote_hosts empty '__GASH_ENV_LOADED=""; remote_hosts'
-fx remote_exec ran 'ssh() { printf "hello from the remote host\n"; }; remote_exec deploy@web.example.com "uptime"'
-fx remote_exec unreachable 'ssh() { return 255; }; remote_exec deploy@web.example.com "uptime"'
+fx remote_exec ran 'mkdir -p bin && printf "#!/bin/sh\necho hello from the remote host\n" >bin/ssh && chmod +x bin/ssh && PATH="$HOME/bin:$PATH"; remote_exec deploy@web.example.com "uptime"'
+fx remote_exec unreachable 'mkdir -p bin && printf "#!/bin/sh\nexit 255\n" >bin/ssh && chmod +x bin/ssh && PATH="$HOME/bin:$PATH"; remote_exec deploy@web.example.com "uptime"'
 fx remote_exec unknown_alias '__GASH_ENV_LOADED=""; remote_exec nohost "uptime"'
 fx remote_exec extra_args 'remote_exec deploy@web.example.com ls -la'
-fx remote_push copied 'scp() { :; }; echo x >f; remote_push deploy@web.example.com f /tmp/f'
-fx remote_push sensitive_declined 'scp() { :; }; echo x >f; remote_push deploy@web.example.com f /etc/app.conf' 'n'
+fx remote_push copied 'mkdir -p bin && printf "#!/bin/sh\n" >bin/scp && chmod +x bin/scp && PATH="$HOME/bin:$PATH"; echo x >f; remote_push deploy@web.example.com f /tmp/f'
+fx remote_push sensitive_declined 'mkdir -p bin && printf "#!/bin/sh\n" >bin/scp && chmod +x bin/scp && PATH="$HOME/bin:$PATH"; echo x >f; remote_push deploy@web.example.com f /etc/app.conf' 'n'
 fx remote_push denied 'remote_push deploy@web.example.com f /etc/shadow'
-fx remote_pull copied 'scp() { :; }; remote_pull deploy@web.example.com /tmp/f ./f'
+fx remote_pull copied 'mkdir -p bin && printf "#!/bin/sh\n" >bin/scp && chmod +x bin/scp && PATH="$HOME/bin:$PATH"; remote_pull deploy@web.example.com /tmp/f ./f'
 fx remote_pull denied 'remote_pull deploy@web.example.com /etc/shadow ./s'
 fx remote_pull missing_args 'remote_pull deploy@web.example.com'
-fx remote_sync_push synced 'rsync() { printf "sending incremental file list\n"; }; mkdir d; remote_sync_push deploy@web.example.com d/ /tmp/d/ --no-progress'
-fx remote_sync_push delete_declined 'rsync() { :; }; mkdir d; remote_sync_push deploy@web.example.com d/ /srv/d/ --delete' 'n'
-fx remote_sync_pull synced 'rsync() { :; }; remote_sync_pull deploy@web.example.com /tmp/d/ ./d/'
+fx remote_sync_push synced 'mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && PATH="$HOME/bin:$PATH"; mkdir d; remote_sync_push deploy@web.example.com d/ /tmp/d/ --no-progress'
+fx remote_sync_push delete_declined 'mkdir -p bin && printf "#!/bin/sh\n" >bin/rsync && chmod +x bin/rsync && PATH="$HOME/bin:$PATH"; mkdir d; remote_sync_push deploy@web.example.com d/ /srv/d/ --delete' 'n'
+fx remote_sync_pull synced 'mkdir -p bin && printf "#!/bin/sh\n" >bin/rsync && chmod +x bin/rsync && PATH="$HOME/bin:$PATH"; remote_sync_pull deploy@web.example.com /tmp/d/ ./d/'
 fx remote_sync_pull denied 'remote_sync_pull deploy@web.example.com /proc/1/ ./d/'
 
 # node.sh: nvm is a stub function, NVM_DIR a directory tree.
