@@ -52,8 +52,8 @@ var allowedAddresses = map[string]bool{"127.0.0.1": true, "::1": true}
 
 // Entry is one line of the block: a loopback address and its names.
 type Entry struct {
-	Address string
-	Names   []string
+	Address string   `json:"address"`
+	Names   []string `json:"names"`
 }
 
 // InputError is a refusal of the input grammar.
