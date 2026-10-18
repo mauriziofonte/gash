@@ -52,6 +52,7 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_env", m.env)
 	t.Handle("llm_ports", m.ports)
 	t.Handle("llm_procs", m.procs)
+	t.Handle("llm_exec", m.exec)
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the

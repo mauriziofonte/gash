@@ -48,9 +48,15 @@ func (e Environ) bash() string {
 
 // Plan is what to run: the full argv and the exact environment to run it with
 // (the caller sets the process environment to Env, i.e. does not inherit).
+// Wrap, Bash and Script are the same argv as runner.Bash takes it: the
+// bwrap prefix (nil without the sandbox), the bash program and the -c
+// script.
 type Plan struct {
-	Argv []string
-	Env  []string
+	Argv   []string
+	Env    []string
+	Wrap   []string
+	Bash   string
+	Script string
 }
 
 var allowWordRE = regexp.MustCompile(`^[A-Za-z0-9._+-]+$`)
@@ -131,11 +137,13 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 	}
 
 	argv := []string{env.bash(), "--noprofile", "--norc", "-c", child}
+	var wrap []string
 	if s.Sandbox == "1" {
-		argv = append([]string{
+		wrap = []string{
 			"bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
 			"--unshare-all", "--die-with-parent", "--chdir", env.Cwd,
-		}, argv...)
+		}
+		argv = append(append([]string{}, wrap...), argv...)
 	}
 
 	var envSlice []string
@@ -145,7 +153,7 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 		envSlice = buildChildEnv(env)
 	}
 
-	return &Plan{Argv: argv, Env: envSlice}, nil
+	return &Plan{Argv: argv, Env: envSlice, Wrap: wrap, Bash: env.bash(), Script: child}, nil
 }
 
 func isSpaceByte(r rune) bool {
