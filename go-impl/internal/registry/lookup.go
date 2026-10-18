@@ -98,3 +98,9 @@ func (f *Function) Delegated() bool {
 	}
 	return true
 }
+
+// HasStub reports whether the generated Bash defines f as a one-line stub
+// that calls the binary: the delegated functions, and the gash card,
+// whose stub hands every argument to the binary's root (`gash version`
+// from the shell reaches the 3.x command).
+func (f *Function) HasStub() bool { return f.Delegated() || f.Name == "gash" }
