@@ -3612,7 +3612,7 @@ Critical and high items:
 | [DB-15](#db-15) | sqlite3's JSON mode mangles bytes that are not UTF-8 and cuts text at a NUL | Correctness | yes | The driver returns the stored bytes and the contract encoder writes valid JSON (one U+FFFD per invalid sequence, `\u0000` for NUL), as DB-03 does for the TSV transport. |
 | [DB-16](#db-16) | MySQL on localhost: the client uses the Unix socket and lets ~/.my.cnf override the URL | Correctness | yes | Host `localhost` connects through the Unix socket: the `socket=` of the `[client]` group of the option files the client reads (`/etc/my.cnf`, `/etc/mysql/my.cnf` with its `!include`/`!includedir`, `~/.my.cnf`), else the first existing platform default (`/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`, `/var/lib/mysql/mysql.sock`). No other option-file setting applies: the `DB:` URL is the connection (lead decision, 2026-10-18). Any other host uses TCP. |
 | [DB-17](#db-17) | Table and database names are checked with locale-dependent character ranges | Portability | yes | ASCII ranges in every locale, the stricter reading (as DB-13 does for the guard). |
-| [DB-18](#db-18) | MySQL ZEROFILL columns lose their padding | Contract | low | yes |
+| [DB-18](#db-18) | MySQL ZEROFILL columns lose their padding, MariaDB YEAR(2) prints four digits | Contract | low | yes |
 | [EXEC-06](#exec-06) | glob expansion order differs under non-C collation | Portability | low | yes |
 | [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Security | high | yes |
 | [SYS-28](#sys-28) | hgrep passes PATTERN through awk `-v`: backslashes are rewritten and the regex dialect depends on the awk | Portability | medium | yes |
@@ -4095,7 +4095,7 @@ Critical and high items:
 | Status | open |
 
 <a id="db-18"></a>
-#### DB-18 · MySQL ZEROFILL columns lose their padding
+#### DB-18 · MySQL ZEROFILL columns lose their padding, MariaDB YEAR(2) prints four digits
 
 | Field | Value |
 |---|---|
@@ -4107,7 +4107,7 @@ Critical and high items:
 | Reproduction | `CREATE TABLE t (n INT(5) ZEROFILL); INSERT INTO t VALUES (42);` then `llm_db_query "SELECT n FROM t"` |
 | Severity | low |
 | Public-contract impact | yes |
-| rc.A behavior | `"42"`: the driver parses the column to an integer before Gash sees it, and the zerofill flag is not exposed, so the padding cannot be rebuilt. The other numeric types keep the client's text (DB-02). `ZEROFILL` is deprecated since MySQL 8.0.17. The alternatives were pinning the driver to v1.7.1 (no ed25519 authentication, three years of fixes missing) or carrying a patched fork (lead decision, 2026-10-18). |
+| rc.A behavior | `"42"`: the driver parses the column to an integer before Gash sees it, and the zerofill flag is not exposed, so the padding cannot be rebuilt. The other numeric types keep the client's text (DB-02). `ZEROFILL` is deprecated since MySQL 8.0.17. For the same reason (the column length is not exposed), a MariaDB `YEAR(2)` column prints four digits. The alternatives were pinning the driver to v1.7.1 (no ed25519 authentication, three years of fixes missing) or carrying a patched fork (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | Same as rc.A, unless DB-02's operator decision makes MySQL values typed, which removes the question. |
 | Proving test | `TestLedger_DB18` in `internal/db` (in-process fake sending `00042` for a zerofill column → `"42"`; YEAR `0000` → `"0000"`; DOUBLE `1e20` → `"1e20"`; FLOAT `1234570` → `"1234570"`). |
 | Status | open |
