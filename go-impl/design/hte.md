@@ -96,6 +96,11 @@ files:
   300`) and `security.conf` (`ServerTokens`, `ServerSignature`, `TraceEnable
   Off`), `Protocols h2 h2c http/1.1`, `TypesConfig` pointing at the
   platform's `mime.types`, `AddDefaultCharset` as Debian ships it.
+* The Debian `apache2.conf` and `dir.conf` defaults the sites rely on, on
+  every platform: `<Directory "/"> AllowOverride None` + `Require all
+  denied`, `<FilesMatch "^\.ht"> Require all denied` (so `.htaccess` and
+  `.htpasswd` are never served), and `DirectoryIndex index.html index.cgi
+  index.pl index.php index.xhtml index.htm` (LEDGER HTE-59).
 * `IncludeOptional` of the global overlay, then of every enabled site's
   rendered vhosts.
 
@@ -119,7 +124,7 @@ paths, logs outside the document root, 307 instead of 301:
     CustomLog "/home/me/.local/state/gash/hte/logs/shop.test/access.log" combined
     CustomLog "/home/me/.local/state/gash/hte/logs/shop.test/bytes.log" "%{%s}t %I .\n%{%s}t %O ."
 
-    Protocols h2 http/1.1
+    Protocols h2c http/1.1
 
     <FilesMatch \.php$>
         SetHandler "proxy:unix:/run/user/1000/gash-hte/8.3-1a2b3c4d5e.sock|fcgi://localhost/"
@@ -157,6 +162,16 @@ control character, newline included, is rejected at validation), so a
 document root with spaces works and a newline cannot inject configuration
 (hte-cli defect). `${APACHE_LOG_DIR}` is never used: the userland master has
 no Debian `envvars`.
+
+`Protocols` per vhost: `h2c http/1.1` on the HTTP vhost, `h2 http/1.1` on the
+HTTPS vhost, `http/1.1` in both when `http2 = false` (LEDGER HTE-38).
+Document roots are validated before anything is rendered: absolute after
+resolving a relative argument against the current directory (HTE-29), an
+existing directory, and none of `$ * ? [ ; " \` or control characters, which
+Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI parser
+(`;` comments, `${NAME}`) would interpret (`invalid_docroot`, hint: "rename
+the directory or use a symlink without these characters"; HTE-08). Pool
+values are double-quoted.
 
 Note for triage (LEDGER "HTE design delta"): with loopback-only binding every
 client address is `127.0.0.1` or `::1`, also for a Windows browser reaching
@@ -269,7 +284,7 @@ PID files and never runs a supervisor process of its own.
 | `service start` | Render if stale, config test, start each FPM master in use, then Apache; wait until the sockets and ports answer |
 | `service stop` | `SIGTERM` (Apache `-k stop`), wait, `SIGKILL` after a timeout. A PID is acted on only when `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p` (macOS) names our config path, so a recycled PID is never signalled |
 | `service restart` | stop + start |
-| `service reload` | Render, test, swap, Apache `-k graceful`, FPM `SIGUSR2`, health check; rollback on failure |
+| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27) |
 | `service status` | Per master: running, PID, uptime, listening addresses; per site: answers on HTTP and HTTPS. `--json` |
 | `service logs` | Tail of the global, per-site Apache and PHP logs (`--site`, `--lines N`; no follow mode, so agents never hang) |
 
@@ -385,7 +400,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 |---|---|
 | `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded (it points at `migrate`). Detects an uninstall stage and offers to restore it |
 | `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix |
-| `migrate [--apply] [--site D]... [--exclude D]... [--yes]` | Section 10. Dry-run plan by default |
+| `migrate [--apply] [--site D]... [--exclude D]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
 | `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--alias N]... [--no-www] [--no-http2]` | New managed site; fails on any invalid value |
 | `site modify --domain D [same flags]` | Changes the state; overlays untouched |
@@ -410,6 +425,20 @@ New error codes (registered in the contract catalog with fixed actions):
 `platform_unsupported` (FATAL), `receipt_mismatch` (FATAL). Partial failure
 never exits 0 (hte-cli defect).
 
+Rules where the operator may choose otherwise (LEDGER items marked
+"Decision for the operator"; the design follows the recommended option):
+
+* euid 0: every `gash hte` command except `install`, `uninstall`, `migrate`
+  and `doctor` fails with `root_not_allowed` (FATAL, hint "Run gash hte as
+  your own user; it asks for sudo itself when a step needs root") (HTE-19).
+* A domain that starts with `www.` is kept as given and gets no `www.www.`
+  alias; every alias goes into the certificate SAN, and an alias change
+  reissues the certificate (HTE-47).
+* Absent flags: `https` on, `force_https` off, `http2` on, profile `dev`,
+  PHP = the `hte.toml` default, else the highest discovered version; a
+  default is only used when the flag is absent, never instead of an invalid
+  value (HTE-55).
+
 ## 10. Migration from hte-cli and system vhosts
 
 `gash hte migrate` reads the system Apache and FPM configuration
@@ -419,7 +448,7 @@ directory and `.info` files, the hosts file) and classifies every vhost:
 
 | Class | Recognized by | Plan |
 |---|---|---|
-| V1 (hte-cli 1.0.x) | Marker `# Auto-generated by the test environment creator`; force block with the directives at column 0, no localhost bypass; pool without `; Profile:` | Import as managed; force-HTTPS normalized; profile inferred from the pool values, else `dev` with a note |
+| V1 (hte-cli 1.0.x) | Marker `# Auto-generated by the test environment creator`; force block with the directives at column 0, no localhost bypass; pool without `; Profile:` | Import as managed; force-HTTPS normalized; profile by the rule of step 4 |
 | V1-fixed | V1 marker plus the bypass block of a later `fix` | Import as managed |
 | V2 (1.1.x) | Marker `# Auto-generated by HTE-Cli`; bypass block; pool with `; Profile:` | Import as managed |
 | Broken-bypass | What hte-cli `fix` recognizes (blank lines between the directives) | Import as managed, normalized |
@@ -441,8 +470,13 @@ Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
    `<Directory ...>` (always `<docroot>/`) when an unquoted path with spaces
    was truncated.
 4. HTTPS: a `:443` vhost plus both `SSLCertificate*File` lines (the 1.1.1
-   rule); forced: either force comment; profile: `; Profile:` lowercased,
-   `dev` when absent (V1 pools) with a note, `dev` with a warning when unknown.
+   rule); forced: either force comment; profile: `; Profile:` lowercased when
+   present, else the profile whose values match the pool exactly (whitespace
+   normalized), else `dev` with the differences reported; an unknown
+   `; Profile:` gives `dev` with a warning (HTE-66). Certificates: exactly
+   `<certdir>/<domain>.crt` and `.key`, copied by the root step, or a new
+   pair with `--reissue-certs`; `doctor` notes copied legacy (RSA)
+   certificates and suggests `cert renew` (HTE-67).
 5. Pool: the exact path `/etc/php/<X.Y>/fpm/pool.d/<domain>.conf` (or the
    platform equivalent) whose first section is `[<domain>]`. Never hte-cli's
    substring search, which took any pool mentioning `[<domain>]`, even in a
