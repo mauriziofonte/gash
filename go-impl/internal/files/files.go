@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -233,7 +234,10 @@ func runSingle(c *invoke.Call, tool string, args []string, archive, outputDir, s
 	out := outputDir + "/" + name
 	f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		p.Error("Failed to create output directory '" + outputDir + "'.")
+		// 2.x: the `>` redirection fails, Bash prints "…: line N: OUT: REASON"
+		// and the tool never runs (|| rc=1). The "file: line N:" prefix names
+		// the sourced file and cannot be reproduced; the rest is kept.
+		_, _ = io.WriteString(c.Stderr, out+": "+redirReason(err)+"\n")
 		return 1
 	}
 	defer f.Close()
@@ -295,6 +299,27 @@ func pipeline(c *invoke.Call, rnr runner.Runner, left, right runner.Cmd) int {
 		return 1
 	}
 	return 0
+}
+
+// redirReason is the strerror text Bash prints for a failed `>` open.
+func redirReason(err error) string {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		switch errno {
+		case syscall.ENOENT:
+			return "No such file or directory"
+		case syscall.EACCES:
+			return "Permission denied"
+		case syscall.EISDIR:
+			return "Is a directory"
+		case syscall.ENOTDIR:
+			return "Not a directory"
+		case syscall.EROFS:
+			return "Read-only file system"
+		}
+		return errno.Error()
+	}
+	return err.Error()
 }
 
 // notFound reports a runner start error for a program that is not on PATH.
