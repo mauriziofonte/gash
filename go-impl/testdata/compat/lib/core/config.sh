@@ -388,10 +388,16 @@ __gash_get_host_entries() {
 # =============================================================================
 
 # List available database connections
-gash_db_list() { __gash_call gash_db_list "$@"; }
+gash_db_list() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash_db_list "$@"
+}
 
 # Test a database connection
-gash_db_test() { __gash_call gash_db_test "$@"; }
+gash_db_test() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash_db_test "$@"
+}
 
 # Create ~/.gash_env from template
 gash_env_init() { __gash_call gash_env_init "$@"; }
@@ -441,7 +447,10 @@ __gash_get_first_ai_provider() {
 }
 
 # List available AI providers
-gash_ai_list() { __gash_call gash_ai_list "$@"; }
+gash_ai_list() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash_ai_list "$@"
+}
 
 # Sourcing never fails: the status of this file is 0.
 true

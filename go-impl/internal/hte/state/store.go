@@ -27,7 +27,7 @@ const (
 
 // siteKeys must all be present in a site file (php_ini is optional).
 var siteKeys = []string{"domain", "aliases", "docroot", "php", "profile", "https", "force_https",
-	"force_https_bypass_loopback", "http2", "enabled", "kind", "raw_conf"}
+	"force_https_bypass_loopback", "http2", "extra_http_ports", "extra_https_ports", "enabled", "kind", "raw_conf"}
 
 // settingsKeys must all be present in hte.toml.
 var settingsKeys = []string{"ports", "ports.http", "ports.https", "listen", "default_php", "modules", "autostart"}
@@ -90,6 +90,12 @@ func EncodeSite(s Site) ([]byte, error) {
 	}
 	if s.Aliases == nil {
 		s.Aliases = []string{}
+	}
+	if s.ExtraHTTPPorts == nil {
+		s.ExtraHTTPPorts = []int{}
+	}
+	if s.ExtraHTTPSPorts == nil {
+		s.ExtraHTTPSPorts = []int{}
 	}
 	return encode(s)
 }

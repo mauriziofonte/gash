@@ -252,6 +252,18 @@ func Splice(hosts, block []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// Strip returns hosts without the managed region (both markers included),
+// every other byte kept. Uninstall uses it when no block existed before
+// install; hosts without a region is returned unchanged.
+func Strip(hosts []byte) ([]byte, error) {
+	start, end, found, err := region(hosts)
+	if err != nil || !found {
+		return hosts, err
+	}
+	out := append([]byte{}, hosts[:start]...)
+	return append(out, hosts[end:]...), nil
+}
+
 // readHosts reads the hosts file, refusing a symlink or a non-regular file
 // (renaming over a symlink would replace it with a file).
 func readHosts(path string) ([]byte, os.FileInfo, error) {
@@ -267,6 +279,25 @@ func readHosts(path string) ([]byte, os.FileInfo, error) {
 	}
 	b, err := os.ReadFile(path)
 	return b, fi, err
+}
+
+// Rewrite replaces the hosts file at path with edit's result, atomically,
+// keeping its owner and mode; a symlink or non-regular file is refused.
+// The root step of uninstall uses it to put back the block that was there
+// before install (Splice), or to remove the block (Strip).
+func Rewrite(path string, edit func(hosts []byte) ([]byte, error)) error {
+	data, fi, err := readHosts(path)
+	if err != nil {
+		return err
+	}
+	out, err := edit(data)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(out, data) {
+		return nil
+	}
+	return writeAtomic(path, out, fi)
 }
 
 // writeAtomic replaces path with data: a temporary file in the same

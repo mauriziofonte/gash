@@ -101,6 +101,13 @@ func committedModule(name string) bool {
 	return false
 }
 
+// LoadEnvLine starts the stub of a function whose 2.x body loads the
+// settings file (registry LoadsEnv): the shim's cached __gash_load_env
+// prints the file's warnings once per shell, before the first such call,
+// and the binary reads the file silently (LEDGER CORE-18). An override of
+// such a function starts with it too ({{% loadenv %}}).
+const LoadEnvLine = `declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env`
+
 // overridePrefix names the templates (in compat/stubs.tmpl) that replace
 // the one-line stub of a function: {{% define "stub/NAME" %}}.
 const overridePrefix = "stub/"
@@ -122,12 +129,16 @@ func parse(fsys fs.FS) (*template.Template, error) {
 			}
 			return strings.Trim(b.String(), "\n"), nil
 		}
+		if f.LoadsEnv {
+			return name + "() {\n    " + LoadEnvLine + "\n    __gash_call " + name + " \"$@\"\n}", nil
+		}
 		return name + `() { __gash_call ` + name + ` "$@"; }`, nil
 	}
 	t, err := template.New("compat").Delims("{{%", "%}}").Funcs(template.FuncMap{
-		"stub":   stub,
-		"join":   strings.Join,
-		"indent": indent,
+		"stub":    stub,
+		"loadenv": func() string { return LoadEnvLine },
+		"join":    strings.Join,
+		"indent":  indent,
 	}).ParseFS(fsys, "*.tmpl")
 	if err != nil {
 		return nil, err

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/compat"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden copies in testdata/compat")
@@ -241,7 +242,7 @@ func TestCallPassesState(t *testing.T) {
 	needBash(t)
 	dir := tree(t)
 	fake := filepath.Join(t.TempDir(), "gash")
-	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\nprintf '%s|' \"$@\"; echo; env | grep -E '^(GASH_|NO_COLOR|COLUMNS|GASH__)' | sort\n"), 0o755))
+	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\n[ \"$1\" = __compat ] && exit 0\nprintf '%s|' \"$@\"; echo; env | grep -E '^(GASH_|NO_COLOR|COLUMNS|GASH__)' | sort\n"), 0o755))
 	out, err := bash(t, []string{"GASH_BIN=" + fake, "GASH_LLM_EXEC=1"},
 		"GASH_HEADLESS=1; NO_COLOR=; export COLUMNS=99; GASH_DB_TIMEOUT=7; source '"+dir+"/gash.sh'; llm_db_query 'a b' c")
 	require.NoError(t, err, out)
@@ -371,4 +372,36 @@ func TestLedger_SYS34(t *testing.T) {
 		require.Equal(t, "\n"+strings.Repeat("-", rule)+"\nT\n\n", out, cols)
 	}
 	require.NoFileExists(t, mark)
+}
+
+// LEDGER CORE-18: the stub of each function whose 2.x body loads the
+// settings file runs the shim's cached __gash_load_env first, and no other
+// stub does; in a shell without gash.sh the warnings then come once, at
+// the first such call, from the shell.
+func TestLedger_CORE18(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	var names []string
+	want := map[string]bool{}
+	for _, f := range registry.Functions() {
+		if f.HasStub() {
+			names = append(names, f.Name)
+			want[f.Name] = f.LoadsEnv
+		}
+	}
+	require.True(t, want["gash_db_list"] && want["llm_exec"] && want["ai_query"] && !want["llm_tree"] && !want["all_colors"])
+	out, err := bash(t, nil, "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; for f in "+strings.Join(names, " ")+"; do declare -f \"$f\"; printf '\\0'; done")
+	require.NoError(t, err, out)
+	defs := strings.Split(out, "\x00")
+	for i, n := range names {
+		require.Equal(t, want[n], strings.Contains(defs[i], "__gash_load_env"), "%s: %s", n, defs[i])
+	}
+
+	fake := filepath.Join(t.TempDir(), "gash")
+	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\nif [ \"$1 $2 $3\" = '__compat env load' ]; then\n"+
+		"  echo 'Warning: Line 1 of ~/.gash_env: unrecognized entry' >&2; echo __GASH_ENV_LOADED=1; exit 0\nfi\necho \"call $1\"\n"), 0o755))
+	out, err = bash(t, []string{"GASH_BIN=" + fake}, "for f in output utils config; do source '"+dir+"/lib/core/'$f.sh; done; "+
+		"source '"+dir+"/lib/modules/llm.sh'; llm_tree; gash_db_list; llm_exec ls; gash_db_list")
+	require.NoError(t, err, out)
+	require.Equal(t, "call llm_tree\nWarning: Line 1 of ~/.gash_env: unrecognized entry\ncall gash_db_list\ncall llm_exec\ncall gash_db_list\n", out)
 }

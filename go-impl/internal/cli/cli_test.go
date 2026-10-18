@@ -17,14 +17,17 @@ import (
 )
 
 func run(args ...string) (string, string, int) {
-	var out, errb bytes.Buffer
-	env := invoke.EnvMap(map[string]string{"LANG": "C.UTF-8"})
-	tbl := handlers.Table(func(t *invoke.Table) {
+	return runWith(handlers.Table(func(t *invoke.Table) {
 		t.HandleCompat("echo args", func(c *invoke.Call) int {
 			_, _ = c.Stdout.Write([]byte(strings.Join(c.Args, "|") + "\n"))
 			return 4
 		})
-	})
+	}), args...)
+}
+
+func runWith(tbl *invoke.Table, args ...string) (string, string, int) {
+	var out, errb bytes.Buffer
+	env := invoke.EnvMap(map[string]string{"LANG": "C.UTF-8"})
 	rc := Run(Process{
 		Args: args, Env: env, Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errb,
 		Term: term.Fixed(env, false, false, false), Table: tbl,
@@ -57,7 +60,9 @@ func TestFunctionArgsRaw(t *testing.T) {
 	require.Equal(t, 0, rc, errOut)
 	require.True(t, strings.HasPrefix(out, "colour0\n"))
 
-	_, errOut, rc = run("llm_tree", "--depth", "2")
+	// A registered function with no handler (an empty table: no module
+	// registers anything) answers the not-implemented envelope.
+	_, errOut, rc = runWith(invoke.NewTable(), "llm_tree", "--depth", "2")
 	require.Equal(t, 1, rc)
 	require.Contains(t, errOut, `"details":"llm_tree is not implemented in this gash build"`)
 }

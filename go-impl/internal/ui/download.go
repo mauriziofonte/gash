@@ -78,7 +78,7 @@ func (d Downloader) client() *http.Client {
 	return &http.Client{
 		// The proxy variables of the process, which is the caller's
 		// exported environment.
-		Transport: &http.Transport{Proxy: http.ProxyFromEnvironment},
+		Transport: proxyTransport(http.ProxyFromEnvironment),
 		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 			if len(via) > 50 {
 				return errTooManyRedirects
@@ -86,6 +86,28 @@ func (d Downloader) client() *http.Client {
 			return nil
 		},
 	}
+}
+
+// proxyTransport is a transport through the proxies of proxy that reports
+// a refused tunnel as curl does (tunnelRefused).
+func proxyTransport(proxy func(*http.Request) (*url.URL, error)) *http.Transport {
+	return &http.Transport{
+		Proxy: proxy,
+		OnProxyConnectResponse: func(_ context.Context, _ *url.URL, _ *http.Request, resp *http.Response) error {
+			if resp.StatusCode != http.StatusOK {
+				return tunnelRefused{resp.StatusCode}
+			}
+			return nil
+		},
+	}
+}
+
+// tunnelRefused is a proxy that answered the CONNECT of an HTTPS request
+// with another status than 200 (an unreachable host, behind a proxy).
+type tunnelRefused struct{ status int }
+
+func (e tunnelRefused) Error() string {
+	return "CONNECT tunnel failed, response " + strconv.Itoa(e.status)
 }
 
 var errTooManyRedirects = errors.New("too many redirects")
@@ -280,9 +302,15 @@ func curlError(err error, u *url.URL, took time.Duration) (int, string) {
 	var opErr *net.OpError
 	var certErr *x509.UnknownAuthorityError
 	var hostErr x509.HostnameError
+	var refused tunnelRefused
 	switch {
 	case errors.Is(err, errTooManyRedirects):
 		return 47, "Maximum (50) redirects followed"
+	case errors.As(err, &refused):
+		return 56, refused.Error()
+	case errors.Is(err, io.EOF):
+		// The server closed the connection without an answer.
+		return 52, "Empty reply from server"
 	case errors.As(err, &dnsErr):
 		return 6, "Could not resolve host: " + host
 	case errors.As(err, &certErr):

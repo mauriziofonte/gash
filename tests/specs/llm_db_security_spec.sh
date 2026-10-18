@@ -109,6 +109,8 @@ MOCK
   printf "DB:default=mysql://u:p%%40ss@127.0.0.1:3306/app\n" >"$tmp/.gash_env"
   export PATH="$tmp/bin:$PATH" GASH_HEADLESS=1 HOME="$tmp" MOCK_DIR="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
+  # Pin the clock: on a slow runner the 100 ms slow-query rule (DB-06) runs the mock a second time (TEST-10).
+  unset EPOCHREALTIME; EPOCHREALTIME="1792007131.734850"
 
   # On failure, show what the client saw.
   trap '"'"'echo "out: ${out-}"; for f in args ini stdin; do echo "--- $f"; cat "$tmp/$f" 2>&1; done'"'"' ERR
@@ -140,6 +142,8 @@ MOCK
   printf "DB:default=pgsql://u:secret@127.0.0.1:5432/app\n" >"$tmp/.gash_env"
   export PATH="$tmp/bin:$PATH" GASH_HEADLESS=1 HOME="$tmp" MOCK_DIR="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
+  # Pin the clock: on a slow runner the 100 ms slow-query rule (DB-06) runs the mock a second time (TEST-10).
+  unset EPOCHREALTIME; EPOCHREALTIME="1792007131.734850"
 
   out="$(llm_db_query "SELECT 1 AS id, true AS ok" -r 3)"
   jq -e ".data[0].ok == true and .rows == 1" <<<"$out" >/dev/null

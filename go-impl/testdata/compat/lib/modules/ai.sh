@@ -20,9 +20,18 @@ if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
 fi
 unset __gash_here
 
-ai_ask() { __gash_call ai_ask "$@"; }
-ai_query() { __gash_call ai_query "$@"; }
-ai_sysinfo() { __gash_call ai_sysinfo "$@"; }
+ai_ask() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call ai_ask "$@"
+}
+ai_query() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call ai_query "$@"
+}
+ai_sysinfo() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call ai_sysinfo "$@"
+}
 
 alias ask='ai_ask'
 alias sysinfo_ai='ai_sysinfo'

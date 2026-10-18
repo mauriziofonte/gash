@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/htaccess"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
@@ -27,10 +28,13 @@ import (
 
 // Options are the flags of `gash hte migrate`.
 type Options struct {
-	Sites          []string // --site D: import only these domains
-	Exclude        []string // --exclude D
-	KeepPoolValues bool     // --keep-pool-values: pool differences go to [php_ini]
-	ReissueCerts   bool     // --reissue-certs: new pairs instead of copying the legacy ones
+	Sites []string // --site D: import only these domains
+	// Exclude are the --exclude values: a domain (every vhost serving it)
+	// or an absolute vhost file path as the plan lists it (that file only,
+	// whatever its class). Nothing is excluded implicitly.
+	Exclude        []string
+	KeepPoolValues bool // --keep-pool-values: pool differences go to [php_ini]
+	ReissueCerts   bool // --reissue-certs: new pairs instead of copying the legacy ones
 }
 
 // Env is what the plan is built from.
@@ -44,6 +48,8 @@ type Env struct {
 	Listen    []string
 	Installed []string     // discovered PHP-FPM versions
 	Existing  []state.Site // sites already managed (migrate is idempotent)
+	// HostsExtra are the names of hosts.toml (an earlier migrate kept them).
+	HostsExtra []string
 	// Stat checks document roots; nil means os.Stat.
 	Stat func(string) (fs.FileInfo, error)
 	// ReadFile reads a document root's .htaccess; nil means os.ReadFile.
@@ -141,8 +147,11 @@ type Report struct {
 
 // Hosts is the hosts part of the plan (design step 7, LEDGER HTE-45).
 type Hosts struct {
-	Entries []hostshelper.Entry `json:"entries"` // the managed block
+	Entries []hostshelper.Entry `json:"entries"` // the managed block after --apply
 	Block   string              `json:"block"`
+	// Extra are the legacy names no site serves: --apply keeps them in
+	// hosts.toml, so they stay in the block.
+	Extra []string `json:"extra_names"`
 	// Legacy are the "# hte-cli" lines; they stay untouched.
 	Legacy []legacy.HostsLine `json:"legacy_lines"`
 }
@@ -161,7 +170,16 @@ type Plan struct {
 	// Blocking are the enabled vhosts neither imported (now or before)
 	// nor excluded: while any is left, --apply imports what it can but
 	// does not stop the system Apache.
-	Blocking []string `json:"blocking_stop"`
+	Blocking []Blocking `json:"blocking_stop"`
+}
+
+// Blocking is an enabled vhost that keeps the system Apache running, with
+// the exact --exclude argument that unblocks the stop.
+type Blocking struct {
+	Path    string `json:"path"`
+	Action  Action `json:"action"`
+	Reason  string `json:"reason,omitempty"`
+	Exclude string `json:"exclude"` // "--exclude PATH", the path shell-quoted when needed
 }
 
 // candidate is a vhost with its identity resolved.
@@ -177,7 +195,7 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	exc, err := normalizeAll(opt.Exclude)
+	exc, excPaths, err := splitExcludes(opt.Exclude)
 	if err != nil {
 		return nil, err
 	}
@@ -188,10 +206,11 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 	}
 	inv := legacy.Scan(env.Sysroot, env.Layout)
 	p := &Plan{Platform: env.OS.Platform(), Sites: make([]SitePlan, 0, len(inv.Vhosts)), RootOps: []RootOp{}, Reports: []Report{},
-		NoLongerServed: []string{}, Blocking: []string{}}
+		NoLongerServed: []string{}, Blocking: []Blocking{}}
 	b := builder{env: env, opt: opt, inv: inv, plan: p, claimed: map[string]bool{}}
 
-	// Identity first, then duplicates, then selection, then the import.
+	// Identity first, then exclusions by path, duplicates, selection, and
+	// the import.
 	var cands []*candidate
 	byDomain := map[string][]*candidate{}
 	for _, v := range inv.Vhosts {
@@ -200,14 +219,27 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		c := &candidate{v: v, plan: &p.Sites[len(p.Sites)-1]}
 		cands = append(cands, c)
 		b.identify(c)
+		if slices.Contains(excPaths, v.Path) {
+			c.plan.Action, c.plan.Reason, c.plan.Code = ActionExcluded, "excluded with --exclude "+v.Path, ""
+			continue
+		}
 		if c.domain != "" {
 			byDomain[c.domain] = append(byDomain[c.domain], c)
 		}
 	}
+	for _, ep := range excPaths {
+		if !slices.ContainsFunc(cands, func(c *candidate) bool { return c.v.Path == ep }) {
+			return nil, hteerr.Newf(hteerr.SiteNotFound, "give the path as the plan lists it",
+				"no legacy vhost file %s", ep)
+		}
+	}
 	for _, d := range append(slices.Clone(sel), exc...) {
 		if _, ok := byDomain[d]; !ok {
-			return nil, hteerr.Newf(hteerr.SiteNotFound, "the plan without --site and --exclude lists the vhosts",
-				"no legacy vhost serves %s", d)
+			hint := "the plan without --site and --exclude lists the vhosts"
+			if slices.Contains(sel, d) && slices.ContainsFunc(cands, func(c *candidate) bool { return c.domain == d }) {
+				return nil, hteerr.Newf(hteerr.ConflictingOptions, "", "%s is selected with --site, but every vhost serving it is excluded", d)
+			}
+			return nil, hteerr.Newf(hteerr.SiteNotFound, hint, "no legacy vhost serves %s", d)
 		}
 	}
 	for _, d := range sortedKeys(byDomain) {
@@ -249,13 +281,48 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		if sp.Action == ActionExcluded {
 			p.NoLongerServed = append(p.NoLongerServed, sp.Path)
 		} else {
-			p.Blocking = append(p.Blocking, sp.Path)
+			p.Blocking = append(p.Blocking, Blocking{Path: sp.Path, Action: sp.Action, Reason: sp.Reason,
+				Exclude: "--exclude " + shellWord(sp.Path)})
 		}
 	}
 	for _, s := range inv.Snippets {
 		p.NoLongerServed = append(p.NoLongerServed, s.Path)
 	}
 	return p, nil
+}
+
+// splitExcludes sorts the --exclude values into domains and absolute
+// vhost file paths (cleaned). A value with a "/" that is not absolute is
+// refused rather than taken for a domain.
+func splitExcludes(in []string) (domains, paths []string, err error) {
+	var names []string
+	for _, e := range in {
+		switch {
+		case path.IsAbs(e):
+			if p := path.Clean(e); !slices.Contains(paths, p) {
+				paths = append(paths, p)
+			}
+		case strings.Contains(e, "/"):
+			return nil, nil, hteerr.Newf(hteerr.InvalidDomain, "--exclude takes a domain or an absolute vhost file path",
+				"--exclude %q is a relative path", e)
+		default:
+			names = append(names, e)
+		}
+	}
+	domains, err = normalizeAll(names)
+	return domains, paths, err
+}
+
+// shellWord quotes a path for a command line the user copies: as is when
+// it holds only safe characters, else in single quotes.
+func shellWord(s string) string {
+	safe := s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/._-+@%=:,", r))
+	}) < 0
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func normalizeAll(in []string) ([]string, error) {
@@ -373,12 +440,18 @@ func (b *builder) build(c *candidate) {
 	} else {
 		b.buildRaw(c)
 	}
-	if c.plan.Site != nil {
-		b.planned = append(b.planned, *c.plan.Site)
-		for _, p := range c.v.Ports {
-			if p != 80 && p != 443 {
-				b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportCustomPort, Paths: []string{c.v.Path},
-					Message: c.domain + " listens on port " + strconv.Itoa(p) + "; gash hte has no per-site listen ports, so it is not kept"})
+	if s := c.plan.Site; s != nil {
+		b.planned = append(b.planned, *s)
+		for _, l := range []struct {
+			proto string
+			ports []int
+		}{{"HTTP", s.ExtraHTTPPorts}, {"HTTPS", s.ExtraHTTPSPorts}} {
+			for _, p := range l.ports {
+				msg := c.domain + " listens on port " + strconv.Itoa(p) + "; kept as an extra " + l.proto + " port of the site"
+				if p < 1024 {
+					msg += " (below 1024: binding it needs net.ipv4.ip_unprivileged_port_start at most " + strconv.Itoa(p) + ")"
+				}
+				b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportCustomPort, Paths: []string{c.v.Path}, Message: msg})
 			}
 		}
 	}
@@ -401,13 +474,22 @@ func (b *builder) buildManaged(c *candidate) {
 			extra = append(extra, a)
 		}
 	}
+	ports, err := customPorts(v.Conf, env)
+	if err != nil {
+		b.skip(c, err.Error())
+		return
+	}
+	if len(ports.https) > 0 && !https {
+		c.plan.Warnings = append(c.plan.Warnings, "the HTTPS ports "+joinInts(ports.https)+" are not kept: the site has no usable HTTPS vhost")
+		ports.https = nil
+	}
 	docroot := v.Docroot
 	f := state.Flags{
 		Domain: c.domain, Docroot: &docroot, PHP: &php, Profile: &profile,
 		HTTPS: &https, ForceHTTPS: &force, ForceHTTPSBypass: &bypass, HTTP2: &http2,
-		Aliases: extra, NoWWW: noWWW,
+		Aliases: extra, NoWWW: noWWW, ExtraHTTPPorts: &ports.http, ExtraHTTPSPorts: &ports.https,
 	}
-	site, err := state.NewSite(f, state.Env{Cwd: "/", Installed: env.Installed, Stat: env.Stat}, b.existing())
+	site, err := state.NewSite(f, state.Env{Cwd: "/", Installed: env.Installed, Ports: env.Ports, Stat: env.Stat}, b.existing())
 	if err != nil {
 		b.skipErr(c, err)
 		return
@@ -415,11 +497,14 @@ func (b *builder) buildManaged(c *candidate) {
 	site.Enabled = v.Enabled
 	if b.opt.KeepPoolValues && pp.Match != nil {
 		for _, d := range pp.Diffs {
-			if k, ok := legacy.INIKey(d.Key); ok && d.Pool != "" && state.CheckINI(k, d.Pool) == nil {
+			k, ok := legacy.INIKey(d.Key)
+			val := iniText(d.Pool)
+			// Line is 0 for a profile value the pool lacks: nothing to keep.
+			if ok && d.Line > 0 && state.CheckINI(k, val) == nil {
 				if site.PHPIni == nil {
 					site.PHPIni = map[string]string{}
 				}
-				site.PHPIni[k] = d.Pool
+				site.PHPIni[k] = val
 				pp.Kept = append(pp.Kept, k)
 			} else {
 				pp.NotKept = append(pp.NotKept, d.Key)
@@ -456,6 +541,28 @@ func (b *builder) htaccess(c *candidate) {
 	for _, r := range redirects {
 		c.plan.Warnings = append(c.plan.Warnings, r.Warning())
 	}
+}
+
+func joinInts(in []int) string {
+	out := make([]string, len(in))
+	for i, n := range in {
+		out[i] = strconv.Itoa(n)
+	}
+	return strings.Join(out, ", ")
+}
+
+// iniText returns the value an INI line means: the text inside a leading
+// pair of double quotes, else the text before a ";" comment, trimmed.
+func iniText(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if rest, ok := strings.CutPrefix(raw, `"`); ok {
+		if v, _, closed := strings.Cut(rest, `"`); closed {
+			return v
+		}
+		return raw
+	}
+	v, _, _ := strings.Cut(raw, ";")
+	return strings.TrimSpace(v)
 }
 
 func lower(in []string) []string {
@@ -561,7 +668,8 @@ func (b *builder) buildRaw(c *candidate) {
 		return
 	}
 	site := state.Site{Domain: c.domain, Aliases: aliases, Kind: state.KindRaw, Enabled: v.Enabled,
-		RawConf: res.conf, HTTPS: res.certFile != ""}
+		RawConf: res.conf, HTTPS: res.certFile != "",
+		ExtraHTTPPorts: append([]int{}, res.ports.http...), ExtraHTTPSPorts: append([]int{}, res.ports.https...)}
 	if aliases == nil {
 		site.Aliases = []string{}
 	}
@@ -581,6 +689,10 @@ func (b *builder) buildRaw(c *candidate) {
 		return
 	}
 	if err := state.CheckUnique(site, b.existing()); err != nil {
+		b.skipErr(c, err)
+		return
+	}
+	if err := state.CheckPortProtocols(site, b.existing()); err != nil {
 		b.skipErr(c, err)
 		return
 	}
@@ -659,29 +771,34 @@ func (b *builder) reportSystem() {
 	}
 }
 
-// hosts builds the managed block: one line per imported site, then the
-// names of "# hte-cli" lines no imported site covers. The legacy lines
-// stay as they are.
+// hosts builds the managed block after --apply: the sites already
+// managed and the imported ones (enabled only, as hosts.Desired), then the
+// names of "# hte-cli" lines no site covers, kept in hosts.toml. The legacy
+// lines stay as they are.
 func (b *builder) hosts(cands []*candidate) {
 	h := &b.plan.Hosts
 	h.Legacy = b.inv.Hosts
 	if h.Legacy == nil {
 		h.Legacy = []legacy.HostsLine{}
 	}
-	h.Entries = []hostshelper.Entry{}
-	covered := map[string]bool{}
+	sites := slices.Clone(b.env.Existing)
 	for _, c := range cands {
-		s := c.plan.Site
-		if s == nil {
-			continue
+		if c.plan.Site != nil {
+			sites = append(sites, *c.plan.Site)
 		}
-		names := s.Names()
-		h.Entries = append(h.Entries, hostshelper.Entry{Address: state.LoopbackIPv4, Names: names})
-		for _, n := range names {
+	}
+	covered := map[string]bool{}
+	for _, s := range sites {
+		for _, n := range s.Names() {
 			covered[n] = true
 		}
 	}
-	var rest []string
+	h.Extra = []string{}
+	for _, n := range b.env.HostsExtra {
+		if !covered[n] && !slices.Contains(h.Extra, n) {
+			h.Extra = append(h.Extra, n)
+		}
+	}
 	for _, l := range b.inv.Hosts {
 		if l.Addr != state.LoopbackIPv4 {
 			b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportHostsLine, Paths: []string{b.env.Layout.Hosts},
@@ -694,13 +811,11 @@ func (b *builder) hosts(cands []*candidate) {
 			case !hostshelper.ValidHostname(n):
 				b.plan.Reports = append(b.plan.Reports, Report{Kind: ReportHostsLine, Paths: []string{b.env.Layout.Hosts},
 					Message: "line " + strconv.Itoa(l.Line) + ": " + n + " is not a hostname; not taken"})
-			case !covered[n] && !slices.Contains(rest, n):
-				rest = append(rest, n)
+			case !covered[n] && !slices.Contains(h.Extra, n):
+				h.Extra = append(h.Extra, n)
 			}
 		}
 	}
-	if len(rest) > 0 {
-		h.Entries = append(h.Entries, hostshelper.Entry{Address: state.LoopbackIPv4, Names: rest})
-	}
+	h.Entries = hosts.Desired(sites, h.Extra)
 	h.Block = string(hostshelper.FormatBlock(h.Entries))
 }
