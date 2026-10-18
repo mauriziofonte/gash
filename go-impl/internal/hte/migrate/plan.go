@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/htaccess"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
 	"github.com/mauriziofonte/gash/internal/hte/profiles"
@@ -45,6 +46,8 @@ type Env struct {
 	Existing  []state.Site // sites already managed (migrate is idempotent)
 	// Stat checks document roots; nil means os.Stat.
 	Stat func(string) (fs.FileInfo, error)
+	// ReadFile reads a document root's .htaccess; nil means os.ReadFile.
+	ReadFile func(string) ([]byte, error)
 }
 
 // Action is what --apply would do with a vhost.
@@ -431,6 +434,22 @@ func (b *builder) buildManaged(c *candidate) {
 	if site.HTTPS {
 		c.plan.Cert = b.certPlan(c, v.CertFile, v.KeyFile, true)
 	}
+	b.htaccess(c)
+}
+
+// htaccess warns about an HTTPS redirect of the document root's .htaccess
+// (LEDGER HTE-26).
+func (b *builder) htaccess(c *candidate) {
+	if c.plan.Site.Docroot == "" {
+		return
+	}
+	redirects, err := htaccess.Check(c.plan.Site.Docroot, b.env.ReadFile)
+	if err != nil {
+		c.plan.Warnings = append(c.plan.Warnings, "cannot read the .htaccess of "+c.plan.Site.Docroot+": "+err.Error())
+	}
+	for _, r := range redirects {
+		c.plan.Warnings = append(c.plan.Warnings, r.Warning())
+	}
 }
 
 func lower(in []string) []string {
@@ -564,6 +583,7 @@ func (b *builder) buildRaw(c *candidate) {
 	if site.HTTPS {
 		c.plan.Cert = b.certPlan(c, res.certFile, res.keyFile, false)
 	}
+	b.htaccess(c)
 }
 
 // reportSockets reports a legacy socket used by several vhost files: each

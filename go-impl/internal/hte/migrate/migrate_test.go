@@ -74,7 +74,19 @@ func envAt(t *testing.T, root string) Env {
 		Sysroot: sr, OS: platform.OS{ID: "ubuntu", VersionID: "24.04", Family: platform.FamilyDebian},
 		Layout: l, User: "dev", Paths: userPaths, Ports: state.StandardPorts,
 		Listen: []string{state.LoopbackIPv4, state.LoopbackIPv6}, Installed: []string{"7.4", "8.3"},
-		Stat: existingDirs(),
+		Stat:     existingDirs(),
+		ReadFile: htaccessFiles(nil),
+	}
+}
+
+// htaccessFiles serves the given document root files; every other path
+// does not exist (the fixtures' document roots are not on this machine).
+func htaccessFiles(files map[string]string) func(string) ([]byte, error) {
+	return func(p string) ([]byte, error) {
+		if s, ok := files[p]; ok {
+			return []byte(s), nil
+		}
+		return nil, &fs.PathError{Op: "open", Path: p, Err: fs.ErrNotExist}
 	}
 }
 
@@ -753,5 +765,20 @@ func TestRawRefusals(t *testing.T) {
 		if s.Action != ActionSkip || s.Site != nil || !strings.Contains(s.Reason, tc.reason) {
 			t.Errorf("%s: %s %q", name, s.Action, s.Reason)
 		}
+	}
+}
+
+// TestHtaccessWarning: migrate warns when a document root's .htaccess
+// redirects to HTTPS on its own (LEDGER HTE-26).
+func TestHtaccessWarning(t *testing.T) {
+	env := envAt(t, fixtureDir(t, "V2"))
+	env.ReadFile = htaccessFiles(map[string]string{
+		"/home/dev/sites/http/public/.htaccess": "RewriteEngine On\nRewriteCond %{HTTP:X-Forwarded-Proto} !https\nRewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]\n",
+	})
+	s := site(t, mustPlan(t, env, Options{}), sa+"001-http.test.conf")
+	if s.Action != ActionImport || !slices.ContainsFunc(s.Warnings, func(w string) bool {
+		return strings.HasPrefix(w, "/home/dev/sites/http/public/.htaccess:3 redirects to HTTPS")
+	}) {
+		t.Fatalf("%+v", s.Warnings)
 	}
 }
