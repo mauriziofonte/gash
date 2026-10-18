@@ -3887,14 +3887,15 @@ Critical and high items:
 | Origin | New finding (rc.A port of llm_* and internal/db) |
 | Area | Portability |
 | Bash location | `lib/modules/llm/fs.sh` llm_grep (rg, else `grep -E`; LLM-03) |
-| Observed behavior | Patterns are read by rg's Rust regex engine, or by the installed grep's ERE in the fallback; the two accept different syntax (`\d`, `\b`, Unicode classes, `{,n}`). |
-| Reproduction | a pattern with `\d` with and without rg on PATH |
+| Observed behavior | Patterns are read by rg's Rust regex engine, or by the installed grep's ERE in the fallback; the two accept different syntax (`\d`, `\b`, Unicode classes, `{,n}`). 2.x ran rg with `2>/dev/null`, so a pattern rg's own parser rejected printed nothing and exited 0 (a silent empty success). |
+| Reproduction | a pattern with `\d` with and without rg on PATH; a pattern rg itself rejects (`a**`, `[a-\d]`) |
 | Severity | low |
 | Public-contract impact | yes |
-| rc.A behavior | One engine, Go's RE2 (`regexp`): the Rust regex syntax rg accepts, minus the few constructs RE2 lacks, which are refused with `invalid_regex`. LLM-03 keeps its result rules. |
+| rc.A behavior | One engine, Go's RE2 (`regexp`). Decision (operator go-ahead, "soundest option"): every pattern that cannot be read exactly as ripgrep 14 reads it fails with `invalid_regex` (RETRY), rg's own syntax errors included. This is the forced divergence from 2.x's silent-empty on rg errors; no spec depended on that behaviour (PRD MUST NOT: never silently return empty, never tool-dependent results). Where the two engines agree the dialect is translated, not refused: `\d`/`\w`/`\s` and negations become rg's Unicode ranges, numeric escapes and `\u`/`\U` become `\x{...}`, spaces in counted repetitions are dropped. `\b`/`\B` and invalid-UTF-8 bytes, where RE2's ASCII `\b` or `.` would differ from rg, are matched exactly by a small NFA over RE2's compiled program (Unicode word boundaries; an invalid byte matches nothing). Constructs RE2 misreads or lacks (`\<` `\>` `\b{start}`, class set ops, `\Q..\E`, octal/backrefs, Rust-only property names, `(?x)` etc.) are refused. LLM-03 keeps its result rules. Measured against rg 14.1.0. |
 | Fix recipe (3.0) | Same as rc.A. |
-| Proving test | `TestLedger_LLM37` in `internal/llm` (rg's documented syntax table: accepted or refused, never misread). |
+| Proving test | `TestLedger_LLM37` in `internal/llm` (rg's documented syntax table: translated, matched exactly, or refused with `invalid_regex`, never misread), for both llm_grep and llm_find --contains. |
 | Status | open |
+| Note | `--ext`/`--glob` filter values are out of scope: a bad filter still matches nothing silently, as in 2.x (it reaches no regex engine and executes no code), so no divergence there. |
 
 <a id="llm-38"></a>
 #### LLM-38 · A NUL late in a large file: rg searches the text before it
@@ -5647,9 +5648,9 @@ Critical and high items:
 | Reproduction | `llm_grep x /nonexistent; echo $?` -> 0; `llm_grep '(' .` -> 0 (temp dir) |
 | Severity | low |
 | Public-contract impact | yes (if changed) |
-| rc.A behavior | Kept: rc.A returns exit 0 with no output for a missing path or invalid regex, matching 2.x. |
-| Fix recipe (3.0) | If the operator wants distinction: emit `path_not_found`/RETRY for a missing root and `invalid_pattern`/RETRY for a regex the engine rejects; otherwise document "empty results and bad inputs are both exit 0, no output". |
-| Proving test | `TestLedger_LLM17` pins the chosen behavior for `/nonexistent` and an invalid pattern. |
+| rc.A behavior | Missing path: kept, exit 0 with no output, matching 2.x. Invalid regex: no longer silent — see [LLM-37](#llm-37). Under the one-engine decision a pattern that cannot be read as ripgrep reads it fails with `invalid_regex` (RETRY), so only the missing-path half of this silent-success is kept. |
+| Fix recipe (3.0) | Missing root: if the operator wants a distinction, emit `path_not_found`/RETRY; otherwise document "empty results and a missing path are both exit 0, no output". The regex half is settled by LLM-37 (`invalid_regex`). |
+| Proving test | `TestLedger_LLM17` pins the kept behavior for `/nonexistent` (missing path only); the invalid-pattern case is covered by `TestLedger_LLM37`. |
 | Status | open |
 
 <a id="llm-18"></a>
