@@ -6,6 +6,8 @@
 package handlers
 
 import (
+	"github.com/mauriziofonte/gash/internal/files"
+	"github.com/mauriziofonte/gash/internal/fsscan"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 )
@@ -18,6 +20,8 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	registerCore(t)
 	registerOutput(t)
 	selfmgmt.Register(t)
+	fsscan.Register(t)
+	files.Register(t)
 	for _, r := range extra {
 		r(t)
 	}

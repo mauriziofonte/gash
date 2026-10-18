@@ -26,7 +26,8 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "gash", "gash_username"}, tbl.Names())
+	require.Equal(t, []string{"all_colors", "archive_extract", "dirs_find_large", "dirs_largest",
+		"dirs_list_empty", "file_backup", "files_largest", "gash", "gash_username", "tree_stats"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
