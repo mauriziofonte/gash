@@ -25,5 +25,6 @@ func Register(t *invoke.Table) { New().Register(t) }
 
 // Register binds the functions of m to t.
 func (m *Module) Register(t *invoke.Table) {
+	t.Handle("gash", m.card)
 	t.Handle("gash_username", m.username)
 }

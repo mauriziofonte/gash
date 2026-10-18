@@ -4,6 +4,7 @@ package registry
 
 import (
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -78,4 +79,22 @@ func (f *Function) StubVars() []string {
 		}
 	}
 	return out
+}
+
+// Delegated reports whether the generated stub of f calls the binary
+// (`gash NAME`), which makes NAME a command of the binary: every function
+// except the gash card itself (the binary's root), the Bash helpers of
+// the core shims (needs_help, needs_confirm_prompt, path_add) and the
+// interactive-only shell functions that gash init bash emits. gash_unload
+// is delegated while its Bash body is not emitted yet (M6).
+func (f *Function) Delegated() bool {
+	switch {
+	case f.Name == "gash":
+		return false
+	case f.Impl == ImplShim:
+		return !strings.HasPrefix(f.StubFile, "lib/core/")
+	case f.Impl == ImplInit:
+		return f.Headless
+	}
+	return true
 }

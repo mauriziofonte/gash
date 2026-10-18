@@ -140,3 +140,13 @@ func TestSettingsAndTopics(t *testing.T) {
 	require.Equal(t, []string{"files", "system", "nav", "git", "docker", "remote", "dev", "llm", "ai", "gash"}, topics)
 	require.Len(t, Packs(), 7)
 }
+
+func TestDelegated(t *testing.T) {
+	var not []string
+	for _, f := range Functions() {
+		if !f.Delegated() {
+			not = append(not, f.Name)
+		}
+	}
+	require.Equal(t, []string{"gash", "help", "needs_confirm_prompt", "needs_help", "nvm", "path_add"}, not)
+}
