@@ -20,6 +20,8 @@ rc.A implementation. S1 was approved by the operator in the session on 2026-10-1
 - Audit of every 2.x module done: `MATRIX.md` (881 rows for 2.x plus the new 3.x surface) and `LEDGER.md` (every PRD seed indexed) merged from per-module fragments. The merge scripts are gone: both files are now edited by hand, by the lead session only.
 - rc.A work merged so far: HTE core (`internal/platform`, `internal/hte/*`, `internal/hostshelper`, `cmd/gash-hosts-helper`), path guard and llm_exec core (`internal/pathguard`, `internal/llmexec`, canonical script per D-1 A, 2.x child prelude byte for byte), config, SQL guard and runner (`internal/config`, `internal/sqlguard`, `internal/runner`).
 - The two install specs that snapshot the working tree into a fresh repository disable git's background maintenance: with the Go tree the detached repack raced the clone and the cleanup on git 2.55 (CI only).
+- Core output primitives, layout emitters and confirmations, runner starts (`Start`, `StartPTY`, `RunScript`) and the leaf config loader merged; stubs of the 21 functions whose 2.x body loads the settings run the cached `__gash_load_env` first (CORE-18).
+- Harness: `tests/run.sh` reads each spec's recorded status (TEST-09); Go mode starts the HTTPS fake (`internal/tools/httpsfake`, the shared curl mock's answers over `HTTPS_PROXY`); the mock-client DB specs pin the clock (TEST-10). Per-test curl fakes move to `MOCK_CURL_ROUTES` route files (TEST-11, core first, then each slice). Go mode: 233 passed of 807 at 883e12d.
 
 ## Next step
 

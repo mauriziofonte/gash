@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 72 | 173 | 115 |
+| Defects | 1 | 25 | 75 | 73 | 174 | 115 |
 | Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 244 | **407** | 241 |
+| **All** | 3 | 36 | 125 | 245 | **408** | 241 |
 
 Critical and high items:
 
@@ -346,6 +346,7 @@ Critical and high items:
 | [TEST-07](#test-07) | 18 specs source Gash at top level in the runner process | Test harness | low | no |
 | [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
 | [TEST-10](#test-10) | Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice | Test harness | low | no |
+| [TEST-11](#test-11) | Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes | Test harness | low | no |
 
 ### llm_* agent functions
 
@@ -3489,6 +3490,24 @@ Critical and high items:
 | rc.A behavior | Fixed in the specs: after sourcing they pin `EPOCHREALTIME` to a constant, as `llm_portability_spec.sh` already does, so the elapsed time is 0 and the mock runs once. Assertions unchanged. |
 | Fix recipe (3.0) | n/a after cutover (testscript, with the clock injected in `internal/db`). |
 | Proving test | The three tests pass with a mock client that sleeps 150 ms. |
+| Status | open |
+
+<a id="test-11"></a>
+#### TEST-11 · Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A, Go-mode HTTPS fake) |
+| Area | Test harness |
+| Bash location | `tests/specs/chrome_spec.sh` (the `MOCKS` curl stub and the "npm registry is unreachable" stub), `tests/specs/toolchains_spec.sh` (the `__gash_download` stub), `tests/specs/output_style_render_spec.sh` (six `chrome_headless_update` fixtures with a `curl()` function, also TEST-05); `tests/mocks/bin/curl` (its 404 and 500 answers) |
+| Observed behavior | These fakes answer the argv the Bash implementation gives curl: `-fsIL` for a size probe, `-o FILE` for a download, `exit 22` or `exit 6` for a failure. The binary sends its requests with net/http, so in Go mode none of them runs and the requests reach the HTTPS fake, which knows only the shared mock's answers. Separately, the shared mock exits 0 with its 404 and 500 bodies even when the caller passed `-f`, where curl exits 22; the fake answers with real statuses. No spec relies on that today: the callers that pass `-f` (`chrome.sh`, `__gash_download`) are faked per test. |
+| Reproduction | `bash tests/run.sh --impl go specs/chrome_spec.sh` once `chrome_headless_update` is ported |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the harness: a test writes the HTTP answers it wants (method, URL pattern, status, headers, body, or "unreachable") to a route file named by `MOCK_CURL_ROUTES`. `tests/mocks/bin/curl` serves routed answers with curl's `-f`, `-I` and `-o` semantics (Bash mode), and the HTTPS fake serves the same file (Go mode). The per-test curl fakes listed above become route files; assertions stay byte for byte the same and the Bash reference stays 807/0. Without `MOCK_CURL_ROUTES` the mock and the fake answer as before. |
+| Fix recipe (3.0) | n/a after cutover (testscript, with a local HTTPS server per script). |
+| Proving test | The converted tests pass in both modes; a route answering 404 gives exit 22 from `curl -f` in Bash mode and the binary's exit 22 path in Go mode. |
 | Status | open |
 
 ## Forced divergences
