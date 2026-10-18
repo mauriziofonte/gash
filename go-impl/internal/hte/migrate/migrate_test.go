@@ -313,7 +313,7 @@ func TestLedger_HTE21(t *testing.T) {
 	if ip.Action != ActionSkip || !strings.Contains(ip.Reason, "is an IP address") || ip.Site != nil {
 		t.Fatalf("IP vhost: %+v", ip)
 	}
-	if strings.Contains(p.Hosts.Block, "127.0.0.1 127.0.0.1") || !slices.Contains(p.Blocking, ip.Path) {
+	if strings.Contains(p.Hosts.Block, "127.0.0.1 127.0.0.1") || !slices.Contains(blockingPaths(p), ip.Path) {
 		t.Fatalf("hosts %q blocking %v", p.Hosts.Block, p.Blocking)
 	}
 }
@@ -418,7 +418,7 @@ func TestLedger_HTE31(t *testing.T) {
 		t.Fatalf("quoted docroot %q", quoted.Site.Docroot)
 	}
 	// Only the enabled skipped file blocks the stop; 020-022 are disabled.
-	if diff := cmp.Diff([]string{sa + "000-default.conf"}, p.Blocking); diff != "" {
+	if diff := cmp.Diff([]string{sa + "000-default.conf"}, blockingPaths(p)); diff != "" {
 		t.Fatal(diff)
 	}
 	if diff := cmp.Diff(before, snapshot(t, root)); diff != "" {
@@ -543,7 +543,7 @@ func TestLedger_HTE64(t *testing.T) {
 			t.Errorf("--site http.test: %s %s", s.Domain, s.Action)
 		}
 	}
-	if diff := cmp.Diff([]string{sa + "002-https.test.conf", sa + "003-forced.test.conf", sa + "010-proxy.test.conf"}, p.Blocking); diff != "" {
+	if diff := cmp.Diff([]string{sa + "002-https.test.conf", sa + "003-forced.test.conf", sa + "010-proxy.test.conf"}, blockingPaths(p)); diff != "" {
 		t.Fatal(diff)
 	}
 }
@@ -828,6 +828,59 @@ func TestRawCustomPorts(t *testing.T) {
 	s = site(t, mustPlan(t, env, Options{}), sa+"050-r.test.conf")
 	if len(s.Site.ExtraHTTPPorts)+len(s.Site.ExtraHTTPSPorts) != 0 || !strings.Contains(s.Site.RawConf, "<VirtualHost 127.0.0.1:3443 [::1]:3443>") {
 		t.Fatalf("stack ports: %+v", s.Site)
+	}
+}
+
+func blockingPaths(p *Plan) []string {
+	out := []string{}
+	for _, b := range p.Blocking {
+		out = append(out, b.Path)
+	}
+	return out
+}
+
+// TestExcludePath: --exclude takes a domain or an absolute vhost file path
+// (lead decision on HTE-31, option a). Nothing is excluded implicitly; a
+// blocking vhost names the exact --exclude argument.
+func TestExcludePath(t *testing.T) {
+	root := copyVariant(t, "Malformed")
+	p := mustPlan(t, envAt(t, root), Options{})
+	if len(p.Blocking) != 1 || p.Blocking[0].Exclude != "--exclude "+sa+"000-default.conf" || p.Blocking[0].Action != ActionSkip {
+		t.Fatalf("blocking: %+v", p.Blocking)
+	}
+	if !strings.Contains(p.Text(), "    to leave it out: --exclude "+sa+"000-default.conf\n") {
+		t.Fatalf("text:\n%s", p.Text())
+	}
+	p = mustPlan(t, envAt(t, root), Options{Exclude: []string{sa + "000-default.conf", sa + "020-.conf"}})
+	if len(p.Blocking) != 0 || site(t, p, sa+"000-default.conf").Action != ActionExcluded ||
+		site(t, p, sa+"020-.conf").Action != ActionExcluded {
+		t.Fatalf("excluded by path: %+v", p.Blocking)
+	}
+	if diff := cmp.Diff([]string{sa + "000-default.conf"}, p.NoLongerServed); diff != "" {
+		t.Fatal(diff) // 020-.conf is not enabled
+	}
+	// Excluding one of two duplicates by path imports the other.
+	root = copyVariant(t, "V2")
+	write(t, root, sa+"004-App.test.conf", marked("App.test", "App.test", "app"))
+	write(t, root, sa+"005-app.test.conf", marked("app.test", "app.test", "app2"))
+	p = mustPlan(t, envAt(t, root), Options{Exclude: []string{sa + "004-App.test.conf"}})
+	if s := site(t, p, sa+"005-app.test.conf"); s.Action != ActionImport || len(reports(p, ReportDuplicate)) != 0 {
+		t.Fatalf("duplicate left: %s %q", s.Action, s.Reason)
+	}
+	for _, tc := range []struct {
+		opt  Options
+		want hteerr.Code
+	}{
+		{Options{Exclude: []string{"sites-available/004-App.test.conf"}}, hteerr.InvalidDomain},
+		{Options{Exclude: []string{sa + "999-none.conf"}}, hteerr.SiteNotFound},
+		{Options{Sites: []string{"app.test"}, Exclude: []string{sa + "004-App.test.conf", sa + "005-app.test.conf"}}, hteerr.ConflictingOptions},
+	} {
+		if _, err := BuildPlan(envAt(t, root), tc.opt); hteerr.CodeOf(err) != tc.want {
+			t.Errorf("%+v: %v", tc.opt, err)
+		}
+	}
+	if w := shellWord("/etc/apache2/sites-available/it's mine.conf"); w != `'/etc/apache2/sites-available/it'\''s mine.conf'` {
+		t.Fatal(w)
 	}
 }
 

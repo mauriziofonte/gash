@@ -27,10 +27,13 @@ import (
 
 // Options are the flags of `gash hte migrate`.
 type Options struct {
-	Sites          []string // --site D: import only these domains
-	Exclude        []string // --exclude D
-	KeepPoolValues bool     // --keep-pool-values: pool differences go to [php_ini]
-	ReissueCerts   bool     // --reissue-certs: new pairs instead of copying the legacy ones
+	Sites []string // --site D: import only these domains
+	// Exclude are the --exclude values: a domain (every vhost serving it)
+	// or an absolute vhost file path as the plan lists it (that file only,
+	// whatever its class). Nothing is excluded implicitly.
+	Exclude        []string
+	KeepPoolValues bool // --keep-pool-values: pool differences go to [php_ini]
+	ReissueCerts   bool // --reissue-certs: new pairs instead of copying the legacy ones
 }
 
 // Env is what the plan is built from.
@@ -161,7 +164,16 @@ type Plan struct {
 	// Blocking are the enabled vhosts neither imported (now or before)
 	// nor excluded: while any is left, --apply imports what it can but
 	// does not stop the system Apache.
-	Blocking []string `json:"blocking_stop"`
+	Blocking []Blocking `json:"blocking_stop"`
+}
+
+// Blocking is an enabled vhost that keeps the system Apache running, with
+// the exact --exclude argument that unblocks the stop.
+type Blocking struct {
+	Path    string `json:"path"`
+	Action  Action `json:"action"`
+	Reason  string `json:"reason,omitempty"`
+	Exclude string `json:"exclude"` // "--exclude PATH", the path shell-quoted when needed
 }
 
 // candidate is a vhost with its identity resolved.
@@ -177,7 +189,7 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	exc, err := normalizeAll(opt.Exclude)
+	exc, excPaths, err := splitExcludes(opt.Exclude)
 	if err != nil {
 		return nil, err
 	}
@@ -188,10 +200,11 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 	}
 	inv := legacy.Scan(env.Sysroot, env.Layout)
 	p := &Plan{Platform: env.OS.Platform(), Sites: make([]SitePlan, 0, len(inv.Vhosts)), RootOps: []RootOp{}, Reports: []Report{},
-		NoLongerServed: []string{}, Blocking: []string{}}
+		NoLongerServed: []string{}, Blocking: []Blocking{}}
 	b := builder{env: env, opt: opt, inv: inv, plan: p, claimed: map[string]bool{}}
 
-	// Identity first, then duplicates, then selection, then the import.
+	// Identity first, then exclusions by path, duplicates, selection, and
+	// the import.
 	var cands []*candidate
 	byDomain := map[string][]*candidate{}
 	for _, v := range inv.Vhosts {
@@ -200,14 +213,27 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		c := &candidate{v: v, plan: &p.Sites[len(p.Sites)-1]}
 		cands = append(cands, c)
 		b.identify(c)
+		if slices.Contains(excPaths, v.Path) {
+			c.plan.Action, c.plan.Reason, c.plan.Code = ActionExcluded, "excluded with --exclude "+v.Path, ""
+			continue
+		}
 		if c.domain != "" {
 			byDomain[c.domain] = append(byDomain[c.domain], c)
 		}
 	}
+	for _, ep := range excPaths {
+		if !slices.ContainsFunc(cands, func(c *candidate) bool { return c.v.Path == ep }) {
+			return nil, hteerr.Newf(hteerr.SiteNotFound, "give the path as the plan lists it",
+				"no legacy vhost file %s", ep)
+		}
+	}
 	for _, d := range append(slices.Clone(sel), exc...) {
 		if _, ok := byDomain[d]; !ok {
-			return nil, hteerr.Newf(hteerr.SiteNotFound, "the plan without --site and --exclude lists the vhosts",
-				"no legacy vhost serves %s", d)
+			hint := "the plan without --site and --exclude lists the vhosts"
+			if slices.Contains(sel, d) && slices.ContainsFunc(cands, func(c *candidate) bool { return c.domain == d }) {
+				return nil, hteerr.Newf(hteerr.ConflictingOptions, "", "%s is selected with --site, but every vhost serving it is excluded", d)
+			}
+			return nil, hteerr.Newf(hteerr.SiteNotFound, hint, "no legacy vhost serves %s", d)
 		}
 	}
 	for _, d := range sortedKeys(byDomain) {
@@ -249,13 +275,48 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		if sp.Action == ActionExcluded {
 			p.NoLongerServed = append(p.NoLongerServed, sp.Path)
 		} else {
-			p.Blocking = append(p.Blocking, sp.Path)
+			p.Blocking = append(p.Blocking, Blocking{Path: sp.Path, Action: sp.Action, Reason: sp.Reason,
+				Exclude: "--exclude " + shellWord(sp.Path)})
 		}
 	}
 	for _, s := range inv.Snippets {
 		p.NoLongerServed = append(p.NoLongerServed, s.Path)
 	}
 	return p, nil
+}
+
+// splitExcludes sorts the --exclude values into domains and absolute
+// vhost file paths (cleaned). A value with a "/" that is not absolute is
+// refused rather than taken for a domain.
+func splitExcludes(in []string) (domains, paths []string, err error) {
+	var names []string
+	for _, e := range in {
+		switch {
+		case path.IsAbs(e):
+			if p := path.Clean(e); !slices.Contains(paths, p) {
+				paths = append(paths, p)
+			}
+		case strings.Contains(e, "/"):
+			return nil, nil, hteerr.Newf(hteerr.InvalidDomain, "--exclude takes a domain or an absolute vhost file path",
+				"--exclude %q is a relative path", e)
+		default:
+			names = append(names, e)
+		}
+	}
+	domains, err = normalizeAll(names)
+	return domains, paths, err
+}
+
+// shellWord quotes a path for a command line the user copies: as is when
+// it holds only safe characters, else in single quotes.
+func shellWord(s string) string {
+	safe := s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/._-+@%=:,", r))
+	}) < 0
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func normalizeAll(in []string) ([]string, error) {

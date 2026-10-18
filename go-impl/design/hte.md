@@ -453,7 +453,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 |---|---|
 | `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded (it points at `migrate`). Detects an uninstall stage and offers to restore it |
 | `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix |
-| `migrate [--apply] [--site D]... [--exclude D]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64) |
+| `migrate [--apply] [--site D]... [--exclude D\|PATH]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64). `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file only, whatever its class); nothing is excluded implicitly, not even Debian's `000-default.conf`, and each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (HTE-31) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
 | `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2] [--extra-http-port N]... [--extra-https-port N]...` | New managed site; fails on any invalid value |
 | `site modify --domain D [same flags]` | Changes the state; overlays untouched |
@@ -562,8 +562,8 @@ Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
    same names to the same address): migrate never deletes or rewrites a hosts
    line outside its own block.
 
-Also handled: duplicate domains (both reported; the user picks one with
-`--site` or excludes the other), a vhost using another site's pool socket
+Also handled: duplicate domains (both reported; the user excludes one by its
+file path, `--exclude PATH`), a vhost using another site's pool socket
 (both sites get their own pool; reported), custom ports (every
 `<VirtualHost>` port other than 80, 443 and the stack's own becomes an extra
 port of the site, HTTP or HTTPS by the section's `SSLEngine on`, raw vhosts
