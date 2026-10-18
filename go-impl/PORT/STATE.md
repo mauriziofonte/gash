@@ -23,6 +23,7 @@ rc.A implementation. S1 was approved by the operator in the session on 2026-10-1
 - Core output primitives, layout emitters and confirmations, runner starts (`Start`, `StartPTY`, `RunScript`) and the leaf config loader merged; stubs of the 21 functions whose 2.x body loads the settings run the cached `__gash_load_env` first (CORE-18).
 - Harness: `tests/run.sh` reads each spec's recorded status (TEST-09); Go mode starts the HTTPS fake (`internal/tools/httpsfake`, the shared curl mock's answers over `HTTPS_PROXY`); the mock-client DB specs pin the clock (TEST-10). Per-test curl fakes move to `MOCK_CURL_ROUTES` route files (TEST-11, core first, then each slice). Go mode: 233 passed of 807 at 883e12d.
 - HTE engine merged (b7a905b): sites, service, certificates (openssl CLI, HTE-39), hosts, supervision, receipt, root session, install/uninstall, `migrate --apply`, doctor, php ini/global; Docker E2E (`go-impl/testdata/hte/e2e/run.sh`, two stories, /etc and /usr/local identical after uninstall) on Ubuntu 24.04. Decisions on its report: HTE-08 (docroot characters, SCRIPT_FILENAME unescape), HTE-69..75.
+- llm slice merged (49dc78c): every llm_* function, llm_exec, and `internal/db` on native drivers (modernc sqlite, go-sql-driver/mysql, pgx) for llm_db_* and gash_db_test; core added gash_help, gash_db_list and gash_ai_list. Go mode: 329 passed of 807. Findings ledgered: TEST-13/14, DB-14..17, LLM-35..39. M5 (php, node, ai) goes to `wt/llm` after its DB follow-ups (DB-02 raw text, DB-16 socket).
 
 ## Next step
 

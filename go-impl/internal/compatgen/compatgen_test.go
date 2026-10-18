@@ -377,7 +377,8 @@ func TestLedger_SYS34(t *testing.T) {
 // LEDGER CORE-18: the stub of each function whose 2.x body loads the
 // settings file runs the shim's cached __gash_load_env first, and no other
 // stub does; in a shell without gash.sh the warnings then come once, at
-// the first such call, from the shell.
+// the first such call, from the shell. After a headless gash.sh load the
+// first load is quiet, unless GASH_DEBUG=1 loads at source time.
 func TestLedger_CORE18(t *testing.T) {
 	needBash(t)
 	dir := tree(t)
@@ -404,4 +405,19 @@ func TestLedger_CORE18(t *testing.T) {
 		"source '"+dir+"/lib/modules/llm.sh'; llm_tree; gash_db_list; llm_exec ls; gash_db_list")
 	require.NoError(t, err, out)
 	require.Equal(t, "call llm_tree\nWarning: Line 1 of ~/.gash_env: unrecognized entry\ncall gash_db_list\ncall llm_exec\ncall gash_db_list\n", out)
+	// GASH_HEADLESS=1 without gash.sh: as loud as 2.x was.
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "for f in output utils config; do source '"+dir+"/lib/core/'$f.sh; done; "+
+		"source '"+dir+"/lib/modules/llm.sh'; llm_exec ls")
+	require.NoError(t, err, out)
+	require.Equal(t, "Warning: Line 1 of ~/.gash_env: unrecognized entry\ncall llm_exec\n", out)
+
+	// A headless gash.sh load parses quietly at the first call, as the 2.x
+	// headless startup did; with GASH_DEBUG=1 it loads at source time,
+	// warnings shown, and the calls then use the cache.
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash_db_list")
+	require.NoError(t, err, out)
+	require.Equal(t, "sourced\ncall llm_exec\ncall gash_db_list\n", out)
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1", "GASH_DEBUG=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash_db_list")
+	require.NoError(t, err, out)
+	require.Equal(t, "Warning: Line 1 of ~/.gash_env: unrecognized entry\nsourced\ncall llm_exec\ncall gash_db_list\n", out)
 }

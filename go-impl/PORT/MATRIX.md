@@ -890,7 +890,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | $TMPDIR/tmp.XXXXXXXXXX | pure output | drop | Bash stderr-capture temp file, created and removed per call; rc.A counts walk errors in-process (FS-30) | - | files-scanners | hygiene_spec.sh |
 | ${HISTFILE:-~/.bash_history} | shell-mutating | port | Read by hgrep (#epoch line, then one command line); appended by the shim's history -a for hgrep, wsl_restart, wsl_shutdown. | - | system | hgrep_spec.sh, output_style_render_spec.sh |
 | .github/copilot-instructions.md (DIR only) | pure output | port | First php + up to 3 spaces/colons + X.Y, per line; dead on PCRE2 < 10.43 and grep without -P in 2.x, read in rc.A: forced divergence DEV-09 | - | devai | none (add TestLedger_DEV09_2x) |
-| .gitignore/.ignore/.rgignore | - | port | ignore rules honored by llm_grep/llm_find content search (one engine, LLM-03) | - | llm | llm_flags_spec.sh |
+| .gitignore/.ignore/.rgignore | - | port | ignore rules honored by llm_grep (rg reads them; one engine, LLM-03), not by llm_find --contains (2.x passes rg --no-ignore) | - | llm | llm_flags_spec.sh |
 | .node-version (DIR only) | pure output | port | Second source, same parsing as .nvmrc; exact pins reduced to the major (DEV-19) | - | devai | none (add TestNodeDetectNodeVersionFile) |
 | .nvmrc (DIR only) | pure output | port | First line with all whitespace removed, parsed to a major (lts/<name>, first [0-9]+(.[0-9]+)*) | - | devai | node_spec.sh |
 | .target-php-version | pure output | port | Line 1, first X.Y (all of them in 2.x: DEV-04); looked up in DIR and each ancestor up to but excluding /, only when DIR resolves to an absolute path; a file without X.Y is skipped | - | devai | php_detect_spec.sh |

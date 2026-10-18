@@ -195,7 +195,15 @@ it "llm_tree outputs JSON by default" bash -c '
     source "$ROOT/lib/core/utils.sh"
     source "$ROOT/lib/modules/llm.sh"
 
-    out="$(llm_tree "$ROOT/lib" 2>/dev/null)"
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+    # A private fixture tree, not the repository source (TEST-06).
+    mkdir -p "$tmp/fx/core" "$tmp/fx/modules"
+    printf "function a() {\n    :\n}\n" >"$tmp/fx/core/a.sh"
+    printf "b() { :; }\n" >"$tmp/fx/modules/b.sh"
+    printf "notes\n" >"$tmp/fx/README.txt"
+
+    out="$(llm_tree "$tmp/fx" 2>/dev/null)"
     [[ "$out" == *"{"* ]]
     [[ "$out" == *"path"* ]]
     [[ "$out" == *"children"* ]]
@@ -208,7 +216,15 @@ it "llm_tree outputs text with --text" bash -c '
     source "$ROOT/lib/core/utils.sh"
     source "$ROOT/lib/modules/llm.sh"
 
-    out="$(llm_tree --text "$ROOT/lib" 2>/dev/null)"
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+    # A private fixture tree, not the repository source (TEST-06).
+    mkdir -p "$tmp/fx/core" "$tmp/fx/modules"
+    printf "function a() {\n    :\n}\n" >"$tmp/fx/core/a.sh"
+    printf "b() { :; }\n" >"$tmp/fx/modules/b.sh"
+    printf "notes\n" >"$tmp/fx/README.txt"
+
+    out="$(llm_tree --text "$tmp/fx" 2>/dev/null)"
     # Text mode should not have JSON braces at start
     [[ "$out" != "{"* ]]
 '
@@ -235,7 +251,15 @@ it "llm_find finds files by pattern" bash -c '
     source "$ROOT/lib/core/utils.sh"
     source "$ROOT/lib/modules/llm.sh"
 
-    out="$(llm_find "*.sh" "$ROOT/lib" 2>/dev/null)"
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+    # A private fixture tree, not the repository source (TEST-06).
+    mkdir -p "$tmp/fx/core" "$tmp/fx/modules"
+    printf "function a() {\n    :\n}\n" >"$tmp/fx/core/a.sh"
+    printf "b() { :; }\n" >"$tmp/fx/modules/b.sh"
+    printf "notes\n" >"$tmp/fx/README.txt"
+
+    out="$(llm_find "*.sh" "$tmp/fx" 2>/dev/null)"
     [[ "$out" == *".sh"* ]]
 '
 
@@ -261,7 +285,15 @@ it "llm_grep finds patterns in files" bash -c '
     source "$ROOT/lib/core/utils.sh"
     source "$ROOT/lib/modules/llm.sh"
 
-    out="$(llm_grep "function" "$ROOT/lib" --ext sh 2>/dev/null)"
+    tmp="$(mktemp -d)"
+    trap "rm -rf $tmp" EXIT
+    # A private fixture tree, not the repository source (TEST-06).
+    mkdir -p "$tmp/fx/core" "$tmp/fx/modules"
+    printf "function a() {\n    :\n}\n" >"$tmp/fx/core/a.sh"
+    printf "b() { :; }\n" >"$tmp/fx/modules/b.sh"
+    printf "notes\n" >"$tmp/fx/README.txt"
+
+    out="$(llm_grep "function" "$tmp/fx" --ext sh 2>/dev/null)"
     [[ -n "$out" ]]
 '
 
