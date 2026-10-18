@@ -74,6 +74,22 @@ fi
 # Files that failed to load, reported by `gash_doctor`.
 __GASH_LOAD_ERRORS=()
 
+# Load timing for `gash_doctor --timing`: with GASH_TIMING=1 at load, each
+# step's cost goes to __GASH_LOAD_TIMES as "MICROSECONDS LABEL". Needs
+# $EPOCHREALTIME (Bash 5.0+); otherwise, and by default, nothing is timed.
+__GASH_LOAD_TIMES=()
+__GASH_TIMING=0
+if [[ "${GASH_TIMING-}" == "1" && -n "${EPOCHREALTIME-}" ]]; then
+    __GASH_TIMING=1
+    __GASH_T0="$EPOCHREALTIME"
+fi
+
+# Usage: __gash_time_record LABEL START  (START: an $EPOCHREALTIME value)
+__gash_time_record() {
+    local now="${EPOCHREALTIME//[!0-9]/}" start="${2//[!0-9]/}"
+    __GASH_LOAD_TIMES+=("$((10#$now - 10#$start)) $1")
+}
+
 # The help registry of 2.x is static data in the binary; this marks it as
 # loaded for needs_help, as sourcing lib/core/help.sh did.
 __GASH_HELP_LOADED=1
@@ -85,7 +101,8 @@ __GASH_HELP_LOADED=1
 # Source a shim with aliases off (they would be baked into function bodies)
 # and, in headless mode, a quiet stderr.
 __gash_source() {
-    local file="$1" rc=0 aliases_on=0
+    local file="$1" rc=0 aliases_on=0 t0=""
+    ((${__GASH_TIMING:-0})) && t0="$EPOCHREALTIME"
     if [[ ! -r "$file" ]]; then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: missing")
         return 0
@@ -101,6 +118,7 @@ __gash_source() {
     if ((rc != 0)); then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: exit $rc")
     fi
+    [[ -n "$t0" ]] && __gash_time_record "${file#"$GASH_DIR"/}" "$t0"
     return 0
 }
 
@@ -116,7 +134,10 @@ __gash_source "$GASH_DIR/lib/core/config.sh"
 # Functions of the modules (they run in the gash binary)
 # -----------------------------------------------------------------------------
 
+# Each module's functions are timed under the name of its 2.x file.
+
 # ai
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 ai_ask() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_ask "$@"
@@ -129,22 +150,30 @@ ai_sysinfo() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_sysinfo "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/ai.sh" "$__GASH_T1"
 
 # chrome
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 chrome_headless_update() { __gash_call chrome_headless_update "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/chrome.sh" "$__GASH_T1"
 
 # docker
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 docker_prune_all() { __gash_call docker_prune_all "$@"; }
 docker_start_all() { __gash_call docker_start_all "$@"; }
 docker_stop_all() { __gash_call docker_stop_all "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/docker.sh" "$__GASH_T1"
 
 # docker-compose
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 docker_compose_check() { __gash_call docker_compose_check "$@"; }
 docker_compose_scan() { __gash_call docker_compose_scan "$@"; }
 docker_compose_upgrade() { __gash_call docker_compose_upgrade "$@"; }
 llm_docker_check() { __gash_call llm_docker_check "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/docker-compose.sh" "$__GASH_T1"
 
 # files
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 archive_extract() { __gash_call archive_extract "$@"; }
 dirs_find_large() { __gash_call dirs_find_large "$@"; }
 dirs_largest() { __gash_call dirs_largest "$@"; }
@@ -152,8 +181,10 @@ dirs_list_empty() { __gash_call dirs_list_empty "$@"; }
 file_backup() { __gash_call file_backup "$@"; }
 files_largest() { __gash_call files_largest "$@"; }
 tree_stats() { __gash_call tree_stats "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/files.sh" "$__GASH_T1"
 
 # gash
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     # The card shows the value this shell gives an alias of the card, as
@@ -167,7 +198,23 @@ gash() {
     done
     GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
 }
-gash_doctor() { __gash_call gash_doctor "$@"; }
+gash_doctor() {
+    # The doctor reports what this shell holds: the files that failed to
+    # load (__GASH_LOAD_ERRORS, one per line) and the known settings set
+    # here (NAME<TAB>VALUE lines), backslash and newline escaped.
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_errs="" __gash_set=""
+    for __gash_v in ${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"}; do
+        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_errs+=${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    for __gash_n in ${__GASH_SETTINGS_KNOWN-}; do
+        [[ -n "${!__gash_n+x}" ]] || continue
+        __gash_v=${!__gash_n}
+        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_set+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__LOAD_ERRORS="$__gash_errs" GASH__SETTINGS="$__gash_set" __gash_call gash_doctor "$@"
+}
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
     local __gash_a
@@ -186,8 +233,10 @@ gash_uninstall() { __gash_call gash_uninstall "$@"; }
 gash_unload() { __gash_call gash_unload "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
 
 # git
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 git_add_tag() { __gash_call git_add_tag "$@"; }
 git_apply_patch() { __gash_call git_apply_patch "$@"; }
 git_delete_tag() { __gash_call git_delete_tag "$@"; }
@@ -195,8 +244,10 @@ git_dump_revisions() { __gash_call git_dump_revisions "$@"; }
 git_list_tags() { __gash_call git_list_tags "$@"; }
 git_repair() { __gash_call git_repair "$@"; }
 git_sync() { __gash_call git_sync "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/git.sh" "$__GASH_T1"
 
 # llm
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 llm_config() { __gash_call llm_config "$@"; }
 llm_db_explain() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
@@ -233,16 +284,22 @@ llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/llm.sh" "$__GASH_T1"
 
 # node
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 node_detect_version() { __gash_call node_detect_version "$@"; }
 node_upgrade() { __gash_call node_upgrade "$@"; }
 nvm_prune_versions() { __gash_call nvm_prune_versions "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
 # php
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 php_detect_version() { __gash_call php_detect_version "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/php.sh" "$__GASH_T1"
 
 # remote
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 remote_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_exec "$@"
@@ -267,17 +324,23 @@ remote_sync_push() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_sync_push "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/remote.sh" "$__GASH_T1"
 
 # ssh
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash_ssh_auto_unlock() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_ssh_auto_unlock "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
 # sysinfo
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 sysinfo() { __gash_call sysinfo "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/sysinfo.sh" "$__GASH_T1"
 
 # system
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 disk_usage() { __gash_call disk_usage "$@"; }
 hgrep() { __gash_call hgrep "$@"; }
 history_grep() { __gash_call history_grep "$@"; }
@@ -293,12 +356,15 @@ wsl_explorer() { __gash_call wsl_explorer "$@"; }
 wsl_restart() { __gash_call wsl_restart "$@"; }
 wsl_shutdown() { __gash_call wsl_shutdown "$@"; }
 wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/system.sh" "$__GASH_T1"
 
 # migrate
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash_migrate() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_migrate "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/migrate.sh" "$__GASH_T1"
 
 # -----------------------------------------------------------------------------
 # Module short aliases (defined in headless mode too: agent contract)
@@ -396,6 +462,7 @@ __gash_symbols_now() {
 
 # Snapshot the state Gash is about to change, for `gash_unload`, unless a
 # 2.x or 3.x load already took it (re-sourcing keeps the pre-Gash state).
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
     __GASH_SNAPSHOT_TAKEN=1
     __GASH_SNAPSHOT=()
@@ -411,10 +478,12 @@ if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
     __gash_symbols_now __GASH_PRE_SYMBOLS
     unset __gash_var
 fi
+((__GASH_TIMING)) && __gash_time_record "gash.sh: snapshot" "$__GASH_T1"
 
 # The interactive layer (prompt, history, terminal, toolchains, alias packs,
 # banner, SSH unlock) comes from the binary, evaluated here at top level.
 # Without a binary: one stderr line, and the stubs answer binary_not_found.
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 if __gash_bin_resolve || __gash_fetch loud; then
     if declare -F __gash_stdout_tty >/dev/null && __gash_stdout_tty; then __gash_tty_out=1; else __gash_tty_out=0; fi
     if __gash_init="$(__gash_export_state __init && GASH__TTY_OUT=$__gash_tty_out "$__GASH_BIN" init bash)"; then
@@ -429,14 +498,23 @@ if __gash_bin_resolve || __gash_fetch loud; then
     fi
     unset __gash_init __gash_tty_out
 fi
+((__GASH_TIMING)) && __gash_time_record "gash init bash" "$__GASH_T1"
 
 # Record what exists after loading; `gash_unload` removes what is here but
 # was not in the snapshot taken before.
-[[ -n "${__GASH_POST_SYMBOLS-}" ]] || __gash_symbols_now __GASH_POST_SYMBOLS
+if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
+    ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+    __gash_symbols_now __GASH_POST_SYMBOLS
+    ((__GASH_TIMING)) && __gash_time_record "gash.sh: symbol list" "$__GASH_T1"
+fi
 
 # User customizations, last so they can override anything above.
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
+((__GASH_TIMING)) && __gash_time_record "user files: ~/.bash_aliases, ~/.bash_local" "$__GASH_T1"
+
+((__GASH_TIMING)) && __gash_time_record "gash.sh (total)" "$__GASH_T0"
 
 # Keep the file's status 0: a `set -e` caller sourcing ~/.gashrc must not
 # die because the last optional file was missing.

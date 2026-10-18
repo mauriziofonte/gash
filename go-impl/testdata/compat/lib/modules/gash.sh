@@ -33,7 +33,23 @@ gash() {
     done
     GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
 }
-gash_doctor() { __gash_call gash_doctor "$@"; }
+gash_doctor() {
+    # The doctor reports what this shell holds: the files that failed to
+    # load (__GASH_LOAD_ERRORS, one per line) and the known settings set
+    # here (NAME<TAB>VALUE lines), backslash and newline escaped.
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_errs="" __gash_set=""
+    for __gash_v in ${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"}; do
+        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_errs+=${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    for __gash_n in ${__GASH_SETTINGS_KNOWN-}; do
+        [[ -n "${!__gash_n+x}" ]] || continue
+        __gash_v=${!__gash_n}
+        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_set+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__LOAD_ERRORS="$__gash_errs" GASH__SETTINGS="$__gash_set" __gash_call gash_doctor "$@"
+}
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
     local __gash_a
