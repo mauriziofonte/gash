@@ -228,35 +228,60 @@ it "process_kill without a terminal refuses unless --force, whatever the number 
   ROOT="${GASH_TEST_ROOT}"
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
 
-  tmp="$(mktemp -d)"; trap "/bin/rm -rf $tmp" EXIT
+  tmp="$(mktemp -d)"
+  trap "kill \$(cat \"$tmp/my-proc\" \"$tmp/many-proc\" 2>/dev/null) 2>/dev/null || true; /bin/rm -rf $tmp" EXIT
+  # Real victims (TEST-04): spawn NAME N starts N sleeps, each reaped by its
+  # own sh, and lists their PIDs in $tmp/NAME for the pgrep mock.
+  spawn() {
+    local i
+    : >"$tmp/$1"
+    for ((i = 0; i < $2; i++)); do
+      sh -c "sleep 300 & echo \$! >>\"$tmp/$1\"; wait" &
+    done
+    while (($(wc -l <"$tmp/$1") < $2)); do sleep 0.1; done
+  }
+  alive() { local pid; for pid in $(cat "$tmp/$1"); do kill -0 "$pid" 2>/dev/null || return 1; done; }
+  dead() {
+    local pid
+    for pid in $(cat "$tmp/$1"); do
+      for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+      ! kill -0 "$pid" 2>/dev/null || return 1
+    done
+  }
   # pgrep mock: one match for my-proc, two for many-proc.
-  printf "#!/bin/sh\ncase \"\$*\" in *many-proc*) printf \"3333\\\\n4444\\\\n\" ;; *my-proc*) echo 2222 ;; *) exit 1 ;; esac\n" >"$tmp/pgrep"
+  printf "#!/bin/sh\ncase \"\$*\" in *many-proc*) cat \"%s/many-proc\" ;; *my-proc*) cat \"%s/my-proc\" ;; *) exit 1 ;; esac\n" "$tmp" "$tmp" >"$tmp/pgrep"
   chmod +x "$tmp/pgrep"
-  export PATH="$tmp:$PATH" MOCK_KILL_LOG="$tmp/kill.log"
-  kill() { printf "%s\n" "$*" >>"$MOCK_KILL_LOG"; return 1; }
+  export PATH="$tmp:$PATH"
+  spawn my-proc 1
+  spawn many-proc 2
 
   export GASH_HEADLESS=1
   for name in my-proc many-proc; do
     out="$(process_kill "$name" 2>&1)" && { echo "killed without --force: $name"; exit 1; }
     [[ "$out" == *"pass -y"* ]]
   done
-  [[ ! -e "$MOCK_KILL_LOG" ]]
+  alive my-proc
+  alive many-proc
 
   process_kill my-proc --force >/dev/null 2>&1
+  dead my-proc
+  spawn my-proc 1
   process_kill -y my-proc >/dev/null 2>&1
+  dead my-proc
   process_kill --force many-proc >/dev/null 2>&1
+  dead many-proc
+  spawn my-proc 1
   process_kill -f my-proc >/dev/null 2>&1
-  grep -qx 2222 "$MOCK_KILL_LOG"
-  grep -qx 3333 "$MOCK_KILL_LOG"
-  grep -qx 4444 "$MOCK_KILL_LOG"
+  dead my-proc
   ! process_kill --bogus my-proc 2>/dev/null
 
   # Not headless but no controlling terminal: same refusal.
   if setsid -w true </dev/null >/dev/null 2>&1; then
-    : >"$MOCK_KILL_LOG"
+    spawn my-proc 1
     unset GASH_HEADLESS
-    out="$(setsid -w bash -c "source \"$ROOT/tests/gash-test.sh\"; gash_source_all \"$ROOT\"; kill() { echo \"\$*\" >>\"$MOCK_KILL_LOG\"; }; process_kill my-proc" </dev/null 2>&1)" && exit 1
-    [[ "$out" == *"pass -y"* && ! -s "$MOCK_KILL_LOG" ]]
+    out="$(setsid -w bash -c "source \"$ROOT/tests/gash-test.sh\"; gash_source_all \"$ROOT\"; process_kill my-proc" </dev/null 2>&1)" && exit 1
+    [[ "$out" == *"pass -y"* ]]
+    alive my-proc
   fi
 '
 
