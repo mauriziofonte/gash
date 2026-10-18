@@ -165,3 +165,32 @@ it "llm_db_* reject unknown options and stray arguments" bash -c '
   [[ "$(llm_db_query SELECT 1 2>&1 >/dev/null | jq -r .error)" == unexpected_argument ]]
   [[ "$(llm_db_tables -c 2>&1 >/dev/null | jq -r .error)" == missing_value ]]
 '
+
+# DB-01: a PostgreSQL E-string mislex (an e/E glued to an identifier wrongly
+# opened an E-string) let a backslash client-command line slip past the guard;
+# SET was also not a forbidden word.
+it "the SQL guard refuses a mislexed E-string and backslash client lines (DB-01)" bash -c '
+  set -euo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  verdict() { local q k; __llm_sql_guard "$1" "$2" q k 2>&1 >/dev/null | jq -r .error; }
+  # somee <q> <bs> <q> <nl> <bs>! id <nl> <q>: the e is glued to the identifier,
+  # so the first quote closes a plain string and the backslash line is in code.
+  [[ "$(verdict pgsql $'"'"'SELECT 1 WHERE somee\x27\\\x27\n\\! id\n\x27'"'"')" == client_command_blocked ]]
+  # Defense in depth: any physical line starting with a backslash is refused.
+  [[ "$(verdict pgsql $'"'"'SELECT 1\n\\! id'"'"')" == client_command_blocked ]]
+  [[ "$(verdict pgsql $'"'"'SELECT 1\n  \\copy t to a'"'"')" == client_command_blocked ]]
+  # SET is now a forbidden word, including when hidden by the former mislex.
+  [[ "$(verdict pgsql $'"'"'SELECT 1 WHERE a = somee\x27x\x27 SET y'"'"')" == write_operation_blocked ]]
+  [[ "$(verdict mysql $'"'"'SELECT 1 SET z'"'"')" == write_operation_blocked ]]
+'
+
+it "the SQL guard still accepts a genuine standalone E-string (DB-01)" bash -c '
+  set -euo pipefail
+  export GASH_HEADLESS=1
+  source "$GASH_TEST_ROOT/gash.sh"
+  ok() { local q k; __llm_sql_guard "$1" "$2" q k; }
+  # A standalone E-string (e/E preceded by whitespace) still escapes backslashes.
+  ok pgsql $'"'"'SELECT E\x27a\\\x27b\x27, \x27C:\\\x27'"'"'
+'

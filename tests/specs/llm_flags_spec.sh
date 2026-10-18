@@ -112,3 +112,41 @@ abc"
   jq -e ".NOTES == \"key *** and *** end\" and .API_BASE == \"https://u:***@example.com/x\" and .PEMDATA == \"***\"" <<<"$out" >/dev/null
   jq -e ".SAFE_VALUE == \"plain\" and .PATCH_LEVEL == \"3\" and .PWD == \"$PWD\"" <<<"$out" >/dev/null
 '
+
+# LLM-01: llm_grep --context was stored unvalidated and used in Bash arithmetic,
+# so a command-substitution value ran code and a non-number killed a set -u caller.
+it "llm_grep --context rejects a non-integer without evaluating it (LLM-01)" bash -c '
+  set -uo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp"
+  source "$GASH_TEST_ROOT/gash.sh"
+  mkdir -p "$tmp/src"; printf "foo\n" > "$tmp/src/a.txt"
+  # A command-substitution value must be refused, never evaluated as arithmetic.
+  ctx="a[\$(touch $tmp/PWNED)]"
+  err="$(llm_grep foo "$tmp/src" --context "$ctx" 2>&1 >/dev/null | jq -r .error)"
+  [[ "$err" == invalid_context ]] || { echo "error was: $err"; exit 1; }
+  [[ ! -e "$tmp/PWNED" ]] || { echo "context was evaluated as code"; exit 1; }
+  # A plain non-number is refused too.
+  err2="$(llm_grep foo "$tmp/src" --context abc 2>&1 >/dev/null | jq -r .error)"
+  [[ "$err2" == invalid_context ]] || { echo "error was: $err2"; exit 1; }
+  # A valid integer still searches with context.
+  printf "a\nfoo\nb\n" > "$tmp/src/c.txt"
+  out="$(llm_grep foo "$tmp/src/c.txt" --context 1)"
+  [[ "$out" == *foo* ]] || { echo "valid context search failed: $out"; exit 1; }
+'
+
+it "llm_grep --context does not kill a set -u caller (LLM-01)" bash -c '
+  set -uo pipefail
+  command -v jq >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  export GASH_HEADLESS=1 HOME="$tmp"
+  source "$GASH_TEST_ROOT/gash.sh"
+  mkdir -p "$tmp/src"; printf "foo\n" > "$tmp/src/a.txt"
+  set -u
+  llm_grep foo "$tmp/src" --context abc >/dev/null 2>&1
+  rc=$?
+  # The caller survives to here (it was not aborted) and llm_grep failed cleanly.
+  [[ $rc -ne 0 ]]
+  echo caller-alive
+'
