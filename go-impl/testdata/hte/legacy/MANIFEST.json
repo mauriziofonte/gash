@@ -50,7 +50,7 @@
         "etc/php/8.3/fpm/pool.d/nocert.test.conf": "'; Profile: HARDENED' -> detectProfile lower-cases to hardened (1.1.1)"
       }
     },
-    "cert-script/sscert_site.test.sh": "the exact bash script create/modify write to $TMPDIR/sscert_<domain>XXXXXX, chmod 0755 and execute as root; identical text in 1.0.x (app/Logic/Bash/Scripts.php) and 1.1.x (app/Services/SslCertManager.php)",
+    "cert-script/sscert_site.test.sh.fixture": "the exact bash script create/modify write to $TMPDIR/sscert_<domain>XXXXXX, chmod 0755 and execute as root; identical text in 1.0.x (app/Logic/Bash/Scripts.php) and 1.1.x (app/Services/SslCertManager.php)",
     "templates/": "tokenized renders ({domain},{docroot},{phpver},{user},{group},{date},{certsdir}) of every template: v1-vhost-{http,https,forced}.conf, v1-pool.conf, v2-vhost-{http,https,forced}.conf, v2-pool-{dev,staging,hardened}.conf; produced by work/hte/render/tok.php running the real getConf() code"
   }
 }
