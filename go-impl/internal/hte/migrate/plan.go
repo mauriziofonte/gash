@@ -662,6 +662,14 @@ func (b *builder) buildRaw(c *candidate) {
 			c.plan.Warnings = append(c.plan.Warnings, "ServerAlias "+a+" is not a hostname; it stays in the vhost but not in the hosts block")
 		}
 	}
+	// A root with a character Apache or PHP-FPM reads as syntax stays in
+	// the system, as a create with it is refused (LEDGER HTE-08).
+	if v.Docroot != "" {
+		if err := state.CheckDocrootText(v.Docroot); err != nil {
+			b.skipErr(c, err)
+			return
+		}
+	}
 	res, err := rewriteRaw(v, c.domain, env)
 	if err != nil {
 		b.skip(c, "cannot import as raw: "+err.Error())
@@ -673,7 +681,7 @@ func (b *builder) buildRaw(c *candidate) {
 	if aliases == nil {
 		site.Aliases = []string{}
 	}
-	if v.Docroot != "" && state.CheckDocrootText(v.Docroot) == nil && path.IsAbs(v.Docroot) && path.Clean(v.Docroot) == v.Docroot {
+	if v.Docroot != "" && path.IsAbs(v.Docroot) && path.Clean(v.Docroot) == v.Docroot {
 		site.Docroot = v.Docroot
 	}
 	if res.php != "" {

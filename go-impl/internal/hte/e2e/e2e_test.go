@@ -424,30 +424,34 @@ func TestE2E(t *testing.T) {
 	})
 
 	step("a document root with a space", func(t *testing.T) {
-		// HTE-08.
+		// HTE-08: the root is quoted in the vhost and the pool, and the
+		// vhost gives PHP-FPM the decoded SCRIPT_FILENAME.
 		root := filepath.Join(home, "www", "with space", "public")
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "index.php"), []byte("<?php echo \"space\\n\";\n"), 0o644); err != nil {
+		php := "<?php echo 'space:', $_SERVER['PATH_INFO'] ?? '', ':', $_GET['q'] ?? '', \"\\n\";\n"
+		if err := os.WriteFile(filepath.Join(root, "index.php"), []byte(php), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := e.SiteCreate(ctx, state.Flags{Domain: "space.test", Docroot: ptr(root), HTTPS: ptr(false)}); err != nil {
 			t.Fatal(err)
 		}
-		a := mustGet(t, "http", "space.test", 80)
+		for path, want := range map[string]string{"/index.php": "space::", "/index.php/extra?q=a%20b": "space:/extra:a b"} {
+			if a, err := getPath("http", "space.test", 80, path, nil); err != nil || a.status != 200 || a.body != want {
+				t.Errorf("space.test%s: %+v %v, want %q", path, a, err, want)
+			}
+		}
 		if _, err := e.SiteRemove(ctx, "space.test", true); err != nil {
 			t.Fatal(err)
 		}
-		// Reported to the lead, not fixed: mod_proxy_fcgi 2.4.58 sends
-		// SCRIPT_FILENAME percent-encoded, so FPM answers "File not found."
-		// (ProxyFCGISetEnvIf "true" SCRIPT_FILENAME
-		// "%{unescape:%{reqenv:SCRIPT_FILENAME}}" in the vhost repairs it).
-		if a.status == 404 && a.body == "File not found." {
-			t.Skipf("HTE-08 defect reproduced: %+v", a)
+		// A character Apache or PHP-FPM reads as syntax is refused.
+		dollar := filepath.Join(home, "www", "a$b")
+		if err := os.MkdirAll(dollar, 0o755); err != nil {
+			t.Fatal(err)
 		}
-		if a.body != "space" {
-			t.Errorf("space.test: %+v", a)
+		if _, err := e.SiteCreate(ctx, state.Flags{Domain: "dollar.test", Docroot: ptr(dollar)}); code(err) != hteerr.InvalidDocroot {
+			t.Errorf("docroot with $: %v", err)
 		}
 	})
 

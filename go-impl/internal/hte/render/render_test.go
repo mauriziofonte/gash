@@ -469,9 +469,25 @@ func TestLedger_HTE08(t *testing.T) {
 	if !strings.Contains(string(g.File("fpm/8.3/pools/shop.test.conf")), "\n; PHP settings\n") {
 		t.Fatal("pool not rendered")
 	}
+	// mod_proxy_fcgi percent-encodes SCRIPT_FILENAME ("my%20shop"): every
+	// vhost with a PHP handler gives PHP-FPM the decoded path, once per
+	// VirtualHost; raw vhosts are left as they are.
+	unescape := `    ProxyFCGISetEnvIf "true" SCRIPT_FILENAME "%{unescape:%{reqenv:SCRIPT_FILENAME}}"` + "\n"
+	allCases(t, func(t *testing.T, in Input, g *Generation) {
+		for _, s := range in.Sites {
+			v := string(g.File("sites/" + s.Domain + ".conf"))
+			want := 0
+			if s.Kind == state.KindManaged && s.HasPool() {
+				want = strings.Count(v, "<VirtualHost ")
+			}
+			if got := strings.Count(v, unescape); got != want {
+				t.Errorf("%s: %d unescape lines, want %d", s.Domain, got, want)
+			}
+		}
+	})
 	// Every docroot character that Apache or FPM would interpret is
 	// refused before rendering (TestValidateRefuses covers " and newline).
-	for _, c := range []string{"$", "*", "?", "[", ";", ":", `"`, `\`, "\t"} {
+	for _, c := range []string{"$", "*", "?", "[", "]", ";", ":", `"`, `\`, "\t"} {
 		in := debianStandard()
 		in.Sites[0].Docroot = "/srv/a" + c + "b"
 		if _, err := Render(in); code(err) != hteerr.InvalidDocroot {

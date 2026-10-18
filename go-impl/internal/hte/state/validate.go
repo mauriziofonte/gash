@@ -43,10 +43,10 @@ func NormalizeDomain(arg string) (string, error) {
 }
 
 // docrootRefused are the characters Apache (${NAME} expansion, <Directory>
-// wildcards, quoting) or the PHP-FPM INI parser (; comments, ${NAME})
-// would interpret, and the open_basedir list separator : (design/hte.md
-// section 3, LEDGER HTE-08).
-const docrootRefused = "$*?[;:\"\\"
+// wildcards * ? [ ], quoting) or the PHP-FPM INI parser (; comments,
+// ${NAME}, quoting) would interpret, and the open_basedir list separator :
+// (design/hte.md section 3, LEDGER HTE-08).
+const docrootRefused = "$*?[];:\"\\"
 
 // CheckDocrootText applies the character rules to a document root: valid
 // UTF-8, no control character (newline included) and none of $ * ? [ ; : " \.
