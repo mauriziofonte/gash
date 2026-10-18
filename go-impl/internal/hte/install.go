@@ -44,7 +44,10 @@ type InstallResult struct {
 	Started  bool             `json:"started"`
 	// Blocking are the enabled system vhosts that keep the system Apache
 	// running (install never stops it while any is left; migrate does).
+	// Install then succeeds without starting the stack, and Next names the
+	// command that moves them (LEDGER HTE-75).
 	Blocking []string `json:"blocking"`
+	Next     string   `json:"next,omitempty"`
 	Warnings []string `json:"warnings"`
 }
 
@@ -313,8 +316,10 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 
 	// The stack.
 	if len(res.Blocking) > 0 {
-		res.Warnings = append(res.Warnings, fmt.Sprintf("the system Apache still serves %d enabled vhosts, so it keeps ports %d and %d: "+
-			"run gash hte migrate to move them (or exclude them), then the stack starts", len(res.Blocking), ports.HTTP, ports.HTTPS))
+		res.Next = "gash hte migrate"
+		res.Warnings = append(res.Warnings, fmt.Sprintf("the system Apache still serves %d enabled vhosts (%s), so it keeps ports %d and %d "+
+			"and the stack is not started: run %s to move them (or exclude them), then the stack starts",
+			len(res.Blocking), strings.Join(res.Blocking, ", "), ports.HTTP, ports.HTTPS, res.Next))
 	}
 	return nil
 }
