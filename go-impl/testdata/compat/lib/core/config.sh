@@ -173,12 +173,20 @@ __gash_load_env() {
     # The binary parses the file (warnings on stderr) and prints the cache
     # as quoted assignments; the values travel on the pipe only.
     # GASH__COLOR: the warnings take this shell's color decision, not the
-    # one of the command substitution.
-    local __gle_out __gle_c=0
-    if __gash_compat_ready && __gash_color_now __gle_c &&
-        __gle_out="$(GASH__COLOR=$__gle_c __gash_compat env load)"; then
-        eval "$__gle_out"
-        return 0
+    # one of the command substitution. After a headless gash.sh load
+    # (__GASH_ENV_QUIET) the parse is quiet, as the 2.x headless startup
+    # load was (LEDGER CORE-18).
+    local __gle_out __gle_c=0 __gle_rc=1
+    if __gash_compat_ready && __gash_color_now __gle_c; then
+        if [[ -n "${__GASH_ENV_QUIET-}" ]]; then
+            __gle_out="$(GASH__COLOR=$__gle_c __gash_compat env load 2>/dev/null)" && __gle_rc=0
+        else
+            __gle_out="$(GASH__COLOR=$__gle_c __gash_compat env load)" && __gle_rc=0
+        fi
+        if ((__gle_rc == 0)); then
+            eval "$__gle_out"
+            return 0
+        fi
     fi
     __GASH_ENV_SSH_KEYS=""
     __GASH_ENV_DB_ENTRIES=""
