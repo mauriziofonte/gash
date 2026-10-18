@@ -73,6 +73,7 @@ type answer struct {
 	body     string
 	cert     *x509.Certificate
 	proto    int // HTTP major version
+	header   http.Header
 }
 
 func get(scheme, host string, port int) (answer, error) { return getPath(scheme, host, port, "/", nil) }
@@ -102,7 +103,7 @@ func getPath(scheme, host string, port int, path string, tlsConf *tls.Config) (a
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	a := answer{status: resp.StatusCode, location: resp.Header.Get("Location"), body: strings.TrimSpace(string(body)), proto: resp.ProtoMajor}
+	a := answer{status: resp.StatusCode, location: resp.Header.Get("Location"), body: strings.TrimSpace(string(body)), proto: resp.ProtoMajor, header: resp.Header}
 	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
 		a.cert = resp.TLS.PeerCertificates[0]
 	}
@@ -484,6 +485,62 @@ func TestE2E(t *testing.T) {
 		}
 		if a := mustGet(t, "http", appDomain, 80); a.status != 200 {
 			t.Errorf("after the rollback: %+v", a)
+		}
+	})
+
+	step("a busy port through an overlay rolls back", func(t *testing.T) {
+		// HTE-71: the generation includes copies of the overlays, so the
+		// rollback brings back the overlay the previous generation ran
+		// with; the user's file is never written. The global overlay
+		// takes a busy Listen port; a site overlay, which sits inside the
+		// vhosts, a log file the user cannot open. Neither fails the
+		// config test.
+		l, err := net.Listen("tcp4", "127.0.0.1:9098")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		cfgPath, err := e.ApacheConfigPath(ctx)
+		if err != nil || cfgPath != paths.ApacheOverlay() {
+			t.Fatalf("apache config path: %q %v", cfgPath, err)
+		}
+		for _, c := range []struct{ overlay, header, edit string }{
+			{paths.ApacheOverlay(), "X-Global", "Listen 127.0.0.1:9098\n"},
+			{paths.SiteOverlay(appDomain), "X-Site", "CustomLog \"/etc/gash-hte-e2e.log\" combined\n"},
+		} {
+			if err := os.WriteFile(c.overlay, []byte("Header set "+c.header+" one\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.ServiceReload(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get(c.header) != "one" {
+				t.Fatalf("%s: with the first overlay: %+v", c.overlay, a)
+			}
+			edit := "Header set " + c.header + " two\n" + c.edit
+			if err := os.WriteFile(c.overlay, []byte(edit), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err = e.ServiceReload(ctx)
+			if code(err) != hteerr.ReloadFailed || !strings.Contains(err.Error(), "rolled back to the previous generation, which is running") {
+				t.Fatalf("%s: %v, want reload_failed with the rollback", c.overlay, err)
+			}
+			t.Logf("the failure: %v", err)
+			if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get(c.header) != "one" {
+				t.Errorf("%s: after the rollback: %+v", c.overlay, a)
+			}
+			if read(t, c.overlay) != edit {
+				t.Errorf("%s changed", c.overlay)
+			}
+			if err := os.Remove(c.overlay); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.ServiceReload(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if a := mustGet(t, "http", appDomain, 80); a.header.Get(c.header) != "" {
+				t.Errorf("%s: without the overlay: %+v", c.overlay, a)
+			}
 		}
 	})
 
