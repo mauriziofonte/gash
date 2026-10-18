@@ -61,12 +61,12 @@ func isFile(path string) bool {
 }
 
 // tool runs NAME ARGS as a 2.x function body ran a command: from the
-// caller's PATH with the caller's exported environment, its output on the
-// call's stdout and stderr; true when it exits 0. A program that does not
+// caller's PATH with the caller's exported environment, on the call's
+// stdin, stdout and stderr; true when it exits 0. A program that does not
 // start is reported as Bash reports it.
 func (m *Module) tool(c *invoke.Call, name string, args ...string) bool {
 	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: name, Args: args, Options: runner.Options{
-		Env: c.Env.Child(), Stdout: c.Stdout, Stderr: c.Stderr,
+		Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr,
 	}})
 	if se, ok := err.(*runner.StartError); ok {
 		_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
