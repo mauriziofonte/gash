@@ -229,7 +229,31 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
-gash_uninstall() { __gash_call gash_uninstall "$@"; }
+gash_uninstall() {
+    # The questions are asked in this shell with needs_confirm_prompt (a
+    # harness may redefine it); the binary checks and removes, one step
+    # per call (GASH__UNINSTALL, internal/selfmgmt).
+    local __gash_rc=0 __gash_env
+    case "${1-}" in
+        -h | --help)
+            __gash_call gash_uninstall "$@"
+            return
+            ;;
+    esac
+    GASH__UNINSTALL=check __gash_call gash_uninstall "$@" || return
+    if ! needs_confirm_prompt "Continue?"; then
+        __gash_info "Uninstall cancelled."
+        return 0
+    fi
+    GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
+    ((__gash_rc == 10)) || return "$__gash_rc"
+    __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    if needs_confirm_prompt "Remove ${__gash_env/#$HOME/\~}?"; then
+        GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
+    else
+        GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
+    fi
+}
 gash_unload() { __gash_call gash_unload "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }

@@ -47,4 +47,5 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("gash_env_init", m.envInit)
 	t.Handle("gash_doctor", m.doctor)
 	t.Handle("gash_upgrade", m.upgrade)
+	t.Handle("gash_uninstall", m.uninstall)
 }

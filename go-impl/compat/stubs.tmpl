@@ -74,3 +74,34 @@ gash_doctor() {
     GASH__LOAD_ERRORS="$__gash_errs" GASH__SETTINGS="$__gash_set" __gash_call gash_doctor "$@"
 }
 {{% end %}}
+
+{{% define "stub/gash_uninstall" %}}
+gash_uninstall() {
+{{%- if .LoadsEnv %}}
+    {{% loadenv %}}
+{{%- end %}}
+    # The questions are asked in this shell with needs_confirm_prompt (a
+    # harness may redefine it); the binary checks and removes, one step
+    # per call (GASH__UNINSTALL, internal/selfmgmt).
+    local __gash_rc=0 __gash_env
+    case "${1-}" in
+        -h | --help)
+            __gash_call gash_uninstall "$@"
+            return
+            ;;
+    esac
+    GASH__UNINSTALL=check __gash_call gash_uninstall "$@" || return
+    if ! needs_confirm_prompt "Continue?"; then
+        __gash_info "Uninstall cancelled."
+        return 0
+    fi
+    GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
+    ((__gash_rc == 10)) || return "$__gash_rc"
+    __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    if needs_confirm_prompt "Remove ${__gash_env/#$HOME/\~}?"; then
+        GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
+    else
+        GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
+    fi
+}
+{{% end %}}
