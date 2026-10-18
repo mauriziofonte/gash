@@ -1560,14 +1560,14 @@ Critical and high items:
 | Origin | New finding (N32) |
 | Area | Correctness |
 | Bash location | `lib/modules/docker-compose.sh:699` |
-| Observed behavior | `__gash_table ... --min 2:40 --max 2:38`: images longer than 38 characters are cut to 38 while shorter ones are padded to 40, so the STATUS column of those rows sits 2 columns to the left (observed with `redis@sha256:111...`). |
-| Reproduction | `printf 'services:\n  p:\n    image: redis@sha256:%s\n  w:\n    image: nginx:latest\n' "$(printf 1%.0s $(seq 64))" >$T/compose.yml && gm 'cd $T; docker_compose_check'` → STATUS of `p` two columns left of `w`'s |
+| Observed behavior | Not reproduced. The entry expected `--min 2:40 --max 2:38` to cut long images to 38 while padding short ones to 40, misaligning STATUS. In fact `__gash_table` pads the cut cell back out to the `--min` width (40), so every STATUS cell stays in the same column. Verified on 2.x (`security/2.1.1`): with a 64-char `redis@sha256:…` image and a short `nginx:latest`, STATUS starts at the same byte column on both rows. |
+| Reproduction | `printf 'services:\n  p:\n    image: redis@sha256:%s\n  w:\n    image: nginx:latest\n' "$(printf 1%.0s $(seq 64))" >$T/compose.yml && gm 'cd $T; docker_compose_check'` → STATUS aligned on both rows (no misalignment) |
 | Severity | low |
 | Public-contract impact | no |
-| rc.A behavior | reproduced (internal/ui table primitive byte for byte, same arguments). |
-| Fix recipe (3.0) | call site in `internal/docker` check: `--min 2:38 --max 2:38`. |
-| Proving test | `TestLedger_DOCK30` in `internal/docker` (golden: every STATUS cell starts at the same column) |
-| Status | open |
+| rc.A behavior | Matches 2.x: the `internal/ui` table pads the truncated cell to `--min`, so STATUS stays aligned, same as the Bash table. |
+| Fix recipe (3.0) | none; no defect. (The call site may still tidy `--min 2:40 --max 2:38` to `--min 2:38 --max 2:38`, cosmetic only.) |
+| Proving test | `TestLedger_DOCK30` in `internal/docker` (golden: every STATUS cell starts at the same column), which passes — confirming alignment, not a defect. |
+| Status | closed: not reproduced |
 
 <a id="dock-31"></a>
 #### DOCK-31 · Option-like image references and service names reach the docker CLI without `--`
@@ -4548,7 +4548,7 @@ Critical and high items:
 | Reproduction | `mkdir -p $T/bin && printf '#!/bin/sh\nexit 52\n' >$T/bin/curl && chmod +x $T/bin/curl && g '__gash_registry_curl https://registry-1.docker.io/v2/; echo "$__gash_registry_curl_error"'` → `curl_error_52` |
 | Severity | low |
 | Public-contract impact | yes |
-| rc.A behavior | Go maps net/http errors onto the same strings: `*net.DNSError` → `dns_error`, ECONNREFUSED → `connection_refused`, any deadline (10 s connect, 20 s total) → `timeout`, TLS handshake and x509 errors → `ssl_error`; every other transport failure (proxy errors, connection reset, EOF or empty reply, too many redirects, invalid URL or header value) → the fixed string `transport_error`. `no_response` cannot occur (net/http yields a status or an error) and stays documented only. Human output is unchanged (`transport_error` takes the default branch, as `curl_error_N` did). curl exit numbers have no Go equivalent. |
+| rc.A behavior | Go maps net/http errors onto the same strings: `*net.DNSError` → `dns_error`, ECONNREFUSED → `connection_refused` (whether the refused connection is to the registry host or to the proxy, matching curl exit 7), any deadline (10 s connect, 20 s total) → `timeout`, TLS handshake and x509 errors → `ssl_error`; every other transport failure — a proxy CONNECT refusal returned as an error, a connection reset, EOF or empty reply, too many redirects, invalid URL or header value — → the fixed string `transport_error` (which is also where curl exit 56 landed, so docker needs no special tunnel handling). `no_response` cannot occur (net/http yields a status or an error) and stays documented only. Human output is unchanged (`transport_error` takes the default branch, as `curl_error_N` did). curl exit numbers have no Go equivalent. |
 | Fix recipe (3.0) | keep `transport_error`; document the vocabulary in docs/reference/docker.md and the AGENTS.md llm_docker_check notes: `dns_error connection_refused timeout ssl_error transport_error unauthorized forbidden not_found rate_limited server_error http_NNN malformed_token no_digest_in_response registry_unreachable`. |
 | Proving test | `TestLedger_DOCK24` in `internal/docker` (httptest server closing the connection → `transport_error`; unresolvable host → `dns_error`; closed port → `connection_refused`; stalled server with a short deadline → `timeout`; self-signed certificate → `ssl_error`) |
 | Status | open |
