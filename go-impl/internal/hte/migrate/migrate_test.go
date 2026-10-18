@@ -530,12 +530,16 @@ func TestLedger_HTE64(t *testing.T) {
 	if diff := cmp.Diff(before, snapshot(t, root)); diff != "" {
 		t.Fatalf("the dry run changed the tree:\n%s", diff)
 	}
-	// --site keeps only the named domains.
+	// --site imports only the named domains; the others keep the system
+	// Apache running.
 	p = mustPlan(t, envAt(t, root), Options{Sites: []string{"HTTP.test"}})
 	for _, s := range p.Sites {
-		if (s.Domain == "http.test") != (s.Action == ActionImport) {
+		if want := map[bool]Action{true: ActionImport, false: ActionUnchosen}[s.Domain == "http.test"]; s.Action != want {
 			t.Errorf("--site http.test: %s %s", s.Domain, s.Action)
 		}
+	}
+	if diff := cmp.Diff([]string{sa + "002-https.test.conf", sa + "003-forced.test.conf", sa + "010-proxy.test.conf"}, p.Blocking); diff != "" {
+		t.Fatal(diff)
 	}
 }
 

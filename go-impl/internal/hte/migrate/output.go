@@ -106,12 +106,12 @@ func (p *Plan) Text() string {
 			}
 		}
 	})
-	section(&b, "No longer served after --apply", len(p.NoLongerServed), func() {
+	section(&b, "No longer served once --apply stops the system Apache", len(p.NoLongerServed), func() {
 		for _, path := range p.NoLongerServed {
 			fmt.Fprintf(&b, "  %s\n", path)
 		}
 	})
-	section(&b, "Blocking --apply (import or exclude each one first)", len(p.Blocking), func() {
+	section(&b, "Keep the system Apache running (--apply stops it only once each is imported or excluded)", len(p.Blocking), func() {
 		for _, path := range p.Blocking {
 			fmt.Fprintf(&b, "  %s\n", path)
 		}

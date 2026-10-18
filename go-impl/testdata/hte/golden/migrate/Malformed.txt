@@ -37,8 +37,5 @@ Reported
   index_gap: unused NNN- numbers 001-019 (information only: gash names files by domain)
     /etc/apache2/sites-available
 
-No longer served after --apply
-  /etc/apache2/sites-available/000-default.conf
-
-Blocking --apply (import or exclude each one first)
+Keep the system Apache running (--apply stops it only once each is imported or excluded)
   /etc/apache2/sites-available/000-default.conf

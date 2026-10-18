@@ -58,7 +58,8 @@ const (
 	ActionImport    Action = "import"          // a managed site
 	ActionImportRaw Action = "import_raw"      // kind = raw
 	ActionSkip      Action = "skip"            // stays in the system, reported
-	ActionExcluded  Action = "excluded"        // --exclude, or left out by --site
+	ActionExcluded  Action = "excluded"        // --exclude: never imported, no longer served once the system Apache stops
+	ActionUnchosen  Action = "not_selected"    // left out by --site: not imported in this run
 	ActionManaged   Action = "already_managed" // a site of that name exists
 )
 
@@ -148,15 +149,19 @@ type Hosts struct {
 
 // Plan is the dry-run result.
 type Plan struct {
-	Platform       string     `json:"platform"`
-	Sites          []SitePlan `json:"sites"`
-	Hosts          Hosts      `json:"hosts"`
-	RootOps        []RootOp   `json:"root_steps"`
-	Reports        []Report   `json:"reports"`
-	NoLongerServed []string   `json:"no_longer_served"`
-	// Blocking are enabled vhosts neither imported nor excluded: --apply
-	// refuses to stop the system Apache while any is left.
-	Blocking []string `json:"blocking"`
+	Platform string     `json:"platform"`
+	Sites    []SitePlan `json:"sites"`
+	Hosts    Hosts      `json:"hosts"`
+	RootOps  []RootOp   `json:"root_steps"`
+	Reports  []Report   `json:"reports"`
+	// NoLongerServed are the enabled vhosts excluded with --exclude and
+	// the enabled conf-enabled snippets: the system Apache stops serving
+	// them when --apply stops it (HTE-64).
+	NoLongerServed []string `json:"no_longer_served"`
+	// Blocking are the enabled vhosts neither imported (now or before)
+	// nor excluded: while any is left, --apply imports what it can but
+	// does not stop the system Apache.
+	Blocking []string `json:"blocking_stop"`
 }
 
 // candidate is a vhost with its identity resolved.
@@ -227,7 +232,7 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		case slices.Contains(exc, c.domain):
 			c.plan.Action, c.plan.Reason = ActionExcluded, "excluded with --exclude"
 		case len(sel) > 0 && !slices.Contains(sel, c.domain):
-			c.plan.Action, c.plan.Reason = ActionExcluded, "not selected with --site"
+			c.plan.Action, c.plan.Reason = ActionUnchosen, "not selected with --site"
 		default:
 			b.build(c)
 		}
@@ -241,8 +246,9 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		if !sp.Enabled || sp.Action == ActionImport || sp.Action == ActionImportRaw || sp.Action == ActionManaged {
 			continue
 		}
-		p.NoLongerServed = append(p.NoLongerServed, sp.Path)
-		if sp.Action != ActionExcluded {
+		if sp.Action == ActionExcluded {
+			p.NoLongerServed = append(p.NoLongerServed, sp.Path)
+		} else {
 			p.Blocking = append(p.Blocking, sp.Path)
 		}
 	}
