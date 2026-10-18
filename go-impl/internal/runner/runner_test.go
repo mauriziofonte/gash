@@ -354,9 +354,30 @@ func TestBashArgv(t *testing.T) {
 		t.Errorf("positional argv = %q %v", argv, err)
 	}
 
+	argv, err = Bash{Use: BashDoctorLoad, Bash: "/bin/bash", Args: []string{"/home/u/.gash"}}.argv()
+	if want := []string{"/bin/bash", "--noprofile", "--norc", "-i", "-c", DoctorLoadScript, "gash-timing", "/home/u/.gash"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("doctor load argv = %q %v", argv, err)
+	}
+	argv, err = Bash{Use: BashDoctorShell}.argv()
+	if want := []string{"bash", "-i", "-c", "exit"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("doctor shell argv = %q %v", argv, err)
+	}
+	argv, err = Bash{Use: BashDoctorBare, Script: "exit"}.argv()
+	if want := []string{"bash", "--noprofile", "--norc", "-i", "-c", "exit"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("doctor bare argv = %q %v", argv, err)
+	}
+
 	for _, b := range []Bash{
 		{},
 		{Use: BashLLMExec},
+		{Use: BashDoctorLoad},
+		{Use: BashDoctorLoad, Args: []string{"/d", "x"}},
+		{Use: BashDoctorLoad, Args: []string{"/d"}, Name: "other"},
+		{Use: BashDoctorLoad, Args: []string{"/d"}, Script: "rm -rf ~"},
+		{Use: BashDoctorLoad, Args: []string{"/d"}, Wrap: []string{"nice"}},
+		{Use: BashDoctorShell, Script: "rm -rf ~"},
+		{Use: BashDoctorShell, Args: []string{"x"}},
+		{Use: BashDoctorBare, Name: "x"},
 		{Use: BashNVMBridge, Script: "nvm ls; rm -rf ~"},
 		{Use: BashNVMBridge, Wrap: []string{"bwrap"}},
 		{Use: BashLLMExec, Script: "s", Wrap: []string{"sudo", "sh", "-c", "x"}},
@@ -366,7 +387,8 @@ func TestBashArgv(t *testing.T) {
 			t.Errorf("%+v: %v, want a refusal", b, err)
 		}
 	}
-	if BashLLMExec.String() != "llm_exec" || BashNVMBridge.String() != "nvm bridge" || BashUse(7).String() != "BashUse(7)" {
+	if BashLLMExec.String() != "llm_exec" || BashNVMBridge.String() != "nvm bridge" || BashDoctorLoad.String() != "doctor load" ||
+		BashDoctorShell.String() != "doctor shell" || BashDoctorBare.String() != "doctor bare" || BashUse(7).String() != "BashUse(7)" {
 		t.Error("BashUse.String")
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// BashUse names one of the two sanctioned uses of bash -c.
+// BashUse names one of the sanctioned uses of bash -c.
 type BashUse int
 
 const (
@@ -22,6 +22,19 @@ const (
 	// NVMBridgeScript; the nvm arguments are positional parameters, never
 	// part of the script.
 	BashNVMBridge
+	// BashDoctorLoad is the load probe of gash_doctor --timing: a new
+	// interactive bash --noprofile --norc runs the fixed script
+	// DoctorLoadScript, which sources the gash.sh and bash_completion of
+	// the install directory (its one argument, $1; $0 is "gash-timing")
+	// and prints the load times the files recorded (GASH_TIMING=1 in Env).
+	BashDoctorLoad
+	// BashDoctorShell is the whole-shell timing of gash_doctor --timing:
+	// `bash -i -c exit`, a new interactive shell with the user's startup
+	// files (~/.bashrc runs, as in 2.x: LEDGER SELF-15).
+	BashDoctorShell
+	// BashDoctorBare is the same timing of bash alone: `bash --noprofile
+	// --norc -i -c exit`.
+	BashDoctorBare
 )
 
 func (u BashUse) String() string {
@@ -30,9 +43,26 @@ func (u BashUse) String() string {
 		return "llm_exec"
 	case BashNVMBridge:
 		return "nvm bridge"
+	case BashDoctorLoad:
+		return "doctor load"
+	case BashDoctorShell:
+		return "doctor shell"
+	case BashDoctorBare:
+		return "doctor bare"
 	}
 	return fmt.Sprintf("BashUse(%d)", int(u))
 }
+
+// DoctorLoadScript is the whole script of BashDoctorLoad, the 2.x probe
+// with its redirections (3>&1 >/dev/null 2>&1) moved inside: the load
+// times go to the probe's stdout, everything the files print is dropped.
+const DoctorLoadScript = `exec 3>&1 >/dev/null 2>&1
+source "$1/gash.sh"
+[[ -f "$1/bash_completion" ]] && source "$1/bash_completion"
+printf "%s\n" "${__GASH_LOAD_TIMES[@]}" >&3`
+
+// doctorExit is the script of the whole-shell timings.
+const doctorExit = "exit"
 
 // NVMBridgeScript is the whole script of BashNVMBridge: it loads nvm the
 // way the 2.x lazy stub does (nvm.sh --no-use, so PATH keeps the version
@@ -40,7 +70,8 @@ func (u BashUse) String() string {
 const NVMBridgeScript = `source "$NVM_DIR/nvm.sh" --no-use || exit 1
 nvm "$@"`
 
-// Bash is a run of bash --noprofile --norc -c SCRIPT [NAME ARGS...].
+// Bash is a run of bash --noprofile --norc -c SCRIPT [NAME ARGS...]; the
+// doctor uses add -i, and BashDoctorShell runs `bash -i -c exit`.
 type Bash struct {
 	Use BashUse
 	// Wrap is an argv prefix the shell runs under (llm_exec's bwrap
@@ -50,7 +81,7 @@ type Bash struct {
 	// Bash is the bash program, looked up as Cmd.Path is; "" means "bash".
 	Bash string
 	// Script is the script: required for BashLLMExec, empty (or exactly
-	// NVMBridgeScript) for BashNVMBridge.
+	// the fixed script of the use) for the others.
 	Script string
 	// Name is $0 and Args are $1...; with both empty no positional
 	// parameters follow the script. BashNVMBridge always passes them, with
@@ -83,6 +114,27 @@ func (b Bash) argv() ([]string, error) {
 		if name == "" {
 			name = "nvm"
 		}
+	case BashDoctorLoad, BashDoctorShell, BashDoctorBare:
+		want := doctorExit
+		if b.Use == BashDoctorLoad {
+			want = DoctorLoadScript
+		}
+		if script != "" && script != want {
+			return nil, fmt.Errorf("%w: %s runs only its fixed script", ErrBashUse, b.Use)
+		}
+		if len(b.Wrap) > 0 {
+			return nil, fmt.Errorf("%w: %s takes no wrapper", ErrBashUse, b.Use)
+		}
+		if b.Use == BashDoctorLoad && (len(args) != 1 || (name != "" && name != "gash-timing")) {
+			return nil, fmt.Errorf("%w: %s takes the install directory only", ErrBashUse, b.Use)
+		}
+		if b.Use != BashDoctorLoad && (name != "" || len(args) > 0) {
+			return nil, fmt.Errorf("%w: %s takes no arguments", ErrBashUse, b.Use)
+		}
+		script = want
+		if b.Use == BashDoctorLoad {
+			name = "gash-timing"
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrBashUse, b.Use)
 	}
@@ -93,7 +145,15 @@ func (b Bash) argv() ([]string, error) {
 	if bash == "" {
 		bash = "bash"
 	}
-	argv := append(append([]string{}, b.Wrap...), bash, "--noprofile", "--norc", "-c", script)
+	flags := []string{"--noprofile", "--norc", "-c"}
+	switch b.Use {
+	case BashDoctorLoad, BashDoctorBare:
+		flags = []string{"--noprofile", "--norc", "-i", "-c"}
+	case BashDoctorShell:
+		flags = []string{"-i", "-c"}
+	}
+	argv := append(append(append([]string{}, b.Wrap...), bash), flags...)
+	argv = append(argv, script)
 	if name != "" || len(args) > 0 {
 		if name == "" {
 			name = "bash"

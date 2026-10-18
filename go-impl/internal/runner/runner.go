@@ -9,9 +9,10 @@
 // $?: the exit status, 128+N when signal N ended it, 127 when the program
 // was not found and 126 when it could not be executed.
 //
-// Run refuses a shell with a command string (sh -c and the like). The two
-// sanctioned Bash uses, llm_exec's canonical script and the nvm bridge, go
-// through RunBash, which names the use; the constant sh -c command lines
+// Run refuses a shell with a command string (sh -c and the like). The
+// sanctioned Bash uses, llm_exec's canonical script, the nvm bridge and the
+// fixed shells gash_doctor --timing measures, go through RunBash, which
+// names the use; the constant sh -c command lines
 // compiled into this package (wsl_compact's, LEDGER SYS-46) go through
 // RunScript, which takes only their name.
 //
