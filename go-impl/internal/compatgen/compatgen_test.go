@@ -421,3 +421,22 @@ func TestLedger_CORE18(t *testing.T) {
 	require.NoError(t, err, out)
 	require.Equal(t, "Warning: Line 1 of ~/.gash_env: unrecognized entry\nsourced\ncall llm_exec\ncall gash_db_list\n", out)
 }
+
+// The gash stub passes the values the caller's shell gives the card's
+// aliases (LEDGER SELF-12): one NAME<TAB>VALUE line per defined one,
+// backslash and newline escaped; names the card does not list and
+// undefined ones stay out, and the words reach the binary's root as they
+// are.
+func TestGashStubPassesCardAliases(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	fake := filepath.Join(t.TempDir(), "gash")
+	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\n[ \"$1 $2 $3\" = '__compat env load' ] && exit 0\n"+
+		"printf '[%s]' \"$@\"; printf '\\n%s' \"$GASH__CARD_ALIASES\"\n"), 0o755))
+	out, err := bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "set -u; source '"+dir+"/gash.sh' >/dev/null 2>&1; unalias -a; "+
+		`alias gst='git status --short' gd='a\b' ll=$'ls\n-l' mine=x ..='cd ..'; gash git --no-color; `+
+		`gash; echo "${GASH__CARD_ALIASES-unset}"`)
+	require.NoError(t, err, out)
+	card := "..\tcd ..\ngd\ta\\\\b\ngst\tgit status --short\nll\tls\\n-l\n"
+	require.Equal(t, "[git][--no-color]\n"+card+"[]\n"+card+"unset\n", out)
+}
