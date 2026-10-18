@@ -15,18 +15,18 @@ S1 (design). No production Go is written before the operator's go-ahead in the s
 - Go 1.27.2 obtained through the toolchain mechanism (`GOTOOLCHAIN=go1.27.2`); `encoding/json/v2` importable without GOEXPERIMENT and rejects invalid UTF-8 by default.
 - Userland Apache + PHP-FPM spike green on an Ubuntu 24.04 container (non-root master on 127.0.0.1:80/443, HTTP/2, proxy_fcgi, graceful reload).
 - S1 design written: `go-impl/design/` (README with the decisions requested, architecture, layout, compat, shell, upgrade, libraries, testing, hte), `PARITY.md` (all 1095 spec tests), prompt and startup benchmarks with the 2.x numbers (`go-impl/bench/shell/`), legacy hte-cli fixtures (`go-impl/testdata/hte/legacy/`).
-- Audit of every 2.x module done; `MATRIX.md` and `LEDGER.md` are generated from per-module fragments.
+- Audit of every 2.x module done: `MATRIX.md` (881 rows for 2.x plus the new 3.x surface) and `LEDGER.md` (396 items, every PRD seed indexed) merged from per-module fragments.
 
 ## Next step
 
-Open the S1 draft PR, then wait for the operator's go-ahead in the session. After it: apply the answers to the decisions (D-1 to D-8 in `go-impl/design/README.md`), then start the Go module (`go-impl/go.mod`, registry, contract, compat generator, `tests/run.sh --impl`).
+Open the S1 draft PR, then wait for the operator's go-ahead in the session. After it: apply the answers to the decisions (D-1 to D-9 in `go-impl/design/README.md`), then start the Go module (`go-impl/go.mod`, registry, contract, compat generator, `tests/run.sh --impl`).
 
 ## Gate
 
 During S1 (no Go yet):
 
 ```bash
-bash tests/run.sh                         # Bash reference: must stay 800 passed / 0 failed
+bash tests/run.sh                         # Bash reference: 0 failed (807 passed at S1 once sqlite3 and gawk were installed)
 ```
 
 From the first Go commit on (after S1 approval):
@@ -56,4 +56,4 @@ bash tests/run.sh --impl go               # same specs against the Go port behin
 
 ## Open questions for the operator
 
-The S1 decisions D-1 to D-8 in `go-impl/design/README.md` (each with a recommendation the work proceeds on unless the operator says otherwise). D-7 (2.1.x security release outside `go-refactor`) needs the operator: a push outside `go-refactor` and a tag are stop conditions.
+The S1 decisions D-1 to D-9 in `go-impl/design/README.md` (each with a recommendation the work proceeds on unless the operator says otherwise). D-7 (2.1.x security release outside `go-refactor`) needs the operator: a push outside `go-refactor` and a tag are stop conditions.
