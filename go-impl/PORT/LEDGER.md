@@ -6723,7 +6723,7 @@ Critical and high items:
 | [HTE-36](#hte-36) | Apache listens on loopback only instead of on every interface | Security | medium | yes |
 | [HTE-37](#hte-37) | Vhosts also answer on `[::1]` | Portability | low | yes |
 | [HTE-38](#hte-38) | HTTP/2 on cleartext (h2c), and a contradiction in the design sample | Correctness | low | yes |
-| [HTE-39](#hte-39) | Certificates: ECDSA P-256, 10 years, proper extensions, made in-process | Security | low | yes |
+| [HTE-39](#hte-39) | Certificates: ECDSA P-256, 10 years, proper extensions, made by the openssl CLI | Security | low | yes |
 | [HTE-40](#hte-40) | One certificate directory per site, user-owned, new file names | Contract | low | yes |
 | [HTE-41](#hte-41) | Per-version session directory where the platform's default is not writable | Portability | low | yes |
 | [HTE-42](#hte-42) | The staging/hardened `open_basedir` list is Debian's on every platform | Portability | low | yes |
@@ -7441,7 +7441,7 @@ Critical and high items:
 | Status | open |
 
 <a id="hte-39"></a>
-#### HTE-39 · Certificates: ECDSA P-256, 10 years, proper extensions, made in-process
+#### HTE-39 · Certificates: ECDSA P-256, 10 years, proper extensions, made by the openssl CLI
 
 | Field | Value |
 |---|---|
@@ -7453,7 +7453,7 @@ Critical and high items:
 | Reproduction | `openssl x509 -noout -subject -dates -ext subjectAltName,basicConstraints -in go-impl/testdata/hte/legacy/V2/etc/apache2/certs-selfsigned/https.test.crt` |
 | Severity | low |
 | Public-contract impact | yes (certificate content; anyone who trusted the old certificate must trust the new one) |
-| rc.A behavior | `crypto/ecdsa` P-256 key, `crypto/x509` self-signed certificate, subject `CN=<domain>` only, SAN `<domain>` and `*.<domain>` (covers `www.`), validity 10 years, `basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. Key written once, never read back; the pair is validated by Apache's config test. `cert renew` replaces both and reloads; `doctor` warns 30 days before expiry. No local CA, no mkcert |
+| rc.A behavior | `openssl genpkey` EC P-256 key (PKCS#8 `PRIVATE KEY`), `openssl req -x509` self-signed certificate from a generated request configuration, random serial, subject `CN=<domain>` only, SAN `<domain>`, `*.<domain>` (covers `www.`) and every alias (HTE-47), validity 10 years, `basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. Private keys only through the openssl CLI, never read or parsed by gash (lead decision, 2026-10-18; PRD MUST NOT 6); certificates are parsed with `crypto/x509`. The pair is checked by comparing the public keys openssl prints for the certificate and derives from the key. `cert renew` replaces both and reloads; `doctor` warns 30 days before expiry. No local CA, no mkcert |
 | Fix recipe (3.0) | none: the delta is the design. To verify in the WSL checklist (not run): a Windows browser accepts the CA:FALSE self-signed certificate once it is added to the Windows trust store |
 | Proving test | `TestLedger_HTE39` in `internal/hte/certs` (parse the generated certificate: algorithm, curve, SAN set, validity, extensions); `hte-e2e`: `curl --cacert cert.pem https://<site>/` succeeds |
 | Status | open |

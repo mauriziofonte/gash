@@ -220,19 +220,29 @@ regex missed (hte-cli warned only in `fix`).
 
 ### 3.1 Certificates
 
-One self-signed certificate per site, SAN `<domain>` and `*.<domain>` (which
-covers `www.`), CN `<domain>`, generated in-process with `crypto/x509` and
-`crypto/ecdsa` (P-256; hte-cli: RSA 2048 through a generated script run as
-root from `/tmp`), validity 10 years (hte-cli: 30), `basicConstraints
-CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. The key is
-written once (0600, in a 0700 directory, atomic rename) and never read back
-or parsed by gash; the pair is validated by Apache's config test. No
+One self-signed certificate per site, SAN `<domain>`, `*.<domain>` (which
+covers `www.`) and every alias (HTE-47), CN `<domain>`, made by the `openssl`
+command line (`genpkey` EC P-256, then `req -x509` with a generated request
+configuration and a random serial; hte-cli: RSA 2048 through a generated
+script run as root from `/tmp`), validity 10 years (hte-cli: 30),
+`basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage
+serverAuth`. Private keys go only through `openssl`: gash never reads,
+parses or holds one (PRD MUST NOT 6), and parses only certificates
+(`crypto/x509`, for `cert show` and `doctor`). `openssl` writes the key into a
+0700 temporary directory inside the site's 0700 directory; gash sets it to
+0600 and renames it into place, then the certificate (a crash in between
+leaves a key the certificate does not match, which `doctor` reports;
+temporary directories of an interrupted run are removed by the next one).
+The pair is checked by comparing the public key `openssl x509 -pubkey`
+prints with the one `openssl pkey -pubout` derives from the key. No
 passphrase (a userland master cannot prompt; hte-cli's passphrase was fake
 anyway, `-nodes`). `cert renew` replaces both files and reloads; `doctor`
 warns 30 days before expiry. No local CA, no mkcert (PRD 2). Each site's
 files live in their own directory, so no operation can touch another site's
 certificate (hte-cli's `rm -rf <dir>/<domain>.*` deleted `shop.test.it`'s
-files when creating `shop.test`).
+files when creating `shop.test`). A legacy key that `migrate` copies is
+read by the root step, which hands the open file to `openssl pkey` running
+as the user (section 7).
 
 ## 4. PHP-FPM
 
