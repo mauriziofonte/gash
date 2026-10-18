@@ -127,28 +127,11 @@ var envCache = []string{
 	"__GASH_ENV_AI_PROVIDERS", "__GASH_ENV_HOST_ENTRIES", "__GASH_ENV_SETTINGS",
 }
 
-// geteuid is the effective uid the owner check compares with (EUID).
-var geteuid = os.Geteuid
-
-// LoadConfig reads the settings file of a call as __gash_load_env did:
-// ${GASH_ENV_FILE:-$HOME/.gash_env}, the permission checks skipped in
-// headless mode unless GASH_DEBUG=1.
-func LoadConfig(c *invoke.Call) *config.File {
-	home := c.Env.Get("HOME")
-	return config.Load(config.Options{
-		Path:     config.FilePath(home, c.Env.Get("GASH_ENV_FILE")),
-		Home:     home,
-		Headless: c.Env.Get("GASH_HEADLESS") == "1",
-		Debug:    c.Env.Get("GASH_DEBUG") == "1",
-		EUID:     geteuid(),
-	})
-}
-
 // compatEnvLoad is `gash __compat env load`: the warnings of the load on
 // stderr, then the cache of __gash_load_env as quoted Bash assignments
 // that the shim evaluates. Secrets travel on this pipe only.
 func compatEnvLoad(c *invoke.Call) int {
-	f := LoadConfig(c)
+	f := config.LoadCaller(c.Env.Get)
 	p := ui.NewPrinter(c.Stderr, c.Term, false)
 	for _, w := range f.Warnings {
 		p.Warning(w.Text)

@@ -94,9 +94,6 @@ func TestCompatEnvLoad(t *testing.T) {
 	env := filepath.Join(home, ".gash_env")
 	require.NoError(t, os.WriteFile(env, []byte("DB:default=mysql://u:p'w@h/d\nAI:claude=sk-x\nSSH:~/id_test=pass phrase\n"+
 		"HOST:web=me@web\nGASH_BANNER=0\nbogus\n"), 0o644))
-	old := geteuid
-	geteuid = func() int { return os.Getuid() }
-	defer func() { geteuid = old }()
 	out, errOut, rc := compat(t, map[string]string{"HOME": home}, false, "", "env", "load")
 	require.Equal(t, 0, rc)
 	require.Equal(t, "Warning: ~/.gash_env is accessible by other users (mode 644). Run: chmod 600 ~/.gash_env\n"+
