@@ -80,8 +80,8 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Interactive AI chat. Provider: claude or gemini (default: first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
-		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "__AI_LAST_EXIT"},
-		Env:               []string{"BASH_VERSION", "EUID", "GASH_AI_DEBUG", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "ZSH_VERSION", "__AI_LAST_EXIT", "git"},
+		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "ZSH_VERSION", "__AI_LAST_EXIT"},
+		Env:               []string{"BASH_VERSION", "EUID", "GASH_AI_DEBUG", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "ZSH_VERSION", "__AI_LAST_EXIT"},
 		CompletionComment: "AI provider completion (first argument only)",
 		Completion: "" +
 			"if ((COMP_CWORD == 1)); then\n" +
@@ -174,8 +174,8 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "ai_query", Usage: "ai_query [provider] \"query\"", Description: "Non-interactive AI query. Provider is optional (uses first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
-		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "__AI_LAST_EXIT"},
-		Env:               []string{"BASH_VERSION", "EUID", "GASH_AI_DEBUG", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "ZSH_VERSION", "__AI_LAST_EXIT", "git"},
+		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "ZSH_VERSION", "__AI_LAST_EXIT"},
+		Env:               []string{"BASH_VERSION", "EUID", "GASH_AI_DEBUG", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "ZSH_VERSION", "__AI_LAST_EXIT"},
 		CompletionComment: "AI provider completion (first argument only)",
 		Completion: "" +
 			"if ((COMP_CWORD == 1)); then\n" +
@@ -650,7 +650,7 @@ var functions = []Function{
 				"  Queries Docker Hub and GHCR registries to compare\n" +
 				"  local image digests with remote ones.",
 		},
-		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD", "compose", "config", "image"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
 		CompletionComment: "Docker compose check/upgrade/scan: dirs + flags (incl. --no-color)",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
@@ -693,7 +693,7 @@ var functions = []Function{
 				"  # Full audit: scan then check each project\n" +
 				"  dcscan /opt --depth 3",
 		},
-		Env: []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD", "compose", "config"},
+		Env: []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"--depth --json --no-color --help\" -- \"$cur\")\n" +
@@ -740,7 +740,7 @@ var functions = []Function{
 				"  Pinned versions (e.g. nginx:1.25.3) are skipped unless --force is used.\n" +
 				"  Pulls new images, recreates affected containers, removes old images.",
 		},
-		Env: []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD", "compose", "config", "image"},
+		Env: []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force --no-color --help\" -- \"$cur\")\n" +
@@ -1154,7 +1154,7 @@ var functions = []Function{
 		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color]", Description: "Run health checks on your Gash installation (--timing: what each file costs at startup)."},
 		Settings:          []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_REPLACE_TOOLS", "GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_NVM", "GASH_PATH_ADD"},
 		ShellVars:         []string{"BASH", "BASH_VERSION", "HOME"},
-		Env:               []string{"BASH_VERSION", "COLUMNS", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "HOME", "NO_COLOR"},
+		Env:               []string{"BASH", "BASH_VERSION", "COLUMNS", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "HOME", "NO_COLOR"},
 		CompletionComment: "gash_doctor: --timing, --no-color",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
@@ -1815,7 +1815,7 @@ var functions = []Function{
 		Decision: "port",
 		Impl:     Impl("binary"),
 		Headless: false,
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "config"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
 		Name:     "gla",
@@ -1827,7 +1827,7 @@ var functions = []Function{
 		Decision: "port",
 		Impl:     Impl("binary"),
 		Headless: false,
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "config"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
 		Name:     "glf",
@@ -1839,7 +1839,7 @@ var functions = []Function{
 		Decision: "port",
 		Impl:     Impl("binary"),
 		Headless: false,
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "config"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
 		Name:     "glg",
@@ -1851,7 +1851,7 @@ var functions = []Function{
 		Decision: "port",
 		Impl:     Impl("binary"),
 		Headless: false,
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "config"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
 		Name:     "glo",
@@ -1863,7 +1863,7 @@ var functions = []Function{
 		Decision: "port",
 		Impl:     Impl("binary"),
 		Headless: false,
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "config"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
 		Name:     "gls",
@@ -1875,7 +1875,7 @@ var functions = []Function{
 		Decision: "port",
 		Impl:     Impl("binary"),
 		Headless: false,
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "config"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
 		Name:     "help",
@@ -2273,7 +2273,7 @@ var functions = []Function{
 				"  Designed for LLM/AI agent consumption.",
 		},
 		Fallback: &Usage{Program: "llm_docker_check", Usage: "llm_docker_check [PATH]", Description: "Compose image update check as JSON"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD", "compose", "config", "image"},
+		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_env",
@@ -2353,7 +2353,7 @@ var functions = []Function{
 		},
 		Fallback:  &Usage{Program: "llm_exec", Usage: "llm_exec <command>", Description: "Execute command safely: read-only allowlist, child shell, no history"},
 		ShellVars: []string{"BASH", "HOME"},
-		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "git", "in"},
+		Env:       []string{"BASH", "EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_find",
@@ -2391,7 +2391,7 @@ var functions = []Function{
 		},
 		Fallback:  &Usage{Program: "llm_find", Usage: "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]", Description: "Find files by pattern (ignores node_modules, vendor, .git)"},
 		ShellVars: []string{"HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "in"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_git_diff",
@@ -2418,7 +2418,7 @@ var functions = []Function{
 		},
 		Fallback:  &Usage{Program: "llm_git_diff", Usage: "llm_git_diff [--staged] [PATH]", Description: "Git diff with stats"},
 		ShellVars: []string{"HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "git"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_git_log",
@@ -2445,7 +2445,7 @@ var functions = []Function{
 		},
 		Fallback:  &Usage{Program: "llm_git_log", Usage: "llm_git_log [--limit N] [PATH]", Description: "Recent git log (JSON)"},
 		ShellVars: []string{"HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "git"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_git_status",
@@ -2472,7 +2472,7 @@ var functions = []Function{
 		},
 		Fallback:  &Usage{Program: "llm_git_status", Usage: "llm_git_status [PATH]", Description: "Compact git status (JSON)"},
 		ShellVars: []string{"HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "git"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_grep",
@@ -2504,7 +2504,7 @@ var functions = []Function{
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
 		ShellVars: []string{"HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "in"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 	},
 	{
 		Name:     "llm_ports",

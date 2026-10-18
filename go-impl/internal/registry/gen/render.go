@@ -37,17 +37,6 @@ func moduleOf(file string) string {
 	return base
 }
 
-// callerShellVars are the variables Bash sets in every shell without
-// exporting them that name the calling shell itself: its path and its
-// version. A function that reads one (any expansion form, ${BASH:-bash}
-// included) gets it passed by its stub, since the binary cannot learn it.
-// The other unexported Bash variables need no passing: EUID, UID, PPID
-// and the host names come from the process, BASHPID is the binary's own
-// pid once the stub's subshell execs it, RANDOM, SECONDS and EPOCH* are
-// the binary's own clock and random source, OSTYPE has its MATRIX row,
-// and arrays (BASH_VERSINFO) cannot be exported.
-var callerShellVars = map[string]bool{"BASH": true, "BASH_VERSION": true}
-
 func (c *catalog) build() ([]registry.Function, error) {
 	m := c.matrix
 	passedEnv := m.passedEnv()
@@ -137,7 +126,7 @@ func (c *catalog) build() ([]registry.Function, error) {
 			switch {
 			case passedSettings[v]:
 				f.Settings = append(f.Settings, v)
-			case (passedEnv[v] || callerShellVars[v]) && !common[v]:
+			case passedEnv[v] && !common[v]:
 				f.ShellVars = append(f.ShellVars, v)
 			}
 			if allEnv[v] && !strings.HasPrefix(v, "__GASH_") {
