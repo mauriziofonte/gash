@@ -11,8 +11,8 @@ import (
 
 // Ports are the ports Apache listens on.
 type Ports struct {
-	HTTP  int `toml:"http"`
-	HTTPS int `toml:"https"`
+	HTTP  int `toml:"http" json:"http"`
+	HTTPS int `toml:"https" json:"https"`
 }
 
 // StandardPorts and HighPorts are the two port sets of `install --ports`.
@@ -33,11 +33,11 @@ var autostartModes = []string{"systemd", "launchd", "shell", "none"}
 // Settings is hte.toml: ports, listen addresses, default PHP, enabled
 // extra Apache modules, autostart mode (design/hte.md section 2).
 type Settings struct {
-	Ports      Ports    `toml:"ports"`
-	Listen     []string `toml:"listen"`      // loopback addresses; ::1 is used only where IPv6 loopback exists
-	DefaultPHP string   `toml:"default_php"` // "" = the highest installed version
-	Modules    []string `toml:"modules"`     // extra modules enabled with `apache modules enable`
-	Autostart  string   `toml:"autostart"`
+	Ports      Ports    `toml:"ports" json:"ports"`
+	Listen     []string `toml:"listen" json:"listen"`           // loopback addresses; ::1 is used only where IPv6 loopback exists
+	DefaultPHP string   `toml:"default_php" json:"default_php"` // "" = the highest installed version
+	Modules    []string `toml:"modules" json:"modules"`         // extra modules enabled with `apache modules enable`
+	Autostart  string   `toml:"autostart" json:"autostart"`
 }
 
 // DefaultSettings returns the settings install writes for a port set.
