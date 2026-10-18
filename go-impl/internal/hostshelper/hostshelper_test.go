@@ -400,7 +400,9 @@ func TestRewriteInPlace(t *testing.T) {
 	if err := os.WriteFile(path, []byte("127.0.0.1 localhost\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rename = func(from, to string) error { return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EACCES} }
+	rename = func(from, to string) error {
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EACCES}
+	}
 	t.Cleanup(func() { rename = os.Rename })
 	err := Rewrite(path, func(h []byte) ([]byte, error) { return Splice(h, []byte("127.0.0.1 d.test\n")) })
 	if !errors.Is(err, syscall.EACCES) {
