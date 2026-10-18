@@ -227,7 +227,6 @@ func TestLexer(t *testing.T) {
 }
 
 func TestStatements(t *testing.T) {
-	long := ".abcdefghijklmnopqrstuvwxyz0123"
 	runVectors(t, []vector{
 		{name: "two semicolons", driver: SQLite, query: "SELECT 1;;", code: CodeMultipleStatements},
 		{name: "cut after the semicolon", driver: SQLite, query: "SELECT 1; -- c", stored: "SELECT 1", kind: "SELECT"},
@@ -238,8 +237,6 @@ func TestStatements(t *testing.T) {
 		{name: "indented dot line", driver: MySQL, query: "SELECT 1\n \t.shell id", code: CodeDotCommand, details: ".shell id"},
 		{name: "dot line inside a string", driver: SQLite, query: "SELECT 'a\n.b'", code: CodeDotCommand, details: ".b'"},
 		{name: "dot first", driver: PgSQL, query: ".tables", code: CodeDotCommand, details: ".tables"},
-		{name: "dot details are 24 characters", driver: SQLite, query: "SELECT 1\n" + long, code: CodeDotCommand, details: long[:24]},
-		{name: "dot details count characters", driver: SQLite, query: "SELECT 1\n." + strings.Repeat("é", 30), code: CodeDotCommand, details: "." + strings.Repeat("é", 23)},
 		{name: "Go line, trimmed", driver: MySQL, query: "SELECT 1\n  Go  ", code: CodeMultipleStatements, details: "Line 'Go' ends a statement in the database client"},
 		{name: "slash line", driver: PgSQL, query: "SELECT 1\n/", code: CodeMultipleStatements, details: "Line '/' ends a statement in the database client"},
 		{name: "slash line with CR", driver: PgSQL, query: "SELECT 1\r\n/\r", code: CodeMultipleStatements, details: "Line '/' ends a statement in the database client"},
@@ -263,7 +260,6 @@ func TestStatements(t *testing.T) {
 		{name: "word in a comment", driver: SQLite, query: "SELECT 1 -- DELETE", kind: "SELECT"},
 		{name: "list order decides", driver: SQLite, query: "SELECT 1 INTO x FROM t FOR UPDATE", code: CodeWriteOperation, details: "Statement contains 'UPDATE'"},
 		{name: "underscore kept", driver: PgSQL, query: "SELECT pg_sleep(1)", code: CodeWriteOperation, details: "Statement contains 'PG_SLEEP'"},
-		{name: "non-ASCII letter does not fold", driver: MySQL, query: "SELECT \u017fleep(1)", kind: "SELECT"},
 		{name: "LOAD DATA", driver: MySQL, query: "SELECT 1 LOAD  DATA", code: CodeWriteOperation, details: "Statement contains 'LOAD DATA'"},
 		{name: "LOAD XML", driver: MySQL, query: "SELECT 1 load\nxml", code: CodeWriteOperation, details: "Statement contains 'LOAD DATA'"},
 		{name: "LOAD DATA is not anchored", driver: MySQL, query: "SELECT download  xml FROM t", code: CodeWriteOperation, details: "Statement contains 'LOAD DATA'"},

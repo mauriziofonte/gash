@@ -11,10 +11,14 @@
 // after any "e" or "E", even the last letter of an identifier, opens a
 // string in which a backslash escapes the next character.
 //
-// Character classes follow the C locale (ASCII whitespace, ASCII case
-// mapping), as Bash does under LC_ALL=C; see LEDGER CORE-08 for why the
-// locale's tables are not reproduced. The details of dot_command_blocked
-// count characters as a UTF-8 locale does.
+// 2.x runs under the caller's locale, and the checks that use case or
+// [[:space:]] read a query differently under LC_ALL=C and under a UTF-8
+// locale (towupper folds "ſ" to "S", iswspace takes U+3000 as a blank).
+// The guard is the strictest of both readings (LEDGER DB-13): a query is
+// checked under the C reading and under UTF-8 readings, and refused when
+// any refuses, with the C reading's error when it refuses. The details of
+// dot_command_blocked count characters as a UTF-8 locale does (LEDGER
+// CORE-16).
 package sqlguard
 
 import (
@@ -81,21 +85,51 @@ func GuardDriver(dbDriver string) string {
 // Precheck is __llm_sql_precheck, run before any connection is resolved:
 // the query passes when one engine's rules accept it (mysql, then pgsql,
 // then sqlite). When all reject it the sqlite verdict is returned
-// (LEDGER DB-12).
+// (LEDGER DB-12). As Check, it refuses when the precheck of either reading
+// refuses, with the C reading's error first (LEDGER DB-13).
 func Precheck(query string) error {
-	if _, err := Check(MySQL, query); err == nil {
+	for _, rd := range readings {
+		if err := precheck(query, rd); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func precheck(query string, rd reading) error {
+	if _, err := check(MySQL, query, rd); err == nil {
 		return nil
 	}
-	if _, err := Check(PgSQL, query); err == nil {
+	if _, err := check(PgSQL, query, rd); err == nil {
 		return nil
 	}
-	_, err := Check(SQLite, query)
+	_, err := check(SQLite, query, rd)
 	return err
 }
 
 // Check is __llm_sql_guard DRIVER QUERY. The error, when not nil, is an
 // *Error with the 2.x code, details, action and hint.
+//
+// The query is refused when the C reading or a UTF-8 reading refuses it
+// (see reading); the error is the first refusing reading's, the C reading
+// first, so every refusal of 2.x under LC_ALL=C stays the same (LEDGER
+// DB-13). An accepted query gets the C reading's result.
 func Check(driver, query string) (Result, error) {
+	var res Result
+	for k, rd := range readings {
+		r, err := check(driver, query, rd)
+		if err != nil {
+			return Result{}, err
+		}
+		if k == 0 {
+			res = r
+		}
+	}
+	return res, nil
+}
+
+// check is __llm_sql_guard under one reading of the locale classes.
+func check(driver, query string, rd reading) (Result, error) {
 	n := len(query)
 	at := func(i int) byte { // ${query:i:1}; 0 stands for "no character"
 		if i < n {
@@ -152,7 +186,7 @@ func Check(driver, query string) (Result, error) {
 				i += len(tag) + end + len(tag) - 1
 				code = append(code, ' ')
 			case '-':
-				if next == '-' && (driver != MySQL || i+2 >= n || isSpace(query[i+2])) {
+				if next == '-' && (driver != MySQL || rd.commentBlankAt(query, i+2)) {
 					state = stLine
 					code = append(code, ' ')
 				} else {
@@ -219,7 +253,7 @@ func Check(driver, query string) (Result, error) {
 	}
 
 	// One statement: a single ";" is accepted only at the very end.
-	trimmed := trimRightSpace(string(code))
+	trimmed := rd.trimRight(string(code))
 	if strings.HasSuffix(trimmed, ";") {
 		trimmed = trimmed[:len(trimmed)-1]
 		query = query[:lastSemicolon]
@@ -232,17 +266,17 @@ func Check(driver, query string) (Result, error) {
 	// mysql end a statement at a line holding only "go" or "/". The lines
 	// are those of the query itself, strings and comments included.
 	for _, line := range strings.Split(query, "\n") {
-		line = trimLeftSpace(line)
+		line = rd.trimLeft(line)
 		if strings.HasPrefix(line, ".") {
 			return Result{}, dotCommand(firstChars(line, 24))
 		}
-		line = trimRightSpace(line)
-		if isGo(line) || line == "/" {
+		line = rd.trimRight(line)
+		if rd.isGo(line) || line == "/" {
 			return Result{}, statementEndLine(line)
 		}
 	}
 
-	upper := asciiUpper(trimmed)
+	upper := rd.upper(trimmed)
 	words := make([]byte, 0, len(upper)+2)
 	words = append(words, ' ')
 	for i := 0; i < len(upper); i++ {
@@ -254,10 +288,7 @@ func Check(driver, query string) (Result, error) {
 	}
 	words = append(words, ' ')
 
-	first := upper
-	for first != "" && (isSpace(first[0]) || first[0] == '(') {
-		first = first[1:]
-	}
+	first := rd.trimLeftParen(upper)
 	for i := 0; i < len(first); i++ {
 		if c := first[i]; !(c >= 'A' && c <= 'Z' || c == '_') {
 			first = first[:i]
@@ -274,7 +305,7 @@ func Check(driver, query string) (Result, error) {
 			return Result{}, containsWord(f)
 		}
 	}
-	if hasLoadData(upper) {
+	if rd.hasLoadData(upper) {
 		return Result{}, clone(errLoadData)
 	}
 	return Result{Query: query, Kind: first}, nil
@@ -317,64 +348,8 @@ func dollarTag(s string) string {
 	return ""
 }
 
-// hasLoadData is [[ $upper =~ LOAD[[:space:]]+(DATA|XML) ]], unanchored.
-func hasLoadData(upper string) bool {
-	for i := 0; ; {
-		k := strings.Index(upper[i:], "LOAD")
-		if k < 0 {
-			return false
-		}
-		j := i + k + 4
-		s := j
-		for j < len(upper) && isSpace(upper[j]) {
-			j++
-		}
-		if j > s && (strings.HasPrefix(upper[j:], "DATA") || strings.HasPrefix(upper[j:], "XML")) {
-			return true
-		}
-		i += k + 1
-	}
-}
-
-// isGo is [[ ${line,,} == go ]] with ASCII case mapping.
-func isGo(s string) bool {
-	return len(s) == 2 && (s[0] == 'g' || s[0] == 'G') && (s[1] == 'o' || s[1] == 'O')
-}
-
 func isWordChar(c byte) bool {
 	return c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_'
-}
-
-// isSpace is [[:space:]] in the C locale.
-func isSpace(c byte) bool {
-	return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r'
-}
-
-func trimLeftSpace(s string) string {
-	i := 0
-	for i < len(s) && isSpace(s[i]) {
-		i++
-	}
-	return s[i:]
-}
-
-func trimRightSpace(s string) string {
-	i := len(s)
-	for i > 0 && isSpace(s[i-1]) {
-		i--
-	}
-	return s[:i]
-}
-
-// asciiUpper is ${s^^} in the C locale: only a-z change.
-func asciiUpper(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if c >= 'a' && c <= 'z' {
-			b[i] = c - 'a' + 'A'
-		}
-	}
-	return string(b)
 }
 
 // firstChars is ${s:0:n} in a UTF-8 locale: the first n characters, an
