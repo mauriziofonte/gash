@@ -301,14 +301,29 @@ __gash_fetch_sum() {
     printf '%s' "${out%% *}"
 }
 
+# The core emitters, loaded from this checkout when the caller sourced a
+# shim without them (they are the only writers to stderr).
+__gash_boot_emitters() {
+    if ! declare -F __gash_error >/dev/null && [[ -r "$__GASH_BOOT_ROOT/lib/core/output.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$__GASH_BOOT_ROOT/lib/core/output.sh"
+    fi
+    if ! declare -F __gash_json_error >/dev/null && [[ -r "$__GASH_BOOT_ROOT/lib/core/utils.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$__GASH_BOOT_ROOT/lib/core/utils.sh"
+    fi
+    declare -F __gash_error >/dev/null && declare -F __gash_json_error >/dev/null
+}
+
 # The one stderr line of an interactive fetch.
 __gash_fetch_line() {
+    __gash_boot_emitters || return 0
     if [[ -z "$__GASH_FETCH_REASON" ]]; then
-        printf 'Gash: installed gash %s for %s/%s\n' "$__GASH_BOOT_VERSION" "$__GASH_BOOT_OS" "$__GASH_BOOT_ARCH" >&2
+        __gash_success "Installed gash $__GASH_BOOT_VERSION for $__GASH_BOOT_OS/$__GASH_BOOT_ARCH"
     else
-        printf 'Gash: gash %s is not installed and could not be downloaded (%s). Run: bash %s/install.sh --repair\n' \
-            "$__GASH_BOOT_VERSION" "$__GASH_FETCH_REASON" "${__GASH_BOOT_ROOT/#$HOME/\~}" >&2
+        __gash_warning "gash $__GASH_BOOT_VERSION is not installed and could not be downloaded ($__GASH_FETCH_REASON). Run: bash ${__GASH_BOOT_ROOT/#$HOME/\~}/install.sh --repair"
     fi
+    return 0
 }
 
 # The report of a call without a binary: the binary_not_found envelope for
@@ -319,15 +334,12 @@ __gash_missing() {
     local details hint
     details="gash ${__GASH_BOOT_VERSION:-unknown} for ${__GASH_BOOT_OS:-${OSTYPE-unknown}}/${__GASH_BOOT_ARCH:-${HOSTTYPE-unknown}} is not installed and could not be downloaded"
     hint="Run: bash ${__GASH_BOOT_ROOT/#$HOME/\~}/install.sh --repair"
+    __gash_boot_emitters || return 1
     if [[ "${GASH_HEADLESS-}" == 1 || "${1-}" == llm_* ]]; then
-        details="${details//\\/\\\\}" hint="${hint//\\/\\\\}"
-        details="${details//\"/\\\"}" hint="${hint//\"/\\\"}"
-        printf '{"error":"binary_not_found","details":"%s","action":"STOP","recoverable":true,"hint":"%s"}\n' "$details" "$hint" >&2
-    elif declare -F __gash_error >/dev/null && declare -F __gash_hint >/dev/null; then
+        __gash_json_error binary_not_found "$details" STOP "$hint"
+    else
         __gash_error "$details"
         __gash_hint "$hint"
-    else
-        printf 'Error: %s\nHint: %s\n' "$details" "$hint" >&2
     fi
     return 1
 }

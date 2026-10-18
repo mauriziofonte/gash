@@ -220,6 +220,12 @@ __gash_use_color() {
     return 0
 }
 
+# Whether stdout is a terminal, for the generated Bash outside lib/core
+# (gash.sh tells `gash init bash`, whose stdout it captures).
+__gash_stdout_tty() {
+    [[ -t 1 ]]
+}
+
 # Helper for functions that accept a --no-color flag.
 # Usage: __gash_want_colors "$no_color_flag_value"  (0 = auto, 1 = force off)
 # Returns 0 when colors should be emitted, 1 otherwise.
