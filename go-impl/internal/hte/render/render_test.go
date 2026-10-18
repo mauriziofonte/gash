@@ -700,7 +700,7 @@ func TestLedger_HTE36(t *testing.T) {
 			t.Fatalf("Listen lines: %v", got)
 		}
 		for _, m := range got {
-			if !regexp.MustCompile(`^(127\.0\.0\.1|\[::1\]):\d+$`).MatchString(m[1]) {
+			if !regexp.MustCompile(`^(127\.0\.0\.1|\[::1\]):\d+( https)?$`).MatchString(m[1]) {
 				t.Errorf("non-loopback Listen %s", m[1])
 			}
 		}

@@ -294,9 +294,15 @@ func Render(in Input) (*Generation, error) {
 		}
 		files = append(files, File{fpmConfRel(v), conf})
 	}
-	var listen []string
-	listen = append(listen, addrList(in.Listen, in.Ports.HTTP)...)
-	listen = append(listen, addrList(in.Listen, in.Ports.HTTPS)...)
+	// Listen names the protocol of a TLS port other than 443, where
+	// Apache would otherwise assume http (it matters for accept filters).
+	listen := addrList(in.Listen, in.Ports.HTTP)
+	for _, a := range addrList(in.Listen, in.Ports.HTTPS) {
+		if in.Ports.HTTPS != 443 {
+			a += " https"
+		}
+		listen = append(listen, a)
+	}
 	httpd, err := execute("httpd.conf.tmpl", map[string]any{
 		"RunDir":       in.Paths.RuntimeDir,
 		"PidFile":      filepath.Join(in.Paths.RuntimeDir, "httpd.pid"),
