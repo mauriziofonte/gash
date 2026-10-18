@@ -169,3 +169,16 @@ func (s *server) reloadPoolUnit(ctx context.Context, pool string) error {
 	_, err := s.unitReload(ctx, name)
 	return err
 }
+
+// undoUnitStop undoes the stop of unit name made in this session: its
+// change must be the last of the receipt (nothing was done after it).
+func (s *server) undoUnitStop(ctx context.Context, name string) ([]string, error) {
+	if s.r == nil {
+		return nil, hteerr.New(hteerr.InvalidState, "there is no root receipt", "")
+	}
+	last, ok := s.r.Last()
+	if !ok || last.Kind != receipt.Unit || last.Name != name || !s.made[last.ID] {
+		return nil, hteerr.Newf(hteerr.InvalidState, "", "the last change of the receipt is not the stop of %s made in this session", name)
+	}
+	return s.restore(ctx, last.ID)
+}

@@ -48,13 +48,15 @@ type Env struct {
 }
 
 type server struct {
-	env   Env
-	user  string
-	uid   int
-	gid   int
-	plan  map[int]Op
-	done  map[int]bool
-	r     *receipt.Receipt
+	env  Env
+	user string
+	uid  int
+	gid  int
+	plan map[int]Op
+	done map[int]bool
+	r    *receipt.Receipt
+	// made are the receipt changes this session recorded.
+	made  map[int]bool
 	stamp string
 }
 
@@ -101,7 +103,7 @@ func open(env Env) (*server, error) {
 		return nil, hteerr.New(hteerr.PrivilegedStepRequired, "the root step needs the invoking user from sudo (SUDO_USER, SUDO_UID), not root",
 			"run gash hte as your own user")
 	}
-	s := &server{env: env, user: user, uid: uid, gid: gid, plan: map[int]Op{}, done: map[int]bool{},
+	s := &server{env: env, user: user, uid: uid, gid: gid, plan: map[int]Op{}, done: map[int]bool{}, made: map[int]bool{},
 		stamp: env.Now().UTC().Format("20060102T150405Z")}
 	r, ok, err := receipt.Load(s.host(receipt.RootPath(user)))
 	if err != nil {
@@ -188,6 +190,8 @@ func (s *server) exec(ctx context.Context, o Op) ([]string, error) {
 		return s.linger(ctx)
 	case OpUnitStop:
 		return s.unitStop(ctx, o.Name)
+	case OpUndoUnitStop:
+		return s.undoUnitStop(ctx, o.Name)
 	case OpUnitReload:
 		return s.unitReload(ctx, o.Name)
 	case OpHostsSnapshot:
@@ -246,6 +250,7 @@ func (s *server) record(c receipt.Change) (receipt.Change, error) {
 	}
 	c.Pending = true
 	c = s.r.Add(c)
+	s.made[c.ID] = true
 	return c, s.save()
 }
 

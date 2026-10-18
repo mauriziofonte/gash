@@ -525,3 +525,35 @@ func TestRestoreOrder(t *testing.T) {
 		t.Fatal("finish with changes left")
 	}
 }
+
+// undo_unit_stop undoes only the stop this session made, while it is the
+// last change: the migrate rollback when a site does not answer.
+func TestUndoUnitStop(t *testing.T) {
+	f := newFixture(t)
+	plan := []Op{{ID: 1, Op: OpUndoUnitStop, Name: "apache2"}, {ID: 2, Op: OpUnitStop, Name: "apache2"},
+		{ID: 3, Op: OpUndoUnitStop, Name: "apache2"}, {ID: 4, Op: OpUndoUnitStop, Name: "php8.3-fpm"}}
+	c := session(t, f.env(), plan)
+	defer c.Close()
+	if _, err := c.Run(1); err == nil {
+		t.Fatal("undo before any stop")
+	}
+	if _, err := c.Run(2); err != nil {
+		t.Fatal(err)
+	}
+	if f.active["apache2"] {
+		t.Fatal("apache2 still active")
+	}
+	if _, err := c.Run(4); err == nil {
+		t.Fatal("undo of a unit this session did not stop")
+	}
+	resp, err := c.Run(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.active["apache2"] {
+		t.Error("apache2 not started again")
+	}
+	if r, perr := receipt.Parse([]byte(resp.Receipt), "root"); perr == nil && len(r.Changes) != 0 {
+		t.Errorf("receipt changes left: %+v", r.Changes)
+	}
+}

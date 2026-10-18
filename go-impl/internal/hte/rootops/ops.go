@@ -41,6 +41,11 @@ const (
 	OpLinger = "linger"
 	// OpUnitStop stops and disables a system unit (Name).
 	OpUnitStop = "unit_stop"
+	// OpUndoUnitStop starts and enables again the system unit Name that
+	// this session stopped (its change must be the last of the receipt):
+	// the rollback of migrate --apply when a site does not answer after
+	// the switch. The user side asks for it only on that failure.
+	OpUndoUnitStop = "undo_unit_stop"
 	// OpUnitReload reloads a running system unit (Name), after its pools
 	// were archived; no receipt change.
 	OpUnitReload = "unit_reload"
@@ -65,7 +70,7 @@ const (
 	OpFinish = "finish_uninstall"
 )
 
-var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpLinger, OpUnitStop, OpUnitReload, OpHostsSnapshot,
+var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpLinger, OpUnitStop, OpUndoUnitStop, OpUnitReload, OpHostsSnapshot,
 	OpArchiveVhost, OpArchivePool, OpCopyKey, OpRecordAutostart, OpRestore, OpFinish}
 
 // Op is one operation of a plan.
@@ -95,6 +100,8 @@ func (o Op) String() string {
 		return "enable systemd linger (loginctl enable-linger), so the stack starts at boot"
 	case OpUnitStop:
 		return "stop and disable the system unit " + o.Name
+	case OpUndoUnitStop:
+		return "only if a site does not answer after the switch: start and enable " + o.Name + " again"
 	case OpUnitReload:
 		return "reload the system unit " + o.Name
 	case OpHostsSnapshot:
@@ -157,7 +164,7 @@ func (o Op) Check() error {
 		if o.Value < 0 || o.Value > 1024 {
 			return bad("port %d", o.Value)
 		}
-	case OpUnitStop, OpUnitReload:
+	case OpUnitStop, OpUndoUnitStop, OpUnitReload:
 		if !unitRE.MatchString(o.Name) {
 			return bad("%q is not a unit gash may touch", o.Name)
 		}

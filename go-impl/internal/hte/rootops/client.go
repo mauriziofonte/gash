@@ -29,6 +29,8 @@ type Client struct {
 	enc  *json.Encoder
 	dec  *json.Decoder
 	plan map[int]Op
+	done bool
+	wait error
 	// Receipt is the root copy after the last answer.
 	Receipt string
 	// OnReceipt, when set, gets the root copy after every answer that
@@ -125,9 +127,12 @@ func (c *Client) Run(id int) (Response, error) {
 	return resp, nil
 }
 
-// Close ends the session.
+// Close ends the session; a second call returns the first one's result.
 func (c *Client) Close() error {
-	c.sess.Stdin().Close()
-	_, err := c.sess.Wait()
-	return err
+	if !c.done {
+		c.done = true
+		c.sess.Stdin().Close()
+		_, c.wait = c.sess.Wait()
+	}
+	return c.wait
 }
