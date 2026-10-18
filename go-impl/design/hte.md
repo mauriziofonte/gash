@@ -150,6 +150,8 @@ paths, logs outside the document root, 307 instead of 301:
     <FilesMatch \.php$>
         SetHandler "proxy:unix:/run/user/1000/gash-hte/8.3-1a2b3c4d5e.sock|fcgi://localhost/"
     </FilesMatch>
+    # mod_proxy_fcgi sends SCRIPT_FILENAME percent-encoded: PHP-FPM gets the path Apache resolved.
+    ProxyFCGISetEnvIf "true" SCRIPT_FILENAME "%{unescape:%{reqenv:SCRIPT_FILENAME}}"
 
     <IfModule mod_brotli.c>
         AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml text/css text/javascript application/x-javascript application/javascript application/json application/x-font-ttf application/vnd.ms-fontobject image/x-icon
@@ -195,12 +197,18 @@ no Debian `envvars`.
 HTTPS vhost, `http/1.1` in both when `http2 = false` (LEDGER HTE-38).
 Document roots are validated before anything is rendered: absolute after
 resolving a relative argument against the current directory (HTE-29), an
-existing directory, and none of `$ * ? [ ; : " \` or control characters, which
-Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI parser
-(`;` comments, `${NAME}`) would interpret, or that would split the
-`open_basedir` list (`:`, its separator) (`invalid_docroot`, hint: "rename
-the directory or use a symlink without these characters"; HTE-08). Pool
-values are double-quoted.
+existing directory, and none of `$ * ? [ ] ; : " \` or control characters,
+which Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI
+parser (`;` comments, `${NAME}`, quoting) would interpret, or that would split
+the `open_basedir` list (`:`, its separator) (`invalid_docroot`, the details
+naming the character, hint: "rename the directory or use a symlink without
+these characters"; HTE-08). `migrate` reports a legacy vhost with such a root
+as a skip with that code and leaves it in the system. Pool values are
+double-quoted. Apache 2.4.58 `mod_proxy_fcgi` sends `SCRIPT_FILENAME`
+percent-encoded (`my%20shop`), and PHP-FPM answers "File not found." for it:
+every vhost with a PHP handler sets `ProxyFCGISetEnvIf "true" SCRIPT_FILENAME
+"%{unescape:%{reqenv:SCRIPT_FILENAME}}"`, which gives FPM the path Apache
+resolved. Raw vhosts are rendered as they are.
 
 Force-HTTPS and the loopback bypass (decision D-2, option C; LEDGER HTE-52):
 with loopback-only binding every client address is `127.0.0.1` or `::1`,
