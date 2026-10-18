@@ -159,11 +159,16 @@ it "the hook builds the prompt; the PS1 set at load runs no git status" bash -c 
     printf \"load:%s\n\" \"\$PS1\"
     __gash_prompt_command
     printf \"hook:%s\n\" \"\$PS1\"
+    printf \"branch:%s\n\" \"\$__GASH_PS1_BRANCH\"
   " 2>/dev/null </dev/null)"
   load="$(grep "^load:" <<<"$out" || true)"
   hook="$(grep "^hook:" <<<"$out" || true)"
+  branch="$(grep "^branch:" <<<"$out" || true)"
   [[ "$load" != *"(master"* && "$load" != *"(main"* ]]
-  [[ "$hook" == *"(master"* || "$hook" == *"(main"* ]]
+  # The hook adds the git segment as a variable reference, never splicing the
+  # branch name into PS1 (SHELL-01); the name lives in __GASH_PS1_BRANCH.
+  [[ "$hook" == *"\${__GASH_PS1_BRANCH}"* ]]
+  [[ "$branch" == "branch:master" || "$branch" == "branch:main" ]]
 '
 
 it "the hook goes first in a PROMPT_COMMAND array or string, once" bash -c '
