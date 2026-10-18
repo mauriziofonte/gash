@@ -25,19 +25,19 @@ const (
 // Site is the state of one site, sites/<domain>.toml. The domain is the
 // identity and never changes.
 type Site struct {
-	Domain                   string            `toml:"domain"`
-	Aliases                  []string          `toml:"aliases"`
-	Docroot                  string            `toml:"docroot"`
-	PHP                      string            `toml:"php"`
-	Profile                  string            `toml:"profile"`
-	HTTPS                    bool              `toml:"https"`
-	ForceHTTPS               bool              `toml:"force_https"`
-	ForceHTTPSBypassLoopback bool              `toml:"force_https_bypass_loopback"`
-	HTTP2                    bool              `toml:"http2"`
-	Enabled                  bool              `toml:"enabled"`
-	Kind                     Kind              `toml:"kind"`
-	RawConf                  string            `toml:"raw_conf"`
-	PHPIni                   map[string]string `toml:"php_ini,omitempty"`
+	Domain                   string            `toml:"domain" json:"domain"`
+	Aliases                  []string          `toml:"aliases" json:"aliases"`
+	Docroot                  string            `toml:"docroot" json:"docroot"`
+	PHP                      string            `toml:"php" json:"php"`
+	Profile                  string            `toml:"profile" json:"profile"`
+	HTTPS                    bool              `toml:"https" json:"https"`
+	ForceHTTPS               bool              `toml:"force_https" json:"force_https"`
+	ForceHTTPSBypassLoopback bool              `toml:"force_https_bypass_loopback" json:"force_https_bypass_loopback"`
+	HTTP2                    bool              `toml:"http2" json:"http2"`
+	Enabled                  bool              `toml:"enabled" json:"enabled"`
+	Kind                     Kind              `toml:"kind" json:"kind"`
+	RawConf                  string            `toml:"raw_conf" json:"raw_conf"`
+	PHPIni                   map[string]string `toml:"php_ini,omitempty" json:"php_ini,omitempty"`
 }
 
 // Names returns the domain followed by the aliases: every name the site
