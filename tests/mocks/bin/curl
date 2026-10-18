@@ -265,7 +265,7 @@ route_write_out() {
 }
 
 route_error() {
-	if ((!r_silent || r_show)); then
+	if ((! r_silent || r_show)); then
 		echo "curl: ($1) $2" >&2
 	fi
 }
@@ -304,7 +304,7 @@ route_serve() {
 	((r_fail && code >= 400)) && failed=1
 	if ((r_head)); then
 		printf '%s' "$hdr" | route_emit
-	elif ((!failed)); then
+	elif ((! failed)); then
 		if [[ -n "$file" ]]; then
 			route_emit <"$file"
 		else
