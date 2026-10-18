@@ -8,6 +8,7 @@ package handlers
 import (
 	"github.com/mauriziofonte/gash/internal/gitx"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/remote"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 )
 
@@ -20,6 +21,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	registerOutput(t)
 	selfmgmt.Register(t)
 	gitx.Register(t)
+	remote.Register(t)
 	for _, r := range extra {
 		r(t)
 	}

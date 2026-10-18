@@ -27,7 +27,8 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
 	require.Equal(t, []string{"all_colors", "gash", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag",
-		"git_dump_revisions", "git_list_tags", "git_repair", "git_sync"}, tbl.Names())
+		"git_dump_revisions", "git_list_tags", "git_repair", "git_sync", "remote_exec", "remote_hosts", "remote_pull",
+		"remote_push", "remote_sync_pull", "remote_sync_push"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
