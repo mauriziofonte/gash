@@ -61,6 +61,7 @@ php         = "8.3"                # an installed version (section 4)
 profile     = "dev"                # dev | staging | hardened (values of hte-cli PhpProfiles.php)
 https       = true
 force_https = false
+force_https_bypass_loopback = false   # true: no redirect for 127.0.0.1 and ::1 (hte-cli 1.1.x behavior, D-2)
 http2       = true
 enabled     = true
 kind        = "managed"            # managed | raw (imported non-HTE vhost, section 10)
@@ -140,9 +141,10 @@ paths, logs outside the document root, 307 instead of 301:
         Require all granted
     </Directory>
 
-    # force_https = true (requests from 127.0.0.1 and ::1 are not redirected, as in hte-cli):
+    # force_https = true:
     #   RewriteEngine On
     #   RewriteCond %{HTTPS} off
+    # force_https_bypass_loopback = true adds (requests from 127.0.0.1 and ::1 are not redirected, as in hte-cli 1.1.x):
     #   RewriteCond %{REMOTE_ADDR} !^127\.0\.0\.1$
     #   RewriteCond %{REMOTE_ADDR} !^::1$
     #   RewriteRule ^/(.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=307,L]
@@ -155,8 +157,8 @@ The HTTPS vhost is the same block on `127.0.0.1:443` with hte-cli's
 `<FilesMatch "\.(cgi|shtml|phtml|php)$"> SSLOptions +StdEnvVars`, its
 `ssl-` log names and HTTPS bytes-log format, `SSLEngine on` and the site's
 `SSLCertificateFile`/`SSLCertificateKeyFile`. When IPv6 loopback exists both
-vhosts also answer on `[::1]`, so the `::1` bypass condition is live (in
-hte-cli it was dead code). Every path written into a config file is quoted
+vhosts also answer on `[::1]`, so the `::1` bypass condition, when enabled,
+is live (in hte-cli it was dead code). Every path written into a config file is quoted
 and escaped by one function (`quoteApacheArg`: `"` and `\` escaped; any
 control character, newline included, is rejected at validation), so a
 document root with spaces works and a newline cannot inject configuration
@@ -173,12 +175,15 @@ Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI parser
 the directory or use a symlink without these characters"; HTE-08). Pool
 values are double-quoted.
 
-Note for triage (LEDGER "HTE design delta"): with loopback-only binding every
-client address is `127.0.0.1` or `::1`, also for a Windows browser reaching
-WSL2 through localhost forwarding, so the hte-cli bypass makes force-HTTPS
-redirect nothing. hte-cli had the same effect in practice (its vhosts only
-matched connections to `127.0.0.1`). The design keeps the bypass as PRD 6.5
-requires and records the consequence as an operator decision (D-2).
+Force-HTTPS and the loopback bypass (decision D-2, option C; LEDGER HTE-52):
+with loopback-only binding every client address is `127.0.0.1` or `::1`,
+also for a Windows browser reaching WSL2 through localhost forwarding, so the
+hte-cli bypass would make force-HTTPS redirect nothing. The bypass is
+therefore a per-site setting, `force_https_bypass_loopback`, off by default:
+force-HTTPS redirects every plain-HTTP request, and a site that needs plain
+HTTP for local tools turns the bypass on (the PRD 6.5 behavior). `migrate`
+keeps each legacy site's behavior: V1 sites import with the bypass off (they
+redirected everything), V1-fixed, V2 and Broken-bypass sites with it on.
 
 `site create`, `site modify`, `site show`, `doctor` and `migrate` warn
 (stderr, and a `warnings` array in `--json`) when the document root's
@@ -402,7 +407,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 | `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix |
 | `migrate [--apply] [--site D]... [--exclude D]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
-| `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--alias N]... [--no-www] [--no-http2]` | New managed site; fails on any invalid value |
+| `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2]` | New managed site; fails on any invalid value |
 | `site modify --domain D [same flags]` | Changes the state; overlays untouched |
 | `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
@@ -434,7 +439,8 @@ Rules where the operator may choose otherwise (LEDGER items marked
 * A domain that starts with `www.` is kept as given and gets no `www.www.`
   alias; every alias goes into the certificate SAN, and an alias change
   reissues the certificate (HTE-47).
-* Absent flags: `https` on, `force_https` off, `http2` on, profile `dev`,
+* Absent flags: `https` on, `force_https` off, `force_https_bypass_loopback`
+  off, `http2` on, profile `dev`,
   PHP = the `hte.toml` default, else the highest discovered version; a
   default is only used when the flag is absent, never instead of an invalid
   value (HTE-55).
@@ -448,10 +454,10 @@ directory and `.info` files, the hosts file) and classifies every vhost:
 
 | Class | Recognized by | Plan |
 |---|---|---|
-| V1 (hte-cli 1.0.x) | Marker `# Auto-generated by the test environment creator`; force block with the directives at column 0, no localhost bypass; pool without `; Profile:` | Import as managed; force-HTTPS normalized; profile by the rule of step 4 |
-| V1-fixed | V1 marker plus the bypass block of a later `fix` | Import as managed |
-| V2 (1.1.x) | Marker `# Auto-generated by HTE-Cli`; bypass block; pool with `; Profile:` | Import as managed |
-| Broken-bypass | What hte-cli `fix` recognizes (blank lines between the directives) | Import as managed, normalized |
+| V1 (hte-cli 1.0.x) | Marker `# Auto-generated by the test environment creator`; force block with the directives at column 0, no localhost bypass; pool without `; Profile:` | Import as managed; force-HTTPS normalized, bypass off (V1 redirected every request); profile by the rule of step 4 |
+| V1-fixed | V1 marker plus the bypass block of a later `fix` | Import as managed, bypass on |
+| V2 (1.1.x) | Marker `# Auto-generated by HTE-Cli`; bypass block; pool with `; Profile:` | Import as managed, bypass on |
+| Broken-bypass | What hte-cli `fix` recognizes (blank lines between the directives) | Import as managed, normalized, bypass on |
 | Malformed | Marker present, domain or socket missing | Not imported; reported |
 | Raw | No marker (reverse proxies, hand-written vhosts) | Import as `kind = raw`: system paths and `${APACHE_LOG_DIR}` rewritten, certificates copied, validated by the config test; failures stay in the system and are reported |
 

@@ -152,8 +152,8 @@ before 2.x loaded.
 
 `gash <function> [args]` runs the same code with the same arguments, output
 and exit status as the shell function (the function is a stub that calls it).
-`gash <topic>` keeps showing the reference card, `gash migrate` the 1.x
-migration. New: `gash init bash`, `gash update`, `gash version`, `gash hte
+`gash <topic>` keeps showing the reference card, `gash migrate` the pointer to the
+2.x route for 1.x installs (D-6). New: `gash init bash`, `gash update`, `gash version`, `gash hte
 ...`, hidden `gash __compat ...` and `gash __complete ...`. For agents that do
 not source Gash, `~/.gash/bin/gash` is a stable path; `install.sh` offers to
 link it into `~/.local/bin`.

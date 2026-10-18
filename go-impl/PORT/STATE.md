@@ -6,7 +6,7 @@ Read this first in every session, then `git log --oneline -20`, then run the gat
 
 ## Phase
 
-S1 (design). No production Go is written before the operator's go-ahead in the session.
+rc.A implementation. S1 was approved by the operator in the session on 2026-10-18 (draft PR #5, `go-refactor` → `main`); the answers to D-1 to D-9 are in `go-impl/design/README.md`, "Decisions taken".
 
 ## Last completed step
 
@@ -15,11 +15,31 @@ S1 (design). No production Go is written before the operator's go-ahead in the s
 - Go 1.27.2 obtained through the toolchain mechanism (`GOTOOLCHAIN=go1.27.2`); `encoding/json/v2` importable without GOEXPERIMENT and rejects invalid UTF-8 by default.
 - Userland Apache + PHP-FPM spike green on an Ubuntu 24.04 container (non-root master on 127.0.0.1:80/443, HTTP/2, proxy_fcgi, graceful reload).
 - S1 design written: `go-impl/design/` (README with the decisions requested, architecture, layout, compat, shell, upgrade, libraries, testing, hte), `PARITY.md` (all 1095 spec tests), prompt and startup benchmarks with the 2.x numbers (`go-impl/bench/shell/`), legacy hte-cli fixtures (`go-impl/testdata/hte/legacy/`).
+- S1 draft PR #5 opened; CI green (12 checks).
+- Operator decisions recorded (D-2 option C, D-6 no 1.x work, the rest as recommended) in the design, MATRIX and LEDGER.
 - Audit of every 2.x module done: `MATRIX.md` (881 rows for 2.x plus the new 3.x surface) and `LEDGER.md` (396 items, every PRD seed indexed) merged from per-module fragments.
 
 ## Next step
 
-Open the S1 draft PR, then wait for the operator's go-ahead in the session. After it: apply the answers to the decisions (D-1 to D-9 in `go-impl/design/README.md`), then start the Go module (`go-impl/go.mod`, registry, contract, compat generator, `tests/run.sh --impl`).
+Milestone M0 of the plan below.
+
+## Plan to rc.A (stop S2)
+
+| Milestone | Content | Done when |
+|---|---|---|
+| M0 Foundation | `go-impl/go.mod` with the pinned stack (`libraries.md`), `cmd/gash`, `internal/{app,term,contract,registry,cli}` skeleton, `internal/compatgen` (gash.sh, the 7 shims, `lib/compat/bootstrap.sh`, `bin/gash`, `bash_completion`), `gash __compat stage`, `tests/run.sh --impl bash\|go\|both`, a Go job in CI | `go test ./...` green; `tests/run.sh --impl go` runs every spec against a staged tree (failures expected) |
+| M1 Core | `config`, `pathguard`, `runner`, `ui` primitives byte for byte, help and card from the registry, `platform` | core, output, config and help specs pass in Go mode |
+| M2 Agent API | `llm`, `llmexec`, `sqlguard`, `db` | llm, exec and db specs pass or map to a forced divergence |
+| M3 Files | `fsscan`, `files` | files specs |
+| M4 System and devops | `system`, `sysinfo`, `ssh`, `docker`, `gitx`, `remote` | their specs |
+| M5 Dev, AI, self-management | `dev`, `ai`, `selfmgmt` | their specs; upgrade scripts of `upgrade.md` 6 |
+| M6 Shell layer | `shellinit` complete; prompt and startup benchmarks against 2.x | shell specs; prompt not slower than 2.x |
+| M7 HTE | `hte`, `hostshelper`, `cmd/gash-hosts-helper`; E2E on Debian/Ubuntu containers here, Fedora/Arch/macOS in CI | PRD 11.1 HTE items |
+| M8 Cutover | `go-impl/` to the root, testscript suite and schemas, Bash framework removed, docs and `AGENTS.md`, CI and release workflows, `VERSION` `3.0.0-rc.A`, `PARITY.md` final | PRD 11.1 all true, then stop S2 |
+
+M2 to M5 and M7 run in parallel after M1, each in its own git worktree
+(`git worktree add ../wt-<name> -b wt/<name> go-refactor`), merged into
+`go-refactor` by the lead session; only `go-refactor` is pushed.
 
 ## Gate
 

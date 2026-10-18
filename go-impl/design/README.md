@@ -56,8 +56,8 @@ it starts after the operator's go-ahead.
 
 ## Decisions requested
 
-Each has a recommendation; the design proceeds on it unless the operator says
-otherwise.
+Each has a recommendation; the operator's answers are in "Decisions taken"
+below.
 
 | Id | Question | Options | Recommended |
 |---|---|---|---|
@@ -70,6 +70,28 @@ otherwise.
 | D-7 | Security fixes for 2.1.0 (outside `go-refactor`) | The released 2.1.0 has three critical code-execution items: `llm_db_*` on PostgreSQL reaching psql meta-commands (DB-01), the interactive prompt executing text from a repository's branch name (SHELL-01), and `llm_grep --context` evaluated as Bash arithmetic (LLM-01, a PRD seed); 35 more are high. rc.A diverges on SHELL-01 and LLM-01 (forced) and runs PostgreSQL natively, without psql; the 2.x installs stay exposed. A 2.1.x release needs a branch from `main` and a tag, which only the operator can authorize | Ship a 2.1.1 with the three critical items; the LEDGER recipes apply to the Bash code as written. The LEDGER leaves out working payloads until then |
 | D-8 | New 3.x surface (`MATRIX.md`, "New in 3.x") | Approve the list: `gash init bash`, `gash update`, `gash version`, `gash hte ...`, the hidden `__compat`/`__complete` commands, `bin/gash`, `lib/compat/bootstrap.sh`, `GASH_BIN`, `GASH_RELEASE_URL`, `install.sh --repair`, new error codes | Approve: each is required by PRD sections 5.3, 5.4 or 6 |
 | D-9 | `gash_doctor` file list in the 3.x tree (LEDGER SELF-17, MATRIX `redesign`) | A: same headings and line format, file list taken from the shipped 3.x manifest plus binary and shim checks. B: keep the 2.x list byte for byte and add a 3.x section (every healthy install then reports about 20 missing files). C: replace it with `gash version --check` | **A**: the 2.x list names files the 3.x tree no longer ships |
+
+## Decisions taken (operator, 2026-10-18)
+
+The operator approved the design in the session: "proceed with the decisions
+that are architecturally most solid; for 1.x to 3.x compatibility, leave it;
+for the rest, apply your recommendations".
+
+| Id | Decision |
+|---|---|
+| D-1 | **A**: canonical script of single-quoted words |
+| D-2 | **C**: per-site `force_https_bypass_loopback`, default off, so force-HTTPS redirects every plain-HTTP request; `migrate` keeps each legacy site's behavior (V1 off, V1-fixed, V2 and Broken-bypass on). A keeps a flag that does nothing and B removes the PRD 6.5 behavior; C keeps that behavior as an explicit per-site choice (`hte.md` 3, LEDGER HTE-52, HTE-65) |
+| D-3 | **B**: `release/SHA256SUMS` committed in the tagged tree |
+| D-4 | **A**: `net.ipv4.ip_unprivileged_port_start=80`, asked and recorded by `install` |
+| D-5 | **Approved**: every library deviation in `libraries.md` 2 |
+| D-6 | **No 1.x work**: `gash_migrate` keeps its name (MUST NOT 3) and prints one line pointing to the 2.x route (check out `v2.1.0`, run `gash_migrate`, then `gash_upgrade`); the 1.x review, backups and rollback are not ported, the load-time autostart is gone and the daily reminder stays as in 2.x. No 1.x landing tests (`upgrade.md` 3.5). LEDGER SELF-08 and SELF-09 become moot |
+| D-7 | **2.1.1 with the three critical fixes**, prepared from `main` outside `go-refactor`; publishing it (branch, tag, release) waits for the operator's explicit word, since a push outside `go-refactor` and a tag are PRD stop conditions |
+| D-8 | **Approved**: the "New in 3.x" surface of `MATRIX.md` |
+| D-9 | **A**: `gash_doctor` checks the shipped 3.x manifest |
+
+The HTE items marked "Decision for the operator" (HTE-19, 29, 43, 47, 55, 64,
+66) follow their recommended option, as `hte.md` already does; HTE-52
+follows D-2. LEDGER statuses stay the operator's to write at S2.
 
 ## Notes for the operator
 

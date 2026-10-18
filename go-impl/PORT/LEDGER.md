@@ -3042,7 +3042,7 @@ Critical and high items:
 | Reproduction | temporary HOME with a 1.x `~/.gashrc` (`export GASH_BASH=$HOME/.gash/gash.sh`) and a 0644 `~/.gash_env`; `$E bash --noprofile --norc -i -c 'umask 022; source $C/gash.sh; gash_migrate --yes --plain' </dev/null; find $HOME/.local/state/gash/backups -printf '%m %p\n'` → `755 .../backups/STAMP`, `644 .../STAMP/2-.gash_env` |
 | Severity | medium |
 | Public-contract impact | no |
-| rc.A behavior | Reproduced: `gash_migrate` (decision `port`) writes the backups with the same modes and keeps them all. |
+| rc.A behavior | Moot (D-6): 3.x does not port the 1.x migration; `gash_migrate` prints a pointer to the 2.x route and writes nothing. |
 | Fix recipe (3.0) | In `internal/selfmgmt` migrate (and the Bash fallback): create `backups/` and `STAMP/` with mode 0700, write each copy with 0600, keep the 5 newest stamps and remove older ones after a successful write (never the one just made); `--status` lists them. Document in `docs/troubleshooting.md` (migration backups). |
 | Proving test | `TestLedger_SELF08` in `internal/selfmgmt` (umask 022: directory 0700, files 0600; seven runs leave five stamps; `--rollback` still restores the newest) |
 | Status | open |
@@ -3060,7 +3060,7 @@ Critical and high items:
 | Reproduction | `git -C $MIRROR grep -n 'erasedups\|history -a; history -c' v1.5.3 -- gash.sh` (1.x: `gash.sh:151`, `:379`) and `grep -c HISTORY_SYNC $C/lib/modules/migrate.sh` → `0` |
 | Severity | low |
 | Public-contract impact | no |
-| rc.A behavior | Reproduced: rc.A shows the same migration screens. |
+| rc.A behavior | Moot (D-6): 3.x does not port the 1.x migration screens. |
 | Fix recipe (3.0) | Add a migration item in `internal/selfmgmt` (and `migrate.sh` while it ships): "Gash 1.x shared history between open terminals. Keep that (GASH_HISTORY_SYNC=1)?", recommended choice no, writes `GASH_HISTORY_SYNC=1` to `~/.gash_env` on yes. Add the line to `docs/migration` notes. |
 | Proving test | `TestLedger_SELF09` in `internal/selfmgmt` (1.x `~/.gashrc`: the plan contains the history item; `--yes` leaves the setting unset) |
 | Status | open |
@@ -7534,7 +7534,7 @@ Critical and high items:
 | Reproduction | `grep -n -A5 'Force HTTPS' go-impl/testdata/hte/legacy/templates/v2-vhost-forced.conf` (and the dossier G note, inferred from Apache's address matching) |
 | Severity | medium |
 | Public-contract impact | yes (redirects) |
-| rc.A behavior | The design keeps the bypass as PRD 6.5 requires. With `Listen` on loopback only, every client address is `127.0.0.1` or `::1`, a Windows browser reaching WSL2 through localhost forwarding included, so `force_https = true` redirects nothing: the flag only records intent. Sites migrated from V1 lose the redirect they had (HTE-65) |
+| rc.A behavior | Decided at S1 (D-2, option C): the bypass is the per-site setting `force_https_bypass_loopback` (`--force-https-bypass`/`--no-force-https-bypass`), off by default, so force-HTTPS redirects every plain-HTTP request with 307; with the bypass on, requests from `127.0.0.1` and `::1` are not redirected (PRD 6.5 behavior). With `Listen` on loopback only every client address is loopback, so with the bypass on force-HTTPS redirects nothing. `migrate` sets the bypass per legacy variant (HTE-65) |
 | Fix recipe (3.0) | Decision. Options: (a) keep the bypass as PRD 6.5 says (design today; force-HTTPS is inert, documented as such in `site show` and the docs); (b) drop the bypass for HTTPS-forced sites (force means a 307 for every plain-HTTP request; local scripts must call `https://` or follow redirects); (c) make the bypass a per-site flag (`force_https_bypass_loopback`, `--force-https-bypass`/`--no-force-https-bypass`) with a default to choose: "off" gives force-HTTPS a meaning and keeps an escape hatch for local tools |
 | Proving test | `TestLedger_HTE52` in `internal/hte/render` (golden forced vhost per option); `hte-e2e`: `curl -sI http://<forced site>/` from loopback → 200 for (a), 307 for (b) and for (c) with the bypass off |
 | Status | open |
@@ -7768,7 +7768,7 @@ Critical and high items:
 | Reproduction | `diff go-impl/testdata/hte/legacy/V1/etc/apache2/sites-available/003-forced.test.conf go-impl/testdata/hte/legacy/V1-fixed/etc/apache2/sites-available/003-forced.test.conf` |
 | Severity | low |
 | Public-contract impact | yes (redirects) |
-| rc.A behavior | Every variant imports as `force_https = true` and renders gash's block (bypass as decided in HTE-52, `R=307`). With the bypass kept, a V1 site that redirected stops redirecting |
+| rc.A behavior | Every variant imports as `force_https = true` and renders gash's block with `R=307`; the bypass follows the variant (D-2): off for V1 (they keep redirecting every request), on for V1-fixed, V2 and Broken-bypass (they keep redirecting almost nothing). The only change is 301 to 307 |
 | Fix recipe (3.0) | none: the delta is the design (follows the HTE-52 decision). Recommended: the plan notes the change for each V1 forced site |
 | Proving test | `TestLedger_HTE65` in `internal/hte/migrate` (V1, V1-fixed, V2, Broken-bypass forced sites → identical rendered force blocks) |
 | Status | open |

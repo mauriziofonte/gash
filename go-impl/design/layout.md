@@ -53,7 +53,7 @@ internal/
   dev/          php_detect_version, node_*, chrome_headless_update
   ai/           ai_ask, ai_query, ai_sysinfo, redaction
   ssh/          gash_ssh_auto_unlock (PTY driver for ssh-add)
-  selfmgmt/     version store, binary fetch, update/upgrade, uninstall, doctor, unload data, migrate (1.x)
+  selfmgmt/     version store, binary fetch, update/upgrade, uninstall, doctor, unload data, 1.x pointer (D-6)
   shellinit/    `gash init bash`: the interactive Bash layer, quoted with mvdan.cc/sh/v3/syntax
   compatgen/    generator of gash.sh, the 7 shim files, bash_completion, bin/gash, docs/reference
   hte/          state, render, apache, fpm, certs, hosts, service, platform, receipt, migrate, doctor, root ops

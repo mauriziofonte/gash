@@ -141,7 +141,7 @@ expectations untouched), each with its LEDGER id.
 ## 5. Upgrade and compatibility tests
 
 The scripts of `upgrade.md` section 6 (2.x install → `gash_upgrade` → 3.x,
-headless and interactive; no binary; rollback to `v2.1.0`; 1.x landings;
+headless and interactive; no binary; rollback to `v2.1.0`;
 `gash update` with a broken target), built from fixture clones with local
 tags and a `file://` release directory. They run in CI on Linux and macOS,
 and on Bash 4.4, 5.0, 5.1 and 5.3 (the compat Bash must load on 4.4).

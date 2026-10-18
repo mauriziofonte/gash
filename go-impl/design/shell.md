@@ -27,7 +27,7 @@ in 3.x.
 | 12 | Banner, SSH auto-unlock | Emitted script (section 7) |
 | 13 | Post symbol list | `gash.sh` |
 | 14 | `~/.bash_aliases`, `~/.bash_local` at top level | `gash.sh`, at top level, after the eval (same order) |
-| 15 | 1.x migration autostart | Emitted script: interactive with a terminal runs `gash_migrate --auto`; otherwise the once-a-day stderr notice; nothing in headless mode (forced divergence, LEDGER) |
+| 15 | 1.x migration autostart | Emitted script: interactive, the once-a-day stderr reminder, also on a terminal (the review no longer starts by itself, D-6); nothing in headless mode (forced divergence, LEDGER SHELL-13) |
 | 16 | `true` | `gash.sh` |
 | 17 | `bash_completion` (from `~/.gashrc`) | Generated, static (section 8) |
 

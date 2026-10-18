@@ -2,9 +2,9 @@
 
 # MATRIX
 
-Every public surface item of Gash 2.1.0 with its 3.x decision (PRD 8), then the new 3.x surface that needs
-approval at S1 (PRD 10, item 18). Approving S1 approves this table; a row the operator wants changed is
-named by its name and kind.
+Every public surface item of Gash 2.1.0 with its 3.x decision (PRD 8), then the new 3.x surface (PRD 10,
+item 18). The operator approved both at S1 on 2026-10-18 (decisions D-6 and D-8 in `go-impl/design/README.md`);
+a later change to a row needs a LEDGER item or the operator's word.
 
 * **kind**: `function`, `compat function` (a helper external harnesses may call after sourcing one of the 7
   shim paths), `alias`, `flag` (synonyms together, as `name -n/--limit`), `env var`, `setting` (a
@@ -34,9 +34,9 @@ named by its name and kind.
 
 | Decision | Rows |
 |---|---|
-| port | 853 |
-| drop | 24 |
-| redesign | 4 |
+| port | 846 |
+| drop | 30 |
+| redesign | 5 |
 
 Not public rows (moot internals in Go, PRD 5.5): the probe cache logic, the snapshot/diff machinery,
 `__gash_no_history`, subshell-dodging state variables, the TSV/awk transports, GNU/BSD/mawk probing, the
@@ -56,7 +56,7 @@ rg/grep dual paths, and the `__gash_*`/`__llm_*` internals not reachable through
 | gash_username | function | pure output | port | whoami, then id -un, then /etc/passwd, else UNKNOWN_USERNAME; extra arguments ignored (SELF-15). | gash gash_username | output_style_render_spec.sh, functions_more_spec.sh |
 | gash_inspiring_quote | function | pure output | port | Random quote from $GASH_DIR/quotes/list.txt, rc 1 when unreadable; positional reported as an option, reproduced (SELF-13). | gash gash_inspiring_quote | functions_more_spec.sh, output_style_render_spec.sh |
 | gash_env_init | function | pure output | port | Copies .gash_env.template to GASH_ENV_FILE or ~/.gash_env with mode 600; only --force as first argument is read (SELF-15). | gash gash_env_init | config_spec.sh, output_style_render_spec.sh, settings_spec.sh |
-| gash_migrate | function | interactive | port | Kept for 1.x installs landing on 3.x (PRD 5.3) and MUST NOT 3; the drop alternative is operator decision D-6; defects reproduced (SELF-08, SELF-09). | gash gash_migrate | migrate_spec.sh, output_style_render_spec.sh |
+| gash_migrate | function | interactive | redesign | Decision D-6: name kept (MUST NOT 3); prints one line pointing to the 2.x route (check out v2.1.0, run gash_migrate, then gash_upgrade), writes nothing, returns 1; the 1.x review, backups and rollback are not ported (SELF-08, SELF-09 moot). | gash gash_migrate | none (add TestSelfmgmt_MigratePointer) |
 | gash_db_list | function | pure output | port | Lists DB: entries with the 2.x mask; 2.x defects reproduced in rc.A (CORE-03, CORE-04, CORE-06). | gash gash_db_list | output_style_render_spec.sh, config_spec.sh |
 | gash_db_test | function | pure output | port | Native DB drivers replace the mysql, psql and sqlite3 clients (architecture.md 9); client-only behavior is a forced divergence (CORE-05). | gash gash_db_test | output_style_render_spec.sh, config_spec.sh |
 | gash_ai_list | function | pure output | port | Lists configured AI providers without tokens; message names ~/.gash_env whatever GASH_ENV_FILE says, reproduced (CORE-06). | gash gash_ai_list | output_style_render_spec.sh, ai_spec.sh, hygiene_spec.sh |
@@ -73,7 +73,7 @@ rg/grep dual paths, and the `__gash_*`/`__llm_*` internals not reachable through
 | nvm (GASH_NVM=lazy stub) | function | shell-mutating | port | Defined with GASH_NVM=lazy when $NVM_DIR/nvm.sh exists and no nvm function does; the first call sources nvm.sh --no-use and nvm bash_completion; parent-shell part stays Bash, emitted by gash init bash. | gash init bash (emits the stub) | toolchains_spec.sh |
 | gash --no-color | flag | pure output | port | Card without colors, anywhere in the arguments. | gash --no-color | gash_card_spec.sh |
 | gash -h/--help | flag | pure output | port | Registered help of gash, rc 0. | gash -h | hygiene_spec.sh |
-| gash migrate | flag | interactive | port | Subcommand: the remaining arguments go to gash_migrate. | gash migrate | migrate_spec.sh |
+| gash migrate | flag | interactive | port | Subcommand: runs gash_migrate (the D-6 pointer). | gash migrate | migrate_spec.sh |
 | gash_help --no-color | flag | pure output | port | Help without colors, anywhere in the arguments. | gash gash_help --no-color | color_gating_spec.sh |
 | gash_help --bash | flag | pure output | port | Delegates to Bash builtin help; stays Bash in the generated function (a binary has no builtin help). | shim (generated gash_help function) --bash | help_spec.sh |
 | gash_help --list | flag | pure output | port | Grouped listing by module; order of unlisted modules is a forced divergence (CORE-07). | gash gash_help --list | help_spec.sh, color_gating_spec.sh, output_style_render_spec.sh |
@@ -91,11 +91,11 @@ rg/grep dual paths, and the `__gash_*`/`__llm_*` internals not reachable through
 | gash_inspiring_quote -h/--help | flag | pure output | port | Registered help, rc 0. | gash gash_inspiring_quote -h | hygiene_spec.sh |
 | gash_env_init --force | flag | pure output | port | Overwrites an existing settings file; read only as the first argument. | gash gash_env_init --force | config_spec.sh |
 | gash_env_init -h/--help | flag | pure output | port | Registered help, rc 0, no file written. | gash gash_env_init -h | config_spec.sh, hygiene_spec.sh |
-| gash_migrate --rollback | flag | interactive | port | Restores the files saved by the last migration (asks unless --yes). | gash gash_migrate --rollback | output_style_render_spec.sh, migrate_spec.sh |
-| gash_migrate --status | flag | interactive | port | Schema version, pending migration and backups. | gash gash_migrate --status | output_style_render_spec.sh |
-| gash_migrate --yes/-y | flag | interactive | port | Takes the recommended choice everywhere, no questions. | gash gash_migrate --yes | output_style_render_spec.sh |
-| gash_migrate --plain | flag | interactive | port | Numbered prompts instead of arrow-key menus (sets GASH_TUI=plain locally). | gash gash_migrate --plain | migrate_spec.sh |
-| gash_migrate --auto | flag | interactive | port | Internal autostart entry from gash.sh at load; undocumented but accepted. | gash gash_migrate --auto | migrate_spec.sh |
+| gash_migrate --rollback | flag | interactive | drop | 1.x backups are not restored in 3.x (D-6); the option gets the pointer. | - | none (covered by TestSelfmgmt_MigratePointer) |
+| gash_migrate --status | flag | interactive | drop | Not ported (D-6); the option gets the pointer. | - | none (covered by TestSelfmgmt_MigratePointer) |
+| gash_migrate --yes/-y | flag | interactive | drop | Not ported (D-6); the option gets the pointer. | - | none (covered by TestSelfmgmt_MigratePointer) |
+| gash_migrate --plain | flag | interactive | drop | Not ported (D-6); the option gets the pointer. | - | none (covered by TestSelfmgmt_MigratePointer) |
+| gash_migrate --auto | flag | interactive | drop | The load-time autostart is gone (D-6); the option gets the pointer. | - | none (covered by TestSelfmgmt_MigratePointer) |
 | gash_migrate -h/--help | flag | interactive | port | Usage text, rc 0. | gash gash_migrate -h | migrate_spec.sh, hygiene_spec.sh |
 | gash_db_list -h/--help | flag | pure output | port | Registered help, rc 0. | gash gash_db_list -h | config_spec.sh, hygiene_spec.sh |
 | gash_db_test -h/--help | flag | pure output | port | Registered help, rc 0, no connection attempted. | gash gash_db_test -h | config_spec.sh, hygiene_spec.sh |
@@ -764,7 +764,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | EUID | shell-mutating | port | Root prompt color; owner check of the settings file. | shim | shell | none (add TestShellInit_EnvEuid) |
 | GASH_AI_DEBUG | pure output | port | 1 prints Debug: AI <label> blocks (redacted request body, HTTP code and elapsed, raw response, curl stderr, extracted JSON) on stderr; environment only (an unknown setting in ~/.gash_env); 2.x read it as a shell variable, so the shim must pass it | binary (passed by the shim) | devai | output_style_render_spec.sh |
 | GASH_AWK | - | drop | awk used by the 2.x card and help parsing (__GASH_AWK); Go runs no awk, so the variable is ignored, never an error. | - | shell, llm, system | none (add TestCompat_GASH_AWK_ignored) |
-| GASH_BASH GASH_COMPLETION | interactive | port | Markers of a 1.x ~/.gashrc that trigger the migration notice or autostart. | binary (file only) | shell | migrate_spec.sh, output_style_render_spec.sh |
+| GASH_BASH GASH_COMPLETION | interactive | port | Markers of a 1.x ~/.gashrc that trigger the daily reminder (the autostart is gone, D-6). | binary (file only) | shell | migrate_spec.sh, output_style_render_spec.sh |
 | GASH_CHROME_LINK | interactive | port | Maintained symlink (default /usr/local/bin/chrome-headless-shell); passed by the shim like GASH_CHROME_ROOT. | binary (passed by the shim) | system | chrome_spec.sh |
 | GASH_CHROME_ROOT | interactive | port | Install root (default /opt/chrome-headless-shell); 2.x also saw an unexported shell value, so the shim must pass it (it is not in the compat variable list). | binary (passed by the shim) | system | chrome_spec.sh |
 | GASH_DEBUG | - | port | =1 shows load diagnostics and settings warnings in headless mode and __gash_debug lines. | binary (passed by the shim) | shell | core_output_spec.sh |
@@ -940,7 +940,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | ~/.gash_env (or $GASH_ENV_FILE) | shell-mutating | port | Read for SSH entries by gash_ssh_auto_unlock. | - | system | ssh_auto_unlock_spec.sh |
 | ~/.gashrc | interactive | port | Written by install and migration, sourced by the profile block, deleted by uninstall without backup (SELF-02). | - | shell | install_uninstall_upgrade_spec.sh, migrate_spec.sh, startup_spec.sh, output_style_render_spec.sh |
 | ~/.local/state/gash/notice | interactive | port | Daily migration notice stamp; never written by a headless load in rc.A (SHELL-13). | - | shell | migrate_spec.sh |
-| ~/.local/state/gash/schema | interactive | port | Schema version written by gash_migrate; 1.x detection when absent. | - | shell | migrate_spec.sh |
+| ~/.local/state/gash/schema | interactive | port | Read for the 1.x detection (absent or older = 1.x reminder); 3.x never writes it (D-6). | - | shell | migrate_spec.sh |
 | ~/.rarrc | interactive | port | Read by unrar for default switches (verified: switches=-inul silences archive_extract on .rar); kept by running unrar with the caller's HOME (FILE-24) | - | files-archive | none (add TestLedger_FILE24_2x) |
 
 ### Paths
@@ -952,7 +952,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | $NVM_DIR/versions/node/ | pure output | port | Directory names are the installed versions: unfiltered in node_detect_version (DEV-05), vX.Y.Z only in node_upgrade; GNU sort -V order (DEV-13) | - | devai | node_spec.sh, node_upgrade_spec.sh |
 | $PWD (first 8 entry names, git branch) | pure output | port | Context fields files (ls -1 order, first 8) and git (null outside a repository) sent with every ai_ask/ai_query question | - | devai | ai_spec.sh |
 | $PWD/.git (walk up to /) | shell-mutating | port | Prompt repository detection without forks, then one git status. | - | shell | prompt_spec.sh, startup_spec.sh |
-| $TMPDIR/gash-migrate.XXXXXX and $TMPDIR/gash-download.XXXXXX | - | port | Temporary work files of gash_migrate and __gash_download, removed afterwards. | - | shell | none (add TestSelfmgmt_TempFiles) |
+| $TMPDIR/gash-migrate.XXXXXX and $TMPDIR/gash-download.XXXXXX | - | port | Temporary work file of __gash_download, removed afterwards; gash-migrate.* is no longer created (D-6). | - | shell | none (add TestSelfmgmt_TempFiles) |
 | $TMPDIR/tmp.XXXXXXXXXX/recovery.git | interactive | port | Temporary bare clone of origin made by git_repair, removed on return (RETURN trap in 2.x, defer in Go). | - | devops | git_repair_spec.sh |
 | ${GASH_CHROME_LINK:-/usr/local/bin/chrome-headless-shell} | interactive | port | Replaced with `sudo ln -sfn`, resolved with readlink -f to find the installed version. | - | system | chrome_spec.sh |
 | ${GASH_CHROME_ROOT:-/opt/chrome-headless-shell}/<version>/ | interactive | port | One directory per version: the outgoing one kept for rollback, the others pruned with `sudo find -depth -delete`; symlinked root is SYS-23. | - | system | chrome_spec.sh |
@@ -977,12 +977,12 @@ One row per item, merged across modules ("Used by" names the sections above that
 | history_grep FILE operands | shell-mutating | port | Words after PATTERN are read as grep FILE operands instead of the history: 2.x defect reproduced in rc.A (SYS-08). | - | system | none (add TestLedger_SYS08) |
 | OUTPUT_DIR (default .) | interactive | port | Created with mkdir -p (no --, mode 0777 & ~umask) when it is not a directory, before the format and its tool are checked (FILE-07, FILE-08); a symlink to a directory is followed | - | files-archive | files_spec.sh, output_style_render_spec.sh |
 | OUTPUT_DIR/<archive members> | interactive | port | Tree formats: written by tar, unzip, 7z or unrar under their own overwrite, prompt, permission and member-name rules (FILE-11, FILE-22) | - | files-archive | files_spec.sh, output_style_render_spec.sh |
-| ~/.local/state/gash/backups/STAMP/ (files and manifest) | interactive | port | Migration backups read by --rollback and --status; modes and pruning reproduced (SELF-08). | - | shell | migrate_spec.sh |
+| ~/.local/state/gash/backups/STAMP/ (files and manifest) | interactive | drop | Written and read only by the 2.x migration (D-6); 3.x leaves existing backups untouched. | - | shell | none |
 | ~/.ssh (or $XDG_RUNTIME_DIR) | shell-mutating | port | mkdir -p and chmod 700 on every agent search, even on an existing directory: 2.x defect reproduced in rc.A (SYS-22). | - | system | none (add TestLedger_SYS22) |
 | ~/.ssh/ | pure output | port | Created by remote_exec with `mkdir -p` and the default umask (0755): 2.x defect reproduced in rc.A (REM-07). | - | devops | none (add TestLedger_REM07 in internal/remote) |
 | ~/.ssh/cm-%C | interactive | port | ControlPath of the multiplexed ssh master (remote_exec, rsync -e string; ControlPersist=60s); written by ssh, not by Gash. | - | devops | none (add TestRemoteSSHOptions in internal/remote) |
 
-## New in 3.x (approval requested)
+## New in 3.x (approved at S1, D-8)
 
 Required by PRD 5.3 (upgrade), 5.4 (shell layer) and 6 (HTE), or by the design (`go-impl/design/`).
 

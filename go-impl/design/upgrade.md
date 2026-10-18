@@ -90,18 +90,18 @@ audit of the 1.x loaders (section 7.2) shows that every 1.x `~/.gashrc`
 sources `$HOME/.gash/gash.sh` and `$HOME/.gash/bash_completion`, which stay
 at the root, so a 1.x install landing on 3.x gets the 3.x shell with no step:
 
-* interactive with a terminal: the 3.x shell, then the 2.x migration review
-  (`gash_migrate --auto`) starts by itself, as it does on 2.x;
-* interactive without a terminal: the shell, plus the 2.x once-a-day stderr
-  notice pointing to `gash migrate`;
-* headless: the functions, nothing printed (2.x prints the notice there too;
-  3.x cannot, MUST NOT 4: forced divergence, LEDGER).
+* interactive: the 3.x shell plus the 2.x once-a-day stderr reminder
+  pointing to `gash migrate` (2.x also started the review by itself on a
+  terminal; 3.x does not, decision D-6);
+* headless: the functions, nothing printed (2.x prints the reminder there
+  too; 3.x cannot, MUST NOT 4: forced divergence, LEDGER SHELL-13).
 
-`gash_migrate` is ported (MATRIX), so the pointer leads somewhere; the
-alternative (drop it and keep only the pointer) is decision D-6 in
-`README.md`. Proven by tests on fixture checkouts of `v1.0.6`, `v1.4.9` and
-`v1.5.3` with their own `~/.gashrc` variants, moved onto the branch head by
-their own 1.x `gash_upgrade`.
+Decision D-6 (operator): no 1.x work in 3.x. `gash_migrate` keeps its name
+(MUST NOT 3) and prints one line pointing to the 2.x route, which still
+works: check out `v2.1.0` in the install directory, open a new shell, run
+`gash_migrate`, then `gash_upgrade`. It writes nothing and returns 1;
+`--help` prints its usage. The 1.x review, backups and rollback are not
+ported, and no test covers 1.x landings.
 
 ### 3.6 `gash update` (3.x)
 
@@ -167,7 +167,6 @@ tags), a `file://` release directory holding the test build, and a temporary
 | `upgrade_2x_resource` | `source ~/.gashrc` in the shell that ran 2.x, then `gash_unload` restores the pre-2.x state |
 | `upgrade_no_binary` | release URL unreachable: one stderr line interactive, envelope headless, status 0 while sourcing, nothing left behind |
 | `upgrade_rollback` | checkout `v2.1.0`, porcelain empty, 2.x loads and upgrades again |
-| `upgrade_1x_landing` | 1.0.6, 1.4.9 and 1.5.3 fixture installs moved onto 3.x by their own 1.x `gash_upgrade`: interactive shell works, headless prints nothing |
 | `update_verify_rollback` | `gash update` with a broken target build rolls back |
 
 ## 7. Audit results (S1)
@@ -182,7 +181,7 @@ data, completion data and prompt code are in memory and never re-read.
 |---|---|---|---|
 | `quotes/list.txt` | `gash_inspiring_quote` | kept, same format | none |
 | `.gash_env.template` | `gash_env_init` | kept | none |
-| `.gashrc` | `gash_migrate` (new `~/.gashrc`) | kept, unchanged | none |
+| `.gashrc` | `gash_migrate` (new `~/.gashrc`) | kept, unchanged | none (3.x `gash_migrate` no longer reads it, D-6) |
 | `gash.sh`, `lib/core/` (layout check before `rm -rf`) | `gash_uninstall` | both kept | none |
 | `.git/` | `gash_upgrade` | unchanged | none: 2.x can still upgrade or roll back |
 | `gash.sh`, `bash_completion` in a child shell | `gash_doctor --timing` | generated 3.x files | times the 3.x load |
@@ -202,10 +201,10 @@ no 3.x code reads, so they are accepted.
 | `~/.gashrc`, v1.0.6 to v1.4.8 | `export GASH_BASH=$HOME/.gash/gash.sh`, `export GASH_COMPLETION=$HOME/.gash/bash_completion`, `source $GASH_BASH`, `source $GASH_COMPLETION` (unconditional) | both files exist at the root: loads |
 | `~/.gashrc`, v1.4.9 to v1.5.0 | quoted, `[ -f "$GASH_COMPLETION" ] && source ...` | loads |
 | `~/.gashrc`, v1.5.3 | if-block with a `GASH_HEADLESS` check | loads; headless prints nothing |
-| `~/.gashrc` in general | paths hard-coded to `~/.gash`; no trailing newline | `GASH_DIR` comes from the path of `gash.sh`, as 2.x; 3.x never rewrites `~/.gashrc` (the migration does it only with consent, as 2.x) |
+| `~/.gashrc` in general | paths hard-coded to `~/.gash`; no trailing newline | `GASH_DIR` comes from the path of `gash.sh`, as 2.x; 3.x never rewrites `~/.gashrc` |
 | Profile block | v1.0.6 to v1.2.0: 5 lines (`# Load Gash Bash` ...); v1.3.0 on: the marker block | sources `~/.gashrc`; uninstall removes either form, as 2.x |
 | 1.x `gash_upgrade` | v1.2.0 to v1.5.3: newest tag by `creatordate`, any name; `checkout` + `reset --hard` + `reflog expire` + `gc`; dirty check only from v1.5.1; no re-source | lands on any 3.x tag, including an rc; the binary is fetched by the next shell (3.1) |
-| 1.x load (v1.5.3) | `HISTCONTROL=ignoreboth:erasedups`, unlimited history, history synced every prompt, `PROMPT_COMMAND` replaced, `umask 022` | the 2.x behavior applies (the migration does not mention the dropped history sync: LEDGER) |
+| 1.x load (v1.5.3) | `HISTCONTROL=ignoreboth:erasedups`, unlimited history, history synced every prompt, `PROMPT_COMMAND` replaced, `umask 022` | the 2.x behavior applies |
 | 1.x quote reader | any random line | can print a `#` comment line of the 2.x format in a still-open 1.x shell (LEDGER, low) |
 
 Detection in 3.x stays the 2.x rule: `~/.gashrc` contains `GASH_BASH` and
