@@ -93,7 +93,7 @@ func TestLedger_LLM37(t *testing.T) {
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, "a.txt"), "word café.\ncaf\xe9 latin1\n")
 	env := baseEnv(physTemp(t), map[string]string{"PATH": ""})
-	for _, p := range []string{`\<word`, `foo{bar}`, `\Qa\E`, `[a&&b]`, `a**`, `\1`, `\x0a`} {
+	for _, p := range []string{"(", "needle\nx", `\<word`, `foo{bar}`, `\Qa\E`, `[a&&b]`, `a**`, `\1`, `\x0a`} {
 		for _, args := range [][]string{{"llm_grep", p, "."}, {"llm_find", "*", ".", "--contains", p}} {
 			r := runGo(t, m, d, env, args[0], args[1:]...)
 			require.Equal(t, 1, r.RC, "%q", args)

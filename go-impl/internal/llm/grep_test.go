@@ -114,8 +114,6 @@ func TestGrepMatches2x(t *testing.T) {
 		{"(?i)NEEDLE", "src"},
 		{"ne+dle (one|two)", "src"},
 		{"a{3}", "src"},
-		{"("},
-		{"needle\nx"},
 		{"needle", "nonexistent"},
 		{"needle", "/nonexistent"},
 		// refusals and argument errors, in the 2.x order
@@ -246,16 +244,16 @@ func TestLedger_LLM16(t *testing.T) {
 	require.Equal(t, want, runGo(t, m, d, env, "llm_grep", "needle"))
 }
 
-// TestLedger_LLM17_2x: a missing PATH and an invalid regex are silent
-// successes.
+// TestLedger_LLM17_2x: a missing PATH is a silent success. (An invalid
+// regex, silent in 2.x too, fails with invalid_regex: LLM-37.)
 func TestLedger_LLM17_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	env := rgEnv(t, physTemp(t))
 	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_grep", "x", "/nonexistent"))
-	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_grep", "(", "."))
 	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_find", "*", "/nonexistent"))
-	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_find", "*", ".", "--contains", "("))
+	require.Equal(t, result{"", "", 0}, run2x(t, d, env, "llm_grep", "(", "."))
+	require.Equal(t, 1, runGo(t, m, d, env, "llm_grep", "(", ".").RC)
 }
 
 // TestLedger_LLM26: binary files are skipped in a walk.

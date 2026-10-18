@@ -39,11 +39,13 @@ func splitExts(s string) []string {
 	return f
 }
 
-// search builds the rg run of an llm function.
-func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool) (*rgSearch, bool) {
+// search builds the rg run of an llm function. Without one, rc is the
+// exit status: a pattern that cannot be read as rg 14 read it fails with
+// invalid_regex (LEDGER LLM-37); globs rg refused print nothing, as 2.x.
+func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool) (s *rgSearch, rc int, ok bool) {
 	r, err := compileRg(re)
 	if err != nil {
-		return nil, false
+		return nil, fail(c, "invalid_regex", re, "Patterns use ripgrep's regex syntax: "+err.Error()), false
 	}
 	cwd, err := m.getwd()
 	if err != nil {
@@ -51,15 +53,15 @@ func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool
 	}
 	over, ok := newOverrides(cwd, globs, secretIglobs())
 	if !ok {
-		return nil, false
+		return nil, 0, false
 	}
-	s := &rgSearch{re: r, over: over, cwd: cwd}
+	s = &rgSearch{re: r, over: over, cwd: cwd}
 	s.rules.noIgnore = noIgnore
 	s.rules.hidden = !noIgnore
 	if !noIgnore {
 		s.rules.global = globalExcludes(c.Env.Get("HOME"), c.Env.Get("XDG_CONFIG_HOME"))
 	}
-	return s, true
+	return s, 0, true
 }
 
 // grep is llm_grep (fs.sh __llm_grep_impl), on the one search engine with
@@ -122,9 +124,9 @@ func (m *Module) grep(c *invoke.Call) int {
 	for _, e := range splitExts(extensions) {
 		globs = append(globs, "*."+e)
 	}
-	s, ok := m.search(c, pattern, globs, false)
+	s, rc, ok := m.search(c, pattern, globs, false)
 	if !ok {
-		return 0
+		return rc
 	}
 	s.context = atoi(context)
 	s.run(safe, c.Stdout, atoi(limit))

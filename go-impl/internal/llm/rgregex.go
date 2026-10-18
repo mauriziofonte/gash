@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"errors"
 	"regexp"
 	"regexp/syntax"
 	"sort"
@@ -44,7 +45,12 @@ func compileRg(pattern string) (*rgRegex, error) {
 	}
 	re, err := regexp.Compile(text)
 	if err != nil {
-		return nil, &rgRefusal{strings.TrimPrefix(err.Error(), "error parsing regexp: ")}
+		// The kind of error only: its text quotes the rewritten pattern.
+		var se *syntax.Error
+		if errors.As(err, &se) {
+			return nil, &rgRefusal{string(se.Code)}
+		}
+		return nil, &rgRefusal{err.Error()}
 	}
 	parsed, err := syntax.Parse(text, syntax.Perl)
 	if err != nil {

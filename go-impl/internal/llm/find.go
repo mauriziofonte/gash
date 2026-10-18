@@ -78,9 +78,9 @@ func (m *Module) find(c *invoke.Call) int {
 		}
 		globs := append([]string{pattern}, noiseGlobs...)
 		globs = append(globs, "!__pycache__")
-		s, ok := m.search(c, contains, globs, true)
+		s, rc, ok := m.search(c, contains, globs, true)
 		if !ok {
-			return 0
+			return rc
 		}
 		s.filesOnly = true
 		s.run(safe, c.Stdout, n)
