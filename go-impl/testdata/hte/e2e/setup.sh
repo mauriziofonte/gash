@@ -35,11 +35,17 @@ fi
 cat /tmp/hosts.orig >/etc/hosts
 echo "the helper wrote the bind mount in place"
 
-# The V2 hte-cli tree; https.test moves to PHP 8.3 (the image has no 7.4).
+# The V2 hte-cli tree. The multi-PHP image has its system PHP 7.4; in
+# the base image https.test moves to PHP 8.3.
+multiphp=${GASH_HTE_E2E_MULTIPHP:-}
 cp -a /e2e/V2/etc/apache2/. /etc/apache2/
 cp /e2e/V2/etc/php/8.3/fpm/pool.d/*.conf /etc/php/8.3/fpm/pool.d/
-sed 's/php7\.4/php8.3/g' /e2e/V2/etc/php/7.4/fpm/pool.d/https.test.conf >/etc/php/8.3/fpm/pool.d/https.test.conf
-sed -i 's/php7\.4/php8.3/g' /etc/apache2/sites-available/002-https.test.conf
+if [ "$multiphp" = 1 ]; then
+    cp /e2e/V2/etc/php/7.4/fpm/pool.d/https.test.conf /etc/php/7.4/fpm/pool.d/
+else
+    sed 's/php7\.4/php8.3/g' /e2e/V2/etc/php/7.4/fpm/pool.d/https.test.conf >/etc/php/8.3/fpm/pool.d/https.test.conf
+    sed -i 's/php7\.4/php8.3/g' /etc/apache2/sites-available/002-https.test.conf
+fi
 grep 'hte-cli' /e2e/V2/etc/hosts >>/etc/hosts
 chown root:root /etc/apache2/certs-selfsigned/*
 chmod 0644 /etc/apache2/certs-selfsigned/*.crt
@@ -47,6 +53,9 @@ chmod 0400 /etc/apache2/certs-selfsigned/*.key
 for s in http https forced; do
     mkdir -p "/home/dev/sites/$s/public"
     printf '<?php echo "legacy:", $_SERVER["HTTP_HOST"], ":", PHP_SAPI, "\\n";\n' >"/home/dev/sites/$s/public/index.php"
+    if [ "$multiphp" = 1 ]; then
+        printf '<?php echo PHP_VERSION, " ", ini_get("max_input_vars"), "\\n";\n' >"/home/dev/sites/$s/public/info.php"
+    fi
 done
 chown -R dev:dev /home/dev/sites
 # As on hte-cli machines, the system Apache runs as the user (the pool
@@ -55,6 +64,9 @@ sed -i -e 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=dev/' -e 's/^expo
 a2enmod -q ssl proxy_fcgi rewrite http2 headers >/dev/null
 # restart: under systemd the units already run, on the default tree.
 service php8.3-fpm restart >/dev/null
+if [ "$multiphp" = 1 ]; then
+    service php7.4-fpm restart >/dev/null
+fi
 service apache2 restart >/dev/null
 echo "== the system Apache serves the legacy sites"
 curl -fsS --resolve http.test:80:127.0.0.1 http://http.test/
@@ -81,6 +93,10 @@ set +e
 if [ "${GASH_HTE_E2E_SYSTEMD:-}" = 1 ]; then
     # A login session (pam_systemd): XDG_RUNTIME_DIR and the user manager.
     su -l dev -c 'env GASH_HTE_E2E=1 GASH_HTE_E2E_SYSTEMD=1 /usr/local/bin/gash-e2e -test.v -test.run TestE2ESystemd -test.timeout 20m'
+elif [ "$multiphp" = 1 ]; then
+    runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 GASH_HTE_E2E_MULTIPHP=1 \
+        /usr/local/bin/gash-e2e -test.v -test.run TestE2EMultiPHP -test.timeout 20m
 else
     runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
         PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 \
@@ -90,7 +106,7 @@ rc=$?
 set -e
 if [ "$rc" != 0 ]; then
     echo "== logs"
-    for f in /home/dev/.local/state/gash/hte/logs/*.log /home/dev/.local/state/gash/hte/logs/*/*.log /var/log/apache2/error.log /var/log/php8.3-fpm.log; do
+    for f in /home/dev/.local/state/gash/hte/logs/*.log /home/dev/.local/state/gash/hte/logs/*/*.log /var/log/apache2/error.log /var/log/php*-fpm.log; do
         [ -f "$f" ] && {
             echo "-- $f"
             tail -n 20 "$f"

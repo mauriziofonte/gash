@@ -11,6 +11,7 @@
 #   testdata/hte/e2e/run.sh            # Ubuntu 24.04
 #   GASH_HTE_E2E_BASE=... run.sh       # another apt-based image
 #   GASH_HTE_E2E_SYSTEMD=1 run.sh      # systemd as PID 1, autostart systemd
+#   GASH_HTE_E2E_MULTIPHP=1 run.sh     # PHP 7.4, 8.2 and 8.4 next to the distro 8.3
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -22,6 +23,15 @@ mkdir -p "$stage"
 
 if ! docker image inspect "$image" >/dev/null 2>&1; then
     docker build --build-arg BASE="$base" -t "$image" -f "$here/Dockerfile.base" "$here"
+fi
+
+if [ "${GASH_HTE_E2E_MULTIPHP:-}" = 1 ]; then
+    # The official php:X.Y-fpm builds side by side (Dockerfile.multiphp).
+    mp=${image/gash-hte-e2e-base/gash-hte-e2e-multiphp}
+    if ! docker image inspect "$mp" >/dev/null 2>&1; then
+        docker build --build-arg BASE="$image" -t "$mp" -f "$here/Dockerfile.multiphp" "$here"
+    fi
+    image=$mp
 fi
 
 export GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0
@@ -64,4 +74,5 @@ fi
 exec docker run --rm --init --network none \
     --security-opt systempaths=unconfined \
     --sysctl net.ipv4.ip_unprivileged_port_start=1024 \
+    -e GASH_HTE_E2E_MULTIPHP="${GASH_HTE_E2E_MULTIPHP:-}" \
     -v "$stage:/e2e:ro" "$image" /e2e/setup.sh
