@@ -20,7 +20,7 @@ stage=${GASH_HTE_E2E_STAGE:-$(mktemp -d)}
 mkdir -p "$stage"
 
 if ! docker image inspect "$image" >/dev/null 2>&1; then
-	docker build --build-arg BASE="$base" -t "$image" -f "$here/Dockerfile.base" "$here"
+    docker build --build-arg BASE="$base" -t "$image" -f "$here/Dockerfile.base" "$here"
 fi
 
 export GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0
@@ -35,6 +35,6 @@ chmod -R a+rX "$stage"
 # mount of /etc/hosts with a plain file. systempaths=unconfined: the root
 # step writes net.ipv4.ip_unprivileged_port_start, which starts at 1024.
 exec docker run --rm --init --network none \
-	--cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
-	--sysctl net.ipv4.ip_unprivileged_port_start=1024 \
-	-v "$stage:/e2e:ro" "$image" /e2e/setup.sh
+    --cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
+    --sysctl net.ipv4.ip_unprivileged_port_start=1024 \
+    -v "$stage:/e2e:ro" "$image" /e2e/setup.sh
