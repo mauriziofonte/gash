@@ -1,0 +1,17 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# LEDGER SYS-42: sysinfo and port_kill run in the binary, so the caller's
+# shell gets no __SYSINFO_MODE (2.x left "llm") and no BASH_REMATCH (2.x
+# left the last =~ match). port_kill stops at the invalid port.
+
+env GASH_HEADLESS=1
+! exec bash -c 'source "$GASH_SH"; sysinfo overview --llm >/dev/null; port_kill abc 2>/dev/null; declare -p __SYSINFO_MODE BASH_REMATCH'
+! stdout .
+stderr 'declare: __SYSINFO_MODE: not found'
+stderr 'declare: BASH_REMATCH: not found'
+
+# Nor any other __SYSINFO_ variable or a RETURN trap, from a function
+# under set -euo pipefail.
+exec bash -c 'set -euo pipefail; source "$GASH_SH"; f() { sysinfo mail --llm; port_kill abc || true; }; f >/dev/null 2>&1; trap -p RETURN; declare -p | grep -c "^declare -[^ ]* __SYSINFO_" || true'
+stdout '^0$'
+! stderr .
