@@ -61,6 +61,9 @@ type rig struct {
 	// runs, direct the master starts and stops outside one.
 	unitActive, inUnit bool
 	direct             []string
+	// mac: the tree is the Homebrew macOS one; pfLoaded is the anchor's
+	// state (pfctl -E loads it, -F empties it).
+	mac, pfLoaded bool
 }
 
 // rigProcs records the stops of masters outside a unit job.
@@ -107,6 +110,22 @@ func (u userRunner) Run(ctx context.Context, c runner.Cmd) (runner.Result, error
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
+	return newRigOn(t, false)
+}
+
+// newMacRig is the rig on the Homebrew macOS tree: pf.conf as macOS ships
+// it, launchd, no system Apache, no hte-cli tree.
+func newMacRig(t *testing.T) *rig {
+	t.Helper()
+	return newRigOn(t, true)
+}
+
+// stockPFConf is the /etc/pf.conf macOS ships.
+const stockPFConf = "scrub-anchor \"com.apple/*\"\nnat-anchor \"com.apple/*\"\nrdr-anchor \"com.apple/*\"\n" +
+	"dummynet-anchor \"com.apple/*\"\nanchor \"com.apple/*\"\nload anchor \"com.apple\" from \"/etc/pf.anchors/com.apple\"\n"
+
+func newRigOn(t *testing.T, mac bool) *rig {
+	t.Helper()
 	f := newFixture(t)
 	// A short runtime directory: socket paths have at most 103 bytes.
 	rt, err := os.MkdirTemp("", "rt")
@@ -115,8 +134,41 @@ func newRig(t *testing.T) *rig {
 	}
 	t.Cleanup(func() { os.RemoveAll(rt) })
 	f.env["XDG_RUNTIME_DIR"] = rt
-	m := &rig{fixture: f, t: t, root: t.TempDir(), stack: servicetest.New(t),
+	m := &rig{fixture: f, t: t, root: t.TempDir(), stack: servicetest.New(t), mac: mac,
 		active: map[string]bool{"apache2": true, "php8.3-fpm": true}, enabled: map[string]bool{"apache2": true, "php8.3-fpm": true}}
+	if mac {
+		m.macTree()
+	} else {
+		m.linuxTree()
+	}
+	m.write("/etc/sudoers", "root ALL=(ALL:ALL) ALL\n@includedir /etc/sudoers.d\n", 0o440)
+	return m.finish(f)
+}
+
+// macTree is the macOS part of the tree.
+func (m *rig) macTree() {
+	m.t.Helper()
+	m.active, m.enabled = map[string]bool{}, map[string]bool{}
+	if err := os.CopyFS(m.root, os.DirFS(filepath.Join(sysroots, "macos"))); err != nil {
+		m.t.Fatal(err)
+	}
+	m.write("/etc/hosts", "127.0.0.1\tlocalhost\n::1\tlocalhost\n", 0o644)
+	m.write(rootops.PFConf, stockPFConf, 0o644)
+	m.write("/etc/pf.anchors/com.apple", "anchor \"250.ApplicationFirewall/*\"\n", 0o644)
+	m.write("/Library/LaunchDaemons/com.example.other.plist", "<plist/>\n", 0o644)
+	if err := os.MkdirAll(filepath.Join(m.root, "var/lib"), 0o755); err != nil {
+		m.t.Fatal(err)
+	}
+	for _, tool := range []string{"/usr/bin/sudo", "/usr/sbin/visudo", "/usr/bin/openssl", "/sbin/pfctl", "/usr/bin/plutil", "/bin/launchctl"} {
+		m.write(tool, "", 0o755)
+	}
+}
+
+// linuxTree is the Debian tree with the hte-cli V2 sites, the system
+// units and the tools.
+func (m *rig) linuxTree() {
+	t := m.t
+	t.Helper()
 	for _, src := range []string{filepath.Join(sysroots, "debian"), "../../testdata/hte/legacy/V2"} {
 		if err := os.CopyFS(m.root, os.DirFS(src)); err != nil && !errors.Is(err, fs.ErrExist) {
 			t.Fatal(err)
@@ -125,7 +177,6 @@ func newRig(t *testing.T) *rig {
 	for _, s := range []string{"http", "https", "forced"} {
 		m.write("/home/dev/sites/"+s+"/public/index.php", "<?php echo 1;\n", 0o644)
 	}
-	m.write("/etc/sudoers", "root ALL=(ALL:ALL) ALL\n@includedir /etc/sudoers.d\n", 0o440)
 	m.write("/proc/sys/net/ipv4/ip_unprivileged_port_start", "1024\n", 0o644)
 	m.write("/etc/init.d/apache2", "#!/bin/sh\n", 0o755)
 	if err := os.MkdirAll(filepath.Join(m.root, "var/lib"), 0o755); err != nil {
@@ -146,6 +197,12 @@ func newRig(t *testing.T) *rig {
 			}
 		}
 	}
+}
+
+// finish adds the hosts helper and the engine's fakes.
+func (m *rig) finish(f *fixture) *rig {
+	t := m.t
+	t.Helper()
 	// The hosts helper: the user side hashes the real file, root copies
 	// it from the tree.
 	helper := filepath.Join(t.TempDir(), "gash-hosts-helper")
@@ -159,6 +216,9 @@ func newRig(t *testing.T) *rig {
 	}
 	e := f.e
 	e.Sysroot, e.Helper, e.Self = sr, helper, "/usr/local/bin/gash"
+	if m.mac {
+		e.GOOS = "darwin"
+	}
 	e.Runner = userRunner{Fake: runner.NewFake(t).Respond(m.userAnswer), m: m}
 	e.Starter = child.Fake(t, func(runner.Call) runner.Expect {
 		return runner.Expect{Serve: func(in io.Reader, out io.Writer) error {
@@ -217,7 +277,12 @@ func (m *rig) lines() (root, user []string) {
 }
 
 func (m *rig) rootEnv() rootops.Env {
-	l, err := legacy.LayoutFor(platform.FamilyDebian, "")
+	o := platform.OS{GOOS: "linux", ID: "ubuntu", VersionID: "24.04", Family: platform.FamilyDebian}
+	prefix := ""
+	if m.mac {
+		o, prefix = platform.OS{GOOS: "darwin", ID: "macos", VersionID: "15.1", Family: platform.FamilyDarwin}, "/opt/homebrew"
+	}
+	l, err := legacy.LayoutFor(o.Family, prefix)
 	if err != nil {
 		m.t.Fatal(err)
 	}
@@ -233,7 +298,7 @@ func (m *rig) rootEnv() rootops.Env {
 			return map[string]string{"SUDO_USER": m.e.User, "SUDO_UID": strconv.Itoa(uid), "SUDO_GID": strconv.Itoa(gid)}[k]
 		},
 		Now:     m.e.now,
-		OS:      platform.OS{GOOS: "linux", ID: "ubuntu", VersionID: "24.04", Family: platform.FamilyDebian},
+		OS:      o,
 		Layout:  l,
 		Systemd: m.systemd,
 		Groups:  func(string) ([]uint32, error) { return []uint32{uint32(gid)}, nil },
@@ -262,7 +327,7 @@ func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 		return e, true
 	}
 	bin, args := filepath.Base(c.Argv[0]), c.Argv[1:]
-	if bin == "php-fpm" || strings.HasPrefix(bin, "php-fpm") || bin == "apache2" {
+	if bin == "php-fpm" || strings.HasPrefix(bin, "php-fpm") || bin == "apache2" || bin == "httpd" {
 		e, _ := m.fixtureAnswer(c)
 		return e, true
 	}
@@ -334,13 +399,17 @@ func (m *rig) unitJob(verb string) runner.Expect {
 func (m *rig) fixtureAnswer(c runner.Call) (runner.Expect, bool) {
 	bin, args := filepath.Base(c.Argv[0]), c.Argv[1:]
 	switch {
+	case bin == "php-fpm" && slices.Equal(args, []string{"-v"}):
+		// Homebrew: php@X.Y, and php for the newest.
+		v := map[string]string{"/opt/homebrew/opt/php@8.3/sbin/php-fpm": "8.3.14", "/opt/homebrew/opt/php/sbin/php-fpm": "8.4.1"}[c.Argv[0]]
+		return runner.Expect{Stdout: "PHP " + v + " (fpm-fcgi) (built: Oct  1 2026 10:00:00)\n"}, true
 	case strings.HasPrefix(bin, "php-fpm") && slices.Equal(args, []string{"-v"}):
 		v := strings.TrimPrefix(bin, "php-fpm")
 		return runner.Expect{Stdout: "PHP " + v + ".6 (fpm-fcgi) (built: Oct  1 2026 10:00:00)\n"}, true
 	case strings.HasPrefix(bin, "php-fpm") && slices.Equal(args, []string{"-i"}):
 		v := strings.TrimPrefix(bin, "php-fpm")
 		return runner.Expect{Stdout: "Scan this dir for additional .ini files => /etc/php/" + v + "/fpm/conf.d\n"}, true
-	case bin == "apache2" && slices.Equal(args, []string{"-l"}):
+	case (bin == "apache2" || bin == "httpd") && slices.Equal(args, []string{"-l"}):
 		return runner.Expect{Stdout: "Compiled in modules:\n  core.c\n  mod_so.c\n  mod_watchdog.c\n  http_core.c\n  mod_log_config.c\n  mod_logio.c\n  mod_version.c\n  mod_unixd.c\n"}, true
 	}
 	return runner.Expect{}, true
@@ -401,6 +470,13 @@ func (m *rig) rootAnswer(c runner.Call) (runner.Expect, bool) {
 		}
 	case "openssl":
 		os.WriteFile(args[2], c.Stdin, 0o600)
+	case "pfctl":
+		switch args[0] {
+		case "-E":
+			m.pfLoaded = true
+		case "-a":
+			m.pfLoaded = m.pfLoaded && args[2] != "-F"
+		}
 	}
 	return runner.Expect{}, true
 }
@@ -492,11 +568,12 @@ func TestUninstallReloadsKeptApache(t *testing.T) {
 	}
 }
 
-// snapshot is every entry of /etc, /usr/local and /var/lib of the tree.
+// snapshot is every entry of /etc, /usr/local, /var/lib and /Library of
+// the tree.
 func (m *rig) snapshot() map[string]string {
 	m.t.Helper()
 	out := map[string]string{}
-	for _, top := range []string{"etc", "usr/local", "var/lib"} {
+	for _, top := range []string{"etc", "usr/local", "var/lib", "Library"} {
 		filepath.WalkDir(filepath.Join(m.root, top), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Managed by gash hte install; gash hte uninstall removes it. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.mauriziofonte.gash.hte.pf</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/sbin/pfctl</string>
+    <string>-E</string>
+    <string>-a</string>
+    <string>com.apple/gash-hte</string>
+    <string>-f</string>
+    <string>/etc/pf.anchors/gash-hte</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
