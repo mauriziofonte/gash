@@ -39,8 +39,31 @@ func inContainer() bool {
 }
 
 // TestMain is also the root step: sudo runs this binary as
-// `gash-e2e hte __root`, as it runs gash.
+// `gash-e2e hte __root`, as it runs gash; and the systemd user unit runs
+// it as `gash-e2e hte __unit start|stop`.
 func TestMain(m *testing.M) {
+	if len(os.Args) == 4 && os.Args[1] == "hte" && os.Args[2] == "__unit" {
+		if !inContainer() {
+			fmt.Fprintln(os.Stderr, "the E2E unit runs only inside the E2E container")
+			os.Exit(2)
+		}
+		e, err := hte.ProcessEngine(false)
+		if err == nil {
+			switch os.Args[3] {
+			case "start":
+				_, err = e.UnitStart(context.Background())
+			case "stop":
+				_, err = e.UnitStop(context.Background())
+			default:
+				err = fmt.Errorf("__unit %q", os.Args[3])
+			}
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if len(os.Args) == 3 && os.Args[1] == "hte" && os.Args[2] == "__root" {
 		if !inContainer() {
 			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container")
@@ -778,7 +801,16 @@ func TestE2EReinstall(t *testing.T) {
 		if !systemApacheRuns() || len(res.Archived) == 0 {
 			t.Fatalf("system Apache running %v, archived %v", systemApacheRuns(), res.Archived)
 		}
-		if a := mustGet(t, "http", "https.test", 80); a.status != 200 || a.body != "legacy:https.test:fpm-fcgi" {
+		// The root steps reload the system Apache and PHP-FPM and return
+		// before they are done; a request that meets the FPM reload gets a
+		// 503 (its children end at once, process_control_timeout = 0).
+		a := mustGet(t, "http", "https.test", 80)
+		for i := 0; a.status == 503 && i < 50; i++ {
+			time.Sleep(100 * time.Millisecond)
+			a = mustGet(t, "http", "https.test", 80)
+			t.Logf("the excluded https.test on 80 after the system reload: %d", a.status)
+		}
+		if a.status != 200 || a.body != "legacy:https.test:fpm-fcgi" {
 			t.Errorf("the excluded https.test on 80: %+v", a)
 		}
 		if a, err := getPath("http", "http.test", 80, "/which.txt", nil); err != nil || a.body == "http" {
@@ -853,4 +885,126 @@ func eventually(file, s string) bool {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return false
+}
+
+// TestE2ESystemd runs in the container with systemd as PID 1 (run.sh with
+// GASH_HTE_E2E_SYSTEMD=1), in a login session of dev: with autostart
+// systemd, install, the service commands, the migrate switch and
+// uninstall start and stop the stack through systemctl --user, so the
+// masters live in the unit's cgroup (LEDGER HTE-73).
+func TestE2ESystemd(t *testing.T) {
+	if os.Getenv("GASH_HTE_E2E_SYSTEMD") != "1" || !inContainer() {
+		t.Skip("runs only inside the systemd E2E container: GASH_HTE_E2E_SYSTEMD=1 testdata/hte/e2e/run.sh")
+	}
+	ctx := context.Background()
+	e, err := hte.ProcessEngine(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := state.NewPaths(mustDirs(t), os.Getuid())
+	unitState := func() string {
+		out, _ := exec.Command("systemctl", "--user", "is-active", "gash-hte.service").Output()
+		return strings.TrimSpace(string(out))
+	}
+	// pidOf returns the PID a master's PID file names, 0 when none runs.
+	pidOf := func(name string) int {
+		data, err := os.ReadFile(filepath.Join(paths.RuntimeDir, name))
+		if err != nil {
+			return 0
+		}
+		var pid int
+		fmt.Sscan(string(data), &pid)
+		if pid < 2 || !exists(fmt.Sprintf("/proc/%d", pid)) {
+			return 0
+		}
+		return pid
+	}
+	// owned: every master named runs in the unit's cgroup.
+	owned := func(t *testing.T, names ...string) map[string]int {
+		t.Helper()
+		pids := map[string]int{}
+		for _, n := range names {
+			pid := pidOf(n)
+			cg, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
+			if pid == 0 || !strings.Contains(string(cg), "/gash-hte.service\n") {
+				t.Errorf("%s (pid %d) is not in the unit's cgroup:\n%s", n, pid, cg)
+			}
+			pids[n] = pid
+		}
+		return pids
+	}
+	step := func(name string, fn func(t *testing.T)) {
+		if !t.Run(name, fn) {
+			t.FailNow()
+		}
+	}
+
+	step("install --autostart systemd", func(t *testing.T) {
+		res, err := e.Install(ctx, hte.InstallOptions{Yes: true, Ports: "high", Autostart: "systemd"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("plan: %s", strings.Join(res.Plan, " | "))
+		if !res.Started || res.Settings.Autostart != "systemd" || unitState() != "active" {
+			t.Fatalf("started %v, autostart %q, unit %s", res.Started, res.Settings.Autostart, unitState())
+		}
+		if !exists("/var/lib/systemd/linger/dev") {
+			t.Error("linger is not enabled")
+		}
+		owned(t, "httpd.pid")
+	})
+
+	step("service stop, start and restart are unit jobs", func(t *testing.T) {
+		res, err := e.ServiceStop(ctx)
+		if err != nil || res.Via != "systemd" || res.Running || unitState() != "inactive" || pidOf("httpd.pid") != 0 {
+			t.Fatalf("stop: %+v %v, unit %s", res, err, unitState())
+		}
+		if res, err = e.ServiceStart(ctx); err != nil || res.Via != "systemd" || !res.Running || unitState() != "active" {
+			t.Fatalf("start: %+v %v, unit %s", res, err, unitState())
+		}
+		before := owned(t, "httpd.pid")
+		if res, err = e.ServiceRestart(ctx); err != nil || res.Via != "systemd" || unitState() != "active" {
+			t.Fatalf("restart: %+v %v, unit %s", res, err, unitState())
+		}
+		if after := owned(t, "httpd.pid"); after["httpd.pid"] == before["httpd.pid"] {
+			t.Error("restart kept the Apache master")
+		}
+	})
+
+	step("the migrate switch starts the stack through the unit", func(t *testing.T) {
+		if _, err := e.ServiceStop(ctx); err != nil {
+			t.Fatal(err)
+		}
+		res, err := e.Migrate(ctx, hte.MigrateOptions{Apply: true, Yes: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("staging %s, imported %v, archived %v, warnings %v", res.Staging, res.Imported, res.Archived, res.Warnings)
+		if !res.Switched || res.Staging == "" || len(res.Imported) != 3 || unitState() != "active" {
+			t.Fatalf("switched %v, staging %q, imported %v, unit %s", res.Switched, res.Staging, res.Imported, unitState())
+		}
+		owned(t, "httpd.pid", "php-fpm-8.3.pid")
+		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 || !strings.Contains(a.body, "fpm-fcgi") {
+			t.Errorf("http.test on 8080: %+v", a)
+		}
+		if !systemApacheRuns() {
+			t.Error("the system Apache stopped on the high ports")
+		}
+	})
+
+	step("uninstall stops the unit and removes it", func(t *testing.T) {
+		res, err := e.Uninstall(ctx, hte.UninstallOptions{Yes: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Warnings) != 0 {
+			t.Errorf("warnings %v", res.Warnings)
+		}
+		if unitState() == "active" || pidOf("httpd.pid") != 0 || exists(filepath.Join(os.Getenv("HOME"), ".config/systemd/user/gash-hte.service")) {
+			t.Errorf("unit %s, apache pid %d", unitState(), pidOf("httpd.pid"))
+		}
+		if exists("/var/lib/systemd/linger/dev") {
+			t.Error("linger stayed enabled")
+		}
+	})
 }

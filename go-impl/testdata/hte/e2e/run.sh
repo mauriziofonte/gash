@@ -10,6 +10,7 @@
 #
 #   testdata/hte/e2e/run.sh            # Ubuntu 24.04
 #   GASH_HTE_E2E_BASE=... run.sh       # another apt-based image
+#   GASH_HTE_E2E_SYSTEMD=1 run.sh      # systemd as PID 1, autostart systemd
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -30,6 +31,32 @@ cp "$here/setup.sh" "$stage/setup.sh"
 rm -rf "$stage/V2"
 cp -a "$mod/testdata/hte/legacy/V2" "$stage/V2"
 chmod -R a+rX "$stage"
+
+if [ "${GASH_HTE_E2E_SYSTEMD:-}" = 1 ]; then
+    # systemd as PID 1 (LEDGER HTE-73): it mounts its cgroup hierarchy
+    # itself, which needs CAP_SYS_ADMIN; the private cgroup namespace
+    # scopes that mount to the container's own cgroup. The story uses the
+    # high ports, so /proc/sys stays read-only.
+    sd=${image/gash-hte-e2e-base/gash-hte-e2e-systemd}
+    if ! docker image inspect "$sd" >/dev/null 2>&1; then
+        docker build --build-arg BASE="$image" -t "$sd" -f "$here/Dockerfile.systemd" "$here"
+    fi
+    name=gash-hte-e2e-systemd-$$
+    docker run -d --rm --name "$name" --network none --cgroupns=private --cap-add SYS_ADMIN \
+        --tmpfs /run --tmpfs /run/lock -v "$stage:/e2e:ro" "$sd" >/dev/null
+    trap 'docker rm -f "$name" >/dev/null 2>&1' EXIT
+    for _ in $(seq 50); do
+        state=$(docker exec "$name" systemctl is-system-running 2>/dev/null || true)
+        case "$state" in
+            running | degraded) break ;;
+        esac
+        sleep 0.2
+    done
+    echo "== systemd: $state"
+    rc=0
+    docker exec -e GASH_HTE_E2E_SYSTEMD=1 "$name" /e2e/setup.sh || rc=$?
+    exit "$rc"
+fi
 
 # systempaths=unconfined: the root step writes
 # net.ipv4.ip_unprivileged_port_start, which starts at 1024. /etc/hosts

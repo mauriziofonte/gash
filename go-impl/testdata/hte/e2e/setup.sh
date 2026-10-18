@@ -53,8 +53,9 @@ chown -R dev:dev /home/dev/sites
 # sockets are dev:dev 0660).
 sed -i -e 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=dev/' -e 's/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=dev/' /etc/apache2/envvars
 a2enmod -q ssl proxy_fcgi rewrite http2 headers >/dev/null
-service php8.3-fpm start >/dev/null
-service apache2 start >/dev/null
+# restart: under systemd the units already run, on the default tree.
+service php8.3-fpm restart >/dev/null
+service apache2 restart >/dev/null
 echo "== the system Apache serves the legacy sites"
 curl -fsS --resolve http.test:80:127.0.0.1 http://http.test/
 curl -fsSk --resolve https.test:443:127.0.0.1 https://https.test/
@@ -77,9 +78,14 @@ snapshot >"$out/before.txt"
 echo "== the test, as dev"
 cd /home/dev
 set +e
-runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
-    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 \
-    /usr/local/bin/gash-e2e -test.v -test.timeout 20m
+if [ "${GASH_HTE_E2E_SYSTEMD:-}" = 1 ]; then
+    # A login session (pam_systemd): XDG_RUNTIME_DIR and the user manager.
+    su -l dev -c 'env GASH_HTE_E2E=1 GASH_HTE_E2E_SYSTEMD=1 /usr/local/bin/gash-e2e -test.v -test.run TestE2ESystemd -test.timeout 20m'
+else
+    runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 \
+        /usr/local/bin/gash-e2e -test.v -test.timeout 20m
+fi
 rc=$?
 set -e
 if [ "$rc" != 0 ]; then
