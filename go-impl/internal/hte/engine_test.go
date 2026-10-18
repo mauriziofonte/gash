@@ -74,8 +74,14 @@ func newFixture(t *testing.T) *fixture {
 	return f
 }
 
-// install writes hte.toml as install would, without the root steps.
+// install writes hte.toml as install would, without the root steps, with
+// the high ports.
 func (f *fixture) install(t *testing.T) *env {
+	t.Helper()
+	return f.installPorts(t, state.HighPorts)
+}
+
+func (f *fixture) installPorts(t *testing.T, ports state.Ports) *env {
 	t.Helper()
 	if err := os.MkdirAll(f.env["XDG_RUNTIME_DIR"], 0o700); err != nil {
 		t.Fatal(err)
@@ -84,7 +90,7 @@ func (f *fixture) install(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := v.store.SaveSettings(state.DefaultSettings(state.HighPorts, "none")); err != nil {
+	if err := v.store.SaveSettings(state.DefaultSettings(ports, "none")); err != nil {
 		t.Fatal(err)
 	}
 	return v
@@ -344,7 +350,7 @@ func newLegacyFixture(t *testing.T) *fixture {
 func TestMigrateRootSteps(t *testing.T) {
 	ctx := context.Background()
 	f := newLegacyFixture(t)
-	v := f.install(t)
+	v := f.installPorts(t, state.StandardPorts)
 	set, err := f.e.installed(v)
 	if err != nil {
 		t.Fatal(err)

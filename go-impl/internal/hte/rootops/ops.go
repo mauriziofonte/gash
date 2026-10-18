@@ -47,7 +47,11 @@ const (
 	// the switch. The user side asks for it only on that failure.
 	OpUndoUnitStop = "undo_unit_stop"
 	// OpUnitReload reloads a running system unit (Name), after its pools
-	// were archived; no receipt change.
+	// were archived; no receipt change. For the system Apache (apache2,
+	// httpd) it first tests the configuration (apachectl configtest);
+	// when the test fails, the vhosts this session archived (the last
+	// changes of the receipt) are put back, nothing is reloaded, and the
+	// operation fails with config_test_failed (LEDGER HTE-70).
 	OpUnitReload = "unit_reload"
 	// OpHostsSnapshot records the hosts block as it is before install.
 	OpHostsSnapshot = "hosts_snapshot"
@@ -103,6 +107,10 @@ func (o Op) String() string {
 	case OpUndoUnitStop:
 		return "only if a site does not answer after the switch: start and enable " + o.Name + " again"
 	case OpUnitReload:
+		if ApacheUnit(o.Name) {
+			return "test the system Apache configuration (apachectl configtest), then reload " + o.Name +
+				" gracefully; if the test fails, put back the vhosts archived above"
+		}
 		return "reload the system unit " + o.Name
 	case OpHostsSnapshot:
 		return "record the gash block of /etc/hosts as it is now, for uninstall"
@@ -141,6 +149,9 @@ var (
 	unitRE = regexp.MustCompile(`^(apache2|httpd|php-fpm|php[5-8]\.[0-9]-fpm|php[5-8][0-9]-php-fpm)$`)
 	modes  = []string{"systemd", "launchd", "shell", "none"}
 )
+
+// ApacheUnit reports a system Apache unit (the others are PHP-FPM).
+func ApacheUnit(name string) bool { return name == "apache2" || name == "httpd" }
 
 func absClean(p string) bool {
 	return strings.HasPrefix(p, "/") && path.Clean(p) == p && !strings.ContainsAny(p, "\x00\n")

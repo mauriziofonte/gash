@@ -38,6 +38,9 @@ type Layout struct {
 	// LogDirs are the system log directories; raw vhosts that log there
 	// are rewritten to the userland logs directory.
 	LogDirs []string
+	// ListenConf are the main configuration files whose Listen directives
+	// name the ports of the system Apache (the vhost files are read too).
+	ListenConf []string
 }
 
 // LayoutFor returns the layout of a platform family. prefix is the
@@ -55,6 +58,7 @@ func LayoutFor(f platform.Family, prefix string) (Layout, error) {
 			Envvars:        "/etc/apache2/envvars",
 			Hosts:          "/etc/hosts",
 			LogDirs:        []string{"/var/log/apache2"},
+			ListenConf:     []string{"/etc/apache2/ports.conf"},
 		}, nil
 	case platform.FamilyFedora:
 		return Layout{
@@ -63,6 +67,7 @@ func LayoutFor(f platform.Family, prefix string) (Layout, error) {
 			AllEnabled: true,
 			Hosts:      "/etc/hosts",
 			LogDirs:    []string{"/var/log/httpd", "/etc/httpd/logs"},
+			ListenConf: []string{"/etc/httpd/conf/httpd.conf"},
 		}, nil
 	case platform.FamilyArch:
 		return Layout{
@@ -72,6 +77,7 @@ func LayoutFor(f platform.Family, prefix string) (Layout, error) {
 			ServerRoot: "/etc/httpd",
 			Hosts:      "/etc/hosts",
 			LogDirs:    []string{"/var/log/httpd"},
+			ListenConf: []string{"/etc/httpd/conf/httpd.conf"},
 		}, nil
 	case platform.FamilyDarwin:
 		if prefix == "" {
@@ -84,6 +90,7 @@ func LayoutFor(f platform.Family, prefix string) (Layout, error) {
 			ServerRoot: prefix,
 			Hosts:      "/etc/hosts",
 			LogDirs:    []string{path.Join(prefix, "var/log/httpd")},
+			ListenConf: []string{path.Join(prefix, "etc/httpd/httpd.conf")},
 		}, nil
 	}
 	return Layout{}, hteerr.Newf(hteerr.PlatformUnsupported, "", "no Apache layout for %s", f)

@@ -183,7 +183,8 @@ type migration struct {
 	reissue  []state.Site // raw HTTPS sites that get a new pair
 	vhosts   []string     // legacy vhosts to archive
 	pools    []string     // legacy pools to archive
-	apache   string       // the system Apache unit to stop, "" when none
+	apache   string       // the system Apache unit, "" when none
+	keep     bool         // the system Apache keeps running: reloaded, not stopped (HTE-70)
 	fpmStop  []string     // system FPM units left without pools
 	fpmKeep  []string     // system FPM units that keep pools (reloaded)
 	blocking bool
@@ -221,12 +222,15 @@ func (w *migration) ops(keys map[string]string) []rootops.Op {
 	if w.blocking {
 		return out
 	}
-	if w.apache != "" {
+	if w.apache != "" && !w.keep {
 		add(rootops.Op{Op: rootops.OpUnitStop, Name: w.apache})
 		add(rootops.Op{Op: rootops.OpUndoUnitStop, Name: w.apache})
 	}
 	for _, p := range w.vhosts {
 		add(rootops.Op{Op: rootops.OpArchiveVhost, Path: p})
+	}
+	if w.apache != "" && w.keep && len(w.vhosts) > 0 {
+		add(rootops.Op{Op: rootops.OpUnitReload, Name: w.apache})
 	}
 	for _, p := range w.pools {
 		add(rootops.Op{Op: rootops.OpArchivePool, Path: p})
@@ -308,6 +312,7 @@ func (e *Engine) planMigration(ctx context.Context, v *env, set state.Settings, 
 			w.apache = systemUnit(v.os.Family)
 		}
 	}
+	w.keep = plan.SystemApache != nil
 	w.fpmUnits()
 	return w, nil
 }
@@ -375,8 +380,12 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 		return o.Op == rootops.OpUnitStop || o.Op == rootops.OpArchiveVhost || o.Op == rootops.OpArchivePool
 	}) {
 		res.Applied = false
+		what := "stops the system Apache and archives the legacy files"
+		if w.keep {
+			what = "archives the legacy files and reloads the system Apache"
+		}
 		return hteerr.Newf(hteerr.ConfirmationRequired, "add --yes",
-			"migrate --apply stops the system Apache and archives the legacy files; the root steps: %s", strings.Join(res.RootPlan, "; "))
+			"migrate --apply %s; the root steps: %s", what, strings.Join(res.RootPlan, "; "))
 	}
 
 	// The temporary key paths, then one sudo for every root step.
@@ -485,10 +494,13 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 		return e.applyHosts(ctx, v, next)
 	}
 
-	// 4. The switch: the system Apache stops, the stack serves every site
-	// on its own ports; a site that does not answer starts it again.
-	if err := run(rootops.OpUnitStop, w.apache); err != nil {
-		return err
+	// 4. The switch: the system Apache stops (unless it keeps running next
+	// to a stack on other ports), the stack serves every site on its own
+	// ports; a site that does not answer starts it again.
+	if !w.keep {
+		if err := run(rootops.OpUnitStop, w.apache); err != nil {
+			return err
+		}
 	}
 	switchErr := func() error {
 		if _, err := e.applyStack(ctx, v, set, next); err != nil {
@@ -504,20 +516,36 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 		if !running {
 			errs = append(errs, sup.Stop(ctx))
 		}
-		if w.apache != "" {
+		after := "the system Apache was started again"
+		if w.keep {
+			after = "the system Apache was not touched"
+		} else if w.apache != "" {
 			errs = append(errs, run(rootops.OpUndoUnitStop, w.apache))
 		}
 		return hteerr.Newf(hteerr.ReloadFailed, "the sites stay imported; fix the cause (gash hte doctor), then run gash hte migrate --apply again",
-			"after the switch: %v; the system Apache was started again", errors.Join(errs...))
+			"after the switch: %v; %s", errors.Join(errs...), after)
 	}
 	res.Switched = true
 
-	// 5. Only now the legacy files go into the archive.
+	// 5. Only now the legacy files go into the archive. A system Apache
+	// that keeps running is then tested and reloaded; a failed test puts
+	// the vhosts back (root does it) and stops here.
 	for _, p := range w.vhosts {
 		if err := run(rootops.OpArchiveVhost, p); err != nil {
 			return err
 		}
 		res.Archived = append(res.Archived, p)
+	}
+	if w.keep {
+		if err := run(rootops.OpUnitReload, w.apache); err != nil {
+			if hteerr.CodeOf(err) == hteerr.ConfigTestFailed {
+				res.Archived = slices.DeleteFunc(res.Archived, func(p string) bool { return slices.Contains(w.vhosts, p) })
+				res.Changes = slices.DeleteFunc(res.Changes, func(c receipt.Change) bool {
+					return c.Kind == receipt.LegacyVhost && slices.Contains(w.vhosts, c.Path)
+				})
+			}
+			return err
+		}
 	}
 	for _, p := range w.pools {
 		if err := run(rootops.OpArchivePool, p); err != nil {

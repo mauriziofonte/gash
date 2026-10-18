@@ -425,10 +425,15 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 	if r == nil || len(r.Changes) == 0 {
 		return nil
 	}
-	// Every change, last first, then the receipt itself.
+	// Every change, last first, then the receipt itself. A system Apache
+	// that migrate left running (HTE-70) is reloaded once its vhosts are
+	// back, so that it serves them again.
 	var plan []rootops.Op
 	for i := len(r.Changes) - 1; i >= 0; i-- {
 		plan = append(plan, rootops.Op{ID: len(plan) + 1, Op: rootops.OpRestore, Change: r.Changes[i].ID})
+	}
+	if unit := reloadAfterRestore(r, v.os.Family); unit != "" {
+		plan = append(plan, rootops.Op{ID: len(plan) + 1, Op: rootops.OpUnitReload, Name: unit})
 	}
 	plan = append(plan, rootops.Op{ID: len(plan) + 1, Op: rootops.OpFinish})
 	c, err := e.rootSession(ctx, v, plan)
@@ -439,6 +444,10 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 	for i, o := range plan {
 		resp, err := c.Run(o.ID)
 		res.Warnings = append(res.Warnings, resp.Warnings...)
+		if err != nil && o.Op == rootops.OpUnitReload {
+			res.Warnings = append(res.Warnings, "the system Apache was not reloaded: "+err.Error())
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -447,6 +456,25 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 		}
 	}
 	return nil
+}
+
+// reloadAfterRestore is the system Apache unit to reload after the
+// restores: when the receipt archived vhosts but never stopped the unit.
+func reloadAfterRestore(r *receipt.Receipt, f platform.Family) string {
+	unit := systemUnit(f)
+	vhosts := false
+	for _, c := range r.Changes {
+		switch {
+		case c.Kind == receipt.Unit && rootops.ApacheUnit(c.Name):
+			return ""
+		case c.Kind == receipt.LegacyVhost:
+			vhosts = true
+		}
+	}
+	if !vhosts {
+		return ""
+	}
+	return unit
 }
 
 // stage moves the userland tree (config, state, data) into a new stage

@@ -608,6 +608,16 @@ func (s *server) unitStop(ctx context.Context, name string) ([]string, error) {
 }
 
 func (s *server) unitReload(ctx context.Context, name string) ([]string, error) {
+	if ApacheUnit(name) {
+		if err := s.configTest(ctx); err != nil {
+			warnings, uerr := s.undoArchivedVhosts(ctx)
+			if uerr != nil {
+				return warnings, hteerr.Newf(hteerr.ConfigTestFailed, "put the vhosts back from "+receipt.ArchiveDir+" by hand",
+					"%v; putting the archived vhosts back failed: %v", err, uerr)
+			}
+			return warnings, err
+		}
+	}
 	st, err := s.unitState(ctx, name)
 	if err != nil || !st.Active {
 		return nil, err
@@ -616,6 +626,41 @@ func (s *server) unitReload(ctx context.Context, name string) ([]string, error) 
 		return nil, s.mustCmd(ctx, "systemctl", "reload-or-restart", name+".service")
 	}
 	return nil, s.mustCmd(ctx, "service", name, "reload")
+}
+
+// configTest runs apachectl configtest (apache2ctl where only that exists).
+func (s *server) configTest(ctx context.Context) error {
+	name := "apachectl"
+	if _, err := s.find(name); err != nil {
+		name = "apache2ctl"
+	}
+	res, err := s.cmd(ctx, name, "configtest")
+	if err != nil {
+		return err
+	}
+	if !res.Success() {
+		return hteerr.Newf(hteerr.ConfigTestFailed, "the archived vhosts were put back; fix the system Apache configuration, then run gash hte migrate --apply again",
+			"%s configtest: %s", name, child.Output(res))
+	}
+	return nil
+}
+
+// undoArchivedVhosts puts back the vhosts this session archived, newest
+// first, as long as they are the last changes of the receipt.
+func (s *server) undoArchivedVhosts(ctx context.Context) ([]string, error) {
+	var warnings []string
+	for s.r != nil {
+		last, ok := s.r.Last()
+		if !ok || last.Kind != receipt.LegacyVhost || !s.made[last.ID] {
+			break
+		}
+		w, err := s.restore(ctx, last.ID)
+		warnings = append(warnings, w...)
+		if err != nil {
+			return warnings, err
+		}
+	}
+	return warnings, nil
 }
 
 func (s *server) hostsSnapshot() ([]string, error) {
