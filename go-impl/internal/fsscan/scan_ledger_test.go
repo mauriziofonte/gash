@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -40,8 +41,40 @@ func runGo(fn, home, pwd string, args ...string) (string, string, int) {
 
 var scanTimeRe = regexp.MustCompile(`"scan_time":"[^"]*"`)
 
+// topArrRe matches a tree_stats top_by_count / top_by_size JSON array so its
+// element order can be canonicalized before a differential comparison. The
+// objects inside hold no literal ']' for the scanner's own output.
+var topArrRe = regexp.MustCompile(`("top_by_(?:count|size)":\[)([^\]]*)(\])`)
+
+// canonTops sorts the entries inside each top_by_count / top_by_size array so
+// two runs that agree on the entries but not their order compare equal. The
+// order of ties in those arrays is a documented forced divergence (FS-28):
+// 2.x follows awk's hash iteration order (mawk, gawk-UTF-8 and gawk-C all
+// differ), which rc.A does not reproduce. The differential tests still check
+// the entries themselves and every other field exactly.
+func canonTops(s string) string {
+	return topArrRe.ReplaceAllStringFunc(s, func(m string) string {
+		g := topArrRe.FindStringSubmatch(m)
+		if g[2] == "" {
+			return m
+		}
+		parts := strings.Split(g[2], "},{")
+		for i := range parts {
+			if !strings.HasPrefix(parts[i], "{") {
+				parts[i] = "{" + parts[i]
+			}
+			if !strings.HasSuffix(parts[i], "}") {
+				parts[i] += "}"
+			}
+		}
+		sort.Strings(parts)
+		return g[1] + strings.Join(parts, ",") + g[3]
+	})
+}
+
 func normScan(s, fx string) string {
 	s = scanTimeRe.ReplaceAllString(s, `"scan_time":"T"`)
+	s = canonTops(s)
 	return strings.ReplaceAll(s, fx, "FX")
 }
 

@@ -5136,7 +5136,7 @@ Critical and high items:
 | Public-contract impact | yes |
 | rc.A behavior | Size lists: size descending, then the 2.x row text (`BYTES\tMTIME\tPATH`) in C byte order descending, which equals 2.x under C/C.UTF-8. tree_stats tops: count desc, size desc, extension asc in bytes (top_by_size: size desc, count desc, extension asc); `tolower` ASCII only (gawk in the C locale). gawk's hash iteration order is an implementation detail and is not reproduced. Table widths stay counted in characters as 2.x counts them in a UTF-8 locale (architecture.md section 5; inferred effect on non-ASCII paths only). |
 | Fix recipe (3.0) | Keep the rc.A tie rules and document them in AGENTS 4.1 and 4.3. |
-| Proving test | `TestLedger_FS28` in `internal/fsscan`: the variant fixture gives the C order under every LANG/LC_ALL; tree_stats tops are identical over 20 runs and across locales. |
+| Proving test | `TestLedger_FS28` in `internal/fsscan`: the variant fixture gives the C order under every LANG/LC_ALL; tree_stats tops are identical over 20 runs and across locales. Because this top order is not reproduced, the differential helper (`normScan`/`same2x`) canonicalizes the `top_by_count`/`top_by_size` element order before comparing go to live 2.x, so a 2.x awk-hash order (e.g. FS-26 on mawk) does not fail the exact diff; the entries and every other field are still compared exactly. |
 | Status | open |
 
 <a id="fs-29"></a>
