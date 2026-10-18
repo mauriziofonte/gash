@@ -28,6 +28,26 @@ func TestSettings_Allow(t *testing.T) {
 	}
 }
 
+// TestLedger_EXEC05_2x: a GASH_LLM_EXEC_ALLOW command skips the per-command
+// and walk rules (so a symlink-following/root walk is allowed) but still gets
+// the per-word secret and path checks (LEDGER EXEC-05, reproduced in rc.A).
+func TestLedger_EXEC05_2x(t *testing.T) {
+	cwd := t.TempDir()
+	if err := os.Mkdir(cwd+"/p", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := Settings{ExecAllow: "find"}
+	// -L (symlink-following walk) would normally be option_not_allowed; the
+	// allow-listed command skips that rule.
+	if _, err := Build("find -L p", s, testEnv(cwd), permissiveProbe()); err != nil {
+		t.Errorf("allow-listed find -L p should skip walk rules, got %v", err)
+	}
+	// The forbidden-path check on an argument still applies.
+	if _, err := Build("find -L /proc", s, testEnv(cwd), permissiveProbe()); errCode(err) != "forbidden_path" {
+		t.Errorf("allow-listed find /proc must still be refused, got %v", err)
+	}
+}
+
 // TestSettings_Unrestricted: unrestricted mode skips the parser and allowlist
 // and passes the raw line, but the blocklist still applies; the child keeps
 // the caller's environment with BASH_ENV/ENV cleared.
