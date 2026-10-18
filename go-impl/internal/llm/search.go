@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,7 +41,7 @@ func (l *lineLimiter) line(b []byte) error {
 // rgSearch is one rg run of the llm functions: -e PATTERN -- PATH with the
 // given globs and ignore policy, its output cut by head -n.
 type rgSearch struct {
-	re        *regexp.Regexp
+	re        *rgRegex
 	over      *overrides
 	rules     ignoreRules
 	context   int
@@ -52,19 +51,6 @@ type rgSearch struct {
 	out         *lineLimiter
 	withName    bool
 	printedSome bool // a context group was printed (for the -- separator)
-}
-
-// compileRg compiles an rg pattern; ok is false where rg refuses it (it
-// then prints nothing on stdout).
-func compileRg(pattern string) (*regexp.Regexp, bool) {
-	if strings.Contains(pattern, "\n") {
-		return nil, false
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, false
-	}
-	return re, true
 }
 
 // run searches root as rg does with one PATH argument: a directory is

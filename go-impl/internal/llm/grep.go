@@ -41,8 +41,8 @@ func splitExts(s string) []string {
 
 // search builds the rg run of an llm function.
 func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool) (*rgSearch, bool) {
-	r, ok := compileRg(re)
-	if !ok {
+	r, err := compileRg(re)
+	if err != nil {
 		return nil, false
 	}
 	cwd, err := m.getwd()
