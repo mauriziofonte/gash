@@ -25,6 +25,9 @@ type Module struct {
 	getwd    func() (string, error)
 	rootHome func() string
 	readFile func(string) ([]byte, error)
+	getpid   func() int
+	// lookPathFn replaces the PATH search in tests.
+	lookPathFn func(name string) (string, bool)
 }
 
 // New returns the module wired to the real system.
@@ -46,6 +49,9 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_find", m.find)
 	t.Handle("llm_grep", m.grep)
 	t.Handle("llm_config", m.config)
+	t.Handle("llm_env", m.env)
+	t.Handle("llm_ports", m.ports)
+	t.Handle("llm_procs", m.procs)
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the

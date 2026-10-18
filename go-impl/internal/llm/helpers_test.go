@@ -4,6 +4,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -84,9 +85,9 @@ func baseEnv(home string, extra map[string]string) map[string]string {
 func run2x(t *testing.T, cwd string, env map[string]string, fn string, args ...string) result {
 	t.Helper()
 	dir := archive2x(t)
-	script := `source "$__T_GASH/gash.sh" >/dev/null 2>&1 || exit 98; cd "$1" || exit 99; shift; "$@"`
-	cmd := exec.Command("bash", append([]string{"--noprofile", "--norc", "-c", script, "bash", cwd, fn}, args...)...)
-	cmd.Env = []string{"__T_GASH=" + dir}
+	script := `source "$1/gash.sh" >/dev/null 2>&1 || exit 98; cd "$2" || exit 99; shift 2; "$@"`
+	cmd := exec.Command("bash", append([]string{"--noprofile", "--norc", "-c", script, "bash", dir, cwd, fn}, args...)...)
+	cmd.Env = []string{}
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -110,7 +111,7 @@ func runGo(t *testing.T, m *Module, cwd string, env map[string]string, fn string
 	m.Register(tbl)
 	var out, errb bytes.Buffer
 	e := invoke.EnvMap(env)
-	c := &invoke.Call{Name: fn, Args: args, Env: e, Stdin: bytes.NewReader(nil), Stdout: &out, Stderr: &errb,
+	c := &invoke.Call{Ctx: context.Background(), Name: fn, Args: args, Env: e, Stdin: bytes.NewReader(nil), Stdout: &out, Stderr: &errb,
 		Term: term.Fixed(e, false, false, false)}
 	rc := tbl.Run(c)
 	return result{out.String(), errb.String(), rc}
