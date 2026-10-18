@@ -17,7 +17,7 @@ func TestCatalogActions(t *testing.T) {
 		"privileged_step_required": Stop, "config_test_failed": Stop, "reload_failed": Stop,
 		"apache_not_found": Fatal, "platform_unsupported": Fatal, "receipt_mismatch": Fatal,
 		"root_not_allowed": Fatal, "missing_value": Retry,
-		"conflicting_options": Retry, "invalid_state": Stop,
+		"conflicting_options": Retry, "invalid_state": Stop, "apache_module_missing": Stop,
 	}
 	if len(Codes()) != len(want) {
 		t.Fatalf("catalog has %d codes, want %d", len(Codes()), len(want))

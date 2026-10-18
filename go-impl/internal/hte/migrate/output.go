@@ -112,8 +112,8 @@ func (p *Plan) Text() string {
 		}
 	})
 	section(&b, "Keep the system Apache running (--apply stops it only once each is imported or excluded)", len(p.Blocking), func() {
-		for _, path := range p.Blocking {
-			fmt.Fprintf(&b, "  %s\n", path)
+		for _, bl := range p.Blocking {
+			fmt.Fprintf(&b, "  %s (%s)\n    to leave it out: %s\n", bl.Path, bl.Action, bl.Exclude)
 		}
 	})
 	return b.String()

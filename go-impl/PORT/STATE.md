@@ -22,6 +22,7 @@ rc.A implementation. S1 was approved by the operator in the session on 2026-10-1
 - The two install specs that snapshot the working tree into a fresh repository disable git's background maintenance: with the Go tree the detached repack raced the clone and the cleanup on git 2.55 (CI only).
 - Core output primitives, layout emitters and confirmations, runner starts (`Start`, `StartPTY`, `RunScript`) and the leaf config loader merged; stubs of the 21 functions whose 2.x body loads the settings run the cached `__gash_load_env` first (CORE-18).
 - Harness: `tests/run.sh` reads each spec's recorded status (TEST-09); Go mode starts the HTTPS fake (`internal/tools/httpsfake`, the shared curl mock's answers over `HTTPS_PROXY`); the mock-client DB specs pin the clock (TEST-10). Per-test curl fakes move to `MOCK_CURL_ROUTES` route files (TEST-11, core first, then each slice). Go mode: 233 passed of 807 at 883e12d.
+- HTE engine merged (b7a905b): sites, service, certificates (openssl CLI, HTE-39), hosts, supervision, receipt, root session, install/uninstall, `migrate --apply`, doctor, php ini/global; Docker E2E (`go-impl/testdata/hte/e2e/run.sh`, two stories, /etc and /usr/local identical after uninstall) on Ubuntu 24.04. Decisions on its report: HTE-08 (docroot characters, SCRIPT_FILENAME unescape), HTE-69..75.
 
 ## Next step
 
@@ -44,7 +45,7 @@ Wiring notes for M1 and later:
 - `runner` refuses any `sh -c`-style start except `BashLLMExec` and `BashNVMBridge`. `wsl_compact` follows SYS-46; `gash_doctor --timing` (fixed script) and `sudo_last` (stays in the shim) are decided by their module workers.
 - `runner` divergences to ledger where a module makes them visible: a shebang-less script gets 126, a background grandchild holding stdout is cut after KillAfter, a timeout signals only the child.
 - SSH unlock needs a PTY (creack/pty, M4).
-- M8 adds a check that only `internal/runner` starts processes.
+- M8 adds a check that only `internal/runner` starts processes. Still outside it: `internal/hte/proc` (moves onto runner: credentials, new session, pipes), `internal/llmexec/probe.go`, `internal/selfmgmt/proc.go`.
 
 ## Plan to rc.A (stop S2)
 
@@ -84,6 +85,7 @@ After any edit of `MATRIX.md`, run `go generate ./internal/registry` and commit 
 | `quay.io`, `public.ecr.aws` (data limit) refused | Use `mirror.gcr.io` |
 | `ppa.launchpadcontent.net` (ondrej/php), `packages.sury.org`, `rpms.remirepo.net` blocked | Multi-PHP E2E here from official `php:X.Y-fpm` images copied side by side; distro multi-PHP repositories only in GitHub Actions |
 | Fedora and Arch package mirrors blocked (dnf/pacman fail inside containers) | Fedora/Arch E2E only in GitHub Actions |
+| `deb.debian.org` returns 403 inside containers | Debian HTE E2E only in GitHub Actions |
 | `api.deps.dev`, `api.securityscorecards.dev`, `libraries.io` blocked | Module status from proxy.golang.org (`@v/list`, `.mod` deprecation comments) and pkg.go.dev |
 | No Docker daemon at session start | `nohup dockerd >/tmp/claude-0/dockerd.log 2>&1 &` |
 | Installed Go is 1.24.7 | `GOTOOLCHAIN=go1.27.2` (checksum verification stays on) |

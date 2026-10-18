@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func TestPaths(t *testing.T) {
 		p.SessionDir("8.3"), p.Receipt(), p.Audit(), p.Lock(), p.RuntimeDir, p.Stage("20261018T100000Z")}
 	want := []string{"/home/me/.config/gash/hte/hte.toml", "/home/me/.config/gash/hte/sites/shop.test.toml",
 		"/home/me/.config/gash/hte/sites/shop.test.apache.conf", "/home/me/.config/gash/hte/apache.conf",
-		"/home/me/.config/gash/hte/php/8.3.ini", "/home/me/.local/state/gash/hte/render",
+		"/home/me/.config/gash/hte/php/8.3/global.ini", "/home/me/.local/state/gash/hte/render",
 		"/home/me/.local/state/gash/hte/logs/shop.test", "/home/me/.local/share/gash/hte/certs/shop.test/cert.pem",
 		"/home/me/.local/share/gash/hte/certs/shop.test/key.pem", "/home/me/.local/state/gash/hte/php/8.3/sessions",
 		"/home/me/.local/state/gash/hte/receipt.json", "/home/me/.local/state/gash/hte/audit.jsonl",
@@ -244,7 +245,7 @@ func TestLedger_HTE08(t *testing.T) {
 	if s, err := NewSite(Flags{Domain: "a.test", Docroot: ptr(spaced)}, f.env, nil); err != nil || s.Docroot != spaced {
 		t.Fatalf("space: %v", err)
 	}
-	for _, c := range []string{"$", "*", "?", "[", ";", `"`, `\`, "\n", "\r", "\t", "\x00", "\x7f", "\u0085", "${HOME}"} {
+	for _, c := range []string{"$", "*", "?", "[", ";", ":", `"`, `\`, "\n", "\r", "\t", "\x00", "\x7f", "\u0085", "${HOME}"} {
 		dir := filepath.Join(f.root, "x"+c+"y")
 		_ = os.Mkdir(dir, 0o755) // some names cannot exist; the check runs first anyway
 		_, err := NewSite(Flags{Domain: "a.test", Docroot: ptr(dir)}, f.env, nil)
@@ -331,7 +332,8 @@ func TestLedger_HTE55(t *testing.T) {
 	s, err := NewSite(Flags{Domain: "c.test", Docroot: ptr(f.pub)}, f.env, nil)
 	must(t, err)
 	want := Site{Domain: "c.test", Aliases: []string{"www.c.test"}, Docroot: f.pub, PHP: "8.3", Profile: "dev",
-		HTTPS: true, ForceHTTPS: false, ForceHTTPSBypassLoopback: false, HTTP2: true, Enabled: true, Kind: KindManaged}
+		HTTPS: true, ForceHTTPS: false, ForceHTTPSBypassLoopback: false, HTTP2: true, Enabled: true, Kind: KindManaged,
+		ExtraHTTPPorts: []int{}, ExtraHTTPSPorts: []int{}}
 	if diff := cmp.Diff(want, s); diff != "" {
 		t.Fatal(diff)
 	}
@@ -436,6 +438,8 @@ func TestSiteRoundTripAndStrictDecode(t *testing.T) {
 		"bad ini key":     text + "\"bad key\" = \"1\"\n",
 		"ini newline":     strings.Replace(text, `memory_limit = "512M"`, `memory_limit = "512M\nx"`, 1),
 		"syntax":          text + "[",
+		"bad port":        strings.Replace(text, "extra_http_ports = []", "extra_http_ports = [0]", 1),
+		"https port only": strings.Replace(strings.Replace(text, "https = true", "https = false", 1), "extra_https_ports = []", "extra_https_ports = [9443]", 1),
 	}
 	for name, content := range bad {
 		if content == text {
@@ -536,5 +540,63 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestExtraPorts: --extra-http-port and --extra-https-port (design/hte.md
+// 2, LEDGER HTE-68).
+func TestExtraPorts(t *testing.T) {
+	f := newFixture(t)
+	env := f.env
+	env.Ports = HighPorts
+	ports := func(p ...int) *[]int { return &p }
+	s, err := NewSite(Flags{Domain: "a.test", Docroot: ptr(f.pub), ExtraHTTPPorts: ports(3000, 8000), ExtraHTTPSPorts: ports(3443)}, env, nil)
+	must(t, err)
+	if !slices.Equal(s.ExtraHTTPPorts, []int{3000, 8000}) || !slices.Equal(s.ExtraHTTPSPorts, []int{3443}) {
+		t.Fatalf("ports: %v %v", s.ExtraHTTPPorts, s.ExtraHTTPSPorts)
+	}
+	for name, tc := range map[string]struct {
+		http, https *[]int
+		noHTTPS     bool
+		want        hteerr.Code
+	}{
+		"zero":         {http: ports(0), want: hteerr.InvalidState},
+		"too high":     {https: ports(70000), want: hteerr.InvalidState},
+		"80":           {http: ports(80), want: hteerr.ConflictingOptions},
+		"443":          {https: ports(443), want: hteerr.ConflictingOptions},
+		"stack http":   {http: ports(8080), want: hteerr.ConflictingOptions},
+		"stack https":  {https: ports(8443), want: hteerr.ConflictingOptions},
+		"twice":        {http: ports(3000, 3000), want: hteerr.ConflictingOptions},
+		"both lists":   {http: ports(3000), https: ports(3000), want: hteerr.ConflictingOptions},
+		"https no TLS": {https: ports(3443), noHTTPS: true, want: hteerr.ConflictingOptions},
+	} {
+		fl := Flags{Domain: "b.test", Docroot: ptr(f.pub), ExtraHTTPPorts: tc.http, ExtraHTTPSPorts: tc.https}
+		if tc.noHTTPS {
+			fl.HTTPS = ptr(false)
+		}
+		if _, err := NewSite(fl, env, nil); code(err) != tc.want {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// Another site may share an extra port with the same protocol only.
+	if _, err := NewSite(Flags{Domain: "b.test", Docroot: ptr(f.pub), ExtraHTTPPorts: ports(3000)}, env, []Site{s}); err != nil {
+		t.Fatalf("shared HTTP port: %v", err)
+	}
+	if _, err := NewSite(Flags{Domain: "b.test", Docroot: ptr(f.pub), ExtraHTTPSPorts: ports(3000)}, env, []Site{s}); code(err) != hteerr.ConflictingOptions {
+		t.Fatalf("protocol clash: %v", err)
+	}
+	// modify: absent keeps, given replaces, empty clears.
+	next, changed, err := ModifySite(s, Flags{Domain: "a.test", ExtraHTTPPorts: ports(9000)}, env, []Site{s})
+	must(t, err)
+	if !changed || !slices.Equal(next.ExtraHTTPPorts, []int{9000}) || !slices.Equal(next.ExtraHTTPSPorts, []int{3443}) {
+		t.Fatalf("modify: %v %v", next.ExtraHTTPPorts, next.ExtraHTTPSPorts)
+	}
+	next, _, err = ModifySite(next, Flags{Domain: "a.test", ExtraHTTPPorts: ports(), ExtraHTTPSPorts: ports()}, env, nil)
+	must(t, err)
+	if len(next.ExtraHTTPPorts)+len(next.ExtraHTTPSPorts) != 0 || next.ExtraHTTPPorts == nil {
+		t.Fatalf("clear: %v %v", next.ExtraHTTPPorts, next.ExtraHTTPSPorts)
+	}
+	if _, _, err := ModifySite(s, Flags{Domain: "a.test", HTTPS: ptr(false)}, env, nil); code(err) != hteerr.ConflictingOptions {
+		t.Fatalf("https off with extra HTTPS ports: %v", err)
 	}
 }

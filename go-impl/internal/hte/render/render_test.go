@@ -73,23 +73,26 @@ func debianStandard() Input {
 		GenDir: p.RenderDir() + "/gen-7",
 		Paths:  p,
 		Apache: Apache{
+			Binary:    "/usr/sbin/apache2",
 			Modules:   modules("/usr/lib/apache2/modules", "log_config", "logio", "unixd"),
 			MimeTypes: "/etc/mime.types",
 		},
 		Ports:  state.StandardPorts,
 		Listen: []string{state.LoopbackIPv4, state.LoopbackIPv6},
 		PHP: map[string]PHPVersion{
-			"8.3": {Overlay: []INIValue{{"memory_limit", "768M"}, {"opcache.enable", "on"}, {"date.timezone", `"Europe/Rome"`}}},
-			"8.4": {},
+			"8.3": debianPHP("8.3"),
+			"8.4": debianPHP("8.4"),
 		},
 		Sites: []state.Site{
 			site("shop.test", func(s *state.Site) {
 				s.Docroot = "/home/me/src/my shop/public"
-				s.PHPIni = map[string]string{"memory_limit": "512M", "display_errors": "on", "auto_prepend_file": ""}
+				s.PHPIni = map[string]string{"memory_limit": "512M", "display_errors": "On", "auto_prepend_file": "",
+					"session.name": "S;ID", "opcache.enable": "0"}
 			}),
 			site("forced.test", func(s *state.Site) {
 				s.PHP, s.Profile, s.ForceHTTPS = "8.4", string(profiles.Staging), true
 				s.Aliases = []string{"www.forced.test", "api.forced.test"}
+				s.ExtraHTTPPorts, s.ExtraHTTPSPorts = []int{3000}, []int{3443}
 			}),
 			site("bypass.test", func(s *state.Site) {
 				s.Profile, s.ForceHTTPS, s.ForceHTTPSBypassLoopback, s.HTTP2 = string(profiles.Hardened), true, true, false
@@ -98,11 +101,22 @@ func debianStandard() Input {
 			site("plain.test", func(s *state.Site) { s.HTTPS, s.Aliases = false, []string{} }),
 			{
 				Domain: "proxy.test", Aliases: []string{}, Kind: state.KindRaw, Enabled: true,
-				RawConf: "<VirtualHost 127.0.0.1:80>\n    ServerName proxy.test\n    ProxyPass / http://127.0.0.1:3000/\n</VirtualHost>",
+				RawConf:        "<VirtualHost 127.0.0.1:80 127.0.0.1:8081>\n    ServerName proxy.test\n    ProxyPass / http://127.0.0.1:3000/\n</VirtualHost>",
+				ExtraHTTPPorts: []int{8081, 3000},
 			},
 			site("off.test", func(s *state.Site) { s.Enabled, s.PHP = false, "8.4" }),
 		},
 	}
+}
+
+func debianPHP(v string) PHPVersion {
+	return PHPVersion{FPM: "/usr/sbin/php-fpm" + v, INI: "/etc/php/" + v + "/fpm/php.ini", ScanDir: "/etc/php/" + v + "/fpm/conf.d"}
+}
+
+func withSession(dir string) PHPVersion {
+	f := debianPHP("8.3")
+	f.SessionDir = dir
+	return f
 }
 
 // fedoraHigh is Fedora with high ports, IPv4 loopback only, every module
@@ -112,10 +126,11 @@ func fedoraHigh() Input {
 	return Input{
 		GenDir: p.RenderDir() + "/gen-1",
 		Paths:  p,
-		Apache: Apache{Modules: modules("/usr/lib64/httpd/modules"), MimeTypes: "/etc/mime.types"},
+		Apache: Apache{Binary: "/usr/sbin/httpd", Modules: modules("/usr/lib64/httpd/modules"), MimeTypes: "/etc/mime.types"},
 		Ports:  state.HighPorts,
 		Listen: []string{state.LoopbackIPv4},
-		PHP:    map[string]PHPVersion{"8.3": {SessionDir: p.StateDir + "/php/8.3/sessions"}},
+		PHP: map[string]PHPVersion{"8.3": {FPM: "/usr/sbin/php-fpm", INI: "/etc/php.ini", ScanDir: "/etc/php.d",
+			SessionDir: p.StateDir + "/php/8.3/sessions"}},
 		Sites: []state.Site{
 			site("app.test", func(s *state.Site) {
 				s.Docroot, s.Profile, s.ForceHTTPS = "/home/dev/app/public", string(profiles.Staging), true
@@ -133,13 +148,14 @@ func fedoraHigh() Input {
 func macosPF() Input {
 	p := paths("/Users/me", "/tmp/gash-hte-501")
 	return Input{
-		GenDir:            p.RenderDir() + "/gen-3",
-		Paths:             p,
-		Apache:            Apache{Modules: modules("/opt/homebrew/lib/httpd/modules"), MimeTypes: "/opt/homebrew/etc/httpd/mime.types"},
+		GenDir: p.RenderDir() + "/gen-3",
+		Paths:  p,
+		Apache: Apache{Binary: "/opt/homebrew/bin/httpd", Modules: modules("/opt/homebrew/lib/httpd/modules"),
+			MimeTypes: "/opt/homebrew/etc/httpd/mime.types"},
 		Ports:             state.HighPorts,
 		RedirectHTTPSPort: 443,
 		Listen:            []string{state.LoopbackIPv4, state.LoopbackIPv6},
-		PHP:               map[string]PHPVersion{"8.4": {}},
+		PHP:               map[string]PHPVersion{"8.4": {FPM: "/opt/homebrew/opt/php/sbin/php-fpm", INI: "/opt/homebrew/etc/php/8.4/php.ini"}},
 		Sites: []state.Site{
 			site("mac.test", func(s *state.Site) {
 				s.Docroot, s.PHP, s.ForceHTTPS = "/Users/me/Sites/mac", "8.4", true
@@ -352,14 +368,21 @@ func TestValidateRefuses(t *testing.T) {
 		{"docroot with quote", func(in *Input) { in.Sites[0].Docroot = `/srv/a"b` }, hteerr.InvalidDocroot},
 		{"docroot with newline", func(in *Input) { in.Sites[0].Docroot = "/srv/a\nInclude /etc/shadow" }, hteerr.InvalidDocroot},
 		{"relative docroot", func(in *Input) { in.Sites[0].Docroot = "public" }, hteerr.InvalidDocroot},
-		{"session dir with dollar", func(in *Input) { in.PHP["8.3"] = PHPVersion{SessionDir: "/var/$x"} }, hteerr.PlatformUnsupported},
-		{"overlay key", func(in *Input) {
-			in.PHP["8.3"] = PHPVersion{Overlay: []INIValue{{"memory limit", "1G"}}}
-		}, hteerr.InvalidState},
-		{"overlay value newline", func(in *Input) {
-			in.PHP["8.3"] = PHPVersion{Overlay: []INIValue{{"memory_limit", "1G\nphp_admin_value[x] = y"}}}
-		}, hteerr.InvalidState},
+		{"session dir with dollar", func(in *Input) { in.PHP["8.3"] = withSession("/var/$x") }, hteerr.PlatformUnsupported},
+		{"session dir with colon", func(in *Input) { in.PHP["8.3"] = withSession("/home/a:b/sessions") }, hteerr.PlatformUnsupported},
+		{"scan dir with colon", func(in *Input) {
+			f := in.PHP["8.3"]
+			f.ScanDir = "/etc/php/8.3/fpm/conf.d:/tmp"
+			in.PHP["8.3"] = f
+		}, hteerr.PlatformUnsupported},
+		{"config dir with colon", func(in *Input) { in.Paths.ConfigDir = "/home/a:b/.config/gash/hte" }, hteerr.PlatformUnsupported},
+		{"no fpm binary", func(in *Input) { in.PHP["8.3"] = PHPVersion{INI: "/etc/php/8.3/fpm/php.ini"} }, hteerr.PHPVersionNotInstalled},
+		{"relative apache", func(in *Input) { in.Apache.Binary = "apache2" }, hteerr.ApacheNotFound},
+		{"php_ini key", func(in *Input) { in.Sites[0].PHPIni = map[string]string{"memory limit": "1G"} }, hteerr.InvalidState},
 		{"php_ini value newline", func(in *Input) { in.Sites[0].PHPIni = map[string]string{"x": "a\nb"} }, hteerr.InvalidState},
+		{"php_ini value quote", func(in *Input) { in.Sites[0].PHPIni = map[string]string{"x": `a"b`} }, hteerr.InvalidState},
+		{"php_ini value backslash", func(in *Input) { in.Sites[0].PHPIni = map[string]string{"x": `a\b`} }, hteerr.InvalidState},
+		{"php_ini value expansion", func(in *Input) { in.Sites[0].PHPIni = map[string]string{"x": "${HOME}"} }, hteerr.InvalidState},
 		{"forced without https", func(in *Input) { in.Sites[1].HTTPS = false }, hteerr.ConflictingOptions},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -448,7 +471,7 @@ func TestLedger_HTE08(t *testing.T) {
 	}
 	// Every docroot character that Apache or FPM would interpret is
 	// refused before rendering (TestValidateRefuses covers " and newline).
-	for _, c := range []string{"$", "*", "?", "[", ";", `"`, `\`, "\t"} {
+	for _, c := range []string{"$", "*", "?", "[", ";", ":", `"`, `\`, "\t"} {
 		in := debianStandard()
 		in.Sites[0].Docroot = "/srv/a" + c + "b"
 		if _, err := Render(in); code(err) != hteerr.InvalidDocroot {
@@ -696,7 +719,8 @@ func TestLedger_HTE36(t *testing.T) {
 	listen := regexp.MustCompile(`(?m)^Listen (.*)$`)
 	allCases(t, func(t *testing.T, in Input, g *Generation) {
 		got := listen.FindAllStringSubmatch(string(g.File("httpd.conf")), -1)
-		if len(got) != 2*len(in.Listen) {
+		h, hs := extraPorts(in.Sites)
+		if len(got) != (2+len(h)+len(hs))*len(in.Listen) {
 			t.Fatalf("Listen lines: %v", got)
 		}
 		for _, m := range got {
@@ -708,7 +732,7 @@ func TestLedger_HTE36(t *testing.T) {
 }
 
 func TestLedger_HTE37(t *testing.T) {
-	v6 := string(mustRender(t, debianStandard()).File("sites/forced.test.conf"))
+	v6 := string(mustRender(t, debianStandard()).File("sites/shop.test.conf"))
 	for _, want := range []string{"<VirtualHost 127.0.0.1:80 [::1]:80>", "<VirtualHost 127.0.0.1:443 [::1]:443>"} {
 		if !strings.Contains(v6, want) {
 			t.Errorf("IPv6 platform: missing %s", want)
@@ -910,21 +934,121 @@ func TestLedger_HTE59(t *testing.T) {
 	}
 }
 
-func TestPoolOverlays(t *testing.T) {
-	pool := string(mustRender(t, debianStandard()).File("fpm/8.3/pools/shop.test.conf"))
-	want := `
-; Global overlay /home/me/.config/gash/hte/php/8.3.ini
-php_admin_value[memory_limit] = 768M
-php_admin_flag[opcache.enable] = on
-php_admin_value[date.timezone] = "Europe/Rome"
+// TestPoolPHPIni: a php_ini key the profile sets replaces the profile's
+// lines with the same admin kind; other keys are php_value or php_flag; a
+// boolean word is a bare flag, any other value is double-quoted. The global
+// overlay is never in a pool.
+// TestExtraListen: extra ports become Listen lines on loopback (ascending,
+// once, TLS ones naming https) and addresses of the site's vhosts only.
+func TestExtraListen(t *testing.T) {
+	g := mustRender(t, debianStandard())
+	httpd := string(g.File("httpd.conf"))
+	want := "Listen 127.0.0.1:80\nListen [::1]:80\nListen 127.0.0.1:3000\nListen [::1]:3000\nListen 127.0.0.1:8081\nListen [::1]:8081\n" +
+		"Listen 127.0.0.1:443\nListen [::1]:443\nListen 127.0.0.1:3443 https\nListen [::1]:3443 https\n"
+	if !strings.Contains(httpd, want) {
+		t.Fatalf("Listen lines:\n%s", httpd)
+	}
+	forced := string(g.File("sites/forced.test.conf"))
+	if !strings.Contains(forced, "<VirtualHost 127.0.0.1:80 [::1]:80 127.0.0.1:3000 [::1]:3000>\n") ||
+		!strings.Contains(forced, "<VirtualHost 127.0.0.1:443 [::1]:443 127.0.0.1:3443 [::1]:3443>\n") {
+		t.Fatalf("forced vhost:\n%s", forced)
+	}
+	if strings.Contains(string(g.File("sites/shop.test.conf")), "3000") {
+		t.Fatal("another site's extra port leaked")
+	}
+	// A disabled site's ports are not listened on; a port of the stack is refused.
+	in := debianStandard()
+	in.Sites[1].Enabled = false
+	if strings.Contains(string(mustRender(t, in).File("httpd.conf")), ":3443") {
+		t.Fatal("disabled site's port listened")
+	}
+	in = fedoraHigh()
+	in.Sites[0].ExtraHTTPPorts = []int{8443}
+	if _, err := Render(in); code(err) != hteerr.ConflictingOptions {
+		t.Fatalf("stack port: %v", err)
+	}
+	in = debianStandard()
+	in.Sites[0].ExtraHTTPSPorts = []int{3000}
+	if _, err := Render(in); code(err) != hteerr.ConflictingOptions {
+		t.Fatalf("protocol clash: %v", err)
+	}
+}
 
+func TestPoolPHPIni(t *testing.T) {
+	pool := string(mustRender(t, debianStandard()).File("fpm/8.3/pools/shop.test.conf"))
+	for _, want := range []string{
+		"\nphp_flag[display_errors] = on\n",
+		"\nphp_admin_value[memory_limit] = \"512M\"\nphp_value[memory_limit] = \"512M\"\n",
+	} {
+		if !strings.Contains(pool, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	for _, gone := range []string{"1024M", "php_flag[display_errors] = off", "Global overlay", "php.ini"} {
+		if strings.Contains(pool, gone) {
+			t.Errorf("pool still has %q", gone)
+		}
+	}
+	want := `
 ; php_ini of /home/me/.config/gash/hte/sites/shop.test.toml
-php_admin_value[auto_prepend_file] = ""
-php_admin_flag[display_errors] = on
-php_admin_value[memory_limit] = 512M
+php_value[auto_prepend_file] = ""
+php_value[opcache.enable] = "0"
+php_value[session.name] = "S;ID"
 `
 	if !strings.HasSuffix(pool, want) {
 		t.Fatalf("pool tail:\n%s", pool)
+	}
+	// hardened sets auto_prepend_file as an admin value: replaced in place.
+	in := debianStandard()
+	in.Sites[2].PHPIni = map[string]string{"auto_prepend_file": "/srv/prepend.php", "expose_php": "Yes"}
+	hardened := string(mustRender(t, in).File("fpm/8.3/pools/bypass.test.conf"))
+	if !strings.Contains(hardened, "\nphp_admin_value[auto_prepend_file] = \"/srv/prepend.php\"\nphp_admin_value[auto_append_file] = \"\"\nphp_admin_flag[expose_php] = yes\n") ||
+		strings.Contains(hardened, "; php_ini of") {
+		t.Fatalf("hardened pool:\n%s", hardened)
+	}
+	// The session directory line is replaced by a session.save_path value.
+	fin := fedoraHigh()
+	fin.Sites[2].PHPIni = map[string]string{"session.save_path": "/home/dev/sessions"}
+	if p := string(mustRender(t, fin).File("fpm/8.3/pools/dev.test.conf")); !strings.Contains(p,
+		"\nphp_admin_value[session.save_path] = \"/home/dev/sessions\"\n") || strings.Count(p, "session.save_path") != 2 {
+		t.Fatalf("session override:\n%s", p)
+	}
+}
+
+// TestManifest: the generation says how to run it: binaries, php.ini, the
+// full PHP_INI_SCAN_DIR, PID files, sockets and site addresses.
+func TestManifest(t *testing.T) {
+	in := debianStandard()
+	g := mustRender(t, in)
+	dir := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(dir, ManifestFile), g.File(ManifestFile), 0o600))
+	m, err := ReadManifest(dir)
+	must(t, err)
+	if m.Apache.Binary != "/usr/sbin/apache2" || m.Apache.Config != "httpd.conf" || len(m.Apache.Listen) != 10 {
+		t.Fatalf("apache: %+v", m.Apache)
+	}
+	f, ok := m.Master("8.3")
+	if !ok || f.Binary != "/usr/sbin/php-fpm8.3" || f.INI != "/etc/php/8.3/fpm/php.ini" ||
+		f.Env()[0] != "PHP_INI_SCAN_DIR=/etc/php/8.3/fpm/conf.d:/home/me/.config/gash/hte/php/8.3" ||
+		f.Config != "fpm/8.3/php-fpm.conf" || len(f.Sockets) != 3 {
+		t.Fatalf("8.3: %+v", f)
+	}
+	if diff := cmp.Diff([]string{"8.3", "8.4"}, m.Versions()); diff != "" {
+		t.Fatal(diff)
+	}
+	if len(m.Sites) != 5 || m.Sites[0].Domain != "bypass.test" {
+		t.Fatalf("sites: %+v", m.Sites)
+	}
+	if e := m.Sites[1]; e.Domain != "forced.test" || len(e.HTTP) != 4 || e.HTTPS[3] != "[::1]:3443" {
+		t.Fatalf("forced.test endpoint: %+v", e)
+	}
+	// No system scan directory: only the overlay directory.
+	if v := ScanDirEnv(in.Paths, PHPVersion{}, "8.4"); v != "/home/me/.config/gash/hte/php/8.4" {
+		t.Fatal(v)
+	}
+	must(t, os.WriteFile(filepath.Join(dir, ManifestFile), []byte(`{"schema":9}`), 0o600))
+	if _, err := ReadManifest(dir); code(err) != hteerr.InvalidState {
+		t.Fatalf("foreign schema: %v", err)
 	}
 }
 

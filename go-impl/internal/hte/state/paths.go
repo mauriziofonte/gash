@@ -48,10 +48,22 @@ func (p Paths) SiteOverlay(domain string) string {
 // ApacheOverlay is the optional server-level Apache overlay.
 func (p Paths) ApacheOverlay() string { return filepath.Join(p.ConfigDir, "apache.conf") }
 
-// PHPOverlay is the global PHP overlay of one PHP version.
-func (p Paths) PHPOverlay(version string) string {
-	return filepath.Join(p.ConfigDir, "php", version+".ini")
+// PHPOverlayDir is the global PHP overlay directory of one PHP version:
+// its *.ini files are read by that version's master after the system's
+// (PHP_INI_SCAN_DIR), never rewritten by the renderer.
+func (p Paths) PHPOverlayDir(version string) string {
+	return filepath.Join(p.ConfigDir, "php", version)
 }
+
+// PHPOverlay is the file of the overlay directory that `gash hte php
+// global set|unset` edits.
+func (p Paths) PHPOverlay(version string) string {
+	return filepath.Join(p.PHPOverlayDir(version), "global.ini")
+}
+
+// HostsState names the extra hosts names of the managed block (the
+// legacy "# hte-cli" names migrate carried over).
+func (p Paths) HostsState() string { return filepath.Join(p.ConfigDir, "hosts.toml") }
 
 // RenderDir holds the rendered generations and the current symlink.
 func (p Paths) RenderDir() string { return filepath.Join(p.StateDir, "render") }

@@ -25,7 +25,6 @@ Sites
                   pool: /etc/php/8.3/fpm/pool.d/valid.test.conf
 
 Hosts block
-  127.0.0.1 nocert.test www.nocert.test
   127.0.0.1 quoted.test www.quoted.test
   127.0.0.1 valid.test www.valid.test
 
@@ -38,4 +37,5 @@ Reported
     /etc/apache2/sites-available
 
 Keep the system Apache running (--apply stops it only once each is imported or excluded)
-  /etc/apache2/sites-available/000-default.conf
+  /etc/apache2/sites-available/000-default.conf (skip)
+    to leave it out: --exclude /etc/apache2/sites-available/000-default.conf

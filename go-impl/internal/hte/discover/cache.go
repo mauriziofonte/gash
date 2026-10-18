@@ -14,10 +14,11 @@ import (
 
 // cacheSchema is bumped when the entry format changes; another schema is
 // read as an empty cache.
-const cacheSchema = 1
+const cacheSchema = 2
 
-// Cache keeps the first line of `php-fpm -v` per binary, valid while the
-// binary keeps its size and mtime (design/hte.md section 4). It is a
+// Cache keeps the first line of `php-fpm -v` and the compiled-in ini scan
+// directory of `php-fpm -i` per binary, valid while the binary keeps its
+// size and mtime (design/hte.md section 4). It is a
 // disposable file in the state directory, php-versions.json: a missing,
 // unreadable or corrupt cache is an empty one and is rewritten, never an
 // error. A nil *Cache caches nothing.
@@ -31,7 +32,11 @@ type Cache struct {
 type CacheEntry struct {
 	Size    int64  `json:"size"`
 	MtimeNS int64  `json:"mtime_ns"`
-	Output  string `json:"output"`
+	Output  string `json:"output"` // first line of -v
+	// ScanDir is the "Scan this dir for additional .ini files" value of
+	// -i, "" for (none); Info is false until -i ran.
+	ScanDir string `json:"scan_dir"`
+	Info    bool   `json:"info"`
 }
 
 // LoadCache reads the cache at path.
@@ -71,21 +76,22 @@ func (c *Cache) Save(path string) error {
 	return nil
 }
 
-func (c *Cache) lookup(bin string, fi fs.FileInfo) (string, bool) {
+func (c *Cache) lookup(bin string, fi fs.FileInfo) (CacheEntry, bool) {
 	if c == nil {
-		return "", false
+		return CacheEntry{}, false
 	}
 	e, ok := c.Entries[bin]
 	if !ok || e.Size != fi.Size() || e.MtimeNS != fi.ModTime().UnixNano() {
-		return "", false
+		return CacheEntry{}, false
 	}
-	return e.Output, true
+	return e, true
 }
 
-func (c *Cache) store(bin string, fi fs.FileInfo, out string) {
+func (c *Cache) store(bin string, fi fs.FileInfo, e CacheEntry) {
 	if c == nil {
 		return
 	}
-	c.Entries[bin] = CacheEntry{Size: fi.Size(), MtimeNS: fi.ModTime().UnixNano(), Output: out}
+	e.Size, e.MtimeNS = fi.Size(), fi.ModTime().UnixNano()
+	c.Entries[bin] = e
 	c.dirty = true
 }

@@ -61,25 +61,22 @@ type Module struct {
 
 // Apache are the facts of the platform's Apache.
 type Apache struct {
+	Binary    string   // apache2 or httpd, recorded in the manifest
 	Modules   []Module // LoadModule lines, built-in modules already left out
 	MimeTypes string   // the platform's mime.types
 }
 
-// INIValue is one setting of a PHP overlay: the ini name and the value
-// text exactly as written in the file (quotes included), so that it means
-// in the pool what it means in php.ini.
-type INIValue struct {
-	Key   string
-	Value string
-}
-
-// PHPVersion are the facts of one PHP version in use.
+// PHPVersion are the facts of one installed PHP version.
 type PHPVersion struct {
+	FPM string // the php-fpm binary
+	INI string // the platform's php.ini, passed with -c
+	// ScanDir is the system directory of additional .ini files ("" for
+	// none). The master runs with PHP_INI_SCAN_DIR set to it plus the
+	// global overlay directory, written out in full (design/hte.md 4).
+	ScanDir string
 	// SessionDir is set when the platform's session.save_path is not
 	// writable by the user (LEDGER HTE-41).
 	SessionDir string
-	// Overlay is the parsed global overlay php/<X.Y>.ini, in file order.
-	Overlay []INIValue
 }
 
 // Input is everything a generation is rendered from.
@@ -210,6 +207,9 @@ func (in Input) validate() error {
 			return err
 		}
 	}
+	if !filepath.IsAbs(in.Apache.Binary) {
+		return hteerr.Newf(hteerr.ApacheNotFound, "", "the Apache binary %q is not an absolute path", in.Apache.Binary)
+	}
 	settings := state.Settings{Ports: in.Ports, Listen: in.Listen, Autostart: "none"}
 	if err := settings.Validate(); err != nil {
 		return err
@@ -223,6 +223,15 @@ func (in Input) validate() error {
 		}
 		if err := state.CheckUnique(s, in.Sites[i+1:]); err != nil {
 			return err
+		}
+		if err := state.CheckPortProtocols(s, in.Sites[i+1:]); err != nil {
+			return err
+		}
+		for _, p := range append(slices.Clone(s.ExtraHTTPPorts), s.ExtraHTTPSPorts...) {
+			if p == in.Ports.HTTP || p == in.Ports.HTTPS {
+				return hteerr.Newf(hteerr.ConflictingOptions, "change the site with gash hte site modify",
+					"site %s lists the stack's port %d as an extra port", s.Domain, p)
+			}
 		}
 		if !s.Enabled || !s.HasPool() {
 			continue
@@ -241,14 +250,35 @@ func (in Input) validate() error {
 			if err := checkBasePath("PHP "+v+" session directory", facts.SessionDir); err != nil {
 				return err
 			}
+			// open_basedir separates its directories with ":".
+			if strings.Contains(facts.SessionDir, ":") {
+				return hteerr.Newf(hteerr.PlatformUnsupported, "use a state directory without \":\"",
+					"the PHP %s session directory %q contains \":\", the open_basedir separator", v, facts.SessionDir)
+			}
 		}
-		for _, kv := range facts.Overlay {
-			if err := state.CheckINI(kv.Key, kv.Value); err != nil {
-				return err
+		if !filepath.IsAbs(facts.FPM) || !filepath.IsAbs(facts.INI) {
+			return hteerr.Newf(hteerr.PHPVersionNotInstalled, "", "PHP %s has no absolute php-fpm binary and php.ini", v)
+		}
+		// PHP_INI_SCAN_DIR separates its directories with ":".
+		for _, d := range []string{facts.ScanDir, in.Paths.PHPOverlayDir(v)} {
+			if strings.Contains(d, ":") || (d != "" && !filepath.IsAbs(d)) {
+				return hteerr.Newf(hteerr.PlatformUnsupported, "use directories without \":\"",
+					"the PHP %s ini directory %q cannot be passed in PHP_INI_SCAN_DIR", v, d)
 			}
 		}
 	}
 	return nil
+}
+
+// ScanDirEnv is the PHP_INI_SCAN_DIR value of a version's master: the
+// system scan directory, then the global overlay directory, in full (an
+// empty element meaning "the compiled-in directory" needs PHP 7.x and is
+// not used).
+func ScanDirEnv(p state.Paths, facts PHPVersion, version string) string {
+	if facts.ScanDir == "" {
+		return p.PHPOverlayDir(version)
+	}
+	return facts.ScanDir + ":" + p.PHPOverlayDir(version)
 }
 
 // Render produces one generation from in.
@@ -296,12 +326,19 @@ func Render(in Input) (*Generation, error) {
 	}
 	// Listen names the protocol of a TLS port other than 443, where
 	// Apache would otherwise assume http (it matters for accept filters).
+	// The enabled sites' extra ports follow, ascending.
+	extraHTTP, extraHTTPS := extraPorts(sites)
 	listen := addrList(in.Listen, in.Ports.HTTP)
-	for _, a := range addrList(in.Listen, in.Ports.HTTPS) {
-		if in.Ports.HTTPS != 443 {
-			a += " https"
+	for _, p := range extraHTTP {
+		listen = append(listen, addrList(in.Listen, p)...)
+	}
+	for _, p := range append([]int{in.Ports.HTTPS}, extraHTTPS...) {
+		for _, a := range addrList(in.Listen, p) {
+			if p != 443 {
+				a += " https"
+			}
+			listen = append(listen, a)
 		}
-		listen = append(listen, a)
 	}
 	httpd, err := execute("httpd.conf.tmpl", map[string]any{
 		"RunDir":       in.Paths.RuntimeDir,
@@ -319,8 +356,50 @@ func Render(in Input) (*Generation, error) {
 		return nil, err
 	}
 	files = append(files, File{"httpd.conf", httpd})
+	var enabled []state.Site
+	for _, s := range sites {
+		if s.Enabled {
+			enabled = append(enabled, s)
+		}
+	}
+	var listenAddrs []string
+	for _, p := range append(append([]int{in.Ports.HTTP}, extraHTTP...), append([]int{in.Ports.HTTPS}, extraHTTPS...)...) {
+		listenAddrs = append(listenAddrs, addrList(in.Listen, p)...)
+	}
+	manifest, err := in.manifest(enabled, slices.Sorted(maps.Keys(pools)), listenAddrs)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, File{ManifestFile, manifest})
 	slices.SortFunc(files, func(a, b File) int { return strings.Compare(a.Path, b.Path) })
 	return &Generation{Files: files}, nil
+}
+
+// extraPorts returns the extra HTTP and HTTPS ports of the enabled
+// sites, each ascending and without repeats.
+func extraPorts(sites []state.Site) (httpPorts, httpsPorts []int) {
+	for _, s := range sites {
+		if !s.Enabled {
+			continue
+		}
+		httpPorts = append(httpPorts, s.ExtraHTTPPorts...)
+		if s.HTTPS {
+			httpsPorts = append(httpsPorts, s.ExtraHTTPSPorts...)
+		}
+	}
+	slices.Sort(httpPorts)
+	slices.Sort(httpsPorts)
+	return slices.Compact(httpPorts), slices.Compact(httpsPorts)
+}
+
+// siteAddrs are the addresses of a site's HTTP or HTTPS vhost: the stack's
+// port, then the site's extra ports.
+func (in Input) siteAddrs(stack int, extra []int) []string {
+	out := addrList(in.Listen, stack)
+	for _, p := range extra {
+		out = append(out, addrList(in.Listen, p)...)
+	}
+	return out
 }
 
 func execute(name string, data any) ([]byte, error) {
@@ -363,8 +442,8 @@ func (in Input) vhost(s state.Site) ([]byte, error) {
 		"Aliases":        s.Aliases,
 		"Docroot":        s.Docroot,
 		"DirectoryPath":  dir,
-		"HTTPAddrs":      strings.Join(addrList(in.Listen, in.Ports.HTTP), " "),
-		"HTTPSAddrs":     strings.Join(addrList(in.Listen, in.Ports.HTTPS), " "),
+		"HTTPAddrs":      strings.Join(in.siteAddrs(in.Ports.HTTP, s.ExtraHTTPPorts), " "),
+		"HTTPSAddrs":     strings.Join(in.siteAddrs(in.Ports.HTTPS, s.ExtraHTTPSPorts), " "),
 		"ErrorLog":       filepath.Join(logs, "error.log"),
 		"AccessLog":      filepath.Join(logs, "access.log"),
 		"BytesLog":       filepath.Join(logs, "bytes.log"),
@@ -384,9 +463,11 @@ func (in Input) vhost(s state.Site) ([]byte, error) {
 }
 
 // pool renders fpm/<X.Y>/pools/<domain>.conf: gash's header, the profile
-// block of hte-cli with the log paths moved to the logs directory, the
-// session directory where needed, the global overlay of the version, then
-// the site's php_ini.
+// block of hte-cli with the log paths moved to the logs directory and the
+// site's php_ini values in place of the profile lines they set, the
+// session directory where needed, then the other php_ini values. The
+// global overlay is not rendered here: the master reads it through
+// PHP_INI_SCAN_DIR.
 func (in Input) pool(s state.Site) ([]byte, error) {
 	facts := in.PHP[s.PHP]
 	logs := in.Paths.SiteLogDir(s.Domain)
@@ -410,49 +491,92 @@ func (in Input) pool(s state.Site) ([]byte, error) {
 		"security.limit_extensions = .php",
 		"",
 	}
+	replaced := map[string]bool{} // php_ini keys written in place of a gash line
 	for _, l := range profiles.Lines(profiles.Name(s.Profile), opts) {
 		switch {
 		case l.IsBlank():
 			lines = append(lines, "")
 		case l.Comment != "":
 			lines = append(lines, "; "+l.Comment)
-		case l.Path:
-			v, err := quoteINI(l.Value)
-			if err != nil {
-				return nil, err
-			}
-			lines = append(lines, l.Key+" = "+v)
 		default:
+			if k, admin, ok := iniDirectiveKey(l.Key); ok {
+				if v, set := s.PHPIni[k]; set {
+					lines = append(lines, phpIniLine(k, v, admin))
+					replaced[k] = true
+					continue
+				}
+			}
+			if l.Path {
+				v, err := quoteINI(l.Value)
+				if err != nil {
+					return nil, err
+				}
+				lines = append(lines, l.Key+" = "+v)
+				continue
+			}
 			lines = append(lines, l.Key+" = "+l.Value)
 		}
 	}
 	if facts.SessionDir != "" {
-		v, err := quoteINI(facts.SessionDir)
-		if err != nil {
-			return nil, err
+		lines = append(lines, "", "; Sessions: the platform's session.save_path is not writable by the user")
+		if v, set := s.PHPIni["session.save_path"]; set {
+			lines = append(lines, phpIniLine("session.save_path", v, true))
+			replaced["session.save_path"] = true
+		} else {
+			v, err := quoteINI(facts.SessionDir)
+			if err != nil {
+				return nil, err
+			}
+			lines = append(lines, "php_admin_value[session.save_path] = "+v)
 		}
-		lines = append(lines, "", "; Sessions: the platform's session.save_path is not writable by the user",
-			"php_admin_value[session.save_path] = "+v)
 	}
-	if len(facts.Overlay) > 0 {
-		lines = append(lines, "", "; Global overlay "+in.Paths.PHPOverlay(s.PHP))
-		for _, kv := range facts.Overlay {
-			lines = append(lines, iniDirective(kv.Key, kv.Value))
+	var rest []string
+	for _, k := range slices.Sorted(maps.Keys(s.PHPIni)) {
+		if !replaced[k] {
+			rest = append(rest, phpIniLine(k, s.PHPIni[k], false))
 		}
 	}
-	if len(s.PHPIni) > 0 {
+	if len(rest) > 0 {
 		lines = append(lines, "", "; php_ini of "+in.Paths.SiteFile(s.Domain))
-		for _, k := range slices.Sorted(maps.Keys(s.PHPIni)) {
-			lines = append(lines, iniDirective(k, s.PHPIni[k]))
-		}
+		lines = append(lines, rest...)
 	}
 	return execute("pool.conf.tmpl", lines)
 }
 
-// iniDirective writes an override with the directive choice of
-// PhpProfiles.php:233-246 (php_admin_flag for on/off, php_admin_value
-// otherwise) and the value text verbatim.
-func iniDirective(key, value string) string {
-	d, v := profiles.AdminDirective(key, value)
-	return d + " = " + v
+// iniDirectiveKey splits a pool directive such as php_admin_value[memory_limit]
+// into the ini name and whether it is an admin directive.
+func iniDirectiveKey(directive string) (key string, admin, ok bool) {
+	for _, d := range []struct {
+		prefix string
+		admin  bool
+	}{{"php_admin_value[", true}, {"php_admin_flag[", true}, {"php_value[", false}, {"php_flag[", false}} {
+		if rest, found := strings.CutPrefix(directive, d.prefix); found {
+			if k, found := strings.CutSuffix(rest, "]"); found && k != "" {
+				return k, d.admin, true
+			}
+		}
+	}
+	return "", false, false
+}
+
+// iniFlags are the boolean words the PHP-FPM INI parser converts for a
+// *_flag directive. FPM refuses a quoted flag ("on" is an invalid boolean
+// value), so flags are written bare; everything else is a *_value with the
+// value double-quoted, where ; and INI constants have no meaning.
+var iniFlags = []string{"on", "off", "yes", "no", "true", "false"}
+
+// phpIniLine writes one [php_ini] entry (design/hte.md 4): a key the
+// profile sets keeps the profile directive's admin kind and replaces its
+// line; any other key is php_value or php_flag. A boolean word becomes a
+// bare *_flag, any other value a double-quoted *_value. CheckINI has
+// already refused the characters a quoted INI value cannot hold.
+func phpIniLine(key, value string, admin bool) string {
+	prefix := "php_"
+	if admin {
+		prefix = "php_admin_"
+	}
+	if w := strings.ToLower(value); slices.Contains(iniFlags, w) {
+		return prefix + "flag[" + key + "] = " + w
+	}
+	return prefix + "value[" + key + "] = \"" + value + "\""
 }

@@ -235,12 +235,41 @@ func ResolveModules(sr platform.Sysroot, a Apache, builtin, extra []string) Modu
 	return m
 }
 
-// MissingError is apache_not_found for modules the userland list needs and
-// the platform lacks, or nil when none is missing.
+// MissingError is apache_module_missing (STOP) for modules the userland
+// list needs and the platform lacks, or nil when none is missing. The hint
+// names the platform's install command for them.
 func (m Modules) MissingError(a Apache, f platform.Family) error {
 	if len(m.Missing) == 0 {
 		return nil
 	}
-	return hteerr.Newf(hteerr.ApacheNotFound, ApacheInstallHint(f),
+	return hteerr.Newf(hteerr.ApacheModuleMissing, ModuleInstallHint(f, m.Missing),
 		"%s lacks the modules %s", a.ModuleDir, strings.Join(m.Missing, ", "))
+}
+
+// ModuleInstallHint is the command that installs the Apache modules
+// missing on the platform. Debian, Arch and Homebrew ship every module of
+// the userland list in the server package; Fedora splits mod_ssl and
+// mod_http2 out of httpd.
+func ModuleInstallHint(f platform.Family, missing []string) string {
+	switch f {
+	case platform.FamilyDebian:
+		return "sudo apt install --reinstall apache2"
+	case platform.FamilyFedora:
+		pkgs := []string{}
+		for _, m := range missing {
+			p := "httpd"
+			if m == "ssl" || m == "http2" {
+				p = "mod_" + m
+			}
+			if !slices.Contains(pkgs, p) {
+				pkgs = append(pkgs, p)
+			}
+		}
+		return "sudo dnf install " + strings.Join(pkgs, " ")
+	case platform.FamilyArch:
+		return "sudo pacman -S apache"
+	case platform.FamilyDarwin:
+		return "brew reinstall httpd"
+	}
+	return ""
 }
