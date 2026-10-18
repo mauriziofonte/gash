@@ -2,8 +2,9 @@
 
 // Package llm holds the llm_* functions of the 2.x lib/modules/llm module
 // that read files and the system (llm_tree, llm_find, llm_grep, llm_config,
-// llm_env, llm_ports, llm_procs) and the llm_exec handler. The llm_db_*
-// family lives in internal/db.
+// llm_env, llm_ports, llm_procs), the llm_exec handler and llm_docker_check
+// (a wrapper of docker_compose_check). The llm_db_* family lives in
+// internal/db.
 package llm
 
 import (
@@ -53,6 +54,7 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_ports", m.ports)
 	t.Handle("llm_procs", m.procs)
 	t.Handle("llm_exec", m.exec)
+	t.Handle("llm_docker_check", m.dockerCheck)
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the
