@@ -353,6 +353,7 @@ func TestValidateRefuses(t *testing.T) {
 		{"docroot with newline", func(in *Input) { in.Sites[0].Docroot = "/srv/a\nInclude /etc/shadow" }, hteerr.InvalidDocroot},
 		{"relative docroot", func(in *Input) { in.Sites[0].Docroot = "public" }, hteerr.InvalidDocroot},
 		{"session dir with dollar", func(in *Input) { in.PHP["8.3"] = PHPVersion{SessionDir: "/var/$x"} }, hteerr.PlatformUnsupported},
+		{"session dir with colon", func(in *Input) { in.PHP["8.3"] = PHPVersion{SessionDir: "/home/a:b/sessions"} }, hteerr.PlatformUnsupported},
 		{"overlay key", func(in *Input) {
 			in.PHP["8.3"] = PHPVersion{Overlay: []INIValue{{"memory limit", "1G"}}}
 		}, hteerr.InvalidState},
@@ -448,7 +449,7 @@ func TestLedger_HTE08(t *testing.T) {
 	}
 	// Every docroot character that Apache or FPM would interpret is
 	// refused before rendering (TestValidateRefuses covers " and newline).
-	for _, c := range []string{"$", "*", "?", "[", ";", `"`, `\`, "\t"} {
+	for _, c := range []string{"$", "*", "?", "[", ";", ":", `"`, `\`, "\t"} {
 		in := debianStandard()
 		in.Sites[0].Docroot = "/srv/a" + c + "b"
 		if _, err := Render(in); code(err) != hteerr.InvalidDocroot {

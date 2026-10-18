@@ -44,11 +44,12 @@ func NormalizeDomain(arg string) (string, error) {
 
 // docrootRefused are the characters Apache (${NAME} expansion, <Directory>
 // wildcards, quoting) or the PHP-FPM INI parser (; comments, ${NAME})
-// would interpret (design/hte.md section 3, LEDGER HTE-08).
-const docrootRefused = "$*?[;\"\\"
+// would interpret, and the open_basedir list separator : (design/hte.md
+// section 3, LEDGER HTE-08).
+const docrootRefused = "$*?[;:\"\\"
 
 // CheckDocrootText applies the character rules to a document root: valid
-// UTF-8, no control character (newline included) and none of $ * ? [ ; " \.
+// UTF-8, no control character (newline included) and none of $ * ? [ ; : " \.
 func CheckDocrootText(p string) error {
 	if !utf8.ValidString(p) {
 		return hteerr.Newf(hteerr.InvalidDocroot, hintDocrootChars, "document root %q is not valid UTF-8", p)

@@ -6743,7 +6743,7 @@ Critical and high items:
 | Severity | high |
 | Public-contract impact | no |
 | rc.A behavior | Validation refuses a docroot with any control character, newline included (`invalid_docroot`, RETRY). Apache paths go through `quoteApacheArg` (double quotes, `"` and `\` escaped), so spaces work. Two gaps the design does not cover yet (inferred from Apache and PHP INI rules, not run): Apache expands `${NAME}` inside quoted arguments, and `<Directory>` treats `*`, `?`, `[` as wildcards; php-fpm's INI parser treats `;` as a comment start and expands `${NAME}` in the `open_basedir` value of staging/hardened pools |
-| Fix recipe (3.0) | Design addition: `invalid_docroot` also for a docroot containing `$`, `*`, `?`, `[`, `;`, `"` or `\` (hint: "rename the directory or use a symlink without these characters"); pool values double-quoted. Prove with `httpd -t` and `php-fpm -t` on the rendered files |
+| Fix recipe (3.0) | Design addition: `invalid_docroot` also for a docroot containing `$`, `*`, `?`, `[`, `;`, `:`, `"` or `\` (hint: "rename the directory or use a symlink without these characters"); `:` because it separates the `open_basedir` list (lead decision, 2026-10-18); pool values double-quoted. Prove with `httpd -t` and `php-fpm -t` on the rendered files |
 | Proving test | `TestLedger_HTE08` in `internal/hte/render` (table of docroots: spaces accepted and rendered quoted; each refused character → `invalid_docroot`; fuzz `quoteApacheArg` so that the output never has a newline); `hte-e2e`: a docroot with a space serves `index.php` |
 | Status | open |
 

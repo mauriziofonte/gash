@@ -169,9 +169,10 @@ no Debian `envvars`.
 HTTPS vhost, `http/1.1` in both when `http2 = false` (LEDGER HTE-38).
 Document roots are validated before anything is rendered: absolute after
 resolving a relative argument against the current directory (HTE-29), an
-existing directory, and none of `$ * ? [ ; " \` or control characters, which
+existing directory, and none of `$ * ? [ ; : " \` or control characters, which
 Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI parser
-(`;` comments, `${NAME}`) would interpret (`invalid_docroot`, hint: "rename
+(`;` comments, `${NAME}`) would interpret, or that would split the
+`open_basedir` list (`:`, its separator) (`invalid_docroot`, hint: "rename
 the directory or use a symlink without these characters"; HTE-08). Pool
 values are double-quoted.
 

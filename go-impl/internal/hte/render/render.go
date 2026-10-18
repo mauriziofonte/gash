@@ -241,6 +241,11 @@ func (in Input) validate() error {
 			if err := checkBasePath("PHP "+v+" session directory", facts.SessionDir); err != nil {
 				return err
 			}
+			// open_basedir separates its directories with ":".
+			if strings.Contains(facts.SessionDir, ":") {
+				return hteerr.Newf(hteerr.PlatformUnsupported, "use a state directory without \":\"",
+					"the PHP %s session directory %q contains \":\", the open_basedir separator", v, facts.SessionDir)
+			}
 		}
 		for _, kv := range facts.Overlay {
 			if err := state.CheckINI(kv.Key, kv.Value); err != nil {
