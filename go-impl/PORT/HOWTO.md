@@ -171,14 +171,15 @@ go through the core emitters (static lint rules S10 and S11).
 bash tests/run.sh --impl go                           # all specs; writes tests/.results/go.tsv
 bash tests/run.sh --impl go specs/core_utils_spec.sh  # one spec
 bash tests/run.sh --impl go -f 'gash_username'        # tests whose "<suite> :: <name>" matches
-bash tests/run.sh --impl both                         # Bash reference, then Go
+bash tests/run.sh --impl both                         # Bash reference, then Go (--results F: F.bash, F.go)
 ```
 
 Go mode builds `go-impl/cmd/gash` (or takes `--gash-bin PATH`), stages
 the checkout without its 2.x implementation files (`gash __compat stage`)
-and runs the unchanged specs there, in a PID namespace when unshare allows
-it (`--no-isolate` to turn it off, `--no-network` to add a network
-namespace). Then:
+and runs the unchanged specs there, in PID and network namespaces when
+unshare allows it (`--network` keeps the host network, `--no-isolate`
+turns both off): a fake a binary bypasses fails instead of reaching the
+network or signalling a real process. Then:
 
 ```bash
 go run ./internal/tools/parity            # write the Go column of PORT/PARITY.md

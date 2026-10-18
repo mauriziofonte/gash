@@ -16,10 +16,11 @@
 #                      staged copy of the checkout) or both
 #       --results FILE also write one line per test, tab-separated: spec,
 #                      line, name, status (pass, fail, skip), skip reason;
-#                      go mode writes tests/.results/go.tsv by default
+#                      go mode writes tests/.results/go.tsv by default;
+#                      both writes FILE.bash and FILE.go
 #       --gash-bin PATH  go mode: use this binary instead of building one
-#       --no-isolate   go mode: do not run in a PID namespace
-#       --no-network   go mode: also run in a network namespace
+#       --no-isolate   go mode: do not run in PID and network namespaces
+#       --network      go mode: keep the host network (no network namespace)
 #   -h, --help         show this help
 #
 # SPEC can be a path or a name relative to tests/ (e.g. specs/files_spec.sh).
@@ -34,8 +35,9 @@
 # Go mode builds go-impl/cmd/gash (or takes --gash-bin), stages the
 # checkout with `gash __compat stage` and runs the unchanged specs from the
 # staged tree. When unshare(1) allows it, the run happens in its own PID
-# namespace, so no test can signal a process it did not start; update the
-# PARITY Go column with `go run ./internal/tools/parity` in go-impl.
+# and network namespaces: no test can signal a process it did not start or
+# reach the network past a missed fake. Update the PARITY Go column with
+# `go run ./internal/tools/parity` in go-impl.
 
 set -uo pipefail
 
@@ -52,8 +54,9 @@ impl=bash
 results_file=""
 gash_bin=""
 isolate=1
-no_network=0
+network=0
 in_namespace=0
+ns_kind=""
 specs=()
 # The arguments as given, for the go part of --impl both and the
 # namespace re-exec.
@@ -128,12 +131,13 @@ while [[ $# -gt 0 ]]; do
       isolate=0
       shift
       ;;
-    --no-network)
-      no_network=1
+    --network)
+      network=1
       shift
       ;;
-    --in-namespace)
+    --in-namespace=*)
       in_namespace=1
+      ns_kind="${1#*=}"
       shift
       ;;
     -f | --filter)
@@ -173,7 +177,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h | --help)
-      sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     --)
@@ -201,31 +205,71 @@ if [[ "$impl" == both ]]; then
       continue
     fi
     case "$a" in
-      --impl) skip_next=1 ;;
+      --impl | --results) skip_next=1 ;;
       --impl=*) ;;
       *) rest+=("$a") ;;
     esac
   done
-  bash "${BASH_SOURCE[0]}" --impl bash ${rest[@]+"${rest[@]}"}
+  r_bash=() r_go=()
+  if [[ -n "$results_file" ]]; then
+    r_bash=(--results "$results_file.bash")
+    r_go=(--results "$results_file.go")
+  fi
+  bash "${BASH_SOURCE[0]}" --impl bash ${r_bash[@]+"${r_bash[@]}"} ${rest[@]+"${rest[@]}"}
   s_bash=$?
   echo
-  bash "${BASH_SOURCE[0]}" --impl go ${rest[@]+"${rest[@]}"}
+  bash "${BASH_SOURCE[0]}" --impl go ${r_go[@]+"${r_go[@]}"} ${rest[@]+"${rest[@]}"}
   s_go=$?
   ((s_bash > s_go)) && exit "$s_bash"
   exit "$s_go"
 fi
 
-# Go mode runs in its own PID namespace (and, with --no-network, network
-# namespace) when unshare allows it: as root directly, otherwise in a user
-# namespace that maps the caller's own uid.
+# Build go-impl/cmd/gash into DEST.
+# Usage: build_gash DEST
+build_gash() {
+  command -v go >/dev/null 2>&1 || {
+    echo "run.sh: --impl go needs Go (or --gash-bin PATH)" >&2
+    return 2
+  }
+  echo "INFO Building go-impl/cmd/gash"
+  (cd "$ROOT_DIR/go-impl" && CGO_ENABLED=0 go build -o "$1" ./cmd/gash) || {
+    echo "run.sh: go build failed" >&2
+    return 2
+  }
+}
+
+# Go mode runs in its own PID and network namespaces (PID only with
+# --network, or when a network namespace is refused) when unshare allows
+# it: as root directly, otherwise in a user namespace that maps the
+# caller's own uid. The binary is built first, outside, where the module
+# cache may need the network.
 if [[ "$impl" == go ]] && ((isolate && ! in_namespace)) && command -v unshare >/dev/null 2>&1; then
-  ns=(--pid --fork --mount-proc)
-  ((no_network)) && ns+=(--net)
-  if [[ "$(id -u)" != 0 ]]; then
-    ns=(--user --map-current-user "${ns[@]}")
+  ns_user=()
+  [[ "$(id -u)" != 0 ]] && ns_user=(--user --map-current-user)
+  ns=()
+  ns_kind=""
+  if ((! network)) && unshare ${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc --net true >/dev/null 2>&1; then
+    ns=(${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc --net)
+    ns_kind=pid+net
+  elif unshare ${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc true >/dev/null 2>&1; then
+    ns=(${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc)
+    ns_kind=pid
   fi
-  if unshare "${ns[@]}" true >/dev/null 2>&1; then
-    exec unshare "${ns[@]}" bash "${BASH_SOURCE[0]}" --in-namespace "${orig_args[@]}"
+  if [[ -n "$ns_kind" ]]; then
+    ns_args=()
+    ns_build=""
+    if [[ -z "$gash_bin" ]]; then
+      ns_build="$(mktemp -d "${TMPDIR:-/tmp}/gash-build.XXXXXX")" || exit 2
+      build_gash "$ns_build/gash" || {
+        rm -rf "$ns_build"
+        exit 2
+      }
+      ns_args=(--gash-bin "$ns_build/gash")
+    fi
+    unshare "${ns[@]}" bash "${BASH_SOURCE[0]}" --in-namespace="$ns_kind" ${ns_args[@]+"${ns_args[@]}"} "${orig_args[@]}"
+    ns_status=$?
+    [[ -n "$ns_build" ]] && rm -rf "$ns_build"
+    exit "$ns_status"
   fi
   echo "INFO unshare cannot create a PID namespace here: go mode runs without isolation" >&2
 fi
@@ -274,16 +318,8 @@ test_root="$ROOT_DIR"
 gash_env=()
 if [[ "$impl" == go ]]; then
   if [[ -z "$gash_bin" ]]; then
-    command -v go >/dev/null 2>&1 || {
-      echo "run.sh: --impl go needs Go (or --gash-bin PATH)" >&2
-      exit 2
-    }
     gash_bin="$workdir/gash"
-    echo "INFO Building go-impl/cmd/gash"
-    (cd "$ROOT_DIR/go-impl" && CGO_ENABLED=0 go build -o "$gash_bin" ./cmd/gash) || {
-      echo "run.sh: go build failed" >&2
-      exit 2
-    }
+    build_gash "$gash_bin" || exit 2
   fi
   [[ -x "$gash_bin" ]] || {
     echo "run.sh: not an executable: $gash_bin" >&2
@@ -300,7 +336,11 @@ if [[ "$impl" == go ]]; then
       "$ROOT_DIR"/*) specs[$i]="$test_root/${specs[$i]#"$ROOT_DIR"/}" ;;
     esac
   done
-  ((in_namespace)) && ns_note=", PID namespace" || ns_note=""
+  case "$ns_kind" in
+    pid+net) ns_note=", PID and network namespaces" ;;
+    pid) ns_note=", PID namespace" ;;
+    *) ns_note="" ;;
+  esac
   echo "INFO Implementation: go (${gash_env[0]}${ns_note})"
 fi
 
