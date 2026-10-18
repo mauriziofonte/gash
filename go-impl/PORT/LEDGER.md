@@ -3558,7 +3558,7 @@ Critical and high items:
 | Section | Defects |
 | Origin | New finding (rc.A port of llm_* and internal/db) |
 | Area | Test harness |
-| Bash location | `llm_spec.sh` (`__llm_validate_command`, `__llm_validate_path`, `__llm_is_secret_file`, `__llm_clean_error_msg`, `__llm_resolve_db`), `llm_exec_security_spec.sh` (two tests), `llm_db_security_spec.sh` (`__llm_sql_guard`, two tests), `llm_db_names_spec.sh` (`__llm_tsv_to_json`), `llm_portability_spec.sh` (`__llm_elapsed_us`, `__llm_realpath`), `llm_flags_spec.sh` (overrides `__llm_has_rg` and sources `lib/modules/llm/core.sh`) |
+| Bash location | `llm_spec.sh` (`__llm_validate_command`, `__llm_validate_path`, `__llm_is_secret_file`, `__llm_clean_error_msg`, `__llm_resolve_db`), `llm_exec_security_spec.sh` (two tests), `llm_db_security_spec.sh` (`__llm_sql_guard`, two tests), `llm_db_names_spec.sh` (`__llm_tsv_to_json`), `llm_portability_spec.sh` (`__llm_elapsed_us`, `__llm_realpath`), `llm_flags_spec.sh` (overrides `__llm_has_rg` and sources `lib/modules/llm/core.sh`), `help_spec.sh` (the seven `__gash_register_help` registry tests; core pins the registry in `internal/registry`) |
 | Observed behavior | These tests call or override `__llm_*` helpers of the Bash implementation. MATRIX lists them as moot internals (PRD 5.5): the generated shims do not define them, so the tests cannot run in Go mode. |
 | Reproduction | `bash tests/run.sh --impl go specs/llm_spec.sh` |
 | Severity | low |

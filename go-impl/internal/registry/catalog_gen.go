@@ -1007,7 +1007,7 @@ var functions = []Function{
 		},
 		Settings:          []string{"GASH_REPLACE_TOOLS", "GASH_UMASK", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
-		ShellVars:         []string{"HOME", "TERM", "TMPDIR", "XDG_STATE_HOME"},
+		ShellVars:         []string{"GASH_VERSION", "HOME", "TERM", "TMPDIR", "XDG_STATE_HOME"},
 		Env:               []string{"COLUMNS", "EUID", "GASH_BASH", "GASH_DEBUG", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_TUI", "GASH_VERSION", "HOME", "NO_COLOR", "TERM", "TMPDIR", "XDG_STATE_HOME"},
 		CompletionComment: "Gash reference card topics",
 		Completion: "" +
@@ -1160,7 +1160,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color]", Description: "Run health checks on your Gash installation (--timing: what each file costs at startup)."},
 		Settings:          []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_REPLACE_TOOLS", "GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_NVM", "GASH_PATH_ADD"},
-		ShellVars:         []string{"BASH", "BASH_VERSION", "HOME"},
+		ShellVars:         []string{"BASH", "BASH_VERSION", "GASH_VERSION", "HOME"},
 		Env:               []string{"BASH", "BASH_VERSION", "COLUMNS", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "HOME", "NO_COLOR"},
 		CompletionComment: "gash_doctor: --timing, --no-color",
 		Completion: "" +
@@ -1249,6 +1249,7 @@ var functions = []Function{
 				"  # Access bash builtin help\n" +
 				"  gash_help --bash cd",
 		},
+		ShellVars:         []string{"GASH_VERSION"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "NO_COLOR"},
 		CompletionComment: "Help system: function names, aliases, and flags",
 		Completion: "" +
@@ -1887,16 +1888,17 @@ var functions = []Function{
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
-		Name:     "help",
-		Module:   "general",
-		Topic:    "system",
-		File:     "lib/aliases/general.sh",
-		StubFile: "lib/aliases/general.sh",
-		Class:    Class("pure output"),
-		Decision: "port",
-		Impl:     Impl("init"),
-		Headless: false,
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "NO_COLOR"},
+		Name:      "help",
+		Module:    "general",
+		Topic:     "system",
+		File:      "lib/aliases/general.sh",
+		StubFile:  "lib/aliases/general.sh",
+		Class:     Class("pure output"),
+		Decision:  "port",
+		Impl:      Impl("init"),
+		Headless:  false,
+		ShellVars: []string{"GASH_VERSION"},
+		Env:       []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "NO_COLOR"},
 	},
 	{
 		Name:     "hgrep",
