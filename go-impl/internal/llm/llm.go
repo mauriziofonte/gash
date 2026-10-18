@@ -45,6 +45,7 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_tree", m.tree)
 	t.Handle("llm_find", m.find)
 	t.Handle("llm_grep", m.grep)
+	t.Handle("llm_config", m.config)
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the
