@@ -169,11 +169,20 @@ func (e *Engine) Install(ctx context.Context, opt InstallOptions) (*InstallResul
 		return nil, err
 	}
 	res := &InstallResult{Plan: []string{}, Changes: []receipt.Change{}, Blocking: []string{}, Warnings: []string{}}
-	out, err := e.locked(v, "install", "", func() (any, error) { return res, e.install(ctx, v, opt, res) })
-	if err != nil {
+	if _, err := e.locked(v, "install", "", func() (any, error) { return res, e.install(ctx, v, opt, res) }); err != nil {
 		return nil, err
 	}
-	return out.(*InstallResult), nil
+	// The stack starts once the lock is released: the systemd unit runs
+	// gash hte __unit start, which takes the lock itself.
+	if len(res.Blocking) > 0 {
+		return res, nil
+	}
+	sr, err := e.ServiceStart(ctx)
+	if err != nil {
+		return res, err
+	}
+	res.Started = sr.Running
+	return res, nil
 }
 
 func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *InstallResult) error {
@@ -306,16 +315,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 	if len(res.Blocking) > 0 {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("the system Apache still serves %d enabled vhosts, so it keeps ports %d and %d: "+
 			"run gash hte migrate to move them (or exclude them), then the stack starts", len(res.Blocking), ports.HTTP, ports.HTTPS))
-		return nil
 	}
-	if autostart == service.AutostartSystemd {
-		if err := e.systemctlUser(ctx, v, "start", service.UnitName); err != nil {
-			return err
-		}
-	} else if _, err := e.UnitStart(ctx); err != nil {
-		return err
-	}
-	res.Started = true
 	return nil
 }
 

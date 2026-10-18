@@ -58,6 +58,9 @@ type Engine struct {
 	Dial         func(ctx context.Context, network, addr string) error
 	StartTimeout time.Duration
 	Sleep        func(time.Duration)
+	// Probe replaces the HTTP probe of a site (migrate's verification)
+	// in tests.
+	Probe func(ctx context.Context, e render.Endpoint) service.SiteStatus
 }
 
 func (e *Engine) now() time.Time {
@@ -267,8 +270,18 @@ type Applied struct {
 }
 
 // apply renders the state into a new generation and moves the stack to
-// it (service.Supervisor.Apply), then writes the hosts block.
+// it (applyStack), then writes the hosts block.
 func (e *Engine) apply(ctx context.Context, v *env, set state.Settings, sites []state.Site) (Applied, error) {
+	out, err := e.applyStack(ctx, v, set, sites)
+	if err != nil {
+		return out, err
+	}
+	return out, e.applyHosts(ctx, v, sites)
+}
+
+// applyStack issues missing certificates, renders the state into a new
+// generation and moves the stack to it (service.Supervisor.Apply).
+func (e *Engine) applyStack(ctx context.Context, v *env, set state.Settings, sites []state.Site) (Applied, error) {
 	m, err := e.discover(ctx, v, set.Modules)
 	if err != nil {
 		return Applied{}, err
@@ -281,10 +294,8 @@ func (e *Engine) apply(ctx context.Context, v *env, set state.Settings, sites []
 	if err := e.prepare(v, in); err != nil {
 		return out, err
 	}
-	if out.Outcome, err = e.supervisor(v).Apply(ctx, in); err != nil {
-		return out, err
-	}
-	return out, e.applyHosts(ctx, v, sites)
+	out.Outcome, err = e.supervisor(v).Apply(ctx, in)
+	return out, err
 }
 
 // desiredHosts is the block of the state.
