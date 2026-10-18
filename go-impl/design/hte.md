@@ -348,15 +348,31 @@ PID files and never runs a supervisor process of its own.
 | `service start` | Render if stale, config test, start each FPM master in use, then Apache; wait until the sockets and ports answer |
 | `service stop` | `SIGTERM` (Apache `-k stop`), wait, `SIGKILL` after a timeout. A PID is acted on only when `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p` (macOS) names our config path, so a recycled PID is never signalled |
 | `service restart` | stop + start |
-| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27) |
+| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts |
 | `service status` | Per master: running, PID, uptime, listening addresses; per site: answers on HTTP and HTTPS. `--json` |
 | `service logs` | Tail of the global, per-site Apache and PHP logs (`--site`, `--lines N`; no follow mode, so agents never hang) |
+
+A master counts as ready when its log gained its readiness line after the
+signal or start (Apache `AH00489 ... resuming normal operations`, which it
+logs whatever `LogLevel` says; FPM `ready to handle connections`), its PID
+file names it, and every address (Apache) or socket (FPM) accepts a
+connection; a failure line (`AH00016`, `no listening sockets available`,
+`FPM initialization failed`) ends the wait at once. FPM re-executes and
+daemonizes again on `SIGUSR2`, so its PID changes; Apache keeps its PID on a
+graceful restart but exits when a new `Listen` port is taken, which the
+rollback then repairs by starting it on the previous generation. A PID file
+whose process is not ours is removed before a start (Apache refuses to
+start while the PID it names is alive). FPM's command line becomes
+`php-fpm: master process (<config>)`, which still names the configuration.
+Apache's config test does not check that a key matches its certificate (it
+fails only at start), so certificates are checked by the pair check of 3.1
+before a generation is made.
 
 Autostart, chosen by `install` and recorded in the receipt:
 
 | Platform | Mechanism |
 |---|---|
-| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=gash hte service start`, `ExecStop=gash hte service stop`), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
+| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because `service start|stop|restart` go through `systemctl --user` while the unit is in use), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
 | Linux without systemd (containers, WSL without systemd) | No boot hook (`/etc/wsl.conf` is never touched). Optional `autostart = "shell"`: the first interactive shell that loads `gash init bash` starts the stack when it is down (one background `gash hte service start`, no output on success) |
 | macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad` |
 
