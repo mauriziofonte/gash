@@ -158,7 +158,19 @@ gash() {
     __gash_call gash "$@"
 }
 gash_doctor() { __gash_call gash_doctor "$@"; }
-gash_help() { __gash_call gash_help "$@"; }
+gash_help() {
+    # --bash TOPIC is Bash's builtin help, which only the shell has.
+    local __gash_a
+    local -a __gash_rest=()
+    for __gash_a in "$@"; do
+        [[ "$__gash_a" == --no-color ]] || __gash_rest+=("$__gash_a")
+    done
+    if [[ "${__gash_rest[0]-}" == --bash ]]; then
+        builtin help "${__gash_rest[@]:1}"
+        return
+    fi
+    __gash_call gash_help "$@"
+}
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 gash_uninstall() { __gash_call gash_uninstall "$@"; }
 gash_unload() { __gash_call gash_unload "$@"; }

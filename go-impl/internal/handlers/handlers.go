@@ -17,6 +17,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	t := invoke.NewTable()
 	registerCore(t)
 	registerConfig(t)
+	registerHelp(t)
 	registerOutput(t)
 	selfmgmt.Register(t)
 	for _, r := range extra {

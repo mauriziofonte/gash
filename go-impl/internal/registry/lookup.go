@@ -104,3 +104,12 @@ func (f *Function) Delegated() bool {
 // whose stub hands every argument to the binary's root (`gash version`
 // from the shell reaches the 3.x command).
 func (f *Function) HasStub() bool { return f.Delegated() || f.Name == "gash" }
+
+// ModuleOrder is the order of the help modules in gash_help and gash_help
+// --list: the fixed list of 2.x, then the modules 2.x appended in Bash's
+// hash order, as Bash 5.2.21 printed them (LEDGER CORE-07). Every module
+// with registered help is in it.
+var ModuleOrder = []string{
+	"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh", "llm", "utils",
+	"node", "remote", "chrome", "php",
+}
