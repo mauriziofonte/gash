@@ -17,11 +17,32 @@ rc.A implementation. S1 was approved by the operator in the session on 2026-10-1
 - S1 design written: `go-impl/design/` (README with the decisions requested, architecture, layout, compat, shell, upgrade, libraries, testing, hte), `PARITY.md` (all 1095 spec tests), prompt and startup benchmarks with the 2.x numbers (`go-impl/bench/shell/`), legacy hte-cli fixtures (`go-impl/testdata/hte/legacy/`).
 - S1 draft PR #5 opened; CI green (12 checks).
 - Operator decisions recorded (D-2 option C, D-6 no 1.x work, the rest as recommended) in the design, MATRIX and LEDGER.
-- Audit of every 2.x module done: `MATRIX.md` (881 rows for 2.x plus the new 3.x surface) and `LEDGER.md` (396 items, every PRD seed indexed) merged from per-module fragments.
+- Audit of every 2.x module done: `MATRIX.md` (881 rows for 2.x plus the new 3.x surface) and `LEDGER.md` (every PRD seed indexed) merged from per-module fragments. The merge scripts are gone: both files are now edited by hand, by the lead session only.
+- rc.A work merged so far: HTE core (`internal/platform`, `internal/hte/*`, `internal/hostshelper`, `cmd/gash-hosts-helper`), path guard and llm_exec core (`internal/pathguard`, `internal/llmexec`, canonical script per D-1 A, 2.x child prelude byte for byte), config, SQL guard and runner (`internal/config`, `internal/sqlguard`, `internal/runner`).
+- The two install specs that snapshot the working tree into a fresh repository disable git's background maintenance: with the Go tree the detached repack raced the clone and the cleanup on git 2.55 (CI only).
 
 ## Next step
 
-Milestone M0 of the plan below.
+M0 is merged (76310d1): Bash reference 807/0, Go mode 202 passed of 807. The module wave runs in parallel worktrees, each owning its packages (shared packages belong to `wt/core`):
+
+| Worktree | Slice |
+|---|---|
+| `wt/core` (M1) | output primitives and compat operations first, then lib/core, gash_help and the card, TEST-03/07, Bash 4.4 load check of the generated Bash in CI |
+| `wt/llm` (M2) | llm_*, llm_exec wiring, internal/db native drivers, gash_db_test |
+| `wt/files` (M3) | lib/modules/files.sh |
+| `wt/devops` (M4b) | docker, compose, git, remote |
+| `wt/sys` (M4a) | system, sysinfo, ssh, chrome |
+| `wt/cfg` | SQL guard DB-13 (strictest of both locales) |
+| `wt/hte` | HTE remainder (certs, hosts, supervision, receipt, migrate --apply, doctor, E2E) |
+
+Still to start: php/node/ai (M5), self-management (gash.sh upgrade/uninstall/unload/doctor, gash_env_init, the gash_migrate pointer), shell layer (M6), HTE CLI wiring (M7), cutover (M8). Spec changes are allowed only for TEST-03..07 as the LEDGER says, expectations unchanged.
+
+Wiring notes for M1 and later:
+- llm_exec's registry entry lists `BASH` among the shell variables it reads, so the stub exports the caller's `$BASH` (named in `GASH__ADDED`, kept out of children); `llmexec` uses it as `Environ.BashPath` and falls back to a PATH lookup, because 2.x ran `${BASH:-bash}` and bash prefixes its errors with that path.
+- `runner` refuses any `sh -c`-style start except `BashLLMExec` and `BashNVMBridge`. `wsl_compact` follows SYS-46; `gash_doctor --timing` (fixed script) and `sudo_last` (stays in the shim) are decided by their module workers.
+- `runner` divergences to ledger where a module makes them visible: a shebang-less script gets 126, a background grandchild holding stdout is cut after KillAfter, a timeout signals only the child.
+- SSH unlock needs a PTY (creack/pty, M4).
+- M8 adds a check that only `internal/runner` starts processes.
 
 ## Plan to rc.A (stop S2)
 
@@ -43,18 +64,12 @@ M2 to M5 and M7 run in parallel after M1, each in its own git worktree
 
 ## Gate
 
-During S1 (no Go yet):
-
-```bash
-bash tests/run.sh                         # Bash reference: 0 failed (807 passed at S1 once sqlite3 and gawk were installed)
-```
-
-From the first Go commit on (after S1 approval):
+Bash reference: 807 passed, 0 failed (sqlite3 and gawk installed). Until M0 lands, the Go part is `go vet` and `go test`:
 
 ```bash
 bash tests/run.sh                         # reference implementation (Bash)
 bash tests/run.sh --impl go               # same specs against the Go port behind the generated shims
-(cd go-impl && GOTOOLCHAIN=go1.27.2 go test ./...)
+(cd go-impl && GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0 go vet ./... && GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0 go test ./...)
 ```
 
 ## Environment blockers (cloud session)

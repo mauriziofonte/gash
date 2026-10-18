@@ -15,7 +15,11 @@
 #   GASH_TEST_FORMAT   "pretty" (default) or "tap"
 #   GASH_TEST_VERBOSE  1 to stream every test's output
 #   GASH_TEST_RESULTS  file to append "total failed skipped" to on summary
+#   GASH_TEST_RECORD   file to append one line per test to, tab-separated:
+#                      spec, line, name, status (pass, fail, skip), reason
 #   NO_COLOR           disable colors (also off when stdout is not a TTY)
+#   GASH_TEST_NO_COLOR the same, set by tests/run.sh, which never passes
+#                      the caller's NO_COLOR to the specs (TEST-01)
 
 # Fail if we're not sourcing
 [[ "${BASH_SOURCE[0]}" != "${0}" ]] || {
@@ -33,7 +37,8 @@ if [[ -z "${__gash_test__initialized-}" ]]; then
   __gash_test__skipped=0
   __gash_test__current_suite=""
   __gash_test__failures=()
-  if [[ (-t 1 || -n "${GASH_TEST_COLOR-}") && -z "${NO_COLOR-}" && "${GASH_TEST_FORMAT:-pretty}" != "tap" ]]; then
+  if [[ (-t 1 || -n "${GASH_TEST_COLOR-}") && -z "${NO_COLOR-}" && -z "${GASH_TEST_NO_COLOR-}" &&
+    "${GASH_TEST_FORMAT:-pretty}" != "tap" ]]; then
     __gash_test__use_color=1
   else
     __gash_test__use_color=0
@@ -103,10 +108,39 @@ gash_require() {
   done
 }
 
+# The reason of a skip that printed no SKIP: line (TEST-03): the first
+# command that a `command -v NAME ... exit 77` or `type -P NAME ... exit 77`
+# line of the test body tests for and that is not available here, else
+# "no reason".
+__gash_test__skip_reason() {
+  local body="${*: -1}" line name
+  while IFS= read -r line; do
+    [[ "$line" == *"exit 77"* ]] || continue
+    while [[ "$line" =~ (command -v|type -P)\ +([A-Za-z0-9_.+-]+)(.*) ]]; do
+      name="${BASH_REMATCH[2]}"
+      line="${BASH_REMATCH[3]}"
+      if ! command -v "$name" >/dev/null 2>&1; then
+        printf '%s not available' "$name"
+        return 0
+      fi
+    done
+  done <<<"$body"
+  printf 'no reason'
+}
+
+# One line of GASH_TEST_RECORD (tabs and newlines in fields become spaces).
+__gash_test__record() {
+  [[ -n "${GASH_TEST_RECORD-}" ]] || return 0
+  local spec="$1" lineno="$2" name="$3" status="$4" reason="${5-}"
+  name="${name//[$'\t\n']/ }" reason="${reason//[$'\t\n']/ }"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$spec" "$lineno" "$name" "$status" "$reason" >>"$GASH_TEST_RECORD"
+}
+
 it() {
   local name="$1"
   shift
   local full="$__gash_test__current_suite :: $name"
+  local spec_file="${BASH_SOURCE[1]-}" spec_line="${BASH_LINENO[0]-0}"
 
   if [[ -n "${GASH_TEST_FILTER-}" ]] && ! [[ "$full" =~ $GASH_TEST_FILTER ]]; then
     return 0
@@ -127,17 +161,21 @@ it() {
   case "$rc" in
     0)
       __gash_test__pass "$full"
+      __gash_test__record "$spec_file" "$spec_line" "$name" pass
       ;;
     77)
       __gash_test__skipped=$((__gash_test__skipped + 1))
       local reason
       reason="$(grep -m1 -oE 'SKIP:? .*' "$out" 2>/dev/null | sed -E 's/^SKIP:? //')"
+      [[ -n "$reason" ]] || reason="$(__gash_test__skip_reason "$@")"
       __gash_test__skip "$full" "$reason"
+      __gash_test__record "$spec_file" "$spec_line" "$name" skip "$reason"
       ;;
     *)
       __gash_test__failed=$((__gash_test__failed + 1))
       __gash_test__failures+=("$full")
       __gash_test__fail "$full (exit $rc)"
+      __gash_test__record "$spec_file" "$spec_line" "$name" fail "exit $rc"
       if [[ "${GASH_TEST_VERBOSE-}" != "1" && -s "$out" ]]; then
         tail -n 25 "$out" | sed 's/^/    │ /'
       fi
@@ -215,6 +253,10 @@ gash_test_summary() {
 # Usage: gash_source_all "$ROOT"
 gash_source_all() {
   local root="${1:-.}"
+
+  # A Gash 3 tree (the generated shims): its help registry is in the
+  # binary, loaded here as the 2.x glob loaded lib/core/help.sh.
+  [[ -r "$root/lib/compat/bootstrap.sh" ]] && __GASH_HELP_LOADED=1
 
   # Source core modules first
   for __gash_core_file in "$root"/lib/core/*.sh; do

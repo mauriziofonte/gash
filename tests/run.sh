@@ -11,6 +11,16 @@
 #       --bash PATH    run specs with the bash binary at PATH (version matrix)
 #       --slow         also run the slow specs (see below)
 #       --no-hermetic  keep the caller's environment (debugging only)
+#       --impl IMPL    bash (default: the 2.x sources of this checkout), go
+#                      (the Gash 3 binary behind the generated shims, in a
+#                      staged copy of the checkout) or both
+#       --results FILE also write one line per test, tab-separated: spec,
+#                      line, name, status (pass, fail, skip), skip reason;
+#                      go mode writes tests/.results/go.tsv by default;
+#                      both writes FILE.bash and FILE.go
+#       --gash-bin PATH  go mode: use this binary instead of building one
+#       --no-isolate   go mode: do not run in PID and network namespaces
+#       --network      go mode: keep the host network (no network namespace)
 #   -h, --help         show this help
 #
 # SPEC can be a path or a name relative to tests/ (e.g. specs/files_spec.sh).
@@ -21,6 +31,13 @@
 # (e.g. GNU tools on macOS).
 # A spec with a "# gash-test: slow" line (the terminal rendering fixtures)
 # runs only with --slow or when named as SPEC; CI runs it in its own job.
+#
+# Go mode builds go-impl/cmd/gash (or takes --gash-bin), stages the
+# checkout with `gash __compat stage` and runs the unchanged specs from the
+# staged tree. When unshare(1) allows it, the run happens in its own PID
+# and network namespaces: no test can signal a process it did not start or
+# reach the network past a missed fake. Update the PARITY Go column with
+# `go run ./internal/tools/parity` in go-impl.
 
 set -uo pipefail
 
@@ -33,7 +50,25 @@ hermetic=1
 awk_impl=""
 bash_impl=""
 slow=0
+impl=bash
+results_file=""
+gash_bin=""
+isolate=1
+network=0
+in_namespace=0
+ns_kind=""
 specs=()
+# The arguments as given, for the go part of --impl both and the
+# namespace re-exec.
+orig_args=("$@")
+
+# A job count: an integer >= 1 (TEST-02).
+check_jobs() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (($1 >= 1)) || {
+    echo "run.sh: --jobs needs an integer >= 1, got: $1" >&2
+    exit 2
+  }
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,8 +77,68 @@ while [[ $# -gt 0 ]]; do
         echo "run.sh: $1 needs a value" >&2
         exit 2
       }
+      check_jobs "$2"
       jobs="$2"
       shift 2
+      ;;
+    -j?*)
+      check_jobs "${1#-j}"
+      jobs="${1#-j}"
+      shift
+      ;;
+    --jobs=*)
+      check_jobs "${1#--jobs=}"
+      jobs="${1#--jobs=}"
+      shift
+      ;;
+    --impl | --impl=*)
+      if [[ "$1" == --impl=* ]]; then
+        impl="${1#--impl=}"
+        shift
+      else
+        [[ $# -ge 2 ]] || {
+          echo "run.sh: $1 needs a value" >&2
+          exit 2
+        }
+        impl="$2"
+        shift 2
+      fi
+      case "$impl" in
+        bash | go | both) ;;
+        *)
+          echo "run.sh: --impl must be bash, go or both, got: $impl" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+    --results)
+      [[ $# -ge 2 ]] || {
+        echo "run.sh: $1 needs a value" >&2
+        exit 2
+      }
+      results_file="$2"
+      shift 2
+      ;;
+    --gash-bin)
+      [[ $# -ge 2 ]] || {
+        echo "run.sh: $1 needs a value" >&2
+        exit 2
+      }
+      gash_bin="$2"
+      shift 2
+      ;;
+    --no-isolate)
+      isolate=0
+      shift
+      ;;
+    --network)
+      network=1
+      shift
+      ;;
+    --in-namespace=*)
+      in_namespace=1
+      ns_kind="${1#*=}"
+      shift
       ;;
     -f | --filter)
       [[ $# -ge 2 ]] || {
@@ -82,7 +177,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h | --help)
-      sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     --)
@@ -100,6 +195,84 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --impl both: the bash run, then the go run, each with its own summary.
+if [[ "$impl" == both ]]; then
+  rest=() skip_next=0
+  for a in "${orig_args[@]}"; do
+    if ((skip_next)); then
+      skip_next=0
+      continue
+    fi
+    case "$a" in
+      --impl | --results) skip_next=1 ;;
+      --impl=*) ;;
+      *) rest+=("$a") ;;
+    esac
+  done
+  r_bash=() r_go=()
+  if [[ -n "$results_file" ]]; then
+    r_bash=(--results "$results_file.bash")
+    r_go=(--results "$results_file.go")
+  fi
+  bash "${BASH_SOURCE[0]}" --impl bash ${r_bash[@]+"${r_bash[@]}"} ${rest[@]+"${rest[@]}"}
+  s_bash=$?
+  echo
+  bash "${BASH_SOURCE[0]}" --impl go ${r_go[@]+"${r_go[@]}"} ${rest[@]+"${rest[@]}"}
+  s_go=$?
+  ((s_bash > s_go)) && exit "$s_bash"
+  exit "$s_go"
+fi
+
+# Build go-impl/cmd/gash into DEST.
+# Usage: build_gash DEST
+build_gash() {
+  command -v go >/dev/null 2>&1 || {
+    echo "run.sh: --impl go needs Go (or --gash-bin PATH)" >&2
+    return 2
+  }
+  echo "INFO Building go-impl/cmd/gash"
+  (cd "$ROOT_DIR/go-impl" && CGO_ENABLED=0 go build -o "$1" ./cmd/gash) || {
+    echo "run.sh: go build failed" >&2
+    return 2
+  }
+}
+
+# Go mode runs in its own PID and network namespaces (PID only with
+# --network, or when a network namespace is refused) when unshare allows
+# it: as root directly, otherwise in a user namespace that maps the
+# caller's own uid. The binary is built first, outside, where the module
+# cache may need the network.
+if [[ "$impl" == go ]] && ((isolate && ! in_namespace)) && command -v unshare >/dev/null 2>&1; then
+  ns_user=()
+  [[ "$(id -u)" != 0 ]] && ns_user=(--user --map-current-user)
+  ns=()
+  ns_kind=""
+  if ((! network)) && unshare ${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc --net true >/dev/null 2>&1; then
+    ns=(${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc --net)
+    ns_kind=pid+net
+  elif unshare ${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc true >/dev/null 2>&1; then
+    ns=(${ns_user[@]+"${ns_user[@]}"} --pid --fork --mount-proc)
+    ns_kind=pid
+  fi
+  if [[ -n "$ns_kind" ]]; then
+    ns_args=()
+    ns_build=""
+    if [[ -z "$gash_bin" ]]; then
+      ns_build="$(mktemp -d "${TMPDIR:-/tmp}/gash-build.XXXXXX")" || exit 2
+      build_gash "$ns_build/gash" || {
+        rm -rf "$ns_build"
+        exit 2
+      }
+      ns_args=(--gash-bin "$ns_build/gash")
+    fi
+    unshare "${ns[@]}" bash "${BASH_SOURCE[0]}" --in-namespace="$ns_kind" ${ns_args[@]+"${ns_args[@]}"} "${orig_args[@]}"
+    ns_status=$?
+    [[ -n "$ns_build" ]] && rm -rf "$ns_build"
+    exit "$ns_status"
+  fi
+  echo "INFO unshare cannot create a PID namespace here: go mode runs without isolation" >&2
+fi
 
 slow_skipped=()
 if [[ ${#specs[@]} -eq 0 ]]; then
@@ -129,6 +302,48 @@ trap 'rm -rf "$workdir"' EXIT
 results="$workdir/results"
 : >"$results"
 
+# Per-test records: --results FILE, and always in go mode.
+if [[ "$impl" == go && -z "$results_file" ]]; then
+  results_file="$ROOT_DIR/tests/.results/go.tsv"
+fi
+records=""
+if [[ -n "$results_file" ]]; then
+  mkdir -p "$(dirname "$results_file")" || exit 2
+  records="$workdir/records"
+  : >"$records"
+fi
+
+# Go mode: the binary, and the staged tree the specs run from.
+test_root="$ROOT_DIR"
+gash_env=()
+if [[ "$impl" == go ]]; then
+  if [[ -z "$gash_bin" ]]; then
+    gash_bin="$workdir/gash"
+    build_gash "$gash_bin" || exit 2
+  fi
+  [[ -x "$gash_bin" ]] || {
+    echo "run.sh: not an executable: $gash_bin" >&2
+    exit 2
+  }
+  stage_out="$("$gash_bin" __compat stage --out "$workdir/stage" --root "$ROOT_DIR")" || {
+    echo "run.sh: staging failed" >&2
+    exit 2
+  }
+  gash_env=("${stage_out%%$'\n'*}")
+  test_root="$workdir/stage"
+  for i in "${!specs[@]}"; do
+    case "${specs[$i]}" in
+      "$ROOT_DIR"/*) specs[$i]="$test_root/${specs[$i]#"$ROOT_DIR"/}" ;;
+    esac
+  done
+  case "$ns_kind" in
+    pid+net) ns_note=", PID and network namespaces" ;;
+    pid) ns_note=", PID namespace" ;;
+    *) ns_note="" ;;
+  esac
+  echo "INFO Implementation: go (${gash_env[0]}${ns_note})"
+fi
+
 # Optional awk override: a shim dir placed first on PATH.
 path_prefix=""
 if [[ -n "$awk_impl" ]]; then
@@ -157,14 +372,18 @@ run_spec() {
   local spec="$1" home
   home="$(mktemp -d "$workdir/home.XXXXXX")"
   local -a envv=(
-    "GASH_TEST_ROOT=$ROOT_DIR"
+    "GASH_TEST_ROOT=$test_root"
     "GASH_TEST_RESULTS=$results"
     "GASH_TEST_FILTER=$filter"
     "GASH_TEST_VERBOSE=$verbose"
   )
-  [[ -n "${NO_COLOR-}" ]] && envv+=("NO_COLOR=1")
+  # The caller's NO_COLOR only turns the runner's own colors off: specs
+  # never inherit it (TEST-01).
+  [[ -n "${NO_COLOR-}" ]] && envv+=("GASH_TEST_NO_COLOR=1")
   [[ -t 1 || -n "${GASH_TEST_COLOR-}" ]] && [[ -z "${NO_COLOR-}" ]] && envv+=("GASH_TEST_COLOR=1")
   [[ -n "${GASH_TEST_AWK-}" ]] && envv+=("GASH_AWK=$GASH_TEST_AWK")
+  [[ -n "$records" ]] && envv+=("GASH_TEST_RECORD=$records")
+  envv+=(${gash_env[@]+"${gash_env[@]}"})
 
   local script='source "$GASH_TEST_ROOT/tests/gash-test.sh"; source "$1"; gash_test_summary'
   if ((hermetic)); then
@@ -220,6 +439,11 @@ done <"$results"
 passed=$((total - failed - skipped))
 elapsed=$((SECONDS - start))
 
+if [[ -n "$records" ]]; then
+  # Spec paths relative to tests/specs, whatever tree they ran from.
+  sed -e "s#^$test_root/tests/specs/##" -e "s#^$ROOT_DIR/tests/specs/##" "$records" >"$results_file"
+fi
+
 echo
 for spec in "${slow_skipped[@]}"; do
   printf 'INFO Not run (slow, use --slow): %s\n' "$spec"
@@ -230,5 +454,6 @@ else
   printf 'FAIL %d passed, %d failed, %d skipped (%d total) in %ds\n' "$passed" "$failed" "$skipped" "$total" "$elapsed"
   status=1
 fi
+[[ -n "$records" ]] && printf 'INFO Per-test results: %s\n' "$results_file"
 
 exit "$status"

@@ -58,6 +58,8 @@ func Scan(sr platform.Sysroot, l Layout) *Inventory {
 	inv.scanHosts(sr)
 	inv.scanEnvvars(sr)
 	inv.scanSnippets(sr)
+	// Unreadable entries come from several passes: report them by path.
+	slices.SortStableFunc(inv.Unreadable, func(a, b Problem) int { return strings.Compare(a.Path, b.Path) })
 	return inv
 }
 

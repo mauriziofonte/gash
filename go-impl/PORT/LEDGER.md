@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 65 | 166 | 114 |
-| Forced divergences | 2 | 3 | 23 | 61 | 89 | 34 |
+| Defects | 1 | 25 | 75 | 69 | 170 | 115 |
+| Forced divergences | 2 | 4 | 24 | 63 | 93 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 35 | 124 | 234 | **396** | 237 |
+| **All** | 3 | 36 | 125 | 240 | **403** | 241 |
 
 Critical and high items:
 
@@ -138,6 +138,7 @@ Critical and high items:
 | [LLM-20](#llm-20) | llm_docker_check applies no path guard and interpolates .env and caller-env secrets into output | Defects | high |
 | [EXEC-01](#exec-01) | attached short-option values and clusters skip the secret-file and forbidden-path checks | Defects | high |
 | [EXEC-02](#exec-02) | `git stash list -p` leaks secret files | Defects | high |
+| [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Forced divergences | high |
 | [SYS-01](#sys-01) | process_kill takes NAME as a pgrep regex: `.*` matches every process | Defects | high |
 | [SYS-35](#sys-35) | gash_ssh_auto_unlock glob-expands each key/passphrase row: keys dropped, passphrase printed | Forced divergences | high |
 | [DOCK-02](#dock-02) | A realpath without -m (BSD, macOS, BusyBox) makes the compose functions act on the current directory's stack | Forced divergences | high |
@@ -191,6 +192,7 @@ Critical and high items:
 | [DB-06](#db-06) | the slow-query threshold includes client spawn and connect time | Correctness | medium | yes |
 | [EXEC-01](#exec-01) | attached short-option values and clusters skip the secret-file and forbidden-path checks | Security | high | yes |
 | [EXEC-02](#exec-02) | `git stash list -p` leaks secret files | Security | high | yes |
+| [EXEC-08](#exec-08) | A line continuation between two `\|` is checked as two pipes, run as `\|\|` | Correctness | low | no |
 | [SYS-01](#sys-01) | process_kill takes NAME as a pgrep regex: `.*` matches every process | Security | high | yes |
 | [SYS-02](#sys-02) | process_kill and port_kill report a process they may not signal as "terminated" | Correctness | medium | yes |
 | [SYS-03](#sys-03) | port_kill also targets UDP clients whose remote port is PORT | Correctness | medium | yes |
@@ -331,6 +333,9 @@ Critical and high items:
 | [CORE-04](#core-04) | gash_db_list lists every duplicate name, while only the first is used | Correctness | low | no |
 | [CORE-06](#core-06) | Messages name ~/.gash_env even when GASH_ENV_FILE points elsewhere | Correctness | low | yes |
 | [CORE-11](#core-11) | A bracketed IPv6 host in a DB URL is split at its first colon | Correctness | low | no |
+| [CORE-13](#core-13) | DB passwords lose trailing newlines and `%00` when decoded | Correctness | low | no |
+| [CORE-14](#core-14) | HOME is matched as a glob when a path is shown with `~` | Correctness | low | yes |
+| [CORE-15](#core-15) | SSH key paths: `~user/` is not a home directory, and `&` in HOME is rewritten on Bash 5.2 | Correctness | low | no |
 | [TEST-01](#test-01) | The test runner leaks the caller's NO_COLOR into the hermetic environment | Test harness | low | no |
 | [TEST-02](#test-02) | `tests/run.sh -j1` is refused | Test harness | low | no |
 | [TEST-03](#test-03) | 88 conditional skips print no reason | Test harness | low | no |
@@ -685,6 +690,24 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A allows `git stash list -p` and applies no exclude pathspecs, leaking the same files. |
 | Fix recipe (3.0) | In `internal/llmexec` treat `git stash list` like `log`: when a patch option is present, apply the `:(exclude,icase,glob)**/PATTERN` and `**/DIR/**` secret pathspecs and `--no-ext-diff --no-textconv`; or refuse patch options on `stash list`. Also gate other `stash list` options (NF2) the same way `log` is gated. |
 | Proving test | `TestLedger_EXEC02` asserts `git stash list -p` shows the non-secret line and never the secret file, in `llm_exec_walk_spec.sh`'s Go form. |
+| Status | open |
+
+<a id="exec-08"></a>
+#### EXEC-08 · A line continuation between two `|` is checked as two pipes, run as `||`
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of the llm_exec renderer) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/exec.sh:847-852` |
+| Observed behavior | The 2.x parser looks at the next character before it handles a backslash-newline, so `\|`, a line continuation, then `\|` is checked as two pipes around an empty command, while bash joins the continuation and reads `\|\|`. The words checked are the same either way; only the operator differs. |
+| Reproduction | two allowed commands joined by `\|`, backslash-newline, `\|`: 2.x checks a pipeline and bash runs an or-list (temp cwd) |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced: the canonical script keeps the continuation, so bash runs what 2.x ran. |
+| Fix recipe (3.0) | In `internal/llmexec`, consume backslash-newline before looking at the next character, so the checked operator is the one bash reads. |
+| Proving test | `TestLedger_EXEC08` pins the rc.A output against 2.x for this line. |
 | Status | open |
 
 ### system, sysinfo, ssh, chrome
@@ -3229,6 +3252,60 @@ Critical and high items:
 | Proving test | `TestLedger_CORE11` in `internal/config` (`[::1]:5432` → host `::1`, port `5432`; `[::1]` → default port; `[::1` → `invalid_db_url`) |
 | Status | open |
 
+<a id="core-13"></a>
+#### CORE-13 · DB passwords lose trailing newlines and `%00` when decoded
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of `internal/config` and `internal/sqlguard`) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/db.sh:246`, `lib/core/config.sh:545` (`$(__gash_url_decode ...)`) |
+| Observed behavior | The decoded password is captured with command substitution, which strips trailing newlines, and Bash variables cannot hold NUL. A password ending in `%0A` loses the newlines; `%00` disappears. The client then authenticates with a different password. |
+| Reproduction | a DB URL whose password ends in `%0A%0A` decodes to the password without them (temp `~/.gash_env`) |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced: `config.DecodePassword` strips trailing newlines and drops NUL, as 2.x does. |
+| Fix recipe (3.0) | Decode into the value directly (no command substitution) and refuse a password that contains NUL with a clear error. |
+| Proving test | `TestLedger_CORE13_2x` pins the 2.x result in `internal/config`. |
+| Status | open |
+
+<a id="core-14"></a>
+#### CORE-14 · HOME is matched as a glob when a path is shown with `~`
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of `internal/config` and `internal/sqlguard`) |
+| Area | Correctness |
+| Bash location | `lib/core/config.sh:137`, `:140`, `:170` (`${file/#$HOME/\~}`) |
+| Observed behavior | `$HOME` is an unquoted pattern in the substitution, so glob characters in HOME match other names, and no `/` is required after it: with HOME=/home/a, `/home/ab/.gash_env` is shown as `~b/.gash_env`. |
+| Reproduction | HOME=/home/a and GASH_ENV_FILE=/home/ab/.gash_env, then a permission warning names `~b/.gash_env` |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | Reproduced: `config.ShownPath` matches HOME with a port of Bash's C-locale pattern matcher. Only patterns with an equivalence class or a multi-character collating symbol (`[=]=]`) can differ, because they depend on the locale (forced, same reasoning as CORE-08). |
+| Fix recipe (3.0) | Replace only a literal HOME followed by `/` or the end of the path. |
+| Proving test | `TestLedger_CORE14_2x` in `internal/config`. |
+| Status | open |
+
+<a id="core-15"></a>
+#### CORE-15 · SSH key paths: `~user/` is not a home directory, and `&` in HOME is rewritten on Bash 5.2
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of `internal/config` and `internal/sqlguard`) |
+| Area | Correctness |
+| Bash location | `lib/core/config.sh:235` (`${key/#\~/$HOME}`) |
+| Observed behavior | Only the first `~` is replaced by HOME, so `~user/k` becomes `$HOMEuser/k`. Under Bash 5.2's patsub_replacement an unquoted `&` in HOME stands for the matched `~`, so a HOME containing `&` gives a different path on Bash 5.2 than on 4.4 to 5.1. |
+| Reproduction | `SSH:~other/k=` gives the path `$HOME` + `other/k`; with HOME containing `&`, the path has `~` in its place on Bash 5.2 (temp HOME) |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced as Bash 5.2 does it (the version CI and the parity tests use): `~` prefix replaced by HOME, `&` in HOME read as the match. |
+| Fix recipe (3.0) | Expand only `~` and `~/`, quote the replacement, and refuse `~user`. |
+| Proving test | `TestLedger_CORE15_2x` in `internal/config`. |
+| Status | open |
+
 ### test harness
 
 <a id="test-01"></a>
@@ -3374,7 +3451,9 @@ Critical and high items:
 | [DB-07](#db-07) | DB error `details` text comes from the native driver, not the client | Contract | low | yes |
 | [DB-08](#db-08) | the SQLite EXPLAIN QUERY PLAN text tree must be rebuilt from plan rows | Contract | medium | yes |
 | [DB-09](#db-09) | psql client meta-commands and PGPASSWORD-in-child are unreachable with the native driver | Security | medium | no |
+| [DB-13](#db-13) | The SQL guard's case folding and spaces follow the locale | Security | medium | yes |
 | [EXEC-06](#exec-06) | glob expansion order differs under non-C collation | Portability | low | yes |
+| [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Security | high | yes |
 | [SYS-28](#sys-28) | hgrep passes PATTERN through awk `-v`: backslashes are rewritten and the regex dialect depends on the awk | Portability | medium | yes |
 | [SYS-29](#sys-29) | hgrep prints a gawk warning for fixed patterns containing regex metacharacters | Portability | low | no |
 | [SYS-30](#sys-30) | hgrep -n is compared with Bash arithmetic | Contract | low | yes |
@@ -3450,6 +3529,8 @@ Critical and high items:
 | [CORE-08](#core-08) | ~/.gash_env lines are trimmed with the locale's notion of whitespace | Portability | low | no |
 | [CORE-09](#core-09) | __gash_json_str and __gash_json_arr fail without jq | Portability | low | no |
 | [CORE-10](#core-10) | __gash_download's INT trap re-parses the destination path as shell code | Security | low | no |
+| [CORE-16](#core-16) | Character counts in messages follow the locale (bytes in C, characters in UTF-8) | Portability | low | yes |
+| [CORE-17](#core-17) | The mode in the ~/.gash_env permission warning depends on the installed stat | Portability | low | no |
 
 ### llm_* agent functions
 
@@ -3689,6 +3770,24 @@ Critical and high items:
 | Proving test | `TestLedger_DB09` asserts a query that would be a psql meta-command reaches the server as SQL (and errors there), never running a shell. |
 | Status | open |
 
+<a id="db-13"></a>
+#### DB-13 · The SQL guard's case folding and spaces follow the locale
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of `internal/config` and `internal/sqlguard`) |
+| Area | Security |
+| Bash location | `lib/modules/llm/db.sh` guard (`${q^^}`, `[[:space:]]`, `[A-Z0-9_]` word scan, dot-command trim) |
+| Observed behavior | Upper-casing and `[[:space:]]` follow `LC_CTYPE`. In a UTF-8 locale `ſ` folds to S and `ı` to I, and U+3000 is a space; in C they are not. So `SELECT ſleep(1)` is refused in UTF-8 and accepted in C, while `ſelect 1` is accepted in UTF-8 and refused in C. |
+| Reproduction | the same harmless query under `LC_ALL=C` and `LC_ALL=C.UTF-8` gets different verdicts (temp SQLite) |
+| Severity | medium |
+| Public-contract impact | yes |
+| rc.A behavior | The libc tables cannot be reproduced, and PRD 10.5 forbids loosening the rail, so the guard checks every query under both readings (C, and a UTF-8 reading with Unicode case folding to ASCII and Unicode spaces) and refuses when either refuses. A query passes only when 2.x would pass it in both locales; the error reported is the C reading's when both refuse. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_DB13` in `internal/sqlguard`, with a property test that a refusal under either reading is a refusal. |
+| Status | open |
+
 ### llm_exec
 
 <a id="exec-06"></a>
@@ -3707,6 +3806,24 @@ Critical and high items:
 | rc.A behavior | Go expands globs itself against the same cwd tracking it validated, in byte (C) order; this differs from 2.x only under non-C collation. Go must never hand an unexpanded or re-globbable word to the shell, so the locale-dependent order cannot be reproduced. |
 | Fix recipe (3.0) | Document byte-order glob expansion in `internal/llmexec`; the canonical single-quoted script (operator decision D-1 option A) carries the already-expanded words so bash does no globbing. |
 | Proving test | `TestLedger_EXEC06` asserts glob expansion is byte-ordered and stable regardless of `LC_COLLATE`. |
+| Status | open |
+
+<a id="exec-07"></a>
+#### EXEC-07 · A trailing backslash makes llm_exec check one word and run another
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of the llm_exec renderer) |
+| Area | Security |
+| Bash location | `lib/modules/llm/exec.sh:834-837` |
+| Observed behavior | When the command line ends with a backslash, the 2.x parser drops it and checks the word without it, but bash keeps the backslash as a literal character. The path and secret-file checks therefore run on one name and the command opens another, which can reach a file the rules refuse (for example through a link whose name ends with a backslash). |
+| Reproduction | in a temp dir, a link whose name ends with a backslash points at a secret-pattern marker; a read command naming the link with the backslash last prints the marker (input shapes only, no working line) |
+| Severity | high |
+| Public-contract impact | yes |
+| rc.A behavior | Go never runs a word it did not check (PRD 10.7), so 2.x cannot be reproduced. A command line that ends with an unquoted backslash is refused with `construct_not_allowed` (RETRY), the error contract 2.x already uses for constructs it does not handle. The refusal comes after the other checks of the line, so a line 2.x refused for another reason keeps that refusal. A backslash before a newline stays a line continuation, and a backslash inside quotes or a comment behaves as in 2.x. Unrestricted mode validates nothing and is unchanged. |
+| Fix recipe (3.0) | Keep the refusal. For 2.x, the same refusal at the end-of-input branch of the parser. |
+| Proving test | `TestLedger_EXEC07` asserts a line ending with a backslash gives `construct_not_allowed` and runs nothing. |
 | Status | open |
 
 ### system, sysinfo, ssh, chrome
@@ -5079,6 +5196,42 @@ Critical and high items:
 | rc.A behavior | `__gash_download` is delegated to the binary (`compat.md` 4); Go handles SIGINT in-process, removes the partial file and the error file by path, prints `Aborted.` and returns 130, and no path is ever parsed as code. Re-parsing a path inside a trap cannot be reproduced. |
 | Fix recipe (3.0) | Same as rc.A; `internal/ui.Download` with `signal.NotifyContext`, cleanup with `os.Remove`. |
 | Proving test | `TestLedger_CORE10` in `internal/ui` (cancelled download with a quote in DEST: file removed, status 130, no marker) |
+| Status | open |
+
+<a id="core-16"></a>
+#### CORE-16 · Character counts in messages follow the locale (bytes in C, characters in UTF-8)
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of `internal/config` and `internal/sqlguard`) |
+| Area | Portability |
+| Bash location | `lib/modules/llm/db.sh:180` (`${line:0:24}` in `dot_command_blocked` details), `lib/core/config.sh:693` (`${token:0:8}` in `gash_ai_list`) |
+| Observed behavior | Substring offsets count characters in a UTF-8 locale and bytes in C, so a multibyte character near the cut gives different text, and in C it can be cut in half (invalid UTF-8 in a JSON envelope). |
+| Reproduction | a dot-command line with a multibyte character before byte 24 under `LC_ALL=C` and `LC_ALL=C.UTF-8` |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | Characters, as 2.x in a UTF-8 locale: a character is never cut. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_CORE16` in `internal/config` and `internal/sqlguard`. |
+| Status | open |
+
+<a id="core-17"></a>
+#### CORE-17 · The mode in the ~/.gash_env permission warning depends on the installed stat
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of `internal/config` and `internal/sqlguard`) |
+| Area | Portability |
+| Bash location | `lib/core/config.sh:127-133` (GNU `stat -c %a`, then BSD `stat -f %Lp`) |
+| Observed behavior | With GNU stat the mode includes the setuid, setgid and sticky digit (`4600`); BSD `%Lp` prints only the permission bits (`600`), so the warning text depends on which stat is on PATH. |
+| Reproduction | a `~/.gash_env` with mode 4644, warning text with GNU stat and with BSD stat |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | The mode is read with `os.Lstat`/`Stat` and printed in the GNU `%a` form on every platform. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_CORE17` in `internal/config`. |
 | Status | open |
 
 ## Decisions for the operator

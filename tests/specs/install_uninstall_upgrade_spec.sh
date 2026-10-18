@@ -420,6 +420,8 @@ it "install.sh into a custom GASH_DIR writes that location into ~/.gashrc" bash 
   mkdir -p "$repo"
   tar -C "$ROOT" --exclude=./.git -cf - . | tar -C "$repo" -xf -
   git init -q "$repo"
+  # No background gc: it would repack while install.sh clones and the trap deletes.
+  git -C "$repo" config maintenance.auto false; git -C "$repo" config gc.auto 0
   git -C "$repo" add -A
   git -C "$repo" commit -q -m snapshot
 
@@ -440,6 +442,8 @@ it "install.sh installs a specific ref with GASH_INSTALL_REF" bash -c '
   # This working tree (uncommitted changes included), in a fresh repository.
   tar -C "$GASH_TEST_ROOT" --exclude=./.git -cf - . | tar -C "$repo" -xf -
   git init -q "$repo"
+  # No background gc: it would repack while install.sh clones and the trap deletes.
+  git -C "$repo" config maintenance.auto false; git -C "$repo" config gc.auto 0
   git -C "$repo" add -A
   git -C "$repo" commit -q -m base
   git -C "$repo" tag v1.0.0
