@@ -127,13 +127,44 @@ fx file_backup copy 'printf x >notes.txt && file_backup notes.txt'
 fx file_backup missing-arg 'file_backup'
 fx file_backup missing-file 'file_backup nope.txt'
 
-# chrome.sh: chrome_headless_update (curl, uname, unzip and ldd as functions)
-fx chrome_headless_update dry-run-new 'curl() { local u="" h=0 o=""; while (($#)); do case $1 in -fsIL) h=1 ;; -o) o=$2; shift ;; http*) u=$1 ;; esac; shift; done; if ((h)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\n\r\n"; return 0; fi; if [[ -n $o ]]; then head -c 2048 /dev/zero >"$o"; return 0; fi; case $u in *npmjs*) echo "{\"version\":\"1.56.0\"}" ;; *browsers.json) echo "{\"browsers\":[{\"name\":\"chromium-headless-shell\",\"revision\":\"1194\",\"browserVersion\":\"141.0.7390.37\"}]}" ;; *141.0.7390.37.json) echo "{\"downloads\":{\"chrome-headless-shell\":[{\"platform\":\"linux64\",\"url\":\"https://storage.example/chs.zip\"}]}}" ;; *) return 22 ;; esac; }; uname() { case $1 in -m) echo x86_64 ;; *) echo Linux ;; esac; }; unzip() { case $1 in -Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;; -q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;; esac; }; ldd() { :; }; export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"; chrome_headless_update --dry-run'
-fx chrome_headless_update upgrade-declined 'curl() { local u="" h=0 o=""; while (($#)); do case $1 in -fsIL) h=1 ;; -o) o=$2; shift ;; http*) u=$1 ;; esac; shift; done; if ((h)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\n\r\n"; return 0; fi; if [[ -n $o ]]; then head -c 2048 /dev/zero >"$o"; return 0; fi; case $u in *npmjs*) echo "{\"version\":\"1.56.0\"}" ;; *browsers.json) echo "{\"browsers\":[{\"name\":\"chromium-headless-shell\",\"revision\":\"1194\",\"browserVersion\":\"141.0.7390.37\"}]}" ;; *141.0.7390.37.json) echo "{\"downloads\":{\"chrome-headless-shell\":[{\"platform\":\"linux64\",\"url\":\"https://storage.example/chs.zip\"}]}}" ;; *) return 22 ;; esac; }; uname() { case $1 in -m) echo x86_64 ;; *) echo Linux ;; esac; }; unzip() { case $1 in -Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;; -q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;; esac; }; ldd() { :; }; export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"; old() { mkdir -p "$GASH_CHROME_ROOT"/{139.0.7258.5,140.0.7339.16}/chrome-headless-shell-linux64 && printf "#!/bin/sh\necho Chrome-Headless-Shell 140.0.7339.16\n" >"$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && ln -s "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" "$GASH_CHROME_LINK"; }; chrome_headless_update' 'n'
-fx chrome_headless_update install 'curl() { local u="" h=0 o=""; while (($#)); do case $1 in -fsIL) h=1 ;; -o) o=$2; shift ;; http*) u=$1 ;; esac; shift; done; if ((h)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\n\r\n"; return 0; fi; if [[ -n $o ]]; then head -c 2048 /dev/zero >"$o"; return 0; fi; case $u in *npmjs*) echo "{\"version\":\"1.56.0\"}" ;; *browsers.json) echo "{\"browsers\":[{\"name\":\"chromium-headless-shell\",\"revision\":\"1194\",\"browserVersion\":\"141.0.7390.37\"}]}" ;; *141.0.7390.37.json) echo "{\"downloads\":{\"chrome-headless-shell\":[{\"platform\":\"linux64\",\"url\":\"https://storage.example/chs.zip\"}]}}" ;; *) return 22 ;; esac; }; uname() { case $1 in -m) echo x86_64 ;; *) echo Linux ;; esac; }; unzip() { case $1 in -Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;; -q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;; esac; }; ldd() { :; }; export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"; old() { mkdir -p "$GASH_CHROME_ROOT"/{139.0.7258.5,140.0.7339.16}/chrome-headless-shell-linux64 && printf "#!/bin/sh\necho Chrome-Headless-Shell 140.0.7339.16\n" >"$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && ln -s "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" "$GASH_CHROME_LINK"; }; chrome_headless_update' 'y'
-fx chrome_headless_update up-to-date 'curl() { local u="" h=0 o=""; while (($#)); do case $1 in -fsIL) h=1 ;; -o) o=$2; shift ;; http*) u=$1 ;; esac; shift; done; if ((h)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\n\r\n"; return 0; fi; if [[ -n $o ]]; then head -c 2048 /dev/zero >"$o"; return 0; fi; case $u in *npmjs*) echo "{\"version\":\"1.56.0\"}" ;; *browsers.json) echo "{\"browsers\":[{\"name\":\"chromium-headless-shell\",\"revision\":\"1194\",\"browserVersion\":\"141.0.7390.37\"}]}" ;; *141.0.7390.37.json) echo "{\"downloads\":{\"chrome-headless-shell\":[{\"platform\":\"linux64\",\"url\":\"https://storage.example/chs.zip\"}]}}" ;; *) return 22 ;; esac; }; uname() { case $1 in -m) echo x86_64 ;; *) echo Linux ;; esac; }; unzip() { case $1 in -Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;; -q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;; esac; }; ldd() { :; }; export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"; mkdir -p "$GASH_CHROME_ROOT/141.0.7390.37/chrome-headless-shell-linux64" && ln -s "$GASH_CHROME_ROOT/141.0.7390.37/chrome-headless-shell-linux64/chrome-headless-shell" "$GASH_CHROME_LINK"; chrome_headless_update'
-fx chrome_headless_update missing-libs 'curl() { local u="" h=0 o=""; while (($#)); do case $1 in -fsIL) h=1 ;; -o) o=$2; shift ;; http*) u=$1 ;; esac; shift; done; if ((h)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\n\r\n"; return 0; fi; if [[ -n $o ]]; then head -c 2048 /dev/zero >"$o"; return 0; fi; case $u in *npmjs*) echo "{\"version\":\"1.56.0\"}" ;; *browsers.json) echo "{\"browsers\":[{\"name\":\"chromium-headless-shell\",\"revision\":\"1194\",\"browserVersion\":\"141.0.7390.37\"}]}" ;; *141.0.7390.37.json) echo "{\"downloads\":{\"chrome-headless-shell\":[{\"platform\":\"linux64\",\"url\":\"https://storage.example/chs.zip\"}]}}" ;; *) return 22 ;; esac; }; uname() { case $1 in -m) echo x86_64 ;; *) echo Linux ;; esac; }; unzip() { case $1 in -Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;; -q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;; esac; }; ldd() { :; }; export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"; ldd() { printf "\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n"; }; chrome_headless_update -y'
-fx chrome_headless_update no-network 'curl() { local u="" h=0 o=""; while (($#)); do case $1 in -fsIL) h=1 ;; -o) o=$2; shift ;; http*) u=$1 ;; esac; shift; done; if ((h)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 2048\r\n\r\n"; return 0; fi; if [[ -n $o ]]; then head -c 2048 /dev/zero >"$o"; return 0; fi; case $u in *npmjs*) echo "{\"version\":\"1.56.0\"}" ;; *browsers.json) echo "{\"browsers\":[{\"name\":\"chromium-headless-shell\",\"revision\":\"1194\",\"browserVersion\":\"141.0.7390.37\"}]}" ;; *141.0.7390.37.json) echo "{\"downloads\":{\"chrome-headless-shell\":[{\"platform\":\"linux64\",\"url\":\"https://storage.example/chs.zip\"}]}}" ;; *) return 22 ;; esac; }; uname() { case $1 in -m) echo x86_64 ;; *) echo Linux ;; esac; }; unzip() { case $1 in -Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;; -q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;; esac; }; ldd() { :; }; export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"; curl() { return 6; }; chrome_headless_update -y'
+# chrome.sh: chrome_headless_update. The repo curl mock (the HTTPS fake in
+# Go mode) answers from a routes file; uname, unzip and ldd are PATH stubs.
+__fx_chs='export GASH_CHROME_ROOT="$HOME/opt" GASH_CHROME_LINK="$HOME/bin/chs"; mkdir -p "$HOME/bin"
+head -c 2048 /dev/zero >"$HOME/zip"
+cat >"$HOME/routes" <<"EOF"
+GET https://registry.npmjs.org/playwright-core/latest 200 {"version":"1.56.0"}
+GET https://cdn.jsdelivr.net/npm/playwright-core@1.56.0/browsers.json 200 {"browsers":[{"name":"chromium-headless-shell","revision":"1194","browserVersion":"141.0.7390.37"}]}
+GET https://googlechromelabs.github.io/chrome-for-testing/141.0.7390.37.json 200 {"downloads":{"chrome-headless-shell":[{"platform":"linux64","url":"https://storage.example/chs.zip"}]}}
+HEAD * 200
+  Content-Length: 2048
+GET * 200 @zip
+EOF
+export MOCK_CURL_ROUTES="$HOME/routes"
+cat >"$HOME/bin/uname" <<"EOF"
+#!/bin/sh
+case "$1" in -m) echo x86_64 ;; *) echo Linux ;; esac
+EOF
+cat >"$HOME/bin/unzip" <<"EOF"
+#!/bin/sh
+case "$1" in
+-Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;;
+-q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;;
+esac
+EOF
+printf "#!/bin/sh\n:\n" >"$HOME/bin/ldd"
+chmod +x "$HOME/bin/uname" "$HOME/bin/unzip" "$HOME/bin/ldd"
+PATH="$HOME/bin:$PATH"
+'
+fx chrome_headless_update dry-run-new "$__fx_chs"'chrome_headless_update --dry-run'
+fx chrome_headless_update upgrade-declined "$__fx_chs"'old() { mkdir -p "$GASH_CHROME_ROOT"/{139.0.7258.5,140.0.7339.16}/chrome-headless-shell-linux64 && printf "#!/bin/sh\necho Chrome-Headless-Shell 140.0.7339.16\n" >"$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && ln -s "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" "$GASH_CHROME_LINK"; }; chrome_headless_update' 'n'
+fx chrome_headless_update install "$__fx_chs"'old() { mkdir -p "$GASH_CHROME_ROOT"/{139.0.7258.5,140.0.7339.16}/chrome-headless-shell-linux64 && printf "#!/bin/sh\necho Chrome-Headless-Shell 140.0.7339.16\n" >"$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" && ln -s "$GASH_CHROME_ROOT/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" "$GASH_CHROME_LINK"; }; chrome_headless_update' 'y'
+fx chrome_headless_update up-to-date "$__fx_chs"'mkdir -p "$GASH_CHROME_ROOT/141.0.7390.37/chrome-headless-shell-linux64" && ln -s "$GASH_CHROME_ROOT/141.0.7390.37/chrome-headless-shell-linux64/chrome-headless-shell" "$GASH_CHROME_LINK"; chrome_headless_update'
+fx chrome_headless_update missing-libs "$__fx_chs"'cat >"$HOME/bin/ldd" <<"EOF"
+#!/bin/sh
+printf "\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n"
+EOF
+chrome_headless_update -y'
+fx chrome_headless_update no-network "$__fx_chs"'printf "* * unreachable\n" >"$HOME/routes"; chrome_headless_update -y'
 fx chrome_headless_update unknown-option 'chrome_headless_update --bogus'
 
 # Fixtures of worker "system": lib/modules/system.sh, lib/modules/docker.sh,
@@ -287,22 +318,23 @@ fx git_sync pushed 'git config --global user.name T && git config --global user.
 fx git_sync nothing 'git config --global user.name T && git config --global user.email t@e.x && git config --global color.ui false && git config --global init.defaultBranch main && git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main; git_sync'
 fx git_sync detached 'git config --global user.name T && git config --global user.email t@e.x && git config --global color.ui false && git config --global init.defaultBranch main && git init -q w && cd w && echo a >f && git add f && git commit -qm init && git checkout -q --detach; git_sync'
 
-# remote.sh: ssh, scp and rsync are stub functions (no network).
+# remote.sh: ssh, scp and rsync are PATH stubs in $HOME/bin (no network;
+# TEST-05: a function fake never reaches the binary's children).
 fx remote_hosts list 'printf "HOST:web=deploy@web.example.com\nHOST:db=admin@10.0.0.5\n" >.gash_env && chmod 600 .gash_env; __GASH_ENV_LOADED=""; remote_hosts'
 fx remote_hosts empty '__GASH_ENV_LOADED=""; remote_hosts'
-fx remote_exec ran 'ssh() { printf "hello from the remote host\n"; }; remote_exec deploy@web.example.com "uptime"'
-fx remote_exec unreachable 'ssh() { return 255; }; remote_exec deploy@web.example.com "uptime"'
+fx remote_exec ran 'mkdir -p bin && printf "#!/bin/sh\necho hello from the remote host\n" >bin/ssh && chmod +x bin/ssh && PATH="$HOME/bin:$PATH"; remote_exec deploy@web.example.com "uptime"'
+fx remote_exec unreachable 'mkdir -p bin && printf "#!/bin/sh\nexit 255\n" >bin/ssh && chmod +x bin/ssh && PATH="$HOME/bin:$PATH"; remote_exec deploy@web.example.com "uptime"'
 fx remote_exec unknown_alias '__GASH_ENV_LOADED=""; remote_exec nohost "uptime"'
 fx remote_exec extra_args 'remote_exec deploy@web.example.com ls -la'
-fx remote_push copied 'scp() { :; }; echo x >f; remote_push deploy@web.example.com f /tmp/f'
-fx remote_push sensitive_declined 'scp() { :; }; echo x >f; remote_push deploy@web.example.com f /etc/app.conf' 'n'
+fx remote_push copied 'mkdir -p bin && printf "#!/bin/sh\n" >bin/scp && chmod +x bin/scp && PATH="$HOME/bin:$PATH"; echo x >f; remote_push deploy@web.example.com f /tmp/f'
+fx remote_push sensitive_declined 'mkdir -p bin && printf "#!/bin/sh\n" >bin/scp && chmod +x bin/scp && PATH="$HOME/bin:$PATH"; echo x >f; remote_push deploy@web.example.com f /etc/app.conf' 'n'
 fx remote_push denied 'remote_push deploy@web.example.com f /etc/shadow'
-fx remote_pull copied 'scp() { :; }; remote_pull deploy@web.example.com /tmp/f ./f'
+fx remote_pull copied 'mkdir -p bin && printf "#!/bin/sh\n" >bin/scp && chmod +x bin/scp && PATH="$HOME/bin:$PATH"; remote_pull deploy@web.example.com /tmp/f ./f'
 fx remote_pull denied 'remote_pull deploy@web.example.com /etc/shadow ./s'
 fx remote_pull missing_args 'remote_pull deploy@web.example.com'
-fx remote_sync_push synced 'rsync() { printf "sending incremental file list\n"; }; mkdir d; remote_sync_push deploy@web.example.com d/ /tmp/d/ --no-progress'
-fx remote_sync_push delete_declined 'rsync() { :; }; mkdir d; remote_sync_push deploy@web.example.com d/ /srv/d/ --delete' 'n'
-fx remote_sync_pull synced 'rsync() { :; }; remote_sync_pull deploy@web.example.com /tmp/d/ ./d/'
+fx remote_sync_push synced 'mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && PATH="$HOME/bin:$PATH"; mkdir d; remote_sync_push deploy@web.example.com d/ /tmp/d/ --no-progress'
+fx remote_sync_push delete_declined 'mkdir -p bin && printf "#!/bin/sh\n" >bin/rsync && chmod +x bin/rsync && PATH="$HOME/bin:$PATH"; mkdir d; remote_sync_push deploy@web.example.com d/ /srv/d/ --delete' 'n'
+fx remote_sync_pull synced 'mkdir -p bin && printf "#!/bin/sh\n" >bin/rsync && chmod +x bin/rsync && PATH="$HOME/bin:$PATH"; remote_sync_pull deploy@web.example.com /tmp/d/ ./d/'
 fx remote_sync_pull denied 'remote_sync_pull deploy@web.example.com /proc/1/ ./d/'
 
 # node.sh: nvm is a stub function, NVM_DIR a directory tree.

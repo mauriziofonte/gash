@@ -20,6 +20,97 @@ NAME() {
 {{% end %}}
 */%}}
 
+{{%/* The system slice (internal/system). The hand-off protocol of
+internal/system/handoff: the binary does what 2.x did before the shell
+step and writes 1 on descriptor 3 when that step runs. */%}}
+
+{{% define "sys/history-handoff" %}}
+{{% .Name %}}() {
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call {{% .Name %}} "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
+    history -a 2>/dev/null || true
+    GASH__RESUME=1 __gash_call {{% .Name %}} "$@"
+}
+{{% end %}}
+
+{{% define "stub/hgrep" %}}{{% template "sys/history-handoff" . %}}{{% end %}}
+{{% define "stub/wsl_restart" %}}{{% template "sys/history-handoff" . %}}{{% end %}}
+{{% define "stub/wsl_shutdown" %}}{{% template "sys/history-handoff" . %}}{{% end %}}
+
+{{% define "stub/history_grep" %}}
+history_grep() {
+    case "${1-}" in
+        -h | --help | "")
+            __gash_call {{% .Name %}} "$@"
+            return
+            ;;
+    esac
+    history | __gash_call {{% .Name %}} "$@"
+}
+{{% end %}}
+
+{{% define "stub/mkdir_cd" %}}
+mkdir_cd() {
+    case "${1-}" in
+        -h | --help | "")
+            __gash_call {{% .Name %}} "$@"
+            return
+            ;;
+    esac
+    local dir="${1-}"
+    mkdir -p "$dir" && cd "$dir" || return 1
+}
+{{% end %}}
+
+{{% define "stub/sudo_last" %}}
+sudo_last() {
+    case "${1-}" in
+        -h | --help)
+            __gash_call {{% .Name %}} "$@"
+            return
+            ;;
+    esac
+    if [[ -n "${1-}" ]]; then
+        sudo "$@"
+        return
+    fi
+    local last_cmd __gash_go="" __gash_rc=0
+    last_cmd=$(fc -ln -1)
+    last_cmd="${last_cmd#"${last_cmd%%[![:space:]]*}"}"
+    {
+        __gash_go="$(printf '%s' "$last_cmd" | GASH__HANDOFF=3 __gash_call {{% .Name %}} 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
+    sudo bash -c "$last_cmd"
+}
+{{% end %}}
+
+{{%/* The ssh slice (internal/ssh). The binary hands back quoted export
+lines of SSH_AUTH_SOCK, SSH_AGENT_PID and GASH_SSH_AUTOUNLOCK_RAN, only
+those names, values quoted with mvdan.cc/sh/v3/syntax (LEDGER SYS-39). */%}}
+
+{{% define "stub/gash_ssh_auto_unlock" %}}
+gash_ssh_auto_unlock() {
+    case "${1-}" in
+        -h | --help)
+            __gash_call {{% .Name %}} "$@"
+            return
+            ;;
+    esac
+    [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
+    {{% if .LoadsEnv %}}{{% loadenv %}}{{% end %}}
+    local __gash_go="" __gash_rc=0
+    {
+        __gash_go="$(GASH__HANDOFF=3 __gash_call {{% .Name %}} "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
+    } 4>&1
+    [[ -z "$__gash_go" ]] || eval "$__gash_go"
+    return "$__gash_rc"
+}
+{{% end %}}
+
 {{% define "stub/gash_help" %}}
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.

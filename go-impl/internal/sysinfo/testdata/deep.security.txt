@@ -1,0 +1,77 @@
+=== SECURITY DEEP ===
+--- iptables
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+--- UFW
+Status: active
+ENABLED=yes
+--- firewalld
+public (active)
+--- fail2ban
+Status
+|- Number of jail: 1
+--- jail.local
+[sshd]
+enabled = true
+--- defaults.conf
+[DEFAULT]
+bantime = 1h
+--- CrowdSec
+common:
+  daemonize: true
+--- acquis.yaml
+source: file
+--- scenarios
+ssh-bf.yaml
+--- SSH
+Port 2222
+--- 50-local.conf
+X11Forwarding no
+--- PAM
+--- common-auth
+auth required pam_unix.so
+--- AppArmor
+apparmor module is loaded.
+--- Users
+alice:1000:/home/alice:/bin/bash
+--- Sudoers
+Defaults env_reset
+--- alice
+alice ALL=(ALL) NOPASSWD: ALL
+--- login.defs (key)
+PASS_MAX_DAYS 99999
+UMASK 022
+--- Login history
+alice pts/0 10.0.0.2 Mon Oct 19 10:00 still logged in
+
+wtmp begins Mon Oct  1 00:00:00 2026
+--- Auth log (recent)
+sshd[6]: Accepted publickey for alice
+sshd[7]: Accepted publickey for alice
+sshd[8]: Accepted publickey for alice
+sshd[9]: Accepted publickey for alice
+sshd[10]: Accepted publickey for alice
+sshd[11]: Accepted publickey for alice
+sshd[12]: Accepted publickey for alice
+sshd[13]: Accepted publickey for alice
+sshd[14]: Accepted publickey for alice
+sshd[15]: Accepted publickey for alice
+sshd[16]: Accepted publickey for alice
+sshd[17]: Accepted publickey for alice
+sshd[18]: Accepted publickey for alice
+sshd[19]: Accepted publickey for alice
+sshd[20]: Accepted publickey for alice
+sshd[21]: Accepted publickey for alice
+sshd[22]: Accepted publickey for alice
+sshd[23]: Accepted publickey for alice
+sshd[24]: Accepted publickey for alice
+sshd[25]: Accepted publickey for alice
+sshd[26]: Accepted publickey for alice
+sshd[27]: Accepted publickey for alice
+sshd[28]: Accepted publickey for alice
+sshd[29]: Accepted publickey for alice
+sshd[30]: Accepted publickey for alice
+sshd[31]: Accepted publickey for alice
+sshd[32]: Accepted publickey for alice
+sshd[33]: Accepted publickey for alice
+sshd[34]: Accepted publickey for alice
+sshd[35]: Accepted publickey for alice
