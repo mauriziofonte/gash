@@ -89,10 +89,11 @@ Removed at cutover: `go-impl/`, `tests/` (the Bash framework, `tests/mocks/bin`,
 `tests/run.sh`), the Bash implementation under `lib/` other than the 8 generated
 files above, `tools/gen-docs.sh`.
 
-Kept on disk although no 3.x code reads them, for shells still running 2.x
-code after `git checkout` (see `upgrade.md` section 3): the files that 2.x
-reads at call time and that must stay readable or fail soft. The list is fixed
-by the audit (`upgrade.md`, "Runtime reads of an open 2.x shell").
+Kept on disk for shells still running 2.x code after `git checkout`:
+`quotes/list.txt`, `.gash_env.template`, `.gashrc`, `gash.sh`, `lib/core/`,
+`VERSION` (all also used by 3.x). `lib/aliases/` and the 2.x modules go; the
+effect on an open 2.x shell is two soft degradations until the next shell
+(`upgrade.md` 7.1).
 
 ## Bookkeeping after cutover
 
