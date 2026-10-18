@@ -157,6 +157,13 @@ func (e *Engine) rootSession(ctx context.Context, v *env, plan []rootops.Op) (*r
 	if sudo == "" {
 		return nil, hteerr.New(hteerr.PrivilegedStepRequired, "sudo is not installed", "install sudo, then run the command again")
 	}
+	if e.BeforeSudo != nil {
+		steps := make([]string, len(plan))
+		for i, o := range plan {
+			steps[i] = o.String()
+		}
+		e.BeforeSudo(steps)
+	}
 	c, err := rootops.Open(ctx, e.Starter, rootops.SudoCmd(sudo, e.Self, e.Interactive), plan)
 	if err != nil {
 		return nil, err
@@ -206,6 +213,10 @@ func (e *Engine) Install(ctx context.Context, opt InstallOptions) (*InstallResul
 	}
 	res := &InstallResult{Plan: []string{}, Changes: []receipt.Change{}, Blocking: []string{}, Warnings: []string{}}
 	if _, err := e.locked(v, "install", "", func() (any, error) { return res, e.install(ctx, v, opt, res) }); err != nil {
+		// A failure after root steps ran returns what they changed.
+		if len(res.Changes) > 0 {
+			return res, err
+		}
 		return nil, err
 	}
 	// The stack starts once the lock is released: the systemd unit runs
@@ -484,6 +495,10 @@ func (e *Engine) Uninstall(ctx context.Context, opt UninstallOptions) (*Uninstal
 	}
 	out, err := e.locked(v, "uninstall", "", func() (any, error) { return res, e.uninstall(ctx, v, res) })
 	if err != nil {
+		// A failure after changes were restored returns them.
+		if len(res.Restored) > 0 {
+			return res, err
+		}
 		return nil, err
 	}
 	// The tree moves after the lock is released (the lock file is in it).

@@ -53,7 +53,11 @@ type Engine struct {
 	Procs        service.Procs
 	// Interactive allows sudo to prompt (a terminal, not headless).
 	Interactive bool
-	Now         func() time.Time
+	// BeforeSudo, when set, receives the root steps of a command as the
+	// session will run them, right before sudo starts (and may prompt):
+	// the command line shows them to the user.
+	BeforeSudo func(steps []string)
+	Now        func() time.Time
 	// LockWait bounds the wait for the state lock (30 s by default).
 	LockWait time.Duration
 	// Dial, StartTimeout: supervision overrides for tests.
