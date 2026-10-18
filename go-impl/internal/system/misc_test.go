@@ -8,11 +8,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/runner"
+	"github.com/mauriziofonte/gash/internal/term"
 )
 
 const dfTyped = "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n" +
@@ -59,6 +62,28 @@ func TestDiskUsage(t *testing.T) {
 	r = call(m, "disk_usage", nil, nil, "", "-h")
 	require.Equal(t, 0, r.rc)
 	require.Contains(t, r.out, "disk_usage")
+}
+
+// On a color terminal the bar and the percentage take the fill's color:
+// success below 75%, warning from 75%, error from 90% (functions_more_spec
+// line 37, whose __gash_use_color override a binary cannot see).
+func TestDiskUsageColors(t *testing.T) {
+	m, _, _ := tm(t, runner.NewFake(t, df("-PTk", dfTyped, 0), df("-PTk", dfTyped, 0)))
+	e := invoke.EnvMap(map[string]string{"LANG": "C.UTF-8"})
+	r := call(m, "disk_usage", nil, term.Fixed(e, true, true, true), "")
+	require.Equal(t, 0, r.rc)
+	for pct, color := range map[string]string{"50%": term.SeqSuccess, "81%": term.SeqWarning, "92%": term.SeqError} {
+		var line string
+		for _, l := range strings.Split(r.out, "\n") {
+			if strings.Contains(l, pct) {
+				line = l
+			}
+		}
+		require.Contains(t, line, color+"━", pct)
+		require.Contains(t, line, color+pct, pct)
+	}
+	r = call(m, "disk_usage", nil, term.Fixed(e, true, true, true), "", "--no-color")
+	require.NotContains(t, r.out, "\x1b[")
 }
 
 // SYS-14: a df that fails loses its whole output: the typed listing falls
