@@ -7057,9 +7057,9 @@ Critical and high items:
 | Reproduction | `work/hte/run.sh $SB create --domain=a.test --docroot=$SB/d --phpver=8.3 --ssl=y --forcessl=n --hosts=n --profile=dev -n && grep sscert_ $SB/exec.log` (the harness keeps a copy in `$SB/last-cert-script.sh`) |
 | Severity | low |
 | Public-contract impact | no |
-| rc.A behavior | Certificates are made in-process (`crypto/x509`, `crypto/ecdsa`) as the user; no script is generated. Root runs only `sudo <gash binary> hte __root <op>` from `install`, `uninstall`, `migrate --apply`, a closed typed set of operations validated against the plan the user saw, and the fixed hosts helper |
+| rc.A behavior | Certificates are made by the openssl CLI as the user (HTE-39), with a fixed argument vector; no script is generated. Root runs only one `sudo <gash binary> hte __root` session per `install`, `uninstall` and `migrate --apply`: the plan the user saw arrives on stdin first, then root runs its operations by id, each once, from a closed typed set, each checked against root's own reading of the system (a vhost or pool to archive must be one `legacy.Scan` finds, a key to copy must be the `SSLCertificateKeyFile` of such a vhost); and the fixed hosts helper |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE17` in `internal/hte/rootops` (an op not in the plan, or with a changed argument, is refused) and `internal/hte/certs` (runner fake records no child process during create/renew) |
+| Proving test | `TestLedger_HTE17` in `internal/hte/rootops` (an op not in the plan, run twice, or naming a file root does not find in the system configuration, is refused; a bad plan is refused before anything runs) and `TestOpenSSLArgv` in `internal/hte/certs` (the only children of create/renew are openssl genpkey and req, fixed argv, no secret, new session) |
 | Status | open |
 
 <a id="hte-18"></a>
@@ -7761,7 +7761,7 @@ Critical and high items:
 | Public-contract impact | yes (ports, URLs, a system-wide setting) |
 | rc.A behavior | Linux and WSL2: `install` sets `net.ipv4.ip_unprivileged_port_start=80` (`/etc/sysctl.d/50-gash-hte.conf` + `sysctl -w`, recorded in the receipt, reverted by `uninstall`; already ≤ 80 in Docker, left as is) after stating that every local user may then bind 80 to 1023. macOS: a direct bind when the kernel allows it, else a `pf` anchor redirecting `127.0.0.1:80/443` to 8080/8443, loaded at boot by a root LaunchDaemon. Declined or impossible: 8080/8443 (configurable), site URLs carry the port, `doctor` reports it |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE56` in `internal/hte/receipt` (install then uninstall on the sysroot fake restores the sysctl file and value byte for byte); `hte-e2e`: unprivileged master bound to `127.0.0.1:80` |
+| Proving test | `TestLedger_HTE56` in `internal/hte/rootops` (install then uninstall on the sysroot fake restores the sysctl file and value byte for byte; a value already at 80 or lower changes nothing and the receipt says so); `hte-e2e`: unprivileged master bound to `127.0.0.1:80` |
 | Status | open |
 
 <a id="hte-57"></a>
@@ -7851,7 +7851,7 @@ Critical and high items:
 | Public-contract impact | yes (new required step) |
 | rc.A behavior | `install` (one interactive sudo: hosts helper `/usr/local/libexec/gash/gash-hosts-helper`, sudoers drop-in `/etc/sudoers.d/gash-hte` validated with `visudo -c -f`, port setting, linger, freeing 80/443) writes the receipt before the first change and after each one (user copy and root copy `/var/lib/gash-hte/receipt-<user>.json`, prior contents of modified files kept in `/var/lib/gash-hte/backup/`). Every command except `install`, `doctor`, `migrate` (dry-run) and `php versions` fails with `hte_not_installed` (STOP) before it. `uninstall` restores from the root copy (refused with `receipt_mismatch`, FATAL, when the user copy differs) and moves the userland tree into `$XDG_STATE_HOME/gash/hte-stage-<ts>/`, which a later `install` offers to restore |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE61` in `internal/hte/receipt` (install then uninstall on the fixture sysroot: byte-identical tree; interrupted install undone from a partial receipt; tampered user copy → `receipt_mismatch`) |
+| Proving test | `TestLedger_HTE61` and `TestInterrupted` in `internal/hte/rootops` (install then uninstall on the fixture sysroot: byte-identical tree; interrupted install undone from a partial receipt, its last change still pending); `TestCompare` in `internal/hte/receipt` (tampered user copy → `receipt_mismatch`) |
 | Status | open |
 
 <a id="hte-62"></a>

@@ -281,6 +281,25 @@ func readHosts(path string) ([]byte, os.FileInfo, error) {
 	return b, fi, err
 }
 
+// Rewrite replaces the hosts file at path with edit's result, atomically,
+// keeping its owner and mode; a symlink or non-regular file is refused.
+// The root step of uninstall uses it to put back the block that was there
+// before install (Splice), or to remove the block (Strip).
+func Rewrite(path string, edit func(hosts []byte) ([]byte, error)) error {
+	data, fi, err := readHosts(path)
+	if err != nil {
+		return err
+	}
+	out, err := edit(data)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(out, data) {
+		return nil
+	}
+	return writeAtomic(path, out, fi)
+}
+
 // writeAtomic replaces path with data: a temporary file in the same
 // directory, the original owner and mode, fsync, rename, fsync of the
 // directory.

@@ -104,6 +104,10 @@ type Change struct {
 	Archive     string          `json:"archive,omitempty"`
 	Link        *Link           `json:"link,omitempty"`
 	AutoMode    string          `json:"autostart,omitempty"`
+	// Pending marks a change recorded before it is made: an interrupted
+	// root step leaves it, and restoring it tolerates a change that never
+	// happened.
+	Pending bool `json:"pending,omitzero"`
 }
 
 // Receipt is the whole receipt.

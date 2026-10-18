@@ -397,13 +397,25 @@ HTE phase; the design supports both outcomes.
 Root is used only by:
 
 1. `install`, `uninstall`, `migrate --apply`: one interactive `sudo
-   <gash binary> hte __root <op>` per command. The operations are a closed,
-   typed set (install helper, write sudoers drop-in, set sysctl, write pf
-   anchor, enable linger, stop/disable/enable/start a named system unit,
-   disable/enable/archive a legacy vhost or pool, read a legacy key file into
-   the user's certificate directory, write the root receipt), each validated
-   against the plan the user saw. Nothing generated is executed as root from
-   `/tmp` (hte-cli defect).
+   <gash binary> hte __root` session per command (`sudo -n` in headless or
+   without a terminal, so it fails with `privileged_step_required` instead of
+   prompting). The user side writes the plan the user saw to the session's
+   stdin as one JSON line, then asks for its operations by id; root answers
+   each with one JSON line carrying the changes and its receipt copy, which
+   the user side stores as its own. The operations are a closed, typed set
+   (`internal/hte/rootops`: install helper, write sudoers drop-in, set
+   sysctl, write pf anchor, enable linger, stop and disable a named system
+   unit, reload one, record the hosts block, archive a legacy vhost or pool,
+   hand a legacy key file to `openssl pkey` running as the user, record the
+   autostart, undo the last change of the receipt, remove the receipt), each
+   run at most once, only when the plan holds it, and checked against root's
+   own reading of the system: a vhost or pool to archive must be one root's
+   `legacy.Scan` finds, a key to copy the `SSLCertificateKeyFile` of such a
+   vhost, the helper's content the SHA-256 the plan names. The user is the
+   one sudo names (`SUDO_USER`, `SUDO_UID`), never the plan. Each change is
+   recorded in the root receipt (pending) before it is made and marked done
+   after; undoing a pending change tolerates one that never happened.
+   Nothing generated is executed as root from `/tmp` (hte-cli defect).
 2. The hosts helper `gash-hosts-helper` (section 7.1).
 
 ### 7.1 Hosts helper and sudoers drop-in
@@ -468,6 +480,15 @@ after each one, so an interrupted install can still be undone:
    "prior":{"enabled":true},"archive":"/var/lib/gash-hte/archive/20261018T100000Z/..."}
  ]}
 ```
+
+Besides the kinds above: `dir_created` (a directory install made, such as
+`/usr/local/libexec/gash`, removed on uninstall when empty), `legacy_pool`
+(an archived pool), `autostart` (the mode and the user file, made and undone
+by the user side; root only records it so both copies stay equal) and
+`pending: true` on a change recorded but not yet completed. Both copies are
+compact JSON plus a newline (the canonical encoding), compared byte for
+byte; root keeps `/var/lib/gash-hte` 0755 and its copy 0644, so `doctor`
+can read it as the user, and the backup and archive directories 0700.
 
 `file_modified` changes keep the prior content in
 `/var/lib/gash-hte/backup/` (root-owned), so restoring is byte-exact.
