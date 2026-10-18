@@ -175,8 +175,9 @@ func TestE2E(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Logf("plan: %s", strings.Join(res.Plan, " | "))
-		if res.Started {
-			t.Error("the stack started while the system Apache holds 80 and 443")
+		// HTE-75: exit 0, started false, next names migrate.
+		if res.Started || res.Next != "gash hte migrate" {
+			t.Errorf("started %v, next %q: the system Apache holds 80 and 443", res.Started, res.Next)
 		}
 		for _, p := range append([]string{defaultVhost}, legacyVhosts...) {
 			if !slices.Contains(res.Blocking, p) {
