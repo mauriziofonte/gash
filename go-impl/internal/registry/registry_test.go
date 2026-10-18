@@ -150,3 +150,41 @@ func TestDelegated(t *testing.T) {
 	}
 	require.Equal(t, []string{"gash", "help", "needs_confirm_prompt", "needs_help", "nvm", "path_add"}, not)
 }
+
+// help_spec.sh "Help System - Registry" against the static registry: an
+// entry stores the help text, the short description, the aliases, the
+// module and the see-also list, and the full load has more than 40.
+func TestHelpRegistryAsHelpSpec(t *testing.T) {
+	f, ok := Lookup("files_largest")
+	require.True(t, ok)
+	require.True(t, f.HasHelp)
+	require.NotEmpty(t, f.Help.Body)
+	require.NotEmpty(t, f.Help.Short)
+	require.Contains(t, f.Help.Aliases, "flf")
+	require.Equal(t, "files", f.Help.Module)
+	require.NotEmpty(t, f.Help.SeeAlso)
+	n := 0
+	for _, f := range Functions() {
+		if f.HasHelp {
+			n++
+		}
+	}
+	require.Greater(t, n, 40)
+}
+
+// LEDGER CORE-07: the help modules come in one fixed order, and every
+// module with registered help is in it.
+func TestLedger_CORE07(t *testing.T) {
+	seen := map[string]bool{}
+	for _, f := range Functions() {
+		if f.HasHelp && f.Help.Module != "" {
+			seen[f.Help.Module] = true
+			require.Contains(t, ModuleOrder, f.Help.Module, f.Name)
+		}
+	}
+	for _, m := range ModuleOrder {
+		require.True(t, seen[m], "ModuleOrder lists %s, which has no help", m)
+	}
+	require.Equal(t, []string{"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh",
+		"llm", "utils", "node", "remote", "chrome", "php"}, ModuleOrder)
+}

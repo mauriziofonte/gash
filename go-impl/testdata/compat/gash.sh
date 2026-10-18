@@ -21,7 +21,8 @@
 #
 # Every public function is a real shell function in both modes; the ones
 # that run in the gash binary are one-line stubs. Sourcing this file never
-# forks in headless mode, prints nothing there, and never returns non-zero.
+# forks in headless mode, prints nothing there (GASH_DEBUG=1 loads the
+# settings and shows their warnings), and never returns non-zero.
 #
 # https://github.com/mauriziofonte/gash · MIT License · (c) Maurizio Fonte
 
@@ -158,7 +159,19 @@ gash() {
     __gash_call gash "$@"
 }
 gash_doctor() { __gash_call gash_doctor "$@"; }
-gash_help() { __gash_call gash_help "$@"; }
+gash_help() {
+    # --bash TOPIC is Bash's builtin help, which only the shell has.
+    local __gash_a
+    local -a __gash_rest=()
+    for __gash_a in "$@"; do
+        [[ "$__gash_a" == --no-color ]] || __gash_rest+=("$__gash_a")
+    done
+    if [[ "${__gash_rest[0]-}" == --bash ]]; then
+        builtin help "${__gash_rest[@]:1}"
+        return
+    fi
+    __gash_call gash_help "$@"
+}
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 gash_uninstall() { __gash_call gash_uninstall "$@"; }
 gash_unload() { __gash_call gash_unload "$@"; }
@@ -337,8 +350,16 @@ alias wslc='wsl_compact'
 # -----------------------------------------------------------------------------
 
 # The binary applies the headless subset of ~/.gash_env settings itself
-# (environment first), so loading reads no file and runs nothing.
+# (environment first), so loading reads no file and runs nothing. 2.x
+# parsed the file here, quietly unless GASH_DEBUG=1: with debug the
+# settings load now, warnings shown; without, the first stub that needs
+# them parses quietly (LEDGER CORE-18).
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
+    if [[ "${GASH_DEBUG-}" == "1" ]]; then
+        __gash_load_env
+    else
+        __GASH_ENV_QUIET=1
+    fi
     return 0
 fi
 

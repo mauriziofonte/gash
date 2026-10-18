@@ -199,3 +199,19 @@ func TestCatalogIsCurrent(t *testing.T) {
 		t.Fatal("internal/registry/catalog_gen.go is stale: run `go generate ./internal/registry`")
 	}
 }
+
+// help_spec.sh "rejects empty func name": a registration without a
+// name stores nothing, as 2.x returned 1 and stored nothing.
+func TestHelpCallSkipsEmptyName(t *testing.T) {
+	dir := t.TempDir()
+	src := "__gash_register_help \"\" --short test <<'HELP'\nbody\nHELP\n" +
+		"__gash_register_help x --short s --aliases a,b --module m --see-also \"y z\" <<'HELP'\nUSAGE\n  x\n\nHELP\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "h.sh"), []byte(src), 0o644))
+	s, err := parseSource(dir, "h.sh")
+	require.NoError(t, err)
+	c := &catalog{defs: map[string][]*fnDef{}, helps: map[string]*helpEntry{}}
+	c.scan(s, s.file.Stmts, scope{})
+	require.Len(t, c.helps, 1)
+	h := c.helps["x"]
+	require.Equal(t, helpEntry{name: "x", file: "h.sh", line: 4, body: "USAGE\n  x", short: "s", aliases: "a,b", module: "m", seeAlso: "y z"}, *h)
+}
