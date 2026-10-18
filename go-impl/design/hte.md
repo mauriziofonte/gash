@@ -798,7 +798,17 @@ sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
 `/usr/local` and `/var/lib/gash-hte` with their state before install.
 `/etc/hosts` stays Docker's bind mount, so the helper writes it in place
 (`setup.sh` checks that first). So far it runs on Ubuntu 24.04 with the
-distro PHP 8.3. `GASH_HTE_E2E_SYSTEMD=1 run.sh` runs `TestE2ESystemd` in a
+distro PHP 8.3. `GASH_HTE_E2E_MULTIPHP=1 run.sh` runs `TestE2EMultiPHP`
+in an image that adds PHP-FPM 7.4, 8.2 and 8.4 from the official
+`php:X.Y-fpm` images (`Dockerfile.multiphp`): each binary is copied into
+`/opt/php/X.Y` with every library it loads, its own loader included
+(`patchelf` points it there), and installed in the Debian layout
+(`/usr/sbin/php-fpmX.Y`, `/etc/php/X.Y/fpm/`, a `www` pool, a SysV
+service `phpX.Y-fpm`); the hte-cli tree then keeps `https.test` on the
+system PHP 7.4, and the story checks that each site runs on a userland
+master of its version, a site on every other version, `site modify --php`
+(the unused master stops), `php global set` on one version, and uninstall
+giving the 7.4 site back to the system PHP 7.4. `GASH_HTE_E2E_SYSTEMD=1 run.sh` runs `TestE2ESystemd` in a
 container with systemd as PID 1 (`Dockerfile.systemd`: logind and the user
 D-Bus added, the units that touch the kernel or devices masked; started
 with a private cgroup namespace and `CAP_SYS_ADMIN`, which systemd needs to
