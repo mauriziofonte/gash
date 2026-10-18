@@ -66,7 +66,7 @@ func TestConfirmMatches2x(t *testing.T) {
 
 			want, rc = run2xTTY(t, in, mode, "__gash_confirm_plan 0")
 			b.Reset()
-			ok = s.ConfirmPlan(tt.WithTTY(in), &b, "0")
+			ok = s.ConfirmPlan(tt, &b, "0")
 			require.Equal(t, want, b.String(), "plan %q %s", in, mode)
 			require.Equal(t, rc == "0", ok, "plan %q %s", in, mode)
 		}

@@ -16,13 +16,14 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-// runAnswering is runMerged with a controlling terminal that types answers.
+// runAnswering is runMerged with a controlling terminal that types the
+// lines of answers, one per question.
 func runAnswering(t *testing.T, name string, env map[string]string, color bool, answers string, args ...string) (string, int) {
 	t.Helper()
 	var out bytes.Buffer
 	e := invoke.EnvMap(env)
 	c := &invoke.Call{Name: name, Args: args, Env: e, Stdout: &out, Stderr: &out,
-		Term: term.Fixed(e, false, color, false).WithTTY(answers)}
+		Term: term.Fixed(e, false, color, false).WithTTYAnswers(strings.SplitAfter(answers, "\n")...)}
 	rc := Table().Run(c)
 	return out.String(), rc
 }

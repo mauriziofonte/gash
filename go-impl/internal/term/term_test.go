@@ -3,6 +3,7 @@
 package term
 
 import (
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -66,30 +67,22 @@ func TestLocaleGlyphs(t *testing.T) {
 	require.Equal(t, "+", Fixed(mapEnv{"LANG": "C"}, false, false, false).Glyphs().OK)
 }
 
-// A test terminal answers successive opens with successive input, as
-// successive `read </dev/tty` get successive lines; without one the open
-// fails.
-func TestFakeTTYReadsOn(t *testing.T) {
-	tt := Fixed(nil, true, true, true).WithTTY("y\nn\n")
-	for _, want := range []string{"y\n", "n\n", ""} {
+// A test terminal types the same input at every open, or successive
+// answers at successive opens; without one the open fails.
+func TestFakeTTYAnswers(t *testing.T) {
+	read := func(tt *Term) string {
 		f, err := tt.OpenTTY()
-		if err != nil {
-			t.Fatal(err)
-		}
-		var got []byte
-		b := make([]byte, 1)
-		for {
-			n, err := f.Read(b)
-			got = append(got, b[:n]...)
-			if err != nil || (n == 1 && b[0] == '\n') {
-				break
-			}
-		}
-		if string(got) != want {
-			t.Errorf("read %q, want %q", got, want)
-		}
+		require.NoError(t, err)
+		b, err := io.ReadAll(f)
+		require.NoError(t, err)
+		return string(b)
 	}
-	if _, err := Fixed(nil, true, true, true).WithoutTTY().OpenTTY(); err == nil {
-		t.Error("WithoutTTY opened a terminal")
+	same := Fixed(nil, true, true, true).WithTTY("y\n")
+	answers := Fixed(nil, true, true, true).WithTTYAnswers("y\n", "n\n")
+	for _, want := range []string{"y\n", "n\n", ""} {
+		require.Equal(t, "y\n", read(same))
+		require.Equal(t, want, read(answers))
 	}
+	_, err := Fixed(nil, true, true, true).WithoutTTY().OpenTTY()
+	require.Error(t, err)
 }
