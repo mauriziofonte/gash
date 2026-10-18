@@ -89,7 +89,9 @@ func CallerFromEnviron(environ []string) Caller {
 	env := make(map[string]string, len(environ))
 	for _, kv := range environ {
 		if i := strings.IndexByte(kv, '='); i > 0 {
-			env[kv[:i]] = kv[i+1:] // the last one wins, as in os.Getenv
+			if _, dup := env[kv[:i]]; !dup {
+				env[kv[:i]] = kv[i+1:] // the first one wins, as in os.Getenv
+			}
 		}
 	}
 	c := Caller{values: map[string]string{}}

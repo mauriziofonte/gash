@@ -167,9 +167,10 @@ func TestCallerFromEnvironGashSet(t *testing.T) {
 	if v, _ := c.Lookup("GASH_BANNER"); v != "0" {
 		t.Errorf("GASH_BANNER = %q", v)
 	}
-	// The last duplicate of a variable wins, as in os.Getenv.
+	// The first duplicate of a variable wins, as in os.Getenv (a Bash
+	// caller never passes duplicates).
 	c = CallerFromEnviron([]string{"GASH_NVM=on", "GASH_NVM=off"})
-	if v, _ := c.Lookup("GASH_NVM"); v != "off" {
+	if v, _ := c.Lookup("GASH_NVM"); v != "on" {
 		t.Errorf("duplicate: %q", v)
 	}
 }
