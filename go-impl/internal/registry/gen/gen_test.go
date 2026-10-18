@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"mvdan.cc/sh/v3/syntax"
 )
 
 const repoRoot = "../../../.."
@@ -135,4 +136,37 @@ func TestModuleAliasesMatch2x(t *testing.T) {
 	}
 	sort.Strings(got)
 	require.Equal(t, want, got)
+}
+
+// Every expansion form of a shell variable is a read, and the variables
+// naming the calling Bash reach the stubs of the functions that read them
+// (llm_exec runs its child with ${BASH:-bash}).
+func TestCallerShellVars(t *testing.T) {
+	needs2x(t)
+	c, err := extract(repoRoot)
+	require.NoError(t, err)
+	fns, err := c.build()
+	require.NoError(t, err)
+	got := map[string][]string{}
+	for _, f := range fns {
+		for _, v := range f.ShellVars {
+			if callerShellVars[v] {
+				got[f.Name] = append(got[f.Name], v)
+			}
+		}
+	}
+	require.Equal(t, map[string][]string{
+		"ai_ask":      {"BASH_VERSION"},
+		"ai_query":    {"BASH_VERSION"},
+		"gash_doctor": {"BASH", "BASH_VERSION"},
+		"llm_exec":    {"BASH"},
+	}, got)
+
+	r := newRefs()
+	f, err := syntax.NewParser().Parse(strings.NewReader(`f() { a=${A:-x} b=${B-} c=${C:+y} d=${#D} e=${E%/*}; }`), "")
+	require.NoError(t, err)
+	r.collect(f)
+	for _, v := range []string{"A", "B", "C", "D", "E"} {
+		require.True(t, r.vars[v], v)
+	}
 }
