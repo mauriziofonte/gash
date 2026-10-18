@@ -197,6 +197,10 @@ func TestMySQLMatches2x(t *testing.T) {
 	answer(t, d, f, "SELECT 1 # comment", "1\n1\n", []string{"1"}, []driver.Value{[]byte("1")})
 	same(t, m, d, env, "llm_db_query", "SELECT 1 # comment")
 	same(t, m, d, env, "llm_db_query", "/*!50000 SELECT 1 */")
+	// A query no engine accepts: the sqlite verdict before any connection
+	// (LEDGER DB-12).
+	same(t, m, d, env, "llm_db_query", "SELECT [a'] ; x")
+	same(t, m, d, env, "llm_db_query", "SELECT `a` ; x")
 	// No database anywhere: no_database before any connection.
 	same(t, m, d, env, "llm_db_query", "SELECT 1", "-c", "maria")
 }

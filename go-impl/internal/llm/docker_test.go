@@ -104,3 +104,24 @@ func TestLLMDockerCheckWithoutCheck(t *testing.T) {
 	require.Equal(t, 1, got.RC)
 	require.Contains(t, got.Stderr, `"details":"docker_compose_check is not implemented in this gash build"`)
 }
+
+// TestLedger_LLM20_2x (reproduced): llm_docker_check applies no path guard
+// and hands any PATH to docker_compose_check, as 2.x did. The .env and
+// environment interpolation half of LLM-20 is docker_compose_check's.
+func TestLedger_LLM20_2x(t *testing.T) {
+	d := physTemp(t)
+	env := baseEnv(d, nil)
+	check := func(c *invoke.Call) int {
+		for _, a := range c.Args {
+			_, _ = fmt.Fprintf(c.Stdout, "[%s]\n", a)
+		}
+		_, _ = fmt.Fprintln(c.Stderr, "checked")
+		return 3
+	}
+	for _, p := range []string{"../x", "/etc/shadow", "/proc/self", "~root/.ssh"} {
+		want := run2xFake(t, d, env, p)
+		got := runGoFake(t, check, d, env, p)
+		require.Equal(t, want, got, p)
+		require.Equal(t, "["+p+"]\n[--json]\n", got.Stdout)
+	}
+}
