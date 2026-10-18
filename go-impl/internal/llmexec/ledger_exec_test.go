@@ -104,3 +104,47 @@ func TestLedger_EXEC07(t *testing.T) {
 		}
 	}
 }
+
+// TestLedger_EXEC08 (defect, reproduced): the 2.x parser reads a pipe, a
+// line continuation and a pipe as two pipes around an empty command, while
+// bash drops the continuation first and reads ||. The words are checked
+// either way; what runs is the || list. The canonical script keeps the
+// continuation, so bash runs exactly what 2.x ran.
+func TestLedger_EXEC08(t *testing.T) {
+	cwd := t.TempDir()
+	mustWrite(t, filepath.Join(cwd, "list.txt"), "b\na\n")
+
+	lc := newLineChecker(testEnv(cwd), permissiveProbe(), map[string]bool{})
+	script, err := lc.checkAndRender("echo a |\\\n| echo b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "'echo' 'a' |\\\n| 'echo' 'b'"; script != want {
+		t.Errorf("script = %q, want %q", script, want)
+	}
+	// Both commands were parsed and checked, as two simple commands.
+	if len(lc.cmdWords) != 2 {
+		t.Errorf("checked commands = %v, want 2", lc.cmdWords)
+	}
+
+	for _, tc := range []struct {
+		line, out string
+		exit      int
+	}{
+		// A pipeline would print b; the || list prints a.
+		{"echo a |\\\n| echo b", "a\n", 0},
+		{"false |\\\n| echo b", "b\n", 0},
+		{"ls |\\\n| wc -l", "list.txt\n", 0},
+	} {
+		mineOut, mineExit, err := runMineCombined(t, tc.line, cwd, cwd)
+		if err != nil {
+			t.Errorf("%q: Build refused: %v", tc.line, err)
+			continue
+		}
+		refOut, refExit := run2x(t, tc.line, cwd, cwd)
+		if mineOut != refOut || mineExit != refExit || mineOut != tc.out || mineExit != tc.exit {
+			t.Errorf("%q:\n  mine = %q (exit %d)\n  2.x  = %q (exit %d)\n  want = %q (exit %d)",
+				tc.line, mineOut, mineExit, refOut, refExit, tc.out, tc.exit)
+		}
+	}
+}

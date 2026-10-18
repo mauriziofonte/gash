@@ -227,9 +227,6 @@ func TestRun_DanglingOperators(t *testing.T) {
 		"ls |\nls",
 		"ls &&\nls",
 		"ls ||\nls",
-		// A line continuation between two operators merges them for bash
-		// (|\<newline>| is ||), in 2.x and in the canonical script alike.
-		"ls |\\\n| wc -l",
 		// Line numbers survive continuations, comments and quoted newlines.
 		"echo a\\\nb\n;",
 		"echo a \\\n b\n;",
