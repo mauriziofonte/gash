@@ -33,7 +33,7 @@ API before rc.A.
 | | `github.com/jackc/pgx/v5` (`stdlib`) | v5.11.0 | active | same |
 | | `modernc.org/sqlite` | v1.60.1 | active (SQLite 3.53.4, pure Go) | same; also replaces the `sqlite3` client |
 | System info | `github.com/shirou/gopsutil/v4` | v4.26.9 | active | `sysinfo`, `llm_procs`, `llm_ports` fields where 2.x parsed tool text |
-| XDG | `github.com/adrg/xdg` | v0.5.3 | maintained, slow tags (last tag 2024-10, commits 2026-09) | HTE and binary store paths |
+| XDG | `github.com/adrg/xdg` | v0.5.3 | maintained, slow tags (last tag 2024-10, commits 2026-09) | test-only: a cross-check of `internal/platform`'s own resolution on Linux. On macOS the library maps the directories to `~/Library`, while `hte.md` 2 wants the same XDG tree on every platform, so the paths are resolved by `internal/platform` from the environment snapshot (lead decision, 2026-10-18) |
 | Atomic writes | `github.com/google/renameio/v2` | v2.0.2 | active, POSIX only (fine: linux and darwin targets) | rendered configs, receipts, state |
 | Locks | `github.com/gofrs/flock` | v0.13.1 | active | HTE lock, binary fetch lock in Go |
 | Shell quoting | `mvdan.cc/sh/v3/syntax` | v3.14.1 | active | `gash init bash`, compat generation, `__compat env load` |

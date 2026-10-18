@@ -308,3 +308,50 @@ func must(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
+
+func TestStrip(t *testing.T) {
+	hosts := []byte("127.0.0.1 localhost\n" + BeginMarker + "\n127.0.0.1 a.test\n" + EndMarker + "\n::1 localhost\n")
+	out, err := Strip(hosts)
+	if err != nil || string(out) != "127.0.0.1 localhost\n::1 localhost\n" {
+		t.Fatalf("%v %q", err, out)
+	}
+	if out, err := Strip([]byte("x\n")); err != nil || string(out) != "x\n" {
+		t.Fatalf("no region: %v %q", err, out)
+	}
+	if _, err := Strip([]byte(BeginMarker + "\n")); err != ErrCorruptBlock {
+		t.Fatalf("corrupt: %v", err)
+	}
+}
+
+func TestRewrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hosts")
+	orig := "127.0.0.1 localhost\n" + BeginMarker + "\n127.0.0.1 a.test\n" + EndMarker + "\n"
+	if err := os.WriteFile(path, []byte(orig), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rewrite(path, Strip); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	fi, _ := os.Stat(path)
+	if string(got) != "127.0.0.1 localhost\n" || fi.Mode().Perm() != 0o640 {
+		t.Fatalf("%q %v", got, fi.Mode())
+	}
+	if err := Rewrite(path, func(h []byte) ([]byte, error) { return Splice(h, []byte("127.0.0.1 b.test\n")) }); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); !strings.HasSuffix(string(got), BeginMarker+"\n127.0.0.1 b.test\n"+EndMarker+"\n") {
+		t.Fatalf("%q", got)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rewrite(link, Strip); err == nil {
+		t.Fatal("symlink rewritten")
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Fatalf("temporary file left: %v", entries)
+	}
+}
