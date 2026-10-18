@@ -175,6 +175,13 @@ func readTar(r io.Reader) ([]member, error) {
 // reads the tar stream it produces. A missing tool or a read error returns
 // nil (no guard), so the extraction path reports it as 2.x did.
 func readTarPiped(c *invoke.Call, tool, archive string) ([]member, error) {
+	// Stand down when the decompressor or tar is missing: the extraction
+	// path then reports it, and a missing tar never starts zstd (FILE-19).
+	for _, need := range []string{tool, "tar"} {
+		if _, err := runner.LookPath(need, c.Env.Child(), ""); err != nil {
+			return nil, nil
+		}
+	}
 	rnr := runnerFor(c)
 	pr, pw := io.Pipe()
 	go func() {
@@ -307,15 +314,7 @@ func runList(c *invoke.Call, tool string, args []string) (string, bool) {
 		Options: runner.Options{Env: c.Env.Child(), Stdout: &out, Stderr: io.Discard},
 	})
 	if err != nil || res.ExitCode != 0 {
-		// Exec captures into Result when Stdout is nil; here we gave a writer,
-		// so read the buffer regardless, but only trust a clean exit.
-		if len(res.Stdout) > 0 {
-			out.Write(res.Stdout)
-		}
 		return "", false
-	}
-	if out.Len() == 0 && len(res.Stdout) > 0 {
-		out.Write(res.Stdout)
 	}
 	return out.String(), true
 }
