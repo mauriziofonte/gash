@@ -13,12 +13,13 @@ S1 (design). No production Go is written before the operator's go-ahead in the s
 - Branch `go-refactor` created from `main` (a4fbc8b) and pushed.
 - Bash baseline: `bash tests/run.sh` → 800 passed, 0 failed, 7 skipped (807) in 33 s on the cloud VM (4 CPU, Bash 5.2.21, mawk, no gawk/sqlite3).
 - Go 1.27.2 obtained through the toolchain mechanism (`GOTOOLCHAIN=go1.27.2`); `encoding/json/v2` importable without GOEXPERIMENT and rejects invalid UTF-8 by default.
-- Userland Apache + PHP-FPM spike green on Ubuntu 24.04 container (non-root master on 127.0.0.1:80/443, HTTP/2, proxy_fcgi, graceful reload).
-- Design drafts under `go-impl/design/`.
+- Userland Apache + PHP-FPM spike green on an Ubuntu 24.04 container (non-root master on 127.0.0.1:80/443, HTTP/2, proxy_fcgi, graceful reload).
+- S1 design written: `go-impl/design/` (README with the decisions requested, architecture, layout, compat, shell, upgrade, libraries, testing, hte), `PARITY.md` (all 1095 spec tests), prompt and startup benchmarks with the 2.x numbers (`go-impl/bench/shell/`), legacy hte-cli fixtures (`go-impl/testdata/hte/legacy/`).
+- Audit of every 2.x module done; `MATRIX.md` and `LEDGER.md` are generated from per-module fragments.
 
 ## Next step
 
-Finish the S1 deliverables (design docs, MATRIX, LEDGER seed verification, PARITY skeleton), open the draft PR, wait for the operator.
+Open the S1 draft PR, then wait for the operator's go-ahead in the session. After it: apply the answers to the decisions (D-1 to D-8 in `go-impl/design/README.md`), then start the Go module (`go-impl/go.mod`, registry, contract, compat generator, `tests/run.sh --impl`).
 
 ## Gate
 
@@ -48,7 +49,11 @@ bash tests/run.sh --impl go               # same specs against the Go port behin
 | No Docker daemon at session start | `nohup dockerd >/tmp/claude-0/dockerd.log 2>&1 &` |
 | Installed Go is 1.24.7 | `GOTOOLCHAIN=go1.27.2` (checksum verification stays on) |
 | Tag pushes are rejected by the proxy | Tags are the operator's |
+| github.com web and API return 403 to plain HTTPS from the session | GitHub through the MCP tools; archived-flag checks of the libraries run in CI |
+| `vuln.go.dev` blocked | govulncheck runs in CI |
+| The per-module audit notes of S1 live only in the session and are lost when the VM is reclaimed | Everything later steps need is in `MATRIX.md`, `LEDGER.md` and `go-impl/design/`; the Bash source stays the reference |
+| Running Gash self-management functions with Gash sourced from the working checkout acts on the checkout itself (`gash.sh` sets `GASH_DIR` to its own directory): one audit run checked out `v2.1.0` here | Experiments source a copy (`git archive go-refactor \| tar -x -C DIR`) or a scratch clone, never this checkout |
 
 ## Open questions for the operator
 
-None blocking yet; S1 questions are listed in the PR description and in `go-impl/design/README.md` section "Decisions requested".
+The S1 decisions D-1 to D-8 in `go-impl/design/README.md` (each with a recommendation the work proceeds on unless the operator says otherwise). D-7 (2.1.x security release outside `go-refactor`) needs the operator: a push outside `go-refactor` and a tag are stop conditions.
