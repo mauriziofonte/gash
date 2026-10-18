@@ -11,7 +11,9 @@
 //
 // Run refuses a shell with a command string (sh -c and the like). The two
 // sanctioned Bash uses, llm_exec's canonical script and the nvm bridge, go
-// through RunBash, which names the use.
+// through RunBash, which names the use; the constant sh -c command lines
+// compiled into this package (wsl_compact's, LEDGER SYS-46) go through
+// RunScript, which takes only their name.
 //
 // Fake replaces the real runner in unit tests: it checks each start
 // against an expected argv, environment and stdin, and returns scripted
@@ -36,6 +38,13 @@ type Runner interface {
 	Run(ctx context.Context, c Cmd) (Result, error)
 	// RunBash runs one of the sanctioned Bash scripts and waits for it.
 	RunBash(ctx context.Context, b Bash) (Result, error)
+	// RunScript runs one of the registered constant sh -c command lines
+	// and waits for it.
+	RunScript(ctx context.Context, s Script) (Result, error)
+	// Start starts c in the background and returns once it runs.
+	Start(ctx context.Context, c Cmd) error
+	// StartPTY starts c on a new pseudo-terminal.
+	StartPTY(ctx context.Context, c Cmd) (PTY, error)
 }
 
 // Options are the parts of a process start shared by Cmd and Bash.
