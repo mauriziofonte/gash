@@ -565,7 +565,12 @@ platform's install command), `platform_unsupported` (FATAL),
 `receipt_mismatch` (FATAL), `conflicting_options` (RETRY: a flag pair that
 contradicts itself, such as `--force-https` with `--no-https`),
 `invalid_state` (STOP: a state file that does not parse or that the strict
-validation refuses; a human fixes the file). Partial failure never exits 0
+validation refuses; a human fixes the file), `openssl_not_found` (FATAL, the
+hint names the platform's install command, like `apache_not_found`),
+`invalid_ports` and `invalid_autostart` (RETRY: as `invalid_profile`, every
+enum flag has its `invalid_<flag>`, whose details name the value and the
+accepted ones), `php_not_enabled` (RETRY: a PHP command on a site without
+PHP, hint `site modify --php VERSION`) (HTE-72). Partial failure never exits 0
 (hte-cli defect).
 
 Rules where the operator may choose otherwise (LEDGER items marked
