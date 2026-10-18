@@ -144,7 +144,10 @@ environment unless 2.x passed it through), stdin for secrets and SQL, no
 recording fake replaces it in unit tests.
 
 External tool policy (MUST NOT 8: results never depend on which awk, grep or
-find is installed):
+find is installed). Where a 2.x result depended on an optional tool (`jq`,
+`rg`, `gawk`, `yq` flavor, compose v2 with jq), Go always behaves as 2.x did
+on the documented path with the tool present, and the degraded path becomes a
+LEDGER item (forced divergence or defect):
 
 | Area | 3.0 | Why |
 |---|---|---|
@@ -155,9 +158,10 @@ find is installed):
 | git | The `git` CLI with the 2.x hardening flags | Parity with the user's config, credentials and hooks policy (PRD 9) |
 | docker, compose | The `docker` CLI for everything 2.x ran through it; registry digests through `go-containerregistry` | `docker compose` has no Go API; the CLI keeps the user's contexts, config and credential helpers. The moby client is not needed (`libraries.md`) |
 | ssh, scp, rsync, ssh-add | The CLIs; `ssh-add` driven through a PTY (`creack/pty`) | User's ssh config, agents and keys; private keys never parsed in-process |
-| systemctl, journalctl, ps, ss/netstat/lsof, ip, kill | As 2.x where the output is the contract; `gopsutil` and `/proc` where 2.x parsed text into fields (`sysinfo`, `llm_procs`, `llm_ports`) | Decided per function in MATRIX |
+| systemctl, journalctl, ps, pgrep, ss/netstat, lsof, df, ip | The CLIs, as 2.x: their output is shown or parsed (in Go, deterministically) and their absence is part of the contract (`ports_tool_not_found`, `port_kill` without lsof). `gopsutil` only where 2.x read `/proc` or `sysctl` itself (`sysinfo` sections) | Same data, same dependency errors, the spec stubs stay valid. Decided per function in MATRIX |
+| kill | `kill(2)` | No output of its own to preserve; specs that faked `kill` are rewritten (`testing.md` 2.3) |
 | nvm | Bash (it is a shell function), through the generated shim | `nvm use` changes the caller's PATH |
-| curl | `net/http` | Proxies and CA from the environment as curl does (`HTTPS_PROXY`, `SSL_CERT_FILE`) |
+| curl | `net/http` | Secrets (API keys, registry tokens) stay in-process instead of reaching a child through a config descriptor; no dependency on curl or `~/.curlrc`. Proxies and CA from the environment (`HTTPS_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`); 2.x timeouts and error taxonomy kept |
 
 ## 8. Safety core
 

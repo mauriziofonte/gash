@@ -99,53 +99,93 @@ files:
 * `IncludeOptional` of the global overlay, then of every enabled site's
   rendered vhosts.
 
-Per managed site (`render/current/sites/<domain>.conf`):
+Per managed site (`render/current/sites/<domain>.conf`). The directives are
+hte-cli 1.1.1's (`ApacheManager.php:386-497`, fixture
+`templates/v2-vhost-forced.conf`) minus its defects: no Apache 2.2 `order`/
+`allow`, no weak `SSLCipherSuite` (server-level TLS defaults instead), quoted
+paths, logs outside the document root, 307 instead of 301:
 
 ```apache
 <VirtualHost 127.0.0.1:80>
+    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay below.
     ServerName shop.test
     ServerAlias www.shop.test
     DocumentRoot "/home/me/src/shop/public"
-    <Directory "/home/me/src/shop/public">
-        Options FollowSymLinks
+    ServerAdmin admin@localhost.net
+    UseCanonicalName Off
+    Options -ExecCGI -Includes
+    RemoveHandler cgi-script .cgi .pl .plx .ppl .perl
+    ErrorLog "/home/me/.local/state/gash/hte/logs/shop.test/error.log"
+    CustomLog "/home/me/.local/state/gash/hte/logs/shop.test/access.log" combined
+    CustomLog "/home/me/.local/state/gash/hte/logs/shop.test/bytes.log" "%{%s}t %I .\n%{%s}t %O ."
+
+    Protocols h2 http/1.1
+
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/run/user/1000/gash-hte/8.3-1a2b3c4d5e.sock|fcgi://localhost/"
+    </FilesMatch>
+
+    <IfModule mod_brotli.c>
+        AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml text/css text/javascript application/x-javascript application/javascript application/json application/x-font-ttf application/vnd.ms-fontobject image/x-icon
+    </IfModule>
+
+    <Directory "/home/me/src/shop/public/">
+        Options -Indexes +FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
-    DirectoryIndex index.php index.html
-    <FilesMatch "\.php$">
-        SetHandler "proxy:unix:/run/user/1000/gash-hte/8.3-1a2b3c4d5e.sock|fcgi://shop.test"
-    </FilesMatch>
-    AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css text/javascript application/javascript application/json image/svg+xml
-    ErrorLog  "/home/me/.local/state/gash/hte/logs/shop.test/error.log"
-    CustomLog "/home/me/.local/state/gash/hte/logs/shop.test/access.log" combined
-    # force_https = true adds (requests from 127.0.0.1 and ::1 are not redirected, as in hte-cli):
+
+    # force_https = true (requests from 127.0.0.1 and ::1 are not redirected, as in hte-cli):
     #   RewriteEngine On
     #   RewriteCond %{HTTPS} off
     #   RewriteCond %{REMOTE_ADDR} !^127\.0\.0\.1$
     #   RewriteCond %{REMOTE_ADDR} !^::1$
-    #   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=307,L]
+    #   RewriteRule ^/(.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=307,L]
+
     IncludeOptional "/home/me/.config/gash/hte/sites/shop.test.apache.conf"
 </VirtualHost>
 ```
 
-`Options` carries neither `Indexes` (no directory listing), `ExecCGI` (CGI
-disabled) nor `Includes` (SSI disabled). The HTTPS vhost repeats the block on
-`:443` with `SSLEngine on` and the site's certificate. Every path written into
-a config file is quoted and escaped by one function (`quoteApacheArg`: `"`
-and `\` escaped, any control character, newline included, rejected at
-validation), so a document root with spaces works and a newline cannot inject
-configuration (hte-cli defect). Redirects use 307, not 301 (browsers cache
-301; hte-cli defect).
+The HTTPS vhost is the same block on `127.0.0.1:443` with hte-cli's
+`<FilesMatch "\.(cgi|shtml|phtml|php)$"> SSLOptions +StdEnvVars`, its
+`ssl-` log names and HTTPS bytes-log format, `SSLEngine on` and the site's
+`SSLCertificateFile`/`SSLCertificateKeyFile`. When IPv6 loopback exists both
+vhosts also answer on `[::1]`, so the `::1` bypass condition is live (in
+hte-cli it was dead code). Every path written into a config file is quoted
+and escaped by one function (`quoteApacheArg`: `"` and `\` escaped; any
+control character, newline included, is rejected at validation), so a
+document root with spaces works and a newline cannot inject configuration
+(hte-cli defect). `${APACHE_LOG_DIR}` is never used: the userland master has
+no Debian `envvars`.
 
 Note for triage (LEDGER "HTE design delta"): with loopback-only binding every
 client address is `127.0.0.1` or `::1`, also for a Windows browser reaching
 WSL2 through localhost forwarding, so the hte-cli bypass makes force-HTTPS
-redirect nothing. The design keeps the bypass as PRD 6.5 requires and records
-the consequence as an operator decision.
+redirect nothing. hte-cli had the same effect in practice (its vhosts only
+matched connections to `127.0.0.1`). The design keeps the bypass as PRD 6.5
+requires and records the consequence as an operator decision (D-2).
 
-`site create` and `site modify` warn (stderr, and a `warnings` array in
-`--json`) when the document root's `.htaccess` has its own HTTPS redirect
-(`RewriteRule` or `Redirect` to `https://`).
+`site create`, `site modify`, `site show`, `doctor` and `migrate` warn
+(stderr, and a `warnings` array in `--json`) when the document root's
+`.htaccess` has its own HTTPS redirect: a `RewriteRule` or `Redirect` to
+`https://`, including the `%{HTTP:X-Forwarded-Proto}` form that hte-cli's
+regex missed (hte-cli warned only in `fix`).
+
+### 3.1 Certificates
+
+One self-signed certificate per site, SAN `<domain>` and `*.<domain>` (which
+covers `www.`), CN `<domain>`, generated in-process with `crypto/x509` and
+`crypto/ecdsa` (P-256; hte-cli: RSA 2048 through a generated script run as
+root from `/tmp`), validity 10 years (hte-cli: 30), `basicConstraints
+CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. The key is
+written once (0600, in a 0700 directory, atomic rename) and never read back
+or parsed by gash; the pair is validated by Apache's config test. No
+passphrase (a userland master cannot prompt; hte-cli's passphrase was fake
+anyway, `-nodes`). `cert renew` replaces both files and reloads; `doctor`
+warns 30 days before expiry. No local CA, no mkcert (PRD 2). Each site's
+files live in their own directory, so no operation can touch another site's
+certificate (hte-cli's `rm -rf <dir>/<domain>.*` deleted `shop.test.it`'s
+files when creating `shop.test`).
 
 ## 4. PHP-FPM
 
@@ -159,22 +199,65 @@ the consequence as an operator decision.
   (+ `/etc/php-legacy/php.ini`), AUR `php-fpmXY` names; Homebrew
   `<prefix>/opt/php@X.Y/sbin/php-fpm` and `<prefix>/opt/php/sbin/php-fpm` +
   `<prefix>/etc/php/X.Y/php.ini`. Results are cached in the state directory,
-  keyed by binary path, size and mtime.
+  keyed by binary path, size and mtime. hte-cli counted a bare `/etc/php/X.Y`
+  directory as installed, so a CLI-only version became the default and its
+  FPM restart failed (design delta).
 * Installing PHP versions or extensions is out of scope: `doctor` reports what
   is missing and prints the platform's install command.
-* One FPM master per version in use: `render/current/fpm/<X.Y>/php-fpm.conf`
-  (`[global]` pid, error_log, `daemonize = yes`) including one pool file per
-  site of that version.
-* One pool per site: `[<domain>]`, `listen = <run>/<X.Y>-<hash>.sock`,
-  `listen.mode = 0660` (the socket is created by the user's master, so it is
-  owned by the user), `pm.*`, `php_admin_value`/`php_admin_flag` and
-  `disable_functions` from the profile with the exact values of hte-cli
-  `PhpProfiles.php` (copied into `internal/hte/profiles` with a golden test
-  against the PHP source), then the global per-version overlay, then the
-  site's `[php_ini]`; `php_admin_value[error_log]` in the logs directory;
-  `security.limit_extensions = .php`; `catch_workers_output = yes`. Each pool
-  starts with `; Managed by gash hte. Profile: <name>` (the marker the old
-  pools lacked).
+* One pool per site, `render/current/fpm/<X.Y>/pools/<domain>.conf`:
+
+  ```ini
+  [shop.test]
+  ; Managed by gash hte. Profile: dev
+  listen = /run/user/1000/gash-hte/8.3-1a2b3c4d5e.sock
+  listen.mode = 0660
+  security.limit_extensions = .php
+  ; ...the profile block, verbatim from hte-cli (below)...
+  slowlog = /home/me/.local/state/gash/hte/logs/shop.test/php-slow.log
+  php_admin_value[error_log] = /home/me/.local/state/gash/hte/logs/shop.test/php-error.log
+  ; ...then the global overlay of 8.3, then the site's [php_ini]
+  ```
+
+  No `user`, `group`, `listen.owner` or `listen.group`: the master runs as the
+  user, so the socket and the workers are the user's (php-fpm ignores those
+  directives when it is not root). hte-cli wrote the invoking user there,
+  `root` when `modify` ran as root, which php-fpm refused (hte-cli defect).
+* Profiles `dev`, `staging`, `hardened` carry the exact values of hte-cli
+  `PhpProfiles.php` (unchanged since 1.1.0), copied into
+  `internal/hte/profiles` with a golden test against the rendered hte-cli
+  pools (`testdata/hte/templates/v2-pool-*.conf`):
+
+  | Setting | dev | staging | hardened |
+  |---|---|---|---|
+  | `php_admin_value[disable_functions]` | `apache_child_terminate,apache_get_modules,apache_getenv,apache_note,apache_setenv` | dev + `dl,highlight_file,show_source,phpinfo` | staging + `exec,shell_exec,system,passthru,popen,proc_open,proc_close,proc_get_status,proc_terminate,pcntl_exec,pcntl_fork,pcntl_signal,symlink` |
+  | `php_admin_flag[allow_url_fopen]` | off | off | off |
+  | `pm` / `max_children` / `start_servers` / `min_spare_servers` / `max_spare_servers` | dynamic / 5 / 2 / 1 / 3 | same | same |
+  | `pm.max_requests` | (none) | 500 | 500 |
+  | `chdir`, `catch_workers_output`, `request_terminate_timeout` | `/`, yes, 180s | same | same |
+  | `php_flag[display_errors]`, `php_admin_flag[log_errors]` | off, on | same | same |
+  | `post_max_size`, `upload_max_filesize` (admin) | 128M | 128M | 32M |
+  | `memory_limit` (admin and plain value) | 1024M | 1024M | 256M |
+  | `php_value[short_open_tag]` | On | On | On |
+  | `php_admin_value[open_basedir]` | (none) | `<docroot>:/var/lib/php:/usr/lib/php:/usr/share/php:/tmp:/dev/urandom` | same |
+  | `allow_url_include`, `session.cookie_httponly`, `session.use_strict_mode`, `session.use_only_cookies` (admin flags) | (none) | off, on, on, on | same |
+  | `auto_prepend_file`, `auto_append_file` (admin values) | (none) | (none) | `""`, `""` |
+  | `php_admin_flag[expose_php]`, `max_execution_time`, `max_input_time` | (none) | (none) | off, 30, 60 |
+
+  Rendering order and the `php_admin_flag`/`php_admin_value` choice follow
+  `PhpProfiles.php:233-246`. Two changes, both in the LEDGER design delta:
+  the `slowlog` and `error_log` paths move to the logs directory (hte-cli put
+  them in the document root, where they could be served), and when the
+  platform's default `session.save_path` is not writable by the user (Fedora's
+  `/var/lib/php/session` is group `apache`), the pool sets a per-version
+  directory under `$XDG_STATE_HOME/gash/hte/php/<X.Y>/sessions` and appends it
+  to `open_basedir`. `slowlog` stays without `request_slowlog_timeout`, as in
+  hte-cli (an inert setting, listed as a decision item).
+* The global FPM master per version, `render/current/fpm/<X.Y>/php-fpm.conf`:
+  `[global]` with `pid`, `error_log` in the logs directory, `daemonize = yes`,
+  then `include=` of that version's pools. It uses the platform's `php.ini`
+  for that version (discovered above) and the global overlay
+  `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>.ini`, passed with `-c`/`PHP_INI_SCAN_DIR`
+  so the system files are read, never written.
 
 ## 5. Lifecycle and supervision
 
@@ -343,16 +426,47 @@ directory and `.info` files, the hosts file) and classifies every vhost:
 | Malformed | Marker present, domain or socket missing | Not imported; reported |
 | Raw | No marker (reverse proxies, hand-written vhosts) | Import as `kind = raw`: system paths and `${APACHE_LOG_DIR}` rewritten, certificates copied, validated by the config test; failures stay in the system and are reported |
 
+Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
+1.1.1, `ApacheManager.php:50-143`), made strict:
+
+1. Candidates: every `*.conf` under the platform's vhost directories
+   (recursive, as hte-cli), classified by marker; a file with a marker but no
+   parseable `SetHandler "proxy:unix:.../php<X.Y>-fpm-<domain>.sock|..."` is
+   Malformed (hte-cli 1.1.0 crashed on those, 1.1.1 skipped them).
+2. Identity: the socket's domain, cross-checked against `ServerName`
+   (different: reported, not imported). Domains are compared
+   case-insensitively; hte-cli kept `--domain` verbatim, so `App.test` and
+   `app.test` can both exist (reported as duplicates).
+3. Document root: quoted or unquoted `DocumentRoot`, recovered from
+   `<Directory ...>` (always `<docroot>/`) when an unquoted path with spaces
+   was truncated.
+4. HTTPS: a `:443` vhost plus both `SSLCertificate*File` lines (the 1.1.1
+   rule); forced: either force comment; profile: `; Profile:` lowercased,
+   `dev` when absent (V1 pools) with a note, `dev` with a warning when unknown.
+5. Pool: the exact path `/etc/php/<X.Y>/fpm/pool.d/<domain>.conf` (or the
+   platform equivalent) whose first section is `[<domain>]`. Never hte-cli's
+   substring search, which took any pool mentioning `[<domain>]`, even in a
+   comment. The pool's own values are compared with the profile and the
+   differences reported (they go to the site's `[php_ini]` with `--keep-pool-values`).
+6. Certificates: exactly `<certdir>/<domain>.crt` and `.key` (`.info`
+   ignored); never a `<domain>.*` glob. The key is root 0400: the root step
+   copies it into the user's certificate directory, or `--reissue-certs`
+   makes a new one.
+7. Hosts: lines marked `# hte-cli` give the names to put in the managed
+   block. The legacy lines themselves are left untouched (they resolve the
+   same names to the same address): migrate never deletes or rewrites a hosts
+   line outside its own block.
+
 Also handled: duplicate domains (both reported; the user picks one with
 `--site` or excludes the other), a vhost using another site's pool socket
 (both sites get their own pool; reported), custom `Listen` ports (kept on the
 site as extra listen ports in the high range, reported when below 1024 and not
-80/443), unmarked vhosts using HTE certificates, orphan pools, certificates
-and `.info` files and index gaps (reported, never deleted), root-owned 0400
-private keys (copied by the root step into the user's certificate directory,
-or a new certificate when `--reissue-certs`), a system Apache whose workers
-already run as the user through `APACHE_RUN_USER` in `envvars` (reported; no
-change needed).
+80/443), unmarked vhosts using HTE certificates (imported as raw, certificate
+copied), orphan pools, certificates and `.info` files and index gaps
+(reported, never deleted), IP addresses used as domains by hte-cli 1.0.8+
+(reported, not imported: a site name must be a hostname), a system Apache whose
+workers already run as the user through `APACHE_RUN_USER` in `envvars`
+(reported; it changes nothing, the master is still root).
 
 `--apply`, per site, idempotent:
 
@@ -366,9 +480,15 @@ change needed).
    equivalent; the files are moved to `/var/lib/gash-hte/archive/<ts>/`, never
    deleted), each change recorded in the receipt.
 
-The exact historical templates of every variant are recovered from hte-cli git
-history into `testdata/hte/legacy/<variant>/` fixtures; migrate is proven on
-all of them (PRD 11.1).
+The exact historical templates of every variant were recovered at S1 by
+running the real hte-cli 1.0.12 and 1.1.1 template code (sources from git
+history and the shipped phars), with what hte-cli 1.1.0 and 1.1.1 read back
+from each tree. They move into `testdata/hte/legacy/<variant>/` (V1,
+V1-fixed, V2, Broken-bypass, Malformed, plus templates and the certificate
+script), and migrate is proven on all of them (PRD 11.1). No tagged hte-cli
+release wrote the Broken-bypass format (it matches hte-cli's own `fix`
+regression test, probably an unreleased 1.0.13): the fixture is built from
+that test.
 
 ## 11. Platforms and verification
 
