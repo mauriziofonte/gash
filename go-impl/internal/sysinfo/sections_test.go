@@ -252,3 +252,21 @@ func TestSectionsLLM(t *testing.T) {
 	}
 	require.Empty(t, fx.sudo(t))
 }
+
+// The identity probes outside etcTree: the container marker of PID 1's
+// environment (read as root when elevated), OpenVZ, and WSL with its
+// config in the compact form only.
+func TestIdentityProbes(t *testing.T) {
+	base := "=== IDENTITY ===\nKernel=6.1.0\nArch=x86_64\nHostname=web1.example.com\nUptime=up 3 days, 2 hours\nVirtualization=kvm\n"
+	fx := newFixture(t, tree{"proc/1/environ": "PATH=/bin\x00HOME=/\x00container=lxc\x00", "proc/vz/": ""})
+	require.Equal(t, result{base + "Container=container=lxc\n", "", 0}, fx.call(t, nil, "identity", "--llm"))
+	fx.uid = 1000
+	fx.env["SUDO_CACHED"] = "0"
+	require.Equal(t, result{base + "Container=container=lxc\n", "", 0}, fx.call(t, nil, "identity", "--llm"))
+	require.Equal(t, "sudo -n true\nsudo cat R/proc/1/environ\n", fx.sudo(t))
+
+	fx = newFixture(t, tree{"proc/1/environ": "PATH=/bin\x00", "proc/vz/": "", "etc/wsl.conf": "[boot]\nsystemd=true", "etc/ubwsl-installed": ""})
+	require.Equal(t, result{base + "Container=OpenVZ\nWSL=yes\nWSL Marker=ubwsl-installed\nWSL_CONF:\n[boot]\nsystemd=true", "", 0},
+		fx.call(t, nil, "identity", "--llm"))
+	require.NotContains(t, fx.call(t, nil, "identity").out, "WSL_CONF")
+}
