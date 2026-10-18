@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 73 | 174 | 115 |
+| Defects | 1 | 25 | 75 | 74 | 175 | 115 |
 | Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
-| **All** | 3 | 36 | 128 | 249 | **416** | 244 |
+| **All** | 3 | 36 | 128 | 250 | **417** | 244 |
 
 Critical and high items:
 
@@ -347,6 +347,7 @@ Critical and high items:
 | [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
 | [TEST-10](#test-10) | Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice | Test harness | low | no |
 | [TEST-11](#test-11) | Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes | Test harness | low | no |
+| [TEST-12](#test-12) | The settings leak check also scans the random temp path, which can hold a checked word | Test harness | low | no |
 
 ### llm_* agent functions
 
@@ -3508,6 +3509,24 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness: a test writes the HTTP answers it wants (method, URL pattern, status, headers, body, or "unreachable") to a route file named by `MOCK_CURL_ROUTES`. `tests/mocks/bin/curl` serves routed answers with curl's `-f`, `-I` and `-o` semantics (Bash mode), and the HTTPS fake serves the same file (Go mode). The per-test curl fakes listed above become route files; assertions stay byte for byte the same and the Bash reference stays 807/0. Without `MOCK_CURL_ROUTES` the mock and the fake answer as before. |
 | Fix recipe (3.0) | n/a after cutover (testscript, with a local HTTPS server per script). |
 | Proving test | The converted tests pass in both modes; a route answering 404 gives exit 22 from `curl -f` in Bash mode and the binary's exit 22 path in Go mode. |
+| Status | open |
+
+<a id="test-12"></a>
+#### TEST-12 · The settings leak check also scans the random temp path, which can hold a checked word
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A CI, Bash 5.0 job) |
+| Area | Test harness |
+| Bash location | `tests/specs/settings_spec.sh` "unknown settings and malformed lines warn with a line number, never any content" |
+| Observed behavior | The test checks that no warning repeats content of the settings file (words such as `box`, `ftp`, `prod`, `pass`), but every warning names the file, whose path comes from `mktemp -d`. A random name such as `tmp.zw8oyhboxu` holds `box`, and the test fails although nothing leaked. Seen once in CI. |
+| Reproduction | the test with `TMPDIR` set to a directory named `boxprod` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the spec: the leak words are checked in the output with the temp path replaced by `TMP`; the line-number checks and the `~/` check still read the output as printed. |
+| Fix recipe (3.0) | n/a after cutover (testscript, fixed work directory). |
+| Proving test | The test passes with `TMPDIR` named `boxprod` and still fails when a warning prints a value from the file. |
 | Status | open |
 
 ## Forced divergences
