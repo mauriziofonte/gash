@@ -3968,7 +3968,7 @@ Critical and high items:
 | Reproduction | the reproduction kept outside the repository: `sysinfo mail` in headless mode with such a COLUMNS value whose command only prints a marker on stderr; the marker is printed twice. Harmless check: `COLUMNS=abc` gives an empty section rule. |
 | Severity | medium |
 | Public-contract impact | no |
-| rc.A behavior | COLUMNS is used only when it is a decimal integer; anything else is treated as unset (80), so the rule is 60 glyphs. It is never evaluated. |
+| rc.A behavior | COLUMNS is used only when it is a run of digits (read as 2.x arithmetic reads digits: a leading 0 is octal); anything else is treated as unset (80), so the rule is 60 glyphs. It is never evaluated. The generated `__gash_section` shim follows the same rule. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/ui` (one COLUMNS parser for every primitive); the generated `lib/core/output.sh` shim checks `[[ $COLUMNS =~ ^[0-9]+$ ]]` before any arithmetic. |
 | Proving test | `TestLedger_SYS34` in `internal/ui` and `testdata/script/ledger_sys34.txtar` (that COLUMNS → no `INJECTED`, a 60-glyph rule) |
 | Status | open |
