@@ -80,7 +80,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Interactive AI chat. Provider: claude or gemini (default: first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
-		ShellVars:         []string{"GASH_AI_DEBUG", "HOME", "__AI_LAST_EXIT"},
+		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "__AI_LAST_EXIT"},
 		Env:               []string{"BASH_VERSION", "EUID", "GASH_AI_DEBUG", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "ZSH_VERSION", "__AI_LAST_EXIT", "git"},
 		CompletionComment: "AI provider completion (first argument only)",
 		Completion: "" +
@@ -174,7 +174,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "ai_query", Usage: "ai_query [provider] \"query\"", Description: "Non-interactive AI query. Provider is optional (uses first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
-		ShellVars:         []string{"GASH_AI_DEBUG", "HOME", "__AI_LAST_EXIT"},
+		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "__AI_LAST_EXIT"},
 		Env:               []string{"BASH_VERSION", "EUID", "GASH_AI_DEBUG", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "ZSH_VERSION", "__AI_LAST_EXIT", "git"},
 		CompletionComment: "AI provider completion (first argument only)",
 		Completion: "" +
@@ -1153,7 +1153,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color]", Description: "Run health checks on your Gash installation (--timing: what each file costs at startup)."},
 		Settings:          []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_REPLACE_TOOLS", "GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_NVM", "GASH_PATH_ADD"},
-		ShellVars:         []string{"HOME"},
+		ShellVars:         []string{"BASH", "BASH_VERSION", "HOME"},
 		Env:               []string{"BASH_VERSION", "COLUMNS", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "HOME", "NO_COLOR"},
 		CompletionComment: "gash_doctor: --timing, --no-color",
 		Completion: "" +
@@ -2352,7 +2352,7 @@ var functions = []Function{
 				"  GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)",
 		},
 		Fallback:  &Usage{Program: "llm_exec", Usage: "llm_exec <command>", Description: "Execute command safely: read-only allowlist, child shell, no history"},
-		ShellVars: []string{"HOME"},
+		ShellVars: []string{"BASH", "HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "git", "in"},
 	},
 	{
