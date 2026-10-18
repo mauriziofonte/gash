@@ -19,6 +19,8 @@ type Printer struct {
 	// had shadowed it (--no-color, __GASH_COLOR_OFF_LOCALS).
 	P term.Palette
 	G term.Glyphs
+	// DebugOn is GASH_DEBUG=1 (__gash_debug prints only then).
+	DebugOn bool
 }
 
 // NewPrinter returns the printer of a call: the runtime gate of t, its
@@ -29,7 +31,7 @@ func NewPrinter(w io.Writer, t *term.Term, noColor bool) Printer {
 	if noColor {
 		p = term.NoColors
 	}
-	return Printer{W: w, Color: t.UseColor(), P: p, G: t.Glyphs()}
+	return Printer{W: w, Color: t.UseColor(), P: p, G: t.Glyphs(), DebugOn: t.Getenv("GASH_DEBUG") == "1"}
 }
 
 // emit is __gash_emit COLOR COLORED_LABEL PLAIN_LABEL MESSAGE.
@@ -60,4 +62,54 @@ func (p Printer) Hint(msg string) {
 		return
 	}
 	_, _ = io.WriteString(p.W, "Hint: "+msg+"\n")
+}
+
+// Note is __gash_note: "<glyph> TEXT" on a color terminal, "TEXT"
+// otherwise.
+func (p Printer) Note(msg string) {
+	if p.Color {
+		_, _ = io.WriteString(p.W, p.P.Info+p.G.Info+p.P.Off+" "+msg+"\n")
+		return
+	}
+	_, _ = io.WriteString(p.W, msg+"\n")
+}
+
+// Step is __gash_step CURRENT TOTAL MESSAGE: "[CURRENT/TOTAL] MESSAGE".
+func (p Printer) Step(current, total, msg string) {
+	if p.Color {
+		_, _ = io.WriteString(p.W, p.P.Primary+"["+current+"/"+total+"]"+p.P.Off+" "+msg+"\n")
+		return
+	}
+	_, _ = io.WriteString(p.W, "["+current+"/"+total+"] "+msg+"\n")
+}
+
+// Debug is __gash_debug: "Debug: MESSAGE", only with GASH_DEBUG=1.
+func (p Printer) Debug(msg string) {
+	if !p.DebugOn {
+		return
+	}
+	p.emit(p.P.Muted, p.G.Info+" Debug:", "Debug:", msg)
+}
+
+// Usage is __gash_usage: "Usage: TEXT" after a usage error.
+func (p Printer) Usage(msg string) { p.emit(p.P.Info, p.G.Info+" Usage:", "Usage:", msg) }
+
+// SSH is __gash_ssh MESSAGE [COLOR]: "SSH: MESSAGE", with the glyph and
+// color of COLOR (info, the default for "", success, warning, error) on a
+// color terminal.
+func (p Printer) SSH(msg, color string) {
+	if !p.Color {
+		_, _ = io.WriteString(p.W, "SSH: "+msg+"\n")
+		return
+	}
+	c, g := p.P.Info, p.G.Info
+	switch color {
+	case "success":
+		c, g = p.P.Success, p.G.OK
+	case "warning":
+		c, g = p.P.Warning, p.G.Warn
+	case "error":
+		c, g = p.P.Error, p.G.Err
+	}
+	_, _ = io.WriteString(p.W, c+g+p.P.Off+" "+p.P.Primary+"SSH:"+p.P.Off+" "+msg+"\n")
 }
