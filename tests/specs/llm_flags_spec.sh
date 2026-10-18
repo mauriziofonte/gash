@@ -24,7 +24,7 @@ it "--help and -h work anywhere on the line" bash -c '
 
 it "functions without options reject them; extra arguments are refused" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"
@@ -83,7 +83,7 @@ it "llm_find PATTERN --contains honours PATTERN, with rg and with grep alike" ba
 
 it "llm_procs prints one compact JSON array" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   export GASH_HEADLESS=1
   source "$GASH_TEST_ROOT/gash.sh"
   out="$(llm_procs)"
@@ -105,7 +105,7 @@ it "llm_procs --name leaves out the calling shell, its parents and their subshel
 
 it "llm_env hides secret names and masks token values" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"

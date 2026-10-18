@@ -4,7 +4,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # shellcheck source=tests/gash-test.sh
 source "$ROOT_DIR/tests/gash-test.sh"
-gash_source_all "$ROOT_DIR"
 
 describe "path_add"
 
@@ -160,18 +159,14 @@ it "__gash_download saves the file and removes it when curl fails" bash -c '
   source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
   HOME="$(mktemp -d)"; trap "rm -rf $HOME" EXIT
   mkdir -p "$HOME/bin"
-  cat > "$HOME/bin/curl" <<EOF
-#!/usr/bin/env bash
-out=""; head=0
-while [[ \$# -gt 0 ]]; do case "\$1" in -o) out="\$2"; shift ;; -fsIL) head=1 ;; esac; shift; done
-if ((head)); then printf "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"; exit 0; fi
-[[ -n "\${CURL_FAIL-}" ]] && { echo "curl: (22) 404" >&2; : > "\$out"; exit 22; }
-printf hello > "\$out"
-EOF
-  chmod +x "$HOME/bin/curl"
+  ln -s "$ROOT/tests/mocks/bin/curl" "$HOME/bin/curl"
+  # Answers of tests/mocks/bin/curl (and of the HTTPS fake in Go mode).
+  printf "GET https://example.test/f 200 hello\n" > "$HOME/routes"
+  printf "HEAD * 200\n  Content-Length: 5\n* * 404\n" > "$HOME/routes-fail"
+  export MOCK_CURL_ROUTES="$HOME/routes"
   PATH="$HOME/bin:$PATH"
   err="$(__gash_download https://example.test/f "$HOME/f" 2>&1 >/dev/null)"
   [[ "$(cat "$HOME/f")" == "hello" && "$err" == *"[5 B]"* && "$err" == *"Fetched 5 B"* ]]
-  rc=0; err="$(CURL_FAIL=1 __gash_download https://example.test/g "$HOME/g" 2>&1)" || rc=$?
+  rc=0; err="$(MOCK_CURL_ROUTES="$HOME/routes-fail" __gash_download https://example.test/g "$HOME/g" 2>&1)" || rc=$?
   [[ $rc -eq 22 && ! -e "$HOME/g" && "$err" == *"Download failed"* ]]
 '

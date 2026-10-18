@@ -9,10 +9,13 @@
 // its own CA, which the run trusts through SSL_CERT_FILE. Nothing leaves
 // the machine.
 //
-// The mock's knobs (MOCK_CURL_ERROR, MOCK_CURL_AI_RESPONSE, ...) are
+// The mock's knobs (MOCK_CURL_ERROR, MOCK_CURL_AI_RESPONSE, ...) and the
+// route file of MOCK_CURL_ROUTES (format at the top of the mock) are
 // variables the test exported for curl; the fake reads them from the
 // environment of the process at the other end of the connection
-// (/proc/net/tcp and /proc/PID/environ, Linux only). MOCK_CURL_LOG gets a
+// (/proc/net/tcp and /proc/PID/environ, Linux only). An unreachable
+// route refuses the CONNECT (502) when it covers the whole host, and
+// otherwise drops the connection after the request. MOCK_CURL_LOG gets a
 // curl-like line per request (method, Accept headers, URL; never another
 // header, so no credential) and a "body:" line, as the mock wrote.
 //
@@ -190,11 +193,20 @@ func (f *fake) conn(c net.Conn) {
 	if host == "" {
 		host = req.Host
 	}
-	_, _ = io.WriteString(c, "HTTP/1.1 200 Connection established\r\n\r\n")
 	name, port, err := net.SplitHostPort(host)
 	if err != nil {
 		name, port = host, "443"
 	}
+	authority := name
+	if port != "443" {
+		authority = net.JoinHostPort(name, port)
+	}
+	if path := env["MOCK_CURL_ROUTES"]; path != "" && refusesTunnel(path, "https://"+authority) {
+		// The host is unreachable: refuse the tunnel, as a proxy does.
+		_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+		return
+	}
+	_, _ = io.WriteString(c, "HTTP/1.1 200 Connection established\r\n\r\n")
 	cert, err := f.leaf(name)
 	if err != nil {
 		return
@@ -202,10 +214,6 @@ func (f *fake) conn(c net.Conn) {
 	tc := tls.Server(&bufConn{Conn: c, r: br}, &tls.Config{Certificates: []tls.Certificate{*cert}, NextProtos: []string{"http/1.1"}})
 	if err := tc.Handshake(); err != nil {
 		return
-	}
-	authority := name
-	if port != "443" {
-		authority = net.JoinHostPort(name, port)
 	}
 	tbr := bufio.NewReader(tc)
 	first, err := http.ReadRequest(tbr)
@@ -233,6 +241,10 @@ func (f *fake) loop(w net.Conn, br *bufio.Reader, env map[string]string, req *ht
 			_, _ = io.Copy(io.Discard, br)
 			return
 		}
+		if r.drop {
+			// Unreachable: no answer at all.
+			return
+		}
 		resp := &http.Response{
 			StatusCode: r.status, ProtoMajor: 1, ProtoMinor: 1, Request: req,
 			Header: http.Header{}, ContentLength: int64(len(r.body)),
@@ -243,6 +255,9 @@ func (f *fake) loop(w net.Conn, br *bufio.Reader, env map[string]string, req *ht
 		}
 		if req.Method == http.MethodHead {
 			resp.ContentLength = -1
+			if r.length > 0 {
+				resp.ContentLength = r.length
+			}
 			resp.Body = http.NoBody
 		}
 		var out bytes.Buffer

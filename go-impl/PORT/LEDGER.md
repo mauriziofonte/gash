@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 73 | 174 | 115 |
-| Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
+| Defects | 1 | 25 | 76 | 76 | 178 | 116 |
+| Forced divergences | 3 | 4 | 26 | 71 | 104 | 47 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
-| **All** | 3 | 36 | 128 | 249 | **416** | 244 |
+| **All** | 4 | 36 | 131 | 259 | **430** | 255 |
 
 Critical and high items:
 
@@ -132,6 +132,7 @@ Critical and high items:
 | [LLM-01](#llm-01) | llm_grep --context is evaluated as Bash arithmetic | Forced divergences | critical |
 | [DB-01](#db-01) | PostgreSQL E-string mislex lets a backslash line slip past the SQL guard | Defects | critical |
 | [SHELL-01](#shell-01) | The prompt re-expands the git branch name, VIRTUAL_ENV, debian_chroot and STY as code | Forced divergences | critical |
+| [FS-50](#fs-50) | tree_stats evaluates text from a scanned file name as Bash arithmetic | Forced divergences | critical |
 | [LLM-02](#llm-02) | llm_env URL password masking fails on @ or / in the password, or a non-leading URL | Defects | high |
 | [LLM-09](#llm-09) | llm_grep / llm_find / llm_tree walks enter protected trees | Defects | high |
 | [LLM-10](#llm-10) | forbidden-path and secret-file lists have gaps | Defects | high |
@@ -191,6 +192,7 @@ Critical and high items:
 | [LLM-34](#llm-34) | llm_procs --name can list its own exiting helper subshell, with an empty name | Correctness | low | no |
 | [DB-01](#db-01) | PostgreSQL E-string mislex lets a backslash line slip past the SQL guard | Security | critical | yes |
 | [DB-06](#db-06) | the slow-query threshold includes client spawn and connect time | Correctness | medium | yes |
+| [DB-14](#db-14) | llm_db_query with EXPLAIN on SQLite prints a raw jq parse error and no envelope | Contract | yes | Reproduced (`internal/db` envelope): the same message, exit 5, no stdout. |
 | [EXEC-01](#exec-01) | attached short-option values and clusters skip the secret-file and forbidden-path checks | Security | high | yes |
 | [EXEC-02](#exec-02) | `git stash list -p` leaks secret files | Security | high | yes |
 | [EXEC-08](#exec-08) | A line continuation between two `\|` is checked as two pipes, run as `\|\|` | Correctness | low | no |
@@ -347,6 +349,9 @@ Critical and high items:
 | [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
 | [TEST-10](#test-10) | Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice | Test harness | low | no |
 | [TEST-11](#test-11) | Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes | Test harness | low | no |
+| [TEST-12](#test-12) | The settings leak check also scans the random temp path, which can hold a checked word | Test harness | low | no |
+| [TEST-13](#test-13) | Specs call 2.x private helpers that rc.A does not have | Test harness | no | The tests stay as they are and run in Bash mode; Go mode reports them under TEST-13. Their rules are pinned by the Go unit tests of `internal/llmexec`, `internal/pathguard`, `internal/sqlguard` and `internal/llm`, which reuse their vectors. |
+| [TEST-14](#test-14) | Mock-client DB specs: the native drivers never run a mock mysql or psql | Test harness | no | The tests run in Bash mode; Go mode reports them under TEST-14. What they check is pinned in `internal/db`: `TestMySQLMatches2x` (read-only session, row cap, the database from `-d` and `.target-database`, the password never in argv or environment) and `TestPgsqlMatches2x` (read-only, standard strings and timeout settings, `current_database()`), plus the byte-for-byte comparison against real psql on a private PostgreSQL 16. |
 
 ### llm_* agent functions
 
@@ -674,6 +679,24 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A keeps a measurement window equivalent to 2.x (connection time included), so `query_time` and the slow-query trigger match. |
 | Fix recipe (3.0) | Measure only server-side execution (driver query duration after the connection is established, or PostgreSQL `EXPLAIN (ANALYZE)` actual time) in `internal/db`; the >=100ms trigger then reflects the query alone. |
 | Proving test | `TestLedger_DB06_2x` asserts a connect-slow/query-fast mock still trips the threshold (rc.A); `TestLedger_DB06_fix` asserts it does not once timing is query-only. |
+| Status | open |
+
+<a id="db-14"></a>
+#### DB-14 · llm_db_query with EXPLAIN on SQLite prints a raw jq parse error and no envelope
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Contract |
+| Bash location | `lib/modules/llm/db.sh` SQLite path into `__llm_db_envelope` (`lib/modules/llm/core.sh`) |
+| Observed behavior | `EXPLAIN …` and `EXPLAIN QUERY PLAN …` make the sqlite3 shell print a text table, not JSON, so the envelope's jq step fails: `jq: parse error: Invalid numeric literal at line 1, column N` on stderr, exit 5, nothing on stdout. |
+| Reproduction | `llm_db_query "EXPLAIN SELECT 1" -f db.sqlite` (temp SQLite) |
+| Severity | medium |
+| Public-contract impact | yes |
+| rc.A behavior | Reproduced (`internal/db` envelope): the same message, exit 5, no stdout. |
+| Fix recipe (3.0) | Wrap the plan text as `[{"plan": TEXT}]` the way `llm_db_explain` does, or refuse EXPLAIN with a hint naming `llm_db_explain`. |
+| Proving test | `TestLedger_DB14_2x` in `internal/db` (rc.A bytes); `TestLedger_DB14_fix` (3.0). |
 | Status | open |
 
 ### llm_exec
@@ -3510,6 +3533,60 @@ Critical and high items:
 | Proving test | The converted tests pass in both modes; a route answering 404 gives exit 22 from `curl -f` in Bash mode and the binary's exit 22 path in Go mode. |
 | Status | open |
 
+<a id="test-12"></a>
+#### TEST-12 · The settings leak check also scans the random temp path, which can hold a checked word
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A CI, Bash 5.0 job) |
+| Area | Test harness |
+| Bash location | `tests/specs/settings_spec.sh` "unknown settings and malformed lines warn with a line number, never any content" |
+| Observed behavior | The test checks that no warning repeats content of the settings file (words such as `box`, `ftp`, `prod`, `pass`), but every warning names the file, whose path comes from `mktemp -d`. A random name such as `tmp.zw8oyhboxu` holds `box`, and the test fails although nothing leaked. Seen once in CI. |
+| Reproduction | the test with `TMPDIR` set to a directory named `boxprod` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the spec: the leak words are checked in the output with the temp path replaced by `TMP`; the line-number checks and the `~/` check still read the output as printed. |
+| Fix recipe (3.0) | n/a after cutover (testscript, fixed work directory). |
+| Proving test | The test passes with `TMPDIR` named `boxprod` and still fails when a warning prints a value from the file. |
+| Status | open |
+
+<a id="test-13"></a>
+#### TEST-13 · Specs call 2.x private helpers that rc.A does not have
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Test harness |
+| Bash location | `llm_spec.sh` (`__llm_validate_command`, `__llm_validate_path`, `__llm_is_secret_file`, `__llm_clean_error_msg`, `__llm_resolve_db`), `llm_exec_security_spec.sh` (two tests), `llm_db_security_spec.sh` (`__llm_sql_guard`, two tests), `llm_db_names_spec.sh` (`__llm_tsv_to_json`), `llm_portability_spec.sh` (`__llm_elapsed_us`, `__llm_realpath`), `llm_flags_spec.sh` (overrides `__llm_has_rg` and sources `lib/modules/llm/core.sh`), `help_spec.sh` (the seven `__gash_register_help` registry tests; core pins the registry in `internal/registry`), `files_spec.sh` (four tests calling `__gash_fs_parse_size` and `__gash_fs_human_size`; `TestParseSize` in `internal/fsscan`), `fs_render_spec.sh` (three tests overriding `__gash_fs_rich_ok` and `__gash_use_color` to force the terminal layout) |
+| Observed behavior | These tests call or override `__llm_*` helpers of the Bash implementation. MATRIX lists them as moot internals (PRD 5.5): the generated shims do not define them, so the tests cannot run in Go mode. |
+| Reproduction | `bash tests/run.sh --impl go specs/llm_spec.sh` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | The tests stay as they are and run in Bash mode; Go mode reports them under TEST-13. Their rules are pinned by the Go unit tests of `internal/llmexec`, `internal/pathguard`, `internal/sqlguard` and `internal/llm`, which reuse their vectors. |
+| Fix recipe (3.0) | n/a after cutover (testscript drives the public functions). |
+| Proving test | PARITY lists each of these tests as TEST-13 in the Go column. |
+| Status | open |
+
+<a id="test-14"></a>
+#### TEST-14 · Mock-client DB specs: the native drivers never run a mock mysql or psql
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Test harness |
+| Bash location | `llm_db_security_spec.sh` (MySQL and PostgreSQL client tests), `llm_db_names_spec.sh` (two tests), `llm_portability_spec.sh` (the decimal-comma clock test) |
+| Observed behavior | The tests put a fake `mysql`/`mariadb`/`psql` on PATH and assert on the argv, stdin and environment it received. The binary connects with native drivers (DB-07, DB-09), so no client runs and nothing is recorded. |
+| Reproduction | `bash tests/run.sh --impl go specs/llm_db_security_spec.sh` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | The tests run in Bash mode; Go mode reports them under TEST-14. What they check is pinned in `internal/db`: `TestMySQLMatches2x` (read-only session, row cap, the database from `-d` and `.target-database`, the password never in argv or environment) and `TestPgsqlMatches2x` (read-only, standard strings and timeout settings, `current_database()`), plus the byte-for-byte comparison against real psql on a private PostgreSQL 16. |
+| Fix recipe (3.0) | n/a after cutover (testscript with the in-process fakes). |
+| Proving test | PARITY lists each of these tests as TEST-14 in the Go column. |
+| Status | open |
+
 ## Forced divergences
 
 | Id | Title | Area | Severity | Contract |
@@ -3522,12 +3599,21 @@ Critical and high items:
 | [LLM-22](#llm-22) | llm_grep --ext leaks globals ext and exts into the caller | Self-management | low | no |
 | [LLM-24](#llm-24) | trailing newlines in a PATH argument are stripped | Correctness | low | no |
 | [LLM-26](#llm-26) | the llm_grep grep fallback has no -I, so binary files leak or misbehave | Portability | low | yes |
+| [LLM-35](#llm-35) | llm_config output depends on which yq is installed | Portability | yes | The binary converts YAML itself, always to JSON: mapping order kept, numbers and booleans as YAML 1.2 reads them, the layout `jq .` gives python-yq's output. No yq runs; the raw-text fallback remains only for a file that does not parse. The flavour test is reported under LLM-35 in Go mode. |
+| [LLM-36](#llm-36) | llm_tree and llm_find order entries by the locale's collation | Portability | yes | Bytewise order (the `C` order) in every locale. |
+| [LLM-37](#llm-37) | llm_grep's regex dialect is ripgrep's Rust regex, or ERE in the grep fallback | Portability | yes | One engine, Go's RE2 (`regexp`): the Rust regex syntax rg accepts, minus the few constructs RE2 lacks, which are refused with `invalid_regex`. LLM-03 keeps its result rules. |
+| [LLM-38](#llm-38) | A NUL late in a large file: rg searches the text before it | Portability | yes | A file with a NUL anywhere is binary and skipped whole, wherever the NUL is. |
+| [LLM-39](#llm-39) | llm_env lists `_`, whose value is Bash's last argument | Correctness | yes | `_` is left out (in Go mode its value would be the binary's path). |
 | [DB-03](#db-03) | the awk/TSV transport artifacts (dropped empty rows, raw control chars) vanish with native drivers | Correctness | medium | no |
 | [DB-05](#db-05) | without jq the DB envelope silently becomes a raw result array | Contract | medium | yes |
 | [DB-07](#db-07) | DB error `details` text comes from the native driver, not the client | Contract | low | yes |
 | [DB-08](#db-08) | the SQLite EXPLAIN QUERY PLAN text tree must be rebuilt from plan rows | Contract | medium | yes |
 | [DB-09](#db-09) | psql client meta-commands and PGPASSWORD-in-child are unreachable with the native driver | Security | medium | no |
 | [DB-13](#db-13) | The SQL guard's case folding and spaces follow the locale | Security | medium | yes |
+| [DB-15](#db-15) | sqlite3's JSON mode mangles bytes that are not UTF-8 and cuts text at a NUL | Correctness | yes | The driver returns the stored bytes and the contract encoder writes valid JSON (one U+FFFD per invalid sequence, `\u0000` for NUL), as DB-03 does for the TSV transport. |
+| [DB-16](#db-16) | MySQL on localhost: the client uses the Unix socket and lets ~/.my.cnf override the URL | Correctness | yes | Host `localhost` connects through the Unix socket: the `socket=` of the `[client]` group of the option files the client reads (`/etc/my.cnf`, `/etc/mysql/my.cnf` with its `!include`/`!includedir`, `~/.my.cnf`), else the first existing platform default (`/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`, `/var/lib/mysql/mysql.sock`). No other option-file setting applies: the `DB:` URL is the connection (lead decision, 2026-10-18). Any other host uses TCP. |
+| [DB-17](#db-17) | Table and database names are checked with locale-dependent character ranges | Portability | yes | ASCII ranges in every locale, the stricter reading (as DB-13 does for the guard). |
+| [DB-18](#db-18) | MySQL ZEROFILL columns lose their padding, MariaDB YEAR(2) prints four digits | Contract | low | yes |
 | [EXEC-06](#exec-06) | glob expansion order differs under non-C collation | Portability | low | yes |
 | [EXEC-07](#exec-07) | A trailing backslash makes llm_exec check one word and run another | Security | high | yes |
 | [SYS-28](#sys-28) | hgrep passes PATTERN through awk `-v`: backslashes are rewritten and the regex dialect depends on the awk | Portability | medium | yes |
@@ -3586,6 +3672,7 @@ Critical and high items:
 | [FS-28](#fs-28) | The order of equal entries depends on the locale and the awk implementation | Portability | low | yes |
 | [FS-29](#fs-29) | Non-ASCII digits pass integer and size validation in UTF-8 locales | Portability | medium | yes |
 | [FS-30](#fs-30) | An unusable TMPDIR forces errors to 0 and leaks a mktemp message | Portability | low | no |
+| [FS-50](#fs-50) | tree_stats evaluates text from a scanned file name as Bash arithmetic | Security | critical | yes |
 | [FILE-16](#file-16) | `nocasematch` stays on in the caller's shell after Ctrl-C | Contract | low | no |
 | [FILE-17](#file-17) | `.tar.zst` exit status depends on the caller's `pipefail` | Correctness | medium | yes |
 | [FILE-18](#file-18) | The caller's `noclobber` makes single-file extraction fail | Correctness | low | no |
@@ -3755,6 +3842,96 @@ Critical and high items:
 | Proving test | Covered by `TestLedger_LLM03` (binary files skipped regardless of installed tools). |
 | Status | open |
 
+<a id="llm-35"></a>
+#### LLM-35 · llm_config output depends on which yq is installed
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Portability |
+| Bash location | `lib/modules/llm/fs.sh` llm_config (`yq . FILE` for python-yq, `yq eval -o=json . FILE` for mikefarah, raw text otherwise) |
+| Observed behavior | A YAML file comes back as JSON from python-yq, as JSON in mikefarah's layout, or as the raw text when no known yq is installed or it fails: the result depends on an installed tool (PRD MUST NOT 8). |
+| Reproduction | `llm_portability_spec.sh` "llm_config converts YAML with either yq flavour …" |
+| Severity | medium |
+| Public-contract impact | yes |
+| rc.A behavior | The binary converts YAML itself, always to JSON: mapping order kept, numbers and booleans as YAML 1.2 reads them, the layout `jq .` gives python-yq's output. No yq runs; the raw-text fallback remains only for a file that does not parse. The flavour test is reported under LLM-35 in Go mode. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_LLM35` in `internal/llm` (the spec's YAML and the python-yq bytes; a parse error gives the raw text). |
+| Status | open |
+
+<a id="llm-36"></a>
+#### LLM-36 · llm_tree and llm_find order entries by the locale's collation
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Portability |
+| Bash location | `lib/modules/llm/fs.sh` (`sort` without `LC_ALL=C`) |
+| Observed behavior | Entry order follows `LC_COLLATE`, so the same tree lists in different orders under `C` and `en_US.UTF-8` (case, punctuation, accents). |
+| Reproduction | the same fixture tree under `LC_ALL=C` and `LC_ALL=en_US.UTF-8` |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | Bytewise order (the `C` order) in every locale. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_LLM36` in `internal/llm` (mixed-case and punctuation names in `C` order). |
+| Status | open |
+
+<a id="llm-37"></a>
+#### LLM-37 · llm_grep's regex dialect is ripgrep's Rust regex, or ERE in the grep fallback
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Portability |
+| Bash location | `lib/modules/llm/fs.sh` llm_grep (rg, else `grep -E`; LLM-03) |
+| Observed behavior | Patterns are read by rg's Rust regex engine, or by the installed grep's ERE in the fallback; the two accept different syntax (`\d`, `\b`, Unicode classes, `{,n}`). |
+| Reproduction | a pattern with `\d` with and without rg on PATH |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | One engine, Go's RE2 (`regexp`): the Rust regex syntax rg accepts, minus the few constructs RE2 lacks, which are refused with `invalid_regex`. LLM-03 keeps its result rules. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_LLM37` in `internal/llm` (rg's documented syntax table: accepted or refused, never misread). |
+| Status | open |
+
+<a id="llm-38"></a>
+#### LLM-38 · A NUL late in a large file: rg searches the text before it
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Portability |
+| Bash location | `lib/modules/llm/fs.sh` llm_grep (rg's binary detection) |
+| Observed behavior | rg treats a file as binary at its first NUL and stops there, so matches before a NUL past its first buffer are still reported; the grep fallback behaves differently again (LLM-26). |
+| Reproduction | a 1 MiB text file with a match, then a NUL at the end |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | A file with a NUL anywhere is binary and skipped whole, wherever the NUL is. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_LLM38` in `internal/llm` (a NUL at byte 0, in the middle and at the end: the file is skipped). |
+| Status | open |
+
+<a id="llm-39"></a>
+#### LLM-39 · llm_env lists `_`, whose value is Bash's last argument
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/system.sh` llm_env (`compgen -e`) |
+| Observed behavior | `compgen -e` includes `_`, the last argument of the previous command, so its value says nothing about the environment and changes from call to call. |
+| Reproduction | `llm_env --filter '^_$'` |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | `_` is left out (in Go mode its value would be the binary's path). |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_LLM39` in `internal/llm`. |
+| Status | open |
+
 ### databases
 
 <a id="db-03"></a>
@@ -3806,7 +3983,7 @@ Critical and high items:
 | Reproduction | n/a (depends on the client binary) |
 | Severity | low |
 | Public-contract impact | yes (details text only) |
-| rc.A behavior | The native drivers (pgx, go-sql-driver/mysql, modernc sqlite) produce their own error strings (e.g. `ERROR: … (SQLSTATE 42P01)`), so the `details` text differs; the `*_error` code and RETRY action are preserved. No spec pins the exact text; the only load-bearing fragment is the sqlite plan `test("u")` substring (DB-08). The client binary cannot be reproduced. |
+| rc.A behavior | The native drivers (pgx, go-sql-driver/mysql, modernc sqlite) produce their own error strings (e.g. `ERROR: … (SQLSTATE 42P01)`), so the `details` text differs; the `*_error` code and RETRY action are preserved. No spec pins the exact text; the only load-bearing fragment is the sqlite plan `test("u")` substring (DB-08). The client binary cannot be reproduced. The client-not-found errors of llm_db_* (`sqlite_not_found`, `mysql_not_found`, `psql_not_found`, and gash_db_test's, CORE-05) cannot occur either, since no client runs; the codes stay registered. |
 | Fix recipe (3.0) | In `internal/db` keep the `*_error` codes and RETRY action; map driver errors to a cleaned `details` string; document that the message text is driver-sourced. |
 | Proving test | `TestLedger_DB07` asserts each engine's error yields the correct `*_error` code and RETRY action with a non-empty cleaned `details`. |
 | Status | open |
@@ -3824,7 +4001,7 @@ Critical and high items:
 | Reproduction | `llm_db_explain "SELECT * FROM u WHERE id=1" -f db.sqlite` -> `[{"plan":"QUERY PLAN\n`--…"}]` (temp sqlite) |
 | Severity | medium |
 | Public-contract impact | yes |
-| rc.A behavior | modernc sqlite's `EXPLAIN QUERY PLAN` returns rows (id, parent, notused, detail), not the tree, so rc.A must synthesize the `QUERY PLAN` text tree from those rows (indentation and ``-- ``/`` | -- `` connectors by id/parent) to match the pinned string. The CLI's own rendering cannot be reproduced. |
+| rc.A behavior | modernc sqlite's `EXPLAIN QUERY PLAN` returns rows (id, parent, notused, detail), not the tree, so rc.A must synthesize the `QUERY PLAN` text tree from those rows (indentation and ``-- ``/`` | -- `` connectors by id/parent) to match the pinned string. The CLI's own rendering cannot be reproduced. The plan content itself follows the SQLite engine: in 2.x the installed sqlite3 (3.45 here), in rc.A the embedded modernc engine (3.53), so the plan of the same query can differ (recursive CTEs). |
 | Fix recipe (3.0) | In `internal/db` build the text tree from the plan rows in the sqlite3 CLI layout; pin it with the envelope schema. |
 | Proving test | `TestLedger_DB08` asserts the synthesized plan string equals the sqlite3 CLI tree and matches `test("u")`. |
 | Status | open |
@@ -3863,6 +4040,78 @@ Critical and high items:
 | rc.A behavior | The libc tables cannot be reproduced, and PRD 10.5 forbids loosening the rail, so the guard checks every query under three readings in a fixed order (C; UTF-8 with the case mappings glibc makes to ASCII, `ſ` and `ı`; UTF-8 that also folds runes whose case orbit holds an ASCII letter, such as the Kelvin sign) and refuses with the first refusal. Blanks in the UTF-8 readings are Unicode spaces plus ASCII, except in the MySQL `--` comment rule, where a wider set would hide text: there they are glibc's exact `iswspace` set. A query passes only when every reading accepts, so nothing 2.x refuses in C or UTF-8 is accepted; a few queries no 2.x locale refuses (an NBSP or Kelvin sign inside a keyword) are refused. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_DB13` (19 vectors checked against 2.x in both locales) and `TestLedger_DB13_Monotonic` (a refusal under any reading is a refusal) in `internal/sqlguard`. |
+| Status | open |
+
+<a id="db-15"></a>
+#### DB-15 · sqlite3's JSON mode mangles bytes that are not UTF-8 and cuts text at a NUL
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/db.sh` SQLite path (`sqlite3 -json`, 3.45) |
+| Observed behavior | Values with invalid UTF-8 come out as sign-extended `\uffffffff` escapes (not valid JSON), and text with a NUL is cut at the NUL. |
+| Reproduction | a table with `X'ff'` and `'a'||char(0)||'b'` (temp SQLite) |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | The driver returns the stored bytes and the contract encoder writes valid JSON (one U+FFFD per invalid sequence, `\u0000` for NUL), as DB-03 does for the TSV transport. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_DB15` in `internal/db`. |
+| Status | open |
+
+<a id="db-16"></a>
+#### DB-16 · MySQL on localhost: the client uses the Unix socket and lets ~/.my.cnf override the URL
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/db.sh:374` (`--defaults-extra-file` with `host=localhost`) |
+| Observed behavior | libmysqlclient connects to `localhost` through the Unix socket (the `[client] socket` of its option files, else the built-in path), not TCP. It also reads `~/.my.cnf` after the extra file, so a user, password or host there overrides the `DB:` URL. |
+| Reproduction | `DB:x=mysql://u:p@localhost/app` with MySQL listening on the socket only; a `~/.my.cnf` with another `user=` |
+| Severity | medium |
+| Public-contract impact | yes |
+| rc.A behavior | Host `localhost` connects through the Unix socket: the `socket=` of the `[client]` group of the option files the client reads (`/etc/my.cnf`, `/etc/mysql/my.cnf` with its `!include`/`!includedir`, `~/.my.cnf`), else the first existing platform default (`/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`, `/var/lib/mysql/mysql.sock`). No other option-file setting applies: the `DB:` URL is the connection (lead decision, 2026-10-18). Any other host uses TCP. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_DB16` in `internal/db` (socket path from an option-file fixture, from the defaults, and a `~/.my.cnf` user that does not apply). |
+| Status | open |
+
+<a id="db-17"></a>
+#### DB-17 · Table and database names are checked with locale-dependent character ranges
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_* and internal/db) |
+| Area | Portability |
+| Bash location | `lib/modules/llm/db.sh` name checks (`[[ =~ ^[A-Za-z0-9_]+$ ]]` and similar) |
+| Observed behavior | Bracket ranges follow the locale's collation, so in some locales they also match letters outside ASCII. |
+| Reproduction | a name with an accented letter under `C` and a UTF-8 locale |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | ASCII ranges in every locale, the stricter reading (as DB-13 does for the guard). |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_DB17` in `internal/db`. |
+| Status | open |
+
+<a id="db-18"></a>
+#### DB-18 · MySQL ZEROFILL columns lose their padding, MariaDB YEAR(2) prints four digits
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of internal/db, go-sql-driver/mysql v1.10.1) |
+| Area | Contract |
+| Bash location | `lib/modules/llm/db.sh` MySQL path (`mysql --batch` prints the server's text) |
+| Observed behavior | A `ZEROFILL` integer column comes back padded (`00042`), as the server sends it. |
+| Reproduction | `CREATE TABLE t (n INT(5) ZEROFILL); INSERT INTO t VALUES (42);` then `llm_db_query "SELECT n FROM t"` |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | `"42"`: the driver parses the column to an integer before Gash sees it, and the zerofill flag is not exposed, so the padding cannot be rebuilt. The other numeric types keep the client's text (DB-02). `ZEROFILL` is deprecated since MySQL 8.0.17. For the same reason (the column length is not exposed), a MariaDB `YEAR(2)` column prints four digits. The alternatives were pinning the driver to v1.7.1 (no ed25519 authentication, three years of fixes missing) or carrying a patched fork (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | Same as rc.A, unless DB-02's operator decision makes MySQL values typed, which removes the question. |
+| Proving test | `TestLedger_DB18` in `internal/db` (in-process fake sending `00042` for a zerofill column → `"42"`; YEAR `0000` → `"0000"`; DOUBLE `1e20` → `"1e20"`; FLOAT `1234570` → `"1234570"`). |
 | Status | open |
 
 ### llm_exec
@@ -4925,6 +5174,24 @@ Critical and high items:
 | Proving test | `TestLedger_FS30` in `testdata/script/fsscan_tmpdir.txtar`: with `TMPDIR=/nonexistent` the envelope still says `"errors":1` and stderr is empty. |
 | Status | open |
 
+<a id="fs-50"></a>
+#### FS-50 · tree_stats evaluates text from a scanned file name as Bash arithmetic
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of lib/modules/files.sh, files worker; confirmed by the lead on a 2.1.0 copy) |
+| Area | Security |
+| Bash location | `lib/modules/files.sh:1664-1666` and `:1675-1677` (terminal renderer of tree_stats) |
+| Observed behavior | The "By size" and "By count" rows are split with `IFS=$'\t' read -r ext cnt sz`, and the count and size fields go straight into `$((${sz:-0} * 1000 / ...))` and `$((${cnt:-0} * 1000 / ...))`. An extension that holds a tab shifts the split (FS-17), so text from a file name in the scanned tree reaches Bash arithmetic evaluation, which runs command substitutions inside array subscripts. Anyone who can create a file in a tree the user later runs `tree_stats` on (a cloned repository, an extracted archive, a shared directory) can run commands as that user. The `--json` output does not take this path. |
+| Reproduction | the reproduction kept outside the repository: a file whose extension holds a tab followed by an array subscript with a command substitution that creates an empty marker file; `tree_stats DIR` on a terminal and the marker appears in the current directory |
+| Severity | critical |
+| Public-contract impact | yes |
+| rc.A behavior | Never evaluated: the fields are read as digits only (`ui.Int`, CORE-02), anything else counts as 0, and the rows keep the 2.x layout for every ordinary name. |
+| Fix recipe (3.0) | Same as rc.A. 2.x patch (for a 2.1.x release, D-7): check `cnt` and `sz` against `^[0-9]+$` before the arithmetic and treat anything else as 0, as `__gash_fs_parse_size` already does for its input. |
+| Proving test | `TestLedger_FS50` in `internal/fsscan` (a name with a tab and an arithmetic payload: no command runs, the row reads 0); in a 2.1.1 series, a regression spec that fails on 2.1.0. |
+| Status | open |
+
 ### archive_extract and file_backup
 
 <a id="file-16"></a>
@@ -5324,9 +5591,9 @@ Critical and high items:
 | Reproduction | a `~/.gash_env` with a malformed line, the modules sourced without gash.sh, then two llm_exec calls: one "Line 1" warning on stderr |
 | Severity | low |
 | Public-contract impact | no |
-| rc.A behavior | The cache lives in the caller's shell, which the binary cannot fill, and printing from the binary would repeat the warnings on every call. So the generated stub of every function whose 2.x body loads the settings runs the shim's `__gash_load_env` (the 2.x helper, cached, warnings printed once per shell) before it calls the binary, and the binary reads the file silently. Same warnings, same count, same shell; in a modules-only, non-headless shell they now also appear when that first call only prints help or is refused, where 2.x printed nothing yet. Shells that load gash.sh are unchanged. |
+| rc.A behavior | The cache lives in the caller's shell, which the binary cannot fill, and printing from the binary would repeat the warnings on every call. So the generated stub of every function whose 2.x body loads the settings runs the shim's `__gash_load_env` (the 2.x helper, cached, warnings printed once per shell) before it calls the binary, and the binary reads the file silently. Same warnings, same count, same shell; in a modules-only, non-headless shell they now also appear when that first call only prints help or is refused, where 2.x printed nothing yet. Shells that load gash.sh interactively are unchanged. A headless gash.sh load fills no cache at source time (no binary start while sourcing), so it follows the 2.x headless startup load instead: without `GASH_DEBUG=1` it marks the shell (`__GASH_ENV_QUIET`) and the shim's `__gash_load_env` later parses quietly (stderr of `env load` discarded; the binary's loader skips the permission check), and with `GASH_DEBUG=1` it runs `__gash_load_env` at source time with its warnings, as 2.x did. A modules-only shell with `GASH_HEADLESS=1` stays loud, as in 2.x, where only gash.sh's startup load was quiet. |
 | Fix recipe (3.0) | Same as rc.A. |
-| Proving test | `llm_exec_security_spec.sh` "reads ~/.gash_env once per call" in Go mode, plus `TestLedger_CORE18` in `internal/compatgen` (the stub of each such function calls `__gash_load_env` first, and no other stub does). |
+| Proving test | `llm_exec_security_spec.sh` "reads ~/.gash_env once per call" in Go mode (both halves), plus `TestLedger_CORE18` in `internal/compatgen` (the stub of each such function calls `__gash_load_env` first, and no other stub does; headless gash.sh: no warning without `GASH_DEBUG=1`, the 2.x warnings at source time with it). |
 | Status | open |
 
 ## Decisions for the operator
@@ -5454,7 +5721,7 @@ Critical and high items:
 | Reproduction | `printf 'a\tb\nNULL\t1\n' | __llm_tsv_to_json mysql` -> `[{"a":"NULL","b":"1"}]` (temp dir) |
 | Severity | low |
 | Public-contract impact | yes |
-| rc.A behavior | Kept: the native go-sql-driver/mysql path stringifies all values and renders NULL as the string `"NULL"` to preserve the documented contract (the driver returns typed values and real null, which rc.A deliberately coerces). |
+| rc.A behavior | Kept: the native go-sql-driver/mysql path stringifies all values and renders NULL as the string `"NULL"` to preserve the documented contract (the driver returns typed values and real null, which rc.A deliberately coerces). Each value is the text the mysql client printed: integers in decimal, `YEAR` zero-padded to four digits, `FLOAT` and `DOUBLE` rebuilt from the parsed value with the server's own formatting (shortest digits, `1e20` exponent form), `DECIMAL`, strings and dates as sent. go-sql-driver/mysql parses numeric columns even on the text protocol (since v1.8.0), so the server's bytes are not available; `ZEROFILL` padding is the one loss (DB-18). |
 | Fix recipe (3.0) | Operator decision: keep all-strings + NULL->"NULL" (matches AGENTS.md section 3.3), or switch MySQL to typed values and real JSON `null` (a documented contract change). |
 | Proving test | `TestLedger_DB02` pins MySQL values as strings and NULL as the chosen representation. |
 | Status | open |

@@ -17,6 +17,12 @@ type reply struct {
 	// hang keeps the request unanswered until the client gives up: the
 	// mock's exit 28 (operation timed out).
 	hang bool
+	// drop closes the connection without an answer: an unreachable route
+	// (the mock's exit 6).
+	drop bool
+	// length is the Content-Length of a routed answer, which a HEAD
+	// answer announces without the body; 0 for the canned answers.
+	length int64
 }
 
 // request is what the mock looked at: the method (-I is HEAD), the URL
@@ -27,8 +33,17 @@ type request struct {
 
 // respond is tests/mocks/bin/curl ported rule for rule: env is the
 // environment of the process that made the request (the MOCK_CURL_*
-// knobs of the test).
+// knobs of the test). The routes of MOCK_CURL_ROUTES come first.
 func respond(env map[string]string, r request) reply {
+	if path := env["MOCK_CURL_ROUTES"]; path != "" {
+		rt, ok, err := findRoute(path, r.method, r.url)
+		if err != nil {
+			return routeFailure(err)
+		}
+		if ok {
+			return rt.reply(path, r.method)
+		}
+	}
 	head := r.method == "HEAD"
 	url := r.url
 	resp := ""

@@ -148,3 +148,64 @@ func TestLedger_EXEC08(t *testing.T) {
 		}
 	}
 }
+
+// TestLedger_EXEC04_2x (decision, kept): the secret-file check runs on the
+// first positional before it is skipped as a grep/rg pattern, so a pattern
+// that looks like a secret file is refused, while one that looks like a
+// protected path is searched for, as in 2.x.
+func TestLedger_EXEC04_2x(t *testing.T) {
+	cwd := t.TempDir()
+	mustWrite(t, filepath.Join(cwd, "notes.txt"), "see /etc/shadow\nand .env\n")
+	for _, line := range []string{"grep .env notes.txt", "grep id_rsa notes.txt", "rg -n .env notes.txt"} {
+		want := refusal2x(t, line, cwd)
+		_, err := build(t, line, cwd)
+		r, ok := err.(*Refusal)
+		if !ok || r.Code != want.Error || r.Details != want.Details || r.Action != want.Action || r.Hint != want.Hint {
+			t.Errorf("%q: got %v, want %+v", line, err, want)
+		}
+		if want.Error != "secret_file_blocked" {
+			t.Errorf("%q: 2.x refused with %q, want secret_file_blocked", line, want.Error)
+		}
+	}
+	for _, line := range []string{"grep /etc/shadow notes.txt", "grep -c /etc/passwd notes.txt"} {
+		want, wantExit := run2x(t, line, cwd, cwd)
+		plan, err := build(t, line, cwd)
+		if err != nil {
+			t.Fatalf("%q: refused: %v", line, err)
+		}
+		got, exit := runPlan(t, plan, cwd)
+		if got != want || exit != wantExit {
+			t.Errorf("%q: got %q (exit %d), want %q (exit %d)", line, got, exit, want, wantExit)
+		}
+	}
+}
+
+// TestLedger_EXEC06 (forced divergence): globs expand in byte order
+// whatever the caller's collation; in the C locale that is the 2.x order.
+func TestLedger_EXEC06(t *testing.T) {
+	cwd := t.TempDir()
+	for _, n := range []string{"b", "B", "a", "_u", "Z1", "é", "e", "a b"} {
+		mustWrite(t, filepath.Join(cwd, n), "")
+	}
+	want := "B Z1 _u a a b b e é\n"
+	if got, exit := run2x(t, "echo *", cwd, cwd); got != want || exit != 0 {
+		t.Fatalf("2.x in C: got %q (exit %d), want %q", got, exit, want)
+	}
+	for _, vars := range []map[string]string{
+		nil,
+		{"LC_ALL": "C.UTF-8"},
+		{"LC_COLLATE": "en_US.UTF-8", "LANG": "de_DE.UTF-8"},
+	} {
+		env := testEnv(cwd)
+		for k, v := range vars {
+			env.Vars[k] = v
+		}
+		plan, err := Build("echo *", Settings{}, env, permissiveProbe())
+		if err != nil {
+			t.Fatalf("%v: %v", vars, err)
+		}
+		if got, exit := runPlan(t, plan, cwd); got != want || exit != 0 {
+			t.Errorf("%v: got %q (exit %d), want %q", vars, got, exit, want)
+		}
+	}
+}

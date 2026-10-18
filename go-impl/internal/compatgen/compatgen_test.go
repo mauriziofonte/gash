@@ -377,7 +377,8 @@ func TestLedger_SYS34(t *testing.T) {
 // LEDGER CORE-18: the stub of each function whose 2.x body loads the
 // settings file runs the shim's cached __gash_load_env first, and no other
 // stub does; in a shell without gash.sh the warnings then come once, at
-// the first such call, from the shell.
+// the first such call, from the shell. After a headless gash.sh load the
+// first load is quiet, unless GASH_DEBUG=1 loads at source time.
 func TestLedger_CORE18(t *testing.T) {
 	needBash(t)
 	dir := tree(t)
@@ -404,4 +405,38 @@ func TestLedger_CORE18(t *testing.T) {
 		"source '"+dir+"/lib/modules/llm.sh'; llm_tree; gash_db_list; llm_exec ls; gash_db_list")
 	require.NoError(t, err, out)
 	require.Equal(t, "call llm_tree\nWarning: Line 1 of ~/.gash_env: unrecognized entry\ncall gash_db_list\ncall llm_exec\ncall gash_db_list\n", out)
+	// GASH_HEADLESS=1 without gash.sh: as loud as 2.x was.
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "for f in output utils config; do source '"+dir+"/lib/core/'$f.sh; done; "+
+		"source '"+dir+"/lib/modules/llm.sh'; llm_exec ls")
+	require.NoError(t, err, out)
+	require.Equal(t, "Warning: Line 1 of ~/.gash_env: unrecognized entry\ncall llm_exec\n", out)
+
+	// A headless gash.sh load parses quietly at the first call, as the 2.x
+	// headless startup did; with GASH_DEBUG=1 it loads at source time,
+	// warnings shown, and the calls then use the cache.
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash_db_list")
+	require.NoError(t, err, out)
+	require.Equal(t, "sourced\ncall llm_exec\ncall gash_db_list\n", out)
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1", "GASH_DEBUG=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash_db_list")
+	require.NoError(t, err, out)
+	require.Equal(t, "Warning: Line 1 of ~/.gash_env: unrecognized entry\nsourced\ncall llm_exec\ncall gash_db_list\n", out)
+}
+
+// The gash stub passes the values the caller's shell gives the card's
+// aliases (LEDGER SELF-12): one NAME<TAB>VALUE line per defined one,
+// backslash and newline escaped; names the card does not list and
+// undefined ones stay out, and the words reach the binary's root as they
+// are.
+func TestGashStubPassesCardAliases(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	fake := filepath.Join(t.TempDir(), "gash")
+	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\n[ \"$1 $2 $3\" = '__compat env load' ] && exit 0\n"+
+		"printf '[%s]' \"$@\"; printf '\\n%s' \"$GASH__CARD_ALIASES\"\n"), 0o755))
+	out, err := bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "set -u; source '"+dir+"/gash.sh' >/dev/null 2>&1; unalias -a; "+
+		`alias gst='git status --short' gd='a\b' ll=$'ls\n-l' mine=x ..='cd ..'; gash git --no-color; `+
+		`gash; echo "${GASH__CARD_ALIASES-unset}"`)
+	require.NoError(t, err, out)
+	card := "..\tcd ..\ngd\ta\\\\b\ngst\tgit status --short\nll\tls\\n-l\n"
+	require.Equal(t, "[git][--no-color]\n"+card+"[]\n"+card+"unset\n", out)
 }

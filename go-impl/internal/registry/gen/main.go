@@ -83,6 +83,10 @@ type catalog struct {
 	headlessSet []string
 	completions []completion
 	packs       []string
+	// cardAliases are the reference card entries of each alias file a
+	// topic lists, as __gash_card_aliases printed them before the shell
+	// overlay.
+	cardAliases map[string][]cardAlias
 	matrix      *matrix
 }
 
@@ -125,6 +129,9 @@ func extract(root string) (*catalog, error) {
 		return nil, err
 	}
 	if err := c.scanCompletion(comp); err != nil {
+		return nil, err
+	}
+	if err := c.scanCardAliases(root); err != nil {
 		return nil, err
 	}
 	c.matrix, err = readMatrix(filepath.Join(root, "go-impl/PORT/MATRIX.md"))

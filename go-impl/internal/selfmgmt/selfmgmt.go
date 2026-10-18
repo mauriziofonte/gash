@@ -5,6 +5,8 @@
 package selfmgmt
 
 import (
+	"math/rand/v2"
+
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
@@ -13,11 +15,13 @@ type Module struct {
 	proc     procs
 	readFile func(string) ([]byte, error)
 	passwd   string
+	// intn picks the quote: a uniform int in [0, n).
+	intn func(n int) int
 }
 
 // New returns the module wired to the real system.
 func New() *Module {
-	return &Module{proc: osProcs{}, readFile: readFileOS, passwd: "/etc/passwd"}
+	return &Module{proc: osProcs{}, readFile: readFileOS, passwd: "/etc/passwd", intn: rand.IntN}
 }
 
 // Register binds the selfmgmt functions to t.
@@ -27,4 +31,5 @@ func Register(t *invoke.Table) { New().Register(t) }
 func (m *Module) Register(t *invoke.Table) {
 	t.Handle("gash", m.card)
 	t.Handle("gash_username", m.username)
+	t.Handle("gash_inspiring_quote", m.quote)
 }
