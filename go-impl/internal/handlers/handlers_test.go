@@ -26,10 +26,14 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "docker_compose_check", "docker_compose_scan", "docker_compose_upgrade",
-		"docker_prune_all", "docker_start_all", "docker_stop_all", "gash", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag",
-		"git_dump_revisions", "git_list_tags", "git_repair", "git_sync", "remote_exec", "remote_hosts", "remote_pull",
-		"remote_push", "remote_sync_pull", "remote_sync_push"}, tbl.Names())
+	require.Equal(t, []string{
+		"all_colors", "docker_compose_check", "docker_compose_scan", "docker_compose_upgrade", "docker_prune_all",
+		"docker_start_all", "docker_stop_all", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_help",
+		"gash_inspiring_quote", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag", "git_dump_revisions",
+		"git_list_tags", "git_repair", "git_sync", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample",
+		"llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports",
+		"llm_procs", "llm_tree", "remote_exec", "remote_hosts", "remote_pull", "remote_push", "remote_sync_pull",
+		"remote_sync_push"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
@@ -81,12 +85,13 @@ func TestCardUnknownTopic(t *testing.T) {
 	require.Equal(t, 1, rc)
 	require.Equal(t, "\x1b[38;5;196mx Error:\x1b[0m Unknown topic: nope. Topics: files system nav git docker remote dev llm ai gash, all\n", errOut)
 
-	// Synonyms are topics; the card itself is not ported yet.
-	_, errOut, rc = run(t, "gash", nil, false, "navigation")
-	require.Equal(t, 1, rc)
-	require.Contains(t, errOut, `"details":"gash is not implemented in this gash build"`)
+	// Synonyms are topics.
+	out, errOut, rc := run(t, "gash", nil, false, "navigation")
+	require.Equal(t, 0, rc)
+	require.Empty(t, errOut)
+	require.Contains(t, out, "\n  NAV  Directory navigation and listings\n")
 
-	out, _, rc := run(t, "gash", nil, false, "git", "-h")
+	out, _, rc = run(t, "gash", nil, false, "git", "-h")
 	require.Equal(t, 0, rc)
 	require.Contains(t, out, "\n  gash  (module: gash)\n")
 

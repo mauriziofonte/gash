@@ -79,7 +79,7 @@ it "__gash_parse_compose_services prefers docker compose config --format json" b
     set -euo pipefail
     ROOT="${GASH_TEST_ROOT}"
     source "$ROOT/tests/gash-test.sh"; gash_source_all "$ROOT"
-    command -v jq >/dev/null 2>&1 || exit 77
+    gash_require jq
     export PATH="$ROOT/tests/mocks/bin:$PATH"
     export MOCK_COMPOSE_CONFIG_JSON="{\"services\":{\"web\":{\"image\":\"nginx:1.27\"},\"app\":{\"build\":{\"context\":\".\"}}}}"
 

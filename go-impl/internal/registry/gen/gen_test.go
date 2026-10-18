@@ -199,3 +199,84 @@ func TestCatalogIsCurrent(t *testing.T) {
 		t.Fatal("internal/registry/catalog_gen.go is stale: run `go generate ./internal/registry`")
 	}
 }
+
+// help_spec.sh "rejects empty func name": a registration without a
+// name stores nothing, as 2.x returned 1 and stored nothing.
+func TestHelpCallSkipsEmptyName(t *testing.T) {
+	dir := t.TempDir()
+	src := "__gash_register_help \"\" --short test <<'HELP'\nbody\nHELP\n" +
+		"__gash_register_help x --short s --aliases a,b --module m --see-also \"y z\" <<'HELP'\nUSAGE\n  x\n\nHELP\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "h.sh"), []byte(src), 0o644))
+	s, err := parseSource(dir, "h.sh")
+	require.NoError(t, err)
+	c := &catalog{defs: map[string][]*fnDef{}, helps: map[string]*helpEntry{}}
+	c.scan(s, s.file.Stmts, scope{})
+	require.Len(t, c.helps, 1)
+	h := c.helps["x"]
+	require.Equal(t, helpEntry{name: "x", file: "h.sh", line: 4, body: "USAGE\n  x", short: "s", aliases: "a,b", module: "m", seeAlso: "y z"}, *h)
+}
+
+// The card entries of every topic alias file are what the awk program of
+// __gash_card_aliases prints: with no alias defined, the 2.x function
+// prints them all but the identity entries ("ls -> ls").
+func TestCardAliasesMatch2x(t *testing.T) {
+	needs2x(t)
+	c, err := extract(repoRoot)
+	require.NoError(t, err)
+	require.NotEmpty(t, c.cardAliases)
+	for f, list := range c.cardAliases {
+		require.Equal(t, cardLines(list), string(run2x(t, false, "unalias -a; __gash_card_aliases '"+f+"'")), f)
+	}
+}
+
+// cardLines is what __gash_card_aliases prints for list in a shell that
+// defines none of its aliases.
+func cardLines(list []cardAlias) string {
+	var b strings.Builder
+	for _, a := range list {
+		if a.value != a.name {
+			b.WriteString(a.name + "\t" + a.value + "\n")
+		}
+	}
+	return b.String()
+}
+
+// The awk rules one by one, against the 2.x function over the same file:
+// comments name the function below them, a trailing comment and one pair
+// of quotes leave the value, load-time variables show what they hold,
+// names with $ and empty values are skipped, a docker alias call gives
+// its name and command, a name counts once.
+func TestCardAliasesOf(t *testing.T) {
+	src := `# Compact log
+function gl {
+    :
+}
+function help {
+x=1
+function gx {
+alias a='ls -l'  # list
+alias b="echo $__gash_composer1 $__gash_composer x"
+alias c=$__gash_hte' create'
+alias d="$__gash_php_latest -v $__gash_bin $__gash_other"
+alias $e=x
+alias f=''
+alias a='again'
+__gash_add_docker_alias "docker" "dps" "docker ps"
+\t# indented comment
+alias g=plain
+alias h=h
+__gash_add_docker_alias "docker" "dps" "other"
+function gy { # comment
+`
+	got := cardAliasesOf(src)
+	require.Equal(t, []cardAlias{
+		{"gl", "Compact log"}, {"gx", ""}, {"a", "ls -l"}, {"b", "echo composer1 composer x"},
+		{"c", "sudo phpX.Y hte-cli' create'"}, {"d", "phpX.Y -v phpX.Y"}, {"dps", "docker ps"}, {"g", "plain"},
+		{"h", "h"}, {"gy", ""},
+	}, got)
+	needs2x(t)
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "lib/aliases"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "lib/aliases/x.sh"), []byte(src), 0o644))
+	require.Equal(t, cardLines(got), string(run2x(t, false, "unalias -a; GASH_DIR='"+dir+"' __gash_card_aliases x")))
+}

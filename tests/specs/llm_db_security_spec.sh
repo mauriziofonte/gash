@@ -8,7 +8,7 @@ describe "LLM database security"
 # Guard verdicts that need no database at all.
 it "the SQL guard refuses client commands, comment tricks and second statements" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   export GASH_HEADLESS=1
   source "$GASH_TEST_ROOT/gash.sh"
   verdict() { local q k; __llm_sql_guard "$1" "$2" q k 2>&1 >/dev/null | jq -r .error; }
@@ -53,8 +53,8 @@ it "the SQL guard accepts ordinary read queries" bash -c '
 
 it "llm_db_query on SQLite caps rows, keeps comments harmless and returns empty envelopes" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
-  command -v sqlite3 >/dev/null 2>&1 || exit 77
+  gash_require jq
+  gash_require sqlite3
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   sqlite3 "$tmp/t.db" "CREATE TABLE u(id INTEGER, name TEXT); INSERT INTO u VALUES (1,'"'"'a'"'"'),(2,'"'"'b'"'"'),(3,'"'"'c'"'"');"
   export GASH_HEADLESS=1 HOME="$tmp"
@@ -72,8 +72,8 @@ it "llm_db_query on SQLite caps rows, keeps comments harmless and returns empty 
 
 it "llm_db_query on SQLite never writes, even past the guard" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
-  command -v sqlite3 >/dev/null 2>&1 || exit 77
+  gash_require jq
+  gash_require sqlite3
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   sqlite3 "$tmp/t.db" "CREATE TABLE u(id INTEGER);"
   export GASH_HEADLESS=1 HOME="$tmp"
@@ -88,7 +88,7 @@ it "llm_db_query on SQLite never writes, even past the guard" bash -c '
 
 it "llm_db_query sends MySQL a read-only session with a row cap, SQL on stdin" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin"
   cat >"$tmp/bin/mysql" <<"MOCK"
@@ -128,7 +128,7 @@ MOCK
 
 it "llm_db_query runs PostgreSQL read-only with a timeout and standard strings, SQL on stdin" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   mkdir -p "$tmp/bin"
   cat >"$tmp/bin/psql" <<"MOCK"
@@ -161,7 +161,7 @@ MOCK
 
 it "llm_db_* reject unknown options and stray arguments" bash -c '
   set -euo pipefail
-  command -v jq >/dev/null 2>&1 || exit 77
+  gash_require jq
   tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
   export GASH_HEADLESS=1 HOME="$tmp"
   source "$GASH_TEST_ROOT/gash.sh"

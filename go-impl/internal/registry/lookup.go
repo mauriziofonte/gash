@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -47,6 +48,23 @@ func Settings() []Setting { return settings }
 
 // Topics returns the reference card topics in card order.
 func Topics() []Topic { return topics }
+
+// CardAliases returns the reference card entries of the alias file FILE
+// (lib/aliases/FILE.sh) in file order; nil for a file no topic lists.
+func CardAliases(file string) []CardAlias { return cardAliases[file] }
+
+// CardAliasNames returns the names of every card entry, sorted, each
+// once: the names whose live alias value the gash stub passes.
+func CardAliasNames() []string {
+	var out []string
+	for _, list := range cardAliases {
+		for _, a := range list {
+			out = append(out, a.Name)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
 
 // Modules returns the distinct modules, sorted.
 func Modules() []string {
@@ -104,3 +122,12 @@ func (f *Function) Delegated() bool {
 // whose stub hands every argument to the binary's root (`gash version`
 // from the shell reaches the 3.x command).
 func (f *Function) HasStub() bool { return f.Delegated() || f.Name == "gash" }
+
+// ModuleOrder is the order of the help modules in gash_help and gash_help
+// --list: the fixed list of 2.x, then the modules 2.x appended in Bash's
+// hash order, as Bash 5.2.21 printed them (LEDGER CORE-07). Every module
+// with registered help is in it.
+var ModuleOrder = []string{
+	"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh", "llm", "utils",
+	"node", "remote", "chrome", "php",
+}

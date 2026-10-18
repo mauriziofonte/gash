@@ -780,7 +780,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | GASH_SSH_AUTOUNLOCK_RAN | shell-mutating | port | Exported once per session so nested shells skip the SSH auto-unlock; set by doctor --timing children. | shim | shell, system | ssh_auto_unlock_spec.sh, output_style_render_spec.sh |
 | GASH_TIMING | - | port | =1 records per-file load times in __GASH_LOAD_TIMES; set by gash_doctor --timing in child shells. | shim | shell | startup_spec.sh |
 | GASH_TUI | interactive | port | =plain gives numbered prompts instead of arrow-key menus. | binary (passed by the shim) | shell | output_style_render_spec.sh |
-| GASH_VERSION | - | port | Public version string from VERSION, read by modules, scripts and agents; unknown when VERSION is missing. | shim | shell | help_spec.sh, gash_spec.sh, functions_smoke_spec.sh |
+| GASH_VERSION | - | port | Public version string from VERSION, read by modules, scripts and agents; unknown when VERSION is missing. | shim; binary (passed by the shim): gash, gash_help and the other lib/modules/gash.sh functions that print it | shell, selfmgmt | help_spec.sh, gash_spec.sh, functions_smoke_spec.sh |
 | GIT_* environment and git config | pure output | port | git module functions run git with the caller's environment, config, hooks, signing and credential helpers (no hardening flags): kept, see GIT-10. | binary (inherited by the git child) | devops | none (add TestLedger_GIT10 in internal/gitx) |
 | GIT_DIR/GIT_WORK_TREE/GIT_CONFIG_* | pure output | port | inherited by __llm_git for llm_git_* (inferred) | binary | llm | llm_system_spec.sh |
 | GITHUB_TOKEN | pure output | port | ghcr registry auth token for llm_docker_check | binary | llm, devops | docker_compose_spec.sh, llm_system_spec.sh |
@@ -890,7 +890,7 @@ One row per item, merged across modules ("Used by" names the sections above that
 | $TMPDIR/tmp.XXXXXXXXXX | pure output | drop | Bash stderr-capture temp file, created and removed per call; rc.A counts walk errors in-process (FS-30) | - | files-scanners | hygiene_spec.sh |
 | ${HISTFILE:-~/.bash_history} | shell-mutating | port | Read by hgrep (#epoch line, then one command line); appended by the shim's history -a for hgrep, wsl_restart, wsl_shutdown. | - | system | hgrep_spec.sh, output_style_render_spec.sh |
 | .github/copilot-instructions.md (DIR only) | pure output | port | First php + up to 3 spaces/colons + X.Y, per line; dead on PCRE2 < 10.43 and grep without -P in 2.x, read in rc.A: forced divergence DEV-09 | - | devai | none (add TestLedger_DEV09_2x) |
-| .gitignore/.ignore/.rgignore | - | port | ignore rules honored by llm_grep/llm_find content search (one engine, LLM-03) | - | llm | llm_flags_spec.sh |
+| .gitignore/.ignore/.rgignore | - | port | ignore rules honored by llm_grep (rg reads them; one engine, LLM-03), not by llm_find --contains (2.x passes rg --no-ignore) | - | llm | llm_flags_spec.sh |
 | .node-version (DIR only) | pure output | port | Second source, same parsing as .nvmrc; exact pins reduced to the major (DEV-19) | - | devai | none (add TestNodeDetectNodeVersionFile) |
 | .nvmrc (DIR only) | pure output | port | First line with all whitespace removed, parsed to a major (lts/<name>, first [0-9]+(.[0-9]+)*) | - | devai | node_spec.sh |
 | .target-php-version | pure output | port | Line 1, first X.Y (all of them in 2.x: DEV-04); looked up in DIR and each ancestor up to but excluding /, only when DIR resolves to an absolute path; a file without X.Y is skipped | - | devai | php_detect_spec.sh |

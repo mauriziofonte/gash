@@ -6,9 +6,11 @@
 package handlers
 
 import (
+	"github.com/mauriziofonte/gash/internal/db"
 	"github.com/mauriziofonte/gash/internal/docker"
 	"github.com/mauriziofonte/gash/internal/gitx"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/remote"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 )
@@ -19,8 +21,12 @@ import (
 func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	t := invoke.NewTable()
 	registerCore(t)
+	registerConfig(t)
+	registerHelp(t)
 	registerOutput(t)
 	selfmgmt.Register(t)
+	llm.Register(t)
+	db.Register(t)
 	gitx.Register(t)
 	remote.Register(t)
 	docker.Register(t)
