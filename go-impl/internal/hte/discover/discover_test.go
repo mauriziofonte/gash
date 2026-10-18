@@ -374,9 +374,13 @@ func TestResolveModules(t *testing.T) {
 		slices.IndexFunc(mods.Load[n+1:], func(m render.Module) bool { return m.Name == "rewrite" }) >= 0 {
 		t.Fatal("rewrite loaded twice or not at all")
 	}
-	if e, ok := hteerr.As(mods.MissingError(a, platform.FamilyFedora)); !ok || e.Code != hteerr.ApacheNotFound ||
-		!strings.Contains(e.Details, "ssl, http2, nosuch") {
+	if e, ok := hteerr.As(mods.MissingError(a, platform.FamilyFedora)); !ok || e.Code != hteerr.ApacheModuleMissing ||
+		e.Action() != hteerr.Stop || !strings.Contains(e.Details, "ssl, http2, nosuch") ||
+		e.Hint != "sudo dnf install mod_ssl mod_http2 httpd" {
 		t.Fatalf("missing error: %v", e)
+	}
+	if h := ModuleInstallHint(platform.FamilyDebian, []string{"ssl"}); h != "sudo apt install --reinstall apache2" {
+		t.Fatalf("debian hint: %s", h)
 	}
 	// A statically built prefork MPM replaces mpm_event, with a warning.
 	mods = ResolveModules(sr, a, []string{"core", "mpm_prefork"}, nil)

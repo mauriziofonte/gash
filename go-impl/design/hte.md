@@ -428,8 +428,14 @@ New error codes (registered in the contract catalog with fixed actions):
 `confirmation_required` (RETRY), `lock_timeout` (RETRY), `port_in_use` (STOP),
 `privileged_step_required` (STOP), `config_test_failed` (STOP), `reload_failed`
 (STOP; details say whether the rollback succeeded), `apache_not_found` (FATAL),
-`platform_unsupported` (FATAL), `receipt_mismatch` (FATAL). Partial failure
-never exits 0 (hte-cli defect).
+`apache_module_missing` (STOP: a module of the userland list or an enabled
+extra module is not in the system module directory; the hint names the
+platform's install command), `platform_unsupported` (FATAL),
+`receipt_mismatch` (FATAL), `conflicting_options` (RETRY: a flag pair that
+contradicts itself, such as `--force-https` with `--no-https`),
+`invalid_state` (STOP: a state file that does not parse or that the strict
+validation refuses; a human fixes the file). Partial failure never exits 0
+(hte-cli defect).
 
 Rules where the operator may choose otherwise (LEDGER items marked
 "Decision for the operator"; the design follows the recommended option):
