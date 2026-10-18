@@ -62,7 +62,7 @@ func TestPrelude_Parity(t *testing.T) {
 			if tc.mode == "unrestricted" {
 				mine = preludeUnrestricted(tc.extra)
 			} else {
-				mine = prelude(tc.extra, OSProbe{})
+				mine = prelude(tc.extra, osProbe{})
 			}
 			mine = strings.TrimRight(mine, "\n")
 			ref := prelude2x(t, tc.extra, tc.mode)

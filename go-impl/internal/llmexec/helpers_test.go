@@ -63,3 +63,37 @@ func runPlan(t *testing.T, p *Plan, cwd string) (stdout string, exit int) {
 	}
 	return out.String(), 0
 }
+
+// osProbe runs the real probes, as lib/modules/llm/exec.sh does (tests
+// only: the package itself starts no process).
+type osProbe struct{}
+
+func (osProbe) HasSandboxedSed() bool {
+	cmd := exec.Command("sed", "--sandbox", "-n", "p")
+	cmd.Stdin = strings.NewReader("x\n")
+	return cmd.Run() == nil
+}
+
+func (osProbe) HasSandboxedGawk() bool {
+	if _, err := exec.LookPath("gawk"); err != nil {
+		return false
+	}
+	return exec.Command("gawk", "--sandbox", "BEGIN{}").Run() == nil
+}
+
+func (osProbe) HasDiffNoDeref() bool {
+	return exec.Command("diff", "--no-dereference", "/dev/null", "/dev/null").Run() == nil
+}
+
+func (osProbe) IsGNUGrep() bool {
+	out, err := exec.Command("grep", "--version").Output()
+	return err == nil && strings.Contains(string(out), "GNU")
+}
+
+func (osProbe) HasBwrap() bool {
+	if _, err := exec.LookPath("bwrap"); err != nil {
+		return false
+	}
+	return exec.Command("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+		"--unshare-all", "--die-with-parent", "true").Run() == nil
+}
