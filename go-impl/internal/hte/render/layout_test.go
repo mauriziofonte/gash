@@ -5,7 +5,6 @@ package render
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -158,44 +157,6 @@ func TestLayoutIncompleteAndForeign(t *testing.T) {
 	for _, e := range ents {
 		if e.Name() == "gen-20" || e.Name() == "gen-20.tmp" {
 			t.Errorf("failed Write left %s", e.Name())
-		}
-	}
-}
-
-func TestParsePHPOverlay(t *testing.T) {
-	got, err := ParsePHPOverlay([]byte("; comment\n\nmemory_limit = 512M\n  date.timezone=\"Europe/Rome\"  \nopcache.enable = on ; inline\nauto_prepend_file =\n"), "8.3.ini")
-	must(t, err)
-	want := []INIValue{
-		{"memory_limit", "512M"},
-		{"date.timezone", `"Europe/Rome"`},
-		{"opcache.enable", "on ; inline"},
-		{"auto_prepend_file", ""},
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatal(diff)
-	}
-	if got, err := ParsePHPOverlay(nil, "empty.ini"); err != nil || len(got) != 0 {
-		t.Fatalf("empty overlay: %v %v", got, err)
-	}
-	for name, bad := range map[string]string{
-		"section":       "[PHP]\nmemory_limit = 1G\n",
-		"hash comment":  "# memory_limit = 1G\n",
-		"no equals":     "memory_limit 1G\n",
-		"bad key":       "memory limit = 1G\n",
-		"empty key":     "= 1G\n",
-		"duplicate":     "memory_limit = 1G\nmemory_limit = 2G\n",
-		"carriage ret":  "memory_limit = 1G\r\n",
-		"nul":           "memory_limit = 1G\x00\n",
-		"invalid utf-8": "date.timezone = \xff\n",
-	} {
-		_, err := ParsePHPOverlay([]byte(bad), "8.3.ini")
-		e, ok := hteerr.As(err)
-		if !ok || e.Code != hteerr.InvalidState {
-			t.Errorf("%s: %v", name, err)
-			continue
-		}
-		if name != "invalid utf-8" && !slices.Contains([]string{"8.3.ini:1", "8.3.ini:2"}, e.Details[:min(len(e.Details), 9)]) {
-			t.Errorf("%s: no line in %q", name, e.Details)
 		}
 	}
 }

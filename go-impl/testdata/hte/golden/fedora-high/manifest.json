@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "apache": {
+    "binary": "/usr/sbin/httpd",
+    "config": "httpd.conf",
+    "pid_file": "/run/user/1001/gash-hte/httpd.pid",
+    "error_log": "/home/dev/.local/state/gash/hte/logs/error.log",
+    "listen": [
+      "127.0.0.1:8080",
+      "127.0.0.1:8443"
+    ]
+  },
+  "fpm": [
+    {
+      "version": "8.3",
+      "binary": "/usr/sbin/php-fpm",
+      "config": "fpm/8.3/php-fpm.conf",
+      "ini": "/etc/php.ini",
+      "scan_dir": "/etc/php.d:/home/dev/.config/gash/hte/php/8.3",
+      "pid_file": "/run/user/1001/gash-hte/php-fpm-8.3.pid",
+      "error_log": "/home/dev/.local/state/gash/hte/logs/php-fpm-8.3.log",
+      "sockets": [
+        "/run/user/1001/gash-hte/8.3-d8831c8698.sock",
+        "/run/user/1001/gash-hte/8.3-f716ce0004.sock",
+        "/run/user/1001/gash-hte/8.3-0897e51e0e.sock"
+      ]
+    }
+  ],
+  "sites": [
+    {
+      "domain": "app.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:8080"
+      ],
+      "https": [
+        "127.0.0.1:8443"
+      ],
+      "socket": "/run/user/1001/gash-hte/8.3-d8831c8698.sock"
+    },
+    {
+      "domain": "dev.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:8080"
+      ],
+      "https": [
+        "127.0.0.1:8443"
+      ],
+      "socket": "/run/user/1001/gash-hte/8.3-f716ce0004.sock"
+    },
+    {
+      "domain": "lab.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:8080"
+      ],
+      "https": [
+        "127.0.0.1:8443"
+      ],
+      "socket": "/run/user/1001/gash-hte/8.3-0897e51e0e.sock"
+    }
+  ]
+}

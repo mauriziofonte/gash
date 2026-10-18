@@ -109,7 +109,8 @@ var mockEnvs = []map[string]string{
 	{"MOCK_CURL_AI_RESPONSE": `{"content":[{"type":"text","text":"x"}]}`},
 }
 
-// The fake's answers are the mock's: status, body, content type.
+// The fake's answers are the mock's: status, body, content type; then
+// the routed answers.
 func TestRespondMatchesMock(t *testing.T) {
 	for _, env := range mockEnvs {
 		for _, u := range mockURLs {
@@ -136,6 +137,7 @@ func TestRespondMatchesMock(t *testing.T) {
 			}
 		}
 	}
+	t.Run("routes", routesMatchMock)
 }
 
 func headerOf(r reply, name string) string {

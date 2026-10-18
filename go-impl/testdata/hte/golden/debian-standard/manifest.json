@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "apache": {
+    "binary": "/usr/sbin/apache2",
+    "config": "httpd.conf",
+    "pid_file": "/run/user/1000/gash-hte/httpd.pid",
+    "error_log": "/home/me/.local/state/gash/hte/logs/error.log",
+    "listen": [
+      "127.0.0.1:80",
+      "[::1]:80",
+      "127.0.0.1:3000",
+      "[::1]:3000",
+      "127.0.0.1:8081",
+      "[::1]:8081",
+      "127.0.0.1:443",
+      "[::1]:443",
+      "127.0.0.1:3443",
+      "[::1]:3443"
+    ]
+  },
+  "fpm": [
+    {
+      "version": "8.3",
+      "binary": "/usr/sbin/php-fpm8.3",
+      "config": "fpm/8.3/php-fpm.conf",
+      "ini": "/etc/php/8.3/fpm/php.ini",
+      "scan_dir": "/etc/php/8.3/fpm/conf.d:/home/me/.config/gash/hte/php/8.3",
+      "pid_file": "/run/user/1000/gash-hte/php-fpm-8.3.pid",
+      "error_log": "/home/me/.local/state/gash/hte/logs/php-fpm-8.3.log",
+      "sockets": [
+        "/run/user/1000/gash-hte/8.3-16aeaff6b1.sock",
+        "/run/user/1000/gash-hte/8.3-b188b9bf8d.sock",
+        "/run/user/1000/gash-hte/8.3-54ec2ffbae.sock"
+      ]
+    },
+    {
+      "version": "8.4",
+      "binary": "/usr/sbin/php-fpm8.4",
+      "config": "fpm/8.4/php-fpm.conf",
+      "ini": "/etc/php/8.4/fpm/php.ini",
+      "scan_dir": "/etc/php/8.4/fpm/conf.d:/home/me/.config/gash/hte/php/8.4",
+      "pid_file": "/run/user/1000/gash-hte/php-fpm-8.4.pid",
+      "error_log": "/home/me/.local/state/gash/hte/logs/php-fpm-8.4.log",
+      "sockets": [
+        "/run/user/1000/gash-hte/8.4-bc936fbb4e.sock"
+      ]
+    }
+  ],
+  "sites": [
+    {
+      "domain": "bypass.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:80",
+        "[::1]:80"
+      ],
+      "https": [
+        "127.0.0.1:443",
+        "[::1]:443"
+      ],
+      "socket": "/run/user/1000/gash-hte/8.3-16aeaff6b1.sock"
+    },
+    {
+      "domain": "forced.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:80",
+        "[::1]:80",
+        "127.0.0.1:3000",
+        "[::1]:3000"
+      ],
+      "https": [
+        "127.0.0.1:443",
+        "[::1]:443",
+        "127.0.0.1:3443",
+        "[::1]:3443"
+      ],
+      "socket": "/run/user/1000/gash-hte/8.4-bc936fbb4e.sock"
+    },
+    {
+      "domain": "plain.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:80",
+        "[::1]:80"
+      ],
+      "https": [],
+      "socket": "/run/user/1000/gash-hte/8.3-b188b9bf8d.sock"
+    },
+    {
+      "domain": "proxy.test",
+      "kind": "raw",
+      "http": [
+        "127.0.0.1:80",
+        "[::1]:80",
+        "127.0.0.1:8081",
+        "[::1]:8081",
+        "127.0.0.1:3000",
+        "[::1]:3000"
+      ],
+      "https": []
+    },
+    {
+      "domain": "shop.test",
+      "kind": "managed",
+      "http": [
+        "127.0.0.1:80",
+        "[::1]:80"
+      ],
+      "https": [
+        "127.0.0.1:443",
+        "[::1]:443"
+      ],
+      "socket": "/run/user/1000/gash-hte/8.3-54ec2ffbae.sock"
+    }
+  ]
+}

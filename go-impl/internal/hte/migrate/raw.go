@@ -20,7 +20,47 @@ type rawResult struct {
 	php      string // PHP version of the socket it uses, "" when none
 	certFile string // legacy certificate it named, "" when none
 	keyFile  string
+	ports    sitePorts // ports other than 80, 443 and the stack's
 	notes    []string
+}
+
+// sitePorts are the custom ports of a legacy vhost file, kept as the
+// site's extra ports (design/hte.md 10, LEDGER HTE-68).
+type sitePorts struct {
+	http, https []int
+}
+
+// customPorts sorts the ports of every <VirtualHost> of a file: 80 and
+// the stack's HTTP port are the HTTP listeners, 443 and the stack's HTTPS
+// port the HTTPS ones; any other port is an extra port of the protocol of
+// its section (SSLEngine on: HTTPS). An address without a port, or a port
+// used with both protocols, is an error.
+func customPorts(conf *legacy.ConfFile, env Env) (sitePorts, error) {
+	var sp sitePorts
+	for _, vh := range conf.Vhosts {
+		tls := vh.TLS()
+		for i, p := range vh.Ports() {
+			switch {
+			case p == 0:
+				return sp, fmt.Errorf("line %d: <VirtualHost %s> names no port", vh.Line, vh.Addrs[i])
+			case p == 80 || p == 443 || p == env.Ports.HTTP || p == env.Ports.HTTPS:
+				continue
+			}
+			own, other := &sp.http, sp.https
+			if tls {
+				own, other = &sp.https, sp.http
+			}
+			if slices.Contains(other, p) {
+				return sp, fmt.Errorf("line %d: port %d serves both HTTP and HTTPS", vh.Line, p)
+			}
+			if !slices.Contains(*own, p) {
+				*own = append(*own, p)
+			}
+		}
+	}
+	slices.Sort(sp.http)
+	slices.Sort(sp.https)
+	return sp, nil
 }
 
 var (
@@ -38,6 +78,7 @@ var (
 // is an error that keeps the vhost in the system.
 func rewriteRaw(v legacy.Vhost, domain string, env Env) (rawResult, error) {
 	var res rawResult
+	var err error
 	logDir := env.Paths.SiteLogDir(domain)
 	if strings.ContainsAny(logDir, " \t\"\\") {
 		return res, fmt.Errorf("the logs directory %s holds characters an unquoted log path cannot carry", logDir)
@@ -85,6 +126,12 @@ func rewriteRaw(v legacy.Vhost, domain string, env Env) (rawResult, error) {
 		}
 		res.php = m[1]
 	}
+	if res.ports, err = customPorts(v.Conf, env); err != nil {
+		return res, err
+	}
+	if len(res.ports.https) > 0 && res.certFile == "" {
+		return res, fmt.Errorf("an SSLEngine section on port %d names no certificate", res.ports.https[0])
+	}
 	quotedCert, err := render.QuoteApacheArg(env.Paths.CertFile(domain))
 	if err != nil {
 		return res, err
@@ -113,13 +160,13 @@ func rewriteRaw(v legacy.Vhost, domain string, env Env) (rawResult, error) {
 			var out []string
 			for _, a := range strings.Fields(m[2]) {
 				var repl []string
-				switch addrPortOf(a) {
-				case 80:
+				switch p := addrPortOf(a); {
+				case p == 80 || p == env.Ports.HTTP:
 					repl = httpAddrs
-				case 443:
+				case p == 443 || p == env.Ports.HTTPS:
 					repl = httpsAddrs
 				default:
-					return res, fmt.Errorf("line %d: <VirtualHost %s> listens on a port other than 80 and 443", n, a)
+					repl = addrs(env.Listen, p) // an extra port, from customPorts
 				}
 				for _, r := range repl {
 					if !slices.Contains(out, r) {
