@@ -21,9 +21,9 @@ Sites
                   note: V1 force-HTTPS: every plain-HTTP request keeps being redirected, now with 307 instead of 301
 
 Hosts block
+  127.0.0.1 forced.test www.forced.test
   127.0.0.1 http.test www.http.test
   127.0.0.1 https.test www.https.test
-  127.0.0.1 forced.test www.forced.test
 
 Root steps (one sudo for --apply)
   copy_key /etc/apache2/certs-selfsigned/https.test.key -> /home/dev/.local/share/gash/hte/certs/https.test/key.pem

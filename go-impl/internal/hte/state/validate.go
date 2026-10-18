@@ -44,11 +44,12 @@ func NormalizeDomain(arg string) (string, error) {
 
 // docrootRefused are the characters Apache (${NAME} expansion, <Directory>
 // wildcards, quoting) or the PHP-FPM INI parser (; comments, ${NAME})
-// would interpret (design/hte.md section 3, LEDGER HTE-08).
-const docrootRefused = "$*?[;\"\\"
+// would interpret, and the open_basedir list separator : (design/hte.md
+// section 3, LEDGER HTE-08).
+const docrootRefused = "$*?[;:\"\\"
 
 // CheckDocrootText applies the character rules to a document root: valid
-// UTF-8, no control character (newline included) and none of $ * ? [ ; " \.
+// UTF-8, no control character (newline included) and none of $ * ? [ ; : " \.
 func CheckDocrootText(p string) error {
 	if !utf8.ValidString(p) {
 		return hteerr.Newf(hteerr.InvalidDocroot, hintDocrootChars, "document root %q is not valid UTF-8", p)
@@ -209,15 +210,24 @@ func BuildAliases(domain string, noWWW bool, extra []string) ([]string, error) {
 // iniKeyRE is the name of a PHP ini setting.
 var iniKeyRE = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.]*$`)
 
-// CheckINI validates one [php_ini] entry: the key is an ini name, the value
-// is UTF-8 text without control characters, written verbatim after the
-// directive (as in php.ini).
+// CheckINI validates one [php_ini] entry: the key is an ini name, the
+// value UTF-8 text that a double-quoted PHP-FPM INI value can hold: no
+// control character, no ", no \ and no ${ (the INI parser expands ${NAME}
+// inside double quotes). The renderer quotes the value (design/hte.md 4).
 func CheckINI(key, value string) error {
 	if !iniKeyRE.MatchString(key) {
 		return hteerr.Newf(hteerr.InvalidState, "", "php_ini key %q is not a PHP setting name", key)
 	}
-	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {
-		return hteerr.Newf(hteerr.InvalidState, "", "php_ini value of %s contains a control character", key)
+	const hint = "a php_ini value cannot contain control characters, \", \\ or ${"
+	switch {
+	case !utf8.ValidString(value):
+		return hteerr.Newf(hteerr.InvalidState, hint, "php_ini value of %s is not valid UTF-8", key)
+	case strings.ContainsFunc(value, unicode.IsControl):
+		return hteerr.Newf(hteerr.InvalidState, hint, "php_ini value of %s contains a control character", key)
+	case strings.ContainsAny(value, "\"\\"):
+		return hteerr.Newf(hteerr.InvalidState, hint, "php_ini value of %s contains \" or \\", key)
+	case strings.Contains(value, "${"):
+		return hteerr.Newf(hteerr.InvalidState, hint, "php_ini value of %s contains ${", key)
 	}
 	return nil
 }

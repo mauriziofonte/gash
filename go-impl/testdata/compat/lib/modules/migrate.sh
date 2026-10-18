@@ -20,7 +20,10 @@ if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
 fi
 unset __gash_here
 
-gash_migrate() { __gash_call gash_migrate "$@"; }
+gash_migrate() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash_migrate "$@"
+}
 
 # Sourcing never fails: the status of this file is 0.
 true

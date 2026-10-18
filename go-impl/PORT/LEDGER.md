@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 71 | 172 | 115 |
-| Forced divergences | 2 | 4 | 24 | 63 | 93 | 37 |
+| Defects | 1 | 25 | 75 | 73 | 174 | 115 |
+| Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
-| HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 242 | **405** | 241 |
+| HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
+| **All** | 3 | 36 | 128 | 249 | **416** | 244 |
 
 Critical and high items:
 
@@ -345,6 +345,8 @@ Critical and high items:
 | [TEST-06](#test-06) | `llm_spec.sh` uses the repository's own `lib/` as a fixture tree | Test harness | low | no |
 | [TEST-07](#test-07) | 18 specs source Gash at top level in the runner process | Test harness | low | no |
 | [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
+| [TEST-10](#test-10) | Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice | Test harness | low | no |
+| [TEST-11](#test-11) | Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes | Test harness | low | no |
 
 ### llm_* agent functions
 
@@ -3472,6 +3474,42 @@ Critical and high items:
 | Proving test | The summary status follows the recorded statuses; a run with every spec passing never ends in FAIL. |
 | Status | open |
 
+<a id="test-10"></a>
+#### TEST-10 · Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A CI, macOS runner) |
+| Area | Test harness |
+| Bash location | `tests/specs/llm_db_security_spec.sh` (MySQL and PostgreSQL client tests), `tests/specs/llm_db_names_spec.sh` (`__dbn_mocks`); the rule is `lib/modules/llm/core.sh:577` |
+| Observed behavior | The specs record what a mock `mysql`/`psql` received (argv, stdin, options) and assert on it. When the call takes 100 ms or more, which on a slow runner the client spawn alone can (DB-06), `llm_db_query` runs the auto-EXPLAIN through the same mock, which overwrites the recorded files, and the assertions fail. Seen once on the macOS job. |
+| Reproduction | the PostgreSQL client test on a loaded runner, or with a mock that sleeps 150 ms |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the specs: after sourcing they pin `EPOCHREALTIME` to a constant, as `llm_portability_spec.sh` already does, so the elapsed time is 0 and the mock runs once. Assertions unchanged. |
+| Fix recipe (3.0) | n/a after cutover (testscript, with the clock injected in `internal/db`). |
+| Proving test | The three tests pass with a mock client that sleeps 150 ms. |
+| Status | open |
+
+<a id="test-11"></a>
+#### TEST-11 · Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A, Go-mode HTTPS fake) |
+| Area | Test harness |
+| Bash location | `tests/specs/chrome_spec.sh` (the `MOCKS` curl stub and the "npm registry is unreachable" stub), `tests/specs/toolchains_spec.sh` (the `__gash_download` stub), `tests/specs/output_style_render_spec.sh` (six `chrome_headless_update` fixtures with a `curl()` function, also TEST-05); `tests/mocks/bin/curl` (its 404 and 500 answers) |
+| Observed behavior | These fakes answer the argv the Bash implementation gives curl: `-fsIL` for a size probe, `-o FILE` for a download, `exit 22` or `exit 6` for a failure. The binary sends its requests with net/http, so in Go mode none of them runs and the requests reach the HTTPS fake, which knows only the shared mock's answers. Separately, the shared mock exits 0 with its 404 and 500 bodies even when the caller passed `-f`, where curl exits 22; the fake answers with real statuses. No spec relies on that today: the callers that pass `-f` (`chrome.sh`, `__gash_download`) are faked per test. |
+| Reproduction | `bash tests/run.sh --impl go specs/chrome_spec.sh` once `chrome_headless_update` is ported |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the harness: a test writes the HTTP answers it wants (method, URL pattern, status, headers, body, or "unreachable") to a route file named by `MOCK_CURL_ROUTES`. `tests/mocks/bin/curl` serves routed answers with curl's `-f`, `-I` and `-o` semantics (Bash mode), and the HTTPS fake serves the same file (Go mode). The per-test curl fakes listed above become route files; assertions stay byte for byte the same and the Bash reference stays 807/0. Without `MOCK_CURL_ROUTES` the mock and the fake answer as before. |
+| Fix recipe (3.0) | n/a after cutover (testscript, with a local HTTPS server per script). |
+| Proving test | The converted tests pass in both modes; a route answering 404 gives exit 22 from `curl -f` in Bash mode and the binary's exit 22 path in Go mode. |
+| Status | open |
+
 ## Forced divergences
 
 | Id | Title | Area | Severity | Contract |
@@ -3569,6 +3607,7 @@ Critical and high items:
 | [CORE-10](#core-10) | __gash_download's INT trap re-parses the destination path as shell code | Security | low | no |
 | [CORE-16](#core-16) | Character counts in messages follow the locale (bytes in C, characters in UTF-8) | Portability | low | yes |
 | [CORE-17](#core-17) | The mode in the ~/.gash_env permission warning depends on the installed stat | Portability | low | no |
+| [CORE-18](#core-18) | Without the startup load, settings warnings come at the first call, before its argument checks | Contract | low | no |
 
 ### llm_* agent functions
 
@@ -5272,6 +5311,24 @@ Critical and high items:
 | Proving test | `TestLedger_CORE17` in `internal/config`. |
 | Status | open |
 
+<a id="core-18"></a>
+#### CORE-18 · Without the startup load, settings warnings come at the first call, before its argument checks
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_exec, `llm_exec_security_spec.sh` "reads ~/.gash_env once per call") |
+| Area | Contract |
+| Bash location | `lib/core/config.sh:147-277` (`__gash_load_env`, cached for the life of the shell) and its callers in the function bodies (`llm/exec.sh:1128`, `llm/db.sh:239`, `remote.sh:71,298`, `ssh.sh:198`, `ai/chat.sh`, `ai/sysinfo.sh`, the `gash_db_*`/`gash_ai_*` helpers of `config.sh`) |
+| Observed behavior | gash.sh loads the settings file at startup and prints its warnings then. A shell that sources only the module files (the compat paths) has no startup load: the first function that needs settings loads the file when its body reaches `__gash_load_env`, after its help, argument and validation checks, and prints the warnings once for the life of the shell. |
+| Reproduction | a `~/.gash_env` with a malformed line, the modules sourced without gash.sh, then two llm_exec calls: one "Line 1" warning on stderr |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | The cache lives in the caller's shell, which the binary cannot fill, and printing from the binary would repeat the warnings on every call. So the generated stub of every function whose 2.x body loads the settings runs the shim's `__gash_load_env` (the 2.x helper, cached, warnings printed once per shell) before it calls the binary, and the binary reads the file silently. Same warnings, same count, same shell; in a modules-only, non-headless shell they now also appear when that first call only prints help or is refused, where 2.x printed nothing yet. Shells that load gash.sh are unchanged. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `llm_exec_security_spec.sh` "reads ~/.gash_env once per call" in Go mode, plus `TestLedger_CORE18` in `internal/compatgen` (the stub of each such function calls `__gash_load_env` first, and no other stub does). |
+| Status | open |
+
 ## Decisions for the operator
 
 | Id | Title | Area | Severity | Contract |
@@ -6761,7 +6818,7 @@ Critical and high items:
 | [HTE-36](#hte-36) | Apache listens on loopback only instead of on every interface | Security | medium | yes |
 | [HTE-37](#hte-37) | Vhosts also answer on `[::1]` | Portability | low | yes |
 | [HTE-38](#hte-38) | HTTP/2 on cleartext (h2c), and a contradiction in the design sample | Correctness | low | yes |
-| [HTE-39](#hte-39) | Certificates: ECDSA P-256, 10 years, proper extensions, made in-process | Security | low | yes |
+| [HTE-39](#hte-39) | Certificates: ECDSA P-256, 10 years, proper extensions, made by the openssl CLI | Security | low | yes |
 | [HTE-40](#hte-40) | One certificate directory per site, user-owned, new file names | Contract | low | yes |
 | [HTE-41](#hte-41) | Per-version session directory where the platform's default is not writable | Portability | low | yes |
 | [HTE-42](#hte-42) | The staging/hardened `open_basedir` list is Debian's on every platform | Portability | low | yes |
@@ -6791,6 +6848,13 @@ Critical and high items:
 | [HTE-66](#hte-66) | migrate finds the pool by exact path; pool values, profile and owner are reconciled | Correctness | medium | yes |
 | [HTE-67](#hte-67) | migrate copies the legacy certificate pair through the root step, or reissues it | Contract | low | yes |
 | [HTE-68](#hte-68) | migrate reports duplicates, shared sockets, custom ports and orphans that hte-cli never noticed | Correctness | low | yes |
+| [HTE-69](#hte-69) | The hosts helper cannot rename over a bind-mounted /etc/hosts (containers) | Platform | low | no |
+| [HTE-70](#hte-70) | migrate --apply with --ports high keeps the system Apache running | Correctness | medium | yes |
+| [HTE-71](#hte-71) | A reload after an overlay edit could not roll back | Correctness | medium | no |
+| [HTE-72](#hte-72) | Error codes for a missing openssl, a bad flag value and PHP settings on a site without PHP | Contract | low | yes |
+| [HTE-73](#hte-73) | With systemd autostart the stack has one supervisor | Correctness | low | no |
+| [HTE-74](#hte-74) | A root operation restarts the system Apache when migrate fails after the switch | Security | medium | no |
+| [HTE-75](#hte-75) | install next to a system Apache it may not stop exits 0 with the stack not started | Contract | low | yes |
 
 ### HTE (design delta vs hte-cli)
 
@@ -6881,7 +6945,7 @@ Critical and high items:
 | Public-contract impact | no |
 | rc.A behavior | The identity is the `domain` key of `sites/<domain>.toml` (file name and key must agree, else the site is reported invalid by `doctor`). Rendered files and sockets are derived from it; nothing is parsed back from rendered config. migrate uses the exact pool path plus the `[<domain>]` first section (HTE-66) |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE05` in `internal/hte/migrate` (on `Malformed/`, `valid.test` gets no pool and `aaa-notes.conf` is untouched) and in `internal/hte/state` (a TOML whose `domain` differs from its file name is refused) |
+| Proving test | `TestLedger_HTE05` in `internal/hte/migrate` (on `Malformed/`, `valid.test` gets its exact-path pool `/etc/php/8.3/fpm/pool.d/valid.test.conf`, `aaa-notes.conf` is reported as an orphan pool and left untouched, and a pool at the exact path whose first section names another site is not taken) and in `internal/hte/state` (a TOML whose `domain` differs from its file name is refused) |
 | Status | open |
 
 <a id="hte-06"></a>
@@ -6917,7 +6981,7 @@ Critical and high items:
 | Public-contract impact | yes (log locations) |
 | rc.A behavior | `slowlog = $XDG_STATE_HOME/gash/hte/logs/<domain>/php-slow.log`, `php_admin_value[error_log] = .../logs/<domain>/php-error.log`, FPM master log `logs/php-fpm-<X.Y>.log`; nothing is ever written under a document root. `service logs --site D` shows them. migrate never deletes files, so old `php*-fpm-*.log` files stay in the docroot |
 | Fix recipe (3.0) | none: the delta is the design. Recommended addition to migrate: list the legacy log files found in each docroot in the plan, with a note that they may be served |
-| Proving test | `TestLedger_HTE07` in `internal/hte/fpm` (golden pools per profile: no rendered path starts with the docroot except `open_basedir`); `hte-e2e`: a PHP warning lands in `logs/<domain>/php-error.log` and the docroot listing is unchanged |
+| Proving test | `TestLedger_HTE07` in `internal/hte/render` (golden pools per profile: no rendered path starts with the docroot except `open_basedir`); `hte-e2e`: a PHP warning lands in `logs/<domain>/php-error.log` and the docroot listing is unchanged. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "logs stay out of the document root" (the warning in `php-error.log`, the docroot listing unchanged). |
 | Status | open |
 
 <a id="hte-08"></a>
@@ -6933,9 +6997,9 @@ Critical and high items:
 | Reproduction | `mkdir -p "$SB/x$(printf '\n')Header set X-Injected yes" && work/hte/run.sh $SB create --domain=inj.test --docroot="$SB/x$(printf '\n')Header set X-Injected yes" --phpver=8.3 --ssl=n --forcessl=n --hosts=n --profile=staging -n` |
 | Severity | high |
 | Public-contract impact | no |
-| rc.A behavior | Validation refuses a docroot with any control character, newline included (`invalid_docroot`, RETRY). Apache paths go through `quoteApacheArg` (double quotes, `"` and `\` escaped), so spaces work. Two gaps the design does not cover yet (inferred from Apache and PHP INI rules, not run): Apache expands `${NAME}` inside quoted arguments, and `<Directory>` treats `*`, `?`, `[` as wildcards; php-fpm's INI parser treats `;` as a comment start and expands `${NAME}` in the `open_basedir` value of staging/hardened pools |
-| Fix recipe (3.0) | Design addition: `invalid_docroot` also for a docroot containing `$`, `*`, `?`, `[`, `;`, `"` or `\` (hint: "rename the directory or use a symlink without these characters"); pool values double-quoted. Prove with `httpd -t` and `php-fpm -t` on the rendered files |
-| Proving test | `TestLedger_HTE08` in `internal/hte/render` (table of docroots: spaces accepted and rendered quoted; each refused character → `invalid_docroot`; fuzz `quoteApacheArg` so that the output never has a newline); `hte-e2e`: a docroot with a space serves `index.php` |
+| rc.A behavior | Validation refuses a docroot with any control character, newline included (`invalid_docroot`, RETRY). Apache paths go through `quoteApacheArg` (double quotes, `"` and `\` escaped), so spaces work. The characters Apache or php-fpm would read as syntax are refused too, with `invalid_docroot` naming the character: `$` (Apache and the INI parser expand `${NAME}`), `*`, `?`, `[`, `]` (`<Directory>` wildcards), `;` (INI comment), `"` and `\` (INI quoting), besides `:` (the `open_basedir` separator); migrate reports a legacy vhost with such a root and leaves it in the system. Apache 2.4.58 `mod_proxy_fcgi` sends `SCRIPT_FILENAME` percent-encoded, so a root with a space gave "File not found.": the vhost sets `ProxyFCGISetEnvIf "true" SCRIPT_FILENAME "%{unescape:%{reqenv:SCRIPT_FILENAME}}"`, which gives FPM the path Apache resolved (lead decision, 2026-10-18) |
+| Fix recipe (3.0) | Design addition: `invalid_docroot` also for a docroot containing `$`, `*`, `?`, `[`, `;`, `:`, `"` or `\` (hint: "rename the directory or use a symlink without these characters"); `:` because it separates the `open_basedir` list (lead decision, 2026-10-18); pool values double-quoted. Prove with `httpd -t` and `php-fpm -t` on the rendered files |
+| Proving test | `TestLedger_HTE08` in `internal/hte/render` (table of docroots: spaces accepted and rendered quoted; each refused character → `invalid_docroot`; fuzz `quoteApacheArg` so that the output never has a newline); `hte-e2e`: a docroot with a space serves `index.php`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "a document root with a space" (`/index.php` and `/index.php/extra?q=a%20b`). |
 | Status | open |
 
 <a id="hte-09"></a>
@@ -6953,7 +7017,7 @@ Critical and high items:
 | Public-contract impact | yes (reload instead of restart) |
 | rc.A behavior | Every mutation renders a new generation `render/gen-<n>/`, runs `httpd -t` and `php-fpm -t` on it, swaps `render/current`, sends Apache `-k graceful` and FPM `SIGUSR2`, then health-checks each site. Any failure restores the previous generation and state: `config_test_failed` (STOP) before the swap, `reload_failed` (STOP, details say whether the rollback succeeded) after it |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE09` in `internal/hte/service` (runner fake: config test fails → `current` unchanged, state unchanged; reload fails → previous generation back, `reload_failed` with `rollback: ok`); `hte-e2e`: an overlay with a syntax error leaves the other sites answering |
+| Proving test | `TestLedger_HTE09` in `internal/hte/service` (runner fake: config test fails → `current` unchanged, state unchanged; reload fails → previous generation back, `reload_failed` with `rollback: ok`); `hte-e2e`: an overlay with a syntax error leaves the other sites answering. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), steps "an overlay error leaves the sites answering" and "a reload that fails rolls back" (a busy extra port: Apache exits on the graceful restart, the previous generation runs again). |
 | Status | open |
 
 <a id="hte-10"></a>
@@ -6971,7 +7035,7 @@ Critical and high items:
 | Public-contract impact | yes (redirect status) |
 | rc.A behavior | `[R=307,L]`, method and body preserved, never cached as permanent. migrate imports forced sites as `force_https = true`, so they render 307; browsers that already cached a 301 keep it until their cache is cleared |
 | Fix recipe (3.0) | none: the delta is the design. Recommended: the migrate plan notes the cached-301 effect for each forced site |
-| Proving test | `TestLedger_HTE10` in `internal/hte/render` (golden `vhost-https-forced.conf` holds `R=307`); `hte-e2e`: a request from a non-bypassed address (HTE-52) gets 307 |
+| Proving test | `TestLedger_HTE10` in `internal/hte/render` (golden `vhost-https-forced.conf` holds `R=307`); `hte-e2e`: a request from a non-bypassed address (HTE-52) gets 307. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "forced HTTPS without the bypass" (307 to `https://<site>/`, from loopback too). |
 | Status | open |
 
 <a id="hte-11"></a>
@@ -6987,9 +7051,9 @@ Critical and high items:
 | Reproduction | `printf '    Header set X-Manual-Edit 1\n' >> $SB/etc/apache2/sites-available/001-a.test.conf && work/hte/run.sh $SB modify --domain=a.test --profile=staging -n && grep -c X-Manual-Edit $SB/etc/apache2/sites-available/001-a.test.conf` (site from HTE-01; prints 0) |
 | Severity | medium |
 | Public-contract impact | yes (where manual edits go) |
-| rc.A behavior | Rendered files are artifacts, rebuilt on every change and never edited. User directives go into `sites/<domain>.apache.conf` (included in every vhost of the site), `apache.conf` (server level) and `php/<X.Y>.ini`; the renderer includes them and never writes them. `site modify` changes only the TOML. The design does not say what migrate does with hand edits in a legacy vhost |
+| rc.A behavior | Rendered files are artifacts, rebuilt on every change and never edited. User directives go into `sites/<domain>.apache.conf` (included in every vhost of the site), `apache.conf` (server level) and the directory `php/<X.Y>/` (its `*.ini` files are read by that version's FPM master after the system ones, through `PHP_INI_SCAN_DIR=<system scan dir>:<overlay dir>` written out in full; lead decision, 2026-10-18); the renderer includes or passes them and never writes them. The site's `[php_ini]` is rendered into its pool: a key the profile sets replaces the profile line with the same admin kind, other keys are `php_value`/`php_flag`, boolean words are bare flags, other values double-quoted; control characters, `"`, `\` and `${` are refused (`invalid_state`). `site modify` changes only the TOML. The design does not say what migrate does with hand edits in a legacy vhost |
 | Fix recipe (3.0) | none for the overlay model. Operator choice for hand edits found by migrate (lines that are not in the variant's template): (a) report them in the plan only; (b) copy them into `sites/<domain>.apache.conf`, validated by the config test, and report them (recommended) |
-| Proving test | `TestLedger_HTE11` in `internal/hte/render` (overlay bytes unchanged after modify of every field); `internal/hte/migrate` (V2 fixture plus one added line → the chosen outcome) |
+| Proving test | `TestLedger_HTE11` in `internal/hte/render` (overlay bytes unchanged after modify of every field); `TestPoolPHPIni` and `TestManifest` in `internal/hte/render` (php_ini rules, no overlay in pools, the full `PHP_INI_SCAN_DIR`); `internal/hte/migrate` (V2 fixture plus one added line → the chosen outcome); `hte-e2e`: a value in `php/<X.Y>/global.ini` shows in `phpinfo()`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "php ini and the global overlay" (`ini_get` shows the `global.ini` and `[php_ini]` values). |
 | Status | open |
 
 <a id="hte-12"></a>
@@ -7007,7 +7071,7 @@ Critical and high items:
 | Public-contract impact | yes |
 | rc.A behavior | A command exits 0 only when every step it ran succeeded; otherwise the first failure's envelope, exit 1, and the rollback of HTE-09. Unknown sites fail with `site_not_found` |
 | Fix recipe (3.0) | none for failures. Operator choice for `site modify` with no effective change: (a) exit 0, `{"changed":false}` in `--json`, one stderr note (recommended, idempotent for scripts); (b) fail with `unexpected_argument`-style RETRY (hte-cli's message, non-zero) |
-| Proving test | `TestLedger_HTE12` in `internal/hte/service` (each step failing in turn → non-zero exit, no "success" text on stdout); `testdata/script/hte_modify_noop.txtar` (the chosen no-op contract) |
+| Proving test | `TestLedger_HTE12` in `internal/hte` (each step failing in turn → non-zero exit, no "success" text on stdout); `testdata/script/hte_modify_noop.txtar` (the chosen no-op contract). The engine test is `TestLedger_HTE12` in `internal/hte` (a failing config test fails `site create` and `site modify` and puts the state back; a no-op modify is `changed=false` and runs nothing); the txtar waits for the CLI. |
 | Status | open |
 
 <a id="hte-13"></a>
@@ -7061,7 +7125,7 @@ Critical and high items:
 | Public-contract impact | no |
 | rc.A behavior | Managed vhosts carry no cipher or protocol directive. The server level sets the Debian `ssl.conf` equivalents: `SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1`, `SSLCipherSuite HIGH:!aNULL`, `SSLHonorCipherOrder off`, `SSLSessionCache shmcb:<run>/ssl_scache(512000)`, `SSLSessionCacheTimeout 300`. A raw imported vhost keeps its own SSL directives (only paths are rewritten) |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE15` in `internal/hte/render` (golden `httpd.conf` and vhosts: no `SSLCipherSuite` in any managed vhost); `hte-e2e`: a TLS 1.1 handshake to `127.0.0.1:443` is refused |
+| Proving test | `TestLedger_HTE15` in `internal/hte/render` (golden `httpd.conf` and vhosts: no `SSLCipherSuite` in any managed vhost); `hte-e2e`: a TLS 1.1 handshake to `127.0.0.1:443` is refused. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "TLS, HTTP/2 and the certificate" (a TLS 1.1 handshake is refused). |
 | Status | open |
 
 <a id="hte-16"></a>
@@ -7095,9 +7159,9 @@ Critical and high items:
 | Reproduction | `work/hte/run.sh $SB create --domain=a.test --docroot=$SB/d --phpver=8.3 --ssl=y --forcessl=n --hosts=n --profile=dev -n && grep sscert_ $SB/exec.log` (the harness keeps a copy in `$SB/last-cert-script.sh`) |
 | Severity | low |
 | Public-contract impact | no |
-| rc.A behavior | Certificates are made in-process (`crypto/x509`, `crypto/ecdsa`) as the user; no script is generated. Root runs only `sudo <gash binary> hte __root <op>` from `install`, `uninstall`, `migrate --apply`, a closed typed set of operations validated against the plan the user saw, and the fixed hosts helper |
+| rc.A behavior | Certificates are made by the openssl CLI as the user (HTE-39), with a fixed argument vector; no script is generated. Root runs only one `sudo <gash binary> hte __root` session per `install`, `uninstall` and `migrate --apply`: the plan the user saw arrives on stdin first, then root runs its operations by id, each once, from a closed typed set, each checked against root's own reading of the system (a vhost or pool to archive must be one `legacy.Scan` finds, a key to copy must be the `SSLCertificateKeyFile` of such a vhost); and the fixed hosts helper |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE17` in `internal/hte/rootops` (an op not in the plan, or with a changed argument, is refused) and `internal/hte/certs` (runner fake records no child process during create/renew) |
+| Proving test | `TestLedger_HTE17` in `internal/hte/rootops` (an op not in the plan, run twice, or naming a file root does not find in the system configuration, is refused; a bad plan is refused before anything runs) and `TestOpenSSLArgv` in `internal/hte/certs` (the only children of create/renew are openssl genpkey and req, fixed argv, no secret, new session) |
 | Status | open |
 
 <a id="hte-18"></a>
@@ -7115,7 +7179,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | Pools have no `user`, `group`, `listen.owner` or `listen.group`: the FPM master runs as the user, so workers and socket belong to the user; `listen.mode = 0660` kept. The userland Apache runs as the same user and reaches the socket without group tricks |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE18` in `internal/hte/fpm` (golden pools per profile: none of the four directives); `hte-e2e`: `stat` of the socket shows the user and 0660, `ps` shows workers as the user |
+| Proving test | `TestLedger_HTE18` in `internal/hte/render` (golden pools per profile: none of the four directives); `hte-e2e`: `stat` of the socket shows the user and 0660, `ps` shows workers as the user. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "logs stay out of the document root" (the masters and workers are the user's processes). |
 | Status | open |
 
 <a id="hte-19"></a>
@@ -7133,7 +7197,7 @@ Critical and high items:
 | Public-contract impact | yes (no sudo for site commands) |
 | rc.A behavior | Site, service, php, apache, cert and hosts commands run as the user with no sudo; the user is the process's own uid (`os.Getuid`) and XDG directories. Root is reached only through `sudo <gash binary> hte __root <op>` (HTE-17) and the hosts helper, whose sudoers line names the user. The design does not say what `gash hte site ...` does when euid is 0 |
 | Fix recipe (3.0) | Operator choice for euid 0: (a) refuse every `gash hte` command except `install`, `uninstall`, `migrate` and `doctor` with a new code `root_not_allowed` (FATAL, hint: "Run gash hte as your own user; it asks for sudo itself when a step needs root") (recommended); (b) let root keep its own userland stack under `/root` |
-| Proving test | `TestLedger_HTE19` in `internal/hte/platform` (identity from the uid fake, environment variables ignored; euid 0 → the chosen outcome) |
+| Proving test | `TestLedger_HTE19` in `internal/hte` (identity from the uid fake, environment variables ignored; euid 0 → the chosen outcome). Implemented with option (a) in `internal/hte` (`Engine.CheckIdentity`); one engine choice to confirm: `migrate --apply` as euid 0 is `root_not_allowed` too (the dry run is allowed), since the sites go into the invoking user's own stack |
 | Status | open |
 
 <a id="hte-20"></a>
@@ -7187,7 +7251,7 @@ Critical and high items:
 | Public-contract impact | yes (which versions are offered) |
 | rc.A behavior | A version 5.6 to 8.5 counts only when its FPM binary runs and `<bin> -v` reports that version, and its `php.ini` exists. Probed layouts: Debian/Ubuntu (`/usr/sbin/php-fpmX.Y`), Fedora distro and Remi, Arch `php`/`php-legacy` and AUR, Homebrew `php@X.Y`. Cached by binary path, size and mtime. `php versions` lists them; `doctor` prints the platform's install command for a missing one |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE22` in `internal/hte/fpm` (sysroot with `etc/php/8.4/cli` only → 8.4 not listed; fake binary answering `PHP 8.3.x (fpm-fcgi)` → 8.3 listed; cache invalidated by an mtime change) |
+| Proving test | `TestLedger_HTE22` in `internal/hte/discover` (sysroot with `etc/php/8.4/cli` only → 8.4 not listed; fake binary answering `PHP 8.3.x (fpm-fcgi)` → 8.3 listed; cache invalidated by an mtime change) |
 | Status | open |
 
 <a id="hte-23"></a>
@@ -7223,7 +7287,7 @@ Critical and high items:
 | Public-contract impact | yes (hosts file format; `hosts list\|sync\|add\|remove` become `hosts list\|apply\|check\|windows`) |
 | rc.A behavior | One region between `# >>> gash hte >>>` and `# <<< gash hte <<<`, appended when absent, regenerated from state by the root helper `gash-hosts-helper apply` (stdin grammar: at most 4096 lines `ADDRESS NAME...`, ADDRESS exactly `127.0.0.1` or `::1`; anything else exit 2, nothing written), written to a temporary file in `/etc`, fsynced, renamed with the original owner and mode. Lines outside the block are never read for decisions nor changed. Applied on every site change, on `service start` and on `doctor`. No per-domain `add`/`remove` |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE24` in `internal/hostshelper` (every refusal path: bad address, wildcard, uppercase, injected newline, 4097 lines; bytes outside the block unchanged; owner and mode kept); `hte-e2e`: helper through the sudoers line |
+| Proving test | `TestLedger_HTE24` in `internal/hostshelper` (every refusal path: bad address, wildcard, uppercase, injected newline, 4097 lines; bytes outside the block unchanged; owner and mode kept); `hte-e2e`: helper through the sudoers line. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "hosts drift is repaired" (the helper through the sudoers line, its refusals, an extra argument refused by sudo). |
 | Status | open |
 
 <a id="hte-25"></a>
@@ -7259,7 +7323,7 @@ Critical and high items:
 | Public-contract impact | yes (new warnings on stderr and in `--json`) |
 | rc.A behavior | `site create`, `site modify`, `site show`, `doctor` and `migrate` warn on stderr, and add a `warnings` array in `--json`, when the docroot's `.htaccess` has a `RewriteRule` or `Redirect`/`RedirectMatch` to `https://`, including the `%{HTTP:X-Forwarded-Proto}` form. The warning names the file and line. Never an error |
 | Fix recipe (3.0) | none: the delta is the design. Implementation note: match per rule (the `RewriteCond` lines directly above one `RewriteRule`), not with a multi-line `.*` |
-| Proving test | `TestLedger_HTE26` in `internal/hte/doctor` (table: the hte-cli forms, the X-Forwarded-Proto form, `Redirect permanent / https://...`, an unrelated `RewriteCond` followed later by an unrelated rule → no warning) |
+| Proving test | `TestLedger_HTE26` in `internal/hte/htaccess` (table: the hte-cli forms, the X-Forwarded-Proto form, `Redirect permanent / https://...`, an unrelated `RewriteCond` followed later by an unrelated rule → no warning) |
 | Status | open |
 
 <a id="hte-27"></a>
@@ -7347,9 +7411,9 @@ Critical and high items:
 | Reproduction | fixture `Malformed/` and `Malformed/expected-discovery-1.1.0.crash.txt` (1.1.0 phar on that tree) |
 | Severity | low |
 | Public-contract impact | no |
-| rc.A behavior | migrate classifies the file as Malformed: reported with the reason (no `SetHandler`, empty domain, default socket), not imported, never modified. If it is enabled in the system Apache, `install` and `migrate --apply` refuse to stop the system Apache until it is excluded, but `--exclude` takes a domain and `020-.conf`/`021-.conf` have none |
+| rc.A behavior | migrate classifies the file as Malformed: reported with the reason (no `SetHandler`, empty domain, default socket), not imported, never modified. If it is enabled in the system Apache, `install` and `migrate --apply` refuse to stop the system Apache until it is excluded. Option (a) was chosen (lead decision, 2026-10-18): `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file, whatever its class: Malformed files, Debian's `000-default.conf`, one of two duplicates). Nothing is excluded implicitly, not even `000-default.conf`; each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (shell-quoted when needed), in the text plan and as `blocking_stop[].exclude` in `--json`. A relative path is `invalid_domain`, an unknown path `site_not_found`, and `--site D` whose every vhost is excluded `conflicting_options` |
 | Fix recipe (3.0) | Design gap, operator choice: (a) `--exclude` also accepts a vhost file path (recommended); (b) Malformed files never block the stop, and the plan says they will no longer be served |
-| Proving test | `TestLedger_HTE31` in `internal/hte/migrate` (every file of `Malformed/` → its class and reason; `025-valid.test` imported; bytes of the tree unchanged) |
+| Proving test | `TestLedger_HTE31` and `TestExcludePath` in `internal/hte/migrate` (every file of `Malformed/` → its class and reason; `025-valid.test` imported; bytes of the tree unchanged; `--exclude PATH` unblocks the stop and resolves duplicates) |
 | Status | open |
 
 <a id="hte-32"></a>
@@ -7367,7 +7431,7 @@ Critical and high items:
 | Public-contract impact | yes |
 | rc.A behavior | One Apache master (distro or Homebrew `apache2`/`httpd` binary and modules) and one `php-fpm` master per PHP version in use, all started by `gash hte service start` as the user, daemonized, tracked by PID files in the runtime directory; `service stop` signals a PID only when its command line names gash's config path. No root process at runtime. `systemctl status apache2` no longer describes the sites; `install`/`migrate --apply` stop and disable the system units (HTE-64) |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE32` in `internal/hte/service` (a PID file pointing at a foreign process is never signalled); `hte-e2e`: masters and workers owned by the user, `service stop` leaves no process |
+| Proving test | `TestLedger_HTE32` in `internal/hte/service` (a PID file pointing at a foreign process is never signalled); `hte-e2e`: masters and workers owned by the user, `service stop` leaves no process. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "stop, start, restart, status, logs" (no process of the stack after `service stop`). |
 | Status | open |
 
 <a id="hte-33"></a>
@@ -7421,7 +7485,7 @@ Critical and high items:
 | Public-contract impact | yes (anything else pointing at the socket breaks) |
 | rc.A behavior | `<runtime>/gash-hte/<X.Y>-<first 10 hex of sha256(domain)>.sock`, to stay under the 104-byte `sun_path` limit of macOS. The name is never parsed (identity is the TOML). migrate rewrites socket paths in raw vhosts it imports; a raw vhost that used another site's socket gets its own pool (reported) |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE35` in `internal/hte/fpm` (socket path length ≤ 103 bytes for a 253-byte domain under a 60-byte runtime directory; vhost and pool name the same path) |
+| Proving test | `TestLedger_HTE35` in `internal/hte/render` (socket path length ≤ 103 bytes for a 253-byte domain under a 60-byte runtime directory; vhost and pool name the same path) |
 | Status | open |
 
 <a id="hte-36"></a>
@@ -7455,9 +7519,9 @@ Critical and high items:
 | Reproduction | `grep -n 'VirtualHost\|::1' go-impl/testdata/hte/legacy/templates/v2-vhost-forced.conf` |
 | Severity | low |
 | Public-contract impact | yes (addresses) |
-| rc.A behavior | When IPv6 loopback exists, both vhosts of a site also bind `[::1]:<http>`/`[::1]:<https>` and the `::1` bypass condition is live. The helper accepts `::1` lines, but the design does not say whether the block contains them |
+| rc.A behavior | When IPv6 loopback exists, both vhosts of a site also bind `[::1]:<http>`/`[::1]:<https>` and the `::1` bypass condition is live. The helper accepts `::1` lines; the block holds `127.0.0.1` lines only, option (a) (lead decision, 2026-10-18) |
 | Fix recipe (3.0) | Operator choice: (a) the block lists `127.0.0.1` lines only (hte-cli parity); (b) it also lists `::1` lines, only while the `[::1]` listener is configured (recommended: clients that prefer IPv6 then hit a live vhost instead of falling back) |
-| Proving test | `TestLedger_HTE37` in `internal/hte/render` (golden vhosts with and without IPv6 loopback on the platform fake); `internal/hte/hosts` (the chosen block content) |
+| Proving test | `TestLedger_HTE37` in `internal/hte/render` (golden vhosts with and without IPv6 loopback on the platform fake) and in `internal/hte/hosts` (only `127.0.0.1` lines) |
 | Status | open |
 
 <a id="hte-38"></a>
@@ -7475,11 +7539,11 @@ Critical and high items:
 | Public-contract impact | yes (protocols offered on port 80) |
 | rc.A behavior | The server level sets `Protocols h2 h2c http/1.1`; each site has `http2 = true` by default (`--no-http2`). The design's sample port-80 vhost still carries `Protocols h2 http/1.1`, which overrides the server value in that vhost, so h2c would stay off |
 | Fix recipe (3.0) | Design text to amend (no operator choice): port-80 vhost `Protocols h2c http/1.1`, HTTPS vhost `Protocols h2 http/1.1`; `http2 = false` → `Protocols http/1.1` in both |
-| Proving test | `TestLedger_HTE38` in `internal/hte/render` (golden vhosts for `http2` true and false); `hte-e2e`: `curl --http2-prior-knowledge http://<site>/` answers with HTTP/2, `curl --http2 https://<site>/` too |
+| Proving test | `TestLedger_HTE38` in `internal/hte/render` (golden vhosts for `http2` true and false); `hte-e2e`: `curl --http2-prior-knowledge http://<site>/` answers with HTTP/2, `curl --http2 https://<site>/` too. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "TLS, HTTP/2 and the certificate" (HTTP/2 over TLS). |
 | Status | open |
 
 <a id="hte-39"></a>
-#### HTE-39 · Certificates: ECDSA P-256, 10 years, proper extensions, made in-process
+#### HTE-39 · Certificates: ECDSA P-256, 10 years, proper extensions, made by the openssl CLI
 
 | Field | Value |
 |---|---|
@@ -7491,9 +7555,9 @@ Critical and high items:
 | Reproduction | `openssl x509 -noout -subject -dates -ext subjectAltName,basicConstraints -in go-impl/testdata/hte/legacy/V2/etc/apache2/certs-selfsigned/https.test.crt` |
 | Severity | low |
 | Public-contract impact | yes (certificate content; anyone who trusted the old certificate must trust the new one) |
-| rc.A behavior | `crypto/ecdsa` P-256 key, `crypto/x509` self-signed certificate, subject `CN=<domain>` only, SAN `<domain>` and `*.<domain>` (covers `www.`), validity 10 years, `basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. Key written once, never read back; the pair is validated by Apache's config test. `cert renew` replaces both and reloads; `doctor` warns 30 days before expiry. No local CA, no mkcert |
+| rc.A behavior | `openssl genpkey` EC P-256 key (PKCS#8 `PRIVATE KEY`), `openssl req -x509` self-signed certificate from a generated request configuration, random serial, subject `CN=<domain>` only, SAN `<domain>`, `*.<domain>` (covers `www.`) and every alias (HTE-47), validity 10 years, `basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. Private keys only through the openssl CLI, never read or parsed by gash (lead decision, 2026-10-18; PRD MUST NOT 6); certificates are parsed with `crypto/x509`. The pair is checked by comparing the public keys openssl prints for the certificate and derives from the key. `cert renew` replaces both and reloads; `doctor` warns 30 days before expiry. No local CA, no mkcert |
 | Fix recipe (3.0) | none: the delta is the design. To verify in the WSL checklist (not run): a Windows browser accepts the CA:FALSE self-signed certificate once it is added to the Windows trust store |
-| Proving test | `TestLedger_HTE39` in `internal/hte/certs` (parse the generated certificate: algorithm, curve, SAN set, validity, extensions); `hte-e2e`: `curl --cacert cert.pem https://<site>/` succeeds |
+| Proving test | `TestLedger_HTE39` in `internal/hte/certs` (parse the generated certificate: algorithm, curve, SAN set, validity, extensions); `hte-e2e`: `curl --cacert cert.pem https://<site>/` succeeds. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "TLS, HTTP/2 and the certificate" (verified with `cert.pem` as the only root). |
 | Status | open |
 
 <a id="hte-40"></a>
@@ -7529,7 +7593,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | When the platform default is not writable by the user (Fedora's `/var/lib/php/session` is group `apache`), the pool sets `session.save_path` to `$XDG_STATE_HOME/gash/hte/php/<X.Y>/sessions` and appends that directory to `open_basedir` in staging and hardened. Debian and Ubuntu pools are unchanged |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE41` in `internal/hte/fpm` (sysroot fakes: Debian → no `session.save_path`; Fedora → the per-version directory, also in `open_basedir`); `hte-e2e` Fedora: a session survives two requests |
+| Proving test | `TestLedger_HTE41` in `internal/hte/render` (sysroot fakes: Debian → no `session.save_path`; Fedora → the per-version directory, also in `open_basedir`); `hte-e2e` Fedora: a session survives two requests |
 | Status | open |
 
 <a id="hte-42"></a>
@@ -7547,7 +7611,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | The design copies the list verbatim to every platform (plus HTE-41's session directory). On Fedora, Arch and Homebrew the PEAR and include directories live elsewhere (`/usr/share/pear`, `<prefix>/share/pear`, inferred), so code that includes from them fails under staging/hardened there. Logs outside the docroot need no entry: PHP checks `error_log` against `open_basedir` only when it is set at runtime, and writes it without the check (inferred from PHP's source; verified by the proving test) |
 | Fix recipe (3.0) | Options: (a) keep the list verbatim on every platform (design today; same text as hte-cli); (b) keep the Debian list on Debian/Ubuntu and substitute each platform's include directories (read from the platform `php.ini` `include_path`) elsewhere (recommended: the profiles then mean the same thing everywhere) |
-| Proving test | `TestLedger_HTE42` in `internal/hte/fpm` (golden staging pool per platform fake); `hte-e2e`: staging profile, a PHP warning reaches `logs/<domain>/php-error.log` |
+| Proving test | `TestLedger_HTE42` in `internal/hte/render` (golden staging pool per platform fake); `hte-e2e`: staging profile, a PHP warning reaches `logs/<domain>/php-error.log` |
 | Status | open |
 
 <a id="hte-43"></a>
@@ -7565,7 +7629,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings, log contents) |
 | rc.A behavior | The design keeps the inert setting (path moved to `logs/<domain>/php-slow.log`, HTE-07), so the profile values stay identical to hte-cli's |
 | Fix recipe (3.0) | Options: (a) keep it inert (design today; exact hte-cli values); (b) add `request_slowlog_timeout = 5s` to every profile so the log works (php-fpm then traces slow workers with ptrace, which a master running as the same user may do on its own children, inferred; check under Docker's default seccomp); (c) drop the `slowlog` line |
-| Proving test | `TestLedger_HTE43` in `internal/hte/fpm` (golden pools hold the chosen lines); for (b) `hte-e2e`: a `sleep(6)` script leaves a backtrace in `php-slow.log` |
+| Proving test | `TestLedger_HTE43` in `internal/hte/render` (golden pools hold the chosen lines); for (b) `hte-e2e`: a `sleep(6)` script leaves a backtrace in `php-slow.log` |
 | Status | open |
 
 <a id="hte-44"></a>
@@ -7583,7 +7647,7 @@ Critical and high items:
 | Public-contract impact | yes (pool settings) |
 | rc.A behavior | Every pool sets `security.limit_extensions = .php`. Managed vhosts only pass `\.php$` to FPM, so this matters for raw imported vhosts and overlays that route other extensions to the socket |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE44` in `internal/hte/fpm` (golden pools) |
+| Proving test | `TestLedger_HTE44` in `internal/hte/render` (golden pools) |
 | Status | open |
 
 <a id="hte-45"></a>
@@ -7599,7 +7663,7 @@ Critical and high items:
 | Reproduction | `cat -A go-impl/testdata/hte/legacy/V2/etc/hosts` |
 | Severity | low |
 | Public-contract impact | yes (hosts file) |
-| rc.A behavior | migrate takes the names from the marked lines into the managed block and never deletes or rewrites a line outside it. The names then resolve twice to the same address, and keep resolving after `site remove` or `uninstall` |
+| rc.A behavior | migrate takes the names from the marked lines into the managed block (the names no imported site serves are kept in `hosts.toml`, so later applies keep them) and never deletes or rewrites a line outside it. The names then resolve twice to the same address, and keep resolving after `site remove` or `uninstall` |
 | Fix recipe (3.0) | Options: (a) leave them untouched (design today); (b) also report, in `doctor`, legacy `# hte-cli` lines whose name is no longer a site, with the line to delete (recommended addition to (a)); (c) a root operation of `migrate --apply` removes them, recorded in the receipt with the prior bytes so that `uninstall` restores them |
 | Proving test | `TestLedger_HTE45` in `internal/hte/migrate` (V2 hosts: block holds the three names, the legacy lines byte-identical); `internal/hte/doctor` for (b) |
 | Status | open |
@@ -7655,7 +7719,7 @@ Critical and high items:
 | Public-contract impact | yes (log locations) |
 | rc.A behavior | `$XDG_STATE_HOME/gash/hte/logs/<domain>/access.log` (combined), `bytes.log` (same format), `error.log` (new per-site `ErrorLog`), the HTTPS vhost with hte-cli's `ssl-` names and HTTPS bytes format, global `logs/error.log` with `LogLevel warn`. `${APACHE_LOG_DIR}` never appears (the userland master has no `envvars`); migrate rewrites it in raw vhosts. `service logs` tails them without a follow mode. The design gives no rotation and does not say whether `site remove` deletes `logs/<domain>/` |
 | Fix recipe (3.0) | Operator choice. Rotation: (a) none (design today); (b) size-based rotation by gash at `service start`/`reload` (keep N old files); (c) piped `rotatelogs` from the platform's Apache utilities. On `site remove`: (a) keep the log directory (recommended, matches "never deletes the docroot" spirit); (b) delete it |
-| Proving test | `TestLedger_HTE48` in `internal/hte/render` (no `${` in any managed golden file; exact log paths); `hte-e2e`: a request appears in `logs/<domain>/access.log` |
+| Proving test | `TestLedger_HTE48` in `internal/hte/render` (no `${` in any managed golden file; exact log paths); `hte-e2e`: a request appears in `logs/<domain>/access.log`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "logs stay out of the document root" (the request in `logs/<domain>/access.log`). |
 | Status | open |
 
 <a id="hte-49"></a>
@@ -7727,7 +7791,7 @@ Critical and high items:
 | Public-contract impact | yes (redirects) |
 | rc.A behavior | Decided at S1 (D-2, option C): the bypass is the per-site setting `force_https_bypass_loopback` (`--force-https-bypass`/`--no-force-https-bypass`), off by default, so force-HTTPS redirects every plain-HTTP request with 307; with the bypass on, requests from `127.0.0.1` and `::1` are not redirected (PRD 6.5 behavior). With `Listen` on loopback only every client address is loopback, so with the bypass on force-HTTPS redirects nothing. `migrate` sets the bypass per legacy variant (HTE-65) |
 | Fix recipe (3.0) | Decision. Options: (a) keep the bypass as PRD 6.5 says (design today; force-HTTPS is inert, documented as such in `site show` and the docs); (b) drop the bypass for HTTPS-forced sites (force means a 307 for every plain-HTTP request; local scripts must call `https://` or follow redirects); (c) make the bypass a per-site flag (`force_https_bypass_loopback`, `--force-https-bypass`/`--no-force-https-bypass`) with a default to choose: "off" gives force-HTTPS a meaning and keeps an escape hatch for local tools |
-| Proving test | `TestLedger_HTE52` in `internal/hte/render` (golden forced vhost per option); `hte-e2e`: `curl -sI http://<forced site>/` from loopback → 200 for (a), 307 for (b) and for (c) with the bypass off |
+| Proving test | `TestLedger_HTE52` in `internal/hte/render` (golden forced vhost per option); `hte-e2e`: `curl -sI http://<forced site>/` from loopback → 200 for (a), 307 for (b) and for (c) with the bypass off. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), steps "migrate --apply" (a V2 forced site answers 200 from loopback: option a) and "forced HTTPS without the bypass". |
 | Status | open |
 
 <a id="hte-53"></a>
@@ -7799,7 +7863,7 @@ Critical and high items:
 | Public-contract impact | yes (ports, URLs, a system-wide setting) |
 | rc.A behavior | Linux and WSL2: `install` sets `net.ipv4.ip_unprivileged_port_start=80` (`/etc/sysctl.d/50-gash-hte.conf` + `sysctl -w`, recorded in the receipt, reverted by `uninstall`; already ≤ 80 in Docker, left as is) after stating that every local user may then bind 80 to 1023. macOS: a direct bind when the kernel allows it, else a `pf` anchor redirecting `127.0.0.1:80/443` to 8080/8443, loaded at boot by a root LaunchDaemon. Declined or impossible: 8080/8443 (configurable), site URLs carry the port, `doctor` reports it |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE56` in `internal/hte/receipt` (install then uninstall on the sysroot fake restores the sysctl file and value byte for byte); `hte-e2e`: unprivileged master bound to `127.0.0.1:80` |
+| Proving test | `TestLedger_HTE56` in `internal/hte/rootops` (install then uninstall on the sysroot fake restores the sysctl file and value byte for byte; a value already at 80 or lower changes nothing and the receipt says so); `hte-e2e`: unprivileged master bound to `127.0.0.1:80`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), steps "install next to the system Apache" and "migrate --apply" (the sysctl set to 80, the unprivileged master on `127.0.0.1:80`). |
 | Status | open |
 
 <a id="hte-57"></a>
@@ -7835,7 +7899,7 @@ Critical and high items:
 | Public-contract impact | yes |
 | rc.A behavior | Debian/Ubuntu (`apache2`, `/usr/lib/apache2/modules`), Fedora (`httpd`, `/usr/lib64/httpd/modules`, distro PHP and Remi), Arch (`httpd`, `php`, `php-legacy`), Homebrew `httpd` on macOS, WSL2 with a manual checklist. `install` and `doctor` check prerequisites per platform: `apache_not_found`, `platform_unsupported` (FATAL). No `SHELL` requirement |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE58` in `internal/hte/platform` (sysroot fakes per platform → binary, module directory, PHP layouts); `hte-e2e` matrix (Debian, Ubuntu, Fedora, Arch, macOS) |
+| Proving test | `TestLedger_HTE58` in `internal/hte/discover` (sysroot fakes per platform → binary, module directory, PHP layouts); `hte-e2e` matrix (Debian, Ubuntu, Fedora, Arch, macOS) |
 | Status | open |
 
 <a id="hte-59"></a>
@@ -7851,9 +7915,9 @@ Critical and high items:
 | Reproduction | by design |
 | Severity | medium |
 | Public-contract impact | yes (modules and snippets enabled in the system Apache no longer apply) |
-| rc.A behavior | `render/current/httpd.conf`: `ServerRoot`, `PidFile`, `DefaultRuntimeDir`, `Mutex` in the runtime directory, global `ErrorLog`, `LogLevel warn`, `LoadModule` for the fixed userland list minus built-ins (read from `httpd -l`), TLS defaults (HTE-15), `ServerTokens`/`ServerSignature`/`TraceEnable Off`, `Protocols`, `TypesConfig`, `AddDefaultCharset`, then the global overlay and the sites. `apache modules enable NAME` adds a module from the system module directory only. The design's list does not mention three Debian defaults the sites rely on: `<Directory /> Require all denied`, `<FilesMatch "^\.ht"> Require all denied` (without it `.htaccess` and `.htpasswd` in a docroot are served as files), and a `DirectoryIndex` that includes `index.php` |
+| rc.A behavior | `render/current/httpd.conf`: `ServerRoot`, `PidFile`, `DefaultRuntimeDir`, `Mutex` in the runtime directory, global `ErrorLog`, `LogLevel warn`, `LoadModule` for the fixed userland list minus built-ins (read from `httpd -l`), TLS defaults (HTE-15), `ServerTokens`/`ServerSignature`/`TraceEnable Off`, `Protocols`, `TypesConfig`, `AddDefaultCharset`, then the global overlay and the sites. `apache modules enable NAME` adds a module from the system module directory only. A module of the list (or an enabled extra one) that the system module directory lacks fails with `apache_module_missing` (STOP), whose hint names the platform's install command (`sudo apt install --reinstall apache2`, `sudo dnf install mod_ssl mod_http2`, `sudo pacman -S apache`, `brew reinstall httpd`); `apache_not_found` (FATAL) stays for a missing server binary (lead decision, 2026-10-18). The design's list does not mention three Debian defaults the sites rely on: `<Directory /> Require all denied`, `<FilesMatch "^\.ht"> Require all denied` (without it `.htaccess` and `.htpasswd` in a docroot are served as files), and a `DirectoryIndex` that includes `index.php` |
 | Fix recipe (3.0) | Design text to amend (no operator choice): render `<Directory "/"> AllowOverride None` + `Require all denied`, `<FilesMatch "^\.ht"> Require all denied`, and Debian's `DirectoryIndex` list at server level on every platform |
-| Proving test | `TestLedger_HTE59` in `internal/hte/render` (golden `httpd.conf` per platform holds the three blocks; `LoadModule` omitted for built-ins); `hte-e2e`: `GET /.htaccess` → 403, `GET /` serves `index.php` |
+| Proving test | `TestLedger_HTE59` in `internal/hte/render` (golden `httpd.conf` per platform holds the three blocks; `LoadModule` omitted for built-ins); `TestResolveModules` in `internal/hte/discover` (missing modules → `apache_module_missing` with the Fedora packages); `hte-e2e`: `GET /.htaccess` → 403, `GET /` serves `index.php` |
 | Status | open |
 
 <a id="hte-60"></a>
@@ -7889,7 +7953,7 @@ Critical and high items:
 | Public-contract impact | yes (new required step) |
 | rc.A behavior | `install` (one interactive sudo: hosts helper `/usr/local/libexec/gash/gash-hosts-helper`, sudoers drop-in `/etc/sudoers.d/gash-hte` validated with `visudo -c -f`, port setting, linger, freeing 80/443) writes the receipt before the first change and after each one (user copy and root copy `/var/lib/gash-hte/receipt-<user>.json`, prior contents of modified files kept in `/var/lib/gash-hte/backup/`). Every command except `install`, `doctor`, `migrate` (dry-run) and `php versions` fails with `hte_not_installed` (STOP) before it. `uninstall` restores from the root copy (refused with `receipt_mismatch`, FATAL, when the user copy differs) and moves the userland tree into `$XDG_STATE_HOME/gash/hte-stage-<ts>/`, which a later `install` offers to restore |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE61` in `internal/hte/receipt` (install then uninstall on the fixture sysroot: byte-identical tree; interrupted install undone from a partial receipt; tampered user copy → `receipt_mismatch`) |
+| Proving test | `TestLedger_HTE61` and `TestInterrupted` in `internal/hte/rootops` (install then uninstall on the fixture sysroot: byte-identical tree; interrupted install undone from a partial receipt, its last change still pending); `TestCompare` in `internal/hte/receipt` (tampered user copy → `receipt_mismatch`). Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`) and `TestE2EReinstall`: after both uninstalls `/etc`, `/usr/local` and `/var/lib/gash-hte` equal their state before install, the system Apache runs again; a second install records nothing. |
 | Status | open |
 
 <a id="hte-62"></a>
@@ -7941,7 +8005,7 @@ Critical and high items:
 | Reproduction | by design |
 | Severity | medium |
 | Public-contract impact | yes |
-| rc.A behavior | Dry-run plan by default. Per site: create the userland site and verify it on a staging listener (`127.0.0.1:<high port>`, Host header and SNI) while the system Apache still holds 80/443; when every enabled system vhost is migrated or excluded, stop and disable the system Apache and the FPM units left without pools, start the userland stack on 80/443, verify again; only then `a2dissite` (or the platform equivalent) and move the legacy files to `/var/lib/gash-hte/archive/<ts>/`, each step in the receipt. Unmarked vhosts are imported as `kind = raw` (system paths and `${APACHE_LOG_DIR}` rewritten, certificates copied, config-tested). Two consequences the design does not spell out: an excluded enabled vhost stops being served, and Debian's `conf-enabled/` snippets are neither read nor classified (Fedora's `conf.d` is read) |
+| rc.A behavior | Dry-run plan by default. Per site: create the userland site and verify it on a staging listener (`127.0.0.1:<high port>`, Host header and SNI) while the system Apache still holds 80/443; when every enabled system vhost is migrated or excluded, stop and disable the system Apache and the FPM units left without pools, start the userland stack on 80/443, verify again; only then `a2dissite` (or the platform equivalent) and move the legacy files to `/var/lib/gash-hte/archive/<ts>/`, each step in the receipt. Unmarked vhosts are imported as `kind = raw` (system paths and `${APACHE_LOG_DIR}` rewritten, certificates copied, config-tested). Two consequences the design does not spell out: an excluded enabled vhost stops being served, and Debian's `conf-enabled/` snippets are neither read nor classified (Fedora's `conf.d` is read). `--exclude` takes a domain or an absolute vhost file path; nothing is excluded implicitly (HTE-31) |
 | Fix recipe (3.0) | Operator choice for `conf-enabled/` snippets: (a) list each enabled one in the plan as "not migrated, no longer served" (recommended); (b) import them as raw server-level includes. In both cases the plan names every excluded enabled vhost as no longer served |
 | Proving test | `TestLedger_HTE64` in `internal/hte/migrate` (plan on a sysroot with V2 sites, one raw reverse proxy, one excluded vhost and one `conf-enabled` snippet → each listed with its outcome; `--apply` on the fake runner: archive and receipt entries in order, nothing deleted) |
 | Status | open |
@@ -7977,7 +8041,7 @@ Critical and high items:
 | Reproduction | fixture `Malformed/` (`024-quoted.test` pool `; Profile: custom` → dev; `nocert.test` pool `; Profile: HARDENED` → hardened) |
 | Severity | medium |
 | Public-contract impact | yes (pool settings) |
-| rc.A behavior | Pool = `/etc/php/<X.Y>/fpm/pool.d/<domain>.conf` (or the platform equivalent) whose first section is `[<domain>]`. Profile: `; Profile:` lowercased; absent (V1) → `dev` with a note; unknown → `dev` with a warning. The pool's values are compared with the profile and the differences reported; with `--keep-pool-values` they go to the site's `[php_ini]`. Inconsistencies in the design: `--keep-pool-values` is missing from the `migrate` signature of section 9, and the V1 row of the class table says "profile inferred from the pool values" while step 4 says `dev` (both give `dev` on an unmodified V1 pool). The design does not say what happens when the pool's `user` is not the invoking user (another sudo user, or `root` after HTE-18) |
+| rc.A behavior | Pool = `/etc/php/<X.Y>/fpm/pool.d/<domain>.conf` (or the platform equivalent) whose first section is `[<domain>]`. Profile: `; Profile:` lowercased; absent (V1) → `dev` with a note; unknown → `dev` with a warning. The pool's values are compared with the profile and the differences reported; with `--keep-pool-values` they go to the site's `[php_ini]` (the value text without its INI quotes or trailing `;` comment; a value `[php_ini]` cannot hold, with `"`, `\` or `${`, is reported as not kept). A kept key that the profile sets replaces the profile line with the profile's admin kind; any other key becomes `php_value`/`php_flag`, so an extra `php_admin_value` of the legacy pool loses its admin kind (lead decision on `[php_ini]`, 2026-10-18). Inconsistencies in the design: `--keep-pool-values` is missing from the `migrate` signature of section 9, and the V1 row of the class table says "profile inferred from the pool values" while step 4 says `dev` (both give `dev` on an unmodified V1 pool). The design does not say what happens when the pool's `user` is not the invoking user (another sudo user, or `root` after HTE-18) |
 | Fix recipe (3.0) | Design text to amend: add `--keep-pool-values` to the signature; one profile rule (recommended: `; Profile:` if present, else the profile whose values match exactly, else `dev` with the differences reported); compare values with whitespace normalized. Operator choice for a foreign pool `user`: (a) import and report (the site then runs as the current user; recommended); (b) skip the site, reported |
 | Proving test | `TestLedger_HTE66` in `internal/hte/migrate` (V1 → dev with a note and no differences; V2 staging/hardened → their profile; a pool with an extra `php_admin_value` → reported, kept only with `--keep-pool-values`; foreign `user` → the chosen outcome) |
 | Status | open |
@@ -8013,9 +8077,135 @@ Critical and high items:
 | Reproduction | fixture `Malformed/` (the non-HTE `000-default.conf` takes part in the next-index computation, `026`; orphan pool `etc/php/custom/fpm/pool.d/orphan.test.conf`, skipped silently) |
 | Severity | low |
 | Public-contract impact | yes (custom ports move to the high range) |
-| rc.A behavior | Duplicates (case-insensitive): both reported, one picked with `--site` or the other excluded. Shared socket: both sites get their own pool, reported. Custom `Listen` ports: kept on the site as extra listen ports in the high range, reported when below 1024 and not 80/443. Orphan pools, certificates, `.info` files and index gaps: reported, never deleted. `APACHE_RUN_USER` set to the user in `envvars`: reported (the master is still root). IP-named vhosts: HTE-21 |
+| rc.A behavior | Duplicates (case-insensitive): both reported, one picked with `--site` or the other excluded. Shared socket: both sites get their own pool, reported. Custom ports: the ports of a vhost's `<VirtualHost>` sections other than 80, 443 and the stack's own become the site's `extra_http_ports` / `extra_https_ports` (by the section's `SSLEngine on`), for managed and raw imports alike, rendered as `Listen` on the loopback addresses plus addresses of the site's vhosts; each is reported, with a note when it is below 1024 (binding needs `ip_unprivileged_port_start` at most that port). A section without a port, a port used for both protocols, or a TLS port without a certificate keeps the vhost in the system (lead decision, 2026-10-18: `site create|modify --extra-http-port N` and `--extra-https-port N`, repeatable, 1 to 65535, never 80, 443 or the stack's ports; one port has one protocol across sites). Orphan pools, certificates, `.info` files and index gaps: reported, never deleted. `APACHE_RUN_USER` set to the user in `envvars`: reported (the master is still root). IP-named vhosts: HTE-21 |
 | Fix recipe (3.0) | none: the delta is the design |
-| Proving test | `TestLedger_HTE68` in `internal/hte/migrate` (one sysroot fixture per case → the exact plan entries; tree bytes unchanged by a dry run) |
+| Proving test | `TestLedger_HTE68` and `TestRawCustomPorts` in `internal/hte/migrate` (one sysroot fixture per case → the exact plan entries; tree bytes unchanged by a dry run); `TestExtraPorts` in `internal/hte/state`, `TestExtraListen` in `internal/hte/render`; `hte-e2e`: a site answers on its extra port. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "an extra port". |
+| Status | open |
+
+<a id="hte-69"></a>
+#### HTE-69 · The hosts helper cannot rename over a bind-mounted /etc/hosts (containers)
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE E2E |
+| Area | Platform |
+| hte-cli location | `internal/hostshelper` (`Rewrite`); design 7.1 ("renamed over the original") |
+| Observed behavior | Docker bind-mounts `/etc/hosts`, so `rename(2)` of the helper's temporary file over it fails with EBUSY: `rename /etc/.hosts.gash-hte-* /etc/hosts: device or resource busy`. Containers are a listed platform. |
+| Reproduction | `printf '127.0.0.1 repro.test\n' \| gash-hosts-helper apply` in a stock container |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | When the rename fails with EBUSY or EXDEV, the helper removes its temporary file and writes the same validated content in place (open without truncation, write, truncate to the new length, fsync). Same file, same content checks, same single sudoers line: no new surface. Elsewhere the rename stays (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestRewriteInPlace` in `internal/hostshelper` (a rename that fails with EBUSY gives the same bytes in place and leaves no temporary file); container run without the mount swap in `setup.sh`. |
+| Status | open |
+
+<a id="hte-70"></a>
+#### HTE-70 · migrate --apply with --ports high keeps the system Apache running
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Correctness |
+| hte-cli location | design 9, `--apply` step 2 (written for standard ports) |
+| Observed behavior | Step 2 stops and disables the system Apache to free 80/443. With `--ports high` the stack does not use 80/443, so the stop only takes away what the system Apache still serves: excluded vhosts and the default site. |
+| Reproduction | `install --ports high`, then `migrate --apply --yes` with an excluded vhost: 80/443 go unanswered |
+| Severity | medium |
+| Public-contract impact | yes |
+| rc.A behavior | With high ports the system Apache is not stopped. Each migrated vhost is disabled and archived, the system configuration is tested (`apachectl configtest` as root), and the system Apache gets a graceful reload; a failed test re-enables the vhosts, nothing is reloaded, and the command reports `config_test_failed`. System FPM units left without pools stop as with standard ports. The plan says which ports stay with the system Apache (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE70` in `internal/hte` (plan with `--ports high`: no unit stop, disable, configtest and reload steps; a failed configtest undoes the disable); container run: the excluded vhost still answers on 80. |
+| Status | open |
+
+<a id="hte-71"></a>
+#### HTE-71 · A reload after an overlay edit could not roll back
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Correctness |
+| hte-cli location | design 5 (vhost `IncludeOptional` of the user's overlay), 10 (generations) |
+| Observed behavior | The vhost included the user's overlay file directly. When a graceful reload passed the config test but failed at run time (a busy port), the previous generation included the same, new overlay, so it could not come back as it was. |
+| Reproduction | edit an overlay to `Listen` a busy port, `gash hte service reload` |
+| Severity | medium |
+| Public-contract impact | no |
+| rc.A behavior | Each generation holds a copy of every site overlay it includes, and the vhost includes the copy. `service reload` copies the overlays into the new generation, tests, reloads, and on failure brings back the previous generation with its own copies. The user's overlay file is never modified; `apache config path` still names it (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE71` in `internal/hte` (an overlay whose reload fails leaves the previous generation running and the overlay file unchanged); container run: step "a busy extra port" repeated through an overlay. |
+| Status | open |
+
+<a id="hte-72"></a>
+#### HTE-72 · Error codes for a missing openssl, a bad flag value and PHP settings on a site without PHP
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Contract |
+| hte-cli location | design 11 (error codes) |
+| Observed behavior | The engine answered a missing openssl with `platform_unsupported`, a bad value of an enum flag with `conflicting_options`, and `php ini set` on a site without PHP with `conflicting_options`. Those codes mean an unsupported system and a flag pair that contradicts itself. |
+| Reproduction | `gash hte site create x.test --ports bogus`; `gash hte php ini set` on a `--no-php` site; PATH without openssl |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | `openssl_not_found` (FATAL, hint with the platform's install command, like `apache_not_found`); `invalid_<flag>` (RETRY, details the value and the accepted ones) for every enum flag, like the existing `invalid_profile`; `php_not_enabled` (RETRY, hint `site modify --php VERSION`). Registered in the contract catalog (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE72` in `internal/hte` (each case → its code and action). |
+| Status | open |
+
+<a id="hte-73"></a>
+#### HTE-73 · With systemd autostart the stack has one supervisor
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Correctness |
+| hte-cli location | `internal/hte/service`, `internal/hte/migrate.go` |
+| Observed behavior | With `--autostart systemd`, `migrate --apply` started the masters directly and then ran `systemctl --user start`, whose ExecStart found the stack already running: the unit and the processes it should own diverge. |
+| Reproduction | not reproduced: no systemd in the E2E containers |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | When the autostart is a systemd user unit, every start, stop and restart of the stack (install, migrate, service commands) goes through `systemctl --user`; the direct start is used only for the other autostart kinds. Proven with the runner fake; a container with systemd as PID 1 proves it when the environment allows one (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE73` in `internal/hte` (with systemd autostart the only lifecycle children are `systemctl --user start\|stop\|restart gash-hte.service`). |
+| Status | open |
+
+<a id="hte-74"></a>
+#### HTE-74 · A root operation restarts the system Apache when migrate fails after the switch
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Security |
+| hte-cli location | `internal/hte/rootops` (`undo_unit_stop`); design 7, 9 |
+| Observed behavior | The S1 set of root operations had no way to give the system Apache back when a site does not answer after the switch, short of a full uninstall. |
+| Reproduction | a site that answers on staging but not after the switch |
+| Severity | medium |
+| Public-contract impact | no |
+| rc.A behavior | `undo_unit_stop`: a conditional step of the plan, run only when a site does not answer after the switch, and only when the unit stop is the last change of the root receipt and was made in the same session; it starts and re-enables that unit, recorded in the receipt. The imported sites stay and the next run completes the move (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE74` in `internal/hte/rootops` (refused when the stop is not the receipt's last change, or comes from another session; runs once). |
+| Status | open |
+
+<a id="hte-75"></a>
+#### HTE-75 · install next to a system Apache it may not stop exits 0 with the stack not started
+
+| Field | Value |
+|---|---|
+| Section | HTE design delta |
+| Origin | Design choice; rc.A HTE phase |
+| Area | Contract |
+| hte-cli location | `internal/hte/install.go` |
+| Observed behavior | With standard ports and enabled vhosts that block the stop (MUST NOT 13), install completes every step but cannot start the stack on 80/443. |
+| Reproduction | install on a machine whose system Apache serves an enabled vhost |
+| Severity | low |
+| Public-contract impact | yes |
+| rc.A behavior | Exit 0: install did what it can do before `migrate`. The JSON has `started: false` and `next: "gash hte migrate"`, the human output a warning naming the blocking vhosts and the command. A scripted `install && migrate` works (lead decision, 2026-10-18). |
+| Fix recipe (3.0) | none: the delta is the design |
+| Proving test | `TestLedger_HTE75` in `internal/hte` (blocking vhosts → exit 0, started false, next set). |
 | Status | open |
 
 ## Seed index

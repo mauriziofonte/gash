@@ -37,7 +37,8 @@ and emits `LoadModule` only for modules that are not built in.
 | Site state | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.toml` | One file per site; the domain is the identity (no numbering, no identity from socket names) |
 | Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, included inside every vhost of the site, never rewritten |
 | Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, included at server level, never rewritten |
-| Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>.ini` | Per PHP version, rendered into every pool of that version |
+| Hosts names | `$XDG_CONFIG_HOME/gash/hte/hosts.toml` | `names = [...]`: names kept in the managed hosts block beyond the sites' own (the legacy `# hte-cli` names `migrate` carries over); missing means none |
+| Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/` | Per PHP version, a directory of `*.ini` files (`php global set` edits `global.ini` in it) that the version's FPM master reads after the system ones through `PHP_INI_SCAN_DIR` (section 4); never rendered into pools |
 | Rendered config | `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` and the symlink `render/current` | Generations; `current` swaps atomically; the previous generation is kept for rollback |
 | Certificates | `$XDG_DATA_HOME/gash/hte/certs/<domain>/{cert.pem,key.pem}` | Key 0600, directory 0700 |
 | Logs | `$XDG_STATE_HOME/gash/hte/logs/` (`error.log`, `<domain>/access.log`, `<domain>/error.log`, `<domain>/php-error.log`, `php-fpm-<X.Y>.log`) | Never inside a document root |
@@ -47,9 +48,11 @@ and emits `LoadModule` only for modules that are not built in.
 | Lock | `$XDG_STATE_HOME/gash/hte/lock` | |
 | Uninstall stage | `$XDG_STATE_HOME/gash/hte-stage-<UTC timestamp>/` | Section 9 |
 
-Paths come from `github.com/adrg/xdg`; macOS uses the same XDG layout
-(`~/.config`, `~/.local/state`, `~/.local/share`) rather than
-`~/Library`, so the tree is identical on every platform and in tests.
+Paths are resolved by `internal/platform` from the environment snapshot
+with the XDG rules (`github.com/adrg/xdg` only cross-checks it in a Linux
+test: on macOS the library would answer `~/Library`); macOS uses the same
+XDG layout (`~/.config`, `~/.local/state`, `~/.local/share`), so the tree is
+identical on every platform and in tests.
 
 Site state (TOML, `github.com/BurntSushi/toml`):
 
@@ -63,10 +66,12 @@ https       = true
 force_https = false
 force_https_bypass_loopback = false   # true: no redirect for 127.0.0.1 and ::1 (hte-cli 1.1.x behavior, D-2)
 http2       = true
+extra_http_ports  = []             # more loopback ports for the HTTP vhost (--extra-http-port N)
+extra_https_ports = []             # more loopback ports for the HTTPS vhost (--extra-https-port N)
 enabled     = true
 kind        = "managed"            # managed | raw (imported non-HTE vhost, section 10)
 raw_conf    = ""                   # kind = raw: the imported vhost file, kept verbatim after path rewriting
-[php_ini]                          # per-site overrides, rendered as php_value / php_admin_value
+[php_ini]                          # per-site overrides (section 4): a profile key replaces the profile's line(s)
 memory_limit = "512M"
 ```
 
@@ -90,7 +95,8 @@ files:
   modules enable NAME` adds a module from the system module directory only;
   the list is validated against the files that exist there.
 * `Listen 127.0.0.1:<http>` and `Listen 127.0.0.1:<https>`, plus `[::1]` when
-  IPv6 loopback is available. Never a wildcard address.
+  IPv6 loopback is available, then the same for every extra port of an
+  enabled site, ascending. Never a wildcard address.
 * TLS defaults equivalent to Debian `ssl.conf` (`SSLProtocol all -SSLv3
   -TLSv1 -TLSv1.1`, `SSLCipherSuite HIGH:!aNULL`, `SSLHonorCipherOrder off`,
   `SSLSessionCache shmcb:<run>/ssl_scache(512000)`, `SSLSessionCacheTimeout
@@ -102,8 +108,22 @@ files:
   denied`, `<FilesMatch "^\.ht"> Require all denied` (so `.htaccess` and
   `.htpasswd` are never served), and `DirectoryIndex index.html index.cgi
   index.pl index.php index.xhtml index.htm` (LEDGER HTE-59).
+* Debian's five `LogFormat` lines (`vhost_combined`, `combined`, `common`,
+  `referer`, `agent`; the vhosts use `combined`), and `unixd` in the module
+  list (built into Debian's `apache2`, a loadable module elsewhere). The TLS
+  directives are not wrapped in `<IfModule mod_ssl.c>`: `ssl` is in the
+  list, so a missing module fails the start instead of silently serving no
+  HTTPS. A `Listen` on a TLS port other than 443 names the protocol
+  (`Listen 127.0.0.1:8443 https`).
 * `IncludeOptional` of the global overlay, then of every enabled site's
   rendered vhosts.
+
+A site's `extra_http_ports` and `extra_https_ports` (1 to 65535, never 80,
+443 or the stack's own ports, never in both lists, the HTTPS ones only on an
+HTTPS site, and a port has one protocol across all sites: else
+`conflicting_options`) add `Listen` lines and the addresses
+`127.0.0.1:<port>` (and `[::1]:<port>`) to that site's HTTP or HTTPS
+`<VirtualHost>`. They keep the custom ports of migrated vhosts (section 10).
 
 Per managed site (`render/current/sites/<domain>.conf`). The directives are
 hte-cli 1.1.1's (`ApacheManager.php:386-497`, fixture
@@ -153,6 +173,12 @@ paths, logs outside the document root, 307 instead of 301:
 </VirtualHost>
 ```
 
+The redirect target is `https://%{HTTP_HOST}%{REQUEST_URI}` when clients
+reach HTTPS on 443 (standard ports, and the macOS `pf` redirect); with any
+other HTTPS port (`install --ports high`) it is
+`https://%{SERVER_NAME}:<https port>%{REQUEST_URI}`, since `HTTP_HOST`
+carries the HTTP port.
+
 The HTTPS vhost is the same block on `127.0.0.1:443` with hte-cli's
 `<FilesMatch "\.(cgi|shtml|phtml|php)$"> SSLOptions +StdEnvVars`, its
 `ssl-` log names and HTTPS bytes-log format, `SSLEngine on` and the site's
@@ -169,9 +195,10 @@ no Debian `envvars`.
 HTTPS vhost, `http/1.1` in both when `http2 = false` (LEDGER HTE-38).
 Document roots are validated before anything is rendered: absolute after
 resolving a relative argument against the current directory (HTE-29), an
-existing directory, and none of `$ * ? [ ; " \` or control characters, which
+existing directory, and none of `$ * ? [ ; : " \` or control characters, which
 Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI parser
-(`;` comments, `${NAME}`) would interpret (`invalid_docroot`, hint: "rename
+(`;` comments, `${NAME}`) would interpret, or that would split the
+`open_basedir` list (`:`, its separator) (`invalid_docroot`, hint: "rename
 the directory or use a symlink without these characters"; HTE-08). Pool
 values are double-quoted.
 
@@ -193,19 +220,29 @@ regex missed (hte-cli warned only in `fix`).
 
 ### 3.1 Certificates
 
-One self-signed certificate per site, SAN `<domain>` and `*.<domain>` (which
-covers `www.`), CN `<domain>`, generated in-process with `crypto/x509` and
-`crypto/ecdsa` (P-256; hte-cli: RSA 2048 through a generated script run as
-root from `/tmp`), validity 10 years (hte-cli: 30), `basicConstraints
-CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. The key is
-written once (0600, in a 0700 directory, atomic rename) and never read back
-or parsed by gash; the pair is validated by Apache's config test. No
+One self-signed certificate per site, SAN `<domain>`, `*.<domain>` (which
+covers `www.`) and every alias (HTE-47), CN `<domain>`, made by the `openssl`
+command line (`genpkey` EC P-256, then `req -x509` with a generated request
+configuration and a random serial; hte-cli: RSA 2048 through a generated
+script run as root from `/tmp`), validity 10 years (hte-cli: 30),
+`basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage
+serverAuth`. Private keys go only through `openssl`: gash never reads,
+parses or holds one (PRD MUST NOT 6), and parses only certificates
+(`crypto/x509`, for `cert show` and `doctor`). `openssl` writes the key into a
+0700 temporary directory inside the site's 0700 directory; gash sets it to
+0600 and renames it into place, then the certificate (a crash in between
+leaves a key the certificate does not match, which `doctor` reports;
+temporary directories of an interrupted run are removed by the next one).
+The pair is checked by comparing the public key `openssl x509 -pubkey`
+prints with the one `openssl pkey -pubout` derives from the key. No
 passphrase (a userland master cannot prompt; hte-cli's passphrase was fake
 anyway, `-nodes`). `cert renew` replaces both files and reloads; `doctor`
 warns 30 days before expiry. No local CA, no mkcert (PRD 2). Each site's
 files live in their own directory, so no operation can touch another site's
 certificate (hte-cli's `rm -rf <dir>/<domain>.*` deleted `shop.test.it`'s
-files when creating `shop.test`).
+files when creating `shop.test`). A legacy key that `migrate` copies is
+read by the root step, which hands the open file to `openssl pkey` running
+as the user (section 7).
 
 ## 4. PHP-FPM
 
@@ -235,8 +272,20 @@ files when creating `shop.test`).
   ; ...the profile block, verbatim from hte-cli (below)...
   slowlog = /home/me/.local/state/gash/hte/logs/shop.test/php-slow.log
   php_admin_value[error_log] = /home/me/.local/state/gash/hte/logs/shop.test/php-error.log
-  ; ...then the global overlay of 8.3, then the site's [php_ini]
+  ; ...then the site's [php_ini] keys the profile does not set
   ```
+
+  The site's `[php_ini]` (lead decision, 2026-10-18): a key the profile also
+  sets (or the per-version `session.save_path` below) is written in place of
+  the profile's line, with the profile directive's admin kind
+  (`memory_limit = "512M"` replaces both `php_admin_value[memory_limit]` and
+  `php_value[memory_limit]`); any other key is `php_value`/`php_flag`, so
+  `ini_set` can still change it. A boolean word (`on`, `off`, `yes`, `no`,
+  `true`, `false`, any case) becomes a bare `*_flag` (FPM refuses a quoted
+  flag: "invalid boolean value"); any other value is a `*_value` written in
+  double quotes, so `;` is text and INI constants are not evaluated
+  (`error_reporting` takes a number). A value with a control character, `"`,
+  `\` or `${` is refused (`invalid_state`).
 
   No `user`, `group`, `listen.owner` or `listen.group`: the master runs as the
   user, so the socket and the workers are the user's (php-fpm ignores those
@@ -274,10 +323,20 @@ files when creating `shop.test`).
   hte-cli (an inert setting, listed as a decision item).
 * The global FPM master per version, `render/current/fpm/<X.Y>/php-fpm.conf`:
   `[global]` with `pid`, `error_log` in the logs directory, `daemonize = yes`,
-  then `include=` of that version's pools. It uses the platform's `php.ini`
-  for that version (discovered above) and the global overlay
-  `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>.ini`, passed with `-c`/`PHP_INI_SCAN_DIR`
-  so the system files are read, never written.
+  then `include=` of that version's pools. It runs with `-c` the platform's
+  `php.ini` for that version and `PHP_INI_SCAN_DIR=<system scan
+  dir>:<overlay dir>` (lead decision, 2026-10-18): the system directory of
+  additional `.ini` files the binary was built with (discovery reads it from
+  `php-fpm -i`, "Scan this dir for additional .ini files", cached with the
+  version; the layout's default when `-i` does not name one), then
+  `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/`, both written out in full (an empty
+  element meaning "the compiled-in directory" needs PHP 7.x; the full list
+  works on 5.6 to 8.5), so the system files are read, never written, and the
+  overlay's values win. A directory containing `:` cannot be passed and is
+  refused (`platform_unsupported`). Each generation carries a
+  `manifest.json` with the binaries, `php.ini`, `PHP_INI_SCAN_DIR`, PID
+  files, sockets and site addresses it was tested with; supervision runs the
+  generation from it.
 
 ## 5. Lifecycle and supervision
 
@@ -289,15 +348,31 @@ PID files and never runs a supervisor process of its own.
 | `service start` | Render if stale, config test, start each FPM master in use, then Apache; wait until the sockets and ports answer |
 | `service stop` | `SIGTERM` (Apache `-k stop`), wait, `SIGKILL` after a timeout. A PID is acted on only when `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p` (macOS) names our config path, so a recycled PID is never signalled |
 | `service restart` | stop + start |
-| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27) |
+| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts. When the rendering is unchanged (only an overlay was edited: overlays are included by path, outside the rendering), the current generation is config-tested and the running masters reload in the same order; a failed test changes nothing. `php global set\|unset` reloads that version's master, and puts the previous overlay back when it does not come back |
 | `service status` | Per master: running, PID, uptime, listening addresses; per site: answers on HTTP and HTTPS. `--json` |
 | `service logs` | Tail of the global, per-site Apache and PHP logs (`--site`, `--lines N`; no follow mode, so agents never hang) |
+
+A master counts as ready when its log gained its readiness line after the
+signal or start (Apache `AH00489 ... resuming normal operations`, which it
+logs whatever `LogLevel` says; FPM `ready to handle connections`), its PID
+file names it, and every address (Apache) or socket (FPM) accepts a
+connection; a failure line (`AH00016`, `no listening sockets available`,
+`FPM initialization failed`) ends the wait at once. FPM re-executes and
+daemonizes again on `SIGUSR2`, so its PID changes; Apache keeps its PID on a
+graceful restart but exits when a new `Listen` port is taken, which the
+rollback then repairs by starting it on the previous generation. A PID file
+whose process is not ours is removed before a start (Apache refuses to
+start while the PID it names is alive). FPM's command line becomes
+`php-fpm: master process (<config>)`, which still names the configuration.
+Apache's config test does not check that a key matches its certificate (it
+fails only at start), so certificates are checked by the pair check of 3.1
+before a generation is made.
 
 Autostart, chosen by `install` and recorded in the receipt:
 
 | Platform | Mechanism |
 |---|---|
-| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=gash hte service start`, `ExecStop=gash hte service stop`), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
+| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because `service start|stop|restart` go through `systemctl --user` while the unit is in use), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
 | Linux without systemd (containers, WSL without systemd) | No boot hook (`/etc/wsl.conf` is never touched). Optional `autostart = "shell"`: the first interactive shell that loads `gash init bash` starts the stack when it is down (one background `gash hte service start`, no output on success) |
 | macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad` |
 
@@ -322,13 +397,30 @@ HTE phase; the design supports both outcomes.
 Root is used only by:
 
 1. `install`, `uninstall`, `migrate --apply`: one interactive `sudo
-   <gash binary> hte __root <op>` per command. The operations are a closed,
-   typed set (install helper, write sudoers drop-in, set sysctl, write pf
-   anchor, enable linger, stop/disable/enable/start a named system unit,
-   disable/enable/archive a legacy vhost or pool, read a legacy key file into
-   the user's certificate directory, write the root receipt), each validated
-   against the plan the user saw. Nothing generated is executed as root from
-   `/tmp` (hte-cli defect).
+   <gash binary> hte __root` session per command (`sudo -n` in headless or
+   without a terminal, so it fails with `privileged_step_required` instead of
+   prompting). The user side writes the plan the user saw to the session's
+   stdin as one JSON line, then asks for its operations by id; root answers
+   each with one JSON line carrying the changes and its receipt copy, which
+   the user side stores as its own. The operations are a closed, typed set
+   (`internal/hte/rootops`: install helper, write sudoers drop-in, set
+   sysctl, write pf anchor, enable linger, stop and disable a named system
+   unit, start it again when this session stopped it and nothing changed
+   since (`undo_unit_stop`, the migrate rollback), reload one, record the
+   hosts block, archive a legacy vhost or pool, hand a legacy key file to
+   `openssl pkey` running as the user, record the autostart, undo the last
+   change of the receipt, remove the receipt), each run at most once, only
+   when the plan holds it, and checked against root's
+   own reading of the system: a vhost or pool to archive must be one root's
+   `legacy.Scan` finds, a key to copy the `SSLCertificateKeyFile` of such a
+   vhost, the helper's content the SHA-256 the plan names. The user is the
+   one sudo names (`SUDO_USER`, `SUDO_UID`), never the plan. Each change is
+   recorded in the root receipt (pending) before it is made and marked done
+   after; undoing a pending change tolerates one that never happened. A
+   second install finds its own changes and records nothing new. The plan
+   names conditional steps too (the rollback above): the user side asks for
+   one only when its condition holds. Nothing generated is executed as root
+   from `/tmp` (hte-cli defect).
 2. The hosts helper `gash-hosts-helper` (section 7.1).
 
 ### 7.1 Hosts helper and sudoers drop-in
@@ -361,7 +453,13 @@ Root is used only by:
 
 Any TLD is allowed for local sites. gash keeps the desired hosts block in its
 state and applies it through the helper on every site change, on `service
-start` and on `doctor`.
+start` and on `doctor`. The block is one `127.0.0.1` line per enabled site
+with every name it serves (domain order), then one line with the names of
+`hosts.toml` that no site serves; never a `::1` line (lead decision,
+2026-10-18, LEDGER HTE-37: Apache still answers on `[::1]` for a client that
+resolves `::1` another way). The drift check reads `/etc/hosts` as the user
+(it is world-readable) and compares the region byte for byte with the
+desired block, naming the missing and the unexpected names.
 
 | Platform | Mechanism |
 |---|---|
@@ -388,6 +486,15 @@ after each one, so an interrupted install can still be undone:
  ]}
 ```
 
+Besides the kinds above: `dir_created` (a directory install made, such as
+`/usr/local/libexec/gash`, removed on uninstall when empty), `legacy_pool`
+(an archived pool), `autostart` (the mode and the user file, made and undone
+by the user side; root only records it so both copies stay equal) and
+`pending: true` on a change recorded but not yet completed. Both copies are
+compact JSON plus a newline (the canonical encoding), compared byte for
+byte; root keeps `/var/lib/gash-hte` 0755 and its copy 0644, so `doctor`
+can read it as the user, and the backup and archive directories 0700.
+
 `file_modified` changes keep the prior content in
 `/var/lib/gash-hte/backup/` (root-owned), so restoring is byte-exact.
 `uninstall` acts on the root copy and refuses when the user copy differs from
@@ -404,10 +511,10 @@ for destructive steps (else `confirmation_required`, RETRY).
 | Command | Outcome |
 |---|---|
 | `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded (it points at `migrate`). Detects an uninstall stage and offers to restore it |
-| `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix |
-| `migrate [--apply] [--site D]... [--exclude D]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64) |
+| `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix. It repairs a drifted hosts block itself (through the helper). `--json`: `{"ok": BOOL, "checks": [{"name", "status", "details", "remedy"}]}` with status `ok`, `warn`, `fail`, `fixed` or `skip`; any `fail` makes it exit non-zero. Port holders are read from `/proc/net/tcp{,6}` (Linux): the process when it is the user's own, else its uid |
+| `migrate [--apply] [--site D]... [--exclude D\|PATH]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64). `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file only, whatever its class); nothing is excluded implicitly, not even Debian's `000-default.conf`, and each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (HTE-31) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
-| `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2]` | New managed site; fails on any invalid value |
+| `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2] [--extra-http-port N]... [--extra-https-port N]...` | New managed site; fails on any invalid value |
 | `site modify --domain D [same flags]` | Changes the state; overlays untouched |
 | `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
@@ -427,8 +534,14 @@ New error codes (registered in the contract catalog with fixed actions):
 `confirmation_required` (RETRY), `lock_timeout` (RETRY), `port_in_use` (STOP),
 `privileged_step_required` (STOP), `config_test_failed` (STOP), `reload_failed`
 (STOP; details say whether the rollback succeeded), `apache_not_found` (FATAL),
-`platform_unsupported` (FATAL), `receipt_mismatch` (FATAL). Partial failure
-never exits 0 (hte-cli defect).
+`apache_module_missing` (STOP: a module of the userland list or an enabled
+extra module is not in the system module directory; the hint names the
+platform's install command), `platform_unsupported` (FATAL),
+`receipt_mismatch` (FATAL), `conflicting_options` (RETRY: a flag pair that
+contradicts itself, such as `--force-https` with `--no-https`),
+`invalid_state` (STOP: a state file that does not parse or that the strict
+validation refuses; a human fixes the file). Partial failure never exits 0
+(hte-cli defect).
 
 Rules where the operator may choose otherwise (LEDGER items marked
 "Decision for the operator"; the design follows the recommended option):
@@ -460,6 +573,17 @@ directory and `.info` files, the hosts file) and classifies every vhost:
 | Broken-bypass | What hte-cli `fix` recognizes (blank lines between the directives) | Import as managed, normalized, bypass on |
 | Malformed | Marker present, domain or socket missing | Not imported; reported |
 | Raw | No marker (reverse proxies, hand-written vhosts) | Import as `kind = raw`: system paths and `${APACHE_LOG_DIR}` rewritten, certificates copied, validated by the config test; failures stay in the system and are reported |
+
+A raw import rewrites only what cannot work in userland and refuses the
+rest: `${APACHE_LOG_DIR}` and the system log directory become the site's log
+directory; `<VirtualHost>` addresses on 80 and 443 become the loopback
+listeners, addresses on other ports the loopback addresses of that port
+(an extra port of the site); a PHP-FPM socket becomes the site's own pool (profile `dev`);
+`SSLCertificateFile`/`SSLCertificateKeyFile` become the site's userland pair
+(copied). A file with `Listen`, several `ServerName` values, half a
+certificate pair, a section without a port, a port of both protocols or a
+socket without a PHP version stays in the system and is reported. Raw vhosts get no `IncludeOptional` of the site overlay: the
+imported text is the site's configuration, kept in `raw_conf`.
 
 Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
 1.1.1, `ApacheManager.php:50-143`), made strict:
@@ -497,11 +621,13 @@ Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
    same names to the same address): migrate never deletes or rewrites a hosts
    line outside its own block.
 
-Also handled: duplicate domains (both reported; the user picks one with
-`--site` or excludes the other), a vhost using another site's pool socket
-(both sites get their own pool; reported), custom `Listen` ports (kept on the
-site as extra listen ports in the high range, reported when below 1024 and not
-80/443), unmarked vhosts using HTE certificates (imported as raw, certificate
+Also handled: duplicate domains (both reported; the user excludes one by its
+file path, `--exclude PATH`), a vhost using another site's pool socket
+(both sites get their own pool; reported), custom ports (every
+`<VirtualHost>` port other than 80, 443 and the stack's own becomes an extra
+port of the site, HTTP or HTTPS by the section's `SSLEngine on`, raw vhosts
+included; reported, with a note below 1024), unmarked vhosts using HTE
+certificates (imported as raw, certificate
 copied), orphan pools, certificates and `.info` files and index gaps
 (reported, never deleted), IP addresses used as domains by hte-cli 1.0.8+
 (reported, not imported: a site name must be a hostname), a system Apache whose
@@ -519,6 +645,35 @@ workers already run as the user through `APACHE_RUN_USER` in `envvars`
 3. Only then disable and archive the legacy files (`a2dissite` or the platform
    equivalent; the files are moved to `/var/lib/gash-hte/archive/<ts>/`, never
    deleted), each change recorded in the receipt.
+
+How `--apply` does it (`internal/hte/migrate.go`):
+
+* It needs `install` first and `--yes` when its root steps stop a unit or
+  archive a file (`confirmation_required` otherwise, before anything runs);
+  as euid 0 it is `root_not_allowed` (the sites go into the invoking user's
+  own stack). One sudo session holds every root step: the key copies, the
+  stop of the system Apache with its conditional rollback
+  (`undo_unit_stop`), the archive steps, the FPM unit steps.
+* Staging: when the stack is not running, the state of every site (the new
+  ones included) is rendered on two free loopback ports picked at run time
+  (IPv4 only, no extra ports, which the system Apache may hold), started,
+  probed, stopped. When the stack already runs, the new sites are applied
+  to it and probed there. A site answers when every address gives an HTTP
+  status other than 502, 503 and 504 (redirects are not followed). A
+  failure puts the previous state files back and removes the new sites'
+  certificate directories.
+* While an enabled vhost blocks the stop (the plan's `blocking_stop`), the
+  sites are imported and verified, nothing is stopped or archived, and a
+  later run finds them `already_managed`: their vhosts and pools are
+  archived then. A failure after the switch starts the system Apache again
+  (`undo_unit_stop`, which root runs only when the stop is the last change
+  of its receipt and was made in the same session); the imported sites
+  stay, and the next run completes the move.
+* Archived: every imported or already managed vhost, and the exact hte-cli
+  pool of a marked one (parsing step 5 above); the pools of raw vhosts are never
+  archived (the default `www.conf` may serve them). A system FPM unit left
+  with no pool file stops and is disabled; one that keeps pools is
+  reloaded.
 
 The exact historical templates of every variant were recovered at S1 by
 running the real hte-cli 1.0.12 and 1.1.1 template code (sources from git
@@ -543,3 +698,14 @@ that test.
 Unit tests use a fixture system root (`internal/hte/sysroot` maps every system
 path under a temporary directory) and an in-process command runner fake, so
 install followed by uninstall is proven to restore the fixture byte for byte.
+
+The container E2E is `testdata/hte/e2e/run.sh`: it builds the test binary of
+`internal/hte/e2e` (build tag `hte_e2e`; it skips outside the container) and
+the hosts helper, and runs them in a disposable container (`--network none`,
+no systemd) whose system Apache and PHP-FPM serve the hte-cli V2 tree. The
+binary runs as an unprivileged user and is also the root step, through one
+sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
+`/usr/local` and `/var/lib/gash-hte` with their state before install. Docker
+bind-mounts `/etc/hosts`, which the helper's rename cannot replace, so the
+container swaps the mount for a plain file first (`--cap-add SYS_ADMIN`).
+So far it runs on Ubuntu 24.04 with the distro PHP 8.3.

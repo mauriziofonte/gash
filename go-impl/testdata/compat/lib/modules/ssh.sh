@@ -28,6 +28,7 @@ gash_ssh_auto_unlock() {
             ;;
     esac
     [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     local __gash_go="" __gash_rc=0
     {
         __gash_go="$(GASH__HANDOFF=3 __gash_call gash_ssh_auto_unlock "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?

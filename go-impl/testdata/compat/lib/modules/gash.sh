@@ -20,7 +20,10 @@ if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
 fi
 unset __gash_here
 
-gash() { __gash_call gash "$@"; }
+gash() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call gash "$@"
+}
 gash_doctor() { __gash_call gash_doctor "$@"; }
 gash_help() { __gash_call gash_help "$@"; }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
