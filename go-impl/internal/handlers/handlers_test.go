@@ -26,11 +26,12 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "chrome_headless_update", "disk_usage", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_help",
-		"gash_inspiring_quote", "gash_ssh_auto_unlock", "gash_username", "hgrep", "history_grep", "ip_public", "llm_config", "llm_db_explain",
-		"llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports",
-		"llm_procs", "llm_tree", "mkdir_cd", "port_kill", "process_find", "process_kill", "services_stop", "sudo_last", "sysinfo", "wsl_compact",
-		"wsl_explorer", "wsl_restart", "wsl_shutdown", "wsl_taskmanager"}, tbl.Names())
+	require.Equal(t, []string{"all_colors", "archive_extract", "chrome_headless_update", "dirs_find_large", "dirs_largest", "dirs_list_empty",
+		"disk_usage", "file_backup", "files_largest", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_help", "gash_inspiring_quote",
+		"gash_ssh_auto_unlock", "gash_username", "hgrep", "history_grep", "ip_public", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample",
+		"llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree",
+		"mkdir_cd", "port_kill", "process_find", "process_kill", "services_stop", "sudo_last", "sysinfo", "tree_stats", "wsl_compact", "wsl_explorer",
+		"wsl_restart", "wsl_shutdown", "wsl_taskmanager"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
