@@ -326,6 +326,31 @@ func TestLedger_HTE08(t *testing.T) {
 	}
 }
 
+// TestLedger_HTE70 (plan half): a stack on ports other than 80 and 443
+// leaves the system Apache running; the plan names its Listen ports and
+// what it keeps serving, and nothing blocks or stops being served.
+func TestLedger_HTE70(t *testing.T) {
+	root := copyVariant(t, "V2")
+	write(t, root, "/etc/apache2/ports.conf", "Listen 80\n<IfModule ssl_module>\n\tListen 443\n</IfModule>\nListen 127.0.0.1:8081\nListen [::1]:8082 http\n")
+	env := envAt(t, root)
+	p := mustPlan(t, env, Options{Exclude: []string{"http.test"}})
+	if p.SystemApache != nil || !slices.Contains(p.NoLongerServed, "/etc/apache2/sites-available/001-http.test.conf") {
+		t.Fatalf("standard ports: %+v no longer served %v", p.SystemApache, p.NoLongerServed)
+	}
+	env.Ports = state.HighPorts
+	p = mustPlan(t, env, Options{Exclude: []string{"http.test"}})
+	sa := p.SystemApache
+	if sa == nil || !slices.Equal(sa.Ports, []int{80, 443, 8081, 8082}) || len(p.Blocking) != 0 || len(p.NoLongerServed) != 0 {
+		t.Fatalf("high ports: %+v blocking %v no longer served %v", sa, p.Blocking, p.NoLongerServed)
+	}
+	if !slices.Equal(sa.Serves, []string{"/etc/apache2/sites-available/001-http.test.conf"}) {
+		t.Errorf("serves %v", sa.Serves)
+	}
+	if out := p.Text(); !strings.Contains(out, "The system Apache keeps running (ports 80, 443, 8081, 8082)") {
+		t.Errorf("human output:\n%s", out)
+	}
+}
+
 func TestLedger_HTE21(t *testing.T) {
 	root := copyVariant(t, "V2")
 	write(t, root, sa+"004-127.0.0.1.conf", marked("127.0.0.1", "127.0.0.1", "ip"))
