@@ -806,7 +806,7 @@ func dirsListEmpty(c *invoke.Call) int {
 	} else {
 		res := findWalk(walkOpts{
 			root: root, xdev: xdev, maxDepth: maxDepth, minDepth: minDepth,
-			noIgnore: noIgnore, excludes: excludes, skipNL: true,
+			noIgnore: noIgnore, excludes: excludes, skipNL: true, rawOrder: true,
 		}, func(e entry) bool {
 			if !e.isDir || !isEmptyDir(e.abs) {
 				return false

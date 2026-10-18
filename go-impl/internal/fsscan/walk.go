@@ -5,6 +5,7 @@ package fsscan
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -30,6 +31,7 @@ type walkOpts struct {
 	excludes []string // user --exclude globs, fnmatch on the absolute path
 	skipTab  bool     // ! -path '*\t*'
 	skipNL   bool     // ! -path '*\n*' (always true for every scanner)
+	rawOrder bool     // children in GNU find's (fts) order, not sorted
 }
 
 // entry is one filesystem entry the walk yields, as find's -printf saw it.
@@ -101,7 +103,13 @@ func findWalk(o walkOpts, keep func(e entry) bool) walkResult {
 		if o.maxDepth >= 0 && depth >= o.maxDepth {
 			return
 		}
-		names, err := readDirNames(abs)
+		var names []string
+		var err error
+		if o.rawOrder {
+			names, err = readDirFTS(abs)
+		} else {
+			names, err = readDirNames(abs)
+		}
 		if err != nil {
 			res.errors++
 			return
@@ -145,6 +153,71 @@ func readDirNames(dir string) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// The gnulib fts limits GNU find runs under: a directory is read in batches
+// of at most ftsMaxReaddir entries, and a batch of more than
+// ftsInodeSortThreshold entries is sorted by inode number unless the file
+// system is tmpfs, NFS or CIFS (fts.c, fts_build and
+// dirent_inode_sort_may_be_useful).
+const (
+	ftsMaxReaddir         = 100000
+	ftsInodeSortThreshold = 10000
+	magicTmpfs            = 0x01021994
+	magicNFS              = 0x6969
+	magicCIFS             = 0xFF534D42
+)
+
+// readDirFTS returns a directory's names in the order GNU find visits them:
+// readdir order, with fts's inode sort of large batches. dirs_list_empty
+// prints in this order (MATRIX: readdir order, unsorted).
+func readDirFTS(dir string) ([]string, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	names, err := f.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+	if len(names) <= ftsInodeSortThreshold || !inodeSortUseful(dir) {
+		return names, nil
+	}
+	for start := 0; start < len(names); start += ftsMaxReaddir {
+		end := min(start+ftsMaxReaddir, len(names))
+		batch := names[start:end]
+		if len(batch) <= ftsInodeSortThreshold {
+			continue
+		}
+		ino := make(map[string]uint64, len(batch))
+		for _, n := range batch {
+			if info, e := os.Lstat(filepath.Join(dir, n)); e == nil {
+				if st, ok := info.Sys().(*syscall.Stat_t); ok {
+					ino[n] = uint64(st.Ino)
+				}
+			}
+		}
+		sort.SliceStable(batch, func(i, j int) bool { return ino[batch[i]] < ino[batch[j]] })
+	}
+	return names, nil
+}
+
+// inodeSortUseful is gnulib's dirent_inode_sort_may_be_useful: false on
+// tmpfs, NFS and CIFS (Linux only, where statfs gives the type), else true.
+func inodeSortUseful(dir string) bool {
+	if runtime.GOOS != "linux" {
+		return true
+	}
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(dir, &st); err != nil {
+		return true
+	}
+	switch uint32(st.Type) {
+	case magicTmpfs, magicNFS, magicCIFS:
+		return false
+	}
+	return true
 }
 
 // statEntry stats a path the way the walk reached it: Lstat normally, Stat
