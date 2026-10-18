@@ -348,7 +348,7 @@ PID files and never runs a supervisor process of its own.
 | `service start` | Render if stale, config test, start each FPM master in use, then Apache; wait until the sockets and ports answer |
 | `service stop` | `SIGTERM` (Apache `-k stop`), wait, `SIGKILL` after a timeout. A PID is acted on only when `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p` (macOS) names our config path, so a recycled PID is never signalled |
 | `service restart` | stop + start |
-| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts |
+| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts. When the rendering is unchanged (only an overlay was edited: overlays are included by path, outside the rendering), the current generation is config-tested and the running masters reload in the same order; a failed test changes nothing. `php global set\|unset` reloads that version's master, and puts the previous overlay back when it does not come back |
 | `service status` | Per master: running, PID, uptime, listening addresses; per site: answers on HTTP and HTTPS. `--json` |
 | `service logs` | Tail of the global, per-site Apache and PHP logs (`--site`, `--lines N`; no follow mode, so agents never hang) |
 
@@ -405,17 +405,22 @@ Root is used only by:
    the user side stores as its own. The operations are a closed, typed set
    (`internal/hte/rootops`: install helper, write sudoers drop-in, set
    sysctl, write pf anchor, enable linger, stop and disable a named system
-   unit, reload one, record the hosts block, archive a legacy vhost or pool,
-   hand a legacy key file to `openssl pkey` running as the user, record the
-   autostart, undo the last change of the receipt, remove the receipt), each
-   run at most once, only when the plan holds it, and checked against root's
+   unit, start it again when this session stopped it and nothing changed
+   since (`undo_unit_stop`, the migrate rollback), reload one, record the
+   hosts block, archive a legacy vhost or pool, hand a legacy key file to
+   `openssl pkey` running as the user, record the autostart, undo the last
+   change of the receipt, remove the receipt), each run at most once, only
+   when the plan holds it, and checked against root's
    own reading of the system: a vhost or pool to archive must be one root's
    `legacy.Scan` finds, a key to copy the `SSLCertificateKeyFile` of such a
    vhost, the helper's content the SHA-256 the plan names. The user is the
    one sudo names (`SUDO_USER`, `SUDO_UID`), never the plan. Each change is
    recorded in the root receipt (pending) before it is made and marked done
-   after; undoing a pending change tolerates one that never happened.
-   Nothing generated is executed as root from `/tmp` (hte-cli defect).
+   after; undoing a pending change tolerates one that never happened. A
+   second install finds its own changes and records nothing new. The plan
+   names conditional steps too (the rollback above): the user side asks for
+   one only when its condition holds. Nothing generated is executed as root
+   from `/tmp` (hte-cli defect).
 2. The hosts helper `gash-hosts-helper` (section 7.1).
 
 ### 7.1 Hosts helper and sudoers drop-in
@@ -506,7 +511,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 | Command | Outcome |
 |---|---|
 | `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded (it points at `migrate`). Detects an uninstall stage and offers to restore it |
-| `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix |
+| `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix. It repairs a drifted hosts block itself (through the helper). `--json`: `{"ok": BOOL, "checks": [{"name", "status", "details", "remedy"}]}` with status `ok`, `warn`, `fail`, `fixed` or `skip`; any `fail` makes it exit non-zero. Port holders are read from `/proc/net/tcp{,6}` (Linux): the process when it is the user's own, else its uid |
 | `migrate [--apply] [--site D]... [--exclude D\|PATH]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64). `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file only, whatever its class); nothing is excluded implicitly, not even Debian's `000-default.conf`, and each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (HTE-31) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
 | `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2] [--extra-http-port N]... [--extra-https-port N]...` | New managed site; fails on any invalid value |
@@ -641,6 +646,35 @@ workers already run as the user through `APACHE_RUN_USER` in `envvars`
    equivalent; the files are moved to `/var/lib/gash-hte/archive/<ts>/`, never
    deleted), each change recorded in the receipt.
 
+How `--apply` does it (`internal/hte/migrate.go`):
+
+* It needs `install` first and `--yes` when its root steps stop a unit or
+  archive a file (`confirmation_required` otherwise, before anything runs);
+  as euid 0 it is `root_not_allowed` (the sites go into the invoking user's
+  own stack). One sudo session holds every root step: the key copies, the
+  stop of the system Apache with its conditional rollback
+  (`undo_unit_stop`), the archive steps, the FPM unit steps.
+* Staging: when the stack is not running, the state of every site (the new
+  ones included) is rendered on two free loopback ports picked at run time
+  (IPv4 only, no extra ports, which the system Apache may hold), started,
+  probed, stopped. When the stack already runs, the new sites are applied
+  to it and probed there. A site answers when every address gives an HTTP
+  status other than 502, 503 and 504 (redirects are not followed). A
+  failure puts the previous state files back and removes the new sites'
+  certificate directories.
+* While an enabled vhost blocks the stop (the plan's `blocking_stop`), the
+  sites are imported and verified, nothing is stopped or archived, and a
+  later run finds them `already_managed`: their vhosts and pools are
+  archived then. A failure after the switch starts the system Apache again
+  (`undo_unit_stop`, which root runs only when the stop is the last change
+  of its receipt and was made in the same session); the imported sites
+  stay, and the next run completes the move.
+* Archived: every imported or already managed vhost, and the exact hte-cli
+  pool of a marked one (parsing step 5 above); the pools of raw vhosts are never
+  archived (the default `www.conf` may serve them). A system FPM unit left
+  with no pool file stops and is disabled; one that keeps pools is
+  reloaded.
+
 The exact historical templates of every variant were recovered at S1 by
 running the real hte-cli 1.0.12 and 1.1.1 template code (sources from git
 history and the shipped phars), with what hte-cli 1.1.0 and 1.1.1 read back
@@ -664,3 +698,14 @@ that test.
 Unit tests use a fixture system root (`internal/hte/sysroot` maps every system
 path under a temporary directory) and an in-process command runner fake, so
 install followed by uninstall is proven to restore the fixture byte for byte.
+
+The container E2E is `testdata/hte/e2e/run.sh`: it builds the test binary of
+`internal/hte/e2e` (build tag `hte_e2e`; it skips outside the container) and
+the hosts helper, and runs them in a disposable container (`--network none`,
+no systemd) whose system Apache and PHP-FPM serve the hte-cli V2 tree. The
+binary runs as an unprivileged user and is also the root step, through one
+sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
+`/usr/local` and `/var/lib/gash-hte` with their state before install. Docker
+bind-mounts `/etc/hosts`, which the helper's rename cannot replace, so the
+container swaps the mount for a plain file first (`--cap-add SYS_ADMIN`).
+So far it runs on Ubuntu 24.04 with the distro PHP 8.3.
