@@ -23,6 +23,14 @@ func TestEnv(t *testing.T) {
 	require.Equal(t, []string{"A=1", "B=", "C=x=y"}, e.Environ())
 }
 
+// A child gets the caller's exported environment: no protocol variables,
+// no shell variable the stub exported for the call only.
+func TestEnvChild(t *testing.T) {
+	e := EnvFrom([]string{"PATH=/bin", "TOKEN=s3cret", "COLUMNS=80", "GASH__SET=", "GASH__HELP=1", "GASH__ADDED=TOKEN NO_COLOR", "NO_COLOR="})
+	require.Equal(t, []string{"COLUMNS=80", "PATH=/bin"}, e.Child())
+	require.Equal(t, []string{"A=1"}, EnvFrom([]string{"A=1"}).Child())
+}
+
 func TestTableHandleAndRun(t *testing.T) {
 	tbl := NewTable()
 	tbl.Handle("gash_username", func(c *Call) int {

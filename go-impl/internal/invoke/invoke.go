@@ -75,6 +75,26 @@ func (e Env) Environ() []string {
 	return out
 }
 
+// Child is the environment of a command the function runs, as a 2.x
+// child saw it: the caller's exported environment. It leaves out the
+// GASH__ protocol variables and the shell variables the stub exported for
+// this call only (GASH__ADDED), so a setting or a token held in a shell
+// variable never reaches a child. Sorted KEY=VALUE entries.
+func (e Env) Child() []string {
+	drop := map[string]bool{}
+	for _, n := range strings.Fields(e.m["GASH__ADDED"]) {
+		drop[n] = true
+	}
+	out := make([]string, 0, len(e.m))
+	for k, v := range e.m {
+		if !drop[k] && !strings.HasPrefix(k, "GASH__") {
+			out = append(out, k+"="+v)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Call is one invocation of a 2.x function.
 type Call struct {
 	Ctx context.Context

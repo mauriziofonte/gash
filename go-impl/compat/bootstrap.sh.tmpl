@@ -293,21 +293,25 @@ __gash_missing() {
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x
 # code read: the common variables, NAME's own, and its settings (with
-# GASH__SET naming those that are set). The file-only settings never reach
-# the binary's environment.
+# GASH__SET naming those that are set). GASH__ADDED names the variables
+# exported here only, which the binary leaves out of the environment of
+# the commands it runs, as 2.x did. The file-only settings never reach the
+# binary's environment.
 # Usage: __gash_export_state NAME
 __gash_export_state() {
-    local __ges_v __ges_set="" __ges_k="${1:-_}" IFS=$' \t\n'
+    local __ges_v __ges_set="" __ges_add="" __ges_k="${1:-_}" IFS=$' \t\n'
     for __ges_v in $__GASH_CALL_COMMON ${__GASH_CALL_VARS[$__ges_k]-}; do
-        [[ -n "${!__ges_v+x}" ]] && export "${__ges_v?}"
+        [[ -n "${!__ges_v+x}" ]] || continue
+        [[ "${!__ges_v@a}" == *x* ]] || __ges_add+="${__ges_add:+ }$__ges_v"
+        export "${__ges_v?}"
     done
     for __ges_v in ${__GASH_CALL_SETTINGS[$__ges_k]-}; do
-        if [[ -n "${!__ges_v+x}" ]]; then
-            export "${__ges_v?}"
-            __ges_set+="${__ges_set:+ }$__ges_v"
-        fi
+        [[ -n "${!__ges_v+x}" ]] || continue
+        [[ "${!__ges_v@a}" == *x* ]] || __ges_add+="${__ges_add:+ }$__ges_v"
+        export "${__ges_v?}"
+        __ges_set+="${__ges_set:+ }$__ges_v"
     done
-    export GASH__SET="$__ges_set"
+    export GASH__SET="$__ges_set" GASH__ADDED="$__ges_add"
     if [[ -n "${__GASH_HELP_LOADED-}" ]]; then
         export GASH__HELP=1
     else

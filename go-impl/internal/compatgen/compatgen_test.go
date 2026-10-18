@@ -207,7 +207,7 @@ func TestCallPassesState(t *testing.T) {
 	fake := filepath.Join(t.TempDir(), "gash")
 	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\nprintf '%s|' \"$@\"; echo; env | grep -E '^(GASH_|NO_COLOR|COLUMNS|GASH__)' | sort\n"), 0o755))
 	out, err := bash(t, []string{"GASH_BIN=" + fake, "GASH_LLM_EXEC=1"},
-		"GASH_HEADLESS=1; NO_COLOR=; COLUMNS=99; GASH_DB_TIMEOUT=7; source '"+dir+"/gash.sh'; llm_db_query 'a b' c")
+		"GASH_HEADLESS=1; NO_COLOR=; export COLUMNS=99; GASH_DB_TIMEOUT=7; source '"+dir+"/gash.sh'; llm_db_query 'a b' c")
 	require.NoError(t, err, out)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.Equal(t, "llm_db_query|a b|c|", lines[0])
@@ -215,9 +215,16 @@ func TestCallPassesState(t *testing.T) {
 	for _, kv := range []string{"GASH_HEADLESS=1", "NO_COLOR=", "COLUMNS=99", "GASH_DB_TIMEOUT=7", "GASH__SET=GASH_DB_TIMEOUT", "GASH__HELP=1"} {
 		require.Contains(t, env, kv)
 	}
+	added := ""
 	for _, kv := range env {
 		require.False(t, strings.HasPrefix(kv, "GASH_LLM_EXEC") || strings.HasPrefix(kv, "GASH_NO_COLOR"), kv)
+		if v, ok := strings.CutPrefix(kv, "GASH__ADDED="); ok {
+			added = v
+		}
 	}
+	// Exported by the stub only: everything but COLUMNS, which the caller
+	// exported itself (GASH_DIR is a shell variable of gash.sh).
+	require.ElementsMatch(t, []string{"GASH_HEADLESS", "NO_COLOR", "GASH_DIR", "GASH_DB_TIMEOUT"}, strings.Fields(added))
 
 	// The gash card: every word to the binary's root.
 	out, err = bash(t, []string{"GASH_BIN=" + fake}, "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash version --json")

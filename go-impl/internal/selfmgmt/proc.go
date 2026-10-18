@@ -19,7 +19,7 @@ import (
 type procs interface {
 	// found reports command -v NAME for an executable on path.
 	found(path, name string) bool
-	// output runs argv with the caller's environment, stdin closed and
+	// output runs argv with the caller's exported environment, stdin closed and
 	// stderr discarded, and returns stdout as $(...) does (trailing
 	// newlines removed); "" when it fails to start.
 	output(c *invoke.Call, path string, argv ...string) string
@@ -40,7 +40,7 @@ func (osProcs) output(c *invoke.Call, path string, argv ...string) string {
 	}
 	cmd := exec.CommandContext(ctx, bin, argv[1:]...)
 	cmd.Args[0] = argv[0]
-	cmd.Env = c.Env.Environ()
+	cmd.Env = c.Env.Child()
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	_ = cmd.Run() // `|| true`: the output counts whatever the status
