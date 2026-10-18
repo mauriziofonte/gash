@@ -18,14 +18,19 @@ rc.A implementation. S1 was approved by the operator in the session on 2026-10-1
 - S1 draft PR #5 opened; CI green (12 checks).
 - Operator decisions recorded (D-2 option C, D-6 no 1.x work, the rest as recommended) in the design, MATRIX and LEDGER.
 - Audit of every 2.x module done: `MATRIX.md` (881 rows for 2.x plus the new 3.x surface) and `LEDGER.md` (every PRD seed indexed) merged from per-module fragments. The merge scripts are gone: both files are now edited by hand, by the lead session only.
-- rc.A work merged so far: HTE core (`internal/platform`, `internal/hte/*`, `internal/hostshelper`, `cmd/gash-hosts-helper`), path guard and llm_exec core (`internal/pathguard`, `internal/llmexec`, canonical script per D-1 A, 2.x child prelude byte for byte).
+- rc.A work merged so far: HTE core (`internal/platform`, `internal/hte/*`, `internal/hostshelper`, `cmd/gash-hosts-helper`), path guard and llm_exec core (`internal/pathguard`, `internal/llmexec`, canonical script per D-1 A, 2.x child prelude byte for byte), config, SQL guard and runner (`internal/config`, `internal/sqlguard`, `internal/runner`).
 - The two install specs that snapshot the working tree into a fresh repository disable git's background maintenance: with the Go tree the detached repack raced the clone and the cleanup on git 2.55 (CI only).
 
 ## Next step
 
-M0 (worker on `wt/m0`), config/SQL guard/runner (`wt/cfg`) and the HTE remainder (`wt/hte`) are in progress; the llm_exec trailing-backslash refusal (EXEC-07) is in progress on `wt/guard`. Then M1.
+M0 (worker on `wt/m0`) and the HTE remainder (`wt/hte`) are in progress; the SQL guard's strictest-of-both-locales reading (DB-13) is in progress on `wt/cfg`. Then M1.
 
-Wiring notes for M1: the runner passes the absolute bash path to `llmexec` (`Environ.BashPath`), because 2.x error messages start with `${BASH:-bash}`.
+Wiring notes for M1 and later:
+- llm_exec's registry entry lists `BASH` among the shell variables it reads, so the stub exports the caller's `$BASH` (named in `GASH__ADDED`, kept out of children); `llmexec` uses it as `Environ.BashPath` and falls back to a PATH lookup, because 2.x ran `${BASH:-bash}` and bash prefixes its errors with that path.
+- `runner` refuses any `sh -c`-style start except `BashLLMExec` and `BashNVMBridge`. `wsl_compact` follows SYS-46; `gash_doctor --timing` (fixed script) and `sudo_last` (stays in the shim) are decided by their module workers.
+- `runner` divergences to ledger where a module makes them visible: a shebang-less script gets 126, a background grandchild holding stdout is cut after KillAfter, a timeout signals only the child.
+- SSH unlock needs a PTY (creack/pty, M4).
+- M8 adds a check that only `internal/runner` starts processes.
 
 ## Plan to rc.A (stop S2)
 
