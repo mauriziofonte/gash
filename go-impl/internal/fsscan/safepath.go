@@ -84,12 +84,18 @@ func safePath(input, home, pwd string, allowRoot bool) (string, *fsError) {
 }
 
 // resolvePhysical is `cd -- "$input" && pwd -P`: the physical absolute path
-// with every symlink component resolved, against pwd for a relative input.
-// "" when the directory cannot be resolved.
+// with every symlink component resolved. A relative input is resolved
+// against the working directory (filepath.Abs, FS-25: CDPATH is not read);
+// pwd is the fallback when the working directory cannot be read. "" when
+// the directory cannot be resolved.
 func resolvePhysical(input, pwd string) string {
 	p := input
 	if !strings.HasPrefix(p, "/") {
-		p = filepath.Join(pwd, p)
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		} else {
+			p = filepath.Join(pwd, p)
+		}
 	}
 	resolved, err := filepath.EvalSymlinks(p)
 	if err != nil {
