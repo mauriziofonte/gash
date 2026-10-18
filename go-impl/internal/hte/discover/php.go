@@ -1,0 +1,273 @@
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package discover
+
+import (
+	"fmt"
+	"regexp"
+	"slices"
+	"strings"
+	"syscall"
+
+	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/platform"
+)
+
+// Layout names where a PHP-FPM binary was found.
+type Layout string
+
+// The probed layouts of design/hte.md section 4.
+const (
+	LayoutDebian     Layout = "debian"      // /usr/sbin/php-fpmX.Y + /etc/php/X.Y/fpm/php.ini (distro, sury/ondrej)
+	LayoutFedora     Layout = "fedora"      // /usr/sbin/php-fpm + /etc/php.ini
+	LayoutRemi       Layout = "remi"        // /opt/remi/phpXY/root/usr/sbin/php-fpm + /etc/opt/remi/phpXY/php.ini
+	LayoutArch       Layout = "arch"        // /usr/bin/php-fpm + /etc/php/php.ini
+	LayoutArchLegacy Layout = "arch-legacy" // /usr/bin/php-fpm-legacy + /etc/php-legacy/php.ini
+	LayoutAUR        Layout = "aur"         // /usr/bin/php-fpmXY + /etc/phpXY/php.ini (inferred)
+	LayoutHomebrew   Layout = "homebrew"    // <prefix>/opt/php@X.Y/sbin/php-fpm or <prefix>/opt/php/sbin/php-fpm + <prefix>/etc/php/X.Y/php.ini
+)
+
+// PHP is one usable PHP-FPM version.
+type PHP struct {
+	Version string `json:"version"` // "8.3"
+	Full    string `json:"full"`    // "8.3.6", as -v reports it
+	FPM     string `json:"fpm"`     // system path of the FPM binary
+	INI     string `json:"ini"`     // system path of its php.ini
+	Layout  Layout `json:"layout"`
+	// SessionPath is the effective session.save_path of php.ini ("" means
+	// the system temporary directory).
+	SessionPath string `json:"session_path"`
+	// NeedsSessionDir is true when SessionPath is set and not writable by
+	// the user: the pools then get a per-version directory (LEDGER HTE-41).
+	NeedsSessionDir bool `json:"needs_session_dir"`
+}
+
+// PHPEnv is what PHP discovery reads.
+type PHPEnv struct {
+	Sysroot platform.Sysroot
+	OS      platform.OS
+	Probe   Probe
+	Cache   *Cache // optional: probe results by binary path, size and mtime
+	// Writable reports whether the user can write the system directory
+	// sys; nil means access(2) on the sysroot path.
+	Writable func(sys string) bool
+}
+
+// PHPResult lists the usable versions, ascending, and every candidate
+// binary that did not qualify, with the reason (doctor prints them).
+type PHPResult struct {
+	Versions []PHP
+	Problems []string
+}
+
+// Installed returns the version numbers, ascending.
+func (r PHPResult) Installed() []string {
+	out := make([]string, 0, len(r.Versions))
+	for _, p := range r.Versions {
+		out = append(out, p.Version)
+	}
+	return out
+}
+
+// Find returns the entry of version v.
+func (r PHPResult) Find(v string) (PHP, bool) {
+	for _, p := range r.Versions {
+		if p.Version == v {
+			return p, true
+		}
+	}
+	return PHP{}, false
+}
+
+type candidate struct {
+	layout  Layout
+	fpm     string
+	ini     string // versionToken stands for the version -v reports
+	version string // "" for an unversioned binary
+}
+
+const versionToken = "{version}"
+
+func nodot(v string) string { return strings.ReplaceAll(v, ".", "") }
+
+func candidates(sr platform.Sysroot, o platform.OS) []candidate {
+	var out []candidate
+	switch o.Family {
+	case platform.FamilyDebian:
+		for _, v := range state.SupportedPHP {
+			out = append(out, candidate{LayoutDebian, "/usr/sbin/php-fpm" + v, "/etc/php/" + v + "/fpm/php.ini", v})
+		}
+	case platform.FamilyFedora:
+		out = append(out, candidate{LayoutFedora, "/usr/sbin/php-fpm", "/etc/php.ini", ""})
+		for _, v := range state.SupportedPHP {
+			xy := nodot(v)
+			out = append(out, candidate{LayoutRemi, "/opt/remi/php" + xy + "/root/usr/sbin/php-fpm", "/etc/opt/remi/php" + xy + "/php.ini", v})
+		}
+	case platform.FamilyArch:
+		out = append(out,
+			candidate{LayoutArch, "/usr/bin/php-fpm", "/etc/php/php.ini", ""},
+			candidate{LayoutArchLegacy, "/usr/bin/php-fpm-legacy", "/etc/php-legacy/php.ini", ""})
+		for _, v := range state.SupportedPHP {
+			xy := nodot(v)
+			out = append(out, candidate{LayoutAUR, "/usr/bin/php-fpm" + xy, "/etc/php" + xy + "/php.ini", v})
+		}
+	case platform.FamilyDarwin:
+		prefix, ok := HomebrewPrefix(sr)
+		if !ok {
+			return nil
+		}
+		out = append(out, candidate{LayoutHomebrew, prefix + "/opt/php/sbin/php-fpm", prefix + "/etc/php/" + versionToken + "/php.ini", ""})
+		for _, v := range state.SupportedPHP {
+			out = append(out, candidate{LayoutHomebrew, prefix + "/opt/php@" + v + "/sbin/php-fpm", prefix + "/etc/php/" + v + "/php.ini", v})
+		}
+	}
+	return out
+}
+
+// fpmVersionRE matches the first line of `php-fpm -v`:
+// "PHP 8.3.6 (fpm-fcgi) (built: ...)". The SAPI must be fpm-fcgi: a CLI
+// binary under an FPM name does not count.
+var fpmVersionRE = regexp.MustCompile(`^PHP ([0-9]+)\.([0-9]+)\.([0-9]+)[^ ]* \(fpm-fcgi\)`)
+
+// ParseFPMVersion returns "X.Y" and the full version from `php-fpm -v`.
+func ParseFPMVersion(out string) (short, full string, ok bool) {
+	first, _, _ := strings.Cut(out, "\n")
+	m := fpmVersionRE.FindStringSubmatch(first)
+	if m == nil {
+		return "", "", false
+	}
+	return m[1] + "." + m[2], m[1] + "." + m[2] + "." + m[3], true
+}
+
+// sessionDefaults are the compiled-in session.save_path of each layout
+// when php.ini does not set it. Debian builds PHP with
+// /var/lib/php/sessions (1733, writable); the design states that Fedora's
+// default is /var/lib/php/session, group apache.
+var sessionDefaults = map[Layout]string{
+	LayoutDebian: "/var/lib/php/sessions",
+	LayoutFedora: "/var/lib/php/session",
+	LayoutRemi:   "/var/lib/php/session",
+}
+
+// iniSessionPath returns the last uncommented session.save_path of a
+// php.ini, with the "N;MODE;" prefix of the files handler removed.
+func iniSessionPath(ini []byte) (string, bool) {
+	val, found := "", false
+	for _, line := range strings.Split(string(ini), "\n") {
+		line = strings.TrimSpace(line)
+		key, v, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) != "session.save_path" {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if rest, ok := strings.CutPrefix(v, `"`); ok {
+			v, _, _ = strings.Cut(rest, `"`)
+		} else {
+			v, _, _ = strings.Cut(v, ";")
+			v = strings.TrimSpace(v)
+		}
+		if i := strings.LastIndex(v, ";"); i >= 0 {
+			v = v[i+1:]
+		}
+		val, found = v, true
+	}
+	return val, found
+}
+
+func accessWritable(sr platform.Sysroot) func(string) bool {
+	return func(sys string) bool {
+		const wOK = 0x2
+		return syscall.Access(sr.Path(sys), wOK) == nil
+	}
+}
+
+// DiscoverPHP probes every layout of the platform. A version counts only
+// when its FPM binary is an executable file, `-v` answers that version with
+// the fpm-fcgi SAPI, and its php.ini exists (LEDGER HTE-22). When two
+// layouts give the same version (Fedora distro and Remi), the first one in
+// probe order is used and the other is reported.
+func DiscoverPHP(env PHPEnv) PHPResult {
+	sr := env.Sysroot
+	writable := env.Writable
+	if writable == nil {
+		writable = accessWritable(sr)
+	}
+	var res PHPResult
+	seen := map[string]string{}
+	for _, c := range candidates(sr, env.OS) {
+		fi, err := sr.Stat(c.fpm)
+		if err != nil {
+			continue // not installed: not a problem
+		}
+		if !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
+			res.Problems = append(res.Problems, c.fpm+" is not an executable file")
+			continue
+		}
+		out, cached := env.Cache.lookup(c.fpm, fi)
+		if !cached {
+			out, err = env.Probe(c.fpm, "-v")
+			if err != nil {
+				res.Problems = append(res.Problems, fmt.Sprintf("%s -v failed: %v", c.fpm, err))
+				continue
+			}
+			first, _, _ := strings.Cut(out, "\n")
+			env.Cache.store(c.fpm, fi, first)
+			out = first
+		}
+		short, full, ok := ParseFPMVersion(out)
+		switch {
+		case !ok:
+			res.Problems = append(res.Problems, fmt.Sprintf("%s -v does not report a PHP-FPM version: %q", c.fpm, firstLine(out)))
+			continue
+		case c.version != "" && short != c.version:
+			res.Problems = append(res.Problems, fmt.Sprintf("%s reports PHP %s, not %s", c.fpm, short, c.version))
+			continue
+		case !slices.Contains(state.SupportedPHP, short):
+			res.Problems = append(res.Problems, fmt.Sprintf("%s reports PHP %s, which gash hte does not support", c.fpm, short))
+			continue
+		}
+		ini := strings.ReplaceAll(c.ini, versionToken, short)
+		data, err := sr.ReadFile(ini)
+		if err != nil || !sr.IsRegular(ini) {
+			res.Problems = append(res.Problems, fmt.Sprintf("%s has no php.ini at %s", c.fpm, ini))
+			continue
+		}
+		if prev, dup := seen[short]; dup {
+			res.Problems = append(res.Problems, fmt.Sprintf("PHP %s is also at %s; using %s", short, c.fpm, prev))
+			continue
+		}
+		seen[short] = c.fpm
+		sess, set := iniSessionPath(data)
+		if !set {
+			sess = sessionDefaults[c.layout]
+		}
+		res.Versions = append(res.Versions, PHP{
+			Version: short, Full: full, FPM: c.fpm, INI: ini, Layout: c.layout,
+			SessionPath:     sess,
+			NeedsSessionDir: sess != "" && !writable(sess),
+		})
+	}
+	slices.SortFunc(res.Versions, func(a, b PHP) int { return state.ComparePHP(a.Version, b.Version) })
+	return res
+}
+
+func firstLine(s string) string {
+	l, _, _ := strings.Cut(s, "\n")
+	return l
+}
+
+// PHPInstallHint is the command that installs PHP-FPM version v on the
+// platform (doctor prints it for a missing version).
+func PHPInstallHint(f platform.Family, v string) string {
+	switch f {
+	case platform.FamilyDebian:
+		return "sudo apt install php" + v + "-fpm"
+	case platform.FamilyFedora:
+		return "sudo dnf install php-fpm (distro version) or php" + nodot(v) + "-php-fpm (Remi)"
+	case platform.FamilyArch:
+		return "sudo pacman -S php-fpm (current) or php-legacy-fpm (legacy)"
+	case platform.FamilyDarwin:
+		return "brew install php@" + v
+	}
+	return ""
+}

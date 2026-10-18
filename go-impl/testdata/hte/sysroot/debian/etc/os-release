@@ -1,0 +1,6 @@
+# Gash 3.0 test fixture. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+PRETTY_NAME="Ubuntu 24.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+ID=ubuntu
+ID_LIKE=debian
