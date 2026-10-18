@@ -26,7 +26,7 @@ type Environ struct {
 	Cwd        string
 	Home       string
 	RootHome   string
-	BashPath   string
+	BashPath   string // the bash to run; see Build
 	Vars       map[string]string
 	FS         pathguard.FS
 	LookupUser func(name string) (home string, ok bool)
@@ -78,6 +78,11 @@ func parseAllow(raw string) []string {
 // Restricted mode (the default) renders the validated parse as a canonical
 // single-quoted script (D-1 A). Unrestricted mode (the user's file-only
 // opt-in) returns the raw line for bash -c after the blocklist only.
+//
+// 2.x runs "${BASH:-bash}", the absolute path of the user's bash, and bash
+// starts a syntax error message with that path. Pass the absolute path in
+// Environ.BashPath (exec.LookPath("bash"), say) for the same messages; when
+// it is empty, argv[0] is "bash".
 func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 	if pr == nil {
 		pr = OSProbe{}
@@ -115,11 +120,14 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 			"GASH_LLM_SANDBOX=1 needs bubblewrap (bwrap) with user namespaces; ask the user to install it or turn the setting off")
 	}
 
+	// 2.x joins "$(__llm_exec_prelude ...)" and the line with one newline;
+	// the command substitution drops the prelude's trailing newlines, so the
+	// line starts on the line right after the last prelude line.
 	var child string
 	if mode == "unrestricted" {
-		child = preludeUnrestricted(extra) + "\n" + line
+		child = strings.TrimRight(preludeUnrestricted(extra), "\n") + "\n" + line
 	} else {
-		child = prelude(extra, pr) + "\n" + canonical
+		child = strings.TrimRight(prelude(extra, pr), "\n") + "\n" + canonical
 	}
 
 	argv := []string{env.bash(), "--noprofile", "--norc", "-c", child}
