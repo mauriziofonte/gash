@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 69 | 170 | 115 |
+| Defects | 1 | 25 | 75 | 70 | 171 | 115 |
 | Forced divergences | 2 | 4 | 24 | 63 | 93 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 240 | **403** | 241 |
+| **All** | 3 | 36 | 125 | 241 | **404** | 241 |
 
 Critical and high items:
 
@@ -343,6 +343,7 @@ Critical and high items:
 | [TEST-05](#test-05) | 52 render fixtures fake external commands as Bash functions | Test harness | medium | no |
 | [TEST-06](#test-06) | `llm_spec.sh` uses the repository's own `lib/` as a fixture tree | Test harness | low | no |
 | [TEST-07](#test-07) | 18 specs source Gash at top level in the runner process | Test harness | low | no |
+| [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
 
 ### llm_* agent functions
 
@@ -3432,6 +3433,24 @@ Critical and high items:
 | rc.A behavior | Lines removed in the harness. |
 | Fix recipe (3.0) | n/a after cutover (testscript). |
 | Proving test | Same results, faster start |
+| Status | open |
+
+<a id="test-09"></a>
+#### TEST-09 · `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A gate run) |
+| Area | Test harness |
+| Bash location | `tests/run.sh` parallel loop (`wait -n` to throttle, then `wait "${pids[$i]}"` per spec) |
+| Observed behavior | The throttle's `wait -n` can reap a spec process whose status Bash then no longer holds, so the later `wait PID` prints `wait: pid N is not a child of this shell`, returns 127 and the run ends in FAIL although every test passed. Intermittent; seen once with 807 passed, 0 failed. |
+| Reproduction | repeated `bash tests/run.sh` on a loaded machine; the summary line reads FAIL with 0 failed |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the harness: each spec process records its own exit status in the run directory, and the summary reads those files instead of the `wait` status. |
+| Fix recipe (3.0) | n/a after cutover (testscript). |
+| Proving test | The summary status follows the recorded statuses; a run with every spec passing never ends in FAIL. |
 | Status | open |
 
 ## Forced divergences
