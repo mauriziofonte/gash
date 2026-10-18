@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -49,10 +51,38 @@ type rig struct {
 	failRoot string
 	// probeFail names a domain whose probe gets a 503.
 	probeFail string
-	// systemd: the machine runs systemd (/run/systemd/system).
+	// systemd: the machine runs systemd (/run/systemd/system); the user
+	// manager runs the unit's hidden commands in-process.
 	systemd   bool
 	rootLines []string
 	userLines []string // the commands of the user side, masters excepted
+	// unitActive is the user unit's state, inUnit true while a job of it
+	// runs, direct the master starts and stops outside one.
+	unitActive, inUnit bool
+	direct             []string
+}
+
+// rigProcs records the stops of masters outside a unit job.
+type rigProcs struct {
+	*servicetest.Stack
+	m *rig
+}
+
+func (p rigProcs) Signal(pid int, sig syscall.Signal) error {
+	if sig == syscall.SIGTERM || sig == syscall.SIGKILL {
+		if cmd, err := p.Cmdline(pid); err == nil {
+			what := "stop apache"
+			if strings.HasPrefix(cmd, "php-fpm") {
+				what = "stop php-fpm"
+			}
+			p.m.mu.Lock()
+			if !p.m.inUnit {
+				p.m.direct = append(p.m.direct, what)
+			}
+			p.m.mu.Unlock()
+		}
+	}
+	return p.Stack.Signal(pid, sig)
 }
 
 // userRunner is the user side's runner: openssl runs for real, the rest
@@ -134,7 +164,7 @@ func newRig(t *testing.T) *rig {
 			return rootops.Serve(context.Background(), in, out, m.rootEnv())
 		}}
 	})
-	e.Procs = m.stack
+	e.Procs = rigProcs{m.stack, m}
 	e.Dial = func(context.Context, string, string) error { return nil }
 	e.Sleep = func(time.Duration) {}
 	e.StartTimeout = time.Second
@@ -214,6 +244,20 @@ func (m *rig) rootEnv() rootops.Env {
 // as the fixture does, the hosts helper behind sudo -n, systemctl --user.
 func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 	if e, ok := m.stack.Answer(c); ok {
+		if start := !slices.Contains(c.Argv, "-t"); start {
+			what := "start " + filepath.Base(c.Argv[0])
+			if len(c.Argv) > 2 && c.Argv[1] == "-f" {
+				// Apache: the addresses of the generation it starts.
+				if man, err := render.ReadManifest(filepath.Dir(c.Argv[2])); err == nil {
+					what += " " + strings.Join(man.Apache.Listen, " ")
+				}
+			}
+			m.mu.Lock()
+			if !m.inUnit {
+				m.direct = append(m.direct, what)
+			}
+			m.mu.Unlock()
+		}
 		return e, true
 	}
 	bin, args := filepath.Base(c.Argv[0]), c.Argv[1:]
@@ -224,6 +268,9 @@ func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 	m.mu.Lock()
 	m.userLines = append(m.userLines, bin+" "+strings.Join(args, " "))
 	m.mu.Unlock()
+	if bin == "systemctl" && m.systemd && len(args) == 3 && args[0] == "--user" && args[2] == "gash-hte.service" {
+		return m.unitJob(args[1]), true
+	}
 	if bin == "sudo" && len(args) == 3 && args[0] == "-n" && args[2] == "apply" {
 		var stderr bytes.Buffer
 		rc := hostshelper.Run([]string{"apply"}, bytes.NewReader(c.Stdin), io.Discard, &stderr,
@@ -231,6 +278,55 @@ func (m *rig) userAnswer(c runner.Call) (runner.Expect, bool) {
 		return runner.Expect{Status: rc, Stderr: stderr.String()}, true
 	}
 	return runner.Expect{}, true
+}
+
+// unitJob plays the user manager for gash-hte.service: start runs
+// ExecStart (gash hte __unit start) unless the unit is active, stop runs
+// ExecStop when it is, restart both, as Type=oneshot with RemainAfterExit
+// does.
+func (m *rig) unitJob(verb string) runner.Expect {
+	run := func(start bool) error {
+		m.mu.Lock()
+		m.inUnit = true
+		m.mu.Unlock()
+		defer func() {
+			m.mu.Lock()
+			m.inUnit = false
+			m.mu.Unlock()
+		}()
+		var err error
+		if start {
+			_, err = m.e.UnitStart(context.Background())
+		} else {
+			_, err = m.e.UnitStop(context.Background())
+		}
+		return err
+	}
+	var err error
+	switch verb {
+	case "start":
+		if !m.unitActive {
+			err = run(true)
+			m.unitActive = err == nil
+		}
+	case "stop":
+		if m.unitActive {
+			err = run(false)
+			m.unitActive = false
+		}
+	case "restart":
+		if m.unitActive {
+			err = run(false)
+		}
+		if err == nil {
+			err = run(true)
+		}
+		m.unitActive = err == nil
+	}
+	if err != nil {
+		return runner.Expect{Status: 1, Stderr: "Job for gash-hte.service failed: " + err.Error()}
+	}
+	return runner.Expect{}
 }
 
 // fixtureAnswer is the discovery answer of the plain fixture.
@@ -492,5 +588,84 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestLedger_HTE73: with the systemd user unit, every start, stop and
+// restart of the stack (install, migrate, uninstall, the service
+// commands) is a job of systemctl --user, whose hidden __unit start and
+// __unit stop run the masters; the masters are never started or stopped
+// directly, but for migrate's staging generation (on its own ports, while
+// the stack is down). A job a locked command waits for runs under that
+// command's lock (the lease) instead of waiting for it.
+func TestLedger_HTE73(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	m.systemd = true
+	must(t, os.MkdirAll(filepath.Join(m.root, "run/systemd/system"), 0o755))
+	m.e.LockWait = time.Second // a job that waited for the lock would fail
+	ins, err := m.e.Install(ctx, InstallOptions{Yes: true, Ports: "high", Autostart: "systemd"})
+	if err != nil || !ins.Started || ins.Settings.Autostart != "systemd" {
+		t.Fatalf("install: %+v %v", ins, err)
+	}
+	var staging string
+	steps := []struct {
+		name string
+		run  func() error
+		jobs []string
+	}{
+		{"install", func() error { return nil }, []string{"start"}},
+		{"service stop", func() error { _, err := m.e.ServiceStop(ctx); return err }, []string{"stop"}},
+		{"service start", func() error { _, err := m.e.ServiceStart(ctx); return err }, []string{"start"}},
+		{"service restart", func() error { _, err := m.e.ServiceRestart(ctx); return err }, []string{"restart"}},
+		{"service stop", func() error { _, err := m.e.ServiceStop(ctx); return err }, []string{"stop"}},
+		{"migrate --apply", func() error {
+			res, err := m.e.Migrate(ctx, MigrateOptions{Apply: true, Yes: true})
+			if err == nil && (!res.Switched || len(res.Imported) != 2) {
+				err = fmt.Errorf("migrate: %+v", res)
+			}
+			if res != nil {
+				staging = res.Staging
+			}
+			return err
+		}, []string{"start"}},
+		{"uninstall", func() error { _, err := m.e.Uninstall(ctx, UninstallOptions{Yes: true}); return err }, []string{"stop", "disable"}},
+	}
+	seen := 0
+	for _, st := range steps {
+		if err := st.run(); err != nil {
+			t.Fatalf("%s: %v", st.name, err)
+		}
+		_, user := m.lines()
+		var jobs []string
+		for _, l := range user[seen:] {
+			if verb, ok := strings.CutPrefix(l, "systemctl --user "); ok && strings.HasSuffix(verb, " gash-hte.service") {
+				jobs = append(jobs, strings.TrimSuffix(verb, " gash-hte.service"))
+			}
+		}
+		seen = len(user)
+		if st.name == "install" {
+			jobs = slices.DeleteFunc(jobs, func(j string) bool { return j == "enable" })
+		}
+		if !slices.Equal(jobs, st.jobs) {
+			t.Errorf("%s: systemctl --user jobs %v, want %v", st.name, jobs, st.jobs)
+		}
+		running := m.stack.Running() > 0
+		if wantUp := st.name != "service stop" && st.name != "uninstall"; running != wantUp || m.unitActive != wantUp {
+			t.Errorf("%s: masters running %v, unit active %v", st.name, running, m.unitActive)
+		}
+	}
+	// The only masters gash started or stopped itself: the staging pair.
+	host, ports, _ := strings.Cut(staging, ":")
+	httpPort, httpsPort, _ := strings.Cut(ports, ",")
+	want := []string{"start php-fpm8.3", "start apache2 " + host + ":" + httpPort + " " + host + ":" + httpsPort, "stop apache", "stop php-fpm"}
+	m.mu.Lock()
+	direct := slices.Clone(m.direct)
+	m.mu.Unlock()
+	if !slices.Equal(direct, want) {
+		t.Errorf("masters started or stopped outside a unit job: %q, want the staging pair %q", direct, want)
+	}
+	if _, err := os.Stat(service.UnitPath(filepath.Join(m.home, ".config"))); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the unit file: %v", err)
 	}
 }
