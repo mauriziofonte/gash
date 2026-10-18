@@ -20,17 +20,20 @@ printf 'dev ALL=(root) NOPASSWD: /usr/local/bin/gash-e2e hte __root\n' >/etc/sud
 chmod 0440 /etc/sudoers.d/e2e
 visudo -c >/dev/null
 
-# Docker bind-mounts /etc/hosts: show what the helper does there, then
-# replace the mount with a plain file of the same content.
+# Docker bind-mounts /etc/hosts, so the helper cannot rename over it and
+# writes in place (LEDGER HTE-69). The test runs on that mount.
 echo "== hosts helper on the bind-mounted /etc/hosts"
-if printf '127.0.0.1 repro.test\n' | /usr/local/bin/gash-hosts-helper apply; then
-    echo "the helper wrote the bind mount"
-else
-    echo "the helper failed with exit $?"
-fi
+grep -q ' /etc/hosts ' /proc/self/mountinfo
 cp /etc/hosts /tmp/hosts.orig
-umount /etc/hosts
-cp /tmp/hosts.orig /etc/hosts
+printf '127.0.0.1 repro.test\n' | /usr/local/bin/gash-hosts-helper apply
+grep -qx '127.0.0.1 repro.test' /etc/hosts
+grep -q ' /etc/hosts ' /proc/self/mountinfo
+if ls /etc/.hosts.gash-hte-* >/dev/null 2>&1; then
+    echo "the helper left a temporary file" >&2
+    exit 1
+fi
+cat /tmp/hosts.orig >/etc/hosts
+echo "the helper wrote the bind mount in place"
 
 # The V2 hte-cli tree; https.test moves to PHP 8.3 (the image has no 7.4).
 cp -a /e2e/V2/etc/apache2/. /etc/apache2/

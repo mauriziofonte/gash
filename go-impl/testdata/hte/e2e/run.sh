@@ -31,10 +31,10 @@ rm -rf "$stage/V2"
 cp -a "$mod/testdata/hte/legacy/V2" "$stage/V2"
 chmod -R a+rX "$stage"
 
-# SYS_ADMIN and no AppArmor confinement: setup.sh replaces Docker's bind
-# mount of /etc/hosts with a plain file. systempaths=unconfined: the root
-# step writes net.ipv4.ip_unprivileged_port_start, which starts at 1024.
+# systempaths=unconfined: the root step writes
+# net.ipv4.ip_unprivileged_port_start, which starts at 1024. /etc/hosts
+# stays Docker's bind mount (LEDGER HTE-69).
 exec docker run --rm --init --network none \
-    --cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
+    --security-opt systempaths=unconfined \
     --sysctl net.ipv4.ip_unprivileged_port_start=1024 \
     -v "$stage:/e2e:ro" "$image" /e2e/setup.sh
