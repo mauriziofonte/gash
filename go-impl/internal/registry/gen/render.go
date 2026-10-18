@@ -342,6 +342,21 @@ func (c *catalog) render() ([]byte, error) {
 		fmt.Fprintf(&b, "\t{Name: %s, Modules: %s, AliasFiles: %s, Description: %s},\n",
 			q(t[0]), strs(strings.Fields(t[1])), strs(strings.Fields(t[2])), q(t[3]))
 	}
+	b.WriteString("}\n\n")
+
+	b.WriteString("var cardAliases = map[string][]CardAlias{\n")
+	files := make([]string, 0, len(c.cardAliases))
+	for f := range c.cardAliases {
+		files = append(files, f)
+	}
+	sort.Strings(files)
+	for _, f := range files {
+		fmt.Fprintf(&b, "\t%s: {\n", q(f))
+		for _, a := range c.cardAliases[f] {
+			fmt.Fprintf(&b, "\t\t{Name: %s, Value: %s},\n", q(a.name), q(a.value))
+		}
+		b.WriteString("\t},\n")
+	}
 	b.WriteString("}\n")
 
 	return format.Source(b.Bytes())
