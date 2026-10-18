@@ -392,7 +392,7 @@ Autostart, chosen by `install` and recorded in the receipt:
 |---|---|
 | Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because every start, stop and restart of the stack goes through `systemctl --user` while the unit is in use: `service start\|stop\|restart`, the stack start of `install` and of the `migrate --apply` switch, the stop of `uninstall` (HTE-73)), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
 | Linux without systemd (containers, WSL without systemd) | No boot hook (`/etc/wsl.conf` is never touched). Optional `autostart = "shell"`: the first interactive shell that loads `gash init bash` starts the stack when it is down (one background `gash hte service start`, no output on success) |
-| macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad` |
+| macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad`, running `<gash> hte __unit start` with the XDG directories install resolved as its `EnvironmentVariables` (launchd starts it without them); install runs `launchctl enable gui/<uid>/io.github.mauriziofonte.gash.hte` (clearing an earlier disable) and starts the stack itself, launchd loads the agent at the next login; uninstall runs `launchctl bootout` on it (not loaded is fine) and removes the file |
 
 With the systemd unit, a `systemctl --user start` that leaves a master
 down (the unit stayed active while its masters ended) is followed by a
@@ -411,7 +411,7 @@ rollback's restart) are started directly too.
 | Platform | Mechanism (recorded in the receipt, reverted by uninstall) |
 |---|---|
 | Linux, WSL2 | `net.ipv4.ip_unprivileged_port_start=80` via `/etc/sysctl.d/50-gash-hte.conf` plus `sysctl -w`. The setting applies to IPv4 and IPv6. When the current value is already 80 or lower (Docker containers default to 0) nothing changes and the receipt says so. Trade-off, stated by `install` before asking: every local user may then bind ports 80 to 1023 |
-| macOS | First choice: a direct bind, if the running kernel lets an unprivileged process bind `127.0.0.1:80` (checked by `install` with a real bind). Otherwise a `pf` anchor redirecting `127.0.0.1:80`/`:443` on `lo0` to the userland ports (`8080`/`8443` by default), loaded at boot by a root LaunchDaemon that only runs `pfctl -a <anchor> -f <root-owned file>` |
+| macOS | First choice: a direct bind, if the running kernel lets an unprivileged process bind `127.0.0.1:80` (checked by `install` with a real bind of `127.0.0.1:80` and `:443`; only `EACCES` or `EPERM` counts as a refusal, a port in use is the stack's start to report). Otherwise a `pf` anchor redirecting `127.0.0.1:80`/`:443` on `lo0` to the userland ports (`8080`/`8443` by default), loaded at boot by a root LaunchDaemon that only runs `pfctl -a <anchor> -f <root-owned file>` (details below) |
 | Any, when declined or impossible | High ports (`8080`/`8443`, configurable), reported by `doctor`; site URLs carry the port |
 
 Rejected: `setcap cap_net_bind_service` on the distro binary (modifies a
@@ -421,6 +421,39 @@ and parses its config as root; PRD 6.1).
 
 The macOS mechanism is to be verified on the GitHub macOS runner during the
 HTE phase; the design supports both outcomes.
+
+The `pf` redirect is the root operation `pf_redirect` (ports: the stack's
+HTTP and HTTPS ports). `/etc/pf.conf` is never edited: the anchor is
+`com.apple/gash-hte`, a child of the `com.apple` anchor that the stock
+`pf.conf` evaluates (`rdr-anchor "com.apple/*"`); a `pf.conf` without that
+line is `platform_unsupported` (hint: restore it, or `--ports high`). Root
+writes the rules file `/etc/pf.anchors/gash-hte` (0644, checked with
+`pfctl -n` before it is put in place):
+
+```
+rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080
+rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 8443
+rdr pass on lo0 inet6 proto tcp from any to ::1 port 80 -> ::1 port 8080
+rdr pass on lo0 inet6 proto tcp from any to ::1 port 443 -> ::1 port 8443
+```
+
+then the LaunchDaemon `/Library/LaunchDaemons/io.github.mauriziofonte.gash.hte.pf.plist`
+(0644, checked with `plutil -lint`; `RunAtLoad`, program
+`/sbin/pfctl -E -a com.apple/gash-hte -f /etc/pf.anchors/gash-hte`: `-E`
+takes a reference on pf being enabled, which it is not by default, without
+turning it off for anyone else), and loads the anchor now with that same
+command. The receipt records both files, then the redirect. The settings
+keep the high ports (Apache listens there) and `install` reports
+`redirect: "pf"`; while the root receipt holds the redirect to the
+settings' ports, the HTTP to HTTPS redirect targets 443 (section 3), and
+`doctor` checks both files and that the redirect's targets are the
+settings' ports. Uninstall unloads the daemon (`launchctl bootout
+system/io.github.mauriziofonte.gash.hte.pf`), empties the anchor
+(`pfctl -a com.apple/gash-hte -F nat`) and removes both files; pf itself
+stays enabled with the anchor empty until the next restart (the boot-time
+reference has no token to release). To verify on the runner: that the
+anchor loaded at boot is evaluated (the daemon may run before macOS loads
+`/etc/pf.conf`).
 
 ## 7. Privilege boundary
 
@@ -434,7 +467,7 @@ Root is used only by:
    each with one JSON line carrying the changes and its receipt copy, which
    the user side stores as its own. The operations are a closed, typed set
    (`internal/hte/rootops`: install helper, write sudoers drop-in, set
-   sysctl, write pf anchor, enable linger, stop and disable a named system
+   sysctl, write pf anchor (`pf_redirect`, section 6), enable linger, stop and disable a named system
    unit, start it again when this session stopped it and nothing changed
    since (`undo_unit_stop`, the migrate rollback), reload one (for the
    system Apache first `apachectl configtest`, and on a failure the vhosts
@@ -524,7 +557,10 @@ after each one, so an interrupted install can still be undone:
 ```
 
 Besides the kinds above: `dir_created` (a directory install made, such as
-`/usr/local/libexec/gash`, removed on uninstall when empty), `legacy_pool`
+`/usr/local/libexec/gash`, removed on uninstall when empty), `pf_redirect`
+(macOS: `name` the anchor, `path` its rules file, `applied` the targets,
+`{"http":8080,"https":8443}`; undone by emptying the anchor and unloading
+its LaunchDaemon, whose files are the `file_created` changes before it), `legacy_pool`
 (an archived pool), `autostart` (the mode and the user file, made and undone
 by the user side; root only records it so both copies stay equal) and
 `pending: true` on a change recorded but not yet completed. Both copies are
@@ -547,7 +583,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 
 | Command | Outcome |
 |---|---|
-| `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded: it then exits 0 without starting the stack, with `started: false`, `next: "gash hte migrate"` and a warning naming those vhosts and the command (HTE-75). Detects an uninstall stage and offers to restore it |
+| `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded: it then exits 0 without starting the stack, with `started: false`, `next: "gash hte migrate"` and a warning naming those vhosts and the command (HTE-75). On macOS `--ports standard` binds directly or sets up the `pf` redirect (`redirect: "pf"`, section 6). Detects an uninstall stage and offers to restore it |
 | `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix. It repairs a drifted hosts block itself (through the helper). `--json`: `{"ok": BOOL, "checks": [{"name", "status", "details", "remedy"}]}` with status `ok`, `warn`, `fail`, `fixed` or `skip`; any `fail` makes it exit non-zero. Port holders are read from `/proc/net/tcp{,6}` (Linux): the process when it is the user's own, else its uid |
 | `migrate [--apply] [--site D]... [--exclude D\|PATH]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64). `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file only, whatever its class); nothing is excluded implicitly, not even Debian's `000-default.conf`, and each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (HTE-31) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
