@@ -310,6 +310,19 @@ func TestShellCommandRefused(t *testing.T) {
 		{"su", "root", "-c", "x"},
 		{"su", "-s", "/bin/sh", "-", "root", "-c", "x"},
 		{"su", "--command=x"},
+		{"sudo", "-E", "HOME=/root", "bash", "-c", "x"},
+		{"sudo", "--user=root", "--", "sh", "-c", "x"},
+		{"env", "-u", "PATH", "-C", "/tmp", "A=1", "bash", "-c", "x"},
+		{"env", "-S", "sh -c x"},
+		{"env", "--split-string=bash -ec", "x"},
+		{"nice", "-n", "10", "sh", "-c", "x"},
+		{"nice", "-10", "sh", "-c", "x"},
+		{"timeout", "-s", "KILL", "5", "bash", "-c", "x"},
+		{"stdbuf", "-oL", "nohup", "setsid", "dash", "-c", "x"},
+		{"ionice", "-c", "3", "bash", "-c", "x"},
+		{"xargs", "-0", "-n", "1", "sh", "-c", "x"},
+		{"chroot", "/srv", "/bin/sh", "-c", "x"},
+		{"sudo", "su", "-c", "x"},
 	}
 	for _, argv := range refused {
 		_, err := Exec{}.Run(context.Background(), Cmd{Path: argv[0], Args: argv[1:]})
@@ -327,6 +340,15 @@ func TestShellCommandRefused(t *testing.T) {
 		{"pgrep", "-c", "sh"},
 		{"su", "-", "root"},
 		{"git", "-c", "core.pager=cat", "log"},
+		{"git", "tag", "-a", "bash", "-m", "-c"},
+		{"git", "commit", "-m", "sh", "-c"},
+		{"ssh", "host", "bash", "-c", "x"},
+		{"rsync", "-e", "ssh", "sh", "-c"},
+		{"sudo", "-u", "bash", "true", "-c"},
+		{"env", "A=1", "git", "tag", "-a", "sh", "-m", "-c"},
+		{"busybox", "--list"},
+		{"timeout", "5"},
+		{"env"},
 	}
 	for _, argv := range allowed {
 		if err := checkNoShell(argv); err != nil {
