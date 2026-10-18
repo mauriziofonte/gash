@@ -6,6 +6,7 @@
 package handlers
 
 import (
+	"github.com/mauriziofonte/gash/internal/docker"
 	"github.com/mauriziofonte/gash/internal/gitx"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/remote"
@@ -22,6 +23,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	selfmgmt.Register(t)
 	gitx.Register(t)
 	remote.Register(t)
+	docker.Register(t)
 	for _, r := range extra {
 		r(t)
 	}
