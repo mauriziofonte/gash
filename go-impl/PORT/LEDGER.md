@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 71 | 172 | 115 |
-| Forced divergences | 2 | 4 | 24 | 63 | 93 | 37 |
+| Defects | 1 | 25 | 75 | 72 | 173 | 115 |
+| Forced divergences | 2 | 4 | 24 | 64 | 94 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 242 | **405** | 241 |
+| **All** | 3 | 36 | 125 | 244 | **407** | 241 |
 
 Critical and high items:
 
@@ -345,6 +345,7 @@ Critical and high items:
 | [TEST-06](#test-06) | `llm_spec.sh` uses the repository's own `lib/` as a fixture tree | Test harness | low | no |
 | [TEST-07](#test-07) | 18 specs source Gash at top level in the runner process | Test harness | low | no |
 | [TEST-09](#test-09) | `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again | Test harness | low | no |
+| [TEST-10](#test-10) | Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice | Test harness | low | no |
 
 ### llm_* agent functions
 
@@ -3472,6 +3473,24 @@ Critical and high items:
 | Proving test | The summary status follows the recorded statuses; a run with every spec passing never ends in FAIL. |
 | Status | open |
 
+<a id="test-10"></a>
+#### TEST-10 · Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A CI, macOS runner) |
+| Area | Test harness |
+| Bash location | `tests/specs/llm_db_security_spec.sh` (MySQL and PostgreSQL client tests), `tests/specs/llm_db_names_spec.sh` (`__dbn_mocks`); the rule is `lib/modules/llm/core.sh:577` |
+| Observed behavior | The specs record what a mock `mysql`/`psql` received (argv, stdin, options) and assert on it. When the call takes 100 ms or more, which on a slow runner the client spawn alone can (DB-06), `llm_db_query` runs the auto-EXPLAIN through the same mock, which overwrites the recorded files, and the assertions fail. Seen once on the macOS job. |
+| Reproduction | the PostgreSQL client test on a loaded runner, or with a mock that sleeps 150 ms |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Fixed in the specs: after sourcing they pin `EPOCHREALTIME` to a constant, as `llm_portability_spec.sh` already does, so the elapsed time is 0 and the mock runs once. Assertions unchanged. |
+| Fix recipe (3.0) | n/a after cutover (testscript, with the clock injected in `internal/db`). |
+| Proving test | The three tests pass with a mock client that sleeps 150 ms. |
+| Status | open |
+
 ## Forced divergences
 
 | Id | Title | Area | Severity | Contract |
@@ -3569,6 +3588,7 @@ Critical and high items:
 | [CORE-10](#core-10) | __gash_download's INT trap re-parses the destination path as shell code | Security | low | no |
 | [CORE-16](#core-16) | Character counts in messages follow the locale (bytes in C, characters in UTF-8) | Portability | low | yes |
 | [CORE-17](#core-17) | The mode in the ~/.gash_env permission warning depends on the installed stat | Portability | low | no |
+| [CORE-18](#core-18) | Without the startup load, settings warnings come at the first call, before its argument checks | Contract | low | no |
 
 ### llm_* agent functions
 
@@ -5270,6 +5290,24 @@ Critical and high items:
 | rc.A behavior | The mode is read with `os.Lstat`/`Stat` and printed in the GNU `%a` form on every platform. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_CORE17` in `internal/config`. |
+| Status | open |
+
+<a id="core-18"></a>
+#### CORE-18 · Without the startup load, settings warnings come at the first call, before its argument checks
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | New finding (rc.A port of llm_exec, `llm_exec_security_spec.sh` "reads ~/.gash_env once per call") |
+| Area | Contract |
+| Bash location | `lib/core/config.sh:147-277` (`__gash_load_env`, cached for the life of the shell) and its callers in the function bodies (`llm/exec.sh:1128`, `llm/db.sh:239`, `remote.sh:71,298`, `ssh.sh:198`, `ai/chat.sh`, `ai/sysinfo.sh`, the `gash_db_*`/`gash_ai_*` helpers of `config.sh`) |
+| Observed behavior | gash.sh loads the settings file at startup and prints its warnings then. A shell that sources only the module files (the compat paths) has no startup load: the first function that needs settings loads the file when its body reaches `__gash_load_env`, after its help, argument and validation checks, and prints the warnings once for the life of the shell. |
+| Reproduction | a `~/.gash_env` with a malformed line, the modules sourced without gash.sh, then two llm_exec calls: one "Line 1" warning on stderr |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | The cache lives in the caller's shell, which the binary cannot fill, and printing from the binary would repeat the warnings on every call. So the generated stub of every function whose 2.x body loads the settings runs the shim's `__gash_load_env` (the 2.x helper, cached, warnings printed once per shell) before it calls the binary, and the binary reads the file silently. Same warnings, same count, same shell; in a modules-only, non-headless shell they now also appear when that first call only prints help or is refused, where 2.x printed nothing yet. Shells that load gash.sh are unchanged. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `llm_exec_security_spec.sh` "reads ~/.gash_env once per call" in Go mode, plus `TestLedger_CORE18` in `internal/compatgen` (the stub of each such function calls `__gash_load_env` first, and no other stub does). |
 | Status | open |
 
 ## Decisions for the operator
