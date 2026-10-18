@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 75 | 70 | 171 | 115 |
+| Defects | 1 | 25 | 75 | 71 | 172 | 115 |
 | Forced divergences | 2 | 4 | 24 | 63 | 93 | 37 |
 | Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
 | Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
 | HTE design delta | 0 | 6 | 20 | 42 | 68 | 55 |
-| **All** | 3 | 36 | 125 | 241 | **404** | 241 |
+| **All** | 3 | 36 | 125 | 242 | **405** | 241 |
 
 Critical and high items:
 
@@ -188,6 +188,7 @@ Critical and high items:
 | [LLM-20](#llm-20) | llm_docker_check applies no path guard and interpolates .env and caller-env secrets into output | Security | high | yes |
 | [LLM-23](#llm-23) | non-UTF-8 bytes pass raw into JSON (two behaviors) | Correctness | medium | yes |
 | [LLM-27](#llm-27) | llm_project detection quirks (poetry always, case-sensitive flask, framework grep anywhere) | Correctness | low | yes |
+| [LLM-34](#llm-34) | llm_procs --name can list its own exiting helper subshell, with an empty name | Correctness | low | no |
 | [DB-01](#db-01) | PostgreSQL E-string mislex lets a backslash line slip past the SQL guard | Security | critical | yes |
 | [DB-06](#db-06) | the slow-query threshold includes client spawn and connect time | Correctness | medium | yes |
 | [EXEC-01](#exec-01) | attached short-option values and clusters skip the secret-file and forbidden-path checks | Security | high | yes |
@@ -618,6 +619,24 @@ Critical and high items:
 | Status | open |
 
 ### databases
+
+<a id="llm-34"></a>
+#### LLM-34 · llm_procs --name can list its own exiting helper subshell, with an empty name
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (rc.A gate run, intermittent) |
+| Area | Correctness |
+| Bash location | `lib/modules/llm/system.sh:125-149` |
+| Observed behavior | The self-exclusion skips the calling shell chain and the subshells whose command line equals their parent's. A helper subshell of llm_procs itself (for example the one that ran `pgrep`) can be caught while it exits: its command line no longer matches its parent's, so it is not skipped, and it is gone before `ps -o comm=` reads its name. The result then holds an entry with an empty name, e.g. for a NAME nothing else matches. Seen once under load (`llm_flags_spec.sh` "leaves out the calling shell"). |
+| Reproduction | `llm_procs --name` with a NAME no process has, repeated on a loaded machine; rarely prints one `{"pid":N,"name":""}` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Does not occur: the binary forks no helper shells, and it leaves out its own process and the calling shell chain as 2.x meant to. The Bash reference spec can still fail intermittently on this until cutover. |
+| Fix recipe (3.0) | Same as rc.A. |
+| Proving test | `TestLedger_LLM34` in `internal/llm`: a NAME that only the caller's chain matches gives `[]` across repeated runs. |
+| Status | open |
 
 <a id="db-01"></a>
 #### DB-01 · PostgreSQL E-string mislex lets a backslash line slip past the SQL guard
