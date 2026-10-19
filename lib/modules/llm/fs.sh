@@ -413,6 +413,11 @@ __llm_grep_impl() {
     fi
 
     __llm_validate_uint "limit" "$limit" || return 1
+    # --context must be a plain integer: it is used in arithmetic below, so a
+    # non-number would otherwise run as Bash arithmetic (code execution) or
+    # kill a `set -u` caller. Normalize so a leading zero is decimal, not octal.
+    __llm_validate_uint "context" "$context" || return 1
+    context=$((10#$context))
 
     # Validate path
     local safe_path

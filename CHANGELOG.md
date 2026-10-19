@@ -71,6 +71,36 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
 - `tests/run.sh` skips the terminal rendering fixtures unless given
   `--slow` or the spec by name; CI runs them once, in their own job.
 
+## [2.1.1] - 2026-10-18
+
+A security release. Four ways untrusted text could reach code execution are
+closed; ordinary use is unchanged.
+
+### Security
+
+- The read-only SQL guard could be bypassed on PostgreSQL. A quote written
+  right after a word was mistaken for the start of an escape string, so text
+  the guard then ignored, including a client command line, slipped past the
+  keyword checks; on the `psql` client such a line can run a shell command.
+  The guard now opens an escape string only for a standalone `e`/`E`, rejects
+  any statement line that begins with a backslash, and treats `SET` as a
+  blocked keyword.
+- The interactive prompt no longer runs text from the current git branch
+  name, the Python virtual-env path, the `debian_chroot` name or the GNU
+  `screen` session as shell code. Each is now shown literally, so entering a
+  repository, virtual-env, chroot or screen whose name contains shell syntax
+  is safe. Ordinary names look exactly as before.
+- `llm_grep --context` is validated as a plain integer instead of being
+  evaluated as shell arithmetic. A non-numeric or crafted value is refused
+  with `invalid_context` and no longer runs code or aborts a `set -u` caller.
+- `tree_stats` no longer evaluates text taken from a scanned file name as
+  shell arithmetic. A tab inside a file extension could shift that text into
+  the per-extension count and size fields, which the terminal view then used
+  in an arithmetic expression; scanning a directory someone else could write
+  to (a cloned repository, an extracted archive, a shared folder) could run a
+  command. Those fields are now read as digits only, so any other value counts
+  as zero and is never evaluated; `--json` keeps numeric fields too.
+
 ## [2.1.0] - 2026-10-14
 
 Everyday tools from a long-lived `.gashrc`, commands that show what they
@@ -385,6 +415,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/mauriziofonte/gash/compare/v1.5.3...v2.0.0
 [1.5.3]: https://github.com/mauriziofonte/gash/compare/v1.5.2...v1.5.3
