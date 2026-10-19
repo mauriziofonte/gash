@@ -68,11 +68,15 @@ if [ "${GASH_HTE_E2E_SYSTEMD:-}" = 1 ]; then
     exit "$rc"
 fi
 
-# systempaths=unconfined: the root step writes
-# net.ipv4.ip_unprivileged_port_start, which starts at 1024. /etc/hosts
+# --privileged: the root step lowers net.ipv4.ip_unprivileged_port_start
+# (which --sysctl starts at 1024) to 80. systempaths=unconfined unmasks the
+# read-only /proc/sys mount, but on a host whose Docker enforces the
+# docker-default AppArmor profile (the GitHub Actions runners) that profile
+# still denies the write: sysctl reports "Read-only file system", exits 0,
+# and the value stays 1024. A privileged throwaway --network none container
+# lifts both; it only ever touches its own disposable namespaces. /etc/hosts
 # stays Docker's bind mount (LEDGER HTE-69).
-exec docker run --rm --init --network none \
-    --security-opt systempaths=unconfined \
+exec docker run --rm --init --network none --privileged \
     --sysctl net.ipv4.ip_unprivileged_port_start=1024 \
     -e GASH_HTE_E2E_MULTIPHP="${GASH_HTE_E2E_MULTIPHP:-}" \
     -v "$stage:/e2e:ro" "$image" /e2e/setup.sh
