@@ -99,6 +99,29 @@ func unlocked(key, pass string) runner.Expect {
 	}}
 }
 
+// unlockedSplit is a successful key whose "Identity added:" line and its
+// trailing CRLF arrive in separate PTY reads, as a real terminal can split
+// them. converse must read through the newline so the next key's spawn line
+// is not glued onto "Identity added:" in the transcript.
+func unlockedSplit(key, pass string) runner.Expect {
+	return runner.Expect{PTY: true, Argv: []string{"ssh-add", "--", key}, Dialog: []runner.DialogStep{
+		{Out: "Enter passphrase for " + key + ": "}, {In: pass + "\r"},
+		{Out: "\r\nIdentity added: " + key + " (user@host)"}, {Out: "\r\n"},
+	}}
+}
+
+// A two-key run where the first key's success line is split from its CRLF
+// must still filter the spawn lines (regression for the glued-spawn leak).
+func TestUnlockSplitSuccessLine(t *testing.T) {
+	fx := newFixture(t, "SSH:~/.ssh/key1=pw\nSSH:~/.ssh/key2=pw2\n", "ssh-add")
+	m, h := tm(runner.NewFake(t, list(noIdentities, 1), unlockedSplit(fx.key("key1"), "pw"), unlocked(fx.key("key2"), "pw2")))
+	r := fx.call(m, nil)
+	require.Equal(t, result{"SSH: Enter passphrase for " + fx.key("key1") + ": \nSSH: Identity added: " + fx.key("key1") + " (user@host)\n" +
+		"SSH: Enter passphrase for " + fx.key("key2") + ": \nSSH: Identity added: " + fx.key("key2") + " (user@host)\n", 0}, r)
+	require.NotContains(t, r.err, "spawn ssh-add")
+	require.Equal(t, "export GASH_SSH_AUTOUNLOCK_RAN=1\n", h.String())
+}
+
 func TestRunOnce(t *testing.T) {
 	fx := newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add")
 	fx.env["GASH_SSH_AUTOUNLOCK_RAN"] = "1"

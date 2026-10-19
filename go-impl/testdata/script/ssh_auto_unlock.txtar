@@ -40,13 +40,14 @@ stderr 'Identity added'
 
 # --- ssh_auto_unlock_spec.sh:129 - the transcript is rendered in gash style:
 # an "SSH:" prefix per line, the agent's "no identities" shown, each key
-# added. (The 2.x "spawn ssh-add lines are dropped" point is not asserted: the
-# Go PTY transcript can intermittently glue the next spawn line onto a key's
-# "Identity added" line so printTranscript does not drop it -- a flaky defect
-# reported to the lead; printTranscript's filter is proven by a Go unit test.)
+# added, and the "spawn ssh-add" lines dropped (two keys, so the second key's
+# spawn line follows the first key's "Identity added" line in the transcript;
+# converse reads each success line through its newline so the spawn line is
+# never glued onto it and printTranscript filters it).
 exec bash -c 'export GASH_ENV_FILE=home/env2 MOCK_SSH_AGENT=1 GASH_SSH_AUTOUNLOCK_RAN= PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; source "$GASH_SH"; gash_ssh_auto_unlock 2>&1 || true'
 stdout 'SSH:.*Identity added'
 stdout 'no identities'
+! stdout 'spawn ssh-add'
 
 # --- ssh_auto_unlock_spec.sh:155 - a key the agent already holds is skipped
 exec bash -c 'export GASH_ENV_FILE=home/env2 MOCK_SSH_AGENT=1 MOCK_SSH_LOADED=SHA256:fp-key1 MOCK_EXPECT_STDIN="$PWD/sent1" GASH_SSH_AUTOUNLOCK_RAN= PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; source "$GASH_SH"; gash_ssh_auto_unlock >/dev/null 2>&1 || true; base64 -d <sent1'

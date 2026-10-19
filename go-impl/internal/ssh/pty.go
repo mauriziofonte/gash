@@ -17,9 +17,14 @@ import (
 // answered (exp_continue), the others end the dialog. Tcl's . matches a
 // newline.
 var (
-	passPrompt  = regexp.MustCompile(`(?s)Enter passphrase.*:`)
-	dialogEnds  = []*regexp.Regexp{regexp.MustCompile(`(?s)Identity added:.*`), regexp.MustCompile(`(?s)Bad passphrase.*`), regexp.MustCompile(`(?s)` + noAgent + `.*`)}
-	readBufSize = 4096
+	passPrompt = regexp.MustCompile(`(?s)Enter passphrase.*:`)
+	// identityAdded is the success terminator. Unlike the Bad-passphrase and
+	// no-agent prompts (which end mid-line, as 2.x expect captures them),
+	// ssh-add prints "Identity added: ...\r\n" and exits, so a clean run's
+	// line is newline-terminated; converse makes sure that newline is read.
+	identityAdded = regexp.MustCompile(`(?s)Identity added:.*`)
+	dialogEnds    = []*regexp.Regexp{identityAdded, regexp.MustCompile(`(?s)Bad passphrase.*`), regexp.MustCompile(`(?s)` + noAgent + `.*`)}
+	readBufSize   = 4096
 )
 
 // child is one ssh-add on its terminal, with a reader that reads only
@@ -133,6 +138,21 @@ func (ch *child) converse(pass string, wait time.Duration) string {
 		}
 		for _, re := range dialogEnds {
 			if re.MatchString(buf) {
+				// On the success terminator, read through the line's
+				// trailing newline (ssh-add emits it before exiting) so the
+				// transcript keeps "Identity added:" on its own line and the
+				// next key's spawn line is not glued onto it. The other
+				// terminators are prompts with no newline and stay as read.
+				if loc := identityAdded.FindStringIndex(buf); loc != nil {
+					for !strings.Contains(buf[loc[0]:], "\n") {
+						data, ok := ch.read(timer.C)
+						if !ok {
+							break
+						}
+						seen.WriteString(data)
+						buf += data
+					}
+				}
 				return seen.String()
 			}
 		}
