@@ -90,6 +90,17 @@ __gash_fs_human_size() {
     __gash_human_size "${1-0}"
 }
 
+# Coerce a count/size field read from a tab-split "top extensions" row to a
+# decimal integer. A tab inside an extension can shift file-name text into
+# these fields; anything that is not all digits becomes 0, so the value is
+# never used as Bash arithmetic (an array subscript runs its command
+# substitutions) nor emitted as a bare JSON number.
+# Usage: __gash_fs_int cnt   (coerces the named variable in place)
+__gash_fs_int() {
+    local -n __gfi_ref="$1"
+    [[ "${__gfi_ref:-}" =~ ^[0-9]+$ ]] || __gfi_ref=0
+}
+
 # Check whether GNU du supports --exclude (BSD du does not).
 # Result cached in __GASH_FS_DU_HAS_EXCLUDE.
 __gash_fs_du_has_exclude() {
@@ -1555,6 +1566,8 @@ tree_stats() {
         local first=1 row ext cnt sz
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_fs_int cnt
+            __gash_fs_int sz
             local esc_ext
             esc_ext=$(__gash_json_escape "$ext")
             [[ $first -eq 0 ]] && tc_json+=","
@@ -1567,6 +1580,7 @@ tree_stats() {
         first=1
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_fs_int sz
             local esc_ext
             esc_ext=$(__gash_json_escape "$ext")
             [[ $first -eq 0 ]] && ts_json+=","
@@ -1610,6 +1624,8 @@ tree_stats() {
         __gash_heading --indent 2 "Top ${top_n} extensions by count:"
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_fs_int cnt
+            __gash_fs_int sz
             printf '%s\t%s\tfiles\t%s\n' "$ext" "${cnt:-0}" "$(__gash_fs_human_size "${sz:-0}")"
         done | __gash_table --no-header --indent 4 --gap 1 --min 1:12 --right 2 --min 2:6 --min 3:6 --color 1:accent
     fi
@@ -1619,6 +1635,7 @@ tree_stats() {
         __gash_heading --indent 2 "Top ${top_n} extensions by size:"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_fs_int sz
             printf '%s\t%s\n' "$ext" "$(__gash_fs_human_size "${sz:-0}")"
         done | __gash_table --no-header --indent 4 --gap 1 --min 1:12 --color 1:accent
     fi
@@ -1662,6 +1679,7 @@ __gash_fs_tree_stats_rich() {
         __gash_heading --indent 2 "By size"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_fs_int sz
             pct=0
             ((size_total > 0)) && pct=$((${sz:-0} * 1000 / size_total))
             printf '%s\t%s\t%s/%s\t%d.%d%%\n' "$ext" "$(__gash_fs_human_size "${sz:-0}")" \
@@ -1673,6 +1691,8 @@ __gash_fs_tree_stats_rich() {
         __gash_heading --indent 2 "By count"
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_fs_int cnt
+            __gash_fs_int sz
             pct=0
             ((files_total > 0)) && pct=$((${cnt:-0} * 1000 / files_total))
             __gash_group_digits n "${cnt:-0}"

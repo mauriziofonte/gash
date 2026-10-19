@@ -126,8 +126,12 @@ __gash_ps1_git() {
         behind="${behind#-}"
     fi
 
+    # Store the untrusted branch name in its own variable and reference it in
+    # PS1, so Bash expands it once and never re-scans it as code (promptvars
+    # re-expands PS1 before every prompt). Ordinary names render byte for byte.
+    __GASH_PS1_BRANCH="$branch"
     local o="${ps1_o-\\[}" c="${ps1_c-\\]}"
-    local seg="${o}${__GASH_PS1_BBLUE}${c}(${branch}"
+    local seg="${o}${__GASH_PS1_BBLUE}${c}(\${__GASH_PS1_BRANCH}"
     [[ -n "$dirty" ]] && seg+="${o}${__GASH_PS1_BYELLOW}${c}*${o}${__GASH_PS1_BBLUE}${c}"
     if [[ "$ahead" != "0" || "$behind" != "0" ]]; then
         seg+="${o}${__GASH_PS1_DIM}${c}"
@@ -165,10 +169,16 @@ __gash_ps1_build() {
     local R="${o}${__GASH_PS1_OFF}${c}"
     local ps1=""
 
-    [[ -n "${debian_chroot-}" ]] && ps1+="(${debian_chroot})"
+    # Untrusted strings (chroot file, venv path) go into their own variables
+    # and PS1 holds only the reference, so Bash never re-expands their content.
+    if [[ -n "${debian_chroot-}" ]]; then
+        __GASH_PS1_CHROOT="$debian_chroot"
+        ps1+="(\${__GASH_PS1_CHROOT})"
+    fi
 
     if [[ -n "${VIRTUAL_ENV-}" ]]; then
-        ps1+="${o}${__GASH_PS1_BWHITE}${c}(${VIRTUAL_ENV##*/})${R} "
+        __GASH_PS1_VENV="${VIRTUAL_ENV##*/}"
+        ps1+="${o}${__GASH_PS1_BWHITE}${c}(\${__GASH_PS1_VENV})${R} "
     fi
 
     # user: red for root, blue under sudo/su, green otherwise
@@ -218,7 +228,8 @@ __gash_ps1_build() {
         if [[ -e "${sessions[0]}" ]]; then
             local current="${STY-}"
             current="${current%%.*}"
-            ps1+=" ${o}${__GASH_PS1_BGREEN}${c}[s${#sessions[@]}${current:+:$current}]${R}"
+            __GASH_PS1_STY="$current"
+            ps1+=" ${o}${__GASH_PS1_BGREEN}${c}[s${#sessions[@]}${current:+:\${__GASH_PS1_STY}}]${R}"
         fi
         break
     done
