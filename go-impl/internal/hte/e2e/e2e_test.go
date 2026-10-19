@@ -39,8 +39,31 @@ func inContainer() bool {
 }
 
 // TestMain is also the root step: sudo runs this binary as
-// `gash-e2e hte __root`, as it runs gash.
+// `gash-e2e hte __root`, as it runs gash; and the systemd user unit runs
+// it as `gash-e2e hte __unit start|stop`.
 func TestMain(m *testing.M) {
+	if len(os.Args) == 4 && os.Args[1] == "hte" && os.Args[2] == "__unit" {
+		if !inContainer() {
+			fmt.Fprintln(os.Stderr, "the E2E unit runs only inside the E2E container")
+			os.Exit(2)
+		}
+		e, err := hte.ProcessEngine(false)
+		if err == nil {
+			switch os.Args[3] {
+			case "start":
+				_, err = e.UnitStart(context.Background())
+			case "stop":
+				_, err = e.UnitStop(context.Background())
+			default:
+				err = fmt.Errorf("__unit %q", os.Args[3])
+			}
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if len(os.Args) == 3 && os.Args[1] == "hte" && os.Args[2] == "__root" {
 		if !inContainer() {
 			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container")
@@ -73,6 +96,7 @@ type answer struct {
 	body     string
 	cert     *x509.Certificate
 	proto    int // HTTP major version
+	header   http.Header
 }
 
 func get(scheme, host string, port int) (answer, error) { return getPath(scheme, host, port, "/", nil) }
@@ -102,7 +126,7 @@ func getPath(scheme, host string, port int, path string, tlsConf *tls.Config) (a
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-	a := answer{status: resp.StatusCode, location: resp.Header.Get("Location"), body: strings.TrimSpace(string(body)), proto: resp.ProtoMajor}
+	a := answer{status: resp.StatusCode, location: resp.Header.Get("Location"), body: strings.TrimSpace(string(body)), proto: resp.ProtoMajor, header: resp.Header}
 	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
 		a.cert = resp.TLS.PeerCertificates[0]
 	}
@@ -174,8 +198,9 @@ func TestE2E(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Logf("plan: %s", strings.Join(res.Plan, " | "))
-		if res.Started {
-			t.Error("the stack started while the system Apache holds 80 and 443")
+		// HTE-75: exit 0, started false, next names migrate.
+		if res.Started || res.Next != "gash hte migrate" {
+			t.Errorf("started %v, next %q: the system Apache holds 80 and 443", res.Started, res.Next)
 		}
 		for _, p := range append([]string{defaultVhost}, legacyVhosts...) {
 			if !slices.Contains(res.Blocking, p) {
@@ -424,30 +449,34 @@ func TestE2E(t *testing.T) {
 	})
 
 	step("a document root with a space", func(t *testing.T) {
-		// HTE-08.
+		// HTE-08: the root is quoted in the vhost and the pool, and the
+		// vhost gives PHP-FPM the decoded SCRIPT_FILENAME.
 		root := filepath.Join(home, "www", "with space", "public")
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "index.php"), []byte("<?php echo \"space\\n\";\n"), 0o644); err != nil {
+		php := "<?php echo 'space:', $_SERVER['PATH_INFO'] ?? '', ':', $_GET['q'] ?? '', \"\\n\";\n"
+		if err := os.WriteFile(filepath.Join(root, "index.php"), []byte(php), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := e.SiteCreate(ctx, state.Flags{Domain: "space.test", Docroot: ptr(root), HTTPS: ptr(false)}); err != nil {
 			t.Fatal(err)
 		}
-		a := mustGet(t, "http", "space.test", 80)
+		for path, want := range map[string]string{"/index.php": "space::", "/index.php/extra?q=a%20b": "space:/extra:a b"} {
+			if a, err := getPath("http", "space.test", 80, path, nil); err != nil || a.status != 200 || a.body != want {
+				t.Errorf("space.test%s: %+v %v, want %q", path, a, err, want)
+			}
+		}
 		if _, err := e.SiteRemove(ctx, "space.test", true); err != nil {
 			t.Fatal(err)
 		}
-		// Reported to the lead, not fixed: mod_proxy_fcgi 2.4.58 sends
-		// SCRIPT_FILENAME percent-encoded, so FPM answers "File not found."
-		// (ProxyFCGISetEnvIf "true" SCRIPT_FILENAME
-		// "%{unescape:%{reqenv:SCRIPT_FILENAME}}" in the vhost repairs it).
-		if a.status == 404 && a.body == "File not found." {
-			t.Skipf("HTE-08 defect reproduced: %+v", a)
+		// A character Apache or PHP-FPM reads as syntax is refused.
+		dollar := filepath.Join(home, "www", "a$b")
+		if err := os.MkdirAll(dollar, 0o755); err != nil {
+			t.Fatal(err)
 		}
-		if a.body != "space" {
-			t.Errorf("space.test: %+v", a)
+		if _, err := e.SiteCreate(ctx, state.Flags{Domain: "dollar.test", Docroot: ptr(dollar)}); code(err) != hteerr.InvalidDocroot {
+			t.Errorf("docroot with $: %v", err)
 		}
 	})
 
@@ -480,6 +509,99 @@ func TestE2E(t *testing.T) {
 		}
 		if a := mustGet(t, "http", appDomain, 80); a.status != 200 {
 			t.Errorf("after the rollback: %+v", a)
+		}
+	})
+
+	step("a busy port through an overlay rolls back", func(t *testing.T) {
+		// HTE-71: the generation includes copies of the overlays, so the
+		// rollback brings back the overlay the previous generation ran
+		// with; the user's file is never written. The global overlay
+		// takes a busy Listen port; a site overlay, which sits inside the
+		// vhosts, a log file the user cannot open. Neither fails the
+		// config test.
+		l, err := net.Listen("tcp4", "127.0.0.1:9098")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer l.Close()
+		cfgPath, err := e.ApacheConfigPath(ctx)
+		if err != nil || cfgPath != paths.ApacheOverlay() {
+			t.Fatalf("apache config path: %q %v", cfgPath, err)
+		}
+		for _, c := range []struct{ overlay, header, edit string }{
+			{paths.ApacheOverlay(), "X-Global", "Listen 127.0.0.1:9098\n"},
+			{paths.SiteOverlay(appDomain), "X-Site", "CustomLog \"/etc/gash-hte-e2e.log\" combined\n"},
+		} {
+			if err := os.WriteFile(c.overlay, []byte("Header set "+c.header+" one\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.ServiceReload(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get(c.header) != "one" {
+				t.Fatalf("%s: with the first overlay: %+v", c.overlay, a)
+			}
+			edit := "Header set " + c.header + " two\n" + c.edit
+			if err := os.WriteFile(c.overlay, []byte(edit), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err = e.ServiceReload(ctx)
+			if code(err) != hteerr.ReloadFailed || !strings.Contains(err.Error(), "rolled back to the previous generation, which is running") {
+				t.Fatalf("%s: %v, want reload_failed with the rollback", c.overlay, err)
+			}
+			t.Logf("the failure: %v", err)
+			if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get(c.header) != "one" {
+				t.Errorf("%s: after the rollback: %+v", c.overlay, a)
+			}
+			if read(t, c.overlay) != edit {
+				t.Errorf("%s changed", c.overlay)
+			}
+			if err := os.Remove(c.overlay); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.ServiceReload(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if a := mustGet(t, "http", appDomain, 80); a.header.Get(c.header) != "" {
+				t.Errorf("%s: without the overlay: %+v", c.overlay, a)
+			}
+		}
+	})
+
+	step("apache modules enable and disable", func(t *testing.T) {
+		// The global overlay tells whether mod_status is loaded.
+		overlay := paths.ApacheOverlay()
+		if err := os.WriteFile(overlay, []byte("<IfModule status_module>\n    Header set X-Status-Module on\n</IfModule>\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(overlay)
+		if _, err := e.ServiceReload(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if a := mustGet(t, "http", appDomain, 80); a.header.Get("X-Status-Module") != "" {
+			t.Fatalf("mod_status is loaded before enable: %+v", a)
+		}
+		res, err := e.ApacheModuleEnable(ctx, "status")
+		if err != nil || !res.Changed || res.Applied == nil || !res.Applied.Reloaded {
+			t.Fatalf("enable status: %+v %v", res, err)
+		}
+		if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get("X-Status-Module") != "on" {
+			t.Errorf("after enable: %+v", a)
+		}
+		if _, err := e.ApacheModuleEnable(ctx, "no_such_module"); code(err) != hteerr.ApacheModuleMissing {
+			t.Errorf("enable no_such_module: %v", err)
+		}
+		if res, err = e.ApacheModuleDisable(ctx, "status"); err != nil || !res.Changed {
+			t.Fatalf("disable status: %+v %v", res, err)
+		}
+		if a := mustGet(t, "http", appDomain, 80); a.status != 200 || a.header.Get("X-Status-Module") != "" {
+			t.Errorf("after disable: %+v", a)
+		}
+		if err := os.Remove(overlay); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.ServiceReload(ctx); err != nil {
+			t.Fatal(err)
 		}
 	})
 
@@ -695,6 +817,50 @@ func TestE2EReinstall(t *testing.T) {
 		}
 	})
 
+	step("migrate on the high ports keeps the system Apache", func(t *testing.T) {
+		// HTE-70: the managed sites' vhosts are archived and the system
+		// Apache reloaded, never stopped; the excluded vhost stays its.
+		// which.txt tells the document roots apart (index.php prints the
+		// Host header, whichever vhost serves it).
+		for _, d := range []string{"http", "https"} {
+			if err := os.WriteFile("/home/dev/sites/"+d+"/public/which.txt", []byte(d), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := e.Migrate(ctx, hte.MigrateOptions{Apply: true, Yes: true, Exclude: []string{"https.test"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("root plan: %s", strings.Join(res.RootPlan, " | "))
+		if sa := res.Plan.SystemApache; sa == nil || !slices.Contains(sa.Ports, 80) || !slices.Contains(sa.Ports, 443) {
+			t.Errorf("plan: %+v", res.Plan.SystemApache)
+		}
+		if !systemApacheRuns() || len(res.Archived) == 0 {
+			t.Fatalf("system Apache running %v, archived %v", systemApacheRuns(), res.Archived)
+		}
+		// The root steps reload the system Apache and PHP-FPM and return
+		// before they are done; a request that meets the FPM reload gets a
+		// 503 (its children end at once, process_control_timeout = 0).
+		a := mustGet(t, "http", "https.test", 80)
+		for i := 0; a.status == 503 && i < 50; i++ {
+			time.Sleep(100 * time.Millisecond)
+			a = mustGet(t, "http", "https.test", 80)
+			t.Logf("the excluded https.test on 80 after the system reload: %d", a.status)
+		}
+		if a.status != 200 || a.body != "legacy:https.test:fpm-fcgi" {
+			t.Errorf("the excluded https.test on 80: %+v", a)
+		}
+		if a, err := getPath("http", "http.test", 80, "/which.txt", nil); err != nil || a.body == "http" {
+			t.Errorf("the archived http.test is still served on 80: %+v %v", a, err)
+		}
+		if a, err := getPath("http", "http.test", 8080, "/which.txt", nil); err != nil || a.body != "http" {
+			t.Errorf("http.test on 8080: %+v %v", a, err)
+		}
+		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 || a.body != "legacy:http.test:fpm-fcgi" {
+			t.Errorf("http.test on 8080: %+v", a)
+		}
+	})
+
 	step("cert renew", func(t *testing.T) {
 		before := mustGet(t, "https", "https.test", 8443)
 		if before.cert == nil || before.cert.PublicKeyAlgorithm != x509.RSA {
@@ -735,6 +901,13 @@ func TestE2EReinstall(t *testing.T) {
 		if !systemApacheRuns() {
 			t.Error("the system Apache stopped")
 		}
+		// The vhosts are back and the system Apache was reloaded.
+		if a, err := getPath("http", "http.test", 80, "/which.txt", nil); err != nil || a.body != "http" {
+			t.Errorf("http.test on 80 after uninstall: %+v %v", a, err)
+		}
+		for _, d := range []string{"http", "https"} {
+			os.Remove("/home/dev/sites/" + d + "/public/which.txt")
+		}
 		t.Logf("stage %s", res.Stage)
 	})
 }
@@ -749,4 +922,126 @@ func eventually(file, s string) bool {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return false
+}
+
+// TestE2ESystemd runs in the container with systemd as PID 1 (run.sh with
+// GASH_HTE_E2E_SYSTEMD=1), in a login session of dev: with autostart
+// systemd, install, the service commands, the migrate switch and
+// uninstall start and stop the stack through systemctl --user, so the
+// masters live in the unit's cgroup (LEDGER HTE-73).
+func TestE2ESystemd(t *testing.T) {
+	if os.Getenv("GASH_HTE_E2E_SYSTEMD") != "1" || !inContainer() {
+		t.Skip("runs only inside the systemd E2E container: GASH_HTE_E2E_SYSTEMD=1 testdata/hte/e2e/run.sh")
+	}
+	ctx := context.Background()
+	e, err := hte.ProcessEngine(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := state.NewPaths(mustDirs(t), os.Getuid())
+	unitState := func() string {
+		out, _ := exec.Command("systemctl", "--user", "is-active", "gash-hte.service").Output()
+		return strings.TrimSpace(string(out))
+	}
+	// pidOf returns the PID a master's PID file names, 0 when none runs.
+	pidOf := func(name string) int {
+		data, err := os.ReadFile(filepath.Join(paths.RuntimeDir, name))
+		if err != nil {
+			return 0
+		}
+		var pid int
+		fmt.Sscan(string(data), &pid)
+		if pid < 2 || !exists(fmt.Sprintf("/proc/%d", pid)) {
+			return 0
+		}
+		return pid
+	}
+	// owned: every master named runs in the unit's cgroup.
+	owned := func(t *testing.T, names ...string) map[string]int {
+		t.Helper()
+		pids := map[string]int{}
+		for _, n := range names {
+			pid := pidOf(n)
+			cg, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
+			if pid == 0 || !strings.Contains(string(cg), "/gash-hte.service\n") {
+				t.Errorf("%s (pid %d) is not in the unit's cgroup:\n%s", n, pid, cg)
+			}
+			pids[n] = pid
+		}
+		return pids
+	}
+	step := func(name string, fn func(t *testing.T)) {
+		if !t.Run(name, fn) {
+			t.FailNow()
+		}
+	}
+
+	step("install --autostart systemd", func(t *testing.T) {
+		res, err := e.Install(ctx, hte.InstallOptions{Yes: true, Ports: "high", Autostart: "systemd"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("plan: %s", strings.Join(res.Plan, " | "))
+		if !res.Started || res.Settings.Autostart != "systemd" || unitState() != "active" {
+			t.Fatalf("started %v, autostart %q, unit %s", res.Started, res.Settings.Autostart, unitState())
+		}
+		if !exists("/var/lib/systemd/linger/dev") {
+			t.Error("linger is not enabled")
+		}
+		owned(t, "httpd.pid")
+	})
+
+	step("service stop, start and restart are unit jobs", func(t *testing.T) {
+		res, err := e.ServiceStop(ctx)
+		if err != nil || res.Via != "systemd" || res.Running || unitState() != "inactive" || pidOf("httpd.pid") != 0 {
+			t.Fatalf("stop: %+v %v, unit %s", res, err, unitState())
+		}
+		if res, err = e.ServiceStart(ctx); err != nil || res.Via != "systemd" || !res.Running || unitState() != "active" {
+			t.Fatalf("start: %+v %v, unit %s", res, err, unitState())
+		}
+		before := owned(t, "httpd.pid")
+		if res, err = e.ServiceRestart(ctx); err != nil || res.Via != "systemd" || unitState() != "active" {
+			t.Fatalf("restart: %+v %v, unit %s", res, err, unitState())
+		}
+		if after := owned(t, "httpd.pid"); after["httpd.pid"] == before["httpd.pid"] {
+			t.Error("restart kept the Apache master")
+		}
+	})
+
+	step("the migrate switch starts the stack through the unit", func(t *testing.T) {
+		if _, err := e.ServiceStop(ctx); err != nil {
+			t.Fatal(err)
+		}
+		res, err := e.Migrate(ctx, hte.MigrateOptions{Apply: true, Yes: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("staging %s, imported %v, archived %v, warnings %v", res.Staging, res.Imported, res.Archived, res.Warnings)
+		if !res.Switched || res.Staging == "" || len(res.Imported) != 3 || unitState() != "active" {
+			t.Fatalf("switched %v, staging %q, imported %v, unit %s", res.Switched, res.Staging, res.Imported, unitState())
+		}
+		owned(t, "httpd.pid", "php-fpm-8.3.pid")
+		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 || !strings.Contains(a.body, "fpm-fcgi") {
+			t.Errorf("http.test on 8080: %+v", a)
+		}
+		if !systemApacheRuns() {
+			t.Error("the system Apache stopped on the high ports")
+		}
+	})
+
+	step("uninstall stops the unit and removes it", func(t *testing.T) {
+		res, err := e.Uninstall(ctx, hte.UninstallOptions{Yes: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Warnings) != 0 {
+			t.Errorf("warnings %v", res.Warnings)
+		}
+		if unitState() == "active" || pidOf("httpd.pid") != 0 || exists(filepath.Join(os.Getenv("HOME"), ".config/systemd/user/gash-hte.service")) {
+			t.Errorf("unit %s, apache pid %d", unitState(), pidOf("httpd.pid"))
+		}
+		if exists("/var/lib/systemd/linger/dev") {
+			t.Error("linger stayed enabled")
+		}
+	})
 }

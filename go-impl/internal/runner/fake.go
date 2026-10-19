@@ -28,8 +28,8 @@ type Call struct {
 	Use BashUse
 	// Script is the constant script of RunScript, 0 otherwise.
 	Script ConstScript
-	// Background is a Start, PTY a StartPTY.
-	Background, PTY bool
+	// Background is a Start, PTY a StartPTY, Session a StartSession.
+	Background, PTY, Session bool
 	// Argv is the whole command line, program first, as given (not looked
 	// up); for RunBash the bash -c line RunBash builds.
 	Argv []string
@@ -38,8 +38,12 @@ type Call struct {
 	Dir     string
 	Timeout time.Duration
 	// Stdin is everything the child could read: the whole Stdin reader;
-	// nil when there was none.
+	// nil when there was none (and for a StartSession, whose input the
+	// Serve of its expectation reads).
 	Stdin []byte
+	// Setsid and Credential are the Options of the same names.
+	Setsid     bool
+	Credential *Credential
 }
 
 // Expect is one expected start and its scripted outcome.
@@ -48,8 +52,13 @@ type Expect struct {
 	Use BashUse
 	// Script is the expected constant script of RunScript.
 	Script ConstScript
-	// Background expects a Start, PTY a StartPTY.
-	Background, PTY bool
+	// Background expects a Start, PTY a StartPTY, Session a StartSession.
+	Background, PTY, Session bool
+	// Serve plays the child of a StartSession: it reads what the code
+	// writes to the session's Stdin and writes what the code reads from
+	// its Stdout, until it returns. Then the session ends with Status (and
+	// Stderr); an error ends it with status 1 and the error text as Stderr.
+	Serve func(stdin io.Reader, stdout io.Writer) error
 	// Dialog is the conversation of a StartPTY child, in order: what it
 	// prints (reads of the PTY return it) and what the code must type
 	// (writes must match it). After the last step reads get io.EOF.
@@ -97,6 +106,7 @@ type Fake struct {
 	t       TB
 	expects []Expect
 	calls   []Call
+	respond func(Call) (Expect, bool)
 }
 
 var _ Runner = (*Fake)(nil)
@@ -120,6 +130,19 @@ func (f *Fake) Expect(e ...Expect) *Fake {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.expects = append(f.expects, e...)
+	return f
+}
+
+// Respond sets a function that answers, in any order, the starts it
+// accepts (ok true), before the expectations are consulted: for code
+// whose starts follow from what it discovers rather than a fixed order.
+// Only the outcome fields of its Expect are used (Stdout, Stderr, Status,
+// Signal, TimedOut, Err, Dialog, Serve); a start it declines goes to the
+// expectations. The refusals of Exec still apply.
+func (f *Fake) Respond(answer func(c Call) (Expect, bool)) *Fake {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.respond = answer
 	return f
 }
 
@@ -182,8 +205,38 @@ func (f *Fake) Start(ctx context.Context, c Cmd) error {
 		f.fail("%v", err)
 		return err
 	}
-	_, err := f.start(ctx, Call{Background: true, Argv: argv}, Options{Env: c.Env, Dir: c.Dir, Stdin: c.Stdin})
+	_, err := f.start(ctx, Call{Background: true, Argv: argv}, Options{Env: c.Env, Dir: c.Dir, Stdin: c.Stdin, Setsid: c.Setsid, Credential: c.Credential})
 	return err
+}
+
+// StartSession implements SessionStarter: the expectation's Serve plays
+// the child over kernel pipes; Err is the start error.
+func (f *Fake) StartSession(ctx context.Context, c Cmd) (Session, error) {
+	argv := append([]string{c.Path}, c.Args...)
+	if err := checkNoShell(argv); err != nil {
+		f.fail("%v", err)
+		return nil, err
+	}
+	o := c.Options
+	o.Stdin = nil // the session's input goes to Serve
+	e, err := f.next(ctx, Call{Session: true, Argv: argv}, o)
+	if err != nil {
+		return nil, err
+	}
+	if e.Err != nil {
+		return nil, e.Err
+	}
+	res := Result{ExitCode: e.Status, TimedOut: e.TimedOut, Stderr: []byte(e.Stderr)}
+	if e.Signal != 0 {
+		res.Signal, res.ExitCode = e.Signal, 128+int(e.Signal)
+	}
+	if c.Stderr != nil {
+		if err := emit(c.Stderr, e.Stderr, &res.Stderr); err != nil {
+			return nil, err
+		}
+		res.Stderr = nil
+	}
+	return startFakeSession(e, res)
 }
 
 // StartPTY implements Runner: the child follows the expectation's Dialog,
@@ -219,6 +272,7 @@ func (f *Fake) next(ctx context.Context, call Call, o Options) (Expect, error) {
 	}
 	argv := call.Argv
 	call.Env, call.Dir, call.Timeout = normalizeEnv(o.Env), o.Dir, o.Timeout
+	call.Setsid, call.Credential = o.Setsid, o.Credential
 	if o.Stdin != nil {
 		in, err := io.ReadAll(o.Stdin)
 		if err != nil {
@@ -229,6 +283,15 @@ func (f *Fake) next(ctx context.Context, call Call, o Options) (Expect, error) {
 
 	f.mu.Lock()
 	f.calls = append(f.calls, call)
+	respond := f.respond
+	f.mu.Unlock()
+	if respond != nil {
+		if e, ok := respond(call); ok {
+			return answered(e, call)
+		}
+	}
+
+	f.mu.Lock()
 	var e Expect
 	have := len(f.expects) > 0
 	if have {
@@ -245,8 +308,14 @@ func (f *Fake) next(ctx context.Context, call Call, o Options) (Expect, error) {
 		f.fail("runner: start %q: %s", argv, why)
 		return Expect{}, fmt.Errorf("%w: %q: %s", ErrUnexpected, argv, why)
 	}
+	return answered(e, call)
+}
+
+// answered is the start error an expectation gives: a *StartError, or
+// any Err of a start that has no Result (Start, StartPTY, StartSession).
+func answered(e Expect, call Call) (Expect, error) {
 	var se *StartError
-	if errors.As(e.Err, &se) || (e.Err != nil && (call.Background || call.PTY)) {
+	if errors.As(e.Err, &se) || (e.Err != nil && (call.Background || call.PTY || call.Session)) {
 		return e, e.Err
 	}
 	return e, nil
@@ -302,6 +371,8 @@ func (e Expect) mismatch(c Call) string {
 		return fmt.Sprintf("script %s, want %s", c.Script, e.Script)
 	case e.Background != c.Background || e.PTY != c.PTY:
 		return fmt.Sprintf("kind background=%t pty=%t, want background=%t pty=%t", c.Background, c.PTY, e.Background, e.PTY)
+	case e.Session != c.Session:
+		return fmt.Sprintf("kind session=%t, want session=%t", c.Session, e.Session)
 	case !slices.Equal(e.Argv, c.Argv):
 		return fmt.Sprintf("want argv %q", e.Argv)
 	case e.Env != nil && !slices.Equal(normalizeEnv(e.Env), c.Env):

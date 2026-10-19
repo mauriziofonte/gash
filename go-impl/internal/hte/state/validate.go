@@ -43,10 +43,10 @@ func NormalizeDomain(arg string) (string, error) {
 }
 
 // docrootRefused are the characters Apache (${NAME} expansion, <Directory>
-// wildcards, quoting) or the PHP-FPM INI parser (; comments, ${NAME})
-// would interpret, and the open_basedir list separator : (design/hte.md
-// section 3, LEDGER HTE-08).
-const docrootRefused = "$*?[;:\"\\"
+// wildcards * ? [ ], quoting) or the PHP-FPM INI parser (; comments,
+// ${NAME}, quoting) would interpret, and the open_basedir list separator :
+// (design/hte.md section 3, LEDGER HTE-08).
+const docrootRefused = "$*?[];:\"\\"
 
 // CheckDocrootText applies the character rules to a document root: valid
 // UTF-8, no control character (newline included) and none of $ * ? [ ; : " \.
@@ -171,7 +171,7 @@ func ParseProfile(flag *string) (profiles.Name, error) {
 	}
 	n, ok := profiles.Parse(*flag)
 	if !ok {
-		return "", hteerr.Newf(hteerr.InvalidProfile, "profiles: dev, staging, hardened", "unknown profile %q", *flag)
+		return "", hteerr.InvalidValue(hteerr.InvalidProfile, "profile", *flag, "dev", "staging", "hardened")
 	}
 	return n, nil
 }

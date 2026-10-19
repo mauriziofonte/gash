@@ -20,23 +20,32 @@ printf 'dev ALL=(root) NOPASSWD: /usr/local/bin/gash-e2e hte __root\n' >/etc/sud
 chmod 0440 /etc/sudoers.d/e2e
 visudo -c >/dev/null
 
-# Docker bind-mounts /etc/hosts: show what the helper does there, then
-# replace the mount with a plain file of the same content.
+# Docker bind-mounts /etc/hosts, so the helper cannot rename over it and
+# writes in place (LEDGER HTE-69). The test runs on that mount.
 echo "== hosts helper on the bind-mounted /etc/hosts"
-if printf '127.0.0.1 repro.test\n' | /usr/local/bin/gash-hosts-helper apply; then
-    echo "the helper wrote the bind mount"
-else
-    echo "the helper failed with exit $?"
-fi
+grep -q ' /etc/hosts ' /proc/self/mountinfo
 cp /etc/hosts /tmp/hosts.orig
-umount /etc/hosts
-cp /tmp/hosts.orig /etc/hosts
+printf '127.0.0.1 repro.test\n' | /usr/local/bin/gash-hosts-helper apply
+grep -qx '127.0.0.1 repro.test' /etc/hosts
+grep -q ' /etc/hosts ' /proc/self/mountinfo
+if ls /etc/.hosts.gash-hte-* >/dev/null 2>&1; then
+    echo "the helper left a temporary file" >&2
+    exit 1
+fi
+cat /tmp/hosts.orig >/etc/hosts
+echo "the helper wrote the bind mount in place"
 
-# The V2 hte-cli tree; https.test moves to PHP 8.3 (the image has no 7.4).
+# The V2 hte-cli tree. The multi-PHP image has its system PHP 7.4; in
+# the base image https.test moves to PHP 8.3.
+multiphp=${GASH_HTE_E2E_MULTIPHP:-}
 cp -a /e2e/V2/etc/apache2/. /etc/apache2/
 cp /e2e/V2/etc/php/8.3/fpm/pool.d/*.conf /etc/php/8.3/fpm/pool.d/
-sed 's/php7\.4/php8.3/g' /e2e/V2/etc/php/7.4/fpm/pool.d/https.test.conf >/etc/php/8.3/fpm/pool.d/https.test.conf
-sed -i 's/php7\.4/php8.3/g' /etc/apache2/sites-available/002-https.test.conf
+if [ "$multiphp" = 1 ]; then
+    cp /e2e/V2/etc/php/7.4/fpm/pool.d/https.test.conf /etc/php/7.4/fpm/pool.d/
+else
+    sed 's/php7\.4/php8.3/g' /e2e/V2/etc/php/7.4/fpm/pool.d/https.test.conf >/etc/php/8.3/fpm/pool.d/https.test.conf
+    sed -i 's/php7\.4/php8.3/g' /etc/apache2/sites-available/002-https.test.conf
+fi
 grep 'hte-cli' /e2e/V2/etc/hosts >>/etc/hosts
 chown root:root /etc/apache2/certs-selfsigned/*
 chmod 0644 /etc/apache2/certs-selfsigned/*.crt
@@ -44,14 +53,21 @@ chmod 0400 /etc/apache2/certs-selfsigned/*.key
 for s in http https forced; do
     mkdir -p "/home/dev/sites/$s/public"
     printf '<?php echo "legacy:", $_SERVER["HTTP_HOST"], ":", PHP_SAPI, "\\n";\n' >"/home/dev/sites/$s/public/index.php"
+    if [ "$multiphp" = 1 ]; then
+        printf '<?php echo PHP_VERSION, " ", ini_get("max_input_vars"), "\\n";\n' >"/home/dev/sites/$s/public/info.php"
+    fi
 done
 chown -R dev:dev /home/dev/sites
 # As on hte-cli machines, the system Apache runs as the user (the pool
 # sockets are dev:dev 0660).
 sed -i -e 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=dev/' -e 's/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=dev/' /etc/apache2/envvars
 a2enmod -q ssl proxy_fcgi rewrite http2 headers >/dev/null
-service php8.3-fpm start >/dev/null
-service apache2 start >/dev/null
+# restart: under systemd the units already run, on the default tree.
+service php8.3-fpm restart >/dev/null
+if [ "$multiphp" = 1 ]; then
+    service php7.4-fpm restart >/dev/null
+fi
+service apache2 restart >/dev/null
 echo "== the system Apache serves the legacy sites"
 curl -fsS --resolve http.test:80:127.0.0.1 http://http.test/
 curl -fsSk --resolve https.test:443:127.0.0.1 https://https.test/
@@ -74,14 +90,23 @@ snapshot >"$out/before.txt"
 echo "== the test, as dev"
 cd /home/dev
 set +e
-runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
-    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 \
-    /usr/local/bin/gash-e2e -test.v -test.timeout 20m
+if [ "${GASH_HTE_E2E_SYSTEMD:-}" = 1 ]; then
+    # A login session (pam_systemd): XDG_RUNTIME_DIR and the user manager.
+    su -l dev -c 'env GASH_HTE_E2E=1 GASH_HTE_E2E_SYSTEMD=1 /usr/local/bin/gash-e2e -test.v -test.run TestE2ESystemd -test.timeout 20m'
+elif [ "$multiphp" = 1 ]; then
+    runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 GASH_HTE_E2E_MULTIPHP=1 \
+        /usr/local/bin/gash-e2e -test.v -test.run TestE2EMultiPHP -test.timeout 20m
+else
+    runuser -u dev -- env -i HOME=/home/dev USER=dev LOGNAME=dev \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin GASH_HTE_E2E=1 \
+        /usr/local/bin/gash-e2e -test.v -test.timeout 20m
+fi
 rc=$?
 set -e
 if [ "$rc" != 0 ]; then
     echo "== logs"
-    for f in /home/dev/.local/state/gash/hte/logs/*.log /home/dev/.local/state/gash/hte/logs/*/*.log /var/log/apache2/error.log /var/log/php8.3-fpm.log; do
+    for f in /home/dev/.local/state/gash/hte/logs/*.log /home/dev/.local/state/gash/hte/logs/*/*.log /var/log/apache2/error.log /var/log/php*-fpm.log; do
         [ -f "$f" ] && {
             echo "-- $f"
             tail -n 20 "$f"

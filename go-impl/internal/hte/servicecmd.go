@@ -4,11 +4,17 @@ package hte
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
+	"github.com/google/renameio/v2"
+
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 )
@@ -30,7 +36,7 @@ func (e *Engine) systemdUnit(v *env, set state.Settings) bool {
 // userEnv is the environment of systemctl --user: the base one plus what
 // it needs to reach the user manager.
 func (e *Engine) userEnv(v *env) []string {
-	out := proc.BaseEnv(v.dirs.Home)
+	out := child.BaseEnv(v.dirs.Home)
 	if v.dirs.RuntimeDir != "" {
 		out = append(out, "XDG_RUNTIME_DIR="+v.dirs.RuntimeDir)
 	}
@@ -45,15 +51,103 @@ func (e *Engine) systemctlUser(ctx context.Context, v *env, args ...string) erro
 	if bin == "" {
 		return hteerr.New(hteerr.PlatformUnsupported, "systemctl is not installed", "")
 	}
-	res, err := e.Runner.Run(ctx, proc.Cmd{Path: bin, Args: append([]string{"--user"}, args...), Env: e.userEnv(v), Setsid: true,
-		Timeout: 3 * time.Minute})
+	c := child.Cmd(bin, e.userEnv(v), append([]string{"--user"}, args...)...)
+	c.Timeout = 3 * time.Minute
+	res, err := child.Run(ctx, e.Runner, c)
 	if err != nil {
 		return err
 	}
-	if !res.OK() {
-		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "systemctl --user %v: %s", args, res.Output())
+	if !res.Success() {
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "systemctl --user %v: %s", args, child.Output(res))
 	}
 	return nil
+}
+
+// unitJob runs systemctl --user args from a command that holds the state
+// lock. The lease names this process while the job runs, so the hidden
+// __unit start and __unit stop that systemd runs meanwhile work under
+// this command's lock instead of waiting for it (LEDGER HTE-73).
+func (e *Engine) unitJob(ctx context.Context, v *env, args ...string) error {
+	lease := v.paths.UnitLease()
+	if err := renameio.WriteFile(lease, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
+		return err
+	}
+	defer os.Remove(lease)
+	return e.systemctlUser(ctx, v, args...)
+}
+
+// underLease reports whether a command that holds the state lock waits
+// for this unit job: the lease names a live process and the lock is held.
+// A lease left by a command that died does not count: its lock went with
+// it.
+func (e *Engine) underLease(v *env) bool {
+	data, err := os.ReadFile(v.paths.UnitLease())
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid < 1 {
+		return false
+	}
+	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
+		return false
+	}
+	l, err := state.AcquireLock(v.paths.Lock(), 0, nil)
+	if err != nil {
+		return hteerr.CodeOf(err) == hteerr.LockTimeout
+	}
+	l.Unlock()
+	return false
+}
+
+// unitLocked runs fn under the state lock, or under the lock of the
+// command whose unit job this is.
+func (e *Engine) unitLocked(v *env, command string, fn func() (any, error)) (any, error) {
+	if e.underLease(v) {
+		res, err := fn()
+		e.audit(v, command, "", res, err)
+		return res, err
+	}
+	return e.locked(v, command, "", fn)
+}
+
+// unitStart starts the stack through the user unit: a unit that stayed
+// active while its masters ended is restarted. locked says whether the
+// caller holds the state lock.
+func (e *Engine) unitStart(ctx context.Context, v *env, locked bool) error {
+	run := e.systemctlUser
+	if locked {
+		run = e.unitJob
+	}
+	if err := run(ctx, v, "start", service.UnitName); err != nil {
+		return err
+	}
+	if all, err := e.supervisor(v).AllRunning(); err != nil || all {
+		return err
+	}
+	return run(ctx, v, "restart", service.UnitName)
+}
+
+// startStack starts the stack from a command that holds the state lock:
+// through systemctl --user when the systemd unit is in use, else directly
+// (LEDGER HTE-73).
+func (e *Engine) startStack(ctx context.Context, v *env, set state.Settings) error {
+	if e.systemdUnit(v, set) {
+		return e.unitStart(ctx, v, true)
+	}
+	return e.supervisor(v).Start(ctx)
+}
+
+// stopStack stops the stack from a command that holds the state lock:
+// through systemctl --user when the systemd unit is in use, then any
+// master still running (one the unit did not start) by its PID file.
+func (e *Engine) stopStack(ctx context.Context, v *env, set state.Settings) error {
+	if e.systemdUnit(v, set) {
+		if err := e.unitJob(ctx, v, "stop", service.UnitName); err != nil {
+			return err
+		}
+	}
+	return e.supervisor(v).Stop(ctx)
 }
 
 // ServiceStart is service start: through systemctl --user when the unit
@@ -89,7 +183,12 @@ func (e *Engine) serviceVia(ctx context.Context, command, verb string, direct fu
 	if !e.systemdUnit(v, set) {
 		return direct(ctx)
 	}
-	if err := e.systemctlUser(ctx, v, verb, service.UnitName); err != nil {
+	if verb == "start" {
+		err = e.unitStart(ctx, v, false)
+	} else {
+		err = e.systemctlUser(ctx, v, verb, service.UnitName)
+	}
+	if err != nil {
 		return nil, err
 	}
 	running, err := e.supervisor(v).Running()
@@ -98,7 +197,8 @@ func (e *Engine) serviceVia(ctx context.Context, command, verb string, direct fu
 
 // UnitStart starts the stack directly (the hidden command the unit
 // runs): render when the state changed, start every master, write the
-// hosts block.
+// hosts block. Run by the unit for a command that holds the lock, it
+// works under that command's lock.
 func (e *Engine) UnitStart(ctx context.Context) (*ServiceResult, error) {
 	v, err := e.ready("service start")
 	if err != nil {
@@ -108,7 +208,7 @@ func (e *Engine) UnitStart(ctx context.Context) (*ServiceResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := e.locked(v, "service start", "", func() (any, error) {
+	res, err := e.unitLocked(v, "service start", func() (any, error) {
 		sites, err := e.sites(v)
 		if err != nil {
 			return nil, err
@@ -134,7 +234,7 @@ func (e *Engine) UnitStop(ctx context.Context) (*ServiceResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := e.locked(v, "service stop", "", func() (any, error) {
+	res, err := e.unitLocked(v, "service stop", func() (any, error) {
 		return &ServiceResult{Via: "direct"}, e.supervisor(v).Stop(ctx)
 	})
 	if err != nil {
@@ -163,7 +263,8 @@ func (e *Engine) ServiceReload(ctx context.Context) (*ServiceResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		// The same rendering: the overlays may have changed.
+		// The same rendering (Apache overlays included): the masters
+		// still read their files again, as a reload promises.
 		if !applied.Changed {
 			if applied.Reloaded, err = e.supervisor(v).Reload(ctx); err != nil {
 				return nil, err

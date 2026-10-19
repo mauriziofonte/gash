@@ -19,15 +19,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/hte/rootops"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Check statuses.
@@ -177,7 +178,7 @@ func (e *Engine) doctorMachine(ctx context.Context, v *env, set state.Settings, 
 		r.add("php", CheckWarn, p, "")
 	}
 	if e.find("openssl") == "" {
-		r.add("openssl", CheckFail, "openssl is not installed", "install openssl with the system package manager")
+		r.add("openssl", CheckFail, "openssl is not installed", discover.OpenSSLInstallHint(v.os.Family))
 	} else {
 		r.add("openssl", CheckOK, e.find("openssl"), "")
 	}
@@ -242,8 +243,8 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 	if !e.Sysroot.Exists(rootops.SudoersPath) {
 		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash hte install")
 	} else if sudo := e.find("sudo"); sudo != "" {
-		res, err := e.Runner.Run(ctx, rootopsListCmd(sudo))
-		if err != nil || !res.OK() {
+		res, err := child.Run(ctx, e.Runner, rootopsListCmd(sudo))
+		if err != nil || !res.Success() {
 			r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash hte install")
 		} else {
 			r.add("sudoers", CheckOK, rootops.SudoersPath, "")
@@ -261,6 +262,31 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 		default:
 			r.add("ports setting", CheckOK, fmt.Sprintf("%s = %d", rootops.PortSysctl, n), "")
 		}
+	}
+	if v.os.GOOS == "darwin" {
+		e.doctorPF(set, r)
+	}
+}
+
+// doctorPF checks the macOS pf redirect the receipt holds: its files as
+// install wrote them, and its targets the stack's ports. (Whether the
+// anchor is loaded only root can read.)
+func (e *Engine) doctorPF(set state.Settings, r *report) {
+	to, ok := e.pfRedirect()
+	if !ok {
+		return
+	}
+	anchor, _ := e.Sysroot.ReadFile(rootops.PFAnchorFile)
+	daemon, _ := e.Sysroot.ReadFile(rootops.PFDaemonPath)
+	switch {
+	case to.HTTP != set.Ports.HTTP || to.HTTPS != set.Ports.HTTPS:
+		r.add("ports setting", CheckFail, fmt.Sprintf("the pf redirect sends ports 80 and 443 to %d and %d, but the stack listens on %d and %d",
+			to.HTTP, to.HTTPS, set.Ports.HTTP, set.Ports.HTTPS), "set the ports in hte.toml back, or run gash hte uninstall and install again")
+	case string(anchor) != string(rootops.PFRules(to.HTTP, to.HTTPS)) || string(daemon) != string(rootops.PFDaemon()):
+		r.add("ports setting", CheckFail, rootops.PFAnchorFile+" or "+rootops.PFDaemonPath+" is missing or changed", "run gash hte uninstall, then gash hte install")
+	default:
+		r.add("ports setting", CheckOK, fmt.Sprintf("pf redirects ports 80 and 443 of the loopback to %d and %d (anchor %s, loaded at boot by %s)",
+			to.HTTP, to.HTTPS, rootops.PFAnchor, rootops.PFDaemonPath), "")
 	}
 }
 
@@ -546,6 +572,8 @@ func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r 
 
 // rootopsListCmd asks sudo, without a password, whether the drop-in
 // allows the helper's check command.
-func rootopsListCmd(sudo string) proc.Cmd {
-	return proc.Cmd{Path: sudo, Args: []string{"-n", "-l", rootops.HelperPath, "check"}, Setsid: true, Timeout: 10 * time.Second}
+func rootopsListCmd(sudo string) runner.Cmd {
+	c := child.Cmd(sudo, nil, "-n", "-l", rootops.HelperPath, "check")
+	c.Timeout = 10 * time.Second
+	return c
 }

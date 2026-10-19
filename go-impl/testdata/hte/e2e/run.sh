@@ -10,6 +10,8 @@
 #
 #   testdata/hte/e2e/run.sh            # Ubuntu 24.04
 #   GASH_HTE_E2E_BASE=... run.sh       # another apt-based image
+#   GASH_HTE_E2E_SYSTEMD=1 run.sh      # systemd as PID 1, autostart systemd
+#   GASH_HTE_E2E_MULTIPHP=1 run.sh     # PHP 7.4, 8.2 and 8.4 next to the distro 8.3
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -23,6 +25,15 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
     docker build --build-arg BASE="$base" -t "$image" -f "$here/Dockerfile.base" "$here"
 fi
 
+if [ "${GASH_HTE_E2E_MULTIPHP:-}" = 1 ]; then
+    # The official php:X.Y-fpm builds side by side (Dockerfile.multiphp).
+    mp=${image/gash-hte-e2e-base/gash-hte-e2e-multiphp}
+    if ! docker image inspect "$mp" >/dev/null 2>&1; then
+        docker build --build-arg BASE="$image" -t "$mp" -f "$here/Dockerfile.multiphp" "$here"
+    fi
+    image=$mp
+fi
+
 export GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0
 (cd "$mod" && go test -c -tags hte_e2e -o "$stage/gash-e2e" ./internal/hte/e2e)
 (cd "$mod" && go build -o "$stage/gash-hosts-helper" ./cmd/gash-hosts-helper)
@@ -31,10 +42,37 @@ rm -rf "$stage/V2"
 cp -a "$mod/testdata/hte/legacy/V2" "$stage/V2"
 chmod -R a+rX "$stage"
 
-# SYS_ADMIN and no AppArmor confinement: setup.sh replaces Docker's bind
-# mount of /etc/hosts with a plain file. systempaths=unconfined: the root
-# step writes net.ipv4.ip_unprivileged_port_start, which starts at 1024.
+if [ "${GASH_HTE_E2E_SYSTEMD:-}" = 1 ]; then
+    # systemd as PID 1 (LEDGER HTE-73): it mounts its cgroup hierarchy
+    # itself, which needs CAP_SYS_ADMIN; the private cgroup namespace
+    # scopes that mount to the container's own cgroup. The story uses the
+    # high ports, so /proc/sys stays read-only.
+    sd=${image/gash-hte-e2e-base/gash-hte-e2e-systemd}
+    if ! docker image inspect "$sd" >/dev/null 2>&1; then
+        docker build --build-arg BASE="$image" -t "$sd" -f "$here/Dockerfile.systemd" "$here"
+    fi
+    name=gash-hte-e2e-systemd-$$
+    docker run -d --rm --name "$name" --network none --cgroupns=private --cap-add SYS_ADMIN \
+        --tmpfs /run --tmpfs /run/lock -v "$stage:/e2e:ro" "$sd" >/dev/null
+    trap 'docker rm -f "$name" >/dev/null 2>&1' EXIT
+    for _ in $(seq 50); do
+        state=$(docker exec "$name" systemctl is-system-running 2>/dev/null || true)
+        case "$state" in
+            running | degraded) break ;;
+        esac
+        sleep 0.2
+    done
+    echo "== systemd: $state"
+    rc=0
+    docker exec -e GASH_HTE_E2E_SYSTEMD=1 "$name" /e2e/setup.sh || rc=$?
+    exit "$rc"
+fi
+
+# systempaths=unconfined: the root step writes
+# net.ipv4.ip_unprivileged_port_start, which starts at 1024. /etc/hosts
+# stays Docker's bind mount (LEDGER HTE-69).
 exec docker run --rm --init --network none \
-    --cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt systempaths=unconfined \
+    --security-opt systempaths=unconfined \
     --sysctl net.ipv4.ip_unprivileged_port_start=1024 \
+    -e GASH_HTE_E2E_MULTIPHP="${GASH_HTE_E2E_MULTIPHP:-}" \
     -v "$stage:/e2e:ro" "$image" /e2e/setup.sh

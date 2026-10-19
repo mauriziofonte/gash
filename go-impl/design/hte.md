@@ -15,7 +15,7 @@ section "HTE design delta", for triage.
 | Who runs the stack | The user. One Apache master (`apache2`/`httpd` from the distro or Homebrew) and one `php-fpm` master per PHP version in use, all started by `gash hte service start` as the user. No root process at runtime |
 | What is reused | System binaries and modules: Debian/Ubuntu `apache2` + `/usr/lib/apache2/modules`, Fedora `httpd` + `/usr/lib64/httpd/modules`, Arch `httpd` + `/usr/lib/httpd/modules`, Homebrew `httpd` + `$(brew --prefix)/lib/httpd/modules`; versioned `php-fpm` binaries. Nothing is compiled |
 | What is rendered | Apache and FPM config files, from declarative per-site state. Rendered files are artifacts, never edited by hand and never the source of truth |
-| Where user edits go | Per-site and global overlay files that the renderer includes and never rewrites (fixes "modify loses manual edits") |
+| Where user edits go | Per-site and global overlay files that every generation copies and includes, and gash never rewrites (fixes "modify loses manual edits") |
 | Privilege | Root only in `install`, `uninstall`, `migrate --apply` (interactive sudo) and in the hosts helper (the only NOPASSWD entry). See section 7 |
 | Change protocol | Render into a new generation, config test (`httpd -t`, `php-fpm -t`), swap, graceful reload, health check, automatic rollback to the previous generation on any failure |
 | Concurrency | Every mutation takes an exclusive lock (`github.com/gofrs/flock`) on `$XDG_STATE_HOME/gash/hte/lock`; reads take none. Lock wait 30 s, then `lock_timeout` (RETRY) |
@@ -35,8 +35,8 @@ and emits `LoadModule` only for modules that are not built in.
 |---|---|---|
 | Global settings | `$XDG_CONFIG_HOME/gash/hte/hte.toml` | Ports, listen addresses, default PHP, enabled extra modules, autostart mode |
 | Site state | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.toml` | One file per site; the domain is the identity (no numbering, no identity from socket names) |
-| Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, included inside every vhost of the site, never rewritten |
-| Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, included at server level, never rewritten |
+| Site Apache overlay | `$XDG_CONFIG_HOME/gash/hte/sites/<domain>.apache.conf` | Optional, a regular file, never rewritten; each generation holds a copy (`overlays/sites/<domain>.apache.conf`) that every vhost of the site includes (HTE-71) |
+| Global Apache overlay | `$XDG_CONFIG_HOME/gash/hte/apache.conf` | Optional, a regular file, never rewritten; each generation holds a copy (`overlays/apache.conf`) included at server level (HTE-71) |
 | Hosts names | `$XDG_CONFIG_HOME/gash/hte/hosts.toml` | `names = [...]`: names kept in the managed hosts block beyond the sites' own (the legacy `# hte-cli` names `migrate` carries over); missing means none |
 | Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/` | Per PHP version, a directory of `*.ini` files (`php global set` edits `global.ini` in it) that the version's FPM master reads after the system ones through `PHP_INI_SCAN_DIR` (section 4); never rendered into pools |
 | Rendered config | `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` and the symlink `render/current` | Generations; `current` swaps atomically; the previous generation is kept for rollback |
@@ -115,7 +115,8 @@ files:
   list, so a missing module fails the start instead of silently serving no
   HTTPS. A `Listen` on a TLS port other than 443 names the protocol
   (`Listen 127.0.0.1:8443 https`).
-* `IncludeOptional` of the global overlay, then of every enabled site's
+* `IncludeOptional` of the generation's copy of the global overlay (a
+  comment above it names the user's file), then of every enabled site's
   rendered vhosts.
 
 A site's `extra_http_ports` and `extra_https_ports` (1 to 65535, never 80,
@@ -133,7 +134,7 @@ paths, logs outside the document root, 307 instead of 301:
 
 ```apache
 <VirtualHost 127.0.0.1:80>
-    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay below.
+    # Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay named below.
     ServerName shop.test
     ServerAlias www.shop.test
     DocumentRoot "/home/me/src/shop/public"
@@ -150,6 +151,8 @@ paths, logs outside the document root, 307 instead of 301:
     <FilesMatch \.php$>
         SetHandler "proxy:unix:/run/user/1000/gash-hte/8.3-1a2b3c4d5e.sock|fcgi://localhost/"
     </FilesMatch>
+    # mod_proxy_fcgi sends SCRIPT_FILENAME percent-encoded: PHP-FPM gets the path Apache resolved.
+    ProxyFCGISetEnvIf "true" SCRIPT_FILENAME "%{unescape:%{reqenv:SCRIPT_FILENAME}}"
 
     <IfModule mod_brotli.c>
         AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml text/css text/javascript application/x-javascript application/javascript application/json application/x-font-ttf application/vnd.ms-fontobject image/x-icon
@@ -169,9 +172,18 @@ paths, logs outside the document root, 307 instead of 301:
     #   RewriteCond %{REMOTE_ADDR} !^::1$
     #   RewriteRule ^/(.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=307,L]
 
-    IncludeOptional "/home/me/.config/gash/hte/sites/shop.test.apache.conf"
+    # Site overlay: "/home/me/.config/gash/hte/sites/shop.test.apache.conf", copied into this generation (run `gash hte service reload` after editing it).
+    IncludeOptional "/home/me/.local/state/gash/hte/render/gen-7/overlays/sites/shop.test.apache.conf"
 </VirtualHost>
 ```
+
+A generation holds a copy of every overlay it includes, made when it is
+rendered, and includes the copies, never the user's files (HTE-71): an
+overlay edit is a change of the rendering, tested, swapped and rolled back
+like any other, and a rollback brings back the overlays the previous
+generation ran with. The copy exists only when the user's file does
+(`IncludeOptional` skips the missing path); a path that is not a regular
+file is `invalid_state`.
 
 The redirect target is `https://%{HTTP_HOST}%{REQUEST_URI}` when clients
 reach HTTPS on 443 (standard ports, and the macOS `pf` redirect); with any
@@ -195,12 +207,18 @@ no Debian `envvars`.
 HTTPS vhost, `http/1.1` in both when `http2 = false` (LEDGER HTE-38).
 Document roots are validated before anything is rendered: absolute after
 resolving a relative argument against the current directory (HTE-29), an
-existing directory, and none of `$ * ? [ ; : " \` or control characters, which
-Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI parser
-(`;` comments, `${NAME}`) would interpret, or that would split the
-`open_basedir` list (`:`, its separator) (`invalid_docroot`, hint: "rename
-the directory or use a symlink without these characters"; HTE-08). Pool
-values are double-quoted.
+existing directory, and none of `$ * ? [ ] ; : " \` or control characters,
+which Apache (`${NAME}` expansion, `<Directory>` wildcards) or the FPM INI
+parser (`;` comments, `${NAME}`, quoting) would interpret, or that would split
+the `open_basedir` list (`:`, its separator) (`invalid_docroot`, the details
+naming the character, hint: "rename the directory or use a symlink without
+these characters"; HTE-08). `migrate` reports a legacy vhost with such a root
+as a skip with that code and leaves it in the system. Pool values are
+double-quoted. Apache 2.4.58 `mod_proxy_fcgi` sends `SCRIPT_FILENAME`
+percent-encoded (`my%20shop`), and PHP-FPM answers "File not found." for it:
+every vhost with a PHP handler sets `ProxyFCGISetEnvIf "true" SCRIPT_FILENAME
+"%{unescape:%{reqenv:SCRIPT_FILENAME}}"`, which gives FPM the path Apache
+resolved. Raw vhosts are rendered as they are.
 
 Force-HTTPS and the loopback bypass (decision D-2, option C; LEDGER HTE-52):
 with loopback-only binding every client address is `127.0.0.1` or `::1`,
@@ -348,7 +366,7 @@ PID files and never runs a supervisor process of its own.
 | `service start` | Render if stale, config test, start each FPM master in use, then Apache; wait until the sockets and ports answer |
 | `service stop` | `SIGTERM` (Apache `-k stop`), wait, `SIGKILL` after a timeout. A PID is acted on only when `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p` (macOS) names our config path, so a recycled PID is never signalled |
 | `service restart` | stop + start |
-| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts. When the rendering is unchanged (only an overlay was edited: overlays are included by path, outside the rendering), the current generation is config-tested and the running masters reload in the same order; a failed test changes nothing. `php global set\|unset` reloads that version's master, and puts the previous overlay back when it does not come back |
+| `service reload` | Render, test, swap, FPM `SIGUSR2` first (wait until every socket of the new generation accepts), then Apache `-k graceful`, health check; rollback on failure. On a site removal the order is reversed: Apache first, then FPM (HTE-27). Per master: one whose pools are added or changed reloads before Apache, one whose pools only went away reloads after it, a version no longer used stops after it, a version whose binary, `php.ini` or `PHP_INI_SCAN_DIR` changed restarts. An Apache overlay edit is a change of the rendering (the generation holds copies of the overlays, section 3), so a failure at run time that the config test does not see, such as a `Listen` on a busy port in the global overlay, rolls back to the previous generation and its own copies (HTE-71). When the rendering is unchanged, the current generation is config-tested and the running masters reload in the same order (they read the global PHP overlay directories themselves); a failed test changes nothing. `php global set\|unset` reloads that version's master, and puts the previous overlay back when it does not come back |
 | `service status` | Per master: running, PID, uptime, listening addresses; per site: answers on HTTP and HTTPS. `--json` |
 | `service logs` | Tail of the global, per-site Apache and PHP logs (`--site`, `--lines N`; no follow mode, so agents never hang) |
 
@@ -372,16 +390,28 @@ Autostart, chosen by `install` and recorded in the receipt:
 
 | Platform | Mechanism |
 |---|---|
-| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because `service start|stop|restart` go through `systemctl --user` while the unit is in use), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
+| Linux with systemd | User unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`, `ExecStart=<gash> hte __unit start`, `ExecStop=<gash> hte __unit stop`: the hidden command starts and stops the masters directly, because every start, stop and restart of the stack goes through `systemctl --user` while the unit is in use: `service start\|stop\|restart`, the stack start of `install` and of the `migrate --apply` switch, the stop of `uninstall` (HTE-73)), `systemctl --user enable`, plus `loginctl enable-linger <user>` (root step) so it starts at boot |
 | Linux without systemd (containers, WSL without systemd) | No boot hook (`/etc/wsl.conf` is never touched). Optional `autostart = "shell"`: the first interactive shell that loads `gash init bash` starts the stack when it is down (one background `gash hte service start`, no output on success) |
-| macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad` |
+| macOS | User LaunchAgent `~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist` with `RunAtLoad`, running `<gash> hte __unit start` with the XDG directories install resolved as its `EnvironmentVariables` (launchd starts it without them); install runs `launchctl enable gui/<uid>/io.github.mauriziofonte.gash.hte` (clearing an earlier disable) and starts the stack itself, launchd loads the agent at the next login; uninstall runs `launchctl bootout` on it (not loaded is fine) and removes the file |
+
+With the systemd unit, a `systemctl --user start` that leaves a master
+down (the unit stayed active while its masters ended) is followed by a
+`restart`. A command that holds the state lock and runs a unit job writes
+`$XDG_STATE_HOME/gash/hte/unit.lease` (its PID) for the job's duration;
+the hidden command, which systemd runs meanwhile, then works under that
+command's lock instead of waiting for it (a lease whose process is gone,
+or with the lock free, does not count). The masters of `migrate`'s staging
+generation (two run-time loopback ports, while the stack is down) are
+still started and stopped directly: the unit always starts the stored
+settings. Masters a reload starts (a PHP version that comes into use, the
+rollback's restart) are started directly too.
 
 ## 6. Ports 80/443 without root at runtime
 
 | Platform | Mechanism (recorded in the receipt, reverted by uninstall) |
 |---|---|
 | Linux, WSL2 | `net.ipv4.ip_unprivileged_port_start=80` via `/etc/sysctl.d/50-gash-hte.conf` plus `sysctl -w`. The setting applies to IPv4 and IPv6. When the current value is already 80 or lower (Docker containers default to 0) nothing changes and the receipt says so. Trade-off, stated by `install` before asking: every local user may then bind ports 80 to 1023 |
-| macOS | First choice: a direct bind, if the running kernel lets an unprivileged process bind `127.0.0.1:80` (checked by `install` with a real bind). Otherwise a `pf` anchor redirecting `127.0.0.1:80`/`:443` on `lo0` to the userland ports (`8080`/`8443` by default), loaded at boot by a root LaunchDaemon that only runs `pfctl -a <anchor> -f <root-owned file>` |
+| macOS | First choice: a direct bind, if the running kernel lets an unprivileged process bind `127.0.0.1:80` (checked by `install` with a real bind of `127.0.0.1:80` and `:443`; only `EACCES` or `EPERM` counts as a refusal, a port in use is the stack's start to report). Otherwise a `pf` anchor redirecting `127.0.0.1:80`/`:443` on `lo0` to the userland ports (`8080`/`8443` by default), loaded at boot by a root LaunchDaemon that only runs `pfctl -a <anchor> -f <root-owned file>` (details below) |
 | Any, when declined or impossible | High ports (`8080`/`8443`, configurable), reported by `doctor`; site URLs carry the port |
 
 Rejected: `setcap cap_net_bind_service` on the distro binary (modifies a
@@ -391,6 +421,39 @@ and parses its config as root; PRD 6.1).
 
 The macOS mechanism is to be verified on the GitHub macOS runner during the
 HTE phase; the design supports both outcomes.
+
+The `pf` redirect is the root operation `pf_redirect` (ports: the stack's
+HTTP and HTTPS ports). `/etc/pf.conf` is never edited: the anchor is
+`com.apple/gash-hte`, a child of the `com.apple` anchor that the stock
+`pf.conf` evaluates (`rdr-anchor "com.apple/*"`); a `pf.conf` without that
+line is `platform_unsupported` (hint: restore it, or `--ports high`). Root
+writes the rules file `/etc/pf.anchors/gash-hte` (0644, checked with
+`pfctl -n` before it is put in place):
+
+```
+rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080
+rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 8443
+rdr pass on lo0 inet6 proto tcp from any to ::1 port 80 -> ::1 port 8080
+rdr pass on lo0 inet6 proto tcp from any to ::1 port 443 -> ::1 port 8443
+```
+
+then the LaunchDaemon `/Library/LaunchDaemons/io.github.mauriziofonte.gash.hte.pf.plist`
+(0644, checked with `plutil -lint`; `RunAtLoad`, program
+`/sbin/pfctl -E -a com.apple/gash-hte -f /etc/pf.anchors/gash-hte`: `-E`
+takes a reference on pf being enabled, which it is not by default, without
+turning it off for anyone else), and loads the anchor now with that same
+command. The receipt records both files, then the redirect. The settings
+keep the high ports (Apache listens there) and `install` reports
+`redirect: "pf"`; while the root receipt holds the redirect to the
+settings' ports, the HTTP to HTTPS redirect targets 443 (section 3), and
+`doctor` checks both files and that the redirect's targets are the
+settings' ports. Uninstall unloads the daemon (`launchctl bootout
+system/io.github.mauriziofonte.gash.hte.pf`), empties the anchor
+(`pfctl -a com.apple/gash-hte -F nat`) and removes both files; pf itself
+stays enabled with the anchor empty until the next restart (the boot-time
+reference has no token to release). To verify on the runner: that the
+anchor loaded at boot is evaluated (the daemon may run before macOS loads
+`/etc/pf.conf`).
 
 ## 7. Privilege boundary
 
@@ -404,9 +467,11 @@ Root is used only by:
    each with one JSON line carrying the changes and its receipt copy, which
    the user side stores as its own. The operations are a closed, typed set
    (`internal/hte/rootops`: install helper, write sudoers drop-in, set
-   sysctl, write pf anchor, enable linger, stop and disable a named system
+   sysctl, write pf anchor (`pf_redirect`, section 6), enable linger, stop and disable a named system
    unit, start it again when this session stopped it and nothing changed
-   since (`undo_unit_stop`, the migrate rollback), reload one, record the
+   since (`undo_unit_stop`, the migrate rollback), reload one (for the
+   system Apache first `apachectl configtest`, and on a failure the vhosts
+   archived earlier in the same session put back), record the
    hosts block, archive a legacy vhost or pool, hand a legacy key file to
    `openssl pkey` running as the user, record the autostart, undo the last
    change of the receipt, remove the receipt), each run at most once, only
@@ -438,6 +503,11 @@ Root is used only by:
 * Effect: replaces only the region between `# >>> gash hte >>>` and `# <<<
   gash hte <<<` in `/etc/hosts` (appended when absent), written to a temporary
   file in `/etc`, fsynced, renamed over the original with its owner and mode.
+  When the rename fails with EBUSY or EXDEV (a container bind-mounts
+  `/etc/hosts`), the temporary file is removed and the same validated content
+  is written in place: opened without truncation and without following a
+  symlink, checked to be the file that was read, written, truncated to the
+  new length, fsynced (HTE-69).
   On macOS it then flushes the resolver cache with two fixed commands.
 * Sudoers drop-in `/etc/sudoers.d/gash-hte`, 0440 root:root, one line:
   `<user> ALL=(root) NOPASSWD: /usr/local/libexec/gash/gash-hosts-helper apply`
@@ -487,7 +557,10 @@ after each one, so an interrupted install can still be undone:
 ```
 
 Besides the kinds above: `dir_created` (a directory install made, such as
-`/usr/local/libexec/gash`, removed on uninstall when empty), `legacy_pool`
+`/usr/local/libexec/gash`, removed on uninstall when empty), `pf_redirect`
+(macOS: `name` the anchor, `path` its rules file, `applied` the targets,
+`{"http":8080,"https":8443}`; undone by emptying the anchor and unloading
+its LaunchDaemon, whose files are the `file_created` changes before it), `legacy_pool`
 (an archived pool), `autostart` (the mode and the user file, made and undone
 by the user side; root only records it so both copies stay equal) and
 `pending: true` on a change recorded but not yet completed. Both copies are
@@ -510,7 +583,7 @@ for destructive steps (else `confirmation_required`, RETRY).
 
 | Command | Outcome |
 |---|---|
-| `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded (it points at `migrate`). Detects an uninstall stage and offers to restore it |
+| `install [--yes] [--ports standard\|high] [--autostart auto\|systemd\|launchd\|shell\|none] [--restore-stage PATH\|--no-restore]` | Prerequisite check per platform; plan; one interactive sudo for the bootstrap (helper, drop-in, ports, linger, freeing 80/443); receipt; userland tree; stack started; autostart. Idempotent. Refuses to stop the system Apache while an enabled vhost is neither migrated nor excluded: it then exits 0 without starting the stack, with `started: false`, `next: "gash hte migrate"` and a warning naming those vhosts and the command (HTE-75). On macOS `--ports standard` binds directly or sets up the `pf` redirect (`redirect: "pf"`, section 6). Detects an uninstall stage and offers to restore it |
 | `doctor [--json]` | Binaries and modules, ports and who holds them, supervision and autostart, sockets, config test, per-site health (HTTP/HTTPS answer), name resolution (with the Windows lines on WSL), certificate validity and SAN, receipt integrity, available PHP versions; the exact remedy for each failure it cannot fix. It repairs a drifted hosts block itself (through the helper). `--json`: `{"ok": BOOL, "checks": [{"name", "status", "details", "remedy"}]}` with status `ok`, `warn`, `fail`, `fixed` or `skip`; any `fail` makes it exit non-zero. Port holders are read from `/proc/net/tcp{,6}` (Linux): the process when it is the user's own, else its uid |
 | `migrate [--apply] [--site D]... [--exclude D\|PATH]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64). `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file only, whatever its class); nothing is excluded implicitly, not even Debian's `000-default.conf`, and each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (HTE-31) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
@@ -519,13 +592,32 @@ for destructive steps (else `confirmation_required`, RETRY).
 | `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
 | `php versions`, `php ini get\|set\|unset --domain D KEY [VALUE]`, `php global get\|set\|unset --version X.Y KEY [VALUE]` | |
-| `apache config path`, `apache modules list\|enable\|disable NAME` | Global overlay; modules within the userland list |
+| `apache config path`, `apache modules list\|enable\|disable NAME` | The global overlay the user edits (generations include a copy of it). `modules list`: every module of the userland list (`base`), the extra modules of `hte.toml` (`enabled`), then the other `mod_<name>.so` files of the system module directory (`available`), each with `builtin` (compiled in, no `LoadModule`), its path, and `missing` for a base or enabled module without a file. `modules enable NAME` adds a module of the system module directory to `hte.toml` (`apache_module_missing` when the directory has no `mod_NAME.so`; a base or already enabled module changes nothing) and `disable NAME` removes an extra one (`conflicting_options` for a base module); either moves the stack to a generation that loads exactly those modules, and a failure puts `hte.toml` back |
 | `service start\|stop\|restart\|reload\|status\|logs` | Section 5 |
 | `cert show\|renew --domain D` | |
 | `hosts list\|apply\|check\|windows` | |
 
 Every command needs `install` first except `install`, `doctor`, `migrate`
 (dry-run) and `php versions`; others fail with `hte_not_installed` (STOP).
+
+Output (`internal/hte/htecmd`): with `--json` a command prints one compact
+JSON object on stdout, the engine's result; the commands whose result is a
+single value wrap it: `php ini get` and `php global get` print `{"domain"`
+or `"version", "key", "value", "set"}`, `apache config path` `{"path"}`,
+`service logs` `{"logs": [{"path", "lines"}]}`, `hosts list`
+`{"entries": [{"address", "names"}]}`, `hosts windows` `{"lines"}`. Without
+`--json` the data goes to stdout as text (key-value blocks and tables) and
+the messages (OK, warnings, hints) to stderr. An error is one envelope on
+stderr and exit 1; a command that did part of its work (root steps that
+ran, sites imported) prints that part first. `doctor` with a `fail`, and
+`hosts check` or `hosts apply` with a block that still differs, exit 1
+without an envelope. Before sudo starts, the root steps are listed on
+stderr, numbered, so that they stand above sudo's password prompt (not
+with `--json` without a terminal: the result carries them). Command-line
+errors map as for the other 3.x commands: an unknown flag is
+`unknown_option`, a flag or positional argument missing its value
+`missing_value`, an extra word or unknown command `unexpected_argument`,
+each with the hint `Run: gash hte <command> --help`.
 
 New error codes (registered in the contract catalog with fixed actions):
 `hte_not_installed` (STOP), `site_not_found` (RETRY), `site_exists` (RETRY),
@@ -540,7 +632,12 @@ platform's install command), `platform_unsupported` (FATAL),
 `receipt_mismatch` (FATAL), `conflicting_options` (RETRY: a flag pair that
 contradicts itself, such as `--force-https` with `--no-https`),
 `invalid_state` (STOP: a state file that does not parse or that the strict
-validation refuses; a human fixes the file). Partial failure never exits 0
+validation refuses; a human fixes the file), `openssl_not_found` (FATAL, the
+hint names the platform's install command, like `apache_not_found`),
+`invalid_ports` and `invalid_autostart` (RETRY: as `invalid_profile`, every
+enum flag has its `invalid_<flag>`, whose details name the value and the
+accepted ones), `php_not_enabled` (RETRY: a PHP command on a site without
+PHP, hint `site modify --php VERSION`) (HTE-72). Partial failure never exits 0
 (hte-cli defect).
 
 Rules where the operator may choose otherwise (LEDGER items marked
@@ -669,6 +766,18 @@ How `--apply` does it (`internal/hte/migrate.go`):
   (`undo_unit_stop`, which root runs only when the stop is the last change
   of its receipt and was made in the same session); the imported sites
   stay, and the next run completes the move.
+* High ports (`install --ports high`, neither port 80 nor 443, HTE-70): the
+  system Apache keeps running and keeps the ports it listens on. The plan
+  (`system_apache`) names those ports (its `Listen` directives and the
+  addresses of the enabled vhosts that are not imported) and the vhosts and
+  snippets it still serves, which then neither block nor count as "no longer
+  served". `--apply` stops nothing: it imports and verifies the sites,
+  archives their vhosts, then runs one `unit_reload` of the system Apache,
+  which tests the system configuration first. A failed test puts the
+  archived vhosts back, reloads nothing and fails with `config_test_failed`;
+  the imported sites stay. System FPM units left without pools stop as with
+  standard ports. `uninstall` re-enables the archived vhosts and reloads the
+  system Apache when the receipt never stopped it.
 * Archived: every imported or already managed vhost, and the exact hte-cli
   pool of a marked one (parsing step 5 above); the pools of raw vhosts are never
   archived (the default `www.conf` may serve them). A system FPM unit left
@@ -705,7 +814,23 @@ the hosts helper, and runs them in a disposable container (`--network none`,
 no systemd) whose system Apache and PHP-FPM serve the hte-cli V2 tree. The
 binary runs as an unprivileged user and is also the root step, through one
 sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
-`/usr/local` and `/var/lib/gash-hte` with their state before install. Docker
-bind-mounts `/etc/hosts`, which the helper's rename cannot replace, so the
-container swaps the mount for a plain file first (`--cap-add SYS_ADMIN`).
-So far it runs on Ubuntu 24.04 with the distro PHP 8.3.
+`/usr/local` and `/var/lib/gash-hte` with their state before install.
+`/etc/hosts` stays Docker's bind mount, so the helper writes it in place
+(`setup.sh` checks that first). So far it runs on Ubuntu 24.04 with the
+distro PHP 8.3. `GASH_HTE_E2E_MULTIPHP=1 run.sh` runs `TestE2EMultiPHP`
+in an image that adds PHP-FPM 7.4, 8.2 and 8.4 from the official
+`php:X.Y-fpm` images (`Dockerfile.multiphp`): each binary is copied into
+`/opt/php/X.Y` with every library it loads, its own loader included
+(`patchelf` points it there), and installed in the Debian layout
+(`/usr/sbin/php-fpmX.Y`, `/etc/php/X.Y/fpm/`, a `www` pool, a SysV
+service `phpX.Y-fpm`); the hte-cli tree then keeps `https.test` on the
+system PHP 7.4, and the story checks that each site runs on a userland
+master of its version, a site on every other version, `site modify --php`
+(the unused master stops), `php global set` on one version, and uninstall
+giving the 7.4 site back to the system PHP 7.4. `GASH_HTE_E2E_SYSTEMD=1 run.sh` runs `TestE2ESystemd` in a
+container with systemd as PID 1 (`Dockerfile.systemd`: logind and the user
+D-Bus added, the units that touch the kernel or devices masked; started
+with a private cgroup namespace and `CAP_SYS_ADMIN`, which systemd needs to
+mount its cgroup hierarchy): in a login session of the user, install with
+`--autostart systemd`, the service commands, the migrate switch and
+uninstall, each master checked to run in the unit's cgroup (HTE-73).

@@ -60,8 +60,8 @@ type PHPEnv struct {
 // PHPResult lists the usable versions, ascending, and every candidate
 // binary that did not qualify, with the reason (doctor prints them).
 type PHPResult struct {
-	Versions []PHP
-	Problems []string
+	Versions []PHP    `json:"versions"`
+	Problems []string `json:"problems"`
 }
 
 // Installed returns the version numbers, ascending.

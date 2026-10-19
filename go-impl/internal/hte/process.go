@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // HelperName is the hosts helper the release ships next to the gash
@@ -38,12 +38,12 @@ func ProcessEngine(interactive bool) (*Engine, error) {
 	}
 	var procs service.Procs = service.LinuxProcs{}
 	if runtime.GOOS == "darwin" {
-		procs = service.DarwinProcs{Runner: proc.OS{}, PS: "/bin/ps"}
+		procs = service.DarwinProcs{Runner: runner.Exec{}, PS: "/bin/ps"}
 	}
 	return &Engine{
 		Sysroot: platform.Real(), GOOS: runtime.GOOS, Getenv: os.Getenv,
 		UID: os.Getuid(), EUID: os.Geteuid(), GID: os.Getgid(), User: u.Username, Cwd: cwd,
 		Self: self, Helper: filepath.Join(filepath.Dir(self), HelperName),
-		Runner: proc.OS{}, Starter: proc.OS{}, Procs: procs, Interactive: interactive,
+		Runner: runner.Exec{}, Starter: runner.Exec{}, Procs: procs, Interactive: interactive,
 	}, nil
 }

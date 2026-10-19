@@ -75,7 +75,8 @@ func (e *Engine) phpIni(ctx context.Context, command, domain string, edit func(m
 			return nil, nil, false, err
 		}
 		if !cur.HasPool() {
-			return nil, nil, false, hteerr.Newf(hteerr.ConflictingOptions, "", "%s has no PHP pool", cur.Domain)
+			return nil, nil, false, hteerr.Newf(hteerr.PHPNotEnabled, "gash hte site modify --domain "+cur.Domain+" --php VERSION",
+				"%s has no PHP", cur.Domain)
 		}
 		next := cur
 		next.PHPIni = maps.Clone(cur.PHPIni)
@@ -216,8 +217,9 @@ func (e *Engine) phpGlobal(ctx context.Context, command, version string, edit fu
 	return res.(*GlobalResult), nil
 }
 
-// ApacheConfigPath is apache config path: the global Apache overlay, read
-// by every generation (IncludeOptional), never written by gash.
+// ApacheConfigPath is apache config path: the global Apache overlay the
+// user edits, never written by gash; every generation includes a copy of
+// it, made when the generation is rendered (LEDGER HTE-71).
 func (e *Engine) ApacheConfigPath(ctx context.Context) (string, error) {
 	v, err := e.ready("apache config path")
 	if err != nil {

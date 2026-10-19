@@ -304,6 +304,53 @@ func marked(name, sock, dir string) string {
 	return strings.NewReplacer("{name}", name, "{sock}", sock, "{dir}", dir).Replace(markedVhost)
 }
 
+// TestLedger_HTE08 (migrate half): a legacy vhost whose document root has
+// a character Apache or PHP-FPM reads as syntax is reported as a skip with
+// invalid_docroot naming the character, and stays in the system: enabled,
+// it blocks the switch.
+func TestLedger_HTE08(t *testing.T) {
+	root := copyVariant(t, "V2")
+	write(t, root, sa+"040-dollar.test.conf", marked("dollar.test", "dollar.test", "a$b"))
+	enable(t, root, "040-dollar.test.conf")
+	write(t, root, sa+"041-r.test.conf", "<VirtualHost *:80>\n    ServerName r.test\n    DocumentRoot \"/srv/r[1]\"\n</VirtualHost>\n")
+	enable(t, root, "041-r.test.conf")
+	p := mustPlan(t, envAt(t, root), Options{})
+	for file, char := range map[string]string{"040-dollar.test.conf": "'$'", "041-r.test.conf": "'['"} {
+		s := site(t, p, sa+file)
+		if s.Action != ActionSkip || s.Site != nil || s.Code != hteerr.InvalidDocroot || !strings.Contains(s.Reason, char) {
+			t.Errorf("%s: %s %s %q", file, s.Action, s.Code, s.Reason)
+		}
+		if !slices.Contains(blockingPaths(p), s.Path) {
+			t.Errorf("%s is not blocking: %v", file, blockingPaths(p))
+		}
+	}
+}
+
+// TestLedger_HTE70 (plan half): a stack on ports other than 80 and 443
+// leaves the system Apache running; the plan names its Listen ports and
+// what it keeps serving, and nothing blocks or stops being served.
+func TestLedger_HTE70(t *testing.T) {
+	root := copyVariant(t, "V2")
+	write(t, root, "/etc/apache2/ports.conf", "Listen 80\n<IfModule ssl_module>\n\tListen 443\n</IfModule>\nListen 127.0.0.1:8081\nListen [::1]:8082 http\n")
+	env := envAt(t, root)
+	p := mustPlan(t, env, Options{Exclude: []string{"http.test"}})
+	if p.SystemApache != nil || !slices.Contains(p.NoLongerServed, "/etc/apache2/sites-available/001-http.test.conf") {
+		t.Fatalf("standard ports: %+v no longer served %v", p.SystemApache, p.NoLongerServed)
+	}
+	env.Ports = state.HighPorts
+	p = mustPlan(t, env, Options{Exclude: []string{"http.test"}})
+	sa := p.SystemApache
+	if sa == nil || !slices.Equal(sa.Ports, []int{80, 443, 8081, 8082}) || len(p.Blocking) != 0 || len(p.NoLongerServed) != 0 {
+		t.Fatalf("high ports: %+v blocking %v no longer served %v", sa, p.Blocking, p.NoLongerServed)
+	}
+	if !slices.Equal(sa.Serves, []string{"/etc/apache2/sites-available/001-http.test.conf"}) {
+		t.Errorf("serves %v", sa.Serves)
+	}
+	if out := p.Text(); !strings.Contains(out, "The system Apache keeps running (ports 80, 443, 8081, 8082)") {
+		t.Errorf("human output:\n%s", out)
+	}
+}
+
 func TestLedger_HTE21(t *testing.T) {
 	root := copyVariant(t, "V2")
 	write(t, root, sa+"004-127.0.0.1.conf", marked("127.0.0.1", "127.0.0.1", "ip"))

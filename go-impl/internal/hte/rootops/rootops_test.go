@@ -20,11 +20,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 const helperBytes = "#!helper binary\n"
@@ -51,7 +52,7 @@ func newFixture(t *testing.T) *fixture {
 	f.write("/etc/sudoers", "Defaults env_reset\nroot ALL=(ALL:ALL) ALL\n@includedir /etc/sudoers.d\n", 0o440)
 	f.write("/etc/sudoers.d/README", "readme\n", 0o440)
 	f.write(sysctlProc, "1024\n", 0o644)
-	for _, tool := range []string{"/usr/sbin/visudo", "/usr/sbin/sysctl", "/usr/sbin/service", "/usr/sbin/update-rc.d", "/usr/bin/openssl", "/usr/bin/loginctl"} {
+	for _, tool := range []string{"/usr/sbin/visudo", "/usr/sbin/sysctl", "/usr/sbin/service", "/usr/sbin/update-rc.d", "/usr/bin/openssl", "/usr/bin/loginctl", "/usr/sbin/apachectl"} {
 		f.write(tool, "", 0o755)
 	}
 	f.write("/home/me/bin/gash-hosts-helper", helperBytes, 0o755)
@@ -98,14 +99,21 @@ func (f *fixture) read(sys string) string {
 	return string(data)
 }
 
-// Run plays the tools the root step runs.
-func (f *fixture) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
+// answer plays the tools the root step runs.
+func (f *fixture) answer(call runner.Call) runner.Expect {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	c := struct {
+		Path string
+		Args []string
+	}{call.Argv[0], call.Argv[1:]}
+	if !call.Setsid {
+		f.t.Errorf("%q without a new session", call.Argv)
+	}
 	line := filepath.Base(c.Path) + " " + strings.Join(c.Args, " ")
 	f.lines = append(f.lines, line)
 	if f.failOn != "" && strings.HasPrefix(line, f.failOn) {
-		return proc.Result{ExitCode: 1, Stderr: []byte("simulated failure")}, nil
+		return runner.Expect{Status: 1, Stderr: "simulated failure"}
 	}
 	switch filepath.Base(c.Path) {
 	case "visudo":
@@ -122,7 +130,7 @@ func (f *fixture) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 		switch c.Args[1] {
 		case "status":
 			if !f.active[c.Args[0]] {
-				return proc.Result{ExitCode: 3}, nil
+				return runner.Expect{Status: 3}
 			}
 		case "stop":
 			f.active[c.Args[0]] = false
@@ -139,18 +147,18 @@ func (f *fixture) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
 			os.Rename(filepath.Join(dir, from+"01"+c.Args[0]), filepath.Join(dir, to+"01"+c.Args[0]))
 		}
 	case "openssl":
-		if c.StdinFile == nil || c.Credential == nil || c.Credential.UID != 1000 || c.Stdin != nil {
-			f.t.Errorf("openssl without the open key or the user's credential: %+v", c)
+		if len(call.Stdin) == 0 || call.Credential == nil || call.Credential.UID != 1000 || call.Credential.GID != 1000 ||
+			!slices.Contains(call.Env, "HOME=/home/me") {
+			f.t.Errorf("openssl without the open key or the user's credential: %+v", call)
 		}
-		data, _ := io.ReadAll(c.StdinFile)
-		os.WriteFile(c.Args[2], data, 0o600)
+		os.WriteFile(c.Args[2], call.Stdin, 0o600)
 	}
-	return proc.Result{}, nil
+	return runner.Expect{}
 }
 
 func (f *fixture) env() Env {
 	return Env{
-		Sysroot: f.sr, Runner: f, Euid: 0,
+		Sysroot: f.sr, Runner: child.Fake(f.t, f.answer), Euid: 0,
 		Getenv: func(k string) string {
 			return map[string]string{"SUDO_USER": "me", "SUDO_UID": "1000", "SUDO_GID": "1000"}[k]
 		},
@@ -170,48 +178,16 @@ func mustLayout(t *testing.T) legacy.Layout {
 	return l
 }
 
-// pipeStarter runs Serve in-process behind a Session.
-type pipeStarter struct{ env Env }
-
-type pipeSession struct {
-	stdin  io.WriteCloser
-	stdout io.Reader
-	done   chan error
-}
-
-func (p *pipeSession) Stdin() io.WriteCloser { return p.stdin }
-func (p *pipeSession) Stdout() io.Reader     { return p.stdout }
-func (p *pipeSession) Wait() (proc.Result, error) {
-	if err := <-p.done; err != nil {
-		return proc.Result{ExitCode: 1, Stderr: []byte(err.Error())}, nil
-	}
-	return proc.Result{}, nil
-}
-
-func (s pipeStarter) Start(ctx context.Context, _ proc.Cmd) (proc.Session, error) {
-	// Kernel pipes, buffered as sudo's are (io.Pipe is not).
-	inR, inW, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	ps := &pipeSession{stdin: inW, stdout: outR, done: make(chan error, 1)}
-	go func() {
-		err := Serve(ctx, inR, outW, s.env)
-		outW.Close()
-		io.Copy(io.Discard, inR)
-		inR.Close()
-		ps.done <- err
-	}()
-	return ps, nil
+// pipeStarter runs Serve in-process behind a session of the runner Fake.
+func pipeStarter(t *testing.T, env Env) runner.SessionStarter {
+	return child.Fake(t, func(runner.Call) runner.Expect {
+		return runner.Expect{Serve: func(in io.Reader, out io.Writer) error { return Serve(context.Background(), in, out, env) }}
+	})
 }
 
 func session(t *testing.T, env Env, plan []Op) *Client {
 	t.Helper()
-	c, err := Open(context.Background(), pipeStarter{env}, SudoCmd("/usr/bin/sudo", "/usr/local/bin/gash", false), plan)
+	c, err := Open(context.Background(), pipeStarter(t, env), SudoCmd("/usr/bin/sudo", "/usr/local/bin/gash", false), plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +444,7 @@ func TestLedger_HTE17(t *testing.T) {
 		{{ID: 1, Op: OpArchiveVhost, Path: "/etc/apache2/../shadow.conf"}},
 		{{ID: 1, Op: OpHostsSnapshot}, {ID: 1, Op: OpHostsSnapshot}},
 	} {
-		if _, err := Open(context.Background(), pipeStarter{f.env()}, proc.Cmd{Path: "/usr/bin/sudo"}, bad); hteerr.CodeOf(err) != hteerr.InvalidState {
+		if _, err := Open(context.Background(), pipeStarter(t, f.env()), runner.Cmd{Path: "/usr/bin/sudo"}, bad); hteerr.CodeOf(err) != hteerr.InvalidState {
 			t.Errorf("%+v: %v", bad, err)
 		}
 	}
@@ -478,14 +454,14 @@ func TestIdentity(t *testing.T) {
 	f := newFixture(t)
 	env := f.env()
 	env.Euid = 1000
-	if _, err := Open(context.Background(), pipeStarter{env}, proc.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
+	if _, err := Open(context.Background(), pipeStarter(t, env), runner.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
 		t.Fatalf("not root: %v", err)
 	}
 	env = f.env()
 	env.Getenv = func(k string) string {
 		return map[string]string{"SUDO_USER": "root", "SUDO_UID": "0", "SUDO_GID": "0"}[k]
 	}
-	if _, err := Open(context.Background(), pipeStarter{env}, proc.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
+	if _, err := Open(context.Background(), pipeStarter(t, env), runner.Cmd{Path: "/usr/bin/sudo"}, nil); hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired {
 		t.Fatalf("root as the user: %v", err)
 	}
 }
@@ -533,7 +509,9 @@ func TestRestoreOrder(t *testing.T) {
 
 // undo_unit_stop undoes only the stop this session made, while it is the
 // last change: the migrate rollback when a site does not answer.
-func TestUndoUnitStop(t *testing.T) {
+// TestLedger_HTE74: undo_unit_stop runs only when the stop of that unit
+// is the last change of the receipt and was made in this session, once.
+func TestLedger_HTE74(t *testing.T) {
 	f := newFixture(t)
 	plan := []Op{{ID: 1, Op: OpUndoUnitStop, Name: "apache2"}, {ID: 2, Op: OpUnitStop, Name: "apache2"},
 		{ID: 3, Op: OpUndoUnitStop, Name: "apache2"}, {ID: 4, Op: OpUndoUnitStop, Name: "php8.3-fpm"}}
@@ -560,6 +538,93 @@ func TestUndoUnitStop(t *testing.T) {
 	}
 	if r, perr := receipt.Parse([]byte(resp.Receipt), "root"); perr == nil && len(r.Changes) != 0 {
 		t.Errorf("receipt changes left: %+v", r.Changes)
+	}
+	if _, err := c.Run(3); err == nil || !strings.Contains(err.Error(), "already ran") {
+		t.Errorf("second undo: %v", err)
+	}
+	c.Close()
+
+	// A stop made by another session, or followed by another change, is
+	// never undone.
+	c = session(t, f.env(), []Op{{ID: 1, Op: OpUnitStop, Name: "apache2"}})
+	if _, err := c.Run(1); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	c = session(t, f.env(), []Op{{ID: 1, Op: OpUndoUnitStop, Name: "apache2"}})
+	if _, err := c.Run(1); err == nil || f.active["apache2"] {
+		t.Errorf("undo of another session's stop: %v", err)
+	}
+	c.Close()
+	f.active["apache2"] = true
+	c = session(t, f.env(), []Op{{ID: 1, Op: OpUnitStop, Name: "php8.3-fpm"}, {ID: 2, Op: OpArchivePool, Path: "/etc/php/8.3/fpm/pool.d/http.test.conf"},
+		{ID: 3, Op: OpUndoUnitStop, Name: "php8.3-fpm"}})
+	defer c.Close()
+	for _, id := range []int{1, 2} {
+		if _, err := c.Run(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.Run(3); err == nil || f.active["php8.3-fpm"] {
+		t.Errorf("undo of a stop that is not the last change: %v", err)
+	}
+}
+
+// TestLedger_HTE70 (root half): the reload of the system Apache tests its
+// configuration first; a failed test puts back the vhosts this session
+// archived and reloads nothing. FPM units reload without the test.
+func TestLedger_HTE70(t *testing.T) {
+	vhosts := []string{"/etc/apache2/sites-available/001-http.test.conf", "/etc/apache2/sites-available/002-https.test.conf"}
+	plan := []Op{{ID: 1, Op: OpArchiveVhost, Path: vhosts[0]}, {ID: 2, Op: OpArchiveVhost, Path: vhosts[1]}, {ID: 3, Op: OpUnitReload, Name: "apache2"}}
+	if got := plan[2].String(); !strings.Contains(got, "apachectl configtest") || !strings.Contains(got, "put back the vhosts") {
+		t.Errorf("plan line %q", got)
+	}
+	for _, fail := range []bool{false, true} {
+		f := newFixture(t)
+		if fail {
+			f.failOn = "apachectl configtest"
+		}
+		before := snapshot(t, filepath.Join(f.root, "etc/apache2"))
+		c := session(t, f.env(), plan)
+		for _, id := range []int{1, 2} {
+			if _, err := c.Run(id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		resp, err := c.Run(3)
+		c.Close()
+		reloaded := slices.Contains(f.lines, "service apache2 reload")
+		r, _ := receipt.Parse([]byte(resp.Receipt), "root")
+		var kinds []receipt.Kind
+		for _, ch := range r.Changes {
+			kinds = append(kinds, ch.Kind)
+		}
+		if !fail {
+			if err != nil || !reloaded || !slices.Contains(f.lines, "apachectl configtest") || len(kinds) != 2 {
+				t.Errorf("passing test: %v reloaded %v kinds %v lines %v", err, reloaded, kinds, f.lines)
+			}
+			continue
+		}
+		if hteerr.CodeOf(err) != hteerr.ConfigTestFailed || reloaded || len(kinds) != 0 {
+			t.Errorf("failing test: %v reloaded %v kinds %v", err, reloaded, kinds)
+		}
+		if diff := cmp.Diff(before, snapshot(t, filepath.Join(f.root, "etc/apache2"))); diff != "" {
+			t.Errorf("the vhosts are not back as they were:\n%s", diff)
+		}
+	}
+	// A stopped system Apache is tested, not started.
+	f := newFixture(t)
+	f.active["apache2"] = false
+	c := session(t, f.env(), []Op{{ID: 1, Op: OpUnitReload, Name: "apache2"}, {ID: 2, Op: OpUnitReload, Name: "php8.3-fpm"}})
+	defer c.Close()
+	for _, id := range []int{1, 2} {
+		if _, err := c.Run(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !slices.Contains(f.lines, "apachectl configtest") || slices.Contains(f.lines, "service apache2 reload") ||
+		!slices.Equal(f.lines[len(f.lines)-2:], []string{"service php8.3-fpm status", "service php8.3-fpm reload"}) {
+		t.Errorf("lines %v", f.lines)
 	}
 }
 

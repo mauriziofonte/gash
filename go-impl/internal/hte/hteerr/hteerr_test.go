@@ -4,7 +4,10 @@ package hteerr
 
 import (
 	"fmt"
+	"slices"
 	"testing"
+
+	"github.com/mauriziofonte/gash/internal/contract"
 )
 
 // The actions of design/hte.md section 9, verbatim.
@@ -18,6 +21,7 @@ func TestCatalogActions(t *testing.T) {
 		"apache_not_found": Fatal, "platform_unsupported": Fatal, "receipt_mismatch": Fatal,
 		"root_not_allowed": Fatal, "missing_value": Retry,
 		"conflicting_options": Retry, "invalid_state": Stop, "apache_module_missing": Stop,
+		"openssl_not_found": Fatal, "php_not_enabled": Retry, "invalid_ports": Retry, "invalid_autostart": Retry,
 	}
 	if len(Codes()) != len(want) {
 		t.Fatalf("catalog has %d codes, want %d", len(Codes()), len(want))
@@ -43,5 +47,29 @@ func TestErrorValue(t *testing.T) {
 	}
 	if CodeOf(fmt.Errorf("plain")) != "" || New(SiteExists, "", "").Error() != "site_exists" {
 		t.Fatal("CodeOf/Error")
+	}
+}
+
+// pendingContract are the codes internal/contract does not register yet;
+// the lead adds their rows (area "hte", origin 3.x) and empties the list.
+var pendingContract = []Code{
+	ApacheModuleMissing, RootNotAllowed, ConflictingOptions, InvalidState,
+	OpenSSLNotFound, PHPNotEnabled, InvalidPorts, InvalidAutostart,
+}
+
+// Every code of the HTE catalog is a row of the contract catalog with the
+// same action (LEDGER HTE-72), but for the pending ones.
+func TestContractCatalog(t *testing.T) {
+	for _, c := range Codes() {
+		a, ok := contract.ActionOf(string(c))
+		pending := slices.Contains(pendingContract, c)
+		switch {
+		case ok && pending:
+			t.Errorf("%s is registered now: drop it from pendingContract", c)
+		case !ok && !pending:
+			t.Errorf("%s is not in the contract catalog", c)
+		case ok && string(a) != string(ActionOf(c)):
+			t.Errorf("%s: the contract says %s, the HTE catalog %s", c, a, ActionOf(c))
+		}
 	}
 }

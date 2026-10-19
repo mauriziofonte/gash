@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -87,8 +88,22 @@ WantedBy=default.target
 `, execLine(gash, "start"), execLine(gash, "stop")), nil
 }
 
-// LaunchAgent is the macOS user agent: it runs the start at login.
-func LaunchAgent(gash string) ([]byte, error) {
+// AgentEnv is the environment of the LaunchAgent: the XDG directories
+// install resolved, so that the agent, which launchd starts without them,
+// finds the same tree (XDG_RUNTIME_DIR only when it was set).
+func AgentEnv(configHome, stateHome, dataHome, runtimeDir string) []string {
+	env := []string{"XDG_CONFIG_HOME=" + configHome, "XDG_DATA_HOME=" + dataHome, "XDG_STATE_HOME=" + stateHome}
+	if runtimeDir != "" {
+		env = append(env, "XDG_RUNTIME_DIR="+runtimeDir)
+	}
+	return env
+}
+
+var agentKeyRE = regexp.MustCompile(`^XDG_[A-Z_]+$`)
+
+// LaunchAgent is the macOS user agent: it runs the start at login, with
+// env (KEY=VALUE, absolute paths) as its environment variables.
+func LaunchAgent(gash string, env []string) ([]byte, error) {
 	if err := checkProgram(gash); err != nil {
 		return nil, err
 	}
@@ -111,8 +126,19 @@ func LaunchAgent(gash string) ([]byte, error) {
 	for _, a := range append([]string{gash}, UnitArgs("start")...) {
 		b.WriteString("    <string>" + esc(a) + "</string>\n")
 	}
-	b.WriteString(`  </array>
-  <key>RunAtLoad</key>
+	b.WriteString("  </array>\n")
+	if len(env) > 0 {
+		b.WriteString("  <key>EnvironmentVariables</key>\n  <dict>\n")
+		for _, kv := range env {
+			k, val, _ := strings.Cut(kv, "=")
+			if !agentKeyRE.MatchString(k) || checkProgram(val) != nil {
+				return nil, hteerr.Newf(hteerr.PlatformUnsupported, "", "%q cannot be in the environment of the LaunchAgent", kv)
+			}
+			b.WriteString("    <key>" + k + "</key>\n    <string>" + esc(val) + "</string>\n")
+		}
+		b.WriteString("  </dict>\n")
+	}
+	b.WriteString(`  <key>RunAtLoad</key>
   <true/>
 </dict>
 </plist>

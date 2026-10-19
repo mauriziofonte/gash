@@ -14,7 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mauriziofonte/gash/internal/hte/proc"
+	"github.com/mauriziofonte/gash/internal/hte/child"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Procs is the view of the process table supervision needs. A PID is
@@ -96,16 +97,18 @@ func (LinuxProcs) Signal(pid int, sig syscall.Signal) error { return syscall.Kil
 
 // DarwinProcs asks ps.
 type DarwinProcs struct {
-	Runner proc.Runner
+	Runner runner.Runner
 	PS     string // /bin/ps
 }
 
 func (p DarwinProcs) ps(pid int, field string) (string, error) {
-	res, err := p.Runner.Run(context.Background(), proc.Cmd{Path: p.PS, Args: []string{"-o", field + "=", "-p", strconv.Itoa(pid)}, Timeout: 5 * time.Second})
+	c := child.Cmd(p.PS, nil, "-o", field+"=", "-p", strconv.Itoa(pid))
+	c.Timeout = 5 * time.Second
+	res, err := child.Run(context.Background(), p.Runner, c)
 	if err != nil {
 		return "", err
 	}
-	if !res.OK() {
+	if !res.Success() {
 		return "", fmt.Errorf("no process %d", pid)
 	}
 	return strings.TrimSpace(string(res.Stdout)), nil

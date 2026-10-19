@@ -20,14 +20,16 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
 	"github.com/mauriziofonte/gash/internal/hte/certs"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/hosts"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
+	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/hte/render"
 	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // Engine holds the process facts every command needs. The CLI fills it
@@ -46,12 +48,16 @@ type Engine struct {
 	// the autostart units run it. Helper is the hosts helper install copies
 	// (gash-hosts-helper next to Self).
 	Self, Helper string
-	Runner       proc.Runner
-	Starter      proc.Starter
+	Runner       runner.Runner
+	Starter      runner.SessionStarter
 	Procs        service.Procs
 	// Interactive allows sudo to prompt (a terminal, not headless).
 	Interactive bool
-	Now         func() time.Time
+	// BeforeSudo, when set, receives the root steps of a command as the
+	// session will run them, right before sudo starts (and may prompt):
+	// the command line shows them to the user.
+	BeforeSudo func(steps []string)
+	Now        func() time.Time
 	// LockWait bounds the wait for the state lock (30 s by default).
 	LockWait time.Duration
 	// Dial, StartTimeout: supervision overrides for tests.
@@ -61,6 +67,9 @@ type Engine struct {
 	// Probe replaces the HTTP probe of a site (migrate's verification)
 	// in tests.
 	Probe func(ctx context.Context, e render.Endpoint) service.SiteStatus
+	// BindLow replaces install's bind of 127.0.0.1:80 and :443 on macOS
+	// (net.Listen) in tests.
+	BindLow func(addr string) error
 }
 
 func (e *Engine) now() time.Time {
@@ -103,12 +112,14 @@ func (e *Engine) resolve() (*env, error) {
 // probe runs a system binary with fixed arguments for discovery.
 func (e *Engine) probe(ctx context.Context) discover.Probe {
 	return func(bin string, args ...string) (string, error) {
-		res, err := e.Runner.Run(ctx, proc.Cmd{Path: bin, Args: args, Timeout: 20 * time.Second, Setsid: true})
+		c := child.Cmd(bin, nil, args...)
+		c.Timeout = 20 * time.Second
+		res, err := child.Run(ctx, e.Runner, c)
 		if err != nil {
 			return "", err
 		}
-		if !res.OK() {
-			return "", fmt.Errorf("%s %s: exit %d: %s", bin, strings.Join(args, " "), res.ExitCode, res.Output())
+		if !res.Success() {
+			return "", fmt.Errorf("%s %s: exit %d: %s", bin, strings.Join(args, " "), res.ExitCode, child.Output(res))
 		}
 		return string(res.Stdout), nil
 	}
@@ -179,29 +190,62 @@ func (e *Engine) input(v *env, m *machine, set state.Settings, sites []state.Sit
 		php[p.Version] = pv
 	}
 	return render.Input{
-		Paths:  v.paths,
-		Apache: render.Apache{Binary: m.apache.Binary, Modules: m.modules.Load, MimeTypes: m.apache.MimeTypes},
-		Ports:  set.Ports,
-		Listen: listenAddrs(set),
-		PHP:    php,
-		Sites:  sites,
+		Paths:             v.paths,
+		Apache:            render.Apache{Binary: m.apache.Binary, Modules: m.modules.Load, MimeTypes: m.apache.MimeTypes},
+		Ports:             set.Ports,
+		RedirectHTTPSPort: e.redirectHTTPSPort(v, set),
+		Listen:            listenAddrs(set),
+		PHP:               php,
+		Sites:             sites,
 	}
+}
+
+// redirectHTTPSPort is 443 on macOS while the root receipt holds the pf
+// redirect to the stack's ports (clients then reach HTTPS on 443), else 0.
+// The root copy is read: root alone writes it.
+func (e *Engine) redirectHTTPSPort(v *env, set state.Settings) int {
+	if v.os.GOOS != "darwin" {
+		return 0
+	}
+	if to, ok := e.pfRedirect(); ok && to.HTTP == set.Ports.HTTP && to.HTTPS == set.Ports.HTTPS {
+		return state.StandardPorts.HTTPS
+	}
+	return 0
+}
+
+// pfRedirect is the pf redirect of the root receipt, if any.
+func (e *Engine) pfRedirect() (receipt.Redirect, bool) {
+	var to receipt.Redirect
+	data, err := e.Sysroot.ReadFile(receipt.RootPath(e.User))
+	if err != nil {
+		return to, false
+	}
+	r, err := receipt.Parse(data, receipt.RootPath(e.User))
+	if err != nil {
+		return to, false
+	}
+	c, ok := r.Find(receipt.PFRedirect, "")
+	if !ok || c.Pending || receipt.Decode(c.Applied, &to) != nil {
+		return to, false
+	}
+	return to, true
 }
 
 func (e *Engine) supervisor(v *env) *service.Supervisor {
 	return &service.Supervisor{
 		Runner: e.Runner, Layout: render.Layout{Dir: v.paths.RenderDir()}, Procs: e.Procs,
-		Env: proc.BaseEnv(v.dirs.Home), Dial: e.Dial, Sleep: e.Sleep, StartTimeout: e.StartTimeout,
+		Env: child.BaseEnv(v.dirs.Home), Dial: e.Dial, Sleep: e.Sleep, StartTimeout: e.StartTimeout,
 	}
 }
 
 func (e *Engine) certs(v *env) certs.Manager {
-	return certs.Manager{Runner: e.Runner, OpenSSL: e.find("openssl"), Paths: v.paths, Env: proc.BaseEnv(v.dirs.Home), Now: e.Now}
+	return certs.Manager{Runner: e.Runner, OpenSSL: e.find("openssl"), OpenSSLHint: discover.OpenSSLInstallHint(v.os.Family),
+		Paths: v.paths, Env: child.BaseEnv(v.dirs.Home), Now: e.Now}
 }
 
 // find returns a system binary in the base PATH, as seen through the
 // sysroot ("" when absent).
-func (e *Engine) find(name string) string { return proc.Find(name, e.Sysroot.IsRegular) }
+func (e *Engine) find(name string) string { return child.Find(name, e.Sysroot.IsRegular) }
 
 // prepare creates the directories a generation names: the runtime
 // directory (0700, owner checked), the logs, the per-site log
@@ -291,6 +335,9 @@ func (e *Engine) applyStack(ctx context.Context, v *env, set state.Settings, sit
 		return out, err
 	}
 	in := e.input(v, m, set, sites)
+	if in.Overlays, err = render.ReadOverlays(v.paths, sites); err != nil {
+		return out, err
+	}
 	if err := e.prepare(v, in); err != nil {
 		return out, err
 	}

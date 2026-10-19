@@ -9,182 +9,29 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
-	"sync"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/render"
+	"github.com/mauriziofonte/gash/internal/hte/service/servicetest"
 	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// fakeStack plays Apache and PHP-FPM: it is the runner of their commands
-// and the process table, and it writes PID files and log lines the way
-// the real masters do (verified in the Ubuntu 24.04 container).
+// fakeStack is the fake masters (servicetest.Stack) behind a runner Fake.
 type fakeStack struct {
-	t      *testing.T
-	mu     sync.Mutex
-	procs  map[int]string // pid -> command line
-	next   int
-	events []string
-	// failTest makes the config test of the named master fail.
-	failTest string
-	// failUSR1 makes Apache exit during a graceful restart (a busy port).
-	failUSR1 bool
-	// deaf masters ignore SIGTERM.
-	deaf bool
+	*servicetest.Stack
+	*runner.Fake
 }
 
 func newStack(t *testing.T) *fakeStack {
-	return &fakeStack{t: t, procs: map[int]string{}, next: 100}
-}
-
-func (f *fakeStack) event(format string, args ...any) {
-	f.events = append(f.events, fmt.Sprintf(format, args...))
-}
-
-func (f *fakeStack) Events() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := slices.Clone(f.events)
-	f.events = nil
-	return out
-}
-
-func appendLog(t *testing.T, path, line string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	fh, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Fprintln(fh, line)
-	fh.Close()
-}
-
-func (f *fakeStack) manifestOf(conf string) *render.Manifest {
-	dir := filepath.Dir(conf)
-	for !strings.HasSuffix(dir, "/current") && !strings.Contains(filepath.Base(dir), "gen-") {
-		dir = filepath.Dir(dir)
-	}
-	m, err := render.ReadManifest(dir)
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	return m
-}
-
-func (f *fakeStack) spawn(cmdline, pidFile string) int {
-	f.next++
-	f.procs[f.next] = cmdline
-	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(f.next)+"\n"), 0o600); err != nil {
-		f.t.Fatal(err)
-	}
-	return f.next
-}
-
-func (f *fakeStack) Run(_ context.Context, c proc.Cmd) (proc.Result, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	apache := strings.HasSuffix(c.Path, "apache2")
-	switch {
-	case c.Args[0] == "-t":
-		name := "fpm"
-		if apache {
-			name = "apache"
-		}
-		f.event("test %s", name)
-		if f.failTest == name {
-			return proc.Result{ExitCode: 1, Stderr: []byte("AH00526: Syntax error on line 3")}, nil
-		}
-		if !apache && !slices.ContainsFunc(c.Env, func(e string) bool { return strings.HasPrefix(e, "PHP_INI_SCAN_DIR=") }) {
-			f.t.Errorf("fpm -t without PHP_INI_SCAN_DIR: %v", c.Env)
-		}
-		return proc.Result{}, nil
-	case apache:
-		m := f.manifestOf(c.Args[1])
-		f.event("start apache")
-		f.spawn(c.Path+" "+strings.Join(c.Args, " "), m.Apache.PidFile)
-		appendLog(f.t, m.Apache.ErrorLog, "AH00489: Apache/2.4.58 configured -- resuming normal operations")
-		return proc.Result{}, nil
-	default:
-		m := f.manifestOf(c.Args[1])
-		v := filepath.Base(filepath.Dir(c.Args[1]))
-		fm, _ := m.Master(v)
-		f.event("start fpm %s", v)
-		if !slices.Contains(c.Env, "PHP_INI_SCAN_DIR="+fm.ScanDir) {
-			f.t.Errorf("fpm start without PHP_INI_SCAN_DIR: %v", c.Env)
-		}
-		f.spawn("php-fpm: master process ("+c.Args[1]+")", fm.PidFile)
-		appendLog(f.t, fm.ErrorLog, "NOTICE: ready to handle connections")
-		return proc.Result{}, nil
-	}
-}
-
-func (f *fakeStack) Cmdline(pid int) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	c, ok := f.procs[pid]
-	if !ok {
-		return "", os.ErrNotExist
-	}
-	return c, nil
-}
-
-func (f *fakeStack) Started(int) (time.Time, error) { return time.Now().Add(-time.Minute), nil }
-
-func (f *fakeStack) Signal(pid int, sig syscall.Signal) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	cmd, ok := f.procs[pid]
-	if !ok {
-		return syscall.ESRCH
-	}
-	apache := !strings.HasPrefix(cmd, "php-fpm")
-	name := "apache"
-	conf := ""
-	if apache {
-		conf = strings.Fields(cmd)[2]
-	} else {
-		conf = strings.TrimSuffix(strings.TrimPrefix(cmd, "php-fpm: master process ("), ")")
-		name = "fpm " + filepath.Base(filepath.Dir(conf))
-	}
-	m := f.manifestOf(conf)
-	switch sig {
-	case syscall.SIGUSR1:
-		f.event("graceful apache")
-		if f.failUSR1 {
-			delete(f.procs, pid)
-			appendLog(f.t, m.Apache.ErrorLog, "(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:3000")
-			appendLog(f.t, m.Apache.ErrorLog, "no listening sockets available, shutting down")
-			return nil
-		}
-		appendLog(f.t, m.Apache.ErrorLog, "AH00489: resuming normal operations")
-	case syscall.SIGUSR2:
-		f.event("reload %s", name)
-		fm, _ := m.Master(filepath.Base(filepath.Dir(conf)))
-		delete(f.procs, pid)
-		f.spawn(cmd, fm.PidFile) // FPM re-execs and daemonizes: a new PID
-		appendLog(f.t, fm.ErrorLog, "NOTICE: ready to handle connections")
-	case syscall.SIGTERM:
-		f.event("stop %s", name)
-		if f.deaf {
-			return nil
-		}
-		delete(f.procs, pid)
-	case syscall.SIGKILL:
-		f.event("kill %s", name)
-		delete(f.procs, pid)
-	}
-	return nil
+	st := servicetest.New(t)
+	return &fakeStack{Stack: st, Fake: runner.NewFake(t).Respond(st.Answer)}
 }
 
 func testPaths(t *testing.T) state.Paths {
@@ -348,7 +195,7 @@ func TestLedger_HTE09(t *testing.T) {
 	f, p := newStack(t), testPaths(t)
 	a := site("a.test", "8.3")
 	s := running(t, f, p, a)
-	f.failTest = "fpm"
+	f.FailTest = "fpm"
 	a.PHPIni = map[string]string{"memory_limit": "1G"}
 	_, err := s.Apply(context.Background(), input(p, a))
 	if hteerr.CodeOf(err) != hteerr.ConfigTestFailed || !strings.Contains(err.Error(), "php-fpm 8.3") {
@@ -372,7 +219,7 @@ func TestRollback(t *testing.T) {
 	f, p := newStack(t), testPaths(t)
 	a := site("a.test", "8.3")
 	s := running(t, f, p, a)
-	f.failUSR1 = true
+	f.FailUSR1 = true
 	a.ExtraHTTPPorts = []int{3000}
 	_, err := s.Apply(context.Background(), input(p, a))
 	if hteerr.CodeOf(err) != hteerr.ReloadFailed || !strings.Contains(err.Error(), "rolled back") || !strings.Contains(err.Error(), "no listening sockets") {
@@ -397,7 +244,7 @@ func TestLedger_HTE32(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Events()
-	f.procs[4242] = "/usr/bin/vim notes.txt"
+	f.AddProcess(4242, "/usr/bin/vim notes.txt")
 	if err := os.WriteFile(filepath.Join(p.RuntimeDir, "httpd.pid"), []byte("4242\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +254,7 @@ func TestLedger_HTE32(t *testing.T) {
 	if ev := f.Events(); len(ev) != 0 {
 		t.Fatalf("signalled a foreign process: %v", ev)
 	}
-	if _, ok := f.procs[4242]; !ok {
+	if !f.HasProcess(4242) {
 		t.Fatal("foreign process gone")
 	}
 	// Start clears the stale PID file instead of failing on it.
@@ -422,7 +269,7 @@ func TestLedger_HTE32(t *testing.T) {
 func TestStopKillsAfterTimeout(t *testing.T) {
 	f, p := newStack(t), testPaths(t)
 	s := running(t, f, p, site("a.test", "8.3"))
-	f.deaf = true
+	f.Deaf = true
 	if err := s.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -437,12 +284,13 @@ func TestStartFailureNamesTheCause(t *testing.T) {
 	if _, err := s.Apply(context.Background(), input(p, site("a.test", "8.3"))); err != nil {
 		t.Fatal(err)
 	}
-	s.Runner = &proc.Fake{Handler: func(c proc.Cmd) (proc.Result, error) {
-		if strings.HasSuffix(c.Path, "apache2") {
-			return proc.Result{ExitCode: 1, Stderr: []byte("(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:8080")}, nil
+	s.Runner = child.Fake(t, func(c runner.Call) runner.Expect {
+		if strings.HasSuffix(c.Argv[0], "apache2") {
+			return runner.Expect{Status: 1, Stderr: "(98)Address already in use: AH00072: make_sock: could not bind to address 127.0.0.1:8080"}
 		}
-		return f.Run(context.Background(), c)
-	}}
+		e, _ := f.Answer(c)
+		return e
+	})
 	if err := s.Start(context.Background()); hteerr.CodeOf(err) != hteerr.PortInUse {
 		t.Fatalf("%v", err)
 	}
@@ -510,7 +358,10 @@ var update = flag.Bool("update", false, "rewrite the golden files under testdata
 // with the program quoted for systemd and escaped for XML.
 func TestLedger_HTE57(t *testing.T) {
 	dir := "../../../testdata/hte/golden/autostart"
-	for name, gen := range map[string]func(string) ([]byte, error){UnitName: SystemdUnit, LaunchAgentLabel + ".plist": LaunchAgent} {
+	agent := func(gash string) ([]byte, error) {
+		return LaunchAgent(gash, AgentEnv("/Users/me/.config", "/Users/me/.local/state", "/Users/me/.local/share", ""))
+	}
+	for name, gen := range map[string]func(string) ([]byte, error){UnitName: SystemdUnit, LaunchAgentLabel + ".plist": agent} {
 		got, err := gen("/home/me/.local/bin/gash")
 		if err != nil {
 			t.Fatal(err)
@@ -543,9 +394,16 @@ func TestLedger_HTE57(t *testing.T) {
 			t.Errorf("unit lacks %q:\n%s", want, unit)
 		}
 	}
-	plist, err := LaunchAgent("/Users/me/bin/gash&<x>")
-	if err != nil || !strings.Contains(string(plist), "<string>/Users/me/bin/gash&amp;&lt;x&gt;</string>") || !strings.Contains(string(plist), "<key>RunAtLoad</key>\n  <true/>") {
+	plist, err := LaunchAgent("/Users/me/bin/gash&<x>", AgentEnv("/Users/me/c&d", "/s", "/d", "/r"))
+	if err != nil || !strings.Contains(string(plist), "<string>/Users/me/bin/gash&amp;&lt;x&gt;</string>") || !strings.Contains(string(plist), "<key>RunAtLoad</key>\n  <true/>") ||
+		!strings.Contains(string(plist), "<key>XDG_CONFIG_HOME</key>\n    <string>/Users/me/c&amp;d</string>") ||
+		!strings.Contains(string(plist), "<key>XDG_RUNTIME_DIR</key>\n    <string>/r</string>") {
 		t.Fatalf("%s %v", plist, err)
+	}
+	for _, env := range [][]string{{"PATH=/bin"}, {"XDG_CONFIG_HOME=relative"}, {"XDG_STATE_HOME=/a\nb"}} {
+		if _, err := LaunchAgent("/Users/me/bin/gash", env); hteerr.CodeOf(err) != hteerr.PlatformUnsupported {
+			t.Errorf("%q accepted: %v", env, err)
+		}
 	}
 	if _, err := SystemdUnit("gash"); hteerr.CodeOf(err) != hteerr.PlatformUnsupported {
 		t.Fatal("relative program accepted")
@@ -561,14 +419,14 @@ func TestReloadSameRendering(t *testing.T) {
 	f, p := newStack(t), testPaths(t)
 	s := running(t, f, p, site("a.test", "8.3"))
 	ctx := context.Background()
-	f.failTest = "apache"
+	f.FailTest = "apache"
 	if _, err := s.Reload(ctx); hteerr.CodeOf(err) != hteerr.ConfigTestFailed {
 		t.Fatalf("broken overlay: %v", err)
 	}
 	if diff := cmp.Diff([]string{"test apache"}, f.Events()); diff != "" {
 		t.Fatalf("a failed test signalled: %s", diff)
 	}
-	f.failTest = ""
+	f.FailTest = ""
 	ran, err := s.Reload(ctx)
 	if err != nil || !ran {
 		t.Fatalf("reload: %v %v", ran, err)

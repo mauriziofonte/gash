@@ -5,6 +5,7 @@ package state
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -245,13 +246,18 @@ func TestLedger_HTE08(t *testing.T) {
 	if s, err := NewSite(Flags{Domain: "a.test", Docroot: ptr(spaced)}, f.env, nil); err != nil || s.Docroot != spaced {
 		t.Fatalf("space: %v", err)
 	}
-	for _, c := range []string{"$", "*", "?", "[", ";", ":", `"`, `\`, "\n", "\r", "\t", "\x00", "\x7f", "\u0085", "${HOME}"} {
+	for _, c := range []string{"$", "*", "?", "[", "]", ";", ":", `"`, `\`, "\n", "\r", "\t", "\x00", "\x7f", "\u0085", "${HOME}"} {
 		dir := filepath.Join(f.root, "x"+c+"y")
 		_ = os.Mkdir(dir, 0o755) // some names cannot exist; the check runs first anyway
 		_, err := NewSite(Flags{Domain: "a.test", Docroot: ptr(dir)}, f.env, nil)
 		e, ok := hteerr.As(err)
 		if !ok || e.Code != hteerr.InvalidDocroot || e.Hint != hintDocrootChars {
 			t.Errorf("%q: %v", c, err)
+			continue
+		}
+		// A refused character is named; a control character is called one.
+		if r := []rune(c)[0]; strings.ContainsRune(docrootRefused, r) && !strings.Contains(e.Details, fmt.Sprintf("%q", r)) {
+			t.Errorf("%q: the details do not name the character: %s", c, e.Details)
 		}
 	}
 	if err := CheckDocrootText("/x/\xff"); code(err) != hteerr.InvalidDocroot {

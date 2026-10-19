@@ -1,15 +1,16 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
 // Package hteerr is the error type of the HTE packages: a code with its
-// fixed action (design/hte.md section 9), details and a hint. It stands in
-// for internal/contract until that package exists; the codes and actions
-// are the ones the contract catalog registers.
+// fixed action (design/hte.md section 9), details and a hint. Every code
+// is a row of the contract catalog (internal/contract) with the same
+// action, which TestContractCatalog checks.
 package hteerr
 
 import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Action is what the caller should do with an error (AGENTS.md section 5).
@@ -58,6 +59,18 @@ const (
 	// refuses, and a php_ini value that cannot be written into a pool. A
 	// human must fix the file.
 	InvalidState Code = "invalid_state"
+
+	// OpenSSLNotFound is a system without an openssl binary; the hint
+	// names the platform's install command (LEDGER HTE-72).
+	OpenSSLNotFound Code = "openssl_not_found"
+	// PHPNotEnabled is a PHP command on a site without PHP (LEDGER
+	// HTE-72).
+	PHPNotEnabled Code = "php_not_enabled"
+	// InvalidPorts and InvalidAutostart are a value outside the accepted
+	// ones of --ports and --autostart, as InvalidProfile is for --profile:
+	// every enum flag has its invalid_<flag> (LEDGER HTE-72).
+	InvalidPorts     Code = "invalid_ports"
+	InvalidAutostart Code = "invalid_autostart"
 )
 
 var actions = map[Code]Action{
@@ -83,6 +96,10 @@ var actions = map[Code]Action{
 	MissingValue:           Retry,
 	ConflictingOptions:     Retry,
 	InvalidState:           Stop,
+	OpenSSLNotFound:        Fatal,
+	PHPNotEnabled:          Retry,
+	InvalidPorts:           Retry,
+	InvalidAutostart:       Retry,
 }
 
 // ActionOf returns the fixed action of code; an unknown code is STOP, as
@@ -120,6 +137,16 @@ func New(code Code, details, hint string) *Error {
 // Newf is New with formatted details.
 func Newf(code Code, hint, format string, args ...any) *Error {
 	return &Error{Code: code, Details: fmt.Sprintf(format, args...), Hint: hint}
+}
+
+// InvalidValue is the invalid_<flag> error of an enum flag: the details
+// name the value and the accepted ones (LEDGER HTE-72).
+func InvalidValue(code Code, flag, value string, accepted ...string) *Error {
+	list := strings.Join(accepted, ", ")
+	if n := len(accepted); n > 1 {
+		list = strings.Join(accepted[:n-1], ", ") + " or " + accepted[n-1]
+	}
+	return Newf(code, "use one of: "+strings.Join(accepted, ", "), "--%s takes %s, not %q", flag, list, value)
 }
 
 // Action returns the fixed action of the error's code.

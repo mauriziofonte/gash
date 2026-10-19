@@ -171,6 +171,33 @@ type Plan struct {
 	// nor excluded: while any is left, --apply imports what it can but
 	// does not stop the system Apache.
 	Blocking []Blocking `json:"blocking_stop"`
+	// SystemApache is set when --apply keeps the system Apache running
+	// because the stack listens on neither 80 nor 443 (install --ports
+	// high, LEDGER HTE-70): the migrated vhosts are archived and the
+	// system Apache reloaded. NoLongerServed and Blocking are then empty:
+	// what is not migrated stays served.
+	SystemApache *SystemApache `json:"system_apache,omitempty"`
+}
+
+// SystemApache is what stays with a system Apache that --apply reloads
+// instead of stopping.
+type SystemApache struct {
+	// Ports are the ports of its Listen directives, ascending.
+	Ports []int `json:"ports"`
+	// Serves are the enabled vhosts not migrated and the enabled
+	// conf-enabled snippets: it keeps serving them.
+	Serves []string `json:"serves"`
+}
+
+// KeepsSystemApache reports a port set that leaves 80 and 443 to the
+// system Apache: --apply then reloads it instead of stopping it.
+func KeepsSystemApache(p state.Ports) bool {
+	for _, n := range []int{p.HTTP, p.HTTPS} {
+		if n == 80 || n == 443 {
+			return false
+		}
+	}
+	return true
 }
 
 // Blocking is an enabled vhost that keeps the system Apache running, with
@@ -273,9 +300,17 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 	b.reportOrphans()
 	b.reportSystem()
 	b.hosts(cands)
+	keep := KeepsSystemApache(env.Ports)
+	if keep {
+		p.SystemApache = &SystemApache{Ports: b.systemPorts(cands), Serves: []string{}}
+	}
 	for _, c := range cands {
 		sp := c.plan
 		if !sp.Enabled || sp.Action == ActionImport || sp.Action == ActionImportRaw || sp.Action == ActionManaged {
+			continue
+		}
+		if keep {
+			p.SystemApache.Serves = append(p.SystemApache.Serves, sp.Path)
 			continue
 		}
 		if sp.Action == ActionExcluded {
@@ -286,9 +321,49 @@ func BuildPlan(env Env, opt Options) (*Plan, error) {
 		}
 	}
 	for _, s := range inv.Snippets {
+		if keep {
+			p.SystemApache.Serves = append(p.SystemApache.Serves, s.Path)
+			continue
+		}
 		p.NoLongerServed = append(p.NoLongerServed, s.Path)
 	}
 	return p, nil
+}
+
+// systemPorts are the ports of the Listen directives of the system
+// Apache: its main configuration files and the vhost files that stay
+// (an imported vhost file holds no Listen).
+func (b *builder) systemPorts(cands []*candidate) []int {
+	var dirs []legacy.Directive
+	for _, f := range b.env.Layout.ListenConf {
+		data, err := b.env.Sysroot.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		if cf, err := legacy.ParseConf(data); err == nil {
+			dirs = append(dirs, cf.Outside...)
+		}
+	}
+	for _, c := range cands {
+		if c.v.Enabled && c.v.Conf != nil && c.plan.Site == nil {
+			dirs = append(dirs, c.v.Conf.Outside...)
+		}
+	}
+	out := []int{}
+	for _, d := range dirs {
+		if !d.Is("Listen") || len(d.Args) == 0 {
+			continue
+		}
+		a := d.Args[0]
+		if i := strings.LastIndex(a, ":"); i >= 0 {
+			a = a[i+1:]
+		}
+		if n, err := strconv.Atoi(a); err == nil && n > 0 && n < 65536 && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // splitExcludes sorts the --exclude values into domains and absolute
@@ -662,6 +737,14 @@ func (b *builder) buildRaw(c *candidate) {
 			c.plan.Warnings = append(c.plan.Warnings, "ServerAlias "+a+" is not a hostname; it stays in the vhost but not in the hosts block")
 		}
 	}
+	// A root with a character Apache or PHP-FPM reads as syntax stays in
+	// the system, as a create with it is refused (LEDGER HTE-08).
+	if v.Docroot != "" {
+		if err := state.CheckDocrootText(v.Docroot); err != nil {
+			b.skipErr(c, err)
+			return
+		}
+	}
 	res, err := rewriteRaw(v, c.domain, env)
 	if err != nil {
 		b.skip(c, "cannot import as raw: "+err.Error())
@@ -673,7 +756,7 @@ func (b *builder) buildRaw(c *candidate) {
 	if aliases == nil {
 		site.Aliases = []string{}
 	}
-	if v.Docroot != "" && state.CheckDocrootText(v.Docroot) == nil && path.IsAbs(v.Docroot) && path.Clean(v.Docroot) == v.Docroot {
+	if v.Docroot != "" && path.IsAbs(v.Docroot) && path.Clean(v.Docroot) == v.Docroot {
 		site.Docroot = v.Docroot
 	}
 	if res.php != "" {

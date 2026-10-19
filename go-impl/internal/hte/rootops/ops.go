@@ -37,6 +37,12 @@ const (
 	// OpSysctlPorts sets net.ipv4.ip_unprivileged_port_start to Value
 	// unless it is already that or lower.
 	OpSysctlPorts = "sysctl_ports"
+	// OpPFRedirect (macOS) redirects ports 80 and 443 of the loopback to
+	// Ports (the stack's HTTP and HTTPS ports): the anchor file
+	// PFAnchorFile, checked with pfctl -n, the LaunchDaemon PFDaemonPath
+	// that loads it at boot, checked with plutil -lint, and the anchor
+	// loaded now.
+	OpPFRedirect = "pf_redirect"
 	// OpLinger enables systemd linger for the user.
 	OpLinger = "linger"
 	// OpUnitStop stops and disables a system unit (Name).
@@ -47,7 +53,11 @@ const (
 	// the switch. The user side asks for it only on that failure.
 	OpUndoUnitStop = "undo_unit_stop"
 	// OpUnitReload reloads a running system unit (Name), after its pools
-	// were archived; no receipt change.
+	// were archived; no receipt change. For the system Apache (apache2,
+	// httpd) it first tests the configuration (apachectl configtest);
+	// when the test fails, the vhosts this session archived (the last
+	// changes of the receipt) are put back, nothing is reloaded, and the
+	// operation fails with config_test_failed (LEDGER HTE-70).
 	OpUnitReload = "unit_reload"
 	// OpHostsSnapshot records the hosts block as it is before install.
 	OpHostsSnapshot = "hosts_snapshot"
@@ -70,7 +80,7 @@ const (
 	OpFinish = "finish_uninstall"
 )
 
-var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpLinger, OpUnitStop, OpUndoUnitStop, OpUnitReload, OpHostsSnapshot,
+var opKinds = []string{OpInstallHelper, OpWriteSudoers, OpSysctlPorts, OpPFRedirect, OpLinger, OpUnitStop, OpUndoUnitStop, OpUnitReload, OpHostsSnapshot,
 	OpArchiveVhost, OpArchivePool, OpCopyKey, OpRecordAutostart, OpRestore, OpFinish}
 
 // Op is one operation of a plan.
@@ -85,6 +95,7 @@ type Op struct {
 	Value  int    `json:"value,omitempty"`
 	Mode   string `json:"mode,omitempty"`
 	Change int    `json:"change,omitempty"`
+	Ports  []int  `json:"ports,omitempty"` // pf_redirect: the HTTP and HTTPS targets
 }
 
 // String is the plan line shown to the user before sudo asks.
@@ -96,6 +107,9 @@ func (o Op) String() string {
 		return "write " + SudoersPath + " (NOPASSWD for the hosts helper only), validated with visudo -c -f"
 	case OpSysctlPorts:
 		return fmt.Sprintf("set %s to %d in %s (every local user may then bind ports %d to 1023)", PortSysctl, o.Value, SysctlFile, o.Value)
+	case OpPFRedirect:
+		return fmt.Sprintf("redirect ports 80 and 443 of the loopback to %d and %d with the pf anchor %s (%s), loaded now and at boot by %s",
+			o.Ports[0], o.Ports[1], PFAnchor, PFAnchorFile, PFDaemonPath)
 	case OpLinger:
 		return "enable systemd linger (loginctl enable-linger), so the stack starts at boot"
 	case OpUnitStop:
@@ -103,6 +117,10 @@ func (o Op) String() string {
 	case OpUndoUnitStop:
 		return "only if a site does not answer after the switch: start and enable " + o.Name + " again"
 	case OpUnitReload:
+		if ApacheUnit(o.Name) {
+			return "test the system Apache configuration (apachectl configtest), then reload " + o.Name +
+				" gracefully; if the test fails, put back the vhosts archived above"
+		}
 		return "reload the system unit " + o.Name
 	case OpHostsSnapshot:
 		return "record the gash block of /etc/hosts as it is now, for uninstall"
@@ -142,6 +160,9 @@ var (
 	modes  = []string{"systemd", "launchd", "shell", "none"}
 )
 
+// ApacheUnit reports a system Apache unit (the others are PHP-FPM).
+func ApacheUnit(name string) bool { return name == "apache2" || name == "httpd" }
+
 func absClean(p string) bool {
 	return strings.HasPrefix(p, "/") && path.Clean(p) == p && !strings.ContainsAny(p, "\x00\n")
 }
@@ -163,6 +184,10 @@ func (o Op) Check() error {
 	case OpSysctlPorts:
 		if o.Value < 0 || o.Value > 1024 {
 			return bad("port %d", o.Value)
+		}
+	case OpPFRedirect:
+		if len(o.Ports) != 2 || o.Ports[0] == o.Ports[1] || slices.ContainsFunc(o.Ports, func(p int) bool { return p < 1024 || p > 65535 }) {
+			return bad("ports %v are not two unprivileged ports", o.Ports)
 		}
 	case OpUnitStop, OpUndoUnitStop, OpUnitReload:
 		if !unitRE.MatchString(o.Name) {

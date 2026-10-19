@@ -16,6 +16,7 @@ import (
 	"github.com/google/renameio/v2"
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
+	"github.com/mauriziofonte/gash/internal/hte/state"
 )
 
 // Layout is the render directory of design/hte.md section 2: complete
@@ -262,4 +263,39 @@ func (l Layout) Prune() ([]string, error) {
 		removed = append(removed, name)
 	}
 	return removed, nil
+}
+
+// ReadOverlays reads the Apache overlays a generation of sites includes
+// (Input.Overlays): the global one and those of the enabled managed
+// sites, each by its path, the missing ones left out. The files are only
+// read: a generation holds copies, and the user's files are never
+// written (LEDGER HTE-71). A path that is not a regular file (a
+// directory, a FIFO) is invalid_state.
+func ReadOverlays(p state.Paths, sites []state.Site) (map[string][]byte, error) {
+	paths := []string{p.ApacheOverlay()}
+	for _, s := range sites {
+		if s.Enabled && s.Kind == state.KindManaged {
+			paths = append(paths, p.SiteOverlay(s.Domain))
+		}
+	}
+	out := map[string][]byte{}
+	for _, path := range paths {
+		fi, err := os.Stat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, hteerr.Newf(hteerr.InvalidState, "", "the overlay %s: %v", path, err)
+		}
+		if !fi.Mode().IsRegular() {
+			return nil, hteerr.Newf(hteerr.InvalidState, "make it a regular file, or remove it",
+				"the overlay %s is not a regular file", path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, hteerr.Newf(hteerr.InvalidState, "", "the overlay %s: %v", path, err)
+		}
+		out[path] = data
+	}
+	return out, nil
 }

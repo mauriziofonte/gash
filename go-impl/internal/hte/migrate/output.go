@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -106,6 +107,19 @@ func (p *Plan) Text() string {
 			}
 		}
 	})
+	if sa := p.SystemApache; sa != nil {
+		var ports []string
+		for _, n := range sa.Ports {
+			ports = append(ports, strconv.Itoa(n))
+		}
+		if len(ports) == 0 {
+			ports = []string{"none found"}
+		}
+		fmt.Fprintf(&b, "\nThe system Apache keeps running (ports %s): --apply archives the migrated vhosts and reloads it\n", strings.Join(ports, ", "))
+		for _, path := range sa.Serves {
+			fmt.Fprintf(&b, "  still served: %s\n", path)
+		}
+	}
 	section(&b, "No longer served once --apply stops the system Apache", len(p.NoLongerServed), func() {
 		for _, path := range p.NoLongerServed {
 			fmt.Fprintf(&b, "  %s\n", path)

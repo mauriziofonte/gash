@@ -49,6 +49,7 @@ SSLHonorCipherOrder off
 SSLSessionCache {{q .SessionCache}}
 SSLSessionCacheTimeout 300
 
+# Global overlay: {{q .UserOverlay}}, copied into this generation (run `gash hte service reload` after editing it).
 IncludeOptional {{q .Overlay}}
 {{- range .SiteConfs}}
 IncludeOptional {{q .}}

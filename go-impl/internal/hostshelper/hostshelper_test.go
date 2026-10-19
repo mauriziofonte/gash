@@ -5,6 +5,7 @@ package hostshelper
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,6 +353,65 @@ func TestRewrite(t *testing.T) {
 		t.Fatal("symlink rewritten")
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Fatalf("temporary file left: %v", entries)
+	}
+}
+
+// TestRewriteInPlace: a rename that fails as over a bind mount (EBUSY, or
+// EXDEV) gives the same bytes in place, in the same file with its owner
+// and mode, and leaves no temporary file; any other rename error is
+// returned (LEDGER HTE-69). Both the apply path and Rewrite go through it.
+func TestRewriteInPlace(t *testing.T) {
+	for _, errno := range []syscall.Errno{syscall.EBUSY, syscall.EXDEV} {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "hosts")
+		long := "127.0.0.1 localhost\n# a comment longer than the block that replaces it\n" +
+			BeginMarker + "\n127.0.0.1 a.test www.a.test\n127.0.0.1 b.test\n" + EndMarker + "\n"
+		if err := os.WriteFile(path, []byte(long), 0o640); err != nil {
+			t.Fatal(err)
+		}
+		before, _ := os.Stat(path)
+		rename = func(from, to string) error { return &os.LinkError{Op: "rename", Old: from, New: to, Err: errno} }
+		t.Cleanup(func() { rename = os.Rename })
+		if err := Rewrite(path, Strip); err != nil {
+			t.Fatalf("%v: %v", errno, err)
+		}
+		got, _ := os.ReadFile(path)
+		after, _ := os.Stat(path)
+		if want := "127.0.0.1 localhost\n# a comment longer than the block that replaces it\n"; string(got) != want {
+			t.Fatalf("%v: %q, want %q", errno, got, want)
+		}
+		if !os.SameFile(before, after) || after.Mode().Perm() != 0o640 {
+			t.Fatalf("%v: not the same file or mode: %v", errno, after.Mode())
+		}
+		var stderr bytes.Buffer
+		if rc := Run([]string{"apply"}, strings.NewReader("127.0.0.1 c.test\n"), io.Discard, &stderr, Config{HostsPath: path, GOOS: "linux"}); rc != 0 {
+			t.Fatalf("%v: apply: %d %s", errno, rc, stderr.String())
+		}
+		if got, _ := os.ReadFile(path); !strings.HasSuffix(string(got), BeginMarker+"\n127.0.0.1 c.test\n"+EndMarker+"\n") {
+			t.Fatalf("%v: apply in place: %q", errno, got)
+		}
+		if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+			t.Fatalf("%v: temporary file left: %v", errno, entries)
+		}
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hosts")
+	if err := os.WriteFile(path, []byte("127.0.0.1 localhost\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rename = func(from, to string) error {
+		return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EACCES}
+	}
+	t.Cleanup(func() { rename = os.Rename })
+	err := Rewrite(path, func(h []byte) ([]byte, error) { return Splice(h, []byte("127.0.0.1 d.test\n")) })
+	if !errors.Is(err, syscall.EACCES) {
+		t.Fatalf("EACCES: %v", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "127.0.0.1 localhost\n" {
+		t.Fatalf("written after a refused rename: %q", got)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
 		t.Fatalf("temporary file left: %v", entries)
 	}
 }

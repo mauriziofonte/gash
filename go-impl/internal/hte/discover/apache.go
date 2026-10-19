@@ -48,6 +48,22 @@ var apacheLayouts = map[platform.Family]apacheLayout{
 	platform.FamilyDarwin: {"bin/httpd", "lib/httpd/modules", "etc/httpd/mime.types"},
 }
 
+// OpenSSLInstallHint is the command that installs the platform's openssl
+// (macOS ships /usr/bin/openssl).
+func OpenSSLInstallHint(f platform.Family) string {
+	switch f {
+	case platform.FamilyDebian:
+		return "sudo apt install openssl"
+	case platform.FamilyFedora:
+		return "sudo dnf install openssl"
+	case platform.FamilyArch:
+		return "sudo pacman -S openssl"
+	case platform.FamilyDarwin:
+		return "/usr/bin/openssl is part of macOS: restore it with a macOS update"
+	}
+	return "install openssl with the system package manager"
+}
+
 // ApacheInstallHint is the command that installs the platform's Apache
 // with the modules the userland list needs.
 func ApacheInstallHint(f platform.Family) string {

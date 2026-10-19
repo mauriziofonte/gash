@@ -73,6 +73,19 @@ type Options struct {
 	// gets SIGKILL, and how long its output pipes may stay open after it
 	// exited (a background grandchild holding them). 0 means 5 seconds.
 	KillAfter time.Duration
+	// Setsid starts the child in a new session, without a controlling
+	// terminal, so that nothing it runs can prompt on /dev/tty. StartPTY
+	// always starts a new session.
+	Setsid bool
+	// Credential, when set, runs the child as that user (a root process
+	// only). StartPTY ignores it.
+	Credential *Credential
+	// FileCapture captures the output that Stdout and Stderr do not
+	// receive through unlinked temporary files instead of pipes: a daemon
+	// that forks and keeps the descriptors it was given (php-fpm, httpd -k
+	// start) then does not hold Run until KillAfter. Run, RunBash and
+	// RunScript only.
+	FileCapture bool
 }
 
 // Cmd is a program started with an explicit argv.
@@ -207,13 +220,31 @@ func start(ctx context.Context, argv []string, o Options) (Result, error) {
 	cmd.Env = env
 	cmd.Dir = o.Dir
 	cmd.Stdin = o.Stdin
+	cmd.SysProcAttr = sysProcAttr(o)
 	var stdout, stderr bytes.Buffer
+	var outFile, errFile *captureFile
 	cmd.Stdout, cmd.Stderr = o.Stdout, o.Stderr
 	if o.Stdout == nil {
 		cmd.Stdout = &stdout
 	}
 	if o.Stderr == nil {
 		cmd.Stderr = &stderr
+	}
+	if o.FileCapture && o.Stdout == nil {
+		f, err := newCaptureFile()
+		if err != nil {
+			return Result{ExitCode: 1}, err // nothing was started
+		}
+		defer f.close()
+		outFile, cmd.Stdout = f, f.f
+	}
+	if o.FileCapture && o.Stderr == nil {
+		f, err := newCaptureFile()
+		if err != nil {
+			return Result{ExitCode: 1}, err
+		}
+		defer f.close()
+		errFile, cmd.Stderr = f, f.f
 	}
 	signaled := false
 	sig := signalOf(o)
@@ -238,6 +269,12 @@ func start(ctx context.Context, argv []string, o Options) (Result, error) {
 	}
 	if o.Stderr == nil {
 		res.Stderr = stderr.Bytes()
+	}
+	if outFile != nil {
+		res.Stdout = outFile.bytes()
+	}
+	if errFile != nil {
+		res.Stderr = errFile.bytes()
 	}
 	if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
 		res.Signal = ws.Signal()

@@ -6,16 +6,18 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/mauriziofonte/gash/internal/hostshelper"
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 func site(domain string, enabled bool, aliases ...string) state.Site {
@@ -86,27 +88,26 @@ func TestCheck(t *testing.T) {
 
 func TestApply(t *testing.T) {
 	desired := Desired([]state.Site{site("a.test", true)}, nil)
-	f := &proc.Fake{}
+	f := child.Fake(t, func(runner.Call) runner.Expect { return runner.Expect{} })
 	a := Applier{Runner: f, Sudo: "/usr/bin/sudo", Helper: HelperPath}
 	if err := a.Apply(context.Background(), desired); err != nil {
 		t.Fatal(err)
 	}
 	c := f.Calls()[0]
-	if c.String() != "/usr/bin/sudo -n /usr/local/libexec/gash/gash-hosts-helper apply" || string(c.Stdin) != "127.0.0.1 a.test\n" || c.Env != nil {
-		t.Fatalf("%s %q %v", c, c.Stdin, c.Env)
+	if child.Line(c.Argv) != "/usr/bin/sudo -n /usr/local/libexec/gash/gash-hosts-helper apply" || string(c.Stdin) != "127.0.0.1 a.test\n" ||
+		!slices.Equal(c.Env, child.BaseEnv("")) || !c.Setsid {
+		t.Fatalf("%q %q %v", c.Argv, c.Stdin, c.Env)
 	}
-	for _, tc := range []struct {
-		res  proc.Result
-		want hteerr.Code
-	}{
-		{proc.Result{ExitCode: 1, Stderr: []byte("sudo: a password is required\n")}, hteerr.PrivilegedStepRequired},
-		{proc.Result{ExitCode: 2, Stderr: []byte("gash-hosts-helper: line 1: bad\n")}, hteerr.InvalidState},
-		{proc.Result{ExitCode: 1, Stderr: []byte("gash-hosts-helper: writing /etc/hosts: read-only\n")}, hteerr.PrivilegedStepRequired},
+	for _, tc := range []runner.Expect{
+		{Status: 1, Stderr: "sudo: a password is required\n"},
+		{Status: 2, Stderr: "gash-hosts-helper: line 1: bad\n"},
+		{Status: 1, Stderr: "gash-hosts-helper: writing /etc/hosts: read-only\n"},
 	} {
-		f := &proc.Fake{Handler: func(proc.Cmd) (proc.Result, error) { return tc.res, nil }}
+		want := map[int]hteerr.Code{1: hteerr.PrivilegedStepRequired, 2: hteerr.InvalidState}[tc.Status]
+		f := child.Fake(t, func(runner.Call) runner.Expect { return tc })
 		err := Applier{Runner: f, Sudo: "/usr/bin/sudo", Helper: HelperPath}.Apply(context.Background(), desired)
-		if hteerr.CodeOf(err) != tc.want {
-			t.Errorf("%s: %v", tc.res.Stderr, err)
+		if hteerr.CodeOf(err) != want {
+			t.Errorf("%s: %v", tc.Stderr, err)
 		}
 	}
 }
@@ -137,16 +138,14 @@ func TestState(t *testing.T) {
 }
 
 func TestWindows(t *testing.T) {
-	f := &proc.Fake{Handler: func(c proc.Cmd) (proc.Result, error) {
-		return proc.Result{Stdout: []byte("ok a.test\r\nfail b.test\r\n")}, nil
-	}}
+	f := child.Fake(t, func(runner.Call) runner.Expect { return runner.Expect{Stdout: "ok a.test\r\nfail b.test\r\n"} })
 	got, err := WindowsUnresolved(context.Background(), f, PowerShell, []string{"a.test", "b.test", "c.test"})
 	if err != nil || !cmp.Equal(got, []string{"b.test", "c.test"}) {
 		t.Fatalf("%v %v", got, err)
 	}
 	c := f.Calls()[0]
-	if string(c.Stdin) != "a.test\nb.test\nc.test\n" || strings.Contains(strings.Join(c.Args, " "), "a.test") {
-		t.Fatalf("names must be data on stdin: %q %q", c.Args, c.Stdin)
+	if string(c.Stdin) != "a.test\nb.test\nc.test\n" || strings.Contains(strings.Join(c.Argv, " "), "a.test") {
+		t.Fatalf("names must be data on stdin: %q %q", c.Argv, c.Stdin)
 	}
 	if diff := cmp.Diff([]string{"127.0.0.1 b.test"}, WindowsLines([]string{"b.test"})); diff != "" {
 		t.Fatal(diff)

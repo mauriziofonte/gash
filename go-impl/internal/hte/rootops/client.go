@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
-	"github.com/mauriziofonte/gash/internal/hte/proc"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // RootArgs are the arguments of the gash binary that serve a root session.
@@ -25,7 +27,7 @@ const SessionTimeout = 30 * time.Minute
 
 // Client is the user side of a root session.
 type Client struct {
-	sess proc.Session
+	sess runner.Session
 	enc  *json.Encoder
 	dec  *json.Decoder
 	plan map[int]Op
@@ -39,22 +41,30 @@ type Client struct {
 }
 
 // SudoCmd is the command that starts a root session: sudo, -n when no
-// prompt is allowed (headless, no terminal), then the gash binary.
-func SudoCmd(sudo, self string, interactive bool) proc.Cmd {
+// prompt is allowed (headless, no terminal), then the gash binary. It
+// stays in the caller's session, so that sudo can prompt on the terminal;
+// interactive, sudo's prompt and messages go to the terminal's standard
+// error, else they are captured for the error message.
+func SudoCmd(sudo, self string, interactive bool) runner.Cmd {
 	args := []string{}
 	if !interactive {
 		args = append(args, "-n")
 	}
 	args = append(args, "--", self)
 	args = append(args, RootArgs...)
-	return proc.Cmd{Path: sudo, Args: args, Timeout: SessionTimeout, Terminal: interactive}
+	c := child.Cmd(sudo, nil, args...)
+	c.Timeout, c.Setsid, c.FileCapture = SessionTimeout, false, false
+	if interactive {
+		c.Stderr = os.Stderr
+	}
+	return c
 }
 
 // Open starts the session and sends the plan.
-func Open(ctx context.Context, st proc.Starter, cmd proc.Cmd, plan []Op) (*Client, error) {
-	sess, err := st.Start(ctx, cmd)
+func Open(ctx context.Context, st runner.SessionStarter, cmd runner.Cmd, plan []Op) (*Client, error) {
+	sess, err := st.StartSession(ctx, cmd)
 	if err != nil {
-		return nil, hteerr.Newf(hteerr.PrivilegedStepRequired, "", "starting %s: %v", cmd, err)
+		return nil, hteerr.Newf(hteerr.PrivilegedStepRequired, "", "starting %s: %v", child.Line(append([]string{cmd.Path}, cmd.Args...)), err)
 	}
 	c := &Client{sess: sess, enc: json.NewEncoder(sess.Stdin()), dec: json.NewDecoder(bufio.NewReader(sess.Stdout())), plan: map[int]Op{}}
 	for _, o := range plan {

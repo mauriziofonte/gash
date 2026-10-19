@@ -94,6 +94,13 @@ type Input struct {
 	// PHP holds the facts of every installed version, keyed by "X.Y".
 	PHP   map[string]PHPVersion
 	Sites []state.Site
+	// Overlays are the user's Apache overlays that exist, by path
+	// (ReadOverlays): the global one and those of the enabled managed
+	// sites. The generation holds a copy of each and its configuration
+	// includes the copies, never the user's files, so a rollback brings
+	// back the overlays the previous generation was tested with (LEDGER
+	// HTE-71).
+	Overlays map[string][]byte
 }
 
 // File is one rendered file, Path relative to the generation directory.
@@ -176,7 +183,12 @@ func SocketPath(runDir, version, domain string) string {
 }
 
 // Rel paths of the generation layout.
-func siteConfRel(domain string) string      { return "sites/" + domain + ".conf" }
+func siteConfRel(domain string) string    { return "sites/" + domain + ".conf" }
+func siteOverlayRel(domain string) string { return "overlays/sites/" + domain + ".apache.conf" }
+
+// globalOverlayRel is the copy of the global Apache overlay.
+const globalOverlayRel = "overlays/apache.conf"
+
 func fpmConfRel(version string) string      { return "fpm/" + version + "/php-fpm.conf" }
 func poolRel(version, domain string) string { return "fpm/" + version + "/pools/" + domain + ".conf" }
 func (in Input) abs(rel string) string      { return filepath.Join(in.GenDir, rel) }
@@ -302,6 +314,9 @@ func Render(in Input) (*Generation, error) {
 		}
 		files = append(files, File{siteConfRel(s.Domain), vhost})
 		siteConfs = append(siteConfs, in.abs(siteConfRel(s.Domain)))
+		if data, ok := in.Overlays[in.Paths.SiteOverlay(s.Domain)]; ok && s.Kind == state.KindManaged {
+			files = append(files, File{siteOverlayRel(s.Domain), data})
+		}
 		if !s.HasPool() {
 			continue
 		}
@@ -349,13 +364,17 @@ func Render(in Input) (*Generation, error) {
 		"Listen":       listen,
 		"MimeTypes":    in.Apache.MimeTypes,
 		"SessionCache": "shmcb:" + filepath.Join(in.Paths.RuntimeDir, "ssl_scache") + "(512000)",
-		"Overlay":      in.Paths.ApacheOverlay(),
+		"Overlay":      in.abs(globalOverlayRel),
+		"UserOverlay":  in.Paths.ApacheOverlay(),
 		"SiteConfs":    siteConfs,
 	})
 	if err != nil {
 		return nil, err
 	}
 	files = append(files, File{"httpd.conf", httpd})
+	if data, ok := in.Overlays[in.Paths.ApacheOverlay()]; ok {
+		files = append(files, File{globalOverlayRel, data})
+	}
 	var enabled []state.Site
 	for _, s := range sites {
 		if s.Enabled {
@@ -458,7 +477,8 @@ func (in Input) vhost(s state.Site) ([]byte, error) {
 		"HTTPS":          s.HTTPS,
 		"CertFile":       in.Paths.CertFile(s.Domain),
 		"KeyFile":        in.Paths.KeyFile(s.Domain),
-		"Overlay":        in.Paths.SiteOverlay(s.Domain),
+		"Overlay":        in.abs(siteOverlayRel(s.Domain)),
+		"UserOverlay":    in.Paths.SiteOverlay(s.Domain),
 	})
 }
 

@@ -16,6 +16,9 @@ import (
 // here is refused before the hosts file is read, so the test never touches
 // /etc/hosts.
 func TestBinaryRefusals(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go command to build the helper with")
+	}
 	bin := filepath.Join(t.TempDir(), "gash-hosts-helper")
 	build := exec.Command("go", "build", "-o", bin, ".")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")

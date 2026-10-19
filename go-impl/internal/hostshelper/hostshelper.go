@@ -52,8 +52,8 @@ var allowedAddresses = map[string]bool{"127.0.0.1": true, "::1": true}
 
 // Entry is one line of the block: a loopback address and its names.
 type Entry struct {
-	Address string
-	Names   []string
+	Address string   `json:"address"`
+	Names   []string `json:"names"`
 }
 
 // InputError is a refusal of the input grammar.
@@ -300,9 +300,16 @@ func Rewrite(path string, edit func(hosts []byte) ([]byte, error)) error {
 	return writeAtomic(path, out, fi)
 }
 
+// rename is os.Rename; tests replace it to make the rename fail as over a
+// bind mount.
+var rename = os.Rename
+
 // writeAtomic replaces path with data: a temporary file in the same
 // directory, the original owner and mode, fsync, rename, fsync of the
-// directory.
+// directory. A container bind-mounts its hosts file, and a rename over a
+// mount point fails with EBUSY (EXDEV across devices): then the temporary
+// file is removed and the same content is written in place (LEDGER
+// HTE-69).
 func writeAtomic(path string, data []byte, orig os.FileInfo) (err error) {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".hosts.gash-hte-*")
@@ -333,14 +340,48 @@ func writeAtomic(path string, data []byte, orig os.FileInfo) (err error) {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	if err = os.Rename(tmp, path); err != nil {
-		return err
+	if err = rename(tmp, path); err != nil {
+		if !errors.Is(err, syscall.EBUSY) && !errors.Is(err, syscall.EXDEV) {
+			return err
+		}
+		if rerr := os.Remove(tmp); rerr != nil {
+			return rerr
+		}
+		return writeInPlace(path, data, orig)
 	}
 	if d, derr := os.Open(dir); derr == nil {
 		_ = d.Sync()
 		_ = d.Close()
 	}
 	return nil
+}
+
+// writeInPlace writes data over the file that was read: opened without
+// following a symlink and without truncation, checked to be the same
+// regular file, written from the start, truncated to the new length and
+// synced. Owner and mode stay those of the file.
+func writeInPlace(path string, data []byte, orig os.FileInfo) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return err
+	}
+	fi, err := f.Stat()
+	if err == nil && (!fi.Mode().IsRegular() || !os.SameFile(fi, orig)) {
+		err = fmt.Errorf("%s changed while it was edited", path)
+	}
+	if err == nil {
+		_, err = f.WriteAt(data, 0)
+	}
+	if err == nil {
+		err = f.Truncate(int64(len(data)))
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 // Config is the environment of Run. The helper binary passes HostsFile,
