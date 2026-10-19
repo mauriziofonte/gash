@@ -16,7 +16,7 @@ env LC_ALL=C.UTF-8
 
 # --- :48 overview - framed header and the topic table
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash'
-stdout 'Gash [0-9.]+ .* Bash for humans and AI agents'
+stdout 'Gash [0-9][0-9A-Za-z.-]* .* Bash for humans and AI agents'
 stdout '[0-9]+ functions .* gash <topic> .* gash_help <name>'
 stdout '^  TOPIC   FUNCTIONS  ALIASES  WHAT$'
 stdout '^  git +[0-9]+ +[0-9]+  Sync, tags, patches'

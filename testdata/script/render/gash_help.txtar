@@ -22,7 +22,7 @@ env LC_ALL=C.UTF-8
 
 # --- :55 overview
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help'
-stdout 'Gash  v[0-9.]+ - Gash, Another SHell!'
+stdout 'Gash  v[0-9][0-9A-Za-z.-]* - Gash, Another SHell!'
 stdout '^  FILES$'
 stdout '^    files_largest +\(flf\) '
 

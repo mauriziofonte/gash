@@ -16,7 +16,7 @@ env LC_ALL=C.UTF-8
 
 # --- :52 ok - banner, a check glyph, section headers
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor'
-stderr 'Gash Doctor . checking installation \(v[0-9.]+\)'
+stderr 'Gash Doctor . checking installation \(v[0-9][0-9A-Za-z.-]*\)'
 stderr 'bash [0-9]'
 stdout '^Runtime:$'
 stdout '^External Tools:$'
