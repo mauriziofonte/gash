@@ -1,0 +1,67 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: ai_spec.sh:186
+# covers: ai_spec.sh:379
+# covers: ai_spec.sh:391
+# covers: ai_spec.sh:403
+# covers: ai_spec.sh:428
+# covers: ai_spec.sh:452
+# covers: ai_spec.sh:476
+# covers: ai_spec.sh:633
+#
+# The AI public surface that never reaches the network: -h help for
+# gash_ai_list, ai_ask and ai_query; the no-provider error; and the
+# confirmation gate (design 6.5). With GASH_AI_CONFIRM=1 every request needs
+# a terminal, so headless ai_query refuses and sends nothing - the refusal
+# names the provider it would have used, which makes the first/specified/
+# generic-query selection (:428/:452/:476) observable without a transport.
+# No curl stub is needed: the gate stops the call before any HTTP. :633 is
+# the `ask` alias, which the interactive alias pack defines.
+
+exec bash ai.sh
+
+env GASH_BANNER=0
+exec bash -i ask_alias.sh
+stdout 'ai_ask'
+
+-- ai.sh --
+export GASH_HEADLESS=1
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+B="$GASH_BIN"
+
+# :186 :379 :391 -h names the function.
+out="$("$B" gash_ai_list -h 2>&1)"; [[ "$out" == *gash_ai_list* ]] || fail "186"
+out="$("$B" ai_ask -h 2>&1)";       [[ "$out" == *ai_ask* ]]       || fail "379"
+out="$("$B" ai_query -h 2>&1)";     [[ "$out" == *ai_query* ]]     || fail "391"
+
+# :403 no provider configured: ai_query fails and says so.
+rm -f "$HOME/.gash_env"
+out="$("$B" ai_query "test query" </dev/null 2>&1)"; rc=$?
+[[ $rc -ne 0 ]]            || fail "403 rc"
+[[ "$out" == *provider* ]] || fail "403 message"
+
+# Providers configured, claude first.
+printf 'AI:claude=sk-ctoken\nAI:gemini=g-token\n' >"$HOME/.gash_env"
+chmod 600 "$HOME/.gash_env"
+
+# :428 the first configured provider is used (claude).
+out="$(GASH_AI_CONFIRM=1 "$B" ai_query "how to list files?" </dev/null 2>&1)"; rc=$?
+[[ $rc -ne 0 ]]                 || fail "428 rc"
+[[ "$out" == *"Not sending"* ]] || fail "428 refused"
+[[ "$out" == *"to claude"* ]]   || fail "428 provider"
+
+# :452 a named provider is honoured (gemini).
+out="$(GASH_AI_CONFIRM=1 "$B" ai_query gemini "what is bash?" </dev/null 2>&1)"; rc=$?
+[[ $rc -ne 0 ]]              || fail "452 rc"
+[[ "$out" == *"to gemini"* ]] || fail "452 provider"
+
+# :476 a generic query is gated the same way (nothing leaks to a provider).
+out="$(GASH_AI_CONFIRM=1 "$B" ai_query "hello" </dev/null 2>&1)"; rc=$?
+[[ $rc -ne 0 ]]                 || fail "476 rc"
+[[ "$out" == *"Not sending"* ]] || fail "476 refused"
+[[ "$out" == *"to claude"* ]]   || fail "476 provider"
+
+-- ask_alias.sh --
+source "$GASH_SH" >/dev/null 2>&1
+alias ask

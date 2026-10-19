@@ -1,0 +1,61 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: gash_spec.sh:7
+# covers: gash_spec.sh:21
+# covers: gash_spec.sh:39
+# covers: gash_spec.sh:54
+# covers: gash_spec.sh:69
+#
+# gash_doctor: -h self-help, a clean run over a real tree (the staged
+# GASH_DIR) with its headings and rc 0, a graceful run over a missing tree
+# (MISSING / not found, still rc 0), and the failed-to-load report. :54 is
+# driven through the shim: the gash_doctor stub forwards the shell's
+# __GASH_LOAD_ERRORS and BASH_VERSION (compat bootstrap), so the binary
+# prints the per-file error, the issue count and the bash line. :69 is the
+# gdoctor alias from the interactive pack.
+
+exec bash doctor.sh
+
+env GASH_HEADLESS=1 GASH_DIR=$GASH_STAGE
+exec bash doctor54.sh
+
+env GASH_BANNER=0
+exec bash -i gdoctor_alias.sh
+stdout 'gash_doctor'
+
+-- doctor.sh --
+export GASH_HEADLESS=1
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+B="$GASH_BIN"
+
+# :7 -h names the function and mentions the health checks.
+out="$("$B" gash_doctor -h 2>&1)"
+[[ "$out" == *gash_doctor* ]]   || fail "7 name"
+[[ "$out" == *"health checks"* ]] || fail "7 health checks"
+
+# :21 a real GASH_DIR: rc 0 and the three section headings.
+out="$(GASH_DIR="$GASH_STAGE" GASH_VERSION=test "$B" gash_doctor 2>&1)"; rc=$?
+[[ $rc -eq 0 ]]                   || fail "21 rc"
+[[ "$out" == *"Core Files"* ]]    || fail "21 Core Files"
+[[ "$out" == *Modules* ]]         || fail "21 Modules"
+[[ "$out" == *"External Tools"* ]] || fail "21 External Tools"
+
+# :39 a missing GASH_DIR: still completes, reports missing files.
+out="$(GASH_DIR="$WORK/nonexistent_gash_dir" GASH_VERSION=test "$B" gash_doctor 2>&1)"; rc=$?
+[[ $rc -eq 0 ]] || fail "39 rc"
+[[ "$out" == *MISSING* || "$out" == *"not found"* ]] || fail "39 missing"
+
+-- doctor54.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -uo pipefail
+__GASH_LOAD_ERRORS=("lib/modules/broken.sh: exit 2")
+out="$(gash_doctor --no-color 2>&1)"
+[[ "$out" == *"failed to load lib/modules/broken.sh: exit 2"* ]] || { echo "FAIL: 54 load error" >&2; exit 1; }
+[[ "$out" == *"issue(s) found"* ]] || { echo "FAIL: 54 issue count" >&2; exit 1; }
+[[ "$out" == *"bash ${BASH_VERSION}"* ]] || { echo "FAIL: 54 bash line" >&2; exit 1; }
+
+-- gdoctor_alias.sh --
+source "$GASH_SH" >/dev/null 2>&1
+alias gdoctor

@@ -1,0 +1,97 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: help_spec.sh:70
+# covers: help_spec.sh:82
+# covers: help_spec.sh:93
+# covers: help_spec.sh:107
+# covers: help_spec.sh:119
+# covers: help_spec.sh:141
+# covers: help_spec.sh:155
+# covers: help_spec.sh:165
+# covers: help_spec.sh:175
+# covers: help_spec.sh:190
+# covers: help_spec.sh:216
+# covers: help_spec.sh:227
+# covers: help_spec.sh:203
+#
+# gash_help: the function detail (USAGE/EXAMPLES/ALIASES), alias
+# resolution, the unknown-name error, the no-argument overview, --short
+# (one line), -h self-help, --search by name and by alias and its
+# no-results message, --list (grouped, with aliases), and the ai_query
+# page's MULTI-SOURCE PIPING block. Driven through the shim as an agent
+# calls it (headless). GASH_VERSION is pinned so the overview is stable.
+
+env GASH_HEADLESS=1 GASH_VERSION=test
+exec bash help.sh
+
+-- help.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+
+# :70 known function shows USAGE/EXAMPLES and its own name.
+out="$(gash_help files_largest 2>&1)"
+[[ "$out" == *USAGE* ]]         || fail "70 USAGE"
+[[ "$out" == *EXAMPLES* ]]      || fail "70 EXAMPLES"
+[[ "$out" == *files_largest* ]] || fail "70 name"
+
+# :82 an alias resolves to its function, and says it is an alias.
+out="$(gash_help flf 2>&1)"
+[[ "$out" == *files_largest* ]] || fail "82 target"
+[[ "$out" == *alias* ]]         || fail "82 alias word"
+
+# :93 an unknown name is an error on stderr.
+out="$(gash_help nonexistent_func_xyz 2>&1)"; rc=$?
+[[ $rc -ne 0 ]]                 || fail "93 rc"
+[[ "$out" == *"No help found"* ]] || fail "93 message"
+
+# :107 no argument prints the overview.
+out="$(gash_help 2>&1)"
+[[ "$out" == *Gash* ]]   || fail "107 Gash"
+[[ "$out" == *FILES* ]]  || fail "107 FILES"
+[[ "$out" == *SYSTEM* ]] || fail "107 SYSTEM"
+
+# :119 --short is one non-empty line.
+out="$(gash_help --short files_largest 2>&1)"
+[[ -n "$out" ]]                   || fail "119 empty"
+[[ "$(printf '%s' "$out" | wc -l)" -eq 0 ]] || fail "119 not one line"
+
+# :141 -h is gash_help's own help: names itself and --list/--search.
+out="$(gash_help -h 2>&1)"
+[[ "$out" == *gash_help* ]] || fail "141 self"
+[[ "$out" == *--list* ]]    || fail "141 --list"
+[[ "$out" == *--search* ]]  || fail "141 --search"
+
+# :155 --search finds by function name.
+out="$(gash_help --search docker 2>&1)"
+[[ "$out" == *docker_stop_all* ]] || fail "155 by name"
+
+# :165 --search finds by alias.
+out="$(gash_help --search flf 2>&1)"
+[[ "$out" == *files_largest* ]] || fail "165 by alias"
+
+# :175 --search with no match says so.
+out="$(gash_help --search xyznonexistent 2>&1)"
+[[ "$out" == *"No results"* ]] || fail "175 no results"
+
+# :190 --list is grouped and names functions.
+out="$(gash_help --list 2>&1)"
+[[ "$out" == *FILES* ]]         || fail "190 FILES"
+[[ "$out" == *SYSTEM* ]]        || fail "190 SYSTEM"
+[[ "$out" == *GIT* ]]           || fail "190 GIT"
+[[ "$out" == *files_largest* ]] || fail "190 name"
+
+# :203 --list includes aliases.
+[[ "$out" == *flf* ]] || fail "203 flf"
+[[ "$out" == *dsa* ]] || fail "203 dsa"
+
+# :216 the ai_query page has the multi-source piping block.
+out="$(gash_help ai_query 2>&1)"
+[[ "$out" == *"MULTI-SOURCE PIPING"* ]] || fail "216 piping"
+[[ "$out" == *ai_query* ]]              || fail "216 name"
+
+# :227 --short resolves an alias to its function's description.
+out="$(gash_help --short flf 2>&1)"
+[[ -n "$out" ]]            || fail "227 empty"
+[[ "$out" == *largest* ]]  || fail "227 desc"
