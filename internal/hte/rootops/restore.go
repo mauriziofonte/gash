@@ -159,8 +159,13 @@ func (s *server) unitRestore(ctx context.Context, name string, prior receipt.Uni
 	return nil
 }
 
-// reloadPoolUnit reloads the system FPM of a restored pool when it runs,
-// so the pool is served again.
+// reloadPoolUnit makes the system FPM of a restored pool serve it again
+// when that FPM runs. Without systemd it restarts instead of reloading: an
+// FPM reload re-execs the master under --daemonize, which removes and then
+// rewrites its pid file, so the `service ... status` of the next restored
+// pool can read "not running" and skip that pool, which then stays unserved
+// (seen in the HTE E2E uninstall). A restart returns once the new master
+// runs, so every restore finds a settled FPM.
 func (s *server) reloadPoolUnit(ctx context.Context, pool string) error {
 	// <PHPRoot>/<X.Y>/fpm/pool.d/<domain>.conf
 	version := path.Base(path.Dir(path.Dir(path.Dir(pool))))
@@ -168,8 +173,15 @@ func (s *server) reloadPoolUnit(ctx context.Context, pool string) error {
 	if !unitRE.MatchString(name) {
 		return nil
 	}
-	_, err := s.unitReload(ctx, name)
-	return err
+	if s.env.Systemd {
+		_, err := s.unitReload(ctx, name)
+		return err
+	}
+	st, err := s.unitState(ctx, name)
+	if err != nil || !st.Active {
+		return err
+	}
+	return s.mustCmd(ctx, "service", name, "restart")
 }
 
 // undoUnitStop undoes the stop of unit name made in this session: its

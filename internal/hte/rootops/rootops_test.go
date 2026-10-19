@@ -40,6 +40,22 @@ type fixture struct {
 	active map[string]bool // system units that run
 	failOn string          // a command line prefix that fails
 	lines  []string
+	// reexec plays the SysV FPM reload: the master re-execs under
+	// --daemonize and rewrites its pid file, so the next `service X status`
+	// reads "not running". loaded is the pool.d each FPM last (re)read.
+	reexec  bool
+	pending map[string]bool
+	loaded  map[string][]string
+}
+
+// pools lists the pool files of the system PHP 8.3 FPM.
+func (f *fixture) pools() []string {
+	entries, _ := os.ReadDir(filepath.Join(f.root, "etc/php/8.3/fpm/pool.d"))
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -129,8 +145,20 @@ func (f *fixture) answer(call runner.Call) runner.Expect {
 	case "service":
 		switch c.Args[1] {
 		case "status":
+			if f.pending[c.Args[0]] {
+				delete(f.pending, c.Args[0])
+				return runner.Expect{Status: 3}
+			}
 			if !f.active[c.Args[0]] {
 				return runner.Expect{Status: 3}
+			}
+		case "reload", "restart":
+			if f.loaded == nil {
+				f.loaded, f.pending = map[string][]string{}, map[string]bool{}
+			}
+			f.loaded[c.Args[0]] = f.pools()
+			if f.reexec && c.Args[1] == "reload" {
+				f.pending[c.Args[0]] = true
 			}
 		case "stop":
 			f.active[c.Args[0]] = false
@@ -261,6 +289,34 @@ func uninstall(t *testing.T, f *fixture) {
 		if _, err := c.Run(o.ID); err != nil {
 			t.Fatalf("%s: %v", o, err)
 		}
+	}
+}
+
+// Uninstall on a SysV host restores two pools in a row: the second one must
+// reach the system FPM too. A reload there re-execs the FPM master, and the
+// status check of the next pool, during that re-exec, read "not running" and
+// skipped it (HTE E2E, debian); restarts leave nothing in flight.
+func TestRestoredPoolsAllServed(t *testing.T) {
+	f := newFixture(t)
+	plan := append(installPlan(), Op{ID: 10, Op: OpArchivePool, Path: "/etc/php/8.3/fpm/pool.d/forced.test.conf"})
+	c := session(t, f.env(), plan)
+	for _, id := range []int{1, 2, 3, 4, 5, 6, 7, 10, 8, 9} {
+		if _, err := c.Run(id); err != nil {
+			t.Fatalf("%d: %v", id, err)
+		}
+	}
+	c.Close()
+	if got := f.pools(); len(got) != 0 {
+		t.Fatalf("pools left after install: %v", got)
+	}
+	f.reexec = true
+	uninstall(t, f)
+	want := f.pools()
+	if !slices.Contains(want, "http.test.conf") || !slices.Contains(want, "forced.test.conf") {
+		t.Fatalf("pools not restored: %v", want)
+	}
+	if diff := cmp.Diff(want, f.loaded["php8.3-fpm"]); diff != "" {
+		t.Fatalf("the system FPM last read other pools than pool.d holds (-disk +loaded):\n%s\nlines %v", diff, f.lines)
 	}
 }
 
