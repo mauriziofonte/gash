@@ -1,0 +1,196 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: docker_compose_spec.sh:1044
+# covers: docker_compose_spec.sh:1068
+#
+# docker_compose_check --json error classification through the shim. The Go
+# port speaks to the registries over net/http (LEDGER DOCK-23..25), so the
+# curl mock is bypassed; instead a tiny stdlib HTTPS CONNECT proxy
+# (fakeproxy.go, built here) serves the same canned responses as
+# tests/mocks/bin/curl, reached through HTTPS_PROXY with its CA trusted via
+# SSL_CERT_FILE, driven by the MOCK_CURL_REGISTRY_* knob it inherits. The
+# proxy is a child of each case's shell (killed and reaped before the shell
+# returns), so the harness tracks no long-running background process. The
+# docker CLI mock stays on PATH for the --json docker/compose presence
+# checks. (The first run compiles the fake; crypto/tls is a cold-cache cost.)
+
+env GASH_HEADLESS=1
+exec go build -o fakeproxy .
+
+# --- docker_compose_spec.sh:1044 - --json shows specific error type for rate limit
+env MOCK_CURL_REGISTRY_RATE_LIMITED=1
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; ./fakeproxy -ca ca1.pem -addr addr1 >fp1.out 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr1 ] && break; sleep 0.05; done; read -r a <addr1; export HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca1.pem"; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_check d1 --json 2>/dev/null || true; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; true'
+stdout '"error":'
+stdout 'rate_limited'
+
+# --- docker_compose_spec.sh:1068 - --json shows unauthorized for auth failure
+env MOCK_CURL_REGISTRY_RATE_LIMITED=
+env MOCK_CURL_REGISTRY_UNAUTHORIZED=1
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; ./fakeproxy -ca ca2.pem -addr addr2 >fp2.out 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr2 ] && break; sleep 0.05; done; read -r a <addr2; export HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca2.pem"; mkdir d2; printf "services:\n  web:\n    image: nginx:latest\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_check d2 --json 2>/dev/null || true; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; true'
+stdout 'unauthorized'
+
+-- go.mod --
+module fakeproxy
+
+go 1.27
+-- fakeproxy.go --
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+//
+// Test fixture: a tiny stdlib-only HTTPS CONNECT proxy that answers
+// registry requests as tests/mocks/bin/curl does, driven by the MOCK_CURL_*
+// variables in its OWN environment. It writes its CA to -ca and its address
+// to -addr, then serves until killed. Used by the docker_compose_check
+// registry-error cases, which the Go binary reaches over net/http via
+// HTTPS_PROXY with the CA trusted through SSL_CERT_FILE.
+package main
+
+import (
+	"bufio"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"flag"
+	"fmt"
+	"io"
+	"math/big"
+	"net"
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+)
+
+var manifestURL = regexp.MustCompile(`/v2/.*/manifests/`)
+
+type fake struct {
+	caCert *x509.Certificate
+	caKey  *ecdsa.PrivateKey
+	mu     sync.Mutex
+	leafs  map[string]*tls.Certificate
+}
+
+func main() {
+	caFile := flag.String("ca", "", "write CA PEM here")
+	addrFile := flag.String("addr", "", "write listen address here")
+	flag.Parse()
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fake CA"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour), IsCA: true,
+		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, BasicConstraintsValid: true}
+	der, _ := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	cert, _ := x509.ParseCertificate(der)
+	os.WriteFile(*caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
+	f := &fake{caCert: cert, caKey: key, leafs: map[string]*tls.Certificate{}}
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.WriteFile(*addrFile, []byte(ln.Addr().String()+"\n"), 0o644)
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go f.conn(c)
+	}
+}
+
+func (f *fake) leaf(host string) *tls.Certificate {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c, ok := f.leafs[host]; ok {
+		return c
+	}
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano()), Subject: pkix.Name{CommonName: host},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, DNSNames: []string{host}}
+	der, _ := x509.CreateCertificate(rand.Reader, tmpl, f.caCert, &key.PublicKey, f.caKey)
+	c := &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	f.leafs[host] = c
+	return c
+}
+
+func (f *fake) conn(c net.Conn) {
+	defer c.Close()
+	br := bufio.NewReader(c)
+	req, err := http.ReadRequest(br)
+	if err != nil || req.Method != http.MethodConnect {
+		return
+	}
+	host := req.URL.Host
+	name, _, err := net.SplitHostPort(host)
+	if err != nil {
+		name = host
+	}
+	io.WriteString(c, "HTTP/1.1 200 Connection established\r\n\r\n")
+	tc := tls.Server(&bufConn{Conn: c, r: br}, &tls.Config{Certificates: []tls.Certificate{*f.leaf(name)}, NextProtos: []string{"http/1.1"}})
+	if tc.Handshake() != nil {
+		return
+	}
+	tbr := bufio.NewReader(tc)
+	for {
+		r, err := http.ReadRequest(tbr)
+		if err != nil {
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		r.Body.Close()
+		url := "https://" + name + r.URL.RequestURI()
+		code, body, hdr := respond(r.Method, url)
+		resp := &http.Response{StatusCode: code, ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{}, Request: r,
+			Close: true, ContentLength: int64(len(body)), Body: io.NopCloser(strings.NewReader(body))}
+		for _, h := range hdr {
+			resp.Header.Add(h[0], h[1])
+		}
+		if r.Method == http.MethodHead {
+			resp.ContentLength = -1
+			resp.Body = http.NoBody
+		}
+		_ = resp.Write(tc)
+		return
+	}
+}
+
+func respond(method, url string) (int, string, [][2]string) {
+	env := func(n string) string { return os.Getenv(n) }
+	json := [][2]string{{"Content-Type", "application/json"}}
+	switch {
+	case strings.Contains(url, "auth.docker.io/token"):
+		switch {
+		case env("MOCK_CURL_REGISTRY_UNAUTHORIZED") == "1":
+			return 401, `{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}` + "\n", json
+		default:
+			return 200, `{"token":"mock-dockerhub-token-abc123","access_token":"mock-dockerhub-token-abc123"}` + "\n", json
+		}
+	case strings.Contains(url, "ghcr.io/token"):
+		return 200, `{"token":"mock-ghcr-token-xyz789"}` + "\n", json
+	case manifestURL.MatchString(url):
+		switch {
+		case env("MOCK_CURL_REGISTRY_RATE_LIMITED") == "1":
+			return 429, `{"errors":[{"code":"TOOMANYREQUESTS","message":"rate limit exceeded"}]}` + "\n", json
+		case env("MOCK_CURL_REGISTRY_UNAUTHORIZED") == "1":
+			return 401, `{"errors":[{"code":"UNAUTHORIZED","message":"authentication required"}]}` + "\n", json
+		case method == http.MethodHead:
+			return 200, "", [][2]string{{"Content-Type", "application/vnd.docker.distribution.manifest.v2+json"},
+				{"Docker-Content-Digest", "sha256:newdigest456abc123def456abc123def456abc123def456abc123def456newdig"}}
+		default:
+			return 200, `{"schemaVersion":2}` + "\n", json
+		}
+	}
+	return 404, `{"error":"Unknown endpoint"}` + "\n", json
+}
+
+type bufConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (b *bufConn) Read(p []byte) (int, error) { return b.r.Read(p) }
