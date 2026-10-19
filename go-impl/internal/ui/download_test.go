@@ -57,16 +57,50 @@ func TestDownload(t *testing.T) {
 	require.Equal(t, "hello", string(b))
 	require.Equal(t, "Get: "+srv.URL+"/redirect [5 B]\nFetched 5 B in 1s (5 B/s)\n", errb.String())
 
+	// A 404 reports the size of its own body (curl -fsIL prints the error
+	// response's headers), so Get shows it, then the download itself fails.
 	errb.Reset()
 	rc = d.Run(t.Context(), s, tt, &errb, srv.URL+"/missing", filepath.Join(dir, "g"))
 	require.Equal(t, 22, rc)
 	require.NoFileExists(t, filepath.Join(dir, "g"))
-	require.Equal(t, "Get: "+srv.URL+"/missing\nError: Download failed ("+srv.URL+"/missing): curl: (22) The requested URL returned error: 404\n", errb.String())
+	require.Equal(t, "Get: "+srv.URL+"/missing ["+HumanBytes(int64(len("404 page not found\n")))+"]\n"+
+		"Error: Download failed ("+srv.URL+"/missing): curl: (22) The requested URL returned error: 404\n", errb.String())
 
 	errb.Reset()
 	rc = d.Run(t.Context(), s, tt, &errb, "", "x")
 	require.Equal(t, 1, rc)
 	require.Equal(t, "Error: Usage: __gash_download URL DEST\n", errb.String())
+}
+
+// RemoteSize reports the Content-Length of the final response whatever its
+// status (a 404 with a body, a redirect's target), as curl -fsIL does; only
+// a response with no length is 0.
+func TestRemoteSize(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/ok":
+			w.Header().Set("Content-Length", "999")
+		case "/missing":
+			w.Header().Set("Content-Length", "1234")
+			w.WriteHeader(http.StatusNotFound)
+		case "/err":
+			w.Header().Set("Content-Length", "77")
+			w.WriteHeader(http.StatusInternalServerError)
+		case "/redir":
+			http.Redirect(w, r, "/missing", http.StatusFound)
+		case "/nolen":
+			w.Header().Set("Transfer-Encoding", "chunked")
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	d := Downloader{Client: srv.Client()}
+	for _, tc := range []struct {
+		path string
+		want int64
+	}{{"/ok", 999}, {"/missing", 1234}, {"/err", 77}, {"/redir", 1234}, {"/nolen", 0}} {
+		require.Equal(t, tc.want, d.RemoteSize(t.Context(), srv.URL+tc.path), tc.path)
+	}
 }
 
 func TestDownloadProgress(t *testing.T) {

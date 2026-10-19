@@ -112,8 +112,14 @@ func (e tunnelRefused) Error() string {
 
 var errTooManyRedirects = errors.New("too many redirects")
 
-// RemoteSize is __gash_remote_size URL: the Content-Length of a HEAD
-// request after redirects, 0 when the server does not say or fails.
+// RemoteSize is __gash_remote_size URL: the Content-Length a HEAD request
+// reports after redirects, whatever its status, 0 when the server gives no
+// length or the request fails. 2.x ran `curl -fsIL URL`, whose -I prints
+// the response headers even on a 4xx/5xx (-f suppresses only the body), so
+// the awk over them returns the length of an error response too; a caller
+// that proceeds to download then fails at the download itself, as 2.x does
+// (not a "no download" shortcut). Only a response with no Content-Length
+// (an unknown or chunked length, resp.ContentLength < 0) is 0.
 func (d Downloader) RemoteSize(ctx context.Context, rawURL string) int64 {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, rawURL, nil)
 	if err != nil {
@@ -124,7 +130,7 @@ func (d Downloader) RemoteSize(ctx context.Context, rawURL string) int64 {
 		return 0
 	}
 	_ = resp.Body.Close()
-	if resp.StatusCode >= 400 || resp.ContentLength < 0 {
+	if resp.ContentLength < 0 {
 		return 0
 	}
 	return resp.ContentLength
