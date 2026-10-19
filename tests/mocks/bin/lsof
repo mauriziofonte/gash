@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-
-# Minimal lsof mock: returns no processes.
-exit 1
