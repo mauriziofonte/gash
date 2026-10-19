@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# forced-divergence: SHELL-01
+# covers: none (3.0 security proof; prompt_spec rows stay Bash, Plan shell)
+#
 # SHELL-01 proving test: a git branch, VIRTUAL_ENV, debian_chroot or STY that
 # holds a command substitution is shown literally and never executed. The
 # emitted prompt stores each value in __GASH_PS1_* and PS1 references it, so

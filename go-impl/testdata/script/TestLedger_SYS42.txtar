@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# forced-divergence: SYS-42
+# covers: none (3.0 self-management proof; no 2.x assertion)
+#
 # LEDGER SYS-42: sysinfo and port_kill run in the binary, so the caller's
 # shell gets no __SYSINFO_MODE (2.x left "llm") and no BASH_REMATCH (2.x
 # left the last =~ match). port_kill stops at the invalid port.
