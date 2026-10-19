@@ -1,0 +1,65 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: node_spec.sh:81
+# covers: node_spec.sh:91
+# covers: node_spec.sh:108
+# covers: node_spec.sh:124
+# covers: node_spec.sh:138
+# covers: node_spec.sh:156
+#
+# node_detect_version reads $NVM_DIR/versions/node and the project files
+# straight off the filesystem (never the nvm shell function), so each case
+# builds a fake NVM_DIR tree with mkdir and resolves against it. Only .version
+# / .full_version and the field names are asserted; node_command and friends
+# depend on the host. The closest-version row asserts the warning on stderr.
+
+env GASH_HEADLESS=1
+mkdir nvm1/versions/node/v18.18.0 nvm1/versions/node/v20.9.0 nvm1/versions/node/v20.11.1
+mkdir nvm2/versions/node/v20.9.0
+mkdir nvm3/versions/node/v18.18.0 nvm3/versions/node/v22.14.0
+mkdir nvm4/versions/node/v22.14.0
+mkdir nvm5/versions/node/v20.9.0
+
+# --- node_spec.sh:81 - errors when NVM_DIR does not exist
+! exec bash -c 'export NVM_DIR=does-not-exist-here; source "$GASH_SH"; node_detect_version'
+stderr 'NVM directory not found'
+
+# --- node_spec.sh:91 - reads .nvmrc (highest priority over package.json)
+exec bash -c 'export NVM_DIR=nvm1; source "$GASH_SH"; node_detect_version proj1 --llm'
+stdout '.version.:.18.'
+stdout '.full_version.:.18\.18\.0.'
+
+# --- node_spec.sh:108 - falls back to package.json engines.node
+exec bash -c 'export NVM_DIR=nvm2; source "$GASH_SH"; node_detect_version proj2 --llm'
+stdout '.version.:.20.'
+
+# --- node_spec.sh:124 - falls back to latest installed when nothing specified
+exec bash -c 'export NVM_DIR=nvm3; source "$GASH_SH"; node_detect_version proj3 --llm'
+stdout '.version.:.22.'
+stdout '.full_version.:.22\.14\.0.'
+
+# --- node_spec.sh:138 - warns and substitutes the closest installed major
+exec bash -c 'export NVM_DIR=nvm4; source "$GASH_SH"; node_detect_version proj4 --llm'
+stderr 'not installed'
+stdout '.version.:.22.'
+
+# --- node_spec.sh:156 - exact JSON field names of the legacy contract
+exec bash -c 'export NVM_DIR=nvm5; source "$GASH_SH"; node_detect_version proj5 --llm'
+stdout '.version.:'
+stdout '.full_version.:'
+stdout '.node_command.:'
+stdout '.npm_command.:'
+stdout '.npx_command.:'
+
+-- proj1/.nvmrc --
+18
+-- proj1/package.json --
+{"engines":{"node":"20"}}
+-- proj2/package.json --
+{"engines":{"node":">=20"}}
+-- proj3/.keep --
+x
+-- proj4/.nvmrc --
+18
+-- proj5/.keep --
+x

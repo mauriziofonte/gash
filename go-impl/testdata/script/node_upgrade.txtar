@@ -1,0 +1,19 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: node_upgrade_spec.sh:28
+# covers: node_upgrade_spec.sh:36
+#
+# The two node_upgrade rows that need no nvm shell function: option parsing
+# refuses an unknown flag before anything else, and with no nvm defined the
+# function stops with "nvm is not loaded". The remaining node_upgrade rows
+# drive a faked nvm function in the caller shell and live in the shell suite.
+
+env GASH_HEADLESS=1
+
+# --- node_upgrade_spec.sh:28 - rejects unknown options
+! exec bash -c 'source "$GASH_SH"; node_upgrade --bogus'
+stderr 'Unknown option: --bogus'
+
+# --- node_upgrade_spec.sh:36 - errors when nvm is not loaded
+! exec bash -c 'source "$GASH_SH"; node_upgrade --dry-run'
+stderr 'nvm is not loaded'

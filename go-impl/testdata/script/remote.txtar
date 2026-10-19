@@ -1,0 +1,39 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: remote_spec.sh:106
+# covers: remote_spec.sh:118
+# covers: remote_spec.sh:128
+# covers: remote_spec.sh:142
+#
+# remote_push / remote_sync_push refuse before ever running ssh/scp/rsync, so
+# these cases need no transfer stub: an unregistered alias, a DENY destination
+# (refused even with --force), and ASK destinations (/etc, a .ssh component)
+# refused in headless mode without --force. The DENY row must reach the path
+# check with a raw user@host, which headless rejects first, so it loads the
+# function headless and unsets GASH_HEADLESS before the call. Row 142 is a
+# split: the __remote_classify_path table is the Go unit test; its public
+# refusal is covered here. HOST aliases come from a GASH_ENV_FILE fixture.
+
+env GASH_HEADLESS=1
+
+# --- remote_spec.sh:106 - remote_push refuses an unregistered alias (headless)
+! exec bash -c 'export GASH_ENV_FILE=no-such-env-file; source "$GASH_SH"; remote_push nope ./f /tmp/f'
+stderr 'Unknown host alias'
+
+# --- remote_spec.sh:118 - remote_push refuses a DENY path even with --force
+! exec bash -c 'export GASH_HEADLESS=1; source "$GASH_SH"; unset GASH_HEADLESS; remote_push someone@example.com ./f /etc/shadow --force'
+stderr 'DENY list'
+stderr 'never allowed'
+
+# --- remote_spec.sh:128 - remote_sync_push refuses an ASK path headless without --force
+! exec bash -c 'export GASH_ENV_FILE=hostenv; source "$GASH_SH"; remote_sync_push hnas ./dir /etc/systemd/system/myapp'
+stderr 'refused in headless mode without --force'
+
+# --- remote_spec.sh:142 - a .ssh component anywhere is refused headless without --force
+! exec bash -c 'export GASH_ENV_FILE=hostenv; source "$GASH_SH"; remote_push git ./f /srv/git/.ssh/authorized_keys'
+stderr 'matched: \.ssh'
+stderr 'refused in headless mode without --force'
+
+-- hostenv --
+HOST:hnas=root@hnas.example.com
+HOST:git=git@git.example.com
