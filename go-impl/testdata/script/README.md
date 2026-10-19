@@ -134,6 +134,16 @@ it reaches zero uncovered. The gate is a standalone tool, never part of
   or it fails in CI with `command not found`. A case that only proves `llm_exec`
   *refuses* the tool (asserts the `.error` code) needs no guard: the guard
   rejects it before it runs.
+- **Never depend on real network (un)reachability.** A net/http function
+  (`ip_public`, `chrome_headless_update`, the `ai_*` calls, the docker/compose
+  registry checks) must be driven through `httpsfake` (start it, set
+  `HTTPS_PROXY`/`SSL_CERT_FILE`, answer via `MOCK_CURL_*`). Do NOT write a case
+  that unsets the proxy and expects the call to FAIL because the endpoint is
+  unreachable: the CI runner has open egress, so the Go binary's net/http path
+  reaches the real endpoint and the case passes/fails opposite to a restricted
+  dev container. To prove a failure path, give the fake no route (it answers
+  404); to prove "no tool needed" (SYS-36), keep the fake and run with
+  `PATH=/nonexistent` so net/http still succeeds without curl/wget.
 - **PARITY Line numbers.** `# covers:` uses the Line cell from the PARITY row
   verbatim (the `it`-body line, one past the `it` keyword); covermap matches on
   that value, so copy it from PARITY, do not recount from the spec.
