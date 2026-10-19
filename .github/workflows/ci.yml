@@ -85,13 +85,9 @@ jobs:
   unit:
     name: Unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # macOS Go parity is not yet a release gate: the port still has pervasive
-    # platform gaps (the /System/Volumes/Data firmlink in paths, the macOS
-    # 103-byte Unix-socket-path limit under long $TMPDIR, Playwright and
-    # sqlite CLI differences). Best effort on macOS, strict on Linux, pending
-    # the operator's macOS triage; this matches the pre-cutover best-effort
-    # macOS job.
-    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    # macOS gates like Linux. Its runner has Homebrew bash 5 on PATH and the
+    # BSD userland otherwise (no GNU coreutils, setsid, timeout, docker or
+    # /proc), so tests that need one of those stub it or say why they skip.
     strategy:
       fail-fast: false
       matrix:
@@ -123,8 +119,7 @@ jobs:
   testscript:
     name: Black-box testscript (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Best effort on macOS, strict on Linux (see the unit job's note).
-    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    # macOS gates like Linux (see the unit job's note).
     strategy:
       fail-fast: false
       matrix:
