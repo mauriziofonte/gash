@@ -70,10 +70,11 @@ exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo all --llm
 stdout '\A=== OVERVIEW ==='
 
 # --- sysinfo_spec.sh:394 - an empty section/sub prints nothing but its own
-# frame; the state dir is removed afterwards.
-exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo mail --no-color'
-stdout 'nothing found'
-! stdout 'Postfix'
+# frame; the state dir is removed afterwards. The mail collector reads the
+# host's /etc, so the empty frame is asserted only on a host with none of
+# the paths it probes (a macOS runner ships /etc/postfix); the 2.x spec
+# overrode the collector, the sub-header rule itself is the Go unit tests'.
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; out=$(sysinfo mail --no-color) || exit; printf "%s\n" "$out"; [[ $out == *MAIL* ]] || exit 1; for p in /etc/postfix /etc/dovecot /etc/exim4 /etc/spamassassin /etc/default/opendkim /etc/bind /etc/unbound; do [ -e "$p" ] && exit 0; done; [[ $out == *"nothing found"* && $out != *Postfix* ]]'
 mkdir td
 exec bash -c 'export PATH="$PWD/bin:$PATH" TMPDIR="$PWD/td"; source "$GASH_SH"; sysinfo mail >/dev/null 2>&1; test -z "$(ls -A td)"'
 
