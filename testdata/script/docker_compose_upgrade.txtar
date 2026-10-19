@@ -23,26 +23,26 @@ stdout '--dry-run'
 stdout '--force'
 
 # --- docker_compose_spec.sh:458 - errors on missing compose file
-! exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; mkdir empty; source "$GASH_SH"; docker_compose_upgrade empty 2>&1'
+! exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; mkdir empty; source "$GASH_SH"; docker_compose_upgrade empty 2>&1'
 stdout 'No docker-compose.yml'
 
 # --- docker_compose_spec.sh:477 - --dry-run shows planned actions
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.3.1\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_upgrade d1 --dry-run 2>&1'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.3.1\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_upgrade d1 --dry-run 2>&1'
 stdout 'OK:.*web'
 stdout 'Info:.*db.*pinned version'
 stdout 'Would run'
 stdout 'pull'
 
 # --- docker_compose_spec.sh:506 - skips all pinned versions
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; mkdir d2; printf "services:\n  web:\n    image: nginx:1.25.3\n  db:\n    image: postgres:15.3.1\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_upgrade d2 --dry-run 2>&1'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; mkdir d2; printf "services:\n  web:\n    image: nginx:1.25.3\n  db:\n    image: postgres:15.3.1\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_upgrade d2 --dry-run 2>&1'
 stdout 'No services to upgrade'
 
 # --- docker_compose_spec.sh:530 - --force includes pinned versions
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; mkdir d3; printf "services:\n  web:\n    image: nginx:1.25.3\n" >d3/docker-compose.yml; source "$GASH_SH"; docker_compose_upgrade d3 --dry-run --force 2>&1'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; mkdir d3; printf "services:\n  web:\n    image: nginx:1.25.3\n" >d3/docker-compose.yml; source "$GASH_SH"; docker_compose_upgrade d3 --dry-run --force 2>&1'
 stdout 'OK:.*web'
 stdout 'Would run'
 
 # --- docker_compose_spec.sh:553 - executes commands in correct order
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_LOG="$PWD/up.log"; mkdir d4; printf "services:\n  web:\n    image: nginx:latest\n" >d4/docker-compose.yml; start="$PWD"; source "$GASH_SH"; docker_compose_upgrade d4 --yes >/dev/null 2>&1 || true; [ "$PWD" = "$start" ]'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_LOG="$PWD/up.log"; mkdir d4; printf "services:\n  web:\n    image: nginx:latest\n" >d4/docker-compose.yml; start="$PWD"; source "$GASH_SH"; docker_compose_upgrade d4 --yes >/dev/null 2>&1 || true; [ "$PWD" = "$start" ]'
 exec bash -c 'tr "\n" " " <up.log'
 stdout 'compose -f .*/d4/docker-compose.yml --project-directory .*/d4 pull web.*stop web.*up -d --remove-orphans web'

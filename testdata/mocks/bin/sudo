@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# Minimal sudo mock for tests.
+# Runs the command without elevation and without prompting.
+
+exec "$@"

@@ -28,35 +28,35 @@ stdout '--json'
 stdout 'USAGE'
 
 # --- docker_compose_spec.sh:346 - errors on missing compose file
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; mkdir empty; source "$GASH_SH"; docker_compose_check empty --json 2>&1 || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; mkdir empty; source "$GASH_SH"; docker_compose_check empty --json 2>&1 || true'
 stdout 'compose_not_found'
 
 # --- docker_compose_spec.sh:363 - --json returns valid JSON structure
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.3\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_check d1 --json 2>/dev/null || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.3\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_check d1 --json 2>/dev/null || true'
 stdout '^\{'
 stdout '"services":'
 stdout '"summary":'
 stdout '"total":'
 
 # --- docker_compose_spec.sh:390 - correctly identifies pinned vs upgradeable
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d2; printf "services:\n  upgradeable:\n    image: nginx:latest\n  pinned:\n    image: postgres:15.3.1\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_check d2 --json 2>/dev/null || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d2; printf "services:\n  upgradeable:\n    image: nginx:latest\n  pinned:\n    image: postgres:15.3.1\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_check d2 --json 2>/dev/null || true'
 stdout '"name":"upgradeable".*"upgradeable":true'
 stdout '"name":"pinned".*"upgradeable":false'
 
 # --- docker_compose_spec.sh:416 - handles compose files with env vars
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d3; printf "services:\n  app:\n    image: \${REGISTRY:-docker.io}/myapp:\${TAG:-latest}\n" >d3/docker-compose.yml; printf "REGISTRY=ghcr.io/myorg\nTAG=v1.0\n" >d3/.env; source "$GASH_SH"; docker_compose_check d3 --json 2>/dev/null || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d3; printf "services:\n  app:\n    image: \${REGISTRY:-docker.io}/myapp:\${TAG:-latest}\n" >d3/docker-compose.yml; printf "REGISTRY=ghcr.io/myorg\nTAG=v1.0\n" >d3/.env; source "$GASH_SH"; docker_compose_check d3 --json 2>/dev/null || true'
 stdout 'ghcr.io/myorg/myapp:v1.0'
 
 # --- docker_compose_spec.sh:686 - llm_docker_check outputs JSON
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d4; printf "services:\n  web:\n    image: nginx:latest\n" >d4/docker-compose.yml; source "$GASH_SH"; llm_docker_check d4 2>/dev/null || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir d4; printf "services:\n  web:\n    image: nginx:latest\n" >d4/docker-compose.yml; source "$GASH_SH"; llm_docker_check d4 2>/dev/null || true'
 stdout '^\{'
 stdout '\}'
 
 # --- docker_compose_spec.sh:758 - handles empty services gracefully
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; mkdir d5; printf "version: \"3\"\n# No services defined\n" >d5/docker-compose.yml; source "$GASH_SH"; docker_compose_check d5 --json 2>&1 || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; mkdir d5; printf "version: \"3\"\n# No services defined\n" >d5/docker-compose.yml; source "$GASH_SH"; docker_compose_check d5 --json 2>&1 || true'
 stdout 'no_services'
 
 # --- docker_compose_spec.sh:1094 - --json escapes special chars in path
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir -p "my project"; printf "services:\n  web:\n    image: nginx:latest\n" >"my project/docker-compose.yml"; source "$GASH_SH"; docker_compose_check "my project" --json 2>/dev/null || true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" HTTPS_PROXY=http://127.0.0.1:1 HTTP_PROXY=http://127.0.0.1:1; mkdir -p "my project"; printf "services:\n  web:\n    image: nginx:latest\n" >"my project/docker-compose.yml"; source "$GASH_SH"; docker_compose_check "my project" --json 2>/dev/null || true'
 stdout '^\{'
 stdout '"services":'

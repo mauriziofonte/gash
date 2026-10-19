@@ -7,7 +7,7 @@
 # port speaks to the registries over net/http (LEDGER DOCK-23..25), so the
 # curl mock is bypassed; instead a tiny stdlib HTTPS CONNECT proxy
 # (fakeproxy.go, built here) serves the same canned responses as
-# tests/mocks/bin/curl, reached through HTTPS_PROXY with its CA trusted via
+# testdata/mocks/bin/curl, reached through HTTPS_PROXY with its CA trusted via
 # SSL_CERT_FILE, driven by the MOCK_CURL_REGISTRY_* knob it inherits. The
 # proxy is a child of each case's shell (killed and reaped before the shell
 # returns), so the harness tracks no long-running background process. The
@@ -19,14 +19,14 @@ exec go build -o fakeproxy .
 
 # --- docker_compose_spec.sh:1044 - --json shows specific error type for rate limit
 env MOCK_CURL_REGISTRY_RATE_LIMITED=1
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; ./fakeproxy -ca ca1.pem -addr addr1 >fp1.out 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr1 ] && break; sleep 0.05; done; read -r a <addr1; export HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca1.pem"; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_check d1 --json 2>/dev/null || true; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; ./fakeproxy -ca ca1.pem -addr addr1 >fp1.out 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr1 ] && break; sleep 0.05; done; read -r a <addr1; export HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca1.pem"; mkdir d1; printf "services:\n  web:\n    image: nginx:latest\n" >d1/docker-compose.yml; source "$GASH_SH"; docker_compose_check d1 --json 2>/dev/null || true; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; true'
 stdout '"error":'
 stdout 'rate_limited'
 
 # --- docker_compose_spec.sh:1068 - --json shows unauthorized for auth failure
 env MOCK_CURL_REGISTRY_RATE_LIMITED=
 env MOCK_CURL_REGISTRY_UNAUTHORIZED=1
-exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; ./fakeproxy -ca ca2.pem -addr addr2 >fp2.out 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr2 ] && break; sleep 0.05; done; read -r a <addr2; export HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca2.pem"; mkdir d2; printf "services:\n  web:\n    image: nginx:latest\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_check d2 --json 2>/dev/null || true; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; true'
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; ./fakeproxy -ca ca2.pem -addr addr2 >fp2.out 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr2 ] && break; sleep 0.05; done; read -r a <addr2; export HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca2.pem"; mkdir d2; printf "services:\n  web:\n    image: nginx:latest\n" >d2/docker-compose.yml; source "$GASH_SH"; docker_compose_check d2 --json 2>/dev/null || true; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; true'
 stdout 'unauthorized'
 
 -- go.mod --
@@ -37,7 +37,7 @@ go 1.27
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 //
 // Test fixture: a tiny stdlib-only HTTPS CONNECT proxy that answers
-// registry requests as tests/mocks/bin/curl does, driven by the MOCK_CURL_*
+// registry requests as testdata/mocks/bin/curl does, driven by the MOCK_CURL_*
 // variables in its OWN environment. It writes its CA to -ca and its address
 // to -addr, then serves until killed. Used by the docker_compose_check
 // registry-error cases, which the Go binary reaches over net/http via
