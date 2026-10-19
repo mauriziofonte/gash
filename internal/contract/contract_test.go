@@ -74,10 +74,10 @@ func TestEveryCodeHasOneValidAction(t *testing.T) {
 	require.Len(t, Codes(), len(codeTable))
 }
 
-// The AGENTS.md section 5 table of 2.1.0, code by code.
+// The AGENTS.md section 5 table of 2.1.1, code by code.
 func TestAgentsTableActions(t *testing.T) {
 	table := map[Action]string{
-		Retry: "unknown_option missing_value unexpected_argument invalid_limit invalid_depth invalid_size invalid_top invalid_filter invalid_type invalid_database_name missing_pattern missing_query missing_table invalid_table_name missing_file empty_command " +
+		Retry: "unknown_option missing_value unexpected_argument invalid_limit invalid_depth invalid_size invalid_top invalid_context invalid_filter invalid_type invalid_database_name missing_pattern missing_query missing_table invalid_table_name missing_file empty_command " +
 			"path_not_found not_a_directory path_unreadable file_not_found file_too_large construct_not_allowed unterminated_quote glob_matches_option " +
 			"executable_comment_blocked backslash_in_literal unterminated_literal sqlite_error mysql_error pgsql_error sqlite_file_not_found missing_sqlite_file compose_not_found",
 		Fatal: "path_traversal_blocked forbidden_path root_scan_blocked secret_file_blocked dangerous_command_blocked option_not_allowed " +

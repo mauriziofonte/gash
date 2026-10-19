@@ -65,6 +65,8 @@ var codeTable = []Code{
 	{"invalid_depth", Retry, "arguments", Origin2x},
 	{"invalid_size", Retry, "arguments", Origin2x},
 	{"invalid_top", Retry, "arguments", Origin2x},
+	// Since 2.1.1 (LLM-01).
+	{"invalid_context", Retry, "arguments", Origin2x},
 	{"invalid_rows", Retry, "arguments", Origin2x},
 	{"invalid_port", Retry, "arguments", Origin2x},
 	{"invalid_filter", Retry, "arguments", Origin2x},
@@ -132,7 +134,6 @@ var codeTable = []Code{
 	// New in 3.x.
 	{"binary_not_found", Stop, "compat", Origin3x},
 	{"internal_error", Stop, "binary", Origin3x},
-	{"invalid_context", Retry, "arguments", Origin3x},
 	{"invalid_regex", Retry, "arguments", Origin3x},
 	{"hte_not_installed", Stop, "hte", Origin3x},
 	{"site_not_found", Retry, "hte", Origin3x},
