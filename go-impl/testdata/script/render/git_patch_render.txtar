@@ -1,0 +1,49 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:274
+# covers: output_style_render_spec.sh:275
+# covers: output_style_render_spec.sh:276
+# covers: output_style_render_spec.sh:277
+# covers: output_style_render_spec.sh:278
+# covers: output_style_render_spec.sh:279
+#
+# git_dump_revisions and git_apply_patch rendering (R2-R6). Short commit
+# hashes vary, so the "Saving version N to file ..." lines are matched by
+# pattern. git_apply_patch drives git with inherited streams, so git's own
+# [1/4]..[4/4] chatter is child noise; the ✓ success line is the assertion.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+env GIT_CONFIG_GLOBAL=$WORK/.gitconfig
+
+# --- :274 git_dump_revisions:dumped
+exec bash -c 'cd $WORK; git config --global user.name T; git config --global user.email t@e.x; git config --global color.ui false; git config --global init.defaultBranch main; mkdir p1; cd p1; git init -q w && cd w && echo a >f && git add f && git commit -qm one && echo b >>f && git commit -qam two; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_dump_revisions f'
+stderr 'Saving version 1 to file f\.001\.[0-9a-f]+ for commit [0-9a-f]+'
+stderr 'Saving version 2 to file f\.002\.[0-9a-f]+'
+
+# --- :275 git_dump_revisions:missing_file
+! exec bash -c 'cd $WORK; mkdir p2; cd p2; git init -q w && cd w; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_dump_revisions nofile'
+stderr 'Error: File .nofile. does not exist in the repository\.'
+
+# --- :276 git_dump_revisions:missing_arg
+! exec bash -c 'cd $WORK; mkdir p3; cd p3; git init -q w && cd w; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_dump_revisions'
+stderr 'Error: Missing filename\. Usage: git_dump_revisions <filename>'
+
+# --- :277 git_apply_patch:applied
+exec bash -c 'cd $WORK; mkdir p4; cd p4; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git checkout -q -b feat && echo g >g && git add g && git commit -qm feat && git checkout -q main; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_apply_patch main feat "$(git rev-parse feat~1)"'
+stderr 'Patch applied successfully from .feat. to .main.\.'
+
+# --- :278 git_apply_patch:missing_args
+! exec bash -c 'cd $WORK; mkdir p5; cd p5; git init -q w && cd w; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_apply_patch'
+stderr 'Error: Missing arguments\.'
+stderr 'Usage: git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH'
+
+# --- :279 git_apply_patch:dirty
+! exec bash -c 'cd $WORK; mkdir p6; cd p6; git init -q w && cd w && echo a >f && git add f && git commit -qm init && git branch feat && echo z >>f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_apply_patch main feat HEAD'
+stderr 'Error: Working tree is not clean\. Commit or stash'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'cd $WORK; mkdir p7; cd p7; git init -q w && cd w; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; git_dump_revisions'
+stderr '^Error: Missing filename'
+! stderr '\x1b'

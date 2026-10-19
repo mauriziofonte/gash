@@ -1,0 +1,39 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:285
+# covers: output_style_render_spec.sh:286
+# covers: output_style_render_spec.sh:287
+# covers: output_style_render_spec.sh:288
+#
+# git_sync rendering (R2-R6): the --dry-run preview, a real commit+push on
+# a feature branch (short hash matched by pattern), the nothing-to-do case,
+# and the detached-HEAD error.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+env GIT_CONFIG_GLOBAL=$WORK/.gitconfig
+
+# --- :285 git_sync:dry_run
+exec bash -c 'cd $WORK; git config --global user.name T; git config --global user.email t@e.x; git config --global color.ui false; git config --global init.defaultBranch main; mkdir s1; cd s1; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; echo n >new; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_sync --dry-run'
+stdout 'Would commit on main'
+stdout 'Would push main to origin/main\.'
+
+# --- :286 git_sync:pushed
+exec bash -c 'cd $WORK; mkdir s2; cd s2; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git checkout -q -b topic && echo n >new; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_sync -m "add new"'
+stderr 'Committed [0-9a-f]+ on topic: add new'
+stderr 'Pushed topic to origin/topic'
+
+# --- :287 git_sync:nothing
+exec bash -c 'cd $WORK; mkdir s3; cd s3; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_sync'
+stderr 'Nothing to commit on main\.'
+stderr 'main is already on origin/main\.'
+
+# --- :288 git_sync:detached
+! exec bash -c 'cd $WORK; mkdir s4; cd s4; git init -q w && cd w && echo a >f && git add f && git commit -qm init && git checkout -q --detach; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_sync'
+stderr 'Error: Detached HEAD: check out a branch first\.'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'cd $WORK; mkdir s5; cd s5; git init -q w && cd w && echo a >f && git add f && git commit -qm init && git checkout -q --detach; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; git_sync'
+stderr '^Error: Detached HEAD'
+! stderr '\x1b'
