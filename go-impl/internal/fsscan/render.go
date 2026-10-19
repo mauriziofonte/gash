@@ -236,7 +236,16 @@ func renderSizeRich(w io.Writer, s ui.Style, rows []sizeRow, human bool, kind, s
 		footer += " " + dot + " " + scanTime
 	}
 
-	tableRows := make([]string, 0, len(rows))
+	// 2.x emits a header row as the first table line (the awk END block,
+	// files.sh:1823-1825), then calls the table with its default header
+	// on; the table styles row 0 as the header and skips its share bar.
+	header := "#\tSIZE\tSHARE"
+	if hasMt {
+		header += "\tMODIFIED"
+	}
+	header += "\tPATH"
+	tableRows := make([]string, 0, len(rows)+1)
+	tableRows = append(tableRows, header)
 	for i, r := range rows {
 		// The 2.x rich awk rejoins a tab-split path with spaces, so an
 		// embedded tab shows as a space in the rich layout only.
