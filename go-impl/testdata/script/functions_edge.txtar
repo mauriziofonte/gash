@@ -1,0 +1,127 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: functions_edge_spec.sh:11
+# covers: functions_edge_spec.sh:24
+# covers: functions_edge_spec.sh:41
+# covers: functions_edge_spec.sh:73
+# covers: functions_edge_spec.sh:107
+# covers: functions_edge_spec.sh:164
+# covers: functions_edge_spec.sh:178
+# covers: functions_edge_spec.sh:192
+# covers: functions_edge_spec.sh:206
+# covers: functions_edge_spec.sh:220
+# covers: functions_edge_spec.sh:241
+# covers: functions_edge_spec.sh:269
+# covers: functions_edge_spec.sh:283
+# covers: functions_edge_spec.sh:304
+# covers: functions_edge_spec.sh:316
+#
+# Function-module edge cases through the shim: the scanners with spaces in
+# paths, the "Missing <x>" line each function prints under nounset when its
+# argument is absent, git_dump_revisions / git_apply_patch, docker_prune_all
+# declining without a terminal, and gash_uninstall with no install. The
+# process_kill kill-fake cases (functions_edge_spec.sh:87, :121) run around a
+# real victim in functions_edge_kill.txtar. Scanner paths are absolute, so a
+# base name is matched as a suffix; Gash's own lines go to stderr.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- functions_edge_spec.sh:11 - files_largest handles paths with spaces
+mkdir sp
+exec bash -c 'head -c 1024 /dev/zero > "sp/file with space.txt"; head -c 2048 /dev/zero > sp/normal.txt'
+exec bash -c 'source "$GASH_SH"; files_largest sp --no-color'
+stdout 'file with space\.txt'
+
+# --- functions_edge_spec.sh:24 - dirs_largest handles spaces and lists only directories
+mkdir ds
+exec bash -c 'mkdir -p "ds/dir one" ds/dir_two; head -c 3072 /dev/zero > "ds/dir one/big"; head -c 1024 /dev/zero > ds/dir_two/small; : > "ds/top file.txt"'
+exec bash -c 'source "$GASH_SH"; dirs_largest ds --no-color'
+stdout 'dir one'
+stdout 'dir_two'
+! stdout 'top file\.txt'
+
+# --- functions_edge_spec.sh:41 - dirs_largest lists subdirectories
+mkdir dl
+exec bash -c 'mkdir -p dl/a dl/b; head -c 10240 /dev/zero > dl/a/file'
+exec bash -c 'source "$GASH_SH"; dirs_largest dl --no-color'
+stdout 'dl/a'
+
+# --- functions_edge_spec.sh:73 - history_grep fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; history_grep'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:107 - process_find fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; process_find'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:164 - mkdir_cd fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; mkdir_cd'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:178 - archive_extract fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; archive_extract'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:192 - file_backup fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; file_backup'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:206 - port_kill fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; port_kill'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:220 - docker_prune_all returns 1 when the user declines, and removes nothing
+mkdir dbin
+exec chmod +x dbin/docker
+! exec bash -c 'export PATH="$WORK/dbin:$PATH"; source "$GASH_SH"; docker_prune_all'
+stderr 'Aborted'
+! grep '\b(rm|rmi|stop|prune)\b' dbin/docker.log
+
+# --- functions_edge_spec.sh:241 - git_dump_revisions writes per-commit files
+exec git init -q gdr
+cd gdr
+exec bash -c 'mkdir -p d; echo v1 > d/f.txt; git add d/f.txt; git commit -q -m c1; echo v2 > d/f.txt; git add d/f.txt; git commit -q -m c2'
+exec bash -c 'source "$GASH_SH"; git_dump_revisions d/f.txt'
+stderr 'Saving version 1'
+stderr 'Saving version 2'
+exec bash -c 'test "$(ls d | grep -c "^f\.txt\.00")" -ge 2'
+cd $WORK
+
+# --- functions_edge_spec.sh:269 - git_dump_revisions fails gracefully when missing arg under nounset
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; git_dump_revisions'
+stderr 'Missing'
+
+# --- functions_edge_spec.sh:283 - git_apply_patch fails gracefully when missing args under nounset
+exec git init -q gap
+cd gap
+! exec bash -c 'set -euo pipefail; source "$GASH_SH"; git_apply_patch'
+stderr 'Usage:'
+cd $WORK
+
+# --- functions_edge_spec.sh:304 - git_apply_patch errors outside git repo
+mkdir norepo
+cd norepo
+! exec bash -c 'source "$GASH_SH"; git_apply_patch main feat 123'
+stderr 'Not in a git repository'
+cd $WORK
+
+# --- functions_edge_spec.sh:316 - gash_uninstall returns error when not installed
+# GASH_DIR is overridden after sourcing (the shim sets it to the stage while
+# loading); a non-existent dir is the 2.x "not installed" path, which removes
+# nothing.
+! exec bash -c 'source "$GASH_SH"; export GASH_DIR="$WORK/nope" HOME="$WORK/freshhome"; gash_uninstall'
+stderr 'Gash is not installed'
+
+-- dbin/docker --
+#!/bin/sh
+echo "$@" >> "$WORK/dbin/docker.log"
+exit 0
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false
