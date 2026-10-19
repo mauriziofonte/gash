@@ -105,3 +105,32 @@ It exits non-zero while any universe row is uncovered or any declaration is
 invalid. During M8a that is expected: coverage is built up case by case until
 it reaches zero uncovered. The gate is a standalone tool, never part of
 `go test ./...`, so the default suite stays green meanwhile.
+
+## Authoring tips (from the pilot slice)
+
+- **Pattern quoting.** `testscript` groups `stdout`/`stderr`/`cmp` patterns by
+  SINGLE quotes only; a double quote does not group. Gash messages quote
+  identifiers (`Tag 'v1' created.`), and that literal `'` cannot sit inside a
+  single-quoted pattern. Match the quote (and any regex metachar such as `(`
+  `)` in `Empty (corrupted) object files:`) with a regex `.`:
+  `stderr 'Tag .v1. created'`. Patterns are regexp by default; use `cmp` only
+  against a captured golden file.
+- **Shell-out streams.** Functions that run git/docker/ssh with inherited
+  streams leak the child's own stdout/stderr to the case (e.g. `git push`
+  prints `* [new tag] ...`). Do not `cmp stderr` a golden for those; match the
+  Gash-authored lines with regex and let the child noise fall where it may.
+- **Determinism for git-driving cases.** The git module runs real git with the
+  caller's env/HOME (GIT-10, no hardening), so a git case must create its own
+  `home/.gitconfig` with `user.name`/`user.email`, `init.defaultBranch=main`
+  and `advice.detachedHead=false`, and set fixed `GIT_AUTHOR_DATE` /
+  `GIT_COMMITTER_DATE`. Match a commit short hash in output with a regex, not a
+  golden. Each case builds its own repo/origin in a subdir; drive the function
+  through the shim (`bash -c 'source "$GASH_SH"; <fn> ...'`), assert the
+  observable contract, then check state with `exec git ...`.
+- **PARITY Line numbers.** `# covers:` uses the Line cell from the PARITY row
+  verbatim (the `it`-body line, one past the `it` keyword); covermap matches on
+  that value, so copy it from PARITY, do not recount from the spec.
+- **Pure-port defects stay plain `# covers:`.** A row that reproduces a 2.x
+  defect the Go port matches byte-for-byte is covered normally; reserve
+  `# forced-divergence:` for a LEDGER "Forced divergences" id where rc.A
+  deliberately differs, and `# ledger:` as a non-coverage annotation.
