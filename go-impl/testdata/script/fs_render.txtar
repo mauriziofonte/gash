@@ -1,0 +1,39 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: fs_render_spec.sh:49
+# covers: fs_render_spec.sh:61
+#
+# Terminal layout of the filesystem scanners. In testscript stdout is a
+# pipe, so a plain call gets the "SIZE  PATH  MTIME" table and tree_stats
+# its plain report (fs_render_spec.sh:49). The rich tree_stats layout is
+# forced with a TTY and color (GASH__TTY_OUT / GASH__COLOR) and matched
+# against the grouped totals and share bars (fs_render_spec.sh:61); the
+# non-deterministic scan time is matched by pattern.
+#
+# fs_render_spec.sh:8 and :31 (the rich files_largest / dirs_largest
+# layout) are NOT covered here: the size-list rich renderer diverges from
+# 2.x (it omits the "#  SIZE  SHARE ... PATH" header row the 2.x awk emits,
+# so the table's default header eats the rank-1 bar, which prints as a raw
+# "bytes/max" instead of a full bar). Reported to the lead as a new defect;
+# left uncovered rather than claimed.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- fs_render_spec.sh:49 - piped output keeps the plain SIZE  PATH lines
+mkdir pp
+exec bash -c 'head -c 2048 /dev/zero > pp/x'
+exec bash -c 'source "$GASH_SH"; files_largest pp'
+stdout '2\.0 KiB +[^ ].*pp/x  [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$'
+! stdout 'Largest files'
+exec bash -c 'source "$GASH_SH"; tree_stats pp'
+stdout '^Tree statistics for .*pp$'
+
+# --- fs_render_spec.sh:61 - tree_stats on a terminal shows grouped totals and share bars
+mkdir tr
+exec bash -c 'head -c 3000000 /dev/zero > tr/a.bin; printf x > tr/b.txt; printf y > tr/c.txt'
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=120; source "$GASH_SH"; tree_stats tr --no-color'
+stdout '^  Files +3 +Total size +2\.8 MiB \(3,000,002 bytes\)$'
+stdout '^  bin +2\.8 MiB  #{20}   99\.9%$'
+stdout '^  txt +2  #{13}\.{7}   66\.6%$'
+stdout 'Scanned in'
