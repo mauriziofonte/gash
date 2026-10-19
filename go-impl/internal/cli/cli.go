@@ -170,7 +170,17 @@ func hteCmd(p *Process, status *int) *cobra.Command {
 		Short:              "Manage the local Apache and PHP-FPM test environment",
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
-		RunE:               notPorted(p, status, "gash hte"),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if h, ok := p.Table.LookupCommand("hte"); ok {
+				*status = h(&invoke.Call{
+					Ctx: p.Ctx, Name: "hte", Args: args, Env: p.Env,
+					Stdin: p.Stdin, Stdout: p.Stdout, Stderr: p.Stderr, Term: p.Term, Handlers: p.Table,
+				})
+				return nil
+			}
+			*status = p.fail(invoke.NotPorted("gash hte"))
+			return nil
+		},
 	}
 }
 

@@ -151,6 +151,14 @@ var codeTable = []Code{
 	{"apache_not_found", Fatal, "hte", Origin3x},
 	{"platform_unsupported", Fatal, "hte", Origin3x},
 	{"receipt_mismatch", Fatal, "hte", Origin3x},
+	{"apache_module_missing", Stop, "hte", Origin3x},
+	{"root_not_allowed", Fatal, "hte", Origin3x},
+	{"conflicting_options", Retry, "hte", Origin3x},
+	{"invalid_state", Stop, "hte", Origin3x},
+	{"openssl_not_found", Fatal, "hte", Origin3x},
+	{"php_not_enabled", Retry, "hte", Origin3x},
+	{"invalid_ports", Retry, "hte", Origin3x},
+	{"invalid_autostart", Retry, "hte", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

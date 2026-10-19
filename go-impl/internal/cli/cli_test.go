@@ -103,7 +103,7 @@ func TestCompatOps(t *testing.T) {
 }
 
 func TestNotPortedCommands(t *testing.T) {
-	for _, args := range [][]string{{"init", "bash"}, {"update"}, {"hte", "site", "list"}} {
+	for _, args := range [][]string{{"init", "bash"}, {"update"}} {
 		_, errOut, rc := run(args...)
 		require.Equal(t, 1, rc, args)
 		require.Contains(t, errOut, `{"error":"internal_error","details":"gash `+args[0]+` is not implemented in this gash build"`)

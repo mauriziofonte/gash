@@ -139,11 +139,12 @@ type Handler func(c *Call) int
 type Table struct {
 	fns    map[string]Handler
 	compat map[string]Handler
+	cmds   map[string]Handler
 }
 
 // NewTable returns an empty table.
 func NewTable() *Table {
-	return &Table{fns: map[string]Handler{}, compat: map[string]Handler{}}
+	return &Table{fns: map[string]Handler{}, compat: map[string]Handler{}, cmds: map[string]Handler{}}
 }
 
 // Handle binds h to the 2.x function name. It panics when name is not in
@@ -172,6 +173,21 @@ func (t *Table) HandleCompat(op string, h Handler) {
 // Lookup returns the handler of a 2.x function.
 func (t *Table) Lookup(name string) (Handler, bool) {
 	h, ok := t.fns[name]
+	return h, ok
+}
+
+// HandleCommand binds h to a 3.x top-level command word ("hte"). It panics
+// when the word already has a handler: a programming error.
+func (t *Table) HandleCommand(word string, h Handler) {
+	if _, dup := t.cmds[word]; dup {
+		panic(fmt.Sprintf("invoke: command %q registered twice", word))
+	}
+	t.cmds[word] = h
+}
+
+// LookupCommand returns the handler of a 3.x command word.
+func (t *Table) LookupCommand(word string) (Handler, bool) {
+	h, ok := t.cmds[word]
 	return h, ok
 }
 

@@ -52,10 +52,8 @@ func TestErrorValue(t *testing.T) {
 
 // pendingContract are the codes internal/contract does not register yet;
 // the lead adds their rows (area "hte", origin 3.x) and empties the list.
-var pendingContract = []Code{
-	ApacheModuleMissing, RootNotAllowed, ConflictingOptions, InvalidState,
-	OpenSSLNotFound, PHPNotEnabled, InvalidPorts, InvalidAutostart,
-}
+// All HTE codes are now registered, so the list is empty.
+var pendingContract = []Code{}
 
 // Every code of the HTE catalog is a row of the contract catalog with the
 // same action (LEDGER HTE-72), but for the pending ones.

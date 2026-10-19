@@ -48,6 +48,9 @@ type Options struct {
 // Run is the handler of `gash hte ARGS...` on the real process.
 func Run(c *invoke.Call) int { return Handler(Options{})(c) }
 
+// Register binds gash hte to the table.
+func Register(t *invoke.Table) { t.HandleCommand("hte", Run) }
+
 // Handler returns the handler of `gash hte` with opt's seams.
 func Handler(opt Options) invoke.Handler {
 	return func(c *invoke.Call) int {

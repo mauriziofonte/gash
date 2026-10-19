@@ -24,6 +24,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -61,6 +62,12 @@ func TestScript(t *testing.T) {
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
+		Condition: func(cond string) (bool, error) {
+			if cond == "root" {
+				return os.Geteuid() == 0, nil
+			}
+			return false, fmt.Errorf("unknown condition %q", cond)
+		},
 		Setup: func(env *testscript.Env) error {
 			home := filepath.Join(env.WorkDir, "home")
 			if err := os.Mkdir(home, 0o755); err != nil {

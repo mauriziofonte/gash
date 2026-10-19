@@ -12,6 +12,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/files"
 	"github.com/mauriziofonte/gash/internal/fsscan"
 	"github.com/mauriziofonte/gash/internal/gitx"
+	"github.com/mauriziofonte/gash/internal/hte/htecmd"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/remote"
@@ -42,6 +43,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	ssh.Register(t)
 	sysinfo.Register(t)
 	system.Register(t)
+	htecmd.Register(t)
 	for _, r := range extra {
 		r(t)
 	}
