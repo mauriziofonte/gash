@@ -2,7 +2,10 @@
 
 > **Audience:** coding agents that run Bash (Claude Code, Codex, Cursor, Gemini,
 > Aider, local models) and the people who configure them.
-> **Applies to:** Gash 2.0.0+.
+> **Applies to:** Gash 2.0.0+, including the 3.0 line. Gash 3.0 reimplements
+> the toolkit in Go behind the same Bash entry point (`source ~/.gash/gash.sh`),
+> so every invocation, function name, flag, JSON shape and error code below is
+> unchanged.
 > **Stable API:** the public function names and flags below, the JSON shapes
 > in section 4, the error contract in section 5 and the variables in section 2.
 

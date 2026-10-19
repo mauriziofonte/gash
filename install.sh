@@ -3,10 +3,13 @@
 { # this ensures the entire script is downloaded #
 
   # Gash installer: clones https://github.com/mauriziofonte/gash into
-  # ~/.gash (or $GASH_DIR), checks out the latest release tag and adds one
-  # delimited block to your Bash profile that sources ~/.gashrc.
+  # ~/.gash (or $GASH_DIR), checks out the latest release tag, adds one
+  # delimited block to your Bash profile that sources ~/.gashrc, and fetches
+  # and verifies (SHA-256) the release binary for your platform.
   #
-  # Usage: install.sh [--assume-yes] [--quiet] [--help]
+  # Usage: install.sh [--assume-yes] [--quiet] [--repair] [--help]
+  #
+  #   --repair   re-fetch the binary for an existing install (non-interactive)
   #
   # Environment:
   #   GASH_DIR                install location (default: ~/.gash)
@@ -15,8 +18,11 @@
   #   GASH_INSTALL_GIT_REPO   repository to clone (default: GitHub)
   #   GASH_INSTALL_REF        branch, tag or commit to install instead of the
   #                           latest release tag
+  #   GASH_RELEASE_URL        base URL of the release assets (default: the
+  #                           GitHub release of the installed tag)
   #   GASH_REQUIRE_SIGNED=1   abort unless the release tag has a signature
-  #                           that `git verify-tag` accepts
+  #                           that `git verify-tag` accepts, and accept only a
+  #                           binary pinned in release/SHA256SUMS
   #
   # MIT License · https://github.com/mauriziofonte/gash
 
@@ -282,17 +288,47 @@
       gashinst_success "Created ~/.gashrc"
     fi
 
+    gashinst_fetch_binary
+
     gashinst_info "Open a new terminal, or run 'source ${GASH_PROFILE:-~/.bashrc}', to start using Gash."
     gashinst_success "Enjoy using Gash"
 
     gashinst_reset
   }
 
+  # Fetch and verify the release binary for this platform, reusing the
+  # checkout's own compat bootstrap (SHA-256 checked). Best-effort: a
+  # failure is reported, not fatal — the shim fetches on first use, and
+  # 'install.sh --repair' retries. With --repair, any half-installed binary
+  # of this version is dropped first so the fetch re-downloads.
+  gashinst_fetch_binary() {
+    local INSTALL_DIR BOOT MODE VDIR
+    INSTALL_DIR="$(gashinst_install_dir)"
+    BOOT="$INSTALL_DIR/lib/compat/bootstrap.sh"
+    if [ ! -r "$BOOT" ]; then
+      gashinst_warning "No compat bootstrap in $INSTALL_DIR; the binary will be fetched on first use."
+      return 0
+    fi
+    # shellcheck source=/dev/null
+    if ! source "$BOOT" 2>/dev/null; then
+      gashinst_warning "Could not load the compat bootstrap; the binary will be fetched on first use."
+      return 0
+    fi
+    if [ "${REPAIR-0}" -eq 1 ] && [ -n "${__GASH_BOOT_VERSION-}" ]; then
+      VDIR="${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/${__GASH_BOOT_VERSION}"
+      command rm -rf "$VDIR" 2>/dev/null || true
+    fi
+    MODE=loud
+    [ "${QUIET-0}" -eq 1 ] && MODE=quiet
+    __gash_fetch "$MODE" || true
+    return 0
+  }
+
   gashinst_reset() {
     unset -f gashinst_has gashinst_echo gashinst_error gashinst_info gashinst_success \
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
-      gashinst_verify_tag gashinst_install_from_git gashinst_do_install gashinst_reset
+      gashinst_verify_tag gashinst_install_from_git gashinst_fetch_binary gashinst_do_install gashinst_reset
   }
 
   # Main script execution starts here
@@ -324,10 +360,12 @@
 
   ASSUME_YES=0
   QUIET=0
+  REPAIR=0
   for arg in "$@"; do
     case "$arg" in
       --assume-yes | -y) ASSUME_YES=1 ;;
       --quiet | -q) QUIET=1 ;;
+      --repair) REPAIR=1 ;;
       --help | -h)
         sed -n '5,21s/^  # \{0,1\}//p' "${BASH_SOURCE[0]}" 2>/dev/null ||
           echo "Usage: install.sh [--assume-yes] [--quiet] [--help]"
@@ -339,6 +377,11 @@
         ;;
     esac
   done
+
+  # --repair is an explicit, non-interactive request to re-fetch the binary.
+  if [ "$REPAIR" -eq 1 ]; then
+    ASSUME_YES=1
+  fi
 
   gashinst_echo
   gashinst_echo "${CYAN}Welcome to the Gash installation script${NC}"

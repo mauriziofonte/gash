@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -15,200 +14,145 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  GO_VERSION: "1.27.2"
   SHELLCHECK_VERSION: v0.11.0
   SHFMT_VERSION: v3.14.1
 
 jobs:
   lint:
-    name: Lint (shellcheck + shfmt)
+    name: Lint (golangci-lint, vet, generated Bash)
     runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install shellcheck and shfmt
-        run: |
-          bin="$HOME/.local/bin"
-          mkdir -p "$bin"
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
-            | tar -xJ --strip-components=1 -C "$bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
-          curl -fsSL -o "$bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
-          chmod +x "$bin/shfmt"
-          echo "$bin" >> "$GITHUB_PATH"
-          export PATH="$bin:$PATH"
-          shellcheck --version
-          shfmt --version
-
-      - name: shellcheck (warning and above)
-        run: shellcheck -s bash -S warning $(git ls-files '*.sh' bash_completion .gashrc)
-
-      - name: shfmt (formatting follows .editorconfig)
-        run: shfmt -d $(git ls-files '*.sh' bash_completion .gashrc tests/mocks/bin)
-
-  go:
-    name: Go port (vet, test, build, specs in go mode)
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: go-impl
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.27.2
-          cache-dependency-path: go-impl/go.sum
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gawk jq sqlite3 strace
-          bin="$HOME/.local/bin"
-          mkdir -p "$bin"
-          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
-            | tar -xJ --strip-components=1 -C "$bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
-          curl -fsSL -o "$bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
-          chmod +x "$bin/shfmt"
-          echo "$bin" >> "$GITHUB_PATH"
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"
           if [ -n "$unformatted" ]; then
-            echo "gofmt would change:"
-            echo "$unformatted"
-            exit 1
+            echo "gofmt would change:"; echo "$unformatted"; exit 1
           fi
 
       - name: go vet
         run: go vet ./...
 
-      # Includes the generated Bash goldens and their bash -n, shellcheck
-      # and shfmt checks (internal/compatgen).
-      - name: go test
-        run: go test ./...
-
-      - name: Build
-        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
-
-      # The 2.x specs against the binary through the generated Bash. Not a
-      # gate until the port is complete (go-impl/PORT/PARITY.md).
-      - name: Specs in go mode
-        continue-on-error: true
-        working-directory: .
-        run: bash tests/run.sh --impl go --gash-bin "$RUNNER_TEMP/gash"
-
-      - name: Upload the per-test results
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
         with:
-          name: go-mode-results
-          path: tests/.results/go.tsv
-          if-no-files-found: ignore
+          version: v2.5.0
 
-  test:
-    name: Tests (${{ matrix.os }}, ${{ matrix.awk }})
+      - name: Install shellcheck and shfmt
+        run: |
+          bin="$HOME/.local/bin"; mkdir -p "$bin"
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            | tar -xJ --strip-components=1 -C "$bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          curl -fsSL -o "$bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
+          chmod +x "$bin/shfmt"
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: shellcheck the generated Bash
+        run: shellcheck -s bash -S warning $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc install.sh)
+
+      - name: shellcheck the launcher (POSIX sh)
+        run: shellcheck -s sh -S warning bin/gash
+
+      - name: shfmt the generated Bash
+        run: shfmt -d $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc bin/gash)
+
+      - name: Generated compat Bash is current
+        run: |
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+          "$RUNNER_TEMP/gash" __compat generate --out "$GITHUB_WORKSPACE" --check
+
+  vuln:
+    name: Vulnerabilities (govulncheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  unit:
+    name: Unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
-        awk: [gawk, mawk]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
         with:
-          fetch-depth: 0
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gawk mawk jq sqlite3
-
-      - name: Run test suite
-        run: bash tests/run.sh --awk ${{ matrix.awk }}
-
-  render:
-    name: Tests (terminal rendering)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq gawk jq sqlite3
 
-      # The slow spec: every human-facing function on a pseudo-terminal,
-      # piped and with NO_COLOR. The other test jobs leave it out.
-      - name: Run rendering fixtures
-        run: bash tests/run.sh specs/output_style_render_spec.sh
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash gawk jq
 
-  bash-versions:
-    name: Tests (bash ${{ matrix.bash }})
-    runs-on: ubuntu-24.04
+      - name: go test -race
+        run: CGO_ENABLED=1 go test -race ./...
+
+      - name: Build
+        run: CGO_ENABLED=0 go build ./...
+
+  testscript:
+    name: Black-box testscript (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        bash: ["4.4", "5.0", "5.1", "5.3"]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gawk jq sqlite3 patchelf
-
-      - name: Fetch bash ${{ matrix.bash }}
-        run: bash tests/ci/fetch-bash.sh "${{ matrix.bash }}" "$RUNNER_TEMP/bash-${{ matrix.bash }}"
-
-      - name: Run test suite
-        run: bash tests/run.sh --bash "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash"
 
       - uses: actions/setup-go@v5
         with:
-          go-version: 1.27.2
-          cache-dependency-path: go-impl/go.sum
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
-      - name: Build the Gash 3 binary
-        working-directory: go-impl
-        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
-
-      # The generated Bash must load on every supported Bash, 4.4 included:
-      # a staged tree sourced headless under set -euo pipefail prints
-      # nothing, returns 0 and defines the 2.x functions and aliases.
-      - name: Generated Bash loads (bash ${{ matrix.bash }})
-        run: bash tests/ci/compat-load.sh "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash" "$RUNNER_TEMP/gash"
-
-      # The 2.x specs against the binary through the generated Bash on this
-      # Bash. Not a gate until the port is complete (go-impl/PORT/PARITY.md).
-      - name: Specs in go mode (bash ${{ matrix.bash }})
-        continue-on-error: true
-        run: bash tests/run.sh --impl go --gash-bin "$RUNNER_TEMP/gash" --bash "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash"
-
-  macos:
-    name: Tests (macOS, best effort)
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Homebrew bash and GNU tools
-        run: brew install bash coreutils findutils gnu-sed grep gawk jq
-
-      - name: Run test suite
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          prefix="$(brew --prefix)"
-          gnu="$prefix/opt/coreutils/libexec/gnubin:$prefix/opt/findutils/libexec/gnubin"
-          gnu="$gnu:$prefix/opt/gnu-sed/libexec/gnubin:$prefix/opt/grep/libexec/gnubin"
-          export GASH_TEST_PATH="$gnu:$prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-          PATH="$GASH_TEST_PATH" "$prefix/bin/bash" tests/run.sh --bash "$prefix/bin/bash"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash gawk jq
+
+      - name: testscript suite
+        run: CGO_ENABLED=0 go test ./cmd/gash/ -run TestScript -count=1
 
   install:
-    name: Installer smoke test
+    name: Installer smoke
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
       - name: Install from this checkout into a clean HOME
         run: |
@@ -216,13 +160,61 @@ jobs:
           # exact commit installable with GASH_INSTALL_REF.
           git branch -f ci-under-test HEAD
           export HOME="$RUNNER_TEMP/home"
-          mkdir -p "$HOME"
-          touch "$HOME/.bashrc"
+          mkdir -p "$HOME"; touch "$HOME/.bashrc"
           GASH_INSTALL_GIT_REPO="$GITHUB_WORKSPACE" GASH_INSTALL_REF=ci-under-test \
             bash install.sh --assume-yes --quiet
           test -f "$HOME/.gash/gash.sh"
           grep -q '>>> GASH START >>>' "$HOME/.bashrc"
-          version="$(GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; echo "$GASH_VERSION"')"
-          test "$version" = "$(cat VERSION)"
-          echo "loaded Gash $version"
-          bash --norc -i -c 'source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
+
+      - name: The installed shim resolves a locally built binary
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+          version="$(GASH_BIN="$RUNNER_TEMP/gash" GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; gash version --json')"
+          echo "$version"
+          bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
+
+  hte-e2e:
+    name: HTE E2E (${{ matrix.distro }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [debian, ubuntu, fedora, arch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Build the binaries
+        run: |
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash-hosts-helper" ./cmd/gash-hosts-helper
+
+      - name: Run the HTE end-to-end stories in a ${{ matrix.distro }} container
+        run: bash testdata/hte/e2e/run.sh "${{ matrix.distro }}"
+        env:
+          GASH_BIN: ${{ runner.temp }}/gash
+          GASH_HOSTS_HELPER_BIN: ${{ runner.temp }}/gash-hosts-helper
+
+  snapshot:
+    name: Snapshot build (goreleaser)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: goreleaser (snapshot, no publish)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean
