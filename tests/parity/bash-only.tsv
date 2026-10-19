@@ -310,3 +310,26 @@ utils_spec.sh	17	__gash_json_escape escapes double quotes	moot (encoding/json)
 utils_spec.sh	27	__gash_json_escape escapes newlines and tabs	moot (encoding/json)
 utils_spec.sh	39	__gash_json_escape handles empty string	moot (encoding/json)
 wsl_spec.sh	29	the memory snapshot has free memory, slab and per-zone blocks	wsl.MemSnapshot from /proc/buddyinfo (skips without it)
+output_style_render_spec.sh	216	wsl_restart:declined: R2-R6	internal/system TestWSLStopVM (WSL-present render needs /proc/version; unit-covered via the sys seam)
+output_style_render_spec.sh	217	wsl_restart:yes: R2-R6	internal/system TestWSLStopVM
+output_style_render_spec.sh	219	wsl_shutdown:yes: R2-R6	internal/system TestWSLStopVM
+output_style_render_spec.sh	221	wsl_explorer:open: R2-R6	internal/system TestWSLExplorer
+output_style_render_spec.sh	222	wsl_explorer:missing-path: R2-R6	internal/system TestWSLExplorer (requireWSL refuses off-WSL before the path check)
+output_style_render_spec.sh	224	wsl_taskmanager:open: R2-R6	internal/system TestWSLTaskmanager
+output_style_render_spec.sh	226	wsl_compact:status: R2-R6	internal/system TestWSLCompact
+output_style_render_spec.sh	227	wsl_compact:compact: R2-R6	internal/system TestWSLCompact
+output_style_render_spec.sh	228	wsl_compact:sudo-failed: R2-R6	internal/system TestWSLCompact
+output_style_render_spec.sh	358	ai_query:timeout: R2-R6	internal/ai TestLedger_AI15_2x (60s response timeout has no seam; unit-covered)
+output_style_render_spec.sh	360	ai_query:confirm-yes: R2-R6	internal/ai TestConfirmSend (typed-y on /dev/tty, not black-box drivable)
+output_style_render_spec.sh	367	ai_sysinfo:report-quit: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	368	ai_sysinfo:report-eof: R2-R6	internal/ai TestDrillMenuInvalidAndEOF
+output_style_render_spec.sh	369	ai_sysinfo:drilldown: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	370	ai_sysinfo:question: R2-R6	internal/ai TestDrillMenu + TestCollectQuestionContext
+output_style_render_spec.sh	371	ai_sysinfo:empty-question: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	372	ai_sysinfo:save: R2-R6	internal/ai TestDrillMenu + TestMarkdownAccumulators
+output_style_render_spec.sh	373	ai_sysinfo:bad-choice: R2-R6	internal/ai TestDrillMenuInvalidAndEOF
+output_style_render_spec.sh	374	ai_sysinfo:no-color: R2-R6	internal/ai TestDrillMenu + TestFormatResponse
+output_style_render_spec.sh	375	ai_sysinfo:http-error: R2-R6	internal/ai TestLedger_AI15_2x / TestClaudeRefusal (failure after a confirm that needs /dev/tty)
+output_style_render_spec.sh	376	ai_sysinfo:drilldown-error: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	377	ai_sysinfo:invalid-reply: R2-R6	internal/ai TestFormatResponse + TestSanitizeJSON
+output_style_render_spec.sh	386	sysinfo:layout: R2-R6	internal/sysinfo TestVerbose/TestFormatter/TestOverview + TestSectionsLLM (sections injected via Bash overrides, not reachable in Go)

@@ -1275,19 +1275,19 @@ a fixture tree (LEDGER `TEST-*` items).
 | 209 | services_stop:bad-option: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: systemctl (mocks/bin) [Y if exec; N if D-Bus] |
 | 212 | sudo_last:command: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: sudo (mocks/bin) [Y if exec] |
 | 213 | sudo_last:declined: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: fc() shell fn [N: shell side]; sudo (mocks/bin) [Y if exec] |
-| 216 | wsl_restart:declined: R2-R6 | MIXED | pass | not run | `split` |  |
-| 217 | wsl_restart:yes: R2-R6 | MIXED | pass | not run | `split` |  |
+| 216 | wsl_restart:declined: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLStopVM (WSL-present render needs /proc/version; unit-covered via the sys seam) |
+| 217 | wsl_restart:yes: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLStopVM |
 | 218 | wsl_restart:not-wsl: R2-R6 | MIXED | pass | not run | `split` |  |
-| 219 | wsl_shutdown:yes: R2-R6 | MIXED | pass | not run | `split` |  |
+| 219 | wsl_shutdown:yes: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLStopVM |
 | 220 | wsl_shutdown:bad-option: R2-R6 | BLACKBOX | pass | not run | `run` |  |
-| 221 | wsl_explorer:open: R2-R6 | MIXED | pass | not run | `split` |  |
-| 222 | wsl_explorer:missing-path: R2-R6 | MIXED | pass | not run | `split` |  |
+| 221 | wsl_explorer:open: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLExplorer |
+| 222 | wsl_explorer:missing-path: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLExplorer (requireWSL refuses off-WSL before the path check) |
 | 223 | wsl_explorer:not-wsl: R2-R6 | MIXED | pass | not run | `split` |  |
-| 224 | wsl_taskmanager:open: R2-R6 | MIXED | pass | not run | `split` |  |
+| 224 | wsl_taskmanager:open: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLTaskmanager |
 | 225 | wsl_taskmanager:not-wsl: R2-R6 | MIXED | pass | not run | `split` |  |
-| 226 | wsl_compact:status: R2-R6 | MIXED | pass | not run | `split` |  |
-| 227 | wsl_compact:compact: R2-R6 | MIXED | pass | not run | `split` |  |
-| 228 | wsl_compact:sudo-failed: R2-R6 | MIXED | pass | not run | `split` |  |
+| 226 | wsl_compact:status: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLCompact |
+| 227 | wsl_compact:compact: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLCompact |
+| 228 | wsl_compact:sudo-failed: R2-R6 | MIXED | pass | not run | `unit` | internal/system TestWSLCompact |
 | 229 | wsl_compact:bad-option: R2-R6 | BLACKBOX | pass | not run | `run` |  |
 | 232 | docker_stop_all:running: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: docker (mocks/bin) [Y if CLI; N if Engine API] |
 | 233 | docker_stop_all:none: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: docker (mocks/bin) [Y if CLI; N if Engine API] |
@@ -1395,26 +1395,26 @@ a fixture tree (LEDGER `TEST-*` items).
 | 355 | ai_query:no-key: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: curl (mocks/bin) [N if net/http] |
 | 356 | ai_query:no-token: R2-R6 | MIXED | pass | not run | `split` |  |
 | 357 | ai_query:http-error: R2-R6 | MIXED | pass | not run | `split` |  |
-| 358 | ai_query:timeout: R2-R6 | MIXED | pass | not run | `split` |  |
+| 358 | ai_query:timeout: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestLedger_AI15_2x (60s response timeout has no seam; unit-covered) |
 | 359 | ai_query:refusal: R2-R6 | MIXED | pass | not run | `split` |  |
-| 360 | ai_query:confirm-yes: R2-R6 | MIXED | pass | not run | `split` |  |
+| 360 | ai_query:confirm-yes: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestConfirmSend (typed-y on /dev/tty, not black-box drivable) |
 | 361 | ai_query:confirm-no: R2-R6 | MIXED | pass | not run | `split` |  |
-| 362 | ai_query:debug: R2-R6 | MIXED | pass | not run | `split` |  |
+| 362 | ai_query:debug: R2-R6 | MIXED | pass | pass | `split` | GASH_AI_DEBUG implemented (internal/ai client.go); black-box in ai_query_render.txtar + unit TestAIDebug |
 | 363 | ai_sysinfo:raw: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: curl (mocks/bin) [N if net/http] |
 | 364 | ai_sysinfo:bad-arg: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: curl (mocks/bin) [N if net/http] |
 | 365 | ai_sysinfo:no-key: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: curl (mocks/bin) [N if net/http] |
 | 366 | ai_sysinfo:confirm-no: R2-R6 | MIXED | pass | not run | `split` |  |
-| 367 | ai_sysinfo:report-quit: R2-R6 | MIXED | pass | not run | `split` |  |
-| 368 | ai_sysinfo:report-eof: R2-R6 | MIXED | pass | not run | `split` |  |
-| 369 | ai_sysinfo:drilldown: R2-R6 | MIXED | pass | not run | `split` |  |
-| 370 | ai_sysinfo:question: R2-R6 | MIXED | pass | not run | `split` |  |
-| 371 | ai_sysinfo:empty-question: R2-R6 | MIXED | pass | not run | `split` |  |
-| 372 | ai_sysinfo:save: R2-R6 | MIXED | pass | not run | `split` |  |
-| 373 | ai_sysinfo:bad-choice: R2-R6 | MIXED | pass | not run | `split` |  |
-| 374 | ai_sysinfo:no-color: R2-R6 | MIXED | pass | not run | `split` |  |
-| 375 | ai_sysinfo:http-error: R2-R6 | MIXED | pass | not run | `split` |  |
-| 376 | ai_sysinfo:drilldown-error: R2-R6 | MIXED | pass | not run | `split` |  |
-| 377 | ai_sysinfo:invalid-reply: R2-R6 | MIXED | pass | not run | `split` |  |
+| 367 | ai_sysinfo:report-quit: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu |
+| 368 | ai_sysinfo:report-eof: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenuInvalidAndEOF |
+| 369 | ai_sysinfo:drilldown: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu |
+| 370 | ai_sysinfo:question: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu + TestCollectQuestionContext |
+| 371 | ai_sysinfo:empty-question: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu |
+| 372 | ai_sysinfo:save: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu + TestMarkdownAccumulators |
+| 373 | ai_sysinfo:bad-choice: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenuInvalidAndEOF |
+| 374 | ai_sysinfo:no-color: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu + TestFormatResponse |
+| 375 | ai_sysinfo:http-error: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestLedger_AI15_2x / TestClaudeRefusal (failure after a confirm that needs /dev/tty) |
+| 376 | ai_sysinfo:drilldown-error: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestDrillMenu |
+| 377 | ai_sysinfo:invalid-reply: R2-R6 | MIXED | pass | not run | `unit` | internal/ai TestFormatResponse + TestSanitizeJSON |
 | 378 | sysinfo:all: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
 | 379 | sysinfo:overview: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
 | 380 | sysinfo:overview-no-color: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
@@ -1423,6 +1423,6 @@ a fixture tree (LEDGER `TEST-*` items).
 | 383 | sysinfo:network: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
 | 384 | sysinfo:system: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
 | 385 | sysinfo:llm: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
-| 386 | sysinfo:layout: R2-R6 | MIXED | pass | not run | `split` |  |
+| 386 | sysinfo:layout: R2-R6 | MIXED | pass | not run | `unit` | internal/sysinfo TestVerbose/TestFormatter/TestOverview + TestSectionsLLM (sections injected via Bash overrides, not reachable in Go) |
 | 387 | sysinfo:bad-arg: R2-R6 | MOCK-DEPENDENT | pass | not run | `run*` | fake: df (mocks/bin) [Y if exec; N if statfs]; journalctl (mocks/bin) [Y if exec]; ps (mocks/bin) [Y if exec; N if /proc]; ss (mocks/bin) [Y if exec; N if /proc]; systemctl (mocks/bin) [Y if exec; N if D-Bus] |
 | 580 | R7: headless loading prints nothing, on a terminal or not | BLACKBOX | pass | not run | `run` |  |
