@@ -1,0 +1,204 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: functions_more_spec.sh:11
+# covers: functions_more_spec.sh:27
+# covers: functions_more_spec.sh:38
+# covers: functions_more_spec.sh:50
+# covers: functions_more_spec.sh:74
+# covers: functions_more_spec.sh:89
+# covers: functions_more_spec.sh:110
+# covers: functions_more_spec.sh:123
+# covers: functions_more_spec.sh:135
+# covers: functions_more_spec.sh:147
+# covers: functions_more_spec.sh:164
+# covers: functions_more_spec.sh:179
+# covers: functions_more_spec.sh:191
+# covers: functions_more_spec.sh:203
+# covers: functions_more_spec.sh:217
+# covers: functions_more_spec.sh:263
+#
+# More function-module cases through the shim: disk_usage over a df stub
+# (rc.A still execs df), dirs_find_large, dirs_list_empty, process_find's
+# no-match line, services_stop over systemctl/service stubs, docker errors
+# with no docker, gash_inspiring_quote and gash_username. disk_usage colors
+# (:38) run the binary directly with a forced TTY and color, since headless
+# disables colors (ColorEnvOK). The process_kill terminal-refusal case
+# (:226) is in functions_more_kill.txtar. df output is deterministic, so the
+# plain rows are matched with the 2.x row patterns.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+exec chmod +x dfbin/df numfmtbin/numfmt sysbin/systemctl sysbin/sudo svcbin/service svcbin/sudo
+
+# --- functions_more_spec.sh:11 - disk_usage formats filtered filesystem types
+exec bash -c 'export PATH="$WORK/dfbin:$PATH"; source "$GASH_SH"; disk_usage'
+stdout '^  /  +/dev/sda1 +ext4 +50 GiB +10 GiB +38 GiB +[^ ]+ +21%$'
+stdout '^  /data +/dev/sdb1 +xfs .* 92%$'
+stdout '^  /mnt/c +C:.* 9p .* 81%$'
+stdout '^  /media/my disk +/dev/sdc1 '
+! stdout tmpfs
+! stdout /run/user
+
+# --- functions_more_spec.sh:27 - disk_usage falls back to df -Pk without types (BSD/macOS)
+exec bash -c 'export PATH="$WORK/dfbin:$PATH" MOCK_DF_NO_TYPE=1; source "$GASH_SH"; disk_usage'
+stdout '^  /  +/dev/disk3s1 +- .* 5%$'
+! stdout devfs
+! exec bash -c 'export PATH="$WORK/dfbin:$PATH" MOCK_DF_NO_TYPE=1; source "$GASH_SH"; disk_usage --bogus'
+
+# --- functions_more_spec.sh:38 - disk_usage colors the bar by fill: green, yellow from 75%, red from 90%
+# Run the binary directly (not headless): headless forces NoColors, so a TTY
+# and color answer (GASH__TTY_OUT / GASH__COLOR, the shim's own protocol) are
+# the PTY equivalent for the color gate.
+exec bash -c 'unset GASH_HEADLESS; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=120 PATH="$WORK/dfbin:$PATH"; exec gash disk_usage'
+stdout '\x1b\[38;5;82m.*21%'
+stdout '\x1b\[38;5;220m.*81%'
+stdout '\x1b\[38;5;196m.*92%'
+
+# --- functions_more_spec.sh:50 - dirs_find_large works without numfmt (pure-bash IEC fallback)
+mkdir dfl0
+exec bash -c 'mkdir -p dfl0/d1; head -c 65536 /dev/zero > dfl0/d1/big'
+exec bash -c 'export PATH="$WORK/numfmtbin:$PATH"; source "$GASH_SH"; dirs_find_large --size 1K dfl0'
+stdout 'dfl0/d1'
+
+# --- functions_more_spec.sh:74 - dirs_find_large lists a directory over threshold
+mkdir dfl1
+exec bash -c 'mkdir -p dfl1/d1; head -c 32768 /dev/zero > dfl1/d1/big'
+exec bash -c 'source "$GASH_SH"; dirs_find_large --size 1 dfl1'
+stdout 'dfl1/d1'
+
+# --- functions_more_spec.sh:89 - dirs_find_large sorts by size and supports K/M suffix
+mkdir dfl2
+exec bash -c 'mkdir -p dfl2/big dfl2/small; head -c 131072 /dev/zero > dfl2/big/f; head -c 2048 /dev/zero > dfl2/small/f'
+exec bash dfl2_order.sh
+
+# --- functions_more_spec.sh:110 - dirs_list_empty lists empty dirs
+mkdir dle
+exec bash -c 'mkdir -p dle/empty dle/nonempty; : > dle/nonempty/f'
+exec bash -c 'source "$GASH_SH"; dirs_list_empty dle'
+stdout 'dle/empty'
+
+# --- functions_more_spec.sh:123 - process_find prints error when no match
+# The pattern is built at runtime so it never appears in a ps command line.
+exec bash -c 'source "$GASH_SH"; a=ZZX; b=XYY; c=99Q; d=Q; process_find "${a}${b}${c}${d}"'
+stderr 'No process found'
+
+# --- functions_more_spec.sh:135 - services_stop -y with nothing running succeeds quietly
+exec bash -c 'export PATH="$WORK/sysbin:$PATH" __GASH_SYSTEMD_RUNDIR="$WORK/sysbin" MOCK_SYSTEMCTL_ACTIVE=; source "$GASH_SH"; services_stop -y'
+stderr 'None of the known services is running'
+
+# --- functions_more_spec.sh:147 - services_stop lists, refuses without a terminal, stops with -y
+exec bash svc_list.sh
+
+# --- functions_more_spec.sh:164 - services_stop falls back to service without systemd
+exec bash svc_fallback.sh
+
+# --- functions_more_spec.sh:179 - docker_start_all errors when docker missing
+! exec bash -c 'source "$GASH_SH"; PATH=/nonexistent docker_start_all'
+stderr 'Docker is not installed'
+
+# --- functions_more_spec.sh:191 - docker_prune_all errors when docker missing (no prompt)
+! exec bash -c 'source "$GASH_SH"; PATH=/nonexistent docker_prune_all'
+stderr 'Docker is not installed'
+
+# --- functions_more_spec.sh:203 - gash_inspiring_quote prints a quote when file present
+mkdir q1/quotes
+exec bash -c 'printf "%s\n" "Hello quote" "Another quote" > q1/quotes/list.txt'
+exec bash -c 'source "$GASH_SH"; GASH_DIR="$WORK/q1" gash_inspiring_quote'
+stdout 'Quote:'
+
+# --- functions_more_spec.sh:217 - gash_username returns a non-empty string
+exec bash -c 'source "$GASH_SH"; gash_username'
+stdout .
+
+# --- functions_more_spec.sh:263 - gash_inspiring_quote skips source comments and shows them with --source
+# q2/quotes/list.txt is a file section so the em-dash is a literal UTF-8 byte.
+exec bash -c 'source "$GASH_SH"; GASH_DIR="$WORK/q2" gash_inspiring_quote'
+stdout 'Quote: .Only quote'
+exec bash -c 'source "$GASH_SH"; GASH_DIR="$WORK/q2" gash_inspiring_quote --source'
+stdout 'Source: A Book, 1999'
+! exec bash -c 'source "$GASH_SH"; GASH_DIR="$WORK/q2" gash_inspiring_quote --bogus'
+
+-- dfbin/df --
+#!/usr/bin/env bash
+if [[ " $* " == *" -PTk "* ]]; then
+	[[ -n "${MOCK_DF_NO_TYPE-}" ]] && {
+		echo "df: illegal option -- T" >&2
+		exit 1
+	}
+	cat <<'OUT'
+Filesystem     Type    1024-blocks     Used Available Capacity Mounted on
+/dev/sda1      ext4       52428800 10485760  39845888      21% /
+tmpfs          tmpfs      16777216        0  16777216       0% /run/user/1000
+/dev/sdb1      xfs       104857600 96468992   8388608      92% /data
+C:\            9p        497008636 400000000 97008636     81% /mnt/c
+/dev/sdc1      ext4        1048576   524288    524288      50% /media/my disk
+OUT
+	exit 0
+fi
+cat <<'OUT'
+Filesystem     1024-blocks     Used Available Capacity Mounted on
+/dev/disk3s1     488245288 20000000 400000000       5% /
+devfs                  200      200         0     100% /dev
+OUT
+-- q2/quotes/list.txt --
+# Header comment
+
+# A Book, 1999
+"Only quote." — Someone
+-- numfmtbin/numfmt --
+#!/usr/bin/env bash
+exit 127
+-- sysbin/systemctl --
+#!/usr/bin/env bash
+if [[ "${1:-}" == "is-active" && "${2:-}" == "--quiet" ]]; then
+	svc="${3:-}"
+	if [[ -n "${MOCK_SYSTEMCTL_ACTIVE:-}" && "$svc" == "$MOCK_SYSTEMCTL_ACTIVE" ]]; then
+		exit 0
+	fi
+	exit 3
+fi
+[[ "${1:-}" == "stop" || "${1:-}" == "start" ]] && exit 0
+exit 0
+-- sysbin/sudo --
+#!/usr/bin/env bash
+exec "$@"
+-- svcbin/service --
+#!/bin/sh
+[ "$1 $2" = "redis status" ] && exit 0
+[ "$2" = status ] && exit 3
+echo "$@" >> "$WORK/svcbin/service.log"
+-- svcbin/sudo --
+#!/bin/sh
+"$@"
+-- dfl2_order.sh --
+set -euo pipefail
+source "$GASH_SH"
+out="$(dirs_find_large --size 1K "$WORK/dfl2")"
+big="$(printf '%s\n' "$out" | grep -n -- "$WORK/dfl2/big" | head -n1 | cut -d: -f1)"
+small="$(printf '%s\n' "$out" | grep -n -- "$WORK/dfl2/small" | head -n1 | cut -d: -f1)"
+[ -n "$big" ] || { echo "big not listed"; exit 1; }
+[ -n "$small" ] || { echo "small not listed"; exit 1; }
+[ "$big" -lt "$small" ] || { echo "big not before small"; exit 1; }
+-- svc_list.sh --
+set -uo pipefail
+export PATH="$WORK/sysbin:$PATH" __GASH_SYSTEMD_RUNDIR="$WORK/sysbin" MOCK_SYSTEMCTL_ACTIVE=mysql
+source "$GASH_SH"
+out="$(services_stop --dry-run 2>&1)"
+case "$out" in *"Running: mysql"*) ;; *) echo "no Running line: $out"; exit 1 ;; esac
+case "$out" in *Stopping*) echo "dry-run stopped: $out"; exit 1 ;; esac
+rc=0; out="$(GASH_HEADLESS=1 services_stop 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] || { echo "headless no-yes rc=$rc"; exit 1; }
+case "$out" in *Stopping*) echo "headless stopped: $out"; exit 1 ;; esac
+out="$(services_stop -y 2>&1)"
+case "$out" in *"Stopping mysql"*) ;; *) echo "no Stopping mysql: $out"; exit 1 ;; esac
+services_stop --bogus 2>/dev/null && { echo "bogus accepted"; exit 1; }
+exit 0
+-- svc_fallback.sh --
+set -uo pipefail
+export __GASH_SYSTEMD_RUNDIR="$WORK/no-systemd" PATH="$WORK/svcbin:/usr/bin:/bin"
+: > "$WORK/svcbin/service.log"
+source "$GASH_SH"
+services_stop -y >/dev/null 2>&1
+log="$(cat "$WORK/svcbin/service.log")"
+[ "$log" = "redis stop" ] || { echo "log=[$log]"; exit 1; }

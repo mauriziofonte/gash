@@ -1,0 +1,22 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: SYS-36
+# covers: functions_smoke_spec.sh:85
+#
+# ip_public without curl/wget (SYS-36). In 2.x, with neither tool on PATH,
+# ip_public printed "This function requires either 'wget' or 'curl' to be
+# installed." and returned 1. rc.A fetches over net/http, so that dependency
+# error is unreachable: whatever PATH holds, the message is never printed.
+# This runs ip_public with an empty PATH; the request then has no network
+# and may fail with "Failed to retrieve public IP address." (SYS-13), but
+# never with the curl/wget dependency error, which is the divergence proven
+# here. The success/timeout behaviors are pinned by TestLedger_SYS36 /
+# TestLedger_SYS13 in internal/system.
+
+env GASH_HEADLESS=1
+
+exec bash -c 'source "$GASH_SH"; PATH=/nonexistent ip_public || true'
+! stderr 'requires either'
+! stderr wget
+! stderr curl
+! stdout 'requires either'

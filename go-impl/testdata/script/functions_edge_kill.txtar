@@ -1,0 +1,51 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: functions_edge_spec.sh:87
+# covers: functions_edge_spec.sh:121
+#
+# The process_kill kill-fake cases, rewritten around a REAL victim (TEST-04):
+# 2.x faked kill() and pgrep to return PID 2222, which a binary's real
+# kill(2) would have signalled. Here a real `sleep` is the victim and a
+# pgrep stub reports its PID, so the syscall the binary makes lands on the
+# test's own process and nothing else.
+#   :87  - process_kill --force signals the matching process (it dies).
+#   :121 - a missing argument errors before pgrep runs, so the process a
+#          stub would have matched is never signalled.
+
+env GASH_HEADLESS=1
+
+exec bash edge_kill_signal.sh
+exec bash edge_kill_missing.sh
+
+-- edge_kill_signal.sh --
+set -uo pipefail
+tmp="$(mktemp -d)"
+trap 'kill "$victim" 2>/dev/null; rm -rf "$tmp"' EXIT
+sleep 300 &
+victim=$!
+printf '#!/bin/sh\necho %s\n' "$victim" >"$tmp/pgrep"
+chmod +x "$tmp/pgrep"
+export PATH="$tmp:$PATH"
+source "$GASH_SH"
+process_kill my-proc --force >/dev/null 2>&1
+for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$victim" 2>/dev/null || break; sleep 0.1; done
+if kill -0 "$victim" 2>/dev/null; then echo "victim survived process_kill --force"; exit 1; fi
+
+-- edge_kill_missing.sh --
+set -uo pipefail
+tmp="$(mktemp -d)"
+trap 'kill "$victim" 2>/dev/null; rm -rf "$tmp"' EXIT
+sleep 300 &
+victim=$!
+# A pgrep stub that would report the victim for any name: if process_kill
+# reached pgrep it would signal it, so the victim surviving proves it did not.
+printf '#!/bin/sh\necho %s\n' "$victim" >"$tmp/pgrep"
+chmod +x "$tmp/pgrep"
+export PATH="$tmp:$PATH"
+source "$GASH_SH"
+out="$(process_kill 2>&1)" && { echo "process_kill with no arg succeeded"; exit 1; }
+case "$out" in
+  *Missing*) ;;
+  *) echo "expected a Missing error, got: $out"; exit 1 ;;
+esac
+kill -0 "$victim" 2>/dev/null || { echo "victim was signalled on a missing argument"; exit 1; }

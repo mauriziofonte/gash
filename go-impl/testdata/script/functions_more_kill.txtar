@@ -1,0 +1,68 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: functions_more_spec.sh:226
+#
+# process_kill without a terminal refuses unless --force, for one match or
+# many. Rewritten around REAL victims (TEST-04): 2.x faked kill() and pgrep
+# to return PID 2222, which the binary's real kill(2) would have signalled.
+# Here `sleep` processes are the victims and a pgrep stub reports their PIDs
+# (one for my-proc, two for many-proc), so every syscall lands on the test's
+# own processes. GASH_HEADLESS=1 is the "no terminal" condition.
+
+env GASH_HEADLESS=1
+
+exec bash more_kill.sh
+
+-- more_kill.sh --
+set -uo pipefail
+tmp="$(mktemp -d)"
+trap 'kill $(cat "$tmp"/*.pids 2>/dev/null) 2>/dev/null; rm -rf "$tmp"' EXIT
+
+spawn() { # NAME COUNT
+	: >"$tmp/$1.pids"
+	local i
+	for ((i = 0; i < $2; i++)); do
+		sleep 300 &
+		echo $! >>"$tmp/$1.pids"
+	done
+}
+alive() { local p; for p in $(cat "$tmp/$1.pids"); do kill -0 "$p" 2>/dev/null || return 1; done; }
+dead() {
+	local p
+	for p in $(cat "$tmp/$1.pids"); do
+		for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
+		! kill -0 "$p" 2>/dev/null || return 1
+	done
+}
+
+printf '#!/bin/sh\ncase "$*" in *many-proc*) cat "%s/many-proc.pids" ;; *my-proc*) cat "%s/my-proc.pids" ;; *) exit 1 ;; esac\n' "$tmp" "$tmp" >"$tmp/pgrep"
+chmod +x "$tmp/pgrep"
+export PATH="$tmp:$PATH"
+source "$GASH_SH"
+
+spawn my-proc 1
+spawn many-proc 2
+
+# Headless, no --force: both refuse with "pass -y" and kill nothing.
+for name in my-proc many-proc; do
+	out="$(process_kill "$name" 2>&1)" && { echo "killed $name without --force"; exit 1; }
+	case "$out" in *"pass -y"*) ;; *) echo "no pass -y for $name: $out"; exit 1 ;; esac
+done
+alive my-proc || { echo "my-proc died on refusal"; exit 1; }
+alive many-proc || { echo "many-proc died on refusal"; exit 1; }
+
+# --force / -y / -f stop them, whatever the count.
+process_kill my-proc --force >/dev/null 2>&1
+dead my-proc || { echo "my-proc survived --force"; exit 1; }
+spawn my-proc 1
+process_kill -y my-proc >/dev/null 2>&1
+dead my-proc || { echo "my-proc survived -y"; exit 1; }
+process_kill --force many-proc >/dev/null 2>&1
+dead many-proc || { echo "many-proc survived --force"; exit 1; }
+spawn my-proc 1
+process_kill -f my-proc >/dev/null 2>&1
+dead my-proc || { echo "my-proc survived -f"; exit 1; }
+
+# An unknown option is refused.
+process_kill --bogus my-proc 2>/dev/null && { echo "bogus accepted"; exit 1; }
+exit 0
