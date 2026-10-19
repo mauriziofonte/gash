@@ -68,9 +68,25 @@ if [ "$multiphp" = 1 ]; then
     service php7.4-fpm restart >/dev/null
 fi
 service apache2 restart >/dev/null
+# After an Apache or PHP-FPM (re)start the FPM pool can need a moment before
+# proxy_fcgi reaches it, so a one-shot request catches a transient 503. Retry
+# briefly: the smoke checks test that the site serves, not that it serves on
+# the first try.
+curl_serves() {
+    local out _
+    for _ in $(seq 1 20); do
+        if out=$(curl -fsS "$@" 2>/dev/null); then
+            printf '%s\n' "$out"
+            return 0
+        fi
+        sleep 0.5
+    done
+    curl -fsS "$@"
+}
+
 echo "== the system Apache serves the legacy sites"
-curl -fsS --resolve http.test:80:127.0.0.1 http://http.test/
-curl -fsSk --resolve https.test:443:127.0.0.1 https://https.test/
+curl_serves --resolve http.test:80:127.0.0.1 http://http.test/
+curl_serves -k --resolve https.test:443:127.0.0.1 https://https.test/
 
 snapshot() {
     local roots=(/etc /usr/local)
@@ -123,7 +139,7 @@ else
 fi
 if pgrep -u root -x apache2 >/dev/null; then
     echo "the system Apache runs again"
-    curl -fsS --resolve http.test:80:127.0.0.1 http://http.test/ || rc=1
+    curl_serves --resolve http.test:80:127.0.0.1 http://http.test/ || rc=1
 else
     echo "the system Apache does not run"
     rc=1
