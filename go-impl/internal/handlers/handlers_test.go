@@ -26,7 +26,7 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"all_colors", "archive_extract", "chrome_headless_update", "dirs_find_large", "dirs_largest", "dirs_list_empty", "disk_usage", "docker_compose_check", "docker_compose_scan", "docker_compose_upgrade", "docker_prune_all", "docker_start_all", "docker_stop_all", "file_backup", "files_largest", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_help", "gash_inspiring_quote", "gash_ssh_auto_unlock", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag", "git_dump_revisions", "git_list_tags", "git_repair", "git_sync", "hgrep", "history_grep", "ip_public", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree", "mkdir_cd", "port_kill", "process_find", "process_kill", "remote_exec", "remote_hosts", "remote_pull", "remote_push", "remote_sync_pull", "remote_sync_push", "services_stop", "sudo_last", "sysinfo", "tree_stats", "wsl_compact", "wsl_explorer", "wsl_restart", "wsl_shutdown", "wsl_taskmanager"}, tbl.Names())
+	require.Equal(t, []string{"all_colors", "archive_extract", "chrome_headless_update", "dirs_find_large", "dirs_largest", "dirs_list_empty", "disk_usage", "docker_compose_check", "docker_compose_scan", "docker_compose_upgrade", "docker_prune_all", "docker_start_all", "docker_stop_all", "file_backup", "files_largest", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_doctor", "gash_env_init", "gash_help", "gash_inspiring_quote", "gash_migrate", "gash_ssh_auto_unlock", "gash_uninstall", "gash_upgrade", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag", "git_dump_revisions", "git_list_tags", "git_repair", "git_sync", "hgrep", "history_grep", "ip_public", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_grep", "llm_ports", "llm_procs", "llm_tree", "mkdir_cd", "port_kill", "process_find", "process_kill", "remote_exec", "remote_hosts", "remote_pull", "remote_push", "remote_sync_pull", "remote_sync_push", "services_stop", "sudo_last", "sysinfo", "tree_stats", "wsl_compact", "wsl_explorer", "wsl_restart", "wsl_shutdown", "wsl_taskmanager"}, tbl.Names())
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
@@ -90,7 +90,7 @@ func TestCardUnknownTopic(t *testing.T) {
 
 	_, errOut, rc = run(t, "gash", nil, false, "migrate", "--x")
 	require.Equal(t, 1, rc)
-	require.Contains(t, errOut, `"details":"gash_migrate is not implemented in this gash build"`)
+	require.Contains(t, errOut, "Error: gash_migrate: Gash 3 does not migrate a Gash 1.x configuration;")
 }
 
 func TestUsername(t *testing.T) {

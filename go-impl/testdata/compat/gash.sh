@@ -74,6 +74,22 @@ fi
 # Files that failed to load, reported by `gash_doctor`.
 __GASH_LOAD_ERRORS=()
 
+# Load timing for `gash_doctor --timing`: with GASH_TIMING=1 at load, each
+# step's cost goes to __GASH_LOAD_TIMES as "MICROSECONDS LABEL". Needs
+# $EPOCHREALTIME (Bash 5.0+); otherwise, and by default, nothing is timed.
+__GASH_LOAD_TIMES=()
+__GASH_TIMING=0
+if [[ "${GASH_TIMING-}" == "1" && -n "${EPOCHREALTIME-}" ]]; then
+    __GASH_TIMING=1
+    __GASH_T0="$EPOCHREALTIME"
+fi
+
+# Usage: __gash_time_record LABEL START  (START: an $EPOCHREALTIME value)
+__gash_time_record() {
+    local now="${EPOCHREALTIME//[!0-9]/}" start="${2//[!0-9]/}"
+    __GASH_LOAD_TIMES+=("$((10#$now - 10#$start)) $1")
+}
+
 # The help registry of 2.x is static data in the binary; this marks it as
 # loaded for needs_help, as sourcing lib/core/help.sh did.
 __GASH_HELP_LOADED=1
@@ -85,7 +101,8 @@ __GASH_HELP_LOADED=1
 # Source a shim with aliases off (they would be baked into function bodies)
 # and, in headless mode, a quiet stderr.
 __gash_source() {
-    local file="$1" rc=0 aliases_on=0
+    local file="$1" rc=0 aliases_on=0 t0=""
+    ((${__GASH_TIMING:-0})) && t0="$EPOCHREALTIME"
     if [[ ! -r "$file" ]]; then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: missing")
         return 0
@@ -101,8 +118,101 @@ __gash_source() {
     if ((rc != 0)); then
         __GASH_LOAD_ERRORS+=("${file#"$GASH_DIR"/}: exit $rc")
     fi
+    [[ -n "$t0" ]] && __gash_time_record "${file#"$GASH_DIR"/}" "$t0"
     return 0
 }
+
+# The names of functions not starting with _, of the other functions and of
+# aliases, three lists separated by \x01 lines, into the variable named $1:
+# what tells, later, which ones Gash defined. One subshell for all three,
+# none when there is nothing to list.
+__gash_symbols_now() {
+    if compgen -A function -X '__gash_*' >/dev/null || compgen -a >/dev/null; then
+        printf -v "$1" '%s' "$(
+            compgen -A function -X '_*' || true
+            printf '\001\n'
+            compgen -A function -X '!_*' || true
+            printf '\001\n'
+            compgen -a || true
+        )"
+    else
+        printf -v "$1" '\001\n\001'
+    fi
+}
+
+# From a list made by __gash_symbols_now, the part that holds functions
+# (public: those not starting with _) or aliases, into VAR.
+# Usage: __gash_symbols_pick VAR LIST functions|aliases [public]
+__gash_symbols_pick() {
+    # Bytes, not characters (\x01 never occurs inside a UTF-8 character),
+    # and offsets instead of ${list#*X}, which is quadratic in bash.
+    local LC_ALL=C
+    local list="$2" public internal aliases
+    public="${list%%$'\001'*}"
+    list="${list:${#public}+1}"
+    internal="${list%%$'\001'*}"
+    aliases="${list:${#internal}+1}"
+    case "$3|${4-}" in
+        aliases*) printf -v "$1" '%s' "$aliases" ;;
+        *"|public") printf -v "$1" '%s' "$public" ;;
+        *) printf -v "$1" '%s\n%s' "$public" "$internal" ;;
+    esac
+}
+
+# Names Gash defined while loading, into the array VAR: present right after
+# it loaded (__GASH_POST_SYMBOLS), absent from the snapshot taken before
+# (__GASH_PRE_SYMBOLS). "public" leaves out names starting with _.
+# Usage: __gash_added_symbols_to VAR functions|aliases [public]
+__gash_added_symbols_to() {
+    local -n __gas_out="$1"
+    # mapfile, not word splitting under `local -` and set -f: Bash 4.4 and
+    # 5.0 crash at exit after `local -` ran in an interactive shell.
+    local __gas_name __gas_pre __gas_post LC_ALL=C
+    local -a __gas_lines=() __gas_kept=()
+    __gash_symbols_pick __gas_pre "${__GASH_PRE_SYMBOLS-}" "${2-}" "${3-}"
+    __gash_symbols_pick __gas_post "${__GASH_POST_SYMBOLS-}" "${2-}" "${3-}"
+    mapfile -t __gas_lines <<<"$__gas_post"
+    for __gas_name in ${__gas_lines[@]+"${__gas_lines[@]}"}; do
+        [[ -n "$__gas_name" ]] && __gas_kept+=("$__gas_name")
+    done
+    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
+    # Usually little or nothing existed before: one lookup per name.
+    [[ -n "${__gas_pre//$'\n'/}" && ${#__gas_out[@]} -gt 0 ]] || return 0
+    local -A __gas_before=()
+    mapfile -t __gas_lines <<<"$__gas_pre"
+    for __gas_name in ${__gas_lines[@]+"${__gas_lines[@]}"}; do
+        [[ -n "$__gas_name" ]] && __gas_before["$__gas_name"]=1
+    done
+    __gas_kept=()
+    for __gas_name in "${__gas_out[@]}"; do
+        [[ -n "${__gas_before["$__gas_name"]+x}" ]] || __gas_kept+=("$__gas_name")
+    done
+    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
+    return 0
+}
+
+# Snapshot the pre-Gash state for `gash_unload` now, before Gash defines a
+# single function, alias or changes a variable, so the whole Gash surface
+# counts as "added" and is removed on unload (2.x took it here too, in its
+# interactive section). Interactive only; not on a re-source (the first
+# load's pre-Gash state is kept).
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+    __GASH_SNAPSHOT_TAKEN=1
+    __GASH_SNAPSHOT=()
+    for __gash_var in PS1 PS2 HISTCONTROL HISTTIMEFORMAT HISTSIZE HISTFILESIZE EDITOR PATH; do
+        if [[ -n "${!__gash_var+x}" ]]; then
+            __GASH_SNAPSHOT+=("$__gash_var=${!__gash_var}")
+        else
+            __GASH_SNAPSHOT+=("$__gash_var")
+        fi
+    done
+    shopt -q histappend && __GASH_SNAPSHOT+=("shopt:histappend=1") || __GASH_SNAPSHOT+=("shopt:histappend=0")
+    shopt -q checkwinsize && __GASH_SNAPSHOT+=("shopt:checkwinsize=1") || __GASH_SNAPSHOT+=("shopt:checkwinsize=0")
+    __gash_symbols_now __GASH_PRE_SYMBOLS
+    unset __gash_var
+fi
+((__GASH_TIMING)) && __gash_time_record "gash.sh: snapshot" "$__GASH_T1"
 
 # The bootstrap first (binary resolution, __gash_call), then the four core
 # shims, in the 2.x order.
@@ -116,7 +226,10 @@ __gash_source "$GASH_DIR/lib/core/config.sh"
 # Functions of the modules (they run in the gash binary)
 # -----------------------------------------------------------------------------
 
+# Each module's functions are timed under the name of its 2.x file.
+
 # ai
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 ai_ask() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_ask "$@"
@@ -129,22 +242,30 @@ ai_sysinfo() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call ai_sysinfo "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/ai.sh" "$__GASH_T1"
 
 # chrome
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 chrome_headless_update() { __gash_call chrome_headless_update "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/chrome.sh" "$__GASH_T1"
 
 # docker
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 docker_prune_all() { __gash_call docker_prune_all "$@"; }
 docker_start_all() { __gash_call docker_start_all "$@"; }
 docker_stop_all() { __gash_call docker_stop_all "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/docker.sh" "$__GASH_T1"
 
 # docker-compose
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 docker_compose_check() { __gash_call docker_compose_check "$@"; }
 docker_compose_scan() { __gash_call docker_compose_scan "$@"; }
 docker_compose_upgrade() { __gash_call docker_compose_upgrade "$@"; }
 llm_docker_check() { __gash_call llm_docker_check "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/docker-compose.sh" "$__GASH_T1"
 
 # files
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 archive_extract() { __gash_call archive_extract "$@"; }
 dirs_find_large() { __gash_call dirs_find_large "$@"; }
 dirs_largest() { __gash_call dirs_largest "$@"; }
@@ -152,8 +273,10 @@ dirs_list_empty() { __gash_call dirs_list_empty "$@"; }
 file_backup() { __gash_call file_backup "$@"; }
 files_largest() { __gash_call files_largest "$@"; }
 tree_stats() { __gash_call tree_stats "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/files.sh" "$__GASH_T1"
 
 # gash
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     # The card shows the value this shell gives an alias of the card, as
@@ -167,7 +290,23 @@ gash() {
     done
     GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
 }
-gash_doctor() { __gash_call gash_doctor "$@"; }
+gash_doctor() {
+    # The doctor reports what this shell holds: the files that failed to
+    # load (__GASH_LOAD_ERRORS, one per line) and the known settings set
+    # here (NAME<TAB>VALUE lines), backslash and newline escaped.
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_errs="" __gash_set=""
+    for __gash_v in ${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"}; do
+        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_errs+=${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    for __gash_n in ${__GASH_SETTINGS_KNOWN-}; do
+        [[ -n "${!__gash_n+x}" ]] || continue
+        __gash_v=${!__gash_n}
+        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_set+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__LOAD_ERRORS="$__gash_errs" GASH__SETTINGS="$__gash_set" __gash_call gash_doctor "$@"
+}
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
     local __gash_a
@@ -182,12 +321,112 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
-gash_uninstall() { __gash_call gash_uninstall "$@"; }
-gash_unload() { __gash_call gash_unload "$@"; }
+gash_uninstall() {
+    # The questions are asked in this shell with needs_confirm_prompt (a
+    # harness may redefine it); the binary checks and removes, one step
+    # per call (GASH__UNINSTALL, internal/selfmgmt).
+    local __gash_rc=0 __gash_env
+    case "${1-}" in
+        -h | --help)
+            __gash_call gash_uninstall "$@"
+            return
+            ;;
+    esac
+    GASH__UNINSTALL=check __gash_call gash_uninstall "$@" || return
+    if ! needs_confirm_prompt "Continue?"; then
+        __gash_info "Uninstall cancelled."
+        return 0
+    fi
+    GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
+    ((__gash_rc == 10)) || return "$__gash_rc"
+    __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    if needs_confirm_prompt "Remove ${__gash_env/#$HOME/\~}?"; then
+        GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
+    else
+        GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
+    fi
+}
+gash_unload() {
+    needs_help "gash_unload" "gash_unload" \
+        "Restores the shell state saved before Gash was loaded (best-effort)." \
+        "${1-}" && return
+
+    if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+        __gash_error "Gash snapshot not found. Source gash.sh first."
+        return 1
+    fi
+
+    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
+    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
+        __gash_prompt_uninstall
+    fi
+
+    # Restore variables, shell options and umask from the load-time snapshot.
+    local __gash_entry __gash_key
+    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
+        case "$__gash_entry" in
+            shopt:*)
+                __gash_key="${__gash_entry#shopt:}"
+                if [[ "$__gash_entry" == *=1 ]]; then
+                    shopt -s "${__gash_key%=*}" 2>/dev/null
+                else
+                    shopt -u "${__gash_key%=*}" 2>/dev/null
+                fi
+                ;;
+            umask=*) umask "${__gash_entry#umask=}" ;;
+            *=*)
+                __gash_key="${__gash_entry%%=*}"
+                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
+                ;;
+            *) unset "$__gash_entry" ;;
+        esac
+    done
+
+    # Remove aliases and functions introduced by Gash.
+    local __gash_name
+    local -a __gash_names=()
+    __gash_added_symbols_to __gash_names aliases
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        unalias "$__gash_name" >/dev/null 2>&1 || true
+    done
+    __gash_added_symbols_to __gash_names functions
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        [[ "$__gash_name" == "gash_unload" ]] && continue
+        unset -f "$__gash_name" >/dev/null 2>&1 || true
+    done
+
+    # Per-prefix function sweep: the load-time snapshot misses functions
+    # defined AFTER it was taken (alias loader, prompt, completion, helpers
+    # created at runtime). Anything gash_* / __gash_* goes.
+    local __gash_fn
+    while IFS= read -r __gash_fn; do
+        [[ -z "${__gash_fn}" ]] && continue
+        [[ "${__gash_fn}" == "gash_unload" ]] && continue
+        unset -f "${__gash_fn}" >/dev/null 2>&1 || true
+    done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
+
+    # Per-prefix variable sweep: includes the cached secrets which must
+    # never survive an unload, plus colors, PS1 caches, help registry.
+    local __gash_var
+    while IFS= read -r __gash_var; do
+        [[ -z "${__gash_var}" ]] && continue
+        unset "${__gash_var}" >/dev/null 2>&1 || true
+    done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
+    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
+
+    unset __gash_name
+
+    # Finally, remove gash_unload itself
+    unset -f gash_unload >/dev/null 2>&1 || true
+
+    return 0
+}
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
 
 # git
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 git_add_tag() { __gash_call git_add_tag "$@"; }
 git_apply_patch() { __gash_call git_apply_patch "$@"; }
 git_delete_tag() { __gash_call git_delete_tag "$@"; }
@@ -195,8 +434,10 @@ git_dump_revisions() { __gash_call git_dump_revisions "$@"; }
 git_list_tags() { __gash_call git_list_tags "$@"; }
 git_repair() { __gash_call git_repair "$@"; }
 git_sync() { __gash_call git_sync "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/git.sh" "$__GASH_T1"
 
 # llm
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 llm_config() { __gash_call llm_config "$@"; }
 llm_db_explain() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
@@ -233,16 +474,22 @@ llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/llm.sh" "$__GASH_T1"
 
 # node
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 node_detect_version() { __gash_call node_detect_version "$@"; }
 node_upgrade() { __gash_call node_upgrade "$@"; }
 nvm_prune_versions() { __gash_call nvm_prune_versions "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
 # php
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 php_detect_version() { __gash_call php_detect_version "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/php.sh" "$__GASH_T1"
 
 # remote
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 remote_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_exec "$@"
@@ -267,8 +514,10 @@ remote_sync_push() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call remote_sync_push "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/remote.sh" "$__GASH_T1"
 
 # ssh
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash_ssh_auto_unlock() {
     case "${1-}" in
         -h | --help)
@@ -285,11 +534,15 @@ gash_ssh_auto_unlock() {
     [[ -z "$__gash_go" ]] || eval "$__gash_go"
     return "$__gash_rc"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
 # sysinfo
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 sysinfo() { __gash_call sysinfo "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/sysinfo.sh" "$__GASH_T1"
 
 # system
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 disk_usage() { __gash_call disk_usage "$@"; }
 hgrep() {
     local __gash_go="" __gash_rc=0
@@ -365,12 +618,15 @@ wsl_shutdown() {
     GASH__RESUME=1 __gash_call wsl_shutdown "$@"
 }
 wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/system.sh" "$__GASH_T1"
 
 # migrate
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 gash_migrate() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call gash_migrate "$@"
 }
+((__GASH_TIMING)) && __gash_time_record "lib/modules/migrate.sh" "$__GASH_T1"
 
 # -----------------------------------------------------------------------------
 # Module short aliases (defined in headless mode too: agent contract)
@@ -448,45 +704,10 @@ fi
 # Interactive mode
 # -----------------------------------------------------------------------------
 
-# The names of functions not starting with _, of the other functions and of
-# aliases, three lists separated by \x01 lines, into the variable named $1:
-# what tells, later, which ones Gash defined. One subshell for all three,
-# none when there is nothing to list.
-__gash_symbols_now() {
-    if compgen -A function -X '__gash_*' >/dev/null || compgen -a >/dev/null; then
-        printf -v "$1" '%s' "$(
-            compgen -A function -X '_*' || true
-            printf '\001\n'
-            compgen -A function -X '!_*' || true
-            printf '\001\n'
-            compgen -a || true
-        )"
-    else
-        printf -v "$1" '\001\n\001'
-    fi
-}
-
-# Snapshot the state Gash is about to change, for `gash_unload`, unless a
-# 2.x or 3.x load already took it (re-sourcing keeps the pre-Gash state).
-if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
-    __GASH_SNAPSHOT_TAKEN=1
-    __GASH_SNAPSHOT=()
-    for __gash_var in PS1 PS2 HISTCONTROL HISTTIMEFORMAT HISTSIZE HISTFILESIZE EDITOR PATH; do
-        if [[ -n "${!__gash_var+x}" ]]; then
-            __GASH_SNAPSHOT+=("$__gash_var=${!__gash_var}")
-        else
-            __GASH_SNAPSHOT+=("$__gash_var")
-        fi
-    done
-    shopt -q histappend && __GASH_SNAPSHOT+=("shopt:histappend=1") || __GASH_SNAPSHOT+=("shopt:histappend=0")
-    shopt -q checkwinsize && __GASH_SNAPSHOT+=("shopt:checkwinsize=1") || __GASH_SNAPSHOT+=("shopt:checkwinsize=0")
-    __gash_symbols_now __GASH_PRE_SYMBOLS
-    unset __gash_var
-fi
-
 # The interactive layer (prompt, history, terminal, toolchains, alias packs,
 # banner, SSH unlock) comes from the binary, evaluated here at top level.
 # Without a binary: one stderr line, and the stubs answer binary_not_found.
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 if __gash_bin_resolve || __gash_fetch loud; then
     if declare -F __gash_stdout_tty >/dev/null && __gash_stdout_tty; then __gash_tty_out=1; else __gash_tty_out=0; fi
     if __gash_init="$(__gash_export_state __init && GASH__TTY_OUT=$__gash_tty_out "$__GASH_BIN" init bash)"; then
@@ -501,14 +722,23 @@ if __gash_bin_resolve || __gash_fetch loud; then
     fi
     unset __gash_init __gash_tty_out
 fi
+((__GASH_TIMING)) && __gash_time_record "gash init bash" "$__GASH_T1"
 
 # Record what exists after loading; `gash_unload` removes what is here but
 # was not in the snapshot taken before.
-[[ -n "${__GASH_POST_SYMBOLS-}" ]] || __gash_symbols_now __GASH_POST_SYMBOLS
+if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
+    ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+    __gash_symbols_now __GASH_POST_SYMBOLS
+    ((__GASH_TIMING)) && __gash_time_record "gash.sh: symbol list" "$__GASH_T1"
+fi
 
 # User customizations, last so they can override anything above.
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
+((__GASH_TIMING)) && __gash_time_record "user files: ~/.bash_aliases, ~/.bash_local" "$__GASH_T1"
+
+((__GASH_TIMING)) && __gash_time_record "gash.sh (total)" "$__GASH_T0"
 
 # Keep the file's status 0: a `set -e` caller sourcing ~/.gashrc must not
 # die because the last optional file was missing.

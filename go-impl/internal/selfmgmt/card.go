@@ -149,20 +149,29 @@ func liveAliases(v string) map[string]string {
 		if !ok || name == "" {
 			continue
 		}
-		var b strings.Builder
-		for i := 0; i < len(value); i++ {
-			if value[i] == '\\' && i+1 < len(value) {
-				i++
-				if value[i] == 'n' {
-					b.WriteByte('\n')
-					continue
-				}
-			}
-			b.WriteByte(value[i])
-		}
-		live[name] = b.String()
+		live[name] = unescapeLine(value)
 	}
 	return live
+}
+
+// unescapeLine undoes the stubs' escaping of one value: \\ is a
+// backslash and \n a newline.
+func unescapeLine(value string) string {
+	if !strings.Contains(value, "\\") {
+		return value
+	}
+	var b strings.Builder
+	for i := 0; i < len(value); i++ {
+		if value[i] == '\\' && i+1 < len(value) {
+			i++
+			if value[i] == 'n' {
+				b.WriteByte('\n')
+				continue
+			}
+		}
+		b.WriteByte(value[i])
+	}
+	return b.String()
 }
 
 // readTab is IFS=$'\t' read -r name value on one line: tabs around the

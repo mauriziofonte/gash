@@ -5,11 +5,9 @@ package runner
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
-	"strings"
 )
 
-// BashUse names one of the two sanctioned uses of bash -c.
+// BashUse names one of the sanctioned uses of bash -c.
 type BashUse int
 
 const (
@@ -22,6 +20,19 @@ const (
 	// NVMBridgeScript; the nvm arguments are positional parameters, never
 	// part of the script.
 	BashNVMBridge
+	// BashDoctorLoad is the load probe of gash_doctor --timing: a new
+	// interactive bash --noprofile --norc runs the fixed script
+	// DoctorLoadScript, which sources the gash.sh and bash_completion of
+	// the install directory (its one argument, $1; $0 is "gash-timing")
+	// and prints the load times the files recorded (GASH_TIMING=1 in Env).
+	BashDoctorLoad
+	// BashDoctorShell is the whole-shell timing of gash_doctor --timing:
+	// `bash -i -c exit`, a new interactive shell with the user's startup
+	// files (~/.bashrc runs, as in 2.x: LEDGER SELF-15).
+	BashDoctorShell
+	// BashDoctorBare is the same timing of bash alone: `bash --noprofile
+	// --norc -i -c exit`.
+	BashDoctorBare
 )
 
 func (u BashUse) String() string {
@@ -30,9 +41,26 @@ func (u BashUse) String() string {
 		return "llm_exec"
 	case BashNVMBridge:
 		return "nvm bridge"
+	case BashDoctorLoad:
+		return "doctor load"
+	case BashDoctorShell:
+		return "doctor shell"
+	case BashDoctorBare:
+		return "doctor bare"
 	}
 	return fmt.Sprintf("BashUse(%d)", int(u))
 }
+
+// DoctorLoadScript is the whole script of BashDoctorLoad, the 2.x probe
+// with its redirections (3>&1 >/dev/null 2>&1) moved inside: the load
+// times go to the probe's stdout, everything the files print is dropped.
+const DoctorLoadScript = `exec 3>&1 >/dev/null 2>&1
+source "$1/gash.sh"
+[[ -f "$1/bash_completion" ]] && source "$1/bash_completion"
+printf "%s\n" "${__GASH_LOAD_TIMES[@]}" >&3`
+
+// doctorExit is the script of the whole-shell timings.
+const doctorExit = "exit"
 
 // NVMBridgeScript is the whole script of BashNVMBridge: it loads nvm the
 // way the 2.x lazy stub does (nvm.sh --no-use, so PATH keeps the version
@@ -40,7 +68,8 @@ func (u BashUse) String() string {
 const NVMBridgeScript = `source "$NVM_DIR/nvm.sh" --no-use || exit 1
 nvm "$@"`
 
-// Bash is a run of bash --noprofile --norc -c SCRIPT [NAME ARGS...].
+// Bash is a run of bash --noprofile --norc -c SCRIPT [NAME ARGS...]; the
+// doctor uses add -i, and BashDoctorShell runs `bash -i -c exit`.
 type Bash struct {
 	Use BashUse
 	// Wrap is an argv prefix the shell runs under (llm_exec's bwrap
@@ -50,7 +79,7 @@ type Bash struct {
 	// Bash is the bash program, looked up as Cmd.Path is; "" means "bash".
 	Bash string
 	// Script is the script: required for BashLLMExec, empty (or exactly
-	// NVMBridgeScript) for BashNVMBridge.
+	// the fixed script of the use) for the others.
 	Script string
 	// Name is $0 and Args are $1...; with both empty no positional
 	// parameters follow the script. BashNVMBridge always passes them, with
@@ -83,6 +112,27 @@ func (b Bash) argv() ([]string, error) {
 		if name == "" {
 			name = "nvm"
 		}
+	case BashDoctorLoad, BashDoctorShell, BashDoctorBare:
+		want := doctorExit
+		if b.Use == BashDoctorLoad {
+			want = DoctorLoadScript
+		}
+		if script != "" && script != want {
+			return nil, fmt.Errorf("%w: %s runs only its fixed script", ErrBashUse, b.Use)
+		}
+		if len(b.Wrap) > 0 {
+			return nil, fmt.Errorf("%w: %s takes no wrapper", ErrBashUse, b.Use)
+		}
+		if b.Use == BashDoctorLoad && (len(args) != 1 || (name != "" && name != "gash-timing")) {
+			return nil, fmt.Errorf("%w: %s takes the install directory only", ErrBashUse, b.Use)
+		}
+		if b.Use != BashDoctorLoad && (name != "" || len(args) > 0) {
+			return nil, fmt.Errorf("%w: %s takes no arguments", ErrBashUse, b.Use)
+		}
+		script = want
+		if b.Use == BashDoctorLoad {
+			name = "gash-timing"
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrBashUse, b.Use)
 	}
@@ -93,7 +143,15 @@ func (b Bash) argv() ([]string, error) {
 	if bash == "" {
 		bash = "bash"
 	}
-	argv := append(append([]string{}, b.Wrap...), bash, "--noprofile", "--norc", "-c", script)
+	flags := []string{"--noprofile", "--norc", "-c"}
+	switch b.Use {
+	case BashDoctorLoad, BashDoctorBare:
+		flags = []string{"--noprofile", "--norc", "-i", "-c"}
+	case BashDoctorShell:
+		flags = []string{"-i", "-c"}
+	}
+	argv := append(append(append([]string{}, b.Wrap...), bash), flags...)
+	argv = append(argv, script)
 	if name != "" || len(args) > 0 {
 		if name == "" {
 			name = "bash"
@@ -102,73 +160,3 @@ func (b Bash) argv() ([]string, error) {
 	}
 	return argv, nil
 }
-
-// shells are the program names checkNoShell treats as command shells.
-var shells = map[string]bool{
-	"sh": true, "bash": true, "dash": true, "ash": true, "zsh": true, "ksh": true, "ksh93": true,
-	"mksh": true, "pdksh": true, "yash": true, "posh": true, "fish": true, "csh": true, "tcsh": true,
-}
-
-// checkNoShell refuses an argv that starts a shell with a command string
-// anywhere in it, also behind a wrapper (sudo sh -c, env bash -c, nice
-// dash -ec, busybox sh -c), and su -c. It is a tripwire against a shell
-// string reaching Run, not a sandbox: what a program does with its
-// arguments is its own business.
-func checkNoShell(argv []string) error {
-	for i, tok := range argv {
-		base := filepath.Base(tok)
-		if base == "su" && hasCommandOption(argv[i+1:], false) {
-			return fmt.Errorf("%w: %s -c", ErrShellCommand, base)
-		}
-		if shells[base] && hasCommandOption(argv[i+1:], true) {
-			return fmt.Errorf("%w: %s -c", ErrShellCommand, base)
-		}
-	}
-	return nil
-}
-
-// hasCommandOption reports a -c (or --command) among the options that
-// follow a shell (or su) name, up to the first operand.
-func hasCommandOption(args []string, shell bool) bool {
-	for j := 0; j < len(args); j++ {
-		a := args[j]
-		switch {
-		case a == "--":
-			return false
-		case a == "--command" || strings.HasPrefix(a, "--command="):
-			return true
-		case strings.HasPrefix(a, "--"):
-			if shell && (a == "--rcfile" || a == "--init-file") {
-				j++
-			}
-			if !shell && !strings.Contains(a, "=") && suLongWithValue[a] {
-				j++
-			}
-		case len(a) > 1 && (a[0] == '-' || (shell && a[0] == '+')):
-			for k := 1; k < len(a); k++ {
-				switch a[k] {
-				case 'c':
-					if a[0] == '-' {
-						return true
-					}
-				case 'o', 'O':
-					if shell {
-						j++ // -o OPTION, -O SHOPT
-					}
-				case 'g', 'G', 's', 'w':
-					if !shell {
-						j++ // su -g GROUP, -s SHELL, ...
-					}
-				}
-			}
-		default:
-			if shell {
-				return false // the script file or a non-option: no command string
-			}
-		}
-	}
-	return false
-}
-
-// suLongWithValue are su's long options that take a separate value.
-var suLongWithValue = map[string]bool{"--group": true, "--supp-group": true, "--shell": true, "--whitelist-environment": true}

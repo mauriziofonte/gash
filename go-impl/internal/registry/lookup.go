@@ -104,7 +104,9 @@ func (f *Function) StubVars() []string {
 // except the gash card itself (the binary's root), the Bash helpers of
 // the core shims (needs_help, needs_confirm_prompt, path_add) and the
 // interactive-only shell functions that gash init bash emits. gash_unload
-// is delegated while its Bash body is not emitted yet (M6).
+// counts here (it gets a stub slot, filled by the stub/gash_unload
+// override), although its override runs entirely in Bash and never calls
+// the binary for the function itself, only needs_help for --help.
 func (f *Function) Delegated() bool {
 	switch {
 	case f.Name == "gash":

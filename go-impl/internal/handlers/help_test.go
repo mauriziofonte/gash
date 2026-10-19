@@ -25,6 +25,34 @@ func run2xGash(t *testing.T, env []string, script string) (string, string, int) 
 	}
 	root, err := filepath.Abs(repoRoot)
 	require.NoError(t, err)
+	return run2xIn(t, root, env, script)
+}
+
+// copy2x is a copy of the committed 2.x runtime files in a new temporary
+// directory, for the self-management functions, which act on the tree
+// gash.sh is sourced from (GASH_DIR): they never run on the checkout.
+func copy2x(t *testing.T) string {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(repoRoot, "lib/modules/gash.sh")); err != nil {
+		t.Skip("the 2.x sources are not in this tree")
+	}
+	dir := filepath.Join(t.TempDir(), "gash")
+	require.NoError(t, os.Mkdir(dir, 0o755))
+	archive := exec.Command("git", "-C", repoRoot, "archive", "HEAD",
+		"gash.sh", "bash_completion", "VERSION", ".gash_env.template", ".gashrc", "lib", "quotes")
+	extract := exec.Command("tar", "-x", "-C", dir)
+	pipe, err := archive.StdoutPipe()
+	require.NoError(t, err)
+	extract.Stdin = pipe
+	require.NoError(t, extract.Start())
+	require.NoError(t, archive.Run())
+	require.NoError(t, extract.Wait())
+	return dir
+}
+
+// run2xIn runs script in an interactive 2.x shell that sourced root/gash.sh.
+func run2xIn(t *testing.T, root string, env []string, script string) (string, string, int) {
+	t.Helper()
 	cmd := exec.Command("bash", "--noprofile", "--norc", "-i", "-c",
 		`source "$1/gash.sh" >/dev/null 2>&1; GASH_VERSION=test; `+script, "_", root)
 	cmd.Env = append([]string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin", "TERM=dumb"}, env...)

@@ -32,11 +32,7 @@ func (m *Module) quote(c *invoke.Call) int {
 		return 1
 	}
 
-	dir := c.Env.Get("GASH_DIR")
-	if dir == "" {
-		dir = c.Env.Get("HOME") + "/.gash"
-	}
-	b, err := m.readFile(dir + "/quotes/list.txt")
+	b, err := m.readFile(installDir(c) + "/quotes/list.txt")
 	if err != nil {
 		return 1
 	}

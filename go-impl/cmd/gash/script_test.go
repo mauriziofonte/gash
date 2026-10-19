@@ -7,7 +7,8 @@ package main
 //
 // Each script gets a clean environment:
 //
-//	HOME        $WORK/home (empty; ~/.gash_env and the XDG dirs live there)
+//	HOME        $WORK/home (the archive's home/ files; ~/.gash_env and the
+//	            XDG dirs live there)
 //	GASH_STAGE  a staged tree (`gash __compat stage`): the checkout with
 //	            the generated gash.sh, shims and bash_completion
 //	GASH_SH     $GASH_STAGE/gash.sh, for `exec bash -c 'source "$GASH_SH"; ...'`
@@ -69,8 +70,9 @@ func TestScript(t *testing.T) {
 			return false, fmt.Errorf("unknown condition %q", cond)
 		},
 		Setup: func(env *testscript.Env) error {
+			// A script's archive may hold files under home/ already.
 			home := filepath.Join(env.WorkDir, "home")
-			if err := os.Mkdir(home, 0o755); err != nil {
+			if err := os.MkdirAll(home, 0o755); err != nil {
 				return err
 			}
 			env.Setenv("HOME", home)

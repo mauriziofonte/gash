@@ -13,22 +13,29 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-// fakeProcs answers command -v and $(...) from a table keyed by argv.
+// fakeProcs answers command -v from have and each start from out (keyed
+// by argv, stdout), through a runner.Fake that expects the starts in ran.
 type fakeProcs struct {
 	have map[string]bool
 	out  map[string]string
 	ran  []string
 }
 
-func (f *fakeProcs) found(_ string, name string) bool { return f.have[name] }
-
-func (f *fakeProcs) output(_ *invoke.Call, _ string, argv ...string) string {
-	k := strings.Join(argv, " ")
-	f.ran = append(f.ran, k)
-	return f.out[k]
+func (f *fakeProcs) module(t *testing.T, passwd string, readErr error) *Module {
+	var ex []runner.Expect
+	for _, k := range f.ran {
+		ex = append(ex, runner.Expect{Argv: strings.Fields(k), Stdout: f.out[k] + "\n"})
+	}
+	return &Module{
+		run:        runner.NewFake(t, ex...),
+		lookPathFn: func(name string) (string, bool) { return "/bin/" + name, f.have[name] },
+		passwd:     "/etc/passwd",
+		readFile:   func(string) ([]byte, error) { return []byte(passwd), readErr },
+	}
 }
 
 func run(t *testing.T, m *Module, env map[string]string, args ...string) (string, int) {
@@ -41,12 +48,6 @@ func run(t *testing.T, m *Module, env map[string]string, args ...string) (string
 	rc := tbl.Run(c)
 	require.Empty(t, errb.String())
 	return out.String(), rc
-}
-
-func module(p *fakeProcs, passwd string, readErr error) *Module {
-	return &Module{proc: p, passwd: "/etc/passwd", readFile: func(string) ([]byte, error) {
-		return []byte(passwd), readErr
-	}}
 }
 
 func TestUsernameChain(t *testing.T) {
@@ -70,41 +71,40 @@ func TestUsernameChain(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, rc := run(t, module(tc.procs, tc.passwd, nil), nil)
+			tc.procs.ran = tc.ran
+			out, rc := run(t, tc.procs.module(t, tc.passwd, nil), nil)
 			require.Equal(t, 0, rc)
 			require.Equal(t, tc.want, out)
-			require.Equal(t, tc.ran, tc.procs.ran)
 		})
 	}
 }
 
 func TestUsernameUnreadablePasswd(t *testing.T) {
-	p := &fakeProcs{have: map[string]bool{"id": true}, out: map[string]string{"id -u": "0"}}
-	out, rc := run(t, module(p, "root:x:0:0::/root:/bin/sh\n", errors.New("denied")), nil)
+	p := &fakeProcs{have: map[string]bool{"id": true}, out: map[string]string{"id -u": "0"}, ran: []string{"id -un", "id -u"}}
+	out, rc := run(t, p.module(t, "root:x:0:0::/root:/bin/sh\n", errors.New("denied")), nil)
 	require.Equal(t, 0, rc)
 	require.Equal(t, "UNKNOWN_USERNAME\n", out)
 }
 
 func TestUsernameIgnoresExtraArguments(t *testing.T) {
-	p := &fakeProcs{have: map[string]bool{"whoami": true}, out: map[string]string{"whoami": "alice"}}
-	out, _ := run(t, module(p, "", nil), nil, "extra", "words")
+	p := &fakeProcs{have: map[string]bool{"whoami": true}, out: map[string]string{"whoami": "alice"}, ran: []string{"whoami"}}
+	out, _ := run(t, p.module(t, "", nil), nil, "extra", "words")
 	require.Equal(t, "alice\n", out)
 }
 
 func TestUsernameHelp(t *testing.T) {
 	p := &fakeProcs{}
 	// Registry loaded (direct call or gash.sh): the registered help page.
-	out, rc := run(t, module(p, "", nil), nil, "--help")
+	out, rc := run(t, p.module(t, "", nil), nil, "--help")
 	require.Equal(t, 0, rc)
 	require.Equal(t, "\n  gash_username  (module: gash)\n\n  Print the current user name\n\n"+
 		"  USAGE\n    gash_username\n\n  EXAMPLES\n    # The name the banner and the prompt show\n    gash_username\n\n"+
 		"  NOTES\n    Tries whoami, then id -un, then the /etc/passwd entry of the\n"+
 		"    current user id; prints UNKNOWN_USERNAME when all of them fail.\n\n", out)
 	// Registry not loaded in the caller's shell: the needs_help fallback.
-	out, rc = run(t, module(p, "", nil), map[string]string{"GASH__HELP": "0"}, "-h")
+	out, rc = run(t, p.module(t, "", nil), map[string]string{"GASH__HELP": "0"}, "-h")
 	require.Equal(t, 0, rc)
 	require.Equal(t, "gash_username\nUsage: gash_username\nPrint the current user name.\n", out)
-	require.Empty(t, p.ran)
 }
 
 // The real chain on this machine: whoami from a fake PATH.

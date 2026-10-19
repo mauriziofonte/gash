@@ -310,6 +310,19 @@ func TestShellCommandRefused(t *testing.T) {
 		{"su", "root", "-c", "x"},
 		{"su", "-s", "/bin/sh", "-", "root", "-c", "x"},
 		{"su", "--command=x"},
+		{"sudo", "-E", "HOME=/root", "bash", "-c", "x"},
+		{"sudo", "--user=root", "--", "sh", "-c", "x"},
+		{"env", "-u", "PATH", "-C", "/tmp", "A=1", "bash", "-c", "x"},
+		{"env", "-S", "sh -c x"},
+		{"env", "--split-string=bash -ec", "x"},
+		{"nice", "-n", "10", "sh", "-c", "x"},
+		{"nice", "-10", "sh", "-c", "x"},
+		{"timeout", "-s", "KILL", "5", "bash", "-c", "x"},
+		{"stdbuf", "-oL", "nohup", "setsid", "dash", "-c", "x"},
+		{"ionice", "-c", "3", "bash", "-c", "x"},
+		{"xargs", "-0", "-n", "1", "sh", "-c", "x"},
+		{"chroot", "/srv", "/bin/sh", "-c", "x"},
+		{"sudo", "su", "-c", "x"},
 	}
 	for _, argv := range refused {
 		_, err := Exec{}.Run(context.Background(), Cmd{Path: argv[0], Args: argv[1:]})
@@ -327,6 +340,15 @@ func TestShellCommandRefused(t *testing.T) {
 		{"pgrep", "-c", "sh"},
 		{"su", "-", "root"},
 		{"git", "-c", "core.pager=cat", "log"},
+		{"git", "tag", "-a", "bash", "-m", "-c"},
+		{"git", "commit", "-m", "sh", "-c"},
+		{"ssh", "host", "bash", "-c", "x"},
+		{"rsync", "-e", "ssh", "sh", "-c"},
+		{"sudo", "-u", "bash", "true", "-c"},
+		{"env", "A=1", "git", "tag", "-a", "sh", "-m", "-c"},
+		{"busybox", "--list"},
+		{"timeout", "5"},
+		{"env"},
 	}
 	for _, argv := range allowed {
 		if err := checkNoShell(argv); err != nil {
@@ -354,9 +376,30 @@ func TestBashArgv(t *testing.T) {
 		t.Errorf("positional argv = %q %v", argv, err)
 	}
 
+	argv, err = Bash{Use: BashDoctorLoad, Bash: "/bin/bash", Args: []string{"/home/u/.gash"}}.argv()
+	if want := []string{"/bin/bash", "--noprofile", "--norc", "-i", "-c", DoctorLoadScript, "gash-timing", "/home/u/.gash"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("doctor load argv = %q %v", argv, err)
+	}
+	argv, err = Bash{Use: BashDoctorShell}.argv()
+	if want := []string{"bash", "-i", "-c", "exit"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("doctor shell argv = %q %v", argv, err)
+	}
+	argv, err = Bash{Use: BashDoctorBare, Script: "exit"}.argv()
+	if want := []string{"bash", "--noprofile", "--norc", "-i", "-c", "exit"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("doctor bare argv = %q %v", argv, err)
+	}
+
 	for _, b := range []Bash{
 		{},
 		{Use: BashLLMExec},
+		{Use: BashDoctorLoad},
+		{Use: BashDoctorLoad, Args: []string{"/d", "x"}},
+		{Use: BashDoctorLoad, Args: []string{"/d"}, Name: "other"},
+		{Use: BashDoctorLoad, Args: []string{"/d"}, Script: "rm -rf ~"},
+		{Use: BashDoctorLoad, Args: []string{"/d"}, Wrap: []string{"nice"}},
+		{Use: BashDoctorShell, Script: "rm -rf ~"},
+		{Use: BashDoctorShell, Args: []string{"x"}},
+		{Use: BashDoctorBare, Name: "x"},
 		{Use: BashNVMBridge, Script: "nvm ls; rm -rf ~"},
 		{Use: BashNVMBridge, Wrap: []string{"bwrap"}},
 		{Use: BashLLMExec, Script: "s", Wrap: []string{"sudo", "sh", "-c", "x"}},
@@ -366,7 +409,8 @@ func TestBashArgv(t *testing.T) {
 			t.Errorf("%+v: %v, want a refusal", b, err)
 		}
 	}
-	if BashLLMExec.String() != "llm_exec" || BashNVMBridge.String() != "nvm bridge" || BashUse(7).String() != "BashUse(7)" {
+	if BashLLMExec.String() != "llm_exec" || BashNVMBridge.String() != "nvm bridge" || BashDoctorLoad.String() != "doctor load" ||
+		BashDoctorShell.String() != "doctor shell" || BashDoctorBare.String() != "doctor bare" || BashUse(7).String() != "BashUse(7)" {
 		t.Error("BashUse.String")
 	}
 }

@@ -3,6 +3,7 @@
 package term
 
 import (
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -64,4 +65,24 @@ func TestLocaleGlyphs(t *testing.T) {
 	require.False(t, LocaleUTF8(mapEnv{}))
 	require.Equal(t, "✓", Fixed(mapEnv{"LANG": "C.UTF-8"}, false, false, false).Glyphs().OK)
 	require.Equal(t, "+", Fixed(mapEnv{"LANG": "C"}, false, false, false).Glyphs().OK)
+}
+
+// A test terminal types the same input at every open, or successive
+// answers at successive opens; without one the open fails.
+func TestFakeTTYAnswers(t *testing.T) {
+	read := func(tt *Term) string {
+		f, err := tt.OpenTTY()
+		require.NoError(t, err)
+		b, err := io.ReadAll(f)
+		require.NoError(t, err)
+		return string(b)
+	}
+	same := Fixed(nil, true, true, true).WithTTY("y\n")
+	answers := Fixed(nil, true, true, true).WithTTYAnswers("y\n", "n\n")
+	for _, want := range []string{"y\n", "n\n", ""} {
+		require.Equal(t, "y\n", read(same))
+		require.Equal(t, want, read(answers))
+	}
+	_, err := Fixed(nil, true, true, true).WithoutTTY().OpenTTY()
+	require.Error(t, err)
 }

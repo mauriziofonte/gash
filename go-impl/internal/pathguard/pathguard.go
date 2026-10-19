@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"strconv"
 	"strings"
+	"syscall"
 )
 
 // FS is the minimal filesystem the guard needs: symlink resolution during
@@ -22,9 +24,16 @@ type OSFS struct{}
 func (OSFS) Lstat(name string) (fs.FileInfo, error) { return os.Lstat(name) }
 func (OSFS) Readlink(name string) (string, error)   { return os.Readlink(name) }
 
-// errSymlinkLoop mirrors __llm_realpath_walk failing after 40 hops; callers
-// fall back to the input path, as 2.x does with `|| normalized="$path"`.
+// errSymlinkLoop is a path whose symlinks expand without end without ever
+// repeating (a link to "itself/.."), where GNU realpath -m never returns;
+// callers fall back to the input path, as 2.x does with
+// `|| normalized="$path"`.
 var errSymlinkLoop = errors.New("pathguard: symlink loop")
+
+// maxSymlinkHops bounds the expansions of one Realpath. GNU realpath -m has
+// no bound (a repeating loop ends on its own, below), so it is far above
+// any real chain.
+const maxSymlinkHops = 4096
 
 // Guard holds the environment-dependent part of the 2.x rules: the current
 // directory (for making relative paths absolute), $HOME (for the leading-~
@@ -161,10 +170,14 @@ func (g *Guard) IsSecretFile(file string) bool {
 	return false
 }
 
-// Realpath is __llm_realpath: the canonical absolute form of path (what
-// `realpath -m` prints), computed by the pure walk (__llm_realpath_walk) that
-// 2.x falls back to where realpath has no -m, so one behavior on every
-// platform. With lexical, symlinks are kept (realpath -m -s).
+// Realpath is __llm_realpath: the canonical absolute form of path, what GNU
+// `realpath -m` prints (2.x on Linux), on every platform. One component at
+// a time, a symlink is replaced by its target; a missing component, a link
+// that cannot be read and a link met again with the same rest of the path
+// (a loop) stay as plain names, as GNU -m keeps them (so `ln -s loop loop;
+// realpath -m loop/x` is DIR/loop/x). With lexical, symlinks are kept
+// (realpath -m -s). The 2.x fallback walk for a realpath without -m (BSD,
+// older macOS) failed after 40 links instead.
 func (g *Guard) Realpath(path string, lexical bool) (string, error) {
 	if path == "" {
 		return "", errors.New("pathguard: empty path")
@@ -175,6 +188,7 @@ func (g *Guard) Realpath(path string, lexical bool) (string, error) {
 	todo := strings.Split(path, "/")
 	out := ""
 	hops := 0
+	seen := map[string]bool{}
 	for i := 0; i < len(todo); i++ {
 		comp := todo[i]
 		switch comp {
@@ -187,25 +201,27 @@ func (g *Guard) Realpath(path string, lexical bool) (string, error) {
 			continue
 		}
 		full := out + "/" + comp
-		if !lexical && g.isSymlink(full) {
-			hops++
-			if hops > 40 {
-				return "", errSymlinkLoop
+		if !lexical {
+			if info, err := g.FS.Lstat(full); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+				// GNU keys a loop on the link and the rest of the name from
+				// this component on.
+				key := linkID(full, info) + "\x00" + strings.Join(todo[i:], "/")
+				link, err := g.FS.Readlink(full)
+				if !seen[key] && err == nil {
+					seen[key] = true
+					if hops++; hops > maxSymlinkHops {
+						return "", errSymlinkLoop
+					}
+					if strings.HasPrefix(link, "/") {
+						out = ""
+					}
+					todo = append(strings.Split(link, "/"), todo[i+1:]...)
+					i = -1
+					continue
+				}
 			}
-			link, err := g.FS.Readlink(full)
-			if err != nil {
-				return "", err
-			}
-			if strings.HasPrefix(link, "/") {
-				out = ""
-			}
-			more := strings.Split(link, "/")
-			rest := append(append([]string{}, more...), todo[i+1:]...)
-			todo = rest
-			i = -1
-			continue
 		}
-		out += "/" + comp
+		out = full
 	}
 	if out == "" {
 		return "/", nil
@@ -213,9 +229,13 @@ func (g *Guard) Realpath(path string, lexical bool) (string, error) {
 	return out, nil
 }
 
-func (g *Guard) isSymlink(name string) bool {
-	info, err := g.FS.Lstat(name)
-	return err == nil && info.Mode()&fs.ModeSymlink != 0
+// linkID names a symlink by device and inode when the file system gives
+// them, else by its path.
+func linkID(path string, info fs.FileInfo) string {
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		return strconv.FormatUint(uint64(st.Dev), 10) + ":" + strconv.FormatUint(st.Ino, 10)
+	}
+	return path
 }
 
 func (g *Guard) existsOrSymlink(name string) bool {

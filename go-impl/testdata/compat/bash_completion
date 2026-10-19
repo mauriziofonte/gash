@@ -11,6 +11,8 @@ if ! declare -F git_add_tag >/dev/null 2>&1; then
     return
 fi
 
+((${__GASH_TIMING:-0})) && __gash_completion_t0="$EPOCHREALTIME"
+
 # -----------------------------------------------------------------------------
 # Completion Function
 # -----------------------------------------------------------------------------
@@ -330,3 +332,8 @@ __gash_enable_completion() {
 
 __gash_enable_completion
 unset -f __gash_enable_completion
+
+if [[ -n "${__gash_completion_t0-}" ]]; then
+    __gash_time_record "bash_completion" "$__gash_completion_t0"
+    unset __gash_completion_t0
+fi
