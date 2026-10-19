@@ -72,12 +72,12 @@ stdout 'Issue:'
 stdout 'Suggestion:'
 
 # --- :357 http-error - the endpoint answers 401 (MOCK_CURL_ERROR via the fake)
-! exec bash -c 'httpsfake -ca ca6 -addr addr6 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=401 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+! exec bash -c 'export MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=401; httpsfake -ca ca6 -addr addr6 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stderr 'Claude API error \(401\)'
 
 # --- :359 refusal - the model declines (stop_reason refusal via the fake;
 # the verbatim response is read from refusal.json to avoid nested quoting)
-! exec bash -c 'httpsfake -ca ca7 -addr addr7 & pid=$!; for i in $(seq 1 100); do [ -s addr7 ] && break; sleep 0.05; done; read -r a <addr7; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca7" MOCK_CURL_AI_RESPONSE="$(cat refusal.json)" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+! exec bash -c 'export MOCK_CURL_AI_RESPONSE="$(cat refusal.json)"; httpsfake -ca ca7 -addr addr7 & pid=$!; for i in $(seq 1 100); do [ -s addr7 ] && break; sleep 0.05; done; read -r a <addr7; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca7" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stderr 'Claude declined this request'
 
 # --- :362 debug - GASH_AI_DEBUG=1 traces the request on stderr: the request

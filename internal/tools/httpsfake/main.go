@@ -11,9 +11,8 @@
 //
 // The mock's knobs (MOCK_CURL_ERROR, MOCK_CURL_AI_RESPONSE, ...) and the
 // route file of MOCK_CURL_ROUTES (format at the top of the mock) are
-// variables the test exported for curl; the fake reads them from the
-// environment of the process at the other end of the connection
-// (/proc/net/tcp and /proc/PID/environ, Linux only). An unreachable
+// variables of the fake's own environment: a case exports them before it
+// starts its fake, on every platform. An unreachable
 // route refuses the CONNECT (502) when it covers the whole host, and
 // otherwise drops the connection after the request. MOCK_CURL_LOG gets a
 // curl-like line per request (method, Accept headers, URL; never another
@@ -94,7 +93,7 @@ type fake struct {
 	caCert *x509.Certificate
 	caKey  *ecdsa.PrivateKey
 	caPEM  []byte
-	// envOf returns the environment of the client of a connection.
+	// envOf returns the knobs that answer a connection.
 	envOf func(c net.Conn) map[string]string
 
 	mu    sync.Mutex
@@ -127,7 +126,7 @@ func newFake() (*fake, error) {
 	return &fake{
 		caCert: cert, caKey: key,
 		caPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
-		envOf: peerEnv,
+		envOf: ownEnv,
 		leafs: map[string]*tls.Certificate{},
 	}, nil
 }
@@ -311,3 +310,17 @@ type bufConn struct {
 }
 
 func (b *bufConn) Read(p []byte) (int, error) { return b.r.Read(p) }
+
+// ownEnv is the fake's own environment: the MOCK_* knobs a case exports
+// before it starts the fake, on every platform (no /proc peer lookup).
+func ownEnv(net.Conn) map[string]string {
+	env := map[string]string{}
+	for _, kv := range os.Environ() {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			if _, dup := env[k]; !dup {
+				env[k] = v
+			}
+		}
+	}
+	return env
+}

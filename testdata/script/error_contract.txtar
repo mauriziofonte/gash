@@ -53,12 +53,25 @@ done
 
 -- missing_value.sh --
 set -euo pipefail
+set -m # job control: each background job is its own process group
+# bounded SECS CMD...: CMD's status, 124 when it outlived SECS (the whole
+# process group is SIGKILLed, as GNU timeout does; macOS has no timeout).
+bounded() {
+  local secs=$1 pid w rc=0; shift
+  "$@" & pid=$!
+  { sleep "$secs"; kill -KILL -- -"$pid"; } >/dev/null 2>&1 </dev/null & w=$!
+  wait "$pid" || rc=$?
+  kill -- -"$w" 2>/dev/null || true; wait "$w" 2>/dev/null || true
+  if ((rc == 137)); then rc=124; fi
+  return "$rc"
+}
 cd "$WORK"
 for call in "files_largest --json --limit" "dirs_largest --json --depth" "dirs_find_large --json --size" \
     "dirs_list_empty --json --exclude" "tree_stats --json --top" "llm_find x --limit" "llm_grep x --ext" \
     "llm_db_query \"SELECT 1\" -c"; do
   rc=0
-  err="$(GASH_HEADLESS=1 timeout 10 bash -c "source \"$GASH_SH\"; $call" 2>&1 >/dev/null)" || rc=$?
+  GASH_HEADLESS=1 bounded 10 bash -c "source \"$GASH_SH\"; $call" 2>"$WORK/mv.err" >/dev/null || rc=$?
+  err="$(<"$WORK/mv.err")"
   [[ $rc -ne 124 ]] || { echo "hang: $call"; exit 1; }
   [[ $rc -ne 0 ]] || { echo "no error: $call"; exit 1; }
   [[ "$(jq -r .error <<<"$err")" == "missing_value" ]] || { echo "$call -> $err"; exit 1; }
@@ -123,7 +136,7 @@ done
 -- docker_contract.sh --
 set -euo pipefail
 tmp="$WORK/dockchk"; rm -rf "$tmp"; mkdir -p "$tmp/none" "$tmp/nosvc"
-export HOME="$tmp"
+export HOME="$tmp" PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"
 source "$GASH_SH"
 check() { # DIR ERROR ACTION
   local rc=0 out

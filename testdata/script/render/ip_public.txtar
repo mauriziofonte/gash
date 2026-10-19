@@ -23,11 +23,11 @@ env HOME=$WORK
 env LC_ALL=C.UTF-8
 
 # --- :173 ip - prints the address the endpoint returned
-exec bash -c 'mkdir -p i173; cd i173; printf "GET https://ipinfo.io/ip 200 203.0.113.7\n" >routes; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" MOCK_CURL_ROUTES="$PWD/routes" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+exec bash -c 'mkdir -p i173; cd i173; printf "GET https://ipinfo.io/ip 200 203.0.113.7\n" >routes; export MOCK_CURL_ROUTES="$PWD/routes"; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stdout 'Public IP: 203\.0\.113\.7'
 
 # --- :174 no-color - same address, no ESC bytes
-exec bash -c 'mkdir -p i174; cd i174; printf "GET https://ipinfo.io/ip 200 203.0.113.7\n" >routes; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" MOCK_CURL_ROUTES="$PWD/routes" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ip_public --no-color; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+exec bash -c 'mkdir -p i174; cd i174; printf "GET https://ipinfo.io/ip 200 203.0.113.7\n" >routes; export MOCK_CURL_ROUTES="$PWD/routes"; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ip_public --no-color; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stdout 'Public IP: 203\.0\.113\.7'
 ! stdout '\x1b'
 
@@ -40,7 +40,7 @@ stderr 'Error: Failed to retrieve public IP address\.'
 # still reaches the endpoint over net/http through the fake and prints the
 # address - never the 2.x "requires wget or curl" message. Deterministic: the
 # fake answers, so this does not depend on the runner's own egress.
-exec bash -c 'mkdir -p i176; cd i176; printf "GET https://ipinfo.io/ip 200 198.51.100.9\n" >routes; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" MOCK_CURL_ROUTES="$PWD/routes" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+exec bash -c 'mkdir -p i176; cd i176; printf "GET https://ipinfo.io/ip 200 198.51.100.9\n" >routes; export MOCK_CURL_ROUTES="$PWD/routes"; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stdout 'Public IP: 198\.51\.100\.9'
 ! stderr 'requires .*wget'
 ! stderr 'requires .*curl'

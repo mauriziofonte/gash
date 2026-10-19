@@ -29,7 +29,8 @@ stderr 'Unknown argument: bogus'
 # --- :379 overview - the identity/resources card
 exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo overview'
 stdout 'CPU'
-stdout 'Memory'
+# Memory comes from /proc/meminfo, as in 2.x.
+[linux] stdout 'Memory'
 
 # --- :380 overview-no-color - the same card with no escape bytes
 exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo overview --no-color'

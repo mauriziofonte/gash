@@ -12,6 +12,8 @@
 env GASH_HEADLESS=1
 env HOME=$WORK
 env LC_ALL=C.UTF-8
+env PATH=$WORK/stub${:}$PATH
+chmod 0755 stub/docker
 
 # --- :260 present then missing
 exec bash -c 'mkdir -p l260; cd l260; printf "services:\n  web:\n    image: nginx:latest\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; llm_docker_check; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
@@ -23,3 +25,12 @@ stdout '"summary":\{"total":1'
 ! exec bash -c 'mkdir -p l260b; cd l260b; printf "services:\n  web:\n    image: nginx:latest\n" >docker-compose.yml; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; llm_docker_check ./none'
 stderr '"error":"compose_not_found"'
 ! stderr '\x1b'
+
+-- stub/docker --
+#!/bin/sh
+# Docker with Compose v2 and no image pulled: `compose version` succeeds,
+# everything else (inspect, compose config) fails, so the services come
+# from the YAML reader and every image is NOT_PULLED - with or without a
+# real docker on the host.
+[ "$1 $2" = "compose version" ] && { echo "Docker Compose version v2.24.0"; exit 0; }
+exit 1

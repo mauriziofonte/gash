@@ -15,14 +15,17 @@ env LC_ALL=C.UTF-8
 
 # --- :108 list - directories over the size threshold
 mkdir d1
-exec bash -c 'cd d1; mkdir -p d/big/inner d/small && head -c 65536 /dev/zero >d/big/inner/f && printf x >d/small/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_find_large --size 16K d'
+# Expected KiB from the host's du (directory blocks differ by filesystem);
+# d/big/g keeps big strictly larger than big/inner where directories take
+# no blocks.
+exec bash -c 'cd d1; mkdir -p d/big/inner d/small && head -c 65536 /dev/zero >d/big/inner/f && printf x >d/big/g && printf x >d/small/f; b=$(du -sk d/big | cut -f1); i=$(du -sk d/big/inner | cut -f1); export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; out=$(dirs_find_large --size 16K d) || exit; printf "%s\n" "$out"; grep -Eq "^  1 +$b\.0 KiB .* big$" <<<"$out" && grep -Eq "^  2 +$i\.0 KiB .* big/inner$" <<<"$out" || { echo "want big=$b big/inner=$i KiB (du -sk)" >&2; exit 1; }'
 stdout '^  Directories over 16K in .*/d$'
-stdout '^  1  72\.0 KiB .* big$'
-stdout '^  2  68\.0 KiB .* big/inner$'
+stdout '^  1 +[0-9]+\.0 KiB .* big$'
+stdout '^  2 +[0-9]+\.0 KiB .* big/inner$'
 
 # --- :109 with-mtime - adds a MODIFIED column, N/A where unknown
 mkdir d2
-exec bash -c 'cd d2; mkdir -p d/big d/none && head -c 65536 /dev/zero >d/big/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_find_large --size 1 --with-mtime d'
+exec bash -c 'cd d2; mkdir -p d/big d/none && head -c 65536 /dev/zero >d/big/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_find_large --size 0 --with-mtime d'
 stdout '^  #      SIZE  SHARE +MODIFIED +PATH$'
 stdout 'N/A +none$'
 

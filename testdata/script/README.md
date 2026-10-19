@@ -137,7 +137,8 @@ it reaches zero uncovered. The gate is a standalone tool, never part of
 - **Never depend on real network (un)reachability.** A net/http function
   (`ip_public`, `chrome_headless_update`, the `ai_*` calls, the docker/compose
   registry checks) must be driven through `httpsfake` (start it, set
-  `HTTPS_PROXY`/`SSL_CERT_FILE`, answer via `MOCK_CURL_*`). Do NOT write a case
+  `HTTPS_PROXY`/`SSL_CERT_FILE`, answer via `MOCK_CURL_*`, exported before the
+  fake starts: it reads its own environment). Do NOT write a case
   that unsets the proxy and expects the call to FAIL because the endpoint is
   unreachable: the CI runner has open egress, so the Go binary's net/http path
   reaches the real endpoint and the case passes/fails opposite to a restricted

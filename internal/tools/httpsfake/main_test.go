@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -164,8 +163,8 @@ func TestRespondKnobs(t *testing.T) {
 	require.True(t, respond(map[string]string{"MOCK_CURL_REGISTRY_TIMEOUT": "1"}, request{url: "https://r/v2/a/manifests/b"}).hang)
 }
 
-// startFake serves a fake on a free port; envOf replaces the peer lookup
-// when not nil.
+// startFake serves a fake on a free port; envOf replaces the fake's own
+// environment when not nil.
 func startFake(t *testing.T, envOf func(net.Conn) map[string]string) (*fake, string, string) {
 	t.Helper()
 	f, err := newFake()
@@ -220,21 +219,20 @@ func TestProxy(t *testing.T) {
 	require.NotContains(t, string(l), "sk-secret")
 }
 
-// The knobs come from the environment of the client process.
-func TestPeerEnv(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("the peer lookup reads /proc")
-	}
+// The knobs come from the fake's own environment, whatever the client's.
+func TestOwnEnv(t *testing.T) {
 	_, proxy, ca := startFake(t, nil)
 	self, err := os.Executable()
 	require.NoError(t, err)
-	run := func(extra ...string) string {
+	run := func() string {
 		cmd := exec.Command(self)
-		cmd.Env = append([]string{"FAKE_CLIENT=https://api.anthropic.com/v1/messages", "FAKE_PROXY=" + proxy, "FAKE_CA=" + ca}, extra...)
+		cmd.Env = []string{"FAKE_CLIENT=https://api.anthropic.com/v1/messages", "FAKE_PROXY=" + proxy, "FAKE_CA=" + ca, "MOCK_CURL_ERROR=1"}
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, string(out))
 		return string(out)
 	}
 	require.True(t, strings.HasPrefix(run(), "200 {\"content\""))
-	require.Equal(t, "503 {\"error\":{\"message\":\"Simulated error\"}}\n", run("MOCK_CURL_ERROR=1", "MOCK_CURL_ERROR_CODE=503"))
+	t.Setenv("MOCK_CURL_ERROR", "1")
+	t.Setenv("MOCK_CURL_ERROR_CODE", "503")
+	require.Equal(t, "503 {\"error\":{\"message\":\"Simulated error\"}}\n", run())
 }

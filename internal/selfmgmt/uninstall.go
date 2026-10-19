@@ -40,11 +40,11 @@ var gashrcSource = regexp.MustCompile(`source.*[./]gashrc`)
 
 // The profile edits of 2.x, run with sed -i.gash-uninstall.bak as 2.x ran
 // them: the delimited block, or the 1.x block (its comment line and the
-// four lines after it).
+// four lines after it; the `;` before `}` lets BSD sed parse it too).
 const (
 	uninstallBackup     = ".gash-uninstall.bak"
 	uninstallSedBlock   = `/# >>> GASH START >>>/,/# <<< GASH END <<</d`
-	uninstallSed1xBlock = `/# Load Gash Bash/{N;N;N;N;d}`
+	uninstallSed1xBlock = `/# Load Gash Bash/{N;N;N;N;d;}`
 )
 
 // uninstall is gash_uninstall (lib/modules/gash.sh): after a confirmation,

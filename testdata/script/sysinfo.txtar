@@ -60,7 +60,9 @@ stdout '=== SYSTEM ==='
 exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo overview --llm'
 stdout '\A=== OVERVIEW ==='
 stdout 'Host='
-stdout '^Memory KiB=used=[0-9]+ total=[0-9]+$'
+# Memory comes from /proc/meminfo, as in 2.x, whose spec checked it only
+# where that file is readable.
+[linux] stdout '^Memory KiB=used=[0-9]+ total=[0-9]+$'
 exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo overview --no-color'
 stdout 'Disk /'
 stdout '%'

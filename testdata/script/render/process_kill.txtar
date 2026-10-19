@@ -29,7 +29,7 @@ exec bash -c 'mkdir -p bin; sleep 300 & vic=$!; printf "#!/bin/sh\necho %s\n" "$
 stderr 'Process [0-9]+ terminated\.'
 
 # --- :190 survivor - a SIGTERM-ignoring victim forces SIGKILL
-exec bash -c 'mkdir -p bin; setsid bash -c "trap \"\" TERM; exec sleep 300" & vic=$!; sleep 0.3; printf "#!/bin/sh\necho %s\n" "$vic" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill -y my-proc; kill -9 "$vic" 2>/dev/null; true'
+exec bash -c 'mkdir -p bin; bash -c "trap \"\" TERM; exec sleep 300" & vic=$!; sleep 0.3; printf "#!/bin/sh\necho %s\n" "$vic" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill -y my-proc; kill -9 "$vic" 2>/dev/null; true'
 stderr 'ignored SIGTERM; killed with SIGKILL'
 
 # --- :191 no-terminal - a detached session still refuses without -y

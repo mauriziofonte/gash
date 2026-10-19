@@ -70,7 +70,7 @@ stdout 'Issue:'
 stdout 'Suggestion:'
 
 # --- :347 http-error - the endpoint answers 401 (MOCK_CURL_ERROR via the fake)
-! exec bash -c 'httpsfake -ca ca6 -addr addr6 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=401 GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+! exec bash -c 'export MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=401; httpsfake -ca ca6 -addr addr6 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stderr 'Claude API error \(401\)'
 
 # --- :348 confirm-no - GASH_AI_CONFIRM=1 forces confirmation; with no
