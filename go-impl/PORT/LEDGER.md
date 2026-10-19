@@ -118,12 +118,12 @@ Conventions for this section:
 
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
-| Defects | 1 | 25 | 76 | 76 | 178 | 116 |
+| Defects | 1 | 25 | 80 | 77 | 183 | 118 |
 | Forced divergences | 3 | 4 | 26 | 71 | 104 | 47 |
-| Decisions for the operator | 0 | 1 | 5 | 25 | 31 | 23 |
-| Doc drift | 0 | 0 | 1 | 41 | 42 | 11 |
+| Decisions for the operator | 0 | 1 | 5 | 26 | 32 | 23 |
+| Doc drift | 0 | 0 | 1 | 47 | 48 | 11 |
 | HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
-| **All** | 4 | 36 | 131 | 259 | **430** | 255 |
+| **All** | 4 | 36 | 135 | 267 | **442** | 257 |
 
 Critical and high items:
 
@@ -223,6 +223,9 @@ Critical and high items:
 | [SYS-25](#sys-25) | services_stop, wsl_compact and chrome_headless_update call sudo without -n in unattended runs | Contract | medium | yes |
 | [SYS-26](#sys-26) | sysinfo completion does not offer `overview` | Completion | low | no |
 | [SYS-27](#sys-27) | No completion for the flags of hgrep, port_kill, process_kill, services_stop, sudo_last and the wsl stop functions | Completion | low | no |
+| [SYS-50](#sys-50) | deep_services WireGuard redaction misses PrivateKey without spaces and every PresharedKey | Security | medium | yes |
+| [SYS-51](#sys-51) | deep_performance I/O-scheduler line reports the queue directory, not the block device | Correctness | medium | no |
+| [SYS-52](#sys-52) | deep collectors glue the next section header onto a file with no final newline | Correctness | low | no |
 | [DOCK-01](#dock-01) | Compose functions act on the current directory when the path argument is empty | Correctness | medium | yes |
 | [DOCK-03](#dock-03) | Completion: dcup2 lacks --yes; docker_prune_all, git_repair, git_sync -m and remote_* incomplete | Completion | low | no |
 | [DOCK-04](#dock-04) | dcup2 ignores override files and COMPOSE_FILE, and --remove-orphans removes override-only services | Correctness | high | yes |
@@ -257,6 +260,7 @@ Critical and high items:
 | [REM-06](#rem-06) | remote_sync_pull --delete checks the local destination with remote wording | Contract | low | yes |
 | [REM-07](#rem-07) | remote_exec creates ~/.ssh with the default umask | Security | low | no |
 | [REM-08](#rem-08) | A HOST target `u@h:22` is accepted; ssh, scp and the tier check read it differently | Correctness | low | yes |
+| [REM-10](#rem-10) | A `/.` (or `//.`) root target normalizes to `.` and classifies as allow, not deny:/ | Security | medium | yes |
 | [DEV-01](#dev-01) | php_detect_version reports a PHP version that is not installed | Correctness | medium | yes |
 | [DEV-02](#dev-02) | OR constraints resolve to their first X.Y (`^7.4\\|^8.0` gives 7.4) | Correctness | medium | yes |
 | [DEV-03](#dev-03) | Major-only constraints are ignored and give the 8.4 default | Correctness | medium | yes |
@@ -339,6 +343,7 @@ Critical and high items:
 | [CORE-13](#core-13) | DB passwords lose trailing newlines and `%00` when decoded | Correctness | low | no |
 | [CORE-14](#core-14) | HOME is matched as a glob when a path is shown with `~` | Correctness | low | yes |
 | [CORE-15](#core-15) | SSH key paths: `~user/` is not a home directory, and `&` in HOME is rewritten on Bash 5.2 | Correctness | low | no |
+| [CORE-19](#core-19) | A located download URL that 404s with a Content-Length is treated as present | Correctness | medium | no |
 | [TEST-01](#test-01) | The test runner leaks the caller's NO_COLOR into the hermetic environment | Test harness | low | no |
 | [TEST-02](#test-02) | `tests/run.sh -j1` is refused | Test harness | low | no |
 | [TEST-03](#test-03) | 88 conditional skips print no reason | Test harness | low | no |
@@ -1243,6 +1248,60 @@ Critical and high items:
 | Proving test | `TestLedger_SYS27` in `internal/compatgen` (each function's completion list equals its grammar's flags) |
 | Status | open |
 
+<a id="sys-50"></a>
+#### SYS-50 · deep_services WireGuard redaction misses PrivateKey without spaces and every PresharedKey
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (lead pin, sysinfo deep_services) |
+| Area | Security |
+| Bash location | `lib/modules/sysinfo.sh:1222-1230` (`__sysinfo_deep_services` WireGuard block; redaction `sed 's/PrivateKey = .*/PrivateKey = [REDACTED]/'` at :1228) |
+| Observed behavior | The redaction matches only `PrivateKey = ` with a space on each side of `=`. A `PrivateKey=<value>` line written without spaces, an indented key line, and every `PresharedKey` line (which the sed never names) are printed in clear. Through `sysinfo services` (deep) or an AI collector these lines reach the model, so a WireGuard private or pre-shared key leaves the host. |
+| Reproduction | A `wg0.conf` under `/etc/wireguard` with a no-space `PrivateKey=` line and a `PresharedKey = ` line: the deep services section prints both values unredacted while a spaced `PrivateKey = ` line is masked. (The input shape is a WireGuard config with those line forms; no key material shown here.) |
+| Severity | medium |
+| Public-contract impact | yes (the redaction is a stated privacy guarantee) |
+| rc.A behavior | Reproduced: `internal/sysinfo/deep.go:80` compiles `PrivateKey = .*` and applies it at :350-357 only to lines matching that exact prefix, so `PrivateKey=nospace`, an indented key and every `PresharedKey` line pass through, as the `deep_test` fixtures confirm. |
+| Fix recipe (3.0) | `internal/sysinfo` WireGuard redaction: match `^[[:space:]]*(PrivateKey\|PresharedKey)[[:space:]]*=` case-insensitively and replace the value with `[REDACTED]`, so both key kinds and all spacing variants are masked. Docs: the sysinfo privacy note lists PresharedKey. |
+| Proving test | `TestLedger_SYS50_fix` in `internal/sysinfo` (fixture with `PrivateKey=`, `PrivateKey = `, indented and `PresharedKey = ` lines: every value `[REDACTED]`); `TestLedger_SYS50_2x` proves the rc.A reproduction |
+| Status | open |
+
+<a id="sys-51"></a>
+#### SYS-51 · deep_performance I/O-scheduler line reports the queue directory, not the block device
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (lead pin, sysinfo deep_performance) |
+| Area | Correctness |
+| Bash location | `lib/modules/sysinfo.sh:1668-1673` (`__sysinfo_deep_performance` I/O-scheduler loop; `echo "$(dirname "$sched" \| xargs basename): ..."` at :1672) |
+| Observed behavior | For `/sys/block/sda/queue/scheduler`, `dirname` gives `/sys/block/sda/queue` and `basename` gives `queue`, so every device is labelled `queue:` instead of `sda:`. The scheduler's block device is taken from the wrong path component (one level too deep), so the drill-down cannot tell the devices apart. |
+| Reproduction | With `/sys/block/sda/queue/scheduler` and `/sys/block/vda/queue/scheduler` present, the I/O-scheduler section prints two `queue: ...` lines, never `sda:`/`vda:`. |
+| Severity | medium |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced: `internal/sysinfo/deep.go:778-784` prints the literal `"queue: "` prefix (the source comment records that `$(dirname … \| xargs basename)` is the queue directory's name, never the device's). |
+| Fix recipe (3.0) | `internal/sysinfo` I/O-scheduler: take the device name from the component two levels up (`/sys/block/<dev>/queue/scheduler` → `<dev>`) and print `<dev>: <scheduler>`. |
+| Proving test | `TestLedger_SYS51_fix` in `internal/sysinfo` (`sda`/`vda` fixtures → `sda:`/`vda:`); `TestLedger_SYS51_2x` proves the `queue:` reproduction |
+| Status | open |
+
+<a id="sys-52"></a>
+#### SYS-52 · deep collectors glue the next section header onto a file with no final newline
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (lead pin, sysinfo deep collectors) |
+| Area | Correctness |
+| Bash location | `lib/modules/sysinfo.sh` deep `cat … \| head -N` pipelines, e.g. `:1320-1321` (custom systemd unit), recurring at `:1145`/`:1149`/`:1153` (OpenDKIM), `:1162` (BIND), `:1248` (NVIDIA), `:1258` (Collectd), `:1269` (Monit) |
+| Observed behavior | A collected file whose last line has no trailing newline passes through `cat … \| head -N` unchanged (head copies the final partial line verbatim), so the next `echo "--- <header>"` is appended directly to that last line, with no line break between the file's final line and the following section header. |
+| Reproduction | A deep-collected config file ending without a newline (e.g. a custom systemd unit file) followed by another section: the section header is printed on the same line as the file's last line. |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced: `internal/sysinfo/text.go:247` `headN` keeps the last line as it is when the input ends without a newline, and `deep.go:72` `raw` writes those bytes verbatim (e.g. `deep.go:501`), so the following `echo` header glues on, byte for byte as 2.x. |
+| Fix recipe (3.0) | `internal/sysinfo` deep output: after a `raw`/`headN` chunk that does not end in `\n`, emit a newline before the next header (equivalently, normalise each collected chunk to end with one newline). |
+| Proving test | `TestLedger_SYS52_fix` in `internal/sysinfo` (a no-final-newline fixture: the next `--- ` header starts on its own line); `TestLedger_SYS52_2x` proves the glued reproduction |
+| Status | open |
+
 ### docker and compose
 
 <a id="dock-01"></a>
@@ -1859,6 +1918,24 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | REM-02's target validation (no `:` outside a bracketed IPv6 literal); the skip warning adds `Hint: put the port in a Host entry of ~/.ssh/config`. |
 | Proving test | `TestLedger_REM08` in `internal/remote` (part of REM-02's table: `u@h:22` refused with the warning) |
+| Status | open |
+
+<a id="rem-10"></a>
+#### REM-10 · A `/.` (or `//.`) root target normalizes to `.` and classifies as allow, not deny:/
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (lead pin, remote `/.` root classification) |
+| Area | Security |
+| Bash location | `lib/modules/remote.sh:96-123` (`__remote_normalize_path`: the trailing-`/.` strip at `:119` runs before the `/.`->`/` special case at `:120`, so `/.` becomes `""` and `:122` prints `.`); `__remote_classify_path:141-192` then returns `allow` for the relative path, never reaching the `deny:/` branch at `:153-154` |
+| Observed behavior | The remote root spelled `/.` (and `//.`, which the `//`-collapse plus the `/.` strip also reduce to `.`) is normalized to `.` — the remote home/cwd — so the safety classifier returns `allow` instead of `deny:/`. The DENY guard on the remote root is bypassed by that spelling: a transfer or exec that means the filesystem root is silently retargeted at the remote home. (rsync `--delete` has its own separate guard at `:235`, which still refuses `.`, so `--delete` is not weakened; the general allow/deny verdict is.) |
+| Reproduction | `__remote_normalize_path /.` prints `.` (not `/`), and `__remote_classify_path /.` prints `allow` (not `deny:/`); likewise for `//.`. |
+| Severity | medium |
+| Public-contract impact | yes (the documented allow/deny classification) |
+| rc.A behavior | Reproduced: `internal/remote/safety.go:56-60` trims the trailing `/.` before the `p == "/."` special case, leaving `""`, and `:65-67` returns `.`; `classifyPath` then returns `allow`. The source comment at `:30` records that `/.` (and `//.`) come out as `.`, as in 2.x. |
+| Fix recipe (3.0) | `internal/remote` `normalizePath`: fold `/.` (and any absolute path that reduces to the root-dot form) to `/` before the trailing-`/.` strip, so `/.` and `//.` classify as `deny:/`; equivalently, when the trailing-`/.` strip empties an absolute path, set it to `/`. |
+| Proving test | `TestLedger_REM10_fix` in `internal/remote` (`/.`, `//.`, `/./` → `deny:/`); `TestLedger_REM10_2x` proves the `allow` reproduction |
 | Status | open |
 
 ### php and node
@@ -3351,6 +3428,24 @@ Critical and high items:
 | Proving test | `TestLedger_CORE15_2x` in `internal/config`. |
 | Status | open |
 
+<a id="core-19"></a>
+#### CORE-19 · A located download URL that 404s with a Content-Length is treated as present
+
+| Field | Value |
+|---|---|
+| Section | Defects |
+| Origin | New finding (core slice, RemoteSize / chrome size parity) |
+| Area | Correctness |
+| Bash location | `lib/core/utils.sh:437-439` (`__gash_remote_size`: `curl -fsIL URL \| … awk 'END { print n + 0 }'`); caller `lib/modules/chrome.sh:89-98` (`__gash_chs_locate`, `size="$(__gash_remote_size "$url")"; ((size > 0))`) |
+| Observed behavior | `curl -fsIL` on a 4xx still prints the response's `Content-Length` header, and the pipeline reads it while ignoring curl's exit 22 (curl is the first stage of the pipe; only awk's status is seen). So a located chrome-headless-shell URL that 404s but carries a `Content-Length` yields a non-zero size; `__gash_chs_locate`'s `((size > 0))` succeeds and the download proceeds, only to fail once the body is the error page. |
+| Reproduction | `__gash_remote_size` against a URL that returns 404 with a non-zero `Content-Length` prints that length (not 0), and `__gash_chs_locate` then returns success. |
+| Severity | medium |
+| Public-contract impact | no |
+| rc.A behavior | Reproduced: `internal/ui/download.go:123-136` `Downloader.RemoteSize` returns `resp.ContentLength` of the HEAD response even on a 404 (only a response with no/`<0` length is 0), matching 2.x `curl -fsIL`; `download_test.go` records that a 404 reports the size of its own body. |
+| Fix recipe (3.0) | `internal/ui` `RemoteSize`: treat a non-2xx HEAD response as size 0 (or an explicit error), so a 404 with a `Content-Length` is not read as a present download; `internal/chrome` `locate` then fails cleanly with a clear message instead of starting a doomed download. |
+| Proving test | `TestLedger_CORE19_fix` in `internal/ui`/`internal/chrome` (HEAD 404 with a non-zero Content-Length → size 0, locate fails with a message); `TestLedger_CORE19_2x` proves the reproduction |
+| Status | open |
+
 ### test harness
 
 <a id="test-01"></a>
@@ -4397,7 +4492,7 @@ Critical and high items:
 | Section | Forced divergences |
 | Origin | New finding (dossier Go port notes, sysinfo) |
 | Area | Portability |
-| Bash location | `lib/modules/sysinfo.sh:508-517` (`ls`), `535-536`, `570`, `578`, `609`, `633`, `685`, `699`, `760`, `801`, `819`, `848`, `917`, `930`, `943` (unsorted `find`), `707-722` (`sort` in the user's locale) |
+| Bash location | `lib/modules/sysinfo.sh:508-517` (`ls`), `535-536`, `570`, `578`, `609`, `633`, `685`, `699`, `760`, `801`, `819`, `848`, `917`, `930`, `943` (unsorted `find`), plus the deep collectors' unsorted `find` at `1172` (unbound), `1184` (proftpd), `1215` (openvpn), `1246` (nvidia), `1256` (collectd), `1349` (overrides), `1493` (netplan), `1655` (sysctl.d), `707-722` (`sort` in the user's locale) |
 | Observed behavior | `ls` and `sort` order by the locale's collation (`B` before `a` in C, after it in en_US.UTF-8); `find` lists in directory (inode/hash) order, which differs between filesystems and runs, and with `head -20` (openvpn) it changes which items are shown. |
 | Reproduction | `env -i G="$PWD" HOME="$(mktemp -d)" PATH=/usr/bin:/bin LC_ALL=C bash -c 'GASH_HEADLESS=1; source "$G/gash.sh"; sysinfo services --llm' > c.txt` and the same with `LC_ALL=en_US.UTF-8` into `u.txt`, then `diff c.txt u.txt` (on a host with mixed-case names under the listed /etc directories) |
 | Severity | low |
@@ -5632,6 +5727,7 @@ Critical and high items:
 | [SHELL-05](#shell-05) | ~/.bash_aliases is sourced twice on distributions whose ~/.bashrc already sources it | Contract | low | yes |
 | [SELF-17](#self-17) | gash_doctor checks the 2.x file list, which the 3.x tree no longer ships | Self-management | medium | yes |
 | [TEST-08](#test-08) | `tests/mocks/bin/sudo` executes its arguments | Test harness | low | no |
+| [SHELL-15](#shell-15) | Reconcile SHELL-06: the grep-alias probe lives in shellinit, not the registry pack | Docs | low | no |
 
 ### llm_* agent functions
 
@@ -6177,6 +6273,24 @@ Critical and high items:
 | Proving test | `testdata/script/user_files_once.txtar` (skel `.bashrc`: side effect runs once and `ll` keeps the user's definition; without the distro line: still sourced once) |
 | Status | open |
 
+<a id="shell-15"></a>
+#### SHELL-15 · Reconcile SHELL-06: the grep-alias probe lives in shellinit, not the registry pack
+
+| Field | Value |
+|---|---|
+| Section | Decisions for the operator |
+| Origin | New finding (reconcile of SHELL-06 against rc.A) |
+| Area | Docs |
+| Bash location | 2.x `lib/aliases/colors.sh:40-46`; rc.A `internal/shellinit/aliases.go:111-112` (the live probe) and the catalog entry `internal/registry/catalog_gen.go:3581` (condition `$__GASH_PROBE_GREP_COLOR`) |
+| Observed behavior | SHELL-06's Observed and rc.A lines are correct as verified against source: rc.A runs the identical 2.x probe `grep --color=auto -q "" /dev/null` at `aliases.go:111`, which fails on every system, so no `grep` alias is emitted (faithful reproduction). The one mismatch is SHELL-06's Fix recipe, which places the 3.0 fix "in the `internal/registry` alias pack", while the probe that decides emission and the proving test (`TestLedger_SHELL06`) are in `internal/shellinit`; the registry only carries the catalog condition. |
+| Reproduction | `grep -n 'grep --color=auto' internal/shellinit/aliases.go internal/registry/catalog_gen.go` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | As SHELL-06 states: no `grep` alias; the generated reference still lists it. |
+| Fix recipe (3.0) | Decide which package owns the SHELL-06 fix: (a) recommended, fix the probe in `internal/shellinit` (run `grep --color=auto -q x` on real input at `gash init bash` time) and reword SHELL-06's Fix recipe to name `internal/shellinit`; (b) keep the decision in the registry catalog condition. Left for the lead rather than edited into SHELL-06, to avoid guessing the intended fix location. |
+| Proving test | the SHELL-06 proving test (`TestLedger_SHELL06` in `internal/shellinit`) already lives where option (a) puts the fix |
+| Status | open |
+
 ### self-management
 
 <a id="self-17"></a>
@@ -6263,6 +6377,12 @@ Critical and high items:
 | [SELF-20](#self-20) | README counts of functions and aliases are stale | Docs | low | no |
 | [SELF-21](#self-21) | gash_upgrade --help says it "cleans up" | Docs | low | no |
 | [CORE-12](#core-12) | .gash_env.template overstates which password characters need URL-encoding | Docs | low | no |
+| [CORE-20](#core-20) | gash_unload's pre-symbol snapshot is taken before the module surface, reproducing 2.x | Self-management | low | no |
+| [CORE-21](#core-21) | architecture.md names only two sanctioned bash -c uses; there are now five | Docs | low | no |
+| [SHELL-16](#shell-16) | The prompt and startup bench harness drops GASH_BIN, so a 3.x run uses the in-tree binary only | Docs | low | no |
+| [SHELL-17](#shell-17) | design/shell.md §7 describes SSH auto-unlock via a __compat sub-command; rc.A uses the ssh module on StartPTY | Docs | low | no |
+| [SHELL-18](#shell-18) | gash_migrate's registered help and the init reminder still describe the 1.x->2.0 migration | Docs | low | no |
+| [SHELL-19](#shell-19) | SHELL-10 and SHELL-13 still need their dedicated proving tests written | Docs | low | no |
 
 ### llm_* agent functions
 
@@ -6950,6 +7070,78 @@ Critical and high items:
 | Proving test | none (doc change; the macOS CI job of `testing.md` covers the walk) |
 | Status | open |
 
+<a id="shell-16"></a>
+#### SHELL-16 · The prompt and startup bench harness drops GASH_BIN, so a 3.x run uses the in-tree binary only
+
+| Field | Value |
+|---|---|
+| Section | Doc drift |
+| Origin | New finding (S3 bench-harness note) |
+| Area | Docs |
+| Bash location | `go-impl/bench/shell/prompt_bench.sh:42-45` and `startup_bench.sh:22` (the `env -i HOME=… PATH=… TERM=… LANG=… USER=… LOGNAME=…` launch, no `GASH_BIN` in the pass-through); shim resolution `go-impl/design/compat.md:35` (`GASH_BIN` first when set) |
+| Observed behavior | The bench scripts run each measurement under `env -i` with a fixed, small environment that does not include `GASH_BIN`. The 3.x generated `gash.sh` therefore cannot see a caller-provided `GASH_BIN` and always resolves the in-tree `bin/gash` of the checkout it is pointed at; a bench run cannot be aimed at an externally built or installed binary. |
+| Reproduction | `grep -n 'env -i' go-impl/bench/shell/prompt_bench.sh go-impl/bench/shell/startup_bench.sh` (no `GASH_BIN` in the list) |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Not a runtime behaviour: the scripts benchmark whatever `gash.sh` the given checkout resolves. For 3.x that is the tree's own `bin/gash`; `GASH_BIN` is scrubbed. |
+| Fix recipe (3.0) | At the S3 3.x bench pass, add `GASH_BIN` to the `env -i` pass-through of `prompt_bench.sh` and `startup_bench.sh` (and the `bench/shell/README.md` usage), so a bench can measure a chosen binary; otherwise document that the 3.x checkout must hold the built `bin/gash`. |
+| Proving test | none (bench harness; covered when the 3.x bench numbers are filled in `bench/shell/README.md`) |
+| Status | open |
+
+<a id="shell-17"></a>
+#### SHELL-17 · design/shell.md §7 describes SSH auto-unlock via a __compat sub-command; rc.A uses the ssh module on StartPTY
+
+| Field | Value |
+|---|---|
+| Section | Doc drift |
+| Origin | New finding (shell design drift) |
+| Area | Docs |
+| Bash location | `go-impl/design/shell.md:157-162` (init script runs `eval "$("$__gash_bin" __compat ssh-unlock)"`); 2.x `lib/modules/ssh.sh` (`gash_ssh_auto_unlock`); rc.A `internal/shellinit/banner.go:42-47` (emits the `gash_ssh_auto_unlock` stub call) and `internal/ssh/pty.go:53` (ssh-add driven through `runner.StartPTY`) |
+| Observed behavior | §7 says the emitted init script performs the SSH auto-unlock by `eval`-ing the output of a hidden `gash __compat ssh-unlock` command. rc.A has no `__compat ssh-unlock` sub-command (none in the tree); instead the init script calls the registered `gash_ssh_auto_unlock` stub, which `internal/ssh` handles, driving `ssh-add` through a PTY on `runner.StartPTY` and handing the agent exports back through the stub hand-off. The design prose names a mechanism that was superseded. |
+| Reproduction | `grep -rn 'ssh-unlock' go-impl/internal go-impl/cmd` (none) versus `go-impl/design/shell.md:157` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | SSH auto-unlock is the `gash_ssh_auto_unlock` function handled by `internal/ssh`; `ssh-add` runs on `runner.StartPTY` (secrets on the PTY only), and the init script emits the stub call plus the `GASH_SSH_AUTOUNLOCK_RAN=1` export, as 2.x. |
+| Fix recipe (3.0) | Update `design/shell.md` §7 to describe the auto-unlock as the `gash_ssh_auto_unlock` stub handled by `internal/ssh` on `runner.StartPTY`, not an `eval "$(gash __compat ssh-unlock)"`. |
+| Proving test | none (design-doc change; the auto-unlock behaviour is covered by `internal/ssh` tests) |
+| Status | open |
+
+<a id="shell-18"></a>
+#### SHELL-18 · gash_migrate's registered help and the init reminder still describe the 1.x->2.0 migration
+
+| Field | Value |
+|---|---|
+| Section | Doc drift |
+| Origin | New finding (D-6 context; same thread as the core-slice migrate note and SHELL-13) |
+| Area | Docs |
+| Bash location | 2.x `lib/modules/migrate.sh:3,384-385` (help "Review the Gash 2.0 changes … with a diff preview and backups"), `:69` (the daily reminder line); rc.A `internal/registry/catalog_gen.go:1313-1362` (the same registered help and the `--yes`/`--rollback`/`--status` usages) and `internal/selfmgmt/migrate.go:14-26` (the ported function) |
+| Observed behavior | Per D-6 the ported `gash_migrate` does not migrate a 1.x configuration: any call (options included) prints one pointer line to the 2.x route and returns 1. But its registered `--help` still carries the 2.x text and the `[--yes] [--plain]`, `--rollback` and `--status` usages, as if the review, backups and rollback were present; and the generated daily reminder still points at "gash migrate" to review the 1.x changes. The help and the reminder describe a flow the function no longer runs. |
+| Reproduction | `grep -n 'Review the Gash 2.0' go-impl/internal/registry/catalog_gen.go` versus `go-impl/internal/selfmgmt/migrate.go` (`MigratePointer`) |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | `gash_migrate` prints the 2.x-route pointer and returns 1 (D-6); the registered help and the daily reminder are inherited from 2.x unchanged. The reminder staying is itself correct (D-6: "the daily reminder stays as in 2.x"); the drift is the help's flags/description and the reminder's "review the changes" wording. |
+| Fix recipe (3.0) | Reduce the `gash_migrate` registered help to the D-6 reality (the name, no `--rollback`/`--status`/`--yes` review, a one-line description that it points at the 2.x route) and reword the daily reminder to the pointer, keeping the once-a-day cadence. |
+| Proving test | `TestLedger_SHELL18` (help text and reminder match the D-6 pointer) once `gash init bash` and the migrate help are reconciled |
+| Status | open |
+
+<a id="shell-19"></a>
+#### SHELL-19 · SHELL-10 and SHELL-13 still need their dedicated proving tests written
+
+| Field | Value |
+|---|---|
+| Section | Doc drift |
+| Origin | New finding (test-coverage note for the S2 LEDGER pass / S3) |
+| Area | Docs |
+| Bash location | the proving tests named by LEDGER SHELL-10 (`TestLedger_SHELL10` in `internal/compatgen`, `testdata/script/load_hygiene.txtar`) and SHELL-13 (`TestLedger_SHELL13` in `internal/compatgen`, `testdata/script/headless_1x_gashrc.txtar`) |
+| Observed behavior | SHELL-10 (load leaves no `BASH_REMATCH`/readonly/array internals in the caller's shell) and SHELL-13 (headless load prints and writes nothing; the interactive once-a-day 1.x notice) are recorded with named proving tests that are not yet present. Both are forced divergences that need a test pinning the rc.A behaviour and the lint/compatgen gate they describe. |
+| Reproduction | the two tests are named in the SHELL-10 and SHELL-13 entries; they do not yet exist in `internal/compatgen`/`testdata/script` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | The behaviours are implemented (compatgen lint for SHELL-10; the headless early return for SHELL-13); only the dedicated LEDGER proving tests are outstanding. |
+| Fix recipe (3.0) | At the S2 LEDGER pass / S3, add `TestLedger_SHELL10` (lint over the generated files and an emitted init script; `load_hygiene.txtar`) and `TestLedger_SHELL13` (`headless_1x_gashrc.txtar`: empty stderr and no state file headless; the once-a-day line interactively) as the SHELL-10/SHELL-13 entries specify. |
+| Proving test | the tests this item asks for (`TestLedger_SHELL10`, `TestLedger_SHELL13`) |
+| Status | open |
+
 ### self-management
 
 <a id="self-18"></a>
@@ -7042,6 +7234,42 @@ Critical and high items:
 | rc.A behavior | Reproduced: template unchanged in rc.A (the binary embeds the same file). |
 | Fix recipe (3.0) | Template text: "Write `%` as `%25`; other characters may be written raw or URL-encoded. The user name is used as written (not decoded)." Same in `docs/configuration.md` (DB entries). |
 | Proving test | `TestLedger_CORE12` in `internal/config` (password `p@:/#x` raw and encoded parse the same; `%2540` decodes to `%40`) |
+| Status | open |
+
+<a id="core-20"></a>
+#### CORE-20 · gash_unload's pre-symbol snapshot is taken before the module surface, reproducing 2.x
+
+| Field | Value |
+|---|---|
+| Section | Doc drift |
+| Origin | New finding (core slice, gash_unload parity note) |
+| Area | Self-management |
+| Bash location | 2.x `gash.sh:191` (`__gash_symbols_now __GASH_PRE_SYMBOLS`, before the core and module sources); 3.x generated `go-impl/compat/gash.sh.tmpl:199-212` (snapshot before the `__gash_source` of bootstrap, the four core shims and the module range) |
+| Observed behavior | The `__GASH_PRE_SYMBOLS` snapshot (the function and alias names that existed before Gash) is taken before the stub/alias surface is defined, not after, so every Gash function and alias counts as "added" and is swept on `gash_unload`. This is intentional and interactive-only; a re-source keeps the first load's pre-Gash state. It is a structural choice of the generated `gash.sh`, not a defect. |
+| Reproduction | `grep -n '__gash_symbols_now __GASH_PRE_SYMBOLS' go-impl/compat/gash.sh.tmpl` shows the call precedes the module `__gash_source`/`range .Modules` block; 2.x `gash.sh:191` is likewise before its core and module sources |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Parity with 2.x: the generated `gash.sh.tmpl` snapshots `__GASH_PRE_SYMBOLS` and the symbol helpers before the stub/alias surface (interactive only), so non-`gash_`-prefixed module functions and aliases are swept on unload exactly as 2.x does. |
+| Fix recipe (3.0) | None: the placement is deliberate and matches 2.x. Recorded so the snapshot is not "moved after the stub surface" in a later refactor; the `gash.sh.tmpl` comment already states the intent. |
+| Proving test | covered by the `gash_unload` parity tests of `internal/selfmgmt` (the module surface is removed and the pre-Gash symbols restored) |
+| Status | open |
+
+<a id="core-21"></a>
+#### CORE-21 · architecture.md names only two sanctioned bash -c uses; there are now five
+
+| Field | Value |
+|---|---|
+| Section | Doc drift |
+| Origin | New finding (core slice, gash_doctor --timing) |
+| Area | Docs |
+| Bash location | `go-impl/design/architecture.md:143` ("`sh -c` anywhere except `llm_exec` … and the nvm bridge"); the sanctioned set is `internal/runner/bash.go:13-36` (`BashLLMExec`, `BashNVMBridge`, `BashDoctorLoad`, `BashDoctorShell`, `BashDoctorBare`) |
+| Observed behavior | The architecture text names only two sanctioned `bash -c` uses (llm_exec and the nvm bridge). rc.A has five: the three `BashDoctor*` shells were added for `gash_doctor --timing` (the load probe, the whole-shell timing `bash -i -c exit`, and the bare-shell timing). The `internal/runner` doc comment already lists all five; the design prose does not. |
+| Reproduction | `grep -n 'nvm bridge' go-impl/design/architecture.md` and the `BashUse` enum in `internal/runner/bash.go` |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | Five sanctioned uses, each gated by `BashUse` and checked by `runner`; the doctor-timing shells carry `-i` and run only fixed scripts. |
+| Fix recipe (3.0) | Update `architecture.md` to name the five sanctioned `bash -c` uses (llm_exec, the nvm bridge, and the three `gash_doctor --timing` shells), or point at the `BashUse` enum as the source of truth. |
+| Proving test | none (doc change; the `BashUse` check is covered by `internal/runner` tests) |
 | Status | open |
 
 ## HTE design delta
