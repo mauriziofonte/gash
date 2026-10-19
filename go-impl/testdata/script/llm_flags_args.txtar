@@ -1,0 +1,56 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_flags_spec.sh:9
+# covers: llm_flags_spec.sh:25
+#
+# Argument handling shared by the llm_* family, driven through the shim.
+# --help and -h are honoured anywhere on the line; functions without options
+# reject unknown ones, refuse a second path with unexpected_argument, flag a
+# value flag with no value, and cap integers at nine digits.
+
+env GASH_HEADLESS=1
+
+# --- llm_flags_spec.sh:9 - --help and -h work anywhere on the line
+exec bash help_anywhere.sh
+
+# --- llm_flags_spec.sh:25 - reject options, refuse extra arguments
+exec bash reject_args.sh
+
+-- help_anywhere.sh --
+set -euo pipefail
+source "$GASH_SH"
+for call in "llm_tree . --help" "llm_find *.php . -h" "llm_grep x . --help" "llm_config x.json --help" \
+    "llm_git_status . -h" "llm_git_log -n 3 --help" "llm_project . --help" "llm_deps . -h" \
+    "llm_db_query SELECT --help" "llm_env --filter X -h" "llm_procs --name x --help" "llm_ports --help"; do
+  set -f
+  out="$($call 2>&1)" || { echo "rc!=0: $call"; exit 1; }
+  set +f
+  fn="${call%% *}"
+  [[ "$out" == *"$fn"* ]] || { echo "no help: $call: $out"; exit 1; }
+done
+-- reject_args.sh --
+set -euo pipefail
+source "$GASH_SH"
+cd "$WORK"
+printf '{}\n' >c.json
+verdict() { "$@" 2>&1 >/dev/null | jq -r .error; }
+[[ "$(verdict llm_git_status --bogus)" == unknown_option ]]
+[[ "$(verdict llm_git_status . other)" == unexpected_argument ]]
+[[ "$(verdict llm_project --bogus)" == unknown_option ]]
+[[ "$(verdict llm_project "$WORK/nonexistent")" == path_not_found ]]
+[[ "$(verdict llm_project "$WORK/c.json")" == not_a_directory ]]
+[[ "$(verdict llm_config --bogus)" == unknown_option ]]
+[[ "$(verdict llm_config c.json other.json)" == unexpected_argument ]]
+[[ "$(verdict llm_config c.json --max-bytes)" == missing_value ]]
+[[ "$(verdict llm_find)" == missing_pattern ]]
+[[ "$(verdict llm_find "*" . extra)" == unexpected_argument ]]
+for fn in llm_tree "llm_grep x" llm_git_diff llm_git_log llm_deps; do
+  [[ "$(verdict $fn . other)" == unexpected_argument ]] || { echo "second path accepted: $fn"; exit 1; }
+done
+[[ "$(verdict llm_find "*" --type x)" == invalid_type ]]
+[[ "$(verdict llm_find "*" --type d --contains x)" == invalid_type ]]
+# Integers are capped at 9 digits (no arithmetic overflow).
+[[ "$(verdict llm_tree --depth 99999999999999999999)" == invalid_depth ]]
+[[ "$(verdict llm_find "*" -n 1234567890)" == invalid_limit ]]
+[[ "$(verdict llm_grep x -n 99999999999999999999)" == invalid_limit ]]
+llm_tree --depth 007 . | jq -e '.type == "directory"' >/dev/null
