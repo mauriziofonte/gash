@@ -27,6 +27,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -57,6 +58,22 @@ func TestScript(t *testing.T) {
 	bin, err := compatgen.Stage(root, stage, exe)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The render-spec network rows (docker_compose_check, ip_public, the AI
+	// functions, ...) talk to registries and APIs over net/http. httpsfake
+	// (internal/tools/httpsfake, design/testing.md 2.4) is the local HTTPS
+	// CONNECT proxy that answers them from the canned curl responses; a case
+	// starts it in the background and points HTTPS_PROXY/SSL_CERT_FILE at it.
+	// It is built once here and put on PATH as `httpsfake`.
+	fakeBin := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	build := exec.Command("go", "build", "-o", filepath.Join(fakeBin, "httpsfake"),
+		"github.com/mauriziofonte/gash/internal/tools/httpsfake")
+	build.Dir = filepath.Join(root, "go-impl")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building httpsfake: %v\n%s", err, out)
 	}
 	// testscript's Dir is non-recursive, but the render-spec fixtures are
 	// grouped in a render/ subdirectory (testdata/script/README.md), so the
@@ -92,6 +109,7 @@ func TestScript(t *testing.T) {
 				return err
 			}
 			env.Setenv("HOME", home)
+			env.Setenv("PATH", fakeBin+string(os.PathListSeparator)+env.Getenv("PATH"))
 			env.Setenv("GASH_STAGE", stage)
 			env.Setenv("GASH_SH", filepath.Join(stage, "gash.sh"))
 			env.Setenv("GASH_BIN", bin)

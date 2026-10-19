@@ -1,0 +1,56 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:251
+# covers: output_style_render_spec.sh:252
+# covers: output_style_render_spec.sh:253
+# covers: output_style_render_spec.sh:254
+# covers: output_style_render_spec.sh:255
+# covers: output_style_render_spec.sh:256
+#
+# docker_compose_upgrade rendering (R2-R6). Building the plan queries the
+# registry over net/http (SYS-36), answered by httpsfake (on PATH via the
+# harness) through HTTPS_PROXY with its CA in SSL_CERT_FILE. The upgrade
+# itself execs `docker compose pull/stop/up` and `docker image prune`,
+# reproduced as a PATH stub that just succeeds. Covers the dry-run plan, the
+# all-pinned no-op (offline), the headless refusal without --yes, the -y
+# run to completion, and the two offline failures (no file, the retired -n).
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :251 dry-run - shows the plan and the commands it would run
+exec bash -c 'mkdir -p u251; cd u251; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.2.1\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade --dry-run; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'Dry run: no changes will be made'
+stdout '• db  \(postgres:15\.2\.1\) - pinned version'
+stdout '✓ web \(nginx:latest\)'
+stdout 'Would run:'
+stdout 'docker compose .* pull web'
+
+# --- :252 all-pinned - every image is digest-pinned: nothing to do (offline)
+exec bash -c 'mkdir -p u252; cd u252; printf "services:\n  db:\n    image: postgres:15.2.1\n" >docker-compose.yml; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade'
+stdout '• db \(postgres:15\.2\.1\) - pinned version'
+stdout 'No services to upgrade \(all pinned\)\.'
+
+# --- :253 declined - headless without --yes refuses the destructive upgrade
+! exec bash -c 'mkdir -p u253; cd u253; printf "services:\n  web:\n    image: nginx:latest\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr 'Refusing to upgrade in headless mode without --yes'
+
+# --- :254 yes - -y pulls, restarts and prunes to completion
+exec bash -c 'mkdir -p u254/bin; cd u254; printf "#!/bin/sh\nexit 0\n" >bin/docker; chmod +x bin/docker; printf "services:\n  web:\n    image: nginx:latest\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade -y; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr '\[1/4\] Pulling updated images\.\.\.'
+stderr '\[4/4\] Cleaning old images\.\.\.'
+stdout 'Upgrade Complete'
+
+# --- :255 no-file (offline)
+! exec bash -c 'mkdir -p u255; cd u255; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade'
+stderr 'Error: No docker-compose\.yml found'
+
+# --- :256 old-n - the retired -n flag is rejected with guidance (offline)
+! exec bash -c 'mkdir -p u256; cd u256; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade -n'
+stderr 'Error: -n is not --dry-run anymore; use --dry-run'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade -n'
+stderr '^Error: -n is not --dry-run anymore'
+! stderr '\x1b'
