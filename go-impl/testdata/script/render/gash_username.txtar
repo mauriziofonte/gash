@@ -1,0 +1,20 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:77
+#
+# gash_username:plain - prints the current login name, plain on every
+# stream (no color, no status glyph). output_style_render_spec.sh:77.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# Color/TTY run: a bare name, no ANSI even with color allowed.
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_username'
+stdout '^[A-Za-z_][A-Za-z0-9_-]*$'
+! stdout '\x1b'
+
+# Plain run: identical bytes.
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; gash_username'
+stdout '^[A-Za-z_][A-Za-z0-9_-]*$'
+! stdout '\x1b'

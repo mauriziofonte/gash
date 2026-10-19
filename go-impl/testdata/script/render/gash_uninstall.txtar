@@ -1,0 +1,37 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:68
+# covers: output_style_render_spec.sh:69
+# covers: output_style_render_spec.sh:70
+# covers: output_style_render_spec.sh:71
+#
+# gash_uninstall rendering (R2-R6): not-installed and not-a-Gash-dir
+# errors, and the confirmation path (a ! Warning prompt that, with no
+# confirmation on stdin, cancels). GASH__TTY_IN=1 makes the function
+# prompt; the empty testscript stdin answers EOF, so it declines.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :68 not-installed
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_uninstall'
+stderr 'Error: Gash is not installed on this system\.'
+
+# --- :69 not-gash - the directory is not a Gash install
+! exec bash -c 'mkdir -p "$HOME/x"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/x" gash_uninstall'
+stderr 'does not look like a Gash installation'
+
+# --- :70 cancel - the warning prompt, then cancelled
+exec bash -c 'mkdir -p "$HOME/g/lib/core"; : >"$HOME/g/gash.sh"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/g" gash_uninstall'
+stderr 'Warning: This will remove Gash'
+stderr 'Uninstall cancelled\.'
+
+# --- :71 confirm - a full fake install with profiles; declines at the prompt
+exec bash -c 'mkdir -p "$HOME/g2/lib/core"; : >"$HOME/g2/gash.sh"; printf "# >>> GASH START >>>\nsource ~/.gashrc\n# <<< GASH END <<<\n" >.bashrc; : >.gashrc; : >.gash_env; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/g2" gash_uninstall'
+stderr 'Warning: This will remove Gash'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_uninstall'
+stderr '^Error: Gash is not installed'
+! stderr '\x1b'

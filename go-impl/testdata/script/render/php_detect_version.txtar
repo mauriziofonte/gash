@@ -1,0 +1,33 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:326
+# covers: output_style_render_spec.sh:327
+# covers: output_style_render_spec.sh:328
+#
+# php_detect_version rendering (R2-R6): a JSON object in headless mode. The
+# version and the derived php_command are stable (computed from the project
+# config, not from any installed php), so only those are asserted; the
+# detected raw binaries depend on the host. Each case gets its own HOME so
+# the version-marker walk-up does not cross cases.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+
+# --- :326 detected - from .target-php-version
+exec bash -c 'export HOME="$WORK/a"; mkdir -p "$HOME" && cd "$HOME" && echo 8.2 >.target-php-version; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; php_detect_version'
+stdout '"version":"8\.2"'
+stdout '"php_command":"php82"'
+
+# --- :327 json - from composer.json require ^8.1
+exec bash -c 'export HOME="$WORK/b"; mkdir -p "$HOME" && cd "$HOME" && echo "{\"require\":{\"php\":\"^8.1\"}}" >composer.json; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; php_detect_version --json'
+stdout '"version":"8\.1"'
+stdout '"php_command":"php81"'
+
+# --- :328 bad_option
+! exec bash -c 'export HOME="$WORK/c"; mkdir -p "$HOME" && cd "$HOME"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; php_detect_version --bogus'
+stderr 'Error: Unknown option: --bogus'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export HOME="$WORK/d"; mkdir -p "$HOME" && cd "$HOME"; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; php_detect_version --bogus'
+stderr '^Error: Unknown option: --bogus'
+! stderr '\x1b'

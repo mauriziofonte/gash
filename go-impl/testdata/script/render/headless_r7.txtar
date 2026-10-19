@@ -1,0 +1,23 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:580
+#
+# R7: loading Gash in headless mode prints nothing, whether or not a terminal
+# is attached. The real-PTY half of the 2.x check (script(1)) is covered by
+# the Go headless-contract tests; here the two states are the inherited no-tty
+# case and a simulated terminal (GASH__TTY_OUT=1), both of which must leave
+# stdout and stderr completely empty.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- not a terminal
+exec bash --noprofile --norc -c 'source "$GASH_SH"'
+! stdout '(?s).'
+! stderr '(?s).'
+
+# --- a (simulated) terminal
+exec bash --noprofile --norc -c 'export GASH__TTY_OUT=1; source "$GASH_SH"'
+! stdout '(?s).'
+! stderr '(?s).'
