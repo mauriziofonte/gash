@@ -1,0 +1,24 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: DB-07
+# forced-divergence: DB-09
+# ledger: TEST-14
+# covers: llm_db_security_spec.sh:89
+# covers: llm_db_security_spec.sh:127
+#
+# Designed divergence (LEDGER DB-07, DB-09; proof pinned by TEST-14's Go
+# tests TestMySQLMatches2x / TestPgsqlMatches2x in internal/db). 2.x drove
+# MySQL and PostgreSQL through the mysql/psql clients and asserted on the
+# argv, stdin and PGPASSWORD a mock client received. 3.0 connects with the
+# native drivers (go-sql-driver/mysql, pgx): no client runs (so the
+# client-not-found path is unreachable, DB-07), and the query string and
+# the password never reach any process argv (DB-09). With an empty PATH and
+# an unreachable host these cases prove the native path is taken (a
+# mysql_error/pgsql_error, not mysql_not_found/psql_not_found) and that
+# neither the SQL nor the password appears in the result.
+
+# llm_db_security_spec.sh:89 - MySQL: native driver, no client spawned, SQL and password never on argv
+exec bash -c 'set -euo pipefail; d="$WORK/db89"; mkdir -p "$d/empty"; printf ''DB:default=mysql://u:p%%40ss@127.0.0.1:1/app\n'' >"$d/.gash_env"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; err="$(PATH="$d/empty" llm_db_query "SELECT id, name FROM t -- note" -r 7 2>&1 >/dev/null || true)"; jq -e ''.error == "mysql_error" and .action == "RETRY"'' <<<"$err" >/dev/null; [[ "$err" != *mysql_not_found* ]]; [[ "$err" != *p@ss* && "$err" != *"SELECT id, name"* ]]'
+
+# llm_db_security_spec.sh:127 - PostgreSQL: native driver (pgx), no psql, no PGPASSWORD child, SQL and password never on argv
+exec bash -c 'set -euo pipefail; d="$WORK/db127"; mkdir -p "$d/empty"; printf ''DB:default=pgsql://u:secret@127.0.0.1:1/app\n'' >"$d/.gash_env"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; err="$(PATH="$d/empty" llm_db_query "SELECT 1 AS id, true AS ok" -r 3 2>&1 >/dev/null || true)"; jq -e ''.error == "pgsql_error" and .action == "RETRY"'' <<<"$err" >/dev/null; [[ "$err" != *psql_not_found* ]]; [[ "$err" != *secret* ]]; [[ "$err" == *database=app* ]]'
