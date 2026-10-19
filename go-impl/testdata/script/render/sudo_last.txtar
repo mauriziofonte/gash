@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:212
+# covers: output_style_render_spec.sh:213
+#
+# sudo_last rendering (R2-R6). It is shell-side (reads the caller's `fc`
+# history and runs sudo), so it renders plain under testscript. sudo is a
+# PATH stub that just execs. Covers running a given command and the
+# declined confirmation of the last history command.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :212 command - sudo_last with an explicit command
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sudo_last echo ok'
+stdout '^ok$'
+
+# --- :213 declined - the last command is shown and aborted
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; fc() { printf "%s\n" "   apt update"; }; source "$GASH_SH"; sudo_last'
+stderr 'About to run as root: apt update'
+stderr 'Aborted\.'
+
+-- sudo --
+#!/usr/bin/env bash
+exec "$@"
