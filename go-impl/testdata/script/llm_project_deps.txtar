@@ -1,0 +1,67 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:283
+# covers: llm_spec.sh:301
+# covers: llm_spec.sh:673
+# covers: llm_spec.sh:689
+# covers: llm_spec.sh:705
+# covers: llm_system_spec.sh:49
+# covers: llm_system_spec.sh:103
+#
+# llm_project and llm_deps over fixture projects. A composer.json makes a PHP
+# project managed by composer; a package.json an npm one. llm_deps reads the
+# manifest into a {manager, dependencies} shape, or {manager, prod, dev} with
+# --dev. has_tests follows a *_test.go file for a Go module. requirements.txt
+# and go.mod read into the same dependency shape.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:283 - detects project info
+exec bash -c 'source "$GASH_SH"; llm_project php'
+stdout '"type": "php"'
+stdout '"package_manager": "composer"'
+
+# --- llm_spec.sh:301 - llm_project shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_project -h'
+stdout llm_project
+
+# --- llm_spec.sh:673 - llm_deps detects PHP dependencies
+exec bash -c 'source "$GASH_SH"; llm_deps php'
+stdout laravel
+
+# --- llm_spec.sh:689 - llm_deps detects Node.js dependencies
+exec bash -c 'source "$GASH_SH"; llm_deps node'
+stdout express
+
+# --- llm_spec.sh:705 - llm_deps shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_deps -h'
+stdout llm_deps
+
+# --- llm_system_spec.sh:49 - has_tests follows a *_test.go file
+exec bash gotests.sh
+
+# --- llm_system_spec.sh:103 - requirements.txt and go.mod, same shape
+exec bash deps_shapes.sh
+
+-- php/composer.json --
+{"require":{"php":">=8.0","laravel/framework":"^10.0"}}
+-- node/package.json --
+{"dependencies":{"express":"^4.18.0"}}
+-- gotests.sh --
+set -euo pipefail
+source "$GASH_SH"
+d="$WORK/gm"
+mkdir -p "$d"
+printf 'module x\n' >"$d/go.mod"
+printf 'package main\n' >"$d/main.go"
+[[ "$(llm_project "$d" | jq -r .has_tests)" == false ]]
+printf 'package main\n' >"$d/main_test.go"
+[[ "$(llm_project "$d" | jq -r .has_tests)" == true ]]
+-- deps_shapes.sh --
+set -euo pipefail
+source "$GASH_SH"
+mkdir -p "$WORK/py" "$WORK/go"
+printf '# c\nrequests>=2\nflask[async]==3 ; python_version>"3"\n-r more.txt\n  numpy\n' >"$WORK/py/requirements.txt"
+printf 'module x\n\nrequire (\n\tgithub.com/a/b v1.0.0\n)\nrequire example.com/z v1.2.3\n' >"$WORK/go/go.mod"
+[[ "$(llm_deps "$WORK/py" | jq -c .dependencies)" == '["requests","flask","numpy"]' ]]
+[[ "$(llm_deps "$WORK/go" --dev | jq -c '[.prod, .dev]')" == '[["github.com/a/b","example.com/z"],[]]' ]]

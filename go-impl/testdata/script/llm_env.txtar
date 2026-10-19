@@ -1,0 +1,75 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:448
+# covers: llm_spec.sh:460
+# covers: llm_spec.sh:478
+# covers: llm_flags_spec.sh:106
+# covers: llm_system_spec.sh:92
+# covers: llm_portability_spec.sh:79
+#
+# llm_env prints a JSON object of the environment. Secret-looking names are
+# left out, token-shaped and URL-password values are masked, --filter keeps a
+# subset, and -h prints the registered help. rc.A reads the process
+# environment directly (os.Environ), never shelling out to env, so a system
+# whose env has no -0 (BSD) changes nothing: the [moot] run* case is proven
+# with an env stub that refuses -0.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:448 - outputs a JSON object
+exec bash -c 'source "$GASH_SH"; llm_env'
+stdout '^\{'
+stdout '\}'
+
+# --- llm_spec.sh:460 - filters out secrets
+env MY_SECRET_PASSWORD=should_not_appear
+env MY_API_KEY=should_not_appear
+env NORMAL_VAR=should_appear
+exec bash -c 'source "$GASH_SH"; llm_env'
+! stdout SECRET_PASSWORD
+! stdout API_KEY
+
+# --- llm_spec.sh:478 - shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_env -h'
+stdout llm_env
+
+# --- llm_flags_spec.sh:106 - hides secret names and masks token values
+exec bash env_masks.sh
+
+# --- llm_system_spec.sh:92 - --filter, URL passwords, secret names
+exec bash env_filter.sh
+
+# --- llm_portability_spec.sh:79 - works where env has no -0 (BSD)
+exec bash env_no0.sh
+
+-- env_masks.sh --
+set -euo pipefail
+source "$GASH_SH"
+export MYSQL_PWD=a GH_PAT=b PASSPHRASE=c MY_JWT=d SLACK_WEBHOOK_URL=e SESSION_ID=f BEARER=g APP_SALT=h ENCRYPTION_PASS=i PRIVATE_THING=j
+export NOTES="key AKIAABCDEFGHIJKLMNOP and ghp_abcdefghijklmnopqrstuvwxyz0123 end"
+export API_BASE="https://u:pw@example.com/x" SAFE_VALUE=plain PATCH_LEVEL=3
+export PEMDATA="-----BEGIN OPENSSH PRIVATE KEY-----
+abc"
+out="$(llm_env)"
+for n in MYSQL_PWD GH_PAT PASSPHRASE MY_JWT SLACK_WEBHOOK_URL SESSION_ID BEARER APP_SALT ENCRYPTION_PASS PRIVATE_THING; do
+  jq -e --arg n "$n" 'has($n) | not' <<<"$out" >/dev/null || { echo "shown: $n"; exit 1; }
+done
+jq -e '.NOTES == "key *** and *** end" and .API_BASE == "https://u:***@example.com/x" and .PEMDATA == "***"' <<<"$out" >/dev/null
+jq -e ".SAFE_VALUE == \"plain\" and .PATCH_LEVEL == \"3\" and .PWD == \"$PWD\"" <<<"$out" >/dev/null
+-- env_filter.sh --
+set -euo pipefail
+export DB_URL="mysql://app:s3cret@db:3306/x" GITHUB_TOKEN=t MY_VAR=1
+source "$GASH_SH"
+out="$(llm_env --filter '^(DB_URL|GITHUB_TOKEN|MY_VAR)$')"
+jq -e 'keys == ["DB_URL", "MY_VAR"]' <<<"$out" >/dev/null
+jq -e '.DB_URL == "mysql://app:***@db:3306/x"' <<<"$out" >/dev/null
+[[ "$(llm_env --filter '(' 2>&1 >/dev/null | jq -r .error)" == invalid_filter ]]
+-- env_no0.sh --
+set -euo pipefail
+mkdir -p "$WORK/nobin"
+printf '#!/bin/sh\necho "env: illegal option -- 0" >&2\nexit 1\n' >"$WORK/nobin/env"
+chmod +x "$WORK/nobin/env"
+export MY_MULTI=$'a\nb=c'
+source "$GASH_SH"
+out="$(PATH="$WORK/nobin:$PATH" llm_env)"
+jq -e ".HOME == \"$HOME\" and .MY_MULTI == \"a\nb=c\" and (has(\"b\") | not)" <<<"$out" >/dev/null

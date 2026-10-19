@@ -1,0 +1,118 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:356
+# covers: llm_spec.sh:379
+# covers: llm_spec.sh:394
+# covers: llm_spec.sh:720
+# covers: llm_spec.sh:742
+# covers: llm_system_spec.sh:62
+# covers: llm_system_spec.sh:116
+#
+# The llm_git_* readers through the shim. The git module runs real git with
+# the caller's env/HOME (GIT-10, no hardening of identity), so each case
+# builds its own repo and the archive carries home/.gitconfig with a fixed
+# identity, default branch and dates. git_status reports a clean repo, log is
+# a JSON array, diff is git diff --stat text. llm_git_status reports renames,
+# odd (newline) names, conflicts and ahead/behind, and no llm_git_* reader
+# runs a program named by the repository's own config (hooks, pager, diff
+# driver, gpg.program): git is hardened against those.
+
+env GASH_HEADLESS=1
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+# A plain repo with one commit, clean working tree.
+exec git init -q -b main r
+cd r
+exec bash -c 'echo x > f; git add f; git commit -q -m "initial commit"'
+
+# --- llm_spec.sh:356 - git_status outputs JSON in a repo
+exec bash -c 'source "$GASH_SH"; llm_git_status .'
+stdout '"branch"'
+stdout '"staged"'
+stdout '"modified"'
+
+# --- llm_spec.sh:379 - git_status shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_git_status -h'
+stdout llm_git_status
+
+# --- llm_spec.sh:394 - git_log outputs a JSON array
+exec bash -c 'source "$GASH_SH"; llm_git_log .'
+stdout '^\['
+stdout '"hash"'
+stdout '"subject"'
+
+# --- llm_spec.sh:720 - git_diff shows diff stats
+exec bash -c 'echo line2 >> f'
+exec bash -c 'source "$GASH_SH"; llm_git_diff .'
+stdout 'f \|'
+
+# --- llm_spec.sh:742 - git_diff shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_git_diff -h'
+stdout llm_git_diff
+
+cd $WORK
+
+# --- llm_system_spec.sh:62 - renames, odd names, conflicts, ahead/behind
+exec bash status_states.sh
+
+# --- llm_system_spec.sh:116 - never run programs named by the repo config
+exec bash git_no_exec.sh
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false
+-- status_states.sh --
+set -euo pipefail
+source "$GASH_SH"
+git init -q "$WORK/up"; cd "$WORK/up"
+printf 'a\n' >a.txt; printf 'b\n' >b.txt; git add .; git commit -qm one
+git clone -q "$WORK/up" "$WORK/sr"; cd "$WORK/sr"
+printf 'c\n' >c.txt; git add c.txt; git commit -qm two
+git mv a.txt "renamed a.txt"
+printf 'x\n' >>b.txt
+printf 'n\n' >"$(printf 'new\nline.txt')"
+out="$(llm_git_status)"
+jq -e '.branch == "main" and .ahead == 1 and .behind == 0' <<<"$out" >/dev/null
+jq -e '.staged == ["renamed a.txt"] and .modified == ["b.txt"]' <<<"$out" >/dev/null
+jq -e '.untracked == ["new\nline.txt"] and .conflicted == []' <<<"$out" >/dev/null
+# A merge conflict lands in "conflicted", not in staged/modified.
+git reset -q --hard; git clean -qfd
+git checkout -qb side HEAD~1; printf 'side\n' >b.txt; git commit -qam side
+git checkout -q main; printf 'main\n' >b.txt; git commit -qam main
+git merge -q side >/dev/null 2>&1 || true
+out="$(llm_git_status)"
+jq -e '.conflicted == ["b.txt"] and (.staged | index("b.txt")) == null' <<<"$out" >/dev/null
+-- git_no_exec.sh --
+set -euo pipefail
+git init -q "$WORK/evil"; cd "$WORK/evil"
+printf 'a\n' >a.txt; printf '*.txt diff=evil\n' >.gitattributes
+git add .; git commit -qm one
+printf 'b\n' >>a.txt; git add a.txt; printf 'c\n' >>a.txt
+printf '#!/bin/sh\necho "$0 $*" >>"%s/ran"\nexit 1\n' "$WORK" >"$WORK/evil.sh"
+chmod +x "$WORK/evil.sh"
+mkdir hooks; cp "$WORK/evil.sh" hooks/post-index-change
+git config core.fsmonitor "$WORK/evil.sh"
+git config core.hooksPath "$WORK/evil/hooks"
+git config diff.external "$WORK/evil.sh"
+git config diff.evil.command "$WORK/evil.sh"
+git config diff.evil.textconv "$WORK/evil.sh"
+git config core.pager "$WORK/evil.sh"
+git config log.showSignature true
+git config gpg.program "$WORK/evil.sh"
+# Sanity: plain git runs them here (else the test proves nothing, so skip).
+git status >/dev/null 2>&1 || true
+[[ -e "$WORK/ran" ]] || { echo "SKIP: git does not run the configured commands here"; exit 0; }
+rm -f "$WORK/ran"
+source "$GASH_SH"
+llm_git_status | jq -e '.staged == ["a.txt"] and .modified == ["a.txt"]' >/dev/null
+[[ "$(llm_git_diff)" == *"a.txt"* ]]
+[[ "$(llm_git_diff --staged)" == *"a.txt"* ]]
+llm_git_log | jq -e 'length == 1 and .[0].subject == "one"' >/dev/null
+[[ ! -e "$WORK/ran" ]] || { cat "$WORK/ran"; exit 1; }

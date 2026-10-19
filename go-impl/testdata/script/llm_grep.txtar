@@ -1,0 +1,28 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:257
+# covers: llm_spec.sh:268
+#
+# llm_grep over a private fixture tree. A literal pattern restricted to one
+# extension returns file:line:content; -h prints the registered help. The
+# literal match is byte-faithful (LLM-37's RE2 engine matches a plain word
+# exactly as the 2.x engines did), so these are plain pure-port rows.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:257 - finds patterns in files
+exec bash -c 'source "$GASH_SH"; llm_grep function fx --ext sh'
+stdout 'core/a\.sh:1:function a'
+
+# --- llm_spec.sh:268 - shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_grep -h'
+stdout llm_grep
+
+-- fx/core/a.sh --
+function a() {
+    :
+}
+-- fx/modules/b.sh --
+b() { :; }
+-- fx/README.txt --
+notes

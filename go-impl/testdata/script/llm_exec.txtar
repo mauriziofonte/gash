@@ -1,0 +1,25 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:148
+# covers: llm_spec.sh:164
+# covers: llm_spec.sh:175
+#
+# llm_exec through the shim, as a user runs it. The 2.x spec sourced the llm
+# module directly; here the binary is driven behind gash.sh. The blocklist
+# refuses a dangerous line, a safe line runs read-only in the child shell,
+# and -h prints the registered help (header plus description).
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:148 - blocks dangerous commands
+! exec bash -c 'source "$GASH_SH"; llm_exec "rm -rf /"'
+stderr dangerous_command_blocked
+
+# --- llm_spec.sh:164 - executes safe commands
+exec bash -c 'source "$GASH_SH"; llm_exec "echo hello"'
+stdout '^hello$'
+
+# --- llm_spec.sh:175 - shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_exec -h'
+stdout llm_exec
+stdout 'Safe command execution wrapper'

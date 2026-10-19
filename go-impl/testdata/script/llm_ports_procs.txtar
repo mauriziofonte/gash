@@ -1,0 +1,94 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:421
+# covers: llm_spec.sh:433
+# covers: llm_spec.sh:757
+# covers: llm_flags_spec.sh:84
+# covers: llm_flags_spec.sh:97
+# covers: llm_system_spec.sh:7
+# covers: llm_system_spec.sh:32
+#
+# llm_ports and llm_procs. rc.A still executes ss/ps (MOCK-DEPENDENT run*: Y
+# because it execs ss), so the ss cases put a fake ss on PATH exactly as the
+# 2.x specs did. llm_ports parses the ss table (Netid column, --listen), and
+# reports a missing ss and netstat as a CONTINUE error. llm_procs prints one
+# compact JSON array, matches full command lines with --name (leaving out the
+# calling shell), and validates --port. Both print the registered help on -h.
+
+env GASH_HEADLESS=1
+
+exec chmod +x ssbin/ss
+
+# --- llm_spec.sh:421 - llm_ports outputs a JSON array
+exec bash ports_array.sh
+
+# --- llm_system_spec.sh:7 - parses ss output with a Netid column, --listen
+exec bash ports_netid.sh
+
+# --- llm_system_spec.sh:32 - missing ss and netstat is a CONTINUE error
+exec bash ports_missing.sh
+
+# --- llm_spec.sh:433 - llm_ports shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_ports -h'
+stdout llm_ports
+
+# --- llm_flags_spec.sh:84 - llm_procs prints one compact JSON array
+exec bash procs_compact.sh
+
+# --- llm_flags_spec.sh:97 - --name leaves out the calling shell and parents
+exec bash procs_name.sh
+
+# --- llm_spec.sh:757 - llm_procs shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_procs -h'
+stdout llm_procs
+
+-- ssbin/ss --
+#!/usr/bin/env bash
+echo "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port"
+echo "tcp   LISTEN 0      4096   [::]:22            [::]:*"
+echo "udp   UNCONN 0      0      0.0.0.0:68         0.0.0.0:*"
+[[ "$1" == *l* ]] || echo "tcp   ESTAB  0      0      10.0.0.2:44312     1.2.3.4:443"
+-- ports_array.sh --
+set -euo pipefail
+export PATH="$WORK/ssbin:$PATH"
+source "$GASH_SH"
+out="$(llm_ports)"
+[[ "$out" == '['* ]]
+[[ "$out" == *']' ]]
+-- ports_netid.sh --
+set -euo pipefail
+export PATH="$WORK/ssbin:$PATH"
+source "$GASH_SH"
+out="$(llm_ports --listen)"
+jq -e 'length == 2' <<<"$out" >/dev/null
+jq -e '.[0] == {port:22, proto:"tcp", state:"LISTEN", address:"[::]"}' <<<"$out" >/dev/null
+jq -e '.[1] == {port:68, proto:"udp", state:"LISTEN", address:"0.0.0.0"}' <<<"$out" >/dev/null
+out="$(llm_ports)"
+jq -e 'length == 3 and (map(.state) | index("ESTAB") != null)' <<<"$out" >/dev/null
+-- ports_missing.sh --
+set -euo pipefail
+source "$GASH_SH"
+# A PATH with the text tools but neither ss nor netstat.
+mkdir -p "$WORK/notools"
+for t in sort awk gawk mawk; do p="$(type -P "$t")" && ln -s "$p" "$WORK/notools/$t" || true; done
+rc=0
+out="$(PATH="$WORK/notools" llm_ports 2>"$WORK/perr")" || rc=$?
+[[ $rc -eq 1 && -z "$out" ]]
+jq -e '.error == "ports_tool_not_found" and .action == "CONTINUE" and .recoverable == true
+  and (.hint | test("iproute2") and test("net-tools"))' "$WORK/perr" >/dev/null
+-- procs_compact.sh --
+set -euo pipefail
+source "$GASH_SH"
+out="$(llm_procs)"
+[[ "$(wc -l <<<"$out")" -eq 1 ]]
+jq -e 'type == "array"' <<<"$out" >/dev/null
+name="no-such-$((RANDOM + 100000))-x"
+[[ "$(llm_procs --name "$name")" == "[]" ]]
+[[ "$(llm_procs --port 1x 2>&1 >/dev/null | jq -r .error)" == invalid_port ]]
+-- procs_name.sh --
+set -euo pipefail
+out="$(GASH_HEADLESS=1 bash -c 'source "$GASH_SH"; llm_procs --name no-such-process-zq7')"
+[[ "$out" == "[]" ]] || { echo "$out"; exit 1; }
+# A real match, child of the calling shell, is still listed.
+out="$(GASH_HEADLESS=1 bash -c 'source "$GASH_SH"; sleep 30 & p=$!; llm_procs --name "sleep 30"; kill $p')"
+[[ "$out" == '[{"pid":'*',"name":"sleep"}]' ]] || { echo "$out"; exit 1; }
