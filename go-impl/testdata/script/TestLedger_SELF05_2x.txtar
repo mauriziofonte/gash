@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# ledger: SELF-05
+# covers: unload_spec.sh:5
+#
 # gash_unload (stub/gash_unload) runs entirely in the caller's shell and
 # reproduces the 2.x behavior: the snapshot taken before Gash loaded (now
 # taken in gash.sh before any stub or alias is defined) lets the whole Gash

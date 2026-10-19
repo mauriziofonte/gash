@@ -1,4 +1,5 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# covers: none (3.0 HTE surface; no 2.x spec)
 # Before install, every command that needs it fails with
 # hte_not_installed (STOP), in text and JSON alike. As root they are
 # root_not_allowed first (hte_refusals.txtar).

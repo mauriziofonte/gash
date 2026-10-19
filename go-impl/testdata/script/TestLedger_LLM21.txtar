@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# forced-divergence: LLM-21
+# covers: none (3.0 self-management proof; no 2.x assertion)
+#
 # LEDGER LLM-21 (forced divergence): 2.x llm_docker_check clobbered the
 # caller's name, tag and f with its loop variables; through the shim the
 # binary runs in its own process, so they stay as they were.

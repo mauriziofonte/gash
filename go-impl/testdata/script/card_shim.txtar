@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# ledger: SELF-12
+# covers: none (3.0 shim surface; headless nav card)
+#
 # The reference card through the shim, plain when piped. Headless loads no
 # alias pack: the nav topic shows the values the alias file writes, the
 # identity alias (ls -> ls) left out. The box (version, function count)

@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# forced-divergence: LLM-22
+# covers: none (3.0 self-management proof; no 2.x assertion)
+#
 # LEDGER LLM-22 (forced divergence): 2.x llm_grep --ext left ext and exts
 # set in the caller's shell; through the shim the binary sets nothing.
 

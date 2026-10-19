@@ -1,4 +1,5 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# covers: none (3.0 HTE surface; no 2.x spec)
 # gash hte command-line errors: one envelope on stderr, nothing on
 # stdout, exit 1, the hint naming the command's help.
 

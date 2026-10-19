@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# forced-divergence: SHELL-07
+# covers: none (3.0 security proof; toolchains_spec rows stay Bash, Plan shell)
+#
 # SHELL-07 proving test: GASH_PATH_ADD is split on space, tab and newline
 # regardless of the caller's IFS, and never glob-expanded. Setting IFS=:
 # before sourcing does not change the result, and a word with a glob

@@ -1,5 +1,7 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# covers: none (3.0 surface; agent headless entry point)
+#
 # The agent entry point: sourcing the staged gash.sh headless under
 # set -euo pipefail prints nothing, returns 0 and defines the functions.
 

@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# ledger: SELF-13
+# covers: none (3.0 shim surface)
+#
 # gash_inspiring_quote through the shim: a quote of GASH_DIR/quotes, its
 # source with --source; a positional word is reported as an unknown option
 # (LEDGER SELF-13, reproduced).

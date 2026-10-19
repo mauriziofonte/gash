@@ -1,5 +1,8 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
+# forced-divergence: CORE-05
+# covers: none (3.0 surface; native-driver message, no 2.x assertion)
+#
 # LEDGER CORE-05: gash_db_test connects through the native drivers. With
 # no mysql, mariadb or psql on PATH and a host that refuses the
 # connection it prints "Connection failed", never "client not found".
