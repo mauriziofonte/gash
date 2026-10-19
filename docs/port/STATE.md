@@ -6,7 +6,15 @@ Read this first in every session, then `git log --oneline -20`, then run the gat
 
 ## Phase
 
-rc.A implementation. S1 was approved by the operator in the session on 2026-10-18 (draft PR #5, `go-refactor` → `main`); the answers to D-1 to D-9 are in `go-impl/design/README.md`, "Decisions taken".
+**S2 reached (2026-10-19): rc.A complete, CI green, LEDGER complete — awaiting the operator's triage.** Do NOT merge PR #5 or push a tag; both are the operator's.
+
+S1 was approved by the operator on 2026-10-18 (draft PR #5, `go-refactor` → `main`); the answers to D-1 to D-9 are in `docs/port/design/README.md`, "Decisions taken".
+
+M8 cutover merged: `go-impl/` promoted to the repo root, the 2.x Bash framework removed (the 8 generated shim files kept), `install.sh` and the CI/release workflows rewritten, `VERSION` `3.0.0-rc.A`; the port bookkeeping moved to `docs/port/` with PARITY.md and MATRIX.md final under `docs/port/archive/`.
+
+CI on PR #5 is green on every blocking leg (head `0de75eb`, run 39251274551): lint, govulncheck, snapshot, installer, ubuntu unit + testscript, and all four HTE E2E distros. The two macOS Go legs (unit + testscript) are `continue-on-error` best-effort, failing on the known platform gaps, pending the operator's macOS triage. Two drive-to-green fixes landed this session: the HTE E2E container runs `--privileged` (GitHub's Docker enforces the docker-default AppArmor profile, which denied the low-port `net.ipv4.ip_unprivileged_port_start` write even under `systempaths=unconfined`, so `sysctl -w` no-op'd and install idempotency/uninstall failed); and SC2120 on `__gash_require_git_repo` is silenced in the compat template (the GH unit runner's shellcheck is <0.11, which flags the optional-arg idiom the pinned v0.11.0 tolerates).
+
+Final PARITY/LEDGER pass done: minted forced divergence SELF-22 ("3.0 drops the 1.x→2.x migration (D-6)"), set the five `migrate_spec` Go cells (:45/64/89/106/131) to `FD SELF-22` and annotated `migrate_d6_route.txtar`; set `ssh_auto_unlock_spec.sh:44` to `FD SYS-37`. LEDGER Summary recomputed to All 443 (FD 105); `#### count == 443` verified. covermap 661/661 (0 uncovered, 0 errors), bashonlymap `-check` clean.
 
 ## Last completed step
 

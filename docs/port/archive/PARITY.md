@@ -879,12 +879,12 @@ a fixture tree (LEDGER `TEST-*` items).
 
 | Line | Test | Class | Bash 2.1.0 | Go (rc.A) | Plan | Replacement or note |
 |---|---|---|---|---|---|---|
-| 45 | detects a 1.x ~/.gashrc and nothing else | MIXED | pass | fail | `split` |  |
+| 45 | detects a 1.x ~/.gashrc and nothing else | MIXED | pass | FD SELF-22 | `split` |  |
 | 54 | outside a terminal Gash prints one reminder a day on stderr | BLACKBOX | pass | fail | `run` |  |
-| 64 | --yes applies the recommended choices, backs up, and --rollback restores | MIXED | pass | fail | `split` |  |
-| 89 | each screen choice lands in ~/.gash_env as the matching setting | MIXED | pass | fail | `split` |  |
-| 106 | nothing is written on cancel, on later, or with a settings file to create | MIXED | pass | fail | `split` |  |
-| 131 | gash migrate --status and option errors | BLACKBOX | pass | fail | `run` |  |
+| 64 | --yes applies the recommended choices, backs up, and --rollback restores | MIXED | pass | FD SELF-22 | `split` |  |
+| 89 | each screen choice lands in ~/.gash_env as the matching setting | MIXED | pass | FD SELF-22 | `split` |  |
+| 106 | nothing is written on cancel, on later, or with a settings file to create | MIXED | pass | FD SELF-22 | `split` |  |
+| 131 | gash migrate --status and option errors | BLACKBOX | pass | FD SELF-22 | `run` |  |
 | 137 | __gash_choose reads a number, takes the default, and gives up on bad input | INTERNAL | pass | fail | `unit` | tui.Choose (numbers, default, bad input |
 | 150 | __gash_choose follows arrow keys, j/k and digits on a terminal | INTERNAL | pass | fail | `unit` | tui.Choose (numbers, default, bad input |
 | 160 | a missing SSH key is not a line to comment out | INTERNAL | pass | fail | `unit` | migrate env problems |
@@ -1007,7 +1007,7 @@ a fixture tree (LEDGER `TEST-*` items).
 | Line | Test | Class | Bash 2.1.0 | Go (rc.A) | Plan | Replacement or note |
 |---|---|---|---|---|---|---|
 | 10 | parses ~/.gash_env SSH entries tolerantly | INTERNAL | pass | fail | `unit` | config SSH entries |
-| 44 | prints install hint when expect is missing | MIXED | pass | fail | `split` |  |
+| 44 | prints install hint when expect is missing | MIXED | pass | FD SYS-37 | `split` |  |
 | 71 | shows error when ssh-agent cannot be started | MIXED | pass | fail | `split` |  |
 | 100 | auto-starts ssh-agent when SSH keys are configured | MIXED | pass | fail | `split` |  |
 | 129 | formats expect output using gash style | MIXED | pass | fail | `split` |  |

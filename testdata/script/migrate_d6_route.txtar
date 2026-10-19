@@ -5,6 +5,7 @@
 # covers: migrate_spec.sh:89
 # covers: migrate_spec.sh:106
 # covers: migrate_spec.sh:131
+# forced-divergence: SELF-22
 #
 # Decision D-6 (design/README.md): 3.x does not port the 1.x->2.x migration.
 # gash_migrate keeps only its name and prints one line pointing at the 2.x
@@ -12,11 +13,9 @@
 # writes nothing, and returns 1. This supersedes the migration-logic rows of
 # migrate_spec.sh: detection (:45), --yes apply/backup/--rollback (:64), the
 # screen choices landing in ~/.gash_env (:89), the nothing-written paths
-# (:106) and --status/option errors (:131). These rows have no matching id
-# in the LEDGER "Forced divergences" table (SELF-08/SELF-09 are recorded
-# "moot" under D-6, not divergences), so they are covered here as the
-# superseding behavior rather than through the forced-divergence channel;
-# the registered --help still carries the 2.x usages (LEDGER SHELL-18).
+# (:106) and --status/option errors (:131), recorded as forced divergence
+# SELF-22 (SELF-08/SELF-09 are the related defects, "moot" under D-6); the
+# registered --help still carries the 2.x usages (LEDGER SHELL-18).
 
 env GASH_HEADLESS=1
 exec bash route.sh

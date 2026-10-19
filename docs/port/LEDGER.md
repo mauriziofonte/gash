@@ -119,11 +119,11 @@ Conventions for this section:
 | Section | critical | high | medium | low | Total | Contract impact |
 |---|---|---|---|---|---|---|
 | Defects | 1 | 25 | 80 | 77 | 183 | 118 |
-| Forced divergences | 3 | 4 | 26 | 71 | 104 | 47 |
+| Forced divergences | 3 | 4 | 26 | 72 | 105 | 47 |
 | Decisions for the operator | 0 | 1 | 5 | 26 | 32 | 23 |
 | Doc drift | 0 | 0 | 1 | 47 | 48 | 11 |
 | HTE design delta | 0 | 6 | 23 | 46 | 75 | 58 |
-| **All** | 4 | 36 | 135 | 267 | **442** | 257 |
+| **All** | 4 | 36 | 135 | 268 | **443** | 257 |
 
 Critical and high items:
 
@@ -3780,6 +3780,7 @@ Critical and high items:
 | [SHELL-13](#shell-13) | Headless load prints a plain-text 1.x notice and writes a state file | Contract | medium | yes |
 | [SELF-11](#self-11) | Card and help lists sort by the user's locale | Portability | low | no |
 | [SELF-16](#self-16) | gash_uninstall leaks the global variable profile_file into the caller's shell | Contract | low | no |
+| [SELF-22](#self-22) | 3.0 drops the 1.x→2.x migration (D-6) | Self-management | low | no |
 | [CORE-01](#core-01) | needs_confirm_prompt prints Bash's own /dev/tty error when there is no terminal | Contract | low | no |
 | [CORE-02](#core-02) | Compat helpers evaluate numeric arguments as Bash arithmetic | Security | low | no |
 | [CORE-05](#core-05) | gash_db_test behaviors that only the mysql/mariadb/psql clients produced | Contract | low | yes |
@@ -5508,6 +5509,23 @@ Critical and high items:
 | rc.A behavior | `gash_uninstall` runs in the binary; the stub cannot and does not set `profile_file` in the caller. A child process cannot leak variables into the parent shell. |
 | Fix recipe (3.0) | Same as rc.A; nothing to change in Go. |
 | Proving test | `TestLedger_SELF16`: `testdata/script/uninstall_no_globals.txtar` (`declare -p` diff around a confirmed uninstall of a fake install shows no new variable) |
+| Status | open |
+
+<a id="self-22"></a>
+#### SELF-22 · 3.0 drops the 1.x→2.x migration (D-6)
+
+| Field | Value |
+|---|---|
+| Section | Forced divergences |
+| Origin | Operator decision D-6 ("lascia stare", 2026-10-18): drop the 1.x→3.x compatibility work |
+| Area | Self-management |
+| Bash location | `lib/modules/migrate.sh` (`__gash_migrate_*`: detection, the migration screen, the backups, `--yes`, `--rollback`, `--status`) |
+| Observed behavior | 2.x `gash_migrate`/`gash migrate` detects a 1.x `~/.gashrc`, runs an interactive migration screen whose choices land in `~/.gash_env`, backs up the old files under `~/.local/state/gash/backups/`, and offers `--yes`, `--rollback` and `--status` (migrate_spec.sh:45/64/89/106/131). |
+| Severity | low |
+| Public-contract impact | no |
+| rc.A behavior | D-6: 3.x does not port the 1.x→2.x migration. `gash_migrate`/`gash migrate` keeps only its name: it prints one line pointing at the 2.x route (check out v2.1.0, run `gash_migrate` there, then `gash_upgrade`), writes nothing (no `~/.gash_env`, no backups, `~/.gashrc` untouched) and returns 1; `--yes`, `--status` and the screen choices all take that same route. This supersedes the migration-logic rows of `migrate_spec.sh` (detection :45, `--yes`/backup/`--rollback` :64, screen→`~/.gash_env` :89, nothing-written :106, `--status`/option errors :131). SELF-08/SELF-09 are moot under the same decision; the once-a-day headless reminder stays (SHELL-13) and the registered `--help` still carries the 2.x usages (SHELL-18). |
+| Fix recipe (3.0) | Same as rc.A: `internal/selfmgmt/migrate.go` is the thin pointer; no migration engine is ported. Reconcile the registered `--help`/reminder wording down to the pointer reality (SHELL-18). |
+| Proving test | `testdata/script/migrate_d6_route.txtar` (headless: `gash_migrate`, `gash migrate --yes`, the screen choices, `--auto`, `--status` and an option error all point at the 2.x route, write nothing and return non-zero; `--help` still lists `--rollback`). |
 | Status | open |
 
 ### lib/core
