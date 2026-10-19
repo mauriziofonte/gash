@@ -1,0 +1,56 @@
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package ai
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+// noTTY returns a module whose /dev/tty cannot be opened.
+func noTTY() *Module {
+	m := New()
+	m.openTTY = func() (*os.File, error) { return nil, os.ErrNotExist }
+	return m
+}
+
+// TestConfirmSend covers the consent matrix (LEDGER AI-23): auto asks only
+// for collected data, 0 never asks, any other value asks every time;
+// without a terminal auto and the others refuse, naming the size.
+func TestConfirmSend(t *testing.T) {
+	m := noTTY()
+
+	// auto + query: no ask, allowed.
+	c, _, _ := newCall(map[string]string{}, nil, false)
+	if !m.confirmSend(c, "claude", "query", "your question", 10) {
+		t.Fatal("auto/query should send without asking")
+	}
+
+	// auto + data, no terminal: refused, size in KB, hint.
+	c, _, errb := newCall(map[string]string{}, nil, false)
+	if m.confirmSend(c, "claude", "data", "system data", 4096) {
+		t.Fatal("auto/data with no tty should refuse")
+	}
+	if !strings.Contains(errb.String(), "GASH_AI_CONFIRM=0") || !strings.Contains(errb.String(), "4 KB") {
+		t.Fatalf("refusal message: %q", errb.String())
+	}
+
+	// 0 never asks.
+	c, _, _ = newCall(map[string]string{"GASH_AI_CONFIRM": "0"}, nil, false)
+	if !m.confirmSend(c, "claude", "data", "system data", 10) {
+		t.Fatal("GASH_AI_CONFIRM=0 should send")
+	}
+
+	// 1 asks every request, so no terminal refuses even a query (AI-23).
+	c, _, _ = newCall(map[string]string{"GASH_AI_CONFIRM": "1"}, nil, false)
+	if m.confirmSend(c, "claude", "query", "your question", 10) {
+		t.Fatal("GASH_AI_CONFIRM=1 with no tty should refuse")
+	}
+
+	// An unknown value also asks (fail closed), refusing without a tty.
+	c, _, _ = newCall(map[string]string{"GASH_AI_CONFIRM": "off"}, nil, false)
+	if m.confirmSend(c, "claude", "query", "your question", 10) {
+		t.Fatal("GASH_AI_CONFIRM=off should fail closed")
+	}
+}
