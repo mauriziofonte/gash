@@ -226,3 +226,58 @@ func TestRetryDelay(t *testing.T) {
 		t.Fatalf("gemini retryDelay=%q", got)
 	}
 }
+
+// TestAIDebug: the GASH_AI_DEBUG=1 trace (MATRIX GASH_AI_DEBUG, 2.x
+// __ai_debug). Off by default; on, the net/http port prints the request
+// body, the HTTP code and elapsed, the raw response and the extracted JSON
+// on stderr, in that order, with no "Curl Stderr" block (no curl, LEDGER
+// AI-15).
+func TestAIDebug(t *testing.T) {
+	f := newFakeAPI(t)
+	m := testModule(f)
+
+	// Off by default.
+	c, _, errb := newCall(map[string]string{}, nil, false)
+	if _, rc := m.request(c, "claude", "tok", "sys", "how to list files?", responseSchema, 1024, time.Second); rc != 0 {
+		t.Fatalf("rc=%d err=%s", rc, errb.String())
+	}
+	if strings.Contains(errb.String(), "Debug:") {
+		t.Fatalf("GASH_AI_DEBUG unset but debug printed:\n%s", errb.String())
+	}
+
+	// On: the four blocks on stderr.
+	c2, _, errb2 := newCall(map[string]string{"GASH_AI_DEBUG": "1"}, nil, false)
+	if _, rc := m.request(c2, "claude", "tok", "sys", "how to list files?", responseSchema, 1024, time.Second); rc != 0 {
+		t.Fatalf("rc=%d err=%s", rc, errb2.String())
+	}
+	s := errb2.String()
+	for _, want := range []string{
+		"Debug: AI Claude Request Body:",
+		"Debug: AI Claude HTTP Code:",
+		"Debug: AI Claude Raw Response:",
+		"Debug: AI Claude Extracted JSON:",
+		"200 (elapsed:",
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %q in debug output:\n%s", want, s)
+		}
+	}
+	// Pretty-printed body carries the model; the extracted JSON carries the
+	// reply the fake returned for a "how to" query.
+	if !strings.Contains(s, `"model"`) || !strings.Contains(s, "ls -lhS") {
+		t.Fatalf("debug body/extracted content missing:\n%s", s)
+	}
+	// No curl, so no "Curl Stderr" block.
+	if strings.Contains(s, "Curl Stderr") {
+		t.Fatalf("net/http port must not print a Curl Stderr block:\n%s", s)
+	}
+	// The blocks keep their 2.x order.
+	last := -1
+	for _, k := range []string{"Request Body", "HTTP Code", "Raw Response", "Extracted JSON"} {
+		i := strings.Index(s, k)
+		if i < 0 || i < last {
+			t.Fatalf("debug block %q out of order:\n%s", k, s)
+		}
+		last = i
+	}
+}

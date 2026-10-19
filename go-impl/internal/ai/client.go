@@ -71,6 +71,9 @@ func (m *Module) request(c *invoke.Call, provider, token, system, user, schemaRa
 		return "", 1
 	}
 
+	dbg := m.debugger(c, label)
+	dbg.body(body)
+
 	ctx := c.Ctx
 	if ctx == nil {
 		ctx = context.Background()
@@ -103,6 +106,9 @@ func (m *Module) request(c *invoke.Call, provider, token, system, user, schemaRa
 		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		cancel()
+
+		dbg.httpCode(resp.StatusCode, elapsed)
+		dbg.rawResponse(respBody)
 
 		rc, delay := handleHTTP(label, resp.StatusCode, respBody, resp.Header)
 		if rc == 0 {
@@ -440,6 +446,7 @@ func geminiBody(system, user, schemaRaw string, maxTokens int) ([]byte, error) {
 // stop reason (refusal, max tokens), and returns the sanitized JSON.
 func (m *Module) finishReply(c *invoke.Call, provider, label string, body []byte, maxTokens int) (string, int) {
 	p := printer(c)
+	dbg := m.debugger(c, label)
 	var text, stop string
 	if provider == "claude" {
 		text, stop = claudeText(body)
@@ -462,6 +469,7 @@ func (m *Module) finishReply(c *invoke.Call, provider, label string, body []byte
 			return "", 1
 		}
 	}
+	dbg.extractedJSON(text)
 	clean, ok := sanitizeJSON([]byte(text))
 	if text == "" || !ok {
 		p.Error("Failed to parse " + label + " response")
