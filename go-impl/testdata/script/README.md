@@ -127,6 +127,13 @@ it reaches zero uncovered. The gate is a standalone tool, never part of
   golden. Each case builds its own repo/origin in a subdir; drive the function
   through the shim (`bash -c 'source "$GASH_SH"; <fn> ...'`), assert the
   observable contract, then check state with `exec git ...`.
+- **Optional tools are not on the CI runner.** `rg`, `fd`, `tree`, `bat` and
+  friends are installed in the dev container but NOT on the GitHub Actions
+  runner. A case that *executes* such a tool (checks its output) must guard it
+  exactly as the 2.x spec does (`if command -v rg >/dev/null 2>&1; then …; fi`),
+  or it fails in CI with `command not found`. A case that only proves `llm_exec`
+  *refuses* the tool (asserts the `.error` code) needs no guard: the guard
+  rejects it before it runs.
 - **PARITY Line numbers.** `# covers:` uses the Line cell from the PARITY row
   verbatim (the `it`-body line, one past the `it` keyword); covermap matches on
   that value, so copy it from PARITY, do not recount from the spec.
