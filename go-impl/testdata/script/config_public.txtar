@@ -1,0 +1,54 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: config_spec.sh:465
+# covers: config_spec.sh:476
+# covers: config_spec.sh:487
+# covers: config_spec.sh:498
+# covers: config_spec.sh:523
+#
+# The public config functions through the shim: gash_db_list, gash_db_test
+# and gash_env_init print their registered help on -h; gash_env_init refuses
+# to overwrite an existing settings file without --force and creates it with
+# mode 600 when --force is given.
+
+env GASH_HEADLESS=1
+
+# --- config_spec.sh:465 - gash_db_list shows help on -h
+exec bash -c 'source "$GASH_SH"; gash_db_list -h'
+stdout gash_db_list
+
+# --- config_spec.sh:476 - gash_db_test shows help on -h
+exec bash -c 'source "$GASH_SH"; gash_db_test -h'
+stdout gash_db_test
+
+# --- config_spec.sh:487 - gash_env_init shows help on -h
+exec bash -c 'source "$GASH_SH"; gash_env_init -h'
+stdout gash_env_init
+
+# --- config_spec.sh:498 - refuses to overwrite without --force
+exec bash env_init_refuse.sh
+
+# --- config_spec.sh:523 - creates config (mode 600) with --force
+exec bash env_init_force.sh
+
+-- env_init_refuse.sh --
+set -uo pipefail
+tmp="$WORK/refuse"; rm -rf "$tmp"; mkdir -p "$tmp"
+touch "$tmp/.gash_env"
+export HOME="$tmp"
+source "$GASH_SH"
+set +e
+gash_env_init 2>/dev/null
+rc=$?
+set -e
+[[ $rc -ne 0 ]]
+
+-- env_init_force.sh --
+set -euo pipefail
+tmp="$WORK/force"; rm -rf "$tmp"; mkdir -p "$tmp"
+touch "$tmp/.gash_env"
+export HOME="$tmp"
+source "$GASH_SH"
+gash_env_init --force
+[[ -f "$tmp/.gash_env" ]]
+[[ "$(stat -c %a "$tmp/.gash_env")" == 600 ]]

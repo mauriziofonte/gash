@@ -1,0 +1,16 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: core_utils_spec.sh:154
+#
+# all_colors prints its help on -h. The 2.x spec sourced lib/core/utils.sh in
+# isolation, so needs_help printed its one-line fallback ("...(256 colors)");
+# through the shim the help registry is always loaded (it is static data in
+# the binary, so gash.sh sets __GASH_HELP_LOADED=1), and -h renders the full
+# registered card, which names the function and the 256-color purpose.
+
+env GASH_HEADLESS=1
+
+exec bash -c 'source "$GASH_SH"; all_colors -h'
+stdout all_colors
+stdout '256 terminal colors'
+! stderr .

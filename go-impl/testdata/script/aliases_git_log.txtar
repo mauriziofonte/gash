@@ -1,0 +1,59 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: aliases_refactor_spec.sh:178
+#
+# The git log aliases (split row: the interactive alias pack stays Bash,
+# emitted by `gash init bash`). glo prints exactly what git log
+# --oneline --decorate --graph does; gl adds the relative date and author;
+# forced color paints the hash with the palette accent (214) and the refs
+# with primary (39); NO_COLOR wins even over color.ui=always. Driven through
+# the shim in an interactive shell, which loads the alias pack. The
+# $__GASH_GIT_LOG_FORMAT internal probe of the 2.x case is a Go unit
+# (internal/gitx); here the observable alias output is asserted.
+
+# Not headless: the alias pack only loads in an interactive, non-headless
+# shell. GASH_BANNER=0 keeps the startup banner out of the output.
+env GASH_BANNER=0
+
+exec bash -i git_log.sh
+stdout '^OK$'
+
+-- home/.gitconfig --
+[user]
+	name = Gash Test
+	email = gash@test.example
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false
+
+-- git_log.sh --
+set -euo pipefail
+export GIT_PAGER=cat PAGER=cat
+repo="$WORK/glrepo"; rm -rf "$repo"; mkdir -p "$repo"; cd "$repo"
+git init -q
+git commit -q --allow-empty -m one
+git commit -q --allow-empty -m two
+git tag v1
+
+source "$GASH_SH" >/dev/null 2>&1
+
+# Plain text: glo is exactly git log --oneline --decorate --graph.
+[[ "$(glo)" == "$(git log --oneline --decorate --graph)" ]] || { echo "glo mismatch"; exit 1; }
+# gl shows the decorated HEAD line with tag, subject and author.
+gl_out="$(gl)"
+[[ "$gl_out" == *" (HEAD -> "*"tag: v1) two ("*"<Gash Test>"* ]] || { echo "gl: $gl_out"; exit 1; }
+
+# Colors forced on: palette accent (214) on the hash, primary (39) on refs.
+git config color.ui always
+out="$(gl)"
+[[ "$out" == *$'\e[38;5;214m'* ]] || { echo "no accent hash"; exit 1; }
+[[ "$out" == *$'\e[38;5;39m (HEAD'* ]] || { echo "no primary refs"; exit 1; }
+
+# NO_COLOR wins even over color.ui=always.
+out="$(NO_COLOR=1 gl)"
+[[ "$out" != *$'\e'* ]] || { echo "NO_COLOR left escapes"; exit 1; }
+out="$(gl)"
+[[ "$out" == *$'\e[38;5;214m'* ]] || { echo "color lost after NO_COLOR"; exit 1; }
+
+echo OK

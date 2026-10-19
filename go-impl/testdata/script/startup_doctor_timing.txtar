@@ -1,0 +1,28 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: startup_spec.sh:28
+#
+# gash_doctor --timing lists each loaded file with its millisecond cost
+# (lib/modules/gash.sh and the gash.sh total) and reports the whole-shell
+# time of a fresh interactive shell started with the user's ~/.bashrc, bash
+# alone subtracted. The banner quote is printed by the child shell elsewhere,
+# never inside the --timing report. Needs Bash 5.0+ (EPOCHREALTIME); on an
+# older Bash the helper self-skips with success.
+
+env GASH_HEADLESS=1
+
+exec bash doctor_timing.sh
+
+-- doctor_timing.sh --
+set -euo pipefail
+[[ -n "${EPOCHREALTIME-}" ]] || { echo "SKIP: needs Bash 5.0+"; exit 0; }
+home="$WORK/dochome"; rm -rf "$home"; mkdir -p "$home"
+ln -s "$GASH_STAGE" "$home/.gash"
+cp "$GASH_STAGE/.gashrc" "$home/.gashrc"
+echo "source ~/.gashrc" >"$home/.bashrc"
+
+out="$(HOME="$home" bash --noprofile --norc -i -c 'source "$HOME/.gash/gash.sh" >/dev/null 2>&1; gash_doctor --timing' 2>&1 </dev/null)"
+grep -Eq '^ +[0-9]+\.[0-9]  lib/modules/gash.sh$' <<<"$out" || { echo "no module line"; printf '%s\n' "$out"; exit 1; }
+grep -Eq '^ +[0-9]+\.[0-9]  gash.sh \(total\)$' <<<"$out" || { echo "no total line"; exit 1; }
+grep -Eq 'New shell with your ~/.bashrc: [0-9]+\.[0-9] ms \(bash alone: [0-9]+\.[0-9] ms' <<<"$out" || { echo "no whole-shell line"; exit 1; }
+[[ "$out" != *"Quote:"* ]] || { echo "banner quote leaked into report"; exit 1; }
