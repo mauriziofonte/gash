@@ -12,8 +12,11 @@
 # reached through HTTPS_PROXY with its CA in SSL_CERT_FILE. Covers the
 # address print, its --no-color twin, the non-2xx failure, and the SYS-36
 # forced divergence - with neither tool on PATH the Go binary still uses
-# net/http (no "requires wget or curl" message), so an unreachable endpoint
-# fails with the same retrieval error rather than a missing-tool error.
+# net/http (no "requires wget or curl" message): through the fake it returns
+# the address, and with no route it fails with the retrieval error, never a
+# missing-tool error. Every case drives the fake, so none depends on real
+# network reachability (a runner with open egress would otherwise reach the
+# real endpoint and make the no-tool case succeed unexpectedly).
 
 env GASH_HEADLESS=1
 env HOME=$WORK
@@ -32,13 +35,19 @@ stdout 'Public IP: 203\.0\.113\.7'
 ! exec bash -c 'mkdir -p i175; cd i175; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stderr 'Error: Failed to retrieve public IP address\.'
 
-# --- :176 no-tool (forced divergence SYS-36) - net/http needs no wget/curl
-! exec bash -c 'unset HTTPS_PROXY HTTP_PROXY NO_PROXY; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent ip_public'
-stderr 'Error: Failed to retrieve public IP address\.'
+# --- :176 no-tool (forced divergence SYS-36) - net/http needs no wget/curl.
+# With neither tool on PATH (PATH=/nonexistent for the call) the Go binary
+# still reaches the endpoint over net/http through the fake and prints the
+# address - never the 2.x "requires wget or curl" message. Deterministic: the
+# fake answers, so this does not depend on the runner's own egress.
+exec bash -c 'mkdir -p i176; cd i176; printf "GET https://ipinfo.io/ip 200 198.51.100.9\n" >routes; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" MOCK_CURL_ROUTES="$PWD/routes" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'Public IP: 198\.51\.100\.9'
 ! stderr 'requires .*wget'
 ! stderr 'requires .*curl'
 
-# --- R6: plain mode failure, no ESC
-! exec bash -c 'unset HTTPS_PROXY HTTP_PROXY NO_PROXY; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent ip_public'
+# --- R6: plain mode failure, no ESC. No route -> the fake answers 404, so
+# ip_public fails deterministically with the plain retrieval error (still no
+# tool on PATH, still net/http), and a piped/no-color run carries no ESC byte.
+! exec bash -c 'mkdir -p i176b; cd i176b; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent ip_public; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stderr '^Error: Failed to retrieve public IP address'
 ! stderr '\x1b'
