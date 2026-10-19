@@ -60,11 +60,15 @@ func TestValidatePath_Forbidden(t *testing.T) {
 		require.Equal(t, "This path is protected and cannot be accessed", r.Hint)
 		require.NotEmpty(t, r.Details) // the normalized path (resolved; e.g. /proc/self -> /proc/<pid>)
 	}
-	// Look-alike names are allowed and returned unchanged.
+	// Look-alike names are allowed. The returned path is realpath-normalized,
+	// so comparing against that same normalization keeps the expectation
+	// host-independent (macOS resolves /etc through the /private firmlink).
 	for _, p := range []string{"/rootfs/x", "/devices", "/etc/passwdx", "/procfs"} {
 		got, err := g.ValidatePath(p)
 		require.NoErrorf(t, err, "%q should be allowed", p)
-		require.Equal(t, p, got)
+		want, err := g.Realpath(p, false)
+		require.NoError(t, err)
+		require.Equal(t, want, got)
 	}
 }
 
@@ -73,11 +77,15 @@ func TestValidatePath_Forbidden(t *testing.T) {
 // names are NOT refused, exactly as 2.1.0 (LEDGER LLM-10).
 func TestLedger_LLM10_2x(t *testing.T) {
 	g := guardAt("/tmp", "/home/u")
-	// Not in the forbidden list, so ValidatePath returns them.
+	// Not in the forbidden list, so ValidatePath returns them (realpath-
+	// normalized; the /private firmlink applies on macOS, so compare against
+	// the same normalization).
 	for _, p := range []string{"/etc/shadow-", "/etc/gshadow-", "/etc/security/opasswd"} {
 		got, err := g.ValidatePath(p)
 		require.NoErrorf(t, err, "LLM-10: %q must not be forbidden in rc.A", p)
-		require.Equal(t, p, got)
+		want, err := g.Realpath(p, false)
+		require.NoError(t, err)
+		require.Equal(t, want, got)
 	}
 	// Not matched as secrets in rc.A.
 	for _, name := range []string{"ssh_host_rsa_key", ".envrc", "terraform.tfvars.json", "auth.json", "credentials_old"} {
@@ -87,12 +95,19 @@ func TestLedger_LLM10_2x(t *testing.T) {
 
 func TestValidatePath_Tilde(t *testing.T) {
 	g := guardAt("/tmp", "/home/u")
+	// ~ expands to Home, then realpath-normalizes; compare against that same
+	// normalization so the macOS /System/Volumes/Data firmlink on /home
+	// does not make the expectation Linux-specific.
 	got, err := g.ValidatePath("~")
 	require.NoError(t, err)
-	require.Equal(t, "/home/u", got)
+	want, err := g.Realpath("/home/u", false)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 	got, err = g.ValidatePath("~/x")
 	require.NoError(t, err)
-	require.Equal(t, "/home/u/x", got)
+	want, err = g.Realpath("/home/u/x", false)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }
 
 // TestLedger_LLM25_2x pins ~user as textual, not real user expansion:

@@ -36,7 +36,15 @@ func newStack(t *testing.T) *fakeStack {
 
 func testPaths(t *testing.T) state.Paths {
 	d := t.TempDir()
-	return state.Paths{ConfigDir: d + "/c", StateDir: d + "/s", DataDir: d + "/d", RuntimeDir: d + "/r"}
+	// Sockets live under RuntimeDir and must fit sun_path (render.MaxSocketPath
+	// = 103 bytes). t.TempDir()'s deep path overflows it under the macOS
+	// $TMPDIR (/var/folders/...), so the runtime dir gets a short base.
+	rt, err := os.MkdirTemp("", "ghrt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(rt) })
+	return state.Paths{ConfigDir: d + "/c", StateDir: d + "/s", DataDir: d + "/d", RuntimeDir: rt}
 }
 
 func site(domain, php string) state.Site {

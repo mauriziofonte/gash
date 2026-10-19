@@ -18,6 +18,11 @@
 # has none of, so the typed-y path is driven with -y (install) and the
 # declined path is the headless "no terminal to confirm" refusal.
 
+# This exercises the Linux install flow: a chrome-headless-shell-linux64 build
+# copied into place with `sudo cp -R --no-preserve=ownership` (a GNU cp flag).
+# macOS fetches a different build and has no GNU cp, so the flow does not apply.
+[!linux] skip 'Linux chrome-headless-shell install flow (linux64 build, GNU cp)'
+
 env GASH_HEADLESS=1
 exec go build -o chromeproxy .
 chmod 0755 bin/uname

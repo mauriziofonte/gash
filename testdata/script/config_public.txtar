@@ -51,4 +51,6 @@ export HOME="$tmp"
 source "$GASH_SH"
 gash_env_init --force
 [[ -f "$tmp/.gash_env" ]]
-[[ "$(stat -c %a "$tmp/.gash_env")" == 600 ]]
+# `stat -c` is GNU-only (BSD stat on macOS uses -f); the ls -l permission
+# field is portable and reads -rw------- for mode 600.
+[[ "$(ls -l "$tmp/.gash_env")" == -rw-------* ]]

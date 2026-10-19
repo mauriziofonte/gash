@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -29,7 +30,9 @@ func treeFixture(t *testing.T) string {
 	mustWrite(t, filepath.Join(d, "src", "__pycache__", "x.pyc"), "c")
 	mustWrite(t, filepath.Join(d, `q"uo\te`), "q")
 	mustWrite(t, filepath.Join(d, "ctl\x01\x1b\x7f\r"), "c")
-	mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "b")
+	if rawNamesOK(t, d) { // APFS rejects a name that is not valid UTF-8
+		mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "b")
+	}
 	mustWrite(t, filepath.Join(d, "tab\tname"), "t")
 	mustWrite(t, filepath.Join(d, "nl\nname"), "n")
 	mustWrite(t, filepath.Join(d, "nl\ndir", "inner"), "n")
@@ -158,6 +161,9 @@ func TestLedger_LLM06_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	d := physTemp(t)
+	if !rawNamesOK(t, d) { // the \xff byte makes this name invalid UTF-8 (APFS)
+		t.Skip("filesystem rejects non-UTF-8 names")
+	}
 	mustWrite(t, filepath.Join(d, "a\x01b\x1bc\x7fd\re\xff"), "x")
 	r := same(t, m, d, env, "llm_tree")
 	require.Contains(t, r.Stdout, `"name":"a`+"\x01b\x1bc\x7fd"+`\re`+"\xff"+`"`)
@@ -168,6 +174,9 @@ func TestLedger_LLM23_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	d := physTemp(t)
+	if !rawNamesOK(t, d) {
+		t.Skip("filesystem rejects non-UTF-8 names (APFS)")
+	}
 	mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "x")
 	r := same(t, m, d, env, "llm_tree")
 	require.Contains(t, r.Stdout, "\"bad\xff\xfe\"")
@@ -200,6 +209,9 @@ func TestLedger_LLM28_2x(t *testing.T) {
 // TestLedger_LLM09_2x: only the start point is guarded; the walk enters
 // protected trees below it.
 func TestLedger_LLM09_2x(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the walk-into-protected-tree case uses /proc, a Linux procfs")
+	}
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	r := runGo(t, m, "/", env, "llm_tree", "--depth", "1", "/")

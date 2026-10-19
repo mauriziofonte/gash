@@ -137,6 +137,21 @@ func mustMkdir(t *testing.T, path string) {
 	require.NoError(t, os.MkdirAll(path, 0o755))
 }
 
+// rawNamesOK reports whether dir's filesystem can hold a filename whose bytes
+// are not valid UTF-8. Linux (ext4/tmpfs) stores arbitrary bytes; macOS APFS
+// rejects the name with "illegal byte sequence". The 2.x find/awk pipeline
+// and the Go port both pass such names through raw, but only where the
+// filesystem can store them.
+func rawNamesOK(t *testing.T, dir string) bool {
+	t.Helper()
+	p := filepath.Join(dir, "probe\xff\xfe")
+	if err := os.WriteFile(p, nil, 0o600); err != nil {
+		return false
+	}
+	_ = os.Remove(p)
+	return true
+}
+
 // physTemp is a temp dir by its physical path (realpath output).
 func physTemp(t *testing.T) string {
 	t.Helper()

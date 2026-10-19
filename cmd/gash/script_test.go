@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -97,8 +98,16 @@ func TestScript(t *testing.T) {
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
 		Condition: func(cond string) (bool, error) {
-			if cond == "root" {
+			switch cond {
+			case "root":
 				return os.Geteuid() == 0, nil
+			case "linux", "darwin", "windows":
+				return runtime.GOOS == cond, nil
+			case "gnused":
+				// llm_exec runs sed only as GNU `sed --sandbox`; macOS ships
+				// BSD sed without it. Probe so the sed-sandbox rows run only
+				// where that path exists (the refusal is a Go unit test).
+				return exec.Command("sed", "--sandbox", "-n", "-e", "p", "/dev/null").Run() == nil, nil
 			}
 			return false, fmt.Errorf("unknown condition %q", cond)
 		},

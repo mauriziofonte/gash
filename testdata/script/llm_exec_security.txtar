@@ -32,8 +32,10 @@ exec bash -c 'set -euo pipefail; d="$WORK/e55"; mkdir -p "$d"; export GASH_HEADL
 # llm_exec_security_spec.sh:75 - checks what unquoted globs expand to
 exec bash -c 'set -euo pipefail; d="$WORK/e75"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; touch -- -delete a.log; [[ "$(llm_exec "find * -name x" 2>&1 >/dev/null | jq -r .error)" == glob_matches_option ]]; [[ -e -delete && -e a.log ]]; llm_exec "ls ./*" >/dev/null; [[ "$(llm_exec "echo ''*''")" == "*" ]]; printf ''S=1\n'' >prod.ENV; [[ "$(llm_exec "cat *.ENV" 2>&1 >/dev/null | jq -r .error)" == secret_file_blocked ]]'
 
-# llm_exec_security_spec.sh:91 - runs sed and awk sandboxed
-exec bash -c 'set -euo pipefail; d="$WORK/e91"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; printf ''a b\n'' >in.txt; [[ "$(llm_exec "sed -n 1p in.txt")" == "a b" ]]; [[ "$(llm_exec "awk ''{print \$2}'' in.txt")" == b ]]; ! llm_exec "sed -n ''1w out'' in.txt" 2>/dev/null; ! llm_exec "awk ''BEGIN{system(\"touch pwned\")}''" 2>/dev/null; [[ ! -e out && ! -e pwned ]]'
+# llm_exec_security_spec.sh:91 - runs sed and awk sandboxed. llm_exec runs sed
+# only as GNU `sed --sandbox`, absent on macOS (BSD sed); the refusal path is a
+# Go unit test (internal/llmexec), so this positive row needs GNU sed.
+[gnused] exec bash -c 'set -euo pipefail; d="$WORK/e91"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; printf ''a b\n'' >in.txt; [[ "$(llm_exec "sed -n 1p in.txt")" == "a b" ]]; [[ "$(llm_exec "awk ''{print \$2}'' in.txt")" == b ]]; ! llm_exec "sed -n ''1w out'' in.txt" 2>/dev/null; ! llm_exec "awk ''BEGIN{system(\"touch pwned\")}''" 2>/dev/null; [[ ! -e out && ! -e pwned ]]'
 
 # llm_exec_security_spec.sh:107 - ignores exported functions that shadow allowed commands
 exec bash -c 'set -euo pipefail; d="$WORK/e107"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; echo(){ builtin echo pwned; }; export -f echo; [[ "$(llm_exec "echo safe")" == safe ]]'
