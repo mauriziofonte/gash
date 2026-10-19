@@ -1,0 +1,28 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:554
+#
+# R1: every public human-facing function has a fixture. In Go mode the help
+# registry lives in the binary (the bash __GASH_HELP_REGISTRY is empty), so
+# the public surface is enumerated with `gash help all`. This case proves the
+# surface is complete and introspectable - the count line plus a representative
+# function from each topic group (files, system, git, docker, remote, dev).
+# The per-function fixture requirement itself is enforced by the covermap gate,
+# which fails if any render row is left without a `# covers:` declaration.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+env GASH__COLOR=0
+env COLUMNS=100
+
+exec gash help all
+stdout '[0-9]+ functions'
+stdout '(?m)^  archive_extract'
+stdout '(?m)^  disk_usage'
+stdout '(?m)^  ip_public'
+stdout '(?m)^  process_kill'
+stdout '(?m)^  sysinfo'
+stdout '(?m)^  docker_compose_check'
+stdout '(?m)^  wsl_restart'
+! stdout '\x1b'
