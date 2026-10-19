@@ -23,7 +23,7 @@ import (
 var update = flag.Bool("update", false, "rewrite the golden copies in testdata/compat")
 
 const (
-	repoRoot = "../../.."
+	repoRoot = "../.."
 	golden   = "../../testdata/compat"
 )
 
@@ -322,7 +322,7 @@ func TestStage(t *testing.T) {
 	root := t.TempDir()
 	for p, body := range map[string]string{
 		"VERSION":               "9.9.9\n",
-		"go-impl/go.mod":        "module x\n",
+		"go.mod":                "module x\n",
 		"gash.sh":               "old\n",
 		"lib/shell/prompt.sh":   "old\n",
 		"lib/aliases/git.sh":    "old\n",

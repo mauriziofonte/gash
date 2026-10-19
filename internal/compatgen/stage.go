@@ -32,14 +32,14 @@ var skipped = map[string]bool{
 const StageBin = ".gash-stage/gash"
 
 // FindRoot returns the Gash checkout that contains dir: the nearest
-// directory above it with a VERSION file and go-impl/go.mod.
+// directory above it with a VERSION file and go.mod.
 func FindRoot(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}
 	for {
-		if isFile(filepath.Join(dir, "VERSION")) && isFile(filepath.Join(dir, "go-impl", "go.mod")) {
+		if isFile(filepath.Join(dir, "VERSION")) && isFile(filepath.Join(dir, "go.mod")) {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

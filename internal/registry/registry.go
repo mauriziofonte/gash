@@ -10,7 +10,7 @@
 // built from it.
 package registry
 
-//go:generate go run ./gen -root ../../.. -out catalog_gen.go
+//go:generate go run ./gen -root ../.. -out catalog_gen.go
 
 // Class is the MATRIX class of a function.
 type Class string

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const repoRoot = "../../.."
+const repoRoot = "../.."
 
 // run2xConfig runs script in a Bash with the 2.x lib/core files sourced
 // as gash.sh orders them, the settings already loaded (their warnings
@@ -21,7 +21,7 @@ const repoRoot = "../../.."
 // stdout and stderr.
 func run2xConfig(t *testing.T, env []string, color bool, script string) (string, string) {
 	t.Helper()
-	if _, err := os.Stat(filepath.Join(repoRoot, "lib/core/config.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(repoRoot, "lib/modules/gash.sh")); err != nil {
 		t.Skip("the 2.x sources are not in this tree")
 	}
 	root, err := filepath.Abs(repoRoot)

@@ -15,7 +15,7 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-const repoRoot = "../../../.."
+const repoRoot = "../../.."
 
 func needs2x(t *testing.T) {
 	t.Helper()

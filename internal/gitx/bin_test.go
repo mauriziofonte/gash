@@ -32,7 +32,7 @@ func TestLedger_GIT09(t *testing.T) {
 			t.Skip(p + " not available")
 		}
 	}
-	root, err := filepath.Abs("../../..")
+	root, err := filepath.Abs("../..")
 	require.NoError(t, err)
 	compat, err := filepath.Abs("../../testdata/compat")
 	require.NoError(t, err)

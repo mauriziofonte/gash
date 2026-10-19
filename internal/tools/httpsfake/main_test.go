@@ -51,7 +51,7 @@ func client(target string) int {
 // body and the header file it wrote.
 func mockCurl(t *testing.T, env map[string]string, method, rawURL, body string) (string, string, string) {
 	t.Helper()
-	mock, err := filepath.Abs("../../../../tests/mocks/bin/curl")
+	mock, err := filepath.Abs("../../../tests/mocks/bin/curl")
 	require.NoError(t, err)
 	if _, err := os.Stat(mock); err != nil {
 		t.Skip("tests/mocks/bin/curl is not in this tree")

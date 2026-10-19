@@ -87,7 +87,7 @@ func run2x(t *testing.T, fn, pwd string, args ...string) (string, string, int, b
 	if err != nil {
 		return "", "", 0, false
 	}
-	root, err := filepath.Abs("../../..")
+	root, err := filepath.Abs("../..")
 	if err != nil {
 		return "", "", 0, false
 	}

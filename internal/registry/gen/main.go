@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	root := flag.String("root", "../../..", "repository root (holds lib/ and go-impl/)")
+	root := flag.String("root", "../..", "repository root (holds lib/ and the port docs)")
 	out := flag.String("out", "catalog_gen.go", "output file")
 	flag.Parse()
 	c, err := extract(*root)
@@ -134,7 +134,7 @@ func extract(root string) (*catalog, error) {
 	if err := c.scanCardAliases(root); err != nil {
 		return nil, err
 	}
-	c.matrix, err = readMatrix(filepath.Join(root, "go-impl/PORT/MATRIX.md"))
+	c.matrix, err = readMatrix(filepath.Join(root, "docs/port/archive/MATRIX.md"))
 	if err != nil {
 		return nil, err
 	}

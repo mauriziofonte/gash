@@ -21,7 +21,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-const repoRoot = "../../.."
+const repoRoot = "../.."
 
 // absRoot is the checkout, resolved before any test changes directory.
 var absRoot = func() string {

@@ -14,7 +14,7 @@ import (
 // matrixFunctions reads the function rows of go-impl/PORT/MATRIX.md.
 func matrixFunctions(t *testing.T) map[string][]string {
 	t.Helper()
-	b, err := os.ReadFile("../../PORT/MATRIX.md")
+	b, err := os.ReadFile("../../docs/port/archive/MATRIX.md")
 	require.NoError(t, err)
 	rows := map[string][]string{}
 	for _, l := range strings.Split(string(b), "\n") {

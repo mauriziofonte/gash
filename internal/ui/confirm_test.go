@@ -28,7 +28,7 @@ func run2xTTY(t *testing.T, input, mode, body string) (string, string) {
 	}
 	root, err := filepath.Abs(repoRoot)
 	require.NoError(t, err)
-	if _, err := os.Stat(filepath.Join(root, "lib/core/output.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "lib/modules/gash.sh")); err != nil {
 		t.Skip("the 2.x sources are not in this tree")
 	}
 	dir := t.TempDir()

@@ -80,7 +80,7 @@ func TestRunWritesAndChecks(t *testing.T) {
 }
 
 func TestRealParityParses(t *testing.T) {
-	b, err := os.ReadFile("../../../PORT/PARITY.md")
+	b, err := os.ReadFile("../../../docs/port/archive/PARITY.md")
 	if err != nil {
 		t.Skip("no PARITY.md")
 	}

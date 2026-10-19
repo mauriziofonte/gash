@@ -37,7 +37,7 @@ func archive2x(t *testing.T) string {
 		}
 		root := wd
 		for {
-			if _, e := os.Stat(filepath.Join(root, "gash.sh")); e == nil {
+			if _, e := os.Stat(filepath.Join(root, "lib/modules/gash.sh")); e == nil {
 				break
 			}
 			parent := filepath.Dir(root)

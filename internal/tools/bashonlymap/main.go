@@ -28,8 +28,8 @@ import (
 )
 
 func main() {
-	parity := flag.String("parity", "PORT/PARITY.md", "the parity table to read")
-	out := flag.String("out", "../tests/parity/bash-only.tsv", "the TSV to write")
+	parity := flag.String("parity", "docs/port/archive/PARITY.md", "the parity table to read")
+	out := flag.String("out", "tests/parity/bash-only.tsv", "the TSV to write")
 	check := flag.Bool("check", false, "report only; status 1 when the file is missing or stale")
 	flag.Parse()
 	os.Exit(run(*parity, *out, *check, os.Stdout, os.Stderr))

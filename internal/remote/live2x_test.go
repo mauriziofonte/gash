@@ -21,7 +21,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-const repoRoot = "../../.."
+const repoRoot = "../.."
 
 // absRoot is the checkout, resolved before any test changes directory.
 var absRoot = func() string {
@@ -75,7 +75,7 @@ type scene struct {
 
 func newScene(t *testing.T, gashEnv string) *scene {
 	t.Helper()
-	if _, err := os.Stat(filepath.Join(absRoot, "lib/modules/remote.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(absRoot, "lib/modules/gash.sh")); err != nil {
 		t.Skip("the 2.x sources are not in this tree")
 	}
 	if _, err := exec.LookPath("bash"); err != nil {

@@ -18,7 +18,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-const repoRoot = "../../.."
+const repoRoot = "../.."
 
 // run2x loads the 2.x gash.sh of the checkout in an interactive shell
 // (the palette set) with a temporary HOME and runs script.

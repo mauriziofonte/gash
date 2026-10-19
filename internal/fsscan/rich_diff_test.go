@@ -64,7 +64,7 @@ func run2xRich(t *testing.T, fn, pwd string, args ...string) (string, int, bool)
 	if err != nil {
 		return "", 0, false
 	}
-	root, err := filepath.Abs("../../..")
+	root, err := filepath.Abs("../..")
 	if err != nil {
 		return "", 0, false
 	}

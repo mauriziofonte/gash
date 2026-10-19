@@ -26,7 +26,7 @@ import (
 // mockPath is tests/mocks/bin/curl; the test skips without it.
 func mockPath(t *testing.T) string {
 	t.Helper()
-	mock, err := filepath.Abs("../../../../tests/mocks/bin/curl")
+	mock, err := filepath.Abs("../../../tests/mocks/bin/curl")
 	require.NoError(t, err)
 	if _, err := os.Stat(mock); err != nil {
 		t.Skip("tests/mocks/bin/curl is not in this tree")

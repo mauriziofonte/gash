@@ -36,7 +36,7 @@ func archive2x(t *testing.T) string {
 		// Walk up to the git worktree root (the module lives in go-impl/).
 		root := wt
 		for {
-			if _, e := os.Stat(filepath.Join(root, "gash.sh")); e == nil {
+			if _, e := os.Stat(filepath.Join(root, "lib/modules/gash.sh")); e == nil {
 				break
 			}
 			parent := filepath.Dir(root)

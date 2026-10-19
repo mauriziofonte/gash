@@ -15,14 +15,14 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-const repoRoot = "../../.."
+const repoRoot = "../.."
 
 // run2x sources the 2.x lib/core/output.sh and utils.sh of the checkout in
 // a non-interactive Bash with env and runs script; stdout is returned.
 // The test is skipped when the 2.x sources or bash are missing.
 func run2x(t *testing.T, env []string, script string) string {
 	t.Helper()
-	if _, err := os.Stat(filepath.Join(repoRoot, "lib/core/output.sh")); err != nil {
+	if _, err := os.Stat(filepath.Join(repoRoot, "lib/modules/gash.sh")); err != nil {
 		t.Skip("the 2.x sources are not in this tree")
 	}
 	if _, err := exec.LookPath("bash"); err != nil {
