@@ -1,0 +1,47 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:363
+# covers: output_style_render_spec.sh:364
+# covers: output_style_render_spec.sh:365
+# covers: output_style_render_spec.sh:366
+#
+# ai_sysinfo rendering (R2-R6), the non-interactive subset. --raw dumps the
+# collected dossier with no API call (plain text); bad-arg and no-key fail
+# before any send; confirm-no is the "no terminal to confirm on" refusal that
+# ai_sysinfo always hits black-box, since its confirmation reads /dev/tty
+# (which testscript has none of) and so does the drill-down menu that follows
+# a confirmed send. The sudo stub fails `sudo -n true`, so the collectors run
+# unprivileged (R2: no sudo). The interactive drill-down rows (report quit/eof,
+# drilldown, question, save, bad-choice, ...) are the internal/ai unit tests.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+chmod 0755 bin/sudo
+
+# --- :364 bad-arg - an unknown argument is refused before any collection
+! exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_sysinfo --bogus </dev/null'
+stderr 'Unknown argument: --bogus'
+
+# --- :363 raw - the dossier is dumped as plain text (no API, no ANSI)
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_sysinfo --raw </dev/null'
+stdout '=== IDENTITY ==='
+! stdout '\x1b'
+
+# --- :365 no-key - the dossier is collected, then no provider is configured
+! exec bash -c 'export PATH="$PWD/bin:$PATH" GASH_ENV_FILE="$PWD/none.env" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_sysinfo </dev/null'
+stderr 'No AI provider configured in ~/.gash_env'
+
+# --- :366 confirm-no - a provider is set, but there is no terminal to confirm
+# the send of collected data on, so it is refused (the typed-n/menu paths are
+# unit tests)
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_sysinfo </dev/null'
+stderr 'Not sending system data from this host.* no terminal to confirm on'
+
+# --- R6: plain mode, the bad-arg error keeps its word prefix and has no ESC
+! exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; ai_sysinfo --bogus </dev/null'
+stderr '^Error: Unknown argument: --bogus'
+! stderr '\x1b'
+
+-- bin/sudo --
+#!/bin/sh
+exit 1

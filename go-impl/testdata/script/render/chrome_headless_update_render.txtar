@@ -1,0 +1,261 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:131
+# covers: output_style_render_spec.sh:132
+# covers: output_style_render_spec.sh:133
+# covers: output_style_render_spec.sh:134
+# covers: output_style_render_spec.sh:135
+# covers: output_style_render_spec.sh:136
+# covers: output_style_render_spec.sh:137
+#
+# chrome_headless_update rendering (R2-R6). The Go port resolves the pinned
+# build over net/http (SYS-36), so the npm/jsDelivr/Chrome-for-Testing
+# answers are served by the embedded stdlib CONNECT proxy (chromeproxy.go,
+# the pattern of the merged chrome.txtar: httpsfake has no such routes) via
+# HTTPS_PROXY with its CA trusted through SSL_CERT_FILE. uname/unzip/ldd/sudo
+# are PATH stubs. The resolution/plan lines print on stdout; refusals and the
+# spinner tasks on stderr. The confirmation reads /dev/tty, which testscript
+# has none of, so the typed-y path is driven with -y (install) and the
+# declined path is the headless "no terminal to confirm" refusal.
+
+env GASH_HEADLESS=1
+exec go build -o chromeproxy .
+chmod 0755 bin/uname
+chmod 0755 bin/unzip
+chmod 0755 bin/ldd
+chmod 0755 bin/sudo
+
+# --- :137 unknown-option - rejected before any probe (no proxy needed)
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update --bogus'
+stderr 'Unknown option: --bogus'
+
+# --- :131 dry-run-new - nothing installed: the NEW-packages plan on stdout
+exec bash -c './chromeproxy -ca ca1 -addr addr1 >/dev/null 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr1 ] && break; sleep 0.05; done; read -r a <addr1; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca1" GASH_CHROME_ROOT="$PWD/n1/opt" GASH_CHROME_LINK="$PWD/n1/chs" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update --dry-run; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'playwright-core 1\.56\.0 \(chromium-headless-shell 141\.0\.7390\.37, revision 1194\)'
+stdout 'Installed:.*none'
+stdout 'NEW packages will be installed'
+stdout 'Need to get 100\.0 MiB'
+! exists n1/opt
+
+# --- :132 upgrade-declined - 139+140 installed, link on 140: the upgrade
+# plan on stdout, then (no -y, no terminal) the confirmation refusal.
+mkdir up/opt/139.0.7258.5/chrome-headless-shell-linux64
+mkdir up/opt/140.0.7339.16/chrome-headless-shell-linux64
+exec touch up/opt/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell
+! exec bash -c 'ln -s "$PWD/up/opt/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" "$PWD/up/chs"; ./chromeproxy -ca ca2 -addr addr2 >/dev/null 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr2 ] && break; sleep 0.05; done; read -r a <addr2; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca2" GASH_CHROME_ROOT="$PWD/up/opt" GASH_CHROME_LINK="$PWD/up/chs" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout '140\.0\.7339\.16 => 141\.0\.7390\.37'
+stdout 'Kept for rollback:.*140\.0\.7339\.16'
+stdout '(?s)REMOVED:.*139\.0\.7258\.5'
+stderr 'No terminal to ask for confirmation: pass -y to go ahead'
+
+# --- :133 install - the same plan then, with -y, the install runs to the
+# verified/installed status lines (sudo is an exec-through stub).
+mkdir in/opt/139.0.7258.5/chrome-headless-shell-linux64
+mkdir in/opt/140.0.7339.16/chrome-headless-shell-linux64
+exec touch in/opt/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell
+exec bash -c 'ln -s "$PWD/in/opt/140.0.7339.16/chrome-headless-shell-linux64/chrome-headless-shell" "$PWD/in/chs"; ./chromeproxy -ca ca3 -addr addr3 >/dev/null 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr3 ] && break; sleep 0.05; done; read -r a <addr3; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca3" GASH_CHROME_ROOT="$PWD/in/opt" GASH_CHROME_LINK="$PWD/in/chs" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update -y; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr 'Verified: Chrome-Headless-Shell 141\.0\.7390\.37'
+stderr 'Installed: Chrome-Headless-Shell 141\.0\.7390\.37'
+exists in/opt/141.0.7390.37/chrome-headless-shell-linux64/chrome-headless-shell
+! exists in/opt/139.0.7258.5
+
+# --- :134 up-to-date - the pinned build is linked: nothing to do
+mkdir ok/opt/141.0.7390.37/chrome-headless-shell-linux64
+exec touch ok/opt/141.0.7390.37/chrome-headless-shell-linux64/chrome-headless-shell
+exec bash -c 'ln -s "$PWD/ok/opt/141.0.7390.37/chrome-headless-shell-linux64/chrome-headless-shell" "$PWD/ok/chs"; ./chromeproxy -ca ca4 -addr addr4 >/dev/null 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr4 ] && break; sleep 0.05; done; read -r a <addr4; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca4" GASH_CHROME_ROOT="$PWD/ok/opt" GASH_CHROME_LINK="$PWD/ok/chs" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'already the newest version \(141\.0\.7390\.37\)'
+
+# --- :135 missing-libs - ldd reports unresolved libraries: the install
+# aborts with the package hint (bin2/ldd, below, reports not-found).
+mkdir ml/opt
+chmod 0755 bin2/ldd
+! exec bash -c './chromeproxy -ca ca5 -addr addr5 >/dev/null 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr5 ] && break; sleep 0.05; done; read -r a <addr5; export PATH="$PWD/bin2:$PWD/bin:$PATH" HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca5" GASH_CHROME_ROOT="$PWD/ml/opt" GASH_CHROME_LINK="$PWD/ml/chs" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update -y; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr 'Missing shared libraries:'
+stderr 'libnss3.so'
+
+# --- :136 no-network - the npm registry is unreachable (the proxy answers
+# 503 to every route, MOCK_CHROME_FAIL): fails cleanly, nothing changed.
+! exec bash -c 'export MOCK_CHROME_FAIL=1; ./chromeproxy -ca ca6 -addr addr6 >/dev/null 2>&1 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a HTTP_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" GASH_CHROME_ROOT="$PWD/nn/opt" GASH_CHROME_LINK="$PWD/nn/chs" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; chrome_headless_update -y; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr 'Nothing changed'
+! exists nn/opt
+
+-- bin/uname --
+#!/bin/sh
+case "$1" in
+  -m) echo "${MOCK_ARCH:-x86_64}" ;;
+  *)  echo Linux ;;
+esac
+-- bin/unzip --
+#!/bin/sh
+case "$1" in
+-Z1) echo chrome-headless-shell-linux64/chrome-headless-shell ;;
+-q) mkdir -p "$4/chrome-headless-shell-linux64" && printf "#!/bin/sh\necho Chrome-Headless-Shell 141.0.7390.37\n" >"$4/chrome-headless-shell-linux64/chrome-headless-shell" && chmod +x "$4/chrome-headless-shell-linux64/chrome-headless-shell" ;;
+esac
+-- bin/ldd --
+#!/bin/sh
+exit 0
+-- bin/sudo --
+#!/bin/sh
+exec "$@"
+-- bin2/ldd --
+#!/bin/sh
+printf '\tlibnss3.so => not found\n\tlibgbm.so.1 => not found\n'
+-- go.mod --
+module chromeproxy
+
+go 1.27
+-- chromeproxy.go --
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+//
+// Test fixture: a stdlib-only HTTPS CONNECT proxy answering the npm
+// registry, jsDelivr and Chrome-for-Testing requests chrome_headless_update
+// makes over net/http, the HEAD on the download url (100 MiB Content-Length)
+// and the GET of the archive (a small real body, so the download completes).
+// With MOCK_CHROME_FAIL=1 every request fails (503), to prove the clean
+// failure path. It writes its CA to -ca and listen address to -addr, serves
+// until killed.
+package main
+
+import (
+	"bufio"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"flag"
+	"fmt"
+	"io"
+	"math/big"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+)
+
+type fake struct {
+	caCert *x509.Certificate
+	caKey  *ecdsa.PrivateKey
+	mu     sync.Mutex
+	leafs  map[string]*tls.Certificate
+}
+
+func main() {
+	caFile := flag.String("ca", "", "write CA PEM here")
+	addrFile := flag.String("addr", "", "write listen address here")
+	flag.Parse()
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fake CA"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour), IsCA: true,
+		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature, BasicConstraintsValid: true}
+	der, _ := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	cert, _ := x509.ParseCertificate(der)
+	os.WriteFile(*caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
+	f := &fake{caCert: cert, caKey: key, leafs: map[string]*tls.Certificate{}}
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.WriteFile(*addrFile, []byte(ln.Addr().String()+"\n"), 0o644)
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go f.conn(c)
+	}
+}
+
+func (f *fake) leaf(host string) *tls.Certificate {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c, ok := f.leafs[host]; ok {
+		return c
+	}
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano()), Subject: pkix.Name{CommonName: host},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, DNSNames: []string{host}}
+	der, _ := x509.CreateCertificate(rand.Reader, tmpl, f.caCert, &key.PublicKey, f.caKey)
+	c := &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	f.leafs[host] = c
+	return c
+}
+
+func (f *fake) conn(c net.Conn) {
+	defer c.Close()
+	br := bufio.NewReader(c)
+	req, err := http.ReadRequest(br)
+	if err != nil || req.Method != http.MethodConnect {
+		return
+	}
+	host := req.URL.Host
+	name, _, err := net.SplitHostPort(host)
+	if err != nil {
+		name = host
+	}
+	io.WriteString(c, "HTTP/1.1 200 Connection established\r\n\r\n")
+	tc := tls.Server(&bufConn{Conn: c, r: br}, &tls.Config{Certificates: []tls.Certificate{*f.leaf(name)}, NextProtos: []string{"http/1.1"}})
+	if tc.Handshake() != nil {
+		return
+	}
+	tbr := bufio.NewReader(tc)
+	for {
+		r, err := http.ReadRequest(tbr)
+		if err != nil {
+			return
+		}
+		io.Copy(io.Discard, r.Body)
+		r.Body.Close()
+		url := "https://" + name + r.URL.RequestURI()
+		code, body, clen := respond(url, r.Method)
+		resp := &http.Response{StatusCode: code, ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{}, Request: r,
+			Close: true, ContentLength: clen, Body: io.NopCloser(strings.NewReader(body))}
+		resp.Header.Set("Content-Type", "application/json")
+		if r.Method == http.MethodHead {
+			resp.Body = http.NoBody
+		}
+		_ = resp.Write(tc)
+		return
+	}
+}
+
+// respond answers each route. For the archive URL a HEAD announces the full
+// 100 MiB (the "Need to get" line), while a GET returns a small real body
+// with a matching Content-Length so the download completes; the unzip stub
+// ignores the bytes and writes the binary.
+func respond(url, method string) (int, string, int64) {
+	if os.Getenv("MOCK_CHROME_FAIL") == "1" {
+		return 503, "", 0
+	}
+	switch {
+	case strings.Contains(url, "registry.npmjs.org/playwright-core/latest"):
+		b := `{"version":"1.56.0"}`
+		return 200, b, int64(len(b))
+	case strings.Contains(url, "playwright-core@1.56.0/browsers.json"):
+		b := `{"browsers":[{"name":"chromium","browserVersion":"1.0.0.0"},{"name":"chromium-headless-shell","revision":"1194","browserVersion":"141.0.7390.37"}]}`
+		return 200, b, int64(len(b))
+	case strings.Contains(url, "chrome-for-testing/141.0.7390.37.json"):
+		b := `{"downloads":{"chrome-headless-shell":[{"platform":"linux64","url":"https://storage.example/141.0.7390.37/linux64/chrome-headless-shell-linux64.zip"}]}}`
+		return 200, b, int64(len(b))
+	case strings.Contains(url, "storage.example/141.0.7390.37/linux64/chrome-headless-shell-linux64.zip"):
+		if method == http.MethodHead {
+			return 200, "", 104857600
+		}
+		body := strings.Repeat("PK\x03\x04", 512) // 2048 bytes, ignored by the unzip stub
+		return 200, body, int64(len(body))
+	}
+	return 404, "", 0
+}
+
+type bufConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (b *bufConn) Read(p []byte) (int, error) { return b.r.Read(p) }

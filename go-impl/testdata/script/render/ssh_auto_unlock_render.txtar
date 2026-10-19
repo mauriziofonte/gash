@@ -1,0 +1,45 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:331
+# covers: output_style_render_spec.sh:332
+# covers: output_style_render_spec.sh:333
+#
+# gash_ssh_auto_unlock rendering (R2-R6). The SSH: transcript and the
+# agent-missing error print on stderr through the gash printer, so each line
+# carries the gash status glyph. The ssh-agent/ssh-add/ssh-keygen mocks of
+# the 2.x suite stay on PATH (driven by MOCK_SSH_AGENT); the passphrase is
+# typed on a PTY instead of an expect script (LEDGER SYS-37), so the no_expect
+# case still adds the key with expect absent and prints no install hint. The
+# split rows' internal halves (the XDG socket-reuse probe, the SSH:-line
+# parser) are the Go unit tests.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+chmod 0600 home/env1
+
+# --- :331 unlocked - the agent is up, the key is added; the transcript is
+# rendered with the SSH: prefix, the agent's "no identities" and the glyphs.
+exec bash -c 'export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=1 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100 PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; source "$GASH_SH"; gash_ssh_auto_unlock'
+stderr 'SSH: The agent has no identities\.'
+stderr 'SSH: Identity added'
+
+# --- :332 no_expect - with expect absent the key is still added (FD SYS-37);
+# no "expect is not installed" hint is printed.
+exec bash -c 'mkdir noexp; ln -s "$GASH_STAGE"/tests/mocks/bin/* noexp/; rm -f noexp/expect; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=1 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100 PATH="$PWD/noexp:$PATH"; source "$GASH_SH"; gash_ssh_auto_unlock'
+stderr 'SSH: Identity added'
+! stderr 'is not installed'
+! stderr 'expect'
+
+# --- :333 no_agent - the agent cannot be started; the error line is rendered
+# (the function stays exit 0 so a sourced headless caller is never broken)
+exec bash -c 'mkdir bin0; printf "#!/bin/sh\nexit 1\n" >bin0/ssh-agent; chmod +x bin0/ssh-agent; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=0 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100 PATH="$PWD/bin0:$GASH_STAGE/tests/mocks/bin:$PATH"; unset SSH_AUTH_SOCK SSH_AGENT_PID; source "$GASH_SH"; gash_ssh_auto_unlock'
+stderr 'ssh-agent is not running'
+
+# --- R6: plain mode, the agent-missing error keeps its word prefix, no ESC
+exec bash -c 'mkdir bin1; printf "#!/bin/sh\nexit 1\n" >bin1/ssh-agent; chmod +x bin1/ssh-agent; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=0 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100 PATH="$PWD/bin1:$GASH_STAGE/tests/mocks/bin:$PATH"; unset SSH_AUTH_SOCK SSH_AGENT_PID; source "$GASH_SH"; gash_ssh_auto_unlock'
+stderr '^Error: ssh-agent is not running'
+! stderr '\x1b'
+
+-- home/.ssh/key1 --
+-- home/env1 --
+SSH:~/.ssh/key1=pw
