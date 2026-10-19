@@ -1,0 +1,98 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: functions_smoke_spec.sh:11
+# covers: functions_smoke_spec.sh:43
+# covers: functions_smoke_spec.sh:54
+# covers: functions_smoke_spec.sh:63
+# covers: functions_smoke_spec.sh:72
+# covers: functions_smoke_spec.sh:97
+# covers: functions_smoke_spec.sh:109
+# covers: functions_smoke_spec.sh:123
+# covers: functions_smoke_spec.sh:132
+# covers: functions_smoke_spec.sh:141
+# covers: functions_smoke_spec.sh:150
+# covers: functions_smoke_spec.sh:159
+# covers: functions_smoke_spec.sh:179
+# covers: functions_smoke_spec.sh:198
+# covers: functions_smoke_spec.sh:207
+#
+# Function-module smoke cases through the shim: gash_help's grouped
+# overview, file_backup, archive_extract and files_largest argument errors,
+# port_kill and docker dependency errors, the WSL helpers' help and their
+# refusal off WSL (this host is not WSL, so no detection override is needed),
+# and the wr/wex module aliases. ip_public (SYS-36) is in
+# functions_smoke_ip.txtar and port_kill with a victim in
+# functions_smoke_kill.txtar.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- functions_smoke_spec.sh:11 - gash_help displays grouped overview
+exec bash -c 'export GASH_VERSION=test; source "$GASH_SH"; gash_help'
+stdout Gash
+stdout FILES
+stdout GIT
+stdout files_largest
+stdout git_add_tag
+
+# --- functions_smoke_spec.sh:43 - file_backup creates timestamped backup
+mkdir fb
+exec bash -c 'echo x > fb/a.txt'
+exec bash -c 'source "$GASH_SH"; file_backup "$WORK/fb/a.txt" >/dev/null'
+exec bash -c 'ls "$WORK/fb" | grep -q "a\.txt_backup_"'
+
+# --- functions_smoke_spec.sh:54 - archive_extract rejects missing file
+! exec bash -c 'source "$GASH_SH"; archive_extract /no/such/file.zip'
+stderr 'does not exist'
+
+# --- functions_smoke_spec.sh:63 - files_largest errors on missing directory
+! exec bash -c 'source "$GASH_SH"; files_largest /no/such/dir'
+stderr 'does not exist'
+
+# --- functions_smoke_spec.sh:72 - files_largest lists files in directory
+mkdir fl
+exec bash -c 'head -c 10240 /dev/zero > fl/big; echo x > fl/small'
+exec bash -c 'source "$GASH_SH"; files_largest fl --no-color'
+stdout big
+
+# --- functions_smoke_spec.sh:97 - port_kill reports when lsof missing
+! exec bash -c 'source "$GASH_SH"; PATH=/nonexistent port_kill 1234'
+stderr requires
+stderr lsof
+stderr 'not available'
+
+# --- functions_smoke_spec.sh:109 - docker_stop_all errors when docker missing
+! exec bash -c 'source "$GASH_SH"; PATH=/nonexistent docker_stop_all'
+stderr 'Docker is not installed'
+
+# --- functions_smoke_spec.sh:123 - wsl_restart shows help on -h
+exec bash -c 'source "$GASH_SH"; wsl_restart -h'
+stdout wsl_restart
+
+# --- functions_smoke_spec.sh:132 - wsl_shutdown shows help on -h
+exec bash -c 'source "$GASH_SH"; wsl_shutdown -h'
+stdout wsl_shutdown
+
+# --- functions_smoke_spec.sh:141 - wsl_explorer shows help on -h
+exec bash -c 'source "$GASH_SH"; wsl_explorer -h'
+stdout wsl_explorer
+
+# --- functions_smoke_spec.sh:150 - wsl_taskmanager shows help on -h
+exec bash -c 'source "$GASH_SH"; wsl_taskmanager -h'
+stdout wsl_taskmanager
+
+# --- functions_smoke_spec.sh:159 - wsl_restart fails outside WSL
+! exec bash -c 'source "$GASH_SH"; wsl_restart'
+stderr WSL
+
+# --- functions_smoke_spec.sh:179 - wsl_explorer fails outside WSL
+! exec bash -c 'source "$GASH_SH"; wsl_explorer'
+stderr WSL
+
+# --- functions_smoke_spec.sh:198 - wr alias points to wsl_restart
+exec bash -c 'source "$GASH_SH"; alias wr'
+stdout wsl_restart
+
+# --- functions_smoke_spec.sh:207 - wex alias points to wsl_explorer
+exec bash -c 'source "$GASH_SH"; alias wex'
+stdout wsl_explorer
