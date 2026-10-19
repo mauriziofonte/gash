@@ -1,0 +1,63 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: php_detect_spec.sh:11
+# covers: php_detect_spec.sh:24
+# covers: php_detect_spec.sh:37
+# covers: php_detect_spec.sh:49
+# covers: php_detect_spec.sh:60
+# covers: php_detect_spec.sh:72
+# covers: php_detect_spec.sh:83
+#
+# php_detect_version resolves the target version from files only (no php
+# binary required), so these cases drive it over fixtures written in the work
+# dir. Only .version and the field names are asserted: the php_*_binary /
+# php_command values depend on the host and are not part of the contract. The
+# human-text case loads the function headless, then unsets GASH_HEADLESS so
+# the binary chooses its interactive rendering while the shim stays sourced.
+
+env GASH_HEADLESS=1
+mkdir empty
+
+# --- php_detect_spec.sh:11 - .target-php-version wins over composer.json
+exec bash -c 'source "$GASH_SH"; php_detect_version target --llm'
+stdout '.version.:.8\.1.'
+
+# --- php_detect_spec.sh:24 - .target-php-version walks up parent directories
+exec bash -c 'source "$GASH_SH"; php_detect_version walkup/sub/deeper --llm'
+stdout '.version.:.7\.4.'
+
+# --- php_detect_spec.sh:37 - falls back to composer.json require.php
+exec bash -c 'source "$GASH_SH"; php_detect_version composer --llm'
+stdout '.version.:.8\.2.'
+
+# --- php_detect_spec.sh:49 - falls back to 8.4 when nothing explicit
+exec bash -c 'source "$GASH_SH"; php_detect_version empty --llm'
+stdout '.version.:.8\.4.'
+
+# --- php_detect_spec.sh:60 - exact JSON field names of the legacy contract
+exec bash -c 'source "$GASH_SH"; php_detect_version empty --llm'
+stdout '.version.:'
+stdout '.php_raw_binary.:'
+stdout '.php_command.:'
+stdout '.composer_raw_binary.:'
+stdout '.composer_command.:'
+
+# --- php_detect_spec.sh:72 - JSON automatically under GASH_HEADLESS=1, no --llm
+exec bash -c 'source "$GASH_SH"; php_detect_version empty'
+stdout '.version.:.8\.4.'
+
+# --- php_detect_spec.sh:83 - human-readable text when interactive, no --llm
+exec bash -c 'source "$GASH_SH"; unset GASH_HEADLESS; php_detect_version empty'
+stderr 'PHP version for'
+! stdout '.version.:'
+
+-- target/.target-php-version --
+8.1
+-- target/composer.json --
+{"require":{"php":"^8.3"}}
+-- walkup/.target-php-version --
+7.4
+-- walkup/sub/deeper/.keep --
+x
+-- composer/composer.json --
+{"require":{"php":"^8.2"}}
