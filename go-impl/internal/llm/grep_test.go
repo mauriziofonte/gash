@@ -114,8 +114,6 @@ func TestGrepMatches2x(t *testing.T) {
 		{"(?i)NEEDLE", "src"},
 		{"ne+dle (one|two)", "src"},
 		{"a{3}", "src"},
-		{"("},
-		{"needle\nx"},
 		{"needle", "nonexistent"},
 		{"needle", "/nonexistent"},
 		// refusals and argument errors, in the 2.x order
@@ -246,16 +244,16 @@ func TestLedger_LLM16(t *testing.T) {
 	require.Equal(t, want, runGo(t, m, d, env, "llm_grep", "needle"))
 }
 
-// TestLedger_LLM17_2x: a missing PATH and an invalid regex are silent
-// successes.
+// TestLedger_LLM17_2x: a missing PATH is a silent success. (An invalid
+// regex, silent in 2.x too, fails with invalid_regex: LLM-37.)
 func TestLedger_LLM17_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	env := rgEnv(t, physTemp(t))
 	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_grep", "x", "/nonexistent"))
-	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_grep", "(", "."))
 	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_find", "*", "/nonexistent"))
-	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_find", "*", ".", "--contains", "("))
+	require.Equal(t, result{"", "", 0}, run2x(t, d, env, "llm_grep", "(", "."))
+	require.Equal(t, 1, runGo(t, m, d, env, "llm_grep", "(", ".").RC)
 }
 
 // TestLedger_LLM26: binary files are skipped in a walk.
@@ -278,4 +276,24 @@ func TestSearchTreeSize(t *testing.T) {
 	env := rgEnv(t, physTemp(t))
 	r := same(t, m, d, env, "llm_grep", "hit")
 	require.Equal(t, 12, strings.Count(r.Stdout, "\n"))
+}
+
+// TestLedger_LLM38: a file with a NUL anywhere (its first byte, the middle,
+// past rg's first 64 KiB buffer) is binary and skipped whole, by llm_grep
+// and llm_find --contains alike.
+func TestLedger_LLM38(t *testing.T) {
+	archive2x(t) // before runGo changes the directory
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "start"), "\x00needle\n")
+	mustWrite(t, filepath.Join(d, "middle"), "needle\n\x00\nneedle\n")
+	mustWrite(t, filepath.Join(d, "end"), "needle\n"+strings.Repeat("pad\n", 40000)+"\x00")
+	mustWrite(t, filepath.Join(d, "text"), "needle\n")
+	env := baseEnv(physTemp(t), map[string]string{"PATH": ""})
+	require.Equal(t, result{d + "/text:1:needle\n", "", 0}, runGo(t, m, d, env, "llm_grep", "needle", d))
+	require.Equal(t, result{d + "/text\n", "", 0}, runGo(t, m, d, env, "llm_find", "*", d, "--contains", "needle"))
+	if _, err := exec.LookPath("rg"); err == nil {
+		// 2.x: rg reported the match before a NUL past its first buffer.
+		require.Contains(t, run2x(t, d, rgEnv(t, physTemp(t)), "llm_grep", "needle", d).Stdout, d+"/end:1:needle")
+	}
 }

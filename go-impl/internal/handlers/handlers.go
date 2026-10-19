@@ -6,8 +6,10 @@
 package handlers
 
 import (
+	"github.com/mauriziofonte/gash/internal/ai"
 	"github.com/mauriziofonte/gash/internal/chrome"
 	"github.com/mauriziofonte/gash/internal/db"
+	"github.com/mauriziofonte/gash/internal/dev"
 	"github.com/mauriziofonte/gash/internal/docker"
 	"github.com/mauriziofonte/gash/internal/files"
 	"github.com/mauriziofonte/gash/internal/fsscan"
@@ -34,6 +36,8 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	selfmgmt.Register(t)
 	llm.Register(t)
 	db.Register(t)
+	dev.Register(t)
+	ai.Register(t)
 	docker.Register(t)
 	files.Register(t)
 	chrome.Register(t)

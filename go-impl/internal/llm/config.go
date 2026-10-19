@@ -3,16 +3,11 @@
 package llm
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"io"
-	"math"
 	"os"
 	"strconv"
 	"strings"
 
-	"go.yaml.in/yaml/v3"
 	"golang.org/x/sys/unix"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -75,11 +70,11 @@ func (m *Module) config(c *invoke.Call) int {
 		if err != nil {
 			return fail(c, "path_unreadable", safe, "The file could not be read")
 		}
-		if js, err := yamlToJSON(data); err == nil {
-			if js = strings.TrimRight(js, "\n"); js != "" {
-				_, _ = io.WriteString(c.Stdout, js+"\n")
-				return 0
-			}
+		// LEDGER LLM-35: JSON as python-yq and jq printed it; the raw
+		// text for a file that does not convert or holds no document.
+		if docs, err := yamlDocs(data); err == nil && len(docs) > 0 {
+			_ = writeYAMLJSON(c.Stdout, docs)
+			return 0
 		}
 		_, _ = c.Stdout.Write(data)
 		return 0
@@ -93,131 +88,4 @@ func (m *Module) config(c *invoke.Call) int {
 		return fail(c, "path_unreadable", safe, "The file could not be read")
 	}
 	return 0
-}
-
-// yamlToJSON converts every document of a YAML stream to JSON in the layout
-// of mikefarah's yq eval -o=json (two-space indent, keys in document
-// order, one document after another). Any parse error is an error: the
-// caller prints the raw text, as 2.x did when yq failed.
-func yamlToJSON(data []byte) (string, error) {
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	var out strings.Builder
-	for {
-		var doc yaml.Node
-		err := dec.Decode(&doc)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
-		var b []byte
-		var node *yaml.Node
-		if len(doc.Content) > 0 {
-			node = doc.Content[0]
-		}
-		b, err = appendYAMLJSON(b, node, "")
-		if err != nil {
-			return "", err
-		}
-		out.Write(b)
-		out.WriteByte('\n')
-	}
-	return out.String(), nil
-}
-
-var errYAMLValue = errors.New("yaml value has no JSON form")
-
-func appendYAMLJSON(b []byte, n *yaml.Node, indent string) ([]byte, error) {
-	if n == nil {
-		return append(b, "null"...), nil
-	}
-	inner := indent + "  "
-	switch n.Kind {
-	case yaml.DocumentNode:
-		if len(n.Content) == 0 {
-			return append(b, "null"...), nil
-		}
-		return appendYAMLJSON(b, n.Content[0], indent)
-	case yaml.AliasNode:
-		return appendYAMLJSON(b, n.Alias, indent)
-	case yaml.MappingNode:
-		if len(n.Content) == 0 {
-			return append(b, "{}"...), nil
-		}
-		b = append(b, "{\n"...)
-		for i := 0; i+1 < len(n.Content); i += 2 {
-			if i > 0 {
-				b = append(b, ",\n"...)
-			}
-			b = append(b, inner...)
-			b = appendJSONString(b, n.Content[i].Value)
-			b = append(b, ": "...)
-			var err error
-			if b, err = appendYAMLJSON(b, n.Content[i+1], inner); err != nil {
-				return nil, err
-			}
-		}
-		return append(append(append(b, '\n'), indent...), '}'), nil
-	case yaml.SequenceNode:
-		if len(n.Content) == 0 {
-			return append(b, "[]"...), nil
-		}
-		b = append(b, "[\n"...)
-		for i, item := range n.Content {
-			if i > 0 {
-				b = append(b, ",\n"...)
-			}
-			b = append(b, inner...)
-			var err error
-			if b, err = appendYAMLJSON(b, item, inner); err != nil {
-				return nil, err
-			}
-		}
-		return append(append(append(b, '\n'), indent...), ']'), nil
-	}
-	switch n.ShortTag() {
-	case "!!null":
-		return append(b, "null"...), nil
-	case "!!bool":
-		var v bool
-		if err := n.Decode(&v); err != nil {
-			return nil, err
-		}
-		return strconv.AppendBool(b, v), nil
-	case "!!int":
-		var v int64
-		if err := n.Decode(&v); err == nil {
-			return strconv.AppendInt(b, v, 10), nil
-		}
-		var u uint64
-		if err := n.Decode(&u); err != nil {
-			return nil, err
-		}
-		return strconv.AppendUint(b, u, 10), nil
-	case "!!float":
-		var v float64
-		if err := n.Decode(&v); err != nil {
-			return nil, err
-		}
-		if math.IsInf(v, 0) || math.IsNaN(v) {
-			return nil, errYAMLValue
-		}
-		js, err := json.Marshal(v)
-		if err != nil {
-			return nil, err
-		}
-		return append(b, js...), nil
-	}
-	return appendJSONString(b, n.Value), nil
-}
-
-// appendJSONString is encoding/json with HTML escaping off, as yq's JSON
-// encoder writes strings.
-func appendJSONString(b []byte, s string) []byte {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(s)
-	return append(b, bytes.TrimRight(buf.Bytes(), "\n")...)
 }

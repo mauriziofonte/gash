@@ -305,7 +305,7 @@ func TestRun_CallerUntouched(t *testing.T) {
 // TestRun_SedAwkSandboxed: sed and awk run sandboxed; writes are refused
 // (llm_exec_security_spec.sh:91).
 func TestRun_SedAwkSandboxed(t *testing.T) {
-	if !(OSProbe{}).HasSandboxedSed() || !(OSProbe{}).HasSandboxedGawk() {
+	if !(osProbe{}).HasSandboxedSed() || !(osProbe{}).HasSandboxedGawk() {
 		t.Skip("sed --sandbox / gawk --sandbox required")
 	}
 	cwd := t.TempDir()
@@ -317,7 +317,7 @@ func TestRun_SedAwkSandboxed(t *testing.T) {
 		{"sed -n 1p in.txt", "a b\n"},
 		{`awk '{print $2}' in.txt`, "b\n"},
 	} {
-		plan, err := Build(tc.line, Settings{}, env, OSProbe{})
+		plan, err := Build(tc.line, Settings{}, env, osProbe{})
 		if err != nil {
 			t.Fatalf("%q: %v", tc.line, err)
 		}
@@ -328,7 +328,7 @@ func TestRun_SedAwkSandboxed(t *testing.T) {
 	}
 	// Sandbox-violating programs fail at runtime (no file written).
 	for _, line := range []string{`sed -n '1w out' in.txt`, `awk 'BEGIN{system("touch pwned")}'`} {
-		plan, err := Build(line, Settings{}, env, OSProbe{})
+		plan, err := Build(line, Settings{}, env, osProbe{})
 		if err != nil {
 			t.Fatalf("%q build: %v", line, err)
 		}

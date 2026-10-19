@@ -89,13 +89,13 @@ func TestConfigYAML(t *testing.T) {
 		{"a: 1\n", "{\n  \"a\": 1\n}\n"},
 		{"a: 1\nb: [x, 2.5, true, null, ~]\nc: {}\nd: []\ne: {f: \"<&>\"}\n",
 			"{\n  \"a\": 1,\n  \"b\": [\n    \"x\",\n    2.5,\n    true,\n    null,\n    null\n  ],\n  \"c\": {},\n  \"d\": [],\n  \"e\": {\n    \"f\": \"<&>\"\n  }\n}\n"},
-		{"- a\n- 0x10\n- 1e3\n- 1.0\n- 'quoted: \"x\"'\n", "[\n  \"a\",\n  16,\n  1000,\n  1,\n  \"quoted: \\\"x\\\"\"\n]\n"},
+		{"- a\n- 0x10\n- 1e3\n- 1.0\n- 'quoted: \"x\"'\n", "[\n  \"a\",\n  16,\n  1000.0,\n  1.0,\n  \"quoted: \\\"x\\\"\"\n]\n"},
 		{"x: &a [1]\ny: *a\n", "{\n  \"x\": [\n    1\n  ],\n  \"y\": [\n    1\n  ]\n}\n"},
 		{"a: 1\n---\nb: 2\n", "{\n  \"a\": 1\n}\n{\n  \"b\": 2\n}\n"},
 		{"hello\n", "\"hello\"\n"},
-		{"a: .inf\n", "a: .inf\n"},
+		{"a: .inf\n", "{\n  \"a\": 1.7976931348623157e+308\n}\n"},
 		{"a: [\n", "a: [\n"},
-		{"a: 1\na: 2\n", "{\n  \"a\": 1,\n  \"a\": 2\n}\n"},
+		{"a: 1\na: 2\n", "{\n  \"a\": 2\n}\n"},
 		{"", ""},
 	} {
 		mustWrite(t, filepath.Join(d, "c.yml"), c.in)

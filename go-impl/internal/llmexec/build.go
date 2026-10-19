@@ -91,7 +91,7 @@ func parseAllow(raw string) []string {
 // it is empty, argv[0] is "bash".
 func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 	if pr == nil {
-		pr = OSProbe{}
+		pr = noProbe{}
 	}
 
 	// Blank line (only whitespace).

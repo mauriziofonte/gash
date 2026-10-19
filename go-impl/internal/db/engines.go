@@ -6,7 +6,6 @@ import (
 	"context"
 	"net"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -57,14 +56,20 @@ type quietLogger struct{}
 
 func (quietLogger) Print(...any) {}
 
-// mysqlConfig is the connection of t: TCP to HOST:PORT, the database by
-// name, the password to the driver only (never argv, a file or a child).
-func mysqlConfig(t target) *mysql.Config {
+// mysqlConfig is the connection of t: TCP to HOST:PORT, or for host
+// localhost the Unix socket the mysql client used (LEDGER DB-16); the
+// database by name, the password to the driver only (never argv, a file
+// or a child).
+func (m *Module) mysqlConfig(c *invoke.Call, t target) *mysql.Config {
 	cfg := mysql.NewConfig()
 	cfg.User = t.user
 	cfg.Passwd = t.pass
 	cfg.Net = "tcp"
 	cfg.Addr = net.JoinHostPort(t.host, t.port)
+	if t.host == "localhost" {
+		cfg.Net = "unix"
+		cfg.Addr = m.mysqlSocket(c.Env.Get("HOME"))
+	}
 	cfg.DBName = t.database
 	cfg.Logger = quietLogger{}
 	return cfg
@@ -77,10 +82,11 @@ func mysqlError(err error) output {
 // mysqlRun is __llm_mysql_run: a read-only session (and sql_select_limit
 // when rowCap is set), then the query. raw is the --raw --skip-column-names
 // text (tab-separated columns, one row per line); otherwise the rows are
-// objects of strings, NULL as "NULL" (LEDGER DB-02).
+// objects of strings, each the client's text, NULL as "NULL" (LEDGER
+// DB-02).
 func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap string) output {
 	ctx := ctxOf(c)
-	db, err := m.openMySQL(mysqlConfig(t))
+	db, err := m.openMySQL(m.mysqlConfig(c, t))
 	if err != nil {
 		return mysqlError(err)
 	}
@@ -107,6 +113,11 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 	if err != nil {
 		return mysqlError(err)
 	}
+	cts, err := rows.ColumnTypes()
+	if err != nil {
+		return mysqlError(err)
+	}
+	meta := mysqlColumns(cts)
 	vals := make([]any, len(cols))
 	ptrs := make([]any, len(cols))
 	for i := range vals {
@@ -121,14 +132,14 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 		if raw {
 			fields := make([]string, len(cols))
 			for i := range cols {
-				fields[i] = mysqlText(vals[i])
+				fields[i] = mysqlText(vals[i], meta[i])
 			}
 			lines = append(lines, strings.Join(fields, "\t"))
 			continue
 		}
 		var o object
 		for i, col := range cols {
-			o.set(col, jvString(mysqlText(vals[i])))
+			o.set(col, jvString(mysqlText(vals[i], meta[i])))
 		}
 		out = append(out, o.value())
 	}
@@ -139,30 +150,6 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 		return textOut(trimNewlines(strings.Join(lines, "\n")))
 	}
 	return values(jvArray(out))
-}
-
-// mysqlText is a value as text: the bytes the server sent; the numbers the
-// driver parses in their shortest form; NULL as the client printed it.
-func mysqlText(v any) string {
-	switch x := v.(type) {
-	case nil:
-		return "NULL"
-	case []byte:
-		return string(x)
-	case string:
-		return x
-	case int64:
-		return strconv.FormatInt(x, 10)
-	case uint64:
-		return strconv.FormatUint(x, 10)
-	case float32:
-		return strconv.FormatFloat(float64(x), 'g', -1, 32)
-	case float64:
-		return strconv.FormatFloat(x, 'g', -1, 64)
-	case time.Time:
-		return x.Format("2006-01-02 15:04:05")
-	}
-	return ""
 }
 
 var digitsRE = regexp.MustCompile(`^[0-9]+$`)

@@ -49,7 +49,6 @@ func TestFindMatches2x(t *testing.T) {
 		{"a.*", "src/a.php", "--contains", "needle"},
 		{"b.*", "src/a.php", "--contains", "needle"},
 		{"*", "bin.dat", "--contains", "after"},
-		{"*", "--contains", "("},
 		{"*", "--contains", "needle", "--type", "f"},
 		{"[", "--contains", "needle"},
 		{"*", "sub/.env.example", "--contains", "needle"},
