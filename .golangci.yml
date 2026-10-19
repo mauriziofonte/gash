@@ -1,0 +1,53 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# Initial lint policy for the Go port (rc.A). The gate runs the bug-finding
+# linters; the style/quickfix opinions and the dead-code sweep are deferred
+# to operator triage after rc.A (see docs/port/design/testing.md).
+#
+#   - govet, errcheck, ineffassign, staticcheck: enabled (real-bug coverage).
+#   - errcheck tolerates the cleanup-path errors the codebase intentionally
+#     drops (Close/Unlock/Remove/Rename/Write/... and os/fmt best-effort
+#     calls), matching the 2.x behavior the port reproduces.
+#   - staticcheck runs the SA (correctness) checks only; the ST/S1/QF style
+#     and quickfix suggestions are opinions, not defects, and are left for a
+#     later pass.
+#   - unused is off for now: its hits are candidate port gaps (e.g. the YAML
+#     helper, the dev grep subsystem) that need wiring-or-removal decisions,
+#     not a blind deletion inside the cutover. Tracked for post-rc.A.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+  settings:
+    staticcheck:
+      checks:
+        - SA*
+    errcheck:
+      exclude-functions:
+        # Best-effort cleanup and diagnostics the port drops on purpose.
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - os.Remove
+        - os.RemoveAll
+        - os.Rename
+        - os.WriteFile
+        - (*os.File).Write
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - filepath.WalkDir
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      # Test helpers legitimately ignore cleanup and setup errors.
+      - path: _test\.go
+        linters:
+          - errcheck
