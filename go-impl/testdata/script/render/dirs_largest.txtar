@@ -1,0 +1,43 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:104
+# covers: output_style_render_spec.sh:105
+# covers: output_style_render_spec.sh:106
+# covers: output_style_render_spec.sh:107
+#
+# dirs_largest terminal rendering (R2-R6): the ranked directory table
+# ("largest ... total" footer), the --depth --no-human variant, the empty
+# "No directories matched." line, and the root_scan_blocked error.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :104 list - ranked directories with share bars
+mkdir d1
+exec bash -c 'cd d1; mkdir -p d/big d/small d/empty && head -c 65536 /dev/zero >d/big/f && printf x >d/small/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_largest d'
+stdout '^  Largest directories in .*/d$'
+stdout '^  #      SIZE  SHARE +PATH$'
+stdout '^  1  68\.0 KiB .* big$'
+stdout '^  3 directories .* largest 68\.0 KiB .* [0-9]+m?s$'
+
+# --- :105 depth - cumulative sizes down to --depth, raw bytes
+mkdir d2
+exec bash -c 'cd d2; mkdir -p d/a/b && head -c 8192 /dev/zero >d/a/b/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_largest --depth 2 --no-human d'
+stdout '^  1  16384 B .* a$'
+stdout '^  2  12288 B .* a/b$'
+
+# --- :106 empty - nothing over the threshold
+mkdir d3
+exec bash -c 'cd d3; mkdir -p d/a; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_largest --min-size 1G d'
+stdout 'No directories matched\.'
+
+# --- :107 root-blocked - scanning / is refused
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_largest /'
+stderr 'Error: root_scan_blocked: Scanning .* is blocked'
+stderr 'Hint: Use --allow-root to override'
+
+# --- R6: plain mode, root-blocked carries the word prefix, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; dirs_largest /'
+stderr '^Error: root_scan_blocked'
+! stderr '\x1b'
