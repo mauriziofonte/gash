@@ -259,7 +259,7 @@ func rgEscape(s string, inClass bool) (string, int, error) {
 func rgHexEscape(s string) (string, int, error) {
 	width := map[byte]int{'x': 2, 'u': 4, 'U': 8}[s[1]]
 	var hex string
-	n := 2
+	var n int
 	if len(s) > 2 && s[2] == '{' {
 		end := strings.IndexByte(s, '}')
 		if end < 0 {

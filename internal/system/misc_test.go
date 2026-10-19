@@ -248,12 +248,12 @@ func TestLedger_SYS25(t *testing.T) {
 
 func TestSudoLast(t *testing.T) {
 	// With a command: sudo runs it on the caller's terminal.
-	m, _, h := tm(t, runner.NewFake(t, runner.Expect{Argv: []string{"sudo", "apt", "update"}, Status: 3}))
+	m, _, _ := tm(t, runner.NewFake(t, runner.Expect{Argv: []string{"sudo", "apt", "update"}, Status: 3}))
 	r := call(m, "sudo_last", nil, nil, "", "apt", "update")
 	require.Equal(t, result{"", "", 3}, r)
 
 	// The stub's call: the recalled command on stdin, Go on the hand-off.
-	m, _, h = tm(t, runner.NewFake(t))
+	m, _, h := tm(t, runner.NewFake(t))
 	env := map[string]string{"GASH__HANDOFF": "3"}
 	r = call(m, "sudo_last", env, ttyTerm(nil, "y\n"), "ls /root")
 	require.Equal(t, 0, r.rc)

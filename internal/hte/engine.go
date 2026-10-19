@@ -136,7 +136,7 @@ func (e *Engine) discoverPHP(ctx context.Context, v *env) discover.PHPResult {
 	cache := discover.LoadCache(v.paths.PHPCache())
 	res := discover.DiscoverPHP(discover.PHPEnv{Sysroot: e.Sysroot, OS: v.os, Probe: e.probe(ctx), Cache: cache})
 	if err := os.MkdirAll(filepath.Dir(v.paths.PHPCache()), 0o700); err == nil {
-		cache.Save(v.paths.PHPCache())
+		_ = cache.Save(v.paths.PHPCache())
 	}
 	return res
 }
@@ -384,7 +384,7 @@ func (e *Engine) locked(v *env, command, site string, fn func() (any, error)) (a
 	if err != nil {
 		return nil, err
 	}
-	defer l.Unlock()
+	defer func() { _ = l.Unlock() }()
 	res, err := fn()
 	e.audit(v, command, site, res, err)
 	return res, err

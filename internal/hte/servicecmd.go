@@ -96,7 +96,7 @@ func (e *Engine) underLease(v *env) bool {
 	if err != nil {
 		return hteerr.CodeOf(err) == hteerr.LockTimeout
 	}
-	l.Unlock()
+	_ = l.Unlock()
 	return false
 }
 

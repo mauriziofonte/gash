@@ -321,7 +321,7 @@ func brackmatch(pat string, p int, test byte) int {
 	p++
 	matched := false
 	for {
-		cstart, cend := c, c
+		cstart, cend := c, c //nolint:ineffassign // range parser: cend's symmetric init pairs with cstart and is set per branch before use
 
 		// Equivalence class [=c=] (single character only).
 		if c == '[' && at(p) == '=' && at(p+2) == '=' && at(p+3) == ']' {

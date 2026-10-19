@@ -311,7 +311,7 @@ func (h *histMatcher) highlight(s, on, off string) string {
 	if h.re == nil {
 		return asciiHighlight(s, h.ascii, on, off)
 	}
-	re := h.re.Copy()
+	re := h.re.Copy() //nolint:staticcheck // Copy is the documented way to vary Longest without mutating the shared h.re
 	re.Longest()
 	return re.ReplaceAllStringFunc(s, func(m string) string { return on + m + off })
 }

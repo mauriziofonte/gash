@@ -457,7 +457,7 @@ func (e *Engine) removeAgent(ctx context.Context, v *env) {
 	if _, err := os.Lstat(p); err != nil {
 		return
 	}
-	e.launchctl(ctx, v, "bootout", e.agentTarget()) // not loaded is fine
+	_, _ = e.launchctl(ctx, v, "bootout", e.agentTarget()) // not loaded is fine
 	os.Remove(p)
 }
 
@@ -531,7 +531,7 @@ func (e *Engine) uninstall(ctx context.Context, v *env, res *UninstallResult) er
 			}
 		}
 		os.Remove(service.UnitPath(v.dirs.ConfigHome))
-		e.systemctlUser(ctx, v, "daemon-reload")
+		_ = e.systemctlUser(ctx, v, "daemon-reload")
 	}
 	if set.Autostart == service.AutostartLaunchd {
 		e.removeAgent(ctx, v)

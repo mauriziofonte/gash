@@ -140,7 +140,7 @@ func probe(ctx context.Context, scheme, host, addr string) Probe {
 		p.Error = err.Error()
 		return p
 	}
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 	resp.Body.Close()
 	p.Status = resp.StatusCode
 	return p

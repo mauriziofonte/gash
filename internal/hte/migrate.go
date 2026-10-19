@@ -473,7 +473,7 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 			return undoState(err)
 		}
 		if err := e.verify(ctx, v, created, res); err != nil {
-			e.applyStack(ctx, v, set, w.sites)
+			_, _ = e.applyStack(ctx, v, set, w.sites)
 			return undoState(err)
 		}
 	} else if len(created) > 0 {

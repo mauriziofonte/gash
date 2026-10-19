@@ -46,7 +46,7 @@ func TestDumpRevisionsMatches2x(t *testing.T) {
 // DOCK-19). Here a directory sits where the first version would go.
 func TestDumpRevisionsUnwritable(t *testing.T) {
 	s := newScene(t, setupHistory)
-	want := s.run2x(plain, "w", "git_dump_revisions", "sub/f.txt")
+	s.run2x(plain, "w", "git_dump_revisions", "sub/f.txt")
 	hash := func() string {
 		out, err := os.ReadDir(filepath.Join(s.dir, "w/sub"))
 		require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestDumpRevisionsUnwritable(t *testing.T) {
 	}()
 	require.NotEmpty(t, hash)
 	s.setup += " && mkdir sub/" + hash
-	want = s.run2x(plain, "w", "git_dump_revisions", "sub/f.txt")
+	want := s.run2x(plain, "w", "git_dump_revisions", "sub/f.txt")
 	got := s.runGo(plain, "w", "git_dump_revisions", nil, "sub/f.txt")
 	require.Equal(t, want.RC, got.RC)
 	require.Equal(t, want.Out, got.Out)

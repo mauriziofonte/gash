@@ -71,8 +71,8 @@ func (s *server) undo(ctx context.Context, c receipt.Change) ([]string, error) {
 		return nil, nil
 	case receipt.Sysctl:
 		var prior, applied string
-		receipt.Decode(c.Prior, &prior)
-		receipt.Decode(c.Applied, &applied)
+		_ = receipt.Decode(c.Prior, &prior)
+		_ = receipt.Decode(c.Applied, &applied)
 		if c.File != nil {
 			if c.File.Prior == nil {
 				if err := os.Remove(s.host(c.File.Path)); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -92,18 +92,18 @@ func (s *server) undo(ctx context.Context, c receipt.Change) ([]string, error) {
 		return s.pfUndo(ctx)
 	case receipt.Linger:
 		var prior bool
-		receipt.Decode(c.Prior, &prior)
+		_ = receipt.Decode(c.Prior, &prior)
 		if prior || !s.env.Systemd {
 			return nil, nil
 		}
 		return nil, s.mustCmd(ctx, "loginctl", "disable-linger", s.user)
 	case receipt.Unit:
 		var prior receipt.UnitState
-		receipt.Decode(c.Prior, &prior)
+		_ = receipt.Decode(c.Prior, &prior)
 		return nil, s.unitRestore(ctx, c.Name, prior)
 	case receipt.HostsBlock:
 		var prior *string
-		receipt.Decode(c.Prior, &prior)
+		_ = receipt.Decode(c.Prior, &prior)
 		return nil, hostshelper.Rewrite(s.host(hostshelper.HostsFile), func(h []byte) ([]byte, error) {
 			if prior == nil {
 				return hostshelper.Strip(h)

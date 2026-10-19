@@ -110,7 +110,7 @@ func LaunchAgent(gash string, env []string) ([]byte, error) {
 	var b bytes.Buffer
 	esc := func(s string) string {
 		var e bytes.Buffer
-		xml.EscapeText(&e, []byte(s))
+		_ = xml.EscapeText(&e, []byte(s))
 		return e.String()
 	}
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>

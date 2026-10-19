@@ -128,6 +128,6 @@ func (s *server) pfRedirect(ctx context.Context, o Op) ([]string, error) {
 // has no token to release), with an empty anchor.
 func (s *server) pfUndo(ctx context.Context) ([]string, error) {
 	// Loaded at boot, or not at all since install: either is fine.
-	s.cmd(ctx, "launchctl", "bootout", "system/"+PFDaemonLabel)
+	_, _ = s.cmd(ctx, "launchctl", "bootout", "system/"+PFDaemonLabel)
 	return nil, s.mustCmd(ctx, "pfctl", "-a", PFAnchor, "-F", "nat")
 }

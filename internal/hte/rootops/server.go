@@ -72,7 +72,7 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, env Env) error {
 		err = s.hello(dec)
 	}
 	if err != nil {
-		enc.Encode(Response{Error: wire(err)})
+		_ = enc.Encode(Response{Error: wire(err)})
 		return err
 	}
 	if err := enc.Encode(Response{OK: true, Receipt: s.receiptText()}); err != nil {
@@ -83,7 +83,7 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, env Env) error {
 		if err := dec.Decode(&req); errors.Is(err, io.EOF) {
 			return nil
 		} else if err != nil {
-			enc.Encode(Response{Error: wire(hteerr.Newf(hteerr.InvalidState, "", "bad request: %v", err))})
+			_ = enc.Encode(Response{Error: wire(hteerr.Newf(hteerr.InvalidState, "", "bad request: %v", err))})
 			return err
 		}
 		resp := s.run(ctx, req)
