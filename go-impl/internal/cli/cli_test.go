@@ -103,7 +103,7 @@ func TestCompatOps(t *testing.T) {
 }
 
 func TestNotPortedCommands(t *testing.T) {
-	for _, args := range [][]string{{"init", "bash"}, {"update"}} {
+	for _, args := range [][]string{{"update"}} {
 		_, errOut, rc := run(args...)
 		require.Equal(t, 1, rc, args)
 		require.Contains(t, errOut, `{"error":"internal_error","details":"gash `+args[0]+` is not implemented in this gash build"`)
@@ -111,6 +111,15 @@ func TestNotPortedCommands(t *testing.T) {
 	_, errOut, rc := run("init", "zsh")
 	require.Equal(t, 1, rc)
 	require.Contains(t, errOut, `"error":"unexpected_argument"`)
+}
+
+// TestInitBash: gash init bash emits the interactive layer (prompt hook and
+// terminal setup are always present) with status 0.
+func TestInitBash(t *testing.T) {
+	out, errOut, rc := run("init", "bash")
+	require.Equal(t, 0, rc, errOut)
+	require.Contains(t, out, "shopt -s checkwinsize")
+	require.Contains(t, out, "__gash_prompt_command")
 }
 
 func TestComplete(t *testing.T) {

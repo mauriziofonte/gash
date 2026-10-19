@@ -51,6 +51,17 @@ var Known = []SettingInfo{
 	{Name: "GASH_PATH_ADD", Expand: Dash},
 }
 
+// SplitPathAdd splits a GASH_PATH_ADD value into words on space, tab and
+// newline, regardless of the caller's IFS and with no glob expansion
+// (forced divergence SHELL-07): 2.x word-split the unquoted value on the
+// caller's IFS and pathname-expanded it, which depended on shell state and
+// the filesystem at load and cannot be reproduced from the binary.
+func SplitPathAdd(v string) []string {
+	return strings.FieldsFunc(v, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n'
+	})
+}
+
 // Info returns the description of a known setting.
 func Info(name string) (SettingInfo, bool) {
 	for _, s := range Known {
