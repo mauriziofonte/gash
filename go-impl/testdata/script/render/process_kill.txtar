@@ -1,0 +1,54 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:188
+# covers: output_style_render_spec.sh:189
+# covers: output_style_render_spec.sh:190
+# covers: output_style_render_spec.sh:191
+# covers: output_style_render_spec.sh:192
+# covers: output_style_render_spec.sh:193
+# covers: output_style_render_spec.sh:194
+#
+# process_kill rendering (R2-R6). kill-fake hazard (testing.md 2.3): each
+# case starts a REAL victim (sleep 300 &) and the pgrep stub returns its
+# PID, so the binary's real kill(2) only ever signals our own throwaway
+# process - never a bare PID 2222. Covers the no-terminal refusal, a -y
+# kill, the SIGKILL escalation for a SIGTERM-ignoring victim, no-match,
+# bad-option and missing-arg.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :188 declined - no -y and no terminal: refuses, victim left alone
+exec bash -c 'mkdir -p bin; sleep 300 & vic=$!; printf "#!/bin/sh\necho %s\n" "$vic" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill my-proc; kill "$vic" 2>/dev/null; true'
+stderr '1 process.es. match .my-proc. \(PID [0-9]+\)'
+stderr 'Refusing to kill without a terminal to confirm; pass -y'
+
+# --- :189 yes - -y terminates the real victim
+exec bash -c 'mkdir -p bin; sleep 300 & vic=$!; printf "#!/bin/sh\necho %s\n" "$vic" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill -y my-proc; kill "$vic" 2>/dev/null; true'
+stderr 'Process [0-9]+ terminated\.'
+
+# --- :190 survivor - a SIGTERM-ignoring victim forces SIGKILL
+exec bash -c 'mkdir -p bin; setsid bash -c "trap \"\" TERM; exec sleep 300" & vic=$!; sleep 0.3; printf "#!/bin/sh\necho %s\n" "$vic" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill -y my-proc; kill -9 "$vic" 2>/dev/null; true'
+stderr 'ignored SIGTERM; killed with SIGKILL'
+
+# --- :191 no-terminal - a detached session still refuses without -y
+exec bash -c 'mkdir -p bin; sleep 300 & vic=$!; printf "#!/bin/sh\necho %s\n" "$vic" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=0 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill my-proc; kill "$vic" 2>/dev/null; true'
+stderr 'Refusing to kill without a terminal to confirm; pass -y'
+
+# --- :192 no-match
+! exec bash -c 'mkdir -p bin && printf "#!/bin/sh\nexit 1\n" >bin/pgrep && chmod +x bin/pgrep; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill nothing-here'
+stderr 'Error: No process found with exact name .nothing-here.'
+
+# --- :193 bad-option
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill --bogus x'
+stderr 'Error: Unknown option: --bogus'
+
+# --- :194 missing-arg
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_kill'
+stderr 'Error: Missing process name\. Usage: process_kill'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; process_kill'
+stderr '^Error: Missing process name'
+! stderr '\x1b'

@@ -1,0 +1,46 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:183
+# covers: output_style_render_spec.sh:184
+# covers: output_style_render_spec.sh:185
+#
+# process_find rendering (R2-R6). The Go binary execs `ps aux`, so the 2.x
+# ps mock is reproduced as a PATH stub (psmock). Covers the match table,
+# the no-match notice and missing-arg.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :183 matches - the ps table filtered by name
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/psmock" bin/ps; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_find proc'
+stderr '• Processes matching proc:'
+stdout '2222 +maurizio .* my-proc$'
+stdout '3333 +maurizio .* another-proc$'
+
+# --- :184 no-match
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/psmock" bin/ps; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_find zzz'
+stderr 'Error: No process found with name .zzz.\.'
+
+# --- :185 missing-arg
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; process_find'
+stderr 'Error: Missing process name\. Usage: process_find <process_name>'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; process_find'
+stderr '^Error: Missing process name'
+! stderr '\x1b'
+
+-- psmock --
+#!/usr/bin/env bash
+if [[ "${1:-}" == "aux" ]]; then
+	cat <<'OUT'
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.1  12345  678 ?        Ss   00:00   0:01 /sbin/init
+maurizio  2222  0.1  0.2  99999  111 pts/0    Sl   00:00   0:00 my-proc --flag
+maurizio  3333  0.0  0.1  88888  222 pts/0    Sl   00:00   0:00 another-proc
+OUT
+	exit 0
+fi
+echo "unsupported ps invocation: $*" >&2
+exit 2

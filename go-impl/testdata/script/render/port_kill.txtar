@@ -1,0 +1,47 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:197
+# covers: output_style_render_spec.sh:198
+# covers: output_style_render_spec.sh:199
+# covers: output_style_render_spec.sh:200
+# covers: output_style_render_spec.sh:201
+# covers: output_style_render_spec.sh:202
+#
+# port_kill rendering (R2-R6). kill-fake hazard: the lsof stub returns a
+# REAL victim PID (sleep 300 &), so the binary's kill(2) only signals our
+# own process. Covers the declined listing, a -y kill, nothing-listening,
+# an invalid port, missing lsof and missing-arg.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :197 declined - lists the listener, then aborts (no -y, no terminal)
+exec bash -c 'mkdir -p bin; sleep 300 & vic=$!; printf "#!/bin/sh\ncase \"\$*\" in *LISTEN*) echo %s ;; esac\n" "$vic" >bin/lsof; printf "#!/bin/sh\necho node\n" >bin/ps; chmod +x bin/lsof bin/ps; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; port_kill 3000; kill "$vic" 2>/dev/null; true'
+stderr '• Listening on port 3000:'
+stderr 'Aborted\.'
+
+# --- :198 yes - -y terminates the listener
+exec bash -c 'mkdir -p bin; sleep 300 & vic=$!; printf "#!/bin/sh\ncase \"\$*\" in *LISTEN*) echo %s ;; esac\n" "$vic" >bin/lsof; printf "#!/bin/sh\necho node\n" >bin/ps; chmod +x bin/lsof bin/ps; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; port_kill -y 3000; kill "$vic" 2>/dev/null; true'
+stderr 'on port 3000 terminated\.'
+
+# --- :199 nothing - lsof reports no listener
+! exec bash -c 'mkdir -p bin && printf "#!/bin/sh\nexit 1\n" >bin/lsof && chmod +x bin/lsof; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; port_kill 8080'
+stderr 'Error: Nothing is listening on port 8080\.'
+
+# --- :200 invalid - out of range
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; port_kill 70000'
+stderr 'Error: Invalid port: 70000 \(expected 1-65535\)\.'
+
+# --- :201 no-lsof - lsof not on PATH
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent port_kill 3000'
+stderr 'Error: This function requires .lsof., which is not available\.'
+
+# --- :202 missing-arg
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; port_kill'
+stderr 'Error: Missing port\. Usage: port_kill'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; port_kill 70000'
+stderr '^Error: Invalid port'
+! stderr '\x1b'
