@@ -1,0 +1,37 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: files_spec.sh:394
+#
+# archive_extract through the shim: .tar.xz and bare .xz always, .tar.zst
+# when zstd is on PATH. The function runs tar/xz/zstd with inherited
+# streams, so the child's own listing leaks to the case; the extracted
+# files are checked instead of the chatter. xz is required for every
+# assertion, so the whole case skips cleanly where it is missing (kept out
+# of files.txtar so that skip does not shadow the other rows).
+
+[!exec:xz] skip 'xz not installed'
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir work
+exec bash -c 'cd work; mkdir src; echo hello > src/a.txt; tar cJf t.tar.xz src'
+
+# .tar.xz
+exec bash -c 'cd work; source "$GASH_SH"; archive_extract t.tar.xz out1 >/dev/null'
+exists work/out1/src/a.txt
+exec cat work/out1/src/a.txt
+stdout '^hello$'
+
+# bare .xz
+exec bash -c 'cd work; echo solo > s.txt; xz -k s.txt'
+exec bash -c 'cd work; source "$GASH_SH"; archive_extract s.txt.xz out2 >/dev/null'
+exec cat work/out2/s.txt
+stdout '^solo$'
+
+# .tar.zst, only when zstd is installed
+[exec:zstd] exec bash -c 'cd work; tar cf - src | zstd -q -o t.tar.zst'
+[exec:zstd] exec bash -c 'cd work; source "$GASH_SH"; archive_extract t.tar.zst out3 >/dev/null'
+[exec:zstd] exists work/out3/src/a.txt
+[exec:zstd] exec cat work/out3/src/a.txt
+[exec:zstd] stdout '^hello$'
