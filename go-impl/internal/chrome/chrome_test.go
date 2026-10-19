@@ -332,9 +332,15 @@ func TestDownloadLookup(t *testing.T) {
 	require.Equal(t, 0, rc)
 	require.Contains(t, r.out, "Need to get 100.0 MiB of archives from "+mirror+"\n")
 
-	// No size anywhere: nothing to download.
+	// No size anywhere: the located URL answers the HEAD with no size
+	// (Content-Length 0), so locate fails and nothing is downloaded. A 2.x
+	// `curl -fsIL` reads even an error response's Content-Length, so a 404
+	// that still carries a size would proceed instead (RemoteSize is faithful
+	// to that); this drives the size genuinely to 0 to cover the no-download
+	// branch.
 	fx = newFixture(t)
 	delete(fx.srv.routes, "GET "+zipURL)
+	fx.srv.routes["HEAD "+zipURL] = route{status: 404}
 	r, rc = fx.call(t, nil, "--dry-run")
 	require.Equal(t, 1, rc)
 	require.Equal(t, result{head + "Installed: none\n", tasks + "Locating the Chrome for Testing download... failed\n" +
