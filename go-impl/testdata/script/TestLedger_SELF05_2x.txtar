@@ -1,0 +1,24 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash_unload (stub/gash_unload) runs entirely in the caller's shell and
+# reproduces the 2.x behavior: the snapshot taken before Gash loaded (now
+# taken in gash.sh before any stub or alias is defined) lets the whole Gash
+# surface count as "added", so unload removes every Gash function and alias
+# and sweeps the GASH_*/__GASH_* variables, while a function, alias or
+# variable that existed before the load is left alone.
+#
+# This also pins the SELF-05 leftover as rc.A keeps it: a user's own GASH_*
+# setting (GASH_BANNER) is swept away with the rest, not restored. The full
+# restore (internal/shellinit, __GASH_SNAPSHOT2) is future work.
+
+exec bash --noprofile --norc -i -c 'export __GASH_BIN="$GASH_BIN" GASH_BANNER=0; alias myuser="echo mine"; myfunc() { echo hi; }; source "$GASH_SH" 2>/dev/null; gash_unload; echo "rc=$?"; echo "gash_username=$(type -t gash_username || echo gone)"; echo "llm_tree=$(type -t llm_tree || echo gone)"; echo "gash_unload=$(type -t gash_unload || echo gone)"; echo "myfunc=$(type -t myfunc || echo gone)"; echo "myuser=$(alias myuser >/dev/null 2>&1 && echo KEPT || echo gone)"; echo "aliases=$(alias | wc -l)"; echo "GASH_VERSION=${GASH_VERSION-gone}"; echo "GASH_BANNER=${GASH_BANNER-gone}"'
+
+stdout '^rc=0$'
+stdout '^gash_username=gone$'
+stdout '^llm_tree=gone$'
+stdout '^gash_unload=gone$'
+stdout '^myfunc=function$'
+stdout '^myuser=KEPT$'
+stdout '^aliases=1$'
+stdout '^GASH_VERSION=gone$'
+stdout '^GASH_BANNER=gone$'

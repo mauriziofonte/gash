@@ -89,7 +89,81 @@ gash_uninstall() {
         GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
     fi
 }
-gash_unload() { __gash_call gash_unload "$@"; }
+gash_unload() {
+    needs_help "gash_unload" "gash_unload" \
+        "Restores the shell state saved before Gash was loaded (best-effort)." \
+        "${1-}" && return
+
+    if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+        __gash_error "Gash snapshot not found. Source gash.sh first."
+        return 1
+    fi
+
+    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
+    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
+        __gash_prompt_uninstall
+    fi
+
+    # Restore variables, shell options and umask from the load-time snapshot.
+    local __gash_entry __gash_key
+    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
+        case "$__gash_entry" in
+            shopt:*)
+                __gash_key="${__gash_entry#shopt:}"
+                if [[ "$__gash_entry" == *=1 ]]; then
+                    shopt -s "${__gash_key%=*}" 2>/dev/null
+                else
+                    shopt -u "${__gash_key%=*}" 2>/dev/null
+                fi
+                ;;
+            umask=*) umask "${__gash_entry#umask=}" ;;
+            *=*)
+                __gash_key="${__gash_entry%%=*}"
+                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
+                ;;
+            *) unset "$__gash_entry" ;;
+        esac
+    done
+
+    # Remove aliases and functions introduced by Gash.
+    local __gash_name
+    local -a __gash_names=()
+    __gash_added_symbols_to __gash_names aliases
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        unalias "$__gash_name" >/dev/null 2>&1 || true
+    done
+    __gash_added_symbols_to __gash_names functions
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        [[ "$__gash_name" == "gash_unload" ]] && continue
+        unset -f "$__gash_name" >/dev/null 2>&1 || true
+    done
+
+    # Per-prefix function sweep: the load-time snapshot misses functions
+    # defined AFTER it was taken (alias loader, prompt, completion, helpers
+    # created at runtime). Anything gash_* / __gash_* goes.
+    local __gash_fn
+    while IFS= read -r __gash_fn; do
+        [[ -z "${__gash_fn}" ]] && continue
+        [[ "${__gash_fn}" == "gash_unload" ]] && continue
+        unset -f "${__gash_fn}" >/dev/null 2>&1 || true
+    done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
+
+    # Per-prefix variable sweep: includes the cached secrets which must
+    # never survive an unload, plus colors, PS1 caches, help registry.
+    local __gash_var
+    while IFS= read -r __gash_var; do
+        [[ -z "${__gash_var}" ]] && continue
+        unset "${__gash_var}" >/dev/null 2>&1 || true
+    done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
+    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
+
+    unset __gash_name
+
+    # Finally, remove gash_unload itself
+    unset -f gash_unload >/dev/null 2>&1 || true
+
+    return 0
+}
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 

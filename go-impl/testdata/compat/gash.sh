@@ -122,6 +122,98 @@ __gash_source() {
     return 0
 }
 
+# The names of functions not starting with _, of the other functions and of
+# aliases, three lists separated by \x01 lines, into the variable named $1:
+# what tells, later, which ones Gash defined. One subshell for all three,
+# none when there is nothing to list.
+__gash_symbols_now() {
+    if compgen -A function -X '__gash_*' >/dev/null || compgen -a >/dev/null; then
+        printf -v "$1" '%s' "$(
+            compgen -A function -X '_*' || true
+            printf '\001\n'
+            compgen -A function -X '!_*' || true
+            printf '\001\n'
+            compgen -a || true
+        )"
+    else
+        printf -v "$1" '\001\n\001'
+    fi
+}
+
+# From a list made by __gash_symbols_now, the part that holds functions
+# (public: those not starting with _) or aliases, into VAR.
+# Usage: __gash_symbols_pick VAR LIST functions|aliases [public]
+__gash_symbols_pick() {
+    # Bytes, not characters (\x01 never occurs inside a UTF-8 character),
+    # and offsets instead of ${list#*X}, which is quadratic in bash.
+    local LC_ALL=C
+    local list="$2" public internal aliases
+    public="${list%%$'\001'*}"
+    list="${list:${#public}+1}"
+    internal="${list%%$'\001'*}"
+    aliases="${list:${#internal}+1}"
+    case "$3|${4-}" in
+        aliases*) printf -v "$1" '%s' "$aliases" ;;
+        *"|public") printf -v "$1" '%s' "$public" ;;
+        *) printf -v "$1" '%s\n%s' "$public" "$internal" ;;
+    esac
+}
+
+# Names Gash defined while loading, into the array VAR: present right after
+# it loaded (__GASH_POST_SYMBOLS), absent from the snapshot taken before
+# (__GASH_PRE_SYMBOLS). "public" leaves out names starting with _.
+# Usage: __gash_added_symbols_to VAR functions|aliases [public]
+__gash_added_symbols_to() {
+    local -n __gas_out="$1"
+    # mapfile, not word splitting under `local -` and set -f: Bash 4.4 and
+    # 5.0 crash at exit after `local -` ran in an interactive shell.
+    local __gas_name __gas_pre __gas_post LC_ALL=C
+    local -a __gas_lines=() __gas_kept=()
+    __gash_symbols_pick __gas_pre "${__GASH_PRE_SYMBOLS-}" "${2-}" "${3-}"
+    __gash_symbols_pick __gas_post "${__GASH_POST_SYMBOLS-}" "${2-}" "${3-}"
+    mapfile -t __gas_lines <<<"$__gas_post"
+    for __gas_name in ${__gas_lines[@]+"${__gas_lines[@]}"}; do
+        [[ -n "$__gas_name" ]] && __gas_kept+=("$__gas_name")
+    done
+    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
+    # Usually little or nothing existed before: one lookup per name.
+    [[ -n "${__gas_pre//$'\n'/}" && ${#__gas_out[@]} -gt 0 ]] || return 0
+    local -A __gas_before=()
+    mapfile -t __gas_lines <<<"$__gas_pre"
+    for __gas_name in ${__gas_lines[@]+"${__gas_lines[@]}"}; do
+        [[ -n "$__gas_name" ]] && __gas_before["$__gas_name"]=1
+    done
+    __gas_kept=()
+    for __gas_name in "${__gas_out[@]}"; do
+        [[ -n "${__gas_before["$__gas_name"]+x}" ]] || __gas_kept+=("$__gas_name")
+    done
+    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
+    return 0
+}
+
+# Snapshot the pre-Gash state for `gash_unload` now, before Gash defines a
+# single function, alias or changes a variable, so the whole Gash surface
+# counts as "added" and is removed on unload (2.x took it here too, in its
+# interactive section). Interactive only; not on a re-source (the first
+# load's pre-Gash state is kept).
+((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+    __GASH_SNAPSHOT_TAKEN=1
+    __GASH_SNAPSHOT=()
+    for __gash_var in PS1 PS2 HISTCONTROL HISTTIMEFORMAT HISTSIZE HISTFILESIZE EDITOR PATH; do
+        if [[ -n "${!__gash_var+x}" ]]; then
+            __GASH_SNAPSHOT+=("$__gash_var=${!__gash_var}")
+        else
+            __GASH_SNAPSHOT+=("$__gash_var")
+        fi
+    done
+    shopt -q histappend && __GASH_SNAPSHOT+=("shopt:histappend=1") || __GASH_SNAPSHOT+=("shopt:histappend=0")
+    shopt -q checkwinsize && __GASH_SNAPSHOT+=("shopt:checkwinsize=1") || __GASH_SNAPSHOT+=("shopt:checkwinsize=0")
+    __gash_symbols_now __GASH_PRE_SYMBOLS
+    unset __gash_var
+fi
+((__GASH_TIMING)) && __gash_time_record "gash.sh: snapshot" "$__GASH_T1"
+
 # The bootstrap first (binary resolution, __gash_call), then the four core
 # shims, in the 2.x order.
 __gash_source "$GASH_DIR/lib/compat/bootstrap.sh"
@@ -254,7 +346,81 @@ gash_uninstall() {
         GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
     fi
 }
-gash_unload() { __gash_call gash_unload "$@"; }
+gash_unload() {
+    needs_help "gash_unload" "gash_unload" \
+        "Restores the shell state saved before Gash was loaded (best-effort)." \
+        "${1-}" && return
+
+    if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+        __gash_error "Gash snapshot not found. Source gash.sh first."
+        return 1
+    fi
+
+    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
+    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
+        __gash_prompt_uninstall
+    fi
+
+    # Restore variables, shell options and umask from the load-time snapshot.
+    local __gash_entry __gash_key
+    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
+        case "$__gash_entry" in
+            shopt:*)
+                __gash_key="${__gash_entry#shopt:}"
+                if [[ "$__gash_entry" == *=1 ]]; then
+                    shopt -s "${__gash_key%=*}" 2>/dev/null
+                else
+                    shopt -u "${__gash_key%=*}" 2>/dev/null
+                fi
+                ;;
+            umask=*) umask "${__gash_entry#umask=}" ;;
+            *=*)
+                __gash_key="${__gash_entry%%=*}"
+                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
+                ;;
+            *) unset "$__gash_entry" ;;
+        esac
+    done
+
+    # Remove aliases and functions introduced by Gash.
+    local __gash_name
+    local -a __gash_names=()
+    __gash_added_symbols_to __gash_names aliases
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        unalias "$__gash_name" >/dev/null 2>&1 || true
+    done
+    __gash_added_symbols_to __gash_names functions
+    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
+        [[ "$__gash_name" == "gash_unload" ]] && continue
+        unset -f "$__gash_name" >/dev/null 2>&1 || true
+    done
+
+    # Per-prefix function sweep: the load-time snapshot misses functions
+    # defined AFTER it was taken (alias loader, prompt, completion, helpers
+    # created at runtime). Anything gash_* / __gash_* goes.
+    local __gash_fn
+    while IFS= read -r __gash_fn; do
+        [[ -z "${__gash_fn}" ]] && continue
+        [[ "${__gash_fn}" == "gash_unload" ]] && continue
+        unset -f "${__gash_fn}" >/dev/null 2>&1 || true
+    done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
+
+    # Per-prefix variable sweep: includes the cached secrets which must
+    # never survive an unload, plus colors, PS1 caches, help registry.
+    local __gash_var
+    while IFS= read -r __gash_var; do
+        [[ -z "${__gash_var}" ]] && continue
+        unset "${__gash_var}" >/dev/null 2>&1 || true
+    done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
+    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
+
+    unset __gash_name
+
+    # Finally, remove gash_unload itself
+    unset -f gash_unload >/dev/null 2>&1 || true
+
+    return 0
+}
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
@@ -537,44 +703,6 @@ fi
 # -----------------------------------------------------------------------------
 # Interactive mode
 # -----------------------------------------------------------------------------
-
-# The names of functions not starting with _, of the other functions and of
-# aliases, three lists separated by \x01 lines, into the variable named $1:
-# what tells, later, which ones Gash defined. One subshell for all three,
-# none when there is nothing to list.
-__gash_symbols_now() {
-    if compgen -A function -X '__gash_*' >/dev/null || compgen -a >/dev/null; then
-        printf -v "$1" '%s' "$(
-            compgen -A function -X '_*' || true
-            printf '\001\n'
-            compgen -A function -X '!_*' || true
-            printf '\001\n'
-            compgen -a || true
-        )"
-    else
-        printf -v "$1" '\001\n\001'
-    fi
-}
-
-# Snapshot the state Gash is about to change, for `gash_unload`, unless a
-# 2.x or 3.x load already took it (re-sourcing keeps the pre-Gash state).
-((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
-    __GASH_SNAPSHOT_TAKEN=1
-    __GASH_SNAPSHOT=()
-    for __gash_var in PS1 PS2 HISTCONTROL HISTTIMEFORMAT HISTSIZE HISTFILESIZE EDITOR PATH; do
-        if [[ -n "${!__gash_var+x}" ]]; then
-            __GASH_SNAPSHOT+=("$__gash_var=${!__gash_var}")
-        else
-            __GASH_SNAPSHOT+=("$__gash_var")
-        fi
-    done
-    shopt -q histappend && __GASH_SNAPSHOT+=("shopt:histappend=1") || __GASH_SNAPSHOT+=("shopt:histappend=0")
-    shopt -q checkwinsize && __GASH_SNAPSHOT+=("shopt:checkwinsize=1") || __GASH_SNAPSHOT+=("shopt:checkwinsize=0")
-    __gash_symbols_now __GASH_PRE_SYMBOLS
-    unset __gash_var
-fi
-((__GASH_TIMING)) && __gash_time_record "gash.sh: snapshot" "$__GASH_T1"
 
 # The interactive layer (prompt, history, terminal, toolchains, alias packs,
 # banner, SSH unlock) comes from the binary, evaluated here at top level.
