@@ -62,6 +62,14 @@ func TestEnvInitMatches2x(t *testing.T) {
 	for _, mode := range []string{"off", "on"} {
 		t.Run(mode, func(t *testing.T) {
 			ref, got := t.TempDir(), t.TempDir()
+			// When a case's target is a directory, gash_env_init chmods it
+			// to 0600 (as 2.x does), stripping the search bit; a non-root
+			// runner then cannot traverse or remove it. Restore owner rwX
+			// before t.TempDir's RemoveAll (cleanups run last-in-first-out).
+			for _, d := range []string{ref, got} {
+				d := d
+				t.Cleanup(func() { _ = exec.Command("chmod", "-R", "u+rwX", d).Run() })
+			}
 			var script strings.Builder
 			script.WriteString("unalias -a\n") // the setup's mkdir, cp, rm as written
 			if mode == "on" {
