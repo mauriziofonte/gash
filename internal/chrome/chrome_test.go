@@ -103,7 +103,8 @@ func cftRoutes() map[string]route {
 }
 
 // Stubs on PATH: uname, unzip and ldd answer from MOCK_* variables of the
-// call's environment; sudo logs its argv and runs it.
+// call's environment; sudo logs its argv and runs it (dropping the GNU-only
+// --no-preserve=ownership where cp is BSD, as on a macOS runner).
 const (
 	unameStub = `#!/bin/sh
 case "$1" in -m) echo "${MOCK_ARCH:-x86_64}" ;; *) echo "${MOCK_SYS:-Linux}" ;; esac
@@ -122,6 +123,12 @@ exit 0
 `
 	sudoStub = `#!/bin/sh
 printf 'sudo %s\n' "$*" >>"$SUDO_LOG"
+if [ "$1" = cp ] && ! cp --version >/dev/null 2>&1; then
+	for a do
+		shift
+		[ "$a" = --no-preserve=ownership ] || set -- "$@" "$a"
+	done
+fi
 exec "$@"
 `
 )
@@ -135,7 +142,9 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	dir := t.TempDir()
+	// The resolved temp dir: macOS links /var to /private/var.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 	fx := &fixture{dir: dir, bin: filepath.Join(dir, "bin"), root: filepath.Join(dir, "opt", "chs")}
 	fx.link = filepath.Join(fx.bin, "chs")
 	for _, d := range []string{fx.bin, filepath.Join(dir, "opt"), filepath.Join(dir, "tmp")} {

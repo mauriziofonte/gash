@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -17,10 +18,33 @@ import (
 // calls: a temporary HOME and GNUPGHOME, fixed identities and dates.
 func upgradeEnv(d string) map[string]string {
 	return map[string]string{
-		"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin", "HOME": d + "/home", "GNUPGHOME": d + "/gnupg",
+		"LANG": "C.UTF-8", "PATH": upgradePath, "HOME": d + "/home", "GNUPGHOME": d + "/gnupg",
 		"GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
 		"GIT_COMMITTER_EMAIL": "t@t", "GIT_AUTHOR_DATE": "2024-05-01T12:00:00Z", "GIT_COMMITTER_DATE": "2024-05-01T12:00:00Z",
 	}
+}
+
+// upgradePath is the PATH of the fixtures: the system's, then the directory
+// of a gpg found elsewhere (Homebrew's on a macOS runner).
+var upgradePath = func() string {
+	p := "/usr/bin:/bin"
+	if g, err := exec.LookPath("gpg"); err == nil {
+		if dir := filepath.Dir(g); dir != "/usr/bin" && dir != "/bin" {
+			p += ":" + dir
+		}
+	}
+	return p
+}()
+
+// upgradeTempDir is a temporary directory with a short path: GNUPGHOME
+// lives in it, and the gpg-agent sockets there must fit in sun_path even
+// under a deep macOS $TMPDIR.
+func upgradeTempDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "gu")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
+	return d
 }
 
 // Fixture builders: $D/o is the origin, $D/g the install.
@@ -72,7 +96,7 @@ func TestUpgradeMatches2x(t *testing.T) {
 	for _, mode := range []string{"off", "on"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
-			ref, got := t.TempDir(), t.TempDir()
+			ref, got := upgradeTempDir(t), upgradeTempDir(t)
 			state := `git -C $D/g describe --tags --exact-match HEAD 2>/dev/null || git -C $D/g rev-parse --abbrev-ref HEAD 2>/dev/null || echo none`
 			var script strings.Builder
 			if mode == "off" {
@@ -159,7 +183,7 @@ func upgradeFixture(t *testing.T, setup string) (string, map[string]string) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("no git")
 	}
-	d := t.TempDir()
+	d := upgradeTempDir(t)
 	envBash(t, upgradeEnv(d), "D="+shq(d)+"; mkdir -p $D/home; "+setup)
 	env := upgradeEnv(d)
 	env["GASH_DIR"] = d + "/g"

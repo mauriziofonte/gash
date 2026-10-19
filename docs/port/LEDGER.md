@@ -3115,7 +3115,7 @@ Critical and high items:
 | Reproduction | as SELF-02 with `mkdir $H/dot; mv $H/.bashrc $H/dot/bashrc; ln -s dot/bashrc $H/.bashrc` before the run; afterwards `test -L $H/.bashrc \|\| echo replaced; grep -c 'GASH START' $H/dot/bashrc` → `replaced`, `1` |
 | Severity | medium |
 | Public-contract impact | no |
-| rc.A behavior | Reproduced: rc.A writes the edited profile in place of the link (temp file renamed over the link path), with the same `.gash-uninstall.bak` side copy. |
+| rc.A behavior | Reproduced: rc.A writes the edited profile in place of the link (temp file renamed over the link path), with the same `.gash-uninstall.bak` side copy. With BSD `sed` (macOS) `sed -i` refuses the link instead and the profile keeps the block, as 2.x does there; the fix recipe drops the `sed` dependency on both. |
 | Fix recipe (3.0) | `internal/selfmgmt` profile editing resolves the link (`filepath.EvalSymlinks`) and writes a temp file in the target's directory, then renames it over the target, keeping its mode; the link stays. Same for install. |
 | Proving test | `TestLedger_SELF04` in `internal/selfmgmt` (linked `~/.bashrc`: link intact, target without the block, mode kept) |
 | Status | open |

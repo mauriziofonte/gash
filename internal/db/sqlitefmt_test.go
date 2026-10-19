@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -29,10 +30,17 @@ func TestSqliteRealFixed(t *testing.T) {
 }
 
 // TestSqliteRealMatchesCLI checks random doubles against the sqlite3 shell
-// the 2.x code ran (ieee754_from_blob gives it the exact bits).
+// the 2.x code ran (ieee754_from_blob gives it the exact bits). sqliteReal
+// models the 3.45 shell on amd64, whose %!.17g digits come from x87 long
+// double arithmetic: another release or arch (the macOS runner's arm64
+// shell) prints other digits, so only that shell is an oracle.
 func TestSqliteRealMatchesCLI(t *testing.T) {
-	if _, err := exec.LookPath("sqlite3"); err != nil {
+	ver, err := exec.Command("sqlite3", "--version").Output()
+	if err != nil {
 		t.Skip("sqlite3 is not installed")
+	}
+	if !strings.HasPrefix(string(ver), "3.45.") || runtime.GOARCH != "amd64" {
+		t.Skipf("the oracle is the sqlite3 3.45 shell on amd64, not %s on %s", strings.Fields(string(ver))[0], runtime.GOARCH)
 	}
 	rng := rand.New(rand.NewPCG(1, 2))
 	for round := 0; round < 20; round++ {

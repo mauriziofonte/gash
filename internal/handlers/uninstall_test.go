@@ -5,6 +5,7 @@ package handlers
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -157,8 +158,12 @@ func TestLedger_SELF02_2x(t *testing.T) {
 }
 
 // LEDGER SELF-04, reproduced in rc.A: a linked ~/.bashrc becomes an edited
-// regular file, and the link's target keeps the Gash block.
+// regular file, and the link's target keeps the Gash block. That is GNU
+// sed -i; BSD sed -i (a macOS runner) refuses the link instead, in 2.x too.
 func TestLedger_SELF04_2x(t *testing.T) {
+	if exec.Command("/bin/sh", "-c", "PATH=/usr/bin:/bin sed --version").Run() != nil {
+		t.Skip("SELF-04 is the GNU sed -i behavior; this sed is not GNU")
+	}
 	d, env := uninstallFixture(t, uninstallFake+"mkdir $D/dot; "+uninstallBlock+">$D/dot/bashrc; ln -s ../dot/bashrc $D/home/.bashrc")
 	_, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
 	require.Equal(t, 0, rc)

@@ -59,8 +59,15 @@ func newFixture(t *testing.T) *fixture {
 		}
 		return runner.Expect{}
 	})
+	// A short runtime directory: socket paths have at most 103 bytes, which
+	// t.TempDir() under the macOS $TMPDIR (/var/folders/...) overflows.
+	rt, err := os.MkdirTemp("", "rt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(rt) })
 	f.env = map[string]string{
-		"HOME": f.home, "XDG_RUNTIME_DIR": filepath.Join(f.home, "run"),
+		"HOME": f.home, "XDG_RUNTIME_DIR": rt,
 		// Who the user is never comes from these (LEDGER HTE-19).
 		"USER": "root", "LOGNAME": "root", "SUDO_USER": "alice", "SUDO_UID": "0", "SUDO_GID": "0",
 	}
