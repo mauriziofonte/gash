@@ -7,10 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/sysinfo"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -85,7 +89,165 @@ func (m *Module) aiSysinfo(c *invoke.Call) int {
 		return 1
 	}
 	formatAnalysis(s, printer(c), c.Stdout, reply)
+
+	// Interactive drill-down loop (terminal stdin only, `[[ ! -t 0 ]]`).
+	if !c.Term.StdinTTY() {
+		return 0
+	}
+	m.drillMenu(c, s, sess, provider, token, reply)
 	return 0
+}
+
+// drillMenu is the ai_sysinfo drill-down loop: a menu that drills into one
+// of the six sections (Session.Deep plus a drill-down API call), answers a
+// free-text question with targeted context, saves the running Markdown
+// report (LEDGER AI-09, write unchecked) or quits. The Markdown buffer is
+// seeded with the initial analysis and grows with each drill-down and
+// question, as 2.x captured each chunk in `$(...)` (trailing newlines
+// dropped on append).
+func (m *Module) drillMenu(c *invoke.Call, s ui.Style, sess *sysinfo.Session, provider, token, initialJSON string) {
+	p := printer(c)
+	md := trimNL(mdInitial(m, initialJSON, provider))
+	menu := []string{
+		"1) Services\t2) Security\t3) Network",
+		"4) Storage\t5) Performance\t6) Maintenance",
+		"?) Ask a question\ts) Save report\tq) Quit",
+	}
+	for {
+		_, _ = io.WriteString(c.Stdout, "\n")
+		s.Heading(c.Stdout, "Drill down for details:")
+		s.Table(c.Stdout, menu, "--no-header", "--indent", "2")
+		_, _ = io.WriteString(c.Stdout, "\n")
+		if c.Term.StdinTTY() {
+			_, _ = io.WriteString(c.Stderr, "> ")
+		}
+		choice, ok := ui.ReadLine(c.Stdin)
+		if !ok {
+			return // Ctrl+D exits
+		}
+
+		switch choice {
+		case "q", "Q", "quit", "exit":
+			return
+		case "?", "ask":
+			md += m.askQuestion(c, s, sess, provider, token, initialJSON)
+			continue
+		case "s", "S", "save":
+			m.saveReport(c, md)
+			continue
+		}
+
+		sectionTitle, deepName := "", ""
+		switch choice {
+		case "1":
+			sectionTitle, deepName = "Services Detected", "services"
+		case "2":
+			sectionTitle, deepName = "Security Posture", "security"
+		case "3":
+			sectionTitle, deepName = "Network", "network"
+		case "4":
+			sectionTitle, deepName = "Storage", "storage"
+		case "5":
+			sectionTitle, deepName = "Performance Tuning", "performance"
+		case "6":
+			sectionTitle, deepName = "Maintenance", "maintenance"
+		default:
+			p.Warning("Invalid choice. Enter 1-6, ?, s, or q.")
+			continue
+		}
+
+		// Initial findings for the drill-down context (the lines of the
+		// matching section of the initial analysis).
+		findings := extractFindings(initialJSON, sectionTitle)
+
+		var deep bytes.Buffer
+		sess.Deep(&deep, deepName)
+
+		userMsg := fmt.Sprintf("Section: %s\n\nInitial findings:\n%s\n\nDetailed data:\n%s",
+			sectionTitle, findings, deep.String())
+		reply, rc := m.request(c, provider, token, sysinfoDrilldownPrompt, userMsg,
+			sysinfoDrilldownSchema, sysinfoMaxTokens, sysinfoResponseTimeout)
+		if rc != 0 {
+			continue
+		}
+		formatDrilldown(s, p, c.Stdout, reply)
+		md += trimNL(mdDrilldown(reply))
+	}
+}
+
+// askQuestion is the `?` menu action: read a question, gather targeted
+// context for the entities it names, call the AI and show the answer. It
+// returns the Markdown chunk to append (empty on EOF, an empty question or
+// a failed call).
+func (m *Module) askQuestion(c *invoke.Call, s ui.Style, sess *sysinfo.Session, provider, token, initialJSON string) string {
+	p := printer(c)
+	_, _ = io.WriteString(c.Stdout, "\n")
+	if c.Term.StdinTTY() {
+		_, _ = io.WriteString(c.Stderr, "Question: ")
+	}
+	question, ok := ui.ReadLine(c.Stdin)
+	if !ok {
+		return "" // Ctrl+D: back to the menu
+	}
+	if question == "" {
+		p.Warning("Empty question.")
+		return ""
+	}
+
+	qCtx := m.collectQuestionContext(c, sess.Sudo, question)
+	userMsg := freetextMsg(initialJSON, qCtx, question)
+	reply, rc := m.request(c, provider, token, sysinfoDrilldownPrompt, userMsg,
+		sysinfoDrilldownSchema, sysinfoMaxTokens, sysinfoResponseTimeout)
+	if rc != 0 {
+		return ""
+	}
+	formatDrilldown(s, p, c.Stdout, reply)
+	return trimNL(mdFreetext(question, reply))
+}
+
+// freetextMsg is the user message of __sysinfo_call_freetext_*: the two
+// forms differ by whether targeted context was collected.
+func freetextMsg(initialJSON, context, question string) string {
+	if context != "" {
+		return fmt.Sprintf("Initial server analysis:\n%s\n\nDetailed system data for this question:\n%s\n\nUser question: %s\n\nAnswer the question using all data provided above. Group your answer into relevant components.",
+			initialJSON, context, question)
+	}
+	return fmt.Sprintf("Initial server analysis:\n%s\n\nUser question: %s\n\nAnswer the question based on the server analysis above. Group your answer into relevant components.",
+		initialJSON, question)
+}
+
+// saveReport writes the running Markdown buffer to a timestamped file in
+// the working directory. The write is unchecked (LEDGER AI-09): the success
+// line prints whatever the write did.
+func (m *Module) saveReport(c *invoke.Call, md string) {
+	filename := "gash-ai-sysinfo-" + m.now().Format("20060102-150405") + ".md"
+	path := filename
+	if cwd, err := m.getwd(); err == nil && cwd != "" {
+		path = filepath.Join(cwd, filename)
+	}
+	_ = os.WriteFile(path, []byte(md), 0o644)
+	printer(c).Success("Report saved to " + filename)
+}
+
+// extractFindings is the jq that pulls the findings of the section titled
+// sectionTitle from the initial analysis as "[severity] text" lines.
+func extractFindings(initialJSON, sectionTitle string) string {
+	var top struct {
+		Sections []siSection `json:"sections"`
+	}
+	if json.Unmarshal([]byte(initialJSON), &top) != nil {
+		return ""
+	}
+	var lines []string
+	for _, sec := range top.Sections {
+		if sec.Title != sectionTitle {
+			continue
+		}
+		for _, f := range sec.Findings {
+			lines = append(lines, "["+f.Severity+"] "+f.Text)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // siFinding and siSection decode the analysis schema.
