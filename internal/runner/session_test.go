@@ -159,7 +159,12 @@ func TestFileCapture(t *testing.T) {
 	if err != nil || res.ExitCode != 0 || string(res.Stdout) != "parent done" {
 		t.Fatalf("daemon: %+v %v", res, err)
 	}
-	if d := time.Since(t0); d > 900*time.Millisecond {
+	// FileCapture writes to a real file, so Run returns when the child
+	// exits and does not wait for the grandchild that still holds the
+	// descriptor (3s). The ceiling is generous because `go test -race`
+	// adds ~1s of fixed fork/exec overhead to this spawn-and-exit; a
+	// capture that wrongly kept a pipe would instead block the full 3s.
+	if d := time.Since(t0); d > 2*time.Second {
 		t.Errorf("held for %v", d)
 	}
 	c = helperCmd(t, "out")

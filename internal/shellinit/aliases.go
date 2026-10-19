@@ -3,7 +3,6 @@
 package shellinit
 
 import (
-	"runtime"
 	"strings"
 )
 
@@ -71,7 +70,7 @@ func (st *state) alias(b *strings.Builder, name, value string) {
 // -----------------------------------------------------------------------------
 
 func (st *state) packColors(b *strings.Builder) {
-	if runtime.GOOS == "darwin" {
+	if st.e.goos == "darwin" {
 		b.WriteString("export LSCOLORS='CxahafafBxagagabababab'\n")
 	}
 	if st.c.Env.Get("LESS") != "" {
@@ -168,7 +167,7 @@ func (st *state) lsColorFlag() string {
 	if st.runOK("ls", "--color=auto", ".") {
 		return "--color=auto"
 	}
-	if runtime.GOOS == "darwin" {
+	if st.e.goos == "darwin" {
 		return "-G"
 	}
 	return ""

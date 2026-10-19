@@ -101,7 +101,15 @@ func TestLedger_LLM25_2x(t *testing.T) {
 	g := guardAt("/tmp", "/home/u")
 	got, err := g.ValidatePath("~root/x")
 	require.NoError(t, err)
-	require.Equal(t, "/home/uroot/x", got)
+	// ~root is textual: the leading ~ is dropped and Home prepended
+	// ("/home/u" + "root/x" = "/home/uroot/x"), not expanded to root's real
+	// home. The result is then realpath-normalized exactly as Realpath does;
+	// comparing against that same normalization keeps the expectation
+	// host-independent (macOS resolves /home through the /System/Volumes/Data
+	// firmlink, which applies equally to both sides).
+	want, err := g.Realpath("/home/uroot/x", false)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }
 
 func TestValidatePath_Empty(t *testing.T) {
@@ -151,6 +159,12 @@ func TestLedger_portability_realpath(t *testing.T) {
 	rp, err := exec.LookPath("realpath")
 	if err != nil {
 		t.Skip("realpath not available")
+	}
+	// The oracle is GNU `realpath -m`; BSD realpath (stock macOS, no
+	// coreutils) has neither -m nor -s, so there is nothing to compare
+	// against here.
+	if err := exec.Command(rp, "-m", "--", ".").Run(); err != nil {
+		t.Skip("realpath has no GNU -m (BSD); oracle unavailable")
 	}
 	dir := t.TempDir()
 	mk := func(p string) { require.NoError(t, os.MkdirAll(filepath.Join(dir, p), 0o755)) }

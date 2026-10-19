@@ -28,6 +28,9 @@ type harness struct {
 	writes map[string]string
 	now    int64
 	ttyOut bool
+	// goos is the target OS the generated layer is built for; "linux" by
+	// default so the suite does not depend on the host it runs on.
+	goos string
 }
 
 func newHarness() *harness {
@@ -38,6 +41,7 @@ func newHarness() *harness {
 		dirs:     map[string]bool{"/usr/bin": true, "/bin": true, "/home/u": true},
 		writes:   map[string]string{},
 		now:      1_700_000_000,
+		goos:     "linux",
 	}
 }
 
@@ -127,6 +131,7 @@ func (h *harness) emit(t *testing.T) string {
 		mkdirAll:  func(string, os.FileMode) error { return nil },
 		writeFile: func(path string, data []byte, _ os.FileMode) error { h.writes[path] = string(data); return nil },
 		now:       func() int64 { return h.now },
+		goos:      h.goos,
 	}
 	env := invoke.EnvMap(h.env)
 	c := &invoke.Call{

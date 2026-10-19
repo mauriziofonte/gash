@@ -14,7 +14,7 @@
 # setting (GASH_BANNER) is swept away with the rest, not restored. The full
 # restore (internal/shellinit, __GASH_SNAPSHOT2) is future work.
 
-exec bash --noprofile --norc -i -c 'export __GASH_BIN="$GASH_BIN" GASH_BANNER=0; alias myuser="echo mine"; myfunc() { echo hi; }; source "$GASH_SH" 2>/dev/null; gash_unload; echo "rc=$?"; echo "gash_username=$(type -t gash_username || echo gone)"; echo "llm_tree=$(type -t llm_tree || echo gone)"; echo "gash_unload=$(type -t gash_unload || echo gone)"; echo "myfunc=$(type -t myfunc || echo gone)"; echo "myuser=$(alias myuser >/dev/null 2>&1 && echo KEPT || echo gone)"; echo "aliases=$(alias | wc -l)"; echo "GASH_VERSION=${GASH_VERSION-gone}"; echo "GASH_BANNER=${GASH_BANNER-gone}"'
+exec bash --noprofile --norc -i -c 'export __GASH_BIN="$GASH_BIN" GASH_BANNER=0; alias myuser="echo mine"; myfunc() { echo hi; }; source "$GASH_SH" 2>/dev/null; gash_unload; echo "rc=$?"; echo "gash_username=$(type -t gash_username || echo gone)"; echo "llm_tree=$(type -t llm_tree || echo gone)"; echo "gash_unload=$(type -t gash_unload || echo gone)"; echo "myfunc=$(type -t myfunc || echo gone)"; echo "myuser=$(alias myuser >/dev/null 2>&1 && echo KEPT || echo gone)"; echo "aliases=$(alias | wc -l | tr -d " ")"; echo "GASH_VERSION=${GASH_VERSION-gone}"; echo "GASH_BANNER=${GASH_BANNER-gone}"'
 
 stdout '^rc=0$'
 stdout '^gash_username=gone$'

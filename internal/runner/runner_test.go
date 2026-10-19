@@ -52,8 +52,11 @@ func helper(mode string, args []string) int {
 		time.Sleep(10 * time.Second)
 	case "sleep":
 		time.Sleep(10 * time.Second)
-	case "short-sleep":
-		time.Sleep(time.Second)
+	case "hold-output":
+		// Keeps the inherited output descriptor open well past the race
+		// runtime's fixed fork/exec overhead, so TestFileCapture can tell a
+		// capture that wrongly blocked on the grandchild from that overhead.
+		time.Sleep(3 * time.Second)
 	case "ignore-term":
 		signal.Ignore(syscall.SIGTERM)
 		fmt.Print("ready")
@@ -70,7 +73,7 @@ func helper(mode string, args []string) int {
 	case "daemon":
 		// A grandchild keeps stdout open after this process exits.
 		cmd := exec.Command(os.Args[0])
-		cmd.Env = []string{"RUNNER_HELPER=short-sleep"}
+		cmd.Env = []string{"RUNNER_HELPER=hold-output"}
 		cmd.Stdout = os.Stdout
 		_ = cmd.Start()
 		fmt.Print("parent done")

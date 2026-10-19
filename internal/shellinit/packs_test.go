@@ -57,6 +57,21 @@ func TestShellInit_AliasPackNavigation(t *testing.T) {
 	require.NotContains(t, plain, "--color=auto")
 }
 
+// On macOS, BSD ls rejects --color=auto, so the probe fails and the pack
+// falls back to -G (and exports LSCOLORS). The goos seam makes this
+// deterministic regardless of the host the suite runs on.
+func TestShellInit_AliasPackNavigationDarwin(t *testing.T) {
+	h := newHarness()
+	h.goos = "darwin"
+	out := h.emit(t)
+	require.Contains(t, out, "alias ls='ls -G'")
+	require.Contains(t, out, "alias l='ls -CF -G'")
+	require.Contains(t, out, "alias ll='ls -l -G'")
+	require.NotContains(t, out, "--color=auto")
+	// packColors exports the BSD LSCOLORS palette on macOS.
+	require.Contains(t, out, "export LSCOLORS='CxahafafBxagagabababab'")
+}
+
 func TestShellInit_AliasPackSafety(t *testing.T) {
 	h := newHarness().withProgram("rm", "ss")
 	h.probe = gnuProbe

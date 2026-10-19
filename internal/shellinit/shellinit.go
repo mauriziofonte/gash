@@ -22,6 +22,7 @@ package shellinit
 import (
 	"context"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -43,6 +44,11 @@ type Emitter struct {
 	mkdirAll  func(string, os.FileMode) error
 	writeFile func(string, []byte, os.FileMode) error
 	now       func() int64
+	// goos is the target OS for the platform-specific alias packs (the ls
+	// color flag, the macOS LSCOLORS export); runtime.GOOS in production,
+	// a fixed value in tests so the generated layer does not depend on the
+	// host the suite runs on.
+	goos string
 }
 
 // New returns an Emitter wired to the real system.
@@ -56,6 +62,7 @@ func New() *Emitter {
 		mkdirAll:  os.MkdirAll,
 		writeFile: os.WriteFile,
 		now:       func() int64 { return time.Now().Unix() },
+		goos:      runtime.GOOS,
 	}
 }
 
