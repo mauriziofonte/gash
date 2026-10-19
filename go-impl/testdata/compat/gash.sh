@@ -926,16 +926,23 @@ alias wslc='wsl_compact'
 # Headless mode
 # -----------------------------------------------------------------------------
 
-# The binary applies the headless subset of ~/.gash_env settings itself
-# (environment first), so loading reads no file and runs nothing. 2.x
-# parsed the file here, quietly unless GASH_DEBUG=1: with debug the
-# settings load now, warnings shown; without, the first stub that needs
-# them parses quietly (LEDGER CORE-18).
+# Settings from ~/.gash_env that change what functions do; the ones that
+# shape the interactive shell (prompt, history, umask, aliases) mean
+# nothing here. 2.x applied this subset in its headless branch, so a
+# sourcing shell sees them as variables (and passes them to the binary).
+# With GASH_DEBUG=1 the file is loaded now and its warnings are shown;
+# without, the four values are read in-shell with no binary start while
+# sourcing, and the first stub parses the file for its warnings later,
+# quietly (LEDGER CORE-18).
 if [[ "${GASH_HEADLESS-}" == "1" ]]; then
     if [[ "${GASH_DEBUG-}" == "1" ]]; then
-        __gash_load_env
+        declare -F __gash_load_env >/dev/null && __gash_load_env
+        declare -F __gash_apply_settings >/dev/null &&
+            __gash_apply_settings GASH_DB_TIMEOUT GASH_AI_CONFIRM GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI
     else
         __GASH_ENV_QUIET=1
+        declare -F __gash_apply_env_settings >/dev/null &&
+            __gash_apply_env_settings GASH_DB_TIMEOUT GASH_AI_CONFIRM GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI
     fi
     return 0
 fi
