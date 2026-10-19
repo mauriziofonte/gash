@@ -1,0 +1,82 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: docker_spec.sh:11
+# covers: docker_spec.sh:32
+# covers: docker_spec.sh:44
+# covers: docker_spec.sh:63
+# covers: docker_spec.sh:84
+# covers: docker_spec.sh:96
+# covers: docker_spec.sh:115
+# covers: docker_spec.sh:138
+# covers: docker_spec.sh:165
+# covers: docker_spec.sh:187
+# covers: docker_spec.sh:214
+#
+# docker_stop_all / docker_start_all / docker_prune_all driven through the
+# shim, as a user runs them. The Go port keeps executing the docker CLI, so
+# the 2.x docker mock (GASH_STAGE/tests/mocks/bin, MOCK_DOCKER_LOG) stays on
+# PATH and records the argv. The 2.x confirmation was a shell function the
+# tests overrode; through the shim it lives in the binary (LEDGER DOCK-11),
+# so the removal path is driven with -y. Functions shell out with inherited
+# streams, so the docker child's stdout/stderr may leak: the Gash-authored
+# lines are matched by regex and the docker calls by the mock log.
+
+env GASH_HEADLESS=1
+
+# --- docker_spec.sh:11 - docker_stop_all stops running containers
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/stop.log"; source "$GASH_SH"; docker_stop_all 2>/dev/null'
+grep 'docker ps -q' stop.log
+grep 'docker stop abc123' stop.log
+
+# --- docker_spec.sh:32 - docker_stop_all is a no-op with no running containers
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; source "$GASH_SH"; docker_stop_all 2>&1'
+stdout 'No running containers'
+
+# --- docker_spec.sh:44 - docker_stop_all errors without docker
+! exec bash -c 'export PATH=/nonexistent; source "$GASH_SH"; docker_stop_all'
+stderr 'Docker is not installed'
+
+# --- docker_spec.sh:63 - docker_start_all starts only stopped containers
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/start.log"; source "$GASH_SH"; docker_start_all 2>/dev/null'
+grep 'ps -aq --filter' start.log
+grep 'docker start stopped123' start.log
+
+# --- docker_spec.sh:84 - docker_start_all is a no-op with no stopped containers
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; source "$GASH_SH"; docker_start_all 2>&1'
+stdout 'No stopped containers'
+
+# --- docker_spec.sh:96 - docker_start_all errors without docker
+! exec bash -c 'export PATH=/nonexistent; source "$GASH_SH"; docker_start_all'
+stderr 'Docker is not installed'
+
+# --- docker_spec.sh:115 - docker_prune_all filters networks by name not ID
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_CUSTOM_NETWORKS=1 MOCK_DOCKER_LOG="$PWD/prune1.log"; source "$GASH_SH"; docker_prune_all -y 2>/dev/null'
+grep 'network ls --format' prune1.log
+
+# --- docker_spec.sh:138 - removes custom networks but preserves built-in
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_CUSTOM_NETWORKS=1 MOCK_DOCKER_LOG="$PWD/prune2.log"; source "$GASH_SH"; docker_prune_all -y 2>/dev/null'
+grep 'docker network rm my_app_network' prune2.log
+grep 'docker network rm test_network' prune2.log
+! grep 'docker network rm bridge' prune2.log
+! grep 'docker network rm host' prune2.log
+! grep 'docker network rm none' prune2.log
+
+# --- docker_spec.sh:165 - --dry-run counts and removes nothing; -y skips the question
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_CUSTOM_NETWORKS=1 MOCK_DOCKER_LOG="$PWD/prune3.log"; source "$GASH_SH"; docker_prune_all --dry-run 2>&1'
+stdout 'To remove:.*network'
+! grep 'docker (rm|rmi|stop|system prune)' prune3.log
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_CUSTOM_NETWORKS=1 MOCK_DOCKER_LOG="$PWD/prune4.log"; source "$GASH_SH"; docker_prune_all -y 2>/dev/null'
+grep 'system prune' prune4.log
+! exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH"; source "$GASH_SH"; docker_prune_all --bogus'
+stderr 'Unknown option: --bogus'
+
+# --- docker_spec.sh:187 - docker_prune_all guards empty container lists
+exec bash -c 'export PATH="$GASH_STAGE/tests/mocks/bin:$PATH" MOCK_DOCKER_LOG="$PWD/prune5.log"; source "$GASH_SH"; docker_prune_all -y 2>/dev/null'
+grep 'system prune' prune5.log
+! grep 'docker stop ' prune5.log
+
+# --- docker_spec.sh:214 - docker aliases are defined
+exec bash -c 'source "$GASH_SH"; alias dsa && alias daa && alias dpa'
+stdout 'dsa=.docker_stop_all.'
+stdout 'daa=.docker_start_all.'
+stdout 'dpa=.docker_prune_all.'
