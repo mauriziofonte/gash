@@ -1,0 +1,82 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: install_uninstall_upgrade_spec.sh:31
+# covers: install_uninstall_upgrade_spec.sh:114
+# covers: install_uninstall_upgrade_spec.sh:151
+# covers: install_uninstall_upgrade_spec.sh:186
+# covers: install_uninstall_upgrade_spec.sh:203
+# covers: install_uninstall_upgrade_spec.sh:222
+# covers: install_uninstall_upgrade_spec.sh:251
+# covers: install_uninstall_upgrade_spec.sh:268
+# covers: install_uninstall_upgrade_spec.sh:289
+#
+# gash_uninstall driven through the shim: the two confirmations are answered
+# in this shell by overriding needs_confirm_prompt (as a 2.x harness did);
+# the binary removes the profile block, ~/.gashrc, the install directory and,
+# on request, the settings file. It refuses any GASH_DIR that is not plainly
+# a Gash checkout.
+
+env GASH_HEADLESS=1
+
+# :31 gash_uninstall removes gash and cleans the profile (1.x block)
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; h="$PWD/un1"; mkdir -p "$h/.gash/lib/core"; : >"$h/.gash/gash.sh"; : >"$h/.gashrc"; cp "$PWD/prof_simple" "$h/.bashrc"; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1 || true; test ! -e "$h/.gashrc"; test ! -d "$h/.gash"; ! grep -q "Load Gash Bash" "$h/.bashrc"; grep -q "something before" "$h/.bashrc"; grep -q "something after" "$h/.bashrc"'
+
+# :114 gash_uninstall preserves other if/fi blocks
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; h="$PWD/un2"; mkdir -p "$h/.gash/lib/core"; : >"$h/.gash/gash.sh"; : >"$h/.gashrc"; cp "$PWD/prof_twoblocks" "$h/.bashrc"; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1 || true; ! grep -q "Load Gash Bash" "$h/.bashrc"; grep -q "My custom block" "$h/.bashrc"; grep -q "Loading custom" "$h/.bashrc"; grep -q "Something after" "$h/.bashrc"'
+
+# :151 gash_uninstall removes the new delimited format
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; h="$PWD/un3"; mkdir -p "$h/.gash/lib/core"; : >"$h/.gash/gash.sh"; : >"$h/.gashrc"; cp "$PWD/prof_delim" "$h/.bashrc"; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1 || true; ! grep -q "GASH START" "$h/.bashrc"; ! grep -q "GASH END" "$h/.bashrc"; ! grep -q "gashrc" "$h/.bashrc"; grep -q "Something before" "$h/.bashrc"; grep -q "Something after" "$h/.bashrc"'
+
+# :186 gash_uninstall removes a custom GASH_DIR location
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; t="$PWD/un4"; c="$t/custom_gash"; mkdir -p "$c/lib/core"; : >"$c/gash.sh"; : >"$t/.gashrc"; : >"$t/.bashrc"; HOME="$t" GASH_DIR="$c" gash_uninstall >/dev/null 2>&1 || true; test ! -d "$c"'
+
+# :203 gash_uninstall removes the settings file named by GASH_ENV_FILE
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; t="$PWD/un5"; c="$t/custom_gash"; mkdir -p "$c/lib/core" "$t/conf"; : >"$c/gash.sh"; : >"$t/.gashrc"; : >"$t/.bashrc"; printf "DB:x=mysql://u:p@h/d\n" >"$t/conf/gash.env"; out="$(HOME="$t" GASH_DIR="$c" GASH_ENV_FILE="$t/conf/gash.env" gash_uninstall 2>&1)" || true; test ! -e "$t/conf/gash.env"; case "$out" in *"Removed ~/conf/gash.env"*) ;; *) echo "BAD:$out"; exit 1;; esac'
+
+# :222 gash_uninstall cleans all profile files
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; h="$PWD/un6"; mkdir -p "$h/.gash/lib/core"; : >"$h/.gash/gash.sh"; : >"$h/.gashrc"; for f in .bashrc .bash_profile .profile; do cp "$PWD/prof_block" "$h/$f"; done; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1 || true; for f in .bashrc .bash_profile .profile; do ! grep -q "Load Gash Bash" "$h/$f"; done'
+
+# :251 gash_uninstall handles missing profile files gracefully
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; h="$PWD/un7"; mkdir -p "$h/.gash/lib/core"; : >"$h/.gash/gash.sh"; : >"$h/.gashrc"; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1; test ! -d "$h/.gash"'
+
+# :268 gash_uninstall refuses a GASH_DIR that is not a Gash checkout
+exec bash -c 'set -uo pipefail; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; h="$PWD/un8"; mkdir -p "$h/data"; : >"$h/data/keep"; : >"$h/.gashrc"; printf "keep me\n" >"$h/.bashrc.bak"; for d in "$h" "$h/data" /; do HOME="$h" GASH_DIR="$d" gash_uninstall >/dev/null 2>&1 && exit 1; done; test -f "$h/data/keep" && test -f "$h/.gashrc" || exit 1; mkdir -p "$h/.gash/lib/core"; : >"$h/.gash/gash.sh"; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1 || exit 1; test ! -d "$h/.gash" && test -f "$h/.bashrc.bak"'
+
+# :289 install then uninstall leaves the system clean
+exec bash -c 'set -e; mkdir repo; tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -; git init -q repo; git -C repo config user.email t@e; git -C repo config user.name T; git -C repo config maintenance.auto false; git -C repo config gc.auto 0; git -C repo add -A; git -C repo commit -q -m snapshot; git -C repo tag v1.0.0; h="$PWD/un9"; mkdir -p "$h"; printf "# Original content\n" >"$h/.bashrc"; HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes --quiet >/dev/null 2>&1; test -d "$h/.gash"; source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt() { return 0; }; HOME="$h" GASH_DIR="$h/.gash" gash_uninstall >/dev/null 2>&1 || true; test ! -d "$h/.gash"; test ! -f "$h/.gashrc"; ! grep -q "gashrc" "$h/.bashrc"; grep -q "Original content" "$h/.bashrc"'
+
+-- prof_simple --
+# something before
+# Load Gash Bash
+# This loads the Gash customized Bash.
+if [ -f "$HOME/.gashrc" ]; then
+  source "$HOME/.gashrc"
+fi
+# something after
+-- prof_twoblocks --
+# Something before
+# Load Gash Bash
+# This loads the Gash customized Bash.
+if [ -f "$HOME/.gashrc" ]; then
+  source "$HOME/.gashrc"
+fi
+# My custom block
+if [ -f "$HOME/.my_config" ]; then
+  echo "Loading custom"
+fi
+# Something after
+-- prof_delim --
+# Something before
+# >>> GASH START >>>
+# Load Gash Bash - Do not edit this block
+if [ -f "$HOME/.gashrc" ]; then
+  source "$HOME/.gashrc"
+fi
+# <<< GASH END <<<
+# Something after
+-- prof_block --
+# Load Gash Bash
+# comment
+if [ -f "$HOME/.gashrc" ]; then
+  source "$HOME/.gashrc"
+fi
