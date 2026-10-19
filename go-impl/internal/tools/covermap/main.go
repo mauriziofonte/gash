@@ -216,22 +216,36 @@ type Case struct {
 	Declared   bool // any covers/covers-test/forced-divergence/covers-none line
 }
 
-// readCases parses the leading comment block of every *.txtar in dir.
+// readCases parses the leading comment block of every *.txtar under dir,
+// recursively (render fixtures are grouped in a render/ subdirectory).
 func readCases(dir string) ([]Case, []string) {
-	paths, err := filepath.Glob(filepath.Join(dir, "*.txtar"))
+	var paths []string
+	var errs []string
+	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(p, ".txtar") {
+			paths = append(paths, p)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, []string{"covermap: " + err.Error()}
 	}
 	sort.Strings(paths)
 	var cases []Case
-	var errs []string
 	for _, p := range paths {
 		b, err := os.ReadFile(p)
 		if err != nil {
 			errs = append(errs, "covermap: "+err.Error())
 			continue
 		}
-		c, es := parseCase(filepath.Base(p), string(b))
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil {
+			rel = filepath.Base(p)
+		}
+		c, es := parseCase(rel, string(b))
 		cases = append(cases, c)
 		errs = append(errs, es...)
 	}
