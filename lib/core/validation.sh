@@ -162,6 +162,9 @@ __gash_require_readable() {
 # Verify we are inside a Git repository.
 # Usage: __gash_require_git_repo ["custom error message"]
 # Returns: 0 if in git repo, 1 otherwise
+# The custom message is an optional part of the API even though the in-tree
+# callers rely on the default; shellcheck before 0.11 flags SC2120 for it.
+# shellcheck disable=SC2120
 __gash_require_git_repo() {
     local custom_msg="${1-}"
 
