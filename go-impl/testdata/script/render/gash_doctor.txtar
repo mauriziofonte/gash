@@ -1,0 +1,38 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:52
+# covers: output_style_render_spec.sh:53
+# covers: output_style_render_spec.sh:54
+#
+# gash_doctor rendering (R2-R6): the healthy run (banner + check glyphs +
+# section headers), the problems run (MISSING errors and warnings with a
+# count), and --timing. The tool-presence lines depend on the host, so only
+# the stable banner, the bash line and section headers are asserted (never
+# "All checks passed", which needs every optional tool present).
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :52 ok - banner, a check glyph, section headers
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor'
+stderr 'Gash Doctor . checking installation \(v[0-9.]+\)'
+stderr 'bash [0-9]'
+stdout '^Runtime:$'
+stdout '^External Tools:$'
+
+# --- :53 problems - missing files and a warning count (split row)
+exec bash -c 'printf "GASH_DB_TIMEOUT=5\n" >.gash_env; chmod 644 .gash_env; export GASH_DB_TIMEOUT=5 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_doctor'
+stderr 'Error:   gash.sh . MISSING'
+stderr 'Warning: [0-9]+ issue.s. found\.'
+
+# --- :54 timing - startup timing table
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor --timing'
+stdout 'Startup timing'
+stdout 'gash.sh \(total\)'
+
+# --- R6: plain mode, no ESC on either stream
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor'
+stderr 'Gash Doctor'
+! stdout '\x1b'
+! stderr '\x1b'
