@@ -1,0 +1,30 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:82
+# covers: output_style_render_spec.sh:83
+#
+# gash_db_list rendering: the empty hint (82) and the masked connection
+# list (83). Status/hint lines go to stderr; on a terminal with color they
+# start with the bullet glyph, with color off they carry their "Info:" word
+# prefix and no ESC (R5/R6). The connection rows go to stdout and always
+# mask the password to ****.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :82 empty - color run: glyph-prefixed hint on stderr
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_db_list'
+stderr '• No database connections configured in ~/\.gash_env'
+stderr 'Run .gash_env_init. to create a template'
+# --- :82 empty - plain run: word prefix, no ESC
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; gash_db_list'
+stderr '^Info: No database connections configured'
+! stderr '\x1b'
+
+# --- :83 list - two connections, passwords masked, rows on stdout
+exec bash -c 'printf "DB:default=mysql://u:secret@db:3306/app\nDB:pg=pgsql://p:x@h:5432/d\n" >.gash_env; chmod 600 .gash_env; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_db_list'
+stderr '• Available database connections:'
+stdout '^  default +mysql://u:\*\*\*\*@db:3306/app$'
+stdout '^  pg +pgsql://p:\*\*\*\*@h:5432/d$'
+! stdout 'secret'

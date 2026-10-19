@@ -58,8 +58,24 @@ func TestScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// testscript's Dir is non-recursive, but the render-spec fixtures are
+	// grouped in a render/ subdirectory (testdata/script/README.md), so the
+	// whole tree is collected explicitly and passed as Files.
+	scriptDir := filepath.Join(root, "go-impl", "testdata", "script")
+	var files []string
+	if err := filepath.WalkDir(scriptDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && filepath.Ext(p) == ".txtar" {
+			files = append(files, p)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	testscript.Run(t, testscript.Params{
-		Dir:                 filepath.Join(root, "go-impl", "testdata", "script"),
+		Files:               files,
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
