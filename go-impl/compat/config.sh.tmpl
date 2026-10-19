@@ -216,6 +216,45 @@ __gash_apply_settings() {
     return 0
 }
 
+# Apply the named settings from ~/.gash_env as shell variables, reading the
+# file in-shell (no binary start, LEDGER CORE-18) and quietly: no warnings,
+# no permission check. The headless startup uses it so the four function
+# settings reach the sourcing shell, as 2.x did, without a fork while
+# sourcing. A variable already set (the environment) always wins, and the
+# 2.x value parsing is reproduced (quoted values keep an inner #, an
+# unquoted trailing "# comment" is dropped). The binary stays the parser of
+# record for warnings and for every other caller (__gash_load_env).
+# Usage: __gash_apply_env_settings NAME...
+__gash_apply_env_settings() {
+    local env_file="${GASH_ENV_FILE:-$HOME/.gash_env}"
+    [[ -f "$env_file" ]] || return 0
+    local only=" $* " line key value q inner rest
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ "$line" == GASH_*=* ]] || continue
+        key="${line%%=*}"
+        [[ "$only" == *" $key "* ]] || continue
+        [[ -n "${!key+x}" ]] && continue
+        value="${line#*=}"
+        if [[ "$value" == [\"\']* ]]; then
+            q="${value:0:1}"
+            inner="${value:1}"
+            if [[ "$inner" == *"$q"* ]]; then
+                rest="${inner#*"$q"}"
+                rest="${rest#"${rest%%[![:space:]]*}"}"
+                [[ -z "$rest" || "$rest" == \#* ]] && value="${inner%%"$q"*}"
+            fi
+        else
+            value="${value%%[[:space:]]#*}"
+            value="${value%"${value##*[![:space:]]}"}"
+        fi
+        printf -v "$key" '%s' "$value"
+    done <"$env_file"
+    return 0
+}
+
 # Read a setting from ~/.gash_env without applying it.
 # Usage: __gash_get_setting NAME  (prints value, rc 1 when absent)
 __gash_get_setting() {
