@@ -1,0 +1,68 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: headless_spec.sh:31
+# covers: headless_spec.sh:59
+# covers: headless_spec.sh:88
+# covers: headless_spec.sh:108
+# covers: headless_spec.sh:135
+# covers: headless_spec.sh:160
+#
+# GASH_HEADLESS mode through the shim: it defines the LLM functions, leaves
+# PS1/PS2/PROMPT_COMMAND untouched, prints nothing at all, loads no alias
+# pack, does not source the user's ~/.bash_local, and works in a plain
+# non-interactive shell.
+
+env GASH_HEADLESS=1
+
+# --- headless_spec.sh:31 - loads LLM functions
+exec bash -c 'export GASH_HEADLESS=1; source "$GASH_SH"; for f in llm_tree llm_grep llm_find llm_db_query; do type "$f" >/dev/null 2>&1 || { echo "missing $f"; exit 1; }; done'
+! stdout .
+! stderr .
+
+# --- headless_spec.sh:59 - does not modify PS1/PS2/PROMPT_COMMAND
+exec bash headless_ps.sh
+stdout '^PS1:ORIG_PS1$'
+stdout '^PS2:ORIG_PS2$'
+stdout '^PROMPT_COMMAND:ORIG_PC$'
+
+# --- headless_spec.sh:88 - produces no output at all
+exec bash -c 'export GASH_HEADLESS=1; source "$GASH_SH"' 2>&1
+! stdout .
+! stderr .
+
+# --- headless_spec.sh:108 - does not load aliases
+exec bash headless_aliases.sh
+stdout '^ll:1$'
+stdout '^gst:1$'
+stdout '^sl:1$'
+
+# --- headless_spec.sh:135 - does not source user ~/.bash_local
+cp bash_local $WORK/home/.bash_local
+exec bash -c 'export GASH_HEADLESS=1; source "$GASH_SH"; echo "BASH_LOCAL_WAS_LOADED:${BASH_LOCAL_WAS_LOADED-not_set}"'
+stdout '^BASH_LOCAL_WAS_LOADED:not_set$'
+
+# --- headless_spec.sh:160 - works in a non-interactive shell
+exec bash -c 'export GASH_HEADLESS=1; source "$GASH_SH"; type llm_tree >/dev/null 2>&1 && echo SUCCESS'
+stdout '^SUCCESS$'
+
+-- bash_local --
+export BASH_LOCAL_WAS_LOADED=1
+
+-- headless_ps.sh --
+set -u
+PS1=ORIG_PS1
+PS2=ORIG_PS2
+PROMPT_COMMAND=ORIG_PC
+export GASH_HEADLESS=1
+source "$GASH_SH"
+echo "PS1:${PS1-}"
+echo "PS2:${PS2-}"
+echo "PROMPT_COMMAND:${PROMPT_COMMAND-}"
+
+-- headless_aliases.sh --
+set -u
+export GASH_HEADLESS=1
+source "$GASH_SH"
+alias ll 2>/dev/null; echo "ll:$?"
+alias gst 2>/dev/null; echo "gst:$?"
+alias sl 2>/dev/null; echo "sl:$?"
