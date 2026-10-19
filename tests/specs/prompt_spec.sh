@@ -156,11 +156,16 @@ it "git segment shows branch, dirty marker and ahead count from one git status" 
     inner_cmd="source \"\$HOME/.gash/gash.sh\" >/dev/null 2>&1 || true
 cd \"\$HOME/project\"
 __gash_ps1_build 0
-printf \"%s\\n\" \"\$PS1\""
+printf \"%s\\n\" \"\$PS1\"
+printf \"BRANCH=%s\\n\" \"\$__GASH_PS1_BRANCH\""
 
     out="$(HOME="$tmp" bash --noprofile --norc -i -c "$inner_cmd" 2>/dev/null)"
 
-    [[ "$out" == *"(feature"* ]]
+    # The branch name is stored in its own variable and PS1 holds only the
+    # reference, so Bash never re-expands it as code (SHELL-01).
+    [[ "$out" == *"BRANCH=feature"* ]]
+    [[ "$out" == *'"'"'(${__GASH_PS1_BRANCH}'"'"'* ]]
+    [[ "$out" != *"(feature"* ]]
     [[ "$out" == *"*"* ]]
     [[ "$out" == *"↑1"* || "$out" == *"+1"* ]]
     # one git process per prompt: no symbolic-ref / rev-parse round trips
@@ -284,8 +289,88 @@ EOF
   [[ "$(get gashzero)" == "$color" && "$(get again)" == "$color" ]]
   # The colored prompt with every \[...\] removed is the plain prompt.
   stripped="$(sed "s/\\\\\\[[^]]*\\\\\\]//g" <<<"$color")"
-  [[ "$stripped" == "(venv) \\u@\\h:\\w ("*") [!1] \\\$ " ]] || { echo "layout: [$stripped]"; exit 1; }
+  [[ "$stripped" == "(\${__GASH_PS1_VENV}) \\u@\\h:\\w ("*") [!1] \\\$ " ]] || { echo "layout: [$stripped]"; exit 1; }
   for v in nocolor gashnocolor; do
     [[ "$(get "$v")" == "$stripped" ]] || { echo "$v: [$(get "$v")] vs [$stripped]"; exit 1; }
   done
+'
+
+# SHELL-01: the prompt spliced the git branch, VIRTUAL_ENV basename,
+# debian_chroot and STY raw into PS1, which Bash re-expands, so a hostile
+# value ran as code. Each now lives in its own variable, referenced by PS1.
+it "the prompt stores a hostile branch, venv and chroot in variables, never inline (SHELL-01)" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  command -v git >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  ln -s "$ROOT" "$tmp/.gash"
+  git init -q "$tmp/evil"
+  git -C "$tmp/evil" -c user.email=a@b -c user.name=a commit -q --allow-empty -m x
+  git -C "$tmp/evil" checkout -q -b "\$(touch\${IFS}BRANCHMARK)"
+  cat > "$tmp/inner.sh" <<"INNER"
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1 || true
+cd "$HOME/evil"
+__gash_ps1_build 0
+printf "PS1=%s\n" "$PS1"
+printf "BRANCH=%s\n" "$__GASH_PS1_BRANCH"
+printf "VENV=%s\n" "$__GASH_PS1_VENV"
+printf "CHROOT=%s\n" "$__GASH_PS1_CHROOT"
+INNER
+  out="$(HOME="$tmp" VIRTUAL_ENV="\$(touch\${IFS}VENVMARK)" debian_chroot="\$(touch\${IFS}CHROOTMARK)" bash --noprofile --norc -i "$tmp/inner.sh" 2>/dev/null)"
+  ps1="$(grep "^PS1=" <<<"$out")"
+  grep -qF "\${__GASH_PS1_BRANCH}" <<<"$ps1"
+  grep -qF "\${__GASH_PS1_VENV}" <<<"$ps1"
+  grep -qF "\${__GASH_PS1_CHROOT}" <<<"$ps1"
+  # No command-substitution text from any untrusted value is inlined into PS1.
+  if grep -qF "\$(" <<<"$ps1"; then echo "raw command substitution inlined in PS1"; exit 1; fi
+  grep -qxF "BRANCH=\$(touch\${IFS}BRANCHMARK)" <<<"$out"
+  grep -qxF "VENV=\$(touch\${IFS}VENVMARK)" <<<"$out"
+  grep -qxF "CHROOT=\$(touch\${IFS}CHROOTMARK)" <<<"$out"
+  # STY is handled the same way (its segment needs a live screen dir to render).
+  grep -qF "\${__GASH_PS1_STY}" "$ROOT/lib/shell/prompt.sh"
+  grep -qF "__GASH_PS1_STY=" "$ROOT/lib/shell/prompt.sh"
+'
+
+it "ordinary branch, venv and chroot names render verbatim (SHELL-01)" bash -c '
+  set -euo pipefail
+  ROOT="${GASH_TEST_ROOT}"
+  command -v git >/dev/null 2>&1 || exit 77
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  ln -s "$ROOT" "$tmp/.gash"
+  git init -q "$tmp/proj"
+  git -C "$tmp/proj" -c user.email=a@b -c user.name=a commit -q --allow-empty -m x
+  git -C "$tmp/proj" checkout -q -b feature/login
+  cat > "$tmp/inner.sh" <<"INNER"
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1 || true
+cd "$HOME/proj"
+__gash_ps1_build 0
+printf "EXP=%s\n" "${PS1@P}"
+INNER
+  out="$(HOME="$tmp" VIRTUAL_ENV=/opt/venvs/myenv debian_chroot=sid bash --noprofile --norc -i "$tmp/inner.sh" 2>/dev/null)"
+  exp="$(grep "^EXP=" <<<"$out")"
+  grep -qF "(feature/login)" <<<"$exp"
+  grep -qF "(myenv)" <<<"$exp"
+  grep -qF "(sid)" <<<"$exp"
+'
+
+it "an interactive prompt never executes a hostile branch, venv or chroot (SHELL-01)" bash -c '
+  set -uo pipefail
+  command -v git >/dev/null 2>&1 || exit 77
+  command -v script >/dev/null 2>&1 || exit 77
+  ROOT="${GASH_TEST_ROOT}"
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  ln -s "$ROOT" "$tmp/.gash"
+  git init -q "$tmp/evil"
+  git -C "$tmp/evil" -c user.email=a@b -c user.name=a commit -q --allow-empty -m x
+  git -C "$tmp/evil" checkout -q -b "\$(touch\${IFS}BRANCHMARK)"
+  cat > "$tmp/feed.sh" <<"FEED"
+source "$HOME/.gash/gash.sh" >/dev/null 2>&1
+cd "$HOME/evil"
+true
+exit
+FEED
+  HOME="$tmp" VIRTUAL_ENV="\$(touch\${IFS}VENVMARK)" debian_chroot="\$(touch\${IFS}CHROOTMARK)" \
+    script -qec "bash --noprofile --norc -i" /dev/null < "$tmp/feed.sh" >/dev/null 2>&1 || true
+  marks="$(find "$tmp" -name "*MARK" 2>/dev/null)"
+  [[ -z "$marks" ]] || { echo "executed: $marks"; exit 1; }
 '

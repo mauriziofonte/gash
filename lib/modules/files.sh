@@ -90,6 +90,17 @@ __gash_fs_human_size() {
     __gash_human_size "${1-0}"
 }
 
+# Coerce a count/size field read from a tab-split "top extensions" row to a
+# decimal integer. A tab inside an extension can shift file-name text into
+# these fields; anything that is not all digits becomes 0, so the value is
+# never used as Bash arithmetic (an array subscript runs its command
+# substitutions) nor emitted as a bare JSON number.
+# Usage: __gash_fs_int cnt   (coerces the named variable in place)
+__gash_fs_int() {
+    local -n __gfi_ref="$1"
+    [[ "${__gfi_ref:-}" =~ ^[0-9]+$ ]] || __gfi_ref=0
+}
+
 # Decide whether ANSI colors should be emitted.
 # Honors: --no-color flag (passed as $1), NO_COLOR env, TTY check on stdout,
 # and --json / --null modes (forced off).
@@ -1572,6 +1583,8 @@ tree_stats() {
         local first=1 row ext cnt sz
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_fs_int cnt
+            __gash_fs_int sz
             local esc_ext
             esc_ext=$(__gash_json_escape "$ext")
             [[ $first -eq 0 ]] && tc_json+=","
@@ -1584,6 +1597,7 @@ tree_stats() {
         first=1
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_fs_int sz
             local esc_ext
             esc_ext=$(__gash_json_escape "$ext")
             [[ $first -eq 0 ]] && ts_json+=","
@@ -1634,6 +1648,8 @@ tree_stats() {
         local ext cnt sz
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_fs_int cnt
+            __gash_fs_int sz
             printf '    %s%-12s%s %s%6d%s files  %s%s%s\n' \
                 "$C" "$ext" "$R" "$Y" "$cnt" "$R" "$G" "$(__gash_fs_human_size "${sz:-0}")" "$R"
         done
@@ -1644,6 +1660,7 @@ tree_stats() {
         echo -e "  ${W}Top ${top_n} extensions by size:${R}"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_fs_int sz
             printf '    %s%-12s%s %s%s%s\n' \
                 "$C" "$ext" "$R" "$G" "$(__gash_fs_human_size "${sz:-0}")" "$R"
         done
@@ -1686,6 +1703,7 @@ __gash_fs_tree_stats_rich() {
         printf '\n  %sBy size%s\n' "$B" "$off"
         for row in "${top_size_rows[@]}"; do
             IFS=$'\t' read -r ext sz <<<"$row"
+            __gash_fs_int sz
             __gash_bar bar "${sz:-0}" "$size_total" 20
             pct=0
             ((size_total > 0)) && pct=$((sz * 1000 / size_total))
@@ -1699,6 +1717,8 @@ __gash_fs_tree_stats_rich() {
         printf '\n  %sBy count%s\n' "$B" "$off"
         for row in "${top_count_rows[@]}"; do
             IFS=$'\t' read -r ext cnt sz <<<"$row"
+            __gash_fs_int cnt
+            __gash_fs_int sz
             __gash_bar bar "${cnt:-0}" "$files_total" 20
             pct=0
             ((files_total > 0)) && pct=$((cnt * 1000 / files_total))

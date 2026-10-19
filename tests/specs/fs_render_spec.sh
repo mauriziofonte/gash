@@ -85,3 +85,31 @@ it "__gash_group_digits and __gash_bar" bash -c '
   __gash_bar bar 50 0 4; [[ "$bar" == $'"'"'\t'"'"'"...." ]]
   __gash_bar bar 7 4 4; [[ "$bar" == "####"$'"'"'\t'"'"' ]]
 '
+
+# FS-50: a tab inside an extension shifted file-name text into the numeric
+# fields of the top-extension rows, and the terminal layout evaluated those
+# fields as Bash arithmetic (an array subscript runs its command
+# substitutions). The fields are now coerced to digits before any arithmetic,
+# and --json no longer emits a non-numeric field.
+it "tree_stats never evaluates file-name text as arithmetic (FS-50)" bash -c '
+  set -o pipefail
+  export GASH_HEADLESS=1 LC_ALL=C COLUMNS=120
+  tmp="$(mktemp -d)"; trap "rm -rf $tmp" EXIT
+  mkdir "$tmp/tree" "$tmp/cwd"
+  printf x >"$tmp/tree/ok.txt"
+  # Extension = <tab> + an array subscript whose command substitution would
+  # create ./marker if the field reached arithmetic. \044 is a literal $, so
+  # nothing is substituted while the file name is built.
+  fn="$(printf "bad.z\ta[\044(touch marker)]")"
+  : >"$tmp/tree/$fn"
+  source "$GASH_TEST_ROOT/gash.sh"
+  __gash_fs_rich_ok() { return 0; }
+  cd "$tmp/cwd"
+  tree_stats "$tmp/tree" >out.txt 2>&1 || true
+  [[ ! -e marker ]] || { echo "file-name text was evaluated as code"; exit 1; }
+  grep -qE "^  txt " out.txt || { echo "ordinary extension row missing"; exit 1; }
+  if command -v jq >/dev/null 2>&1; then
+    tree_stats --json "$tmp/tree" >json.txt 2>&1 || true
+    jq -e . <json.txt >/dev/null 2>&1 || { echo "tree_stats --json emitted invalid JSON"; exit 1; }
+  fi
+'

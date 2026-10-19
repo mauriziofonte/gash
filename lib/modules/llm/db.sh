@@ -22,7 +22,7 @@ __LLM_SQL_ALLOWED_FIRST=" SELECT WITH VALUES TABLE SHOW DESCRIBE DESC EXPLAIN PR
 
 # Words refused anywhere in the statement (outside strings and comments):
 # data and schema changes, file and program access, session/server control.
-__LLM_SQL_FORBIDDEN_WORDS=" INSERT UPDATE DELETE MERGE UPSERT DROP CREATE ALTER TRUNCATE GRANT REVOKE RENAME ATTACH DETACH VACUUM REINDEX COPY CALL HANDLER LOCK UNLOCK INTO OUTFILE DUMPFILE LOAD_FILE SYS_EXEC SYS_EVAL GET_LOCK PG_READ_FILE PG_READ_BINARY_FILE PG_LS_DIR PG_STAT_FILE PG_FILE_WRITE PG_FILE_RENAME PG_FILE_UNLINK LO_IMPORT LO_EXPORT LO_UNLINK LO_PUT LO_FROM_BYTEA DBLINK DBLINK_EXEC DBLINK_CONNECT DBLINK_SEND_QUERY QUERY_TO_XML QUERY_TO_XMLSCHEMA QUERY_TO_XML_AND_XMLSCHEMA SET_CONFIG PG_TERMINATE_BACKEND PG_CANCEL_BACKEND PG_RELOAD_CONF PG_ROTATE_LOGFILE PG_PROMOTE PG_NOTIFY LOAD_EXTENSION READFILE WRITEFILE EDIT SLEEP PG_SLEEP PG_SLEEP_FOR PG_SLEEP_UNTIL BENCHMARK "
+__LLM_SQL_FORBIDDEN_WORDS=" INSERT UPDATE DELETE MERGE UPSERT DROP CREATE ALTER TRUNCATE GRANT REVOKE RENAME ATTACH DETACH VACUUM REINDEX COPY CALL HANDLER LOCK UNLOCK SET INTO OUTFILE DUMPFILE LOAD_FILE SYS_EXEC SYS_EVAL GET_LOCK PG_READ_FILE PG_READ_BINARY_FILE PG_LS_DIR PG_STAT_FILE PG_FILE_WRITE PG_FILE_RENAME PG_FILE_UNLINK LO_IMPORT LO_EXPORT LO_UNLINK LO_PUT LO_FROM_BYTEA DBLINK DBLINK_EXEC DBLINK_CONNECT DBLINK_SEND_QUERY QUERY_TO_XML QUERY_TO_XMLSCHEMA QUERY_TO_XML_AND_XMLSCHEMA SET_CONFIG PG_TERMINATE_BACKEND PG_CANCEL_BACKEND PG_RELOAD_CONF PG_ROTATE_LOGFILE PG_PROMOTE PG_NOTIFY LOAD_EXTENSION READFILE WRITEFILE EDIT SLEEP PG_SLEEP PG_SLEEP_FOR PG_SLEEP_UNTIL BENCHMARK "
 
 # -----------------------------------------------------------------------------
 # SQL guard
@@ -44,6 +44,20 @@ __llm_sql_guard() {
 
     local code="" c next state="code" quote="" i n=${#query} esc=0 last_semicolon=-1
     local tag rest
+
+    # Defense in depth: refuse any physical line that starts (after optional
+    # whitespace) with a backslash before lexing. Database clients process
+    # such a line as a client meta-command (psql \!, \copy, \i) that reaches
+    # shell execution, so no lexer verdict may let one through.
+    local __sg_line
+    while IFS= read -r __sg_line; do
+        __sg_line="${__sg_line#"${__sg_line%%[![:space:]]*}"}"
+        if [[ "$__sg_line" == "\\"* ]]; then
+            __llm_error "client_command_blocked" "Backslash at the start of a line" "FATAL" "false" "Client commands such as \\! are not allowed; use plain SQL"
+            return 1
+        fi
+    done <<<"$query"
+
     for ((i = 0; i < n; i++)); do
         c="${query:i:1}"
         next="${query:i+1:1}"
@@ -53,7 +67,12 @@ __llm_sql_guard() {
                     state="quoted"
                     quote="$c"
                     esc=0
-                    if [[ "$driver" == "pgsql" && "$c" == "'" && $i -gt 0 && "${query:i-1:1}" == [Ee] ]]; then
+                    # PostgreSQL E-string: a leading e/E opens one only when it
+                    # is a standalone token, not the tail of an identifier
+                    # (somee'...' is identifier + plain string). Mirrors the
+                    # dollar-quote identifier-boundary guard below.
+                    if [[ "$driver" == "pgsql" && "$c" == "'" && $i -gt 0 && "${query:i-1:1}" == [Ee] &&
+                        ($i -eq 1 || ! "${query:i-2:1}" =~ ^[A-Za-z0-9_$]$) ]]; then
                         esc=1
                     fi
                     code+=" "
