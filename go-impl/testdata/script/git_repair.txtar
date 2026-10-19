@@ -1,0 +1,84 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: git_repair_spec.sh:11
+# covers: git_repair_spec.sh:23
+# covers: git_repair_spec.sh:41
+# covers: git_repair_spec.sh:85
+# covers: git_repair_spec.sh:115
+#
+# git_repair driven through the shim. Each case builds its own bare origin
+# and work tree in a subdirectory and reproduces the 2.x observable contract
+# (stdout/stderr/exit and git state). -y skips the confirmation (as 2.x,
+# LEDGER GIT-01/GIT-08: no origin-URL hardening); without a terminal and
+# without -y it refuses.
+
+env GASH_HEADLESS=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+# --- git_repair_spec.sh:11 - errors outside a git repository
+mkdir norepo
+cd norepo
+! exec bash -c 'source "$GASH_SH"; git_repair'
+stderr 'Not in a git repository\.'
+
+# --- git_repair_spec.sh:23 - fails gracefully when origin is missing
+cd $WORK
+exec git init -q r23
+cd r23
+exec bash -c 'echo x > f; git add f; git commit -q -m init'
+! exec bash -c 'source "$GASH_SH"; git_repair'
+stderr 'Remote'
+stderr 'origin'
+stderr 'not configured'
+
+# --- git_repair_spec.sh:41 - repairs a repo with corrupted loose objects
+cd $WORK
+exec git init -q --bare o41.git
+exec git init -q w41
+cd w41
+exec bash -c 'git config user.email test@example.com; git config user.name Test; echo "hello world" > f; git add f; git commit -q -m init; git remote add origin $WORK/o41.git; git push -q origin HEAD:refs/heads/main'
+# Truncate the loose blob to 0 bytes (simulate a crash); before repair it is
+# unreadable.
+exec bash -c 'blob=$(git rev-parse HEAD:f); obj=".git/objects/${blob:0:2}/${blob:2}"; test -f "$obj"; chmod u+w "$obj"; : > "$obj"; test ! -s "$obj"'
+! exec bash -c 'blob=$(git rev-parse HEAD:f); git cat-file -p "$blob"'
+exec bash -c 'source "$GASH_SH"; git_repair -y'
+exec bash -c 'blob=$(git rev-parse HEAD:f); test "$(git cat-file -p "$blob")" = "hello world"'
+exec git fsck --full
+
+# --- git_repair_spec.sh:85 - repairs inside a linked worktree, --dry-run changes nothing
+cd $WORK
+exec git init -q --bare o85.git
+exec git init -q w85
+cd w85
+exec bash -c 'git config user.email t@example.com; git config user.name T; echo hello > f; git add f; git commit -q -m init; git remote add origin $WORK/o85.git; git push -q origin HEAD:refs/heads/main; git worktree add -q $WORK/wt85 -b side'
+cd $WORK/wt85
+exec bash -c 'objdir=$(git rev-parse --git-path objects); blob=$(git rev-parse HEAD:f); obj="$objdir/${blob:0:2}/${blob:2}"; chmod u+w "$obj"; : > "$obj"'
+# --dry-run reports the corruption and changes nothing.
+exec bash -c 'source "$GASH_SH"; git_repair --dry-run'
+stdout 'Empty .corrupted. object files'
+exec bash -c 'objdir=$(git rev-parse --git-path objects); blob=$(git rev-parse HEAD:f); obj="$objdir/${blob:0:2}/${blob:2}"; test ! -s "$obj"; test -e "$obj"'
+# Without -y and without a terminal it refuses, leaving the object in place.
+! exec bash -c 'source "$GASH_SH"; git_repair </dev/null'
+exec bash -c 'objdir=$(git rev-parse --git-path objects); blob=$(git rev-parse HEAD:f); obj="$objdir/${blob:0:2}/${blob:2}"; test -e "$obj"'
+# -y repairs.
+exec bash -c 'source "$GASH_SH"; git_repair -y'
+exec bash -c 'blob=$(git rev-parse HEAD:f); test "$(git cat-file -p "$blob")" = "hello"'
+exec git fsck --full
+
+# --- git_repair_spec.sh:115 - says there is nothing to repair on a healthy repo
+cd $WORK
+exec git init -q w115
+cd w115
+exec bash -c 'echo x > f; git add f; git commit -q -m init; git remote add origin $WORK/nowhere.git'
+exec bash -c 'source "$GASH_SH"; git_repair'
+stderr 'nothing to repair'
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false
