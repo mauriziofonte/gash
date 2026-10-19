@@ -257,8 +257,10 @@ every check below.
   `/etc/sudoers` and everything below them are refused, checked as written
   and after resolving symlinks. Root's home is refused also where it is not
   `/root` (macOS: `/var/root`).
-* Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root`, need
-  `--allow-root` for `/`, and do not refuse `..`.
+* Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root` as scan roots
+  (the PATH argument only: a walk that follows `-L` or starts at `/` with
+  `--allow-root` can still enter them), need `--allow-root` for `/`, and do
+  not refuse `..`.
 * `llm_exec` applies the same forbidden-path rules to every argument of
   every command (option values, `key=value` words, `~`, glob matches, and
   relative paths after a `cd` in the line), except `/dev/null`, the
