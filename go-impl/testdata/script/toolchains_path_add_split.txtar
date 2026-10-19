@@ -1,0 +1,35 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# SHELL-07 proving test: GASH_PATH_ADD is split on space, tab and newline
+# regardless of the caller's IFS, and never glob-expanded. Setting IFS=:
+# before sourcing does not change the result, and a word with a glob
+# character is taken literally (a missing directory, skipped).
+
+env GASH_BANNER=0
+
+# IFS=: before sourcing still splits the two space-separated directories and
+# prepends both.
+exec bash --norc --noprofile -i split.sh
+stdout 'D1=yes'
+stdout 'D2=yes'
+
+# A directory on disk that a glob would match is not added: the word is
+# taken literally, so match1 never reaches PATH.
+exec bash --norc --noprofile -i glob.sh
+stdout 'GLOB=literal'
+
+-- split.sh --
+set -e
+mkdir -p d1 d2
+export GASH_PATH_ADD="$PWD/d1 $PWD/d2"
+IFS=:
+source "$GASH_SH" >/dev/null 2>&1
+case ":$PATH:" in *":$PWD/d1:"*) echo D1=yes ;; *) echo D1=no ;; esac
+case ":$PATH:" in *":$PWD/d2:"*) echo D2=yes ;; *) echo D2=no ;; esac
+
+-- glob.sh --
+set -e
+mkdir -p match1
+export GASH_PATH_ADD="$PWD/match*"
+source "$GASH_SH" >/dev/null 2>&1
+case ":$PATH:" in *"/match1:"*) echo GLOB=expanded ;; *) echo GLOB=literal ;; esac

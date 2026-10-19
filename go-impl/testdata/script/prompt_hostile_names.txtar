@@ -1,0 +1,41 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# SHELL-01 proving test: a git branch, VIRTUAL_ENV, debian_chroot or STY that
+# holds a command substitution is shown literally and never executed. The
+# emitted prompt stores each value in __GASH_PS1_* and PS1 references it, so
+# Bash expands it once (no re-scan): after the prompt is drawn no marker file
+# exists, and the expanded prompt contains the literal text.
+
+env GASH_BANNER=0
+
+exec bash setup.sh
+exec bash --norc --noprofile -i drive.sh
+
+# The command substitutions would create these if the prompt executed them.
+! exists repo/pwned
+! exists repo/pwned_venv
+! exists repo/pwned_chroot
+! exists repo/pwned_sty
+
+# The expanded prompt shows the literal branch, chroot and venv text.
+grep 'b\$\(>pwned\)x' repo/prompt.out
+grep 'c\$\(>pwned_chroot\)x' repo/prompt.out
+grep 'v\$\(>pwned_venv\)' repo/prompt.out
+
+-- setup.sh --
+set -e
+git init -q repo
+cd repo
+git config user.email a@b.c
+git config user.name tester
+git commit -q --allow-empty -m init
+git branch -m 'b$(>pwned)x'
+
+-- drive.sh --
+cd repo
+source "$GASH_SH" >/dev/null 2>&1
+export VIRTUAL_ENV='/v$(>pwned_venv)'
+export debian_chroot='c$(>pwned_chroot)x'
+export STY='s$(>pwned_sty)x.y'
+__gash_prompt_command
+printf '%s' "${PS1@P}" >prompt.out

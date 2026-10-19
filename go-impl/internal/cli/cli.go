@@ -23,6 +23,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/registry"
+	"github.com/mauriziofonte/gash/internal/shellinit"
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
@@ -149,7 +150,20 @@ func initCmd(p *Process, status *int) *cobra.Command {
 		Short:     "Print the interactive Bash layer for gash.sh to evaluate",
 		Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		ValidArgs: []string{"bash"},
-		RunE:      notPorted(p, status, "gash init"),
+		RunE: func(_ *cobra.Command, _ []string) error {
+			c := &invoke.Call{
+				Ctx: p.Ctx, Name: "init", Env: p.Env,
+				Stdin: p.Stdin, Stdout: p.Stdout, Stderr: p.Stderr,
+				Term: p.Term, Handlers: p.Table,
+			}
+			script, err := shellinit.New().Emit(c)
+			if err != nil {
+				*status = p.fail(contract.New("init_failed", err.Error(), ""))
+				return nil
+			}
+			_, _ = io.WriteString(p.Stdout, script)
+			return nil
+		},
 	}
 }
 

@@ -42,6 +42,7 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("git_apply_patch", m.applyPatch)
 	t.Handle("git_repair", m.repair)
 	t.Handle("git_sync", m.sync)
+	m.registerLog(t)
 }
 
 // call is one invocation with its printer and the process helpers.
