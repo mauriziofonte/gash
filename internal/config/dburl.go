@@ -104,14 +104,22 @@ func bracketHost(hostinfo string) (host, port string, ok bool) {
 	return hostinfo[1:end], strings.TrimPrefix(after, ":"), true
 }
 
+// ErrNULPassword is CheckDBURL's error for a password holding "%00": no
+// client can send a NUL byte (LEDGER CORE-13).
+var ErrNULPassword = errors.New("The password holds %00 (a NUL byte), which no client can send: change the password")
+
 // ErrIPv6Host is CheckDBURL's error for a host part that starts with "["
 // without a matching "]" (or with text other than ":PORT" after it).
 var ErrIPv6Host = errors.New("Write IPv6 hosts as [addr]:port")
 
-// CheckDBURL reports a URL that ParseDBURL cannot split as written: a host
-// part opening an IPv6 bracket that is not closed (LEDGER CORE-11). The
-// callers fail with invalid_db_url and the error text as hint.
+// CheckDBURL reports a URL that cannot be used as written: a host part
+// opening an IPv6 bracket that is not closed (LEDGER CORE-11), or a
+// password that decodes to a NUL byte (LEDGER CORE-13). The callers fail
+// with invalid_db_url and the error text as hint.
 func CheckDBURL(url string) error {
+	if strings.Contains(DecodePassword(ParseDBURL(url).Password), "\x00") {
+		return ErrNULPassword
+	}
 	rest := url
 	if i := strings.Index(url, "://"); i >= 0 {
 		rest = url[i+3:]
@@ -133,14 +141,18 @@ func CheckDBURL(url string) error {
 // URLDecode is __gash_url_decode: every "%XX" with two hex digits becomes
 // that byte, anything else is kept as written. "%00" decodes to nothing
 // (a Bash variable cannot hold a NUL byte).
-func URLDecode(s string) string {
+func URLDecode(s string) string { return urlDecode(s, false) }
+
+// urlDecode decodes every "%XX" with two hex digits; keepNUL keeps the NUL
+// byte of "%00".
+func urlDecode(s string, keepNUL bool) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] == '%' && i+2 < len(s) {
 			hi, ok1 := unhex(s[i+1])
 			lo, ok2 := unhex(s[i+2])
 			if ok1 && ok2 {
-				if v := hi<<4 | lo; v != 0 {
+				if v := hi<<4 | lo; v != 0 || keepNUL {
 					b.WriteByte(v)
 				}
 				i += 2
@@ -152,11 +164,13 @@ func URLDecode(s string) string {
 	return b.String()
 }
 
-// DecodePassword is the password as the 2.x callers see it:
-// pw=$(__gash_url_decode "$pw"), so trailing newlines ("%0A" at the end)
-// are removed by the command substitution.
+// DecodePassword decodes a DB: password into the value as a whole: trailing
+// newlines ("%0A" at the end) are kept and "%00" is a NUL byte, which
+// CheckDBURL refuses (3.0: CORE-13 fixed; 2.x captured the decoder with
+// $(...), so the newlines were lost and "%00" vanished, and the client was
+// given another password).
 func DecodePassword(encoded string) string {
-	return strings.TrimRight(URLDecode(encoded), "\n")
+	return urlDecode(encoded, true)
 }
 
 // URLEncode is __gash_url_encode: bytes outside [A-Za-z0-9._~-] become

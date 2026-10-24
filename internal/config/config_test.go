@@ -673,28 +673,22 @@ func TestLedger_CORE08(t *testing.T) {
 	}
 }
 
+// 3.0: CORE-14 fixed: HOME is a literal prefix that ends at a "/" or at
+// the end of the path. The rows marked 2.x were shown otherwise by
+// ${path/#$HOME/\~}, which took HOME as a glob pattern.
 func TestShownPath(t *testing.T) {
 	tests := []struct{ path, home, want string }{
 		{"/home/u/.gash_env", "/home/u", "~/.gash_env"},
 		{"/home/u", "/home/u", "~"},
-		{"/home/user2/x", "/home/u", "~ser2/x"}, // not limited to path components
+		{"/home/user2/x", "/home/u", "/home/user2/x"}, // 2.x: ~ser2/x
 		{"/etc/gash_env", "/home/u", "/etc/gash_env"},
-		{"/a", "", "~/a"}, // empty HOME matches the empty prefix
-		{"/home/u/x", "/home/u/", "~x"},
-		{"/h/abc/def", "/h/*", "~"},    // HOME is a glob pattern
-		{"/h/a/x", "/h/[ab]", "~/x"},   // bracket
-		{"/h/a/x", "/h/a?", "~x"},      // ?
-		{"/h/*/x", "/h/\\*", "~/x"},    // escaped *
-		{"/h/a/x", "/h/\\*", "/h/a/x"}, // escaped * is literal
-		{"bZ", "[!]x]", "bZ"},          // umatchlen and the matcher disagree, as in Bash
-		{"]b", "[]x]", "~b"},           // leading ] is a member
-		{"\\~", "\\", "\\~"},           // a lone backslash matches nothing here
-		{"-b\t\\", "*\\", "-b\t\\"},    // quick check pattern *\* needs a final *
-		{"a\\x", "a\\", "a\\x"},        // trailing backslash
-		{"*a-z", "**\\*", "*a-z"},      // pattern starting and ending with *
-		{"x*", "**\\*", "~"},           // ... matches a final *
-		{"ab", "?(", "ab"},             // ?( is not extglob here
-		{"/home/u/x", "/home/[[:alpha:]]", "~/x"},
+		{"/a", "", "/a"},                     // 2.x: ~/a
+		{"/home/u/x", "/home/u/", "~/x"},     // 2.x: ~x
+		{"/h/abc/def", "/h/*", "/h/abc/def"}, // 2.x: ~ (HOME was a glob)
+		{"/h/a/x", "/h/[ab]", "/h/a/x"},      // 2.x: ~/x
+		{"/h/*/x", "/h/*", "~/x"},
+		{"/home/u/x", "/home/[[:alpha:]]", "/home/u/x"}, // 2.x: ~/x
+		{"/x", "/", "/x"},
 	}
 	for _, tt := range tests {
 		if got := ShownPath(tt.path, tt.home); got != tt.want {
@@ -703,58 +697,69 @@ func TestShownPath(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-14, reproduced: ${file/#$HOME/\~} takes HOME as an unquoted
-// glob pattern matched against any prefix, not a path component.
-func TestLedger_CORE14_2x(t *testing.T) {
+// LEDGER CORE-14: HOME is matched literally and only up to a "/" or the
+// end of the path (3.0: CORE-14 fixed; 2.x took HOME as an unquoted glob
+// pattern matched against any prefix).
+func TestLedger_CORE14(t *testing.T) {
 	tests := []struct{ path, home, want string }{
-		{"/home/ab/.gash_env", "/home/a", "~b/.gash_env"},
+		{"/home/ab/.gash_env", "/home/a", "/home/ab/.gash_env"}, // 2.x: ~b/.gash_env
 		{"/home/a/.gash_env", "/home/a", "~/.gash_env"},
 		{"/home/a", "/home/a", "~"},
-		{"/home/bob/.gash_env", "/home/*", "~"},
-		{"/home/b/.gash_env", "/home/[ab]", "~/.gash_env"},
+		{"/home/bob/.gash_env", "/home/*", "/home/bob/.gash_env"}, // 2.x: ~
+		{"/home/b/.gash_env", "/home/[ab]", "/home/b/.gash_env"},  // 2.x: ~/.gash_env
 	}
 	for _, tt := range tests {
 		if got := ShownPath(tt.path, tt.home); got != tt.want {
 			t.Errorf("ShownPath(%q, HOME=%q) = %q, want %q", tt.path, tt.home, got, tt.want)
 		}
 	}
+	// The loader's messages use it.
+	f := Parse([]byte("bogus\n"), "/home/ab/.gash_env", "/home/a")
+	require.Equal(t, []string{"Line 1 of /home/ab/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"}, texts(f.Warnings))
 }
 
-// LEDGER CORE-15, reproduced: ${key/#\~/$HOME} replaces only the "~", so
-// ~user/k becomes $HOME followed by "user/k", and under Bash 5.2
-// patsub_replacement an "&" in HOME stands for the matched "~".
-func TestLedger_CORE15_2x(t *testing.T) {
-	tests := []struct{ key, home, want string }{
-		{"~user/k", "/home/u", "/home/uuser/k"},
-		{"~root/.ssh/id", "/home/u", "/home/uroot/.ssh/id"},
-		{"~/k", "/srv/a&b", "/srv/a~b/k"},
-		{"~/k", "/srv/a\\&b", "/srv/a&b/k"},
-		{"~/k", "/home/u", "/home/u/k"},
+// LEDGER CORE-15: only "~" and "~/" stand for HOME, used literally, and a
+// "~user" key path is refused with a warning (3.0: CORE-15 fixed; 2.x made
+// ~user/k $HOME followed by user/k, and under Bash 5.2 an "&" in HOME stood
+// for the matched "~").
+func TestLedger_CORE15(t *testing.T) {
+	tests := []struct {
+		key, home, want string
+		ok              bool
+	}{
+		{"~user/k", "/home/u", "", false},       // 2.x: /home/uuser/k
+		{"~root/.ssh/id", "/home/u", "", false}, // 2.x: /home/uroot/.ssh/id
+		{"~/k", "/srv/a&b", "/srv/a&b/k", true}, // 2.x (Bash 5.2): /srv/a~b/k
+		{"~/k", "/srv/a\\&b", "/srv/a\\&b/k", true},
+		{"~/k", "/home/u", "/home/u/k", true},
 	}
 	for _, tt := range tests {
-		if got := ExpandTilde(tt.key, tt.home); got != tt.want {
-			t.Errorf("ExpandTilde(%q, HOME=%q) = %q, want %q", tt.key, tt.home, got, tt.want)
+		if got, ok := ExpandTilde(tt.key, tt.home); got != tt.want || ok != tt.ok {
+			t.Errorf("ExpandTilde(%q, HOME=%q) = %q %v, want %q %v", tt.key, tt.home, got, ok, tt.want, tt.ok)
 		}
 	}
+	f := Parse([]byte("SSH:~root/.ssh/id=pw\n"), "/h/.gash_env", "/h")
+	require.Empty(t, f.SSHKeys)
+	require.Equal(t, []string{"Line 1 of ~/.gash_env: SSH key path starts with ~user; write the full path (skipping)"}, texts(f.Warnings))
 }
 
 func TestExpandTilde(t *testing.T) {
 	tests := []struct{ key, home, want string }{
 		{"~/.ssh/id", "/home/u", "/home/u/.ssh/id"},
 		{"~", "/home/u", "/home/u"},
-		{"~root/.ssh/id", "/home/u", "/home/uroot/.ssh/id"},
 		{"/abs/~/id", "/home/u", "/abs/~/id"},
-		{"~/x", "/h/a&b", "/h/a~b/x"}, // Bash 5.2 patsub_replacement
-		{"~/x", "/h/a\\&b", "/h/a&b/x"},
-		{"~/x", "/h/a\\\\b", "/h/a\\b/x"},
+		{"rel/id", "/home/u", "rel/id"},
+		// 3.0: CORE-15 fixed: HOME is used literally (2.x on Bash 5.2 read
+		// "&" and "\\" in HOME as replacement syntax).
+		{"~/x", "/h/a&b", "/h/a&b/x"},
+		{"~/x", "/h/a\\&b", "/h/a\\&b/x"},
+		{"~/x", "/h/a\\\\b", "/h/a\\\\b/x"},
 		{"~/x", "/h/a\\b", "/h/a\\b/x"},
-		{"~/x", "/h/\\", "/h/\\/x"},
-		{"~/x", "/h/a\\\\&b", "/h/a\\~b/x"},
 		{"~/x", "", "/x"},
 	}
 	for _, tt := range tests {
-		if got := ExpandTilde(tt.key, tt.home); got != tt.want {
-			t.Errorf("ExpandTilde(%q, HOME=%q) = %q, want %q", tt.key, tt.home, got, tt.want)
+		if got, ok := ExpandTilde(tt.key, tt.home); got != tt.want || !ok {
+			t.Errorf("ExpandTilde(%q, HOME=%q) = %q %v, want %q", tt.key, tt.home, got, ok, tt.want)
 		}
 	}
 }

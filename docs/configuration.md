@@ -107,9 +107,10 @@ Rules that apply to every form:
 
 ### SSH keys
 
-`SSH:keypath=passphrase`. A leading `~` in the path is expanded. The key file
-must exist, otherwise the entry is skipped with a warning. An empty passphrase
-is allowed. In interactive shells `gash_ssh_auto_unlock` starts `ssh-agent`
+`SSH:keypath=passphrase`. A leading `~/` (or `~` alone) stands for your home
+directory; a `~user` path is skipped with a warning (write the full path). The
+key file must exist, otherwise the entry is skipped with a warning. An empty
+passphrase is allowed. In interactive shells `gash_ssh_auto_unlock` starts `ssh-agent`
 when none is running and adds each key through `expect` (required), once per
 session: it exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it.
 
@@ -125,7 +126,9 @@ session: it exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it.
 * The connection named `default` is used when `-c` is not given.
 * Only the password is percent-decoded. Write `%` as `%25`; other
   characters may be written raw or URL-encoded (`p@ss` and `p%40ss` are the
-  same password). The user name is used as written (not decoded).
+  same password). The user name is used as written (not decoded). The
+  decoded password is used whole, trailing newlines included; one that holds
+  `%00` (a NUL byte) is refused with `invalid_db_url`.
 * An IPv6 host goes in brackets: `[::1]:5432`, or `[::1]` for the default
   port. A bracket that is not closed is refused with `invalid_db_url`.
 

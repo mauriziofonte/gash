@@ -170,7 +170,11 @@ func (f *File) parseLine(lineno int, raw, home string) {
 	switch prefix {
 	case "SSH":
 		// SSH:keypath=passphrase (an empty passphrase is allowed).
-		key = ExpandTilde(key, home)
+		key, ok := ExpandTilde(key, home)
+		if !ok {
+			f.warnLine(lineno, "SSH key path starts with ~user; write the full path (skipping)")
+			return
+		}
 		if fi, err := os.Stat(key); err != nil || !fi.Mode().IsRegular() {
 			f.warnLine(lineno, "SSH key file not found (skipping)")
 			return

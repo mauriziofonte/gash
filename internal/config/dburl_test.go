@@ -30,23 +30,35 @@ func TestURLDecode(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-13, reproduced: the callers capture __gash_url_decode with
-// $(...) (db.sh:246, config.sh:545), so a password loses its trailing
-// newlines, and %00 decodes to nothing (a Bash string holds no NUL).
-func TestLedger_CORE13_2x(t *testing.T) {
+// LEDGER CORE-13: the password is decoded into the value as a whole, so
+// trailing newlines stay and "%00" is a NUL byte, which CheckDBURL refuses
+// (3.0: CORE-13 fixed; 2.x captured the decoder with $(...): "ab%0A%0A"
+// was "ab" and "pw%00x" was "pwx").
+func TestLedger_CORE13(t *testing.T) {
 	tests := []struct{ in, want string }{
-		{"ab%0A%0A", "ab"},
+		{"ab%0A%0A", "ab\n\n"},
 		{"a%0Ab", "a\nb"},
 		{"p%40ss", "p@ss"},
-		{"%0A", ""},
-		{"pw%00x", "pwx"},
-		{"pw%0A%00", "pw"},
-		{"%00%0A%00", ""},
+		{"%0A", "\n"},
+		{"pw%00x", "pw\x00x"},
+		{"pw%0A%00", "pw\n\x00"},
 	}
 	for _, tt := range tests {
 		if got := DecodePassword(tt.in); got != tt.want {
 			t.Errorf("DecodePassword(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+	for _, bad := range []string{"mysql://u:pw%00x@h/d", "pgsql://u:%00@h/d"} {
+		if err := CheckDBURL(bad); err != ErrNULPassword {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+	if err := CheckDBURL("mysql://u:ab%0A%0A@h/d"); err != nil {
+		t.Errorf("newline password: %v", err)
+	}
+	// URLDecode, the port of __gash_url_decode, still drops "%00".
+	if got := URLDecode("pw%00x"); got != "pwx" {
+		t.Errorf("URLDecode %q", got)
 	}
 }
 

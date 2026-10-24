@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -275,17 +276,13 @@ func uninstallProfiles(home string) []string {
 }
 
 // uninstallEnvFile is the settings file and its name as the messages show
-// it (${env_file/#$HOME/\~}).
+// it: HOME shown as "~" when a "/" or the end follows it (LEDGER CORE-14).
 func uninstallEnvFile(c *invoke.Call) (string, string) {
 	envFile := c.Env.Get("GASH_ENV_FILE")
 	if envFile == "" {
 		envFile = c.Env.Get("HOME") + "/.gash_env"
 	}
-	shown := envFile
-	if home := c.Env.Get("HOME"); strings.HasPrefix(envFile, home) {
-		shown = "~" + envFile[len(home):]
-	}
-	return envFile, shown
+	return envFile, config.ShownPath(envFile, c.Env.Get("HOME"))
 }
 
 // physical is $(cd -- DIR && pwd -P): the absolute path with every symlink
