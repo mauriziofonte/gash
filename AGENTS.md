@@ -310,7 +310,8 @@ not.
    Arguments and glob matches that are secret files are refused. Also
    refused: `ps e`, `getent shadow`/`gshadow`, `yq` `load()` and `-s`,
    `diff -r` without GNU `--no-dereference`, git `--literal-pathspecs`,
-   `--no-index`, `cat-file --batch`, `stash show -p` and `remote show`
+   `--no-index`, `cat-file --batch`, `stash show -p`, patch options on
+   `stash list` (`-p`, `-U`, `--word-diff`, ...) and `remote show`
    without `-n` (it contacts the network).
 
 The child Bash runs with `--noprofile --norc` and a short environment:

@@ -164,12 +164,49 @@ func TestLedger_EXEC01(t *testing.T) {
 	}
 }
 
-// TestLedger_EXEC02_2x: `git stash list -p` is allowed and applies no secret
-// pathspecs, so it leaks (LEDGER EXEC-02, reproduced in rc.A).
+// TestLedger_EXEC02_2x: 2.x allowed `git stash list -p` and applied no
+// secret pathspecs, so it printed stashed secret files. 3.0: EXEC-02
+// fixed, a patch option on git stash list is refused.
 func TestLedger_EXEC02_2x(t *testing.T) {
 	repo := setupRepo(t)
-	if _, err := Build("git stash list -p", Settings{}, testEnv(repo), permissiveProbe()); err != nil {
-		t.Errorf("EXEC-02: git stash list -p must not be refused in rc.A, got %v", err)
+	_, err := Build("git stash list -p", Settings{}, testEnv(repo), permissiveProbe())
+	if errCode(err) != "option_not_allowed" {
+		t.Errorf("EXEC-02: git stash list -p = %v, want option_not_allowed", err)
+	}
+}
+
+// TestLedger_EXEC02: git stash list runs and shows the stash, never the
+// stashed secret file: every patch option is refused, FATAL.
+func TestLedger_EXEC02(t *testing.T) {
+	repo := setupRepo(t)
+	home := filepath.Dir(repo)
+	mustWrite(t, filepath.Join(repo, ".env"), "PASSWORD=stashed\n")
+	mustWrite(t, filepath.Join(repo, "app.txt"), "PASSWORD=okstash\n")
+	cmd := exec.Command("git", "stash", "-q")
+	cmd.Dir = repo
+	cmd.Env = []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null"}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git stash: %v\n%s", err, out)
+	}
+	for _, opt := range []string{"-p", "--patch", "-u", "-U3", "--unified=1", "--word-diff", "--color-words",
+		"-W", "--function-context", "-c", "--cc", "-m", "--diff-merges=on", "--binary", "--full-diff", "-t"} {
+		_, err := build(t, "git stash list "+opt, repo)
+		r, ok := err.(*Refusal)
+		if !ok || r.Code != "option_not_allowed" || r.Details != "git stash list "+opt || r.Action != "FATAL" {
+			t.Errorf("git stash list %s: got %v, want option_not_allowed FATAL", opt, err)
+		}
+	}
+	for _, line := range []string{"git stash list", "git stash list --stat", "git stash list --name-only"} {
+		out, exit, err := runMineCombined(t, line, repo, home)
+		if err != nil || exit != 0 {
+			t.Fatalf("%q: %v (exit %d) %q", line, err, exit, out)
+		}
+		if !strings.Contains(out, "stash@{0}") {
+			t.Errorf("%q: no stash listed: %q", line, out)
+		}
+		if strings.Contains(out, "PASSWORD=") {
+			t.Errorf("%q: printed file contents: %q", line, out)
+		}
 	}
 }
 

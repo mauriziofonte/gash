@@ -54,7 +54,7 @@ caller's shell, after three checks:
 | `find`, `fd`, `rg` | `-exec`, `-execdir`, `-ok`, `-delete`, `-fprint*`, `-fls`; `fd -x/-X`; `rg --pre` |
 | `sort`, `tree` | `-o`, `--output`, `--compress-program` |
 | `sed`, `yq` | `-i`, `--in-place`; `yq` also `-s`/`--split-exp` (writes files) and `load()` (reads any file) |
-| `git` | global options other than `-C`, `--no-pager` and a few read-only ones (so no `-c`, no `--literal-pathspecs`); subcommands outside a read-only list; `--output`, `--ext-diff`, `--textconv`, `--no-index`, `cat-file --batch*`; blobs named by id (`show SHA`, `cat-file -p SHA`); `REV:PATH` naming a secret file; creating or deleting branches and tags; `remote` other than `show -n`/`get-url`; `config` without `--get`/`--list`; `stash` other than `list`/`show` (summary options only) |
+| `git` | global options other than `-C`, `--no-pager` and a few read-only ones (so no `-c`, no `--literal-pathspecs`); subcommands outside a read-only list; `--output`, `--ext-diff`, `--textconv`, `--no-index`, `cat-file --batch*`; blobs named by id (`show SHA`, `cat-file -p SHA`); `REV:PATH` naming a secret file; creating or deleting branches and tags; `remote` other than `show -n`/`get-url`; `config` without `--get`/`--list`; `stash` other than `list`/`show` (summary options only; no patch options on `list`) |
 | `ps`, `getent` | BSD `ps e` (other processes' environments); `getent shadow`, `getent gshadow` |
 | `diff` | `-r` where `diff` has no `--no-dereference` |
 | `docker` | subcommands other than `ps`, `images`, `logs`, `inspect`, `stats`, `top` and other read-only ones |

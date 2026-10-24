@@ -117,6 +117,18 @@ func (lc *lineChecker) checkGit(args []string) error {
 			}
 			return refuseOption("git stash", d)
 		}
+		// 2.x left git stash list unconstrained, and git stash list -p
+		// printed the stashed patches of secret files: git puts the stash
+		// ref after its own arguments, so no :(exclude) pathspec can be
+		// added. A patch option is refused (3.0: LEDGER EXEC-02 fixed).
+		if p0 == "list" {
+			for _, w := range rest {
+				if isGitPatchOpt(w) {
+					return refuse("option_not_allowed", "git stash list "+w, "FATAL",
+						"git stash list prints the list only here; for a stash's patch use: git diff 'stash@{0}^' 'stash@{0}'")
+				}
+			}
+		}
 		if p0 == "show" {
 			for _, w := range rest {
 				if !isGitStashShowOpt(w) {
@@ -147,6 +159,21 @@ func isGitBranchTagWrite(w string) bool {
 	return strings.HasPrefix(w, "--local-user") || strings.HasPrefix(w, "--file") ||
 		strings.HasPrefix(w, "--message") || strings.HasPrefix(w, "-m") ||
 		strings.HasPrefix(w, "--set-upstream-to") || strings.HasPrefix(w, "--track")
+}
+
+// isGitPatchOpt is the patch-option test of the child git wrapper
+// (__llm_cx_git): an option that makes a log print diffs.
+func isGitPatchOpt(w string) bool {
+	switch w {
+	case "-p", "-u", "-W", "--function-context", "-c", "--cc", "--dd", "-m", "--binary", "--full-diff", "-t":
+		return true
+	}
+	for _, p := range []string{"--patch", "-U", "--unified", "--word-diff", "--color-words", "--remerge-diff", "--diff-merges"} {
+		if strings.HasPrefix(w, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func isGitStashShowOpt(w string) bool {
