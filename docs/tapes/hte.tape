@@ -1,6 +1,7 @@
 # gash hte: local HTTPS sites with Apache and PHP-FPM, run as your user.
 # Changes the machine (one sudo at install): render.sh records it only with
-# GASH_DEMO_HTE=1, and the hidden tail uninstalls again.
+# GASH_DEMO_HTE=1, and the hidden tail uninstalls again. The tail also saves
+# the page to /tmp/gash-demo-hte.check, which render.sh checks.
 # Record with docs/tapes/render.sh hte (see docs/tapes/README.md).
 Output docs/assets/hte.gif
 
@@ -51,7 +52,7 @@ Wait
 Sleep 4s
 
 Hide
-Type "clear; gash hte site remove --domain shop.test --yes >/dev/null 2>&1; gash hte uninstall --yes >/dev/null 2>&1"
+Type "clear; curl -sk https://shop.test/ >/tmp/gash-demo-hte.check; gash hte site remove --domain shop.test --yes >/dev/null 2>&1; gash hte uninstall --yes >/dev/null 2>&1"
 Enter
 Wait
 

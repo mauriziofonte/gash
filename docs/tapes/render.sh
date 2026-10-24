@@ -38,5 +38,12 @@ else
 fi
 for t in "${tapes[@]}"; do
     echo "== $t"
+    rm -f /tmp/gash-demo-hte.check
     vhs "$t"
+    # vhs records whatever the commands print, errors included: for the
+    # HTE tape, check that the site really answered.
+    if [ "$t" = docs/tapes/hte.tape ] && ! grep -q '^Acme shop: PHP' /tmp/gash-demo-hte.check 2>/dev/null; then
+        echo "render.sh: $t: https://shop.test/ did not answer during the recording" >&2
+        exit 1
+    fi
 done
