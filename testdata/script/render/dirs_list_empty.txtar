@@ -27,9 +27,11 @@ exec bash -c 'cd d2; mkdir -p d/e1 d/e2; export GASH__TTY_OUT=1 GASH__COLOR=1 CO
 stdout '^2$'
 
 # --- :114 none - no empty directories, no output
+# 3.0: FS-18 fixed: not even a blank line (rc.A printed one).
 mkdir d3
 exec bash -c 'cd d3; mkdir -p d && printf x >d/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_list_empty d'
 ! stdout '.'
+cmp stdout empty.txt
 
 # --- :115 not-a-directory - the path is a file
 ! exec bash -c 'printf x >f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_list_empty f'
@@ -39,3 +41,5 @@ stderr 'Error: not_a_directory: Path .f. is not a directory'
 ! exec bash -c 'printf x >f2; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; dirs_list_empty f2'
 stderr '^Error: not_a_directory'
 ! stderr '\x1b'
+
+-- empty.txt --

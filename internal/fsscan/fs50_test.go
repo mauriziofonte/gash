@@ -40,5 +40,10 @@ func TestLedger_FS50(t *testing.T) {
 		if !strings.Contains(out, "txt") {
 			t.Errorf("%s: the ordinary extension row is missing: %q", run.name, out)
 		}
+		// 3.0: FS-01 and FS-17 fixed: the tab name is left out, so no row
+		// carries any part of it.
+		if strings.Contains(out, "touch") || strings.Contains(out, "MARKER") {
+			t.Errorf("%s: a row carries the file name's text: %q", run.name, out)
+		}
 	}
 }

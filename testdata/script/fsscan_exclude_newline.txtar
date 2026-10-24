@@ -1,0 +1,21 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: FS-20
+# covers: none (3.0 surface)
+#
+# An --exclude value holding a newline is refused with invalid_filter in all
+# five scanners, and is never turned into walk predicates: the value below
+# is shaped like a find action that would create an empty MARKER file, and
+# no MARKER may exist after the five calls.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir fx
+exec bash -c 'printf x > fx/f'
+
+! exec bash -c 'source "$GASH_SH"; v=$(printf "*\n-exec\ntouch\n%s\n;" "$WORK/MARKER"); rc=0; for f in files_largest dirs_largest dirs_find_large dirs_list_empty tree_stats; do $f --json --exclude "$v" fx && rc=1; done; exit $((rc == 0))'
+stderr '"error":"invalid_filter"'
+! stdout .
+! exists MARKER
+! exists fx/MARKER

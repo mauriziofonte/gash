@@ -5,8 +5,10 @@ package fsscan
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -83,207 +85,506 @@ func fakeTool(t *testing.T, dir, name string) {
 	}
 }
 
-func TestLedger_FS02_2x(t *testing.T) {
+// envOf decodes one JSON line, failing the test when it is not valid JSON.
+func envOf(t *testing.T, label, out string) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		t.Fatalf("%s: invalid JSON %q: %v", label, out, err)
+	}
+	return m
+}
+
+// scanArgs adds the flags a scanner needs to report everything on a small
+// fixture (dirs_find_large: a zero threshold; dirs_largest: depth 3).
+func scanArgs(fn string, args ...string) []string {
+	switch fn {
+	case "dirs_find_large":
+		return append([]string{"--size", "0"}, args...)
+	case "dirs_largest":
+		return append([]string{"--depth", "3"}, args...)
+	}
+	return args
+}
+
+// TestLedger_FS02_fix: -L never enters a protected tree; tree_stats -L
+// counts what the tree without the link holds (3.0: FS-02 fixed).
+func TestLedger_FS02_fix(t *testing.T) {
 	prot := physical(t, t.TempDir())
 	mustWrite(t, filepath.Join(prot, "secret"), "0123456789")
+	mustMkdir(t, prot, "sub")
 	d := physical(t, t.TempDir())
+	mustMkdir(t, d, "own")
+	mustWrite(t, filepath.Join(d, "own", "f"), "x")
 	if err := os.Symlink(prot, filepath.Join(d, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(prot, "secret"), filepath.Join(d, "own", "flink")); err != nil {
 		t.Fatal(err)
 	}
 	withForbidden(t, prot)
 
-	// -L walks into the protected tree below ROOT (not re-checked).
-	out, _, rc := runGo("files_largest", t.TempDir(), d, "-L", "--json", "--depth", "2", d)
-	if rc != 0 || !strings.Contains(out, `"path":"`+d+`/link/secret"`) {
-		t.Errorf("files_largest -L: rc=%d out=%q", rc, out)
+	out, errb, rc := runGo("files_largest", t.TempDir(), d, "-L", "--json", "--depth", "2", d)
+	m := envOf(t, "files_largest -L", out)
+	if rc != 0 || errb != "" || m["count"] != 1.0 || m["errors"] != 0.0 || !strings.Contains(out, `"path":"`+d+`/own/f"`) {
+		t.Errorf("files_largest -L: rc=%d out=%q err=%q", rc, out, errb)
 	}
 	out, _, rc = runGo("tree_stats", t.TempDir(), d, "-L", "--json", d)
-	if rc != 0 || !strings.Contains(out, `"files_total":1`) {
+	data := envOf(t, "tree_stats -L", out)["data"].(map[string]any)
+	if rc != 0 || data["files_total"] != 1.0 || data["dirs_total"] != 2.0 || data["empty_dirs"] != 0.0 {
 		t.Errorf("tree_stats -L: rc=%d out=%q", rc, out)
 	}
-	// The PATH argument itself is guarded, with the resolved path.
-	out, errb, rc := runGo("files_largest", t.TempDir(), d, "--json", filepath.Join(d, "link"))
+	// The PATH argument itself is still guarded, with the resolved path.
+	out, errb, rc = runGo("files_largest", t.TempDir(), d, "--json", filepath.Join(d, "link"))
 	if rc == 0 || out != "" || !strings.Contains(errb, `"error":"forbidden_path","details":"`+prot+`"`) {
 		t.Errorf("guarded link: rc=%d out=%q err=%q", rc, out, errb)
 	}
 }
 
-func TestLedger_FS03_2x(t *testing.T) {
+// TestLedger_FS03_fix: a walk never descends into a protected tree, also
+// from an allowed root above it, in all five scanners (3.0: FS-03 fixed).
+func TestLedger_FS03_fix(t *testing.T) {
 	d := physical(t, t.TempDir())
-	mustMkdir(t, d, "proc")
-	mustWrite(t, filepath.Join(d, "proc", "f"), "x")
-	withForbidden(t, filepath.Join(d, "proc"))
-	// The walk from an allowed root enters a protected subtree, no warning.
-	out, errb, rc := runGo("files_largest", t.TempDir(), d, "--json", d)
-	if rc != 0 || errb != "" || !strings.Contains(out, `"path":"`+d+`/proc/f"`) {
-		t.Errorf("walk below root: rc=%d out=%q err=%q", rc, out, errb)
+	for _, top := range []string{"proc", "root", "home"} {
+		mustMkdir(t, d, top+"/sub", top+"/e")
+		writeN(t, filepath.Join(d, top, "sub", "f"), 3000)
+	}
+	withForbidden(t, filepath.Join(d, "proc"), filepath.Join(d, "root"))
+	for fn := range scanHandlers {
+		out, errb, rc := runGo(fn, t.TempDir(), d, scanArgs(fn, "--allow-root", "--json", d)...)
+		envOf(t, fn, out)
+		if rc != 0 || errb != "" || strings.Contains(out, d+"/proc") || strings.Contains(out, d+"/root") {
+			t.Errorf("%s: rc=%d out=%q err=%q", fn, rc, out, errb)
+		}
+		if fn != "tree_stats" && !strings.Contains(out, d+"/home") {
+			t.Errorf("%s: home/ entries missing: %q", fn, out)
+		}
+	}
+	out, _, _ := runGo("tree_stats", t.TempDir(), d, "--json", d)
+	data := envOf(t, "tree_stats", out)["data"].(map[string]any)
+	if data["files_total"] != 1.0 || data["dirs_total"] != 4.0 || data["empty_dirs"] != 1.0 {
+		t.Errorf("tree_stats counts the protected trees: %q", out)
 	}
 	// "/" is blocked without --allow-root and scans silently with it.
-	_, errb, rc = runGo("files_largest", t.TempDir(), d, "--json", "--depth", "0", "/")
+	_, errb, rc := runGo("files_largest", t.TempDir(), d, "--json", "--depth", "0", "/")
 	if rc == 0 || !strings.Contains(errb, `"error":"root_scan_blocked"`) {
 		t.Errorf("/ without --allow-root: rc=%d err=%q", rc, errb)
 	}
-	same2x(t, d, nil, "files_largest", "--allow-root", "--json", "--depth", "0", "/")
-	same2x(t, d, nil, "dirs_list_empty", "--allow-root", "--json", "--depth", "0", "/")
+	out, errb, rc = runGo("dirs_list_empty", t.TempDir(), d, "--allow-root", "--json", "--depth", "0", "/")
+	if rc != 0 || errb != "" || !strings.HasPrefix(out, `{"data":[],"count":0,"path":"/"`) {
+		t.Errorf("/ with --allow-root: rc=%d out=%q err=%q", rc, out, errb)
+	}
 }
 
-func TestLedger_FS04_2x(t *testing.T) {
+// TestLedger_FS04_fix: a second PATH, before or after "--", fails with
+// unexpected_argument; "-- A" still scans A (3.0: FS-04 fixed).
+func TestLedger_FS04_fix(t *testing.T) {
 	d := t.TempDir()
 	mustMkdir(t, d, "a", "b")
 	mustWrite(t, filepath.Join(d, "b", "f"), "x")
 	a, b := filepath.Join(d, "a"), filepath.Join(d, "b")
+	want := `{"error":"unexpected_argument","details":"` + b + `","action":"RETRY","recoverable":true,"hint":"Pass at most one PATH"}` + "\n"
 	for fn := range scanHandlers {
-		args := []string{"--json", a, b}
-		if fn == "dirs_find_large" {
-			args = append([]string{"--size", "1"}, args...)
+		for _, args := range [][]string{{"--json", a, b}, {"--json", "--", a, b}, {"--json", a, "--", b}} {
+			out, errb, rc := runGo(fn, t.TempDir(), d, args...)
+			if rc != 1 || out != "" || errb != want {
+				t.Errorf("%s %q: rc=%d out=%q err=%q", fn, args, rc, out, errb)
+			}
 		}
-		same2x(t, d, nil, fn, args...)
-		same2x(t, d, nil, fn, append(args[:len(args)-2:len(args)-2], "--", b, a)...)
+		out, errb, rc := runGo(fn, t.TempDir(), d, "--json", "--", b)
+		if rc != 0 || errb != "" || !json.Valid([]byte(out)) {
+			t.Errorf("%s -- B: rc=%d out=%q err=%q", fn, rc, out, errb)
+		}
 	}
-	out, _, rc := runGo("files_largest", t.TempDir(), d, "--json", a, b)
-	if rc != 0 || !strings.Contains(out, `"path":"`+physical(t, b)+`/f"`) {
-		t.Errorf("last PATH wins: rc=%d out=%q", rc, out)
+	_, errb, rc := runGo("files_largest", t.TempDir(), d, a, b)
+	if rc != 1 || errb != "Error: unexpected_argument: "+b+"\nHint: Pass at most one PATH\n" {
+		t.Errorf("text mode: rc=%d err=%q", rc, errb)
 	}
 }
 
-func TestLedger_FS05_2x(t *testing.T) {
+// TestLedger_FS05_fix: every integer flag takes 1 to 9 ASCII digits, base
+// 10, with the FS-49 hint (3.0: FS-05 and FS-49 fixed).
+func TestLedger_FS05_fix(t *testing.T) {
 	d := t.TempDir()
 	mustWrite(t, filepath.Join(d, "f"), "x")
-	out, _, rc := same2x(t, d, nil, "files_largest", "--json", "--depth", "2147483648", d)
-	if rc != 0 || !strings.Contains(out, `"count":0`) || !strings.Contains(out, `"errors":1`) {
-		t.Errorf("--depth 2147483648: rc=%d out=%q", rc, out)
+	flags := []struct{ fn, flag, code string }{
+		{"files_largest", "-n", "invalid_limit"}, {"files_largest", "--depth", "invalid_depth"},
+		{"dirs_largest", "-n", "invalid_limit"}, {"dirs_largest", "--depth", "invalid_depth"},
+		{"dirs_find_large", "-n", "invalid_limit"}, {"dirs_find_large", "--depth", "invalid_depth"},
+		{"dirs_list_empty", "--min-depth", "invalid_depth"}, {"dirs_list_empty", "--depth", "invalid_depth"},
+		{"tree_stats", "--depth", "invalid_depth"}, {"tree_stats", "--top", "invalid_top"},
 	}
-	same2x(t, d, nil, "files_largest", "--json", "-n", "99999999999999999999", d)
-	same2x(t, d, nil, "files_largest", "--json", "-n", "1234567890", d)
-	same2x(t, d, nil, "dirs_largest", "--json", "--depth", "9223372036854775807", d)
-	same2x(t, d, nil, "dirs_list_empty", "--json", "--depth", "1234567890", d)
-	same2x(t, d, nil, "tree_stats", "--json", "--top", "1234567890", d)
+	for _, f := range flags {
+		want := `{"error":"` + f.code + `","details":"1234567890","action":"RETRY","recoverable":true,` +
+			`"hint":"Provide a non-negative integer (at most 9 digits)"}` + "\n"
+		out, errb, rc := runGo(f.fn, t.TempDir(), d, "--json", f.flag, "1234567890", d)
+		if rc != 1 || out != "" || errb != want {
+			t.Errorf("%s %s: rc=%d out=%q err=%q", f.fn, f.flag, rc, out, errb)
+		}
+		if _, _, rc := runGo(f.fn, t.TempDir(), d, "--json", f.flag, "999999999", d); rc != 0 {
+			t.Errorf("%s %s 999999999: rc=%d", f.fn, f.flag, rc)
+		}
+	}
+	// --depth 010 is ten levels.
+	deep := t.TempDir()
+	p := deep
+	for i := 1; i <= 14; i++ {
+		p = filepath.Join(p, "d")
+	}
+	mustMkdir(t, p, ".")
+	writeN(t, filepath.Join(p, "f"), 5000)
+	out, _, rc := runGo("dirs_largest", t.TempDir(), deep, "--json", "--depth", "010", deep)
+	if n := strings.Count(out, `"path":`); rc != 0 || n != 10 {
+		t.Errorf("--depth 010: rc=%d rows=%d, want 10", rc, n)
+	}
 }
 
-func TestLedger_FS06_2x(t *testing.T) {
-	d := t.TempDir()
-	tab := filepath.Join(d, "t\tx")
-	mustMkdir(t, d, "t\tx")
-	writeN(t, filepath.Join(tab, "f"), 5000)
-	out, _, _ := same2x(t, d, nil, "dirs_largest", "--json", d)
-	if !strings.Contains(out, `t\tx"`) {
-		t.Errorf("tab path not listed: %q", out)
-	}
-	same2x(t, d, nil, "dirs_largest", "--null", d)
-	same2x(t, d, nil, "dirs_largest", d)
+// fixTabNL builds the tab/newline fixture of FS-01: dirs t<TAB>x, n<NL>x,
+// empty et<TAB>x and en<NL>x, files ft<TAB>y and fn<NL>y, and norm/f.
+func fixTabNL(t *testing.T) string {
+	t.Helper()
+	d := physical(t, t.TempDir())
+	mustMkdir(t, d, "t\tx", "n\nx", "et\tx", "en\nx", "norm")
+	writeN(t, filepath.Join(d, "t\tx", "f"), 5000)
+	writeN(t, filepath.Join(d, "n\nx", "f"), 5000)
+	writeN(t, filepath.Join(d, "ft\ty"), 700)
+	writeN(t, filepath.Join(d, "fn\ny"), 700)
+	writeN(t, filepath.Join(d, "norm", "f"), 1000)
+	return d
 }
 
-func TestLedger_FS07_2x(t *testing.T) {
+// TestLedger_FS01_fix: no scanner, in any mode, reports a path below the
+// root that holds a tab or a newline, nor a name cut from one; tree_stats
+// leaves them out of every count (3.0: FS-01 applied uniformly).
+func TestLedger_FS01_fix(t *testing.T) {
+	d := fixTabNL(t)
+	bad := func(out string) bool {
+		rest := strings.ReplaceAll(out, d, "")
+		for _, cut := range []string{"/t\"", "/et\"", "/n\"", "/t\x00", "/et\x00", "/n\x00", "/t\n", "/et\n", "/n\n"} {
+			if strings.Contains(rest, cut) {
+				return true
+			}
+		}
+		return strings.Contains(rest, `\t`) || strings.Contains(rest, `\n`) ||
+			strings.Contains(strings.TrimSuffix(rest, "\n"), "\n/") || strings.Contains(rest, "\t")
+	}
+	for fn := range scanHandlers {
+		modes := [][]string{{"--json"}, {"--null"}, {}}
+		switch fn {
+		case "tree_stats":
+			modes = [][]string{{"--json"}}
+		case "dirs_list_empty":
+			modes = append(modes, []string{"--count"})
+		case "dirs_find_large":
+			modes = append(modes, []string{"--json", "--with-mtime"}, []string{"--null", "--with-mtime"})
+		}
+		for _, m := range modes {
+			args := scanArgs(fn, append(append([]string{}, m...), d)...)
+			out, errb, rc := runGo(fn, t.TempDir(), d, args...)
+			if rc != 0 || errb != "" || bad(out) {
+				t.Errorf("%s %q: rc=%d out=%q err=%q", fn, m, rc, out, errb)
+			}
+			if len(m) > 0 && m[0] == "--json" {
+				envOf(t, fn, out)
+			}
+		}
+	}
+	out, _, _ := runGo("tree_stats", t.TempDir(), d, "--json", d)
+	data := envOf(t, "tree_stats", out)["data"].(map[string]any)
+	if data["files_total"] != 1.0 || data["dirs_total"] != 2.0 || data["empty_dirs"] != 0.0 || data["size_total"] != 1000.0 {
+		t.Errorf("tree_stats counts: %q", out)
+	}
+	out, _, _ = runGo("dirs_list_empty", t.TempDir(), d, "--count", d)
+	if out != "0\n" {
+		t.Errorf("dirs_list_empty --count: %q", out)
+	}
+}
+
+// TestLedger_FS06_fix: dirs_largest leaves a tab directory out in every
+// mode, and out of its parent's total (3.0: FS-06 fixed).
+func TestLedger_FS06_fix(t *testing.T) {
+	d := physical(t, t.TempDir())
+	mustMkdir(t, d, "p/t\tx", "q")
+	writeN(t, filepath.Join(d, "p", "t\tx", "f"), 50000)
+	writeN(t, filepath.Join(d, "q", "f"), 5000)
+	for _, mode := range []string{"--json", "--null", "--no-color"} {
+		out, _, rc := runGo("dirs_largest", t.TempDir(), d, mode, "--depth", "3", d)
+		if rc != 0 || strings.Contains(out, "t\tx") || strings.Contains(out, `t\tx`) {
+			t.Errorf("%s: rc=%d out=%q", mode, rc, out)
+		}
+	}
+	out, _, _ := runGo("dirs_largest", t.TempDir(), d, "--json", d)
+	var env struct {
+		Data []struct {
+			Size int64
+			Path string
+		}
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil || len(env.Data) != 2 || env.Data[0].Path != d+"/q" {
+		t.Errorf("p must be smaller than q without its tab child: %q", out)
+	}
+}
+
+// TestLedger_FS07_fix: dirs_list_empty leaves an empty tab directory out
+// (3.0: FS-07 fixed).
+func TestLedger_FS07_fix(t *testing.T) {
 	d := t.TempDir()
 	mustMkdir(t, d, "et\tx")
-	out, _, _ := same2x(t, d, nil, "dirs_list_empty", "--json", d)
-	if !strings.Contains(out, `"count":1`) {
-		t.Errorf("tab dir not counted: %q", out)
-	}
-	for _, mode := range []string{"--null", "--count", ""} {
+	mustWrite(t, filepath.Join(d, "f"), "x")
+	for _, c := range []struct{ mode, want string }{{"--count", "0\n"}, {"--null", ""}, {"", ""}} {
 		args := []string{d}
-		if mode != "" {
-			args = []string{mode, d}
+		if c.mode != "" {
+			args = []string{c.mode, d}
 		}
-		same2x(t, d, nil, "dirs_list_empty", args...)
+		if out, _, rc := runGo("dirs_list_empty", t.TempDir(), d, args...); rc != 0 || out != c.want {
+			t.Errorf("%q: rc=%d out=%q", c.mode, rc, out)
+		}
+	}
+	out, _, _ := runGo("dirs_list_empty", t.TempDir(), d, "--json", d)
+	if envOf(t, "json", out)["count"] != 0.0 {
+		t.Errorf("--json: %q", out)
 	}
 }
 
-func TestLedger_FS08_2x(t *testing.T) {
+// TestLedger_FS08_fix: tree_stats counts neither tab paths nor newline
+// directories, in both counts (3.0: FS-08 fixed).
+func TestLedger_FS08_fix(t *testing.T) {
 	d := t.TempDir()
-	mustMkdir(t, d, "en\nx")
-	out, _, _ := same2x(t, d, nil, "tree_stats", "--json", d)
-	if !strings.Contains(out, `"empty_dirs":2`) || !strings.Contains(out, `"dirs_total":1`) {
+	mustMkdir(t, d, "en\nx", "et\tx", "t\tx")
+	mustWrite(t, filepath.Join(d, "t\tx", "f"), "x")
+	mustWrite(t, filepath.Join(d, "ft\ty"), "x")
+	out, _, _ := runGo("tree_stats", t.TempDir(), d, "--json", d)
+	data := envOf(t, "tree_stats", out)["data"].(map[string]any)
+	if data["empty_dirs"] != 0.0 || data["dirs_total"] != 1.0 || data["files_total"] != 0.0 {
 		t.Errorf("FS-08 counts: %q", out)
 	}
 }
 
-func TestLedger_FS09_2x(t *testing.T) {
+// TestLedger_FS09_fix: dirs_find_large never reports a path cut at a tab;
+// every --null record is an existing directory (3.0: FS-09 fixed).
+func TestLedger_FS09_fix(t *testing.T) {
 	d := t.TempDir()
-	mustMkdir(t, d, "t\tx")
+	mustMkdir(t, d, "t\tx", "ok")
 	writeN(t, filepath.Join(d, "t\tx", "f"), 5000)
-	out, _, _ := same2x(t, d, nil, "dirs_find_large", "--size", "1", "--json", d)
-	if !strings.Contains(out, `"path":"`+physical(t, d)+`/t"`) {
-		t.Errorf("path not cut at the tab: %q", out)
+	writeN(t, filepath.Join(d, "ok", "f"), 5000)
+	for _, extra := range [][]string{nil, {"--with-mtime"}} {
+		out, _, rc := runGo("dirs_find_large", t.TempDir(), d, append([]string{"--size", "1", "--json"}, append(extra, d)...)...)
+		if rc != 0 || strings.Contains(out, `/t"`) || strings.Contains(out, `t\tx`) || !strings.Contains(out, `/ok"`) {
+			t.Errorf("%q: rc=%d out=%q", extra, rc, out)
+		}
 	}
-	out, _, _ = same2x(t, d, nil, "dirs_find_large", "--size", "1", "--json", "--with-mtime", d)
-	if !strings.Contains(out, `t\tx"`) {
-		t.Errorf("--with-mtime path not intact: %q", out)
+	out, _, _ := runGo("dirs_find_large", t.TempDir(), d, "--size", "1", "--null", d)
+	recs := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	for _, r := range recs {
+		if st, err := os.Stat(r); err != nil || !st.IsDir() || strings.HasSuffix(r, "/t") {
+			t.Errorf("--null record %q", r)
+		}
 	}
-	same2x(t, d, nil, "dirs_find_large", "--size", "1", "--null", d)
 }
 
-func TestLedger_FS10_2x(t *testing.T) {
-	d := t.TempDir()
-	for _, n := range []string{"esc\033x", "bs\bx", "ff\fx", "soh\001x"} {
-		mustWrite(t, filepath.Join(d, n), "x")
-		mustMkdir(t, d, "d"+n)
+// TestLedger_FS10_fix: every scanner's JSON is valid for names holding
+// control characters, and the names round-trip (3.0: FS-10 fixed).
+func TestLedger_FS10_fix(t *testing.T) {
+	d := physical(t, t.TempDir())
+	names := []string{"esc\033x", "bs\bx", "ff\fx", "soh\001x", "del\x7fx"}
+	for _, n := range names {
+		writeN(t, filepath.Join(d, "f"+n), 2000)
+		mustMkdir(t, d, "d"+n+"/e")
+		writeN(t, filepath.Join(d, "d"+n, "g"), 2000)
 	}
-	same2x(t, d, nil, "files_largest", "--json", d)
-	same2x(t, d, nil, "dirs_list_empty", "--json", d)
-	same2x(t, d, nil, "dirs_largest", "--json", d)
-	same2x(t, d, nil, "dirs_find_large", "--size", "0", "--json", d)
+	for fn := range scanHandlers {
+		out, _, rc := runGo(fn, t.TempDir(), d, scanArgs(fn, "--json", d)...)
+		if rc != 0 || !json.Valid([]byte(out)) {
+			t.Errorf("%s: rc=%d invalid JSON %q", fn, rc, out)
+			continue
+		}
+		if fn == "tree_stats" {
+			continue
+		}
+		var decoded struct{ Data json.RawMessage }
+		_ = json.Unmarshal([]byte(out), &decoded)
+		for _, n := range names {
+			want := "/f" + n
+			if fn != "files_largest" {
+				want = "/d" + n
+			}
+			if !strings.Contains(string(decodeStrings(t, decoded.Data)), want) {
+				t.Errorf("%s: %q does not round-trip", fn, want)
+			}
+		}
+	}
 }
 
-func TestLedger_FS11_2x(t *testing.T) {
+// decodeStrings returns every string of a JSON value, joined by NULs.
+func decodeStrings(t *testing.T, raw json.RawMessage) string {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	var walk func(any)
+	walk = func(x any) {
+		switch y := x.(type) {
+		case string:
+			b.WriteString(y)
+			b.WriteByte(0)
+		case []any:
+			for _, e := range y {
+				walk(e)
+			}
+		case map[string]any:
+			for _, e := range y {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	return b.String()
+}
+
+// TestLedger_FS11_fix: the size flags use the native grammar: the fallback
+// oddities are refused, units are case-insensitive (3.0: FS-11 fixed).
+func TestLedger_FS11_fix(t *testing.T) {
 	d := t.TempDir()
 	writeN(t, filepath.Join(d, "f"), 2000)
-	_, _, rc := same2x(t, d, nil, "files_largest", "--json", "--min-size", "K1", d)
-	if rc != 0 {
-		t.Errorf("--min-size K1: rc=%d", rc)
+	for _, v := range []string{"1K2", "K1", "iB5", "1 0K", "5i"} {
+		for _, c := range []struct{ fn, flag string }{{"files_largest", "--min-size"}, {"dirs_largest", "--min-size"}, {"dirs_find_large", "--size"}} {
+			_, errb, rc := runGo(c.fn, t.TempDir(), d, "--json", c.flag, v, d)
+			if rc != 1 || !strings.Contains(errb, `"error":"invalid_size","details":"`+v+`"`) {
+				t.Errorf("%s %s %q: rc=%d err=%q", c.fn, c.flag, v, rc, errb)
+			}
+		}
 	}
-	_, errb, _ := same2x(t, d, nil, "files_largest", "--json", "--min-size", "1kb", d)
-	if !strings.Contains(errb, `"error":"invalid_size"`) {
-		t.Errorf("--min-size 1kb: %q", errb)
-	}
-	for _, v := range []string{"1.5K", "2K", "1Ki", "1KiB", "1KB", "abc", "1x2", "0", "3M", "1e3"} {
-		same2x(t, d, nil, "files_largest", "--json", "--min-size", v, d)
-		same2x(t, d, nil, "dirs_find_large", "--json", "--size", v, d)
+	for _, c := range []struct {
+		v     string
+		count float64
+	}{{"1kb", 1}, {"1KIB", 1}, {"1.5K", 1}, {"2K", 0}, {"1999B", 1}} {
+		out, _, rc := runGo("files_largest", t.TempDir(), d, "--json", "--min-size", c.v, d)
+		if rc != 0 || envOf(t, c.v, out)["count"] != c.count {
+			t.Errorf("--min-size %s: rc=%d out=%q", c.v, rc, out)
+		}
 	}
 }
 
-func TestLedger_FS12_2x(t *testing.T) {
-	base := t.TempDir()
+// TestLedger_FS12_fix: one --exclude rule in all five scanners: the base
+// name or the path below PATH, '*' never crossing '/', never the root's own
+// path, no '|' splitting (3.0: FS-12 fixed).
+func TestLedger_FS12_fix(t *testing.T) {
+	base := physical(t, t.TempDir())
 	d := filepath.Join(base, "proj")
-	mustMkdir(t, base, "proj/src", "proj/mysrcdir", "proj/logs", "proj/s1c/e", "proj/x/src")
-	mustWrite(t, filepath.Join(d, "mysrcdir", "f"), "x")
+	mustMkdir(t, base, "proj/src/e", "proj/mysrcdir/e", "proj/logs/e", "proj/x/src/e")
+	writeN(t, filepath.Join(d, "mysrcdir", "f"), 3000)
 	writeN(t, filepath.Join(d, "logs", "a.log"), 3000)
 	writeN(t, filepath.Join(d, "src", "m.go"), 2000)
 	writeN(t, filepath.Join(d, "x", "src", "n.go"), 1000)
-	for _, pat := range []string{"src", "*/src", physical(t, d) + "/src", "*.log", "s*c", "src|logs", "proj"} {
-		same2x(t, base, nil, "dirs_largest", "--json", "--exclude", pat, d)
-		same2x(t, base, nil, "dirs_find_large", "--json", "--size", "0", "--exclude", pat, d)
-		same2x(t, base, nil, "files_largest", "--json", "--exclude", pat, d)
-		same2x(t, base, nil, "dirs_list_empty", "--json", "--exclude", pat, d)
+	hidden := func(out, p string) bool { return !strings.Contains(out, d+"/"+p) }
+	for fn := range scanHandlers {
+		all, _, _ := runGo(fn, t.TempDir(), base, scanArgs(fn, "--json", d)...)
+		for _, c := range []struct {
+			pat          string
+			hide, keep   []string
+			sameAsNoExcl bool
+		}{
+			{pat: "src", hide: []string{"src/", "x/src/"}, keep: []string{"mysrcdir/"}},
+			{pat: "*/src", hide: []string{"x/src/"}, keep: []string{"src/", "mysrcdir/"}},
+			{pat: "s*c", hide: []string{"src/", "x/src/"}, keep: []string{"mysrcdir/"}},
+			{pat: "*.log", keep: []string{"src/"}},
+			{pat: "proj", sameAsNoExcl: true},
+			{pat: "src|logs", sameAsNoExcl: true},
+			{pat: d + "/src", sameAsNoExcl: true},
+		} {
+			out, _, rc := runGo(fn, t.TempDir(), base, scanArgs(fn, "--json", "--exclude", c.pat, d)...)
+			if rc != 0 {
+				t.Errorf("%s --exclude %q: rc=%d", fn, c.pat, rc)
+				continue
+			}
+			if c.sameAsNoExcl {
+				if normScan(out, d) != normScan(all, d) {
+					t.Errorf("%s --exclude %q hid something:\n got %q\nwant %q", fn, c.pat, out, all)
+				}
+				continue
+			}
+			if fn == "tree_stats" {
+				continue // no paths in its output; counts checked below
+			}
+			for _, h := range c.hide {
+				if !hidden(out, h) {
+					t.Errorf("%s --exclude %q: %s still listed: %q", fn, c.pat, h, out)
+				}
+			}
+			for _, k := range c.keep {
+				if hidden(out, k) {
+					t.Errorf("%s --exclude %q: %s hidden: %q", fn, c.pat, k, out)
+				}
+			}
+		}
+	}
+	out, _, _ := runGo("tree_stats", t.TempDir(), base, "--json", "--exclude", "src", d)
+	data := envOf(t, "tree_stats", out)["data"].(map[string]any)
+	if data["files_total"] != 2.0 || data["empty_dirs"] != 2.0 {
+		t.Errorf("tree_stats --exclude src: %q", out)
+	}
+	out, _, _ = runGo("tree_stats", t.TempDir(), base, "--json", "--exclude", "*.log", d)
+	if envOf(t, "tree_stats", out)["data"].(map[string]any)["files_total"] != 3.0 {
+		t.Errorf("tree_stats --exclude *.log: %q", out)
 	}
 }
 
-func TestLedger_FS13_2x(t *testing.T) {
+// TestLedger_FS13_fix: the default prunes and excludes never apply to the
+// root, and --min-depth only filters the output (3.0: FS-13 fixed).
+func TestLedger_FS13_fix(t *testing.T) {
 	base := t.TempDir()
 	v := filepath.Join(base, "vendor")
-	mustMkdir(t, base, "vendor")
+	mustMkdir(t, base, "vendor/e")
 	mustWrite(t, filepath.Join(v, "f"), "x")
-	out, _, _ := same2x(t, base, nil, "files_largest", "--json", v)
-	if !strings.Contains(out, `"count":0`) {
-		t.Errorf("pruned root still scanned: %q", out)
+	for fn := range scanHandlers {
+		out, _, rc := runGo(fn, t.TempDir(), base, scanArgs(fn, "--json", v)...)
+		if rc != 0 || strings.Contains(out, `"count":0`) || strings.Contains(out, `"files_total":0`) {
+			t.Errorf("%s scanning vendor/: rc=%d out=%q", fn, rc, out)
+		}
+	}
+	out, _, _ := runGo("files_largest", t.TempDir(), base, "--json", "--exclude", "vendor", v)
+	if !strings.Contains(out, `"count":1`) {
+		t.Errorf("--exclude matched the root: %q", out)
 	}
 	d := t.TempDir()
 	mustMkdir(t, d, "node_modules/a/b", "src/c")
-	same2x(t, d, nil, "dirs_list_empty", "--json", "--min-depth", "2", d)
-	same2x(t, d, nil, "dirs_list_empty", "--json", d)
-}
-
-func TestLedger_FS14_2x(t *testing.T) {
-	d := t.TempDir()
-	out, _, rc := same2x(t, d, nil, "dirs_list_empty", "--json", "--depth", "2147483648", d)
-	if rc != 0 || !strings.Contains(out, `"data":[],"count":0`) || !strings.Contains(out, `"errors":1`) {
-		t.Errorf("FS-14: rc=%d out=%q", rc, out)
+	out, _, _ = runGo("dirs_list_empty", t.TempDir(), d, "--json", "--min-depth", "2", d)
+	if strings.Contains(out, "node_modules") || !strings.Contains(out, "/src/c\"") {
+		t.Errorf("--min-depth 2: %q", out)
 	}
-	same2x(t, d, nil, "files_largest", "--json", "--depth", "99999999999", d)
-	same2x(t, d, nil, "tree_stats", "--json", "--depth", "2147483648", d)
 }
 
-func TestLedger_FS15_2x(t *testing.T) {
+// TestLedger_FS14_fix: the argument cases are refused by validation; an
+// unlistable root is path_unreadable (3.0: FS-14 fixed).
+func TestLedger_FS14_fix(t *testing.T) {
+	d := t.TempDir()
+	_, errb, rc := runGo("dirs_list_empty", t.TempDir(), d, "--json", "--depth", "2147483648", d)
+	if rc != 1 || !strings.Contains(errb, `"error":"invalid_depth"`) {
+		t.Errorf("--depth 2147483648: rc=%d err=%q", rc, errb)
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("needs an unprivileged user: root lists mode-0111 directories")
+	}
+	x := filepath.Join(d, "x")
+	mustMkdir(t, d, "x/sub")
+	if err := os.Chmod(x, 0o111); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(x, 0o755) })
+	want := `{"error":"path_unreadable","details":"Path '` + x + `' is not readable","action":"RETRY","recoverable":true,"hint":"Check directory permissions"}` + "\n"
+	for fn := range scanHandlers {
+		out, errb, rc := runGo(fn, t.TempDir(), d, scanArgs(fn, "--json", x)...)
+		if rc != 1 || out != "" || errb != want {
+			t.Errorf("%s: rc=%d out=%q err=%q", fn, rc, out, errb)
+		}
+	}
+}
+
+// TestLedger_FS15_fix: errors counts each unreadable entry once, in all
+// five scanners (3.0: FS-15 fixed).
+func TestLedger_FS15_fix(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("needs an unprivileged user: root reads mode-000 directories")
 	}
@@ -293,36 +594,73 @@ func TestLedger_FS15_2x(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(filepath.Join(d, "x"), 0o755) })
-	out, _, _ := same2x(t, d, nil, "dirs_list_empty", "--json", d)
-	if !strings.Contains(out, `"errors":2`) {
-		t.Errorf("dirs_list_empty errors: %q", out)
-	}
-	out, _, _ = same2x(t, d, nil, "files_largest", "--json", d)
-	if !strings.Contains(out, `"errors":1`) {
-		t.Errorf("files_largest errors: %q", out)
+	for fn := range scanHandlers {
+		out, _, rc := runGo(fn, t.TempDir(), d, scanArgs(fn, "--json", d)...)
+		if rc != 0 || !strings.Contains(out, `"errors":1}`) {
+			t.Errorf("%s: rc=%d out=%q", fn, rc, out)
+		}
 	}
 }
 
-func TestLedger_FS16_2x(t *testing.T) {
+// TestLedger_FS15_loop: a directory loop under -L is one error, and the walk
+// does not run around it.
+func TestLedger_FS15_loop(t *testing.T) {
 	d := t.TempDir()
-	mustMkdir(t, d, "node_modules/p", "src")
+	mustMkdir(t, d, "a")
+	mustWrite(t, filepath.Join(d, "a", "f"), "x")
+	if err := os.Symlink("..", filepath.Join(d, "a", "up")); err != nil {
+		t.Fatal(err)
+	}
+	out, _, rc := runGo("files_largest", t.TempDir(), d, "-L", "--json", d)
+	if rc != 0 || !strings.Contains(out, `"count":1`) || !strings.Contains(out, `"errors":1}`) {
+		t.Errorf("rc=%d out=%q", rc, out)
+	}
+}
+
+// TestLedger_FS16_fix: tree_stats empty_dirs counts what dirs_list_empty
+// --count counts, with the same prunes and excludes (3.0: FS-16 fixed).
+func TestLedger_FS16_fix(t *testing.T) {
+	d := t.TempDir()
+	mustMkdir(t, d, "node_modules/p", "src", "logs")
 	mustWrite(t, filepath.Join(d, "node_modules", "p", "i.js"), "x")
 	mustWrite(t, filepath.Join(d, "src", "a"), "x")
-	out, _, _ := same2x(t, d, nil, "tree_stats", "--json", d)
-	if !strings.Contains(out, `"empty_dirs":1`) {
+	mustWrite(t, filepath.Join(d, "logs", "x.log"), "x")
+	fixtures := []string{d, mkfix(t), fixTabNL(t)}
+	for _, fx := range fixtures {
+		for _, extra := range [][]string{nil, {"--exclude", "*.log"}, {"--no-ignore"}, {"--exclude", "src"}} {
+			out, _, _ := runGo("tree_stats", t.TempDir(), fx, append(append([]string{"--json"}, extra...), fx)...)
+			cnt, _, _ := runGo("dirs_list_empty", t.TempDir(), fx, append(append([]string{"--count"}, extra...), fx)...)
+			got := envOf(t, "tree_stats", out)["data"].(map[string]any)["empty_dirs"]
+			if strconv.Itoa(int(got.(float64)))+"\n" != cnt {
+				t.Errorf("%s %q: empty_dirs %v, dirs_list_empty --count %q", fx, extra, got, cnt)
+			}
+		}
+	}
+	out, _, _ := runGo("tree_stats", t.TempDir(), d, "--json", "--exclude", "*.log", d)
+	if !strings.Contains(out, `"empty_dirs":0`) {
 		t.Errorf("FS-16 empty_dirs: %q", out)
 	}
-	same2x(t, d, nil, "tree_stats", "--json", "--exclude", "*/src", d)
 }
 
-func TestLedger_FS19_2x(t *testing.T) {
+// TestLedger_FS19_fix: the --json pre-scan skips flag values, so
+// `--exclude --json` takes "--json" as the glob only (3.0: FS-19 fixed).
+func TestLedger_FS19_fix(t *testing.T) {
 	d := t.TempDir()
 	mustWrite(t, filepath.Join(d, "f"), "x")
-	out, _, _ := same2x(t, d, nil, "files_largest", "--exclude", "--json", d)
-	if !strings.HasPrefix(out, `{"data":`) {
-		t.Errorf("FS-19 not JSON: %q", out)
+	mustMkdir(t, d, "e")
+	out, _, rc := runGo("files_largest", t.TempDir(), d, "--exclude", "--json", d)
+	if rc != 0 || strings.HasPrefix(out, "{") || !strings.Contains(out, d) {
+		t.Errorf("files_largest: rc=%d out=%q", rc, out)
 	}
-	same2x(t, d, nil, "dirs_list_empty", "--exclude", "--json", d)
+	out, _, rc = runGo("dirs_list_empty", t.TempDir(), d, "--exclude", "--json", d)
+	if rc != 0 || strings.HasPrefix(out, "{") || !strings.HasSuffix(out, "/e\n") {
+		t.Errorf("dirs_list_empty: rc=%d out=%q", rc, out)
+	}
+	// An error met before a real --json still gets the JSON contract.
+	_, errb, rc := runGo("tree_stats", t.TempDir(), d, "--top", "x", "--json", d)
+	if rc != 1 || !strings.HasPrefix(errb, `{"error":"invalid_top"`) {
+		t.Errorf("error before --json: rc=%d err=%q", rc, errb)
+	}
 }
 
 // TestLedger_FS23: the root and --exclude values are compared literally
@@ -344,12 +682,16 @@ func TestLedger_FS23(t *testing.T) {
 			t.Errorf("%s lists its own root: rc=%d out=%q", fn, rc, out)
 		}
 	}
+	// The --exclude value reaches the glob matcher unchanged: an escaped
+	// backslash matches a literal one (3.0: FS-12 glob rule; a real tab
+	// path is left out anyway, FS-01).
 	d := t.TempDir()
-	mustMkdir(t, d, "x\ty")
-	writeN(t, filepath.Join(d, "x\ty", "f"), 5000)
-	out, _, _ := runGo("dirs_largest", t.TempDir(), d, "--json", "--exclude", `x\ty`, d)
-	if !strings.Contains(out, `x\ty"`) {
-		t.Errorf(`--exclude 'x\ty' hid the tab directory: %q`, out)
+	mustMkdir(t, d, `x\ty`, "keep")
+	writeN(t, filepath.Join(d, `x\ty`, "f"), 5000)
+	writeN(t, filepath.Join(d, "keep", "f"), 5000)
+	out, _, _ := runGo("dirs_largest", t.TempDir(), d, "--json", "--exclude", `x\\ty`, d)
+	if strings.Contains(out, `x\\ty"`) || !strings.Contains(out, `/keep"`) {
+		t.Errorf(`--exclude 'x\\ty' did not hide the backslash directory: %q`, out)
 	}
 }
 
@@ -418,17 +760,25 @@ func TestLedger_FS26(t *testing.T) {
 func TestLedger_FS27(t *testing.T) {
 	bin := t.TempDir()
 	fakeTool(t, bin, "du")
-	d := t.TempDir()
+	d := physical(t, t.TempDir())
 	mustMkdir(t, d, "n\nx", "n", "ok")
 	writeN(t, filepath.Join(d, "n\nx", "f"), 9000)
 	writeN(t, filepath.Join(d, "ok", "f"), 5000)
 	env := map[string]string{"PATH": bin + ":/usr/bin:/bin"}
-	out, _, _ := same2x(t, d, env, "dirs_largest", "--json", d)
-	if strings.Count(out, `"path":`) != 2 || !strings.Contains(out, `/ok"`) || !strings.Contains(out, `/n"`) {
+	out, _, _ := runGoEnv("dirs_largest", t.TempDir(), d, env, "--json", d)
+	var e struct{ Data []struct{ Path string } }
+	if err := json.Unmarshal([]byte(out), &e); err != nil || len(e.Data) != 2 ||
+		e.Data[0].Path != d+"/ok" || e.Data[1].Path != d+"/n" {
 		t.Errorf("FS-27 rows: %q", out)
 	}
-	same2x(t, d, env, "dirs_largest", "--null", d)
-	same2x(t, d, env, "dirs_find_large", "--json", "--size", "0", d)
+	out, _, _ = runGoEnv("dirs_largest", t.TempDir(), d, env, "--null", d)
+	if out != d+"/ok\x00"+d+"/n\x00" {
+		t.Errorf("FS-27 --null: %q", out)
+	}
+	out, _, _ = runGoEnv("dirs_find_large", t.TempDir(), d, env, "--json", "--size", "0", d)
+	if strings.Contains(out, `\n`) || strings.Count(out, `"path":`) != 2 {
+		t.Errorf("FS-27 dirs_find_large: %q", out)
+	}
 }
 
 // TestLedger_FS29: non-ASCII digits get the scanner's invalid_* envelope in
@@ -464,10 +814,15 @@ func TestLedger_FS29(t *testing.T) {
 }
 
 // TestLedger_FS30: TMPDIR is not read; errors are counted in-process.
+// 3.0: FS-05 fixed: the oversized --depth that produced the error is now
+// refused, so the error comes from a directory loop under -L instead.
 func TestLedger_FS30(t *testing.T) {
 	d := t.TempDir()
+	if err := os.Symlink(".", filepath.Join(d, "loop")); err != nil {
+		t.Fatal(err)
+	}
 	out, errb, rc := runGoEnv("files_largest", t.TempDir(), d, map[string]string{"TMPDIR": "/nonexistent"},
-		"--json", "--depth", "2147483648", d)
+		"-L", "--json", d)
 	if rc != 0 || errb != "" || !strings.Contains(out, `"errors":1`) {
 		t.Errorf("FS-30: rc=%d out=%q err=%q", rc, out, errb)
 	}

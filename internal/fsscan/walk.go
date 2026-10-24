@@ -3,6 +3,8 @@
 package fsscan
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,125 +20,216 @@ import (
 // --no-ignore, matched on the base name (files.sh:34-40).
 var defaultPrune = []string{"node_modules", "vendor", ".git", "__pycache__", ".cache"}
 
-// walkOpts drive findWalk, the native replacement for the 2.x `find`
-// invocations (architecture.md 7): one behavior on every platform, so the
-// result never depends on which find is installed (MUST NOT 8, FS-26).
+// walkOpts drive findWalk, the native walk every scanner uses
+// (architecture.md 7): one behavior on every platform, so the result never
+// depends on which find or du is installed (MUST NOT 8, FS-26).
 type walkOpts struct {
-	root     string   // absolute scan root (safe_path)
-	follow   bool     // -L: follow symlinks (FS-02 reproduced: no reguard)
-	xdev     bool     // -xdev: stay on the root's device
-	maxDepth int      // -maxdepth; <0 means unbounded
-	minDepth int      // -mindepth; 0 means none
-	noIgnore bool     // --no-ignore: drop the default prunes
-	excludes []string // user --exclude globs, fnmatch on the absolute path
-	skipTab  bool     // ! -path '*\t*'
-	skipNL   bool     // ! -path '*\n*' (always true for every scanner)
-	rawOrder bool     // children in GNU find's (fts) order, not sorted
+	root      string   // absolute, physical scan root (safePath)
+	follow    bool     // -L: follow symlinks (never into protected trees, FS-02)
+	xdev      bool     // stay on the root's device
+	maxDepth  int      // deepest level reported and descended; <0 means unbounded
+	noIgnore  bool     // --no-ignore: drop the default prunes
+	excludes  []string // user --exclude globs (FS-12)
+	rawOrder  bool     // children in readdir (fts) order, not sorted
+	needEmpty bool     // also read directories at maxDepth, to know if they are empty
 }
 
-// entry is one filesystem entry the walk yields, as find's -printf saw it.
+// entry is one filesystem entry the walk reports.
 type entry struct {
-	abs       string // %p: the path find built (absolute, root-rooted)
-	rel       string // %P: path relative to root ("" for the root itself)
+	abs       string // the path below the root, as the walk built it
+	rel       string // path relative to the root ("" for the root itself)
 	depth     int    // root is depth 0
-	size      int64  // %s: st_size (of the target under -L)
+	size      int64  // st_size (of the target under -L)
 	mtime     time.Time
 	isDir     bool
 	isRegular bool
+	empty     bool // a directory that holds no entry at all (FS-16)
 }
 
 // walkResult holds what one walk produced.
 type walkResult struct {
 	entries []entry
-	errors  int // unreadable directories (FS-15)
+	// errors is the number of entries whose open or stat failed, each
+	// counted once, plus the symlink loops met under -L (FS-15).
+	errors int
+	// rootErr reports that the root itself could not be read (FS-14).
+	rootErr bool
 }
 
-// findWalk reproduces a 2.x `find` traversal: pre-order, directory entries
-// in a deterministic (sorted) order (architecture.md 7), honoring the
-// default prunes, user excludes, -maxdepth, -mindepth, -xdev and -L, and
-// leaving out tab/newline paths as the scanner's -path tests did. It never
-// consults the path guard below the root, so -L and --allow-root walk into
-// protected trees exactly as 2.x did (FS-02, FS-03).
+// skipped is the one exclusion rule of the five scanners, applied to every
+// entry below the root (depth >= 1, FS-13) during the walk: a path that
+// holds a tab or a newline (FS-01), a default prune directory, or a user
+// --exclude match (FS-12). A skipped entry is not reported, not descended
+// and adds to no total.
+func skipped(o *walkOpts, rel, name string, isDir bool) bool {
+	if strings.ContainsAny(rel, "\t\n") {
+		return true
+	}
+	if isDir && !o.noIgnore {
+		for _, n := range defaultPrune {
+			if name == n {
+				return true
+			}
+		}
+	}
+	for _, ex := range o.excludes {
+		if excludeMatch(ex, rel, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// excludeMatch is the --exclude rule (FS-12): GLOB matches the entry's base
+// name or its path relative to the scan root, with fnmatch semantics where
+// '*', '?' and a bracket never match '/' (FNM_PATHNAME). The root's own
+// path is never part of the match.
+func excludeMatch(pat, rel, name string) bool {
+	if pat == "" {
+		return false
+	}
+	return matchPathname(pat, name) || matchPathname(pat, rel)
+}
+
+// matchPathname is fnmatch with FNM_PATHNAME: the pattern and the name have
+// the same number of '/'-separated components and each pair matches.
+func matchPathname(pat, name string) bool {
+	ps, ns := strings.Split(pat, "/"), strings.Split(name, "/")
+	if len(ps) != len(ns) {
+		return false
+	}
+	for i := range ps {
+		if !pathguard.MatchGlobSegment(ps[i], ns[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// findWalk walks the tree pre-order, children in sorted order (or readdir
+// order with rawOrder), and reports every entry keep accepts, the root
+// included. Below the root it applies skipped, -xdev, -L with loop
+// detection, and the protected-tree rail: an entry whose physical path is
+// protected (FS-02, FS-03) is skipped silently, before its target is
+// stat'ed, and is not counted in errors.
 func findWalk(o walkOpts, keep func(e entry) bool) walkResult {
 	res := walkResult{}
 	var rootDev uint64
-	if o.xdev {
-		if st, err := os.Stat(o.root); err == nil {
-			rootDev = deviceOf(st)
-		}
+	rootInfo, err := os.Stat(o.root)
+	if err != nil {
+		res.errors++
+		res.rootErr = true
+		return res
 	}
-	pruneNames := map[string]bool{}
-	if !o.noIgnore {
-		for _, n := range defaultPrune {
-			pruneNames[n] = true
-		}
-	}
-	var visit func(abs, rel string, depth int, info os.FileInfo)
-	visit = func(abs, rel string, depth int, info os.FileInfo) {
+	rootDev = deviceOf(rootInfo)
+	ancestors := map[[2]uint64]bool{}
+
+	var visit func(abs, phys, rel string, depth int, info os.FileInfo)
+	visit = func(abs, phys, rel string, depth int, info os.FileInfo) {
 		isDir := info.IsDir()
 		e := entry{
 			abs: abs, rel: rel, depth: depth,
 			size: info.Size(), mtime: info.ModTime(),
 			isDir: isDir, isRegular: info.Mode().IsRegular(),
 		}
-		// The prune/exclude predicates fire at depth >= minDepth only, so a
-		// prune above --min-depth does not stop the descent (FS-13).
-		if depth >= o.minDepth {
-			if isDir && pruneNames[filepath.Base(abs)] {
-				return
+		descend := isDir && (o.maxDepth < 0 || depth < o.maxDepth)
+		var names []string
+		if isDir && (descend || o.needEmpty) {
+			var rerr error
+			if o.rawOrder {
+				names, rerr = readDirFTS(abs)
+			} else {
+				names, rerr = readDirNames(abs)
 			}
-			for _, ex := range o.excludes {
-				if ex != "" && pathguard.MatchGlobSegment(ex, abs) {
-					return
+			if rerr != nil {
+				res.errors++
+				if depth == 0 {
+					res.rootErr = true
 				}
+				descend = false
+			} else {
+				e.empty = len(names) == 0
 			}
 		}
-		yieldable := depth >= o.minDepth &&
-			!(o.skipNL && strings.ContainsRune(abs, '\n')) &&
-			!(o.skipTab && strings.ContainsRune(abs, '\t'))
-		if yieldable && keep(e) {
+		if keep(e) {
 			res.entries = append(res.entries, e)
 		}
-		if !isDir {
+		if !descend {
 			return
 		}
-		if o.maxDepth >= 0 && depth >= o.maxDepth {
-			return
-		}
-		var names []string
-		var err error
-		if o.rawOrder {
-			names, err = readDirFTS(abs)
-		} else {
-			names, err = readDirNames(abs)
-		}
-		if err != nil {
-			res.errors++
-			return
+		id, hasID := inodeOf(info)
+		if hasID {
+			ancestors[id] = true
+			defer delete(ancestors, id)
 		}
 		for _, name := range names {
-			child := filepath.Join(abs, name)
 			crel := name
 			if rel != "" {
 				crel = rel + "/" + name
 			}
-			ci, cerr := statEntry(child, o.follow)
-			if cerr != nil {
+			child := filepath.Join(abs, name)
+			cphys := filepath.Join(phys, name)
+			if protected(cphys) {
+				continue
+			}
+			ci, lerr := os.Lstat(child)
+			if lerr != nil {
+				res.errors++
+				continue
+			}
+			if o.follow && ci.Mode()&os.ModeSymlink != 0 {
+				target, rerr := filepath.EvalSymlinks(child)
+				if rerr == nil && protected(target) {
+					continue
+				}
+				if st, serr := os.Stat(child); serr == nil {
+					ci, cphys = st, target
+				} else if !errors.Is(serr, fs.ErrNotExist) {
+					res.errors++ // a symlink loop: find -L reports it
+				}
+			}
+			if skipped(&o, crel, name, ci.IsDir()) {
 				continue
 			}
 			if o.xdev && ci.IsDir() && deviceOf(ci) != rootDev {
 				continue
 			}
-			visit(child, crel, depth+1, ci)
+			if ci.IsDir() {
+				if cid, ok := inodeOf(ci); ok && ancestors[cid] {
+					res.errors++ // a directory loop through a followed link
+					continue
+				}
+			}
+			visit(child, cphys, crel, depth+1, ci)
 		}
 	}
-	info, err := statEntry(o.root, o.follow)
-	if err != nil {
-		res.errors++
-		return res
-	}
-	visit(o.root, "", 0, info)
+	visit(o.root, o.root, "", 0, rootInfo)
 	return res
+}
+
+// protectedList is the scanners' protected set: __gash_fs_forbidden's list
+// plus root's home where it is not /root (macOS: /var/root), the same table
+// for the PATH check and for the walk (FS-02, FS-03).
+func protectedList() []string {
+	list := scannerForbidden
+	if h := pathguard.RootHome(); len(h) > 1 && h[0] == '/' && h != "/root" {
+		list = append(append([]string{}, list...), h)
+	}
+	return list
+}
+
+// protected reports whether a physical path is, or is below, a protected
+// location (whole components), also with a leading /private removed
+// (macOS's /private/var/root).
+func protected(p string) bool {
+	for _, cand := range []string{p, strings.TrimPrefix(p, "/private")} {
+		for _, f := range protectedList() {
+			if cand == f || strings.HasPrefix(cand, f+"/") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // readDirNames returns the names of a directory, sorted (deterministic
@@ -218,18 +311,6 @@ func inodeSortUseful(dir string) bool {
 		return false
 	}
 	return true
-}
-
-// statEntry stats a path the way the walk reached it: Lstat normally, Stat
-// under -L (follow). Under -L a dangling link or a loop fails and the
-// entry is skipped (counted elsewhere as find would).
-func statEntry(path string, follow bool) (os.FileInfo, error) {
-	if follow {
-		if st, err := os.Stat(path); err == nil {
-			return st, nil
-		}
-	}
-	return os.Lstat(path)
 }
 
 // deviceOf is the st_dev of an entry, for -xdev.
