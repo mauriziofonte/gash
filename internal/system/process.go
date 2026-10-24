@@ -31,6 +31,10 @@ func (m *Module) processFind(c *invoke.Call) int {
 		p.Error("Missing process name. Usage: process_find <process_name>")
 		return 1
 	}
+	if len(c.Args) > 1 {
+		p.Error(unexpectedArg(c.Args[1]))
+		return 1
+	}
 	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "ps", Args: []string{"-eo", "pid=,user=,pcpu=,args="},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: c.Stderr}})
 	ps := strings.ReplaceAll(string(res.Stdout), "\x00", "")
@@ -63,8 +67,9 @@ func (m *Module) processFind(c *invoke.Call) int {
 
 // killArgs is the option loop of process_kill and port_kill: -y, --yes,
 // -f and --force skip the question, another word starting with "-" is an
-// error, the last other word wins (SYS-10).
+// error, and exactly one other word is the operand (LEDGER SYS-10).
 func killArgs(c *invoke.Call, p ui.Printer) (force bool, operand string, ok bool) {
+	seen := false
 	for _, a := range c.Args {
 		switch {
 		case a == "-y" || a == "--yes" || a == "-f" || a == "--force":
@@ -72,12 +77,19 @@ func killArgs(c *invoke.Call, p ui.Printer) (force bool, operand string, ok bool
 		case strings.HasPrefix(a, "-"):
 			p.Error("Unknown option: " + a)
 			return false, "", false
+		case seen:
+			p.Error(unexpectedArg(a))
+			return false, "", false
 		default:
-			operand = a
+			operand, seen = a, true
 		}
 	}
 	return force, operand, true
 }
+
+// unexpectedArg is the error of a second positional argument (LEDGER
+// SYS-10), the human form of the llm family's unexpected_argument.
+func unexpectedArg(a string) string { return "Unexpected argument: " + a }
 
 // processKill is process_kill: the processes named NAME exactly, ignoring
 // case (pgrepName), the plan and the question unless -y, then TERM, a

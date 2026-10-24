@@ -149,14 +149,19 @@ func TestLedger_SYS02(t *testing.T) {
 	require.Equal(t, result{"", "Info: Listening on port 8080:\n  1  init\nError: Process 1: permission denied.\n", 1}, r)
 }
 
-// SYS-10: the last positional wins in process_kill and port_kill.
+// SYS-10: a second positional argument is an error, status 1, nothing run
+// (3.0: SYS-10 fixed; 2.x let the last or the first one win).
 func TestLedger_SYS10(t *testing.T) {
 	bin := binDir(t, "lsof")
-	m, _, _ := tm(t, runner.NewFake(t, pgrep("b", "", 1), lsof("81", "", ""), lsofUDP("81", "")))
+	m, _, _ := tm(t, runner.NewFake(t))
 	r := call(m, "process_kill", nil, nil, "", "-y", "a", "b")
-	require.Contains(t, r.err, "exact name 'b'")
+	require.Equal(t, result{"", "Error: Unexpected argument: b\n", 1}, r)
 	r = call(m, "port_kill", map[string]string{"PATH": bin}, nil, "", "80", "81")
-	require.Equal(t, result{"", "Error: Nothing is listening on port 81.\n", 1}, r)
+	require.Equal(t, result{"", "Error: Unexpected argument: 81\n", 1}, r)
+	r = call(m, "process_find", nil, nil, "", "a", "b")
+	require.Equal(t, result{"", "Error: Unexpected argument: b\n", 1}, r)
+	r = call(m, "mkdir_cd", nil, nil, "", "a", "b")
+	require.Equal(t, result{"", "Error: Unexpected argument: b\n", 1}, r)
 }
 
 func lsof(port, tcp, udp string) runner.Expect {

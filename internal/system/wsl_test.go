@@ -106,6 +106,9 @@ func TestWSLExplorer(t *testing.T) {
 	require.Equal(t, result{"", "", 0}, r)
 	r = call(m, "wsl_explorer", nil, nil, "", filepath.Join(d, "nope"))
 	require.Equal(t, result{"", "Error: No such file or directory: " + filepath.Join(d, "nope") + "\n", 1}, r)
+	// 3.0: SYS-10 fixed: a second positional is refused, nothing runs.
+	r = call(m, "wsl_explorer", nil, nil, "", d, "x")
+	require.Equal(t, result{"", "Error: Unexpected argument: x\n", 1}, r)
 }
 
 func TestWSLTaskmanager(t *testing.T) {

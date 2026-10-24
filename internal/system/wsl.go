@@ -98,6 +98,10 @@ func (m *Module) wslExplorer(c *invoke.Call) int {
 	if !m.requireWSL(c) {
 		return 1
 	}
+	if len(c.Args) > 1 {
+		ui.NewPrinter(c.Stderr, c.Term, false).Error(unexpectedArg(c.Args[1]))
+		return 1
+	}
 	target := c.Arg(0)
 	if target == "" {
 		target = "."
