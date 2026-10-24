@@ -783,3 +783,74 @@ func TestLedger_HTE75(t *testing.T) {
 		t.Errorf("masters %d, system Apache active %v, plan %q", m.stack.Running(), m.active["apache2"], res.Plan)
 	}
 }
+
+// TestLedger_HTE64Apply: migrate --apply on the standard ports with one
+// enabled vhost excluded and a conf-enabled snippet: the plan names both as
+// no longer served; the system Apache stops before anything is archived,
+// the archives follow in the plan's order, each one a receipt change, and
+// nothing is deleted (every archived file is in the archive, byte for
+// byte).
+func TestLedger_HTE64Apply(t *testing.T) {
+	ctx := context.Background()
+	sa := "/etc/apache2/sites-available/"
+	m := newRig(t)
+	m.installPorts(t, state.StandardPorts)
+	m.write("/etc/apache2/conf-available/phpmyadmin.conf", "Alias /phpmyadmin /usr/share/phpmyadmin\n", 0o644)
+	must(t, os.MkdirAll(filepath.Join(m.root, "etc/apache2/conf-enabled"), 0o755))
+	must(t, os.Symlink("../conf-available/phpmyadmin.conf", filepath.Join(m.root, "etc/apache2/conf-enabled/phpmyadmin.conf")))
+	before := m.snapshot()
+	excluded := sa + "002-https.test.conf"
+	res, err := m.e.Migrate(ctx, MigrateOptions{Apply: true, Yes: true, Exclude: []string{excluded}})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if !slices.Equal(res.Plan.NoLongerServed, []string{excluded, "/etc/apache2/conf-enabled/phpmyadmin.conf"}) {
+		t.Errorf("no longer served: %v", res.Plan.NoLongerServed)
+	}
+	if !res.Switched || m.active["apache2"] || m.enabled["apache2"] {
+		t.Errorf("switched %v, apache2 active %v enabled %v", res.Switched, m.active["apache2"], m.enabled["apache2"])
+	}
+	var kinds []string
+	for _, c := range res.Changes {
+		kinds = append(kinds, string(c.Kind)+" "+c.Path+c.Name)
+	}
+	want := []string{
+		"unit apache2",
+		"legacy_vhost " + sa + "001-http.test.conf",
+		"legacy_vhost " + sa + "003-forced.test.conf",
+		"legacy_pool /etc/php/8.3/fpm/pool.d/http.test.conf",
+		"legacy_pool /etc/php/8.3/fpm/pool.d/forced.test.conf",
+		"unit php8.3-fpm", // left without pools
+	}
+	if !slices.Equal(kinds, want) {
+		t.Errorf("receipt changes:\n%s\nwant\n%s", strings.Join(kinds, "\n"), strings.Join(want, "\n"))
+	}
+	// Nothing deleted: each archived file is in its archive with its bytes;
+	// the excluded vhost and the snippet are untouched.
+	for _, c := range res.Changes {
+		if c.Kind != receipt.LegacyVhost && c.Kind != receipt.LegacyPool {
+			continue
+		}
+		if c.Archive == "" || !strings.HasPrefix(c.Archive, "/var/lib/gash-hte/archive/") {
+			t.Errorf("%s: archive %q", c.Path, c.Archive)
+			continue
+		}
+		var got string
+		filepath.WalkDir(filepath.Join(m.root, c.Archive), func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && filepath.Base(p) == filepath.Base(c.Path) {
+				data, _ := os.ReadFile(p)
+				got = string(data)
+			}
+			return nil
+		})
+		if b := before[c.Path]; b == "" || !strings.HasSuffix(b, " "+got) || got == "" {
+			t.Errorf("%s: archived bytes %q, before %q", c.Path, got, b)
+		}
+	}
+	after := m.snapshot()
+	for _, p := range []string{excluded, "/etc/apache2/conf-available/phpmyadmin.conf", "/etc/apache2/conf-enabled/phpmyadmin.conf"} {
+		if after[p] != before[p] {
+			t.Errorf("%s changed: %q, before %q", p, after[p], before[p])
+		}
+	}
+}
