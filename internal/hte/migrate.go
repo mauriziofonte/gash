@@ -181,8 +181,11 @@ type migration struct {
 	fpmStop  []string     // system FPM units left without pools
 	fpmKeep  []string     // system FPM units that keep pools (reloaded)
 	blocking bool
-	extra    []string // hosts.toml names after --apply
-	keyFile  func(domain string) string
+	// switchOnly: nothing to import, every enabled system vhost
+	// excluded: --apply only stops the system Apache and starts the stack.
+	switchOnly bool
+	extra      []string // hosts.toml names after --apply
+	keyFile    func(domain string) string
 }
 
 // lines are the root steps as the user sees them before sudo.
@@ -300,12 +303,20 @@ func (e *Engine) planMigration(ctx context.Context, v *env, set state.Settings, 
 			w.pools = append(w.pools, p)
 		}
 	}
-	if len(w.vhosts) > 0 || len(w.create) > 0 {
+	w.keep = plan.SystemApache != nil
+	// Every enabled system vhost excluded and nothing to import (a
+	// machine whose system Apache serves only its stock default vhost):
+	// the switch alone frees the standard ports, as install would have
+	// done without that vhost. The excluded vhosts stay as they are; the
+	// system Apache is stopped and disabled, and uninstall starts it
+	// again.
+	w.switchOnly = len(w.vhosts) == 0 && len(w.create) == 0 && !w.blocking && !w.keep &&
+		slices.ContainsFunc(plan.Sites, func(sp migrate.SitePlan) bool { return sp.Enabled && sp.Action == migrate.ActionExcluded })
+	if len(w.vhosts) > 0 || len(w.create) > 0 || w.switchOnly {
 		if e.systemApacheInstalled(v) {
 			w.apache = systemUnit(v.os.Family)
 		}
 	}
-	w.keep = plan.SystemApache != nil
 	w.fpmUnits()
 	return w, nil
 }
@@ -364,7 +375,7 @@ func (e *Engine) migrateApply(ctx context.Context, v *env, set state.Settings, o
 	}
 	res.Plan, res.RootPlan = w.plan, w.lines()
 	res.Applied = true
-	if len(w.create) == 0 && len(w.vhosts) == 0 {
+	if len(w.create) == 0 && len(w.vhosts) == 0 && !w.switchOnly {
 		res.Warnings = append(res.Warnings, "nothing to migrate")
 		return nil
 	}

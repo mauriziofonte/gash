@@ -101,6 +101,14 @@ What else changes when you move:
   `~/.config/gash/hte/apache.conf` for the server
   (`gash hte apache config path`). Run `gash hte service reload` after
   editing them.
+* On the standard ports, install stops the system Apache only when nothing
+  it serves would be lost. While an enabled vhost is neither migrated nor
+  excluded (on a fresh Debian or Ubuntu the stock `000-default.conf`, on
+  Fedora mod_ssl's `ssl.conf`), install leaves the stack stopped and names
+  the vhost with the `--exclude` to add. `gash hte migrate --apply --exclude
+  PATH --yes` then stops and disables the system Apache and starts the stack
+  on 80 and 443, also when there is nothing to import. The excluded file
+  stays as it is, and `gash hte uninstall` starts the system Apache again.
 
 ## WSL
 

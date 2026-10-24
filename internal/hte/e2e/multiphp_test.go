@@ -93,6 +93,7 @@ func TestE2EMultiPHP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	uninstallOnFailure(t, e)
 	home := os.Getenv("HOME")
 	full := map[string]string{}
 	for _, v := range phpVersions {

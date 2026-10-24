@@ -240,16 +240,7 @@ func (e *Engine) doctorRoot(ctx context.Context, v *env, set state.Settings, r *
 	} else {
 		r.add("hosts helper", CheckOK, rootops.HelperPath, "")
 	}
-	if !e.Sysroot.Exists(rootops.SudoersPath) {
-		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash hte install")
-	} else if sudo := e.find("sudo"); sudo != "" {
-		res, err := child.Run(ctx, e.Runner, rootopsListCmd(sudo))
-		if err != nil || !res.Success() {
-			r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash hte install")
-		} else {
-			r.add("sudoers", CheckOK, rootops.SudoersPath, "")
-		}
-	}
+	e.doctorSudoers(ctx, r)
 	if v.os.GOOS == "linux" && set.Ports.HTTP < 1024 {
 		data, err := e.Sysroot.ReadFile("/proc/sys/net/ipv4/ip_unprivileged_port_start")
 		n, perr := strconv.Atoi(strings.TrimSpace(string(data)))
@@ -578,6 +569,34 @@ func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r 
 
 // rootopsListCmd asks sudo, without a password, whether the drop-in
 // allows the helper's check command.
+// doctorSudoers checks the sudoers drop-in. Fedora and Arch ship
+// /etc/sudoers.d as 0750: the user cannot stat the file, which is not
+// missing, so sudo -n -l is the proof that the rule works.
+func (e *Engine) doctorSudoers(ctx context.Context, r *report) {
+	_, err := e.Sysroot.Stat(rootops.SudoersPath)
+	hidden := err != nil && errors.Is(err, fs.ErrPermission)
+	if err != nil && !hidden {
+		r.add("sudoers", CheckFail, rootops.SudoersPath+" is missing", "run gash hte install")
+		return
+	}
+	sudo := e.find("sudo")
+	if sudo == "" {
+		if hidden {
+			r.add("sudoers", CheckWarn, rootops.SudoersPath+" is not readable by you and sudo is not on the PATH", "")
+		}
+		return
+	}
+	res, err := child.Run(ctx, e.Runner, rootopsListCmd(sudo))
+	switch {
+	case err != nil || !res.Success():
+		r.add("sudoers", CheckFail, "sudo does not allow the hosts helper without a password", "run gash hte install")
+	case hidden:
+		r.add("sudoers", CheckOK, rootops.SudoersPath+" (not readable by you; sudo allows the hosts helper)", "")
+	default:
+		r.add("sudoers", CheckOK, rootops.SudoersPath, "")
+	}
+}
+
 func rootopsListCmd(sudo string) runner.Cmd {
 	c := child.Cmd(sudo, nil, "-n", "-l", rootops.HelperPath, "check")
 	c.Timeout = 10 * time.Second

@@ -15,6 +15,14 @@ out=/tmp/e2e
 mkdir -p "$out"
 
 useradd -m -s /bin/bash dev
+# pam_unix's account check fails (AUTHINFO_UNAVAIL) for a user without a
+# shadow entry, which a container image without /etc/shadow leaves (seen
+# on Fedora); sudo then asks for a password even under NOPASSWD.
+pwconv
+if ! getent shadow dev >/dev/null; then
+    echo "the user dev has no shadow entry" >&2
+    exit 2
+fi
 install -m 0755 /e2e/gash-e2e /usr/local/bin/gash-e2e
 install -m 0755 /e2e/gash-hosts-helper /usr/local/bin/gash-hosts-helper
 # The test binary is also the root step (gash hte __root).

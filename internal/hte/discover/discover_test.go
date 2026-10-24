@@ -466,3 +466,69 @@ func TestParseFPMVersion(t *testing.T) {
 		t.Fatal("install hints")
 	}
 }
+
+// TestDiscoverPHPSameBinary: Homebrew links opt/php and opt/php@X.Y to
+// one keg; that is one installation and no problem. Two distinct binaries
+// of one version still report the second.
+func TestDiscoverPHPSameBinary(t *testing.T) {
+	build := func(t *testing.T, distinct bool) platform.Sysroot {
+		t.Helper()
+		dir := t.TempDir()
+		write := func(rel string, mode os.FileMode) {
+			p := filepath.Join(dir, rel)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte("#!/bin/sh\n"), mode); err != nil {
+				t.Fatal(err)
+			}
+		}
+		link := func(target, rel string) {
+			p := filepath.Join(dir, rel)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		write("opt/homebrew/bin/brew", 0o755)
+		write("opt/homebrew/Cellar/php/8.5.11/sbin/php-fpm", 0o755)
+		write("opt/homebrew/etc/php/8.5/php.ini", 0o644)
+		link("../Cellar/php/8.5.11", "opt/homebrew/opt/php")
+		if distinct {
+			write("opt/homebrew/Cellar/php@8.5/8.5.10/sbin/php-fpm", 0o755)
+			link("../Cellar/php@8.5/8.5.10", "opt/homebrew/opt/php@8.5")
+		} else {
+			link("../Cellar/php/8.5.11", "opt/homebrew/opt/php@8.5")
+		}
+		sr, err := platform.NewSysroot(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sr
+	}
+	const (
+		main  = "/opt/homebrew/opt/php/sbin/php-fpm"
+		alias = "/opt/homebrew/opt/php@8.5/sbin/php-fpm"
+	)
+	for _, distinct := range []bool{false, true} {
+		t.Run(map[bool]string{false: "one-keg", true: "two-binaries"}[distinct], func(t *testing.T) {
+			sr := build(t, distinct)
+			probe := newProbe(map[string]string{main + " -v": fpmV("8.5.11"), alias + " -v": fpmV("8.5.10")})
+			res := DiscoverPHP(PHPEnv{Sysroot: sr, OS: platform.DetectOS(sr, "darwin"), Probe: probe.run, Writable: writable})
+			if len(res.Versions) != 1 || res.Versions[0].FPM != main || res.Versions[0].Full != "8.5.11" {
+				t.Fatalf("versions %+v", res.Versions)
+			}
+			var want []string
+			if distinct {
+				want = []string{"PHP 8.5 is also at " + alias + "; using " + main}
+			} else if n := probe.calls[alias+" -v"]; n != 0 {
+				t.Fatalf("the alias of one keg was probed %d times", n)
+			}
+			if diff := cmp.Diff(want, res.Problems); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+	}
+}

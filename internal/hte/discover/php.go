@@ -4,6 +4,8 @@ package discover
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -193,7 +195,8 @@ func accessWritable(sr platform.Sysroot) func(string) bool {
 // when its FPM binary is an executable file, `-v` answers that version with
 // the fpm-fcgi SAPI, and its php.ini exists (LEDGER HTE-22). When two
 // layouts give the same version (Fedora distro and Remi), the first one in
-// probe order is used and the other is reported.
+// probe order is used and the other is reported, unless both names lead
+// to the same file.
 func DiscoverPHP(env PHPEnv) PHPResult {
 	sr := env.Sysroot
 	writable := env.Writable
@@ -202,6 +205,7 @@ func DiscoverPHP(env PHPEnv) PHPResult {
 	}
 	var res PHPResult
 	seen := map[string]string{}
+	var used []fs.FileInfo // the FPM binaries of res.Versions
 	for _, c := range candidates(sr, env.OS) {
 		fi, err := sr.Stat(c.fpm)
 		if err != nil {
@@ -209,6 +213,11 @@ func DiscoverPHP(env PHPEnv) PHPResult {
 		}
 		if !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
 			res.Problems = append(res.Problems, c.fpm+" is not an executable file")
+			continue
+		}
+		// Two names of one binary (Homebrew links opt/php and
+		// opt/php@X.Y to the same keg) are one installation.
+		if slices.ContainsFunc(used, func(u fs.FileInfo) bool { return os.SameFile(u, fi) }) {
 			continue
 		}
 		entry, cached := env.Cache.lookup(c.fpm, fi)
@@ -259,6 +268,7 @@ func DiscoverPHP(env PHPEnv) PHPResult {
 			continue
 		}
 		seen[short] = c.fpm
+		used = append(used, fi)
 		sess, set := iniSessionPath(data)
 		if !set {
 			sess = sessionDefaults[c.layout]
