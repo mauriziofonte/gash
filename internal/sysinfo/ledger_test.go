@@ -75,9 +75,8 @@ func TestLedger_SYS17(t *testing.T) {
 		"--- SSL private keys\n/etc/ssl/private/a.pem\n/etc/ssl/private/b.key\n"), r.out)
 }
 
-// LEDGER SYS-18 (reproduced): the GNU grep -P expressions of 2.x over
-// os-release: ID takes \w only unquoted, VERSION_ID and PRETTY_NAME only
-// double-quoted. The values are never evaluated.
+// 3.0: SYS-18 fixed: identity reads os-release(5) with the platform
+// parser: values quoted or not, escapes undone, never evaluated.
 func TestLedger_SYS18(t *testing.T) {
 	for name, c := range map[string]struct{ release, want string }{
 		"debian": {"PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"12\"\nID=debian\n",
@@ -85,18 +84,19 @@ func TestLedger_SYS18(t *testing.T) {
 		"ubuntu": {"PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nVERSION_ID=\"24.04\"\nID=ubuntu\nID_LIKE=debian\n",
 			"OS=Ubuntu 24.04.1 LTS\nOS ID=ubuntu\nVersion=24.04\n"},
 		"rhel": {"NAME=\"Red Hat Enterprise Linux\"\nID=\"rhel\"\nVERSION_ID=\"9.4\"\nPRETTY_NAME=\"Red Hat Enterprise Linux 9.4 (Plow)\"\n",
-			"OS=Red Hat Enterprise Linux 9.4 (Plow)\nVersion=9.4\n"},
+			"OS=Red Hat Enterprise Linux 9.4 (Plow)\nOS ID=rhel\nVersion=9.4\n"},
 		"fedora": {"NAME=\"Fedora Linux\"\nVERSION_ID=39\nID=fedora\nPRETTY_NAME=\"Fedora Linux 39 (Workstation Edition)\"\n",
-			"OS=Fedora Linux 39 (Workstation Edition)\nOS ID=fedora\n"},
+			"OS=Fedora Linux 39 (Workstation Edition)\nOS ID=fedora\nVersion=39\n"},
 		"tumbleweed": {"NAME=\"openSUSE Tumbleweed\"\nID=opensuse-tumbleweed\nVERSION_ID=\"20241001\"\nPRETTY_NAME=\"openSUSE Tumbleweed\"\n",
-			"OS=openSUSE Tumbleweed\nOS ID=opensuse\nVersion=20241001\n"},
+			"OS=openSUSE Tumbleweed\nOS ID=opensuse-tumbleweed\nVersion=20241001\n"},
 		"leap": {"NAME=\"openSUSE Leap\"\nID=\"opensuse-leap\"\nVERSION_ID=\"15.6\"\nPRETTY_NAME=\"openSUSE Leap 15.6\"\n",
-			"OS=openSUSE Leap 15.6\nVersion=15.6\n"},
+			"OS=openSUSE Leap 15.6\nOS ID=opensuse-leap\nVersion=15.6\n"},
 		"alpine": {"NAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.19.1\nPRETTY_NAME=\"Alpine Linux v3.19\"\n",
-			"OS=Alpine Linux v3.19\nOS ID=alpine\n"},
-		"single quotes": {"PRETTY_NAME='Some OS'\nID='x'\nVERSION_ID='1'\n", ""},
+			"OS=Alpine Linux v3.19\nOS ID=alpine\nVersion=3.19.1\n"},
+		"single quotes": {"PRETTY_NAME='Some OS'\nID='x'\nVERSION_ID='1'\n", "OS=Some OS\nOS ID=x\nVersion=1\n"},
+		"escapes":       {"PRETTY_NAME=\"A \\\"B\\\" \\$C\"\nID=a\n", "OS=A \"B\" $C\nOS ID=a\n"},
 		"command": {"PRETTY_NAME=\"$(echo INJECTED) `id`\"\nID=a$(b)\n",
-			"OS=$(echo INJECTED) `id`\nOS ID=a\n"},
+			"OS=$(echo INJECTED) `id`\nOS ID=a$(b)\n"},
 	} {
 		fx := newFixture(t, tree{"etc/os-release": c.release})
 		r := fx.call(t, nil, "identity", "--llm")

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -17,25 +18,8 @@ var (
 	reNoteSemiBlank = regexp.MustCompile(`^(#|;|$)`)
 	reHash          = regexp.MustCompile(`^#`)
 	reSlashBlank    = regexp.MustCompile(`^(//|$)`)
-
-	// grep -oP '^ID=\K\w+' and friends (SYS-18: \w is ASCII, as PCRE
-	// without UCP).
-	reOSID      = regexp.MustCompile(`^ID=([A-Za-z0-9_]+)`)
-	reOSPretty  = regexp.MustCompile(`^PRETTY_NAME="([^"]+)`)
-	reOSVersion = regexp.MustCompile(`^VERSION_ID="([^"]+)`)
-	reContainer = regexp.MustCompile(`(?i)container|vz|lxc|docker`)
+	reContainer     = regexp.MustCompile(`(?i)container|vz|lxc|docker`)
 )
-
-// grepO is `grep -oP RE FILE` for an expression whose match is group 1.
-func (f files) grepO(data []byte, re *regexp.Regexp) string {
-	var out []string
-	for _, l := range grepLines(data, f.u8) {
-		if m := re.FindStringSubmatch(l); m != nil {
-			out = append(out, m[1])
-		}
-	}
-	return subst(out)
-}
 
 // identity is __sysinfo_collect_identity.
 func (s *Session) identity(o *out) {
@@ -43,8 +27,10 @@ func (s *Session) identity(o *out) {
 	o.section("IDENTITY")
 	pretty, id, version := "", "", ""
 	if f.isFile("/etc/os-release") {
-		b := f.read("/etc/os-release")
-		id, pretty, version = f.grepO(b, reOSID), f.grepO(b, reOSPretty), f.grepO(b, reOSVersion)
+		// os-release(5): quoted or not, escapes undone, never evaluated
+		// (SYS-18).
+		rel := platform.ParseOSRelease(f.read("/etc/os-release"))
+		id, pretty, version = rel["ID"], rel["PRETTY_NAME"], rel["VERSION_ID"]
 	}
 	o.kv("OS", pretty)
 	o.kv("OS ID", id)
