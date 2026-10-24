@@ -65,9 +65,6 @@ snapshot() {
 out=$(mktemp -d)
 snapshot >"$out/before.txt"
 
-echo "== pf probe (temporary)"
-"$here/macos-pf-probe.sh" || true
-
 echo "== the test, as $USER"
 rc=0
 (cd "$HOME" && env -i HOME="$HOME" USER="$USER" LOGNAME="$USER" PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="${TMPDIR:-/tmp}" \

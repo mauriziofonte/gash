@@ -8786,6 +8786,7 @@ Not LEDGER items of the 2.1.0 audit: what the 3.0 fix phase found on its own wor
 | F-10 | ai_sysinfo prints empty Containers / SSL private keys headers; Virtualmin SSL sits under Let's Encrypt | Headers only with content; Virtualmin SSL has its own | done 9ae20ce |
 | F-11 | CONTRIBUTING.md Conventions is 2.x prose | Rewritten for the 3.0 layout | done 9ae20ce |
 | F-12 | A stale CORE-19 comment in the internal/chrome tests | Corrected | done 9ae20ce |
+| F-13 | macOS: with the `rdr pass` anchor, pf refuses the state of a direct loopback connection to the stack's port once a redirected one left its state (`state-insert`), so Apache looks dead (found by the hte-macos CI job) | `rdr` without `pass`, state kept for the inbound half only, outbound half of the stack's ports stateless; uninstall flushes the whole anchor. Verified on the runner: the old shape drops every direct connection from the second round on, the new one none | done 379658a |
 
 ### Design commitments not met (audit of 2026-10-24)
 
@@ -8796,7 +8797,7 @@ Not LEDGER items of the 2.1.0 audit: what the 3.0 fix phase found on its own wor
 | A-03 | Multi-PHP and systemd E2E stories in CI | Never enabled in CI | done 7ad1a0e |
 | A-04 | `autostart = "shell"` starts the stack from the first interactive shell (hte.md) | Nothing called `gash hte __autostart` | done 7ad1a0e |
 | A-05 | Compat Bash 4.4, 5.0, 5.1, 5.3 in CI (compat.md 1) | No Bash matrix job | done ae2452f |
-| A-06 | macOS HTE on a GitHub runner with Homebrew httpd and php (testing.md 6) | No macOS HTE job | done 7ad1a0e |
+| A-06 | macOS HTE on a GitHub runner with Homebrew httpd and php (testing.md 6) | No macOS HTE job; once added, it found F-13 | done 7ad1a0e, 379658a |
 | A-07 | gash-hosts-helper SHA-256 checked (upgrade.md 2) | Not pinned | done b34d0bb |
 | A-08 | Shell state parity after a 2.1.0 load and after gash_unload (shell.md) | No test | done ae2452f |
 | A-09 | Prompt PS1 goldens for every segment (shell.md) | Injection tests only | done ae2452f |

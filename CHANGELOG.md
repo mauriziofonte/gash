@@ -6,7 +6,7 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [3.0.0] - Unreleased
+## [3.0.0] - 2026-10-24
 
 Gash is now one Go binary with thin generated Bash around it. Every 2.x
 function keeps its name, and its arguments, output, exit codes and `--json`
@@ -655,6 +655,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/mauriziofonte/gash/compare/v1.5.3...v2.0.0
