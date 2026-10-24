@@ -3114,6 +3114,7 @@ var functions = []Function{
 				"  of that major. Majors that are not installed are never added and a\n" +
 				"  major is never removed. When an install fails, that major keeps its\n" +
 				"  patches. The active version moves to the new patch of its major.\n" +
+				"  Exits 1 when an install or a removal failed.\n" +
 				"  Needs nvm loaded (GASH_NVM=lazy or on does it) and network access to\n" +
 				"  nodejs.org. Without a terminal the question is refused: pass -y.",
 		},
@@ -3153,7 +3154,7 @@ var functions = []Function{
 			Aliases: "nvmp",
 			Body: "" +
 				"USAGE\n" +
-				"  nvm_prune_versions [--force]\n" +
+				"  nvm_prune_versions [-y|--yes|--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Preview what would be removed (default, no changes made)\n" +
@@ -3165,9 +3166,10 @@ var functions = []Function{
 				"NOTES\n" +
 				"  For each installed major version, keeps only the latest patch.\n" +
 				"  The currently active version (nvm current) is never uninstalled,\n" +
-				"  even if it is not the latest patch for its major.",
+				"  even if it is not the latest patch for its major. -y and --yes are\n" +
+				"  the same as --force. Exits 1 when a removal failed.",
 		},
-		Fallback:  &Usage{Program: "nvm_prune_versions", Usage: "nvm_prune_versions [--force]", Description: "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp"},
+		Fallback:  &Usage{Program: "nvm_prune_versions", Usage: "nvm_prune_versions [-y|--yes|--force]", Description: "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp"},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "NVM_DIR"},
 	},

@@ -1,0 +1,53 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: DEV-06
+# covers: none (3.0 fix proof)
+#
+# DEV-06 proving test: node_upgrade -y with a faked nvm (a shell function,
+# as the real nvm is) where installing the new v20 patch fails. The v20
+# patches are kept, the v22 upgrade goes through, the final line still
+# names the active version, and the status is 1 (2.x returned 0).
+
+env GASH_HEADLESS=1
+env NVM_DIR=$WORK/nvm
+env T=$WORK
+
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; node_upgrade -y; echo "rc=$?"'
+stdout '^rc=1$'
+stderr 'Error: Installing v20\.2\.0 failed: the v20 patches are kept\.'
+stderr 'Warning: v20\.1\.0 kept \(installing the new v20 failed\)\.'
+stderr '^OK: Active version: v22\.3\.0$'
+grep '^install v22\.3\.0 --reinstall-packages-from=v22\.1\.0$' calls
+grep '^uninstall v22\.1\.0$' calls
+! grep '^uninstall v20' calls
+
+# Every install succeeding: status 0.
+rm calls
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; export NVM_FAIL=none; node_upgrade -y; echo "rc=$?"'
+stdout '^rc=0$'
+grep '^uninstall v20\.1\.0$' calls
+
+-- nvmfake.sh --
+# A faked nvm: logs its calls, reads the remote index from a file, and
+# fails "nvm install v20.2.0" unless NVM_FAIL=none.
+__fake_current=v22.1.0
+nvm() {
+    printf '%s\n' "$*" >>"$T/calls"
+    case "$1" in
+    ls-remote) cat "$T/remote.txt" ;;
+    current) echo "$__fake_current" ;;
+    use) __fake_current="$2" ;;
+    install)
+        [[ "$2" == v20.2.0 && "${NVM_FAIL-}" != none ]] && return 3
+        __fake_current="$2"
+        ;;
+    uninstall) return 0 ;;
+    esac
+}
+-- remote.txt --
+       v20.1.0   (LTS: Iron)
+       v20.2.0   (Latest LTS: Iron)
+       v22.1.0
+       v22.3.0
+-- nvm/versions/node/v20.1.0/bin/node --
+-- nvm/versions/node/v22.1.0/bin/node --
