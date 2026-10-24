@@ -3379,16 +3379,16 @@ var functions = []Function{
 				"\n" +
 				"SECTIONS\n" +
 				"  overview   Host, load, CPU, memory, swap, root disk and address at a glance\n" +
-				"  identity   OS, kernel, virtualization, cloud provider, WSL detection\n" +
-				"  storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)\n" +
-				"  services   Running systemd services, custom units\n" +
-				"  auth       Sudoers, SSH config (PAM details via deep drill-down)\n" +
-				"  network    Interfaces, DNS, DHCP, hostname\n" +
-				"  security   Firewall rules, SSH hardening, fail2ban/crowdsec\n" +
-				"  webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies\n" +
-				"  mail       Postfix, Dovecot, DKIM, virtual domains\n" +
-				"  infra      Docker, containers, monitoring, backup systems\n" +
-				"  system     Cron jobs, systemd timers, custom hooks\n" +
+				"  identity   OS, kernel, hostname, uptime, virtualization, container, WSL\n" +
+				"  storage    fstab, crypttab, LVM, mdadm, ZFS, smartd, sanoid, hdparm, NFS\n" +
+				"  services   Detected/running services, timers, listening ports, custom units\n" +
+				"  auth       Users, sudoers, sshd_config (PAM details via deep drill-down)\n" +
+				"  network    resolv.conf, hosts, interfaces, netplan, dhcpcd\n" +
+				"  security   fail2ban, crowdsec, ufw; firewalld, iptables, AppArmor presence\n" +
+				"  webstack   Apache, Nginx, PHP and FPM pools, MySQL/MariaDB, PostgreSQL\n" +
+				"  mail       Postfix, Dovecot, Exim4, SpamAssassin, OpenDKIM, BIND, Unbound\n" +
+				"  infra      FTP, Samba, OpenMediaVault, VPN, Docker, containers, monitoring\n" +
+				"  system     Cron, Let's Encrypt, SSL keys, kernel tuning, GRUB, logrotate\n" +
 				"  all        Overview, then every section (default)\n" +
 				"\n" +
 				"EXAMPLES\n" +

@@ -477,16 +477,16 @@ sysinfo [section] [--llm] [--no-color]
 
 ```text
 overview   Host, load, CPU, memory, swap, root disk and address at a glance
-identity   OS, kernel, virtualization, cloud provider, WSL detection
-storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)
-services   Running systemd services, custom units
-auth       Sudoers, SSH config (PAM details via deep drill-down)
-network    Interfaces, DNS, DHCP, hostname
-security   Firewall rules, SSH hardening, fail2ban/crowdsec
-webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies
-mail       Postfix, Dovecot, DKIM, virtual domains
-infra      Docker, containers, monitoring, backup systems
-system     Cron jobs, systemd timers, custom hooks
+identity   OS, kernel, hostname, uptime, virtualization, container, WSL
+storage    fstab, crypttab, LVM, mdadm, ZFS, smartd, sanoid, hdparm, NFS
+services   Detected/running services, timers, listening ports, custom units
+auth       Users, sudoers, sshd_config (PAM details via deep drill-down)
+network    resolv.conf, hosts, interfaces, netplan, dhcpcd
+security   fail2ban, crowdsec, ufw; firewalld, iptables, AppArmor presence
+webstack   Apache, Nginx, PHP and FPM pools, MySQL/MariaDB, PostgreSQL
+mail       Postfix, Dovecot, Exim4, SpamAssassin, OpenDKIM, BIND, Unbound
+infra      FTP, Samba, OpenMediaVault, VPN, Docker, containers, monitoring
+system     Cron, Let's Encrypt, SSL keys, kernel tuning, GRUB, logrotate
 all        Overview, then every section (default)
 ```
 

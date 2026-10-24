@@ -210,19 +210,43 @@ func TestLedger_SYS41(t *testing.T) {
 	}
 }
 
-// LEDGER SYS-48 (reproduced): the help keeps the 2.x section
-// descriptions, wrong as they are.
+// 3.0: SYS-48 fixed: each section's help description names what the
+// section prints: the lines are pinned, and over the full fixture the
+// sub-headers and keys they name are in that section's output.
 func TestLedger_SYS48(t *testing.T) {
 	r := newFixture(t).call(t, nil, "--help")
 	require.Equal(t, 0, r.rc)
 	for _, l := range []string{
-		"    storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)\n",
-		"    network    Interfaces, DNS, DHCP, hostname\n",
-		"    security   Firewall rules, SSH hardening, fail2ban/crowdsec\n",
-		"    infra      Docker, containers, monitoring, backup systems\n",
-		"    system     Cron jobs, systemd timers, custom hooks\n",
+		"    identity   OS, kernel, hostname, uptime, virtualization, container, WSL\n",
+		"    storage    fstab, crypttab, LVM, mdadm, ZFS, smartd, sanoid, hdparm, NFS\n",
+		"    services   Detected/running services, timers, listening ports, custom units\n",
+		"    auth       Users, sudoers, sshd_config (PAM details via deep drill-down)\n",
+		"    network    resolv.conf, hosts, interfaces, netplan, dhcpcd\n",
+		"    security   fail2ban, crowdsec, ufw; firewalld, iptables, AppArmor presence\n",
+		"    webstack   Apache, Nginx, PHP and FPM pools, MySQL/MariaDB, PostgreSQL\n",
+		"    mail       Postfix, Dovecot, Exim4, SpamAssassin, OpenDKIM, BIND, Unbound\n",
+		"    infra      FTP, Samba, OpenMediaVault, VPN, Docker, containers, monitoring\n",
+		"    system     Cron, Let's Encrypt, SSL keys, kernel tuning, GRUB, logrotate\n",
 	} {
 		require.Contains(t, r.out, l)
+	}
+	fx := newFixture(t, etcTree, procTree)
+	for section, marks := range map[string][]string{
+		"identity": {"\nOS=", "\nKernel=", "\nHostname=", "\nUptime=", "\nVirtualization="},
+		"storage":  {"--- fstab\n", "--- crypttab\n", "LVM=", "--- mdadm\n", "ZFS=", "--- smartd\n", "--- NFS exports\n"},
+		"services": {"--- Detected (by /etc/ dirs)\n", "--- Running services\n", "--- Timers\n", "--- Listening ports\n", "--- Custom systemd units\n"},
+		"auth":     {"--- Users\n", "--- Sudo\n", "--- SSH\n"},
+		"network":  {"--- resolv.conf\n", "--- hosts\n", "--- netplan\n"},
+		"security": {"--- fail2ban\n", "--- crowdsec\n", "--- ufw\n", "AppArmor="},
+		"webstack": {"--- Apache\n", "--- Nginx\n", "--- PHP\n", "--- MySQL/MariaDB\n", "--- PostgreSQL\n"},
+		"mail":     {"--- Postfix\n", "--- Dovecot\n", "--- BIND\n", "--- Unbound\n"},
+		"infra":    {"--- Samba\n", "--- OpenMediaVault\n", "--- OpenVPN\n", "--- Containers\n", "--- Collectd\n"},
+		"system":   {"--- Cron\n", "--- Let's Encrypt\n", "--- SSL private keys\n", "--- Kernel tuning\n", "--- GRUB\n", "--- Logrotate\n"},
+	} {
+		out := fx.call(t, nil, section, "--llm").out
+		for _, mk := range marks {
+			require.Contains(t, out, mk, section)
+		}
 	}
 }
 
