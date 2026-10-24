@@ -43,3 +43,39 @@ func TestScriptSignalsOnlyItsOwnPIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestScriptFakesProgramsOnPATH is the LEDGER TEST-05 rule: a script fakes
+// an external program with a stub on PATH (or httpsfake for the network),
+// never with a shell function, which only the 2.x Bash implementation would
+// call: the binary runs the real program and would reach the network or the
+// real tool. Shell-side names (history, fc, nvm, needs_confirm_prompt) are
+// shell functions in the caller's shell and stay function overrides.
+func TestScriptFakesProgramsOnPATH(t *testing.T) {
+	files, err := filepath.Glob("../../testdata/script/*.txtar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	more, err := filepath.Glob("../../testdata/script/*/*.txtar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, more...)
+	fake := regexp.MustCompile(`(?:^|[\s;{(&|'"])(curl|wget|ssh|scp|rsync|docker|git|lsof|pgrep|pkill|ps|ss|netstat|kill|sudo|` +
+		`systemctl|jq|sqlite3|mysql|psql|pg_isready|uname|ip|dig|apt|dpkg|node|npm|php|composer|tar|unzip|gzip|7z|unrar|` +
+		`zstd|xz|sed|awk|gawk|grep|find|du|df|free|whoami|id|hostname|openssl|gpg)\s*\(\)\s*\{`)
+	// Known cases owned by another slice, reported to the lead: the :99
+	// render case of files_largest fakes find, which the binary's native
+	// walk never calls (the case passes without exercising a find error).
+	known := map[string]bool{"files_largest.txtar:find": true}
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if m := fake.FindStringSubmatch(line); m != nil && !known[filepath.Base(f)+":"+m[1]] {
+				t.Errorf("%s:%d: %s is faked with a shell function; put a stub on PATH instead (TEST-05)", filepath.Base(f), i+1, m[1])
+			}
+		}
+	}
+}
