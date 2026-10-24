@@ -384,7 +384,6 @@ __gash_enable_completion() {
         mkdir_cd
         node_detect_version
         node_upgrade
-        nvm
         nvm_prune_versions
         path_add
         php_detect_version
