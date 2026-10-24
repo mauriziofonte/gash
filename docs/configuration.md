@@ -31,7 +31,8 @@ directory it lives in. It does nothing in a non-interactive shell unless
 3. Terminal settings, history policy, prompt.
 4. Every function module in `lib/modules/`.
 5. Gash aliases (`lib/aliases/`), then the banner, then SSH key auto-unlock.
-6. `~/.bash_aliases`, then `~/.bash_local`.
+6. `~/.bash_aliases` (unless your `~/.bashrc` already sources it), then
+   `~/.bash_local`.
 7. The Gash 1.x migration check. `~/.gashrc` then sources `bash_completion`.
 
 **Headless** (`GASH_HEADLESS=1`): core libraries, function modules and the
@@ -232,8 +233,10 @@ These are not accepted in `~/.gash_env`.
 
 In interactive mode, after everything else, Gash sources `~/.bash_aliases` and
 then `~/.bash_local`, at top level, so they can override any Gash alias or
-function. Many distribution `~/.bashrc` files already source `~/.bash_aliases`;
-in that case it runs twice. `~/.gashrc` is created once by the installer and
+function. Many distribution `~/.bashrc` files already source `~/.bash_aliases`
+(a line such as `. ~/.bash_aliases`); Gash then does not source it again, so it
+runs once, and its aliases still win because Gash never replaces an alias you
+defined before it loaded. `~/.gashrc` is created once by the installer and
 not overwritten later; keep your own code in `~/.bash_local` rather than there.
 
 ## Inspecting and undoing

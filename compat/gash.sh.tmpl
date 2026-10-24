@@ -334,8 +334,28 @@ if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
 fi
 
 # User customizations, last so they can override anything above.
+# ~/.bash_aliases is sourced only when none of the files that are sourcing
+# this one (~/.bashrc, ~/.gashrc...) sources it itself, as many distribution
+# ~/.bashrc files do: it then runs once (3.0: SHELL-05 fixed; 2.x ran it
+# twice). Pack aliases never replace the user's (SHELL-09), so its aliases
+# still win when it ran before Gash.
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-[[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
+__gash_aliases_sourced=0
+__gash_re='(^|[[:space:];])(\.|source)[[:space:]]+["'"'"']?(~|\$HOME|\$\{HOME\})/\.bash_aliases(["'"'"'[:space:];]|$)'
+for ((__gash_i = 1; __gash_i < ${#BASH_SOURCE[@]}; __gash_i++)); do
+    [[ -f "${BASH_SOURCE[__gash_i]}" && -r "${BASH_SOURCE[__gash_i]}" ]] || continue
+    mapfile -t __gash_lines <"${BASH_SOURCE[__gash_i]}" 2>/dev/null || continue
+    for __gash_line in "${__gash_lines[@]}"; do
+        [[ "$__gash_line" =~ ^[[:space:]]*# ]] && continue
+        if [[ "$__gash_line" =~ $__gash_re ]]; then
+            __gash_aliases_sourced=1
+            break 2
+        fi
+    done
+done
+unset __gash_i __gash_lines __gash_line __gash_re
+((__gash_aliases_sourced)) || { [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"; }
+unset __gash_aliases_sourced
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
 ((__GASH_TIMING)) && __gash_time_record "user files: ~/.bash_aliases, ~/.bash_local" "$__GASH_T1"
 

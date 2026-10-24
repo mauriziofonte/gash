@@ -1,0 +1,38 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-05
+# covers: none (3.0 shell fix)
+#
+# SHELL-05 proving test: with a distribution ~/.bashrc that sources
+# ~/.bash_aliases itself (as Ubuntu's skel does) and then loads Gash, the
+# side effects of ~/.bash_aliases run once and its ll keeps the user's
+# value; with a ~/.bashrc that does not source it, Gash sources it, once.
+# 2.x sourced it again after the profile had.
+
+env GASH_BANNER=0
+env GASH_SH_PATH=$GASH_SH
+
+cp skel.bashrc home/.bashrc
+exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll]}"; wc -l <~/count'
+stdout '^ll=ls -l --mine$'
+stdout '^1$'
+
+rm home/count
+cp plain.bashrc home/.bashrc
+exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll]}"; wc -l <~/count'
+stdout '^ll=ls -l --mine$'
+stdout '^1$'
+
+-- home/.bash_aliases --
+echo sourced >>"$HOME/count"
+alias ll='ls -l --mine'
+-- skel.bashrc --
+# ~/.bashrc of a distribution
+alias ll='ls -alF'
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+source "$GASH_SH_PATH"
+-- plain.bashrc --
+alias ll='ls -alF'
+source "$GASH_SH_PATH"
