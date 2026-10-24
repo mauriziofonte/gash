@@ -110,9 +110,11 @@ llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
 Read-only, enforced twice: one statement starting with SELECT, WITH,
 VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA, with no write
 keywords or file/program functions; then a read-only client session
-(sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL
-default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).
-Output: {data, rows, query_time}.
+(SQLite read-only in defensive mode, MySQL READ ONLY transactions,
+PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT
+statement timeout). Output: {data, rows, query_time}. -h is help: the
+host comes from the connection URL. Error details are the database
+driver's message.
 ```
 
 See also: `llm_db_tables`, `llm_db_schema`, `llm_db_sample`, `llm_db_explain`

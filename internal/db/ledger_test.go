@@ -261,9 +261,10 @@ func TestLedger_DB11(t *testing.T) {
 			{"-h", "127.0.0.1"},
 			{"x", "-f", "nope.db", "--help", "-d"},
 		} {
-			got := same(t, m, d, env, fn, args...)
+			got := runGo(t, m, d, env, fn, args...)
 			require.Equal(t, 0, got.RC)
 			require.Contains(t, got.Stdout, fn)
+			require.Empty(t, got.Stderr)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -270,6 +271,29 @@ func TestLedger_DB07(t *testing.T) {
 	got = runGo(t, m, d, env, "llm_db_query", "SELECT 1")
 	require.Equal(t, `{"error":"mysql_error","details":"dial tcp 127.0.0.1:3306: connect: connection refused","action":"RETRY","recoverable":true,"hint":"Fix the SQL and retry","query_time":"0µs"}`+"\n", got.Stderr)
 	require.True(t, strings.HasPrefix(got.Stderr, `{"error":"mysql_error"`))
+
+	// The other engines: the details are the driver's message, cleaned to
+	// one line; the code is the engine's *_error, the action RETRY.
+	envelope := func(r result) (e struct{ Error, Details, Action string }) {
+		t.Helper()
+		require.Equal(t, 1, r.RC)
+		require.Empty(t, r.Stdout)
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		require.Equal(t, "RETRY", e.Action, r.Stderr)
+		require.NotEmpty(t, e.Details)
+		require.NotContains(t, e.Details, "\n")
+		require.Equal(t, e.Details, strings.Join(strings.Fields(e.Details), " "))
+		return e
+	}
+	sd := physTemp(t)
+	db := sqliteFixture(t, sd, fixtureSQL)
+	e := envelope(runGo(t, m, sd, baseEnv(sd, nil), "llm_db_query", "SELECT * FROM nope", "-f", db))
+	require.Equal(t, "sqlite_error", e.Error)
+	require.Contains(t, e.Details, "nope")
+	pd, home := pgHome(t, 1)
+	e = envelope(runGo(t, m, pd, baseEnv(home, nil), "llm_db_query", "SELECT 1", "-c", "down"))
+	require.Equal(t, "pgsql_error", e.Error)
+	require.NotContains(t, e.Details, "s@cret")
 }
 
 // TestMySQLFloatText: the FLOAT and DOUBLE text of MySQL 8.0 and MariaDB

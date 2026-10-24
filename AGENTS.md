@@ -100,7 +100,14 @@ of a `.target-database` file in the current directory; `-d` and that file
 must hold a plain name (`[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}`, otherwise
 `invalid_database_name`). The row limit is `-n` (also `--limit`, and `-r`/`--rows` on
 `llm_db_query`). SQLite and PostgreSQL return native JSON types,
-MySQL/MariaDB return every value as a string. `llm_db_query` adds a
+MySQL/MariaDB return every value as a string and a SQL NULL as the string
+`"NULL"`. `llm_db_schema` keys follow the engine: SQLite
+`cid,name,type,notnull,dflt_value,pk`, MySQL/MariaDB
+`name,type,nullable,key,default`, PostgreSQL
+`column_name,data_type,is_nullable,column_default`. `-h` is always help: the
+host comes only from the connection URL. The `details` of `sqlite_error`,
+`mysql_error` and `pgsql_error` is the database driver's message on one
+line. `llm_db_query` adds a
 slow_query_explain field (the plan) when a query takes 100 ms or more
 (the query alone: connecting and the session setup do not count).
 `--analyze` executes the query to measure it, still read-only.

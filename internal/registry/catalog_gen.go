@@ -2126,9 +2126,11 @@ var functions = []Function{
 				"  Read-only, enforced twice: one statement starting with SELECT, WITH,\n" +
 				"  VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA, with no write\n" +
 				"  keywords or file/program functions; then a read-only client session\n" +
-				"  (sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL\n" +
-				"  default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).\n" +
-				"  Output: {data, rows, query_time}.",
+				"  (SQLite read-only in defensive mode, MySQL READ ONLY transactions,\n" +
+				"  PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT\n" +
+				"  statement timeout). Output: {data, rows, query_time}. -h is help: the\n" +
+				"  host comes from the connection URL. Error details are the database\n" +
+				"  driver's message.",
 		},
 		Fallback:  &Usage{Program: "llm_db_query", Usage: "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]", Description: "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
