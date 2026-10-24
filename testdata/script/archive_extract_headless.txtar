@@ -1,0 +1,32 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: FILE-11
+# covers: none (3.0 surface)
+#
+# 3.0: FILE-11 fixed. Headless (or with stdin not a terminal) unzip and 7z
+# never prompt and never overwrite: an existing file stays, no prompt text
+# appears and the call returns at once.
+
+[!exec:unzip] skip 'unzip not installed'
+[!exec:zip] skip 'zip not installed'
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir work
+exec bash -c 'cd work; mkdir src; echo new > src/a.txt; zip -qr a.zip src; echo P > src/a.txt'
+exec bash -c 'cd work; source "$GASH_SH"; archive_extract a.zip </dev/null'
+! stdout 'replace'
+! stderr 'replace|EOF'
+exec cat work/src/a.txt
+stdout '^P$'
+
+# A piped answer is not read either.
+exec bash -c 'cd work; source "$GASH_SH"; printf "A\n" | archive_extract a.zip'
+exec cat work/src/a.txt
+stdout '^P$'
+
+# 7z keeps the existing file the same way.
+[exec:7z] exec bash -c 'cd work; 7z a -bd -bso0 x.7z src; echo Q > src/a.txt; source "$GASH_SH"; archive_extract x.7z </dev/null >/dev/null'
+[exec:7z] exec cat work/src/a.txt
+[exec:7z] stdout '^Q$'
