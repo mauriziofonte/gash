@@ -4,12 +4,18 @@ package hte
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/mauriziofonte/gash/internal/hte/child"
+	"github.com/mauriziofonte/gash/internal/hte/rootops"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 func TestProcAddr(t *testing.T) {
@@ -65,5 +71,71 @@ func TestDoctorNotInstalled(t *testing.T) {
 	}
 	if i := slices.IndexFunc(res.Checks, func(c Check) bool { return c.Name == "php" }); i < 0 || res.Checks[i].Status != CheckOK {
 		t.Errorf("php check: %+v", res.Checks)
+	}
+}
+
+// Fedora and Arch ship /etc/sudoers.d as 0750: the drop-in is there but
+// the user cannot stat it. Doctor asks sudo instead of calling it missing.
+func TestDoctorSudoersUnreadableDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a 0750 directory; run as a regular user")
+	}
+	dir := t.TempDir()
+	for rel, mode := range map[string]os.FileMode{"usr/bin/sudo": 0o755, "etc/sudoers.d/gash-hte": 0o440} {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x\n"), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sudoersD := filepath.Join(dir, "etc/sudoers.d")
+	sr, err := platform.NewSysroot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, sudoOK bool) Check {
+		t.Helper()
+		run := child.Fake(t, func(c runner.Call) runner.Expect {
+			if filepath.Base(c.Argv[0]) == "sudo" && slices.Contains(c.Argv, "-l") && !sudoOK {
+				return runner.Expect{Status: 1, Stderr: "sudo: a password is required"}
+			}
+			return runner.Expect{}
+		})
+		r := &report{}
+		(&Engine{Sysroot: sr, Runner: run}).doctorSudoers(context.Background(), r)
+		if len(r.checks) != 1 {
+			t.Fatalf("checks %+v", r.checks)
+		}
+		return r.checks[0]
+	}
+
+	// The user owns the temporary tree, so 0750 would not hide anything
+	// from them; 0000 is what root:root 0750 is to a user outside the group.
+	if err := os.Chmod(sudoersD, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(sudoersD, 0o755) })
+	if _, err := os.Stat(filepath.Join(sudoersD, "gash-hte")); !errors.Is(err, fs.ErrPermission) {
+		t.Skipf("the directory does not hide the file: %v", err)
+	}
+	if c := check(t, true); c.Status != CheckOK || !strings.Contains(c.Details, "not readable by you") {
+		t.Errorf("hidden, sudo allows: %+v", c)
+	}
+	if c := check(t, false); c.Status != CheckFail || strings.Contains(c.Details, "missing") {
+		t.Errorf("hidden, sudo refuses: %+v", c)
+	}
+	if err := os.Chmod(sudoersD, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if c := check(t, true); c.Status != CheckOK || c.Details != rootops.SudoersPath {
+		t.Errorf("readable: %+v", c)
+	}
+	if err := os.Remove(filepath.Join(sudoersD, "gash-hte")); err != nil {
+		t.Fatal(err)
+	}
+	if c := check(t, true); c.Status != CheckFail || !strings.Contains(c.Details, "is missing") {
+		t.Errorf("missing: %+v", c)
 	}
 }
