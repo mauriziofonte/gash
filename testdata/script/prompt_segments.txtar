@@ -1,0 +1,176 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 prompt goldens; prompt_spec rows stay Bash, Plan shell)
+#
+# shell.md 11: golden PS1 strings for every segment, byte-equal to 2.x. The
+# want_* files below were rendered by Gash 2.1.0 (git archive v2.1.0, same
+# drive.sh, as root and as an unprivileged user) and the 3.x prompt
+# matches them byte for byte; the SHELL-01 holder variables (the branch,
+# venv and chroot are references in 3.x, raw text in 2.x) render the same.
+#
+# Each case sets its environment, ends a command with a status and runs
+# the prompt hook (__gash_prompt_command), then prints ${PS1@P} with ESC as
+# \e. \u, \h, \w and \$ are replaced by USER, HOST, CWD and PROMPTCHAR
+# before the expansion (they are Bash's, and differ per machine); one raw
+# PS1 shows the \[ \] wrappers. The SSH host color is per machine (from
+# /etc/machine-id), so it is fixed in __GASH_PS1_HOST_COLOR first. The user
+# color follows EUID (red for root), so there is one golden per kind of
+# user. Segments: chroot, venv, user (normal, other user, root), SSH host,
+# cwd, git (clean, dirty, ahead/behind with UTF-8 and ASCII glyphs,
+# detached, unborn, excluded, inside .git), jobs, exit status, the color
+# gate (NO_COLOR, GASH_NO_COLOR=1 and =0), PS2 and GASH_PROMPT=0. The
+# screen segment needs a system directory (/run/screen) and is left to
+# prompt_hostile_names.txtar (STY) and the 2.x audit.
+
+env GASH_BANNER=0
+exec bash setup.sh
+
+exec env -i PATH=$PATH HOME=$WORK/home W=$WORK TERM=dumb LANG=C.UTF-8 GASH_BANNER=0 GASH_SH=$GASH_SH GASH_BIN=$GASH_BIN HISTFILE=$WORK/hist bash --norc --noprofile -i drive.sh
+[root] cmp stdout want_root.txt
+[!root] cmp stdout want_user.txt
+
+# The glyph set is chosen at load: an ASCII locale gives + and -.
+exec env -i PATH=$PATH HOME=$WORK/home W=$WORK TERM=dumb LANG=C GASH_BANNER=0 GASH_SH=$GASH_SH GASH_BIN=$GASH_BIN HISTFILE=$WORK/hist bash --norc --noprofile -i drive.sh ascii
+[root] cmp stdout want_ascii_root.txt
+[!root] cmp stdout want_ascii_user.txt
+
+-- setup.sh --
+set -e
+export GIT_CONFIG_GLOBAL=$PWD/gitconfig GIT_CONFIG_NOSYSTEM=1
+git config --global user.name T; git config --global user.email t@example.com
+git config --global init.defaultBranch main; git config --global advice.detachedHead false
+export GIT_AUTHOR_DATE='2026-01-01T00:00:00Z' GIT_COMMITTER_DATE='2026-01-01T00:00:00Z'
+mkdir -p home/plain g
+git init -q g/origin.git --bare
+git clone -q g/origin.git g/seed 2>/dev/null
+for i in 1 2 3; do echo "$i" >g/seed/f; git -C g/seed add f; git -C g/seed commit -qm "c$i"; done
+git -C g/seed push -q origin main
+git clone -q g/origin.git g/clean
+git clone -q g/origin.git g/dirty; echo x >>g/dirty/f
+git clone -q g/origin.git g/ab; git -C g/ab reset -q --hard HEAD~2; echo y >g/ab/new; git -C g/ab add new; git -C g/ab commit -qm local
+git clone -q g/origin.git g/detached; git -C g/detached checkout -q --detach HEAD~1
+git init -q g/unborn
+git clone -q g/origin.git g/excluded
+-- drive.sh --
+# drive.sh [ascii]: render the prompt of every case; ascii renders only the
+# ahead/behind glyphs (the shell was loaded in an ASCII locale).
+export GIT_CONFIG_GLOBAL=$W/gitconfig GIT_CONFIG_NOSYSTEM=1
+source "$GASH_SH" >/dev/null 2>&1
+__GASH_PS1_HOST_COLOR=$'\e[1;36m'
+render() {
+    local name=$1 code=${2:-0} p
+    (exit "$code")
+    __gash_prompt_command
+    p=$PS1
+    p=${p//\\u/USER}
+    p=${p//\\h/HOST}
+    p=${p//\\w/CWD}
+    p=${p//\\\$/PROMPTCHAR}
+    p=${p@P}
+    p=${p//$'\e'/\\e}
+    p=${p//$'\001'/\\[}
+    p=${p//$'\002'/\\]}
+    printf '%s: %s|\n' "$name" "$p"
+}
+if [[ ${1-} == ascii ]]; then
+    cd "$W/g/ab" && render git_ahead_behind
+    NO_COLOR=1 render git_ahead_behind_no_color
+    exit 0
+fi
+cd "$HOME/plain"
+render plain
+# The raw PS1: every escape inside \[ \] (Bash counts the width right).
+p=${PS1//$'\e'/\\e}
+printf 'raw_plain: %s|\n' "$p"
+render exit_1 1
+render exit_130 130
+VIRTUAL_ENV=/opt/envs/myenv render venv
+debian_chroot=jail render chroot
+VIRTUAL_ENV=/opt/envs/myenv debian_chroot=jail render chroot_venv 2
+USER=alice LOGNAME=bob render other_user
+SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 22' render ssh
+NO_COLOR=1 render no_color 1
+GASH_NO_COLOR=1 SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 22' VIRTUAL_ENV=/v/e render gash_no_color 1
+GASH_NO_COLOR=0 render gash_no_color_0
+sleep 30 >/dev/null 2>&1 &
+j1=$!
+render jobs_1
+sleep 30 >/dev/null 2>&1 &
+j2=$!
+render jobs_2
+kill "$j1" "$j2"
+wait "$j1" "$j2" 2>/dev/null
+cd "$W/g/clean" && render git_clean
+cd "$W/g/dirty" && render git_dirty
+cd "$W/g/ab" && render git_ahead_behind
+cd "$W/g/ab" && NO_COLOR=1 render git_ahead_behind_no_color
+cd "$W/g/detached" && render git_detached
+cd "$W/g/unborn" && render git_unborn
+cd "$W/g/dirty" && render git_dirty_exit 1
+cd "$W/g/excluded" && GASH_GIT_EXCLUDE="/nope:$W/g/excluded/" render git_excluded
+cd "$W/g/clean/.git" && render git_inside_dotgit
+p=${PS2@P}
+p=${p//$'\e'/\\e}
+printf 'PS2: %s|\n' "$p"
+cd "$HOME/plain"
+GASH_PROMPT=0
+PS1=unchanged
+render prompt_off 1
+-- want_root.txt --
+plain: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+raw_plain: \[\e[0;31m\]\u\[\e[0m\]:\[\e[1;33m\]\w\[\e[0m\] \[\e[1;35m\]\$\[\e[0m\] |
+exit_1: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;31m[!1]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+exit_130: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;31m[!130]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+venv: \e[1;37m(myenv)\e[0m \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+chroot: (jail)\e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+chroot_venv: (jail)\e[1;37m(myenv)\e[0m \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;31m[!2]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+other_user: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+ssh: \e[0;31mUSER\e[0m\e[1;37m@\e[1;36mHOST\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+no_color: USER:CWD [!1] PROMPTCHAR |
+gash_no_color: (e) USER@HOST:CWD [!1] PROMPTCHAR |
+gash_no_color_0: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+jobs_1: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;32m[j1]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+jobs_2: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;32m[j2]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_clean: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_dirty: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[1;33m*\e[1;34m)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_ahead_behind: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[2m↑1↓2\e[0m\e[1;34m)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_ahead_behind_no_color: USER:CWD (main↑1↓2) PROMPTCHAR |
+git_detached: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(9a5ba16)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_unborn: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_dirty_exit: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[1;33m*\e[1;34m)\e[0m \e[1;31m[!1]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_excluded: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_inside_dotgit: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+PS2: \e[1;35m>\e[0m |
+prompt_off: unchanged|
+-- want_user.txt --
+plain: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+raw_plain: \[\e[0;32m\]\u\[\e[0m\]:\[\e[1;33m\]\w\[\e[0m\] \[\e[1;35m\]\$\[\e[0m\] |
+exit_1: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;31m[!1]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+exit_130: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;31m[!130]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+venv: \e[1;37m(myenv)\e[0m \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+chroot: (jail)\e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+chroot_venv: (jail)\e[1;37m(myenv)\e[0m \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;31m[!2]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+other_user: \e[0;34mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+ssh: \e[0;32mUSER\e[0m\e[1;37m@\e[1;36mHOST\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+no_color: USER:CWD [!1] PROMPTCHAR |
+gash_no_color: (e) USER@HOST:CWD [!1] PROMPTCHAR |
+gash_no_color_0: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+jobs_1: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;32m[j1]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+jobs_2: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;32m[j2]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_clean: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_dirty: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[1;33m*\e[1;34m)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_ahead_behind: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[2m↑1↓2\e[0m\e[1;34m)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_ahead_behind_no_color: USER:CWD (main↑1↓2) PROMPTCHAR |
+git_detached: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(9a5ba16)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_unborn: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_dirty_exit: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[1;33m*\e[1;34m)\e[0m \e[1;31m[!1]\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_excluded: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_inside_dotgit: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+PS2: \e[1;35m>\e[0m |
+prompt_off: unchanged|
+-- want_ascii_root.txt --
+git_ahead_behind: \e[0;31mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[2m+1-2\e[0m\e[1;34m)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_ahead_behind_no_color: USER:CWD (main+1-2) PROMPTCHAR |
+-- want_ascii_user.txt --
+git_ahead_behind: \e[0;32mUSER\e[0m:\e[1;33mCWD\e[0m \e[1;34m(main\e[2m+1-2\e[0m\e[1;34m)\e[0m \e[1;35mPROMPTCHAR\e[0m |
+git_ahead_behind_no_color: USER:CWD (main+1-2) PROMPTCHAR |

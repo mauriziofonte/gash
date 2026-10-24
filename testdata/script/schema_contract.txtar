@@ -1,0 +1,168 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 contract check: envelope JSON Schemas)
+#
+# design/architecture.md 4 and testing.md 4: every JSON output shape and the
+# error envelope have a JSON Schema under testdata/schema/, and the real
+# output of each --json function is validated against it (the `schema`
+# command of cmd/gash/script_test.go). envelope_schema.txtar checks the
+# same shapes value by value with jq; this file checks them against the
+# published schemas, so a new member or a changed type fails here first.
+
+env GASH_HEADLESS=1
+exec bash setup.sh
+
+# --- size list (files_largest, dirs_largest, dirs_find_large)
+exec gash files_largest t --json
+schema size_list stdout
+! schema empty_dirs stdout
+exec gash dirs_largest t --json
+schema size_list stdout
+exec gash dirs_find_large t --size 1 --json
+schema size_list stdout
+exec gash dirs_find_large t --size 1 --with-mtime --json
+schema size_list stdout
+exec gash files_largest empty --json
+schema size_list stdout
+stdout '"data":\[\],"count":0'
+
+# --- empty dirs, tree stats
+exec gash dirs_list_empty t --json
+schema empty_dirs stdout
+exec gash dirs_list_empty t --json --count
+schema empty_dirs stdout
+exec gash tree_stats t --json --top 2
+schema tree_stats stdout
+
+# --- llm_tree: plain, --stats, cut at 500 entries
+exec gash llm_tree t
+schema llm_tree stdout
+exec gash llm_tree t --depth 3 --stats
+schema llm_tree stdout
+exec gash llm_tree many --stats
+schema llm_tree stdout
+stdout '"truncated":true'
+
+# --- databases (SQLite; MySQL/MariaDB/PostgreSQL in internal/db's
+# integration tests, which share db.json)
+exec gash llm_db_tables -f app.db
+schema db stdout
+exec gash llm_db_schema users -f app.db
+schema db stdout
+exec gash llm_db_sample users -f app.db -n 1
+schema db stdout
+exec gash llm_db_query 'SELECT id, name FROM users ORDER BY id' -f app.db
+schema db stdout
+exec gash llm_db_query 'SELECT 1 WHERE 0' -f app.db
+schema db stdout
+exec gash llm_db_explain 'SELECT * FROM users' -f app.db
+schema db stdout
+
+# --- git
+exec gash llm_git_status repo
+schema git_status stdout
+exec gash llm_git_log repo -n 5
+schema git_log stdout
+exec gash llm_git_log repo -n 0
+schema git_log stdout
+
+# --- system and project
+env PATH=$WORK/fakebin:$PATH
+exec gash llm_ports
+schema ports stdout
+exec gash llm_ports --listen
+schema ports stdout
+exec gash llm_procs
+schema procs stdout
+exec gash llm_procs --name bash
+schema procs stdout
+exec gash llm_procs --port 22
+schema procs stdout
+stdout '"port":22'
+env SCHEMA_PLAIN=plain
+env SCHEMA_URL=mysql://u:secret@h/db
+exec gash llm_env --filter ^SCHEMA_
+schema env stdout
+stdout '"SCHEMA_PLAIN": "plain"'
+! stdout secret
+exec gash llm_project web
+schema project stdout
+exec gash llm_deps web
+schema deps stdout
+exec gash llm_deps web --dev
+schema deps stdout
+stdout '"dev"'
+
+# --- docker compose: the shared docker mock, no registry reachable (every
+# service is ERROR)
+env PATH=$GASH_STAGE/testdata/mocks/bin:$PATH
+env HTTPS_PROXY=http://127.0.0.1:1
+env HTTP_PROXY=http://127.0.0.1:1
+exec gash docker_compose_check compose --json
+schema docker_check stdout
+exec gash llm_docker_check compose
+schema docker_check stdout
+exec gash docker_compose_scan scan --json
+schema docker_scan stdout
+
+# --- dev version detection
+exec gash php_detect_version web --json
+schema php_detect stdout
+env NVM_DIR=$WORK/nvm
+exec gash node_detect_version web --json
+schema node_detect stdout
+
+# --- history
+exec bash -c 'export HISTFILE=history; source "$GASH_SH"; hgrep ls --json'
+schema history stdout
+stdout '"command":"ls -la"'
+
+# --- 3.x commands
+exec gash version --json
+schema version stdout
+
+# --- error envelopes, one per family, on stderr
+! exec gash llm_tree nowhere
+schema error stderr
+! exec gash llm_tree --depth x t
+schema error stderr
+! exec gash files_largest nowhere --json
+schema error stderr
+! exec gash llm_db_query 'DELETE FROM users' -f app.db
+schema error stderr
+stderr '"query_time"|"FATAL"'
+! exec gash llm_db_query 'SELECT * FROM nope' -f app.db
+schema error stderr
+stderr '"error":"sqlite_error"'
+! exec gash llm_exec 'rm -rf /tmp/x'
+schema error stderr
+! exec gash llm_git_status t
+schema error stderr
+! exec gash llm_deps t
+schema error stderr
+! exec gash docker_compose_check t --json
+schema error stderr
+! exec gash version --bogus
+schema error stderr
+! exec gash hte site list --json
+schema error stderr
+
+-- setup.sh --
+set -e
+mkdir -p t/a/b t/empty empty many web compose scan/p1 scan/p2 fakebin nvm/versions/node/v20.11.0
+head -c 70000 /dev/zero >t/a/b/big.bin
+printf 'hi\n' >t/a/x.txt
+(cd many && i=0 && while [ $i -lt 510 ]; do : >"f$i"; i=$((i + 1)); done)
+sqlite3 app.db 'CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT, score REAL); INSERT INTO users(name, score) VALUES ("alice", 1.5), ("bob", NULL);'
+git init -q -b main repo
+git -C repo -c user.email=t@t -c user.name=T commit -q --allow-empty -m 'first "quoted"'
+echo a >repo/a
+printf '{"name":"x","dependencies":{"left-pad":"1"},"devDependencies":{"jest":"1"}}' >web/package.json
+echo 20 >web/.nvmrc
+printf 'services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.3\n' >compose/docker-compose.yml
+printf 'services:\n  app:\n    image: nginx\n' >scan/p1/docker-compose.yml
+printf 'services:\n  db:\n    image: postgres\n' >scan/p2/compose.yaml
+printf '#1700000100\nls -la\n#1700000200\ngit status\n#1700000300\nls /tmp\n' >history
+printf '#!/bin/sh\necho "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port"\necho "tcp   LISTEN 0      4096   [::]:22            [::]:*"\necho "udp   UNCONN 0      0      0.0.0.0:68         0.0.0.0:*"\n' >fakebin/ss
+printf '#!/bin/sh\necho 1\n' >fakebin/lsof
+chmod +x fakebin/ss fakebin/lsof

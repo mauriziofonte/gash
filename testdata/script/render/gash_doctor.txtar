@@ -27,10 +27,13 @@ stdout '^External Tools:$'
 stderr 'Error:   gash.sh . MISSING'
 stderr 'Warning: [0-9]+ issue.s. found\.'
 
-# --- :54 timing - startup timing table
-exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor --timing'
-stdout 'Startup timing'
-stdout 'gash.sh \(total\)'
+# --- :54 timing - startup timing table ($EPOCHREALTIME: Bash 5.0+; on 4.4
+# the documented error, testdata/bash/run.sh)
+[bash5] exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor --timing'
+[bash5] stdout 'Startup timing'
+[bash5] stdout 'gash.sh \(total\)'
+[!bash5] ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor --timing'
+[!bash5] stderr 'gash_doctor --timing needs Bash 5\.0 or newer'
 
 # --- R6: plain mode, no ESC on either stream (without the 0644 settings
 # file of :53, an issue that would make the status 1)

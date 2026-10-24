@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. docker_compose_scan --json.",
+  "title": "Compose scan",
+  "type": "object",
+  "required": ["base_path", "depth", "compose_files", "total_found"],
+  "properties": {
+    "base_path": {"type": "string", "pattern": "^/"},
+    "depth": {"type": "integer", "minimum": 0},
+    "compose_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "file", "services"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^/"},
+          "file": {"enum": ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]},
+          "services": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "total_found": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}

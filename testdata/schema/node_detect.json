@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. node_detect_version --json (AGENTS.md 3.4).",
+  "title": "node_detect_version",
+  "type": "object",
+  "required": ["version", "full_version", "node_command", "npm_command", "npx_command"],
+  "properties": {
+    "version": {"type": "string", "pattern": "^[0-9]+$"},
+    "full_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"},
+    "node_command": {"type": "string", "pattern": "^node[0-9]+$"},
+    "npm_command": {"type": "string", "pattern": "^npm[0-9]+$"},
+    "npx_command": {"type": "string", "pattern": "^npx[0-9]+$"}
+  },
+  "additionalProperties": false
+}

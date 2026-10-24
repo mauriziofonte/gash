@@ -64,7 +64,13 @@ func Handler(opt Options) invoke.Handler {
 		top.CompletionOptions.DisableDefaultCmd = true
 		top.SetHelpCommand(&cobra.Command{Use: "__help", Hidden: true})
 		top.AddCommand(r.tree())
-		top.SetArgs(append([]string{"hte"}, c.Args...))
+		args := append([]string{"hte"}, c.Args...)
+		// gash __complete hte WORDS... reaches here as Args __complete
+		// WORDS...: cobra's completion request is a command of the root.
+		if len(c.Args) > 0 && c.Args[0] == cobra.ShellCompRequestCmd {
+			args = append([]string{cobra.ShellCompRequestCmd, "hte"}, c.Args[1:]...)
+		}
+		top.SetArgs(args)
 		top.SetIn(c.Stdin)
 		top.SetOut(c.Stdout)
 		top.SetErr(c.Stderr)

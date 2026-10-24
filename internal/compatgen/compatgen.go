@@ -325,7 +325,11 @@ func buildData() Data {
 
 	seenAlias := map[string]bool{}
 	for _, f := range registry.Functions() {
-		if f.Name != "needs_help" && f.Name != "needs_confirm_prompt" {
+		// nvm is nvm's own function (2.x registered only the functions its
+		// load added, so nvm only under GASH_NVM=lazy, whose stub hands over
+		// to nvm and its completion on first use): Gash must not replace
+		// the completion of an nvm the user loaded (init_bash_state_parity).
+		if f.Name != "needs_help" && f.Name != "needs_confirm_prompt" && f.Name != "nvm" {
 			d.CompleteFunctions = append(d.CompleteFunctions, f.Name)
 		}
 		if !f.HasHelp {

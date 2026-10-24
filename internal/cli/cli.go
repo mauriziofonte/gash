@@ -13,9 +13,11 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -222,6 +224,20 @@ func hteCmd(p *Process, status *int) *cobra.Command {
 		Short:              "Manage the local Apache and PHP-FPM test environment",
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
+		// The hte tree lives in its handler: gash __complete hte WORDS asks
+		// it (htecmd answers a leading __complete) and relays the answer.
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			h, ok := p.Table.LookupCommand("hte")
+			if !ok {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			var out bytes.Buffer
+			h(&invoke.Call{
+				Ctx: p.Ctx, Name: "hte", Args: append(append([]string{cobra.ShellCompRequestCmd}, args...), toComplete),
+				Env: p.Env, Stdin: p.Stdin, Stdout: &out, Stderr: io.Discard, Term: p.Term, Handlers: p.Table,
+			})
+			return parseCompletion(out.String())
+		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			if h, ok := p.Table.LookupCommand("hte"); ok {
 				*status = h(&invoke.Call{
@@ -282,4 +298,24 @@ func usageEnvelope(err error, args []string) contract.Envelope {
 		hint = "Run: gash " + args[0] + " --help"
 	}
 	return contract.New(code, msg, hint)
+}
+
+// parseCompletion reads the answer of a cobra __complete request: one
+// completion per line, then ":DIRECTIVE".
+func parseCompletion(out string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	directive := cobra.ShellCompDirectiveDefault
+	var comps []cobra.Completion
+	for _, l := range lines {
+		if d, ok := strings.CutPrefix(l, ":"); ok {
+			if n, err := strconv.Atoi(d); err == nil {
+				directive = cobra.ShellCompDirective(n)
+			}
+			continue
+		}
+		if l != "" {
+			comps = append(comps, l)
+		}
+	}
+	return comps, directive
 }

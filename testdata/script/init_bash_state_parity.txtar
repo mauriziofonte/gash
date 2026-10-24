@@ -1,0 +1,173 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-06
+# ledger: SHELL-09
+# ledger: SELF-03
+# ledger: SELF-05
+# covers: none (3.0 shell-state proof, shell.md 11)
+#
+# MATRIX "gash init bash" / shell.md 11, state parity: in the same fixture
+# HOME an interactive Bash loads Gash 2.1.0 (git archive v2.1.0, the
+# $GASH_2X_SH tree that script_test.go prepares) and then 3.x, and the
+# shell state after each load is compared: public functions (declare -F),
+# aliases (alias -p), completion specs (complete -p), shopt -p, set -o,
+# trap -p, umask and every variable that is not an internal (__*) or
+# changed by Bash itself (declare -p), PROMPT_COMMAND, PS1 and PS2 included.
+# The tree path and GASH_VERSION are normalized. Matrix: defaults, every
+# setting off, GASH_REPLACE_TOOLS=1, GASH_NVM=lazy, GASH_PATH_ADD, aliases
+# defined before Gash, string and array PROMPT_COMMAND, an nvm the user
+# loaded with its completion, docker/php tools on PATH, GASH_HISTORY_SYNC
+# with GASH_UMASK.
+#
+# 3.0 differences from 2.1.0, checked one by one and then left out of the
+# comparison: the grep alias (SHELL-06 fixed), the path alias (rewritten
+# on 2.x main after v2.1.0, carried by the port), no Gash completion for
+# nvm (2.x registered it for its lazy stub; 3.x registered it always and
+# replaced the completion of a user's nvm, and gash_unload then removed
+# it: fixed with this test), aliases the user defined first stay
+# (SHELL-09 fixed).
+#
+# After gash_unload the 3.x shell is exactly the shell before the load,
+# in every case (SELF-03, SELF-05 fixed; 2.x left completion specs,
+# exports and overwritten aliases behind).
+
+[!has2x] skip 'the v2.1.0 tree is not available (fetch the tag; CI sets GASH_REQUIRE_2X=1)'
+
+exec bash parity.sh
+cmp stdout want.txt
+
+-- parity.sh --
+# parity.sh: every case loads 2.1.0, then 3.x, in the same fixture HOME.
+set -u
+mkdir -p "$WORK/out" "$WORK/bin"
+for t in docker docker-compose php composer htop pydf colordiff; do
+    printf '#!/bin/sh\nexit 0\n' >"$WORK/bin/$t"
+    chmod +x "$WORK/bin/$t"
+done
+home() {
+    rm -rf "$WORK/h"
+    mkdir -p "$WORK/h"
+    case "$1" in
+    all_off) printf 'GASH_PROMPT=0\nGASH_BANNER=0\nGASH_HISTORY=0\nGASH_HISTORY_SYNC=0\nGASH_SAFETY_ALIASES=0\nGASH_REPLACE_TOOLS=0\nGASH_NVM=off\nGASH_SHOW_INXI=0\n' >"$WORK/h/.gash_env" ;;
+    replace_tools) printf 'GASH_REPLACE_TOOLS=1\n' >"$WORK/h/.gash_env" ;;
+    nvm_lazy)
+        mkdir -p "$WORK/h/.nvm/versions/node/v20.11.0/bin" "$WORK/h/.nvm/alias"
+        printf 'nvm() { :; }\n' >"$WORK/h/.nvm/nvm.sh"
+        echo 20 >"$WORK/h/.nvm/alias/default"
+        printf 'GASH_NVM=lazy\n' >"$WORK/h/.gash_env"
+        ;;
+    path_add)
+        mkdir -p "$WORK/h/b1" "$WORK/h/b2"
+        printf 'GASH_PATH_ADD="%s %s /nonexistent"\n' "$WORK/h/b1" "$WORK/h/b2" >"$WORK/h/.gash_env"
+        ;;
+    history_umask) printf 'GASH_HISTORY_SYNC=1\nGASH_UMASK=027\n' >"$WORK/h/.gash_env" ;;
+    esac
+    chmod 600 "$WORK/h/.gash_env" 2>/dev/null || true
+}
+norm() { # normalize a dump of tree $2 into stdout
+    sed -e "s|$2|TREE|g" -e 's/^declare -- GASH_VERSION=.*/declare -- GASH_VERSION=VERSION/' "$1"
+}
+for c in ${CASES:-defaults all_off replace_tools nvm_lazy path_add user_aliases prompt_string prompt_array nvm_user docker_php history_umask}; do
+    p="$PATH"
+    case "$c" in docker_php | replace_tools) p="$WORK/bin:$PATH" ;; esac
+    for impl in 2 3; do
+        home "$c"
+        if [ "$impl" = 2 ]; then sh_=$GASH_2X_SH; else sh_=$GASH_SH; fi
+        (cd "$WORK/h" && env -i PATH="$p" HOME="$WORK/h" TERM=dumb LANG=C.UTF-8 GASH_BIN="$GASH_BIN" \
+            __P_SH="$sh_" __P_CASE="$c" __P_OUT="$WORK/out/$impl.$c" bash --norc --noprofile -i "$WORK/state.sh" >/dev/null 2>&1)
+        for s in before loaded unloaded; do norm "$WORK/out/$impl.$c.$s" "${sh_%/gash.sh}" >"$WORK/out/$impl.$c.$s.n"; done
+    done
+    # The 3.0 differences from 2.1.0, each checked on its own below and
+    # then taken out of both dumps:
+    #   grep alias   SHELL-06 fixed: 3.x defines grep='grep --color=auto'
+    #   path alias   2.x main after v2.1.0 (a54ff76) rewrote it without
+    #                echo -e; the port carries the newer alias
+    #   nvm spec     2.x registered its completion for the lazy nvm stub it
+    #                added; 3.x never replaces the completion of nvm
+    #   gp, ll       SHELL-09 fixed: an alias the user defined first stays
+    l2="$WORK/out/2.$c.loaded.n" l3="$WORK/out/3.$c.loaded.n"
+    grep -qx "alias grep='grep --color=auto'" "$l3" || echo "$c: 3.x has no grep alias (SHELL-06)"
+    grep -qxF "alias path='tr \":\" \"\\n\" <<<\"\$PATH\"'" "$l3" || echo "$c: 3.x path alias changed"
+    if [ "$c" = nvm_lazy ]; then
+        grep -qx 'complete -o default -F __gash_complete nvm' "$l2" || echo "$c: 2.x no longer registers nvm"
+    fi
+    if grep -qx 'complete -o default -F __gash_complete nvm' "$l3"; then echo "$c: 3.x replaces the nvm completion"; fi
+    if [ "$c" = nvm_user ]; then
+        grep -qx 'complete -o default -F __nvm nvm' "$l3" || echo "$c: 3.x dropped the user's nvm completion"
+    fi
+    if [ "$c" = user_aliases ]; then
+        grep -qx "alias gp='echo mine'" "$l3" && grep -qx "alias ll='ls -1'" "$l3" || echo "$c: 3.x overwrote a user alias (SHELL-09)"
+        grep -qx "alias gp='echo mine'" "$l2" && echo "$c: 2.x kept the user alias gp"
+    fi
+    for f in "$l2" "$l3"; do
+        sed -i.bak -e "/^alias grep='grep --color=auto'\$/d" -e '/^alias path=/d' \
+            -e '/^complete -o default -F __gash_complete nvm$/d' "$f"
+        [ "$c" = user_aliases ] && sed -i.bak -e '/^alias gp=/d' -e '/^alias ll=/d' "$f"
+        rm -f "$f.bak"
+    done
+    if diff "$WORK/out/2.$c.before.n" "$WORK/out/3.$c.before.n" >/dev/null; then b=same; else b=DIFF; fi
+    if diff -u "$WORK/out/2.$c.loaded.n" "$WORK/out/3.$c.loaded.n" >"$WORK/out/$c.loaded.diff"; then l=same; else l=DIFF; cat "$WORK/out/$c.loaded.diff" >&2; fi
+    if diff -u "$WORK/out/3.$c.before.n" "$WORK/out/3.$c.unloaded.n" >"$WORK/out/$c.unload.diff"; then u=exact; else u=DIFF; cat "$WORK/out/$c.unload.diff" >&2; fi
+    echo "$c: before $b, loaded $l, unload $u"
+done
+-- state.sh --
+# state.sh: in an interactive Bash, apply the case's pre-load state, then
+# dump the shell state before the load, after it and after gash_unload.
+__dump() {
+    local __v
+    {
+        echo "## functions"
+        declare -F | sed 's/^declare -f[a-z]* //' | grep -v '^__' | sort
+        echo "## aliases"
+        alias -p
+        echo "## complete"
+        complete -p | sort
+        echo "## shopt"
+        shopt -p
+        echo "## set"
+        set -o
+        echo "## trap"
+        trap -p
+        echo "## umask"
+        umask
+        echo "## variables"
+        for __v in $(compgen -v | sort); do
+            case "$__v" in
+            __* | _ | BASH | BASH_* | BASHOPTS | BASHPID | COLUMNS | LINES | COMP_* | DIRSTACK | EPOCH* | FUNCNAME | GROUPS | HISTCMD | LINENO | OLDPWD | PIPESTATUS | PPID | PWD | RANDOM | SECONDS | SHLVL | SRANDOM | GASH_BIN) continue ;;
+            esac
+            declare -p "$__v" 2>/dev/null
+        done
+    } >"$1"
+}
+case "$__P_CASE" in
+user_aliases)
+    alias gp='echo mine'
+    alias ll='ls -1'
+    ;;
+prompt_string) PROMPT_COMMAND='echo hi >/dev/null' ;;
+prompt_array) PROMPT_COMMAND=('true' 'echo x >/dev/null') ;;
+nvm_user)
+    # nvm loaded by the user's .bashrc before Gash, with its completion.
+    nvm() { :; }
+    __nvm() { :; }
+    complete -o default -F __nvm nvm
+    ;;
+esac
+__dump "$__P_OUT.before"
+source "$__P_SH" >/dev/null 2>&1
+source "${__P_SH%/*}/bash_completion"
+__dump "$__P_OUT.loaded"
+gash_unload >/dev/null 2>&1
+__dump "$__P_OUT.unloaded"
+-- want.txt --
+defaults: before same, loaded same, unload exact
+all_off: before same, loaded same, unload exact
+replace_tools: before same, loaded same, unload exact
+nvm_lazy: before same, loaded same, unload exact
+path_add: before same, loaded same, unload exact
+user_aliases: before same, loaded same, unload exact
+prompt_string: before same, loaded same, unload exact
+prompt_array: before same, loaded same, unload exact
+nvm_user: before same, loaded same, unload exact
+docker_php: before same, loaded same, unload exact
+history_umask: before same, loaded same, unload exact

@@ -1,0 +1,51 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 HTE surface; no 2.x spec)
+#
+# gash hte doctor (MATRIX "gash hte doctor", hte.md 9) runs before install
+# and needs no live stack. Before install it always reports the install
+# check as failed with its remedy, so it exits non-zero in both modes.
+# Human mode: one line per check on stdout (OK:/Warning:/Error: with an
+# indented remedy), the failure count on stderr. --json: one object
+# {"ok","checks":[{"name","status","details","remedy"}]} on stdout,
+# nothing on stderr, valid against testdata/schema/hte_doctor.json. The
+# other checks (Apache, ports) depend on the machine and are asserted only
+# by shape.
+
+# --- --json
+! exec gash hte doctor --json
+! stderr .
+schema hte_doctor stdout
+stdout '^\{"ok":false,"checks":\[\{"name":"platform","status":"ok","details":"[^"]+"\}'
+stdout '\{"name":"install","status":"fail","details":"gash hte is not installed for this user","remedy":"run gash hte install"\}'
+stdout '"name":"port 80","status":"(ok|warn|fail)"'
+stdout '"name":"port 443","status":"(ok|warn|fail)"'
+
+# The global --json form (before the subcommand) is the same report.
+! exec gash hte --json doctor
+schema hte_doctor stdout
+stdout '"name":"install","status":"fail"'
+
+# --- human
+! exec gash hte doctor
+stdout '^OK: platform: .+$'
+stdout '^Error: install: gash hte is not installed for this user$'
+stdout '^  remedy: run gash hte install$'
+stdout '^(OK|Warning|Error): port 80: '
+stderr '^Error: [0-9]+ checks? failed$'
+
+# Without a terminal no color, also with TERM set.
+env TERM=xterm-256color
+! exec gash hte doctor
+! stdout '\x1b'
+! stderr '\x1b'
+
+# --- errors: the RETRY envelope of the 3.x commands
+! exec gash hte doctor --bogus
+! stdout .
+stderr '^\{"error":"unknown_option","details":"unknown flag: --bogus","action":"RETRY","recoverable":true,"hint":"Run: gash hte doctor --help"\}$'
+schema error stderr
+! exec gash hte doctor extra
+! stdout .
+stderr '^\{"error":"unexpected_argument",'
+schema error stderr

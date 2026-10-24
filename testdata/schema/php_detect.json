@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. php_detect_version --json (AGENTS.md 3.4).",
+  "title": "php_detect_version",
+  "type": "object",
+  "required": ["version", "php_raw_binary", "php_command", "composer_raw_binary", "composer_command"],
+  "properties": {
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+    "php_raw_binary": {"type": "string"},
+    "php_command": {"type": "string", "pattern": "^php[0-9]+$"},
+    "composer_raw_binary": {"type": "string"},
+    "composer_command": {"type": "string", "pattern": "^composer[0-9]+$"}
+  },
+  "additionalProperties": false
+}

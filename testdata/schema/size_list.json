@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. files_largest, dirs_largest, dirs_find_large with --json (AGENTS.md 4.1).",
+  "title": "Size list",
+  "type": "object",
+  "required": ["data", "count", "total_size", "total_size_human", "kind", "scan_time", "errors"],
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["size", "size_human", "path"],
+        "properties": {
+          "size": {"type": "integer", "minimum": 0},
+          "size_human": {"type": "string", "minLength": 1},
+          "mtime": {"type": "string", "pattern": "^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}|N/A)$"},
+          "path": {"type": "string", "pattern": "^/"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "count": {"type": "integer", "minimum": 0},
+    "total_size": {"type": "integer", "minimum": 0},
+    "total_size_human": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["files", "directories"]},
+    "scan_time": {"type": "string", "pattern": "^[0-9]+ms$"},
+    "errors": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false,
+  "if": {"properties": {"kind": {"const": "files"}}},
+  "then": {"properties": {"data": {"items": {"required": ["mtime"]}}}}
+}

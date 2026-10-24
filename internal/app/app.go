@@ -37,8 +37,10 @@ func Main(args, environ []string, stdin, stdout, stderr *os.File) (status int) {
 
 	var got atomic.Int32
 	sig := make(chan os.Signal, 1)
+	relayed := make(chan struct{})
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
+		defer close(relayed)
 		s, ok := <-sig
 		if !ok {
 			return
@@ -50,8 +52,14 @@ func Main(args, environ []string, stdin, stdout, stderr *os.File) (status int) {
 		cancel()
 	}()
 	defer func() {
+		// Stop hands a signal the runtime already caught to sig before it
+		// returns, and the goroutine records it before relayed closes. A
+		// Ctrl-C reaches the child and gash together: the child may end
+		// and the handler return before the goroutine ran, and the status
+		// must still be 128+N, not the handler's (cmd/gash signal_test.go).
 		signal.Stop(sig)
 		close(sig)
+		<-relayed
 		if r := recover(); r != nil {
 			status = panicked(stderr, env, r)
 		}

@@ -171,7 +171,10 @@ and on Bash 4.4, 5.0, 5.1 and 5.3 (the compat Bash must load on 4.4).
 | vuln | `govulncheck ./...` |
 | unit | `go test -race ./...` on ubuntu-latest and macos-latest |
 | specs (until cutover) | `tests/run.sh --impl bash` and `--impl go`, plus the render spec, on Linux; Bash version matrix 4.4/5.0/5.1/5.3 for the compat layer |
-| testscript | Linux and macOS |
+| testscript | Linux and macOS; the 2.x differential scripts (state parity, prompt goldens) against a `git archive` of `v2.1.0` |
+| coverage-gates | `covermap -summary` (0 uncovered, 0 errors) and `bashonlymap -check` (section 4) |
+| compat-bash | the Go and testscript suites with Bash 4.4, 5.0, 5.1 and 5.3 first on PATH (`testdata/bash/run.sh`, Bash copied out of the official `bash:VERSION` images) |
+| db-servers | `internal/db` `TestServers` against `mysql:8.4`, `mariadb:11` and `postgres:16` service containers (`GASH_TEST_*_URL`, `GASH_TEST_DB_REQUIRE=1`) |
 | upgrade | section 5 |
 | hte-e2e | container matrix of section 6: Debian 12, Ubuntu 24.04, Fedora (Remi), Arch; multi-PHP on Ubuntu, systemd on Debian and Ubuntu |
 | hte-macos | section 6 natively on a macOS runner (Homebrew `httpd`, `php`, `php@8.3`) |

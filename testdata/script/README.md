@@ -152,3 +152,9 @@ it reaches zero uncovered. The gate is a standalone tool, never part of
   defect the Go port matches byte-for-byte is covered normally; reserve
   `# forced-divergence:` for a LEDGER "Forced divergences" id where rc.A
   deliberately differs, and `# ledger:` as a non-coverage annotation.
+- **JSON Schemas.** Every JSON output shape and the error envelope has a
+  schema in `testdata/schema/NAME.json` (`design/architecture.md` 4). The
+  suite's `schema NAME stdout|stderr|FILE` command validates the content (one
+  pretty value, or one compact value per line) against it; `! schema` asserts
+  it does not match. A new `--json` output gets a schema and a case in
+  `schema_contract.txtar`.

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. hgrep/history_grep --json.",
+  "title": "history_grep",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["timestamp", "epoch", "count", "command"],
+    "properties": {
+      "timestamp": {"type": "string"},
+      "epoch": {"type": "integer"},
+      "count": {"type": "integer", "minimum": 1},
+      "command": {"type": "string"}
+    },
+    "additionalProperties": false
+  }
+}
