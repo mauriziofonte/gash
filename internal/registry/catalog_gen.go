@@ -2983,7 +2983,11 @@ var functions = []Function{
 				"  pf node\n" +
 				"\n" +
 				"  # Check if a service is running\n" +
-				"  pf mysql",
+				"  pf mysql\n" +
+				"\n" +
+				"NOTES\n" +
+				"  NAME is matched literally, ignoring case, against each command line\n" +
+				"  (not the user or other columns). Returns 1 when nothing matches.",
 		},
 		Fallback: &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},

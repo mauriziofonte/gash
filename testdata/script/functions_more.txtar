@@ -80,7 +80,8 @@ stdout 'dle/empty'
 
 # --- functions_more_spec.sh:123 - process_find prints error when no match
 # The pattern is built at runtime so it never appears in a ps command line.
-exec bash -c 'source "$GASH_SH"; a=ZZX; b=XYY; c=99Q; d=Q; process_find "${a}${b}${c}${d}"'
+# 3.0: SYS-04 fixed: no match returns 1 (2.x returned 0).
+! exec bash -c 'source "$GASH_SH"; a=ZZX; b=XYY; c=99Q; d=Q; process_find "${a}${b}${c}${d}"'
 stderr 'No process found'
 
 # --- functions_more_spec.sh:135 - services_stop -y with nothing running succeeds quietly

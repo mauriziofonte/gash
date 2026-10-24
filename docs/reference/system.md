@@ -289,6 +289,13 @@ pf node
 pf mysql
 ```
 
+#### Notes
+
+```text
+NAME is matched literally, ignoring case, against each command line
+(not the user or other columns). Returns 1 when nothing matches.
+```
+
 See also: `process_kill`, `port_kill`
 
 ## process_kill

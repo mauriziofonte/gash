@@ -15,23 +15,24 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// psAux is the ps aux table of tests/mocks/bin/ps, plus the binary's own
-// row and a grep-named process.
-const psAux = `USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
-root         1  0.0  0.1  12345  678 ?        Ss   00:00   0:01 /sbin/init
-maurizio  2222  0.1  0.2  99999  111 pts/0    Sl   00:00   0:00 my-proc --flag
-maurizio  3333  0.0  0.1  88888  222 pts/0    Sl   00:00   0:00 another-proc
-maurizio  4242  0.0  0.1  88888  222 pts/0    Sl   00:00   0:00 gash process_find proc
-maurizio  5555  0.0  0.1  88888  222 pts/0    Sl   00:00   0:00 ripgrep proc
+// psAux is the `ps -eo pid=,user=,pcpu=,args=` table of the tests: no
+// header, the binary's own row and a grep-named process.
+const psAux = `    1 root      0.0 /sbin/init
+ 2222 maurizio  0.1 my-proc --flag
+ 3333 maurizio  0.0 another-proc
+ 4242 maurizio  0.0 gash process_find proc
+ 5555 maurizio  0.0 ripgrep proc
 `
 
-func psExpect() runner.Expect { return runner.Expect{Argv: []string{"ps", "aux"}, Stdout: psAux} }
+func psExpect() runner.Expect {
+	return runner.Expect{Argv: []string{"ps", "-eo", "pid=,user=,pcpu=,args="}, Stdout: psAux}
+}
 
 func TestProcessFind(t *testing.T) {
 	m, _, _ := tm(t, runner.NewFake(t, psExpect(), psExpect()))
 	r := call(m, "process_find", nil, nil, "", "proc")
-	require.Equal(t, result{"   2222     maurizio     0.1  my-proc\n   3333     maurizio     0.0  another-proc\n",
-		"Info: Processes matching proc:\n", 0}, r)
+	require.Equal(t, result{"   2222     maurizio     0.1  my-proc\n   3333     maurizio     0.0  another-proc\n" +
+		"   5555     maurizio     0.0  ripgrep\n", "Info: Processes matching proc:\n", 0}, r)
 	r = call(m, "process_find", nil, nil, "", "INIT")
 	require.Equal(t, result{"   1        root         0.0  /sbin/init\n", "Info: Processes matching INIT:\n", 0}, r)
 
@@ -39,20 +40,23 @@ func TestProcessFind(t *testing.T) {
 	require.Equal(t, result{"", "Error: Missing process name. Usage: process_find <process_name>\n", 1}, r)
 }
 
-// SYS-04: no match is an error with status 0; the whole ps line is
-// matched (the header too) and every line with "grep" is dropped.
+// SYS-04: NAME is matched literally, ignoring case, against the COMMAND
+// field only (no header, no user column); a grep-named process is found;
+// no match is an error with status 1 (3.0: SYS-04 fixed; 2.x returned 0,
+// matched the whole ps line and dropped every line with "grep").
 func TestLedger_SYS04(t *testing.T) {
-	m, _, _ := tm(t, runner.NewFake(t, psExpect(), psExpect(), psExpect(), psExpect()))
+	m, _, _ := tm(t, runner.NewFake(t, psExpect(), psExpect(), psExpect(), psExpect(), psExpect()))
 	r := call(m, "process_find", nil, nil, "", "zz")
-	require.Equal(t, result{"", "Error: No process found with name 'zz'.\n", 0}, r)
+	require.Equal(t, result{"", "Error: No process found with name 'zz'.\n", 1}, r)
 	r = call(m, "process_find", nil, nil, "", "PID")
-	require.Equal(t, result{"   PID      USER         %CPU COMMAND\n", "Info: Processes matching PID:\n", 0}, r)
-	r = call(m, "process_find", nil, nil, "", "ripgrep")
-	require.Equal(t, 0, r.rc)
-	require.Equal(t, "Error: No process found with name 'ripgrep'.\n", r.err)
-	// A pattern grep refuses: its message, then the no-match error.
-	r = call(m, "process_find", nil, nil, "", "[a")
-	require.Equal(t, result{"", "grep: Unmatched [, [^, [:, [., or [=\nError: No process found with name '[a'.\n", 0}, r)
+	require.Equal(t, result{"", "Error: No process found with name 'PID'.\n", 1}, r)
+	r = call(m, "process_find", nil, nil, "", "maurizio")
+	require.Equal(t, 1, r.rc)
+	r = call(m, "process_find", nil, nil, "", "grep")
+	require.Equal(t, result{"   5555     maurizio     0.0  ripgrep\n", "Info: Processes matching grep:\n", 0}, r)
+	// Regex characters are literal.
+	r = call(m, "process_find", nil, nil, "", "my-.*")
+	require.Equal(t, result{"", "Error: No process found with name 'my-.*'.\n", 1}, r)
 }
 
 func pgrep(name, out string, status int) runner.Expect {

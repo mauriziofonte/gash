@@ -16,9 +16,11 @@ import (
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
-// processFind is process_find: `ps aux | grep -i -- NAME | grep -v grep`
-// (GNU BRE, SYS-38), as a PID/USER/%CPU/command table; no match is an
-// error line with status 0 (SYS-04). The binary's own row is left out.
+// processFind is process_find: the processes whose command line contains
+// NAME, ignoring case, as a PID/USER/%CPU/program table (LEDGER SYS-04: NAME
+// is matched literally against the COMMAND field of `ps -eo
+// pid=,user=,pcpu=,args=` only, never the header or another column; only
+// the binary's own row is left out; no match is an error with status 1).
 func (m *Module) processFind(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -29,29 +31,29 @@ func (m *Module) processFind(c *invoke.Call) int {
 		p.Error("Missing process name. Usage: process_find <process_name>")
 		return 1
 	}
-	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "ps", Args: []string{"aux"},
+	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "ps", Args: []string{"-eo", "pid=,user=,pcpu=,args="},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: c.Stderr}})
 	ps := strings.ReplaceAll(string(res.Stdout), "\x00", "")
+	needle := strings.ToLower(name)
+	self := strconv.Itoa(m.self)
 	var rows []string
-	re, err := compileBRE(name)
-	if gerr, ok := err.(*grepError); ok {
-		write(c.Stderr, "grep: "+gerr.msg+"\n")
-	} else if err != nil {
-		p.Error("Invalid pattern: " + name)
-		return 1
-	} else {
-		self := strconv.Itoa(m.self)
-		for _, l := range grepData(c.Stderr, re, ps, "(standard input)", "") {
-			f := awkFields(l)
-			if strings.Contains(l, "grep") || field(f, 1) == self {
-				continue
-			}
-			rows = append(rows, field(f, 1)+"\t"+field(f, 0)+"\t"+field(f, 2)+"\t"+field(f, 10))
+	for _, l := range strings.Split(ps, "\n") {
+		f := strings.Fields(l)
+		if len(f) < 4 || f[0] == self {
+			continue
 		}
+		args := strings.TrimSpace(l)
+		for i := 0; i < 3; i++ {
+			args = strings.TrimLeft(strings.TrimPrefix(args, f[i]), " \t")
+		}
+		if !strings.Contains(strings.ToLower(args), needle) {
+			continue
+		}
+		rows = append(rows, f[0]+"\t"+f[1]+"\t"+f[2]+"\t"+f[3])
 	}
 	if len(rows) == 0 {
 		p.Error("No process found with name '" + name + "'.")
-		return 0
+		return 1
 	}
 	p.Info("Processes matching " + name + ":")
 	ui.StyleOf(c.Term, false).Table(c.Stdout, rows, "--no-header", "--indent", "3", "--gap", "1",
