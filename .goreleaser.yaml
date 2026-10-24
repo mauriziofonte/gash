@@ -11,6 +11,8 @@ project_name: gash
 before:
   hooks:
     - go mod download
+    # A release tag must match VERSION (D-3: the tree pins its binaries).
+    - go run ./internal/tools/releasesums -check-version {{ .Version }} -snapshot={{ .IsSnapshot }}
 
 builds:
   - id: gash
@@ -20,9 +22,19 @@ builds:
       - CGO_ENABLED=0
     goos: [linux, darwin]
     goarch: [amd64, arm64]
+    # Reproducible, as internal/tools/releasesums builds it: the binary a
+    # release ships must match the hash release/SHA256SUMS pins in the tag.
+    flags:
+      - -trimpath
+      - -buildvcs=false
     ldflags:
-      - -s -w
+      - -s -w -X github.com/mauriziofonte/gash/internal/buildinfo.Version={{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        # The hook inherits the target's GOOS/GOARCH: the tool itself is
+        # built for the runner.
+        - env -u GOOS -u GOARCH -u GOAMD64 -u GOARM64 go run ./internal/tools/releasesums -verify {{ .Path }} -platform {{ .Os }}_{{ .Arch }} -snapshot={{ .IsSnapshot }}
 
   - id: gash-hosts-helper
     main: ./cmd/gash-hosts-helper
@@ -31,6 +43,9 @@ builds:
       - CGO_ENABLED=0
     goos: [linux, darwin]
     goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+      - -buildvcs=false
     ldflags:
       - -s -w
     mod_timestamp: "{{ .CommitTimestamp }}"
