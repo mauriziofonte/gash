@@ -194,8 +194,18 @@ func (m *Module) askQuestion(c *invoke.Call, s ui.Style, sess *sysinfo.Session, 
 		return ""
 	}
 
-	qCtx := m.collectQuestionContext(c, sess.Sudo, question)
+	qCtx, kinds := m.questionContext(c, sess.Sudo, question)
 	userMsg := freetextMsg(initialJSON, qCtx, question)
+	// LEDGER AI-01: data collected for this question is confirmed per
+	// question (kind data, so auto mode asks too); a refusal or no terminal
+	// sends nothing and goes back to the menu. Protected paths contribute
+	// only their "skipped" line, so they alone need no question.
+	if len(kinds) > 0 {
+		what := "question context (" + strings.Join(kinds, ", ") + ")"
+		if !m.confirmSend(c, provider, "data", what, len(userMsg)) {
+			return ""
+		}
+	}
 	reply, rc := m.request(c, provider, token, sysinfoDrilldownPrompt, userMsg,
 		sysinfoDrilldownSchema, sysinfoMaxTokens, sysinfoResponseTimeout)
 	if rc != 0 {

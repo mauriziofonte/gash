@@ -205,6 +205,14 @@ repository's `.git/config` before pointing an agent at it.
   refusal. Headless mode reads it from `~/.gash_env` too; the environment
   wins. `GASH_AI_DEBUG=1` prints the (redacted) request
   bodies and raw replies on stderr.
+* **`ai_sysinfo` questions.** A path named in a `?` question passes the same
+  guard as the `llm_*` readers: a `..` component is refused, symlinks are
+  resolved, and a [forbidden path](#forbidden-paths) or a
+  [secret file](#secret-files) (lexical or resolved, base names
+  case-insensitive) contributes only `=== FILE: PATH === (skipped: protected
+  path)`, never its content; directory listings leave secret entries out.
+  The data a question collects is confirmed per question (as `data`, so the
+  default `auto` asks too); without a terminal nothing is sent.
 
 ## remote_*
 

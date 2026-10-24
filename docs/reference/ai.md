@@ -225,13 +225,19 @@ The ? option detects entities in your question:
   "what's in /etc/postfix/main.cf?" -> reads the file
   "what's on port 3306?" -> reads socket listeners
   "tell me about apache" -> reads service configs
+Paths follow the llm_* reader rules: no .. components, symlinks
+resolved, and protected paths (/proc, /sys, /dev, /boot, /root,
+/etc/shadow, /etc/passwd, /etc/sudoers...) and secret files
+(.env, *.key, id_rsa*, .ssh/...) are skipped, never read; directory
+listings leave secret files out.
 ```
 
 #### Privacy
 
 ```text
 Before the first request, ai_sysinfo shows how much system data it
-will send and asks for confirmation (GASH_AI_CONFIRM=auto). Without
+will send and asks for confirmation (GASH_AI_CONFIRM=auto). Each ?
+question that collects data asks again before sending it. Without
 a terminal it refuses; set GASH_AI_CONFIRM=0 in ~/.gash_env to allow
 unattended runs. Secrets are redacted before sending either way.
 Use --raw to see exactly what is collected.

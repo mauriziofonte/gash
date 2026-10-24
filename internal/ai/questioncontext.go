@@ -5,11 +5,13 @@ package ai
 import (
 	"bytes"
 	"context"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -63,8 +65,16 @@ func stripTrailingPunct(s string) string { return strings.TrimRight(s, "?.!,:;)\
 // commands go through the runner; file contents and directory listings
 // through the sysroot.
 func (m *Module) collectQuestionContext(c *invoke.Call, sudo func(string, ...string) []byte, question string) string {
+	text, _ := m.questionContext(c, sudo, question)
+	return text
+}
+
+// questionContext is collectQuestionContext that also returns the kinds of
+// items it collected (files, directories, units, ports, services), in that
+// order, for the per-question confirmation (LEDGER AI-01).
+func (m *Module) questionContext(c *invoke.Call, sudo func(string, ...string) []byte, question string) (string, []string) {
 	if question == "" {
-		return ""
+		return "", nil
 	}
 	q := &qctx{m: m, c: c, sudo: sudo}
 	lowerQ := strings.ToLower(question)
@@ -100,14 +110,24 @@ func (m *Module) collectQuestionContext(c *invoke.Call, sudo func(string, ...str
 			continue
 		}
 		seen[fpath] = true
-		switch {
-		case m.sys.IsRegular(fpath):
-			q.add("=== FILE: " + fpath + " ===\n")
-			q.add(q.headFile(fpath, 200) + "\n")
+		// LEDGER AI-01: the path guard of the llm_* readers, on the
+		// lexical and the resolved path; a refused path sends no content.
+		target, ok := q.guardPath(fpath)
+		if !ok {
+			q.add("=== FILE: " + fpath + " === (skipped: protected path)\n")
 			q.add("\n")
-		case m.sys.IsDir(fpath):
+			continue
+		}
+		switch {
+		case m.sys.IsRegular(target):
+			q.kind("files")
+			q.add("=== FILE: " + fpath + " ===\n")
+			q.add(q.headFile(target, 200) + "\n")
+			q.add("\n")
+		case m.sys.IsDir(target):
+			q.kind("directories")
 			q.add("=== DIRECTORY: " + fpath + " ===\n")
-			q.add(q.cmdHead(50, "ls", "-la", fpath) + "\n")
+			q.add(sub(headN(q.dropSecretEntries(target, m.cmd(c, "ls", "-la", target)), 50)) + "\n")
 			q.add("\n")
 		}
 	}
@@ -125,6 +145,7 @@ func (m *Module) collectQuestionContext(c *invoke.Call, sudo func(string, ...str
 			continue
 		}
 		seen["port:"+port] = true
+		q.kind("ports")
 		q.add("=== PORT: " + port + " ===\n")
 		q.add(sub(headN(grepF(m.cmd(c, "ss", "-tlnp"), ":"+port), 10)) + "\n")
 		q.add("\n")
@@ -151,6 +172,7 @@ func (m *Module) collectQuestionContext(c *invoke.Call, sudo func(string, ...str
 			continue
 		}
 		seen[svc+".service"] = true
+		q.kind("units")
 		q.add("=== SYSTEMD UNIT: " + svc + ".service ===\n")
 		q.add("--- Unit file ---\n")
 		q.add(unitOut + "\n")
@@ -161,7 +183,63 @@ func (m *Module) collectQuestionContext(c *invoke.Call, sudo func(string, ...str
 		q.add("\n")
 	}
 
-	return q.b.String()
+	var kinds []string
+	for _, k := range []string{"files", "directories", "units", "ports", "services"} {
+		if q.kinds[k] {
+			kinds = append(kinds, k)
+		}
+	}
+	return q.b.String(), kinds
+}
+
+// guardPath applies the path rules of the llm_* file readers to a path
+// named in a question (LEDGER AI-01): a ".." component is refused, then
+// the lexically cleaned path and its symlink-resolved form must be outside
+// the forbidden list (root's home included) and must not be a secret file
+// or lie under a secret directory (base names case-insensitive). It
+// returns the resolved path to read.
+func (q *qctx) guardPath(p string) (string, bool) {
+	for _, comp := range strings.Split(p, "/") {
+		if comp == ".." {
+			return "", false
+		}
+	}
+	clean := path.Clean(p)
+	g := pathguard.NewGuard(q.m.sys, "/", q.c.Env.Get("HOME"), pathguard.RootHome())
+	resolved, err := g.Realpath(clean, false)
+	if err != nil || resolved == "" {
+		resolved = clean
+	}
+	if g.PathForbidden(clean, resolved) || pathguard.SecretName(clean) || pathguard.SecretName(resolved) {
+		return "", false
+	}
+	return resolved, true
+}
+
+// reLsLong splits an `ls -la` line into its eight leading fields and the
+// name (with " -> TARGET" for a symlink).
+var reLsLong = regexp.MustCompile(`^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(.*)$`)
+
+// dropSecretEntries removes from an `ls -la DIR` listing the entries the
+// path guard refuses: a secret name, or a symlink into a protected path or
+// to a secret file (LEDGER AI-01).
+func (q *qctx) dropSecretEntries(dir string, out []byte) []byte {
+	var kept []byte
+	for _, l := range bytes.SplitAfter(out, []byte("\n")) {
+		if len(l) == 0 {
+			continue
+		}
+		if mm := reLsLong.FindSubmatch(bytes.TrimRight(l, "\n")); mm != nil {
+			name, _, _ := strings.Cut(string(mm[1]), " -> ")
+			if name != "." && name != ".." {
+				if _, ok := q.guardPath(strings.TrimSuffix(dir, "/") + "/" + name); !ok {
+					continue
+				}
+			}
+		}
+		kept = append(kept, l...)
+	}
+	return kept
 }
 
 // serviceKeywords runs the pattern-4 blocks in the 2.x order.
@@ -169,6 +247,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 	m := q.m
 	if reKwApache.MatchString(lowerQ) && !seen["svc:apache"] {
 		seen["svc:apache"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Apache2 ===\n")
 		q.add("--- Status ---\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "apache2", "--no-pager") + "\n")
@@ -189,6 +268,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwNginx.MatchString(lowerQ) && !seen["svc:nginx"] {
 		seen["svc:nginx"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Nginx ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "nginx", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/nginx/nginx.conf") {
@@ -200,6 +280,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwMysql.MatchString(lowerQ) && !seen["svc:mysql"] {
 		seen["svc:mysql"] = true
+		q.kind("services")
 		q.add("=== SERVICE: MariaDB/MySQL ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "mariadb", "--no-pager") + "\n")
 		if m.sys.IsDir("/etc/mysql") {
@@ -220,6 +301,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwRedis.MatchString(lowerQ) && !seen["svc:redis"] {
 		seen["svc:redis"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Redis ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "redis-server", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/redis/redis.conf") {
@@ -231,6 +313,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwPhp.MatchString(lowerQ) && !seen["svc:php"] {
 		seen["svc:php"] = true
+		q.kind("services")
 		q.add("=== SERVICE: PHP-FPM ===\n")
 		for _, ver := range q.phpVersions() {
 			q.add("--- PHP " + ver + " FPM ---\n")
@@ -252,6 +335,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwPostfix.MatchString(lowerQ) && !seen["svc:postfix"] {
 		seen["svc:postfix"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Postfix ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "postfix", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/postfix/main.cf") {
@@ -263,6 +347,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwSsh.MatchString(lowerQ) && !seen["svc:ssh"] {
 		seen["svc:ssh"] = true
+		q.kind("services")
 		q.add("=== SERVICE: SSH ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "sshd", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/ssh/sshd_config") {
@@ -278,6 +363,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwFail2ban.MatchString(lowerQ) && !seen["svc:fail2ban"] {
 		seen["svc:fail2ban"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Fail2ban ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "fail2ban", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/fail2ban/jail.local") {
@@ -289,6 +375,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwDocker.MatchString(lowerQ) && !seen["svc:docker"] {
 		seen["svc:docker"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Docker ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "docker", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/docker/daemon.json") {
@@ -300,6 +387,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwPostgres.MatchString(lowerQ) && !seen["svc:postgres"] {
 		seen["svc:postgres"] = true
+		q.kind("services")
 		q.add("=== SERVICE: PostgreSQL ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "postgresql", "--no-pager") + "\n")
 		pgconf := firstLine(m.cmd(q.c, "find", "/etc/postgresql", "-name", "pg_hba.conf"))
@@ -312,6 +400,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 	if reKwCron.MatchString(lowerQ) && !seen["svc:cron"] {
 		seen["svc:cron"] = true
+		q.kind("services")
 		q.add("=== SERVICE: Cron ===\n")
 		if out, rc := m.cmdRC(q.c, "crontab", "-l"); rc != 0 {
 			q.add("(no user crontab)\n")
@@ -328,16 +417,26 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 
 // qctx accumulates the question-context text with the module's seams.
 type qctx struct {
-	m    *Module
-	c    *invoke.Call
-	sudo func(string, ...string) []byte
-	b    strings.Builder
+	m     *Module
+	c     *invoke.Call
+	sudo  func(string, ...string) []byte
+	b     strings.Builder
+	kinds map[string]bool
 }
 
 func (q *qctx) add(s string) { q.b.WriteString(s) }
 
+// kind records that an item of kind k was collected.
+func (q *qctx) kind(k string) {
+	if q.kinds == nil {
+		q.kinds = map[string]bool{}
+	}
+	q.kinds[k] = true
+}
+
 // unitBlock is the per-unit collection of patterns 1 and 5's head.
 func (q *qctx) unitBlock(unit string) {
+	q.kind("units")
 	q.add("=== SYSTEMD UNIT: " + unit + " ===\n")
 	q.add("--- Unit file ---\n")
 	q.add(q.cmdHead(60, "systemctl", "cat", unit) + "\n")

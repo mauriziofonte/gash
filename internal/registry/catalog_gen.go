@@ -235,10 +235,16 @@ var functions = []Function{
 				"    \"what's in /etc/postfix/main.cf?\" -> reads the file\n" +
 				"    \"what's on port 3306?\" -> reads socket listeners\n" +
 				"    \"tell me about apache\" -> reads service configs\n" +
+				"  Paths follow the llm_* reader rules: no .. components, symlinks\n" +
+				"  resolved, and protected paths (/proc, /sys, /dev, /boot, /root,\n" +
+				"  /etc/shadow, /etc/passwd, /etc/sudoers...) and secret files\n" +
+				"  (.env, *.key, id_rsa*, .ssh/...) are skipped, never read; directory\n" +
+				"  listings leave secret files out.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Before the first request, ai_sysinfo shows how much system data it\n" +
-				"  will send and asks for confirmation (GASH_AI_CONFIRM=auto). Without\n" +
+				"  will send and asks for confirmation (GASH_AI_CONFIRM=auto). Each ?\n" +
+				"  question that collects data asks again before sending it. Without\n" +
 				"  a terminal it refuses; set GASH_AI_CONFIRM=0 in ~/.gash_env to allow\n" +
 				"  unattended runs. Secrets are redacted before sending either way.\n" +
 				"  Use --raw to see exactly what is collected.",

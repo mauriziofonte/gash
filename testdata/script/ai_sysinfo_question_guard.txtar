@@ -1,0 +1,52 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: AI-01
+# covers: none (3.0 fix: ai_sysinfo question paths pass the llm_* path guard)
+#
+# A path named in an ai_sysinfo `?` question passes the path guard of the
+# llm_* readers (LEDGER AI-01): a secret file (id_rsa*) and a symlink to
+# /etc/shadow contribute only their "skipped: protected path" line, never
+# their content, while an ordinary file is still read. The menu reads the
+# piped stdin as the terminal (GASH__TTY_IN=1); GASH_AI_CONFIRM=0 lets the
+# send go out with no /dev/tty (the per-question confirmation is the
+# internal/ai unit test TestLedger_AI01_fix). httpsfake answers both
+# requests and logs their bodies. The fixtures live under /var/tmp, which
+# the question-path pattern recognizes and every user may write.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+chmod 0755 bin/sudo
+exec bash guard.sh
+
+-- bin/sudo --
+#!/bin/sh
+exit 1
+-- guard.sh --
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+d=$(mktemp -d /var/tmp/gash-ai01.XXXXXX) || fail "no /var/tmp"
+trap 'rm -rf "$d"; kill "$pid" 2>/dev/null' EXIT
+printf 'MARKER-SECRET-KEY\n' >"$d/id_rsa.bak"
+printf 'MARKER-PLAIN-CONF\n' >"$d/app.conf"
+ln -s /etc/shadow "$d/innocent.txt"
+
+export MOCK_CURL_LOG="$PWD/curl.log"
+httpsfake -ca ca -addr addr & pid=$!
+for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done
+read -r a <addr
+printf 'AI:claude=test-key\n' >"$HOME/.gash_env"
+chmod 600 "$HOME/.gash_env"
+export PATH="$PWD/bin:$PATH" HTTPS_PROXY="http://$a" SSL_CERT_FILE="$PWD/ca"
+export GASH_AI_CONFIRM=0 GASH__TTY_IN=1
+
+printf '?\nwhat about %s and %s and %s\nq\n' "$d/id_rsa.bak" "$d/innocent.txt" "$d/app.conf" |
+    gash ai_sysinfo claude >out 2>err || fail "rc $?: $(cat err)"
+
+[ "$(grep -c '^body:' curl.log)" = 2 ] || fail "want 2 requests: $(grep -c '^body:' curl.log)"
+last=$(grep '^body:' curl.log | tail -1)
+case "$last" in *MARKER-SECRET-KEY*) fail "secret file content sent" ;; esac
+case "$last" in *root:*) fail "shadow content sent" ;; esac
+case "$last" in *"$d/id_rsa.bak === (skipped: protected path)"*) ;; *) fail "no skipped line for the key" ;; esac
+case "$last" in *"$d/innocent.txt === (skipped: protected path)"*) ;; *) fail "no skipped line for the link" ;; esac
+case "$last" in *MARKER-PLAIN-CONF*) ;; *) fail "ordinary file not read" ;; esac
+echo ok
