@@ -12,5 +12,6 @@
 | [Changelog](../CHANGELOG.md) | Release history |
 
 The GIFs in `assets/` are recorded from `tapes/` with
-[vhs](https://github.com/charmbracelet/vhs) (`vhs docs/tapes/demo.tape` from the
-repository root); CI re-records them on `main`.
+[vhs](https://github.com/charmbracelet/vhs), against gash built from the same
+commit: see [tapes/README.md](tapes/README.md). The Demos workflow records
+them again on `main`.
