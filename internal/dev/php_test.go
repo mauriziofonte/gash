@@ -5,10 +5,13 @@ package dev
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // phpJSON is the one-line JSON php_detect_version prints.
@@ -29,7 +32,8 @@ func TestPHPDetect(t *testing.T) {
 	mkfile(t, filepath.Join(proj, "composer.json"), `{"require":{"php":"^8.3"}}`)
 	r := call(m, "", env, "php_detect_version", proj, "--llm")
 	require.Equal(t, phpJSON("8.1", "php", "php81", "", "composer"), r.out)
-	require.Empty(t, r.err)
+	// 3.0: DEV-01 fixed: the missing PHP 8.1 is named on stderr.
+	require.Equal(t, "Warning: PHP 8.1 is not installed; php_raw_binary falls back to php\n", r.err)
 	require.Equal(t, 0, r.rc)
 
 	// Walk-up to a parent's .target-php-version.
@@ -53,9 +57,9 @@ func TestPHPDetect(t *testing.T) {
 	require.NotContains(t, human.out, `"version"`)
 }
 
-// TestLedger_DEV01_2x: no installed check (a pinned version absent from
-// the host is reported without a warning), the probe order kept.
-func TestLedger_DEV01_2x(t *testing.T) {
+// 3.0: DEV-01 fixed. A version whose binary is not installed is named in
+// a warning on stderr; stdout (the JSON) is the 2.x one, rc 0.
+func TestLedger_DEV01_fix(t *testing.T) {
 	root := phys(t)
 	m := devMod(t, root)
 	proj := phys(t)
@@ -63,12 +67,17 @@ func TestLedger_DEV01_2x(t *testing.T) {
 	env := baseEnv(phys(t), nil)
 
 	// No /usr/bin/php8.1 or /usr/bin/php8 in the sysroot: php_raw_binary
-	// falls to the literal "php", php_command stays php81, no warning.
+	// falls to the literal "php", php_command stays php81.
 	r := call(m, "", env, "php_detect_version", proj, "--llm")
 	require.Equal(t, phpJSON("8.1", "php", "php81", "", "composer"), r.out)
-	require.Empty(t, r.err)
+	require.Equal(t, "Warning: PHP 8.1 is not installed; php_raw_binary falls back to php\n", r.err)
+	require.Equal(t, 0, r.rc)
 
-	// /usr/bin/php8.1 present: it is reported.
+	// The human mode warns too.
+	human := call(m, "", baseEnv(phys(t), map[string]string{"GASH_HEADLESS": ""}), "php_detect_version", proj)
+	require.Contains(t, human.err, "Warning: PHP 8.1 is not installed;")
+
+	// /usr/bin/php8.1 present: it is reported, no warning.
 	mkexe(t, filepath.Join(root, "usr", "bin", "php8.1"))
 	r = call(m, "", env, "php_detect_version", proj, "--llm")
 	require.Equal(t, phpJSON("8.1", "/usr/bin/php8.1", "php81", "", "composer"), r.out)
@@ -80,18 +89,41 @@ func TestLedger_DEV01_2x(t *testing.T) {
 	mkexe(t, filepath.Join(root2, "usr", "bin", "php8"))
 	r = call(m2, "", env, "php_detect_version", proj, "--llm")
 	require.Equal(t, phpJSON("8.1", "/usr/bin/php8", "php81", "", "composer"), r.out)
+	require.Equal(t, "Warning: PHP 8.1 is not installed; using /usr/bin/php8\n", r.err)
 }
 
-// TestLedger_DEV02_2x: an OR constraint resolves to the first X.Y of its
-// text (the defect), not the highest alternative.
-func TestLedger_DEV02_2x(t *testing.T) {
-	m := devMod(t, phys(t))
+// 3.0: DEV-02 fixed. An OR constraint resolves to its highest alternative
+// that is installed, else its highest alternative.
+func TestLedger_DEV02_fix(t *testing.T) {
+	root := phys(t)
+	m := devMod(t, root)
 	env := baseEnv(phys(t), nil)
+	detect := func(m *Module, constraint string) string {
+		proj := phys(t)
+		mkfile(t, filepath.Join(proj, "composer.json"), `{"require":{"php":"`+constraint+`"}}`)
+		return version(call(m, "", env, "php_detect_version", proj, "--llm").out)
+	}
 	for _, c := range []struct{ constraint, want string }{
-		{`^7.4|^8.0`, "7.4"},
+		{`^7.4|^8.0`, "8.0"},
 		{`^8.0 || ^7.4`, "8.0"},
 		{`>=7.2 <8.0`, "7.2"},
 		{`~8.2.10`, "8.2"},
+		{`^7.4 || ^8.10 || ^8.2`, "8.10"},
+	} {
+		require.Equal(t, c.want, detect(m, c.constraint), c.constraint)
+	}
+	// Only php7.4 installed: the installed alternative wins.
+	mkexe(t, filepath.Join(root, "usr", "bin", "php7.4"))
+	require.Equal(t, "7.4", detect(m, `^7.4|^8.0`))
+}
+
+// 3.0: DEV-03 fixed. A bare major is X.0; * alone has no bound and falls
+// through to the next source.
+func TestLedger_DEV03_fix(t *testing.T) {
+	m := devMod(t, phys(t))
+	env := baseEnv(phys(t), nil)
+	for _, c := range []struct{ constraint, want string }{
+		{"^7", "7.0"}, {">=8", "8.0"}, {"8.*", "8.0"}, {"*", "8.4"}, {"^7 || ^8", "8.0"},
 	} {
 		proj := phys(t)
 		mkfile(t, filepath.Join(proj, "composer.json"), `{"require":{"php":"`+c.constraint+`"}}`)
@@ -99,30 +131,20 @@ func TestLedger_DEV02_2x(t *testing.T) {
 	}
 }
 
-// TestLedger_DEV03_2x: a major-only constraint holds no X.Y, so the
-// source is skipped and the 8.4 default is reported.
-func TestLedger_DEV03_2x(t *testing.T) {
-	m := devMod(t, phys(t))
-	env := baseEnv(phys(t), nil)
-	for _, constraint := range []string{"^7", ">=8", "8.*", "*"} {
-		proj := phys(t)
-		mkfile(t, filepath.Join(proj, "composer.json"), `{"require":{"php":"`+constraint+`"}}`)
-		require.Equal(t, "8.4", version(call(m, "", env, "php_detect_version", proj, "--llm").out), constraint)
-	}
-}
-
-// TestLedger_DEV04_2x: every X.Y of line 1 of .target-php-version is
-// joined with a newline (the defect).
-func TestLedger_DEV04_2x(t *testing.T) {
+// 3.0: DEV-04 fixed. Only the first X.Y of line 1 of .target-php-version
+// counts.
+func TestLedger_DEV04_fix(t *testing.T) {
 	m := devMod(t, phys(t))
 	env := baseEnv(phys(t), nil)
 	for _, c := range []struct{ line, want string }{
-		{"7.4 8.0\n", `7.4\n8.0`},
-		{"8.2.15.3\n", `8.2\n15.3`},
+		{"7.4 8.0\n", "7.4"},
+		{"8.2.15.3\n", "8.2"},
 	} {
 		proj := phys(t)
 		mkfile(t, filepath.Join(proj, ".target-php-version"), c.line)
-		require.Equal(t, c.want, version(call(m, "", env, "php_detect_version", proj, "--llm").out), c.line)
+		r := call(m, "", env, "php_detect_version", proj, "--llm")
+		require.Equal(t, c.want, version(r.out), c.line)
+		require.Equal(t, "php"+strings.ReplaceAll(c.want, ".", ""), field(r.out, "php_command"), c.line)
 	}
 }
 
@@ -203,16 +225,26 @@ func TestLedger_DEV12_2x(t *testing.T) {
 	require.Equal(t, phpJSON("8.4", filepath.Join(bin, "php"), "php84", filepath.Join(bin, "composer"), "composer84"), r.out)
 }
 
-// TestLedger_DEV18_fix would add a warning; rc.A keeps the 2.x silence
-// (DEV-18 is an operator decision, deferred): a missing DIR answers 8.4,
-// rc 0, no stderr.
-func TestLedger_DEV18_2x(t *testing.T) {
+// 3.0: DEV-18 fixed (operator: keep stdout and rc 0, add the warning). A
+// missing DIR answers as 2.x did, with `Warning: Directory not found:
+// DIR` on stderr, in both functions.
+func TestLedger_DEV18_fix(t *testing.T) {
 	m := devMod(t, phys(t))
 	env := baseEnv(phys(t), nil)
 	r := call(m, "", env, "php_detect_version", "/does/not/exist", "--llm")
 	require.Equal(t, "8.4", version(r.out))
-	require.Empty(t, r.err)
+	require.True(t, strings.HasPrefix(r.err, "Warning: Directory not found: /does/not/exist\n"), r.err)
 	require.Equal(t, 0, r.rc)
+
+	nvm := nvmTree(t, "v20.11.1")
+	r = call(m, "", baseEnv(phys(t), map[string]string{"NVM_DIR": nvm}), "node_detect_version", "/does/not/exist", "--llm")
+	require.Equal(t, "20", field(r.out, "version"))
+	require.Equal(t, "Warning: Directory not found: /does/not/exist\n", r.err)
+	require.Equal(t, 0, r.rc)
+
+	// An existing DIR: no warning.
+	r = call(m, "", env, "php_detect_version", phys(t), "--llm")
+	require.NotContains(t, r.err, "Directory not found")
 }
 
 // version is the .version field of the one-line JSON.
@@ -224,4 +256,84 @@ func version(out string) string {
 	}
 	rest := out[i+len(key):]
 	return rest[:strings.Index(rest, `"`)]
+}
+
+// TestLedger_DEV21 proves the php alias table of docs/reference/dev.md
+// lists every alias the php pack defines, each with its condition, and
+// none of the dropped hte aliases. (TestRegistry_AliasDocsMatchConditions
+// in internal/registry is outside this slice; the `gash dev` card is
+// generated elsewhere.)
+func TestLedger_DEV21(t *testing.T) {
+	_, self, _, _ := runtime.Caller(0) // call() changes the working directory
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "docs", "reference", "dev.md"))
+	require.NoError(t, err)
+	doc := string(data)
+	i := strings.Index(doc, "## Aliases\n")
+	require.GreaterOrEqual(t, i, 0)
+	rows := map[string]string{}
+	for _, line := range strings.Split(doc[i:], "\n") {
+		cells := strings.Split(line, "|")
+		if len(cells) != 5 || !strings.HasPrefix(strings.TrimSpace(cells[1]), "`") {
+			continue
+		}
+		name := strings.Trim(strings.Fields(strings.TrimSpace(cells[1]))[0], "`")
+		rows[name] = strings.TrimSpace(cells[3])
+	}
+	want := map[string]string{
+		"phpXY":                    "for each installed phpX.Y",
+		"composerXY":               "for each installed phpX.Y, when composer is installed",
+		"1composerXY":              "for each installed phpX.Y of 7.2, 7.1, 7.0 and 5.6, when composer1 is installed",
+		"php":                      "with GASH_REPLACE_TOOLS=1",
+		"composer":                 "with GASH_REPLACE_TOOLS=1, when composer is installed",
+		"composer-packages-update": "when composer is installed",
+		"composer-self-update":     "when composer is installed",
+		"composer1-self-update":    "when composer1 is installed",
+	}
+	require.Equal(t, want, rows)
+
+	// Every php-pack alias of the registry has its row (loop names as
+	// their family), except the hte aliases 3.0 dropped (DEV-17).
+	for _, a := range registry.Aliases() {
+		if a.Pack != "php" {
+			continue
+		}
+		name := strings.ReplaceAll(strings.Trim(a.Name, `"`), "${__gash_v//./}", "XY")
+		if strings.HasPrefix(name, "hte") {
+			require.NotContains(t, rows, name, "dropped alias %s has a row", name)
+			continue
+		}
+		require.Contains(t, rows, name, "registry alias %s has no row", a.Name)
+	}
+}
+
+// TestLedger_DEV22 proves the php_detect_version and node_detect_version
+// help NOTES state how far detection reaches and what it checks.
+// (TestRegistry_HelpGolden is not in internal/registry; this pins the
+// rules in the owning package.)
+func TestLedger_DEV22(t *testing.T) {
+	for name, rules := range map[string][]string{
+		"php_detect_version": {
+			"then in every parent directory except /",
+			"composer.json and copilot-instructions.md are read in project_dir only",
+			"/usr/bin/phpX.Y is not installed, a warning",
+			"Warning: Directory not found: DIR",
+			"--json (or --llm)",
+		},
+		"node_detect_version": {
+			"read in project_dir only (no walk-up)",
+			"reduced to its major",
+			"When the major is not installed, a warning names it and the newest installed version is used",
+			"prereleases and other names do not count",
+			"Warning: Directory not found: DIR",
+			"--json (or --llm)",
+		},
+	} {
+		f, ok := registry.Lookup(name)
+		require.True(t, ok, name)
+		body := strings.Join(strings.Fields(f.Help.Body), " ")
+		for _, r := range rules {
+			require.Contains(t, body, r, name)
+		}
+		require.Equal(t, name+" [project_dir] [--json|--llm]", f.Fallback.Usage, name)
+	}
 }

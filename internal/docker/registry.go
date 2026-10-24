@@ -69,8 +69,15 @@ type reply struct {
 // registryCall is __gash_registry_curl: one request (redirects
 // followed), "" and the final answer on a 2xx status, else the error
 // class of the 2.x vocabulary, with net/http errors in place of curl's
-// exit codes (LEDGER DOCK-24).
+// exit codes (LEDGER DOCK-24). The headers of an HTTP error answer are
+// kept, for its WWW-Authenticate challenge.
 func (x *call) registryCall(method, rawURL string, header http.Header) (reply, string) {
+	return x.registryCallAuth(method, rawURL, header, "", "")
+}
+
+// registryCallAuth is registryCall with HTTP basic credentials when user
+// is not empty.
+func (x *call) registryCallAuth(method, rawURL string, header http.Header, user, pass string) (reply, string) {
 	ctx, cancel := context.WithTimeout(x.ctx(), callTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
@@ -82,6 +89,9 @@ func (x *call) registryCall(method, rawURL string, header http.Header) (reply, s
 			req.Header.Add(k, v)
 		}
 	}
+	if user != "" {
+		req.SetBasicAuth(user, pass)
+	}
 	resp, err := x.client().Do(req)
 	if err != nil {
 		return reply{}, errorClass(err)
@@ -92,21 +102,22 @@ func (x *call) registryCall(method, rawURL string, header http.Header) (reply, s
 		return reply{}, errorClass(err)
 	}
 	code := resp.StatusCode
+	r := reply{body: body, header: resp.Header}
 	switch {
 	case code >= 200 && code <= 299:
-		return reply{body: body, header: resp.Header}, ""
+		return r, ""
 	case code == 401:
-		return reply{}, "unauthorized"
+		return r, "unauthorized"
 	case code == 403:
-		return reply{}, "forbidden"
+		return r, "forbidden"
 	case code == 404:
-		return reply{}, "not_found"
+		return r, "not_found"
 	case code == 429:
-		return reply{}, "rate_limited"
+		return r, "rate_limited"
 	case code >= 500 && code <= 599:
-		return reply{}, "server_error"
+		return r, "server_error"
 	}
-	return reply{}, fmt.Sprintf("http_%03d", code)
+	return r, fmt.Sprintf("http_%03d", code)
 }
 
 // errorClass maps a net/http failure onto the curl error words: a DNS
@@ -201,9 +212,10 @@ func jqRaw(v any) string {
 }
 
 // token is __gash_dockerhub_token and __gash_ghcr_token: the bearer of a
-// manifest request, or the error class.
-func (x *call) token(rawURL string) (string, string) {
-	r, e := x.registryCall(http.MethodGet, rawURL, http.Header{"Accept": {"*/*"}})
+// manifest request, or the error class; with user, the token is asked
+// with those basic credentials (a GITHUB_TOKEN exchange).
+func (x *call) token(rawURL, user, pass string) (string, string) {
+	r, e := x.registryCallAuth(http.MethodGet, rawURL, http.Header{"Accept": {"*/*"}}, user, pass)
 	if e != "" {
 		return "", e
 	}
@@ -213,37 +225,75 @@ func (x *call) token(rawURL string) (string, string) {
 	return "", "malformed_token"
 }
 
-// remoteDigest is __gash_get_remote_digest REGISTRY NAME TAG: Docker Hub
-// with an anonymous token, ghcr.io with GITHUB_TOKEN as the bearer when
-// it is exported (LEDGER DOCK-14, kept) or an anonymous token, any other
-// registry with one plain HEAD (DOCK-15, kept). The digest is the
-// Docker-Content-Digest of the final answer (DOCK-25).
+// denied is an answer that another credential may change.
+func denied(e string) bool { return e == "unauthorized" || e == "forbidden" }
+
+// remoteDigest is __gash_get_remote_digest: the digest of the manifest
+// of img on its registry, by one HEAD (LEDGER DOCK-25), or the error
+// class. Docker Hub gets an anonymous token; ghcr.io a token exchanged
+// for the exported GITHUB_TOKEN (never sent as it is), or an anonymous
+// one when there is none or it is refused (DOCK-14); any other registry
+// gets a plain HEAD and, on a Bearer challenge, an anonymous token from
+// its realm (DOCK-15). No credential store is read.
 func (x *call) remoteDigest(img image) (string, string) {
-	if strings.HasPrefix(img.tag, "@sha256:") {
-		return img.tag[1:], ""
+	if img.digest != "" {
+		return img.digest, ""
 	}
-	h := http.Header{"Accept": manifestAccept}
-	host := img.registry
+	if img.bad {
+		return "", "invalid_reference"
+	}
+	scheme := img.scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+	u := url.URL{Scheme: scheme, Host: img.host, Path: "/v2/" + img.name + "/manifests/" + img.tag}
+	head := func(bearer string) (reply, string) {
+		h := http.Header{"Accept": manifestAccept}
+		if bearer != "" {
+			h.Set("Authorization", "Bearer "+bearer)
+		}
+		return x.registryCall(http.MethodHead, u.String(), h)
+	}
+	var r reply
+	var e string
 	switch img.registry {
 	case "docker.io":
-		t, e := x.token("https://auth.docker.io/token?service=registry.docker.io&scope=repository:" + queryEscape(img.name) + ":pull")
-		if e != "" {
-			return "", e
+		t, te := x.token("https://auth.docker.io/token?service=registry.docker.io&scope=repository:"+queryEscape(img.name)+":pull", "", "")
+		if te != "" {
+			return "", te
 		}
-		h.Set("Authorization", "Bearer "+t)
-		host = "registry-1.docker.io"
+		r, e = head(t)
 	case "ghcr.io":
-		t := x.exported.Get("GITHUB_TOKEN")
-		if t == "" {
-			var e string
-			if t, e = x.token("https://ghcr.io/token?service=ghcr.io&scope=repository:" + queryEscape(img.name) + ":pull"); e != "" {
-				return "", e
+		tokenURL := "https://ghcr.io/token?service=ghcr.io&scope=repository:" + queryEscape(img.name) + ":pull"
+		e = "unauthorized"
+		if pat := x.exported.Get("GITHUB_TOKEN"); pat != "" {
+			t, te := x.token(tokenURL, "gash", pat)
+			switch {
+			case te == "":
+				r, e = head(t)
+			case !denied(te):
+				return "", te
 			}
 		}
-		h.Set("Authorization", "Bearer "+t)
+		if denied(e) {
+			t, te := x.token(tokenURL, "", "")
+			if te != "" {
+				return "", te
+			}
+			r, e = head(t)
+		}
+	default:
+		r, e = head("")
+		if e == "unauthorized" {
+			if tokenURL, ok := challengeURL(r.header, img.name); ok {
+				t, te := x.token(tokenURL, "", "")
+				if te != "" {
+					return "", te
+				}
+				r, e = head(t)
+			}
+		}
 	}
-	u := url.URL{Scheme: "https", Host: host, Path: "/v2/" + img.name + "/manifests/" + img.tag}
-	r, e := x.registryCall(http.MethodHead, u.String(), h)
 	if e != "" {
 		return "", e
 	}
@@ -258,4 +308,64 @@ func (x *call) remoteDigest(img image) (string, string) {
 		return "", "no_digest_in_response"
 	}
 	return digest.String(), ""
+}
+
+// challengeURL is the token URL of a `WWW-Authenticate: Bearer
+// realm="...",service="...",scope="..."` challenge: the realm with its
+// service and scope (repository:NAME:pull when the challenge names none).
+func challengeURL(h http.Header, repo string) (string, bool) {
+	for _, v := range h.Values("Www-Authenticate") {
+		scheme, rest, _ := strings.Cut(strings.TrimSpace(v), " ")
+		if !strings.EqualFold(scheme, "bearer") {
+			continue
+		}
+		params := challengeParams(rest)
+		realm, err := url.Parse(params["realm"])
+		if err != nil || params["realm"] == "" || (realm.Scheme != "https" && realm.Scheme != "http") {
+			continue
+		}
+		q := realm.Query()
+		if s := params["service"]; s != "" {
+			q.Set("service", s)
+		}
+		scope := params["scope"]
+		if scope == "" {
+			scope = "repository:" + repo + ":pull"
+		}
+		q.Set("scope", scope)
+		realm.RawQuery = q.Encode()
+		return realm.String(), true
+	}
+	return "", false
+}
+
+// challengeParams reads the key="value" (or key=token) list of a
+// challenge.
+func challengeParams(s string) map[string]string {
+	out := map[string]string{}
+	for s != "" {
+		s = strings.TrimLeft(s, " \t,")
+		k, rest, ok := strings.Cut(s, "=")
+		if !ok {
+			break
+		}
+		k = strings.ToLower(strings.TrimSpace(k))
+		var v string
+		if strings.HasPrefix(rest, `"`) {
+			var b strings.Builder
+			i := 1
+			for ; i < len(rest) && rest[i] != '"'; i++ {
+				if rest[i] == '\\' && i+1 < len(rest) {
+					i++
+				}
+				b.WriteByte(rest[i])
+			}
+			v, s = b.String(), rest[min(i+1, len(rest)):]
+		} else {
+			v, s, _ = strings.Cut(rest, ",")
+			v = strings.TrimSpace(v)
+		}
+		out[k] = v
+	}
+	return out
 }

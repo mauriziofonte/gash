@@ -115,7 +115,7 @@ slow_query_explain field (the plan) when a query takes 100 ms or more.
 | `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines |
 | `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev` |
-| `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries); an unknown digest is `null` |
+| `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference` |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
 
@@ -243,7 +243,7 @@ Each code always carries the action shown:
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
 | Database | `no_db_config` `no_database` `unknown_db_type` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `jq_not_found` (FATAL) |
-| `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` (CONTINUE); `compose_not_found` (RETRY) |
+| `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` (RETRY) |
 
 The one exception: scanners without `--json` print human `Error:` /
 `Hint:` lines.

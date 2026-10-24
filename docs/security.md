@@ -187,6 +187,14 @@ smudge filters named in `.gitattributes` and defined in the repository's
 configuration can still run during `status` and `diff`: inspect an untrusted
 repository's `.git/config` before pointing an agent at it.
 
+The git module functions (`git_sync`, `git_add_tag`, `git_delete_tag`,
+`git_apply_patch`, `git_repair`, `git_dump_revisions`, `git_list_tags`) are
+your own repository operations and get none of this hardening: they run your
+hooks (`pre-commit`, `commit-msg`, ...), signing (`commit.gpgSign`,
+`tag.gpgSign`), credential helpers, `core.sshCommand` and `insteadOf` rules,
+as a plain `git` would. Do not run them in a repository whose configuration
+you do not trust.
+
 ## AI module
 
 * **Redaction.** The text sent (question, piped input, collected system data)
@@ -210,14 +218,24 @@ repository's `.git/config` before pointing an agent at it.
 ## remote_*
 
 In headless mode only aliases registered as `HOST:alias=user@host` are
-accepted; interactively a raw `user@host` works too. Remote paths of
+accepted; interactively a raw `user@host` works too. A target, registered or
+raw, is strict: the user is letters, digits, `.`, `_` and `-` (not first), the
+host a name of letters, digits, `.` and `-` starting with a letter or digit, or
+a bracketed IPv6 literal. So no part reads as an ssh option, and a port
+(`u@h:22`, which ssh, scp and the tier check would read differently) is
+refused: put it in a `Host` entry of `~/.ssh/config`. ssh gets `--` before the
+target, scp and rsync before their operands, and rsync runs with `-s`
+(`--protect-args`), so the remote shell does not split or expand the remote
+path. Unknown options and extra arguments are refused. Remote paths of
 `remote_push`, `remote_pull` and `remote_sync_*` are normalized (repeated `/`,
 `.` segments, trailing `/`; `~/` becomes a path relative to the remote home,
-`~root` becomes `/root` and `~user` becomes `/home/user`), `..` is refused, then:
+`~root` becomes `/root` and `~user` becomes `/home/user`; `/.` is `/`), `..`
+is refused, then:
 
 | Tier | Paths | Interactive | Headless |
 |---|---|---|---|
-| Deny | `/`, `/etc/ssh`, `/etc/sudoers*`, `/etc/passwd`, `/etc/shadow*`, `/etc/gshadow*`, `/etc/pam.d`, `/boot`, `/sys`, `/proc`, `/dev`, `/bin`, `/sbin`, `/lib*`, `/usr/bin`, `/usr/sbin`, `/usr/lib`, `/usr/lib64` | Refused, no override | Refused, no override |
+| Deny | `/` itself; `/etc/ssh`, `/etc/sudoers`, `/etc/sudoers.d`, `/etc/passwd`, `/etc/shadow`, `/etc/shadow-`, `/etc/gshadow`, `/etc/gshadow-`, `/etc/pam.d`, `/boot`, `/sys`, `/proc`, `/dev`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/lib32`, `/libx32`, `/usr/bin`, `/usr/sbin`, `/usr/lib`, `/usr/lib64` and everything below each | Refused, no override | Refused, no override |
+| Deny | A path the remote side may expand: `*` `?` `[` `]` `{` `}` `$` a backquote `;` `&` `\|` `<` `>` `(` `)` `!` a quote, a backslash, a newline, or a `~` past the start (`deny:metacharacters`) | Refused, no override | Refused, no override |
 | Ask | `/etc`, `/var`, `/usr/local`, `/root`, and any path with a `.ssh` component (any home, any depth, any case) | y/N prompt, or `--force` | Refused unless `--force` |
 | Allow | `/tmp`, `/var/tmp`, relative paths, everything else | Allowed | Allowed |
 
@@ -225,7 +243,9 @@ accepted; interactively a raw `user@host` works too. Remote paths of
 `/home/<user>/`, and for relative paths inside the remote home. The home
 itself, however it is written (`~`, `~user`, `/home/<user>`, `/Users/<user>`,
 `/root`), and any `.ssh` path never count as safe; elsewhere it asks, or needs
-`--force` in headless mode.
+`--force` in headless mode. For `remote_sync_pull` the same rule applies to
+the local destination (a relative path is inside the current directory, never
+your home itself), and the messages say so.
 `remote_exec` runs any command on the remote host: the path tiers do not apply
 to it.
 
@@ -243,7 +263,11 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `process_kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
 | `services_stop` (alias `quit`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
 | `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
+| `docker_stop_all`, `docker_start_all` | List the containers (`Will stop N container(s): NAMES`) and ask; `-y` skips | Refused unless `-y` |
 | `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
+| `git_add_tag`, `git_delete_tag` | Show the tag and the origin URL (`Will push refs/tags/T to origin (URL)`) and ask; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `git_sync` | Shows what it commits and where it pushes (`Will commit N file(s) on B (M untracked) and push to U`) and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `git_apply_patch` | Shows the checkout, pull and apply plan and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
 | `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
 | `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |

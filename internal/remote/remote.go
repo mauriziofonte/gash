@@ -8,14 +8,17 @@
 // caller's exported environment (c.Env.Child()) and the 2.x argv. Hosts
 // come from the HOST: entries of ~/.gash_env; headless, only those are
 // accepted. Remote paths go through the 2.x DENY/ASK/ALLOW tables on the
-// literal string. The 2.x grammar and its defects are kept (LEDGER
-// REM-01 to REM-03, REM-05 to REM-08); script arguments are quoted
-// POSIX-style (REM-04).
+// path as written; a remote path the remote side could expand (globs,
+// $, quotes, ...) is refused (LEDGER REM-03). Targets are strict
+// user@host (REM-02, REM-08), unknown flags are refused (REM-01), and
+// script arguments are quoted POSIX-style (REM-04).
 package remote
 
 import (
 	"context"
 	"io"
+	"net"
+	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/config"
@@ -107,31 +110,54 @@ func (x *call) requireArg(value, name, usage string) bool {
 func (x *call) loadConfig() *config.File { return config.LoadCaller(x.Env.Get) }
 
 // resolveTarget is __remote_resolve_target: a registered alias, or,
-// interactively, a raw user@host.
+// interactively, a raw user@host. Both must pass validTarget (LEDGER
+// REM-02, REM-08): an alias whose HOST: target fails it is skipped with a
+// warning, as an unregistered name.
 func (x *call) resolveTarget(input string) (string, bool) {
 	if t, ok := x.loadConfig().HostTarget(input); ok {
-		return t, true
+		if validTarget(t) {
+			return t, true
+		}
+		x.p.Warning("HOST target of '" + input + "' must be user@host (skipping)")
+		if strings.Contains(t, ":") {
+			x.p.Hint("put the port in a Host entry of ~/.ssh/config")
+		}
 	}
 	if x.headless() {
 		x.p.Error("Unknown host alias '" + input + "'. In headless mode only aliases registered in ~/.gash_env (HOST:alias=user@host) are accepted.")
 		return "", false
 	}
-	if rawTarget(input) {
+	if validTarget(input) {
 		return input, true
 	}
 	x.p.Error("Unknown host alias '" + input + "' and not a valid user@host target.")
 	return "", false
 }
 
-// rawTarget is `[[ T =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]`: one @ with
-// text on both sides and no blank anywhere. An option-like target passes
-// (LEDGER REM-02), as does u@h:22 (REM-08).
-func rawTarget(t string) bool {
-	at := strings.IndexByte(t, '@')
-	if at <= 0 || at == len(t)-1 || strings.IndexByte(t[at+1:], '@') >= 0 {
+var (
+	reTargetUser = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._-]*$`)
+	reTargetHost = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
+)
+
+// validTarget is the user@host test of raw targets and HOST: entries: one
+// @, a user of letters, digits, '.', '_' and '-' not starting with '-',
+// and a host name of letters, digits, '.' and '-' starting with a letter
+// or digit, or a bracketed IPv6 literal. So neither part reads as an ssh
+// option and the host holds no ':' port that ssh, scp and the tier check
+// would read differently (LEDGER REM-02, REM-08).
+func validTarget(t string) bool {
+	user, host, ok := strings.Cut(t, "@")
+	if !ok || !reTargetUser.MatchString(user) {
 		return false
 	}
-	return !strings.ContainsAny(t, " \t\n\v\f\r")
+	if reTargetHost.MatchString(host) {
+		return true
+	}
+	if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		ip := net.ParseIP(host[1 : len(host)-1])
+		return ip != nil && strings.Contains(host, ":")
+	}
+	return false
 }
 
 // sshOpts are the ssh options of remote_exec, with the multiplexing
@@ -148,8 +174,12 @@ func sshOpts(home string) []string {
 	}
 }
 
-// rsyncRSH is the -e string of the rsync functions: $HOME embedded
-// unquoted, so rsync splits a HOME with spaces (LEDGER REM-05).
+// rsyncRSH is the -e string of the rsync functions. rsync splits it on
+// spaces itself, honoring single and double quotes, where a doubled quote
+// is a literal one (a backslash is not special), so the ControlPath
+// option is single-quoted with every ' of HOME doubled: one word for any
+// HOME (LEDGER REM-05).
 func rsyncRSH(home string) string {
-	return "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o ControlPath=" + home + "/.ssh/cm-%C -o ControlPersist=60s"
+	return "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o '" +
+		strings.ReplaceAll("ControlPath="+home+"/.ssh/cm-%C", "'", "''") + "' -o ControlPersist=60s"
 }

@@ -5,19 +5,28 @@ package remote
 import (
 	"io"
 
+	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
 // hosts is remote_hosts: the HOST: entries of ~/.gash_env as an
 // alias/target table on stdout (aliases padded to 15 at least), or two
-// Info lines when there is none. Extra arguments are ignored.
+// Info lines when there is none (entries with an invalid target do not
+// count). Extra arguments are ignored.
 func (m *Module) hosts(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
 	x := m.begin(c)
-	entries := x.loadConfig().Hosts
+	// An entry whose target fails validTarget is skipped, as the HOST:
+	// parser should skip it (LEDGER REM-02, REM-08).
+	var entries []config.Entry
+	for _, e := range x.loadConfig().Hosts {
+		if validTarget(e.Value) {
+			entries = append(entries, e)
+		}
+	}
 	if len(entries) == 0 {
 		x.p.Info("No remote hosts configured in ~/.gash_env")
 		x.p.Info("Add: HOST:alias=user@host")

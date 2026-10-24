@@ -11,6 +11,10 @@ import (
 // setupDirty: setupOrigin with a modified, a new and a deleted file.
 const setupDirty = setupOrigin + ` && echo n >new && echo m >>a && git rm -q --cached a && git add a && touch gone && git add gone && git commit -qm g && git push -q 2>/dev/null && rm gone && mkdir -p d/e && echo x >d/e/deep`
 
+// 3.0: GIT-01 and GIT-07 fixed: --yes is a flag (the "unknown option"
+// case), the cases that commit or push need it, and the push names its
+// upstream (TestLedger_GIT01, TestLedger_GIT07); this 2.x comparison
+// skips without the 2.x sources.
 func TestSyncMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup, cwd string

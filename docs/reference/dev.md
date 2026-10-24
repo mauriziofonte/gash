@@ -65,7 +65,7 @@ Detect the Node.js version a project wants
 #### Usage
 
 ```text
-node_detect_version [project_dir] [--json]
+node_detect_version [project_dir] [--json|--llm]
 ```
 
 #### Examples
@@ -82,8 +82,18 @@ node_detect_version /path/to/project --json
 
 ```text
 Priority: .nvmrc -> .node-version -> package.json engines.node -> latest
-installed. JSON output is also emitted automatically under
-GASH_HEADLESS=1, --json is not required there.
+installed, read in project_dir only (no walk-up). Every source is
+reduced to its major (lts/NAME through nvm's alias files, then the
+codename table), and full_version is the newest installed patch of
+that major: an exact pin such as v20.9.0 resolves to the newest
+installed v20 patch. Installed versions are the vX.Y.Z directories of
+$NVM_DIR/versions/node (prereleases and other names do not count).
+When the major is not installed, a warning names it and the newest
+installed version is used. A project_dir that is not a directory gives
+"Warning: Directory not found: DIR" with the same answer and status 0.
+Unknown options are refused before the NVM directory is checked.
+JSON output is also emitted automatically under GASH_HEADLESS=1;
+--json (or --llm) is not required there.
 ```
 
 ## node_upgrade
@@ -163,7 +173,7 @@ Detect the PHP version a project wants
 #### Usage
 
 ```text
-php_detect_version [project_dir] [--json]
+php_detect_version [project_dir] [--json|--llm]
 ```
 
 #### Examples
@@ -179,20 +189,39 @@ php_detect_version /path/to/project --json
 #### Notes
 
 ```text
-Priority: .target-php-version (walk-up) -> composer.json .require.php ->
-.github/copilot-instructions.md -> fallback 8.4. JSON output is also
-emitted automatically under GASH_HEADLESS=1, --json is not required there.
+Priority: .target-php-version (the first X.Y of its first line, looked
+up in project_dir, then in every parent directory except /) ->
+composer.json .require.php -> .github/copilot-instructions.md (the
+first "php X.Y") -> fallback 8.4. composer.json and
+copilot-instructions.md are read in project_dir only.
+A composer constraint is split on | and ||; each alternative counts by
+its lower bound (^7.4 is 7.4; a bare major such as ^8, >=8 or 8.* is
+8.0; * alone counts for nothing). The highest alternative whose
+/usr/bin/phpX.Y is installed wins, else the highest alternative.
+When /usr/bin/phpX.Y is not installed, a warning on stderr says so and
+names the binary used instead (/usr/bin/phpX, then php on PATH); the
+JSON is unchanged. A project_dir that is not a directory gives
+"Warning: Directory not found: DIR" with the same answer and status 0.
+JSON output is also emitted automatically under GASH_HEADLESS=1;
+--json (or --llm) is not required there.
 ```
 
 ## Aliases
 
-| Alias | Runs |
-|---|---|
-| `php` | `phpX.Y` |
-| `composer-packages-update` | `composer global update` |
-| `composer-self-update` | `sudo composer self-update` |
-| `hte` | `sudo phpX.Y hte-cli create` |
-| `hte-create` | `sudo phpX.Y hte-cli create` |
-| `hte-remove` | `sudo phpX.Y hte-cli remove` |
-| `hte-details` | `sudo phpX.Y hte-cli details` |
+The php pack is loaded in interactive shells when `php` is on PATH.
+`phpX.Y` below is the absolute path of that binary followed by
+`-d allow_url_fopen=1 -d memory_limit=2048M`.
 
+| Alias | Runs | Defined |
+|---|---|---|
+| `phpXY` (`php85` ... `php56`) | `phpX.Y` | for each installed phpX.Y |
+| `composerXY` | `phpX.Y composer` | for each installed phpX.Y, when composer is installed |
+| `1composerXY` (`1composer72`, `1composer71`, `1composer70`, `1composer56`) | `phpX.Y composer1` | for each installed phpX.Y of 7.2, 7.1, 7.0 and 5.6, when composer1 is installed |
+| `php` | newest `phpX.Y` | with GASH_REPLACE_TOOLS=1 |
+| `composer` | newest `phpX.Y composer` | with GASH_REPLACE_TOOLS=1, when composer is installed |
+| `composer-packages-update` | `composer global update` | when composer is installed |
+| `composer-self-update` | `sudo composer self-update` | when composer is installed |
+| `composer1-self-update` | `sudo composer1 self-update` | when composer1 is installed |
+
+The 2.x `hte`, `hte-create`, `hte-remove` and `hte-details` aliases are
+gone: use `gash hte`.

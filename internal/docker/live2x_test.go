@@ -59,6 +59,8 @@ type scene struct {
 	// mode
 	color bool
 	utf8  bool
+	// goOnly scenes link the testdata mocks and goTools (newGoScene).
+	goOnly bool
 }
 
 func newScene(t *testing.T) *scene {
@@ -73,6 +75,22 @@ func newScene(t *testing.T) *scene {
 	}
 	return &scene{t: t, base: t.TempDir(), files: map[string]string{},
 		stubs: map[string]string{"docker": "", "docker-compose": "", "curl": ""}}
+}
+
+// goTools are the programs the testdata mocks and the test stubs need.
+var goTools = []string{"bash", "sh", "env", "dirname", "cat", "printf", "tr"}
+
+// newGoScene is a scene for the handler alone (runGo), which needs no 2.x
+// sources: the docker and docker-compose mocks of testdata/mocks/bin.
+func newGoScene(t *testing.T) *scene {
+	t.Helper()
+	for _, n := range goTools {
+		if _, err := exec.LookPath(n); err != nil {
+			t.Skip(n + " not available")
+		}
+	}
+	return &scene{t: t, base: t.TempDir(), files: map[string]string{}, goOnly: true,
+		stubs: map[string]string{"docker": "", "docker-compose": ""}}
 }
 
 func (s *scene) work() string  { return filepath.Join(s.base, "work") }
@@ -132,7 +150,11 @@ func (s *scene) build() {
 	for _, f := range []string{s.log(), filepath.Join(s.base, "curl.log")} {
 		require.NoError(s.t, os.RemoveAll(f))
 	}
-	for _, n := range tools {
+	toolList, mocks := tools, filepath.Join(absRoot, "tests/mocks/bin")
+	if s.goOnly {
+		toolList, mocks = goTools, filepath.Join(absRoot, "testdata/mocks/bin")
+	}
+	for _, n := range toolList {
 		p, err := exec.LookPath(n)
 		require.NoError(s.t, err)
 		require.NoError(s.t, os.Symlink(p, filepath.Join(s.toolD(), n)))
@@ -140,7 +162,7 @@ func (s *scene) build() {
 	for n, script := range s.stubs {
 		dst := filepath.Join(s.stubD(), n)
 		if script == "" {
-			require.NoError(s.t, os.Symlink(filepath.Join(absRoot, "tests/mocks/bin", n), dst))
+			require.NoError(s.t, os.Symlink(filepath.Join(mocks, n), dst))
 			continue
 		}
 		require.NoError(s.t, os.WriteFile(dst, []byte(script), 0o755))

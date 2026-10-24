@@ -26,8 +26,9 @@ var (
 
 // normalizePath is __remote_normalize_path: "~" and "~/..." made
 // relative, "~root" spelled /root and "~NAME" /home/NAME, repeated
-// slashes collapsed, "." segments and trailing slashes dropped. As in
-// 2.x, "/." (also "//.") comes out as "." (relative).
+// slashes collapsed, "." segments and trailing slashes dropped. An
+// absolute path that reduces to the root ("/.", "//.", "/./") is "/"
+// (LEDGER REM-10: 2.x made it ".", the remote home).
 func normalizePath(p string) string {
 	switch {
 	case p == "~" || strings.HasPrefix(p, "~/"):
@@ -53,10 +54,11 @@ func normalizePath(p string) string {
 		p = strings.ReplaceAll(p, "/./", "/")
 	}
 	p = strings.TrimPrefix(p, "./")
+	abs := strings.HasPrefix(p, "/")
 	if strings.HasSuffix(p, "/.") {
 		p = p[:len(p)-2]
 	}
-	if p == "/." {
+	if p == "" && abs {
 		p = "/"
 	}
 	for p != "/" && strings.HasSuffix(p, "/") {
@@ -97,11 +99,23 @@ func under(p, prefix string) bool { return p == prefix || strings.HasPrefix(p, p
 // traversal is [[ "/P/" == */../* ]].
 func traversal(p string) bool { return strings.Contains("/"+p+"/", "/../") }
 
+// expandable reports whether the remote side could expand raw: a glob
+// character, $, a backquote, a shell operator, a quote, a backslash or a
+// newline anywhere, or a ~ anywhere but at the start (~, ~/..., ~NAME),
+// which normalizePath reads itself. The tiers would otherwise judge a
+// string that is not the path the remote side opens (LEDGER REM-03).
+func expandable(raw string) bool {
+	return strings.ContainsAny(raw, "*?[]{}$`;&|<>()!'\"\\\n") || strings.Contains(strings.TrimPrefix(raw, "~"), "~")
+}
+
 // classifyPath is __remote_classify_path: "allow", "deny:<prefix>" or
-// "ask:<prefix>" ("ask:.ssh" for a sensitive component), on the literal
-// string: glob and expansion characters are not looked at (LEDGER
-// REM-03).
+// "ask:<prefix>" ("ask:.ssh" for a sensitive component), and
+// "deny:metacharacters" for a path the remote side could expand (LEDGER
+// REM-03), checked first, on the string as written.
 func classifyPath(raw string) string {
+	if expandable(raw) {
+		return "deny:metacharacters"
+	}
 	path := normalizePath(raw)
 	if traversal(path) {
 		return "deny:path_traversal"
@@ -145,6 +159,9 @@ var (
 // /home/<user>/ or the remote home (a relative path); never the home
 // itself, a sensitive component or a path with "..".
 func safeForDelete(raw string) bool {
+	if expandable(raw) {
+		return false
+	}
 	path := normalizePath(raw)
 	if traversal(path) {
 		return false
@@ -171,11 +188,14 @@ func safeForDelete(raw string) bool {
 func (x *call) checkSafety(path, operation string, force bool) bool {
 	verdict := classifyPath(path)
 	kind, detail, _ := strings.Cut(verdict, ":")
-	switch kind {
-	case "deny":
+	switch {
+	case verdict == "deny:metacharacters":
+		x.p.Error("Remote path '" + path + "' contains characters the remote side may expand. Refusing " + operation + ".")
+		return false
+	case kind == "deny":
 		x.p.Error("Remote path '" + path + "' is in the DENY list (matched: " + detail + "). This is never allowed, not even with --force. Refusing " + operation + ".")
 		return false
-	case "ask":
+	case kind == "ask":
 		if force {
 			return true
 		}
@@ -192,12 +212,23 @@ func (x *call) checkSafety(path, operation string, force bool) bool {
 	return true
 }
 
-// checkDeleteSafety is __remote_check_delete_safety PATH FORCE, worded
-// for the remote side also when PATH is remote_sync_pull's local
-// destination (LEDGER REM-06).
-func (x *call) checkDeleteSafety(path string, force bool) bool {
+// checkDeleteSafety is __remote_check_delete_safety PATH FORCE LOCAL:
+// the safe set of safeForDelete, worded for the remote destination, or,
+// for remote_sync_pull (local), for the local one (LEDGER REM-06).
+func (x *call) checkDeleteSafety(path string, force, local bool) bool {
 	if safeForDelete(path) || force {
 		return true
+	}
+	if local {
+		if x.headless() {
+			x.p.Error("rsync --delete targeting the local destination '" + path + "' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the current directory; never your home itself or .ssh). Refused in headless mode without --force.")
+			return false
+		}
+		if x.s.Confirm(x.Term, x.Stderr, "rsync --delete targeting the local destination '"+path+"' can remove local files. Proceed?") {
+			return true
+		}
+		x.p.Info("Operation cancelled.")
+		return false
 	}
 	if x.headless() {
 		x.p.Error("rsync --delete targeting '" + path + "' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home; never the home itself or .ssh). Refused in headless mode without --force.")

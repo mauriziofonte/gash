@@ -1,0 +1,30 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: REM-03
+#
+# A remote path the remote side may expand is refused, also with --force,
+# and rsync never runs; a plain path reaches rsync with -s.
+
+env GASH_HEADLESS=1
+env GASH_ENV_FILE=$WORK/hostenv
+env T=$WORK
+
+chmod 755 bin/rsync
+
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src ''$HOME'' --delete'
+stderr '^Error: Remote path .\$HOME. contains characters the remote side may expand\. Refusing sync-push\.$'
+! exists argv
+
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src ''$HOME'' --delete --force'
+stderr 'contains characters the remote side may expand'
+! exists argv
+
+exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src /tmp/build'
+grep '^-s$' argv
+
+-- hostenv --
+HOST:box=deploy@box.example
+-- bin/rsync --
+#!/bin/sh
+for a in "$@"; do printf '%s\n' "$a"; done >>"$T/argv"

@@ -669,7 +669,13 @@ var functions = []Function{
 			SeeAlso: "docker_compose_upgrade docker_compose_scan",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_check [PATH] [--json]\n" +
+				"  docker_compose_check [PATH] [--json] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  PATH        Directory with the compose file (default: current directory)\n" +
+				"  --json      JSON output for scripting; errors are JSON envelopes on stderr\n" +
+				"  --no-color  Disable ANSI colors (auto-off on pipe, NO_COLOR, GASH_HEADLESS)\n" +
+				"  -h, --help  Show this help\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Check for updates in current directory\n" +
@@ -682,14 +688,29 @@ var functions = []Function{
 				"  dcc --json\n" +
 				"\n" +
 				"STATUS CODES\n" +
-				"  UPDATE     New image available on registry\n" +
-				"  UP-TO-DATE Image matches remote digest\n" +
-				"  PINNED     Version is pinned (e.g. nginx:1.25.3), skipped\n" +
-				"  ERROR      Could not reach registry\n" +
+				"  CURRENT     Local image matches the remote digest\n" +
+				"  UPDATE      A newer image is on the registry\n" +
+				"  NOT_PULLED  The image is not pulled locally yet\n" +
+				"  PINNED      Digest pin or full version (e.g. nginx:1.25.3), not upgraded\n" +
+				"  ERROR       Registry unreachable, auth refused or invalid image reference\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Queries Docker Hub and GHCR registries to compare\n" +
-				"  local image digests with remote ones.",
+				"  Compose resolves the project files itself (compose.yaml first, override\n" +
+				"  files, COMPOSE_FILE); when `docker compose config` fails, the first of\n" +
+				"  compose.yaml, compose.yml, docker-compose.yml, docker-compose.yaml is\n" +
+				"  read.\n" +
+				"  Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN\n" +
+				"  is exchanged for a GHCR token), the others anonymously, answering a\n" +
+				"  Bearer challenge. Image variables come from the exported environment\n" +
+				"  and DIR/.env, with Compose's interpolation rules.\n" +
+				"  The exit status is 0 whenever the report prints, ERROR rows included.\n" +
+				"\n" +
+				"REGISTRY ERRORS\n" +
+				"  The error field of an ERROR row (--json) is one of: dns_error,\n" +
+				"  connection_refused, timeout, ssl_error, transport_error, unauthorized,\n" +
+				"  forbidden, not_found, rate_limited, server_error, http_NNN (another\n" +
+				"  status), malformed_token, no_digest_in_response, registry_unreachable,\n" +
+				"  invalid_reference (the image name does not parse).",
 		},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
 		CompletionComment: "Docker compose check/upgrade/scan: dirs + flags (incl. --no-color)",
@@ -719,7 +740,15 @@ var functions = []Function{
 			SeeAlso: "docker_compose_check docker_compose_upgrade",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_scan [BASEDIR] [--depth N] [--json]\n" +
+				"  docker_compose_scan [BASEDIR] [-d|--depth N] [-j|--json] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  BASEDIR     Base directory to scan (default: current directory)\n" +
+				"  -d, --depth N\n" +
+				"              Maximum search depth, a non-negative integer (default: 3)\n" +
+				"  -j, --json  JSON output for scripting\n" +
+				"  --no-color  Disable ANSI colors\n" +
+				"  -h, --help  Show this help (first word only)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Scan current directory for compose files\n" +
@@ -732,12 +761,15 @@ var functions = []Function{
 				"  dcscan /home/deploy --json\n" +
 				"\n" +
 				"  # Full audit: scan then check each project\n" +
-				"  dcscan /opt --depth 3",
+				"  dcscan /opt --depth 3\n" +
+				"\n" +
+				"NOTES\n" +
+				"  An unknown option is refused with exit status 1.",
 		},
 		Env: []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--depth --json --no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-d --depth -j --json --no-color --help\" -- \"$cur\")\n" +
 			"else\n" +
 			"    mapfile -t COMPREPLY < <(compgen -d -- \"$cur\")\n" +
 			"fi",
@@ -761,7 +793,15 @@ var functions = []Function{
 			SeeAlso: "docker_compose_check docker_compose_scan",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_upgrade [PATH] [--dry-run] [--force]\n" +
+				"  docker_compose_upgrade [PATH] [--dry-run] [-f|--force] [-y|--yes] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  PATH        Directory with the compose file (default: current directory)\n" +
+				"  --dry-run   Show what would be done without executing\n" +
+				"  -f, --force Upgrade pinned versions too\n" +
+				"  -y, --yes   Skip the confirmation (required in headless mode)\n" +
+				"  --no-color  Disable ANSI colors\n" +
+				"  -h, --help  Show this help\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Upgrade services with mutable tags (latest, main, dev)\n" +
@@ -773,18 +813,22 @@ var functions = []Function{
 				"  # Force upgrade even for pinned versions\n" +
 				"  dcup2 --force\n" +
 				"\n" +
-				"  # Upgrade a specific project\n" +
-				"  dcup2 /opt/myapp\n" +
+				"  # Upgrade a specific project, no question asked\n" +
+				"  dcup2 /opt/myapp --yes\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Only upgrades services with mutable tags (latest, main, dev, etc.).\n" +
 				"  Pinned versions (e.g. nginx:1.25.3) are skipped unless --force is used.\n" +
-				"  Pulls new images, recreates affected containers, removes old images.",
+				"  Pulls new images, recreates affected containers, removes old images.\n" +
+				"  Compose runs in PATH with its own file discovery, so override files\n" +
+				"  (docker-compose.override.yml) and COMPOSE_FILE are honored.\n" +
+				"  Headless (GASH_HEADLESS=1) it refuses to run without --yes.\n" +
+				"  Declining the confirmation returns 1.",
 		},
 		Env: []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force --no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force -f --yes -y --no-color --help\" -- \"$cur\")\n" +
 			"else\n" +
 			"    mapfile -t COMPREPLY < <(compgen -d -- \"$cur\")\n" +
 			"fi",
@@ -830,6 +874,10 @@ var functions = []Function{
 		},
 		Fallback: &Usage{Program: "docker_prune_all", Usage: "docker_prune_all [-y] [--dry-run]", Description: "Remove all Docker containers, images, volumes and networks (asks first)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "docker_start_all",
@@ -850,17 +898,26 @@ var functions = []Function{
 			SeeAlso: "docker_stop_all",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_start_all\n" +
+				"  docker_start_all [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Start all stopped containers\n" +
 				"  daa\n" +
 				"\n" +
 				"  # Restart everything\n" +
-				"  dsa && daa",
+				"  dsa && daa\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Lists the stopped containers (Will start N container(s): NAMES)\n" +
+				"  and asks before acting; -y/--yes skips the question and is required\n" +
+				"  headless or without a terminal. Declining returns 1.",
 		},
-		Fallback: &Usage{Program: "docker_start_all", Usage: "docker_start_all", Description: "Start all stopped Docker containers."},
+		Fallback: &Usage{Program: "docker_start_all", Usage: "docker_start_all [-y]", Description: "Start all stopped Docker containers (asks first; -y skips)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "docker_stop_all",
@@ -881,17 +938,26 @@ var functions = []Function{
 			SeeAlso: "docker_start_all docker_prune_all",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_stop_all\n" +
+				"  docker_stop_all [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Stop every running container\n" +
 				"  dsa\n" +
 				"\n" +
 				"  # Restart all containers: stop then start\n" +
-				"  dsa && daa",
+				"  dsa && daa\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Lists the running containers (Will stop N container(s): NAMES)\n" +
+				"  and asks before acting; -y/--yes skips the question and is required\n" +
+				"  headless or without a terminal. Declining returns 1.",
 		},
-		Fallback: &Usage{Program: "docker_stop_all", Usage: "docker_stop_all", Description: "Stop all running Docker containers."},
+		Fallback: &Usage{Program: "docker_stop_all", Usage: "docker_stop_all [-y]", Description: "Stop all running Docker containers (asks first; -y skips)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "file_backup",
@@ -1608,7 +1674,7 @@ var functions = []Function{
 			SeeAlso: "git_list_tags git_delete_tag",
 			Body: "" +
 				"USAGE\n" +
-				"  git_add_tag TAG_NAME [\"TAG_MESSAGE\"]\n" +
+				"  git_add_tag TAG_NAME [\"TAG_MESSAGE\"] [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Create a tag with auto-generated message\n" +
@@ -1617,18 +1683,26 @@ var functions = []Function{
 				"  # Create a tag with a custom message\n" +
 				"  gat v2.0.0 \"Major release with breaking changes\"\n" +
 				"\n" +
-				"  # Release workflow: commit, tag, done\n" +
-				"  gcm \"prepare release\" && gat v1.2.3 \"Bugfix release\"\n" +
+				"  # Release workflow: commit, tag, done (no question asked)\n" +
+				"  gcm \"prepare release\" && gat v1.2.3 \"Bugfix release\" --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Creates an annotated tag and pushes it to the remote\n" +
-				"  in one step. Requires a clean git repo with a remote.",
+				"  Creates an annotated tag and pushes it to origin in one step\n" +
+				"  (Will push refs/tags/TAG to origin (URL)).\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  The flags may come anywhere; -- ends them. A name starting with '-'\n" +
+				"  is refused. An unreachable origin is an error before anything is\n" +
+				"  created. Requires a git repo with an 'origin' remote.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:          &Usage{Program: "git_add_tag", Usage: "git_add_tag <tag_name> \"<tag_message>\"", Description: "Creates an annotated tag and pushes it to remote. Alias: gat"},
+		Fallback:          &Usage{Program: "git_add_tag", Usage: "git_add_tag <tag_name> [\"<tag_message>\"] [-y|--yes] [--dry-run]", Description: "Creates an annotated tag and pushes it to remote. Alias: gat"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "Git tag completion",
+		CompletionComment: "Git tag completion, with the confirmation flags",
 		Completion: "" +
-			"if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"$(git tag -l 2>/dev/null)\" -- \"$cur\")\n" +
 			"else\n" +
 			"    COMPREPLY=()\n" +
@@ -1653,22 +1727,34 @@ var functions = []Function{
 			SeeAlso: "git_dump_revisions",
 			Body: "" +
 				"USAGE\n" +
-				"  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH\n" +
+				"  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Cherry-pick a commit from feature to main via patch\n" +
+				"  # Bring the work of feature-auth since abc1234 onto main\n" +
 				"  gpatch main feature-auth abc1234\n" +
 				"\n" +
-				"  # Apply a specific fix from an old branch\n" +
-				"  gpatch develop hotfix-db e5f6a7b\n" +
+				"  # The same without a question (scripts, headless mode)\n" +
+				"  gpatch develop hotfix-db e5f6a7b --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Steps: checks out main, creates a patch from the specified commit\n" +
-				"  on the feature branch, applies it, and returns you to main.\n" +
-				"  The commit hash must exist on the feature branch.",
+				"  Steps: checks out MAIN and pulls origin MAIN, checks out FEATURE,\n" +
+				"  writes `git diff-index COMMIT --binary` (every change from COMMIT to\n" +
+				"  FEATURE's work tree, not a single commit) to a temporary\n" +
+				"  gash-patch-*.patch file, checks out MAIN and applies it with\n" +
+				"  `git apply --3way`, leaving the changes uncommitted on MAIN.\n" +
+				"  COMMIT only has to exist. The work tree must be clean.\n" +
+				"  On a failure the branch you started on is checked out again; a patch\n" +
+				"  that does not apply is kept in the temporary directory.\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback: &Usage{Program: "git_apply_patch", Usage: "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH", Description: "Create and apply a patch from a feature branch to the main branch. Example: git_apply_patch main old-feat 123456. Alias: gap"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback: &Usage{Program: "git_apply_patch", Usage: "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]", Description: "Apply the changes of a feature branch since a commit to the main branch (asks first). Example: git_apply_patch main old-feat 123456. Alias: gpatch"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "TMPDIR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "git_delete_tag",
@@ -1689,23 +1775,30 @@ var functions = []Function{
 			SeeAlso: "git_list_tags git_add_tag",
 			Body: "" +
 				"USAGE\n" +
-				"  git_delete_tag TAG_NAME\n" +
+				"  git_delete_tag TAG_NAME [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Remove a mis-tagged release\n" +
 				"  gdt v1.0.0-beta\n" +
 				"\n" +
 				"  # Fix a tag: delete and recreate\n" +
-				"  gdt v1.0.0 && gat v1.0.0 \"Fixed release\"\n" +
+				"  gdt v1.0.0 --yes && gat v1.0.0 \"Fixed release\" --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Deletes the tag both locally and on the remote origin.",
+				"  Deletes the tag both locally and on the remote origin\n" +
+				"  (Will delete refs/tags/TAG locally and on origin (URL)).\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  An unreachable origin is an error before anything is deleted.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:          &Usage{Program: "git_delete_tag", Usage: "git_delete_tag <tag_name>", Description: "Deletes a tag both locally and on remote. Alias: gdt"},
+		Fallback:          &Usage{Program: "git_delete_tag", Usage: "git_delete_tag <tag_name> [-y|--yes] [--dry-run]", Description: "Deletes a tag both locally and on remote. Alias: gdt"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "Git tag completion",
+		CompletionComment: "Git tag completion, with the confirmation flags",
 		Completion: "" +
-			"if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"$(git tag -l 2>/dev/null)\" -- \"$cur\")\n" +
 			"else\n" +
 			"    COMPREPLY=()\n" +
@@ -1741,7 +1834,10 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg\n" +
-				"  Each revision is dumped with its commit log message alongside.",
+				"  Each revision is dumped with its commit log message alongside.\n" +
+				"  001 is the newest revision, the highest number the oldest.\n" +
+				"  FILENAME may be relative or absolute, inside the work tree, and must\n" +
+				"  be tracked; a git failure returns 1 and leaves no empty file.",
 		},
 		Fallback:          &Usage{Program: "git_dump_revisions", Usage: "git_dump_revisions FILENAME", Description: "Dump all revisions of a file in a GIT repo into multiple separate files. Example: git_dump_revisions path/to/somefile.txt. Alias: gdr"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -1774,7 +1870,11 @@ var functions = []Function{
 				"  glt\n" +
 				"\n" +
 				"  # Check existing tags before creating a new release\n" +
-				"  glt && gat v2.0.0 \"Major release\"",
+				"  glt && gat v2.0.0 \"Major release\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Annotated tags are listed once. When origin cannot be reached the\n" +
+				"  remote list is an error and the status is 1.",
 		},
 		Fallback:          &Usage{Program: "git_list_tags", Usage: "git_list_tags", Description: "Lists all local and remote tags. Alias: glt"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -1805,7 +1905,7 @@ var functions = []Function{
 			SeeAlso: "git_list_tags",
 			Body: "" +
 				"USAGE\n" +
-				"  git_repair [-y] [--dry-run]\n" +
+				"  git_repair [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Fix a repo after a crash/OOM left empty loose object files\n" +
@@ -1815,15 +1915,22 @@ var functions = []Function{
 				"  gheal --dry-run\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Deletes 0-byte loose objects, copies the packs of a temporary bare\n" +
-				"  clone of 'origin' into the object store, then runs 'git gc' and\n" +
-				"  'git fsck --full' to verify. A plain 'git fetch' cannot do this: the\n" +
-				"  refs already match, so git believes it has the objects. Works in\n" +
-				"  linked worktrees and submodules. Shows the plan and asks first; -y\n" +
-				"  skips the question. Requires a git repo with an 'origin' remote.",
+				"  Makes a temporary bare clone of 'origin' first, then deletes the\n" +
+				"  0-byte loose objects (OBJECTS/xx/HASH files only: pack .keep and\n" +
+				"  info/ files are never touched), copies the packs of the clone into\n" +
+				"  the object store, then runs 'git gc' and 'git fsck --full' to\n" +
+				"  verify. A failed clone deletes nothing. A plain 'git fetch' cannot\n" +
+				"  do this: the refs already match, so git believes it has the objects.\n" +
+				"  Works in linked worktrees and submodules. Shows the plan and asks\n" +
+				"  first; -y skips the question. Requires a git repo with an 'origin'\n" +
+				"  remote; an origin URL starting with '-' is refused.",
 		},
 		Fallback: &Usage{Program: "git_repair", Usage: "git_repair [-y] [--dry-run]", Description: "Repair a repo with corrupted 0-byte loose objects by re-fetching them from origin. Alias: gheal"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "git_sync",
@@ -1844,14 +1951,14 @@ var functions = []Function{
 			SeeAlso: "git_repair",
 			Body: "" +
 				"USAGE\n" +
-				"  git_sync [-m MESSAGE] [--no-push] [--dry-run]\n" +
+				"  git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Save everything with the default message \"chore: sync\" and push\n" +
 				"  gsync\n" +
 				"\n" +
-				"  # With a real message\n" +
-				"  gsync -m \"docs: notes from the meeting\"\n" +
+				"  # With a real message, no question asked\n" +
+				"  gsync -m \"docs: notes from the meeting\" --yes\n" +
 				"\n" +
 				"  # What would be committed and where it would go\n" +
 				"  gsync --dry-run\n" +
@@ -1859,14 +1966,20 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Stages new, modified and deleted files of the whole work tree\n" +
 				"  (git add --all), commits only when there is something to commit, then\n" +
-				"  pushes the current branch to its upstream. A branch without upstream is\n" +
-				"  pushed to origin and the upstream is set. Refuses on a detached HEAD\n" +
-				"  and during a merge, rebase, cherry-pick or revert. .gitignore applies:\n" +
-				"  check `git status` first in repositories without one.",
+				"  pushes the current branch to its upstream branch, named explicitly\n" +
+				"  (git push REMOTE HEAD:BRANCH, the target --dry-run shows). A branch\n" +
+				"  without upstream is pushed to origin and the upstream is set.\n" +
+				"  Shows the plan (Will commit N file(s) on BRANCH (M untracked) and push\n" +
+				"  to UPSTREAM) and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal.\n" +
+				"  Refuses on a detached HEAD and during a merge, rebase, cherry-pick or\n" +
+				"  revert. .gitignore applies: check `git status` first in repositories\n" +
+				"  without one.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:   &Usage{Program: "git_sync", Usage: "git_sync [-m MESSAGE] [--no-push] [--dry-run]", Description: "Stage everything, commit it and push the current branch. Alias: gsync"},
+		Fallback:   &Usage{Program: "git_sync", Usage: "git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]", Description: "Stage everything, commit it and push the current branch. Alias: gsync"},
 		Env:        []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--message --no-push --dry-run --help\" -- \"$cur\")",
+		Completion: "mapfile -t COMPREPLY < <(compgen -W \"-m --message --no-push --dry-run -y --yes --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "gl",
@@ -2763,7 +2876,7 @@ var functions = []Function{
 			Module: "node",
 			Body: "" +
 				"USAGE\n" +
-				"  node_detect_version [project_dir] [--json]\n" +
+				"  node_detect_version [project_dir] [--json|--llm]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Human-readable, current directory\n" +
@@ -2774,10 +2887,20 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Priority: .nvmrc -> .node-version -> package.json engines.node -> latest\n" +
-				"  installed. JSON output is also emitted automatically under\n" +
-				"  GASH_HEADLESS=1, --json is not required there.",
+				"  installed, read in project_dir only (no walk-up). Every source is\n" +
+				"  reduced to its major (lts/NAME through nvm's alias files, then the\n" +
+				"  codename table), and full_version is the newest installed patch of\n" +
+				"  that major: an exact pin such as v20.9.0 resolves to the newest\n" +
+				"  installed v20 patch. Installed versions are the vX.Y.Z directories of\n" +
+				"  $NVM_DIR/versions/node (prereleases and other names do not count).\n" +
+				"  When the major is not installed, a warning names it and the newest\n" +
+				"  installed version is used. A project_dir that is not a directory gives\n" +
+				"  \"Warning: Directory not found: DIR\" with the same answer and status 0.\n" +
+				"  Unknown options are refused before the NVM directory is checked.\n" +
+				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
+				"  --json (or --llm) is not required there.",
 		},
-		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
+		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json|--llm]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "NVM_DIR"},
 	},
@@ -2932,7 +3055,7 @@ var functions = []Function{
 			Module: "php",
 			Body: "" +
 				"USAGE\n" +
-				"  php_detect_version [project_dir] [--json]\n" +
+				"  php_detect_version [project_dir] [--json|--llm]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Human-readable, current directory\n" +
@@ -2942,11 +3065,23 @@ var functions = []Function{
 				"  php_detect_version /path/to/project --json\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Priority: .target-php-version (walk-up) -> composer.json .require.php ->\n" +
-				"  .github/copilot-instructions.md -> fallback 8.4. JSON output is also\n" +
-				"  emitted automatically under GASH_HEADLESS=1, --json is not required there.",
+				"  Priority: .target-php-version (the first X.Y of its first line, looked\n" +
+				"  up in project_dir, then in every parent directory except /) ->\n" +
+				"  composer.json .require.php -> .github/copilot-instructions.md (the\n" +
+				"  first \"php X.Y\") -> fallback 8.4. composer.json and\n" +
+				"  copilot-instructions.md are read in project_dir only.\n" +
+				"  A composer constraint is split on | and ||; each alternative counts by\n" +
+				"  its lower bound (^7.4 is 7.4; a bare major such as ^8, >=8 or 8.* is\n" +
+				"  8.0; * alone counts for nothing). The highest alternative whose\n" +
+				"  /usr/bin/phpX.Y is installed wins, else the highest alternative.\n" +
+				"  When /usr/bin/phpX.Y is not installed, a warning on stderr says so and\n" +
+				"  names the binary used instead (/usr/bin/phpX, then php on PATH); the\n" +
+				"  JSON is unchanged. A project_dir that is not a directory gives\n" +
+				"  \"Warning: Directory not found: DIR\" with the same answer and status 0.\n" +
+				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
+				"  --json (or --llm) is not required there.",
 		},
-		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
+		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json|--llm]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
@@ -3089,13 +3224,26 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Connections are multiplexed (ControlMaster, 60s persist): repeated calls to\n" +
-				"  the same host reuse one session. Under GASH_HEADLESS=1 only a registered\n" +
-				"  alias (~/.gash_env HOST:) is accepted, never a raw user@host target.",
+				"  the same host reuse one session; a missing ~/.ssh (the socket's\n" +
+				"  directory) is created with mode 0700.\n" +
+				"  The exit status is the remote command's. When ssh exits 255, a probe\n" +
+				"  (ssh ... exit 0) tells the cases apart: the connection is healthy and\n" +
+				"  the status is 255 (the command was killed or exited 255), or it is not\n" +
+				"  and the status is 1.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
 		Fallback:  &Usage{Program: "remote_exec", Usage: "remote_exec <alias|user@host> \"command\" | --script FILE [-- args...]", Description: "Execute a command or script on a remote host via multiplexed SSH. Alias: rex"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--script --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_hosts",
@@ -3123,7 +3271,9 @@ var functions = []Function{
 				"  rh\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Reads HOST:alias=user@host entries from ~/.gash_env.",
+				"  Reads HOST:alias=user@host entries from ~/.gash_env, or from the file\n" +
+				"  GASH_ENV_FILE names. An entry whose target is not a valid user@host\n" +
+				"  (an option-like name, a host:port) is not listed and never used.",
 		},
 		Fallback:  &Usage{Program: "remote_hosts", Usage: "remote_hosts", Description: "List configured remote host aliases from ~/.gash_env. Alias: rh"},
 		LoadsEnv:  true,
@@ -3149,16 +3299,35 @@ var functions = []Function{
 			SeeAlso: "remote_push remote_sync_pull",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]\n" +
+				"  remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Pull a single file\n" +
-				"  rpull viper /tmp/backup.tar.gz ./backup.tar.gz",
+				"  rpull viper /tmp/backup.tar.gz ./backup.tar.gz\n" +
+				"\n" +
+				"  # Pull a directory, keeping times and modes\n" +
+				"  rpull viper /srv/app/config ./config -r -p\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_pull", Usage: "remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]", Description: "Copy a remote file/dir to the local machine via scp. Alias: rpull"},
+		Fallback:  &Usage{Program: "remote_pull", Usage: "remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]", Description: "Copy a remote file/dir to the local machine via scp. Alias: rpull"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-r --recursive -p --preserve --no-progress --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_push",
@@ -3179,19 +3348,35 @@ var functions = []Function{
 			SeeAlso: "remote_pull remote_sync_push",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]\n" +
+				"  remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Push a config file\n" +
 				"  rpush hnas ./nginx.conf /tmp/nginx.conf\n" +
 				"\n" +
 				"  # Push a directory\n" +
-				"  rpush hnas ./dist /tmp/dist -r",
+				"  rpush hnas ./dist /tmp/dist -r\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_push", Usage: "remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]", Description: "Copy a local file/dir to a remote host via scp. Alias: rpush"},
+		Fallback:  &Usage{Program: "remote_push", Usage: "remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]", Description: "Copy a local file/dir to a remote host via scp. Alias: rpush"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-r --recursive -p --preserve --no-progress --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_sync_pull",
@@ -3212,16 +3397,39 @@ var functions = []Function{
 			SeeAlso: "remote_sync_push remote_pull",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]\n" +
+				"  remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Sync a remote project directory locally\n" +
-				"  rspull viper /home/maurizio/projects/foo/ ./foo/",
+				"  rspull viper /home/maurizio/projects/foo/ ./foo/\n" +
+				"\n" +
+				"  # Mirror it, skipping logs\n" +
+				"  rspull viper /srv/app/ ./app/ --delete --exclude '*.log'\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  rsync runs with -s (--protect-args). With --delete the LOCAL\n" +
+				"  destination is checked: below /tmp, /var/tmp or /home/<user>/, or a\n" +
+				"  relative path inside the current directory, never your home itself or\n" +
+				"  .ssh; elsewhere it asks, or needs --force in headless mode.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_sync_pull", Usage: "remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]", Description: "Sync a remote directory to the local machine via rsync. Alias: rspull"},
+		Fallback:  &Usage{Program: "remote_sync_pull", Usage: "remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]", Description: "Sync a remote directory to the local machine via rsync. Alias: rspull"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--delete --dry-run --no-progress --force --exclude= --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_sync_push",
@@ -3242,16 +3450,36 @@ var functions = []Function{
 			SeeAlso: "remote_sync_pull remote_push",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]\n" +
+				"  remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Sync a build directory\n" +
-				"  rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'",
+				"  rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  rsync runs with -s (--protect-args). --delete runs without asking only\n" +
+				"  below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the\n" +
+				"  remote home, never the home itself or a .ssh path; elsewhere it asks,\n" +
+				"  or needs --force in headless mode.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_sync_push", Usage: "remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]", Description: "Sync a local directory to a remote host via rsync. Alias: rspush"},
+		Fallback:  &Usage{Program: "remote_sync_push", Usage: "remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]", Description: "Sync a local directory to a remote host via rsync. Alias: rspush"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--delete --dry-run --no-progress --force --exclude= --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "services_stop",

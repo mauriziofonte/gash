@@ -1,0 +1,57 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: GIT-01
+#
+# Headless, a tag deletion, a tag push and a sync refuse without --yes and
+# change nothing; with --yes they act.
+
+env GASH_HEADLESS=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+exec git init -q --bare o.git
+exec git init -q w
+cd w
+exec bash -c 'git remote add origin ../o.git; echo a >a; git add a; git commit -qm init; git push -q -u origin main 2>/dev/null; git tag -a v1 -m one; git push -q origin v1 2>/dev/null'
+
+# git_delete_tag: refused headless, the tag stays on origin; --yes deletes it.
+! exec bash -c 'source "$GASH_SH"; git_delete_tag v1'
+stderr '^Error: Refusing to delete tag .v1. in headless mode without --yes\.$'
+exec git ls-remote --tags origin refs/tags/v1
+stdout 'refs/tags/v1'
+exec bash -c 'source "$GASH_SH"; git_delete_tag v1 --yes'
+exec git ls-remote --tags origin refs/tags/v1
+! stdout .
+
+# git_add_tag: refused headless, no local tag.
+! exec bash -c 'source "$GASH_SH"; git_add_tag v2'
+stderr 'Refusing to push tag .v2.'
+! exec git rev-parse -q --verify refs/tags/v2
+
+# git_sync on a dirty tree: refused headless, HEAD and the status unchanged.
+exec bash -c 'echo s >.env.local; echo b >>a'
+exec git rev-parse HEAD
+cp stdout $WORK/head-before
+exec git status --porcelain
+cp stdout $WORK/status-before
+! exec bash -c 'source "$GASH_SH"; git_sync'
+stderr 'Refusing to commit and push in headless mode without --yes'
+exec git rev-parse HEAD
+cmp stdout $WORK/head-before
+exec git status --porcelain
+cmp stdout $WORK/status-before
+
+# git_sync --yes commits and pushes.
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
+stderr 'OK: Pushed main to origin/main'
+exec bash -c 'test "$(git rev-parse HEAD)" = "$(git -C ../o.git rev-parse main)"'
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false

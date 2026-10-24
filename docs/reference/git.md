@@ -23,7 +23,7 @@ Alias: `gat`
 #### Usage
 
 ```text
-git_add_tag TAG_NAME ["TAG_MESSAGE"]
+git_add_tag TAG_NAME ["TAG_MESSAGE"] [-y|--yes] [--dry-run]
 ```
 
 #### Examples
@@ -35,15 +35,21 @@ gat v1.0.0
 # Create a tag with a custom message
 gat v2.0.0 "Major release with breaking changes"
 
-# Release workflow: commit, tag, done
-gcm "prepare release" && gat v1.2.3 "Bugfix release"
+# Release workflow: commit, tag, done (no question asked)
+gcm "prepare release" && gat v1.2.3 "Bugfix release" --yes
 ```
 
 #### Notes
 
 ```text
-Creates an annotated tag and pushes it to the remote
-in one step. Requires a clean git repo with a remote.
+Creates an annotated tag and pushes it to origin in one step
+(Will push refs/tags/TAG to origin (URL)).
+Shows the plan and asks first; -y/--yes skips the question and is
+required in headless mode or without a terminal; --dry-run only shows.
+The flags may come anywhere; -- ends them. A name starting with '-'
+is refused. An unreachable origin is an error before anything is
+created. Requires a git repo with an 'origin' remote.
+Runs with your git configuration, hooks and signing settings.
 ```
 
 See also: `git_list_tags`, `git_delete_tag`
@@ -57,25 +63,33 @@ Alias: `gpatch`
 #### Usage
 
 ```text
-git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH
+git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
-# Cherry-pick a commit from feature to main via patch
+# Bring the work of feature-auth since abc1234 onto main
 gpatch main feature-auth abc1234
 
-# Apply a specific fix from an old branch
-gpatch develop hotfix-db e5f6a7b
+# The same without a question (scripts, headless mode)
+gpatch develop hotfix-db e5f6a7b --yes
 ```
 
 #### Notes
 
 ```text
-Steps: checks out main, creates a patch from the specified commit
-on the feature branch, applies it, and returns you to main.
-The commit hash must exist on the feature branch.
+Steps: checks out MAIN and pulls origin MAIN, checks out FEATURE,
+writes `git diff-index COMMIT --binary` (every change from COMMIT to
+FEATURE's work tree, not a single commit) to a temporary
+gash-patch-*.patch file, checks out MAIN and applies it with
+`git apply --3way`, leaving the changes uncommitted on MAIN.
+COMMIT only has to exist. The work tree must be clean.
+On a failure the branch you started on is checked out again; a patch
+that does not apply is kept in the temporary directory.
+Shows the plan and asks first; -y/--yes skips the question and is
+required in headless mode or without a terminal; --dry-run only shows.
+Runs with your git configuration, hooks and signing settings.
 ```
 
 See also: `git_dump_revisions`
@@ -89,7 +103,7 @@ Alias: `gdt`
 #### Usage
 
 ```text
-git_delete_tag TAG_NAME
+git_delete_tag TAG_NAME [-y|--yes] [--dry-run]
 ```
 
 #### Examples
@@ -99,13 +113,18 @@ git_delete_tag TAG_NAME
 gdt v1.0.0-beta
 
 # Fix a tag: delete and recreate
-gdt v1.0.0 && gat v1.0.0 "Fixed release"
+gdt v1.0.0 --yes && gat v1.0.0 "Fixed release" --yes
 ```
 
 #### Notes
 
 ```text
-Deletes the tag both locally and on the remote origin.
+Deletes the tag both locally and on the remote origin
+(Will delete refs/tags/TAG locally and on origin (URL)).
+Shows the plan and asks first; -y/--yes skips the question and is
+required in headless mode or without a terminal; --dry-run only shows.
+An unreachable origin is an error before anything is deleted.
+Runs with your git configuration, hooks and signing settings.
 ```
 
 See also: `git_list_tags`, `git_add_tag`
@@ -137,6 +156,9 @@ gdr scripts/deploy.sh
 ```text
 Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg
 Each revision is dumped with its commit log message alongside.
+001 is the newest revision, the highest number the oldest.
+FILENAME may be relative or absolute, inside the work tree, and must
+be tracked; a git failure returns 1 and leaves no empty file.
 ```
 
 See also: `git_apply_patch`
@@ -163,6 +185,13 @@ glt
 glt && gat v2.0.0 "Major release"
 ```
 
+#### Notes
+
+```text
+Annotated tags are listed once. When origin cannot be reached the
+remote list is an error and the status is 1.
+```
+
 See also: `git_add_tag`, `git_delete_tag`
 
 ## git_repair
@@ -174,7 +203,7 @@ Alias: `gheal`
 #### Usage
 
 ```text
-git_repair [-y] [--dry-run]
+git_repair [-y|--yes] [--dry-run]
 ```
 
 #### Examples
@@ -190,12 +219,15 @@ gheal --dry-run
 #### Notes
 
 ```text
-Deletes 0-byte loose objects, copies the packs of a temporary bare
-clone of 'origin' into the object store, then runs 'git gc' and
-'git fsck --full' to verify. A plain 'git fetch' cannot do this: the
-refs already match, so git believes it has the objects. Works in
-linked worktrees and submodules. Shows the plan and asks first; -y
-skips the question. Requires a git repo with an 'origin' remote.
+Makes a temporary bare clone of 'origin' first, then deletes the
+0-byte loose objects (OBJECTS/xx/HASH files only: pack .keep and
+info/ files are never touched), copies the packs of the clone into
+the object store, then runs 'git gc' and 'git fsck --full' to
+verify. A failed clone deletes nothing. A plain 'git fetch' cannot
+do this: the refs already match, so git believes it has the objects.
+Works in linked worktrees and submodules. Shows the plan and asks
+first; -y skips the question. Requires a git repo with an 'origin'
+remote; an origin URL starting with '-' is refused.
 ```
 
 See also: `git_list_tags`
@@ -209,7 +241,7 @@ Alias: `gsync`
 #### Usage
 
 ```text
-git_sync [-m MESSAGE] [--no-push] [--dry-run]
+git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]
 ```
 
 #### Examples
@@ -218,8 +250,8 @@ git_sync [-m MESSAGE] [--no-push] [--dry-run]
 # Save everything with the default message "chore: sync" and push
 gsync
 
-# With a real message
-gsync -m "docs: notes from the meeting"
+# With a real message, no question asked
+gsync -m "docs: notes from the meeting" --yes
 
 # What would be committed and where it would go
 gsync --dry-run
@@ -230,10 +262,16 @@ gsync --dry-run
 ```text
 Stages new, modified and deleted files of the whole work tree
 (git add --all), commits only when there is something to commit, then
-pushes the current branch to its upstream. A branch without upstream is
-pushed to origin and the upstream is set. Refuses on a detached HEAD
-and during a merge, rebase, cherry-pick or revert. .gitignore applies:
-check `git status` first in repositories without one.
+pushes the current branch to its upstream branch, named explicitly
+(git push REMOTE HEAD:BRANCH, the target --dry-run shows). A branch
+without upstream is pushed to origin and the upstream is set.
+Shows the plan (Will commit N file(s) on BRANCH (M untracked) and push
+to UPSTREAM) and asks first; -y/--yes skips the question and is
+required in headless mode or without a terminal.
+Refuses on a detached HEAD and during a merge, rebase, cherry-pick or
+revert. .gitignore applies: check `git status` first in repositories
+without one.
+Runs with your git configuration, hooks and signing settings.
 ```
 
 See also: `git_repair`

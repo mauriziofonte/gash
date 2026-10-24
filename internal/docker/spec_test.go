@@ -63,36 +63,39 @@ func writeFile(t *testing.T, content string) string {
 // docker_compose_spec.sh:11-104 and :713, the parser (YAML subset; the
 // config JSON path with a docker fake).
 func TestSpecParseServices(t *testing.T) {
-	out := lineParser([]byte("version: \"3\"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - \"80:80\"\n" +
-		"  db:\n    image: postgres:15\n    environment:\n      - POSTGRES_PASSWORD=secret\n  redis:\n    image: redis:7-alpine\n"))
+	out := lines3(lineParser([]byte("version: \"3\"\nservices:\n  web:\n    image: nginx:latest\n    ports:\n      - \"80:80\"\n" +
+		"  db:\n    image: postgres:15\n    environment:\n      - POSTGRES_PASSWORD=secret\n  redis:\n    image: redis:7-alpine\n")))
 	require.Equal(t, "web|nginx:latest\ndb|postgres:15\nredis|redis:7-alpine\n", out)
 
-	out = lineParser([]byte("services:\n  app:\n    image: \"ghcr.io/org/app:v1.0\"\n  api:\n    image: 'my-registry.io/api:latest'\n"))
+	out = lines3(lineParser([]byte("services:\n  app:\n    image: \"ghcr.io/org/app:v1.0\"\n  api:\n    image: 'my-registry.io/api:latest'\n")))
 	require.Equal(t, "app|ghcr.io/org/app:v1.0\napi|my-registry.io/api:latest\n", out)
 
-	out = lineParser([]byte(strings.Join([]string{"services:", "    web:   # front", "        image: \"nginx:1.25\"   # pinned",
+	out = lines3(lineParser([]byte(strings.Join([]string{"services:", "    web:   # front", "        image: \"nginx:1.25\"   # pinned",
 		"        labels:", "            image: not-this", "    \"db\":", "        build: .", "    cache:",
-		"        image: redis:latest", "volumes:", "    data:", "        image: nope"}, "\n") + "\n"))
+		"        image: redis:latest", "volumes:", "    data:", "        image: nope"}, "\n") + "\n")))
 	require.Equal(t, "web|nginx:1.25\ncache|redis:latest\n", out)
 
-	out = lineParser([]byte("services:\n  app:\n    build: .\n    ports:\n      - \"3000:3000\"\n  db:\n    image: postgres:15\n"))
+	out = lines3(lineParser([]byte("services:\n  app:\n    build: .\n    ports:\n      - \"3000:3000\"\n  db:\n    image: postgres:15\n")))
 	require.Equal(t, "db|postgres:15\n", out)
 
-	out = lineParser([]byte("services:\n  # Comment before service\n  web:\n    image: nginx:latest # inline comment\n" +
+	out = lines3(lineParser([]byte("services:\n  # Comment before service\n  web:\n    image: nginx:latest # inline comment\n" +
 		"    ports:\n      - \"80:80\"\n  db:\n    # Comment inside service\n    image: postgres:15\n  cache:\n" +
-		"    image: redis  # No tag\n  custom:\n    image: \"my.registry.io:5000/namespace/app:v1.0.0\"\n"))
+		"    image: redis  # No tag\n  custom:\n    image: \"my.registry.io:5000/namespace/app:v1.0.0\"\n")))
 	require.Equal(t, "web|nginx:latest\ndb|postgres:15\ncache|redis\ncustom|my.registry.io:5000/namespace/app:v1.0.0\n", out)
 
-	// Compose v2: the services of `config --format json`, never jq.
+	// Compose v2: the services of `config --format json`, never jq; the
+	// project's own discovery, in its directory (3.0: DOCK-04 fixed).
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "docker"), nil, 0o755))
 	file := writeFile(t, "services:\n  web:\n    image: ${TAG}\n")
 	f := runner.NewFake(t,
 		runner.Expect{Argv: []string{"docker", "compose", "version"}},
-		runner.Expect{Argv: []string{"docker", "compose", "-f", file, "--project-directory", filepath.Dir(file), "config", "--format", "json"},
+		runner.Expect{Argv: []string{"docker", "compose", "--project-directory", filepath.Dir(file), "config", "--format", "json"},
+			Dir:    runner.Text(filepath.Dir(file)),
 			Stdout: `{"services":{"web":{"image":"nginx:1.27"},"app":{"build":{"context":"."}}}}` + "\n"})
 	u := newUnit(t, []string{"PATH=" + dir}, f, nil)
-	require.Equal(t, "web|nginx:1.27", u.parseServices(file))
+	p := u.parseServices(file, true)
+	require.Equal(t, parsed{services: []service{{"web", "nginx:1.27"}}, fromConfig: true}, p)
 	f.Verify()
 }
 
@@ -117,12 +120,19 @@ func TestSpecNormalizeAndUpgradeable(t *testing.T) {
 		"nginx": "docker.io|library/nginx|latest", "nginx:1.25": "docker.io|library/nginx|1.25",
 		"redis:7-alpine": "docker.io|library/redis|7-alpine", "ollama/ollama:latest": "docker.io|ollama/ollama|latest",
 		"bitnami/postgresql:15": "docker.io|bitnami/postgresql|15", "ghcr.io/open-webui/open-webui:main": "ghcr.io|open-webui/open-webui|main",
-		"nginx@sha256:abc123def456": "docker.io|library/nginx|@sha256:abc123def456", "registry.example.com/myapp:v1": "registry.example.com|myapp|v1",
+		// 3.0: DOCK-06 fixed: a digest pin is a digest (a valid one).
+		"nginx@sha256:" + strings.Repeat("a", 64): "docker.io|library/nginx|@sha256:" + strings.Repeat("a", 64),
+		"registry.example.com/myapp:v1":           "registry.example.com|myapp|v1",
 		"my.private.registry:5000/org/app:latest": "my.private.registry:5000|org/app|latest",
 		"localhost:5000/myapp:latest":             "localhost:5000|myapp|latest", "localhost/myapp:v1": "localhost|myapp|v1",
 	} {
 		i := normalizeImage(ref)
-		require.Equal(t, want, i.registry+"|"+i.name+"|"+i.tag, ref)
+		tag := i.tag
+		if i.digest != "" {
+			tag = "@" + i.digest
+		}
+		require.False(t, i.bad, ref)
+		require.Equal(t, want, i.registry+"|"+i.name+"|"+tag, ref)
 	}
 	for _, tag := range []string{"latest", "main", "dev", "edge", "nightly", "15", "1.25", "8.1", "7-alpine", "1.25-slim"} {
 		require.True(t, isUpgradeable(tag), tag)
@@ -170,33 +180,34 @@ func TestSpecRegistryCall(t *testing.T) {
 // docker_compose_spec.sh:872-1037: tokens and digests.
 func TestSpecTokensAndDigests(t *testing.T) {
 	hub := "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/nginx:pull"
-	tok, e := newUnit(t, nil, nil, mockEnv()).token(hub)
+	tok, e := newUnit(t, nil, nil, mockEnv()).token(hub, "", "")
 	require.Equal(t, "mock-dockerhub-token-abc123", tok)
 	require.Equal(t, "", e)
-	tok, e = newUnit(t, nil, nil, mockEnv("MOCK_CURL_REGISTRY_AUTH_FAIL=1")).token(hub)
+	tok, e = newUnit(t, nil, nil, mockEnv("MOCK_CURL_REGISTRY_AUTH_FAIL=1")).token(hub, "", "")
 	require.Equal(t, "", tok)
 	require.Equal(t, "server_error", e)
-	tok, _ = newUnit(t, nil, nil, mockEnv()).token("https://ghcr.io/token?service=ghcr.io&scope=repository:open-webui/open-webui:pull")
+	tok, _ = newUnit(t, nil, nil, mockEnv()).token("https://ghcr.io/token?service=ghcr.io&scope=repository:open-webui/open-webui:pull", "", "")
 	require.Equal(t, "mock-ghcr-token-xyz789", tok)
 
-	// GITHUB_TOKEN is the bearer itself: no token request.
+	// 3.0: DOCK-14 fixed: GITHUB_TOKEN is exchanged for a token first.
 	reg := mockEnv()
-	d, _ := newUnit(t, []string{"GITHUB_TOKEN=my-custom-gh-token"}, nil, reg).remoteDigest(image{"ghcr.io", "some/image", "latest"})
+	d, _ := newUnit(t, []string{"GITHUB_TOKEN=my-custom-gh-token"}, nil, reg).remoteDigest(normalizeImage("ghcr.io/some/image"))
 	require.True(t, strings.HasPrefix(d, "sha256:"))
-	require.Equal(t, []string{"HEAD https://ghcr.io/v2/some/image/manifests/latest"}, reg.reqs)
+	require.Equal(t, []string{"GET https://ghcr.io/token?service=ghcr.io&scope=repository:some/image:pull",
+		"HEAD https://ghcr.io/v2/some/image/manifests/latest"}, reg.reqs)
 
-	d, e = newUnit(t, nil, nil, mockEnv()).remoteDigest(image{"docker.io", "library/nginx", "latest"})
+	d, e = newUnit(t, nil, nil, mockEnv()).remoteDigest(normalizeImage("nginx"))
 	require.Equal(t, "sha256:newdigest456abc123def456abc123def456abc123def456abc123def456newdig", d)
 	require.Equal(t, "", e)
-	d, _ = newUnit(t, nil, nil, mockEnv()).remoteDigest(image{"ghcr.io", "open-webui/open-webui", "main"})
+	d, _ = newUnit(t, nil, nil, mockEnv()).remoteDigest(normalizeImage("ghcr.io/open-webui/open-webui:main"))
 	require.True(t, strings.HasPrefix(d, "sha256:"))
 	for _, knob := range []string{"MOCK_CURL_REGISTRY_AUTH_FAIL=1", "MOCK_CURL_REGISTRY_RATE_LIMITED=1"} {
-		d, e = newUnit(t, nil, nil, mockEnv(knob)).remoteDigest(image{"docker.io", "library/nginx", "latest"})
+		d, e = newUnit(t, nil, nil, mockEnv(knob)).remoteDigest(normalizeImage("nginx"))
 		require.Equal(t, "", d)
 		require.NotEqual(t, "", e)
 	}
-	d, _ = newUnit(t, nil, nil, nil).remoteDigest(image{"docker.io", "library/nginx", "@sha256:abc123def456"})
-	require.Equal(t, "sha256:abc123def456", d)
+	d, _ = newUnit(t, nil, nil, nil).remoteDigest(normalizeImage("nginx@sha256:" + strings.Repeat("a", 64)))
+	require.Equal(t, "sha256:"+strings.Repeat("a", 64), d)
 
 	// The multi-arch index types are asked first, on every registry.
 	var accepts []string
@@ -206,12 +217,21 @@ func TestSpecTokensAndDigests(t *testing.T) {
 		}
 		return mockEnv().RoundTrip(req)
 	})
-	_, _ = newUnit(t, nil, nil, rec).remoteDigest(image{"docker.io", "library/nginx", "latest"})
-	_, _ = newUnit(t, nil, nil, rec).remoteDigest(image{"registry.example.com", "team/app", "latest"})
+	_, _ = newUnit(t, nil, nil, rec).remoteDigest(normalizeImage("nginx"))
+	_, _ = newUnit(t, nil, nil, rec).remoteDigest(normalizeImage("registry.example.com/team/app"))
 	require.Equal(t, []string{"registry-1.docker.io " + strings.Join(manifestAccept, ","),
 		"registry.example.com " + strings.Join(manifestAccept, ",")}, accepts)
 	require.Equal(t, "application/vnd.oci.image.index.v1+json", manifestAccept[0])
 	require.Equal(t, "application/vnd.docker.distribution.manifest.list.v2+json", manifestAccept[1])
+}
+
+// lines3 writes services as the "name|image" lines 2.x printed.
+func lines3(svcs []service) string {
+	var b strings.Builder
+	for _, s := range svcs {
+		b.WriteString(s.name + "|" + s.image + "\n")
+	}
+	return b.String()
 }
 
 type roundTrip func(*http.Request) (*http.Response, error)

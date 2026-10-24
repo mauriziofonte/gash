@@ -6,8 +6,8 @@
 #
 # git_list_tags, git_add_tag and git_delete_tag driven through the shim.
 # Each case builds its own bare origin and work tree in a subdirectory and
-# reproduces the 2.x observable contract (stderr/exit and git state). Tag
-# push and delete happen without a question (LEDGER GIT-01, as 2.x).
+# reproduces the 2.x observable contract (stderr/exit and git state).
+# 3.0: GIT-01 fixed: headless, a tag push or deletion needs --yes.
 
 env GASH_HEADLESS=1
 env GIT_AUTHOR_DATE='1700000000 +0000'
@@ -28,12 +28,12 @@ exec git init -q --bare o29.git
 exec git init -q w29
 cd w29
 exec bash -c 'echo x > f; git add f; git commit -q -m init; git remote add origin ../o29.git'
-exec bash -c 'source "$GASH_SH"; git_add_tag v-test "test tag"'
+exec bash -c 'source "$GASH_SH"; git_add_tag v-test "test tag" --yes'
 stderr 'Tag .v-test. created'
 stderr 'Tag .v-test. pushed to remote'
 exec git rev-parse v-test
 exec bash -c 'git ls-remote --tags origin | grep -q "refs/tags/v-test"'
-exec bash -c 'source "$GASH_SH"; git_delete_tag v-test'
+exec bash -c 'source "$GASH_SH"; git_delete_tag v-test --yes'
 stderr 'Local tag .v-test. deleted'
 stderr 'Remote tag .v-test. deleted'
 ! exec git rev-parse v-test
@@ -51,12 +51,12 @@ exec git branch v2.0
 # v1.0 does not exist even though v1.0.1 does: delete refuses, add works.
 ! exec bash -c 'source "$GASH_SH"; git_delete_tag v1.0'
 stderr 'Tag .v1.0. does not exist'
-exec bash -c 'source "$GASH_SH"; git_add_tag v1.0'
+exec bash -c 'source "$GASH_SH"; git_add_tag v1.0 --yes'
 exec git ls-remote --exit-code --tags origin refs/tags/v1.0
 
 # A branch with the tag name neither blocks the tag nor gets pushed/deleted.
-exec bash -c 'source "$GASH_SH"; git_add_tag v2.0'
-exec bash -c 'source "$GASH_SH"; git_delete_tag v2.0'
+exec bash -c 'source "$GASH_SH"; git_add_tag v2.0 --yes'
+exec bash -c 'source "$GASH_SH"; git_delete_tag v2.0 --yes'
 exec git rev-parse -q --verify refs/heads/v2.0
 ! exec git rev-parse -q --verify refs/tags/v2.0
 exec git ls-remote --exit-code --tags origin refs/tags/v1.0.1

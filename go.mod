@@ -13,6 +13,7 @@ require (
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/gofrs/flock v0.13.1
 	github.com/google/go-cmp v0.7.0
+	github.com/google/go-containerregistry v0.22.1
 	github.com/google/renameio/v2 v2.0.2
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/rogpeppe/go-internal v1.16.0
@@ -34,6 +35,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	golang.org/x/text v0.41.0 // indirect

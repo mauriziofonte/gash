@@ -7,8 +7,10 @@
 // Every git call is the git CLI started through internal/runner with the
 // caller's exported environment (c.Env.Child()) and no hardening flags,
 // so the user's configuration, hooks, signing and credential helpers
-// apply as in 2.x (LEDGER GIT-10). The 2.x argv, step order, messages
-// and exit statuses are kept, defects included (GIT-01 to GIT-08).
+// apply as in 2.x (LEDGER GIT-10: they are the user's own repository
+// operations). 3.0 asks before a tag push or deletion, a sync and a
+// patch, with -y/--yes for headless use (GIT-01), and fixes the 2.x
+// defects GIT-02 to GIT-08.
 package gitx
 
 import (

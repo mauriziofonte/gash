@@ -100,7 +100,7 @@ __gash_complete() {
 
         docker_compose_scan)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--depth --json --no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "-d --depth -j --json --no-color --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
@@ -108,9 +108,21 @@ __gash_complete() {
 
         docker_compose_upgrade)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force -f --yes -y --no-color --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
+            fi
+            ;;
+
+        docker_prune_all | git_apply_patch | git_repair)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
+            fi
+            ;;
+
+        docker_start_all | docker_stop_all)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --help" -- "$cur")
             fi
             ;;
 
@@ -130,8 +142,19 @@ __gash_complete() {
             fi
             ;;
 
+        # Git tag completion, with the confirmation flags
+        git_add_tag | git_delete_tag)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
+            elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
+            else
+                COMPREPLY=()
+            fi
+            ;;
+
         # Git tag completion
-        git_add_tag | git_delete_tag | git_list_tags)
+        git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
                 mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
             else
@@ -140,7 +163,7 @@ __gash_complete() {
             ;;
 
         git_sync)
-            mapfile -t COMPREPLY < <(compgen -W "--message --no-push --dry-run --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "-m --message --no-push --dry-run -y --yes --help" -- "$cur")
             ;;
 
         # Directory completion (other)
@@ -153,6 +176,24 @@ __gash_complete() {
                 mapfile -t COMPREPLY < <(compgen -W "--append --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
+            fi
+            ;;
+
+        remote_exec)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--script --help" -- "$cur")
+            fi
+            ;;
+
+        remote_pull | remote_push)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-r --recursive -p --preserve --no-progress --force --help" -- "$cur")
+            fi
+            ;;
+
+        remote_sync_pull | remote_sync_push)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--delete --dry-run --no-progress --force --exclude= --help" -- "$cur")
             fi
             ;;
 
