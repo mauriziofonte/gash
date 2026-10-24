@@ -37,7 +37,7 @@ func listTable(s ui.Style, w io.Writer, lines []string, minName string) {
 // dbList is gash_db_list: the DB: connections of the settings file, the
 // passwords masked, also with an empty user name (3.0: CORE-03 fixed), a
 // repeated name listed once (3.0: CORE-04 fixed), the messages naming
-// ~/.gash_env whatever GASH_ENV_FILE says (CORE-06, reproduced).
+// the file read, GASH_ENV_FILE included (3.0: CORE-06 fixed).
 func dbList(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -46,7 +46,7 @@ func dbList(c *invoke.Call) int {
 	s := ui.StyleOf(c.Term, false)
 	p := s.Printer(c.Stderr)
 	if len(f.DB) == 0 {
-		p.Info("No database connections configured in ~/.gash_env")
+		p.Info("No database connections configured in " + f.Shown)
 		p.Info("Run 'gash_env_init' to create a template configuration")
 		return 0
 	}
@@ -61,7 +61,8 @@ func dbList(c *invoke.Call) int {
 }
 
 // aiList is gash_ai_list: the AI: providers of the settings file, each
-// token shown as its first eight characters and "...".
+// token shown as its first eight characters and "...". The empty message
+// names the file read (3.0: CORE-06 fixed).
 func aiList(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -70,7 +71,7 @@ func aiList(c *invoke.Call) int {
 	s := ui.StyleOf(c.Term, false)
 	p := s.Printer(c.Stderr)
 	if len(f.AI) == 0 {
-		p.Info("No AI providers configured in ~/.gash_env")
+		p.Info("No AI providers configured in " + f.Shown)
 		p.Info("Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY")
 		return 0
 	}

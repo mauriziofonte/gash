@@ -775,3 +775,12 @@ func TestValidHostTargetMatches2x(t *testing.T) {
 		}
 	}
 }
+
+// LEDGER CORE-06: File.Shown, the name the messages use, is the file read:
+// GASH_ENV_FILE when set (HOME shown as "~"), else ~/.gash_env.
+func TestLedger_CORE06(t *testing.T) {
+	get := func(env map[string]string) func(string) string { return func(k string) string { return env[k] } }
+	require.Equal(t, "/x/y", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": "/x/y"})).Shown)
+	require.Equal(t, "~/conf/env", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": "/h/conf/env"})).Shown)
+	require.Equal(t, "~/.gash_env", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": ""})).Shown)
+}

@@ -127,15 +127,18 @@ func TestLedger_CORE04(t *testing.T) {
 	require.NotContains(t, out, "pgsql://b:p2@h2/e")
 }
 
-// LEDGER CORE-06 (reproduced in rc.A): the messages name ~/.gash_env
-// when GASH_ENV_FILE names another file.
-func TestLedger_CORE06_2x(t *testing.T) {
+// LEDGER CORE-06: the messages name the file GASH_ENV_FILE names, not
+// ~/.gash_env (3.0: CORE-06 fixed; rc.A said ~/.gash_env).
+func TestLedger_CORE06(t *testing.T) {
 	other := filepath.Join(t.TempDir(), "other")
 	env := map[string]string{"GASH_ENV_FILE": other}
 	_, errOut := listOf(t, "gash_db_list", "", env)
-	require.Equal(t, "Info: No database connections configured in ~/.gash_env\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
+	require.Equal(t, "Info: No database connections configured in "+other+"\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
 	_, errOut = listOf(t, "gash_ai_list", "", env)
-	require.Equal(t, "Info: No AI providers configured in ~/.gash_env\nInfo: Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY\n", errOut)
+	require.Equal(t, "Info: No AI providers configured in "+other+"\nInfo: Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY\n", errOut)
+	// Without GASH_ENV_FILE the default file keeps its 2.x name.
+	_, errOut = listOf(t, "gash_db_list", "", nil)
+	require.Equal(t, "Info: No database connections configured in ~/.gash_env\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
 	// The file itself is the one read.
 	out, _ := listOf(t, "gash_ai_list", "AI:claude=sk-123456789\n", env)
 	require.True(t, strings.Contains(out, "claude     sk-12345..."), out)
