@@ -31,8 +31,8 @@ or `gash_help llm_tree`.
 Headless mode does **not** load the prompt, history settings, banner, the
 alias pack, `~/.bash_aliases` or `~/.bash_local`. Module short aliases exist,
 but Bash does not expand aliases in non-interactive shells: use full function
-names. One exception to "prints nothing": with a Gash 1.x configuration, one
-stderr line (at most once a day) asks the user to run the migration.
+names. Sourcing in headless mode never prints, whatever the configuration
+(a Gash 1.x one included: its reminder is for interactive shells only).
 
 Without headless mode, `gash.sh` does nothing in a non-interactive shell. Do
 not use `bash -i` and do not source `~/.gashrc` (the user's entry point).

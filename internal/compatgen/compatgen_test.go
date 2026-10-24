@@ -492,3 +492,30 @@ echo "GASH_VERSION=${GASH_VERSION-gone} GASH_DIR=${GASH_DIR-gone} cache=${__GASH
 	require.Equal(t, "declare -x GASH_BANNER=\"0\"\ndeclare -- GASH_GIT_EXCLUDE=\"/srv/repo\"\n"+
 		"GASH_VERSION=gone GASH_DIR=gone cache=gone\n", out)
 }
+
+// LEDGER SHELL-13: the headless branch of gash.sh returns before the
+// interactive layer (`gash init bash`, which carries the 1.x reminder), so
+// sourcing it headless with a 1.x ~/.gashrc prints nothing and writes no
+// state (forced divergence; 2.x printed the reminder and wrote a notice).
+func TestLedger_SHELL13(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	b, err := os.ReadFile(filepath.Join(dir, "gash.sh"))
+	require.NoError(t, err)
+	src := string(b)
+	headless := strings.Index(src, "if [[ \"${GASH_HEADLESS-}\" == \"1\" ]]; then\n    if [[ \"${GASH_DEBUG-}\" == \"1\" ]]; then")
+	require.Greater(t, headless, 0)
+	ret := strings.Index(src[headless:], "\n    return 0\nfi\n")
+	require.Greater(t, ret, 0)
+	require.Greater(t, strings.Index(src, `" init bash)"`), headless+ret, "gash init bash runs after the headless return")
+
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gashrc"), []byte("export GASH_BASH=\"$HOME/.gash/gash.sh\"\n"), 0o644))
+	cmd := exec.Command("bash", "--noprofile", "--norc", "-c", "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; echo rc=$?")
+	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin", "LANG=C.UTF-8"}
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	require.Equal(t, "rc=0\n", string(out))
+	_, err = os.Stat(filepath.Join(home, ".local/state/gash"))
+	require.True(t, os.IsNotExist(err), "no state written")
+}
