@@ -8,7 +8,8 @@
 #
 # gash_doctor: -h self-help, a clean run over a real tree (the staged
 # GASH_DIR) with its headings and rc 0, a graceful run over a missing tree
-# (MISSING / not found, still rc 0), and the failed-to-load report. :54 is
+# (MISSING / not found, rc 1 since 3.0: SELF-06), and the failed-to-load
+# report. :54 is
 # driven through the shim: the gash_doctor stub forwards the shell's
 # __GASH_LOAD_ERRORS and BASH_VERSION (compat bootstrap), so the binary
 # prints the per-file error, the issue count and the bash line. :69 is the
@@ -41,9 +42,10 @@ out="$(GASH_DIR="$GASH_STAGE" GASH_VERSION=test "$B" gash_doctor 2>&1)"; rc=$?
 [[ "$out" == *Modules* ]]         || fail "21 Modules"
 [[ "$out" == *"External Tools"* ]] || fail "21 External Tools"
 
-# :39 a missing GASH_DIR: still completes, reports missing files.
+# :39 a missing GASH_DIR: still completes, reports missing files; the
+# status is 1 (3.0: SELF-06 fixed; 2.x returned 0 with issues).
 out="$(GASH_DIR="$WORK/nonexistent_gash_dir" GASH_VERSION=test "$B" gash_doctor 2>&1)"; rc=$?
-[[ $rc -eq 0 ]] || fail "39 rc"
+[[ $rc -eq 1 ]] || fail "39 rc"
 [[ "$out" == *MISSING* || "$out" == *"not found"* ]] || fail "39 missing"
 
 -- doctor54.sh --

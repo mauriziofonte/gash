@@ -227,9 +227,11 @@ not overwritten later; keep your own code in `~/.bash_local` rather than there.
 ## Inspecting and undoing
 
 * `gash_doctor` (alias `gdoctor`): Bash version, files that failed to load,
-  core files and modules, the `~/.gash_env` mode, settings currently set as
-  shell variables, and whether `git`, `curl`, `jq`, `sqlite3` and `docker` are
-  installed. `gash_doctor --timing` lists what each file and step costs when a
+  core files and modules, the binary against the hash `release/SHA256SUMS`
+  pins, the generated shims against what this gash version generates (both on
+  release builds), the `~/.gash_env` mode, settings currently set as shell
+  variables, and whether `git`, `curl`, `jq`, `sqlite3` and `docker` are
+  installed. It returns 1 when a check fails. `gash_doctor --timing` lists what each file and step costs when a
   shell starts, then times a whole new shell (Bash 5.0+).
 * `gash_unload`: in an interactive shell, restores `PS1`, `PS2`, history
   variables, `EDITOR`, `PATH`, `histappend`, `checkwinsize` and the umask as

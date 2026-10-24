@@ -5,11 +5,13 @@ package selfmgmt
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/compatgen"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -176,4 +178,91 @@ func TestLedger_SELF04(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(d, "dotfiles"))
 	require.NoError(t, err)
 	require.Len(t, entries, 1, "no temporary file left")
+}
+
+// doctorTree writes a 3.x install of version 3.0.0 into a new directory: the
+// generated files as this binary generates them, the other shipped files,
+// and release/SHA256SUMS pinning the fake binary at exe for this platform.
+func doctorTree(t *testing.T, exe string) string {
+	t.Helper()
+	d := t.TempDir()
+	files, err := compatgen.Generate(false)
+	require.NoError(t, err)
+	for _, f := range files {
+		p := filepath.Join(d, f.Path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, f.Data, 0o644))
+	}
+	for _, f := range []string{"VERSION", "quotes/list.txt", ".gash_env.template"} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(d, f)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(d, f), []byte("3.0.0\n"), 0o644))
+	}
+	require.NoError(t, os.WriteFile(exe, []byte("the binary"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(d, "release"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(d, "release/SHA256SUMS"),
+		[]byte(fileSHA256(exe)+"  "+runtime.GOOS+"_"+runtime.GOARCH+"/gash\n"+strings.Repeat("0", 64)+"  other_os/gash\n"), 0o644))
+	return d
+}
+
+// doctorModule is the module as a 3.0.0 release binary at exe.
+func doctorModule(exe string) *Module {
+	m := New()
+	m.version = "3.0.0"
+	m.executable = func() (string, error) { return exe, nil }
+	return m
+}
+
+func doctorEnv(t *testing.T, dir string) map[string]string {
+	return map[string]string{"HOME": t.TempDir(), "GASH_DIR": dir, "PATH": t.TempDir(), "BASH_VERSION": "5.2.21(1)-release",
+		"GASH_VERSION": "3.0.0"}
+}
+
+// LEDGER SELF-17: on a 3.x install the doctor checks the shipped files, the
+// binary against the hash release/SHA256SUMS pins, and every generated
+// file against what this binary generates: a healthy tree passes; a
+// removed shim is its MISSING line, an edited one and a binary that does
+// not match are their own lines, each an issue.
+func TestLedger_SELF17(t *testing.T) {
+	exe := filepath.Join(t.TempDir(), "gash")
+	d := doctorTree(t, exe)
+	out, errOut, rc := callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
+	require.Equal(t, 0, rc, errOut)
+	plat := runtime.GOOS + "_" + runtime.GOARCH
+	require.Contains(t, out, "Binary:")
+	require.Contains(t, out, "Shims:")
+	require.Contains(t, errOut, "OK:   "+plat+" — matches release/SHA256SUMS\n")
+	require.Contains(t, errOut, "OK:   lib/core/utils.sh\n")
+	require.True(t, strings.HasSuffix(errOut, "\nOK: All checks passed.\n"), errOut)
+
+	require.NoError(t, os.Remove(filepath.Join(d, "lib/core/utils.sh")))
+	require.NoError(t, os.WriteFile(filepath.Join(d, "bash_completion"), []byte("# edited\n"), 0o644))
+	require.NoError(t, os.WriteFile(exe, []byte("another binary"), 0o755))
+	_, errOut, rc = callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, "Error:   lib/core/utils.sh — MISSING\n")
+	require.Contains(t, errOut, "Error:   bash_completion — differs from gash 3.0.0 (regenerate: gash __compat generate --out "+d+")\n")
+	require.Contains(t, errOut, "Error:   "+plat+" — does not match release/SHA256SUMS\n")
+	require.True(t, strings.HasSuffix(errOut, "\nWarning: 3 issue(s) found.\n"), errOut)
+
+	// A development build checks neither.
+	_, errOut, _ = callModule(t, New(), "gash_doctor", doctorEnv(t, d))
+	require.Contains(t, errOut, "Info:   not checked (development build)\n")
+}
+
+// LEDGER SELF-06: the doctor returns 1 when a check fails and refuses an
+// unknown option with status 2 before running any check (3.0: SELF-06
+// fixed).
+func TestLedger_SELF06(t *testing.T) {
+	exe := filepath.Join(t.TempDir(), "gash")
+	d := doctorTree(t, exe)
+	require.NoError(t, os.Remove(filepath.Join(d, "lib/modules/php.sh")))
+	_, errOut, rc := callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, "Warning:   php — not found\n")
+	require.True(t, strings.HasSuffix(errOut, "\nWarning: 1 issue(s) found.\n"), errOut)
+
+	out, errOut, rc := callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d), "--bogus")
+	require.Equal(t, 2, rc)
+	require.Empty(t, out)
+	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color])\n", errOut)
 }

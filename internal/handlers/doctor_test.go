@@ -179,8 +179,23 @@ func TestDoctorMatches2x(t *testing.T) {
 					args = append([]string{"--no-color"}, args...)
 				}
 				o, rc := runMerged(t, "gash_doctor", env, mode != "off", args...)
+				if strings.HasPrefix(tc.name, "help") {
+					// The help page carries the 3.0 notes (SELF-06, SELF-17).
+					continue
+				}
+				if tc.name == "bogus" {
+					// 3.0: SELF-06 fixed: an unknown option is refused before
+					// any check (TestLedger_SELF06).
+					require.Equal(t, 2, rc, tc.name)
+					continue
+				}
 				require.Equal(t, withoutFileLists(norm(f[5])), withoutFileLists(o), tc.name)
-				require.Equal(t, f[6], strconv.Itoa(rc), tc.name)
+				// 3.0: SELF-06 fixed: issues make the status 1 (2.x: 0).
+				want := f[6]
+				if strings.Contains(o, " issue(s) found.") {
+					want = "1"
+				}
+				require.Equal(t, want, strconv.Itoa(rc), tc.name)
 			}
 		})
 	}
@@ -209,7 +224,7 @@ func TestLedger_SELF17(t *testing.T) {
 	require.NoError(t, os.Remove(filepath.Join(d, "lib/core/utils.sh")))
 	require.NoError(t, os.Remove(filepath.Join(d, "lib/modules/node.sh")))
 	out, rc = runMerged(t, "gash_doctor", env, false)
-	require.Equal(t, 0, rc)
+	require.Equal(t, 1, rc) // 3.0: SELF-06 fixed
 	require.Contains(t, out, "\nError:   lib/core/utils.sh — MISSING\n")
 	require.Contains(t, out, "\nWarning:   node — not found\n")
 	require.True(t, strings.HasSuffix(out, "\nWarning: 2 issue(s) found.\n"), out)
@@ -238,12 +253,17 @@ func TestDoctorChecksTheShippedFiles(t *testing.T) {
 	}
 }
 
-// LEDGER SELF-06, reproduced in rc.A: issues leave the status 0 and an
-// unknown option is ignored.
-func TestLedger_SELF06_2x(t *testing.T) {
+// LEDGER SELF-06: a failed check makes the status 1, and an unknown option
+// is refused with status 2 before any check runs (3.0: SELF-06 fixed; 2.x
+// returned 0 and ignored the option).
+func TestLedger_SELF06(t *testing.T) {
 	env := map[string]string{"HOME": t.TempDir(), "GASH_DIR": filepath.Join(t.TempDir(), "none"), "PATH": t.TempDir()}
-	out, rc := runMerged(t, "gash_doctor", env, false, "--bogus")
-	require.Equal(t, 0, rc)
+	out, rc := runMerged(t, "gash_doctor", env, false)
+	require.Equal(t, 1, rc)
 	require.Regexp(t, regexp.MustCompile(`\nWarning: [0-9]+ issue\(s\) found\.\n$`), out)
 	require.Contains(t, out, "\nError:   gash.sh — MISSING\n")
+
+	out, rc = runMerged(t, "gash_doctor", env, false, "--bogus")
+	require.Equal(t, 2, rc)
+	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color])\n", out)
 }

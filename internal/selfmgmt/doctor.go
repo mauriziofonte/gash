@@ -3,11 +3,16 @@
 package selfmgmt
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/compatgen"
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -47,9 +52,10 @@ var DoctorModules = []string{"remote", "node", "php"}
 var doctorTools = []string{"git", "curl", "jq", "sqlite3", "docker"}
 
 // doctor is gash_doctor [--timing] [--no-color] (lib/modules/gash.sh): the
-// 2.x headings and lines, rc 0 even with issues and unknown options
-// ignored (LEDGER SELF-06, SELF-15, reproduced), over the 3.x file list
-// plus a line for the binary (SELF-17).
+// 2.x headings and lines over the 3.x file list, a line for the binary,
+// and the Binary and Shims checks (SELF-17). It returns 1 when a check
+// fails and refuses an unknown option with status 2 before any check
+// (3.0: SELF-06 fixed; 2.x returned 0 and ignored unknown options).
 func (m *Module) doctor(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -61,6 +67,10 @@ func (m *Module) doctor(c *invoke.Call) int {
 			noColor = true
 		case "--timing":
 			timing = true
+		default:
+			ui.StyleOf(c.Term, !c.Term.WantColors(noColor)).Printer(c.Stderr).
+				Error("Unknown option: " + a + " (usage: gash_doctor [--timing] [--no-color])")
+			return 2
 		}
 	}
 	s := ui.StyleOf(c.Term, !c.Term.WantColors(noColor))
@@ -91,7 +101,8 @@ func (m *Module) doctor(c *invoke.Call) int {
 		p.Error("  bash " + bv + " — Gash needs 4.4 or newer")
 		issues++
 	}
-	if !m.binaryLine(p, dir) {
+	release := m.binaryLine(p, dir)
+	if !release {
 		issues++
 	}
 	loadErrors := escapedLines(c.Env.Get(LoadErrorsVar))
@@ -125,7 +136,14 @@ func (m *Module) doctor(c *invoke.Call) int {
 		}
 	}
 
-	// 4. Config file and settings
+	// 4. The binary against the hash this tree pins, the generated files
+	// against what this binary generates (SELF-17).
+	s.Heading(out, "Binary:")
+	issues += m.doctorBinary(p, dir, release)
+	s.Heading(out, "Shims:")
+	issues += m.doctorShims(p, dir, release)
+
+	// 5. Config file and settings
 	s.Heading(out, "Configuration:")
 	envFile := c.Env.Get("GASH_ENV_FILE")
 	if envFile == "" {
@@ -146,7 +164,7 @@ func (m *Module) doctor(c *invoke.Call) int {
 		s.KV(out, "--indent", "4", "--width", "0", "--sep", "=", kv[0], kv[1])
 	}
 
-	// 5. External tools
+	// 6. External tools
 	s.Heading(out, "External Tools:")
 	for _, tool := range doctorTools {
 		if path, ok := m.lookPath(c, tool); ok {
@@ -156,14 +174,102 @@ func (m *Module) doctor(c *invoke.Call) int {
 		}
 	}
 
-	// 6. Summary
+	// 7. Summary
 	_, _ = io.WriteString(out, "\n")
 	if issues == 0 {
 		p.Success("All checks passed.")
-	} else {
-		p.Warning(strconv.Itoa(issues) + " issue(s) found.")
+		return 0
 	}
+	p.Warning(strconv.Itoa(issues) + " issue(s) found.")
+	return 1
+}
+
+// doctorBinary checks the running binary against release/SHA256SUMS, the
+// hash the tagged tree pins for this platform ("HASH  OS_ARCH/gash", the
+// lines the bootstrap reads). A development build or a binary of another
+// version is not checked, nor is a tree that pins nothing. The number of
+// issues found.
+func (m *Module) doctorBinary(p ui.Printer, dir string, release bool) int {
+	if m.version == "dev" || !release {
+		p.Info("  not checked (" + m.notCheckedReason() + ")")
+		return 0
+	}
+	platform := runtime.GOOS + "_" + runtime.GOARCH
+	pin := ""
+	if b, err := m.readFile(dir + "/release/SHA256SUMS"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if hash, name, ok := strings.Cut(strings.TrimRight(line, "\r"), "  "); ok && name == platform+"/gash" {
+				pin = hash
+			}
+		}
+	}
+	if pin == "" {
+		p.Info("  " + platform + " — no hash pinned in release/SHA256SUMS")
+		return 0
+	}
+	path, err := m.executable()
+	sum := ""
+	if err == nil {
+		sum = fileSHA256(path)
+	}
+	if sum != pin {
+		p.Error("  " + platform + " — does not match release/SHA256SUMS")
+		return 1
+	}
+	p.Success("  " + platform + " — matches release/SHA256SUMS")
 	return 0
+}
+
+// doctorShims checks each generated file of the install (gash.sh, the
+// lib/ shims, bash_completion, bin/gash) against what this binary
+// generates: a file edited by hand, or left from another version, is an
+// issue. A missing one is already a Core Files line. Not checked for a
+// development build or a binary of another version.
+func (m *Module) doctorShims(p ui.Printer, dir string, release bool) int {
+	if m.version == "dev" || !release {
+		p.Info("  not checked (" + m.notCheckedReason() + ")")
+		return 0
+	}
+	files, err := compatgen.Generate(false)
+	if err != nil {
+		p.Error("  cannot generate the shims: " + err.Error())
+		return 1
+	}
+	issues := 0
+	for _, f := range files {
+		got, err := m.readFile(dir + "/" + f.Path)
+		switch {
+		case err != nil:
+			continue
+		case bytes.Equal(got, f.Data):
+			p.Success("  " + f.Path)
+		default:
+			p.Error("  " + f.Path + " — differs from gash " + m.version + " (regenerate: gash __compat generate --out " + dir + ")")
+			issues++
+		}
+	}
+	return issues
+}
+
+func (m *Module) notCheckedReason() string {
+	if m.version == "dev" {
+		return "development build"
+	}
+	return "the binary is not this install's version"
+}
+
+// fileSHA256 is the hex SHA-256 of a file; "" when it cannot be read.
+func fileSHA256(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // binaryLine reports the binary that runs this call: its version and path,

@@ -174,9 +174,12 @@ gash_doctor --timing
 #### Notes
 
 ```text
-Checks: core files, modules, config file permissions,
-external tools (git, curl, jq, sqlite3, docker).
-Reports missing or misconfigured components.
+Checks: core files, modules, the binary (against the hash
+release/SHA256SUMS pins), the generated shims (against this
+gash version), config file permissions, external tools
+(git, curl, jq, sqlite3, docker).
+Reports missing or misconfigured components and returns 1
+when a check fails (2 for an unknown option).
 
 --timing loads Gash in a new interactive shell and lists the
 milliseconds each file and step takes (5 ms or more stands out),
