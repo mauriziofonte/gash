@@ -1,0 +1,36 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: REM-02
+#
+# ssh gets -- immediately before the target, in the command call and in the
+# exit-255 probe; an option-like HOST: target is never used.
+
+env GASH_HEADLESS=1
+env GASH_ENV_FILE=$WORK/hostenv
+env T=$WORK
+
+chmod 755 bin/ssh
+
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_exec box true'
+exec grep -c '^-- deploy@box\.example ' argv
+stdout '^2$'
+grep '^-- deploy@box\.example unset HISTFILE HISTSIZE; true$' argv
+grep '^-- deploy@box\.example exit 0$' argv
+rm argv
+
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_exec opt true'
+stderr 'HOST target of .opt. must be user@host \(skipping\)'
+stderr 'Unknown host alias .opt.'
+! exists argv
+
+-- hostenv --
+HOST:box=deploy@box.example
+HOST:opt=-oProxyCommand=x@h
+-- bin/ssh --
+#!/bin/sh
+# Log the words from the first -- on, as one line, then fail as a dead
+# connection does.
+while [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done
+printf '%s\n' "$*" >>"$T/argv"
+exit 255

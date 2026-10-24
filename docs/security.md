@@ -217,14 +217,24 @@ you do not trust.
 ## remote_*
 
 In headless mode only aliases registered as `HOST:alias=user@host` are
-accepted; interactively a raw `user@host` works too. Remote paths of
+accepted; interactively a raw `user@host` works too. A target, registered or
+raw, is strict: the user is letters, digits, `.`, `_` and `-` (not first), the
+host a name of letters, digits, `.` and `-` starting with a letter or digit, or
+a bracketed IPv6 literal. So no part reads as an ssh option, and a port
+(`u@h:22`, which ssh, scp and the tier check would read differently) is
+refused: put it in a `Host` entry of `~/.ssh/config`. ssh gets `--` before the
+target, scp and rsync before their operands, and rsync runs with `-s`
+(`--protect-args`), so the remote shell does not split or expand the remote
+path. Unknown options and extra arguments are refused. Remote paths of
 `remote_push`, `remote_pull` and `remote_sync_*` are normalized (repeated `/`,
 `.` segments, trailing `/`; `~/` becomes a path relative to the remote home,
-`~root` becomes `/root` and `~user` becomes `/home/user`), `..` is refused, then:
+`~root` becomes `/root` and `~user` becomes `/home/user`; `/.` is `/`), `..`
+is refused, then:
 
 | Tier | Paths | Interactive | Headless |
 |---|---|---|---|
-| Deny | `/`, `/etc/ssh`, `/etc/sudoers*`, `/etc/passwd`, `/etc/shadow*`, `/etc/gshadow*`, `/etc/pam.d`, `/boot`, `/sys`, `/proc`, `/dev`, `/bin`, `/sbin`, `/lib*`, `/usr/bin`, `/usr/sbin`, `/usr/lib`, `/usr/lib64` | Refused, no override | Refused, no override |
+| Deny | `/` itself; `/etc/ssh`, `/etc/sudoers`, `/etc/sudoers.d`, `/etc/passwd`, `/etc/shadow`, `/etc/shadow-`, `/etc/gshadow`, `/etc/gshadow-`, `/etc/pam.d`, `/boot`, `/sys`, `/proc`, `/dev`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/lib32`, `/libx32`, `/usr/bin`, `/usr/sbin`, `/usr/lib`, `/usr/lib64` and everything below each | Refused, no override | Refused, no override |
+| Deny | A path the remote side may expand: `*` `?` `[` `]` `{` `}` `$` a backquote `;` `&` `\|` `<` `>` `(` `)` `!` a quote, a backslash, a newline, or a `~` past the start (`deny:metacharacters`) | Refused, no override | Refused, no override |
 | Ask | `/etc`, `/var`, `/usr/local`, `/root`, and any path with a `.ssh` component (any home, any depth, any case) | y/N prompt, or `--force` | Refused unless `--force` |
 | Allow | `/tmp`, `/var/tmp`, relative paths, everything else | Allowed | Allowed |
 
@@ -232,7 +242,9 @@ accepted; interactively a raw `user@host` works too. Remote paths of
 `/home/<user>/`, and for relative paths inside the remote home. The home
 itself, however it is written (`~`, `~user`, `/home/<user>`, `/Users/<user>`,
 `/root`), and any `.ssh` path never count as safe; elsewhere it asks, or needs
-`--force` in headless mode.
+`--force` in headless mode. For `remote_sync_pull` the same rule applies to
+the local destination (a relative path is inside the current directory, never
+your home itself), and the messages say so.
 `remote_exec` runs any command on the remote host: the path tiers do not apply
 to it.
 

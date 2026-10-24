@@ -9,64 +9,79 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
-// transfer describes one scp or rsync function: its name, which side the
-// remote path is on, and the operation word of its safety messages.
+// transfer describes one scp or rsync function: its name, its usage
+// line, which side the remote path is on, and the operation word of its
+// safety messages.
 type transfer struct {
 	name      string
+	usage     string
 	srcName   string // "local source" or "remote source"
 	dstName   string
 	operation string
 	pull      bool // the remote path is SRC
 }
 
-var (
-	pushSpec     = transfer{"remote_push", "local source", "remote destination", "push", false}
-	pullSpec     = transfer{"remote_pull", "remote source", "local destination", "pull (source path access)", true}
-	syncPushSpec = transfer{"remote_sync_push", "local source", "remote destination", "sync-push", false}
-	syncPullSpec = transfer{"remote_sync_pull", "remote source", "local destination", "sync-pull (source path access)", true}
+const (
+	scpOpts   = " [-r|--recursive] [-p|--preserve] [--no-progress] [--force]"
+	rsyncOpts = " [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]"
 )
 
-// flags are the words after the three positionals. Unknown words are
-// ignored, a fourth positional too (LEDGER REM-01).
+var (
+	pushSpec = transfer{"remote_push", "remote_push <alias|user@host> <local-src> <remote-dst>" + scpOpts,
+		"local source", "remote destination", "push", false}
+	pullSpec = transfer{"remote_pull", "remote_pull <alias|user@host> <remote-src> <local-dst>" + scpOpts,
+		"remote source", "local destination", "pull (source path access)", true}
+	syncPushSpec = transfer{"remote_sync_push", "remote_sync_push <alias|user@host> <local-dir> <remote-dir>" + rsyncOpts,
+		"local source", "remote destination", "sync-push", false}
+	syncPullSpec = transfer{"remote_sync_pull", "remote_sync_pull <alias|user@host> <remote-dir> <local-dir>" + rsyncOpts,
+		"remote source", "local destination", "sync-pull (source path access)", true}
+)
+
+// flags are the words after the three positionals.
 type flags struct {
 	recursive, preserve, noProgress, force, delete, dryRun bool
 	excludes                                               []string
 }
 
-func scpFlags(words []string) flags {
+// parseFlags reads the words after the three positionals: the scp or the
+// rsync flags, --exclude PAT (two words) as well as --exclude=PAT. An
+// unknown option or a fourth positional is an error naming the usage
+// line (LEDGER REM-01).
+func (x *call) parseFlags(t transfer, words []string, rsync bool) (flags, bool) {
 	var f flags
-	for _, a := range words {
-		switch a {
-		case "-r", "--recursive":
-			f.recursive = true
-		case "-p", "--preserve":
-			f.preserve = true
-		case "--no-progress":
-			f.noProgress = true
-		case "--force":
-			f.force = true
-		}
-	}
-	return f
-}
-
-func rsyncFlags(words []string) flags {
-	var f flags
-	for _, a := range words {
+	for i := 0; i < len(words); i++ {
+		a := words[i]
 		switch {
-		case a == "--delete":
-			f.delete = true
-		case a == "--dry-run":
-			f.dryRun = true
+		case !rsync && (a == "-r" || a == "--recursive"):
+			f.recursive = true
+		case !rsync && (a == "-p" || a == "--preserve"):
+			f.preserve = true
 		case a == "--no-progress":
 			f.noProgress = true
 		case a == "--force":
 			f.force = true
-		case strings.HasPrefix(a, "--exclude="):
+		case rsync && a == "--delete":
+			f.delete = true
+		case rsync && a == "--dry-run":
+			f.dryRun = true
+		case rsync && strings.HasPrefix(a, "--exclude="):
 			f.excludes = append(f.excludes, strings.TrimPrefix(a, "--exclude="))
+		case rsync && a == "--exclude":
+			if i+1 >= len(words) {
+				x.p.Error("--exclude needs a pattern (usage: " + t.usage + ")")
+				return f, false
+			}
+			i++
+			f.excludes = append(f.excludes, words[i])
+		case strings.HasPrefix(a, "-"):
+			x.p.Error("Unknown option: " + a + " (usage: " + t.usage + ")")
+			return f, false
+		default:
+			x.p.Error("Unexpected argument: " + a + " (usage: " + t.usage + ")")
+			return f, false
 		}
 	}
-	return f
+	return f, true
 }
 
 // positionals checks the three positionals, as __gash_require_arg does, in
@@ -92,7 +107,10 @@ func (m *Module) scp(c *invoke.Call, t transfer) int {
 	if !ok {
 		return 1
 	}
-	f := scpFlags(c.Args[3:])
+	f, ok := x.parseFlags(t, c.Args[3:], false)
+	if !ok {
+		return 1
+	}
 	target, ok := x.resolveTarget(input)
 	if !ok {
 		return 1
@@ -126,11 +144,11 @@ func (m *Module) scp(c *invoke.Call, t transfer) int {
 	return x.run(c.Stdin, c.Stdout, c.Stderr, "scp", args...).ExitCode
 }
 
-// rsync is remote_sync_push and remote_sync_pull: `rsync -az -e "<ssh
+// rsync is remote_sync_push and remote_sync_pull: `rsync -az -s -e "<ssh
 // string>" [--info=progress2] [--delete] [--dry-run] [--exclude=PAT...]
 // -- SRC DST`, after the tier check of the remote path and, with
-// --delete, the delete check of the destination (local for a pull,
-// LEDGER REM-06).
+// --delete, the delete check of the destination (the local one, in local
+// words, for a pull: LEDGER REM-06).
 func (m *Module) rsync(c *invoke.Call, t transfer) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -140,7 +158,10 @@ func (m *Module) rsync(c *invoke.Call, t transfer) int {
 	if !ok {
 		return 1
 	}
-	f := rsyncFlags(c.Args[3:])
+	f, ok := x.parseFlags(t, c.Args[3:], true)
+	if !ok {
+		return 1
+	}
 	target, ok := x.resolveTarget(input)
 	if !ok {
 		return 1
@@ -152,14 +173,16 @@ func (m *Module) rsync(c *invoke.Call, t transfer) int {
 	if !x.checkSafety(remotePath, t.operation, f.force) {
 		return 1
 	}
-	if f.delete && !x.checkDeleteSafety(dst, f.force) {
+	if f.delete && !x.checkDeleteSafety(dst, f.force, t.pull) {
 		return 1
 	}
 	if !x.have("rsync") {
 		x.p.Error("rsync is not installed.")
 		return 1
 	}
-	args := []string{"-az", "-e", rsyncRSH(x.home())}
+	// -s (--protect-args): the remote shell never splits or expands the
+	// remote path (LEDGER REM-03).
+	args := []string{"-az", "-s", "-e", rsyncRSH(x.home())}
 	if !f.noProgress {
 		args = append(args, "--info=progress2")
 	}

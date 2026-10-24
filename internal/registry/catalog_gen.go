@@ -3150,13 +3150,26 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Connections are multiplexed (ControlMaster, 60s persist): repeated calls to\n" +
-				"  the same host reuse one session. Under GASH_HEADLESS=1 only a registered\n" +
-				"  alias (~/.gash_env HOST:) is accepted, never a raw user@host target.",
+				"  the same host reuse one session; a missing ~/.ssh (the socket's\n" +
+				"  directory) is created with mode 0700.\n" +
+				"  The exit status is the remote command's. When ssh exits 255, a probe\n" +
+				"  (ssh ... exit 0) tells the cases apart: the connection is healthy and\n" +
+				"  the status is 255 (the command was killed or exited 255), or it is not\n" +
+				"  and the status is 1.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
 		Fallback:  &Usage{Program: "remote_exec", Usage: "remote_exec <alias|user@host> \"command\" | --script FILE [-- args...]", Description: "Execute a command or script on a remote host via multiplexed SSH. Alias: rex"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--script --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_hosts",
@@ -3184,7 +3197,9 @@ var functions = []Function{
 				"  rh\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Reads HOST:alias=user@host entries from ~/.gash_env.",
+				"  Reads HOST:alias=user@host entries from ~/.gash_env, or from the file\n" +
+				"  GASH_ENV_FILE names. An entry whose target is not a valid user@host\n" +
+				"  (an option-like name, a host:port) is not listed and never used.",
 		},
 		Fallback:  &Usage{Program: "remote_hosts", Usage: "remote_hosts", Description: "List configured remote host aliases from ~/.gash_env. Alias: rh"},
 		LoadsEnv:  true,
@@ -3210,16 +3225,35 @@ var functions = []Function{
 			SeeAlso: "remote_push remote_sync_pull",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]\n" +
+				"  remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Pull a single file\n" +
-				"  rpull viper /tmp/backup.tar.gz ./backup.tar.gz",
+				"  rpull viper /tmp/backup.tar.gz ./backup.tar.gz\n" +
+				"\n" +
+				"  # Pull a directory, keeping times and modes\n" +
+				"  rpull viper /srv/app/config ./config -r -p\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_pull", Usage: "remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]", Description: "Copy a remote file/dir to the local machine via scp. Alias: rpull"},
+		Fallback:  &Usage{Program: "remote_pull", Usage: "remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]", Description: "Copy a remote file/dir to the local machine via scp. Alias: rpull"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-r --recursive -p --preserve --no-progress --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_push",
@@ -3240,19 +3274,35 @@ var functions = []Function{
 			SeeAlso: "remote_pull remote_sync_push",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]\n" +
+				"  remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Push a config file\n" +
 				"  rpush hnas ./nginx.conf /tmp/nginx.conf\n" +
 				"\n" +
 				"  # Push a directory\n" +
-				"  rpush hnas ./dist /tmp/dist -r",
+				"  rpush hnas ./dist /tmp/dist -r\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_push", Usage: "remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]", Description: "Copy a local file/dir to a remote host via scp. Alias: rpush"},
+		Fallback:  &Usage{Program: "remote_push", Usage: "remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]", Description: "Copy a local file/dir to a remote host via scp. Alias: rpush"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-r --recursive -p --preserve --no-progress --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_sync_pull",
@@ -3273,16 +3323,39 @@ var functions = []Function{
 			SeeAlso: "remote_sync_push remote_pull",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]\n" +
+				"  remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Sync a remote project directory locally\n" +
-				"  rspull viper /home/maurizio/projects/foo/ ./foo/",
+				"  rspull viper /home/maurizio/projects/foo/ ./foo/\n" +
+				"\n" +
+				"  # Mirror it, skipping logs\n" +
+				"  rspull viper /srv/app/ ./app/ --delete --exclude '*.log'\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  rsync runs with -s (--protect-args). With --delete the LOCAL\n" +
+				"  destination is checked: below /tmp, /var/tmp or /home/<user>/, or a\n" +
+				"  relative path inside the current directory, never your home itself or\n" +
+				"  .ssh; elsewhere it asks, or needs --force in headless mode.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_sync_pull", Usage: "remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]", Description: "Sync a remote directory to the local machine via rsync. Alias: rspull"},
+		Fallback:  &Usage{Program: "remote_sync_pull", Usage: "remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]", Description: "Sync a remote directory to the local machine via rsync. Alias: rspull"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--delete --dry-run --no-progress --force --exclude= --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_sync_push",
@@ -3303,16 +3376,36 @@ var functions = []Function{
 			SeeAlso: "remote_sync_pull remote_push",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]\n" +
+				"  remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Sync a build directory\n" +
-				"  rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'",
+				"  rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  rsync runs with -s (--protect-args). --delete runs without asking only\n" +
+				"  below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the\n" +
+				"  remote home, never the home itself or a .ssh path; elsewhere it asks,\n" +
+				"  or needs --force in headless mode.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_sync_push", Usage: "remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]", Description: "Sync a local directory to a remote host via rsync. Alias: rspush"},
+		Fallback:  &Usage{Program: "remote_sync_push", Usage: "remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]", Description: "Sync a local directory to a remote host via rsync. Alias: rspush"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--delete --dry-run --no-progress --force --exclude= --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "services_stop",

@@ -179,6 +179,24 @@ __gash_complete() {
             fi
             ;;
 
+        remote_exec)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--script --help" -- "$cur")
+            fi
+            ;;
+
+        remote_pull | remote_push)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-r --recursive -p --preserve --no-progress --force --help" -- "$cur")
+            fi
+            ;;
+
+        remote_sync_pull | remote_sync_push)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--delete --dry-run --no-progress --force --exclude= --help" -- "$cur")
+            fi
+            ;;
+
         # System info sections + flags
         sysinfo)
             mapfile -t COMPREPLY < <(compgen -W "identity storage services auth network security webstack mail infra system all --llm --no-color" -- "$cur")
