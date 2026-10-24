@@ -159,17 +159,30 @@ shows it. See [migration.md](migration.md).
 ## Removing Gash
 
 * For the current shell only: `gash_unload` (interactive shells).
-* For good: `gash_uninstall` in an interactive terminal (it refuses in headless
-  mode). After confirmation it removes the Gash block from `~/.bashrc`,
-  `~/.bash_profile` and `~/.profile`, deletes `~/.gashrc` and the install
-  directory, and asks separately before deleting `~/.gash_env`. A profile that
-  is a symlink (dotfiles) stays one: the file it points to is edited, with its
-  mode kept.
+* For good: `gash_uninstall` in an interactive terminal. Without a terminal
+  (headless mode, a script, no controlling tty) it cannot ask, so it prints
+  `Info: Uninstall cancelled.`, removes nothing and returns 0. After
+  confirmation it removes the Gash block from `~/.bashrc`, `~/.bash_profile`
+  and `~/.profile`, deletes `~/.gashrc` and the install directory, and asks
+  separately before deleting the settings file: `~/.gash_env`, or the file
+  `GASH_ENV_FILE` names when it is set in the shell you uninstall from. A
+  profile that is a symlink (dotfiles) stays one: the file it points to is
+  edited, with its mode kept.
 * Backups it keeps, and lists at the end (`Backups kept: ...`): each edited
   profile as it was before the edit (`~/.bashrc.gash-uninstall.bak`,
   `~/.bash_profile.gash-uninstall.bak`, `~/.profile.gash-uninstall.bak`), and
   `~/.gashrc.gash-uninstall.bak` when your `~/.gashrc` held lines of your own
   (a `~/.gashrc` exactly as an installer wrote it is simply deleted).
-* Left behind: `~/.local/state/gash` (migration backups), a block added to a
-  profile chosen with `PROFILE=` at install time, and a file named by
-  `GASH_ENV_FILE`. Remove them by hand. Open a new terminal afterwards.
+* Left behind, to remove by hand:
+  * `~/.local/state/gash` (`$XDG_STATE_HOME/gash`: notices, 2.x migration
+    backups);
+  * `~/.cache/gash/probes` (written by 2.x only);
+  * the downloaded binaries in `~/.local/share/gash/versions`
+    (`$XDG_DATA_HOME/gash/versions`);
+  * the ssh-agent Gash started, still running, and its socket
+    `gash-ssh-agent.sock` (in `$XDG_RUNTIME_DIR` or `~/.ssh`);
+  * a block added to a profile chosen with `PROFILE=` at install time;
+  * a settings file named by `GASH_ENV_FILE` when that variable is not set in
+    the shell you uninstall from.
+
+  Open a new terminal afterwards.
