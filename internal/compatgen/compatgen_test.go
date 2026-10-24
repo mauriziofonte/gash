@@ -559,3 +559,16 @@ func TestLedger_CORE02(t *testing.T) {
 		"Error: Expected at least 1 argument(s), got 0.\nrc=1\n"+
 		"[###\t.......]\n[#\t.........]\n[\t.....]\nrc=1\n", out)
 }
+
+// LEDGER CORE-14 in the generated Bash: __gash_shown (the settings-file
+// permission warnings of the fallback loader, the gash_uninstall question)
+// shows HOME as "~" only as a literal prefix followed by "/" or the end
+// (3.0: CORE-14 fixed; 2.x used ${PATH/#$HOME/\~}, a glob).
+func TestLedger_CORE14(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out, err := bash(t, nil, `source '`+dir+`/lib/core/output.sh'; s() { HOME=$1; __gash_shown v "$2"; printf '%s|' "$v"; }; `+
+		`s /home/a /home/a/x; s /home/a /home/ab/x; s /home/a /home/a; s /home/a/ /home/a/y; s "" /x; s '/home/*' /home/b/x; s '/h/[ab]' /h/a/x`)
+	require.NoError(t, err, out)
+	require.Equal(t, "~/x|/home/ab/x|~|~/y|/x|/home/b/x|/h/a/x|", out)
+}
