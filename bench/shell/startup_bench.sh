@@ -19,7 +19,7 @@ OUT=${2:?out dir}
 RUNS=${3:-30}
 mkdir -p "$OUT"
 H="$(mktemp -d "$OUT/home.XXXX")"
-E=(env -i HOME="$H" PATH=/usr/local/bin:/usr/bin:/bin TERM=xterm-256color LANG=C.UTF-8 USER="${USER:-root}" LOGNAME="${USER:-root}")
+E=(env -i HOME="$H" PATH=/usr/local/bin:/usr/bin:/bin TERM=xterm-256color LANG=C.UTF-8 USER="${USER:-root}" LOGNAME="${USER:-root}" ${GASH_BIN:+"GASH_BIN=$GASH_BIN"})
 
 t() { # label cmd...
     local label="$1" t0 t1
