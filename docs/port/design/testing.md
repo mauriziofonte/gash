@@ -161,7 +161,7 @@ and on Bash 4.4, 5.0, 5.1 and 5.3 (the compat Bash must load on 4.4).
   from official `php:X.Y-fpm` images; Fedora and Arch run in CI.
 * macOS: GitHub Actions runner with Homebrew `httpd` and PHP, including the
   port mechanism check.
-* WSL2: the operator's manual checklist (`docs/hte/wsl-checklist.md`).
+* WSL2: the operator's manual checklist (`docs/hte.md`, section "WSL").
 
 ## 7. CI (GitHub Actions)
 

@@ -4,6 +4,7 @@ package htecmd
 
 import (
 	"maps"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -161,5 +162,55 @@ func TestFollowup_F01(t *testing.T) {
 	}
 	if _, err := parse("--http2", "--no-http2"); err == nil || !strings.Contains(err.Error(), "contradict") {
 		t.Errorf("--http2 --no-http2: %v", err)
+	}
+}
+
+// TestFollowup_F02: every visible command of gash hte has its long help,
+// every help text belongs to a command, and a flag a text names is one
+// the command, its parents or its subcommands have.
+func TestFollowup_F02(t *testing.T) {
+	flagRE := regexp.MustCompile(`--[a-z0-9][a-z0-9-]*`)
+	seen := map[string]bool{}
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c.Hidden {
+			return
+		}
+		path := c.CommandPath()
+		seen[path] = true
+		if strings.TrimSpace(c.Long) == "" || c.Long != helpLong[path] {
+			t.Errorf("%s: no long help", path)
+		}
+		has := func(name string) bool {
+			if c.Flags().Lookup(name) != nil || c.InheritedFlags().Lookup(name) != nil {
+				return true
+			}
+			found := false
+			var sub func(*cobra.Command)
+			sub = func(d *cobra.Command) {
+				if d.Flags().Lookup(name) != nil {
+					found = true
+				}
+				for _, e := range d.Commands() {
+					sub(e)
+				}
+			}
+			sub(c)
+			return found
+		}
+		for _, f := range flagRE.FindAllString(c.Long, -1) {
+			if !has(f[2:]) {
+				t.Errorf("%s: the help names %s, which it does not have", path, f)
+			}
+		}
+		for _, s := range c.Commands() {
+			walk(s)
+		}
+	}
+	walk((&run{}).tree())
+	for p := range helpLong {
+		if !seen[p] {
+			t.Errorf("help text for %q, which is not a visible command", p)
+		}
 	}
 }

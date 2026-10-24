@@ -24,16 +24,15 @@ func (r *run) tree() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "hte",
 		Short: "Manage the local Apache and PHP-FPM test environment",
-		Long: "gash hte runs a userland Apache and PHP-FPM for local sites: one sudo at install for the\n" +
-			"few system steps, everything else as you. Every command takes --json.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	root.SetHelpCommand(&cobra.Command{Use: "__help", Hidden: true})
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return err })
 	root.PersistentFlags().BoolVar(&r.asJSON, "json", false, "print one JSON object")
 	root.AddCommand(r.install(), r.uninstall(), r.doctor(), r.migrate(), r.site(), r.php(), r.apache(),
 		r.service(), r.cert(), r.hosts(), r.rootStep(), r.unit(), r.autostart())
+	setHelp(root)
 	return root
 }
 
