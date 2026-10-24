@@ -2320,7 +2320,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the walker follows links under `-L` and does not consult pathguard for entries below ROOT. A safety-rail gap, but rc.A neither loosens nor tightens rails silently; fixed in 3.0. |
 | Fix recipe (3.0) | In `internal/fsscan` (walker), check every directory entered and every entry reported, after symlink resolution (`filepath.EvalSymlinks` whenever the entry is, or was reached through, a followed link), against the forbidden list of `internal/pathguard` (`pathguard.Forbidden`: /proc /sys /dev /boot /root and root's home, whole-component match, the same table the PATH check uses); on a match skip it silently: no stat of the target, no descent, not counted in `errors`. Applies to files_largest and to both tree_stats counts. AGENTS 6.1: "Scanners refuse /proc, /sys, /dev, /boot, /root, also when reached through a symlink or from /"; `-L` help: "Follow symbolic links (never into protected paths)". |
 | Proving test | `TestLedger_FS02_2x` and `TestLedger_FS02_fix` in `internal/fsscan`, with the pathguard table pointed at a fixture directory (test build, sysroot indirection): rc.A lists the file behind the link; 3.0 lists only `own/f`, and tree_stats `-L` equals the counts of the tree without the link. `testdata/script/fsscan_follow_forbidden.txtar` checks the envelope. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-03"></a>
 #### FS-03 · --allow-root / walks /proc /sys /dev /boot /root
@@ -2338,7 +2338,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: with `--allow-root` the walk from `/` enters the protected trees; no warning. |
 | Fix recipe (3.0) | Same check as FS-02 in `internal/fsscan`: every directory about to be entered is tested with `pathguard.Forbidden` (after resolution); from `/` this prunes /proc /sys /dev /boot /root at depth 1, silently and outside `errors`. No new warning line (the comment is dropped with the Bash source). AGENTS 6.1 as in FS-02. |
 | Proving test | `TestLedger_FS03_2x` / `TestLedger_FS03_fix` in `internal/fsscan` on a sysroot fixture holding `proc/`, `root/` and `home/`: scanning the fixture root with `--allow-root` reports entries of `proc/` and `root/` in rc.A and only `home/` entries in 3.0, for all five scanners. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-04"></a>
 #### FS-04 · A second PATH silently wins; words after `-- PATH` are ignored
@@ -2356,7 +2356,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the scanner grammar in `internal/cli/args` keeps last-PATH-wins and the `--` rule. |
 | Fix recipe (3.0) | In the scanner grammar (`internal/cli/args`, scanners family): remember that a PATH was taken; a second positional (before or after `--`), or any word after the word following `--`, fails with `unexpected_argument` RETRY, details = that word, hint `Pass at most one PATH` (as `__llm_take_path`, `lib/modules/llm/core.sh:416-425`); text mode prints `Error: unexpected_argument: WORD` and `Hint: Pass at most one PATH`, rc 1. AGENTS 3 and 9 then hold. |
 | Proving test | `TestLedger_FS04_2x` / `TestLedger_FS04_fix` in `internal/cli/args` (table over the five scanners): 3.0 `$fn --json A B` and `$fn --json -- A B` print `{"error":"unexpected_argument","details":"B","action":"RETRY","recoverable":true,"hint":"Pass at most one PATH"}` on stderr, nothing on stdout, rc 1; `$fn --json -- A` still scans A. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-05"></a>
 #### FS-05 · Integer flags accept digit strings of any length
@@ -2374,7 +2374,7 @@ Critical and high items:
 | rc.A behavior | Reproduced on the GNU path: any length accepted; `-n`/`--top` compare as float64; find-backed depths read as decimal, values above 2147483647 give the empty success with `errors: 1` (FS-14); du-backed depths (dirs_largest, dirs_find_large) work up to 9223372036854775807. Diverging parts: in the du-backed depths a leading zero, `08`/`09` and values above 2^63-1 get `invalid_depth` (forced divergence FS-21); non-ASCII digits get the error contract (forced divergence FS-29). |
 | Fix recipe (3.0) | In the scanner grammar (`internal/cli/args`): every integer flag must match `^[0-9]{1,9}$` (ASCII) and is read in base 10 (`strconv.Atoi`, so `010` = 10); failures keep the current codes and hints (`invalid_limit`, `invalid_depth`, `invalid_top`, RETRY) with details = the raw value; per-scanner meaning of `0` unchanged and documented. Same rule as `__llm_validate_uint` (`lib/modules/llm/core.sh:280-288`). |
 | Proving test | `TestLedger_FS05_2x` / `TestLedger_FS05_fix` in `internal/cli/args`: for each of the ten integer flags, `1234567890` is accepted in rc.A and gives its `invalid_*` RETRY envelope, rc 1, in 3.0; `files_largest --json --depth 999999999 D` succeeds in both; `dirs_largest --json --depth 010` on a 14-level fixture lists rows down to depth 10 in 3.0. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-06"></a>
 #### FS-06 · dirs_largest keeps paths containing a tab
@@ -2392,7 +2392,7 @@ Critical and high items:
 | rc.A behavior | Reproduced in every mode (JSON, --null, plain text column split, rich space). |
 | Fix recipe (3.0) | Apply the documented exclusion uniformly: the FS-01 predicate in `internal/fsscan` (tab paths skipped and left out of parent totals). |
 | Proving test | `TestLedger_FS06_2x` (rc.A lists `t\tx`, plain text shows the split column) / `TestLedger_FS06_fix` (absent in every mode) in `internal/fsscan`; part of `fsscan_tabnl.txtar`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-07"></a>
 #### FS-07 · dirs_list_empty keeps paths containing a tab
@@ -2410,7 +2410,7 @@ Critical and high items:
 | rc.A behavior | Reproduced in every mode. |
 | Fix recipe (3.0) | Apply the documented exclusion uniformly (FS-01 predicate in `internal/fsscan`). |
 | Proving test | `TestLedger_FS07_2x` / `TestLedger_FS07_fix` in `internal/fsscan`: count 1 then 0 on the fixture, in --json, --null, --count and text. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-08"></a>
 #### FS-08 · tree_stats counts tab paths, and its empty-dir count counts newline directories
@@ -2428,7 +2428,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the main count keeps tab paths; the empty-dir count equals the number of lines GNU find would print (a newline in a name adds one). |
 | Fix recipe (3.0) | Apply the documented exclusion uniformly (FS-01 predicate) in both tree_stats counts, which 3.0 merges into one walk (FS-16). |
 | Proving test | `TestLedger_FS08_2x` (3/4/3 on the fixture) / `TestLedger_FS08_fix` (1/2/0, size_total 1000) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-09"></a>
 #### FS-09 · dirs_find_large cuts a path at its first tab and can name another directory
@@ -2446,7 +2446,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the path is truncated at its first tab in every mode without `--with-mtime`, intact with it. |
 | Fix recipe (3.0) | Apply the documented exclusion uniformly (FS-01 predicate); independently, `internal/fsscan` never splits a path once read. |
 | Proving test | `TestLedger_FS09_2x` (rc.A reports `$d/t`) / `TestLedger_FS09_fix` (no row for the tab dir; `dirs_find_large --size 1 --null D \| xargs -0 -n1 test -d` succeeds) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-10"></a>
 #### FS-10 · JSON carries raw C0 control characters (invalid JSON)
@@ -2464,7 +2464,7 @@ Critical and high items:
 | rc.A behavior | Reproduced byte for byte: `internal/contract` has a 2.x scanner-escaper mode used by these four envelopes (escapes only the set 2.x escaped for that envelope; other C0, DEL and invalid UTF-8 written raw); text mode raw. |
 | Fix recipe (3.0) | Encode every string of the five scanner envelopes with the standard contract escaping: `\"` `\\` `\n` `\r` `\t` `\b` `\f`, every other C0 as `\u00xx` (lowercase hex), as `__gash_json_escape_to` (`lib/core/utils.sh:173-195`) and architecture.md section 4; invalid UTF-8 stays raw unless the operator decides otherwise. Text mode unchanged in 3.0 (quoting control characters there would be a separate decision). |
 | Proving test | `TestLedger_FS10_2x` (rc.A output bytes equal the 2.x golden for names `esc\033x`, `bs\bx`, `ff\fx`, `soh\001x`) / `TestLedger_FS10_fix` (every scanner's `--json` passes `jq -e .` and round-trips the names) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-11"></a>
 #### FS-11 · The size parser's fallback joins all digits and accepts stray units
@@ -2482,7 +2482,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the two-stage parser of the GNU path (numfmt `--from=iec` grammar emulated: decimals, K..E, round away from zero, then the fallback rules above), except the values whose meaning came from Bash arithmetic (forced divergence FS-22). |
 | Fix recipe (3.0) | One native parser in `internal/fsscan` (size grammar): `^[0-9]{1,15}(\.[0-9]{1,6})?([KMGTPE](iB\|i\|B)?\|B)?$`, unit letters case-insensitive, no spaces, value = ceil(number × 1024^k), above 2^63-1 refused; failures keep `invalid_size` RETRY with each scanner's 2.x hint. AGENTS 3.2 and the helps state the grammar (FS-34). |
 | Proving test | `TestLedger_FS11_2x` / `TestLedger_FS11_fix` in `internal/fsscan`, table-driven over `work/files-scanners/sizes.txt`: rc.A rows equal the numfmt-present 2.x column; 3.0 gives the numfmt column for valid rows and `invalid_size` for `1K2`, `K1`, `iB5`, `1 0K`, `5i`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-12"></a>
 #### FS-12 · --exclude means three different things across the scanners
@@ -2500,7 +2500,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: three engines kept per scanner: find `-path` fnmatch without FNM_PATHNAME (`*` crosses `/`) on the absolute path; GNU du exclude matching; the awk substring test with `\|` splitting. |
 | Fix recipe (3.0) | One rule in `internal/fsscan` for all five: GLOB matched with fnmatch semantics where `*` does not cross `/`, against the entry's base name and against its path relative to ROOT, never against ROOT's own prefix; no `\|` splitting; excluded entries are left out of every total. Help `--exclude` line for all five: "Skip entries whose name or path below PATH matches GLOB (repeatable)"; AGENTS 3.2 likewise. |
 | Proving test | `TestLedger_FS12_2x` (rc.A matrix of `src`, `*/src`, absolute, `*.log`, `s*c`, `src\|logs`, `proj` equals the 2.x results of `work/files-scanners/repro-exclude.sh`) / `TestLedger_FS12_fix` (`src` hides `src` but not `mysrcdir` in all five; `proj` hides nothing; `src\|logs` hides nothing; identical across scanners) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-13"></a>
 #### FS-13 · Default prunes apply to the scan root itself; --min-depth disables them
@@ -2518,7 +2518,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: prunes match the root, and in dirs_list_empty they are not applied above `--min-depth`. |
 | Fix recipe (3.0) | In `internal/fsscan`: default prunes and excludes apply to entries at depth >= 1 only and always during the walk; `--min-depth` filters output only. Help of `--no-ignore` unchanged. |
 | Proving test | `TestLedger_FS13_2x` / `TestLedger_FS13_fix` in `internal/fsscan`: scanning `D/vendor` lists its content in 3.0 (count 0 in rc.A); `dirs_list_empty --min-depth 2 D` omits `node_modules/*` in 3.0. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-14"></a>
 #### FS-14 · Walker failures on the GNU path are reported as an empty success
@@ -2536,7 +2536,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: find-backed depths above 2147483647 give the same empty envelope with `errors: 1`; an unreadable ROOT gives the empty result with the GNU line count (FS-15). The tool-variant cases are forced divergence FS-26. |
 | Fix recipe (3.0) | FS-05 validation removes the argument cases. In `internal/fsscan`, a failure to read ROOT itself returns `path_unreadable` RETRY, details `Path 'INPUT' is not readable`, hint `Check directory permissions` (the existing `__gash_fs_safe_path` wording, `files.sh:174-175`), rc 1. |
 | Proving test | `TestLedger_FS14_2x` / `TestLedger_FS14_fix` in `internal/fsscan`: `--depth 2147483648` gives the empty envelope in rc.A and `invalid_depth` in 3.0; a mode-0111 ROOT (unprivileged test user) gives `path_unreadable` in 3.0. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-15"></a>
 #### FS-15 · errors counts walker stderr lines, not unreadable entries
@@ -2554,7 +2554,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the native walker counts the lines GNU find/du would print: 1 per unreadable directory or loop, 2 per unreadable directory in dirs_list_empty, plus 1 per newline inside the reported path. |
 | Fix recipe (3.0) | In `internal/fsscan`: `errors` = number of entries whose open or stat failed, each counted once, in all five scanners. AGENTS 4.1 sentence unchanged (it becomes true). |
 | Proving test | `TestLedger_FS15_2x` (1 and 2 on the fixture) / `TestLedger_FS15_fix` (1 in all five) in `internal/fsscan`, unprivileged fixture as in `work/files-scanners/repro-errors.sh`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-16"></a>
 #### FS-16 · tree_stats empty_dirs counts pruned and excluded entries
@@ -2572,7 +2572,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the empty-dir count emulates GNU find's implicit `-print` of prune matches (no `-L`, walk errors not counted). |
 | Fix recipe (3.0) | In `internal/fsscan` tree_stats: count empty directories during the main walk, with the same prunes, excludes, `-L` and FS-01 predicate; `empty_dirs` then equals `dirs_list_empty --count` for the same flags. |
 | Proving test | `TestLedger_FS16_2x` (1 and 2) / `TestLedger_FS16_fix` (0 and 0, and equality with `dirs_list_empty --count` on every dossier fixture) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-17"></a>
 #### FS-17 · tree_stats extension containing a tab breaks the JSON and the text
@@ -2590,7 +2590,7 @@ Critical and high items:
 | rc.A behavior | Reproduced byte for byte: the extension is split at its first tab into ext, count and size exactly as the `read` did, in JSON and text. |
 | Fix recipe (3.0) | FS-01 predicate removes tab names; independently `internal/fsscan` carries the extension as one value and encodes it with the contract escaper. |
 | Proving test | `TestLedger_FS17_2x` (rc.A bytes equal the 2.x golden) / `TestLedger_FS17_fix` (`jq -e .` passes, no `x` extension) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-18"></a>
 #### FS-18 · dirs_list_empty prints one blank line when nothing is found
@@ -2608,7 +2608,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (pinned by `output_style_render_spec.sh` fixture `dirs_list_empty:none`). |
 | Fix recipe (3.0) | In `internal/fsscan` dirs_list_empty text mode: print nothing when the list is empty; update the render fixture. |
 | Proving test | `TestLedger_FS18_2x` (stdout is exactly `\n`) / `TestLedger_FS18_fix` (stdout empty) in `internal/fsscan`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-19"></a>
 #### FS-19 · The --json pre-scan also matches a flag value
@@ -2626,7 +2626,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (the scanner grammar pre-scans every word). |
 | Fix recipe (3.0) | In `internal/cli/args` (scanners family): the pre-scan skips the word after each value flag (`-n`, `--limit`, `--min-size`, `--size`, `--exclude`, `--depth`, `--max-depth`, `--min-depth`, `--top`), so errors met before a real `--json` still get JSON. |
 | Proving test | `TestLedger_FS19_2x` (JSON output) / `TestLedger_FS19_fix` (text output, `--json` used only as the glob) in `internal/cli/args`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 ### archive_extract and file_backup
 
@@ -2646,7 +2646,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: suffixes matched case-insensitively in the 2.x order, the output name computed with `basename`'s case-sensitive suffix rule, `OUTPUT_DIR/foo.Z` opened with `O_TRUNC` before `uncompress foo.Z -c` starts, so the archive is emptied as in 2.x |
 | Fix recipe (3.0) | In `internal/files`, `singleFileTarget()`: strip the matched suffix case-insensitively (`strings.EqualFold` on the last `len(suffix)` bytes of the base name) and only when something remains; before opening, refuse when the remainder is empty or the target is the archive itself (`os.SameFile` on both `os.Stat` results, so through symlinks too): `Error: Output 'P' would overwrite the archive 'F'.`, rc 1, nothing opened. Route `*.tar.z` and `*.taz` before `*.z` (FILE-13). Use `uncompress -c -- F` (FILE-14). Help NOTES (FILE-26). |
 | Proving test | `TestLedger_FILE01_fix` in `internal/files`: in a temp dir, `foo.Z` (gzip output) and `real.Z` (compress output, skipped without ncompress) extracted with OUTPUT_DIR `.`: archive bytes unchanged, `foo` and `real` hold the payload, rc 0. `TestLedger_FILE01_2x`: 0-byte archive, rc 1. `testdata/script/archive_extract_compress.txtar` runs both through the shim |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-02"></a>
 #### FILE-02 · Upper- and mixed-case suffixes (`.GZ`, `.XZ`, `.Bz2`, `.ZST`) empty the archive; a file named `.gz` empties itself
@@ -2664,7 +2664,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (the FILE-01 name rule and open-and-truncate before the tool) |
 | Fix recipe (3.0) | The FILE-01 change in `singleFileTarget()`: case-insensitive strip (`UP.GZ` → `UP`, `Cap.Bz2` → `Cap`, `S.ZST` → `S`) and the refusal `Error: Output 'P' would overwrite the archive 'F'.` rc 1 for a name that would stay equal to the archive (`.gz`, `.xz`, `.bz2`, `.zst`, `.z` alone). The help's "(case-insensitive)" becomes true (FILE-26) |
 | Proving test | `TestLedger_FILE02_fix` in `internal/files`: table `UP.GZ BIG.XZ Cap.Bz2 S.ZST .gz` run in the archive's directory: archive bytes unchanged; `UP`, `BIG`, `Cap`, `S` hold the payload, rc 0; `.gz` gives the refusal line, rc 1, `.gz` unchanged. `TestLedger_FILE02_2x`: 0 bytes, rc 1 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-03"></a>
 #### FILE-03 · Single-file formats truncate the output before the tool runs: a corrupt archive or a missing tool destroys an existing file
@@ -2682,7 +2682,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: open `O_WRONLY\|O_CREAT\|O_TRUNC`, 0666 (umask applied by the kernel), following symlinks, then start the tool with that file as stdout; a missing tool is reported after the open (FILE-19), so the empty file stays |
 | Fix recipe (3.0) | In `internal/files`, single-file branch: (1) resolve the tool first (`exec.LookPath`); missing → `Error: Command 'gunzip' is not installed or not in PATH.` (the `__gash_require_command` default, `lib/core/validation.sh:29`), rc 1, nothing created; (2) decompress into a new file in OUTPUT_DIR opened with `O_WRONLY\|O_CREAT\|O_EXCL`, mode 0666, random name `.axe-XXXXXX` (kernel umask keeps the 2.x mode); (3) on tool success `os.Rename` it over the target (a symlink at the target is replaced, never written through); on failure remove it. An existing target is still replaced on success (2.x contract) |
 | Proving test | `TestLedger_FILE03_fix` in `internal/files`: corrupt `s.txt.gz` keeps `s.txt` = `PRECIOUS`, rc 1, no `.axe-*` left; PATH without gunzip → the error line, no `s.txt`; symlink `out/s.txt -> ../victim/s.txt` leaves `victim/s.txt` unchanged and `out/s.txt` a regular file; a good archive still replaces `s.txt`, rc 0. `TestLedger_FILE03_2x`: the empty file |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-04"></a>
 #### FILE-04 · file_backup: two backups in the same second (or in a DST fall-back hour) overwrite each other
@@ -2700,7 +2700,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: same name, same `cp -v -- FILE BACKUP` |
 | Fix recipe (3.0) | In `internal/files`, `fileBackup()`: reserve the name atomically: `os.OpenFile(name, O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW, srcMode&0777)` (kernel umask gives the mode cp would give a new file); on `EEXIST` retry with `_1`, `_2`, ... appended to the stamp; then run `cp -v -- FILE NAME`, which rewrites the reserved file in place. Help NOTES: "a backup never replaces an existing file; a second backup in the same second gets `_1`" (FILE-27) |
 | Proving test | `TestLedger_FILE04_fix` in `internal/files`, frozen stamp (`clock.Fake`, or a PATH `date` stub if FILE-25 keeps the CLI): three calls leave `a_backup_S`, `a_backup_S_1`, `a_backup_S_2` with the three contents, rc 0 each; the two New York instants give two files. `TestLedger_FILE04_2x`: one file |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a6a47ca |
 
 <a id="file-05"></a>
 #### FILE-05 · file_backup writes through an existing symlink or hard link, or copies into a directory, at the backup name
@@ -2718,7 +2718,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: cp runs with the 2.x argv and applies its own write-through, into-directory and dangling-link rules |
 | Fix recipe (3.0) | The FILE-04 reservation: `O_CREAT\|O_EXCL\|O_NOFOLLOW` fails with `EEXIST` on any existing entry (symlink, dangling symlink, hard link, directory), so the next suffix is tried and the existing entry is never opened |
 | Proving test | `TestLedger_FILE05_fix` in `internal/files`: with a symlink to `victim`, a hard link to `other`, a directory and a dangling symlink pre-created at the frozen-stamp name (one per case), `victim`, `other` and the directory are unchanged and the backup is `a_backup_S_1`, rc 0. `TestLedger_FILE05_2x`: `victim` rewritten |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a6a47ca |
 
 <a id="file-06"></a>
 #### FILE-06 · file_backup ignores cp's exit status
@@ -2736,7 +2736,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: Go runs cp, ignores its status and returns 1 only when BACKUP is not a regular file afterwards (`os.Stat`, following symlinks) |
 | Fix recipe (3.0) | In `internal/files`, `fileBackup()`: a non-zero cp status → `Error: Failed to create backup file.` (2.x text), rc 1, and remove the file reserved by FILE-04 so no partial backup remains; keep the regular-file check after a zero status |
 | Proving test | `TestLedger_FILE06_fix` in `internal/files` with `runner.Fake` making cp write one byte and exit 1: rc 1, the Error line, no backup file. `testdata/script/file_backup_cp_fail.txtar` with a PATH `cp` stub exiting 1 after an earlier backup of the same (frozen) second |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a6a47ca |
 
 <a id="file-07"></a>
 #### FILE-07 · OUTPUT_DIR is created before the format and its tool are checked
@@ -2754,7 +2754,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `mkdir -p` with the 2.x argv before the dispatch |
 | Fix recipe (3.0) | In `internal/files`, `archiveExtract()`: pick the branch from the suffix table and resolve its tools first (FILE-03, FILE-19); an unsupported type gives the 2.x error with no directory created; only then run `mkdir -p -- DIR` (FILE-08) |
 | Proving test | `TestLedger_FILE07_fix` in `internal/files`: unsupported type, PATH without zstd for `.tar.zst`, PATH without unzip for `.zip`: rc 1 and no `newdir` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-08"></a>
 #### FILE-08 · An option-like OUTPUT_DIR reaches `mkdir` without `--`
@@ -2772,7 +2772,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: Go runs `mkdir -p OUTPUT_DIR` with the 2.x argv, so the lines and statuses come from mkdir itself |
 | Fix recipe (3.0) | In `archiveExtract()`: run `mkdir -p -- DIR` (mkdir's own error lines are kept), and prefix `./` to an OUTPUT_DIR that starts with `-` before every later use, as `files.sh:1913` does for the archive name |
 | Proving test | `TestLedger_FILE08_fix` in `internal/files`: `archive_extract a.tgz --help` creates `--help/s`, prints no mkdir help, rc 0; `-x` creates `-x/s`, rc 0 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-09"></a>
 #### FILE-09 · unrar reads a dash-named OUTPUT_DIR as a switch
@@ -2790,7 +2790,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (same argv) |
 | Fix recipe (3.0) | `unrar x -- F DIR/`: `-` stops switch scanning (listed in UnRAR 7.00's usage text), the trailing `/` marks the destination, and DIR gets the FILE-08 `./` prefix |
 | Proving test | `TestLedger_FILE09_fix` in `internal/files` (skips without unrar): existing `-x`: `-x/src/a.txt` written, no `src/` in cwd, rc 0 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-10"></a>
 #### FILE-10 · unzip, 7z and unrar expand wildcards in the archive name
@@ -2808,7 +2808,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (same argv) |
 | Fix recipe (3.0) | 7z: add the literal-name switch `-spd` (`7z x -spd -oDIR -- F`; verified with 7-Zip 23.01: `y?.7z` alone extracted with `yb.7z` present). unzip has no literal mode and ignores backslash escapes; unrar has no such switch and ignores backslash escapes (both verified): when the base name contains `*`, `?` or `[`, refuse before creating anything: `Error: Archive name 'X' contains wildcard characters (* ? [) that unzip would expand; rename it.` (tool name per branch), rc 1. Alternative for the operator: run the tool on a private symlink with a plain name inside an `os.MkdirTemp` dir (names keep working; the banner shows the temporary path) |
 | Proving test | `TestLedger_FILE10_fix` in `internal/files`: `p[1].zip` + `p1.zip` → the refusal, nothing extracted, rc 1; `y?.7z` + `yb.7z` → only `y?.7z`'s content, rc 0 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-11"></a>
 #### FILE-11 · unzip, unrar and 7z prompt and read stdin in headless mode
@@ -2826,7 +2826,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the binary inherits the caller's stdin and terminal (`compat.md` 3), so the tools prompt and read exactly as in 2.x |
 | Fix recipe (3.0) | Never prompt in headless (PRD 6.2 spirit, MUST NOT 15). In `archiveExtract()`, when `GASH_HEADLESS=1` or stdin is not a TTY: start unzip, unrar and 7z with stdin `/dev/null` and `SysProcAttr{Setsid: true}` (no controlling terminal, so no `/dev/tty` prompt), plus the never-overwrite switches `unzip -n`, `unrar x -o- -p-` (`-p-`: do not query a password, from RAR's documentation, not run), `7z x -aos`; an encrypted archive then fails at once with the tool's error (7z prints its password prompt and stops on EOF; documented in the help NOTES, FILE-26). On a TTY outside headless the prompts stay |
 | Proving test | `TestLedger_FILE11_fix` in `internal/files` (`runner.Fake`: headless argv carries the switches, stdin is `/dev/null`, `Setsid` set). `testdata/script/archive_extract_headless.txtar` under a PTY with `GASH_HEADLESS=1`: existing file unchanged, no prompt text from unzip, return within 2 s |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-12"></a>
 #### FILE-12 · "File 'X' does not exist." for existing non-regular paths (both functions)
@@ -2844,7 +2844,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (same text from the Go port of `__gash_require_file`) |
 | Fix recipe (3.0) | In `internal/files`, before the shared check: `os.Stat` succeeds and the mode is not regular, or `os.Lstat` finds a dangling symlink → `Error: 'X' is not a regular file.`, rc 1. The shared helper keeps its text for other callers |
 | Proving test | `TestLedger_FILE12_fix` in `internal/files`: directory, FIFO and dangling symlink give the new text for both functions; a missing path keeps "does not exist" |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-13"></a>
 #### FILE-13 · `.tar.Z` is decompressed, not unpacked; `.taz`, `.tar.lz`, `.tlz`, `.tar.lzma`, `.lz4`, `.tbz` are unsupported
@@ -2862,7 +2862,7 @@ Critical and high items:
 | rc.A behavior | Reproduced |
 | Fix recipe (3.0) | Before `*.z` in the suffix table: `*.tar.z` and `*.taz` → `uncompress -c -- F \| tar xvf - -C DIR --no-same-owner --no-same-permissions`, rc 1 when either side fails (FILE-17). Not `tar xvZf`: it needs ncompress's `compress` (verified: `tar (child): compress: Cannot exec`), while gzip's `uncompress` is always there on Linux. New formats (`.tar.lz`/`.tlz` via `tar --lzip`, `.tar.lzma` via `tar --lzma`, `.tbz` as `.tbz2`) only on operator request, with the help updated |
 | Proving test | `TestLedger_FILE13_fix` in `internal/files`: `a.tar.Z` and `a.taz` → `o/src/a.txt`, rc 0, archive unchanged |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-14"></a>
 #### FILE-14 · `uncompress F -c` puts `-c` after the operand
@@ -2880,7 +2880,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: argv `uncompress F -c` on every OS |
 | Fix recipe (3.0) | `uncompress -c -- F` in the `*.z` branch and in the FILE-13 pipeline |
 | Proving test | `TestLedger_FILE14_fix` in `internal/files` (`runner.Fake` asserts argv `uncompress -c -- F`); macOS CI run of `testdata/script/archive_extract_compress.txtar`: `s.z` kept, `o/s` written |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-15"></a>
 #### FILE-15 · A trailing newline in the archive name is dropped from the output name
@@ -2898,7 +2898,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: Go strips trailing `\n` bytes from the computed name, as `$(...)` does. The dossier listed it as a forced-divergence candidate; it is a pure string rule Go can reproduce, so it stays a defect |
 | Fix recipe (3.0) | In `singleFileTarget()`: keep the exact base name minus the suffix, no newline stripping |
 | Proving test | `TestLedger_FILE15_fix` in `internal/files`: `$'foo\n.gz'` → `$'foo\n'` holds the payload, an existing `foo` untouched |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 ### shell layer
 
@@ -5089,7 +5089,7 @@ Critical and high items:
 | rc.A behavior | Go never re-parses a user string as find predicates: the native walk cannot be injected (MUST NOT 7). An `--exclude` value containing a newline gets the error contract in all five scanners (one grammar): `invalid_filter` RETRY (the existing argument-value code of AGENTS 5; no exclude-specific code exists), details = the value (JSON-escaped), hint `--exclude takes a glob without newlines, e.g. '*/node_modules'`, rc 1, nothing on stdout. 2.x's injected predicates cannot be kept; dirs_largest/dirs_find_large, which accepted such a value as one du glob matching nothing, diverge the same way. |
 | Fix recipe (3.0) | Keep the rc.A rule in `internal/cli/args` (scanners family, `--exclude` value check); list `invalid_filter` for the scanners in AGENTS 5 and add "no newlines" to each `--exclude` help line in 3.0. |
 | Proving test | `TestLedger_FS20` in `internal/cli/args` (for each scanner: the reproduction's value gives the `invalid_filter` envelope, stdout empty, rc 1) and `testdata/script/fsscan_exclude_newline.txtar` (no `MARKER` exists after the five calls). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9, ca0b3dd |
 
 <a id="fs-21"></a>
 #### FS-21 · dirs_largest / dirs_find_large --depth goes through Bash arithmetic
@@ -5107,7 +5107,7 @@ Critical and high items:
 | rc.A behavior | Decimal values without a leading zero up to 9223372036854775807 behave as on the GNU path (`0` becomes 1 in dirs_largest and means unbounded in dirs_find_large). A value with a leading zero (other than `0` itself) or above 9223372036854775807 gets `invalid_depth` RETRY with the scanner's 2.x hint (`Provide a positive integer` in dirs_largest, `Provide a non-negative integer` in dirs_find_large), details = the raw value, rc 1. Those meanings came only from Bash arithmetic (octal, base errors, 64-bit wrap); Go never evaluates user strings as arithmetic. |
 | Fix recipe (3.0) | Superseded by the FS-05 rule (1 to 9 ASCII digits, base 10: `010` = 10, `08` = 8). |
 | Proving test | `TestLedger_FS21` in `internal/cli/args`: `010`, `08`, `09`, `9223372036854775808`, `99999999999999999999` give `invalid_depth` for both scanners with empty stdout; `0`, `1`, `2147483648` scan. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-22"></a>
 #### FS-22 · The size grammar depends on numfmt, and thresholds overflow in Bash arithmetic
@@ -5125,7 +5125,7 @@ Critical and high items:
 | rc.A behavior | The numfmt-present grammar on every platform (numfmt `--from=iec` emulated, then the fallback rules of FS-11). A value whose 2.x meaning came from wrapped 64-bit Bash arithmetic gets `invalid_size` RETRY with the scanner's 2.x hint, rc 1: a fallback product above 2^63-1 (all three size flags), and a dirs_find_large size above 9223372036854774784 where `(bytes+1023)/1024` overflows. `--min-size` values numfmt accepts up to 2^63 still compare as float64, as awk did. |
 | Fix recipe (3.0) | The FS-11 native parser (64-bit integers, refuse above 2^63-1). |
 | Proving test | `TestLedger_FS22` in `internal/fsscan`: `--size 8E`, `--size 9223372036854775807`, `--size 8192P`, `--min-size 9999999P` give `invalid_size`; `1.5K`, `1E`, `08` parse as numfmt does with no numfmt on PATH. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-23"></a>
 #### FS-23 · awk -v unescapes the scan root and the --exclude values
@@ -5215,7 +5215,7 @@ Critical and high items:
 | rc.A behavior | The GNU path: newline directories are left out, also from parent totals. |
 | Fix recipe (3.0) | FS-01 predicate (unchanged for newlines). |
 | Proving test | `TestLedger_FS27` in `internal/fsscan`: the fixture gives `ok`, `n` with the GNU-path sizes under any PATH. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 <a id="fs-28"></a>
 #### FS-28 · The order of equal entries depends on the locale and the awk implementation
@@ -5233,7 +5233,7 @@ Critical and high items:
 | rc.A behavior | Size lists: size descending, then the 2.x row text (`BYTES\tMTIME\tPATH`) in C byte order descending, which equals 2.x under C/C.UTF-8. tree_stats tops: count desc, size desc, extension asc in bytes (top_by_size: size desc, count desc, extension asc); `tolower` ASCII only (gawk in the C locale). gawk's hash iteration order is an implementation detail and is not reproduced. Table widths stay counted in characters as 2.x counts them in a UTF-8 locale (architecture.md section 5; inferred effect on non-ASCII paths only). |
 | Fix recipe (3.0) | Keep the rc.A tie rules and document them in AGENTS 4.1 and 4.3. |
 | Proving test | `TestLedger_FS28` in `internal/fsscan`: the variant fixture gives the C order under every LANG/LC_ALL; tree_stats tops are identical over 20 runs and across locales. Because this top order is not reproduced, the differential helper (`normScan`/`same2x`) canonicalizes the `top_by_count`/`top_by_size` element order before comparing go to live 2.x, so a 2.x awk-hash order (e.g. FS-26 on mawk) does not fail the exact diff; the entries and every other field are still compared exactly. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd (rc.A tie rules documented) |
 
 <a id="fs-29"></a>
 #### FS-29 · Non-ASCII digits pass integer and size validation in UTF-8 locales
@@ -5287,7 +5287,7 @@ Critical and high items:
 | rc.A behavior | Never evaluated: the fields are read as digits only (`ui.Int`, CORE-02), anything else counts as 0, and the rows keep the 2.x layout for every ordinary name. |
 | Fix recipe (3.0) | Same as rc.A. 2.x patch (for a 2.1.x release, D-7): check `cnt` and `sz` against `^[0-9]+$` before the arithmetic and treat anything else as 0, as `__gash_fs_parse_size` already does for its input. |
 | Proving test | `TestLedger_FS50` in `internal/fsscan` (a name with a tab and an arithmetic payload: no command runs, the row reads 0); in a 2.1.1 series, a regression spec that fails on 2.1.0. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_FS50 c3522e5 |
 
 ### archive_extract and file_backup
 
@@ -5361,7 +5361,7 @@ Critical and high items:
 | rc.A behavior | Bash's text names the sourcing file and line (or `bash`) and cannot be reproduced byte for byte. rc.A emits the 2.x dependency error contract: `Error: Command 'unzip' is not installed or not in PATH.` (the `__gash_require_command` default, `lib/core/validation.sh:29`, through the `Error:` emitter and its color gate), rc 1, after the 2.x file effects (OUTPUT_DIR created; single-file output opened and truncated first). zstd keeps `Error: Extracting .zst needs zstd.`; for `.tar.zst` with tar missing, zstd is not started |
 | Fix recipe (3.0) | Keep the line; check the branch's tools before creating anything (FILE-03, FILE-07) |
 | Proving test | `TestLedger_FILE19` in `internal/files`: PATH without each tool gives the exact line and rc 1; the single-file case leaves the empty output in rc.A; `testdata/script/archive_extract_missing_tool.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a2a30ac |
 
 <a id="file-20"></a>
 #### FILE-20 · User shell functions named like the tools are called by 2.x
@@ -6195,7 +6195,7 @@ Critical and high items:
 | rc.A behavior | Decision kept as on record. rc.A reproduces each scanner's GNU-path behavior: files_largest excludes both; the deviations of the others are Defects reproduced: FS-06 (dirs_largest), FS-07 (dirs_list_empty), FS-08 (tree_stats counts), FS-09 (dirs_find_large cut), FS-17 (tree_stats extensions). |
 | Fix recipe (3.0) | Once the operator confirms the rule, apply the documented exclusion uniformly: one predicate in `internal/fsscan` (walker): an entry whose path relative to ROOT contains `\t` or `\n` is skipped, never descended into, and its size is added to no total (the GNU du `--exclude` semantics 2.x already has for newlines). Used by all five scanners and by both tree_stats counts. AGENTS 3.2 unchanged; the files_largest NOTES paragraph is added to the help of the other four in 3.0. |
 | Proving test | `TestLedger_FS01_fix` in `internal/fsscan`: on the tab/newline fixture (dirs `t\tx`, `n\nx`, empty `et\tx`, `en\nx`, files `ft\ty`, `fn\ny`, `norm/f`) no scanner in any mode (--json, --null, text, dirs_find_large with and without --with-mtime) reports a path containing `\t` or `\n` or the truncated names `t`, `et`, `n`; tree_stats gives files_total 1, dirs_total 2, empty_dirs 0, size_total 1000; `testdata/script/fsscan_tabnl.txtar` runs `jq -e .` on every JSON line. |
-| Status | accept: apply the exclusion uniformly (one predicate in internal/fsscan) (operator 2026-10-24) |
+| Status | accept: done d6a4bf9 |
 
 ### archive_extract and file_backup
 
@@ -6215,7 +6215,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: same tools, same argv, whatever they enforce; outside-pointing symlink members stay where the tool put them |
 | Fix recipe (3.0) | Options: (a) keep 2.x, document the tool versions tested; (b) recommended: an in-process pre-check of the member list before the tool runs: tar formats through Go's `archive/tar` on the same decompressed stream (`compress/gzip`, `compress/bzip2`, or the `xz -dc`, `zstd -dc`, `uncompress -c` output), zip through `archive/zip`, 7z through `7z l -slt -ba -- F`, rar through `unrar lt -- F`; refuse when a member name is absolute, has a `..` component, is a symlink or hard link whose target resolves outside OUTPUT_DIR, or lies below a symlink member: `Error: Archive 'F' has an unsafe member 'M' (absolute path, .. component or link outside the destination); nothing extracted.`, rc 1, before OUTPUT_DIR is created (in `internal/files`, `memberGuard()`); the tool then extracts as today; (c) as (b) with an opt-out flag (new grammar for a function that has none; not recommended) |
 | Proving test | `TestLedger_FILE22_fix` in `internal/files`: the mkevil corpus (tar, tgz, zip, rar 4 stored, 7z with `-snl` and `-spf`) is refused per archive, the sandbox gains no file; a clean archive still extracts, rc 0 |
-| Status | accept: option (b): in-process member pre-check (operator 2026-10-24) |
+| Status | accept: done a2a30ac (option b; guard extended to rar symlinks and 7z link targets) |
 
 <a id="file-23"></a>
 #### FILE-23 · Tool exit statuses collapse to 0/1, and tool warnings are failures for some formats only
@@ -6233,7 +6233,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x (0 or 1) |
 | Fix recipe (3.0) | Options: (a) keep 0/1 (recommended: 2.x contract, simplest for scripts); (b) pass each tool's status through (gzip 2, unzip 1, 7z 1/2, tar 2); (c) rc 0 on the known warning statuses (gzip 2, unzip 1) with `Warning: <tool> reported warnings; files were extracted.` on stderr |
 | Proving test | `TestLedger_FILE23` in `internal/files` pins the chosen mapping per tool with `runner.Fake` |
-| Status | accept: option (a): keep 0/1 (operator 2026-10-24) |
+| Status | accept: done (option a, rc.A); TestLedger_FILE23 |
 
 <a id="file-24"></a>
 #### FILE-24 · Tool configuration in the environment and in `~/.rarrc` changes archive_extract results
@@ -6251,7 +6251,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: the extraction tools get the caller's environment and HOME unchanged (2.x passed everything through, so the runner's allowlist rule, `architecture.md` 7, keeps the full environment for these tools) |
 | Fix recipe (3.0) | Options: (a) keep pass-through and document it in the help NOTES (recommended: the user's tool configuration is respected); (b) drop these variables and run unrar with an empty temporary HOME, for results independent of user configuration (behavior change for users who rely on them) |
 | Proving test | `TestLedger_FILE24_2x` in `internal/files` (`runner.Fake` asserts the variables and HOME reach the tool); `testdata/script/archive_extract_tool_env.txtar` (`TAR_OPTIONS=--keep-old-files` → rc 1, old file kept) |
-| Status | accept: option (a): keep pass-through and document it (operator 2026-10-24) |
+| Status | accept: done ca0b3dd (option a, documented) |
 
 <a id="file-25"></a>
 #### FILE-25 · Backup stamp: Go's clock does not read POSIX TZ strings the way `date` does
@@ -6269,7 +6269,7 @@ Critical and high items:
 | rc.A behavior | Operator choice; the pure-port default is (a) |
 | Fix recipe (3.0) | Options: (a) rc.A runs `date +%Y%m%d%H%M%S` from PATH, as 2.x did (exact parity including POSIX TZ strings; a user `date` function stays ignored, FILE-20); (b) Go's clock plus a POSIX TZ rule parser for values that are not zone names; (c) Go's clock as is (a forced divergence for POSIX TZ strings). Recheck with go1.27.2 before choosing (b) or (c) |
 | Proving test | `TestLedger_FILE25_2x` in `internal/files`: under `TZ=JST-9` and `TZ=EST5EDT,M3.2.0,M11.1.0` at a fixed instant, the stamp equals `date -d @N +%Y%m%d%H%M%S` |
-| Status | accept: option (a): date from PATH (operator 2026-10-24) |
+| Status | accept: done (option a, rc.A); TestLedger_FILE25_2x |
 
 ### shell layer
 
@@ -6704,7 +6704,7 @@ Critical and high items:
 | rc.A behavior | Code reproduces 2.x (FS-04); the rc.A AGENTS.md (prose, rewritten for 3.x) may state the real scanner behavior with a pointer to FS-04. |
 | Fix recipe (3.0) | Fixed by FS-04; the AGENTS sentences then hold as written. |
 | Proving test | `TestLedger_FS04_fix`; `TestDocs_AgentsCatalog` (generated catalog matches the registry grammar). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done via FS-04 (TestLedger_FS04_fix) |
 
 <a id="fs-32"></a>
 #### FS-32 · AGENTS 3 says integers have at most 9 digits
@@ -6722,7 +6722,7 @@ Critical and high items:
 | rc.A behavior | Code reproduces 2.x (FS-05, with FS-21 and FS-29 diverging); rc.A AGENTS.md may describe the real range. |
 | Fix recipe (3.0) | Fixed by FS-05. |
 | Proving test | `TestLedger_FS05_fix`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done via FS-05 (TestLedger_FS05_fix) |
 
 <a id="fs-33"></a>
 #### FS-33 · AGENTS 3.2 and the files_largest NOTES say tab/newline paths are left out
@@ -6740,7 +6740,7 @@ Critical and high items:
 | rc.A behavior | Code reproduces 2.x; files_largest help body unchanged; rc.A AGENTS.md may say which scanners apply the rule. |
 | Fix recipe (3.0) | Fixed by the FS-01 predicate; copy the NOTES paragraph into the four other helps. |
 | Proving test | `TestLedger_FS01_fix`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-34"></a>
 #### FS-34 · AGENTS 3.2 lists sizes as bytes or K/M/G/T/P
@@ -6758,7 +6758,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0; rc.A AGENTS.md may state the GNU-path grammar. |
 | Fix recipe (3.0) | After FS-11, AGENTS 3.2 and every size flag's help state the 3.0 grammar ("bytes, or a number with up to 6 decimals and K, M, G, T, P or E, optionally followed by B, i or iB"); the numfmt NOTES line is removed. |
 | Proving test | `TestDocs_SizeGrammar` in `internal/registry`: the help text of every size flag matches the parser's documented grammar string. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-35"></a>
 #### FS-35 · AGENTS 4.1 says errors counts unreadable entries
@@ -6776,7 +6776,7 @@ Critical and high items:
 | rc.A behavior | Code reproduces 2.x (FS-15); rc.A AGENTS.md may describe the GNU line count. |
 | Fix recipe (3.0) | Fixed by FS-15. |
 | Proving test | `TestLedger_FS15_fix`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done via FS-15 (TestLedger_FS15_fix) |
 
 <a id="fs-36"></a>
 #### FS-36 · AGENTS 5 says scanners in --json mode report errors as one JSON line
@@ -6812,7 +6812,7 @@ Critical and high items:
 | rc.A behavior | Code reproduces 2.x; rc.A AGENTS.md should say "as scan roots" until 3.0, so agents are not told the rail is wider than it is. |
 | Fix recipe (3.0) | Fixed by FS-02 and FS-03; AGENTS 6.1 gains "also when reached through a symlink or from /". |
 | Proving test | `TestLedger_FS02_fix`, `TestLedger_FS03_fix`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-38"></a>
 #### FS-38 · AGENTS 7 says empty results print no lines
@@ -6830,7 +6830,7 @@ Critical and high items:
 | rc.A behavior | Code reproduces 2.x (FS-18); rc.A AGENTS.md may note the blank line. |
 | Fix recipe (3.0) | Fixed by FS-18. |
 | Proving test | `TestLedger_FS18_fix`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done via FS-18 (TestLedger_FS18_fix) |
 
 <a id="fs-39"></a>
 #### FS-39 · files_largest help: --exclude is a "substring match"
@@ -6848,7 +6848,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | With FS-12, the line reads "Skip entries whose name or path below PATH matches GLOB (repeatable)" in all five helps. |
 | Proving test | `TestLedger_FS12_fix` plus the help golden of each scanner in `internal/registry`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-40"></a>
 #### FS-40 · dirs_largest help: --exclude is a "substring match"
@@ -6866,7 +6866,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | As FS-39 (one wording for all five). |
 | Proving test | `TestLedger_FS12_fix` plus the help golden. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-41"></a>
 #### FS-41 · --human help: "auto-on on TTY"
@@ -6884,7 +6884,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | files_largest help line: "Human-readable sizes (default except with --json or --null)". |
 | Proving test | Help golden in `internal/registry`; `TestFSScan_HumanToggle` (piped output is human). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-42"></a>
 #### FS-42 · --no-color help: "Disable ANSI colors" (the rich layout stays)
@@ -6902,7 +6902,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Help line: "Disable ANSI colors (layout unchanged; NO_COLOR also honored)". |
 | Proving test | Help golden; `fs_render_spec.sh` (no ANSI with `--no-color` under the rich layout). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-43"></a>
 #### FS-43 · files_largest help lists the JSON envelope without total_size_human and kind
@@ -6920,7 +6920,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Help line: "Emit JSON envelope: {data, count, total_size, total_size_human, kind, scan_time, errors}"; same keys in the example comment. |
 | Proving test | Help golden; `envelope_schema_spec.sh` (key set). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-44"></a>
 #### FS-44 · dirs_largest help does not say --depth 0 becomes 1
@@ -6938,7 +6938,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Help: "Depth limit (default 1, top-level only; 0 means 1)". |
 | Proving test | Help golden; `TestFSScan_DirsLargestDepthZero`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-45"></a>
 #### FS-45 · dirs_find_large help does not say --depth 0 means unbounded
@@ -6956,7 +6956,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Help: "Depth limit (default unbounded; 0 also means unbounded)". |
 | Proving test | Help golden; `TestFSScan_FindLargeDepthZero`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-46"></a>
 #### FS-46 · tree_stats help example scans / without --allow-root
@@ -6974,7 +6974,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Example: `tree_stats --xdev --depth 8 --allow-root /`. |
 | Proving test | `TestRegistry_HelpExamplesParse` in `internal/registry` (every help example passes its grammar and path rails on a fixture root). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="fs-47"></a>
 #### FS-47 · Header comment: "--allow-root implies a warning"
@@ -7028,7 +7028,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: hint strings byte-identical in rc.A (they are envelope content), corrected in 3.0. |
 | Fix recipe (3.0) | With FS-05: hints `Provide a non-negative integer (at most 9 digits)` for invalid_limit, invalid_depth and invalid_top in all five scanners. |
 | Proving test | `TestLedger_FS05_fix` asserts the hint strings. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d6a4bf9 |
 
 ### archive_extract and file_backup
 
@@ -7048,7 +7048,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A (registry `Help` byte-identical), corrected in 3.0 |
 | Fix recipe (3.0) | In the `archive_extract` registry entry (`internal/registry`; in 2.x the `__gash_register_help` heredoc): list `.Z` (compress), `.z` (pack) and, after FILE-13, `.tar.Z`/`.taz`; add a NOTES block: the tool each format needs; single-file output = archive name minus the suffix, in OUTPUT_DIR, replaced on success (FILE-03); tools' listings go to stdout; headless never prompts and never overwrites in unzip/unrar/7z (FILE-11); wildcard names refused (FILE-10). Keep "(case-insensitive)" once FILE-01/02 are fixed. Regenerate `docs/reference/files.md`; the 3.x prose docs may describe the real behavior now |
 | Proving test | `tests/specs/docs_spec.sh:15` (reference generated from the registry) stays green; `TestRegistryHelpGolden` in `internal/registry` pins the new archive_extract body |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 <a id="file-27"></a>
 #### FILE-27 · file_backup help is silent on local time, collisions, symlinks and the stdout line
@@ -7066,7 +7066,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0 |
 | Fix recipe (3.0) | NOTES block in the `file_backup` registry entry: local time, the collision suffix after FILE-04, source symlinks followed, the one stdout line, mode and mtime rules; regenerate `docs/reference/files.md` |
 | Proving test | `tests/specs/docs_spec.sh:15` stays green; `TestRegistryHelpGolden` in `internal/registry` pins the new file_backup body |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ca0b3dd |
 
 ### shell layer
 
