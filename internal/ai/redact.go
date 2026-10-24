@@ -33,9 +33,10 @@ var (
 		{regexp.MustCompilePOSIX(`xox[abposr]-[A-Za-z0-9-]{10,}`), `[REDACTED]`},
 		{regexp.MustCompilePOSIX(`AIza[0-9A-Za-z_-]{35}`), `[REDACTED]`},
 		// LEDGER AI-07 (3.0): bearer/basic/token Authorization headers, the
-		// SSH:KEY=PASSPHRASE lines of ~/.gash_env, crypt(3) hashes.
+		// SSH:KEY=PASSPHRASE lines of ~/.gash_env (indented too, as the
+		// config loader accepts them), crypt(3) hashes.
 		{regexp.MustCompile(`(?i)\b((?:proxy-)?authorization[ \t]*:[ \t]*(?:bearer|basic|token)[ \t]+)[^ \t]+`), `${1}[REDACTED]`},
-		{regexp.MustCompile(`^(SSH:[^=]*=).*`), `${1}[REDACTED]`},
+		{regexp.MustCompile(`^([ \t]*SSH:[^=]*=).*`), `${1}[REDACTED]`},
 		{regexp.MustCompile(`\$(?:1|2[abxy]?|5|6|7|y|gy)\$[^:\s]+`), `[REDACTED HASH]`},
 	}
 )

@@ -72,12 +72,14 @@ func TestLedger_AI07_fix(t *testing.T) {
 	in := "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.e30.abcdef\n" +
 		"proxy-authorization: basic dXNlcjpwYXNz\n" +
 		"SSH:~/.ssh/id_rsa=correct horse battery\n" +
+		"  \tSSH:~/.ssh/id_ed25519=staple  \n" +
 		"root:$6$fakesalt$fakehash:19000:0:99999:7:::\n" +
 		"admin:$2y$10$abcdefghijklmnopqrstuv:x\n" +
 		"the password is hunter2\nDB_PASSWORD=s3cret"
 	want := "Authorization: Bearer [REDACTED]\n" +
 		"proxy-authorization: basic [REDACTED]\n" +
 		"SSH:~/.ssh/id_rsa=[REDACTED]\n" +
+		"  \tSSH:~/.ssh/id_ed25519=[REDACTED]\n" +
 		"root:[REDACTED HASH]:19000:0:99999:7:::\n" +
 		"admin:[REDACTED HASH]:x\n" +
 		"the password is hunter2\nDB_PASSWORD=[REDACTED]"
