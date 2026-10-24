@@ -149,6 +149,14 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install bash gawk jq
 
+      # init_bash_state_parity.txtar loads 2.1.0 and 3.x in the same shell:
+      # the shallow checkout has no tags, so fetch v2.1.0 and make a
+      # missing 2.x tree a failure instead of a skip.
+      - name: Fetch v2.1.0 for the 2.x differential scripts
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/tags/v2.1.0:refs/tags/v2.1.0
+          echo "GASH_REQUIRE_2X=1" >>"$GITHUB_ENV"
+
       - name: testscript suite
         run: CGO_ENABLED=0 go test ./cmd/gash/ -run TestScript -count=1
 

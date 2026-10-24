@@ -76,6 +76,16 @@ func TestScript(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building httpsfake: %v\n%s", err, out)
 	}
+	// The 2.1.0 tree (git archive v2.1.0, never the checkout itself) for
+	// the scripts that compare a 2.x load with a 3.x one in the same shell
+	// (init_bash_state_parity.txtar, condition [has2x], $GASH_2X_SH). A
+	// shallow clone has no tags: CI fetches v2.1.0 and sets
+	// GASH_REQUIRE_2X=1, so a missing tree fails there instead of skipping.
+	tree2x := filepath.Join(t.TempDir(), "gash-2.1.0")
+	has2x := archive2x(root, tree2x) == nil
+	if !has2x && os.Getenv("GASH_REQUIRE_2X") == "1" {
+		t.Fatalf("GASH_REQUIRE_2X=1 but the v2.1.0 tree is not available: %v", archive2x(root, tree2x))
+	}
 	// testscript's Dir is non-recursive, but the render-spec fixtures are
 	// grouped in a render/ subdirectory (testdata/script/README.md), so the
 	// whole tree is collected explicitly and passed as Files.
@@ -106,6 +116,8 @@ func TestScript(t *testing.T) {
 			switch cond {
 			case "root":
 				return os.Geteuid() == 0, nil
+			case "has2x":
+				return has2x, nil
 			case "linux", "darwin", "windows":
 				return runtime.GOOS == cond, nil
 			case "gnused":
@@ -129,7 +141,29 @@ func TestScript(t *testing.T) {
 			env.Setenv("GASH_BIN", bin)
 			env.Setenv("LANG", "C.UTF-8")
 			env.Setenv("TERM", "dumb")
+			if has2x {
+				env.Setenv("GASH_2X_SH", filepath.Join(tree2x, "gash.sh"))
+			}
 			return nil
 		},
 	})
+}
+
+// archive2x extracts the v2.1.0 tag of the checkout at root into dir
+// (once: an existing gash.sh there is reused).
+func archive2x(root, dir string) error {
+	if _, err := os.Stat(filepath.Join(dir, "gash.sh")); err == nil {
+		return nil
+	}
+	if err := exec.Command("git", "-C", root, "rev-parse", "--verify", "--quiet", "v2.1.0^{commit}").Run(); err != nil {
+		return fmt.Errorf("no v2.1.0 tag in %s (git fetch origin tag v2.1.0)", root)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	cmd := exec.Command("bash", "-c", `git -C "$1" archive v2.1.0 | tar -x -C "$2"`, "bash", root, dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git archive v2.1.0: %v: %s", err, out)
+	}
+	return nil
 }
