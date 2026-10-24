@@ -1,0 +1,37 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-11
+# covers: none (3.0 load-path proof)
+#
+# SHELL-11 proving test: an interactive shell that sources gash.sh through
+# a file link, or through a chain of two links (the second relative), gets
+# the tree's GASH_DIR and GASH_VERSION and no load errors. 2.x took the
+# link's directory: five "lib/core/*.sh: missing" errors and
+# GASH_VERSION=unknown.
+
+env GASH_BANNER=0
+
+exec bash --norc --noprofile -i drive.sh one
+stdout '^dir=ok$'
+stdout '^version=ok$'
+stdout '^errors=0$'
+stdout '^func=function$'
+! stderr 'missing'
+
+exec bash --norc --noprofile -i drive.sh sub/two
+stdout '^dir=ok$'
+stdout '^version=ok$'
+stdout '^errors=0$'
+stdout '^func=function$'
+! stderr 'missing'
+
+-- drive.sh --
+mkdir -p "$WORK/links/sub"
+ln -sfn "$GASH_SH" "$WORK/links/one.sh"
+ln -sfn ../one.sh "$WORK/links/sub/two.sh"
+IFS= read -r want <"$GASH_STAGE/VERSION"
+source "$WORK/links/$1.sh"
+[[ "$GASH_DIR" == "$GASH_STAGE" ]] && echo dir=ok || echo "dir=$GASH_DIR"
+[[ "$GASH_VERSION" == "$want" && "$GASH_VERSION" != unknown ]] && echo version=ok || echo "version=$GASH_VERSION"
+echo "errors=${#__GASH_LOAD_ERRORS[@]}"
+echo "func=$(type -t gash_username)"

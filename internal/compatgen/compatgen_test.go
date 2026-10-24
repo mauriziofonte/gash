@@ -664,3 +664,28 @@ func TestLedger_SHELL10(t *testing.T) {
 		require.True(t, gashAllowed[name] || gashAllowedRE.MatchString(name), "%s is set at load time and not in the allowlist", name)
 	}
 }
+
+// LEDGER SHELL-11: gash.sh sourced through a file link, a chain of two
+// links (one relative) or a linked directory finds its tree: GASH_DIR is
+// the real directory and GASH_VERSION the tree's version, where 2.x took
+// the link's directory and loaded nothing (3.0: SHELL-11 fixed).
+func TestLedger_SHELL11(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	links := t.TempDir()
+	require.NoError(t, os.Symlink(filepath.Join(dir, "gash.sh"), filepath.Join(links, "one.sh")))
+	require.NoError(t, os.Mkdir(filepath.Join(links, "sub"), 0o755))
+	require.NoError(t, os.Symlink("../one.sh", filepath.Join(links, "sub", "two.sh")))
+	require.NoError(t, os.Symlink(dir, filepath.Join(links, "tree")))
+	for _, src := range []string{
+		filepath.Join(links, "one.sh"),
+		filepath.Join(links, "sub", "two.sh"),
+	} {
+		out, err := bash(t, []string{"GASH_HEADLESS=1"}, `source '`+src+`'; printf '%s|%s' "$GASH_DIR" "$GASH_VERSION"`)
+		require.NoError(t, err, out)
+		require.Equal(t, dir+"|2.1.0", out, src)
+	}
+	out, err := bash(t, []string{"GASH_HEADLESS=1"}, `source '`+links+`/tree/gash.sh'; printf '%s|%s' "$GASH_DIR" "$GASH_VERSION"`)
+	require.NoError(t, err, out)
+	require.Equal(t, links+"/tree|2.1.0", out)
+}

@@ -83,9 +83,18 @@ fi
 # -----------------------------------------------------------------------------
 
 # GASH_DIR is wherever this file lives, so custom install locations and
-# symlinked checkouts work without configuration.
+# symlinked checkouts work without configuration. A linked gash.sh (or a
+# chain of links) is followed to the real file first (SHELL-11); readlink
+# runs only when the file is a link, at most 40 times.
 __gash_self="${BASH_SOURCE[0]}"
 [[ "$__gash_self" == */* ]] || __gash_self="./$__gash_self"
+for ((__gash_i = 0; __gash_i < 40; __gash_i++)); do
+    [[ -L "$__gash_self" ]] || break
+    __gash_link="$(readlink -- "$__gash_self")" || break
+    [[ "$__gash_link" == /* ]] || __gash_link="${__gash_self%/*}/$__gash_link"
+    __gash_self="$__gash_link"
+done
+unset __gash_i __gash_link
 GASH_DIR="${__gash_self%/*}"
 [[ "$GASH_DIR" == /* ]] || GASH_DIR="$PWD/${GASH_DIR#./}"
 GASH_DIR="${GASH_DIR%/.}"
