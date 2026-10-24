@@ -91,20 +91,21 @@ example `GASH_AWK=gawk`) before Gash loads.
 
 ## macOS
 
-macOS is best effort. Besides Homebrew Bash, Gash expects GNU tools:
+macOS is best effort and needs Homebrew Bash. The scanners (`files_largest`,
+`tree_stats`, `dirs_*`, `llm_tree`, `llm_find`) and the path checks of the
+`llm_*` functions are Go code and work the same as on Linux; a few functions
+still call GNU tools:
 
 | Missing GNU feature | Affected |
 |---|---|
-| `find -printf` | `files_largest`, `tree_stats`, `dirs_find_large --with-mtime`, `llm_tree` (JSON) |
-| `realpath -m` | path normalization in `llm_*` |
-| `sed --sandbox` | `sed` in `llm_exec` |
+| `sed --sandbox`, `gawk --sandbox` | `sed` and `awk` in `llm_exec` are refused |
 | `df -T` | `disk_usage` shows every `/dev` device, without a filesystem type |
 
-**Fix:** `brew install bash coreutils findutils gawk gnu-sed`, then put the GNU
+**Fix:** `brew install bash coreutils gawk gnu-sed`, then put the GNU
 names first in `PATH` before the Gash block in `~/.bashrc`:
 
 ```bash
-for p in coreutils findutils gnu-sed; do
+for p in coreutils gnu-sed; do
     PATH="$(brew --prefix)/opt/$p/libexec/gnubin:$PATH"
 done
 ```
