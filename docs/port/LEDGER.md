@@ -922,7 +922,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the binary applies the same two awk programs (field rebuild with single spaces, first-seen dedup on the rebuilt line, `NR`, `$1" "$2`, `index`-based remainder) to the text the shim pipes from `history`. |
 | Fix recipe (3.0) | `internal/system` `historyGrep`: the shim pipes `HISTTIMEFORMAT= history` so no timestamp prefix reaches the binary; parse each line as `NUM CMD`; dedup on CMD; column 2 = first two words, column 3 = the rest by position; exclude lines whose first word is `history_grep` or `hg`. |
 | Proving test | `TestLedger_SYS09` in `internal/system` (`git push`, `cp a a`, `ls ls ls`, two timestamped `git push origin` → one row each, exact columns) |
-| Status | accept: partly done 4734075 (binary); history_grep stub HISTTIMEFORMAT pending in core |
+| Status | accept: done b6d161e |
 
 <a id="sys-10"></a>
 #### SYS-10 · Extra positional arguments are silently accepted
@@ -940,7 +940,7 @@ Critical and high items:
 | rc.A behavior | Reproduced by the per-function 2.x grammars (last or first positional wins as in 2.x). |
 | Fix recipe (3.0) | `internal/cli/args`: these grammars accept exactly one positional; a second one prints `Error: Unexpected argument: X` (the human form of the llm family's `unexpected_argument`) and returns 1. |
 | Proving test | `TestLedger_SYS10` in `internal/cli/args` (one vector per function: two positionals → error, rc 1) |
-| Status | accept: partly done fb74a23 (binary); mkdir_cd stub pending in core |
+| Status | accept: done b6d161e |
 
 <a id="sys-11"></a>
 #### SYS-11 · mkdir_cd follows CDPATH and passes option-like names to mkdir and cd
@@ -958,7 +958,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the generated shim keeps `mkdir -p "$dir" && cd "$dir" \|\| return 1` verbatim in the caller's shell. |
 | Fix recipe (3.0) | `internal/compatgen` mkdir_cd shim: `mkdir -p -- "$dir" && CDPATH= cd -- "$dir"`, with `./-` substituted for a literal `-`; no stdout. |
 | Proving test | `TestLedger_SYS11` in `internal/compatgen` plus `testdata/script/ledger_sys11.txtar` (CDPATH set → PWD is `./foo`, stdout empty; `mkdir_cd -p` creates `./-p`) |
-| Status | accept: pending in core (compat/stubs.tmpl mkdir_cd) |
+| Status | accept: done b6d161e |
 
 <a id="sys-12"></a>
 #### SYS-12 · sudo_last returns 0 when declined and asks even with no previous command
@@ -1828,7 +1828,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same regex, same ssh argv). |
 | Fix recipe (3.0) | `internal/remote` target validation, shared by the `HOST:` parser (`internal/config`) and raw targets: user `^[A-Za-z0-9._][A-Za-z0-9._-]*$`, host `^[A-Za-z0-9][A-Za-z0-9.-]*$` or a bracketed IPv6 literal, so neither part starts with `-` and the host has no `:`; a failing `HOST:` entry gets the existing warning `Line N of ~/.gash_env: HOST target must be user@host (skipping)`; a failing raw target gets `Error: Unknown host alias 'X' and not a valid user@host target.` rc 1. Every ssh argv puts `--` before the target: `ssh OPTS -- TARGET CMD`, the 255 probe too. docs/security.md remote_* section. |
 | Proving test | `TestLedger_REM02` in `internal/remote` (validation table: `-oProxyCommand=x@h`, `u@-h`, `-u@h`, `u@h:22` refused; `deploy@box.example`, `u@[::1]` accepted) and `testdata/script/rem02_target.txtar` (logging ssh: `--` immediately before the target in both ssh calls) |
-| Status | accept: partly done 4fc4e85 (internal/remote); config.ValidHostTarget strictness pending in core |
+| Status | accept: done cdbab90 |
 
 <a id="rem-03"></a>
 #### REM-03 · Path tiers are checked on strings the remote side may expand
@@ -1918,7 +1918,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | REM-02's target validation (no `:` outside a bracketed IPv6 literal); the skip warning adds `Hint: put the port in a Host entry of ~/.ssh/config`. |
 | Proving test | `TestLedger_REM08` in `internal/remote` (part of REM-02's table: `u@h:22` refused with the warning) |
-| Status | accept: partly done 4fc4e85 (internal/remote); config.ValidHostTarget strictness pending in core |
+| Status | accept: done cdbab90 |
 
 <a id="rem-10"></a>
 #### REM-10 · A `/.` (or `//.`) root target normalizes to `.` and classifies as allow, not deny:/
@@ -2046,7 +2046,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the apply phase in the shim (DEV-16) keeps 2.x's `rc` rule. |
 | Fix recipe (3.0) | In the generated node_upgrade apply phase (`internal/compatgen` template of `lib/modules/node.sh`): set `rc=1` when any `nvm install` fails; keep the messages and the final `OK: Active version:` line, then return `rc`. Docs: node_upgrade NOTES add "exits 1 when an install or a removal failed". |
 | Proving test | `testdata/script/node_upgrade_install_fail.txtar` (mock nvm whose install fails: rc 1, v20.11.1 kept, the error line present) as `TestLedger_DEV06_fix` |
-| Status | accept: pending in core (compat/stubs.tmpl) |
+| Status | accept: done dda94a4 |
 
 <a id="dev-07"></a>
 #### DEV-07 · nvm_prune_versions --force reports success when an uninstall fails
@@ -2064,7 +2064,7 @@ Critical and high items:
 | rc.A behavior | reproduced in the shim. |
 | Fix recipe (3.0) | Generated nvm_prune_versions shim: record each failing `nvm uninstall`, print `Error: Uninstalling vX failed.` for it, and end with `Error: N duplicate version(s) could not be removed.` rc 1 instead of the OK line when N > 0. Docs: nvm_prune_versions NOTES. |
 | Proving test | `testdata/script/nvm_prune_uninstall_fail.txtar` (`TestLedger_DEV07_fix`): rc 1, no OK line |
-| Status | accept: pending in core (compat/stubs.tmpl) |
+| Status | accept: done dda94a4 |
 
 <a id="dev-08"></a>
 #### DEV-08 · nvm_prune_versions reads io.js entries as Node versions
@@ -2082,7 +2082,7 @@ Critical and high items:
 | rc.A behavior | reproduced in the shim. |
 | Fix recipe (3.0) | Generated shim: match whole entries with `grep -oE '(^\|[[:space:]>])v[0-9]+\.[0-9]+\.[0-9]+'` and strip the prefix, so `iojs-v*` lines are skipped. Docs: none. |
 | Proving test | `testdata/script/nvm_prune_iojs.txtar` (`TestLedger_DEV08_fix`): `OK: No duplicate NVM versions found.` |
-| Status | accept: pending in core (compat/stubs.tmpl) |
+| Status | accept: done dda94a4 |
 
 ### ai
 
@@ -2918,7 +2918,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the hook emitted by `gash init bash` prints the title from the same values with the same `printf`, bytes unchanged (the prompt stays a Bash hook in 3.x). |
 | Fix recipe (3.0) | In the `internal/shellinit` hook template, before the `printf`, replace control characters in each part: `local t="${cwd} [${USER-}]"; t=${t//[[:cntrl:]]/?}` (same for the SSH form), so C0 bytes, DEL and, in a UTF-8 locale, U+0080-U+009F become `?`. No new error; the title is cosmetic. Note in `docs/configuration.md` (Prompt) that control characters in the title are shown as `?`. |
 | Proving test | `TestLedger_SHELL02` in `internal/shellinit` (template sanitizes every title part); `testdata/script/prompt_title_controls.txtar` (cwd holding `\a` and `\e`: the title output is exactly one `\e]2;...\a` frame with `?` in place of each control; an ordinary cwd gives the 2.x bytes) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 3e2b9ab |
 
 <a id="shell-03"></a>
 #### SHELL-03 · Completion offers `gash help`, which fails
@@ -2936,7 +2936,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the generated `bash_completion` keeps `help` among the candidates, and `gash help` keeps the error text and rc 1. |
 | Fix recipe (3.0) | `internal/compatgen` builds the candidate list from the card's own topic table in `internal/registry` plus `all` and `migrate` (the subcommands `gash` accepts), never a literal list; drop `help`. `gash help` keeps its error (users have `gash_help`). |
 | Proving test | `TestLedger_SHELL03` in `internal/compatgen` (each completion candidate for `gash` runs with rc 0 under a fake terminal; `help` is not a candidate) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 8128400 |
 
 <a id="shell-04"></a>
 #### SHELL-04 · GASH_HISTORY overwrites the user's HISTCONTROL, while the migration says it is respected
@@ -2954,7 +2954,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the history block emitted by `gash init bash` assigns the same four values unconditionally when `GASH_HISTORY` is not `0`, and the migration text is unchanged. |
 | Fix recipe (3.0) | In the `internal/shellinit` history block: keep a non-empty HISTCONTROL and add `ignoreboth` only when none of `ignorespace`, `ignoredups`, `ignoreboth` is present (`case ":$HISTCONTROL:" in *:ignore*) ;; *) HISTCONTROL=${HISTCONTROL:+$HISTCONTROL:}ignoreboth ;; esac`); keep `HISTSIZE=-1`, `HISTFILESIZE=-1` (documented). Update `docs/configuration.md:180` and `.gash_env.template:104`: "adds ignoreboth unless you set your own HISTCONTROL". |
 | Proving test | `TestLedger_SHELL04` in `internal/shellinit`; `testdata/script/history_respects_histcontrol.txtar` (`HISTCONTROL=erasedups` before load → `erasedups:ignoreboth`; `ignoredups` → unchanged; unset → `ignoreboth`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done dc77d5b |
 
 <a id="shell-06"></a>
 #### SHELL-06 · The `grep` color alias is never defined
@@ -2972,7 +2972,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the alias pack evaluated by the binary keeps the 2.x outcome (no `grep` alias), and the generated reference keeps listing it. |
 | Fix recipe (3.0) | In the `internal/registry` alias pack, define `grep` when `grep --color=auto -q x` succeeds on the input `x` (Go: run once at `gash init bash` time, no cache); docs already match the fix. |
 | Proving test | `TestLedger_SHELL06` in `internal/shellinit` (fake GNU grep that honors `--color`: init output contains `alias grep='grep --color=auto'`; a grep that rejects the flag: no alias) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 582e82b |
 
 <a id="shell-08"></a>
 #### SHELL-08 · The first word of GASH_PATH_ADD is taken as a path_add option
@@ -2990,7 +2990,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the init layer passes the split words (SHELL-07) to the same option parsing, so `--append` appends and `-h` prints the help. |
 | Fix recipe (3.0) | `internal/shellinit` adds the directories with an option-less helper (`__gash_path_prepend DIR...`, same once-only rule as `path_add`); a word that starts with `-` is a directory name like any other (it does not exist, so it is skipped). `docs/configuration.md` (GASH_PATH_ADD): "directories only, no options". |
 | Proving test | `TestLedger_SHELL08` in `internal/shellinit` (`GASH_PATH_ADD='-h /opt/x'` emits no help text and adds `/opt/x` if it exists) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done f40af4e |
 
 <a id="shell-09"></a>
 #### SHELL-09 · Gash overwrites aliases defined before it, and unload does not restore them
@@ -3008,7 +3008,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the init layer defines the pack aliases unconditionally as 2.x does, and the emitted unload keeps the 2.x snapshot (names only). |
 | Fix recipe (3.0) | In `internal/shellinit`, emit every pack alias guarded by `[[ -v 'BASH_ALIASES[NAME]' ]] \|\| alias NAME=...` (a name the user defined first is left alone) and record the names Gash defined in `__GASH_ALIAS_NAMES`; unload removes only those. Makes `docs/configuration.md:51-52` true; note it in CHANGELOG (aliases the user had stop being replaced). |
 | Proving test | `TestLedger_SHELL09` in `internal/shellinit`; `testdata/script/alias_user_first.txtar` (`alias ll='ls -alF'` before load: same after load and after unload; no prior alias: Gash's after load, none after unload) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 5da215a |
 
 <a id="shell-11"></a>
 #### SHELL-11 · Sourcing gash.sh through a symlinked file breaks GASH_DIR
@@ -3026,7 +3026,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the generated `gash.sh` computes `GASH_DIR` the same way, so a linked file fails as in 2.x (the binary is then not found next to it). |
 | Fix recipe (3.0) | `internal/compatgen` template for `gash.sh`: resolve the file with a loop (`f=${BASH_SOURCE[0]}; while [[ -L $f ]]; do l=$(readlink -- "$f"); [[ $l == /* ]] \|\| l=${f%/*}/$l; f=$l; done`) before taking the directory; `gash init bash` prints the resolved absolute path. |
 | Proving test | `TestLedger_SHELL11` in `internal/compatgen`; `testdata/script/gash_sh_symlink.txtar` (source through a file link and a chain of two links: `GASH_VERSION` is the tree's version, no load errors) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done aeb52af (GASH_DIR is resolved in gash.sh, not printed by gash init) |
 
 <a id="shell-12"></a>
 #### SHELL-12 · Module aliases are outside the shadow rule
@@ -3044,7 +3044,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the init layer applies the shadow rule (`[[ -v 'BASH_ALIASES[NAME]' ]]` guard and PATH check) to the alias-pack names the 2.x loader checked and not to module aliases. |
 | Fix recipe (3.0) | In `internal/registry`, mark each alias "shadowable"; apply the PATH check to module aliases too (except the ones whose purpose is to replace a program, listed explicitly with a reason), and remove `sl` from the exempt list or document why. `docs/configuration.md` (aliases) states the rule for module aliases. |
 | Proving test | `TestLedger_SHELL12` in `internal/shellinit` (fake `dcc` on PATH: no `dcc` alias emitted; without it: emitted) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done f75f7f8, 07d81fe |
 
 ### self-management
 
@@ -3064,7 +3064,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `gash_upgrade` (decision `redesign`: name, output lines and exit codes kept, `upgrade.md` 3.6 flow) still checks out the highest final release when it differs from HEAD, so an rc.A install returns to v2.1.0. |
 | Fix recipe (3.0) | In `internal/selfmgmt`: parse current and latest as semver (`v` optional, a pre-release is lower than its release); without an exact tag use `git describe --tags --abbrev=0` plus `git merge-base --is-ancestor LATEST HEAD`; when current >= latest or LATEST is an ancestor of HEAD print `Info: This checkout (CUR) is newer than the latest release (LATEST); not downgrading.` and return 0 with no checkout. Rollback becomes an explicit command (`upgrade.md`). Update `docs/reference/gash.md` (gash_upgrade). |
 | Proving test | `TestLedger_SELF01` in `internal/selfmgmt` (mirror with v2.0.0, v2.1.0, v3.0.0-rc.1 and an untagged commit after v2.1.0: from rc.1 and from the untagged commit HEAD is unchanged and the newer-than line is printed; from v2.0.0 HEAD moves to v2.1.0) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9f7520e |
 
 <a id="self-02"></a>
 #### SELF-02 · gash_uninstall deletes ~/.gashrc without a backup and then deletes its own profile backups
@@ -3082,7 +3082,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A removes `~/.gashrc` and the profile backups exactly as 2.x does. |
 | Fix recipe (3.0) | In `internal/selfmgmt` uninstall: when `~/.gashrc` differs from every known template (2.x `.gashrc`, its custom-dir variant, the four 1.x variants), rename it to `~/.gashrc.gash-uninstall.bak` and print `Info: Saved your ~/.gashrc as ~/.gashrc.gash-uninstall.bak`; keep the profile `.gash-uninstall.bak` files and list them in the final lines (`Info: Backups kept: ...`). `docs/troubleshooting.md` (uninstall) lists them. |
 | Proving test | `TestLedger_SELF02` in `internal/selfmgmt` (modified `~/.gashrc` → `.bak` with the same bytes; pristine template → no `.bak`; profile backup present after uninstall) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37931cb |
 
 <a id="self-03"></a>
 #### SELF-03 · gash_unload leaves completion specs, exports and an empty PROMPT_COMMAND
@@ -3100,7 +3100,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the unload function emitted by `gash init bash` stays Bash and keeps the 2.x leftovers (`shell.md`), reading the 2.x snapshot format so a 2.x-loaded shell can still unload. |
 | Fix recipe (3.0) | In `internal/shellinit`: record `__GASH_COMPLETE_NAMES` when registering and run `complete -r "${__GASH_COMPLETE_NAMES[@]}"` on unload; add a second array `__GASH_SNAPSHOT2` holding set/unset and export state of `LESSOPEN LESSCLOSE LS_COLORS LSCOLORS LESS_TERMCAP_* PAGER NVM_DIR debian_chroot PROMPT_COMMAND` and pre-existing `GASH_*` (SELF-05), restored exactly; the 2.x `__GASH_SNAPSHOT` format stays valid. |
 | Proving test | `TestLedger_SELF03` in `internal/shellinit`; `testdata/script/unload_exact.txtar` (`declare -p` minus dynamic variables, `alias -p`, `complete -p`, `shopt -p`, `set -o`, `trap -p`, `umask` identical before load and after unload) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 542e801 |
 
 <a id="self-04"></a>
 #### SELF-04 · gash_uninstall replaces a symlinked profile with a regular file
@@ -3118,7 +3118,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A writes the edited profile in place of the link (temp file renamed over the link path), with the same `.gash-uninstall.bak` side copy. With BSD `sed` (macOS) `sed -i` refuses the link instead and the profile keeps the block, as 2.x does there; the fix recipe drops the `sed` dependency on both. |
 | Fix recipe (3.0) | `internal/selfmgmt` profile editing resolves the link (`filepath.EvalSymlinks`) and writes a temp file in the target's directory, then renames it over the target, keeping its mode; the link stays. Same for install. |
 | Proving test | `TestLedger_SELF04` in `internal/selfmgmt` (linked `~/.bashrc`: link intact, target without the block, mode kept) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 25f241e |
 
 <a id="self-05"></a>
 #### SELF-05 · gash_unload removes the user's own GASH_* settings
@@ -3136,7 +3136,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the emitted unload sweeps `GASH_*` and `__GASH_*` as 2.x does. |
 | Fix recipe (3.0) | `internal/shellinit`: record `compgen -v GASH_` (names, values, export flag) in `__GASH_SNAPSHOT2` before load (SELF-03); unload restores those and unsets only the names Gash created; the secret caches (`__GASH_ENV_*`) are always unset. Update `docs/configuration.md:236-238`. |
 | Proving test | `TestLedger_SELF05` in `internal/shellinit` (`GASH_BANNER=0` exported before load: same value and export flag after unload; `GASH_VERSION` gone) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 542e801 |
 
 <a id="self-06"></a>
 #### SELF-06 · gash_doctor always returns 0, ignores unknown options and checks incomplete lists
@@ -3154,7 +3154,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `gash_doctor` (decision `redesign`, SELF-17) keeps the 2.x output lines, rc 0 with issues, and ignores unknown options. |
 | Fix recipe (3.0) | In `internal/selfmgmt` doctor: return 1 when issues > 0; reject an unknown option with `Error: Unknown option: X` rc 2 (the project's usage status); take the file list from the shipped manifest (SELF-17). Update `docs/reference/gash.md` (gash_doctor: "returns 1 when a check fails"). |
 | Proving test | `TestLedger_SELF06` in `internal/selfmgmt` (missing shipped file → rc 1 and the issue line; `--bogus` → usage error, no checks run) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 94d8efc |
 
 <a id="self-07"></a>
 #### SELF-07 · The installer leaves an unreleased checkout behind when GASH_REQUIRE_SIGNED refuses
@@ -3172,7 +3172,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the rewritten `install.sh` (`layout.md`: clone and tag as before, then fetch and verify the binary; `upgrade.md` 3.7) keeps the clone-then-verify order, so the clone stays after the refusal and no binary is fetched. |
 | Fix recipe (3.0) | `install.sh`: clone into `mktemp -d "${INSTALL_DIR%/*}/.gash-install.XXXXXX"`, check out and verify the tag there, then `mv` it to `INSTALL_DIR`; on refusal remove the temporary clone and print `Info: Nothing was installed.`; for an existing install verify before the checkout (already so); the binary fetch runs only after the rename. |
 | Proving test | `testdata/script/install_require_signed.txtar` (unsigned mirror, `GASH_REQUIRE_SIGNED=1`: rc 1, refusal line, `~/.gash` absent; signed and verifiable: installed) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done fa0cb46 |
 
 <a id="self-08"></a>
 #### SELF-08 · Migration backups are world-readable, keep the old mode of ~/.gash_env and are never pruned
@@ -3190,7 +3190,7 @@ Critical and high items:
 | rc.A behavior | Moot (D-6): 3.x does not port the 1.x migration; `gash_migrate` prints a pointer to the 2.x route and writes nothing. |
 | Fix recipe (3.0) | In `internal/selfmgmt` migrate (and the Bash fallback): create `backups/` and `STAMP/` with mode 0700, write each copy with 0600, keep the 5 newest stamps and remove older ones after a successful write (never the one just made); `--status` lists them. Document in `docs/troubleshooting.md` (migration backups). |
 | Proving test | `TestLedger_SELF08` in `internal/selfmgmt` (umask 022: directory 0700, files 0600; seven runs leave five stamps; `--rollback` still restores the newest) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (moot under D-6); TestSelfmgmt_MigratePointer |
 
 <a id="self-09"></a>
 #### SELF-09 · The migration does not mention the 1.x history behavior it drops
@@ -3208,7 +3208,7 @@ Critical and high items:
 | rc.A behavior | Moot (D-6): 3.x does not port the 1.x migration screens. |
 | Fix recipe (3.0) | Add a migration item in `internal/selfmgmt` (and `migrate.sh` while it ships): "Gash 1.x shared history between open terminals. Keep that (GASH_HISTORY_SYNC=1)?", recommended choice no, writes `GASH_HISTORY_SYNC=1` to `~/.gash_env` on yes. Add the line to `docs/migration` notes. |
 | Proving test | `TestLedger_SELF09` in `internal/selfmgmt` (1.x `~/.gashrc`: the plan contains the history item; `--yes` leaves the setting unset) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (moot under D-6) |
 
 <a id="self-10"></a>
 #### SELF-10 · Tag signatures are detected by a text match
@@ -3226,7 +3226,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/gitx` runs the same `cat-file -p` and applies the same unanchored pattern before `verify-tag`. |
 | Fix recipe (3.0) | `internal/gitx.TagSignature`: require `git cat-file -t refs/tags/TAG` = `tag`, then a line equal to `-----BEGIN PGP SIGNATURE-----` or `-----BEGIN SSH SIGNATURE-----` after the header block, then `git verify-tag`; an unsigned annotated or lightweight tag is "not signed". Same in `install.sh`. |
 | Proving test | `TestLedger_SELF10` in `internal/gitx` (annotated tag quoting the marker → "not signed"; lightweight tag on a signed commit → "not signed"; signed tag with the key → verified) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 156b8bb |
 
 <a id="self-12"></a>
 #### SELF-12 · The `gash` card counts and lists aliases that are not defined
@@ -3244,7 +3244,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the binary renders the card from the static registry lists with the same counts, whatever the caller's shell defined. |
 | Fix recipe (3.0) | The generated `gash` shell function passes the live alias names (`GASH__ALIASES="${!BASH_ALIASES[*]}"`) to the binary; `internal/registry` card code counts and lists only registered aliases present in that list (all registered ones when the variable is absent, e.g. from a script). |
 | Proving test | `TestLedger_SELF12` in `internal/registry` (`GASH__ALIASES` without `gp gc` → git count 42 and neither listed) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 1a72c4e |
 
 <a id="self-13"></a>
 #### SELF-13 · Small message defects: positional reported as an option, wrong line count in a comment
@@ -3262,7 +3262,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: same message and rc. |
 | Fix recipe (3.0) | `internal/selfmgmt` quote command: a word not starting with `-` gives `Error: Unexpected argument: foo (usage: gash_inspiring_quote [--source])` rc 1; options keep `Unknown option`. Comment fixed in the Bash it replaces (no code effect). |
 | Proving test | `TestLedger_SELF13` in `internal/selfmgmt` (`foo` → unexpected-argument line, rc 1; `--bogus` → unknown-option line, rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 0b987ab |
 
 <a id="self-14"></a>
 #### SELF-14 · A 1.x shell reading the 2.x/3.x quote file can print a comment line
@@ -3280,7 +3280,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A keeps `quotes/list.txt` in the 2.x format at the same path (`layout.md`), so an open 1.x shell behaves the same. |
 | Fix recipe (3.0) | None in code (1.x is frozen); `upgrade.md` 3.5 notes "open a new terminal after upgrading from 1.x". Keep the file format stable (no new line kinds) through 3.x. |
 | Proving test | `TestLedger_SELF14` in `internal/selfmgmt` (the embedded and shipped `quotes/list.txt` hold only quote lines and `# source` lines, the 2.x grammar) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="self-15"></a>
 #### SELF-15 · Arguments are ignored, and gash_doctor --timing runs the user's ~/.bashrc three times
@@ -3298,7 +3298,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the same commands accept and ignore extra arguments, and `--timing` keeps the three whole-shell runs (the measurement is its documented purpose). |
 | Fix recipe (3.0) | Every self-management command in `internal/selfmgmt` rejects an unknown option with `Error: Unknown option: X` and an unexpected positional with `Error: Unexpected argument: X`, rc 2 (the registry's usage status), before any side effect. `gash_doctor --timing` prints `Info: --timing starts your shell 3 times (your ~/.bashrc runs each time).` before measuring. Update `docs/reference/gash.md`. |
 | Proving test | `TestLedger_SELF15` in `internal/selfmgmt` (each command with `--bogus`: rc 2, no file written, no git call) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done f6ba544 |
 
 ### lib/core
 
@@ -3318,7 +3318,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the binary applies the same mask rule and prints the URL as 2.x does (rule 2; the fix is the first 3.0 change). |
 | Fix recipe (3.0) | `internal/config.MaskDBURL`: when the userinfo (text before the last `@`) contains `:`, print `driver://USER:****@HOSTPART` with USER possibly empty; equivalently the regex `^([^:]+://[^:@]*:).+(@[^@]*)$`. Shared by every place that shows a DB URL. |
 | Proving test | `TestLedger_CORE03` in `internal/config` (`mysql://:p@h/d` → `mysql://:****@h/d`; `u:p@@h` → `u:****@h`; no password → unchanged); `testdata/script/db_list_mask.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done fc62bda |
 
 <a id="core-04"></a>
 #### CORE-04 · gash_db_list lists every duplicate name, while only the first is used
@@ -3336,7 +3336,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A lists both rows and resolves the first. |
 | Fix recipe (3.0) | `internal/config` loader: on a repeated `DB:` (and `SSH:`, `HOST:`) name, keep the first and warn `Line N of ~/.gash_env: duplicate DB:NAME, ignored (first is at line M)` in interactive mode; `gash_db_list` shows only the entries in effect. |
 | Proving test | `TestLedger_CORE04` in `internal/config` (duplicate name → one entry, the first, one warning with both line numbers) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 43e391e |
 
 <a id="core-06"></a>
 #### CORE-06 · Messages name ~/.gash_env even when GASH_ENV_FILE points elsewhere
@@ -3354,7 +3354,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the same literal text. |
 | Fix recipe (3.0) | `internal/config` exposes `ShownPath()` (`${GASH_ENV_FILE:-~/.gash_env}` with `$HOME` shown as `~`); the three messages use it. `--help` bodies stay as they are (they describe the default file). |
 | Proving test | `TestLedger_CORE06` in `internal/config` (`GASH_ENV_FILE=/x/y`: the three messages name `/x/y`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 75b93b7, d16347c |
 
 <a id="core-11"></a>
 #### CORE-11 · A bracketed IPv6 host in a DB URL is split at its first colon
@@ -3372,7 +3372,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/config.ParseDBURL` splits the same way, so the native driver is handed host `[` and fails as 2.x did (error text per DB-07). |
 | Fix recipe (3.0) | `ParseDBURL`: when hostinfo starts with `[`, the host is up to the matching `]` (brackets removed for the driver), the port follows `]:`; a missing `]` is `invalid_db_url` with hint `Write IPv6 hosts as [addr]:port`. Document in `.gash_env.template` (DB section). |
 | Proving test | `TestLedger_CORE11` in `internal/config` (`[::1]:5432` → host `::1`, port `5432`; `[::1]` → default port; `[::1` → `invalid_db_url`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 2e890cb, d16347c |
 
 <a id="core-13"></a>
 #### CORE-13 · DB passwords lose trailing newlines and `%00` when decoded
@@ -3390,7 +3390,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `config.DecodePassword` strips trailing newlines and drops NUL, as 2.x does. |
 | Fix recipe (3.0) | Decode into the value directly (no command substitution) and refuse a password that contains NUL with a clear error. |
 | Proving test | `TestLedger_CORE13_2x` pins the 2.x result in `internal/config`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ce8eff2, d16347c |
 
 <a id="core-14"></a>
 #### CORE-14 · HOME is matched as a glob when a path is shown with `~`
@@ -3408,7 +3408,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `config.ShownPath` matches HOME with a port of Bash's C-locale pattern matcher. Only patterns with an equivalence class or a multi-character collating symbol (`[=]=]`) can differ, because they depend on the locale (forced, same reasoning as CORE-08). |
 | Fix recipe (3.0) | Replace only a literal HOME followed by `/` or the end of the path. |
 | Proving test | `TestLedger_CORE14_2x` in `internal/config`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ce8eff2, 95b09cc |
 
 <a id="core-15"></a>
 #### CORE-15 · SSH key paths: `~user/` is not a home directory, and `&` in HOME is rewritten on Bash 5.2
@@ -3426,7 +3426,7 @@ Critical and high items:
 | rc.A behavior | Reproduced as Bash 5.2 does it (the version CI and the parity tests use): `~` prefix replaced by HOME, `&` in HOME read as the match. |
 | Fix recipe (3.0) | Expand only `~` and `~/`, quote the replacement, and refuse `~user`. |
 | Proving test | `TestLedger_CORE15_2x` in `internal/config`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ce8eff2 |
 
 <a id="core-19"></a>
 #### CORE-19 · A located download URL that 404s with a Content-Length is treated as present
@@ -3444,7 +3444,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/ui/download.go:123-136` `Downloader.RemoteSize` returns `resp.ContentLength` of the HEAD response even on a 404 (only a response with no/`<0` length is 0), matching 2.x `curl -fsIL`; `download_test.go` records that a 404 reports the size of its own body. |
 | Fix recipe (3.0) | `internal/ui` `RemoteSize`: treat a non-2xx HEAD response as size 0 (or an explicit error), so a 404 with a `Content-Length` is not read as a present download; `internal/chrome` `locate` then fails cleanly with a clear message instead of starting a doomed download. |
 | Proving test | `TestLedger_CORE19_fix` in `internal/ui`/`internal/chrome` (HEAD 404 with a non-zero Content-Length → size 0, locate fails with a message); `TestLedger_CORE19_2x` proves the reproduction |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d34ccf4 |
 
 ### test harness
 
@@ -3464,7 +3464,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness on the branch before Go mode starts (test infrastructure, not Gash; no expectation changes). The Bash framework is removed at cutover. |
 | Fix recipe (3.0) | Never forward `NO_COLOR` into the spec environment; pass a runner-only `GASH_TEST_NO_COLOR=1` and read it in `tests/gash-test.sh:36` for the runner's own colors. testscript sets an explicit environment per script. |
 | Proving test | `NO_COLOR=1 bash tests/run.sh` gives 807/0; testscript scripts never inherit `NO_COLOR` (`testdata/script/env_hermetic.txtar`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done c72b558 |
 
 <a id="test-02"></a>
 #### TEST-02 · `tests/run.sh -j1` is refused
@@ -3482,7 +3482,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness (it gains `--impl` at the same time). |
 | Fix recipe (3.0) | Accept `-j*` and `--jobs=*`; validate an integer ≥ 1. |
 | Proving test | `bash tests/run.sh -j1 specs/unload_spec.sh` exits 0 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (obsolete at cutover: go test -p replaces tests/run.sh) |
 
 <a id="test-03"></a>
 #### TEST-03 · 88 conditional skips print no reason
@@ -3500,7 +3500,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness (`gash_require X` everywhere, `(no reason)` fallback). |
 | Fix recipe (3.0) | Replace the idiom with `gash_require X`; testscript uses `[exec:X]` conditions, which print the condition. |
 | Proving test | Without sqlite3 every DB skip prints `(sqlite3 not available)` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); every skip carries a reason |
 
 <a id="test-04"></a>
 #### TEST-04 · Specs fake `kill` with a fixed PID, a hazard once the code under test is a binary
@@ -3518,7 +3518,7 @@ Critical and high items:
 | rc.A behavior | These tests are rewritten around a real victim (`sleep 300 & pid=$!`, pgrep stub returns `$pid`, as `functions_smoke_spec.sh:218` already does) before any Go-mode run; Go-mode runs also happen in a PID and network namespace. Expectations unchanged. |
 | Fix recipe (3.0) | Same rewrite in the testscript port; no test may name a PID it did not create. |
 | Proving test | Go mode: the victim is dead, no other PID was signalled (the namespace contains only the test's processes) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 8f03ff2 |
 
 <a id="test-05"></a>
 #### TEST-05 · 52 render fixtures fake external commands as Bash functions
@@ -3536,7 +3536,7 @@ Critical and high items:
 | rc.A behavior | A fixture helper writes such fakes as PATH stubs; Go-mode runs have no network, so a missed fake fails instead of escaping. Shell-side names (`history`, `fc`, `nvm`) stay function overrides. |
 | Fix recipe (3.0) | Same in the testscript port (stubs on PATH, network namespace). |
 | Proving test | Go mode under `unshare -n` passes R2-R6 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 10ed38f |
 
 <a id="test-06"></a>
 #### TEST-06 · `llm_spec.sh` uses the repository's own `lib/` as a fixture tree
@@ -3554,7 +3554,7 @@ Critical and high items:
 | rc.A behavior | A private fixture tree in `$tmp` replaces it; assertions unchanged. |
 | Fix recipe (3.0) | Same fixture in testscript. |
 | Proving test | Identical output in both modes |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); llm txtars use archive fixtures |
 
 <a id="test-07"></a>
 #### TEST-07 · 18 specs source Gash at top level in the runner process
@@ -3572,7 +3572,7 @@ Critical and high items:
 | rc.A behavior | Lines removed in the harness. |
 | Fix recipe (3.0) | n/a after cutover (testscript). |
 | Proving test | Same results, faster start |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (obsolete at cutover) |
 
 <a id="test-09"></a>
 #### TEST-09 · `tests/run.sh` can end in FAIL with 0 failed: a reaped job is waited for again
@@ -3590,7 +3590,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness: each spec process records its own exit status in the run directory, and the summary reads those files instead of the `wait` status. |
 | Fix recipe (3.0) | n/a after cutover (testscript). |
 | Proving test | The summary status follows the recorded statuses; a run with every spec passing never ends in FAIL. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (obsolete at cutover) |
 
 <a id="test-10"></a>
 #### TEST-10 · Mock-client DB specs depend on the runner's speed: the slow-query rule runs the mock twice
@@ -3608,7 +3608,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the specs: after sourcing they pin `EPOCHREALTIME` to a constant, as `llm_portability_spec.sh` already does, so the elapsed time is 0 and the mock runs once. Assertions unchanged. |
 | Fix recipe (3.0) | n/a after cutover (testscript, with the clock injected in `internal/db`). |
 | Proving test | The three tests pass with a mock client that sleeps 150 ms. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); injected clock |
 
 <a id="test-11"></a>
 #### TEST-11 · Specs fake curl per test, but the binary speaks HTTP itself and never runs those fakes
@@ -3626,7 +3626,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the harness: a test writes the HTTP answers it wants (method, URL pattern, status, headers, body, or "unreachable") to a route file named by `MOCK_CURL_ROUTES`. `tests/mocks/bin/curl` serves routed answers with curl's `-f`, `-I` and `-o` semantics (Bash mode), and the HTTPS fake serves the same file (Go mode). The per-test curl fakes listed above become route files; assertions stay byte for byte the same and the Bash reference stays 807/0. Without `MOCK_CURL_ROUTES` the mock and the fake answer as before. |
 | Fix recipe (3.0) | n/a after cutover (testscript, with a local HTTPS server per script). |
 | Proving test | The converted tests pass in both modes; a route answering 404 gives exit 22 from `curl -f` in Bash mode and the binary's exit 22 path in Go mode. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); per-script HTTPS servers |
 
 <a id="test-12"></a>
 #### TEST-12 · The settings leak check also scans the random temp path, which can hold a checked word
@@ -3644,7 +3644,7 @@ Critical and high items:
 | rc.A behavior | Fixed in the spec: the leak words are checked in the output with the temp path replaced by `TMP`; the line-number checks and the `~/` check still read the output as printed. |
 | Fix recipe (3.0) | n/a after cutover (testscript, fixed work directory). |
 | Proving test | The test passes with `TMPDIR` named `boxprod` and still fails when a warning prints a value from the file. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 2566e9d |
 
 <a id="test-13"></a>
 #### TEST-13 · Specs call 2.x private helpers that rc.A does not have
@@ -3662,7 +3662,7 @@ Critical and high items:
 | rc.A behavior | The tests stay as they are and run in Bash mode; Go mode reports them under TEST-13. Their rules are pinned by the Go unit tests of `internal/llmexec`, `internal/pathguard`, `internal/sqlguard` and `internal/llm`, which reuse their vectors. |
 | Fix recipe (3.0) | n/a after cutover (testscript drives the public functions). |
 | Proving test | PARITY lists each of these tests as TEST-13 in the Go column. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (obsolete at cutover; rules pinned in llmexec, pathguard, sqlguard, llm) |
 
 <a id="test-14"></a>
 #### TEST-14 · Mock-client DB specs: the native drivers never run a mock mysql or psql
@@ -3680,7 +3680,7 @@ Critical and high items:
 | rc.A behavior | The tests run in Bash mode; Go mode reports them under TEST-14. What they check is pinned in `internal/db`: `TestMySQLMatches2x` (read-only session, row cap, the database from `-d` and `.target-database`, the password never in argv or environment) and `TestPgsqlMatches2x` (read-only, standard strings and timeout settings, `current_database()`), plus the byte-for-byte comparison against real psql on a private PostgreSQL 16. |
 | Fix recipe (3.0) | n/a after cutover (testscript with the in-process fakes). |
 | Proving test | PARITY lists each of these tests as TEST-14 in the Go column. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestMySQLMatches2x, TestPgsqlMatches2x |
 
 ## Forced divergences
 
@@ -3846,7 +3846,7 @@ Critical and high items:
 | rc.A behavior | The Go binary builds JSON natively and never depends on jq, so rc.A always emits the jq-present valid JSON. The no-jq degraded path is a forced divergence: it cannot arise because there is no jq dependency. |
 | Fix recipe (3.0) | None in Go beyond the native encoder (`internal/contract`). For a transitional Bash build, add the `llm_git_log` guard (`jq_not_found` FATAL) or render with `__gash_json_escape`. Keep the pretty 2-space layout byte-for-byte. |
 | Proving test | `TestLedger_LLM04` validates `llm_git_status` output against `testdata/schema/git_status.json` with no jq on PATH (shim run). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="llm-16"></a>
 #### LLM-16 · RIPGREP_CONFIG_PATH and rg global ignore files change llm_grep / llm_find output
@@ -3864,7 +3864,7 @@ Critical and high items:
 | rc.A behavior | The native engine reads no rg config and ignores `RIPGREP_CONFIG_PATH`; output is fixed by the engine's own ignore rules. The rg-config dependency cannot be reproduced. |
 | Fix recipe (3.0) | None beyond the native engine; document that external rg config has no effect. |
 | Proving test | `TestLedger_LLM16` runs `llm_grep` with a hostile `RIPGREP_CONFIG_PATH` set and asserts unchanged output. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="llm-21"></a>
 #### LLM-21 · llm_docker_check clobbers the caller's shell variables
@@ -3936,7 +3936,7 @@ Critical and high items:
 | rc.A behavior | The single native engine skips binary files as rg does, so the grep-fallback behavior (and its version dependence) is not reproduced; folded into the one-engine decision (LLM-03). |
 | Fix recipe (3.0) | None beyond the native engine's binary-file skip (`internal/fsscan`). Bash fix if the fallback is kept: add `-I`. |
 | Proving test | Covered by `TestLedger_LLM03` (binary files skipped regardless of installed tools). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="llm-35"></a>
 #### LLM-35 · llm_config output depends on which yq is installed
@@ -4047,7 +4047,7 @@ Critical and high items:
 | rc.A behavior | Not reproduced: there is no client and no TSV pipe. The native drivers return typed rows, so empty single-column rows are preserved (correct `rows`) and the contract encoder escapes control chars. The awk-TSV transport cannot be reproduced because the CLIs are gone. |
 | Fix recipe (3.0) | None beyond using the native drivers and encoder in `internal/db`/`internal/contract`. |
 | Proving test | `TestLedger_DB03` asserts an empty single-column row is counted and a control-char value round-trips as valid JSON through the native path. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="db-05"></a>
 #### DB-05 · without jq the DB envelope silently becomes a raw result array
@@ -4065,7 +4065,7 @@ Critical and high items:
 | rc.A behavior | Not reproduced: the Go binary builds JSON natively and always emits `{data,rows,query_time}`; the no-jq degraded path cannot arise because there is no jq dependency. |
 | Fix recipe (3.0) | None beyond the native encoder in `internal/contract`. |
 | Proving test | `TestLedger_DB05` asserts `llm_db_query` with no jq on PATH still yields the `{data,rows,query_time}` envelope. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="db-07"></a>
 #### DB-07 · DB error `details` text comes from the native driver, not the client
@@ -4119,7 +4119,7 @@ Critical and high items:
 | rc.A behavior | With pgx the query string goes straight to the server, which never processes psql meta-commands, so `\!`/`\copy`/`\i` cannot run and no password reaches a child process; the psql transport cannot be reproduced. This removes the DB-01 impact in rc.A even though the guard lexer quirk is still reproduced. |
 | Fix recipe (3.0) | None beyond using pgx in `internal/db`; document that psql meta-commands are not available. |
 | Proving test | `TestLedger_DB09` asserts a query that would be a psql meta-command reaches the server as SQL (and errors there), never running a shell. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="db-13"></a>
 #### DB-13 · The SQL guard's case folding and spaces follow the locale
@@ -4285,7 +4285,7 @@ Critical and high items:
 | rc.A behavior | No warning: rc.A runs no awk; stdout as on the gawk path. |
 | Fix recipe (3.0) | None beyond rc.A (`internal/system` builds the highlight from the matcher, only when colors are on). |
 | Proving test | `TestLedger_SYS29` in `internal/system` (`hgrep a.b` with a match → stderr empty) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-30"></a>
 #### SYS-30 · hgrep -n is compared with Bash arithmetic
@@ -4321,7 +4321,7 @@ Critical and high items:
 | rc.A behavior | Deterministic: ties keep the order of each command's last occurrence in the file (reversed with `-r`). Neither awk order is reproducible or documented. |
 | Fix recipe (3.0) | None beyond rc.A; note the tie rule in the help NOTES (3.0). |
 | Proving test | `TestLedger_SYS31` in `internal/system` (three equal epochs → file order, `-r` → reverse) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-32"></a>
 #### SYS-32 · hgrep case folding, highlighting and timestamps depend on the awk and the locale
@@ -4339,7 +4339,7 @@ Critical and high items:
 | rc.A behavior | The gawk path in a UTF-8 locale, whatever is installed: Unicode simple case folding for matching and highlighting (`strings.EqualFold` rules, `(?i)` for `-E`), timestamps from Go `time` in local time. `GASH_AWK` no longer has an effect (MATRIX `drop`). |
 | Fix recipe (3.0) | None beyond rc.A; docs/troubleshooting.md loses the "hgrep needs gawk/strftime" entry; `GASH_AWK` is removed from docs/configuration.md once no 3.x function uses awk. |
 | Proving test | `TestLedger_SYS32` in `internal/system` (`école` finds `ÉCOLE`; on a fake TTY `git` highlights `GIT`; same result with `LC_ALL=C`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-33"></a>
 #### SYS-33 · port_kill accepts 2^64+N as port N
@@ -4357,7 +4357,7 @@ Critical and high items:
 | rc.A behavior | Digits are compared as a decimal number without wraparound (leading zeros still accepted: `018080` is 18080): anything outside 1-65535 gets `Error: Invalid port: X (expected 1-65535).` rc 1. |
 | Fix recipe (3.0) | None beyond rc.A (`internal/cli/args` port_kill grammar). |
 | Proving test | `TestLedger_SYS33` in `internal/cli/args` (`18446744073709551696` → invalid; `018080` → 18080) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-34"></a>
 #### SYS-34 · sysinfo evaluates COLUMNS as Bash arithmetic (command substitution runs)
@@ -4375,7 +4375,7 @@ Critical and high items:
 | rc.A behavior | COLUMNS is used only when it is a run of digits (read as 2.x arithmetic reads digits: a leading 0 is octal); anything else is treated as unset (80), so the rule is 60 glyphs. It is never evaluated. The generated `__gash_section` shim follows the same rule. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/ui` (one COLUMNS parser for every primitive); the generated `lib/core/output.sh` shim checks `[[ $COLUMNS =~ ^[0-9]+$ ]]` before any arithmetic. |
 | Proving test | `TestLedger_SYS34` in `internal/ui` and `testdata/script/ledger_sys34.txtar` (that COLUMNS → no `INJECTED`, a 60-glyph rule) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-35"></a>
 #### SYS-35 · gash_ssh_auto_unlock glob-expands each key/passphrase row: keys dropped, passphrase printed
@@ -4393,7 +4393,7 @@ Critical and high items:
 | rc.A behavior | rc.A iterates the parsed entries of `internal/config` (no word splitting, no globbing, the caller's shopts are invisible to the binary): every key is offered, nothing is printed; this is the default-shopt 2.x result. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/ssh`. For any 2.x maintenance release: `while IFS=$'\t' read -r keyfile password; do ...; done <<<"$ssh_keys"`. |
 | Proving test | `TestLedger_SYS35` in `internal/ssh` (passphrases `pa*ss`, `a?b`, `[x]` → both keys reach the PTY driver, stderr empty) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-36"></a>
 #### SYS-36 · ip_public and chrome_headless_update use net/http: the curl, wget and jq dependency errors become unreachable
@@ -4411,7 +4411,7 @@ Critical and high items:
 | rc.A behavior | The three messages are never printed: the requests go through net/http (proxy from `HTTPS_PROXY`/`NO_PROXY`, CA from the system or `SSL_CERT_FILE`, no rc files). ip_public takes the wget path: a non-2xx status is `Error: Failed to retrieve public IP address.` rc 1. chrome keeps requiring unzip and ldd (still CLIs). The specs `functions_smoke_spec.sh` "ip_public fails gracefully without curl/wget" and the render fixture `ip_public no-tool` become `n/a` in Go mode; chrome specs reach a local HTTPS fake through `HTTPS_PROXY` (`testing.md` 2.4). |
 | Fix recipe (3.0) | None beyond rc.A: remove the three messages from the registry `Errors` lists and the curl/jq requirement from `docs/reference/dev.md` and the chrome help NOTES (help bodies unchanged in rc.A). |
 | Proving test | `TestLedger_SYS36` in `internal/system` and `internal/dev` (empty PATH: ip_public reaches the fake and prints `Public IP: 203.0.113.7`; a 503 → failure message, rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-37"></a>
 #### SYS-37 · gash_ssh_auto_unlock drives ssh-add through a PTY: expect is no longer required
@@ -4429,7 +4429,7 @@ Critical and high items:
 | rc.A behavior | The binary spawns `ssh-add -- KEY` on a PTY, answers `Enter passphrase.*:` with the passphrase (from memory, never argv, env or a file), stops on the same four patterns, eof or 20 s, and formats the transcript with the 2.x line rules (`Identity added` success, `Bad passphrase` error, ...). The missing-expect warning, the hint, the temp script and the `Invalid input` exit are unreachable; keys are unlocked where 2.x refused. `ssh_auto_unlock_spec.sh` "prints install hint when expect is missing" becomes `n/a` in Go mode. |
 | Fix recipe (3.0) | None beyond rc.A. 3.0 help and docs: REQUIREMENTS lists `ssh-add` and `ssh-agent` only (help body unchanged in rc.A, corrected in 3.0); `docs/configuration.md` drops "through `expect` (required)". |
 | Proving test | `TestLedger_SYS37` in `internal/ssh` (PTY fake of ssh-add: passphrase sent once, `SSH: Identity added: KEY` on stderr, no file under TMPDIR) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-38"></a>
 #### SYS-38 · history_grep and process_find match with grep's BRE: results depend on grep flavor and locale
@@ -4447,7 +4447,7 @@ Critical and high items:
 | rc.A behavior | GNU grep's BRE (with its `\+ \? \| \{m,n\} \( \)` extensions and POSIX classes) translated to Go regexp, case-insensitive with Unicode simple folding in every locale (the UTF-8 path). Back-references have no Go equivalent: such a pattern gets `Error: Invalid pattern: P` rc 1 instead of a grep match. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/system` (one `breToRE2` translator shared by both functions, with GNU grep vectors). |
 | Proving test | `TestLedger_SYS38` in `internal/system` (`a+b` literal, `a\+b` repetition, `ssh\|cron` alternation, `école` vs `ÉCOLE` under `LC_ALL=C`, `\(a\)\1` → error) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-39"></a>
 #### SYS-39 · The agent start evals ssh-agent's output in the caller's shell
@@ -4465,7 +4465,7 @@ Critical and high items:
 | rc.A behavior | The binary parses only `SSH_AUTH_SOCK=VALUE` and `SSH_AGENT_PID=DIGITS` assignments from the agent's output and prints them as quoted `export` lines (`mvdan.cc/sh/v3/syntax` quoting) for the shim to eval; anything else is ignored. Same variables as 2.x for a real agent. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/ssh`. |
 | Proving test | `TestLedger_SYS39` in `internal/ssh` (agent output with an extra command → only the two exports, quoted) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-40"></a>
 #### SYS-40 · /etc/os-release is sourced as shell code
@@ -4483,7 +4483,7 @@ Critical and high items:
 | rc.A behavior | The file is parsed, never executed: KEY=VALUE lines with os-release(5) quoting through `internal/platform`; `PRETTY_NAME`, else `NAME`, as 2.x showed. No variable reaches the caller (and the ssh hint is unreachable, SYS-37). |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_SYS40` in `internal/platform` (os-release fixture containing a command line → value parsed, nothing run) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-41"></a>
 #### SYS-41 · sysinfo listing order follows LC_COLLATE and raw directory order
@@ -4501,7 +4501,7 @@ Critical and high items:
 | rc.A behavior | Byte order everywhere: directory listings come from `os.ReadDir` (sorted by name) and every `sort` is a byte sort; caps such as `head -20` apply after sorting. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/sysinfo`. |
 | Proving test | `TestLedger_SYS41` in `internal/sysinfo` (sysroot fixture with `B.conf`, `a.conf`, created in reverse order → `B.conf` then `a.conf` in every locale) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="sys-42"></a>
 #### SYS-42 · Shell state left behind by 2.x calls (sysinfo globals, BASH_REMATCH)
@@ -4519,7 +4519,7 @@ Critical and high items:
 | rc.A behavior | Nothing is left in the caller (a child process cannot set them); the stub defines no such variable. `ai_sysinfo`, the only reader of `__SYSINFO_MODE`, is ported inside the binary. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_SYS42` as `testdata/script/TestLedger_SYS42.txtar` (after the two calls through the shim, `declare -p __SYSINFO_MODE BASH_REMATCH` fails) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### docker and compose
 
@@ -4539,7 +4539,7 @@ Critical and high items:
 | rc.A behavior | Go resolves paths natively with GNU `realpath -m` semantics (absolute, lexically cleaned, symlinks of the longest existing prefix resolved), so the target directory is always the one named; only the empty string still falls back (DOCK-01). The Bash result depends on which realpath is installed, which the external tool policy removes. |
 | Fix recipe (3.0) | none beyond rc.A and DOCK-01. docs/troubleshooting.md: delete the `realpath -m` row (3.x needs no external realpath). |
 | Proving test | `TestLedger_DOCK02` in `internal/docker` (resolver equals GNU `realpath -m` on relative, nonexistent and symlinked vectors) and `testdata/script/dock02_no_realpath.txtar` (a failing `realpath` stub first on PATH; `docker_compose_check $WORK/t --json` reports `$WORK/t`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-08"></a>
 #### DOCK-08 · A `|` in an image shifts fields and injects keys into docker_compose_check --json
@@ -4557,7 +4557,7 @@ Critical and high items:
 | rc.A behavior | Go keeps each service in a struct and the contract encoder escapes every string, so the image is reported intact (`"image":"redis:a\|L\|R\|S\",\"evil\":\"1\|0\|"`) and no key outside the envelope schema is emitted. Reproducing the shift would mean re-implementing the Bash row transport and emitting attacker-shaped keys. |
 | Fix recipe (3.0) | none beyond rc.A; with DOCK-06's parser such a reference becomes a row with status `ERROR` and `"error":"invalid_reference"` (new value of the per-service error vocabulary, human message `Invalid image reference`, hint `Check the image name in the compose file`). |
 | Proving test | `TestLedger_DOCK08` in `internal/docker` (fixture above: the service object's keys equal the schema keys, `.image` intact) plus `testdata/schema/docker_compose_check.json` validation |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-11"></a>
 #### DOCK-11 · Compose functions leave variables in the caller's shell, including the registry token
@@ -4575,7 +4575,7 @@ Critical and high items:
 | rc.A behavior | none of these variables is set: a binary cannot change the caller's shell, and the shim must not re-create them (the token stays in the binary's memory). |
 | Fix recipe (3.0) | none (moot in 3.x). For a 2.x patch release only: declare them `local` and `unset __gash_auth_token` after use. |
 | Proving test | `TestLedger_DOCK11` as `testdata/script/dock11_no_leak.txtar` (`declare -p` before and after `docker_compose_check`, `docker_compose_upgrade --dry-run` and `docker_compose_scan` through the shim are identical) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-12"></a>
 #### DOCK-12 · Image interpolation reads shell-only variables and applies Bash pattern rules
@@ -4611,7 +4611,7 @@ Critical and high items:
 | rc.A behavior | The question line, the refusal and the exit statuses are kept; the Bash diagnostic is not printed and nothing replaces it: it names a 2.x script path and line number that the binary does not have. |
 | Fix recipe (3.0) | none beyond rc.A. |
 | Proving test | `TestLedger_DOCK19` as `testdata/script/dock19_no_tty.txtar` (under `setsid`, stderr holds the question and `Info: Upgrade cancelled.`, no `line 77`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-23"></a>
 #### DOCK-23 · curl behaviors in registry calls: URL globbing, ~/.curlrc, curl's proxy and CA variables, token in a curl config
@@ -4629,7 +4629,7 @@ Critical and high items:
 | rc.A behavior | Go builds each URL with net/url (no globbing; an invalid name fails as `transport_error`, DOCK-24), never reads `~/.curlrc`, takes proxies from `http.ProxyFromEnvironment` (HTTPS_PROXY, HTTP_PROXY, NO_PROXY and lowercase; not ALL_PROXY) and CAs from SSL_CERT_FILE, SSL_CERT_DIR and the system pool, and keeps the token in-process as one header value (a CR or LF in it fails before sending, `transport_error`). The 2.x results depend on the curl build and the user's curl configuration. |
 | Fix recipe (3.0) | none beyond rc.A. docs/reference/docker.md: registry calls honor HTTPS_PROXY, NO_PROXY and SSL_CERT_FILE, not `~/.curlrc` or ALL_PROXY. |
 | Proving test | `TestLedger_DOCK23` in `internal/docker` (image `app{a,b}:latest` → one request with the escaped path to the httptest fake; a HOME with a `.curlrc` changes nothing; HTTPS_PROXY pointing at the fake is used) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-24"></a>
 #### DOCK-24 · curl exit codes in the registry error vocabulary (`curl_error_N`, `no_response`)
@@ -4665,7 +4665,7 @@ Critical and high items:
 | rc.A behavior | Go takes Docker-Content-Digest from the final response only (net/http follows the redirects); concatenating intermediate hops is an artifact of curl's header dump. |
 | Fix recipe (3.0) | none beyond rc.A. |
 | Proving test | `TestLedger_DOCK25` in `internal/docker` (httptest redirect chain with a digest on both hops → the final digest) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-26"></a>
 #### DOCK-26 · Compose v2 without jq: Go always parses `docker compose config --format json`
@@ -4683,7 +4683,7 @@ Critical and high items:
 | rc.A behavior | With compose v2 on PATH Go always parses `config --format json` with encoding/json (jq is irrelevant), keeping Compose's semantics and order; the line parser (the awk subset ported rule for rule) runs only with compose v1 or when `config` fails, as in 2.x. The jq-absent result depended on an optional tool, which the external tool policy removes. |
 | Fix recipe (3.0) | none beyond rc.A; docs: jq is no longer needed by the compose functions. |
 | Proving test | `TestLedger_DOCK26` in `internal/docker` (runner fake serving config JSON with no jq on PATH → services from the JSON in its order; a compose v1 fake → line-parser vectors: block style, quotes, ` #`, CRLF, tabs) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dock-27"></a>
 #### DOCK-27 · docker_compose_scan orders files by the locale's collation
@@ -4701,7 +4701,7 @@ Critical and high items:
 | rc.A behavior | byte order of the full path (as `LC_ALL=C sort`) whatever the locale; locale-dependent sorting is excluded by the external tool policy. |
 | Fix recipe (3.0) | none beyond rc.A. |
 | Proving test | `TestLedger_DOCK27` in `internal/docker` (paths `B/`, `a/`, `a-b/`, `a_b/` come out in byte order with LANG=en_US.UTF-8 in the environment) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### git module
 
@@ -4721,7 +4721,7 @@ Critical and high items:
 | rc.A behavior | `$commit` is untouched: a binary cannot set variables in the caller's shell. |
 | Fix recipe (3.0) | none (moot). |
 | Proving test | `TestLedger_GIT09` as `testdata/script/git09_no_leak.txtar` (`commit=mine; git_dump_revisions f; echo $commit` → `mine`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### remote
 
@@ -4741,7 +4741,7 @@ Critical and high items:
 | rc.A behavior | Go quotes each argument POSIX-style, locale-independent, valid for sh, dash, bash and zsh: `unset HISTFILE HISTSIZE; bash -s -- 'a b' '~' '' '$(id)'` (an embedded `'` as `'\''`, no trailing space). With a bash remote the script receives the same arguments as in 2.x; the remote command string differs byte for byte. `printf %q` is Bash-only quoting. |
 | Fix recipe (3.0) | none beyond rc.A. |
 | Proving test | `TestLedger_REM04` in `internal/remote` (for the vectors `a b`, a newline, `é`, `~`, the empty string, `$(id)` and `it's`, `sh -c` and `bash -c` on the built string print identical argv) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### php and node
 
@@ -4761,7 +4761,7 @@ Critical and high items:
 | rc.A behavior | Go `regexp` has no lookbehind; rc.A implements the source as the code intended (the PCRE2 >= 10.43 result): `(?i)php[[:space:]:]{0,3}([0-9]+\.[0-9]+)` applied line by line, first submatch in file order, in its slot after composer.json and before 8.4, DIR only. Results checked with Go 1.27: `PHP 8.2` → 8.2, `php:8.3-fpm` → 8.3, `PHPUnit 10.5` → none, four spaces before the number → none, `php` and the number on different lines → none. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: php_detect_version NOTES keep the three sources and add "copilot-instructions: first `php` followed by up to three spaces or colons and X.Y"; release notes: "2.x on PCRE2 < 10.43 or without `grep -P` ignored this source". |
 | Proving test | `TestLedger_DEV09_2x` in `internal/dev` (the vectors above; with `.target-php-version 7.4` → 7.4; with composer `^8.1` → 8.1) and `testdata/script/php_detect_copilot.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-10"></a>
 #### DEV-10 · jq's presence and version decide the composer.json and package.json sources
@@ -4779,7 +4779,7 @@ Critical and high items:
 | rc.A behavior | Native JSON, as 2.x with jq 1.7 present: number values keep their source text (`8.10`), strings as is, objects/arrays rendered as jq 1.7 `-r` renders them before the X.Y search, invalid JSON or a non-object `require` skipped silently. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: dev.md drops "needs jq". |
 | Proving test | `TestLedger_DEV10_2x` in `internal/dev`: `8.10` number → `"8.10"`, `{"v":"7.3"}` → 7.3, `"require":"x"` → falls through |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-11"></a>
 #### DEV-11 · A relative project_dir is resolved through CDPATH
@@ -4797,7 +4797,7 @@ Critical and high items:
 | rc.A behavior | `CDPATH` is ignored (a non-exported shell variable the binary does not receive, and not a documented input): a relative DIR is joined to the logical cwd (`$PWD` when it names the cwd, as `os.Getwd` does) and cleaned lexically, as `cd -L` without CDPATH; a missing DIR keeps the 2.x rule (absolute: walk up from the literal path; relative: no walk-up). |
 | Fix recipe (3.0) | None beyond rc.A. Docs: none. |
 | Proving test | `TestLedger_DEV11_2x` in `internal/dev` (relative, absolute, missing, symlinked DIR vectors of the dossier; CDPATH set in the environment has no effect) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-12"></a>
 #### DEV-12 · php_raw_binary and composer_raw_binary come from Bash's command hash table
@@ -4815,7 +4815,7 @@ Critical and high items:
 | rc.A behavior | `exec.LookPath` over the inherited PATH (the hash table is shell state a binary cannot read); the `/usr/bin/php<version>` and `/usr/bin/php<major>` probes and the composer fallbacks keep their order. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: none. |
 | Proving test | `TestLedger_DEV12_2x` in `internal/dev` (PATH fixture decides; no hash state exists) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-13"></a>
 #### DEV-13 · Version ordering depends on GNU `sort -V`
@@ -4833,7 +4833,7 @@ Critical and high items:
 | rc.A behavior | A Go port of GNU coreutils `filevercmp` (the documented GNU result) on every platform. |
 | Fix recipe (3.0) | None beyond rc.A; DEV-05's filter removes prereleases from node_detect_version. |
 | Proving test | `TestLedger_DEV13_2x` in `internal/dev` (comparison table checked against GNU `sort -V` output captured at S1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-14"></a>
 #### DEV-14 · The caller's IFS breaks node_upgrade's plan
@@ -4851,7 +4851,7 @@ Critical and high items:
 | rc.A behavior | The plan is computed with explicit splitting (one version per line) and rows joined with one space, the default-IFS result whatever the caller's IFS; the shim passes each version to `nvm` as its own argument. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_DEV14_2x` in `internal/dev` (plan for the fixture above: `1 newly installed, 2 to remove, 1 up to date.`) and `testdata/script/node_upgrade_ifs.txtar` (caller `IFS=,`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-15"></a>
 #### DEV-15 · `shopt -s failglob` leaks a Bash error from node_upgrade
@@ -4869,7 +4869,7 @@ Critical and high items:
 | rc.A behavior | The directory is listed natively; only the `Info:` line is printed, rc 0 (shell options do not reach the binary). |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `testdata/script/node_upgrade_failglob.txtar` (`TestLedger_DEV15_2x`: stderr has no `no match`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="dev-16"></a>
 #### DEV-16 · nvm is a shell function: node_upgrade and nvm_prune_versions keep their nvm calls in the Bash shim
@@ -4887,7 +4887,7 @@ Critical and high items:
 | rc.A behavior | A binary cannot call a shell function or change the caller's PATH, so the generated shim runs every nvm call in the caller's shell in 2.x order (same `declare -f nvm` check and message); work that needs no nvm (installed tags, plan, rows and counts) may run in the binary, fed by the shim. stdout, stderr, exit codes, the PATH change and the lazy-load sourcing are those of 2.x; spec overrides of `nvm` keep working. |
 | Fix recipe (3.0) | None (permanent design). Docs: `compat.md` section 4 lists both functions under "shell-mutating". |
 | Proving test | `tests/specs/node_spec.sh` and `node_upgrade_spec.sh` green with `--impl go`; `testdata/script/node_upgrade_path.txtar` (`TestLedger_DEV16_2x`: after `-y` with a mock nvm, `nvm use` changed PATH in the calling shell) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### ai
 
@@ -4907,7 +4907,7 @@ Critical and high items:
 | rc.A behavior | Requests, response parsing and sanitizing are native (`net/http`, `encoding/json`), so both messages are unreachable and `ai_sysinfo --raw` prints the data whatever is installed. The 2.x behavior with both tools present is kept: same request bodies (key order `model,max_tokens,system,messages,output_config` and `systemInstruction,contents,generationConfig`, as jq built them), same retry policy (HTTP 429, 500, 502-504, 529, at most three retries, delay from `Retry-After`, else Gemini `RetryInfo.retryDelay` in `Ns` or `Nms`, else 5 s, clamped 1-60 s, the `<label> API busy (HTTP N), retrying in Ns (i/3)...` warning and the `still busy ... after 3 retries` error), same error texts, same control-character stripping. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: ai.md and `ai.sh` header drop "Runtime: curl, jq"; the PRIVACY text "The API key travels in a curl config read from a pipe" becomes "The API key stays inside the gash process" in prose docs (help bodies per AI-25). |
 | Proving test | `TestLedger_AI13_2x` in `internal/ai` (no curl/jq on PATH: `--raw` prints data rc 0; a request reaches the fake HTTPS server) and `testdata/script/ai_no_curl.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-14"></a>
 #### AI-14 · The AI transport no longer reads curl's configuration
@@ -4925,7 +4925,7 @@ Critical and high items:
 | rc.A behavior | `net/http` with the key header set in-process and sent byte for byte (no config quoting); proxies from `HTTPS_PROXY`/`https_proxy` and `NO_PROXY`/`no_proxy` only (`ALL_PROXY` and `~/.curlrc` ignored), CA from the system pool or `SSL_CERT_FILE`/`SSL_CERT_DIR` (`CURL_CA_BUNDLE` ignored), connect timeout 5 s, total timeout 60 s (120 s for ai_sysinfo) as `--max-time`; no request header is ever printed, so the key cannot reach debug output. A token holding bytes `net/http` refuses in a header (control characters) fails as a transport error (AI-15 fallback) where curl sent it. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: configuration.md says the AI requests honour `HTTPS_PROXY`/`NO_PROXY` and `SSL_CERT_FILE`, not curl's configuration. |
 | Proving test | `TestLedger_AI14_2x` in `internal/ai` (a `~/.curlrc` with `verbose` and `ALL_PROXY` set change nothing; the fake server receives the token `ab"cd` intact; debug output never contains the token) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-15"></a>
 #### AI-15 · Transport errors keyed on curl exit codes are mapped from Go errors
@@ -4943,7 +4943,7 @@ Critical and high items:
 | rc.A behavior | Go errors are mapped onto the same texts: `*net.DNSError` → 6 (5 when it names the proxy host), `ECONNREFUSED`/`EHOSTUNREACH`/`ENETUNREACH` → 7, dial timeout → 28 "Connection timed out" text, client timeout → 28 by the same elapsed rule (whole seconds), TLS handshake errors → 35, `x509` verification errors → 60, unexpected EOF in the body → 18, connection closed before a status line → 52, write errors → 55, read errors and resets → 56; redirects are not followed (`CheckRedirect` returns `http.ErrUseLastResponse`), so 47 and 22 are unreachable as with curl; anything else prints `<label> API: request failed: <error, control characters stripped>` in place of `curl failed (exit N)`, and the debug "Curl Stderr" block never appears. HTTP-level handling (200, retry codes, `.error.message // .error // "Unknown error"`, refusal and max-token stops) is unchanged. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: none (ai.md has no error list). |
 | Proving test | `TestLedger_AI15_2x` in `internal/ai` (table of injected transport errors → exact message; a 301 reply → `Claude API error (301): Unknown error`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-16"></a>
 #### AI-16 · The caller's IFS joins the ai_query question
@@ -4961,7 +4961,7 @@ Critical and high items:
 | rc.A behavior | Words joined with one space (the default-IFS result); the caller's IFS does not reach the binary. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `testdata/script/ai_query_ifs.txtar` (`TestLedger_AI16_2x`: caller `IFS=,`, body ends `what is up`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-17"></a>
 #### AI-17 · `shopt -s nocasematch` changes provider and GASH_AI_CONFIRM matching
@@ -4979,7 +4979,7 @@ Critical and high items:
 | rc.A behavior | Case-sensitive matching everywhere (the default-shell result): `Claude hi` is the question, `CLAUDE` is an unknown argument for ai_sysinfo, `AUTO` means "ask" (AI-23). |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_AI17_2x` in `internal/cli/args` (grammar table) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-18"></a>
 #### AI-18 · Whether extglob is on decides which question paths ai_sysinfo reads
@@ -4997,7 +4997,7 @@ Critical and high items:
 | rc.A behavior | All trailing `? . ! , : ; ) " '` characters are stripped (the extglob-on result, what the code comment intends); the AI-01 reproduction still applies to the path that remains. |
 | Fix recipe (3.0) | None beyond rc.A (AI-01's path rules apply after stripping). |
 | Proving test | `TestLedger_AI18_2x` in `internal/ai` (`/etc/hostname?!` → `/etc/hostname`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-19"></a>
 #### AI-19 · The locale decides characters or bytes for the 4 KB cut marker, the "bytes" info and the consent size
@@ -5015,7 +5015,7 @@ Critical and high items:
 | rc.A behavior | Bytes everywhere (the C-locale result): the cut is exactly 4096 bytes as `head -c`, the marker is added when 4096 bytes were read, the info and the consent count bytes; the partial UTF-8 sequence is written into the JSON body as U+FFFD, as jq did. |
 | Fix recipe (3.0) | None beyond rc.A (a 3.0 option: cut on a UTF-8 boundary). |
 | Proving test | `TestLedger_AI19_2x` in `internal/ai` (6000-byte `é` input: marker present, body ends with U+FFFD before the marker, consent `4 KB`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-20"></a>
 #### AI-20 · Bash's own diagnostics from the AI functions are not reproduced
@@ -5033,7 +5033,7 @@ Critical and high items:
 | rc.A behavior | These lines name Bash source files and lines that do not exist in 3.x and come from the interpreter, so rc.A prints nothing in their place; NUL bytes are dropped silently; the rest of each flow (what is sent, the success line of AI-09, exit codes) is as 2.x. |
 | Fix recipe (3.0) | None beyond rc.A; AI-04 and AI-09 fixes add proper messages. |
 | Proving test | `TestLedger_AI20_2x` in `internal/ai` (NUL input: stderr has no `warning:` line, body has `ab`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-21"></a>
 #### AI-21 · `grep -P` availability decides the context distro
@@ -5051,7 +5051,7 @@ Critical and high items:
 | rc.A behavior | The expression is evaluated natively (first line `^ID=` followed by `[A-Za-z0-9_]+`), the GNU grep result on every host; the quoting gaps stay (AI-11). |
 | Fix recipe (3.0) | None beyond rc.A (AI-11 fixes the parsing). |
 | Proving test | `TestLedger_AI21_2x` in `internal/ai` (`ID=alpine` → alpine/apk with no grep present) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="ai-22"></a>
 #### AI-22 · No request temp files, and no orphaned sudo keep-alive, after an interrupt
@@ -5069,7 +5069,7 @@ Critical and high items:
 | rc.A behavior | The request is built and sent in memory (no temp files, `TMPDIR` unused); a keep-alive, if ported, is a goroutine or a child in the binary's process group, ended with the process on SIGINT/SIGTERM. Neither leftover can occur. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_AI22_2x` in `internal/ai` (SIGINT during a slow fake request: no file created under `TMPDIR`, no child left) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### file scanners
 
@@ -5143,7 +5143,7 @@ Critical and high items:
 | rc.A behavior | Literal string comparison: the root is never listed and `x\ty` matches only that literal text. awk's escape processing is a property of the awk language, not of the scanners' contract; Go has no counterpart to reproduce. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS23` in `internal/fsscan`: both reproductions (root not listed; `--exclude 'x\ty'` hides nothing). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-24"></a>
 #### FS-24 · Without GNU du, prune names act as regexes and pruned trees still count
@@ -5161,7 +5161,7 @@ Critical and high items:
 | rc.A behavior | The GNU du semantics on every platform (native walk, no probe, no cache variable). |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS24` in `internal/fsscan`: the fixture gives the GNU-du result whatever du is on PATH. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-25"></a>
 #### FS-25 · A relative PATH is resolved through CDPATH
@@ -5179,7 +5179,7 @@ Critical and high items:
 | rc.A behavior | A relative PATH is resolved against the working directory only (`filepath.Abs`, then `EvalSymlinks`); CDPATH is not read, so the reproduction lists `$d/a/src/f`. CDPATH is a feature of Bash's `cd` builtin, and its 2.x effect (a broken two-line path) is an accident a binary cannot and should not imitate. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS25` in `internal/fsscan` (and `testdata/script/fsscan_cdpath.txtar` through the shim with CDPATH set in the caller): the reproduction lists `a/src/f`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-26"></a>
 #### FS-26 · A find without -printf (BusyBox, BSD, macOS) empties files_largest and tree_stats
@@ -5197,7 +5197,7 @@ Critical and high items:
 | rc.A behavior | Native walk: the GNU-path result on every platform, whatever find is installed (MUST NOT 8). |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS26` in `internal/fsscan`: with a BusyBox-like find first on PATH (testscript), files_largest and tree_stats give the GNU-path results. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-27"></a>
 #### FS-27 · Without GNU du a newline-named directory is reported under a truncated, wrong path
@@ -5251,7 +5251,7 @@ Critical and high items:
 | rc.A behavior | ASCII digits only (the C-locale path): such a value gets its scanner's `invalid_limit`, `invalid_depth`, `invalid_top` or `invalid_size` RETRY envelope with the 2.x hint, rc 1, in every locale. |
 | Fix recipe (3.0) | None beyond rc.A (Go `regexp` and `strconv` are ASCII). |
 | Proving test | `TestLedger_FS29` in `internal/cli/args`: under `LC_ALL=en_US.UTF-8`, `١` is refused by every integer and size flag of the five scanners. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-30"></a>
 #### FS-30 · An unusable TMPDIR forces errors to 0 and leaks a mktemp message
@@ -5269,7 +5269,7 @@ Critical and high items:
 | rc.A behavior | No temp file: errors are counted in-process (FS-15 rule) and no mktemp line is printed; TMPDIR is not read. The temp file is Bash stderr transport, so its failure mode depends on the environment rather than on the contract. |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS30` in `testdata/script/fsscan_tmpdir.txtar`: with `TMPDIR=/nonexistent` the envelope still says `"errors":1` and stderr is empty. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-50"></a>
 #### FS-50 · tree_stats evaluates text from a scanned file name as Bash arithmetic
@@ -5307,7 +5307,7 @@ Critical and high items:
 | rc.A behavior | Not reproduced: a binary cannot change an option of the parent shell and the stub sets none; suffixes are matched in Go (`strings.EqualFold`). An interrupted call leaves the caller's options as they were |
 | Fix recipe (3.0) | None in 3.x (fixed by construction). For a 2.x patch release: drop `shopt`, use `local lc=${archive_file,,}; case "$lc" in` |
 | Proving test | `testdata/script/archive_extract_interrupt.txtar`: under a PTY, SIGINT during a slow `tar` stub, then `shopt nocasematch` prints `off`; `TestArchiveSuffixMatch` in `internal/files` (case table) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="file-17"></a>
 #### FILE-17 · `.tar.zst` exit status depends on the caller's `pipefail`
@@ -5325,7 +5325,7 @@ Critical and high items:
 | rc.A behavior | Pipefail-on semantics whatever the caller set: rc 1 when zstd or tar exits non-zero. The binary cannot see the caller's shell options; this is the path the spec exercises (`files_spec.sh:394` runs under `set -euo pipefail`). Where 2.x returned 0 (no pipefail, zstd failed, tar succeeded), rc.A returns 1 |
 | Fix recipe (3.0) | None beyond rc.A: wait for both processes, rc 1 when either fails; same rule for the FILE-13 `.tar.Z` pipeline |
 | Proving test | `TestLedger_FILE17` in `internal/files` (`runner.Fake`: zstd 1 / tar 0 → 1; 0/1 → 1; 0/0 → 0); `testdata/script/archive_extract_tzst.txtar`: the garbage-tail archive → rc 1 from a caller without pipefail |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="file-18"></a>
 #### FILE-18 · The caller's `noclobber` makes single-file extraction fail
@@ -5343,7 +5343,7 @@ Critical and high items:
 | rc.A behavior | noclobber ignored: the binary cannot see the caller's shell options, so the output is always opened with `O_TRUNC` (the default path) and an existing file is overwritten, as 2.x does without `set -C` |
 | Fix recipe (3.0) | None; the FILE-03 temp-and-rename keeps "replaced on success" as the one rule, stated in the help NOTES (FILE-26) |
 | Proving test | `testdata/script/archive_extract_noclobber.txtar`: a `set -C` caller, existing `s.txt` replaced, rc 0 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="file-19"></a>
 #### FILE-19 · Missing tools are reported by Bash's "command not found" text
@@ -5379,7 +5379,7 @@ Critical and high items:
 | rc.A behavior | Not reproduced: a binary cannot call the caller's shell functions and Go never executes user-supplied code. It runs the executables found on the PATH it receives (`exec.LookPath`; shell functions, aliases and `hash -p` entries ignored) and takes the stamp per FILE-25 |
 | Fix recipe (3.0) | None (by construction); `docs/port` notes that tool overrides must be executables on PATH |
 | Proving test | `testdata/script/files_shadow.txtar`: with `date(){ echo FIXED; }` and `tar(){ return 9; }` defined in the caller, the backup name ends in 14 digits and the `.tgz` extracts, rc 0 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="file-21"></a>
 #### FILE-21 · The `cp -v` line of file_backup depends on the locale
@@ -5397,7 +5397,7 @@ Critical and high items:
 | rc.A behavior | rc.A runs cp with `LC_ALL=C` added to its environment, so the line always has C-locale quoting: every byte 0x80-0xFF is written as `\ooo` (three octal digits) inside `$'…'`, consecutive such bytes in one group, exactly as 2.x printed under `LANG=C`; ASCII names, control bytes and invalid bytes print as under every 2.x locale; cp's diagnostics are untranslated English with `'…'` quotes. Differs from 2.x only for non-ASCII names, or translated messages, under a non-C locale; the caller's locale would otherwise decide the stdout line. On macOS the system cp's own format stays, as in 2.x there |
 | Fix recipe (3.0) | None required. Optional: print the line in Go (`internal/ui` shell-escape quoting) to drop the GNU/BSD difference |
 | Proving test | `TestLedger_FILE21` in `internal/files`: caller `LANG=C.UTF-8`, name `più` → stdout `'pi'$'\303\271' -> 'pi'$'\303\271''_backup_<14 digits>'`; `testdata/script/file_backup_quoting.txtar` (tab, ESC, `it's`, `a b`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ### shell layer
 
@@ -5417,7 +5417,7 @@ Critical and high items:
 | rc.A behavior | The emitted hook stores each untrusted string in its own variable (`__GASH_PS1_BRANCH`, `__GASH_PS1_VENV`, `__GASH_PS1_CHROOT`, `__GASH_PS1_STY`) and PS1 holds only the reference (`${__GASH_PS1_BRANCH}`), so Bash expands it once and never re-scans the value: ordinary names render byte for byte as in 2.x and no text from a branch, venv path, chroot file or screen session is ever executed (PRD MUST NOT 7: no shell re-parsing of user strings). Reproducing the 2.x execution is not allowed. Prompt cost unchanged (still no exec outside repositories, one `git status` inside). |
 | Fix recipe (3.0) | Same as rc.A (the divergence is the fix). In `internal/shellinit` the hook template assigns `__GASH_PS1_BRANCH=$branch` etc. and appends the literal text `${__GASH_PS1_BRANCH}` to `ps1`; a shellinit lint test fails if any non-palette variable is concatenated into `ps1` by value. Document in `docs/configuration.md` (Prompt) that names are shown literally. |
 | Proving test | `TestLedger_SHELL01` in `internal/shellinit` (the template references, never interpolates, the four strings); `testdata/script/prompt_hostile_names.txtar` (branch names with `$(...)`, backticks, `${...}`; `VIRTUAL_ENV`, `debian_chroot`, `STY` with the same shapes: after `__gash_prompt_command; : "${PS1@P}"` no marker file exists and the expanded prompt contains the literal text; ordinary names give the 2.x golden PS1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ba208f0 |
 
 <a id="shell-07"></a>
 #### SHELL-07 · GASH_PATH_ADD is word-split on the caller's IFS and glob-expanded
@@ -5435,7 +5435,7 @@ Critical and high items:
 | rc.A behavior | The binary splits the value on space, tab and newline regardless of `IFS`, never globs, and emits `path_add 'w1' 'w2' ...` (single-quoted words), so every other rule is the 2.x `path_add`: `~` and a leading `~/` expanded (not `~user`), one trailing `/` dropped, missing directories skipped, existing PATH entries kept in place, prepended in the order given (a first word `--append`, `-h` or `--help` keeps its 2.x meaning: SHELL-08). A word with glob characters is taken literally (normally a missing directory, skipped). Glob expansion and IFS-dependent splitting of a user string cannot be kept (they depend on the caller's shell state and the filesystem at load). |
 | Fix recipe (3.0) | Same as rc.A. `internal/shellinit`: `config.SplitPathAdd(v)` = `strings.FieldsFunc(v, func(r rune) bool { return r == ' ' \|\| r == '\t' \|\| r == '\n' })`. Docs: `.gash_env.template:116-118` and `docs/configuration.md` say "separated by spaces; no wildcards". |
 | Proving test | `TestLedger_SHELL07` in `internal/shellinit` (`"~/a  ~/b\t/c*"` → `path_add '~/a' '~/b' '/c*'`); `testdata/script/toolchains_path_add_split.txtar` (`IFS=:` before sourcing does not change the result; a `*` word adds nothing) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done f40af4e |
 
 <a id="shell-10"></a>
 #### SHELL-10 · Loading leaves BASH_REMATCH and readonly or array internals in the caller's shell
@@ -5453,7 +5453,7 @@ Critical and high items:
 | rc.A behavior | The init script and the generated shims test values without regexes (the binary validates `GASH_UMASK` and resolves the nvm directory), declare no readonly variables and none of the module internals (they live in the binary), so `BASH_REMATCH` is untouched and nothing readonly is left. A binary cannot leave Bash internals in the caller's shell, and the shim must not (`compat.md` 4: sourcing leaves no `BASH_REMATCH` or other globals). Only the documented `__GASH_*` bookkeeping that `gash_unload` and completion need remains. |
 | Fix recipe (3.0) | Same as rc.A. `internal/compatgen` lint: no `=~`, `readonly` or `declare -r` at top level of any generated file or emitted init script; an allowlist of the `__GASH_*` names the shims may define. |
 | Proving test | `TestLedger_SHELL10` in `internal/compatgen` (lint over the generated files and an emitted init script); `testdata/script/load_hygiene.txtar` (`GASH_UMASK=027`, `GASH_NVM=lazy` fixture: `BASH_REMATCH` unchanged, `declare -pr` shows no Gash name) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 39b9fc9 |
 
 <a id="shell-13"></a>
 #### SHELL-13 · Headless load prints a plain-text 1.x notice and writes a state file
@@ -5471,7 +5471,7 @@ Critical and high items:
 | rc.A behavior | Headless sourcing prints nothing and writes nothing (PRD MUST NOT 4: nothing printed while sourcing in headless mode); the generated `gash.sh` does not run the autostart at all when `GASH_HEADLESS=1`. Interactive shells keep the 2.x behavior: with a terminal `gash_migrate --auto`, without one the once-a-day notice and the `notice` state file. |
 | Fix recipe (3.0) | Same as rc.A. `internal/compatgen` (gash.sh template): the headless branch returns before any autostart; `internal/shellinit` keeps the interactive autostart. AGENTS.md:31: drop the exception ("sourcing in headless mode never prints"). |
 | Proving test | `TestLedger_SHELL13` in `internal/compatgen`; `testdata/script/headless_1x_gashrc.txtar` (1.x `~/.gashrc`, headless source: empty stderr, status 0, no `~/.local/state/gash` created; interactive without a terminal: the 2.x line once, then silence within 24 h) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done adb2213 |
 
 ### self-management
 
@@ -5491,7 +5491,7 @@ Critical and high items:
 | rc.A behavior | Names sort by bytes, as `LC_ALL=C` (the order `tools/gen-docs.sh` already publishes); `--search` folds case with Unicode simple lower-casing (`strings.ToLower`), equal to Bash's result in UTF-8 locales. Locale-dependent collation is a property of the host's libc and cannot be reproduced deterministically. |
 | Fix recipe (3.0) | Same as rc.A: `internal/registry` sorts with `slices.Sort` on the names; `internal/ui` help search uses `strings.ToLower` on both sides. Docs: none. |
 | Proving test | `TestLedger_SELF11` in `internal/registry` (names `a_b`, `ab`, `a_c` sort as `a_b a_c ab`); `testdata/script/help_list_order.txtar` (`LC_ALL=en_US.UTF-8` and `LC_ALL=C` give identical `gash_help --list`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_SELF11 |
 
 <a id="self-16"></a>
 #### SELF-16 · gash_uninstall leaks the global variable profile_file into the caller's shell
@@ -5509,7 +5509,7 @@ Critical and high items:
 | rc.A behavior | `gash_uninstall` runs in the binary; the stub cannot and does not set `profile_file` in the caller. A child process cannot leak variables into the parent shell. |
 | Fix recipe (3.0) | Same as rc.A; nothing to change in Go. |
 | Proving test | `TestLedger_SELF16`: `testdata/script/uninstall_no_globals.txtar` (`declare -p` diff around a confirmed uninstall of a fake install shows no new variable) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_SELF16.txtar |
 
 <a id="self-22"></a>
 #### SELF-22 · 3.0 drops the 1.x→2.x migration (D-6)
@@ -5526,7 +5526,7 @@ Critical and high items:
 | rc.A behavior | D-6: 3.x does not port the 1.x→2.x migration. `gash_migrate`/`gash migrate` keeps only its name: it prints one line pointing at the 2.x route (check out v2.1.0, run `gash_migrate` there, then `gash_upgrade`), writes nothing (no `~/.gash_env`, no backups, `~/.gashrc` untouched) and returns 1; `--yes`, `--status` and the screen choices all take that same route. This supersedes the migration-logic rows of `migrate_spec.sh` (detection :45, `--yes`/backup/`--rollback` :64, screen→`~/.gash_env` :89, nothing-written :106, `--status`/option errors :131). SELF-08/SELF-09 are moot under the same decision; the once-a-day headless reminder stays (SHELL-13) and the registered `--help` still carries the 2.x usages (SHELL-18). |
 | Fix recipe (3.0) | Same as rc.A: `internal/selfmgmt/migrate.go` is the thin pointer; no migration engine is ported. Reconcile the registered `--help`/reminder wording down to the pointer reality (SHELL-18). |
 | Proving test | `testdata/script/migrate_d6_route.txtar` (headless: `gash_migrate`, `gash migrate --yes`, the screen choices, `--auto`, `--status` and an option error all point at the 2.x route, write nothing and return non-zero; `--help` still lists `--rollback`). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 38f0d14 |
 
 ### lib/core
 
@@ -5546,7 +5546,7 @@ Critical and high items:
 | rc.A behavior | The binary (every interactive 2.x function it runs) prints the question and, when `/dev/tty` cannot be opened, only the 2.x refusal path (for `gash_uninstall`: `Info: Uninstall cancelled.`), never Bash's error text, which a Go program cannot produce. The generated `needs_confirm_prompt` in `lib/core/utils.sh` uses `{ read -r REPLY </dev/tty; } 2>/dev/null` so the Bash helper matches. |
 | Fix recipe (3.0) | Same as rc.A: `internal/ui.Confirm` returns false on an open error of `/dev/tty`; compatgen template of `needs_confirm_prompt` as above. |
 | Proving test | `TestLedger_CORE01` in `internal/ui` (no tty: false, stderr holds only the question); `testdata/script/confirm_no_tty.txtar` (`setsid`, `needs_confirm_prompt q` and `gash_uninstall`: stderr has no `/dev/tty:` text) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done bb63583 |
 
 <a id="core-02"></a>
 #### CORE-02 · Compat helpers evaluate numeric arguments as Bash arithmetic
@@ -5564,7 +5564,7 @@ Critical and high items:
 | rc.A behavior | The generated helpers (and their Go counterparts in `internal/ui`) accept an operand only when it matches `^-?[0-9]+$`; any other value is taken as 0, the value Bash gives a word naming an unset variable, and is never evaluated. Integer inputs give byte-identical output; `__gash_require_args_min abc 1` still prints `Error: Expected at least 1 argument(s), got abc.` and returns 1. Executing text from an argument cannot be reproduced (MUST NOT 7). |
 | Fix recipe (3.0) | Same as rc.A. compatgen: a shared `__gash_int VAR VALUE` helper (glob test `[[ $v == ?(-)+([0-9]) ]]` with extglob saved and restored, no regex) used by every helper above; `COLUMNS` read through `__gash_tty_width`'s existing digit check in `__gash_section`. |
 | Proving test | `TestLedger_CORE02` in `internal/compatgen` (each helper called with a subscript-with-substitution value leaves no marker file; integer vectors give the 2.x output); `testdata/script/compat_helpers_arith.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 470b4b2 (test; the fix was already in __gash_int) |
 
 <a id="core-05"></a>
 #### CORE-05 · gash_db_test behaviors that only the mysql/mariadb/psql clients produced
@@ -5582,7 +5582,7 @@ Critical and high items:
 | rc.A behavior | The test runs `SELECT 1` through the native drivers (`internal/db`, go-sql-driver/mysql and pgx), so the "client not found" lines cannot occur and client option files and the socket meaning of `localhost` do not apply; the password goes to the driver, never into an ini file or a child environment. Kept exactly: the `Info: Testing connection 'NAME' (DRIVER://USER@HOST:PORT/DB)...` line, `OK: Connection successful!` / `Error: Connection failed` / `Error: Unknown driver: X` / `Error: Connection 'NAME' not found in ~/.gash_env`, rc 0/1, default name `default`, default ports 3306/5432. Same consequence as DB-07 and DB-09 for `llm_db_*` (lead dedupes). |
 | Fix recipe (3.0) | In `internal/db.TestConnection`: connect timeout `GASH_DB_TIMEOUT` (default 30 s); mysql host `localhost` connects through the first existing of `/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`, else TCP; on failure print `Error: Connection failed` then `Hint: <driver error, cleaned>`. Docs: `docs/configuration.md` (Databases) says no client is needed and option files are not read. |
 | Proving test | `TestLedger_CORE05` in `internal/db` (fake server: success line, failure line, rc; no process started); `testdata/script/gash_db_test_noclient.txtar` (PATH without mysql/psql, unreachable host: `Connection failed`, never `client not found`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d16347c (localhost socket via DB-16) |
 
 <a id="core-07"></a>
 #### CORE-07 · gash_help --list orders the modules outside its fixed list by Bash's hash order
@@ -5600,7 +5600,7 @@ Critical and high items:
 | rc.A behavior | The registry lists modules in one fixed order: the 2.x fixed list, then `node remote chrome php` (what Bash 5.2.21, the S1 reference, prints). Bash's hash order cannot be reproduced in general. |
 | Fix recipe (3.0) | Same as rc.A: `internal/registry.ModuleOrder` is a constant slice; a test fails when a module is missing from it. |
 | Proving test | `TestLedger_CORE07` in `internal/registry` (every module of the registry is in `ModuleOrder`; `gash_help --list` headings equal the golden list) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 91efd3b |
 
 <a id="core-08"></a>
 #### CORE-08 · ~/.gash_env lines are trimmed with the locale's notion of whitespace
@@ -5618,7 +5618,7 @@ Critical and high items:
 | rc.A behavior | `internal/config` trims and splits on ASCII whitespace only (space, `\t`, `\n`, `\v`, `\f`, `\r`), as Bash does in the C locale; a line padded with non-ASCII spaces is "unrecognized" with the 2.x warning text. The libc's locale tables cannot be reproduced deterministically. |
 | Fix recipe (3.0) | Same as rc.A; `docs/configuration.md` (file format): "spaces and tabs around a line are ignored". |
 | Proving test | `TestLedger_CORE08` in `internal/config` (U+3000 and U+00A0 padded lines are warned and skipped; ASCII padding accepted) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 91efd3b |
 
 <a id="core-09"></a>
 #### CORE-09 · __gash_json_str and __gash_json_arr fail without jq
@@ -5636,7 +5636,7 @@ Critical and high items:
 | rc.A behavior | The generated helpers ask the binary's encoder (`gash __compat json str`, `json arr`, values on stdin): the jq layout of the documented path (compact, `\u00xx` lowercase, U+FFFD for invalid UTF-8, as jq produced it), status 0, whether or not jq is installed. Without the binary they fall back to `__gash_json_escape_to` (pure Bash, raw bytes). The missing-jq failure is a result that depends on an optional tool (architecture 7, MUST NOT 8). |
 | Fix recipe (3.0) | Same as rc.A; `internal/contract` encoder shared with every JSON emitter. |
 | Proving test | `TestLedger_CORE09` in `internal/contract` (golden vectors of jq 1.7 for quotes, controls, invalid UTF-8); `testdata/script/compat_json_nojq.txtar` (PATH without jq: `__gash_json_arr a 'b"c'` prints `["a","b\"c"]`, rc 0) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 91efd3b |
 
 <a id="core-10"></a>
 #### CORE-10 · __gash_download's INT trap re-parses the destination path as shell code
@@ -5654,7 +5654,7 @@ Critical and high items:
 | rc.A behavior | `__gash_download` is delegated to the binary (`compat.md` 4); Go handles SIGINT in-process, removes the partial file and the error file by path, prints `Aborted.` and returns 130, and no path is ever parsed as code. Re-parsing a path inside a trap cannot be reproduced. |
 | Fix recipe (3.0) | Same as rc.A; `internal/ui.Download` with `signal.NotifyContext`, cleanup with `os.Remove`. |
 | Proving test | `TestLedger_CORE10` in `internal/ui` (cancelled download with a quote in DEST: file removed, status 130, no marker) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_CORE10 |
 
 <a id="core-16"></a>
 #### CORE-16 · Character counts in messages follow the locale (bytes in C, characters in UTF-8)
@@ -5672,7 +5672,7 @@ Critical and high items:
 | rc.A behavior | Characters, as 2.x in a UTF-8 locale: a character is never cut. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_CORE16` in `internal/config` and `internal/sqlguard`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); existing tests |
 
 <a id="core-17"></a>
 #### CORE-17 · The mode in the ~/.gash_env permission warning depends on the installed stat
@@ -5690,7 +5690,7 @@ Critical and high items:
 | rc.A behavior | The mode is read with `os.Lstat`/`Stat` and printed in the GNU `%a` form on every platform. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_CORE17` in `internal/config`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); existing tests |
 
 <a id="core-18"></a>
 #### CORE-18 · Without the startup load, settings warnings come at the first call, before its argument checks
@@ -5708,7 +5708,7 @@ Critical and high items:
 | rc.A behavior | The cache lives in the caller's shell, which the binary cannot fill, and printing from the binary would repeat the warnings on every call. So the generated stub of every function whose 2.x body loads the settings runs the shim's `__gash_load_env` (the 2.x helper, cached, warnings printed once per shell) before it calls the binary, and the binary reads the file silently. Same warnings, same count, same shell; in a modules-only, non-headless shell they now also appear when that first call only prints help or is refused, where 2.x printed nothing yet. Shells that load gash.sh interactively are unchanged. A headless gash.sh load fills no cache at source time (no binary start while sourcing), so it follows the 2.x headless startup load instead: without `GASH_DEBUG=1` it marks the shell (`__GASH_ENV_QUIET`) and the shim's `__gash_load_env` later parses quietly (stderr of `env load` discarded; the binary's loader skips the permission check), and with `GASH_DEBUG=1` it runs `__gash_load_env` at source time with its warnings, as 2.x did. A modules-only shell with `GASH_HEADLESS=1` stays loud, as in 2.x, where only gash.sh's startup load was quiet. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `llm_exec_security_spec.sh` "reads ~/.gash_env once per call" in Go mode (both halves), plus `TestLedger_CORE18` in `internal/compatgen` (the stub of each such function calls `__gash_load_env` first, and no other stub does; headless gash.sh: no warning without `GASH_DEBUG=1`, the 2.x warnings at source time with it). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); existing tests |
 
 ## Decisions for the operator
 
@@ -5765,7 +5765,7 @@ Critical and high items:
 | rc.A behavior | Missing path: kept, exit 0 with no output, matching 2.x. Invalid regex: no longer silent — see [LLM-37](#llm-37). Under the one-engine decision a pattern that cannot be read as ripgrep reads it fails with `invalid_regex` (RETRY), so only the missing-path half of this silent-success is kept. |
 | Fix recipe (3.0) | Missing root: if the operator wants a distinction, emit `path_not_found`/RETRY; otherwise document "empty results and a missing path are both exit 0, no output". The regex half is settled by LLM-37 (`invalid_regex`). |
 | Proving test | `TestLedger_LLM17` pins the kept behavior for `/nonexistent` (missing path only); the invalid-pattern case is covered by `TestLedger_LLM37`. |
-| Status | accept: done e250421 |
+| Status | accept: emit path_not_found (RETRY) for a missing root (operator 2026-10-24); done e250421 |
 
 <a id="llm-18"></a>
 #### LLM-18 · an empty first positional is skipped and the next word becomes PATTERN
@@ -5783,7 +5783,7 @@ Critical and high items:
 | rc.A behavior | Kept: the argument grammar skips an empty first positional exactly as 2.x does (this is the documented grammar quirk). |
 | Fix recipe (3.0) | If the operator wants strictness: track "pattern given" rather than "pattern non-empty" and emit `missing_pattern` for an empty pattern; otherwise document the skip. |
 | Proving test | `TestLedger_LLM18` pins the chosen behavior for `llm_find '' x`. |
-| Status | accept: done e250421 |
+| Status | accept: strict: missing_pattern for an empty pattern (operator 2026-10-24); done e250421 |
 
 <a id="llm-25"></a>
 #### LLM-25 · ~user is textual, not user expansion
@@ -5801,7 +5801,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A replaces a leading `~` with `$HOME` textually and does not expand `~user`, matching 2.x. |
 | Fix recipe (3.0) | If the operator wants correctness: expand only `~` and `~/…` to `$HOME`, and either resolve `~user` via the passwd database or refuse it; otherwise document the textual rule. |
 | Proving test | `TestLedger_LLM25` pins the `~root/x` -> `$HOME/root/x` resolution. |
-| Status | accept: done 39a5990, 517f190 |
+| Status | accept: expand ~ and ~/ only; refuse ~user (operator 2026-10-24); done 39a5990, 517f190 |
 
 <a id="llm-29"></a>
 #### LLM-29 · scanners exclude paths containing a tab or newline
@@ -5819,7 +5819,7 @@ Critical and high items:
 | rc.A behavior | Kept: the native scanner excludes tab/newline paths in JSON and name-search modes, matching 2.x (PRD 4.3). |
 | Fix recipe (3.0) | Operator decision: keep the exclusion (documented), or carry such names as JSON strings (the native encoder can escape them) and drop the exclusion. If kept, apply it by entry name so the root is not caught (see LLM-08). |
 | Proving test | `TestLedger_LLM29` pins whichever rule the operator chooses for a tab/newline file name. |
-| Status | accept: done 80338c9 |
+| Status | accept: keep the exclusion, applied by entry name (as FS-01) (operator 2026-10-24); done 80338c9 |
 
 ### databases
 
@@ -5839,7 +5839,7 @@ Critical and high items:
 | rc.A behavior | Kept: the native go-sql-driver/mysql path stringifies all values and renders NULL as the string `"NULL"` to preserve the documented contract (the driver returns typed values and real null, which rc.A deliberately coerces). Each value is the text the mysql client printed: integers in decimal, `YEAR` zero-padded to four digits, `FLOAT` and `DOUBLE` rebuilt from the parsed value with the server's own formatting (shortest digits, `1e20` exponent form), `DECIMAL`, strings and dates as sent. go-sql-driver/mysql parses numeric columns even on the text protocol (since v1.8.0), so the server's bytes are not available; `ZEROFILL` padding is the one loss (DB-18). |
 | Fix recipe (3.0) | Operator decision: keep all-strings + NULL->"NULL" (matches AGENTS.md section 3.3), or switch MySQL to typed values and real JSON `null` (a documented contract change). |
 | Proving test | `TestLedger_DB02` pins MySQL values as strings and NULL as the chosen representation. |
-| Status | accept: done 6682f4b (kept, documented) |
+| Status | accept: keep all-strings and NULL as "NULL" (operator 2026-10-24); done 6682f4b (kept, documented) |
 
 <a id="db-10"></a>
 #### DB-10 · llm_db_schema key sets differ per engine
@@ -5857,7 +5857,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A emits each engine's key set exactly as 2.x does. |
 | Fix recipe (3.0) | Operator decision: keep per-engine keys (matches the pinned spec) or define one unified schema shape across engines (a contract change). |
 | Proving test | `TestLedger_DB10` pins each engine's key set. |
-| Status | accept: done 6682f4b (kept, documented) |
+| Status | accept: keep per-engine key sets (operator 2026-10-24); done 6682f4b (kept, documented) |
 
 <a id="db-11"></a>
 #### DB-11 · -h always means help on llm_db_*, never a host option
@@ -5875,7 +5875,7 @@ Critical and high items:
 | rc.A behavior | Kept: the db grammar intercepts `-h`/`--help` as help before parsing. |
 | Fix recipe (3.0) | Operator decision: keep (document "-h is help; host comes from the connection URL") — recommended for consistency with the rest of the family. |
 | Proving test | `TestLedger_DB11` pins `-h` as help for every llm_db_* function. |
-| Status | accept: done 6682f4b (documented) |
+| Status | accept: keep; document that the host comes from the URL (operator 2026-10-24); done 6682f4b (documented) |
 
 <a id="db-12"></a>
 #### DB-12 · the pre-connection SQL precheck returns the SQLite verdict when all engines reject
@@ -5893,7 +5893,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A reproduces the precheck order and emits the sqlite verdict pre-connection to match 2.x error text/codes. |
 | Fix recipe (3.0) | Operator decision: keep the sqlite-verdict precheck, or defer guard errors until the driver is known so the message matches the target engine. |
 | Proving test | `TestLedger_DB12` pins the pre-connection verdict for a query all engines reject. |
-| Status | accept: done 4d21014 |
+| Status | accept: defer guard errors until the engine is known (operator 2026-10-24); done 4d21014 |
 
 ### llm_exec
 
@@ -5913,7 +5913,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A runs the same regexes (ported as Go regexps over the space-normalized line, including the cosmetically dead patterns) against the whole line, quotes included. |
 | Fix recipe (3.0) | Operator decision: keep the quote-oblivious tripwire (documented in AGENTS.md section 6.3 as "a regex tripwire, easy to evade") or make it structural. If kept, document that quoted text is matched. |
 | Proving test | `TestLedger_EXEC03` pins that a quoted blocklist token is refused. |
-| Status | accept: done 5c38905 (kept, documented) |
+| Status | accept: keep the quote-oblivious tripwire; document it (operator 2026-10-24); done 5c38905 (kept, documented) |
 
 <a id="exec-04"></a>
 #### EXEC-04 · pattern operands are checked as file names
@@ -5931,7 +5931,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A runs the secret-file check on the first positional before skipping it as a pattern, matching 2.x. |
 | Fix recipe (3.0) | Operator decision: keep (a pattern resembling a secret name is refused) or move the secret check after the pattern-skip so only real file operands are checked. Document the chosen rule. |
 | Proving test | `TestLedger_EXEC04` pins the behavior for a secret-looking pattern vs a path-looking pattern. |
-| Status | accept: done (rc.A); documented 5c38905 |
+| Status | accept: keep (a pattern resembling a secret name is refused) (operator 2026-10-24); done (rc.A); documented 5c38905 |
 
 <a id="exec-05"></a>
 #### EXEC-05 · GASH_LLM_EXEC_ALLOW commands bypass the argument and walk rules
@@ -5949,7 +5949,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A reproduces the full bypass for allow-listed commands (per-word secret/path checks still apply). |
 | Fix recipe (3.0) | Operator decision: keep the documented bypass, or keep the walk-root/symlink checks even for allow-listed commands. Document whichever is chosen. |
 | Proving test | `TestLedger_EXEC05` pins that an allow-listed command skips arg/walk rules but not the secret/path checks. |
-| Status | accept: done 5c38905 |
+| Status | accept: keep the walk-root/symlink checks for allow-listed commands too (operator 2026-10-24); done 5c38905 |
 
 ### system, sysinfo, ssh, chrome
 
@@ -5969,7 +5969,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: limit applied after the sort, as `tail -n N`. |
 | Fix recipe (3.0) | Decision: (a) keep, documenting "with -r, -n keeps the oldest N"; or (b, recommended) `-n N` always means the N most recent: `internal/system` `hgrep` takes the newest N in ascending order, then reverses for `-r`. Help NOTES state the rule. |
 | Proving test | `TestLedger_SYS43` in `internal/system` (two entries, `-r -n 1` → `echo two` under option b) |
-| Status | accept: done 105f468 |
+| Status | accept: option (b): -n N is always the N most recent (operator 2026-10-24); done 105f468 |
 
 <a id="sys-44"></a>
 #### SYS-44 · SSH passphrases lose trailing whitespace
@@ -5987,7 +5987,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: `internal/config` trims the whole line (the config-spec vectors stay as they are). |
 | Fix recipe (3.0) | Decision: (a) keep trimming and document it in `docs/configuration.md` ("trailing spaces of a passphrase are dropped"); or (b) trim only the left side and the key part, keep the value verbatim minus a final `\r`, with a `Warning: Line N of FILE: passphrase ends with whitespace` so accidental spaces are visible. |
 | Proving test | `TestLedger_SYS44` in `internal/config` (value `trail   ` round-trips under option b; warning printed once) |
-| Status | accept: pending in core (internal/config SSH: parser) |
+| Status | accept: option (b): keep the value verbatim minus a final \r, warn on trailing whitespace (operator 2026-10-24); done 652aa51 |
 
 <a id="sys-45"></a>
 #### SYS-45 · wsl_compact drops caches and compacts memory as root with no question and no headless gate
@@ -6005,7 +6005,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: no question, no headless gate, `0` when dmesg fails. |
 | Fix recipe (3.0) | Decision: (a) keep (it is the repair and is harmless to data); or (b, recommended) keep it unprompted on a terminal, but headless without `-y` prints `Error: wsl_compact needs root: pass -y to run it unattended.` rc 1 (new `-y`/`--yes` flag), and print `unknown (dmesg not readable)` instead of `0` when dmesg exits non-zero. |
 | Proving test | `TestLedger_SYS45` in `internal/system` (WSL sysroot, headless, no `-y` → rc 1 and no sudo call; failing dmesg → `unknown`) |
-| Status | accept: done 7607509 |
+| Status | accept: option (b): headless needs -y; dmesg failure prints unknown (operator 2026-10-24); done 7607509 |
 
 <a id="sys-46"></a>
 #### SYS-46 · wsl_compact's constant `sudo sh -c` script versus the runner's no-shell rule
@@ -6023,7 +6023,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: the identical `sudo sh -c` argv, which needs a runner exception. |
 | Fix recipe (3.0) | Decision: (a, recommended for rc.A parity) `internal/runner` gains `ConstScript`, accepted only for compile-time constant scripts declared in the registry (this one), listed in `architecture.md` 7; or (b) three calls `sudo sync`, `sudo tee /proc/sys/vm/drop_caches` (stdin `3`), `sudo tee /proc/sys/vm/compact_memory` (stdin `1`), stdout discarded, failure message unchanged; render fixture `wsl_compact compact` then sees three sudo lines. |
 | Proving test | `TestLedger_SYS46` in `internal/runner` (option a: a non-constant script is refused at build time by a vet check; option b: fake runner sees the three argv) |
-| Status | accept: done (rc.A); runner.ConstScript ScriptWSLCompact, TestLedger_SYS46 |
+| Status | accept: option (a): runner ConstScript for registered constant scripts (operator 2026-10-24); done (rc.A); runner.ConstScript ScriptWSLCompact, TestLedger_SYS46 |
 
 ### docker and compose
 
@@ -6043,7 +6043,7 @@ Critical and high items:
 | rc.A behavior | keeps 2.x: no question, no flag. |
 | Fix recipe (3.0) | If accepted: print `Will stop N container(s): NAME...` (or `Will start ...`), then `__gash_confirm_plan` (Y/n) with `-y/--yes`; headless or no terminal → `Error: No terminal to ask for confirmation: pass -y to go ahead.` rc 1; rows in docs/security.md "Confirmations"; completion `-y --yes`. |
 | Proving test | `TestLedger_DOCK22` in `internal/docker` (headless without `-y` → rc 1 and no `docker stop` call; with `-y` → stop called once with every ID) |
-| Status | accept: done 09ca07f, 63f58e1 |
+| Status | accept: list the containers and confirm; -y/--yes for headless (operator 2026-10-24); done 09ca07f, 63f58e1 |
 
 ### git module
 
@@ -6063,7 +6063,7 @@ Critical and high items:
 | rc.A behavior | keeps 2.x: `internal/gitx` runs the git module functions with the caller's environment and configuration, without `-c core.hooksPath=...` or other hardening; only the `llm_*` git calls get the hardening flags. |
 | Fix recipe (3.0) | recommended: keep (they are the user's own repository operations); architecture.md section 7 and docs/security.md say that git module functions run the user's hooks and config. If the operator wants hardening, a separate decision with its own flags. |
 | Proving test | `TestLedger_GIT10` as `testdata/script/git10_hooks.txtar` (a pre-commit hook creates a marker; `git_sync --no-push` → marker exists) |
-| Status | accept: done 9eed0f7 |
+| Status | accept: keep; document that git module functions run the user hooks and config (operator 2026-10-24); done 9eed0f7 |
 
 ### php and node
 
@@ -6083,7 +6083,7 @@ Critical and high items:
 | rc.A behavior | Not carried: `gash init bash` defines none of the four and never probes `~/.config/composer/vendor/bin/hte-cli`; `gash hte ...` (design `hte.md`: user-run stack, root-owned hosts helper, `gash hte migrate` for existing hte-cli sites) replaces hte-cli. Typing `hte` in 3.x gives Bash's `command not found`. |
 | Fix recipe (3.0) | None beyond rc.A. Docs: `docs/reference/dev.md` drops the four alias rows; `docs/migration.md` (2.x → 3.x) gains "hte, hte-create, hte-remove, hte-details are gone: use `gash hte` (`gash hte migrate` imports hte-cli sites)"; CHANGELOG lists the removal. |
 | Proving test | `testdata/script/alias_parity.txtar` (`TestLedger_DEV17_2x`): with a fake hte-cli file, none of the four aliases is defined after `eval "$(gash init bash)"` |
-| Status | accept: confirm the removal (gash hte replaces them) (operator 2026-10-24) |
+| Status | accept: confirm the removal (gash hte replaces them) (operator 2026-10-24); done (removed in rc.A; docs/reference/dev.md says so) |
 
 <a id="dev-18"></a>
 #### DEV-18 · A missing or unusable project_dir never errors
@@ -6101,7 +6101,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x behavior (frozen contract: defaults and exit codes). |
 | Fix recipe (3.0) | Recommended: keep stdout and rc 0, add `Warning: Directory not found: <DIR>` on stderr (both functions, both modes) when DIR is not a directory. Alternative (contract break): `Error: Directory not found: <DIR>` rc 1. Docs: NOTES of both functions. |
 | Proving test | `TestLedger_DEV18_fix` in `internal/dev` (missing DIR: same stdout, the warning on stderr) |
-| Status | accept: done 37bcf69 |
+| Status | accept: keep stdout and rc 0, add the stderr warning (operator 2026-10-24); done 37bcf69 |
 
 <a id="dev-19"></a>
 #### DEV-19 · Exact Node pins are reduced to their major
@@ -6119,7 +6119,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x behavior (the `version` key is the major by contract). |
 | Fix recipe (3.0) | Recommended: keep, and document it in the NOTES ("exact pins resolve to the newest installed patch of their major"). Alternative: an installed exact pin becomes `full_version` (value change, no new key). |
 | Proving test | `TestLedger_DEV19_2x` in `internal/dev` (pin v20.9.0 → `20.11.1`) |
-| Status | accept: done 37bcf69 |
+| Status | accept: keep and document (operator 2026-10-24); done 37bcf69 |
 
 <a id="dev-20"></a>
 #### DEV-20 · Flag meanings and check order differ between the node functions
@@ -6137,7 +6137,7 @@ Critical and high items:
 | rc.A behavior | Keeps every 2.x rule and message (the 2.x grammars are ported rule for rule). |
 | Fix recipe (3.0) | Recommended: accept `-y`/`--yes` in nvm_prune_versions as synonyms of `--force`; parse arguments before the environment checks in all three (unknown option first, `Error: Unknown option: X ...` rc 1). Docs: usage lines. |
 | Proving test | `TestLedger_DEV20_fix` in `internal/cli/args` (grammar table: order of errors, `-y` accepted) |
-| Status | accept: partly done 37bcf69 (Go); nvm_prune_versions stub pending in core |
+| Status | accept: as recommended: -y/--yes synonyms, arguments parsed before environment checks (operator 2026-10-24); done dda94a4 |
 
 ### ai
 
@@ -6157,7 +6157,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x rule (fail closed on unknown values). |
 | Fix recipe (3.0) | Recommended: keep fail-closed and add `Warning: GASH_AI_CONFIRM=<value> is not 0, 1 or auto: asking before every request` (once per call) for other values; do not alias `off` to `0` (an unattended send must stay explicit). Docs: configuration.md settings table states the rule. |
 | Proving test | `TestLedger_AI23_fix` in `internal/ai` (`off` → asks/refuses and warns; `0`, `1`, `auto` unchanged) |
-| Status | accept: done 2980327 |
+| Status | accept: keep fail-closed, add the warning (operator 2026-10-24); done 2980327 |
 
 <a id="ai-24"></a>
 #### AI-24 · `-h`/`--help` is help only as the first argument of the AI functions
@@ -6175,7 +6175,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x rule (needs_help on `$1` only), as the architecture's grammar port requires. |
 | Fix recipe (3.0) | Recommended: also treat `-h`/`--help` as help when it is the only word after a provider (`ai_query claude --help`, `ai_ask gemini -h`) and accept it anywhere in ai_sysinfo; questions that merely contain `--help` among other words stay questions. Docs: usage NOTES. |
 | Proving test | `TestLedger_AI24_fix` in `internal/cli/args` (vectors above; `ai_query what does ls --help print` stays a question) |
-| Status | accept: done 8049ea1 |
+| Status | accept: as recommended: help also as the only word after a provider (operator 2026-10-24); done 8049ea1 |
 
 ### file scanners
 
@@ -6195,7 +6195,7 @@ Critical and high items:
 | rc.A behavior | Decision kept as on record. rc.A reproduces each scanner's GNU-path behavior: files_largest excludes both; the deviations of the others are Defects reproduced: FS-06 (dirs_largest), FS-07 (dirs_list_empty), FS-08 (tree_stats counts), FS-09 (dirs_find_large cut), FS-17 (tree_stats extensions). |
 | Fix recipe (3.0) | Once the operator confirms the rule, apply the documented exclusion uniformly: one predicate in `internal/fsscan` (walker): an entry whose path relative to ROOT contains `\t` or `\n` is skipped, never descended into, and its size is added to no total (the GNU du `--exclude` semantics 2.x already has for newlines). Used by all five scanners and by both tree_stats counts. AGENTS 3.2 unchanged; the files_largest NOTES paragraph is added to the help of the other four in 3.0. |
 | Proving test | `TestLedger_FS01_fix` in `internal/fsscan`: on the tab/newline fixture (dirs `t\tx`, `n\nx`, empty `et\tx`, `en\nx`, files `ft\ty`, `fn\ny`, `norm/f`) no scanner in any mode (--json, --null, text, dirs_find_large with and without --with-mtime) reports a path containing `\t` or `\n` or the truncated names `t`, `et`, `n`; tree_stats gives files_total 1, dirs_total 2, empty_dirs 0, size_total 1000; `testdata/script/fsscan_tabnl.txtar` runs `jq -e .` on every JSON line. |
-| Status | accept: done d6a4bf9 |
+| Status | accept: apply the exclusion uniformly (one predicate in internal/fsscan) (operator 2026-10-24); done d6a4bf9 |
 
 ### archive_extract and file_backup
 
@@ -6215,7 +6215,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: same tools, same argv, whatever they enforce; outside-pointing symlink members stay where the tool put them |
 | Fix recipe (3.0) | Options: (a) keep 2.x, document the tool versions tested; (b) recommended: an in-process pre-check of the member list before the tool runs: tar formats through Go's `archive/tar` on the same decompressed stream (`compress/gzip`, `compress/bzip2`, or the `xz -dc`, `zstd -dc`, `uncompress -c` output), zip through `archive/zip`, 7z through `7z l -slt -ba -- F`, rar through `unrar lt -- F`; refuse when a member name is absolute, has a `..` component, is a symlink or hard link whose target resolves outside OUTPUT_DIR, or lies below a symlink member: `Error: Archive 'F' has an unsafe member 'M' (absolute path, .. component or link outside the destination); nothing extracted.`, rc 1, before OUTPUT_DIR is created (in `internal/files`, `memberGuard()`); the tool then extracts as today; (c) as (b) with an opt-out flag (new grammar for a function that has none; not recommended) |
 | Proving test | `TestLedger_FILE22_fix` in `internal/files`: the mkevil corpus (tar, tgz, zip, rar 4 stored, 7z with `-snl` and `-spf`) is refused per archive, the sandbox gains no file; a clean archive still extracts, rc 0 |
-| Status | accept: done a2a30ac (option b; guard extended to rar symlinks and 7z link targets) |
+| Status | accept: option (b): in-process member pre-check (operator 2026-10-24); done a2a30ac (option b; guard extended to rar symlinks and 7z link targets) |
 
 <a id="file-23"></a>
 #### FILE-23 · Tool exit statuses collapse to 0/1, and tool warnings are failures for some formats only
@@ -6233,7 +6233,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x (0 or 1) |
 | Fix recipe (3.0) | Options: (a) keep 0/1 (recommended: 2.x contract, simplest for scripts); (b) pass each tool's status through (gzip 2, unzip 1, 7z 1/2, tar 2); (c) rc 0 on the known warning statuses (gzip 2, unzip 1) with `Warning: <tool> reported warnings; files were extracted.` on stderr |
 | Proving test | `TestLedger_FILE23` in `internal/files` pins the chosen mapping per tool with `runner.Fake` |
-| Status | accept: done (option a, rc.A); TestLedger_FILE23 |
+| Status | accept: option (a): keep 0/1 (operator 2026-10-24); done (option a, rc.A); TestLedger_FILE23 |
 
 <a id="file-24"></a>
 #### FILE-24 · Tool configuration in the environment and in `~/.rarrc` changes archive_extract results
@@ -6251,7 +6251,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: the extraction tools get the caller's environment and HOME unchanged (2.x passed everything through, so the runner's allowlist rule, `architecture.md` 7, keeps the full environment for these tools) |
 | Fix recipe (3.0) | Options: (a) keep pass-through and document it in the help NOTES (recommended: the user's tool configuration is respected); (b) drop these variables and run unrar with an empty temporary HOME, for results independent of user configuration (behavior change for users who rely on them) |
 | Proving test | `TestLedger_FILE24_2x` in `internal/files` (`runner.Fake` asserts the variables and HOME reach the tool); `testdata/script/archive_extract_tool_env.txtar` (`TAR_OPTIONS=--keep-old-files` → rc 1, old file kept) |
-| Status | accept: done ca0b3dd (option a, documented) |
+| Status | accept: option (a): keep pass-through and document it (operator 2026-10-24); done ca0b3dd (option a, documented) |
 
 <a id="file-25"></a>
 #### FILE-25 · Backup stamp: Go's clock does not read POSIX TZ strings the way `date` does
@@ -6269,7 +6269,7 @@ Critical and high items:
 | rc.A behavior | Operator choice; the pure-port default is (a) |
 | Fix recipe (3.0) | Options: (a) rc.A runs `date +%Y%m%d%H%M%S` from PATH, as 2.x did (exact parity including POSIX TZ strings; a user `date` function stays ignored, FILE-20); (b) Go's clock plus a POSIX TZ rule parser for values that are not zone names; (c) Go's clock as is (a forced divergence for POSIX TZ strings). Recheck with go1.27.2 before choosing (b) or (c) |
 | Proving test | `TestLedger_FILE25_2x` in `internal/files`: under `TZ=JST-9` and `TZ=EST5EDT,M3.2.0,M11.1.0` at a fixed instant, the stamp equals `date -d @N +%Y%m%d%H%M%S` |
-| Status | accept: done (option a, rc.A); TestLedger_FILE25_2x |
+| Status | accept: option (a): date from PATH (operator 2026-10-24); done (option a, rc.A); TestLedger_FILE25_2x |
 
 ### shell layer
 
@@ -6289,7 +6289,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: the generated `gash.sh` sources both user files after `gash init bash`, so `~/.bash_aliases` runs twice on such systems. |
 | Fix recipe (3.0) | Options: (a) keep the documented double sourcing; (b) recommended: once pack aliases no longer replace the user's (SHELL-09 fix), stop re-sourcing `~/.bash_aliases` when the profile already sourced it (detect with a guard variable set by a one-line wrapper the installer adds, or simply source it only when no alias existed before load), keep `~/.bash_local`; update `docs/configuration.md:220-224` and CHANGELOG. |
 | Proving test | `testdata/script/user_files_once.txtar` (skel `.bashrc`: side effect runs once and `ll` keeps the user's definition; without the distro line: still sourced once) |
-| Status | accept: option (b): source ~/.bash_aliases once (operator 2026-10-24) |
+| Status | accept: option (b): source ~/.bash_aliases once (operator 2026-10-24); done b3596d7, d0a6dce |
 
 <a id="shell-15"></a>
 #### SHELL-15 · Reconcile SHELL-06: the grep-alias probe lives in shellinit, not the registry pack
@@ -6307,7 +6307,7 @@ Critical and high items:
 | rc.A behavior | As SHELL-06 states: no `grep` alias; the generated reference still lists it. |
 | Fix recipe (3.0) | Decide which package owns the SHELL-06 fix: (a) recommended, fix the probe in `internal/shellinit` (run `grep --color=auto -q x` on real input at `gash init bash` time) and reword SHELL-06's Fix recipe to name `internal/shellinit`; (b) keep the decision in the registry catalog condition. Left for the lead rather than edited into SHELL-06, to avoid guessing the intended fix location. |
 | Proving test | the SHELL-06 proving test (`TestLedger_SHELL06` in `internal/shellinit`) already lives where option (a) puts the fix |
-| Status | accept: option (a): fix the probe in internal/shellinit (operator 2026-10-24) |
+| Status | accept: option (a): fix the probe in internal/shellinit (operator 2026-10-24); done 582e82b (option a) |
 
 ### self-management
 
@@ -6327,7 +6327,7 @@ Critical and high items:
 | rc.A behavior | Proposed (MATRIX `redesign`): rc.A keeps the 2.x headings, line format (`  PATH` / `  PATH — MISSING`, `  NAME — not found`), settings and tools sections and the rc 0, but takes the file list from the shipped 3.x manifest (the generated files, `VERSION`, `quotes/list.txt`, `.gash_env.template`, the binary for this `VERSION`); keeping the literal 2.x list would flag every healthy rc.A install. An open 2.x shell keeps its own list (soft degradation, `upgrade.md` 7.1). |
 | Fix recipe (3.0) | Options: (a) the proposal above (recommended); (b) keep the 2.x list byte for byte and add a 3.x section (every install shows warnings); (c) replace the doctor by `gash version --check`. With (a): `internal/selfmgmt` doctor reads the manifest that `internal/compatgen` writes, adds `Binary:` and `Shims:` checks (sha256 against the release manifest), rc per SELF-06. |
 | Proving test | `TestLedger_SELF17` in `internal/selfmgmt` (staged 3.x tree: `All checks passed.`; one generated shim removed: its `— MISSING` line) |
-| Status | accept: option (a): file list from the 3.x manifest plus binary and shim checks (operator 2026-10-24) |
+| Status | accept: option (a): file list from the 3.x manifest plus binary and shim checks (operator 2026-10-24); done 94d8efc |
 
 ### test harness
 
@@ -6347,7 +6347,7 @@ Critical and high items:
 | rc.A behavior | Kept; Go-mode runs happen in a namespace. |
 | Fix recipe (3.0) | Options: keep; or make the stub log and refuse unless the target is itself a stub on PATH. |
 | Proving test | A Go-mode test reaching sudo with an unmocked target fails visibly |
-| Status | accept: make the stub log and refuse unless the target is a stub (operator 2026-10-24) |
+| Status | accept: make the stub log and refuse unless the target is a stub (operator 2026-10-24); done 2f66411 |
 
 ## Doc drift
 
@@ -6646,7 +6646,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the card's alias names and static expansions and dev.md unchanged in rc.A (except the hte rows, dropped with DEV-17), corrected in 3.0. The values 2.x took from the live shell (`BASH_ALIASES`) cannot be read by a binary, so rc.A shows the static expansion for every row (forced part, for the owner of the `gash` card). |
 | Fix recipe (3.0) | The registry carries each php-pack alias with its condition (MATRIX rows) and the card and dev.md are generated from it (PRD 5.5): families `phpXY`, `composerXY`, `1composerXY` "for each installed phpX.Y", `php` and `composer` "with GASH_REPLACE_TOOLS=1", `composer1-self-update` "when composer1 is installed". |
 | Proving test | `TestRegistry_AliasDocsMatchConditions` in `internal/registry` and a `gash dev` golden in `testdata/script/card_dev.txtar` |
-| Status | accept: partly done 37bcf69 (docs/reference/dev.md); gash dev card pending in core |
+| Status | accept: done 7b19f1d |
 
 <a id="dev-22"></a>
 #### DEV-22 · php_detect_version and node_detect_version help omit how far detection reaches and what it does not check
@@ -6794,7 +6794,7 @@ Critical and high items:
 | rc.A behavior | Already true in rc.A: those inputs get the JSON error contract (forced divergences FS-21, FS-22, FS-29). |
 | Fix recipe (3.0) | None beyond rc.A. |
 | Proving test | `TestLedger_FS21`, `TestLedger_FS22`, `TestLedger_FS29`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-37"></a>
 #### FS-37 · AGENTS 6.1 says scanners refuse /proc, /sys, /dev, /boot, /root
@@ -6992,7 +6992,7 @@ Critical and high items:
 | rc.A behavior | Moot: the Bash source is not ported; no Go action. |
 | Fix recipe (3.0) | None (comment removed with the Bash implementation at cutover); FS-03 covers the walk. |
 | Proving test | None needed (comment only). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-48"></a>
 #### FS-48 · Prune-args comment: "null-safe if the caller uses mapfile -d ''"
@@ -7010,7 +7010,7 @@ Critical and high items:
 | rc.A behavior | Moot: the helper is not ported (native matcher). |
 | Fix recipe (3.0) | None (removed at cutover). |
 | Proving test | None needed (comment only). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="fs-49"></a>
 #### FS-49 · Hints say "positive integer" where 0 is accepted
@@ -7086,7 +7086,7 @@ Critical and high items:
 | rc.A behavior | Moot for the ported functions (native directory walk in Go, identical on Linux and macOS); the remaining Bash (generated shims, init output) needs only Bash 4.4+ builtins and coreutils. |
 | Fix recipe (3.0) | Rewrite `CONTRIBUTING.md` "Portability": "Bash 4.4+ for the generated shell layer; the binary needs no external userland except the tools a command documents"; the line about BSD userland goes. |
 | Proving test | none (doc change; the macOS CI job of `testing.md` covers the walk) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9d937ae |
 
 <a id="shell-16"></a>
 #### SHELL-16 · The prompt and startup bench harness drops GASH_BIN, so a 3.x run uses the in-tree binary only
@@ -7104,7 +7104,7 @@ Critical and high items:
 | rc.A behavior | Not a runtime behaviour: the scripts benchmark whatever `gash.sh` the given checkout resolves. For 3.x that is the tree's own `bin/gash`; `GASH_BIN` is scrubbed. |
 | Fix recipe (3.0) | At the S3 3.x bench pass, add `GASH_BIN` to the `env -i` pass-through of `prompt_bench.sh` and `startup_bench.sh` (and the `bench/shell/README.md` usage), so a bench can measure a chosen binary; otherwise document that the 3.x checkout must hold the built `bin/gash`. |
 | Proving test | none (bench harness; covered when the 3.x bench numbers are filled in `bench/shell/README.md`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 939ad3f, 91cecfe |
 
 <a id="shell-17"></a>
 #### SHELL-17 · design/shell.md §7 describes SSH auto-unlock via a __compat sub-command; rc.A uses the ssh module on StartPTY
@@ -7122,7 +7122,7 @@ Critical and high items:
 | rc.A behavior | SSH auto-unlock is the `gash_ssh_auto_unlock` function handled by `internal/ssh`; `ssh-add` runs on `runner.StartPTY` (secrets on the PTY only), and the init script emits the stub call plus the `GASH_SSH_AUTOUNLOCK_RAN=1` export, as 2.x. |
 | Fix recipe (3.0) | Update `design/shell.md` §7 to describe the auto-unlock as the `gash_ssh_auto_unlock` stub handled by `internal/ssh` on `runner.StartPTY`, not an `eval "$(gash __compat ssh-unlock)"`. |
 | Proving test | none (design-doc change; the auto-unlock behaviour is covered by `internal/ssh` tests) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 07d81fe |
 
 <a id="shell-18"></a>
 #### SHELL-18 · gash_migrate's registered help and the init reminder still describe the 1.x->2.0 migration
@@ -7140,7 +7140,7 @@ Critical and high items:
 | rc.A behavior | `gash_migrate` prints the 2.x-route pointer and returns 1 (D-6); the registered help and the daily reminder are inherited from 2.x unchanged. The reminder staying is itself correct (D-6: "the daily reminder stays as in 2.x"); the drift is the help's flags/description and the reminder's "review the changes" wording. |
 | Fix recipe (3.0) | Reduce the `gash_migrate` registered help to the D-6 reality (the name, no `--rollback`/`--status`/`--yes` review, a one-line description that it points at the 2.x route) and reword the daily reminder to the pointer, keeping the once-a-day cadence. |
 | Proving test | `TestLedger_SHELL18` (help text and reminder match the D-6 pointer) once `gash init bash` and the migrate help are reconciled |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 38f0d14 |
 
 <a id="shell-19"></a>
 #### SHELL-19 · SHELL-10 and SHELL-13 still need their dedicated proving tests written
@@ -7158,7 +7158,7 @@ Critical and high items:
 | rc.A behavior | The behaviours are implemented (compatgen lint for SHELL-10; the headless early return for SHELL-13); only the dedicated LEDGER proving tests are outstanding. |
 | Fix recipe (3.0) | At the S2 LEDGER pass / S3, add `TestLedger_SHELL10` (lint over the generated files and an emitted init script; `load_hygiene.txtar`) and `TestLedger_SHELL13` (`headless_1x_gashrc.txtar`: empty stderr and no state file headless; the once-a-day line interactively) as the SHELL-10/SHELL-13 entries specify. |
 | Proving test | the tests this item asks for (`TestLedger_SHELL10`, `TestLedger_SHELL13`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 39b9fc9; TestLedger_SHELL13 |
 
 ### self-management
 
@@ -7178,7 +7178,7 @@ Critical and high items:
 | rc.A behavior | Not applicable (rc.A keeps the 2.1.0 contract). |
 | Fix recipe (3.0) | 3.0 is the major that records these: add a "Breaking changes since 2.0" list to the 3.0 CHANGELOG entry naming the 2.1.0 items above, and keep the CONTRIBUTING rule. |
 | Proving test | none (doc change) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (CHANGELOG 3.0.0) |
 
 <a id="self-19"></a>
 #### SELF-19 · troubleshooting.md describes uninstall incompletely
@@ -7196,7 +7196,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A behaves as the code (cancel, rc 0) and the page is unchanged in rc.A. |
 | Fix recipe (3.0) | Rewrite the uninstall paragraph from the 3.0 behavior: no terminal → cancelled, nothing removed; left behind: `~/.local/state/gash`, `~/.cache/gash/probes` (2.x only), the ssh-agent socket, a `PROFILE=` block, and `GASH_ENV_FILE` only when not set in the uninstalling shell; the binary `versions/` directory goes with the install directory. |
 | Proving test | none (doc change; uninstall behavior covered by SELF-02) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 52ac68f |
 
 <a id="self-20"></a>
 #### SELF-20 · README counts of functions and aliases are stale
@@ -7214,7 +7214,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: README unchanged in rc.A. |
 | Fix recipe (3.0) | Generate both numbers from `internal/registry` into README by `internal/compatgen` (docs generation), or write "about ninety functions and over a hundred aliases" and "38 short aliases and 6 log helpers". |
 | Proving test | `TestRegistry_ReadmeCounts` in `internal/registry` (README numbers equal the registry's) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 5b94155 |
 
 <a id="self-21"></a>
 #### SELF-21 · gash_upgrade --help says it "cleans up"
@@ -7232,7 +7232,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Registry help NOTES for `gash_upgrade`: "Fetches the release tags, checks out the newest release (never an older one), and fetches its binary. Open a new terminal afterwards." |
 | Proving test | `TestRegistry_HelpGolden` golden updated in 3.0 (rc.A golden is the 2.x body) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d37b1eb |
 
 ### lib/core
 
@@ -7252,7 +7252,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: template unchanged in rc.A (the binary embeds the same file). |
 | Fix recipe (3.0) | Template text: "Write `%` as `%25`; other characters may be written raw or URL-encoded. The user name is used as written (not decoded)." Same in `docs/configuration.md` (DB entries). |
 | Proving test | `TestLedger_CORE12` in `internal/config` (password `p@:/#x` raw and encoded parse the same; `%2540` decodes to `%40`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 2e890cb |
 
 <a id="core-20"></a>
 #### CORE-20 · gash_unload's pre-symbol snapshot is taken before the module surface, reproducing 2.x
@@ -7270,7 +7270,7 @@ Critical and high items:
 | rc.A behavior | Parity with 2.x: the generated `gash.sh.tmpl` snapshots `__GASH_PRE_SYMBOLS` and the symbol helpers before the stub/alias surface (interactive only), so non-`gash_`-prefixed module functions and aliases are swept on unload exactly as 2.x does. |
 | Fix recipe (3.0) | None: the placement is deliberate and matches 2.x. Recorded so the snapshot is not "moved after the stub surface" in a later refactor; the `gash.sh.tmpl` comment already states the intent. |
 | Proving test | covered by the `gash_unload` parity tests of `internal/selfmgmt` (the module surface is removed and the pre-Gash symbols restored) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="core-21"></a>
 #### CORE-21 · architecture.md names only two sanctioned bash -c uses; there are now five
@@ -7288,7 +7288,7 @@ Critical and high items:
 | rc.A behavior | Five sanctioned uses, each gated by `BashUse` and checked by `runner`; the doctor-timing shells carry `-i` and run only fixed scripts. |
 | Fix recipe (3.0) | Update `architecture.md` to name the five sanctioned `bash -c` uses (llm_exec, the nvm bridge, and the three `gash_doctor --timing` shells), or point at the `BashUse` enum as the source of truth. |
 | Proving test | none (doc change; the `BashUse` check is covered by `internal/runner` tests) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d4ec579 |
 
 ## HTE design delta
 
@@ -7388,7 +7388,7 @@ Critical and high items:
 | rc.A behavior | Boolean flag pairs `--https`/`--no-https` and `--force-https`/`--no-force-https` (cobra bool flags) set `https`/`force_https` in the site TOML. No string-to-bool helper exists; a value cobra cannot parse fails with the flag error of the Gash contract, never with a default. `--force-https` with `--no-https` fails (RETRY) instead of being ignored |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE01` in `internal/hte/state` (every flag combination → TOML values, the contradictory pair refused); `testdata/script/hte_site_create_http_only.txtar` (`--no-https` renders no `:443` vhost and no certificate) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-02"></a>
 #### HTE-02 · Invalid `--docroot`, `--phpver`, `--profile` silently fall back under `-n`
@@ -7406,7 +7406,7 @@ Critical and high items:
 | rc.A behavior | Each invalid value fails before anything is written, in argument order: `docroot_not_found` / `invalid_docroot`, `php_version_not_installed`, `invalid_profile`, `site_exists` (all RETRY), hint listing the valid values (installed versions, `dev, staging, hardened`). An absent optional flag takes the documented default (HTE-55), never a substitute for an invalid value |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE02` in `internal/hte/state` (table: each invalid value → its code, no file under the sysroot changed) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-03"></a>
 #### HTE-03 · An invalid default loops forever under `-n` (create, `hosts add`)
@@ -7424,7 +7424,7 @@ Critical and high items:
 | rc.A behavior | No retry loop exists. Without a TTY (or with `GASH_HEADLESS=1`) an invalid value fails once with its code (`invalid_domain`, RETRY); a missing required flag fails with `missing_value`. On a TTY a missing required flag is asked once; an invalid answer fails with the same code |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE03` in `internal/hte/cli` (prompt fake answering an invalid value: one error, one exit); `testdata/script/hte_no_tty.txtar` (stdin `/dev/null`, missing `--domain` → `missing_value`, exits within 1 s) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-04"></a>
 #### HTE-04 · `remove` and `modify` act on site #1 when `--domain` is a typo
@@ -7442,7 +7442,7 @@ Critical and high items:
 | rc.A behavior | `--domain` is required on `site modify/remove/show/enable/disable` and `cert show/renew`; an unknown one fails with `site_not_found` (RETRY, hint: `gash hte site list`). No command ever picks a site the user did not name |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE04` in `internal/hte/state` (two sites, `remove --domain typo.test --yes` → `site_not_found`, both sites byte-identical) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-05"></a>
 #### HTE-05 · Site identity comes from the FPM socket name; the pool is found by substring
@@ -7460,7 +7460,7 @@ Critical and high items:
 | rc.A behavior | The identity is the `domain` key of `sites/<domain>.toml` (file name and key must agree, else the site is reported invalid by `doctor`). Rendered files and sockets are derived from it; nothing is parsed back from rendered config. migrate uses the exact pool path plus the `[<domain>]` first section (HTE-66) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE05` in `internal/hte/migrate` (on `Malformed/`, `valid.test` gets its exact-path pool `/etc/php/8.3/fpm/pool.d/valid.test.conf`, `aaa-notes.conf` is reported as an orphan pool and left untouched, and a pool at the exact path whose first section names another site is not taken) and in `internal/hte/state` (a TOML whose `domain` differs from its file name is refused) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-06"></a>
 #### HTE-06 · Certificate generation runs `rm -rf <certdir>/<domain>.*`
@@ -7478,7 +7478,7 @@ Critical and high items:
 | rc.A behavior | No glob and no shell: each site owns `certs/<domain>/` (HTE-40); create, renew and remove touch only that directory, by exact path, through Go file calls |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE06` in `internal/hte/certs` (sites `shop.test.it` then `shop.test`: the first site's `cert.pem`/`key.pem` unchanged byte for byte after create, renew and remove of the second) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-07"></a>
 #### HTE-07 · PHP slow log and error log are written inside the document root
@@ -7496,7 +7496,7 @@ Critical and high items:
 | rc.A behavior | `slowlog = $XDG_STATE_HOME/gash/hte/logs/<domain>/php-slow.log`, `php_admin_value[error_log] = .../logs/<domain>/php-error.log`, FPM master log `logs/php-fpm-<X.Y>.log`; nothing is ever written under a document root. `service logs --site D` shows them. migrate never deletes files, so old `php*-fpm-*.log` files stay in the docroot |
 | Fix recipe (3.0) | none: the delta is the design. Recommended addition to migrate: list the legacy log files found in each docroot in the plan, with a note that they may be served |
 | Proving test | `TestLedger_HTE07` in `internal/hte/render` (golden pools per profile: no rendered path starts with the docroot except `open_basedir`); `hte-e2e`: a PHP warning lands in `logs/<domain>/php-error.log` and the docroot listing is unchanged. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "logs stay out of the document root" (the warning in `php-error.log`, the docroot listing unchanged). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-08"></a>
 #### HTE-08 · The document root is interpolated unquoted into the vhost and the pool
@@ -7532,7 +7532,7 @@ Critical and high items:
 | rc.A behavior | Every mutation renders a new generation `render/gen-<n>/`, runs `httpd -t` and `php-fpm -t` on it, swaps `render/current`, sends Apache `-k graceful` and FPM `SIGUSR2`, then health-checks each site. Any failure restores the previous generation and state: `config_test_failed` (STOP) before the swap, `reload_failed` (STOP, details say whether the rollback succeeded) after it |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE09` in `internal/hte/service` (runner fake: config test fails → `current` unchanged, state unchanged; reload fails → previous generation back, `reload_failed` with `rollback: ok`); `hte-e2e`: an overlay with a syntax error leaves the other sites answering. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), steps "an overlay error leaves the sites answering" and "a reload that fails rolls back" (a busy extra port: Apache exits on the graceful restart, the previous generation runs again). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-10"></a>
 #### HTE-10 · Forced HTTPS redirects with 301
@@ -7550,7 +7550,7 @@ Critical and high items:
 | rc.A behavior | `[R=307,L]`, method and body preserved, never cached as permanent. migrate imports forced sites as `force_https = true`, so they render 307; browsers that already cached a 301 keep it until their cache is cleared |
 | Fix recipe (3.0) | none: the delta is the design. Recommended: the migrate plan notes the cached-301 effect for each forced site |
 | Proving test | `TestLedger_HTE10` in `internal/hte/render` (golden `vhost-https-forced.conf` holds `R=307`); `hte-e2e`: a request from a non-bypassed address (HTE-52) gets 307. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "forced HTTPS without the bypass" (307 to `https://<site>/`, from loopback too). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-11"></a>
 #### HTE-11 · `modify` regenerates the whole vhost and drops manual edits
@@ -7568,7 +7568,7 @@ Critical and high items:
 | rc.A behavior | Rendered files are artifacts, rebuilt on every change and never edited. User directives go into `sites/<domain>.apache.conf` (included in every vhost of the site), `apache.conf` (server level) and the directory `php/<X.Y>/` (its `*.ini` files are read by that version's FPM master after the system ones, through `PHP_INI_SCAN_DIR=<system scan dir>:<overlay dir>` written out in full; lead decision, 2026-10-18); the renderer includes or passes them and never writes them. The site's `[php_ini]` is rendered into its pool: a key the profile sets replaces the profile line with the same admin kind, other keys are `php_value`/`php_flag`, boolean words are bare flags, other values double-quoted; control characters, `"`, `\` and `${` are refused (`invalid_state`). `site modify` changes only the TOML. The design does not say what migrate does with hand edits in a legacy vhost |
 | Fix recipe (3.0) | none for the overlay model. Operator choice for hand edits found by migrate (lines that are not in the variant's template): (a) report them in the plan only; (b) copy them into `sites/<domain>.apache.conf`, validated by the config test, and report them (recommended) |
 | Proving test | `TestLedger_HTE11` in `internal/hte/render` (overlay bytes unchanged after modify of every field); `TestPoolPHPIni` and `TestManifest` in `internal/hte/render` (php_ini rules, no overlay in pools, the full `PHP_INI_SCAN_DIR`); `internal/hte/migrate` (V2 fixture plus one added line → the chosen outcome); `hte-e2e`: a value in `php/<X.Y>/global.ini` shows in `phpinfo()`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "php ini and the global overlay" (`ini_get` shows the `global.ini` and `[php_ini]` values). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-12"></a>
 #### HTE-12 · Partial failures exit 0 with "successfully!"
@@ -7586,7 +7586,7 @@ Critical and high items:
 | rc.A behavior | A command exits 0 only when every step it ran succeeded; otherwise the first failure's envelope, exit 1, and the rollback of HTE-09. Unknown sites fail with `site_not_found` |
 | Fix recipe (3.0) | none for failures. Operator choice for `site modify` with no effective change: (a) exit 0, `{"changed":false}` in `--json`, one stderr note (recommended, idempotent for scripts); (b) fail with `unexpected_argument`-style RETRY (hte-cli's message, non-zero) |
 | Proving test | `TestLedger_HTE12` in `internal/hte` (each step failing in turn → non-zero exit, no "success" text on stdout); `testdata/script/hte_modify_noop.txtar` (the chosen no-op contract). The engine test is `TestLedger_HTE12` in `internal/hte` (a failing config test fails `site create` and `site modify` and puts the state back; a no-op modify is `changed=false` and runs nothing); the txtar waits for the CLI. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-13"></a>
 #### HTE-13 · Numbered vhost file names, index counting foreign files, renumbering after remove
@@ -7604,7 +7604,7 @@ Critical and high items:
 | rc.A behavior | No numbers anywhere: `sites/<domain>.toml`, `render/current/sites/<domain>.conf`, `fpm/<X.Y>/pools/<domain>.conf`. Include order is the sorted domain list, so rendering is deterministic. Nothing is renamed on remove; `--no-normalize` has no counterpart. migrate ignores the legacy index and reports gaps only as information |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE13` in `internal/hte/render` (three sites, remove the first: the other two rendered files byte-identical, names unchanged) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-14"></a>
 #### HTE-14 · Unused 128-character passphrase next to `-nodes`
@@ -7622,7 +7622,7 @@ Critical and high items:
 | rc.A behavior | The key is written unencrypted on purpose (a userland master cannot prompt for it), protected by file mode 0600 in a 0700 directory owned by the user; no passphrase code exists |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE14` in `internal/hte/certs` (key file is a plain `PRIVATE KEY` PEM, mode 0600, parent 0700) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-15"></a>
 #### HTE-15 · Weak `SSLCipherSuite`, no `SSLProtocol`
@@ -7640,7 +7640,7 @@ Critical and high items:
 | rc.A behavior | Managed vhosts carry no cipher or protocol directive. The server level sets the Debian `ssl.conf` equivalents: `SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1`, `SSLCipherSuite HIGH:!aNULL`, `SSLHonorCipherOrder off`, `SSLSessionCache shmcb:<run>/ssl_scache(512000)`, `SSLSessionCacheTimeout 300`. A raw imported vhost keeps its own SSL directives (only paths are rewritten) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE15` in `internal/hte/render` (golden `httpd.conf` and vhosts: no `SSLCipherSuite` in any managed vhost); `hte-e2e`: a TLS 1.1 handshake to `127.0.0.1:443` is refused. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "TLS, HTTP/2 and the certificate" (a TLS 1.1 handshake is refused). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-16"></a>
 #### HTE-16 · Apache 2.2 `order allow,deny` / `allow from all` beside `Require all granted`
@@ -7658,7 +7658,7 @@ Critical and high items:
 | rc.A behavior | Managed vhosts use `Require all granted` only. `access_compat` stays in the userland module list solely for raw imported vhosts that still use `order`/`allow` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE16` in `internal/hte/render` (no `order`/`allow from` in any managed golden vhost) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-17"></a>
 #### HTE-17 · A generated certificate script runs as root from `$TMPDIR`
@@ -7676,7 +7676,7 @@ Critical and high items:
 | rc.A behavior | Certificates are made by the openssl CLI as the user (HTE-39), with a fixed argument vector; no script is generated. Root runs only one `sudo <gash binary> hte __root` session per `install`, `uninstall` and `migrate --apply`: the plan the user saw arrives on stdin first, then root runs its operations by id, each once, from a closed typed set, each checked against root's own reading of the system (a vhost or pool to archive must be one `legacy.Scan` finds, a key to copy must be the `SSLCertificateKeyFile` of such a vhost); and the fixed hosts helper |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE17` in `internal/hte/rootops` (an op not in the plan, run twice, or naming a file root does not find in the system configuration, is refused; a bad plan is refused before anything runs) and `TestOpenSSLArgv` in `internal/hte/certs` (the only children of create/renew are openssl genpkey and req, fixed argv, no secret, new session) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-18"></a>
 #### HTE-18 · The pool's `user`/`group` follow the invoker; `modify` as root writes `user = root`
@@ -7694,7 +7694,7 @@ Critical and high items:
 | rc.A behavior | Pools have no `user`, `group`, `listen.owner` or `listen.group`: the FPM master runs as the user, so workers and socket belong to the user; `listen.mode = 0660` kept. The userland Apache runs as the same user and reaches the socket without group tricks |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE18` in `internal/hte/render` (golden pools per profile: none of the four directives); `hte-e2e`: `stat` of the socket shows the user and 0660, `ps` shows workers as the user. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "logs stay out of the document root" (the masters and workers are the user's processes). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-19"></a>
 #### HTE-19 · Who the user is comes from `USER`/`SUDO_USER`, not from the process
@@ -7730,7 +7730,7 @@ Critical and high items:
 | rc.A behavior | `--domain` is lowercased, then checked against a hostname grammar (the design gives it for the hosts helper; site validation must use the same one so that every site fits in the block: labels `[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?`, at least two labels, at most 253 bytes, no wildcard, no trailing dot); a scheme or path fails with `invalid_domain` (no silent stripping). Identity and duplicate checks compare lowercased names (`site_exists`). migrate reports case-only duplicates and imports one only with `--site` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE20` in `internal/hte/state` (`Shop.Test` stored as `shop.test`; creating `shop.test` afterwards → `site_exists`); `internal/hte/migrate` (two vhosts `App.test`/`app.test` → both reported as duplicates) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-21"></a>
 #### HTE-21 · IP addresses are accepted as domains
@@ -7748,7 +7748,7 @@ Critical and high items:
 | rc.A behavior | An IP address fails with `invalid_domain` (RETRY, hint: "a site name is a hostname such as app.test"). migrate reports IP-named vhosts and does not import them |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE21` in `internal/hte/state` (`127.0.0.1`, `::1`, `[::1]` → `invalid_domain`); `internal/hte/migrate` (a vhost named `127.0.0.1` → reported, not imported) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-22"></a>
 #### HTE-22 · A bare `/etc/php/X.Y` directory counts as an installed PHP-FPM version
@@ -7766,7 +7766,7 @@ Critical and high items:
 | rc.A behavior | A version 5.6 to 8.5 counts only when its FPM binary runs and `<bin> -v` reports that version, and its `php.ini` exists. Probed layouts: Debian/Ubuntu (`/usr/sbin/php-fpmX.Y`), Fedora distro and Remi, Arch `php`/`php-legacy` and AUR, Homebrew `php@X.Y`. Cached by binary path, size and mtime. `php versions` lists them; `doctor` prints the platform's install command for a missing one |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE22` in `internal/hte/discover` (sysroot with `etc/php/8.4/cli` only → 8.4 not listed; fake binary answering `PHP 8.3.x (fpm-fcgi)` → 8.3 listed; cache invalidated by an mtime change) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-23"></a>
 #### HTE-23 · `hte-cli fix` has no counterpart; its "restarted successfully" was always printed
@@ -7784,7 +7784,7 @@ Critical and high items:
 | rc.A behavior | No `fix` command: managed sites are rendered from state, so there is no stale force block to repair. migrate recognizes V1, V1-fixed and Broken-bypass force blocks (with `fix`'s two patterns, `ApacheManager.php:301,319`) and imports them as `force_https = true` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE23` in `internal/hte/migrate` (V1, V1-fixed and both Broken-bypass files → `force_https = true`; the rendered vhost equals the golden forced vhost) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-24"></a>
 #### HTE-24 · `/etc/hosts` lines tagged `# hte-cli` are edited line by line
@@ -7802,7 +7802,7 @@ Critical and high items:
 | rc.A behavior | One region between `# >>> gash hte >>>` and `# <<< gash hte <<<`, appended when absent, regenerated from state by the root helper `gash-hosts-helper apply` (stdin grammar: at most 4096 lines `ADDRESS NAME...`, ADDRESS exactly `127.0.0.1` or `::1`; anything else exit 2, nothing written), written to a temporary file in `/etc`, fsynced, renamed with the original owner and mode. Lines outside the block are never read for decisions nor changed. Applied on every site change, on `service start` and on `doctor`. No per-domain `add`/`remove` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE24` in `internal/hostshelper` (every refusal path: bad address, wildcard, uppercase, injected newline, 4097 lines; bytes outside the block unchanged; owner and mode kept); `hte-e2e`: helper through the sudoers line. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "hosts drift is repaired" (the helper through the sudoers line, its refusals, an extra argument refused by sudo). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-25"></a>
 #### HTE-25 · `remove` leaves the `.info` file; disabling SSL leaves all three certificate files
@@ -7838,7 +7838,7 @@ Critical and high items:
 | rc.A behavior | `site create`, `site modify`, `site show`, `doctor` and `migrate` warn on stderr, and add a `warnings` array in `--json`, when the docroot's `.htaccess` has a `RewriteRule` or `Redirect`/`RedirectMatch` to `https://`, including the `%{HTTP:X-Forwarded-Proto}` form. The warning names the file and line. Never an error |
 | Fix recipe (3.0) | none: the delta is the design. Implementation note: match per rule (the `RewriteCond` lines directly above one `RewriteRule`), not with a multi-line `.*` |
 | Proving test | `TestLedger_HTE26` in `internal/hte/htaccess` (table: the hte-cli forms, the X-Forwarded-Proto form, `Redirect permanent / https://...`, an unrelated `RewriteCond` followed later by an unrelated rule → no warning) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-27"></a>
 #### HTE-27 · `create` restarts Apache before PHP-FPM
@@ -7946,7 +7946,7 @@ Critical and high items:
 | rc.A behavior | One Apache master (distro or Homebrew `apache2`/`httpd` binary and modules) and one `php-fpm` master per PHP version in use, all started by `gash hte service start` as the user, daemonized, tracked by PID files in the runtime directory; `service stop` signals a PID only when its command line names gash's config path. No root process at runtime. `systemctl status apache2` no longer describes the sites; `install`/`migrate --apply` stop and disable the system units (HTE-64) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE32` in `internal/hte/service` (a PID file pointing at a foreign process is never signalled); `hte-e2e`: masters and workers owned by the user, `service stop` leaves no process. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "stop, start, restart, status, logs" (no process of the stack after `service stop`). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-33"></a>
 #### HTE-33 · Every file moves from `/etc` and `/var/run` to the user's XDG directories
@@ -7964,7 +7964,7 @@ Critical and high items:
 | rc.A behavior | Settings `$XDG_CONFIG_HOME/gash/hte/hte.toml`; sites and overlays `$XDG_CONFIG_HOME/gash/hte/sites/`, `apache.conf`, `php/<X.Y>.ini`; rendered config `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` + `render/current`; logs, receipt, audit log and lock under `$XDG_STATE_HOME/gash/hte/`; certificates `$XDG_DATA_HOME/gash/hte/certs/<domain>/`; runtime (PIDs, sockets, mutexes, TLS cache) `$XDG_RUNTIME_DIR/gash-hte/`, else `/tmp/gash-hte-<uid>/` (0700, owner and non-symlink checked). macOS uses the same XDG layout, not `~/Library`. Root-owned files only: helper, sudoers drop-in, sysctl/pf files, `/var/lib/gash-hte/` (receipt copy, backups, archive) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE33` in `internal/platform` (XDG variables set and unset → the paths above; runtime fallback refused when it is a symlink or foreign-owned) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-34"></a>
 #### HTE-34 · Declarative TOML state; rendered files are generations, never the source of truth
@@ -7982,7 +7982,7 @@ Critical and high items:
 | rc.A behavior | `sites/<domain>.toml` (keys `domain`, `aliases`, `docroot`, `php`, `profile`, `https`, `force_https`, `http2`, `enabled`, `kind`, `raw_conf`, `[php_ini]`) is the only source; rendering is a pure function of state, overlays and platform facts, golden-tested. Rendered vhosts carry ``# Managed by gash hte. Edit the site with `gash hte site modify`, or add directives to the overlay below.`` and pools `; Managed by gash hte. Profile: <p>`, no date (the audit log keeps history). The previous generation is kept for rollback |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE34` in `internal/hte/render` (same state twice → byte-identical generations; golden files per variant and platform) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-35"></a>
 #### HTE-35 · FPM socket path and name change; the domain is no longer in the socket name
@@ -8000,7 +8000,7 @@ Critical and high items:
 | rc.A behavior | `<runtime>/gash-hte/<X.Y>-<first 10 hex of sha256(domain)>.sock`, to stay under the 104-byte `sun_path` limit of macOS. The name is never parsed (identity is the TOML). migrate rewrites socket paths in raw vhosts it imports; a raw vhost that used another site's socket gets its own pool (reported) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE35` in `internal/hte/render` (socket path length ≤ 103 bytes for a 253-byte domain under a 60-byte runtime directory; vhost and pool name the same path) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-36"></a>
 #### HTE-36 · Apache listens on loopback only instead of on every interface
@@ -8018,7 +8018,7 @@ Critical and high items:
 | rc.A behavior | `Listen 127.0.0.1:<http>` and `Listen 127.0.0.1:<https>`, plus `[::1]` when IPv6 loopback is available; never a wildcard address. Nothing answers on a LAN or Docker-bridge address: a container that reached the host's Apache through its bridge IP (or `host.docker.internal`) no longer gets any response |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE36` in `internal/hte/render` (golden `httpd.conf`: only loopback `Listen` lines); `hte-e2e`: connect to the container's non-loopback address on 80/443 refused |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-37"></a>
 #### HTE-37 · Vhosts also answer on `[::1]`
@@ -8072,7 +8072,7 @@ Critical and high items:
 | rc.A behavior | `openssl genpkey` EC P-256 key (PKCS#8 `PRIVATE KEY`), `openssl req -x509` self-signed certificate from a generated request configuration, random serial, subject `CN=<domain>` only, SAN `<domain>`, `*.<domain>` (covers `www.`) and every alias (HTE-47), validity 10 years, `basicConstraints CA:FALSE`, `keyUsage digitalSignature`, `extKeyUsage serverAuth`. Private keys only through the openssl CLI, never read or parsed by gash (lead decision, 2026-10-18; PRD MUST NOT 6); certificates are parsed with `crypto/x509`. The pair is checked by comparing the public keys openssl prints for the certificate and derives from the key. `cert renew` replaces both and reloads; `doctor` warns 30 days before expiry. No local CA, no mkcert |
 | Fix recipe (3.0) | none: the delta is the design. To verify in the WSL checklist (not run): a Windows browser accepts the CA:FALSE self-signed certificate once it is added to the Windows trust store |
 | Proving test | `TestLedger_HTE39` in `internal/hte/certs` (parse the generated certificate: algorithm, curve, SAN set, validity, extensions); `hte-e2e`: `curl --cacert cert.pem https://<site>/` succeeds. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "TLS, HTTP/2 and the certificate" (verified with `cert.pem` as the only root). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-40"></a>
 #### HTE-40 · One certificate directory per site, user-owned, new file names
@@ -8090,7 +8090,7 @@ Critical and high items:
 | rc.A behavior | `$XDG_DATA_HOME/gash/hte/certs/<domain>/cert.pem` and `key.pem`; directory 0700, key 0600, owned by the user, written by atomic rename. The vhost names these paths through `quoteApacheArg`. migrate copies the legacy pair there (HTE-67); unmarked vhosts that used HTE certificates are imported as raw with a copy |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE40` in `internal/hte/certs` (modes, ownership on the sysroot fake, no temporary file left after an interrupted write) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-41"></a>
 #### HTE-41 · Per-version session directory where the platform's default is not writable
@@ -8108,7 +8108,7 @@ Critical and high items:
 | rc.A behavior | When the platform default is not writable by the user (Fedora's `/var/lib/php/session` is group `apache`), the pool sets `session.save_path` to `$XDG_STATE_HOME/gash/hte/php/<X.Y>/sessions` and appends that directory to `open_basedir` in staging and hardened. Debian and Ubuntu pools are unchanged |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE41` in `internal/hte/render` (sysroot fakes: Debian → no `session.save_path`; Fedora → the per-version directory, also in `open_basedir`); `hte-e2e` Fedora: a session survives two requests |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-42"></a>
 #### HTE-42 · The staging/hardened `open_basedir` list is Debian's on every platform
@@ -8162,7 +8162,7 @@ Critical and high items:
 | rc.A behavior | Every pool sets `security.limit_extensions = .php`. Managed vhosts only pass `\.php$` to FPM, so this matters for raw imported vhosts and overlays that route other extensions to the socket |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE44` in `internal/hte/render` (golden pools) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-45"></a>
 #### HTE-45 · migrate leaves legacy `# hte-cli` hosts lines untouched
@@ -8252,7 +8252,7 @@ Critical and high items:
 | rc.A behavior | Data on stdout; progress and warnings on stderr; an error is one JSON envelope line on stderr (`error`, `details`, `action`, `recoverable`, `hint`, codes from the HTE catalog of design section 9), exit 1. No banner. Color only per the Gash gate (TTY, `NO_COLOR`, `GASH_NO_COLOR`, `GASH_HEADLESS`, `--no-color`) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE49` in `internal/hte/cli` (every HTE code emitted with its catalog action); `testdata/script/hte_errors.txtar` (stdout empty on error, envelope validated against `testdata/schema/error.json`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-50"></a>
 #### HTE-50 · `--json` on every command
@@ -8270,7 +8270,7 @@ Critical and high items:
 | rc.A behavior | Every `gash hte` command takes `--json`: site state, service status per master and site, doctor checks with remedies, migrate plans, receipts; `warnings` array where the design warns (HTE-26). One JSON Schema per shape under `testdata/schema/` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE50` in `internal/hte/cli` (every command registered with `--json`); `testdata/script/hte_json.txtar` (each output validated against its schema) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-51"></a>
 #### HTE-51 · No prompts or menus without a TTY; destructive steps need `--yes`
@@ -8288,7 +8288,7 @@ Critical and high items:
 | rc.A behavior | Without a TTY or in headless mode nothing is asked: a missing required flag fails with `missing_value`, a destructive step without `--yes` fails with `confirmation_required` (RETRY, non-zero). On a TTY only a missing required flag is asked. No menus, no `--interactive`, no `-n` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE51` in `internal/hte/cli` (prompt fake never called without a TTY); `testdata/script/hte_no_tty.txtar` (`site remove` without `--yes` → `confirmation_required`, site intact) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-52"></a>
 #### HTE-52 · Force-HTTPS bypass for 127.0.0.1 and ::1 makes the redirect a no-op under loopback-only binding
@@ -8378,7 +8378,7 @@ Critical and high items:
 | rc.A behavior | Linux and WSL2: `install` sets `net.ipv4.ip_unprivileged_port_start=80` (`/etc/sysctl.d/50-gash-hte.conf` + `sysctl -w`, recorded in the receipt, reverted by `uninstall`; already ≤ 80 in Docker, left as is) after stating that every local user may then bind 80 to 1023. macOS: a direct bind when the kernel allows it, else a `pf` anchor redirecting `127.0.0.1:80/443` to 8080/8443, loaded at boot by a root LaunchDaemon. Declined or impossible: 8080/8443 (configurable), site URLs carry the port, `doctor` reports it |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE56` in `internal/hte/rootops` (install then uninstall on the sysroot fake restores the sysctl file and value byte for byte; a value already at 80 or lower changes nothing and the receipt says so); `hte-e2e`: unprivileged master bound to `127.0.0.1:80`. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), steps "install next to the system Apache" and "migrate --apply" (the sysctl set to 80, the unprivileged master on `127.0.0.1:80`). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-57"></a>
 #### HTE-57 · Autostart through a user unit, a LaunchAgent, or the first shell
@@ -8396,7 +8396,7 @@ Critical and high items:
 | rc.A behavior | systemd: user unit `gash-hte.service` (`Type=oneshot`, `RemainAfterExit=yes`) enabled with `systemctl --user enable` plus `loginctl enable-linger` (root step) so it starts at boot. No systemd (containers, WSL without systemd): no boot hook, `/etc/wsl.conf` untouched, optional `autostart = "shell"` (the first interactive shell running `gash init bash` starts the stack). macOS: LaunchAgent with `RunAtLoad`, so sites start at login, not at boot |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE57` in `internal/hte/service` (rendered unit and plist golden files; receipt entries for linger) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-58"></a>
 #### HTE-58 · Supported platforms: Debian/Ubuntu only becomes Debian/Ubuntu, Fedora, Arch, macOS
@@ -8414,7 +8414,7 @@ Critical and high items:
 | rc.A behavior | Debian/Ubuntu (`apache2`, `/usr/lib/apache2/modules`), Fedora (`httpd`, `/usr/lib64/httpd/modules`, distro PHP and Remi), Arch (`httpd`, `php`, `php-legacy`), Homebrew `httpd` on macOS, WSL2 with a manual checklist. `install` and `doctor` check prerequisites per platform: `apache_not_found`, `platform_unsupported` (FATAL). No `SHELL` requirement |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE58` in `internal/hte/discover` (sysroot fakes per platform → binary, module directory, PHP layouts); `hte-e2e` matrix (Debian, Ubuntu, Fedora, Arch, macOS) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-59"></a>
 #### HTE-59 · The server-level configuration is rendered by gash, not Debian's `apache2.conf`
@@ -8450,7 +8450,7 @@ Critical and high items:
 | rc.A behavior | The docroot must exist and is never created or modified: `docroot_not_found` (RETRY, hint: "create the directory first") |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE60` in `internal/hte/state` (missing directory → `docroot_not_found`, nothing created) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-61"></a>
 #### HTE-61 · An `install` step, a receipt, and a restoring `uninstall`
@@ -8468,7 +8468,7 @@ Critical and high items:
 | rc.A behavior | `install` (one interactive sudo: hosts helper `/usr/local/libexec/gash/gash-hosts-helper`, sudoers drop-in `/etc/sudoers.d/gash-hte` validated with `visudo -c -f`, port setting, linger, freeing 80/443) writes the receipt before the first change and after each one (user copy and root copy `/var/lib/gash-hte/receipt-<user>.json`, prior contents of modified files kept in `/var/lib/gash-hte/backup/`). Every command except `install`, `doctor`, `migrate` (dry-run) and `php versions` fails with `hte_not_installed` (STOP) before it. `uninstall` restores from the root copy (refused with `receipt_mismatch`, FATAL, when the user copy differs) and moves the userland tree into `$XDG_STATE_HOME/gash/hte-stage-<ts>/`, which a later `install` offers to restore |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE61` and `TestInterrupted` in `internal/hte/rootops` (install then uninstall on the fixture sysroot: byte-identical tree; interrupted install undone from a partial receipt, its last change still pending); `TestCompare` in `internal/hte/receipt` (tampered user copy → `receipt_mismatch`). Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`) and `TestE2EReinstall`: after both uninstalls `/etc`, `/usr/local` and `/var/lib/gash-hte` equal their state before install, the system Apache runs again; a second install records nothing. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-62"></a>
 #### HTE-62 · Mutations take a lock and append to an audit log
@@ -8486,7 +8486,7 @@ Critical and high items:
 | rc.A behavior | Exclusive `flock` on `$XDG_STATE_HOME/gash/hte/lock` for every mutation (30 s, then `lock_timeout`, RETRY); reads take none. One JSON line per mutation in `audit.jsonl`: `{"ts","command","site","outcome","details"}` |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE62` in `internal/hte/state` (second mutation while the lock is held → `lock_timeout` after the fake clock passes 30 s; audit line per mutation, none per read) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-63"></a>
 #### HTE-63 · New commands with no hte-cli counterpart
@@ -8504,7 +8504,7 @@ Critical and high items:
 | rc.A behavior | `install`, `uninstall`, `doctor` (binaries, modules, ports, supervision, sockets, config test, per-site health, name resolution, certificate expiry and SAN, receipt integrity), `migrate`, `service start\|stop\|restart\|reload\|status\|logs`, `cert show\|renew`, `php versions`, `php ini get\|set\|unset --domain D`, `php global get\|set\|unset --version X.Y`, `apache config path`, `apache modules list\|enable\|disable`, `site enable\|disable`, `hosts check\|windows` (WSL: the lines to add to the Windows hosts file for names Windows cannot resolve) |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE63` in `internal/hte/cli` (command tree); one `testdata/script/hte_<command>.txtar` per command |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-64"></a>
 #### HTE-64 · `migrate --apply` stops and disables the system Apache; legacy files are archived
@@ -8540,7 +8540,7 @@ Critical and high items:
 | rc.A behavior | Every variant imports as `force_https = true` and renders gash's block with `R=307`; the bypass follows the variant (D-2): off for V1 (they keep redirecting every request), on for V1-fixed, V2 and Broken-bypass (they keep redirecting almost nothing). The only change is 301 to 307 |
 | Fix recipe (3.0) | none: the delta is the design (follows the HTE-52 decision). Recommended: the plan notes the change for each V1 forced site |
 | Proving test | `TestLedger_HTE65` in `internal/hte/migrate` (V1, V1-fixed, V2, Broken-bypass forced sites → identical rendered force blocks) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-66"></a>
 #### HTE-66 · migrate finds the pool by exact path; pool values, profile and owner are reconciled
@@ -8594,7 +8594,7 @@ Critical and high items:
 | rc.A behavior | Duplicates (case-insensitive): both reported, one picked with `--site` or the other excluded. Shared socket: both sites get their own pool, reported. Custom ports: the ports of a vhost's `<VirtualHost>` sections other than 80, 443 and the stack's own become the site's `extra_http_ports` / `extra_https_ports` (by the section's `SSLEngine on`), for managed and raw imports alike, rendered as `Listen` on the loopback addresses plus addresses of the site's vhosts; each is reported, with a note when it is below 1024 (binding needs `ip_unprivileged_port_start` at most that port). A section without a port, a port used for both protocols, or a TLS port without a certificate keeps the vhost in the system (lead decision, 2026-10-18: `site create|modify --extra-http-port N` and `--extra-https-port N`, repeatable, 1 to 65535, never 80, 443 or the stack's ports; one port has one protocol across sites). Orphan pools, certificates, `.info` files and index gaps: reported, never deleted. `APACHE_RUN_USER` set to the user in `envvars`: reported (the master is still root). IP-named vhosts: HTE-21 |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE68` and `TestRawCustomPorts` in `internal/hte/migrate` (one sysroot fixture per case → the exact plan entries; tree bytes unchanged by a dry run); `TestExtraPorts` in `internal/hte/state`, `TestExtraListen` in `internal/hte/render`; `hte-e2e`: a site answers on its extra port. Container run: `internal/hte/e2e` (`TestE2E`, container run of `testdata/hte/e2e/run.sh`), step "an extra port". |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-69"></a>
 #### HTE-69 · The hosts helper cannot rename over a bind-mounted /etc/hosts (containers)
@@ -8612,7 +8612,7 @@ Critical and high items:
 | rc.A behavior | When the rename fails with EBUSY or EXDEV, the helper removes its temporary file and writes the same validated content in place (open without truncation, write, truncate to the new length, fsync). Same file, same content checks, same single sudoers line: no new surface. Elsewhere the rename stays (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestRewriteInPlace` in `internal/hostshelper` (a rename that fails with EBUSY gives the same bytes in place and leaves no temporary file); container run without the mount swap in `setup.sh`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-70"></a>
 #### HTE-70 · migrate --apply with --ports high keeps the system Apache running
@@ -8630,7 +8630,7 @@ Critical and high items:
 | rc.A behavior | With high ports the system Apache is not stopped. Each migrated vhost is disabled and archived, the system configuration is tested (`apachectl configtest` as root), and the system Apache gets a graceful reload; a failed test re-enables the vhosts, nothing is reloaded, and the command reports `config_test_failed`. System FPM units left without pools stop as with standard ports. The plan says which ports stay with the system Apache (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE70` in `internal/hte` (plan with `--ports high`: no unit stop, disable, configtest and reload steps; a failed configtest undoes the disable); container run: the excluded vhost still answers on 80. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-71"></a>
 #### HTE-71 · A reload after an overlay edit could not roll back
@@ -8648,7 +8648,7 @@ Critical and high items:
 | rc.A behavior | Each generation holds a copy of every site overlay it includes, and the vhost includes the copy. `service reload` copies the overlays into the new generation, tests, reloads, and on failure brings back the previous generation with its own copies. The user's overlay file is never modified; `apache config path` still names it (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE71` in `internal/hte` (an overlay whose reload fails leaves the previous generation running and the overlay file unchanged); container run: step "a busy extra port" repeated through an overlay. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-72"></a>
 #### HTE-72 · Error codes for a missing openssl, a bad flag value and PHP settings on a site without PHP
@@ -8666,7 +8666,7 @@ Critical and high items:
 | rc.A behavior | `openssl_not_found` (FATAL, hint with the platform's install command, like `apache_not_found`); `invalid_<flag>` (RETRY, details the value and the accepted ones) for every enum flag, like the existing `invalid_profile`; `php_not_enabled` (RETRY, hint `site modify --php VERSION`). Registered in the contract catalog (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE72` in `internal/hte` (each case → its code and action). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-73"></a>
 #### HTE-73 · With systemd autostart the stack has one supervisor
@@ -8684,7 +8684,7 @@ Critical and high items:
 | rc.A behavior | When the autostart is a systemd user unit, every start, stop and restart of the stack (install, migrate, service commands) goes through `systemctl --user`; the direct start is used only for the other autostart kinds. Proven with the runner fake; a container with systemd as PID 1 proves it when the environment allows one (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE73` in `internal/hte` (with systemd autostart the only lifecycle children are `systemctl --user start\|stop\|restart gash-hte.service`). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-74"></a>
 #### HTE-74 · A root operation restarts the system Apache when migrate fails after the switch
@@ -8702,7 +8702,7 @@ Critical and high items:
 | rc.A behavior | `undo_unit_stop`: a conditional step of the plan, run only when a site does not answer after the switch, and only when the unit stop is the last change of the root receipt and was made in the same session; it starts and re-enables that unit, recorded in the receipt. The imported sites stay and the next run completes the move (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE74` in `internal/hte/rootops` (refused when the stop is not the receipt's last change, or comes from another session; runs once). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 <a id="hte-75"></a>
 #### HTE-75 · install next to a system Apache it may not stop exits 0 with the stack not started
@@ -8720,7 +8720,7 @@ Critical and high items:
 | rc.A behavior | Exit 0: install did what it can do before `migrate`. The JSON has `started: false` and `next: "gash hte migrate"`, the human output a warning naming the blocking vhosts and the command. A scripted `install && migrate` works (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | none: the delta is the design |
 | Proving test | `TestLedger_HTE75` in `internal/hte` (blocking vhosts → exit 0, started false, next set). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: no 3.0 change (Fix recipe: none) |
 
 ## Seed index
 
