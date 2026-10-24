@@ -75,20 +75,33 @@ func TestLedger_SHELL08(t *testing.T) {
 	require.Contains(t, h2.emit(t), "path_add -h\n")
 }
 
-// TestLedger_SHELL06 proves the grep color alias is never defined: the 2.x
-// probe greps an empty pattern from /dev/null, which always exits 1, so the
-// defect (no grep alias) is reproduced in rc.A.
+// TestLedger_SHELL06: the grep color alias is defined when `grep
+// --color=auto -q x` reading "x" succeeds, and not for a grep that rejects
+// the flag (3.0: SHELL-06 fixed; the 2.x probe grepped an empty file and the
+// alias was never defined).
 func TestLedger_SHELL06(t *testing.T) {
-	h := newHarness().withProgram("grep")
-	// The probe behaves like real grep on an empty file: no match, exit 1.
-	h.probe = func(c runner.Call) (runner.Expect, bool) {
-		if len(c.Argv) > 0 && c.Argv[0] == "grep" {
-			return runner.Expect{Status: 1}, true
+	for _, honors := range []bool{true, false} {
+		h := newHarness().withProgram("grep")
+		h.probe = func(c runner.Call) (runner.Expect, bool) {
+			if len(c.Argv) > 0 && c.Argv[0] == "grep" {
+				if !honors {
+					return runner.Expect{Status: 2, Stderr: "grep: unrecognized option '--color=auto'\n"}, true
+				}
+				require.Equal(t, []string{"grep", "--color=auto", "-q", "x"}, c.Argv)
+				if strings.Contains(string(c.Stdin), "x") {
+					return runner.Expect{Status: 0}, true
+				}
+				return runner.Expect{Status: 1}, true
+			}
+			return runner.Expect{}, false
 		}
-		return runner.Expect{}, false
+		out := h.emit(t)
+		if honors {
+			require.Contains(t, out, "alias grep='grep --color=auto'")
+		} else {
+			require.NotContains(t, out, "alias grep=")
+		}
 	}
-	out := h.emit(t)
-	require.NotContains(t, out, "alias grep=")
 }
 
 // TestLedger_SHELL01_Lint is the SHELL-01 lint: in the prompt builder, every

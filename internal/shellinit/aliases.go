@@ -110,9 +110,10 @@ func (st *state) packColors(b *strings.Builder) {
 			b.WriteString("fi\n")
 		}
 	}
-	// grep: the 2.x probe reads an empty pattern from /dev/null, so it always
-	// exits 1 and the alias is never defined (SHELL-06, reproduced).
-	if st.runOK("grep", "--color=auto", "-q", "", "/dev/null") {
+	// grep: defined when `grep --color=auto -q x` finds the x it reads, so
+	// a grep that rejects --color has no alias (3.0: SHELL-06 fixed; the
+	// 2.x probe grepped an empty file, always exited 1 and never defined it).
+	if st.runOKInput("x\n", "grep", "--color=auto", "-q", "x") {
 		st.alias(b, "grep", "grep --color=auto")
 	}
 }

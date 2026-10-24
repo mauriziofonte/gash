@@ -195,6 +195,15 @@ func (st *state) runOK(name string, args ...string) bool {
 	return err == nil && r.ExitCode == 0
 }
 
+// runOKInput is runOK with stdin as the program's standard input.
+func (st *state) runOKInput(stdin, name string, args ...string) bool {
+	r, err := st.e.run.Run(st.ctx(), runner.Cmd{
+		Path: name, Args: args,
+		Options: runner.Options{Env: st.probeEnv(), Stdin: strings.NewReader(stdin), Stdout: discard{}, Stderr: discard{}},
+	})
+	return err == nil && r.ExitCode == 0
+}
+
 // runOut runs name with args and returns its captured stdout (the shell
 // probes that read output, e.g. `rm --version`). Empty on any failure.
 func (st *state) runOut(name string, args ...string) string {
