@@ -58,9 +58,12 @@ func (lc *lineChecker) checkSimple(words []pword) ([][]string, error) {
 		if err := lc.checkArgs(words); err != nil {
 			return nil, err
 		}
-		if err := lc.checkWalk(words); err != nil {
-			return nil, err
-		}
+	}
+	// The walk rules (no symlink-following walk, no walk root at / or
+	// above a protected tree) hold for commands in GASH_LLM_EXEC_ALLOW too;
+	// only the per-command option rules are lifted (LEDGER EXEC-05).
+	if err := lc.checkWalk(words); err != nil {
+		return nil, err
 	}
 
 	plain := []string{name}

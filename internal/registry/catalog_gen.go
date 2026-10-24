@@ -2370,7 +2370,7 @@ var functions = []Function{
 				"  HOME, USER, locale, TERM, TZ, TMPDIR, ...), never the caller's tokens.\n" +
 				"\n" +
 				"SETTINGS (~/.gash_env only)\n" +
-				"  GASH_LLM_EXEC_ALLOW=\"make npm\"   extra commands, any arguments\n" +
+				"  GASH_LLM_EXEC_ALLOW=\"make npm\"   extra commands, any options (walk rules kept)\n" +
 				"  GASH_LLM_EXEC=unrestricted       skip the allowlist\n" +
 				"  GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)",
 		},

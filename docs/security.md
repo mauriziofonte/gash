@@ -39,6 +39,8 @@ caller's shell, after three checks:
    `rm -rf /` and variants, `dd if=`, `mkfs.`, `> /dev/sd*`, `chmod 777 /`,
    `shutdown`, `reboot`, `halt`, fork bombs, `curl ... | sh`, `history -c`,
    `HISTFILE=`, `cat /etc/shadow`, `.ssh/id_`, `AWS_SECRET`, `PRIVATE_KEY`.
+   It reads the line as text, quotes included, so `echo 'please shutdown'`
+   is refused too.
 2. **Quote-aware parse.** Only plain words joined by `|`, `&&`, `||`, `;` or a
    newline. Refused: `$` and backticks (also inside double quotes), `(` `)`,
    brace expansion, background `&`, `|&`, `VAR=value` prefixes, commands given
@@ -85,8 +87,10 @@ mode it inherits the caller's environment with `BASH_ENV` and `ENV` empty.
 
 Settings, read from `~/.gash_env` only (never from the environment):
 
-* `GASH_LLM_EXEC_ALLOW="make npm"`: extra commands with any arguments, without
-  per-command rules; listing `sed`, `awk`, `gawk`, `grep`, `rg`, `diff` or
+* `GASH_LLM_EXEC_ALLOW="make npm"`: extra commands with any options, without
+  per-command option rules; the secret-file, forbidden-path and walk rules
+  (no symlink-following walk, no walk at `/` or above a protected tree)
+  still apply; listing `sed`, `awk`, `gawk`, `grep`, `rg`, `diff` or
   `git` drops its wrapper.
 * `GASH_LLM_EXEC=unrestricted`: skips checks 2 and 3 (secret-file checks
   included) and the wrappers. Only the blocklist remains.
@@ -99,7 +103,8 @@ option values (`--file=/proc/x`, `-f/proc/x`, `-vf/proc/x`), `key=value` words, 
 `~user`, glob matches, and relative paths after a `cd` earlier in the line.
 Not checked: `/dev/null`, the arguments of `echo`, `printf`, `basename` and
 `dirname`, and the pattern operand of `grep`, `rg`, `sed`, `awk`, `jq` and
-`yq`. An allowed command can still read any other file your user can read
+`yq` (a pattern that looks like a secret file name, `grep id_rsa`, is still
+refused by the secret-file check). An allowed command can still read any other file your user can read
 whose name is not secret.
 
 Recursive commands (`grep -r`, `rg`, `find`, `fd`, `tree`, `du`, `ls -R`,

@@ -317,7 +317,8 @@ not.
 
 1. **Blocklist** of dangerous patterns (`rm -rf /`, `dd if=`, `mkfs.`,
    shutdown, `curl ... | sh`, `history -c`, `.ssh/id_`, ...). A regex
-   tripwire, easy to evade by rephrasing; it applies in every mode.
+   tripwire over the whole line, quoted text included (`echo 'shutdown'`
+   is refused), easy to evade by rephrasing; it applies in every mode.
 2. **Parser**: plain words joined by `|`, `&&`, `||`, `;` or newlines. No `$`
    or backtick expansion, no subshells or braces, no background jobs, no
    `VAR=value` prefixes, no redirections except `>/dev/null`, `2>&1`, `>&2`.
@@ -327,7 +328,8 @@ not.
    `git branch -D`, `git -c`, `docker rm`, `systemctl stop`, ...). php, node,
    python and similar run only with `--version`. sed and awk run as GNU
    `sed --sandbox` / `gawk --sandbox`, refused where those are missing.
-   Arguments and glob matches that are secret files are refused. Also
+   Arguments and glob matches that are secret files are refused, pattern
+   operands included (`grep id_rsa` is refused like a file). Also
    refused: `ps e`, `getent shadow`/`gshadow`, `yq` `load()` and `-s`,
    `diff -r` without GNU `--no-dereference`, git `--literal-pathspecs`,
    `--no-index`, `cat-file --batch`, `stash show -p`, patch options on
@@ -355,7 +357,7 @@ never from same-named environment variables:
 
 | Setting | Effect |
 |---|---|
-| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any arguments (secret-file check still applies) |
+| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
 | `GASH_LLM_EXEC=unrestricted` | Skips parser, allowlist and secret-file check; only the blocklist remains |
 | `GASH_LLM_SANDBOX=1` | Runs the child in `bwrap`: read-only filesystem, no network (`sandbox_unavailable` if bwrap cannot start) |
 
