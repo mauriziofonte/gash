@@ -11,7 +11,7 @@
 # GASH_* settings included. What 2.x set without recording the state
 # before it stays, as 2.x's own gash_unload left it: its module variables
 # (__AI_*, __LLM_*, __REMOTE_*, __SYSINFO_*, many read-only, which no
-# unload can remove) and LESSOPEN, LESSCLOSE, LS_COLORS and an empty
+# unload can remove) and LESSOPEN, LESSCLOSE, LS_COLORS (LSCOLORS on macOS) and an empty
 # PROMPT_COMMAND; the snapshot leaves those out.
 
 [!exec:git] skip 'needs git'
@@ -43,7 +43,7 @@ exec git -C home/.gash status --porcelain
 snap() {
     {
         declare -p | grep -vE '^declare -[-a-zA-Z]* (BASH[A-Z_]*|RANDOM|SRANDOM|SECONDS|LINENO|EPOCHREALTIME|EPOCHSECONDS|_|BASHPID|FUNCNAME|PIPESTATUS|HISTCMD|COLUMNS|LINES|OLDPWD|PWD|SHLVL|PPID|COMP_WORDBREAKS|MAILCHECK)=' |
-            grep -vE '^declare -[-a-zA-Z]* (__AI_[A-Z_]*|__LLM_[A-Z_]*|__REMOTE_[A-Z_]*|__SYSINFO_[A-Z_]*|LESSOPEN|LESSCLOSE|LS_COLORS|PROMPT_COMMAND)='
+            grep -vE '^declare -[-a-zA-Z]* (__AI_[A-Z_]*|__LLM_[A-Z_]*|__REMOTE_[A-Z_]*|__SYSINFO_[A-Z_]*|LESSOPEN|LESSCLOSE|LS_COLORS|LSCOLORS|PROMPT_COMMAND)='
         echo '--- alias'; alias -p
         echo '--- complete'; complete -p
         echo '--- shopt'; shopt -p

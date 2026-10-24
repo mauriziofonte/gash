@@ -151,7 +151,7 @@ umask and the user's exported `GASH_*` settings). What 2.x set without
 recording the earlier value stays as 2.x's own `gash_unload` left it: its
 module variables (`__AI_*`, `__LLM_*`, `__REMOTE_*`, `__SYSINFO_*`, many of
 them read-only, which no unload can remove) and `LESSOPEN`, `LESSCLOSE`,
-`LS_COLORS` and an empty `PROMPT_COMMAND`. Proven by
+`LS_COLORS` (`LSCOLORS` on macOS) and an empty `PROMPT_COMMAND`. Proven by
 `testdata/script/upgrade_2x_resource.txtar`.
 
 ## 6. Direct invocation
