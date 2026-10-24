@@ -20,6 +20,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -290,11 +291,18 @@ func TestLedger_CORE05(t *testing.T) {
 		same(t, m, d, env, "gash_db_test", name)
 	}
 
-	// A failed connection: the same lines as a failing client.
+	// A failed connection: the same lines as a failing client, then (3.0:
+	// CORE-05 fixed) the driver's error as a hint.
 	f.connErr = &mysql.MySQLError{Number: 1045, Message: "Access denied"}
 	fenv := baseEnv(home, map[string]string{"PATH": env["PATH"], "MOCK_DIR": d, "MOCK_RC": "1"})
-	got := same(t, m, d, fenv, "gash_db_test")
+	want := run2x(t, d, fenv, "gash_db_test")
+	got := runGo(t, m, d, fenv, "gash_db_test")
 	require.Equal(t, 1, got.RC)
+	require.Equal(t, want.RC, got.RC)
+	require.Equal(t, want.Stdout, got.Stdout)
+	hint, ok := strings.CutPrefix(got.Stderr, want.Stderr)
+	require.True(t, ok, "%q after %q", got.Stderr, want.Stderr)
+	require.Regexp(t, `^Hint: Error 1045.*Access denied\n$`, hint)
 
 	// No client on PATH: the native driver still connects.
 	f.connErr = nil
@@ -435,4 +443,54 @@ func TestLedger_DB12(t *testing.T) {
 	require.Nil(t, f.cfg, "the guard refused before any connection")
 	require.Empty(t, f.log())
 	_ = home
+}
+
+// TestLedger_CORE05_fix: gash_db_test connects within GASH_DB_TIMEOUT
+// (default 30 s) and follows "Connection failed" with the driver's error
+// as a hint; a missing connection names the file GASH_ENV_FILE points at
+// (CORE-06); a URL CheckDBURL refuses fails before any connection, as
+// invalid_db_url for llm_db_* (CORE-11, CORE-13). 3.0: CORE-05 fixed.
+func TestLedger_CORE05_fix(t *testing.T) {
+	d, home, env := mysqlHome(t)
+	f := &fakeMySQL{answers: map[string]fakeAnswer{"SELECT 1": {cols: []string{"1"}, rows: [][]driver.Value{{int64(1)}}}}}
+	m := frozen(New())
+	m.openMySQL = f.open
+
+	got := runGo(t, m, d, env, "gash_db_test")
+	require.Equal(t, 0, got.RC, got.Stderr)
+	require.InDelta(t, 30, f.cfg.Timeout.Seconds(), 1)
+	for v, want := range map[string]float64{"5": 5, "x": 30, "0": 30, "": 30} {
+		e := baseEnv(home, map[string]string{"PATH": env["PATH"], "GASH_DB_TIMEOUT": v})
+		require.Equal(t, 0, runGo(t, m, d, e, "gash_db_test").RC)
+		require.InDelta(t, want, f.cfg.Timeout.Seconds(), 1, "GASH_DB_TIMEOUT=%q", v)
+	}
+
+	f.connErr = &mysql.MySQLError{Number: 1045, Message: "Access denied for user 'u'"}
+	got = runGo(t, m, d, env, "gash_db_test")
+	require.Equal(t, 1, got.RC)
+	require.Contains(t, got.Stderr, "Error: Connection failed\nHint: Error 1045")
+	require.Contains(t, got.Stderr, "Access denied for user 'u'\n")
+	require.NotContains(t, got.Stderr, "p@ss")
+	f.connErr = nil
+
+	other := filepath.Join(d, "other.env")
+	mustWrite(t, other, "DB:v6=pgsql://u:p@[::1/app\nDB:nul=mysql://u:a%00b@h/app\n", 0o600)
+	oenv := baseEnv(home, map[string]string{"PATH": env["PATH"], "GASH_ENV_FILE": other})
+	got = runGo(t, m, d, oenv, "gash_db_test", "nope")
+	require.Equal(t, 1, got.RC)
+	require.Contains(t, got.Stderr, "Connection 'nope' not found in "+other+"\n")
+
+	for name, hint := range map[string]string{"v6": config.ErrIPv6Host.Error(), "nul": config.ErrNULPassword.Error()} {
+		f.cfg = nil
+		got = runGo(t, m, d, oenv, "gash_db_test", name)
+		require.Equal(t, 1, got.RC)
+		require.Equal(t, "Error: Connection '"+name+"' has an invalid URL\nHint: "+hint+"\n", got.Stderr)
+		require.Nil(t, f.cfg, "no connection for %s", name)
+
+		got = runGo(t, m, d, oenv, "llm_db_tables", "-c", name)
+		require.Equal(t, 1, got.RC)
+		require.Contains(t, got.Stderr, `{"error":"invalid_db_url","details":"Connection '`+name+`' has an invalid URL","action":"STOP",`)
+		require.Contains(t, got.Stderr, `"hint":"`+hint+`"`)
+		require.Nil(t, f.cfg, "no connection for %s", name)
+	}
 }

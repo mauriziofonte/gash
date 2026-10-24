@@ -1258,6 +1258,7 @@ var functions = []Function{
 				"  gash_db_test legacy",
 		},
 		Fallback:  &Usage{Program: "gash_db_test", Usage: "gash_db_test [CONNECTION_NAME]", Description: "Test a database connection from ~/.gash_env. Default: 'default'"},
+		Settings:  []string{"GASH_DB_TIMEOUT"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},

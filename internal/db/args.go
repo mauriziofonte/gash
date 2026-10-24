@@ -128,6 +128,12 @@ func (m *Module) target(c *invoke.Call, a *dbArgs) (target, *output) {
 			"Ask user which database connection to use. Connections are configured in ~/.gash_env"))
 		return target{}, &o
 	}
+	// LEDGER CORE-11, CORE-13: an unclosed IPv6 bracket or a NUL in the
+	// password is refused before any connection.
+	if err := config.CheckDBURL(url); err != nil {
+		o := failed(contract.New("invalid_db_url", "Connection '"+a.connection+"' has an invalid URL", err.Error()))
+		return target{}, &o
+	}
 	u := config.ParseDBURL(url)
 	t := target{driver: u.Driver, user: u.User, pass: config.DecodePassword(u.Password), host: u.Host, port: u.Port, database: u.Database}
 	switch {

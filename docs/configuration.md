@@ -139,6 +139,13 @@ session: it exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it.
   port. A bracket that is not closed is refused with `invalid_db_url`.
 
 `gash_db_list` masks passwords; `gash_db_test [NAME]` runs `SELECT 1` on one.
+No `mysql`, `mariadb` or `psql` client is needed and none is run: Gash
+connects through its own drivers, so client option files (`~/.my.cnf`,
+`/etc/mysql/*.cnf`) and `~/.pgpass` are not read. A MySQL `localhost` host
+connects through the first existing of `/run/mysqld/mysqld.sock`,
+`/var/run/mysqld/mysqld.sock` and `/tmp/mysql.sock`, else over TCP. The test
+gives up after `GASH_DB_TIMEOUT` seconds (default 30), and a failed test
+prints the driver's error as a `Hint:` line after `Error: Connection failed`.
 
 ### AI providers
 
