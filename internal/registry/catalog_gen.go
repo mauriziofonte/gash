@@ -1650,15 +1650,22 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Fetches the release tags and checks out the newest release (never\n" +
-				"  an older one). Open a new terminal afterwards: it loads the new\n" +
-				"  version and fetches its binary.\n" +
-				"  A checkout newer than the latest release (a pre-release, or a\n" +
-				"  commit after it) is left as it is. To go back to a release:\n" +
-				"  git -C ~/.gash checkout vX.Y.Z",
+				"  an older one). It runs the steps of gash update. A checkout newer\n" +
+				"  than the latest release (a pre-release, or a commit after it) is\n" +
+				"  left as it is.\n" +
+				"  Before the checkout, the release binary is downloaded into\n" +
+				"  ~/.local/share/gash/versions/<version>/ and verified (the hash in\n" +
+				"  the tag's release/SHA256SUMS, else the release's checksums.txt;\n" +
+				"  GASH_REQUIRE_SIGNED=1 also requires a signed tag and a pinned\n" +
+				"  binary). After it, the new version is loaded in a test shell; if\n" +
+				"  that fails, the previous version is checked out again.\n" +
+				"  Open a new terminal afterwards to load the new version.\n" +
+				"  To go back: gash update --rollback (the previous version and its\n" +
+				"  binary are kept), or git -C ~/.gash checkout vX.Y.Z",
 		},
 		Fallback:  &Usage{Program: "gash_upgrade", Usage: "gash_upgrade", Description: "Upgrade Gash to the latest release (refuses to touch local modifications)."},
-		ShellVars: []string{"GASH_REQUIRE_SIGNED", "HOME"},
-		Env:       []string{"GASH_DIR", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_REQUIRE_SIGNED", "HOME", "NO_COLOR"},
+		ShellVars: []string{"BASH", "GASH_RELEASE_URL", "GASH_REQUIRE_SIGNED", "HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"},
+		Env:       []string{"GASH_DIR", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_RELEASE_URL", "GASH_REQUIRE_SIGNED", "HOME", "NO_COLOR", "XDG_DATA_HOME", "XDG_STATE_HOME"},
 	},
 	{
 		Name:     "gash_username",
