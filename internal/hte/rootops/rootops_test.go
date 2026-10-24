@@ -729,3 +729,31 @@ func TestUnitStopWithoutServiceManager(t *testing.T) {
 		t.Errorf("commands run: %q", f.lines)
 	}
 }
+
+// TestSudoersIncludedir: the drop-in directory line of /etc/sudoers in its
+// Debian/Arch (@includedir), Fedora (#includedir) and macOS (#includedir
+// through /private, the target of the /etc symlink) spellings. The macOS
+// one was refused, so install failed on every Mac.
+func TestSudoersIncludedir(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		ok   bool
+	}{
+		{"@includedir /etc/sudoers.d", true},
+		{"#includedir /etc/sudoers.d", true},
+		{"## (the '#' here does not indicate a comment)\n#includedir /private/etc/sudoers.d", true},
+		{"@includedir /etc/sudoers.d/", true},
+		{"# includedir /etc/sudoers.d", false},
+		{"#includedir /private/etc/sudoers.d.old", false},
+		{"#includedir /tmp/etc/sudoers.d", false},
+	} {
+		f := newFixture(t)
+		f.write("/etc/sudoers", "root ALL=(ALL) ALL\n"+tc.line+"\n", 0o440)
+		c := session(t, f.env(), []Op{{ID: 1, Op: OpWriteSudoers}})
+		_, err := c.Run(1)
+		c.Close()
+		if (err == nil) != tc.ok {
+			t.Errorf("%q: %v, want accepted %v", tc.line, err, tc.ok)
+		}
+	}
+}

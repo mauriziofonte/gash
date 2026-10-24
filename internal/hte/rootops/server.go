@@ -440,7 +440,10 @@ func (s *server) installHelper(ctx context.Context, o Op) ([]string, error) {
 	return nil, s.writeFile(HelperPath, data, 0o755, path.Dir(HelperPath)+"/.gash-hosts-helper.tmp", nil)
 }
 
-var includedirRE = regexp.MustCompile(`(?m)^[ \t]*[#@]includedir[ \t]+/etc/sudoers\.d[ \t]*$`)
+// includedirRE finds the line of /etc/sudoers that reads the drop-ins.
+// macOS names the directory through the /etc symlink's target:
+// "#includedir /private/etc/sudoers.d".
+var includedirRE = regexp.MustCompile(`(?m)^[ \t]*[#@]includedir[ \t]+(/private)?/etc/sudoers\.d/?[ \t]*$`)
 
 // SudoersContent is the drop-in for user: the helper, with its exact
 // arguments, and nothing else.
