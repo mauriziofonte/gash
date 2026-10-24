@@ -66,19 +66,24 @@ func (m *Module) ports(c *invoke.Call) int {
 		return fail(c, "ports_tool_not_found", "Neither ss nor netstat is installed",
 			"Install iproute2 (ss) or net-tools (netstat) to list ports. Skip this check")
 	}
-	// sort -t $'\t' -k1,1n -k2,2 -u: by port, then protocol, the first
-	// line of each (port, protocol) kept (LLM-11).
+	// By port, then protocol, in the tool's order otherwise; one record
+	// per (port, protocol, state, address), so an IPv4 and an IPv6
+	// listener on one port are two records (LLM-11; 2.x kept one line
+	// per port and protocol).
 	sort.SliceStable(rows, func(i, j int) bool {
 		if c := cmpNumeric(rows[i][0], rows[j][0]); c != 0 {
 			return c < 0
 		}
 		return rows[i][1] < rows[j][1]
 	})
+	seen := map[[4]string]bool{}
 	b := []byte{'['}
-	for i, r := range rows {
-		if i > 0 && cmpNumeric(r[0], rows[i-1][0]) == 0 && r[1] == rows[i-1][1] {
+	for _, r := range rows {
+		key := [4]string{numericText(r[0]), r[1], r[2], r[3]}
+		if seen[key] {
 			continue
 		}
+		seen[key] = true
 		if len(b) > 1 {
 			b = append(b, ',')
 		}

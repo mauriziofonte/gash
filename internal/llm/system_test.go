@@ -86,20 +86,41 @@ EOF`}},
 		for _, args := range [][]string{{}, {"--listen"}, {"-l"}, {"-l", "--listen"}, {"--bogus"}, {"-l", "x"}, {"x", "--help"}} {
 			r := same(t, m, d, env, "llm_ports", args...)
 			if c.name == "ss" && len(args) == 0 {
-				require.Equal(t, `[{"port":9,"proto":"tcp","state":"LISTEN","address":"[fe80::1]"},{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":53,"proto":"tcp","state":"LISTEN","address":"127.0.0.53%lo"},{"port":68,"proto":"udp","state":"LISTEN","address":"0.0.0.0"},{"port":123,"proto":"udp","state":"LISTEN","address":"[fe80::1]"},{"port":8080,"proto":"tcp","state":"LISTEN","address":"a\"b\\c`+"\x01"+`"},{"port":44312,"proto":"tcp","state":"ESTAB","address":"10.0.0.2"}]`+"\n", r.Stdout)
+				// 3.0: LLM-06 fixed, LLM-11 fixed
+				require.Equal(t, `[{"port":9,"proto":"tcp","state":"LISTEN","address":"[fe80::1]"},{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":22,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":53,"proto":"tcp","state":"LISTEN","address":"127.0.0.53%lo"},{"port":68,"proto":"udp","state":"LISTEN","address":"0.0.0.0"},{"port":123,"proto":"udp","state":"LISTEN","address":"[fe80::1]"},{"port":8080,"proto":"tcp","state":"LISTEN","address":"a\"b\\c\u0001"},{"port":44312,"proto":"tcp","state":"ESTAB","address":"10.0.0.2"}]`+"\n", r.Stdout)
 			}
 		}
 	}
 }
 
-// TestLedger_LLM11_2x: two sockets on one port and protocol are one record.
+// TestLedger_LLM11_2x: two sockets on one port and protocol are two
+// records (2.x kept one).
 func TestLedger_LLM11_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{"ss": ssOut})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log")})
-	r := same(t, m, d, env, "llm_ports", "--listen")
-	require.Equal(t, 1, strings.Count(r.Stdout, `"port":22,`))
+	// 3.0: LLM-11 fixed
+	r := runGo(t, m, d, env, "llm_ports", "--listen")
+	require.Equal(t, 2, strings.Count(r.Stdout, `"port":22,`))
+}
+
+// TestLedger_LLM11: an IPv4 and an IPv6 listener on port 22 are two
+// records; an exact duplicate is one; records sort by port, then protocol.
+func TestLedger_LLM11(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	bin := stubBin(t, map[string]string{"ss": `cat <<'EOF'
+Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port
+udp   UNCONN 0      0      0.0.0.0:22         0.0.0.0:*
+tcp   LISTEN 0      4096   0.0.0.0:22         0.0.0.0:*
+tcp   LISTEN 0      4096   [::]:22            [::]:*
+tcp   LISTEN 0      4096   0.0.0.0:022        0.0.0.0:*
+tcp   LISTEN 0      4096   0.0.0.0:21         0.0.0.0:*
+EOF`})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t)})
+	r := runGo(t, m, d, env, "llm_ports", "--listen")
+	require.Equal(t, result{`[{"port":21,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":22,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":22,"proto":"udp","state":"LISTEN","address":"0.0.0.0"}]` + "\n", "", 0}, r)
 }
 
 // TestLedger_LLM06_2x_ports: llm_ports and llm_procs escape control
