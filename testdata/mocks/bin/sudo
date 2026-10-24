@@ -1,6 +1,39 @@
 #!/usr/bin/env bash
 
-# Minimal sudo mock for tests.
-# Runs the command without elevation and without prompting.
+# Sudo mock for tests. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# It never elevates and never prompts. Every call is logged (one line of
+# arguments to $MOCK_SUDO_LOG when that is set). The command runs only when
+# it is itself a stub: a file in this mock directory or under the test's
+# $WORK. Any other target is refused with status 1 and a line on stderr,
+# so a test that reaches a real program through sudo fails visibly
+# (LEDGER TEST-08). Credential probes (-v, -k, -K, -l, or the command
+# true) succeed without running anything.
 
-exec "$@"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+[[ -n "${MOCK_SUDO_LOG:-}" ]] && printf '%s\n' "$*" >>"$MOCK_SUDO_LOG"
+
+while (($#)); do
+	case "$1" in
+	-v | -k | -K | -l | --validate | --reset-timestamp | --remove-timestamp | --list) exit 0 ;;
+	-u | -g | -C | -D | -h | -p | -r | -t | -U | -T) shift 2 ;;
+	--) shift && break ;;
+	-*) shift ;;
+	*) break ;;
+	esac
+done
+(($#)) || exit 0
+[[ "$1" == true ]] && exit 0
+
+target="$(command -v -- "$1" 2>/dev/null)" || {
+	printf 'sudo mock: %s: command not found\n' "$1" >&2
+	exit 1
+}
+dir="$(cd "$(dirname "$target")" 2>/dev/null && pwd -P)"
+work=""
+[[ -n "${WORK:-}" ]] && work="$(cd "$WORK" 2>/dev/null && pwd -P)"
+if [[ "$dir" == "$here" || (-n "$work" && ("$dir" == "$work" || "$dir" == "$work"/*)) ]]; then
+	exec "$@"
+fi
+printf 'sudo mock: refusing to run %s (%s is not a test stub)\n' "$1" "$target" >&2
+exit 1

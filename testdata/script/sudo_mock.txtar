@@ -1,0 +1,38 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: TEST-08
+# covers: none (3.0 harness proof)
+#
+# TEST-08 proving test: the shared sudo mock (testdata/mocks/bin/sudo)
+# logs every call and runs only a stub: one of the shared mocks or a file
+# under $WORK. A real program reached through it is refused with status 1
+# and a line on stderr, where the 2.x mock ran it unelevated.
+
+env MOCK_SUDO_LOG=$WORK/sudo.log
+chmod 755 stub/hello
+
+# A shared mock runs (systemctl stop exits 0).
+exec bash -c 'PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" sudo -n systemctl stop nginx; echo "rc=$?"'
+stdout '^rc=0$'
+
+# A stub under $WORK runs, options before it are skipped.
+exec bash -c 'PATH="$WORK/stub:$GASH_STAGE/testdata/mocks/bin:$PATH" sudo -u root -E hello; echo "rc=$?"'
+stdout '^stub ran$'
+stdout '^rc=0$'
+
+# A real program is refused and never runs.
+exec bash -c 'PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" sudo touch "$WORK/real-ran"; echo "rc=$?"'
+stdout '^rc=1$'
+stderr '^sudo mock: refusing to run touch \(.*touch is not a test stub\)$'
+! exists real-ran
+
+# Credential probes succeed without running anything.
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; sudo -n true && sudo -v && echo probes=ok'
+stdout '^probes=ok$'
+
+grep -count=5 '(?m)^.+$' sudo.log
+grep '^touch ' sudo.log
+
+-- stub/hello --
+#!/bin/sh
+echo stub ran
