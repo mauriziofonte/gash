@@ -3,6 +3,8 @@
 package shellinit
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -86,4 +88,67 @@ func TestLedger_SHELL06(t *testing.T) {
 	}
 	out := h.emit(t)
 	require.NotContains(t, out, "alias grep=")
+}
+
+// TestLedger_SHELL01_Lint is the SHELL-01 lint: in the prompt builder, every
+// value concatenated into ps1, seg, PS1 or PS2 by value (an unescaped $NAME or
+// ${NAME...}) is a palette entry, a \[ \] wrapper or a value Gash computed
+// itself. Any other variable (a branch, a path, a file's text) must go
+// through a __GASH_PS1_* holder and be referenced as \${HOLDER}, so Bash never
+// re-scans it as code.
+func TestLedger_SHELL01_Lint(t *testing.T) {
+	out := newHarness().emit(t)
+	allowed := map[string]bool{
+		// \[ \] wrappers, the reset sequence and the pieces being built.
+		"o": true, "c": true, "R": true, "ps1": true, "seg": true,
+		"ps1_o": true, "ps1_c": true,
+		// Values computed by Gash: numbers and a palette escape.
+		"ahead": true, "behind": true, "exit_code": true, "host_color": true,
+		"#nl": true, "#sessions": true,
+		// The git segment, itself built under this lint.
+		"__GASH_PS1_GIT_SEG": true,
+		// ${HOLDER:+...} only tests the holder; its value is referenced inside.
+		"__GASH_PS1_STY": true,
+	}
+	palette := regexp.MustCompile(`^__GASH_PS1_(OFF|RED|GREEN|BLUE|BRED|BGREEN|BYELLOW|BBLUE|BPURPLE|BWHITE|DIM|AHEAD|BEHIND)$`)
+	assign := regexp.MustCompile(`(?:\bps1\+?=|\bseg\+?=|\bPS1=|\bPS2=|\b__GASH_PS1_GIT_SEG=)(.*)$`)
+	name := regexp.MustCompile(`^(#?[A-Za-z_][A-Za-z0-9_]*)`)
+
+	checked := 0
+	for _, fn := range []string{"__gash_ps1_git", "__gash_ps1_build"} {
+		start := strings.Index(out, "\n"+fn+"() {\n")
+		require.GreaterOrEqual(t, start, 0, "%s not emitted", fn)
+		body := out[start+1:]
+		body = body[:strings.Index(body, "\n}\n")]
+		for _, line := range strings.Split(body, "\n") {
+			m := assign.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			checked++
+			rhs := m[1]
+			for i := 0; i < len(rhs); i++ {
+				switch rhs[i] {
+				case '\\':
+					i++ // an escaped character, e.g. \${HOLDER}: deferred, not by value
+					continue
+				case '$':
+				default:
+					continue
+				}
+				rest := rhs[i+1:]
+				if strings.HasPrefix(rest, "{") {
+					rest = rest[1:]
+				}
+				n := name.FindString(rest)
+				if n == "" {
+					continue // $' quoting, $( or $(( handled below
+				}
+				require.True(t, allowed[n] || palette.MatchString(n),
+					"%s concatenates $%s into the prompt by value: %q", fn, n, line)
+			}
+			require.NotRegexp(t, `\$\([^(]`, rhs, "%s: command substitution in a prompt assignment: %q", fn, line)
+		}
+	}
+	require.Greater(t, checked, 20, "the lint found too few prompt assignments to be meaningful")
 }
