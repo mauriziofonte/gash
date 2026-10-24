@@ -41,19 +41,14 @@ func TestLedger_DB05(t *testing.T) {
 
 var queryTimeRE = regexp.MustCompile(`"query_time":"([0-9]+)\.([0-9])ms"`)
 
-// TestLedger_DB06_2x: the clock runs from before the connection, so a slow
-// connect with a fast query trips the 100 ms rule and adds
-// slow_query_explain, in 2.x (a mock client that sleeps) and in rc.A (a
-// fake server whose connect takes 150 ms of the module's clock).
+// TestLedger_DB06_2x: 2.x started the clock before the client connected,
+// so a slow connect with a fast query tripped the 100 ms rule and added
+// slow_query_explain (rc.A pinned it with a fake server whose connect took
+// 150 ms of the module's clock). 3.0: DB-06 fixed, the same connect counts
+// nothing: query_time is the query's own, and no plan is added.
 func TestLedger_DB06_2x(t *testing.T) {
 	d, _, env := mysqlHome(t)
 	plan := `{"query_block":{"select_id":1}}`
-	slow := "#!/usr/bin/env bash\nin=$(cat)\nif [[ $in == *'EXPLAIN FORMAT=JSON'* ]]; then printf '%s\\n' '" + plan +
-		"'; else sleep 0.2; printf 'id\\n1\\n'; fi\n"
-	mustWrite(t, filepath.Join(d, "bin", "mysql"), slow, 0o755)
-	mustWrite(t, filepath.Join(d, "bin", "mariadb"), slow, 0o755)
-	want := run2xLive(t, d, env, "llm_db_query", "SELECT id FROM t", "-r", "5")
-
 	f := &fakeMySQL{answers: map[string]fakeAnswer{
 		"SELECT id FROM t":                     {cols: []string{"id"}, rows: [][]driver.Value{{int64(1)}}},
 		"EXPLAIN FORMAT=JSON SELECT id FROM t": {cols: []string{"EXPLAIN"}, rows: [][]driver.Value{{[]byte(plan)}}},
@@ -66,27 +61,47 @@ func TestLedger_DB06_2x(t *testing.T) {
 		return f.open(cfg)
 	}
 	got := runGo(t, m, d, env, "llm_db_query", "SELECT id FROM t", "-r", "5")
-	require.Equal(t, `{"data":[{"id":"1"}],"rows":1,"query_time":"150.0ms","slow_query_explain":[`+plan+`]}`+"\n", got.Stdout)
-	// The explain runs without the row cap, as 2.x ran it.
+	require.Equal(t, result{`{"data":[{"id":"1"}],"rows":1,"query_time":"0µs"}` + "\n", "", 0}, got)
+	require.Equal(t, []string{"SET SESSION TRANSACTION READ ONLY", "SET SESSION sql_select_limit = 5", "SELECT id FROM t"}, f.log())
+}
+
+// TestLedger_DB06_fix: the 100 ms rule and query_time see the query alone:
+// a slow query trips it (the plan runs without the row cap), a slow
+// connect plus a query under the threshold does not, and a call that runs
+// no query (a guard refusal) counts its whole time.
+func TestLedger_DB06_fix(t *testing.T) {
+	d, _, env := mysqlHome(t)
+	plan := `{"query_block":{"select_id":1}}`
+	f := &fakeMySQL{answers: map[string]fakeAnswer{
+		"SELECT id FROM t":                     {cols: []string{"id"}, rows: [][]driver.Value{{int64(1)}}},
+		"EXPLAIN FORMAT=JSON SELECT id FROM t": {cols: []string{"EXPLAIN"}, rows: [][]driver.Value{{[]byte(plan)}}},
+	}}
+	m := New()
+	clock := time.Unix(1792007131, 0)
+	m.now = func() time.Time { return clock }
+	connect := 2 * time.Second
+	query := 150 * time.Millisecond
+	m.openMySQL = func(cfg *mysql.Config) (*sql.DB, error) {
+		clock = clock.Add(connect)
+		return f.open(cfg)
+	}
+	f.onQuery = func(q string) {
+		if q == "SELECT id FROM t" {
+			clock = clock.Add(query)
+		}
+	}
+	got := runGo(t, m, d, env, "llm_db_query", "SELECT id FROM t", "-r", "5")
+	require.Equal(t, result{`{"data":[{"id":"1"}],"rows":1,"query_time":"150.0ms","slow_query_explain":[` + plan + `]}` + "\n", "", 0}, got)
 	require.Equal(t, []string{"SET SESSION TRANSACTION READ ONLY", "SET SESSION sql_select_limit = 5", "SELECT id FROM t",
 		"SET SESSION TRANSACTION READ ONLY", "EXPLAIN FORMAT=JSON SELECT id FROM t"}, f.log())
 
-	ms := queryTimeRE.FindStringSubmatch(want.Stdout)
-	require.NotNil(t, ms, "%+v", want)
-	n, _ := strconv.Atoi(ms[1])
-	require.GreaterOrEqual(t, n, 100)
-	require.Equal(t, got.Stdout, queryTimeRE.ReplaceAllString(want.Stdout, `"query_time":"150.0ms"`))
-	require.Equal(t, want.Stderr, got.Stderr)
-	require.Equal(t, want.RC, got.RC)
-
-	// Below the threshold: no plan.
-	clock = time.Unix(1792007131, 0)
-	m.openMySQL = func(cfg *mysql.Config) (*sql.DB, error) {
-		clock = clock.Add(99999 * time.Microsecond)
-		return f.open(cfg)
-	}
+	query = 99999 * time.Microsecond
 	got = runGo(t, m, d, env, "llm_db_query", "SELECT id FROM t")
-	require.Equal(t, `{"data":[{"id":"1"}],"rows":1,"query_time":"99.9ms"}`+"\n", got.Stdout)
+	require.Equal(t, result{`{"data":[{"id":"1"}],"rows":1,"query_time":"99.9ms"}` + "\n", "", 0}, got)
+
+	got = runGo(t, m, d, env, "llm_db_query", "DELETE FROM t")
+	require.Equal(t, 1, got.RC)
+	require.Contains(t, got.Stderr, `"query_time":"0µs"`)
 }
 
 // cliEQP is what the sqlite3 shell makes of EXPLAIN QUERY PLAN QUERY: the

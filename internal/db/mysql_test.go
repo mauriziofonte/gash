@@ -28,6 +28,8 @@ type fakeMySQL struct {
 	stmts   []string
 	answers map[string]fakeAnswer
 	connErr error
+	// onQuery, when set, runs as a query arrives (a test's clock).
+	onQuery func(q string)
 }
 
 type fakeAnswer struct {
@@ -84,6 +86,9 @@ func (c *fakeConn) ExecContext(_ context.Context, q string, _ []driver.NamedValu
 }
 
 func (c *fakeConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
+	if c.f.onQuery != nil {
+		c.f.onQuery(q)
+	}
 	c.f.mu.Lock()
 	defer c.f.mu.Unlock()
 	c.f.stmts = append(c.f.stmts, q)

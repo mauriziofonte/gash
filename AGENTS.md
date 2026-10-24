@@ -98,7 +98,8 @@ must hold a plain name (`[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}`, otherwise
 `invalid_database_name`). The row limit is `-n` (also `--limit`, and `-r`/`--rows` on
 `llm_db_query`). SQLite and PostgreSQL return native JSON types,
 MySQL/MariaDB return every value as a string. `llm_db_query` adds a
-slow_query_explain field (the plan) when a query takes 100 ms or more.
+slow_query_explain field (the plan) when a query takes 100 ms or more
+(the query alone: connecting and the session setup do not count).
 `--analyze` executes the query to measure it, still read-only.
 
 ### 3.4 Git, system, project
@@ -177,7 +178,8 @@ permission denied). No results: `"data": []` and `"count": 0`.
 
 `llm_db_tables` returns `{"data":["users"],...}`. `llm_db_explain` always
 returns an array: JSON plans as the engine gives them, SQLite text plans as
-`[{"plan": TEXT}]`. query_time is in µs, ms or s.
+`[{"plan": TEXT}]`. query_time is in µs, ms or s, and counts the time the
+query ran on the server (sent to last row read), not the connection.
 
 ### 4.5 Tree (`llm_tree --depth 2 --stats`)
 

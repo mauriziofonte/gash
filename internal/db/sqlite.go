@@ -79,6 +79,7 @@ func (m *Module) sqliteRun(c *invoke.Call, file, query string, mode int) output 
 	if _, err := sqlite.Limit(conn, sqliteLimitAttached, 0); err != nil {
 		return sqliteError(err)
 	}
+	defer m.startQuery(ctx)()
 	info, err := columnInfo(conn, query)
 	if err != nil {
 		return sqliteError(err)
