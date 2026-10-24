@@ -689,3 +689,48 @@ func TestLedger_SHELL11(t *testing.T) {
 	require.NoError(t, err, out)
 	require.Equal(t, links+"/tree|2.1.0", out)
 }
+
+// LEDGER SYS-09 (shim part): history_grep pipes the history without the
+// HISTTIMEFORMAT prefix, so the binary sees "NUM CMD" lines, and the
+// caller's HISTTIMEFORMAT is left as it was.
+func TestLedger_SYS09(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out, err := bash(t, []string{"GASH_HEADLESS=1", "GASH_BIN=/bin/true"}, `source '`+dir+`/gash.sh'; set -o history; HISTTIMEFORMAT='%F %T '; `+
+		`history -s 'git push'; history -s 'cp a a'; __gash_call() { cat; }; history_grep git; echo "fmt=$HISTTIMEFORMAT"`)
+	require.NoError(t, err, out)
+	require.Regexp(t, `(?m)^ *[0-9]+  git push$`, out)
+	require.Regexp(t, `(?m)^ *[0-9]+  cp a a$`, out)
+	require.NotRegexp(t, `[0-9]{4}-[0-9]{2}-[0-9]{2}`, out)
+	require.Contains(t, out, "fmt=%F %T \n")
+}
+
+// LEDGER SYS-11, SYS-10 (shim part): mkdir_cd creates and enters exactly
+// the directory named, never a CDPATH one, prints nothing, takes "-" as
+// ./- and an option-like name as a name; a second word is the binary's
+// "Unexpected argument" (3.0: SYS-11 fixed; 2.x entered $CDPATH/foo and
+// printed it, ran cd - and failed on -p).
+func TestLedger_SYS11(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	work := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(work, "cdp", "foo"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(work, "here"), 0o755))
+	fake := filepath.Join(t.TempDir(), "gash")
+	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\n[ \"$1 $2 $3\" = '__compat env load' ] && exit 0\necho \"bin: $*\" >&2; exit 1\n"), 0o755))
+	run := func(script string) string {
+		out, err := bash(t, []string{"GASH_HEADLESS=1", "GASH_BIN=" + fake}, `source '`+dir+`/gash.sh'; cd '`+work+`/here'; `+script)
+		require.NoError(t, err, out)
+		return out
+	}
+	out := run(`export CDPATH='` + work + `/cdp'; mkdir_cd foo; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "rc=0 pwd="+work+"/here/foo\n", out, "stdout stays empty and CDPATH is not followed")
+	out = run(`mkdir_cd -; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "rc=0 pwd="+work+"/here/-\n", out)
+	out = run(`mkdir_cd -p; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "rc=0 pwd="+work+"/here/-p\n", out)
+	out = run(`mkdir_cd a b 2>&1; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "bin: mkdir_cd a b\nrc=1 pwd="+work+"/here\n", out)
+	_, err := os.Stat(filepath.Join(work, "here", "a"))
+	require.True(t, os.IsNotExist(err), "nothing is created for two words")
+}

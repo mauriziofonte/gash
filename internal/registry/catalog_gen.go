@@ -3001,7 +3001,11 @@ var functions = []Function{
 				"  mkcd my-new-project\n" +
 				"\n" +
 				"  # Create nested directories and enter\n" +
-				"  mkcd ~/projects/client/frontend",
+				"  mkcd ~/projects/client/frontend\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Exactly one DIRECTORY, taken as a name: -p creates ./-p and - creates\n" +
+				"  ./-. CDPATH is not searched, and nothing is printed.",
 		},
 		Fallback:          &Usage{Program: "mkdir_cd", Usage: "mkdir_cd DIRECTORY", Description: "Create DIRECTORY and cd into it. Alias: mkcd"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},

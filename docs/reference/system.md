@@ -254,6 +254,13 @@ mkcd my-new-project
 mkcd ~/projects/client/frontend
 ```
 
+#### Notes
+
+```text
+Exactly one DIRECTORY, taken as a name: -p creates ./-p and - creates
+./-. CDPATH is not searched, and nothing is printed.
+```
+
 ## path_add
 
 Add directories to PATH once each

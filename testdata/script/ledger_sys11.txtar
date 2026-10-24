@@ -1,0 +1,29 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SYS-11
+# ledger: SYS-10
+# covers: none (3.0 fix proof)
+#
+# SYS-11 proving test: with CDPATH set and $CDPATH/foo existing, mkdir_cd
+# foo creates and enters ./foo and prints nothing; mkdir_cd -p creates and
+# enters ./-p; mkdir_cd - enters ./-, not OLDPWD. SYS-10: a second word is
+# refused with "Unexpected argument" and nothing is created.
+
+env GASH_HEADLESS=1
+mkdir cdp/foo
+mkdir here
+
+exec bash -c 'source "$GASH_SH"; cd "$WORK/here"; export CDPATH="$WORK/cdp"; mkdir_cd foo; echo "pwd=$PWD"'
+stdout -count=1 '(?m)^.+$'
+stdout '^pwd=.*/here/foo$'
+exists here/foo
+
+exec bash -c 'source "$GASH_SH"; cd "$WORK/here"; mkdir_cd -p; echo "pwd=$PWD"; cd "$WORK/here"; mkdir_cd -; echo "pwd=$PWD"'
+stdout '^pwd=.*/here/-p$'
+stdout '^pwd=.*/here/-$'
+exists here/-p
+exists here/-
+
+! exec bash -c 'source "$GASH_SH"; cd "$WORK/here"; mkdir_cd one two'
+stderr '^Error: Unexpected argument: two$'
+! exists here/one
