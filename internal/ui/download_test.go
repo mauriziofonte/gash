@@ -57,13 +57,13 @@ func TestDownload(t *testing.T) {
 	require.Equal(t, "hello", string(b))
 	require.Equal(t, "Get: "+srv.URL+"/redirect [5 B]\nFetched 5 B in 1s (5 B/s)\n", errb.String())
 
-	// A 404 reports the size of its own body (curl -fsIL prints the error
-	// response's headers), so Get shows it, then the download itself fails.
+	// A 404 has no size (3.0: CORE-19 fixed; 2.x showed the size of the
+	// error body), so Get shows none, then the download itself fails.
 	errb.Reset()
 	rc = d.Run(t.Context(), s, tt, &errb, srv.URL+"/missing", filepath.Join(dir, "g"))
 	require.Equal(t, 22, rc)
 	require.NoFileExists(t, filepath.Join(dir, "g"))
-	require.Equal(t, "Get: "+srv.URL+"/missing ["+HumanBytes(int64(len("404 page not found\n")))+"]\n"+
+	require.Equal(t, "Get: "+srv.URL+"/missing\n"+
 		"Error: Download failed ("+srv.URL+"/missing): curl: (22) The requested URL returned error: 404\n", errb.String())
 
 	errb.Reset()
@@ -72,10 +72,10 @@ func TestDownload(t *testing.T) {
 	require.Equal(t, "Error: Usage: __gash_download URL DEST\n", errb.String())
 }
 
-// RemoteSize reports the Content-Length of the final response whatever its
-// status (a 404 with a body, a redirect's target), as curl -fsIL does; only
-// a response with no length is 0.
-func TestRemoteSize(t *testing.T) {
+// RemoteSize reports the Content-Length of the final 2xx response (also
+// after a redirect); an error status or a response with no length is 0
+// (3.0: CORE-19 fixed; 2.x, like curl -fsIL, read a 404's length too).
+func TestLedger_CORE19_fix(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/ok":
@@ -88,6 +88,8 @@ func TestRemoteSize(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		case "/redir":
 			http.Redirect(w, r, "/missing", http.StatusFound)
+		case "/redirok":
+			http.Redirect(w, r, "/ok", http.StatusFound)
 		case "/nolen":
 			w.Header().Set("Transfer-Encoding", "chunked")
 			w.WriteHeader(http.StatusNotFound)
@@ -98,7 +100,7 @@ func TestRemoteSize(t *testing.T) {
 	for _, tc := range []struct {
 		path string
 		want int64
-	}{{"/ok", 999}, {"/missing", 1234}, {"/err", 77}, {"/redir", 1234}, {"/nolen", 0}} {
+	}{{"/ok", 999}, {"/missing", 0}, {"/err", 0}, {"/redir", 0}, {"/redirok", 999}, {"/nolen", 0}} {
 		require.Equal(t, tc.want, d.RemoteSize(t.Context(), srv.URL+tc.path), tc.path)
 	}
 }
