@@ -138,11 +138,13 @@ func (m *Module) unlock(c *invoke.Call, s *session) bool {
 		p.Error("ssh-add is not available; cannot auto-unlock SSH keys.")
 		return false
 	}
-	list := m.list(s)
-	if strings.Contains(list, noAgent) {
+	// ssh-add -l exits 2 when it reaches no agent, whatever it says: an
+	// unset SSH_AUTH_SOCK or a socket a dead agent left (SYS-21).
+	list, rc := m.list(s)
+	if rc == 2 || strings.Contains(list, noAgent) {
 		m.startAgent(s)
-		list = m.list(s)
-		if strings.Contains(list, noAgent) {
+		list, rc = m.list(s)
+		if rc == 2 || strings.Contains(list, noAgent) {
 			p.Error("ssh-agent is not running and could not be started automatically.")
 			return false
 		}
@@ -177,12 +179,17 @@ func (m *Module) found(s *session, name string) bool {
 	return err == nil
 }
 
-// list is `$(ssh-add -l 2>&1 || true)`.
-func (m *Module) list(s *session) string {
+// list is `$(ssh-add -l 2>&1)` and its exit status: 0 keys, 1 no keys,
+// 2 no agent.
+func (m *Module) list(s *session) (string, int) {
 	var out bytes.Buffer
-	_, _ = m.run.Run(s.ctx(), runner.Cmd{Path: "ssh-add", Args: []string{"-l"},
+	res, err := m.run.Run(s.ctx(), runner.Cmd{Path: "ssh-add", Args: []string{"-l"},
 		Options: runner.Options{Env: s.env, Stdout: &out, Stderr: &out}})
-	return runner.CommandSubst(out.Bytes())
+	rc := res.ExitCode
+	if se, ok := err.(*runner.StartError); ok {
+		rc = se.Status
+	}
+	return runner.CommandSubst(out.Bytes()), rc
 }
 
 // fingerprint is the field 2 of `ssh-keygen -lf KEY.pub` (KEY when there

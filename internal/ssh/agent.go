@@ -25,16 +25,20 @@ func (m *Module) startAgent(s *session) {
 	}
 	home := s.c.Env.Get("HOME")
 	dir := s.c.Env.Get("XDG_RUNTIME_DIR")
-	if dir == "" {
+	if dir == "" || !privateDir(dir) {
 		dir = home + "/.ssh"
 	}
-	if st, err := os.Stat(dir); err != nil || !st.IsDir() || unix.Faccessat(unix.AT_FDCWD, dir, unix.W_OK, unix.AT_EACCESS) != nil {
-		dir = home + "/.ssh"
+	// The directory is made private only when this search created it; one
+	// that was there keeps its mode, and one that others may write is no
+	// place for the socket: the agent then picks its own (SYS-22).
+	if _, err := os.Lstat(dir); os.IsNotExist(err) {
+		if os.MkdirAll(dir, 0o700) == nil {
+			_ = os.Chmod(dir, 0o700)
+		}
 	}
-	// `mkdir -p "$dir" && chmod 700 "$dir"`, also on a directory that was
-	// there (SYS-22).
-	if os.MkdirAll(dir, 0o777) == nil {
-		_ = os.Chmod(dir, 0o700)
+	if !privateDir(dir) {
+		m.newAgent(s, "-s")
+		return
 	}
 	sock := dir + "/" + agentSock
 
@@ -58,8 +62,14 @@ func (m *Module) startAgent(s *session) {
 		_ = os.Remove(sock)
 	}
 
-	out := m.agentOutput(s, "-a", sock, "-s")
-	if out == "" {
+	m.newAgent(s, "-a", sock, "-s")
+}
+
+// newAgent starts `ssh-agent ARGS`, else `ssh-agent -s`, and sets the
+// variables of the first one that printed them.
+func (m *Module) newAgent(s *session, args ...string) {
+	out := m.agentOutput(s, args...)
+	if out == "" && len(args) > 1 {
 		out = m.agentOutput(s, "-s")
 	}
 	if out == "" {
@@ -68,6 +78,16 @@ func (m *Module) startAgent(s *session) {
 	for _, a := range agentAssignments(out) {
 		s.set(a[0], a[1])
 	}
+}
+
+// privateDir reports whether dir is a directory the user may write and
+// neither group nor others may (the sticky /tmp-like case included).
+func privateDir(dir string) bool {
+	st, err := os.Stat(dir)
+	if err != nil || !st.IsDir() || st.Mode().Perm()&0o022 != 0 {
+		return false
+	}
+	return unix.Faccessat(unix.AT_FDCWD, dir, unix.W_OK, unix.AT_EACCESS) == nil
 }
 
 // agentOutput is `$(ssh-agent ARGS 2>/dev/null | sed '/^echo Agent pid /d')`.
