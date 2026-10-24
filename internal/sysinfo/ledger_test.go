@@ -4,6 +4,7 @@ package sysinfo
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -43,16 +44,18 @@ func TestLedger_SYS15(t *testing.T) {
 	}
 }
 
-// LEDGER SYS-16 (reproduced): systemd-detect-virt prints none and fails on
-// bare metal, and `|| echo none` adds a second none.
+// 3.0: SYS-16 fixed: systemd-detect-virt's own none (exit 1 on bare
+// metal) is the one value; none also when it prints nothing.
 func TestLedger_SYS16(t *testing.T) {
 	fx := newFixture(t)
 	fx.env["MOCK_VIRT"] = "none"
 	fx.env["MOCK_VIRT_RC"] = "1"
 	r := fx.call(t, nil, "identity", "--llm")
-	require.Contains(t, r.out, "\nVirtualization=none\nnone\n")
+	require.Contains(t, r.out, "\nVirtualization=none\n")
+	require.NotContains(t, r.out, "\nnone\n")
 	r = fx.call(t, nil, "identity")
-	require.Contains(t, r.out, "  Virtualization:          none\nnone\n")
+	require.Contains(t, r.out, "  Virtualization:          none\n")
+	require.NotContains(t, r.out, "\nnone\n")
 
 	// A tool that prints nothing and fails gives the one none.
 	fx.stub(t, "systemd-detect-virt", "exit 1")
@@ -121,9 +124,9 @@ func TestLedger_SYS18(t *testing.T) {
 	}
 }
 
-// LEDGER SYS-19 (reproduced): the user expands the /etc/ssl/private
-// globs; unmatched, they reach the root-side ls as literal words, and the
-// names it prints are listed.
+// 3.0: SYS-19 fixed: /etc/ssl/private is listed as root with one find
+// (a normal user cannot expand a glob in it), the names it prints sorted
+// under their own heading.
 func TestLedger_SYS19(t *testing.T) {
 	fx := newFixture(t, tree{"etc/ssl/private/": ""})
 	fx.uid = 1000
@@ -132,21 +135,28 @@ func TestLedger_SYS19(t *testing.T) {
 	fx.stub(t, "sudo", `printf 'sudo %s\n' "$*" >>"$SUDO_LOG"
 case "$1" in
 -n) exit 0 ;;
-ls) [ "$2" = "$SUDO_ROOT/etc/ssl/private/*.pem" ] && printf '%s\n' "$SUDO_ROOT/etc/ssl/private/z.key" "$SUDO_ROOT/etc/ssl/private/k.pem" ; exit 2 ;;
+find) [ "$2" = "$SUDO_ROOT/etc/ssl/private" ] && printf '%s\n' "$SUDO_ROOT/etc/ssl/private/z.key" "$SUDO_ROOT/etc/ssl/private/k.pem"; exit 0 ;;
 esac
 exec "$@"`)
 	r := fx.call(t, nil, "system", "--llm")
-	// 3.0: SYS-17 fixed: the names have their own sub-header.
 	require.Contains(t, r.out, "cron.monthly:\n--- SSL private keys\n/etc/ssl/private/k.pem\n/etc/ssl/private/z.key\n--- Profile\n")
-	require.Contains(t, fx.sudo(t), "\nsudo ls R/etc/ssl/private/*.pem R/etc/ssl/private/*.key R/etc/ssl/private/*.crt\n")
-	require.Equal(t, 1, strings.Count(fx.sudo(t), "sudo ls "))
+	require.Contains(t, fx.sudo(t), "\nsudo find R/etc/ssl/private -maxdepth 1 -name *.pem -o -name *.key -o -name *.crt\n")
+	require.Equal(t, 1, strings.Count(fx.sudo(t), "/etc/ssl/private"))
+	require.NotContains(t, fx.sudo(t), "sudo ls R/etc/ssl")
 
-	// A match the user can see is passed expanded.
-	fx = newFixture(t, tree{"etc/ssl/private/a.key": ""})
-	fx.uid = 1000
-	fx.env["SUDO_CACHED"] = "0"
-	fx.call(t, nil, "system", "--llm")
-	require.Contains(t, fx.sudo(t), "\nsudo ls R/etc/ssl/private/*.pem R/etc/ssl/private/a.key R/etc/ssl/private/*.crt\n")
+	// Root reads the directory itself, sorted, the first ten.
+	tr := tree{}
+	for i := 0; i < 12; i++ {
+		tr[fmt.Sprintf("etc/ssl/private/k%02d.key", 11-i)] = ""
+	}
+	tr["etc/ssl/private/notes.txt"] = ""
+	fx = newFixture(t, tr)
+	r = fx.call(t, nil, "system", "--llm")
+	want := "--- SSL private keys\n"
+	for i := 0; i < 10; i++ {
+		want += fmt.Sprintf("/etc/ssl/private/k%02d.key\n", i)
+	}
+	require.Contains(t, r.out, want+"--- Profile\n")
 }
 
 // LEDGER SYS-20 (reproduced): the last section wins; help only as the

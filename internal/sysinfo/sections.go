@@ -46,12 +46,14 @@ func (s *Session) identity(o *out) {
 	o.kv("Uptime", runner.CommandSubst(up))
 
 	if s.has("systemd-detect-virt") {
-		// `|| echo none` after the tool's own `none` (SYS-16).
-		out, rc := s.tool("systemd-detect-virt")
-		if rc != 0 {
-			out = append(append([]byte(nil), out...), "none\n"...)
+		// The tool's own answer, trimmed; none only when it printed
+		// nothing (SYS-16: it prints none and exits 1 on bare metal).
+		out, _ := s.tool("systemd-detect-virt")
+		virt := strings.TrimSpace(string(out))
+		if virt == "" {
+			virt = "none"
 		}
-		o.kv("Virtualization", runner.CommandSubst(out))
+		o.kv("Virtualization", virt)
 	}
 
 	// cat /proc/1/environ | tr '\0' '\n' | grep -iE ... | head -1
@@ -600,14 +602,10 @@ func (s *Session) system(o *out) {
 	if f.isDir("/etc/ssl/virtualmin") {
 		o.kv("Virtualmin SSL", strconv.Itoa(len(f.ls("/etc/ssl/virtualmin")))+" domains")
 	}
-	// The globs are the user's: unreadable for a normal user, so the
-	// literal words reach sudo ls (SYS-19).
-	var words []string
-	for _, pat := range []string{"/etc/ssl/private/*.pem", "/etc/ssl/private/*.key", "/etc/ssl/private/*.crt"} {
-		words = append(words, f.words(pat)...)
-	}
+	// The directory is listed as root (0710 root:ssl-cert: a normal user
+	// cannot expand a glob in it), sorted, the first ten (SYS-19).
 	o.subhead("SSL private keys")
-	o.raw(head(s.sudoLsPaths(words...), 10))
+	o.raw(head(s.sudoFind("/etc/ssl/private", query{maxDepth: 1, names: []string{"*.pem", "*.key", "*.crt"}}), 10))
 
 	o.subhead("Kernel tuning")
 	if f.isDir("/etc/sysctl.d") {

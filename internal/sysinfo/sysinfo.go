@@ -13,6 +13,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/help"
@@ -297,6 +298,9 @@ func (s *Session) sudoFind(root string, q query) []string {
 		return s.f.find(root, q)
 	}
 	args := []string{"find", s.m.sys.Path(root)}
+	if q.maxDepth > 0 {
+		args = append(args, "-maxdepth", strconv.Itoa(q.maxDepth))
+	}
 	if q.typ != 0 {
 		args = append(args, "-type", string(q.typ))
 	}
@@ -322,23 +326,6 @@ func (s *Session) sudoLs(dir string) []string {
 	}
 	out, _ := s.tool("sudo", "ls", s.m.sys.Path(dir)+"/")
 	return sorted(lines(out))
-}
-
-// sudoLsPaths is `__sysinfo_sudo ls WORD...` for words the user expanded.
-func (s *Session) sudoLsPaths(words ...string) []string {
-	if !s.elevated() {
-		return s.f.lsPaths(words...)
-	}
-	args := []string{"ls"}
-	for _, w := range words {
-		args = append(args, s.m.sys.Path(w))
-	}
-	out, _ := s.tool("sudo", args...)
-	var ps []string
-	for _, l := range lines(out) {
-		ps = append(ps, s.sysPath(l))
-	}
-	return sorted(ps)
 }
 
 // sysPath maps a host path a root-side tool printed back to its system
