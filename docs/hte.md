@@ -37,6 +37,14 @@ required flag fails with `missing_value`, and a destructive step without
 | `cert show\|renew --domain D` | The site's self-signed certificate |
 | `hosts list\|apply\|check\|windows` | The managed block in `/etc/hosts`; `windows` prints the lines for the Windows hosts file under WSL |
 
+`--autostart` picks how the stack comes back after a reboot. The default
+`auto` is a systemd user unit where systemd runs, a LaunchAgent on macOS,
+and nothing elsewhere. Where there is no systemd (containers, WSL without
+systemd), `--autostart shell` makes every interactive shell that loads Gash
+start the stack in the background when it is down. That start prints
+nothing and never slows or fails the shell; when it fails, the reason is in
+`~/.local/state/gash/hte/logs/autostart.log`.
+
 `site create` needs `--domain` and `--docroot`. A relative document root is
 resolved against the current directory. When you leave a flag out, the site
 gets HTTPS on, forced HTTPS off, HTTP/2 on, the `dev` profile, a `www.` alias,

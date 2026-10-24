@@ -1,0 +1,13 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# The Fedora image of the gash hte end-to-end test (run.sh fedora): the
+# distro httpd (mod_ssl and mod_http2 are packages of their own) and
+# php-fpm, PHP-FPM 8.3 from the Remi repository side by side
+# (/opt/remi/php83, /etc/opt/remi/php83), openssl and sudo, nothing of
+# gash (run.sh mounts the binaries). As a fresh install leaves them,
+# nothing is enabled or started.
+ARG BASE=mirror.gcr.io/library/fedora:44
+FROM ${BASE}
+RUN dnf -y install "https://rpms.remirepo.net/fedora/remi-release-$(rpm -E %fedora).rpm" \
+    && dnf -y install --setopt=install_weak_deps=False httpd mod_ssl mod_http2 php-fpm php83-php-fpm \
+        openssl sudo curl procps-ng iproute shadow-utils util-linux-core findutils diffutils \
+    && dnf clean all

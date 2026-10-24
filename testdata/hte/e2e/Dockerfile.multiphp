@@ -4,7 +4,8 @@
 # official php:X.Y-fpm images, copied side by side into /opt/php/X.Y
 # (bundle.sh) and exposed in the Debian layout (multiphp.sh). The
 # ondrej/sury repositories are not reachable from the cloud session
-# (PORT/STATE.md); CI uses them.
+# (docs/port/STATE.md), so CI builds the same image (Ubuntu only: the
+# distro 8.3 completes the set).
 ARG BASE=gash-hte-e2e-base:ubuntu-24.04
 FROM mirror.gcr.io/library/php:7.4-fpm AS php74
 COPY bundle.sh /bundle.sh

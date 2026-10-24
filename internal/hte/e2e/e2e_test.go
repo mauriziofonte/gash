@@ -20,8 +20,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -38,12 +40,36 @@ func inContainer() bool {
 	return err == nil
 }
 
+// macMarker is the file testdata/hte/e2e/macos.sh creates, as root, on a
+// disposable macOS CI runner for the length of its run (sudo resets the
+// environment, so the root step could not see a variable).
+const macMarker = "/var/run/gash-hte-e2e-ci"
+
+// ownedByRoot reports a file of uid 0.
+func ownedByRoot(fi os.FileInfo) bool {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && st.Uid == 0
+}
+
+// sandboxed reports a system the E2E test may change: the container of
+// run.sh, or a macOS CI runner that macos.sh marked.
+func sandboxed() bool {
+	if inContainer() {
+		return true
+	}
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	fi, err := os.Lstat(macMarker)
+	return err == nil && fi.Mode().IsRegular() && ownedByRoot(fi)
+}
+
 // TestMain is also the root step: sudo runs this binary as
 // `gash-e2e hte __root`, as it runs gash; and the systemd user unit runs
 // it as `gash-e2e hte __unit start|stop`.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 4 && os.Args[1] == "hte" && os.Args[2] == "__unit" {
-		if !inContainer() {
+		if !sandboxed() {
 			fmt.Fprintln(os.Stderr, "the E2E unit runs only inside the E2E container")
 			os.Exit(2)
 		}
@@ -65,8 +91,8 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	if len(os.Args) == 3 && os.Args[1] == "hte" && os.Args[2] == "__root" {
-		if !inContainer() {
-			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container")
+		if !sandboxed() {
+			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container or on a marked macOS CI runner")
 			os.Exit(2)
 		}
 		if err := rootops.Serve(context.Background(), os.Stdin, os.Stdout, rootops.ProcessEnv()); err != nil {
@@ -77,6 +103,16 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
+
+// distroPHP is the PHP-FPM version of the distro packages in a Debian or
+// Ubuntu image, which setup.sh reads from the php-fpm package: 8.3 on
+// Ubuntu 24.04, 8.2 on Debian 12. The hte-cli tree runs its 8.3 sites on it.
+var distroPHP = func() string {
+	if v := os.Getenv("GASH_HTE_E2E_PHP"); v != "" {
+		return v
+	}
+	return "8.3"
+}()
 
 const (
 	defaultVhost = "/etc/apache2/sites-available/000-default.conf"
@@ -290,7 +326,7 @@ func TestE2E(t *testing.T) {
 				t.Errorf("%s not archived", p)
 			}
 		}
-		for _, p := range []string{"/etc/php/8.3/fpm/pool.d/http.test.conf", "/etc/php/8.3/fpm/pool.d/https.test.conf"} {
+		for _, p := range []string{"/etc/php/" + distroPHP + "/fpm/pool.d/http.test.conf", "/etc/php/" + distroPHP + "/fpm/pool.d/https.test.conf"} {
 			if exists(p) {
 				t.Errorf("%s not archived", p)
 			}
@@ -445,7 +481,7 @@ func TestE2E(t *testing.T) {
 			t.Errorf("the document root gained files: %v", after)
 		}
 		// HTE-18: the masters and workers are the user's.
-		for _, name := range []string{"apache2", "php-fpm8.3"} {
+		for _, name := range []string{"apache2", "php-fpm" + distroPHP} {
 			if exec.Command("pgrep", "-u", "dev", "-x", name).Run() != nil {
 				t.Errorf("no %s process of dev", name)
 			}
@@ -521,7 +557,7 @@ func TestE2E(t *testing.T) {
 		if _, err := e.PHPIniSet(ctx, appDomain, "memory_limit", "321M"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.PHPGlobalSet(ctx, "8.3", "max_input_vars", "1234"); err != nil {
+		if _, err := e.PHPGlobalSet(ctx, distroPHP, "max_input_vars", "1234"); err != nil {
 			t.Fatal(err)
 		}
 		if a := mustGet(t, "http", appDomain, 80); a.body != "app:321M:1234" {
@@ -659,7 +695,7 @@ func TestE2E(t *testing.T) {
 			t.Error("port 80 answers after stop")
 		}
 		// HTE-32: stop leaves no process of the stack.
-		for _, name := range []string{"apache2", "php-fpm8.3"} {
+		for _, name := range []string{"apache2", "php-fpm" + distroPHP} {
 			if out, err := exec.Command("pgrep", "-u", "dev", "-a", "-x", name).Output(); err == nil {
 				t.Errorf("%s processes after stop: %s", name, out)
 			}
@@ -1057,7 +1093,7 @@ func TestE2ESystemd(t *testing.T) {
 		if !res.Switched || res.Staging == "" || len(res.Imported) != 3 || unitState() != "active" {
 			t.Fatalf("switched %v, staging %q, imported %v, unit %s", res.Switched, res.Staging, res.Imported, unitState())
 		}
-		owned(t, "httpd.pid", "php-fpm-8.3.pid")
+		owned(t, "httpd.pid", "php-fpm-"+distroPHP+".pid")
 		if a := mustGet(t, "http", "http.test", 8080); a.status != 200 || !strings.Contains(a.body, "fpm-fcgi") {
 			t.Errorf("http.test on 8080: %+v", a)
 		}

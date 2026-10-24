@@ -44,7 +44,7 @@ type Inventory struct {
 	Hosts      []HostsLine
 	// RunUser is APACHE_RUN_USER of envvars, "" when unset or absent.
 	RunUser    string
-	Snippets   []Snippet // enabled conf-enabled snippets
+	Snippets   []Snippet // enabled conf-enabled snippets, and loaded files of a vhost directory with no <VirtualHost>
 	Indexes    []int     // NNN- prefixes of the files of the first vhost directory
 	Unreadable []Problem
 }
@@ -115,6 +115,17 @@ func (inv *Inventory) scanVhosts(sr platform.Sysroot) {
 			return
 		}
 		v := Classify(p, data)
+		if !v.Marked() && v.Conf != nil && len(v.Conf.Vhosts) == 0 {
+			// Server configuration with no <VirtualHost>: Fedora's
+			// conf.d holds welcome.conf, autoindex.conf, userdir.conf and
+			// the php package's php.conf next to the vhosts, all loaded.
+			// They serve no site, so they are snippets, as Debian's
+			// conf-enabled files are: never a vhost that blocks install.
+			if enabled {
+				inv.Snippets = append(inv.Snippets, Snippet{Path: p})
+			}
+			return
+		}
 		v.Enabled = enabled
 		inv.Vhosts = append(inv.Vhosts, v)
 	}

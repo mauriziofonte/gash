@@ -702,3 +702,58 @@ func TestReinstallRecordsNothing(t *testing.T) {
 		c.Close()
 	}
 }
+
+// TestUnitStopWithoutServiceManager: a Fedora or Arch system without
+// systemd running (a container) ships httpd.service but no init script
+// and no `service` command. Its unit is stopped and disabled as far as
+// anything can tell: unit_stop records nothing and runs nothing, where it
+// failed on the missing `service` before.
+func TestUnitStopWithoutServiceManager(t *testing.T) {
+	f := newFixture(t)
+	if err := os.Remove(filepath.Join(f.root, "usr/sbin/service")); err != nil {
+		t.Fatal(err)
+	}
+	f.write("/usr/lib/systemd/system/httpd.service", "[Unit]\n", 0o644)
+	env := f.env()
+	env.OS = platform.OS{GOOS: "linux", ID: "fedora", VersionID: "44", Family: platform.FamilyFedora}
+	c := session(t, env, []Op{{ID: 1, Op: OpUnitStop, Name: "httpd"}})
+	defer c.Close()
+	resp, err := c.Run(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Changes) != 0 || !slices.Contains(resp.Warnings, "httpd is already stopped and disabled") {
+		t.Errorf("unit_stop: %+v", resp)
+	}
+	if len(f.lines) != 0 {
+		t.Errorf("commands run: %q", f.lines)
+	}
+}
+
+// TestSudoersIncludedir: the drop-in directory line of /etc/sudoers in its
+// Debian/Arch (@includedir), Fedora (#includedir) and macOS (#includedir
+// through /private, the target of the /etc symlink) spellings. The macOS
+// one was refused, so install failed on every Mac.
+func TestSudoersIncludedir(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		ok   bool
+	}{
+		{"@includedir /etc/sudoers.d", true},
+		{"#includedir /etc/sudoers.d", true},
+		{"## (the '#' here does not indicate a comment)\n#includedir /private/etc/sudoers.d", true},
+		{"@includedir /etc/sudoers.d/", true},
+		{"# includedir /etc/sudoers.d", false},
+		{"#includedir /private/etc/sudoers.d.old", false},
+		{"#includedir /tmp/etc/sudoers.d", false},
+	} {
+		f := newFixture(t)
+		f.write("/etc/sudoers", "root ALL=(ALL) ALL\n"+tc.line+"\n", 0o440)
+		c := session(t, f.env(), []Op{{ID: 1, Op: OpWriteSudoers}})
+		_, err := c.Run(1)
+		c.Close()
+		if (err == nil) != tc.ok {
+			t.Errorf("%q: %v, want accepted %v", tc.line, err, tc.ok)
+		}
+	}
+}

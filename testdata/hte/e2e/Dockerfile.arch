@@ -1,0 +1,10 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# The Arch image of the gash hte end-to-end test (run.sh arch): the
+# distro apache (httpd), php-fpm and php-legacy-fpm side by side, openssl
+# and sudo, nothing of gash (run.sh mounts the binaries). As a fresh
+# install leaves them, nothing is enabled or started.
+ARG BASE=mirror.gcr.io/library/archlinux:latest
+FROM ${BASE}
+RUN pacman -Syu --noconfirm --needed apache php php-fpm php-legacy php-legacy-fpm \
+        openssl sudo curl procps-ng iproute2 shadow util-linux findutils diffutils \
+    && rm -rf /var/cache/pacman/pkg/*
