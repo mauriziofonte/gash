@@ -2036,11 +2036,14 @@ var functions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:  "Read config files (JSON/YAML, excludes .env)",
+			Short:  "Read a file that is not secret (YAML as JSON)",
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
 				"  llm_config FILE [--max-bytes N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_config package.json\n" +
@@ -2048,7 +2051,8 @@ var functions = []Function{
 				"  llm_config big.json --max-bytes 5000000\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Refuses to read .env files and other secret files for security.\n" +
+				"  Reads any file that is not secret: .env files, keys and the other\n" +
+				"  secret files are refused.\n" +
 				"  YAML comes out as JSON, converted by Gash itself (no yq needed), or\n" +
 				"  as the raw text when it does not parse. Files over --max-bytes\n" +
 				"  (default 1 MiB) fail with file_too_large.",
@@ -2074,7 +2078,13 @@ var functions = []Function{
 			SeeAlso: "llm_db_query",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_explain \"QUERY\" [-c CONNECTION] [-f SQLITE_FILE] [--analyze]\n" +
+				"  llm_db_explain \"QUERY\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
+				"  --analyze              Run the query to measure it (still read-only)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_explain \"SELECT * FROM users WHERE email LIKE '%@example.com'\" -c default\n" +
@@ -2191,7 +2201,12 @@ var functions = []Function{
 			SeeAlso: "llm_db_tables llm_db_query",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_schema TABLE [-c CONNECTION] [-f SQLITE_FILE]\n" +
+				"  llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_schema users -c default\n" +
@@ -2221,7 +2236,12 @@ var functions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]\n" +
+				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_tables -c default\n" +
@@ -2252,6 +2272,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_deps [PATH] [--dev]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --dev                  Split the result into prod and dev\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_deps\n" +
@@ -2314,7 +2337,11 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_env [--filter PATTERN]\n" +
+				"  llm_env [--filter REGEX | REGEX]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -f, --filter REGEX     Only names that match REGEX (Go RE2 syntax, e.g.\n" +
+				"                         '^PATH$' or 'NODE|NPM'); a bare REGEX works too\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_env\n" +
@@ -2397,6 +2424,12 @@ var functions = []Function{
 				"USAGE\n" +
 				"  llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]\n" +
 				"\n" +
+				"OPTIONS\n" +
+				"  --type f|d             Files (default) or directories\n" +
+				"  --contains REGEX       Keep the files whose content matches REGEX\n" +
+				"                         (ripgrep's regex syntax); files only\n" +
+				"  -n, --limit N          Paths to print (default 100)\n" +
+				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all PHP files\n" +
 				"  llm_find \"*.php\"\n" +
@@ -2437,6 +2470,9 @@ var functions = []Function{
 				"USAGE\n" +
 				"  llm_git_diff [--staged] [PATH]\n" +
 				"\n" +
+				"OPTIONS\n" +
+				"  --staged               Staged changes (also --cached)\n" +
+				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_diff\n" +
 				"  llm_git_diff --staged",
@@ -2462,7 +2498,10 @@ var functions = []Function{
 			SeeAlso: "llm_git_status llm_git_diff",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_log [--limit N] [PATH]\n" +
+				"  llm_git_log [-n N] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -n, --limit N          Commits to list (default 10)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_log\n" +
@@ -2493,7 +2532,15 @@ var functions = []Function{
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_status\n" +
-				"  # {\"branch\":\"main\",\"ahead\":0,\"behind\":0,\"staged\":[],\"modified\":[\"README.md\"],\"untracked\":[],\"conflicted\":[]}",
+				"  # {\n" +
+				"  #   \"branch\": \"main\",\n" +
+				"  #   \"ahead\": 0,\n" +
+				"  #   \"behind\": 0,\n" +
+				"  #   \"staged\": [],\n" +
+				"  #   \"modified\": [\"README.md\"],\n" +
+				"  #   \"untracked\": [],\n" +
+				"  #   \"conflicted\": []\n" +
+				"  # }",
 		},
 		Fallback:  &Usage{Program: "llm_git_status", Usage: "llm_git_status [PATH]", Description: "Compact git status (JSON)"},
 		ShellVars: []string{"HOME"},
@@ -2515,7 +2562,12 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N]\n" +
+				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
+				"  -C, --context N        Lines of context around each match (default 0)\n" +
+				"  -n, --limit N          Lines to print (default 100)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find TODO comments in PHP files\n" +
@@ -2560,6 +2612,9 @@ var functions = []Function{
 				"USAGE\n" +
 				"  llm_ports [--listen]\n" +
 				"\n" +
+				"OPTIONS\n" +
+				"  -l, --listen           Listening sockets only\n" +
+				"\n" +
 				"EXAMPLES\n" +
 				"  llm_ports\n" +
 				"  llm_ports --listen",
@@ -2584,7 +2639,11 @@ var functions = []Function{
 			SeeAlso: "llm_ports",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_procs [--name NAME] [--port PORT]\n" +
+				"  llm_procs [--name NAME | --port PORT]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --name NAME            Processes whose command line contains NAME\n" +
+				"  --port PORT            Processes with a socket on PORT\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
@@ -2641,7 +2700,13 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_tree [--text] [--depth N] [PATH]\n" +
+				"  llm_tree [--text] [--depth N] [--stats] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --text                 Indented text list, 200 lines max (default depth 3)\n" +
+				"  --depth N              Levels below PATH, 1 or more (default 1; also\n" +
+				"                         --max-depth)\n" +
+				"  --stats                Add sizes and child counts to the JSON tree\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # JSON output (default)\n" +
