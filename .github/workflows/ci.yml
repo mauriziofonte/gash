@@ -235,3 +235,30 @@ jobs:
       # same bytes.
       - name: goreleaser and releasesums build the same binaries
         run: go run ./internal/tools/releasesums -compare dist
+
+  coverage-gates:
+    name: Spec-to-txtar coverage gates
+    # testing.md 4 and 8: every public 2.x assertion (PARITY run/run*/split
+    # rows) is covered by a txtar case, a Go unit row of
+    # tests/parity/bash-only.tsv or a LEDGER forced divergence
+    # (testdata/script/README.md has the declaration syntax).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: covermap (every PARITY row covered, every declaration valid)
+        run: |
+          summary="$(go run ./internal/tools/covermap -summary)"
+          echo "$summary"
+          case "$summary" in
+            *" 0 uncovered, 0 errors") ;;
+            *) echo "covermap: uncovered rows or invalid declarations (go run ./internal/tools/covermap -v)"; exit 1 ;;
+          esac
+
+      - name: bashonlymap (tests/parity/bash-only.tsv matches PARITY)
+        run: go run ./internal/tools/bashonlymap -check
