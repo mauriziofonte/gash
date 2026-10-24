@@ -88,7 +88,6 @@ var codeTable = []Code{
 	{"path_unreadable", Retry, "paths", Origin2x},
 	{"file_not_found", Retry, "paths", Origin2x},
 	{"file_too_large", Retry, "paths", Origin2x},
-	{"invalid_path", Retry, "paths", Origin3x},
 	// llm_exec.
 	{"dangerous_command_blocked", Fatal, "llm_exec", Origin2x},
 	{"option_not_allowed", Fatal, "llm_exec", Origin2x},
@@ -137,6 +136,7 @@ var codeTable = []Code{
 	{"internal_error", Stop, "binary", Origin3x},
 	{"invalid_regex", Retry, "arguments", Origin3x},
 	{"invalid_manifest", Retry, "context", Origin3x},
+	{"invalid_path", Retry, "paths", Origin3x},
 	{"hte_not_installed", Stop, "hte", Origin3x},
 	{"site_not_found", Retry, "hte", Origin3x},
 	{"site_exists", Retry, "hte", Origin3x},
