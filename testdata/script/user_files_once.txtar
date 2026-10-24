@@ -13,13 +13,13 @@ env GASH_BANNER=0
 env GASH_SH_PATH=$GASH_SH
 
 cp skel.bashrc home/.bashrc
-exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll]}"; wc -l <~/count'
+exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll]}"; echo $(($(wc -l <~/count)))'
 stdout '^ll=ls -l --mine$'
 stdout '^1$'
 
 rm home/count
 cp plain.bashrc home/.bashrc
-exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll]}"; wc -l <~/count'
+exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll]}"; echo $(($(wc -l <~/count)))'
 stdout '^ll=ls -l --mine$'
 stdout '^1$'
 
@@ -45,7 +45,7 @@ for l in '. ~/.bash_aliases' 'if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases;
     : >"$HOME/by"
     (
         source "$HOME/rc" >/dev/null 2>&1
-        echo "$(wc -l <"$HOME/count") $(<"$HOME/by") $l"
+        echo "$(($(wc -l <"$HOME/count"))) $(<"$HOME/by") $l"
     )
 done
 echo "rematch=${BASH_REMATCH[1]}"
