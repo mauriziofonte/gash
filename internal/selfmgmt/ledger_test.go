@@ -266,3 +266,24 @@ func TestLedger_SELF06(t *testing.T) {
 	require.Empty(t, out)
 	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color])\n", errOut)
 }
+
+// LEDGER SELF-10: tagSigned takes a tag object as signed only when, after
+// the header block, a BEGIN marker line is followed by the matching END
+// line at the end (3.0: SELF-10 fixed; 2.x matched the marker as text).
+func TestLedger_SELF10(t *testing.T) {
+	head := "object 3c98a1da386c6a10a42fde470165ebf153867e47\ntype commit\ntag v1.1\ntagger T <t@e> 1700000000 +0000\n\n"
+	pgp := "-----BEGIN PGP SIGNATURE-----\n\niQ\n-----END PGP SIGNATURE-----\n"
+	ssh := "-----BEGIN SSH SIGNATURE-----\nU1NI\n-----END SSH SIGNATURE-----\n"
+	for obj, want := range map[string]bool{
+		head + "rel\n" + pgp: true,
+		head + "rel\n" + ssh: true,
+		head + pgp:           true,
+		head + "quoting -----BEGIN PGP SIGNATURE----- in text\n":                      false,
+		head + "see\n-----BEGIN PGP SIGNATURE-----\nno end\n":                         false,
+		head + "rel\n-----BEGIN PGP SIGNATURE-----\nx\n-----END SSH SIGNATURE-----\n": false,
+		"-----BEGIN PGP SIGNATURE-----\n-----END PGP SIGNATURE-----\n":                false, // no header block
+		"": false,
+	} {
+		require.Equal(t, want, tagSigned([]byte(obj)), "%q", obj)
+	}
+}

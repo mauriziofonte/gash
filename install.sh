@@ -150,12 +150,30 @@
       tail -n 1
   }
 
+  # Whether TAG is an annotated tag whose object carries a signature: after
+  # the header block a line equal to the BEGIN marker and, as the last line,
+  # the matching END marker (SELF-10). A lightweight tag (cat-file tag
+  # fails) and a message that only quotes the marker are not signed.
+  gashinst_tag_signed() {
+    local obj kind
+    obj="$(git cat-file tag "refs/tags/$1" 2>/dev/null)" || return 1
+    [[ "$obj" == *$'\n\n'* ]] || return 1
+    obj=$'\n'"${obj#*$'\n\n'}"
+    for kind in PGP SSH; do
+      if [[ "$obj" == *$'\n'"-----BEGIN $kind SIGNATURE-----"$'\n'* &&
+        "$obj" == *$'\n'"-----END $kind SIGNATURE-----" ]]; then
+        return 0
+      fi
+    done
+    return 1
+  }
+
   # Check the tag signature when there is one. GASH_REQUIRE_SIGNED=1 turns
   # a missing or unverifiable signature into a refusal: status 1, the caller
   # stops.
   gashinst_verify_tag() {
     local TAG="$1"
-    if git cat-file -p "refs/tags/$TAG" 2>/dev/null | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----'; then
+    if gashinst_tag_signed "$TAG"; then
       if git verify-tag "$TAG" >/dev/null 2>&1; then
         gashinst_success "Signature of $TAG verified."
         return 0
@@ -381,8 +399,8 @@
     unset -f gashinst_has gashinst_echo gashinst_error gashinst_info gashinst_success \
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
-      gashinst_verify_tag gashinst_tmp_clone_cleanup gashinst_abort gashinst_install_from_git \
-      gashinst_fetch_binary gashinst_do_install gashinst_reset
+      gashinst_verify_tag gashinst_tag_signed gashinst_tmp_clone_cleanup gashinst_abort \
+      gashinst_install_from_git gashinst_fetch_binary gashinst_do_install gashinst_reset
   }
 
   # Main script execution starts here

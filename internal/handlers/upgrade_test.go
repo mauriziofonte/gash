@@ -91,6 +91,18 @@ var upgradeCases = []struct {
 // checkout newer than the latest release is not moved back (SELF-01).
 var upgradeSELF01 = map[string]bool{"untagged head": true, "rc install": true}
 
+// upgradeSELF10 names the cases where a tag that only looks signed is now
+// unsigned (SELF-10), with the line 3.0 prints and its status; the
+// resulting checkout is still the one 2.x left.
+var upgradeSELF10 = map[string]struct {
+	line string
+	rc   int
+}{
+	"marker in message":            {"Upgraded Gash from v1.0 to v1.1.", 0},
+	"marker required":              {"v1.1 is not signed.", 1},
+	"lightweight on signed commit": {"v1.1 is not signed.", 1},
+}
+
 // gash_upgrade does what 2.x does on the same fixtures: the same messages
 // (git's own included), status and resulting checkout.
 func TestUpgradeMatches2x(t *testing.T) {
@@ -161,7 +173,13 @@ func TestUpgradeMatches2x(t *testing.T) {
 						n++
 						continue
 					}
-					if upgradeSELF01[tc.name] {
+					if want, ok := upgradeSELF10[tc.name]; ok {
+						// 3.0: SELF-10 fixed: no "signed, but could not be
+						// verified" for a tag without a signature block.
+						require.Contains(t, o, want.line, tc.name)
+						require.NotContains(t, o, "could not be verified", tc.name)
+						require.Equal(t, want.rc, rc, tc.name)
+					} else if upgradeSELF01[tc.name] {
 						// 3.0: SELF-01 fixed: a checkout newer than the latest
 						// release stays where it is (2.x moved it back).
 						require.Contains(t, o, "is newer than the latest release", tc.name)
@@ -249,17 +267,23 @@ func TestLedger_SELF01(t *testing.T) {
 	}
 }
 
-// LEDGER SELF-10, reproduced in rc.A: a signature is detected by a text
-// match on the object the tag names, so an annotated tag whose message
-// quotes the marker counts as signed (and fails to verify), and so does a
-// lightweight tag on a signed commit (the commit's gpgsig header matches;
-// verify-tag refuses a commit).
-func TestLedger_SELF10_2x(t *testing.T) {
+// LEDGER SELF-10: a tag is signed only when it is an annotated tag whose
+// object ends with a signature block, so an annotated tag whose message
+// quotes the marker and a lightweight tag on a signed commit are "not
+// signed" (3.0: SELF-10 fixed; rc.A matched the marker as text and said
+// "signed, but the signature could not be verified").
+func TestLedger_SELF10(t *testing.T) {
 	_, env := upgradeFixture(t, upgradeTwo+`git -C $D/o tag -a v1.1 -m 'quoting -----BEGIN PGP SIGNATURE----- in text'`)
 	out, rc := runMerged(t, "gash_upgrade", env, false)
 	require.Equal(t, 0, rc)
-	require.Contains(t, out, "Warning: v1.1 is signed, but the signature could not be verified (is the key in your keyring?).\n")
+	require.NotContains(t, out, "could not be verified")
 	require.Contains(t, out, "OK: Upgraded Gash from v1.0 to v1.1.\n")
+
+	_, env = upgradeFixture(t, upgradeTwo+`git -C $D/o tag -a v1.1 -m "$(printf 'see\n-----BEGIN SSH SIGNATURE-----\nno end')"`)
+	env["GASH_REQUIRE_SIGNED"] = "1"
+	out, rc = runMerged(t, "gash_upgrade", env, false)
+	require.Equal(t, 1, rc)
+	require.Contains(t, out, "Warning: v1.1 is not signed.\nError: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
 
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("no gpg")
@@ -270,6 +294,14 @@ func TestLedger_SELF10_2x(t *testing.T) {
 	env["GASH_REQUIRE_SIGNED"] = "1"
 	out, rc = runMerged(t, "gash_upgrade", env, false)
 	require.Equal(t, 1, rc)
-	require.Contains(t, out, "Warning: v1.1 is signed, but the signature could not be verified (is the key in your keyring?).\n"+
+	require.Contains(t, out, "Warning: v1.1 is not signed.\n"+
 		"Error: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
+
+	// A signed tag with the key still verifies.
+	d, env = upgradeFixture(t, upgradeTwo+upgradeGPG+"git -C $D/o -c user.signingkey=t@t tag -s v1.1 -m rel")
+	t.Cleanup(func() { _ = exec.Command("gpgconf", "--homedir", d+"/gnupg", "--kill", "gpg-agent").Run() })
+	env["GASH_REQUIRE_SIGNED"] = "1"
+	out, rc = runMerged(t, "gash_upgrade", env, false)
+	require.Equal(t, 0, rc, out)
+	require.Contains(t, out, "OK: Signature of v1.1 verified.\n")
 }

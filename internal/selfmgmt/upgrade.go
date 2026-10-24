@@ -20,7 +20,31 @@ var releaseTag = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+)*$`)
 // signatureMarker is the text __gash_verify_tag looks for in the tag object
 // (LEDGER SELF-10, reproduced: unanchored, so a tag message quoting it
 // counts as a signature).
-var signatureMarker = regexp.MustCompile(`-{5}BEGIN (PGP|SSH) SIGNATURE-{5}`)
+// tagSigned reports whether the tag object obj (git cat-file tag) carries a
+// signature: after the header block, a line equal to "-----BEGIN PGP
+// SIGNATURE-----" (or SSH) and, as the last line, the matching END line
+// (3.0: SELF-10 fixed; 2.x matched the marker anywhere in the text of the
+// object the tag names, so a message quoting it, or the gpgsig header of a
+// signed commit under a lightweight tag, counted as a signature).
+func tagSigned(obj []byte) bool {
+	_, body, ok := strings.Cut(string(obj), "\n\n")
+	if !ok {
+		return false
+	}
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	last := lines[len(lines)-1]
+	for _, kind := range []string{"PGP", "SSH"} {
+		if last != "-----END "+kind+" SIGNATURE-----" {
+			continue
+		}
+		for _, l := range lines[:len(lines)-1] {
+			if l == "-----BEGIN "+kind+" SIGNATURE-----" {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // upgrade is gash_upgrade (lib/modules/gash.sh): the install directory, a
 // clean git checkout, moves to the highest release tag of origin, its
@@ -130,14 +154,16 @@ func (m *Module) latestTag(c *invoke.Call, dir string) string {
 }
 
 // verifyTag is __gash_verify_tag DIR TAG: reports a tag's signature when
-// the tag object shows one; false only with GASH_REQUIRE_SIGNED=1 and a tag
-// that is unsigned or does not verify.
+// the tag is an annotated tag whose object carries one (tagSigned; `git
+// cat-file tag` fails for a lightweight tag, which is not signed); false
+// only with GASH_REQUIRE_SIGNED=1 and a tag that is unsigned or does not
+// verify.
 func (m *Module) verifyTag(c *invoke.Call, p ui.Printer, dir, tag string) bool {
 	required := c.Env.Get("GASH_REQUIRE_SIGNED") == "1"
-	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "cat-file", "-p", "refs/tags/" + tag},
+	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "cat-file", "tag", "refs/tags/" + tag},
 		Options: runner.Options{Env: c.Env.Child()}})
 	switch {
-	case err == nil && signatureMarker.Match(res.Stdout):
+	case err == nil && res.Success() && tagSigned(res.Stdout):
 		vr, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "verify-tag", tag},
 			Options: runner.Options{Env: c.Env.Child()}})
 		if err == nil && vr.Success() {
