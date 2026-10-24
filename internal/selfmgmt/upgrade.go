@@ -3,7 +3,6 @@
 package selfmgmt
 
 import (
-	"os"
 	"regexp"
 	"strings"
 
@@ -46,15 +45,10 @@ func tagSigned(obj []byte) bool {
 	return false
 }
 
-// upgrade is gash_upgrade (lib/modules/gash.sh): the install directory, a
-// clean git checkout, moves to the highest release tag of origin, its
-// signature checked first. A checkout newer than that release (a newer or
-// pre-release tag, or a commit that has the release in its history) is
-// left alone (3.0: SELF-01 fixed; 2.x compared for equality only and moved
-// such an install back); an argument is refused before any git command
-// (3.0: SELF-15 fixed; 2.x ignored it). The git commands run as 2.x ran them:
-// the user's git, configuration and credentials, fetch and checkout on the
-// terminal.
+// upgrade is gash_upgrade (lib/modules/gash.sh), which runs the flow of
+// gash update (upgrade.md 3.6, MATRIX "redesign") with the 2.x name, output
+// lines and statuses. An argument is refused before any git command (3.0:
+// SELF-15 fixed; 2.x ignored it).
 func (m *Module) upgrade(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -62,16 +56,24 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	if badArgs(c, "gash_upgrade") {
 		return usageStatus
 	}
+	return m.upgradeFlow(c)
+}
+
+// upgradeFlow moves the install directory, a clean git checkout, to the
+// highest release tag of origin, its signature checked first (upgrade.md
+// 3.6). A checkout newer than that release (a newer or pre-release tag, or
+// a commit that has the release in its history) is left alone (3.0:
+// SELF-01 fixed; 2.x compared for equality only and moved such an install
+// back). When the tag's tree is a 3.x tree, the binary of its VERSION is
+// downloaded and verified into the versions directory before the tree is
+// touched; after the checkout a smoke test loads the new tree in child
+// shells, and a failure checks out the previous commit again (moveTo).
+// The git commands run as 2.x ran them: the user's git, configuration and
+// credentials, fetch and checkout on the terminal.
+func (m *Module) upgradeFlow(c *invoke.Call) int {
 	p := ui.StyleOf(c.Term, false).Printer(c.Stderr)
 	dir := installDir(c)
-
-	if st, err := os.Stat(dir + "/.git"); err != nil || !st.IsDir() {
-		p.Error("Gash is not installed in " + dir + " as a git checkout. See https://github.com/mauriziofonte/gash.")
-		return 1
-	}
-	// The checkout below would overwrite local edits: refuse instead.
-	if m.output(c, "git", "-C", dir, "status", "--porcelain") != "" {
-		p.Error("Working tree at " + dir + " has local modifications. Commit, stash, or discard them before upgrading.")
+	if !m.cleanCheckout(c, p, dir) {
 		return 1
 	}
 
@@ -101,15 +103,17 @@ func (m *Module) upgrade(c *invoke.Call) int {
 		p.Error("GASH_REQUIRE_SIGNED=1 is set; not upgrading to " + latest + ".")
 		return 1
 	}
-	if !m.tool(c, "git", "-C", dir, "-c", "advice.detachedHead=false", "checkout", "--quiet", latest) {
-		p.Error("Failed to check out " + latest + ".")
-		return 1
+	from := m.head(c, dir, current)
+	to := m.inspect(c, dir, latest, latest)
+	if rc := m.moveTo(c, p, dir, from, to); rc != 0 {
+		return rc
 	}
-	from := ""
+	shown := ""
 	if current != "" {
-		from = "from " + current + " "
+		shown = "from " + current + " "
 	}
-	p.Success("Upgraded Gash " + from + "to " + latest + ".")
+	p.Success("Upgraded Gash " + shown + "to " + latest + ".")
+	m.recordUpdate(c, dir, from, to)
 	p.Info("Open a new terminal (or run 'source ~/.gashrc') to load it.")
 	return 0
 }

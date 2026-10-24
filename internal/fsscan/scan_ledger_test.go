@@ -196,15 +196,45 @@ func TestDifferential2x(t *testing.T) {
 }
 
 // TestLedger_FS20 pins the forced divergence: a newline in an --exclude value
-// gets the invalid_filter contract in all five scanners.
+// gets the invalid_filter contract in all five scanners. The hint's example
+// is a bare name, which FS-12 matches at any depth (F-03).
 func TestLedger_FS20(t *testing.T) {
 	fx := mkfix(t)
 	want := `{"error":"invalid_filter","details":"a\nb","action":"RETRY","recoverable":true,` +
-		`"hint":"--exclude takes a glob without newlines, e.g. '*/node_modules'"}` + "\n"
+		`"hint":"--exclude takes a glob without newlines, e.g. 'node_modules'"}` + "\n"
 	for fn := range scanHandlers {
 		out, errb, rc := runGo(fn, t.TempDir(), fx, "--json", "--exclude", "a\nb", fx)
 		if rc != 1 || out != "" || errb != want {
 			t.Errorf("%s: rc=%d out=%q err=%q", fn, rc, out, errb)
+		}
+	}
+}
+
+// TestFollowup_F03: the invalid_filter hint's example, --exclude
+// 'node_modules', skips a node_modules at any depth (FS-12 matches the base
+// name), while the old example '*/node_modules' matched only at depth 2.
+func TestFollowup_F03(t *testing.T) {
+	fx := t.TempDir()
+	mustMkdir(t, fx, "node_modules", "a/node_modules", "a/b/c/node_modules", "src")
+	for _, p := range []string{"node_modules/one.js", "a/node_modules/two.js", "a/b/c/node_modules/three.js", "src/keep.js"} {
+		writeN(t, filepath.Join(fx, p), 4096)
+	}
+	run := func(glob string) string {
+		out, errb, rc := runGo("files_largest", t.TempDir(), fx, "--no-ignore", "--null", "--exclude", glob, fx)
+		if rc != 0 {
+			t.Fatalf("--exclude %s: rc=%d err=%q", glob, rc, errb)
+		}
+		return out
+	}
+	for glob, want := range map[string]map[string]bool{
+		"node_modules":   {"keep.js": true, "one.js": false, "two.js": false, "three.js": false},
+		"*/node_modules": {"keep.js": true, "one.js": true, "two.js": false, "three.js": true},
+	} {
+		out := run(glob)
+		for f, listed := range want {
+			if strings.Contains(out, f) != listed {
+				t.Errorf("--exclude %s: %s listed=%v, want %v; out=%q", glob, f, !listed, listed, out)
+			}
 		}
 	}
 }

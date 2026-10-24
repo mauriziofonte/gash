@@ -6,6 +6,7 @@ package selfmgmt
 
 import (
 	"math/rand/v2"
+	"net/http"
 	"os"
 
 	"github.com/mauriziofonte/gash/internal/buildinfo"
@@ -25,6 +26,9 @@ type Module struct {
 	// version and executable are the binary's own (gash_doctor).
 	version    string
 	executable func() (string, error)
+	// http downloads the release assets of gash update; nil is a client
+	// with the proxies of the environment.
+	http *http.Client
 }
 
 // New returns the module wired to the real system.
@@ -48,4 +52,5 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("gash_doctor", m.doctor)
 	t.Handle("gash_upgrade", m.upgrade)
 	t.Handle("gash_uninstall", m.uninstall)
+	t.HandleCommand("update", m.update)
 }

@@ -17,8 +17,6 @@ package remote
 import (
 	"context"
 	"io"
-	"net"
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/config"
@@ -110,19 +108,20 @@ func (x *call) requireArg(value, name, usage string) bool {
 func (x *call) loadConfig() *config.File { return config.LoadCaller(x.Env.Get) }
 
 // resolveTarget is __remote_resolve_target: a registered alias, or,
-// interactively, a raw user@host. Both must pass validTarget (LEDGER
-// REM-02, REM-08): an alias whose HOST: target fails it is skipped with a
+// interactively, a raw user@host. Both must pass config.ValidHostTarget,
+// the one user@host rule of the HOST: load and remote_* (LEDGER REM-02,
+// REM-08): an alias whose HOST: target fails it is skipped with a
 // warning, as an unregistered name.
 func (x *call) resolveTarget(input string) (string, bool) {
 	f := x.loadConfig()
 	t, ok := f.HostTarget(input)
 	if !ok {
-		// The load skipped it (config.ValidHostTarget is validTarget's
-		// rule); say why the alias is unknown.
+		// The load skipped it (config.ValidHostTarget); say why the alias
+		// is unknown.
 		t, ok = f.RejectedHost(input)
 	}
 	if ok {
-		if validTarget(t) {
+		if config.ValidHostTarget(t) {
 			return t, true
 		}
 		x.p.Warning("HOST target of '" + input + "' must be user@host (skipping)")
@@ -134,37 +133,11 @@ func (x *call) resolveTarget(input string) (string, bool) {
 		x.p.Error("Unknown host alias '" + input + "'. In headless mode only aliases registered in ~/.gash_env (HOST:alias=user@host) are accepted.")
 		return "", false
 	}
-	if validTarget(input) {
+	if config.ValidHostTarget(input) {
 		return input, true
 	}
 	x.p.Error("Unknown host alias '" + input + "' and not a valid user@host target.")
 	return "", false
-}
-
-var (
-	reTargetUser = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._-]*$`)
-	reTargetHost = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
-)
-
-// validTarget is the user@host test of raw targets and HOST: entries: one
-// @, a user of letters, digits, '.', '_' and '-' not starting with '-',
-// and a host name of letters, digits, '.' and '-' starting with a letter
-// or digit, or a bracketed IPv6 literal. So neither part reads as an ssh
-// option and the host holds no ':' port that ssh, scp and the tier check
-// would read differently (LEDGER REM-02, REM-08).
-func validTarget(t string) bool {
-	user, host, ok := strings.Cut(t, "@")
-	if !ok || !reTargetUser.MatchString(user) {
-		return false
-	}
-	if reTargetHost.MatchString(host) {
-		return true
-	}
-	if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
-		ip := net.ParseIP(host[1 : len(host)-1])
-		return ip != nil && strings.Contains(host, ":")
-	}
-	return false
 }
 
 // sshOpts are the ssh options of remote_exec, with the multiplexing

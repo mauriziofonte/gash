@@ -181,10 +181,10 @@ gash_doctor --timing
 #### Notes
 
 ```text
-Checks: core files, modules, the binary (against the hash
-release/SHA256SUMS pins), the generated shims (against this
-gash version), config file permissions, external tools
-(git, curl, jq, sqlite3, docker).
+Checks: core files, modules, the binary and gash-hosts-helper
+(against the hashes release/SHA256SUMS pins), the generated
+shims (against this gash version), config file permissions,
+external tools (git, curl, jq, sqlite3, docker).
 Reports missing or misconfigured components and returns 1
 when a check fails (2 for an unknown option).
 
@@ -420,11 +420,18 @@ gash_upgrade
 
 ```text
 Fetches the release tags and checks out the newest release (never
-an older one). Open a new terminal afterwards: it loads the new
-version and fetches its binary.
-A checkout newer than the latest release (a pre-release, or a
-commit after it) is left as it is. To go back to a release:
-git -C ~/.gash checkout vX.Y.Z
+an older one). It runs the steps of gash update. A checkout newer
+than the latest release (a pre-release, or a commit after it) is
+left as it is.
+Before the checkout, the release binary is downloaded into
+~/.local/share/gash/versions/<version>/ and verified (the hash in
+the tag's release/SHA256SUMS, else the release's checksums.txt;
+GASH_REQUIRE_SIGNED=1 also requires a signed tag and a pinned
+binary). After it, the new version is loaded in a test shell; if
+that fails, the previous version is checked out again.
+Open a new terminal afterwards to load the new version.
+To go back: gash update --rollback (the previous version and its
+binary are kept), or git -C ~/.gash checkout vX.Y.Z
 ```
 
 See also: `gash_doctor`, `gash_uninstall`

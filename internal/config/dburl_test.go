@@ -200,26 +200,6 @@ func TestLedger_CORE03(t *testing.T) {
 	}
 }
 
-// LEDGER LLM-02, reproduced: the llm_env URL mask is anchored and stops the
-// password at the first "/" or "@".
-func TestLedger_LLM02_2x(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"mysql://user:p@ss@host/db", "mysql://user:***@ss@host/db"},
-		{"mysql://u:pa/ss@h/d", "mysql://u:pa/ss@h/d"},
-		{"x https://u:pw@h/", "x https://u:pw@h/"},
-		{"https://u:pw@h/", "https://u:***@h/"},
-		{"redis://:pw@h:6379", "redis://:***@h:6379"},
-		{"postgres://u@h/d", "postgres://u@h/d"},
-		{"a+b.c-d://u:x@h", "a+b.c-d://u:***@h"},
-		{"1http://u:p@h", "1http://u:p@h"},
-	}
-	for _, tt := range tests {
-		if got := MaskEnvURL(tt.in); got != tt.want {
-			t.Errorf("MaskEnvURL(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
 // LEDGER CORE-16: ${token:0:8} counts characters as a UTF-8 locale does
 // (LC_ALL=C would count bytes and could cut a character); an invalid byte
 // counts as one character and is kept.

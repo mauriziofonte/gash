@@ -19,11 +19,11 @@ func (m *Module) hosts(c *invoke.Call) int {
 		return 0
 	}
 	x := m.begin(c)
-	// An entry whose target fails validTarget is skipped, as the HOST:
-	// parser should skip it (LEDGER REM-02, REM-08).
+	// An entry whose target fails config.ValidHostTarget is skipped, as
+	// the HOST: parser should skip it (LEDGER REM-02, REM-08).
 	var entries []config.Entry
 	for _, e := range x.loadConfig().Hosts {
-		if validTarget(e.Value) {
+		if config.ValidHostTarget(e.Value) {
 			entries = append(entries, e)
 		}
 	}

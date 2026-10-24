@@ -1,0 +1,65 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 self-management proof)
+#
+# docs/port/design/upgrade.md 3.1, 3.2 and 6: a 2.1.0 install (the 2.1.0
+# installer, from a fixture origin whose v3.0.0 tag holds this checkout's
+# 3.x tree) runs its own 2.x gash_upgrade headless. Sourcing the 3.x
+# gash.sh headless then prints nothing and returns 0 with GASH_VERSION
+# 3.0.0; the first call fetches the binary from the file:// release
+# silently and answers. The working tree stays clean throughout.
+
+[!exec:git] skip 'needs git'
+[!v2tree] skip 'needs the v2.1.0 tag (a shallow checkout has no tags: the testscript CI job fetches them)'
+env GASH_BIN=
+env GASH_RELEASE_URL=file://$WORK/rel
+
+gashfixture origin v2.1.0:2x v3.0.0:3x
+gashrelease 3.0.0 rel
+
+# 2.1.0, installed by its own installer.
+exec sh -c 'git -C origin show v2.1.0:install.sh >install2.sh'
+env GASH_INSTALL_GIT_REPO=$WORK/origin
+env GASH_INSTALL_REF=v2.1.0
+exec bash install2.sh --assume-yes --quiet
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v2\.1\.0$'
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; echo "v=$GASH_VERSION"'
+stdout '^v=2\.1\.0$'
+
+# 2.x gash_upgrade, headless.
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; gash_upgrade'
+stderr 'Upgraded Gash from v2\.1\.0 to v3\.0\.0'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.0$'
+exec git -C home/.gash status --porcelain
+! stdout .
+
+# Headless source: silent, status 0, the 3.x version; no fetch yet.
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; echo "rc=$? v=$GASH_VERSION"'
+stdout '^rc=0 v=3\.0\.0$'
+! stderr .
+! exists home/.local/share/gash/versions/3.0.0/gash
+
+# The first call fetches silently, then answers.
+mkdir proj/src
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; llm_tree proj'
+stdout '"src"'
+! stderr .
+exists home/.local/share/gash/versions/3.0.0/gash
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; gash version --json'
+stdout '"version":"3\.0\.0"'
+exec sh -c 'ls -A "$HOME/.local/share/gash/versions/3.0.0"'
+! stdout '^\.'
+
+exec git -C home/.gash status --porcelain
+! stdout .
+
+-- home/.bashrc --
+# the user's bashrc
+-- home/.gitconfig --
+[user]
+	name = t
+	email = t@t
+[advice]
+	detachedHead = false

@@ -728,7 +728,9 @@ var functions = []Function{
 				"  Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN\n" +
 				"  is exchanged for a GHCR token), the others anonymously, answering a\n" +
 				"  Bearer challenge. Image variables come from the exported environment\n" +
-				"  and DIR/.env, with Compose's interpolation rules.\n" +
+				"  and DIR/.env, with Compose's interpolation rules; a quoted value in\n" +
+				"  DIR/.env that never closes is refused (invalid_env_file), as Compose\n" +
+				"  refuses the whole file.\n" +
 				"  The exit status is 0 whenever the report prints, ERROR rows included.\n" +
 				"\n" +
 				"REGISTRY ERRORS\n" +
@@ -1296,10 +1298,10 @@ var functions = []Function{
 				"  gash_doctor --timing\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Checks: core files, modules, the binary (against the hash\n" +
-				"  release/SHA256SUMS pins), the generated shims (against this\n" +
-				"  gash version), config file permissions, external tools\n" +
-				"  (git, curl, jq, sqlite3, docker).\n" +
+				"  Checks: core files, modules, the binary and gash-hosts-helper\n" +
+				"  (against the hashes release/SHA256SUMS pins), the generated\n" +
+				"  shims (against this gash version), config file permissions,\n" +
+				"  external tools (git, curl, jq, sqlite3, docker).\n" +
 				"  Reports missing or misconfigured components and returns 1\n" +
 				"  when a check fails (2 for an unknown option).\n" +
 				"\n" +
@@ -1650,15 +1652,22 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Fetches the release tags and checks out the newest release (never\n" +
-				"  an older one). Open a new terminal afterwards: it loads the new\n" +
-				"  version and fetches its binary.\n" +
-				"  A checkout newer than the latest release (a pre-release, or a\n" +
-				"  commit after it) is left as it is. To go back to a release:\n" +
-				"  git -C ~/.gash checkout vX.Y.Z",
+				"  an older one). It runs the steps of gash update. A checkout newer\n" +
+				"  than the latest release (a pre-release, or a commit after it) is\n" +
+				"  left as it is.\n" +
+				"  Before the checkout, the release binary is downloaded into\n" +
+				"  ~/.local/share/gash/versions/<version>/ and verified (the hash in\n" +
+				"  the tag's release/SHA256SUMS, else the release's checksums.txt;\n" +
+				"  GASH_REQUIRE_SIGNED=1 also requires a signed tag and a pinned\n" +
+				"  binary). After it, the new version is loaded in a test shell; if\n" +
+				"  that fails, the previous version is checked out again.\n" +
+				"  Open a new terminal afterwards to load the new version.\n" +
+				"  To go back: gash update --rollback (the previous version and its\n" +
+				"  binary are kept), or git -C ~/.gash checkout vX.Y.Z",
 		},
 		Fallback:  &Usage{Program: "gash_upgrade", Usage: "gash_upgrade", Description: "Upgrade Gash to the latest release (refuses to touch local modifications)."},
-		ShellVars: []string{"GASH_REQUIRE_SIGNED", "HOME"},
-		Env:       []string{"GASH_DIR", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_REQUIRE_SIGNED", "HOME", "NO_COLOR"},
+		ShellVars: []string{"BASH", "GASH_RELEASE_URL", "GASH_REQUIRE_SIGNED", "HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"},
+		Env:       []string{"GASH_DIR", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_RELEASE_URL", "GASH_REQUIRE_SIGNED", "HOME", "NO_COLOR", "XDG_DATA_HOME", "XDG_STATE_HOME"},
 	},
 	{
 		Name:     "gash_username",
@@ -3614,7 +3623,9 @@ var functions = []Function{
 				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
 				"  start) is refused, even with --force. An unknown option or a fourth\n" +
 				"  argument is an error.\n" +
-				"  rsync runs with -s (--protect-args). With --delete the LOCAL\n" +
+				"  rsync runs with -s (--protect-args); openrsync (macOS), which has no\n" +
+				"  -s, gets the remote path single-quoted for the remote shell and\n" +
+				"  --progress. With --delete the LOCAL\n" +
 				"  destination is checked: below /tmp, /var/tmp or /home/<user>/, or a\n" +
 				"  relative path inside the current directory, never your home itself or\n" +
 				"  .ssh; elsewhere it asks, or needs --force in headless mode.\n" +
@@ -3664,7 +3675,9 @@ var functions = []Function{
 				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
 				"  start) is refused, even with --force. An unknown option or a fourth\n" +
 				"  argument is an error.\n" +
-				"  rsync runs with -s (--protect-args). --delete runs without asking only\n" +
+				"  rsync runs with -s (--protect-args); openrsync (macOS), which has no\n" +
+				"  -s, gets the remote path single-quoted for the remote shell and\n" +
+				"  --progress. --delete runs without asking only\n" +
 				"  below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the\n" +
 				"  remote home, never the home itself or a .ssh path; elsewhere it asks,\n" +
 				"  or needs --force in headless mode.\n" +

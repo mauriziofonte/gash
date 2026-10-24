@@ -61,7 +61,7 @@ bash tests/run.sh --impl go                # same specs, Go behind the shim
 |---|---|
 | `needs_confirm_prompt(){...}` overrides (23 tests) | `--yes` where the function has it; else answers fed on a PTY (`script`) |
 | `__gash_use_color`, `__gash_fs_rich_ok`, `__gash_stderr_fancy` overrides (21) | Run under a PTY with `COLUMNS` set. No new "force color" variable (it would be new public surface) |
-| `__gash_require_wsl` (15) | A WSL fixture root (`platform.Sysroot` with `/proc/sys/fs/binfmt_misc/WSLInterop` and `/proc/version`), set through the test-only `GASH__SYSROOT` variable that only test builds (`-tags gashtest`) read |
+| `__gash_require_wsl` (15) | A WSL fixture root (`platform.NewSysroot(dir)` with `/proc/sys/fs/binfmt_misc/WSLInterop` and `/proc/version`) injected into the system module's `sys` field by its unit tests (TestWSLStopVM, TestWSLExplorer). The black-box `wsl.txtar` covers the off-WSL half (option parsing, the refusal before any sudo or cmd.exe call). No binary reads a fixture root from the environment: release and test builds share one code path, so 3.0 has no `GASH__SYSROOT` variable or `gashtest` build tag |
 | `__sysinfo_ensure_sudo` (5) | PATH `sudo` stub failing `sudo -n true` |
 | `__llm_has_rg` (2) | Moot: one search engine (`architecture.md` 7); the specs run once |
 | `kill(){...}` with `pgrep` faked to return PID 2222 (`functions_edge_spec.sh:87`, `functions_more_spec.sh:226`, 3 render fixtures) | **Hazard**: a binary calling `kill(2)` would signal a real PID 2222. These tests are rewritten around a real victim (`sleep 300 & pgrep stub returns $!`), as `functions_smoke_spec.sh:218` already does, before Go mode runs them; every Go-mode run happens in a PID and network namespace (`unshare -pnf --mount-proc`, or a container in CI) as a second barrier |
@@ -161,7 +161,7 @@ and on Bash 4.4, 5.0, 5.1 and 5.3 (the compat Bash must load on 4.4).
   from official `php:X.Y-fpm` images; Fedora and Arch run in CI.
 * macOS: GitHub Actions runner with Homebrew `httpd` and PHP, including the
   port mechanism check.
-* WSL2: the operator's manual checklist (`docs/hte/wsl-checklist.md`).
+* WSL2: the operator's manual checklist (`docs/hte.md`, section "WSL").
 
 ## 7. CI (GitHub Actions)
 

@@ -68,7 +68,9 @@ read.
 Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN
 is exchanged for a GHCR token), the others anonymously, answering a
 Bearer challenge. Image variables come from the exported environment
-and DIR/.env, with Compose's interpolation rules.
+and DIR/.env, with Compose's interpolation rules; a quoted value in
+DIR/.env that never closes is refused (invalid_env_file), as Compose
+refuses the whole file.
 The exit status is 0 whenever the report prints, ERROR rows included.
 ```
 

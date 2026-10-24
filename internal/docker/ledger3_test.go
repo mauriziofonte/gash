@@ -382,18 +382,20 @@ func TestLedger_DOCK10(t *testing.T) {
 }
 
 // LEDGER DOCK-13 (3.0 fix): interpolation with Compose's rules: the
-// operators, the environment over DIR/.env, $VAR, Compose's dotenv.
+// operators, the environment over DIR/.env, $VAR, Compose's dotenv. An
+// unterminated quote makes both refuse the whole file (3.0: F-09 fixed;
+// gash left only that variable undefined).
 func TestLedger_DOCK13(t *testing.T) {
 	dir := t.TempDir()
 	env := filepath.Join(dir, ".env")
-	require.NoError(t, os.WriteFile(env, []byte("EMPTY=\nTAG=env-file\n  SPACED=1\nexport EXP=1\nINL=x # c\n"+
-		"SQ='a $TAG'\nDQ=\"v\\tx ${INL}\"\nREF=${INL}y\nML=\"l1\nl2\"\nAFTER=ok\nQ=\"a'\n"), 0o644))
+	good := "EMPTY=\nTAG=env-file\n  SPACED=1\nexport EXP=1\nINL=x # c\n" +
+		"SQ='a $TAG'\nDQ=\"v\\tx ${INL}\"\nREF=${INL}y\nML=\"l1\nl2\"\nAFTER=ok\n"
+	require.NoError(t, os.WriteFile(env, []byte(good), 0o644))
 	vectors := []struct{ in, want string }{
 		{"redis:${EMPTY-dflt}/${TAG}/$TAG", "redis:/shell/shell"},
 		{"${EMPTY:-dflt}", "dflt"},
 		{"${SPACED:-no}", "1"},
 		{"${EXP:-no}", "1"},
-		{"${Q}", ""}, // an unterminated quote at the end: no definition
 		{"${INL}", "x"},
 		{"${A:-}x", "x"},
 		{"${A:-a:-b}", "a:-b"},
@@ -423,19 +425,24 @@ func TestLedger_DOCK13(t *testing.T) {
 		require.Contains(t, u.err.String(), "Warning: Cannot interpolate "+in, in)
 	}
 
+	_, err := dotenv(env, func(string) (string, bool) { return "", false })
+	require.NoError(t, err)
+
+	// The unterminated quote: gash refuses the file, naming the line where
+	// the value opens.
+	bad := filepath.Join(t.TempDir(), ".env")
+	require.NoError(t, os.WriteFile(bad, []byte(good+"Q=\"a'\n"), 0o644))
+	_, err = dotenv(bad, func(string) (string, bool) { return "", false })
+	require.EqualError(t, err, "line 12: unterminated quoted value of Q")
+
 	// The same vectors through Compose itself, when the plugin is here.
 	if err := exec.Command("docker", "compose", "version").Run(); err != nil {
 		t.Log("the Compose plugin is not available: the vectors are not compared with docker compose config")
 		return
 	}
-	// Compose refuses the whole .env over the unterminated Q line, where
-	// gash leaves Q undefined: compare without that line and its vector.
 	// A service whose image resolves to "" is not a valid project, so those
 	// vectors are checked above only. `config` prints a literal $ as $$ (its
 	// output is Compose YAML again), so that escape is undone below.
-	data, err := os.ReadFile(env)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(env, bytes.Replace(data, []byte("Q=\"a'\n"), nil, 1), 0o644))
 	var yml strings.Builder
 	yml.WriteString("services:\n")
 	for i, v := range vectors {
@@ -455,6 +462,52 @@ func TestLedger_DOCK13(t *testing.T) {
 		i := int(s.name[1] - 'a')
 		require.Equal(t, vectors[i].want, strings.ReplaceAll(s.image, "$$", "$"), vectors[i].in)
 	}
+
+	// Compose refuses the same file with the Q line, as gash does.
+	require.NoError(t, os.WriteFile(env, []byte(good+"Q=\"a'\n"), 0o644))
+	cmd = exec.Command("docker", "compose", "--project-directory", dir, "config", "--format", "json")
+	cmd.Dir, cmd.Env = dir, append(os.Environ(), "TAG=shell")
+	msg, err := cmd.CombinedOutput()
+	require.Error(t, err, "%s", msg)
+	require.Contains(t, string(msg), "unterminated quoted value")
+}
+
+// TestFollowup_F09: docker_compose_check and docker_compose_upgrade read
+// DIR/.env themselves when Compose cannot give the merged config; a quoted
+// value that never closes makes them refuse, as Compose refuses the whole
+// file, naming the file and the line (3.0: F-09 fixed; the variable was
+// left undefined and the check went on).
+func TestFollowup_F09(t *testing.T) {
+	dir := project(t, map[string]string{
+		"compose.yml": "services:\n  web:\n    image: nginx:${TAG}\n",
+		".env":        "A=1\nTAG=\"1.25\nB=2\n",
+	})
+	f := fakeDocker(t, "", nil) // config fails: the YAML-subset reader and DIR/.env
+	out, errOut, rc := runUnit(t, f, mockEnv(), nil, nil, "docker_compose_check", dir, "--json")
+	require.Equal(t, 1, rc)
+	require.Empty(t, out)
+	require.Equal(t, `{"error":"invalid_env_file","details":"`+dir+`/.env:2","action":"RETRY","recoverable":true,`+
+		`"hint":"Close the quoted value of TAG that opens on line 2: Compose refuses the whole file"}`+"\n", errOut)
+
+	_, errOut, rc = runUnit(t, fakeDocker(t, "", nil), mockEnv(), nil, nil, "docker_compose_check", dir)
+	require.Equal(t, 1, rc)
+	require.Equal(t, "Error: Cannot read "+dir+"/.env: line 2: unterminated quoted value of TAG\n"+
+		"Hint: Close the quoted value of TAG that opens on line 2: Compose refuses the whole file\n", errOut)
+
+	f = fakeDocker(t, "", nil)
+	out, errOut, rc = runUnit(t, f, nil, nil, nil, "docker_compose_upgrade", dir, "--yes")
+	require.Equal(t, 1, rc)
+	require.Empty(t, out)
+	require.Contains(t, errOut, "Error: Cannot read "+dir+"/.env: line 2: unterminated quoted value of TAG\n")
+	for _, c := range composeCalls(f) {
+		require.NotContains(t, c.Argv, "pull")
+	}
+
+	// A closed quote is read as before.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env"), []byte("A=1\nTAG=\"1.25\"\n"), 0o644))
+	out, _, rc = runUnit(t, fakeDocker(t, "", nil), nil, nil, nil, "docker_compose_upgrade", dir, "--dry-run")
+	require.Equal(t, 0, rc)
+	require.Contains(t, out, "(nginx:1.25)")
 }
 
 // LEDGER DOCK-14 (3.0 fix): GITHUB_TOKEN is exchanged at ghcr.io/token,

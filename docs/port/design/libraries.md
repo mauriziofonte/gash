@@ -31,20 +31,19 @@ API before rc.A.
 | Templates | `text/template` | stdlib | | Apache and FPM rendering, golden files |
 | Databases | `github.com/go-sql-driver/mysql` | v1.10.1 | active | `llm_db_*`, `gash_db_*` |
 | | `github.com/jackc/pgx/v5` (`stdlib`) | v5.11.0 | active | same |
+| Containers | `github.com/google/go-containerregistry` (`pkg/name` only) | v0.22.1 | active | image reference parsing (LEDGER DOCK-06, DOCK-07); the registry protocol stays on `net/http` |
 | | `modernc.org/sqlite` | v1.60.1 | active (SQLite 3.53.4, pure Go) | same; also replaces the `sqlite3` client |
-| System info | `github.com/shirou/gopsutil/v4` | v4.26.9 | active | `sysinfo`, `llm_procs`, `llm_ports` fields where 2.x parsed tool text |
 | XDG | `github.com/adrg/xdg` | v0.5.3 | maintained, slow tags (last tag 2024-10, commits 2026-09) | test-only: a cross-check of `internal/platform`'s own resolution on Linux. On macOS the library maps the directories to `~/Library`, while `hte.md` 2 wants the same XDG tree on every platform, so the paths are resolved by `internal/platform` from the environment snapshot (lead decision, 2026-10-18) |
 | Atomic writes | `github.com/google/renameio/v2` | v2.0.2 | active, POSIX only (fine: linux and darwin targets) | rendered configs, receipts, state |
 | Locks | `github.com/gofrs/flock` | v0.13.1 | active | HTE lock, binary fetch lock in Go |
 | Shell quoting | `mvdan.cc/sh/v3/syntax` | v3.14.1 | active | `gash init bash`, compat generation, `__compat env load` |
 | PTY | `github.com/creack/pty` | v1.1.24 | maintained, slow tags | `gash_ssh_auto_unlock` (ssh-add) |
-| Concurrency | `golang.org/x/sync` (`errgroup`) | v0.24.0 | active | HTE parallel health checks |
 | Terminal | `golang.org/x/term`, `golang.org/x/sys` | latest at implementation start | official | TTY checks, window size, `statfs`, ioctls (addition: PRD lists none for this) |
 | Tests | `github.com/stretchr/testify` (`require`) | v1.12.1 | active | |
 | | `github.com/google/go-cmp` | v0.7.0 | maintained, slow tags | |
 | | `github.com/rogpeppe/go-internal/testscript` | v1.16.0 | active | black-box suite |
 | | `github.com/santhosh-tekuri/jsonschema/v6` | v6.0.3 | active | envelope schemas |
-| | `github.com/spf13/afero`, `testing/fstest` | v1.15.0, stdlib | active | filesystem fakes |
+| | `testing/fstest`, `t.TempDir` | stdlib | | filesystem fakes |
 | Quality | `golangci-lint` v2 | v2.15.0 (Go 1.27 support since v2.13.0) | active | release binary in CI, not `go install` (upstream advice) |
 | | `golang.org/x/vuln` (govulncheck) | v1.9.0 | active | CI |
 | Release | `goreleaser` | v2.18.3 | active | `.goreleaser.yaml`, tags only |
@@ -64,13 +63,16 @@ v0.61.0 exist); govulncheck gates CI.
 | `charm.land/huh/v2` v2.0.3 | Not used | Prompts are 2.x primitives (`__gash_choose`, confirm lines) with pinned output; new commands prompt only for a missing flag on a TTY, with the same primitives |
 | `charm.land/log/v2` v2.0.1 | Not used | Diagnostics have the 2.x `__gash_debug` format; `log/slog` with a small handler writes it |
 | `github.com/moby/moby/client` v0.6.2, `.../api` v1.56.1 | Not used | Every docker operation of 2.x goes through the `docker` CLI, whose output Gash passes through (`docker system prune`, `compose pull/up/ps`); Compose has no Go API at all. Keeping the CLI keeps the user's contexts, config and credential helpers and byte-identical output. The client is also pre-1.0 and adds about 3.6 ms of start-up to every `gash` process (with go-containerregistry) |
-| `github.com/google/go-containerregistry` v0.22.1 | Not used in rc.A | The 2.x registry protocol (token endpoints, the four Accept headers, HEAD only, error taxonomy `dns_error` ... `no_digest_in_response`, https everywhere, no Docker credential store) is ported over `net/http`. ggcr changes each of these by default (challenge auth, `~/.docker/config.json`, plain HTTP for localhost, stricter reference parsing). Its fixes (digest-pinned refs, `docker.io/<name>`, `GITHUB_TOKEN` exchange, challenge auth for other registries) are LEDGER items; the fix recipes use ggcr, so it enters in 3.0 if those are accepted |
+| `github.com/google/go-containerregistry` v0.22.1 | `pkg/name` only (3.0) | rc.A did not link it: the 2.x registry protocol (token endpoints, the four Accept headers, HEAD only, error taxonomy `dns_error` ... `no_digest_in_response`, no Docker credential store) is ported over `net/http`, and ggcr's remote client changes each of these by default. 3.0 fixes the reference handling (digest-pinned refs, `docker.io/<name>`, plain HTTP for localhost and private registries as Docker does) with `pkg/name`; the GITHUB_TOKEN exchange and the anonymous Bearer challenge (DOCK-14, DOCK-15) stay on `net/http` |
+| `github.com/shirou/gopsutil/v4` v4.26.9 | Not used | The collectors (`internal/sysinfo`, `llm_procs`, `llm_ports`, `internal/hte/service`) read the sources 2.x read (`/proc`, `/sys` and the tools' output), so each field keeps its 2.x derivation; no field needed the library |
+| `golang.org/x/sync` (`errgroup`) v0.24.0 | Not used | HTE health checks are a handful of local probes and run in order, with their output in a fixed order |
+| `github.com/spf13/afero` v1.15.0 | Not used | Filesystem tests run on real temporary trees (`t.TempDir`) and `testing/fstest`; the code under test calls `os` directly |
 | `github.com/anthropics/anthropic-sdk-go` v1.82.0, `google.golang.org/genai` v1.75.0 | Not used | Start-up cost lands on every `gash` call, not only AI: the full stack starts in 11.4-13.0 ms against 2.0 ms for a bare binary, and genai alone is 8.2 ms (grpc, otel, cloud auth); anthropic-sdk-go links a prerelease `go.yaml.in/yaml/v4` (rc). Parity: 2.x builds each request itself (model from settings, `effort` only for Claude 5 models, structured-output schema, redaction first) and has its own retry policy (HTTP 429, 500, 502-504 and 529 only, up to three times, delay from `Retry-After` or Gemini `RetryInfo`, clamped to 1-60 s, with the warning `<label> API busy (HTTP N), retrying in Ns (i/3)...`, `lib/modules/ai/client.sh:85-103,295`); the SDKs bring their own retry and backoff rules and error texts. Both APIs are one HTTPS POST with a JSON body: `internal/ai` ports the 2.x requests, retries and error mapping over `net/http` |
 | `github.com/dustin/go-humanize` v1.1.0 | Not used | 2.x size and duration formats (`512.0 KiB`, `580.3 KiB`, `32.5ms`, `N.NNs`) differ from humanize's; one small formatter reproduces them |
 | `log/slog` with `charm.land/log/v2` as TTY handler | `log/slog` only | See log above |
 
 Expected start-up after these deviations: about 5-7 ms per call (cobra,
-database drivers, gopsutil); the benchmark test in `architecture.md` 1 keeps
+database drivers); the benchmark test in `architecture.md` 1 keeps
 `gash version` under 10 ms.
 
 ## 3. Additions not in the PRD list

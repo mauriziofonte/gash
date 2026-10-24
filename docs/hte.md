@@ -54,7 +54,7 @@ its place. The other flags are `--php X.Y`,
 `--profile dev|staging|hardened`, `--https`/`--no-https`,
 `--force-https`/`--no-force-https`,
 `--force-https-bypass`/`--no-force-https-bypass`, `--alias NAME` (repeatable),
-`--no-www`, `--no-http2`, `--extra-http-port N` and `--extra-https-port N`.
+`--no-www`, `--http2`/`--no-http2`, `--extra-http-port N` and `--extra-https-port N`.
 `site modify` takes the same flags. `site remove --domain D --yes` removes
 the site's state, configuration, pool, certificate and hosts names. It never
 touches the document root, the site's overlay or its logs.
@@ -101,3 +101,36 @@ What else changes when you move:
   `~/.config/gash/hte/apache.conf` for the server
   (`gash hte apache config path`). Run `gash hte service reload` after
   editing them.
+
+## WSL
+
+On WSL2 `gash hte` runs inside the Linux distribution as on Linux, with these
+differences:
+
+* Autostart: when WSL boots with systemd (`[boot] systemd=true` in
+  `/etc/wsl.conf`), `install` uses the systemd user unit. Without systemd,
+  `--autostart auto` sets up none; `--autostart shell` starts the stack from
+  the first interactive shell that loads gash. gash never edits
+  `/etc/wsl.conf`.
+* Ports: the same `net.ipv4.ip_unprivileged_port_start` step as on Linux.
+* Names: WSL writes `/etc/hosts` again at every boot. `service start` and
+  `doctor` put the gash block back. Windows has its own hosts file, which
+  gash never edits: `gash hte hosts windows` prints the lines to add to
+  `C:\Windows\System32\drivers\etc\hosts` for the names Windows cannot
+  resolve (asked through `powershell.exe` when interop is available), and
+  `doctor` warns about those names.
+* A Windows browser reaches the sites through WSL's localhost forwarding, so
+  its requests come from `127.0.0.1`: `--force-https-bypass` would let it use
+  plain HTTP too.
+
+A check after install:
+
+1. `gash hte doctor` reports no failure.
+2. `gash hte site create --domain shop.test --docroot public`, then
+   `curl -k https://shop.test/` inside WSL answers.
+3. `gash hte hosts windows`: add the lines it prints to the Windows hosts
+   file (as administrator), then open `https://shop.test/` in a Windows
+   browser (the certificate is self-signed, so the browser warns).
+4. Run `wsl --shutdown` in Windows and open WSL again. With systemd the
+   stack is up; with `--autostart shell` it starts with the first shell.
+   `gash hte hosts check` exits 0.

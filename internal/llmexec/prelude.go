@@ -274,15 +274,15 @@ func prelude(extra []string, pr Probe) string {
 		b.WriteString("gawk() { command gawk --sandbox \"$@\"; }\n")
 	}
 
-	// Secret exclusions.
-	grepEx := pathguard.SecretExcludes("grep")
+	// Secret exclusions: the patterns without the exceptions (F-05).
+	grepEx := pathguard.ExecSecretExcludes("grep")
 	for _, dir := range pathguard.SecretDirs {
 		if strings.Contains(dir, "/") {
 			base := dir[strings.LastIndexByte(dir, '/')+1:]
 			grepEx = append(grepEx, "--exclude-dir="+pathguard.IcaseGlob(base))
 		}
 	}
-	rgEx := pathguard.SecretExcludes("rg")
+	rgEx := pathguard.ExecSecretExcludes("rg")
 
 	b.WriteString(childHelpers)
 	b.WriteString("__LLM_CX_GREP=(" + quoteArray(grepEx) + ")\n")
@@ -320,7 +320,7 @@ func prelude(extra []string, pr Probe) string {
 	if !inExtra["git"] {
 		b.WriteString("__LLM_CX_GITCFG=(" + quoteArray(pathguard.GitSafeConfig) + ")\n")
 		var gx []string
-		for _, pat := range pathguard.SecretPatterns {
+		for _, pat := range pathguard.SecretExcludeGlobs(false) {
 			gx = append(gx, ":(exclude,icase,glob)**/"+pat)
 		}
 		for _, dir := range pathguard.SecretDirs {

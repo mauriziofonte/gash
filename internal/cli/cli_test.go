@@ -102,13 +102,35 @@ func TestCompatOps(t *testing.T) {
 	require.Contains(t, out, "  gash_username  (module: gash)\n")
 }
 
-func TestNotPortedCommands(t *testing.T) {
-	for _, args := range [][]string{{"update"}} {
-		_, errOut, rc := run(args...)
-		require.Equal(t, 1, rc, args)
-		require.Contains(t, errOut, `{"error":"internal_error","details":"gash `+args[0]+` is not implemented in this gash build"`)
-	}
-	_, errOut, rc := run("init", "zsh")
+// gash update runs the selfmgmt flow (upgrade.md 3.6): it needs a git
+// checkout, takes --rollback and nothing else, and has its own help; a
+// build without the handler answers not-implemented.
+func TestUpdateCommand(t *testing.T) {
+	_, errOut, rc := run("update")
+	require.Equal(t, 1, rc)
+	require.Equal(t, "Error: Gash is not installed in /.gash as a git checkout. See https://github.com/mauriziofonte/gash.\n", errOut)
+	_, errOut, rc = run("update", "--rollback")
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, "as a git checkout")
+
+	_, errOut, rc = run("update", "--bogus")
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, `{"error":"unknown_option","details":"unknown flag: --bogus"`)
+	_, errOut, rc = run("update", "now")
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, `"error":"unexpected_argument"`)
+
+	out, _, rc := run("update", "--help")
+	require.Equal(t, 0, rc)
+	require.Contains(t, out, "gash update [--rollback]")
+	require.Contains(t, out, "--rollback")
+	require.Contains(t, out, "release/SHA256SUMS")
+
+	_, errOut, rc = runWith(invoke.NewTable(), "update")
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, `{"error":"internal_error","details":"gash update is not implemented in this gash build"`)
+
+	_, errOut, rc = run("init", "zsh")
 	require.Equal(t, 1, rc)
 	require.Contains(t, errOut, `"error":"unexpected_argument"`)
 }

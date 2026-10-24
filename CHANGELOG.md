@@ -72,6 +72,9 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   and sysinfo completions offer the real flags.
 - `GASH_DB_TIMEOUT` also bounds `gash_db_test`, which prints the driver's
   error as a hint when the connection fails.
+- `gash hte site create|modify --http2` turns HTTP/2 back on after
+  `--no-http2`; every `gash hte` command has its own `--help`, and
+  [docs/hte.md](docs/hte.md) has a WSL section.
 
 ### Changed
 
@@ -224,6 +227,21 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   described 2.x behaviour wrongly (size grammar, envelope keys, error
   vocabulary, exclusions, which user configuration the git and archive
   tools honour).
+- `llm_find` keeps its results when the root path holds a newline;
+  `llm_find` and `llm_tree` list entries in byte order, so `-n N` and the
+  500-entry cap cut at the same place.
+- Inside `llm_exec`, grep, rg, diff and git search `.env` templates
+  (`.env.example`, ...) and `id_*.pub` keys again; real secrets stay
+  excluded.
+- `remote_sync_push` and `remote_sync_pull` work with openrsync, the
+  `/usr/bin/rsync` of macOS.
+- `docker_compose_check` and `docker_compose_upgrade` refuse a `DIR/.env`
+  with an unterminated quoted value, as Compose does (`invalid_env_file`),
+  instead of reading it differently from Compose.
+- `ai_sysinfo` prints the Containers and SSL private keys headings only
+  with content, and Virtualmin certificates under their own heading.
+- The scanners' `--exclude` hint shows `'node_modules'`, which matches at
+  any depth.
 
 ### Security
 
