@@ -760,3 +760,30 @@ func TestLedger_DOCK17(t *testing.T) {
 	u, _ := registry.Lookup("docker_compose_upgrade")
 	require.Contains(t, u.Help.Body, "override files")
 }
+
+// DOCK-03: the completion word lists name the flags the functions accept
+// (testdata/script/dock03_completion.txtar drives __gash_complete).
+func TestLedger_DOCK03(t *testing.T) {
+	for fn, words := range map[string]string{
+		"docker_compose_upgrade": "--dry-run --force -f --yes -y --no-color --help",
+		"docker_compose_scan":    "-d --depth -j --json --no-color --help",
+		"docker_compose_check":   "--json --no-color --help",
+		"docker_prune_all":       "-y --yes --dry-run --help",
+		"docker_stop_all":        "-y --yes --help",
+		"docker_start_all":       "-y --yes --help",
+		"git_repair":             "-y --yes --dry-run --help",
+		"git_sync":               "-m --message --no-push --dry-run -y --yes --help",
+		"git_add_tag":            "-y --yes --dry-run --help",
+		"git_delete_tag":         "-y --yes --dry-run --help",
+		"git_apply_patch":        "-y --yes --dry-run --help",
+		"remote_push":            "-r --recursive -p --preserve --no-progress --force --help",
+		"remote_pull":            "-r --recursive -p --preserve --no-progress --force --help",
+		"remote_sync_push":       "--delete --dry-run --no-progress --force --exclude= --help",
+		"remote_sync_pull":       "--delete --dry-run --no-progress --force --exclude= --help",
+		"remote_exec":            "--script --help",
+	} {
+		f, ok := registry.Lookup(fn)
+		require.True(t, ok, fn)
+		require.Contains(t, f.Completion, `compgen -W "`+words+`"`, fn)
+	}
+}
