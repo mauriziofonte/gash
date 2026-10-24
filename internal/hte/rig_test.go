@@ -854,3 +854,57 @@ func TestLedger_HTE64Apply(t *testing.T) {
 		}
 	}
 }
+
+// TestLedger_HTE25 (engine part, option a): site modify --no-https keeps
+// the site's certificate directory, doctor lists it, and --https later
+// reuses the same pair; site remove deletes exactly that site's
+// directory, never another site's.
+func TestLedger_HTE25(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	v := m.install(t)
+	docroot := m.docroot(t)
+	for _, d := range []string{"a.test", "b.test"} {
+		if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: d, Docroot: &docroot}); err != nil {
+			t.Fatalf("create %s: %v", d, err)
+		}
+	}
+	show := func(d string) string {
+		t.Helper()
+		info, err := m.e.CertShow(ctx, d)
+		if err != nil {
+			t.Fatalf("cert show %s: %v", d, err)
+		}
+		return info.SHA256
+	}
+	a, b := show("a.test"), show("b.test")
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "a.test", HTTPS: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := show("a.test"); got != a {
+		t.Errorf("--no-https replaced the certificate")
+	}
+	doc, err := m.e.Doctor(ctx)
+	must(t, err)
+	listed := slices.ContainsFunc(doc.Checks, func(c Check) bool {
+		return c.Name == "certificate a.test" && c.Status == CheckOK && strings.Contains(c.Details, "HTTP only")
+	})
+	if !listed {
+		t.Errorf("doctor does not list the kept certificate: %+v", doc.Checks)
+	}
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "a.test", HTTPS: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := show("a.test"); got != a {
+		t.Errorf("--https did not reuse the kept certificate")
+	}
+	if _, err := m.e.SiteRemove(ctx, "a.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(v.paths.CertDir("a.test")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("remove left %s: %v", v.paths.CertDir("a.test"), err)
+	}
+	if got := show("b.test"); got != b {
+		t.Errorf("removing a.test changed b.test's certificate")
+	}
+}
