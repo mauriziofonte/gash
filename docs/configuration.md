@@ -100,7 +100,8 @@ Rules that apply to every form:
   and `gash_db_list` lists only the entry in effect.
 * A line that does not match is skipped with a warning on stderr that names
   the file, the line number and the kind of problem, never any part of the
-  line, for example
+  line (only the duplicate warning names the entry, never its value), for
+  example
   `Warning: Line 4 of ~/.gash_env: DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)`.
   Headless mode prints these warnings only with `GASH_DEBUG=1`.
 
@@ -122,8 +123,11 @@ session: it exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it.
   URL, then from the first word of a `.target-database` file in the current
   directory.
 * The connection named `default` is used when `-c` is not given.
-* Only the password is percent-decoded. Encode `%` as `%25` and, to be safe,
-  `@` as `%40`, `:` as `%3A`, `/` as `%2F`, `#` as `%23`.
+* Only the password is percent-decoded. Write `%` as `%25`; other
+  characters may be written raw or URL-encoded (`p@ss` and `p%40ss` are the
+  same password). The user name is used as written (not decoded).
+* An IPv6 host goes in brackets: `[::1]:5432`, or `[::1]` for the default
+  port. A bracket that is not closed is refused with `invalid_db_url`.
 
 `gash_db_list` masks passwords; `gash_db_test [NAME]` runs `SELECT 1` on one.
 

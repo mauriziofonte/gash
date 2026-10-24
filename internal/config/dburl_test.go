@@ -94,8 +94,10 @@ func TestParseDBURL(t *testing.T) {
 			DBURL{"mysql", "user", "p@ss", "localhost", "3306", "db"}},
 		{"CORE-12 raw @ : / # in password", "mysql://u:p@:/#x@h/d",
 			DBURL{"mysql", "u", "p@:/#x", "h", "3306", "d"}},
-		{"CORE-11 IPv6 host split at its first colon (reproduced)", "pgsql://u:p@[::1]:5432/d",
-			DBURL{"pgsql", "u", "p", "[", ":1]:5432", "d"}},
+		// 3.0: CORE-11 fixed: the bracketed IPv6 host is no longer split at
+		// its first colon (2.x: host "[", port ":1]:5432").
+		{"CORE-11 bracketed IPv6 host", "pgsql://u:p@[::1]:5432/d",
+			DBURL{"pgsql", "u", "p", "::1", "5432", "d"}},
 		{"user only", "mysql://u@h/d", DBURL{"mysql", "u", "", "h", "3306", "d"}},
 		{"empty user", "mysql://:pw@h/d", DBURL{"mysql", "", "pw", "h", "3306", "d"}},
 		{"empty port: no default", "mysql://u:p@h:/db", DBURL{"mysql", "u", "p", "h", "", "db"}},
@@ -109,6 +111,42 @@ func TestParseDBURL(t *testing.T) {
 	for _, tt := range tests {
 		if got := ParseDBURL(tt.in); got != tt.want {
 			t.Errorf("%s: ParseDBURL(%q) = %+v, want %+v", tt.name, tt.in, got, tt.want)
+		}
+	}
+}
+
+// LEDGER CORE-11: a bracketed IPv6 host is the text inside the brackets,
+// the port follows "]:" or is the driver's default, and an unclosed
+// bracket is reported for invalid_db_url (3.0: CORE-11 fixed).
+func TestLedger_CORE11(t *testing.T) {
+	tests := []struct{ in, host, port string }{
+		{"pgsql://u:p@[::1]:5432/d", "::1", "5432"},
+		{"pgsql://u:p@[::1]/d", "::1", "5432"},
+		{"mysql://u:p@[fe80::1%eth0]:3307/d", "fe80::1%eth0", "3307"},
+		{"mariadb://u@[2001:db8::7]", "2001:db8::7", "3306"},
+		{"mysql://u:p@[::1]:/d", "::1", ""},
+	}
+	for _, tt := range tests {
+		u := ParseDBURL(tt.in)
+		if u.Host != tt.host || u.Port != tt.port {
+			t.Errorf("%s: host %q port %q, want %q %q", tt.in, u.Host, u.Port, tt.host, tt.port)
+		}
+		if err := CheckDBURL(tt.in); err != nil {
+			t.Errorf("%s: %v", tt.in, err)
+		}
+	}
+	if got := ParseDBURL("pgsql://u:p@[::1]:5432/d").Display(); got != "pgsql://u@[::1]:5432/d" {
+		t.Errorf("display %q", got)
+	}
+	for _, bad := range []string{"pgsql://u:p@[::1/d", "pgsql://u:p@[::1", "mysql://u:p@[::1]x:3306/d"} {
+		if err := CheckDBURL(bad); err != ErrIPv6Host || err.Error() != "Write IPv6 hosts as [addr]:port" {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+	// A password holding "[" does not count: the host part is after the last "@".
+	for _, ok := range []string{"mysql://u:p[x@h/d", "mysql://u:p@h/[d", "mysql://u:p@h:3306/d", ""} {
+		if err := CheckDBURL(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
 		}
 	}
 }

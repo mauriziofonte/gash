@@ -29,16 +29,16 @@
 # The 'default' connection is used when no -c option is specified.
 # Database name in URL is optional (can be specified per-query with -d).
 #
-# Special characters in password must be URL-encoded:
-#   @  →  %40
-#   :  →  %3A
-#   /  →  %2F
-#   #  →  %23
-#   %  →  %25
+# Password: write % as %25; other characters may be written raw or
+# URL-encoded (p@ss and p%40ss are the same password). The user name is used
+# as written (not decoded).
+#
+# IPv6 hosts go in brackets: [addr]:port, or [addr] for the default port.
 #
 # Examples:
 # DB:default=mysql://root:password@localhost:3306/myapp
 # DB:legacy=mysql://admin:p%40ssw0rd@localhost:3307/old_db
+# DB:local6=pgsql://pguser:secret@[::1]:5432/analytics
 # DB:analytics=pgsql://pguser:secret@localhost:5432/analytics
 # DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
 #
