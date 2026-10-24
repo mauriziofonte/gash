@@ -99,12 +99,23 @@ func requireCardLayout(t *testing.T, want, got string, args []string) {
 		}
 		wf, gf := strings.Fields(sgr.ReplaceAllString(w[i], "")), strings.Fields(sgr.ReplaceAllString(g[i], ""))
 		_, isFunc := registry.Lookup(firstField(gf))
-		// The column header and a section rule follow the widest usage.
-		spacing := slices.Equal(wf, gf) || (isRule(wf) && isRule(gf))
+		// The column header (its last name cut to fit) and a section rule
+		// follow the widest usage.
+		spacing := slices.EqualFunc(wf, gf, sameCell) || (isRule(wf) && isRule(gf))
 		if !spacing && (!isFunc || firstField(wf) != firstField(gf)) {
 			require.Equal(t, want, got, "%q: line %d", args, i+1)
 		}
 	}
+}
+
+// sameCell reports whether two header cells are one name, either side
+// possibly cut with an ellipsis where the narrower layout ran out of room.
+func sameCell(a, b string) bool {
+	cut := func(x, y string) bool {
+		p, ok := strings.CutSuffix(x, "…")
+		return ok && strings.HasPrefix(y, p)
+	}
+	return a == b || cut(a, b) || cut(b, a)
 }
 
 func isRule(f []string) bool {
