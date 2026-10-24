@@ -235,3 +235,27 @@ func TestLedger_SHELL09(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "alias ll='ls -alF'\nalias la='ls -la'\n", string(b))
 }
+
+// TestLedger_SHELL10: the init script never runs =~ (which would leave
+// BASH_REMATCH set in the caller's shell) and declares nothing readonly,
+// whatever the settings; GASH_UMASK is validated and the nvm directory
+// resolved by the binary. The generated files are linted in
+// internal/compatgen, the loaded shell in testdata/script/load_hygiene.txtar.
+func TestLedger_SHELL10(t *testing.T) {
+	bad := regexp.MustCompile(`=~|\breadonly\b|declare\s+-[A-Za-z]*r`)
+	for _, env := range []map[string]string{
+		{},
+		{"GASH_UMASK": "027", "GASH_NVM": "lazy", "GASH_PATH_ADD": "~/bin"},
+		{"GASH_NVM": "on", "GASH_PROMPT": "0", "GASH_HISTORY_SYNC": "1"},
+	} {
+		h := newHarness()
+		for k, v := range env {
+			h.env[k] = v
+		}
+		out := h.emit(t)
+		require.NotEmpty(t, out)
+		for i, l := range strings.Split(out, "\n") {
+			require.False(t, bad.MatchString(l), "%v: line %d: %q", env, i+1, l)
+		}
+	}
+}

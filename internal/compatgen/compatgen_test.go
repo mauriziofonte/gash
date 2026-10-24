@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -590,4 +591,76 @@ func TestLedger_SHELL03(t *testing.T) {
 	require.Equal(t, want, got)
 	require.NotContains(t, got, "help")
 	require.NotContains(t, got, "migrate")
+}
+
+// topLevel returns the lines of a generated Bash file outside function
+// bodies (the generated files are shfmt-formatted: a function opens with
+// "NAME() {" at column 0 and closes with "}" at column 0).
+func topLevel(text string) []string {
+	var out []string
+	inFunc := false
+	for _, l := range strings.Split(text, "\n") {
+		switch {
+		case !inFunc && funcOpen.MatchString(l):
+			inFunc = true
+		case inFunc && l == "}":
+			inFunc = false
+		case !inFunc:
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+var (
+	funcOpen      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_:.-]*\(\) \{$`)
+	hygieneBad    = regexp.MustCompile(`=~|(^|[;&|{(\s])readonly\s|declare\s+-[A-Za-z]*r`)
+	gashAssign    = regexp.MustCompile(`(?:^|[^A-Za-z0-9_$])(__GASH_[A-Z0-9_]+)(?:\[[^]]*\])?\+?=`)
+	gashDeclared  = regexp.MustCompile(`declare\s+-[A-Za-z]+\s+(__GASH_[A-Z0-9_]+)`)
+	gashAllowedRE = regexp.MustCompile(`^__GASH_(COLOR|GLYPH|SYMBOL|BOOT|ENV|SPINNER|CALL|BOLD|SNAPSHOT)(_[A-Z0-9_]+)?$`)
+)
+
+// gashAllowed are the other __GASH_* names a generated file may set at
+// load time: the palette and screen sequences, the load bookkeeping that
+// gash_unload, gash_doctor --timing and completion read.
+var gashAllowed = map[string]bool{
+	"__GASH_AWK": true, "__GASH_RED": true, "__GASH_GREEN": true, "__GASH_YELLOW": true, "__GASH_BLUE": true,
+	"__GASH_CYAN": true, "__GASH_WHITE": true, "__GASH_DIM": true, "__GASH_UNDERLINE": true,
+	"__GASH_CLEAR_SCREEN": true, "__GASH_CURSOR_HIDE": true, "__GASH_CURSOR_SHOW": true, "__GASH_ERASE_EOL": true,
+	"__GASH_FETCH_REASON": true, "__GASH_HELP_LOADED": true, "__GASH_LOAD_ERRORS": true, "__GASH_LOAD_TIMES": true,
+	"__GASH_SETTINGS_KNOWN": true, "__GASH_T0": true, "__GASH_T1": true, "__GASH_TIMING": true,
+	"__GASH_USER_ALIASES": true, "__GASH_PRE_SYMBOLS": true, "__GASH_POST_SYMBOLS": true,
+	"__GASH_COMPLETE_NAMES": true, "__GASH_SNAPSHOT2": true,
+}
+
+// LEDGER SHELL-10: loading leaves no BASH_REMATCH and nothing readonly in
+// the caller's shell: no generated file runs =~, readonly or declare -r at
+// top level, and the __GASH_* names they set while loading are the
+// documented bookkeeping of the allowlist. The init script is linted in
+// internal/shellinit, the loaded shell in testdata/script/load_hygiene.txtar.
+func TestLedger_SHELL10(t *testing.T) {
+	dir := tree(t)
+	files := append(bashFiles(dir), filepath.Join(dir, "bash_completion"))
+	set := map[string]bool{}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		require.NoError(t, err)
+		for _, l := range topLevel(string(b)) {
+			code := strings.TrimSpace(l)
+			if strings.HasPrefix(code, "#") {
+				continue
+			}
+			require.False(t, hygieneBad.MatchString(code), "%s: top-level %q", f, l)
+			for _, m := range gashAssign.FindAllStringSubmatch(code, -1) {
+				set[m[1]] = true
+			}
+			for _, m := range gashDeclared.FindAllStringSubmatch(code, -1) {
+				set[m[1]] = true
+			}
+		}
+	}
+	require.NotEmpty(t, set)
+	for name := range set {
+		require.True(t, gashAllowed[name] || gashAllowedRE.MatchString(name), "%s is set at load time and not in the allowlist", name)
+	}
 }
