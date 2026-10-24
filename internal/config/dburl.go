@@ -221,22 +221,6 @@ func MaskDBURL(url string) string {
 	return m[1] + "****" + m[2]
 }
 
-// envURLMask is the llm_env redaction regex (__llm_env_redact), anchored at
-// the start of the value, the password ending at the first "/" or "@"
-// (LEDGER LLM-02, reproduced in rc.A).
-var envURLMask = regexp.MustCompile(`(?s)^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):[^/@]*@(.*)$`)
-
-// MaskEnvURL is the URL step of llm_env's value redaction: scheme://user:
-// followed by "***@" and the rest, applied once to the whole value. The
-// token patterns that llm_env applies afterwards are not part of it.
-func MaskEnvURL(value string) string {
-	m := envURLMask.FindStringSubmatch(value)
-	if m == nil {
-		return value
-	}
-	return m[1] + ":***@" + m[2]
-}
-
 // MaskAIToken is how gash_ai_list shows a token: ${token:0:8}... (the first
 // eight characters, then "...").
 func MaskAIToken(token string) string {
