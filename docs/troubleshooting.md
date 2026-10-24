@@ -162,7 +162,9 @@ shows it. See [migration.md](migration.md).
 * For good: `gash_uninstall` in an interactive terminal (it refuses in headless
   mode). After confirmation it removes the Gash block from `~/.bashrc`,
   `~/.bash_profile` and `~/.profile`, deletes `~/.gashrc` and the install
-  directory, and asks separately before deleting `~/.gash_env`.
+  directory, and asks separately before deleting `~/.gash_env`. A profile that
+  is a symlink (dotfiles) stays one: the file it points to is edited, with its
+  mode kept.
 * Backups it keeps, and lists at the end (`Backups kept: ...`): each edited
   profile as it was before the edit (`~/.bashrc.gash-uninstall.bak`,
   `~/.bash_profile.gash-uninstall.bak`, `~/.profile.gash-uninstall.bak`), and

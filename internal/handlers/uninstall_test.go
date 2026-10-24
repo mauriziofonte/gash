@@ -5,7 +5,6 @@ package handlers
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -70,6 +69,13 @@ var uninstallCases = []struct {
 	{"help", uninstallFake, "y\n", nil, []string{"-h"}},
 }
 
+// uninstall3x names the cases where 3.0 no longer matches 2.x. 3.0: SELF-04
+// fixed: a linked profile stays a link, and a backup path taken by a
+// directory leaves the profile unedited with an error (TestLedger_SELF04
+// proves both). The help page carries the 3.0 notes on the backups kept
+// (SELF-02).
+var uninstall3x = map[string]bool{"linked profile": true, "backup is a dir": true, "help": true}
+
 // uninstallState lists the case directory: every path with its type and
 // mode, link targets and file contents.
 const uninstallState = `cd "$D" && find . -mindepth 1 | LC_ALL=C sort | while read -r p; do ` +
@@ -123,6 +129,10 @@ func TestUninstallMatches2x(t *testing.T) {
 					env[k] = strings.ReplaceAll(v, "$D", d)
 				}
 				o, rc := runAnswering(t, "gash_uninstall", env, mode == "on", tc.answers, tc.args...)
+				if uninstall3x[tc.name] {
+					// 3.0 differs from 2.x here on purpose (see uninstall3x).
+					continue
+				}
 				// 3.0: SELF-02 fixed. A ~/.gashrc with the user's lines is kept
 				// as a backup and the profile backups are kept and listed, so
 				// those lines, files and the backup-removal status are put back
@@ -200,23 +210,34 @@ func TestLedger_SELF02(t *testing.T) {
 	require.Equal(t, "# before\n# after\n", string(b))
 }
 
-// LEDGER SELF-04, reproduced in rc.A: a linked ~/.bashrc becomes an edited
-// regular file, and the link's target keeps the Gash block. That is GNU
-// sed -i; BSD sed -i (a macOS runner) refuses the link instead, in 2.x too.
-func TestLedger_SELF04_2x(t *testing.T) {
-	if exec.Command("/bin/sh", "-c", "PATH=/usr/bin:/bin sed --version").Run() != nil {
-		t.Skip("SELF-04 is the GNU sed -i behavior; this sed is not GNU")
-	}
-	d, env := uninstallFixture(t, uninstallFake+"mkdir $D/dot; "+uninstallBlock+">$D/dot/bashrc; ln -s ../dot/bashrc $D/home/.bashrc")
+// LEDGER SELF-04: a linked ~/.bashrc stays a link, and the file it points
+// to loses the Gash block and keeps its mode (3.0: SELF-04 fixed; 2.x's
+// GNU sed -i replaced the link by an edited regular file).
+func TestLedger_SELF04(t *testing.T) {
+	d, env := uninstallFixture(t, uninstallFake+"mkdir $D/dot; "+uninstallBlock+">$D/dot/bashrc; chmod 640 $D/dot/bashrc; ln -s ../dot/bashrc $D/home/.bashrc")
 	_, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
 	require.Equal(t, 0, rc)
-	st, err := os.Lstat(filepath.Join(d, "home/.bashrc"))
-	require.NoError(t, err)
-	require.True(t, st.Mode().IsRegular(), "the link was replaced")
-	b, err := os.ReadFile(filepath.Join(d, "home/.bashrc"))
+	target, err := os.Readlink(filepath.Join(d, "home/.bashrc"))
+	require.NoError(t, err, "the link was replaced")
+	require.Equal(t, "../dot/bashrc", target)
+	b, err := os.ReadFile(filepath.Join(d, "dot/bashrc"))
 	require.NoError(t, err)
 	require.Equal(t, "# before\n# after\n", string(b))
-	b, err = os.ReadFile(filepath.Join(d, "dot/bashrc"))
+	st, err := os.Stat(filepath.Join(d, "dot/bashrc"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o640), st.Mode().Perm())
+	b, err = os.ReadFile(filepath.Join(d, "home/.bashrc.gash-uninstall.bak"))
 	require.NoError(t, err)
 	require.Contains(t, string(b), "# >>> GASH START >>>")
+
+	// A backup path taken by a directory: the profile is left as it was,
+	// with an error, and the uninstall goes on.
+	d, env = uninstallFixture(t, uninstallFake+uninstallBlock+">$D/home/.profile; mkdir $D/home/.profile.gash-uninstall.bak")
+	out, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
+	require.Equal(t, 0, rc)
+	require.Contains(t, out, "Error: Failed to edit "+d+"/home/.profile; remove the Gash block yourself.\n")
+	b, err = os.ReadFile(filepath.Join(d, "home/.profile"))
+	require.NoError(t, err)
+	require.Contains(t, string(b), "# >>> GASH START >>>")
+	require.NoDirExists(t, filepath.Join(d, "home/.gash"))
 }

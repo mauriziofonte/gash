@@ -12,6 +12,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -38,9 +39,10 @@ const UninstallAskEnv = 10
 // 'source.*[./]gashrc').
 var gashrcSource = regexp.MustCompile(`source.*[./]gashrc`)
 
-// The profile edits of 2.x, run with sed -i.gash-uninstall.bak as 2.x ran
-// them: the delimited block, or the 1.x block (its comment line and the
-// four lines after it; the `;` before `}` lets BSD sed parse it too).
+// The profile edits of 2.x, run with sed as 2.x ran them: the delimited
+// block, or the 1.x block (its comment line and the four lines after it;
+// the `;` before `}` lets BSD sed parse it too). editProfile writes the
+// result in place of the file a linked profile points to.
 const (
 	uninstallBackup     = ".gash-uninstall.bak"
 	uninstallSedBlock   = `/# >>> GASH START >>>/,/# <<< GASH END <<</d`
@@ -53,8 +55,8 @@ const (
 // Gash checkout), then asks about the settings file. A ~/.gashrc that holds
 // the user's own lines is kept as ~/.gashrc.gash-uninstall.bak, and the
 // profile backups sed makes are kept and listed (3.0: SELF-02 fixed; 2.x
-// removed both). A linked profile is replaced by an edited regular file
-// (SELF-04): sed -i runs as 2.x ran it.
+// removed both). A linked profile stays a link and its target is edited
+// (3.0: SELF-04 fixed; 2.x's sed -i replaced the link by a regular file).
 func (m *Module) uninstall(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -104,9 +106,9 @@ func (m *Module) uninstall(c *invoke.Call) int {
 		p.Info("Removing Gash block from: " + profile)
 		switch {
 		case strings.Contains(string(text), "# >>> GASH START >>>"):
-			m.tool(c, "sed", "-i"+uninstallBackup, uninstallSedBlock, profile)
+			m.editProfile(c, p, profile, uninstallSedBlock)
 		case strings.Contains(string(text), "# Load Gash Bash"):
-			m.tool(c, "sed", "-i"+uninstallBackup, uninstallSed1xBlock, profile)
+			m.editProfile(c, p, profile, uninstallSed1xBlock)
 		}
 	}
 
@@ -151,6 +153,69 @@ func uninstallTarget(c *invoke.Call, p ui.Printer, dir string) (string, bool) {
 		return "", false
 	}
 	return real, true
+}
+
+// editProfile removes the Gash block from profile: sed EXPR prints the
+// edited text, PROFILE.gash-uninstall.bak gets a copy of the text before
+// the edit, and the edited text replaces the file the profile resolves to
+// (a temporary file in its directory renamed over it, with its mode), so a
+// linked profile stays a link (LEDGER SELF-04). sed's own messages pass
+// through; false when the profile was left as it was.
+func (m *Module) editProfile(c *invoke.Call, p ui.Printer, profile, expr string) bool {
+	target, err := filepath.EvalSymlinks(profile)
+	if err != nil {
+		target = profile
+	}
+	st, err := os.Stat(target)
+	if err != nil {
+		p.Error("Failed to edit " + profile + "; remove the Gash block yourself.")
+		return false
+	}
+	before, err := os.ReadFile(target)
+	if err != nil {
+		p.Error("Failed to edit " + profile + "; remove the Gash block yourself.")
+		return false
+	}
+	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "sed", Args: []string{expr, target}, Options: runner.Options{
+		Env: c.Env.Child(), Stderr: c.Stderr,
+	}})
+	if se, ok := err.(*runner.StartError); ok {
+		_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
+		return false
+	}
+	if err != nil || !res.Success() {
+		return false
+	}
+	mode := st.Mode().Perm()
+	if writeAtomic(profile+uninstallBackup, before, mode) != nil || writeAtomic(target, res.Stdout, mode) != nil {
+		p.Error("Failed to edit " + profile + "; remove the Gash block yourself.")
+		return false
+	}
+	return true
+}
+
+// writeAtomic writes data to path through a temporary file in the same
+// directory renamed over it, with mode perm. A link at path is replaced.
+func writeAtomic(path string, data []byte, perm os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".gash-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp, perm)
+	}
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+	}
+	return err
 }
 
 // uninstallGashrc removes ~/.gashrc when it is a template an installer

@@ -155,6 +155,12 @@ func TestUpgradeMatches2x(t *testing.T) {
 						env[k] = val
 					}
 					o, rc := runMerged(t, "gash_upgrade", env, mode == "on", a...)
+					if tc.name == "help" {
+						// The help page carries the 3.0 notes (SELF-01); the
+						// help package tests its rendering.
+						n++
+						continue
+					}
 					if upgradeSELF01[tc.name] {
 						// 3.0: SELF-01 fixed: a checkout newer than the latest
 						// release stays where it is (2.x moved it back).

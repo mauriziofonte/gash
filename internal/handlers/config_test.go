@@ -43,7 +43,7 @@ func run2xConfig(t *testing.T, env []string, color bool, script string) (string,
 var configFixtures = map[string]string{
 	"none":  "",
 	"empty": "# nothing\n",
-	"many": "DB:default=mysql://u:p@ss@h/d\nDB:default=pgsql://:SECRET@h2:5432/e\nDB:a-very-long-connection-name=mariadb://root:x@db\n" +
+	"many": "DB:default=mysql://u:p@ss@h/d\nDB:default=pgsql://:SECR@h2:5432/e\nDB:a-very-long-connection-name=mariadb://root:x@db\n" +
 		"DB:ünï=mysql://ü:pä@h/d\nDB:nopw=mysql://u@h/d\nDB:tab=mysql://u:p@h/d\tx\n" +
 		"AI:claude=sk-ant-1234567890\nAI:gemini=short\nAI:x=é€abcdefghij\nAI:averyveryverylongname=k\n",
 }
@@ -60,6 +60,10 @@ func TestConfigListsMatch2x(t *testing.T) {
 				for _, color := range []bool{false, true} {
 					env := []string{"HOME=" + home, "LANG=" + lang}
 					wantOut, wantErr := run2xConfig(t, env, color, fn)
+					// 3.0: CORE-03 fixed: a password-only URL is masked too
+					// (2.x showed it). The password is as long as the mask,
+					// so the columns 2.x computed still hold.
+					wantOut = strings.ReplaceAll(wantOut, "pgsql://:SECR@", "pgsql://:****@")
 					out, errOut, rc := run(t, fn, map[string]string{"HOME": home, "LANG": lang}, color)
 					require.Equal(t, 0, rc)
 					require.Equal(t, wantOut, out, "%s %s %s %v", name, fn, lang, color)

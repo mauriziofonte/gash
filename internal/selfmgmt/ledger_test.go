@@ -145,3 +145,35 @@ func TestLedger_SELF01(t *testing.T) {
 		require.False(t, ok, bad)
 	}
 }
+
+// LEDGER SELF-04: uninstall edits the file a linked profile points to and
+// leaves the link in place, the target's mode kept; the backup next to the
+// profile holds the text before the edit (3.0: SELF-04 fixed).
+func TestLedger_SELF04(t *testing.T) {
+	d := t.TempDir()
+	home := filepath.Join(d, "home")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".gash/lib/core"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash/gash.sh"), nil, 0o644))
+	require.NoError(t, os.Mkdir(filepath.Join(d, "dotfiles"), 0o755))
+	block := "a\n# >>> GASH START >>>\nsource ~/.gashrc\n# <<< GASH END <<<\nb\n"
+	require.NoError(t, os.WriteFile(filepath.Join(d, "dotfiles/bashrc"), []byte(block), 0o600))
+	require.NoError(t, os.Symlink("../dotfiles/bashrc", filepath.Join(home, ".bashrc")))
+	_, errOut, rc := callModule(t, New(), "gash_uninstall",
+		map[string]string{"HOME": home, "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", UninstallStepVar: "remove"})
+	require.Equal(t, 0, rc, errOut)
+	link, err := os.Readlink(filepath.Join(home, ".bashrc"))
+	require.NoError(t, err)
+	require.Equal(t, "../dotfiles/bashrc", link)
+	b, err := os.ReadFile(filepath.Join(d, "dotfiles/bashrc"))
+	require.NoError(t, err)
+	require.Equal(t, "a\nb\n", string(b))
+	st, err := os.Stat(filepath.Join(d, "dotfiles/bashrc"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), st.Mode().Perm())
+	b, err = os.ReadFile(filepath.Join(home, ".bashrc.gash-uninstall.bak"))
+	require.NoError(t, err)
+	require.Equal(t, block, string(b))
+	entries, err := os.ReadDir(filepath.Join(d, "dotfiles"))
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "no temporary file left")
+}
