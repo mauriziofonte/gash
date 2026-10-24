@@ -65,7 +65,8 @@ caller's shell, after three checks:
 Arguments naming a secret file (see below), also as `NAME=path` or as a value
 attached to a short option or option cluster (`-f.env`, `-ivf.env`), are
 refused.
-Unquoted globs are expanded first; a match that is a secret file or starts with
+Unquoted globs are expanded first, by Gash, in byte order whatever the locale
+(bash does no globbing of its own); a match that is a secret file or starts with
 `-` is refused. In the child shell, functions shadowing allowed commands are
 removed, `sed` runs as GNU `sed --sandbox`, `awk` as `gawk --sandbox` (both
 refused where unavailable), and `git` as described in [Git](#git). `grep`,

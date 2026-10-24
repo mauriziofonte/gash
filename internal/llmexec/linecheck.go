@@ -102,10 +102,11 @@ var redirRE = regexp.MustCompile(`^(2>&1|1?>&2|[12]?>[[:space:]]*/dev/null|&>[[:
 // Bash therefore groups the commands as it grouped the raw line in 2.x, and a line that bash rejected with a syntax error (and
 // status 2) is rejected the same way, on the same line, running no word of
 // it. Adjacent operators stay adjacent, so ";;" is still the token bash
-// refuses as ";;". So does a line continuation between two operators: bash
-// drops it before reading tokens, so "|\<newline>|" is "||" to bash, as it
-// was in 2.x, while the parser saw two pipes around an empty command (the
-// words, all validated, are the same either way; EXEC-08, reproduced).
+// refuses as ";;". A line continuation between the two characters of "||"
+// or "&&" is dropped before the operator is read, as bash drops it: 2.x saw
+// two pipes around an empty command where bash read "||" (3.0: EXEC-08
+// fixed). The operator is rendered whole and the continuations after it,
+// so later lines keep their line numbers.
 func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 	n := len(cmd)
 	trailingBackslash := false
@@ -210,23 +211,28 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 			return "", refuse("construct_not_allowed", string(c), "RETRY",
 				"Variable expansion and command substitution are not allowed; write values literally")
 		case '|':
-			if i+1 < n && cmd[i+1] == '&' {
+			// The next character is read past line continuations, as bash
+			// joins them before reading the operator (3.0: EXEC-08 fixed).
+			j, conts := skipConts(cmd, i+1)
+			if j < n && cmd[j] == '&' {
 				return "", refuse("construct_not_allowed", "|&", "RETRY", "Use 2>&1 |")
 			}
-			if i+1 < n && cmd[i+1] == '|' {
-				i++
+			if j < n && cmd[j] == '|' {
+				i = j
 				if err := lc.endSimple("||"); err != nil {
 					return "", err
 				}
+				lc.gap = conts
 			} else if err := lc.endSimple("|"); err != nil {
 				return "", err
 			}
 		case '&':
-			if i+1 < n && cmd[i+1] == '&' {
-				i++
+			if j, conts := skipConts(cmd, i+1); j < n && cmd[j] == '&' {
+				i = j
 				if err := lc.endSimple("&&"); err != nil {
 					return "", err
 				}
+				lc.gap = conts
 			} else {
 				return "", refuse("construct_not_allowed", "&", "RETRY", "Background jobs are not allowed")
 			}
@@ -265,6 +271,17 @@ func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
 	}
 	lc.script.WriteString(lc.gap)
 	return lc.script.String(), nil
+}
+
+// skipConts returns the index of the first character at or after j that
+// is not part of a line continuation (backslash-newline), and the
+// continuations it skipped.
+func skipConts(cmd string, j int) (int, string) {
+	k := j
+	for k+1 < len(cmd) && cmd[k] == '\\' && cmd[k+1] == '\n' {
+		k += 2
+	}
+	return k, cmd[j:k]
 }
 
 func isDquoteEscapable(c byte) bool {
