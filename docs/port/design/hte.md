@@ -686,7 +686,9 @@ Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
 1.1.1, `ApacheManager.php:50-143`), made strict:
 
 1. Candidates: every `*.conf` under the platform's vhost directories
-   (recursive, as hte-cli), classified by marker; a file with a marker but no
+   (recursive, as hte-cli; an entry the user cannot read, or a symlink
+   loop, is listed in the plan as unreadable and the scan goes on, HTE-28),
+   classified by marker; a file with a marker but no
    parseable `SetHandler "proxy:unix:.../php<X.Y>-fpm-<domain>.sock|..."` is
    Malformed (hte-cli 1.1.0 crashed on those, 1.1.1 skipped them).
 2. Identity: the socket's domain, cross-checked against `ServerName`
