@@ -20,8 +20,10 @@ var diskTypes = regexp.MustCompile(`^(ext[2-4]|xfs|btrfs|zfs|f2fs|fat|vfat|exfat
 // wslDrive is a Windows drive mounted by WSL (drvfs or 9p on /mnt/X).
 var wslDrive = regexp.MustCompile(`^/mnt/[a-z]$`)
 
-// diskUsage is disk_usage: `df -PTk`, else `df -Pk` (BSD df), each one's
-// output dropped when df fails (SYS-14), filtered and drawn as 2.x did.
+// diskUsage is disk_usage: `df -PTk`, else `df -Pk` (BSD df) when -PTk
+// printed no data row, filtered and drawn as 2.x did. df's output counts
+// whatever its exit status: GNU df exits 1 for one unreadable mount while
+// it still lists the others (SYS-14).
 func (m *Module) diskUsage(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -76,14 +78,22 @@ func (m *Module) diskUsage(c *invoke.Call) int {
 	return 0
 }
 
-// df is `raw="$(df FLAGS 2>/dev/null)" || raw=""`.
+// df is `raw="$(df FLAGS 2>/dev/null)"` whatever df's status, "" when df
+// did not run or printed no data row below its header.
 func (m *Module) df(c *invoke.Call, flags string) string {
 	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "df", Args: []string{flags},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
-	if err != nil || res.ExitCode != 0 {
+	if err != nil {
 		return ""
 	}
-	return runner.CommandSubst(res.Stdout)
+	raw := runner.CommandSubst(res.Stdout)
+	lines := strings.Split(raw, "\n")
+	for _, l := range lines[1:] {
+		if strings.TrimSpace(l) != "" {
+			return raw
+		}
+	}
+	return ""
 }
 
 type diskRow struct {

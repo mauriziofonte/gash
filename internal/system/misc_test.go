@@ -88,15 +88,25 @@ func TestDiskUsageColors(t *testing.T) {
 	require.NotContains(t, r.out, "\x1b[")
 }
 
-// SYS-14: a df that fails loses its whole output: the typed listing falls
-// back to -Pk, and -Pk failing too is the df failure.
+// 3.0: SYS-14 fixed: df's rows count whatever its exit status (GNU df
+// exits 1 for one unreadable mount); -Pk is the fallback only when -PTk
+// printed no data row, and the df failure is an output with none.
 func TestLedger_SYS14(t *testing.T) {
-	m, _, _ := tm(t, runner.NewFake(t, df("-PTk", dfTyped, 1), df("-Pk", dfBSD, 0)))
+	ext4 := "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n" +
+		"/dev/vda1 ext4 104857600 52428800 52428800 50% /\n"
+	m, _, _ := tm(t, runner.NewFake(t, df("-PTk", ext4, 1)))
 	r := call(m, "disk_usage", nil, nil, "")
+	require.Equal(t, 0, r.rc)
+	require.Empty(t, r.err)
+	require.Contains(t, r.out, "/dev/vda1")
+
+	header := "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n"
+	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", header, 1), df("-Pk", dfBSD, 1)))
+	r = call(m, "disk_usage", nil, nil, "")
 	require.Equal(t, "\n  MOUNT  DEVICE        TYPE     SIZE     USED     FREE  USE\n"+
 		"  /      /dev/disk1s1  -     9.0 KiB  5.0 KiB  4.0 KiB  ━━━━━━────  56%\n\n", r.out)
 
-	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", dfTyped, 1), df("-Pk", dfBSD, 1)))
+	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", "", 1), df("-Pk", header, 1)))
 	r = call(m, "disk_usage", nil, nil, "")
 	require.Equal(t, result{"", "Error: disk_usage: df failed\n", 1}, r)
 }
