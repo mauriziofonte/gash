@@ -108,3 +108,31 @@ func TestCollect(t *testing.T) {
 	_, err := os.Stat(fx.env["SUDO_LOG"])
 	require.True(t, os.IsNotExist(err))
 }
+
+// TestFollowup_F10: in the collectors ai_sysinfo runs (every 2.x header
+// at once), the 3.x headings Containers, Virtualmin SSL and SSL private
+// keys print only with a line under them, and Virtualmin's certificates
+// sit under their own heading, not Let's Encrypt's (3.0: F-10 fixed).
+func TestFollowup_F10(t *testing.T) {
+	collect := func(fx *fixture, section string) string {
+		e := invoke.EnvMap(fx.env)
+		var w bytes.Buffer
+		c := &invoke.Call{Name: "ai_sysinfo", Env: e, Stdin: strings.NewReader(""), Stdout: &w, Stderr: &w, Term: term.Fixed(e, true, true, true)}
+		s := fx.m.Begin(c, false, false)
+		defer s.Release()
+		s.Collect(&w, section)
+		return w.String()
+	}
+	empty := newFixture(t)
+	require.NotContains(t, collect(empty, "infra"), "--- Containers")
+	sys := collect(empty, "system")
+	require.NotContains(t, sys, "--- SSL private keys")
+	require.NotContains(t, sys, "--- Virtualmin SSL")
+	require.Contains(t, sys, "--- Kernel tuning\n") // a 2.x header still prints at once
+
+	full := newFixture(t, tree{"etc/containerd/": "", "etc/letsencrypt/live/a.example/": "",
+		"etc/ssl/virtualmin/1/": "", "etc/ssl/private/k.key": ""})
+	require.Contains(t, collect(full, "infra"), "--- Containers\ncontainerd=present\n")
+	sys = collect(full, "system")
+	require.Contains(t, sys, "--- Let's Encrypt\na.example\n--- Virtualmin SSL\nDomains=1\n--- SSL private keys\n")
+}
