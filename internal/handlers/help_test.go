@@ -75,9 +75,11 @@ var helpCalls = [][]string{
 	{"--list", "--no-color"}, {"--no-color", "dsa"}, {"all_colors"}, {"path_add"}, {"gash_username"},
 }
 
-// migrateListing is a gash_help listing line of gash_migrate, from its
-// name to the end of the line.
-var migrateListing = regexp.MustCompile(`(?m)^(.*gash_migrate\b).*$`)
+// migrateListing is a gash_help listing line, from its name to the end of
+// the line, of a function whose summary 3.0 rewrote: gash_migrate (the D-6
+// pointer, SHELL-18) and archive_extract, ai_ask and llm_config (their
+// fixed behaviour).
+var migrateListing = regexp.MustCompile(`(?m)^(.*\b(?:gash_migrate|archive_extract|ai_ask|llm_config)\b).*$`)
 
 // gash_help prints what 2.x prints: every form, colors off, on and
 // shadowed by --no-color, at two widths.
