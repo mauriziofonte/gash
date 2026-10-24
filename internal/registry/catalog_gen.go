@@ -3406,7 +3406,13 @@ var functions = []Function{
 				"  sysinfo services --llm\n" +
 				"\n" +
 				"  # Combine with AI for instant analysis\n" +
-				"  sysinfo webstack --llm | ai_query \"audit this web stack\"",
+				"  sysinfo webstack --llm | ai_query \"audit this web stack\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  On a terminal a normal user is asked for sudo only by the sections\n" +
+				"  that read root-only files (identity, storage, services, auth,\n" +
+				"  security, system, all); overview, network, webstack, mail and infra\n" +
+				"  never ask.",
 		},
 		Fallback:          &Usage{Program: "sysinfo", Usage: "sysinfo [section] [--llm] [--no-color]", Description: "System information enumeration for headless Debian/Ubuntu servers.\nSections: overview identity storage services auth network security webstack mail infra system all\nFlags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si"},
 		ShellVars:         []string{"TMPDIR"},

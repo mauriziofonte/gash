@@ -25,6 +25,10 @@ import (
 // Sections are the words sysinfo takes, in the order of its help.
 var Sections = []string{"overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all"}
 
+// needsSudo are the sections that read anything as root; sysinfo asks
+// for sudo only for those, and for all (SYS-15).
+var needsSudo = map[string]bool{"identity": true, "storage": true, "services": true, "auth": true, "security": true, "system": true, "all": true}
+
 // Module is the sysinfo handler with its seams: the runner, the sysroot,
 // the user id and the period of the sudo keep-alive (0: none).
 type Module struct {
@@ -72,7 +76,10 @@ func (m *Module) sysinfo(c *invoke.Call) int {
 	if llm {
 		noColor = true
 	}
-	s := m.Begin(c, noColor, !llm)
+	s := m.session(c, noColor)
+	if needsSudo[section] {
+		s = m.Begin(c, noColor, !llm)
+	}
 	defer s.Release()
 	// The lazy headers keep their state in memory: no state directory.
 	o := s.output(c.Stdout, llm, true)
@@ -105,17 +112,11 @@ type Session struct {
 // Begin is __sysinfo_ensure_sudo for one run of c: root needs nothing;
 // cached credentials (`sudo -n true`) are kept alive; otherwise, on a
 // terminal outside headless mode, `sudo -v` asks once, with the Info and
-// Warning lines when verbose. Every run asks, whatever its sections use
-// (SYS-15). noColor is the --no-color flag of the run.
+// Warning lines when verbose. sysinfo calls it only for the sections that
+// read as root (SYS-15). noColor is the --no-color flag of the run.
 func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
-	ctx := c.Ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	s := &Session{m: m, c: c, ctx: ctx, env: c.Env.Child(), style: ui.StyleOf(c.Term, noColor)}
-	s.f = files{sys: m.sys, u8: s.style.UTF8}
-	if m.uid() == 0 {
-		s.sudo = true
+	s := m.session(c, noColor)
+	if s.sudo {
 		return s
 	}
 	if s.status("sudo", "-n", "true") != 0 {
@@ -126,7 +127,7 @@ func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
 		if verbose {
 			p.Info("Elevated privileges needed for full system enumeration.")
 		}
-		res, err := m.run.Run(ctx, runner.Cmd{Path: "sudo", Args: []string{"-v"},
+		res, err := m.run.Run(s.ctx, runner.Cmd{Path: "sudo", Args: []string{"-v"},
 			Options: runner.Options{Env: s.env, Stdin: c.Stdin, Stdout: c.Stdout, Stderr: io.Discard}})
 		if err != nil || res.ExitCode != 0 {
 			if verbose {
@@ -137,6 +138,19 @@ func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
 	}
 	s.sudo = true
 	s.keepAlive()
+	return s
+}
+
+// session is a Session that asks for nothing: root reads as root, any
+// other user reads as itself.
+func (m *Module) session(c *invoke.Call, noColor bool) *Session {
+	ctx := c.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s := &Session{m: m, c: c, ctx: ctx, env: c.Env.Child(), style: ui.StyleOf(c.Term, noColor)}
+	s.f = files{sys: m.sys, u8: s.style.UTF8}
+	s.sudo = m.uid() == 0
 	return s
 }
 

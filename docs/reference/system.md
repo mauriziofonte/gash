@@ -510,6 +510,15 @@ sysinfo services --llm
 sysinfo webstack --llm | ai_query "audit this web stack"
 ```
 
+#### Notes
+
+```text
+On a terminal a normal user is asked for sudo only by the sections
+that read root-only files (identity, storage, services, auth,
+security, system, all); overview, network, webstack, mail and infra
+never ask.
+```
+
 See also: `ai_sysinfo`
 
 ## wsl_compact

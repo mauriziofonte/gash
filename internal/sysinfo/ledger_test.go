@@ -16,16 +16,24 @@ import (
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
-// LEDGER SYS-15 (reproduced): a normal user on a terminal is asked for
-// sudo before any section, overview and network included, which never
-// read as root.
+// 3.0: SYS-15 fixed: a normal user on a terminal is asked for sudo only
+// for the sections that read as root (and all); overview, network,
+// webstack, mail and infra run with no sudo call.
 func TestLedger_SYS15(t *testing.T) {
-	for _, args := range [][]string{{"overview", "--llm"}, {"network", "--llm"}, {"network"}, {"auth", "--llm"}} {
+	for _, args := range [][]string{{"overview", "--llm"}, {"network", "--llm"}, {"network"}, {"webstack"}, {"mail", "--llm"}, {"infra"}} {
 		fx := newFixture(t, etcTree, procTree)
 		fx.uid = 1000
 		r := fx.call(t, term.Fixed(invoke.EnvMap(fx.env), true, false, false), args...)
 		require.Equal(t, 0, r.rc, args)
-		require.Equal(t, "sudo -n true\nsudo -v\n", fx.sudo(t), args)
+		require.Empty(t, fx.sudo(t), args)
+		require.Empty(t, r.err, args)
+	}
+	for _, args := range [][]string{{"auth", "--llm"}, {"identity"}, {"all", "--llm"}} {
+		fx := newFixture(t, etcTree, procTree)
+		fx.uid = 1000
+		r := fx.call(t, term.Fixed(invoke.EnvMap(fx.env), true, false, false), args...)
+		require.Equal(t, 0, r.rc, args)
+		require.True(t, strings.HasPrefix(fx.sudo(t), "sudo -n true\nsudo -v\n"), args)
 		if args[len(args)-1] == "--llm" {
 			require.Empty(t, r.err, args)
 		} else {
