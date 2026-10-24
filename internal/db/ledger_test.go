@@ -173,11 +173,12 @@ func TestLedger_DB09(t *testing.T) {
 	_, err := os.Stat(marker)
 	require.True(t, os.IsNotExist(err), "a meta-command ran on the client")
 
-	// The DB-01 vector passes the guard as in 2.x and reaches the server
-	// as SQL, which refuses it; no psql on PATH is needed.
+	// 3.0: DB-01 fixed. The DB-01 vector passed the guard in 2.x and
+	// reached the server as SQL, which refused it; the guard now refuses
+	// its backslash line before any connection.
 	got := runGo(t, m, d, env, "llm_db_query", "SELECT 1 WHERE somee'\\'\n\\1\n'")
 	require.Equal(t, 1, got.RC)
-	require.Regexp(t, `^\{"error":"pgsql_error","details":"(\\.|[^"\\])+","action":"RETRY"`, got.Stderr)
+	require.Regexp(t, `^\{"error":"client_command_blocked","details":"Backslash outside a string literal","action":"FATAL"`, got.Stderr)
 	got = runGo(t, m, d, env, "llm_db_query", "SELECT 1 AS one")
 	require.Equal(t, result{`{"data":[{"one":1}],"rows":1,"query_time":"0µs"}` + "\n", "", 0}, got)
 }

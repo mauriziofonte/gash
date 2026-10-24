@@ -111,13 +111,15 @@ points read from a file (`find -files0-from`, `--files0-from`).
 
 Read-only is enforced twice, so one parser mistake does not become a write.
 First a **SQL guard** lexes the query with the target engine's quoting rules
-(including PostgreSQL `E''` and dollar quotes), ignoring literals and comments.
+(including PostgreSQL `E''` strings, where the `E` starts a token, and dollar
+quotes), ignoring literals and comments.
 It accepts one statement (a trailing `;` is fine) starting with `SELECT`,
 `WITH`, `VALUES`, `TABLE`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `PRAGMA`,
 and refuses write keywords anywhere (`INSERT`, `UPDATE`, `DELETE`, `DROP`,
 `CREATE`, `ALTER`, `INTO`, `OUTFILE`, `LOAD DATA`, `COPY`, ...), file and
 program functions (`LOAD_FILE`, `PG_READ_FILE`, `LO_IMPORT`, `DBLINK`, ...),
-`SLEEP`, `BENCHMARK`, client commands (a backslash outside a literal), MySQL
+`SET`, `SLEEP`, `BENCHMARK`, client commands (a backslash outside a literal,
+or at the start of any line, literals and comments included), MySQL
 `/*! */` comments, SQLite dot-commands and lines holding only `go` or `/`.
 Then the **session is read-only**:
 

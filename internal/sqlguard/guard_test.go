@@ -133,27 +133,28 @@ func TestLedger_DB12(t *testing.T) {
 	}
 }
 
-// LEDGER DB-01, reproduced: the pgsql lexer opens an E-string at any quote
-// after "e" or "E", also the last letter of an identifier, so a backslash
-// keeps the guard's string open past the quote that PostgreSQL closes. The
-// shapes are harmless: what the guard fails to see is a forbidden word, a
-// backslash line that is no psql command, and SET.
+// LEDGER DB-01: the 2.x vectors. 2.x opened an E-string at any quote after
+// "e" or "E", also the last letter of an identifier, so a backslash kept
+// the guard's string open past the quote that PostgreSQL closes. 3.0:
+// DB-01 fixed: the identifier's quote is a plain string, a line that
+// starts with a backslash is refused before lexing, and SET is a forbidden
+// word, so none of these shapes passes any more.
 func TestLedger_DB01_2x(t *testing.T) {
 	runVectors(t, []vector{
 		{name: "DB-01 identifier ending in e hides a backslash line", driver: PgSQL,
-			query: "SELECT 1 WHERE somee'\\'\n\\1\n'", kind: "SELECT"},
+			query: "SELECT 1 WHERE somee'\\'\n\\1\n'", code: CodeClientCommand, details: "Backslash outside a string literal"},
 		{name: "DB-01 identifier ending in E", driver: PgSQL,
-			query: "SELECT 1 WHERE somE'\\'\n\\1\n'", kind: "SELECT"},
+			query: "SELECT 1 WHERE somE'\\'\n\\1\n'", code: CodeClientCommand},
 		{name: "DB-01 control: another letter closes the string", driver: PgSQL,
 			query: "SELECT 1 WHERE somex'\\'\n\\1\n'", code: CodeClientCommand, details: "Backslash outside a string literal"},
 		{name: "DB-01 identifier ending in e hides a forbidden word", driver: PgSQL,
-			query: "SELECT 1 WHERE somee'\\' DELETE FROM t --'", kind: "SELECT"},
+			query: "SELECT 1 WHERE somee'\\' DELETE FROM t --'", code: CodeWriteOperation, details: "Statement contains 'DELETE'"},
 		{name: "DB-01 control: the forbidden word is seen", driver: PgSQL,
 			query: "SELECT 1 WHERE somex'\\' DELETE FROM t --'", code: CodeWriteOperation, details: "Statement contains 'DELETE'"},
-		{name: "DB-01 SET is not a forbidden word", driver: PgSQL,
-			query: "SELECT 1 WHERE somee'\\' SET x = 1 '", kind: "SELECT"},
-		{name: "DB-01 mysql refuses the backslash", driver: MySQL,
-			query: "SELECT 1 WHERE somee'\\'\n\\1\n'", code: CodeBackslashInLiteral},
+		{name: "DB-01 SET after the identifier's string", driver: PgSQL,
+			query: "SELECT 1 WHERE somee'\\' SET x = 1 '", code: CodeUnterminated},
+		{name: "DB-01 mysql refuses the backslash line", driver: MySQL,
+			query: "SELECT 1 WHERE somee'\\'\n\\1\n'", code: CodeClientCommand},
 		{name: "DB-01 sqlite closes the string", driver: SQLite,
 			query: "SELECT 1 WHERE somee'\\'\n\\1\n'", code: CodeClientCommand},
 		{name: "DB-01 a real E-string escapes the quote", driver: PgSQL,
@@ -161,12 +162,45 @@ func TestLedger_DB01_2x(t *testing.T) {
 	})
 }
 
-// SET is refused only as the first keyword: it is not a forbidden word
-// (LEDGER DB-01), so it passes anywhere else.
+// LEDGER DB-01, 3.0 fix: a quote is an E-string opener only after an "e"
+// that starts a token; a backslash line is a client command wherever the
+// lexer stands; SET is a forbidden word. The vectors are harmless shapes
+// (a backslash line that is no psql command, a forbidden word, SET).
+func TestLedger_DB01_fix(t *testing.T) {
+	runVectors(t, []vector{
+		// The identifier-then-quote-then-backslash-line shape.
+		{name: "identifier e, backslash line", driver: PgSQL,
+			query: "SELECT 1 WHERE somee'\\'\n\\1\n'", code: CodeClientCommand},
+		{name: "identifier with a non-ASCII letter", driver: PgSQL,
+			query: "SELECT caf\u00e9e'\\' DELETE FROM t --'", code: CodeWriteOperation, details: "Statement contains 'DELETE'"},
+		{name: "identifier with digits and $", driver: PgSQL,
+			query: "SELECT a1$e'\\' DELETE FROM t --'", code: CodeWriteOperation, details: "Statement contains 'DELETE'"},
+		// An e that starts a token still opens an E-string.
+		{name: "standalone E", driver: PgSQL, query: "SELECT E'\\' DELETE ' FROM t", kind: "SELECT"},
+		{name: "E after a parenthesis", driver: PgSQL, query: "SELECT (E'\\'')", kind: "SELECT"},
+		{name: "E after a quoted identifier", driver: PgSQL, query: "SELECT \"x\"E'\\' DELETE '", kind: "SELECT"},
+		{name: "E after a number", driver: PgSQL, query: "SELECT 1E'\\' DELETE '", kind: "SELECT"},
+		{name: "E after a parameter", driver: PgSQL, query: "SELECT $1E'\\' DELETE '", kind: "SELECT"},
+		{name: "E after a dollar quote", driver: PgSQL, query: "SELECT $$a$$E'\\' DELETE '", kind: "SELECT"},
+		// A backslash line is refused in a string, in a comment, after blanks.
+		{name: "backslash line in a string", driver: PgSQL, query: "SELECT 'a\n\\b'", code: CodeClientCommand},
+		{name: "backslash line in a comment", driver: PgSQL, query: "SELECT 1 /*\n  \\x */", code: CodeClientCommand},
+		{name: "backslash line after blanks", driver: SQLite, query: "SELECT 1\n \t\\x", code: CodeClientCommand},
+		{name: "backslash inside a line is still a literal", driver: PgSQL, query: "SELECT 'C:\\x'", kind: "SELECT"},
+		// SET is a forbidden word.
+		{name: "SET anywhere", driver: PgSQL, query: "SELECT 1 AS set", code: CodeWriteOperation, details: "Statement contains 'SET'"},
+		{name: "SET first", driver: PgSQL, query: "SET search_path = x", code: CodeWriteOperation, details: "Statement starts with 'SET'"},
+		{name: "SET in a string is fine", driver: PgSQL, query: "SELECT 'SET x'", kind: "SELECT"},
+		{name: "SETOF is another word", driver: PgSQL, query: "SELECT 1 AS setof", kind: "SELECT"},
+	})
+}
+
+// SET is refused as the first keyword and, since 3.0, anywhere as a word
+// (3.0: DB-01 fixed; 2.x let it pass after the first keyword).
 func TestSetNotForbidden(t *testing.T) {
 	runVectors(t, []vector{
 		{name: "SET first", driver: PgSQL, query: "SET search_path = x", code: CodeWriteOperation, details: "Statement starts with 'SET'"},
-		{name: "SET later", driver: PgSQL, query: "SELECT 1 AS set", kind: "SELECT"},
+		{name: "SET later", driver: PgSQL, query: "SELECT 1 AS set", code: CodeWriteOperation, details: "Statement contains 'SET'"},
 		{name: "SET_CONFIG is forbidden", driver: PgSQL, query: "SELECT set_config('a', 'b', false)", code: CodeWriteOperation, details: "Statement contains 'SET_CONFIG'"},
 	})
 }
