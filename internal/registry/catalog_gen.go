@@ -240,7 +240,8 @@ var functions = []Function{
 				"\n" +
 				"  Options 1-6 run deep collectors that read full config files.\n" +
 				"  Option ? lets you ask about specific services, files, or ports.\n" +
-				"  Option s exports the full session as a Markdown report.\n" +
+				"  Option s exports the full session as a Markdown report (mode 0600)\n" +
+				"  in the current directory; a failed write is reported as an error.\n" +
 				"\n" +
 				"SMART QUESTIONS\n" +
 				"  The ? option detects entities in your question:\n" +

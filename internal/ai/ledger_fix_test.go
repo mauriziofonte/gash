@@ -255,3 +255,58 @@ func TestLedger_AI06_fix(t *testing.T) {
 		t.Fatalf("ai_ask body user:\n%s", u)
 	}
 }
+
+// TestLedger_AI09_fix: the saved report keeps the blank line between
+// chunks, ends with a newline and has mode 0600; a failed write is an
+// error with no success line.
+func TestLedger_AI09_fix(t *testing.T) {
+	f := newFakeAPI(t)
+	drilldownAPI(f)
+	m := testModule(f)
+	m.now = func() time.Time { return time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC) }
+	dir := t.TempDir()
+	m.getwd = func() (string, error) { return dir, nil }
+	cb, _, _ := newCall(map[string]string{}, nil, false)
+	sess := m.si.Begin(cb, false, false)
+	defer sess.Release()
+
+	in := strings.NewReader("?\nwhat is my memory usage\ns\nq\n")
+	c, _, errb := newCall(map[string]string{}, in, true)
+	m.drillMenu(c, ui.StyleOf(c.Term, false), sess, "claude", "tok", initialAnalysisJSON)
+	p := filepath.Join(dir, "gash-ai-sysinfo-20200102-030405.md")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("not saved: %v (%s)", err, errb.String())
+	}
+	md := string(b)
+	if !strings.HasSuffix(md, "\n") || strings.HasSuffix(md, "\n\n") {
+		t.Fatalf("want exactly one final newline: %q", md[len(md)-10:])
+	}
+	if !strings.Contains(md, "- **Warning:** redis stopped\n\n---\n\n## Question: what is my memory usage") {
+		t.Fatalf("no blank line between the chunks:\n%s", md)
+	}
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v, want 0600", fi.Mode().Perm())
+	}
+	if !strings.Contains(errb.String(), "Report saved to gash-ai-sysinfo-20200102-030405.md") {
+		t.Fatalf("no success line: %q", errb.String())
+	}
+
+	// An unwritable directory: the error, no success line.
+	if os.Geteuid() == 0 {
+		m.getwd = func() (string, error) { return "/proc", nil }
+	} else {
+		ro := t.TempDir()
+		if err := os.Chmod(ro, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		m.getwd = func() (string, error) { return ro, nil }
+	}
+	in = strings.NewReader("s\nq\n")
+	c, _, errb = newCall(map[string]string{}, in, true)
+	m.drillMenu(c, ui.StyleOf(c.Term, false), sess, "claude", "tok", initialAnalysisJSON)
+	if !strings.Contains(errb.String(), "Error: Could not save the report to gash-ai-sysinfo-20200102-030405.md: ") ||
+		strings.Contains(errb.String(), "Report saved") {
+		t.Fatalf("failed write: %q", errb.String())
+	}
+}

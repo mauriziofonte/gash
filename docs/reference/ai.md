@@ -227,7 +227,8 @@ After the initial analysis, an interactive menu appears:
 
 Options 1-6 run deep collectors that read full config files.
 Option ? lets you ask about specific services, files, or ports.
-Option s exports the full session as a Markdown report.
+Option s exports the full session as a Markdown report (mode 0600)
+in the current directory; a failed write is reported as an error.
 ```
 
 #### Smart questions
