@@ -140,7 +140,7 @@ func missingValue(flag string) *fsError {
 // re-parses a user string into find predicates (MUST NOT 7).
 func excludeOK(v string) *fsError {
 	if strings.ContainsRune(v, '\n') {
-		return errf("invalid_filter", v, "--exclude takes a glob without newlines, e.g. '*/node_modules'")
+		return errf("invalid_filter", v, "--exclude takes a glob without newlines, e.g. 'node_modules'")
 	}
 	return nil
 }
