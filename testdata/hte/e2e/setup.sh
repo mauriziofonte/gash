@@ -29,6 +29,21 @@ install -m 0755 /e2e/gash-hosts-helper /usr/local/bin/gash-hosts-helper
 printf 'dev ALL=(root) NOPASSWD: /usr/local/bin/gash-e2e hte __root\n' >/etc/sudoers.d/e2e
 chmod 0440 /etc/sudoers.d/e2e
 visudo -c >/dev/null
+# The root step must be reachable as dev before the stories start; when it
+# is not, show what sudo's PAM stack sees instead of failing inside a story.
+if ! runuser -u dev -- sudo -n -l /usr/local/bin/gash-e2e hte __root >/dev/null 2>"$out/sudo.err"; then
+    echo "== sudo as dev refused" >&2
+    cat "$out/sudo.err" >&2
+    for f in /etc/pam.d/sudo /etc/pam.d/system-auth /etc/nsswitch.conf; do
+        echo "-- $f" >&2
+        grep -v '^#' "$f" >&2 || true
+    done
+    getent passwd dev >&2 || true
+    getent shadow dev >&2 || true
+    ls -l /etc/shadow /usr/bin/sudo /usr/sbin/unix_chkpwd >&2 || true
+    command -v selinuxenabled >/dev/null && { selinuxenabled && echo "selinux enabled" >&2 || echo "selinux disabled" >&2; }
+    exit 1
+fi
 
 # Docker bind-mounts /etc/hosts, so the helper cannot rename over it and
 # writes in place (LEDGER HTE-69). The test runs on that mount.
