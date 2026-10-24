@@ -1131,6 +1131,7 @@ func uninstallOnFailure(t *testing.T, e *hte.Engine) {
 		if !t.Failed() {
 			return
 		}
+		dumpState(t)
 		res, err := e.Uninstall(context.Background(), hte.UninstallOptions{Yes: true})
 		if err != nil {
 			t.Logf("cleanup: uninstall: %v", err)
@@ -1138,4 +1139,42 @@ func uninstallOnFailure(t *testing.T, e *hte.Engine) {
 		}
 		t.Logf("cleanup: uninstalled, stage %s, restored %d changes, warnings %v", res.Stage, len(res.Restored), res.Warnings)
 	})
+}
+
+// dumpState logs what a failed story leaves for diagnosis before the
+// cleanup uninstall removes it: the Listen lines of the rendered Apache
+// configuration, the tail of every stack log and the listening TCP
+// sockets.
+func dumpState(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	state := filepath.Join(home, ".local", "state", "gash", "hte")
+	if b, err := os.ReadFile(filepath.Join(state, "render", "current", "httpd.conf")); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(line); len(f) > 0 && (f[0] == "Listen" || f[0] == "ServerName" || f[0] == "PidFile") {
+				t.Logf("state: httpd.conf: %s", strings.TrimSpace(line))
+			}
+		}
+	}
+	_ = filepath.WalkDir(filepath.Join(state, "logs"), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".log") {
+			return nil
+		}
+		if b, err := os.ReadFile(path); err == nil {
+			lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+			if len(lines) > 20 {
+				lines = lines[len(lines)-20:]
+			}
+			t.Logf("state: %s:\n%s", path, strings.Join(lines, "\n"))
+		}
+		return nil
+	})
+	for _, argv := range [][]string{{"lsof", "-nP", "-iTCP", "-sTCP:LISTEN"}, {"ss", "-ltnp"}} {
+		if out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err == nil {
+			t.Logf("state: %s:\n%s", strings.Join(argv, " "), out)
+			break
+		}
+	}
 }
