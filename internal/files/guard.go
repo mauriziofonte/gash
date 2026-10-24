@@ -136,11 +136,19 @@ func listMembers(c *invoke.Call, k kind, archive string) ([]member, error) {
 		defer f.Close()
 		return readTar(bzip2.NewReader(f))
 	case kTarXz:
-		return readTarPiped(c, "xz", []string{"-dc", "--", archive})
+		return readTarPiped(c, "xz", []string{"-dc", "--", archive}, nil)
 	case kTarZst:
-		return readTarPiped(c, "zstd", []string{"-dc", "--", archive})
+		return readTarPiped(c, "zstd", []string{"-dc", "--", archive}, nil)
 	case kTarZ:
-		return readTarPiped(c, "uncompress", []string{"-c", "--", archive})
+		args, in, err := uncompressArgs(archive)
+		if err != nil {
+			return nil, nil
+		}
+		if in == nil {
+			return readTarPiped(c, "uncompress", args, nil)
+		}
+		defer in.Close()
+		return readTarPiped(c, "uncompress", args, in)
 	case kZip:
 		return readZip(archive)
 	case kSevenZip:
@@ -177,7 +185,7 @@ func readTar(r io.Reader) ([]member, error) {
 // argument) through the runner and reads the tar stream it produces. A
 // missing tool or a read error returns nil (no guard), so the extraction
 // path reports it.
-func readTarPiped(c *invoke.Call, tool string, args []string) ([]member, error) {
+func readTarPiped(c *invoke.Call, tool string, args []string, stdin io.Reader) ([]member, error) {
 	// Stand down when the decompressor or tar is missing: the extraction
 	// path then reports it, and a missing tar never starts zstd (FILE-19).
 	for _, need := range []string{tool, "tar"} {
@@ -190,7 +198,7 @@ func readTarPiped(c *invoke.Call, tool string, args []string) ([]member, error) 
 	go func() {
 		res, err := rnr.Run(callCtx(c), runner.Cmd{
 			Path: tool, Args: args,
-			Options: runner.Options{Env: c.Env.Child(), Stdout: pw},
+			Options: runner.Options{Env: c.Env.Child(), Stdin: stdin, Stdout: pw},
 		})
 		if err == nil && res.ExitCode != 0 {
 			err = io.ErrUnexpectedEOF

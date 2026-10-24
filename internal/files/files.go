@@ -278,19 +278,37 @@ func archiveExtract(c *invoke.Call) int {
 			runner.Cmd{Path: "zstd", Args: []string{"-dc", "--", src}},
 			runner.Cmd{Path: "tar", Args: []string{"xvf", "-", "-C", dir, "--no-same-owner", "--no-same-permissions"}})
 	case kTarZ:
-		return pipeline(c, runnerFor(c),
-			runner.Cmd{Path: "uncompress", Args: []string{"-c", "--", src}},
+		args, in, err := uncompressArgs(src)
+		if err != nil {
+			return 1
+		}
+		if in != nil {
+			defer in.Close()
+		}
+		left := runner.Cmd{Path: "uncompress", Args: args}
+		if in != nil {
+			left.Stdin = in
+		}
+		return pipeline(c, runnerFor(c), left,
 			runner.Cmd{Path: "tar", Args: []string{"xvf", "-", "-C", dir, "--no-same-owner", "--no-same-permissions"}})
 	case kSingleXz:
-		return runSingle(c, "xz", []string{"-dc", "--", src}, target)
+		return runSingle(c, "xz", []string{"-dc", "--", src}, target, nil)
 	case kSingleZst:
-		return runSingle(c, "zstd", []string{"-dc", "--", src}, target)
+		return runSingle(c, "zstd", []string{"-dc", "--", src}, target, nil)
 	case kSingleBz2:
-		return runSingle(c, "bunzip2", []string{"-c", "--", src}, target)
+		return runSingle(c, "bunzip2", []string{"-c", "--", src}, target, nil)
 	case kSingleGz:
-		return runSingle(c, "gunzip", []string{"-c", "--", src}, target)
+		return runSingle(c, "gunzip", []string{"-c", "--", src}, target, nil)
 	case kSingleZ:
-		return runSingle(c, "uncompress", []string{"-c", "--", src}, target)
+		args, in, err := uncompressArgs(src)
+		if err != nil {
+			return 1
+		}
+		if in == nil {
+			return runSingle(c, "uncompress", args, target, nil)
+		}
+		defer in.Close()
+		return runSingle(c, "uncompress", args, target, in)
 	case kRar:
 		args := []string{"x"}
 		if !ask {
@@ -343,12 +361,16 @@ func runTar(c *invoke.Call, flags, archive, outputDir string) int {
 // the target's directory, opened O_EXCL with mode 0666 (the umask applies),
 // renamed over target only when the tool succeeds and removed otherwise, so
 // a corrupt archive never destroys an existing file and a symlink at target
-// is replaced, never written through.
-func runSingle(c *invoke.Call, tool string, args []string, target string) int {
+// is replaced, never written through. stdin, when not nil, replaces the
+// caller's stdin.
+func runSingle(c *invoke.Call, tool string, args []string, target string, stdin io.Reader) int {
 	p := ui.StyleOf(c.Term, false).Printer(c.Stderr)
 	if st, err := os.Lstat(target); err == nil && st.IsDir() {
 		_, _ = io.WriteString(c.Stderr, target+": Is a directory\n")
 		return 1
+	}
+	if stdin == nil {
+		stdin = c.Stdin
 	}
 	f, tmp, err := createTemp(filepath.Dir(target))
 	if err != nil {
@@ -357,7 +379,7 @@ func runSingle(c *invoke.Call, tool string, args []string, target string) int {
 	}
 	res, rerr := runnerFor(c).Run(callCtx(c), runner.Cmd{
 		Path: tool, Args: args,
-		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: f, Stderr: c.Stderr},
+		Options: runner.Options{Env: c.Env.Child(), Stdin: stdin, Stdout: f, Stderr: c.Stderr},
 	})
 	cerr := f.Close()
 	if notFound(rerr) {
@@ -407,7 +429,10 @@ func pipeline(c *invoke.Call, rnr runner.Runner, left, right runner.Cmd) int {
 	if _, isFile := stderr.(*os.File); !isFile && stderr != nil {
 		stderr = &lockedWriter{w: stderr} // both children copy into it at once
 	}
-	left.Env, left.Stdin, left.Stdout, left.Stderr = env, c.Stdin, pw, stderr
+	if left.Stdin == nil {
+		left.Stdin = c.Stdin
+	}
+	left.Env, left.Stdout, left.Stderr = env, pw, stderr
 	right.Env, right.Stdin, right.Stdout, right.Stderr = env, pr, c.Stdout, stderr
 
 	done := make(chan int, 1)
@@ -602,4 +627,19 @@ func withLCAllC(env []string) []string {
 		}
 	}
 	return append(out, "LC_ALL=C")
+}
+
+// uncompressArgs is the uncompress argv for src. A BSD uncompress appends
+// .Z to an operand that lacks it (s.z becomes s.z.Z), so a name that does
+// not end in .Z (.z, .taz) is fed on stdin instead; the returned file is
+// then open and the caller closes it.
+func uncompressArgs(src string) ([]string, *os.File, error) {
+	if strings.HasSuffix(src, ".Z") {
+		return []string{"-c", "--", src}, nil, nil
+	}
+	f, err := os.Open(src)
+	if err != nil {
+		return nil, nil, err
+	}
+	return []string{"-c"}, f, nil
 }

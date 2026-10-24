@@ -737,22 +737,33 @@ func TestLedger_FILE13_fix(t *testing.T) {
 }
 
 // TestLedger_FILE14_fix: uncompress gets -c before the operand and --, so a
-// BSD getopt never reads -c as a file (3.0: FILE-14 fixed).
+// BSD getopt never reads -c as a file (3.0: FILE-14 fixed). A name without
+// the .Z suffix goes on stdin, since a BSD uncompress would look for NAME.Z.
 func TestLedger_FILE14_fix(t *testing.T) {
-	d := t.TempDir()
-	write(t, filepath.Join(d, "s.z"), []byte("x"))
-	if err := os.Mkdir(filepath.Join(d, "o"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	withRunner(t, runner.NewFake(t, runner.Expect{Argv: []string{"uncompress", "-c", "--", "s.z"}, Stdout: "hi\n"}))
-	if _, _, rc := runIn(t, d, map[string]string{"PATH": stubBin(t, "uncompress")}, nil, "archive_extract", "s.z", "o"); rc != 0 {
-		t.Errorf("rc=%d", rc)
-	}
-	if b, _ := os.ReadFile(filepath.Join(d, "o", "s")); string(b) != "hi\n" {
-		t.Errorf("output %q", b)
-	}
-	if b, _ := os.ReadFile(filepath.Join(d, "s.z")); string(b) != "x" {
-		t.Errorf("archive changed: %q", b)
+	for _, tc := range []struct {
+		name string
+		want runner.Expect
+	}{
+		{"s.Z", runner.Expect{Argv: []string{"uncompress", "-c", "--", "s.Z"}, Stdout: "hi\n"}},
+		{"s.z", runner.Expect{Argv: []string{"uncompress", "-c"}, Stdin: runner.Text("x"), Stdout: "hi\n"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := t.TempDir()
+			write(t, filepath.Join(d, tc.name), []byte("x"))
+			if err := os.Mkdir(filepath.Join(d, "o"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			withRunner(t, runner.NewFake(t, tc.want))
+			if _, _, rc := runIn(t, d, map[string]string{"PATH": stubBin(t, "uncompress")}, nil, "archive_extract", tc.name, "o"); rc != 0 {
+				t.Errorf("rc=%d", rc)
+			}
+			if b, _ := os.ReadFile(filepath.Join(d, "o", "s")); string(b) != "hi\n" {
+				t.Errorf("output %q", b)
+			}
+			if b, _ := os.ReadFile(filepath.Join(d, tc.name)); string(b) != "x" {
+				t.Errorf("archive changed: %q", b)
+			}
+		})
 	}
 }
 
