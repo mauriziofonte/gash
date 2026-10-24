@@ -316,8 +316,9 @@ func TestLedger_CORE05(t *testing.T) {
 	require.Contains(t, got.Stderr, "Connection successful!")
 }
 
-// TestLedger_DB14_2x: an EXPLAIN on SQLite fails as 2.x failed, its text
-// table refused by jq: the jq message, exit 5, nothing on stdout.
+// TestLedger_DB14_2x: 2.x failed an EXPLAIN on SQLite through
+// llm_db_query, its text table refused by jq: the jq message, exit 5,
+// nothing on stdout. 3.0: DB-14 fixed, each is an envelope on stdout.
 func TestLedger_DB14_2x(t *testing.T) {
 	d := physTemp(t)
 	home := filepath.Join(d, "home")
@@ -326,11 +327,34 @@ func TestLedger_DB14_2x(t *testing.T) {
 	m := frozen(New())
 	env := baseEnv(home, nil)
 	for _, q := range []string{"EXPLAIN SELECT 1", "EXPLAIN QUERY PLAN SELECT * FROM u WHERE id = 1", "explain select name from u"} {
-		got := same(t, m, d, env, "llm_db_query", q, "-f", db)
-		require.Equal(t, 5, got.RC, q)
-		require.Empty(t, got.Stdout, q)
-		require.Regexp(t, `^jq: parse error: Invalid numeric literal at line 1, column [0-9]+\n$`, got.Stderr, q)
+		got := runGo(t, m, d, env, "llm_db_query", q, "-f", db)
+		require.Equal(t, 0, got.RC, q)
+		require.Empty(t, got.Stderr, q)
+		require.True(t, json.Valid([]byte(got.Stdout)), got.Stdout)
 	}
+}
+
+// TestLedger_DB14_fix: llm_db_query wraps SQLite's EXPLAIN QUERY PLAN as
+// [{plan: TEXT}], the tree llm_db_explain gives, and returns a bytecode
+// EXPLAIN as its rows.
+func TestLedger_DB14_fix(t *testing.T) {
+	d := physTemp(t)
+	db := sqliteFixture(t, d, "CREATE TABLE u(id INTEGER PRIMARY KEY, name TEXT);")
+	m := frozen(New())
+	env := baseEnv(d, nil)
+	q := "SELECT * FROM u WHERE id = 1"
+	got := runGo(t, m, d, env, "llm_db_query", "EXPLAIN QUERY PLAN "+q, "-f", db)
+	want := runGo(t, m, d, env, "llm_db_explain", q, "-f", db)
+	require.Equal(t, 0, got.RC, got.Stderr)
+	require.Equal(t, want, got)
+	require.Regexp(t, `^\{"data":\[\{"plan":"QUERY PLAN\\n`+"`"+`--SEARCH u USING INTEGER PRIMARY KEY \(rowid=\?\)"\}\],"rows":1,"query_time":"0µs"\}\n$`, got.Stdout)
+
+	got = runGo(t, m, d, env, "llm_db_query", "EXPLAIN SELECT 1", "-f", db)
+	require.Equal(t, 0, got.RC, got.Stderr)
+	rows := keysOf(t, got.Stdout)
+	require.NotEmpty(t, rows)
+	require.Equal(t, []string{"addr", "opcode", "p1", "p2", "p3", "p4", "p5", "comment"}, rows[0])
+	require.Contains(t, got.Stdout, `"opcode":"Init"`)
 }
 
 // TestLedger_DB15: SQLite text that is not UTF-8, or holds a NUL, comes

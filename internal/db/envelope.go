@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -75,10 +74,11 @@ func (m *Module) envelope(c *invoke.Call, slow func() output, impl func() output
 		xpl = &x
 	}
 	if o.isText {
-		// 2.x piped the sqlite3 shell's text rendering of an EXPLAIN into
-		// jq, which refused it.
-		_, _ = fmt.Fprintf(c.Stderr, "jq: parse error: Invalid numeric literal at line 1, column %d\n", firstWordLen(o.text)+1)
-		return 5
+		// A text plan (SQLite's EXPLAIN QUERY PLAN through llm_db_query)
+		// is [{plan: TEXT}], as llm_db_explain gives it. 2.x piped the
+		// sqlite3 shell's text into jq, which refused it: a raw jq error,
+		// exit 5 (3.0: LEDGER DB-14 fixed).
+		o = planArray(o)
 	}
 	for _, v := range o.vals {
 		var obj object
@@ -91,13 +91,6 @@ func (m *Module) envelope(c *invoke.Call, slow func() output, impl func() output
 		_, _ = c.Stdout.Write(append(obj.value().appendJSON(nil), '\n'))
 	}
 	return 0
-}
-
-func firstWordLen(s string) int {
-	if i := strings.IndexAny(s, " \t\n"); i >= 0 {
-		return i
-	}
-	return len(s)
 }
 
 // formatQueryTime is __llm_format_query_time: 842µs, 12.3ms, 1.23s

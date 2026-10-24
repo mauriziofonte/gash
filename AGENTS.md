@@ -178,7 +178,9 @@ permission denied). No results: `"data": []` and `"count": 0`.
 
 `llm_db_tables` returns `{"data":["users"],...}`. `llm_db_explain` always
 returns an array: JSON plans as the engine gives them, SQLite text plans as
-`[{"plan": TEXT}]`. query_time is in µs, ms or s, and counts the time the
+`[{"plan": TEXT}]`; `llm_db_query "EXPLAIN QUERY PLAN ..."` on SQLite gives
+the same `[{"plan": TEXT}]`, and a SQLite bytecode `EXPLAIN` its rows
+(`addr`, `opcode`, `p1`..`p5`, `comment`). query_time is in µs, ms or s, and counts the time the
 query ran on the server (sent to last row read), not the connection.
 
 ### 4.5 Tree (`llm_tree --depth 2 --stats`)
