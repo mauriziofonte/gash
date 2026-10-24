@@ -108,6 +108,7 @@ func (s *Session) storage(o *out) {
 		o.subhead("crypttab")
 		o.raw(f.grep(s.sudoRead("/etc/crypttab"), reHash, false))
 	}
+	o.endsub()
 	if f.isDir("/etc/lvm") {
 		o.kv("LVM", "present")
 	}
@@ -115,6 +116,7 @@ func (s *Session) storage(o *out) {
 		o.subhead("mdadm")
 		o.raw(f.grep(f.read("/etc/mdadm/mdadm.conf"), regexp.MustCompile(`^ARRAY`), true))
 	}
+	o.endsub()
 	if f.isDir("/etc/zfs") {
 		o.kv("ZFS", "present")
 		if f.isFile("/etc/hostid") {
@@ -137,6 +139,7 @@ func (s *Session) storage(o *out) {
 		}
 		o.raw(f.grep(f.read(smartf), reNoteBlank, false))
 	}
+	o.endsub()
 	if f.isFile("/etc/hdparm.conf") {
 		o.kv("hdparm", "present")
 	}
@@ -144,6 +147,7 @@ func (s *Session) storage(o *out) {
 		o.subhead("NFS exports")
 		o.raw(f.grep(f.read("/etc/exports"), reNoteBlank, false))
 	}
+	o.endsub()
 	if f.isFile("/etc/nfs.conf") {
 		o.kv("NFS conf", "present")
 	}
@@ -202,6 +206,7 @@ func (s *Session) services(o *out) {
 		o.subhead("saslauthd")
 		o.raw(f.grep(f.read("/etc/default/saslauthd"), reNoteBlank, false))
 	}
+	o.endsub()
 	if len(f.lsPaths(f.glob("/etc/*.org")...)) > 0 {
 		o.item("Legacy .org backups found")
 	}
@@ -341,6 +346,7 @@ func (s *Session) security(o *out) {
 			o.raw(f.grep(f.read("/etc/ufw/ufw.conf"), reNoteBlank, false))
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/firewalld") {
 		o.kv("firewalld", "present")
 	}
@@ -538,12 +544,14 @@ func (s *Session) infra(o *out) {
 		o.raw(f.lsPaths(f.glob("/etc/wireguard/*.conf")...))
 	}
 	if f.isDir("/etc/docker") {
-		// The heading waits for the next line, whatever it is (SYS-17).
 		o.subhead("Docker")
 		if f.isFile("/etc/docker/daemon.json") {
 			o.rawBytes(f.read("/etc/docker/daemon.json"))
 		}
 	}
+	// The runtimes have a heading of their own: a Docker heading with no
+	// daemon.json under it is dropped, never inherited (SYS-17).
+	o.subhead("Containers")
 	if f.isDir("/etc/containerd") {
 		o.kv("containerd", "present")
 	}
@@ -559,6 +567,7 @@ func (s *Session) infra(o *out) {
 		o.raw(f.ls("/etc/monit/conf.d"))
 		o.raw(f.ls("/etc/monit/conf-available"))
 	}
+	o.endsub()
 	if f.isDir("/etc/snmp") {
 		o.kv("SNMP", "present")
 	}
@@ -572,6 +581,7 @@ func (s *Session) infra(o *out) {
 			o.item("Virtualmin: installed")
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/usermin") {
 		o.kv("Usermin", "installed")
 	}
@@ -600,6 +610,7 @@ func (s *Session) system(o *out) {
 			o.raw(f.grep(f.read("/etc/letsencrypt/cli.ini"), reNoteBlank, false))
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/ssl/virtualmin") {
 		o.kv("Virtualmin SSL", strconv.Itoa(len(f.ls("/etc/ssl/virtualmin")))+" domains")
 	}
@@ -609,6 +620,7 @@ func (s *Session) system(o *out) {
 	for _, pat := range []string{"/etc/ssl/private/*.pem", "/etc/ssl/private/*.key", "/etc/ssl/private/*.crt"} {
 		words = append(words, f.words(pat)...)
 	}
+	o.subhead("SSL private keys")
 	o.raw(head(s.sudoLsPaths(words...), 10))
 
 	o.subhead("Kernel tuning")
@@ -649,6 +661,7 @@ func (s *Session) system(o *out) {
 			o.raw(head(f.grep(f.read("/etc/chrony/chrony.conf"), reNoteBlank, false), 10))
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/.git") {
 		o.kv("etckeeper", "git tracked")
 	}

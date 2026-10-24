@@ -52,20 +52,27 @@ func TestLedger_SYS16(t *testing.T) {
 	require.NotContains(t, fx.call(t, nil, "identity", "--llm").out, "Virtualization")
 }
 
-// LEDGER SYS-17 (reproduced): a pending sub-header lands on the next line
-// of any block.
+// 3.0: SYS-17 fixed: a sub-header is scoped to its block: one that
+// printed nothing is dropped, never inherited by a later line; the
+// runtimes print under Containers and the /etc/ssl/private names under
+// SSL private keys.
 func TestLedger_SYS17(t *testing.T) {
 	fx := newFixture(t, tree{"etc/docker/": "", "etc/containerd/": ""})
-	require.Equal(t, result{"=== INFRA ===\n--- Docker\ncontainerd=present\n", "", 0}, fx.call(t, nil, "infra", "--llm"))
+	require.Equal(t, result{"=== INFRA ===\n--- Containers\ncontainerd=present\n", "", 0}, fx.call(t, nil, "infra", "--llm"))
 	// Without a line after it the heading never shows.
 	fx = newFixture(t, tree{"etc/docker/": ""})
 	require.Equal(t, result{"=== INFRA ===\n", "", 0}, fx.call(t, nil, "infra", "--llm"))
+	// An empty fstab and crypttab leave LVM at the section level.
+	fx = newFixture(t, tree{"etc/crypttab": "# none\n", "etc/lvm/": ""})
+	require.Equal(t, result{"=== STORAGE ===\nLVM=present\n", "", 0}, fx.call(t, nil, "storage", "--llm"))
+	// An empty ufw block leaves firewalld at the section level.
+	fx = newFixture(t, tree{"etc/ufw/": "", "etc/firewalld/": ""})
+	require.Equal(t, result{"=== SECURITY ===\nfirewalld=present\n", "", 0}, fx.call(t, nil, "security", "--llm"))
 
-	// The key names of /etc/ssl/private run on under the last cron item.
 	fx = newFixture(t, tree{"etc/ssl/private/b.key": "", "etc/ssl/private/a.pem": "", "etc/ssl/private/c.txt": ""})
 	r := fx.call(t, nil, "system", "--llm")
 	require.True(t, strings.HasPrefix(r.out, "=== SYSTEM ===\n--- Cron\ncron.d:\ncron.daily:\ncron.hourly:\ncron.weekly:\ncron.monthly:\n"+
-		"/etc/ssl/private/a.pem\n/etc/ssl/private/b.key\n"), r.out)
+		"--- SSL private keys\n/etc/ssl/private/a.pem\n/etc/ssl/private/b.key\n"), r.out)
 }
 
 // LEDGER SYS-18 (reproduced): the GNU grep -P expressions of 2.x over
@@ -119,7 +126,8 @@ ls) [ "$2" = "$SUDO_ROOT/etc/ssl/private/*.pem" ] && printf '%s\n' "$SUDO_ROOT/e
 esac
 exec "$@"`)
 	r := fx.call(t, nil, "system", "--llm")
-	require.Contains(t, r.out, "cron.monthly:\n/etc/ssl/private/k.pem\n/etc/ssl/private/z.key\n--- Profile\n")
+	// 3.0: SYS-17 fixed: the names have their own sub-header.
+	require.Contains(t, r.out, "cron.monthly:\n--- SSL private keys\n/etc/ssl/private/k.pem\n/etc/ssl/private/z.key\n--- Profile\n")
 	require.Contains(t, fx.sudo(t), "\nsudo ls R/etc/ssl/private/*.pem R/etc/ssl/private/*.key R/etc/ssl/private/*.crt\n")
 	require.Equal(t, 1, strings.Count(fx.sudo(t), "sudo ls "))
 
