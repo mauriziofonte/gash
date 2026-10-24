@@ -120,6 +120,7 @@ func TestScript(t *testing.T) {
 		Cmds: map[string]func(*testscript.TestScript, bool, []string){
 			"gashfixture": fx.cmdFixture,
 			"gashrelease": fx.cmdRelease,
+			"schema":      cmdSchema(root),
 		},
 		Files:               files,
 		UpdateScripts:       *update,
@@ -127,9 +128,6 @@ func TestScript(t *testing.T) {
 		RequireUniqueNames:  true,
 		// schema NAME stdout|stderr|FILE validates JSON output against
 		// testdata/schema/NAME.json (schema_test.go).
-		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
-			"schema": cmdSchema(root),
-		},
 		Condition: func(cond string) (bool, error) {
 			switch cond {
 			case "root":
