@@ -41,8 +41,10 @@ gash all             The whole card, every topic
 files, system, nav, git, docker, remote, dev, llm, ai, gash
 (navigation, management, php and node still work as old names)
 
-The card is built from the help registry and the alias files, so it
-always lists exactly what this Gash ships.
+The card is built from the help registry and the alias files. In an
+interactive shell it counts and lists only the aliases the shell
+defines (one skipped because a program of that name exists, or a pack
+whose tool is missing, is left out); headless it lists them all.
 ```
 
 #### Examples

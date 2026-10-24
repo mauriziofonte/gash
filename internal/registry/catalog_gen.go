@@ -990,8 +990,10 @@ var functions = []Function{
 				"  files, system, nav, git, docker, remote, dev, llm, ai, gash\n" +
 				"  (navigation, management, php and node still work as old names)\n" +
 				"\n" +
-				"  The card is built from the help registry and the alias files, so it\n" +
-				"  always lists exactly what this Gash ships.\n" +
+				"  The card is built from the help registry and the alias files. In an\n" +
+				"  interactive shell it counts and lists only the aliases the shell\n" +
+				"  defines (one skipped because a program of that name exists, or a pack\n" +
+				"  whose tool is missing, is left out); headless it lists them all.\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Quick reminder of all git aliases\n" +

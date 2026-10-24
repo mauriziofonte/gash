@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -74,6 +75,13 @@ func TestCardMatches2x(t *testing.T) {
 				}
 				env := map[string]string{"LANG": "C.UTF-8", "COLUMNS": tc.cols, "GASH_VERSION": "test", selfmgmt.CardAliasesVar: live}
 				o, e, rc := run(t, "gash", env, tc.mode != "off", args...)
+				if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
+					// 3.0: SELF-12 fixed: the help says which aliases the
+					// card lists; the help package tests its rendering.
+					require.Contains(t, o, "counts and lists only the aliases the shell", "%q", args)
+					require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%q", args)
+					continue
+				}
 				require.Equal(t, fields[2*i], o+e, "%q", args)
 				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%q", args)
 			}
@@ -105,13 +113,39 @@ func TestCardListsTheRegistry(t *testing.T) {
 	require.Contains(t, overview, strconv.Itoa(len(fns))+" functions")
 }
 
-// LEDGER SELF-12, reproduced in rc.A: the card counts and lists the
-// aliases of the alias files whatever the caller's shell defined; only
-// the values of defined aliases come from the shell. With gp and gc
-// absent from the shell (the shadow rule dropped them), git still counts
-// 44 aliases and lists both with the values the file writes.
-func TestLedger_SELF12_2x(t *testing.T) {
+// LEDGER SELF-12: from a shell that is not headless the card counts and
+// lists only the aliases the shell defines (3.0: SELF-12 fixed; rc.A
+// counted 44 git aliases and listed gp and gc although the shadow rule had
+// dropped them). Without the live flag (headless, a script) the card still
+// shows every registered alias.
+func TestLedger_SELF12(t *testing.T) {
 	gitCount := regexp.MustCompile(`(?m)^  git +7 +([0-9]+) `)
+	// Every git alias of the card but gp and gc, as a shell where programs
+	// named gp and gc exist defines them.
+	var live strings.Builder
+	n := 0
+	for _, a := range registry.CardAliases("git") {
+		if a.Name != "gp" && a.Name != "gc" && a.Name != a.Value {
+			live.WriteString(a.Name + "\t" + a.Value + "\n")
+			n++
+		}
+	}
+	require.Equal(t, 42, n)
+	env := map[string]string{"LC_ALL": "C", "COLUMNS": "200", selfmgmt.CardAliasesVar: live.String(), selfmgmt.CardLiveVar: "1"}
+	overview, _, _ := run(t, "gash", env, false)
+	require.Equal(t, "42", gitCount.FindStringSubmatch(overview)[1])
+	card, _, _ := run(t, "gash", env, false, "git")
+	require.NotRegexp(t, `(?m)  gp +git pull( |$)`, card)
+	require.NotRegexp(t, `(?m)  gc +git commit( |$)`, card)
+	require.Regexp(t, `(?m)  gst +git status( |$)`, card)
+
+	// A shell with no alias defined: no alias counted or listed.
+	env[selfmgmt.CardAliasesVar] = ""
+	overview, _, _ = run(t, "gash", env, false)
+	require.Equal(t, "0", gitCount.FindStringSubmatch(overview)[1])
+
+	// Headless or a script (no live flag): every registered alias, the
+	// values of defined ones from the shell.
 	for _, live := range []string{"", "gst\tgit status --short\n"} {
 		env := map[string]string{"LC_ALL": "C", "COLUMNS": "200", selfmgmt.CardAliasesVar: live}
 		overview, _, _ := run(t, "gash", env, false)

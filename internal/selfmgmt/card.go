@@ -19,6 +19,15 @@ import (
 // with backslash and newline escaped as \\ and \n.
 const CardAliasesVar = "GASH__CARD_ALIASES"
 
+// CardLiveVar is "1" when the gash stub runs in a shell that is not
+// headless: the card then counts and lists only the aliases of
+// CardAliasesVar, the ones the shell defines (3.0: SELF-12 fixed; 2.x
+// counted and listed every alias of the alias files, also those the shadow
+// rule dropped and the packs whose tool is absent). Without it (a headless
+// shell, a script calling the binary) the card shows every registered
+// alias, as 2.x did.
+const CardLiveVar = "GASH__CARD_LIVE"
+
 // card is gash [TOPIC|all] [--no-color] (lib/modules/gash.sh): the
 // reference card built from the help registry and the alias files. `gash
 // migrate` runs gash_migrate, -h shows the registered help, an unknown
@@ -77,7 +86,7 @@ func (m *Module) card(c *invoke.Call) int {
 
 	// __gash_want_colors "$no_color" || eval "$__GASH_COLOR_OFF_LOCALS".
 	s := ui.StyleOf(c.Term, !color)
-	k := cardOf(s, w, liveAliases(c.Env.Get(CardAliasesVar)))
+	k := cardOf(s, w, liveAliases(c.Env.Get(CardAliasesVar)), c.Env.Get(CardLiveVar) == "1")
 	p, b, mu, r := "", "", "", ""
 	if s.Color {
 		p, b, mu, r = s.P.Primary, s.P.Bold, s.P.Muted, s.P.Off
@@ -131,10 +140,11 @@ type cardWriter struct {
 	s    ui.Style
 	w    io.Writer
 	live map[string]string
+	only bool // list only the aliases of live (CardLiveVar)
 }
 
-func cardOf(s ui.Style, w io.Writer, live map[string]string) cardWriter {
-	return cardWriter{s: s, w: w, live: live}
+func cardOf(s ui.Style, w io.Writer, live map[string]string, only bool) cardWriter {
+	return cardWriter{s: s, w: w, live: live, only: only}
 }
 
 func (k cardWriter) nl() { _, _ = io.WriteString(k.w, "\n") }
@@ -184,13 +194,16 @@ func readTab(line string) (name, value string) {
 
 // aliasLines is the output of __gash_card_aliases FILE: the entries of
 // the file with the value the caller's shell gives a defined alias, the
-// identity ones ("ls -> ls") left out.
+// identity ones ("ls -> ls") left out, and with k.only those the shell
+// does not define.
 func (k cardWriter) aliasLines(file string) string {
 	var b strings.Builder
 	for _, a := range registry.CardAliases(file) {
 		name, value := readTab(a.Name + "\t" + a.Value)
 		if v, ok := k.live[name]; ok {
 			value = v
+		} else if k.only {
+			continue
 		}
 		if value == name {
 			continue

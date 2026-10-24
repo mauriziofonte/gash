@@ -132,14 +132,17 @@ gash() {
     {{% if .LoadsEnv %}}{{% loadenv %}}{{% end %}}
     # The card shows the value this shell gives an alias of the card, as
     # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
-    # backslash and newline escaped (LEDGER SELF-12).
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card=""
+    # backslash and newline escaped. Outside headless mode the card counts
+    # and lists only those (GASH__CARD_LIVE=1, LEDGER SELF-12); a headless
+    # shell loads no alias pack and gets the whole registered list.
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card="" __gash_live=1
+    [[ "${GASH_HEADLESS-}" == "1" ]] && __gash_live=""
     for __gash_n in {{% cardAliasNames %}}; do
         [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
         __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
         __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
     done
-    GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
+    GASH__CARD_ALIASES="$__gash_card" GASH__CARD_LIVE="$__gash_live" __gash_call gash "$@"
 }
 {{% end %}}
 
