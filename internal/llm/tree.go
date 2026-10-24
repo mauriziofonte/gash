@@ -11,7 +11,6 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
-	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // treeCap is the awk cap= of the JSON listing, textCap the head -n of the
@@ -61,13 +60,13 @@ func (m *Module) tree(c *invoke.Call) int {
 			maxDepth = "3"
 		}
 	}
-	if !validUint(c, "depth", maxDepth) {
-		return 1
+	// One invalid_depth message for 0 and for a non-integer: the depth is
+	// 1 or more (LLM-28; 2.x had two detail formats).
+	if !uintRE.MatchString(maxDepth) || atoi(maxDepth) < 1 {
+		return fail(c, "invalid_depth", "Value '"+maxDepth+"' is not an integer from 1 to 999999999",
+			"Provide a depth of 1 or more")
 	}
 	depth := atoi(maxDepth)
-	if depth < 1 {
-		return fail(c, "invalid_depth", maxDepth, "Provide a positive integer")
-	}
 	safe, ok := m.validatePath(c, p.path)
 	if !ok {
 		return 1
@@ -75,65 +74,85 @@ func (m *Module) tree(c *invoke.Call) int {
 	if st, err := os.Stat(safe); err != nil || !st.IsDir() {
 		return fail(c, "not_a_directory", safe, "Provide a valid directory path")
 	}
+	forbidden, ok := m.walkRoot(c, safe, "names")
+	if !ok {
+		return 1
+	}
 	if textMode {
-		_, _ = c.Stdout.Write(treeText(safe, depth))
+		_, _ = c.Stdout.Write(treeText(safe, depth, forbidden))
 		return 0
 	}
-	_, _ = c.Stdout.Write(treeJSON(safe, depth, withStats))
+	_, _ = c.Stdout.Write(treeJSON(safe, depth, withStats, forbidden))
 	return 0
 }
 
-// treeText is the --text listing: find's output (start point included,
-// pruned names and everything but files and directories left out) split
-// into lines, sorted, cut at 200 lines and indented by the slashes below
-// the start point.
-func treeText(safe string, maxDepth int) []byte {
-	var raw strings.Builder
-	w := findWalker{maxDepth: maxDepth, withStart: true}
+// treeText is the --text listing: the start point and the entries below
+// it (pruned names and other file types left out), in byte order of their
+// path components, cut at 200 lines and indented by the slashes below the
+// start point. 3.0 (LLM-19): the noise names are pruned below the start
+// point only, so a root named vendor lists its contents; the prefix is
+// cut literally (a root like a[1] indents right); symlinks are listed as
+// "name -> target", as the JSON tree lists them; names with a tab or a
+// newline are left out, as in the JSON tree; the root / prints as /.
+func treeText(safe string, maxDepth int, forbidden func(string) bool) []byte {
+	type textEntry struct {
+		path, rel string
+		parts     []string
+		typ       byte
+	}
+	var ents []textEntry
+	w := findWalker{maxDepth: maxDepth, withStart: true, forbidden: forbidden}
 	w.visit = func(e findEntry) bool {
-		name := startName(e.path)
 		if e.depth > 0 {
-			name = e.path[strings.LastIndexByte(e.path, '/')+1:]
+			name := e.path[strings.LastIndexByte(e.path, '/')+1:]
+			if prunedNames[name] {
+				return false
+			}
+			if strings.ContainsAny(e.rel, "\n\t") {
+				return true
+			}
 		}
-		if prunedNames[name] {
-			return false
+		t := e.typeLetter()
+		if t != 'f' && t != 'd' && t != 'l' {
+			return true
 		}
-		if t := e.typeLetter(); t == 'f' || t == 'd' {
-			raw.WriteString(e.path)
-			raw.WriteByte('\n')
+		var parts []string
+		if e.rel != "" {
+			parts = strings.Split(e.rel, "/")
 		}
+		ents = append(ents, textEntry{path: e.path, rel: e.rel, parts: parts, typ: t})
 		return true
 	}
 	w.walk(safe)
-	lines := strings.Split(raw.String(), "\n")
-	lines = lines[:len(lines)-1]
-	sort.Strings(lines)
-	if len(lines) > textCap {
-		lines = lines[:textCap]
+	sort.SliceStable(ents, func(i, j int) bool {
+		a, b := ents[i].parts, ents[j].parts
+		for k := 0; k < len(a) && k < len(b); k++ {
+			if a[k] != b[k] {
+				return a[k] < b[k]
+			}
+		}
+		return len(a) < len(b)
+	})
+	if len(ents) > textCap {
+		ents = ents[:textCap]
 	}
 	var out bytes.Buffer
-	for _, item := range lines {
-		rel := stripPrefixGlob(item, safe)
-		rel = strings.TrimPrefix(rel, "/")
-		indent := strings.Repeat("  ", strings.Count(rel, "/"))
-		name := basename(item)
-		if st, err := os.Stat(item); err == nil && st.IsDir() {
-			name += "/"
+	for _, e := range ents {
+		indent := strings.Repeat("  ", strings.Count(e.rel, "/"))
+		name := basename(e.path)
+		switch e.typ {
+		case 'd':
+			if name != "/" {
+				name += "/"
+			}
+		case 'l':
+			if target, err := os.Readlink(e.path); err == nil {
+				name += " -> " + target
+			}
 		}
 		echo(&out, indent+name)
 	}
 	return out.Bytes()
-}
-
-// stripPrefixGlob is ${item#$pat} with an unquoted pattern: the shortest
-// prefix of item that matches the shell pattern pat is removed.
-func stripPrefixGlob(item, pat string) string {
-	for i := 0; i <= len(item); i++ {
-		if pathguard.MatchGlobSegment(pat, item[:i]) {
-			return item[i:]
-		}
-	}
-	return item
 }
 
 // basename is $(basename "$p"): trailing slashes removed, the last
@@ -173,7 +192,7 @@ type treeNode struct {
 // treeJSON is the JSON tree: the find stream below the start point (pruned
 // names, other file types and paths with a tab or newline left out) folded
 // as the 2.x awk program does.
-func treeJSON(safe string, maxDepth int, withStats bool) []byte {
+func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) bool) []byte {
 	total := map[string]int64{}
 	nchild := map[string]int{}
 	nodes := map[string]*treeNode{}
@@ -181,7 +200,7 @@ func treeJSON(safe string, maxDepth int, withStats bool) []byte {
 	nodes[""] = root
 	listed, truncated := 0, false
 
-	w := findWalker{maxDepth: maxDepth}
+	w := findWalker{maxDepth: maxDepth, forbidden: forbidden}
 	if withStats {
 		w.maxDepth = -1
 	}
@@ -194,9 +213,10 @@ func treeJSON(safe string, maxDepth int, withStats bool) []byte {
 		if t == '?' {
 			return true
 		}
-		// ! -path '*\n*' ! -path '*\t*': tested on the whole path, the
-		// start point included (LLM-08, LLM-29).
-		if strings.ContainsAny(e.path, "\n\t") {
+		// Names with a tab or a newline are left out (LLM-29), tested on
+		// the path below the start point so a root whose own name holds
+		// one still lists its children (LLM-08).
+		if strings.ContainsAny(e.rel, "\n\t") {
 			return true
 		}
 		parts := strings.Split(e.rel, "/")
@@ -245,7 +265,7 @@ func treeJSON(safe string, maxDepth int, withStats bool) []byte {
 
 	var b []byte
 	b = append(b, `{"path":`...)
-	b = contract.AppendString(b, safe, contract.EscapeBash)
+	b = contract.AppendString(b, safe, contract.EscapeJQ)
 	b = append(b, `,"type":"directory"`...)
 	if withStats {
 		b = appendStats(b, total[""], nchild[""])
@@ -272,7 +292,7 @@ func appendStats(b []byte, size int64, count int) []byte {
 
 func emitTreeNode(b []byte, n *treeNode, depthRem int, withStats bool, total map[string]int64, nchild map[string]int) []byte {
 	b = append(b, `{"name":"`...)
-	b = appendAwkEscaped(b, n.rel[strings.LastIndexByte(n.rel, '/')+1:])
+	b = appendEscaped(b, n.rel[strings.LastIndexByte(n.rel, '/')+1:])
 	b = append(b, `","type":"`...)
 	b = append(b, n.typ...)
 	b = append(b, '"')
@@ -295,27 +315,4 @@ func emitTreeNode(b []byte, n *treeNode, depthRem int, withStats bool, total map
 		b = append(b, ']')
 	}
 	return append(b, '}')
-}
-
-// appendAwkEscaped is the esc() of the 2.x awk programs: backslash, double
-// quote, newline, carriage return and tab escaped, every other byte raw
-// (LLM-06, LLM-23).
-func appendAwkEscaped(b []byte, s string) []byte {
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; c {
-		case '\\':
-			b = append(b, '\\', '\\')
-		case '"':
-			b = append(b, '\\', '"')
-		case '\n':
-			b = append(b, '\\', 'n')
-		case '\r':
-			b = append(b, '\\', 'r')
-		case '\t':
-			b = append(b, '\\', 't')
-		default:
-			b = append(b, c)
-		}
-	}
-	return b
 }

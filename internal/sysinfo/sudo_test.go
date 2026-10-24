@@ -49,11 +49,12 @@ func TestSudoUnavailable(t *testing.T) {
 	require.Equal(t, "sudo -n true\n", fx.sudo(t))
 }
 
-// On a terminal, verbose mode says why it asks, and what failed.
+// On a terminal, verbose mode says why it asks, and what failed (3.0:
+// SYS-15 fixed: a section that reads as root, network asks nothing).
 func TestSudoPrompt(t *testing.T) {
 	fx := newFixture(t)
 	fx.uid = 1000
-	r := fx.call(t, fx.tty(), "network")
+	r := fx.call(t, fx.tty(), "identity")
 	require.Equal(t, term.SeqInfo+"•"+term.SeqOff+" Elevated privileges needed for full system enumeration.\n"+
 		term.SeqWarning+"! Warning:"+term.SeqOff+" Could not obtain sudo. Some data will be limited.\n", r.err)
 	require.Equal(t, "sudo -n true\nsudo -v\n", fx.sudo(t))
@@ -61,7 +62,7 @@ func TestSudoPrompt(t *testing.T) {
 	// --no-color empties the colors, the glyphs stay (2.x locals).
 	fx = newFixture(t)
 	fx.uid = 1000
-	r = fx.call(t, fx.tty(), "network", "--no-color")
+	r = fx.call(t, fx.tty(), "identity", "--no-color")
 	require.Equal(t, "• Elevated privileges needed for full system enumeration.\n"+
 		"! Warning: Could not obtain sudo. Some data will be limited.\n", r.err)
 

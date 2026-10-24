@@ -65,12 +65,7 @@ func (m *Module) nodeDetect(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	dir := nvmDir(c)
-	if !isDir(dir) {
-		printer(c).Error(fmt.Sprintf(nvmUpgradeMsg, dir))
-		return 1
-	}
-
+	// The arguments come first, then the environment (LEDGER DEV-20).
 	projectDir, llm := ".", headless(c)
 	for _, a := range c.Args {
 		switch {
@@ -82,6 +77,15 @@ func (m *Module) nodeDetect(c *invoke.Call) int {
 		default:
 			projectDir = a
 		}
+	}
+	dir := nvmDir(c)
+	if !isDir(dir) {
+		printer(c).Error(fmt.Sprintf(nvmUpgradeMsg, dir))
+		return 1
+	}
+	if !isDir(projectDir) {
+		// Same answer and rc 0, with a warning (LEDGER DEV-18).
+		printer(c).Warning("Directory not found: " + projectDir)
 	}
 
 	major := m.nodeMajor(c, dir, projectDir)
@@ -195,9 +199,13 @@ func (m *Module) ltsMajor(dir, name string) string {
 	return major
 }
 
-// installedVersions is __node_installed_versions: every entry name of
-// $NVM_DIR/versions/node with a leading v stripped, in sort -V order
-// (unfiltered: LEDGER DEV-05).
+// reRelease is an installed Node release directory, as node_upgrade
+// keeps them: vX.Y.Z.
+var reRelease = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// installedVersions is __node_installed_versions: the vX.Y.Z entries of
+// $NVM_DIR/versions/node with the v stripped, in sort -V order; a stray
+// name or a prerelease is not an installed version (LEDGER DEV-05).
 func (m *Module) installedVersions(dir string) []string {
 	entries, err := os.ReadDir(filepath.Join(dir, "versions", "node"))
 	if err != nil {
@@ -205,7 +213,9 @@ func (m *Module) installedVersions(dir string) []string {
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		names = append(names, strings.TrimPrefix(e.Name(), "v"))
+		if reRelease.MatchString(e.Name()) {
+			names = append(names, strings.TrimPrefix(e.Name(), "v"))
+		}
 	}
 	return sortV(names)
 }

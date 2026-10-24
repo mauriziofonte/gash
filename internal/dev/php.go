@@ -39,24 +39,32 @@ func (m *Module) phpDetect(c *invoke.Call) int {
 		}
 	}
 
+	if !isDir(projectDir) {
+		// A missing or unusable DIR keeps its answer and rc 0, with a
+		// warning (LEDGER DEV-18).
+		printer(c).Warning("Directory not found: " + projectDir)
+	}
 	version := m.phpVersionString(c, projectDir)
 	major, _, _ := strings.Cut(version, ".")
 
 	// Binary probes: /usr/bin/php<version>, /usr/bin/php<major>, then
 	// `php` on PATH, then the literal "php" (LEDGER DEV-12: PATH, no
-	// hash table).
+	// hash table). When the version's own binary is missing, a warning
+	// says so; the JSON is unchanged (DEV-01).
 	phpRaw := ""
 	switch {
 	case m.executable("/usr/bin/php" + version):
 		phpRaw = "/usr/bin/php" + version
 	case m.executable("/usr/bin/php" + major):
 		phpRaw = "/usr/bin/php" + major
+		printer(c).Warning("PHP " + version + " is not installed; using " + phpRaw)
 	default:
 		if p, err := runner.LookPath("php", c.Env.Child(), cwd(c)); err == nil {
 			phpRaw = p
 		} else {
 			phpRaw = "php"
 		}
+		printer(c).Warning("PHP " + version + " is not installed; php_raw_binary falls back to " + phpRaw)
 	}
 
 	vernodot := strings.ReplaceAll(version, ".", "")
@@ -106,7 +114,7 @@ func (m *Module) phpDetect(c *invoke.Call) int {
 }
 
 // phpVersionString is __php_detect_version_string: .target-php-version
-// (walk-up), then composer.json .require.php, then
+// (walk-up), then composer.json .require.php (constraintVersion), then
 // .github/copilot-instructions.md, then 8.4.
 func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 	// The walk-up starts at the directory `cd "$project_dir" && pwd`
@@ -119,10 +127,10 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 	for strings.HasPrefix(searchDir, "/") && searchDir != "/" {
 		f := filepath.Join(searchDir, ".target-php-version")
 		if isFile(f) {
-			// head -1 | grep -oE '[0-9]+\.[0-9]+' (every match joined,
-			// LEDGER DEV-04).
-			if ms := reXY.FindAllString(firstLine(headLine(f)), -1); len(ms) > 0 {
-				return strings.Join(ms, "\n")
+			// The first X.Y of line 1 (LEDGER DEV-04: 2.x joined every
+			// match with a newline).
+			if v := firstXY(firstLine(headLine(f))); v != "" {
+				return v
 			}
 		}
 		parent := gnuDirname(searchDir)
@@ -132,11 +140,11 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 		searchDir = parent
 	}
 
-	// composer.json .require.php: first X.Y of the jq -r value (LEDGER
-	// DEV-02, DEV-03).
+	// composer.json .require.php, as jq -r prints it, read as a
+	// constraint (LEDGER DEV-02, DEV-03).
 	if composer := filepath.Join(projectDir, "composer.json"); isFile(composer) {
 		if data, err := m.readFile(composer); err == nil {
-			if v := firstXY(subst(jqPathRaw(data, "require", "php"))); v != "" {
+			if v := m.constraintVersion(subst(jqPathRaw(data, "require", "php"))); v != "" {
 				return v
 			}
 		}
@@ -151,6 +159,62 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 		}
 	}
 	return "8.4"
+}
+
+// reMajor is the first run of digits of a constraint alternative.
+var reMajor = regexp.MustCompile(`[0-9]+`)
+
+// constraintVersion is the X.Y a composer constraint asks for (LEDGER
+// DEV-02, DEV-03): the constraint split on || and |, each alternative's
+// lower bound (its first X.Y; a bare major such as ^7, >=8 or 8.* is
+// X.0; * alone has none), then the highest alternative whose
+// /usr/bin/phpX.Y is installed, else the highest one; "" when no
+// alternative has a bound.
+func (m *Module) constraintVersion(constraint string) string {
+	var bounds []string
+	for _, alt := range strings.Split(strings.ReplaceAll(constraint, "||", "|"), "|") {
+		if v := firstXY(alt); v != "" {
+			bounds = append(bounds, v)
+		} else if mj := reMajor.FindString(alt); mj != "" {
+			bounds = append(bounds, mj+".0")
+		}
+	}
+	best, bestInstalled := "", ""
+	for _, v := range bounds {
+		if best == "" || xyLess(best, v) {
+			best = v
+		}
+		if m.executable("/usr/bin/php"+v) && (bestInstalled == "" || xyLess(bestInstalled, v)) {
+			bestInstalled = v
+		}
+	}
+	if bestInstalled != "" {
+		return bestInstalled
+	}
+	return best
+}
+
+// xyLess compares two X.Y versions numerically.
+func xyLess(a, b string) bool {
+	am, an, _ := strings.Cut(a, ".")
+	bm, bn, _ := strings.Cut(b, ".")
+	if x, y := atoi(am), atoi(bm); x != y {
+		return x < y
+	}
+	return atoi(an) < atoi(bn)
+}
+
+// atoi is the value of a digit string, saturating instead of
+// overflowing.
+func atoi(s string) int {
+	n := 0
+	for _, c := range s {
+		if n > 1<<40 {
+			break
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n
 }
 
 // firstXY is `grep -oE '[0-9]+\.[0-9]+' | head -1`: the first X.Y of s.

@@ -1,0 +1,27 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: GIT-10
+#
+# The git module functions run the user's own hooks and configuration
+# (they are the user's repository operations): git_sync runs pre-commit.
+
+env GASH_HEADLESS=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+exec git init -q w
+cd w
+exec bash -c 'echo a >a; git add a; git commit -qm init'
+exec bash -c 'printf "#!/bin/sh\n: >\"\$0.ran\"\n" >.git/hooks/pre-commit; chmod +x .git/hooks/pre-commit; echo x >x'
+exec bash -c 'source "$GASH_SH"; git_sync --no-push --yes'
+exists .git/hooks/pre-commit.ran
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false

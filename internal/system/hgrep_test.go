@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/help"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -94,8 +97,7 @@ func TestHgrepArguments(t *testing.T) {
 
 	r = hgrep(t, histFixture, nil, "-h")
 	require.Equal(t, 0, r.rc)
-	require.Equal(t, hgrepHelp, r.out)
-	require.True(t, strings.HasPrefix(r.out, "hgrep - Smart history search with timestamps and deduplication\n\nUSAGE:\n"))
+	require.Equal(t, registeredHelp(t, "hgrep"), r.out)
 
 	m, _, _ := tm(t, runner.NewFake(t))
 	r = call(m, "hgrep", map[string]string{"HISTFILE": "/nonexistent/h"}, nil, "", "git")
@@ -182,36 +184,45 @@ func TestHgrepPick(t *testing.T) {
 	require.Equal(t, result{"", "", 0}, r)
 }
 
-// SYS-05: an invalid -E regex is an empty result with status 0; one line
-// of ours replaces the awk diagnostic.
+// SYS-05: an invalid -E regex is an error with status 1 and no stdout in
+// every output mode, also for an empty history (3.0: SYS-05 fixed; 2.x
+// printed the empty result with status 0).
 func TestLedger_SYS05(t *testing.T) {
-	for _, tc := range []struct{ mode, out string }{{"-j", "[]\n"}, {"-c", "0\n"}, {"-H", ""}} {
-		r := hgrep(t, histFixture, nil, "-E", "(", tc.mode)
-		require.Equal(t, result{tc.out, "Error: Invalid regex: (\n", 0}, r, tc.mode)
+	for _, tc := range []string{"-j", "-c", "-H"} {
+		r := hgrep(t, histFixture, nil, "-E", "(", tc)
+		require.Equal(t, result{"", "Error: Invalid regex: (\n", 1}, r, tc)
 	}
-	// awk never compiled the regex of an empty history.
 	r := hgrep(t, "", nil, "-E", "(", "-j")
-	require.Equal(t, result{"[]\n", "", 0}, r)
+	require.Equal(t, result{"", "Error: Invalid regex: (\n", 1}, r)
 }
 
-// SYS-06: the 2.x JSON escaping (raw control bytes) and the CRLF records
-// skipped are reproduced.
+// SYS-06: --json uses the jq-compatible encoder (control bytes as \u00xx,
+// so the array parses and round-trips), and one trailing CR of a CRLF
+// history file is dropped from both lines (3.0: SYS-06 fixed).
 func TestLedger_SYS06(t *testing.T) {
 	r := hgrep(t, "#1700000000\necho \x1b[31mred\n#1700000001\necho cr\r\n", nil, "echo", "-j")
-	require.Equal(t, "[{\"timestamp\":\"2023-11-14 22:13:20\",\"epoch\":1700000000,\"count\":1,\"command\":\"echo \x1b[31mred\"},"+
-		"{\"timestamp\":\"2023-11-14 22:13:21\",\"epoch\":1700000001,\"count\":1,\"command\":\"echo cr\r\"}]\n", r.out)
-	require.False(t, json.Valid([]byte(r.out)))
-	r = hgrep(t, "#1700000000\r\necho crlf\r\n", nil, "echo", "-c")
-	require.Equal(t, "0\n", r.out)
+	require.Equal(t, "[{\"timestamp\":\"2023-11-14 22:13:20\",\"epoch\":1700000000,\"count\":1,\"command\":\"echo \\u001b[31mred\"},"+
+		"{\"timestamp\":\"2023-11-14 22:13:21\",\"epoch\":1700000001,\"count\":1,\"command\":\"echo cr\"}]\n", r.out)
+	var got []struct{ Command string }
+	require.NoError(t, json.Unmarshal([]byte(r.out), &got))
+	require.Equal(t, "echo \x1b[31mred", got[0].Command)
+	r = hgrep(t, "#1700000000\r\necho crlf\r\n#1700000001\r\necho two\r\n", nil, "echo", "-j")
+	require.Equal(t, "[{\"timestamp\":\"2023-11-14 22:13:20\",\"epoch\":1700000000,\"count\":1,\"command\":\"echo crlf\"},"+
+		"{\"timestamp\":\"2023-11-14 22:13:21\",\"epoch\":1700000001,\"count\":1,\"command\":\"echo two\"}]\n", r.out)
 }
 
-// SYS-07: every word starting with "-" is an option, `--` included; -h
-// is help only as the first word.
+// SYS-07: `--` ends the options, so a pattern may start with "-"; -h is
+// help anywhere before `--` (3.0: SYS-07 fixed).
 func TestLedger_SYS07(t *testing.T) {
-	r := hgrep(t, histFixture, nil, "--", "--force")
-	require.Equal(t, result{"", "Error: Unknown option: --. Use -h for help.\n", 1}, r)
-	r = hgrep(t, histFixture, nil, "git", "-h")
-	require.Equal(t, result{"", "Error: Unknown option: -h. Use -h for help.\n", 1}, r)
+	h := "#1700000000\ngit push --force\n#1700000001\ngit push\n"
+	r := hgrep(t, h, nil, "--", "--force")
+	require.Equal(t, result{"[2023-11-14 22:13:20] git push --force\n", "", 0}, r)
+	r = hgrep(t, h, nil, "-c", "--", "-h")
+	require.Equal(t, result{"0\n", "", 0}, r)
+	r = hgrep(t, h, nil, "git", "-h")
+	require.Equal(t, result{registeredHelp(t, "hgrep"), "", 0}, r)
+	r = hgrep(t, h, nil, "--", "a", "b")
+	require.Equal(t, result{"", "Error: Multiple patterns not supported: b\n", 1}, r)
 }
 
 // SYS-28: the pattern reaches the matcher verbatim; -E is a Go regexp,
@@ -224,10 +235,11 @@ func TestLedger_SYS28(t *testing.T) {
 	require.Equal(t, result{"[2023-11-14 22:13:21] cmd a.b\n", "", 0}, r)
 	r = hgrep(t, h, nil, "-E", `^\S+$`)
 	require.Equal(t, result{"[2023-11-14 22:13:23] NOSPACE\n", "", 0}, r)
-	// Syntax Go regexp lacks takes the invalid-regex path.
+	// Syntax Go regexp lacks takes the invalid-regex path (3.0: SYS-05
+	// fixed, so that is status 1 with no stdout).
 	for _, p := range []string{`\<cmd`, `\ycmd`, `(a)\1`} {
 		r = hgrep(t, h, nil, "-E", p, "-c")
-		require.Equal(t, result{"0\n", "Error: Invalid regex: " + p + "\n", 0}, r, p)
+		require.Equal(t, result{"", "Error: Invalid regex: " + p + "\n", 1}, r, p)
 	}
 }
 
@@ -237,17 +249,18 @@ func TestLedger_SYS29(t *testing.T) {
 	require.Equal(t, result{"[2023-11-14 22:25:00] cmd a.b git\n", "", 0}, r)
 }
 
-// SYS-30: -n is a decimal number, never evaluated; beyond 64 bits it is
-// refused.
+// SYS-30: -n is a decimal number, never evaluated, at most 9 digits.
 func TestLedger_SYS30(t *testing.T) {
 	r := hgrep(t, histFixture, nil, "git", "-n", "08", "-c")
 	require.Equal(t, "8\n", r.out)
 	r = hgrep(t, histFixture, nil, "git", "-n", "0", "-c")
 	require.Equal(t, "9\n", r.out)
-	r = hgrep(t, histFixture, nil, "git", "-n", "9223372036854775807", "-c")
+	r = hgrep(t, histFixture, nil, "git", "-n", "999999999", "-c")
 	require.Equal(t, "9\n", r.out)
-	r = hgrep(t, histFixture, nil, "git", "-n", "9223372036854775808")
-	require.Equal(t, result{"", "Error: Option -n requires a numeric argument\n", 1}, r)
+	for _, v := range []string{"1234567890", "9223372036854775808"} {
+		r = hgrep(t, histFixture, nil, "git", "-n", v)
+		require.Equal(t, result{"", "Error: Option -n requires a numeric argument\n", 1}, r, v)
+	}
 }
 
 // SYS-31: equal epochs keep the order of the last executions in the file,
@@ -276,12 +289,39 @@ func TestLedger_SYS32(t *testing.T) {
 	require.Equal(t, "\x1b[38;5;245m[2023-11-14 22:13:21]\x1b[0m \x1b[38;5;214mGIT\x1b[0m \x1b[38;5;214mlog\x1b[0m\n", r.out)
 }
 
-// SYS-43: -n keeps the last N lines of the sorted list, so with -r the N
-// oldest.
+// SYS-43: -n N is always the N most recent matches, with -r too (3.0:
+// SYS-43 option b; 2.x kept the N oldest with -r).
 func TestLedger_SYS43(t *testing.T) {
-	h := "#1700000000\necho one\n#1700000100\necho two\n"
+	h := "#1700000000\necho one\n#1700000100\necho two\n#1700000200\necho three\n"
 	r := hgrep(t, h, nil, "echo", "-r", "-n", "1")
-	require.Equal(t, "[2023-11-14 22:13:20] echo one\n", r.out)
-	r = hgrep(t, h, nil, "echo", "-n", "1")
-	require.Equal(t, "[2023-11-14 22:15:00] echo two\n", r.out)
+	require.Equal(t, "[2023-11-14 22:16:40] echo three\n", r.out)
+	r = hgrep(t, h, nil, "echo", "-r", "-n", "2")
+	require.Equal(t, "[2023-11-14 22:16:40] echo three\n[2023-11-14 22:15:00] echo two\n", r.out)
+	r = hgrep(t, h, nil, "echo", "-n", "2")
+	require.Equal(t, "[2023-11-14 22:15:00] echo two\n[2023-11-14 22:16:40] echo three\n", r.out)
+}
+
+// SYS-47: one help body for `hgrep -h` and gash_help, listing every option
+// of the grammar, `-r` as newest first, and examples whose timestamps are
+// their epochs in UTC.
+func TestLedger_SYS47(t *testing.T) {
+	body := registeredHelp(t, "hgrep")
+	for _, flag := range []string{"-n, --limit", "-a, --all", "-r, --reverse", "-j, --json", "-H, --no-highlight",
+		"-E, --regex", "-c, --count", "-g, --group", "--pick", "--no-color", "-h, --help", "--  "} {
+		require.Contains(t, body, flag)
+	}
+	require.Contains(t, body, "-r, --reverse       Newest first (default: oldest first)")
+	require.Contains(t, body, `"timestamp":"`+time.Unix(1705330321, 0).UTC().Format("2006-01-02 15:04:05")+`","epoch":1705330321`)
+	require.Contains(t, body, "["+time.Unix(1705330321, 0).UTC().Format("2006-01-02 15:04:05")+"] git push origin main")
+}
+
+// registeredHelp is the registered help page of name, as gash_help prints
+// it without colors.
+func registeredHelp(t *testing.T, name string) string {
+	t.Helper()
+	f, ok := registry.Lookup(name)
+	require.True(t, ok)
+	var b strings.Builder
+	require.True(t, help.Display(&b, false, f))
+	return b.String()
 }

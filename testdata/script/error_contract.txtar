@@ -53,15 +53,16 @@ done
 
 -- missing_value.sh --
 set -euo pipefail
-set -m # job control: each background job is its own process group
-# bounded SECS CMD...: CMD's status, 124 when it outlived SECS (the whole
-# process group is SIGKILLed, as GNU timeout does; macOS has no timeout).
+# bounded SECS CMD...: CMD's status, 124 when it outlived SECS (CMD and its
+# children are SIGKILLed; macOS has no timeout). No job control: `set -m`
+# makes Homebrew bash 5.3 on macOS print "child setpgid ... Operation not
+# permitted" into the command's stderr.
 bounded() {
   local secs=$1 pid w rc=0; shift
   "$@" & pid=$!
-  { sleep "$secs"; kill -KILL -- -"$pid"; } >/dev/null 2>&1 </dev/null & w=$!
+  { sleep "$secs" && { pkill -KILL -P "$pid"; kill -KILL "$pid"; }; } >/dev/null 2>&1 </dev/null & w=$!
   wait "$pid" || rc=$?
-  kill -- -"$w" 2>/dev/null || true; wait "$w" 2>/dev/null || true
+  pkill -P "$w" 2>/dev/null || true; wait "$w" 2>/dev/null || true
   if ((rc == 137)); then rc=124; fi
   return "$rc"
 }

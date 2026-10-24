@@ -40,6 +40,9 @@ var reRetryNum = regexp.MustCompile(`^[0-9]+\.?[0-9]*$`)
 // are retried up to three times honoring Retry-After (AI-13).
 func (m *Module) request(c *invoke.Call, provider, token, system, user, schemaRaw string, maxTokens int, timeout time.Duration) (string, int) {
 	p := printer(c)
+	if (provider == "claude" || provider == "gemini") && !m.modelOK(c, provider) {
+		return "", 1
+	}
 	var url, label, keyHeader, model string
 	switch provider {
 	case "claude":
@@ -128,6 +131,21 @@ func (m *Module) request(c *invoke.Call, provider, token, system, user, schemaRa
 		p.Error(httpErrorMessage(label, resp.StatusCode, respBody))
 		return "", 1
 	}
+}
+
+// reModel is the shape of a model name: it goes into the Gemini URL path,
+// so no '/', '?', '#' or '..' may reach it (AI-12).
+var reModel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// modelOK reports whether the GASH_AI_MODEL_* override of provider, when
+// set, is a plain model name; it prints the error when it is not.
+func (m *Module) modelOK(c *invoke.Call, provider string) bool {
+	name := "GASH_AI_MODEL_" + strings.ToUpper(provider)
+	if v := c.Env.Get(name); v != "" && !reModel.MatchString(v) {
+		printer(c).Error("Invalid " + name + " value (letters, digits, '.', '_' and '-' only)")
+		return false
+	}
+	return true
 }
 
 // model is __ai_model: the GASH_AI_MODEL_* override, else the built-in.

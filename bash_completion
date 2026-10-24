@@ -82,8 +82,8 @@ __gash_complete() {
             fi
             ;;
 
-        # disk_usage / ip_public — just --no-color
-        disk_usage | ip_public)
+        # disk_usage — just --no-color
+        disk_usage)
             if [[ "$cur" == -* ]]; then
                 mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
             fi
@@ -100,7 +100,7 @@ __gash_complete() {
 
         docker_compose_scan)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--depth --json --no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "-d --depth -j --json --no-color --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
@@ -108,9 +108,21 @@ __gash_complete() {
 
         docker_compose_upgrade)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force -f --yes -y --no-color --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
+            fi
+            ;;
+
+        docker_prune_all | git_apply_patch | git_repair)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
+            fi
+            ;;
+
+        docker_start_all | docker_stop_all)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --help" -- "$cur")
             fi
             ;;
 
@@ -130,8 +142,26 @@ __gash_complete() {
             fi
             ;;
 
+        # Only --help as an option (words complete as files)
+        gash_ssh_auto_unlock | history_grep | process_find | sudo_last | wsl_explorer | wsl_taskmanager)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--help" -- "$cur")
+            fi
+            ;;
+
+        # Git tag completion, with the confirmation flags
+        git_add_tag | git_delete_tag)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
+            elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
+            else
+                COMPREPLY=()
+            fi
+            ;;
+
         # Git tag completion
-        git_add_tag | git_delete_tag | git_list_tags)
+        git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
                 mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
             else
@@ -140,7 +170,21 @@ __gash_complete() {
             ;;
 
         git_sync)
-            mapfile -t COMPREPLY < <(compgen -W "--message --no-push --dry-run --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "-m --message --no-push --dry-run -y --yes --help" -- "$cur")
+            ;;
+
+        # hgrep — its options
+        hgrep)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help" -- "$cur")
+            fi
+            ;;
+
+        # ip_public — --no-color and --raw
+        ip_public)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--no-color --raw --help" -- "$cur")
+            fi
             ;;
 
         # Directory completion (other)
@@ -156,9 +200,41 @@ __gash_complete() {
             fi
             ;;
 
+        # Kill functions — -y/--yes and the 2.0 -f/--force
+        port_kill | process_kill)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes -f --force --help" -- "$cur")
+            fi
+            ;;
+
+        remote_exec)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--script --help" -- "$cur")
+            fi
+            ;;
+
+        remote_pull | remote_push)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-r --recursive -p --preserve --no-progress --force --help" -- "$cur")
+            fi
+            ;;
+
+        remote_sync_pull | remote_sync_push)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--delete --dry-run --no-progress --force --exclude= --help" -- "$cur")
+            fi
+            ;;
+
+        # services_stop — confirmation flags and --dry-run
+        services_stop)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes -f --force --dry-run --help" -- "$cur")
+            fi
+            ;;
+
         # System info sections + flags
         sysinfo)
-            mapfile -t COMPREPLY < <(compgen -W "identity storage services auth network security webstack mail infra system all --llm --no-color" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "overview identity storage services auth network security webstack mail infra system all --llm --no-color --help" -- "$cur")
             ;;
 
         # tree_stats: directories + flags
@@ -171,7 +247,14 @@ __gash_complete() {
             ;;
 
         wsl_compact)
-            mapfile -t COMPREPLY < <(compgen -W "--status --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "--status -y --yes --help" -- "$cur")
+            ;;
+
+        # WSL stop functions — -y/--yes
+        wsl_restart | wsl_shutdown)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --help" -- "$cur")
+            fi
             ;;
 
         # The reference card topics, and the 3.x commands of the binary

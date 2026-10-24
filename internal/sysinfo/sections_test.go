@@ -182,7 +182,7 @@ zone "example.com" {
 server:
   verbosity: 1  port: 53
 `,
-	// The Docker heading lands on containerd (SYS-17).
+	// 3.0: SYS-17 fixed: containerd prints under its own heading.
 	"infra": `=== INFRA ===
 --- Samba
 [global]
@@ -193,7 +193,7 @@ config.xml=10 bytes
 --- OpenVPN
 /etc/openvpn/client.conf
 /etc/openvpn/sub/site.ovpn
---- Docker
+--- Containers
 containerd=present
 --- Collectd
 cpu.conf
@@ -202,7 +202,7 @@ miniserv.conf
 virtual-server
 Virtualmin: installed
 `,
-	// The private key names land under cron.monthly: (SYS-17).
+	// 3.0: SYS-17 fixed: the private key names have their own heading.
 	"system": `=== SYSTEM ===
 --- Cron
 SHELL=/bin/sh
@@ -217,6 +217,7 @@ example.com
 example.com
 max-log-backups = 0
 Virtualmin SSL=1 domains
+--- SSL private keys
 /etc/ssl/private/server.key
 /etc/ssl/private/server.pem
 --- Kernel tuning

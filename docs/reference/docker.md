@@ -23,7 +23,16 @@ Alias: `dcc`
 #### Usage
 
 ```text
-docker_compose_check [PATH] [--json]
+docker_compose_check [PATH] [--json] [--no-color]
+```
+
+#### Options
+
+```text
+PATH        Directory with the compose file (default: current directory)
+--json      JSON output for scripting; errors are JSON envelopes on stderr
+--no-color  Disable ANSI colors (auto-off on pipe, NO_COLOR, GASH_HEADLESS)
+-h, --help  Show this help
 ```
 
 #### Examples
@@ -42,17 +51,35 @@ dcc --json
 #### Status codes
 
 ```text
-UPDATE     New image available on registry
-UP-TO-DATE Image matches remote digest
-PINNED     Version is pinned (e.g. nginx:1.25.3), skipped
-ERROR      Could not reach registry
+CURRENT     Local image matches the remote digest
+UPDATE      A newer image is on the registry
+NOT_PULLED  The image is not pulled locally yet
+PINNED      Digest pin or full version (e.g. nginx:1.25.3), not upgraded
+ERROR       Registry unreachable, auth refused or invalid image reference
 ```
 
 #### Notes
 
 ```text
-Queries Docker Hub and GHCR registries to compare
-local image digests with remote ones.
+Compose resolves the project files itself (compose.yaml first, override
+files, COMPOSE_FILE); when `docker compose config` fails, the first of
+compose.yaml, compose.yml, docker-compose.yml, docker-compose.yaml is
+read.
+Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN
+is exchanged for a GHCR token), the others anonymously, answering a
+Bearer challenge. Image variables come from the exported environment
+and DIR/.env, with Compose's interpolation rules.
+The exit status is 0 whenever the report prints, ERROR rows included.
+```
+
+#### Registry errors
+
+```text
+The error field of an ERROR row (--json) is one of: dns_error,
+connection_refused, timeout, ssl_error, transport_error, unauthorized,
+forbidden, not_found, rate_limited, server_error, http_NNN (another
+status), malformed_token, no_digest_in_response, registry_unreachable,
+invalid_reference (the image name does not parse).
 ```
 
 See also: `docker_compose_upgrade`, `docker_compose_scan`
@@ -66,7 +93,18 @@ Alias: `dcscan`
 #### Usage
 
 ```text
-docker_compose_scan [BASEDIR] [--depth N] [--json]
+docker_compose_scan [BASEDIR] [-d|--depth N] [-j|--json] [--no-color]
+```
+
+#### Options
+
+```text
+BASEDIR     Base directory to scan (default: current directory)
+-d, --depth N
+            Maximum search depth, a non-negative integer (default: 3)
+-j, --json  JSON output for scripting
+--no-color  Disable ANSI colors
+-h, --help  Show this help (first word only)
 ```
 
 #### Examples
@@ -85,6 +123,12 @@ dcscan /home/deploy --json
 dcscan /opt --depth 3
 ```
 
+#### Notes
+
+```text
+An unknown option is refused with exit status 1.
+```
+
 See also: `docker_compose_check`, `docker_compose_upgrade`
 
 ## docker_compose_upgrade
@@ -96,7 +140,18 @@ Alias: `dcup2`
 #### Usage
 
 ```text
-docker_compose_upgrade [PATH] [--dry-run] [--force]
+docker_compose_upgrade [PATH] [--dry-run] [-f|--force] [-y|--yes] [--no-color]
+```
+
+#### Options
+
+```text
+PATH        Directory with the compose file (default: current directory)
+--dry-run   Show what would be done without executing
+-f, --force Upgrade pinned versions too
+-y, --yes   Skip the confirmation (required in headless mode)
+--no-color  Disable ANSI colors
+-h, --help  Show this help
 ```
 
 #### Examples
@@ -111,8 +166,8 @@ dcup2 --dry-run
 # Force upgrade even for pinned versions
 dcup2 --force
 
-# Upgrade a specific project
-dcup2 /opt/myapp
+# Upgrade a specific project, no question asked
+dcup2 /opt/myapp --yes
 ```
 
 #### Notes
@@ -121,6 +176,10 @@ dcup2 /opt/myapp
 Only upgrades services with mutable tags (latest, main, dev, etc.).
 Pinned versions (e.g. nginx:1.25.3) are skipped unless --force is used.
 Pulls new images, recreates affected containers, removes old images.
+Compose runs in PATH with its own file discovery, so override files
+(docker-compose.override.yml) and COMPOSE_FILE are honored.
+Headless (GASH_HEADLESS=1) it refuses to run without --yes.
+Declining the confirmation returns 1.
 ```
 
 See also: `docker_compose_check`, `docker_compose_scan`
@@ -172,7 +231,7 @@ Alias: `daa`
 #### Usage
 
 ```text
-docker_start_all
+docker_start_all [-y]
 ```
 
 #### Examples
@@ -183,6 +242,14 @@ daa
 
 # Restart everything
 dsa && daa
+```
+
+#### Notes
+
+```text
+Lists the stopped containers (Will start N container(s): NAMES)
+and asks before acting; -y/--yes skips the question and is required
+headless or without a terminal. Declining returns 1.
 ```
 
 See also: `docker_stop_all`
@@ -196,7 +263,7 @@ Alias: `dsa`
 #### Usage
 
 ```text
-docker_stop_all
+docker_stop_all [-y]
 ```
 
 #### Examples
@@ -207,6 +274,14 @@ dsa
 
 # Restart all containers: stop then start
 dsa && daa
+```
+
+#### Notes
+
+```text
+Lists the running containers (Will stop N container(s): NAMES)
+and asks before acting; -y/--yes skips the question and is required
+headless or without a terminal. Declining returns 1.
 ```
 
 See also: `docker_start_all`, `docker_prune_all`
@@ -236,6 +311,10 @@ llm_docker_check /opt/myapp
 ```text
 Wrapper around docker_compose_check --json.
 Designed for LLM/AI agent consumption.
+PATH follows the llm_* path rules (no .., no protected trees).
+${VAR} in the compose file is resolved from PATH/.env and a short
+allowlist (HOME, USER, PATH, LANG, DOCKER_HOST, ...), never from
+other exported variables, so a token cannot reach the output.
 ```
 
 See also: `docker_compose_check`

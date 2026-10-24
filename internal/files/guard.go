@@ -136,9 +136,19 @@ func listMembers(c *invoke.Call, k kind, archive string) ([]member, error) {
 		defer f.Close()
 		return readTar(bzip2.NewReader(f))
 	case kTarXz:
-		return readTarPiped(c, "xz", archive)
+		return readTarPiped(c, "xz", []string{"-dc", "--", archive}, nil)
 	case kTarZst:
-		return readTarPiped(c, "zstd", archive)
+		return readTarPiped(c, "zstd", []string{"-dc", "--", archive}, nil)
+	case kTarZ:
+		args, in, err := uncompressArgs(archive)
+		if err != nil {
+			return nil, nil
+		}
+		if in == nil {
+			return readTarPiped(c, "uncompress", args, nil)
+		}
+		defer in.Close()
+		return readTarPiped(c, "uncompress", args, in)
 	case kZip:
 		return readZip(archive)
 	case kSevenZip:
@@ -171,10 +181,11 @@ func readTar(r io.Reader) ([]member, error) {
 	}
 }
 
-// readTarPiped decompresses with `TOOL -dc -- ARCHIVE` through the runner and
-// reads the tar stream it produces. A missing tool or a read error returns
-// nil (no guard), so the extraction path reports it as 2.x did.
-func readTarPiped(c *invoke.Call, tool, archive string) ([]member, error) {
+// readTarPiped decompresses with `TOOL ARGS...` (the archive is the last
+// argument) through the runner and reads the tar stream it produces. A
+// missing tool or a read error returns nil (no guard), so the extraction
+// path reports it.
+func readTarPiped(c *invoke.Call, tool string, args []string, stdin io.Reader) ([]member, error) {
 	// Stand down when the decompressor or tar is missing: the extraction
 	// path then reports it, and a missing tar never starts zstd (FILE-19).
 	for _, need := range []string{tool, "tar"} {
@@ -186,8 +197,8 @@ func readTarPiped(c *invoke.Call, tool, archive string) ([]member, error) {
 	pr, pw := io.Pipe()
 	go func() {
 		res, err := rnr.Run(callCtx(c), runner.Cmd{
-			Path: tool, Args: []string{"-dc", "--", archive},
-			Options: runner.Options{Env: c.Env.Child(), Stdout: pw},
+			Path: tool, Args: args,
+			Options: runner.Options{Env: c.Env.Child(), Stdin: stdin, Stdout: pw},
 		})
 		if err == nil && res.ExitCode != 0 {
 			err = io.ErrUnexpectedEOF
@@ -223,9 +234,10 @@ func readZip(archive string) ([]member, error) {
 	return out, nil
 }
 
-// readSevenZip lists a 7z archive with `7z l -slt -ba -- F`. The target of a
-// symlink member is not in the technical listing, so a symlink is only
-// flagged (its name still carries the absolute/.. checks).
+// readSevenZip lists a 7z archive with `7z l -slt -ba -- F`. A symlink
+// member's target is its stored content (7-Zip's -snl), which the technical
+// listing does not show, so it is read with `7z e -so -spd -- F NAME`
+// (-spd: NAME is literal, never a wildcard).
 func readSevenZip(c *invoke.Call, archive string) ([]member, error) {
 	out, ok := runList(c, "7z", []string{"l", "-slt", "-ba", "--", archive})
 	if !ok {
@@ -261,6 +273,13 @@ func readSevenZip(c *invoke.Call, archive string) ([]member, error) {
 		}
 	}
 	flush()
+	for i := range members {
+		if members[i].isSymlink {
+			if t, ok := runList(c, "7z", []string{"e", "-so", "-spd", "--", archive, members[i].name}); ok && len(t) <= 4096 {
+				members[i].target = t
+			}
+		}
+	}
 	return members, nil
 }
 
@@ -293,7 +312,12 @@ func readRar(c *invoke.Call, archive string) ([]member, error) {
 			flush()
 			cur.name, have = val, true
 		case "Type":
-			if strings.EqualFold(val, "Link") || strings.EqualFold(val, "Symlink") {
+			// "Unix symbolic link", "Windows symbolic link", "Hard link",
+			// "Junction"...: every link type is checked.
+			switch t := strings.ToLower(val); {
+			case strings.Contains(t, "hard link"):
+				cur.isHardlink = true
+			case strings.Contains(t, "link"), strings.Contains(t, "junction"):
 				cur.isSymlink = true
 			}
 		case "Target", "Link target":

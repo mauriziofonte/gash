@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,14 +79,40 @@ func TestFindMatches2x(t *testing.T) {
 	}
 }
 
-// TestLedger_LLM18_2x: an empty first positional is skipped and the next
-// word becomes PATTERN.
+// TestLedger_LLM18_2x: an empty first positional is PATTERN, so it is
+// missing_pattern (2.x skipped it and the next word became PATTERN).
 func TestLedger_LLM18_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, "x"), "")
 	env := baseEnv(physTemp(t), nil)
-	r := same(t, m, d, env, "llm_find", "", "x")
+	// 3.0: LLM-18 fixed
+	r := runGo(t, m, d, env, "llm_find", "", "x")
+	require.Equal(t, 1, r.RC)
+	require.Empty(t, r.Stdout)
+	require.Contains(t, r.Stderr, `"error":"missing_pattern"`)
+}
+
+// TestLedger_LLM18: llm_find ” x and llm_grep ” dir are missing_pattern
+// (RETRY), never a search for the next word.
+func TestLedger_LLM18(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "x"), "dir\n")
+	mustMkdir(t, filepath.Join(d, "dir"))
+	env := baseEnv(physTemp(t), nil)
+	for _, args := range [][]string{{"llm_find", "", "x"}, {"llm_find", "", "*"}, {"llm_grep", "", "dir"}, {"llm_grep", "", "."}} {
+		r := runGo(t, m, d, env, args[0], args[1:]...)
+		require.Equal(t, 1, r.RC, args)
+		require.Empty(t, r.Stdout, args)
+		var e struct{ Error, Action string }
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		require.Equal(t, "missing_pattern", e.Error, args)
+		require.Equal(t, "RETRY", e.Action, args)
+	}
+	// A pattern then an empty PATH is still a path (the current directory
+	// only when PATH is left out).
+	r := runGo(t, m, d, env, "llm_find", "x")
 	require.Equal(t, result{d + "/x\n", "", 0}, r)
 }
 

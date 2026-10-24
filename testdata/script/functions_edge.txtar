@@ -74,8 +74,9 @@ stderr 'Missing'
 # --- functions_edge_spec.sh:220 - docker_prune_all returns 1 when the user declines, and removes nothing
 mkdir dbin
 exec chmod +x dbin/docker
+# 3.0: DOCK-21 fixed: without a terminal to ask, the refusal says that -y is needed.
 ! exec bash -c 'export PATH="$WORK/dbin:$PATH"; source "$GASH_SH"; docker_prune_all'
-stderr 'Aborted'
+stderr 'No terminal to ask for confirmation: pass -y to go ahead'
 ! grep '\b(rm|rmi|stop|prune)\b' dbin/docker.log
 
 # --- functions_edge_spec.sh:241 - git_dump_revisions writes per-commit files

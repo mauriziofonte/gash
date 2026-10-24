@@ -260,35 +260,29 @@ func (m *Module) gitLog(c *invoke.Call) int {
 	}
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
 		"-C", safe, "log", "-n", limit, "--no-ext-diff", "--no-textconv", "--no-show-signature",
-		"--format=%h%x1f%s%x1f%an%x1f%ci%x1e")
+		"-z", "--format=%h%x00%s%x00%an%x00%ci")
 	_, _ = c.Stdout.Write(gitLogJSON(res.Stdout))
 	return 0
 }
 
-// gitLogJSON is the jq filter of __llm_git_log_impl applied natively:
-//
-//	split("\u001e") | map(select(length > 0) | ltrimstr("\n")
-//	  | split("\u001f") | select(length == 4)
-//	  | {hash: .[0], subject: .[1], author: .[2], date: .[3]})
-//
-// rendered as jq -c would (compact array, jq escaping, trailing newline).
+// gitLogJSON renders the NUL-separated output of git log -z with four
+// NUL-separated fields per commit (hash, subject, author, date) as a
+// compact jq-style array. NUL cannot occur in a commit header, so a
+// subject or author holding 0x1e or 0x1f keeps its commit (LLM-13; 2.x
+// split on those bytes and dropped the commit).
 func gitLogJSON(out []byte) []byte {
 	var b bytes.Buffer
 	b.WriteByte('[')
-	first := true
-	for _, part := range strings.Split(string(out), "\x1e") {
-		if len(part) == 0 {
-			continue
-		}
-		part = strings.TrimPrefix(part, "\n")
-		f := strings.Split(part, "\x1f")
-		if len(f) != 4 {
-			continue
-		}
-		if !first {
+	s := strings.TrimSuffix(string(out), "\x00")
+	var fields []string
+	if s != "" {
+		fields = strings.Split(s, "\x00")
+	}
+	for i := 0; i+4 <= len(fields); i += 4 {
+		f := fields[i : i+4]
+		if i > 0 {
 			b.WriteByte(',')
 		}
-		first = false
 		b.WriteString(`{"hash":`)
 		b.Write(contract.AppendString(nil, f[0], contract.EscapeJQ))
 		b.WriteString(`,"subject":`)

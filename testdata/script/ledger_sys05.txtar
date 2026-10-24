@@ -1,0 +1,18 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SYS-05
+# covers: none (3.0 fix: an invalid hgrep -E regex is an error)
+#
+# LEDGER SYS-05: hgrep compiles the -E pattern before reading the history:
+# an invalid regex prints one error line and returns 1 with nothing on
+# stdout, in every output mode (2.x printed [] or 0 and returned 0).
+
+env GASH_HEADLESS=1
+exec bash -c 'printf "#1700000000\ngit a\n" >"$HOME/h"'
+! exec bash -c 'source "$GASH_SH"; HISTFILE="$HOME/h" hgrep -E "(" -j'
+! stdout .
+stderr '^Error: Invalid regex: \($'
+! exec bash -c 'source "$GASH_SH"; HISTFILE="$HOME/h" hgrep -E "(" -c'
+! stdout .
+exec bash -c 'source "$GASH_SH"; HISTFILE="$HOME/h" hgrep -E "^git" -c'
+stdout '^1$'

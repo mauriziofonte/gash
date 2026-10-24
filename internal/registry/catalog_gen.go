@@ -19,7 +19,7 @@ var functions = []Function{
 		Aliases:  []string{"ask"},
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Interactive AI chat from the terminal",
+			Short:   "Ask the AI one question from the terminal",
 			Module:  "ai",
 			Aliases: "ask",
 			SeeAlso: "ai_query ai_sysinfo gash_ai_list",
@@ -28,14 +28,14 @@ var functions = []Function{
 				"  ai_ask [provider]\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Start an interactive chat (uses first configured provider)\n" +
+				"  # Ask one question (uses first configured provider)\n" +
 				"  ask\n" +
 				"\n" +
 				"  # Use a specific provider\n" +
 				"  ask claude\n" +
 				"  ask gemini\n" +
 				"\n" +
-				"  # Type your questions interactively:\n" +
+				"  # Type your question at the prompt:\n" +
 				"  #   claude: how to find files larger than 100MB?\n" +
 				"  #   Command: find . -type f -size +100M\n" +
 				"  #   Explanation: Finds all files larger than 100MB.\n" +
@@ -68,18 +68,24 @@ var functions = []Function{
 				"    (with piped data) -> Troubleshoot (Issue + Suggestion)\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Type 'exit' or 'quit' or press Ctrl+C to end the session.\n" +
-				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  One question per call; Enter on an empty line aborts, exit/quit cancel.\n" +
+				"  ai_ask needs a terminal (not headless): from a script or an agent use\n" +
+				"  ai_query \"question\" instead.\n" +
+				"  Piped content is auto-truncated to 4KB to save tokens; piped input must\n" +
+				"  start within 2 seconds, or stdin is ignored with a warning.\n" +
+				"  -h/--help is help as the first word or right after the provider.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
-				"  URLs, KEY=value secrets and well-known token formats (sk-, ghp_,\n" +
-				"  AKIA, xox, AIza). The API key travels in a curl config read from\n" +
-				"  a pipe, never on the command line.\n" +
+				"  URLs, KEY=value secrets, Authorization headers, SSH: passphrase\n" +
+				"  lines, password hashes ($6$...) and well-known token formats (sk-,\n" +
+				"  ghp_, AKIA, xox, AIza). Free text (\"the password is ...\") is not\n" +
+				"  detected. The API key stays inside the gash process, never on a\n" +
+				"  command line.\n" +
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},
-		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Interactive AI chat. Provider: claude or gemini (default: first available)"},
+		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Ask the AI one question. Provider: claude or gemini (default: first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
 		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "ZSH_VERSION", "__AI_LAST_EXIT"},
@@ -163,14 +169,21 @@ var functions = []Function{
 				"  } | ai_query \"correlate these errors\"\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  Piped content is auto-truncated to 4KB to save tokens. Piped input must\n" +
+				"  start within 2 seconds: an open stdin that stays silent is ignored with\n" +
+				"  a warning (redirect </dev/null to skip the wait).\n" +
 				"  When input is piped, the AI enters troubleshoot mode automatically.\n" +
+				"  A provider alone is not a question: \"ai_query claude\" fails with\n" +
+				"  \"No query provided\". -h/--help is help as the first word or as the\n" +
+				"  only word after the provider; inside a longer question it is text.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
-				"  URLs, KEY=value secrets and well-known token formats (sk-, ghp_,\n" +
-				"  AKIA, xox, AIza). The API key travels in a curl config read from\n" +
-				"  a pipe, never on the command line.\n" +
+				"  URLs, KEY=value secrets, Authorization headers, SSH: passphrase\n" +
+				"  lines, password hashes ($6$...) and well-known token formats (sk-,\n" +
+				"  ghp_, AKIA, xox, AIza). Free text (\"the password is ...\") is not\n" +
+				"  detected. The API key stays inside the gash process, never on a\n" +
+				"  command line.\n" +
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},
@@ -206,7 +219,7 @@ var functions = []Function{
 			SeeAlso: "sysinfo ai_query",
 			Body: "" +
 				"USAGE\n" +
-				"  ai_sysinfo [provider] [--raw]\n" +
+				"  ai_sysinfo [claude|gemini] [--raw] [--no-color]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Run AI-powered system analysis\n" +
@@ -227,7 +240,8 @@ var functions = []Function{
 				"\n" +
 				"  Options 1-6 run deep collectors that read full config files.\n" +
 				"  Option ? lets you ask about specific services, files, or ports.\n" +
-				"  Option s exports the full session as a Markdown report.\n" +
+				"  Option s exports the full session as a Markdown report (mode 0600)\n" +
+				"  in the current directory; a failed write is reported as an error.\n" +
 				"\n" +
 				"SMART QUESTIONS\n" +
 				"  The ? option detects entities in your question:\n" +
@@ -235,15 +249,23 @@ var functions = []Function{
 				"    \"what's in /etc/postfix/main.cf?\" -> reads the file\n" +
 				"    \"what's on port 3306?\" -> reads socket listeners\n" +
 				"    \"tell me about apache\" -> reads service configs\n" +
+				"  A port is \"port N\" or HOST:N (127.0.0.1:8080, localhost:9000, *:22,\n" +
+				"  [::1]:5432); a clock time such as 10:30 is no port.\n" +
+				"  Paths follow the llm_* reader rules: no .. components, symlinks\n" +
+				"  resolved, and protected paths (/proc, /sys, /dev, /boot, /root,\n" +
+				"  /etc/shadow, /etc/passwd, /etc/sudoers...) and secret files\n" +
+				"  (.env, *.key, id_rsa*, .ssh/...) are skipped, never read; directory\n" +
+				"  listings leave secret files out.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Before the first request, ai_sysinfo shows how much system data it\n" +
-				"  will send and asks for confirmation (GASH_AI_CONFIRM=auto). Without\n" +
+				"  will send and asks for confirmation (GASH_AI_CONFIRM=auto). Each ?\n" +
+				"  question that collects data asks again before sending it. Without\n" +
 				"  a terminal it refuses; set GASH_AI_CONFIRM=0 in ~/.gash_env to allow\n" +
 				"  unattended runs. Secrets are redacted before sending either way.\n" +
 				"  Use --raw to see exactly what is collected.",
 		},
-		Fallback:          &Usage{Program: "ai_sysinfo", Usage: "ai_sysinfo [provider] [--raw] [--no-color]", Description: "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai"},
+		Fallback:          &Usage{Program: "ai_sysinfo", Usage: "ai_sysinfo [claude|gemini] [--raw] [--no-color]", Description: "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
 		ShellVars:         []string{"GASH_AI_DEBUG", "HOME"},
@@ -293,7 +315,7 @@ var functions = []Function{
 		Aliases:  []string{"axe"},
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z)",
+			Short:   "Extract archives (tar, zip, gz, bz2, xz, zst, Z, rar, 7z)",
 			Module:  "files",
 			Aliases: "axe",
 			SeeAlso: "file_backup",
@@ -312,10 +334,31 @@ var functions = []Function{
 				"  axe data.7z /tmp/extracted\n" +
 				"\n" +
 				"SUPPORTED FORMATS\n" +
-				"  .tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar,\n" +
-				"  .gz, .bz2, .xz, .zst,\n" +
-				"  .tgz, .tbz2, .zip, .rar, .7z, .z\n" +
-				"  (case-insensitive)",
+				"  .tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar.Z, .taz, .tar,\n" +
+				"  .gz, .bz2, .xz, .zst, .Z (compress), .z (pack),\n" +
+				"  .tgz, .tbz2, .zip, .rar, .7z\n" +
+				"  (case-insensitive)\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Tools: tar (with zstd for .tar.zst/.tzst, uncompress for .tar.Z/.taz),\n" +
+				"  gunzip, bunzip2, xz, zstd and uncompress (.z needs gzip's uncompress)\n" +
+				"  for the single-file formats, unzip, unrar and 7z. A missing tool is\n" +
+				"  reported before anything is written. OUTPUT_DIR (default: the current\n" +
+				"  directory) is created when missing.\n" +
+				"  Single-file formats write the archive name without its suffix into\n" +
+				"  OUTPUT_DIR; an existing file of that name is replaced only when the\n" +
+				"  tool succeeds.\n" +
+				"  Members with an absolute path, a .. component or a link outside\n" +
+				"  OUTPUT_DIR are refused before anything is extracted.\n" +
+				"  The tools' listings go to stdout. Exit status: 0 on success, 1 on any\n" +
+				"  failure.\n" +
+				"  With GASH_HEADLESS=1 or without a terminal on stdin, unzip, unrar and\n" +
+				"  7z never prompt and never overwrite existing files; an encrypted 7z\n" +
+				"  archive prints its password prompt and stops on end of input.\n" +
+				"  .zip and .rar names containing *, ? or [ are refused (unzip and unrar\n" +
+				"  would expand them as wildcards): rename the file.\n" +
+				"  The tools' own configuration applies: TAR_OPTIONS, UNZIP, RAR and\n" +
+				"  ~/.rarrc, GZIP, BZIP2, XZ_OPT and similar variables.",
 		},
 		Fallback:          &Usage{Program: "archive_extract", Usage: "archive_extract ARCHIVE_FILE [OUTPUT_DIR]", Description: "Extracts the ARCHIVE_FILE in the current directory or the specified OUTPUT_DIR. Alias: axe"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -360,7 +403,11 @@ var functions = []Function{
 				"  Layout: /opt/chrome-headless-shell/<version>/ with the symlink\n" +
 				"  /usr/local/bin/chrome-headless-shell (GASH_CHROME_ROOT and\n" +
 				"  GASH_CHROME_LINK change them). The outgoing version is kept for\n" +
-				"  rollback, older ones are removed. Installing needs sudo.\n" +
+				"  rollback, older ones are removed. Installing uses sudo only when ROOT\n" +
+				"  or the link directory is not writable; headless or without a terminal\n" +
+				"  it runs sudo -n and stops early when sudo wants a password. The\n" +
+				"  binary's --version must name the version exactly, also for a copy\n" +
+				"  already under ROOT (one that does not is replaced).\n" +
 				"  Missing shared libraries are reported with the apt packages to install.\n" +
 				"  Point your tools at the shared binary and stop npm from downloading\n" +
 				"  browsers of its own:\n" +
@@ -413,10 +460,13 @@ var functions = []Function{
 				"  dirs_find_large --size 100M --depth 6 /opt\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  --size SIZE            Size threshold (default 20M; formats: 20M, 1G, 500K, bytes)\n" +
-				"  --depth N              Depth limit (default unbounded; use to cap very deep trees)\n" +
+				"  --size SIZE            Size threshold (default 20M): bytes, or a number with\n" +
+				"                         up to 6 decimals and K, M, G, T, P or E, optionally\n" +
+				"                         followed by B, i or iB\n" +
+				"  --depth N              Depth limit (default unbounded; 0 also means unbounded)\n" +
 				"  -n, --limit N          Cap results (default 1000)\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable)\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --no-ignore            Disable default pruning\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
 				"  --allow-root           Required to scan '/'\n" +
@@ -424,15 +474,17 @@ var functions = []Function{
 				"  --json                 Emit JSON envelope\n" +
 				"  --null, -0             NUL-delimited paths\n" +
 				"  --human / --no-human   Size formatting toggle\n" +
-				"  --no-color             Disable ANSI colors\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"PERFORMANCE\n" +
-				"  Uses a single `du -k` pass plus awk filtering: O(N) in filesystem entries,\n" +
-				"  versus the legacy per-directory re-walk which was O(N^2). Expect 10x-100x\n" +
-				"  speedup on large trees.\n" +
+				"  One walk adds up disk usage per directory (as `du -k` counts it): O(N)\n" +
+				"  in filesystem entries, versus the legacy per-directory re-walk which was\n" +
+				"  O(N^2).\n" +
 				"\n" +
 				"NOTES\n" +
-				"  numfmt is optional: a pure-bash IEC-suffix parser provides fallback.",
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  results (they cannot be represented safely in TSV/line-oriented output).\n" +
+				"  --null records are therefore always intact, complete paths.",
 		},
 		Fallback:          &Usage{Program: "dirs_find_large", Usage: "dirs_find_large [DIRECTORY] [--size SIZE] [--depth N] [--limit N] [--exclude GLOB] [--no-ignore] [--xdev] [--allow-root] [--with-mtime] [--json] [--null] [--human] [--no-color]", Description: "Finds directories larger than SIZE (default 20M), single-walk aggregation. Alias: dfl"},
 		ShellVars:         []string{"HOME"},
@@ -483,22 +535,29 @@ var functions = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Cap results (default 100)\n" +
-				"  --depth N              Depth limit (default 1, top-level only). Use higher values\n" +
-				"                         to reveal nested offenders (node_modules, vendor/, target/).\n" +
-				"  --min-size SIZE        Ignore directories smaller than SIZE\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable, substring match)\n" +
+				"  --depth N              Depth limit (default 1, top-level only; 0 means 1).\n" +
+				"                         Use higher values to reveal nested offenders\n" +
+				"                         (node_modules, vendor/, target/).\n" +
+				"  --min-size SIZE        Ignore directories smaller than SIZE: bytes,\n" +
+				"                         or a number with up to 6 decimals and K, M, G, T,\n" +
+				"                         P or E, optionally followed by B, i or iB\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --no-ignore            Disable default pruning\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
 				"  --allow-root           Required to scan '/'\n" +
 				"  --json                 Emit JSON envelope\n" +
 				"  --null, -0             NUL-delimited paths\n" +
 				"  --human / --no-human   Force human-readable / raw-bytes sizes\n" +
-				"  --no-color             Disable ANSI colors\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Sizes are cumulative (du semantics). Deeper scans will show parent\n" +
 				"  directories alongside their subdirs; filter with --min-size and --depth\n" +
-				"  to narrow the view.",
+				"  to narrow the view.\n" +
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  results (they cannot be represented safely in TSV/line-oriented output).\n" +
+				"  --null records are therefore always intact, complete paths.",
 		},
 		Fallback:          &Usage{Program: "dirs_largest", Usage: "dirs_largest [PATH] [--limit N] [--depth N] [--min-size SIZE] [--exclude GLOB] [--no-ignore] [--xdev] [--allow-root] [--json] [--null] [--human] [--no-color]", Description: "Lists the largest directories under PATH, sorted by cumulative size. Default depth 1 (top-level). Alias: dld"},
 		ShellVars:         []string{"HOME"},
@@ -550,7 +609,8 @@ var functions = []Function{
 				"OPTIONS\n" +
 				"  --min-depth N      Minimum depth (find -mindepth)\n" +
 				"  --depth N          Maximum depth (find -maxdepth)\n" +
-				"  --exclude GLOB     Prune matching paths\n" +
+				"  --exclude GLOB     Skip entries whose name or path below PATH matches GLOB\n" +
+				"                     (repeatable; no newlines)\n" +
 				"  --ignore-dotfiles  Skip directories whose name starts with '.'\n" +
 				"  --no-ignore        Disable default pruning\n" +
 				"  --xdev             Stay on a single filesystem\n" +
@@ -561,7 +621,10 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  \"Empty\" means no regular entries (not even hidden files). A directory\n" +
-				"  containing only a prune-excluded subdirectory is NOT empty.",
+				"  containing only a prune-excluded subdirectory is NOT empty.\n" +
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  results (they cannot be represented safely in TSV/line-oriented output).\n" +
+				"  --null records are therefore always intact, complete paths.",
 		},
 		Fallback:          &Usage{Program: "dirs_list_empty", Usage: "dirs_list_empty [PATH] [--min-depth N] [--depth N] [--exclude GLOB] [--ignore-dotfiles] [--no-ignore] [--xdev] [--allow-root] [--null] [--count] [--json]", Description: "Lists all empty directories under PATH. Alias: dle"},
 		ShellVars:         []string{"HOME"},
@@ -607,7 +670,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "disk_usage", Usage: "disk_usage [--no-color]", Description: "Displays disk usage for real filesystem types, formatted for easy reading. Alias: du2"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "disk_usage / ip_public — just --no-color",
+		CompletionComment: "disk_usage — just --no-color",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --help\" -- \"$cur\")\n" +
@@ -632,7 +695,13 @@ var functions = []Function{
 			SeeAlso: "docker_compose_upgrade docker_compose_scan",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_check [PATH] [--json]\n" +
+				"  docker_compose_check [PATH] [--json] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  PATH        Directory with the compose file (default: current directory)\n" +
+				"  --json      JSON output for scripting; errors are JSON envelopes on stderr\n" +
+				"  --no-color  Disable ANSI colors (auto-off on pipe, NO_COLOR, GASH_HEADLESS)\n" +
+				"  -h, --help  Show this help\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Check for updates in current directory\n" +
@@ -645,14 +714,29 @@ var functions = []Function{
 				"  dcc --json\n" +
 				"\n" +
 				"STATUS CODES\n" +
-				"  UPDATE     New image available on registry\n" +
-				"  UP-TO-DATE Image matches remote digest\n" +
-				"  PINNED     Version is pinned (e.g. nginx:1.25.3), skipped\n" +
-				"  ERROR      Could not reach registry\n" +
+				"  CURRENT     Local image matches the remote digest\n" +
+				"  UPDATE      A newer image is on the registry\n" +
+				"  NOT_PULLED  The image is not pulled locally yet\n" +
+				"  PINNED      Digest pin or full version (e.g. nginx:1.25.3), not upgraded\n" +
+				"  ERROR       Registry unreachable, auth refused or invalid image reference\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Queries Docker Hub and GHCR registries to compare\n" +
-				"  local image digests with remote ones.",
+				"  Compose resolves the project files itself (compose.yaml first, override\n" +
+				"  files, COMPOSE_FILE); when `docker compose config` fails, the first of\n" +
+				"  compose.yaml, compose.yml, docker-compose.yml, docker-compose.yaml is\n" +
+				"  read.\n" +
+				"  Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN\n" +
+				"  is exchanged for a GHCR token), the others anonymously, answering a\n" +
+				"  Bearer challenge. Image variables come from the exported environment\n" +
+				"  and DIR/.env, with Compose's interpolation rules.\n" +
+				"  The exit status is 0 whenever the report prints, ERROR rows included.\n" +
+				"\n" +
+				"REGISTRY ERRORS\n" +
+				"  The error field of an ERROR row (--json) is one of: dns_error,\n" +
+				"  connection_refused, timeout, ssl_error, transport_error, unauthorized,\n" +
+				"  forbidden, not_found, rate_limited, server_error, http_NNN (another\n" +
+				"  status), malformed_token, no_digest_in_response, registry_unreachable,\n" +
+				"  invalid_reference (the image name does not parse).",
 		},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
 		CompletionComment: "Docker compose check/upgrade/scan: dirs + flags (incl. --no-color)",
@@ -682,7 +766,15 @@ var functions = []Function{
 			SeeAlso: "docker_compose_check docker_compose_upgrade",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_scan [BASEDIR] [--depth N] [--json]\n" +
+				"  docker_compose_scan [BASEDIR] [-d|--depth N] [-j|--json] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  BASEDIR     Base directory to scan (default: current directory)\n" +
+				"  -d, --depth N\n" +
+				"              Maximum search depth, a non-negative integer (default: 3)\n" +
+				"  -j, --json  JSON output for scripting\n" +
+				"  --no-color  Disable ANSI colors\n" +
+				"  -h, --help  Show this help (first word only)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Scan current directory for compose files\n" +
@@ -695,12 +787,15 @@ var functions = []Function{
 				"  dcscan /home/deploy --json\n" +
 				"\n" +
 				"  # Full audit: scan then check each project\n" +
-				"  dcscan /opt --depth 3",
+				"  dcscan /opt --depth 3\n" +
+				"\n" +
+				"NOTES\n" +
+				"  An unknown option is refused with exit status 1.",
 		},
 		Env: []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--depth --json --no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-d --depth -j --json --no-color --help\" -- \"$cur\")\n" +
 			"else\n" +
 			"    mapfile -t COMPREPLY < <(compgen -d -- \"$cur\")\n" +
 			"fi",
@@ -724,7 +819,15 @@ var functions = []Function{
 			SeeAlso: "docker_compose_check docker_compose_scan",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_upgrade [PATH] [--dry-run] [--force]\n" +
+				"  docker_compose_upgrade [PATH] [--dry-run] [-f|--force] [-y|--yes] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  PATH        Directory with the compose file (default: current directory)\n" +
+				"  --dry-run   Show what would be done without executing\n" +
+				"  -f, --force Upgrade pinned versions too\n" +
+				"  -y, --yes   Skip the confirmation (required in headless mode)\n" +
+				"  --no-color  Disable ANSI colors\n" +
+				"  -h, --help  Show this help\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Upgrade services with mutable tags (latest, main, dev)\n" +
@@ -736,18 +839,22 @@ var functions = []Function{
 				"  # Force upgrade even for pinned versions\n" +
 				"  dcup2 --force\n" +
 				"\n" +
-				"  # Upgrade a specific project\n" +
-				"  dcup2 /opt/myapp\n" +
+				"  # Upgrade a specific project, no question asked\n" +
+				"  dcup2 /opt/myapp --yes\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Only upgrades services with mutable tags (latest, main, dev, etc.).\n" +
 				"  Pinned versions (e.g. nginx:1.25.3) are skipped unless --force is used.\n" +
-				"  Pulls new images, recreates affected containers, removes old images.",
+				"  Pulls new images, recreates affected containers, removes old images.\n" +
+				"  Compose runs in PATH with its own file discovery, so override files\n" +
+				"  (docker-compose.override.yml) and COMPOSE_FILE are honored.\n" +
+				"  Headless (GASH_HEADLESS=1) it refuses to run without --yes.\n" +
+				"  Declining the confirmation returns 1.",
 		},
 		Env: []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force --no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force -f --yes -y --no-color --help\" -- \"$cur\")\n" +
 			"else\n" +
 			"    mapfile -t COMPREPLY < <(compgen -d -- \"$cur\")\n" +
 			"fi",
@@ -793,6 +900,10 @@ var functions = []Function{
 		},
 		Fallback: &Usage{Program: "docker_prune_all", Usage: "docker_prune_all [-y] [--dry-run]", Description: "Remove all Docker containers, images, volumes and networks (asks first)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "docker_start_all",
@@ -813,17 +924,26 @@ var functions = []Function{
 			SeeAlso: "docker_stop_all",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_start_all\n" +
+				"  docker_start_all [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Start all stopped containers\n" +
 				"  daa\n" +
 				"\n" +
 				"  # Restart everything\n" +
-				"  dsa && daa",
+				"  dsa && daa\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Lists the stopped containers (Will start N container(s): NAMES)\n" +
+				"  and asks before acting; -y/--yes skips the question and is required\n" +
+				"  headless or without a terminal. Declining returns 1.",
 		},
-		Fallback: &Usage{Program: "docker_start_all", Usage: "docker_start_all", Description: "Start all stopped Docker containers."},
+		Fallback: &Usage{Program: "docker_start_all", Usage: "docker_start_all [-y]", Description: "Start all stopped Docker containers (asks first; -y skips)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "docker_stop_all",
@@ -844,17 +964,26 @@ var functions = []Function{
 			SeeAlso: "docker_start_all docker_prune_all",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_stop_all\n" +
+				"  docker_stop_all [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Stop every running container\n" +
 				"  dsa\n" +
 				"\n" +
 				"  # Restart all containers: stop then start\n" +
-				"  dsa && daa",
+				"  dsa && daa\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Lists the running containers (Will stop N container(s): NAMES)\n" +
+				"  and asks before acting; -y/--yes skips the question and is required\n" +
+				"  headless or without a terminal. Declining returns 1.",
 		},
-		Fallback: &Usage{Program: "docker_stop_all", Usage: "docker_stop_all", Description: "Stop all running Docker containers."},
+		Fallback: &Usage{Program: "docker_stop_all", Usage: "docker_stop_all [-y]", Description: "Stop all running Docker containers (asks first; -y skips)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "file_backup",
@@ -886,7 +1015,17 @@ var functions = []Function{
 				"  fbk /etc/apache2/apache2.conf && vim /etc/apache2/apache2.conf\n" +
 				"\n" +
 				"  # Backup a script before refactoring\n" +
-				"  fbk my-deploy-script.sh",
+				"  fbk my-deploy-script.sh\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The stamp is local time (YYYYMMDDHHMMSS, no zone). A backup never\n" +
+				"  replaces an existing file or link: a second backup in the same second\n" +
+				"  gets _1, then _2, and so on.\n" +
+				"  A symlinked FILE is followed: the backup is a copy of its target, next\n" +
+				"  to FILE. On success cp -v prints one line on stdout:\n" +
+				"  'SRC' -> 'DST'. A failed copy removes the partial backup (exit 1).\n" +
+				"  Mode: FILE's permission bits without setuid, setgid and sticky, with\n" +
+				"  the umask applied; the modification time is the time of the copy.",
 		},
 		Fallback:          &Usage{Program: "file_backup", Usage: "file_backup FILE", Description: "Copy FILE to FILE_backup_YYYYMMDDHHMMSS. Alias: fbk"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -923,7 +1062,8 @@ var functions = []Function{
 				"  # Top 20 files larger than 50MB, stay on same filesystem\n" +
 				"  files_largest --limit 20 --min-size 50M --xdev /var/log\n" +
 				"\n" +
-				"  # JSON output for scripting (envelope: data/count/total_size/scan_time)\n" +
+				"  # JSON output for scripting\n" +
+				"  # (envelope: data/count/total_size/total_size_human/kind/scan_time/errors)\n" +
 				"  files_largest /home --json | jq '.data[] | select(.size > 1073741824)'\n" +
 				"\n" +
 				"  # NUL-delimited paths for safe xargs pipelines\n" +
@@ -934,17 +1074,21 @@ var functions = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Cap results (default 100)\n" +
-				"  --min-size SIZE        Ignore files smaller than SIZE (e.g. 10M, 1G, 500K)\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable, substring match)\n" +
+				"  --min-size SIZE        Ignore files smaller than SIZE: bytes, or a\n" +
+				"                         number with up to 6 decimals and K, M, G, T, P or\n" +
+				"                         E, optionally followed by B, i or iB\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --depth N              Limit scan depth (default: unbounded)\n" +
 				"  --no-ignore            Disable default pruning (node_modules/.git/vendor/__pycache__/.cache)\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
-				"  --follow-symlinks, -L  Follow symbolic links\n" +
+				"  --follow-symlinks, -L  Follow symbolic links (never into protected paths)\n" +
 				"  --allow-root           Required to scan '/' (safety guard)\n" +
-				"  --json                 Emit JSON envelope: {data, count, total_size, scan_time, errors}\n" +
+				"  --json                 Emit JSON envelope: {data, count, total_size,\n" +
+				"                         total_size_human, kind, scan_time, errors}\n" +
 				"  --null, -0             NUL-delimited paths for xargs -0\n" +
-				"  --human                Force human-readable sizes (auto-on on TTY)\n" +
-				"  --no-color             Disable ANSI colors (also honors NO_COLOR)\n" +
+				"  --human                Human-readable sizes (default except with --json or --null)\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Paths containing literal tab or newline characters are excluded from\n" +
@@ -1399,10 +1543,15 @@ var functions = []Function{
 				"  Runs once per session (tracked by GASH_SSH_AUTOUNLOCK_RAN).\n" +
 				"  Only unlocks keys that are not already loaded in the agent.",
 		},
-		Fallback:  &Usage{Program: "gash_ssh_auto_unlock", Usage: "gash_ssh_auto_unlock", Description: "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)."},
-		LoadsEnv:  true,
-		ShellVars: []string{"HOME", "OSTYPE"},
-		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_SSH_AUTOUNLOCK_RAN", "HOME", "NO_COLOR", "OSTYPE", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"},
+		Fallback:          &Usage{Program: "gash_ssh_auto_unlock", Usage: "gash_ssh_auto_unlock", Description: "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)."},
+		LoadsEnv:          true,
+		ShellVars:         []string{"HOME", "OSTYPE"},
+		Env:               []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_SSH_AUTOUNLOCK_RAN", "HOME", "NO_COLOR", "OSTYPE", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "gash_uninstall",
@@ -1558,7 +1707,7 @@ var functions = []Function{
 			SeeAlso: "git_list_tags git_delete_tag",
 			Body: "" +
 				"USAGE\n" +
-				"  git_add_tag TAG_NAME [\"TAG_MESSAGE\"]\n" +
+				"  git_add_tag TAG_NAME [\"TAG_MESSAGE\"] [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Create a tag with auto-generated message\n" +
@@ -1567,18 +1716,26 @@ var functions = []Function{
 				"  # Create a tag with a custom message\n" +
 				"  gat v2.0.0 \"Major release with breaking changes\"\n" +
 				"\n" +
-				"  # Release workflow: commit, tag, done\n" +
-				"  gcm \"prepare release\" && gat v1.2.3 \"Bugfix release\"\n" +
+				"  # Release workflow: commit, tag, done (no question asked)\n" +
+				"  gcm \"prepare release\" && gat v1.2.3 \"Bugfix release\" --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Creates an annotated tag and pushes it to the remote\n" +
-				"  in one step. Requires a clean git repo with a remote.",
+				"  Creates an annotated tag and pushes it to origin in one step\n" +
+				"  (Will push refs/tags/TAG to origin (URL)).\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  The flags may come anywhere; -- ends them. A name starting with '-'\n" +
+				"  is refused. An unreachable origin is an error before anything is\n" +
+				"  created. Requires a git repo with an 'origin' remote.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:          &Usage{Program: "git_add_tag", Usage: "git_add_tag <tag_name> \"<tag_message>\"", Description: "Creates an annotated tag and pushes it to remote. Alias: gat"},
+		Fallback:          &Usage{Program: "git_add_tag", Usage: "git_add_tag <tag_name> [\"<tag_message>\"] [-y|--yes] [--dry-run]", Description: "Creates an annotated tag and pushes it to remote. Alias: gat"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "Git tag completion",
+		CompletionComment: "Git tag completion, with the confirmation flags",
 		Completion: "" +
-			"if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"$(git tag -l 2>/dev/null)\" -- \"$cur\")\n" +
 			"else\n" +
 			"    COMPREPLY=()\n" +
@@ -1603,22 +1760,34 @@ var functions = []Function{
 			SeeAlso: "git_dump_revisions",
 			Body: "" +
 				"USAGE\n" +
-				"  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH\n" +
+				"  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Cherry-pick a commit from feature to main via patch\n" +
+				"  # Bring the work of feature-auth since abc1234 onto main\n" +
 				"  gpatch main feature-auth abc1234\n" +
 				"\n" +
-				"  # Apply a specific fix from an old branch\n" +
-				"  gpatch develop hotfix-db e5f6a7b\n" +
+				"  # The same without a question (scripts, headless mode)\n" +
+				"  gpatch develop hotfix-db e5f6a7b --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Steps: checks out main, creates a patch from the specified commit\n" +
-				"  on the feature branch, applies it, and returns you to main.\n" +
-				"  The commit hash must exist on the feature branch.",
+				"  Steps: checks out MAIN and pulls origin MAIN, checks out FEATURE,\n" +
+				"  writes `git diff-index COMMIT --binary` (every change from COMMIT to\n" +
+				"  FEATURE's work tree, not a single commit) to a temporary\n" +
+				"  gash-patch-*.patch file, checks out MAIN and applies it with\n" +
+				"  `git apply --3way`, leaving the changes uncommitted on MAIN.\n" +
+				"  COMMIT only has to exist. The work tree must be clean.\n" +
+				"  On a failure the branch you started on is checked out again; a patch\n" +
+				"  that does not apply is kept in the temporary directory.\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback: &Usage{Program: "git_apply_patch", Usage: "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH", Description: "Create and apply a patch from a feature branch to the main branch. Example: git_apply_patch main old-feat 123456. Alias: gap"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback: &Usage{Program: "git_apply_patch", Usage: "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]", Description: "Apply the changes of a feature branch since a commit to the main branch (asks first). Example: git_apply_patch main old-feat 123456. Alias: gpatch"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "TMPDIR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "git_delete_tag",
@@ -1639,23 +1808,30 @@ var functions = []Function{
 			SeeAlso: "git_list_tags git_add_tag",
 			Body: "" +
 				"USAGE\n" +
-				"  git_delete_tag TAG_NAME\n" +
+				"  git_delete_tag TAG_NAME [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Remove a mis-tagged release\n" +
 				"  gdt v1.0.0-beta\n" +
 				"\n" +
 				"  # Fix a tag: delete and recreate\n" +
-				"  gdt v1.0.0 && gat v1.0.0 \"Fixed release\"\n" +
+				"  gdt v1.0.0 --yes && gat v1.0.0 \"Fixed release\" --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Deletes the tag both locally and on the remote origin.",
+				"  Deletes the tag both locally and on the remote origin\n" +
+				"  (Will delete refs/tags/TAG locally and on origin (URL)).\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  An unreachable origin is an error before anything is deleted.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:          &Usage{Program: "git_delete_tag", Usage: "git_delete_tag <tag_name>", Description: "Deletes a tag both locally and on remote. Alias: gdt"},
+		Fallback:          &Usage{Program: "git_delete_tag", Usage: "git_delete_tag <tag_name> [-y|--yes] [--dry-run]", Description: "Deletes a tag both locally and on remote. Alias: gdt"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "Git tag completion",
+		CompletionComment: "Git tag completion, with the confirmation flags",
 		Completion: "" +
-			"if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"$(git tag -l 2>/dev/null)\" -- \"$cur\")\n" +
 			"else\n" +
 			"    COMPREPLY=()\n" +
@@ -1691,7 +1867,10 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg\n" +
-				"  Each revision is dumped with its commit log message alongside.",
+				"  Each revision is dumped with its commit log message alongside.\n" +
+				"  001 is the newest revision, the highest number the oldest.\n" +
+				"  FILENAME may be relative or absolute, inside the work tree, and must\n" +
+				"  be tracked; a git failure returns 1 and leaves no empty file.",
 		},
 		Fallback:          &Usage{Program: "git_dump_revisions", Usage: "git_dump_revisions FILENAME", Description: "Dump all revisions of a file in a GIT repo into multiple separate files. Example: git_dump_revisions path/to/somefile.txt. Alias: gdr"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -1724,7 +1903,11 @@ var functions = []Function{
 				"  glt\n" +
 				"\n" +
 				"  # Check existing tags before creating a new release\n" +
-				"  glt && gat v2.0.0 \"Major release\"",
+				"  glt && gat v2.0.0 \"Major release\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Annotated tags are listed once. When origin cannot be reached the\n" +
+				"  remote list is an error and the status is 1.",
 		},
 		Fallback:          &Usage{Program: "git_list_tags", Usage: "git_list_tags", Description: "Lists all local and remote tags. Alias: glt"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -1755,7 +1938,7 @@ var functions = []Function{
 			SeeAlso: "git_list_tags",
 			Body: "" +
 				"USAGE\n" +
-				"  git_repair [-y] [--dry-run]\n" +
+				"  git_repair [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Fix a repo after a crash/OOM left empty loose object files\n" +
@@ -1765,15 +1948,22 @@ var functions = []Function{
 				"  gheal --dry-run\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Deletes 0-byte loose objects, copies the packs of a temporary bare\n" +
-				"  clone of 'origin' into the object store, then runs 'git gc' and\n" +
-				"  'git fsck --full' to verify. A plain 'git fetch' cannot do this: the\n" +
-				"  refs already match, so git believes it has the objects. Works in\n" +
-				"  linked worktrees and submodules. Shows the plan and asks first; -y\n" +
-				"  skips the question. Requires a git repo with an 'origin' remote.",
+				"  Makes a temporary bare clone of 'origin' first, then deletes the\n" +
+				"  0-byte loose objects (OBJECTS/xx/HASH files only: pack .keep and\n" +
+				"  info/ files are never touched), copies the packs of the clone into\n" +
+				"  the object store, then runs 'git gc' and 'git fsck --full' to\n" +
+				"  verify. A failed clone deletes nothing. A plain 'git fetch' cannot\n" +
+				"  do this: the refs already match, so git believes it has the objects.\n" +
+				"  Works in linked worktrees and submodules. Shows the plan and asks\n" +
+				"  first; -y skips the question. Requires a git repo with an 'origin'\n" +
+				"  remote; an origin URL starting with '-' is refused.",
 		},
 		Fallback: &Usage{Program: "git_repair", Usage: "git_repair [-y] [--dry-run]", Description: "Repair a repo with corrupted 0-byte loose objects by re-fetching them from origin. Alias: gheal"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "git_sync",
@@ -1794,14 +1984,14 @@ var functions = []Function{
 			SeeAlso: "git_repair",
 			Body: "" +
 				"USAGE\n" +
-				"  git_sync [-m MESSAGE] [--no-push] [--dry-run]\n" +
+				"  git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Save everything with the default message \"chore: sync\" and push\n" +
 				"  gsync\n" +
 				"\n" +
-				"  # With a real message\n" +
-				"  gsync -m \"docs: notes from the meeting\"\n" +
+				"  # With a real message, no question asked\n" +
+				"  gsync -m \"docs: notes from the meeting\" --yes\n" +
 				"\n" +
 				"  # What would be committed and where it would go\n" +
 				"  gsync --dry-run\n" +
@@ -1809,14 +1999,20 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Stages new, modified and deleted files of the whole work tree\n" +
 				"  (git add --all), commits only when there is something to commit, then\n" +
-				"  pushes the current branch to its upstream. A branch without upstream is\n" +
-				"  pushed to origin and the upstream is set. Refuses on a detached HEAD\n" +
-				"  and during a merge, rebase, cherry-pick or revert. .gitignore applies:\n" +
-				"  check `git status` first in repositories without one.",
+				"  pushes the current branch to its upstream branch, named explicitly\n" +
+				"  (git push REMOTE HEAD:BRANCH, the target --dry-run shows). A branch\n" +
+				"  without upstream is pushed to origin and the upstream is set.\n" +
+				"  Shows the plan (Will commit N file(s) on BRANCH (M untracked) and push\n" +
+				"  to UPSTREAM) and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal.\n" +
+				"  Refuses on a detached HEAD and during a merge, rebase, cherry-pick or\n" +
+				"  revert. .gitignore applies: check `git status` first in repositories\n" +
+				"  without one.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:   &Usage{Program: "git_sync", Usage: "git_sync [-m MESSAGE] [--no-push] [--dry-run]", Description: "Stage everything, commit it and push the current branch. Alias: gsync"},
+		Fallback:   &Usage{Program: "git_sync", Usage: "git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]", Description: "Stage everything, commit it and push the current branch. Alias: gsync"},
 		Env:        []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--message --no-push --dry-run --help\" -- \"$cur\")",
+		Completion: "mapfile -t COMPREPLY < <(compgen -W \"-m --message --no-push --dry-run -y --yes --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "gl",
@@ -1923,13 +2119,19 @@ var functions = []Function{
 				"  hgrep PATTERN [OPTIONS]\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  -n LIMIT        Show only last N results (default: all)\n" +
-				"  -a, --all       Include the hgrep command itself in results\n" +
-				"  -r, --reverse   Reverse order (oldest first)\n" +
-				"  -j, --json      Output as JSON array\n" +
-				"  -H, --no-highlight  Disable color highlighting of matches\n" +
-				"  -E, --regex     Treat PATTERN as extended regex\n" +
-				"  -c, --count     Only show count of matching commands\n" +
+				"  -n, --limit N       Show only the N most recent matches (0: all)\n" +
+				"  -a, --all           Include hgrep/history_grep commands in results\n" +
+				"  -r, --reverse       Newest first (default: oldest first)\n" +
+				"  -j, --json          Output as JSON array\n" +
+				"  -H, --no-highlight  Disable highlighting / force plain output\n" +
+				"  -E, --regex         PATTERN is a Go regular expression (RE2 syntax),\n" +
+				"                      case-insensitive; an invalid regex is an error\n" +
+				"  -c, --count         Only show the count of unique matching commands\n" +
+				"  -g, --group         Collapse similar commands under a shared chain prefix\n" +
+				"      --pick          Fuzzy-select a matching command via fzf and print it\n" +
+				"      --no-color      Disable colored output for this invocation\n" +
+				"  -h, --help          Show this help (anywhere before --)\n" +
+				"  --                  End of options: the next word is PATTERN\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Search for git push commands\n" +
@@ -1944,14 +2146,41 @@ var functions = []Function{
 				"  # Count how many times you ran a command\n" +
 				"  hgrep \"npm install\" -c\n" +
 				"\n" +
-				"  # Regex: find git push or pull\n" +
-				"  hgrep -E \"git (push|pull)\"\n" +
+				"  # Regex: git push or pull at the start\n" +
+				"  hgrep -E \"^git (push|pull)\"\n" +
 				"\n" +
-				"  # Reverse order (oldest first)\n" +
-				"  hgrep kubectl -r",
+				"  # Group \"cd X && ...\" variants under one prefix\n" +
+				"  hgrep cd -g\n" +
+				"\n" +
+				"  # Fuzzy-pick a past git command (needs fzf)\n" +
+				"  hgrep git --pick\n" +
+				"\n" +
+				"  # Newest first\n" +
+				"  hgrep kubectl -r\n" +
+				"\n" +
+				"  # A pattern that starts with \"-\"\n" +
+				"  hgrep -- --force\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Matching is case-insensitive; PATTERN is a fixed string unless -E.\n" +
+				"  Commands are deduplicated (the last run wins) and listed oldest first.\n" +
+				"  -n N keeps the N most recent matches, with or without -r.\n" +
+				"\n" +
+				"OUTPUT FORMAT\n" +
+				"  [2024-01-15 14:52:01] git push origin main\n" +
+				"  [2024-01-15 15:10:22] git commit -m \"fix\"\n" +
+				"\n" +
+				"  With --json:\n" +
+				"  [{\"timestamp\":\"2024-01-15 14:52:01\",\"epoch\":1705330321,\"count\":1,\"command\":\"git push origin main\"},...]",
 		},
-		ShellVars: []string{"HISTFILE", "HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
+		Fallback:          &Usage{Program: "hgrep", Usage: "hgrep PATTERN [OPTIONS]", Description: "Smart history search with timestamps and deduplication"},
+		ShellVars:         []string{"HISTFILE", "HOME"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
+		CompletionComment: "hgrep — its options",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "history_grep",
@@ -1972,7 +2201,7 @@ var functions = []Function{
 			SeeAlso: "hgrep",
 			Body: "" +
 				"USAGE\n" +
-				"  history_grep PATTERN\n" +
+				"  history_grep PATTERN...\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all git commands in history\n" +
@@ -1986,10 +2215,19 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Simple and fast. For advanced features (timestamps,\n" +
-				"  deduplication, JSON output), use hgrep instead.",
+				"  deduplication, JSON output), use hgrep instead.\n" +
+				"  The words are joined with spaces into one pattern (a GNU grep basic\n" +
+				"  regex, case-insensitive) matched against each command. Column 2 is a\n" +
+				"  command's first two words, column 3 the rest; duplicates and the\n" +
+				"  history_grep/hg lines themselves are left out.",
 		},
-		Fallback: &Usage{Program: "history_grep", Usage: "history_grep PATTERN", Description: "Searches the bash history for commands matching PATTERN. Alias: hg"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "history_grep", Usage: "history_grep PATTERN...", Description: "Searches the bash history for commands matching PATTERN (words joined with spaces). Alias: hg"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "ip_public",
@@ -2009,21 +2247,29 @@ var functions = []Function{
 			Aliases: "myip",
 			Body: "" +
 				"USAGE\n" +
-				"  ip_public\n" +
+				"  ip_public [--no-color] [--raw]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --no-color  Plain output\n" +
+				"  --raw       Print the bare address, no label\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Show your public IP\n" +
 				"  myip\n" +
 				"\n" +
 				"  # Use in a script\n" +
-				"  MY_IP=$(myip) && echo \"Server IP: $MY_IP\"",
+				"  MY_IP=$(myip --raw) && echo \"Server IP: $MY_IP\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The request gives up after 10 seconds. An answer that is not an IP\n" +
+				"  address (a captive portal or rate-limit page) is an error, rc 1.",
 		},
-		Fallback:          &Usage{Program: "ip_public", Usage: "ip_public [--no-color]", Description: "Displays your public IP address (via ipinfo.io). Alias: myip"},
+		Fallback:          &Usage{Program: "ip_public", Usage: "ip_public [--no-color] [--raw]", Description: "Displays your public IP address (via ipinfo.io). Alias: myip"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "disk_usage / ip_public — just --no-color",
+		CompletionComment: "ip_public — --no-color and --raw",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --raw --help\" -- \"$cur\")\n" +
 			"fi",
 	},
 	{
@@ -2038,11 +2284,14 @@ var functions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:  "Read config files (JSON/YAML, excludes .env)",
+			Short:  "Read a file that is not secret (YAML as JSON)",
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
 				"  llm_config FILE [--max-bytes N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_config package.json\n" +
@@ -2050,9 +2299,10 @@ var functions = []Function{
 				"  llm_config big.json --max-bytes 5000000\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Refuses to read .env files and other secret files for security.\n" +
-				"  YAML comes out as JSON when yq (mikefarah's or the Python yq) is\n" +
-				"  installed, as the raw text otherwise. Files over --max-bytes\n" +
+				"  Reads any file that is not secret: .env files, keys and the other\n" +
+				"  secret files are refused.\n" +
+				"  YAML comes out as JSON, converted by Gash itself (no yq needed), or\n" +
+				"  as the raw text when it does not parse. Files over --max-bytes\n" +
 				"  (default 1 MiB) fail with file_too_large.",
 		},
 		Fallback:  &Usage{Program: "llm_config", Usage: "llm_config <file> [--max-bytes N]", Description: "Read config file (JSON/YAML, NOT .env); files over 1 MiB need --max-bytes"},
@@ -2076,7 +2326,13 @@ var functions = []Function{
 			SeeAlso: "llm_db_query",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_explain \"QUERY\" [-c CONNECTION] [-f SQLITE_FILE] [--analyze]\n" +
+				"  llm_db_explain \"QUERY\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
+				"  --analyze              Run the query to measure it (still read-only)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_explain \"SELECT * FROM users WHERE email LIKE '%@example.com'\" -c default\n" +
@@ -2128,9 +2384,11 @@ var functions = []Function{
 				"  Read-only, enforced twice: one statement starting with SELECT, WITH,\n" +
 				"  VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA, with no write\n" +
 				"  keywords or file/program functions; then a read-only client session\n" +
-				"  (sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL\n" +
-				"  default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).\n" +
-				"  Output: {data, rows, query_time}.",
+				"  (SQLite read-only in defensive mode, MySQL READ ONLY transactions,\n" +
+				"  PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT\n" +
+				"  statement timeout). Output: {data, rows, query_time}. -h is help: the\n" +
+				"  host comes from the connection URL. Error details are the database\n" +
+				"  driver's message.",
 		},
 		Fallback:  &Usage{Program: "llm_db_query", Usage: "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]", Description: "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2191,7 +2449,12 @@ var functions = []Function{
 			SeeAlso: "llm_db_tables llm_db_query",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_schema TABLE [-c CONNECTION] [-f SQLITE_FILE]\n" +
+				"  llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_schema users -c default\n" +
@@ -2221,7 +2484,12 @@ var functions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]\n" +
+				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_tables -c default\n" +
@@ -2252,6 +2520,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_deps [PATH] [--dev]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --dev                  Split the result into prod and dev\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_deps\n" +
@@ -2289,7 +2560,11 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Wrapper around docker_compose_check --json.\n" +
-				"  Designed for LLM/AI agent consumption.",
+				"  Designed for LLM/AI agent consumption.\n" +
+				"  PATH follows the llm_* path rules (no .., no protected trees).\n" +
+				"  ${VAR} in the compose file is resolved from PATH/.env and a short\n" +
+				"  allowlist (HOME, USER, PATH, LANG, DOCKER_HOST, ...), never from\n" +
+				"  other exported variables, so a token cannot reach the output.",
 		},
 		Fallback: &Usage{Program: "llm_docker_check", Usage: "llm_docker_check [PATH]", Description: "Compose image update check as JSON"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
@@ -2310,7 +2585,11 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_env [--filter PATTERN]\n" +
+				"  llm_env [--filter REGEX | REGEX]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -f, --filter REGEX     Only names that match REGEX (Go RE2 syntax, e.g.\n" +
+				"                         '^PATH$' or 'NODE|NPM'); a bare REGEX works too\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_env\n" +
@@ -2366,7 +2645,7 @@ var functions = []Function{
 				"  HOME, USER, locale, TERM, TZ, TMPDIR, ...), never the caller's tokens.\n" +
 				"\n" +
 				"SETTINGS (~/.gash_env only)\n" +
-				"  GASH_LLM_EXEC_ALLOW=\"make npm\"   extra commands, any arguments\n" +
+				"  GASH_LLM_EXEC_ALLOW=\"make npm\"   extra commands, any options (walk rules kept)\n" +
 				"  GASH_LLM_EXEC=unrestricted       skip the allowlist\n" +
 				"  GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)",
 		},
@@ -2393,6 +2672,12 @@ var functions = []Function{
 				"USAGE\n" +
 				"  llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]\n" +
 				"\n" +
+				"OPTIONS\n" +
+				"  --type f|d             Files (default) or directories\n" +
+				"  --contains REGEX       Keep the files whose content matches REGEX\n" +
+				"                         (ripgrep's regex syntax); files only\n" +
+				"  -n, --limit N          Paths to print (default 100)\n" +
+				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all PHP files\n" +
 				"  llm_find \"*.php\"\n" +
@@ -2407,7 +2692,8 @@ var functions = []Function{
 				"  PATTERN is a file name glob (find -name). With --contains only the\n" +
 				"  files it matches are searched, hidden and gitignored ones included,\n" +
 				"  with or without ripgrep. Skips node_modules, vendor, .git and\n" +
-				"  __pycache__; --contains also skips secret files. Default limit 100.",
+				"  __pycache__; --contains also skips secret files. Default limit 100.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_find", Usage: "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]", Description: "Find files by pattern (ignores node_modules, vendor, .git)"},
 		ShellVars: []string{"HOME"},
@@ -2431,6 +2717,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_git_diff [--staged] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --staged               Staged changes (also --cached)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_diff\n" +
@@ -2457,7 +2746,10 @@ var functions = []Function{
 			SeeAlso: "llm_git_status llm_git_diff",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_log [--limit N] [PATH]\n" +
+				"  llm_git_log [-n N] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -n, --limit N          Commits to list (default 10)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_log\n" +
@@ -2488,7 +2780,15 @@ var functions = []Function{
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_status\n" +
-				"  # {\"branch\":\"main\",\"ahead\":0,\"behind\":0,\"staged\":[],\"modified\":[\"README.md\"],\"untracked\":[],\"conflicted\":[]}",
+				"  # {\n" +
+				"  #   \"branch\": \"main\",\n" +
+				"  #   \"ahead\": 0,\n" +
+				"  #   \"behind\": 0,\n" +
+				"  #   \"staged\": [],\n" +
+				"  #   \"modified\": [\"README.md\"],\n" +
+				"  #   \"untracked\": [],\n" +
+				"  #   \"conflicted\": []\n" +
+				"  # }",
 		},
 		Fallback:  &Usage{Program: "llm_git_status", Usage: "llm_git_status [PATH]", Description: "Compact git status (JSON)"},
 		ShellVars: []string{"HOME"},
@@ -2510,7 +2810,12 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N]\n" +
+				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
+				"  -C, --context N        Lines of context around each match (default 0)\n" +
+				"  -n, --limit N          Lines to print (default 100)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find TODO comments in PHP files\n" +
@@ -2520,7 +2825,17 @@ var functions = []Function{
 				"  llm_grep \"function processOrder\" .\n" +
 				"\n" +
 				"  # With context lines\n" +
-				"  llm_grep \"class.*Controller\" . --ext php --context 3",
+				"  llm_grep \"class.*Controller\" . --ext php --context 3\n" +
+				"\n" +
+				"NOTES\n" +
+				"  One built-in engine, the same with or without ripgrep installed:\n" +
+				"  ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore\n" +
+				"  matches, binary files, node_modules, vendor and .git are skipped; files\n" +
+				"  come in sorted path order. Secret files are skipped, templates such as\n" +
+				"  .env.example searched. Default limit 100.\n" +
+				"  Output: file:line:content with absolute paths (a FILE PATH gives\n" +
+				"  line:content); context lines use -, groups are separated by --.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
 		ShellVars: []string{"HOME"},
@@ -2544,6 +2859,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_ports [--listen]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -l, --listen           Listening sockets only\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_ports\n" +
@@ -2569,12 +2887,20 @@ var functions = []Function{
 			SeeAlso: "llm_ports",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_procs [--name NAME] [--port PORT]\n" +
+				"  llm_procs [--name NAME | --port PORT]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --name NAME            Processes whose command line contains NAME\n" +
+				"  --port PORT            Processes with a socket on PORT\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
 				"  llm_procs --name nginx\n" +
-				"  llm_procs --port 3306",
+				"  llm_procs --port 3306\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --port takes 0 to 65535 (invalid_port above) and wins over --name,\n" +
+				"  which is then ignored.",
 		},
 		Fallback: &Usage{Program: "llm_procs", Usage: "llm_procs [--name NAME] [--port PORT]", Description: "List processes (JSON)"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -2622,7 +2948,13 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_tree [--text] [--depth N] [PATH]\n" +
+				"  llm_tree [--text] [--depth N] [--stats] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --text                 Indented text list, 200 lines max (default depth 3)\n" +
+				"  --depth N              Levels below PATH, 1 or more (default 1; also\n" +
+				"                         --max-depth)\n" +
+				"  --stats                Add sizes and child counts to the JSON tree\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # JSON output (default)\n" +
@@ -2635,7 +2967,10 @@ var functions = []Function{
 				"  llm_tree --depth 2 /etc/nginx\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Ignores noise directories: node_modules, vendor, .git, __pycache__",
+				"  Ignores noise directories below PATH: node_modules, vendor, .git,\n" +
+				"  __pycache__, .cache. Entries whose name holds a tab or\n" +
+				"  a newline are left out. --text lists symlinks as name -> target, in\n" +
+				"  byte order whatever the locale.",
 		},
 		Fallback:  &Usage{Program: "llm_tree", Usage: "llm_tree [--text] [--depth N] [--stats] [PATH]", Description: "Compact directory tree (JSON default, --text for indented, --stats for size/count)"},
 		ShellVars: []string{"HOME"},
@@ -2713,7 +3048,7 @@ var functions = []Function{
 			Module: "node",
 			Body: "" +
 				"USAGE\n" +
-				"  node_detect_version [project_dir] [--json]\n" +
+				"  node_detect_version [project_dir] [--json|--llm]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Human-readable, current directory\n" +
@@ -2724,10 +3059,20 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Priority: .nvmrc -> .node-version -> package.json engines.node -> latest\n" +
-				"  installed. JSON output is also emitted automatically under\n" +
-				"  GASH_HEADLESS=1, --json is not required there.",
+				"  installed, read in project_dir only (no walk-up). Every source is\n" +
+				"  reduced to its major (lts/NAME through nvm's alias files, then the\n" +
+				"  codename table), and full_version is the newest installed patch of\n" +
+				"  that major: an exact pin such as v20.9.0 resolves to the newest\n" +
+				"  installed v20 patch. Installed versions are the vX.Y.Z directories of\n" +
+				"  $NVM_DIR/versions/node (prereleases and other names do not count).\n" +
+				"  When the major is not installed, a warning names it and the newest\n" +
+				"  installed version is used. A project_dir that is not a directory gives\n" +
+				"  \"Warning: Directory not found: DIR\" with the same answer and status 0.\n" +
+				"  Unknown options are refused before the NVM directory is checked.\n" +
+				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
+				"  --json (or --llm) is not required there.",
 		},
-		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
+		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json|--llm]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "NVM_DIR"},
 	},
@@ -2882,7 +3227,7 @@ var functions = []Function{
 			Module: "php",
 			Body: "" +
 				"USAGE\n" +
-				"  php_detect_version [project_dir] [--json]\n" +
+				"  php_detect_version [project_dir] [--json|--llm]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Human-readable, current directory\n" +
@@ -2892,11 +3237,23 @@ var functions = []Function{
 				"  php_detect_version /path/to/project --json\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Priority: .target-php-version (walk-up) -> composer.json .require.php ->\n" +
-				"  .github/copilot-instructions.md -> fallback 8.4. JSON output is also\n" +
-				"  emitted automatically under GASH_HEADLESS=1, --json is not required there.",
+				"  Priority: .target-php-version (the first X.Y of its first line, looked\n" +
+				"  up in project_dir, then in every parent directory except /) ->\n" +
+				"  composer.json .require.php -> .github/copilot-instructions.md (the\n" +
+				"  first \"php X.Y\") -> fallback 8.4. composer.json and\n" +
+				"  copilot-instructions.md are read in project_dir only.\n" +
+				"  A composer constraint is split on | and ||; each alternative counts by\n" +
+				"  its lower bound (^7.4 is 7.4; a bare major such as ^8, >=8 or 8.* is\n" +
+				"  8.0; * alone counts for nothing). The highest alternative whose\n" +
+				"  /usr/bin/phpX.Y is installed wins, else the highest alternative.\n" +
+				"  When /usr/bin/phpX.Y is not installed, a warning on stderr says so and\n" +
+				"  names the binary used instead (/usr/bin/phpX, then php on PATH); the\n" +
+				"  JSON is unchanged. A project_dir that is not a directory gives\n" +
+				"  \"Warning: Directory not found: DIR\" with the same answer and status 0.\n" +
+				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
+				"  --json (or --llm) is not required there.",
 		},
-		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
+		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json|--llm]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
@@ -2930,10 +3287,16 @@ var functions = []Function{
 				"NOTES\n" +
 				"  --force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session\n" +
 				"  connected to that port elsewhere is left alone. SIGTERM first,\n" +
-				"  SIGKILL for processes still alive after about 3 seconds.",
+				"  SIGKILL for processes still alive after about 3 seconds.\n" +
+				"  Returns 1 when a process could not be signalled (permission denied).",
 		},
-		Fallback: &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Kill functions — -y/--yes and the 2.0 -f/--force",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "process_find",
@@ -2964,10 +3327,19 @@ var functions = []Function{
 				"  pf node\n" +
 				"\n" +
 				"  # Check if a service is running\n" +
-				"  pf mysql",
+				"  pf mysql\n" +
+				"\n" +
+				"NOTES\n" +
+				"  NAME is matched literally, ignoring case, against each command line\n" +
+				"  (not the user or other columns). Returns 1 when nothing matches.",
 		},
-		Fallback: &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "process_kill",
@@ -3002,10 +3374,18 @@ var functions = []Function{
 				"  with their command lines and asks. Without a terminal to ask\n" +
 				"  (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.\n" +
 				"  --force is the same as -y. SIGTERM first, SIGKILL for processes still\n" +
-				"  alive after about 3 seconds. Declining returns 1.",
+				"  alive after about 3 seconds. Declining returns 1, and so does a\n" +
+				"  process that could not be signalled (permission denied).\n" +
+				"  NAME is a name, not a pattern: regex characters match themselves, and\n" +
+				"  a name longer than 15 bytes is matched against the full program name.",
 		},
-		Fallback: &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Kill functions — -y/--yes and the 2.0 -f/--force",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_exec",
@@ -3039,13 +3419,26 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Connections are multiplexed (ControlMaster, 60s persist): repeated calls to\n" +
-				"  the same host reuse one session. Under GASH_HEADLESS=1 only a registered\n" +
-				"  alias (~/.gash_env HOST:) is accepted, never a raw user@host target.",
+				"  the same host reuse one session; a missing ~/.ssh (the socket's\n" +
+				"  directory) is created with mode 0700.\n" +
+				"  The exit status is the remote command's. When ssh exits 255, a probe\n" +
+				"  (ssh ... exit 0) tells the cases apart: the connection is healthy and\n" +
+				"  the status is 255 (the command was killed or exited 255), or it is not\n" +
+				"  and the status is 1.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
 		Fallback:  &Usage{Program: "remote_exec", Usage: "remote_exec <alias|user@host> \"command\" | --script FILE [-- args...]", Description: "Execute a command or script on a remote host via multiplexed SSH. Alias: rex"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--script --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_hosts",
@@ -3073,7 +3466,9 @@ var functions = []Function{
 				"  rh\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Reads HOST:alias=user@host entries from ~/.gash_env.",
+				"  Reads HOST:alias=user@host entries from ~/.gash_env, or from the file\n" +
+				"  GASH_ENV_FILE names. An entry whose target is not a valid user@host\n" +
+				"  (an option-like name, a host:port) is not listed and never used.",
 		},
 		Fallback:  &Usage{Program: "remote_hosts", Usage: "remote_hosts", Description: "List configured remote host aliases from ~/.gash_env. Alias: rh"},
 		LoadsEnv:  true,
@@ -3099,16 +3494,35 @@ var functions = []Function{
 			SeeAlso: "remote_push remote_sync_pull",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]\n" +
+				"  remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Pull a single file\n" +
-				"  rpull viper /tmp/backup.tar.gz ./backup.tar.gz",
+				"  rpull viper /tmp/backup.tar.gz ./backup.tar.gz\n" +
+				"\n" +
+				"  # Pull a directory, keeping times and modes\n" +
+				"  rpull viper /srv/app/config ./config -r -p\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_pull", Usage: "remote_pull <alias|user@host> <remote-src> <local-dst> [-r] [-p] [--no-progress] [--force]", Description: "Copy a remote file/dir to the local machine via scp. Alias: rpull"},
+		Fallback:  &Usage{Program: "remote_pull", Usage: "remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]", Description: "Copy a remote file/dir to the local machine via scp. Alias: rpull"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-r --recursive -p --preserve --no-progress --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_push",
@@ -3129,19 +3543,35 @@ var functions = []Function{
 			SeeAlso: "remote_pull remote_sync_push",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]\n" +
+				"  remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Push a config file\n" +
 				"  rpush hnas ./nginx.conf /tmp/nginx.conf\n" +
 				"\n" +
 				"  # Push a directory\n" +
-				"  rpush hnas ./dist /tmp/dist -r",
+				"  rpush hnas ./dist /tmp/dist -r\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_push", Usage: "remote_push <alias|user@host> <local-src> <remote-dst> [-r] [-p] [--no-progress] [--force]", Description: "Copy a local file/dir to a remote host via scp. Alias: rpush"},
+		Fallback:  &Usage{Program: "remote_push", Usage: "remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]", Description: "Copy a local file/dir to a remote host via scp. Alias: rpush"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-r --recursive -p --preserve --no-progress --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_sync_pull",
@@ -3162,16 +3592,39 @@ var functions = []Function{
 			SeeAlso: "remote_sync_push remote_pull",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]\n" +
+				"  remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Sync a remote project directory locally\n" +
-				"  rspull viper /home/maurizio/projects/foo/ ./foo/",
+				"  rspull viper /home/maurizio/projects/foo/ ./foo/\n" +
+				"\n" +
+				"  # Mirror it, skipping logs\n" +
+				"  rspull viper /srv/app/ ./app/ --delete --exclude '*.log'\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  rsync runs with -s (--protect-args). With --delete the LOCAL\n" +
+				"  destination is checked: below /tmp, /var/tmp or /home/<user>/, or a\n" +
+				"  relative path inside the current directory, never your home itself or\n" +
+				"  .ssh; elsewhere it asks, or needs --force in headless mode.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_sync_pull", Usage: "remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]", Description: "Sync a remote directory to the local machine via rsync. Alias: rspull"},
+		Fallback:  &Usage{Program: "remote_sync_pull", Usage: "remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]", Description: "Sync a remote directory to the local machine via rsync. Alias: rspull"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--delete --dry-run --no-progress --force --exclude= --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_sync_push",
@@ -3192,16 +3645,36 @@ var functions = []Function{
 			SeeAlso: "remote_sync_pull remote_push",
 			Body: "" +
 				"USAGE\n" +
-				"  remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]\n" +
+				"  remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Sync a build directory\n" +
-				"  rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'",
+				"  rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);\n" +
+				"  a remote path with characters the remote side may expand (* ? [ ] { }\n" +
+				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
+				"  start) is refused, even with --force. An unknown option or a fourth\n" +
+				"  argument is an error.\n" +
+				"  rsync runs with -s (--protect-args). --delete runs without asking only\n" +
+				"  below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the\n" +
+				"  remote home, never the home itself or a .ssh path; elsewhere it asks,\n" +
+				"  or needs --force in headless mode.\n" +
+				"  A target is user@host: a user of letters, digits, '.', '_' and '-'\n" +
+				"  (not first), a host name or a bracketed IPv6 literal; no port (put it\n" +
+				"  in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a\n" +
+				"  registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE\n" +
+				"  names) is accepted, never a raw user@host target.",
 		},
-		Fallback:  &Usage{Program: "remote_sync_push", Usage: "remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude=PAT] [--dry-run] [--no-progress] [--force]", Description: "Sync a local directory to a remote host via rsync. Alias: rspush"},
+		Fallback:  &Usage{Program: "remote_sync_push", Usage: "remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]", Description: "Sync a local directory to a remote host via rsync. Alias: rspush"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
 		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--delete --dry-run --no-progress --force --exclude= --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "services_stop",
@@ -3242,10 +3715,16 @@ var functions = []Function{
 				"  Only stops services that are currently active, through systemd when it\n" +
 				"  runs, else through `service` (WSL without systemd, containers).\n" +
 				"  --force is the same as -y. Returns 1 when declined or when a stop\n" +
-				"  fails.",
+				"  fails. Headless or without a terminal it runs sudo -n, and stops\n" +
+				"  before anything when sudo needs a password.",
 		},
-		Fallback: &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "services_stop — confirmation flags and --dry-run",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "sudo_last",
@@ -3273,10 +3752,20 @@ var functions = []Function{
 				"  plz               # -> sudo apt update\n" +
 				"\n" +
 				"  # Run a specific command with sudo\n" +
-				"  plz systemctl restart nginx",
+				"  plz systemctl restart nginx\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without COMMAND it shows the previous command and asks first;\n" +
+				"  declining (or no terminal to ask on) returns 1, and so does a shell\n" +
+				"  with no previous command in its history.",
 		},
-		Fallback: &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "sysinfo",
@@ -3301,16 +3790,16 @@ var functions = []Function{
 				"\n" +
 				"SECTIONS\n" +
 				"  overview   Host, load, CPU, memory, swap, root disk and address at a glance\n" +
-				"  identity   OS, kernel, virtualization, cloud provider, WSL detection\n" +
-				"  storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)\n" +
-				"  services   Running systemd services, custom units\n" +
-				"  auth       Sudoers, SSH config (PAM details via deep drill-down)\n" +
-				"  network    Interfaces, DNS, DHCP, hostname\n" +
-				"  security   Firewall rules, SSH hardening, fail2ban/crowdsec\n" +
-				"  webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies\n" +
-				"  mail       Postfix, Dovecot, DKIM, virtual domains\n" +
-				"  infra      Docker, containers, monitoring, backup systems\n" +
-				"  system     Cron jobs, systemd timers, custom hooks\n" +
+				"  identity   OS, kernel, hostname, uptime, virtualization, container, WSL\n" +
+				"  storage    fstab, crypttab, LVM, mdadm, ZFS, smartd, sanoid, hdparm, NFS\n" +
+				"  services   Detected/running services, timers, listening ports, custom units\n" +
+				"  auth       Users, sudoers, sshd_config (PAM details via deep drill-down)\n" +
+				"  network    resolv.conf, hosts, interfaces, netplan, dhcpcd\n" +
+				"  security   fail2ban, crowdsec, ufw; firewalld, iptables, AppArmor presence\n" +
+				"  webstack   Apache, Nginx, PHP and FPM pools, MySQL/MariaDB, PostgreSQL\n" +
+				"  mail       Postfix, Dovecot, Exim4, SpamAssassin, OpenDKIM, BIND, Unbound\n" +
+				"  infra      FTP, Samba, OpenMediaVault, VPN, Docker, containers, monitoring\n" +
+				"  system     Cron, Let's Encrypt, SSL keys, kernel tuning, GRUB, logrotate\n" +
 				"  all        Overview, then every section (default)\n" +
 				"\n" +
 				"EXAMPLES\n" +
@@ -3328,13 +3817,21 @@ var functions = []Function{
 				"  sysinfo services --llm\n" +
 				"\n" +
 				"  # Combine with AI for instant analysis\n" +
-				"  sysinfo webstack --llm | ai_query \"audit this web stack\"",
+				"  sysinfo webstack --llm | ai_query \"audit this web stack\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  On a terminal a normal user is asked for sudo only by the sections\n" +
+				"  that read root-only files (identity, storage, services, auth,\n" +
+				"  security, system, all); overview, network, webstack, mail and infra\n" +
+				"  never ask.\n" +
+				"  One section per call: a second one is an error. -h/--help anywhere\n" +
+				"  shows this help.",
 		},
 		Fallback:          &Usage{Program: "sysinfo", Usage: "sysinfo [section] [--llm] [--no-color]", Description: "System information enumeration for headless Debian/Ubuntu servers.\nSections: overview identity storage services auth network security webstack mail infra system all\nFlags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si"},
 		ShellVars:         []string{"TMPDIR"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "TMPDIR"},
 		CompletionComment: "System info sections + flags",
-		Completion:        "mapfile -t COMPREPLY < <(compgen -W \"identity storage services auth network security webstack mail infra system all --llm --no-color\" -- \"$cur\")",
+		Completion:        "mapfile -t COMPREPLY < <(compgen -W \"overview identity storage services auth network security webstack mail infra system all --llm --no-color --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "tree_stats",
@@ -3370,23 +3867,27 @@ var functions = []Function{
 				"  tree_stats /var/log --json | jq '.data.top_by_size'\n" +
 				"\n" +
 				"  # Stay on one filesystem, cap scan depth\n" +
-				"  tree_stats --xdev --depth 8 /\n" +
+				"  tree_stats --xdev --depth 8 --allow-root /\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --depth N              Scan depth limit (default unbounded)\n" +
 				"  --top N                Number of extensions in top lists (default 5)\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable)\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --no-ignore            Disable default pruning\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
-				"  --follow-symlinks, -L  Follow symbolic links\n" +
+				"  --follow-symlinks, -L  Follow symbolic links (never into protected paths)\n" +
 				"  --allow-root           Required to scan '/'\n" +
 				"  --json                 Emit JSON envelope\n" +
-				"  --no-color             Disable ANSI colors\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Single-walk aggregation via `find -printf` + awk. Extensions are derived\n" +
-				"  from the basename (lowercased, after the last dot). Files with no dot\n" +
-				"  or hidden-only dot (.env) are grouped as \"(no ext)\".",
+				"  Single-walk aggregation. Extensions are derived from the basename\n" +
+				"  (ASCII-lowercased, after the last dot). Files with no dot or\n" +
+				"  hidden-only dot (.env) are grouped as \"(no ext)\".\n" +
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  every count and total (they cannot be represented safely in\n" +
+				"  line-oriented output).",
 		},
 		Fallback:          &Usage{Program: "tree_stats", Usage: "tree_stats [PATH] [--depth N] [--top N] [--exclude GLOB] [--no-ignore] [--xdev] [--follow-symlinks] [--allow-root] [--json] [--no-color]", Description: "Compact filesystem stats: totals, top extensions (by count & size), depth, empty dirs. Alias: tls"},
 		ShellVars:         []string{"HOME"},
@@ -3418,7 +3919,7 @@ var functions = []Function{
 			SeeAlso: "wsl_restart wsl_shutdown",
 			Body: "" +
 				"USAGE\n" +
-				"  wsl_compact [--status]\n" +
+				"  wsl_compact [--status] [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # code . or explorer.exe fail with \"UtilAcceptVsock ... accept4 failed 110\"\n" +
@@ -3433,11 +3934,14 @@ var functions = []Function{
 				"  allocation fails (dmesg: \"page allocation failure: order:7\") and the\n" +
 				"  launch times out. wsl_compact drops the page cache and slab, compacts\n" +
 				"  memory (sudo), prints the free blocks before and after, and checks that\n" +
-				"  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.",
+				"  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.\n" +
+				"  On a terminal it runs without asking; headless it needs -y (--yes).\n" +
+				"  Unattended, sudo must not need a password (sudo -n is checked first).\n" +
+				"  When dmesg is not readable the failure count is \"unknown\".",
 		},
-		Fallback:   &Usage{Program: "wsl_compact", Usage: "wsl_compact [--status]", Description: "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc"},
+		Fallback:   &Usage{Program: "wsl_compact", Usage: "wsl_compact [--status] [-y]", Description: "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc"},
 		Env:        []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--status --help\" -- \"$cur\")",
+		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--status -y --yes --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "wsl_explorer",
@@ -3474,8 +3978,13 @@ var functions = []Function{
 				"  Defaults to current directory if no path specified.\n" +
 				"  Only works inside WSL (Windows Subsystem for Linux).",
 		},
-		Fallback: &Usage{Program: "wsl_explorer", Usage: "wsl_explorer [PATH]", Description: "Open Windows Explorer in the current or specified directory. Alias: wex"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_explorer", Usage: "wsl_explorer [PATH]", Description: "Open Windows Explorer in the current or specified directory. Alias: wex"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_restart",
@@ -3510,8 +4019,13 @@ var functions = []Function{
 				"  with the servers running in them. WSL starts again with the next\n" +
 				"  terminal. Asks first; -y skips the question. Same as wsl_shutdown.",
 		},
-		Fallback: &Usage{Program: "wsl_restart", Usage: "wsl_restart [-y]", Description: "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_restart", Usage: "wsl_restart [-y]", Description: "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "WSL stop functions — -y/--yes",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_shutdown",
@@ -3542,8 +4056,13 @@ var functions = []Function{
 				"  Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.\n" +
 				"  Asks first; -y skips the question.",
 		},
-		Fallback: &Usage{Program: "wsl_shutdown", Usage: "wsl_shutdown [-y]", Description: "Shut down WSL (saves bash history first). Alias: wsd"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_shutdown", Usage: "wsl_shutdown [-y]", Description: "Shut down WSL (saves bash history first). Alias: wsd"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "WSL stop functions — -y/--yes",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_taskmanager",
@@ -3575,8 +4094,13 @@ var functions = []Function{
 				"  Does not change your current working directory.\n" +
 				"  Only works inside WSL (Windows Subsystem for Linux).",
 		},
-		Fallback: &Usage{Program: "wsl_taskmanager", Usage: "wsl_taskmanager", Description: "Open Windows Task Manager from WSL. Alias: wtm"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_taskmanager", Usage: "wsl_taskmanager", Description: "Open Windows Task Manager from WSL. Alias: wtm"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 }
 

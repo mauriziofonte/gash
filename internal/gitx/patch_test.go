@@ -15,6 +15,9 @@ git checkout -q -b feature && echo f >f && git add f && echo c >>a && git commit
 printf 'bin\000ary' >bin.dat && git add bin.dat && git commit -qm "binary" &&
 git checkout -q main`
 
+// 3.0: GIT-01 and GIT-06 fixed: applying needs --yes and the patch goes
+// to a temporary file (TestLedger_GIT01, TestLedger_GIT06); this 2.x
+// comparison skips without the 2.x sources.
 func TestApplyPatchMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup, cwd string

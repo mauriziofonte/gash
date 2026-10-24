@@ -58,9 +58,12 @@ func (lc *lineChecker) checkSimple(words []pword) ([][]string, error) {
 		if err := lc.checkArgs(words); err != nil {
 			return nil, err
 		}
-		if err := lc.checkWalk(words); err != nil {
-			return nil, err
-		}
+	}
+	// The walk rules (no symlink-following walk, no walk root at / or
+	// above a protected tree) hold for commands in GASH_LLM_EXEC_ALLOW too;
+	// only the per-command option rules are lifted (LEDGER EXEC-05).
+	if err := lc.checkWalk(words); err != nil {
+		return nil, err
 	}
 
 	plain := []string{name}
@@ -108,7 +111,8 @@ func (lc *lineChecker) checkSimple(words []pword) ([][]string, error) {
 		}
 
 		// Word-level secret check: the word, a "key=value" value, and a git
-		// REV:PATH (EXEC-02/04 surface here, EXEC-01's attached value does not).
+		// REV:PATH (EXEC-04 surfaces here; an attached option value is checked below,
+		// EXEC-01).
 		secret := lc.guard.IsSecretFile(w)
 		if !secret && strings.Contains(w, "=") {
 			secret = lc.guard.IsSecretFile(w[strings.IndexByte(w, '=')+1:])
@@ -141,8 +145,13 @@ func (lc *lineChecker) checkSimple(words []pword) ([][]string, error) {
 		case strings.HasPrefix(w, "--"):
 			// no path check
 		case strings.HasPrefix(w, "-") && len(w) >= 2:
-			// EXEC-01: strip exactly two characters, forbidden-path check only.
-			if err := lc.checkPath(w[2:], cwd, false); err != nil {
+			// A short option with an attached value, alone or at the end
+			// of a cluster (-fFILE, -uvfFILE): 2.x stripped exactly two
+			// characters and ran the forbidden-path check only. Every
+			// split of the cluster is checked now, the secret-file check
+			// and the path check, so the value is examined whichever
+			// letter takes it (3.0: LEDGER EXEC-01 fixed).
+			if err := lc.checkAttached(w, cwd); err != nil {
 				return nil, err
 			}
 		case strings.Contains(w, "="):
@@ -199,6 +208,26 @@ func shortCluster(w string, ch byte) bool {
 		}
 	}
 	return false
+}
+
+// checkAttached checks the values a short-option word can carry: for
+// -abcVALUE any of bcVALUE, cVALUE, VALUE may be the value of the letter
+// before it, so each is checked as a path and as a secret file (the path
+// check first, so the 2.x refusal of -XPATH keeps its details). The
+// per-command tables are not needed to find the value, and a command they
+// do not list is covered as well.
+func (lc *lineChecker) checkAttached(w, cwd string) error {
+	for k := 2; k < len(w); k++ {
+		v := w[k:]
+		if err := lc.checkPath(v, cwd, false); err != nil {
+			return err
+		}
+		if lc.guard.IsSecretFile(v) {
+			return refuse("secret_file_blocked", v, "FATAL",
+				"Secret files cannot be read through llm_exec")
+		}
+	}
+	return nil
 }
 
 // checkArgs is __llm_exec_check_args: the per-command writing-option rules.

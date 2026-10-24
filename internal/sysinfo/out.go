@@ -11,9 +11,10 @@ import (
 // out is the dual output of 2.x (__sysinfo_section, _kv, _item, _sub,
 // _raw): verbose through the ui primitives, or compact (=== T ===, K=V,
 // --- t). lazy is the state directory of sysinfo: a sub-header waits for
-// the first line under it, whatever block that line comes from (SYS-17),
-// and a verbose section that printed nothing says so. Without it every
-// header prints at once.
+// the first line of its own block, and a block that printed nothing drops
+// it (endsub), so a later line never inherits it (SYS-17); a verbose
+// section that printed nothing says so. Without it every header prints at
+// once.
 type out struct {
 	w    io.Writer
 	s    ui.Style
@@ -100,6 +101,11 @@ func (o *out) subhead(title string) {
 	}
 	o.subPrint(title)
 }
+
+// endsub ends the block of the last sub-header: a header still waiting
+// for its first line is dropped, and the lines that follow belong to the
+// section.
+func (o *out) endsub() { o.sub = "" }
 
 func (o *out) subPrint(title string) {
 	if o.llm {

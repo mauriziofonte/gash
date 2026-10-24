@@ -17,6 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
+	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 // Module is the system handler set with its seams: tests replace the
@@ -36,6 +37,8 @@ type Module struct {
 	client *http.Client
 	// ipURL is the address ip_public asks.
 	ipURL string
+	// ipTimeout bounds ip_public's request.
+	ipTimeout time.Duration
 	// open opens the hand-off descriptor of a stub override.
 	open handoff.Opener
 	// readable is [[ -r PATH ]].
@@ -45,16 +48,17 @@ type Module struct {
 // New returns the module wired to the real system.
 func New() *Module {
 	return &Module{
-		run:      runner.Exec{},
-		sys:      platform.Real(),
-		kill:     func(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) },
-		sleep:    time.Sleep,
-		self:     os.Getpid(),
-		loc:      time.Local,
-		client:   http.DefaultClient,
-		ipURL:    "https://ipinfo.io/ip",
-		open:     handoff.OpenFD,
-		readable: readableOS,
+		run:       runner.Exec{},
+		sys:       platform.Real(),
+		kill:      func(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) },
+		sleep:     time.Sleep,
+		self:      os.Getpid(),
+		loc:       time.Local,
+		client:    http.DefaultClient,
+		ipURL:     "https://ipinfo.io/ip",
+		ipTimeout: ipTimeout,
+		open:      handoff.OpenFD,
+		readable:  readableOS,
 	}
 }
 
@@ -86,6 +90,46 @@ func ctx(c *invoke.Call) context.Context {
 		return c.Ctx
 	}
 	return context.Background()
+}
+
+// unattended reports a run where sudo cannot ask for a password:
+// headless, or no controlling terminal.
+func unattended(c *invoke.Call) bool {
+	if c.Term.Headless() {
+		return true
+	}
+	tty, err := c.Term.OpenTTY()
+	if err != nil {
+		return true
+	}
+	_ = tty.Close()
+	return false
+}
+
+// sudoReady is the check before an unattended sudo (SYS-25): `sudo -n
+// true` must pass, else the call is refused with one clear error rather
+// than a password prompt nobody sees. On a terminal it is always ready;
+// a sudo that does not start is left to the real call's message.
+func (m *Module) sudoReady(c *invoke.Call, p ui.Printer) bool {
+	if !unattended(c) {
+		return true
+	}
+	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "sudo", Args: []string{"-n", "true"},
+		Options: runner.Options{Env: c.Env.Child(), Stdout: io.Discard, Stderr: io.Discard}})
+	if _, ok := err.(*runner.StartError); ok || (err == nil && res.ExitCode == 0) {
+		return true
+	}
+	p.Error("sudo needs a password: run interactively or configure NOPASSWD.")
+	return false
+}
+
+// sudoArgv is the argv of `sudo ARGS`, `sudo -n ARGS` in an unattended
+// run.
+func sudoArgv(c *invoke.Call, args ...string) []string {
+	if unattended(c) {
+		return append([]string{"-n"}, args...)
+	}
+	return args
 }
 
 // found is `command -v NAME` for a program on the caller's PATH.

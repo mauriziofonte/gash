@@ -98,6 +98,9 @@ type env struct {
 	paths state.Paths
 	os    platform.OS
 	store state.Store
+	// reissue names the sites whose aliases this command changed: their
+	// certificate is made again for the new names (HTE-47).
+	reissue []string
 }
 
 func (e *Engine) resolve() (*env, error) {
@@ -275,8 +278,10 @@ func (e *Engine) prepare(v *env, in render.Input) error {
 }
 
 // ensureCerts gives every enabled HTTPS managed site a pair that covers
-// its names: a missing pair, or one that does not cover a new alias, is
-// issued (HTE-47); a pair whose key does not match is an error.
+// its names: a missing pair, one that does not cover a name, or the pair
+// of a site whose aliases changed (so that the SAN lists exactly the
+// names served) is issued (HTE-47); a pair whose key does not match is an
+// error.
 func (e *Engine) ensureCerts(ctx context.Context, v *env, sites []state.Site) ([]string, error) {
 	cm := e.certs(v)
 	var notes []string
@@ -291,7 +296,7 @@ func (e *Engine) ensureCerts(ctx context.Context, v *env, sites []state.Site) ([
 				return notes, err
 			}
 			notes = append(notes, "issued a certificate for "+s.Domain)
-		case len(info.Uncovered(s.Names())) > 0:
+		case len(info.Uncovered(s.Names())) > 0, slices.Contains(v.reissue, s.Domain):
 			if err := cm.Issue(ctx, s); err != nil {
 				return notes, err
 			}

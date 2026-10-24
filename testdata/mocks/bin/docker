@@ -75,6 +75,11 @@ if [[ "${1:-}" == "compose" ]]; then
 	esac
 fi
 
+# docker image inspect is docker inspect for images only.
+if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+	shift
+fi
+
 # Handle regular docker commands
 case "${1:-}" in
 ps)
@@ -102,6 +107,7 @@ inspect)
 		shift
 		format="$1"
 		shift
+		[[ "${1:-}" == "--" ]] && shift
 		image="$1"
 
 		# Return mock digest based on image

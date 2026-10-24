@@ -13,6 +13,9 @@ import (
 	"context"
 	"io"
 	"os"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/help"
@@ -22,8 +25,13 @@ import (
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
-// Sections are the words sysinfo takes, in the order of its help.
+// Sections are the words sysinfo takes, in the order of its help: the
+// one list of the parser, the error lines and the completion (SYS-26).
 var Sections = []string{"overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all"}
+
+// needsSudo are the sections that read anything as root; sysinfo asks
+// for sudo only for those, and for all (SYS-15).
+var needsSudo = map[string]bool{"identity": true, "storage": true, "services": true, "auth": true, "security": true, "system": true, "all": true}
 
 // Module is the sysinfo handler with its seams: the runner, the sysroot,
 // the user id and the period of the sudo keep-alive (0: none).
@@ -45,34 +53,47 @@ func Register(t *invoke.Table) { New().Register(t) }
 // Register binds the function of m to t.
 func (m *Module) Register(t *invoke.Table) { t.Handle("sysinfo", m.sysinfo) }
 
-// sysinfo is sysinfo [section] [--llm] [--no-color].
+// sysinfo is sysinfo [section] [--llm] [--no-color]: one section at
+// most, -h/--help anywhere (SYS-20).
 func (m *Module) sysinfo(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
-		return 0
-	}
-	section, llm, noColor := "all", false, false
 	for _, a := range c.Args {
-		switch a {
-		case "--llm":
+		if (a == "-h" || a == "--help") && help.NeedsOf(c, "--help") {
+			return 0
+		}
+	}
+	section, llm, noColor := "", false, false
+	for _, a := range c.Args {
+		switch {
+		case a == "--llm":
 			llm = true
-		case "--no-color":
+		case a == "--no-color":
 			noColor = true
-		case "overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all":
-			// The last one wins (SYS-20).
-			section = a
-		default:
+		case !slices.Contains(Sections, a):
 			p := ui.NewPrinter(c.Stderr, c.Term, false)
 			p.Error("Unknown argument: " + a)
-			p.Info("Sections: overview identity storage services auth network security webstack mail infra system all")
+			p.Info("Sections: " + strings.Join(Sections, " "))
 			p.Info("Flags: --llm, --no-color")
 			return 1
+		case section != "":
+			p := ui.NewPrinter(c.Stderr, c.Term, false)
+			p.Error("Only one section allowed: " + a)
+			p.Info("Sections: " + strings.Join(Sections, " "))
+			return 1
+		default:
+			section = a
 		}
+	}
+	if section == "" {
+		section = "all"
 	}
 	// --llm implies --no-color.
 	if llm {
 		noColor = true
 	}
-	s := m.Begin(c, noColor, !llm)
+	s := m.session(c, noColor)
+	if needsSudo[section] {
+		s = m.Begin(c, noColor, !llm)
+	}
 	defer s.Release()
 	// The lazy headers keep their state in memory: no state directory.
 	o := s.output(c.Stdout, llm, true)
@@ -105,17 +126,11 @@ type Session struct {
 // Begin is __sysinfo_ensure_sudo for one run of c: root needs nothing;
 // cached credentials (`sudo -n true`) are kept alive; otherwise, on a
 // terminal outside headless mode, `sudo -v` asks once, with the Info and
-// Warning lines when verbose. Every run asks, whatever its sections use
-// (SYS-15). noColor is the --no-color flag of the run.
+// Warning lines when verbose. sysinfo calls it only for the sections that
+// read as root (SYS-15). noColor is the --no-color flag of the run.
 func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
-	ctx := c.Ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	s := &Session{m: m, c: c, ctx: ctx, env: c.Env.Child(), style: ui.StyleOf(c.Term, noColor)}
-	s.f = files{sys: m.sys, u8: s.style.UTF8}
-	if m.uid() == 0 {
-		s.sudo = true
+	s := m.session(c, noColor)
+	if s.sudo {
 		return s
 	}
 	if s.status("sudo", "-n", "true") != 0 {
@@ -126,7 +141,7 @@ func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
 		if verbose {
 			p.Info("Elevated privileges needed for full system enumeration.")
 		}
-		res, err := m.run.Run(ctx, runner.Cmd{Path: "sudo", Args: []string{"-v"},
+		res, err := m.run.Run(s.ctx, runner.Cmd{Path: "sudo", Args: []string{"-v"},
 			Options: runner.Options{Env: s.env, Stdin: c.Stdin, Stdout: c.Stdout, Stderr: io.Discard}})
 		if err != nil || res.ExitCode != 0 {
 			if verbose {
@@ -137,6 +152,19 @@ func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
 	}
 	s.sudo = true
 	s.keepAlive()
+	return s
+}
+
+// session is a Session that asks for nothing: root reads as root, any
+// other user reads as itself.
+func (m *Module) session(c *invoke.Call, noColor bool) *Session {
+	ctx := c.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s := &Session{m: m, c: c, ctx: ctx, env: c.Env.Child(), style: ui.StyleOf(c.Term, noColor)}
+	s.f = files{sys: m.sys, u8: s.style.UTF8}
+	s.sudo = m.uid() == 0
 	return s
 }
 
@@ -283,6 +311,9 @@ func (s *Session) sudoFind(root string, q query) []string {
 		return s.f.find(root, q)
 	}
 	args := []string{"find", s.m.sys.Path(root)}
+	if q.maxDepth > 0 {
+		args = append(args, "-maxdepth", strconv.Itoa(q.maxDepth))
+	}
 	if q.typ != 0 {
 		args = append(args, "-type", string(q.typ))
 	}
@@ -308,23 +339,6 @@ func (s *Session) sudoLs(dir string) []string {
 	}
 	out, _ := s.tool("sudo", "ls", s.m.sys.Path(dir)+"/")
 	return sorted(lines(out))
-}
-
-// sudoLsPaths is `__sysinfo_sudo ls WORD...` for words the user expanded.
-func (s *Session) sudoLsPaths(words ...string) []string {
-	if !s.elevated() {
-		return s.f.lsPaths(words...)
-	}
-	args := []string{"ls"}
-	for _, w := range words {
-		args = append(args, s.m.sys.Path(w))
-	}
-	out, _ := s.tool("sudo", args...)
-	var ps []string
-	for _, l := range lines(out) {
-		ps = append(ps, s.sysPath(l))
-	}
-	return sorted(ps)
 }
 
 // sysPath maps a host path a root-side tool printed back to its system

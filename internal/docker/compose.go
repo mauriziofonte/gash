@@ -11,7 +11,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/name"
+
+	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // composeCmd is __gash_compose_cmd: ["docker" "compose"] when `docker
@@ -40,31 +44,43 @@ func (x *call) requireCompose() bool {
 	return false
 }
 
-// resolveDir is `realpath -m "$path" 2>/dev/null || path="$PWD"`: the
-// GNU realpath -m form of the argument (LEDGER DOCK-02), the caller's
-// $PWD for the one argument it refuses, "" (DOCK-01, kept). GNU -m keeps
-// a looping symlink as a plain name where the walk refuses it, so a path
-// through a loop takes its lexical form and never the caller's $PWD.
-func (x *call) resolveDir(p string) string {
+// resolveDir is resolveComposeDir RAW: the GNU realpath -m form of the
+// argument (LEDGER DOCK-02). An empty argument, or one that cannot be
+// resolved, is refused (DOCK-01): 2.x fell back to the current directory.
+// GNU -m keeps a looping symlink as a plain name where the walk refuses
+// it, so a path through a loop takes its lexical form.
+func (x *call) resolveDir(p string) (string, bool) {
 	if p == "" {
-		return x.pwd()
+		return "", false
 	}
 	wd, _ := os.Getwd()
 	g := pathguard.NewGuard(pathguard.OSFS{}, wd, x.Env.Get("HOME"), "")
 	if r, err := g.Realpath(p, false); err == nil {
-		return r
+		return r, true
 	}
 	if r, err := g.Realpath(p, true); err == nil {
-		return r
+		return r, true
 	}
-	return x.pwd()
+	return "", false
 }
 
-// composeNames are the file names 2.x looks for, in its order (LEDGER
-// DOCK-29, kept).
-var composeNames = []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}
+// refuseDir reports a PATH argument resolveDir refused: the envelope with
+// --json, the error line otherwise.
+func (x *call) refuseDir(raw string, jsonOut bool) int {
+	if jsonOut {
+		return x.Fail(contract.New("path_not_found", raw, "Pass the directory that holds the compose file (omit it for the current directory)"))
+	}
+	x.p.Error("Cannot resolve path: '" + raw + "'")
+	return 1
+}
+
+// composeNames are the file names Compose discovers, in its order
+// (compose-go DefaultFileNames, LEDGER DOCK-29).
+var composeNames = []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"}
 
 // composeFile is the first regular file (after symlinks) DIR/NAME, "".
+// It names the project in the headings and the JSON; Compose itself
+// discovers the files of a project (DOCK-04).
 func composeFile(dir string) string {
 	for _, n := range composeNames {
 		f := dir + "/" + n
@@ -73,6 +89,22 @@ func composeFile(dir string) string {
 		}
 	}
 	return ""
+}
+
+// composeArgv is the compose command of a project in DIR, no -f: Compose
+// applies its own discovery there (compose.yaml precedence, override
+// files, COMPOSE_FILE from the environment or DIR/.env), and the call
+// runs with DIR as its working directory (LEDGER DOCK-04).
+func (x *call) composeArgv(dir string, args ...string) []string {
+	return append(append(x.composeCmd(), "--project-directory", dir), args...)
+}
+
+// runCompose runs a compose argv in dir.
+func (x *call) runCompose(dir string, stdout, stderr io.Writer, argv []string) runner.Result {
+	res, _ := x.m.Run.Run(x.ctx(), runner.Cmd{Path: argv[0], Args: argv[1:], Options: runner.Options{
+		Env: x.Env.Child(), Dir: dir, Stdin: x.Stdin, Stdout: stdout, Stderr: stderr,
+	}})
+	return res
 }
 
 // dirname is GNU dirname: the string without its last component and the
@@ -107,89 +139,110 @@ func basename(s string) string {
 	return t[strings.LastIndexByte(t, '/')+1:]
 }
 
-// readFields is `IFS='|' read -r V1 ... Vn <<<"$line"`: one field per
-// variable, the last one taking the rest of the line, which loses a
-// single trailing '|' when it holds no other one.
-func readFields(line string, n int) []string {
-	out := make([]string, n)
-	for i := 0; i < n-1; i++ {
-		j := strings.IndexByte(line, '|')
-		if j < 0 {
-			out[i] = line
-			return out
-		}
-		out[i], line = line[:j], line[j+1:]
-	}
-	if strings.HasSuffix(line, "|") && !strings.Contains(line[:len(line)-1], "|") {
-		line = line[:len(line)-1]
-	}
-	out[n-1] = line
-	return out
-}
-
 // hereLines are the lines `while read ...; done <<<"$VAR"` reads: one
 // for an empty value, as the here-string adds a newline.
 func hereLines(v string) []string { return strings.Split(v, "\n") }
 
-// service is one "name|image" line of __gash_parse_compose_services.
+// service is one service of a compose file with its image, kept whole
+// (LEDGER DOCK-08).
 type service struct{ name, image string }
 
-// parseServices is $(__gash_parse_compose_services FILE): "name|image"
-// lines. With Compose v2 on the PATH they come from `docker compose -f
-// FILE --project-directory DIR config --format json`, parsed natively
-// (LEDGER DOCK-26: 2.x needed jq for this); without it, or when config
-// fails, from the YAML-subset reader ported rule for rule.
-func (x *call) parseServices(file string) string {
+// parsed is what parseServices read: the services with an image, whether
+// they came from `docker compose config` (already interpolated), and the
+// first service name that starts with '-' (refused, LEDGER DOCK-31).
+type parsed struct {
+	services   []service
+	fromConfig bool
+	badName    string
+}
+
+// parseServices reads the services of FILE: with Compose v2 on the PATH
+// from `docker compose --project-directory DIR config --format json`,
+// parsed natively (LEDGER DOCK-26: 2.x needed jq for this), in DIR; a
+// project (check, upgrade) gets no -f, so the override files and
+// COMPOSE_FILE apply (DOCK-04), a scanned file keeps -f FILE. Without v2,
+// or when config fails, the YAML-subset reader. Rows without a name are
+// skipped (DOCK-05).
+func (x *call) parseServices(file string, project bool) parsed {
 	if st, err := os.Stat(file); err != nil || !st.Mode().IsRegular() {
-		return ""
+		return parsed{}
 	}
+	var out parsed
 	if cmd := x.composeCmd(); len(cmd) == 2 {
-		res := x.run(nil, io.Discard, "docker", "compose", "-f", file, "--project-directory", dirname(file),
-			"config", "--format", "json")
+		dir := dirname(file)
+		argv := []string{"docker", "compose", "--project-directory", dir, "config", "--format", "json"}
+		if !project {
+			argv = []string{"docker", "compose", "-f", file, "--project-directory", dir, "config", "--format", "json"}
+		}
+		res := x.runCompose(dir, nil, io.Discard, argv)
 		if res.ExitCode == 0 {
-			if out, ok := configServices(res.Stdout); ok {
-				return strings.TrimRight(strings.ReplaceAll(out, "\x00", ""), "\n")
+			if svcs, ok := configServices(res.Stdout); ok {
+				out = parsed{services: svcs, fromConfig: true}
 			}
 		}
 	}
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return ""
+	if !out.fromConfig {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return parsed{}
+		}
+		out.services = lineParser(data)
 	}
-	return strings.TrimRight(lineParser(data), "\n")
+	kept := out.services[:0]
+	for _, s := range out.services {
+		if s.name == "" {
+			continue
+		}
+		if strings.HasPrefix(s.name, "-") && out.badName == "" {
+			out.badName = s.name
+		}
+		kept = append(kept, s)
+	}
+	out.services = kept
+	return out
+}
+
+// refuseBadName is the refusal of a service name that starts with '-'.
+func (x *call) refuseBadName(name, file string, jsonOut bool) int {
+	if jsonOut {
+		return x.Fail(contract.New("invalid_service_name", name, "Rename the service in "+file+": a name cannot start with '-'"))
+	}
+	x.p.Error("Invalid service name '" + name + "' in " + file)
+	return 1
 }
 
 // configServices is `jq -r '.services // {} | to_entries[] |
 // select(.value.image != null) | "\(.key)|\(.value.image)"'` on the
-// config output: one line per service with an image, in the order of the
-// JSON. ok is false where jq fails (not JSON, services or a service not
-// an object), which sends 2.x to the YAML-subset reader.
-func configServices(data []byte) (string, bool) {
+// config output: one service per entry with an image, in the order of
+// the JSON, NUL bytes dropped. ok is false where jq fails (not JSON,
+// services or a service not an object), which sends 2.x to the
+// YAML-subset reader.
+func configServices(data []byte) ([]service, bool) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
-	var b strings.Builder
+	var out []service
 	for {
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
-			return b.String(), true
+			return out, true
 		}
 		if err != nil {
-			return "", false
+			return nil, false
 		}
 		if tok == nil {
 			continue // null: .services of null is null
 		}
 		if d, ok := tok.(json.Delim); !ok || d != '{' {
-			return "", false
+			return nil, false
 		}
-		if !topServices(dec, &b) {
-			return "", false
+		if !topServices(dec, &out) {
+			return nil, false
 		}
 	}
 }
 
 // topServices reads the members of the top object after its '{'.
-func topServices(dec *json.Decoder, b *strings.Builder) bool {
+func topServices(dec *json.Decoder, out *[]service) bool {
 	var services json.RawMessage
 	found := false
 	for dec.More() {
@@ -220,6 +273,7 @@ func topServices(dec *json.Decoder, b *strings.Builder) bool {
 	if d, ok := t.(json.Delim); !ok || d != '{' {
 		return false
 	}
+	noNUL := strings.NewReplacer("\x00", "")
 	for sd.More() {
 		k, err := sd.Token()
 		if err != nil {
@@ -241,7 +295,7 @@ func topServices(dec *json.Decoder, b *strings.Builder) bool {
 		if img == nil {
 			continue
 		}
-		b.WriteString(k.(string) + "|" + jqText(img) + "\n")
+		*out = append(*out, service{noNUL.Replace(k.(string)), noNUL.Replace(jqText(img))})
 	}
 	return true
 }
@@ -264,14 +318,14 @@ var (
 
 // lineParser is the YAML-subset reader of 2.x (an awk program): block
 // services at any indentation, `image:` at the first child indentation,
-// comments, blanks and quotes trimmed (LEDGER DOCK-28, kept).
-func lineParser(data []byte) string {
+// comments, blanks and quotes trimmed.
+func lineParser(data []byte) []service {
 	text := string(data)
 	recs := strings.Split(text, "\n")
 	if strings.HasSuffix(text, "\n") {
 		recs = recs[:len(recs)-1]
 	}
-	var b strings.Builder
+	var out []service
 	inServices := false
 	svcInd, childInd := -1, -1
 	current := ""
@@ -306,138 +360,87 @@ func lineParser(data []byte) string {
 		}
 		if ind == childInd && reImage.MatchString(rec) {
 			if img := unquote(reImage.ReplaceAllString(rec, "")); img != "" {
-				b.WriteString(current + "|" + img + "\n")
+				out = append(out, service{strings.ReplaceAll(current, "\x00", ""), strings.ReplaceAll(img, "\x00", "")})
 			}
 		}
 	}
-	return b.String()
+	return out
 }
 
-// unquote is the awk unquote(): leading blanks, a " #..." comment and
-// trailing blanks or CR go, then one pair of surrounding quotes.
+// unquote is the awk unquote() with quotes read first (LEDGER DOCK-28): a
+// value that starts with a quote ends at the matching quote, whatever
+// follows; an unquoted value loses a " #..." comment and its trailing
+// blanks or CR.
 func unquote(s string) string {
 	s = strings.TrimLeft(s, " \t")
+	if s != "" && (s[0] == '"' || s[0] == '\'') {
+		if i := strings.IndexByte(s[1:], s[0]); i >= 0 {
+			return s[1 : 1+i]
+		}
+	}
 	if loc := reComment.FindStringIndex(s); loc != nil {
 		s = s[:loc[0]]
 	}
-	s = strings.TrimRight(s, " \t\r")
-	if len(s) >= 2 && (s[0] == '"' && s[len(s)-1] == '"' || s[0] == '\'' && s[len(s)-1] == '\'') {
-		s = s[1 : len(s)-1]
-	}
-	return s
+	return strings.TrimRight(s, " \t\r")
 }
 
-// envFile is the KEY=VALUE map of __gash_resolve_env_vars: lines that
-// are not comments, one leading and one trailing quote of each kind
-// stripped, the last definition winning (LEDGER DOCK-13, kept).
-func envFile(path string) map[string]string {
-	vars := map[string]string{}
-	if st, err := os.Stat(path); err != nil || !st.Mode().IsRegular() {
-		return vars
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return vars
-	}
-	text := strings.ReplaceAll(string(data), "\x00", "")
-	recs := strings.Split(text, "\n")
-	if strings.HasSuffix(text, "\n") {
-		recs = recs[:len(recs)-1]
-	}
-	for _, line := range recs {
-		if line == "" || line[0] == '#' {
-			continue
-		}
-		m := reEnvLine.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		val := strings.TrimPrefix(m[2], `"`)
-		val = strings.TrimSuffix(val, `"`)
-		val = strings.TrimPrefix(val, `'`)
-		val = strings.TrimSuffix(val, `'`)
-		vars[m[1]] = val
-	}
-	return vars
-}
-
-var (
-	reEnvLine = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
-	reVarRef  = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)((:?-)([^}]*))?\}`)
-	reEchoOpt = regexp.MustCompile(`^-[neE]+$`)
-)
-
-// resolveEnvVars is $(__gash_resolve_env_vars VALUE ENV_FILE): every
-// ${VAR}, ${VAR:-default} and ${VAR-default} (both as :-) replaced by
-// the non-empty value from ENV_FILE, else from the caller's exported
-// environment, else the default, at most 50 rounds (then the warning).
-// Replacement is literal (LEDGER DOCK-12); the rules are 2.x's (DOCK-13).
+// resolveEnvVars interpolates an image the YAML-subset reader returned
+// with Compose's rules (interp.go, LEDGER DOCK-13): the caller's exported
+// environment first, then ENV_FILE. A malformed or failing template
+// leaves the value as it is, with a warning.
 func (x *call) resolveEnvVars(value, envPath string) string {
-	vars := envFile(envPath)
-	result := value
-	for i := 0; ; i++ {
-		m := reVarRef.FindStringSubmatch(result)
-		if m == nil {
-			break
+	file := dotenv(envPath, x.exported.Lookup)
+	get := func(n string) (string, bool) {
+		if v, ok := x.exported.Lookup(n); ok {
+			return v, true
 		}
-		if i >= 50 {
-			// Printed from inside a command substitution: stdout is not
-			// the terminal there, so the plain form.
-			plain := x.p
-			plain.Color = false
-			plain.Warning("Unresolvable variable reference (circular?) in: " + value)
-			break
-		}
-		resolved := vars[m[1]]
-		if resolved == "" {
-			resolved = x.exported.Get(m[1])
-		}
-		if resolved == "" {
-			resolved = m[4]
-		}
-		result = strings.ReplaceAll(result, m[0], resolved)
+		v, ok := file[n]
+		return v, ok
 	}
-	// echo "$result", in a command substitution.
-	if reEchoOpt.MatchString(result) {
-		return ""
+	out, err := interpolate(value, get)
+	if err != nil {
+		x.p.Warning("Cannot interpolate " + value + ": " + err.Error())
+		return value
 	}
-	return strings.TrimRight(result, "\n")
+	return out
 }
 
-// image is the registry|name|tag of __gash_normalize_image, as `IFS='|'
-// read -r registry name tag` splits it.
-type image struct{ registry, name, tag string }
+// image is a parsed image reference: the registry ("docker.io" for
+// Docker Hub, whatever host spelling the reference used), the host and
+// scheme to query, the repository, and the tag or the digest it is
+// pinned to. bad is a reference Docker cannot parse.
+type image struct {
+	registry, host, scheme, name, tag, digest string
+	bad                                       bool
+}
 
-// normalizeImage is __gash_normalize_image ported rule for rule: a
-// digest after the last '@', a tag after the last ':' of the last path
-// segment (none when an '@' is left, so image:tag@sha256:... keeps its
-// tag, LEDGER DOCK-06, kept), a first segment with '.' or ':' or
-// "localhost" as the registry, library/ for single names (DOCK-07, kept).
+// normalizeImage parses ref with go-containerregistry's name package
+// (LEDGER DOCK-06, DOCK-07): docker.io, index.docker.io and
+// registry-1.docker.io are Docker Hub, a single-segment name gets
+// library/, a digest pin is kept (an image:tag@sha256:... reference is
+// pinned to its digest), and localhost, loopback and private registries
+// are asked over plain HTTP as Docker does.
 func normalizeImage(ref string) image {
-	registry, name, tag := "docker.io", "", "latest"
-	img := ref
-	if strings.Contains(img, "@sha256:") {
-		i := strings.LastIndexByte(img, '@')
-		tag = "@" + img[i+1:]
-		img = img[:i]
-	}
-	lastSeg := img[strings.LastIndexByte(img, '/')+1:]
-	if strings.Contains(lastSeg, ":") && !strings.Contains(img, "@") {
-		i := strings.LastIndexByte(img, ':')
-		tag, img = img[i+1:], img[:i]
-	}
-	if strings.Contains(img, "/") {
-		first := img[:strings.IndexByte(img, '/')]
-		if strings.Contains(first, ".") || strings.Contains(first, ":") || first == "localhost" {
-			registry, name = first, img[strings.IndexByte(img, '/')+1:]
-		} else {
-			name = img
+	r, err := name.ParseReference(ref)
+	if err != nil {
+		reg := "docker.io"
+		if first, _, ok := strings.Cut(ref, "/"); ok && (strings.ContainsAny(first, ".:") || first == "localhost") {
+			reg = first
 		}
-	} else {
-		name = "library/" + img
+		return image{registry: reg, name: ref, bad: true}
 	}
-	f := readFields(registry+"|"+name+"|"+tag, 3)
-	return image{f[0], f[1], f[2]}
+	ctx := r.Context()
+	img := image{registry: ctx.RegistryStr(), host: ctx.RegistryStr(), scheme: ctx.Scheme(), name: ctx.RepositoryStr()}
+	if img.registry == name.DefaultRegistry || img.registry == "registry-1.docker.io" || img.registry == "docker.io" {
+		img.registry, img.host = "docker.io", "registry-1.docker.io"
+	}
+	switch v := r.(type) {
+	case name.Digest:
+		img.digest = v.DigestStr()
+	case name.Tag:
+		img.tag = v.TagStr()
+	}
+	return img
 }
 
 var (
@@ -472,9 +475,10 @@ func isUpgradeable(tag string) bool {
 var reDigest = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
 // localDigest is $(__gash_get_local_digest IMAGE): the RepoDigests entry
-// of the image's repository from `docker inspect` (no --type image,
-// LEDGER DOCK-16, kept; the reference in option position, DOCK-31,
-// kept), else the first one, when it is a sha256 digest.
+// of the image's repository from `docker image inspect` (images only, a
+// container of the same name is never inspected, LEDGER DOCK-16; the
+// reference after --, DOCK-31), else the first one, when it is a sha256
+// digest.
 func (x *call) localDigest(ref string) string {
 	repo := ref
 	if i := strings.LastIndexByte(repo, '@'); i >= 0 {
@@ -483,7 +487,7 @@ func (x *call) localDigest(ref string) string {
 	if strings.Contains(repo[strings.LastIndexByte(repo, '/')+1:], ":") {
 		repo = repo[:strings.LastIndexByte(repo, ':')]
 	}
-	digests, st := x.subst("docker", "inspect", "--format", `{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}`, ref)
+	digests, st := x.subst("docker", "image", "inspect", "--format", `{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}`, "--", ref)
 	if st != 0 {
 		digests = ""
 	}

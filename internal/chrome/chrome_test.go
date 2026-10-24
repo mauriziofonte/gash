@@ -103,8 +103,10 @@ func cftRoutes() map[string]route {
 }
 
 // Stubs on PATH: uname, unzip and ldd answer from MOCK_* variables of the
-// call's environment; sudo logs its argv and runs it (dropping the GNU-only
-// --no-preserve=ownership where cp is BSD, as on a macOS runner).
+// call's environment; sudo logs its argv and runs it (dropping -n and
+// failing it under MOCK_SUDO_PASSWORD); cp runs /bin/cp, dropping the
+// GNU-only --no-preserve=ownership (a no-op without -p) where cp is BSD, as
+// on a macOS runner, whether or not sudo runs it.
 const (
 	unameStub = `#!/bin/sh
 case "$1" in -m) echo "${MOCK_ARCH:-x86_64}" ;; *) echo "${MOCK_SYS:-Linux}" ;; esac
@@ -123,13 +125,20 @@ exit 0
 `
 	sudoStub = `#!/bin/sh
 printf 'sudo %s\n' "$*" >>"$SUDO_LOG"
-if [ "$1" = cp ] && ! cp --version >/dev/null 2>&1; then
+if [ "$1" = -n ]; then
+	[ -n "$MOCK_SUDO_PASSWORD" ] && { echo "sudo: a password is required" >&2; exit 1; }
+	shift
+fi
+exec "$@"
+`
+	cpStub = `#!/bin/sh
+if ! /bin/cp --version >/dev/null 2>&1; then
 	for a do
 		shift
 		[ "$a" = --no-preserve=ownership ] || set -- "$@" "$a"
 	done
 fi
-exec "$@"
+exec /bin/cp "$@"
 `
 )
 
@@ -150,7 +159,7 @@ func newFixture(t *testing.T) *fixture {
 	for _, d := range []string{fx.bin, filepath.Join(dir, "opt"), filepath.Join(dir, "tmp")} {
 		require.NoError(t, os.MkdirAll(d, 0o755))
 	}
-	for name, body := range map[string]string{"uname": unameStub, "unzip": unzipStub, "ldd": lddStub, "sudo": sudoStub} {
+	for name, body := range map[string]string{"uname": unameStub, "unzip": unzipStub, "ldd": lddStub, "sudo": sudoStub, "cp": cpStub} {
 		require.NoError(t, os.WriteFile(filepath.Join(fx.bin, name), []byte(body), 0o755))
 	}
 	fx.env = map[string]string{
@@ -266,7 +275,7 @@ func TestInstall(t *testing.T) {
 	require.Equal(t, 0, rc)
 	installed := "T/opt/chs/141.0.7390.37/chrome-headless-shell-linux64/chrome-headless-shell"
 	require.Equal(t, result{head + "Installed: none\n" + newPlan, tasks + located + fetchedNote +
-		"Info: Verified: Chrome-Headless-Shell 141.0.7390.37\nInfo: Installing into T/opt/chs/141.0.7390.37 (sudo)...\n" +
+		"Info: Verified: Chrome-Headless-Shell 141.0.7390.37\nInfo: Installing into T/opt/chs/141.0.7390.37...\n" +
 		"OK: Installed: Chrome-Headless-Shell 141.0.7390.37 -> " + installed + "\n"}, r)
 	require.Equal(t, []string{target, target + "/chrome-headless-shell-linux64", target + "/" + binRel}, fx.tree(t))
 	dest, err := os.Readlink(fx.link)
@@ -284,11 +293,12 @@ func TestUpgradeInstall(t *testing.T) {
 	require.NoError(t, os.Symlink(fx.version(t, "140.0.7339.16", "140.0.7339.16"), fx.link))
 	r, rc := fx.call(t, nil, "--yes")
 	require.Equal(t, 0, rc)
-	require.Contains(t, r.err, "Info: Installing into T/opt/chs/141.0.7390.37 (sudo)...\nInfo: Removing chrome-headless-shell 139.0.7258.5...\n"+
+	require.Contains(t, r.err, "Info: Installing into T/opt/chs/141.0.7390.37...\nInfo: Removing chrome-headless-shell 139.0.7258.5...\n"+
 		"OK: Installed: Chrome-Headless-Shell 141.0.7390.37 -> T/opt/chs/141.0.7390.37/"+binRel+"\n")
 	require.Equal(t, []string{"140.0.7339.16", "140.0.7339.16/chrome-headless-shell-linux64", "140.0.7339.16/" + binRel,
 		target, target + "/chrome-headless-shell-linux64", target + "/" + binRel}, fx.tree(t))
-	require.Contains(t, fx.sudo(t), "sudo find T/opt/chs/139.0.7258.5 -depth -delete\n")
+	// 3.0: SYS-25 fixed: a ROOT the user can write needs no sudo.
+	require.Empty(t, fx.sudo(t))
 }
 
 func TestMissingLibraries(t *testing.T) {

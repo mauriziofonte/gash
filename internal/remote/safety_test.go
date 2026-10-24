@@ -41,7 +41,10 @@ var pathVectors = []string{
 	"/tmp/a b", "/tmp/\tx", "/tmp/é", "/ETC/shadow", "/etc/SHADOW",
 }
 
-// The tables give what the 2.x tables give, vector by vector.
+// The tables give what the 2.x tables give, vector by vector. 3.0: REM-03
+// and REM-10 fixed: the expandable strings are deny:metacharacters and
+// "/." is deny:/ (TestLedger_REM03, TestLedger_REM10_fix); this 2.x
+// comparison skips without the 2.x sources.
 func TestClassifyMatches2x(t *testing.T) {
 	var script strings.Builder
 	for _, v := range pathVectors {
@@ -112,24 +115,27 @@ func TestResolveTargetSpec(t *testing.T) {
 	require.Contains(t, r.Log, "[root@hnas.example.com]")
 }
 
+// 3.0: REM-02 and REM-08 fixed: targets are strict user@host (no part
+// starting with '-', no ':' outside a bracketed IPv6 literal), so the
+// 2.x regex comparison below no longer applies (it skips without the 2.x
+// sources).
 func TestRawTarget(t *testing.T) {
 	for v, ok := range map[string]bool{
-		"deploy@box.example": true, "u@[::1]": true, "-oProxyCommand=x@h": true, "u@-h": true, "-u@h": true,
-		"u@h:22": true, "u@h@x": false, "@h": false, "u@": false, "uh": false, "u @h": false, "u@h\t": false,
-		"u@h\v": false, "u@h\r": false, "": false, "é@h": true,
+		"deploy@box.example": true, "u@[::1]": true, "-oProxyCommand=x@h": false, "u@-h": false, "-u@h": false,
+		"u@h:22": false, "u@h@x": false, "@h": false, "u@": false, "uh": false, "u @h": false, "u@h\t": false,
+		"u@h\v": false, "u@h\r": false, "": false, "é@h": false,
 	} {
-		require.Equal(t, ok, rawTarget(v), "%q", v)
+		require.Equal(t, ok, validTarget(v), "%q", v)
 	}
-	// The 2.x regex, on the same vectors.
+	// The 2.x regex, on the same vectors: it accepted the option-like and
+	// host:port targets.
 	vs := []string{"deploy@box.example", "-oProxyCommand=x@h", "u@h:22", "u@h@x", "@h", "u@", "u @h", "u@h\v", "é@h"}
 	var script strings.Builder
 	for _, v := range vs {
 		script.WriteString(`[[ ` + shq(v) + ` =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]] && echo y || echo n` + "\n")
 	}
 	got := strings.Fields(bash2x(t, script.String()))
-	for i, v := range vs {
-		require.Equal(t, got[i] == "y", rawTarget(v), "%q", v)
-	}
+	require.Equal(t, []string{"y", "y", "y", "n", "n", "n", "n", "n", "y"}, got)
 }
 
 func TestScriptArgs(t *testing.T) {

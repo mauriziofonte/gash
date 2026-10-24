@@ -3,8 +3,11 @@
 package llm
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // requireJQ skips when jq is not installed.
@@ -39,7 +42,8 @@ func TestProjectMatches2x(t *testing.T) {
 	mustWrite(t, filepath.Join(expr, "package.json"), `{"dependencies":{"express":"4.0.0"}}`+"\n")
 	mustWrite(t, filepath.Join(expr, "yarn.lock"), "# yarn\n")
 
-	// python / django, poetry (pyproject.toml forces poetry per LLM-27)
+	// python / django; 3.0: LLM-27 fixed, a pyproject.toml without
+	// [tool.poetry] is pip (2.x said poetry for any pyproject.toml)
 	py := physTemp(t)
 	mustWrite(t, filepath.Join(py, "requirements.txt"), "flask==3.0.0\n")
 	mustWrite(t, filepath.Join(py, "pyproject.toml"), "[build-system]\nrequires = [\"setuptools\"]\n")
@@ -146,4 +150,95 @@ func TestDepsMatches2x(t *testing.T) {
 			same(t, m, tc.cwd, baseEnv(home, nil), "llm_deps", tc.args...)
 		})
 	}
+}
+
+// TestLedger_LLM05: a JSON manifest that is not one JSON object (broken,
+// an array, empty, two values) is invalid_manifest (RETRY), one JSON line
+// on stderr, exit 1; 2.x printed jq's raw parse error with exit 5, or
+// nothing with exit 0 for an empty file.
+func TestLedger_LLM05(t *testing.T) {
+	requireJQ(t)
+	m := New()
+	for _, body := range []string{`{"dependencies": {`, `["a"]`, "", "  \n", `{"a":1} {"b":2}`, "null", `"x"`} {
+		for _, name := range []string{"package.json", "composer.json"} {
+			d := physTemp(t)
+			mustWrite(t, filepath.Join(d, name), body)
+			r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_deps")
+			require.Equal(t, result{"", `{"error":"invalid_manifest","details":"` + filepath.Join(d, name) +
+				`","action":"RETRY","recoverable":true,"hint":"The manifest is not a JSON object; fix it or use llm_config to read it"}` + "\n", 1}, r, "%s %q", name, body)
+		}
+	}
+}
+
+// TestLedger_LLM14: a go.mod comment line is no dependency, and a
+// dependency map that is not an object counts as empty (2.x: "//" and
+// the array's indices).
+func TestLedger_LLM14(t *testing.T) {
+	requireJQ(t)
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	gomod := physTemp(t)
+	mustWrite(t, filepath.Join(gomod, "go.mod"),
+		"module example.com/x\n\ngo 1.22\n\nrequire (\n\tgithub.com/pkg/errors v0.9.1\n\t// pinned for CVE\n\t//nospace x\n\tgolang.org/x/sys v0.1.0 // indirect\n)\n\nrequire gopkg.in/yaml.v3 v3.0.1\n")
+	require.Equal(t, result{`{"manager":"go","dependencies":["github.com/pkg/errors","golang.org/x/sys","gopkg.in/yaml.v3"]}` + "\n", "", 0},
+		runGo(t, m, gomod, env, "llm_deps"))
+
+	node := physTemp(t)
+	mustWrite(t, filepath.Join(node, "package.json"), `{"dependencies":["react","vue"],"devDependencies":{"jest":"29","eslint":"8","é\u0001":"1"}}`)
+	require.Equal(t, result{`{"manager":"npm","dependencies":[]}` + "\n", "", 0}, runGo(t, m, node, env, "llm_deps"))
+	require.Equal(t, result{`{"manager":"npm","prod":[],"dev":["eslint","jest","é\u0001"]}` + "\n", "", 0}, runGo(t, m, node, env, "llm_deps", "--dev"))
+
+	composer := physTemp(t)
+	mustWrite(t, filepath.Join(composer, "composer.json"), `{"require":{"symfony/console":"^6.0","monolog/monolog":"^3.0","php":">=8"},"require-dev":"x"}`)
+	require.Equal(t, result{`{"manager":"composer","prod":["monolog/monolog","php","symfony/console"],"dev":[]}` + "\n", "", 0},
+		runGo(t, m, composer, env, "llm_deps", "--dev"))
+	none := physTemp(t)
+	mustWrite(t, filepath.Join(none, "package.json"), `{"name":"x"}`)
+	require.Equal(t, result{`{"manager":"npm","dependencies":[]}` + "\n", "", 0}, runGo(t, m, none, env, "llm_deps"))
+}
+
+// TestLedger_LLM27: llm_project reads the manifests: a pyproject.toml without
+// [tool.poetry] is pip, with it poetry; "next" in a description or a script
+// sets no framework, under devDependencies it does; Flask in any case in
+// requirements.txt is flask, a flask- package is not; symfony/ only counts
+// under require or require-dev.
+func TestLedger_LLM27(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	info := func(d string) (v struct{ Type, Framework, Package_manager string }) {
+		t.Helper()
+		r := runGo(t, m, d, env, "llm_project")
+		require.Equal(t, 0, r.RC, r.Stderr)
+		require.NoError(t, json.Unmarshal([]byte(r.Stdout), &v), r.Stdout)
+		return v
+	}
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "pyproject.toml"), "[project]\nname = \"x\"\n# [tool.poetry]\n[tool.setuptools]\n")
+	require.Equal(t, "pip", info(d).Package_manager)
+	mustWrite(t, filepath.Join(d, "pyproject.toml"), "[project]\nname = \"x\"\n[ tool.poetry.dependencies ]\npython = \"^3.11\"\n")
+	require.Equal(t, "poetry", info(d).Package_manager)
+
+	d = physTemp(t)
+	mustWrite(t, filepath.Join(d, "requirements.txt"), "Flask-Login\n# flask\n")
+	require.Equal(t, "", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "requirements.txt"), "Flask-Login\nFlask>=3 ; python_version > \"3\"\n")
+	require.Equal(t, "flask", info(d).Framework)
+
+	d = physTemp(t)
+	mustWrite(t, filepath.Join(d, "package.json"), `{"description":"not \"next\" at all","scripts":{"vue":"x"},"dependencies":{"left-pad":"1"}}`)
+	require.Equal(t, "", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "package.json"), `{"dependencies":{"react":"18"},"devDependencies":{"next":"14"}}`)
+	require.Equal(t, "nextjs", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "package.json"), `{"dependencies":{"express":"4","vue":"3"}}`)
+	require.Equal(t, "vue", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "package.json"), `not json "next"`)
+	v := info(d)
+	require.Equal(t, "javascript", v.Type)
+	require.Equal(t, "", v.Framework)
+
+	d = physTemp(t)
+	mustWrite(t, filepath.Join(d, "composer.json"), `{"description":"like symfony/console","require":{"monolog/monolog":"3"}}`)
+	require.Equal(t, "", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "composer.json"), `{"require-dev":{"symfony/var-dumper":"6"}}`)
+	require.Equal(t, "symfony", info(d).Framework)
 }

@@ -48,12 +48,25 @@ func printer(c *invoke.Call) ui.Printer { return ui.NewPrinter(c.Stderr, c.Term,
 // only the caller's shell has.
 const nvmMissing = "nvm is not loaded in this shell. Source $NVM_DIR/nvm.sh first."
 
-// nvmPrune is nvm_prune_versions run outside the shim: help, or the
-// missing nvm (its first check, before the options, LEDGER DEV-20). The
-// shim runs the function itself, in the caller's shell (LEDGER DEV-16).
+// nvmPruneUsage is the usage line of nvm_prune_versions: -y and --yes
+// are synonyms of --force (LEDGER DEV-20).
+const nvmPruneUsage = "nvm_prune_versions [-y|--yes|--force]"
+
+// nvmPrune is nvm_prune_versions run outside the shim: help, an unknown
+// option (the arguments come before the environment, LEDGER DEV-20), or
+// the missing nvm. The shim runs the function itself, in the caller's
+// shell (LEDGER DEV-16).
 func (m *Module) nvmPrune(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
+	}
+	for _, a := range c.Args {
+		switch a {
+		case "--force", "-f", "-y", "--yes":
+		default:
+			printer(c).Error("Unknown option: " + a + " (usage: " + nvmPruneUsage + ")")
+			return 1
+		}
 	}
 	printer(c).Error(nvmMissing)
 	return 1

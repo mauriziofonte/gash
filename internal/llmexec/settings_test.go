@@ -37,14 +37,51 @@ func TestLedger_EXEC05_2x(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := Settings{ExecAllow: "find"}
-	// -L (symlink-following walk) would normally be option_not_allowed; the
-	// allow-listed command skips that rule.
-	if _, err := Build("find -L p", s, testEnv(cwd), permissiveProbe()); err != nil {
-		t.Errorf("allow-listed find -L p should skip walk rules, got %v", err)
+	// 3.0: EXEC-05 fixed. -L (a symlink-following walk) is option_not_allowed
+	// for an allow-listed find too (2.x skipped the walk rules).
+	if _, err := Build("find -L p", s, testEnv(cwd), permissiveProbe()); errCode(err) != "option_not_allowed" {
+		t.Errorf("allow-listed find -L p must keep the walk rules, got %v", err)
 	}
 	// The forbidden-path check on an argument still applies.
-	if _, err := Build("find -L /proc", s, testEnv(cwd), permissiveProbe()); errCode(err) != "forbidden_path" {
+	if _, err := Build("find -L /proc", s, testEnv(cwd), permissiveProbe()); errCode(err) == "" {
 		t.Errorf("allow-listed find /proc must still be refused, got %v", err)
+	}
+}
+
+// TestLedger_EXEC05: a command in GASH_LLM_EXEC_ALLOW skips the per-command
+// option rules but keeps the walk rules (no symlink-following walk, no
+// walk root at / or above a protected tree) and the secret/path checks.
+func TestLedger_EXEC05(t *testing.T) {
+	cwd := t.TempDir()
+	if err := os.Mkdir(cwd+"/p", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := Settings{ExecAllow: "find grep"}
+	env := testEnv(cwd)
+	for line, want := range map[string]string{
+		// Option rules lifted: -delete and -exec are refused for the
+		// plain allowlist, accepted when the operator names find.
+		"find p -name x -delete": "",
+		"find p -exec true ;":    "",
+		// Walk rules kept.
+		"find -L p":      "option_not_allowed",
+		"find p -follow": "option_not_allowed",
+		"find /":         "forbidden_path",
+		"grep -R x p":    "option_not_allowed",
+		"grep -r x /":    "forbidden_path",
+		// Per-word checks kept.
+		"find /proc":     "forbidden_path",
+		"grep x .env":    "secret_file_blocked",
+		"find p -name x": "",
+	} {
+		_, err := Build(line, s, env, permissiveProbe())
+		if got := errCode(err); got != want {
+			t.Errorf("Build(%q) = %v, want %q", line, err, want)
+		}
+	}
+	// Without the allow-list entry, the option rules apply.
+	if _, err := Build("find p -name x -delete", Settings{}, env, permissiveProbe()); errCode(err) == "" {
+		t.Errorf("find -delete must be refused without GASH_LLM_EXEC_ALLOW")
 	}
 }
 

@@ -10,49 +10,19 @@ import (
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
-const upgradeHelp = `docker_compose_upgrade - Upgrade Docker Compose services
-
-USAGE:
-  docker_compose_upgrade [PATH] [OPTIONS]
-
-OPTIONS:
-  PATH        Directory containing docker-compose.yml (default: current dir)
-  --dry-run   Show what would be done without executing
-  --force     Force upgrade even for pinned versions
-  --yes       Skip the interactive confirmation (REQUIRED in headless mode)
-  --no-color  Disable ANSI colors
-  -h          Show this help
-
-BEHAVIOR:
-  Only upgrades services with mutable tags (latest, main, dev, etc.).
-  Services with pinned versions (e.g., nginx:1.25.3) are skipped.
-  Use --force to override and upgrade all services.
-  In headless mode (GASH_HEADLESS=1) the upgrade refuses to run without
-  an explicit --yes: pulling images and restarting a stack must never
-  happen as a silent side effect of automation.
-
-EXAMPLES:
-  docker_compose_upgrade                  Upgrade in current directory
-  docker_compose_upgrade /path/to/app     Upgrade specific project
-  docker_compose_upgrade --dry-run        Preview changes
-`
-
 // upgrade is docker_compose_upgrade [PATH] [--dry-run] [--force] [--yes]
 // [--no-color]: the plan, then pull, stop, up -d --remove-orphans of the
 // services with mutable tags, docker image prune -f and ps. Every
-// compose call carries -f FILE --project-directory DIR (LEDGER DOCK-04,
-// kept), service names go without "--" (DOCK-31, kept), a file without
-// image services plans one empty service (DOCK-05, kept) and a declined
-// upgrade returns 0 (DOCK-18, kept).
+// compose call carries --project-directory DIR, no -f, and runs in DIR,
+// so Compose applies the override files and COMPOSE_FILE (LEDGER
+// DOCK-04); service names come after "--" (DOCK-31); a file without
+// image services is refused before any compose call (DOCK-05) and a
+// declined upgrade returns 1 (DOCK-18).
 func (m *Module) upgrade(c *invoke.Call) int {
 	if isHelp(c) {
-		_, _ = io.WriteString(c.Stdout, upgradeHelp)
-		return 0
+		return helpPage(c)
 	}
 	x := m.begin(c)
-	if !x.requireDocker() || !x.requireCompose() {
-		return 1
-	}
 	path := "."
 	dryRun, force, assumeYes, noColor := false, false, false, false
 	for _, a := range c.Args {
@@ -80,13 +50,30 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	w, s := c.Stdout, x.s
 	put := func(t string) { _, _ = io.WriteString(w, t) }
 
-	path = x.resolveDir(path)
+	// The argument first: a PATH that cannot be resolved is refused
+	// before any docker call (LEDGER DOCK-01).
+	raw := path
+	path, ok := x.resolveDir(raw)
+	if !ok {
+		return x.refuseDir(raw, false)
+	}
+	if !x.requireDocker() || !x.requireCompose() {
+		return 1
+	}
 	file := composeFile(path)
 	if file == "" {
 		x.p.Error("No docker-compose.yml found in " + path)
 		return 1
 	}
-	dc := append(ifsFields(strings.Join(x.composeCmd(), " ")), "-f", file, "--project-directory", path)
+	parsed := x.parseServices(file, true)
+	if parsed.badName != "" {
+		return x.refuseBadName(parsed.badName, file, false)
+	}
+	if len(parsed.services) == 0 {
+		x.p.Error("No services with images found in " + file)
+		return 1
+	}
+	dc := x.composeArgv(path)
 
 	s.Section(w, "Docker Compose Upgrade")
 	s.KV(w, "--value-color", "accent", "Path:", path)
@@ -104,14 +91,17 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	}
 	var services, rows []string
 	envPath := path + "/.env"
-	for _, line := range hereLines(x.parseServices(file)) {
-		f := readFields(line, 2)
-		resolved := x.resolveEnvVars(f[1], envPath)
-		if force || isUpgradeable(normalizeImage(resolved).tag) {
-			services = append(services, f[0])
-			rows = append(rows, markUp+"\t"+f[0]+"\t("+resolved+")\tsuccess")
+	for _, svc := range parsed.services {
+		resolved := svc.image
+		if !parsed.fromConfig {
+			resolved = x.resolveEnvVars(svc.image, envPath)
+		}
+		img := normalizeImage(resolved)
+		if force || img.digest == "" && !img.bad && isUpgradeable(img.tag) {
+			services = append(services, svc.name)
+			rows = append(rows, markUp+"\t"+svc.name+"\t("+resolved+")\tsuccess")
 		} else {
-			rows = append(rows, markSkip+"\t"+f[0]+"\t("+resolved+") - pinned version\tinfo")
+			rows = append(rows, markSkip+"\t"+svc.name+"\t("+resolved+") - pinned version\tinfo")
 		}
 	}
 	s.Table(w, ui.ReadRows(strings.NewReader(strings.Join(rows, "\n")+"\n")),
@@ -126,9 +116,9 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	dcs, svcs := strings.Join(dc, " "), strings.Join(services, " ")
 	if dryRun {
 		s.Heading(w, "Would run:")
-		put("  " + dcs + " pull " + svcs + "\n")
-		put("  " + dcs + " stop " + svcs + "\n")
-		put("  " + dcs + " up -d --remove-orphans " + svcs + "\n")
+		put("  " + dcs + " pull -- " + svcs + "\n")
+		put("  " + dcs + " stop -- " + svcs + "\n")
+		put("  " + dcs + " up -d --remove-orphans -- " + svcs + "\n")
 		put("  docker image prune -f\n")
 		return 0
 	}
@@ -142,18 +132,18 @@ func (m *Module) upgrade(c *invoke.Call) int {
 		put("\n")
 		s.Heading(w, "This will:")
 		s.List(w, "pull new images for: "+svcs,
-			"stop and recreate those containers",
-			"remove containers of this project no longer in "+file[strings.LastIndexByte(file, '/')+1:]+" (--remove-orphans)",
+			"stop and recreate those containers, with "+basename(file)+" and its override files (docker-compose.override.yml, COMPOSE_FILE) as docker compose reads them",
+			"remove containers of this project no longer in those files (--remove-orphans)",
 			"remove dangling images on this host, from any project (docker image prune -f)")
 		if !s.Confirm(c.Term, c.Stderr, "Proceed with upgrade?") {
 			x.p.Info("Upgrade cancelled.")
-			return 0
+			return 1
 		}
 	}
 
 	compose := func(stdout, stderr io.Writer, args ...string) int {
-		argv := append(append(append([]string{}, dc[1:]...), args...), services...)
-		return x.run(stdout, stderr, dc[0], argv...).ExitCode
+		argv := append(append(append(append([]string{}, dc...), args...), "--"), services...)
+		return x.runCompose(path, stdout, stderr, argv).ExitCode
 	}
 	x.p.Step("1", "4", "Pulling updated images...")
 	if compose(c.Stdout, c.Stderr, "pull") != 0 {
@@ -172,5 +162,5 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	put("\n")
 	s.Mark(w, "ok", "Upgrade Complete")
 	put("\n")
-	return x.run(c.Stdout, c.Stderr, dc[0], append(append([]string{}, dc[1:]...), "ps")...).ExitCode
+	return x.runCompose(path, c.Stdout, c.Stderr, append(append([]string{}, dc...), "ps")).ExitCode
 }

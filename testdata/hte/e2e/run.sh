@@ -34,7 +34,7 @@ if [ "${GASH_HTE_E2E_MULTIPHP:-}" = 1 ]; then
     image=$mp
 fi
 
-export GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0
+export GOTOOLCHAIN=go1.27.3 CGO_ENABLED=0
 (cd "$mod" && go test -c -tags hte_e2e -o "$stage/gash-e2e" ./internal/hte/e2e)
 (cd "$mod" && go build -o "$stage/gash-hosts-helper" ./cmd/gash-hosts-helper)
 cp "$here/setup.sh" "$stage/setup.sh"

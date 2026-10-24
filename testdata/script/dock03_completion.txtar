@@ -1,0 +1,21 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: DOCK-03
+#
+# Completion offers the flags the functions accept: --yes for
+# docker_compose_upgrade (required headless), -y/--yes on the confirmed
+# docker and git functions, -m for git_sync, the remote_* flags.
+
+env GASH_HEADLESS=1
+
+exec bash -c 'source "$GASH_SH"; source "$GASH_STAGE/bash_completion"; c() { COMP_WORDS=("$@"); COMP_CWORD=$(($# - 1)); COMPREPLY=(); __gash_complete; echo "$1 ${COMPREPLY[*]}"; }; c docker_compose_upgrade --y; c docker_prune_all -; c docker_stop_all -; c git_repair -; c git_sync -; c git_add_tag -; c remote_push -; c remote_sync_pull --; c remote_exec --s'
+stdout '^docker_compose_upgrade --yes$'
+stdout '^docker_prune_all -y --yes --dry-run --help$'
+stdout '^docker_stop_all -y --yes --help$'
+stdout '^git_repair -y --yes --dry-run --help$'
+stdout '^git_sync -m --message --no-push --dry-run -y --yes --help$'
+stdout '^git_add_tag -y --yes --dry-run --help$'
+stdout '^remote_push -r --recursive -p --preserve --no-progress --force --help$'
+stdout '^remote_sync_pull --delete --dry-run --no-progress --force --exclude= --help$'
+stdout '^remote_exec --script$'

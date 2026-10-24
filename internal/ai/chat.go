@@ -15,28 +15,27 @@ import (
 )
 
 // aiQuery is ai_query [provider] "query": a non-interactive query. Help is
-// recognized only as the first argument (LEDGER AI-24).
+// the first argument, or the only word after a provider (LEDGER AI-24).
 func (m *Module) aiQuery(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
+	if help.NeedsOf(c, c.Arg(0)) || (providerHelp(c.Args) && help.NeedsOf(c, c.Arg(1))) {
 		return 0
 	}
 	p := printer(c)
 
-	// Piped input is read first, before the argument grammar (AI-05
-	// reproduced: it blocks on any open non-terminal stdin until EOF or
-	// 4 KB).
-	piped := ""
-	if !c.Term.StdinTTY() {
-		piped = readPiped(c.Stdin)
-	}
-
+	// The argument grammar comes first: a provider alone is no question
+	// (LEDGER AI-02), refused before stdin is read or a request is made.
 	provider, query := parseQueryArgs(c.Args)
 	if query == "" {
 		p.Error("No query provided")
 		return 1
 	}
+
+	piped := ""
+	if !c.Term.StdinTTY() {
+		piped = m.readPipedInput(c)
+	}
 	if piped != "" {
-		query = pipeWrap(piped, query)
+		query = pipeWrap(redact(piped), redact(query))
 	}
 
 	provider, token, ok := m.resolveProvider(c, provider)
@@ -61,27 +60,29 @@ func (m *Module) aiQuery(c *invoke.Call) int {
 	return 0
 }
 
-// parseQueryArgs is the ai_query grammar: with two or more words a leading
-// "claude" or "gemini" is the provider (case-sensitive, AI-17), the rest
-// the question joined by one space (AI-16); one word is the whole question
-// (so `ai_query claude` sends "claude", AI-02 reproduced).
+// parseQueryArgs is the ai_query grammar: a leading "claude" or "gemini"
+// is the provider (case-sensitive, AI-17), the rest the question joined by
+// one space (AI-16). A provider alone leaves the question empty (LEDGER
+// AI-02: `ai_query claude` is no longer the question "claude").
 func parseQueryArgs(args []string) (provider, query string) {
-	switch {
-	case len(args) == 1:
-		query = args[0]
-	case len(args) >= 2:
-		if args[0] == "claude" || args[0] == "gemini" {
-			return args[0], strings.Join(args[1:], " ")
-		}
-		query = strings.Join(args, " ")
+	if len(args) >= 1 && isProvider(args[0]) {
+		return args[0], strings.Join(args[1:], " ")
 	}
-	return "", query
+	return "", strings.Join(args, " ")
 }
 
+// isProvider reports whether word names a provider (case-sensitive).
+func isProvider(word string) bool { return word == "claude" || word == "gemini" }
+
+// providerHelp reports a provider followed by one word only, which is then
+// help when it is -h or --help (LEDGER AI-24): `ai_query claude --help`.
+func providerHelp(args []string) bool { return len(args) == 2 && isProvider(args[0]) }
+
 // aiAsk is ai_ask [provider]: one interactive question read from the
-// prompt (AI-03: one question per call). Help is the first argument only.
+// prompt (AI-03: one question per call). Help is the first argument, or
+// the only word after a provider (LEDGER AI-24).
 func (m *Module) aiAsk(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
+	if help.NeedsOf(c, c.Arg(0)) || (providerHelp(c.Args) && help.NeedsOf(c, c.Arg(1))) {
 		return 0
 	}
 	p := printer(c)
@@ -96,18 +97,31 @@ func (m *Module) aiAsk(c *invoke.Call) int {
 		return 1
 	}
 
+	// LEDGER AI-04: ai_ask reads its question from a terminal; without one
+	// (or headless) nothing is read or sent.
+	if c.Term.Headless() || !m.ttyOpens() {
+		p.Error("ai_ask needs a terminal: use ai_query \"question\" (stdin is read as piped input)")
+		return 1
+	}
+
 	piped := ""
 	if !c.Term.StdinTTY() {
-		piped = readPiped(c.Stdin)
+		piped = m.readPipedInput(c)
 	}
 
 	var query string
 	if piped != "" {
 		lines := strings.Count(piped, "\n") + 1
 		p.Info("Piped input received (" + strconv.Itoa(lines) + " lines, " + strconv.Itoa(len(piped)) + " bytes)")
-		query = m.readTTYLine() // AI-04: without a terminal this reads nothing
+		query = m.readTTYLine()
 	} else {
 		query = m.readStdinLine(c)
+	}
+
+	// LEDGER AI-03: one question per call; exit, quit or q cancel it.
+	switch strings.ToLower(strings.TrimSpace(query)) {
+	case "exit", "quit", "q":
+		return 1
 	}
 
 	if query == "" && piped == "" {
@@ -118,7 +132,7 @@ func (m *Module) aiAsk(c *invoke.Call) int {
 		query = "Analyze this content: explain what it does, identify any issues or errors, and suggest improvements."
 	}
 	if piped != "" {
-		query = pipeWrap(piped, query)
+		query = pipeWrap(redact(piped), redact(query))
 	}
 
 	what := "your question"
@@ -162,6 +176,9 @@ func (m *Module) resolveProvider(c *invoke.Call, provider string) (string, strin
 }
 
 // pipeWrap is the troubleshoot-mode wrapper 2.x builds around piped input.
+// Callers redact the piped part and the question separately first (LEDGER
+// AI-06), so an unclosed PRIVATE KEY block in the pipe drops only the rest
+// of the pipe, never the question or the closing "---".
 func pipeWrap(piped, query string) string {
 	return "[PIPE INPUT - TROUBLESHOOT MODE]\n---\n" + piped + "\n---\nUser question: " + query
 }
@@ -184,9 +201,18 @@ func readPiped(r io.Reader) string {
 	return s
 }
 
+// ttyOpens is `{ : </dev/tty; }`: a controlling terminal can be opened.
+func (m *Module) ttyOpens() bool {
+	tty, err := m.openTTY()
+	if err != nil {
+		return false
+	}
+	_ = tty.Close()
+	return true
+}
+
 // readTTYLine reads one line from /dev/tty (the pipe case of ai_ask), ""
-// when no terminal can be opened (AI-04 reproduced: the empty question
-// becomes the auto-analysis prompt).
+// when no terminal can be opened.
 func (m *Module) readTTYLine() string {
 	tty, err := m.openTTY()
 	if err != nil {

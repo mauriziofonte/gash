@@ -38,45 +38,40 @@ stderr 'No token configured for .gemini. in ~/.gash_env'
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_ask openai </dev/null'
 stderr 'No token configured for .openai. in ~/.gash_env'
 
-# --- :343 empty-query - a terminal with no question aborts
+# --- 3.0: AI-04 fixed. ai_ask reads its question from a terminal and
+# refuses headless or without /dev/tty, before reading stdin or sending
+# anything, so every row that reached the provider black-box in 2.x
+# (:338-:343, :347, :348) now renders that refusal: one error line on
+# stderr, nothing on stdout. The reply rendering these rows drove is the
+# shared formatResponse of ai_query (ai_query_render.txtar) and the
+# internal/ai unit tests (TestLedger_AI03_fix, which answers on a fake
+# terminal).
+
+# --- :343 empty-query
 ! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_ask </dev/null'
-stderr 'Empty query, aborting'
+stderr 'ai_ask needs a terminal: use ai_query "question" \(stdin is read as piped input\)'
+! stdout .
 
-# --- :338 command - a "how to" question renders a Command/Explanation pair
-exec bash -c 'httpsfake -ca ca1 -addr addr1 & pid=$!; for i in $(seq 1 100); do [ -s addr1 ] && break; sleep 0.05; done; read -r a <addr1; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca1" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "how to list files?\n" | ai_ask; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
-stdout 'Command:'
-stdout 'ls -lhS'
-stdout 'Explanation:'
-
-# --- :339 explanation - a "what is" question, gemini, renders an explanation
-exec bash -c 'httpsfake -ca ca2 -addr addr2 & pid=$!; for i in $(seq 1 100); do [ -s addr2 ] && break; sleep 0.05; done; read -r a <addr2; printf "AI:gemini=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca2" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask gemini; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
-stdout 'Explanation:'
-stdout 'conceptual explanation'
-
-# --- :340 code - a "write a script" question renders the code block
-exec bash -c 'httpsfake -ca ca3 -addr addr3 & pid=$!; for i in $(seq 1 100); do [ -s addr3 ] && break; sleep 0.05; done; read -r a <addr3; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca3" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "write a script to back up my home\n" | ai_ask; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
-stdout 'Creates a backup script'
-stdout '# bash'
-
-# --- :341 fallback - anything else renders the assistant fallback text
-exec bash -c 'httpsfake -ca ca4 -addr addr4 & pid=$!; for i in $(seq 1 100); do [ -s addr4 ] && break; sleep 0.05; done; read -r a <addr4; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca4" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "hello\n" | ai_ask; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
-stdout 'terminal assistant'
-
-# --- :342 piped - stdin is piped (not a terminal): the pipe note on stderr
-# and the troubleshoot rendering on stdout
-exec bash -c 'httpsfake -ca ca5 -addr addr5 & pid=$!; for i in $(seq 1 100); do [ -s addr5 ] && break; sleep 0.05; done; read -r a <addr5; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca5" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "PHP Fatal error: x\n" | ai_ask claude; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
-stderr 'Piped input received'
-stdout 'Issue:'
-stdout 'Suggestion:'
-
-# --- :347 http-error - the endpoint answers 401 (MOCK_CURL_ERROR via the fake)
-! exec bash -c 'export MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=401; httpsfake -ca ca6 -addr addr6 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
-stderr 'Claude API error \(401\)'
-
-# --- :348 confirm-no - GASH_AI_CONFIRM=1 forces confirmation; with no
-# terminal to confirm on, the send is refused (the typed-n path is a unit test)
+# --- :338 command, :339 explanation (gemini), :340 code, :341 fallback,
+# :347 http-error, :348 confirm-no: the question on a stdin the shim reports
+# as a terminal
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "how to list files?\n" | ai_ask'
+stderr 'ai_ask needs a terminal'
+! stdout .
+! exec bash -c 'printf "AI:gemini=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask gemini'
+stderr 'ai_ask needs a terminal'
+! stdout .
 ! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH_AI_CONFIRM=1 GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask'
-stderr 'Not sending .* to claude: no terminal to confirm on'
+stderr 'ai_ask needs a terminal'
+! stderr 'Not sending'
+! stdout .
+
+# --- :342 piped - stdin is piped (not a terminal): refused before the pipe
+# is read (no "Piped input received" note)
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "PHP Fatal error: x\n" | ai_ask claude'
+stderr 'ai_ask needs a terminal'
+! stderr 'Piped input received'
+! stdout .
 
 # --- R6: plain mode, the no-key error keeps its word prefix and has no ESC
 # (a fresh empty env file, so the keys written by earlier cases do not leak)

@@ -92,13 +92,19 @@ hgrep PATTERN [OPTIONS]
 #### Options
 
 ```text
--n LIMIT        Show only last N results (default: all)
--a, --all       Include the hgrep command itself in results
--r, --reverse   Reverse order (oldest first)
--j, --json      Output as JSON array
--H, --no-highlight  Disable color highlighting of matches
--E, --regex     Treat PATTERN as extended regex
--c, --count     Only show count of matching commands
+-n, --limit N       Show only the N most recent matches (0: all)
+-a, --all           Include hgrep/history_grep commands in results
+-r, --reverse       Newest first (default: oldest first)
+-j, --json          Output as JSON array
+-H, --no-highlight  Disable highlighting / force plain output
+-E, --regex         PATTERN is a Go regular expression (RE2 syntax),
+                    case-insensitive; an invalid regex is an error
+-c, --count         Only show the count of unique matching commands
+-g, --group         Collapse similar commands under a shared chain prefix
+    --pick          Fuzzy-select a matching command via fzf and print it
+    --no-color      Disable colored output for this invocation
+-h, --help          Show this help (anywhere before --)
+--                  End of options: the next word is PATTERN
 ```
 
 #### Examples
@@ -116,11 +122,38 @@ hgrep deploy -j
 # Count how many times you ran a command
 hgrep "npm install" -c
 
-# Regex: find git push or pull
-hgrep -E "git (push|pull)"
+# Regex: git push or pull at the start
+hgrep -E "^git (push|pull)"
 
-# Reverse order (oldest first)
+# Group "cd X && ..." variants under one prefix
+hgrep cd -g
+
+# Fuzzy-pick a past git command (needs fzf)
+hgrep git --pick
+
+# Newest first
 hgrep kubectl -r
+
+# A pattern that starts with "-"
+hgrep -- --force
+```
+
+#### Notes
+
+```text
+Matching is case-insensitive; PATTERN is a fixed string unless -E.
+Commands are deduplicated (the last run wins) and listed oldest first.
+-n N keeps the N most recent matches, with or without -r.
+```
+
+#### Output format
+
+```text
+[2024-01-15 14:52:01] git push origin main
+[2024-01-15 15:10:22] git commit -m "fix"
+
+With --json:
+[{"timestamp":"2024-01-15 14:52:01","epoch":1705330321,"count":1,"command":"git push origin main"},...]
 ```
 
 See also: `history_grep`
@@ -134,7 +167,7 @@ Alias: `hg`
 #### Usage
 
 ```text
-history_grep PATTERN
+history_grep PATTERN...
 ```
 
 #### Examples
@@ -155,6 +188,10 @@ hg "ssh "
 ```text
 Simple and fast. For advanced features (timestamps,
 deduplication, JSON output), use hgrep instead.
+The words are joined with spaces into one pattern (a GNU grep basic
+regex, case-insensitive) matched against each command. Column 2 is a
+command's first two words, column 3 the rest; duplicates and the
+history_grep/hg lines themselves are left out.
 ```
 
 See also: `hgrep`
@@ -168,7 +205,14 @@ Alias: `myip`
 #### Usage
 
 ```text
-ip_public
+ip_public [--no-color] [--raw]
+```
+
+#### Options
+
+```text
+--no-color  Plain output
+--raw       Print the bare address, no label
 ```
 
 #### Examples
@@ -178,7 +222,14 @@ ip_public
 myip
 
 # Use in a script
-MY_IP=$(myip) && echo "Server IP: $MY_IP"
+MY_IP=$(myip --raw) && echo "Server IP: $MY_IP"
+```
+
+#### Notes
+
+```text
+The request gives up after 10 seconds. An answer that is not an IP
+address (a captive portal or rate-limit page) is an error, rc 1.
 ```
 
 ## mkdir_cd
@@ -259,6 +310,7 @@ ptk -y 3000
 --force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session
 connected to that port elsewhere is left alone. SIGTERM first,
 SIGKILL for processes still alive after about 3 seconds.
+Returns 1 when a process could not be signalled (permission denied).
 ```
 
 See also: `process_find`, `process_kill`
@@ -286,6 +338,13 @@ pf node
 
 # Check if a service is running
 pf mysql
+```
+
+#### Notes
+
+```text
+NAME is matched literally, ignoring case, against each command line
+(not the user or other columns). Returns 1 when nothing matches.
 ```
 
 See also: `process_kill`, `port_kill`
@@ -319,7 +378,10 @@ Matches the executable name exactly, ignoring case, lists the matches
 with their command lines and asks. Without a terminal to ask
 (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.
 --force is the same as -y. SIGTERM first, SIGKILL for processes still
-alive after about 3 seconds. Declining returns 1.
+alive after about 3 seconds. Declining returns 1, and so does a
+process that could not be signalled (permission denied).
+NAME is a name, not a pattern: regex characters match themselves, and
+a name longer than 15 bytes is matched against the full program name.
 ```
 
 See also: `process_find`, `port_kill`
@@ -362,7 +424,8 @@ mongodb, redis, redis-server, memcached, docker
 Only stops services that are currently active, through systemd when it
 runs, else through `service` (WSL without systemd, containers).
 --force is the same as -y. Returns 1 when declined or when a stop
-fails.
+fails. Headless or without a terminal it runs sudo -n, and stops
+before anything when sudo needs a password.
 ```
 
 See also: `process_kill`
@@ -390,6 +453,14 @@ plz               # -> sudo apt update
 plz systemctl restart nginx
 ```
 
+#### Notes
+
+```text
+Without COMMAND it shows the previous command and asks first;
+declining (or no terminal to ask on) returns 1, and so does a shell
+with no previous command in its history.
+```
+
 ## sysinfo
 
 Comprehensive system information enumeration
@@ -406,16 +477,16 @@ sysinfo [section] [--llm] [--no-color]
 
 ```text
 overview   Host, load, CPU, memory, swap, root disk and address at a glance
-identity   OS, kernel, virtualization, cloud provider, WSL detection
-storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)
-services   Running systemd services, custom units
-auth       Sudoers, SSH config (PAM details via deep drill-down)
-network    Interfaces, DNS, DHCP, hostname
-security   Firewall rules, SSH hardening, fail2ban/crowdsec
-webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies
-mail       Postfix, Dovecot, DKIM, virtual domains
-infra      Docker, containers, monitoring, backup systems
-system     Cron jobs, systemd timers, custom hooks
+identity   OS, kernel, hostname, uptime, virtualization, container, WSL
+storage    fstab, crypttab, LVM, mdadm, ZFS, smartd, sanoid, hdparm, NFS
+services   Detected/running services, timers, listening ports, custom units
+auth       Users, sudoers, sshd_config (PAM details via deep drill-down)
+network    resolv.conf, hosts, interfaces, netplan, dhcpcd
+security   fail2ban, crowdsec, ufw; firewalld, iptables, AppArmor presence
+webstack   Apache, Nginx, PHP and FPM pools, MySQL/MariaDB, PostgreSQL
+mail       Postfix, Dovecot, Exim4, SpamAssassin, OpenDKIM, BIND, Unbound
+infra      FTP, Samba, OpenMediaVault, VPN, Docker, containers, monitoring
+system     Cron, Let's Encrypt, SSL keys, kernel tuning, GRUB, logrotate
 all        Overview, then every section (default)
 ```
 
@@ -439,6 +510,17 @@ sysinfo services --llm
 sysinfo webstack --llm | ai_query "audit this web stack"
 ```
 
+#### Notes
+
+```text
+On a terminal a normal user is asked for sudo only by the sections
+that read root-only files (identity, storage, services, auth,
+security, system, all); overview, network, webstack, mail and infra
+never ask.
+One section per call: a second one is an error. -h/--help anywhere
+shows this help.
+```
+
 See also: `ai_sysinfo`
 
 ## wsl_compact
@@ -450,7 +532,7 @@ Alias: `wslc`
 #### Usage
 
 ```text
-wsl_compact [--status]
+wsl_compact [--status] [-y]
 ```
 
 #### Examples
@@ -472,6 +554,9 @@ allocation fails (dmesg: "page allocation failure: order:7") and the
 launch times out. wsl_compact drops the page cache and slab, compacts
 memory (sudo), prints the free blocks before and after, and checks that
 cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.
+On a terminal it runs without asking; headless it needs -y (--yes).
+Unattended, sudo must not need a password (sudo -n is checked first).
+When dmesg is not readable the failure count is "unknown".
 ```
 
 See also: `wsl_restart`, `wsl_shutdown`

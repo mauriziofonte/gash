@@ -13,6 +13,7 @@ package ai
 import (
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -54,6 +55,11 @@ type Module struct {
 	getwd   func() (string, error)
 	readDir func(string) ([]os.DirEntry, error)
 	openTTY func() (*os.File, error)
+	// pipeWait bounds the wait for piped input (LEDGER AI-05).
+	pipeWait time.Duration
+	// confirmWarned holds the calls already warned about their
+	// GASH_AI_CONFIRM value (AI-23).
+	confirmWarned sync.Map
 }
 
 // New returns the module wired to the real system.
@@ -69,6 +75,8 @@ func New() *Module {
 		getwd:   os.Getwd,
 		readDir: os.ReadDir,
 		openTTY: func() (*os.File, error) { return os.OpenFile("/dev/tty", os.O_RDWR, 0) },
+
+		pipeWait: pipedWait,
 	}
 }
 

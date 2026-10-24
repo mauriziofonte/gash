@@ -31,7 +31,8 @@ bash/stable 5.2 amd64 [upgradable from: 5.1]
 --- dpkg log (recent)
 1 install a
 2 install b
-3 status c--- unattended-upgrades
+3 status c
+--- unattended-upgrades
 Unattended-Upgrade::Origins-Pattern {
 };
 --- Pending config merges

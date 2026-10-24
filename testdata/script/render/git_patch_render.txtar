@@ -31,7 +31,8 @@ stderr 'Error: File .nofile. does not exist in the repository\.'
 stderr 'Error: Missing filename\. Usage: git_dump_revisions <filename>'
 
 # --- :277 git_apply_patch:applied
-exec bash -c 'cd $WORK; mkdir p4; cd p4; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git checkout -q -b feat && echo g >g && git add g && git commit -qm feat && git checkout -q main; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_apply_patch main feat "$(git rev-parse feat~1)"'
+# 3.0: GIT-01 fixed: headless, applying a patch needs --yes.
+exec bash -c 'cd $WORK; mkdir p4; cd p4; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git checkout -q -b feat && echo g >g && git add g && git commit -qm feat && git checkout -q main; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_apply_patch main feat "$(git rev-parse feat~1)" --yes'
 stderr 'Patch applied successfully from .feat. to .main.\.'
 
 # --- :278 git_apply_patch:missing_args

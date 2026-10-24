@@ -5,12 +5,16 @@ package ai
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/google/renameio/v2"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -27,11 +31,13 @@ var sysinfoSections = []string{
 
 // aiSysinfo is ai_sysinfo [provider] [--raw] [--no-color]: collect the
 // system dossier, ask the provider for an analysis and print it. --raw
-// dumps the dossier with no API call. Help is the first argument only
-// (LEDGER AI-24); --no-color is accepted though the help omits it (AI-25).
+// dumps the dossier with no API call. -h/--help is help anywhere (LEDGER
+// AI-24).
 func (m *Module) aiSysinfo(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
-		return 0
+	for _, a := range c.Args {
+		if (a == "-h" || a == "--help") && help.NeedsOf(c, a) {
+			return 0
+		}
 	}
 	p := printer(c)
 
@@ -101,13 +107,18 @@ func (m *Module) aiSysinfo(c *invoke.Call) int {
 // drillMenu is the ai_sysinfo drill-down loop: a menu that drills into one
 // of the six sections (Session.Deep plus a drill-down API call), answers a
 // free-text question with targeted context, saves the running Markdown
-// report (LEDGER AI-09, write unchecked) or quits. The Markdown buffer is
-// seeded with the initial analysis and grows with each drill-down and
-// question, as 2.x captured each chunk in `$(...)` (trailing newlines
-// dropped on append).
+// report or quits. The Markdown buffer is seeded with the initial analysis
+// and grows with each drill-down and question.
 func (m *Module) drillMenu(c *invoke.Call, s ui.Style, sess *sysinfo.Session, provider, token, initialJSON string) {
 	p := printer(c)
+	// LEDGER AI-09: each chunk is appended after one blank line, so a
+	// chunk's last line never runs into the next heading.
 	md := trimNL(mdInitial(m, initialJSON, provider))
+	appendChunk := func(chunk string) {
+		if chunk = trimNL(chunk); chunk != "" {
+			md += "\n" + chunk
+		}
+	}
 	menu := []string{
 		"1) Services\t2) Security\t3) Network",
 		"4) Storage\t5) Performance\t6) Maintenance",
@@ -130,7 +141,7 @@ func (m *Module) drillMenu(c *invoke.Call, s ui.Style, sess *sysinfo.Session, pr
 		case "q", "Q", "quit", "exit":
 			return
 		case "?", "ask":
-			md += m.askQuestion(c, s, sess, provider, token, initialJSON)
+			appendChunk(m.askQuestion(c, s, sess, provider, token, initialJSON))
 			continue
 		case "s", "S", "save":
 			m.saveReport(c, md)
@@ -171,7 +182,7 @@ func (m *Module) drillMenu(c *invoke.Call, s ui.Style, sess *sysinfo.Session, pr
 			continue
 		}
 		formatDrilldown(s, p, c.Stdout, reply)
-		md += trimNL(mdDrilldown(reply))
+		appendChunk(mdDrilldown(reply))
 	}
 }
 
@@ -194,8 +205,18 @@ func (m *Module) askQuestion(c *invoke.Call, s ui.Style, sess *sysinfo.Session, 
 		return ""
 	}
 
-	qCtx := m.collectQuestionContext(c, sess.Sudo, question)
+	qCtx, kinds := m.questionContext(c, sess.Sudo, question)
 	userMsg := freetextMsg(initialJSON, qCtx, question)
+	// LEDGER AI-01: data collected for this question is confirmed per
+	// question (kind data, so auto mode asks too); a refusal or no terminal
+	// sends nothing and goes back to the menu. Protected paths contribute
+	// only their "skipped" line, so they alone need no question.
+	if len(kinds) > 0 {
+		what := "question context (" + strings.Join(kinds, ", ") + ")"
+		if !m.confirmSend(c, provider, "data", what, len(userMsg)) {
+			return ""
+		}
+	}
 	reply, rc := m.request(c, provider, token, sysinfoDrilldownPrompt, userMsg,
 		sysinfoDrilldownSchema, sysinfoMaxTokens, sysinfoResponseTimeout)
 	if rc != 0 {
@@ -216,17 +237,38 @@ func freetextMsg(initialJSON, context, question string) string {
 		initialJSON, question)
 }
 
-// saveReport writes the running Markdown buffer to a timestamped file in
-// the working directory. The write is unchecked (LEDGER AI-09): the success
-// line prints whatever the write did.
+// saveReport writes the running Markdown buffer, with a final newline, to
+// a timestamped file in the working directory, atomically and at mode 0600
+// (it holds system data). A failed write is an error with no success line
+// (LEDGER AI-09).
 func (m *Module) saveReport(c *invoke.Call, md string) {
 	filename := "gash-ai-sysinfo-" + m.now().Format("20060102-150405") + ".md"
 	path := filename
 	if cwd, err := m.getwd(); err == nil && cwd != "" {
 		path = filepath.Join(cwd, filename)
 	}
-	_ = os.WriteFile(path, []byte(md), 0o644)
+	if err := renameio.WriteFile(path, []byte(trimNL(md)+"\n"), 0o600); err != nil {
+		printer(c).Error("Could not save the report to " + filename + ": " + errReason(err))
+		return
+	}
 	printer(c).Success("Report saved to " + filename)
+}
+
+// errReason is the innermost message of a file error ("permission
+// denied"), without the operation and path that wrap it.
+func errReason(err error) string {
+	for {
+		var pe *fs.PathError
+		var le *os.LinkError
+		switch {
+		case errors.As(err, &pe):
+			err = pe.Err
+		case errors.As(err, &le):
+			err = le.Err
+		default:
+			return err.Error()
+		}
+	}
 }
 
 // extractFindings is the jq that pulls the findings of the section titled
@@ -262,9 +304,8 @@ type siSection struct {
 }
 
 // formatAnalysis is __sysinfo_format_ai_response: the server heading, the
-// severity counts and each section's findings. A reply without a sections
-// array keeps the empty counts of the 2.x defect (LEDGER AI-10), without
-// the jq error lines (there is no jq).
+// severity counts and each section's findings. A reply without sections
+// (missing, not an array, or empty) counts zero and says so (AI-10).
 func formatAnalysis(s ui.Style, p ui.Printer, w io.Writer, jsonReply string) {
 	var top map[string]json.RawMessage
 	if json.Unmarshal([]byte(jsonReply), &top) != nil {
@@ -285,6 +326,9 @@ func formatAnalysis(s ui.Style, p ui.Printer, w io.Writer, jsonReply string) {
 
 	var sections []siSection
 	_ = json.Unmarshal(top["sections"], &sections)
+	if len(sections) == 0 {
+		p.Warning("The reply holds no sections.")
+	}
 	for _, sec := range sections {
 		s.Heading(w, sec.Title)
 		printFindings(s, w, sec.Findings)
@@ -313,14 +357,11 @@ func severityStatus(sev string) string {
 	return "info"
 }
 
-// severityCounts counts findings by severity across the sections. When
-// sections is absent or not an array, every count is "" (the 2.x empty
-// jq output), reproducing the empty counts line of AI-10.
+// severityCounts counts findings by severity across the sections; a
+// missing or non-array sections counts as no sections, all zero (AI-10).
 func severityCounts(sectionsRaw json.RawMessage) (crit, warn, info, ok string) {
 	var sections []siSection
-	if len(sectionsRaw) == 0 || json.Unmarshal(sectionsRaw, &sections) != nil {
-		return "", "", "", ""
-	}
+	_ = json.Unmarshal(sectionsRaw, &sections)
 	var c, wn, in, o int
 	for _, sec := range sections {
 		for _, f := range sec.Findings {

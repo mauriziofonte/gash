@@ -28,20 +28,25 @@ func distroOf(t *testing.T, osRelease string) (string, string) {
 	}
 	m := New()
 	m.sys = sr
-	d := m.distro()
-	return d, pkgManager(d)
+	return m.distro()
 }
 
-// TestLedger_AI11_2x: the quoting gap and the table are reproduced; quoted
-// IDs and Linux Mint fall to unknown, opensuse-* truncates to opensuse.
-func TestLedger_AI11_2x(t *testing.T) {
+// 3.0: AI-11 fixed: the ID is read with the os-release parser (quotes
+// and all), Linux Mint's and AlmaLinux's real IDs are in the table, and
+// an unknown ID takes the manager of its first known ID_LIKE word.
+func TestLedger_AI11_fix(t *testing.T) {
 	cases := []struct{ os, distro, pkg string }{
 		{"ID=ubuntu\n", "ubuntu", "apt"},
 		{"ID=rocky\n", "rocky", "dnf"},
-		{`ID="rocky"` + "\n", "linux", "unknown"},          // quoted value: no match
-		{"ID=linuxmint\n", "linuxmint", "unknown"},         // real Mint ID not in table
-		{"ID=opensuse-tumbleweed\n", "opensuse", "zypper"}, // truncated at '-'
-		{"NAME=Foo\n", "linux", "unknown"},                 // no ID line
+		{`ID="rocky"` + "\n", "rocky", "dnf"},
+		{"ID='almalinux'\n", "almalinux", "dnf"},
+		{"ID=linuxmint\n", "linuxmint", "apt"},
+		{"ID=opensuse-tumbleweed\n", "opensuse-tumbleweed", "zypper"},
+		{"ID=foo\nID_LIKE=debian\n", "foo", "apt"},
+		{"ID=bar\nID_LIKE=\"other rhel fedora\"\n", "bar", "dnf"},
+		{"ID=baz\nID_LIKE=\"suse opensuse\"\n", "baz", "zypper"},
+		{"ID=\"a b\"\n", "linux", "unknown"},
+		{"NAME=Foo\n", "linux", "unknown"},
 	}
 	for _, c := range cases {
 		d, p := distroOf(t, c.os)

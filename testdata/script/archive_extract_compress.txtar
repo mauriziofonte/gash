@@ -1,0 +1,38 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: FILE-01
+# ledger: FILE-13
+# ledger: FILE-14
+# covers: none (3.0 surface)
+#
+# archive_extract on compress (.Z) data through the shim. 3.0: FILE-01 fixed
+# (the archive in the working directory is decompressed to its name without
+# .Z and left unchanged; rc.A emptied it), FILE-14 fixed (uncompress -c --
+# F, so a BSD uncompress keeps the archive too) and FILE-13 fixed (.tar.Z is
+# unpacked). The .Z data is real compress output where compress exists, else
+# gzip output, which gzip's uncompress wrapper (Linux) reads as well.
+
+[!exec:uncompress] skip 'uncompress not installed'
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir work
+exec bash -c 'cd work; z() { compress -c -f 2>/dev/null || gzip -c; }; printf "hi\n" | z > foo.Z; printf "lo\n" | z > s.z; mkdir src; printf "A\n" > src/a.txt; tar cf - src | z > a.tar.Z; rm -r src'
+
+# foo.Z in the working directory: foo written, foo.Z unchanged
+exec bash -c 'cd work; wc -c < foo.Z > before; source "$GASH_SH"; archive_extract foo.Z; wc -c < foo.Z > after; cmp before after'
+exec cat work/foo
+stdout '^hi$'
+
+# s.z into another directory: s.z kept, o/s written
+exec bash -c 'cd work; source "$GASH_SH"; archive_extract s.z o'
+exists work/s.z
+exec cat work/o/s
+stdout '^lo$'
+
+# .tar.Z is unpacked
+exec bash -c 'cd work; source "$GASH_SH"; archive_extract a.tar.Z t >/dev/null'
+exists work/a.tar.Z
+exec cat work/t/src/a.txt
+stdout '^A$'

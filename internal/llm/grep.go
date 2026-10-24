@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"os"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -55,13 +56,24 @@ func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool
 	if !ok {
 		return nil, 0, false
 	}
-	s = &rgSearch{re: r, over: over, cwd: cwd}
+	userOver, _ := newOverrides(cwd, globs, nil)
+	s = &rgSearch{re: r, over: over, userOver: userOver, cwd: cwd}
 	s.rules.noIgnore = noIgnore
 	s.rules.hidden = !noIgnore
 	if !noIgnore {
 		s.rules.global = globalExcludes(c.Env.Get("HOME"), c.Env.Get("XDG_CONFIG_HOME"))
 	}
 	return s, 0, true
+}
+
+// pathExists fails with path_not_found/RETRY when the search root does
+// not exist (LLM-17: 2.x printed nothing and exited 0, as for no match).
+func (m *Module) pathExists(c *invoke.Call, safe string) bool {
+	if _, err := os.Stat(safe); err != nil {
+		fail(c, "path_not_found", safe, "Provide an existing file or directory")
+		return false
+	}
+	return true
 }
 
 // grep is llm_grep (fs.sh __llm_grep_impl), on the one search engine with
@@ -71,6 +83,7 @@ func (m *Module) grep(c *invoke.Call) int {
 		return 0
 	}
 	pattern, extensions, context, limit := "", "", "0", "100"
+	havePattern := false
 	var p pathTaker
 	p.path = "."
 	args := c.Args
@@ -95,8 +108,10 @@ func (m *Module) grep(c *invoke.Call) int {
 		if strings.HasPrefix(a, "-") {
 			return fail(c, "unknown_option", a, "Use --ext, --context, or --limit")
 		}
-		if pattern == "" {
-			pattern = a
+		// The first positional is PATTERN, even when empty (LLM-18: 2.x
+		// skipped an empty one and took the next word).
+		if !havePattern {
+			pattern, havePattern = a, true
 		} else if !p.take(c, a) {
 			return 1
 		}
@@ -117,8 +132,15 @@ func (m *Module) grep(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
+	if !m.pathExists(c, safe) {
+		return 1
+	}
 	if m.guard(c).IsSecretFile(safe) {
 		return fail(c, "secret_file_blocked", safe, "This file contains secrets and cannot be searched")
+	}
+	forbidden, ok := m.walkRoot(c, safe, "content")
+	if !ok {
+		return 1
 	}
 	globs := append([]string{}, noiseGlobs...)
 	for _, e := range splitExts(extensions) {
@@ -129,6 +151,7 @@ func (m *Module) grep(c *invoke.Call) int {
 		return rc
 	}
 	s.context = atoi(context)
+	s.forbidden = forbidden
 	s.run(safe, c.Stdout, atoi(limit))
 	return 0
 }

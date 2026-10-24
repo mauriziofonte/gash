@@ -1,0 +1,29 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: LLM-01
+# covers: none (3.0 security proof; no 2.x assertion)
+#
+# LEDGER LLM-01 (forced divergence): 2.x evaluated llm_grep --context as
+# Bash arithmetic, so a non-numeric value aborted a `set -u` caller. The
+# value is a plain integer now: anything else is invalid_context (RETRY),
+# nothing is evaluated, and the caller's shell carries on.
+
+env GASH_HEADLESS=1
+exec bash -c 'set -u; source "$GASH_SH"; err="$(llm_grep needle p --context abc 2>&1 >/dev/null)" || rc=$?; printf "rc=%s\n" "$rc"; jq -r ".error, .action" <<<"$err"; echo survived'
+cmp stdout want.txt
+! exists marker
+
+exec bash -c 'set -u; source "$GASH_SH"; llm_grep needle p --context "a[\$(touch marker)]" 2>/dev/null || echo refused'
+stdout '^refused$'
+! exists marker
+
+exec bash -c 'source "$GASH_SH"; llm_grep needle p --context 1'
+stdout 'p/a\.txt:1:needle'
+
+-- p/a.txt --
+needle
+-- want.txt --
+rc=1
+invalid_context
+RETRY
+survived

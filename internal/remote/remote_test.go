@@ -44,6 +44,9 @@ func TestHostsMatches2x(t *testing.T) {
 	})
 }
 
+// 3.0: REM-02 and REM-07 fixed: ssh gets -- before the target and ~/.ssh
+// is created 0700 (TestLedger_REM02, TestLedger_REM07); this 2.x
+// comparison skips without the 2.x sources.
 func TestExecMatches2x(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -154,6 +157,8 @@ func TestRemoteExecScriptArgs(t *testing.T) {
 	}
 }
 
+// 3.0: REM-01 fixed: the "unknown ignored" case is now refused
+// (TestLedger_REM01); this 2.x comparison skips without the 2.x sources.
 func TestRemoteScpFlags(t *testing.T) {
 	cases := []struct {
 		name string
@@ -223,6 +228,9 @@ func TestRemotePullForce(t *testing.T) {
 	require.Empty(t, r.Log)
 }
 
+// 3.0: REM-01, REM-03 and REM-05 fixed: --exclude PAT is two words, rsync
+// gets -s and a quoted ControlPath (TestLedger_REM01, TestLedger_REM03,
+// TestLedger_REM05); this 2.x comparison skips without the 2.x sources.
 func TestRemoteRsyncFlags(t *testing.T) {
 	cases := []struct {
 		name string
@@ -269,6 +277,8 @@ func TestRemoteRsyncFlags(t *testing.T) {
 	})
 }
 
+// 3.0: REM-06 fixed: the local check now speaks of the local destination
+// (TestLedger_REM06); this 2.x comparison skips without the 2.x sources.
 // TestRemoteSyncPullDeleteLocal: remote_sync_pull --delete checks the
 // LOCAL destination with the remote wording (LEDGER REM-06).
 func TestRemoteSyncPullDeleteLocal(t *testing.T) {

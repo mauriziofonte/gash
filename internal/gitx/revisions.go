@@ -3,8 +3,10 @@
 package gitx
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
-	"io"
+	"io/fs"
 	"os"
 	"strconv"
 	"strings"
@@ -16,11 +18,14 @@ import (
 const logRule = "*******************************************************\n"
 
 // dumpRevisions is git_dump_revisions FILE: for every short hash of `git
-// log --pretty=format:%h FILE` (newest first, numbered from 001), the
+// log --pretty=format:%h -- PATH` (newest first, numbered from 001), the
 // file at that commit in FILE.NNN.HASH and its log message in
-// FILE.NNN.HASH.logmsg. The status is 0 whatever git reports, FILE is not
-// preceded by -- and is read as ./FILE in the commit (LEDGER GIT-05). The
-// caller's $commit is never touched (GIT-09).
+// FILE.NNN.HASH.logmsg. PATH is FILE's work-tree path (`git ls-files
+// --full-name --error-unmatch -- FILE`), read as `git show HASH:PATH`, so
+// a file named like a branch and an absolute FILE work; any git failure
+// is `Error: git failed on 'FILE'.` with status 1, and every output is
+// written to a temporary file then renamed, so no empty file is left
+// (LEDGER GIT-05). The caller's $commit is never touched (GIT-09).
 func (m *Module) dumpRevisions(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -37,50 +42,71 @@ func (m *Module) dumpRevisions(c *invoke.Call) int {
 		x.p.Error("File '" + file + "' does not exist in the repository.")
 		return 1
 	}
-
-	hashes, _ := x.gitOut("log", "--pretty=format:%h", file)
-	// for commit in $(...): unquoted, split on blanks and newlines (hashes
-	// hold no glob characters).
+	failed := func() int {
+		x.p.Error("git failed on '" + file + "'.")
+		return 1
+	}
+	path, ok := x.gitOut("ls-files", "--full-name", "--error-unmatch", "--", file)
+	if !ok || path == "" || strings.Contains(path, "\n") {
+		return failed()
+	}
+	hashes, ok := x.gitOut("log", "--pretty=format:%h", "--", file)
+	if !ok {
+		return failed()
+	}
 	for i, commit := range strings.Fields(hashes) {
 		index := i + 1
 		out := file + "." + fmt.Sprintf("%03d", index) + "." + commit
 		log := out + ".logmsg"
 		x.p.Info("Saving version " + strconv.Itoa(index) + " to file " + out + " for commit " + commit)
 
-		// echo RULE >"$log"; git log -1 ... >>"$log"; echo RULE >>"$log"
-		if f, ok := redirect(log, false); ok {
-			_, _ = io.WriteString(f, logRule)
-			_ = f.Close()
+		var msg bytes.Buffer
+		msg.WriteString(logRule)
+		if !x.cmd(&msg, c.Stderr, "git", "log", "-1", "--pretty=format:%s%nAuthored by %an at %ai%n%n%b%n", commit).Success() {
+			return failed()
 		}
-		if f, ok := redirect(log, true); ok {
-			x.cmd(f, c.Stderr, "git", "log", "-1", "--pretty=format:%s%nAuthored by %an at %ai%n%n%b%n", commit)
-			_ = f.Close()
+		msg.WriteString(logRule)
+		var body bytes.Buffer
+		if !x.cmd(&body, c.Stderr, "git", "show", commit+":"+path).Success() {
+			return failed()
 		}
-		if f, ok := redirect(log, true); ok {
-			_, _ = io.WriteString(f, logRule)
-			_ = f.Close()
+		if err := writeRenamed(log, msg.Bytes()); err != nil {
+			x.p.Error("Cannot write " + log + ": " + err.Error())
+			return 1
 		}
-		// git show "$commit:./$file" >"$out"
-		if f, ok := redirect(out, false); ok {
-			x.cmd(f, c.Stderr, "git", "show", commit+":./"+file)
-			_ = f.Close()
+		if err := writeRenamed(out, body.Bytes()); err != nil {
+			x.p.Error("Cannot write " + out + ": " + err.Error())
+			return 1
 		}
 	}
 	return 0
 }
 
-// redirect opens path as the shell's > (truncate) or >> (append) does:
-// created with mode 0666 less the umask, symlinks followed. When the
-// open fails the shell skips the command; Bash's diagnostic, which names
-// a 2.x script line, is not printed (LEDGER DOCK-19).
-func redirect(path string, appendTo bool) (*os.File, bool) {
-	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	if appendTo {
-		flag = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+// writeRenamed writes data to a new temporary file next to path, created
+// as a shell redirection creates one (mode 0666 less the umask), and
+// renames it to path.
+func writeRenamed(path string, data []byte) error {
+	var f *os.File
+	var err error
+	for i := 0; ; i++ {
+		f, err = os.OpenFile(path+".tmp-"+strconv.Itoa(os.Getpid())+"-"+strconv.Itoa(i), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if !errors.Is(err, fs.ErrExist) || i == 100 {
+			break
+		}
 	}
-	f, err := os.OpenFile(path, flag, 0o666)
 	if err != nil {
-		return nil, false
+		return err
 	}
-	return f, true
+	tmp := f.Name()
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+	}
+	return err
 }

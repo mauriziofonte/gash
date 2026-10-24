@@ -1,0 +1,19 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: FILE-24
+# covers: none (3.0 surface)
+#
+# FILE-24 option (a): the extraction tools get the caller's environment,
+# so the user's tar configuration applies (TAR_OPTIONS is GNU tar's).
+
+[!linux] skip 'TAR_OPTIONS is read by GNU tar'
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir work
+exec bash -c 'cd work; mkdir src; echo new > src/a.txt; tar czf a.tgz src; mkdir -p o/src; echo OLD > o/src/a.txt'
+! exec bash -c 'cd work; export TAR_OPTIONS=--keep-old-files; source "$GASH_SH"; archive_extract a.tgz o >/dev/null'
+stderr 'src/a.txt'
+exec cat work/o/src/a.txt
+stdout '^OLD$'

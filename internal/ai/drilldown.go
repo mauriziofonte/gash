@@ -105,8 +105,7 @@ func capitalize(s string) string {
 }
 
 // mdInitial is __sysinfo_md_initial: the Markdown of the initial analysis.
-// A reply without a sections array leaves the summary counts empty (LEDGER
-// AI-10), as the 2.x jq produced nothing.
+// A reply without a sections array counts zero (AI-10).
 func mdInitial(m *Module, jsonReply, provider string) string {
 	var top map[string]json.RawMessage
 	_ = json.Unmarshal([]byte(jsonReply), &top)

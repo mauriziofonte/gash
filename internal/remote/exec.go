@@ -3,7 +3,9 @@
 package remote
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -16,9 +18,8 @@ import (
 const historyOff = "unset HISTFILE HISTSIZE; "
 
 // exec is remote_exec TARGET "COMMAND" | TARGET --script FILE|- [--
-// ARGS...]: ssh with the multiplexing options, the target in option
-// position (LEDGER REM-02), then the probe that tells a 255 exit from a
-// dead connection.
+// ARGS...]: ssh with the multiplexing options, -- and the target (LEDGER
+// REM-02), then the probe that tells a 255 exit from a dead connection.
 func (m *Module) exec(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -76,16 +77,23 @@ func (m *Module) exec(c *invoke.Call) int {
 		}
 	}
 
-	// mkdir -p "$HOME/.ssh" 2>/dev/null || true: the caller's umask
-	// applies (LEDGER REM-07).
-	_ = os.MkdirAll(x.home()+"/.ssh", 0o777)
+	// A missing ~/.ssh (the multiplexing socket's directory) is created
+	// with mode 0700, as OpenSSH expects; an existing one is left as it
+	// is (LEDGER REM-07).
+	if dir := x.home() + "/.ssh"; x.home() != "" {
+		if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
+			_ = os.Mkdir(dir, 0o700)
+		}
+	}
 	opts := sshOpts(x.home())
 
-	res := x.run(stdin, c.Stdout, c.Stderr, "ssh", append(opts, target, historyOff+remoteCmd)...)
+	// -- ends ssh's options: the target is never read as one (LEDGER
+	// REM-02).
+	res := x.run(stdin, c.Stdout, c.Stderr, "ssh", append(opts, "--", target, historyOff+remoteCmd)...)
 	if res.ExitCode != 255 {
 		return res.ExitCode
 	}
-	probe := append(append([]string{"-o", "ConnectTimeout=5"}, opts...), target, "exit 0")
+	probe := append(append([]string{"-o", "ConnectTimeout=5"}, opts...), "--", target, "exit 0")
 	if x.run(c.Stdin, c.Stdout, io.Discard, "ssh", probe...).Success() {
 		x.p.Error("Remote command exited 255 (killed by a signal or explicit exit 255); the SSH connection is healthy.")
 		return 255

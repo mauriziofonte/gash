@@ -54,3 +54,34 @@ func TestConfirmSend(t *testing.T) {
 		t.Fatal("GASH_AI_CONFIRM=off should fail closed")
 	}
 }
+
+// 3.0: AI-23 fixed: a GASH_AI_CONFIRM value other than 0, 1 or auto still
+// asks before every request (fail closed, so headless refuses), with one
+// warning per call; 0, 1 and auto warn nothing.
+func TestLedger_AI23_fix(t *testing.T) {
+	m := noTTY()
+	warn := "Warning: GASH_AI_CONFIRM=off is not 0, 1 or auto: asking before every request\n"
+	c, _, errb := newCall(map[string]string{"GASH_AI_CONFIRM": "off"}, nil, false)
+	// Two requests on one call: both refuse, the warning prints once.
+	for i := 0; i < 2; i++ {
+		if m.confirmSend(c, "claude", "query", "your question", 10) {
+			t.Fatalf("request %d: off must fail closed", i+1)
+		}
+	}
+	if got := errb.String(); strings.Count(got, "Warning:") != 1 || !strings.HasPrefix(got, warn) || !strings.Contains(got, "no terminal to confirm on") {
+		t.Fatalf("stderr %q", got)
+	}
+	// A new call warns again.
+	c, _, errb = newCall(map[string]string{"GASH_AI_CONFIRM": "AUTO"}, nil, false)
+	m.confirmSend(c, "claude", "query", "q", 1)
+	if !strings.HasPrefix(errb.String(), "Warning: GASH_AI_CONFIRM=AUTO is not 0, 1 or auto") {
+		t.Fatalf("AUTO: %q", errb.String())
+	}
+	for _, v := range []string{"0", "1", "auto", ""} {
+		c, _, errb := newCall(map[string]string{"GASH_AI_CONFIRM": v}, nil, false)
+		m.confirmSend(c, "claude", "data", "x", 1)
+		if strings.Contains(errb.String(), "Warning:") {
+			t.Fatalf("%q warned: %q", v, errb.String())
+		}
+	}
+}

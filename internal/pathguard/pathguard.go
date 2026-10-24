@@ -66,7 +66,8 @@ func OSGuard() *Guard {
 	return NewGuard(OSFS{}, cwd, home, rootHome)
 }
 
-// ValidatePath is __llm_validate_path: it refuses a ".." traversal and a
+// ValidatePath is __llm_validate_path: it refuses a ".." traversal, a
+// ~user path (invalid_path, RETRY: only ~ and ~/ expand, to Home) and a
 // forbidden path, and otherwise returns the realpath-normalized path. An
 // empty path is ".".
 func (g *Guard) ValidatePath(path string) (string, error) {
@@ -81,9 +82,18 @@ func (g *Guard) ValidatePath(path string) (string, error) {
 			Hint:   "Path traversal (..) is not allowed for security reasons",
 		}
 	}
-	// Textual leading-~ substitution (LLM-25: ~user is not expanded).
-	if strings.HasPrefix(path, "~") {
+	// ~ and ~/... are $HOME; ~user is refused, since it is not expanded
+	// (LEDGER LLM-25: 2.x replaced the ~ textually, so ~root/x became
+	// $HOME + "root/x").
+	if path == "~" || strings.HasPrefix(path, "~/") {
 		path = g.Home + path[1:]
+	} else if strings.HasPrefix(path, "~") {
+		return "", &Refusal{
+			Code:    "invalid_path",
+			Details: path,
+			Action:  "RETRY",
+			Hint:    "Only ~ and ~/ expand to your home; give another user's path in full",
+		}
 	}
 	normalized, err := g.Realpath(path, false)
 	if err != nil {
@@ -117,6 +127,30 @@ func (g *Guard) PathForbidden(path, normalized string) bool {
 		lexical = path
 	}
 	for _, cand := range []string{normalized, strings.TrimPrefix(normalized, "/private"), lexical} {
+		for _, f := range g.Forbidden {
+			if cand == f || strings.HasPrefix(cand, f+"/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// UnderForbidden reports whether path, read as it is (no symlink resolved,
+// no realpath), is one of the forbidden entries or lives below one, also
+// with a leading /private stripped (macOS). It is the per-entry test of a
+// walk that does not follow symlinks from a root that was resolved: every
+// entry it meets is already a physical path, so no lookup is needed. A
+// relative path is joined to Cwd first. New in 3.0 (LEDGER LLM-09).
+func (g *Guard) UnderForbidden(path string) bool {
+	if path == "" {
+		return false
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = strings.TrimSuffix(g.Cwd, "/") + "/" + path
+	}
+	path = strings.TrimSuffix(path, "/")
+	for _, cand := range []string{path, strings.TrimPrefix(path, "/private")} {
 		for _, f := range g.Forbidden {
 			if cand == f || strings.HasPrefix(cand, f+"/") {
 				return true

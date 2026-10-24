@@ -9,40 +9,27 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
-const scanHelp = `docker_compose_scan - Scan for Docker Compose projects
-
-USAGE:
-  docker_compose_scan [BASEDIR] [OPTIONS]
-
-OPTIONS:
-  BASEDIR     Base directory to scan (default: current dir)
-  --depth N   Maximum search depth (default: 3)
-  --json      Output in JSON format
-  --no-color  Disable ANSI colors
-  -h          Show this help
-
-EXAMPLES:
-  docker_compose_scan                     Scan current directory
-  docker_compose_scan ~ --depth 2         Scan home with depth 2
-  docker_compose_scan /projects --json    JSON output
-`
-
 // scan is docker_compose_scan [BASEDIR] [--depth N] [--json]
 // [--no-color]: the compose files down to depth N, with their services.
-// Unknown options are ignored (LEDGER DOCK-10, kept); the JSON keeps
-// the raw names, [""] and the depth text, and a depth find refuses gives
-// the empty shape (DOCK-09, kept); files come in byte order (DOCK-27).
+// An unknown option is refused, -h/--help is help only as the first word
+// (LEDGER DOCK-10); the depth is a non-negative integer, printed as one,
+// and the JSON is encoded (DOCK-09); files come in byte order (DOCK-27).
 func (m *Module) scan(c *invoke.Call) int {
 	if isHelp(c) {
-		_, _ = io.WriteString(c.Stdout, scanHelp)
-		return 0
+		return helpPage(c)
 	}
 	x := m.begin(c)
 	basedir, depth := ".", "3"
 	jsonOut, noColor := false, false
+	for _, a := range c.Args {
+		if a == "--json" || a == "-j" {
+			jsonOut = true
+		}
+	}
 	for args := c.Args; len(args) > 0; {
 		switch a := args[0]; {
 		case a == "--depth" || a == "-d":
@@ -52,54 +39,71 @@ func (m *Module) scan(c *invoke.Call) int {
 			}
 			depth, args = args[1], args[2:]
 		case a == "--json" || a == "-j":
-			jsonOut, args = true, args[1:]
+			args = args[1:]
 		case a == "--no-color":
 			noColor, args = true, args[1:]
 		case strings.HasPrefix(a, "-"):
-			args = args[1:]
+			if jsonOut {
+				return c.Fail(contract.New("unknown_option", a, "Use a directory, --depth N, --json or --no-color"))
+			}
+			x.p.Error("Unknown option: " + a)
+			return 1
 		default:
 			basedir, args = a, args[1:]
 		}
 	}
+	max, ok := maxDepth(depth)
+	if !ok {
+		if jsonOut {
+			return c.Fail(contract.New("invalid_depth", depth, "Use --depth N with N a non-negative integer"))
+		}
+		x.p.Error("Invalid --depth: " + depth + " (use a non-negative integer)")
+		return 1
+	}
+	depth = strconv.Itoa(max)
 	x.colors(noColor)
 	w, s := c.Stdout, x.s
 	put := func(t string) { _, _ = io.WriteString(w, t) }
 
-	basedir = x.resolveDir(basedir)
-	files := findCompose(basedir, depth)
-	if files == "" {
+	raw := basedir
+	basedir, ok = x.resolveDir(raw)
+	if !ok {
+		return x.refuseDir(raw, jsonOut)
+	}
+	files := findCompose(basedir, max)
+	if len(files) == 0 {
 		if jsonOut {
-			put(`{"base_path":` + q(basedir) + `,"compose_files":[],"total_found":0}` + "\n")
+			put(`{"base_path":` + q(basedir) + `,"depth":` + depth + `,"compose_files":[],"total_found":0}` + "\n")
 		} else {
 			put("No docker-compose files found in " + basedir + " (depth: " + depth + ")\n")
 		}
 		return 0
 	}
+	found := make([]parsed, len(files))
+	for i, file := range files {
+		found[i] = x.parseServices(file, false)
+		if found[i].badName != "" {
+			return x.refuseBadName(found[i].badName, file, jsonOut)
+		}
+	}
 
 	if jsonOut {
 		var b strings.Builder
 		b.WriteString(`{"base_path":` + q(basedir) + `,"depth":` + depth + `,"compose_files":[`)
-		total := 0
-		for _, file := range hereLines(files) {
-			total++
-			if total > 1 {
+		for i, file := range files {
+			if i > 0 {
 				b.WriteByte(',')
 			}
-			// parse | cut -d'|' -f1 | tr '\n' ',' | sed 's/,$//'
-			var names []string
-			if text := x.parseServices(file); text != "" {
-				for _, l := range strings.Split(text, "\n") {
-					name, _, _ := strings.Cut(l, "|")
-					names = append(names, name)
+			b.WriteString(`{"path":` + q(dirname(file)) + `,"file":` + q(basename(file)) + `,"services":[`)
+			for j, svc := range found[i].services {
+				if j > 0 {
+					b.WriteByte(',')
 				}
+				b.WriteString(q(svc.name))
 			}
-			joined := strings.ReplaceAll(strings.Join(names, ","), ",", `","`)
-			if reEchoOpt.MatchString(joined) { // echo -n "$services"
-				joined = ""
-			}
-			b.WriteString(`{"path":` + q(dirname(file)) + `,"file":` + q(basename(file)) + `,"services":["` + joined + `"]}`)
+			b.WriteString(`]}`)
 		}
-		b.WriteString(`],"total_found":` + strconv.Itoa(total) + "}\n")
+		b.WriteString(`],"total_found":` + strconv.Itoa(len(files)) + "}\n")
 		put(b.String())
 		return 0
 	}
@@ -111,27 +115,23 @@ func (m *Module) scan(c *invoke.Call) int {
 	put("\n")
 	s.Heading(w, "Scanning for Docker Compose files in "+basedir+" (depth: "+depth+")")
 	put("\n")
-	total := 0
-	for _, file := range hereLines(files) {
-		total++
+	for i, file := range files {
 		s.Print(w, "accent", dirname(file))
 		var items []string
-		for _, line := range hereLines(x.parseServices(file)) {
-			if f := readFields(line, 2); f[0] != "" {
-				items = append(items, f[0]+": "+f[1])
-			}
+		for _, svc := range found[i].services {
+			items = append(items, svc.name+": "+svc.image)
 		}
 		if len(items) > 0 {
 			s.List(w, items...)
 		}
 		put("\n")
 	}
-	put("Found " + bold + strconv.Itoa(total) + off + " compose file(s)\n")
+	put("Found " + bold + strconv.Itoa(len(files)) + off + " compose file(s)\n")
 	return 0
 }
 
-// maxDepth is the -maxdepth argument GNU find accepts: decimal digits up
-// to INT_MAX.
+// maxDepth is a --depth value: decimal digits (^[0-9]+$) up to INT_MAX,
+// the -maxdepth GNU find accepts.
 func maxDepth(v string) (int, bool) {
 	if v == "" || strings.Trim(v, "0123456789") != "" {
 		return 0, false
@@ -158,17 +158,12 @@ func composeName(n string) bool {
 
 // findCompose is $(find BASEDIR -maxdepth DEPTH -type f \( -name ... \)
 // 2>/dev/null | sort): regular files (symlinks not followed) with one
-// of the compose names, the lines in byte order (LEDGER DOCK-27); "" when
-// find refuses the depth or finds nothing. Unreadable directories are
-// skipped.
-func findCompose(root, depth string) string {
-	max, ok := maxDepth(depth)
-	if !ok {
-		return ""
-	}
+// of the compose names, the lines in byte order (LEDGER DOCK-27).
+// Unreadable directories are skipped.
+func findCompose(root string, max int) []string {
 	st, err := os.Lstat(root)
 	if err != nil {
-		return ""
+		return nil
 	}
 	var found []string
 	if st.Mode().IsRegular() && composeName(basename(root)) {
@@ -197,9 +192,15 @@ func findCompose(root, depth string) string {
 		walk(root, 1)
 	}
 	if len(found) == 0 {
-		return ""
+		return nil
 	}
 	ls := strings.Split(strings.Join(found, "\n"), "\n")
 	sort.Strings(ls)
-	return strings.TrimRight(strings.Join(ls, "\n"), "\n")
+	out := ls[:0]
+	for _, l := range ls {
+		if l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }

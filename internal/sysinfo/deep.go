@@ -68,8 +68,14 @@ func (d deepOut) lines(ls []string) {
 	}
 }
 
-// raw is a tool's or cat's bytes as they are.
-func (d deepOut) raw(b []byte) { _, _ = d.w.Write(b) }
+// raw is a tool's or cat's bytes, ended by a newline when the last line
+// has none, so the next header starts on a line of its own (SYS-52).
+func (d deepOut) raw(b []byte) {
+	_, _ = d.w.Write(b)
+	if len(b) > 0 && b[len(b)-1] != '\n' {
+		_, _ = io.WriteString(d.w, "\n")
+	}
+}
 
 var (
 	reNoteBlankIndent = regexp.MustCompile(`^(#|$|[[:space:]]*#)`)
@@ -77,7 +83,8 @@ var (
 	rePHPIni          = regexp.MustCompile(`^(memory_limit|upload_max|post_max|max_execution|max_input|date.timezone|error_reporting|display_errors|opcache)`)
 	reWebminKeys      = regexp.MustCompile(`^(port|ssl|listen|session)`)
 	reTimesyncd       = regexp.MustCompile(`^(#|$|\[)`)
-	reWireGuardKey    = regexp.MustCompile(`PrivateKey = .*`)
+	// Both WireGuard key kinds, any case and spacing (SYS-50).
+	reWireGuardKey = regexp.MustCompile(`(?i)^([[:space:]]*(?:PrivateKey|PresharedKey)[[:space:]]*=[[:space:]]*).*`)
 	// grep -oP '^EnvironmentFile=-?\K.*' and friends: the match is group 1.
 	reEnvFile = regexp.MustCompile(`^EnvironmentFile=-?(.*)`)
 	reExec    = regexp.MustCompile(`^ExecStart=(.*)`)
@@ -348,14 +355,11 @@ func (s *Session) deepServices(d deepOut) {
 				continue
 			}
 			d.echo("--- " + path.Base(p))
-			// sed 's/PrivateKey = .*/PrivateKey = [REDACTED]/': that exact
-			// spelling only.
+			// The value of every PrivateKey and PresharedKey line is
+			// masked, whatever its spacing (SYS-50).
 			var ls []string
 			for _, l := range f.grepFile(p, reNoteBlank, false) {
-				if loc := reWireGuardKey.FindStringIndex(l); loc != nil {
-					l = l[:loc[0]] + "PrivateKey = [REDACTED]"
-				}
-				ls = append(ls, l)
+				ls = append(ls, reWireGuardKey.ReplaceAllString(l, "${1}[REDACTED]"))
 			}
 			d.lines(head(ls, 20))
 		}
@@ -778,9 +782,9 @@ func (s *Session) deepPerformance(d deepOut) {
 	d.echo("--- I/O scheduler")
 	for _, p := range f.glob("/sys/block/*/queue/scheduler") {
 		if f.isFile(p) {
-			// $(dirname "$sched" | xargs basename) is the queue directory's
-			// name, never the device's.
-			d.echo("queue: " + runner.CommandSubst(f.read(p)))
+			// /sys/block/DEV/queue/scheduler: the device, two levels up
+			// (SYS-51).
+			d.echo(path.Base(path.Dir(path.Dir(p))) + ": " + runner.CommandSubst(f.read(p)))
 		}
 	}
 }

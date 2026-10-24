@@ -26,12 +26,10 @@ func SecretName(path string) bool {
 	if i := strings.LastIndex(base, "/"); i >= 0 {
 		base = base[i+1:]
 	}
-	base = asciiLower(base)
-	for _, pat := range SecretExceptions {
-		if matchGlob(pat, base) {
-			return false
-		}
+	if SecretException(base) {
+		return false
 	}
+	base = asciiLower(base)
 	for _, pat := range SecretPatterns {
 		if matchGlob(pat, base) {
 			return true
@@ -40,6 +38,20 @@ func SecretName(path string) bool {
 	lower := asciiLower(path)
 	for _, dir := range SecretDirs {
 		if strings.Contains("/"+lower+"/", "/"+dir+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// SecretException reports whether a base name matches one of the
+// SecretExceptions (case-insensitively): a template that shares a secret
+// name but holds no secrets, which wins over the patterns and the secret
+// directories. Walks use it to search such files (LEDGER LLM-15).
+func SecretException(name string) bool {
+	name = asciiLower(name)
+	for _, pat := range SecretExceptions {
+		if matchGlob(pat, name) {
 			return true
 		}
 	}

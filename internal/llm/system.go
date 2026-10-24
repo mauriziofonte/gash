@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -67,30 +66,35 @@ func (m *Module) ports(c *invoke.Call) int {
 		return fail(c, "ports_tool_not_found", "Neither ss nor netstat is installed",
 			"Install iproute2 (ss) or net-tools (netstat) to list ports. Skip this check")
 	}
-	// sort -t $'\t' -k1,1n -k2,2 -u: by port, then protocol, the first
-	// line of each (port, protocol) kept (LLM-11).
+	// By port, then protocol, in the tool's order otherwise; one record
+	// per (port, protocol, state, address), so an IPv4 and an IPv6
+	// listener on one port are two records (LLM-11; 2.x kept one line
+	// per port and protocol).
 	sort.SliceStable(rows, func(i, j int) bool {
 		if c := cmpNumeric(rows[i][0], rows[j][0]); c != 0 {
 			return c < 0
 		}
 		return rows[i][1] < rows[j][1]
 	})
+	seen := map[[4]string]bool{}
 	b := []byte{'['}
-	for i, r := range rows {
-		if i > 0 && cmpNumeric(r[0], rows[i-1][0]) == 0 && r[1] == rows[i-1][1] {
+	for _, r := range rows {
+		key := [4]string{numericText(r[0]), r[1], r[2], r[3]}
+		if seen[key] {
 			continue
 		}
+		seen[key] = true
 		if len(b) > 1 {
 			b = append(b, ',')
 		}
 		b = append(b, `{"port":`...)
 		b = append(b, numericText(r[0])...)
 		b = append(b, `,"proto":"`...)
-		b = appendQuoteEsc(b, r[1])
+		b = appendEscaped(b, r[1])
 		b = append(b, `","state":"`...)
-		b = appendQuoteEsc(b, r[2])
+		b = appendEscaped(b, r[2])
 		b = append(b, `","address":"`...)
-		b = appendQuoteEsc(b, r[3])
+		b = appendEscaped(b, r[3])
 		b = append(b, `"}`...)
 	}
 	b = append(b, "]\n"...)
@@ -98,16 +102,14 @@ func (m *Module) ports(c *invoke.Call) int {
 	return 0
 }
 
-// appendQuoteEsc is the esc() of the llm_ports awk: backslash and double
-// quote only (LLM-06).
-func appendQuoteEsc(b []byte, s string) []byte {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' || s[i] == '"' {
-			b = append(b, '\\')
-		}
-		b = append(b, s[i])
-	}
-	return b
+// appendEscaped appends s as the inside of a JSON string, the way jq
+// writes it: every control character escaped and each invalid UTF-8
+// sequence as one U+FFFD. The 2.x awk escapers left controls (some all,
+// some all but tab, newline and CR) and invalid bytes raw, so a name with
+// one made the output invalid JSON (3.0: LEDGER LLM-06 and LLM-23 fixed).
+func appendEscaped(b []byte, s string) []byte {
+	q := contract.AppendString(nil, s, contract.EscapeJQ)
+	return append(b, q[1:len(q)-1]...)
 }
 
 var digitsRE = regexp.MustCompile(`^[0-9]+$`)
@@ -233,8 +235,16 @@ func (m *Module) procs(c *invoke.Call) int {
 		}
 		args = args[2:]
 	}
-	if port != "" && !validUint(c, "port", port) {
-		return 1
+	if port != "" {
+		if !validUint(c, "port", port) {
+			return 1
+		}
+		// Base 10, leading zeros dropped, so "port" is a plain JSON
+		// number; above 65535 is no port at all (LLM-12).
+		if n := numericText(port); len(n) > 5 || atoi(n) > 65535 {
+			return fail(c, "invalid_port", "Value '"+port+"' is above 65535", "Provide a port number from 0 to 65535")
+		}
+		port = numericText(port)
 	}
 	var items []string
 	switch {
@@ -246,8 +256,7 @@ func (m *Module) procs(c *invoke.Call) int {
 					continue
 				}
 				cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
-				// The port as typed (LLM-12).
-				items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeBash)+`,"port":`+port+`}`)
+				items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`,"port":`+port+`}`)
 			}
 		}
 	case name != "":
@@ -271,13 +280,13 @@ func (m *Module) procs(c *invoke.Call) int {
 			b = append(b, `{"pid":`...)
 			b = append(b, field(f, 2)...)
 			b = append(b, `,"user":"`...)
-			b = appendQuoteEsc(b, field(f, 1))
+			b = appendEscaped(b, field(f, 1))
 			b = append(b, `","cpu":`...)
 			b = append(b, field(f, 3)...)
 			b = append(b, `,"mem":`...)
 			b = append(b, field(f, 4)...)
 			b = append(b, `,"name":"`...)
-			b = appendQuoteEsc(b, field(f, 11))
+			b = appendEscaped(b, field(f, 11))
 			b = append(b, `"}`...)
 			items = append(items, string(b))
 		}
@@ -344,7 +353,7 @@ func (m *Module) procsByName(c *invoke.Call, name string) []string {
 			}
 		}
 		cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
-		items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeBash)+`}`)
+		items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`}`)
 	}
 	return items
 }
@@ -381,10 +390,55 @@ var (
 	}
 )
 
-// envRedact is __llm_env_redact: a URL password, a private key block and
+// envURLRE is a URL with a password, from its scheme: scheme://user:
+// then the password up to the last "@" of the token.
+var envURLRE = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):.*@([^@]*)$`)
+
+// isSchemeChar is [A-Za-z0-9+.-], the characters a URL scheme is made of.
+func isSchemeChar(c byte) bool {
+	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '+' || c == '.' || c == '-'
+}
+
+// envMaskURLs masks the password of every URL in v: each blank-separated
+// token is masked from the leftmost scheme that starts it or follows a
+// character no scheme holds, the password running to the token's last
+// "@". 2.x matched the whole value from its start and stopped the password
+// at the first "/" or "@", so a password holding either, or a URL after
+// other text, leaked (3.0: LEDGER LLM-02 fixed).
+func envMaskURLs(v string) string {
+	var b strings.Builder
+	for len(v) > 0 {
+		i := strings.IndexAny(v, " \t\n\r\v\f")
+		if i < 0 {
+			i = len(v)
+		}
+		b.WriteString(maskURLToken(v[:i]))
+		j := i
+		for j < len(v) && strings.IndexByte(" \t\n\r\v\f", v[j]) >= 0 {
+			j++
+		}
+		b.WriteString(v[i:j])
+		v = v[j:]
+	}
+	return b.String()
+}
+
+func maskURLToken(tok string) string {
+	for i := 0; i < len(tok); i++ {
+		if i > 0 && isSchemeChar(tok[i-1]) {
+			continue
+		}
+		if m := envURLRE.FindStringSubmatch(tok[i:]); m != nil {
+			return tok[:i] + m[1] + ":***@" + m[2]
+		}
+	}
+	return tok
+}
+
+// envRedact is __llm_env_redact: URL passwords, a private key block and
 // the known token formats masked.
 func envRedact(v string) string {
-	v = config.MaskEnvURL(v)
+	v = envMaskURLs(v)
 	if envKeyRE.MatchString(v) {
 		return "***"
 	}
@@ -456,9 +510,11 @@ func (m *Module) env(c *invoke.Call) int {
 		}
 		first = false
 		b = append(b, "\n  "...)
-		b = contract.AppendString(b, n, contract.EscapeBash)
+		b = contract.AppendString(b, n, contract.EscapeJQ)
 		b = append(b, ": "...)
-		b = contract.AppendString(b, envRedact(vars[n]), contract.EscapeBash)
+		// Invalid UTF-8 is one U+FFFD per bad sequence, as on the jq
+		// paths (3.0: LEDGER LLM-23 fixed; 2.x let the bytes through).
+		b = contract.AppendString(b, envRedact(vars[n]), contract.EscapeJQ)
 	}
 	b = append(b, "\n}\n"...)
 	_, _ = c.Stdout.Write(b)
