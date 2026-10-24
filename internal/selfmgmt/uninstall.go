@@ -10,8 +10,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -38,9 +40,10 @@ const UninstallAskEnv = 10
 // 'source.*[./]gashrc').
 var gashrcSource = regexp.MustCompile(`source.*[./]gashrc`)
 
-// The profile edits of 2.x, run with sed -i.gash-uninstall.bak as 2.x ran
-// them: the delimited block, or the 1.x block (its comment line and the
-// four lines after it; the `;` before `}` lets BSD sed parse it too).
+// The profile edits of 2.x, run with sed as 2.x ran them: the delimited
+// block, or the 1.x block (its comment line and the four lines after it;
+// the `;` before `}` lets BSD sed parse it too). editProfile writes the
+// result in place of the file a linked profile points to.
 const (
 	uninstallBackup     = ".gash-uninstall.bak"
 	uninstallSedBlock   = `/# >>> GASH START >>>/,/# <<< GASH END <<</d`
@@ -50,13 +53,17 @@ const (
 // uninstall is gash_uninstall (lib/modules/gash.sh): after a confirmation,
 // removes the Gash block from ~/.bashrc, ~/.bash_profile and ~/.profile,
 // ~/.gashrc and the install directory (only one that is unmistakably a
-// Gash checkout), then asks about the settings file. As in 2.x, ~/.gashrc
-// goes without a copy and the profile backups sed makes are removed at the
-// end (LEDGER SELF-02), and a linked profile is replaced by an edited
-// regular file (SELF-04): sed -i runs as 2.x ran it.
+// Gash checkout), then asks about the settings file. A ~/.gashrc that holds
+// the user's own lines is kept as ~/.gashrc.gash-uninstall.bak, and the
+// profile backups sed makes are kept and listed (3.0: SELF-02 fixed; 2.x
+// removed both). A linked profile stays a link and its target is edited
+// (3.0: SELF-04 fixed; 2.x's sed -i replaced the link by a regular file).
 func (m *Module) uninstall(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
+	}
+	if badArgs(c, "gash_uninstall") {
+		return usageStatus
 	}
 	s := ui.StyleOf(c.Term, false)
 	p := s.Printer(c.Stderr)
@@ -103,17 +110,14 @@ func (m *Module) uninstall(c *invoke.Call) int {
 		p.Info("Removing Gash block from: " + profile)
 		switch {
 		case strings.Contains(string(text), "# >>> GASH START >>>"):
-			m.tool(c, "sed", "-i"+uninstallBackup, uninstallSedBlock, profile)
+			m.editProfile(c, p, profile, uninstallSedBlock)
 		case strings.Contains(string(text), "# Load Gash Bash"):
-			m.tool(c, "sed", "-i"+uninstallBackup, uninstallSed1xBlock, profile)
+			m.editProfile(c, p, profile, uninstallSed1xBlock)
 		}
 	}
 
 	if isFile(home + "/.gashrc") {
-		p.Info("Removing ~/.gashrc...")
-		if err := os.Remove(home + "/.gashrc"); err != nil && !os.IsNotExist(err) {
-			p.Error("Failed to remove ~/.gashrc; please remove it manually.")
-		}
+		uninstallGashrc(p, home)
 	} else {
 		p.Info(home + "/.gashrc not found; skipping.")
 	}
@@ -155,10 +159,94 @@ func uninstallTarget(c *invoke.Call, p ui.Printer, dir string) (string, bool) {
 	return real, true
 }
 
+// editProfile removes the Gash block from profile: sed EXPR prints the
+// edited text, PROFILE.gash-uninstall.bak gets a copy of the text before
+// the edit, and the edited text replaces the file the profile resolves to
+// (a temporary file in its directory renamed over it, with its mode), so a
+// linked profile stays a link (LEDGER SELF-04). sed's own messages pass
+// through; false when the profile was left as it was.
+func (m *Module) editProfile(c *invoke.Call, p ui.Printer, profile, expr string) bool {
+	target, err := filepath.EvalSymlinks(profile)
+	if err != nil {
+		target = profile
+	}
+	st, err := os.Stat(target)
+	if err != nil {
+		p.Error("Failed to edit " + profile + "; remove the Gash block yourself.")
+		return false
+	}
+	before, err := os.ReadFile(target)
+	if err != nil {
+		p.Error("Failed to edit " + profile + "; remove the Gash block yourself.")
+		return false
+	}
+	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "sed", Args: []string{expr, target}, Options: runner.Options{
+		Env: c.Env.Child(), Stderr: c.Stderr,
+	}})
+	if se, ok := err.(*runner.StartError); ok {
+		_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
+		return false
+	}
+	if err != nil || !res.Success() {
+		return false
+	}
+	mode := st.Mode().Perm()
+	if writeAtomic(profile+uninstallBackup, before, mode) != nil || writeAtomic(target, res.Stdout, mode) != nil {
+		p.Error("Failed to edit " + profile + "; remove the Gash block yourself.")
+		return false
+	}
+	return true
+}
+
+// writeAtomic writes data to path through a temporary file in the same
+// directory renamed over it, with mode perm. A link at path is replaced.
+func writeAtomic(path string, data []byte, perm os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".gash-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp, perm)
+	}
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+	}
+	return err
+}
+
+// uninstallGashrc removes ~/.gashrc when it is a template an installer
+// wrote, and otherwise renames it to ~/.gashrc.gash-uninstall.bak, so the
+// user's own lines (the 1.x migration appends them there) survive
+// (LEDGER SELF-02).
+func uninstallGashrc(p ui.Printer, home string) {
+	gashrc := home + "/.gashrc"
+	if data, err := os.ReadFile(gashrc); err == nil && pristineGashrc(data) {
+		p.Info("Removing ~/.gashrc...")
+		if err := os.Remove(gashrc); err != nil && !os.IsNotExist(err) {
+			p.Error("Failed to remove ~/.gashrc; please remove it manually.")
+		}
+		return
+	}
+	if err := os.Rename(gashrc, gashrc+uninstallBackup); err != nil {
+		p.Error("Failed to save ~/.gashrc as ~/.gashrc" + uninstallBackup + "; it was left in place.")
+		return
+	}
+	p.Info("Saved your ~/.gashrc as ~/.gashrc" + uninstallBackup)
+}
+
 // uninstallEnd handles the settings file when it exists (removed when
-// remove is true, else kept), prints the closing lines and removes the
-// profile backups. The status is that of the last backup removal, as the
-// 2.x loop left it.
+// remove is true, else kept) and prints the closing lines, listing the
+// backups uninstall left: the profiles as sed -i saved them before the
+// edit and a ~/.gashrc that held the user's lines (3.0: SELF-02 fixed;
+// 2.x removed the profile backups here).
 func (m *Module) uninstallEnd(c *invoke.Call, p ui.Printer, remove bool) int {
 	envFile, shown := uninstallEnvFile(c)
 	if isFile(envFile) {
@@ -172,18 +260,18 @@ func (m *Module) uninstallEnd(c *invoke.Call, p ui.Printer, remove bool) int {
 		}
 	}
 	p.Success("Gash uninstalled.")
-	p.Info("Restart your terminal to apply changes.")
-
-	rc := 0
-	for _, profile := range uninstallProfiles(c.Env.Get("HOME")) {
-		rc = 0
-		backup := profile + uninstallBackup
-		if err := removeFile(backup); err != nil && !os.IsNotExist(err) {
-			_, _ = io.WriteString(c.Stderr, "rm: cannot remove '"+backup+"': "+errnoText(err)+"\n")
-			rc = 1
+	home := c.Env.Get("HOME")
+	var kept []string
+	for _, f := range append(uninstallProfiles(home), home+"/.gashrc") {
+		if st, err := os.Lstat(f + uninstallBackup); err == nil && !st.IsDir() {
+			kept = append(kept, "~"+strings.TrimPrefix(f, home)+uninstallBackup)
 		}
 	}
-	return rc
+	if len(kept) > 0 {
+		p.Info("Backups kept: " + strings.Join(kept, ", "))
+	}
+	p.Info("Restart your terminal to apply changes.")
+	return 0
 }
 
 func uninstallProfiles(home string) []string {
@@ -191,17 +279,13 @@ func uninstallProfiles(home string) []string {
 }
 
 // uninstallEnvFile is the settings file and its name as the messages show
-// it (${env_file/#$HOME/\~}).
+// it: HOME shown as "~" when a "/" or the end follows it (LEDGER CORE-14).
 func uninstallEnvFile(c *invoke.Call) (string, string) {
 	envFile := c.Env.Get("GASH_ENV_FILE")
 	if envFile == "" {
 		envFile = c.Env.Get("HOME") + "/.gash_env"
 	}
-	shown := envFile
-	if home := c.Env.Get("HOME"); strings.HasPrefix(envFile, home) {
-		shown = "~" + envFile[len(home):]
-	}
-	return envFile, shown
+	return envFile, config.ShownPath(envFile, c.Env.Get("HOME"))
 }
 
 // physical is $(cd -- DIR && pwd -P): the absolute path with every symlink

@@ -40,10 +40,12 @@ func run2xConfig(t *testing.T, env []string, color bool, script string) (string,
 	return out.String(), errb.String()
 }
 
+// 3.0: CORE-04 fixed: a repeated name keeps only its first entry, so the
+// password-only URL of "many" has a name of its own (2.x listed both rows).
 var configFixtures = map[string]string{
 	"none":  "",
 	"empty": "# nothing\n",
-	"many": "DB:default=mysql://u:p@ss@h/d\nDB:default=pgsql://:SECRET@h2:5432/e\nDB:a-very-long-connection-name=mariadb://root:x@db\n" +
+	"many": "DB:default=mysql://u:p@ss@h/d\nDB:second=pgsql://:SECR@h2:5432/e\nDB:a-very-long-connection-name=mariadb://root:x@db\n" +
 		"DB:ünï=mysql://ü:pä@h/d\nDB:nopw=mysql://u@h/d\nDB:tab=mysql://u:p@h/d\tx\n" +
 		"AI:claude=sk-ant-1234567890\nAI:gemini=short\nAI:x=é€abcdefghij\nAI:averyveryverylongname=k\n",
 }
@@ -60,6 +62,10 @@ func TestConfigListsMatch2x(t *testing.T) {
 				for _, color := range []bool{false, true} {
 					env := []string{"HOME=" + home, "LANG=" + lang}
 					wantOut, wantErr := run2xConfig(t, env, color, fn)
+					// 3.0: CORE-03 fixed: a password-only URL is masked too
+					// (2.x showed it). The password is as long as the mask,
+					// so the columns 2.x computed still hold.
+					wantOut = strings.ReplaceAll(wantOut, "pgsql://:SECR@", "pgsql://:****@")
 					out, errOut, rc := run(t, fn, map[string]string{"HOME": home, "LANG": lang}, color)
 					require.Equal(t, 0, rc)
 					require.Equal(t, wantOut, out, "%s %s %s %v", name, fn, lang, color)
@@ -97,29 +103,57 @@ func listOf(t *testing.T, fn, content string, env map[string]string) (string, st
 	return out, errOut
 }
 
-// LEDGER CORE-03 (reproduced in rc.A): an empty user name leaves the
-// password visible.
-func TestLedger_CORE03_2x(t *testing.T) {
+// LEDGER CORE-03: an empty user name no longer leaves the password visible
+// (3.0: CORE-03 fixed).
+func TestLedger_CORE03(t *testing.T) {
 	out, _ := listOf(t, "gash_db_list", "DB:default=mysql://:SECRETPW@h/d\nDB:u=mysql://u:p@h/d\n", nil)
-	require.Equal(t, "\n  default         mysql://:SECRETPW@h/d\n  u               mysql://u:****@h/d\n", out)
+	require.Equal(t, "\n  default         mysql://:****@h/d\n  u               mysql://u:****@h/d\n", out)
 }
 
-// LEDGER CORE-04 (reproduced in rc.A): every duplicate name is listed.
-func TestLedger_CORE04_2x(t *testing.T) {
-	out, _ := listOf(t, "gash_db_list", "DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n", nil)
-	require.Equal(t, "\n  default         mysql://a:****@h1/d\n  default         pgsql://b:****@h2/e\n", out)
+// LEDGER CORE-04: a repeated name is listed once, with the entry in
+// effect (3.0: CORE-04 fixed; rc.A listed every duplicate).
+func TestLedger_CORE04(t *testing.T) {
+	out, errOut := listOf(t, "gash_db_list", "DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n", nil)
+	require.Equal(t, "\n  default         mysql://a:****@h1/d\n", out)
+	require.Equal(t, "Info: Available database connections:\n", errOut, "the load warning belongs to the shell's load")
+
+	// The shell's load (gash.sh) shows it, with both line numbers.
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash_env"), []byte("DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n"), 0o600))
+	out, errOut, rc := compat(t, map[string]string{"HOME": home}, false, "", "env", "load")
+	require.Equal(t, 0, rc)
+	require.Equal(t, "Warning: Line 2 of ~/.gash_env: duplicate DB:default, ignored (first is at line 1)\n", errOut)
+	require.Contains(t, out, "mysql://a:p1@h1/d")
+	require.NotContains(t, out, "pgsql://b:p2@h2/e")
 }
 
-// LEDGER CORE-06 (reproduced in rc.A): the messages name ~/.gash_env
-// when GASH_ENV_FILE names another file.
-func TestLedger_CORE06_2x(t *testing.T) {
+// LEDGER CORE-06: the messages name the file GASH_ENV_FILE names, not
+// ~/.gash_env (3.0: CORE-06 fixed; rc.A said ~/.gash_env).
+func TestLedger_CORE06(t *testing.T) {
 	other := filepath.Join(t.TempDir(), "other")
 	env := map[string]string{"GASH_ENV_FILE": other}
 	_, errOut := listOf(t, "gash_db_list", "", env)
-	require.Equal(t, "Info: No database connections configured in ~/.gash_env\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
+	require.Equal(t, "Info: No database connections configured in "+other+"\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
 	_, errOut = listOf(t, "gash_ai_list", "", env)
-	require.Equal(t, "Info: No AI providers configured in ~/.gash_env\nInfo: Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY\n", errOut)
+	require.Equal(t, "Info: No AI providers configured in "+other+"\nInfo: Add: AI:claude=YOUR_API_KEY or AI:gemini=YOUR_API_KEY\n", errOut)
+	// Without GASH_ENV_FILE the default file keeps its 2.x name.
+	_, errOut = listOf(t, "gash_db_list", "", nil)
+	require.Equal(t, "Info: No database connections configured in ~/.gash_env\nInfo: Run 'gash_env_init' to create a template configuration\n", errOut)
 	// The file itself is the one read.
 	out, _ := listOf(t, "gash_ai_list", "AI:claude=sk-123456789\n", env)
 	require.True(t, strings.Contains(out, "claude     sk-12345..."), out)
+}
+
+// LEDGER REM-02, REM-08: the shell's load skips a HOST: target remote_*
+// would refuse, and a target with a port says where the port goes.
+func TestLedger_REM02(t *testing.T) {
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash_env"), []byte("HOST:a=u@h:2222\nHOST:b=-oProxyCommand=x@h\nHOST:c=u@[::1]\n"), 0o600))
+	out, errOut, rc := compat(t, map[string]string{"HOME": home}, false, "", "env", "load")
+	require.Equal(t, 0, rc)
+	require.Equal(t, "Warning: Line 1 of ~/.gash_env: HOST target must be user@host (skipping)\n"+
+		"Hint: put the port in a Host entry of ~/.ssh/config\n"+
+		"Warning: Line 2 of ~/.gash_env: HOST target must be user@host (skipping)\n", errOut)
+	require.Contains(t, out, `__GASH_ENV_HOST_ENTRIES=$'c\tu@[::1]'`)
+	require.NotContains(t, out, "2222")
 }

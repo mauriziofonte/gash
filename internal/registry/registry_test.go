@@ -4,7 +4,9 @@ package registry
 
 import (
 	"os"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -187,4 +189,140 @@ func TestLedger_CORE07(t *testing.T) {
 	}
 	require.Equal(t, []string{"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh",
 		"llm", "utils", "node", "remote", "chrome", "php"}, ModuleOrder)
+}
+
+// LEDGER SELF-21: the gash_upgrade help says what it does (fetch the tags,
+// check out the newest release, never an older one) and no longer claims a
+// cleanup that only 1.x did (3.0: SELF-21 fixed).
+func TestLedger_SELF21(t *testing.T) {
+	f, ok := Lookup("gash_upgrade")
+	require.True(t, ok)
+	require.NotContains(t, f.Help.Body, "cleans up")
+	require.Contains(t, f.Help.Body, "  Fetches the release tags and checks out the newest release (never\n  an older one).")
+}
+
+// LEDGER SELF-20: the counts README.md states are the registry's: the
+// functions with a help page, every alias (module short aliases and pack
+// aliases), the git pack's aliases plus the log helpers of its card, and
+// the llm functions.
+func TestRegistry_ReadmeCounts(t *testing.T) {
+	b, err := os.ReadFile("../../README.md")
+	require.NoError(t, err)
+	readme := string(b)
+	fns, llm := 0, 0
+	for _, f := range Functions() {
+		if f.HasHelp {
+			fns++
+			if f.Help.Module == "llm" {
+				llm++
+			}
+		}
+	}
+	gitAliases := 0
+	for _, a := range Aliases() {
+		if a.Pack == "git" {
+			gitAliases++
+		}
+	}
+	helpers := len(CardAliases("git")) - gitAliases
+	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
+	require.Contains(t, readme, strconv.Itoa(gitAliases)+" short aliases and "+strconv.Itoa(helpers)+" log helpers")
+	require.Equal(t, 18, llm, "README.md says Eighteen read-only JSON functions")
+	require.Contains(t, readme, "Eighteen read-only JSON functions")
+}
+
+// LEDGER DEV-21: the card's php entries are the php pack's aliases, each
+// with the condition under which the shell defines it: the per-version
+// families (phpXY, composerXY, 1composerXY) for each installed phpX.Y,
+// php and composer with GASH_REPLACE_TOOLS=1, composer1-self-update when
+// composer1 is installed; the hte aliases DEV-17 dropped are not listed.
+func TestRegistry_AliasDocsMatchConditions(t *testing.T) {
+	card := map[string]CardAlias{}
+	for _, a := range CardAliases("php") {
+		card[a.Name] = a
+	}
+	family := map[string]string{`"php$`: "phpXY", `"composer$`: "composerXY", `"1composer$`: "1composerXY"}
+	seen := map[string]bool{}
+	for _, a := range Aliases() {
+		if a.Pack != "php" {
+			continue
+		}
+		name := a.Name
+		for prefix, row := range family {
+			if strings.HasPrefix(a.Name, prefix) {
+				name = row
+			}
+		}
+		if strings.HasPrefix(name, "hte") {
+			require.NotContains(t, card, name, "DEV-17 dropped %s", name)
+			continue
+		}
+		e, ok := card[name]
+		require.True(t, ok, "php pack alias %s has no card entry", a.Name)
+		seen[name] = true
+		cond := a.Condition
+		switch {
+		case strings.Contains(cond, "for "):
+			require.True(t, strings.HasPrefix(e.Condition, "for each installed phpX.Y"), name)
+			require.NotEmpty(t, e.Each, name)
+		case strings.Contains(cond, "GASH_REPLACE_TOOLS"):
+			require.Equal(t, "with GASH_REPLACE_TOOLS=1", e.Condition, name)
+		case strings.Contains(cond, "__gash_composer1"):
+			require.Equal(t, "when composer1 is installed", e.Condition, name)
+		case strings.Contains(cond, `-n "$__gash_composer"`):
+			require.Equal(t, "when composer is installed", e.Condition, name)
+		default:
+			require.Empty(t, e.Condition, name)
+		}
+		if strings.Contains(cond, "__gash_composer1") {
+			require.Contains(t, e.Condition, "composer1", name)
+		}
+	}
+	for name := range card {
+		require.True(t, seen[name], "card entry %s is no php pack alias", name)
+	}
+	require.Equal(t, []string{"1composer", "composer", "php"}, CardAliasFamilies())
+}
+
+// docs/reference is written from the help registry: the README table
+// has each topic's function and alias counts, and each topic page has
+// every function of the topic under its own heading, with its summary
+// and its first usage line. A help change that leaves the page behind
+// fails here (the pages once named a tools/gen-docs.sh that does not
+// exist).
+func TestRegistry_ReferenceDocs(t *testing.T) {
+	readme, err := os.ReadFile("../../docs/reference/README.md")
+	require.NoError(t, err)
+	for _, tp := range Topics() {
+		fns := 0
+		b, err := os.ReadFile("../../docs/reference/" + tp.Name + ".md")
+		require.NoError(t, err, tp.Name)
+		page := string(b)
+		require.False(t, strings.Contains(page, "gen-docs"), "%s names a gen-docs tool", tp.Name)
+		for _, f := range Functions() {
+			if !f.HasHelp || !slices.Contains(tp.Modules, f.Help.Module) {
+				continue
+			}
+			fns++
+			require.True(t, strings.Contains(page, "\n## "+f.Name+"\n\n"+f.Help.Short+"\n"), "%s.md: heading and summary of %s", tp.Name, f.Name)
+			lines := strings.Split(f.Help.Body, "\n")
+			for i, l := range lines {
+				if l == "USAGE" && i+1 < len(lines) {
+					require.True(t, strings.Contains(page, "\n"+strings.TrimSpace(lines[i+1])+"\n"), "%s.md: usage of %s: %s", tp.Name, f.Name, lines[i+1])
+					break
+				}
+			}
+		}
+		aliases := 0
+		for _, file := range tp.AliasFiles {
+			for _, a := range CardAliases(file) {
+				if a.Name != a.Value {
+					aliases++
+				}
+			}
+		}
+		row := "| [" + tp.Name + "](" + tp.Name + ".md) | " + strconv.Itoa(fns) + " | " + strconv.Itoa(aliases) + " | " + tp.Description + " |"
+		require.True(t, strings.Contains(string(readme), row), "README.md row: %s", row)
+	}
+	require.False(t, strings.Contains(string(readme), "gen-docs"), "README.md names a gen-docs tool")
 }

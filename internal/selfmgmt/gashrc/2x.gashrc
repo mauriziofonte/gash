@@ -1,0 +1,17 @@
+# ~/.gashrc — loads Gash (https://github.com/mauriziofonte/gash).
+# Managed by the Gash installer; your own settings belong in ~/.gash_env
+# (see ~/.gash/.gash_env.template) or ~/.bash_local.
+
+# Where Gash is installed. The installer rewrites this line for custom
+# locations; GASH_DIR set in the environment takes precedence.
+__gash_home="${GASH_DIR:-$HOME/.gash}"
+
+if [ -f "$__gash_home/gash.sh" ]; then
+    source "$__gash_home/gash.sh"
+    # Completion only matters interactively.
+    if [ "${GASH_HEADLESS-}" != "1" ] && [ -f "$__gash_home/bash_completion" ]; then
+        source "$__gash_home/bash_completion"
+    fi
+fi
+
+unset __gash_home

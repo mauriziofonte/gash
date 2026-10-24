@@ -1,6 +1,6 @@
 # Function reference
 
-Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand.
+Written from the help registry; `go test ./internal/registry` (TestRegistry_ReferenceDocs) checks it against the help text.
 In a shell, `gash <topic>` shows the same card and `gash_help <name>` any entry.
 
 | Topic | Functions | Aliases | What |
@@ -11,7 +11,7 @@ In a shell, `gash <topic>` shows the same card and `gash_help <name>` any entry.
 | [git](git.md) | 7 | 44 | Sync, tags, patches, repository repair, git shortcuts |
 | [docker](docker.md) | 7 | 27 | Containers and Compose stacks |
 | [remote](remote.md) | 7 | 0 | Hosts from ~/.gash_env: exec, push, pull, sync |
-| [dev](dev.md) | 5 | 7 | PHP and Node.js versions, headless Chrome |
+| [dev](dev.md) | 5 | 8 | PHP and Node.js versions, headless Chrome |
 | [llm](llm.md) | 18 | 0 | Read-only JSON tools for AI agents |
 | [ai](ai.md) | 3 | 0 | Ask Claude or Gemini from the terminal |
 | [gash](gash.md) | 13 | 0 | Help, doctor, configuration, upgrade |

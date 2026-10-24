@@ -4,6 +4,8 @@ package shellinit
 
 import (
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // aliasPacks emits the 2.x alias packs (colors, navigation, safety, git,
@@ -11,7 +13,8 @@ import (
 // shell. The probes 2.x ran in the shell (ls --color, grep color, rm GNU,
 // dircolors) run in the binary with the same commands and interpretation;
 // the 2.x probe cache is moot and neither read nor written. Module short
-// aliases stay in gash.sh and are outside this.
+// aliases are defined by gash.sh (headless mode too); the shadow rule for
+// them is moduleShadows, after the packs.
 func (st *state) aliasPacks(b *strings.Builder) {
 	st.timed(b, "lib/aliases/colors.sh", st.packColors)
 	st.timed(b, "lib/aliases/navigation.sh", st.packNavigation)
@@ -20,13 +23,35 @@ func (st *state) aliasPacks(b *strings.Builder) {
 	st.timed(b, "lib/aliases/docker.sh", st.packDocker)
 	st.timed(b, "lib/aliases/php.sh", st.packPhp)
 	st.timed(b, "lib/aliases/general.sh", st.packGeneral)
+	st.moduleShadows(b)
+}
+
+// moduleShadows applies the shadow rule to the module short aliases gash.sh
+// defined before this script runs: a name that is also a program on PATH
+// is removed again, so the program runs (fake dcc on PATH: no dcc alias).
+// An alias the user defined before Gash loaded is left alone, and no module
+// alias replaces a program on purpose, so none is exempt. 3.0: SHELL-12
+// fixed: 2.x took the module aliases for the user's own and kept them all.
+func (st *state) moduleShadows(b *strings.Builder) {
+	seen := map[string]bool{}
+	for _, a := range registry.Aliases() {
+		if a.Pack != "" || a.Function == "" || seen[a.Name] {
+			continue
+		}
+		seen[a.Name] = true
+		if !exempt(a.Name) && st.has(a.Name) {
+			b.WriteString("[[ -v '" + UserAliasesVar + "[" + a.Name + "]' ]] || unalias " + a.Name + " 2>/dev/null || true\n")
+		}
+	}
 }
 
 // shadowExempt is the fixed list of 2.x _loader.sh: an alias of one of these
 // names is defined even when it hides a program on PATH (ls wraps ls on
-// purpose, and so on).
+// purpose, and so on). sl is no longer on it: the alias catches a typo of
+// ls, and a user who installed the sl program wants that program instead
+// (3.0: SHELL-12 fixed).
 var shadowExempt = map[string]bool{
-	"ls": true, "dir": true, "vdir": true, "sl": true, "cp": true, "mv": true,
+	"ls": true, "dir": true, "vdir": true, "cp": true, "mv": true,
 	"rm": true, "mkdir": true, "chown": true, "chmod": true, "chgrp": true,
 	"grep": true, "bc": true, "reboot": true, "shutdown": true, "less": true,
 	"tail": true, "df": true, "top": true, "traceroute": true, "tracepath": true,
@@ -47,22 +72,27 @@ func exempt(name string) bool {
 	return digitAfter("php") || digitAfter("composer") || digitAfter("1composer")
 }
 
-// aliasStmt is the alias definition for name=value under the shadow rule: an
-// exempt or non-shadowing name is defined unconditionally; a name that hides
-// a program on PATH is defined only when it already existed before Gash
-// ([[ -v 'BASH_ALIASES[gp]' ]] && alias gp='git push'), which is what 2.x
-// did (a pre-existing alias is overwritten, SHELL-09; a new one is dropped).
+// UserAliasesVar is the associative array gash.sh fills, before Gash
+// defines anything, with the aliases the user had (compat/gash.sh.tmpl).
+const UserAliasesVar = "__GASH_USER_ALIASES"
+
+// aliasStmt is the alias definition for name=value: a name the user defined
+// before Gash loaded is left alone ([[ -v '__GASH_USER_ALIASES[ll]' ]] ||
+// alias ll='ls -l'), and under the shadow rule a non-exempt name that hides
+// a program on PATH is not defined at all (""). 3.0: SHELL-09 fixed: 2.x
+// overwrote an alias the user defined first.
 func (st *state) aliasStmt(name, value string) string {
-	def := "alias " + name + "=" + quote(value)
-	if exempt(name) || !st.has(name) {
-		return def
+	if !exempt(name) && st.has(name) {
+		return ""
 	}
-	return "[[ -v 'BASH_ALIASES[" + name + "]' ]] && " + def
+	return "[[ -v '" + UserAliasesVar + "[" + name + "]' ]] || alias " + name + "=" + quote(value)
 }
 
 // alias writes one pack alias with its shadow decision.
 func (st *state) alias(b *strings.Builder, name, value string) {
-	b.WriteString(st.aliasStmt(name, value) + "\n")
+	if stmt := st.aliasStmt(name, value); stmt != "" {
+		b.WriteString(stmt + "\n")
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -105,9 +135,10 @@ func (st *state) packColors(b *strings.Builder) {
 			b.WriteString("fi\n")
 		}
 	}
-	// grep: the 2.x probe reads an empty pattern from /dev/null, so it always
-	// exits 1 and the alias is never defined (SHELL-06, reproduced).
-	if st.runOK("grep", "--color=auto", "-q", "", "/dev/null") {
+	// grep: defined when `grep --color=auto -q x` finds the x it reads, so
+	// a grep that rejects --color has no alias (3.0: SHELL-06 fixed; the
+	// 2.x probe grepped an empty file, always exited 1 and never defined it).
+	if st.runOKInput("x\n", "grep", "--color=auto", "-q", "x") {
 		st.alias(b, "grep", "grep --color=auto")
 	}
 }
@@ -278,7 +309,9 @@ func (st *state) packDocker(b *strings.Builder) {
 // aliasIfFunc emits a function-backed pack alias guarded by the shell test
 // 2.x used (declare -F FUNC), combined with the shadow rule.
 func (st *state) aliasIfFunc(b *strings.Builder, name, fn string) {
-	b.WriteString("declare -F " + fn + " >/dev/null 2>&1 && " + st.aliasStmt(name, fn) + "\n")
+	if stmt := st.aliasStmt(name, fn); stmt != "" {
+		b.WriteString("declare -F " + fn + " >/dev/null 2>&1 && { " + stmt + "; }\n")
+	}
 }
 
 // -----------------------------------------------------------------------------

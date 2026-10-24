@@ -1,0 +1,58 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: DEV-21
+# covers: none (3.0 card fix)
+#
+# DEV-21 proving test: the dev card lists the php pack as the shell layer
+# defines it. Headless it shows the per-version families (phpXY,
+# composerXY, 1composerXY), the GASH_REPLACE_TOOLS pair and the composer
+# aliases, each with its condition, and none of the hte aliases DEV-17
+# dropped (2.x listed php=phpX.Y unconditionally and four hte rows). In an
+# interactive shell with php8.3, php7.2, composer and composer1 on PATH the
+# card lists the shell's own php83, composer83, 1composer72, ... and no
+# condition notes.
+
+env GASH_BANNER=0
+chmod 755 bin/php
+chmod 755 bin/php8.3
+chmod 755 bin/php7.2
+chmod 755 bin/composer
+chmod 755 bin/composer1
+
+exec bash --norc --noprofile -c 'GASH_HEADLESS=1; source "$GASH_SH" >/dev/null 2>&1; COLUMNS=200 gash dev --no-color'
+stdout '(^|  )phpXY +phpX\.Y'
+stdout '(^|  )composerXY +phpX\.Y composer'
+stdout '(^|  )1composerXY +phpX\.Y composer1'
+stdout '(^|  )composer1-self-update +sudo composer1 self-update'
+stdout '^  phpXY: for each installed phpX\.Y$'
+stdout '^  php, composer: with GASH_REPLACE_TOOLS=1$'
+stdout '^  composer1-self-update: when composer1 is installed$'
+! stdout 'hte'
+
+exec bash --norc --noprofile -i -c 'export PATH="$WORK/bin:$PATH"; source "$GASH_SH" >/dev/null 2>&1; echo "php83=${BASH_ALIASES[php83]-none}"; COLUMNS=200 gash dev --no-color'
+stdout '^php83=.*/bin/php8\.3 -d allow_url_fopen=1'
+# The grid cuts the values (the long $WORK paths): the names are checked.
+stdout '(^|  )php83 +/'
+stdout '(^|  )php72 +/'
+stdout '(^|  )composer83 +/'
+stdout '(^|  )1composer72 +/'
+stdout '(^|  )composer1-self-update +sudo /'
+! stdout 'phpXY|composerXY|for each installed'
+! stdout '1composer83'
+! stdout 'hte'
+
+-- bin/php --
+#!/bin/sh
+exit 0
+-- bin/php8.3 --
+#!/bin/sh
+exit 0
+-- bin/php7.2 --
+#!/bin/sh
+exit 0
+-- bin/composer --
+#!/bin/sh
+exit 0
+-- bin/composer1 --
+#!/bin/sh
+exit 0

@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SELF-12
+# covers: none (3.0 self-management fix)
+#
+# SELF-12 proving test: in an interactive shell the card counts and lists
+# only the aliases the shell defines. A program named gp on PATH makes the
+# shadow rule skip the gp alias, so `gash git` no longer lists it (2.x
+# listed every alias of the alias file). Headless, the card still lists
+# every registered alias.
+
+env GASH_BANNER=0
+env PATH=$WORK/bin:$PATH
+chmod 755 bin/gp
+
+exec bash --norc --noprofile -i -c 'source "$GASH_SH" >/dev/null 2>&1; echo "gp=${BASH_ALIASES[gp]-none} gst=${BASH_ALIASES[gst]-none}"; COLUMNS=200 gash git --no-color'
+stdout '^gp=none gst=git status'
+! stdout '(^|  )gp +git pull'
+stdout '(^|  )gst +git status'
+
+exec bash --norc --noprofile -c 'GASH_HEADLESS=1; source "$GASH_SH" >/dev/null 2>&1; COLUMNS=200 gash git --no-color'
+stdout '(^|  )gp +git pull'
+
+-- bin/gp --
+#!/bin/sh
+exit 0

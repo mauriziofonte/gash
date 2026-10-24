@@ -5,7 +5,6 @@ package handlers
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -70,6 +69,13 @@ var uninstallCases = []struct {
 	{"help", uninstallFake, "y\n", nil, []string{"-h"}},
 }
 
+// uninstall3x names the cases where 3.0 no longer matches 2.x. 3.0: SELF-04
+// fixed: a linked profile stays a link, and a backup path taken by a
+// directory leaves the profile unedited with an error (TestLedger_SELF04
+// proves both). The help page carries the 3.0 notes on the backups kept
+// (SELF-02).
+var uninstall3x = map[string]bool{"linked profile": true, "backup is a dir": true, "help": true}
+
 // uninstallState lists the case directory: every path with its type and
 // mode, link targets and file contents.
 const uninstallState = `cd "$D" && find . -mindepth 1 | LC_ALL=C sort | while read -r p; do ` +
@@ -123,13 +129,62 @@ func TestUninstallMatches2x(t *testing.T) {
 					env[k] = strings.ReplaceAll(v, "$D", d)
 				}
 				o, rc := runAnswering(t, "gash_uninstall", env, mode == "on", tc.answers, tc.args...)
-				require.Equal(t, strings.ReplaceAll(fields[2*i], dRef, d), o, tc.name)
-				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), tc.name)
+				if uninstall3x[tc.name] {
+					// 3.0 differs from 2.x here on purpose (see uninstall3x).
+					continue
+				}
+				if tc.name == "extra arguments" {
+					// 3.0: SELF-15 fixed: the argument is refused before
+					// anything is removed (2.x ignored it and uninstalled).
+					require.Contains(t, o, "Unknown option: --bogus (usage: gash_uninstall)", tc.name)
+					require.Equal(t, 2, rc, tc.name)
+					require.DirExists(t, d+"/home/.gash", tc.name)
+					continue
+				}
+				// 3.0: SELF-02 fixed. A ~/.gashrc with the user's lines is kept
+				// as a backup and the profile backups are kept and listed, so
+				// those lines, files and the backup-removal status are put back
+				// in their 2.x shape; everything else must still match 2.x.
+				refOut, refRC := undoSELF02Ref(strings.ReplaceAll(fields[2*i], dRef, d), fields[2*i+1])
+				require.Equal(t, refOut, undoSELF02(o), tc.name)
+				require.Equal(t, refRC, strconv.Itoa(rc), tc.name)
+				bash(t, "D="+shq(d)+"; find \"$D\" -name '*.gash-uninstall.bak' ! -type d -delete")
 				require.Equal(t, strings.ReplaceAll(bash(t, "D="+shq(dRef)+"; "+uninstallState), dRef, d),
 					bash(t, "D="+shq(d)+"; "+uninstallState), tc.name)
 			}
 		})
 	}
+}
+
+// undoSELF02 maps the 3.0 uninstall messages back to 2.x: the ~/.gashrc
+// line says "Removing" and no "Backups kept" line is printed.
+func undoSELF02(out string) string {
+	out = strings.ReplaceAll(out, "Saved your ~/.gashrc as ~/.gashrc.gash-uninstall.bak", "Removing ~/.gashrc...")
+	var b strings.Builder
+	for _, line := range strings.SplitAfter(out, "\n") {
+		if !strings.Contains(line, "Backups kept: ") {
+			b.WriteString(line)
+		}
+	}
+	return b.String()
+}
+
+// undoSELF02Ref drops what 2.x printed and returned when removing a profile
+// backup failed (3.0 no longer removes the backups).
+func undoSELF02Ref(out, rc string) (string, string) {
+	var b strings.Builder
+	dropped := false
+	for _, line := range strings.SplitAfter(out, "\n") {
+		if strings.HasPrefix(line, "rm: cannot remove '") && strings.Contains(line, ".gash-uninstall.bak': ") {
+			dropped = true
+			continue
+		}
+		b.WriteString(line)
+	}
+	if dropped {
+		rc = "0"
+	}
+	return b.String(), rc
 }
 
 // uninstallFixture runs setup in a new case directory and returns it with
@@ -141,39 +196,56 @@ func uninstallFixture(t *testing.T, setup string) (string, map[string]string) {
 	return d, map[string]string{"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin", "HOME": d + "/home"}
 }
 
-// LEDGER SELF-02, reproduced in rc.A: a confirmed uninstall removes a
-// ~/.gashrc holding the user's own lines without a copy, and the profile
-// backups sed made are gone at the end.
-func TestLedger_SELF02_2x(t *testing.T) {
+// LEDGER SELF-02: a confirmed uninstall keeps a ~/.gashrc holding the
+// user's own lines as ~/.gashrc.gash-uninstall.bak and keeps the profile
+// backups sed made (3.0: SELF-02 fixed; 2.x removed them all).
+func TestLedger_SELF02(t *testing.T) {
 	d, env := uninstallFixture(t, uninstallFake+"echo \"alias mine='echo mine'\" >>$D/home/.gashrc; "+uninstallBlock+">$D/home/.bashrc")
-	_, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
+	out, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
 	require.Equal(t, 0, rc)
-	for _, gone := range []string{".gashrc", ".gashrc.gash-uninstall.bak", ".bashrc.gash-uninstall.bak", ".gash"} {
+	for _, gone := range []string{".gashrc", ".gash"} {
 		_, err := os.Lstat(filepath.Join(d, "home", gone))
 		require.True(t, os.IsNotExist(err), gone)
 	}
-	b, err := os.ReadFile(filepath.Join(d, "home/.bashrc"))
+	b, err := os.ReadFile(filepath.Join(d, "home/.gashrc.gash-uninstall.bak"))
+	require.NoError(t, err)
+	require.Equal(t, "source ~/.gash/gash.sh\nalias mine='echo mine'\n", string(b))
+	_, err = os.Stat(filepath.Join(d, "home/.bashrc.gash-uninstall.bak"))
+	require.NoError(t, err)
+	require.Contains(t, out, "Info: Backups kept: ~/.bashrc.gash-uninstall.bak, ~/.gashrc.gash-uninstall.bak\n")
+	b, err = os.ReadFile(filepath.Join(d, "home/.bashrc"))
 	require.NoError(t, err)
 	require.Equal(t, "# before\n# after\n", string(b))
 }
 
-// LEDGER SELF-04, reproduced in rc.A: a linked ~/.bashrc becomes an edited
-// regular file, and the link's target keeps the Gash block. That is GNU
-// sed -i; BSD sed -i (a macOS runner) refuses the link instead, in 2.x too.
-func TestLedger_SELF04_2x(t *testing.T) {
-	if exec.Command("/bin/sh", "-c", "PATH=/usr/bin:/bin sed --version").Run() != nil {
-		t.Skip("SELF-04 is the GNU sed -i behavior; this sed is not GNU")
-	}
-	d, env := uninstallFixture(t, uninstallFake+"mkdir $D/dot; "+uninstallBlock+">$D/dot/bashrc; ln -s ../dot/bashrc $D/home/.bashrc")
+// LEDGER SELF-04: a linked ~/.bashrc stays a link, and the file it points
+// to loses the Gash block and keeps its mode (3.0: SELF-04 fixed; 2.x's
+// GNU sed -i replaced the link by an edited regular file).
+func TestLedger_SELF04(t *testing.T) {
+	d, env := uninstallFixture(t, uninstallFake+"mkdir $D/dot; "+uninstallBlock+">$D/dot/bashrc; chmod 640 $D/dot/bashrc; ln -s ../dot/bashrc $D/home/.bashrc")
 	_, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
 	require.Equal(t, 0, rc)
-	st, err := os.Lstat(filepath.Join(d, "home/.bashrc"))
-	require.NoError(t, err)
-	require.True(t, st.Mode().IsRegular(), "the link was replaced")
-	b, err := os.ReadFile(filepath.Join(d, "home/.bashrc"))
+	target, err := os.Readlink(filepath.Join(d, "home/.bashrc"))
+	require.NoError(t, err, "the link was replaced")
+	require.Equal(t, "../dot/bashrc", target)
+	b, err := os.ReadFile(filepath.Join(d, "dot/bashrc"))
 	require.NoError(t, err)
 	require.Equal(t, "# before\n# after\n", string(b))
-	b, err = os.ReadFile(filepath.Join(d, "dot/bashrc"))
+	st, err := os.Stat(filepath.Join(d, "dot/bashrc"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o640), st.Mode().Perm())
+	b, err = os.ReadFile(filepath.Join(d, "home/.bashrc.gash-uninstall.bak"))
 	require.NoError(t, err)
 	require.Contains(t, string(b), "# >>> GASH START >>>")
+
+	// A backup path taken by a directory: the profile is left as it was,
+	// with an error, and the uninstall goes on.
+	d, env = uninstallFixture(t, uninstallFake+uninstallBlock+">$D/home/.profile; mkdir $D/home/.profile.gash-uninstall.bak")
+	out, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
+	require.Equal(t, 0, rc)
+	require.Contains(t, out, "Error: Failed to edit "+d+"/home/.profile; remove the Gash block yourself.\n")
+	b, err = os.ReadFile(filepath.Join(d, "home/.profile"))
+	require.NoError(t, err)
+	require.Contains(t, string(b), "# >>> GASH START >>>")
+	require.NoDirExists(t, filepath.Join(d, "home/.gash"))
 }

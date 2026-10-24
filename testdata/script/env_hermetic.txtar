@@ -1,0 +1,20 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: TEST-01
+# covers: none (3.0 harness proof)
+#
+# TEST-01 proving test: a script never inherits the caller's color or
+# mode settings. `NO_COLOR=1 GASH_NO_COLOR=1 GASH_HEADLESS=1 GASH_DEBUG=1
+# go test ./cmd/gash -run TestScript/env_hermetic` passes: testscript
+# builds each script's environment itself (cmd/gash/script_test.go Setup),
+# where the 2.x runner forwarded NO_COLOR into every spec.
+
+exec bash --norc --noprofile -c 'for v in NO_COLOR GASH_NO_COLOR GASH_HEADLESS GASH_DEBUG GASH_TUI CLICOLOR_FORCE COLUMNS; do echo "$v=${!v-unset}"; done'
+stdout '^NO_COLOR=unset$'
+stdout '^GASH_NO_COLOR=unset$'
+stdout '^GASH_HEADLESS=unset$'
+stdout '^GASH_DEBUG=unset$'
+stdout '^GASH_TUI=unset$'
+stdout '^CLICOLOR_FORCE=unset$'
+stdout '^COLUMNS=unset$'
+stdout -count=7 '=unset$'

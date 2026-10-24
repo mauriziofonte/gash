@@ -1,0 +1,17 @@
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
+
+# Path to your Gash installation.
+export GASH_BASH="$HOME/.gash/gash.sh"
+export GASH_COMPLETION="$HOME/.gash/bash_completion"
+
+if [ -f "$GASH_BASH" ]; then
+    source "$GASH_BASH" # This loads Gash
+    # Completion only matters interactively; skip the work in headless mode.
+    # The `if` block (not a trailing `&&`) keeps the file's exit status 0
+    # when the completion file is missing: a `set -e` wrapper sourcing
+    # ~/.gashrc must never die on a missing optional file.
+    if [ "${GASH_HEADLESS-}" != "1" ] && [ -f "$GASH_COMPLETION" ]; then
+        source "$GASH_COMPLETION" # This loads Gash completion
+    fi
+fi

@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: SHELL-13
+# covers: none (3.0 shell proof)
+#
+# SHELL-13 proving test: with a Gash 1.x ~/.gashrc, sourcing gash.sh in
+# headless mode prints nothing, returns 0 and creates no gash state
+# directory (2.x printed a plain-text reminder there and wrote a notice
+# file). An interactive shell without a terminal still gets the reminder
+# once, then nothing within 24 hours.
+
+exec bash -c 'export GASH_HEADLESS=1; source "$GASH_SH"; echo "rc=$?"'
+stdout '^rc=0$'
+! stderr .
+! exists home/.local/state/gash
+
+env GASH_BANNER=0
+exec bash --norc --noprofile -i -c 'source "$GASH_SH"'
+stderr -count=1 'Gash 1\.x'
+exists home/.local/state/gash/notice
+
+exec bash --norc --noprofile -i -c 'source "$GASH_SH"'
+! stderr 'Gash 1\.x'
+
+-- home/.gashrc --
+export GASH_BASH="$HOME/.gash/gash.sh"

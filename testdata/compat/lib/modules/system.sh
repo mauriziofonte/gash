@@ -37,7 +37,9 @@ history_grep() {
             return
             ;;
     esac
-    history | __gash_call history_grep "$@"
+    # No timestamp prefix reaches the binary: it parses "NUM CMD" lines
+    # (LEDGER SYS-09).
+    HISTTIMEFORMAT='' history | __gash_call history_grep "$@"
 }
 ip_public() { __gash_call ip_public "$@"; }
 mkdir_cd() {
@@ -47,8 +49,16 @@ mkdir_cd() {
             return
             ;;
     esac
-    local dir="${1-}"
-    mkdir -p "$dir" && cd "$dir" || return 1
+    # One directory only: a second word is the binary's "Unexpected
+    # argument" (LEDGER SYS-10).
+    if (($# > 1)); then
+        __gash_call mkdir_cd "$@"
+        return
+    fi
+    # No option parsing, no CDPATH, and "-" is ./- (LEDGER SYS-11).
+    local dir="$1"
+    [[ "$dir" == - ]] && dir=./-
+    mkdir -p -- "$dir" && CDPATH='' cd -- "$dir" || return 1
 }
 port_kill() { __gash_call port_kill "$@"; }
 process_find() { __gash_call process_find "$@"; }

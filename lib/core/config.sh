@@ -154,11 +154,13 @@ __gash_check_env_perms() {
         read -r perms owner <<<"$out"
     fi
 
+    local shown
+    __gash_shown shown "$file"
     if [[ "$perms" =~ ^[0-7]{1,4}$ ]] && (((8#$perms) & 8#077)); then
-        __gash_warning "${file/#$HOME/\~} is accessible by other users (mode $perms). Run: chmod 600 ${file/#$HOME/\~}"
+        __gash_warning "$shown is accessible by other users (mode $perms). Run: chmod 600 $shown"
     fi
     if [[ -n "$owner" && "$owner" != "${EUID-}" ]]; then
-        __gash_warning "${file/#$HOME/\~} is owned by uid $owner, not by you (uid ${EUID-}). Gash will still read it."
+        __gash_warning "$shown is owned by uid $owner, not by you (uid ${EUID-}). Gash will still read it."
     fi
     return 0
 }

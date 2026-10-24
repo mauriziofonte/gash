@@ -341,8 +341,12 @@ terminal Gash drives, and AI API keys stay inside the gash process.
 
 The installer and `gash_upgrade` check out the newest release tag. A signed tag
 (PGP or SSH) is checked with `git verify-tag`; an unverifiable one gets a
-warning. `GASH_REQUIRE_SIGNED=1` aborts on an unsigned or unverifiable tag.
-`GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
+warning. A tag counts as signed only when it is an annotated tag whose object
+ends with a signature block: a lightweight tag (even on a signed commit) and a
+message that only quotes the marker are unsigned. `GASH_REQUIRE_SIGNED=1` aborts on an unsigned or unverifiable tag.
+A new install is cloned and checked in a temporary directory next to the
+install location and moved into place only when it passes, so a refusal leaves
+nothing behind. `GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
 
 ## Reporting a vulnerability
 

@@ -164,7 +164,8 @@ node_upgrade() {
     ((dry_run)) && return 0
     __gash_confirm_plan "$assume_yes" || return 1
 
-    local current failed=" "
+    # The status is 1 when an install or a removal failed (LEDGER DEV-06).
+    local current failed=" " rc=0
     current="$(nvm current 2>/dev/null)"
 
     for i in "${!installs[@]}"; do
@@ -174,6 +175,7 @@ node_upgrade() {
             major="${major%%.*}"
             __gash_error "Installing ${installs[$i]} failed: the v$major patches are kept."
             failed+="$major "
+            rc=1
         fi
     done
 
@@ -187,7 +189,6 @@ node_upgrade() {
         nvm use "$current" >/dev/null 2>&1 || true
     fi
 
-    local rc=0
     for ver in "${removes[@]}"; do
         major="${ver#v}"
         major="${major%%.*}"
@@ -204,22 +205,23 @@ node_upgrade() {
 }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 nvm_prune_versions() {
-    needs_help "nvm_prune_versions" "nvm_prune_versions [--force]" \
+    needs_help "nvm_prune_versions" "nvm_prune_versions [-y|--yes|--force]" \
         "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp" \
         "${1-}" && return
 
-    __gash_require_nvm || return 1
-
+    # The arguments come first, then the nvm check (LEDGER DEV-20).
     local force=0 arg
     for arg in "$@"; do
         case "$arg" in
-            --force | -f) force=1 ;;
+            --force | -f | -y | --yes) force=1 ;;
             *)
-                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [--force])"
+                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [-y|--yes|--force])"
                 return 1
                 ;;
         esac
     done
+
+    __gash_require_nvm || return 1
 
     local current
     current="$(nvm current)"
@@ -228,6 +230,8 @@ nvm_prune_versions() {
     local duplicates=() ver major
 
     # Oldest first: each newer patch of a major pushes the previous one out.
+    # Whole version entries only (start of line, after a blank or nvm's ->
+    # marker), so iojs-v1.2.3 is not read as v1.2.3 (LEDGER DEV-08).
     # (grep -E, not -P: BSD and busybox grep have no -P.)
     while read -r ver; do
         [[ "$ver" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || continue
@@ -236,13 +240,15 @@ nvm_prune_versions() {
             duplicates+=("${latest[$major]}")
         fi
         latest[$major]="$ver"
-    done < <(nvm ls --no-colors --no-alias | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u | sort -V)
+    done < <(nvm ls --no-colors --no-alias | grep -oE '(^|[[:space:]>])v[0-9]+\.[0-9]+\.[0-9]+' |
+        sed -E 's/^[[:space:]>]+//' | sort -u | sort -V)
 
     if [[ ${#duplicates[@]} -eq 0 ]]; then
         __gash_success "No duplicate NVM versions found."
         return 0
     fi
 
+    local failed=0
     for ver in "${duplicates[@]}"; do
         if [[ "$ver" == "$current" ]]; then
             __gash_info "Keeping $ver (currently active)."
@@ -251,13 +257,21 @@ nvm_prune_versions() {
 
         if [[ $force -eq 1 ]]; then
             __gash_info "Uninstalling $ver..."
-            nvm uninstall "$ver"
+            if ! nvm uninstall "$ver"; then
+                __gash_error "Uninstalling $ver failed."
+                ((failed++)) || true
+            fi
         else
             __gash_warning "Dry run: would uninstall $ver. Re-run with --force to apply."
         fi
     done
 
     if [[ $force -eq 1 ]]; then
+        # A failed removal is an error, not the OK line (LEDGER DEV-07).
+        if ((failed)); then
+            __gash_error "$failed duplicate version(s) could not be removed."
+            return 1
+        fi
         __gash_success "Duplicate NVM versions removed."
     else
         __gash_info "Dry-run complete. Re-run with --force to actually uninstall."

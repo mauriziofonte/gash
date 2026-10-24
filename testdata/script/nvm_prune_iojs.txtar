@@ -1,0 +1,34 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: DEV-08
+# covers: none (3.0 fix proof)
+#
+# DEV-08 proving test: nvm_prune_versions reads whole version entries of
+# "nvm ls" only. An io.js entry (iojs-v1.2.3) and a version inside an
+# alias line are not taken for Node versions, so nothing is offered for
+# removal when each Node major has one patch (2.x read iojs-v1.2.3 as
+# v1.2.3 and could pair it with a real v1 entry). The active marker (->)
+# still counts as an entry.
+
+env GASH_HEADLESS=1
+env T=$WORK
+
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; nvm_prune_versions; echo "rc=$?"'
+stdout '^rc=0$'
+stderr '^OK: No duplicate NVM versions found\.$'
+
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; NVM_DUP=1 nvm_prune_versions; echo "rc=$?"'
+stdout '^rc=0$'
+stderr '^Warning: Dry run: would uninstall v1\.0\.0\. Re-run with --force to apply\.$'
+! stderr 'v1\.2\.3'
+
+-- nvmfake.sh --
+nvm() {
+    case "$1" in
+    current) echo v22.2.0 ;;
+    ls)
+        printf '%s\n' '   iojs-v1.2.3' '       v1.1.0' '->     v22.2.0' 'default -> 22 (-> xv22.1.0)'
+        [[ -n "${NVM_DUP-}" ]] && printf '%s\n' '       v1.0.0'
+        ;;
+    esac
+}

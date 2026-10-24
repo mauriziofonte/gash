@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -74,6 +75,10 @@ var helpCalls = [][]string{
 	{"--list", "--no-color"}, {"--no-color", "dsa"}, {"all_colors"}, {"path_add"}, {"gash_username"},
 }
 
+// migrateListing is a gash_help listing line of gash_migrate, from its
+// name to the end of the line.
+var migrateListing = regexp.MustCompile(`(?m)^(.*gash_migrate\b).*$`)
+
 // gash_help prints what 2.x prints: every form, colors off, on and
 // shadowed by --no-color, at two widths.
 func TestGashHelpMatches2x(t *testing.T) {
@@ -103,7 +108,9 @@ func TestGashHelpMatches2x(t *testing.T) {
 				}
 				env := map[string]string{"LANG": "C.UTF-8", "COLUMNS": cols, "GASH_VERSION": "test"}
 				o, e, rc := run(t, "gash_help", env, mode != "off", args...)
-				require.Equal(t, fields[2*i], o+e, "%s %s %q", cols, mode, args)
+				// 3.0: SHELL-18 fixed: gash_migrate's description is the D-6
+				// pointer, so its listing line is compared up to the name.
+				require.Equal(t, migrateListing.ReplaceAllString(fields[2*i], "$1"), migrateListing.ReplaceAllString(o+e, "$1"), "%s %s %q", cols, mode, args)
 				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%s %s %q", cols, mode, args)
 			}
 		}
@@ -111,3 +118,22 @@ func TestGashHelpMatches2x(t *testing.T) {
 }
 
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// LEDGER CORE-07: gash_help --list (and gash_help with no argument) shows
+// the modules in one fixed order, the 2.x list then node remote chrome php,
+// never in a hash order.
+func TestLedger_CORE07(t *testing.T) {
+	want := []string{"FILES", "SYSTEM", "GIT", "DOCKER", "DOCKER-COMPOSE", "AI", "SYSINFO", "GASH", "SSH",
+		"LLM", "UTILS", "NODE", "REMOTE", "CHROME", "PHP"}
+	for _, args := range [][]string{{"--list"}, nil} {
+		out, _, rc := run(t, "gash_help", map[string]string{"LANG": "C.UTF-8"}, false, args...)
+		require.Equal(t, 0, rc)
+		var got []string
+		for _, l := range strings.Split(out, "\n") {
+			if m := regexp.MustCompile(`^  ([A-Z][A-Z-]+)$`).FindStringSubmatch(l); m != nil {
+				got = append(got, m[1])
+			}
+		}
+		require.Equal(t, want, got, "%v", args)
+	}
+}

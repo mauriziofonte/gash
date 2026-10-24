@@ -125,6 +125,6 @@ func TestLedger_CORE01(t *testing.T) {
 	cmd.Stdin = strings.NewReader("")
 	got, err := cmd.Output()
 	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(string(got), "Continue? [y/N] "), string(got))
-	require.True(t, strings.HasSuffix(string(got), " rc=1\n"), string(got))
+	// 3.0: CORE-01 fixed in the generated helper too: only the question.
+	require.Equal(t, "Continue? [y/N]  rc=1\n", string(got))
 }

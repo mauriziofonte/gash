@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -439,4 +440,297 @@ func TestGashStubPassesCardAliases(t *testing.T) {
 	require.NoError(t, err, out)
 	card := "..\tcd ..\ngd\ta\\\\b\ngst\tgit status --short\nll\tls\\n-l\n"
 	require.Equal(t, "[git][--no-color]\n"+card+"[]\n"+card+"unset\n", out)
+}
+
+// bashInteractive runs script in an interactive bash without a binary
+// (GASH_BIN=/bin/true: `gash init bash` emits nothing).
+func bashInteractive(t *testing.T, script string) string {
+	t.Helper()
+	cmd := exec.Command("bash", "--noprofile", "--norc", "-i", "-c", script)
+	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin", "LANG=C.UTF-8", "TERM=dumb", "GASH_BIN=/bin/true"}
+	cmd.Stdin = nil
+	out, err := cmd.Output()
+	require.NoError(t, err, string(out))
+	return string(out)
+}
+
+// LEDGER SELF-03: gash_unload removes the completion specs Gash registered
+// and restores the variables Gash sets or exports to their exact pre-load
+// state: unset ones are unset (not left exported), set ones keep their
+// value and export flag, and an unset PROMPT_COMMAND is unset again rather
+// than left empty (3.0: SELF-03 fixed). The end-to-end proof is
+// testdata/script/unload_exact.txtar.
+func TestLedger_SELF03(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out := bashInteractive(t, `complete -F _mine mine; LESS_TERMCAP_md=keep; unset PROMPT_COMMAND
+source '`+dir+`/gash.sh' >/dev/null 2>&1; source '`+dir+`/bash_completion'
+complete -p | grep -c __gash_complete >/dev/null || echo "no specs registered"
+# What the shell layer does on a real load:
+export LESSOPEN='| lesspipe %s' LS_COLORS='di=01' LESS_TERMCAP_mb=x LESS_TERMCAP_md=y PAGER=most
+PROMPT_COMMAND=""
+gash_unload
+echo "specs=$(complete -p | grep -c __gash_complete)"
+complete -p mine
+for v in LESSOPEN LS_COLORS LESS_TERMCAP_mb PAGER PROMPT_COMMAND; do echo "$v=${!v-unset}"; done
+declare -p LESS_TERMCAP_md`)
+	require.Equal(t, "specs=0\ncomplete -F _mine mine\nLESSOPEN=unset\nLS_COLORS=unset\nLESS_TERMCAP_mb=unset\nPAGER=unset\n"+
+		"PROMPT_COMMAND=unset\ndeclare -- LESS_TERMCAP_md=\"keep\"\n", out)
+}
+
+// LEDGER SELF-05: a GASH_* setting the user had before Gash loaded keeps its
+// value and export flag after gash_unload; the GASH_* variables Gash set and
+// the secret caches are gone (3.0: SELF-05 fixed; 2.x swept them all).
+func TestLedger_SELF05(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out := bashInteractive(t, `export GASH_BANNER=0; GASH_GIT_EXCLUDE=/srv/repo
+source '`+dir+`/gash.sh' >/dev/null 2>&1
+__GASH_ENV_DB_default=secret; GASH_BANNER=1
+gash_unload
+declare -p GASH_BANNER GASH_GIT_EXCLUDE
+echo "GASH_VERSION=${GASH_VERSION-gone} GASH_DIR=${GASH_DIR-gone} cache=${__GASH_ENV_DB_default-gone}"`)
+	require.Equal(t, "declare -x GASH_BANNER=\"0\"\ndeclare -- GASH_GIT_EXCLUDE=\"/srv/repo\"\n"+
+		"GASH_VERSION=gone GASH_DIR=gone cache=gone\n", out)
+}
+
+// LEDGER SHELL-13: the headless branch of gash.sh returns before the
+// interactive layer (`gash init bash`, which carries the 1.x reminder), so
+// sourcing it headless with a 1.x ~/.gashrc prints nothing and writes no
+// state (forced divergence; 2.x printed the reminder and wrote a notice).
+func TestLedger_SHELL13(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	b, err := os.ReadFile(filepath.Join(dir, "gash.sh"))
+	require.NoError(t, err)
+	src := string(b)
+	headless := strings.Index(src, "if [[ \"${GASH_HEADLESS-}\" == \"1\" ]]; then\n    if [[ \"${GASH_DEBUG-}\" == \"1\" ]]; then")
+	require.Greater(t, headless, 0)
+	ret := strings.Index(src[headless:], "\n    return 0\nfi\n")
+	require.Greater(t, ret, 0)
+	require.Greater(t, strings.Index(src, `" init bash)"`), headless+ret, "gash init bash runs after the headless return")
+
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gashrc"), []byte("export GASH_BASH=\"$HOME/.gash/gash.sh\"\n"), 0o644))
+	cmd := exec.Command("bash", "--noprofile", "--norc", "-c", "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; echo rc=$?")
+	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin", "LANG=C.UTF-8"}
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	require.Equal(t, "rc=0\n", string(out))
+	_, err = os.Stat(filepath.Join(home, ".local/state/gash"))
+	require.True(t, os.IsNotExist(err), "no state written")
+}
+
+// LEDGER CORE-02: the generated helpers take a numeric operand only when
+// it is a run of digits (with an optional minus); anything else is 0 and
+// is never evaluated, so an array subscript holding a command
+// substitution runs nothing. Integer operands give the 2.x output. The
+// end-to-end proof is testdata/script/compat_helpers_arith.txtar.
+func TestLedger_CORE02(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	tmp := t.TempDir()
+	src := "GASH_HEADLESS=1; for f in output utils validation; do source '" + dir + "/lib/core/'$f.sh; done; "
+	calls := map[string]string{
+		"require_args_min": `__gash_require_args_min "$P" 1; echo "rc=$?"`,
+		"bar_value":        `__gash_bar v "$P" 10 10; echo "[$v]"`,
+		"bar_max":          `__gash_bar v 5 "$P" 10; echo "[$v]"`,
+		"bar_width":        `__gash_bar v 5 10 "$P"; echo "[$v]"`,
+		"want_colors":      `__gash_want_colors "$P"; echo "rc=$?"`,
+		"wrap":             `__gash_wrap a "$P" 'hello world'; echo "${a[*]}"`,
+		"choose":           `__gash_choose c "$P" x y </dev/null; echo "rc=$?"`,
+		"progress":         `__gash_progress "$P" "$P" m; echo "rc=$?"`,
+		"section":          `COLUMNS="$P" __gash_section T`,
+	}
+	for name, call := range calls {
+		mark := filepath.Join(tmp, name)
+		out, err := bash(t, []string{"LC_ALL=C"}, src+"P='a[$(touch "+mark+")]'; "+call)
+		require.NoError(t, err, "%s: %s", name, out)
+		require.NoFileExists(t, mark, "%s ran the substitution", name)
+	}
+
+	// A plain word is 0 (2.x read the unset variable of that name), and
+	// integer vectors keep the 2.x results.
+	out, err := bash(t, []string{"LC_ALL=C"}, src+`__gash_require_args_min abc 1; echo "rc=$?"; `+
+		`__gash_require_args_min 2 1; echo "rc=$?"; __gash_require_args_min 0 1; echo "rc=$?"; `+
+		`__gash_bar v 3 10 10; echo "[$v]"; __gash_bar v 1 100 10; echo "[$v]"; __gash_bar v 0 10 5; echo "[$v]"; `+
+		`__gash_want_colors 1; echo "rc=$?"`)
+	require.NoError(t, err, out)
+	require.Equal(t, "Error: Expected at least 1 argument(s), got abc.\nrc=1\nrc=0\n"+
+		"Error: Expected at least 1 argument(s), got 0.\nrc=1\n"+
+		"[###\t.......]\n[#\t.........]\n[\t.....]\nrc=1\n", out)
+}
+
+// LEDGER CORE-14 in the generated Bash: __gash_shown (the settings-file
+// permission warnings of the fallback loader, the gash_uninstall question)
+// shows HOME as "~" only as a literal prefix followed by "/" or the end
+// (3.0: CORE-14 fixed; 2.x used ${PATH/#$HOME/\~}, a glob).
+func TestLedger_CORE14(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out, err := bash(t, nil, `source '`+dir+`/lib/core/output.sh'; s() { HOME=$1; __gash_shown v "$2"; printf '%s|' "$v"; }; `+
+		`s /home/a /home/a/x; s /home/a /home/ab/x; s /home/a /home/a; s /home/a/ /home/a/y; s "" /x; s '/home/*' /home/b/x; s '/h/[ab]' /h/a/x`)
+	require.NoError(t, err, out)
+	require.Equal(t, "~/x|/home/ab/x|~|~/y|/x|/home/b/x|/h/a/x|", out)
+}
+
+// LEDGER SHELL-03: TAB after "gash " offers all, the card topics and the
+// binary's commands, all from the registry, and no longer "help" (an
+// unknown topic: 3.0: SHELL-03 fixed). Every topic candidate is one the
+// card accepts; testdata/script/completion_gash_topics.txtar runs them.
+func TestLedger_SHELL03(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out := bashInteractive(t, `source '`+dir+`/gash.sh' >/dev/null 2>&1; source '`+dir+`/bash_completion'; COMP_WORDS=(gash ""); COMP_CWORD=1; __gash_complete gash "" gash; printf '%s\n' "${COMPREPLY[@]}"`)
+	got := strings.Fields(out)
+	want := []string{"all"}
+	for _, tp := range registry.Topics() {
+		want = append(want, tp.Name)
+	}
+	want = append(want, registry.Commands()...)
+	require.Equal(t, want, got)
+	require.NotContains(t, got, "help")
+	require.NotContains(t, got, "migrate")
+}
+
+// topLevel returns the lines of a generated Bash file outside function
+// bodies (the generated files are shfmt-formatted: a function opens with
+// "NAME() {" at column 0 and closes with "}" at column 0).
+func topLevel(text string) []string {
+	var out []string
+	inFunc := false
+	for _, l := range strings.Split(text, "\n") {
+		switch {
+		case !inFunc && funcOpen.MatchString(l):
+			inFunc = true
+		case inFunc && l == "}":
+			inFunc = false
+		case !inFunc:
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+var (
+	funcOpen      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_:.-]*\(\) \{$`)
+	hygieneBad    = regexp.MustCompile(`=~|(^|[;&|{(\s])readonly\s|declare\s+-[A-Za-z]*r`)
+	gashAssign    = regexp.MustCompile(`(?:^|[^A-Za-z0-9_$])(__GASH_[A-Z0-9_]+)(?:\[[^]]*\])?\+?=`)
+	gashDeclared  = regexp.MustCompile(`declare\s+-[A-Za-z]+\s+(__GASH_[A-Z0-9_]+)`)
+	gashAllowedRE = regexp.MustCompile(`^__GASH_(COLOR|GLYPH|SYMBOL|BOOT|ENV|SPINNER|CALL|BOLD|SNAPSHOT)(_[A-Z0-9_]+)?$`)
+)
+
+// gashAllowed are the other __GASH_* names a generated file may set at
+// load time: the palette and screen sequences, the load bookkeeping that
+// gash_unload, gash_doctor --timing and completion read.
+var gashAllowed = map[string]bool{
+	"__GASH_AWK": true, "__GASH_RED": true, "__GASH_GREEN": true, "__GASH_YELLOW": true, "__GASH_BLUE": true,
+	"__GASH_CYAN": true, "__GASH_WHITE": true, "__GASH_DIM": true, "__GASH_UNDERLINE": true,
+	"__GASH_CLEAR_SCREEN": true, "__GASH_CURSOR_HIDE": true, "__GASH_CURSOR_SHOW": true, "__GASH_ERASE_EOL": true,
+	"__GASH_FETCH_REASON": true, "__GASH_HELP_LOADED": true, "__GASH_LOAD_ERRORS": true, "__GASH_LOAD_TIMES": true,
+	"__GASH_SETTINGS_KNOWN": true, "__GASH_T0": true, "__GASH_T1": true, "__GASH_TIMING": true,
+	"__GASH_USER_ALIASES": true, "__GASH_PRE_SYMBOLS": true, "__GASH_POST_SYMBOLS": true,
+	"__GASH_COMPLETE_NAMES": true, "__GASH_SNAPSHOT2": true,
+}
+
+// LEDGER SHELL-10: loading leaves no BASH_REMATCH and nothing readonly in
+// the caller's shell: no generated file runs =~, readonly or declare -r at
+// top level, and the __GASH_* names they set while loading are the
+// documented bookkeeping of the allowlist. The init script is linted in
+// internal/shellinit, the loaded shell in testdata/script/load_hygiene.txtar.
+func TestLedger_SHELL10(t *testing.T) {
+	dir := tree(t)
+	files := append(bashFiles(dir), filepath.Join(dir, "bash_completion"))
+	set := map[string]bool{}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		require.NoError(t, err)
+		for _, l := range topLevel(string(b)) {
+			code := strings.TrimSpace(l)
+			if strings.HasPrefix(code, "#") {
+				continue
+			}
+			require.False(t, hygieneBad.MatchString(code), "%s: top-level %q", f, l)
+			for _, m := range gashAssign.FindAllStringSubmatch(code, -1) {
+				set[m[1]] = true
+			}
+			for _, m := range gashDeclared.FindAllStringSubmatch(code, -1) {
+				set[m[1]] = true
+			}
+		}
+	}
+	require.NotEmpty(t, set)
+	for name := range set {
+		require.True(t, gashAllowed[name] || gashAllowedRE.MatchString(name), "%s is set at load time and not in the allowlist", name)
+	}
+}
+
+// LEDGER SHELL-11: gash.sh sourced through a file link, a chain of two
+// links (one relative) or a linked directory finds its tree: GASH_DIR is
+// the real directory and GASH_VERSION the tree's version, where 2.x took
+// the link's directory and loaded nothing (3.0: SHELL-11 fixed).
+func TestLedger_SHELL11(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	links := t.TempDir()
+	require.NoError(t, os.Symlink(filepath.Join(dir, "gash.sh"), filepath.Join(links, "one.sh")))
+	require.NoError(t, os.Mkdir(filepath.Join(links, "sub"), 0o755))
+	require.NoError(t, os.Symlink("../one.sh", filepath.Join(links, "sub", "two.sh")))
+	require.NoError(t, os.Symlink(dir, filepath.Join(links, "tree")))
+	for _, src := range []string{
+		filepath.Join(links, "one.sh"),
+		filepath.Join(links, "sub", "two.sh"),
+	} {
+		out, err := bash(t, []string{"GASH_HEADLESS=1"}, `source '`+src+`'; printf '%s|%s' "$GASH_DIR" "$GASH_VERSION"`)
+		require.NoError(t, err, out)
+		require.Equal(t, dir+"|2.1.0", out, src)
+	}
+	out, err := bash(t, []string{"GASH_HEADLESS=1"}, `source '`+links+`/tree/gash.sh'; printf '%s|%s' "$GASH_DIR" "$GASH_VERSION"`)
+	require.NoError(t, err, out)
+	require.Equal(t, links+"/tree|2.1.0", out)
+}
+
+// LEDGER SYS-09 (shim part): history_grep pipes the history without the
+// HISTTIMEFORMAT prefix, so the binary sees "NUM CMD" lines, and the
+// caller's HISTTIMEFORMAT is left as it was.
+func TestLedger_SYS09(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out, err := bash(t, []string{"GASH_HEADLESS=1", "GASH_BIN=/bin/true"}, `source '`+dir+`/gash.sh'; set -o history; HISTTIMEFORMAT='%F %T '; `+
+		`history -s 'git push'; history -s 'cp a a'; __gash_call() { cat; }; history_grep git; echo "fmt=$HISTTIMEFORMAT"`)
+	require.NoError(t, err, out)
+	require.Regexp(t, `(?m)^ *[0-9]+  git push$`, out)
+	require.Regexp(t, `(?m)^ *[0-9]+  cp a a$`, out)
+	require.NotRegexp(t, `[0-9]{4}-[0-9]{2}-[0-9]{2}`, out)
+	require.Contains(t, out, "fmt=%F %T \n")
+}
+
+// LEDGER SYS-11, SYS-10 (shim part): mkdir_cd creates and enters exactly
+// the directory named, never a CDPATH one, prints nothing, takes "-" as
+// ./- and an option-like name as a name; a second word is the binary's
+// "Unexpected argument" (3.0: SYS-11 fixed; 2.x entered $CDPATH/foo and
+// printed it, ran cd - and failed on -p).
+func TestLedger_SYS11(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	work := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(work, "cdp", "foo"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(work, "here"), 0o755))
+	fake := filepath.Join(t.TempDir(), "gash")
+	require.NoError(t, os.WriteFile(fake, []byte("#!/bin/sh\n[ \"$1 $2 $3\" = '__compat env load' ] && exit 0\necho \"bin: $*\" >&2; exit 1\n"), 0o755))
+	run := func(script string) string {
+		out, err := bash(t, []string{"GASH_HEADLESS=1", "GASH_BIN=" + fake}, `source '`+dir+`/gash.sh'; cd '`+work+`/here'; `+script)
+		require.NoError(t, err, out)
+		return out
+	}
+	out := run(`export CDPATH='` + work + `/cdp'; mkdir_cd foo; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "rc=0 pwd="+work+"/here/foo\n", out, "stdout stays empty and CDPATH is not followed")
+	out = run(`mkdir_cd -; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "rc=0 pwd="+work+"/here/-\n", out)
+	out = run(`mkdir_cd -p; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "rc=0 pwd="+work+"/here/-p\n", out)
+	out = run(`mkdir_cd a b 2>&1; echo "rc=$? pwd=$PWD"`)
+	require.Equal(t, "bin: mkdir_cd a b\nrc=1 pwd="+work+"/here\n", out)
+	_, err := os.Stat(filepath.Join(work, "here", "a"))
+	require.True(t, os.IsNotExist(err), "nothing is created for two words")
 }

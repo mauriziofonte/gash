@@ -30,23 +30,35 @@ func TestURLDecode(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-13, reproduced: the callers capture __gash_url_decode with
-// $(...) (db.sh:246, config.sh:545), so a password loses its trailing
-// newlines, and %00 decodes to nothing (a Bash string holds no NUL).
-func TestLedger_CORE13_2x(t *testing.T) {
+// LEDGER CORE-13: the password is decoded into the value as a whole, so
+// trailing newlines stay and "%00" is a NUL byte, which CheckDBURL refuses
+// (3.0: CORE-13 fixed; 2.x captured the decoder with $(...): "ab%0A%0A"
+// was "ab" and "pw%00x" was "pwx").
+func TestLedger_CORE13(t *testing.T) {
 	tests := []struct{ in, want string }{
-		{"ab%0A%0A", "ab"},
+		{"ab%0A%0A", "ab\n\n"},
 		{"a%0Ab", "a\nb"},
 		{"p%40ss", "p@ss"},
-		{"%0A", ""},
-		{"pw%00x", "pwx"},
-		{"pw%0A%00", "pw"},
-		{"%00%0A%00", ""},
+		{"%0A", "\n"},
+		{"pw%00x", "pw\x00x"},
+		{"pw%0A%00", "pw\n\x00"},
 	}
 	for _, tt := range tests {
 		if got := DecodePassword(tt.in); got != tt.want {
 			t.Errorf("DecodePassword(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+	for _, bad := range []string{"mysql://u:pw%00x@h/d", "pgsql://u:%00@h/d"} {
+		if err := CheckDBURL(bad); err != ErrNULPassword {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+	if err := CheckDBURL("mysql://u:ab%0A%0A@h/d"); err != nil {
+		t.Errorf("newline password: %v", err)
+	}
+	// URLDecode, the port of __gash_url_decode, still drops "%00".
+	if got := URLDecode("pw%00x"); got != "pwx" {
+		t.Errorf("URLDecode %q", got)
 	}
 }
 
@@ -94,8 +106,10 @@ func TestParseDBURL(t *testing.T) {
 			DBURL{"mysql", "user", "p@ss", "localhost", "3306", "db"}},
 		{"CORE-12 raw @ : / # in password", "mysql://u:p@:/#x@h/d",
 			DBURL{"mysql", "u", "p@:/#x", "h", "3306", "d"}},
-		{"CORE-11 IPv6 host split at its first colon (reproduced)", "pgsql://u:p@[::1]:5432/d",
-			DBURL{"pgsql", "u", "p", "[", ":1]:5432", "d"}},
+		// 3.0: CORE-11 fixed: the bracketed IPv6 host is no longer split at
+		// its first colon (2.x: host "[", port ":1]:5432").
+		{"CORE-11 bracketed IPv6 host", "pgsql://u:p@[::1]:5432/d",
+			DBURL{"pgsql", "u", "p", "::1", "5432", "d"}},
 		{"user only", "mysql://u@h/d", DBURL{"mysql", "u", "", "h", "3306", "d"}},
 		{"empty user", "mysql://:pw@h/d", DBURL{"mysql", "", "pw", "h", "3306", "d"}},
 		{"empty port: no default", "mysql://u:p@h:/db", DBURL{"mysql", "u", "p", "h", "", "db"}},
@@ -109,6 +123,42 @@ func TestParseDBURL(t *testing.T) {
 	for _, tt := range tests {
 		if got := ParseDBURL(tt.in); got != tt.want {
 			t.Errorf("%s: ParseDBURL(%q) = %+v, want %+v", tt.name, tt.in, got, tt.want)
+		}
+	}
+}
+
+// LEDGER CORE-11: a bracketed IPv6 host is the text inside the brackets,
+// the port follows "]:" or is the driver's default, and an unclosed
+// bracket is reported for invalid_db_url (3.0: CORE-11 fixed).
+func TestLedger_CORE11(t *testing.T) {
+	tests := []struct{ in, host, port string }{
+		{"pgsql://u:p@[::1]:5432/d", "::1", "5432"},
+		{"pgsql://u:p@[::1]/d", "::1", "5432"},
+		{"mysql://u:p@[fe80::1%eth0]:3307/d", "fe80::1%eth0", "3307"},
+		{"mariadb://u@[2001:db8::7]", "2001:db8::7", "3306"},
+		{"mysql://u:p@[::1]:/d", "::1", ""},
+	}
+	for _, tt := range tests {
+		u := ParseDBURL(tt.in)
+		if u.Host != tt.host || u.Port != tt.port {
+			t.Errorf("%s: host %q port %q, want %q %q", tt.in, u.Host, u.Port, tt.host, tt.port)
+		}
+		if err := CheckDBURL(tt.in); err != nil {
+			t.Errorf("%s: %v", tt.in, err)
+		}
+	}
+	if got := ParseDBURL("pgsql://u:p@[::1]:5432/d").Display(); got != "pgsql://u@[::1]:5432/d" {
+		t.Errorf("display %q", got)
+	}
+	for _, bad := range []string{"pgsql://u:p@[::1/d", "pgsql://u:p@[::1", "mysql://u:p@[::1]x:3306/d"} {
+		if err := CheckDBURL(bad); err != ErrIPv6Host || err.Error() != "Write IPv6 hosts as [addr]:port" {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+	// A password holding "[" does not count: the host part is after the last "@".
+	for _, ok := range []string{"mysql://u:p[x@h/d", "mysql://u:p@h/[d", "mysql://u:p@h:3306/d", ""} {
+		if err := CheckDBURL(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
 		}
 	}
 }
@@ -128,18 +178,19 @@ func TestLedger_CORE12(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-03, reproduced: gash_db_list masks only when the user name is
-// non-empty.
-func TestLedger_CORE03_2x(t *testing.T) {
+// LEDGER CORE-03: the password is masked whether or not the user name is
+// empty (3.0: CORE-03 fixed; 2.x showed mysql://:PW@h/d unmasked).
+func TestLedger_CORE03(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"mysql://u:p@h/d", "mysql://u:****@h/d"},
-		{"mysql://:SECRETPW@h/d", "mysql://:SECRETPW@h/d"}, // the defect
+		{"mysql://:SECRETPW@h/d", "mysql://:****@h/d"},
+		{"redis://:pw@h:6379", "redis://:****@h:6379"},
 		{"mysql://u:p@@h", "mysql://u:****@h"},
 		{"mysql://u:p@ss@host/db", "mysql://u:****@host/db"},
 		{"mysql://u@h/d", "mysql://u@h/d"},
 		{"mysql://u:@h/d", "mysql://u:@h/d"},
 		{"mysql://u@h:3306/d", "mysql://u@h:3306/d"},
-		{"mysql://u@h:3306/d@x", "mysql://u@h:****@x"},
+		{"mysql://u@h:3306/d@x", "mysql://u@h:3306/d@x"}, // no password in the userinfo
 		{"pgsql://u:p%40ss@h:5432/x", "pgsql://u:****@h:5432/x"},
 	}
 	for _, tt := range tests {

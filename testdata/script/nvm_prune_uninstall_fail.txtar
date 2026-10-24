@@ -1,0 +1,50 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: DEV-07
+# ledger: DEV-20
+# covers: none (3.0 fix proof)
+#
+# DEV-07 proving test: nvm_prune_versions --force with a faked nvm whose
+# "nvm uninstall v18.1.0" fails prints an error for that version and ends
+# with the count of versions it could not remove and status 1, not the OK
+# line (2.x said "Duplicate NVM versions removed." and returned 0).
+# DEV-20: -y and --yes are --force, and the options are checked before
+# the nvm check (an unknown option is reported without nvm loaded).
+
+env GASH_HEADLESS=1
+env T=$WORK
+
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; nvm_prune_versions --force; echo "rc=$?"'
+stdout '^rc=1$'
+stderr '^Error: Uninstalling v18\.1\.0 failed\.$'
+stderr '^Error: 1 duplicate version\(s\) could not be removed\.$'
+! stderr 'Duplicate NVM versions removed'
+grep '^uninstall v18\.1\.0$' calls
+grep '^uninstall v20\.1\.0$' calls
+
+# -y and --yes apply too; all removals succeeding end with the OK line.
+rm calls
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; NVM_FAIL=none nvm_prune_versions -y; echo "rc=$?"'
+stdout '^rc=0$'
+stderr '^OK: Duplicate NVM versions removed\.$'
+exec bash -c 'source "$GASH_SH"; source "$T/nvmfake.sh"; NVM_FAIL=none nvm_prune_versions --yes; echo "rc=$?"'
+stdout '^rc=0$'
+
+# Without nvm: the bad option is reported first, a good one meets the nvm check.
+! exec bash -c 'source "$GASH_SH"; nvm_prune_versions --bogus'
+stderr '^Error: Unknown option: --bogus \(usage: nvm_prune_versions \[-y\|--yes\|--force\]\)$'
+! stderr 'nvm is not loaded'
+! exec bash -c 'source "$GASH_SH"; nvm_prune_versions -y'
+stderr 'nvm is not loaded'
+
+-- nvmfake.sh --
+# A faked nvm: three majors with an older patch each; uninstalling
+# v18.1.0 fails unless NVM_FAIL=none.
+nvm() {
+    printf '%s\n' "$*" >>"$T/calls"
+    case "$1" in
+    current) echo v22.2.0 ;;
+    ls) printf '%s\n' '       v18.1.0' '       v18.2.0' '       v20.1.0' '       v20.3.0' '->     v22.2.0' ;;
+    uninstall) [[ "$2" == v18.1.0 && "${NVM_FAIL-}" != none ]] && return 1; return 0 ;;
+    esac
+}

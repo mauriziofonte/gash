@@ -2,7 +2,7 @@
 
 Processes, ports, services, disks, history, WSL.
 
-_Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
+_Written from the help registry (`gash_help NAME`); `go test ./internal/registry` checks it against the help text._
 
 | Function | Alias | Description |
 |---|---|---|
@@ -252,6 +252,13 @@ mkcd my-new-project
 
 # Create nested directories and enter
 mkcd ~/projects/client/frontend
+```
+
+#### Notes
+
+```text
+Exactly one DIRECTORY, taken as a name: -p creates ./-p and - creates
+./-. CDPATH is not searched, and nothing is printed.
 ```
 
 ## path_add

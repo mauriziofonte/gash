@@ -50,14 +50,51 @@ if [[ $- != *i* && "${GASH_HEADLESS-}" != "1" ]]; then
     return 0
 fi
 
+# The exact pre-Gash state of the variables Gash sets or exports, for
+# `gash_unload` (SELF-03, SELF-05): taken first, before GASH_DIR and
+# GASH_VERSION are assigned, so the user's own GASH_* settings are told
+# apart from Gash's. Each entry is "-NAME" (unset before) or the variable's
+# declaration as Bash prints it (${NAME@A}); arrays and read-only variables
+# are left out (unload leaves them alone), and PROMPT_COMMAND is recorded
+# only when unset (the prompt hook removal keeps any other entry).
+# Interactive only, first load only; no fork.
+if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+    __GASH_SNAPSHOT2=()
+    for __gash_var in ${!GASH_@} LESSOPEN LESSCLOSE LS_COLORS LSCOLORS PAGER NVM_DIR debian_chroot EDITOR \
+        HISTTIMEFORMAT LESS_TERMCAP_mb LESS_TERMCAP_md LESS_TERMCAP_me LESS_TERMCAP_se LESS_TERMCAP_so \
+        LESS_TERMCAP_ue LESS_TERMCAP_us PROMPT_COMMAND; do
+        if [[ -z "${!__gash_var+x}" ]]; then
+            __GASH_SNAPSHOT2+=("-$__gash_var")
+        elif [[ "$__gash_var" != PROMPT_COMMAND && "${!__gash_var@a}" != *[aAr]* ]]; then
+            __GASH_SNAPSHOT2+=("${!__gash_var@A}")
+        fi
+    done
+    # The user's aliases: a pack alias of the same name is not defined over
+    # them (SHELL-09; `gash init bash` emits the guard).
+    declare -gA __GASH_USER_ALIASES=()
+    for __gash_var in "${!BASH_ALIASES[@]}"; do
+        __GASH_USER_ALIASES["$__gash_var"]=1
+    done
+    unset __gash_var
+fi
+
 # -----------------------------------------------------------------------------
 # Location and version
 # -----------------------------------------------------------------------------
 
 # GASH_DIR is wherever this file lives, so custom install locations and
-# symlinked checkouts work without configuration.
+# symlinked checkouts work without configuration. A linked gash.sh (or a
+# chain of links) is followed to the real file first (SHELL-11); readlink
+# runs only when the file is a link, at most 40 times.
 __gash_self="${BASH_SOURCE[0]}"
 [[ "$__gash_self" == */* ]] || __gash_self="./$__gash_self"
+for ((__gash_i = 0; __gash_i < 40; __gash_i++)); do
+    [[ -L "$__gash_self" ]] || break
+    __gash_link="$(readlink -- "$__gash_self")" || break
+    [[ "$__gash_link" == /* ]] || __gash_link="${__gash_self%/*}/$__gash_link"
+    __gash_self="$__gash_link"
+done
+unset __gash_i __gash_link
 GASH_DIR="${__gash_self%/*}"
 [[ "$GASH_DIR" == /* ]] || GASH_DIR="$PWD/${GASH_DIR#./}"
 GASH_DIR="${GASH_DIR%/.}"
@@ -238,15 +275,25 @@ __gash_source "$GASH_DIR/lib/core/config.sh"
 # -----------------------------------------------------------------------------
 # Module short aliases (defined in headless mode too: agent contract)
 # -----------------------------------------------------------------------------
+# An alias the user defined before an interactive load is left alone, and
+# `gash init bash` removes one that hides a program on PATH (SHELL-12).
+# Headless mode has no user list: an empty one stands in while they load.
+__gash_ua=0
+declare -p __GASH_USER_ALIASES >/dev/null 2>&1 || {
+    declare -gA __GASH_USER_ALIASES=()
+    __gash_ua=1
+}
 {{% range .ModuleAliases %}}
 {{%- if .Condition %}}
 if {{% .Condition %}}; then
-    alias {{% .Definition %}}
+    [[ -v '__GASH_USER_ALIASES[{{% .Name %}}]' ]] || alias {{% .Definition %}}
 fi
 {{%- else %}}
-alias {{% .Definition %}}
+[[ -v '__GASH_USER_ALIASES[{{% .Name %}}]' ]] || alias {{% .Definition %}}
 {{%- end %}}
 {{%- end %}}
+((__gash_ua)) && unset __GASH_USER_ALIASES
+unset __gash_ua
 
 # -----------------------------------------------------------------------------
 # Headless mode
@@ -306,8 +353,37 @@ if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
 fi
 
 # User customizations, last so they can override anything above.
+# ~/.bash_aliases is sourced only when none of the files that are sourcing
+# this one (~/.bashrc, ~/.gashrc...) sources it itself, as many distribution
+# ~/.bashrc files do: it then runs once (3.0: SHELL-05 fixed; 2.x ran it
+# twice). Pack aliases never replace the user's (SHELL-09), so its aliases
+# still win when it ran before Gash.
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-[[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
+__gash_aliases_sourced=0
+for ((__gash_i = 1; __gash_i < ${#BASH_SOURCE[@]}; __gash_i++)); do
+    [[ -f "${BASH_SOURCE[__gash_i]}" && -r "${BASH_SOURCE[__gash_i]}" ]] || continue
+    mapfile -t __gash_lines <"${BASH_SOURCE[__gash_i]}" 2>/dev/null || continue
+    for __gash_line in "${__gash_lines[@]}"; do
+        # Glob tests only: a regex would leave BASH_REMATCH set (SHELL-10).
+        __gash_line="${__gash_line#"${__gash_line%%[![:space:]]*}"}"
+        [[ "$__gash_line" == "#"* ]] && continue
+        for __gash_cmd in ". " "source "; do
+            # The spellings a profile uses, matched as text.
+            # shellcheck disable=SC2088
+            for __gash_p in '~/.bash_aliases' '$HOME/.bash_aliases' '"$HOME/.bash_aliases"' '${HOME}/.bash_aliases' '"${HOME}/.bash_aliases"'; do
+                [[ "$__gash_line" == "$__gash_cmd$__gash_p"* || "$__gash_line" == *[[:space:]\;]"$__gash_cmd$__gash_p"* ]] || continue
+                __gash_tail="${__gash_line#*"$__gash_cmd$__gash_p"}"
+                if [[ -z "$__gash_tail" || "$__gash_tail" == [[:space:]\;]* ]]; then
+                    __gash_aliases_sourced=1
+                    break 4
+                fi
+            done
+        done
+    done
+done
+unset __gash_i __gash_lines __gash_line __gash_cmd __gash_p __gash_tail
+((__gash_aliases_sourced)) || { [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"; }
+unset __gash_aliases_sourced
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
 ((__GASH_TIMING)) && __gash_time_record "user files: ~/.bash_aliases, ~/.bash_local" "$__GASH_T1"
 

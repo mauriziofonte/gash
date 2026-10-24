@@ -260,7 +260,7 @@ __gash_complete() {
         # The reference card topics, and the 3.x commands of the binary
         gash)
             if ((COMP_CWORD == 1)); then
-                mapfile -t COMPREPLY < <(compgen -W "all help files system nav git docker remote dev llm ai gash init update version hte" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "all files system nav git docker remote dev llm ai gash init update version hte" -- "$cur")
             else
                 case "${COMP_WORDS[1]-}" in
                     init | update | version | hte)
@@ -411,6 +411,8 @@ __gash_enable_completion() {
         [[ -n "${BASH_ALIASES[$a]+x}" ]] && names+=("$a")
     done
     complete -o default -F __gash_complete "${names[@]}"
+    # The names, for gash_unload to remove these specs (SELF-03).
+    __GASH_COMPLETE_NAMES=("${names[@]}")
 }
 
 __gash_enable_completion

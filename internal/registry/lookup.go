@@ -49,6 +49,14 @@ func Settings() []Setting { return settings }
 // Topics returns the reference card topics in card order.
 func Topics() []Topic { return topics }
 
+// commands are the public commands of the binary: `gash WORD` runs them
+// instead of a card topic.
+var commands = []string{"init", "update", "version", "hte"}
+
+// Commands returns the public commands of the binary (internal/cli selects
+// them, the generated completion offers them after the card topics).
+func Commands() []string { return slices.Clone(commands) }
+
 // CardAliases returns the reference card entries of the alias file FILE
 // (lib/aliases/FILE.sh) in file order; nil for a file no topic lists.
 func CardAliases(file string) []CardAlias { return cardAliases[file] }
@@ -60,6 +68,22 @@ func CardAliasNames() []string {
 	for _, list := range cardAliases {
 		for _, a := range list {
 			out = append(out, a.Name)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// CardAliasFamilies returns the Each prefixes of the card entries that
+// stand for a family of aliases (php for php83), sorted, each once: the
+// gash stub passes the live aliases named PREFIX followed by digits.
+func CardAliasFamilies() []string {
+	var out []string
+	for _, list := range cardAliases {
+		for _, a := range list {
+			if a.Each != "" {
+				out = append(out, a.Each)
+			}
 		}
 	}
 	slices.Sort(out)

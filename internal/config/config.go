@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -50,24 +51,30 @@ type Setting struct {
 type Warning struct {
 	Line int    // line number, 0 for the permission and owner checks
 	Text string // the message, e.g. "Line 3 of ~/.gash_env: unknown GASH_ setting, skipping"
+	// Hint is an optional "Hint:" line printed after the warning, e.g.
+	// "put the port in a Host entry of ~/.ssh/config".
+	Hint string
 }
 
 // String is the warning as 2.x prints it without colors.
 func (w Warning) String() string { return "Warning: " + w.Text }
 
-// File is the parsed configuration, in file order. Lookups return the first
-// entry with a name (first entry wins); the lists keep every entry, as
-// gash_db_list shows every one (LEDGER CORE-04, reproduced).
+// File is the parsed configuration, in file order. A repeated SSH:, DB: or
+// HOST: name keeps only its first entry, with a warning for each later one
+// (3.0: CORE-04 fixed), so the lists hold the entries in effect.
 type File struct {
-	Path     string
-	Shown    string // Path as 2.x names it in messages (see ShownPath)
-	Exists   bool   // a regular file (after symlinks) is there
-	SSHKeys  []Entry
-	DB       []Entry
-	AI       []Entry
-	Hosts    []Entry
-	Settings []Setting
-	Warnings []Warning
+	Path    string
+	Shown   string // Path as 2.x names it in messages (see ShownPath)
+	Exists  bool   // a regular file (after symlinks) is there
+	SSHKeys []Entry
+	DB      []Entry
+	AI      []Entry
+	Hosts   []Entry
+	// RejectedHosts are the HOST: entries skipped because their target
+	// fails ValidHostTarget, so remote_* can say why an alias is unknown.
+	RejectedHosts []Entry
+	Settings      []Setting
+	Warnings      []Warning
 	// ReadErr is set when the file exists but cannot be read. 2.x then
 	// printed Bash's own redirection error (text not reproducible) and
 	// went on with an empty configuration, as this File does.
@@ -133,6 +140,9 @@ func (f *File) parseLine(lineno int, raw, home string) {
 	line := strings.TrimSuffix(raw, "\n")
 	line = strings.ReplaceAll(line, "\x00", "")
 	line = strings.TrimSuffix(line, "\r")
+	// full keeps the right side: an SSH: passphrase is the value verbatim
+	// (LEDGER SYS-44); every other entry is read trimmed, as 2.x did.
+	full := trimLeftSpace(line)
 	line = trimSpace(line)
 	if line == "" || line[0] == '#' {
 		return
@@ -169,19 +179,29 @@ func (f *File) parseLine(lineno int, raw, home string) {
 
 	switch prefix {
 	case "SSH":
-		// SSH:keypath=passphrase (an empty passphrase is allowed).
-		key = ExpandTilde(key, home)
+		// SSH:keypath=passphrase (an empty passphrase is allowed). The
+		// passphrase keeps its trailing whitespace, with a warning so an
+		// accidental space is visible (3.0: SYS-44 fixed; 2.x dropped it).
+		value = full[len(prefix)+1+len(key)+1:]
+		key, ok := ExpandTilde(key, home)
+		if !ok {
+			f.warnLine(lineno, "SSH key path starts with ~user; write the full path (skipping)")
+			return
+		}
 		if fi, err := os.Stat(key); err != nil || !fi.Mode().IsRegular() {
 			f.warnLine(lineno, "SSH key file not found (skipping)")
 			return
 		}
-		f.SSHKeys = append(f.SSHKeys, entry(key, value, lineno))
+		if value != trimRightSpace(value) {
+			f.warnLine(lineno, "passphrase ends with whitespace")
+		}
+		f.SSHKeys = f.add(f.SSHKeys, "SSH", entry(key, value, lineno))
 	case "DB":
 		if !hasPrefixAny(value, "mysql://", "mariadb://", "pgsql://") {
 			f.warnLine(lineno, "DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)")
 			return
 		}
-		f.DB = append(f.DB, entry(key, value, lineno))
+		f.DB = f.add(f.DB, "DB", entry(key, value, lineno))
 	case "AI":
 		if key != "claude" && key != "gemini" {
 			f.warnLine(lineno, "unknown AI provider (supported: claude, gemini), skipping")
@@ -195,10 +215,28 @@ func (f *File) parseLine(lineno int, raw, home string) {
 	case "HOST":
 		if !ValidHostTarget(value) {
 			f.warnLine(lineno, "HOST target must be user@host (skipping)")
+			if strings.Contains(value, ":") {
+				f.Warnings[len(f.Warnings)-1].Hint = "put the port in a Host entry of ~/.ssh/config"
+			}
+			f.RejectedHosts = append(f.RejectedHosts, entry(key, value, lineno))
 			return
 		}
-		f.Hosts = append(f.Hosts, entry(key, value, lineno))
+		f.Hosts = f.add(f.Hosts, "HOST", entry(key, value, lineno))
 	}
+}
+
+// add appends e to list unless an entry of that name is there already: the
+// later one is then ignored, with "Line N of FILE: duplicate DB:NAME,
+// ignored (first is at line M)" (LEDGER CORE-04). 2.x kept both, used the
+// first and said nothing.
+func (f *File) add(list []Entry, prefix string, e Entry) []Entry {
+	for _, o := range list {
+		if o.Name == e.Name {
+			f.warnLine(e.Line, "duplicate "+prefix+":"+e.Name+", ignored (first is at line "+strconv.Itoa(o.Line)+")")
+			return list
+		}
+	}
+	return append(list, e)
 }
 
 // entry stores NAME and VALUE the way 2.x did, as one "NAME<TAB>VALUE" line
@@ -253,18 +291,42 @@ func validSettingName(key string) bool {
 	return true
 }
 
-// ValidHostTarget is the 2.x user@host test, [[ V =~
-// ^[^@[:space:]]+@[^@[:space:]]+$ ]]: one @ with text on both sides and no
-// blank (C-locale [:space:]) anywhere. Option-like and host:port values
-// pass (LEDGER REM-02, REM-08). It checks HOST: entries and remote_*'s
-// raw targets.
+// ValidHostTarget reports whether v is a HOST: target remote_* accepts,
+// the rule of remote.validTarget: user@host with a user of
+// [A-Za-z0-9._][A-Za-z0-9._-]* and a host name of
+// [A-Za-z0-9][A-Za-z0-9.-]* or a bracketed IPv6 literal ([::1]). A port
+// (host:22), an option-like word or any other character is refused, so a
+// HOST: line the remote functions would reject is skipped at load with
+// its warning (LEDGER REM-02, REM-08).
 func ValidHostTarget(v string) bool {
-	at := strings.IndexByte(v, '@')
-	if at <= 0 || at == len(v)-1 || strings.IndexByte(v[at+1:], '@') >= 0 {
+	user, host, ok := strings.Cut(v, "@")
+	if !ok || !targetWord(user, "._", "._-") {
 		return false
 	}
-	for i := 0; i < len(v); i++ {
-		if isSpace(v[i]) {
+	if targetWord(host, "", ".-") {
+		return true
+	}
+	if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		return net.ParseIP(host[1:len(host)-1]) != nil && strings.Contains(host, ":")
+	}
+	return false
+}
+
+// targetWord reports whether s is one ASCII letter or digit (or a byte of
+// first) followed by letters, digits and bytes of rest: no regexp, so the
+// package compiles nothing at start.
+func targetWord(s, first, rest string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		alnum := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+		extra := rest
+		if i == 0 {
+			extra = first
+		}
+		if !alnum && strings.IndexByte(extra, c) < 0 {
 			return false
 		}
 	}
@@ -342,6 +404,15 @@ func (f *File) HostTarget(alias string) (string, bool) {
 	return first(f.Hosts, alias)
 }
 
+// RejectedHost is the target of the first HOST: line for alias that was
+// skipped because it fails ValidHostTarget (LEDGER REM-02, REM-08).
+func (f *File) RejectedHost(alias string) (string, bool) {
+	if alias == "" {
+		return "", false
+	}
+	return first(f.RejectedHosts, alias)
+}
+
 // Setting is __gash_get_setting: the value of the first GASH_NAME= line
 // for name, read from the file only.
 func (f *File) Setting(name string) (string, bool) {
@@ -359,8 +430,8 @@ type DBListRow struct {
 	URL  string // masked with MaskDBURL
 }
 
-// DBList is what gash_db_list prints, one row per DB: entry, duplicates
-// included (LEDGER CORE-04, reproduced).
+// DBList is what gash_db_list prints, one row per DB: entry in effect
+// (a repeated name is listed once, 3.0: CORE-04 fixed).
 func (f *File) DBList() []DBListRow {
 	rows := make([]DBListRow, 0, len(f.DB))
 	for _, e := range f.DB {

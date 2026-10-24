@@ -87,6 +87,22 @@ var upgradeCases = []struct {
 	{"help", "", nil, [][]string{{"-h"}, {"--help"}}},
 }
 
+// upgradeSELF01 names the cases where 3.0 no longer matches 2.x: a
+// checkout newer than the latest release is not moved back (SELF-01).
+var upgradeSELF01 = map[string]bool{"untagged head": true, "rc install": true}
+
+// upgradeSELF10 names the cases where a tag that only looks signed is now
+// unsigned (SELF-10), with the line 3.0 prints and its status; the
+// resulting checkout is still the one 2.x left.
+var upgradeSELF10 = map[string]struct {
+	line string
+	rc   int
+}{
+	"marker in message":            {"Upgraded Gash from v1.0 to v1.1.", 0},
+	"marker required":              {"v1.1 is not signed.", 1},
+	"lightweight on signed commit": {"v1.1 is not signed.", 1},
+}
+
 // gash_upgrade does what 2.x does on the same fixtures: the same messages
 // (git's own included), status and resulting checkout.
 func TestUpgradeMatches2x(t *testing.T) {
@@ -142,6 +158,7 @@ func TestUpgradeMatches2x(t *testing.T) {
 				if args == nil {
 					args = [][]string{{}}
 				}
+				before := envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state)
 				for _, a := range args {
 					env := upgradeEnv(d)
 					env["GASH_DIR"] = d + "/g"
@@ -150,9 +167,37 @@ func TestUpgradeMatches2x(t *testing.T) {
 						env[k] = val
 					}
 					o, rc := runMerged(t, "gash_upgrade", env, mode == "on", a...)
-					require.Equal(t, strings.ReplaceAll(fields[2*n], dRef, d), o, "%s %q", tc.name, a)
-					require.Equal(t, fields[2*n+1], strconv.Itoa(rc), "%s %q", tc.name, a)
+					if tc.name == "help" {
+						// The help page carries the 3.0 notes (SELF-01); the
+						// help package tests its rendering.
+						n++
+						continue
+					}
+					if tc.name == "extra arguments" {
+						// 3.0: SELF-15 fixed: the argument is refused before
+						// any git command (2.x ignored it and upgraded).
+						require.Contains(t, o, "Unknown option: --bogus (usage: gash_upgrade)", tc.name)
+						require.Equal(t, 2, rc, tc.name)
+					} else if want, ok := upgradeSELF10[tc.name]; ok {
+						// 3.0: SELF-10 fixed: no "signed, but could not be
+						// verified" for a tag without a signature block.
+						require.Contains(t, o, want.line, tc.name)
+						require.NotContains(t, o, "could not be verified", tc.name)
+						require.Equal(t, want.rc, rc, tc.name)
+					} else if upgradeSELF01[tc.name] {
+						// 3.0: SELF-01 fixed: a checkout newer than the latest
+						// release stays where it is (2.x moved it back).
+						require.Contains(t, o, "is newer than the latest release", tc.name)
+						require.Equal(t, 0, rc, tc.name)
+					} else {
+						require.Equal(t, strings.ReplaceAll(fields[2*n], dRef, d), o, "%s %q", tc.name, a)
+						require.Equal(t, fields[2*n+1], strconv.Itoa(rc), "%s %q", tc.name, a)
+					}
 					n++
+				}
+				if upgradeSELF01[tc.name] || tc.name == "extra arguments" {
+					require.Equal(t, before, envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state), tc.name)
+					continue
 				}
 				require.Equal(t, envBash(t, upgradeEnv(dRef), "D="+shq(dRef)+"; "+state),
 					envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state), tc.name)
@@ -190,39 +235,68 @@ func upgradeFixture(t *testing.T, setup string) (string, map[string]string) {
 	return d, env
 }
 
-// LEDGER SELF-01, reproduced in rc.A: the newest release tag is compared
-// with HEAD for equality only, so an install on a pre-release tag, or on a
-// commit after the last release, moves back to that release.
-func TestLedger_SELF01_2x(t *testing.T) {
+// LEDGER SELF-01: an install on a pre-release tag newer than the latest
+// release, or on a commit after it, is left where it is with a "newer than"
+// line; an older release still moves to the latest (3.0: SELF-01 fixed;
+// 2.x compared for equality only and moved both back to v2.1.0).
+func TestLedger_SELF01(t *testing.T) {
 	mirror := upgradeOrigin + "git -C $D/o tag v2.0.0; git -C $D/o commit -q --allow-empty -m b; git -C $D/o tag v2.1.0; " +
 		"git -C $D/o commit -q --allow-empty -m c; git -C $D/o tag v3.0.0-rc.1; git -C $D/o commit -q --allow-empty -m d; "
-	for _, tc := range []struct{ from, clone, want string }{
-		{"v3.0.0-rc.1", "git clone -q -b v3.0.0-rc.1 $D/o $D/g 2>/dev/null", "OK: Upgraded Gash from v3.0.0-rc.1 to v2.1.0.\n"},
-		{"untagged", "git clone -q $D/o $D/g", "OK: Upgraded Gash to v2.1.0.\n"},
-		{"v2.0.0", "git clone -q -b v2.0.0 $D/o $D/g 2>/dev/null", "OK: Upgraded Gash from v2.0.0 to v2.1.0.\n"},
+	for _, tc := range []struct{ from, clone, want, head string }{
+		{"v3.0.0-rc.1", "git clone -q -b v3.0.0-rc.1 $D/o $D/g 2>/dev/null",
+			"Info: This checkout (v3.0.0-rc.1) is newer than the latest release (v2.1.0); not downgrading.\n", "v3.0.0-rc.1"},
+		{"untagged", "git clone -q $D/o $D/g",
+			"Info: This checkout (v3.0.0-rc.1-1-g", ""},
+		{"untagged after the release", "git clone -q $D/o $D/g; git -C $D/g -c advice.detachedHead=false checkout -q v2.1.0; " +
+			"git -C $D/g tag -d v3.0.0-rc.1 >/dev/null; git -C $D/g commit -q --allow-empty -m local",
+			"Info: This checkout (v2.1.0-1-g", ""},
+		{"after the release, nearest tag not a version", "git clone -q $D/o $D/g; git -C $D/g -c advice.detachedHead=false checkout -q v2.1.0; " +
+			"git -C $D/g commit -q --allow-empty -m local; git -C $D/g tag nightly",
+			"Info: This checkout (nightly) is newer", ""},
+		{"v2.0.0", "git clone -q -b v2.0.0 $D/o $D/g 2>/dev/null", "OK: Upgraded Gash from v2.0.0 to v2.1.0.\n", "v2.1.0"},
 	} {
 		d, env := upgradeFixture(t, mirror+tc.clone)
+		before := envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" rev-parse HEAD")
 		out, rc := runMerged(t, "gash_upgrade", env, false)
 		require.Equal(t, 0, rc, tc.from)
 		require.Contains(t, out, tc.want, tc.from)
-		require.Equal(t, "v2.1.0\n", envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" describe --tags --exact-match HEAD"), tc.from)
+		after := envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" rev-parse HEAD")
+		if tc.head == "v2.1.0" {
+			require.NotContains(t, out, "newer than", tc.from)
+			require.Equal(t, "v2.1.0\n", envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" describe --tags --exact-match HEAD"), tc.from)
+			continue
+		}
+		require.Contains(t, out, "is newer than the latest release (v2.1.0); not downgrading.\n", tc.from)
+		require.NotContains(t, out, "Upgraded", tc.from)
+		require.Equal(t, before, after, tc.from+": HEAD moved")
 	}
 }
 
-// LEDGER SELF-10, reproduced in rc.A: a signature is detected by a text
-// match on the object the tag names, so an annotated tag whose message
-// quotes the marker counts as signed (and fails to verify), and so does a
-// lightweight tag on a signed commit (the commit's gpgsig header matches;
-// verify-tag refuses a commit).
-func TestLedger_SELF10_2x(t *testing.T) {
+// LEDGER SELF-10: a tag is signed only when it is an annotated tag whose
+// object ends with a signature block, so an annotated tag whose message
+// quotes the marker and a lightweight tag on a signed commit are "not
+// signed" (3.0: SELF-10 fixed; rc.A matched the marker as text and said
+// "signed, but the signature could not be verified").
+func TestLedger_SELF10(t *testing.T) {
 	_, env := upgradeFixture(t, upgradeTwo+`git -C $D/o tag -a v1.1 -m 'quoting -----BEGIN PGP SIGNATURE----- in text'`)
 	out, rc := runMerged(t, "gash_upgrade", env, false)
 	require.Equal(t, 0, rc)
-	require.Contains(t, out, "Warning: v1.1 is signed, but the signature could not be verified (is the key in your keyring?).\n")
+	require.NotContains(t, out, "could not be verified")
 	require.Contains(t, out, "OK: Upgraded Gash from v1.0 to v1.1.\n")
+
+	_, env = upgradeFixture(t, upgradeTwo+`git -C $D/o tag -a v1.1 -m "$(printf 'see\n-----BEGIN SSH SIGNATURE-----\nno end')"`)
+	env["GASH_REQUIRE_SIGNED"] = "1"
+	out, rc = runMerged(t, "gash_upgrade", env, false)
+	require.Equal(t, 1, rc)
+	require.Contains(t, out, "Warning: v1.1 is not signed.\nError: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
 
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("no gpg")
+	}
+	// gpg-agent's socket lives in the fixture's GNUPGHOME under TMPDIR; a
+	// Unix socket path is limited to 107 bytes.
+	if len(os.TempDir()) > 70 {
+		t.Skip("TMPDIR is too long for a gpg-agent socket")
 	}
 	d, env := upgradeFixture(t, strings.Replace(upgradeTwo, "git -C $D/o commit -q --allow-empty -m two; ", "", 1)+upgradeGPG+
 		"git -C $D/o -c user.signingkey=t@t commit -q -S --allow-empty -m signed; git -C $D/o tag v1.1")
@@ -230,6 +304,14 @@ func TestLedger_SELF10_2x(t *testing.T) {
 	env["GASH_REQUIRE_SIGNED"] = "1"
 	out, rc = runMerged(t, "gash_upgrade", env, false)
 	require.Equal(t, 1, rc)
-	require.Contains(t, out, "Warning: v1.1 is signed, but the signature could not be verified (is the key in your keyring?).\n"+
+	require.Contains(t, out, "Warning: v1.1 is not signed.\n"+
 		"Error: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
+
+	// A signed tag with the key still verifies.
+	d, env = upgradeFixture(t, upgradeTwo+upgradeGPG+"git -C $D/o -c user.signingkey=t@t tag -s v1.1 -m rel")
+	t.Cleanup(func() { _ = exec.Command("gpgconf", "--homedir", d+"/gnupg", "--kill", "gpg-agent").Run() })
+	env["GASH_REQUIRE_SIGNED"] = "1"
+	out, rc = runMerged(t, "gash_upgrade", env, false)
+	require.Equal(t, 0, rc, out)
+	require.Contains(t, out, "OK: Signature of v1.1 verified.\n")
 }

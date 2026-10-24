@@ -11,36 +11,43 @@ keep the public contract (functions, `--json` envelopes, error contract,
 ```bash
 git clone https://github.com/mauriziofonte/gash.git
 cd gash
-bash tests/run.sh                 # the whole suite, in parallel
-GASH_HEADLESS=1 bash -c 'source ./gash.sh; files_largest --json .'
+go test ./...                                  # unit tests and the testscript suite
+go build -o "$HOME/gash-dev" ./cmd/gash        # a binary of this working copy
+GASH_BIN="$HOME/gash-dev" GASH_HEADLESS=1 bash -c 'source ./gash.sh; files_largest --json .'
 ```
 
+`gash.sh` calls the binary named by `GASH_BIN`; without it, the release
+binary of the checkout's `VERSION` (`~/.local/share/gash/versions/`), fetched
+on first use. `bin/gash` is the launcher script, not the binary.
+
 To try a working copy as your shell, point `~/.gashrc` at it with
-`GASH_DIR=/path/to/gash` or run `bash --rcfile <(echo "source $PWD/gash.sh")`.
+`GASH_DIR=/path/to/gash` or run
+`GASH_BIN="$HOME/gash-dev" bash --rcfile <(echo "source $PWD/gash.sh")`.
 
 ## Before you open a pull request
 
 ```bash
-bash tests/run.sh                                   # all specs but the slow one
-bash tests/run.sh --slow                            # with the rendering fixtures (~8 min)
-bash tests/run.sh -f 'files_largest'                # only matching tests
-bash tests/run.sh --awk mawk                        # with mawk as awk
-bash tests/run.sh --bash /path/to/bash-4.4/bin/bash # an older Bash
-shellcheck -s bash -S warning $(git ls-files '*.sh' bash_completion .gashrc)
-shfmt -d $(git ls-files '*.sh' bash_completion .gashrc tests/mocks/bin)
-tools/gen-docs.sh                                   # when help text changed
+gofmt -l . && go vet ./...
+CGO_ENABLED=1 go test -race ./...                   # unit tests
+go test ./cmd/gash -run TestScript                  # black-box testscript suite
+go run ./cmd/gash __compat generate --out .         # after a compat/*.tmpl change
+go test ./internal/compatgen -update                # then refresh the goldens
+go run ./cmd/gash __compat generate --out . --check # the generated Bash is current
+go run ./internal/tools/covermap                    # every 2.x assertion has a home
+shellcheck -s bash -S warning $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc install.sh)
+shfmt -d $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc bin/gash)
+go test ./internal/registry -run ReferenceDocs      # when help text changed: update docs/reference
 ```
 
-CI runs the same commands on Ubuntu 22.04 and 24.04 (gawk and mawk), on
-Bash 4.4, 5.0, 5.1 and 5.3, and on macOS with Homebrew Bash and GNU tools
-(best effort). `tests/ci/fetch-bash.sh` builds the older Bash versions
-locally.
+CI runs the same commands on Linux and macOS, as a non-root user.
 
 ## Conventions
 
-- **Bash 4.4+, GNU or BSD userland.** Only features every Bash in the
-  matrix has, no `\b` in regexes (macOS lacks it), no gawk-only awk
-  (`__GASH_AWK` prefers gawk where it is only a nicety).
+- **Portability.** Bash 4.4+ for the generated shell layer, using only
+  features every Bash in the matrix has (no `\b` in regexes: macOS lacks
+  it). The binary needs no external userland except the tools a command
+  documents (`git`, `docker`, `ssh`, ...); directory walks, text handling
+  and formatting are Go, identical on Linux and macOS.
 - **Safe under `set -euo pipefail`.** Callers source Gash from strict
   scripts: avoid `[[ … ]] && cmd` as the last command of a function or loop,
   and never leave `BASH_REMATCH` or other globals behind at load time.

@@ -50,14 +50,51 @@ if [[ $- != *i* && "${GASH_HEADLESS-}" != "1" ]]; then
     return 0
 fi
 
+# The exact pre-Gash state of the variables Gash sets or exports, for
+# `gash_unload` (SELF-03, SELF-05): taken first, before GASH_DIR and
+# GASH_VERSION are assigned, so the user's own GASH_* settings are told
+# apart from Gash's. Each entry is "-NAME" (unset before) or the variable's
+# declaration as Bash prints it (${NAME@A}); arrays and read-only variables
+# are left out (unload leaves them alone), and PROMPT_COMMAND is recorded
+# only when unset (the prompt hook removal keeps any other entry).
+# Interactive only, first load only; no fork.
+if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+    __GASH_SNAPSHOT2=()
+    for __gash_var in ${!GASH_@} LESSOPEN LESSCLOSE LS_COLORS LSCOLORS PAGER NVM_DIR debian_chroot EDITOR \
+        HISTTIMEFORMAT LESS_TERMCAP_mb LESS_TERMCAP_md LESS_TERMCAP_me LESS_TERMCAP_se LESS_TERMCAP_so \
+        LESS_TERMCAP_ue LESS_TERMCAP_us PROMPT_COMMAND; do
+        if [[ -z "${!__gash_var+x}" ]]; then
+            __GASH_SNAPSHOT2+=("-$__gash_var")
+        elif [[ "$__gash_var" != PROMPT_COMMAND && "${!__gash_var@a}" != *[aAr]* ]]; then
+            __GASH_SNAPSHOT2+=("${!__gash_var@A}")
+        fi
+    done
+    # The user's aliases: a pack alias of the same name is not defined over
+    # them (SHELL-09; `gash init bash` emits the guard).
+    declare -gA __GASH_USER_ALIASES=()
+    for __gash_var in "${!BASH_ALIASES[@]}"; do
+        __GASH_USER_ALIASES["$__gash_var"]=1
+    done
+    unset __gash_var
+fi
+
 # -----------------------------------------------------------------------------
 # Location and version
 # -----------------------------------------------------------------------------
 
 # GASH_DIR is wherever this file lives, so custom install locations and
-# symlinked checkouts work without configuration.
+# symlinked checkouts work without configuration. A linked gash.sh (or a
+# chain of links) is followed to the real file first (SHELL-11); readlink
+# runs only when the file is a link, at most 40 times.
 __gash_self="${BASH_SOURCE[0]}"
 [[ "$__gash_self" == */* ]] || __gash_self="./$__gash_self"
+for ((__gash_i = 0; __gash_i < 40; __gash_i++)); do
+    [[ -L "$__gash_self" ]] || break
+    __gash_link="$(readlink -- "$__gash_self")" || break
+    [[ "$__gash_link" == /* ]] || __gash_link="${__gash_self%/*}/$__gash_link"
+    __gash_self="$__gash_link"
+done
+unset __gash_i __gash_link
 GASH_DIR="${__gash_self%/*}"
 [[ "$GASH_DIR" == /* ]] || GASH_DIR="$PWD/${GASH_DIR#./}"
 GASH_DIR="${GASH_DIR%/.}"
@@ -281,14 +318,26 @@ gash() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     # The card shows the value this shell gives an alias of the card, as
     # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
-    # backslash and newline escaped (LEDGER SELF-12).
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card=""
-    for __gash_n in .. ... .... ..... .4 .5 bc cd.. chgrp chmod chown cls composer-packages-update composer-self-update cp dc dcb dcc dcdown dclogs dcls dclsr dcps dcpull dcrestart dcrm dcscan dcup dcup2 dexec dils dinspect dir dirm dlogs dnetls dpruneall drm drmi dstart dstartall dstop dstopall ga gaa gap gb gbD gba gbd gc gca gcan gcb gcm gco gd gds gdw gf gfa gl gla glf glg glo glog gls gp gpf gpr gpsh gr grb grba grbc grep grh grh1 grhh gs gsh gsha gshl gshp gst gsw gswc hte hte-create hte-details hte-remove l la lash less ll ls mkdir mv path php ports quit reboot rm shutdown sl vdir; do
+    # backslash and newline escaped. Outside headless mode the card counts
+    # and lists only those (GASH__CARD_LIVE=1, LEDGER SELF-12); a headless
+    # shell loads no alias pack and gets the whole registered list.
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card="" __gash_live=1
+    [[ "${GASH_HEADLESS-}" == "1" ]] && __gash_live=""
+    for __gash_n in .. ... .... ..... .4 .5 1composerXY bc cd.. chgrp chmod chown cls composer composer-packages-update composer-self-update composer1-self-update composerXY cp dc dcb dcc dcdown dclogs dcls dclsr dcps dcpull dcrestart dcrm dcscan dcup dcup2 dexec dils dinspect dir dirm dlogs dnetls dpruneall drm drmi dstart dstartall dstop dstopall ga gaa gap gb gbD gba gbd gc gca gcan gcb gcm gco gd gds gdw gf gfa gl gla glf glg glo glog gls gp gpf gpr gpsh gr grb grba grbc grep grh grh1 grhh gs gsh gsha gshl gshp gst gsw gswc l la lash less ll ls mkdir mv path php phpXY ports quit reboot rm shutdown sl vdir; do
         [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
         __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
         __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
     done
-    GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
+    # The families of the card (php83 for phpXY, LEDGER DEV-21).
+    for __gash_n in "${!BASH_ALIASES[@]}"; do
+        case "$__gash_n" in
+            1composer[0-9]* | composer[0-9]* | php[0-9]*) ;;
+            *) continue ;;
+        esac
+        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__CARD_ALIASES="$__gash_card" GASH__CARD_LIVE="$__gash_live" __gash_call gash "$@"
 }
 gash_doctor() {
     # The doctor reports what this shell holds: the files that failed to
@@ -325,7 +374,7 @@ gash_uninstall() {
     # The questions are asked in this shell with needs_confirm_prompt (a
     # harness may redefine it); the binary checks and removes, one step
     # per call (GASH__UNINSTALL, internal/selfmgmt).
-    local __gash_rc=0 __gash_env
+    local __gash_rc=0 __gash_env __gash_shown_env
     case "${1-}" in
         -h | --help)
             __gash_call gash_uninstall "$@"
@@ -340,7 +389,8 @@ gash_uninstall() {
     GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
     ((__gash_rc == 10)) || return "$__gash_rc"
     __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
-    if needs_confirm_prompt "Remove ${__gash_env/#$HOME/\~}?"; then
+    __gash_shown __gash_shown_env "$__gash_env"
+    if needs_confirm_prompt "Remove $__gash_shown_env?"; then
         GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
     else
         GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
@@ -405,14 +455,44 @@ gash_unload() {
         unset -f "${__gash_fn}" >/dev/null 2>&1 || true
     done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
 
+    # The completion specs Gash registered (SELF-03).
+    if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
+        complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
+    fi
+
     # Per-prefix variable sweep: includes the cached secrets which must
     # never survive an unload, plus colors, PS1 caches, help registry.
+    local -a __gash_snap2=(${__GASH_SNAPSHOT2[@]+"${__GASH_SNAPSHOT2[@]}"})
     local __gash_var
     while IFS= read -r __gash_var; do
         [[ -z "${__gash_var}" ]] && continue
         unset "${__gash_var}" >/dev/null 2>&1 || true
     done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
     unset __AI_LAST_EXIT >/dev/null 2>&1 || true
+
+    # The exact pre-Gash state (SELF-03, SELF-05): a variable unset before
+    # is unset (PROMPT_COMMAND only when nothing is left in it); any other
+    # gets back its value and attributes from the declaration Bash printed
+    # at load time (${NAME@A}, Bash's own quoting), run as a global.
+    for __gash_entry in ${__gash_snap2[@]+"${__gash_snap2[@]}"}; do
+        case "$__gash_entry" in
+            -PROMPT_COMMAND) [[ -n "${PROMPT_COMMAND[*]-}" ]] || unset PROMPT_COMMAND ;;
+            -*) unset "${__gash_entry#-}" >/dev/null 2>&1 || true ;;
+            *)
+                if [[ "$__gash_entry" == "declare "* ]]; then
+                    __gash_key="${__gash_entry#declare }"
+                    __gash_key="${__gash_key#* }"
+                    __gash_entry="declare -g ${__gash_entry#declare }"
+                else
+                    __gash_key="$__gash_entry"
+                fi
+                __gash_key="${__gash_key%%=*}"
+                [[ "$__gash_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+                unset "$__gash_key" >/dev/null 2>&1 || true
+                eval "$__gash_entry"
+                ;;
+        esac
+    done
 
     unset __gash_name
 
@@ -622,7 +702,8 @@ node_upgrade() {
     ((dry_run)) && return 0
     __gash_confirm_plan "$assume_yes" || return 1
 
-    local current failed=" "
+    # The status is 1 when an install or a removal failed (LEDGER DEV-06).
+    local current failed=" " rc=0
     current="$(nvm current 2>/dev/null)"
 
     for i in "${!installs[@]}"; do
@@ -632,6 +713,7 @@ node_upgrade() {
             major="${major%%.*}"
             __gash_error "Installing ${installs[$i]} failed: the v$major patches are kept."
             failed+="$major "
+            rc=1
         fi
     done
 
@@ -645,7 +727,6 @@ node_upgrade() {
         nvm use "$current" >/dev/null 2>&1 || true
     fi
 
-    local rc=0
     for ver in "${removes[@]}"; do
         major="${ver#v}"
         major="${major%%.*}"
@@ -662,22 +743,23 @@ node_upgrade() {
 }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 nvm_prune_versions() {
-    needs_help "nvm_prune_versions" "nvm_prune_versions [--force]" \
+    needs_help "nvm_prune_versions" "nvm_prune_versions [-y|--yes|--force]" \
         "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp" \
         "${1-}" && return
 
-    __gash_require_nvm || return 1
-
+    # The arguments come first, then the nvm check (LEDGER DEV-20).
     local force=0 arg
     for arg in "$@"; do
         case "$arg" in
-            --force | -f) force=1 ;;
+            --force | -f | -y | --yes) force=1 ;;
             *)
-                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [--force])"
+                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [-y|--yes|--force])"
                 return 1
                 ;;
         esac
     done
+
+    __gash_require_nvm || return 1
 
     local current
     current="$(nvm current)"
@@ -686,6 +768,8 @@ nvm_prune_versions() {
     local duplicates=() ver major
 
     # Oldest first: each newer patch of a major pushes the previous one out.
+    # Whole version entries only (start of line, after a blank or nvm's ->
+    # marker), so iojs-v1.2.3 is not read as v1.2.3 (LEDGER DEV-08).
     # (grep -E, not -P: BSD and busybox grep have no -P.)
     while read -r ver; do
         [[ "$ver" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || continue
@@ -694,13 +778,15 @@ nvm_prune_versions() {
             duplicates+=("${latest[$major]}")
         fi
         latest[$major]="$ver"
-    done < <(nvm ls --no-colors --no-alias | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u | sort -V)
+    done < <(nvm ls --no-colors --no-alias | grep -oE '(^|[[:space:]>])v[0-9]+\.[0-9]+\.[0-9]+' |
+        sed -E 's/^[[:space:]>]+//' | sort -u | sort -V)
 
     if [[ ${#duplicates[@]} -eq 0 ]]; then
         __gash_success "No duplicate NVM versions found."
         return 0
     fi
 
+    local failed=0
     for ver in "${duplicates[@]}"; do
         if [[ "$ver" == "$current" ]]; then
             __gash_info "Keeping $ver (currently active)."
@@ -709,13 +795,21 @@ nvm_prune_versions() {
 
         if [[ $force -eq 1 ]]; then
             __gash_info "Uninstalling $ver..."
-            nvm uninstall "$ver"
+            if ! nvm uninstall "$ver"; then
+                __gash_error "Uninstalling $ver failed."
+                ((failed++)) || true
+            fi
         else
             __gash_warning "Dry run: would uninstall $ver. Re-run with --force to apply."
         fi
     done
 
     if [[ $force -eq 1 ]]; then
+        # A failed removal is an error, not the OK line (LEDGER DEV-07).
+        if ((failed)); then
+            __gash_error "$failed duplicate version(s) could not be removed."
+            return 1
+        fi
         __gash_success "Duplicate NVM versions removed."
     else
         __gash_info "Dry-run complete. Re-run with --force to actually uninstall."
@@ -800,7 +894,9 @@ history_grep() {
             return
             ;;
     esac
-    history | __gash_call history_grep "$@"
+    # No timestamp prefix reaches the binary: it parses "NUM CMD" lines
+    # (LEDGER SYS-09).
+    HISTTIMEFORMAT='' history | __gash_call history_grep "$@"
 }
 ip_public() { __gash_call ip_public "$@"; }
 mkdir_cd() {
@@ -810,8 +906,16 @@ mkdir_cd() {
             return
             ;;
     esac
-    local dir="${1-}"
-    mkdir -p "$dir" && cd "$dir" || return 1
+    # One directory only: a second word is the binary's "Unexpected
+    # argument" (LEDGER SYS-10).
+    if (($# > 1)); then
+        __gash_call mkdir_cd "$@"
+        return
+    fi
+    # No option parsing, no CDPATH, and "-" is ./- (LEDGER SYS-11).
+    local dir="$1"
+    [[ "$dir" == - ]] && dir=./-
+    mkdir -p -- "$dir" && CDPATH='' cd -- "$dir" || return 1
 }
 port_kill() { __gash_call port_kill "$@"; }
 process_find() { __gash_call process_find "$@"; }
@@ -871,56 +975,66 @@ gash_migrate() {
 # -----------------------------------------------------------------------------
 # Module short aliases (defined in headless mode too: agent contract)
 # -----------------------------------------------------------------------------
+# An alias the user defined before an interactive load is left alone, and
+# `gash init bash` removes one that hides a program on PATH (SHELL-12).
+# Headless mode has no user list: an empty one stands in while they load.
+__gash_ua=0
+declare -p __GASH_USER_ALIASES >/dev/null 2>&1 || {
+    declare -gA __GASH_USER_ALIASES=()
+    __gash_ua=1
+}
 
-alias ask='ai_ask'
-alias sysinfo_ai='ai_sysinfo'
-alias chri='chrome_headless_update'
-alias dcc='docker_compose_check'
-alias dcup2='docker_compose_upgrade'
-alias dcscan='docker_compose_scan'
-alias dsa='docker_stop_all'
-alias daa='docker_start_all'
-alias dpa='docker_prune_all'
-alias flf='files_largest'
-alias dld='dirs_largest'
-alias dfl='dirs_find_large'
-alias dle='dirs_list_empty'
-alias tls='tree_stats'
-alias axe='archive_extract'
-alias fbk='file_backup'
-alias gdoctor='gash_doctor'
-alias glt='git_list_tags'
-alias gat='git_add_tag'
-alias gdt='git_delete_tag'
-alias gdr='git_dump_revisions'
-alias gpatch='git_apply_patch'
-alias gheal='git_repair'
-alias gsync='git_sync'
-alias nvmp='nvm_prune_versions'
-alias nvmc='node_upgrade'
-alias rh='remote_hosts'
-alias rex='remote_exec'
-alias rpush='remote_push'
-alias rpull='remote_pull'
-alias rspush='remote_sync_push'
-alias rspull='remote_sync_pull'
-alias si='sysinfo'
-alias du2='disk_usage'
+[[ -v '__GASH_USER_ALIASES[ask]' ]] || alias ask='ai_ask'
+[[ -v '__GASH_USER_ALIASES[sysinfo_ai]' ]] || alias sysinfo_ai='ai_sysinfo'
+[[ -v '__GASH_USER_ALIASES[chri]' ]] || alias chri='chrome_headless_update'
+[[ -v '__GASH_USER_ALIASES[dcc]' ]] || alias dcc='docker_compose_check'
+[[ -v '__GASH_USER_ALIASES[dcup2]' ]] || alias dcup2='docker_compose_upgrade'
+[[ -v '__GASH_USER_ALIASES[dcscan]' ]] || alias dcscan='docker_compose_scan'
+[[ -v '__GASH_USER_ALIASES[dsa]' ]] || alias dsa='docker_stop_all'
+[[ -v '__GASH_USER_ALIASES[daa]' ]] || alias daa='docker_start_all'
+[[ -v '__GASH_USER_ALIASES[dpa]' ]] || alias dpa='docker_prune_all'
+[[ -v '__GASH_USER_ALIASES[flf]' ]] || alias flf='files_largest'
+[[ -v '__GASH_USER_ALIASES[dld]' ]] || alias dld='dirs_largest'
+[[ -v '__GASH_USER_ALIASES[dfl]' ]] || alias dfl='dirs_find_large'
+[[ -v '__GASH_USER_ALIASES[dle]' ]] || alias dle='dirs_list_empty'
+[[ -v '__GASH_USER_ALIASES[tls]' ]] || alias tls='tree_stats'
+[[ -v '__GASH_USER_ALIASES[axe]' ]] || alias axe='archive_extract'
+[[ -v '__GASH_USER_ALIASES[fbk]' ]] || alias fbk='file_backup'
+[[ -v '__GASH_USER_ALIASES[gdoctor]' ]] || alias gdoctor='gash_doctor'
+[[ -v '__GASH_USER_ALIASES[glt]' ]] || alias glt='git_list_tags'
+[[ -v '__GASH_USER_ALIASES[gat]' ]] || alias gat='git_add_tag'
+[[ -v '__GASH_USER_ALIASES[gdt]' ]] || alias gdt='git_delete_tag'
+[[ -v '__GASH_USER_ALIASES[gdr]' ]] || alias gdr='git_dump_revisions'
+[[ -v '__GASH_USER_ALIASES[gpatch]' ]] || alias gpatch='git_apply_patch'
+[[ -v '__GASH_USER_ALIASES[gheal]' ]] || alias gheal='git_repair'
+[[ -v '__GASH_USER_ALIASES[gsync]' ]] || alias gsync='git_sync'
+[[ -v '__GASH_USER_ALIASES[nvmp]' ]] || alias nvmp='nvm_prune_versions'
+[[ -v '__GASH_USER_ALIASES[nvmc]' ]] || alias nvmc='node_upgrade'
+[[ -v '__GASH_USER_ALIASES[rh]' ]] || alias rh='remote_hosts'
+[[ -v '__GASH_USER_ALIASES[rex]' ]] || alias rex='remote_exec'
+[[ -v '__GASH_USER_ALIASES[rpush]' ]] || alias rpush='remote_push'
+[[ -v '__GASH_USER_ALIASES[rpull]' ]] || alias rpull='remote_pull'
+[[ -v '__GASH_USER_ALIASES[rspush]' ]] || alias rspush='remote_sync_push'
+[[ -v '__GASH_USER_ALIASES[rspull]' ]] || alias rspull='remote_sync_pull'
+[[ -v '__GASH_USER_ALIASES[si]' ]] || alias si='sysinfo'
+[[ -v '__GASH_USER_ALIASES[du2]' ]] || alias du2='disk_usage'
 if ! type -P hg >/dev/null 2>&1; then
-    alias hg='history_grep'
+    [[ -v '__GASH_USER_ALIASES[hg]' ]] || alias hg='history_grep'
 fi
-alias myip='ip_public'
-alias pf='process_find'
-alias pk='process_kill'
-alias ptk='port_kill'
-alias svs='services_stop'
-alias plz='sudo_last'
-alias mkcd='mkdir_cd'
-alias wr='wsl_restart'
-alias wsd='wsl_shutdown'
-alias wex='wsl_explorer'
-alias wtm='wsl_taskmanager'
-alias wslc='wsl_compact'
+[[ -v '__GASH_USER_ALIASES[myip]' ]] || alias myip='ip_public'
+[[ -v '__GASH_USER_ALIASES[pf]' ]] || alias pf='process_find'
+[[ -v '__GASH_USER_ALIASES[pk]' ]] || alias pk='process_kill'
+[[ -v '__GASH_USER_ALIASES[ptk]' ]] || alias ptk='port_kill'
+[[ -v '__GASH_USER_ALIASES[svs]' ]] || alias svs='services_stop'
+[[ -v '__GASH_USER_ALIASES[plz]' ]] || alias plz='sudo_last'
+[[ -v '__GASH_USER_ALIASES[mkcd]' ]] || alias mkcd='mkdir_cd'
+[[ -v '__GASH_USER_ALIASES[wr]' ]] || alias wr='wsl_restart'
+[[ -v '__GASH_USER_ALIASES[wsd]' ]] || alias wsd='wsl_shutdown'
+[[ -v '__GASH_USER_ALIASES[wex]' ]] || alias wex='wsl_explorer'
+[[ -v '__GASH_USER_ALIASES[wtm]' ]] || alias wtm='wsl_taskmanager'
+[[ -v '__GASH_USER_ALIASES[wslc]' ]] || alias wslc='wsl_compact'
+((__gash_ua)) && unset __GASH_USER_ALIASES
+unset __gash_ua
 
 # -----------------------------------------------------------------------------
 # Headless mode
@@ -980,8 +1094,37 @@ if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
 fi
 
 # User customizations, last so they can override anything above.
+# ~/.bash_aliases is sourced only when none of the files that are sourcing
+# this one (~/.bashrc, ~/.gashrc...) sources it itself, as many distribution
+# ~/.bashrc files do: it then runs once (3.0: SHELL-05 fixed; 2.x ran it
+# twice). Pack aliases never replace the user's (SHELL-09), so its aliases
+# still win when it ran before Gash.
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-[[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"
+__gash_aliases_sourced=0
+for ((__gash_i = 1; __gash_i < ${#BASH_SOURCE[@]}; __gash_i++)); do
+    [[ -f "${BASH_SOURCE[__gash_i]}" && -r "${BASH_SOURCE[__gash_i]}" ]] || continue
+    mapfile -t __gash_lines <"${BASH_SOURCE[__gash_i]}" 2>/dev/null || continue
+    for __gash_line in "${__gash_lines[@]}"; do
+        # Glob tests only: a regex would leave BASH_REMATCH set (SHELL-10).
+        __gash_line="${__gash_line#"${__gash_line%%[![:space:]]*}"}"
+        [[ "$__gash_line" == "#"* ]] && continue
+        for __gash_cmd in ". " "source "; do
+            # The spellings a profile uses, matched as text.
+            # shellcheck disable=SC2088
+            for __gash_p in '~/.bash_aliases' '$HOME/.bash_aliases' '"$HOME/.bash_aliases"' '${HOME}/.bash_aliases' '"${HOME}/.bash_aliases"'; do
+                [[ "$__gash_line" == "$__gash_cmd$__gash_p"* || "$__gash_line" == *[[:space:]\;]"$__gash_cmd$__gash_p"* ]] || continue
+                __gash_tail="${__gash_line#*"$__gash_cmd$__gash_p"}"
+                if [[ -z "$__gash_tail" || "$__gash_tail" == [[:space:]\;]* ]]; then
+                    __gash_aliases_sourced=1
+                    break 4
+                fi
+            done
+        done
+    done
+done
+unset __gash_i __gash_lines __gash_line __gash_cmd __gash_p __gash_tail
+((__gash_aliases_sourced)) || { [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"; }
+unset __gash_aliases_sourced
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
 ((__GASH_TIMING)) && __gash_time_record "user files: ~/.bash_aliases, ~/.bash_local" "$__GASH_T1"
 

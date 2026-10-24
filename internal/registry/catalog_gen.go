@@ -1134,8 +1134,10 @@ var functions = []Function{
 				"  files, system, nav, git, docker, remote, dev, llm, ai, gash\n" +
 				"  (navigation, management, php and node still work as old names)\n" +
 				"\n" +
-				"  The card is built from the help registry and the alias files, so it\n" +
-				"  always lists exactly what this Gash ships.\n" +
+				"  The card is built from the help registry and the alias files. In an\n" +
+				"  interactive shell it counts and lists only the aliases the shell\n" +
+				"  defines (one skipped because a program of that name exists, or a pack\n" +
+				"  whose tool is missing, is left out); headless it lists them all.\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Quick reminder of all git aliases\n" +
@@ -1293,13 +1295,17 @@ var functions = []Function{
 				"  gash_doctor --timing\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Checks: core files, modules, config file permissions,\n" +
-				"  external tools (git, curl, jq, sqlite3, docker).\n" +
-				"  Reports missing or misconfigured components.\n" +
+				"  Checks: core files, modules, the binary (against the hash\n" +
+				"  release/SHA256SUMS pins), the generated shims (against this\n" +
+				"  gash version), config file permissions, external tools\n" +
+				"  (git, curl, jq, sqlite3, docker).\n" +
+				"  Reports missing or misconfigured components and returns 1\n" +
+				"  when a check fails (2 for an unknown option).\n" +
 				"\n" +
 				"  --timing loads Gash in a new interactive shell and lists the\n" +
 				"  milliseconds each file and step takes (5 ms or more stands out),\n" +
-				"  then times whole new shells: with your ~/.bashrc, and bash alone.\n" +
+				"  then times whole new shells: with your ~/.bashrc, and bash alone,\n" +
+				"  3 times each (a line says first that your ~/.bashrc runs 3 times).\n" +
 				"  Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps\n" +
 				"  the same figures in its __GASH_LOAD_TIMES array.",
 		},
@@ -1466,45 +1472,35 @@ var functions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Guided migration of a Gash 1.x configuration to 2.0",
+			Short:   "Shows how to migrate a Gash 1.x configuration",
 			Module:  "gash",
-			SeeAlso: "gash gash_doctor",
+			SeeAlso: "gash gash_doctor gash_upgrade",
 			Body: "" +
 				"USAGE\n" +
-				"  gash_migrate [--yes] [--plain]\n" +
-				"  gash_migrate --rollback [--yes]\n" +
-				"  gash_migrate --status\n" +
-				"  (also: gash migrate ...)\n" +
+				"  gash_migrate\n" +
+				"  (also: gash migrate)\n" +
 				"\n" +
-				"  Walks through the Gash 2.0 changes that concern your setup, one screen\n" +
-				"  each: the ~/.gashrc loader, ~/.gash_env lines 2.0 skips, command\n" +
-				"  replacements (GASH_REPLACE_TOOLS), umask, lines of your shell files that\n" +
-				"  use changed commands, llm_exec and AI consent. You see a diff of every\n" +
-				"  file before anything is written; each file is backed up first.\n" +
+				"  Gash 3 does not migrate a Gash 1.x configuration. gash_migrate prints\n" +
+				"  one line on stderr with the route and returns 1: check out v2.1.0 in\n" +
+				"  your Gash directory, open a new terminal, run gash_migrate there (the\n" +
+				"  2.x guided review, with a diff preview and backups), then gash_upgrade.\n" +
+				"  It writes nothing.\n" +
 				"\n" +
-				"  It starts by itself in the first interactive shell after the upgrade.\n" +
-				"  In scripts and headless shells Gash only prints a one-line reminder on\n" +
-				"  stderr, at most once a day.\n" +
-				"\n" +
-				"OPTIONS\n" +
-				"  --yes         Take the recommended choice everywhere, no questions\n" +
-				"  --plain       Numbered prompts instead of arrow-key menus\n" +
-				"  --rollback    Restore the files saved by the last migration\n" +
-				"  --status      Schema version, pending migration and backups\n" +
+				"  While ~/.gashrc is still the 1.x loader, an interactive shell prints a\n" +
+				"  one-line reminder on stderr, at most once a day. Headless shells print\n" +
+				"  nothing.\n" +
 				"\n" +
 				"FILES\n" +
-				"  ~/.local/state/gash/schema     configuration schema version\n" +
-				"  ~/.local/state/gash/backups/   one folder per migration, with a manifest\n" +
+				"  ~/.local/state/gash/schema     configuration schema version (2 or more:\n" +
+				"                                 no reminder)\n" +
+				"  ~/.local/state/gash/notice     time of the last reminder\n" +
 				"  (under $XDG_STATE_HOME/gash when that is set)\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Review the changes again\n" +
-				"  gash migrate\n" +
-				"\n" +
-				"  # Undo the last migration\n" +
-				"  gash migrate --rollback",
+				"  # Show the route\n" +
+				"  gash migrate",
 		},
-		Fallback:  &Usage{Program: "gash_migrate", Usage: "gash_migrate [--rollback|--status] [--yes] [--plain]", Description: "Review the Gash 2.0 changes that concern your configuration and apply your choices, with a diff preview and backups. Also: gash migrate"},
+		Fallback:  &Usage{Program: "gash_migrate", Usage: "gash_migrate", Description: "Point a Gash 1.x configuration to the 2.x migration route: Gash 3 does not migrate it. Also: gash migrate"},
 		Settings:  []string{"GASH_REPLACE_TOOLS", "GASH_UMASK", "GASH_AI_CONFIRM"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME", "TERM", "TMPDIR", "XDG_STATE_HOME"},
@@ -1583,6 +1579,8 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Removes the Gash sourcing block from your shell profile,\n" +
 				"  deletes the installation directory, and cleans up.\n" +
+				"  Kept as FILE.gash-uninstall.bak: each profile as it was\n" +
+				"  before the edit, and a ~/.gashrc that holds your own lines.\n" +
 				"  Restart your terminal after uninstalling.",
 		},
 		Fallback:  &Usage{Program: "gash_uninstall", Usage: "gash_uninstall", Description: "Remove Gash and its startup block from this account (asks first)."},
@@ -1650,8 +1648,12 @@ var functions = []Function{
 				"  # Then restart your terminal to apply changes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Fetches the latest git tag, checks out that version,\n" +
-				"  and cleans up. Restart your shell after upgrading.",
+				"  Fetches the release tags and checks out the newest release (never\n" +
+				"  an older one). Open a new terminal afterwards: it loads the new\n" +
+				"  version and fetches its binary.\n" +
+				"  A checkout newer than the latest release (a pre-release, or a\n" +
+				"  commit after it) is left as it is. To go back to a release:\n" +
+				"  git -C ~/.gash checkout vX.Y.Z",
 		},
 		Fallback:  &Usage{Program: "gash_upgrade", Usage: "gash_upgrade", Description: "Upgrade Gash to the latest release (refuses to touch local modifications)."},
 		ShellVars: []string{"GASH_REQUIRE_SIGNED", "HOME"},
@@ -2999,7 +3001,11 @@ var functions = []Function{
 				"  mkcd my-new-project\n" +
 				"\n" +
 				"  # Create nested directories and enter\n" +
-				"  mkcd ~/projects/client/frontend",
+				"  mkcd ~/projects/client/frontend\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Exactly one DIRECTORY, taken as a name: -p creates ./-p and - creates\n" +
+				"  ./-. CDPATH is not searched, and nothing is printed.",
 		},
 		Fallback:          &Usage{Program: "mkdir_cd", Usage: "mkdir_cd DIRECTORY", Description: "Create DIRECTORY and cd into it. Alias: mkcd"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -3112,6 +3118,7 @@ var functions = []Function{
 				"  of that major. Majors that are not installed are never added and a\n" +
 				"  major is never removed. When an install fails, that major keeps its\n" +
 				"  patches. The active version moves to the new patch of its major.\n" +
+				"  Exits 1 when an install or a removal failed.\n" +
 				"  Needs nvm loaded (GASH_NVM=lazy or on does it) and network access to\n" +
 				"  nodejs.org. Without a terminal the question is refused: pass -y.",
 		},
@@ -3151,7 +3158,7 @@ var functions = []Function{
 			Aliases: "nvmp",
 			Body: "" +
 				"USAGE\n" +
-				"  nvm_prune_versions [--force]\n" +
+				"  nvm_prune_versions [-y|--yes|--force]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Preview what would be removed (default, no changes made)\n" +
@@ -3163,9 +3170,10 @@ var functions = []Function{
 				"NOTES\n" +
 				"  For each installed major version, keeps only the latest patch.\n" +
 				"  The currently active version (nvm current) is never uninstalled,\n" +
-				"  even if it is not the latest patch for its major.",
+				"  even if it is not the latest patch for its major. -y and --yes are\n" +
+				"  the same as --force. Exits 1 when a removal failed.",
 		},
-		Fallback:  &Usage{Program: "nvm_prune_versions", Usage: "nvm_prune_versions [--force]", Description: "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp"},
+		Fallback:  &Usage{Program: "nvm_prune_versions", Usage: "nvm_prune_versions [-y|--yes|--force]", Description: "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp"},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "NVM_DIR"},
 	},
@@ -4414,14 +4422,18 @@ var cardAliases = map[string][]CardAlias{
 		{Name: "cls", Value: "clear"},
 		{Name: "path", Value: "tr \":\" \"\\n\" <<<\"$PATH\""},
 	},
+	// The php pack as internal/shellinit emits it (LEDGER DEV-21): the
+	// per-version families, the GASH_REPLACE_TOOLS pair and composer1;
+	// the hte aliases are gone (DEV-17: gash hte replaces them).
 	"php": {
-		{Name: "php", Value: "phpX.Y"},
-		{Name: "composer-packages-update", Value: "composer global update"},
-		{Name: "composer-self-update", Value: "sudo composer self-update"},
-		{Name: "hte", Value: "sudo phpX.Y hte-cli create"},
-		{Name: "hte-create", Value: "sudo phpX.Y hte-cli create"},
-		{Name: "hte-remove", Value: "sudo phpX.Y hte-cli remove"},
-		{Name: "hte-details", Value: "sudo phpX.Y hte-cli details"},
+		{Name: "phpXY", Value: "phpX.Y", Condition: "for each installed phpX.Y", Each: "php"},
+		{Name: "composerXY", Value: "phpX.Y composer", Condition: "for each installed phpX.Y, with composer", Each: "composer"},
+		{Name: "1composerXY", Value: "phpX.Y composer1", Condition: "for each installed phpX.Y up to 7.2, with composer1", Each: "1composer"},
+		{Name: "php", Value: "phpX.Y", Condition: "with GASH_REPLACE_TOOLS=1"},
+		{Name: "composer", Value: "phpX.Y composer", Condition: "with GASH_REPLACE_TOOLS=1"},
+		{Name: "composer-packages-update", Value: "composer global update", Condition: "when composer is installed"},
+		{Name: "composer-self-update", Value: "sudo composer self-update", Condition: "when composer is installed"},
+		{Name: "composer1-self-update", Value: "sudo composer1 self-update", Condition: "when composer1 is installed"},
 	},
 	"safety": {
 		{Name: "cp", Value: "cp -iv"},

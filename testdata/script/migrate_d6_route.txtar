@@ -15,7 +15,7 @@
 # screen choices landing in ~/.gash_env (:89), the nothing-written paths
 # (:106) and --status/option errors (:131), recorded as forced divergence
 # SELF-22 (SELF-08/SELF-09 are the related defects, "moot" under D-6); the
-# registered --help still carries the 2.x usages (LEDGER SHELL-18).
+# registered --help describes the pointer (LEDGER SHELL-18, fixed in 3.0).
 
 env GASH_HEADLESS=1
 exec bash route.sh
@@ -61,5 +61,7 @@ out="$(gash migrate --status 2>&1)"; rc=$?
 [[ $rc -eq 1 ]]              || fail "131 status rc"
 [[ "$out" == *"$POINTER"* ]] || fail "131 status pointer"
 if gash migrate --bogus >/dev/null 2>&1; then fail "131 bogus returned 0"; fi
+# 3.0: SHELL-18 fixed: the help describes the pointer, not the 2.x usages.
 help="$(gash_migrate --help 2>&1)"
-[[ "$help" == *"--rollback"* ]] || fail "131 help --rollback"
+[[ "$help" != *"--rollback"* ]] || fail "131 help still lists --rollback"
+[[ "$help" == *"does not migrate a Gash 1.x configuration"* ]] || fail "131 help pointer"

@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // write creates a file with the given mode in a fresh temporary directory.
@@ -113,14 +115,35 @@ func TestLoadSSHMissingKey(t *testing.T) {
 	}
 }
 
-// LEDGER SYS-44: the whole line is trimmed before SSH: is split, so a
-// passphrase loses its trailing whitespace (2.x kept).
-func TestLedger_SYS44_2x(t *testing.T) {
+// LEDGER SYS-44: an SSH: passphrase is the value verbatim but for a final
+// CR: trailing whitespace is kept, with one "passphrase ends with
+// whitespace" warning for the line (3.0: SYS-44 fixed; 2.x trimmed the
+// whole line, so "pass  \t" became "pass"). The left side and the other
+// entries are trimmed as before.
+func TestLedger_SYS44(t *testing.T) {
 	key := write(t, "k", "", 0o600)
-	f := load(t, "SSH:"+key+"=pass  \t\n", "/h")
-	if len(f.SSHKeys) != 1 || f.SSHKeys[0].Value != "pass" {
-		t.Errorf("got %+v", f.SSHKeys)
-	}
+	f := load(t, "  SSH:"+key+"=pass  \t\r\nSSH:"+key+"2=x\n", "/h")
+	require.Len(t, f.SSHKeys, 1)
+	require.Equal(t, "pass  \t", f.SSHKeys[0].Value)
+	require.Equal(t, key, f.SSHKeys[0].Name)
+	ws := texts(f.Warnings)
+	require.Len(t, ws, 2, "%q", ws)
+	require.True(t, strings.HasSuffix(ws[0], "Line 1 of "+f.Shown+": passphrase ends with whitespace"), ws[0])
+	require.Contains(t, ws[1], "SSH key file not found")
+
+	f = load(t, "SSH:"+key+"=trail   \n", "/h")
+	require.Equal(t, "trail   ", f.SSHKeys[0].Value)
+	require.Len(t, f.Warnings, 1)
+
+	// No warning without trailing whitespace, and an empty passphrase stays
+	// allowed; a DB: value is still trimmed.
+	f = load(t, "SSH:"+key+"=pass\nDB:x=mysql://u:p@h/d   \n", "/h")
+	require.Empty(t, f.Warnings)
+	require.Equal(t, "pass", f.SSHKeys[0].Value)
+	require.Equal(t, "mysql://u:p@h/d", f.DB[0].Value)
+	f = load(t, "SSH:"+key+"=\n", "/h")
+	require.Empty(t, f.Warnings)
+	require.Equal(t, "", f.SSHKeys[0].Value)
 }
 
 // config_spec.sh:258, :287, :315, :345, :430.
@@ -175,21 +198,39 @@ func TestLoadReload(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-04, reproduced: duplicate DB: names are all listed, the first
-// one is used, and nothing is said about the second.
-func TestLedger_CORE04_2x(t *testing.T) {
-	f := load(t, "DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n", "/h")
+// LEDGER CORE-04: a repeated DB:, SSH: or HOST: name keeps only the first
+// entry, which is the one used, and the later one is reported with both
+// line numbers (3.0: CORE-04 fixed; 2.x listed both and said nothing).
+func TestLedger_CORE04(t *testing.T) {
+	f := Parse([]byte("DB:default=mysql://a:p1@h1/d\nDB:other=mysql://o:p@h/o\nDB:default=pgsql://b:p2@h2/e\n"+
+		"HOST:web=u@a\nHOST:web=v@b\nAI:claude=sk-1\nAI:claude=sk-2\n"), "/h/.gash_env", "/h")
 	rows := f.DBList()
-	want := []DBListRow{{"default", "mysql://a:****@h1/d"}, {"default", "pgsql://b:****@h2/e"}}
+	want := []DBListRow{{"default", "mysql://a:****@h1/d"}, {"other", "mysql://o:****@h/o"}}
 	if !reflect.DeepEqual(rows, want) {
 		t.Errorf("rows %+v", rows)
 	}
 	if u, _ := f.DBURL("default"); u != "mysql://a:p1@h1/d" {
 		t.Errorf("first entry wins: %q", u)
 	}
-	if len(f.Warnings) != 0 {
-		t.Errorf("warnings %q", texts(f.Warnings))
+	if h, _ := f.HostTarget("web"); h != "u@a" || len(f.Hosts) != 1 {
+		t.Errorf("host %q %d", h, len(f.Hosts))
 	}
+	require.Equal(t, []string{
+		"Line 3 of ~/.gash_env: duplicate DB:default, ignored (first is at line 1)",
+		"Line 5 of ~/.gash_env: duplicate HOST:web, ignored (first is at line 4)",
+	}, texts(f.Warnings))
+	// AI: lines are outside the rule: the first token is used, as in 2.x.
+	if tok, _ := f.AIToken("claude"); tok != "sk-1" {
+		t.Errorf("ai %q", tok)
+	}
+
+	dir := t.TempDir()
+	key := filepath.Join(dir, "id")
+	require.NoError(t, os.WriteFile(key, nil, 0o600))
+	f = Parse([]byte("SSH:"+key+"=one\nSSH:"+key+"=two\n"), "/h/.gash_env", "/h")
+	require.Len(t, f.SSHKeys, 1)
+	require.Equal(t, "one", f.SSHKeys[0].Value)
+	require.Equal(t, []string{"Line 2 of ~/.gash_env: duplicate SSH:" + key + ", ignored (first is at line 1)"}, texts(f.Warnings))
 }
 
 // ai_spec.sh:7-162 (AI: entries and lookups).
@@ -233,14 +274,16 @@ func TestLoadHostEntries(t *testing.T) {
 	if got, _ := f.HostTarget("web"); got != "root@web.example.com" {
 		t.Errorf("first wins: %q", got)
 	}
-	// LEDGER REM-02, reproduced: an option-looking target is accepted.
-	if got, _ := f.HostTarget("opt"); got != "-oProxyCommand=x@h" {
+	// 3.0: REM-02 fixed: an option-looking target is skipped with a warning
+	// (2.x accepted it).
+	if got, ok := f.HostTarget("opt"); ok {
 		t.Errorf("REM-02: %q", got)
 	}
 	if _, ok := f.HostTarget(""); ok {
 		t.Error("empty alias must find nothing")
 	}
-	if len(f.Hosts) != 4 || len(f.Warnings) != 1 {
+	// 3.0: CORE-04 fixed: the second web= line is ignored with a warning.
+	if len(f.Hosts) != 2 || len(f.Warnings) != 3 {
 		t.Errorf("hosts %q warnings %q", names(f.Hosts), texts(f.Warnings))
 	}
 }
@@ -481,8 +524,12 @@ func TestWarningsNeverShowContent(t *testing.T) {
 			t.Errorf("no warning for line %s: %s", n, out)
 		}
 	}
+	// The file's own path (a random temp name, which may hold a checked
+	// word such as "box") is not content: the words are looked for with
+	// it replaced (LEDGER TEST-12).
+	scan := strings.ReplaceAll(out, p, "FILE")
 	for _, leak := range []string{"GASH_NOPE", "topsecret", "PASSWORD", "hunter2", "sk-ant", "PASTED", "prod", "ftp", "pw@", "openai", "sk-zzz", "box", "nohost", "missing_key", "pass"} {
-		if strings.Contains(out, leak) {
+		if strings.Contains(scan, leak) {
 			t.Errorf("leaked %s: %s", leak, out)
 		}
 	}
@@ -652,28 +699,22 @@ func TestLedger_CORE08(t *testing.T) {
 	}
 }
 
+// 3.0: CORE-14 fixed: HOME is a literal prefix that ends at a "/" or at
+// the end of the path. The rows marked 2.x were shown otherwise by
+// ${path/#$HOME/\~}, which took HOME as a glob pattern.
 func TestShownPath(t *testing.T) {
 	tests := []struct{ path, home, want string }{
 		{"/home/u/.gash_env", "/home/u", "~/.gash_env"},
 		{"/home/u", "/home/u", "~"},
-		{"/home/user2/x", "/home/u", "~ser2/x"}, // not limited to path components
+		{"/home/user2/x", "/home/u", "/home/user2/x"}, // 2.x: ~ser2/x
 		{"/etc/gash_env", "/home/u", "/etc/gash_env"},
-		{"/a", "", "~/a"}, // empty HOME matches the empty prefix
-		{"/home/u/x", "/home/u/", "~x"},
-		{"/h/abc/def", "/h/*", "~"},    // HOME is a glob pattern
-		{"/h/a/x", "/h/[ab]", "~/x"},   // bracket
-		{"/h/a/x", "/h/a?", "~x"},      // ?
-		{"/h/*/x", "/h/\\*", "~/x"},    // escaped *
-		{"/h/a/x", "/h/\\*", "/h/a/x"}, // escaped * is literal
-		{"bZ", "[!]x]", "bZ"},          // umatchlen and the matcher disagree, as in Bash
-		{"]b", "[]x]", "~b"},           // leading ] is a member
-		{"\\~", "\\", "\\~"},           // a lone backslash matches nothing here
-		{"-b\t\\", "*\\", "-b\t\\"},    // quick check pattern *\* needs a final *
-		{"a\\x", "a\\", "a\\x"},        // trailing backslash
-		{"*a-z", "**\\*", "*a-z"},      // pattern starting and ending with *
-		{"x*", "**\\*", "~"},           // ... matches a final *
-		{"ab", "?(", "ab"},             // ?( is not extglob here
-		{"/home/u/x", "/home/[[:alpha:]]", "~/x"},
+		{"/a", "", "/a"},                     // 2.x: ~/a
+		{"/home/u/x", "/home/u/", "~/x"},     // 2.x: ~x
+		{"/h/abc/def", "/h/*", "/h/abc/def"}, // 2.x: ~ (HOME was a glob)
+		{"/h/a/x", "/h/[ab]", "/h/a/x"},      // 2.x: ~/x
+		{"/h/*/x", "/h/*", "~/x"},
+		{"/home/u/x", "/home/[[:alpha:]]", "/home/u/x"}, // 2.x: ~/x
+		{"/x", "/", "/x"},
 	}
 	for _, tt := range tests {
 		if got := ShownPath(tt.path, tt.home); got != tt.want {
@@ -682,64 +723,79 @@ func TestShownPath(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-14, reproduced: ${file/#$HOME/\~} takes HOME as an unquoted
-// glob pattern matched against any prefix, not a path component.
-func TestLedger_CORE14_2x(t *testing.T) {
+// LEDGER CORE-14: HOME is matched literally and only up to a "/" or the
+// end of the path (3.0: CORE-14 fixed; 2.x took HOME as an unquoted glob
+// pattern matched against any prefix).
+func TestLedger_CORE14(t *testing.T) {
 	tests := []struct{ path, home, want string }{
-		{"/home/ab/.gash_env", "/home/a", "~b/.gash_env"},
+		{"/home/ab/.gash_env", "/home/a", "/home/ab/.gash_env"}, // 2.x: ~b/.gash_env
 		{"/home/a/.gash_env", "/home/a", "~/.gash_env"},
 		{"/home/a", "/home/a", "~"},
-		{"/home/bob/.gash_env", "/home/*", "~"},
-		{"/home/b/.gash_env", "/home/[ab]", "~/.gash_env"},
+		{"/home/bob/.gash_env", "/home/*", "/home/bob/.gash_env"}, // 2.x: ~
+		{"/home/b/.gash_env", "/home/[ab]", "/home/b/.gash_env"},  // 2.x: ~/.gash_env
 	}
 	for _, tt := range tests {
 		if got := ShownPath(tt.path, tt.home); got != tt.want {
 			t.Errorf("ShownPath(%q, HOME=%q) = %q, want %q", tt.path, tt.home, got, tt.want)
 		}
 	}
+	// The loader's messages use it.
+	f := Parse([]byte("bogus\n"), "/home/ab/.gash_env", "/home/a")
+	require.Equal(t, []string{"Line 1 of /home/ab/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"}, texts(f.Warnings))
 }
 
-// LEDGER CORE-15, reproduced: ${key/#\~/$HOME} replaces only the "~", so
-// ~user/k becomes $HOME followed by "user/k", and under Bash 5.2
-// patsub_replacement an "&" in HOME stands for the matched "~".
-func TestLedger_CORE15_2x(t *testing.T) {
-	tests := []struct{ key, home, want string }{
-		{"~user/k", "/home/u", "/home/uuser/k"},
-		{"~root/.ssh/id", "/home/u", "/home/uroot/.ssh/id"},
-		{"~/k", "/srv/a&b", "/srv/a~b/k"},
-		{"~/k", "/srv/a\\&b", "/srv/a&b/k"},
-		{"~/k", "/home/u", "/home/u/k"},
+// LEDGER CORE-15: only "~" and "~/" stand for HOME, used literally, and a
+// "~user" key path is refused with a warning (3.0: CORE-15 fixed; 2.x made
+// ~user/k $HOME followed by user/k, and under Bash 5.2 an "&" in HOME stood
+// for the matched "~").
+func TestLedger_CORE15(t *testing.T) {
+	tests := []struct {
+		key, home, want string
+		ok              bool
+	}{
+		{"~user/k", "/home/u", "", false},       // 2.x: /home/uuser/k
+		{"~root/.ssh/id", "/home/u", "", false}, // 2.x: /home/uroot/.ssh/id
+		{"~/k", "/srv/a&b", "/srv/a&b/k", true}, // 2.x (Bash 5.2): /srv/a~b/k
+		{"~/k", "/srv/a\\&b", "/srv/a\\&b/k", true},
+		{"~/k", "/home/u", "/home/u/k", true},
 	}
 	for _, tt := range tests {
-		if got := ExpandTilde(tt.key, tt.home); got != tt.want {
-			t.Errorf("ExpandTilde(%q, HOME=%q) = %q, want %q", tt.key, tt.home, got, tt.want)
+		if got, ok := ExpandTilde(tt.key, tt.home); got != tt.want || ok != tt.ok {
+			t.Errorf("ExpandTilde(%q, HOME=%q) = %q %v, want %q %v", tt.key, tt.home, got, ok, tt.want, tt.ok)
 		}
 	}
+	f := Parse([]byte("SSH:~root/.ssh/id=pw\n"), "/h/.gash_env", "/h")
+	require.Empty(t, f.SSHKeys)
+	require.Equal(t, []string{"Line 1 of ~/.gash_env: SSH key path starts with ~user; write the full path (skipping)"}, texts(f.Warnings))
 }
 
 func TestExpandTilde(t *testing.T) {
 	tests := []struct{ key, home, want string }{
 		{"~/.ssh/id", "/home/u", "/home/u/.ssh/id"},
 		{"~", "/home/u", "/home/u"},
-		{"~root/.ssh/id", "/home/u", "/home/uroot/.ssh/id"},
 		{"/abs/~/id", "/home/u", "/abs/~/id"},
-		{"~/x", "/h/a&b", "/h/a~b/x"}, // Bash 5.2 patsub_replacement
-		{"~/x", "/h/a\\&b", "/h/a&b/x"},
-		{"~/x", "/h/a\\\\b", "/h/a\\b/x"},
+		{"rel/id", "/home/u", "rel/id"},
+		// 3.0: CORE-15 fixed: HOME is used literally (2.x on Bash 5.2 read
+		// "&" and "\\" in HOME as replacement syntax).
+		{"~/x", "/h/a&b", "/h/a&b/x"},
+		{"~/x", "/h/a\\&b", "/h/a\\&b/x"},
+		{"~/x", "/h/a\\\\b", "/h/a\\\\b/x"},
 		{"~/x", "/h/a\\b", "/h/a\\b/x"},
-		{"~/x", "/h/\\", "/h/\\/x"},
-		{"~/x", "/h/a\\\\&b", "/h/a\\~b/x"},
 		{"~/x", "", "/x"},
 	}
 	for _, tt := range tests {
-		if got := ExpandTilde(tt.key, tt.home); got != tt.want {
-			t.Errorf("ExpandTilde(%q, HOME=%q) = %q, want %q", tt.key, tt.home, got, tt.want)
+		if got, ok := ExpandTilde(tt.key, tt.home); got != tt.want || !ok {
+			t.Errorf("ExpandTilde(%q, HOME=%q) = %q %v, want %q", tt.key, tt.home, got, ok, tt.want)
 		}
 	}
 }
 
-// ValidHostTarget answers as the 2.x regex does in bash.
+// ValidHostTarget answers as the 2.x regex does in bash, except for the
+// targets 3.0 refuses (3.0: REM-02, REM-08 fixed): a port, an option-like
+// user and characters outside the remote_* rule. It never accepts what
+// 2.x refused.
 func TestValidHostTargetMatches2x(t *testing.T) {
+	refused3x := map[string]bool{"u@h:22": true, "-oProxyCommand=x@h": true, "ü@h": true, "u@h\u00a0x": true}
 	bash, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("bash not available")
@@ -748,9 +804,53 @@ func TestValidHostTargetMatches2x(t *testing.T) {
 		"u@@h", "u@h@x", "u h@x", "u@h\tx", "u@h\n", "\vu@h", "u@h\r", "u@h\f", "uh", "", "ü@h", "u@h x"} {
 		cmd := exec.Command(bash, "--noprofile", "--norc", "-c", `[[ $1 =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]`, "_", v)
 		cmd.Env = []string{"LC_ALL=C"}
-		want := cmd.Run() == nil
+		want := cmd.Run() == nil && !refused3x[v]
 		if got := ValidHostTarget(v); got != want {
 			t.Errorf("ValidHostTarget(%q) = %v, bash says %v", v, got, want)
 		}
 	}
+}
+
+// LEDGER CORE-06: File.Shown, the name the messages use, is the file read:
+// GASH_ENV_FILE when set (HOME shown as "~"), else ~/.gash_env.
+func TestLedger_CORE06(t *testing.T) {
+	get := func(env map[string]string) func(string) string { return func(k string) string { return env[k] } }
+	require.Equal(t, "/x/y", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": "/x/y"})).Shown)
+	require.Equal(t, "~/conf/env", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": "/h/conf/env"})).Shown)
+	require.Equal(t, "~/.gash_env", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": ""})).Shown)
+}
+
+// LEDGER REM-02, REM-08: a HOST: target must pass the remote_* rule
+// (user [A-Za-z0-9._][A-Za-z0-9._-]*, host [A-Za-z0-9][A-Za-z0-9.-]* or a
+// bracketed IPv6 literal), or the line is skipped with its warning; a
+// target with a ':' also gets a hint about ~/.ssh/config (2.x accepted
+// option-like users and host:port, which remote_* then refused or passed
+// to ssh as an option).
+func TestLedger_REM02(t *testing.T) {
+	for v, ok := range map[string]bool{
+		"root@web.example.com": true, "deploy@10.0.0.5": true, "u@[::1]": true, "u@[2001:db8::1]": true,
+		"_svc.x@h-1": true, ".u@h": true, "u-x@h": true,
+		"-oProxyCommand=x@h": false, "u@h:22": false, "u@-h": false, "u@.h": false, "-u@h": false,
+		"u@[10.0.0.1]": false, "u@[::1": false, "u@[]": false, "u@h_x": false, "u@h/x": false, "u@": false, "@h": false,
+		"u@h@i": false, "u @h": false, "ü@h": false,
+	} {
+		require.Equal(t, ok, ValidHostTarget(v), v)
+	}
+
+	f := load(t, "HOST:opt=-oProxyCommand=x@h\nHOST:port=u@h:22\nHOST:v6=u@[::1]\n", "/h")
+	require.Equal(t, []string{"v6=u@[::1]"}, names(f.Hosts))
+	require.Len(t, f.Warnings, 2)
+	require.Contains(t, f.Warnings[0].Text, "Line 1 of ")
+	require.True(t, strings.HasSuffix(f.Warnings[0].Text, ": HOST target must be user@host (skipping)"))
+	require.Empty(t, f.Warnings[0].Hint)
+	require.Contains(t, f.Warnings[1].Text, "Line 2 of ")
+	require.Equal(t, "put the port in a Host entry of ~/.ssh/config", f.Warnings[1].Hint)
+	// remote_* names the skipped entry when its alias is used.
+	got, ok := f.RejectedHost("port")
+	require.True(t, ok)
+	require.Equal(t, "u@h:22", got)
+	_, ok = f.HostTarget("port")
+	require.False(t, ok)
+	_, ok = f.RejectedHost("v6")
+	require.False(t, ok)
 }

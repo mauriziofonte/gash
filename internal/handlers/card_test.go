@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,6 +46,39 @@ func cardScript(prefix string, shadow bool) string {
 	return b.String()
 }
 
+// devOverview is the dev row of the card overview, up to its alias count.
+var devOverview = regexp.MustCompile(`(?m)^(.*dev(?:\x1b\[[0-9;]*m| )+[0-9]+ +)[0-9]+`)
+
+// topicHeading is a card topic heading line ("  LLM  ...").
+var topicHeading = regexp.MustCompile(`^  (\x1b\[[0-9;]*m)*[A-Z][A-Z-]+(\x1b\[[0-9;]*m)* `)
+
+// stripDevAliases drops the alias block of the dev topic (from its
+// "Aliases" heading to the next topic heading or the end) and the empty
+// lines in it.
+func stripDevAliases(s string) string {
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	inDev, skip := false, false
+	for _, l := range lines {
+		switch {
+		case strings.Contains(l, "PHP and Node.js versions"):
+			inDev, skip = true, false
+		case skip && topicHeading.MatchString(l):
+			inDev, skip = false, false
+		case inDev && strings.Contains(l, "Aliases"):
+			skip = true
+		}
+		if skip {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
+}
+
+// cardRule is a card section rule (a line of ─ only).
+var cardRule = regexp.MustCompile(`(?m)^(\s*)─+$`)
+
 // gash prints the card 2.x prints: every topic and form, colors off, on
 // and shadowed by --no-color, at three widths, with the aliases of an
 // interactive shell and with aliases the user redefined (their values
@@ -74,7 +108,27 @@ func TestCardMatches2x(t *testing.T) {
 				}
 				env := map[string]string{"LANG": "C.UTF-8", "COLUMNS": tc.cols, "GASH_VERSION": "test", selfmgmt.CardAliasesVar: live}
 				o, e, rc := run(t, "gash", env, tc.mode != "off", args...)
-				require.Equal(t, fields[2*i], o+e, "%q", args)
+				if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
+					// 3.0: SELF-12 fixed: the help says which aliases the
+					// card lists; the help package tests its rendering.
+					require.Contains(t, o, "counts and lists only the aliases the shell", "%q", args)
+					require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%q", args)
+					continue
+				}
+				// 3.0: SHELL-18 fixed: gash_migrate's usage and description
+				// are the D-6 pointer (migrateListing, help_test.go), and the
+				// gash section's rule follows its widest line.
+				// 3.0: DEV-21 fixed: the dev topic's php aliases are the
+				// 3.0 pack with conditions, so its alias block and count
+				// are left out of the comparison (TestLedger_DEV21).
+				norm := func(s string) string {
+					s = stripDevAliases(devOverview.ReplaceAllString(s, "${1}N"))
+					if !strings.Contains(s, "gash_migrate") {
+						return s
+					}
+					return cardRule.ReplaceAllString(migrateListing.ReplaceAllString(s, "$1"), "$1─")
+				}
+				require.Equal(t, norm(fields[2*i]), norm(o+e), "%q", args)
 				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%q", args)
 			}
 		})
@@ -105,13 +159,39 @@ func TestCardListsTheRegistry(t *testing.T) {
 	require.Contains(t, overview, strconv.Itoa(len(fns))+" functions")
 }
 
-// LEDGER SELF-12, reproduced in rc.A: the card counts and lists the
-// aliases of the alias files whatever the caller's shell defined; only
-// the values of defined aliases come from the shell. With gp and gc
-// absent from the shell (the shadow rule dropped them), git still counts
-// 44 aliases and lists both with the values the file writes.
-func TestLedger_SELF12_2x(t *testing.T) {
+// LEDGER SELF-12: from a shell that is not headless the card counts and
+// lists only the aliases the shell defines (3.0: SELF-12 fixed; rc.A
+// counted 44 git aliases and listed gp and gc although the shadow rule had
+// dropped them). Without the live flag (headless, a script) the card still
+// shows every registered alias.
+func TestLedger_SELF12(t *testing.T) {
 	gitCount := regexp.MustCompile(`(?m)^  git +7 +([0-9]+) `)
+	// Every git alias of the card but gp and gc, as a shell where programs
+	// named gp and gc exist defines them.
+	var live strings.Builder
+	n := 0
+	for _, a := range registry.CardAliases("git") {
+		if a.Name != "gp" && a.Name != "gc" && a.Name != a.Value {
+			live.WriteString(a.Name + "\t" + a.Value + "\n")
+			n++
+		}
+	}
+	require.Equal(t, 42, n)
+	env := map[string]string{"LC_ALL": "C", "COLUMNS": "200", selfmgmt.CardAliasesVar: live.String(), selfmgmt.CardLiveVar: "1"}
+	overview, _, _ := run(t, "gash", env, false)
+	require.Equal(t, "42", gitCount.FindStringSubmatch(overview)[1])
+	card, _, _ := run(t, "gash", env, false, "git")
+	require.NotRegexp(t, `(?m)  gp +git pull( |$)`, card)
+	require.NotRegexp(t, `(?m)  gc +git commit( |$)`, card)
+	require.Regexp(t, `(?m)  gst +git status( |$)`, card)
+
+	// A shell with no alias defined: no alias counted or listed.
+	env[selfmgmt.CardAliasesVar] = ""
+	overview, _, _ = run(t, "gash", env, false)
+	require.Equal(t, "0", gitCount.FindStringSubmatch(overview)[1])
+
+	// Headless or a script (no live flag): every registered alias, the
+	// values of defined ones from the shell.
 	for _, live := range []string{"", "gst\tgit status --short\n"} {
 		env := map[string]string{"LC_ALL": "C", "COLUMNS": "200", selfmgmt.CardAliasesVar: live}
 		overview, _, _ := run(t, "gash", env, false)
@@ -123,4 +203,28 @@ func TestLedger_SELF12_2x(t *testing.T) {
 			require.Regexp(t, `(?m)  gst +git status --short( |$)`, card)
 		}
 	}
+}
+
+// LEDGER DEV-21: the dev card shows the php pack's families with their
+// conditions; a shell that defines php83 and php74 gets those listed (and
+// counted) in place of phpXY, and no condition notes.
+func TestLedger_DEV21(t *testing.T) {
+	devCount := regexp.MustCompile(`(?m)^  dev +[0-9]+ +([0-9]+) `)
+	env := map[string]string{"LC_ALL": "C", "COLUMNS": "200"}
+	card, _, _ := run(t, "gash", env, false, "dev")
+	require.Regexp(t, `(?m)^  phpXY +phpX\.Y `, card)
+	require.Contains(t, card, "\n  phpXY: for each installed phpX.Y\n")
+	require.Contains(t, card, "\n  php, composer: with GASH_REPLACE_TOOLS=1\n")
+	require.NotContains(t, card, "hte")
+
+	env[selfmgmt.CardAliasesVar] = "php83\t/usr/bin/php8.3 -d x\nphp74\t/usr/bin/php7.4 -d x\ncomposer83\t/usr/bin/php8.3 c\nphpfoo\tx\nphp8x\ty\n"
+	env[selfmgmt.CardLiveVar] = "1"
+	card, _, _ = run(t, "gash", env, false, "dev")
+	require.Regexp(t, `(?m)^  php74 +/usr/bin/php7\.4 -d x +php83 +/usr/bin/php8\.3 -d x +composer83 +/usr/bin/php8\.3 c\s*$`, card)
+	require.NotContains(t, card, "phpXY")
+	require.NotContains(t, card, "phpfoo")
+	require.NotContains(t, card, "php8x")
+	require.NotContains(t, card, "for each installed")
+	overview, _, _ := run(t, "gash", env, false)
+	require.Equal(t, "3", devCount.FindStringSubmatch(overview)[1])
 }

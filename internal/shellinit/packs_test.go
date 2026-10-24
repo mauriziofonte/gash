@@ -26,8 +26,8 @@ func gnuProbe(c runner.Call) (runner.Expect, bool) {
 }
 
 func TestShellInit_AliasPackColors(t *testing.T) {
-	// With a grep probe that exits 1 (empty pattern on /dev/null), no grep
-	// alias is defined (SHELL-06).
+	// With a grep probe that fails (a grep without --color), no grep alias
+	// is defined (SHELL-06).
 	out := newHarness().withProgram("grep").emit(t)
 	require.NotContains(t, out, "alias grep=")
 

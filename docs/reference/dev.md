@@ -2,7 +2,7 @@
 
 PHP and Node.js versions, headless Chrome.
 
-_Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
+_Written from the help registry (`gash_help NAME`); `go test ./internal/registry` checks it against the help text._
 
 | Function | Alias | Description |
 |---|---|---|
@@ -134,6 +134,7 @@ published patch with the global packages of the patch it replaces
 of that major. Majors that are not installed are never added and a
 major is never removed. When an install fails, that major keeps its
 patches. The active version moves to the new patch of its major.
+Exits 1 when an install or a removal failed.
 Needs nvm loaded (GASH_NVM=lazy or on does it) and network access to
 nodejs.org. Without a terminal the question is refused: pass -y.
 ```
@@ -149,7 +150,7 @@ Alias: `nvmp`
 #### Usage
 
 ```text
-nvm_prune_versions [--force]
+nvm_prune_versions [-y|--yes|--force]
 ```
 
 #### Examples
@@ -167,7 +168,8 @@ nvmp --force
 ```text
 For each installed major version, keeps only the latest patch.
 The currently active version (nvm current) is never uninstalled,
-even if it is not the latest patch for its major.
+even if it is not the latest patch for its major. -y and --yes are
+the same as --force. Exits 1 when a removal failed.
 ```
 
 ## php_detect_version

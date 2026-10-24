@@ -13,11 +13,14 @@ import (
 const unknownUsername = "UNKNOWN_USERNAME"
 
 // username is gash_username: whoami, then id -un, then the /etc/passwd
-// entry of id -u, else UNKNOWN_USERNAME. Extra arguments are ignored
-// (SELF-15).
+// entry of id -u, else UNKNOWN_USERNAME. An argument is refused (3.0:
+// SELF-15 fixed; 2.x ignored it).
 func (m *Module) username(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
+	}
+	if badArgs(c, "gash_username") {
+		return usageStatus
 	}
 	name := ""
 	// if command -v whoami; then user_name=$(whoami 2>/dev/null) || true

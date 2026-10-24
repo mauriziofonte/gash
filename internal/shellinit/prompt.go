@@ -237,18 +237,21 @@ __gash_ps1_build() {
     PS2="${o}${__GASH_PS1_BPURPLE}${c}>${R} "
 }
 
-# Window title: "cwd [user]" locally, "user@host:cwd" over SSH.
+# Window title: "cwd [user]" locally, "user@host:cwd" over SSH. Control
+# characters (C0, DEL and, in a UTF-8 locale, C1) become "?", so a name
+# holding BEL or ESC cannot end the title early (SHELL-02).
 __gash_set_terminal_title() {
     case "${TERM-}" in
         xterm* | rxvt* | screen* | tmux* | alacritty | foot* | kitty* | wezterm | vte* | gnome* | konsole*) ;;
         *) return 0 ;;
     esac
-    local cwd="${PWD/#$HOME/\~}"
+    local cwd="${PWD/#$HOME/\~}" title
     if [[ -n "${SSH_CONNECTION-}" ]]; then
-        printf '\e]2;%s\a' "${USER-}@${HOSTNAME-}:${cwd}"
+        title="${USER-}@${HOSTNAME-}:${cwd}"
     else
-        printf '\e]2;%s\a' "${cwd} [${USER-}]"
+        title="${cwd} [${USER-}]"
     fi
+    printf '\e]2;%s\a' "${title//[[:cntrl:]]/?}"
 }
 
 # -----------------------------------------------------------------------------

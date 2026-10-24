@@ -52,9 +52,10 @@ func (st *state) banner(b *strings.Builder) {
 // configuration schema an account has once it is on Gash 2.x or later.
 const migrateSchemaVersion = 2
 
-// migrateNotice is the once-a-day reminder lib/modules/migrate.sh prints for
-// a 1.x account; kept verbatim (SHELL-13: no review in rc.A, D-6).
-const migrateNotice = `gash: your configuration is from Gash 1.x; open a terminal and run "gash migrate" to review the changes in 2.0`
+// migrateNotice is the once-a-day reminder for a 1.x account. 3.0: SHELL-18
+// fixed: it points at the D-6 route instead of the 2.x review it no longer
+// runs (2.x: "... run "gash migrate" to review the changes in 2.0").
+const migrateNotice = `gash: your configuration is from Gash 1.x, which Gash 3 does not migrate; run "gash migrate" for the steps`
 
 // migrateReminder is lib/modules/migrate.sh __gash_migrate_autostart as rc.A
 // keeps it (D-6: the guided review no longer starts by itself, so even on a

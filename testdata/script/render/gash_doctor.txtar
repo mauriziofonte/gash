@@ -21,8 +21,9 @@ stderr 'bash [0-9]'
 stdout '^Runtime:$'
 stdout '^External Tools:$'
 
-# --- :53 problems - missing files and a warning count (split row)
-exec bash -c 'printf "GASH_DB_TIMEOUT=5\n" >.gash_env; chmod 644 .gash_env; export GASH_DB_TIMEOUT=5 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_doctor'
+# --- :53 problems - missing files and a warning count (split row); the
+# status is 1 (3.0: SELF-06 fixed)
+! exec bash -c 'printf "GASH_DB_TIMEOUT=5\n" >.gash_env; chmod 644 .gash_env; export GASH_DB_TIMEOUT=5 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_doctor'
 stderr 'Error:   gash.sh . MISSING'
 stderr 'Warning: [0-9]+ issue.s. found\.'
 
@@ -31,7 +32,9 @@ exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH
 stdout 'Startup timing'
 stdout 'gash.sh \(total\)'
 
-# --- R6: plain mode, no ESC on either stream
+# --- R6: plain mode, no ESC on either stream (without the 0644 settings
+# file of :53, an issue that would make the status 1)
+rm .gash_env
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$GASH_STAGE" gash_doctor'
 stderr 'Gash Doctor'
 ! stdout '\x1b'

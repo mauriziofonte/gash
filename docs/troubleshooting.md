@@ -61,10 +61,11 @@ Headless calls stay quiet unless `GASH_DEBUG=1`.
 | `~/.gash_env is accessible by other users (mode 644). Run: chmod 600 ~/.gash_env` | `chmod 600 ~/.gash_env` (any mode without group or other bits is fine) |
 | `~/.gash_env is owned by uid N, not by you` | `chown "$USER" ~/.gash_env` |
 | `Line N ...: SSH key file not found (skipping)` | Fix the path, or remove the line |
+| `Line N ...: passphrase ends with whitespace` | The spaces or tabs are part of the passphrase; remove them unless the passphrase really ends with them |
 | `Line N ...: DB URL must start with mysql://, mariadb:// or pgsql://` | Use one of those schemes (`pgsql`, not `postgres`) |
 | `Line N ...: unknown AI provider (supported: claude, gemini)` | Only `claude` and `gemini` exist |
 | `Line N ...: AI provider X has an empty token` | Add the token after `=` |
-| `Line N ...: HOST target must be user@host` | One `@`, no spaces |
+| `Line N ...: HOST target must be user@host` | One `@`; user of letters, digits, `.`, `_`, `-`; a host name or `[IPv6]`; no port (put it in a `Host` entry of `~/.ssh/config`) |
 | `Line N ...: unknown GASH_ setting` | Check the name in [configuration.md](configuration.md#settings-reference) |
 | `Line N ...: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=)` | The line has none of those prefixes |
 | `Line N ...: SSH: entry has no '='` | Use `SSH:path=passphrase` (same for `DB:`, `AI:`, `HOST:`) |
@@ -91,20 +92,21 @@ example `GASH_AWK=gawk`) before Gash loads.
 
 ## macOS
 
-macOS is best effort. Besides Homebrew Bash, Gash expects GNU tools:
+macOS is best effort and needs Homebrew Bash. The scanners (`files_largest`,
+`tree_stats`, `dirs_*`, `llm_tree`, `llm_find`) and the path checks of the
+`llm_*` functions are Go code and work the same as on Linux; a few functions
+still call GNU tools:
 
 | Missing GNU feature | Affected |
 |---|---|
-| `find -printf` | `files_largest`, `tree_stats`, `dirs_find_large --with-mtime`, `llm_tree` (JSON) |
-| `realpath -m` | path normalization in `llm_*` |
-| `sed --sandbox` | `sed` in `llm_exec` |
+| `sed --sandbox`, `gawk --sandbox` | `sed` and `awk` in `llm_exec` are refused |
 | `df -T` | `disk_usage` shows every `/dev` device, without a filesystem type |
 
-**Fix:** `brew install bash coreutils findutils gawk gnu-sed`, then put the GNU
+**Fix:** `brew install bash coreutils gawk gnu-sed`, then put the GNU
 names first in `PATH` before the Gash block in `~/.bashrc`:
 
 ```bash
-for p in coreutils findutils gnu-sed; do
+for p in coreutils gnu-sed; do
     PATH="$(brew --prefix)/opt/$p/libexec/gnubin:$PATH"
 done
 ```
@@ -136,32 +138,51 @@ missing file means a damaged checkout: `git -C ~/.gash status`, then reinstall.
 
 **Cause:** `~/.gashrc` loads `bash_completion` from the install directory, in
 interactive shells only; sourcing `gash.sh` directly skips it. **Fix:** source
-`~/.gashrc` (a 1.x one is replaced by `gash migrate`). `complete -p
+`~/.gashrc` (a 1.x one is replaced by the 2.x `gash migrate`; see below). `complete -p
 files_largest` should print `complete -o default -F __gash_complete files_largest`.
 
 ## "gash: your configuration is from Gash 1.x"
 
 ```
-gash: your configuration is from Gash 1.x; open a terminal and run "gash migrate" to review the changes in 2.0
+gash: your configuration is from Gash 1.x, which Gash 3 does not migrate; run "gash migrate" for the steps
 ```
 
 **Cause:** `~/.gashrc` is the 1.x loader (it mentions `GASH_BASH`) and no
-migration is recorded. In a script or headless shell Gash prints this line on
-stderr at most once a day; in an interactive terminal it starts the guided
-migration instead.
-**Fix:** run `gash migrate` in a terminal (`gash migrate --yes` takes the
-recommended choice everywhere without asking). In the menu that opens by
-itself, "Keep everything as it is and don't ask again" also stops it. State
-lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`); `gash migrate --status`
-shows it. See [migration.md](migration.md).
+migration is recorded. An interactive shell prints this line on stderr at
+most once a day; headless shells print nothing.
+**Fix:** Gash 3 does not migrate a 1.x configuration. `gash migrate` prints
+the route: check out v2.1.0 in your Gash directory, open a new terminal, run
+`gash_migrate` there (the 2.x guided review), then `gash_upgrade`. State
+lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`). See
+[migration.md](migration.md).
 
 ## Removing Gash
 
 * For the current shell only: `gash_unload` (interactive shells).
-* For good: `gash_uninstall` in an interactive terminal (it refuses in headless
-  mode). After confirmation it removes the Gash block from `~/.bashrc`,
-  `~/.bash_profile` and `~/.profile`, deletes `~/.gashrc` and the install
-  directory, and asks separately before deleting `~/.gash_env`.
-* Left behind: `~/.local/state/gash` (migration backups), a block added to a
-  profile chosen with `PROFILE=` at install time, and a file named by
-  `GASH_ENV_FILE`. Remove them by hand. Open a new terminal afterwards.
+* For good: `gash_uninstall` in an interactive terminal. Without a terminal
+  (headless mode, a script, no controlling tty) it cannot ask, so it prints
+  `Info: Uninstall cancelled.`, removes nothing and returns 0. After
+  confirmation it removes the Gash block from `~/.bashrc`, `~/.bash_profile`
+  and `~/.profile`, deletes `~/.gashrc` and the install directory, and asks
+  separately before deleting the settings file: `~/.gash_env`, or the file
+  `GASH_ENV_FILE` names when it is set in the shell you uninstall from. A
+  profile that is a symlink (dotfiles) stays one: the file it points to is
+  edited, with its mode kept.
+* Backups it keeps, and lists at the end (`Backups kept: ...`): each edited
+  profile as it was before the edit (`~/.bashrc.gash-uninstall.bak`,
+  `~/.bash_profile.gash-uninstall.bak`, `~/.profile.gash-uninstall.bak`), and
+  `~/.gashrc.gash-uninstall.bak` when your `~/.gashrc` held lines of your own
+  (a `~/.gashrc` exactly as an installer wrote it is simply deleted).
+* Left behind, to remove by hand:
+  * `~/.local/state/gash` (`$XDG_STATE_HOME/gash`: notices, 2.x migration
+    backups);
+  * `~/.cache/gash/probes` (written by 2.x only);
+  * the downloaded binaries in `~/.local/share/gash/versions`
+    (`$XDG_DATA_HOME/gash/versions`);
+  * the ssh-agent Gash started, still running, and its socket
+    `gash-ssh-agent.sock` (in `$XDG_RUNTIME_DIR` or `~/.ssh`);
+  * a block added to a profile chosen with `PROFILE=` at install time;
+  * a settings file named by `GASH_ENV_FILE` when that variable is not set in
+    the shell you uninstall from.
+
+  Open a new terminal afterwards.

@@ -9,7 +9,7 @@
 
 ![Gash at a terminal: the reference card, files_largest, tree_stats, disk_usage and sysinfo](docs/assets/demo.gif)
 
-Gash adds about eighty functions and a hundred aliases to Bash: find what
+Gash adds 85 functions and 163 aliases to Bash: find what
 fills a disk, inspect a server, tag a release, upgrade a Compose stack, push
 files to a host. Every function has `--help` with examples, and the ones an
 agent needs speak JSON with a documented error contract.
@@ -93,7 +93,7 @@ shows one topic; `gash_help --search WORD` searches every help page.
 | [files](docs/reference/files.md) | `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats`, `archive_extract`, `file_backup` |
 | [system](docs/reference/system.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `history_grep`, `wsl_compact` and other WSL helpers |
 | [nav](docs/reference/nav.md) | `..`, `...`, `ll`, `la` and friends |
-| [git](docs/reference/git.md) | `git_sync` (add, commit, push), `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, and 44 short aliases |
+| [git](docs/reference/git.md) | `git_sync` (add, commit, push), `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, 38 short aliases and 6 log helpers |
 | [docker](docs/reference/docker.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
 | [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
 | [dev](docs/reference/dev.md) | `node_upgrade` (newest patch of every Node major), `chrome_headless_update` (Chrome for Puppeteer/Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |

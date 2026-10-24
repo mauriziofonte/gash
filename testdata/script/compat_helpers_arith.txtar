@@ -1,0 +1,22 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: CORE-02
+# covers: none (3.0 security proof; no 2.x assertion)
+#
+# LEDGER CORE-02: the core helpers a harness sources take a numeric operand
+# only when it is a run of digits; an array subscript with a command
+# substitution is 0 and runs nothing (2.x created the marker). The unit
+# proof, with every helper, is TestLedger_CORE02 in internal/compatgen.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+exec bash --norc --noprofile -c 'for f in output utils validation; do source "$GASH_STAGE/lib/core/$f.sh"; done; P="a[\$(touch $WORK/marker)]"; __gash_require_args_min "$P" 1; echo "rc=$?"; __gash_bar v "$P" 10 4; echo "[$v]"; __gash_want_colors "$P"; echo "rc=$?"; COLUMNS="$P" __gash_section T'
+! exists marker
+stdout '^rc=1$'
+stderr '^Error: Expected at least 1 argument\(s\), got a\[\$\(touch .*/marker\)\]\.$'
+stdout '^\[	\.\.\.\.\]$'
+
+exec bash --norc --noprofile -c 'source "$GASH_STAGE/lib/core/output.sh"; source "$GASH_STAGE/lib/core/validation.sh"; __gash_require_args_min abc 1; echo "rc=$?"; __gash_require_args_min 3 2; echo "rc=$?"'
+stdout '^rc=1$'
+stdout '^rc=0$'
+stderr '^Error: Expected at least 1 argument\(s\), got abc\.$'

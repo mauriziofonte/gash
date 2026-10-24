@@ -37,7 +37,7 @@ EOF
 run() {
     local label="$1" dir="$2" pre="$3" what="$4"
     env -i HOME="$H" PATH=/usr/local/bin:/usr/bin:/bin TERM=xterm-256color LANG=C.UTF-8 \
-        USER="${USER:-root}" LOGNAME="${USER:-root}" GASH_BANNER=0 \
+        USER="${USER:-root}" LOGNAME="${USER:-root}" GASH_BANNER=0 ${GASH_BIN:+"GASH_BIN=$GASH_BIN"} \
         bash --noprofile --norc -i -c "$(inner "$label" "$dir" "$pre" "$what")" </dev/null >/dev/null 2>&1
 }
 

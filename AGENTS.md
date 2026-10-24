@@ -31,8 +31,8 @@ or `gash_help llm_tree`.
 Headless mode does **not** load the prompt, history settings, banner, the
 alias pack, `~/.bash_aliases` or `~/.bash_local`. Module short aliases exist,
 but Bash does not expand aliases in non-interactive shells: use full function
-names. One exception to "prints nothing": with a Gash 1.x configuration, one
-stderr line (at most once a day) asks the user to run the migration.
+names. Sourcing in headless mode never prints, whatever the configuration
+(a Gash 1.x one included: its reminder is for interactive shells only).
 
 Without headless mode, `gash.sh` does nothing in a non-interactive shell. Do
 not use `bash -i` and do not source `~/.gashrc` (the user's entry point).
@@ -267,7 +267,7 @@ Each code always carries the action shown:
 | Paths | `path_traversal_blocked` `forbidden_path` `root_scan_blocked` `secret_file_blocked` (FATAL); `path_not_found` `not_a_directory` `path_unreadable` `file_not_found` `file_too_large` `invalid_path` (RETRY) |
 | `llm_exec` | `dangerous_command_blocked` `option_not_allowed` (FATAL); `command_not_allowed` `sandbox_unavailable` (STOP); `construct_not_allowed` `unterminated_quote` `glob_matches_option` (RETRY) |
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
-| Database | `no_db_config` `no_database` `unknown_db_type` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
+| Database | `no_db_config` `no_database` `unknown_db_type` `invalid_db_url` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` (RETRY) |
 

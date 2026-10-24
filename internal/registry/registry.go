@@ -157,6 +157,13 @@ type Topic struct {
 type CardAlias struct {
 	Name  string
 	Value string
+	// Condition says when the shell defines the alias, shown under the
+	// card's alias grid ("for each installed phpX.Y"); empty when always.
+	Condition string
+	// Each is set on an entry that stands for a family of aliases: the
+	// names Each followed by digits (php83 for Each "php"). A card that
+	// lists only the aliases the shell defines shows those names instead.
+	Each string
 }
 
 // CommonShellVars are passed by every stub (compat.md 3): mode and

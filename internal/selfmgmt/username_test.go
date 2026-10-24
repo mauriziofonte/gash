@@ -86,10 +86,14 @@ func TestUsernameUnreadablePasswd(t *testing.T) {
 	require.Equal(t, "UNKNOWN_USERNAME\n", out)
 }
 
-func TestUsernameIgnoresExtraArguments(t *testing.T) {
-	p := &fakeProcs{have: map[string]bool{"whoami": true}, out: map[string]string{"whoami": "alice"}, ran: []string{"whoami"}}
-	out, _ := run(t, p.module(t, "", nil), nil, "extra", "words")
-	require.Equal(t, "alice\n", out)
+// 3.0: SELF-15 fixed: an extra word is refused with rc 2 before whoami
+// runs (2.x ignored it and printed the name).
+func TestUsernameRefusesExtraArguments(t *testing.T) {
+	p := &fakeProcs{have: map[string]bool{"whoami": true}, out: map[string]string{"whoami": "alice"}}
+	out, errOut, rc := callModule(t, p.module(t, "", nil), "gash_username", nil, "extra", "words")
+	require.Equal(t, 2, rc)
+	require.Empty(t, out)
+	require.Equal(t, "Error: Unexpected argument: extra (usage: gash_username)\n", errOut)
 }
 
 func TestUsernameHelp(t *testing.T) {

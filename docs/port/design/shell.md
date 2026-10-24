@@ -136,14 +136,17 @@ for a rollback to 2.x).
 
 The shadow rule is exact without forks: for every alias that would hide a
 program on PATH (the binary checks PATH, honoring the fixed exemption list
-`ls dir vdir sl cp mv rm mkdir chown chmod chgrp grep bc reboot shutdown less
+`ls dir vdir cp mv rm mkdir chown chmod chgrp grep bc reboot shutdown less
 tail df top traceroute tracepath diff php composer php[0-9]* composer[0-9]*
-1composer[0-9]*`), the script defines it only when it already existed before
-Gash (`[[ -v 'BASH_ALIASES[gp]' ]] && alias gp='git push'`), which is what 2.x
-did (the redefinition of a pre-existing alias is itself a LEDGER defect,
-reproduced). Aliases that hide no program are defined unconditionally.
-Module short aliases are defined by `gash.sh` in both modes (agent contract)
-and, as in 2.x, are outside the shadow rule.
+1composer[0-9]*`; `sl` left the list in 3.0, SHELL-12), the script does not
+define it. An alias the user defined before Gash is left alone
+(`[[ -v '__GASH_USER_ALIASES[gp]' ]] || alias gp='git push'`, SHELL-09).
+Aliases that hide no program are defined under the same guard.
+Module short aliases are defined by `gash.sh` in both modes (agent
+contract), under the same user-alias guard; in an interactive shell the
+init script then removes the ones that hide a program on PATH
+(`[[ -v '__GASH_USER_ALIASES[dcc]' ]] || unalias dcc`, SHELL-12). No module
+alias is exempt.
 
 The `gl gla glo glg gls glf` git log functions and `help` are emitted as Bash
 functions that call the binary (their output is a `git log` or the help
@@ -156,10 +159,12 @@ text); `quit` stays an alias.
 line and the quote are rendered by the binary with the color decision of
 the shell's stdout (`GASH__TTY_OUT`) and the width rule of 2.x, and emitted
 as one quoted `printf`. SSH auto-unlock: when keys are configured, the
-script runs `eval "$("$__gash_bin" __compat ssh-unlock)"`, which drives
-`ssh-add` through a PTY (secrets on the PTY only) and prints the quoted
-`SSH_AUTH_SOCK`/`SSH_AGENT_PID` exports; otherwise only
-`export GASH_SSH_AUTOUNLOCK_RAN=1`, as 2.x.
+script calls the `gash_ssh_auto_unlock` stub that `gash.sh` defined before
+the eval. `internal/ssh` handles it: it drives `ssh-add` on
+`runner.StartPTY` (secrets on the PTY only) and hands the
+`SSH_AUTH_SOCK`/`SSH_AGENT_PID` exports back through the stub hand-off.
+There is no `__compat ssh-unlock` command. With no keys the script only
+runs `export GASH_SSH_AUTOUNLOCK_RAN=1`, as 2.x.
 
 ## 8. Completion
 

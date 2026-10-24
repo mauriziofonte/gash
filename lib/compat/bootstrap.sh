@@ -122,6 +122,20 @@ declare -gA __GASH_CALL_SETTINGS=(
     [__init]="GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM GASH_DB_TIMEOUT GASH_NVM GASH_PATH_ADD"
 )
 
+# PATH as the messages name it: a leading HOME, taken literally and
+# followed by "/" or the end of PATH, shown as "~"; a trailing "/" of HOME
+# is ignored and an empty HOME shows PATH as it is (LEDGER CORE-14; 2.x
+# used ${PATH/#$HOME/\~}, which took HOME as a glob pattern).
+# Usage: __gash_shown VAR PATH
+__gash_shown() {
+    local __gsh_p="${2-}" __gsh_h="${HOME-}"
+    while [[ "$__gsh_h" == */ ]]; do __gsh_h="${__gsh_h%/}"; done
+    if [[ -n "$__gsh_h" && ("$__gsh_p" == "$__gsh_h" || "$__gsh_p" == "$__gsh_h"/*) ]]; then
+        __gsh_p="~${__gsh_p#"$__gsh_h"}"
+    fi
+    printf -v "$1" '%s' "$__gsh_p"
+}
+
 # Integer operand of a compat helper (LEDGER CORE-02): VALUE when it is an
 # optionally signed run of digits, else 0, the value Bash gives a word that
 # names an unset variable. Never evaluated as an expression.

@@ -48,7 +48,9 @@ history_grep() {
             return
             ;;
     esac
-    history | __gash_call {{% .Name %}} "$@"
+    # No timestamp prefix reaches the binary: it parses "NUM CMD" lines
+    # (LEDGER SYS-09).
+    HISTTIMEFORMAT='' history | __gash_call {{% .Name %}} "$@"
 }
 {{% end %}}
 
@@ -60,8 +62,16 @@ mkdir_cd() {
             return
             ;;
     esac
-    local dir="${1-}"
-    mkdir -p "$dir" && cd "$dir" || return 1
+    # One directory only: a second word is the binary's "Unexpected
+    # argument" (LEDGER SYS-10).
+    if (($# > 1)); then
+        __gash_call {{% .Name %}} "$@"
+        return
+    fi
+    # No option parsing, no CDPATH, and "-" is ./- (LEDGER SYS-11).
+    local dir="$1"
+    [[ "$dir" == - ]] && dir=./-
+    mkdir -p -- "$dir" && CDPATH='' cd -- "$dir" || return 1
 }
 {{% end %}}
 
@@ -132,14 +142,26 @@ gash() {
     {{% if .LoadsEnv %}}{{% loadenv %}}{{% end %}}
     # The card shows the value this shell gives an alias of the card, as
     # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
-    # backslash and newline escaped (LEDGER SELF-12).
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card=""
+    # backslash and newline escaped. Outside headless mode the card counts
+    # and lists only those (GASH__CARD_LIVE=1, LEDGER SELF-12); a headless
+    # shell loads no alias pack and gets the whole registered list.
+    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card="" __gash_live=1
+    [[ "${GASH_HEADLESS-}" == "1" ]] && __gash_live=""
     for __gash_n in {{% cardAliasNames %}}; do
         [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
         __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
         __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
     done
-    GASH__CARD_ALIASES="$__gash_card" __gash_call gash "$@"
+    # The families of the card (php83 for phpXY, LEDGER DEV-21).
+    for __gash_n in "${!BASH_ALIASES[@]}"; do
+        case "$__gash_n" in
+            {{% cardAliasFamilies %}}) ;;
+            *) continue ;;
+        esac
+        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
+    GASH__CARD_ALIASES="$__gash_card" GASH__CARD_LIVE="$__gash_live" __gash_call gash "$@"
 }
 {{% end %}}
 
@@ -174,7 +196,7 @@ gash_uninstall() {
     # The questions are asked in this shell with needs_confirm_prompt (a
     # harness may redefine it); the binary checks and removes, one step
     # per call (GASH__UNINSTALL, internal/selfmgmt).
-    local __gash_rc=0 __gash_env
+    local __gash_rc=0 __gash_env __gash_shown_env
     case "${1-}" in
         -h | --help)
             __gash_call gash_uninstall "$@"
@@ -189,7 +211,8 @@ gash_uninstall() {
     GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
     ((__gash_rc == 10)) || return "$__gash_rc"
     __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
-    if needs_confirm_prompt "Remove ${__gash_env/#$HOME/\~}?"; then
+    __gash_shown __gash_shown_env "$__gash_env"
+    if needs_confirm_prompt "Remove $__gash_shown_env?"; then
         GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
     else
         GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
@@ -201,8 +224,12 @@ gash_uninstall() {
 and aliases, restore the snapshot), so it stays entirely in Bash and never
 calls the binary except for --help (needs_help -> __gash_compat help). It
 reproduces the 2.x body (lib/modules/gash.sh): the snapshot restore, the
-added-symbol removal via __gash_added_symbols_to (gash.sh), the per-prefix
-sweeps, and the SELF-03/SELF-05 leftovers left as they are (rc.A). */%}}
+added-symbol removal via __gash_added_symbols_to (gash.sh) and the
+per-prefix sweeps; then (3.0: SELF-03, SELF-05 fixed) it removes the
+completion specs Gash registered and restores __GASH_SNAPSHOT2 exactly: the
+variables Gash sets or exports, and the user's own GASH_* settings, as they
+were before the load (a shell a 2.x gash.sh loaded has no __GASH_SNAPSHOT2
+and keeps the 2.x result). */%}}
 {{% define "stub/gash_unload" %}}
 gash_unload() {
     needs_help "{{% .Fallback.Program %}}" "{{% .Fallback.Usage %}}" \
@@ -263,14 +290,44 @@ gash_unload() {
         unset -f "${__gash_fn}" >/dev/null 2>&1 || true
     done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
 
+    # The completion specs Gash registered (SELF-03).
+    if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
+        complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
+    fi
+
     # Per-prefix variable sweep: includes the cached secrets which must
     # never survive an unload, plus colors, PS1 caches, help registry.
+    local -a __gash_snap2=(${__GASH_SNAPSHOT2[@]+"${__GASH_SNAPSHOT2[@]}"})
     local __gash_var
     while IFS= read -r __gash_var; do
         [[ -z "${__gash_var}" ]] && continue
         unset "${__gash_var}" >/dev/null 2>&1 || true
     done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
     unset __AI_LAST_EXIT >/dev/null 2>&1 || true
+
+    # The exact pre-Gash state (SELF-03, SELF-05): a variable unset before
+    # is unset (PROMPT_COMMAND only when nothing is left in it); any other
+    # gets back its value and attributes from the declaration Bash printed
+    # at load time (${NAME@A}, Bash's own quoting), run as a global.
+    for __gash_entry in ${__gash_snap2[@]+"${__gash_snap2[@]}"}; do
+        case "$__gash_entry" in
+            -PROMPT_COMMAND) [[ -n "${PROMPT_COMMAND[*]-}" ]] || unset PROMPT_COMMAND ;;
+            -*) unset "${__gash_entry#-}" >/dev/null 2>&1 || true ;;
+            *)
+                if [[ "$__gash_entry" == "declare "* ]]; then
+                    __gash_key="${__gash_entry#declare }"
+                    __gash_key="${__gash_key#* }"
+                    __gash_entry="declare -g ${__gash_entry#declare }"
+                else
+                    __gash_key="$__gash_entry"
+                fi
+                __gash_key="${__gash_key%%=*}"
+                [[ "$__gash_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+                unset "$__gash_key" >/dev/null 2>&1 || true
+                eval "$__gash_entry"
+                ;;
+        esac
+    done
 
     unset __gash_name
 
@@ -435,7 +492,8 @@ node_upgrade() {
     ((dry_run)) && return 0
     __gash_confirm_plan "$assume_yes" || return 1
 
-    local current failed=" "
+    # The status is 1 when an install or a removal failed (LEDGER DEV-06).
+    local current failed=" " rc=0
     current="$(nvm current 2>/dev/null)"
 
     for i in "${!installs[@]}"; do
@@ -445,6 +503,7 @@ node_upgrade() {
             major="${major%%.*}"
             __gash_error "Installing ${installs[$i]} failed: the v$major patches are kept."
             failed+="$major "
+            rc=1
         fi
     done
 
@@ -458,7 +517,6 @@ node_upgrade() {
         nvm use "$current" >/dev/null 2>&1 || true
     fi
 
-    local rc=0
     for ver in "${removes[@]}"; do
         major="${ver#v}"
         major="${major%%.*}"
@@ -478,22 +536,23 @@ node_upgrade() {
 {{% define "stub/nvm_prune_versions" %}}
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
 nvm_prune_versions() {
-    needs_help "nvm_prune_versions" "nvm_prune_versions [--force]" \
+    needs_help "nvm_prune_versions" "nvm_prune_versions [-y|--yes|--force]" \
         "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp" \
         "${1-}" && return
 
-    __gash_require_nvm || return 1
-
+    # The arguments come first, then the nvm check (LEDGER DEV-20).
     local force=0 arg
     for arg in "$@"; do
         case "$arg" in
-            --force | -f) force=1 ;;
+            --force | -f | -y | --yes) force=1 ;;
             *)
-                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [--force])"
+                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [-y|--yes|--force])"
                 return 1
                 ;;
         esac
     done
+
+    __gash_require_nvm || return 1
 
     local current
     current="$(nvm current)"
@@ -502,6 +561,8 @@ nvm_prune_versions() {
     local duplicates=() ver major
 
     # Oldest first: each newer patch of a major pushes the previous one out.
+    # Whole version entries only (start of line, after a blank or nvm's ->
+    # marker), so iojs-v1.2.3 is not read as v1.2.3 (LEDGER DEV-08).
     # (grep -E, not -P: BSD and busybox grep have no -P.)
     while read -r ver; do
         [[ "$ver" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || continue
@@ -510,13 +571,15 @@ nvm_prune_versions() {
             duplicates+=("${latest[$major]}")
         fi
         latest[$major]="$ver"
-    done < <(nvm ls --no-colors --no-alias | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u | sort -V)
+    done < <(nvm ls --no-colors --no-alias | grep -oE '(^|[[:space:]>])v[0-9]+\.[0-9]+\.[0-9]+' |
+        sed -E 's/^[[:space:]>]+//' | sort -u | sort -V)
 
     if [[ ${#duplicates[@]} -eq 0 ]]; then
         __gash_success "No duplicate NVM versions found."
         return 0
     fi
 
+    local failed=0
     for ver in "${duplicates[@]}"; do
         if [[ "$ver" == "$current" ]]; then
             __gash_info "Keeping $ver (currently active)."
@@ -525,13 +588,21 @@ nvm_prune_versions() {
 
         if [[ $force -eq 1 ]]; then
             __gash_info "Uninstalling $ver..."
-            nvm uninstall "$ver"
+            if ! nvm uninstall "$ver"; then
+                __gash_error "Uninstalling $ver failed."
+                ((failed++)) || true
+            fi
         else
             __gash_warning "Dry run: would uninstall $ver. Re-run with --force to apply."
         fi
     done
 
     if [[ $force -eq 1 ]]; then
+        # A failed removal is an error, not the OK line (LEDGER DEV-07).
+        if ((failed)); then
+            __gash_error "$failed duplicate version(s) could not be removed."
+            return 1
+        fi
         __gash_success "Duplicate NVM versions removed."
     else
         __gash_info "Dry-run complete. Re-run with --force to actually uninstall."

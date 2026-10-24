@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -90,6 +91,8 @@ func TestLedger_REM02(t *testing.T) {
 		"deploy@box.example": true, "u@[::1]": true, "u_1.x@10.0.0.1": true, "u@[1.2.3.4]": false, "u@[]": false,
 	} {
 		require.Equal(t, ok, validTarget(v), "%q", v)
+		// The load applies the same rule (config.ValidHostTarget).
+		require.Equal(t, ok, config.ValidHostTarget(v), "config: %q", v)
 	}
 
 	s := newGoScene(t, boxEnv)

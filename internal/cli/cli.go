@@ -42,11 +42,15 @@ type Process struct {
 	Executable func() (string, error)
 }
 
-// commands3x are the words that select a 3.x command.
-var commands3x = map[string]bool{
-	"version": true, "init": true, "update": true, "hte": true,
-	"__compat": true, cobra.ShellCompRequestCmd: true, cobra.ShellCompNoDescRequestCmd: true,
-}
+// commands3x are the words that select a 3.x command: the public ones of
+// registry.Commands and the internal ones.
+var commands3x = func() map[string]bool {
+	m := map[string]bool{"__compat": true, cobra.ShellCompRequestCmd: true, cobra.ShellCompNoDescRequestCmd: true}
+	for _, c := range registry.Commands() {
+		m[c] = true
+	}
+	return m
+}()
 
 // IsCommand reports whether word selects a command of the binary rather
 // than a topic of the gash card.

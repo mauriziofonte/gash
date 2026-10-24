@@ -72,20 +72,27 @@ func TestQuoteMatches2x(t *testing.T) {
 					env["COLUMNS"] = cols
 				}
 				o, e, rc := run(t, "gash_inspiring_quote", env, mode == "on", cl.args...)
-				require.Equal(t, fields[2*i], o+e, "%s %q %s %q", mode, cols, cl.name, cl.args)
+				want := fields[2*i]
+				if len(cl.args) > 0 && cl.args[0] == "foo" {
+					// 3.0: SELF-13 fixed: a positional word is an
+					// unexpected argument, no longer an unknown option.
+					want = strings.Replace(want, "Unknown option: foo", "Unexpected argument: foo", 1)
+				}
+				require.Equal(t, want, o+e, "%s %q %s %q", mode, cols, cl.name, cl.args)
 				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%s %q %s %q", mode, cols, cl.name, cl.args)
 			}
 		}
 	}
 }
 
-// LEDGER SELF-13, reproduced in rc.A: a positional word is reported as
-// an unknown option, with the usage, rc 1, as an unknown option is.
-func TestLedger_SELF13_2x(t *testing.T) {
-	for _, a := range []string{"foo", "--bogus"} {
+// LEDGER SELF-13: a positional word is an unexpected argument and an
+// unknown option an unknown option, both with the usage and rc 1 (3.0:
+// SELF-13 fixed; rc.A called both an unknown option).
+func TestLedger_SELF13(t *testing.T) {
+	for a, what := range map[string]string{"foo": "Unexpected argument", "--bogus": "Unknown option", "-x": "Unknown option"} {
 		o, e, rc := run(t, "gash_inspiring_quote", nil, false, a)
 		require.Empty(t, o)
-		require.Equal(t, "Error: Unknown option: "+a+" (usage: gash_inspiring_quote [--source])\n", e)
+		require.Equal(t, "Error: "+what+": "+a+" (usage: gash_inspiring_quote [--source])\n", e)
 		require.Equal(t, 1, rc)
 	}
 }

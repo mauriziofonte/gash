@@ -14,8 +14,8 @@ import (
 
 // envInit is gash_env_init [--force] (lib/core/config.sh): copies
 // $GASH_DIR/.gash_env.template to GASH_ENV_FILE or ~/.gash_env with mode
-// 600, refusing an existing file without --force. Only the first argument
-// is read: any other word is ignored, as in 2.x (LEDGER SELF-15).
+// 600, refusing an existing file without --force. Any other argument is
+// refused before anything is written (3.0: SELF-15 fixed; 2.x ignored it).
 //
 // The copy and the mode change run cp and chmod from the caller's PATH, as
 // 2.x did, so what they print on failure, what a directory or a symlink as
@@ -23,6 +23,9 @@ import (
 func (m *Module) envInit(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
+	}
+	if badArgs(c, "gash_env_init [--force]", "--force") {
+		return usageStatus
 	}
 	force := c.Arg(0) == "--force"
 	target := c.Env.Get("GASH_ENV_FILE")
