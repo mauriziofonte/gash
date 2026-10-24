@@ -5,12 +5,8 @@ package system
 import (
 	"errors"
 	"io"
-	"io/fs"
-	"os"
-	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"unicode/utf8"
 
 	"github.com/mauriziofonte/gash/internal/help"
@@ -19,10 +15,13 @@ import (
 )
 
 // historyGrep is history_grep: the stub override pipes the caller's
-// `history` here. The binary runs the 2.x pipeline `grep -i -- "$@" |
-// grep -v history_grep | awk | awk | __gash_table`: with more than one
-// word, grep reads the named files instead of the history (SYS-08), and
-// the two awk passes keep their column and dedup defects (SYS-09).
+// `history` here. Every word joins, with single spaces, one pattern (GNU
+// BRE, case-insensitive, LEDGER SYS-38) that is matched against the
+// command of each `NUM  CMD` line of the piped history, never a file named
+// by a word (SYS-08). Commands are deduplicated on CMD, the first one
+// kept; column 2 is its first two words and column 3 the rest of it by
+// position; a command whose first word is history_grep or hg is left out
+// (SYS-09).
 func (m *Module) historyGrep(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -32,44 +31,71 @@ func (m *Module) historyGrep(c *invoke.Call) int {
 		p.Error("Missing pattern. Usage: history_grep <pattern>")
 		return 1
 	}
-	lines, ok := m.grepI(c, p, c.Args[0], c.Args[1:])
-	if !ok {
+	pattern := strings.Join(c.Args, " ")
+	re, err := compileBRE(pattern)
+	var ge *grepError
+	switch {
+	case errors.As(err, &ge):
+		write(c.Stderr, "grep: "+ge.msg+"\n")
+		return 0
+	case err != nil:
+		p.Error("Invalid pattern: " + pattern)
 		return 1
 	}
-	var kept []string
-	for _, l := range lines {
-		if !strings.Contains(l, "history_grep") {
-			kept = append(kept, l)
-		}
-	}
-	// awk '{ $1=""; seen[$0]++; if (seen[$0]==1) print $0 }'
+	data, _ := readAll(c.Stdin)
 	seen := map[string]bool{}
-	var uniq []string
-	for _, l := range kept {
-		f := awkFields(l)
-		rebuilt := ""
+	var rows []string
+	suppressed := false
+	for _, l := range strings.Split(strings.TrimSuffix(data, "\n"), "\n") {
+		cmd := historyCommand(l)
+		if cmd == "" || !re.MatchString(cmd) {
+			continue
+		}
+		if strings.IndexByte(cmd, 0) >= 0 || !utf8.ValidString(cmd) {
+			suppressed = true
+			continue
+		}
+		f := awkFields(cmd)
+		if f[0] == "history_grep" || f[0] == "hg" || seen[cmd] {
+			continue
+		}
+		seen[cmd] = true
+		col2, rest := f[0], ""
 		if len(f) > 1 {
-			rebuilt = " " + strings.Join(f[1:], " ")
+			col2 += " " + f[1]
+			rest = strings.TrimLeft(cmd[strings.Index(cmd, f[0])+len(f[0]):], " \t")
+			rest = strings.TrimLeft(rest[len(f[1]):], " \t")
 		}
-		if !seen[rebuilt] {
-			seen[rebuilt] = true
-			uniq = append(uniq, rebuilt)
+		row := strconv.Itoa(len(rows)+1) + "\t" + col2
+		if rest != "" {
+			row += "\t" + rest
 		}
+		rows = append(rows, row)
 	}
-	// awk '{ printf "%s\t%s\t%s\n", NR, $1" "$2, substr($0, index($0,$3)) }'
-	rows := make([]string, 0, len(uniq))
-	for i, l := range uniq {
-		f := awkFields(l)
-		f1, f2, f3 := field(f, 0), field(f, 1), field(f, 2)
-		rest := l
-		if j := strings.Index(l, f3); f3 != "" && j >= 0 {
-			rest = l[j:]
-		}
-		rows = append(rows, strconv.Itoa(i+1)+"\t"+f1+" "+f2+"\t"+rest)
+	if suppressed {
+		write(c.Stderr, "grep: (standard input): binary file matches\n")
 	}
 	ui.StyleOf(c.Term, false).Table(c.Stdout, rows,
 		"--no-header", "--gap", "1", "--min", "1:5", "--min", "2:20", "--color", "1:muted", "--color", "2:accent")
 	return 0
+}
+
+// historyCommand is CMD of a `history` line "  NUM  CMD" (the shim runs
+// `history` with HISTTIMEFORMAT empty, so no timestamp precedes CMD): the
+// text after the number and its blanks, trailing blanks dropped. A line
+// without a leading number is all command.
+func historyCommand(l string) string {
+	t := strings.TrimLeft(l, " \t")
+	i := 0
+	for i < len(t) && t[i] >= '0' && t[i] <= '9' {
+		i++
+	}
+	if i > 0 && i < len(t) && (t[i] == ' ' || t[i] == '\t' || t[i] == '*') {
+		t = strings.TrimLeft(t[i:], "* \t")
+	} else if i > 0 && i == len(t) {
+		return ""
+	}
+	return strings.TrimRight(t, " \t\r")
 }
 
 // awkFields splits a line as awk's default FS does: runs of spaces, tabs
@@ -83,96 +109,6 @@ func field(f []string, i int) string {
 		return f[i]
 	}
 	return ""
-}
-
-// grepI is `grep -i -- PATTERN [FILE...]` (GNU grep 3.11, the BRE of
-// compileBRE): the matching lines (prefixed with "FILE:" for two or more
-// files), with GNU grep's messages on stderr. Without FILE it reads
-// stdin. A pattern grep refuses prints grep's error and yields no lines;
-// one Go cannot express prints "Error: Invalid pattern: P" and ok is
-// false (LEDGER SYS-38).
-func (m *Module) grepI(c *invoke.Call, p ui.Printer, pattern string, files []string) (lines []string, ok bool) {
-	re, err := compileBRE(pattern)
-	var ge *grepError
-	switch {
-	case errors.As(err, &ge):
-		write(c.Stderr, "grep: "+ge.msg+"\n")
-		return nil, true
-	case err != nil:
-		p.Error("Invalid pattern: " + pattern)
-		return nil, false
-	}
-	if len(files) == 0 {
-		data, _ := readAll(c.Stdin)
-		return grepData(c.Stderr, re, data, "(standard input)", ""), true
-	}
-	for _, f := range files {
-		prefix := ""
-		if len(files) > 1 {
-			prefix = f + ":"
-		}
-		if f == "-" {
-			data, _ := readAll(c.Stdin)
-			lines = append(lines, grepData(c.Stderr, re, data, "(standard input)", prefix)...)
-			continue
-		}
-		data, err := os.ReadFile(f)
-		if err != nil {
-			write(c.Stderr, "grep: "+f+": "+grepReason(err)+"\n")
-			continue
-		}
-		lines = append(lines, grepData(c.Stderr, re, string(data), f, prefix)...)
-	}
-	return lines, true
-}
-
-// grepData matches the lines of one input. Input with a NUL byte is
-// binary: no line is printed. A line that is not UTF-8 is never printed.
-// Either way a match is reported as "grep: NAME: binary file matches".
-func grepData(stderr io.Writer, re *regexp.Regexp, data, name, prefix string) []string {
-	if data == "" {
-		return nil
-	}
-	binary := strings.IndexByte(data, 0) >= 0
-	data = strings.TrimSuffix(data, "\n")
-	var out []string
-	suppressed := false
-	for _, l := range strings.Split(data, "\n") {
-		if !re.MatchString(l) {
-			continue
-		}
-		if binary || !utf8.ValidString(l) {
-			suppressed = true
-			continue
-		}
-		out = append(out, prefix+l)
-	}
-	if suppressed {
-		write(stderr, "grep: "+name+": binary file matches\n")
-	}
-	return out
-}
-
-// grepReason is the strerror text of a file grep could not read.
-func grepReason(err error) string {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
-		switch errno {
-		case syscall.ENOENT:
-			return "No such file or directory"
-		case syscall.EISDIR:
-			return "Is a directory"
-		case syscall.EACCES:
-			return "Permission denied"
-		case syscall.ENOTDIR:
-			return "Not a directory"
-		}
-		return errno.Error()
-	}
-	if errors.Is(err, fs.ErrNotExist) {
-		return "No such file or directory"
-	}
-	return err.Error()
 }
 
 // readAll reads a whole stream; nil is empty.

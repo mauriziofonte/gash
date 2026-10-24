@@ -2018,7 +2018,7 @@ var functions = []Function{
 			SeeAlso: "hgrep",
 			Body: "" +
 				"USAGE\n" +
-				"  history_grep PATTERN\n" +
+				"  history_grep PATTERN...\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all git commands in history\n" +
@@ -2032,9 +2032,13 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Simple and fast. For advanced features (timestamps,\n" +
-				"  deduplication, JSON output), use hgrep instead.",
+				"  deduplication, JSON output), use hgrep instead.\n" +
+				"  The words are joined with spaces into one pattern (a GNU grep basic\n" +
+				"  regex, case-insensitive) matched against each command. Column 2 is a\n" +
+				"  command's first two words, column 3 the rest; duplicates and the\n" +
+				"  history_grep/hg lines themselves are left out.",
 		},
-		Fallback: &Usage{Program: "history_grep", Usage: "history_grep PATTERN", Description: "Searches the bash history for commands matching PATTERN. Alias: hg"},
+		Fallback: &Usage{Program: "history_grep", Usage: "history_grep PATTERN...", Description: "Searches the bash history for commands matching PATTERN (words joined with spaces). Alias: hg"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{

@@ -167,7 +167,7 @@ Alias: `hg`
 #### Usage
 
 ```text
-history_grep PATTERN
+history_grep PATTERN...
 ```
 
 #### Examples
@@ -188,6 +188,10 @@ hg "ssh "
 ```text
 Simple and fast. For advanced features (timestamps,
 deduplication, JSON output), use hgrep instead.
+The words are joined with spaces into one pattern (a GNU grep basic
+regex, case-insensitive) matched against each command. Column 2 is a
+command's first two words, column 3 the rest; duplicates and the
+history_grep/hg lines themselves are left out.
 ```
 
 See also: `hgrep`
