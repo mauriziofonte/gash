@@ -37,11 +37,86 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
-// fileContains is `grep -q SUB FILE 2>/dev/null` for a SUB with no regex
-// metacharacters: a byte-substring match, false when the file is unreadable.
-func fileContains(path, sub string) bool {
-	data, err := os.ReadFile(path)
-	return err == nil && bytes.Contains(data, []byte(sub))
+// manifestDep reports whether the JSON manifest at path (one JSON object)
+// has a key under its prodKey or devKey object that match accepts. An
+// unreadable or malformed manifest has none.
+func (m *Module) manifestDep(path, prodKey, devKey string, match func(string) bool) bool {
+	data, err := m.readManifest(path)
+	if err != nil {
+		return false
+	}
+	top, err := jsonObject(data)
+	if err != nil {
+		return false
+	}
+	for _, key := range []string{prodKey, devKey} {
+		obj, err := jsonObject(top[key])
+		if err != nil {
+			continue
+		}
+		for k := range obj {
+			if match(k) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// poetryProject reports whether pyproject.toml declares a [tool.poetry]
+// table (or one of its subtables), the mark of a Poetry project.
+func (m *Module) poetryProject(path string) bool {
+	data, err := m.readManifest(path)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "[") {
+			continue
+		}
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+		h := strings.ReplaceAll(strings.Trim(line, "[]"), " ", "")
+		h = strings.ReplaceAll(h, "\t", "")
+		if h == "tool.poetry" || strings.HasPrefix(h, "tool.poetry.") {
+			return true
+		}
+	}
+	return false
+}
+
+// requirement reports whether requirements.txt names the distribution
+// name (compared as PEP 503 normalizes names: case, and runs of -_. alike).
+func (m *Module) requirement(path, name string) bool {
+	data, err := m.readManifest(path)
+	if err != nil {
+		return false
+	}
+	norm := func(s string) string {
+		s = strings.ToLower(s)
+		return strings.NewReplacer("_", "-", ".", "-").Replace(s)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "-") {
+			continue
+		}
+		end := strings.IndexFunc(line, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.')
+		})
+		if end >= 0 {
+			line = line[:end]
+		}
+		if norm(line) == norm(name) {
+			return true
+		}
+	}
+	return false
 }
 
 // findTestGo is `find PATH -name "*_test.go" -print -quit`: whether any
@@ -62,9 +137,11 @@ func findTestGo(root string) bool {
 }
 
 // project is llm_project (project.sh __llm_project_impl): detect the project
-// type and emit the info object. Detection reproduces the 2.x precedence and
-// its quirks (poetry whenever pyproject.toml exists, case-sensitive flask,
-// framework grep anywhere in package.json) — LEDGER LLM-27.
+// type and emit the info object, with the 2.x precedence. 3.0 (LEDGER
+// LLM-27): the manifests are parsed, not grepped: poetry only with a
+// [tool.poetry] table in pyproject.toml, flask as a requirement name in any
+// case, and the JS and Symfony frameworks only as keys of the dependency
+// objects.
 func (m *Module) project(c *invoke.Call) int {
 	if helpAnywhere(c) {
 		return 0
@@ -92,7 +169,7 @@ func (m *Module) project(c *invoke.Call) int {
 		switch {
 		case isRegular(safe + "/artisan"):
 			framework, entry = "laravel", "public/index.php"
-		case isDir(safe+"/symfony") || fileContains(safe+"/composer.json", `"symfony/`):
+		case isDir(safe+"/symfony") || m.manifestDep(safe+"/composer.json", "require", "require-dev", func(k string) bool { return strings.HasPrefix(k, "symfony/") }):
 			framework, entry = "symfony", "public/index.php"
 		}
 		if isDir(safe + "/tests") {
@@ -106,28 +183,24 @@ func (m *Module) project(c *invoke.Call) int {
 		if isRegular(safe + "/pnpm-lock.yaml") {
 			pm = "pnpm"
 		}
-		switch {
-		case fileContains(safe+"/package.json", `"next"`):
-			framework = "nextjs"
-		case fileContains(safe+"/package.json", `"react"`):
-			framework = "react"
-		case fileContains(safe+"/package.json", `"vue"`):
-			framework = "vue"
-		case fileContains(safe+"/package.json", `"express"`):
-			framework = "express"
+		for _, fw := range [][2]string{{"next", "nextjs"}, {"react", "react"}, {"vue", "vue"}, {"express", "express"}} {
+			if m.manifestDep(safe+"/package.json", "dependencies", "devDependencies", func(k string) bool { return k == fw[0] }) {
+				framework = fw[1]
+				break
+			}
 		}
 		if isDir(safe+"/tests") || isDir(safe+"/__tests__") {
 			hasTests = true
 		}
 	case isRegular(safe+"/requirements.txt") || isRegular(safe+"/pyproject.toml"):
 		ptype, pm = "python", "pip"
-		if isRegular(safe + "/pyproject.toml") {
+		if m.poetryProject(safe + "/pyproject.toml") {
 			pm = "poetry"
 		}
 		switch {
 		case isRegular(safe + "/manage.py"):
 			framework = "django"
-		case fileContains(safe+"/requirements.txt", "flask"):
+		case m.requirement(safe+"/requirements.txt", "flask"):
 			framework = "flask"
 		}
 		if isDir(safe + "/tests") {

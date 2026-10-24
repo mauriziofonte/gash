@@ -131,6 +131,11 @@ slow_query_explain field (the plan) when a query takes 100 ms or more
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
 
 `llm_project` types: `php`, `javascript`, `python`, `go`, `rust`, `unknown`.
+The framework comes from the dependency keys of `package.json`
+(`dependencies`/`devDependencies`: next, react, vue, express) and
+`composer.json` (`require`/`require-dev`: `symfony/*`; laravel by `artisan`);
+flask from a `requirements.txt` entry; `package_manager` is `poetry` only
+when `pyproject.toml` has a `[tool.poetry]` table.
 Example: `{"type":"javascript","framework":"express","package_manager":"npm","has_tests":true,"entry_point":"","path":"/tmp/web.tbjb"}`.
 
 ### 3.5 Command execution

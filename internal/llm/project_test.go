@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -41,7 +42,8 @@ func TestProjectMatches2x(t *testing.T) {
 	mustWrite(t, filepath.Join(expr, "package.json"), `{"dependencies":{"express":"4.0.0"}}`+"\n")
 	mustWrite(t, filepath.Join(expr, "yarn.lock"), "# yarn\n")
 
-	// python / django, poetry (pyproject.toml forces poetry per LLM-27)
+	// python / django; 3.0: LLM-27 fixed, a pyproject.toml without
+	// [tool.poetry] is pip (2.x said poetry for any pyproject.toml)
 	py := physTemp(t)
 	mustWrite(t, filepath.Join(py, "requirements.txt"), "flask==3.0.0\n")
 	mustWrite(t, filepath.Join(py, "pyproject.toml"), "[build-system]\nrequires = [\"setuptools\"]\n")
@@ -193,4 +195,50 @@ func TestLedger_LLM14(t *testing.T) {
 	none := physTemp(t)
 	mustWrite(t, filepath.Join(none, "package.json"), `{"name":"x"}`)
 	require.Equal(t, result{`{"manager":"npm","dependencies":[]}` + "\n", "", 0}, runGo(t, m, none, env, "llm_deps"))
+}
+
+// TestLedger_LLM27: llm_project reads the manifests: a pyproject.toml without
+// [tool.poetry] is pip, with it poetry; "next" in a description or a script
+// sets no framework, under devDependencies it does; Flask in any case in
+// requirements.txt is flask, a flask- package is not; symfony/ only counts
+// under require or require-dev.
+func TestLedger_LLM27(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	info := func(d string) (v struct{ Type, Framework, Package_manager string }) {
+		t.Helper()
+		r := runGo(t, m, d, env, "llm_project")
+		require.Equal(t, 0, r.RC, r.Stderr)
+		require.NoError(t, json.Unmarshal([]byte(r.Stdout), &v), r.Stdout)
+		return v
+	}
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "pyproject.toml"), "[project]\nname = \"x\"\n# [tool.poetry]\n[tool.setuptools]\n")
+	require.Equal(t, "pip", info(d).Package_manager)
+	mustWrite(t, filepath.Join(d, "pyproject.toml"), "[project]\nname = \"x\"\n[ tool.poetry.dependencies ]\npython = \"^3.11\"\n")
+	require.Equal(t, "poetry", info(d).Package_manager)
+
+	d = physTemp(t)
+	mustWrite(t, filepath.Join(d, "requirements.txt"), "Flask-Login\n# flask\n")
+	require.Equal(t, "", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "requirements.txt"), "Flask-Login\nFlask>=3 ; python_version > \"3\"\n")
+	require.Equal(t, "flask", info(d).Framework)
+
+	d = physTemp(t)
+	mustWrite(t, filepath.Join(d, "package.json"), `{"description":"not \"next\" at all","scripts":{"vue":"x"},"dependencies":{"left-pad":"1"}}`)
+	require.Equal(t, "", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "package.json"), `{"dependencies":{"react":"18"},"devDependencies":{"next":"14"}}`)
+	require.Equal(t, "nextjs", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "package.json"), `{"dependencies":{"express":"4","vue":"3"}}`)
+	require.Equal(t, "vue", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "package.json"), `not json "next"`)
+	v := info(d)
+	require.Equal(t, "javascript", v.Type)
+	require.Equal(t, "", v.Framework)
+
+	d = physTemp(t)
+	mustWrite(t, filepath.Join(d, "composer.json"), `{"description":"like symfony/console","require":{"monolog/monolog":"3"}}`)
+	require.Equal(t, "", info(d).Framework)
+	mustWrite(t, filepath.Join(d, "composer.json"), `{"require-dev":{"symfony/var-dumper":"6"}}`)
+	require.Equal(t, "symfony", info(d).Framework)
 }
