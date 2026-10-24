@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -136,12 +138,33 @@ func TestIPPublic(t *testing.T) {
 	require.Equal(t, result{"", "Error: Failed to retrieve public IP address.\n", 1}, r)
 }
 
-// SYS-13: a 2xx body is printed as it is.
+// 3.0: SYS-13 fixed: only a body that parses as an address is printed
+// (an HTML page is the retrieval error), the request is bounded by
+// ipTimeout, and --raw prints the bare address.
 func TestLedger_SYS13(t *testing.T) {
 	m, _, _ := tm(t, runner.NewFake(t))
+	fail := result{"", "Error: Failed to retrieve public IP address.\n", 1}
 	ipServer(t, m, 200, "<html>Rate limit</html>\n")
-	r := call(m, "ip_public", nil, nil, "")
-	require.Equal(t, result{"Public IP: <html>Rate limit</html>\n", "", 0}, r)
+	require.Equal(t, fail, call(m, "ip_public", nil, nil, ""))
+	ipServer(t, m, 200, "203.0.113.7 extra\n")
+	require.Equal(t, fail, call(m, "ip_public", nil, nil, ""))
+
+	ipServer(t, m, 200, " 2001:db8::7\r\n")
+	require.Equal(t, result{"2001:db8::7\n", "", 0}, call(m, "ip_public", nil, ttyTerm(nil, "-"), "", "--raw"))
+	require.Equal(t, result{"Public IP: 2001:db8::7\n", "", 0}, call(m, "ip_public", nil, nil, ""))
+
+	release := make(chan struct{})
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+		_, _ = w.Write([]byte("203.0.113.9"))
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	m.client, m.ipURL, m.ipTimeout = srv.Client(), srv.URL+"/ip", 50*time.Millisecond
+	start := time.Now()
+	require.Equal(t, fail, call(m, "ip_public", nil, nil, "", "--raw"))
+	require.Less(t, time.Since(start), 5*time.Second)
+	require.Equal(t, 10*time.Second, New().ipTimeout)
 }
 
 // SYS-36: net/http, whatever PATH holds; an error status is the wget
@@ -303,4 +326,24 @@ func TestMkdirCD(t *testing.T) {
 	require.Equal(t, result{"", "mkdir: missing operand\n", 1}, r)
 	r = call(m, "mkdir_cd", nil, nil, "")
 	require.Equal(t, result{"", "Error: Missing directory. Usage: mkdir_cd <directory>\n", 1}, r)
+}
+
+// 3.0: SYS-49 fixed: every flag ip_public and disk_usage accept is in the
+// USAGE or OPTIONS of the registered help, and in the fallback usage.
+func TestLedger_SYS49(t *testing.T) {
+	for name, flags := range map[string][]string{
+		"ip_public":  {"--no-color", "--raw"},
+		"disk_usage": {"--no-color"},
+	} {
+		page := registeredHelp(t, name)
+		usage := page[strings.Index(page, "USAGE"):]
+		if i := strings.Index(usage, "EXAMPLES"); i >= 0 {
+			usage = usage[:i]
+		}
+		f, _ := registry.Lookup(name)
+		for _, fl := range flags {
+			require.Contains(t, usage, fl, name)
+			require.Contains(t, f.Fallback.Usage, fl, name)
+		}
+	}
 }

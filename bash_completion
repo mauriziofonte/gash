@@ -83,7 +83,7 @@ __gash_complete() {
             ;;
 
         # disk_usage / ip_public — just --no-color
-        disk_usage | ip_public)
+        disk_usage)
             if [[ "$cur" == -* ]]; then
                 mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
             fi
@@ -141,6 +141,13 @@ __gash_complete() {
 
         git_sync)
             mapfile -t COMPREPLY < <(compgen -W "--message --no-push --dry-run --help" -- "$cur")
+            ;;
+
+        # ip_public — --no-color and --raw
+        ip_public)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--no-color --raw --help" -- "$cur")
+            fi
             ;;
 
         # Directory completion (other)

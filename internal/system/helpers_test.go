@@ -73,15 +73,16 @@ func tm(t *testing.T, f *runner.Fake) (*Module, *kills, *fakeHandoff) {
 	k := &kills{alive: map[int]bool{}}
 	h := &fakeHandoff{}
 	m := &Module{
-		run:      f,
-		sys:      platform.Real(),
-		kill:     k.kill,
-		sleep:    func(time.Duration) {},
-		self:     testSelf,
-		loc:      time.UTC,
-		ipURL:    "https://ipinfo.io/ip",
-		open:     func() (io.WriteCloser, error) { return h, nil },
-		readable: func(p string) bool { _, err := os.Stat(p); return err == nil },
+		run:       f,
+		sys:       platform.Real(),
+		kill:      k.kill,
+		sleep:     func(time.Duration) {},
+		self:      testSelf,
+		loc:       time.UTC,
+		ipURL:     "https://ipinfo.io/ip",
+		ipTimeout: ipTimeout,
+		open:      func() (io.WriteCloser, error) { return h, nil },
+		readable:  func(p string) bool { _, err := os.Stat(p); return err == nil },
 	}
 	return m, k, h
 }

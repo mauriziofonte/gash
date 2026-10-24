@@ -2059,21 +2059,29 @@ var functions = []Function{
 			Aliases: "myip",
 			Body: "" +
 				"USAGE\n" +
-				"  ip_public\n" +
+				"  ip_public [--no-color] [--raw]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --no-color  Plain output\n" +
+				"  --raw       Print the bare address, no label\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Show your public IP\n" +
 				"  myip\n" +
 				"\n" +
 				"  # Use in a script\n" +
-				"  MY_IP=$(myip) && echo \"Server IP: $MY_IP\"",
+				"  MY_IP=$(myip --raw) && echo \"Server IP: $MY_IP\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The request gives up after 10 seconds. An answer that is not an IP\n" +
+				"  address (a captive portal or rate-limit page) is an error, rc 1.",
 		},
-		Fallback:          &Usage{Program: "ip_public", Usage: "ip_public [--no-color]", Description: "Displays your public IP address (via ipinfo.io). Alias: myip"},
+		Fallback:          &Usage{Program: "ip_public", Usage: "ip_public [--no-color] [--raw]", Description: "Displays your public IP address (via ipinfo.io). Alias: myip"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "disk_usage / ip_public — just --no-color",
+		CompletionComment: "ip_public — --no-color and --raw",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --raw --help\" -- \"$cur\")\n" +
 			"fi",
 	},
 	{

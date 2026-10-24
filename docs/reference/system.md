@@ -205,7 +205,14 @@ Alias: `myip`
 #### Usage
 
 ```text
-ip_public
+ip_public [--no-color] [--raw]
+```
+
+#### Options
+
+```text
+--no-color  Plain output
+--raw       Print the bare address, no label
 ```
 
 #### Examples
@@ -215,7 +222,14 @@ ip_public
 myip
 
 # Use in a script
-MY_IP=$(myip) && echo "Server IP: $MY_IP"
+MY_IP=$(myip --raw) && echo "Server IP: $MY_IP"
+```
+
+#### Notes
+
+```text
+The request gives up after 10 seconds. An answer that is not an IP
+address (a captive portal or rate-limit page) is an error, rc 1.
 ```
 
 ## mkdir_cd

@@ -36,6 +36,8 @@ type Module struct {
 	client *http.Client
 	// ipURL is the address ip_public asks.
 	ipURL string
+	// ipTimeout bounds ip_public's request.
+	ipTimeout time.Duration
 	// open opens the hand-off descriptor of a stub override.
 	open handoff.Opener
 	// readable is [[ -r PATH ]].
@@ -45,16 +47,17 @@ type Module struct {
 // New returns the module wired to the real system.
 func New() *Module {
 	return &Module{
-		run:      runner.Exec{},
-		sys:      platform.Real(),
-		kill:     func(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) },
-		sleep:    time.Sleep,
-		self:     os.Getpid(),
-		loc:      time.Local,
-		client:   http.DefaultClient,
-		ipURL:    "https://ipinfo.io/ip",
-		open:     handoff.OpenFD,
-		readable: readableOS,
+		run:       runner.Exec{},
+		sys:       platform.Real(),
+		kill:      func(pid int, sig syscall.Signal) error { return syscall.Kill(pid, sig) },
+		sleep:     time.Sleep,
+		self:      os.Getpid(),
+		loc:       time.Local,
+		client:    http.DefaultClient,
+		ipURL:     "https://ipinfo.io/ip",
+		ipTimeout: ipTimeout,
+		open:      handoff.OpenFD,
+		readable:  readableOS,
 	}
 }
 
