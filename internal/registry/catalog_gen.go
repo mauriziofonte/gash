@@ -728,7 +728,9 @@ var functions = []Function{
 				"  Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN\n" +
 				"  is exchanged for a GHCR token), the others anonymously, answering a\n" +
 				"  Bearer challenge. Image variables come from the exported environment\n" +
-				"  and DIR/.env, with Compose's interpolation rules.\n" +
+				"  and DIR/.env, with Compose's interpolation rules; a quoted value in\n" +
+				"  DIR/.env that never closes is refused (invalid_env_file), as Compose\n" +
+				"  refuses the whole file.\n" +
 				"  The exit status is 0 whenever the report prints, ERROR rows included.\n" +
 				"\n" +
 				"REGISTRY ERRORS\n" +

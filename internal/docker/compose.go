@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -202,6 +203,26 @@ func (x *call) parseServices(file string, project bool) parsed {
 	return out
 }
 
+// checkEnvFile refuses DIR/.env when Compose would refuse it: a quoted
+// value that never closes makes Compose reject the whole file, so gash
+// does not go on with the definitions before it (F-09). ok is whether
+// the file is usable (an absent one is); otherwise rc is the status.
+func (x *call) checkEnvFile(envPath string, jsonOut bool) (rc int, ok bool) {
+	_, err := dotenv(envPath, x.exported.Lookup)
+	e, bad := err.(*dotenvError)
+	if !bad {
+		return 0, true
+	}
+	hint := "Close the quoted value of " + e.key + " that opens on line " + strconv.Itoa(e.line) +
+		": Compose refuses the whole file"
+	if jsonOut {
+		return x.Fail(contract.New("invalid_env_file", e.path+":"+strconv.Itoa(e.line), hint)), false
+	}
+	x.p.Error("Cannot read " + e.path + ": " + e.Error())
+	x.p.Hint(hint)
+	return 1, false
+}
+
 // refuseBadName is the refusal of a service name that starts with '-'.
 func (x *call) refuseBadName(name, file string, jsonOut bool) int {
 	if jsonOut {
@@ -387,9 +408,10 @@ func unquote(s string) string {
 // resolveEnvVars interpolates an image the YAML-subset reader returned
 // with Compose's rules (interp.go, LEDGER DOCK-13): the caller's exported
 // environment first, then ENV_FILE. A malformed or failing template
-// leaves the value as it is, with a warning.
+// leaves the value as it is, with a warning. The caller has refused an
+// ENV_FILE that Compose would refuse (checkEnvFile).
 func (x *call) resolveEnvVars(value, envPath string) string {
-	file := dotenv(envPath, x.exported.Lookup)
+	file, _ := dotenv(envPath, x.exported.Lookup)
 	get := func(n string) (string, bool) {
 		if v, ok := x.exported.Lookup(n); ok {
 			return v, true

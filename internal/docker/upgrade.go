@@ -73,6 +73,12 @@ func (m *Module) upgrade(c *invoke.Call) int {
 		x.p.Error("No services with images found in " + file)
 		return 1
 	}
+	envPath := path + "/.env"
+	if !parsed.fromConfig {
+		if rc, ok := x.checkEnvFile(envPath, false); !ok {
+			return rc
+		}
+	}
 	dc := x.composeArgv(path)
 
 	s.Section(w, "Docker Compose Upgrade")
@@ -90,7 +96,6 @@ func (m *Module) upgrade(c *invoke.Call) int {
 		markUp, markSkip = s.G.OK, s.G.Info
 	}
 	var services, rows []string
-	envPath := path + "/.env"
 	for _, svc := range parsed.services {
 		resolved := svc.image
 		if !parsed.fromConfig {
