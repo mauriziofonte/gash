@@ -4,6 +4,8 @@ package shellinit
 
 import (
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // aliasPacks emits the 2.x alias packs (colors, navigation, safety, git,
@@ -11,7 +13,8 @@ import (
 // shell. The probes 2.x ran in the shell (ls --color, grep color, rm GNU,
 // dircolors) run in the binary with the same commands and interpretation;
 // the 2.x probe cache is moot and neither read nor written. Module short
-// aliases stay in gash.sh and are outside this.
+// aliases are defined by gash.sh (headless mode too); the shadow rule for
+// them is moduleShadows, after the packs.
 func (st *state) aliasPacks(b *strings.Builder) {
 	st.timed(b, "lib/aliases/colors.sh", st.packColors)
 	st.timed(b, "lib/aliases/navigation.sh", st.packNavigation)
@@ -20,13 +23,35 @@ func (st *state) aliasPacks(b *strings.Builder) {
 	st.timed(b, "lib/aliases/docker.sh", st.packDocker)
 	st.timed(b, "lib/aliases/php.sh", st.packPhp)
 	st.timed(b, "lib/aliases/general.sh", st.packGeneral)
+	st.moduleShadows(b)
+}
+
+// moduleShadows applies the shadow rule to the module short aliases gash.sh
+// defined before this script runs: a name that is also a program on PATH
+// is removed again, so the program runs (fake dcc on PATH: no dcc alias).
+// An alias the user defined before Gash loaded is left alone, and no module
+// alias replaces a program on purpose, so none is exempt. 3.0: SHELL-12
+// fixed: 2.x took the module aliases for the user's own and kept them all.
+func (st *state) moduleShadows(b *strings.Builder) {
+	seen := map[string]bool{}
+	for _, a := range registry.Aliases() {
+		if a.Pack != "" || a.Function == "" || seen[a.Name] {
+			continue
+		}
+		seen[a.Name] = true
+		if !exempt(a.Name) && st.has(a.Name) {
+			b.WriteString("[[ -v '" + UserAliasesVar + "[" + a.Name + "]' ]] || unalias " + a.Name + " 2>/dev/null || true\n")
+		}
+	}
 }
 
 // shadowExempt is the fixed list of 2.x _loader.sh: an alias of one of these
 // names is defined even when it hides a program on PATH (ls wraps ls on
-// purpose, and so on).
+// purpose, and so on). sl is no longer on it: the alias catches a typo of
+// ls, and a user who installed the sl program wants that program instead
+// (3.0: SHELL-12 fixed).
 var shadowExempt = map[string]bool{
-	"ls": true, "dir": true, "vdir": true, "sl": true, "cp": true, "mv": true,
+	"ls": true, "dir": true, "vdir": true, "cp": true, "mv": true,
 	"rm": true, "mkdir": true, "chown": true, "chmod": true, "chgrp": true,
 	"grep": true, "bc": true, "reboot": true, "shutdown": true, "less": true,
 	"tail": true, "df": true, "top": true, "traceroute": true, "tracepath": true,

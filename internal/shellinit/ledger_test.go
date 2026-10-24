@@ -259,3 +259,21 @@ func TestLedger_SHELL10(t *testing.T) {
 		}
 	}
 }
+
+// LEDGER SHELL-12: a module short alias that is also a program on PATH is
+// removed again by the init script (fake dcc on PATH: unalias dcc, unless
+// the user defined dcc before Gash loaded); without the program nothing is
+// emitted for it and gash.sh's alias stays. sl is no longer exempt from the
+// pack rule (3.0: SHELL-12 fixed). testdata/script/module_alias_shadow.txtar
+// runs it in a shell.
+func TestLedger_SHELL12(t *testing.T) {
+	out := newHarness().withProgram("dcc").withProgram("sl").emit(t)
+	require.Contains(t, out, "[[ -v '__GASH_USER_ALIASES[dcc]' ]] || unalias dcc 2>/dev/null || true\n")
+	require.NotContains(t, out, "alias sl=")
+	require.NotContains(t, out, "unalias gdoctor")
+
+	out = newHarness().emit(t)
+	require.NotContains(t, out, "unalias dcc")
+	require.NotContains(t, out, "unalias ")
+	require.Contains(t, out, "alias sl=")
+}

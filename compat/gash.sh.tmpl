@@ -275,15 +275,25 @@ __gash_source "$GASH_DIR/lib/core/config.sh"
 # -----------------------------------------------------------------------------
 # Module short aliases (defined in headless mode too: agent contract)
 # -----------------------------------------------------------------------------
+# An alias the user defined before an interactive load is left alone, and
+# `gash init bash` removes one that hides a program on PATH (SHELL-12).
+# Headless mode has no user list: an empty one stands in while they load.
+__gash_ua=0
+declare -p __GASH_USER_ALIASES >/dev/null 2>&1 || {
+    declare -gA __GASH_USER_ALIASES=()
+    __gash_ua=1
+}
 {{% range .ModuleAliases %}}
 {{%- if .Condition %}}
 if {{% .Condition %}}; then
-    alias {{% .Definition %}}
+    [[ -v '__GASH_USER_ALIASES[{{% .Name %}}]' ]] || alias {{% .Definition %}}
 fi
 {{%- else %}}
-alias {{% .Definition %}}
+[[ -v '__GASH_USER_ALIASES[{{% .Name %}}]' ]] || alias {{% .Definition %}}
 {{%- end %}}
 {{%- end %}}
+((__gash_ua)) && unset __GASH_USER_ALIASES
+unset __gash_ua
 
 # -----------------------------------------------------------------------------
 # Headless mode

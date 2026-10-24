@@ -12,7 +12,7 @@ environment variables. This page lists them, their load order and every setting.
 | `~/.gash_env` | you (`gash_env_init` creates it) | SSH keys, database connections, AI tokens, remote hosts, settings |
 | `~/.bash_aliases`, `~/.bash_local` | you | Your own aliases and shell code, loaded after Gash |
 | `~/.local/state/gash/` | `gash migrate` | Migration state and backups (`$XDG_STATE_HOME/gash` when that is set) |
-| `~/.cache/gash/probes` | Gash, at startup | What the alias files learned about your tools (see [Aliases](#aliases)); safe to delete (`$XDG_CACHE_HOME/gash` when that is set) |
+| `~/.cache/gash/probes` | Gash 2.x only | What the 2.x alias files learned about your tools; Gash 3 neither reads nor writes it, safe to delete (`$XDG_CACHE_HOME/gash` when that is set) |
 
 The installer adds a block between `# >>> GASH START >>>` and `# <<< GASH END <<<`
 to `~/.bashrc` (or the profile it detects) that sources `~/.gashrc`.
@@ -45,20 +45,19 @@ need are applied from `~/.gash_env`; see [Precedence](#precedence).
 ### Aliases
 
 A Gash alias never hides a program: when an alias name from `lib/aliases/`
-is also a program on your `PATH` (`gp` and PARI/GP, `gc` and Graphviz, `dc`
-and the calculator, `gs` and Ghostscript), the alias is not defined and the
-program runs. The aliases that wrap the program of the same name on purpose
-stay (`ls`, `cp`, `mv`, `rm`, `mkdir`, `grep`, `bc`, `reboot`, `shutdown`,
-`sl`, and the `GASH_REPLACE_TOOLS` ones), and so does an alias you defined
-before Gash loaded. The `hg` alias of `history_grep` follows the same rule
-when Mercurial is installed. To get a dropped alias back, define it in
-`~/.bash_aliases`.
+or a module short alias (`dcc`, `pk`, `wr`, ...) is also a program on your
+`PATH` (`gp` and PARI/GP, `gc` and Graphviz, `dc` and the calculator, `gs`
+and Ghostscript, `sl` and the steam locomotive), the alias is not defined
+and the program runs. The aliases that wrap the program of the same name on
+purpose stay (`ls`, `cp`, `mv`, `rm`, `mkdir`, `grep`, `bc`, `reboot`,
+`shutdown`, and the `GASH_REPLACE_TOOLS` ones), and so does an alias you
+defined before Gash loaded. The `hg` alias of `history_grep` follows the
+same rule when Mercurial is installed. No module alias replaces a program on
+purpose. To get a dropped alias back, define it in `~/.bash_aliases`.
 
 Which options `ls`, `grep` and `rm` accept, `dircolors`' `LS_COLORS` and the
-list of dropped aliases are worked out once and kept in
-`~/.cache/gash/probes`. Gash works them out again after a day, or sooner
-when Gash, `PATH`, `TERM`, `COLORTERM` or `~/.dircolors` changes or a
-program is installed in a `PATH` directory.
+list of dropped aliases are worked out by `gash init bash` each time a shell
+starts; nothing is cached.
 
 ## ~/.gash_env
 
