@@ -24,7 +24,8 @@ stderr 'No empty objects and the history is connected: nothing to repair\.'
 # --- :281 git_repair:dry_run
 exec bash -c 'cd $WORK; mkdir r2; cd r2; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; mkdir -p .git/objects/ab && : >.git/objects/ab/cdef0123456789abcdef0123456789abcdef01; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_repair --dry-run'
 stdout 'Empty .corrupted. object files: 1'
-stdout '^Plan: delete the empty files'
+# 3.0: GIT-08 fixed: the clone comes first, the deletion after it.
+stdout '^Plan: make a fresh bare clone'
 
 # --- :282 git_repair:declined - no terminal, so it refuses
 ! exec bash -c 'cd $WORK; mkdir r3; cd r3; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; mkdir -p .git/objects/ab && : >.git/objects/ab/cdef0123456789abcdef0123456789abcdef01; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_repair'

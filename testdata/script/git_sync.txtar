@@ -11,8 +11,8 @@
 # git_sync driven through the shim, as a user runs it. Each case builds its
 # own bare origin and work tree in a subdirectory. Reproduces the 2.x
 # observable contract (stdout/stderr/exit) and git state. git_sync reports
-# the commit short hash (LEDGER GIT-01: no confirmation, as 2.x), matched by
-# a pattern rather than a golden.
+# the commit short hash, matched by a pattern rather than a golden.
+# 3.0: GIT-01 fixed: headless, a commit or push needs --yes.
 
 env GASH_HEADLESS=1
 env GIT_AUTHOR_DATE='1700000000 +0000'
@@ -46,7 +46,7 @@ cd w1
 exec bash -c 'git remote add origin ../o1.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
 exec bash -c 'echo b > b; echo a2 > a; mkdir sub; echo c > sub/c'
 cd sub
-exec bash -c 'source "$GASH_SH"; git_sync'
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
 stderr 'OK: Committed [0-9a-f]+ on main: chore: sync'
 stderr 'OK: Pushed main to origin/main\.'
 cd $WORK/w1
@@ -56,7 +56,7 @@ exec git log -1 --format=%s
 stdout '^chore: sync$'
 exec bash -c 'test "$(git rev-parse HEAD)" = "$(git -C ../o1.git rev-parse main)"'
 exec git rm -q b
-exec bash -c 'source "$GASH_SH"; git_sync -m "remove b"'
+exec bash -c 'source "$GASH_SH"; git_sync -m "remove b" --yes'
 exec bash -c 'test "$(git -C ../o1.git log -1 --format=%s main)" = "remove b"'
 
 # --- git_sync_spec.sh:49 - --no-push commits only
@@ -66,7 +66,7 @@ exec git init -q -b main w3
 cd w3
 exec bash -c 'git remote add origin ../o3.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
 exec bash -c 'echo x > x'
-exec bash -c 'source "$GASH_SH"; git_sync --no-push'
+exec bash -c 'source "$GASH_SH"; git_sync --no-push --yes'
 exec git rev-list --count origin/main..HEAD
 stdout '^1$'
 
@@ -78,7 +78,7 @@ cd w4
 exec bash -c 'git remote add origin ../o4.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
 exec git checkout -q -b feature
 exec bash -c 'echo f > f'
-exec bash -c 'source "$GASH_SH"; git_sync'
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
 exec git rev-parse --abbrev-ref @{upstream}
 stdout '^origin/feature$'
 
@@ -89,7 +89,7 @@ exec git init -q -b main w5
 cd w5
 exec bash -c 'git remote add origin ../o5.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
 exec bash -c 'echo y > y; git add y; git commit -q -m local'
-exec bash -c 'source "$GASH_SH"; git_sync'
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
 stderr 'Nothing to commit on main\.'
 stderr 'Pushed main to origin/main\.'
 exec git rev-list --count origin/main..HEAD

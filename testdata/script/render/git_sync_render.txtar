@@ -20,7 +20,8 @@ stdout 'Would commit on main'
 stdout 'Would push main to origin/main\.'
 
 # --- :286 git_sync:pushed
-exec bash -c 'cd $WORK; mkdir s2; cd s2; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git checkout -q -b topic && echo n >new; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_sync -m "add new"'
+# 3.0: GIT-01 fixed: headless, a commit and push needs --yes.
+exec bash -c 'cd $WORK; mkdir s2; cd s2; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git checkout -q -b topic && echo n >new; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_sync -m "add new" --yes'
 stderr 'Committed [0-9a-f]+ on topic: add new'
 stderr 'Pushed topic to origin/topic'
 

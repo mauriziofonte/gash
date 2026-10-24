@@ -18,6 +18,9 @@ const corrupt = `for o in $(git rev-parse HEAD:a) $(git rev-parse HEAD~1:a); do
 	p=$(git rev-parse --git-path objects)/${o:0:2}/${o:2}; chmod u+w "$p"; : >"$p"
 done`
 
+// 3.0: GIT-08 fixed: the clone comes before the deletion, so the step
+// order changed (TestLedger_GIT08); this 2.x comparison skips without the
+// 2.x sources.
 func TestRepairMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup, cwd string

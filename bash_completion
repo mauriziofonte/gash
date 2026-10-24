@@ -114,7 +114,7 @@ __gash_complete() {
             fi
             ;;
 
-        docker_prune_all)
+        docker_prune_all | git_apply_patch | git_repair)
             if [[ "$cur" == -* ]]; then
                 mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
             fi
@@ -142,8 +142,19 @@ __gash_complete() {
             fi
             ;;
 
+        # Git tag completion, with the confirmation flags
+        git_add_tag | git_delete_tag)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
+            elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
+            else
+                COMPREPLY=()
+            fi
+            ;;
+
         # Git tag completion
-        git_add_tag | git_delete_tag | git_list_tags)
+        git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
                 mapfile -t COMPREPLY < <(compgen -W "$(git tag -l 2>/dev/null)" -- "$cur")
             else
@@ -152,7 +163,7 @@ __gash_complete() {
             ;;
 
         git_sync)
-            mapfile -t COMPREPLY < <(compgen -W "--message --no-push --dry-run --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "-m --message --no-push --dry-run -y --yes --help" -- "$cur")
             ;;
 
         # Directory completion (other)

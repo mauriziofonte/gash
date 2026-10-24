@@ -15,6 +15,9 @@ mkdir -p sub && printf 'one\n' >sub/f.txt && git add sub && git commit -qm "add 
 printf 'two\n' >sub/f.txt && git commit -qam "change f" -m "with a body" &&
 printf 'three\n' >sub/f.txt && GIT_AUTHOR_NAME=Other git commit -qam "change f again"`
 
+// 3.0: GIT-05 fixed: an untracked file is now a git failure with status
+// 1 (TestLedger_GIT05); this 2.x comparison skips without the 2.x
+// sources.
 func TestDumpRevisionsMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup, cwd string

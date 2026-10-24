@@ -32,7 +32,8 @@ stdout '^Remote tags:$'
 stderr 'Error: Remote .origin. is not configured\.'
 
 # --- :269 git_add_tag:created
-exec bash -c 'cd $WORK; mkdir t3; cd t3; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_add_tag v2.0 "Release two"'
+# 3.0: GIT-01 fixed: headless, a tag push needs --yes.
+exec bash -c 'cd $WORK; mkdir t3; cd t3; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_add_tag v2.0 "Release two" --yes'
 stderr 'Tag .v2.0. created\.'
 stderr 'Tag .v2.0. pushed to remote\.'
 
@@ -45,7 +46,8 @@ stderr 'Error: Tag .v2.0. already exists\.'
 stderr 'Error: Missing tag name\. Usage: git_add_tag'
 
 # --- :272 git_delete_tag:deleted
-exec bash -c 'cd $WORK; mkdir t6; cd t6; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git tag -a v1 -m one && git push -q origin v1 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_delete_tag v1'
+# 3.0: GIT-01 fixed: headless, a tag deletion needs --yes.
+exec bash -c 'cd $WORK; mkdir t6; cd t6; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git tag -a v1 -m one && git push -q origin v1 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_delete_tag v1 --yes'
 stderr 'Local tag .v1. deleted\.'
 stderr 'Remote tag .v1. deleted\.'
 

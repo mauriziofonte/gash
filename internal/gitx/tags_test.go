@@ -12,6 +12,8 @@ const setupTags = setupOrigin + ` &&
 git tag v1 && git tag -a v2 -m "two" && git push -q origin v2 2>/dev/null &&
 git tag -a v0.9 -m "old" HEAD~1 && git push -q origin v0.9 2>/dev/null && git tag -d v0.9 >/dev/null`
 
+// 3.0: GIT-02 fixed: the "tags" cases no longer list peeled ^{} lines
+// (TestLedger_GIT02); this 2.x comparison skips without the 2.x sources.
 func TestListTagsMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup, cwd string
@@ -34,6 +36,9 @@ func TestListTagsMatches2x(t *testing.T) {
 	}
 }
 
+// 3.0: GIT-01, GIT-03 and GIT-04 fixed: the cases that create a tag now
+// need --yes (TestLedger_GIT01), and an option-like name is refused
+// (TestLedger_GIT04); this 2.x comparison skips without the 2.x sources.
 func TestAddTagMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup string
@@ -66,6 +71,9 @@ func TestAddTagMatches2x(t *testing.T) {
 	})
 }
 
+// 3.0: GIT-01 and GIT-03 fixed: the cases that delete a tag now need
+// --yes, which "extra words ignored" now passes (TestLedger_GIT01); this
+// 2.x comparison skips without the 2.x sources.
 func TestDeleteTagMatches2x(t *testing.T) {
 	cases := []struct {
 		name, setup string

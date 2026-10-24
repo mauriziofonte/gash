@@ -60,6 +60,13 @@ const gitConfig = `[user]
 func newScene(t *testing.T, setup string, extra ...string) *scene {
 	t.Helper()
 	need2x(t)
+	return sceneFor(t, setup, extra...)
+}
+
+// sceneFor is the scene of newScene, without the check for the 2.x
+// sources (the 3.0 proving tests need only bash and git).
+func sceneFor(t *testing.T, setup string, extra ...string) *scene {
+	t.Helper()
 	base := t.TempDir()
 	home := filepath.Join(base, "home")
 	tmp := filepath.Join(base, "tmp")
@@ -155,6 +162,15 @@ __gash_use_color() { return ` + gate + `; }
 func (s *scene) runGo(m mode, cwd, fn string, tm func(*term.Term) *term.Term, args ...string) result {
 	s.t.Helper()
 	s.build()
+	r := s.handler(m, cwd, fn, tm, args...)
+	r.State = s.state()
+	return r
+}
+
+// handler runs the handler of fn in cwd of the current tree, without
+// rebuilding it and without the State snapshot.
+func (s *scene) handler(m mode, cwd, fn string, tm func(*term.Term) *term.Term, args ...string) result {
+	s.t.Helper()
 	s.t.Chdir(filepath.Join(s.dir, cwd))
 	tbl := invoke.NewTable()
 	New().Register(tbl)
@@ -167,7 +183,7 @@ func (s *scene) runGo(m mode, cwd, fn string, tm func(*term.Term) *term.Term, ar
 	var out, errb bytes.Buffer
 	c := &invoke.Call{Ctx: context.Background(), Name: fn, Args: args, Env: e, Stdout: &out, Stderr: &errb, Term: tt}
 	rc := tbl.Run(c)
-	return result{Out: out.String(), Err: errb.String(), RC: rc, State: s.state()}
+	return result{Out: out.String(), Err: errb.String(), RC: rc}
 }
 
 // stateScript prints the tree: the files outside git directories with a

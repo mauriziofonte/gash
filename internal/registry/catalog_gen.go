@@ -1622,7 +1622,7 @@ var functions = []Function{
 			SeeAlso: "git_list_tags git_delete_tag",
 			Body: "" +
 				"USAGE\n" +
-				"  git_add_tag TAG_NAME [\"TAG_MESSAGE\"]\n" +
+				"  git_add_tag TAG_NAME [\"TAG_MESSAGE\"] [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Create a tag with auto-generated message\n" +
@@ -1631,18 +1631,26 @@ var functions = []Function{
 				"  # Create a tag with a custom message\n" +
 				"  gat v2.0.0 \"Major release with breaking changes\"\n" +
 				"\n" +
-				"  # Release workflow: commit, tag, done\n" +
-				"  gcm \"prepare release\" && gat v1.2.3 \"Bugfix release\"\n" +
+				"  # Release workflow: commit, tag, done (no question asked)\n" +
+				"  gcm \"prepare release\" && gat v1.2.3 \"Bugfix release\" --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Creates an annotated tag and pushes it to the remote\n" +
-				"  in one step. Requires a clean git repo with a remote.",
+				"  Creates an annotated tag and pushes it to origin in one step\n" +
+				"  (Will push refs/tags/TAG to origin (URL)).\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  The flags may come anywhere; -- ends them. A name starting with '-'\n" +
+				"  is refused. An unreachable origin is an error before anything is\n" +
+				"  created. Requires a git repo with an 'origin' remote.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:          &Usage{Program: "git_add_tag", Usage: "git_add_tag <tag_name> \"<tag_message>\"", Description: "Creates an annotated tag and pushes it to remote. Alias: gat"},
+		Fallback:          &Usage{Program: "git_add_tag", Usage: "git_add_tag <tag_name> [\"<tag_message>\"] [-y|--yes] [--dry-run]", Description: "Creates an annotated tag and pushes it to remote. Alias: gat"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "Git tag completion",
+		CompletionComment: "Git tag completion, with the confirmation flags",
 		Completion: "" +
-			"if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"$(git tag -l 2>/dev/null)\" -- \"$cur\")\n" +
 			"else\n" +
 			"    COMPREPLY=()\n" +
@@ -1667,22 +1675,34 @@ var functions = []Function{
 			SeeAlso: "git_dump_revisions",
 			Body: "" +
 				"USAGE\n" +
-				"  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH\n" +
+				"  git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Cherry-pick a commit from feature to main via patch\n" +
+				"  # Bring the work of feature-auth since abc1234 onto main\n" +
 				"  gpatch main feature-auth abc1234\n" +
 				"\n" +
-				"  # Apply a specific fix from an old branch\n" +
-				"  gpatch develop hotfix-db e5f6a7b\n" +
+				"  # The same without a question (scripts, headless mode)\n" +
+				"  gpatch develop hotfix-db e5f6a7b --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Steps: checks out main, creates a patch from the specified commit\n" +
-				"  on the feature branch, applies it, and returns you to main.\n" +
-				"  The commit hash must exist on the feature branch.",
+				"  Steps: checks out MAIN and pulls origin MAIN, checks out FEATURE,\n" +
+				"  writes `git diff-index COMMIT --binary` (every change from COMMIT to\n" +
+				"  FEATURE's work tree, not a single commit) to a temporary\n" +
+				"  gash-patch-*.patch file, checks out MAIN and applies it with\n" +
+				"  `git apply --3way`, leaving the changes uncommitted on MAIN.\n" +
+				"  COMMIT only has to exist. The work tree must be clean.\n" +
+				"  On a failure the branch you started on is checked out again; a patch\n" +
+				"  that does not apply is kept in the temporary directory.\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback: &Usage{Program: "git_apply_patch", Usage: "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH", Description: "Create and apply a patch from a feature branch to the main branch. Example: git_apply_patch main old-feat 123456. Alias: gap"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback: &Usage{Program: "git_apply_patch", Usage: "git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]", Description: "Apply the changes of a feature branch since a commit to the main branch (asks first). Example: git_apply_patch main old-feat 123456. Alias: gpatch"},
+		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "TMPDIR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "git_delete_tag",
@@ -1703,23 +1723,30 @@ var functions = []Function{
 			SeeAlso: "git_list_tags git_add_tag",
 			Body: "" +
 				"USAGE\n" +
-				"  git_delete_tag TAG_NAME\n" +
+				"  git_delete_tag TAG_NAME [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Remove a mis-tagged release\n" +
 				"  gdt v1.0.0-beta\n" +
 				"\n" +
 				"  # Fix a tag: delete and recreate\n" +
-				"  gdt v1.0.0 && gat v1.0.0 \"Fixed release\"\n" +
+				"  gdt v1.0.0 --yes && gat v1.0.0 \"Fixed release\" --yes\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Deletes the tag both locally and on the remote origin.",
+				"  Deletes the tag both locally and on the remote origin\n" +
+				"  (Will delete refs/tags/TAG locally and on origin (URL)).\n" +
+				"  Shows the plan and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal; --dry-run only shows.\n" +
+				"  An unreachable origin is an error before anything is deleted.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:          &Usage{Program: "git_delete_tag", Usage: "git_delete_tag <tag_name>", Description: "Deletes a tag both locally and on remote. Alias: gdt"},
+		Fallback:          &Usage{Program: "git_delete_tag", Usage: "git_delete_tag <tag_name> [-y|--yes] [--dry-run]", Description: "Deletes a tag both locally and on remote. Alias: gdt"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "Git tag completion",
+		CompletionComment: "Git tag completion, with the confirmation flags",
 		Completion: "" +
-			"if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"elif type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"$(git tag -l 2>/dev/null)\" -- \"$cur\")\n" +
 			"else\n" +
 			"    COMPREPLY=()\n" +
@@ -1755,7 +1782,10 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg\n" +
-				"  Each revision is dumped with its commit log message alongside.",
+				"  Each revision is dumped with its commit log message alongside.\n" +
+				"  001 is the newest revision, the highest number the oldest.\n" +
+				"  FILENAME may be relative or absolute, inside the work tree, and must\n" +
+				"  be tracked; a git failure returns 1 and leaves no empty file.",
 		},
 		Fallback:          &Usage{Program: "git_dump_revisions", Usage: "git_dump_revisions FILENAME", Description: "Dump all revisions of a file in a GIT repo into multiple separate files. Example: git_dump_revisions path/to/somefile.txt. Alias: gdr"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -1788,7 +1818,11 @@ var functions = []Function{
 				"  glt\n" +
 				"\n" +
 				"  # Check existing tags before creating a new release\n" +
-				"  glt && gat v2.0.0 \"Major release\"",
+				"  glt && gat v2.0.0 \"Major release\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Annotated tags are listed once. When origin cannot be reached the\n" +
+				"  remote list is an error and the status is 1.",
 		},
 		Fallback:          &Usage{Program: "git_list_tags", Usage: "git_list_tags", Description: "Lists all local and remote tags. Alias: glt"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -1819,7 +1853,7 @@ var functions = []Function{
 			SeeAlso: "git_list_tags",
 			Body: "" +
 				"USAGE\n" +
-				"  git_repair [-y] [--dry-run]\n" +
+				"  git_repair [-y|--yes] [--dry-run]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Fix a repo after a crash/OOM left empty loose object files\n" +
@@ -1829,15 +1863,22 @@ var functions = []Function{
 				"  gheal --dry-run\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Deletes 0-byte loose objects, copies the packs of a temporary bare\n" +
-				"  clone of 'origin' into the object store, then runs 'git gc' and\n" +
-				"  'git fsck --full' to verify. A plain 'git fetch' cannot do this: the\n" +
-				"  refs already match, so git believes it has the objects. Works in\n" +
-				"  linked worktrees and submodules. Shows the plan and asks first; -y\n" +
-				"  skips the question. Requires a git repo with an 'origin' remote.",
+				"  Makes a temporary bare clone of 'origin' first, then deletes the\n" +
+				"  0-byte loose objects (OBJECTS/xx/HASH files only: pack .keep and\n" +
+				"  info/ files are never touched), copies the packs of the clone into\n" +
+				"  the object store, then runs 'git gc' and 'git fsck --full' to\n" +
+				"  verify. A failed clone deletes nothing. A plain 'git fetch' cannot\n" +
+				"  do this: the refs already match, so git believes it has the objects.\n" +
+				"  Works in linked worktrees and submodules. Shows the plan and asks\n" +
+				"  first; -y skips the question. Requires a git repo with an 'origin'\n" +
+				"  remote; an origin URL starting with '-' is refused.",
 		},
 		Fallback: &Usage{Program: "git_repair", Usage: "git_repair [-y] [--dry-run]", Description: "Repair a repo with corrupted 0-byte loose objects by re-fetching them from origin. Alias: gheal"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "git_sync",
@@ -1858,14 +1899,14 @@ var functions = []Function{
 			SeeAlso: "git_repair",
 			Body: "" +
 				"USAGE\n" +
-				"  git_sync [-m MESSAGE] [--no-push] [--dry-run]\n" +
+				"  git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Save everything with the default message \"chore: sync\" and push\n" +
 				"  gsync\n" +
 				"\n" +
-				"  # With a real message\n" +
-				"  gsync -m \"docs: notes from the meeting\"\n" +
+				"  # With a real message, no question asked\n" +
+				"  gsync -m \"docs: notes from the meeting\" --yes\n" +
 				"\n" +
 				"  # What would be committed and where it would go\n" +
 				"  gsync --dry-run\n" +
@@ -1873,14 +1914,20 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Stages new, modified and deleted files of the whole work tree\n" +
 				"  (git add --all), commits only when there is something to commit, then\n" +
-				"  pushes the current branch to its upstream. A branch without upstream is\n" +
-				"  pushed to origin and the upstream is set. Refuses on a detached HEAD\n" +
-				"  and during a merge, rebase, cherry-pick or revert. .gitignore applies:\n" +
-				"  check `git status` first in repositories without one.",
+				"  pushes the current branch to its upstream branch, named explicitly\n" +
+				"  (git push REMOTE HEAD:BRANCH, the target --dry-run shows). A branch\n" +
+				"  without upstream is pushed to origin and the upstream is set.\n" +
+				"  Shows the plan (Will commit N file(s) on BRANCH (M untracked) and push\n" +
+				"  to UPSTREAM) and asks first; -y/--yes skips the question and is\n" +
+				"  required in headless mode or without a terminal.\n" +
+				"  Refuses on a detached HEAD and during a merge, rebase, cherry-pick or\n" +
+				"  revert. .gitignore applies: check `git status` first in repositories\n" +
+				"  without one.\n" +
+				"  Runs with your git configuration, hooks and signing settings.",
 		},
-		Fallback:   &Usage{Program: "git_sync", Usage: "git_sync [-m MESSAGE] [--no-push] [--dry-run]", Description: "Stage everything, commit it and push the current branch. Alias: gsync"},
+		Fallback:   &Usage{Program: "git_sync", Usage: "git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]", Description: "Stage everything, commit it and push the current branch. Alias: gsync"},
 		Env:        []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--message --no-push --dry-run --help\" -- \"$cur\")",
+		Completion: "mapfile -t COMPREPLY < <(compgen -W \"-m --message --no-push --dry-run -y --yes --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "gl",

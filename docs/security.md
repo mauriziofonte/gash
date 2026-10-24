@@ -186,6 +186,14 @@ smudge filters named in `.gitattributes` and defined in the repository's
 configuration can still run during `status` and `diff`: inspect an untrusted
 repository's `.git/config` before pointing an agent at it.
 
+The git module functions (`git_sync`, `git_add_tag`, `git_delete_tag`,
+`git_apply_patch`, `git_repair`, `git_dump_revisions`, `git_list_tags`) are
+your own repository operations and get none of this hardening: they run your
+hooks (`pre-commit`, `commit-msg`, ...), signing (`commit.gpgSign`,
+`tag.gpgSign`), credential helpers, `core.sshCommand` and `insteadOf` rules,
+as a plain `git` would. Do not run them in a repository whose configuration
+you do not trust.
+
 ## AI module
 
 * **Redaction.** The text sent (question, piped input, collected system data)
@@ -244,6 +252,9 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
 | `docker_stop_all`, `docker_start_all` | List the containers (`Will stop N container(s): NAMES`) and ask; `-y` skips | Refused unless `-y` |
 | `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
+| `git_add_tag`, `git_delete_tag` | Show the tag and the origin URL (`Will push refs/tags/T to origin (URL)`) and ask; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `git_sync` | Shows what it commits and where it pushes (`Will commit N file(s) on B (M untracked) and push to U`) and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `git_apply_patch` | Shows the checkout, pull and apply plan and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
 | `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
 | `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
