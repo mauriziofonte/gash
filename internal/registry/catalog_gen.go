@@ -70,6 +70,7 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Type 'exit' or 'quit' or press Ctrl+C to end the session.\n" +
 				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  -h/--help is help as the first word or right after the provider.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
@@ -165,6 +166,9 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
 				"  When input is piped, the AI enters troubleshoot mode automatically.\n" +
+				"  A provider alone is not a question: \"ai_query claude\" fails with\n" +
+				"  \"No query provided\". -h/--help is help as the first word or as the\n" +
+				"  only word after the provider; inside a longer question it is text.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +

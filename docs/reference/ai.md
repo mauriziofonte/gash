@@ -76,6 +76,7 @@ The AI automatically detects your intent:
 ```text
 Type 'exit' or 'quit' or press Ctrl+C to end the session.
 Piped content is auto-truncated to 4KB to save tokens.
+-h/--help is help as the first word or right after the provider.
 ```
 
 #### Privacy
@@ -163,6 +164,9 @@ diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf \
 ```text
 Piped content is auto-truncated to 4KB to save tokens.
 When input is piped, the AI enters troubleshoot mode automatically.
+A provider alone is not a question: "ai_query claude" fails with
+"No query provided". -h/--help is help as the first word or as the
+only word after the provider; inside a longer question it is text.
 ```
 
 #### Privacy

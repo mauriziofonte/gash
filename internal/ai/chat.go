@@ -15,25 +15,24 @@ import (
 )
 
 // aiQuery is ai_query [provider] "query": a non-interactive query. Help is
-// recognized only as the first argument (LEDGER AI-24).
+// the first argument, or the only word after a provider (LEDGER AI-24).
 func (m *Module) aiQuery(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
+	if help.NeedsOf(c, c.Arg(0)) || (providerHelp(c.Args) && help.NeedsOf(c, c.Arg(1))) {
 		return 0
 	}
 	p := printer(c)
 
-	// Piped input is read first, before the argument grammar (AI-05
-	// reproduced: it blocks on any open non-terminal stdin until EOF or
-	// 4 KB).
-	piped := ""
-	if !c.Term.StdinTTY() {
-		piped = readPiped(c.Stdin)
-	}
-
+	// The argument grammar comes first: a provider alone is no question
+	// (LEDGER AI-02), refused before stdin is read or a request is made.
 	provider, query := parseQueryArgs(c.Args)
 	if query == "" {
 		p.Error("No query provided")
 		return 1
+	}
+
+	piped := ""
+	if !c.Term.StdinTTY() {
+		piped = readPiped(c.Stdin)
 	}
 	if piped != "" {
 		query = pipeWrap(piped, query)
@@ -61,27 +60,29 @@ func (m *Module) aiQuery(c *invoke.Call) int {
 	return 0
 }
 
-// parseQueryArgs is the ai_query grammar: with two or more words a leading
-// "claude" or "gemini" is the provider (case-sensitive, AI-17), the rest
-// the question joined by one space (AI-16); one word is the whole question
-// (so `ai_query claude` sends "claude", AI-02 reproduced).
+// parseQueryArgs is the ai_query grammar: a leading "claude" or "gemini"
+// is the provider (case-sensitive, AI-17), the rest the question joined by
+// one space (AI-16). A provider alone leaves the question empty (LEDGER
+// AI-02: `ai_query claude` is no longer the question "claude").
 func parseQueryArgs(args []string) (provider, query string) {
-	switch {
-	case len(args) == 1:
-		query = args[0]
-	case len(args) >= 2:
-		if args[0] == "claude" || args[0] == "gemini" {
-			return args[0], strings.Join(args[1:], " ")
-		}
-		query = strings.Join(args, " ")
+	if len(args) >= 1 && isProvider(args[0]) {
+		return args[0], strings.Join(args[1:], " ")
 	}
-	return "", query
+	return "", strings.Join(args, " ")
 }
 
+// isProvider reports whether word names a provider (case-sensitive).
+func isProvider(word string) bool { return word == "claude" || word == "gemini" }
+
+// providerHelp reports a provider followed by one word only, which is then
+// help when it is -h or --help (LEDGER AI-24): `ai_query claude --help`.
+func providerHelp(args []string) bool { return len(args) == 2 && isProvider(args[0]) }
+
 // aiAsk is ai_ask [provider]: one interactive question read from the
-// prompt (AI-03: one question per call). Help is the first argument only.
+// prompt (AI-03: one question per call). Help is the first argument, or
+// the only word after a provider (LEDGER AI-24).
 func (m *Module) aiAsk(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
+	if help.NeedsOf(c, c.Arg(0)) || (providerHelp(c.Args) && help.NeedsOf(c, c.Arg(1))) {
 		return 0
 	}
 	p := printer(c)

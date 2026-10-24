@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
 // claudeUser returns the user message content of a recorded Claude body.
@@ -93,20 +95,75 @@ func TestAIQueryNoProvider(t *testing.T) {
 	}
 }
 
-// TestLedger_AI02_2x: `ai_query claude` sends the word "claude" as the
-// question (the reproduced defect), rc 0, one request.
-func TestLedger_AI02_2x(t *testing.T) {
+// TestLedger_AI02_fix: `ai_query claude` names the provider and leaves the
+// question empty: "No query provided", rc 1, no request, piped input too
+// (3.0: AI-02 fixed; 2.x sent the word "claude"). `ai_query claude hi` is
+// unchanged.
+func TestLedger_AI02_fix(t *testing.T) {
 	f := newFakeAPI(t)
 	m := testModule(f)
-	c, _, _ := newCall(map[string]string{"HOME": gashEnvHome(t, "AI:claude=t")}, nil, true, "claude")
-	if rc := m.aiQuery(c); rc != 0 {
-		t.Fatalf("want rc 0")
+	home := gashEnvHome(t, "AI:claude=t", "AI:gemini=g")
+	for _, args := range [][]string{{"claude"}, {"gemini"}} {
+		for _, piped := range []bool{false, true} {
+			var in *strings.Reader
+			if piped {
+				in = strings.NewReader("some log\n")
+			}
+			c, _, errb := newCall(map[string]string{"HOME": home}, in, !piped, args...)
+			if in == nil {
+				c.Stdin = nil
+			}
+			if rc := m.aiQuery(c); rc != 1 {
+				t.Fatalf("%v piped=%v: want rc 1", args, piped)
+			}
+			if errb.String() != "Error: No query provided\n" {
+				t.Fatalf("%v: stderr %q", args, errb.String())
+			}
+		}
 	}
-	if f.count() != 1 {
-		t.Fatalf("want 1 request, got %d", f.count())
+	if f.count() != 0 {
+		t.Fatalf("want no request, got %d", f.count())
 	}
-	if u := claudeUser(t, f.lastBody()); !strings.HasSuffix(u, "\n\nclaude") {
-		t.Fatalf("question should be \"claude\", body user=%q", u)
+	c, _, _ := newCall(map[string]string{"HOME": home}, nil, true, "claude", "hi")
+	if rc := m.aiQuery(c); rc != 0 || f.count() != 1 {
+		t.Fatalf("claude hi: rc %d, %d requests", rc, f.count())
+	}
+	if u := claudeUser(t, f.lastBody()); !strings.HasSuffix(u, "\n\nhi") {
+		t.Fatalf("question should be \"hi\", body user=%q", u)
+	}
+}
+
+// TestLedger_AI24_fix: -h/--help is help as the first word or as the only
+// word after a provider (ai_query, ai_ask), and anywhere in ai_sysinfo; a
+// question that merely contains --help stays a question.
+func TestLedger_AI24_fix(t *testing.T) {
+	f := newFakeAPI(t)
+	m := testModule(f)
+	home := gashEnvHome(t, "AI:claude=t")
+	for _, tc := range []struct {
+		name string
+		args []string
+		run  func(*invoke.Call) int
+	}{
+		{"ai_query", []string{"claude", "--help"}, m.aiQuery},
+		{"ai_query", []string{"--help"}, m.aiQuery},
+		{"ai_ask", []string{"gemini", "-h"}, m.aiAsk},
+		{"ai_sysinfo", []string{"claude", "--help"}, m.aiSysinfo},
+		{"ai_sysinfo", []string{"--raw", "-h"}, m.aiSysinfo},
+	} {
+		c, out, _ := newCall(map[string]string{"HOME": home}, nil, true, tc.args...)
+		c.Name = tc.name
+		if rc := tc.run(c); rc != 0 || !strings.Contains(out.String(), tc.name) {
+			t.Fatalf("%s %v: rc %d, out %q", tc.name, tc.args, rc, out.String())
+		}
+	}
+	if f.count() != 0 {
+		t.Fatalf("help sent %d requests", f.count())
+	}
+	c, out, _ := newCall(map[string]string{"HOME": home}, nil, true, "what", "does", "ls", "--help", "print")
+	c.Name = "ai_query"
+	if rc := m.aiQuery(c); rc != 0 || f.count() != 1 || strings.Contains(out.String(), "USAGE") {
+		t.Fatalf("question with --help: rc %d, %d requests", rc, f.count())
 	}
 }
 

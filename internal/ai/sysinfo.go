@@ -27,11 +27,13 @@ var sysinfoSections = []string{
 
 // aiSysinfo is ai_sysinfo [provider] [--raw] [--no-color]: collect the
 // system dossier, ask the provider for an analysis and print it. --raw
-// dumps the dossier with no API call. Help is the first argument only
-// (LEDGER AI-24); --no-color is accepted though the help omits it (AI-25).
+// dumps the dossier with no API call. -h/--help is help anywhere (LEDGER
+// AI-24).
 func (m *Module) aiSysinfo(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
-		return 0
+	for _, a := range c.Args {
+		if (a == "-h" || a == "--help") && help.NeedsOf(c, a) {
+			return 0
+		}
 	}
 	p := printer(c)
 
