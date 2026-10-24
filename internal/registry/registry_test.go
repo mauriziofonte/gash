@@ -5,6 +5,7 @@ package registry
 import (
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -197,4 +198,34 @@ func TestLedger_SELF21(t *testing.T) {
 	require.True(t, ok)
 	require.NotContains(t, f.Help.Body, "cleans up")
 	require.Contains(t, f.Help.Body, "  Fetches the release tags and checks out the newest release (never\n  an older one).")
+}
+
+// LEDGER SELF-20: the counts README.md states are the registry's: the
+// functions with a help page, every alias (module short aliases and pack
+// aliases), the git pack's aliases plus the log helpers of its card, and
+// the llm functions.
+func TestRegistry_ReadmeCounts(t *testing.T) {
+	b, err := os.ReadFile("../../README.md")
+	require.NoError(t, err)
+	readme := string(b)
+	fns, llm := 0, 0
+	for _, f := range Functions() {
+		if f.HasHelp {
+			fns++
+			if f.Help.Module == "llm" {
+				llm++
+			}
+		}
+	}
+	gitAliases := 0
+	for _, a := range Aliases() {
+		if a.Pack == "git" {
+			gitAliases++
+		}
+	}
+	helpers := len(CardAliases("git")) - gitAliases
+	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
+	require.Contains(t, readme, strconv.Itoa(gitAliases)+" short aliases and "+strconv.Itoa(helpers)+" log helpers")
+	require.Equal(t, 18, llm, "README.md says Eighteen read-only JSON functions")
+	require.Contains(t, readme, "Eighteen read-only JSON functions")
 }
