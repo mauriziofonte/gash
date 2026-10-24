@@ -113,7 +113,7 @@ slow_query_explain field (the plan) when a query takes 100 ms or more.
 | `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines |
 | `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev` |
-| `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries); an unknown digest is `null` |
+| `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries); an unknown digest is `null`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
 

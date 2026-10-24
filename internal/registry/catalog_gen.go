@@ -2287,7 +2287,11 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Wrapper around docker_compose_check --json.\n" +
-				"  Designed for LLM/AI agent consumption.",
+				"  Designed for LLM/AI agent consumption.\n" +
+				"  PATH follows the llm_* path rules (no .., no protected trees).\n" +
+				"  ${VAR} in the compose file is resolved from PATH/.env and a short\n" +
+				"  allowlist (HOME, USER, PATH, LANG, DOCKER_HOST, ...), never from\n" +
+				"  other exported variables, so a token cannot reach the output.",
 		},
 		Fallback: &Usage{Program: "llm_docker_check", Usage: "llm_docker_check [PATH]", Description: "Compose image update check as JSON"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
