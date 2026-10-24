@@ -42,8 +42,15 @@ exec git -C home/.gash status --porcelain
 -- drive.sh --
 snap() {
     {
-        declare -p | grep -vE '^declare -[-a-zA-Z]* (BASH[A-Z_]*|RANDOM|SRANDOM|SECONDS|LINENO|EPOCHREALTIME|EPOCHSECONDS|_|BASHPID|FUNCNAME|PIPESTATUS|HISTCMD|COLUMNS|LINES|OLDPWD|PWD|SHLVL|PPID|COMP_WORDBREAKS|MAILCHECK)=' |
-            grep -vE '^declare -[-a-zA-Z]* (__AI_[A-Z_]*|__LLM_[A-Z_]*|__REMOTE_[A-Z_]*|__SYSINFO_[A-Z_]*|LESSOPEN|LESSCLOSE|LS_COLORS|LSCOLORS|PROMPT_COMMAND)='
+        # By name, not by declare -p line: Bash 5.0 prints a multi-line
+        # value (2.x's __AI_* prompts) on several lines.
+        for __snap_v in $(compgen -v); do
+            case $__snap_v in
+            BASH* | RANDOM | SRANDOM | SECONDS | LINENO | EPOCHREALTIME | EPOCHSECONDS | _ | BASHPID | FUNCNAME | PIPESTATUS | HISTCMD | COLUMNS | LINES | OLDPWD | PWD | SHLVL | PPID | COMP_WORDBREAKS | MAILCHECK | __snap_v) ;;
+            __AI_* | __LLM_* | __REMOTE_* | __SYSINFO_* | LESSOPEN | LESSCLOSE | LS_COLORS | LSCOLORS | PROMPT_COMMAND) ;;
+            *) declare -p "$__snap_v" ;;
+            esac
+        done
         echo '--- alias'; alias -p
         echo '--- complete'; complete -p
         echo '--- shopt'; shopt -p
