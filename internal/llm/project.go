@@ -4,11 +4,14 @@ package llm
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/contract"
@@ -165,12 +168,14 @@ func (m *Module) project(c *invoke.Call) int {
 }
 
 // deps is llm_deps (project.sh __llm_deps_impl): the project dependencies as
-// {manager, dependencies} or, with --dev, {manager, prod, dev}. The exact
-// 2.x jq programs run through the sanctioned runner (jq is a hard dependency
-// here: jq_not_found FATAL without it), so the jq output — key sorting,
-// array manifests yielding index lists, the raw parse error and exit 5 on a
-// malformed manifest (LEDGER LLM-05), the go.mod `//` entry (LEDGER LLM-14)
-// — is reproduced byte for byte.
+// {manager, dependencies} or, with --dev, {manager, prod, dev}.
+// composer.json and package.json are read natively (3.0: LEDGER LLM-05 and
+// LLM-14 fixed): a manifest that is not one JSON object, empty included, is
+// invalid_manifest (2.x: jq's raw parse error and exit 5, or nothing and
+// exit 0), and a dependency map that is not an object counts as empty
+// (2.x: jq's keys gave an array's indices). requirements.txt and go.mod
+// keep the 2.x jq programs, through the sanctioned runner (jq_not_found,
+// FATAL, without jq); a go.mod comment line is no dependency (LLM-14).
 func (m *Module) deps(c *invoke.Call) int {
 	if helpAnywhere(c) {
 		return 0
@@ -208,11 +213,9 @@ func (m *Module) deps(c *invoke.Call) int {
 	}
 	switch {
 	case isRegular(safe + "/composer.json"):
-		prog := `(.require // {} | keys) as $prod | (."require-dev" // {} | keys) as $dev | ` + shape
-		return m.runJQ(c, jq, nil, "-c", "--arg", "m", "composer", prog, safe+"/composer.json")
+		return m.jsonDeps(c, safe+"/composer.json", "composer", "require", "require-dev", includeDev)
 	case isRegular(safe + "/package.json"):
-		prog := `(.dependencies // {} | keys) as $prod | (.devDependencies // {} | keys) as $dev | ` + shape
-		return m.runJQ(c, jq, nil, "-c", "--arg", "m", "npm", prog, safe+"/package.json")
+		return m.jsonDeps(c, safe+"/package.json", "npm", "dependencies", "devDependencies", includeDev)
 	case isRegular(safe + "/requirements.txt"):
 		data, _ := os.ReadFile(safe + "/requirements.txt")
 		prog := `[inputs | sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0 and (startswith("-") | not)) | sub("[ <>=!~;\\[@].*"; "")] as $prod | [] as $dev | ` + shape
@@ -226,6 +229,84 @@ func (m *Module) deps(c *invoke.Call) int {
 			"No composer.json, package.json, requirements.txt or go.mod found",
 			"Not a package-managed project")
 	}
+}
+
+// jsonDeps prints the dependency names of a JSON manifest: the keys of
+// its prodKey and devKey objects, sorted bytewise as jq's keys sorts them,
+// encoded as jq -c writes them.
+func (m *Module) jsonDeps(c *invoke.Call, file, manager, prodKey, devKey string, includeDev bool) int {
+	data, err := m.readManifest(file)
+	var top map[string]json.RawMessage
+	if err == nil {
+		top, err = jsonObject(data)
+	}
+	if err != nil {
+		return fail(c, "invalid_manifest", file, "The manifest is not a JSON object; fix it or use llm_config to read it")
+	}
+	b := []byte(`{"manager":`)
+	b = contract.AppendString(b, manager, contract.EscapeJQ)
+	if includeDev {
+		b = append(b, `,"prod":`...)
+		b = appendKeys(b, top[prodKey])
+		b = append(b, `,"dev":`...)
+		b = appendKeys(b, top[devKey])
+	} else {
+		b = append(b, `,"dependencies":`...)
+		b = appendKeys(b, top[prodKey])
+	}
+	b = append(b, "}\n"...)
+	_, _ = c.Stdout.Write(b)
+	return 0
+}
+
+func (m *Module) readManifest(file string) ([]byte, error) {
+	if m.readFile != nil {
+		return m.readFile(file)
+	}
+	return os.ReadFile(file)
+}
+
+// jsonObject decodes data as exactly one JSON object; anything else (an
+// empty file, another value, a second value after it) is an error.
+func jsonObject(data []byte) (map[string]json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 || raw[0] != '{' {
+		return nil, errNotObject
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, errNotObject
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+var errNotObject = errors.New("not one JSON object")
+
+// appendKeys appends the sorted keys of v when it is an object, [] for
+// anything else (missing, null, an array, a string, ...).
+func appendKeys(b []byte, v json.RawMessage) []byte {
+	var keys []string
+	if obj, err := jsonObject(v); err == nil {
+		for k := range obj {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	b = append(b, '[')
+	for i, k := range keys {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = contract.AppendString(b, k, contract.EscapeJQ)
+	}
+	return append(b, ']')
 }
 
 // runJQ runs jq with its stdout and stderr on the caller's streams (the 2.x
@@ -246,10 +327,9 @@ var (
 
 // goModRequires is the awk program of the go.mod branch: inside a
 // `require (` block it prints the first field of each line with two or more
-// fields; a one-line `require MODULE VERSION` prints the module. It keeps
-// the 2.x behavior, a `// comment` line in a block yielding a `//` entry
-// (LEDGER LLM-14). Its output is awk-independent, feeding the same jq
-// program the shell piped it to.
+// fields, except a `// comment` line (2.x listed its `//`, LEDGER LLM-14);
+// a one-line `require MODULE VERSION` prints the module. Its output feeds
+// the jq program the shell piped it to.
 func goModRequires(data []byte) []byte {
 	content := string(data)
 	lines := strings.Split(content, "\n")
@@ -268,7 +348,9 @@ func goModRequires(data []byte) []byte {
 			continue
 		}
 		if block {
-			if f := awkFields(line); len(f) >= 2 {
+			// A comment line is no dependency (3.0: LEDGER LLM-14 fixed;
+			// 2.x listed its "//").
+			if f := awkFields(line); len(f) >= 2 && !strings.HasPrefix(f[0], "//") {
 				out.WriteString(f[0])
 				out.WriteByte('\n')
 			}

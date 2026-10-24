@@ -5,6 +5,8 @@ package llm
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // requireJQ skips when jq is not installed.
@@ -146,4 +148,49 @@ func TestDepsMatches2x(t *testing.T) {
 			same(t, m, tc.cwd, baseEnv(home, nil), "llm_deps", tc.args...)
 		})
 	}
+}
+
+// TestLedger_LLM05: a JSON manifest that is not one JSON object (broken,
+// an array, empty, two values) is invalid_manifest (RETRY), one JSON line
+// on stderr, exit 1; 2.x printed jq's raw parse error with exit 5, or
+// nothing with exit 0 for an empty file.
+func TestLedger_LLM05(t *testing.T) {
+	requireJQ(t)
+	m := New()
+	for _, body := range []string{`{"dependencies": {`, `["a"]`, "", "  \n", `{"a":1} {"b":2}`, "null", `"x"`} {
+		for _, name := range []string{"package.json", "composer.json"} {
+			d := physTemp(t)
+			mustWrite(t, filepath.Join(d, name), body)
+			r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_deps")
+			require.Equal(t, result{"", `{"error":"invalid_manifest","details":"` + filepath.Join(d, name) +
+				`","action":"RETRY","recoverable":true,"hint":"The manifest is not a JSON object; fix it or use llm_config to read it"}` + "\n", 1}, r, "%s %q", name, body)
+		}
+	}
+}
+
+// TestLedger_LLM14: a go.mod comment line is no dependency, and a
+// dependency map that is not an object counts as empty (2.x: "//" and
+// the array's indices).
+func TestLedger_LLM14(t *testing.T) {
+	requireJQ(t)
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	gomod := physTemp(t)
+	mustWrite(t, filepath.Join(gomod, "go.mod"),
+		"module example.com/x\n\ngo 1.22\n\nrequire (\n\tgithub.com/pkg/errors v0.9.1\n\t// pinned for CVE\n\t//nospace x\n\tgolang.org/x/sys v0.1.0 // indirect\n)\n\nrequire gopkg.in/yaml.v3 v3.0.1\n")
+	require.Equal(t, result{`{"manager":"go","dependencies":["github.com/pkg/errors","golang.org/x/sys","gopkg.in/yaml.v3"]}` + "\n", "", 0},
+		runGo(t, m, gomod, env, "llm_deps"))
+
+	node := physTemp(t)
+	mustWrite(t, filepath.Join(node, "package.json"), `{"dependencies":["react","vue"],"devDependencies":{"jest":"29","eslint":"8","é\u0001":"1"}}`)
+	require.Equal(t, result{`{"manager":"npm","dependencies":[]}` + "\n", "", 0}, runGo(t, m, node, env, "llm_deps"))
+	require.Equal(t, result{`{"manager":"npm","prod":[],"dev":["eslint","jest","é\u0001"]}` + "\n", "", 0}, runGo(t, m, node, env, "llm_deps", "--dev"))
+
+	composer := physTemp(t)
+	mustWrite(t, filepath.Join(composer, "composer.json"), `{"require":{"symfony/console":"^6.0","monolog/monolog":"^3.0","php":">=8"},"require-dev":"x"}`)
+	require.Equal(t, result{`{"manager":"composer","prod":["monolog/monolog","php","symfony/console"],"dev":[]}` + "\n", "", 0},
+		runGo(t, m, composer, env, "llm_deps", "--dev"))
+	none := physTemp(t)
+	mustWrite(t, filepath.Join(none, "package.json"), `{"name":"x"}`)
+	require.Equal(t, result{`{"manager":"npm","dependencies":[]}` + "\n", "", 0}, runGo(t, m, none, env, "llm_deps"))
 }
