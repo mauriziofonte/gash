@@ -150,7 +150,8 @@ A path is secret when its base name matches, ignoring case, one of:
 |---|---|
 | Environment files | `.env` `.env.*` `*.env` (not `.env.example`, `.env.sample`, `.env.dist`, `.env.template`, `*.env.example`) |
 | Keys and keystores | `*.pem` `*.key` `*.p12` `*.pfx` `*.jks` `*.keystore` `*.kdbx` `*.ppk` `id_rsa*` `id_dsa*` `id_ecdsa*` `id_ed25519*` `*_rsa` `*_dsa` `*_ecdsa` `*_ed25519` (not `*.pub`) |
-| Credential files | `credentials` `credentials.*` `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc` `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto` `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig` `*.tfstate` `*.tfstate.*` `*.tfvars` |
+| Credential files | `credentials` `credentials.*` `credentials_*` `credentials-*` `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc` `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto` `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig` `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json` `.envrc` |
+| Host keys | `ssh_host_*_key` (not `*.pub`) |
 | Directories | anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.config/gcloud` |
 
 A symlink is judged by its own name and by its target's.
@@ -165,14 +166,19 @@ A symlink is judged by its own name and by its target's.
 ## Forbidden paths
 
 `/proc`, `/sys`, `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/gshadow`,
-`/etc/passwd`, `/etc/sudoers`, `/etc/sudoers.d` and everything below them,
+`/etc/passwd`, `/etc/sudoers`, `/etc/sudoers.d`, `/etc/shadow-`,
+`/etc/gshadow-`, `/etc/security/opasswd` and everything below them,
 matched per path component (`/rootfs` is allowed), plus root's home where it
 is not `/root` (macOS: `/var/root`). A `..` component is refused.
-The path is checked as written, after `realpath -m` (symlinks resolved; a
-Bash walk where `realpath -m` is missing) and, for macOS, without a
-`/private` prefix. Applies to `llm_tree`, `llm_find`,
-`llm_grep`, `llm_config`, `llm_git_*`, `llm_project`, `llm_deps`, SQLite
-files of `llm_db_*` and the arguments of `llm_exec`. The filesystem scanners (`files_largest`, `dirs_largest`,
+The path is checked as written, after resolving it as `realpath -m` does
+(symlinks resolved) and, for macOS, without a `/private` prefix. Applies to
+`llm_tree`, `llm_find`, `llm_grep`, `llm_config`, `llm_git_*`, `llm_project`,
+`llm_deps`, SQLite files of `llm_db_*` and the arguments of `llm_exec`.
+The walks of `llm_tree`, `llm_find` and `llm_grep` may not start at `/` or
+above a protected tree (content searches, `llm_grep` and
+`llm_find --contains`, also not above an `/etc` entry): `forbidden_path`,
+hint `Search a subdirectory`. Below the root they skip every entry at or
+below a protected path, and they do not follow symlinks. The filesystem scanners (`files_largest`, `dirs_largest`,
 `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse `/proc`, `/sys`,
 `/dev`, `/boot` and `/root` (as written and resolved), and `/` without
 `--allow-root`.

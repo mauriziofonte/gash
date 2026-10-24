@@ -126,6 +126,30 @@ func (g *Guard) PathForbidden(path, normalized string) bool {
 	return false
 }
 
+// UnderForbidden reports whether path, read as it is (no symlink resolved,
+// no realpath), is one of the forbidden entries or lives below one, also
+// with a leading /private stripped (macOS). It is the per-entry test of a
+// walk that does not follow symlinks from a root that was resolved: every
+// entry it meets is already a physical path, so no lookup is needed. A
+// relative path is joined to Cwd first. New in 3.0 (LEDGER LLM-09).
+func (g *Guard) UnderForbidden(path string) bool {
+	if path == "" {
+		return false
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = strings.TrimSuffix(g.Cwd, "/") + "/" + path
+	}
+	path = strings.TrimSuffix(path, "/")
+	for _, cand := range []string{path, strings.TrimPrefix(path, "/private")} {
+		for _, f := range g.Forbidden {
+			if cand == f || strings.HasPrefix(cand, f+"/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // PathAboveForbidden is __llm_path_above_forbidden: whether a walk starting at
 // path would enter a protected tree (path is "/" or a strict ancestor of a
 // forbidden entry). mode "content" counts every forbidden entry; mode "names"

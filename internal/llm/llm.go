@@ -141,6 +141,22 @@ func (m *Module) validatePath(c *invoke.Call, path string) (string, bool) {
 	return safe, true
 }
 
+// walkRoot refuses a walk that would start at / or above a protected tree
+// (forbidden_path, FATAL) and returns the per-entry test that keeps the
+// walk out of the protected trees below its root. mode is "content" for a
+// content search (the /etc entries count) and "names" for a listing, as
+// llm_exec's walk rule reads them. 2.x checked the start point only, so a
+// walk from / or /etc listed /proc and /root and read /etc/shadow (3.0:
+// LEDGER LLM-09 fixed).
+func (m *Module) walkRoot(c *invoke.Call, safe, mode string) (func(string) bool, bool) {
+	g := m.guard(c)
+	if g.PathAboveForbidden(safe, mode) {
+		fail(c, "forbidden_path", safe, "Search a subdirectory")
+		return nil, false
+	}
+	return g.UnderForbidden, true
+}
+
 // pathTaker is __llm_take_path: the first positional is the PATH, a second
 // one is unexpected_argument.
 type pathTaker struct {

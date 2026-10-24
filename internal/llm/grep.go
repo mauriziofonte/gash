@@ -120,6 +120,10 @@ func (m *Module) grep(c *invoke.Call) int {
 	if m.guard(c).IsSecretFile(safe) {
 		return fail(c, "secret_file_blocked", safe, "This file contains secrets and cannot be searched")
 	}
+	forbidden, ok := m.walkRoot(c, safe, "content")
+	if !ok {
+		return 1
+	}
 	globs := append([]string{}, noiseGlobs...)
 	for _, e := range splitExts(extensions) {
 		globs = append(globs, "*."+e)
@@ -129,6 +133,7 @@ func (m *Module) grep(c *invoke.Call) int {
 		return rc
 	}
 	s.context = atoi(context)
+	s.forbidden = forbidden
 	s.run(safe, c.Stdout, atoi(limit))
 	return 0
 }

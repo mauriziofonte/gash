@@ -67,6 +67,14 @@ func (m *Module) find(c *invoke.Call) int {
 		return 1
 	}
 	n := atoi(limit)
+	mode := "names"
+	if contains != "" {
+		mode = "content"
+	}
+	forbidden, ok := m.walkRoot(c, safe, mode)
+	if !ok {
+		return 1
+	}
 	if contains != "" {
 		if m.guard(c).IsSecretFile(safe) {
 			return fail(c, "secret_file_blocked", safe, "This file contains secrets and cannot be searched")
@@ -83,6 +91,7 @@ func (m *Module) find(c *invoke.Call) int {
 			return rc
 		}
 		s.filesOnly = true
+		s.forbidden = forbidden
 		s.run(safe, c.Stdout, n)
 		return 0
 	}
@@ -90,7 +99,7 @@ func (m *Module) find(c *invoke.Call) int {
 		return 0
 	}
 	out := &lineLimiter{w: c.Stdout, left: n}
-	w := findWalker{maxDepth: -1, withStart: true}
+	w := findWalker{maxDepth: -1, withStart: true, forbidden: forbidden}
 	w.visit = func(e findEntry) bool {
 		name := startName(e.path)
 		if e.depth > 0 {

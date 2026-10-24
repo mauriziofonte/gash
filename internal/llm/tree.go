@@ -75,11 +75,15 @@ func (m *Module) tree(c *invoke.Call) int {
 	if st, err := os.Stat(safe); err != nil || !st.IsDir() {
 		return fail(c, "not_a_directory", safe, "Provide a valid directory path")
 	}
+	forbidden, ok := m.walkRoot(c, safe, "names")
+	if !ok {
+		return 1
+	}
 	if textMode {
-		_, _ = c.Stdout.Write(treeText(safe, depth))
+		_, _ = c.Stdout.Write(treeText(safe, depth, forbidden))
 		return 0
 	}
-	_, _ = c.Stdout.Write(treeJSON(safe, depth, withStats))
+	_, _ = c.Stdout.Write(treeJSON(safe, depth, withStats, forbidden))
 	return 0
 }
 
@@ -87,9 +91,9 @@ func (m *Module) tree(c *invoke.Call) int {
 // pruned names and everything but files and directories left out) split
 // into lines, sorted, cut at 200 lines and indented by the slashes below
 // the start point.
-func treeText(safe string, maxDepth int) []byte {
+func treeText(safe string, maxDepth int, forbidden func(string) bool) []byte {
 	var raw strings.Builder
-	w := findWalker{maxDepth: maxDepth, withStart: true}
+	w := findWalker{maxDepth: maxDepth, withStart: true, forbidden: forbidden}
 	w.visit = func(e findEntry) bool {
 		name := startName(e.path)
 		if e.depth > 0 {
@@ -173,7 +177,7 @@ type treeNode struct {
 // treeJSON is the JSON tree: the find stream below the start point (pruned
 // names, other file types and paths with a tab or newline left out) folded
 // as the 2.x awk program does.
-func treeJSON(safe string, maxDepth int, withStats bool) []byte {
+func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) bool) []byte {
 	total := map[string]int64{}
 	nchild := map[string]int{}
 	nodes := map[string]*treeNode{}
@@ -181,7 +185,7 @@ func treeJSON(safe string, maxDepth int, withStats bool) []byte {
 	nodes[""] = root
 	listed, truncated := 0, false
 
-	w := findWalker{maxDepth: maxDepth}
+	w := findWalker{maxDepth: maxDepth, forbidden: forbidden}
 	if withStats {
 		w.maxDepth = -1
 	}

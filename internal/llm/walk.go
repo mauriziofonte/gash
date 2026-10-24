@@ -75,6 +75,10 @@ type findWalker struct {
 	withStart bool
 	// stop, once set by visit, ends the walk (head closed the pipe).
 	stop bool
+	// forbidden, when set, leaves out an entry at or below a protected
+	// tree, unvisited and not entered (3.0: LEDGER LLM-09 fixed; 2.x only
+	// checked the start point).
+	forbidden func(path string) bool
 }
 
 func (w *findWalker) walk(start string) {
@@ -108,6 +112,9 @@ func (w *findWalker) dir(path, rel string, depth int) {
 			continue
 		}
 		e := findEntry{path: findJoin(path, name), depth: depth, mode: info.Mode(), size: info.Size()}
+		if w.forbidden != nil && w.forbidden(e.path) {
+			continue
+		}
 		if rel == "" {
 			e.rel = name
 		} else {

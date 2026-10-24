@@ -254,9 +254,15 @@ every check below.
 
 * `llm_*` path arguments: a `..` component is refused; `/proc`, `/sys`,
   `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/gshadow`, `/etc/passwd`,
-  `/etc/sudoers` and everything below them are refused, checked as written
-  and after resolving symlinks. Root's home is refused also where it is not
-  `/root` (macOS: `/var/root`).
+  `/etc/sudoers`, `/etc/sudoers.d`, `/etc/shadow-`, `/etc/gshadow-`,
+  `/etc/security/opasswd` and everything below them are refused, checked as
+  written and after resolving symlinks. Root's home is refused also where it
+  is not `/root` (macOS: `/var/root`).
+* `llm_tree`, `llm_find` and `llm_grep` walks may not start at `/` or at a
+  directory above a protected tree (`llm_grep` and `llm_find --contains`:
+  also above an `/etc` entry, so not at `/etc`): `forbidden_path`, hint
+  `Search a subdirectory`. Below their root they leave out every entry at or
+  below a protected path, and they never follow symlinks.
 * Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root` as scan roots
   (the PATH argument only: a walk that follows `-L` or starts at `/` with
   `--allow-root` can still enter them), need `--allow-root` for `/`, and do
@@ -271,8 +277,7 @@ every check below.
   (content searches: also above `/etc`), and may not follow symlinks
   (`grep -R`, `rg -L`, `find -L`/`-follow`/`-files0-from`, `fd -L`,
   `tree -l`, `du -L`, `ls -RL`, `--dereference-recursive`).
-* Paths resolve with `realpath -m`, or a Bash fallback where it is missing
-  (BusyBox, older macOS).
+* Paths resolve as GNU `realpath -m` resolves them, on every platform.
 
 ### 6.2 Secret files
 

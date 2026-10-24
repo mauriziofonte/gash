@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -206,17 +205,63 @@ func TestLedger_LLM28_2x(t *testing.T) {
 	require.Equal(t, `{"error":"invalid_depth","details":"Value 'abc' is not a positive integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for depth"}`+"\n", r.Stderr)
 }
 
-// TestLedger_LLM09_2x: only the start point is guarded; the walk enters
-// protected trees below it.
+// TestLedger_LLM09_2x: 2.x guarded only the start point, so a walk from /
+// entered the protected trees below it. 3.0: LLM-09 fixed, a walk from /
+// is refused.
 func TestLedger_LLM09_2x(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("the walk-into-protected-tree case uses /proc, a Linux procfs")
-	}
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	r := runGo(t, m, "/", env, "llm_tree", "--depth", "1", "/")
-	require.Equal(t, 0, r.RC)
-	require.Contains(t, r.Stdout, `{"name":"proc","type":"directory"}`)
+	require.Equal(t, result{"", `{"error":"forbidden_path","details":"/","action":"FATAL","recoverable":false,"hint":"Search a subdirectory"}` + "\n", 1}, r)
+}
+
+// TestLedger_LLM09: a walk may not start at / or above a protected tree
+// (for llm_grep and llm_find --contains also above an /etc entry), and the
+// walk leaves out every entry at or below a protected path.
+func TestLedger_LLM09(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	refused := func(r result) {
+		t.Helper()
+		require.Equal(t, 1, r.RC)
+		require.Empty(t, r.Stdout)
+		require.Contains(t, r.Stderr, `"error":"forbidden_path"`)
+		require.Contains(t, r.Stderr, `"hint":"Search a subdirectory"`)
+	}
+	refused(runGo(t, m, "/", env, "llm_grep", "root", "/etc"))
+	refused(runGo(t, m, "/", env, "llm_tree", "--depth", "2", "/"))
+	refused(runGo(t, m, "/", env, "llm_tree", "--text", "/"))
+	refused(runGo(t, m, "/", env, "llm_find", "*", "/"))
+	refused(runGo(t, m, "/", env, "llm_find", "*", "/etc", "--contains", "root"))
+
+	// A listing of /etc is allowed, without the protected names.
+	r := runGo(t, m, "/", env, "llm_tree", "/etc")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	for _, n := range []string{"passwd", "shadow", "gshadow", "sudoers", "sudoers.d", "shadow-", "gshadow-"} {
+		require.NotContains(t, r.Stdout, `{"name":"`+n+`",`)
+	}
+	r = runGo(t, m, "/", env, "llm_find", "passwd*", "/etc", "-n", "1000")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	for _, l := range strings.Split(r.Stdout, "\n") {
+		require.NotRegexp(t, `/etc/passwd$`, l)
+	}
+
+	// Root's home is protected too: a fake one in a temp tree.
+	d := physTemp(t)
+	rh := filepath.Join(d, "home", "rootish")
+	mustWrite(t, filepath.Join(rh, "secret.txt"), "needle\n")
+	mustWrite(t, filepath.Join(d, "home", "user", "notes.txt"), "needle\n")
+	m.rootHome = func() string { return rh }
+	for _, args := range [][]string{
+		{"llm_tree", d}, {"llm_tree", "--text", filepath.Join(d, "home")}, {"llm_find", "*", d},
+		{"llm_grep", "needle", d}, {"llm_find", "*", d, "--contains", "needle"},
+	} {
+		refused(runGo(t, m, d, env, args[0], args[1:]...))
+	}
+	r = runGo(t, m, d, env, "llm_grep", "needle", filepath.Join(d, "home", "user"))
+	require.Equal(t, result{filepath.Join(d, "home", "user", "notes.txt") + ":1:needle\n", "", 0}, r)
+	_, err := os.Stat(rh)
+	require.NoError(t, err)
 }
 
 // TestLedger_LLM24: a trailing newline in PATH is kept (2.x lost it in a

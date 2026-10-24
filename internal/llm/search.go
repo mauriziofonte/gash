@@ -47,6 +47,9 @@ type rgSearch struct {
 	context   int
 	filesOnly bool // -l
 	cwd       string
+	// forbidden leaves out an entry at or below a protected tree
+	// (LEDGER LLM-09).
+	forbidden func(path string) bool
 
 	out         *lineLimiter
 	withName    bool
@@ -109,6 +112,9 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 		path := findJoin(dir, name)
 		apath := findJoin(abs, name)
 		isDir := e.IsDir()
+		if s.forbidden != nil && s.forbidden(apath) {
+			continue
+		}
 		if s.skip(ig, apath, name, isDir) {
 			continue
 		}
