@@ -376,7 +376,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A masks exactly as the 2.x anchored regex does (partial leaks preserved) so the redaction output matches byte for byte. |
 | Fix recipe (3.0) | Split each whitespace token and apply `^(.*[^A-Za-z0-9+.-] | )([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):.*@([^@]*)$` -> `\1\2:***@\3` (password runs greedily to the last `@`), in `internal/ai`/`internal/ui` redaction; rejoin on the original separators. |
 | Proving test | `TestLedger_LLM02` asserts `mysql://u:p@ss@h/d` -> `mysql://u:***@h/d`, `mysql://u:pa/ss@h/d` -> `mysql://u:***@h/d`, `x https://u:pw@h/` -> `x https://u:***@h/`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4b5e9b1 |
 
 <a id="llm-05"></a>
 #### LLM-05 · llm_deps leaks a raw jq error with exit 5 on an invalid manifest
@@ -394,7 +394,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A returns exit 5 and a jq-equivalent raw error line on an invalid manifest (byte parity on the exit code; message text matches jq's). |
 | Fix recipe (3.0) | Native manifest parse in the `llm_deps` handler; on parse failure emit a new `invalid_manifest`/RETRY, details the path, hint `The manifest is not a JSON object; fix it or use llm_config to read it`; empty manifest -> same code; add `invalid_manifest` to AGENTS.md section 5. |
 | Proving test | `TestLedger_LLM05` asserts broken/array/empty `package.json` -> exit 1 with `.error=="invalid_manifest"` and one JSON line on stderr. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done e864421 |
 
 <a id="llm-06"></a>
 #### LLM-06 · awk JSON escapers leave C0 control characters raw (invalid JSON)
@@ -412,7 +412,7 @@ Critical and high items:
 | rc.A behavior | Reproduced at the byte level: on the paths that used the awk or inline escapers (llm_tree names, llm_ports, llm_procs), the contract encoder writes C0 controls other than tab, newline and CR raw, exactly as 2.x; the jq paths keep jq's `\u00xx` escapes. |
 | Fix recipe (3.0) | Drop the raw mode of `internal/contract` for these paths: escape `\b \f \n \r \t` and `\u00xx` (lowercase hex, as jq) for every other C0 control on every path. |
 | Proving test | `TestLedger_LLM06` feeds names/values with `\x01`, `\x1b`, `\x7f` through llm_tree, llm_ports, llm_procs and `__llm_tsv_to_json` equivalents and asserts `jq -e .` succeeds and values round-trip. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 80f82cb |
 
 <a id="llm-08"></a>
 #### LLM-08 · llm_tree root path with quote, backslash, tab or newline gives invalid JSON and an empty listing
@@ -430,7 +430,7 @@ Critical and high items:
 | rc.A behavior | Partly reproduced: the native encoder escapes `"`/`\`/controls correctly so the path is valid JSON (cannot emit the raw bytes, see LLM-06), but rc.A reproduces the empty-children behavior when the root name itself contains a tab or newline (the tab/newline exclusion applied to the root, tied to LLM-29). |
 | Fix recipe (3.0) | In `internal/fsscan` carry the root as bytes through the encoder (no re-interpretation) and apply the tab/newline exclusion by entry name, not by a path-prefix match that catches the root. |
 | Proving test | `TestLedger_LLM08` asserts a root named `q"uote` with one child emits valid JSON with `children` length 1. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 80338c9 |
 
 <a id="llm-09"></a>
 #### LLM-09 · llm_grep / llm_find / llm_tree walks enter protected trees
@@ -448,7 +448,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the native scanner walks into the protected trees exactly as 2.x does (only the root is guarded). |
 | Fix recipe (3.0) | In `internal/fsscan`, skip any path at or below a `__LLM_FORBIDDEN_PATHS` entry during the walk (reuse `pathguard.AboveForbidden`); refuse a root that is a forbidden tree or its ancestor with `forbidden_path` FATAL, hint `Search a subdirectory`. |
 | Proving test | `TestLedger_LLM09` asserts `llm_grep root /etc` output has no `/etc/shadow` line and `llm_tree --depth 2 /` has no children under `root`/`proc`/`sys`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 7b87da7 |
 
 <a id="llm-10"></a>
 #### LLM-10 · forbidden-path and secret-file lists have gaps
@@ -466,7 +466,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A uses the identical path/secret tables, so the same gaps exist. |
 | Fix recipe (3.0) | In `internal/pathguard`, add `/etc/shadow-`, `/etc/gshadow-`, `/etc/security/opasswd` to the forbidden paths and `ssh_host_*_key`, `.envrc`, `*.tfvars.json`, `credentials*` to the secret patterns (the tables are shared with docs generation). |
 | Proving test | `TestLedger_LLM10` extends the secret/forbidden matrix with these names and asserts refusal. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 7b87da7 (credentials_* and credentials-* rather than credentials*) |
 
 <a id="llm-11"></a>
 #### LLM-11 · llm_ports collapses distinct sockets on the same port and protocol
@@ -484,7 +484,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A dedups on (port, proto) and loses the other rows. |
 | Fix recipe (3.0) | In the `llm_ports` handler dedupe whole records (port, proto, state, address) and sort by port then proto; keep `UNCONN`->`LISTEN` and the address-without-port rule. |
 | Proving test | `TestLedger_LLM11` feeds IPv4+IPv6 listeners on 22 and asserts two records. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done b1f9d1c |
 
 <a id="llm-12"></a>
 #### LLM-12 · llm_procs --port: leading zeros produce an invalid JSON number and there is no range check
@@ -502,7 +502,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A emits the port as the caller typed it (source-text number token, matching jq 1.7's lenient acceptance) and applies no range check. |
 | Fix recipe (3.0) | In the `llm_procs` handler normalize with base-10 parse before emitting and reject `port>65535` with `invalid_port`/RETRY; document that `--name` is ignored when `--port` is given. |
 | Proving test | `TestLedger_LLM12` asserts `llm_procs --port 0080` output parses as strict JSON and `--port 99999` -> `invalid_port`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 77625d1 |
 
 <a id="llm-13"></a>
 #### LLM-13 · llm_git_log drops commits whose subject or author contains 0x1e/0x1f
@@ -520,7 +520,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A splits on 0x1f/0x1e and drops the same records so the array matches 2.x. |
 | Fix recipe (3.0) | In the `llm_git_log` handler use NUL-delimited `git log -z --format='%h%x00%s%x00%an%x00%ci'` (NUL cannot occur in a header), read 4 fields per record and render with the native encoder. |
 | Proving test | `TestLedger_LLM13` asserts a commit whose subject has a control char still appears in the array. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 253f6f7 |
 
 <a id="llm-14"></a>
 #### LLM-14 · llm_deps go.mod and array manifests produce wrong data silently
@@ -538,7 +538,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A matches the awk/jq output including the `"//"` entry and index lists. |
 | Fix recipe (3.0) | In the `llm_deps` handler skip go.mod lines matching `^//`; treat a non-object `dependencies` as empty; empty manifest -> `invalid_manifest` (LLM-05). |
 | Proving test | `TestLedger_LLM14` asserts a commented go.mod and an array-valued package.json produce clean dependency lists. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done e864421 |
 
 <a id="llm-15"></a>
 #### LLM-15 · secret exceptions are not honored by walks; the grep fallback refuses an explicit secret-exception file
@@ -556,7 +556,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the native engine applies patterns without exceptions in walks, matching 2.x. |
 | Fix recipe (3.0) | In `internal/fsscan`, apply the secret exceptions after the patterns (later-wins) so exception files are searched, and never exclude a file named explicitly as the single PATH. |
 | Proving test | `TestLedger_LLM15` asserts `.env.example` is searched in a tree walk and as an explicit file. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done b1779e2 |
 
 <a id="llm-19"></a>
 #### LLM-19 · llm_tree --text and llm_find name search quirks
@@ -574,7 +574,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A matches the text-mode layout, root-prune blank output and symlink omission. |
 | Fix recipe (3.0) | In the `llm_tree` text renderer prune only below the root, quote the prefix strip, include symlinks, exclude newline names as JSON mode does, and sort with C collation. |
 | Proving test | `TestLedger_LLM19` asserts a directory named `vendor` lists its contents in text mode and a symlink appears. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 7a6bb46 |
 
 <a id="llm-20"></a>
 #### LLM-20 · llm_docker_check applies no path guard and interpolates .env and caller-env secrets into output
@@ -592,7 +592,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A skips the path guard and performs the same `.env`/env interpolation, matching the 2.x JSON (caller-variable clobber is handled separately as a forced divergence, LLM-21). |
 | Fix recipe (3.0) | Give `llm_docker_check` the llm_* grammar (`__llm_needs_help`, path-arg, `pathguard` validation); interpolate only from the compose `.env` and compose-defined variables, never arbitrary caller env; the `.env` read is itself a secret-file access to gate. |
 | Proving test | `TestLedger_LLM20` asserts `llm_docker_check ../x` is refused and an exported secret never reaches the `image` field. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4f80853 |
 
 <a id="llm-23"></a>
 #### LLM-23 · non-UTF-8 bytes pass raw into JSON (two behaviors)
@@ -610,7 +610,7 @@ Critical and high items:
 | rc.A behavior | Reproduced at the byte level: the contract encoder writes raw bytes where 2.x let them through and U+FFFD where jq replaced them (`jsontext.AllowInvalidUTF8`), preserving both paths. |
 | Fix recipe (3.0) | Decide one rule (recommended U+FFFD everywhere, as jq does) in `internal/contract`; `strings.ToValidUTF8(s,"�")` before encoding on the former raw paths. |
 | Proving test | `TestLedger_LLM23` asserts the chosen rule holds for llm_tree, llm_env and the jq-path functions alike. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 80f82cb |
 
 <a id="llm-27"></a>
 #### LLM-27 · llm_project detection quirks (poetry always, case-sensitive flask, framework grep anywhere)
@@ -628,7 +628,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A matches the first-match and grep-anywhere detection exactly. |
 | Fix recipe (3.0) | In the `llm_project` handler parse the manifest (poetry only when `[tool.poetry]` present; framework keys only under `dependencies`/`devDependencies`); keep the documented precedence order. |
 | Proving test | `TestLedger_LLM27` asserts a non-poetry pyproject reports `pip` and a `"next"` mention in a description does not set the framework. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 7cd22ff |
 
 ### databases
 
@@ -648,7 +648,7 @@ Critical and high items:
 | rc.A behavior | Does not occur: the binary forks no helper shells, and it leaves out its own process and the calling shell chain as 2.x meant to. The Bash reference spec can still fail intermittently on this until cutover. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_LLM34` in `internal/llm`: a NAME that only the caller's chain matches gives `[]` across repeated runs. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_LLM34 |
 
 <a id="db-01"></a>
 #### DB-01 · PostgreSQL E-string mislex lets a backslash line slip past the SQL guard
@@ -666,7 +666,7 @@ Critical and high items:
 | rc.A behavior | The lexer quirk is reproduced in the guard verdicts for parity (rc.A); but with the native pgx driver there is no psql client, so no client meta-command can run — the shell-execution impact disappears even while a guard verdict can still mis-pass. (The `\!`/meta-command path is unreachable; see DB-09.) |
 | Fix recipe (3.0) | In `internal/sqlguard`, treat `'` as an E-string opener only when the `e`/`E` is a standalone token, i.e. the character before it is not an identifier character `[A-Za-z0-9_$]` (mirror the dollar-quote guard at db.sh:74); additionally reject a backslash at the start of any physical line of the query before lexing (defense in depth); add `SET` to the forbidden words. The native pgx driver removes meta-commands entirely. |
 | Proving test | `TestLedger_DB01_2x` asserts the lexer vectors reproduce the 2.x verdicts; `TestLedger_DB01_fix` asserts the identifier-boundary rule makes the identifier-then-quote-then-backslash-line shape return `client_command_blocked`, that `SET …` is `write_operation_blocked`, and that a pgx connection never runs a client meta-command. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 8ec419c |
 
 <a id="db-06"></a>
 #### DB-06 · the slow-query threshold includes client spawn and connect time
@@ -684,7 +684,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A keeps a measurement window equivalent to 2.x (connection time included), so `query_time` and the slow-query trigger match. |
 | Fix recipe (3.0) | Measure only server-side execution (driver query duration after the connection is established, or PostgreSQL `EXPLAIN (ANALYZE)` actual time) in `internal/db`; the >=100ms trigger then reflects the query alone. |
 | Proving test | `TestLedger_DB06_2x` asserts a connect-slow/query-fast mock still trips the threshold (rc.A); `TestLedger_DB06_fix` asserts it does not once timing is query-only. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 103ab0d |
 
 <a id="db-14"></a>
 #### DB-14 · llm_db_query with EXPLAIN on SQLite prints a raw jq parse error and no envelope
@@ -702,7 +702,7 @@ Critical and high items:
 | rc.A behavior | Reproduced (`internal/db` envelope): the same message, exit 5, no stdout. |
 | Fix recipe (3.0) | Wrap the plan text as `[{"plan": TEXT}]` the way `llm_db_explain` does, or refuse EXPLAIN with a hint naming `llm_db_explain`. |
 | Proving test | `TestLedger_DB14_2x` in `internal/db` (rc.A bytes); `TestLedger_DB14_fix` (3.0). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done af24d8f |
 
 ### llm_exec
 
@@ -722,7 +722,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A ports the `-?*` two-character strip and the forbidden-only check, so the same attached-value bypass exists. |
 | Fix recipe (3.0) | In `internal/llmexec` argument checking, split option letters from an attached value using the per-command value-taking-option tables (the walk tables already encode which short options take a value), then run BOTH the secret-file check (`secret_file_blocked`/FATAL) and the forbidden-path check (`forbidden_path`/FATAL) on the extracted value; drop the fixed 2-character assumption. |
 | Proving test | `TestLedger_EXEC01` asserts an attached-value secret file -> `secret_file_blocked` and an attached-value protected path -> `forbidden_path`, added alongside the S12 vectors. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 697f422 |
 
 <a id="exec-02"></a>
 #### EXEC-02 · `git stash list -p` leaks secret files
@@ -740,7 +740,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A allows `git stash list -p` and applies no exclude pathspecs, leaking the same files. |
 | Fix recipe (3.0) | In `internal/llmexec` treat `git stash list` like `log`: when a patch option is present, apply the `:(exclude,icase,glob)**/PATTERN` and `**/DIR/**` secret pathspecs and `--no-ext-diff --no-textconv`; or refuse patch options on `stash list`. Also gate other `stash list` options (NF2) the same way `log` is gated. |
 | Proving test | `TestLedger_EXEC02` asserts `git stash list -p` shows the non-secret line and never the secret file, in `llm_exec_walk_spec.sh`'s Go form. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done e581039 |
 
 <a id="exec-08"></a>
 #### EXEC-08 · A line continuation between two `|` is checked as two pipes, run as `||`
@@ -758,7 +758,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the canonical script keeps the continuation, so bash runs what 2.x ran. |
 | Fix recipe (3.0) | In `internal/llmexec`, consume backslash-newline before looking at the next character, so the checked operator is the one bash reads. |
 | Proving test | `TestLedger_EXEC08` pins the rc.A output against 2.x for this line. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 30410b6 |
 
 ### system, sysinfo, ssh, chrome
 
@@ -3810,7 +3810,7 @@ Critical and high items:
 | rc.A behavior | Go must never evaluate a user string as arithmetic. rc.A parses `--context` with `^[0-9]{1,9}$` and emits a new `invalid_context`/RETRY on failure; it does not reproduce the arithmetic or the `set -u` abort. |
 | Fix recipe (3.0) | In the grep argument grammar (`internal/cli/args` llm family), after parsing `--context`, call the uint validator (name `context`); on failure emit `invalid_context` RETRY, details `Value 'V' is not a positive integer below 1000000000`, hint `Provide a plain integer for context`; add `invalid_context` to AGENTS.md section 5. Bash shim: `__llm_validate_uint context` before use. |
 | Proving test | `TestLedger_LLM01` in `internal/cli/args` asserts `--context abc` -> `invalid_context` and no code runs; `testdata/script/llm_grep_context.txtar` asserts a `set -u` caller survives. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 90a9fcd |
 
 <a id="llm-03"></a>
 #### LLM-03 · llm_grep / llm_find --contains results depend on rg vs the grep fallback
@@ -3828,7 +3828,7 @@ Critical and high items:
 | rc.A behavior | One native engine with ripgrep semantics (Go `regexp`, `.gitignore`/`.ignore`/`.rgignore`, hidden and binary files skipped, deterministic path order). rc.A always behaves as the rg path did; the grep-fallback behavior (BRE, hidden/ignored searched, no `-I`, N18) is not reproduced. `RIPGREP_CONFIG_PATH` (LLM-16) and rg's nondeterministic order are also dropped. |
 | Fix recipe (3.0) | `internal/fsscan` single engine + `internal/fsscan/ignore`; document RE2 syntax, hidden+ignored skipped, binary skipped, sorted path order; one code path for both `llm_grep` and `llm_find --contains`. |
 | Proving test | `TestLedger_LLM03` runs the fixture-corpus vectors (TODO | FIXME, fo+, a{3}) and asserts identical output to the pinned golden, independent of any installed rg/grep. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63ee2b9 (docs) |
 
 <a id="llm-04"></a>
 #### LLM-04 · llm_git_status emits invalid JSON with exit 0 when jq is absent
@@ -3882,7 +3882,7 @@ Critical and high items:
 | rc.A behavior | A Go binary runs in its own process and cannot set caller shell variables, so the leak is impossible; the one-line stub never exports anything. Forced divergence (a binary cannot reproduce the clobber). |
 | Fix recipe (3.0) | Moot in Go. Bash fix if kept: declare all loop/registry vars `local` in `docker_compose_check`. |
 | Proving test | `TestLedger_LLM21` (txtar) runs `llm_docker_check` through the shim and asserts the caller's `name`/`tag`/`f` are unchanged. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_LLM21.txtar |
 
 <a id="llm-22"></a>
 #### LLM-22 · llm_grep --ext leaks globals ext and exts into the caller
@@ -3900,7 +3900,7 @@ Critical and high items:
 | rc.A behavior | A Go binary cannot set caller variables; the stub leaks nothing. Forced divergence. |
 | Fix recipe (3.0) | Moot in Go. Bash fix if kept: `local -a exts=(); local ext`. |
 | Proving test | `TestLedger_LLM22` (txtar) asserts the caller's `ext`/`exts` survive a `--ext` call. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_LLM22.txtar |
 
 <a id="llm-24"></a>
 #### LLM-24 · trailing newlines in a PATH argument are stripped
@@ -3918,7 +3918,7 @@ Critical and high items:
 | rc.A behavior | Go passes paths as values, never through a `$(...)` capture, so a trailing-newline path is kept intact: rc.A diverges from 2.x (it does not strip). The `$(...)` accident cannot and should not be reproduced. |
 | Fix recipe (3.0) | Moot in Go (paths are `[]byte`/`string` values). Bash fix if kept: return the path through a nameref. |
 | Proving test | `TestLedger_LLM24` asserts a trailing-newline directory name is preserved end to end. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_LLM24 |
 
 <a id="llm-26"></a>
 #### LLM-26 · the llm_grep grep fallback has no -I, so binary files leak or misbehave
@@ -3954,7 +3954,7 @@ Critical and high items:
 | rc.A behavior | The binary converts YAML itself, always to JSON: mapping order kept, numbers and booleans as YAML 1.2 reads them, the layout `jq .` gives python-yq's output. No yq runs; the raw-text fallback remains only for a file that does not parse. The flavour test is reported under LLM-35 in Go mode. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_LLM35` in `internal/llm` (the spec's YAML and the python-yq bytes; a parse error gives the raw text). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63ee2b9 (docs) |
 
 <a id="llm-36"></a>
 #### LLM-36 · llm_tree and llm_find order entries by the locale's collation
@@ -3972,7 +3972,7 @@ Critical and high items:
 | rc.A behavior | Bytewise order (the `C` order) in every locale. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_LLM36` in `internal/llm` (mixed-case and punctuation names in `C` order). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); test runnable 6bbfa68 |
 
 <a id="llm-37"></a>
 #### LLM-37 · llm_grep's regex dialect is ripgrep's Rust regex, or ERE in the grep fallback
@@ -3990,7 +3990,7 @@ Critical and high items:
 | rc.A behavior | One engine, Go's RE2 (`regexp`). Decision (operator go-ahead, "soundest option"): every pattern that cannot be read exactly as ripgrep 14 reads it fails with `invalid_regex` (RETRY), rg's own syntax errors included. This is the forced divergence from 2.x's silent-empty on rg errors; no spec depended on that behaviour (PRD MUST NOT: never silently return empty, never tool-dependent results). Where the two engines agree the dialect is translated, not refused: `\d`/`\w`/`\s` and negations become rg's Unicode ranges, numeric escapes and `\u`/`\U` become `\x{...}`, spaces in counted repetitions are dropped. `\b`/`\B` and invalid-UTF-8 bytes, where RE2's ASCII `\b` or `.` would differ from rg, are matched exactly by a small NFA over RE2's compiled program (Unicode word boundaries; an invalid byte matches nothing). Constructs RE2 misreads or lacks (`\<` `\>` `\b{start}`, class set ops, `\Q..\E`, octal/backrefs, Rust-only property names, `(?x)` etc.) are refused. LLM-03 keeps its result rules. Measured against rg 14.1.0. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_LLM37` in `internal/llm` (rg's documented syntax table: translated, matched exactly, or refused with `invalid_regex`, never misread), for both llm_grep and llm_find --contains. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); AGENTS table 517f190 |
 | Note | `--ext`/`--glob` filter values are out of scope: a bad filter still matches nothing silently, as in 2.x (it reaches no regex engine and executes no code), so no divergence there. |
 
 <a id="llm-38"></a>
@@ -4009,7 +4009,7 @@ Critical and high items:
 | rc.A behavior | A file with a NUL anywhere is binary and skipped whole, wherever the NUL is. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_LLM38` in `internal/llm` (a NUL at byte 0, in the middle and at the end: the file is skipped). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); test runnable 6bbfa68 |
 
 <a id="llm-39"></a>
 #### LLM-39 · llm_env lists `_`, whose value is Bash's last argument
@@ -4027,7 +4027,7 @@ Critical and high items:
 | rc.A behavior | `_` is left out (in Go mode its value would be the binary's path). |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_LLM39` in `internal/llm`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); test runnable 6bbfa68 |
 
 ### databases
 
@@ -4083,7 +4083,7 @@ Critical and high items:
 | rc.A behavior | The native drivers (pgx, go-sql-driver/mysql, modernc sqlite) produce their own error strings (e.g. `ERROR: … (SQLSTATE 42P01)`), so the `details` text differs; the `*_error` code and RETRY action are preserved. No spec pins the exact text; the only load-bearing fragment is the sqlite plan `test("u")` substring (DB-08). The client binary cannot be reproduced. The client-not-found errors of llm_db_* (`sqlite_not_found`, `mysql_not_found`, `psql_not_found`, and gash_db_test's, CORE-05) cannot occur either, since no client runs; the codes stay registered. |
 | Fix recipe (3.0) | In `internal/db` keep the `*_error` codes and RETRY action; map driver errors to a cleaned `details` string; document that the message text is driver-sourced. |
 | Proving test | `TestLedger_DB07` asserts each engine's error yields the correct `*_error` code and RETRY action with a non-empty cleaned `details`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 6682f4b (documented) |
 
 <a id="db-08"></a>
 #### DB-08 · the SQLite EXPLAIN QUERY PLAN text tree must be rebuilt from plan rows
@@ -4101,7 +4101,7 @@ Critical and high items:
 | rc.A behavior | modernc sqlite's `EXPLAIN QUERY PLAN` returns rows (id, parent, notused, detail), not the tree, so rc.A must synthesize the `QUERY PLAN` text tree from those rows (indentation and ``-- ``/`` | -- `` connectors by id/parent) to match the pinned string. The CLI's own rendering cannot be reproduced. The plan content itself follows the SQLite engine: in 2.x the installed sqlite3 (3.45 here), in rc.A the embedded modernc engine (3.53), so the plan of the same query can differ (recursive CTEs). |
 | Fix recipe (3.0) | In `internal/db` build the text tree from the plan rows in the sqlite3 CLI layout; pin it with the envelope schema. |
 | Proving test | `TestLedger_DB08` asserts the synthesized plan string equals the sqlite3 CLI tree and matches `test("u")`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_DB08 |
 
 <a id="db-09"></a>
 #### DB-09 · psql client meta-commands and PGPASSWORD-in-child are unreachable with the native driver
@@ -4137,7 +4137,7 @@ Critical and high items:
 | rc.A behavior | The libc tables cannot be reproduced, and PRD 10.5 forbids loosening the rail, so the guard checks every query under three readings in a fixed order (C; UTF-8 with the case mappings glibc makes to ASCII, `ſ` and `ı`; UTF-8 that also folds runes whose case orbit holds an ASCII letter, such as the Kelvin sign) and refuses with the first refusal. Blanks in the UTF-8 readings are Unicode spaces plus ASCII, except in the MySQL `--` comment rule, where a wider set would hide text: there they are glibc's exact `iswspace` set. A query passes only when every reading accepts, so nothing 2.x refuses in C or UTF-8 is accepted; a few queries no 2.x locale refuses (an NBSP or Kelvin sign inside a keyword) are refused. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_DB13` (19 vectors checked against 2.x in both locales) and `TestLedger_DB13_Monotonic` (a refusal under any reading is a refusal) in `internal/sqlguard`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_DB13, TestLedger_DB13_Monotonic |
 
 <a id="db-15"></a>
 #### DB-15 · sqlite3's JSON mode mangles bytes that are not UTF-8 and cuts text at a NUL
@@ -4155,7 +4155,7 @@ Critical and high items:
 | rc.A behavior | The driver returns the stored bytes and the contract encoder writes valid JSON (one U+FFFD per invalid sequence, `\u0000` for NUL), as DB-03 does for the TSV transport. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_DB15` in `internal/db`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A) |
 
 <a id="db-16"></a>
 #### DB-16 · MySQL on localhost: the client uses the Unix socket and lets ~/.my.cnf override the URL
@@ -4173,7 +4173,7 @@ Critical and high items:
 | rc.A behavior | Host `localhost` connects through the Unix socket: the `socket=` of the `[client]` group of the option files the client reads (`/etc/my.cnf`, `/etc/mysql/my.cnf` with its `!include`/`!includedir`, `~/.my.cnf`), else the first existing platform default (`/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`, `/tmp/mysql.sock`, `/var/lib/mysql/mysql.sock`). No other option-file setting applies: the `DB:` URL is the connection (lead decision, 2026-10-18). Any other host uses TCP. |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_DB16` in `internal/db` (socket path from an option-file fixture, from the defaults, and a `~/.my.cnf` user that does not apply). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_DB16 |
 
 <a id="db-17"></a>
 #### DB-17 · Table and database names are checked with locale-dependent character ranges
@@ -4191,7 +4191,7 @@ Critical and high items:
 | rc.A behavior | ASCII ranges in every locale, the stricter reading (as DB-13 does for the guard). |
 | Fix recipe (3.0) | Same as rc.A. |
 | Proving test | `TestLedger_DB17` in `internal/db`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A) |
 
 <a id="db-18"></a>
 #### DB-18 · MySQL ZEROFILL columns lose their padding, MariaDB YEAR(2) prints four digits
@@ -4209,7 +4209,7 @@ Critical and high items:
 | rc.A behavior | `"42"`: the driver parses the column to an integer before Gash sees it, and the zerofill flag is not exposed, so the padding cannot be rebuilt. The other numeric types keep the client's text (DB-02). `ZEROFILL` is deprecated since MySQL 8.0.17. For the same reason (the column length is not exposed), a MariaDB `YEAR(2)` column prints four digits. The alternatives were pinning the driver to v1.7.1 (no ed25519 authentication, three years of fixes missing) or carrying a patched fork (lead decision, 2026-10-18). |
 | Fix recipe (3.0) | Same as rc.A, unless DB-02's operator decision makes MySQL values typed, which removes the question. |
 | Proving test | `TestLedger_DB18` in `internal/db` (in-process fake sending `00042` for a zerofill column → `"42"`; YEAR `0000` → `"0000"`; DOUBLE `1e20` → `"1e20"`; FLOAT `1234570` → `"1234570"`). |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A) |
 
 ### llm_exec
 
@@ -4229,7 +4229,7 @@ Critical and high items:
 | rc.A behavior | Go expands globs itself against the same cwd tracking it validated, in byte (C) order; this differs from 2.x only under non-C collation. Go must never hand an unexpanded or re-globbable word to the shell, so the locale-dependent order cannot be reproduced. |
 | Fix recipe (3.0) | Document byte-order glob expansion in `internal/llmexec`; the canonical single-quoted script (operator decision D-1 option A) carries the already-expanded words so bash does no globbing. |
 | Proving test | `TestLedger_EXEC06` asserts glob expansion is byte-ordered and stable regardless of `LC_COLLATE`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); docs 30410b6 |
 
 <a id="exec-07"></a>
 #### EXEC-07 · A trailing backslash makes llm_exec check one word and run another
@@ -4247,7 +4247,7 @@ Critical and high items:
 | rc.A behavior | Go never runs a word it did not check (PRD 10.7), so 2.x cannot be reproduced. A command line that ends with an unquoted backslash is refused with `construct_not_allowed` (RETRY), the error contract 2.x already uses for constructs it does not handle. The refusal comes after the other checks of the line, so a line 2.x refused for another reason keeps that refusal. A backslash before a newline stays a line continuation, and a backslash inside quotes or a comment behaves as in 2.x. Unrestricted mode validates nothing and is unchanged. |
 | Fix recipe (3.0) | Keep the refusal. For 2.x, the same refusal at the end-of-input branch of the parser. |
 | Proving test | `TestLedger_EXEC07` asserts a line ending with a backslash gives `construct_not_allowed` and runs nothing. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done (rc.A); TestLedger_EXEC07 runs without 2.x (30410b6) |
 
 ### system, sysinfo, ssh, chrome
 
@@ -5765,7 +5765,7 @@ Critical and high items:
 | rc.A behavior | Missing path: kept, exit 0 with no output, matching 2.x. Invalid regex: no longer silent — see [LLM-37](#llm-37). Under the one-engine decision a pattern that cannot be read as ripgrep reads it fails with `invalid_regex` (RETRY), so only the missing-path half of this silent-success is kept. |
 | Fix recipe (3.0) | Missing root: if the operator wants a distinction, emit `path_not_found`/RETRY; otherwise document "empty results and a missing path are both exit 0, no output". The regex half is settled by LLM-37 (`invalid_regex`). |
 | Proving test | `TestLedger_LLM17` pins the kept behavior for `/nonexistent` (missing path only); the invalid-pattern case is covered by `TestLedger_LLM37`. |
-| Status | accept: emit path_not_found (RETRY) for a missing root (operator 2026-10-24) |
+| Status | accept: done e250421 |
 
 <a id="llm-18"></a>
 #### LLM-18 · an empty first positional is skipped and the next word becomes PATTERN
@@ -5783,7 +5783,7 @@ Critical and high items:
 | rc.A behavior | Kept: the argument grammar skips an empty first positional exactly as 2.x does (this is the documented grammar quirk). |
 | Fix recipe (3.0) | If the operator wants strictness: track "pattern given" rather than "pattern non-empty" and emit `missing_pattern` for an empty pattern; otherwise document the skip. |
 | Proving test | `TestLedger_LLM18` pins the chosen behavior for `llm_find '' x`. |
-| Status | accept: strict: missing_pattern for an empty pattern (operator 2026-10-24) |
+| Status | accept: done e250421 |
 
 <a id="llm-25"></a>
 #### LLM-25 · ~user is textual, not user expansion
@@ -5801,7 +5801,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A replaces a leading `~` with `$HOME` textually and does not expand `~user`, matching 2.x. |
 | Fix recipe (3.0) | If the operator wants correctness: expand only `~` and `~/…` to `$HOME`, and either resolve `~user` via the passwd database or refuse it; otherwise document the textual rule. |
 | Proving test | `TestLedger_LLM25` pins the `~root/x` -> `$HOME/root/x` resolution. |
-| Status | accept: expand ~ and ~/ only; refuse ~user (operator 2026-10-24) |
+| Status | accept: done 39a5990, 517f190 |
 
 <a id="llm-29"></a>
 #### LLM-29 · scanners exclude paths containing a tab or newline
@@ -5819,7 +5819,7 @@ Critical and high items:
 | rc.A behavior | Kept: the native scanner excludes tab/newline paths in JSON and name-search modes, matching 2.x (PRD 4.3). |
 | Fix recipe (3.0) | Operator decision: keep the exclusion (documented), or carry such names as JSON strings (the native encoder can escape them) and drop the exclusion. If kept, apply it by entry name so the root is not caught (see LLM-08). |
 | Proving test | `TestLedger_LLM29` pins whichever rule the operator chooses for a tab/newline file name. |
-| Status | accept: keep the exclusion, applied by entry name (as FS-01) (operator 2026-10-24) |
+| Status | accept: done 80338c9 |
 
 ### databases
 
@@ -5839,7 +5839,7 @@ Critical and high items:
 | rc.A behavior | Kept: the native go-sql-driver/mysql path stringifies all values and renders NULL as the string `"NULL"` to preserve the documented contract (the driver returns typed values and real null, which rc.A deliberately coerces). Each value is the text the mysql client printed: integers in decimal, `YEAR` zero-padded to four digits, `FLOAT` and `DOUBLE` rebuilt from the parsed value with the server's own formatting (shortest digits, `1e20` exponent form), `DECIMAL`, strings and dates as sent. go-sql-driver/mysql parses numeric columns even on the text protocol (since v1.8.0), so the server's bytes are not available; `ZEROFILL` padding is the one loss (DB-18). |
 | Fix recipe (3.0) | Operator decision: keep all-strings + NULL->"NULL" (matches AGENTS.md section 3.3), or switch MySQL to typed values and real JSON `null` (a documented contract change). |
 | Proving test | `TestLedger_DB02` pins MySQL values as strings and NULL as the chosen representation. |
-| Status | accept: keep all-strings and NULL as "NULL" (operator 2026-10-24) |
+| Status | accept: done 6682f4b (kept, documented) |
 
 <a id="db-10"></a>
 #### DB-10 · llm_db_schema key sets differ per engine
@@ -5857,7 +5857,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A emits each engine's key set exactly as 2.x does. |
 | Fix recipe (3.0) | Operator decision: keep per-engine keys (matches the pinned spec) or define one unified schema shape across engines (a contract change). |
 | Proving test | `TestLedger_DB10` pins each engine's key set. |
-| Status | accept: keep per-engine key sets (operator 2026-10-24) |
+| Status | accept: done 6682f4b (kept, documented) |
 
 <a id="db-11"></a>
 #### DB-11 · -h always means help on llm_db_*, never a host option
@@ -5875,7 +5875,7 @@ Critical and high items:
 | rc.A behavior | Kept: the db grammar intercepts `-h`/`--help` as help before parsing. |
 | Fix recipe (3.0) | Operator decision: keep (document "-h is help; host comes from the connection URL") — recommended for consistency with the rest of the family. |
 | Proving test | `TestLedger_DB11` pins `-h` as help for every llm_db_* function. |
-| Status | accept: keep; document that the host comes from the URL (operator 2026-10-24) |
+| Status | accept: done 6682f4b (documented) |
 
 <a id="db-12"></a>
 #### DB-12 · the pre-connection SQL precheck returns the SQLite verdict when all engines reject
@@ -5893,7 +5893,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A reproduces the precheck order and emits the sqlite verdict pre-connection to match 2.x error text/codes. |
 | Fix recipe (3.0) | Operator decision: keep the sqlite-verdict precheck, or defer guard errors until the driver is known so the message matches the target engine. |
 | Proving test | `TestLedger_DB12` pins the pre-connection verdict for a query all engines reject. |
-| Status | accept: defer guard errors until the engine is known (operator 2026-10-24) |
+| Status | accept: done 4d21014 |
 
 ### llm_exec
 
@@ -5913,7 +5913,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A runs the same regexes (ported as Go regexps over the space-normalized line, including the cosmetically dead patterns) against the whole line, quotes included. |
 | Fix recipe (3.0) | Operator decision: keep the quote-oblivious tripwire (documented in AGENTS.md section 6.3 as "a regex tripwire, easy to evade") or make it structural. If kept, document that quoted text is matched. |
 | Proving test | `TestLedger_EXEC03` pins that a quoted blocklist token is refused. |
-| Status | accept: keep the quote-oblivious tripwire; document it (operator 2026-10-24) |
+| Status | accept: done 5c38905 (kept, documented) |
 
 <a id="exec-04"></a>
 #### EXEC-04 · pattern operands are checked as file names
@@ -5931,7 +5931,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A runs the secret-file check on the first positional before skipping it as a pattern, matching 2.x. |
 | Fix recipe (3.0) | Operator decision: keep (a pattern resembling a secret name is refused) or move the secret check after the pattern-skip so only real file operands are checked. Document the chosen rule. |
 | Proving test | `TestLedger_EXEC04` pins the behavior for a secret-looking pattern vs a path-looking pattern. |
-| Status | accept: keep (a pattern resembling a secret name is refused) (operator 2026-10-24) |
+| Status | accept: done (rc.A); documented 5c38905 |
 
 <a id="exec-05"></a>
 #### EXEC-05 · GASH_LLM_EXEC_ALLOW commands bypass the argument and walk rules
@@ -5949,7 +5949,7 @@ Critical and high items:
 | rc.A behavior | Kept: rc.A reproduces the full bypass for allow-listed commands (per-word secret/path checks still apply). |
 | Fix recipe (3.0) | Operator decision: keep the documented bypass, or keep the walk-root/symlink checks even for allow-listed commands. Document whichever is chosen. |
 | Proving test | `TestLedger_EXEC05` pins that an allow-listed command skips arg/walk rules but not the secret/path checks. |
-| Status | accept: keep the walk-root/symlink checks for allow-listed commands too (operator 2026-10-24) |
+| Status | accept: done 5c38905 |
 
 ### system, sysinfo, ssh, chrome
 
@@ -6420,7 +6420,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A prints `line:content` for a file PATH and `abspath:line:content` for a directory, matching 2.x. |
 | Fix recipe (3.0) | Code is right; fix the docs: "file:line:content (a FILE PATH: line:content); context lines use `-`, groups are separated by `--`, paths are absolute". Update `AGENTS.md:51-61` and the registry Help for llm_grep. |
 | Proving test | `TestLedger_LLM07` pins `line:content` for a file and `abspath:line:content` for a directory. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done e250421 |
 
 <a id="llm-28"></a>
 #### LLM-28 · invalid_depth has two detail formats and the uint message says "positive" while 0 is accepted
@@ -6438,7 +6438,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A emits both detail variants exactly where 2.x does. |
 | Fix recipe (3.0) | Decide one `invalid_depth` message (depth must be >= 1) and reword the uint hint to "non-negative"; keep the distinct `<1` check for depth. Document in AGENTS.md section 5. |
 | Proving test | `TestLedger_LLM28` pins the chosen `invalid_depth` details for 0 and for a non-integer. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 177c377 |
 
 <a id="llm-30"></a>
 #### LLM-30 · AGENTS.md section 3 misstates the llm_* grammar and search behavior
@@ -6456,7 +6456,7 @@ Critical and high items:
 | rc.A behavior | rc.A reproduces the real grammar; AGENTS.md, rewritten for 3.x (PRD 11.1), describes it. Help bodies stay byte-identical until 3.0. |
 | Fix recipe (3.0) | Regenerate AGENTS.md section 3 from the registry Grammar/Help: per-function second-positional behavior, `--context` validation, the actual rg usage, and the no-`--flag=value`/no-`--`/help-anywhere rules. |
 | Proving test | A registry-vs-docs unit test (`internal/registry`) asserts the generated section 3 matches each function's grammar. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 0b3997d |
 
 <a id="llm-31"></a>
 #### LLM-31 · docs/reference/llm.md omits flags and gives rg-only examples
@@ -6474,7 +6474,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the help bodies are byte-identical in rc.A, and `docs/reference/` is generated from them, so the omissions stay until 3.0; AGENTS.md (rewritten for 3.x) states the real flags. |
 | Fix recipe (3.0) | Ensure every flag and synonym is in each function's registry Help; replace the rg-only example; state the ERE/RE2 dialect; describe llm_config reading any non-secret file; show pretty git_status output. |
 | Proving test | The registry-vs-docs unit test covers the generated `docs/reference/llm.md`. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ed20656 |
 
 <a id="llm-32"></a>
 #### LLM-32 · AGENTS.md section 6 security doc drift
@@ -6492,7 +6492,7 @@ Critical and high items:
 | rc.A behavior | rc.A matches the code; the shared pathguard/secret tables drive both the guard and docs so they cannot drift once the gaps (LLM-09/10/15) are decided. |
 | Fix recipe (3.0) | Generate section 6 from the `internal/pathguard` tables; reconcile the glob wording with the actual patterns; state that only llm_exec restricts walks until LLM-09 is accepted. |
 | Proving test | The pathguard-table-vs-docs unit test asserts section 6 matches the tables. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 70020ee |
 
 <a id="llm-33"></a>
 #### LLM-33 · docker_compose_check help says UP-TO-DATE but the code emits CURRENT; NOT_PULLED undocumented
@@ -6510,7 +6510,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A emits `CURRENT`/`NOT_PULLED` as the code does and keeps the 2.x help body byte for byte; the help text is corrected in 3.0 with this item. |
 | Fix recipe (3.0) | Fix the registry Help to list `UPDATE`, `CURRENT`, `PINNED`, `NOT_PULLED`, `ERROR`. |
 | Proving test | Covered by the registry-vs-docs unit test for the docker module. |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63f58e1 (devops slice, docker_compose_check help) |
 
 ### system, sysinfo, ssh, chrome
 
