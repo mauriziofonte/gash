@@ -57,10 +57,14 @@ type gashBuild struct {
 }
 
 // tree3Skip are the top-level entries of the staged tree a release tree
-// does not need (Go sources, tests, docs, the staged binary).
+// does not need (Go sources, tests, docs, the staged binary), and the
+// checkout's release/SHA256SUMS: it pins the checkout's own release
+// build, not the fixture's (a script that wants a pin writes it with
+// gashrelease -pin).
 var tree3Skip = map[string]bool{
 	".gash-stage": true, ".github": true, "internal": true, "cmd": true, "testdata": true,
 	"docs": true, "bench": true, "tests": true, "compat": true, "go.mod": true, "go.sum": true,
+	"release": true,
 }
 
 // v2Tree extracts git archive v2.1.0 once; "" when the checkout has no
