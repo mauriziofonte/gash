@@ -77,8 +77,8 @@ func killArgs(c *invoke.Call, p ui.Printer) (force bool, operand string, ok bool
 	return force, operand, true
 }
 
-// processKill is process_kill: `pgrep -ix NAME` with NAME as pgrep's
-// regex (SYS-01), the plan and the question unless -y, then TERM, a
+// processKill is process_kill: the processes named NAME exactly, ignoring
+// case (pgrepName), the plan and the question unless -y, then TERM, a
 // three-second poll and KILL for the survivors.
 func (m *Module) processKill(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
@@ -93,9 +93,7 @@ func (m *Module) processKill(c *invoke.Call) int {
 		p.Error("Missing process name. Usage: process_kill [-y] <process_name>")
 		return 1
 	}
-	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "pgrep", Args: []string{"-ix", name},
-		Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
-	pids := m.dropSelf(strings.Fields(runner.CommandSubst(res.Stdout)))
+	pids := m.dropSelf(m.pgrepName(c, name))
 	if len(pids) == 0 {
 		p.Error("No process found with exact name '" + name + "'. Use process_find (pf) to inspect candidates.")
 		return 1
@@ -134,6 +132,64 @@ func (m *Module) processKill(c *invoke.Call) int {
 		}
 	})
 	return 0
+}
+
+// commLen is the length of the kernel's process name (comm), which pgrep
+// matches: longer names are truncated to it.
+const commLen = 15
+
+// pgrepName lists the PIDs whose name is NAME, ignoring case (LEDGER
+// SYS-01: NAME is a name, not a pattern). Every ERE metacharacter is
+// escaped for `pgrep -ix --`; a NAME longer than the 15-byte comm is
+// looked up by its first 15 bytes and kept only where argv[0]'s base name
+// (from /proc/PID/cmdline, else `ps -o args=`) equals NAME ignoring case.
+func (m *Module) pgrepName(c *invoke.Call, name string) []string {
+	key := name
+	if len(key) > commLen {
+		key = key[:commLen]
+	}
+	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "pgrep", Args: []string{"-ix", "--", escapeERE(key)},
+		Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
+	pids := strings.Fields(runner.CommandSubst(res.Stdout))
+	if len(name) <= commLen {
+		return pids
+	}
+	var out []string
+	for _, pid := range pids {
+		if strings.EqualFold(m.argv0Base(c, pid), name) {
+			out = append(out, pid)
+		}
+	}
+	return out
+}
+
+// argv0Base is the base name of PID's argv[0]: /proc/PID/cmdline, or the
+// first word of `ps -o args= -p PID` where /proc is absent.
+func (m *Module) argv0Base(c *invoke.Call, pid string) string {
+	arg0 := ""
+	if b, err := m.sys.ReadFile("/proc/" + pid + "/cmdline"); err == nil {
+		arg0, _, _ = strings.Cut(string(b), "\x00")
+	} else if out, st := m.output(c, "ps", "-o", "args=", "-p", pid); st == 0 {
+		if f := strings.Fields(out); len(f) > 0 {
+			arg0 = f[0]
+		}
+	}
+	if i := strings.LastIndexByte(arg0, '/'); i >= 0 {
+		arg0 = arg0[i+1:]
+	}
+	return arg0
+}
+
+// escapeERE backslash-escapes every POSIX ERE metacharacter of s.
+func escapeERE(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if strings.IndexByte(`\.[]()*+?{}|^$`, s[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // hasTTY is `{ : </dev/tty; } 2>/dev/null`: a controlling terminal opens.

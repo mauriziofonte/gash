@@ -4,11 +4,14 @@ package system
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -53,7 +56,7 @@ func TestLedger_SYS04(t *testing.T) {
 }
 
 func pgrep(name, out string, status int) runner.Expect {
-	return runner.Expect{Argv: []string{"pgrep", "-ix", name}, Stdout: out, Status: status}
+	return runner.Expect{Argv: []string{"pgrep", "-ix", "--", escapeERE(name)}, Stdout: out, Status: status}
 }
 
 func TestProcessKill(t *testing.T) {
@@ -96,16 +99,34 @@ func TestProcessKill(t *testing.T) {
 	require.Equal(t, result{"", "Error: Missing process name. Usage: process_kill [-y] <process_name>\n", 1}, r)
 }
 
-// SYS-01: NAME is pgrep's anchored regex, passed as it is; only the
-// binary's own PID is left out of the matches.
+// SYS-01: NAME is a name, not a pattern (3.0: SYS-01 fixed): every ERE
+// metacharacter is escaped for `pgrep -ix --`, so `.*` matches only a
+// process literally named ".*"; a NAME over the 15-byte comm is looked up
+// by its first 15 bytes and confirmed on argv[0]'s base name.
 func TestLedger_SYS01(t *testing.T) {
-	m, k, _ := tm(t, runner.NewFake(t, pgrep(".*", "1\n2\n4242\n", 0), pgrep(".*", "4242\n", 0)))
+	m, k, _ := tm(t, runner.NewFake(t,
+		runner.Expect{Argv: []string{"pgrep", "-ix", "--", `\.\*`}, Status: 1},
+		runner.Expect{Argv: []string{"pgrep", "-ix", "--", `node\|npm`}, Status: 1},
+		runner.Expect{Argv: []string{"pgrep", "-ix", "--", "webpack-dev-ser"}, Stdout: "700\n701\n702\n"},
+	))
 	r := call(m, "process_kill", map[string]string{"GASH_HEADLESS": "1"}, nil, "", ".*")
-	require.Equal(t, result{"", "Error: 2 process(es) match '.*' (PID 1 2). Refusing to kill without a terminal to confirm; pass -y.\n", 1}, r)
-	require.Empty(t, k.sent)
-	r = call(m, "process_kill", map[string]string{"GASH_HEADLESS": "1"}, nil, "", ".*")
+	require.Equal(t, result{"", "Error: No process found with exact name '.*'. Use process_find (pf) to inspect candidates.\n", 1}, r)
+	r = call(m, "process_kill", map[string]string{"GASH_HEADLESS": "1"}, nil, "", "node|npm")
 	require.Equal(t, 1, r.rc)
-	require.Contains(t, r.err, "No process found with exact name '.*'")
+	require.Empty(t, k.sent)
+
+	root := t.TempDir()
+	for pid, argv := range map[string]string{
+		"700": "/usr/bin/node\x00/opt/x/webpack-dev-server\x00",
+		"701": "/opt/x/bin/Webpack-Dev-Server\x00--port\x00",
+		"702": "webpack-dev-service\x00",
+	} {
+		require.NoError(t, os.MkdirAll(filepath.Join(root, "proc", pid), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, "proc", pid, "cmdline"), []byte(argv), 0o644))
+	}
+	m.sys, _ = platform.NewSysroot(root)
+	r = call(m, "process_kill", map[string]string{"GASH_HEADLESS": "1"}, nil, "", "webpack-dev-server")
+	require.Equal(t, result{"", "Error: 1 process(es) match 'webpack-dev-server' (PID 701). Refusing to kill without a terminal to confirm; pass -y.\n", 1}, r)
 }
 
 // SYS-02: a process the user may not signal is reported as terminated.

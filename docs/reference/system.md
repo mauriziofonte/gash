@@ -320,6 +320,8 @@ with their command lines and asks. Without a terminal to ask
 (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.
 --force is the same as -y. SIGTERM first, SIGKILL for processes still
 alive after about 3 seconds. Declining returns 1.
+NAME is a name, not a pattern: regex characters match themselves, and
+a name longer than 15 bytes is matched against the full program name.
 ```
 
 See also: `process_find`, `port_kill`

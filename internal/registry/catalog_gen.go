@@ -3006,7 +3006,9 @@ var functions = []Function{
 				"  with their command lines and asks. Without a terminal to ask\n" +
 				"  (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.\n" +
 				"  --force is the same as -y. SIGTERM first, SIGKILL for processes still\n" +
-				"  alive after about 3 seconds. Declining returns 1.",
+				"  alive after about 3 seconds. Declining returns 1.\n" +
+				"  NAME is a name, not a pattern: regex characters match themselves, and\n" +
+				"  a name longer than 15 bytes is matched against the full program name.",
 		},
 		Fallback: &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
