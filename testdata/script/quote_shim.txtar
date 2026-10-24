@@ -4,8 +4,8 @@
 # covers: none (3.0 shim surface)
 #
 # gash_inspiring_quote through the shim: a quote of GASH_DIR/quotes, its
-# source with --source; a positional word is reported as an unknown option
-# (LEDGER SELF-13, reproduced).
+# source with --source; a positional word is an unexpected argument and an
+# unknown option an unknown option (3.0: SELF-13 fixed).
 
 env GASH_HEADLESS=1 COLUMNS=60
 exec bash -c 'source "$GASH_SH"; GASH_DIR=$PWD gash_inspiring_quote --source'
@@ -14,7 +14,11 @@ cmp stdout want.txt
 
 ! exec bash -c 'source "$GASH_SH"; gash_inspiring_quote foo'
 ! stdout .
-stderr '^Error: Unknown option: foo \(usage: gash_inspiring_quote \[--source\]\)$'
+stderr '^Error: Unexpected argument: foo \(usage: gash_inspiring_quote \[--source\]\)$'
+
+! exec bash -c 'source "$GASH_SH"; gash_inspiring_quote --bogus'
+! stdout .
+stderr '^Error: Unknown option: --bogus \(usage: gash_inspiring_quote \[--source\]\)$'
 
 -- quotes/list.txt --
 # A talk, 2001, https://example.test/talk

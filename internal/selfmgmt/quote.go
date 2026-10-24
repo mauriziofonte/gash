@@ -15,8 +15,9 @@ import (
 // $GASH_DIR/quotes/list.txt (one per line, under a "# source" comment
 // line), word-wrapped after a "Quote:" label; --source adds where it was
 // said or written. rc 1 when the file is unreadable or holds no quote. Any
-// other first argument is reported as an unknown option, positional words
-// included (LEDGER SELF-13, reproduced).
+// other first argument is refused with rc 1: an unknown option as such, a
+// word not starting with "-" as an unexpected argument (3.0: SELF-13
+// fixed; 2.x called it an unknown option too).
 func (m *Module) quote(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -28,7 +29,11 @@ func (m *Module) quote(c *invoke.Call) int {
 	case "--source":
 		showSource = true
 	default:
-		s.Printer(c.Stderr).Error("Unknown option: " + a + " (usage: gash_inspiring_quote [--source])")
+		what := "Unknown option: "
+		if !strings.HasPrefix(a, "-") {
+			what = "Unexpected argument: "
+		}
+		s.Printer(c.Stderr).Error(what + a + " (usage: gash_inspiring_quote [--source])")
 		return 1
 	}
 

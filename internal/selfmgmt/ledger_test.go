@@ -287,3 +287,17 @@ func TestLedger_SELF10(t *testing.T) {
 		require.Equal(t, want, tagSigned([]byte(obj)), "%q", obj)
 	}
 }
+
+// LEDGER SELF-13: gash_inspiring_quote tells a positional word from an
+// unknown option (3.0: SELF-13 fixed; 2.x called both an unknown option).
+func TestLedger_SELF13(t *testing.T) {
+	for a, want := range map[string]string{
+		"foo":     "Error: Unexpected argument: foo (usage: gash_inspiring_quote [--source])\n",
+		"--bogus": "Error: Unknown option: --bogus (usage: gash_inspiring_quote [--source])\n",
+	} {
+		out, errOut, rc := call(t, "gash_inspiring_quote", nil, a)
+		require.Empty(t, out)
+		require.Equal(t, want, errOut)
+		require.Equal(t, 1, rc)
+	}
+}
