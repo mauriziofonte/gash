@@ -253,15 +253,16 @@ func TestLoadHostEntries(t *testing.T) {
 	if got, _ := f.HostTarget("web"); got != "root@web.example.com" {
 		t.Errorf("first wins: %q", got)
 	}
-	// LEDGER REM-02, reproduced: an option-looking target is accepted.
-	if got, _ := f.HostTarget("opt"); got != "-oProxyCommand=x@h" {
+	// 3.0: REM-02 fixed: an option-looking target is skipped with a warning
+	// (2.x accepted it).
+	if got, ok := f.HostTarget("opt"); ok {
 		t.Errorf("REM-02: %q", got)
 	}
 	if _, ok := f.HostTarget(""); ok {
 		t.Error("empty alias must find nothing")
 	}
 	// 3.0: CORE-04 fixed: the second web= line is ignored with a warning.
-	if len(f.Hosts) != 3 || len(f.Warnings) != 2 {
+	if len(f.Hosts) != 2 || len(f.Warnings) != 3 {
 		t.Errorf("hosts %q warnings %q", names(f.Hosts), texts(f.Warnings))
 	}
 }
@@ -768,8 +769,12 @@ func TestExpandTilde(t *testing.T) {
 	}
 }
 
-// ValidHostTarget answers as the 2.x regex does in bash.
+// ValidHostTarget answers as the 2.x regex does in bash, except for the
+// targets 3.0 refuses (3.0: REM-02, REM-08 fixed): a port, an option-like
+// user and characters outside the remote_* rule. It never accepts what
+// 2.x refused.
 func TestValidHostTargetMatches2x(t *testing.T) {
+	refused3x := map[string]bool{"u@h:22": true, "-oProxyCommand=x@h": true, "ü@h": true, "u@h\u00a0x": true}
 	bash, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("bash not available")
@@ -778,7 +783,7 @@ func TestValidHostTargetMatches2x(t *testing.T) {
 		"u@@h", "u@h@x", "u h@x", "u@h\tx", "u@h\n", "\vu@h", "u@h\r", "u@h\f", "uh", "", "ü@h", "u@h x"} {
 		cmd := exec.Command(bash, "--noprofile", "--norc", "-c", `[[ $1 =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]]`, "_", v)
 		cmd.Env = []string{"LC_ALL=C"}
-		want := cmd.Run() == nil
+		want := cmd.Run() == nil && !refused3x[v]
 		if got := ValidHostTarget(v); got != want {
 			t.Errorf("ValidHostTarget(%q) = %v, bash says %v", v, got, want)
 		}
@@ -792,4 +797,39 @@ func TestLedger_CORE06(t *testing.T) {
 	require.Equal(t, "/x/y", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": "/x/y"})).Shown)
 	require.Equal(t, "~/conf/env", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": "/h/conf/env"})).Shown)
 	require.Equal(t, "~/.gash_env", LoadCaller(get(map[string]string{"HOME": "/h", "GASH_ENV_FILE": ""})).Shown)
+}
+
+// LEDGER REM-02, REM-08: a HOST: target must pass the remote_* rule
+// (user [A-Za-z0-9._][A-Za-z0-9._-]*, host [A-Za-z0-9][A-Za-z0-9.-]* or a
+// bracketed IPv6 literal), or the line is skipped with its warning; a
+// target with a ':' also gets a hint about ~/.ssh/config (2.x accepted
+// option-like users and host:port, which remote_* then refused or passed
+// to ssh as an option).
+func TestLedger_REM02(t *testing.T) {
+	for v, ok := range map[string]bool{
+		"root@web.example.com": true, "deploy@10.0.0.5": true, "u@[::1]": true, "u@[2001:db8::1]": true,
+		"_svc.x@h-1": true, ".u@h": true, "u-x@h": true,
+		"-oProxyCommand=x@h": false, "u@h:22": false, "u@-h": false, "u@.h": false, "-u@h": false,
+		"u@[10.0.0.1]": false, "u@[::1": false, "u@[]": false, "u@h_x": false, "u@h/x": false, "u@": false, "@h": false,
+		"u@h@i": false, "u @h": false, "ü@h": false,
+	} {
+		require.Equal(t, ok, ValidHostTarget(v), v)
+	}
+
+	f := load(t, "HOST:opt=-oProxyCommand=x@h\nHOST:port=u@h:22\nHOST:v6=u@[::1]\n", "/h")
+	require.Equal(t, []string{"v6=u@[::1]"}, names(f.Hosts))
+	require.Len(t, f.Warnings, 2)
+	require.Contains(t, f.Warnings[0].Text, "Line 1 of ")
+	require.True(t, strings.HasSuffix(f.Warnings[0].Text, ": HOST target must be user@host (skipping)"))
+	require.Empty(t, f.Warnings[0].Hint)
+	require.Contains(t, f.Warnings[1].Text, "Line 2 of ")
+	require.Equal(t, "put the port in a Host entry of ~/.ssh/config", f.Warnings[1].Hint)
+	// remote_* names the skipped entry when its alias is used.
+	got, ok := f.RejectedHost("port")
+	require.True(t, ok)
+	require.Equal(t, "u@h:22", got)
+	_, ok = f.HostTarget("port")
+	require.False(t, ok)
+	_, ok = f.RejectedHost("v6")
+	require.False(t, ok)
 }

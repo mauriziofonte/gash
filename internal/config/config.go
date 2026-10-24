@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -50,6 +51,9 @@ type Setting struct {
 type Warning struct {
 	Line int    // line number, 0 for the permission and owner checks
 	Text string // the message, e.g. "Line 3 of ~/.gash_env: unknown GASH_ setting, skipping"
+	// Hint is an optional "Hint:" line printed after the warning, e.g.
+	// "put the port in a Host entry of ~/.ssh/config".
+	Hint string
 }
 
 // String is the warning as 2.x prints it without colors.
@@ -59,15 +63,18 @@ func (w Warning) String() string { return "Warning: " + w.Text }
 // HOST: name keeps only its first entry, with a warning for each later one
 // (3.0: CORE-04 fixed), so the lists hold the entries in effect.
 type File struct {
-	Path     string
-	Shown    string // Path as 2.x names it in messages (see ShownPath)
-	Exists   bool   // a regular file (after symlinks) is there
-	SSHKeys  []Entry
-	DB       []Entry
-	AI       []Entry
-	Hosts    []Entry
-	Settings []Setting
-	Warnings []Warning
+	Path    string
+	Shown   string // Path as 2.x names it in messages (see ShownPath)
+	Exists  bool   // a regular file (after symlinks) is there
+	SSHKeys []Entry
+	DB      []Entry
+	AI      []Entry
+	Hosts   []Entry
+	// RejectedHosts are the HOST: entries skipped because their target
+	// fails ValidHostTarget, so remote_* can say why an alias is unknown.
+	RejectedHosts []Entry
+	Settings      []Setting
+	Warnings      []Warning
 	// ReadErr is set when the file exists but cannot be read. 2.x then
 	// printed Bash's own redirection error (text not reproducible) and
 	// went on with an empty configuration, as this File does.
@@ -199,6 +206,10 @@ func (f *File) parseLine(lineno int, raw, home string) {
 	case "HOST":
 		if !ValidHostTarget(value) {
 			f.warnLine(lineno, "HOST target must be user@host (skipping)")
+			if strings.Contains(value, ":") {
+				f.Warnings[len(f.Warnings)-1].Hint = "put the port in a Host entry of ~/.ssh/config"
+			}
+			f.RejectedHosts = append(f.RejectedHosts, entry(key, value, lineno))
 			return
 		}
 		f.Hosts = f.add(f.Hosts, "HOST", entry(key, value, lineno))
@@ -271,18 +282,42 @@ func validSettingName(key string) bool {
 	return true
 }
 
-// ValidHostTarget is the 2.x user@host test, [[ V =~
-// ^[^@[:space:]]+@[^@[:space:]]+$ ]]: one @ with text on both sides and no
-// blank (C-locale [:space:]) anywhere. Option-like and host:port values
-// pass (LEDGER REM-02, REM-08). It checks HOST: entries and remote_*'s
-// raw targets.
+// ValidHostTarget reports whether v is a HOST: target remote_* accepts,
+// the rule of remote.validTarget: user@host with a user of
+// [A-Za-z0-9._][A-Za-z0-9._-]* and a host name of
+// [A-Za-z0-9][A-Za-z0-9.-]* or a bracketed IPv6 literal ([::1]). A port
+// (host:22), an option-like word or any other character is refused, so a
+// HOST: line the remote functions would reject is skipped at load with
+// its warning (LEDGER REM-02, REM-08).
 func ValidHostTarget(v string) bool {
-	at := strings.IndexByte(v, '@')
-	if at <= 0 || at == len(v)-1 || strings.IndexByte(v[at+1:], '@') >= 0 {
+	user, host, ok := strings.Cut(v, "@")
+	if !ok || !targetWord(user, "._", "._-") {
 		return false
 	}
-	for i := 0; i < len(v); i++ {
-		if isSpace(v[i]) {
+	if targetWord(host, "", ".-") {
+		return true
+	}
+	if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		return net.ParseIP(host[1:len(host)-1]) != nil && strings.Contains(host, ":")
+	}
+	return false
+}
+
+// targetWord reports whether s is one ASCII letter or digit (or a byte of
+// first) followed by letters, digits and bytes of rest: no regexp, so the
+// package compiles nothing at start.
+func targetWord(s, first, rest string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		alnum := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+		extra := rest
+		if i == 0 {
+			extra = first
+		}
+		if !alnum && strings.IndexByte(extra, c) < 0 {
 			return false
 		}
 	}
@@ -358,6 +393,15 @@ func (f *File) HostTarget(alias string) (string, bool) {
 		return "", false
 	}
 	return first(f.Hosts, alias)
+}
+
+// RejectedHost is the target of the first HOST: line for alias that was
+// skipped because it fails ValidHostTarget (LEDGER REM-02, REM-08).
+func (f *File) RejectedHost(alias string) (string, bool) {
+	if alias == "" {
+		return "", false
+	}
+	return first(f.RejectedHosts, alias)
 }
 
 // Setting is __gash_get_setting: the value of the first GASH_NAME= line

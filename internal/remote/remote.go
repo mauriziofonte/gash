@@ -114,7 +114,14 @@ func (x *call) loadConfig() *config.File { return config.LoadCaller(x.Env.Get) }
 // REM-02, REM-08): an alias whose HOST: target fails it is skipped with a
 // warning, as an unregistered name.
 func (x *call) resolveTarget(input string) (string, bool) {
-	if t, ok := x.loadConfig().HostTarget(input); ok {
+	f := x.loadConfig()
+	t, ok := f.HostTarget(input)
+	if !ok {
+		// The load skipped it (config.ValidHostTarget is validTarget's
+		// rule); say why the alias is unknown.
+		t, ok = f.RejectedHost(input)
+	}
+	if ok {
 		if validTarget(t) {
 			return t, true
 		}

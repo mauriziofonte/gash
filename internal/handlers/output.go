@@ -135,6 +135,9 @@ func compatEnvLoad(c *invoke.Call) int {
 	p := ui.NewPrinter(c.Stderr, c.Term, false)
 	for _, w := range f.Warnings {
 		p.Warning(w.Text)
+		if w.Hint != "" {
+			p.Hint(w.Hint)
+		}
 	}
 	join := func(es []config.Entry) string {
 		parts := make([]string, len(es))

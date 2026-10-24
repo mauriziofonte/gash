@@ -142,9 +142,12 @@ skipped. The first provider listed is the default for `ai_ask` (alias `ask`),
 
 ### Remote hosts
 
-`HOST:alias=user@host` (no spaces, exactly one `@`). The `remote_*` functions
-accept the alias. For a non-standard port or key, define the host in
-`~/.ssh/config` and use that name as `host`. In headless mode only registered
+`HOST:alias=user@host`. The user is letters, digits, `.`, `_` and `-` (not
+first); the host is a name of letters, digits, `.` and `-` starting with a
+letter or digit, or an IPv6 address in brackets (`deploy@[2001:db8::1]`). Any
+other target, such as `u@h:2222` or `-oOption@h`, is skipped at load with a
+warning. The `remote_*` functions accept the alias. For a non-standard port
+or key, define the host in `~/.ssh/config` and use that name as `host`. In headless mode only registered
 aliases are accepted. `remote_hosts` (alias `rh`) lists them.
 
 ### Settings

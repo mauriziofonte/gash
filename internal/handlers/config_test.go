@@ -143,3 +143,17 @@ func TestLedger_CORE06(t *testing.T) {
 	out, _ := listOf(t, "gash_ai_list", "AI:claude=sk-123456789\n", env)
 	require.True(t, strings.Contains(out, "claude     sk-12345..."), out)
 }
+
+// LEDGER REM-02, REM-08: the shell's load skips a HOST: target remote_*
+// would refuse, and a target with a port says where the port goes.
+func TestLedger_REM02(t *testing.T) {
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash_env"), []byte("HOST:a=u@h:2222\nHOST:b=-oProxyCommand=x@h\nHOST:c=u@[::1]\n"), 0o600))
+	out, errOut, rc := compat(t, map[string]string{"HOME": home}, false, "", "env", "load")
+	require.Equal(t, 0, rc)
+	require.Equal(t, "Warning: Line 1 of ~/.gash_env: HOST target must be user@host (skipping)\n"+
+		"Hint: put the port in a Host entry of ~/.ssh/config\n"+
+		"Warning: Line 2 of ~/.gash_env: HOST target must be user@host (skipping)\n", errOut)
+	require.Contains(t, out, `__GASH_ENV_HOST_ENTRIES=$'c\tu@[::1]'`)
+	require.NotContains(t, out, "2222")
+}

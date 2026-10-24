@@ -64,7 +64,7 @@ Headless calls stay quiet unless `GASH_DEBUG=1`.
 | `Line N ...: DB URL must start with mysql://, mariadb:// or pgsql://` | Use one of those schemes (`pgsql`, not `postgres`) |
 | `Line N ...: unknown AI provider (supported: claude, gemini)` | Only `claude` and `gemini` exist |
 | `Line N ...: AI provider X has an empty token` | Add the token after `=` |
-| `Line N ...: HOST target must be user@host` | One `@`, no spaces |
+| `Line N ...: HOST target must be user@host` | One `@`; user of letters, digits, `.`, `_`, `-`; a host name or `[IPv6]`; no port (put it in a `Host` entry of `~/.ssh/config`) |
 | `Line N ...: unknown GASH_ setting` | Check the name in [configuration.md](configuration.md#settings-reference) |
 | `Line N ...: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=)` | The line has none of those prefixes |
 | `Line N ...: SSH: entry has no '='` | Use `SSH:path=passphrase` (same for `DB:`, `AI:`, `HOST:`) |

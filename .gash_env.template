@@ -71,6 +71,10 @@
 # ============================================
 # Format: HOST:alias=user@host
 #
+# user: letters, digits, . _ - (not first); host: a name of letters, digits,
+# . - or an IPv6 address in brackets. No port: put it in a Host entry of
+# ~/.ssh/config and use that name as host.
+#
 # Named shortcuts for remote_exec/remote_push/remote_pull/remote_sync_push/
 # remote_sync_pull. Interactively you can also target any user@host directly
 # without registering it here; a registered alias is required when Gash runs
