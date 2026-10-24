@@ -74,8 +74,11 @@ The AI automatically detects your intent:
 #### Notes
 
 ```text
-Type 'exit' or 'quit' or press Ctrl+C to end the session.
-Piped content is auto-truncated to 4KB to save tokens.
+One question per call; Enter on an empty line aborts, exit/quit cancel.
+ai_ask needs a terminal (not headless): from a script or an agent use
+ai_query "question" instead.
+Piped content is auto-truncated to 4KB to save tokens; piped input must
+start within 2 seconds, or stdin is ignored with a warning.
 -h/--help is help as the first word or right after the provider.
 ```
 
@@ -162,7 +165,9 @@ diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf \
 #### Notes
 
 ```text
-Piped content is auto-truncated to 4KB to save tokens.
+Piped content is auto-truncated to 4KB to save tokens. Piped input must
+start within 2 seconds: an open stdin that stays silent is ignored with
+a warning (redirect </dev/null to skip the wait).
 When input is piped, the AI enters troubleshoot mode automatically.
 A provider alone is not a question: "ai_query claude" fails with
 "No query provided". -h/--help is help as the first word or as the

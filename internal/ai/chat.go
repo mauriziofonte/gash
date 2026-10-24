@@ -32,7 +32,7 @@ func (m *Module) aiQuery(c *invoke.Call) int {
 
 	piped := ""
 	if !c.Term.StdinTTY() {
-		piped = readPiped(c.Stdin)
+		piped = m.readPipedInput(c)
 	}
 	if piped != "" {
 		query = pipeWrap(piped, query)
@@ -97,18 +97,31 @@ func (m *Module) aiAsk(c *invoke.Call) int {
 		return 1
 	}
 
+	// LEDGER AI-04: ai_ask reads its question from a terminal; without one
+	// (or headless) nothing is read or sent.
+	if c.Term.Headless() || !m.ttyOpens() {
+		p.Error("ai_ask needs a terminal: use ai_query \"question\" (stdin is read as piped input)")
+		return 1
+	}
+
 	piped := ""
 	if !c.Term.StdinTTY() {
-		piped = readPiped(c.Stdin)
+		piped = m.readPipedInput(c)
 	}
 
 	var query string
 	if piped != "" {
 		lines := strings.Count(piped, "\n") + 1
 		p.Info("Piped input received (" + strconv.Itoa(lines) + " lines, " + strconv.Itoa(len(piped)) + " bytes)")
-		query = m.readTTYLine() // AI-04: without a terminal this reads nothing
+		query = m.readTTYLine()
 	} else {
 		query = m.readStdinLine(c)
+	}
+
+	// LEDGER AI-03: one question per call; exit, quit or q cancel it.
+	switch strings.ToLower(strings.TrimSpace(query)) {
+	case "exit", "quit", "q":
+		return 1
 	}
 
 	if query == "" && piped == "" {
@@ -185,9 +198,18 @@ func readPiped(r io.Reader) string {
 	return s
 }
 
+// ttyOpens is `{ : </dev/tty; }`: a controlling terminal can be opened.
+func (m *Module) ttyOpens() bool {
+	tty, err := m.openTTY()
+	if err != nil {
+		return false
+	}
+	_ = tty.Close()
+	return true
+}
+
 // readTTYLine reads one line from /dev/tty (the pipe case of ai_ask), ""
-// when no terminal can be opened (AI-04 reproduced: the empty question
-// becomes the auto-analysis prompt).
+// when no terminal can be opened.
 func (m *Module) readTTYLine() string {
 	tty, err := m.openTTY()
 	if err != nil {

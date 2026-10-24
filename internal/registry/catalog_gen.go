@@ -68,8 +68,11 @@ var functions = []Function{
 				"    (with piped data) -> Troubleshoot (Issue + Suggestion)\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Type 'exit' or 'quit' or press Ctrl+C to end the session.\n" +
-				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  One question per call; Enter on an empty line aborts, exit/quit cancel.\n" +
+				"  ai_ask needs a terminal (not headless): from a script or an agent use\n" +
+				"  ai_query \"question\" instead.\n" +
+				"  Piped content is auto-truncated to 4KB to save tokens; piped input must\n" +
+				"  start within 2 seconds, or stdin is ignored with a warning.\n" +
 				"  -h/--help is help as the first word or right after the provider.\n" +
 				"\n" +
 				"PRIVACY\n" +
@@ -164,7 +167,9 @@ var functions = []Function{
 				"  } | ai_query \"correlate these errors\"\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  Piped content is auto-truncated to 4KB to save tokens. Piped input must\n" +
+				"  start within 2 seconds: an open stdin that stays silent is ignored with\n" +
+				"  a warning (redirect </dev/null to skip the wait).\n" +
 				"  When input is piped, the AI enters troubleshoot mode automatically.\n" +
 				"  A provider alone is not a question: \"ai_query claude\" fails with\n" +
 				"  \"No query provided\". -h/--help is help as the first word or as the\n" +

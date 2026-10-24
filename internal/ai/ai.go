@@ -54,6 +54,8 @@ type Module struct {
 	getwd   func() (string, error)
 	readDir func(string) ([]os.DirEntry, error)
 	openTTY func() (*os.File, error)
+	// pipeWait bounds the wait for piped input (LEDGER AI-05).
+	pipeWait time.Duration
 }
 
 // New returns the module wired to the real system.
@@ -69,6 +71,8 @@ func New() *Module {
 		getwd:   os.Getwd,
 		readDir: os.ReadDir,
 		openTTY: func() (*os.File, error) { return os.OpenFile("/dev/tty", os.O_RDWR, 0) },
+
+		pipeWait: pipedWait,
 	}
 }
 

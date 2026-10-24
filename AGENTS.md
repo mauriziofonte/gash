@@ -374,7 +374,9 @@ token formats (sk-, ghp_, AKIA, xox, AIza). Redaction is pattern-based and
 can miss secrets. `GASH_AI_CONFIRM`: auto (default) asks before sending data
 Gash collected itself (`ai_sysinfo`), 1 asks before every request, 0 never
 asks. In headless mode or without a terminal, a request that needs
-confirmation is refused. Call
+confirmation is refused. `ai_ask` needs a terminal and refuses headless:
+use `ai_query "question"`. Piped input must start within 2 seconds; an open
+but silent stdin is ignored with a warning (redirect `</dev/null`). Call
 AI functions only when the user asks for them.
 
 Headless mode reads `GASH_DB_TIMEOUT`, `GASH_AI_CONFIRM`,
