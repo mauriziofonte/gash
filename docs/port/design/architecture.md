@@ -140,8 +140,12 @@ after `gash` gets what the 2.x `gash` function prints for an unknown topic
 The only package that starts processes. Explicit argv (never a shell string),
 explicit environment (built from an allowlist, never the full parent
 environment unless 2.x passed it through), stdin for secrets and SQL, no
-`sh -c` anywhere except `llm_exec` (section 8.3) and the nvm bridge. A
-recording fake replaces it in unit tests.
+`sh -c` anywhere except the five sanctioned `bash -c` uses: `llm_exec`
+(section 8.3), the nvm bridge, and the three `gash_doctor --timing` shells
+(the load probe, the whole-shell timing `bash -i -c exit` and the bare-shell
+timing `bash --noprofile --norc -i -c exit`). The `runner.BashUse` enum is
+the source of truth: `RunBash` refuses any Bash that does not match its use.
+A recording fake replaces it in unit tests.
 
 External tool policy (MUST NOT 8: results never depend on which awk, grep or
 find is installed). Where a 2.x result depended on an optional tool (`jq`,
