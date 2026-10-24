@@ -346,7 +346,10 @@ Matched case-insensitively on the base name, and on the target of a symlink
 `llm_find --contains` and, inside `llm_exec`, `grep`, `rg`, `diff` and
 `git diff`/`show`/`grep`/`log -p` skip them (`git log` with `--follow` or
 `-L` does not; nor do commands named in `GASH_LLM_EXEC_ALLOW` or
-`unrestricted` mode). `llm_exec` also refuses `git show REV:PATH` for a
+`unrestricted` mode). Inside `llm_exec` those tools search the `.env`
+templates and the `id_*` public keys (`id_rsa.pub`); an exception name that
+also matches another pattern (`credentials.pub`, `secrets.env.example`)
+stays skipped there. `llm_exec` also refuses `git show REV:PATH` for a
 secret PATH and git blobs named by id (`git show SHA`, `git cat-file -p
 SHA`, `--batch`). Their names still appear in `llm_tree` and `llm_find`
 name searches. Detection is by name only: a password inside `config.php` is

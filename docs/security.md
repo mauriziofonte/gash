@@ -167,7 +167,7 @@ A symlink is judged by its own name and by its target's.
 
 | Function | Effect |
 |---|---|
-| `llm_exec` | Refuses secret arguments, glob matches and `git` `REV:PATH`; `grep`, `rg`, `diff` and `git` diff/show/grep/patch logs skip secret files (not in `unrestricted` mode, nor for commands in `GASH_LLM_EXEC_ALLOW`) |
+| `llm_exec` | Refuses secret arguments, glob matches and `git` `REV:PATH`; `grep`, `rg`, `diff` and `git` diff/show/grep/patch logs skip secret files (not in `unrestricted` mode, nor for commands in `GASH_LLM_EXEC_ALLOW`) but search the `.env` templates and the `id_*` public keys (`id_rsa.pub`); an exception name that also matches another pattern (`credentials.pub`, `secrets.env.example`) stays skipped there |
 | `llm_config` | Refuses a secret file |
 | `llm_grep`, `llm_find --contains` | Refuse a secret path; skip secret files and directories in recursive searches, but search the exceptions (`.env.example`, `*.pub`, ...) there, dotfiles included |
 | `llm_tree`, `llm_find`, filesystem scanners | List names and sizes only, secret files included |
