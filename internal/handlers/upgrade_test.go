@@ -293,6 +293,11 @@ func TestLedger_SELF10(t *testing.T) {
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("no gpg")
 	}
+	// gpg-agent's socket lives in the fixture's GNUPGHOME under TMPDIR; a
+	// Unix socket path is limited to 107 bytes.
+	if len(os.TempDir()) > 70 {
+		t.Skip("TMPDIR is too long for a gpg-agent socket")
+	}
 	d, env := upgradeFixture(t, strings.Replace(upgradeTwo, "git -C $D/o commit -q --allow-empty -m two; ", "", 1)+upgradeGPG+
 		"git -C $D/o -c user.signingkey=t@t commit -q -S --allow-empty -m signed; git -C $D/o tag v1.1")
 	t.Cleanup(func() { _ = exec.Command("gpgconf", "--homedir", d+"/gnupg", "--kill", "gpg-agent").Run() })
