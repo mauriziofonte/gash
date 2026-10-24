@@ -17,6 +17,11 @@ import (
 // case-sensitive). Without a terminal, auto and the other values refuse.
 func (m *Module) confirmSend(c *invoke.Call, provider, kind, what string, nbytes int) bool {
 	p := printer(c)
+	// A model name that is not plain is refused before anyone is asked
+	// about a request that would not go out (AI-12).
+	if !m.modelOK(c, provider) {
+		return false
+	}
 	mode := c.Env.Get("GASH_AI_CONFIRM")
 	if mode == "" {
 		mode = "auto"
