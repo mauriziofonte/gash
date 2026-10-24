@@ -519,3 +519,43 @@ func TestLedger_SHELL13(t *testing.T) {
 	_, err = os.Stat(filepath.Join(home, ".local/state/gash"))
 	require.True(t, os.IsNotExist(err), "no state written")
 }
+
+// LEDGER CORE-02: the generated helpers take a numeric operand only when
+// it is a run of digits (with an optional minus); anything else is 0 and
+// is never evaluated, so an array subscript holding a command
+// substitution runs nothing. Integer operands give the 2.x output. The
+// end-to-end proof is testdata/script/compat_helpers_arith.txtar.
+func TestLedger_CORE02(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	tmp := t.TempDir()
+	src := "GASH_HEADLESS=1; for f in output utils validation; do source '" + dir + "/lib/core/'$f.sh; done; "
+	calls := map[string]string{
+		"require_args_min": `__gash_require_args_min "$P" 1; echo "rc=$?"`,
+		"bar_value":        `__gash_bar v "$P" 10 10; echo "[$v]"`,
+		"bar_max":          `__gash_bar v 5 "$P" 10; echo "[$v]"`,
+		"bar_width":        `__gash_bar v 5 10 "$P"; echo "[$v]"`,
+		"want_colors":      `__gash_want_colors "$P"; echo "rc=$?"`,
+		"wrap":             `__gash_wrap a "$P" 'hello world'; echo "${a[*]}"`,
+		"choose":           `__gash_choose c "$P" x y </dev/null; echo "rc=$?"`,
+		"progress":         `__gash_progress "$P" "$P" m; echo "rc=$?"`,
+		"section":          `COLUMNS="$P" __gash_section T`,
+	}
+	for name, call := range calls {
+		mark := filepath.Join(tmp, name)
+		out, err := bash(t, []string{"LC_ALL=C"}, src+"P='a[$(touch "+mark+")]'; "+call)
+		require.NoError(t, err, "%s: %s", name, out)
+		require.NoFileExists(t, mark, "%s ran the substitution", name)
+	}
+
+	// A plain word is 0 (2.x read the unset variable of that name), and
+	// integer vectors keep the 2.x results.
+	out, err := bash(t, []string{"LC_ALL=C"}, src+`__gash_require_args_min abc 1; echo "rc=$?"; `+
+		`__gash_require_args_min 2 1; echo "rc=$?"; __gash_require_args_min 0 1; echo "rc=$?"; `+
+		`__gash_bar v 3 10 10; echo "[$v]"; __gash_bar v 1 100 10; echo "[$v]"; __gash_bar v 0 10 5; echo "[$v]"; `+
+		`__gash_want_colors 1; echo "rc=$?"`)
+	require.NoError(t, err, out)
+	require.Equal(t, "Error: Expected at least 1 argument(s), got abc.\nrc=1\nrc=0\n"+
+		"Error: Expected at least 1 argument(s), got 0.\nrc=1\n"+
+		"[###\t.......]\n[#\t.........]\n[\t.....]\nrc=1\n", out)
+}
