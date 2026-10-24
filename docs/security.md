@@ -133,9 +133,13 @@ Then the **session is read-only**:
 
 | Engine | Session | Credentials |
 |---|---|---|
-| SQLite (`-f FILE`) | `sqlite3 -readonly -bail`, plus `-safe` on 3.37+; SQL on stdin | The file must pass the forbidden-path check and start with `SQLite format 3` |
-| MySQL, MariaDB | `SET SESSION TRANSACTION READ ONLY`; rows capped with `sql_select_limit`; database as `--database=NAME` | `--defaults-extra-file` on a process substitution, never argv |
-| PostgreSQL | `default_transaction_read_only=on`, `statement_timeout` from `GASH_DB_TIMEOUT` (30 s), 10 s connect timeout, `psql -X`; SQL on stdin; database in `PGDATABASE` (libpq would read a `-d` value holding `=` as a conninfo string) | `PGPASSWORD` in the environment of `psql` only |
+| SQLite (`-f FILE`) | Opened read-only (`mode=ro`), defensive and query-only, untrusted schemas (`trusted_schema=0`) | The file must pass the forbidden-path check and start with `SQLite format 3` |
+| MySQL, MariaDB | `SET SESSION TRANSACTION READ ONLY`; rows capped with `sql_select_limit` | Passed to the built-in driver in memory, never on a command line |
+| PostgreSQL | `default_transaction_read_only=on`, `statement_timeout` from `GASH_DB_TIMEOUT` (30 s), 10 s connect timeout | Passed to the built-in driver in memory, never on a command line |
+
+All three engines use drivers built into Gash: no `sqlite3`, `mysql` or
+`psql` client runs, and their error text is the driver's (`details` of
+`sqlite_error`, `mysql_error`, `pgsql_error`).
 
 Row caps are applied by the engine (outer `LIMIT` or `sql_select_limit`):
 `llm_db_query -r N` (default 100), `llm_db_sample --limit N` (default 5). Table
@@ -178,7 +182,8 @@ is not `/root` (macOS: `/var/root`). A `..` component is refused.
 The path is checked as written, after resolving it as `realpath -m` does
 (symlinks resolved) and, for macOS, without a `/private` prefix. Applies to
 `llm_tree`, `llm_find`, `llm_grep`, `llm_config`, `llm_git_*`, `llm_project`,
-`llm_deps`, SQLite files of `llm_db_*` and the arguments of `llm_exec`.
+`llm_deps`, `llm_docker_check`, SQLite files of `llm_db_*` and the
+arguments of `llm_exec`.
 The walks of `llm_tree`, `llm_find` and `llm_grep` may not start at `/` or
 above a protected tree (content searches, `llm_grep` and
 `llm_find --contains`, also not above an `/etc` entry): `forbidden_path`,

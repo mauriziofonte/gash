@@ -307,14 +307,24 @@ every check below.
 
 ### 6.2 Secret files
 
-Matched case-insensitively on the base name, and on the target of a symlink:
-`.env`, `.env.*`, `*.env`, keys and keystores (`*.pem`, `*.key`, `*.p12`,
-`*.pfx`, `*.jks`, `*.ppk`, `id_rsa*`, `*_ed25519`, ...), `credentials*`,
-`secrets*`, `.gash_env`, `.pgpass`, `.netrc`, `.git-credentials`, `.npmrc`,
-`.pypirc`, `.htpasswd`, `.my.cnf`, kubeconfig, `*.tfstate`, `*.tfvars`, and
-anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`,
-`.config/gcloud`. Templates such as `.env.example` and `*.pub` are allowed,
-and recursive searches include them.
+Matched case-insensitively on the base name, and on the target of a symlink
+(the list is `internal/pathguard`'s table, checked by a test):
+
+* Environment: `.env` `.env.*` `*.env` `.envrc`
+* Keys and keystores: `*.pem` `*.key` `*.p12` `*.pfx` `*.jks` `*.keystore`
+  `*.kdbx` `*.ppk` `id_rsa*` `id_dsa*` `id_ecdsa*` `id_ed25519*` `*_rsa`
+  `*_dsa` `*_ecdsa` `*_ed25519` `ssh_host_*_key`
+* Credentials: `credentials` `credentials.*` `credentials_*` `credentials-*`
+  `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc`
+  `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto`
+  `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig`
+  `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json`
+* Anything under a directory `.ssh` `.gnupg` `.aws` `.azure` `.kube`
+  `.docker` `.config/gcloud`
+* Not secret (templates, which win over the above): `*.pub` `.env.example`
+  `.env.sample` `.env.dist` `.env.template` `*.env.example`; `llm_grep`
+  and `llm_find --contains` search them.
+
 `llm_config` and `llm_exec` refuse them as arguments; `llm_grep`,
 `llm_find --contains` and, inside `llm_exec`, `grep`, `rg`, `diff` and
 `git diff`/`show`/`grep`/`log -p` skip them (`git log` with `--follow` or
@@ -385,19 +395,19 @@ which file is read. On `command_not_allowed`, ask the user; never edit
    file, program or sleep functions outside literals and comments (INSERT,
    INTO, FOR UPDATE, ATTACH, LOAD_FILE, pg_read_file, pg_sleep, ...); no client
    commands (`\!`, sqlite dot-commands, MySQL `/*! */` comments).
-2. **Read-only client session**: `sqlite3 -readonly -safe` (`-safe` where the
-   sqlite3 version has it); MySQL/MariaDB `SET SESSION TRANSACTION READ ONLY`
-   plus a sql_select_limit row cap; PostgreSQL with
-   default_transaction_read_only=on and a statement timeout of
-   `GASH_DB_TIMEOUT` seconds (default 30). MySQL and SQLite have no timeout.
+2. **Read-only session**, through the built-in drivers (no `sqlite3`,
+   `mysql` or `psql` client runs): SQLite opened read-only in defensive,
+   query-only mode with untrusted schemas; MySQL/MariaDB
+   `SET SESSION TRANSACTION READ ONLY` plus a sql_select_limit row cap;
+   PostgreSQL with default_transaction_read_only=on and a statement timeout
+   of `GASH_DB_TIMEOUT` seconds (default 30). MySQL and SQLite have no
+   timeout.
 
-Neither passwords nor the SQL reach the client's command line: all three
-clients read the SQL from stdin. Table names for `llm_db_schema` and `llm_db_sample` must match
+No program runs, so neither passwords nor the SQL appear on a command line.
+Table names for `llm_db_schema` and `llm_db_sample` must match
 `[A-Za-z_][A-Za-z0-9_]*`; database names from `-d` or `.target-database`
 must match `[A-Za-z0-9_][A-Za-z0-9_$.-]*`, 64 characters at most
-(`invalid_database_name`). MySQL gets the database as `--database=NAME`,
-psql through PGDATABASE, so no name is read as an option or a conninfo
-string. Read-only is not harmless: a heavy SELECT still
+(`invalid_database_name`). Read-only is not harmless: a heavy SELECT still
 loads the server, and the database user decides what is readable. Prefer a
 read-only database user in `~/.gash_env`.
 
