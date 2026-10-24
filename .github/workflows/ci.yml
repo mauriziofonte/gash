@@ -270,3 +270,36 @@ jobs:
 
       - name: bashonlymap (tests/parity/bash-only.tsv matches PARITY)
         run: go run ./internal/tools/bashonlymap -check
+
+  compat-bash:
+    name: Compat Bash ${{ matrix.bash }}
+    # testing.md 5 and 7, compat.md 1: the generated Bash (gash.sh, the
+    # shims, bash_completion, the gash init bash layer) on every supported
+    # Bash. testdata/bash/run.sh copies Bash out of the official
+    # bash:VERSION image and runs the Go suite (testscript included) with
+    # it first on PATH.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        bash: ["4.4", "5.0", "5.1", "5.3"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3
+
+      - name: Fetch v2.1.0 for the 2.x differential scripts
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/tags/v2.1.0:refs/tags/v2.1.0
+          echo "GASH_REQUIRE_2X=1" >>"$GITHUB_ENV"
+
+      - name: Go suite with Bash ${{ matrix.bash }}
+        run: bash testdata/bash/run.sh "${{ matrix.bash }}"

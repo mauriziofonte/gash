@@ -30,6 +30,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -76,6 +79,15 @@ func TestScript(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building httpsfake: %v\n%s", err, out)
 	}
+	// testdata/bash/run.sh runs the suite with another Bash first on PATH
+	// and names it here, so a PATH mistake fails instead of testing the
+	// system Bash again.
+	if want := os.Getenv("GASH_EXPECT_BASH"); want != "" {
+		out, err := exec.Command("bash", "-c", `echo "${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"`).Output()
+		if got := strings.TrimSpace(string(out)); err != nil || got != want {
+			t.Fatalf("GASH_EXPECT_BASH=%s but the bash on PATH is %q (%v)", want, got, err)
+		}
+	}
 	// The 2.1.0 tree (git archive v2.1.0, never the checkout itself) for
 	// the scripts that compare a 2.x load with a 3.x one in the same shell
 	// (init_bash_state_parity.txtar, condition [has2x], $GASH_2X_SH). A
@@ -118,6 +130,10 @@ func TestScript(t *testing.T) {
 				return os.Geteuid() == 0, nil
 			case "has2x":
 				return has2x, nil
+			case "bash5":
+				// The bash on PATH is 5.0 or newer (testdata/bash/run.sh
+				// runs the suite with 4.4 too).
+				return bashMajor() >= 5, nil
 			case "linux", "darwin", "windows":
 				return runtime.GOOS == cond, nil
 			case "gnused":
@@ -167,3 +183,13 @@ func archive2x(root, dir string) error {
 	}
 	return nil
 }
+
+// bashMajor is the major version of the bash on PATH, 0 when unknown.
+var bashMajor = sync.OnceValue(func() int {
+	out, err := exec.Command("bash", "-c", `echo "${BASH_VERSINFO[0]}"`).Output()
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+	return n
+})
