@@ -159,20 +159,21 @@ exec "$@"`)
 	require.Contains(t, r.out, want+"--- Profile\n")
 }
 
-// LEDGER SYS-20 (reproduced): the last section wins; help only as the
-// first word.
+// 3.0: SYS-20 fixed: a second section is an error naming it; -h/--help
+// is the help wherever it is.
 func TestLedger_SYS20(t *testing.T) {
 	fx := newFixture(t, etcTree)
-	require.Equal(t, result{llmWant["storage"], "", 0}, fx.call(t, nil, "identity", "storage", "--llm"))
+	sections := "Info: Sections: overview identity storage services auth network security webstack mail infra system all\n"
+	require.Equal(t, result{"", "Error: Only one section allowed: storage\n" + sections, 1}, fx.call(t, nil, "identity", "storage", "--llm"))
+	require.Equal(t, result{"", "Error: Only one section allowed: all\n" + sections, 1}, fx.call(t, nil, "all", "all"))
 	unknown := "Info: Sections: overview identity storage services auth network security webstack mail infra system all\nInfo: Flags: --llm, --no-color\n"
-	require.Equal(t, result{"", "Error: Unknown argument: --help\n" + unknown, 1}, fx.call(t, nil, "--llm", "--help"))
-	require.Equal(t, result{"", "Error: Unknown argument: -h\n" + unknown, 1}, fx.call(t, nil, "mail", "-h"))
 	require.Equal(t, result{"", "Error: Unknown argument: bogus\n" + unknown, 1}, fx.call(t, nil, "mail", "bogus", "--llm"))
-	for _, h := range []string{"--help", "-h"} {
-		r := fx.call(t, nil, h, "bogus")
-		require.Equal(t, 0, r.rc)
-		require.Contains(t, r.out, "  sysinfo  (module: sysinfo)\n")
+	for _, args := range [][]string{{"--help", "bogus"}, {"-h"}, {"--llm", "--help"}, {"mail", "-h"}, {"identity", "storage", "--help"}} {
+		r := fx.call(t, nil, args...)
+		require.Equal(t, 0, r.rc, args)
+		require.Contains(t, r.out, "  sysinfo  (module: sysinfo)\n", args)
 	}
+	require.Equal(t, result{llmWant["storage"], "", 0}, fx.call(t, nil, "storage", "--llm"))
 	require.Empty(t, fx.sudo(t))
 }
 

@@ -50,12 +50,15 @@ func Register(t *invoke.Table) { New().Register(t) }
 // Register binds the function of m to t.
 func (m *Module) Register(t *invoke.Table) { t.Handle("sysinfo", m.sysinfo) }
 
-// sysinfo is sysinfo [section] [--llm] [--no-color].
+// sysinfo is sysinfo [section] [--llm] [--no-color]: one section at
+// most, -h/--help anywhere (SYS-20).
 func (m *Module) sysinfo(c *invoke.Call) int {
-	if help.NeedsOf(c, c.Arg(0)) {
-		return 0
+	for _, a := range c.Args {
+		if (a == "-h" || a == "--help") && help.NeedsOf(c, "--help") {
+			return 0
+		}
 	}
-	section, llm, noColor := "all", false, false
+	section, llm, noColor := "", false, false
 	for _, a := range c.Args {
 		switch a {
 		case "--llm":
@@ -63,7 +66,12 @@ func (m *Module) sysinfo(c *invoke.Call) int {
 		case "--no-color":
 			noColor = true
 		case "overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all":
-			// The last one wins (SYS-20).
+			if section != "" {
+				p := ui.NewPrinter(c.Stderr, c.Term, false)
+				p.Error("Only one section allowed: " + a)
+				p.Info("Sections: overview identity storage services auth network security webstack mail infra system all")
+				return 1
+			}
 			section = a
 		default:
 			p := ui.NewPrinter(c.Stderr, c.Term, false)
@@ -72,6 +80,9 @@ func (m *Module) sysinfo(c *invoke.Call) int {
 			p.Info("Flags: --llm, --no-color")
 			return 1
 		}
+	}
+	if section == "" {
+		section = "all"
 	}
 	// --llm implies --no-color.
 	if llm {

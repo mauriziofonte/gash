@@ -3412,7 +3412,9 @@ var functions = []Function{
 				"  On a terminal a normal user is asked for sudo only by the sections\n" +
 				"  that read root-only files (identity, storage, services, auth,\n" +
 				"  security, system, all); overview, network, webstack, mail and infra\n" +
-				"  never ask.",
+				"  never ask.\n" +
+				"  One section per call: a second one is an error. -h/--help anywhere\n" +
+				"  shows this help.",
 		},
 		Fallback:          &Usage{Program: "sysinfo", Usage: "sysinfo [section] [--llm] [--no-color]", Description: "System information enumeration for headless Debian/Ubuntu servers.\nSections: overview identity storage services auth network security webstack mail infra system all\nFlags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si"},
 		ShellVars:         []string{"TMPDIR"},

@@ -517,6 +517,8 @@ On a terminal a normal user is asked for sudo only by the sections
 that read root-only files (identity, storage, services, auth,
 security, system, all); overview, network, webstack, mail and infra
 never ask.
+One section per call: a second one is an error. -h/--help anywhere
+shows this help.
 ```
 
 See also: `ai_sysinfo`
