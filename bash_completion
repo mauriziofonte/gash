@@ -100,7 +100,7 @@ __gash_complete() {
 
         docker_compose_scan)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--depth --json --no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "-d --depth -j --json --no-color --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
             fi
@@ -108,9 +108,21 @@ __gash_complete() {
 
         docker_compose_upgrade)
             if [[ "$cur" == -* ]]; then
-                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --no-color --help" -- "$cur")
+                mapfile -t COMPREPLY < <(compgen -W "--dry-run --force -f --yes -y --no-color --help" -- "$cur")
             else
                 mapfile -t COMPREPLY < <(compgen -d -- "$cur")
+            fi
+            ;;
+
+        docker_prune_all)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --dry-run --help" -- "$cur")
+            fi
+            ;;
+
+        docker_start_all | docker_stop_all)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --help" -- "$cur")
             fi
             ;;
 

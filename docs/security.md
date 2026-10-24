@@ -242,6 +242,7 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `process_kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
 | `services_stop` (alias `quit`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
 | `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
+| `docker_stop_all`, `docker_start_all` | List the containers (`Will stop N container(s): NAMES`) and ask; `-y` skips | Refused unless `-y` |
 | `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
 | `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
 | `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |

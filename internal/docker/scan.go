@@ -13,24 +13,6 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
 
-const scanHelp = `docker_compose_scan - Scan for Docker Compose projects
-
-USAGE:
-  docker_compose_scan [BASEDIR] [OPTIONS]
-
-OPTIONS:
-  BASEDIR     Base directory to scan (default: current dir)
-  --depth N   Maximum search depth (default: 3)
-  --json      Output in JSON format
-  --no-color  Disable ANSI colors
-  -h          Show this help
-
-EXAMPLES:
-  docker_compose_scan                     Scan current directory
-  docker_compose_scan ~ --depth 2         Scan home with depth 2
-  docker_compose_scan /projects --json    JSON output
-`
-
 // scan is docker_compose_scan [BASEDIR] [--depth N] [--json]
 // [--no-color]: the compose files down to depth N, with their services.
 // An unknown option is refused, -h/--help is help only as the first word
@@ -38,8 +20,7 @@ EXAMPLES:
 // and the JSON is encoded (DOCK-09); files come in byte order (DOCK-27).
 func (m *Module) scan(c *invoke.Call) int {
 	if isHelp(c) {
-		_, _ = io.WriteString(c.Stdout, scanHelp)
-		return 0
+		return helpPage(c)
 	}
 	x := m.begin(c)
 	basedir, depth := ".", "3"

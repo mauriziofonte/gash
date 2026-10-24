@@ -10,33 +10,6 @@ import (
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
-const upgradeHelp = `docker_compose_upgrade - Upgrade Docker Compose services
-
-USAGE:
-  docker_compose_upgrade [PATH] [OPTIONS]
-
-OPTIONS:
-  PATH        Directory containing docker-compose.yml (default: current dir)
-  --dry-run   Show what would be done without executing
-  --force     Force upgrade even for pinned versions
-  --yes       Skip the interactive confirmation (REQUIRED in headless mode)
-  --no-color  Disable ANSI colors
-  -h          Show this help
-
-BEHAVIOR:
-  Only upgrades services with mutable tags (latest, main, dev, etc.).
-  Services with pinned versions (e.g., nginx:1.25.3) are skipped.
-  Use --force to override and upgrade all services.
-  In headless mode (GASH_HEADLESS=1) the upgrade refuses to run without
-  an explicit --yes: pulling images and restarting a stack must never
-  happen as a silent side effect of automation.
-
-EXAMPLES:
-  docker_compose_upgrade                  Upgrade in current directory
-  docker_compose_upgrade /path/to/app     Upgrade specific project
-  docker_compose_upgrade --dry-run        Preview changes
-`
-
 // upgrade is docker_compose_upgrade [PATH] [--dry-run] [--force] [--yes]
 // [--no-color]: the plan, then pull, stop, up -d --remove-orphans of the
 // services with mutable tags, docker image prune -f and ps. Every
@@ -47,8 +20,7 @@ EXAMPLES:
 // declined upgrade returns 1 (DOCK-18).
 func (m *Module) upgrade(c *invoke.Call) int {
 	if isHelp(c) {
-		_, _ = io.WriteString(c.Stdout, upgradeHelp)
-		return 0
+		return helpPage(c)
 	}
 	x := m.begin(c)
 	path := "."

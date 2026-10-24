@@ -8,30 +8,11 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/contract"
+	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
-
-const checkHelp = `docker_compose_check - Check for Docker Compose image updates
-
-USAGE:
-  docker_compose_check [PATH] [--json] [--no-color]
-
-OPTIONS:
-  PATH        Directory containing docker-compose.yml (default: current dir)
-  --json      Output in JSON format for scripting
-  --no-color  Disable ANSI colors (auto-off on pipe / NO_COLOR / GASH_HEADLESS)
-  -h          Show this help
-
-OUTPUT:
-  Shows each service with current local digest, remote digest, and update status.
-  Services with pinned versions show "PINNED" and won't be upgraded.
-
-EXAMPLES:
-  docker_compose_check                    Check current directory
-  docker_compose_check /path/to/project   Check specific project
-  docker_compose_check --json             JSON output for scripting
-`
 
 // result is one service of docker_compose_check, kept whole (LEDGER
 // DOCK-08: 2.x joined the fields with '|' and split them again).
@@ -44,6 +25,16 @@ type result struct {
 // argument only.
 func isHelp(c *invoke.Call) bool { a := c.Arg(0); return a == "-h" || a == "--help" }
 
+// helpPage prints the registered help of the function: the one help text
+// of `gash help NAME` and NAME -h (LEDGER DOCK-17: 2.x printed a separate
+// heredoc that had drifted from the registry).
+func helpPage(c *invoke.Call) int {
+	if f, ok := registry.Lookup(c.Name); ok {
+		help.Display(c.Stdout, c.Term.UseColor(), f)
+	}
+	return 0
+}
+
 func q(s string) string { return contract.Quote(s, contract.EscapeBash) }
 
 // check is docker_compose_check [PATH] [--json] [--no-color]: per
@@ -52,8 +43,7 @@ func q(s string) string { return contract.Quote(s, contract.EscapeBash) }
 // Its name and --json contract are what llm_docker_check calls.
 func (m *Module) check(c *invoke.Call) int {
 	if isHelp(c) {
-		_, _ = io.WriteString(c.Stdout, checkHelp)
-		return 0
+		return helpPage(c)
 	}
 	x := m.begin(c)
 	path, jsonOut, noColor := ".", false, false

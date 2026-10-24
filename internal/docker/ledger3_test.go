@@ -17,7 +17,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -708,4 +710,53 @@ func TestLedger_DOCK29(t *testing.T) {
 	for _, c := range f.Calls() {
 		require.NotContains(t, c.Argv, "-f")
 	}
+}
+
+// DOCK-17: one help text per compose function. NAME -h prints the
+// registered help (the page of `gash help NAME`); its usage line names
+// every option the parser accepts, and the check help names every status
+// the code can emit.
+func TestLedger_DOCK17(t *testing.T) {
+	usage := map[string][]string{
+		"docker_compose_check":   {"[PATH]", "--json", "--no-color"},
+		"docker_compose_scan":    {"[BASEDIR]", "-d", "--depth N", "-j", "--json", "--no-color"},
+		"docker_compose_upgrade": {"[PATH]", "--dry-run", "-f", "--force", "-y", "--yes", "--no-color"},
+		"docker_stop_all":        {"[-y]"},
+		"docker_start_all":       {"[-y]"},
+	}
+	for fn, words := range usage {
+		f, ok := registry.Lookup(fn)
+		require.True(t, ok, fn)
+		body := f.Help.Body
+		_, rest, found := strings.Cut(body, "USAGE\n")
+		require.True(t, found, fn)
+		line, _, _ := strings.Cut(rest, "\n")
+		for _, w := range words {
+			require.Contains(t, line, w, fn)
+		}
+		if strings.HasPrefix(fn, "docker_compose_") {
+			var want bytes.Buffer
+			help.Display(&want, false, f)
+			for _, arg := range []string{"-h", "--help"} {
+				out, errOut, rc := runUnit(t, runner.NewFake(t), nil, nil, nil, fn, arg)
+				require.Equal(t, 0, rc, fn)
+				require.Empty(t, errOut, fn)
+				require.Equal(t, want.String(), out, fn)
+			}
+		}
+	}
+	f, _ := registry.Lookup("docker_compose_check")
+	for _, st := range []string{"CURRENT", "UPDATE", "NOT_PULLED", "PINNED", "ERROR"} {
+		require.Contains(t, f.Help.Body, "  "+st+" ", st)
+	}
+	require.NotContains(t, f.Help.Body, "UP-TO-DATE")
+	require.Contains(t, f.Help.Body, "exit status is 0 whenever the report prints")
+	require.Contains(t, f.Help.Body, "the others anonymously")
+	for _, code := range []string{"dns_error", "connection_refused", "timeout", "ssl_error", "transport_error",
+		"unauthorized", "forbidden", "not_found", "rate_limited", "server_error", "http_NNN", "malformed_token",
+		"no_digest_in_response", "registry_unreachable", "invalid_reference"} {
+		require.Contains(t, f.Help.Body, code)
+	}
+	u, _ := registry.Lookup("docker_compose_upgrade")
+	require.Contains(t, u.Help.Body, "override files")
 }

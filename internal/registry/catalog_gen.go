@@ -632,7 +632,13 @@ var functions = []Function{
 			SeeAlso: "docker_compose_upgrade docker_compose_scan",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_check [PATH] [--json]\n" +
+				"  docker_compose_check [PATH] [--json] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  PATH        Directory with the compose file (default: current directory)\n" +
+				"  --json      JSON output for scripting; errors are JSON envelopes on stderr\n" +
+				"  --no-color  Disable ANSI colors (auto-off on pipe, NO_COLOR, GASH_HEADLESS)\n" +
+				"  -h, --help  Show this help\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Check for updates in current directory\n" +
@@ -645,14 +651,29 @@ var functions = []Function{
 				"  dcc --json\n" +
 				"\n" +
 				"STATUS CODES\n" +
-				"  UPDATE     New image available on registry\n" +
-				"  UP-TO-DATE Image matches remote digest\n" +
-				"  PINNED     Version is pinned (e.g. nginx:1.25.3), skipped\n" +
-				"  ERROR      Could not reach registry\n" +
+				"  CURRENT     Local image matches the remote digest\n" +
+				"  UPDATE      A newer image is on the registry\n" +
+				"  NOT_PULLED  The image is not pulled locally yet\n" +
+				"  PINNED      Digest pin or full version (e.g. nginx:1.25.3), not upgraded\n" +
+				"  ERROR       Registry unreachable, auth refused or invalid image reference\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Queries Docker Hub and GHCR registries to compare\n" +
-				"  local image digests with remote ones.",
+				"  Compose resolves the project files itself (compose.yaml first, override\n" +
+				"  files, COMPOSE_FILE); when `docker compose config` fails, the first of\n" +
+				"  compose.yaml, compose.yml, docker-compose.yml, docker-compose.yaml is\n" +
+				"  read.\n" +
+				"  Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN\n" +
+				"  is exchanged for a GHCR token), the others anonymously, answering a\n" +
+				"  Bearer challenge. Image variables come from the exported environment\n" +
+				"  and DIR/.env, with Compose's interpolation rules.\n" +
+				"  The exit status is 0 whenever the report prints, ERROR rows included.\n" +
+				"\n" +
+				"REGISTRY ERRORS\n" +
+				"  The error field of an ERROR row (--json) is one of: dns_error,\n" +
+				"  connection_refused, timeout, ssl_error, transport_error, unauthorized,\n" +
+				"  forbidden, not_found, rate_limited, server_error, http_NNN (another\n" +
+				"  status), malformed_token, no_digest_in_response, registry_unreachable,\n" +
+				"  invalid_reference (the image name does not parse).",
 		},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
 		CompletionComment: "Docker compose check/upgrade/scan: dirs + flags (incl. --no-color)",
@@ -682,7 +703,15 @@ var functions = []Function{
 			SeeAlso: "docker_compose_check docker_compose_upgrade",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_scan [BASEDIR] [--depth N] [--json]\n" +
+				"  docker_compose_scan [BASEDIR] [-d|--depth N] [-j|--json] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  BASEDIR     Base directory to scan (default: current directory)\n" +
+				"  -d, --depth N\n" +
+				"              Maximum search depth, a non-negative integer (default: 3)\n" +
+				"  -j, --json  JSON output for scripting\n" +
+				"  --no-color  Disable ANSI colors\n" +
+				"  -h, --help  Show this help (first word only)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Scan current directory for compose files\n" +
@@ -695,12 +724,15 @@ var functions = []Function{
 				"  dcscan /home/deploy --json\n" +
 				"\n" +
 				"  # Full audit: scan then check each project\n" +
-				"  dcscan /opt --depth 3",
+				"  dcscan /opt --depth 3\n" +
+				"\n" +
+				"NOTES\n" +
+				"  An unknown option is refused with exit status 1.",
 		},
 		Env: []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--depth --json --no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-d --depth -j --json --no-color --help\" -- \"$cur\")\n" +
 			"else\n" +
 			"    mapfile -t COMPREPLY < <(compgen -d -- \"$cur\")\n" +
 			"fi",
@@ -724,7 +756,15 @@ var functions = []Function{
 			SeeAlso: "docker_compose_check docker_compose_scan",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_compose_upgrade [PATH] [--dry-run] [--force]\n" +
+				"  docker_compose_upgrade [PATH] [--dry-run] [-f|--force] [-y|--yes] [--no-color]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  PATH        Directory with the compose file (default: current directory)\n" +
+				"  --dry-run   Show what would be done without executing\n" +
+				"  -f, --force Upgrade pinned versions too\n" +
+				"  -y, --yes   Skip the confirmation (required in headless mode)\n" +
+				"  --no-color  Disable ANSI colors\n" +
+				"  -h, --help  Show this help\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Upgrade services with mutable tags (latest, main, dev)\n" +
@@ -736,18 +776,22 @@ var functions = []Function{
 				"  # Force upgrade even for pinned versions\n" +
 				"  dcup2 --force\n" +
 				"\n" +
-				"  # Upgrade a specific project\n" +
-				"  dcup2 /opt/myapp\n" +
+				"  # Upgrade a specific project, no question asked\n" +
+				"  dcup2 /opt/myapp --yes\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Only upgrades services with mutable tags (latest, main, dev, etc.).\n" +
 				"  Pinned versions (e.g. nginx:1.25.3) are skipped unless --force is used.\n" +
-				"  Pulls new images, recreates affected containers, removes old images.",
+				"  Pulls new images, recreates affected containers, removes old images.\n" +
+				"  Compose runs in PATH with its own file discovery, so override files\n" +
+				"  (docker-compose.override.yml) and COMPOSE_FILE are honored.\n" +
+				"  Headless (GASH_HEADLESS=1) it refuses to run without --yes.\n" +
+				"  Declining the confirmation returns 1.",
 		},
 		Env: []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "PWD"},
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force --no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--dry-run --force -f --yes -y --no-color --help\" -- \"$cur\")\n" +
 			"else\n" +
 			"    mapfile -t COMPREPLY < <(compgen -d -- \"$cur\")\n" +
 			"fi",
@@ -793,6 +837,10 @@ var functions = []Function{
 		},
 		Fallback: &Usage{Program: "docker_prune_all", Usage: "docker_prune_all [-y] [--dry-run]", Description: "Remove all Docker containers, images, volumes and networks (asks first)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "docker_start_all",
@@ -813,17 +861,26 @@ var functions = []Function{
 			SeeAlso: "docker_stop_all",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_start_all\n" +
+				"  docker_start_all [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Start all stopped containers\n" +
 				"  daa\n" +
 				"\n" +
 				"  # Restart everything\n" +
-				"  dsa && daa",
+				"  dsa && daa\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Lists the stopped containers (Will start N container(s): NAMES)\n" +
+				"  and asks before acting; -y/--yes skips the question and is required\n" +
+				"  headless or without a terminal. Declining returns 1.",
 		},
-		Fallback: &Usage{Program: "docker_start_all", Usage: "docker_start_all", Description: "Start all stopped Docker containers."},
+		Fallback: &Usage{Program: "docker_start_all", Usage: "docker_start_all [-y]", Description: "Start all stopped Docker containers (asks first; -y skips)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "docker_stop_all",
@@ -844,17 +901,26 @@ var functions = []Function{
 			SeeAlso: "docker_start_all docker_prune_all",
 			Body: "" +
 				"USAGE\n" +
-				"  docker_stop_all\n" +
+				"  docker_stop_all [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Stop every running container\n" +
 				"  dsa\n" +
 				"\n" +
 				"  # Restart all containers: stop then start\n" +
-				"  dsa && daa",
+				"  dsa && daa\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Lists the running containers (Will stop N container(s): NAMES)\n" +
+				"  and asks before acting; -y/--yes skips the question and is required\n" +
+				"  headless or without a terminal. Declining returns 1.",
 		},
-		Fallback: &Usage{Program: "docker_stop_all", Usage: "docker_stop_all", Description: "Stop all running Docker containers."},
+		Fallback: &Usage{Program: "docker_stop_all", Usage: "docker_stop_all [-y]", Description: "Stop all running Docker containers (asks first; -y skips)."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "file_backup",
