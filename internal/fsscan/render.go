@@ -38,47 +38,9 @@ func sortSizeRows(rows []sizeRow) {
 	})
 }
 
-// escSizeList escapes a string for the files_largest/dirs_largest/
-// dirs_find_large JSON envelopes, which escaped only \ " \n \r \t and left
-// every other control byte, DEL and high byte raw (FS-10, reproduced).
-func escSizeList(s string) string {
-	return escSet(s, true)
-}
-
-// escEmpty escapes for the dirs_list_empty data array, which escaped \ " \t
-// \r only (FS-10).
-func escEmpty(s string) string {
-	return escSet(s, false)
-}
-
-func escSet(s string, withNL bool) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; c {
-		case '\\':
-			b.WriteString(`\\`)
-		case '"':
-			b.WriteString(`\"`)
-		case '\n':
-			if withNL {
-				b.WriteString(`\n`)
-			} else {
-				b.WriteByte(c)
-			}
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		default:
-			b.WriteByte(c)
-		}
-	}
-	return b.String()
-}
-
 // escFull is the full contract escaper (__gash_json_escape): \" \\ \n \r \t
-// \b \f and \u00xx for the other C0, used by tree_stats and the
-// dirs_list_empty path field.
+// \b \f and \u00xx for the other C0. Every string of the five scanner
+// envelopes goes through it (FS-10).
 func escFull(s string) string {
 	q := contract.Quote(s, contract.EscapeBash)
 	return q[1 : len(q)-1]
@@ -101,11 +63,11 @@ func renderSizeJSON(w io.Writer, rows []sizeRow, scanTime string, errCount int, 
 		b.WriteByte('"')
 		if r.mtime != "" {
 			b.WriteString(`,"mtime":"`)
-			b.WriteString(escSizeList(r.mtime))
+			b.WriteString(escFull(r.mtime))
 			b.WriteByte('"')
 		}
 		b.WriteString(`,"path":"`)
-		b.WriteString(escSizeList(r.path))
+		b.WriteString(escFull(r.path))
 		b.WriteString(`"}`)
 		total += r.bytes
 	}

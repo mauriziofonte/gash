@@ -10,7 +10,6 @@ package fsscan
 
 import (
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,50 +31,84 @@ func Register(t *invoke.Table) {
 	t.Handle("tree_stats", treeStats)
 }
 
-// findDepthMax is INT_MAX: a find -maxdepth above it makes GNU find refuse
-// its arguments, which 2.x reported as an empty success with errors 1
-// (FS-14).
-const findDepthMax = 2147483647
-
-// jsonPrescan reproduces the 2.x pre-scan that turns on JSON mode when any
-// word before "--" equals "--json", flag values included (FS-19).
-func jsonPrescan(args []string) bool {
-	for _, a := range args {
+// jsonPrescan turns on JSON mode before parsing when a word before "--"
+// is "--json", so errors met before it still get the JSON contract. The
+// word after each of the scanner's value flags is a value, never the flag
+// (FS-19): `--exclude --json` uses "--json" as the glob.
+func jsonPrescan(args []string, valueFlags ...string) bool {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		if a == "--" {
 			return false
 		}
 		if a == "--json" {
 			return true
 		}
+		for _, f := range valueFlags {
+			if a == f {
+				i++
+				break
+			}
+		}
 	}
 	return false
 }
 
-// isUint reports [[ s =~ ^[0-9]+$ ]] (ASCII digits, any length). A
-// non-ASCII digit of a UTF-8 locale never matches (FS-29).
-func isUint(s string) bool {
-	if s == "" {
-		return false
+// intHint is the hint of invalid_limit, invalid_depth and invalid_top in
+// every scanner (FS-49).
+const intHint = "Provide a non-negative integer (at most 9 digits)"
+
+// parseUint9 is the integer rule of every scanner flag (FS-05): 1 to 9
+// ASCII digits, read in base 10 (so "010" is 10). Non-ASCII digits never
+// match (FS-29).
+func parseUint9(s string) (int, bool) {
+	if s == "" || len(s) > 9 {
+		return 0, false
 	}
+	n := 0
 	for i := 0; i < len(s); i++ {
 		if s[i] < '0' || s[i] > '9' {
-			return false
+			return 0, false
 		}
+		n = n*10 + int(s[i]-'0')
 	}
-	return true
+	return n, true
 }
 
-// limitValue is an awk NR<=n cap: a run of digits of any length read in
-// base 10 (so "010" is 10), clamped to the platform int (FS-05).
-func limitValue(s string) int {
-	n, err := strconv.ParseInt(strings.TrimLeft(s, "0"), 10, 64)
-	if err != nil || n > math.MaxInt32<<8 {
-		if len(strings.TrimLeft(s, "0")) == 0 {
-			return 0
-		}
-		return math.MaxInt32 << 8
+// intFlag validates an integer flag value, or returns its invalid_* error.
+func intFlag(code, v string) (int, *fsError) {
+	n, ok := parseUint9(v)
+	if !ok {
+		return 0, errf(code, v, intHint)
 	}
-	return int(n)
+	return n, nil
+}
+
+// pathArgs is the one-PATH rule of the scanners (FS-04): the first bare
+// word is PATH; a second one, before or after "--", fails with
+// unexpected_argument.
+type pathArgs struct {
+	dir   string
+	taken bool
+}
+
+func (p *pathArgs) take(word string) *fsError {
+	if p.taken {
+		return errf("unexpected_argument", word, "Pass at most one PATH")
+	}
+	p.dir, p.taken = word, true
+	return nil
+}
+
+// rest handles the words after "--": the first is PATH, any other is an
+// unexpected_argument.
+func (p *pathArgs) rest(words []string) *fsError {
+	for _, w := range words {
+		if e := p.take(w); e != nil {
+			return e
+		}
+	}
+	return nil
 }
 
 // human is the tri-state of --human/--no-human: auto until set.
@@ -124,19 +157,22 @@ func scanTimer() func() string {
 	return func() string { return formatElapsed(nowClock().Sub(t0).Milliseconds()) }
 }
 
+// rootUnreadable is the error of a scan root that cannot be listed
+// (FS-14), worded as the safe_path check.
+func rootUnreadable(input, home string) *fsError {
+	return errf("path_unreadable", "Path '"+expandHome(input, home)+"' is not readable", "Check directory permissions")
+}
+
 // --- files_largest ---------------------------------------------------------
 
 func filesLargest(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	// The --json pre-scan sets the mode before the loop and is never reset,
-	// so a --json seen as a flag value still turns on JSON output and the
-	// JSON error contract (FS-19, reproduced).
-	jsonMode := jsonPrescan(c.Args)
+	jsonMode := jsonPrescan(c.Args, "-n", "--limit", "--min-size", "--exclude", "--depth", "--max-depth")
 	s := ui.StyleOf(c.Term, false)
 
-	dir := "."
+	pa := pathArgs{dir: "."}
 	limit := 100
 	var minInput, depthInput string
 	noIgnore, xdev, follow, allowRoot := false, false, false, false
@@ -153,10 +189,11 @@ func filesLargest(c *invoke.Call) int {
 			if !ok {
 				return missingValue(a).emit(c.Stderr, s, jsonMode)
 			}
-			if !isUint(v) {
-				return errf("invalid_limit", v, "Provide a positive integer").emit(c.Stderr, s, jsonMode)
+			n, e := intFlag("invalid_limit", v)
+			if e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
-			limit = limitValue(v)
+			limit = n
 		case "--min-size":
 			v, ok := next(args, &i)
 			if !ok {
@@ -201,77 +238,71 @@ func filesLargest(c *invoke.Call) int {
 				return 0
 			}
 		case "--":
-			if i+1 < len(args) {
-				dir = args[i+1]
+			if e := pa.rest(args[i+1:]); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
 			i = len(args)
 		default:
 			if strings.HasPrefix(a, "-") {
 				return errf("unknown_option", a, "Use --help to see valid flags").emit(c.Stderr, s, jsonMode)
 			}
-			dir = a
+			if e := pa.take(a); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
+			}
 		}
 	}
 
 	var minBytes int64
 	if minInput != "" {
-		sz, ok := ParseSize(minInput)
-		if !ok || sz.Wrapped {
+		n, ok := ParseSize(minInput)
+		if !ok {
 			return errf("invalid_size", minInput, "Use a size like 10M, 1G, 500K").emit(c.Stderr, s, jsonMode)
 		}
-		minBytes = sz.Bytes
+		minBytes = n
 	}
 	maxDepth := -1
-	depthOverflow := false
 	if depthInput != "" {
-		if !isUint(depthInput) {
-			return errf("invalid_depth", depthInput, "Provide a non-negative integer").emit(c.Stderr, s, jsonMode)
+		d, e := intFlag("invalid_depth", depthInput)
+		if e != nil {
+			return e.emit(c.Stderr, s, jsonMode)
 		}
-		d, _ := strconv.ParseInt(depthInput, 10, 64)
-		if d > findDepthMax {
-			depthOverflow = true
-		} else {
-			maxDepth = int(d)
-		}
+		maxDepth = d
 	}
 
 	home, pwd := callEnv(c)
-	root, fe := safePath(dir, home, pwd, allowRoot)
+	root, fe := safePath(pa.dir, home, pwd, allowRoot)
 	if fe != nil {
 		return fe.emit(c.Stderr, s, jsonMode)
 	}
 	human := hm.resolve(jsonMode, nullMode)
 	elapsed := scanTimer()
 
+	res := findWalk(walkOpts{
+		root: root, follow: follow, xdev: xdev, maxDepth: maxDepth,
+		noIgnore: noIgnore, excludes: excludes,
+	}, func(e entry) bool { return e.isRegular && e.size >= minBytes })
+	if res.rootErr {
+		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
+	}
 	var rows []sizeRow
-	errCount := 0
-	if depthOverflow {
-		errCount = 1 // find refused the argument (FS-14)
-	} else {
-		res := findWalk(walkOpts{
-			root: root, follow: follow, xdev: xdev, maxDepth: maxDepth,
-			noIgnore: noIgnore, excludes: excludes, skipTab: true, skipNL: true,
-		}, func(e entry) bool { return e.isRegular && e.size >= minBytes })
-		errCount = res.errors
-		for _, e := range res.entries {
-			rows = append(rows, sizeRow{bytes: e.size, mtime: mtimeFmt(e.mtime), path: e.abs})
-		}
-		sortSizeRows(rows)
-		if limit < len(rows) {
-			rows = rows[:limit]
-		}
+	for _, e := range res.entries {
+		rows = append(rows, sizeRow{bytes: e.size, mtime: mtimeFmt(e.mtime), path: e.abs})
+	}
+	sortSizeRows(rows)
+	if limit < len(rows) {
+		rows = rows[:limit]
 	}
 	st := elapsed()
 
 	switch {
 	case jsonMode:
-		renderSizeJSON(c.Stdout, rows, st, errCount, "files")
+		renderSizeJSON(c.Stdout, rows, st, res.errors, "files")
 	case nullMode:
 		renderSizeNull(c.Stdout, rows)
 	default:
 		s = ui.StyleOf(c.Term, noColor)
 		renderSizeText(c.Stdout, s, rows, human, "files", st, root, "")
-		scanWarn(c.Stderr, s, errCount, false)
+		scanWarn(c.Stderr, s, res.errors, false)
 	}
 	return 0
 }
@@ -291,68 +322,7 @@ func mtimeFmt(t interface{ Format(string) string }) string {
 	return t.Format("2006-01-02 15:04")
 }
 
-// isEmptyDir reports `find -type d -empty`: a directory that reads back no
-// entries. An unreadable directory is not empty (find would report an error,
-// not an empty hit).
-func isEmptyDir(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	names, err := f.Readdirnames(1)
-	if err != nil && err != io.EOF {
-		return false
-	}
-	return len(names) == 0
-}
-
-// parseDuDepth validates a du -d depth under the FS-05/FS-21 rule: ASCII
-// digits only, base 10, no leading zero except "0" itself, at most
-// 9223372036854775807. A rejected value gets invalid_depth with the
-// scanner's 2.x hint. Those meanings 2.x took from Bash arithmetic (octal,
-// base errors, 64-bit wrap) are a forced divergence; Go never evaluates a
-// user string as arithmetic.
-func parseDuDepth(s, hint string) (int64, *fsError) {
-	if !isUint(s) {
-		return 0, errf("invalid_depth", s, hint)
-	}
-	if len(s) > 1 && s[0] == '0' {
-		return 0, errf("invalid_depth", s, hint)
-	}
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, errf("invalid_depth", s, hint)
-	}
-	return n, nil
-}
-
-// substrExcludes reproduces the awk post-filter of dirs_largest and
-// dirs_find_large, which joined the --exclude values with '|' and split them
-// again, then dropped any path that contains one as a substring (FS-12: the
-// du globs filter the walk, these substrings filter the surviving list).
-func substrExcludes(excludes []string) []string {
-	joined := strings.Join(excludes, "|")
-	var out []string
-	for _, p := range strings.Split(joined, "|") {
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func pathHasSubstr(subs []string, abs string) bool {
-	for _, s := range subs {
-		if strings.Contains(abs, s) {
-			return true
-		}
-	}
-	return false
-}
-
-// newestFileMtime is `find DIR -maxdepth 10 -type f -printf '%T@\t%TY-..' |
-// sort -nr | head -1`: the newest regular file within ten levels of dir,
+// newestFileMtime is the newest regular file within ten levels of dir,
 // formatted in local time, or "N/A" when there is none. No prunes, no -xdev,
 // symlinks not followed (find -type f without -L).
 func newestFileMtime(dir string) string {
@@ -392,10 +362,10 @@ func dirsLargest(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	jsonMode := jsonPrescan(c.Args)
+	jsonMode := jsonPrescan(c.Args, "-n", "--limit", "--depth", "--max-depth", "--min-size", "--exclude")
 	s := ui.StyleOf(c.Term, false)
 
-	dir := "."
+	pa := pathArgs{dir: "."}
 	limit := 100
 	depthInput := "1"
 	var minInput string
@@ -413,10 +383,11 @@ func dirsLargest(c *invoke.Call) int {
 			if !ok {
 				return missingValue(a).emit(c.Stderr, s, jsonMode)
 			}
-			if !isUint(v) {
-				return errf("invalid_limit", v, "Provide a positive integer").emit(c.Stderr, s, jsonMode)
+			n, e := intFlag("invalid_limit", v)
+			if e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
-			limit = limitValue(v)
+			limit = n
 		case "--depth", "--max-depth":
 			v, ok := next(args, &i)
 			if !ok {
@@ -459,50 +430,51 @@ func dirsLargest(c *invoke.Call) int {
 				return 0
 			}
 		case "--":
-			if i+1 < len(args) {
-				dir = args[i+1]
+			if e := pa.rest(args[i+1:]); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
 			i = len(args)
 		default:
 			if strings.HasPrefix(a, "-") {
 				return errf("unknown_option", a, "Use --help to see valid flags").emit(c.Stderr, s, jsonMode)
 			}
-			dir = a
+			if e := pa.take(a); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
+			}
 		}
 	}
 
-	depth, fe := parseDuDepth(depthInput, "Provide a positive integer")
+	depth, fe := intFlag("invalid_depth", depthInput)
 	if fe != nil {
 		return fe.emit(c.Stderr, s, jsonMode)
 	}
 	if depth < 1 {
-		depth = 1
+		depth = 1 // documented: 0 means 1 (FS-44)
 	}
 	var minBytes int64
 	if minInput != "" {
-		sz, ok := ParseSize(minInput)
-		if !ok || sz.Wrapped {
+		n, ok := ParseSize(minInput)
+		if !ok {
 			return errf("invalid_size", minInput, "Use a size like 10M, 1G").emit(c.Stderr, s, jsonMode)
 		}
-		minBytes = sz.Bytes
+		minBytes = n
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(dir, home, pwd, allowRoot)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
 	human := hm.resolve(jsonMode, nullMode)
 	elapsed := scanTimer()
 
-	res := duWalk(duOpts{root: root, xdev: xdev, maxDepth: int(depth), noIgnore: noIgnore, excludes: excludes})
-	subs := substrExcludes(excludes)
+	res := duWalk(duOpts{root: root, xdev: xdev, maxDepth: depth, noIgnore: noIgnore, excludes: excludes})
+	if res.rootErr {
+		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
+	}
 	var rows []sizeRow
 	for _, d := range res.dirs {
 		if d.abs == root { // drop the root operand (du prints it last)
-			continue
-		}
-		if pathHasSubstr(subs, d.abs) {
 			continue
 		}
 		bytes := d.kib * 1024
@@ -536,10 +508,10 @@ func dirsFindLarge(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	jsonMode := jsonPrescan(c.Args)
+	jsonMode := jsonPrescan(c.Args, "--size", "--depth", "--max-depth", "-n", "--limit", "--exclude")
 	s := ui.StyleOf(c.Term, false)
 
-	dir := "."
+	pa := pathArgs{dir: "."}
 	sizeThreshold := "20M"
 	depthInput := ""
 	limit := 1000
@@ -569,10 +541,11 @@ func dirsFindLarge(c *invoke.Call) int {
 			if !ok {
 				return missingValue(a).emit(c.Stderr, s, jsonMode)
 			}
-			if !isUint(v) {
-				return errf("invalid_limit", v, "Provide a positive integer").emit(c.Stderr, s, jsonMode)
+			n, e := intFlag("invalid_limit", v)
+			if e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
-			limit = limitValue(v)
+			limit = n
 		case "--exclude":
 			v, ok := next(args, &i)
 			if !ok {
@@ -605,40 +578,39 @@ func dirsFindLarge(c *invoke.Call) int {
 				return 0
 			}
 		case "--":
-			if i+1 < len(args) {
-				dir = args[i+1]
+			if e := pa.rest(args[i+1:]); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
 			i = len(args)
 		default:
 			if strings.HasPrefix(a, "-") {
 				return errf("unknown_option", a, "Use --help to see valid flags").emit(c.Stderr, s, jsonMode)
 			}
-			dir = a
+			if e := pa.take(a); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
+			}
 		}
 	}
 
 	// Order matches 2.x: size, then limit, then depth.
-	sz, ok := ParseSize(sizeThreshold)
-	if !ok || sz.Wrapped {
+	threshold, ok := ParseSize(sizeThreshold)
+	if !ok || threshold > maxInt64-1023 { // (bytes+1023)/1024 must not overflow (FS-22)
 		return errf("invalid_size", sizeThreshold, "Use a size like 20M, 1G, 500K").emit(c.Stderr, s, jsonMode)
 	}
-	if sz.Bytes > maxInt64-1023 { // (bytes+1023)/1024 would overflow (FS-22)
-		return errf("invalid_size", sizeThreshold, "Use a size like 20M, 1G, 500K").emit(c.Stderr, s, jsonMode)
-	}
-	thresholdKiB := (sz.Bytes + 1023) / 1024
+	thresholdKiB := (threshold + 1023) / 1024
 	maxDepth := -1
 	if depthInput != "" {
-		depth, fe := parseDuDepth(depthInput, "Provide a non-negative integer")
+		depth, fe := intFlag("invalid_depth", depthInput)
 		if fe != nil {
 			return fe.emit(c.Stderr, s, jsonMode)
 		}
-		if depth > 0 { // 0 (and no flag) means unbounded
-			maxDepth = int(depth)
+		if depth > 0 { // 0 (and no flag) means unbounded (FS-45)
+			maxDepth = depth
 		}
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(dir, home, pwd, allowRoot)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
@@ -646,7 +618,9 @@ func dirsFindLarge(c *invoke.Call) int {
 	elapsed := scanTimer()
 
 	res := duWalk(duOpts{root: root, xdev: xdev, maxDepth: maxDepth, noIgnore: noIgnore, excludes: excludes})
-	subs := substrExcludes(excludes)
+	if res.rootErr {
+		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
+	}
 	var rows []sizeRow
 	for _, d := range res.dirs {
 		if d.abs == root {
@@ -655,14 +629,12 @@ func dirsFindLarge(c *invoke.Call) int {
 		if d.kib < thresholdKiB {
 			continue
 		}
-		if pathHasSubstr(subs, d.abs) {
-			continue
-		}
 		rows = append(rows, sizeRow{bytes: d.kib * 1024, path: d.abs})
 	}
-	// 2.x sorts the `bytes\tpath` lines (no mtime yet), ties by the whole
-	// line in C byte order descending, then caps at the limit; --with-mtime
-	// enrichment happens afterwards (so mtime is never part of the sort key).
+	// Size descending, ties by the `bytes\tpath` text in C byte order
+	// descending (FS-28), then the limit; --with-mtime enrichment happens
+	// afterwards, so mtime is never part of the sort key. A path is never
+	// split once read (FS-09).
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].bytes != rows[j].bytes {
 			return rows[i].bytes > rows[j].bytes
@@ -674,13 +646,9 @@ func dirsFindLarge(c *invoke.Call) int {
 	if limit < len(rows) {
 		rows = rows[:limit]
 	}
-	// Enrich / truncate: with --with-mtime keep the full path and the newest
-	// file's time; without it the path is cut at its first tab (FS-09).
-	for i := range rows {
-		if withMtime {
+	if withMtime {
+		for i := range rows {
 			rows[i].mtime = newestFileMtime(rows[i].path)
-		} else if idx := strings.IndexByte(rows[i].path, '\t'); idx >= 0 {
-			rows[i].path = rows[i].path[:idx]
 		}
 	}
 	st := elapsed()
@@ -705,10 +673,10 @@ func dirsListEmpty(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	jsonMode := jsonPrescan(c.Args)
+	jsonMode := jsonPrescan(c.Args, "--min-depth", "--depth", "--max-depth", "--exclude")
 	s := ui.StyleOf(c.Term, false)
 
-	dir := "."
+	pa := pathArgs{dir: "."}
 	var minDepthInput, maxDepthInput string
 	ignoreDotfiles, noIgnore, xdev, allowRoot := false, false, false, false
 	nullMode, countOnly := false, false
@@ -758,68 +726,60 @@ func dirsListEmpty(c *invoke.Call) int {
 				return 0
 			}
 		case "--":
-			if i+1 < len(args) {
-				dir = args[i+1]
+			if e := pa.rest(args[i+1:]); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
 			i = len(args)
 		default:
 			if strings.HasPrefix(a, "-") {
 				return errf("unknown_option", a, "Use --help to see valid flags").emit(c.Stderr, s, jsonMode)
 			}
-			dir = a
+			if e := pa.take(a); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
+			}
 		}
 	}
 
 	minDepth := 0
 	if minDepthInput != "" {
-		if !isUint(minDepthInput) {
-			return errf("invalid_depth", minDepthInput, "Provide a non-negative integer").emit(c.Stderr, s, jsonMode)
+		d, e := intFlag("invalid_depth", minDepthInput)
+		if e != nil {
+			return e.emit(c.Stderr, s, jsonMode)
 		}
-		minDepth = int(limitValue(minDepthInput))
+		minDepth = d
 	}
 	maxDepth := -1
-	depthOverflow := false
 	if maxDepthInput != "" {
-		if !isUint(maxDepthInput) {
-			return errf("invalid_depth", maxDepthInput, "Provide a non-negative integer").emit(c.Stderr, s, jsonMode)
+		d, e := intFlag("invalid_depth", maxDepthInput)
+		if e != nil {
+			return e.emit(c.Stderr, s, jsonMode)
 		}
-		// find -mindepth/-maxdepth read decimal; a value above INT_MAX (or
-		// above int64) makes GNU find refuse its arguments (FS-14).
-		d, err := strconv.ParseInt(maxDepthInput, 10, 64)
-		if err != nil || d > findDepthMax {
-			depthOverflow = true
-		} else {
-			maxDepth = int(d)
-		}
+		maxDepth = d
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(dir, home, pwd, allowRoot)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
 
-	var paths []string
-	errCount := 0
-	if depthOverflow {
-		errCount = 1 // GNU find prints one line for the bad -maxdepth arg
-	} else {
-		res := findWalk(walkOpts{
-			root: root, xdev: xdev, maxDepth: maxDepth, minDepth: minDepth,
-			noIgnore: noIgnore, excludes: excludes, skipNL: true, rawOrder: true,
-		}, func(e entry) bool {
-			if !e.isDir || !isEmptyDir(e.abs) {
-				return false
-			}
-			if ignoreDotfiles && strings.HasPrefix(filepath.Base(e.abs), ".") {
-				return false
-			}
-			return true
-		})
-		errCount = res.errors * 2 // GNU find reports each unreadable dir twice (FS-15)
-		for _, e := range res.entries {
-			paths = append(paths, e.abs)
+	// --min-depth only filters the output: the prunes and excludes apply at
+	// every level during the walk (FS-13).
+	res := findWalk(walkOpts{
+		root: root, xdev: xdev, maxDepth: maxDepth,
+		noIgnore: noIgnore, excludes: excludes, rawOrder: true, needEmpty: true,
+	}, func(e entry) bool {
+		if e.depth < minDepth || !e.isDir || !e.empty {
+			return false
 		}
+		return !(ignoreDotfiles && strings.HasPrefix(filepath.Base(e.abs), "."))
+	})
+	if res.rootErr {
+		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
+	}
+	paths := make([]string, 0, len(res.entries))
+	for _, e := range res.entries {
+		paths = append(paths, e.abs)
 	}
 
 	switch {
@@ -830,15 +790,15 @@ func dirsListEmpty(c *invoke.Call) int {
 			if i > 0 {
 				b.WriteByte(',')
 			}
-			b.WriteString(`"` + escEmpty(p) + `"`)
+			b.WriteString(`"` + escFull(p) + `"`)
 		}
 		b.WriteString(`],"count":` + strconv.Itoa(len(paths)))
 		b.WriteString(`,"path":"` + escFull(root) + `"`)
-		b.WriteString(`,"errors":` + strconv.Itoa(errCount) + "}\n")
+		b.WriteString(`,"errors":` + strconv.Itoa(res.errors) + "}\n")
 		_, _ = io.WriteString(c.Stdout, b.String())
 	case countOnly:
 		_, _ = io.WriteString(c.Stdout, strconv.Itoa(len(paths))+"\n")
-		scanWarn(c.Stderr, s, errCount, false)
+		scanWarn(c.Stderr, s, res.errors, false)
 	case nullMode:
 		var b strings.Builder
 		for _, p := range paths {
@@ -846,12 +806,16 @@ func dirsListEmpty(c *invoke.Call) int {
 			b.WriteByte(0)
 		}
 		_, _ = io.WriteString(c.Stdout, b.String())
-		scanWarn(c.Stderr, s, errCount, false)
+		scanWarn(c.Stderr, s, res.errors, false)
 	default:
-		// 2.x `printf '%s\n' "$output"`: the paths joined by newlines with a
-		// trailing newline, or one blank line when none were found (FS-18).
-		_, _ = io.WriteString(c.Stdout, strings.Join(paths, "\n")+"\n")
-		scanWarn(c.Stderr, s, errCount, false)
+		// One path per line; nothing at all when none was found (FS-18).
+		var b strings.Builder
+		for _, p := range paths {
+			b.WriteString(p)
+			b.WriteByte('\n')
+		}
+		_, _ = io.WriteString(c.Stdout, b.String())
+		scanWarn(c.Stderr, s, res.errors, false)
 	}
 	return 0
 }

@@ -48,7 +48,8 @@ stdout '^  By size$'
 # --- :120 invalid-top
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; tree_stats --top x .'
 stderr 'Error: invalid_top: x'
-stderr 'Hint: Provide a positive integer'
+# 3.0: FS-49 fixed (the hint names the real range)
+stderr 'Hint: Provide a non-negative integer \(at most 9 digits\)'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; tree_stats --top x .'

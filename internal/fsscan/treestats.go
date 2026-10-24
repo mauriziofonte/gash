@@ -4,21 +4,18 @@ package fsscan
 
 import (
 	"io"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
-	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 // extCount is one extension's running totals during the tree_stats walk.
 type extCount struct {
-	ext   string // the full extension as computed (may contain a tab, FS-17)
+	ext   string // the extension, one value (FS-17)
 	count int64
 	size  int64
 }
@@ -72,10 +69,10 @@ func treeStats(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	jsonMode := jsonPrescan(c.Args)
+	jsonMode := jsonPrescan(c.Args, "--depth", "--max-depth", "--top", "--exclude")
 	s := ui.StyleOf(c.Term, false)
 
-	dir := "."
+	pa := pathArgs{dir: "."}
 	var depthInput string
 	topInput := "5"
 	noIgnore, xdev, follow, allowRoot := false, false, false, false
@@ -124,79 +121,75 @@ func treeStats(c *invoke.Call) int {
 				return 0
 			}
 		case "--":
-			if i+1 < len(args) {
-				dir = args[i+1]
+			if e := pa.rest(args[i+1:]); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
 			}
 			i = len(args)
 		default:
 			if strings.HasPrefix(a, "-") {
 				return errf("unknown_option", a, "Use --help to see valid flags").emit(c.Stderr, s, jsonMode)
 			}
-			dir = a
+			if e := pa.take(a); e != nil {
+				return e.emit(c.Stderr, s, jsonMode)
+			}
 		}
 	}
 
 	maxDepth := -1
-	depthOverflow := false
 	if depthInput != "" {
-		if !isUint(depthInput) {
-			return errf("invalid_depth", depthInput, "Provide a non-negative integer").emit(c.Stderr, s, jsonMode)
+		d, e := intFlag("invalid_depth", depthInput)
+		if e != nil {
+			return e.emit(c.Stderr, s, jsonMode)
 		}
-		d, err := strconv.ParseInt(depthInput, 10, 64)
-		if err != nil || d > findDepthMax {
-			depthOverflow = true
-		} else {
-			maxDepth = int(d)
-		}
+		maxDepth = d
 	}
-	if !isUint(topInput) {
-		return errf("invalid_top", topInput, "Provide a positive integer").emit(c.Stderr, s, jsonMode)
+	topN, te := intFlag("invalid_top", topInput)
+	if te != nil {
+		return te.emit(c.Stderr, s, jsonMode)
 	}
-	topN := int(limitValue(topInput))
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(dir, home, pwd, allowRoot)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
 	elapsed := scanTimer()
 
+	// One walk counts files, directories, sizes, extensions and empty
+	// directories with the same prunes, excludes, -L and tab/newline rule,
+	// so empty_dirs equals dirs_list_empty --count (FS-08, FS-16).
+	res := findWalk(walkOpts{
+		root: root, follow: follow, xdev: xdev, maxDepth: maxDepth,
+		noIgnore: noIgnore, excludes: excludes, needEmpty: true,
+	}, func(e entry) bool { return e.isDir || e.isRegular })
+	if res.rootErr {
+		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
+	}
 	var filesTotal, dirsTotal, sizeTotal, maxDepthVal int64
 	exts := map[string]*extCount{}
-	errCount := 0
 	emptyCount := 0
-	if depthOverflow {
-		errCount = 1 // find refused the -maxdepth argument (FS-14)
-	} else {
-		res := findWalk(walkOpts{
-			root: root, follow: follow, xdev: xdev, maxDepth: maxDepth,
-			noIgnore: noIgnore, excludes: excludes, skipNL: true,
-		}, func(e entry) bool { return e.isDir || e.isRegular })
-		errCount = res.errors
-		for _, e := range res.entries {
-			if d := int64(strings.Count(e.rel, "/")); d > maxDepthVal {
-				maxDepthVal = d
+	for _, e := range res.entries {
+		if d := int64(strings.Count(e.rel, "/")); d > maxDepthVal {
+			maxDepthVal = d
+		}
+		switch {
+		case e.isRegular:
+			filesTotal++
+			sizeTotal += e.size
+			key := extOf(baseName(e.rel))
+			ec := exts[key]
+			if ec == nil {
+				ec = &extCount{ext: key}
+				exts[key] = ec
 			}
-			switch {
-			case e.isRegular:
-				filesTotal++
-				sizeTotal += e.size
-				key := extOf(baseName(e.rel))
-				ec := exts[key]
-				if ec == nil {
-					ec = &extCount{ext: key}
-					exts[key] = ec
-				}
-				ec.count++
-				ec.size += e.size
-			case e.isDir:
-				dirsTotal++
+			ec.count++
+			ec.size += e.size
+		case e.isDir:
+			dirsTotal++
+			if e.empty {
+				emptyCount++
 			}
 		}
-		emptyCount = treeEmptyCount(walkOpts{
-			root: root, xdev: xdev, maxDepth: maxDepth,
-			noIgnore: noIgnore, excludes: excludes,
-		})
 	}
 	var avg int64
 	if filesTotal > 0 {
@@ -204,6 +197,7 @@ func treeStats(c *invoke.Call) int {
 	}
 	topCount, topSize := topExtensions(exts, topN)
 	st := elapsed()
+	errCount := res.errors
 
 	if jsonMode {
 		renderTreeJSON(c.Stdout, root, filesTotal, dirsTotal, sizeTotal, avg,
@@ -267,85 +261,8 @@ func topExtensions(exts map[string]*extCount, topN int) (byCount, bySize []extCo
 	return cnt, sz
 }
 
-// treeEmptyCount reproduces the second find of tree_stats:
-// `find ROOT [-xdev] [-maxdepth N] PRUNES -type d -empty | wc -l`, with no
-// -L, no newline test and find's implicit -print of every pruned entry and
-// every --exclude match, files included (FS-16, FS-08). The count is the
-// number of stderr-free output lines, so a printed path with an embedded
-// newline adds a line. Walk errors are discarded (sent to /dev/null).
-func treeEmptyCount(o walkOpts) int {
-	pruneNames := map[string]bool{}
-	if !o.noIgnore {
-		for _, n := range defaultPrune {
-			pruneNames[n] = true
-		}
-	}
-	var rootDev uint64
-	if o.xdev {
-		if st, err := os.Stat(o.root); err == nil {
-			rootDev = deviceOf(st)
-		}
-	}
-	lines := 0
-	printEntry := func(abs string) { lines += 1 + strings.Count(abs, "\n") }
-
-	var visit func(abs string, depth int)
-	visit = func(abs string, depth int) {
-		info, err := os.Lstat(abs)
-		if err != nil {
-			return
-		}
-		isDir := info.IsDir()
-		if o.follow && info.Mode()&os.ModeSymlink != 0 {
-			if st, e := os.Stat(abs); e == nil {
-				isDir = st.IsDir()
-			}
-		}
-		// Prune clause: a default-prune directory, or any --exclude -path
-		// match (files too), is printed and not descended.
-		if isDir && pruneNames[filepath.Base(abs)] {
-			printEntry(abs)
-			return
-		}
-		for _, ex := range o.excludes {
-			if ex != "" && pathguard.MatchGlobSegment(ex, abs) {
-				printEntry(abs)
-				return
-			}
-		}
-		if isDir && isEmptyDir(abs) {
-			printEntry(abs)
-		}
-		if !isDir {
-			return
-		}
-		if o.maxDepth >= 0 && depth >= o.maxDepth {
-			return
-		}
-		names, err := readDirNames(abs)
-		if err != nil {
-			return
-		}
-		for _, name := range names {
-			child := filepath.Join(abs, name)
-			ci, cerr := os.Lstat(child)
-			if cerr != nil {
-				continue
-			}
-			if o.xdev && ci.IsDir() && deviceOf(ci) != rootDev {
-				continue
-			}
-			visit(child, depth+1)
-		}
-	}
-	visit(o.root, 0)
-	return lines
-}
-
-// renderTreeJSON writes the one-line tree_stats envelope. A tab inside an
-// extension is split into ext, count and size exactly as the 2.x
-// `IFS=$'\t' read -r ext cnt sz` did, so such a row stays byte-for-byte (and
-// invalid JSON) as in 2.x (FS-17).
+// renderTreeJSON writes the one-line tree_stats envelope. Each extension is
+// one value, encoded with the contract escaper (FS-17).
 func renderTreeJSON(w io.Writer, root string, files, dirs, size, avg, maxDepth int64,
 	empty int, byCount, bySize []extCount, scanTime string, errCount int) {
 	var b strings.Builder
@@ -370,53 +287,18 @@ func renderTreeJSON(w io.Writer, root string, files, dirs, size, avg, maxDepth i
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		ext, cnt, sz := splitExt3(e.ext, e.count, e.size)
-		b.WriteString(`{"ext":"` + escFull(ext) + `","count":` + cnt + `,"size":` + sz + `}`)
+		b.WriteString(`{"ext":"` + escFull(e.ext) + `","count":` + strconv.FormatInt(e.count, 10) +
+			`,"size":` + strconv.FormatInt(e.size, 10) + `}`)
 	}
 	b.WriteString(`],"top_by_size":[`)
 	for i, e := range bySize {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		ext, sz := splitExt2(e.ext, e.size)
-		b.WriteString(`{"ext":"` + escFull(ext) + `","size":` + sz + `}`)
+		b.WriteString(`{"ext":"` + escFull(e.ext) + `","size":` + strconv.FormatInt(e.size, 10) + `}`)
 	}
 	b.WriteString(`]},"scan_time":"` + scanTime + `","errors":` + strconv.Itoa(errCount) + "}\n")
 	_, _ = io.WriteString(w, b.String())
-}
-
-// splitExt3 emulates `IFS=$'\t' read -r ext cnt sz` over the TSV row
-// `EXT\tCOUNT\tSIZE`: ext is the first tab field, cnt the second, sz the
-// rest; an empty field becomes "0" (the shell's `${v:-0}`).
-func splitExt3(ext string, count, size int64) (string, string, string) {
-	row := ext + "\t" + strconv.FormatInt(count, 10) + "\t" + strconv.FormatInt(size, 10)
-	f := strings.SplitN(row, "\t", 3)
-	e, cnt, sz := f[0], "", ""
-	if len(f) > 1 {
-		cnt = f[1]
-	}
-	if len(f) > 2 {
-		sz = f[2]
-	}
-	return e, zeroDefault(cnt), zeroDefault(sz)
-}
-
-// splitExt2 emulates `IFS=$'\t' read -r ext sz` over `EXT\tSIZE`.
-func splitExt2(ext string, size int64) (string, string) {
-	row := ext + "\t" + strconv.FormatInt(size, 10)
-	f := strings.SplitN(row, "\t", 2)
-	e, sz := f[0], ""
-	if len(f) > 1 {
-		sz = f[1]
-	}
-	return e, zeroDefault(sz)
-}
-
-func zeroDefault(s string) string {
-	if s == "" {
-		return "0"
-	}
-	return s
 }
 
 // renderTreePlain is the non-color tree_stats layout: a heading, the KV
@@ -438,8 +320,7 @@ func renderTreePlain(w io.Writer, s ui.Style, root string, files, dirs, size, av
 		s.Heading(w, "--indent", "2", "Top "+strconv.Itoa(topN)+" extensions by count:")
 		rows := make([]string, 0, len(byCount))
 		for _, e := range byCount {
-			ext, cnt, sz := splitExt3(e.ext, e.count, e.size)
-			rows = append(rows, ext+"\t"+cnt+"\tfiles\t"+ui.HumanSize(sz))
+			rows = append(rows, e.ext+"\t"+strconv.FormatInt(e.count, 10)+"\tfiles\t"+ui.HumanBytes(e.size))
 		}
 		s.Table(w, rows, "--no-header", "--indent", "4", "--gap", "1",
 			"--min", "1:12", "--right", "2", "--min", "2:6", "--min", "3:6", "--color", "1:accent")
@@ -449,16 +330,15 @@ func renderTreePlain(w io.Writer, s ui.Style, root string, files, dirs, size, av
 		s.Heading(w, "--indent", "2", "Top "+strconv.Itoa(topN)+" extensions by size:")
 		rows := make([]string, 0, len(bySize))
 		for _, e := range bySize {
-			ext, sz := splitExt2(e.ext, e.size)
-			rows = append(rows, ext+"\t"+ui.HumanSize(sz))
+			rows = append(rows, e.ext+"\t"+ui.HumanBytes(e.size))
 		}
 		s.Table(w, rows, "--no-header", "--indent", "4", "--gap", "1", "--min", "1:12", "--color", "1:accent")
 	}
 }
 
 // renderTreeRich is __gash_fs_tree_stats_rich: the summary grid, then the top
-// extensions by size and by count with share bars. The percentage uses
-// integer handling (never Bash arithmetic on a tab-broken field).
+// extensions by size and by count with share bars. Counts and sizes are
+// integers end to end: no text from a file name is ever evaluated (FS-50).
 func renderTreeRich(w io.Writer, s ui.Style, root string, files, dirs, size, avg, maxDepth int64,
 	empty int, topN int, byCount, bySize []extCount, scanTime string) {
 	_, _ = io.WriteString(w, "\n")
@@ -476,9 +356,8 @@ func renderTreeRich(w io.Writer, s ui.Style, root string, files, dirs, size, avg
 
 	width := 8
 	for _, e := range append(append([]extCount{}, bySize...), byCount...) {
-		ext, _ := splitExt2(e.ext, e.size)
-		if ui.Len(ext) > width {
-			width = ui.Len(ext)
+		if ui.Len(e.ext) > width {
+			width = ui.Len(e.ext)
 		}
 	}
 	topts := []string{"--no-header", "--indent", "2", "--min", "1:" + strconv.Itoa(width),
@@ -490,10 +369,8 @@ func renderTreeRich(w io.Writer, s ui.Style, root string, files, dirs, size, avg
 		s.Heading(w, "--indent", "2", "By size")
 		rows := make([]string, 0, len(bySize))
 		for _, e := range bySize {
-			ext, szStr := splitExt2(e.ext, e.size)
-			sz := int64(ui.Int(szStr))
-			rows = append(rows, ext+"\t"+ui.HumanSize(szStr)+"\t"+
-				strconv.FormatInt(sz, 10)+"/"+strconv.FormatInt(size, 10)+"\t"+pctMille(sz, size))
+			rows = append(rows, e.ext+"\t"+ui.HumanBytes(e.size)+"\t"+
+				strconv.FormatInt(e.size, 10)+"/"+strconv.FormatInt(size, 10)+"\t"+pctMille(e.size, size))
 		}
 		s.Table(w, rows, topts...)
 	}
@@ -502,10 +379,9 @@ func renderTreeRich(w io.Writer, s ui.Style, root string, files, dirs, size, avg
 		s.Heading(w, "--indent", "2", "By count")
 		rows := make([]string, 0, len(byCount))
 		for _, e := range byCount {
-			ext, cntStr, _ := splitExt3(e.ext, e.count, e.size)
-			cnt := int64(ui.Int(cntStr))
-			rows = append(rows, ext+"\t"+ui.GroupDigits(cntStr)+"\t"+
-				cntStr+"/"+strconv.FormatInt(files, 10)+"\t"+pctMille(cnt, files))
+			cnt := strconv.FormatInt(e.count, 10)
+			rows = append(rows, e.ext+"\t"+ui.GroupDigits(cnt)+"\t"+
+				cnt+"/"+strconv.FormatInt(files, 10)+"\t"+pctMille(e.count, files))
 		}
 		s.Table(w, rows, topts...)
 	}

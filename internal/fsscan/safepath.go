@@ -10,8 +10,9 @@ import (
 
 // scannerForbidden is __gash_fs_forbidden's list: the scanners' own, short
 // forbidden set (not the full pathguard list). A resolved scan root under
-// one of these is refused; the walk itself is not re-checked, so -L and
-// --allow-root still descend into them (FS-02, FS-03).
+// one of these is refused, and the walks skip every entry whose physical
+// path is under one of them, also through -L or from / with --allow-root
+// (FS-02, FS-03; protectedList adds root's home).
 var scannerForbidden = []string{"/proc", "/sys", "/dev", "/boot", "/root"}
 
 // forbidden reports whether p is, or is under, a protected location, after
@@ -23,27 +24,28 @@ func forbidden(p string) bool {
 	for strings.Contains(p, "/./") {
 		p = strings.ReplaceAll(p, "/./", "/")
 	}
-	p = strings.TrimSuffix(p, "/.")
-	for _, f := range scannerForbidden {
-		if p == f || strings.HasPrefix(p, f+"/") {
-			return true
-		}
+	return protected(strings.TrimSuffix(p, "/."))
+}
+
+// expandHome is the leading-~ substitution of a PATH argument.
+func expandHome(input, home string) string {
+	if input == "" {
+		return "."
 	}
-	return false
+	if input == "~" {
+		return home
+	}
+	if strings.HasPrefix(input, "~/") {
+		return home + "/" + input[2:]
+	}
+	return input
 }
 
 // safePath resolves a user PATH and refuses dangerous targets
 // (__gash_fs_safe_path). home and pwd are the caller's $HOME and $PWD; the
 // relative path is resolved against pwd only, so CDPATH is ignored (FS-25).
 func safePath(input, home, pwd string, allowRoot bool) (string, *fsError) {
-	if input == "" {
-		input = "."
-	}
-	if input == "~" {
-		input = home
-	} else if strings.HasPrefix(input, "~/") {
-		input = home + "/" + input[2:]
-	}
+	input = expandHome(input, home)
 
 	// Protected locations are refused before any existence check.
 	lexical := input

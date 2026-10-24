@@ -10,10 +10,15 @@ package files
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/help"
@@ -47,9 +52,9 @@ func isRegularFile(path string) bool {
 	return err == nil && st.Mode().IsRegular()
 }
 
-// kind classifies an archive by its suffix, case-insensitive, in the exact
-// 2.x `case` order (so .tar.gz beats .gz and .tar.Z falls to the single
-// uncompress branch, FILE-13).
+// kind classifies an archive by its suffix, case-insensitive, in the 2.x
+// `case` order (so .tar.gz beats .gz), with .tar.Z and .taz routed to the
+// uncompress-and-unpack branch before the single .Z branch (FILE-13).
 type kind int
 
 const (
@@ -67,12 +72,13 @@ const (
 	kTbz2     // tar xvjf
 	kTgz      // tar xvzf
 	kZip
-	kSingleZ // uncompress (also .tar.Z, FILE-13)
+	kTarZ    // uncompress -c | tar xvf - (.tar.Z, .taz; FILE-13)
+	kSingleZ // uncompress -c
 	kSevenZip
 )
 
-// classify returns the kind and, for a single-file format, the literal
-// lowercase suffix 2.x handed to `basename` (case-sensitive strip, FILE-01/02).
+// classify returns the kind and, for a single-file format, the suffix that
+// the output name drops (matched case-insensitively, FILE-01/02).
 func classify(name string) (kind, string) {
 	l := strings.ToLower(name)
 	switch {
@@ -102,6 +108,8 @@ func classify(name string) (kind, string) {
 		return kTgz, ""
 	case strings.HasSuffix(l, ".zip"):
 		return kZip, ""
+	case strings.HasSuffix(l, ".tar.z"), strings.HasSuffix(l, ".taz"):
+		return kTarZ, ""
 	case strings.HasSuffix(l, ".z"):
 		return kSingleZ, ".z"
 	case strings.HasSuffix(l, ".7z"):
@@ -109,6 +117,76 @@ func classify(name string) (kind, string) {
 	default:
 		return kUnsupported, ""
 	}
+}
+
+// tools are the programs a branch runs, in the order they are checked.
+func (k kind) tools() []string {
+	switch k {
+	case kTarBz2, kTarGz, kTarXz, kTarPlain, kTbz2, kTgz:
+		return []string{"tar"}
+	case kTarZst:
+		return []string{"zstd", "tar"}
+	case kTarZ:
+		return []string{"uncompress", "tar"}
+	case kSingleXz:
+		return []string{"xz"}
+	case kSingleZst:
+		return []string{"zstd"}
+	case kSingleBz2:
+		return []string{"bunzip2"}
+	case kSingleGz:
+		return []string{"gunzip"}
+	case kSingleZ:
+		return []string{"uncompress"}
+	case kRar:
+		return []string{"unrar"}
+	case kZip:
+		return []string{"unzip"}
+	case kSevenZip:
+		return []string{"7z"}
+	}
+	return nil
+}
+
+// missingTool is the dependency error of a branch whose tool is not on
+// PATH (FILE-19): zstd keeps its 2.x line, the others get the
+// __gash_require_command default.
+func missingTool(tool string) string {
+	if tool == "zstd" {
+		return "Extracting .zst needs zstd."
+	}
+	return "Command '" + tool + "' is not installed or not in PATH."
+}
+
+// hasWildcard reports whether name holds a character that unzip and unrar
+// expand as a wildcard in the archive operand (FILE-10).
+func hasWildcard(name string) bool {
+	return strings.ContainsAny(name, "*?[")
+}
+
+// notRegular reports an existing path that is not a regular file: a
+// directory, a FIFO, a socket, a device or a dangling symlink (FILE-12).
+func notRegular(path string) bool {
+	if st, err := os.Stat(path); err == nil {
+		return !st.Mode().IsRegular()
+	}
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// interactive reports whether the extraction tools may prompt: never in
+// headless mode or when stdin is not a terminal (FILE-11).
+func interactive(c *invoke.Call) bool {
+	return !c.Term.Headless() && c.Term.StdinTTY()
+}
+
+// dashSafe prefixes "./" to a name that starts with "-", so no tool reads
+// it as an option (FILE-08, FILE-09).
+func dashSafe(name string) string {
+	if strings.HasPrefix(name, "-") {
+		return "./" + name
+	}
+	return name
 }
 
 func archiveExtract(c *invoke.Call) int {
@@ -127,25 +205,53 @@ func archiveExtract(c *invoke.Call) int {
 		p.Error("Missing archive file. Usage: archive_extract <archive_file> [output_dir]")
 		return 1
 	}
+	if notRegular(archive) {
+		p.Error("'" + archive + "' is not a regular file.")
+		return 1
+	}
 	if !isRegularFile(archive) {
 		p.Error("File '" + archive + "' does not exist.")
 		return 1
 	}
 
+	// Everything is checked before OUTPUT_DIR is created (FILE-07): the
+	// format, the archive name, the tools, the members and the output name.
 	k, suffix := classify(archive)
-
+	if k == kUnsupported {
+		p.Error("Cannot extract '" + archive + "', unsupported file type.")
+		return 1
+	}
+	if (k == kZip || k == kRar) && hasWildcard(baseName(archive)) {
+		tool := k.tools()[0]
+		p.Error("Archive name '" + archive + "' contains wildcard characters (* ? [) that " + tool +
+			" would expand; rename it.")
+		return 1
+	}
+	for _, tool := range k.tools() {
+		if _, err := runner.LookPath(tool, c.Env.Child(), ""); err != nil {
+			p.Error(missingTool(tool))
+			return 1
+		}
+	}
 	// FILE-22 (option b): refuse a hostile member before OUTPUT_DIR exists.
 	if member, unsafe, _ := memberGuard(c, k, archive, outputDir); unsafe {
 		p.Error("Archive '" + archive + "' has an unsafe member '" + member +
 			"' (absolute path, .. component or link outside the destination); nothing extracted.")
 		return 1
 	}
+	var target string
+	if suffix != "" {
+		target = outputDir + "/" + singleFileName(archive, suffix)
+		if sameFile(target, archive) {
+			p.Error("Output '" + target + "' would overwrite the archive '" + archive + "'.")
+			return 1
+		}
+	}
 
-	// FILE-07/08: mkdir -p OUTPUT_DIR, 2.x argv (no --), before the dispatch.
+	// FILE-08: mkdir -p -- OUTPUT_DIR (mkdir's own lines are kept).
 	if st, err := os.Stat(outputDir); err != nil || !st.IsDir() {
-		rnr := runnerFor(c)
-		res, rerr := rnr.Run(callCtx(c), runner.Cmd{
-			Path: "mkdir", Args: []string{"-p", outputDir},
+		res, rerr := runnerFor(c).Run(callCtx(c), runner.Cmd{
+			Path: "mkdir", Args: []string{"-p", "--", outputDir},
 			Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
 		})
 		if rerr != nil || res.ExitCode != 0 {
@@ -154,57 +260,73 @@ func archiveExtract(c *invoke.Call) int {
 		}
 	}
 
-	// A leading-dash archive name must not look like an option to the tools.
-	if strings.HasPrefix(archive, "-") {
-		archive = "./" + archive
-	}
+	// A leading-dash name must not look like an option to the tools.
+	src, dir := dashSafe(archive), dashSafe(outputDir)
+	ask := interactive(c)
 
 	switch k {
-	case kTarBz2:
-		return runTar(c, "xvjf", archive, outputDir)
+	case kTarBz2, kTbz2:
+		return runTar(c, "xvjf", src, dir)
 	case kTarGz, kTgz:
-		return runTar(c, "xvzf", archive, outputDir)
+		return runTar(c, "xvzf", src, dir)
 	case kTarXz:
-		return runTar(c, "xvJf", archive, outputDir)
+		return runTar(c, "xvJf", src, dir)
 	case kTarPlain:
-		return runTar(c, "xvf", archive, outputDir)
-	case kTbz2:
-		return runTar(c, "xvjf", archive, outputDir)
+		return runTar(c, "xvf", src, dir)
 	case kTarZst:
-		return runTarZst(c, archive, outputDir)
+		return pipeline(c, runnerFor(c),
+			runner.Cmd{Path: "zstd", Args: []string{"-dc", "--", src}},
+			runner.Cmd{Path: "tar", Args: []string{"xvf", "-", "-C", dir, "--no-same-owner", "--no-same-permissions"}})
+	case kTarZ:
+		return pipeline(c, runnerFor(c),
+			runner.Cmd{Path: "uncompress", Args: []string{"-c", "--", src}},
+			runner.Cmd{Path: "tar", Args: []string{"xvf", "-", "-C", dir, "--no-same-owner", "--no-same-permissions"}})
 	case kSingleXz:
-		return runSingle(c, "xz", []string{"-dc", "--", archive}, archive, outputDir, suffix, false)
+		return runSingle(c, "xz", []string{"-dc", "--", src}, target)
 	case kSingleZst:
-		return runSingle(c, "zstd", []string{"-dc", "--", archive}, archive, outputDir, suffix, true)
+		return runSingle(c, "zstd", []string{"-dc", "--", src}, target)
 	case kSingleBz2:
-		return runSingle(c, "bunzip2", []string{"-c", archive}, archive, outputDir, suffix, false)
+		return runSingle(c, "bunzip2", []string{"-c", "--", src}, target)
 	case kSingleGz:
-		return runSingle(c, "gunzip", []string{"-c", archive}, archive, outputDir, suffix, false)
+		return runSingle(c, "gunzip", []string{"-c", "--", src}, target)
 	case kSingleZ:
-		return runSingle(c, "uncompress", []string{archive, "-c"}, archive, outputDir, suffix, false)
+		return runSingle(c, "uncompress", []string{"-c", "--", src}, target)
 	case kRar:
-		return runTool(c, "unrar", []string{"x", archive, outputDir})
+		args := []string{"x"}
+		if !ask {
+			args = append(args, "-o-", "-p-")
+		}
+		if !strings.HasSuffix(dir, "/") {
+			dir += "/"
+		}
+		return runTool(c, "unrar", append(args, "--", src, dir), ask)
 	case kZip:
-		return runTool(c, "unzip", []string{archive, "-d", outputDir})
-	case kSevenZip:
-		return runTool(c, "7z", []string{"x", archive, "-o" + outputDir})
-	default:
-		p.Error("Cannot extract '" + archive + "', unsupported file type.")
-		return 1
+		args := []string{}
+		if !ask {
+			args = append(args, "-n")
+		}
+		return runTool(c, "unzip", append(args, src, "-d", dir), ask)
+	default: // kSevenZip
+		args := []string{"x", "-spd"}
+		if !ask {
+			args = append(args, "-aos")
+		}
+		return runTool(c, "7z", append(args, "-o"+dir, "--", src), ask)
 	}
 }
 
 // runTool runs a multi-member extractor with the caller's environment and
-// standard streams; a missing tool gets the 2.x dependency error (FILE-19),
-// any non-zero status collapses to 1 (FILE-23 option a).
-func runTool(c *invoke.Call, tool string, args []string) int {
-	rnr := runnerFor(c)
-	res, err := rnr.Run(callCtx(c), runner.Cmd{
-		Path: tool, Args: args,
-		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
-	})
+// standard output. When it may not prompt (FILE-11) its stdin is /dev/null
+// and it runs in a new session, without a controlling terminal. Any
+// non-zero status collapses to 1 (FILE-23 option a).
+func runTool(c *invoke.Call, tool string, args []string, ask bool) int {
+	o := runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}
+	if !ask {
+		o.Stdin, o.Setsid = nil, true
+	}
+	res, err := runnerFor(c).Run(callCtx(c), runner.Cmd{Path: tool, Args: args, Options: o})
 	if notFound(err) {
-		ui.StyleOf(c.Term, false).Printer(c.Stderr).Error("Command '" + tool + "' is not installed or not in PATH.")
+		ui.StyleOf(c.Term, false).Printer(c.Stderr).Error(missingTool(tool))
 		return 1
 	}
 	if err != nil || res.ExitCode != 0 {
@@ -214,64 +336,66 @@ func runTool(c *invoke.Call, tool string, args []string) int {
 }
 
 func runTar(c *invoke.Call, flags, archive, outputDir string) int {
-	return runTool(c, "tar", []string{flags, archive, "-C", outputDir, "--no-same-owner", "--no-same-permissions"})
+	return runTool(c, "tar", []string{flags, archive, "-C", outputDir, "--no-same-owner", "--no-same-permissions"}, true)
 }
 
-// runSingle reproduces the single-file branches (FILE-01/02/03/15): the
-// output OUTPUT_DIR/<basename minus the lowercase suffix> is opened with
-// O_TRUNC, 0666, following symlinks, before the tool runs; a corrupt input
-// or a missing tool leaves the truncated file. zstd is checked first.
-func runSingle(c *invoke.Call, tool string, args []string, archive, outputDir, suffix string, zstdGuard bool) int {
-	rnr := runnerFor(c)
+// runSingle decompresses one file to target (FILE-03): into a new file in
+// the target's directory, opened O_EXCL with mode 0666 (the umask applies),
+// renamed over target only when the tool succeeds and removed otherwise, so
+// a corrupt archive never destroys an existing file and a symlink at target
+// is replaced, never written through.
+func runSingle(c *invoke.Call, tool string, args []string, target string) int {
 	p := ui.StyleOf(c.Term, false).Printer(c.Stderr)
-	if zstdGuard {
-		if _, err := runner.LookPath("zstd", c.Env.Child(), ""); err != nil {
-			p.Error("Extracting .zst needs zstd.")
-			return 1
-		}
-	}
-	name := strings.TrimRight(basenameSuffix(archive, suffix), "\n") // $(basename …) strips trailing newlines (FILE-15)
-	out := outputDir + "/" + name
-	f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		// 2.x: the `>` redirection fails, Bash prints "…: line N: OUT: REASON"
-		// and the tool never runs (|| rc=1). The "file: line N:" prefix names
-		// the sourced file and cannot be reproduced; the rest is kept.
-		_, _ = io.WriteString(c.Stderr, out+": "+redirReason(err)+"\n")
+	if st, err := os.Lstat(target); err == nil && st.IsDir() {
+		_, _ = io.WriteString(c.Stderr, target+": Is a directory\n")
 		return 1
 	}
-	defer f.Close()
-	res, rerr := rnr.Run(callCtx(c), runner.Cmd{
+	f, tmp, err := createTemp(filepath.Dir(target))
+	if err != nil {
+		_, _ = io.WriteString(c.Stderr, target+": "+redirReason(err)+"\n")
+		return 1
+	}
+	res, rerr := runnerFor(c).Run(callCtx(c), runner.Cmd{
 		Path: tool, Args: args,
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: f, Stderr: c.Stderr},
 	})
+	cerr := f.Close()
 	if notFound(rerr) {
-		p.Error("Command '" + tool + "' is not installed or not in PATH.")
+		_ = os.Remove(tmp)
+		p.Error(missingTool(tool))
 		return 1
 	}
-	if rerr != nil || res.ExitCode != 0 {
+	if rerr != nil || res.ExitCode != 0 || cerr != nil {
+		_ = os.Remove(tmp)
+		return 1
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Remove(tmp)
+		_, _ = io.WriteString(c.Stderr, target+": "+redirReason(err)+"\n")
 		return 1
 	}
 	return 0
 }
 
-// runTarZst reproduces `zstd -dc -- F | tar xvf - …` with pipefail semantics
-// (FILE-17): rc 1 when either side fails. zstd is checked first, then tar;
-// a missing tar means zstd is never started (FILE-19).
-func runTarZst(c *invoke.Call, archive, outputDir string) int {
-	rnr := runnerFor(c)
-	p := ui.StyleOf(c.Term, false).Printer(c.Stderr)
-	if _, err := runner.LookPath("zstd", c.Env.Child(), ""); err != nil {
-		p.Error("Extracting .zst needs zstd.")
-		return 1
+// createTemp creates dir/.axe-XXXXXX with O_EXCL and mode 0666, so the
+// kernel umask gives the file the mode a shell redirection would.
+func createTemp(dir string) (*os.File, string, error) {
+	var b [6]byte
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	for {
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, "", err
+		}
+		for i := range b {
+			b[i] = chars[int(b[i])%len(chars)]
+		}
+		name := filepath.Join(dir, ".axe-"+string(b[:]))
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		return f, name, err
 	}
-	if _, err := runner.LookPath("tar", c.Env.Child(), ""); err != nil {
-		p.Error("Command 'tar' is not installed or not in PATH.")
-		return 1
-	}
-	return pipeline(c, rnr,
-		runner.Cmd{Path: "zstd", Args: []string{"-dc", "--", archive}},
-		runner.Cmd{Path: "tar", Args: []string{"xvf", "-", "-C", outputDir, "--no-same-owner", "--no-same-permissions"}})
 }
 
 // pipeline runs left | right through an in-process pipe and returns 1 when
@@ -279,8 +403,12 @@ func runTarZst(c *invoke.Call, archive, outputDir string) int {
 func pipeline(c *invoke.Call, rnr runner.Runner, left, right runner.Cmd) int {
 	pr, pw := io.Pipe()
 	env := c.Env.Child()
-	left.Env, left.Stdin, left.Stdout, left.Stderr = env, c.Stdin, pw, c.Stderr
-	right.Env, right.Stdin, right.Stdout, right.Stderr = env, pr, c.Stdout, c.Stderr
+	stderr := c.Stderr
+	if _, isFile := stderr.(*os.File); !isFile && stderr != nil {
+		stderr = &lockedWriter{w: stderr} // both children copy into it at once
+	}
+	left.Env, left.Stdin, left.Stdout, left.Stderr = env, c.Stdin, pw, stderr
+	right.Env, right.Stdin, right.Stdout, right.Stderr = env, pr, c.Stdout, stderr
 
 	done := make(chan int, 1)
 	go func() {
@@ -301,7 +429,20 @@ func pipeline(c *invoke.Call, rnr runner.Runner, left, right runner.Cmd) int {
 	return 0
 }
 
-// redirReason is the strerror text Bash prints for a failed `>` open.
+// lockedWriter serializes the writes of the two sides of a pipeline into
+// one writer that is not a file (a file is handed to both children as is).
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(b []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(b)
+}
+
+// redirReason is the strerror text of a failed output open.
 func redirReason(err error) string {
 	var errno syscall.Errno
 	if errors.As(err, &errno) {
@@ -331,21 +472,39 @@ func notFound(err error) bool {
 	return false
 }
 
-// basenameSuffix is `basename NAME SUFFIX`: the last path component with a
-// trailing SUFFIX removed when it is present and is not the whole name
-// (case-sensitive, so a .GZ name keeps its name against a .gz suffix).
-func basenameSuffix(name, suffix string) string {
+// baseName is the last path component of name (trailing slashes dropped).
+func baseName(name string) string {
 	trimmed := strings.TrimRight(name, "/")
 	if trimmed == "" {
-		trimmed = "/"
+		return "/"
 	}
 	if i := strings.LastIndexByte(trimmed, '/'); i >= 0 {
 		trimmed = trimmed[i+1:]
 	}
-	if suffix != "" && trimmed != suffix && strings.HasSuffix(trimmed, suffix) {
-		trimmed = trimmed[:len(trimmed)-len(suffix)]
-	}
 	return trimmed
+}
+
+// singleFileName is the output name of a single-file format: the archive's
+// base name with the matched suffix removed case-insensitively, when
+// something remains (FILE-01, FILE-02), kept byte for byte otherwise:
+// trailing newlines included (FILE-15).
+func singleFileName(archive, suffix string) string {
+	b := baseName(archive)
+	if len(b) > len(suffix) && strings.EqualFold(b[len(b)-len(suffix):], suffix) {
+		return b[:len(b)-len(suffix)]
+	}
+	return b
+}
+
+// sameFile reports whether target names the archive itself, through
+// symlinks too (FILE-01).
+func sameFile(target, archive string) bool {
+	ts, err := os.Stat(target)
+	if err != nil {
+		return false
+	}
+	as, err := os.Stat(archive)
+	return err == nil && os.SameFile(ts, as)
 }
 
 func fileBackup(c *invoke.Call) int {
@@ -360,7 +519,12 @@ func fileBackup(c *invoke.Call) int {
 		p.Error("Missing file. Usage: file_backup <file>")
 		return 1
 	}
-	if !isRegularFile(file) {
+	if notRegular(file) {
+		p.Error("'" + file + "' is not a regular file.")
+		return 1
+	}
+	st, err := os.Stat(file)
+	if err != nil || !st.Mode().IsRegular() {
 		p.Error("File '" + file + "' does not exist.")
 		return 1
 	}
@@ -373,19 +537,60 @@ func fileBackup(c *invoke.Call) int {
 		Options: runner.Options{Env: c.Env.Child()},
 	})
 	stamp := runner.CommandSubst(dres.Stdout)
-	backup := file + "_backup_" + stamp
 
-	// FILE-21: cp runs with LC_ALL=C added, so the -v line always has C-locale
-	// quoting. FILE-06: cp's status is ignored; the regular-file check decides.
-	_, _ = rnr.Run(callCtx(c), runner.Cmd{
-		Path: "cp", Args: []string{"-v", "--", file, backup},
-		Options: runner.Options{Env: withLCAllC(c.Env.Child()), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
-	})
-	if !isRegularFile(backup) {
+	// FILE-04/05: reserve a free name atomically. O_EXCL|O_NOFOLLOW fails on
+	// any existing entry (a file, a symlink, a dangling symlink, a hard link,
+	// a directory), which is never opened: the next suffix is tried instead.
+	backup, finalMode, fixMode, err := reserveBackup(file+"_backup_"+stamp, st.Mode().Perm())
+	if err != nil {
 		p.Error("Failed to create backup file.")
 		return 1
 	}
+
+	// FILE-21: cp runs with LC_ALL=C added, so the -v line always has C-locale
+	// quoting; it rewrites the reserved file in place. FILE-06: a failing cp
+	// is a failure, and its partial file is removed.
+	res, rerr := rnr.Run(callCtx(c), runner.Cmd{
+		Path: "cp", Args: []string{"-v", "--", file, backup},
+		Options: runner.Options{Env: withLCAllC(c.Env.Child()), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
+	})
+	if rerr != nil || res.ExitCode != 0 || !isRegularFile(backup) {
+		_ = os.Remove(backup)
+		p.Error("Failed to create backup file.")
+		return 1
+	}
+	if fixMode {
+		_ = os.Chmod(backup, finalMode)
+	}
 	return 0
+}
+
+// reserveBackup creates base, or base_1, base_2... when it exists, with
+// O_CREAT|O_EXCL|O_NOFOLLOW, and returns the name taken. The file gets the
+// source's permission bits with the umask applied, as the file cp would
+// create; it is created owner-writable so cp can rewrite it, and for a
+// source without owner write fixMode asks for finalMode once the copy is
+// done.
+func reserveBackup(base string, perm os.FileMode) (name string, finalMode os.FileMode, fixMode bool, err error) {
+	for n := 0; ; n++ {
+		name = base
+		if n > 0 {
+			name = base + "_" + strconv.Itoa(n)
+		}
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, perm|0o200)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", 0, false, err
+		}
+		st, serr := f.Stat()
+		cerr := f.Close()
+		if serr == nil && perm&0o200 == 0 {
+			finalMode, fixMode = st.Mode().Perm()&^0o200, true
+		}
+		return name, finalMode, fixMode, cerr
+	}
 }
 
 // withLCAllC returns env with LC_ALL forced to C (FILE-21).

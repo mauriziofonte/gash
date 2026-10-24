@@ -1,0 +1,39 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: FS-01
+# ledger: FS-06
+# ledger: FS-07
+# ledger: FS-08
+# ledger: FS-09
+# ledger: FS-17
+# covers: none (3.0 surface)
+#
+# FS-01 (operator decision, applied uniformly in 3.0): no scanner reports a
+# path that holds a tab or a newline below PATH, in any mode, and tree_stats
+# counts none of them. Every --json line is valid JSON.
+
+[!exec:jq] skip 'jq not installed'
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir fx
+exec bash -c 'cd fx; mkdir "$(printf "t\tx")" "$(printf "n\nx")" "$(printf "et\tx")" "$(printf "en\nx")" norm; head -c 5000 /dev/zero > "$(printf "t\tx")/f"; head -c 5000 /dev/zero > "$(printf "n\nx")/f"; head -c 700 /dev/zero > "$(printf "ft\ty")"; head -c 700 /dev/zero > "$(printf "f.x\ty")"; head -c 1000 /dev/zero > norm/f'
+
+exec bash -c 'source "$GASH_SH"; for f in files_largest dirs_largest dirs_list_empty tree_stats; do $f --json fx | jq -e . >/dev/null || exit 1; done; dirs_find_large --json --size 0 fx | jq -e . >/dev/null'
+
+exec bash -c 'source "$GASH_SH"; files_largest --json fx | jq -r ".data[].path"; dirs_largest --json --depth 3 fx | jq -r ".data[].path"; dirs_find_large --json --size 0 fx | jq -r ".data[].path"; dirs_find_large --json --size 0 --with-mtime fx | jq -r ".data[].path"; dirs_list_empty --json fx | jq -r ".data[]"'
+! stdout '	'
+! stdout '/t$'
+! stdout '/et$'
+! stdout '/n$'
+! stdout '^x$'
+stdout '/norm'
+
+exec bash -c 'source "$GASH_SH"; dirs_find_large --size 0 --null fx | xargs -0 -n1 test -d'
+
+exec bash -c 'source "$GASH_SH"; dirs_list_empty --count fx'
+stdout '^0$'
+
+exec bash -c 'source "$GASH_SH"; tree_stats --json fx | jq -c "[.data.files_total, .data.dirs_total, .data.empty_dirs, .data.size_total, [.data.top_by_count[].ext]]"'
+stdout '^\[1,2,0,1000,\["\(no ext\)"\]\]$'

@@ -4,60 +4,65 @@ package fsscan
 
 import "testing"
 
-// TestParseSize pins the size grammar against the live 2.x
-// __gash_fs_parse_size oracle (numfmt --from=iec, then the pure-bash
-// fallback). These replace the INTERNAL parse_size spec tests, which cannot
-// reach the Go binary (files_spec.sh calls the private Bash helper).
+// TestParseSize pins the 3.0 size grammar (FS-11, FS-22): the numfmt
+// --from=iec values rc.A emulated stay, the pure-bash fallback oddities are
+// refused, units are case-insensitive and values above 2^63-1 are refused.
 func TestParseSize(t *testing.T) {
 	cases := []struct {
-		in      string
-		ok      bool
-		bytes   int64
-		big     bool
-		wrapped bool
+		in    string
+		ok    bool
+		bytes int64
 	}{
-		{"1024", true, 1024, false, false},
-		{"1K", true, 1024, false, false},
-		{"1M", true, 1048576, false, false},
-		{"1G", true, 1073741824, false, false},
-		{"2GiB", true, 2147483648, false, false},
-		{"20M", true, 20971520, false, false},
-		{"500K", true, 512000, false, false},
-		{"1.5K", true, 1536, false, false},
-		{"0.5K", true, 512, false, false},
-		{"1.9999K", true, 2048, false, false},
-		{"1.5G", true, 1610612736, false, false},
-		{"1E", true, 1152921504606846976, false, false},
-		// fallback cases (numfmt refuses, pure-bash takes over)
-		{"1K2", true, 12288, false, false},
-		{"K1", true, 1024, false, false},
-		{"iB5", true, 5, false, false},
-		{"5i", true, 5, false, false},
-		{"1 0K", true, 10240, false, false},
-		{"1kB", true, 1024, false, false},
-		{"1Ki", true, 1024, false, false},
-		{"1KiB", true, 1024, false, false},
-		// overflow classifications (FS-22)
-		{"8E", true, maxInt64, true, false},
-		{"9999999P", true, maxInt64, true, true},
+		{"1024", true, 1024},
+		{"0", true, 0},
+		{"08", true, 8},
+		{"1K", true, 1024},
+		{"1M", true, 1048576},
+		{"1G", true, 1073741824},
+		{"2GiB", true, 2147483648},
+		{"20M", true, 20971520},
+		{"500K", true, 512000},
+		{"1.5K", true, 1536},
+		{"0.5K", true, 512},
+		{"1.9999K", true, 2048},
+		{"1.5G", true, 1610612736},
+		{"1E", true, 1152921504606846976},
+		{"7E", true, 7 << 60},
+		{"1.5", true, 2},
+		{"100B", true, 100},
+		{"1kB", true, 1024},
+		{"1Ki", true, 1024},
+		{"1KiB", true, 1024},
+		// 3.0: FS-11 fixed: units are case-insensitive.
+		{"1kb", true, 1024},
+		{"1kib", true, 1024},
+		{"5KIB", true, 5120},
+		{"9223372036854775807", false, 0}, // 19 digits: above the 15-digit bound
+		{"999999999999999", true, 999999999999999},
+		// 3.0: FS-11 fixed: the fallback oddities are refused.
+		{"1K2", false, 0},
+		{"K1", false, 0},
+		{"iB5", false, 0},
+		{"5i", false, 0},
+		{"1 0K", false, 0},
+		{" 1K", false, 0},
+		// FS-22: above 2^63-1.
+		{"8E", false, 0},
+		{"8192P", false, 0},
+		{"9999999P", false, 0},
 		// errors
-		{"", false, 0, false, false},
-		{"5KIB", false, 0, false, false},
-		{"1kb", false, 0, false, false},
-		{"nonsense", false, 0, false, false},
+		{"", false, 0},
+		{"nonsense", false, 0},
+		{"1.2.3K", false, 0},
+		{"1.1234567K", false, 0},
+		{"1e3", false, 0},
+		{"-1K", false, 0},
+		{"١", false, 0},
 	}
 	for _, c := range cases {
 		got, ok := ParseSize(c.in)
-		if ok != c.ok {
-			t.Errorf("ParseSize(%q) ok = %v, want %v", c.in, ok, c.ok)
-			continue
-		}
-		if !ok {
-			continue
-		}
-		if got.Bytes != c.bytes || got.Big != c.big || got.Wrapped != c.wrapped {
-			t.Errorf("ParseSize(%q) = %+v, want bytes=%d big=%v wrapped=%v",
-				c.in, got, c.bytes, c.big, c.wrapped)
+		if ok != c.ok || (ok && got != c.bytes) {
+			t.Errorf("ParseSize(%q) = %d, %v; want %d, %v", c.in, got, ok, c.bytes, c.ok)
 		}
 	}
 }

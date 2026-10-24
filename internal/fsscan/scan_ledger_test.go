@@ -5,6 +5,7 @@ package fsscan
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -172,7 +173,8 @@ func TestDifferential2x(t *testing.T) {
 		{"dirs_list_empty", fx},
 		{"files_largest", "--json", "--bogus", fx},
 		{"dirs_find_large", "--json", "--size", "nonsense", fx},
-		{"files_largest", "--exclude", "--json", fx}, // FS-19
+		// 3.0: FS-19 fixed: `files_largest --exclude --json` no longer
+		// matches 2.x; TestLedger_FS19_fix pins it.
 	}
 	for _, args := range cases {
 		fn, rest := args[0], args[1:]
@@ -207,11 +209,12 @@ func TestLedger_FS20(t *testing.T) {
 	}
 }
 
-// TestLedger_FS21 pins the du-depth forced divergence: a leading zero, 08/09
-// and values above 2^63-1 are invalid_depth; decimal values scan.
+// TestLedger_FS21 pins the du-depth forced divergence. 3.0: superseded by
+// the FS-05 rule: 1 to 9 ASCII digits in base 10, so 010 is 10 and 08 is 8;
+// longer values are invalid_depth.
 func TestLedger_FS21(t *testing.T) {
 	fx := mkfix(t)
-	for _, bad := range []string{"010", "08", "09", "9223372036854775808", "99999999999999999999"} {
+	for _, bad := range []string{"9223372036854775808", "99999999999999999999", "2147483648"} {
 		for _, fn := range []string{"dirs_largest", "dirs_find_large"} {
 			out, errb, rc := runGo(fn, t.TempDir(), fx, "--json", "--depth", bad, fx)
 			if rc != 1 || out != "" || !strings.Contains(errb, `"error":"invalid_depth"`) {
@@ -219,7 +222,7 @@ func TestLedger_FS21(t *testing.T) {
 			}
 		}
 	}
-	for _, good := range []string{"0", "1", "2147483648"} {
+	for _, good := range []string{"0", "1", "010", "08", "09"} {
 		for _, fn := range []string{"dirs_largest", "dirs_find_large"} {
 			out, _, rc := runGo(fn, t.TempDir(), fx, "--json", "--depth", good, fx)
 			if rc != 0 || !strings.Contains(out, `"kind":"directories"`) {
@@ -229,7 +232,8 @@ func TestLedger_FS21(t *testing.T) {
 	}
 }
 
-// TestLedger_FS22 pins the size overflow forced divergence.
+// TestLedger_FS22 pins the size overflow forced divergence, now through the
+// FS-11 native parser: values above 2^63-1 are invalid_size.
 func TestLedger_FS22(t *testing.T) {
 	fx := mkfix(t)
 	for _, sz := range []string{"8E", "9223372036854775807", "8192P"} {
@@ -238,14 +242,18 @@ func TestLedger_FS22(t *testing.T) {
 			t.Errorf("dirs_find_large --size %s: rc=%d err=%q", sz, rc, errb)
 		}
 	}
-	_, errb, rc := runGo("files_largest", t.TempDir(), fx, "--json", "--min-size", "9999999P", fx)
-	if rc != 1 || !strings.Contains(errb, `"error":"invalid_size"`) {
-		t.Errorf("files_largest --min-size 9999999P: rc=%d err=%q", rc, errb)
+	// 3.0: FS-11 fixed: 8E (2^63) is refused by --min-size too.
+	for _, sz := range []string{"9999999P", "8E"} {
+		_, errb, rc := runGo("files_largest", t.TempDir(), fx, "--json", "--min-size", sz, fx)
+		if rc != 1 || !strings.Contains(errb, `"error":"invalid_size"`) {
+			t.Errorf("files_largest --min-size %s: rc=%d err=%q", sz, rc, errb)
+		}
 	}
-	// A numfmt Big value (8E) is kept by --min-size and filters everything out.
-	out, _, rc := runGo("files_largest", t.TempDir(), fx, "--json", "--min-size", "8E", fx)
-	if rc != 0 || !strings.Contains(out, `"count":0`) {
-		t.Errorf("files_largest --min-size 8E: rc=%d out=%q", rc, out)
+	for _, sz := range []string{"1.5K", "1E", "08"} {
+		_, errb, rc := runGoEnv("dirs_find_large", t.TempDir(), fx, map[string]string{"PATH": t.TempDir()}, "--json", "--size", sz, fx)
+		if rc != 0 {
+			t.Errorf("dirs_find_large --size %s without numfmt: rc=%d err=%q", sz, rc, errb)
+		}
 	}
 }
 
@@ -277,30 +285,28 @@ func TestLedger_FS28(t *testing.T) {
 	}
 }
 
-// TestLedger_FS18 pins the one-blank-line of dirs_list_empty text mode when
-// nothing matches.
-func TestLedger_FS18(t *testing.T) {
+// TestLedger_FS18_fix: dirs_list_empty text mode prints nothing when
+// nothing matches (3.0: FS-18 fixed; rc.A printed one blank line).
+func TestLedger_FS18_fix(t *testing.T) {
 	fx := t.TempDir()
 	mustWrite(t, filepath.Join(fx, "f"), "x")
 	out, _, rc := runGo("dirs_list_empty", t.TempDir(), fx, fx)
-	if rc != 0 || out != "\n" {
-		t.Errorf("rc=%d out=%q, want one newline", rc, out)
+	if rc != 0 || out != "" {
+		t.Errorf("rc=%d out=%q, want no output", rc, out)
 	}
 }
 
-// TestLedger_FS17 pins the tab-in-extension reproduction: the extension is
-// split into ext, count and size as the 2.x `read` did (invalid JSON kept).
-func TestLedger_FS17(t *testing.T) {
+// TestLedger_FS17_fix: a tab inside an extension never splits a row: the
+// file is left out (FS-01) and the JSON stays valid (3.0: FS-17 fixed).
+func TestLedger_FS17_fix(t *testing.T) {
 	fx := t.TempDir()
 	mustWrite(t, filepath.Join(fx, "f.x\ty"), "z")
+	mustWrite(t, filepath.Join(fx, "g.txt"), "z")
 	out, _, rc := runGo("tree_stats", t.TempDir(), fx, "--json", fx)
-	if rc != 0 {
-		t.Fatalf("rc=%d", rc)
+	if rc != 0 || !json.Valid([]byte(out)) {
+		t.Fatalf("rc=%d invalid JSON %q", rc, out)
 	}
-	if !strings.Contains(out, `{"ext":"x","count":y,"size":1`+"\t"+`1}`) {
-		t.Errorf("FS-17 not reproduced in top_by_count: %q", out)
-	}
-	if !strings.Contains(out, `{"ext":"x","size":y`+"\t"+`1}`) {
-		t.Errorf("FS-17 not reproduced in top_by_size: %q", out)
+	if strings.Contains(out, `"ext":"x"`) || !strings.Contains(out, `"ext":"txt","count":1,"size":1`) {
+		t.Errorf("FS-17: %q", out)
 	}
 }

@@ -293,7 +293,7 @@ var functions = []Function{
 		Aliases:  []string{"axe"},
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z)",
+			Short:   "Extract archives (tar, zip, gz, bz2, xz, zst, Z, rar, 7z)",
 			Module:  "files",
 			Aliases: "axe",
 			SeeAlso: "file_backup",
@@ -312,10 +312,31 @@ var functions = []Function{
 				"  axe data.7z /tmp/extracted\n" +
 				"\n" +
 				"SUPPORTED FORMATS\n" +
-				"  .tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar,\n" +
-				"  .gz, .bz2, .xz, .zst,\n" +
-				"  .tgz, .tbz2, .zip, .rar, .7z, .z\n" +
-				"  (case-insensitive)",
+				"  .tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar.Z, .taz, .tar,\n" +
+				"  .gz, .bz2, .xz, .zst, .Z (compress), .z (pack),\n" +
+				"  .tgz, .tbz2, .zip, .rar, .7z\n" +
+				"  (case-insensitive)\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Tools: tar (with zstd for .tar.zst/.tzst, uncompress for .tar.Z/.taz),\n" +
+				"  gunzip, bunzip2, xz, zstd and uncompress (.z needs gzip's uncompress)\n" +
+				"  for the single-file formats, unzip, unrar and 7z. A missing tool is\n" +
+				"  reported before anything is written. OUTPUT_DIR (default: the current\n" +
+				"  directory) is created when missing.\n" +
+				"  Single-file formats write the archive name without its suffix into\n" +
+				"  OUTPUT_DIR; an existing file of that name is replaced only when the\n" +
+				"  tool succeeds.\n" +
+				"  Members with an absolute path, a .. component or a link outside\n" +
+				"  OUTPUT_DIR are refused before anything is extracted.\n" +
+				"  The tools' listings go to stdout. Exit status: 0 on success, 1 on any\n" +
+				"  failure.\n" +
+				"  With GASH_HEADLESS=1 or without a terminal on stdin, unzip, unrar and\n" +
+				"  7z never prompt and never overwrite existing files; an encrypted 7z\n" +
+				"  archive prints its password prompt and stops on end of input.\n" +
+				"  .zip and .rar names containing *, ? or [ are refused (unzip and unrar\n" +
+				"  would expand them as wildcards): rename the file.\n" +
+				"  The tools' own configuration applies: TAR_OPTIONS, UNZIP, RAR and\n" +
+				"  ~/.rarrc, GZIP, BZIP2, XZ_OPT and similar variables.",
 		},
 		Fallback:          &Usage{Program: "archive_extract", Usage: "archive_extract ARCHIVE_FILE [OUTPUT_DIR]", Description: "Extracts the ARCHIVE_FILE in the current directory or the specified OUTPUT_DIR. Alias: axe"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -413,10 +434,13 @@ var functions = []Function{
 				"  dirs_find_large --size 100M --depth 6 /opt\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  --size SIZE            Size threshold (default 20M; formats: 20M, 1G, 500K, bytes)\n" +
-				"  --depth N              Depth limit (default unbounded; use to cap very deep trees)\n" +
+				"  --size SIZE            Size threshold (default 20M): bytes, or a number with\n" +
+				"                         up to 6 decimals and K, M, G, T, P or E, optionally\n" +
+				"                         followed by B, i or iB\n" +
+				"  --depth N              Depth limit (default unbounded; 0 also means unbounded)\n" +
 				"  -n, --limit N          Cap results (default 1000)\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable)\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --no-ignore            Disable default pruning\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
 				"  --allow-root           Required to scan '/'\n" +
@@ -424,15 +448,17 @@ var functions = []Function{
 				"  --json                 Emit JSON envelope\n" +
 				"  --null, -0             NUL-delimited paths\n" +
 				"  --human / --no-human   Size formatting toggle\n" +
-				"  --no-color             Disable ANSI colors\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"PERFORMANCE\n" +
-				"  Uses a single `du -k` pass plus awk filtering: O(N) in filesystem entries,\n" +
-				"  versus the legacy per-directory re-walk which was O(N^2). Expect 10x-100x\n" +
-				"  speedup on large trees.\n" +
+				"  One walk adds up disk usage per directory (as `du -k` counts it): O(N)\n" +
+				"  in filesystem entries, versus the legacy per-directory re-walk which was\n" +
+				"  O(N^2).\n" +
 				"\n" +
 				"NOTES\n" +
-				"  numfmt is optional: a pure-bash IEC-suffix parser provides fallback.",
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  results (they cannot be represented safely in TSV/line-oriented output).\n" +
+				"  --null records are therefore always intact, complete paths.",
 		},
 		Fallback:          &Usage{Program: "dirs_find_large", Usage: "dirs_find_large [DIRECTORY] [--size SIZE] [--depth N] [--limit N] [--exclude GLOB] [--no-ignore] [--xdev] [--allow-root] [--with-mtime] [--json] [--null] [--human] [--no-color]", Description: "Finds directories larger than SIZE (default 20M), single-walk aggregation. Alias: dfl"},
 		ShellVars:         []string{"HOME"},
@@ -483,22 +509,29 @@ var functions = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Cap results (default 100)\n" +
-				"  --depth N              Depth limit (default 1, top-level only). Use higher values\n" +
-				"                         to reveal nested offenders (node_modules, vendor/, target/).\n" +
-				"  --min-size SIZE        Ignore directories smaller than SIZE\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable, substring match)\n" +
+				"  --depth N              Depth limit (default 1, top-level only; 0 means 1).\n" +
+				"                         Use higher values to reveal nested offenders\n" +
+				"                         (node_modules, vendor/, target/).\n" +
+				"  --min-size SIZE        Ignore directories smaller than SIZE: bytes,\n" +
+				"                         or a number with up to 6 decimals and K, M, G, T,\n" +
+				"                         P or E, optionally followed by B, i or iB\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --no-ignore            Disable default pruning\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
 				"  --allow-root           Required to scan '/'\n" +
 				"  --json                 Emit JSON envelope\n" +
 				"  --null, -0             NUL-delimited paths\n" +
 				"  --human / --no-human   Force human-readable / raw-bytes sizes\n" +
-				"  --no-color             Disable ANSI colors\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Sizes are cumulative (du semantics). Deeper scans will show parent\n" +
 				"  directories alongside their subdirs; filter with --min-size and --depth\n" +
-				"  to narrow the view.",
+				"  to narrow the view.\n" +
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  results (they cannot be represented safely in TSV/line-oriented output).\n" +
+				"  --null records are therefore always intact, complete paths.",
 		},
 		Fallback:          &Usage{Program: "dirs_largest", Usage: "dirs_largest [PATH] [--limit N] [--depth N] [--min-size SIZE] [--exclude GLOB] [--no-ignore] [--xdev] [--allow-root] [--json] [--null] [--human] [--no-color]", Description: "Lists the largest directories under PATH, sorted by cumulative size. Default depth 1 (top-level). Alias: dld"},
 		ShellVars:         []string{"HOME"},
@@ -550,7 +583,8 @@ var functions = []Function{
 				"OPTIONS\n" +
 				"  --min-depth N      Minimum depth (find -mindepth)\n" +
 				"  --depth N          Maximum depth (find -maxdepth)\n" +
-				"  --exclude GLOB     Prune matching paths\n" +
+				"  --exclude GLOB     Skip entries whose name or path below PATH matches GLOB\n" +
+				"                     (repeatable; no newlines)\n" +
 				"  --ignore-dotfiles  Skip directories whose name starts with '.'\n" +
 				"  --no-ignore        Disable default pruning\n" +
 				"  --xdev             Stay on a single filesystem\n" +
@@ -561,7 +595,10 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  \"Empty\" means no regular entries (not even hidden files). A directory\n" +
-				"  containing only a prune-excluded subdirectory is NOT empty.",
+				"  containing only a prune-excluded subdirectory is NOT empty.\n" +
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  results (they cannot be represented safely in TSV/line-oriented output).\n" +
+				"  --null records are therefore always intact, complete paths.",
 		},
 		Fallback:          &Usage{Program: "dirs_list_empty", Usage: "dirs_list_empty [PATH] [--min-depth N] [--depth N] [--exclude GLOB] [--ignore-dotfiles] [--no-ignore] [--xdev] [--allow-root] [--null] [--count] [--json]", Description: "Lists all empty directories under PATH. Alias: dle"},
 		ShellVars:         []string{"HOME"},
@@ -886,7 +923,17 @@ var functions = []Function{
 				"  fbk /etc/apache2/apache2.conf && vim /etc/apache2/apache2.conf\n" +
 				"\n" +
 				"  # Backup a script before refactoring\n" +
-				"  fbk my-deploy-script.sh",
+				"  fbk my-deploy-script.sh\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The stamp is local time (YYYYMMDDHHMMSS, no zone). A backup never\n" +
+				"  replaces an existing file or link: a second backup in the same second\n" +
+				"  gets _1, then _2, and so on.\n" +
+				"  A symlinked FILE is followed: the backup is a copy of its target, next\n" +
+				"  to FILE. On success cp -v prints one line on stdout:\n" +
+				"  'SRC' -> 'DST'. A failed copy removes the partial backup (exit 1).\n" +
+				"  Mode: FILE's permission bits without setuid, setgid and sticky, with\n" +
+				"  the umask applied; the modification time is the time of the copy.",
 		},
 		Fallback:          &Usage{Program: "file_backup", Usage: "file_backup FILE", Description: "Copy FILE to FILE_backup_YYYYMMDDHHMMSS. Alias: fbk"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -923,7 +970,8 @@ var functions = []Function{
 				"  # Top 20 files larger than 50MB, stay on same filesystem\n" +
 				"  files_largest --limit 20 --min-size 50M --xdev /var/log\n" +
 				"\n" +
-				"  # JSON output for scripting (envelope: data/count/total_size/scan_time)\n" +
+				"  # JSON output for scripting\n" +
+				"  # (envelope: data/count/total_size/total_size_human/kind/scan_time/errors)\n" +
 				"  files_largest /home --json | jq '.data[] | select(.size > 1073741824)'\n" +
 				"\n" +
 				"  # NUL-delimited paths for safe xargs pipelines\n" +
@@ -934,17 +982,21 @@ var functions = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Cap results (default 100)\n" +
-				"  --min-size SIZE        Ignore files smaller than SIZE (e.g. 10M, 1G, 500K)\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable, substring match)\n" +
+				"  --min-size SIZE        Ignore files smaller than SIZE: bytes, or a\n" +
+				"                         number with up to 6 decimals and K, M, G, T, P or\n" +
+				"                         E, optionally followed by B, i or iB\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --depth N              Limit scan depth (default: unbounded)\n" +
 				"  --no-ignore            Disable default pruning (node_modules/.git/vendor/__pycache__/.cache)\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
-				"  --follow-symlinks, -L  Follow symbolic links\n" +
+				"  --follow-symlinks, -L  Follow symbolic links (never into protected paths)\n" +
 				"  --allow-root           Required to scan '/' (safety guard)\n" +
-				"  --json                 Emit JSON envelope: {data, count, total_size, scan_time, errors}\n" +
+				"  --json                 Emit JSON envelope: {data, count, total_size,\n" +
+				"                         total_size_human, kind, scan_time, errors}\n" +
 				"  --null, -0             NUL-delimited paths for xargs -0\n" +
-				"  --human                Force human-readable sizes (auto-on on TTY)\n" +
-				"  --no-color             Disable ANSI colors (also honors NO_COLOR)\n" +
+				"  --human                Human-readable sizes (default except with --json or --null)\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Paths containing literal tab or newline characters are excluded from\n" +
@@ -3368,23 +3420,27 @@ var functions = []Function{
 				"  tree_stats /var/log --json | jq '.data.top_by_size'\n" +
 				"\n" +
 				"  # Stay on one filesystem, cap scan depth\n" +
-				"  tree_stats --xdev --depth 8 /\n" +
+				"  tree_stats --xdev --depth 8 --allow-root /\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --depth N              Scan depth limit (default unbounded)\n" +
 				"  --top N                Number of extensions in top lists (default 5)\n" +
-				"  --exclude GLOB         Prune matching paths (repeatable)\n" +
+				"  --exclude GLOB         Skip entries whose name or path below PATH matches GLOB\n" +
+				"                         (repeatable; no newlines)\n" +
 				"  --no-ignore            Disable default pruning\n" +
 				"  --xdev                 Stay on a single filesystem\n" +
-				"  --follow-symlinks, -L  Follow symbolic links\n" +
+				"  --follow-symlinks, -L  Follow symbolic links (never into protected paths)\n" +
 				"  --allow-root           Required to scan '/'\n" +
 				"  --json                 Emit JSON envelope\n" +
-				"  --no-color             Disable ANSI colors\n" +
+				"  --no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Single-walk aggregation via `find -printf` + awk. Extensions are derived\n" +
-				"  from the basename (lowercased, after the last dot). Files with no dot\n" +
-				"  or hidden-only dot (.env) are grouped as \"(no ext)\".",
+				"  Single-walk aggregation. Extensions are derived from the basename\n" +
+				"  (ASCII-lowercased, after the last dot). Files with no dot or\n" +
+				"  hidden-only dot (.env) are grouped as \"(no ext)\".\n" +
+				"  Paths containing literal tab or newline characters are excluded from\n" +
+				"  every count and total (they cannot be represented safely in\n" +
+				"  line-oriented output).",
 		},
 		Fallback:          &Usage{Program: "tree_stats", Usage: "tree_stats [PATH] [--depth N] [--top N] [--exclude GLOB] [--no-ignore] [--xdev] [--follow-symlinks] [--allow-root] [--json] [--no-color]", Description: "Compact filesystem stats: totals, top extensions (by count & size), depth, empty dirs. Alias: tls"},
 		ShellVars:         []string{"HOME"},

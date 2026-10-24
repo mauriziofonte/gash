@@ -169,7 +169,8 @@ Bash walk where `realpath -m` is missing) and, for macOS, without a
 `llm_grep`, `llm_config`, `llm_git_*`, `llm_project`, `llm_deps`, SQLite
 files of `llm_db_*` and the arguments of `llm_exec`. The filesystem scanners (`files_largest`, `dirs_largest`,
 `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse `/proc`, `/sys`,
-`/dev`, `/boot` and `/root` (as written and resolved), and `/` without
+`/dev`, `/boot` and `/root` (as written and resolved), also when reached
+through a symlink or from `/` (a walk skips them), and `/` without
 `--allow-root`.
 
 ## Git

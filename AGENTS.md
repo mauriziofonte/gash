@@ -74,10 +74,12 @@ with or without ripgrep. Zero matches: exit 0, no output.
 | `tree_stats [PATH]` | Totals, top extensions (`--top N`), depth, empty dirs |
 
 Common flags (each `--help` lists its own set): `--json`, `--null`/`-0`
-(NUL-separated paths), `--exclude GLOB` (repeatable), `--no-ignore`, `--xdev`,
-`--allow-root` (required to scan `/`), `--human`/`--no-human`, `--no-color`.
-Sizes take bytes or K/M/G/T/P suffixes. Paths containing a tab or a newline
-are left out of the results.
+(NUL-separated paths), `--exclude GLOB` (repeatable; skips entries whose name
+or path below PATH matches; a newline in GLOB is `invalid_filter`),
+`--no-ignore`, `--xdev`, `--allow-root` (required to scan `/`),
+`--human`/`--no-human`, `--no-color`. Sizes are bytes, or a number with up to
+6 decimals and K, M, G, T, P or E, optionally followed by B, i or iB (powers
+of 1024). Paths containing a tab or a newline are left out of the results.
 
 ### 3.3 Databases (read-only)
 
@@ -149,7 +151,9 @@ Real output; only whitespace was changed to fit the page.
 
 kind is "files" or "directories"; directories have no mtime unless
 `dirs_find_large --with-mtime`. errors counts unreadable entries (usually
-permission denied). No results: `"data": []` and `"count": 0`.
+permission denied). No results: `"data": []` and `"count": 0`. Equal sizes
+are ordered by mtime, newer first (`files_largest`), then by path in
+descending byte order.
 
 ### 4.2 Empty dirs (`dirs_list_empty --json`)
 
@@ -166,6 +170,10 @@ permission denied). No results: `"data": []` and `"count": 0`.
   "top_by_size":[{"ext":"log","size":524288},{"ext":"png","size":70000}]},
  "scan_time":"6ms","errors":0}
 ```
+
+top_by_count is ordered by count, then size (both descending), then
+extension in ascending byte order; top_by_size by size, then count, then
+extension. Extensions are lowercased in ASCII only.
 
 ### 4.4 Database (`llm_db_*`)
 
@@ -257,10 +265,11 @@ every check below.
   `/etc/sudoers` and everything below them are refused, checked as written
   and after resolving symlinks. Root's home is refused also where it is not
   `/root` (macOS: `/var/root`).
-* Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root` as scan roots
-  (the PATH argument only: a walk that follows `-L` or starts at `/` with
-  `--allow-root` can still enter them), need `--allow-root` for `/`, and do
-  not refuse `..`.
+* Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root` (and root's
+  home where it is not `/root`), also when reached through a symlink or
+  from `/`: as the PATH argument they fail with `forbidden_path`, and a walk
+  that follows `-L` or starts at `/` with `--allow-root` skips them. They
+  need `--allow-root` for `/` and do not refuse `..`.
 * `llm_exec` applies the same forbidden-path rules to every argument of
   every command (option values, `key=value` words, `~`, glob matches, and
   relative paths after a `cd` in the line), except `/dev/null`, the
