@@ -124,13 +124,18 @@ func (m *Module) processKill(c *invoke.Call) int {
 			return 1
 		}
 	}
-	m.terminate(pids, func(pid string, killed bool) {
-		if killed {
+	if !m.terminate(pids, func(pid string, outcome int) {
+		switch outcome {
+		case outKilled:
 			p.Info("Process " + pid + " ignored SIGTERM; killed with SIGKILL.")
-		} else {
+		case outDenied:
+			p.Error(deniedMsg(pid))
+		default:
 			p.Info("Process " + pid + " terminated.")
 		}
-	})
+	}) {
+		return 1
+	}
 	return 0
 }
 
@@ -237,17 +242,37 @@ func (m *Module) signal(pid string, sig syscall.Signal) error {
 	return m.kill(n, sig)
 }
 
+// Outcomes of terminate for one PID.
+const (
+	outTerminated = iota // gone after TERM (or already gone)
+	outKilled            // still alive after the poll, sent KILL
+	outDenied            // the user may not signal it (EPERM)
+)
+
 // terminate sends TERM to every PID, polls them with signal 0 every 0.1 s
-// for up to 3 s, then KILLs the survivors. A PID whose probe fails (dead,
-// or EPERM: SYS-02) counts as terminated. report gets each PID in order.
-func (m *Module) terminate(pids []string, report func(pid string, killed bool)) {
+// for up to 3 s, then KILLs the survivors. A PID that refuses a signal
+// with EPERM is not terminated (LEDGER SYS-02): it is reported as denied
+// and left out of the poll; ESRCH means it is gone. report gets each PID
+// in order; terminate returns false when any PID was denied.
+func (m *Module) terminate(pids []string, report func(pid string, outcome int)) bool {
+	denied := map[string]bool{}
 	for _, pid := range pids {
-		_ = m.signal(pid, syscall.SIGTERM)
+		if m.signal(pid, syscall.SIGTERM) == syscall.EPERM {
+			denied[pid] = true
+		}
+	}
+	probe := func(pid string) bool {
+		err := m.signal(pid, 0)
+		if err == syscall.EPERM {
+			denied[pid] = true
+			return false
+		}
+		return err == nil
 	}
 	for waited := 0; waited < 30; waited++ {
 		alive := false
 		for _, pid := range pids {
-			if m.signal(pid, 0) == nil {
+			if !denied[pid] && probe(pid) {
 				alive = true
 			}
 		}
@@ -256,15 +281,27 @@ func (m *Module) terminate(pids []string, report func(pid string, killed bool)) 
 		}
 		m.sleep(100 * time.Millisecond)
 	}
+	ok := true
 	for _, pid := range pids {
-		if m.signal(pid, 0) == nil {
-			_ = m.signal(pid, syscall.SIGKILL)
-			report(pid, true)
-		} else {
-			report(pid, false)
+		alive := !denied[pid] && probe(pid)
+		if alive && m.signal(pid, syscall.SIGKILL) == syscall.EPERM {
+			denied[pid] = true
+		}
+		switch {
+		case denied[pid]:
+			ok = false
+			report(pid, outDenied)
+		case alive:
+			report(pid, outKilled)
+		default:
+			report(pid, outTerminated)
 		}
 	}
+	return ok
 }
+
+// deniedMsg is the SYS-02 error of a process the user may not signal.
+func deniedMsg(pid string) string { return "Process " + pid + ": permission denied." }
 
 // portKill is port_kill: the lsof TCP-listener and UDP queries (a UDP
 // client of PORT included, SYS-03) merged as `sort -un`, the plan, the
@@ -316,13 +353,18 @@ func (m *Module) portKill(c *invoke.Call) int {
 		p.Info("Aborted.")
 		return 1
 	}
-	m.terminate(pids, func(pid string, killed bool) {
-		if killed {
+	if !m.terminate(pids, func(pid string, outcome int) {
+		switch outcome {
+		case outKilled:
 			p.Info("Process " + pid + " on port " + port + " ignored SIGTERM; killed with SIGKILL.")
-		} else {
+		case outDenied:
+			p.Error(deniedMsg(pid))
+		default:
 			p.Info("Process " + pid + " on port " + port + " terminated.")
 		}
-	})
+	}) {
+		return 1
+	}
 	return 0
 }
 

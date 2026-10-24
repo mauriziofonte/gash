@@ -2948,7 +2948,8 @@ var functions = []Function{
 				"NOTES\n" +
 				"  --force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session\n" +
 				"  connected to that port elsewhere is left alone. SIGTERM first,\n" +
-				"  SIGKILL for processes still alive after about 3 seconds.",
+				"  SIGKILL for processes still alive after about 3 seconds.\n" +
+				"  Returns 1 when a process could not be signalled (permission denied).",
 		},
 		Fallback: &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -3020,7 +3021,8 @@ var functions = []Function{
 				"  with their command lines and asks. Without a terminal to ask\n" +
 				"  (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.\n" +
 				"  --force is the same as -y. SIGTERM first, SIGKILL for processes still\n" +
-				"  alive after about 3 seconds. Declining returns 1.\n" +
+				"  alive after about 3 seconds. Declining returns 1, and so does a\n" +
+				"  process that could not be signalled (permission denied).\n" +
 				"  NAME is a name, not a pattern: regex characters match themselves, and\n" +
 				"  a name longer than 15 bytes is matched against the full program name.",
 		},

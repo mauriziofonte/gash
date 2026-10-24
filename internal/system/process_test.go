@@ -129,13 +129,20 @@ func TestLedger_SYS01(t *testing.T) {
 	require.Equal(t, result{"", "Error: 1 process(es) match 'webpack-dev-server' (PID 701). Refusing to kill without a terminal to confirm; pass -y.\n", 1}, r)
 }
 
-// SYS-02: a process the user may not signal is reported as terminated.
+// SYS-02: a process the user may not signal is reported as such and the
+// call returns 1 (3.0: SYS-02 fixed; 2.x said "terminated", rc 0); ESRCH
+// still means terminated.
 func TestLedger_SYS02(t *testing.T) {
-	m, k, _ := tm(t, runner.NewFake(t, pgrep("root-proc", "1\n", 0)))
+	m, k, _ := tm(t, runner.NewFake(t, pgrep("root-proc", "1\n", 0), lsof("8080", "1\n", ""), lsofUDP("8080", ""),
+		runner.Expect{Argv: []string{"ps", "-o", "comm=", "-p", "1"}, Stdout: "init\n"}))
 	k.refuse = syscall.EPERM
 	r := call(m, "process_kill", nil, nil, "", "-y", "root-proc")
-	require.Equal(t, result{"", "Info: Process 1 terminated.\n", 0}, r)
-	require.Equal(t, []string{"TERM 1", "0 1", "0 1"}, k.sent)
+	require.Equal(t, result{"", "Error: Process 1: permission denied.\n", 1}, r)
+	require.Equal(t, []string{"TERM 1"}, k.sent)
+
+	k.sent = nil
+	r = call(m, "port_kill", map[string]string{"PATH": binDir(t, "lsof")}, nil, "", "-y", "8080")
+	require.Equal(t, result{"", "Info: Listening on port 8080:\n  1  init\nError: Process 1: permission denied.\n", 1}, r)
 }
 
 // SYS-10: the last positional wins in process_kill and port_kill.
