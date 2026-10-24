@@ -19,7 +19,7 @@ var functions = []Function{
 		Aliases:  []string{"ask"},
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Interactive AI chat from the terminal",
+			Short:   "Ask the AI one question from the terminal",
 			Module:  "ai",
 			Aliases: "ask",
 			SeeAlso: "ai_query ai_sysinfo gash_ai_list",
@@ -28,14 +28,14 @@ var functions = []Function{
 				"  ai_ask [provider]\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Start an interactive chat (uses first configured provider)\n" +
+				"  # Ask one question (uses first configured provider)\n" +
 				"  ask\n" +
 				"\n" +
 				"  # Use a specific provider\n" +
 				"  ask claude\n" +
 				"  ask gemini\n" +
 				"\n" +
-				"  # Type your questions interactively:\n" +
+				"  # Type your question at the prompt:\n" +
 				"  #   claude: how to find files larger than 100MB?\n" +
 				"  #   Command: find . -type f -size +100M\n" +
 				"  #   Explanation: Finds all files larger than 100MB.\n" +
@@ -85,7 +85,7 @@ var functions = []Function{
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},
-		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Interactive AI chat. Provider: claude or gemini (default: first available)"},
+		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Ask the AI one question. Provider: claude or gemini (default: first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
 		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "ZSH_VERSION", "__AI_LAST_EXIT"},
@@ -219,7 +219,7 @@ var functions = []Function{
 			SeeAlso: "sysinfo ai_query",
 			Body: "" +
 				"USAGE\n" +
-				"  ai_sysinfo [provider] [--raw]\n" +
+				"  ai_sysinfo [claude|gemini] [--raw] [--no-color]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Run AI-powered system analysis\n" +
@@ -265,7 +265,7 @@ var functions = []Function{
 				"  unattended runs. Secrets are redacted before sending either way.\n" +
 				"  Use --raw to see exactly what is collected.",
 		},
-		Fallback:          &Usage{Program: "ai_sysinfo", Usage: "ai_sysinfo [provider] [--raw] [--no-color]", Description: "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai"},
+		Fallback:          &Usage{Program: "ai_sysinfo", Usage: "ai_sysinfo [claude|gemini] [--raw] [--no-color]", Description: "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
 		ShellVars:         []string{"GASH_AI_DEBUG", "HOME"},

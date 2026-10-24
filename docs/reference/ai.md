@@ -6,13 +6,13 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 | Function | Alias | Description |
 |---|---|---|
-| [`ai_ask`](#ai-ask) | `ask` | Interactive AI chat from the terminal |
+| [`ai_ask`](#ai-ask) | `ask` | Ask the AI one question from the terminal |
 | [`ai_query`](#ai-query) |  | Non-interactive AI query with optional piped input |
 | [`ai_sysinfo`](#ai-sysinfo) | `sysinfo_ai` | AI-powered system security and configuration analysis |
 
 ## ai_ask
 
-Interactive AI chat from the terminal
+Ask the AI one question from the terminal
 
 Alias: `ask`
 
@@ -25,14 +25,14 @@ ai_ask [provider]
 #### Examples
 
 ```bash
-# Start an interactive chat (uses first configured provider)
+# Ask one question (uses first configured provider)
 ask
 
 # Use a specific provider
 ask claude
 ask gemini
 
-# Type your questions interactively:
+# Type your question at the prompt:
 #   claude: how to find files larger than 100MB?
 #   Command: find . -type f -size +100M
 #   Explanation: Finds all files larger than 100MB.
@@ -200,7 +200,7 @@ Alias: `sysinfo_ai`
 #### Usage
 
 ```text
-ai_sysinfo [provider] [--raw]
+ai_sysinfo [claude|gemini] [--raw] [--no-color]
 ```
 
 #### Examples

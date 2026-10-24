@@ -205,9 +205,10 @@ repository's `.git/config` before pointing an agent at it.
 * **WireGuard keys.** The `sysinfo` drill-downs, and the AI collectors that
   run them, print the value of every WireGuard `PrivateKey` and
   `PresharedKey` line as `[REDACTED]`, whatever its case and spacing.
-* **Transport.** The body goes through a temporary file created with umask 077
-  and then deleted; the API key reaches `curl` through `--config` on a pipe,
-  never argv. Control characters are stripped from replies.
+* **Transport.** The request is made inside the gash process over HTTPS: the
+  body is never written to a file, and the API key is a request header set
+  in the process, never on a command line. Control characters are stripped
+  from replies.
 * **Consent.** `GASH_AI_CONFIRM=auto` (default) asks before sending data Gash
   collected (`ai_sysinfo`) and sends what you typed or piped; `1` always asks;
   `0` never; any other value (case-sensitive: `off`, `AUTO`) always asks and
@@ -287,8 +288,8 @@ only with `GASH_DEBUG=1`. Parsed values
 live in unexported shell variables (not inherited by child processes) that
 `gash_unload` removes. Secrets never go on a command line, where other users
 could read them in `/proc/<pid>/cmdline`: MySQL credentials use
-`--defaults-extra-file`, SSH passphrases reach `expect` on stdin, API keys
-reach `curl` through `--config`.
+`--defaults-extra-file`, SSH passphrases are typed to `ssh-add` on a
+terminal Gash drives, and AI API keys stay inside the gash process.
 
 ## Install and upgrade
 

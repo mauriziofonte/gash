@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // claudeUser returns the user message content of a recorded Claude body.
@@ -205,5 +207,42 @@ func TestReadPiped(t *testing.T) {
 	}
 	if len(got) != 4096+len("\n[... truncated to 4KB]") {
 		t.Fatalf("cut not at 4096 bytes: %d", len(got))
+	}
+}
+
+// 3.0: AI-25 fixed: the registered help of ai_sysinfo names --no-color
+// and the providers, ai_ask is one question per call, and the PRIVACY
+// notes describe the in-process key.
+func TestLedger_AI25(t *testing.T) {
+	page := func(name string) string {
+		f, ok := registry.Lookup(name)
+		if !ok {
+			t.Fatalf("%s not registered", name)
+		}
+		var b strings.Builder
+		if !help.Display(&b, false, f) {
+			t.Fatalf("%s: no help", name)
+		}
+		return b.String()
+	}
+	si := page("ai_sysinfo")
+	for _, want := range []string{"  ai_sysinfo [claude|gemini] [--raw] [--no-color]\n"} {
+		if !strings.Contains(si, want) {
+			t.Errorf("ai_sysinfo help lacks %q:\n%s", want, si)
+		}
+	}
+	if f, _ := registry.Lookup("ai_sysinfo"); !strings.Contains(f.Fallback.Usage, "--no-color") {
+		t.Errorf("fallback usage %q", f.Fallback.Usage)
+	}
+	ask := strings.Join(strings.Fields(page("ai_ask")), " ")
+	for _, want := range []string{"Ask the AI one question from the terminal", "The API key stays inside the gash process, never on a command line"} {
+		if !strings.Contains(ask, want) {
+			t.Errorf("ai_ask help lacks %q:\n%s", want, ask)
+		}
+	}
+	for _, stale := range []string{"Interactive AI chat", "interactive chat", "end the session", "curl config"} {
+		if strings.Contains(ask, stale) {
+			t.Errorf("ai_ask help still says %q", stale)
+		}
 	}
 }
