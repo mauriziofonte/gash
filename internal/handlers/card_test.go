@@ -83,9 +83,10 @@ var cardRule = regexp.MustCompile(`(?m)^(\s*)─+$`)
 var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // requireCardLayout fails unless got is want line for line, except that a
-// function's row may differ after its name: 3.0's fixes rewrote many usages
-// and summaries (each under its own ledger item), while the card's topics,
-// headers, grouping, row order and line count still match 2.x.
+// function's row may differ after its name, and the column header and a
+// section rule in spacing: 3.0's fixes rewrote many usages and summaries
+// (each under its own ledger item), while the card's topics, header names,
+// grouping, row order and line count still match 2.x.
 func requireCardLayout(t *testing.T, want, got string, args []string) {
 	t.Helper()
 	w, g := strings.Split(want, "\n"), strings.Split(got, "\n")
@@ -98,10 +99,16 @@ func requireCardLayout(t *testing.T, want, got string, args []string) {
 		}
 		wf, gf := strings.Fields(sgr.ReplaceAllString(w[i], "")), strings.Fields(sgr.ReplaceAllString(g[i], ""))
 		_, isFunc := registry.Lookup(firstField(gf))
-		if !isFunc || firstField(wf) != firstField(gf) {
+		// The column header and a section rule follow the widest usage.
+		spacing := slices.Equal(wf, gf) || (isRule(wf) && isRule(gf))
+		if !spacing && (!isFunc || firstField(wf) != firstField(gf)) {
 			require.Equal(t, want, got, "%q: line %d", args, i+1)
 		}
 	}
+}
+
+func isRule(f []string) bool {
+	return len(f) == 1 && strings.Trim(f[0], "─") == ""
 }
 
 func firstField(f []string) string {
