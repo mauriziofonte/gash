@@ -74,6 +74,13 @@ func (m *Module) check(c *invoke.Call) int {
 			path = a
 		}
 	}
+	// The argument first: a PATH that cannot be resolved is refused
+	// before any docker call (LEDGER DOCK-01).
+	raw := path
+	path, ok := x.resolveDir(raw)
+	if !ok {
+		return x.refuseDir(raw, jsonOut)
+	}
 	if jsonOut {
 		if !x.have("docker") {
 			return c.Fail(contract.New("docker_not_found", "Docker is not installed", "Skip the image update check"))
@@ -86,7 +93,6 @@ func (m *Module) check(c *invoke.Call) int {
 	}
 	x.colors(noColor)
 
-	path = x.resolveDir(path)
 	file := composeFile(path)
 	if file == "" {
 		if jsonOut {
@@ -96,8 +102,11 @@ func (m *Module) check(c *invoke.Call) int {
 		x.p.Error("No docker-compose.yml found in " + path)
 		return 1
 	}
-	services := x.parseServices(file)
-	if services == "" {
+	parsed := x.parseServices(file, true)
+	if parsed.badName != "" {
+		return x.refuseBadName(parsed.badName, file, jsonOut)
+	}
+	if len(parsed.services) == 0 {
 		if jsonOut {
 			return c.Fail(contract.New("no_services", file, "The compose file has no service with an image: nothing to check"))
 		}
@@ -108,16 +117,24 @@ func (m *Module) check(c *invoke.Call) int {
 	envPath := path + "/.env"
 	var results []result
 	var total, updates, current, pinned, errs int
-	for _, line := range hereLines(services) {
-		f := readFields(line, 2)
+	for _, svc := range parsed.services {
 		total++
-		r := result{name: f[0], image: x.resolveEnvVars(f[1], envPath)}
+		r := result{name: svc.name, image: svc.image}
+		if !parsed.fromConfig {
+			r.image = x.resolveEnvVars(svc.image, envPath)
+		}
 		img := normalizeImage(r.image)
-		r.upgradeable = isUpgradeable(img.tag)
-		if strings.HasPrefix(img.tag, "@sha256:") {
-			r.status, r.local, r.remote = "PINNED", img.tag[1:], img.tag[1:]
+		switch {
+		case img.digest != "":
+			// A digest pin, with or without a tag: nothing to ask
+			// (LEDGER DOCK-06).
+			r.status, r.local, r.remote = "PINNED", img.digest, img.digest
 			pinned++
-		} else {
+		case img.bad:
+			r.status, r.err = "ERROR", "invalid_reference"
+			errs++
+		default:
+			r.upgradeable = isUpgradeable(img.tag)
 			r.local = x.localDigest(r.image)
 			var e string
 			r.remote, e = x.remoteDigest(img)
@@ -248,6 +265,8 @@ func (x *call) report(results []result, file string, updates, current, pinned, e
 // errorText is the message and hint of an error class on a registry.
 func errorText(err, reg string) (string, string) {
 	switch err {
+	case "invalid_reference":
+		return "Invalid image reference", "Check the image name in the compose file"
 	case "timeout":
 		return "Connection timed out", "Registry may be slow or unreachable"
 	case "dns_error":

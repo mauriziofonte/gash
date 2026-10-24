@@ -1,0 +1,27 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: DOCK-01
+#
+# An empty PATH argument (an unset variable in `dcc "$DIR" --json`) is
+# refused; it never means the current directory. Omitting it still does.
+
+env GASH_HEADLESS=1
+
+! exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; cd p; source "$GASH_SH"; docker_compose_check "" --json'
+! stdout .
+stderr '^\{"error":"path_not_found","action":"RETRY","recoverable":true,"hint":"Pass the directory that holds the compose file \(omit it for the current directory\)"\}$'
+
+! exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"; cd p; source "$GASH_SH"; docker_compose_upgrade "" --yes'
+stderr '^Error: Cannot resolve path: ..$'
+
+! exec bash -c 'cd p; source "$GASH_SH"; docker_compose_scan "" --json'
+stderr '"error":"path_not_found"'
+
+exec bash -c 'cd p; source "$GASH_SH"; docker_compose_scan --json'
+stdout '"services":\["cwdsvc"\]'
+
+-- p/compose.yml --
+services:
+  cwdsvc:
+    image: nginx:latest

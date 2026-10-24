@@ -7,22 +7,24 @@
 //
 // docker, docker compose and docker-compose are started through
 // internal/runner with the caller's exported environment (c.Env.Child())
-// and the 2.x argv, never through a shell. Registry digests are asked
-// over net/http with the 2.x protocol (registry.go). The 2.x behaviors and
-// defects are kept as the LEDGER DOCK items say; the forced divergences
-// are DOCK-02 (paths resolved natively, GNU realpath -m semantics), DOCK-08
-// (one struct per service), DOCK-11 (nothing is left in the caller's
-// shell), DOCK-12 (interpolation from DIR/.env and the exported
-// environment, literal replacement), DOCK-19 (no Bash diagnostics),
-// DOCK-23 to DOCK-25 (net/http instead of curl), DOCK-26 (compose v2
-// config parsed with encoding/json) and DOCK-27 (byte order).
+// and the 2.x argv, never through a shell; compose runs in the project
+// directory without -f, so Compose discovers the project's files itself
+// (LEDGER DOCK-04). Image references are parsed with go-containerregistry
+// (DOCK-06, DOCK-07) and registry digests asked over net/http with the
+// 2.x protocol (HEAD only, the error vocabulary, no credential store),
+// plus the GITHUB_TOKEN exchange and the anonymous Bearer challenge
+// (DOCK-14, DOCK-15). The forced divergences are DOCK-02 (paths resolved
+// natively, GNU realpath -m semantics), DOCK-08 (one struct per service),
+// DOCK-11 (nothing is left in the caller's shell), DOCK-12 (only the
+// exported environment and DIR/.env interpolate), DOCK-19 (no Bash
+// diagnostics), DOCK-23 to DOCK-25 (net/http instead of curl), DOCK-26
+// (compose v2 config parsed with encoding/json) and DOCK-27 (byte order).
 package docker
 
 import (
 	"context"
 	"io"
 	"net/http"
-	"os"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -131,13 +133,3 @@ func (x *call) requireDocker() bool {
 
 // headless is GASH_HEADLESS=1.
 func (x *call) headless() bool { return x.Env.Get("GASH_HEADLESS") == "1" }
-
-// pwd is the caller's $PWD (the fallback of a path realpath -m refuses),
-// the working directory of the binary when the caller has none.
-func (x *call) pwd() string {
-	if p := x.Env.Get("PWD"); p != "" {
-		return p
-	}
-	wd, _ := os.Getwd()
-	return wd
-}

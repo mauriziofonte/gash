@@ -27,7 +27,8 @@ stdout 'Dry run: no changes will be made'
 stdout '• db  \(postgres:15\.2\.1\) - pinned version'
 stdout '✓ web \(nginx:latest\)'
 stdout 'Would run:'
-stdout 'docker compose .* pull web'
+# 3.0: DOCK-31 fixed: service names after --.
+stdout 'docker compose .* pull -- web'
 
 # --- :252 all-pinned - every image is digest-pinned: nothing to do (offline)
 exec bash -c 'mkdir -p u252; cd u252; printf "services:\n  db:\n    image: postgres:15.2.1\n" >docker-compose.yml; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade'
@@ -39,7 +40,10 @@ stdout 'No services to upgrade \(all pinned\)\.'
 stderr 'Refusing to upgrade in headless mode without --yes'
 
 # --- :254 yes - -y pulls, restarts and prunes to completion
-exec bash -c 'mkdir -p u254/bin; cd u254; printf "#!/bin/sh\nexit 0\n" >bin/docker; chmod +x bin/docker; printf "services:\n  web:\n    image: nginx:latest\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade -y; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+# A docker whose compose config fails (the YAML reader runs) and every other
+# call succeeds. (2.x read an empty successful config as one empty service:
+# 3.0: DOCK-05 fixed.)
+exec bash -c 'mkdir -p u254/bin; cd u254; install -m755 "$WORK/stub254/docker" bin/docker; printf "services:\n  web:\n    image: nginx:latest\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export PATH="$PWD/bin:$PATH" HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_upgrade -y; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stderr '\[1/4\] Pulling updated images\.\.\.'
 stderr '\[4/4\] Cleaning old images\.\.\.'
 stdout 'Upgrade Complete'
@@ -65,3 +69,7 @@ stderr '^Error: -n is not --dry-run anymore'
 # real docker on the host.
 [ "$1 $2" = "compose version" ] && { echo "Docker Compose version v2.24.0"; exit 0; }
 exit 1
+-- stub254/docker --
+#!/bin/sh
+case " $* " in *" config "*) exit 1 ;; esac
+exit 0

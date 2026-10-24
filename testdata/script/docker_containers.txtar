@@ -24,8 +24,12 @@
 env GASH_HEADLESS=1
 
 # --- docker_spec.sh:11 - docker_stop_all stops running containers
-exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/stop.log"; source "$GASH_SH"; docker_stop_all 2>/dev/null'
-grep 'docker ps -q' stop.log
+# 3.0: DOCK-22 fixed: headless it needs -y; the listing names the containers.
+! exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/stop0.log"; source "$GASH_SH"; docker_stop_all'
+stderr 'No terminal to ask for confirmation: pass -y to go ahead'
+! grep 'docker stop' stop0.log
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/stop.log"; source "$GASH_SH"; docker_stop_all -y 2>/dev/null'
+grep 'docker ps --format' stop.log
 grep 'docker stop abc123' stop.log
 
 # --- docker_spec.sh:32 - docker_stop_all is a no-op with no running containers
@@ -37,8 +41,9 @@ stdout 'No running containers'
 stderr 'Docker is not installed'
 
 # --- docker_spec.sh:63 - docker_start_all starts only stopped containers
-exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/start.log"; source "$GASH_SH"; docker_start_all 2>/dev/null'
-grep 'ps -aq --filter' start.log
+# 3.0: DOCK-22 fixed: -y headless.
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_LOG="$PWD/start.log"; source "$GASH_SH"; docker_start_all -y 2>/dev/null'
+grep 'ps -a --filter' start.log
 grep 'docker start stopped123' start.log
 
 # --- docker_spec.sh:84 - docker_start_all is a no-op with no stopped containers

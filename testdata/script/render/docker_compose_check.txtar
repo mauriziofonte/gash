@@ -26,10 +26,11 @@ env PATH=$WORK/stub${:}$PATH
 chmod 0755 stub/docker
 
 # --- :243 updates - mixed mutable/pinned images, newest available
-exec bash -c 'mkdir -p c243; cd c243; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.2.1\n  app:\n    image: ghcr.io/some-org/a-really-long-application-image-name:main\n  pinned:\n    image: redis@sha256:abc\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_check; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+exec bash -c 'mkdir -p c243; cd c243; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15.2.1\n  app:\n    image: ghcr.io/some-org/a-really-long-application-image-name:main\n  pinned:\n    image: redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" >docker-compose.yml; httpsfake -ca ca -addr addr & pid=$!; for i in $(seq 1 100); do [ -s addr ] && break; sleep 0.05; done; read -r a <addr; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_check; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
 stdout 'Checking .*/docker-compose\.yml'
 stdout '(?m)^web\s+nginx:latest\s+NOT_PULLED'
-stdout '(?m)^pinned\s+redis@sha256:abc\s+PINNED'
+# 3.0: DOCK-06 fixed: a digest pin must be a valid digest to parse.
+stdout '(?m)^pinned\s+redis@sha256:a+\S?\s+PINNED'
 stdout 'Summary: 3 update.s. 1 pinned'
 
 # --- :244 errors - the registry rate-limits every lookup
