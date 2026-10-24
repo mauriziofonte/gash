@@ -954,3 +954,25 @@ func TestLedger_HTE47(t *testing.T) {
 		t.Error("a removed alias did not reissue the pair")
 	}
 }
+
+// TestLedger_HTE48 (engine part, option a for both choices): site remove
+// keeps the site's log directory and its files, as it keeps the document
+// root; nothing rotates the logs.
+func TestLedger_HTE48(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	v := m.install(t)
+	docroot := m.docroot(t)
+	if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: &docroot, HTTPS: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	logs := v.paths.SiteLogDir("app.test")
+	access := filepath.Join(logs, "access.log")
+	must(t, os.WriteFile(access, []byte("127.0.0.1 - - GET /\n"), 0o600))
+	if _, err := m.e.SiteRemove(ctx, "app.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(access); err != nil || string(data) != "127.0.0.1 - - GET /\n" {
+		t.Errorf("site remove changed the site's log: %q %v", data, err)
+	}
+}
