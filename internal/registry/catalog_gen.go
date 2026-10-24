@@ -3312,7 +3312,8 @@ var functions = []Function{
 				"  Only stops services that are currently active, through systemd when it\n" +
 				"  runs, else through `service` (WSL without systemd, containers).\n" +
 				"  --force is the same as -y. Returns 1 when declined or when a stop\n" +
-				"  fails.",
+				"  fails. Headless or without a terminal it runs sudo -n, and stops\n" +
+				"  before anything when sudo needs a password.",
 		},
 		Fallback: &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -3493,7 +3494,7 @@ var functions = []Function{
 			SeeAlso: "wsl_restart wsl_shutdown",
 			Body: "" +
 				"USAGE\n" +
-				"  wsl_compact [--status]\n" +
+				"  wsl_compact [--status] [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # code . or explorer.exe fail with \"UtilAcceptVsock ... accept4 failed 110\"\n" +
@@ -3508,11 +3509,14 @@ var functions = []Function{
 				"  allocation fails (dmesg: \"page allocation failure: order:7\") and the\n" +
 				"  launch times out. wsl_compact drops the page cache and slab, compacts\n" +
 				"  memory (sudo), prints the free blocks before and after, and checks that\n" +
-				"  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.",
+				"  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.\n" +
+				"  On a terminal it runs without asking; headless it needs -y (--yes).\n" +
+				"  Unattended, sudo must not need a password (sudo -n is checked first).\n" +
+				"  When dmesg is not readable the failure count is \"unknown\".",
 		},
-		Fallback:   &Usage{Program: "wsl_compact", Usage: "wsl_compact [--status]", Description: "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc"},
+		Fallback:   &Usage{Program: "wsl_compact", Usage: "wsl_compact [--status] [-y]", Description: "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc"},
 		Env:        []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--status --help\" -- \"$cur\")",
+		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--status -y --yes --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "wsl_explorer",

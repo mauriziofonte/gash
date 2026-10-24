@@ -424,7 +424,8 @@ mongodb, redis, redis-server, memcached, docker
 Only stops services that are currently active, through systemd when it
 runs, else through `service` (WSL without systemd, containers).
 --force is the same as -y. Returns 1 when declined or when a stop
-fails.
+fails. Headless or without a terminal it runs sudo -n, and stops
+before anything when sudo needs a password.
 ```
 
 See also: `process_kill`
@@ -520,7 +521,7 @@ Alias: `wslc`
 #### Usage
 
 ```text
-wsl_compact [--status]
+wsl_compact [--status] [-y]
 ```
 
 #### Examples
@@ -542,6 +543,9 @@ allocation fails (dmesg: "page allocation failure: order:7") and the
 launch times out. wsl_compact drops the page cache and slab, compacts
 memory (sudo), prints the free blocks before and after, and checks that
 cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.
+On a terminal it runs without asking; headless it needs -y (--yes).
+Unattended, sudo must not need a password (sudo -n is checked first).
+When dmesg is not readable the failure count is "unknown".
 ```
 
 See also: `wsl_restart`, `wsl_shutdown`

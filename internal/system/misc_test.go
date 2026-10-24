@@ -222,7 +222,7 @@ func TestServicesStop(t *testing.T) {
 	f.Expect(runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "nginx"}, Stderr: "sudo systemctl stop nginx\n"},
 		runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "docker"}, Stderr: "sudo systemctl stop docker\n", Status: 5})
 	m, _, _ := tm(t, f)
-	r := call(m, "services_stop", svcEnv(t, true, "systemctl", "service"), nil, "", "-y")
+	r := call(m, "services_stop", svcEnv(t, true, "systemctl", "service"), ctty(), "", "-y")
 	require.Equal(t, result{"", "Info: Running: nginx docker\nInfo: Stopping nginx...\nsudo systemctl stop nginx\n" +
 		"Info: Stopping docker...\nsudo systemctl stop docker\n", 1}, r)
 
@@ -237,7 +237,7 @@ func TestServicesStop(t *testing.T) {
 	}
 	f.Expect(runner.Expect{Argv: []string{"sudo", "service", "mysql", "stop"}})
 	m, _, _ = tm(t, f)
-	r = call(m, "services_stop", svcEnv(t, false, "systemctl", "service"), nil, "", "--yes")
+	r = call(m, "services_stop", svcEnv(t, false, "systemctl", "service"), ctty(), "", "--yes")
 	require.Equal(t, result{"", "Info: Running: mysql\nInfo: Stopping mysql...\n", 0}, r)
 
 	m, _, _ = tm(t, runner.NewFake(t, isActive("nginx")...))
@@ -261,20 +261,39 @@ func TestServicesStop(t *testing.T) {
 	require.Equal(t, result{"", "Error: Unknown option: -x (usage: services_stop [-y] [--dry-run])\n", 1}, r)
 }
 
-// SYS-25: unattended -y still runs plain sudo on the caller's terminal.
+// 3.0: SYS-25 fixed: an unattended -y (headless, or no controlling
+// terminal) checks `sudo -n true` first and stops with sudo -n; a sudo
+// that wants a password is one clear error and nothing is stopped.
 func TestLedger_SYS25(t *testing.T) {
 	f := runner.NewFake(t, isActive("redis")...)
-	f.Expect(runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "redis"}, Stdin: runner.Text("typed")})
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}},
+		runner.Expect{Argv: []string{"sudo", "-n", "systemctl", "stop", "redis"}, Stdin: runner.Text("typed")})
 	m, _, _ := tm(t, f)
 	env := svcEnv(t, true, "systemctl")
 	env["GASH_HEADLESS"] = "1"
 	r := call(m, "services_stop", env, nil, "typed", "-y")
 	require.Equal(t, 0, r.rc)
 
+	f = runner.NewFake(t, isActive("redis")...)
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Stderr: "sudo: a password is required\n", Status: 1})
+	m, _, _ = tm(t, f)
+	r = call(m, "services_stop", env, nil, "", "-y")
+	require.Equal(t, result{"", "Info: Running: redis\nError: sudo needs a password: run interactively or configure NOPASSWD.\n", 1}, r)
+
+	// No controlling terminal, not headless: the same check.
+	f = runner.NewFake(t, isActive("redis")...)
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Status: 1})
+	m, _, _ = tm(t, f)
+	delete(env, "GASH_HEADLESS")
+	r = call(m, "services_stop", env, nil, "", "-y")
+	require.Equal(t, 1, r.rc)
+
 	// A sudo that does not start is the shell's message.
 	f = runner.NewFake(t, isActive("redis")...)
-	f.Expect(runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "redis"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}})
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}},
+		runner.Expect{Argv: []string{"sudo", "-n", "systemctl", "stop", "redis"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}})
 	m, _, _ = tm(t, f)
+	env["GASH_HEADLESS"] = "1"
 	r = call(m, "services_stop", env, nil, "", "-y")
 	require.Equal(t, result{"", "Info: Running: redis\nInfo: Stopping redis...\nbash: sudo: command not found\n", 1}, r)
 }

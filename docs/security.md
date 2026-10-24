@@ -259,12 +259,20 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
 | `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
 | `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
+| `wsl_compact` | Runs without asking (it changes no data) | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
 | `sudo_last` (no argument) | Shows the command and asks | Refused |
 | `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
 
 `gash_uninstall` also refuses a directory that resolves to `/` or your home,
 or has no `gash.sh` and `lib/core`.
+
+`services_stop`, `wsl_compact` and `chrome_headless_update` run sudo with `-n`
+when headless or without a terminal, after a `sudo -n true` check: a sudo
+that needs a password stops the command with `Error: sudo needs a password:
+run interactively or configure NOPASSWD.` instead of waiting at a prompt
+nobody sees. `chrome_headless_update` uses no sudo at all when its root and
+link directories are writable.
 
 ## Credentials in ~/.gash_env
 

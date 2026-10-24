@@ -178,7 +178,7 @@ __gash_complete() {
             ;;
 
         wsl_compact)
-            mapfile -t COMPREPLY < <(compgen -W "--status --help" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "--status -y --yes --help" -- "$cur")
             ;;
 
         # The reference card topics, and the 3.x commands of the binary

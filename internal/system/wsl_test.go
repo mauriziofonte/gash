@@ -153,7 +153,7 @@ func TestWSLCompact(t *testing.T) {
 
 	m, _, _ = tm(t, runner.NewFake(t, append(dmesg(dmesgPlain, dmesgStamped, 0), compact(0))...))
 	wslRoot(t, m, true, false)
-	r = call(m, "wsl_compact", nil, nil, "")
+	r = call(m, "wsl_compact", nil, ctty(), "")
 	require.Equal(t, "order-7 allocation failures since the VM started: 2 (last: Mon Oct  6 11:00:00 2026)\n"+compactTable, r.out)
 	require.Equal(t, "Info: Dropping the page cache and slab, then compacting memory (sudo)...\n"+
 		"sudo sh -c sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory\n", r.err)
@@ -161,14 +161,15 @@ func TestWSLCompact(t *testing.T) {
 
 	m, _, _ = tm(t, runner.NewFake(t, append(dmesg("", "", 1), compact(1))...))
 	wslRoot(t, m, true, false)
-	r = call(m, "wsl_compact", nil, nil, "")
-	require.Equal(t, result{"order-7 allocation failures since the VM started: 0\n",
+	r = call(m, "wsl_compact", nil, ctty(), "")
+	// 3.0: SYS-45 fixed: a failing dmesg is no count, not 0.
+	require.Equal(t, result{"order-7 allocation failures since the VM started: unknown (dmesg not readable)\n",
 		"Info: Dropping the page cache and slab, then compacting memory (sudo)...\n" +
 			"sudo sh -c sync && echo 3 > /proc/sys/vm/drop_caches && echo 1 > /proc/sys/vm/compact_memory\n" +
 			"Error: drop_caches/compact_memory failed.\n", 1}, r)
 
 	r = call(m, "wsl_compact", nil, nil, "", "--x")
-	require.Equal(t, result{"", "Error: Unknown option: --x (usage: wsl_compact [--status])\n", 1}, r)
+	require.Equal(t, result{"", "Error: Unknown option: --x (usage: wsl_compact [--status] [-y])\n", 1}, r)
 }
 
 // The interop check runs Windows' cmd.exe with a 20 s limit when it is
@@ -179,7 +180,7 @@ func TestWSLCompactInterop(t *testing.T) {
 	root := wslRoot(t, m, true, true)
 	cmd := filepath.Join(root, "mnt/c/Windows/System32/cmd.exe")
 	f.Expect(runner.Expect{Argv: []string{cmd, "/c", "exit", "0"}})
-	r := call(m, "wsl_compact", nil, nil, "")
+	r := call(m, "wsl_compact", nil, ctty(), "")
 	require.Equal(t, 0, r.rc)
 	require.Contains(t, r.err, "OK: Windows interop works.\n")
 	require.Equal(t, "20s", f.Calls()[3].Timeout.String())
@@ -189,18 +190,38 @@ func TestWSLCompactInterop(t *testing.T) {
 	sr, err := platform.NewSysroot(root)
 	require.NoError(t, err)
 	m.sys = sr
-	r = call(m, "wsl_compact", nil, nil, "")
+	r = call(m, "wsl_compact", nil, ctty(), "")
 	require.Equal(t, 1, r.rc)
 	require.Contains(t, r.err, "Error: Windows interop still fails. Last resort, from Windows: wsl --shutdown\n")
 }
 
-// SYS-45: no question and no headless gate; a failing dmesg counts 0.
+// 3.0: SYS-45 fixed: headless without -y is refused before anything
+// runs; with -y it goes ahead (after the sudo -n check of SYS-25); a
+// failing dmesg prints unknown, not 0. --status needs no -y.
 func TestLedger_SYS45(t *testing.T) {
-	m, _, _ := tm(t, runner.NewFake(t, append(dmesg("", "", 1), compact(0))...))
+	headless := map[string]string{"GASH_HEADLESS": "1"}
+	f := runner.NewFake(t)
+	m, _, _ := tm(t, f)
 	wslRoot(t, m, true, false)
-	r := call(m, "wsl_compact", map[string]string{"GASH_HEADLESS": "1"}, nil, "")
-	require.Equal(t, 0, r.rc)
-	require.Equal(t, "order-7 allocation failures since the VM started: 0\n"+compactTable, r.out)
+	r := call(m, "wsl_compact", headless, nil, "")
+	require.Equal(t, result{"", "Error: wsl_compact needs root: pass -y to run it unattended.\n", 1}, r)
+	require.Empty(t, f.Calls())
+
+	m, _, _ = tm(t, runner.NewFake(t, append(dmesg("", "", 1), runner.Expect{Argv: []string{"sudo", "-n", "true"}}, compact(0))...))
+	wslRoot(t, m, true, false)
+	r = call(m, "wsl_compact", headless, nil, "", "-y")
+	require.Equal(t, 0, r.rc, r.err)
+	require.Equal(t, "order-7 allocation failures since the VM started: unknown (dmesg not readable)\n"+compactTable, r.out)
+
+	m, _, _ = tm(t, runner.NewFake(t, append(dmesg("", "", 0), runner.Expect{Argv: []string{"sudo", "-n", "true"}, Status: 1})...))
+	wslRoot(t, m, true, false)
+	r = call(m, "wsl_compact", headless, nil, "", "--yes")
+	require.Equal(t, 1, r.rc)
+	require.Equal(t, "Error: sudo needs a password: run interactively or configure NOPASSWD.\n", r.err)
+
+	m, _, _ = tm(t, runner.NewFake(t, dmesg("", "", 0)...))
+	wslRoot(t, m, true, false)
+	require.Equal(t, 0, call(m, "wsl_compact", headless, nil, "", "--status").rc)
 }
 
 // SYS-46: the one sudo call is the registered constant script.
@@ -208,7 +229,7 @@ func TestLedger_SYS46(t *testing.T) {
 	f := runner.NewFake(t, append(dmesg("", "", 0), compact(0))...)
 	m, _, _ := tm(t, f)
 	wslRoot(t, m, true, false)
-	r := call(m, "wsl_compact", nil, nil, "")
+	r := call(m, "wsl_compact", nil, ctty(), "")
 	require.Equal(t, 0, r.rc)
 	require.Equal(t, runner.ScriptWSLCompact, f.Calls()[2].Script)
 }
