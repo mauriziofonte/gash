@@ -188,3 +188,13 @@ func TestLedger_CORE07(t *testing.T) {
 	require.Equal(t, []string{"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh",
 		"llm", "utils", "node", "remote", "chrome", "php"}, ModuleOrder)
 }
+
+// LEDGER SELF-21: the gash_upgrade help says what it does (fetch the tags,
+// check out the newest release, never an older one) and no longer claims a
+// cleanup that only 1.x did (3.0: SELF-21 fixed).
+func TestLedger_SELF21(t *testing.T) {
+	f, ok := Lookup("gash_upgrade")
+	require.True(t, ok)
+	require.NotContains(t, f.Help.Body, "cleans up")
+	require.Contains(t, f.Help.Body, "  Fetches the release tags and checks out the newest release (never\n  an older one).")
+}
