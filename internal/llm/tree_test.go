@@ -238,15 +238,36 @@ func TestLedger_LLM29(t *testing.T) {
 	require.Equal(t, `{"path":"`+d+`","type":"directory","size":1,"children_count":1,"children":[{"name":"ok","type":"file","size":1}]}`+"\n", r.Stdout)
 }
 
-// TestLedger_LLM28_2x: invalid_depth has two detail formats.
+// TestLedger_LLM28_2x: invalid_depth has one detail format for 0 and for a
+// non-integer (2.x had two).
 func TestLedger_LLM28_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	d := physTemp(t)
-	r := same(t, m, d, env, "llm_tree", "--depth", "0")
-	require.Equal(t, `{"error":"invalid_depth","details":"0","action":"RETRY","recoverable":true,"hint":"Provide a positive integer"}`+"\n", r.Stderr)
-	r = same(t, m, d, env, "llm_tree", "--depth", "abc")
-	require.Equal(t, `{"error":"invalid_depth","details":"Value 'abc' is not a positive integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for depth"}`+"\n", r.Stderr)
+	// 3.0: LLM-28 fixed
+	r := runGo(t, m, d, env, "llm_tree", "--depth", "0")
+	require.Equal(t, `{"error":"invalid_depth","details":"Value '0' is not an integer from 1 to 999999999","action":"RETRY","recoverable":true,"hint":"Provide a depth of 1 or more"}`+"\n", r.Stderr)
+	r = runGo(t, m, d, env, "llm_tree", "--depth", "abc")
+	require.Equal(t, `{"error":"invalid_depth","details":"Value 'abc' is not an integer from 1 to 999999999","action":"RETRY","recoverable":true,"hint":"Provide a depth of 1 or more"}`+"\n", r.Stderr)
+}
+
+// TestLedger_LLM28: llm_tree --depth 0, 00, abc, -1 and 1234567890 share the
+// one invalid_depth message (RETRY); 1 and 007 are accepted; the other
+// integer options say "non-negative" and accept 0.
+func TestLedger_LLM28(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	d := physTemp(t)
+	for _, v := range []string{"0", "00", "abc", "-1", "1234567890"} {
+		r := runGo(t, m, d, env, "llm_tree", "--depth", v)
+		require.Equal(t, result{"", `{"error":"invalid_depth","details":"Value '` + v + `' is not an integer from 1 to 999999999","action":"RETRY","recoverable":true,"hint":"Provide a depth of 1 or more"}` + "\n", 1}, r, v)
+	}
+	for _, v := range []string{"1", "007"} {
+		require.Equal(t, 0, runGo(t, m, d, env, "llm_tree", "--depth", v).RC, v)
+	}
+	r := runGo(t, m, d, env, "llm_find", "*", "-n", "x")
+	require.Equal(t, result{"", `{"error":"invalid_limit","details":"Value 'x' is not a non-negative integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for limit"}` + "\n", 1}, r)
+	require.Equal(t, result{"", "", 0}, runGo(t, m, d, env, "llm_find", "*", "-n", "0"))
 }
 
 // TestLedger_LLM09_2x: 2.x guarded only the start point, so a walk from /

@@ -60,13 +60,13 @@ func (m *Module) tree(c *invoke.Call) int {
 			maxDepth = "3"
 		}
 	}
-	if !validUint(c, "depth", maxDepth) {
-		return 1
+	// One invalid_depth message for 0 and for a non-integer: the depth is
+	// 1 or more (LLM-28; 2.x had two detail formats).
+	if !uintRE.MatchString(maxDepth) || atoi(maxDepth) < 1 {
+		return fail(c, "invalid_depth", "Value '"+maxDepth+"' is not an integer from 1 to 999999999",
+			"Provide a depth of 1 or more")
 	}
 	depth := atoi(maxDepth)
-	if depth < 1 {
-		return fail(c, "invalid_depth", maxDepth, "Provide a positive integer")
-	}
 	safe, ok := m.validatePath(c, p.path)
 	if !ok {
 		return 1

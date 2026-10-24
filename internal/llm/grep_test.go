@@ -179,8 +179,9 @@ func TestLedger_LLM01(t *testing.T) {
 	marker := filepath.Join(d, "marker")
 	for _, v := range []string{"abc", "a[$(touch " + marker + ")]", "1+1", "-1", "", "1234567890", " 1"} {
 		r := runGo(t, m, d, env, "llm_grep", "x", "--context", v)
+		// 3.0: LLM-28 fixed ("non-negative", 2.x said "positive")
 		require.Equal(t, result{"", `{"error":"invalid_context","details":"Value '` + v +
-			`' is not a positive integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for context"}` + "\n", 1}, r, v)
+			`' is not a non-negative integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for context"}` + "\n", 1}, r, v)
 	}
 	require.NoFileExists(t, marker)
 	r := runGo(t, m, d, env, "llm_grep", "x", "-C", "1")

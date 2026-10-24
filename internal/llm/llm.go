@@ -106,7 +106,8 @@ func validUint(c *invoke.Call, name, value string) bool {
 	if uintRE.MatchString(value) {
 		return true
 	}
-	fail(c, "invalid_"+name, "Value '"+value+"' is not a positive integer below 1000000000",
+	// "non-negative": 0 is accepted (LLM-28; 2.x said "positive").
+	fail(c, "invalid_"+name, "Value '"+value+"' is not a non-negative integer below 1000000000",
 		"Provide a plain integer for "+name)
 	return false
 }

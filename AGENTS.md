@@ -258,6 +258,11 @@ Each code always carries the action shown:
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` (CONTINUE); `compose_not_found` (RETRY) |
 
+Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
+non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
+999999999 (`invalid_depth`: "Value 'X' is not an integer from 1 to
+999999999").
+
 The one exception: scanners without `--json` print human `Error:` /
 `Hint:` lines.
 
