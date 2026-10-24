@@ -629,10 +629,12 @@ func TestLedger_FILE10_fix(t *testing.T) {
 	withRunner(t, runner.Exec{})
 	need(t, "7z")
 	e := t.TempDir()
-	for name, member := range map[string]string{"y?.7z": "Y", "yb.7z": "B"} {
+	// y?.7z first: p7zip 17.05 (a macOS runner's 7z) matches its own archive
+	// name as a wildcard when a yb.7z already exists, whatever -spd says.
+	for _, a := range []struct{ name, member string }{{"y?.7z", "Y"}, {"yb.7z", "B"}} {
 		src := t.TempDir()
-		write(t, filepath.Join(src, member), []byte(member))
-		cmd := exec.Command("7z", "a", "-bd", "-spd", "--", filepath.Join(e, name), filepath.Join(src, member))
+		write(t, filepath.Join(src, a.member), []byte(a.member))
+		cmd := exec.Command("7z", "a", "-bd", "-spd", "--", filepath.Join(e, a.name), filepath.Join(src, a.member))
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("7z a: %v %s", err, out)
 		}
