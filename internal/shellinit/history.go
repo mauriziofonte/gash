@@ -2,12 +2,16 @@
 
 package shellinit
 
-// historyBlock is lib/shell/history.sh, emitted verbatim: GASH_HISTORY=1
-// (the default) sets the history policy unconditionally (the overwrite of a
-// user's HISTCONTROL is the reproduced LEDGER SHELL-04 defect), and defines
-// __gash_history_hook, which the prompt hook calls. All pure Bash, no fork.
+// historyBlock is lib/shell/history.sh: GASH_HISTORY=1 (the default) sets
+// the history policy and defines __gash_history_hook, which the prompt hook
+// calls. A HISTCONTROL the user set is kept, with ignoreboth added only when
+// it has none of ignorespace, ignoredups, ignoreboth (3.0: SHELL-04 fixed;
+// 2.x overwrote it). All pure Bash, no fork.
 const historyBlock = `if [[ "${GASH_HISTORY:-1}" == "1" ]]; then
-    HISTCONTROL=ignoreboth
+    case ":${HISTCONTROL-}:" in
+        *:ignore*) ;;
+        *) HISTCONTROL="${HISTCONTROL:+$HISTCONTROL:}ignoreboth" ;;
+    esac
     shopt -s histappend
     HISTSIZE=-1
     HISTFILESIZE=-1

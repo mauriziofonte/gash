@@ -177,7 +177,7 @@ of them (the prompt, history and aliases are already set up). Use
 | `GASH_GIT_EXCLUDE` | empty | Colon-separated repository roots with no git segment in the prompt. Absolute paths, matched exactly (`~` is not expanded). `$HOME` as a root is always skipped |
 | `GASH_BANNER` | `1` | `0` hides the startup banner and quote |
 | `GASH_SHOW_INXI` | `0` | `1` prints a short `inxi` summary at startup when `inxi` is installed |
-| `GASH_HISTORY` | `1` | Gash manages history: unlimited size, timestamps, `ignoreboth`, `histappend`, each command written at once. `0` leaves history alone |
+| `GASH_HISTORY` | `1` | Gash manages history: unlimited size, timestamps, `histappend`, each command written at once, and `ignoreboth` added to `HISTCONTROL` unless you set your own (`ignorespace`, `ignoredups` or `ignoreboth`; another value such as `erasedups` gets `:ignoreboth` appended). `0` leaves history alone |
 | `GASH_HISTORY_SYNC` | `0` | `1` re-reads the history file before each prompt, to see commands from other terminals |
 | `GASH_SAFETY_ALIASES` | `1` | `cp -iv`, `mv -iv`, `mkdir -pv`, and `rm -Iv --one-file-system --preserve-root` plus `--preserve-root` for `chown`, `chmod`, `chgrp` with GNU tools (`rm -iv` otherwise). `0` turns them off |
 | `GASH_REPLACE_TOOLS` | `0` | `1` aliases `less` to `most` (and sets `PAGER`), `tail` to `multitail`, `df` to `pydf`, `top` to `htop`, `traceroute` and `tracepath` to `mtr`, `diff` to `colordiff` when installed, and `php`/`composer` to the newest `phpX.Y` |

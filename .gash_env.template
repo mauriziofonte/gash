@@ -102,6 +102,7 @@
 #
 # History
 # GASH_HISTORY=1           # 0 = leave HISTSIZE/HISTCONTROL/histappend alone
+#                          # (1 adds ignoreboth unless you set your own HISTCONTROL)
 # GASH_HISTORY_SYNC=0      # 1 = share history live between open terminals
 #
 # Commands

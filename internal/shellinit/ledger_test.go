@@ -3,6 +3,7 @@
 package shellinit
 
 import (
+	"os/exec"
 	"regexp"
 	"strings"
 	"testing"
@@ -164,4 +165,29 @@ func TestLedger_SHELL02(t *testing.T) {
 	body = body[:strings.Index(body, "\n}\n")]
 	require.Contains(t, body, `printf '\e]2;%s\a' "${title//[[:cntrl:]]/?}"`)
 	require.Equal(t, 1, strings.Count(body, "printf "), "every title goes through the sanitized printf")
+}
+
+// TestLedger_SHELL04 proves the history block keeps a HISTCONTROL the user
+// set: ignoreboth is added only when none of ignorespace, ignoredups,
+// ignoreboth is present (3.0: SHELL-04 fixed; 2.x overwrote it).
+func TestLedger_SHELL04(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	for _, tc := range []struct{ before, want string }{
+		{"unset", "ignoreboth"},
+		{"", "ignoreboth"},
+		{"erasedups", "erasedups:ignoreboth"},
+		{"ignoredups", "ignoredups"},
+		{"ignorespace:erasedups", "ignorespace:erasedups"},
+		{"ignoreboth", "ignoreboth"},
+	} {
+		set := "HISTCONTROL=" + quote(tc.before) + "; "
+		if tc.before == "unset" {
+			set = "unset HISTCONTROL; "
+		}
+		out, err := exec.Command("bash", "--noprofile", "--norc", "-c", set+historyBlock+"\nprintf %s \"$HISTCONTROL\"").Output()
+		require.NoError(t, err)
+		require.Equal(t, tc.want, string(out), tc.before)
+	}
 }

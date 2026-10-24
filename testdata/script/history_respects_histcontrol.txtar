@@ -1,0 +1,23 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-04
+# covers: none (3.0 shell fix)
+#
+# SHELL-04 proving test: an interactive load keeps the HISTCONTROL set
+# before it and adds ignoreboth only when none of ignorespace, ignoredups,
+# ignoreboth is there. HISTSIZE and HISTFILESIZE stay unlimited (-1), as
+# documented. 2.x replaced any HISTCONTROL with ignoreboth.
+
+env GASH_BANNER=0
+
+exec bash --norc --noprofile -i -c 'HISTCONTROL=erasedups HISTSIZE=5000; source "$GASH_SH" >/dev/null 2>&1; echo "a=$HISTCONTROL $HISTSIZE $HISTFILESIZE"'
+stdout '^a=erasedups:ignoreboth -1 -1$'
+
+exec bash --norc --noprofile -i -c 'HISTCONTROL=ignoredups; source "$GASH_SH" >/dev/null 2>&1; echo "b=$HISTCONTROL"'
+stdout '^b=ignoredups$'
+
+exec bash --norc --noprofile -i -c 'unset HISTCONTROL; source "$GASH_SH" >/dev/null 2>&1; echo "c=$HISTCONTROL"'
+stdout '^c=ignoreboth$'
+
+exec bash --norc --noprofile -i -c 'HISTCONTROL=erasedups; GASH_HISTORY=0; source "$GASH_SH" >/dev/null 2>&1; echo "d=$HISTCONTROL"'
+stdout '^d=erasedups$'
