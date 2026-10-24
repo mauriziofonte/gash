@@ -27,8 +27,11 @@ func TestOnlyRunnerStartsProcesses(t *testing.T) {
 	}
 	allowed := func(rel string) bool {
 		rel = filepath.ToSlash(rel)
+		// tools/releasesums is a release build tool (it runs go build),
+		// a main package never linked into gash.
 		return rel == "runner" || strings.HasPrefix(rel, "runner/") ||
-			rel == "llmexec/probe.go" || rel == "selfmgmt/proc.go"
+			rel == "llmexec/probe.go" || rel == "selfmgmt/proc.go" ||
+			strings.HasPrefix(rel, "tools/releasesums/")
 	}
 	// forbidden selector calls, as "pkg.Func".
 	forbidden := map[string]bool{
