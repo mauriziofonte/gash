@@ -226,3 +226,32 @@ func TestLedger_AI05_fix(t *testing.T) {
 		t.Fatal("piped data not sent")
 	}
 }
+
+// TestLedger_AI06_fix: the piped part and the question are redacted
+// separately, so an unclosed PRIVATE KEY block in the pipe keeps the
+// question and the closing "---" (ai_query and ai_ask).
+func TestLedger_AI06_fix(t *testing.T) {
+	f := newFakeAPI(t)
+	m := testModule(f)
+	home := gashEnvHome(t, "AI:claude=t")
+	c, _, errb := newCall(map[string]string{"HOME": home},
+		strings.NewReader("-----BEGIN RSA PRIVATE KEY-----\nabc\n"), false, "q1")
+	if rc := m.aiQuery(c); rc != 0 {
+		t.Fatalf("rc %d: %s", rc, errb.String())
+	}
+	u := claudeUser(t, f.lastBody())
+	if strings.Contains(u, "abc") || !strings.Contains(u, "[REDACTED PRIVATE KEY]\n---\nUser question: q1") {
+		t.Fatalf("body user:\n%s", u)
+	}
+
+	ttyAnswer(t, m, "q2\n")
+	c, _, errb = newCall(map[string]string{"HOME": home},
+		strings.NewReader("-----BEGIN OPENSSH PRIVATE KEY-----\nxyz\n"), false, "claude")
+	if rc := m.aiAsk(c); rc != 0 {
+		t.Fatalf("ai_ask rc %d: %s", rc, errb.String())
+	}
+	u = claudeUser(t, f.lastBody())
+	if strings.Contains(u, "xyz") || !strings.Contains(u, "User question: q2") {
+		t.Fatalf("ai_ask body user:\n%s", u)
+	}
+}

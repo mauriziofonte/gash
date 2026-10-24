@@ -50,8 +50,10 @@ func TestRedactKeepsOrdinaryWords(t *testing.T) {
 	}
 }
 
-// TestLedger_AI06_2x: an unclosed PRIVATE KEY block swallows the rest of
-// the text, the question included.
+// TestLedger_AI06_2x: redact itself still drops everything after an
+// unclosed PRIVATE KEY block, the question included when it is given the
+// composed text. 3.0: AI-06 fixed in the callers, which redact the piped
+// part and the question separately (TestLedger_AI06_fix).
 func TestLedger_AI06_2x(t *testing.T) {
 	in := "[PIPE INPUT - TROUBLESHOOT MODE]\n---\n-----BEGIN RSA PRIVATE KEY-----\nabc\n---\nUser question: q1\n"
 	out := redact(in)
@@ -78,9 +80,8 @@ func TestLedger_AI07_2x(t *testing.T) {
 	}
 }
 
-// TestLedger_AI06_separateParts is not reproduced in rc.A: redaction runs
-// on the whole composed text, so a block opened in the piped part drops
-// the question too (checked above). This test pins that composition.
+// TestRedactWholeText: a closed block in the middle of one text keeps what
+// follows it.
 func TestRedactWholeText(t *testing.T) {
 	// A closed block in the middle keeps the following question.
 	in := "pre\n-----BEGIN RSA PRIVATE KEY-----\nxyz\n-----END RSA PRIVATE KEY-----\nUser question: hello"

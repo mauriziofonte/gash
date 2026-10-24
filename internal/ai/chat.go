@@ -35,7 +35,7 @@ func (m *Module) aiQuery(c *invoke.Call) int {
 		piped = m.readPipedInput(c)
 	}
 	if piped != "" {
-		query = pipeWrap(piped, query)
+		query = pipeWrap(redact(piped), redact(query))
 	}
 
 	provider, token, ok := m.resolveProvider(c, provider)
@@ -132,7 +132,7 @@ func (m *Module) aiAsk(c *invoke.Call) int {
 		query = "Analyze this content: explain what it does, identify any issues or errors, and suggest improvements."
 	}
 	if piped != "" {
-		query = pipeWrap(piped, query)
+		query = pipeWrap(redact(piped), redact(query))
 	}
 
 	what := "your question"
@@ -176,6 +176,9 @@ func (m *Module) resolveProvider(c *invoke.Call, provider string) (string, strin
 }
 
 // pipeWrap is the troubleshoot-mode wrapper 2.x builds around piped input.
+// Callers redact the piped part and the question separately first (LEDGER
+// AI-06), so an unclosed PRIVATE KEY block in the pipe drops only the rest
+// of the pipe, never the question or the closing "---".
 func pipeWrap(piped, query string) string {
 	return "[PIPE INPUT - TROUBLESHOOT MODE]\n---\n" + piped + "\n---\nUser question: " + query
 }
