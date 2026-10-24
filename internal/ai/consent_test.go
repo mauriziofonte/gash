@@ -62,8 +62,11 @@ func TestLedger_AI23_fix(t *testing.T) {
 	m := noTTY()
 	warn := "Warning: GASH_AI_CONFIRM=off is not 0, 1 or auto: asking before every request\n"
 	c, _, errb := newCall(map[string]string{"GASH_AI_CONFIRM": "off"}, nil, false)
-	if m.confirmSend(c, "claude", "query", "your question", 10) || m.confirmSend(c, "claude", "query", "your question", 10) {
-		t.Fatal("off must fail closed")
+	// Two requests on one call: both refuse, the warning prints once.
+	for i := 0; i < 2; i++ {
+		if m.confirmSend(c, "claude", "query", "your question", 10) {
+			t.Fatalf("request %d: off must fail closed", i+1)
+		}
 	}
 	if got := errb.String(); strings.Count(got, "Warning:") != 1 || !strings.HasPrefix(got, warn) || !strings.Contains(got, "no terminal to confirm on") {
 		t.Fatalf("stderr %q", got)
