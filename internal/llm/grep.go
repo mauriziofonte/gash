@@ -55,7 +55,8 @@ func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool
 	if !ok {
 		return nil, 0, false
 	}
-	s = &rgSearch{re: r, over: over, cwd: cwd}
+	userOver, _ := newOverrides(cwd, globs, nil)
+	s = &rgSearch{re: r, over: over, userOver: userOver, cwd: cwd}
 	s.rules.noIgnore = noIgnore
 	s.rules.hidden = !noIgnore
 	if !noIgnore {

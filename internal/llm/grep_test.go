@@ -220,15 +220,42 @@ func TestLedger_LLM07_2x(t *testing.T) {
 	require.Equal(t, d+"/f.txt:1:hit\n", same(t, m, d, env, "llm_grep", "hit", ".").Stdout)
 }
 
-// TestLedger_LLM15_2x: a walk leaves out secret-exception files too, an
-// explicit exception file is searched.
+// TestLedger_LLM15_2x: a walk searches secret-exception files (2.x left
+// them out), an explicit exception file is searched.
 func TestLedger_LLM15_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, ".env.example"), "hit\n")
 	env := rgEnv(t, physTemp(t))
-	require.Equal(t, "", same(t, m, d, env, "llm_grep", "hit", ".").Stdout)
-	require.Equal(t, "1:hit\n", same(t, m, d, env, "llm_grep", "hit", ".env.example").Stdout)
+	// 3.0: LLM-15 fixed
+	require.Equal(t, d+"/.env.example:1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".").Stdout)
+	require.Equal(t, "1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".env.example").Stdout)
+}
+
+// TestLedger_LLM15: the secret exceptions win over the patterns in a walk
+// (llm_grep and llm_find --contains) as for an explicit file; the secret
+// files themselves stay out, and --ext still filters the exceptions.
+func TestLedger_LLM15(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	for _, f := range []string{".env.example", "x.env.example", ".ENV.Sample", "id_rsa.pub", ".env", "id_rsa", "x.env"} {
+		mustWrite(t, filepath.Join(d, f), "hit\n")
+	}
+	env := rgEnv(t, physTemp(t))
+	want := d + "/.ENV.Sample:1:hit\n" + d + "/.env.example:1:hit\n" + d + "/id_rsa.pub:1:hit\n" + d + "/x.env.example:1:hit\n"
+	require.Equal(t, result{want, "", 0}, runGo(t, m, d, env, "llm_grep", "hit", "."))
+	r := runGo(t, m, d, env, "llm_find", "*", "--contains", "hit")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	for _, f := range []string{".ENV.Sample", ".env.example", "id_rsa.pub", "x.env.example"} {
+		require.Contains(t, r.Stdout, d+"/"+f+"\n")
+	}
+	for _, f := range []string{".env", "id_rsa", "x.env"} {
+		require.NotContains(t, r.Stdout, d+"/"+f+"\n")
+	}
+	require.Equal(t, "1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".env.example").Stdout)
+	require.Equal(t, d+"/id_rsa.pub:1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".", "--ext", "pub").Stdout)
+	r = runGo(t, m, d, env, "llm_grep", "hit", ".env")
+	require.Contains(t, r.Stderr, "secret_file_blocked")
 }
 
 // TestLedger_LLM16: RIPGREP_CONFIG_PATH changes nothing.

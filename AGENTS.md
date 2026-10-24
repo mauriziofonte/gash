@@ -291,7 +291,8 @@ Matched case-insensitively on the base name, and on the target of a symlink:
 `secrets*`, `.gash_env`, `.pgpass`, `.netrc`, `.git-credentials`, `.npmrc`,
 `.pypirc`, `.htpasswd`, `.my.cnf`, kubeconfig, `*.tfstate`, `*.tfvars`, and
 anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`,
-`.config/gcloud`. Templates such as `.env.example` and `*.pub` are allowed.
+`.config/gcloud`. Templates such as `.env.example` and `*.pub` are allowed,
+and recursive searches include them.
 `llm_config` and `llm_exec` refuse them as arguments; `llm_grep`,
 `llm_find --contains` and, inside `llm_exec`, `grep`, `rg`, `diff` and
 `git diff`/`show`/`grep`/`log -p` skip them (`git log` with `--follow` or

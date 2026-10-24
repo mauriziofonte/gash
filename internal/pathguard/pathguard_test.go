@@ -344,3 +344,20 @@ func TestUnderForbidden(t *testing.T) {
 		require.Falsef(t, g.UnderForbidden(p), "%q is not under a forbidden entry", p)
 	}
 }
+
+// TestSecretException: the exception names match case-insensitively on the
+// base name only, and SecretName lets them through (LEDGER LLM-15).
+func TestSecretException(t *testing.T) {
+	for name, want := range map[string]bool{
+		".env.example": true, ".ENV.Example": true, "x.env.example": true, "id_rsa.pub": true,
+		".env.sample": true, ".env.dist": true, ".env.template": true,
+		".env": false, "id_rsa": false, "x.env": false, "example": false,
+	} {
+		if got := SecretException(name); got != want {
+			t.Errorf("SecretException(%q) = %v, want %v", name, got, want)
+		}
+		if want && SecretName("/p/"+name) {
+			t.Errorf("SecretName(%q) = true for an exception", name)
+		}
+	}
+}
