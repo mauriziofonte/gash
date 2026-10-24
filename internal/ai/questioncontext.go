@@ -8,6 +8,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -23,9 +24,10 @@ var (
 	// Pattern 2: /etc|var|usr|opt|srv|home|run paths (the body excludes the
 	// shell-metacharacter set of the 2.x class).
 	rePathEntity = regexp.MustCompile("/(etc|var|usr|opt|srv|home|run)/[^ \"'\x60|;&<>(){}]+")
-	// Pattern 3: ports (LEDGER AI-08: the bare ":" alternative also takes
-	// clock times such as 12:30). The digits are submatch 2.
-	rePortEntity = regexp.MustCompile(`(port[: ]+|:)([0-9]{1,5})([^0-9]|$)`)
+	// Pattern 3: ports, as "port N" or HOST:N where HOST is an IPv4
+	// address, localhost, * or a bracketed IPv6 address, so a clock time
+	// such as 12:30 is no port (AI-08). The digits are submatch 1.
+	rePortEntity = regexp.MustCompile(`(?:port[: ]+|(?:\b[0-9]{1,3}(?:\.[0-9]{1,3}){3}|\blocalhost|\*|\[[0-9a-f:.]+\]):)([0-9]{1,5})(?:[^0-9]|$)`)
 	// Pattern 5: hyphenated/underscored names that could be unit names.
 	reSvcNameEntity = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9]*[-_][a-zA-Z0-9][-a-zA-Z0-9_]*`)
 )
@@ -139,15 +141,15 @@ func (m *Module) questionContext(c *invoke.Call, sudo func(string, ...string) []
 		if loc == nil {
 			break
 		}
-		port := remaining[loc[4]:loc[5]]
+		port := remaining[loc[2]:loc[3]]
 		remaining = remaining[loc[1]:]
-		if port == "" || seen["port:"+port] {
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 || seen["port:"+port] {
 			continue
 		}
 		seen["port:"+port] = true
 		q.kind("ports")
 		q.add("=== PORT: " + port + " ===\n")
-		q.add(sub(headN(grepF(m.cmd(c, "ss", "-tlnp"), ":"+port), 10)) + "\n")
+		q.add(sub(headN(ssListening(m.cmd(c, "ss", "-tlnp"), port), 10)) + "\n")
 		q.add("\n")
 	}
 
@@ -562,10 +564,12 @@ func headN(b []byte, n int) []byte {
 
 // grepF is `grep -F SUBSTR`: the lines containing substr, each kept with
 // its newline.
-func grepF(b []byte, substr string) []byte {
+// ssListening keeps the `ss -tlnp` rows whose local address (column 4)
+// ends with :PORT exactly, so port 30 never keeps :3000 or :3306 (AI-08).
+func ssListening(b []byte, port string) []byte {
 	var out []byte
 	for _, l := range bytes.SplitAfter(b, []byte("\n")) {
-		if bytes.Contains(l, []byte(substr)) {
+		if f := strings.Fields(string(l)); len(f) > 3 && strings.HasSuffix(f[3], ":"+port) {
 			out = append(out, l...)
 		}
 	}

@@ -239,6 +239,8 @@ The ? option detects entities in your question:
   "what's in /etc/postfix/main.cf?" -> reads the file
   "what's on port 3306?" -> reads socket listeners
   "tell me about apache" -> reads service configs
+A port is "port N" or HOST:N (127.0.0.1:8080, localhost:9000, *:22,
+[::1]:5432); a clock time such as 10:30 is no port.
 Paths follow the llm_* reader rules: no .. components, symlinks
 resolved, and protected paths (/proc, /sys, /dev, /boot, /root,
 /etc/shadow, /etc/passwd, /etc/sudoers...) and secret files

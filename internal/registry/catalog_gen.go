@@ -249,6 +249,8 @@ var functions = []Function{
 				"    \"what's in /etc/postfix/main.cf?\" -> reads the file\n" +
 				"    \"what's on port 3306?\" -> reads socket listeners\n" +
 				"    \"tell me about apache\" -> reads service configs\n" +
+				"  A port is \"port N\" or HOST:N (127.0.0.1:8080, localhost:9000, *:22,\n" +
+				"  [::1]:5432); a clock time such as 10:30 is no port.\n" +
 				"  Paths follow the llm_* reader rules: no .. components, symlinks\n" +
 				"  resolved, and protected paths (/proc, /sys, /dev, /boot, /root,\n" +
 				"  /etc/shadow, /etc/passwd, /etc/sudoers...) and secret files\n" +
