@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -178,23 +179,21 @@ func (m *Module) doctor(c *invoke.Call) int {
 
 // doctorBinary checks the running binary against release/SHA256SUMS, the
 // hash the tagged tree pins for this platform ("HASH  OS_ARCH/gash", the
-// lines the bootstrap reads). A development build or a binary of another
-// version is not checked, nor is a tree that pins nothing. The number of
-// issues found.
+// lines the bootstrap reads), and the gash-hosts-helper next to it against
+// its own pin ("HASH  OS_ARCH/gash-hosts-helper") when the tree has one. A
+// development build or a binary of another version is not checked, nor is
+// a tree that pins nothing. The number of issues found.
 func (m *Module) doctorBinary(p ui.Printer, dir string, release bool) int {
 	if m.version == "dev" || !release {
 		p.Info("  not checked (" + m.notCheckedReason() + ")")
 		return 0
 	}
 	platform := runtime.GOOS + "_" + runtime.GOARCH
-	pin := ""
+	pins := map[string]string{}
 	if b, err := m.readFile(dir + "/release/SHA256SUMS"); err == nil {
-		for _, line := range strings.Split(string(b), "\n") {
-			if hash, name, ok := strings.Cut(strings.TrimRight(line, "\r"), "  "); ok && name == platform+"/gash" {
-				pin = hash
-			}
-		}
+		pins = parsePins(string(b), platform)
 	}
+	pin := pins[binGash]
 	if pin == "" {
 		p.Info("  " + platform + " — no hash pinned in release/SHA256SUMS")
 		return 0
@@ -204,12 +203,26 @@ func (m *Module) doctorBinary(p ui.Printer, dir string, release bool) int {
 	if err == nil {
 		sum = fileSHA256(path)
 	}
+	issues := 0
 	if sum != pin {
 		p.Error("  " + platform + " — does not match release/SHA256SUMS")
-		return 1
+		issues++
+	} else {
+		p.Success("  " + platform + " — matches release/SHA256SUMS")
 	}
-	p.Success("  " + platform + " — matches release/SHA256SUMS")
-	return 0
+	if hpin := pins[binHelper]; hpin != "" && err == nil {
+		helper := filepath.Join(filepath.Dir(path), binHelper)
+		switch hsum := fileSHA256(helper); {
+		case hsum == "":
+			p.Info("  " + binHelper + " — not installed next to the binary")
+		case hsum != hpin:
+			p.Error("  " + binHelper + " — does not match release/SHA256SUMS")
+			issues++
+		default:
+			p.Success("  " + binHelper + " — matches release/SHA256SUMS")
+		}
+	}
+	return issues
 }
 
 // doctorShims checks each generated file of the install (gash.sh, the

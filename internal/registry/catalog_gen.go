@@ -1296,10 +1296,10 @@ var functions = []Function{
 				"  gash_doctor --timing\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Checks: core files, modules, the binary (against the hash\n" +
-				"  release/SHA256SUMS pins), the generated shims (against this\n" +
-				"  gash version), config file permissions, external tools\n" +
-				"  (git, curl, jq, sqlite3, docker).\n" +
+				"  Checks: core files, modules, the binary and gash-hosts-helper\n" +
+				"  (against the hashes release/SHA256SUMS pins), the generated\n" +
+				"  shims (against this gash version), config file permissions,\n" +
+				"  external tools (git, curl, jq, sqlite3, docker).\n" +
 				"  Reports missing or misconfigured components and returns 1\n" +
 				"  when a check fails (2 for an unknown option).\n" +
 				"\n" +
