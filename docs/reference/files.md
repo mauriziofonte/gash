@@ -6,7 +6,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 | Function | Alias | Description |
 |---|---|---|
-| [`archive_extract`](#archive-extract) | `axe` | Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z) |
+| [`archive_extract`](#archive-extract) | `axe` | Extract archives (tar, zip, gz, bz2, xz, zst, Z, rar, 7z) |
 | [`dirs_find_large`](#dirs-find-large) | `dfl` | Find directories exceeding a size threshold (single-walk aggregation) |
 | [`dirs_largest`](#dirs-largest) | `dld` | List the largest directories with depth and filter control |
 | [`dirs_list_empty`](#dirs-list-empty) | `dle` | List empty directories with depth, prune and count options |
@@ -16,7 +16,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 ## archive_extract
 
-Extract archives (tar, zip, gz, bz2, xz, zst, rar, 7z)
+Extract archives (tar, zip, gz, bz2, xz, zst, Z, rar, 7z)
 
 Alias: `axe`
 
@@ -42,10 +42,34 @@ axe data.7z /tmp/extracted
 #### Supported formats
 
 ```text
-.tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar,
-.gz, .bz2, .xz, .zst,
-.tgz, .tbz2, .zip, .rar, .7z, .z
+.tar.gz, .tar.bz2, .tar.xz, .txz, .tar.zst, .tzst, .tar.Z, .taz, .tar,
+.gz, .bz2, .xz, .zst, .Z (compress), .z (pack),
+.tgz, .tbz2, .zip, .rar, .7z
 (case-insensitive)
+```
+
+#### Notes
+
+```text
+Tools: tar (with zstd for .tar.zst/.tzst, uncompress for .tar.Z/.taz),
+gunzip, bunzip2, xz, zstd and uncompress (.z needs gzip's uncompress)
+for the single-file formats, unzip, unrar and 7z. A missing tool is
+reported before anything is written. OUTPUT_DIR (default: the current
+directory) is created when missing.
+Single-file formats write the archive name without its suffix into
+OUTPUT_DIR; an existing file of that name is replaced only when the
+tool succeeds.
+Members with an absolute path, a .. component or a link outside
+OUTPUT_DIR are refused before anything is extracted.
+The tools' listings go to stdout. Exit status: 0 on success, 1 on any
+failure.
+With GASH_HEADLESS=1 or without a terminal on stdin, unzip, unrar and
+7z never prompt and never overwrite existing files; an encrypted 7z
+archive prints its password prompt and stops on end of input.
+.zip and .rar names containing *, ? or [ are refused (unzip and unrar
+would expand them as wildcards): rename the file.
+The tools' own configuration applies: TAR_OPTIONS, UNZIP, RAR and
+~/.rarrc, GZIP, BZIP2, XZ_OPT and similar variables.
 ```
 
 See also: `file_backup`
@@ -84,10 +108,13 @@ dirs_find_large --size 100M --depth 6 /opt
 #### Options
 
 ```text
---size SIZE            Size threshold (default 20M; formats: 20M, 1G, 500K, bytes)
---depth N              Depth limit (default unbounded; use to cap very deep trees)
+--size SIZE            Size threshold (default 20M): bytes, or a number with
+                       up to 6 decimals and K, M, G, T, P or E, optionally
+                       followed by B, i or iB
+--depth N              Depth limit (default unbounded; 0 also means unbounded)
 -n, --limit N          Cap results (default 1000)
---exclude GLOB         Prune matching paths (repeatable)
+--exclude GLOB         Skip entries whose name or path below PATH matches GLOB
+                       (repeatable; no newlines)
 --no-ignore            Disable default pruning
 --xdev                 Stay on a single filesystem
 --allow-root           Required to scan '/'
@@ -95,21 +122,23 @@ dirs_find_large --size 100M --depth 6 /opt
 --json                 Emit JSON envelope
 --null, -0             NUL-delimited paths
 --human / --no-human   Size formatting toggle
---no-color             Disable ANSI colors
+--no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)
 ```
 
 #### Performance
 
 ```text
-Uses a single `du -k` pass plus awk filtering: O(N) in filesystem entries,
-versus the legacy per-directory re-walk which was O(N^2). Expect 10x-100x
-speedup on large trees.
+One walk adds up disk usage per directory (as `du -k` counts it): O(N)
+in filesystem entries, versus the legacy per-directory re-walk which was
+O(N^2).
 ```
 
 #### Notes
 
 ```text
-numfmt is optional: a pure-bash IEC-suffix parser provides fallback.
+Paths containing literal tab or newline characters are excluded from
+results (they cannot be represented safely in TSV/line-oriented output).
+--null records are therefore always intact, complete paths.
 ```
 
 See also: `dirs_largest`, `files_largest`, `tree_stats`, `disk_usage`
@@ -148,17 +177,21 @@ dirs_largest --null --depth 3 ~/projects | xargs -0 du -sh
 
 ```text
 -n, --limit N          Cap results (default 100)
---depth N              Depth limit (default 1, top-level only). Use higher values
-                       to reveal nested offenders (node_modules, vendor/, target/).
---min-size SIZE        Ignore directories smaller than SIZE
---exclude GLOB         Prune matching paths (repeatable, substring match)
+--depth N              Depth limit (default 1, top-level only; 0 means 1).
+                       Use higher values to reveal nested offenders
+                       (node_modules, vendor/, target/).
+--min-size SIZE        Ignore directories smaller than SIZE: bytes,
+                       or a number with up to 6 decimals and K, M, G, T,
+                       P or E, optionally followed by B, i or iB
+--exclude GLOB         Skip entries whose name or path below PATH matches GLOB
+                       (repeatable; no newlines)
 --no-ignore            Disable default pruning
 --xdev                 Stay on a single filesystem
 --allow-root           Required to scan '/'
 --json                 Emit JSON envelope
 --null, -0             NUL-delimited paths
 --human / --no-human   Force human-readable / raw-bytes sizes
---no-color             Disable ANSI colors
+--no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)
 ```
 
 #### Notes
@@ -167,6 +200,9 @@ dirs_largest --null --depth 3 ~/projects | xargs -0 du -sh
 Sizes are cumulative (du semantics). Deeper scans will show parent
 directories alongside their subdirs; filter with --min-size and --depth
 to narrow the view.
+Paths containing literal tab or newline characters are excluded from
+results (they cannot be represented safely in TSV/line-oriented output).
+--null records are therefore always intact, complete paths.
 ```
 
 See also: `files_largest`, `dirs_find_large`, `tree_stats`, `disk_usage`
@@ -206,7 +242,8 @@ dirs_list_empty --ignore-dotfiles ~/projects
 ```text
 --min-depth N      Minimum depth (find -mindepth)
 --depth N          Maximum depth (find -maxdepth)
---exclude GLOB     Prune matching paths
+--exclude GLOB     Skip entries whose name or path below PATH matches GLOB
+                   (repeatable; no newlines)
 --ignore-dotfiles  Skip directories whose name starts with '.'
 --no-ignore        Disable default pruning
 --xdev             Stay on a single filesystem
@@ -221,6 +258,9 @@ dirs_list_empty --ignore-dotfiles ~/projects
 ```text
 "Empty" means no regular entries (not even hidden files). A directory
 containing only a prune-excluded subdirectory is NOT empty.
+Paths containing literal tab or newline characters are excluded from
+results (they cannot be represented safely in TSV/line-oriented output).
+--null records are therefore always intact, complete paths.
 ```
 
 See also: `files_largest`, `dirs_largest`, `tree_stats`
@@ -251,6 +291,19 @@ fbk /etc/apache2/apache2.conf && vim /etc/apache2/apache2.conf
 fbk my-deploy-script.sh
 ```
 
+#### Notes
+
+```text
+The stamp is local time (YYYYMMDDHHMMSS, no zone). A backup never
+replaces an existing file or link: a second backup in the same second
+gets _1, then _2, and so on.
+A symlinked FILE is followed: the backup is a copy of its target, next
+to FILE. On success cp -v prints one line on stdout:
+'SRC' -> 'DST'. A failed copy removes the partial backup (exit 1).
+Mode: FILE's permission bits without setuid, setgid and sticky, with
+the umask applied; the modification time is the time of the copy.
+```
+
 See also: `archive_extract`
 
 ## files_largest
@@ -276,7 +329,8 @@ files_largest
 # Top 20 files larger than 50MB, stay on same filesystem
 files_largest --limit 20 --min-size 50M --xdev /var/log
 
-# JSON output for scripting (envelope: data/count/total_size/scan_time)
+# JSON output for scripting
+# (envelope: data/count/total_size/total_size_human/kind/scan_time/errors)
 files_largest /home --json | jq '.data[] | select(.size > 1073741824)'
 
 # NUL-delimited paths for safe xargs pipelines
@@ -290,17 +344,21 @@ files_largest --no-ignore ~/projects
 
 ```text
 -n, --limit N          Cap results (default 100)
---min-size SIZE        Ignore files smaller than SIZE (e.g. 10M, 1G, 500K)
---exclude GLOB         Prune matching paths (repeatable, substring match)
+--min-size SIZE        Ignore files smaller than SIZE: bytes, or a
+                       number with up to 6 decimals and K, M, G, T, P or
+                       E, optionally followed by B, i or iB
+--exclude GLOB         Skip entries whose name or path below PATH matches GLOB
+                       (repeatable; no newlines)
 --depth N              Limit scan depth (default: unbounded)
 --no-ignore            Disable default pruning (node_modules/.git/vendor/__pycache__/.cache)
 --xdev                 Stay on a single filesystem
---follow-symlinks, -L  Follow symbolic links
+--follow-symlinks, -L  Follow symbolic links (never into protected paths)
 --allow-root           Required to scan '/' (safety guard)
---json                 Emit JSON envelope: {data, count, total_size, scan_time, errors}
+--json                 Emit JSON envelope: {data, count, total_size,
+                       total_size_human, kind, scan_time, errors}
 --null, -0             NUL-delimited paths for xargs -0
---human                Force human-readable sizes (auto-on on TTY)
---no-color             Disable ANSI colors (also honors NO_COLOR)
+--human                Human-readable sizes (default except with --json or --null)
+--no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)
 ```
 
 #### Notes
@@ -340,7 +398,7 @@ tree_stats --top 10 ~/projects
 tree_stats /var/log --json | jq '.data.top_by_size'
 
 # Stay on one filesystem, cap scan depth
-tree_stats --xdev --depth 8 /
+tree_stats --xdev --depth 8 --allow-root /
 ```
 
 #### Options
@@ -348,21 +406,25 @@ tree_stats --xdev --depth 8 /
 ```text
 --depth N              Scan depth limit (default unbounded)
 --top N                Number of extensions in top lists (default 5)
---exclude GLOB         Prune matching paths (repeatable)
+--exclude GLOB         Skip entries whose name or path below PATH matches GLOB
+                       (repeatable; no newlines)
 --no-ignore            Disable default pruning
 --xdev                 Stay on a single filesystem
---follow-symlinks, -L  Follow symbolic links
+--follow-symlinks, -L  Follow symbolic links (never into protected paths)
 --allow-root           Required to scan '/'
 --json                 Emit JSON envelope
---no-color             Disable ANSI colors
+--no-color             Disable ANSI colors (layout unchanged; NO_COLOR also honored)
 ```
 
 #### Notes
 
 ```text
-Single-walk aggregation via `find -printf` + awk. Extensions are derived
-from the basename (lowercased, after the last dot). Files with no dot
-or hidden-only dot (.env) are grouped as "(no ext)".
+Single-walk aggregation. Extensions are derived from the basename
+(ASCII-lowercased, after the last dot). Files with no dot or
+hidden-only dot (.env) are grouped as "(no ext)".
+Paths containing literal tab or newline characters are excluded from
+every count and total (they cannot be represented safely in
+line-oriented output).
 ```
 
 See also: `files_largest`, `dirs_largest`, `dirs_find_large`
