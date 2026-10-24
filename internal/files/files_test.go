@@ -897,11 +897,14 @@ func TestLedger_FILE22_fix(t *testing.T) {
 		}
 		cmd := exec.Command("7z", "a", "-bd", "-snl", filepath.Join(run, "snl.7z"), filepath.Join(src, "l"))
 		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("7z a -snl: %v %s", err, out)
-		}
-		_, errb, rc := runIn(t, run, nil, nil, "archive_extract", "snl.7z", "out")
-		if rc != 1 || errb != "Error: Archive 'snl.7z' has an unsafe member 'l' (absolute path, .. component or link outside the destination); nothing extracted.\n" {
-			t.Errorf("snl.7z: rc=%d err=%q", rc, errb)
+			// p7zip 17.05 (Homebrew, macOS) follows the link despite -snl
+			// and cannot store a dangling one: no fixture to test with.
+			t.Logf("7z a -snl cannot store the symlink here, skipping the snl.7z case: %v %s", err, out)
+		} else {
+			_, errb, rc := runIn(t, run, nil, nil, "archive_extract", "snl.7z", "out")
+			if rc != 1 || errb != "Error: Archive 'snl.7z' has an unsafe member 'l' (absolute path, .. component or link outside the destination); nothing extracted.\n" {
+				t.Errorf("snl.7z: rc=%d err=%q", rc, errb)
+			}
 		}
 	}
 
@@ -958,7 +961,8 @@ func TestLedger_FILE04_fix(t *testing.T) {
 		if i > 0 {
 			name += "_" + string(rune('0'+i))
 		}
-		if rc != 0 || out != "'a' -> '"+name+"'\n" || errb != "" {
+		// cp -v: GNU quotes both names, BSD (macOS) does not.
+		if rc != 0 || (out != "'a' -> '"+name+"'\n" && out != "a -> "+name+"\n") || errb != "" {
 			t.Errorf("call %d: rc=%d out=%q err=%q", i+1, rc, out, errb)
 		}
 		if b, _ := os.ReadFile(filepath.Join(d, name)); string(b) != content {
