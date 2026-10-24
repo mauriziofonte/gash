@@ -46,7 +46,7 @@ its place. The other flags are `--php X.Y`,
 `--profile dev|staging|hardened`, `--https`/`--no-https`,
 `--force-https`/`--no-force-https`,
 `--force-https-bypass`/`--no-force-https-bypass`, `--alias NAME` (repeatable),
-`--no-www`, `--no-http2`, `--extra-http-port N` and `--extra-https-port N`.
+`--no-www`, `--http2`/`--no-http2`, `--extra-http-port N` and `--extra-https-port N`.
 `site modify` takes the same flags. `site remove --domain D --yes` removes
 the site's state, configuration, pool, certificate and hosts names. It never
 touches the document root, the site's overlay or its logs.
