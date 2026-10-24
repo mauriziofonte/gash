@@ -83,10 +83,9 @@ Headless calls stay quiet unless `GASH_DEBUG=1`.
 
 ## awk differences (mawk, BSD awk)
 
-**Cause:** Gash uses `gawk` when it is installed, otherwise the system `awk`.
-`hgrep --json` needs `strftime` (gawk; mawk 1.3.4 has it, older mawk and BSD
-awk do not). `llm_exec` refuses `awk` unless `gawk --sandbox` works, and
-refuses `sed` unless GNU `sed --sandbox` works.
+**Cause:** `llm_exec` refuses `awk` unless `gawk --sandbox` works, and
+refuses `sed` unless GNU `sed --sandbox` works. (`hgrep` runs no awk: its
+matching, timestamps and JSON are the same with every awk.)
 **Fix:** install `gawk`. To force a specific program, set `GASH_AWK` (for
 example `GASH_AWK=gawk`) before Gash loads.
 

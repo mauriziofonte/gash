@@ -38,9 +38,11 @@ exec bash -c 'printf "#1700000000\ncd /tmp && ls\n#1700000100\ncd /tmp && git st
 stdout 'cd /tmp && git status$'
 ! stdout '\x1b'
 
-# --- :161 regex-reverse-limit
+# --- :161 regex-reverse-limit (3.0: SYS-43 fixed: -n 1 is the most recent
+# match, with -r too; 2.x kept the oldest, git push)
 exec bash -c 'printf "#1700000000\ngit push\n#1700000100\ngit pull\n#1700000200\ngit status\n" >h4; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h4" hgrep -E "git (push|pull)" -r -n 1'
-stdout '^\[2023-11-14 22:13:20\] git push$'
+stdout '^\[2023-11-14 22:15:00\] git pull$'
+! stdout 'git push'
 ! stdout 'git status'
 
 # --- :162 no-highlight

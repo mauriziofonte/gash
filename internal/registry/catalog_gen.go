@@ -1941,13 +1941,19 @@ var functions = []Function{
 				"  hgrep PATTERN [OPTIONS]\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  -n LIMIT        Show only last N results (default: all)\n" +
-				"  -a, --all       Include the hgrep command itself in results\n" +
-				"  -r, --reverse   Reverse order (oldest first)\n" +
-				"  -j, --json      Output as JSON array\n" +
-				"  -H, --no-highlight  Disable color highlighting of matches\n" +
-				"  -E, --regex     Treat PATTERN as extended regex\n" +
-				"  -c, --count     Only show count of matching commands\n" +
+				"  -n, --limit N       Show only the N most recent matches (0: all)\n" +
+				"  -a, --all           Include hgrep/history_grep commands in results\n" +
+				"  -r, --reverse       Newest first (default: oldest first)\n" +
+				"  -j, --json          Output as JSON array\n" +
+				"  -H, --no-highlight  Disable highlighting / force plain output\n" +
+				"  -E, --regex         PATTERN is a Go regular expression (RE2 syntax),\n" +
+				"                      case-insensitive; an invalid regex is an error\n" +
+				"  -c, --count         Only show the count of unique matching commands\n" +
+				"  -g, --group         Collapse similar commands under a shared chain prefix\n" +
+				"      --pick          Fuzzy-select a matching command via fzf and print it\n" +
+				"      --no-color      Disable colored output for this invocation\n" +
+				"  -h, --help          Show this help (anywhere before --)\n" +
+				"  --                  End of options: the next word is PATTERN\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Search for git push commands\n" +
@@ -1962,12 +1968,34 @@ var functions = []Function{
 				"  # Count how many times you ran a command\n" +
 				"  hgrep \"npm install\" -c\n" +
 				"\n" +
-				"  # Regex: find git push or pull\n" +
-				"  hgrep -E \"git (push|pull)\"\n" +
+				"  # Regex: git push or pull at the start\n" +
+				"  hgrep -E \"^git (push|pull)\"\n" +
 				"\n" +
-				"  # Reverse order (oldest first)\n" +
-				"  hgrep kubectl -r",
+				"  # Group \"cd X && ...\" variants under one prefix\n" +
+				"  hgrep cd -g\n" +
+				"\n" +
+				"  # Fuzzy-pick a past git command (needs fzf)\n" +
+				"  hgrep git --pick\n" +
+				"\n" +
+				"  # Newest first\n" +
+				"  hgrep kubectl -r\n" +
+				"\n" +
+				"  # A pattern that starts with \"-\"\n" +
+				"  hgrep -- --force\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Matching is case-insensitive; PATTERN is a fixed string unless -E.\n" +
+				"  Commands are deduplicated (the last run wins) and listed oldest first.\n" +
+				"  -n N keeps the N most recent matches, with or without -r.\n" +
+				"\n" +
+				"OUTPUT FORMAT\n" +
+				"  [2024-01-15 14:52:01] git push origin main\n" +
+				"  [2024-01-15 15:10:22] git commit -m \"fix\"\n" +
+				"\n" +
+				"  With --json:\n" +
+				"  [{\"timestamp\":\"2024-01-15 14:52:01\",\"epoch\":1705330321,\"count\":1,\"command\":\"git push origin main\"},...]",
 		},
+		Fallback:  &Usage{Program: "hgrep", Usage: "hgrep PATTERN [OPTIONS]", Description: "Smart history search with timestamps and deduplication"},
 		ShellVars: []string{"HISTFILE", "HOME"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
 	},

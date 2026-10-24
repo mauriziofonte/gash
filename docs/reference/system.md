@@ -92,13 +92,19 @@ hgrep PATTERN [OPTIONS]
 #### Options
 
 ```text
--n LIMIT        Show only last N results (default: all)
--a, --all       Include the hgrep command itself in results
--r, --reverse   Reverse order (oldest first)
--j, --json      Output as JSON array
--H, --no-highlight  Disable color highlighting of matches
--E, --regex     Treat PATTERN as extended regex
--c, --count     Only show count of matching commands
+-n, --limit N       Show only the N most recent matches (0: all)
+-a, --all           Include hgrep/history_grep commands in results
+-r, --reverse       Newest first (default: oldest first)
+-j, --json          Output as JSON array
+-H, --no-highlight  Disable highlighting / force plain output
+-E, --regex         PATTERN is a Go regular expression (RE2 syntax),
+                    case-insensitive; an invalid regex is an error
+-c, --count         Only show the count of unique matching commands
+-g, --group         Collapse similar commands under a shared chain prefix
+    --pick          Fuzzy-select a matching command via fzf and print it
+    --no-color      Disable colored output for this invocation
+-h, --help          Show this help (anywhere before --)
+--                  End of options: the next word is PATTERN
 ```
 
 #### Examples
@@ -116,11 +122,38 @@ hgrep deploy -j
 # Count how many times you ran a command
 hgrep "npm install" -c
 
-# Regex: find git push or pull
-hgrep -E "git (push|pull)"
+# Regex: git push or pull at the start
+hgrep -E "^git (push|pull)"
 
-# Reverse order (oldest first)
+# Group "cd X && ..." variants under one prefix
+hgrep cd -g
+
+# Fuzzy-pick a past git command (needs fzf)
+hgrep git --pick
+
+# Newest first
 hgrep kubectl -r
+
+# A pattern that starts with "-"
+hgrep -- --force
+```
+
+#### Notes
+
+```text
+Matching is case-insensitive; PATTERN is a fixed string unless -E.
+Commands are deduplicated (the last run wins) and listed oldest first.
+-n N keeps the N most recent matches, with or without -r.
+```
+
+#### Output format
+
+```text
+[2024-01-15 14:52:01] git push origin main
+[2024-01-15 15:10:22] git commit -m "fix"
+
+With --json:
+[{"timestamp":"2024-01-15 14:52:01","epoch":1705330321,"count":1,"command":"git push origin main"},...]
 ```
 
 See also: `history_grep`
