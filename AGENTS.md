@@ -56,12 +56,15 @@ digits. `--help` or `-h` anywhere on an `llm_*` line prints its help
 | `llm_tree [--depth N] [--stats] [--text] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list, 200 lines max |
 | `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches |
 | `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N]` | `file:line:content` lines (default 100) |
-| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON when a `yq` (mikefarah's, or the Python one with `jq`) can, raw text otherwise; files over 1 MiB (default) fail with `file_too_large` |
+| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large` |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
-\_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_) and use ripgrep when
-installed. `llm_find --contains` searches hidden and gitignored files too,
-with or without ripgrep. Zero matches: exit 0, no output.
+\_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_). `llm_grep` and
+`llm_find --contains` share one built-in engine, the same whether ripgrep is
+installed or not: ripgrep's regex syntax, binary files skipped, files in
+sorted path order; `llm_grep` also skips hidden files and what
+`.gitignore`/`.ignore`/`.rgignore` exclude, `llm_find --contains` searches
+them. Zero matches: exit 0, no output.
 
 ### 3.2 Filesystem scanners
 

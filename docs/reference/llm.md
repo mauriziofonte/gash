@@ -47,8 +47,8 @@ llm_config big.json --max-bytes 5000000
 
 ```text
 Refuses to read .env files and other secret files for security.
-YAML comes out as JSON when yq (mikefarah's or the Python yq) is
-installed, as the raw text otherwise. Files over --max-bytes
+YAML comes out as JSON, converted by Gash itself (no yq needed), or
+as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
 ```
 
@@ -384,6 +384,16 @@ llm_grep "function processOrder" .
 
 # With context lines
 llm_grep "class.*Controller" . --ext php --context 3
+```
+
+#### Notes
+
+```text
+One built-in engine, the same with or without ripgrep installed:
+ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore
+matches, binary files, node_modules, vendor and .git are skipped; files
+come in sorted path order. Secret files are skipped, templates such as
+.env.example searched. Default limit 100.
 ```
 
 ## llm_ports

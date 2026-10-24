@@ -2049,8 +2049,8 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Refuses to read .env files and other secret files for security.\n" +
-				"  YAML comes out as JSON when yq (mikefarah's or the Python yq) is\n" +
-				"  installed, as the raw text otherwise. Files over --max-bytes\n" +
+				"  YAML comes out as JSON, converted by Gash itself (no yq needed), or\n" +
+				"  as the raw text when it does not parse. Files over --max-bytes\n" +
 				"  (default 1 MiB) fail with file_too_large.",
 		},
 		Fallback:  &Usage{Program: "llm_config", Usage: "llm_config <file> [--max-bytes N]", Description: "Read config file (JSON/YAML, NOT .env); files over 1 MiB need --max-bytes"},
@@ -2522,7 +2522,14 @@ var functions = []Function{
 				"  llm_grep \"function processOrder\" .\n" +
 				"\n" +
 				"  # With context lines\n" +
-				"  llm_grep \"class.*Controller\" . --ext php --context 3",
+				"  llm_grep \"class.*Controller\" . --ext php --context 3\n" +
+				"\n" +
+				"NOTES\n" +
+				"  One built-in engine, the same with or without ripgrep installed:\n" +
+				"  ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore\n" +
+				"  matches, binary files, node_modules, vendor and .git are skipped; files\n" +
+				"  come in sorted path order. Secret files are skipped, templates such as\n" +
+				"  .env.example searched. Default limit 100.",
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
 		ShellVars: []string{"HOME"},
