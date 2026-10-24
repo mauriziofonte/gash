@@ -202,6 +202,9 @@ repository's `.git/config` before pointing an agent at it.
   is hunter2"), is sent. The piped input and the question are redacted
   separately, so an unclosed private key block in the pipe never swallows
   the question.
+* **WireGuard keys.** The `sysinfo` drill-downs, and the AI collectors that
+  run them, print the value of every WireGuard `PrivateKey` and
+  `PresharedKey` line as `[REDACTED]`, whatever its case and spacing.
 * **Transport.** The body goes through a temporary file created with umask 077
   and then deleted; the API key reaches `curl` through `--config` on a pipe,
   never argv. Control characters are stripped from replies.

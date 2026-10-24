@@ -3,8 +3,10 @@
 package sysinfo
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -203,4 +205,67 @@ func TestLedger_SYS48(t *testing.T) {
 	} {
 		require.Contains(t, r.out, l)
 	}
+}
+
+// wgFixture holds every spelling of the two WireGuard key kinds.
+const wgFixture = "[Interface]\nPrivateKey=MARKER-A\nPrivateKey = MARKER-B\n  PrivateKey = MARKER-C\n" +
+	"privatekey\t=\tMARKER-D\nAddress = 10.0.0.1/24\n[Peer]\nPresharedKey = MARKER-E\nPublicKey = public\n"
+
+// 3.0: SYS-50 fixed: the WireGuard drill-down masks the value of every
+// PrivateKey and PresharedKey line, whatever its case and spacing.
+func TestLedger_SYS50_fix(t *testing.T) {
+	fx := deepFixture(t, tree{"etc/wireguard/wg9.conf": wgFixture})
+	services := fx.deep(t, "services")
+	require.NotContains(t, services, "MARKER-")
+	require.Contains(t, services, "--- wg9.conf\n[Interface]\nPrivateKey=[REDACTED]\nPrivateKey = [REDACTED]\n  PrivateKey = [REDACTED]\n"+
+		"privatekey\t=\t[REDACTED]\nAddress = 10.0.0.1/24\n[Peer]\nPresharedKey = [REDACTED]\nPublicKey = public\n")
+}
+
+// SYS-50 (2.x): `sed 's/PrivateKey = .*/PrivateKey = [REDACTED]/'` over
+// the same lines leaves three of the five values in clear.
+func TestLedger_SYS50_2x(t *testing.T) {
+	sed := regexp.MustCompile(`PrivateKey = .*`)
+	var clear []string
+	for _, l := range strings.Split(wgFixture, "\n") {
+		l = sed.ReplaceAllString(l, "PrivateKey = [REDACTED]")
+		if i := strings.Index(l, "MARKER-"); i >= 0 {
+			clear = append(clear, l[i:])
+		}
+	}
+	require.Equal(t, []string{"MARKER-A", "MARKER-D", "MARKER-E"}, clear)
+}
+
+// 3.0: SYS-51 fixed: each I/O scheduler line names its block device.
+func TestLedger_SYS51_fix(t *testing.T) {
+	out := deepFixture(t).deep(t, "performance")
+	require.Contains(t, out, "--- I/O scheduler\nsda: [mq-deadline] none\nvda: none\n")
+	require.NotContains(t, out, "queue:")
+}
+
+// SYS-51 (2.x): `dirname "$sched" | xargs basename` is the queue
+// directory's name for every device.
+func TestLedger_SYS51_2x(t *testing.T) {
+	for _, p := range []string{"/sys/block/sda/queue/scheduler", "/sys/block/vda/queue/scheduler"} {
+		require.Equal(t, "queue", filepath.Base(filepath.Dir(p)))
+	}
+}
+
+// 3.0: SYS-52 fixed: a file with no final newline is ended by one, so
+// the next header starts its own line.
+func TestLedger_SYS52_fix(t *testing.T) {
+	fx := deepFixture(t, tree{"etc/collectd/collectd.conf.d/cpu.conf": "<Plugin cpu>"})
+	require.Contains(t, fx.deep(t, "services"), "<Plugin cpu>\n--- Monit\n")
+	var b bytes.Buffer
+	d := deepOut{&b}
+	d.raw([]byte("a"))
+	d.raw([]byte("b\n"))
+	d.raw(nil)
+	d.echo("--- next")
+	require.Equal(t, "a\nb\n--- next\n", b.String())
+}
+
+// SYS-52 (2.x): `cat FILE | head -N` copies a final partial line as it
+// is, so `echo "--- header"` lands on it.
+func TestLedger_SYS52_2x(t *testing.T) {
+	require.Equal(t, "<Plugin cpu>--- Monit\n", string(headN([]byte("<Plugin cpu>"), 20))+"--- Monit\n")
 }
