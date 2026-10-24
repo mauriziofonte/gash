@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_tree JSON (AGENTS.md 4.5): the root carries path, children carry name; size and children_count only with --stats; truncated only on the root of a cut listing.",
+  "title": "llm_tree",
+  "type": "object",
+  "required": ["path", "type"],
+  "properties": {
+    "path": {"type": "string", "pattern": "^/"},
+    "type": {"const": "directory"},
+    "size": {"type": "integer", "minimum": 0},
+    "children_count": {"type": "integer", "minimum": 0},
+    "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+    "truncated": {"const": true}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {"enum": ["directory", "file", "link"]},
+        "size": {"type": "integer", "minimum": 0},
+        "children_count": {"type": "integer", "minimum": 0},
+        "children": {"type": "array", "items": {"$ref": "#/$defs/node"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

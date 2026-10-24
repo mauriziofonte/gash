@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. gash hte doctor --json (hte.md 9): ok is false exactly when a check failed.",
+  "title": "gash hte doctor",
+  "type": "object",
+  "required": ["ok", "checks"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "status", "details"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "status": {"enum": ["ok", "warn", "fail", "fixed", "skip"]},
+          "details": {"type": "string"},
+          "remedy": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "if": {"properties": {"checks": {"contains": {"properties": {"status": {"const": "fail"}}}}}},
+  "then": {"properties": {"ok": {"const": false}}},
+  "else": {"properties": {"ok": {"const": true}}}
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_ports (AGENTS.md 3.4).",
+  "title": "llm_ports",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["port", "proto", "state", "address"],
+    "properties": {
+      "port": {"type": "integer", "minimum": 0, "maximum": 65535},
+      "proto": {"type": "string", "minLength": 1},
+      "state": {"type": "string"},
+      "address": {"type": "string"}
+    },
+    "additionalProperties": false
+  }
+}

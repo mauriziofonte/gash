@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_project (AGENTS.md 3.4).",
+  "title": "llm_project",
+  "type": "object",
+  "required": ["type", "framework", "package_manager", "has_tests", "entry_point", "path"],
+  "properties": {
+    "type": {"enum": ["php", "javascript", "python", "go", "rust", "unknown"]},
+    "framework": {"type": "string"},
+    "package_manager": {"type": "string"},
+    "has_tests": {"type": "boolean"},
+    "entry_point": {"type": "string"},
+    "path": {"type": "string", "pattern": "^/"}
+  },
+  "additionalProperties": false
+}

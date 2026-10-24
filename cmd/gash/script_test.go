@@ -97,6 +97,11 @@ func TestScript(t *testing.T) {
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
+		// schema NAME stdout|stderr|FILE validates JSON output against
+		// testdata/schema/NAME.json (schema_test.go).
+		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
+			"schema": cmdSchema(root),
+		},
 		Condition: func(cond string) (bool, error) {
 			switch cond {
 			case "root":

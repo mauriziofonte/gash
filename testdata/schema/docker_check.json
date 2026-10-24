@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. docker_compose_check --json and llm_docker_check (AGENTS.md 3.4).",
+  "title": "Compose image check",
+  "type": "object",
+  "required": [
+    "path",
+    "compose_file",
+    "services",
+    "summary"
+  ],
+  "properties": {
+    "path": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "compose_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "image",
+          "local_digest",
+          "remote_digest",
+          "status",
+          "upgradeable"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "image": {
+            "type": "string"
+          },
+          "local_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remote_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "UPDATE",
+              "CURRENT",
+              "PINNED",
+              "NOT_PULLED",
+              "ERROR"
+            ]
+          },
+          "upgradeable": {
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dns_error",
+                  "connection_refused",
+                  "timeout",
+                  "ssl_error",
+                  "transport_error",
+                  "unauthorized",
+                  "forbidden",
+                  "not_found",
+                  "rate_limited",
+                  "server_error",
+                  "malformed_token",
+                  "no_digest_in_response",
+                  "registry_unreachable",
+                  "invalid_reference"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^http_[0-9]{3}$"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "if": {
+          "properties": {
+            "status": {
+              "const": "ERROR"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "error"
+          ]
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "updates",
+        "current",
+        "pinned",
+        "errors"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "current": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pinned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
