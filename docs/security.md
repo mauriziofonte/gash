@@ -269,7 +269,9 @@ reach `curl` through `--config`.
 The installer and `gash_upgrade` check out the newest release tag. A signed tag
 (PGP or SSH) is checked with `git verify-tag`; an unverifiable one gets a
 warning. `GASH_REQUIRE_SIGNED=1` aborts on an unsigned or unverifiable tag.
-`GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
+A new install is cloned and checked in a temporary directory next to the
+install location and moved into place only when it passes, so a refusal leaves
+nothing behind. `GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
 
 ## Reporting a vulnerability
 

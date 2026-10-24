@@ -1,0 +1,71 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SELF-07
+# covers: none (3.0 self-management proof)
+#
+# SELF-07 proving test: a new install is cloned and verified in a temporary
+# directory and moved into place only when it passes. With
+# GASH_REQUIRE_SIGNED=1 and an unsigned latest tag the installer refuses
+# (status 1, the refusal line), says nothing was installed and leaves no
+# ~/.gash and no temporary clone. A tag signed with an SSH key that git can
+# verify installs. Local repositories only, no network.
+
+env GASH_HEADLESS=1
+
+exec bash mkrepo.sh
+
+# Unsigned latest tag: refused, nothing left behind.
+! exec bash -c 'h="$PWD/h1"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stderr 'GASH_REQUIRE_SIGNED=1 is set; refusing to install v1.0.0\.'
+stdout 'Info: Nothing was installed\.'
+! exists h1/.gash
+! exec bash -c 'ls -A h1 | grep -q gash-install'
+! exists h1/.gashrc
+
+# Without GASH_REQUIRE_SIGNED the same tag installs.
+exec bash -c 'h="$PWD/h2"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Installed Gash v1.0.0\.'
+exists h2/.gash/gash.sh
+exists h2/.gashrc
+! exec bash -c 'ls -A h2 | grep -q gash-install'
+exec bash -c 'test "$(git -C h2/.gash describe --tags --exact-match HEAD)" = v1.0.0'
+
+# An empty existing install directory receives the verified clone.
+exec bash -c 'h="$PWD/h3"; mkdir -p "$h/.gash"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes --quiet'
+exists h3/.gash/.git
+exists h3/.gash/gash.sh
+
+# A signed, verifiable tag installs under GASH_REQUIRE_SIGNED=1 (a gpg key
+# made for the case in a short-named directory under /tmp, since the agent
+# socket path is length-limited on macOS; the agent is stopped and the
+# directory removed at the end).
+[!exec:gpg] stop 'no gpg for the signed case'
+exec bash mksigned.sh
+exec bash -c 'h="$PWD/h4"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GNUPGHOME="$(cat gnupghome)" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Signature of v1\.0\.1 verified\.'
+stdout 'Installed Gash v1\.0\.1\.'
+exists h4/.gash/gash.sh
+exec bash -c 'g="$(cat gnupghome)"; GNUPGHOME="$g" gpgconf --kill all || true; rm -rf -- "$g"'
+
+-- mkrepo.sh --
+set -e
+mkdir repo
+tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -
+git init -q repo
+git -C repo config user.email t@e
+git -C repo config user.name T
+git -C repo config maintenance.auto false
+git -C repo config gc.auto 0
+git -C repo add -A
+git -C repo commit -q -m snapshot
+git -C repo tag -a v1.0.0 -m v1.0.0
+-- mksigned.sh --
+set -e
+h="$PWD/h4"
+mkdir -p "$h"
+: >"$h/.bashrc"
+GNUPGHOME="$(mktemp -d /tmp/gash-gpg.XXXXXX)"
+export GNUPGHOME
+printf '%s' "$GNUPGHOME" >gnupghome
+gpg --batch --quiet --passphrase '' --quick-gen-key 'T <t@e>' ed25519 sign never 2>/dev/null
+git -C repo -c user.signingkey=t@e tag -s v1.0.1 -m v1.0.1

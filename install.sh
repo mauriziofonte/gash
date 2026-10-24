@@ -151,7 +151,8 @@
   }
 
   # Check the tag signature when there is one. GASH_REQUIRE_SIGNED=1 turns
-  # a missing or unverifiable signature into an error.
+  # a missing or unverifiable signature into a refusal: status 1, the caller
+  # stops.
   gashinst_verify_tag() {
     local TAG="$1"
     if git cat-file -p "refs/tags/$TAG" 2>/dev/null | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----'; then
@@ -167,8 +168,28 @@
     fi
     if [ "${GASH_REQUIRE_SIGNED-0}" = "1" ]; then
       gashinst_error "GASH_REQUIRE_SIGNED=1 is set; refusing to install $TAG."
-      exit 1
+      return 1
     fi
+    return 0
+  }
+
+  # A new install is cloned, checked out and verified in a temporary
+  # directory next to INSTALL_DIR, and moved into place only once it passed
+  # (SELF-07): a refusal or a failure leaves nothing behind.
+  gashinst_tmp_clone_cleanup() {
+    if [ -n "${GASHINST_TMP_CLONE-}" ]; then
+      command rm -rf -- "$GASHINST_TMP_CLONE"
+      GASHINST_TMP_CLONE=""
+    fi
+  }
+
+  # Stop after a refusal or failure: remove a temporary clone, say so.
+  gashinst_abort() {
+    if [ -n "${GASHINST_TMP_CLONE-}" ]; then
+      gashinst_tmp_clone_cleanup
+      gashinst_info "Nothing was installed."
+    fi
+    exit 1
   }
 
   gashinst_install_from_git() {
@@ -197,36 +218,68 @@
       exit 1
     else
       gashinst_info "Cloning Gash into '$INSTALL_DIR'."
-      mkdir -p "$INSTALL_DIR"
-      if ! command git clone --quiet "$GIT_REPO" "$INSTALL_DIR"; then
-        gashinst_error "Failed to clone $GIT_REPO."
+      local PARENT
+      PARENT="$(dirname -- "$INSTALL_DIR")"
+      mkdir -p -- "$PARENT"
+      GASHINST_TMP_CLONE="$(mktemp -d "$PARENT/.gash-install.XXXXXX")" || {
+        GASHINST_TMP_CLONE=""
+        gashinst_error "Failed to create a temporary directory in $PARENT."
         exit 1
+      }
+      trap gashinst_tmp_clone_cleanup EXIT
+      if ! command git clone --quiet "$GIT_REPO" "$GASHINST_TMP_CLONE"; then
+        gashinst_error "Failed to clone $GIT_REPO."
+        gashinst_abort
       fi
+      cd "$GASHINST_TMP_CLONE" || {
+        gashinst_error "Failed to change directory to $GASHINST_TMP_CLONE"
+        gashinst_abort
+      }
+    fi
+
+    local REF="${GASH_INSTALL_REF-}"
+    local LATEST_TAG=""
+    if [ -n "$REF" ]; then
+      if ! git -c advice.detachedHead=false checkout --quiet "$REF" 2>/dev/null &&
+        ! git -c advice.detachedHead=false checkout --quiet "origin/$REF" 2>/dev/null; then
+        gashinst_error "Cannot check out '$REF'."
+        gashinst_abort
+      fi
+    else
+      LATEST_TAG="$(gashinst_latest_tag)" || LATEST_TAG=""
+      if [ -n "$LATEST_TAG" ]; then
+        gashinst_verify_tag "$LATEST_TAG" || gashinst_abort
+        if ! git -c advice.detachedHead=false checkout --quiet "$LATEST_TAG"; then
+          gashinst_error "Failed to check out $LATEST_TAG."
+          gashinst_abort
+        fi
+      fi
+    fi
+
+    # Move a verified new clone into place: INSTALL_DIR is absent, or an
+    # empty directory (possibly a link to one), which receives its contents.
+    if [ -n "${GASHINST_TMP_CLONE-}" ]; then
+      cd / || exit 1
+      if [ -d "$INSTALL_DIR" ]; then
+        if ! (shopt -s dotglob && command mv -- "$GASHINST_TMP_CLONE"/* "$INSTALL_DIR"/); then
+          gashinst_error "Failed to move the new checkout into $INSTALL_DIR."
+          gashinst_abort
+        fi
+      elif ! command mv -- "$GASHINST_TMP_CLONE" "$INSTALL_DIR"; then
+        gashinst_error "Failed to move the new checkout into $INSTALL_DIR."
+        gashinst_abort
+      fi
+      gashinst_tmp_clone_cleanup
+      trap - EXIT
       cd "$INSTALL_DIR" || {
         gashinst_error "Failed to change directory to $INSTALL_DIR"
         exit 1
       }
     fi
 
-    local REF="${GASH_INSTALL_REF-}"
     if [ -n "$REF" ]; then
-      if ! git -c advice.detachedHead=false checkout --quiet "$REF" 2>/dev/null &&
-        ! git -c advice.detachedHead=false checkout --quiet "origin/$REF" 2>/dev/null; then
-        gashinst_error "Cannot check out '$REF'."
-        exit 1
-      fi
       gashinst_success "Installed Gash at $REF."
-      return 0
-    fi
-
-    local LATEST_TAG
-    LATEST_TAG="$(gashinst_latest_tag)" || LATEST_TAG=""
-    if [ -n "$LATEST_TAG" ]; then
-      gashinst_verify_tag "$LATEST_TAG"
-      if ! git -c advice.detachedHead=false checkout --quiet "$LATEST_TAG"; then
-        gashinst_error "Failed to check out $LATEST_TAG."
-        exit 1
-      fi
+    elif [ -n "$LATEST_TAG" ]; then
       gashinst_success "Installed Gash $LATEST_TAG."
     else
       gashinst_warning "No release tags found, using the latest commit on the default branch."
@@ -328,7 +381,8 @@
     unset -f gashinst_has gashinst_echo gashinst_error gashinst_info gashinst_success \
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
-      gashinst_verify_tag gashinst_install_from_git gashinst_fetch_binary gashinst_do_install gashinst_reset
+      gashinst_verify_tag gashinst_tmp_clone_cleanup gashinst_abort gashinst_install_from_git \
+      gashinst_fetch_binary gashinst_do_install gashinst_reset
   }
 
   # Main script execution starts here
