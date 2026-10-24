@@ -8766,6 +8766,52 @@ item says which part.
 | Doc drift | `.gash_env.template` URL-encoding claim | PARTIAL | [CORE-12](#core-12) |
 | Doc drift | README function count | PARTIAL | [SELF-20](#self-20) |
 
+## Found in the fix phase (3.0)
+
+Not LEDGER items of the 2.1.0 audit: what the 3.0 fix phase found on its own work. Under the operator's rule that 3.0 ships no known defect (2026-10-19), each was fixed in 3.0, not triaged. The commit is the merge that carries the fix.
+
+### Follow-ups of the six slices
+
+| Id | Finding | Fix | Status |
+|---|---|---|---|
+| F-01 | `gash hte site modify` can turn HTTP/2 off but not back on | `--http2`; the flag-set pin (TestLedger_HTE53), help and docs/hte.md | done 9ae20ce |
+| F-02 | The `gash hte` help pages are unwritten; the design names a WSL checklist that does not exist | Help bodies from the implemented flags; the WSL reference points at docs/hte.md "WSL" | done 9ae20ce |
+| F-03 | The FS-20 hint example `'*/node_modules'` matches only at depth 2 under FS-12 semantics | `'node_modules'` in the hint and the docs | done 9ae20ce |
+| F-04 | llm_find drops every result under a root whose name holds a newline; results come in directory order | Results kept; bytewise order (as LLM-36) | done 9ae20ce |
+| F-05 | The llm_exec grep/rg/diff wrappers exclude the secret-exception files (`.env.example`) | The exceptions pass, as in the path guard | done 9ae20ce |
+| F-06 | `config.MaskEnvURL` has no caller | Removed with its test | done 9ae20ce |
+| F-07 | remote and config hold the same host-target rule twice | remote calls config; the agreement cases kept | done 9ae20ce |
+| F-08 | macOS `openrsync` and the REM-02 rsync argv | openrsync detected; argv it accepts; stub test | done 9ae20ce |
+| F-09 | An unterminated quote in DIR/.env leaves the variable undefined, while Compose refuses the file | Refused like Compose (`invalid_env_file`, file and line); TestLedger_DOCK13 compares with Compose | done 9ae20ce |
+| F-10 | ai_sysinfo prints empty Containers / SSL private keys headers; Virtualmin SSL sits under Let's Encrypt | Headers only with content; Virtualmin SSL has its own | done 9ae20ce |
+| F-11 | CONTRIBUTING.md Conventions is 2.x prose | Rewritten for the 3.0 layout | done 9ae20ce |
+| F-12 | A stale CORE-19 comment in the internal/chrome tests | Corrected | done 9ae20ce |
+
+### Design commitments not met (audit of 2026-10-24)
+
+| # | Commitment (design doc) | Gap found | Status |
+|---|---|---|---|
+| A-01 | `install.sh --repair` fetches the binary for VERSION only (upgrade.md 3.7) | It ran the whole install | done b34d0bb |
+| A-02 | HTE E2E on Debian 12, Ubuntu 24.04, Fedora (+Remi), Arch (testing.md 6) | The matrix ran Ubuntu four times | done 7ad1a0e, 1f5e58c, 94bdc0e |
+| A-03 | Multi-PHP and systemd E2E stories in CI | Never enabled in CI | done 7ad1a0e |
+| A-04 | `autostart = "shell"` starts the stack from the first interactive shell (hte.md) | Nothing called `gash hte __autostart` | done 7ad1a0e |
+| A-05 | Compat Bash 4.4, 5.0, 5.1, 5.3 in CI (compat.md 1) | No Bash matrix job | done ae2452f |
+| A-06 | macOS HTE on a GitHub runner with Homebrew httpd and php (testing.md 6) | No macOS HTE job | done 7ad1a0e |
+| A-07 | gash-hosts-helper SHA-256 checked (upgrade.md 2) | Not pinned | done b34d0bb |
+| A-08 | Shell state parity after a 2.1.0 load and after gash_unload (shell.md) | No test | done ae2452f |
+| A-09 | Prompt PS1 goldens for every segment (shell.md) | Injection tests only | done ae2452f |
+| A-10 | Envelope JSON Schemas in testdata/schema, validated (architecture.md) | Missing | done ae2452f |
+| A-11 | `gash version` under 10 ms (architecture.md) | No benchmark | done ae2452f |
+| A-12 | bin/gash launcher test | Missing | done b34d0bb |
+| A-13 | Bootstrap fetch success, mismatch, lock, stale lock, REQUIRE_SIGNED tests | Unreachable URL only | done b34d0bb |
+| A-14 | GASH__SYSROOT read by `-tags gashtest` builds (testing.md) | Never built; WSL-present is unit-covered through the `sys` field, so the seam was dropped from the design | done df9443d (docs) |
+| A-15 | DB module against real MySQL 8.4, MariaDB 11, PostgreSQL 16 (testing.md) | Fakes only | done ae2452f |
+| A-16 | `gash __complete` through the generated bash_completion | Unit test only | done ae2452f |
+| A-17 | SIGINT/SIGTERM exit 128+N and reach children (architecture.md) | No test; the test found a signal race, fixed | done ae2452f |
+| A-18 | Spec-to-txtar coverage gates in CI (testing.md) | covermap and bashonlymap local only | done ae2452f |
+| A-19 | Fetch message wording (upgrade.md 3.1, 3.3) | Doc and code differed | done 53b4677 |
+| A-20 | Library table (libraries.md) | Out of step with go.mod | done df9443d |
+
 ## Seeds not confirmed
 
 None: every seed is CONFIRMED or PARTIAL (see the seed index).

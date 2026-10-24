@@ -6,7 +6,9 @@ Read this first in every session, then `git log --oneline -20`, then run the gat
 
 ## Phase
 
-**3.0 fix phase (from 2026-10-24).** The operator triaged the LEDGER: every item `accept` (bulk, "Solo le 32"), and the 32 Decisions as the lead recommended (the chosen option is in each Status note). Every accepted fix lands in 3.0 before S3, not in a 3.1 (operator, 2026-10-19). 327 items have work (a Fix recipe that is not "none"); they are split into six slices worked in parallel worktrees, highest severity first:
+**3.0 fix phase complete (2026-10-24); next is S3.** Every accepted LEDGER item has its Status note (`accept: done <commit>`, or `no 3.0 change` where the Fix recipe is none). The six slices, the follow-ups F-01..F-12 and the design-audit gaps A-01..A-20 (LEDGER "Found in the fix phase") are merged into `go-refactor`; the worktrees below are finished and not reused. S3: CI green on every job (macOS HTE included), VERSION 3.0.0, `release/SHA256SUMS` committed last (Release procedure), the CHANGELOG 3.0.0 entry final, PR #5 ready for review.
+
+History: **3.0 fix phase (from 2026-10-24).** The operator triaged the LEDGER: every item `accept` (bulk, "Solo le 32"), and the 32 Decisions as the lead recommended (the chosen option is in each Status note). Every accepted fix lands in 3.0 before S3, not in a 3.1 (operator, 2026-10-19). 327 items have work (a Fix recipe that is not "none"); they are split into six slices worked in parallel worktrees, highest severity first:
 
 | Worktree | Branch | Areas | Items |
 |---|---|---|---|
