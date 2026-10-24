@@ -173,7 +173,7 @@ of them (the prompt, history and aliases are already set up). Use
 
 | Setting | Default | Effect |
 |---|---|---|
-| `GASH_PROMPT` | `1` | `0` keeps your own `PS1`. The prompt hook still runs for history and the last exit status. Names the prompt shows (git branch, virtualenv, `debian_chroot`, screen session) appear literally: `$(...)`, backticks or `${...}` in them are never run |
+| `GASH_PROMPT` | `1` | `0` keeps your own `PS1`. The prompt hook still runs for history and the last exit status. Names the prompt shows (git branch, virtualenv, `debian_chroot`, screen session) appear literally: `$(...)`, backticks or `${...}` in them are never run. Control characters in the terminal title (the directory, user and host names) are shown as `?` |
 | `GASH_GIT_EXCLUDE` | empty | Colon-separated repository roots with no git segment in the prompt. Absolute paths, matched exactly (`~` is not expanded). `$HOME` as a root is always skipped |
 | `GASH_BANNER` | `1` | `0` hides the startup banner and quote |
 | `GASH_SHOW_INXI` | `0` | `1` prints a short `inxi` summary at startup when `inxi` is installed |

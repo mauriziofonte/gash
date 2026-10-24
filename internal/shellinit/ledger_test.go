@@ -152,3 +152,16 @@ func TestLedger_SHELL01_Lint(t *testing.T) {
 	}
 	require.Greater(t, checked, 20, "the lint found too few prompt assignments to be meaningful")
 }
+
+// TestLedger_SHELL02 proves the terminal title replaces every control
+// character of its parts (cwd, USER, HOSTNAME) by "?" before the OSC frame
+// is printed, so a name cannot end the frame early (SHELL-02).
+func TestLedger_SHELL02(t *testing.T) {
+	out := newHarness().emit(t)
+	start := strings.Index(out, "\n__gash_set_terminal_title() {\n")
+	require.GreaterOrEqual(t, start, 0)
+	body := out[start:]
+	body = body[:strings.Index(body, "\n}\n")]
+	require.Contains(t, body, `printf '\e]2;%s\a' "${title//[[:cntrl:]]/?}"`)
+	require.Equal(t, 1, strings.Count(body, "printf "), "every title goes through the sanitized printf")
+}

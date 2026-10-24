@@ -1,0 +1,31 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-02
+# covers: none (3.0 security fix)
+#
+# SHELL-02 proving test: the terminal title is one \e]2;...\a frame whatever
+# the working directory holds. A directory name with BEL and ESC (which
+# would end the frame early and send the rest to the terminal as escape
+# sequences) is shown with "?" in place of each control character; an
+# ordinary directory gives the 2.x bytes.
+
+env GASH_BANNER=0
+env TERM=xterm
+env USER=tester
+
+exec bash --norc --noprofile -i drive.sh
+stdout '^hostile=ok$'
+stdout '^plain=ok$'
+
+-- drive.sh --
+source "$GASH_SH" >/dev/null 2>&1
+unset SSH_CONNECTION
+mkdir -p "$HOME/plain" "$HOME/"$'d\a\e[31mx'
+cd "$HOME/"$'d\a\e[31mx'
+got="$(__gash_set_terminal_title)"
+want="$(printf '\e]2;%s\a' '~/d??[31mx [tester]')"
+[[ "$got" == "$want" ]] && echo hostile=ok || printf 'hostile=BAD %q\n' "$got"
+cd "$HOME/plain"
+got="$(__gash_set_terminal_title)"
+want="$(printf '\e]2;%s\a' '~/plain [tester]')"
+[[ "$got" == "$want" ]] && echo plain=ok || printf 'plain=BAD %q\n' "$got"
