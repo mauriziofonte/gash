@@ -133,21 +133,36 @@ func TestValidatePath_Tilde(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// TestLedger_LLM25_2x pins ~user as textual, not real user expansion:
-// "~root/x" becomes "$HOME" + "root/x" (LEDGER LLM-25, kept in rc.A).
+// TestLedger_LLM25_2x: ~user is refused with invalid_path (2.x read it
+// textually: "~root/x" became "$HOME" + "root/x").
 func TestLedger_LLM25_2x(t *testing.T) {
 	g := guardAt("/tmp", "/home/u")
-	got, err := g.ValidatePath("~root/x")
-	require.NoError(t, err)
-	// ~root is textual: the leading ~ is dropped and Home prepended
-	// ("/home/u" + "root/x" = "/home/uroot/x"), not expanded to root's real
-	// home. The result is then realpath-normalized exactly as Realpath does;
-	// comparing against that same normalization keeps the expectation
-	// host-independent (macOS resolves /home through the /System/Volumes/Data
-	// firmlink, which applies equally to both sides).
-	want, err := g.Realpath("/home/uroot/x", false)
-	require.NoError(t, err)
-	require.Equal(t, want, got)
+	// 3.0: LLM-25 fixed
+	_, err := g.ValidatePath("~root/x")
+	var r *Refusal
+	require.ErrorAs(t, err, &r)
+	require.Equal(t, "invalid_path", r.Code)
+	require.Equal(t, "RETRY", r.Action)
+	require.Equal(t, "~root/x", r.Details)
+}
+
+// TestLedger_LLM25: ~ and ~/... expand to Home; ~user, ~root and ~+ are
+// refused (invalid_path, RETRY); a ~ later in the path is a plain byte.
+func TestLedger_LLM25(t *testing.T) {
+	g := guardAt("/tmp", "/home/u")
+	for in, raw := range map[string]string{"~": "/home/u", "~/x": "/home/u/x", "a~b": "/tmp/a~b", "x/~": "/tmp/x/~"} {
+		got, err := g.ValidatePath(in)
+		require.NoError(t, err, in)
+		want, err := g.Realpath(raw, false)
+		require.NoError(t, err)
+		require.Equal(t, want, got, in)
+	}
+	for _, in := range []string{"~root", "~root/x", "~u/x", "~+", "~-/x"} {
+		_, err := g.ValidatePath(in)
+		var r *Refusal
+		require.ErrorAs(t, err, &r, in)
+		require.Equal(t, "invalid_path", r.Code, in)
+	}
 }
 
 func TestValidatePath_Empty(t *testing.T) {

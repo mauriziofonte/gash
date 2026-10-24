@@ -322,8 +322,8 @@ func TestLedger_LLM24(t *testing.T) {
 	require.NotContains(t, r.Stdout, "in-plain")
 }
 
-// TestLedger_LLM25_2x: a leading ~ is replaced by $HOME textually, ~user
-// is not expanded: ~root/x is ${HOME}root/x.
+// TestLedger_LLM25_2x: ~user is invalid_path, ~/ expands to $HOME (2.x
+// replaced a leading ~ by $HOME textually: ~root/x was ${HOME}root/x).
 func TestLedger_LLM25_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
@@ -331,8 +331,12 @@ func TestLedger_LLM25_2x(t *testing.T) {
 	mustMkdir(t, home)
 	mustWrite(t, filepath.Join(d, "hroot", "x", "f"), "x")
 	env := baseEnv(home, nil)
-	r := same(t, m, home, env, "llm_tree", "~root/x")
-	require.Equal(t, `{"path":"`+home+`root/x","type":"directory","children":[{"name":"f","type":"file"}]}`+"\n", r.Stdout)
+	// 3.0: LLM-25 fixed (2.x listed $HOME + "root/x")
+	r := runGo(t, m, home, env, "llm_tree", "~root/x")
+	require.Equal(t, result{"", `{"error":"invalid_path","details":"~root/x","action":"RETRY","recoverable":true,"hint":"Only ~ and ~/ expand to your home; give another user's path in full"}` + "\n", 1}, r)
+	mustWrite(t, filepath.Join(home, "x", "f"), "x")
+	r = runGo(t, m, d, env, "llm_tree", "~/x")
+	require.Equal(t, `{"path":"`+home+`/x","type":"directory","children":[{"name":"f","type":"file"}]}`+"\n", r.Stdout)
 }
 
 func TestTreeCaps(t *testing.T) {

@@ -88,6 +88,7 @@ var codeTable = []Code{
 	{"path_unreadable", Retry, "paths", Origin2x},
 	{"file_not_found", Retry, "paths", Origin2x},
 	{"file_too_large", Retry, "paths", Origin2x},
+	{"invalid_path", Retry, "paths", Origin3x},
 	// llm_exec.
 	{"dangerous_command_blocked", Fatal, "llm_exec", Origin2x},
 	{"option_not_allowed", Fatal, "llm_exec", Origin2x},
