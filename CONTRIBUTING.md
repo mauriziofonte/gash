@@ -109,8 +109,9 @@ on the `# ` comment line right above the quote, with a URL when there is one:
 
 Quote exactly, in English, and name the person who said it (a law named after
 someone is attributed to whoever wrote it down). When Wikiquote lists a line
-as disputed or misattributed, leave it out, and check that the line is not
-already in the file.
+as disputed or misattributed, leave it out.
+`go test ./internal/handlers -run TestShippedQuotes` checks the source lines,
+the format and duplicates.
 
 ## Commits and pull requests
 
