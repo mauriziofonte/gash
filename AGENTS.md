@@ -374,7 +374,7 @@ Authorization headers, `SSH:` passphrase lines, crypt password hashes and
 known token formats (sk-, ghp_, AKIA, xox, AIza). Redaction is pattern-based
 and can miss secrets (free text such as "the password is ..." is sent). `GASH_AI_CONFIRM`: auto (default) asks before sending data
 Gash collected itself (`ai_sysinfo`), 1 asks before every request, 0 never
-asks. In headless mode or without a terminal, a request that needs
+asks; any other value asks before every request and warns. In headless mode or without a terminal, a request that needs
 confirmation is refused. `ai_ask` needs a terminal and refuses headless:
 use `ai_query "question"`. Piped input must start within 2 seconds; an open
 but silent stdin is ignored with a warning (redirect `</dev/null`). Call

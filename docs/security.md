@@ -210,7 +210,8 @@ repository's `.git/config` before pointing an agent at it.
   never argv. Control characters are stripped from replies.
 * **Consent.** `GASH_AI_CONFIRM=auto` (default) asks before sending data Gash
   collected (`ai_sysinfo`) and sends what you typed or piped; `1` always asks;
-  `0` never. Where consent is needed, no terminal or headless mode means
+  `0` never; any other value (case-sensitive: `off`, `AUTO`) always asks and
+  warns once. Where consent is needed, no terminal or headless mode means
   refusal. Headless mode reads it from `~/.gash_env` too; the environment
   wins. `GASH_AI_DEBUG=1` prints the (redacted) request
   bodies and raw replies on stderr.
