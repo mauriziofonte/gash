@@ -142,6 +142,13 @@ func parse(fsys fs.FS) (*template.Template, error) {
 		// cardAliasNames is the names of the card entries as shell words,
 		// for the gash stub.
 		"cardAliasNames": func() string { return shellWords(registry.CardAliasNames()) },
+		"cardAliasFamilies": func() string {
+			var pats []string
+			for _, p := range registry.CardAliasFamilies() {
+				pats = append(pats, p+"[0-9]*")
+			}
+			return strings.Join(pats, " | ")
+		},
 	}).ParseFS(fsys, "*.tmpl")
 	if err != nil {
 		return nil, err

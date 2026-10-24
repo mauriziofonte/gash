@@ -199,6 +199,14 @@ func readTab(line string) (name, value string) {
 func (k cardWriter) aliasLines(file string) string {
 	var b strings.Builder
 	for _, a := range registry.CardAliases(file) {
+		if a.Each != "" && k.only {
+			// A family entry (phpXY): the shell's own php83, php74, ...
+			// (LEDGER DEV-21).
+			for _, name := range k.family(a.Each) {
+				b.WriteString(name + "\t" + k.live[name] + "\n")
+			}
+			continue
+		}
 		name, value := readTab(a.Name + "\t" + a.Value)
 		if v, ok := k.live[name]; ok {
 			value = v
@@ -211,6 +219,48 @@ func (k cardWriter) aliasLines(file string) string {
 		b.WriteString(name + "\t" + value + "\n")
 	}
 	return b.String()
+}
+
+// family returns the live aliases named prefix followed by digits only,
+// sorted by bytes.
+func (k cardWriter) family(prefix string) []string {
+	var out []string
+	for name := range k.live {
+		rest, ok := strings.CutPrefix(name, prefix)
+		if ok && rest != "" && strings.Trim(rest, "0123456789") == "" {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// aliasNotes are the conditions of the card entries of files that
+// aliasLines shows, one "NAMES: CONDITION" line per condition in file
+// order (LEDGER DEV-21). A card that lists only the aliases the shell
+// defines needs none: those are defined.
+func (k cardWriter) aliasNotes(files []string) []string {
+	if k.only {
+		return nil
+	}
+	var order []string
+	names := map[string][]string{}
+	for _, f := range files {
+		for _, a := range registry.CardAliases(f) {
+			if a.Condition == "" || a.Value == a.Name {
+				continue
+			}
+			if names[a.Condition] == nil {
+				order = append(order, a.Condition)
+			}
+			names[a.Condition] = append(names[a.Condition], a.Name)
+		}
+	}
+	out := make([]string, 0, len(order))
+	for _, c := range order {
+		out = append(out, strings.Join(names[c], ", ")+": "+c)
+	}
+	return out
 }
 
 // nonEmptyLines is ... | grep -c .
@@ -333,4 +383,10 @@ func (k cardWriter) topic(t registry.Topic) {
 		}
 	}
 	s.Table(w, ui.ReadRows(strings.NewReader(rows.String())), opts...)
+	if notes := k.aliasNotes(t.AliasFiles); len(notes) > 0 {
+		k.nl()
+		for _, note := range notes {
+			s.Print(w, "muted", "  "+note)
+		}
+	}
 }

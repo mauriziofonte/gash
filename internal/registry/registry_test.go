@@ -229,3 +229,56 @@ func TestRegistry_ReadmeCounts(t *testing.T) {
 	require.Equal(t, 18, llm, "README.md says Eighteen read-only JSON functions")
 	require.Contains(t, readme, "Eighteen read-only JSON functions")
 }
+
+// LEDGER DEV-21: the card's php entries are the php pack's aliases, each
+// with the condition under which the shell defines it: the per-version
+// families (phpXY, composerXY, 1composerXY) for each installed phpX.Y,
+// php and composer with GASH_REPLACE_TOOLS=1, composer1-self-update when
+// composer1 is installed; the hte aliases DEV-17 dropped are not listed.
+func TestRegistry_AliasDocsMatchConditions(t *testing.T) {
+	card := map[string]CardAlias{}
+	for _, a := range CardAliases("php") {
+		card[a.Name] = a
+	}
+	family := map[string]string{`"php$`: "phpXY", `"composer$`: "composerXY", `"1composer$`: "1composerXY"}
+	seen := map[string]bool{}
+	for _, a := range Aliases() {
+		if a.Pack != "php" {
+			continue
+		}
+		name := a.Name
+		for prefix, row := range family {
+			if strings.HasPrefix(a.Name, prefix) {
+				name = row
+			}
+		}
+		if strings.HasPrefix(name, "hte") {
+			require.NotContains(t, card, name, "DEV-17 dropped %s", name)
+			continue
+		}
+		e, ok := card[name]
+		require.True(t, ok, "php pack alias %s has no card entry", a.Name)
+		seen[name] = true
+		cond := a.Condition
+		switch {
+		case strings.Contains(cond, "for "):
+			require.True(t, strings.HasPrefix(e.Condition, "for each installed phpX.Y"), name)
+			require.NotEmpty(t, e.Each, name)
+		case strings.Contains(cond, "GASH_REPLACE_TOOLS"):
+			require.Equal(t, "with GASH_REPLACE_TOOLS=1", e.Condition, name)
+		case strings.Contains(cond, "__gash_composer1"):
+			require.Equal(t, "when composer1 is installed", e.Condition, name)
+		case strings.Contains(cond, `-n "$__gash_composer"`):
+			require.Equal(t, "when composer is installed", e.Condition, name)
+		default:
+			require.Empty(t, e.Condition, name)
+		}
+		if strings.Contains(cond, "__gash_composer1") {
+			require.Contains(t, e.Condition, "composer1", name)
+		}
+	}
+	for name := range card {
+		require.True(t, seen[name], "card entry %s is no php pack alias", name)
+	}
+	require.Equal(t, []string{"1composer", "composer", "php"}, CardAliasFamilies())
+}

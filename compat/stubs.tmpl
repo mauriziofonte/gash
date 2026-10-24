@@ -142,6 +142,15 @@ gash() {
         __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
         __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
     done
+    # The families of the card (php83 for phpXY, LEDGER DEV-21).
+    for __gash_n in "${!BASH_ALIASES[@]}"; do
+        case "$__gash_n" in
+            {{% cardAliasFamilies %}}) ;;
+            *) continue ;;
+        esac
+        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
+        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
+    done
     GASH__CARD_ALIASES="$__gash_card" GASH__CARD_LIVE="$__gash_live" __gash_call gash "$@"
 }
 {{% end %}}

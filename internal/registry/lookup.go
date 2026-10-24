@@ -74,6 +74,22 @@ func CardAliasNames() []string {
 	return slices.Compact(out)
 }
 
+// CardAliasFamilies returns the Each prefixes of the card entries that
+// stand for a family of aliases (php for php83), sorted, each once: the
+// gash stub passes the live aliases named PREFIX followed by digits.
+func CardAliasFamilies() []string {
+	var out []string
+	for _, list := range cardAliases {
+		for _, a := range list {
+			if a.Each != "" {
+				out = append(out, a.Each)
+			}
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 // Modules returns the distinct modules, sorted.
 func Modules() []string {
 	seen := map[string]bool{}

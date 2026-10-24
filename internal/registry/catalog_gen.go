@@ -4418,14 +4418,18 @@ var cardAliases = map[string][]CardAlias{
 		{Name: "cls", Value: "clear"},
 		{Name: "path", Value: "tr \":\" \"\\n\" <<<\"$PATH\""},
 	},
+	// The php pack as internal/shellinit emits it (LEDGER DEV-21): the
+	// per-version families, the GASH_REPLACE_TOOLS pair and composer1;
+	// the hte aliases are gone (DEV-17: gash hte replaces them).
 	"php": {
-		{Name: "php", Value: "phpX.Y"},
-		{Name: "composer-packages-update", Value: "composer global update"},
-		{Name: "composer-self-update", Value: "sudo composer self-update"},
-		{Name: "hte", Value: "sudo phpX.Y hte-cli create"},
-		{Name: "hte-create", Value: "sudo phpX.Y hte-cli create"},
-		{Name: "hte-remove", Value: "sudo phpX.Y hte-cli remove"},
-		{Name: "hte-details", Value: "sudo phpX.Y hte-cli details"},
+		{Name: "phpXY", Value: "phpX.Y", Condition: "for each installed phpX.Y", Each: "php"},
+		{Name: "composerXY", Value: "phpX.Y composer", Condition: "for each installed phpX.Y, with composer", Each: "composer"},
+		{Name: "1composerXY", Value: "phpX.Y composer1", Condition: "for each installed phpX.Y up to 7.2, with composer1", Each: "1composer"},
+		{Name: "php", Value: "phpX.Y", Condition: "with GASH_REPLACE_TOOLS=1"},
+		{Name: "composer", Value: "phpX.Y composer", Condition: "with GASH_REPLACE_TOOLS=1"},
+		{Name: "composer-packages-update", Value: "composer global update", Condition: "when composer is installed"},
+		{Name: "composer-self-update", Value: "sudo composer self-update", Condition: "when composer is installed"},
+		{Name: "composer1-self-update", Value: "sudo composer1 self-update", Condition: "when composer1 is installed"},
 	},
 	"safety": {
 		{Name: "cp", Value: "cp -iv"},

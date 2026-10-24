@@ -46,6 +46,36 @@ func cardScript(prefix string, shadow bool) string {
 	return b.String()
 }
 
+// devOverview is the dev row of the card overview, up to its alias count.
+var devOverview = regexp.MustCompile(`(?m)^(.*dev(?:\x1b\[[0-9;]*m| )+[0-9]+ +)[0-9]+`)
+
+// topicHeading is a card topic heading line ("  LLM  ...").
+var topicHeading = regexp.MustCompile(`^  (\x1b\[[0-9;]*m)*[A-Z][A-Z-]+(\x1b\[[0-9;]*m)* `)
+
+// stripDevAliases drops the alias block of the dev topic (from its
+// "Aliases" heading to the next topic heading or the end) and the empty
+// lines in it.
+func stripDevAliases(s string) string {
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	inDev, skip := false, false
+	for _, l := range lines {
+		switch {
+		case strings.Contains(l, "PHP and Node.js versions"):
+			inDev, skip = true, false
+		case skip && topicHeading.MatchString(l):
+			inDev, skip = false, false
+		case inDev && strings.Contains(l, "Aliases"):
+			skip = true
+		}
+		if skip {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
+}
+
 // cardRule is a card section rule (a line of ─ only).
 var cardRule = regexp.MustCompile(`(?m)^(\s*)─+$`)
 
@@ -88,7 +118,11 @@ func TestCardMatches2x(t *testing.T) {
 				// 3.0: SHELL-18 fixed: gash_migrate's usage and description
 				// are the D-6 pointer (migrateListing, help_test.go), and the
 				// gash section's rule follows its widest line.
+				// 3.0: DEV-21 fixed: the dev topic's php aliases are the
+				// 3.0 pack with conditions, so its alias block and count
+				// are left out of the comparison (TestLedger_DEV21).
 				norm := func(s string) string {
+					s = stripDevAliases(devOverview.ReplaceAllString(s, "${1}N"))
 					if !strings.Contains(s, "gash_migrate") {
 						return s
 					}
@@ -169,4 +203,28 @@ func TestLedger_SELF12(t *testing.T) {
 			require.Regexp(t, `(?m)  gst +git status --short( |$)`, card)
 		}
 	}
+}
+
+// LEDGER DEV-21: the dev card shows the php pack's families with their
+// conditions; a shell that defines php83 and php74 gets those listed (and
+// counted) in place of phpXY, and no condition notes.
+func TestLedger_DEV21(t *testing.T) {
+	devCount := regexp.MustCompile(`(?m)^  dev +[0-9]+ +([0-9]+) `)
+	env := map[string]string{"LC_ALL": "C", "COLUMNS": "200"}
+	card, _, _ := run(t, "gash", env, false, "dev")
+	require.Regexp(t, `(?m)^  phpXY +phpX\.Y `, card)
+	require.Contains(t, card, "\n  phpXY: for each installed phpX.Y\n")
+	require.Contains(t, card, "\n  php, composer: with GASH_REPLACE_TOOLS=1\n")
+	require.NotContains(t, card, "hte")
+
+	env[selfmgmt.CardAliasesVar] = "php83\t/usr/bin/php8.3 -d x\nphp74\t/usr/bin/php7.4 -d x\ncomposer83\t/usr/bin/php8.3 c\nphpfoo\tx\nphp8x\ty\n"
+	env[selfmgmt.CardLiveVar] = "1"
+	card, _, _ = run(t, "gash", env, false, "dev")
+	require.Regexp(t, `(?m)^  php74 +/usr/bin/php7\.4 -d x +php83 +/usr/bin/php8\.3 -d x +composer83 +/usr/bin/php8\.3 c\s*$`, card)
+	require.NotContains(t, card, "phpXY")
+	require.NotContains(t, card, "phpfoo")
+	require.NotContains(t, card, "php8x")
+	require.NotContains(t, card, "for each installed")
+	overview, _, _ := run(t, "gash", env, false)
+	require.Equal(t, "3", devCount.FindStringSubmatch(overview)[1])
 }
