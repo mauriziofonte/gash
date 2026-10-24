@@ -303,3 +303,52 @@ jobs:
 
       - name: Go suite with Bash ${{ matrix.bash }}
         run: bash testdata/bash/run.sh "${{ matrix.bash }}"
+
+  db-servers:
+    name: DB module on MySQL 8.4, MariaDB 11, PostgreSQL 16
+    # testing.md 2.4: the db module through the native drivers against
+    # real servers (internal/db/server_test.go). The password carries
+    # @, : and % so the ~/.gash_env URL grammar and its percent-decoding
+    # are exercised; GASH_TEST_DB_REQUIRE=1 turns a missing server into
+    # a failure instead of a skip.
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: 'p@ss:w%rd'
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: 'p@ss:w%rd'
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: 'p@ss:w%rd'
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      GASH_TEST_MYSQL_URL: 'mysql://root:p%40ss%3Aw%25rd@127.0.0.1:3306'
+      GASH_TEST_MARIADB_URL: 'mariadb://root:p%40ss%3Aw%25rd@127.0.0.1:3307'
+      GASH_TEST_PGSQL_URL: 'pgsql://postgres:p%40ss%3Aw%25rd@127.0.0.1:5432'
+      GASH_TEST_DB_REQUIRE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: internal/db against the three servers
+        run: go test ./internal/db -run TestServers -count=1 -v
