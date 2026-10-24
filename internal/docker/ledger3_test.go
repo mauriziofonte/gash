@@ -423,15 +423,23 @@ func TestLedger_DOCK13(t *testing.T) {
 		require.Contains(t, u.err.String(), "Warning: Cannot interpolate "+in, in)
 	}
 
-	// The same vectors through Compose itself, when Compose v2 is here.
-	if out, err := exec.Command("docker", "compose", "version").Output(); err != nil || !bytes.Contains(out, []byte("v2")) {
-		t.Log("Compose v2 not available: the vectors are not compared with docker compose config")
+	// The same vectors through Compose itself, when the plugin is here.
+	if err := exec.Command("docker", "compose", "version").Run(); err != nil {
+		t.Log("the Compose plugin is not available: the vectors are not compared with docker compose config")
 		return
 	}
+	// Compose refuses the whole .env over the unterminated Q line, where
+	// gash leaves Q undefined: compare without that line and its vector.
+	// A service whose image resolves to "" is not a valid project, so those
+	// vectors are checked above only. `config` prints a literal $ as $$ (its
+	// output is Compose YAML again), so that escape is undone below.
+	data, err := os.ReadFile(env)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(env, bytes.Replace(data, []byte("Q=\"a'\n"), nil, 1), 0o644))
 	var yml strings.Builder
 	yml.WriteString("services:\n")
 	for i, v := range vectors {
-		if strings.Contains(v.want, "\n") {
+		if strings.Contains(v.want, "\n") || v.want == "" {
 			continue
 		}
 		yml.WriteString("  s" + string(rune('a'+i)) + ":\n    image: '" + strings.ReplaceAll(v.in, "'", "''") + "'\n")
@@ -445,7 +453,7 @@ func TestLedger_DOCK13(t *testing.T) {
 	require.True(t, ok)
 	for _, s := range svcs {
 		i := int(s.name[1] - 'a')
-		require.Equal(t, vectors[i].want, s.image, vectors[i].in)
+		require.Equal(t, vectors[i].want, strings.ReplaceAll(s.image, "$$", "$"), vectors[i].in)
 	}
 }
 
