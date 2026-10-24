@@ -211,6 +211,31 @@ jobs:
           GASH_HTE_E2E_MULTIPHP: ${{ matrix.story == 'multiphp' && '1' || '' }}
           GASH_HTE_E2E_SYSTEMD: ${{ matrix.story == 'systemd' && '1' || '' }}
 
+  hte-macos:
+    # The HTE story natively on macOS (the macOS runners have no Docker):
+    # TestE2EDistro through testdata/hte/e2e/macos.sh, which refuses to run
+    # anywhere but a GitHub Actions macOS runner, a disposable VM. Blocking:
+    # its scope is what Homebrew bottles reliably provide (httpd, the
+    # current php and php@8.3, discovered under the Homebrew prefix) plus
+    # the runner's passwordless sudo for the root step; the rest is gash's
+    # own (the port mechanism install picks there, direct bind or the pf
+    # redirect, the LaunchAgent of autostart auto, the hosts helper on
+    # /private/etc/hosts). The script uses no job control (Homebrew bash 5.3
+    # prints setpgid noise under set -m) and only BSD userland flags.
+    name: HTE E2E (macOS, Homebrew)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Run the HTE end-to-end story on Homebrew httpd and PHP
+        run: bash testdata/hte/e2e/macos.sh
+
   snapshot:
     name: Snapshot build (goreleaser)
     runs-on: ubuntu-24.04

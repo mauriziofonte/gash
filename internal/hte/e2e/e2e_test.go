@@ -20,8 +20,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -38,12 +40,36 @@ func inContainer() bool {
 	return err == nil
 }
 
+// macMarker is the file testdata/hte/e2e/macos.sh creates, as root, on a
+// disposable macOS CI runner for the length of its run (sudo resets the
+// environment, so the root step could not see a variable).
+const macMarker = "/var/run/gash-hte-e2e-ci"
+
+// ownedByRoot reports a file of uid 0.
+func ownedByRoot(fi os.FileInfo) bool {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && st.Uid == 0
+}
+
+// sandboxed reports a system the E2E test may change: the container of
+// run.sh, or a macOS CI runner that macos.sh marked.
+func sandboxed() bool {
+	if inContainer() {
+		return true
+	}
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	fi, err := os.Lstat(macMarker)
+	return err == nil && fi.Mode().IsRegular() && ownedByRoot(fi)
+}
+
 // TestMain is also the root step: sudo runs this binary as
 // `gash-e2e hte __root`, as it runs gash; and the systemd user unit runs
 // it as `gash-e2e hte __unit start|stop`.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 4 && os.Args[1] == "hte" && os.Args[2] == "__unit" {
-		if !inContainer() {
+		if !sandboxed() {
 			fmt.Fprintln(os.Stderr, "the E2E unit runs only inside the E2E container")
 			os.Exit(2)
 		}
@@ -65,8 +91,8 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	if len(os.Args) == 3 && os.Args[1] == "hte" && os.Args[2] == "__root" {
-		if !inContainer() {
-			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container")
+		if !sandboxed() {
+			fmt.Fprintln(os.Stderr, "the E2E root step runs only inside the E2E container or on a marked macOS CI runner")
 			os.Exit(2)
 		}
 		if err := rootops.Serve(context.Background(), os.Stdin, os.Stdout, rootops.ProcessEnv()); err != nil {

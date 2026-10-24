@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/discover"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
 	"github.com/mauriziofonte/gash/internal/hte/rootops"
+	"github.com/mauriziofonte/gash/internal/hte/service"
 	"github.com/mauriziofonte/gash/internal/hte/state"
 )
 
@@ -37,10 +39,11 @@ echo $ok ? "session:ok\n" : "session:fail\n";
 const stackProcs = "(httpd|apache2|php-fpm.*)"
 
 // TestE2EDistro runs in the Fedora and Arch images (run.sh fedora|arch),
-// which have no hte-cli: the distro httpd and two PHP-FPM packagings side
-// by side, as installed and never started (Fedora: the distro php-fpm and
-// Remi's php83; Arch: php and php-legacy). GASH_HTE_E2E_LAYOUTS names the
-// discovery layouts the image must show. The story: discovery, install on
+// which have no hte-cli, and on a macOS CI runner (macos.sh): the system
+// httpd and two PHP-FPM packagings side by side, as installed and never
+// started (Fedora: the distro php-fpm and Remi's php83; Arch: php and
+// php-legacy; macOS: Homebrew's httpd, php and php@8.3).
+// GASH_HTE_E2E_LAYOUTS names the discovery layouts the system must show. The story: discovery, install on
 // the standard ports (where a stock vhost of the distro httpd blocks it,
 // that refusal, then the high ports), a site on each version (HTTP, HTTPS
 // with HTTP/2, sessions), php global set on one version, site modify
@@ -49,8 +52,8 @@ const stackProcs = "(httpd|apache2|php-fpm.*)"
 // install.
 func TestE2EDistro(t *testing.T) {
 	layouts := strings.Fields(os.Getenv("GASH_HTE_E2E_LAYOUTS"))
-	if len(layouts) == 0 || !inContainer() {
-		t.Skip("runs only inside the Fedora or Arch E2E container: testdata/hte/e2e/run.sh fedora|arch")
+	if len(layouts) == 0 || !sandboxed() {
+		t.Skip("runs only inside the Fedora or Arch E2E container (testdata/hte/e2e/run.sh fedora|arch) or on a macOS CI runner (macos.sh)")
 	}
 	if os.Geteuid() == 0 {
 		t.Fatal("the E2E test runs as an unprivileged user")
@@ -62,6 +65,7 @@ func TestE2EDistro(t *testing.T) {
 	}
 	home := os.Getenv("HOME")
 	paths := state.NewPaths(mustDirs(t), os.Getuid())
+	me := e.User
 	step := func(name string, fn func(t *testing.T)) {
 		if !t.Run(name, fn) {
 			t.FailNow()
@@ -120,11 +124,29 @@ func TestE2EDistro(t *testing.T) {
 		if fi, err := os.Stat(rootops.HelperPath); err != nil || fi.Mode().Perm() != 0o755 {
 			t.Errorf("helper: %v %v", fi, err)
 		}
-		if got := strings.TrimSpace(read(t, "/proc/sys/net/ipv4/ip_unprivileged_port_start")); got != "80" {
-			t.Errorf("ip_unprivileged_port_start = %s", got)
+		if runtime.GOOS == "linux" {
+			if got := strings.TrimSpace(read(t, "/proc/sys/net/ipv4/ip_unprivileged_port_start")); got != "80" {
+				t.Errorf("ip_unprivileged_port_start = %s", got)
+			}
+		} else {
+			// macOS: a direct bind where the kernel allows it, else the
+			// pf redirect.
+			t.Logf("redirect %q", res.Redirect)
 		}
-		if read(t, receipt.RootPath("dev")) != read(t, paths.Receipt()) {
+		if read(t, receipt.RootPath(me)) != read(t, paths.Receipt()) {
 			t.Error("the two receipt copies differ")
+		}
+		// autostart auto: the LaunchAgent on macOS; nothing in a
+		// container without systemd.
+		want := map[string]string{"darwin": service.AutostartLaunchd}[runtime.GOOS]
+		if want == "" {
+			want = service.AutostartNone
+		}
+		if res.Settings.Autostart != want {
+			t.Errorf("autostart %q, want %q", res.Settings.Autostart, want)
+		}
+		if agent := service.LaunchAgentPath(home); exists(agent) != (want == service.AutostartLaunchd) {
+			t.Errorf("LaunchAgent %s exists %v with autostart %s", agent, exists(agent), want)
 		}
 		if !slices.Equal(res.Blocking, blocking) {
 			t.Fatalf("blocking %v, want %v", res.Blocking, blocking)
@@ -206,12 +228,12 @@ func TestE2EDistro(t *testing.T) {
 			t.Errorf("masters %v, want %v", got, want)
 		}
 		// HTE-18: the masters and workers are the user's, none is root's.
-		for _, args := range [][]string{{"-u", "dev", "-x", "(httpd|apache2)"}, {"-u", "dev", "-f", "php-fpm: master process"}} {
+		for _, args := range [][]string{{"-u", me, "-x", "(httpd|apache2)"}, {"-u", me, "-f", "php-fpm: master process"}} {
 			if exec.Command("pgrep", args...).Run() != nil {
 				t.Errorf("pgrep %v: no process", args)
 			}
 		}
-		if out, err := exec.Command("pgrep", "-u", "root", "-a", "-x", stackProcs).Output(); err == nil {
+		if out, err := exec.Command("pgrep", "-l", "-u", "root", "-x", stackProcs).Output(); err == nil {
 			t.Errorf("root processes of the stack: %s", out)
 		}
 	})
@@ -247,7 +269,7 @@ func TestE2EDistro(t *testing.T) {
 		if _, err := get("http", domains[0], httpPort); err == nil {
 			t.Errorf("port %d answers after stop", httpPort)
 		}
-		if out, err := exec.Command("pgrep", "-u", "dev", "-a", "-x", stackProcs).Output(); err == nil {
+		if out, err := exec.Command("pgrep", "-l", "-u", me, "-x", stackProcs).Output(); err == nil {
 			t.Errorf("processes after stop: %s", out)
 		}
 		if _, err := e.ServiceStart(ctx); err != nil {
@@ -295,12 +317,12 @@ func TestE2EDistro(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Logf("stage %s, restored %d changes, warnings %v", res.Stage, len(res.Restored), res.Warnings)
-		for _, p := range []string{rootops.HelperPath, rootops.SudoersPath, receipt.RootPath("dev"), paths.ConfigDir} {
+		for _, p := range []string{rootops.HelperPath, rootops.SudoersPath, receipt.RootPath(me), paths.ConfigDir, service.LaunchAgentPath(home)} {
 			if exists(p) {
 				t.Errorf("%s stays", p)
 			}
 		}
-		if out, err := exec.Command("pgrep", "-a", "-x", stackProcs).Output(); err == nil {
+		if out, err := exec.Command("pgrep", "-l", "-x", stackProcs).Output(); err == nil {
 			t.Errorf("processes after uninstall: %s", out)
 		}
 		if _, err := get("http", domains[0], httpPort); err == nil {

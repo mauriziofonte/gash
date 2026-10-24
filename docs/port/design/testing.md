@@ -173,7 +173,8 @@ and on Bash 4.4, 5.0, 5.1 and 5.3 (the compat Bash must load on 4.4).
 | specs (until cutover) | `tests/run.sh --impl bash` and `--impl go`, plus the render spec, on Linux; Bash version matrix 4.4/5.0/5.1/5.3 for the compat layer |
 | testscript | Linux and macOS |
 | upgrade | section 5 |
-| hte-e2e | container matrix of section 6 |
+| hte-e2e | container matrix of section 6: Debian 12, Ubuntu 24.04, Fedora (Remi), Arch; multi-PHP on Ubuntu, systemd on Debian and Ubuntu |
+| hte-macos | section 6 natively on a macOS runner (Homebrew `httpd`, `php`, `php@8.3`) |
 | snapshot | `goreleaser release --snapshot --clean` (no publish) |
 | release | `.github/workflows/release.yml`, on tags only |
 

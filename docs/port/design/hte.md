@@ -803,7 +803,7 @@ that test.
 | Debian, Ubuntu | E2E in containers here (Ubuntu; deb.debian.org is blocked in this session) and in CI (Debian 12 and Ubuntu 24.04): real Apache, real PHP-FPM, without systemd and with systemd as PID 1. Multi-PHP on Ubuntu: the ondrej/sury repositories are blocked in this session, so PHP 7.4, 8.2 and 8.4 come from the official `php:X.Y-fpm` images copied side by side into one image (`/opt/php/X.Y`), here and in CI |
 | Fedora | E2E container in CI (the session cannot reach Fedora mirrors): distro PHP plus Remi side-by-side |
 | Arch | E2E container in CI (the session cannot reach Arch mirrors): `php` and `php-legacy` |
-| macOS | GitHub Actions macOS runner: Homebrew `httpd`, `php`, `php@8.3`; port mechanism verified there |
+| macOS | GitHub Actions macOS runner (the `hte-macos` job, `testdata/hte/e2e/macos.sh` running `TestE2EDistro` natively): Homebrew `httpd`, `php`, `php@8.3`; the port mechanism install picks there, the LaunchAgent, the hosts helper, and the system paths compared before install and after uninstall |
 | WSL2 | Manual checklist for the operator (`docs/hte/wsl-checklist.md`) |
 
 Unit tests use a fixture system root (`internal/hte/sysroot` maps every system
