@@ -36,10 +36,14 @@ func devMod(t *testing.T, root string) *Module {
 }
 
 // call runs NAME on m with env, in the working directory cwd (unchanged
-// when ""), the plain terminal.
+// when ""; the previous one is restored after), the plain terminal.
 func call(m *Module, cwd string, env map[string]string, name string, args ...string) result {
+	// The handler runs in cwd; the test's directory is restored after.
 	if cwd != "" {
+		prev, err := os.Getwd()
+		must(err)
 		must(os.Chdir(cwd))
+		defer func() { must(os.Chdir(prev)) }()
 	}
 	e := invoke.EnvMap(env)
 	var out, errb bytes.Buffer
