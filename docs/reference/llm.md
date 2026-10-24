@@ -423,6 +423,13 @@ llm_procs --name nginx
 llm_procs --port 3306
 ```
 
+#### Notes
+
+```text
+--port takes 0 to 65535 (invalid_port above) and wins over --name,
+which is then ignored.
+```
+
 See also: `llm_ports`
 
 ## llm_project

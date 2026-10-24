@@ -235,8 +235,16 @@ func (m *Module) procs(c *invoke.Call) int {
 		}
 		args = args[2:]
 	}
-	if port != "" && !validUint(c, "port", port) {
-		return 1
+	if port != "" {
+		if !validUint(c, "port", port) {
+			return 1
+		}
+		// Base 10, leading zeros dropped, so "port" is a plain JSON
+		// number; above 65535 is no port at all (LLM-12).
+		if n := numericText(port); len(n) > 5 || atoi(n) > 65535 {
+			return fail(c, "invalid_port", "Value '"+port+"' is above 65535", "Provide a port number from 0 to 65535")
+		}
+		port = numericText(port)
 	}
 	var items []string
 	switch {
@@ -248,7 +256,6 @@ func (m *Module) procs(c *invoke.Call) int {
 					continue
 				}
 				cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
-				// The port as typed (LLM-12).
 				items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`,"port":`+port+`}`)
 			}
 		}

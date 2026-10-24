@@ -2576,7 +2576,11 @@ var functions = []Function{
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
 				"  llm_procs --name nginx\n" +
-				"  llm_procs --port 3306",
+				"  llm_procs --port 3306\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --port takes 0 to 65535 (invalid_port above) and wins over --name,\n" +
+				"  which is then ignored.",
 		},
 		Fallback: &Usage{Program: "llm_procs", Usage: "llm_procs [--name NAME] [--port PORT]", Description: "List processes (JSON)"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},

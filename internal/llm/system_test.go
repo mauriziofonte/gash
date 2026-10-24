@@ -187,20 +187,54 @@ func TestProcsMatches2x(t *testing.T) {
 	}
 }
 
-// TestLedger_LLM12_2x: --port keeps leading zeros in the JSON (a source
-// text number token, as 2.x printed it) and has no range check.
+// TestLedger_LLM12_2x: --port is a plain base-10 JSON number (2.x kept
+// the leading zeros, a source text number token) and is range checked
+// (2.x had no check).
 func TestLedger_LLM12_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{
 		"ps":   psStub,
-		"lsof": `case "$2" in :0080|:99999) echo 4242 ;; esac`,
+		"lsof": `case "$2" in :80|:0080|:99999) echo 4242 ;; esac`,
 	})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t)})
-	r := same(t, m, d, env, "llm_procs", "--port", "0080")
-	require.Equal(t, `[{"pid":4242,"name":"nginx","port":0080}]`+"\n", r.Stdout)
-	r = same(t, m, d, env, "llm_procs", "--port", "99999")
-	require.Equal(t, `[{"pid":4242,"name":"nginx","port":99999}]`+"\n", r.Stdout)
+	// 3.0: LLM-12 fixed
+	r := runGo(t, m, d, env, "llm_procs", "--port", "0080")
+	require.Equal(t, `[{"pid":4242,"name":"nginx","port":80}]`+"\n", r.Stdout)
+	r = runGo(t, m, d, env, "llm_procs", "--port", "99999")
+	require.Equal(t, 1, r.RC)
+	require.Contains(t, r.Stderr, `"error":"invalid_port"`)
+}
+
+// TestLedger_LLM12: llm_procs --port 0080 parses as strict JSON with port
+// 80 (lsof asked for :80); --port 99999 is invalid_port/RETRY with nothing
+// on stdout; 65535 is accepted.
+func TestLedger_LLM12(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	log := filepath.Join(d, "lsof.log")
+	bin := stubBin(t, map[string]string{
+		"ps":   psStub,
+		"lsof": `printf '%s\n' "$2" >>"$LSOF_LOG"; case "$2" in :80) echo 4242 ;; esac`,
+	})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "LSOF_LOG": log})
+	r := runGo(t, m, d, env, "llm_procs", "--port", "0080")
+	require.Equal(t, []any{map[string]any{"pid": float64(4242), "name": "nginx", "port": float64(80)}}, strictJSON(t, r.Stdout))
+	r = runGo(t, m, d, env, "llm_procs", "--port", "65535")
+	require.Equal(t, result{"[]\n", "", 0}, r)
+	for _, p := range []string{"99999", "65536", "1234567890"} {
+		r = runGo(t, m, d, env, "llm_procs", "--port", p)
+		require.Equal(t, "", r.Stdout)
+		require.Equal(t, 1, r.RC)
+		var e struct{ Error, Action, Details string }
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		require.Equal(t, "invalid_port", e.Error)
+		require.Equal(t, "RETRY", e.Action)
+		require.Contains(t, e.Details, p)
+	}
+	b, err := os.ReadFile(log)
+	require.NoError(t, err)
+	require.Equal(t, ":80\n:65535\n", string(b))
 }
 
 // TestProcsByNameLeavesOutSelf: this process, its ancestors and their
