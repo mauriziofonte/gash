@@ -92,7 +92,13 @@ func TestScript(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// The upgrade scripts' fixtures (fixture_test.go): built once, shared.
+	fx := &fixtures{root: root, stage: stage, cache: t.TempDir(), builds: map[string]*gashBuild{}}
 	testscript.Run(t, testscript.Params{
+		Cmds: map[string]func(*testscript.TestScript, bool, []string){
+			"gashfixture": fx.cmdFixture,
+			"gashrelease": fx.cmdRelease,
+		},
 		Files:               files,
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
@@ -101,6 +107,11 @@ func TestScript(t *testing.T) {
 			switch cond {
 			case "root":
 				return os.Geteuid() == 0, nil
+			case "v2tree":
+				// The v2.1.0 tag the 2.x upgrade fixtures check out; a
+				// shallow checkout (actions/checkout fetch-depth 1) has none.
+				t2, err := fx.v2Tree()
+				return t2 != "", err
 			case "linux", "darwin", "windows":
 				return runtime.GOOS == cond, nil
 			case "gnused":
