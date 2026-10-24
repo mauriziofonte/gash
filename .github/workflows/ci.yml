@@ -110,8 +110,10 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install bash gawk jq
 
+      # The race build also runs ./cmd/gash's testscript suite, which on the
+      # macOS runner takes longer than go test's default 10m timeout.
       - name: go test -race
-        run: CGO_ENABLED=1 go test -race ./...
+        run: CGO_ENABLED=1 go test -race -timeout 30m ./...
 
       - name: Build
         run: CGO_ENABLED=0 go build ./...
