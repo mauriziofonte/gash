@@ -1,0 +1,21 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: LLM-22
+# covers: none (3.0 self-management proof; no 2.x assertion)
+#
+# LEDGER LLM-22 (forced divergence): 2.x llm_grep --ext left ext and exts
+# set in the caller's shell; through the shim the binary sets nothing.
+
+env GASH_HEADLESS=1
+exec bash -c 'source "$GASH_SH"; ext=E exts=X; llm_grep needle p --ext sh,md; llm_grep needle p --ext txt; printf "%s/%s\n" "$ext" "$exts"'
+cmpenv stdout want.txt
+! stderr .
+
+-- p/a.sh --
+needle
+-- p/b.md --
+needle
+-- want.txt --
+$WORK/p/a.sh:1:needle
+$WORK/p/b.md:1:needle
+E/X

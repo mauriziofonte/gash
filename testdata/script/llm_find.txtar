@@ -1,0 +1,56 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:231
+# covers: llm_spec.sh:242
+# forced-divergence: LLM-03
+# covers: llm_flags_spec.sh:56
+#
+# llm_find by name over a fixture tree, its -h help, and llm_find --contains.
+# LLM-03: the 2.x spec ran the --contains body once per engine (rg and the
+# grep fallback), toggling __llm_has_rg, because the two engines could return
+# different sets. rc.A has one native engine, so the engine loop is dropped;
+# the single run must still return the pinned set (hidden and gitignored files
+# searched, node_modules/vendor/__pycache__ and secret files skipped), which
+# is the set the 2.x test asserted both engines agree on.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:231 - finds files by pattern
+exec bash -c 'source "$GASH_SH"; llm_find "*.sh" fx'
+stdout '\.sh'
+
+# --- llm_spec.sh:242 - shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_find -h'
+stdout llm_find
+
+# --- llm_flags_spec.sh:56 - --contains honours PATTERN (one native engine)
+exec bash find_contains.sh
+
+-- fx/core/a.sh --
+function a() {
+    :
+}
+-- fx/modules/b.sh --
+b() { :; }
+-- fx/README.txt --
+notes
+-- find_contains.sh --
+set -euo pipefail
+source "$GASH_SH"
+p="$WORK/p"
+mkdir -p "$p/src" "$p/.hidden" "$p/node_modules" "$p/__pycache__" "$p/vendor"
+for f in src/a.php c.md .hidden/x.php ignored.php node_modules/y.php __pycache__/z.php vendor/v.php secrets.php; do
+  printf 'needle\n' >"$p/$f"
+done
+printf 'nothing\n' >"$p/src/b.php"
+printf 'ignored.php\n' >"$p/.gitignore"
+expected="$(printf '%s\n' "$p/.hidden/x.php" "$p/ignored.php" "$p/src/a.php")"
+# One engine only (LLM-03): no __llm_has_rg toggle, no per-engine loop.
+got="$(llm_find "*.php" "$p" --contains needle | sort)"
+[[ "$got" == "$expected" ]] || { echo "contains: $got"; exit 1; }
+[[ -z "$(llm_find "*.nomatch" "$p" --contains needle)" ]] || { echo nomatch; exit 1; }
+[[ "$(llm_find "*.md" "$p" --contains needle)" == "$p/c.md" ]] || { echo md; exit 1; }
+[[ "$(llm_find "a.*" "$p/src/a.php" --contains needle)" == "$p/src/a.php" ]] || { echo file; exit 1; }
+[[ -z "$(llm_find "b.*" "$p/src/a.php" --contains needle)" ]] || { echo "file pattern"; exit 1; }
+# The name search lists the same files, plus the secret file and the non-match.
+[[ "$(llm_find "*.php" "$p" | sort)" == "$(printf '%s\n' "$p/.hidden/x.php" "$p/ignored.php" "$p/secrets.php" "$p/src/a.php" "$p/src/b.php")" ]]

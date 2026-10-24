@@ -1,0 +1,101 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: color_gating_spec.sh:179
+# covers: color_gating_spec.sh:191
+# covers: color_gating_spec.sh:202
+# covers: color_gating_spec.sh:213
+# covers: color_gating_spec.sh:223
+# covers: color_gating_spec.sh:231
+# covers: color_gating_spec.sh:240
+# covers: color_gating_spec.sh:249
+# covers: color_gating_spec.sh:258
+# covers: color_gating_spec.sh:271
+# covers: color_gating_spec.sh:288
+# covers: color_gating_spec.sh:316
+#
+# The color decision matrix. The binary's documented tty override
+# (GASH__TTY_OUT, the answer the caller's __gash_use_color gives, term.go)
+# forces stdout "a terminal" so the --no-color flag has something to
+# suppress; without the flag under a forced tty the palette appears
+# (baseline), and --no-color, a pipe (no override), a --json error path and
+# GASH_HEADLESS=1 each keep the output free of escape bytes. :316 is the
+# flag's scope: a terminal gets colors, a pipe none, for disk_usage and the
+# card. No optional tools run here (native scanners, native df), so the
+# case needs no rg/fd/tree/bat guard.
+
+exec bash color.sh
+
+-- color.sh --
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+has() { case "$1" in *$'\033['*) return 0 ;; *) return 1 ;; esac; }
+B="$GASH_BIN"
+d="$WORK/cbox"; mkdir -p "$d"
+dd if=/dev/zero of="$d/big.bin" bs=1024 count=8 status=none 2>/dev/null
+
+# :179 files_largest --no-color: the row is there, no escapes, even with a
+# forced terminal; and the palette does appear without the flag (baseline).
+out="$(GASH__TTY_OUT=1 "$B" files_largest "$d" --human --no-color 2>&1)"
+[[ "$out" == *big.bin* ]] || fail "179 data"
+has "$out" && fail "179 ansi with --no-color"
+out="$(GASH__TTY_OUT=1 "$B" files_largest "$d" --human 2>&1)"
+has "$out" || fail "179 no color on a forced tty baseline"
+
+# :191 a forbidden-path error under a pipe carries no escapes.
+out="$("$B" files_largest /proc 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] || fail "191 rc"
+[[ "$out" == *forbidden_path* || "$out" == *protected* ]] || fail "191 code"
+has "$out" && fail "191 ansi"
+
+# :202 disk_usage --no-color keeps the header, strips escapes.
+out="$(GASH__TTY_OUT=1 "$B" disk_usage --no-color 2>&1)"
+[[ "$out" == *MOUNT* ]] || fail "202 header"
+has "$out" && fail "202 ansi"
+
+# :213 sysinfo --llm implies no color.
+out="$(GASH__TTY_OUT=1 "$B" sysinfo identity --llm 2>&1)"
+has "$out" && fail "213 ansi"
+
+# :223 gash_doctor --no-color: no escapes.
+out="$(GASH__TTY_OUT=1 GASH_DIR="$GASH_STAGE" "$B" gash_doctor --no-color 2>&1)"
+has "$out" && fail "223 ansi"
+
+# :231 gash_help function detail --no-color: USAGE kept, no escapes.
+out="$(GASH__TTY_OUT=1 "$B" gash_help files_largest --no-color 2>&1)"
+[[ "$out" == *USAGE* ]] || fail "231 usage"
+has "$out" && fail "231 ansi"
+
+# :240 gash_help --list --no-color: names kept, no escapes.
+out="$(GASH__TTY_OUT=1 "$B" gash_help --list --no-color 2>&1)"
+[[ "$out" == *files_largest* ]] || fail "240 name"
+has "$out" && fail "240 ansi"
+
+# :249 gash_help --search --no-color: result kept, no escapes.
+out="$(GASH__TTY_OUT=1 "$B" gash_help --search flf --no-color 2>&1)"
+[[ "$out" == *files_largest* ]] || fail "249 name"
+has "$out" && fail "249 ansi"
+
+# :258 dirs_list_empty --json forbidden: JSON error, no escapes.
+out="$(GASH__TTY_OUT=1 "$B" dirs_list_empty --json /proc 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] || fail "258 rc"
+[[ "$out" == *forbidden_path* ]] || fail "258 code"
+has "$out" && fail "258 ansi"
+
+# :271 headless end-to-end (shim sourced): files_largest emits no escapes.
+out="$(GASH_HEADLESS=1 bash -c 'source "$GASH_SH"; files_largest "$1"' _ "$d" 2>&1)"
+has "$out" && fail "271 ansi"
+
+# :288 headless end-to-end (shim sourced): gash_doctor emits no escapes.
+out="$(GASH_HEADLESS=1 GASH_DIR="$GASH_STAGE" bash -c 'source "$GASH_SH"; gash_doctor' 2>&1)"
+has "$out" && fail "288 ansi"
+
+# :316 the flag's scope is the caller's stdout: a terminal gets colors, a
+# pipe none, for both a scanner (disk_usage) and the card (gash).
+for cmd in disk_usage gash; do
+  tty_out="$(GASH__TTY_OUT=1 "$B" "$cmd" 2>&1)"
+  has "$tty_out" || fail "316 $cmd no color on a terminal"
+  pipe_out="$("$B" "$cmd" 2>&1)"
+  [[ -n "$pipe_out" ]] || fail "316 $cmd empty under a pipe"
+  if has "$pipe_out"; then fail "316 $cmd color under a pipe"; fi
+done
+exit 0

@@ -1,0 +1,196 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: files_spec.sh:72
+# covers: files_spec.sh:84
+# covers: files_spec.sh:95
+# covers: files_spec.sh:112
+# covers: files_spec.sh:123
+# covers: files_spec.sh:136
+# covers: files_spec.sh:151
+# covers: files_spec.sh:162
+# covers: files_spec.sh:178
+# covers: files_spec.sh:190
+# covers: files_spec.sh:206
+# covers: files_spec.sh:218
+# covers: files_spec.sh:228
+# covers: files_spec.sh:243
+# covers: files_spec.sh:251
+# covers: files_spec.sh:259
+# covers: files_spec.sh:268
+# covers: files_spec.sh:281
+# covers: files_spec.sh:299
+# covers: files_spec.sh:311
+# covers: files_spec.sh:322
+# covers: files_spec.sh:336
+# covers: files_spec.sh:353
+# covers: files_spec.sh:370
+# covers: files_spec.sh:378
+#
+# The files-module scanners driven through the shim, as a user runs them.
+# Each case builds its own fixture tree in a subdirectory and asserts the
+# 2.x observable contract (stdout / stderr / exit). Piped output (no TTY in
+# testscript) is the plain "SIZE  PATH[  MTIME]" table, so the human cases
+# match the plain layout; the JSON envelope carries a non-deterministic
+# scan_time and mtime, so it is matched with patterns, not a golden. The
+# archive_extract case (files_spec.sh:394) and the terminal rich layout
+# (fs_render_spec.sh) live in their own files.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- files_spec.sh:72 - files_largest --min-size filters out small files
+mkdir msz
+exec bash -c 'head -c 65536 /dev/zero > msz/big.bin; echo smol > msz/small.txt'
+exec bash -c 'source "$GASH_SH"; files_largest msz --min-size 10K --no-color'
+stdout 'big\.bin'
+! stdout 'small\.txt'
+
+# --- files_spec.sh:84 - files_largest --limit caps results
+mkdir lim
+exec bash -c 'for i in 1 2 3 4 5; do head -c $((i*1024)) /dev/zero > lim/f$i.bin; done'
+exec bash -c 'source "$GASH_SH"; files_largest lim --limit 2 --no-color'
+stdout 'f5\.bin'
+stdout 'f4\.bin'
+! stdout 'f3\.bin'
+! stdout 'f1\.bin'
+
+# --- files_spec.sh:95 - files_largest --json emits a valid envelope
+mkdir jenv
+exec bash -c 'head -c 8192 /dev/zero > jenv/a.bin; echo x > jenv/b.txt'
+exec bash -c 'source "$GASH_SH"; files_largest jenv --json'
+stdout '"count":2'
+stdout '"kind":"files"'
+stdout '"size":[0-9]'
+stdout '"size_human":"'
+stdout '"mtime":"'
+stdout '"path":"'
+
+# --- files_spec.sh:112 - files_largest --null emits NUL-delimited paths
+mkdir nul
+exec bash -c ': > nul/x; : > nul/y'
+exec bash -c 'source "$GASH_SH"; files_largest nul --null | xargs -0 -n1 basename | sort'
+stdout '^x$'
+stdout '^y$'
+
+# --- files_spec.sh:123 - files_largest respects default prune (node_modules)
+mkdir prune
+exec bash -c 'mkdir -p prune/node_modules/foo; head -c 131072 /dev/zero > prune/node_modules/foo/mass.bin; echo x > prune/kept.txt'
+exec bash -c 'source "$GASH_SH"; files_largest prune --no-color'
+stdout 'kept\.txt'
+! stdout 'mass\.bin'
+
+# --- files_spec.sh:136 - files_largest --no-ignore disables pruning
+exec bash -c 'source "$GASH_SH"; files_largest prune --no-ignore --no-color'
+stdout 'mass\.bin'
+
+# --- files_spec.sh:151 - dirs_largest --depth 2 reveals nested offenders
+mkdir dl
+exec bash -c 'mkdir -p dl/proj/big; head -c 262144 /dev/zero > dl/proj/big/blob'
+exec bash -c 'source "$GASH_SH"; dirs_largest dl --depth 2 --no-color'
+stdout '/proj/big'
+
+# --- files_spec.sh:162 - dirs_largest --json envelope is valid
+mkdir dlj
+exec bash -c 'mkdir -p dlj/a dlj/b; head -c 32768 /dev/zero > dlj/a/f'
+exec bash -c 'source "$GASH_SH"; dirs_largest dlj --depth 2 --json'
+stdout '"kind":"directories"'
+stdout '"count":[1-9][0-9]*'
+
+# --- files_spec.sh:178 - dirs_find_large --with-mtime adds mtime column
+mkdir dfm
+exec bash -c 'mkdir -p dfm/d1; head -c 65536 /dev/zero > dfm/d1/big'
+exec bash -c 'source "$GASH_SH"; dirs_find_large dfm --size 1K --with-mtime --no-color'
+stdout '[0-9]{4}-[0-9]{2}-[0-9]{2}'
+
+# --- files_spec.sh:190 - dirs_find_large --json envelope is valid
+exec bash -c 'source "$GASH_SH"; dirs_find_large dfm --size 1K --json'
+stdout '"kind":"directories"'
+stdout '"count":[1-9][0-9]*'
+
+# --- files_spec.sh:206 - dirs_list_empty --count outputs a number
+mkdir dle
+exec bash -c 'mkdir -p dle/a dle/b dle/c; : > dle/a/f'
+exec bash -c 'source "$GASH_SH"; dirs_list_empty dle --count'
+stdout '^[2-9][0-9]*$'
+
+# --- files_spec.sh:218 - dirs_list_empty --null emits NUL-delimited
+mkdir dlen
+exec bash -c 'mkdir -p dlen/empty_a dlen/empty_b'
+exec bash -c 'source "$GASH_SH"; dirs_list_empty dlen --null | xargs -0 -n1 basename | sort'
+stdout '^empty_a$'
+stdout '^empty_b$'
+
+# --- files_spec.sh:228 - dirs_list_empty --json envelope is valid
+mkdir dlej
+exec bash -c 'mkdir -p dlej/e1 dlej/e2'
+exec bash -c 'source "$GASH_SH"; dirs_list_empty dlej --json'
+stdout '"count":[2-9][0-9]*'
+
+# --- files_spec.sh:243 - safe_path blocks / without --allow-root
+! exec bash -c 'source "$GASH_SH"; files_largest /'
+stderr 'root_scan_blocked'
+
+# --- files_spec.sh:251 - safe_path blocks forbidden prefixes (/proc)
+! exec bash -c 'source "$GASH_SH"; files_largest /proc'
+stderr 'forbidden_path'
+
+# --- files_spec.sh:259 - safe_path emits JSON error when --json is active
+! exec bash -c 'source "$GASH_SH"; files_largest --json /proc'
+stderr '"error":"forbidden_path"'
+stderr '"action":"FATAL"'
+
+# --- files_spec.sh:268 - invalid size returns JSON error under --json
+! exec bash -c 'source "$GASH_SH"; files_largest --json --min-size notasize'
+stderr '"error":"invalid_size"'
+
+# --- files_spec.sh:281 - tree_stats prints totals and extension tops
+mkdir ts
+exec bash -c 'mkdir -p ts/sub; head -c 32768 /dev/zero > ts/a.bin; head -c 65536 /dev/zero > ts/sub/b.bin; echo x > ts/c.txt'
+exec bash -c 'source "$GASH_SH"; tree_stats ts --no-color'
+stdout 'Files:'
+stdout 'Directories:'
+stdout 'Total size:'
+stdout 'Top.*by count'
+stdout 'Top.*by size'
+stdout 'bin'
+
+# --- files_spec.sh:299 - tree_stats --json envelope is valid and has stats fields
+mkdir tsj
+exec bash -c 'mkdir -p tsj/sub; head -c 32768 /dev/zero > tsj/a.bin'
+exec bash -c 'source "$GASH_SH"; tree_stats tsj --json'
+stdout '"files_total":'
+stdout '"dirs_total":'
+stdout '"size_total":'
+stdout '"top_by_size":'
+stdout '"top_by_count":'
+
+# --- files_spec.sh:311 - tls alias is defined (headless loads module aliases)
+exec bash -c 'source "$GASH_SH"; alias tls'
+stdout 'tree_stats'
+
+# --- files_spec.sh:322 - llm_tree JSON default depth 1 stays flat
+mkdir lt
+exec bash -c 'mkdir -p lt/a/b; echo x > lt/a/b/deep.txt'
+exec bash -c 'source "$GASH_SH"; llm_tree lt'
+stdout '"children":\[\{"name":"a","type":"directory"\}\]\}'
+
+# --- files_spec.sh:336 - llm_tree --depth 3 produces nested JSON
+exec bash -c 'source "$GASH_SH"; llm_tree --depth 3 lt'
+stdout '"name":"a","type":"directory","children":\['
+stdout '"name":"b","type":"directory","children":\[\{"name":"deep\.txt"'
+
+# --- files_spec.sh:353 - llm_tree --stats adds size and children_count
+mkdir lts
+exec bash -c 'mkdir -p lts/a; head -c 16384 /dev/zero > lts/a/big'
+exec bash -c 'source "$GASH_SH"; llm_tree --depth 2 --stats lts'
+stdout '"size":16384,"children_count":1'
+
+# --- files_spec.sh:370 - llm_tree rejects --depth 0 (invalid)
+! exec bash -c 'source "$GASH_SH"; llm_tree --depth 0 lt'
+stderr 'invalid_depth'
+
+# --- files_spec.sh:378 - size scanners print nothing on stderr when SIGPIPE is ignored
+mkdir sp
+exec bash -c 'mkdir -p sp/d; for i in $(seq 1 3000); do printf "%${i}s" x > sp/d/f$i; done'
+exec bash -c 'source "$GASH_SH"; trap "" PIPE; { files_largest -n 1 sp; dirs_largest -n 1 sp; dirs_find_large --size 1 -n 1 sp; } >/dev/null'
+! stderr .

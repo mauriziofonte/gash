@@ -1,0 +1,20 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SYS-12
+# covers: none (3.0 fix: sudo_last declined or without history returns 1)
+#
+# LEDGER SYS-12: headless `sudo_last` (plz) in a shell with no history is an error
+# before any warning, status 1; with a previous command, the headless
+# refusal is "Aborted." and status 1 (2.x returned 0 both times). sudo is
+# a stub that would print if it ran.
+
+env GASH_HEADLESS=1
+exec bash -c 'mkdir -p bin && printf "#!/bin/sh\necho SUDO-RAN\n" >bin/sudo && chmod 755 bin/sudo'
+! exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sudo_last'
+stderr '^Error: No previous command in history\.$'
+! stderr 'About to run as root'
+! stdout SUDO-RAN
+! exec bash -c 'export PATH="$PWD/bin:$PATH"; fc() { printf "%s\n" "   apt update"; }; source "$GASH_SH"; sudo_last'
+stderr 'About to run as root: apt update'
+stderr 'Aborted\.'
+! stdout SUDO-RAN

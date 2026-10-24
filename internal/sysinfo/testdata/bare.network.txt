@@ -1,0 +1,8 @@
+=== NETWORK DEEP ===
+--- Interfaces
+--- Routes
+--- Neighbors
+--- resolv.conf
+--- hosts
+--- Listening TCP
+--- Listening UDP

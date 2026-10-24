@@ -1,0 +1,946 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+{
+ "source": "python-yq 3.1.0 with PyYAML 6.0.1 and jq 1.7.1 (Ubuntu 24.04): the stdout of `yq . FILE`, or the file itself where yq failed or printed nothing, as 2.x llm_config printed it",
+ "cases": [
+  {
+   "in": "a: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "a: 1.0\nb: 1e3\nc: 1.5e-7\nd: 1.0e16\ne: .inf\nf: -.inf\ng: .nan\nh: 0.1\ni: -0.0\nj: 12345678901234567890\nk: 1.0e15\nl: 0.00001\nm: 5e-324\n",
+   "out": "{\n  \"a\": 1.0,\n  \"b\": 1000.0,\n  \"c\": 1.5E-7,\n  \"d\": 1E+16,\n  \"e\": 1.7976931348623157e+308,\n  \"f\": -1.7976931348623157e+308,\n  \"g\": null,\n  \"h\": 0.1,\n  \"i\": -0.0,\n  \"j\": 12345678901234567890,\n  \"k\": 1000000000000000.0,\n  \"l\": 0.00001,\n  \"m\": 5E-324\n}\n"
+  },
+  {
+   "in": "x: !foo bar\ny: !!str 12\nz: !!binary aGVsbG8=\n",
+   "out": "{\n  \"x\": \"bar\",\n  \"y\": \"12\",\n  \"z\": \"aGVsbG8=\"\n}\n"
+  },
+  {
+   "in": "b: &b {a: 1, b: 2}\no: &o {b: 3, c: 4}\nm: {<<: [*b, *o], c: 5, d: 6}\n",
+   "out": "{\n  \"b\": {\n    \"a\": 1,\n    \"b\": 2\n  },\n  \"o\": {\n    \"b\": 3,\n    \"c\": 4\n  },\n  \"m\": {\n    \"b\": 2,\n    \"c\": 5,\n    \"a\": 1,\n    \"d\": 6\n  }\n}\n"
+  },
+  {
+   "in": "a: 1\na: 2\nb: 3\n",
+   "out": "{\n  \"a\": 2,\n  \"b\": 3\n}\n"
+  },
+  {
+   "in": "---\n---\na: 1\n",
+   "out": "null\n{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "s: \"\\u00e9\\t\\x01   /\"\n",
+   "out": "{\n  \"s\": \"\u00e9\\t\\u0001   /\"\n}\n"
+  },
+  {
+   "in": "d: 2001-12-14\nt: 2001-12-14t21:59:43.10-05:00\n",
+   "out": "{\n  \"d\": \"2001-12-14\",\n  \"t\": \"2001-12-14t21:59:43.10-05:00\"\n}\n"
+  },
+  {
+   "in": "- yes\n- no\n- on\n- off\n- y\n- True\n- TRUE\n- tRue\n- False\n- FALSE\n",
+   "out": "[\n  \"yes\",\n  \"no\",\n  \"on\",\n  \"off\",\n  \"y\",\n  true,\n  true,\n  \"tRue\",\n  false,\n  false\n]\n"
+  },
+  {
+   "in": "- 0o17\n- 0x1F\n- 1_000\n- 1:30\n- +12\n- -0\n- 0b101\n- .5\n- 1.\n- +.inf\n- .NaN\n- 00\n- 0x\n- 0o\n- -0x1F\n- +0o7\n- 1e\n- e3\n- 1E3\n- 1.5E+3\n- -.5e-3\n- .Inf\n- .INF\n- -.Inf\n- .nan\n- .NAN\n- inf\n- nan\n",
+   "out": "[\n  15,\n  31,\n  \"1_000\",\n  \"1:30\",\n  12,\n  0,\n  \"0b101\",\n  0.5,\n  1.0,\n  1.7976931348623157e+308,\n  null,\n  0,\n  \"0x\",\n  \"0o\",\n  \"-0x1F\",\n  \"+0o7\",\n  \"1e\",\n  \"e3\",\n  1000.0,\n  1500.0,\n  -0.0005,\n  1.7976931348623157e+308,\n  1.7976931348623157e+308,\n  -1.7976931348623157e+308,\n  null,\n  null,\n  \"inf\",\n  \"nan\"\n]\n"
+  },
+  {
+   "in": "- ~\n- \n- Null\n- NULL\n- nULL\n- null\n",
+   "out": "[\n  null,\n  null,\n  null,\n  null,\n  \"nULL\",\n  null\n]\n"
+  },
+  {
+   "in": "1: a\n2.5: b\ntrue: c\n~: d\n.inf: e\n.nan: f\n1e3: g\n-0.0: h\n0x10: i\n",
+   "out": "{\n  \"1\": \"c\",\n  \"2.5\": \"b\",\n  \"null\": \"d\",\n  \"Infinity\": \"e\",\n  \"NaN\": \"f\",\n  \"1000.0\": \"g\",\n  \"-0.0\": \"h\",\n  \"16\": \"i\"\n}\n"
+  },
+  {
+   "in": "a: |\n  line1\n  line2\nb: >\n  folded\n  text\nc: '123'\nd: \"true\"\n",
+   "out": "{\n  \"a\": \"line1\\nline2\\n\",\n  \"b\": \"folded text\\n\",\n  \"c\": \"123\",\n  \"d\": \"true\"\n}\n"
+  },
+  {
+   "in": "base: &base\n  x: 1\n  y: 2\nderived:\n  <<: *base\n  y: 3\n  z: 4\n",
+   "out": "{\n  \"base\": {\n    \"x\": 1,\n    \"y\": 2\n  },\n  \"derived\": {\n    \"x\": 1,\n    \"y\": 3,\n    \"z\": 4\n  }\n}\n"
+  },
+  {
+   "in": "a: {<<: {x: 1}, x: 2}\n",
+   "out": "{\n  \"a\": {\n    \"x\": 2\n  }\n}\n"
+  },
+  {
+   "in": "a: {x: 2, <<: {x: 1, y: 1}}\n",
+   "out": "{\n  \"a\": {\n    \"x\": 2,\n    \"y\": 1\n  }\n}\n"
+  },
+  {
+   "in": "a: [1, [2, [3, {}]], {b: []}]\n",
+   "out": "{\n  \"a\": [\n    1,\n    [\n      2,\n      [\n        3,\n        {}\n      ]\n    ],\n    {\n      \"b\": []\n    }\n  ]\n}\n"
+  },
+  {
+   "in": "hello\n",
+   "out": "\"hello\"\n"
+  },
+  {
+   "in": "'single'\n",
+   "out": "\"single\"\n"
+  },
+  {
+   "in": "- 1\n- - 2\n  - 3\n- {a: b}\n",
+   "out": "[\n  1,\n  [\n    2,\n    3\n  ],\n  {\n    \"a\": \"b\"\n  }\n]\n"
+  },
+  {
+   "in": "a: 0.1e1\nb: 100.0\nc: 1e16\nd: 1e-4\ne: 1e-5\nf: 123456789012345678\ng: 0.000123\nh: 9007199254740993\ni: 1.7976931348623157e308\nj: 2e308\nk: 4.9e-324\nl: 1e-400\n",
+   "out": "{\n  \"a\": 1.0,\n  \"b\": 100.0,\n  \"c\": 1E+16,\n  \"d\": 0.0001,\n  \"e\": 0.00001,\n  \"f\": 123456789012345678,\n  \"g\": 0.000123,\n  \"h\": 9007199254740993,\n  \"i\": 1.7976931348623157E+308,\n  \"j\": 1.7976931348623157e+308,\n  \"k\": 5E-324,\n  \"l\": 0.0\n}\n"
+  },
+  {
+   "in": "a: -1e16\nb: 1.2345678901234567e-5\nc: 33.3e5\nd: 1.0e+2\ne: 1E+2\nf: 12e-3\n",
+   "out": "{\n  \"a\": -1E+16,\n  \"b\": 0.000012345678901234568,\n  \"c\": 3330000.0,\n  \"d\": 100.0,\n  \"e\": 100.0,\n  \"f\": 0.012\n}\n"
+  },
+  {
+   "in": "emoji: \"\\U0001F600\"\nctl: \"\\x7f\"\nnel: \"\\x85\"\nquote: '\"'\nbs: \"\\\\\"\n",
+   "out": "{\n  \"emoji\": \"\ud83d\ude00\",\n  \"ctl\": \"\\u007f\",\n  \"nel\": \"\u0085\",\n  \"quote\": \"\\\"\",\n  \"bs\": \"\\\\\"\n}\n"
+  },
+  {
+   "in": "k: \"\\u2028 \\u2029 \\ufeff\"\n",
+   "out": "{\n  \"k\": \"\u2028 \u2029 \ufeff\"\n}\n"
+  },
+  {
+   "in": "? a\n: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "a:\n  - b: 1\n    c: 2\n  - d\n",
+   "out": "{\n  \"a\": [\n    {\n      \"b\": 1,\n      \"c\": 2\n    },\n    \"d\"\n  ]\n}\n"
+  },
+  {
+   "in": "a: !!int \"12\"\nb: !!float \"12\"\nc: !!bool \"true\"\nd: !!null \"\"\ne: !!str\n",
+   "out": "{\n  \"a\": 12,\n  \"b\": 12.0,\n  \"c\": true,\n  \"d\": null,\n  \"e\": \"\"\n}\n"
+  },
+  {
+   "in": "a: !!float 1\nb: !!int 0x1F\n",
+   "out": "{\n  \"a\": 1.0,\n  \"b\": 31\n}\n"
+  },
+  {
+   "in": "x: &x 1\ny: *x\n",
+   "out": "{\n  \"x\": 1,\n  \"y\": 1\n}\n"
+  },
+  {
+   "in": "a: 'it''s'\nb: \"multi\n  line\"\n",
+   "out": "{\n  \"a\": \"it's\",\n  \"b\": \"multi line\"\n}\n"
+  },
+  {
+   "in": "# only comment\n",
+   "out": "# only comment\n"
+  },
+  {
+   "in": "",
+   "out": ""
+  },
+  {
+   "in": "a: [\n",
+   "out": "a: [\n"
+  },
+  {
+   "in": "{a: 1, b: [c, d]}\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": [\n    \"c\",\n    \"d\"\n  ]\n}\n"
+  },
+  {
+   "in": "a: b: c\n",
+   "out": "a: b: c\n"
+  },
+  {
+   "in": "a: 1\n...\n---\nb: 2\n",
+   "out": "{\n  \"a\": 1\n}\n{\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "%YAML 1.2\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "a: 1 # comment\nb: 'x' # c\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": \"x\"\n}\n"
+  },
+  {
+   "in": "a: 12:30:00\nb: 190:20:30\n",
+   "out": "{\n  \"a\": \"12:30:00\",\n  \"b\": \"190:20:30\"\n}\n"
+  },
+  {
+   "in": "%YAML 1.1\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "%YAML 1.3\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "%YAML 2.0\n---\na: 1\n",
+   "out": "%YAML 2.0\n---\na: 1\n"
+  },
+  {
+   "in": "%TAG !e! tag:example.com,2000:\n---\na: !e!foo 1\n",
+   "out": "{\n  \"a\": \"1\"\n}\n"
+  },
+  {
+   "in": "s: !!set {a, b}\n",
+   "out": "{\n  \"s\": {\n    \"a\": null,\n    \"b\": null\n  }\n}\n"
+  },
+  {
+   "in": "o: !!omap [a: 1, b: 2]\n",
+   "out": "{\n  \"o\": [\n    [\n      \"a\",\n      1\n    ],\n    [\n      \"b\",\n      2\n    ]\n  ]\n}\n"
+  },
+  {
+   "in": "p: !!pairs [a: 1, a: 2]\n",
+   "out": "{\n  \"p\": [\n    [\n      \"a\",\n      1\n    ],\n    [\n      \"a\",\n      2\n    ]\n  ]\n}\n"
+  },
+  {
+   "in": "\ufeffa: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "a: 1\r\nb: 2\r\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: \"x\ty\"\n",
+   "out": "{\n  \"a\": \"x\\ty\"\n}\n"
+  },
+  {
+   "in": "&k key: v\nother: *k\n",
+   "out": "{\n  \"key\": \"v\",\n  \"other\": \"key\"\n}\n"
+  },
+  {
+   "in": "a: &v x\n*v : y\n",
+   "out": "{\n  \"a\": \"x\",\n  \"x\": \"y\"\n}\n"
+  },
+  {
+   "in": ": v\n",
+   "out": ": v\n"
+  },
+  {
+   "in": "a:\n\t- b\n",
+   "out": "a:\n\t- b\n"
+  },
+  {
+   "in": "a: plain\n  multi\n  line\n",
+   "out": "{\n  \"a\": \"plain multi line\"\n}\n"
+  },
+  {
+   "in": "a: - b\n",
+   "out": "a: - b\n"
+  },
+  {
+   "in": "- !!map {a: 1}\n- !!seq [1]\n- !!str [1]\n",
+   "out": "- !!map {a: 1}\n- !!seq [1]\n- !!str [1]\n"
+  },
+  {
+   "in": "a: !!null x\n",
+   "out": "{\n  \"a\": null\n}\n"
+  },
+  {
+   "in": "a: !!bool yes\n",
+   "out": "{\n  \"a\": true\n}\n"
+  },
+  {
+   "in": "a: !!int 1.5\n",
+   "out": "a: !!int 1.5\n"
+  },
+  {
+   "in": "a: !!float abc\n",
+   "out": "a: !!float abc\n"
+  },
+  {
+   "in": "a: !!timestamp 2001-12-14\n",
+   "out": "{\n  \"a\": \"2001-12-14\"\n}\n"
+  },
+  {
+   "in": "a: !<tag:yaml.org,2002:str> 12\n",
+   "out": "{\n  \"a\": \"12\"\n}\n"
+  },
+  {
+   "in": "a: !<tag:yaml.org,2002:int> 12\n",
+   "out": "{\n  \"a\": 12\n}\n"
+  },
+  {
+   "in": "a: ! 12\n",
+   "out": "{\n  \"a\": 12\n}\n"
+  },
+  {
+   "in": "a: !local {b: 1}\n",
+   "out": "{\n  \"a\": {\n    \"b\": 1\n  }\n}\n"
+  },
+  {
+   "in": "a: !local [1]\n",
+   "out": "{\n  \"a\": [\n    1\n  ]\n}\n"
+  },
+  {
+   "in": "x: &a [*a]\n",
+   "out": "x: &a [*a]\n"
+  },
+  {
+   "in": "a: *nope\n",
+   "out": "a: *nope\n"
+  },
+  {
+   "in": "a: &a 1\na: &a 2\nb: *a\n",
+   "out": "a: &a 1\na: &a 2\nb: *a\n"
+  },
+  {
+   "in": "<<: {a: 1}\nb: 2\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: {<<: 1}\n",
+   "out": "a: {<<: 1}\n"
+  },
+  {
+   "in": "a: {<<: [1]}\n",
+   "out": "a: {<<: [1]}\n"
+  },
+  {
+   "in": "a: {<<: *b}\n",
+   "out": "a: {<<: *b}\n"
+  },
+  {
+   "in": "'<<': {a: 1}\n",
+   "out": "{\n  \"<<\": {\n    \"a\": 1\n  }\n}\n"
+  },
+  {
+   "in": "a: {? b}\n",
+   "out": "{\n  \"a\": {\n    \"b\": null\n  }\n}\n"
+  },
+  {
+   "in": "[a, b]: c\n",
+   "out": "[a, b]: c\n"
+  },
+  {
+   "in": "{a: 1}: c\n",
+   "out": "{a: 1}: c\n"
+  },
+  {
+   "in": "a: [b, c]: d\n",
+   "out": "a: [b, c]: d\n"
+  },
+  {
+   "in": "a: 'x\n\n  y'\n",
+   "out": "{\n  \"a\": \"x\\ny\"\n}\n"
+  },
+  {
+   "in": "a: \"\\0\"\n",
+   "out": "{\n  \"a\": \"\\u0000\"\n}\n"
+  },
+  {
+   "in": "a: \"\\_\\N\\L\\P\"\n",
+   "out": "{\n  \"a\": \"\u00a0\u0085\u2028\u2029\"\n}\n"
+  },
+  {
+   "in": "a: \"\\e\\a\\v\\f\\b\"\n",
+   "out": "{\n  \"a\": \"\\u001b\\u0007\\u000b\\f\\b\"\n}\n"
+  },
+  {
+   "in": "key with spaces: 1\n\"quoted key\": 2\n'k''': 3\n",
+   "out": "{\n  \"key with spaces\": 1,\n  \"quoted key\": 2,\n  \"k'\": 3\n}\n"
+  },
+  {
+   "in": "a: 1\n  b: 2\n",
+   "out": "a: 1\n  b: 2\n"
+  },
+  {
+   "in": "- a\nb: c\n",
+   "out": "- a\nb: c\n"
+  },
+  {
+   "in": "a: @x\n",
+   "out": "a: @x\n"
+  },
+  {
+   "in": "a: `x\n",
+   "out": "a: `x\n"
+  },
+  {
+   "in": "a: x #c\nb: x#c\n",
+   "out": "{\n  \"a\": \"x\",\n  \"b\": \"x#c\"\n}\n"
+  },
+  {
+   "in": "a: -\nb: - \n",
+   "out": "a: -\nb: - \n"
+  },
+  {
+   "in": "a: ---\nb: ...\n",
+   "out": "{\n  \"a\": \"---\",\n  \"b\": \"...\"\n}\n"
+  },
+  {
+   "in": "--- a\n--- b\n",
+   "out": "\"a\"\n\"b\"\n"
+  },
+  {
+   "in": "--- |\n  lit\n--- >-\n  fold\n",
+   "out": "\"lit\\n\"\n\"fold\"\n"
+  },
+  {
+   "in": "a: |+\n  keep\n\nb: |-\n  strip\n",
+   "out": "{\n  \"a\": \"keep\\n\\n\",\n  \"b\": \"strip\"\n}\n"
+  },
+  {
+   "in": "a: |2\n   x\n",
+   "out": "{\n  \"a\": \" x\\n\"\n}\n"
+  },
+  {
+   "in": "...\n",
+   "out": "...\n"
+  },
+  {
+   "in": "---\n",
+   "out": "null\n"
+  },
+  {
+   "in": "--- # c\n",
+   "out": "null\n"
+  },
+  {
+   "in": "a: !!str\nb: !!int\n",
+   "out": "a: !!str\nb: !!int\n"
+  },
+  {
+   "in": "a: !!binary |\n  aGVs\n  bG8=\n",
+   "out": "{\n  \"a\": \"aGVs\\nbG8=\\n\"\n}\n"
+  },
+  {
+   "in": "a: 1.0e+16\nb: 9.999999999999999e15\nc: 0.0001\nd: 0.00009999\n",
+   "out": "{\n  \"a\": 1E+16,\n  \"b\": 1E+16,\n  \"c\": 0.0001,\n  \"d\": 0.00009999\n}\n"
+  },
+  {
+   "in": "a: 123456789012345680000\nb: 1.2345678901234568e+20\n",
+   "out": "{\n  \"a\": 123456789012345680000,\n  \"b\": 1.2345678901234568E+20\n}\n"
+  },
+  {
+   "in": "a: 0.\nb: -.0\nc: +0.0\nd: 0e0\n",
+   "out": "{\n  \"a\": 0.0,\n  \"b\": -0.0,\n  \"c\": 0.0,\n  \"d\": 0.0\n}\n"
+  },
+  {
+   "in": "a: 1e-7\nb: 1e-6\nc: 1.5e-6\nd: 0.000001\n",
+   "out": "{\n  \"a\": 1E-7,\n  \"b\": 0.000001,\n  \"c\": 0.0000015,\n  \"d\": 0.000001\n}\n"
+  },
+  {
+   "in": "a: 1e21\nb: 1e22\nc: 1.0e+300\n",
+   "out": "{\n  \"a\": 1E+21,\n  \"b\": 1E+22,\n  \"c\": 1E+300\n}\n"
+  },
+  {
+   "in": "a: +1\nb: +0x1\nc: -0o7\nd: 0X1\ne: 0O7\nf: 0xG\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": \"+0x1\",\n  \"c\": \"-0o7\",\n  \"d\": \"0X1\",\n  \"e\": \"0O7\",\n  \"f\": \"0xG\"\n}\n"
+  },
+  {
+   "in": "a: 1__0\nb: _1\nc: 1_\n",
+   "out": "{\n  \"a\": \"1__0\",\n  \"b\": \"_1\",\n  \"c\": \"1_\"\n}\n"
+  },
+  {
+   "in": "a: .\nb: ..inf\nc: +.nan\nd: -.nan\n",
+   "out": "{\n  \"a\": \".\",\n  \"b\": \"..inf\",\n  \"c\": \"+.nan\",\n  \"d\": \"-.nan\"\n}\n"
+  },
+  {
+   "in": "1: a\ntrue: b\n1.0: c\n",
+   "out": "{\n  \"1\": \"c\"\n}\n"
+  },
+  {
+   "in": "true: a\n1: b\n",
+   "out": "{\n  \"true\": \"b\"\n}\n"
+  },
+  {
+   "in": "0: a\nfalse: b\n-0.0: c\n0.0: d\n",
+   "out": "{\n  \"0\": \"d\"\n}\n"
+  },
+  {
+   "in": "1000: a\n1e3: b\n",
+   "out": "{\n  \"1000\": \"b\"\n}\n"
+  },
+  {
+   "in": "1: a\n\"1\": b\n",
+   "out": "{\n  \"1\": \"b\"\n}\n"
+  },
+  {
+   "in": ".nan: a\n.nan: b\n",
+   "out": "{\n  \"NaN\": \"b\"\n}\n"
+  },
+  {
+   "in": ".inf: a\n+.inf: b\n",
+   "out": "{\n  \"Infinity\": \"b\"\n}\n"
+  },
+  {
+   "in": "9007199254740993: a\n9007199254740992.0: b\n9007199254740992: c\n",
+   "out": "{\n  \"9007199254740993\": \"a\",\n  \"9007199254740992.0\": \"c\"\n}\n"
+  },
+  {
+   "in": "a: !!timestamp 2001-12-14\nb: !!timestamp 2001-12-14t21:59:43.10-05:00\nc: !!timestamp 2001-12-14 21:59:43.10 Z\nd: !!timestamp 2001-1-2 3:04:05\ne: !!timestamp 2001-12-14T21:59:43.1234567+5:30\nf: !!timestamp 2001-12-14T21:59:43-00\ng: !!timestamp 2001-12-14T21:59:43.000\n",
+   "out": "{\n  \"a\": \"2001-12-14\",\n  \"b\": \"2001-12-14T21:59:43.100000-05:00\",\n  \"c\": \"2001-12-14T21:59:43.100000+00:00\",\n  \"d\": \"2001-01-02T03:04:05\",\n  \"e\": \"2001-12-14T21:59:43.123456+05:30\",\n  \"f\": \"2001-12-14T21:59:43+00:00\",\n  \"g\": \"2001-12-14T21:59:43\"\n}\n"
+  },
+  {
+   "in": "a: !!timestamp 2001-02-29\n",
+   "out": "a: !!timestamp 2001-02-29\n"
+  },
+  {
+   "in": "a: !!timestamp 2000-02-29\n",
+   "out": "{\n  \"a\": \"2000-02-29\"\n}\n"
+  },
+  {
+   "in": "a: !!timestamp 2001-12-14T25:00:00\n",
+   "out": "a: !!timestamp 2001-12-14T25:00:00\n"
+  },
+  {
+   "in": "a: !!timestamp 2001-12-14T21:59:43+24:00\n",
+   "out": "a: !!timestamp 2001-12-14T21:59:43+24:00\n"
+  },
+  {
+   "in": "a: !!timestamp 0000-01-01\n",
+   "out": "a: !!timestamp 0000-01-01\n"
+  },
+  {
+   "in": "a: !!timestamp 2001-12-14x\n",
+   "out": "a: !!timestamp 2001-12-14x\n"
+  },
+  {
+   "in": "!!timestamp 2001-12-14: x\n",
+   "out": "!!timestamp 2001-12-14: x\n"
+  },
+  {
+   "in": "a: !!int \"\"\n",
+   "out": "a: !!int \"\"\n"
+  },
+  {
+   "in": "a: !!int 1:-30\n",
+   "out": "{\n  \"a\": 30\n}\n"
+  },
+  {
+   "in": "a: !!float 1_000.5\nb: !!float -.INF\nc: !!float .NaN\nd: !!float 1:30.5\ne: !!float inf\nf: !!float Infinity\ng: !!float 1e5\nh: !!float 12\ni: !!float \" 1.5 \"\n",
+   "out": "{\n  \"a\": 1000.5,\n  \"b\": -1.7976931348623157e+308,\n  \"c\": null,\n  \"d\": 90.5,\n  \"e\": 1.7976931348623157e+308,\n  \"f\": 1.7976931348623157e+308,\n  \"g\": 100000.0,\n  \"h\": 12.0,\n  \"i\": 1.5\n}\n"
+  },
+  {
+   "in": "a: !!float 1.5.5\n",
+   "out": "a: !!float 1.5.5\n"
+  },
+  {
+   "in": "a: !!float 0x10\n",
+   "out": "a: !!float 0x10\n"
+  },
+  {
+   "in": "a: !!bool On\nb: !!bool NO\nc: !!bool y\n",
+   "out": "a: !!bool On\nb: !!bool NO\nc: !!bool y\n"
+  },
+  {
+   "in": "a: !!null whatever\nb: !!str ~\n",
+   "out": "{\n  \"a\": null,\n  \"b\": \"~\"\n}\n"
+  },
+  {
+   "in": "!!merge <<: {a: 1}\nb: 2\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: <<\n",
+   "out": "{\n  \"a\": \"<<\"\n}\n"
+  },
+  {
+   "in": "<<: [{a: 1}, {a: 2, b: 3}]\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": 3\n}\n"
+  },
+  {
+   "in": "x: &x {a: 1}\ny: {<<: *x, <<: {b: 2}}\n",
+   "out": "{\n  \"x\": {\n    \"a\": 1\n  },\n  \"y\": {\n    \"a\": 1,\n    \"b\": 2\n  }\n}\n"
+  },
+  {
+   "in": "a: !!omap\n  - x: 1\n  - y: 2\n",
+   "out": "{\n  \"a\": [\n    [\n      \"x\",\n      1\n    ],\n    [\n      \"y\",\n      2\n    ]\n  ]\n}\n"
+  },
+  {
+   "in": "a: !!omap [x]\n",
+   "out": "a: !!omap [x]\n"
+  },
+  {
+   "in": "a: !!omap [{x: 1, y: 2}]\n",
+   "out": "a: !!omap [{x: 1, y: 2}]\n"
+  },
+  {
+   "in": "a: !!omap {x: 1}\n",
+   "out": "a: !!omap {x: 1}\n"
+  },
+  {
+   "in": "a: !!pairs [1: 2, true: 3]\n",
+   "out": "{\n  \"a\": [\n    [\n      1,\n      2\n    ],\n    [\n      true,\n      3\n    ]\n  ]\n}\n"
+  },
+  {
+   "in": "a: !!set\n  ? x\n  ? y\n",
+   "out": "{\n  \"a\": {\n    \"x\": null,\n    \"y\": null\n  }\n}\n"
+  },
+  {
+   "in": "a: !!python/tuple [1, 2]\n",
+   "out": "{\n  \"a\": [\n    1,\n    2\n  ]\n}\n"
+  },
+  {
+   "in": "a: !!map {x: 1}\nb: !!seq [1]\n",
+   "out": "{\n  \"a\": {\n    \"x\": 1\n  },\n  \"b\": [\n    1\n  ]\n}\n"
+  },
+  {
+   "in": "a: !!map [1]\n",
+   "out": "a: !!map [1]\n"
+  },
+  {
+   "in": "a: !!seq {x: 1}\n",
+   "out": "a: !!seq {x: 1}\n"
+  },
+  {
+   "in": "a: !!null [1]\n",
+   "out": "a: !!null [1]\n"
+  },
+  {
+   "in": "a: &a\n  b: 1\nc: *a\nd: *a\n",
+   "out": "{\n  \"a\": {\n    \"b\": 1\n  },\n  \"c\": {\n    \"b\": 1\n  },\n  \"d\": {\n    \"b\": 1\n  }\n}\n"
+  },
+  {
+   "in": "a: \"tab\\there\"\nb: 'nl\n\n  x'\n",
+   "out": "{\n  \"a\": \"tab\\there\",\n  \"b\": \"nl\\nx\"\n}\n"
+  },
+  {
+   "in": "- &a x\n- *a\n- &a y\n",
+   "out": "- &a x\n- *a\n- &a y\n"
+  },
+  {
+   "in": "a: \"\\x00 \\x1f \\u001F\"\n",
+   "out": "{\n  \"a\": \"\\u0000 \\u001f \\u001f\"\n}\n"
+  },
+  {
+   "in": "key: \"\\u00ad\\u200b\\ufeff\"\n",
+   "out": "{\n  \"key\": \"\u00ad\u200b\ufeff\"\n}\n"
+  },
+  {
+   "in": "a: [1, 2,]\n",
+   "out": "{\n  \"a\": [\n    1,\n    2\n  ]\n}\n"
+  },
+  {
+   "in": "a: {b: 1,}\n",
+   "out": "{\n  \"a\": {\n    \"b\": 1\n  }\n}\n"
+  },
+  {
+   "in": "a: [a, b, ]\n",
+   "out": "{\n  \"a\": [\n    \"a\",\n    \"b\"\n  ]\n}\n"
+  },
+  {
+   "in": "a: {b}\n",
+   "out": "{\n  \"a\": {\n    \"b\": null\n  }\n}\n"
+  },
+  {
+   "in": "a: [b: c]\n",
+   "out": "{\n  \"a\": [\n    {\n      \"b\": \"c\"\n    }\n  ]\n}\n"
+  },
+  {
+   "in": "a: [? b : c]\n",
+   "out": "{\n  \"a\": [\n    {\n      \"b\": \"c\"\n    }\n  ]\n}\n"
+  },
+  {
+   "in": "{a: [b, c], d: {e: f}}\n",
+   "out": "{\n  \"a\": [\n    \"b\",\n    \"c\"\n  ],\n  \"d\": {\n    \"e\": \"f\"\n  }\n}\n"
+  },
+  {
+   "in": "- [a, b]\n- {c: d}\n- - e\n  - f\n",
+   "out": "[\n  [\n    \"a\",\n    \"b\"\n  ],\n  {\n    \"c\": \"d\"\n  },\n  [\n    \"e\",\n    \"f\"\n  ]\n]\n"
+  },
+  {
+   "in": "a:\n- b\n- c\n",
+   "out": "{\n  \"a\": [\n    \"b\",\n    \"c\"\n  ]\n}\n"
+  },
+  {
+   "in": "a:\n  - b\n  -\n  - c\n",
+   "out": "{\n  \"a\": [\n    \"b\",\n    null,\n    \"c\"\n  ]\n}\n"
+  },
+  {
+   "in": "a: b\n c\n",
+   "out": "{\n  \"a\": \"b c\"\n}\n"
+  },
+  {
+   "in": "a:    \n  b\n",
+   "out": "{\n  \"a\": \"b\"\n}\n"
+  },
+  {
+   "in": "a: 'b''c'\n",
+   "out": "{\n  \"a\": \"b'c\"\n}\n"
+  },
+  {
+   "in": "a: \"b\\\"c\"\n",
+   "out": "{\n  \"a\": \"b\\\"c\"\n}\n"
+  },
+  {
+   "in": "a: \"b\\\n  c\"\n",
+   "out": "{\n  \"a\": \"bc\"\n}\n"
+  },
+  {
+   "in": "a: >\n  b\n\n  c\n   d\n  e\n",
+   "out": "{\n  \"a\": \"b\\nc\\n d\\ne\\n\"\n}\n"
+  },
+  {
+   "in": "a: |\n  b\n\n  c\n   d\n",
+   "out": "{\n  \"a\": \"b\\n\\nc\\n d\\n\"\n}\n"
+  },
+  {
+   "in": "a: >-\n\n  b\n",
+   "out": "{\n  \"a\": \"\\nb\"\n}\n"
+  },
+  {
+   "in": "a: |\n\n\n",
+   "out": "{\n  \"a\": \"\"\n}\n"
+  },
+  {
+   "in": "a: |1\n  b\n",
+   "out": "{\n  \"a\": \" b\\n\"\n}\n"
+  },
+  {
+   "in": "- |\n  x\n- >\n  y\n",
+   "out": "[\n  \"x\\n\",\n  \"y\\n\"\n]\n"
+  },
+  {
+   "in": "a: !!str |\n  x\n",
+   "out": "{\n  \"a\": \"x\\n\"\n}\n"
+  },
+  {
+   "in": "a: b # c\n# d\ne: f\n",
+   "out": "{\n  \"a\": \"b\",\n  \"e\": \"f\"\n}\n"
+  },
+  {
+   "in": "a: #c\n  b\n",
+   "out": "{\n  \"a\": \"b\"\n}\n"
+  },
+  {
+   "in": "a: b#c\n",
+   "out": "{\n  \"a\": \"b#c\"\n}\n"
+  },
+  {
+   "in": "a: 'b'#c\n",
+   "out": "{\n  \"a\": \"b\"\n}\n"
+  },
+  {
+   "in": "a: \"b\"c\n",
+   "out": "a: \"b\"c\n"
+  },
+  {
+   "in": "a: http://x.y/z?q=1#frag\n",
+   "out": "{\n  \"a\": \"http://x.y/z?q=1#frag\"\n}\n"
+  },
+  {
+   "in": "a: x: y\n",
+   "out": "a: x: y\n"
+  },
+  {
+   "in": "a: - x\n",
+   "out": "a: - x\n"
+  },
+  {
+   "in": "a: [x\n",
+   "out": "a: [x\n"
+  },
+  {
+   "in": "a: {x\n",
+   "out": "a: {x\n"
+  },
+  {
+   "in": "a: 'x\n",
+   "out": "a: 'x\n"
+  },
+  {
+   "in": "a: \"x\n",
+   "out": "a: \"x\n"
+  },
+  {
+   "in": "- a\n - b\n",
+   "out": "[\n  \"a - b\"\n]\n"
+  },
+  {
+   "in": "a:\n  b: 1\n c: 2\n",
+   "out": "a:\n  b: 1\n c: 2\n"
+  },
+  {
+   "in": "\ta: 1\n",
+   "out": "\ta: 1\n"
+  },
+  {
+   "in": "a: \"\t\"\n",
+   "out": "{\n  \"a\": \"\\t\"\n}\n"
+  },
+  {
+   "in": "? |\n  block key\n: v\n",
+   "out": "{\n  \"block key\\n\": \"v\"\n}\n"
+  },
+  {
+   "in": "? - a\n: v\n",
+   "out": "? - a\n: v\n"
+  },
+  {
+   "in": "&a a: &b b\n*a : *b\n",
+   "out": "{\n  \"a\": \"b\"\n}\n"
+  },
+  {
+   "in": "*a : x\n",
+   "out": "*a : x\n"
+  },
+  {
+   "in": "a: !<!> x\n",
+   "out": "{\n  \"a\": \"x\"\n}\n"
+  },
+  {
+   "in": "a: !!binary aGVsbG8=\n",
+   "out": "{\n  \"a\": \"aGVsbG8=\"\n}\n"
+  },
+  {
+   "in": "--- !!map\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "--- !!str\n--- !!null\n",
+   "out": "\"\"\nnull\n"
+  },
+  {
+   "in": "--- >\n  text\n...\n--- |\n  more\n",
+   "out": "\"text\\n\"\n\"more\\n\"\n"
+  },
+  {
+   "in": "a: 1\n--- \nb: 2\n",
+   "out": "{\n  \"a\": 1\n}\n{\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: 1\n---b\n",
+   "out": "a: 1\n---b\n"
+  },
+  {
+   "in": "---a\n",
+   "out": "\"---a\"\n"
+  },
+  {
+   "in": "a: ...\n",
+   "out": "{\n  \"a\": \"...\"\n}\n"
+  },
+  {
+   "in": "...\na: 1\n",
+   "out": "...\na: 1\n"
+  },
+  {
+   "in": "a: 1\n...\n...\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "%TAG ! tag:x,2000:\n--- !y z\n",
+   "out": "\"z\"\n"
+  },
+  {
+   "in": "%FOO bar\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "%YAML 1.2\n%YAML 1.2\n---\na: 1\n",
+   "out": "%YAML 1.2\n%YAML 1.2\n---\na: 1\n"
+  },
+  {
+   "in": "%YAML 1.2\na: 1\n",
+   "out": "%YAML 1.2\na: 1\n"
+  },
+  {
+   "in": "a: 1\n%YAML 1.2\n---\nb: 2\n",
+   "out": "{\n  \"a\": 1\n}\n{\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: 1\n...\n%YAML 1.2\n---\nb: 2\n",
+   "out": "{\n  \"a\": 1\n}\n{\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "%YAML 1.2 # comment\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "%YAML   1.2\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "%YAML 1.20\n---\na: 1\n",
+   "out": "{\n  \"a\": 1\n}\n"
+  },
+  {
+   "in": "a: \u00e9\nb: \u4e2d\u6587\nc: \ud83d\ude00\n",
+   "out": "{\n  \"a\": \"\u00e9\",\n  \"b\": \"\u4e2d\u6587\",\n  \"c\": \"\ud83d\ude00\"\n}\n"
+  },
+  {
+   "in": "\u00e9: 1\n",
+   "out": "{\n  \"\u00e9\": 1\n}\n"
+  },
+  {
+   "in": "a: \u2028\n",
+   "out": "{\n  \"a\": null\n}\n"
+  },
+  {
+   "in": "a: b\u2028c\n",
+   "out": "a: b\u2028c\n"
+  },
+  {
+   "in": "a: 1\u2029b: 2\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: 1\u0085b: 2\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: 1\rb: 2\r",
+   "out": "{\n  \"a\": 1,\n  \"b\": 2\n}\n"
+  },
+  {
+   "in": "a: [1,\r\n2]\r\n",
+   "out": "{\n  \"a\": [\n    1,\n    2\n  ]\n}\n"
+  },
+  {
+   "in": "a:\r\n  - 1\r\n",
+   "out": "{\n  \"a\": [\n    1\n  ]\n}\n"
+  },
+  {
+   "in": "a: \ufeffx\n",
+   "out": "{\n  \"a\": \"\ufeffx\"\n}\n"
+  },
+  {
+   "in": "---\n\ufeffa: 1\n",
+   "out": "{\n  \"\ufeffa\": 1\n}\n"
+  },
+  {
+   "in": "a: !!str\n",
+   "out": "{\n  \"a\": \"\"\n}\n"
+  },
+  {
+   "in": "a: !foo\n",
+   "out": "{\n  \"a\": \"\"\n}\n"
+  },
+  {
+   "in": "a: &x\nb: *x\n",
+   "out": "{\n  \"a\": null,\n  \"b\": null\n}\n"
+  },
+  {
+   "in": "a: [&x , *x]\n",
+   "out": "{\n  \"a\": [\n    null,\n    null\n  ]\n}\n"
+  },
+  {
+   "in": "a: 1\nb: &c\n  d: 1\ne:\n  <<: *c\n  d: 2\n",
+   "out": "{\n  \"a\": 1,\n  \"b\": {\n    \"d\": 1\n  },\n  \"e\": {\n    \"d\": 2\n  }\n}\n"
+  },
+  {
+   "in": "a: -1e-0\nb: 1e+0\nc: 1E-01\nd: 00.5\ne: 0005\nf: -0005\ng: +0005.0\n",
+   "out": "{\n  \"a\": -1.0,\n  \"b\": 1.0,\n  \"c\": 0.1,\n  \"d\": 0.5,\n  \"e\": 5,\n  \"f\": -5,\n  \"g\": 5.0\n}\n"
+  },
+  {
+   "in": "a: 1e309\nb: -1e309\nc: 1e-330\n",
+   "out": "{\n  \"a\": 1.7976931348623157e+308,\n  \"b\": -1.7976931348623157e+308,\n  \"c\": 0.0\n}\n"
+  },
+  {
+   "in": "a: 0.1\nb: 0.2\nc: 0.30000000000000004\nd: 1.1e1\ne: 123.456e-2\n",
+   "out": "{\n  \"a\": 0.1,\n  \"b\": 0.2,\n  \"c\": 0.30000000000000004,\n  \"d\": 11.0,\n  \"e\": 1.23456\n}\n"
+  },
+  {
+   "in": "a: 100000000000000000.0\nb: 10000000000000000.0\nc: 1000000000000000.0\nd: 0.0001234\ne: 0.00001234\n",
+   "out": "{\n  \"a\": 1E+17,\n  \"b\": 1E+16,\n  \"c\": 1000000000000000.0,\n  \"d\": 0.0001234,\n  \"e\": 0.00001234\n}\n"
+  },
+  {
+   "in": "a0: &a0 [\"lol\"]\na1: &a1 [*a0, *a0, *a0, *a0, *a0]\na2: &a2 [*a1, *a1, *a1, *a1, *a1]\na3: &a3 [*a2, *a2, *a2, *a2, *a2]\n",
+   "out": "{\n  \"a0\": [\n    \"lol\"\n  ],\n  \"a1\": [\n    [\n      \"lol\"\n    ],\n    [\n      \"lol\"\n    ],\n    [\n      \"lol\"\n    ],\n    [\n      \"lol\"\n    ],\n    [\n      \"lol\"\n    ]\n  ],\n  \"a2\": [\n    [\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ]\n    ],\n    [\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ]\n    ],\n    [\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ]\n    ],\n    [\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ]\n    ],\n    [\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ],\n      [\n        \"lol\"\n      ]\n    ]\n  ],\n  \"a3\": [\n    [\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ]\n    ],\n    [\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ]\n    ],\n    [\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ]\n    ],\n    [\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ]\n    ],\n    [\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ],\n      [\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ],\n        [\n          \"lol\"\n        ]\n      ]\n    ]\n  ]\n}\n"
+  },
+  {
+   "in": "a0: &a0 [\"lol\"]\na1: &a1 [*a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0]\na2: &a2 [*a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1]\na3: &a3 [*a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2]\na4: &a4 [*a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3]\na5: &a5 [*a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4]\na6: &a6 [*a5, *a5, *a5, *a5, *a5, *a5, *a5, *a5, *a5, *a5]\na7: &a7 [*a6, *a6, *a6, *a6, *a6, *a6, *a6, *a6, *a6, *a6]\na8: &a8 [*a7, *a7, *a7, *a7, *a7, *a7, *a7, *a7, *a7, *a7]\na9: &a9 [*a8, *a8, *a8, *a8, *a8, *a8, *a8, *a8, *a8, *a8]\n",
+   "out": "a0: &a0 [\"lol\"]\na1: &a1 [*a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0]\na2: &a2 [*a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1]\na3: &a3 [*a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2]\na4: &a4 [*a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3]\na5: &a5 [*a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4]\na6: &a6 [*a5, *a5, *a5, *a5, *a5, *a5, *a5, *a5, *a5, *a5]\na7: &a7 [*a6, *a6, *a6, *a6, *a6, *a6, *a6, *a6, *a6, *a6]\na8: &a8 [*a7, *a7, *a7, *a7, *a7, *a7, *a7, *a7, *a7, *a7]\na9: &a9 [*a8, *a8, *a8, *a8, *a8, *a8, *a8, *a8, *a8, *a8]\n"
+  },
+  {
+   "in": "a0: &a0 [\"lol\"]\na1: &a1 [*a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0]\na2: &a2 [*a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1]\na3: &a3 [*a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2]\na4: &a4 [*a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3]\na5: &a5 [*a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4]\n",
+   "out": "a0: &a0 [\"lol\"]\na1: &a1 [*a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0]\na2: &a2 [*a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1]\na3: &a3 [*a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2]\na4: &a4 [*a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3, *a3]\na5: &a5 [*a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4, *a4]\n"
+  }
+ ]
+}

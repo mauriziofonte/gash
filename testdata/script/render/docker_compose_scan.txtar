@@ -1,0 +1,31 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:257
+# covers: output_style_render_spec.sh:258
+# covers: output_style_render_spec.sh:259
+#
+# docker_compose_scan rendering (R2-R6). It walks the tree for compose files
+# and lists the image of each service - no registry call, so it runs fully
+# offline. Covers the found listing (color glyph), the empty notice and the
+# --json layout (plain, no ESC). Each case runs in its own subdirectory so
+# the shared $WORK does not leak compose files between cases.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :257 found - lists every compose file and its services
+exec bash -c 'mkdir -p found/a found/b/c; printf "services:\n  web:\n    image: nginx:latest\n  db:\n    image: postgres:15\n" >found/a/compose.yml; printf "services:\n  x:\n    build: .\n" >found/b/c/docker-compose.yml; cd found; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_scan'
+stdout 'Scanning for Docker Compose files in .*/found \(depth: 3\)'
+stdout '• web: nginx:latest'
+stdout 'Found 2 compose file.s.'
+
+# --- :258 none - nothing to find
+exec bash -c 'mkdir -p empty; cd empty; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_scan'
+stdout 'No docker-compose files found in .*/empty'
+
+# --- :259 json - machine layout, no ESC
+exec bash -c 'mkdir -p j/a; printf "services:\n  web:\n    image: nginx:latest\n" >j/a/compose.yml; cd j; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_compose_scan --json --no-color'
+stdout '"total_found":1'
+stdout '"compose_files":\[\{"path":'
+! stdout '\x1b'

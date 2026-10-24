@@ -1,0 +1,22 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: gash_upgrade_no_exit_spec.sh:11
+#
+# CORE-18 no-exit contract: sourcing the shim headless and then invoking
+# gash_upgrade with an invalid GASH_DIR must RETURN a non-zero status, never
+# exit the sourcing shell. The `status=` line only prints if gash_upgrade
+# returned rather than calling exit.
+
+env GASH_HEADLESS=1
+
+exec bash upgrade_no_exit.sh
+stdout '^status=[0-9]+$'
+stdout 'Gash is not installed|Failed to change directory'
+
+-- upgrade_no_exit.sh --
+set -euo pipefail
+source "$GASH_SH"
+out="$({ GASH_DIR=/no/such/dir gash_upgrade; echo "status=$?"; } 2>&1 || true)"
+[[ "$out" == *"status="* ]] || { echo "no status line (did it exit?): $out"; exit 1; }
+[[ "$out" == *"Failed to change directory"* || "$out" == *"Gash is not installed"* ]] || { echo "unexpected: $out"; exit 1; }
+printf '%s\n' "$out"

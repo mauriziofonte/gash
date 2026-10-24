@@ -1,0 +1,261 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: headless_contract_spec.sh:47
+# covers: headless_contract_spec.sh:53
+# covers: headless_contract_spec.sh:58
+# covers: headless_contract_spec.sh:71
+# covers: headless_contract_spec.sh:77
+# covers: headless_contract_spec.sh:83
+# covers: headless_contract_spec.sh:89
+# covers: headless_contract_spec.sh:94
+# covers: headless_contract_spec.sh:99
+# covers: headless_contract_spec.sh:112
+# covers: headless_contract_spec.sh:125
+# covers: headless_contract_spec.sh:139
+# covers: headless_contract_spec.sh:156
+# covers: headless_contract_spec.sh:163
+# covers: headless_contract_spec.sh:169
+# covers: headless_contract_spec.sh:178
+# covers: headless_contract_spec.sh:185
+# covers: headless_contract_spec.sh:197
+# covers: headless_contract_spec.sh:207
+# covers: headless_contract_spec.sh:214
+#
+# Headless contract: every public function survives set -euo pipefail (the
+# LLM-wrapper/CI environment), returns 0 on legitimately empty results, emits
+# parseable JSON where promised, and never leaks diagnostics into $(...).
+# Each helper sources the shim headless, THEN enables strict mode (mirrors
+# the gash-exec wrappers) and drives a function over a sandbox of hostile
+# filenames (space, tab, newline, quotes, dash, glob, unicode) with an
+# unreadable dir. llm_ports still execs ss (MOCK-DEPENDENT run*): fake ss.
+
+env GASH_HEADLESS=1
+
+exec chmod +x ssbin/ss
+
+# --- search functions: empty results are rc 0, non-integer limit rejected
+exec bash grep_empty.sh         # :47
+exec bash find_empty.sh         # :53
+exec bash limit_reject.sh       # :58
+
+# --- JSON emitters parse with jq on hostile input
+exec bash tree_json.sh          # :71
+exec bash project_json.sh       # :77
+exec bash env_json.sh           # :83
+exec bash procs_json.sh         # :89
+exec bash ports_json.sh         # :94
+exec bash git_status_json.sh    # :99
+exec bash git_log_json.sh       # :112
+
+# --- SQL guards
+exec bash db_query_reject.sh    # :125
+exec bash db_sample_reject.sh   # :139
+
+# --- fs scanners on the hostile sandbox
+exec bash files_unreadable.sh   # :156
+exec bash dirs_largest_json.sh  # :163
+exec bash dirs_find_json.sh     # :169
+exec bash empty_tree_json.sh    # :178
+exec bash files_null.sh         # :185
+exec bash files_sep.sh          # :197
+
+# --- sysinfo collectors and misc errexit traps
+exec bash sysinfo_pipefail.sh   # :207
+exec bash history_empty.sh      # :214
+
+-- ssbin/ss --
+#!/usr/bin/env bash
+echo "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port"
+echo "tcp   LISTEN 0      4096   [::]:22            [::]:*"
+
+-- sandbox.sh --
+# Sourced by helpers: build a hostile sandbox + unreadable dir in $sandbox.
+mksandbox() {
+  sandbox="$(mktemp -d "$WORK/sbox.XXXXXX")"
+  mkdir -p "$sandbox/sub" "$sandbox/noperm" "$sandbox/empty dir"
+  printf x > "$sandbox/normal.txt"
+  printf x > "$sandbox/with space.txt"
+  printf x > "$sandbox/-leading-dash.txt"
+  printf x > "$sandbox/g*l(o)b?.txt"
+  printf x > "$sandbox/quote\"double.txt"
+  printf x > "$sandbox/quote'single.txt"
+  printf x > "$sandbox/più_unicode_è.txt"
+  printf x > "$(printf '%s/tab\there.txt' "$sandbox")"
+  printf x > "$(printf '%s/new\nline.txt' "$sandbox")"
+  chmod 000 "$sandbox/noperm"
+}
+
+-- grep_empty.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+llm_grep 'PATTERN_THAT_DOES_NOT_EXIST_XYZ' . >/dev/null
+echo alive >/dev/null
+
+-- find_empty.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+llm_find '*.ext_that_does_not_exist_xyz' >/dev/null
+
+-- limit_reject.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+set +e
+llm_grep 'x' --limit 'evil; payload' >/dev/null 2>&1; rc1=$?
+llm_find '*.x' --limit '5; DROP' >/dev/null 2>&1; rc2=$?
+set -e
+[[ $rc1 -ne 0 && $rc2 -ne 0 ]]
+
+-- tree_json.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+llm_tree --depth 3 "$sandbox" | jq -e . >/dev/null
+
+-- project_json.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+llm_project "$sandbox" | jq -e . >/dev/null
+
+-- env_json.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+export HC_MULTILINE=$'line1\nline2"quoted'
+llm_env | jq -e . >/dev/null
+
+-- procs_json.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+llm_procs | jq -e . >/dev/null
+
+-- ports_json.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+PATH="$WORK/ssbin:$PATH" llm_ports | jq -e . >/dev/null
+
+-- git_status_json.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+repo="$(mktemp -d "$WORK/repo.XXXXXX")"
+git -C "$repo" init -q
+printf x > "$repo/evil\"quote.txt"
+printf x > "$repo/back\\slash.txt"
+out=$(llm_git_status "$repo")
+printf '%s' "$out" | jq -e . >/dev/null
+[[ $(printf '%s' "$out" | jq -r '.staged | length') == 0 ]]
+
+-- git_log_json.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+repo="$(mktemp -d "$WORK/repolog.XXXXXX")"
+git -C "$repo" init -q
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m 'subject with "quotes" and \backslash'
+llm_git_log --limit 5 "$repo" | jq -e . >/dev/null
+
+-- db_query_reject.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+db="$(mktemp -u "$WORK/db.XXXXXX").db"
+sqlite3 "$db" 'CREATE TABLE t(x); INSERT INTO t VALUES (1)'
+set +e
+llm_db_query 'SELECT * FROM t' -f "$db" -r '5; DROP TABLE t' >/dev/null 2>&1
+rc=$?
+set -e
+[[ $rc -ne 0 ]]
+[[ $(sqlite3 "$db" 'SELECT count(*) FROM t') == 1 ]]
+
+-- db_sample_reject.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+db="$(mktemp -u "$WORK/db2.XXXXXX").db"
+sqlite3 "$db" 'CREATE TABLE t(x)'
+set +e
+llm_db_sample t -f "$db" --limit '1; ATTACH' >/dev/null 2>&1
+rc=$?
+set -e
+[[ $rc -ne 0 ]]
+
+-- files_unreadable.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+files_largest "$sandbox" --limit 2 >/dev/null 2>&1
+files_largest "$sandbox" --json | jq -e . >/dev/null
+
+-- dirs_largest_json.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+dirs_largest "$sandbox" --json | jq -e . >/dev/null
+
+-- dirs_find_json.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+out=$(dirs_find_large "$sandbox" --size 1 --json)
+printf '%s' "$out" | jq -e . >/dev/null
+root=$(cd "$sandbox" && pwd -P)
+[[ $(printf '%s' "$out" | jq -r --arg r "$root" '[.data[] | select(.path == $r)] | length') == 0 ]]
+
+-- empty_tree_json.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+dirs_list_empty "$sandbox" --json | jq -e . >/dev/null
+tree_stats "$sandbox" --json | jq -e . >/dev/null
+
+-- files_null.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+out_file="$(mktemp "$WORK/null.XXXXXX")"
+files_largest "$sandbox" --null > "$out_file"
+while IFS= read -r -d '' p; do
+  [[ -f "$p" ]] || exit 1
+done < "$out_file"
+
+-- files_sep.sh --
+source "$WORK/sandbox.sh"
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+mksandbox
+files_largest -- "$sandbox" 2>/dev/null | grep -q 'normal.txt'
+
+-- sysinfo_pipefail.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+sysinfo identity --llm >/dev/null
+sysinfo storage --llm >/dev/null
+sysinfo all --llm >/dev/null
+
+-- history_empty.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -euo pipefail
+history_grep 'PATTERN_THAT_DOES_NOT_EXIST_XYZ' >/dev/null

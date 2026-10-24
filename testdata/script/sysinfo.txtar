@@ -1,0 +1,97 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: sysinfo_spec.sh:281
+# covers: sysinfo_spec.sh:293
+# covers: sysinfo_spec.sh:314
+# covers: sysinfo_spec.sh:331
+# covers: sysinfo_spec.sh:343
+# covers: sysinfo_spec.sh:369
+# covers: sysinfo_spec.sh:394
+# covers: sysinfo_spec.sh:439
+# covers: sysinfo_spec.sh:453
+# covers: sysinfo_spec.sh:476
+#
+# sysinfo / ai_sysinfo through the shim. The 2.x __sysinfo_ensure_sudo seam is
+# a PATH sudo stub that fails `sudo -n true` (testing.md 2.3), so the binary
+# runs in no-sudo mode non-interactively. Collectors shell out to the real
+# df/ss/ps/systemctl where present and print each section header regardless of
+# what the host yields, so the assertions key off the headers and the
+# always-present identity/overview fields, never host-specific data. The
+# split rows' internal halves (the box-width alignment, the sub-header
+# suppression driven by an overridden collector, the AI request wrappers) are
+# the Go unit tests; covered here is the observable public surface.
+
+env GASH_HEADLESS=1
+chmod 0755 bin/sudo
+
+# --- sysinfo_spec.sh:281 - sysinfo -h shows help
+exec bash -c 'source "$GASH_SH"; sysinfo -h'
+stdout 'sysinfo'
+
+# --- sysinfo_spec.sh:293 - sysinfo identity --llm outputs only IDENTITY
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo identity --llm'
+stdout '=== IDENTITY ==='
+stdout 'Kernel='
+! stdout '=== STORAGE ==='
+! stdout '=== SERVICES ==='
+
+# --- sysinfo_spec.sh:314 - sysinfo badname returns an error
+! exec bash -c 'source "$GASH_SH"; sysinfo badname'
+stderr 'Unknown argument'
+
+# --- sysinfo_spec.sh:331 - si alias is defined
+exec bash -c 'source "$GASH_SH"; alias si'
+stdout 'sysinfo'
+
+# --- sysinfo_spec.sh:343 - sysinfo all --llm outputs all 10 section headers
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo all --llm'
+stdout '=== IDENTITY ==='
+stdout '=== STORAGE ==='
+stdout '=== SERVICES ==='
+stdout '=== AUTH ==='
+stdout '=== NETWORK ==='
+stdout '=== SECURITY ==='
+stdout '=== WEBSTACK ==='
+stdout '=== MAIL ==='
+stdout '=== INFRA ==='
+stdout '=== SYSTEM ==='
+
+# --- sysinfo_spec.sh:369 - opens with an overview: key=value for --llm, card otherwise
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo overview --llm'
+stdout '\A=== OVERVIEW ==='
+stdout 'Host='
+# Memory comes from /proc/meminfo, as in 2.x, whose spec checked it only
+# where that file is readable.
+[linux] stdout '^Memory KiB=used=[0-9]+ total=[0-9]+$'
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo overview --no-color'
+stdout 'Disk /'
+stdout '%'
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo all --llm'
+stdout '\A=== OVERVIEW ==='
+
+# --- sysinfo_spec.sh:394 - an empty section/sub prints nothing but its own
+# frame; the state dir is removed afterwards. The mail collector reads the
+# host's /etc, so the empty frame is asserted only on a host with none of
+# the paths it probes (a macOS runner ships /etc/postfix); the 2.x spec
+# overrode the collector, the sub-header rule itself is the Go unit tests'.
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; out=$(sysinfo mail --no-color) || exit; printf "%s\n" "$out"; [[ $out == *MAIL* ]] || exit 1; for p in /etc/postfix /etc/dovecot /etc/exim4 /etc/spamassassin /etc/default/opendkim /etc/bind /etc/unbound; do [ -e "$p" ] && exit 0; done; [[ $out == *"nothing found"* && $out != *Postfix* ]]'
+mkdir td
+exec bash -c 'export PATH="$PWD/bin:$PATH" TMPDIR="$PWD/td"; source "$GASH_SH"; sysinfo mail >/dev/null 2>&1; test -z "$(ls -A td)"'
+
+# --- sysinfo_spec.sh:439 - ai_sysinfo -h shows help
+exec bash -c 'source "$GASH_SH"; ai_sysinfo -h'
+stdout 'ai_sysinfo'
+
+# --- sysinfo_spec.sh:453 - ai_sysinfo --raw outputs LLM data without an API call
+exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; ai_sysinfo --raw'
+stdout '=== IDENTITY ==='
+stdout '=== STORAGE ==='
+stdout 'Kernel='
+
+# --- sysinfo_spec.sh:476 - sysinfo_ai alias is defined
+exec bash -c 'source "$GASH_SH"; alias sysinfo_ai'
+stdout 'ai_sysinfo'
+
+-- bin/sudo --
+#!/bin/sh
+exit 1

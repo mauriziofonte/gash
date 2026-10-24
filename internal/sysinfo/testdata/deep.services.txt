@@ -1,0 +1,188 @@
+=== SERVICES DEEP ===
+--- Apache2
+--- ports.conf
+Listen 80
+--- mods-enabled
+rewrite
+ssl
+--- vhost: 000-default.conf
+<VirtualHost *:80>
+  ServerName example.com
+</VirtualHost>
+--- Nginx
+--- site: link
+server {
+  listen 80;
+}
+--- site: site
+server {
+  listen 80;
+}
+--- Lighttpd
+server.port = 80
+10-fastcgi.conf
+--- PHP 8.2
+--- pool: www.conf
+[www]
+user = www-data
+pm = dynamic
+--- cli/php.ini (key)
+memory_limit = 128M
+display_errors = Off
+--- modules
+curl,opcache
+--- PHP 8.3
+--- MySQL/MariaDB
+--- 50-server.cnf
+[mysqld]
+bind-address = 127.0.0.1
+--- my.cnf
+[client]
+--- PostgreSQL
+--- version: 16
+port = 5432
+--- pg_hba.conf
+local all all peer
+--- Redis
+bind 127.0.0.1
+--- Postfix
+--- main.cf
+myhostname = mail
+--- master.cf
+smtp inet n - y - - smtpd
+--- Dovecot
+protocols = imap
+--- 10-mail.conf
+mail_location = maildir:~/Maildir
+--- B.conf
+y = 2
+--- b.conf
+x = 1
+--- Exim4
+dc_eximconfig_configtype='internet'
+--- SpamAssassin
+required_score 5.0
+Razor=configured
+--- OpenDKIM
+SOCKET=local:/run/opendkim.sock
+--- TrustedHosts
+127.0.0.1
+localhost
+--- KeyTable
+mail._domainkey.example.com example.com:mail:/etc/opendkim/keys/mail.private
+--- BIND
+--- named.conf.local
+zone "example.com" {
+  type master;
+};
+--- named.conf.options
+options {
+  directory "/var/cache/bind";
+};
+--- Unbound
+server:
+  verbosity: 1
+  port: 53
+--- Avahi
+[server]
+use-ipv4=yes
+--- ProFTPD
+ServerName "ftp"
+TLSEngine on
+--- vsftpd
+listen=YES
+--- Samba
+[global]
+  workgroup = WORKGROUP
+--- OpenMediaVault
+OMV=installed
+config.xml=10 bytes
+--- NFS
+# e
+/srv *(rw)
+[nfsd]
+--- OpenVPN
+--- client.conf
+client
+remote vpn.example.com 1194
+--- mullvad.conf
+x
+--- site.ovpn
+dev tun
+Mullvad=configured
+--- WireGuard
+--- wg0.conf
+[Interface]
+PrivateKey = [REDACTED]
+PrivateKey=[REDACTED]
+Address = 10.0.0.1/24
+  PrivateKey = [REDACTED]
+--- Docker
+{"log-driver":"json-file"}
+Client:
+ Version: 24
+Server:
+ Containers: 3
+--- containerd
+version = 2
+--- NVIDIA Container Runtime
+--- config.toml
+disable-require = false
+--- Collectd
+LoadPlugin cpu
+--- cpu.conf
+<Plugin cpu>
+--- Monit
+--- conf.d/nginx
+check process nginx
+--- conf-available/apache
+check process apache
+--- SNMP
+rocommunity public
+--- sysstat
+ENABLED="true"
+--- smartmontools
+DEVICESCAN
+--- Webmin
+port=10000
+ssl=1
+modules:
+miniserv.conf
+virtual-server
+Virtualmin=installed
+--- Usermin=installed
+--- Chrony
+pool 2.debian.pool.ntp.org iburst
+--- systemd-timesyncd
+NTP=ntp.example.com
+--- Custom systemd units
+--- Custom: custom.service
+[Service]
+EnvironmentFile=-/etc/default/custom
+EnvironmentFile=/etc/missing
+EnvironmentFile=
+ExecStart=/opt/app/bin/app --config /opt/app/app.yaml --other /etc/app.conf
+WorkingDirectory=/opt/app
+WorkingDirectory=
+--- Config: /etc/default/custom
+PORT=8080
+--- Config: /opt/app/app.yaml
+listen: 8080
+--- Config: /etc/app.conf
+x=1
+/opt/app
+--- Custom: backup.timer
+[Timer]
+OnCalendar=daily
+--- Override: /etc/systemd/system/custom.service.d/override.conf
+[Service]
+Restart=always
+--- Running services
+cron.service
+ssh.service
+--- Active timers
+logrotate.service
+--- Listening TCP
+LISTEN 0 128 0.0.0.0:22 0.0.0.0:*
+--- Listening UDP
+LISTEN 0 128 0.0.0.0:22 0.0.0.0:*

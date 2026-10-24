@@ -1,0 +1,79 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:145
+# covers: output_style_render_spec.sh:146
+# covers: output_style_render_spec.sh:147
+# covers: output_style_render_spec.sh:148
+# covers: output_style_render_spec.sh:149
+# covers: output_style_render_spec.sh:150
+#
+# disk_usage rendering (R2-R6). The Go binary execs `df -PTk` (falling back
+# to `df -Pk` when -T is rejected), so the 2.x df mock is reproduced as a
+# PATH stub (dfmock) rather than a shell function. Covers the table, the
+# --no-color table, the BSD no-type fallback (TYPE shown as -), the
+# virtual-only notice, the df-failed error and bad-option.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :145 table - the real-looking table (deterministic via the stub)
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dfmock" bin/df; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage'
+stdout '^  MOUNT +DEVICE +TYPE +SIZE +USED +FREE +USE$'
+stdout '^  / +/dev/sda1 +ext4 +50 GiB '
+stdout '^  /data +/dev/sdb1 +xfs +100 GiB .* 92%$'
+
+# --- :146 no-color - same table, no ESC
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dfmock" bin/df; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage --no-color'
+stdout '^  MOUNT +DEVICE +TYPE '
+! stdout '\x1b'
+
+# --- :147 no-types - df has no -T, the TYPE column shows -
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dfmock" bin/df; export PATH="$HOME/bin:$PATH" MOCK_DF_NO_TYPE=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage'
+stdout '^  / +/dev/disk3s1 +- +'
+
+# --- :148 virtual-only - only virtual filesystems are present
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dfvirtual" bin/df; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage'
+stderr 'No disk-backed filesystems found'
+
+# --- :149 df-failed - df exits non-zero
+! exec bash -c 'mkdir -p bin && printf "#!/bin/sh\nexit 1\n" >bin/df && chmod +x bin/df; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage'
+stderr 'Error: disk_usage: df failed'
+
+# --- :150 bad-option
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; disk_usage --bogus'
+stderr 'Error: disk_usage: unknown option .--bogus.'
+
+# --- R6: plain mode, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; disk_usage --bogus'
+stderr '^Error: disk_usage: unknown option'
+! stderr '\x1b'
+
+-- dfmock --
+#!/usr/bin/env bash
+if [[ " $* " == *" -PTk "* ]]; then
+	[[ -n "${MOCK_DF_NO_TYPE-}" ]] && {
+		echo "df: illegal option -- T" >&2
+		exit 1
+	}
+	cat <<'OUT'
+Filesystem     Type    1024-blocks     Used Available Capacity Mounted on
+/dev/sda1      ext4       52428800 10485760  39845888      21% /
+tmpfs          tmpfs      16777216        0  16777216       0% /run/user/1000
+/dev/sdb1      xfs       104857600 96468992   8388608      92% /data
+C:\            9p        497008636 400000000 97008636     81% /mnt/c
+/dev/sdc1      ext4        1048576   524288    524288      50% /media/my disk
+OUT
+	exit 0
+fi
+cat <<'OUT'
+Filesystem     1024-blocks     Used Available Capacity Mounted on
+/dev/disk3s1     488245288 20000000 400000000       5% /
+devfs                  200      200         0     100% /dev
+OUT
+-- dfvirtual --
+#!/usr/bin/env bash
+cat <<'OUT'
+Filesystem     Type    1024-blocks     Used Available Capacity Mounted on
+tmpfs          tmpfs      16777216        0  16777216       0% /run
+OUT

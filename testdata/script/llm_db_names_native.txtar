@@ -1,0 +1,23 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: DB-07
+# forced-divergence: DB-09
+# ledger: TEST-14
+# covers: llm_db_names_spec.sh:48
+# covers: llm_db_names_spec.sh:65
+#
+# Designed divergence (LEDGER DB-07, DB-09; proof pinned by TEST-14's Go
+# tests in internal/db). 2.x asserted that a mock mysql client received
+# --database=NAME and psql received PGDATABASE (never -d) on argv. 3.0
+# hands the database name straight to the native driver's connection, so
+# no name reaches a client option and no client runs (DB-07, DB-09). The
+# name validation itself (invalid_database_name for -d and .target-database)
+# is unchanged and runs before any connection; these cases show a valid
+# name routed into the native connection (the PostgreSQL error echoes
+# database=NAME) and bad names still refused.
+
+# llm_db_names_spec.sh:48 - valid names route through the native driver, not a client option (never -d on argv)
+exec bash -c 'set -euo pipefail; d="$WORK/dn48"; mkdir -p "$d/empty"; printf ''%s\n'' ''DB:my=mysql://u:secret@127.0.0.1:1/app'' ''DB:pg=pgsql://u:secret@127.0.0.1:1/app'' >"$d/.gash_env"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; myerr="$(PATH="$d/empty" llm_db_query "SELECT 1" -c my -d "other_db-2.x" 2>&1 >/dev/null || true)"; jq -e ''.error == "mysql_error"'' <<<"$myerr" >/dev/null; [[ "$myerr" != *mysql_not_found* ]]; pgerr="$(PATH="$d/empty" llm_db_query "SELECT 1" -c pg -d "other_db" 2>&1 >/dev/null || true)"; jq -e ''.error == "pgsql_error"'' <<<"$pgerr" >/dev/null; [[ "$pgerr" == *database=other_db* ]]; [[ "$(llm_db_tables -c pg 2>&1 >/dev/null || true)" == *database=app* ]]'
+
+# llm_db_names_spec.sh:65 - .target-database is read only when it holds a plain name; -d still wins over a bad file
+exec bash -c 'set -euo pipefail; d="$WORK/dn65"; mkdir -p "$d/empty" "$d/repo"; printf ''%s\n'' ''DB:myn=mysql://u:secret@127.0.0.1:1'' ''DB:pgn=pgsql://u:secret@127.0.0.1:1'' >"$d/.gash_env"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d/repo"; printf ''  shop_db  # comment\n'' >.target-database; myerr="$(PATH="$d/empty" llm_db_query "SELECT 1" -c myn 2>&1 >/dev/null || true)"; jq -e ''.error == "mysql_error"'' <<<"$myerr" >/dev/null; pgerr="$(PATH="$d/empty" llm_db_query "SELECT 1" -c pgn 2>&1 >/dev/null || true)"; [[ "$pgerr" == *database=shop_db* ]]; for bad in "postgresql://attacker.example/x" "--host=attacker.example" "host=evil"; do printf ''%s\n'' "$bad" >.target-database; for conn in myn pgn; do err="$(llm_db_query "SELECT 1" -c "$conn" 2>&1 >/dev/null || true)"; jq -e ''.error == "invalid_database_name" and (.details | startswith(".target-database"))'' <<<"$err" >/dev/null || { echo "accepted for $conn: $bad: $err"; exit 1; }; done; done; printf ''postgresql://attacker.example/x\n'' >.target-database; pgerr="$(PATH="$d/empty" llm_db_query "SELECT 1" -c pgn -d plaindb 2>&1 >/dev/null || true)"; [[ "$pgerr" == *database=plaindb* ]]'

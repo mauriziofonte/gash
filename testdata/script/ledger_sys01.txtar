@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SYS-01
+# covers: none (3.0 fix: process_kill NAME is a name, not a pgrep regex)
+#
+# LEDGER SYS-01: process_kill escapes NAME for `pgrep -ix --`, so `.*` (or
+# `sle.p` next to a running sleep) matches no process instead of every one;
+# headless, the not-found error and status 1, nothing signalled.
+
+env GASH_HEADLESS=1
+! exec bash -c 'source "$GASH_SH"; process_kill ".*"'
+stderr '^Error: No process found with exact name .\.\*.\. Use process_find'
+! stderr 'process\(es\) match'
+
+exec bash victim.sh
+
+-- victim.sh --
+set -uo pipefail
+sleep 300 &
+victim=$!
+trap 'kill "$victim" 2>/dev/null' EXIT
+source "$GASH_SH"
+process_kill "sle.p" 2>err && { echo "matched a pattern"; exit 1; }
+grep -q "No process found with exact name 'sle.p'" err || { cat err; exit 1; }
+kill -0 "$victim" || { echo "victim signalled"; exit 1; }
+exit 0

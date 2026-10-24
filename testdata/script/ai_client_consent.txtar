@@ -1,0 +1,29 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: ai_client_spec.sh:84
+#
+# ai_query sends nothing when consent is refused. With GASH_AI_CONFIRM=1 and
+# no terminal, the confirmation gate (design 6.5) refuses before the shared
+# HTTP client runs, so no request leaves the machine. We prove the
+# short-circuit black-box: the output is the consent refusal (not a
+# transport error), with a provider configured and an HTTPS_PROXY that would
+# have surfaced a different error had any request actually been attempted.
+
+exec bash consent.sh
+
+-- consent.sh --
+export GASH_HEADLESS=1 GASH_AI_CONFIRM=1
+export HTTPS_PROXY=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+B="$GASH_BIN"
+
+printf 'AI:claude=sk-secret-token\n' >"$HOME/.gash_env"
+chmod 600 "$HOME/.gash_env"
+
+out="$("$B" ai_query "how to list files?" </dev/null 2>&1)"; rc=$?
+[[ $rc -ne 0 ]]                            || fail "rc should be non-zero"
+[[ "$out" == *"Not sending"* ]]            || fail "not the consent refusal"
+[[ "$out" == *"no terminal to confirm"* ]] || fail "missing the no-terminal reason"
+# Nothing was sent: the message is the gate's, not the transport's.
+[[ "$out" != *"proxy"* && "$out" != *"connection"* && "$out" != *"timeout"* ]] || fail "a request was attempted"

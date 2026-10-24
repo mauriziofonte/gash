@@ -1,0 +1,46 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: docker_compose_spec.sh:591
+# covers: docker_compose_spec.sh:602
+# covers: docker_compose_spec.sh:620
+# covers: docker_compose_spec.sh:637
+# covers: docker_compose_spec.sh:650
+# covers: docker_compose_spec.sh:672
+#
+# docker_compose_scan through the shim. Scan needs no docker daemon: it
+# finds compose files by name under a depth limit and lists their services
+# (parsed by the YAML subset). The --json shape is asserted byte-faithfully;
+# the alias pack (dcc/dcup2/dcscan) is defined by sourcing the shim.
+
+env GASH_HEADLESS=1
+
+# --- docker_compose_scan.sh:591 - shows help with -h
+exec bash -c 'source "$GASH_SH"; docker_compose_scan -h 2>&1'
+stdout 'docker_compose_scan'
+stdout '--depth'
+stdout '--json'
+
+# --- docker_compose_scan.sh:602 - finds compose files
+exec bash -c 'mkdir -p base/project1 base/project2; printf "services:\n  app:\n    image: nginx\n" >base/project1/docker-compose.yml; printf "services:\n  db:\n    image: postgres\n" >base/project2/compose.yaml; source "$GASH_SH"; docker_compose_scan base --json 2>/dev/null'
+stdout '"total_found":2'
+stdout project1
+stdout project2
+
+# --- docker_compose_scan.sh:620 - respects depth limit
+exec bash -c 'mkdir -p d/level1/level2/level3; printf "services:\n  a:\n    image: nginx\n" >d/level1/docker-compose.yml; printf "services:\n  b:\n    image: nginx\n" >d/level1/level2/level3/docker-compose.yml; source "$GASH_SH"; docker_compose_scan d --depth 2 --json 2>/dev/null'
+stdout '"total_found":1'
+
+# --- docker_compose_scan.sh:637 - handles empty directory
+exec bash -c 'mkdir empty; source "$GASH_SH"; docker_compose_scan empty --json 2>/dev/null'
+stdout '"total_found":0'
+stdout '"compose_files":\[\]'
+
+# --- docker_compose_scan.sh:650 - finds all naming variants
+exec bash -c 'mkdir -p v/p1 v/p2 v/p3 v/p4; printf "services:\n  a:\n    image: nginx\n" >v/p1/docker-compose.yml; printf "services:\n  a:\n    image: nginx\n" >v/p2/docker-compose.yaml; printf "services:\n  a:\n    image: nginx\n" >v/p3/compose.yml; printf "services:\n  a:\n    image: nginx\n" >v/p4/compose.yaml; source "$GASH_SH"; docker_compose_scan v --json 2>/dev/null'
+stdout '"total_found":4'
+
+# --- docker_compose_spec.sh:672 - docker compose aliases are defined
+exec bash -c 'source "$GASH_SH"; alias dcc && alias dcup2 && alias dcscan'
+stdout 'dcc=.docker_compose_check.'
+stdout 'dcup2=.docker_compose_upgrade.'
+stdout 'dcscan=.docker_compose_scan.'

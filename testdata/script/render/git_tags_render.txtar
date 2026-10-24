@@ -1,0 +1,61 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:267
+# covers: output_style_render_spec.sh:268
+# covers: output_style_render_spec.sh:269
+# covers: output_style_render_spec.sh:270
+# covers: output_style_render_spec.sh:271
+# covers: output_style_render_spec.sh:272
+# covers: output_style_render_spec.sh:273
+#
+# git tag functions rendering (R2-R6): git_list_tags (local+remote lists,
+# and the no-remote error), git_add_tag (created/pushed status lines, the
+# already-exists and missing-name errors), git_delete_tag (deleted status,
+# unknown-tag error). The git module runs real git with color.ui false
+# (GIT-10), so the commit identity comes from a per-case global gitconfig;
+# git's own push/delete chatter is child noise, matched loosely.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+env GIT_CONFIG_GLOBAL=$WORK/.gitconfig
+
+# --- :267 git_list_tags:tags - local and remote tags
+exec bash -c 'cd $WORK; git config --global user.name T; git config --global user.email t@e.x; git config --global color.ui false; git config --global init.defaultBranch main; mkdir t1; cd t1; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git tag -a v1.0 -m one && git push -q origin v1.0 2>/dev/null && git tag v1.1; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_list_tags'
+stdout '^Local tags:$'
+stdout '^v1\.0$'
+stdout '^v1\.1$'
+stdout '^Remote tags:$'
+
+# --- :268 git_list_tags:no_remote
+! exec bash -c 'cd $WORK; mkdir t2; cd t2; git init -q x && cd x; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_list_tags'
+stderr 'Error: Remote .origin. is not configured\.'
+
+# --- :269 git_add_tag:created
+# 3.0: GIT-01 fixed: headless, a tag push needs --yes.
+exec bash -c 'cd $WORK; mkdir t3; cd t3; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_add_tag v2.0 "Release two" --yes'
+stderr 'Tag .v2.0. created\.'
+stderr 'Tag .v2.0. pushed to remote\.'
+
+# --- :270 git_add_tag:exists
+! exec bash -c 'cd $WORK; mkdir t4; cd t4; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git tag v2.0; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_add_tag v2.0'
+stderr 'Error: Tag .v2.0. already exists\.'
+
+# --- :271 git_add_tag:missing_name
+! exec bash -c 'cd $WORK; mkdir t5; cd t5; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_add_tag'
+stderr 'Error: Missing tag name\. Usage: git_add_tag'
+
+# --- :272 git_delete_tag:deleted
+# 3.0: GIT-01 fixed: headless, a tag deletion needs --yes.
+exec bash -c 'cd $WORK; mkdir t6; cd t6; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; git tag -a v1 -m one && git push -q origin v1 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_delete_tag v1 --yes'
+stderr 'Local tag .v1. deleted\.'
+stderr 'Remote tag .v1. deleted\.'
+
+# --- :273 git_delete_tag:unknown
+! exec bash -c 'cd $WORK; mkdir t7; cd t7; git init -q --bare r.git && git init -q w && cd w && git remote add origin ../r.git && echo a >f && git add f && git commit -qm init && git push -q -u origin main 2>/dev/null; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; git_delete_tag nope'
+stderr 'Error: Tag .nope. does not exist\.'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'cd $WORK; mkdir t8; cd t8; git init -q x && cd x; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; git_list_tags'
+stderr '^Error: Remote .origin. is not configured'
+! stderr '\x1b'

@@ -1,0 +1,35 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: FS-02
+# ledger: FS-03
+# covers: none (3.0 surface)
+#
+# 3.0: FS-02 and FS-03 fixed. A scanner never walks into /proc, /sys, /dev,
+# /boot or /root: not through a symlink followed with -L, not from / with
+# --allow-root. Nothing below them is read: the entries are skipped before
+# their target is stat'ed, and they are not counted as errors.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir fx/own
+exec bash -c 'printf x > fx/own/f; ln -s /dev fx/devlink'
+[linux] exec bash -c 'ln -s /proc fx/proclink'
+
+exec bash -c 'source "$GASH_SH"; tree_stats -L --json fx'
+stdout '"files_total":1,"dirs_total":2,'
+stdout '"errors":0}$'
+
+exec bash -c 'source "$GASH_SH"; files_largest -L --json --depth 3 fx'
+stdout '"count":1,'
+stdout '"path":"[^"]*/own/f"'
+! stdout '/devlink/'
+! stdout '/proclink/'
+
+# The PATH argument itself is refused with the resolved path.
+! exec bash -c 'source "$GASH_SH"; files_largest --json fx/devlink'
+stderr '^\{"error":"forbidden_path","details":"/dev",'
+
+# From / with --allow-root, the protected trees are pruned at depth 1.
+[linux] exec bash -c 'source "$GASH_SH"; files_largest --allow-root --json --depth 2 -n 100000 /'
+[linux] ! stdout '"path":"/(proc|sys|dev|boot|root)/'

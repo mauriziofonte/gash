@@ -1,0 +1,121 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 self-management proof)
+#
+# docs/port/design/upgrade.md 3.6 and 6: gash update (and gash_upgrade,
+# the same flow) on a 3.x install cloned from a fixture origin, against a
+# file:// release directory of builds of this checkout. A target whose
+# binary does not verify (checksum, wrong version) is refused before the
+# tree moves; a target whose tree fails the smoke test is checked out and
+# then left again, the previous binary in place; a good target pinned by
+# release/SHA256SUMS is installed; gash update --rollback goes back and
+# forth. The working tree stays clean at every step.
+
+[!exec:git] skip 'needs git'
+env GASH_BIN=
+env GASH_RELEASE_URL=file://$WORK/rel
+env GASH_DIR=$HOME/.gash
+
+# The 3.0.0 install; its first headless call fetches the binary.
+gashfixture origin v3.0.0:3x
+gashrelease 3.0.0 rel
+exec git clone -q origin home/.gash
+exec git -C home/.gash -c advice.detachedHead=false checkout -q v3.0.0
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; gash version --json'
+stdout '"version":"3.0.0"'
+exists home/.local/share/gash/versions/3.0.0/gash
+
+# Nothing recorded yet: no rollback.
+! exec gash update --rollback
+stderr '^Error: No previous version of .*/home/.gash to return to'
+
+# A checksum mismatch: refused, nothing changed.
+gashfixture origin v3.0.1:3x
+gashrelease 3.0.1 rel
+exec sh -c 'for f in rel/gash_3.0.1_*.tar.gz; do echo x >>"$f"; done'
+! exec gash update
+stderr '^Error: Could not install the gash binary of v3.0.1 \(checksum mismatch for gash_3\.0\.1_[a-z]+_[a-z0-9]+\.tar\.gz\); nothing was changed\.$'
+! stderr 'Upgraded'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.0$'
+exec git -C home/.gash status --porcelain
+! stdout .
+! exists home/.local/share/gash/versions/3.0.1/gash
+
+# A binary that answers another version: refused and removed.
+gashrelease -stamp 3.0.9 3.0.1 rel
+! exec gash update
+stderr 'the downloaded binary is version 3\.0\.9, not 3\.0\.1\); nothing was changed\.$'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.0$'
+! exists home/.local/share/gash/versions/3.0.1/gash
+
+# A tree that prints while loading headless: checked out, smoke-tested,
+# checked out back; gash_upgrade through the installed shim runs the flow.
+exec sh -c 'cd origin && echo 3.0.2 >VERSION && { echo "echo broken >&2"; cat gash.sh; } >g && mv g gash.sh && git commit -qam broken && git tag -a v3.0.2 -m v3.0.2'
+gashrelease 3.0.2 rel
+! exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; gash_upgrade'
+stderr '^OK: Installed gash 3\.0\.2 for [a-z]+/[a-z0-9]+ \(verified against checksums\.txt\)\.$'
+stderr '^Error: v3\.0\.2 failed its smoke test \(the headless load printed output\)\.$'
+stderr '^Info: Went back to v3\.0\.0; nothing else was changed\.$'
+! stderr 'Upgraded'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.0$'
+exec git -C home/.gash status --porcelain
+! stdout .
+exists home/.local/share/gash/versions/3.0.0/gash
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; echo "v=$GASH_VERSION"; gash version --json'
+stdout '^v=3\.0\.0$'
+stdout '"version":"3\.0\.0"'
+
+# A good release whose tree pins the binary (release/SHA256SUMS).
+gashfixture origin v3.0.3:3x
+gashrelease -pin origin/release/SHA256SUMS 3.0.3 rel
+exec sh -c 'cd origin && git add -A && git commit -qm pin && git tag -f -a v3.0.3 -m v3.0.3 >/dev/null'
+exec gash update
+stderr '^Info: Checking for a new release in .*/home/.gash\.\.\.$'
+stderr '^OK: Installed gash 3\.0\.3 for [a-z]+/[a-z0-9]+ \(verified against release/SHA256SUMS\)\.$'
+stderr '^OK: Upgraded Gash from v3\.0\.0 to v3\.0\.3\.$'
+stderr '^Info: Open a new terminal'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.3$'
+exec git -C home/.gash status --porcelain
+! stdout .
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; echo "v=$GASH_VERSION"; gash version --json'
+stdout '^v=3\.0\.3$'
+stdout '"version":"3\.0\.3"'
+# Two versions are kept.
+exists home/.local/share/gash/versions/3.0.0/gash
+exists home/.local/share/gash/versions/3.0.3/gash
+! exists home/.local/share/gash/versions/3.0.2
+
+exec gash update
+stderr 'already up-to-date \(v3\.0\.3'
+
+# Back to the previous version, and forth again.
+exec gash update --rollback
+stderr '^OK: Rolled back Gash from v3\.0\.3 to v3\.0\.0\.$'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.0$'
+exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; echo "v=$GASH_VERSION"; gash version --json'
+stdout '^v=3\.0\.0$'
+stdout '"version":"3\.0\.0"'
+exec gash update --rollback
+stderr '^OK: Rolled back Gash from v3\.0\.0 to v3\.0\.3\.$'
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.3$'
+exec git -C home/.gash status --porcelain
+! stdout .
+
+-- home/.gitconfig --
+[user]
+	name = t
+	email = t@t
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false
+[commit]
+	gpgsign = false
+[tag]
+	gpgsign = false

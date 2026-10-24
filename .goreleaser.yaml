@@ -1,0 +1,73 @@
+# Gash 3.0 release build. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# The archive and checksum names match what the compat bootstrap fetches
+# (lib/compat/bootstrap.sh __gash_fetch): for a tag v<VERSION> it downloads
+# gash_<VERSION>_<os>_<arch>.tar.gz and checksums.txt, then extracts the
+# `gash` (and `gash-hosts-helper`) binary from the archive root.
+version: 2
+
+project_name: gash
+
+before:
+  hooks:
+    - go mod download
+    # A release tag must match VERSION (D-3: the tree pins its binaries).
+    - go run ./internal/tools/releasesums -check-version {{ .Version }} -snapshot={{ .IsSnapshot }}
+
+builds:
+  - id: gash
+    main: ./cmd/gash
+    binary: gash
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    # Reproducible, as internal/tools/releasesums builds it: the binary a
+    # release ships must match the hash release/SHA256SUMS pins in the tag.
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w -X github.com/mauriziofonte/gash/internal/buildinfo.Version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        # The hook inherits the target's GOOS/GOARCH: the tool itself is
+        # built for the runner.
+        - env -u GOOS -u GOARCH -u GOAMD64 -u GOARM64 go run ./internal/tools/releasesums -verify {{ .Path }} -platform {{ .Os }}_{{ .Arch }} -snapshot={{ .IsSnapshot }}
+
+  - id: gash-hosts-helper
+    main: ./cmd/gash-hosts-helper
+    binary: gash-hosts-helper
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        # The helper is pinned too: gash hte install makes it a root-owned
+        # sudo target.
+        - env -u GOOS -u GOARCH -u GOAMD64 -u GOARM64 go run ./internal/tools/releasesums -verify {{ .Path }} -platform {{ .Os }}_{{ .Arch }} -snapshot={{ .IsSnapshot }}
+
+archives:
+  - id: default
+    ids: [gash, gash-hosts-helper]
+    name_template: "gash_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+release:
+  draft: false
+  prerelease: auto

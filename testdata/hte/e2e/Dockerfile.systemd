@@ -1,0 +1,19 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# The E2E image with systemd as PID 1 (run.sh debian|ubuntu,
+# GASH_HTE_E2E_SYSTEMD=1): the base image plus systemd, logind and the user
+# D-Bus. The units that touch the kernel or devices are masked: the
+# container shares the VM's kernel and runs --privileged, and nothing may
+# change it (kernel settings and modules, binfmt_misc, udev, device nodes,
+# kernel filesystems, the clock).
+ARG BASE=gash-hte-e2e-base:ubuntu-24.04
+FROM ${BASE}
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv dbus dbus-user-session && rm -rf /var/lib/apt/lists/* \
+    && systemctl mask systemd-sysctl.service systemd-udevd.service systemd-udev-trigger.service systemd-modules-load.service \
+        systemd-remount-fs.service systemd-firstboot.service systemd-timesyncd.service getty.target console-getty.service \
+        systemd-binfmt.service proc-sys-fs-binfmt_misc.automount proc-sys-fs-binfmt_misc.mount kmod-static-nodes.service \
+        systemd-random-seed.service sys-kernel-debug.mount sys-kernel-tracing.mount sys-kernel-config.mount \
+        sys-fs-fuse-connections.mount dev-hugepages.mount
+ENV container=docker
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

@@ -1,0 +1,335 @@
+# bash-only tests: the INTERNAL 2.x specs replaced by a Go unit test (Plan `unit`).
+# Generated from docs/port/archive/PARITY.md by internal/tools/bashonlymap; do not edit by hand.
+# spec	line	test name	replacement
+ai_client_spec.sh	8	secrets are redacted before sending	ai.Redact
+ai_client_spec.sh	34	redaction keeps ordinary words after password/token/secret	ai.Redact negative vectors (password/token/secret followed by prose)
+ai_client_spec.sh	47	the request body and API key never appear in curl argv	request built off-argv
+ai_client_spec.sh	65	consent: auto asks only for collected data, refuses without a terminal	ai.Confirm (GASH_AI_CONFIRM=0, 4 KB threshold, refuses without TTY)
+ai_client_spec.sh	102	terminal escapes in a reply are stripped	ai.Sanitize
+ai_client_spec.sh	119	a 529 overload is retried after Retry-After	retry with Retry-After
+ai_client_spec.sh	136	a refusal stop_reason is reported, not parsed	refusal -> 'declined' message, not parsed
+ai_client_spec.sh	149	GASH_AI_MODEL_CLAUDE overrides the model sent	model override reaches request body
+ai_client_spec.sh	165	Claude 5 models get effort low, older ones no effort field	claude-haiku-5-5 gets output_config.effort=low + json_schema
+ai_spec.sh	7	parses AI:claude=TOKEN from config	internal/ai, internal/config
+ai_spec.sh	30	parses AI:gemini=TOKEN from config	internal/ai, internal/config
+ai_spec.sh	53	rejects unknown AI provider	internal/ai, internal/config
+ai_spec.sh	82	parses multiple AI providers	internal/ai, internal/config
+ai_spec.sh	111	__gash_get_ai_token returns token for valid provider	config.Load AI:<provider>=TOKEN entries, unknown provider rejected, order kept
+ai_spec.sh	134	__gash_get_ai_token returns empty for unknown provider	config.Load AI:<provider>=TOKEN entries, unknown provider rejected, order kept
+ai_spec.sh	162	__gash_get_first_ai_provider returns first configured	config.Load AI:<provider>=TOKEN entries, unknown provider rejected, order kept
+ai_spec.sh	199	__gash_json_escape escapes quotes correctly	moot in Go (encoding/json)
+ai_spec.sh	211	__gash_json_escape escapes newlines	moot in Go (encoding/json)
+ai_spec.sh	225	__gash_json_escape escapes backslashes	moot in Go (encoding/json)
+ai_spec.sh	237	__ai_gather_context returns valid JSON with 7 fields	ai.Context (7 fields incl. cwd)
+ai_spec.sh	259	__ai_gather_context includes current directory	ai.Context (7 fields incl. cwd)
+ai_spec.sh	275	__ai_require_jq fails when jq missing	dependency gate
+ai_spec.sh	294	__ai_require_curl fails when curl missing	dependency gate
+ai_spec.sh	315	__ai_call_claude builds request and returns structured JSON with type	request/response shape per provider ('type' field)
+ai_spec.sh	335	__ai_call_gemini builds request and returns structured JSON with type	request/response shape per provider ('type' field)
+ai_spec.sh	355	__ai_call_claude handles API error	HTTP error mapping
+ai_spec.sh	504	__ai_format_response type=command shows Command and Explanation	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	521	__ai_format_response prints model text verbatim: no \n or \c expansion	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	546	__ai_format_response type=explanation shows only Explanation	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	564	__ai_format_response type=fallback shows direct text (no labels)	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	583	__ai_format_response type=troubleshoot shows Issue and Suggestion	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	600	__ai_format_response type=code shows description and code block	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	616	__ai_format_response handles missing type (defaults to fallback)	render of response types command/explanation/fallback/troubleshoot/code
+ai_spec.sh	652	__ai_handle_curl_error returns 0 on success (HTTP 200, no curl error)	curl exit 28 / HTTP 401 mapping
+ai_spec.sh	665	__ai_handle_curl_error returns 1 on curl exit code 28 (timeout)	curl exit 28 / HTTP 401 mapping
+ai_spec.sh	682	__ai_handle_curl_error returns 1 on HTTP 401	curl exit 28 / HTTP 401 mapping
+chrome_spec.sh	101	maps missing libraries to packages, without t64 where apt lacks it	chrome.LibToPkg (t64 suffix only where apt has it)
+color_gating_spec.sh	34	__gash_color_env_ok returns 1 when GASH_HEADLESS=1	render.ColorEnabled (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR, TTY)
+color_gating_spec.sh	47	__gash_color_env_ok returns 1 when NO_COLOR is set	render.ColorEnabled (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR, TTY)
+color_gating_spec.sh	57	__gash_color_env_ok returns 1 when GASH_NO_COLOR is set	render.ColorEnabled (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR, TTY)
+color_gating_spec.sh	67	__gash_use_color returns 1 on non-TTY stdout	render.ColorEnabled (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR, TTY)
+color_gating_spec.sh	77	__gash_color_scope emits local-shadow block when colors disabled	render.ColorEnabled (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR, TTY)
+color_gating_spec.sh	89	__gash_color_scope emits nothing when colors enabled	render.ColorEnabled (GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR, TTY)
+color_gating_spec.sh	107	GASH_HEADLESS=1 produces no ANSI in __gash_error	render status lines plain when gated
+color_gating_spec.sh	118	NO_COLOR=1 produces no ANSI in __gash_info	render status lines plain when gated
+color_gating_spec.sh	129	GASH_NO_COLOR=1 produces no ANSI in __gash_warning	render status lines plain when gated
+color_gating_spec.sh	140	GASH_HEADLESS=1 zeroes color vars at load time	render status lines plain when gated
+color_gating_spec.sh	156	pipe context (non-TTY stdout) produces no ANSI in __gash_info	render status lines plain when gated
+color_gating_spec.sh	166	pipe context produces no ANSI in __gash_error (stderr uniform rule)	render status lines plain when gated
+color_gating_spec.sh	304	GASH_NO_COLOR=0 keeps colors on; NO_COLOR=0 still turns them off	GASH_NO_COLOR=0 keeps colour, NO_COLOR=0 disables (any value)
+config_spec.sh	7	__gash_url_decode decodes simple %XX sequences	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	17	__gash_url_decode decodes @ symbol (%40)	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	27	__gash_url_decode decodes colon (%3A)	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	37	__gash_url_decode handles multiple encoded chars	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	47	__gash_url_decode leaves plain text unchanged	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	57	__gash_url_encode encodes @ symbol	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	67	__gash_url_encode leaves alphanumeric unchanged	config.URLDecode/Encode (%XX, @, :, plain text)
+config_spec.sh	79	__gash_parse_db_url parses mysql URL	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	100	__gash_parse_db_url parses pgsql URL	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	120	__gash_parse_db_url parses mariadb URL	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	140	__gash_parse_db_url handles URL-encoded password	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	160	__gash_parse_db_url handles URL without database	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	179	__gash_parse_db_url defaults mysql port to 3306	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	193	__gash_parse_db_url defaults pgsql port to 5432	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	209	__gash_load_env handles missing file gracefully	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	228	__gash_load_env parses SSH entries	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	258	__gash_load_env parses DB entries	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	287	__gash_get_db_url returns error for missing connection	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	315	__gash_load_env skips comments and empty lines	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	345	__gash_load_env trims whitespace	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	368	__gash_reload_env clears and reloads cache	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	405	__gash_load_env skips SSH keys for non-existent files	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	430	__gash_load_env skips invalid DB URL formats	config.Load (SSH/DB entries, comments, trim, missing key files skipped, invalid URL skipped)
+config_spec.sh	552	__gash_parse_db_url handles @ in password (URL-encoded)	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+config_spec.sh	574	__gash_parse_db_url handles raw @ in password (split on last @)	config.ParseDBURL (split on last @, default ports 3306/5432, encoded password stays encoded)
+core_output_spec.sh	7	defines color variables	palette constants (internal/render)
+core_output_spec.sh	19	__gash_info prints cyan Info prefix	internal/render golden tests
+core_output_spec.sh	29	__gash_error prints red Error prefix to stderr	internal/render golden tests
+core_output_spec.sh	39	__gash_success prints green OK prefix	internal/render golden tests
+core_output_spec.sh	49	__gash_warning prints yellow Warning prefix	internal/render golden tests
+core_output_spec.sh	59	__gash_ssh prints SSH prefix with color variants	internal/render golden tests
+core_output_spec.sh	75	__gash_step prints step indicator	internal/render golden tests
+core_output_spec.sh	85	__gash_debug prints only when GASH_DEBUG=1	internal/render golden tests
+core_output_spec.sh	101	__gash_print outputs colored text without prefix	internal/render golden tests
+core_output_spec.sh	110	all output functions handle empty messages	internal/render golden tests
+core_output_spec.sh	126	__gash_color_of maps semantic names to the palette	internal/render golden tests
+core_output_spec.sh	137	__gash_table: an all-empty column is a spacer, also under set -u	internal/render golden tests
+core_output_spec.sh	144	__gash_table_into: lines into an array, styled by the caller's color decision	internal/render golden tests
+core_output_spec.sh	156	__gash_table: --gap and --min reproduce a fixed-width layout	internal/render golden tests
+core_output_spec.sh	164	__gash_table: --cell-color styles a column per row and hides the style column	internal/render golden tests
+core_output_spec.sh	177	__gash_table: --bar draws VALUE/MAX, full part in the cell style, empty part muted	internal/render golden tests
+core_output_spec.sh	188	__gash_table --bar: a cell that is not VALUE/MAX prints as text (a header row given as data)	internal/render golden tests
+core_output_spec.sh	196	__gash_table: --max cuts the end, --max-left keeps it	internal/render golden tests
+core_output_spec.sh	203	__gash_table: --fit N shrinks a middle column to the terminal width	internal/render golden tests
+core_output_spec.sh	212	__gash_kv: padded bold keys, optional value style, separator and width	internal/render golden tests
+core_output_spec.sh	226	__gash_heading: bold title on a color terminal, plain text otherwise	internal/render golden tests
+core_output_spec.sh	234	__gash_tty_io: true only when stdin and stdout are terminals	
+core_output_spec.sh	244	__gash_heading --note: secondary text after the title, muted in color	internal/render golden tests
+core_output_spec.sh	253	__gash_usage, __gash_note and __gash_debug keep their plain prefixes and get a glyph in color	internal/render golden tests
+core_output_spec.sh	266	__gash_ask_render: QUESTION [ANSWERS] on stderr, answers bold in color, question verbatim	internal/render golden tests
+core_output_spec.sh	275	__gash_read_line reads a line and prompts only on a terminal	internal/render golden tests
+core_output_spec.sh	282	__gash_clear_screen prints nothing when stdout is not a terminal, with NO_COLOR or headless	internal/render golden tests
+core_output_spec.sh	294	__gash_color_chart: 256 names, colored only on a color terminal; __gash_sgr_extra lists its swatches	internal/render golden tests
+core_output_spec.sh	305	spinner and progress print no escape sequence when stdout is not a terminal	
+core_output_spec.sh	318	__gash_list: bulleted items, bullet colored on a color terminal	internal/render golden tests
+core_output_spec.sh	326	__gash_mark: glyph in the status color on a terminal, word prefix otherwise	internal/render golden tests
+core_output_spec.sh	337	__gash_hint: muted Hint line on stderr	internal/render golden tests
+core_utils_spec.sh	7	needs_help prints usage on -h	help.Needs (-h/--help)
+core_utils_spec.sh	21	needs_help prints usage on --help	help.Needs (-h/--help)
+core_utils_spec.sh	33	needs_help returns 1 for non-help args	help.Needs (-h/--help)
+core_utils_spec.sh	46	needs_help returns 1 for empty arg	help.Needs (-h/--help)
+core_utils_spec.sh	59	__gash_tty_width returns a number	internal/render / internal/util
+core_utils_spec.sh	69	__gash_tty_width defaults to 80 when no terminal	internal/render / internal/util
+core_utils_spec.sh	82	__gash_trim_ws trims leading and trailing whitespace	internal/render / internal/util
+core_utils_spec.sh	91	__gash_trim_ws trims tabs	internal/render / internal/util
+core_utils_spec.sh	100	__gash_trim_ws handles empty string	internal/render / internal/util
+core_utils_spec.sh	109	__gash_trim_ws handles whitespace-only string	internal/render / internal/util
+core_utils_spec.sh	118	__gash_expand_tilde_path expands ~/path	internal/render / internal/util
+core_utils_spec.sh	127	__gash_expand_tilde_path expands bare ~	internal/render / internal/util
+core_utils_spec.sh	136	__gash_expand_tilde_path leaves absolute paths unchanged	internal/render / internal/util
+core_utils_spec.sh	145	__gash_expand_tilde_path leaves relative paths unchanged	internal/render / internal/util
+core_utils_spec.sh	170	needs_confirm_prompt and __gash_confirm_plan render the same way, with their own defaults	
+core_utils_spec.sh	200	needs_help fallback uses the semantic palette only	help.Needs (-h/--help)
+core_utils_spec.sh	209	__gash_task: glyph and colored status on a color terminal, plain text otherwise	internal/render / internal/util
+core_utils_spec.sh	219	__gash_json_warning prints one JSON warning line on stderr	{"warning":"partial_results","skipped_entries":3,"hint":...} on stderr
+core_validation_spec.sh	7	__gash_require_command succeeds for existing command	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	16	__gash_require_command fails for missing command	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	31	__gash_require_command uses custom error message	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	46	__gash_require_file succeeds for existing file	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	58	__gash_require_file fails for missing file	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	73	__gash_require_dir succeeds for existing directory	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	85	__gash_require_dir fails for missing directory	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	100	__gash_require_git_repo fails outside git repo	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	119	__gash_require_git_repo succeeds inside git repo	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	133	__gash_require_git_remote fails when remote missing	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	153	__gash_require_arg fails for empty value	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	169	__gash_require_arg succeeds for non-empty value	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	178	__gash_require_docker checks docker command	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	197	__gash_require_binary succeeds for existing binary	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	206	__gash_require_binary fails for missing binary	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	221	__gash_require_binary ignores aliases and functions	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	239	__gash_require_readable succeeds for readable file	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	252	__gash_require_readable fails for missing file	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	267	__gash_require_git_repo_with_remote fails outside git repo	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	286	__gash_require_git_repo_with_remote fails when remote missing	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+core_validation_spec.sh	306	__gash_require_git_repo_with_remote succeeds with repo and remote	require.* messages ('not installed'/'not in PATH', 'does not exist', 'not readable', 'git repository', 'origin ... not configured')
+docker_compose_spec.sh	11	__gash_parse_compose_services extracts services correctly	compose.ParseServices (YAML subset, quoted images, build-only
+docker_compose_spec.sh	41	__gash_parse_compose_services handles quoted images	compose.ParseServices (YAML subset, quoted images, build-only
+docker_compose_spec.sh	62	__gash_parse_compose_services reads any indentation without Compose v2	compose.ParseServices (YAML subset, quoted images, build-only
+docker_compose_spec.sh	78	__gash_parse_compose_services prefers docker compose config --format json	compose.ParseServices (YAML subset, quoted images, build-only
+docker_compose_spec.sh	91	__gash_parse_compose_services handles services without image (build)	compose.ParseServices (YAML subset, quoted images, build-only
+docker_compose_spec.sh	115	__gash_resolve_env_vars expands variables from .env	compose.ResolveEnv (.env, ${VAR:-default}, quotes)
+docker_compose_spec.sh	130	__gash_resolve_env_vars uses defaults when var not set	compose.ResolveEnv (.env, ${VAR:-default}, quotes)
+docker_compose_spec.sh	146	__gash_resolve_env_vars handles quoted values in .env	compose.ResolveEnv (.env, ${VAR:-default}, quotes)
+docker_compose_spec.sh	167	__gash_normalize_image handles official Docker Hub images	image.Normalize -> 'docker.io\
+docker_compose_spec.sh	182	__gash_normalize_image handles namespaced Docker Hub images	image.Normalize -> 'docker.io\
+docker_compose_spec.sh	194	__gash_normalize_image handles GHCR images	image.Normalize -> 'docker.io\
+docker_compose_spec.sh	203	__gash_normalize_image handles digest-pinned images	image.Normalize -> 'docker.io\
+docker_compose_spec.sh	212	__gash_normalize_image handles custom registries	image.Normalize -> 'docker.io\
+docker_compose_spec.sh	228	__gash_is_upgradeable returns true for mutable tags	image.IsUpgradeable (mutable/partial/pinned/suffix tags)
+docker_compose_spec.sh	240	__gash_is_upgradeable returns true for partial versions	image.IsUpgradeable (mutable/partial/pinned/suffix tags)
+docker_compose_spec.sh	250	__gash_is_upgradeable returns false for pinned versions	image.IsUpgradeable (mutable/partial/pinned/suffix tags)
+docker_compose_spec.sh	261	__gash_is_upgradeable handles tags with suffixes	image.IsUpgradeable (mutable/partial/pinned/suffix tags)
+docker_compose_spec.sh	276	__gash_compose_cmd detects docker compose v2	compose CLI detection v2 vs v1 (exec)
+docker_compose_spec.sh	287	__gash_compose_cmd falls back to docker-compose v1	compose CLI detection v2 vs v1 (exec)
+docker_compose_spec.sh	315	__gash_require_compose fails without docker	compose CLI detection v2 vs v1 (exec)
+docker_compose_spec.sh	713	handles compose file with syntax edge cases	compose.ParseServices (YAML subset, quoted images, build-only
+docker_compose_spec.sh	746	handles missing .env file gracefully	compose.ResolveEnv (.env, ${VAR:-default}, quotes)
+docker_compose_spec.sh	785	__gash_registry_curl returns 0 on HTTP 200	registry client status mapping (200/401/429/timeout/500 -> error codes)
+docker_compose_spec.sh	799	__gash_registry_curl returns 1 + unauthorized on HTTP 401	registry client status mapping (200/401/429/timeout/500 -> error codes)
+docker_compose_spec.sh	817	__gash_registry_curl returns 1 + rate_limited on HTTP 429	registry client status mapping (200/401/429/timeout/500 -> error codes)
+docker_compose_spec.sh	834	__gash_registry_curl returns 1 + timeout on curl exit 28	registry client status mapping (200/401/429/timeout/500 -> error codes)
+docker_compose_spec.sh	851	__gash_registry_curl returns 1 + server_error on HTTP 500	registry client status mapping (200/401/429/timeout/500 -> error codes)
+docker_compose_spec.sh	872	__gash_dockerhub_token returns token on success	token endpoints (auth.docker.io, ghcr.io, GITHUB_TOKEN)
+docker_compose_spec.sh	883	__gash_dockerhub_token returns 1 on auth failure	token endpoints (auth.docker.io, ghcr.io, GITHUB_TOKEN)
+docker_compose_spec.sh	900	__gash_ghcr_token returns token on success	token endpoints (auth.docker.io, ghcr.io, GITHUB_TOKEN)
+docker_compose_spec.sh	911	__gash_ghcr_token uses GITHUB_TOKEN when available	token endpoints (auth.docker.io, ghcr.io, GITHUB_TOKEN)
+docker_compose_spec.sh	922	__gash_ghcr_token returns 1 on auth failure	token endpoints (auth.docker.io, ghcr.io, GITHUB_TOKEN)
+docker_compose_spec.sh	943	__gash_get_remote_digest succeeds for Docker Hub	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	955	__gash_get_remote_digest asks for multi-arch indexes on every registry	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	971	__gash_get_remote_digest succeeds for GHCR	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	983	__gash_get_remote_digest returns 1 on auth failure	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	1000	__gash_get_remote_digest returns 1 on rate limit	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	1017	__gash_get_remote_digest handles digest-pinned images	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	1027	__gash_get_remote_digest sets __gash_remote_digest variable	manifest HEAD with manifest.list.v2+json and oci.image.index.v1+json Accept headers
+docker_compose_spec.sh	1123	__gash_normalize_image handles localhost registry	image.Normalize -> 'docker.io\
+error_contract_spec.sh	8	__gash_json_error emits the documented shape and derives recoverable	errjson shape {error,message,action,recoverable,details}
+files_spec.sh	19	parse_size: plain integer is bytes	fs.ParseSize (bytes, K/M/G/T IEC, 2GiB, invalid -> error)
+files_spec.sh	27	parse_size: K/M/G/T IEC suffix	fs.ParseSize (bytes, K/M/G/T IEC, 2GiB, invalid -> error)
+files_spec.sh	37	parse_size: invalid input returns 1	fs.ParseSize (bytes, K/M/G/T IEC, 2GiB, invalid -> error)
+files_spec.sh	52	human_size: zero bytes	fs.HumanSize ('0 B', '1.0 KiB', '1.5 MiB')
+files_spec.sh	59	human_size: IEC scaling with one decimal	fs.HumanSize ('0 B', '1.0 KiB', '1.5 MiB')
+fs_render_spec.sh	76	__gash_group_digits and __gash_bar	render.GroupDigits / render.Bar
+functions_smoke_spec.sh	25	needs_help prints usage on -h	
+functions_smoke_spec.sh	34	__gash_trim_ws trims tabs/spaces	
+gash_card_spec.sh	66	__gash_box keeps its border aligned with colored and over-wide lines	render.Box / render.Table --fit
+gash_card_spec.sh	79	__gash_table --fit truncates the last column and --color skips the header	render.Box / render.Table --fit
+headless_contract_spec.sh	219	__gash_url_decode survives errexit and keeps newlines (A6/M9)	config.URLDecode keeps newlines
+headless_contract_spec.sh	225	__gash_url_encode is UTF-8 byte-wise (M6)	config.URLDecode keeps newlines
+headless_contract_spec.sh	235	config warnings never contaminate captured DB URLs (C12)	warnings go to stderr, never into captured DB URL
+headless_contract_spec.sh	247	needs_confirm_prompt refuses in headless mode, no ghost confirm (C13)	confirm refuses headless
+headless_spec.sh	5	loads core functions in headless mode	checks type __gash_info/__gash_error/__gash_success
+help_spec.sh	7	__gash_register_help stores help text	help.Register (text, short, aliases, module, see-also, empty name rejected)
+help_spec.sh	15	__gash_register_help stores short description	help.Register (text, short, aliases, module, see-also, empty name rejected)
+help_spec.sh	23	__gash_register_help stores aliases	help.Register (text, short, aliases, module, see-also, empty name rejected)
+help_spec.sh	31	__gash_register_help stores module	help.Register (text, short, aliases, module, see-also, empty name rejected)
+help_spec.sh	39	__gash_register_help stores see-also	help.Register (text, short, aliases, module, see-also, empty name rejected)
+help_spec.sh	47	__gash_register_help rejects empty func name	help.Register (text, short, aliases, module, see-also, empty name rejected)
+help_spec.sh	59	help registry is populated with >40 entries after full load	registry size > 40 (85 today)
+llm_db_names_spec.sh	92	MySQL TSV escapes decode left to right (an escaped backslash before 0)	db.MySQLTSVToJSON (escapes decoded left to right)
+llm_db_security_spec.sh	9	the SQL guard refuses client commands, comment tricks and second statements	sql.Guard verdict table (client commands, comment tricks, second statements
+llm_db_security_spec.sh	37	the SQL guard accepts ordinary read queries	sql.Guard verdict table (client commands, comment tricks, second statements
+llm_exec_security_spec.sh	161	__llm_is_secret_file covers keys, credentials, secret dirs and symlinks	llm/guard secret-file and path tables
+llm_exec_security_spec.sh	201	__llm_validate_path blocks whole system trees, not look-alike names	llm/guard secret-file and path tables
+llm_portability_spec.sh	48	path guards resolve symlinks without realpath -m (BSD, older macOS)	guard symlink resolution (filepath.EvalSymlinks)
+llm_spec.sh	14	__llm_validate_command blocks rm -rf /	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	30	__llm_validate_command blocks dd if=	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	46	__llm_validate_command blocks fork bomb	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	62	__llm_validate_command allows safe commands	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	74	__llm_validate_path blocks path traversal	llm/guard path traversal/forbidden
+llm_spec.sh	90	__llm_validate_path blocks forbidden paths	llm/guard path traversal/forbidden
+llm_spec.sh	106	__llm_validate_path allows safe paths	llm/guard path traversal/forbidden
+llm_spec.sh	120	__llm_is_secret_file detects .env files	llm/guard secret files (.env)
+llm_spec.sh	132	__llm_is_secret_file allows regular files	llm/guard secret files (.env)
+llm_spec.sh	565	__llm_validate_command blocks rm -rf / with extra spaces	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	581	__llm_validate_command blocks rm -rf / with tabs	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	598	__llm_validate_command blocks rm -rf / with leading/trailing spaces	llm/guard command denylist (rm -rf / with spaces/tabs, dd if=, fork bomb)
+llm_spec.sh	854	__llm_clean_error_msg collapses whitespace and escapes quotes	db error cleaning (whitespace, quotes, MySQL password warning)
+llm_spec.sh	865	__llm_clean_error_msg with --mysql filters password warning	db error cleaning (whitespace, quotes, MySQL password warning)
+llm_spec.sh	879	__llm_clean_error_msg handles empty input	db error cleaning (whitespace, quotes, MySQL password warning)
+llm_spec.sh	894	__llm_resolve_db returns error for missing connection	db resolve -> no_db_config
+migrate_spec.sh	137	__gash_choose reads a number, takes the default, and gives up on bad input	tui.Choose (numbers, default, bad input
+migrate_spec.sh	150	__gash_choose follows arrow keys, j/k and digits on a terminal	tui.Choose (numbers, default, bad input
+migrate_spec.sh	160	a missing SSH key is not a line to comment out	migrate env problems
+migrate_spec.sh	167	the inventory helpers succeed when they find nothing (set -e callers)	migrate inventory helpers return 0 on empty
+node_upgrade_spec.sh	125	resolves lts/<name> through nvm alias files, also new codenames	node.ParseVersionToMajor via alias files
+remote_spec.sh	11	classifies DENY paths correctly	remote safety tables DENY/ASK/ALLOW + delete safety
+remote_spec.sh	25	demotes /etc/systemd, /etc/crontab, /etc/init.d to ASK (not DENY)	remote safety tables DENY/ASK/ALLOW + delete safety
+remote_spec.sh	36	classifies ALLOW paths correctly	remote safety tables DENY/ASK/ALLOW + delete safety
+remote_spec.sh	48	normalizes paths before classifying: no slash or dot tricks, ~/.ssh asks	remote safety tables DENY/ASK/ALLOW + delete safety
+remote_spec.sh	69	resolve_target accepts a raw user@host interactively	remote.ResolveTarget (raw user@host refused headless, alias accepted)
+remote_spec.sh	79	resolve_target refuses a raw user@host under GASH_HEADLESS=1	remote.ResolveTarget (raw user@host refused headless, alias accepted)
+remote_spec.sh	91	resolve_target accepts a registered alias under GASH_HEADLESS=1	remote.ResolveTarget (raw user@host refused headless, alias accepted)
+remote_spec.sh	165	rsync --delete never treats the remote home itself as safe, however it is written	remote safety tables DENY/ASK/ALLOW + delete safety
+remote_spec.sh	183	another user's home is spelled out before the safety tables	remote safety tables DENY/ASK/ALLOW + delete safety
+settings_spec.sh	8	settings are parsed with quotes stripped and read back	internal/config settings parser
+settings_spec.sh	29	a variable already set in the environment wins over the file	internal/config settings parser
+settings_spec.sh	46	unknown settings and malformed lines warn with a line number, never any content	warnings 'Line N of FILE:' with ~ for HOME, never content
+settings_spec.sh	74	an inline # comment after a value is not part of the value	internal/config settings parser
+settings_spec.sh	106	the permission check warns only when group or other bits are set	config.CheckPerms warns on 640/604/660/644/710, not 600/400/700/500
+settings_spec.sh	236	every setting documented in .gash_env.template is accepted by the parser	every .gash_env.template setting in the known-settings table
+ssh_auto_unlock_spec.sh	10	parses ~/.gash_env SSH entries tolerantly	config SSH entries
+ssh_auto_unlock_spec.sh	178	reuses the agent on the fixed socket instead of starting another	agent socket XDG_RUNTIME_DIR/gash-ssh-agent.sock (python socket fixture)
+sysinfo_spec.sh	11	__sysinfo_section outputs === TITLE === in LLM mode	sysinfo LLM-mode formatter ('=== T ===', 'K=V', '--- t', empty skipped)
+sysinfo_spec.sh	25	__sysinfo_kv outputs key=value in LLM mode	sysinfo LLM-mode formatter ('=== T ===', 'K=V', '--- t', empty skipped)
+sysinfo_spec.sh	39	__sysinfo_kv skips empty values	sysinfo LLM-mode formatter ('=== T ===', 'K=V', '--- t', empty skipped)
+sysinfo_spec.sh	53	__sysinfo_item outputs plain text in LLM mode	sysinfo LLM-mode formatter ('=== T ===', 'K=V', '--- t', empty skipped)
+sysinfo_spec.sh	67	__sysinfo_sub outputs --- title in LLM mode	sysinfo LLM-mode formatter ('=== T ===', 'K=V', '--- t', empty skipped)
+sysinfo_spec.sh	87	__sysinfo_release_sudo clears keepalive PID	sudo keepalive (Bash process management
+sysinfo_spec.sh	104	__sysinfo_sudo runs command without sudo when __SYSINFO_HAS_SUDO=0	sudo keepalive (Bash process management
+sysinfo_spec.sh	124	__sysinfo_collect_identity outputs IDENTITY header and Kernel	collectors (header only
+sysinfo_spec.sh	140	__sysinfo_collect_storage outputs STORAGE header	collectors (header only
+sysinfo_spec.sh	155	__sysinfo_collect_services outputs SERVICES header	collectors (header only
+sysinfo_spec.sh	170	__sysinfo_collect_auth outputs AUTH header	collectors (header only
+sysinfo_spec.sh	185	__sysinfo_collect_network outputs NETWORK header	collectors (header only
+sysinfo_spec.sh	200	__sysinfo_collect_security outputs SECURITY header	collectors (header only
+sysinfo_spec.sh	215	__sysinfo_collect_webstack outputs WEBSTACK header	collectors (header only
+sysinfo_spec.sh	230	__sysinfo_collect_mail outputs MAIL header	collectors (header only
+sysinfo_spec.sh	245	__sysinfo_collect_infra outputs INFRA header	collectors (header only
+sysinfo_spec.sh	260	__sysinfo_collect_system outputs SYSTEM header	collectors (header only
+sysinfo_spec.sh	496	__sysinfo_call_claude returns structured JSON via mock	ai sysinfo requests (curl fake N if net/http)
+sysinfo_spec.sh	515	__sysinfo_call_gemini returns structured JSON via mock	ai sysinfo requests (curl fake N if net/http)
+sysinfo_spec.sh	540	__sysinfo_format_ai_response formats valid JSON with hostname and findings	report render ('Error:/Warning:/OK:/Info:' + counts, 'Invalid JSON')
+sysinfo_spec.sh	560	__sysinfo_format_ai_response fails on invalid JSON	report render ('Error:/Warning:/OK:/Info:' + counts, 'Invalid JSON')
+sysinfo_spec.sh	578	__sysinfo_format_ai_response shows severity icons correctly	report render ('Error:/Warning:/OK:/Info:' + counts, 'Invalid JSON')
+sysinfo_spec.sh	607	__sysinfo_deep_services outputs header and runs without error	collectors (header only
+sysinfo_spec.sh	622	__sysinfo_deep_security outputs header and runs without error	collectors (header only
+sysinfo_spec.sh	637	__sysinfo_deep_network outputs header and interface data	collectors (header only
+sysinfo_spec.sh	654	__sysinfo_deep_storage outputs header and disk data	collectors (header only
+sysinfo_spec.sh	671	__sysinfo_deep_performance outputs header and CPU/memory data	collectors (header only
+sysinfo_spec.sh	689	__sysinfo_deep_maintenance outputs header and cron/package data	collectors (header only
+sysinfo_spec.sh	712	__sysinfo_call_drilldown_claude returns component-based JSON via mock	ai sysinfo requests (curl fake N if net/http)
+sysinfo_spec.sh	732	__sysinfo_call_drilldown_gemini returns component-based JSON via mock	ai sysinfo requests (curl fake N if net/http)
+sysinfo_spec.sh	758	__sysinfo_format_drilldown_response formats components with status and issues	report render ('Error:/Warning:/OK:/Info:' + counts, 'Invalid JSON')
+sysinfo_spec.sh	781	__sysinfo_format_drilldown_response handles empty components array	report render ('Error:/Warning:/OK:/Info:' + counts, 'Invalid JSON')
+sysinfo_spec.sh	797	__sysinfo_format_drilldown_response fails on invalid JSON	report render ('Error:/Warning:/OK:/Info:' + counts, 'Invalid JSON')
+sysinfo_spec.sh	821	__sysinfo_call_freetext_claude returns component-based JSON via mock	ai sysinfo requests (curl fake N if net/http)
+sysinfo_spec.sh	839	__sysinfo_call_freetext_gemini returns component-based JSON via mock	ai sysinfo requests (curl fake N if net/http)
+sysinfo_spec.sh	863	__sysinfo_md_initial generates markdown with hostname and sections	markdown report ('# System Analysis Report', '## Server:', '## Drill-down:', '## Question:')
+sysinfo_spec.sh	886	__sysinfo_md_drilldown generates markdown with components	markdown report ('# System Analysis Report', '## Server:', '## Drill-down:', '## Question:')
+sysinfo_spec.sh	906	__sysinfo_md_freetext generates markdown with question header	markdown report ('# System Analysis Report', '## Server:', '## Drill-down:', '## Question:')
+sysinfo_spec.sh	932	save handler writes markdown file with correct content	markdown report ('# System Analysis Report', '## Server:', '## Drill-down:', '## Question:')
+sysinfo_spec.sh	964	__sysinfo_collect_question_context detects systemd unit in question	collectors (header only
+sysinfo_spec.sh	986	__sysinfo_collect_question_context detects file path in question	collectors (header only
+sysinfo_spec.sh	1014	__sysinfo_collect_question_context detects port number in question	collectors (header only
+sysinfo_spec.sh	1032	__sysinfo_collect_question_context returns empty for generic question	collectors (header only
+sysinfo_spec.sh	1049	__sysinfo_collect_question_context detects known service keyword (apache)	collectors (header only
+sysinfo_spec.sh	1068	__sysinfo_collect_question_context detects service name without .service suffix	collectors (header only
+sysinfo_spec.sh	1089	__sysinfo_call_freetext_claude passes context_data to API	ai sysinfo requests (curl fake N if net/http)
+toolchains_spec.sh	109	GASH_NVM and GASH_PATH_ADD are known ~/.gash_env settings	settings table has GASH_NVM, GASH_PATH_ADD
+toolchains_spec.sh	125	__gash_human_size uses IEC units	render.HumanSize (abc -> '0 B')
+toolchains_spec.sh	136	__gash_confirm_plan: -y passes, no terminal refuses without waiting	tui.ConfirmPlan (-y passes, headless refuses with 'pass -y')
+toolchains_spec.sh	146	__gash_task reports done or failed and keeps the status	tui.Task 'Working... done' / 'Breaking... failed', status kept
+toolchains_spec.sh	157	__gash_download saves the file and removes it when curl fails	download '[5 B]', 'Fetched 5 B', removes file on failure, rc 22
+utils_spec.sh	7	__gash_json_escape escapes backslashes	moot (encoding/json)
+utils_spec.sh	17	__gash_json_escape escapes double quotes	moot (encoding/json)
+utils_spec.sh	27	__gash_json_escape escapes newlines and tabs	moot (encoding/json)
+utils_spec.sh	39	__gash_json_escape handles empty string	moot (encoding/json)
+wsl_spec.sh	29	the memory snapshot has free memory, slab and per-zone blocks	wsl.MemSnapshot from /proc/buddyinfo (skips without it)
+output_style_render_spec.sh	216	wsl_restart:declined: R2-R6	internal/system TestWSLStopVM (WSL-present render needs /proc/version; unit-covered via the sys seam)
+output_style_render_spec.sh	217	wsl_restart:yes: R2-R6	internal/system TestWSLStopVM
+output_style_render_spec.sh	219	wsl_shutdown:yes: R2-R6	internal/system TestWSLStopVM
+output_style_render_spec.sh	221	wsl_explorer:open: R2-R6	internal/system TestWSLExplorer
+output_style_render_spec.sh	222	wsl_explorer:missing-path: R2-R6	internal/system TestWSLExplorer (requireWSL refuses off-WSL before the path check)
+output_style_render_spec.sh	224	wsl_taskmanager:open: R2-R6	internal/system TestWSLTaskmanager
+output_style_render_spec.sh	226	wsl_compact:status: R2-R6	internal/system TestWSLCompact
+output_style_render_spec.sh	227	wsl_compact:compact: R2-R6	internal/system TestWSLCompact
+output_style_render_spec.sh	228	wsl_compact:sudo-failed: R2-R6	internal/system TestWSLCompact
+output_style_render_spec.sh	358	ai_query:timeout: R2-R6	internal/ai TestLedger_AI15_2x (60s response timeout has no seam; unit-covered)
+output_style_render_spec.sh	360	ai_query:confirm-yes: R2-R6	internal/ai TestConfirmSend (typed-y on /dev/tty, not black-box drivable)
+output_style_render_spec.sh	367	ai_sysinfo:report-quit: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	368	ai_sysinfo:report-eof: R2-R6	internal/ai TestDrillMenuInvalidAndEOF
+output_style_render_spec.sh	369	ai_sysinfo:drilldown: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	370	ai_sysinfo:question: R2-R6	internal/ai TestDrillMenu + TestCollectQuestionContext
+output_style_render_spec.sh	371	ai_sysinfo:empty-question: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	372	ai_sysinfo:save: R2-R6	internal/ai TestDrillMenu + TestMarkdownAccumulators
+output_style_render_spec.sh	373	ai_sysinfo:bad-choice: R2-R6	internal/ai TestDrillMenuInvalidAndEOF
+output_style_render_spec.sh	374	ai_sysinfo:no-color: R2-R6	internal/ai TestDrillMenu + TestFormatResponse
+output_style_render_spec.sh	375	ai_sysinfo:http-error: R2-R6	internal/ai TestLedger_AI15_2x / TestClaudeRefusal (failure after a confirm that needs /dev/tty)
+output_style_render_spec.sh	376	ai_sysinfo:drilldown-error: R2-R6	internal/ai TestDrillMenu
+output_style_render_spec.sh	377	ai_sysinfo:invalid-reply: R2-R6	internal/ai TestFormatResponse + TestSanitizeJSON
+output_style_render_spec.sh	386	sysinfo:layout: R2-R6	internal/sysinfo TestVerbose/TestFormatter/TestOverview + TestSectionsLLM (sections injected via Bash overrides, not reachable in Go)

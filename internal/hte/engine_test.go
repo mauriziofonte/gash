@@ -1,0 +1,581 @@
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package hte
+
+import (
+	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/mauriziofonte/gash/internal/hte/child"
+	"github.com/mauriziofonte/gash/internal/hte/hteerr"
+	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/runner"
+)
+
+const sysroots = "../../testdata/hte/sysroot"
+
+// fixture is an engine on the Debian sysroot fixture with a fake runner:
+// the FPM binaries answer as PHP 8.3, Apache lists no built-in modules,
+// every config test passes unless failTest names the binary.
+type fixture struct {
+	e        *Engine
+	run      *runner.Fake
+	home     string
+	failTest string
+	env      map[string]string
+}
+
+func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	dir, err := filepath.Abs(filepath.Join(sysroots, "debian"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sr, err := platform.NewSysroot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fixture{home: t.TempDir()}
+	f.run = child.Fake(t, func(c runner.Call) runner.Expect {
+		bin, args := filepath.Base(c.Argv[0]), c.Argv[1:]
+		switch {
+		case strings.HasPrefix(bin, "php-fpm") && slices.Equal(args, []string{"-v"}):
+			v := strings.TrimPrefix(bin, "php-fpm")
+			return runner.Expect{Stdout: "PHP " + v + ".6 (fpm-fcgi) (built: Oct  1 2026 10:00:00)\n"}
+		case strings.HasPrefix(bin, "php-fpm") && slices.Equal(args, []string{"-i"}):
+			v := strings.TrimPrefix(bin, "php-fpm")
+			return runner.Expect{Stdout: "Scan this dir for additional .ini files => /etc/php/" + v + "/fpm/conf.d\n"}
+		case bin == "apache2" && slices.Equal(args, []string{"-l"}):
+			return runner.Expect{Stdout: "Compiled in modules:\n  core.c\n  mod_so.c\n  mod_watchdog.c\n  http_core.c\n  mod_log_config.c\n  mod_logio.c\n  mod_version.c\n  mod_unixd.c\n"}
+		case len(args) > 0 && args[0] == "-t" && f.failTest != "" && bin == f.failTest:
+			return runner.Expect{Status: 1, Stderr: "AH00526: Syntax error on line 1"}
+		}
+		return runner.Expect{}
+	})
+	// A short runtime directory: socket paths have at most 103 bytes, which
+	// t.TempDir() under the macOS $TMPDIR (/var/folders/...) overflows.
+	rt, err := os.MkdirTemp("", "rt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(rt) })
+	f.env = map[string]string{
+		"HOME": f.home, "XDG_RUNTIME_DIR": rt,
+		// Who the user is never comes from these (LEDGER HTE-19).
+		"USER": "root", "LOGNAME": "root", "SUDO_USER": "alice", "SUDO_UID": "0", "SUDO_GID": "0",
+	}
+	f.e = &Engine{
+		Sysroot: sr, GOOS: "linux", Getenv: func(k string) string { return f.env[k] },
+		// UID owns the temporary tree; EUID is only ever compared with 0.
+		UID: os.Getuid(), EUID: 4242, GID: os.Getgid(), User: "dev", Cwd: f.home,
+		Self: "/usr/local/bin/gash", Helper: "/usr/local/bin/gash-hosts-helper",
+		Runner: f.run,
+	}
+	return f
+}
+
+// install writes hte.toml as install would, without the root steps, with
+// the high ports.
+func (f *fixture) install(t *testing.T) *env {
+	t.Helper()
+	return f.installPorts(t, state.HighPorts)
+}
+
+func (f *fixture) installPorts(t *testing.T, ports state.Ports) *env {
+	t.Helper()
+	if err := os.MkdirAll(f.env["XDG_RUNTIME_DIR"], 0o700); err != nil {
+		t.Fatal(err)
+	}
+	v, err := f.e.resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.store.SaveSettings(state.DefaultSettings(ports, "none")); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func (f *fixture) docroot(t *testing.T) string {
+	t.Helper()
+	d := filepath.Join(f.home, "www", "app", "public")
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func code(err error) hteerr.Code {
+	if he, ok := hteerr.As(err); ok {
+		return he.Code
+	}
+	return ""
+}
+
+// TestLedger_HTE19: the user is the process's uid; USER, LOGNAME and
+// SUDO_* change nothing. With euid 0 every command but install,
+// uninstall, migrate and doctor is root_not_allowed, before it reads or
+// writes anything.
+func TestLedger_HTE19(t *testing.T) {
+	f := newFixture(t)
+	delete(f.env, "XDG_RUNTIME_DIR")
+	f.e.UID = 4242
+	v, err := f.e.resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.paths.RuntimeDir != "/tmp/gash-hte-4242" {
+		t.Errorf("runtime dir %q, want the one of uid 4242", v.paths.RuntimeDir)
+	}
+	if v.paths.ConfigDir != filepath.Join(f.home, ".config", "gash", "hte") {
+		t.Errorf("config dir %q", v.paths.ConfigDir)
+	}
+
+	f.e.EUID = 0
+	ctx := context.Background()
+	calls := map[string]func() error{
+		"site create": func() error {
+			_, err := f.e.SiteCreate(ctx, state.Flags{Domain: "a.test", Docroot: ptr(f.home)})
+			return err
+		},
+		"site modify":            func() error { _, err := f.e.SiteModify(ctx, state.Flags{Domain: "a.test"}); return err },
+		"site remove":            func() error { _, err := f.e.SiteRemove(ctx, "a.test", false); return err },
+		"site list":              func() error { _, err := f.e.SiteList(ctx); return err },
+		"site show":              func() error { _, err := f.e.SiteShow(ctx, "a.test"); return err },
+		"service start":          func() error { _, err := f.e.ServiceStart(ctx); return err },
+		"service status":         func() error { _, err := f.e.ServiceStatus(ctx); return err },
+		"service logs":           func() error { _, err := f.e.ServiceLogs(ctx, "", 10); return err },
+		"cert renew":             func() error { _, err := f.e.CertRenew(ctx, "a.test"); return err },
+		"hosts apply":            func() error { _, err := f.e.HostsApply(ctx); return err },
+		"apache modules list":    func() error { _, err := f.e.ApacheModulesList(ctx); return err },
+		"apache modules enable":  func() error { _, err := f.e.ApacheModuleEnable(ctx, "status"); return err },
+		"apache modules disable": func() error { _, err := f.e.ApacheModuleDisable(ctx, "status"); return err },
+		"apache config path":     func() error { _, err := f.e.ApacheConfigPath(ctx); return err },
+		"site enable":            func() error { _, err := f.e.SiteEnable(ctx, "a.test"); return err },
+		"site disable":           func() error { _, err := f.e.SiteDisable(ctx, "a.test"); return err },
+		"service stop":           func() error { _, err := f.e.ServiceStop(ctx); return err },
+		"service restart":        func() error { _, err := f.e.ServiceRestart(ctx); return err },
+		"service reload":         func() error { _, err := f.e.ServiceReload(ctx); return err },
+		"cert show":              func() error { _, err := f.e.CertShow(ctx, "a.test"); return err },
+		"hosts list":             func() error { _, err := f.e.HostsList(ctx); return err },
+		"hosts check":            func() error { _, err := f.e.HostsCheck(ctx); return err },
+		"hosts windows":          func() error { _, err := f.e.HostsWindows(ctx); return err },
+		"php versions":           func() error { _, err := f.e.PHPVersions(ctx); return err },
+		"php ini get":            func() error { _, _, err := f.e.PHPIniGet(ctx, "a.test", "memory_limit"); return err },
+		"php ini set":            func() error { _, err := f.e.PHPIniSet(ctx, "a.test", "memory_limit", "1G"); return err },
+		"php ini unset":          func() error { _, err := f.e.PHPIniUnset(ctx, "a.test", "memory_limit"); return err },
+		"php global get":         func() error { _, _, err := f.e.PHPGlobalGet(ctx, "8.3", "memory_limit"); return err },
+		"php global set":         func() error { _, err := f.e.PHPGlobalSet(ctx, "8.3", "memory_limit", "1G"); return err },
+		"php global unset":       func() error { _, err := f.e.PHPGlobalUnset(ctx, "8.3", "memory_limit"); return err },
+		"migrate --apply": func() error {
+			_, err := f.e.Migrate(ctx, MigrateOptions{Apply: true})
+			return err
+		},
+	}
+	for name, call := range calls {
+		if err := call(); code(err) != hteerr.RootNotAllowed {
+			t.Errorf("%s as euid 0: %v, want root_not_allowed", name, err)
+		}
+	}
+	for _, c := range []string{"install", "uninstall", "migrate", "doctor"} {
+		if err := f.e.CheckIdentity(c); err != nil {
+			t.Errorf("%s as euid 0: %v", c, err)
+		}
+	}
+	if entries, _ := os.ReadDir(f.home); len(entries) != 0 {
+		t.Errorf("a refused command wrote under HOME: %v", entries)
+	}
+	if len(f.run.Calls()) != 0 {
+		t.Errorf("a refused command ran %v", child.Lines(f.run.Calls()))
+	}
+	if he, _ := hteerr.As(f.e.CheckIdentity("site list")); he == nil || he.Action() != hteerr.Fatal {
+		t.Errorf("root_not_allowed is not FATAL: %v", he)
+	}
+}
+
+// TestLedger_HTE12: a step that fails makes the command fail and leaves
+// the state as it was; site modify with no effective change succeeds
+// with changed=false and runs nothing.
+func TestLedger_HTE12(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	v := f.install(t)
+	root := f.docroot(t)
+	flags := state.Flags{Domain: "app.test", Docroot: ptr(root), HTTPS: ptr(false)}
+
+	// The Apache config test fails: no site file, no generation.
+	f.failTest = "apache2"
+	_, err := f.e.SiteCreate(ctx, flags)
+	if code(err) != hteerr.ConfigTestFailed {
+		t.Fatalf("site create with a failing config test: %v, want config_test_failed", err)
+	}
+	if _, err := os.Stat(v.paths.SiteFile("app.test")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the site file stayed after the failure: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(v.paths.RenderDir(), "current")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a generation became current after the failure: %v", err)
+	}
+
+	// The same create, passing.
+	f.failTest = ""
+	res, err := f.e.SiteCreate(ctx, flags)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Changed || res.Applied == nil || res.Site.PHP != "8.3" {
+		t.Fatalf("site create: %+v", res)
+	}
+	if _, err := os.Stat(v.paths.SiteFile("app.test")); err != nil {
+		t.Fatal(err)
+	}
+	gen := res.Applied.Generation
+
+	// A modify that changes nothing: changed=false, no command run.
+	before := len(f.run.Calls())
+	res, err = f.e.SiteModify(ctx, state.Flags{Domain: "app.test", Docroot: ptr(root), HTTPS: ptr(false)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Changed || res.Applied != nil {
+		t.Errorf("no-op modify: %+v", res)
+	}
+	if got := f.run.Calls()[before:]; len(got) != 0 {
+		t.Errorf("no-op modify ran %d commands", len(got))
+	}
+
+	// A modify whose config test fails: the previous site file is back.
+	f.failTest = "php-fpm8.3"
+	old, _ := os.ReadFile(v.paths.SiteFile("app.test"))
+	_, err = f.e.SiteModify(ctx, state.Flags{Domain: "app.test", Profile: ptr("hardened")})
+	if code(err) != hteerr.ConfigTestFailed {
+		t.Fatalf("modify with a failing FPM test: %v", err)
+	}
+	if now, _ := os.ReadFile(v.paths.SiteFile("app.test")); string(now) != string(old) {
+		t.Errorf("the site file changed after a failed modify:\n%s", now)
+	}
+	n, _, _, err := f.e.supervisor(v).Current()
+	if err != nil || n != gen {
+		t.Errorf("current generation %d (%v), want %d", n, err, gen)
+	}
+
+	// Remove needs --yes; with it the site and its files go.
+	if _, err := f.e.SiteRemove(ctx, "app.test", false); code(err) != hteerr.ConfirmationRequired {
+		t.Errorf("remove without --yes: %v", err)
+	}
+	f.failTest = ""
+	if _, err := f.e.SiteRemove(ctx, "app.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(v.paths.SiteFile("app.test")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("site file after remove: %v", err)
+	}
+	if _, err := os.Stat(root); err != nil {
+		t.Errorf("remove touched the document root: %v", err)
+	}
+}
+
+// Before install every command but install, migrate and doctor is
+// hte_not_installed.
+func TestNotInstalled(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	if _, err := f.e.SiteList(ctx); code(err) != hteerr.HTENotInstalled {
+		t.Errorf("site list: %v", err)
+	}
+	if _, err := f.e.ServiceStart(ctx); code(err) != hteerr.HTENotInstalled {
+		t.Errorf("service start: %v", err)
+	}
+	if _, err := f.e.Uninstall(ctx, UninstallOptions{Yes: true}); code(err) != hteerr.HTENotInstalled {
+		t.Errorf("uninstall: %v", err)
+	}
+	if _, err := f.e.ApacheModuleEnable(ctx, "status"); code(err) != hteerr.HTENotInstalled {
+		t.Errorf("apache modules enable: %v", err)
+	}
+}
+
+// php ini and php global: the site's [php_ini] reaches its pool; the
+// global overlay is a file of key lines, edited in place.
+func TestPHPCommands(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	v := f.install(t)
+	if _, err := f.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: ptr(f.docroot(t)), HTTPS: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.e.PHPIniSet(ctx, "app.test", "memory_limit", `5"M`); code(err) != hteerr.InvalidState {
+		t.Errorf("a quote in a value: %v", err)
+	}
+	res, err := f.e.PHPIniSet(ctx, "app.test", "memory_limit", "321M")
+	if err != nil || !res.Changed {
+		t.Fatalf("php ini set: %+v %v", res, err)
+	}
+	pool, err := os.ReadFile(filepath.Join(v.paths.RenderDir(), "current", "fpm", "8.3", "pools", "app.test.conf"))
+	if err != nil || !strings.Contains(string(pool), `php_admin_value[memory_limit] = "321M"`) {
+		t.Errorf("pool after php ini set (%v):\n%s", err, pool)
+	}
+	if val, ok, _ := f.e.PHPIniGet(ctx, "app.test", "memory_limit"); !ok || val != "321M" {
+		t.Errorf("php ini get: %q %v", val, ok)
+	}
+	if res, err := f.e.PHPIniSet(ctx, "app.test", "memory_limit", "321M"); err != nil || res.Changed {
+		t.Errorf("the same value again: %+v %v", res, err)
+	}
+	if res, err := f.e.PHPIniUnset(ctx, "app.test", "memory_limit"); err != nil || !res.Changed || res.Site.PHPIni != nil {
+		t.Errorf("php ini unset: %+v %v", res, err)
+	}
+
+	if _, err := f.e.PHPGlobalSet(ctx, "7.4", "max_input_vars", "1"); code(err) != hteerr.PHPVersionNotInstalled {
+		t.Errorf("an absent version: %v", err)
+	}
+	for _, kv := range [][2]string{{"max_input_vars", "1234"}, {"display_errors", "On"}, {"max_input_vars", "4321"}} {
+		if _, err := f.e.PHPGlobalSet(ctx, "8.3", kv[0], kv[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(v.paths.PHPOverlay("8.3"))
+	if string(data) != "max_input_vars = \"4321\"\ndisplay_errors = On\n" {
+		t.Errorf("overlay:\n%s", data)
+	}
+	if val, ok, _ := f.e.PHPGlobalGet(ctx, "8.3", "max_input_vars"); !ok || val != "4321" {
+		t.Errorf("php global get: %q %v", val, ok)
+	}
+	if _, err := f.e.PHPGlobalUnset(ctx, "8.3", "max_input_vars"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(v.paths.PHPOverlay("8.3")); string(data) != "display_errors = On\n" {
+		t.Errorf("overlay after unset:\n%s", data)
+	}
+}
+
+// newLegacyFixture is the Debian fixture plus the hte-cli V2 tree.
+func newLegacyFixture(t *testing.T) *fixture {
+	t.Helper()
+	f := newFixture(t)
+	dir := t.TempDir()
+	for _, src := range []string{filepath.Join(sysroots, "debian"), "../../testdata/hte/legacy/V2"} {
+		if err := os.CopyFS(dir, os.DirFS(src)); err != nil && !errors.Is(err, fs.ErrExist) {
+			t.Fatal(err)
+		}
+	}
+	for _, s := range []string{"http", "https", "forced"} {
+		if err := os.MkdirAll(filepath.Join(dir, "home/dev/sites", s, "public"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sr, err := platform.NewSysroot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.e.Sysroot = sr
+	return f
+}
+
+// migrate --apply decides its root steps from the plan: copies first, the
+// stop and its conditional rollback, the archives, then the FPM units; a
+// blocking vhost leaves only the copies; the stop and archives need --yes.
+func TestMigrateRootSteps(t *testing.T) {
+	ctx := context.Background()
+	f := newLegacyFixture(t)
+	v := f.installPorts(t, state.StandardPorts)
+	set, err := f.e.installed(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// https.test uses PHP 7.4, which the fixture lacks: it blocks the stop.
+	w, err := f.e.planMigration(ctx, v, set, MigrateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.blocking {
+		t.Fatalf("not blocking: %+v", w.plan.Blocking)
+	}
+	if got := w.lines(); len(got) != 1 || !strings.Contains(got[0], "forced.test.key") {
+		t.Errorf("blocked root steps: %v", got)
+	}
+
+	https := "/etc/apache2/sites-available/002-https.test.conf"
+	w, err = f.e.planMigration(ctx, v, set, MigrateOptions{Exclude: []string{https}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, o := range w.ops(nil) {
+		kinds = append(kinds, o.Op+" "+o.Path+o.Name)
+	}
+	want := []string{
+		"copy_key ",
+		"archive_vhost /etc/apache2/sites-available/001-http.test.conf",
+		"archive_vhost /etc/apache2/sites-available/003-forced.test.conf",
+		"archive_pool /etc/php/8.3/fpm/pool.d/http.test.conf",
+		"archive_pool /etc/php/8.3/fpm/pool.d/forced.test.conf",
+		"unit_stop php8.3-fpm",
+	}
+	if !slices.Equal(kinds, want) {
+		t.Errorf("root steps:\n%s\nwant\n%s", strings.Join(kinds, "\n"), strings.Join(want, "\n"))
+	}
+	_, err = f.e.Migrate(ctx, MigrateOptions{Apply: true, Exclude: []string{https}})
+	if code(err) != hteerr.ConfirmationRequired {
+		t.Errorf("apply without --yes: %v", err)
+	}
+	if sites, _, _ := v.store.LoadSites(); len(sites) != 0 {
+		t.Errorf("a refused apply created %d sites", len(sites))
+	}
+	f.e.EUID = 0
+	if _, err := f.e.Migrate(ctx, MigrateOptions{Apply: true}); code(err) != hteerr.RootNotAllowed {
+		t.Errorf("apply as euid 0: %v", err)
+	}
+	if _, err := f.e.Migrate(ctx, MigrateOptions{}); err != nil {
+		t.Errorf("dry run as euid 0: %v", err)
+	}
+}
+
+// TestLedger_HTE72: a missing openssl is openssl_not_found (FATAL, the
+// platform's install command as hint), a value outside an enum flag is
+// its invalid_<flag> (RETRY, the details name the value and the accepted
+// ones), a PHP command on a site without PHP is php_not_enabled (RETRY,
+// hint site modify --php).
+func TestLedger_HTE72(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t) // the Debian sysroot has no openssl
+	type want struct {
+		code    hteerr.Code
+		action  hteerr.Action
+		details string
+		hint    string
+	}
+	check := func(name string, err error, w want) {
+		t.Helper()
+		he, ok := hteerr.As(err)
+		if !ok || he.Code != w.code || he.Action() != w.action || !strings.Contains(he.Details, w.details) || !strings.Contains(he.Hint, w.hint) {
+			t.Errorf("%s: %#v, want %+v", name, err, w)
+		}
+	}
+	_, err := f.e.Install(ctx, InstallOptions{Ports: "bogus"})
+	check("install --ports bogus", err, want{hteerr.InvalidPorts, hteerr.Retry, `--ports takes standard or high, not "bogus"`, "standard, high"})
+	_, err = f.e.Install(ctx, InstallOptions{Autostart: "cron"})
+	check("install --autostart cron", err, want{hteerr.InvalidAutostart, hteerr.Retry,
+		`--autostart takes auto, systemd, launchd, shell or none, not "cron"`, "auto, systemd, launchd, shell, none"})
+	_, err = f.e.Install(ctx, InstallOptions{Ports: "high", Autostart: "none"})
+	check("install without openssl", err, want{hteerr.OpenSSLNotFound, hteerr.Fatal, "openssl is not installed", "sudo apt install openssl"})
+
+	v := f.install(t)
+	root := f.docroot(t)
+	_, err = f.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: ptr(root), Profile: ptr("prod")})
+	check("site create --profile prod", err, want{hteerr.InvalidProfile, hteerr.Retry, `--profile takes dev, staging or hardened, not "prod"`, "dev, staging, hardened"})
+	_, err = f.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: ptr(root)})
+	check("site create with HTTPS, without openssl", err, want{hteerr.OpenSSLNotFound, hteerr.Fatal, "openssl is not installed", "sudo apt install openssl"})
+
+	raw := state.Site{Domain: "raw.test", Aliases: []string{}, Kind: state.KindRaw, Enabled: true,
+		RawConf: "<VirtualHost 127.0.0.1:8080>\n    ServerName raw.test\n</VirtualHost>\n"}
+	if err := v.store.SaveSite(raw); err != nil {
+		t.Fatal(err)
+	}
+	for name, run := range map[string]func() error{
+		"php ini set":   func() error { _, err := f.e.PHPIniSet(ctx, "raw.test", "memory_limit", "1G"); return err },
+		"php ini unset": func() error { _, err := f.e.PHPIniUnset(ctx, "raw.test", "memory_limit"); return err },
+	} {
+		check(name+" on a site without PHP", run(), want{hteerr.PHPNotEnabled, hteerr.Retry, "raw.test has no PHP", "gash hte site modify --domain raw.test --php VERSION"})
+	}
+}
+
+// apache modules list, enable and disable: the userland list, the extra
+// modules of hte.toml and the other modules of the system directory; an
+// enable or disable moves to a generation that loads exactly them, and a
+// failed one puts hte.toml back.
+func TestApacheModules(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	v := f.install(t)
+	list := func() map[string]ModuleInfo {
+		t.Helper()
+		res, err := f.e.ApacheModulesList(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]ModuleInfo{}
+		for _, m := range res.Modules {
+			out[m.Name] = m
+		}
+		if res.Dir != "/usr/lib/apache2/modules" || len(out) != len(res.Modules) {
+			t.Fatalf("dir %s, %d modules, %d names", res.Dir, len(res.Modules), len(out))
+		}
+		return out
+	}
+	loads := func(name string) bool {
+		t.Helper()
+		httpd, err := os.ReadFile(filepath.Join(v.paths.RenderDir(), "current", "httpd.conf"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Contains(string(httpd), "LoadModule "+name+"_module ")
+	}
+	settings := func() []string {
+		t.Helper()
+		set, err := v.store.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return set.Modules
+	}
+
+	got := list()
+	if m := got["ssl"]; m.State != ModuleBase || m.Builtin || m.Path != "/usr/lib/apache2/modules/mod_ssl.so" {
+		t.Errorf("ssl: %+v", m)
+	}
+	if m := got["log_config"]; m.State != ModuleBase || !m.Builtin || m.Path != "" {
+		t.Errorf("log_config: %+v", m)
+	}
+	if m := got["status"]; m.State != ModuleAvailable || m.Path != "/usr/lib/apache2/modules/mod_status.so" {
+		t.Errorf("status: %+v", m)
+	}
+
+	res, err := f.e.ApacheModuleEnable(ctx, "status")
+	if err != nil || !res.Changed || res.Applied == nil || !res.Applied.Changed {
+		t.Fatalf("enable status: %+v %v", res, err)
+	}
+	if !loads("status") || !slices.Equal(settings(), []string{"status"}) || list()["status"].State != ModuleEnabled {
+		t.Errorf("after enable: loads %v, modules %v", loads("status"), settings())
+	}
+	if res, err := f.e.ApacheModuleEnable(ctx, "status"); err != nil || res.Changed {
+		t.Errorf("enable status again: %+v %v", res, err)
+	}
+	if res, err := f.e.ApacheModuleEnable(ctx, "ssl"); err != nil || res.Changed || len(res.Warnings) != 1 {
+		t.Errorf("enable ssl: %+v %v", res, err)
+	}
+	for _, bad := range []string{"nosuch", "../ssl", "Status"} {
+		if _, err := f.e.ApacheModuleEnable(ctx, bad); code(err) != hteerr.ApacheModuleMissing || hteerr.ActionOf(code(err)) != hteerr.Stop {
+			t.Errorf("enable %q: %v", bad, err)
+		}
+	}
+	if _, err := f.e.ApacheModuleDisable(ctx, "ssl"); code(err) != hteerr.ConflictingOptions {
+		t.Errorf("disable ssl: %v", err)
+	}
+	if res, err := f.e.ApacheModuleDisable(ctx, "cgi"); err != nil || res.Changed {
+		t.Errorf("disable cgi (not enabled): %+v %v", res, err)
+	}
+
+	// A config test that fails puts hte.toml back.
+	f.failTest = "apache2"
+	if _, err := f.e.ApacheModuleEnable(ctx, "cgi"); code(err) != hteerr.ConfigTestFailed {
+		t.Errorf("enable cgi with a failing test: %v", err)
+	}
+	f.failTest = ""
+	if !slices.Equal(settings(), []string{"status"}) || loads("cgi") {
+		t.Errorf("after the failed enable: modules %v, loads cgi %v", settings(), loads("cgi"))
+	}
+
+	if res, err := f.e.ApacheModuleDisable(ctx, "status"); err != nil || !res.Changed || res.Applied == nil {
+		t.Fatalf("disable status: %+v %v", res, err)
+	}
+	if loads("status") || len(settings()) != 0 || list()["status"].State != ModuleAvailable {
+		t.Errorf("after disable: loads %v, modules %v", loads("status"), settings())
+	}
+}

@@ -1,0 +1,36 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-10
+# covers: none (3.0 shell hygiene proof)
+#
+# SHELL-10 proving test: an interactive load with GASH_UMASK=027 and
+# GASH_NVM=lazy (a resolvable default version) leaves BASH_REMATCH as the
+# caller had it and declares no readonly name of Gash (2.x left
+# BASH_REMATCH=([0]="027") and readonly __AI_* constants).
+
+env GASH_BANNER=0
+env GASH_UMASK=027
+env GASH_NVM=lazy
+env NVM_DIR=$WORK/nvm
+
+exec bash --norc --noprofile -i drive.sh
+stdout '^rematch=keep$'
+stdout '^umask=0027$'
+stdout '^nodebin=yes$'
+! stdout 'readonly'
+
+-- drive.sh --
+[[ keep =~ (keep) ]]
+declare -pr | LC_ALL=C sort >"$WORK/ro.before"
+source "$GASH_SH" >/dev/null 2>&1
+echo "rematch=${BASH_REMATCH[1]-unset}"
+echo "umask=$(umask)"
+case ":$PATH:" in *":$NVM_DIR/versions/node/v20.1.0/bin:"*) echo nodebin=yes ;; *) echo nodebin=no ;; esac
+declare -pr | LC_ALL=C sort >"$WORK/ro.after"
+comm -13 "$WORK/ro.before" "$WORK/ro.after" | grep -E '__GASH|__AI|__LLM|gash' && echo readonly
+true
+-- nvm/nvm.sh --
+# fake nvm.sh: never sourced by a lazy load
+-- nvm/alias/default --
+20
+-- nvm/versions/node/v20.1.0/bin/node --

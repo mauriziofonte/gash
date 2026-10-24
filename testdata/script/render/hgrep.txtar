@@ -1,0 +1,91 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:158
+# covers: output_style_render_spec.sh:159
+# covers: output_style_render_spec.sh:160
+# covers: output_style_render_spec.sh:161
+# covers: output_style_render_spec.sh:162
+# covers: output_style_render_spec.sh:163
+# covers: output_style_render_spec.sh:164
+# covers: output_style_render_spec.sh:165
+# covers: output_style_render_spec.sh:166
+# covers: output_style_render_spec.sh:167
+# covers: output_style_render_spec.sh:168
+# covers: output_style_render_spec.sh:169
+# covers: output_style_render_spec.sh:170
+#
+# hgrep rendering (R2-R6): flat matches with [timestamp] command lines,
+# grouping, --no-color, regex + reverse + limit, --no-highlight, -c count,
+# -j JSON, empty, --pick refusal with no terminal, and the argument errors.
+# TZ is pinned so the formatted timestamps are deterministic.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+env TZ=UTC
+
+# --- :158 flat
+exec bash -c 'printf "#1700000000\ncd /tmp && ls\n#1700000100\ncd /tmp && git status\n#1700000200\ncd /tmp && ls\n#1700000300\ngit push origin main\n" >h; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h" hgrep git'
+stdout '^\[2023-11-14 22:15:00\] cd /tmp && git status$'
+stdout '^\[2023-11-14 22:18:20\] git push origin main$'
+
+# --- :159 group
+exec bash -c 'printf "#1700000000\ncd /tmp && ls\n#1700000100\ncd /tmp && git status\n#1700000200\ncd /tmp && ls\n#1700000300\ngit push origin main\n" >h2; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h2" hgrep cd -g'
+stdout '\[2023-11-14 22:16:40\] cd /tmp && ls$'
+
+# --- :160 group-no-color
+exec bash -c 'printf "#1700000000\ncd /tmp && ls\n#1700000100\ncd /tmp && git status\n" >h3; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h3" hgrep cd -g --no-color'
+stdout 'cd /tmp && git status$'
+! stdout '\x1b'
+
+# --- :161 regex-reverse-limit (3.0: SYS-43 fixed: -n 1 is the most recent
+# match, with -r too; 2.x kept the oldest, git push)
+exec bash -c 'printf "#1700000000\ngit push\n#1700000100\ngit pull\n#1700000200\ngit status\n" >h4; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h4" hgrep -E "git (push|pull)" -r -n 1'
+stdout '^\[2023-11-14 22:15:00\] git pull$'
+! stdout 'git push'
+! stdout 'git status'
+
+# --- :162 no-highlight
+exec bash -c 'printf "#1700000000\ngit push\n" >h5; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h5" hgrep git -H'
+stdout '^\[2023-11-14 22:13:20\] git push$'
+! stdout '\x1b'
+
+# --- :163 count - a scalar count, then zero
+exec bash -c 'printf "#1700000000\ngit push\n#1700000100\ngit pull\n" >h6; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h6" hgrep git -c; HISTFILE="$PWD/h6" hgrep zzz -c'
+stdout '^2$'
+stdout '^0$'
+
+# --- :164 json
+exec bash -c 'printf "#1700000000\ngit push\n" >h7; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h7" hgrep git -j; HISTFILE="$PWD/h7" hgrep zzz -j'
+stdout '"command":"git push"'
+stdout '^\[\]$'
+
+# --- :165 empty - a match-less search prints nothing, exit 0
+exec bash -c 'printf "#1700000000\ngit push\n" >h8; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h8" hgrep zzz'
+! stdout '.'
+
+# --- :166 pick - --pick needs a terminal
+! exec bash -c 'printf "#1700000000\ngit push\n#1700000100\ngit pull\n" >h9; fzf() { head -n 1; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/h9" hgrep git --pick'
+stderr 'Error: --pick requires an interactive terminal'
+
+# --- :167 missing-pattern
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; hgrep'
+stderr 'Error: Missing required argument: pattern'
+stderr 'Usage: hgrep <pattern>'
+
+# --- :168 bad-option
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; hgrep git --bogus'
+stderr 'Error: Unknown option: --bogus\. Use -h for help\.'
+
+# --- :169 bad-limit
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; hgrep git -n x'
+stderr 'Error: Option -n requires a numeric argument'
+
+# --- :170 no-histfile
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; HISTFILE="$PWD/none" hgrep git'
+stderr 'Error: Cannot read history file:'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; hgrep'
+stderr '^Error: Missing required argument'
+! stderr '\x1b'

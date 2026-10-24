@@ -1,0 +1,42 @@
+{
+    "installed_php_versions": [
+        "8.3"
+    ],
+    "vhosts": [
+        {
+            "index": 1,
+            "conf": "/etc/apache2/sites-available/001-broken.test.conf",
+            "name": "001-broken.test.conf",
+            "phpver": "8.3",
+            "domain": "broken.test",
+            "docroot": "/home/dev/sites/broken.test/public",
+            "enabled": true,
+            "ssl": true,
+            "forcedssl": true,
+            "sslcertfile": "/etc/apache2/certs-selfsigned/broken.test.crt",
+            "sslkeyfile": "/etc/apache2/certs-selfsigned/broken.test.key",
+            "needs_localhost_bypass_fix": true,
+            "pool": "/etc/php/8.3/fpm/pool.d/broken.test.conf",
+            "pool_phpver": "8.3",
+            "profile": "dev"
+        },
+        {
+            "index": 2,
+            "conf": "/etc/apache2/sites-available/002-broken0.test.conf",
+            "name": "002-broken0.test.conf",
+            "phpver": "8.3",
+            "domain": "broken0.test",
+            "docroot": "/home/dev/sites/broken0.test/public",
+            "enabled": true,
+            "ssl": true,
+            "forcedssl": true,
+            "sslcertfile": "/etc/apache2/certs-selfsigned/broken0.test.crt",
+            "sslkeyfile": "/etc/apache2/certs-selfsigned/broken0.test.key",
+            "needs_localhost_bypass_fix": true,
+            "pool": "/etc/php/8.3/fpm/pool.d/broken0.test.conf",
+            "pool_phpver": "8.3",
+            "profile": "dev"
+        }
+    ],
+    "next_index": "003"
+}

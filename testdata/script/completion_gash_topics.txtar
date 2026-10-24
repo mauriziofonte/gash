@@ -1,0 +1,30 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-03
+# covers: none (3.0 completion fix)
+#
+# SHELL-03 proving test: every card word TAB offers after "gash " runs with
+# status 0, and "help" (an unknown topic) is no longer offered. The
+# binary's commands (init, update, version, hte) take their own arguments
+# and are completed further by the binary; they are not run here.
+
+env GASH_BANNER=0
+exec bash --norc --noprofile -i drive.sh
+stdout '^offered: all files system nav git docker remote dev llm ai gash init update version hte$'
+! stdout 'FAILED'
+stdout '^ran 11$'
+
+-- drive.sh --
+source "$GASH_SH" >/dev/null 2>&1
+source "$GASH_STAGE/bash_completion"
+COMP_WORDS=(gash "")
+COMP_CWORD=1
+__gash_complete gash "" gash
+echo "offered: ${COMPREPLY[*]}"
+n=0
+for w in "${COMPREPLY[@]}"; do
+    case "$w" in init | update | version | hte) continue ;; esac
+    gash "$w" >/dev/null 2>&1 || echo "FAILED $w"
+    n=$((n + 1))
+done
+echo "ran $n"

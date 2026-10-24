@@ -1,0 +1,42 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: functions_smoke_spec.sh:218
+#
+# port_kill targets listeners only, validates the port and asks first.
+# Around a REAL victim (`sleep`, as the 2.x case already did): an lsof stub
+# answers only the TCP-LISTEN query (logging every call) with the victim's
+# PID, so the binary's real kill(2) lands on the test's own process. An
+# out-of-range or non-numeric port is refused before lsof is ever run;
+# headless without --force lists and refuses, killing nothing; --force kills.
+
+env GASH_HEADLESS=1
+
+exec bash smoke_port_kill.sh
+
+-- smoke_port_kill.sh --
+set -uo pipefail
+tmp="$(mktemp -d)"
+trap 'kill "$victim" 2>/dev/null; rm -rf "$tmp"' EXIT
+sleep 300 &
+victim=$!
+printf '#!/bin/sh\necho "$*" >>"%s/lsof.log"\ncase "$*" in *-sTCP:LISTEN*) echo %s ;; esac\n' "$tmp" "$victim" >"$tmp/lsof"
+chmod +x "$tmp/lsof"
+export PATH="$tmp:$PATH"
+source "$GASH_SH"
+
+# An out-of-range or non-numeric port is refused before lsof runs.
+port_kill 70000 2>/dev/null && { echo "70000 accepted"; exit 1; }
+port_kill 80x 2>/dev/null && { echo "80x accepted"; exit 1; }
+[ ! -e "$tmp/lsof.log" ] || { echo "lsof ran during validation"; exit 1; }
+
+# Headless without --force: lists the listener, refuses, kills nothing.
+port_kill 8080 2>/dev/null && { echo "killed without --force"; exit 1; }
+kill -0 "$victim" 2>/dev/null || { echo "victim died on refusal"; exit 1; }
+grep -q -- "-iTCP:8080 -sTCP:LISTEN" "$tmp/lsof.log" || { echo "no LISTEN query"; exit 1; }
+grep -q -- "-i:8080" "$tmp/lsof.log" && { echo "queried non-listeners"; exit 1; }
+
+# --force terminates the listener.
+port_kill --force 8080 >/dev/null 2>&1 || { echo "--force returned non-zero"; exit 1; }
+for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$victim" 2>/dev/null || break; sleep 0.1; done
+kill -0 "$victim" 2>/dev/null && { echo "victim survived --force"; exit 1; }
+exit 0

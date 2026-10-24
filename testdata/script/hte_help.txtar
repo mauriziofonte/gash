@@ -1,0 +1,27 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# covers: none (3.0 HTE surface; no 2.x spec)
+# gash hte help: on stdout, exit 0, nothing on stderr; the hidden
+# commands are not listed.
+
+exec gash hte
+stdout '^Manage the local Apache and PHP-FPM test environment|^gash hte runs a userland Apache'
+stdout '^  gash hte \[command\]$'
+stdout '^  install +Install the stack'
+stdout '^  migrate +Move the hte-cli and system vhosts'
+! stdout '__root|__unit|__autostart|completion'
+! stderr .
+
+exec gash hte --help
+stdout '^      --json   print one JSON object$'
+! stderr .
+
+exec gash hte site create --help
+stdout '^  gash hte site create \[flags\]$'
+stdout '--docroot string'
+stdout '--force-https-bypass'
+stdout '--extra-https-port ints'
+! stderr .
+
+exec gash hte apache modules -h
+stdout '^  disable +Stop loading an enabled extra module$'
+! stderr .

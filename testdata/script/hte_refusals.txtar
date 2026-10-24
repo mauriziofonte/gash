@@ -1,0 +1,30 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# covers: none (3.0 HTE surface; no 2.x spec)
+# What gash hte refuses before it acts: a missing required flag without
+# a terminal, a destructive command without --yes, an invalid enum value,
+# and every command but install, uninstall, migrate and doctor as root.
+
+# Without a terminal a missing required flag is missing_value, never a
+# prompt.
+! exec gash hte site show
+! stdout .
+stderr '^\{"error":"missing_value","details":"--domain is required","action":"RETRY","recoverable":true,"hint":"pass --domain"\}$'
+
+! exec gash hte php global get memory_limit
+stderr '^\{"error":"missing_value","details":"--version is required",'
+
+! exec gash hte uninstall
+! stdout .
+stderr '^\{"error":"confirmation_required","details":"uninstall removes the stack and restores the system","action":"RETRY","recoverable":true,"hint":"add --yes"\}$'
+
+! exec gash hte install --ports low
+stderr '^\{"error":"invalid_ports","details":"--ports takes standard or high, not \\"low\\"","action":"RETRY","recoverable":true,"hint":"use one of: standard, high"\}$'
+
+! exec gash hte install --autostart cron --json
+! stdout .
+stderr '^\{"error":"invalid_autostart",.*"action":"RETRY"'
+
+[root] ! exec gash hte site list
+[root] stderr '^\{"error":"root_not_allowed","details":"gash hte site list runs as your own user, not as root","action":"FATAL","recoverable":false,"hint":"Run gash hte as your own user; it asks for sudo itself when a step needs root"\}$'
+[root] ! exec gash hte migrate --apply
+[root] stderr '"error":"root_not_allowed"'

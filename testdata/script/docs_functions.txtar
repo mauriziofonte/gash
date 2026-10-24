@@ -1,0 +1,36 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: docs_spec.sh:26
+#
+# Every Gash function name cited in the hand-written documentation
+# (README/AGENTS/CHANGELOG and docs/*.md) exists: it is a defined function, a
+# loaded alias, or a string the code emits. In 3.0 the functions live in the
+# binary and the error codes it emits (git_not_found, docker_not_found, ...)
+# are string literals there, so the 2.x `grep lib/` fallback is extended with
+# a grep of the binary ($GASH_BIN) alongside the generated lib/ stubs.
+
+env GASH_HEADLESS=1
+
+exec bash docs_functions.sh
+
+-- docs_functions.sh --
+set -euo pipefail
+ROOT="$GASH_STAGE"
+source "$GASH_SH"
+pages=("$ROOT/README.md" "$ROOT/AGENTS.md" "$ROOT/CHANGELOG.md")
+for p in "$ROOT"/docs/*.md; do [[ -f "$p" ]] && pages+=("$p"); done
+prefixes="llm|gash|remote|git|docker|wsl|dirs|files|tree|ai|process|sysinfo|port|disk|archive|services|history"
+missing=""
+while IFS= read -r name; do
+  declare -F "$name" >/dev/null && continue
+  alias "$name" >/dev/null 2>&1 && continue
+  # An error code ("git_not_found") is a name too, emitted by the code: a
+  # quoted string in the generated lib/ stubs, or a literal in the binary.
+  grep -rqF -- "\"$name\"" "$ROOT/lib" && continue
+  grep -qF -- "$name" "$GASH_BIN" && continue
+  missing+=" $name"
+done < <(
+  grep -ohE "(^|[^[:alnum:]_./\"{-])($prefixes)_[a-z0-9_]*[a-z0-9]([^[:alnum:]_*./\"-]|\$)" "${pages[@]}" |
+    grep -oE "($prefixes)_[a-z0-9_]*[a-z0-9]" | sort -u
+)
+[[ -z "$missing" ]] || { echo "not defined:$missing" >&2; exit 1; }

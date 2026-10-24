@@ -2,7 +2,12 @@
 
 Help, doctor, configuration, upgrade.
 
-_Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
+`gash_doctor`, `gash_env_init`, `gash_uninstall`, `gash_upgrade` and
+`gash_username` refuse an unknown option (`Error: Unknown option: X`) or an
+unexpected argument (`Error: Unexpected argument: X`) with status 2, before
+they change anything.
+
+_Written from the help registry (`gash_help NAME`); `go test ./internal/registry` checks it against the help text._
 
 | Function | Alias | Description |
 |---|---|---|
@@ -14,7 +19,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | [`gash_env_init`](#gash-env-init) |  | Create ~/.gash_env configuration template |
 | [`gash_help`](#gash-help) |  | Help system with examples, search, and discovery |
 | [`gash_inspiring_quote`](#gash-inspiring-quote) |  | Display a random quote, optionally with its source |
-| [`gash_migrate`](#gash-migrate) |  | Guided migration of a Gash 1.x configuration to 2.0 |
+| [`gash_migrate`](#gash-migrate) |  | Shows how to migrate a Gash 1.x configuration |
 | [`gash_uninstall`](#gash-uninstall) |  | Uninstall Gash and clean up configurations |
 | [`gash_unload`](#gash-unload) |  | Restore shell state to before Gash was loaded |
 | [`gash_upgrade`](#gash-upgrade) |  | Upgrade Gash to the latest version |
@@ -41,8 +46,10 @@ gash all             The whole card, every topic
 files, system, nav, git, docker, remote, dev, llm, ai, gash
 (navigation, management, php and node still work as old names)
 
-The card is built from the help registry and the alias files, so it
-always lists exactly what this Gash ships.
+The card is built from the help registry and the alias files. In an
+interactive shell it counts and lists only the aliases the shell
+defines (one skipped because a program of that name exists, or a pack
+whose tool is missing, is left out); headless it lists them all.
 ```
 
 #### Examples
@@ -174,13 +181,17 @@ gash_doctor --timing
 #### Notes
 
 ```text
-Checks: core files, modules, config file permissions,
+Checks: core files, modules, the binary and gash-hosts-helper
+(against the hashes release/SHA256SUMS pins), the generated
+shims (against this gash version), config file permissions,
 external tools (git, curl, jq, sqlite3, docker).
-Reports missing or misconfigured components.
+Reports missing or misconfigured components and returns 1
+when a check fails (2 for an unknown option).
 
 --timing loads Gash in a new interactive shell and lists the
 milliseconds each file and step takes (5 ms or more stands out),
-then times whole new shells: with your ~/.bashrc, and bash alone.
+then times whole new shells: with your ~/.bashrc, and bash alone,
+3 times each (a line says first that your ~/.bashrc runs 3 times).
 Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
 the same figures in its __GASH_LOAD_TIMES array.
 ```
@@ -290,55 +301,42 @@ see CONTRIBUTING.md.
 
 ## gash_migrate
 
-Guided migration of a Gash 1.x configuration to 2.0
+Shows how to migrate a Gash 1.x configuration
 
 #### Usage
 
 ```text
-gash_migrate [--yes] [--plain]
-gash_migrate --rollback [--yes]
-gash_migrate --status
-(also: gash migrate ...)
+gash_migrate
+(also: gash migrate)
 
-Walks through the Gash 2.0 changes that concern your setup, one screen
-each: the ~/.gashrc loader, ~/.gash_env lines 2.0 skips, command
-replacements (GASH_REPLACE_TOOLS), umask, lines of your shell files that
-use changed commands, llm_exec and AI consent. You see a diff of every
-file before anything is written; each file is backed up first.
+Gash 3 does not migrate a Gash 1.x configuration. gash_migrate prints
+one line on stderr with the route and returns 1: check out v2.1.0 in
+your Gash directory, open a new terminal, run gash_migrate there (the
+2.x guided review, with a diff preview and backups), then gash_upgrade.
+It writes nothing.
 
-It starts by itself in the first interactive shell after the upgrade.
-In scripts and headless shells Gash only prints a one-line reminder on
-stderr, at most once a day.
-```
-
-#### Options
-
-```text
---yes         Take the recommended choice everywhere, no questions
---plain       Numbered prompts instead of arrow-key menus
---rollback    Restore the files saved by the last migration
---status      Schema version, pending migration and backups
+While ~/.gashrc is still the 1.x loader, an interactive shell prints a
+one-line reminder on stderr, at most once a day. Headless shells print
+nothing.
 ```
 
 #### Files
 
 ```text
-~/.local/state/gash/schema     configuration schema version
-~/.local/state/gash/backups/   one folder per migration, with a manifest
+~/.local/state/gash/schema     configuration schema version (2 or more:
+                               no reminder)
+~/.local/state/gash/notice     time of the last reminder
 (under $XDG_STATE_HOME/gash when that is set)
 ```
 
 #### Examples
 
 ```bash
-# Review the changes again
+# Show the route
 gash migrate
-
-# Undo the last migration
-gash migrate --rollback
 ```
 
-See also: `gash`, `gash_doctor`
+See also: `gash`, `gash_doctor`, `gash_upgrade`
 
 ## gash_uninstall
 
@@ -362,6 +360,8 @@ gash_uninstall
 ```text
 Removes the Gash sourcing block from your shell profile,
 deletes the installation directory, and cleans up.
+Kept as FILE.gash-uninstall.bak: each profile as it was
+before the edit, and a ~/.gashrc that holds your own lines.
 Restart your terminal after uninstalling.
 ```
 
@@ -419,8 +419,19 @@ gash_upgrade
 #### Notes
 
 ```text
-Fetches the latest git tag, checks out that version,
-and cleans up. Restart your shell after upgrading.
+Fetches the release tags and checks out the newest release (never
+an older one). It runs the steps of gash update. A checkout newer
+than the latest release (a pre-release, or a commit after it) is
+left as it is.
+Before the checkout, the release binary is downloaded into
+~/.local/share/gash/versions/<version>/ and verified (the hash in
+the tag's release/SHA256SUMS, else the release's checksums.txt;
+GASH_REQUIRE_SIGNED=1 also requires a signed tag and a pinned
+binary). After it, the new version is loaded in a test shell; if
+that fails, the previous version is checked out again.
+Open a new terminal afterwards to load the new version.
+To go back: gash update --rollback (the previous version and its
+binary are kept), or git -C ~/.gash checkout vX.Y.Z
 ```
 
 See also: `gash_doctor`, `gash_uninstall`

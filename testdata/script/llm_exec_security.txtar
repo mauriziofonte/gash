@@ -1,0 +1,59 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_exec_security_spec.sh:8
+# covers: llm_exec_security_spec.sh:30
+# covers: llm_exec_security_spec.sh:55
+# covers: llm_exec_security_spec.sh:75
+# covers: llm_exec_security_spec.sh:91
+# covers: llm_exec_security_spec.sh:107
+# covers: llm_exec_security_spec.sh:117
+# covers: llm_exec_security_spec.sh:137
+# covers: llm_exec_security_spec.sh:179
+# covers: llm_exec_security_spec.sh:212
+# covers: llm_exec_security_spec.sh:248
+# covers: llm_exec_security_spec.sh:264
+#
+# llm_exec driven through the shim, reproducing the 2.x observable contract
+# (stdout/stderr/exit and the stderr error envelope). The INTERNAL rows
+# (:161 __llm_is_secret_file, :201 __llm_validate_path) are n/a (Go unit
+# tests, tests/parity/bash-only.tsv). The split rows :117/:137/:179/:248
+# are covered on their runnable public half; their internal half is a Go
+# unit test.
+
+# llm_exec_security_spec.sh:8 - plain read-only command lines in a child shell
+exec bash -c 'set -euo pipefail; d="$WORK/e8"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; printf ''b\na\n'' >list.txt; [[ "$(llm_exec "echo hello")" == hello ]]; [[ "$(llm_exec "sort list.txt | head -n 1")" == a ]]; [[ "$(llm_exec "ls nothing-here 2>/dev/null || echo missing")" == missing ]]; [[ "$(llm_exec "echo ''a b'' \"c d\" e\;f")" == "a b c d e;f" ]]; [[ "$(llm_exec $''echo one\necho two # trailing > comment'')" == $''one\ntwo'' ]]; [[ "$(llm_exec "echo err >&2" 2>&1)" == err ]]; llm_exec "cd /"; [[ "$PWD" == "$d" ]]; set +e; llm_exec "grep -q zzz list.txt"; rc=$?; set -e; [[ $rc -eq 1 ]]'
+
+# llm_exec_security_spec.sh:30 - refuses expansions, redirections, subshells, unknown commands
+exec bash -c 'set -euo pipefail; d="$WORK/e30"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; v(){ llm_exec "$1" 2>&1 >/dev/null | jq -r .error; }; [[ "$(v "echo \$HOME")" == construct_not_allowed ]]; [[ "$(v "echo \"\$(id)\"")" == construct_not_allowed ]]; [[ "$(v "echo \`id\`")" == construct_not_allowed ]]; [[ "$(v "echo x > out")" == construct_not_allowed ]]; [[ "$(v "cat < /etc/hostname")" == construct_not_allowed ]]; [[ "$(v "sleep 5 &")" == construct_not_allowed ]]; [[ "$(v "(ls)")" == construct_not_allowed ]]; [[ "$(v "{rm,-rf,x}")" == construct_not_allowed ]]; [[ "$(v "FOO=1 ls")" == construct_not_allowed ]]; [[ "$(v "rm -f x")" == command_not_allowed ]]; [[ "$(v "/bin/rm x")" == command_not_allowed ]]; [[ "$(v "ls | xargs rm")" == command_not_allowed ]]; [[ "$(v "echo ''open")" == unterminated_quote ]]; [[ ! -e out ]]'
+
+# llm_exec_security_spec.sh:55 - refuses writing options of allowed commands
+exec bash -c 'set -euo pipefail; d="$WORK/e55"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; touch keep.txt; v(){ llm_exec "$1" 2>&1 >/dev/null | jq -r .error; }; for line in "find . -delete" "find . ''-exec'' rm {} ;" "find . -dele\\te" "sort -o out keep.txt" "sort -ro out keep.txt" "sed -i s/a/b/ keep.txt" "uniq keep.txt out" "date -s now" "git branch -D main" "git branch newname" "git -c core.pager=sh log" "git config user.name x" "git push" "git stash" "systemctl stop nginx" "docker rm x" "php -r 1" "crontab -r"; do [[ "$(v "$line")" == option_not_allowed ]] || { echo "not refused: $line"; exit 1; }; done; [[ -e keep.txt && ! -e out ]]'
+
+# llm_exec_security_spec.sh:75 - checks what unquoted globs expand to
+exec bash -c 'set -euo pipefail; d="$WORK/e75"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; touch -- -delete a.log; [[ "$(llm_exec "find * -name x" 2>&1 >/dev/null | jq -r .error)" == glob_matches_option ]]; [[ -e -delete && -e a.log ]]; llm_exec "ls ./*" >/dev/null; [[ "$(llm_exec "echo ''*''")" == "*" ]]; printf ''S=1\n'' >prod.ENV; [[ "$(llm_exec "cat *.ENV" 2>&1 >/dev/null | jq -r .error)" == secret_file_blocked ]]'
+
+# llm_exec_security_spec.sh:91 - runs sed and awk sandboxed. llm_exec runs sed
+# only as GNU `sed --sandbox`, absent on macOS (BSD sed); the refusal path is a
+# Go unit test (internal/llmexec), so this positive row needs GNU sed.
+[gnused] exec bash -c 'set -euo pipefail; d="$WORK/e91"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; printf ''a b\n'' >in.txt; [[ "$(llm_exec "sed -n 1p in.txt")" == "a b" ]]; [[ "$(llm_exec "awk ''{print \$2}'' in.txt")" == b ]]; ! llm_exec "sed -n ''1w out'' in.txt" 2>/dev/null; ! llm_exec "awk ''BEGIN{system(\"touch pwned\")}''" 2>/dev/null; [[ ! -e out && ! -e pwned ]]'
+
+# llm_exec_security_spec.sh:107 - ignores exported functions that shadow allowed commands
+exec bash -c 'set -euo pipefail; d="$WORK/e107"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; echo(){ builtin echo pwned; }; export -f echo; [[ "$(llm_exec "echo safe")" == safe ]]'
+
+# llm_exec_security_spec.sh:117 - settings come from ~/.gash_env, never the environment (binary re-reads the file each call)
+exec bash -c 'set -euo pipefail; d="$WORK/e117"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d" GASH_LLM_EXEC=unrestricted GASH_LLM_EXEC_ALLOW=seq; source "$GASH_SH"; [[ "$(llm_exec "seq 2" 2>&1 >/dev/null | jq -r .error)" == command_not_allowed ]]; printf ''GASH_LLM_EXEC_ALLOW="seq"\n'' >"$d/.gash_env"; [[ "$(llm_exec "seq 2 | wc -l")" -eq 2 ]]; [[ "$(llm_exec "seq 2 | xargs echo" 2>&1 >/dev/null | jq -r .error)" == command_not_allowed ]]; printf ''GASH_LLM_EXEC=unrestricted\n'' >"$d/.gash_env"; [[ "$(llm_exec "seq 2 | xargs echo")" == "1 2" ]]; [[ "$(llm_exec "rm -rf /" 2>&1 >/dev/null | jq -r .error)" == dangerous_command_blocked ]]'
+
+# llm_exec_security_spec.sh:137 - GASH_LLM_SANDBOX=1 without bwrap is refused (split: the bwrap-arg construction is a Go unit test)
+exec bash -c 'set -euo pipefail; d="$WORK/e137"; mkdir -p "$d/empty"; printf ''GASH_LLM_SANDBOX=1\n'' >"$d/.gash_env"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; [[ "$(PATH="$d/empty" llm_exec "echo hi" 2>&1 >/dev/null | jq -r .error)" == sandbox_unavailable ]]'
+
+# llm_exec_security_spec.sh:179 - llm_grep and llm_find never read secret files (engine-independent: rg on PATH or not)
+exec bash -c 'set -euo pipefail; d="$WORK/e179"; mkdir -p "$d/p/.ssh" "$d/bin"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; printf ''TOKEN=needle\n'' >"$d/p/.ENV"; printf ''needle\n'' >"$d/p/.ssh/notes.php"; printf ''needle\n'' >"$d/p/app.php"; for t in bash grep find xargs head realpath sed tr cat sort awk mkdir rm mktemp dirname basename; do p="$(type -P "$t")" && ln -sf "$p" "$d/bin/$t"; done; for pathset in "$PATH" "$d/bin"; do out="$(PATH="$pathset" llm_grep needle "$d/p")"; [[ "$out" == *app.php* && "$out" != *ENV* && "$out" != *.ssh* ]]; out="$(PATH="$pathset" llm_find "*" "$d/p" --contains needle)"; [[ "$out" == *app.php* && "$out" != *ENV* && "$out" != *.ssh* ]]; done; [[ "$(llm_grep needle "$d/p/.ENV" 2>&1 >/dev/null | jq -r .error)" == secret_file_blocked ]]; ln -s "$d/p/.ENV" "$d/p/conf.json"; [[ "$(llm_config "$d/p/conf.json" 2>&1 >/dev/null | jq -r .error)" == secret_file_blocked ]]'
+
+# llm_exec_security_spec.sh:212 - refuses forbidden system paths in arguments, globs and after cd
+exec bash -c 'set -euo pipefail; d="$WORK/e212"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; cd "$d"; ln -s /proc/self "$d/me"; v(){ llm_exec "$1" 2>&1 >/dev/null | jq -r .error; }; rel="$(realpath --relative-to="$d" /proc 2>/dev/null)" || rel="../../../../../../../../proc"; for line in "head -c 50 /proc/self/environ" "cat /proc/self/cmdline" "ls /sys" "cat /root/.bashrc" "head /etc/shadow" "cat $rel/self/environ" "cat me/environ" "cd / && cat proc/self/environ" "cd / && ls proc" "cd /etc && cat shadow" "grep -f/proc/self/environ x" "ls --directory=/sys" "git -C /root status" "cat ~root/.profile" "wc -c /dev/sda"; do [[ "$(v "$line")" == forbidden_path ]] || { echo "not refused: $line"; exit 1; }; done; if [[ -d /proc/self ]]; then [[ "$(v "cat /pro?/self/environ")" == forbidden_path ]]; fi; err="$(llm_exec "cat /proc/self/environ" 2>&1 >/dev/null || true)"; jq -e ''.action == "FATAL" and .recoverable == false and .details == "/proc/self/environ"'' <<<"$err" >/dev/null; [[ "$(llm_exec "cat /dev/null && echo ok")" == ok ]]; [[ "$(llm_exec "ls nothing 2>/dev/null || echo none")" == none ]]; [[ "$(llm_exec "echo /proc/x")" == /proc/x ]]; printf ''see /proc/cpuinfo\n'' >notes.txt; [[ "$(llm_exec "grep /proc/ notes.txt")" == "see /proc/cpuinfo" ]]; [[ "$(llm_exec "cat ./notes.txt")" == "see /proc/cpuinfo" ]]'
+
+# llm_exec_security_spec.sh:248 - reads ~/.gash_env quietly at startup in headless (split: the warn-once replay is a Go unit test)
+exec bash -c 'set -euo pipefail; d="$WORK/e248"; mkdir -p "$d"; printf ''%s\n'' "garbage line" ''GASH_LLM_EXEC_ALLOW=seq'' >"$d/.gash_env"; chmod 600 "$d/.gash_env"; export HOME="$d"; cd "$d"; out="$(GASH_HEADLESS=1 bash --noprofile --norc -c "source \"$GASH_SH\"; llm_exec \"seq 2\"" 2>"$d/err")"; [[ "$out" == $''1\n2'' && ! -s "$d/err" ]]'
+
+# llm_exec_security_spec.sh:264 - the grep fallback (no rg on PATH) skips nested secret directories
+exec bash -c 'set -euo pipefail; d="$WORK/e264"; mkdir -p "$d/bin" "$d/p/.config/gcloud" "$d/p/src" "$d/p/node_modules" "$d/p/sp ace" "$d/p/a/.kube"; for t in bash grep find xargs head realpath sed tr cat sort awk mkdir rm mktemp dirname basename; do p="$(type -P "$t")" && ln -sf "$p" "$d/bin/$t"; done; printf ''needle\n'' >"$d/p/.config/gcloud/creds.py"; printf ''needle\n'' >"$d/p/a/.kube/config.py"; printf ''needle\n'' >"$d/p/node_modules/x.js"; printf ''needle\n'' >"$d/p/.env"; printf ''needle\n'' >"$d/p/src/app.py"; printf ''needle\n'' >"$d/p/sp ace/b.js"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; export PATH="$d/bin"; ! type -P rg >/dev/null; out="$(llm_grep needle "$d/p")"; [[ "$out" == *"src/app.py:1:needle"* && "$out" == *"sp ace/b.js:1:needle"* ]]; [[ "$out" != *gcloud* && "$out" != *.kube* && "$out" != *node_modules* && "$out" != *.env* ]]; [[ "$(llm_grep needle "$d/p" --ext py)" == "$d/p/src/app.py:1:needle" ]]; out="$(llm_find "*" "$d/p" --contains needle)"; [[ "$out" == *src/app.py* && "$out" != *gcloud* && "$out" != *.kube* ]]; [[ -z "$(llm_grep zzz "$d/p" </dev/null)" ]]'

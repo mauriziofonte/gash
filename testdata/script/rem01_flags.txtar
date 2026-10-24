@@ -1,0 +1,44 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: REM-01
+#
+# An unknown option or a fourth positional is refused before any transfer
+# tool runs; --exclude PAT (two words) reaches rsync as --exclude=PAT.
+
+env GASH_HEADLESS=1
+env GASH_ENV_FILE=$WORK/hostenv
+env T=$WORK
+
+chmod 755 bin/rsync
+chmod 755 bin/scp
+
+# --delete -n: -n is refused, rsync never runs.
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src /tmp/build --delete -n'
+stderr '^Error: Unknown option: -n \(usage: remote_sync_push '
+! exists argv
+
+# --exclude .env is the pattern of --exclude.
+exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src /tmp/build --delete --exclude .env'
+grep '^--exclude=\.env$' argv
+grep '^--delete$' argv
+rm argv
+
+# remote_push has no --dry-run: refused, scp never runs.
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_push box a /tmp/x --dry-run'
+stderr 'Unknown option: --dry-run'
+! exists argv
+
+# A fourth positional.
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_pull box /tmp/x ./x extra'
+stderr '^Error: Unexpected argument: extra \(usage: remote_pull '
+! exists argv
+
+-- hostenv --
+HOST:box=deploy@box.example
+-- bin/rsync --
+#!/bin/sh
+for a in "$@"; do printf '%s\n' "$a"; done >>"$T/argv"
+-- bin/scp --
+#!/bin/sh
+for a in "$@"; do printf '%s\n' "$a"; done >>"$T/argv"

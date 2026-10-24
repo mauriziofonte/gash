@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:84
+# covers: output_style_render_spec.sh:85
+#
+# gash_db_test rendering (R2-R6): an unknown connection name, and a
+# configuration whose only entry has an unsupported driver. Both render the
+# ✗ Error status line on stderr (R5) and the word-prefixed form in plain
+# mode (R6).
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :84 missing - no such connection
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_db_test nosuch'
+stderr 'Error: Connection .nosuch. not found in ~/.gash_env'
+
+# --- :85 unknown-driver - the default connection is not usable
+! exec bash -c 'printf "DB:default=oracle://u:p@h:1/d\n" >.gash_env; chmod 600 .gash_env; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_db_test'
+stderr 'Error: '
+
+# --- R6: plain mode, word-prefixed error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; gash_db_test nosuch'
+stderr '^Error: Connection .nosuch. not found'
+! stderr '\x1b'

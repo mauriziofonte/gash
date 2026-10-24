@@ -1,0 +1,50 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:314
+# covers: output_style_render_spec.sh:315
+# covers: output_style_render_spec.sh:316
+# covers: output_style_render_spec.sh:317
+# covers: output_style_render_spec.sh:318
+# covers: output_style_render_spec.sh:319
+#
+# node_upgrade rendering (R2-R6). It is a shell-side function that calls the
+# caller's nvm (a stub here), so under testscript (no PTY) it renders in the
+# plain, word-prefixed form: the dry-run plan, the no-terminal confirmation
+# refusal, a real -y upgrade, up-to-date, the offline index error and the
+# nvm-not-loaded error.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :314 dry_run - the install/remove/up-to-date plan
+exec bash -c 'export NVM_DIR="$HOME/.nvm"; mkdir -p "$NVM_DIR/versions/node/v18.20.3" "$NVM_DIR/versions/node/v20.11.0" "$NVM_DIR/versions/node/v22.20.0"; nvm() { case "$1" in ls-remote) printf "        v18.20.8   (Latest LTS: Hydrogen)\n        v20.19.5   (Latest LTS: Iron)\n        v22.20.0   (Latest LTS: Jod)\n" ;; current) echo v20.11.0 ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_upgrade --dry-run'
+stdout 'Latest LTS: v22 \(Jod\)'
+stdout 'The following NEW versions will be installed:'
+stdout '2 newly installed, 2 to remove, 1 up to date\.'
+
+# --- :315 declined - no terminal to confirm
+! exec bash -c 'export NVM_DIR="$HOME/.nvmd"; mkdir -p "$NVM_DIR/versions/node/v18.20.3" "$NVM_DIR/versions/node/v20.11.0" "$NVM_DIR/versions/node/v22.20.0"; nvm() { case "$1" in ls-remote) printf "        v18.20.8   (Latest LTS: Hydrogen)\n        v20.19.5   (Latest LTS: Iron)\n        v22.20.0   (Latest LTS: Jod)\n" ;; current) echo v20.11.0 ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_upgrade'
+stderr 'No terminal to ask for confirmation: pass -y'
+
+# --- :316 upgraded - a real -y run against a richer nvm stub
+exec bash -c 'export NVM_DIR="$HOME/.nvmu"; mkdir -p "$NVM_DIR/versions/node/v18.20.3" "$NVM_DIR/versions/node/v20.11.0" "$NVM_DIR/versions/node/v22.20.0"; nvm() { case "$1" in ls-remote) printf "        v18.20.8   (Latest LTS: Hydrogen)\n        v20.19.5   (Latest LTS: Iron)\n        v22.20.0   (Latest LTS: Jod)\n" ;; current) echo v20.11.0 ;; install) mkdir -p "$NVM_DIR/versions/node/${2#v}" ;; uninstall) : ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_upgrade -y'
+stderr 'Installing v18.20.8'
+stderr 'Active version:'
+
+# --- :317 up_to_date
+exec bash -c 'export NVM_DIR="$HOME/.nvmt"; mkdir -p "$NVM_DIR/versions/node/v22.20.0"; nvm() { case "$1" in ls-remote) printf "        v22.20.0   (Latest LTS: Jod)\n" ;; current) echo v22.20.0 ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_upgrade'
+stdout '0 newly installed, 0 to remove, 1 up to date\.'
+
+# --- :318 offline - the remote index cannot be read
+! exec bash -c 'export NVM_DIR="$HOME/.nvmo"; mkdir -p "$NVM_DIR/versions/node/v22.20.0"; nvm() { return 1; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_upgrade'
+stderr 'Error: Unable to read the remote index'
+
+# --- :319 no_nvm
+! exec bash -c 'unset -f nvm; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_upgrade'
+stderr 'Error: nvm is not loaded in this shell'
+
+# --- R6: plain mode, no ESC
+! exec bash -c 'unset -f nvm; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; node_upgrade'
+stderr '^Error: nvm is not loaded'
+! stderr '\x1b'

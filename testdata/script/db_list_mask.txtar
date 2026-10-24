@@ -1,0 +1,18 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: CORE-03
+# covers: none (3.0 security fix)
+#
+# CORE-03 proving test: gash_db_list masks the password of a password-only
+# URL (empty user name) as it masks any other; a URL without a password is
+# shown unchanged. 2.x printed mysql://:SECRETPW@h/d as written.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+exec bash -c 'printf "DB:default=mysql://:SECRETPW@h/d\nDB:u=mysql://u:p@h/d\nDB:np=mysql://u@h/d\n" >.gash_env; chmod 600 .gash_env; source "$GASH_SH"; gash_db_list'
+stdout '^  default +mysql://:\*\*\*\*@h/d$'
+stdout '^  u +mysql://u:\*\*\*\*@h/d$'
+stdout '^  np +mysql://u@h/d$'
+! stdout 'SECRETPW'

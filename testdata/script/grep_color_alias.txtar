@@ -1,0 +1,12 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-06
+# covers: none (3.0 shell fix)
+#
+# SHELL-06: an interactive load defines grep='grep --color=auto' with the
+# system grep (GNU and BSD grep both take --color=auto); 2.x probed an
+# empty file and never defined it.
+
+env GASH_BANNER=0
+exec bash --norc --noprofile -i -c 'source "$GASH_SH" >/dev/null 2>&1; echo "grep=${BASH_ALIASES[grep]-none}"'
+stdout '^grep=grep --color=auto$'

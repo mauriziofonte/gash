@@ -1,0 +1,36 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:74
+# covers: output_style_render_spec.sh:75
+# covers: output_style_render_spec.sh:76
+#
+# gash_upgrade rendering (R2-R6): not-a-checkout error, a real upgrade
+# between two tags (then "already up-to-date"), and a dirty working tree.
+# The git commit identity comes from GIT_AUTHOR_*/GIT_COMMITTER_* env vars.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+env GIT_AUTHOR_NAME=t
+env GIT_AUTHOR_EMAIL=t@t
+env GIT_COMMITTER_NAME=t
+env GIT_COMMITTER_EMAIL=t@t
+
+# --- :74 not-a-checkout
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_upgrade'
+stderr 'Error: Gash is not installed in .*/nowhere as a git checkout'
+
+# --- :75 upgrade - fast-forward from v1.0 to v1.1, then up-to-date
+exec bash -c 'git init -q o && git -C o commit -q --allow-empty -m one && git -C o tag v1.0 && git clone -q o g && git -C g -c advice.detachedHead=false checkout -q v1.0 && git -C o commit -q --allow-empty -m two && git -C o tag v1.1; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/g" gash_upgrade; GASH_DIR="$HOME/g" gash_upgrade'
+stderr 'Checking for a new release in '
+stderr 'Upgraded Gash from v1.0 to v1.1\.'
+stderr 'already up-to-date \(v1.1'
+
+# --- :76 dirty - refuses with local modifications
+! exec bash -c 'git init -q g2 && git -C g2 commit -q --allow-empty -m one && : >g2/new; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/g2" gash_upgrade'
+stderr 'Error: Working tree at .* has local modifications'
+
+# --- R6: plain mode, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; GASH_DIR="$HOME/nowhere" gash_upgrade'
+stderr '^Error: Gash is not installed'
+! stderr '\x1b'

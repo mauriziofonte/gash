@@ -1,0 +1,41 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: install_uninstall_upgrade_spec.sh:10
+# covers: install_uninstall_upgrade_spec.sh:354
+# covers: install_uninstall_upgrade_spec.sh:372
+# covers: install_uninstall_upgrade_spec.sh:387
+# covers: install_uninstall_upgrade_spec.sh:402
+# covers: install_uninstall_upgrade_spec.sh:410
+# covers: install_uninstall_upgrade_spec.sh:435
+#
+# install.sh driven black-box: it clones a local git snapshot of the staged
+# checkout into HOME/.gash, writes the delimited profile block and ~/.gashrc,
+# and best-effort fetches the release binary. The fetch is pointed at a
+# nonexistent file:// release so no network is touched and it fails quietly;
+# the install still completes, exactly as the 2.x install rows asserted.
+
+env GASH_RELEASE_URL=file:///nonexistent
+
+# A git repository snapshot of the staged checkout, with a release tag.
+exec bash -c 'set -e; mkdir repo; tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -; git init -q repo; git -C repo config user.email t@e; git -C repo config user.name T; git -C repo config maintenance.auto false; git -C repo config gc.auto 0; git -C repo add -A; git -C repo commit -q -m snapshot; git -C repo tag v1.0.0'
+
+# :10 install.sh installs into HOME and updates profile
+exec bash -c 'set -e; h="$PWD/h1"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo" bash "$PWD/repo/install.sh" --assume-yes --quiet >/dev/null 2>&1; test -d "$h/.gash"; test -f "$h/.gashrc"; grep -q "source \"\$HOME/.gashrc\"" "$h/.bashrc"'
+
+# :354 install.sh uses the new delimited format
+exec bash -c 'set -e; h="$PWD/h2"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo" bash "$PWD/repo/install.sh" --assume-yes --quiet >/dev/null 2>&1; grep -q ">>> GASH START >>>" "$h/.bashrc"; grep -q "<<< GASH END <<<" "$h/.bashrc"'
+
+# :372 install.sh refuses to update a checkout with local modifications
+exec bash -c 'set -e; h="$PWD/h3"; mkdir -p "$h"; : >"$h/.bashrc"; r() { HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo" bash "$PWD/repo/install.sh" --assume-yes --quiet; }; r >/dev/null 2>&1; echo "# local edit" >>"$h/.gash/gash.sh"; rc=0; out="$(r 2>&1)" || rc=$?; test "$rc" -ne 0; case "$out" in *"local modifications"*) ;; *) echo "BAD:$out"; exit 1;; esac; grep -q "# local edit" "$h/.gash/gash.sh"'
+
+# :402 install.sh rejects unknown options
+exec bash -c 'rc=0; out="$(bash "$PWD/repo/install.sh" --bogus 2>&1)" || rc=$?; test "$rc" -eq 2; case "$out" in *"Unknown option: --bogus"*) ;; *) echo "BAD:$out"; exit 1;; esac'
+
+# :410 install.sh into a custom GASH_DIR writes that location into ~/.gashrc
+exec bash -c 'set -e; h="$PWD/h4"; mkdir -p "$h"; : >"$h/.bashrc"; custom="$h/opt dir/gash"; HOME="$h" PROFILE="$h/.bashrc" GASH_DIR="$custom" GASH_INSTALL_GIT_REPO="$PWD/repo" bash "$PWD/repo/install.sh" --assume-yes --quiet >/dev/null 2>&1; test -f "$custom/gash.sh"; out="$(env -u GASH_DIR HOME="$h" GASH_HEADLESS=1 bash -c "source \"\$HOME/.gashrc\"; printf %s \"\$GASH_DIR\"")"; test "$out" = "$custom"'
+
+# :435 install.sh installs a specific ref with GASH_INSTALL_REF
+exec bash -c 'set -e; mkdir repo2; tar -C "$GASH_STAGE" -cf - . | tar -C repo2 -xf -; git init -q repo2; git -C repo2 config user.email t@e; git -C repo2 config user.name T; git -C repo2 config maintenance.auto false; git -C repo2 config gc.auto 0; git -C repo2 add -A; git -C repo2 commit -q -m base; git -C repo2 tag v1.0.0; echo marker >repo2/MARKER; git -C repo2 add MARKER; git -C repo2 commit -q -m next; git -C repo2 branch feature; h="$PWD/h5"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo2" bash "$PWD/repo2/install.sh" --assume-yes --quiet >/dev/null 2>&1; test ! -e "$h/.gash/MARKER"; rm -rf "$h/.gash"; HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo2" GASH_INSTALL_REF=feature bash "$PWD/repo2/install.sh" --assume-yes --quiet >/dev/null 2>&1; test -e "$h/.gash/MARKER"'
+
+# :387 install.sh without a terminal and without --assume-yes fails cleanly
+exec bash -c 'if ! command -v setsid >/dev/null 2>&1; then exit 0; fi; h="$PWD/h6"; mkdir -p "$h"; : >"$h/.bashrc"; rc=0; out="$(HOME="$h" PROFILE="$h/.bashrc" GASH_INSTALL_GIT_REPO="$PWD/repo" setsid -w bash "$PWD/repo/install.sh" </dev/null 2>&1)" || rc=$?; test "$rc" -eq 1; case "$out" in *"--assume-yes"*) ;; *) echo "BAD:$out"; exit 1;; esac; test ! -e "$h/.gash"; test ! -s "$h/.bashrc"'

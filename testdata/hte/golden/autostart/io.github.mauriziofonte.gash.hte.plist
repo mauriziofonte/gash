@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Managed by gash hte install; gash hte uninstall removes it. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.mauriziofonte.gash.hte</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/home/me/.local/bin/gash</string>
+    <string>hte</string>
+    <string>__unit</string>
+    <string>start</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>XDG_CONFIG_HOME</key>
+    <string>/Users/me/.config</string>
+    <key>XDG_DATA_HOME</key>
+    <string>/Users/me/.local/share</string>
+    <key>XDG_STATE_HOME</key>
+    <string>/Users/me/.local/state</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>

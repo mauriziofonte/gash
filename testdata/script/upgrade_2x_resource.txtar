@@ -1,0 +1,71 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 self-management proof)
+#
+# docs/port/design/upgrade.md 3.1 step 3, compat.md 5 and upgrade.md 6: in
+# the interactive shell that loaded 2.1.0 and ran its gash_upgrade,
+# `source ~/.gashrc` loads 3.0.0 over the 2.x state (the whole interactive
+# layer, no error), and gash_unload then puts the shell back as it was
+# before 2.x loaded (the unload_exact snapshot: variables, aliases,
+# completion specs, shell options, traps, umask), the user's exported
+# GASH_* settings included. What 2.x set without recording the state
+# before it stays, as 2.x's own gash_unload left it: its module variables
+# (__AI_*, __LLM_*, __REMOTE_*, __SYSINFO_*, many read-only, which no
+# unload can remove) and LESSOPEN, LESSCLOSE, LS_COLORS (LSCOLORS on macOS) and an empty
+# PROMPT_COMMAND; the snapshot leaves those out.
+
+[!exec:git] skip 'needs git'
+[!v2tree] skip 'needs the v2.1.0 tag (a shallow checkout has no tags: the testscript CI job fetches them)'
+env GASH_BIN=
+env GASH_RELEASE_URL=file://$WORK/rel
+env GASH_BANNER=0
+
+gashfixture origin v2.1.0:2x v3.0.0:3x
+gashrelease 3.0.0 rel
+exec sh -c 'git -C origin show v2.1.0:install.sh >install2.sh'
+env GASH_INSTALL_GIT_REPO=$WORK/origin
+env GASH_INSTALL_REF=v2.1.0
+env PROFILE=/dev/null
+exec bash install2.sh --assume-yes --quiet
+
+exec bash --norc --noprofile -i drive.sh
+stdout '^first=2\.1\.0$'
+stdout '^upgraded=0$'
+stdout '^second=3\.0\.0 function$'
+stdout '^bin=3\.0\.0$'
+stdout '^unloaded=0$'
+exec cat second.err
+cmp before.txt after.txt
+exec git -C home/.gash status --porcelain
+! stdout .
+
+-- drive.sh --
+snap() {
+    {
+        declare -p | grep -vE '^declare -[-a-zA-Z]* (BASH[A-Z_]*|RANDOM|SRANDOM|SECONDS|LINENO|EPOCHREALTIME|EPOCHSECONDS|_|BASHPID|FUNCNAME|PIPESTATUS|HISTCMD|COLUMNS|LINES|OLDPWD|PWD|SHLVL|PPID|COMP_WORDBREAKS|MAILCHECK)=' |
+            grep -vE '^declare -[-a-zA-Z]* (__AI_[A-Z_]*|__LLM_[A-Z_]*|__REMOTE_[A-Z_]*|__SYSINFO_[A-Z_]*|LESSOPEN|LESSCLOSE|LS_COLORS|LSCOLORS|PROMPT_COMMAND)='
+        echo '--- alias'; alias -p
+        echo '--- complete'; complete -p
+        echo '--- shopt'; shopt -p
+        echo '--- set'; set -o
+        echo '--- trap'; trap -p
+        echo '--- umask'; umask
+    } >"$1"
+}
+snap before.txt
+source "$HOME/.gashrc" >/dev/null 2>&1
+echo "first=$GASH_VERSION"
+gash_upgrade >/dev/null 2>&1
+echo "upgraded=$?"
+source "$HOME/.gashrc" >/dev/null 2>second.err
+echo "second=$GASH_VERSION $(type -t gash_doctor)"
+echo "bin=$(gash version --json | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+gash_unload >/dev/null 2>&1
+echo "unloaded=$?"
+snap after.txt
+-- home/.gitconfig --
+[user]
+	name = t
+	email = t@t
+[advice]
+	detachedHead = false

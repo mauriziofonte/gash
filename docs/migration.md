@@ -1,5 +1,11 @@
 # Upgrading from Gash 1.x
 
+**Gash 3 does not migrate a Gash 1.x configuration.** Move to 2.1.0 first:
+check out `v2.1.0` in your Gash directory (`git -C ~/.gash fetch --tags &&
+git -C ~/.gash checkout v2.1.0`), open a new terminal and follow this page
+there, then run `gash_upgrade`. In Gash 3, `gash migrate` only prints that
+route and returns 1. The rest of this page describes the 2.x migration.
+
 Gash 2.0 changes a few defaults that 1.x users rely on. None of them
 silently rewrites your files: the first interactive shell after the upgrade
 opens a guided migration that shows each change, asks what you want, shows

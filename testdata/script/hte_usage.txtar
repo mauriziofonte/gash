@@ -1,0 +1,32 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# covers: none (3.0 HTE surface; no 2.x spec)
+# gash hte command-line errors: one envelope on stderr, nothing on
+# stdout, exit 1, the hint naming the command's help.
+
+! exec gash hte install --bogus
+! stdout .
+stderr '^\{"error":"unknown_option","details":"unknown flag: --bogus","action":"RETRY","recoverable":true,"hint":"Run: gash hte install --help"\}$'
+
+! exec gash hte site create --domain
+! stdout .
+stderr '^\{"error":"missing_value","details":"flag needs an argument: --domain","action":"RETRY","recoverable":true,"hint":"Run: gash hte site create --help"\}$'
+
+! exec gash hte php ini set --domain a.test memory_limit
+stderr '^\{"error":"missing_value","details":"accepts 2 arg\(s\), received 1",'
+
+! exec gash hte doctor extra
+stderr '^\{"error":"unexpected_argument",.*"hint":"Run: gash hte doctor --help"\}$'
+
+! exec gash hte frobnicate
+stderr '^\{"error":"unexpected_argument","details":"unknown command \\"frobnicate\\" for \\"gash hte\\"",'
+
+! exec gash hte help
+stderr '"error":"unexpected_argument"'
+
+# A flag pair that contradicts itself fails before anything runs.
+! exec gash hte install --restore-stage /x --no-restore
+! stdout .
+stderr '^\{"error":"conflicting_options","details":"--restore-stage and --no-restore contradict each other","action":"RETRY","recoverable":true,"hint":"pass one of them"\}$'
+
+! exec gash hte site create --domain a.test --docroot /srv --https --no-https
+stderr '^\{"error":"conflicting_options","details":"--https and --no-https contradict each other",'

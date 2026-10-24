@@ -1,0 +1,150 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: hgrep_spec.sh:6
+# covers: hgrep_spec.sh:33
+# covers: hgrep_spec.sh:57
+# covers: hgrep_spec.sh:77
+# covers: hgrep_spec.sh:96
+# covers: hgrep_spec.sh:117
+# covers: hgrep_spec.sh:141
+# covers: hgrep_spec.sh:163
+# covers: hgrep_spec.sh:185
+# covers: hgrep_spec.sh:199
+# covers: hgrep_spec.sh:210
+# covers: hgrep_spec.sh:224
+# covers: hgrep_spec.sh:241
+# covers: hgrep_spec.sh:258
+# covers: hgrep_spec.sh:275
+#
+# hgrep reads HISTFILE and needs no external tools, so each case points
+# HISTFILE at a fixture written in the work dir and drives the function
+# through the shim headless. -H forces plain (non-highlighted) output so the
+# lines are stable; the 2.x default is oldest-last (ascending epoch).
+
+env GASH_HEADLESS=1
+
+# --- hgrep_spec.sh:6 - deduplicates keeping last execution (JSON)
+exec bash -c 'export HISTFILE=hist_dedup; source "$GASH_SH"; hgrep echo -j'
+stdout 'command.:.echo world'
+stdout 'epoch.:1700000200,.count.:2,.command.:.echo hello'
+
+# --- hgrep_spec.sh:33 - respects --limit (last N)
+exec bash -c 'export HISTFILE=hist_limit; source "$GASH_SH"; hgrep cmd -n 2 -H'
+stdout 'cmd2'
+stdout 'cmd3'
+! stdout 'cmd1'
+
+# --- hgrep_spec.sh:57 - excludes self-references by default
+exec bash -c 'export HISTFILE=hist_self; source "$GASH_SH"; hgrep test -H'
+stdout 'echo test'
+! stdout 'hgrep test'
+
+# --- hgrep_spec.sh:77 - includes self-references with -a
+exec bash -c 'export HISTFILE=hist_self; source "$GASH_SH"; hgrep test -a -H'
+stdout 'hgrep test'
+stdout 'echo test'
+
+# --- hgrep_spec.sh:96 - --reverse shows newest first
+exec bash -c 'export HISTFILE=hist_rev; source "$GASH_SH"; hgrep cmd -r -H'
+stdout '(?s)new_cmd.*old_cmd'
+
+# --- hgrep_spec.sh:117 - --json outputs a valid JSON array
+exec bash -c 'export HISTFILE=hist_json; source "$GASH_SH"; hgrep git -j'
+stdout '^\[\{.*\}\]$'
+stdout '.timestamp.:'
+stdout '.command.:'
+stdout '.epoch.:'
+
+# --- hgrep_spec.sh:141 - --count returns the deduplicated count
+exec bash -c 'export HISTFILE=hist_count; source "$GASH_SH"; hgrep git -c'
+stdout '^2$'
+
+# --- hgrep_spec.sh:163 - --regex enables extended regex
+exec bash -c 'export HISTFILE=hist_regex; source "$GASH_SH"; hgrep -E "^git (push|pull)" -H'
+stdout 'git push'
+stdout 'git pull'
+! stdout 'status'
+
+# --- hgrep_spec.sh:185 - fails gracefully on a missing pattern
+! exec bash -c 'source "$GASH_SH"; hgrep'
+stderr 'Missing'
+
+# --- hgrep_spec.sh:199 - shows help on -h
+exec bash -c 'source "$GASH_SH"; hgrep -h'
+stdout 'hgrep PATTERN'
+stdout '--limit'
+stdout '--json'
+
+# --- hgrep_spec.sh:210 - rejects unknown options
+! exec bash -c 'source "$GASH_SH"; hgrep test --invalid'
+stderr 'Unknown option'
+
+# --- hgrep_spec.sh:224 - empty JSON array when no matches
+exec bash -c 'export HISTFILE=hist_none; source "$GASH_SH"; hgrep nonexistent -j'
+stdout '^\[\]$'
+
+# --- hgrep_spec.sh:241 - count is 0 when no matches
+exec bash -c 'export HISTFILE=hist_none; source "$GASH_SH"; hgrep nonexistent -c'
+stdout '^0$'
+
+# --- hgrep_spec.sh:258 - handles commands with special characters
+exec bash -c 'export HISTFILE=hist_special; source "$GASH_SH"; hgrep grep -H'
+stdout 'echo .hello world. \| grep -E .test\.\*pattern.'
+
+# --- hgrep_spec.sh:275 - JSON escapes special characters
+exec bash -c 'export HISTFILE=hist_escape; source "$GASH_SH"; hgrep echo -j'
+stdout 'echo \\.test with'
+stdout '\\\\'
+
+-- hist_dedup --
+#1700000000
+echo hello
+#1700000100
+echo world
+#1700000200
+echo hello
+-- hist_limit --
+#1700000000
+cmd1
+#1700000100
+cmd2
+#1700000200
+cmd3
+-- hist_self --
+#1700000000
+hgrep test
+#1700000100
+echo test
+-- hist_rev --
+#1700000000
+old_cmd
+#1700000200
+new_cmd
+-- hist_json --
+#1700000000
+git commit
+#1700000100
+git push
+-- hist_count --
+#1700000000
+git status
+#1700000100
+git push
+#1700000200
+git status
+-- hist_regex --
+#1700000000
+git push
+#1700000100
+git pull
+#1700000200
+git status
+-- hist_none --
+#1700000000
+git status
+-- hist_special --
+#1700000000
+echo "hello world" | grep -E "test.*pattern"
+-- hist_escape --
+#1700000000
+echo "test with \"quotes\""

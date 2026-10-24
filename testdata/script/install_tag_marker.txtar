@@ -1,0 +1,50 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SELF-10
+# covers: none (3.0 self-management proof)
+#
+# SELF-10 for the installer: a tag counts as signed only when it is an
+# annotated tag whose object ends with a signature block. An annotated tag
+# whose message quotes the marker (inside a line, or as a line with no END
+# block after it) and a lightweight tag are "not signed", so
+# GASH_REQUIRE_SIGNED=1 refuses them as unsigned, never as "signed, but the
+# signature could not be verified". Local repositories only, no network.
+
+env GASH_HEADLESS=1
+
+exec bash mkrepo.sh 'quoting -----BEGIN PGP SIGNATURE----- in text'
+! exec bash -c 'h="$PWD/h1"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Warning: v1\.0\.0 is not signed\.'
+! stdout 'could not be verified'
+! exists h1/.gash
+
+exec bash mkrepo.sh 'line marker'
+! exec bash -c 'h="$PWD/h2"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Warning: v1\.0\.0 is not signed\.'
+! stdout 'could not be verified'
+
+exec bash mkrepo.sh ''
+! exec bash -c 'h="$PWD/h3"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Warning: v1\.0\.0 is not signed\.'
+! stdout 'could not be verified'
+
+-- mkrepo.sh --
+# mkrepo.sh MESSAGE: a fresh repo of the staged tree tagged v1.0.0, an
+# annotated tag with MESSAGE ("line marker": the BEGIN line alone on a line;
+# empty: a lightweight tag).
+set -e
+rm -rf repo
+mkdir repo
+tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -
+git init -q repo
+git -C repo config user.email t@e
+git -C repo config user.name T
+git -C repo config maintenance.auto false
+git -C repo config gc.auto 0
+git -C repo add -A
+git -C repo commit -q -m snapshot
+case "$1" in
+'') git -C repo tag v1.0.0 ;;
+'line marker') git -C repo tag -a v1.0.0 -m "$(printf 'see\n-----BEGIN PGP SIGNATURE-----\nnot a signature')" ;;
+*) git -C repo tag -a v1.0.0 -m "$1" ;;
+esac

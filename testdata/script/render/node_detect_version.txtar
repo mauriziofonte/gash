@@ -1,0 +1,44 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:309
+# covers: output_style_render_spec.sh:310
+# covers: output_style_render_spec.sh:311
+# covers: output_style_render_spec.sh:312
+# covers: output_style_render_spec.sh:313
+#
+# node_detect_version rendering (R2-R6): it emits a JSON object in headless
+# mode. detected (from .nvmrc resolved against the NVM tree), not_installed
+# (a warning plus a fallback version), explicit --json, the missing-NVM
+# error and the unknown-option error.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :309 detected - .nvmrc 20 resolves to the installed v20.11.0
+exec bash -c 'export NVM_DIR="$HOME/.nvm"; mkdir -p "$NVM_DIR/versions/node/v20.11.0" "$NVM_DIR/versions/node/v22.1.0"; echo 20 >.nvmrc; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_detect_version'
+stdout '"version":"20"'
+stdout '"full_version":"20\.11\.0"'
+stdout '"node_command":"node20"'
+
+# --- :310 not_installed - wanted 18, falls back with a warning
+exec bash -c 'export NVM_DIR="$HOME/.nvm2"; mkdir -p "$NVM_DIR/versions/node/v22.1.0"; echo 18 >.nvmrc; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_detect_version'
+stdout '"full_version":"22\.1\.0"'
+stderr 'Node 18 not installed'
+
+# --- :311 json - explicit flag
+exec bash -c 'export NVM_DIR="$HOME/.nvm3"; mkdir -p "$NVM_DIR/versions/node/v22.1.0"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_detect_version --json'
+stdout '"version":"22"'
+
+# --- :312 no_nvm - the NVM directory is absent
+! exec bash -c 'export NVM_DIR="$HOME/none"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_detect_version'
+stderr 'Error: NVM directory not found'
+
+# --- :313 bad_option
+! exec bash -c 'export NVM_DIR="$HOME/.nvm4"; mkdir -p "$NVM_DIR"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; node_detect_version --bogus'
+stderr 'Error: Unknown option: --bogus'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export NVM_DIR="$HOME/none2"; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; node_detect_version'
+stderr '^Error: NVM directory not found'
+! stderr '\x1b'

@@ -1,0 +1,28 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# The multi-PHP image of the gash hte end-to-end test: the base image (the
+# distro Apache and PHP-FPM 8.3) plus PHP-FPM 7.4, 8.2 and 8.4 from the
+# official php:X.Y-fpm images, copied side by side into /opt/php/X.Y
+# (bundle.sh) and exposed in the Debian layout (multiphp.sh). The
+# ondrej/sury repositories are not reachable from the cloud session
+# (docs/port/STATE.md), so CI builds the same image (Ubuntu only: the
+# distro 8.3 completes the set).
+ARG BASE=gash-hte-e2e-base:ubuntu-24.04
+FROM mirror.gcr.io/library/php:7.4-fpm AS php74
+COPY bundle.sh /bundle.sh
+RUN sh /bundle.sh 7.4
+
+FROM mirror.gcr.io/library/php:8.2-fpm-bookworm AS php82
+COPY bundle.sh /bundle.sh
+RUN sh /bundle.sh 8.2
+
+FROM mirror.gcr.io/library/php:8.4-fpm-bookworm AS php84
+COPY bundle.sh /bundle.sh
+RUN sh /bundle.sh 8.4
+
+FROM ${BASE}
+RUN apt-get update && apt-get install -y --no-install-recommends patchelf && rm -rf /var/lib/apt/lists/*
+COPY --from=php74 /opt/php/7.4 /opt/php/7.4
+COPY --from=php82 /opt/php/8.2 /opt/php/8.2
+COPY --from=php84 /opt/php/8.4 /opt/php/8.4
+COPY multiphp.sh /multiphp.sh
+RUN sh /multiphp.sh 7.4 8.2 8.4
