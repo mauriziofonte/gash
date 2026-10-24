@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
@@ -311,4 +312,15 @@ func TestLedger_SYS52_fix(t *testing.T) {
 // is, so `echo "--- header"` lands on it.
 func TestLedger_SYS52_2x(t *testing.T) {
 	require.Equal(t, "<Plugin cpu>--- Monit\n", string(headN([]byte("<Plugin cpu>"), 20))+"--- Monit\n")
+}
+
+// 3.0: SYS-26 fixed: the completion offers every word of Sections (the
+// parser's list, overview included) and the flags, nothing else.
+func TestLedger_SYS26(t *testing.T) {
+	f, ok := registry.Lookup("sysinfo")
+	require.True(t, ok)
+	m := regexp.MustCompile(`compgen -W "([^"]*)"`).FindStringSubmatch(f.Completion)
+	require.NotNil(t, m, f.Completion)
+	require.Equal(t, append(append([]string{}, Sections...), "--llm", "--no-color", "--help"), strings.Fields(m[1]))
+	require.Contains(t, Sections, "overview")
 }

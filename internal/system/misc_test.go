@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -374,5 +375,34 @@ func TestLedger_SYS49(t *testing.T) {
 			require.Contains(t, usage, fl, name)
 			require.Contains(t, f.Fallback.Usage, fl, name)
 		}
+	}
+}
+
+// 3.0: SYS-27 fixed: every function of the module completes its own
+// flags (the others only --help, their words completing as files).
+func TestLedger_SYS27(t *testing.T) {
+	words := regexp.MustCompile(`compgen -W "([^"]*)"`)
+	for name, want := range map[string]string{
+		"hgrep":                "-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help",
+		"port_kill":            "-y --yes -f --force --help",
+		"process_kill":         "-y --yes -f --force --help",
+		"services_stop":        "-y --yes -f --force --dry-run --help",
+		"wsl_restart":          "-y --yes --help",
+		"wsl_shutdown":         "-y --yes --help",
+		"wsl_compact":          "--status -y --yes --help",
+		"ip_public":            "--no-color --raw --help",
+		"disk_usage":           "--no-color --help",
+		"history_grep":         "--help",
+		"process_find":         "--help",
+		"sudo_last":            "--help",
+		"wsl_explorer":         "--help",
+		"wsl_taskmanager":      "--help",
+		"gash_ssh_auto_unlock": "--help",
+	} {
+		f, ok := registry.Lookup(name)
+		require.True(t, ok, name)
+		m := words.FindStringSubmatch(f.Completion)
+		require.NotNil(t, m, name)
+		require.Equal(t, want, m[1], name)
 	}
 }

@@ -13,7 +13,9 @@ import (
 	"context"
 	"io"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/help"
@@ -23,7 +25,8 @@ import (
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
-// Sections are the words sysinfo takes, in the order of its help.
+// Sections are the words sysinfo takes, in the order of its help: the
+// one list of the parser, the error lines and the completion (SYS-26).
 var Sections = []string{"overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all"}
 
 // needsSudo are the sections that read anything as root; sysinfo asks
@@ -60,25 +63,24 @@ func (m *Module) sysinfo(c *invoke.Call) int {
 	}
 	section, llm, noColor := "", false, false
 	for _, a := range c.Args {
-		switch a {
-		case "--llm":
+		switch {
+		case a == "--llm":
 			llm = true
-		case "--no-color":
+		case a == "--no-color":
 			noColor = true
-		case "overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all":
-			if section != "" {
-				p := ui.NewPrinter(c.Stderr, c.Term, false)
-				p.Error("Only one section allowed: " + a)
-				p.Info("Sections: overview identity storage services auth network security webstack mail infra system all")
-				return 1
-			}
-			section = a
-		default:
+		case !slices.Contains(Sections, a):
 			p := ui.NewPrinter(c.Stderr, c.Term, false)
 			p.Error("Unknown argument: " + a)
-			p.Info("Sections: overview identity storage services auth network security webstack mail infra system all")
+			p.Info("Sections: " + strings.Join(Sections, " "))
 			p.Info("Flags: --llm, --no-color")
 			return 1
+		case section != "":
+			p := ui.NewPrinter(c.Stderr, c.Term, false)
+			p.Error("Only one section allowed: " + a)
+			p.Info("Sections: " + strings.Join(Sections, " "))
+			return 1
+		default:
+			section = a
 		}
 	}
 	if section == "" {

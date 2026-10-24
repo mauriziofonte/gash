@@ -633,7 +633,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "disk_usage", Usage: "disk_usage [--no-color]", Description: "Displays disk usage for real filesystem types, formatted for easy reading. Alias: du2"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "disk_usage / ip_public — just --no-color",
+		CompletionComment: "disk_usage — just --no-color",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --help\" -- \"$cur\")\n" +
@@ -1429,10 +1429,15 @@ var functions = []Function{
 				"  Runs once per session (tracked by GASH_SSH_AUTOUNLOCK_RAN).\n" +
 				"  Only unlocks keys that are not already loaded in the agent.",
 		},
-		Fallback:  &Usage{Program: "gash_ssh_auto_unlock", Usage: "gash_ssh_auto_unlock", Description: "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)."},
-		LoadsEnv:  true,
-		ShellVars: []string{"HOME", "OSTYPE"},
-		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_SSH_AUTOUNLOCK_RAN", "HOME", "NO_COLOR", "OSTYPE", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"},
+		Fallback:          &Usage{Program: "gash_ssh_auto_unlock", Usage: "gash_ssh_auto_unlock", Description: "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)."},
+		LoadsEnv:          true,
+		ShellVars:         []string{"HOME", "OSTYPE"},
+		Env:               []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_SSH_AUTOUNLOCK_RAN", "HOME", "NO_COLOR", "OSTYPE", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "gash_uninstall",
@@ -2001,9 +2006,14 @@ var functions = []Function{
 				"  With --json:\n" +
 				"  [{\"timestamp\":\"2024-01-15 14:52:01\",\"epoch\":1705330321,\"count\":1,\"command\":\"git push origin main\"},...]",
 		},
-		Fallback:  &Usage{Program: "hgrep", Usage: "hgrep PATTERN [OPTIONS]", Description: "Smart history search with timestamps and deduplication"},
-		ShellVars: []string{"HISTFILE", "HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
+		Fallback:          &Usage{Program: "hgrep", Usage: "hgrep PATTERN [OPTIONS]", Description: "Smart history search with timestamps and deduplication"},
+		ShellVars:         []string{"HISTFILE", "HOME"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
+		CompletionComment: "hgrep — its options",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "history_grep",
@@ -2044,8 +2054,13 @@ var functions = []Function{
 				"  command's first two words, column 3 the rest; duplicates and the\n" +
 				"  history_grep/hg lines themselves are left out.",
 		},
-		Fallback: &Usage{Program: "history_grep", Usage: "history_grep PATTERN...", Description: "Searches the bash history for commands matching PATTERN (words joined with spaces). Alias: hg"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "history_grep", Usage: "history_grep PATTERN...", Description: "Searches the bash history for commands matching PATTERN (words joined with spaces). Alias: hg"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "ip_public",
@@ -2997,8 +3012,13 @@ var functions = []Function{
 				"  SIGKILL for processes still alive after about 3 seconds.\n" +
 				"  Returns 1 when a process could not be signalled (permission denied).",
 		},
-		Fallback: &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Kill functions — -y/--yes and the 2.0 -f/--force",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "process_find",
@@ -3035,8 +3055,13 @@ var functions = []Function{
 				"  NAME is matched literally, ignoring case, against each command line\n" +
 				"  (not the user or other columns). Returns 1 when nothing matches.",
 		},
-		Fallback: &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "process_kill",
@@ -3076,8 +3101,13 @@ var functions = []Function{
 				"  NAME is a name, not a pattern: regex characters match themselves, and\n" +
 				"  a name longer than 15 bytes is matched against the full program name.",
 		},
-		Fallback: &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Kill functions — -y/--yes and the 2.0 -f/--force",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_exec",
@@ -3317,8 +3347,13 @@ var functions = []Function{
 				"  fails. Headless or without a terminal it runs sudo -n, and stops\n" +
 				"  before anything when sudo needs a password.",
 		},
-		Fallback: &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "services_stop — confirmation flags and --dry-run",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "sudo_last",
@@ -3353,8 +3388,13 @@ var functions = []Function{
 				"  declining (or no terminal to ask on) returns 1, and so does a shell\n" +
 				"  with no previous command in its history.",
 		},
-		Fallback: &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "sysinfo",
@@ -3420,7 +3460,7 @@ var functions = []Function{
 		ShellVars:         []string{"TMPDIR"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "TMPDIR"},
 		CompletionComment: "System info sections + flags",
-		Completion:        "mapfile -t COMPREPLY < <(compgen -W \"identity storage services auth network security webstack mail infra system all --llm --no-color\" -- \"$cur\")",
+		Completion:        "mapfile -t COMPREPLY < <(compgen -W \"overview identity storage services auth network security webstack mail infra system all --llm --no-color --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "tree_stats",
@@ -3563,8 +3603,13 @@ var functions = []Function{
 				"  Defaults to current directory if no path specified.\n" +
 				"  Only works inside WSL (Windows Subsystem for Linux).",
 		},
-		Fallback: &Usage{Program: "wsl_explorer", Usage: "wsl_explorer [PATH]", Description: "Open Windows Explorer in the current or specified directory. Alias: wex"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_explorer", Usage: "wsl_explorer [PATH]", Description: "Open Windows Explorer in the current or specified directory. Alias: wex"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_restart",
@@ -3599,8 +3644,13 @@ var functions = []Function{
 				"  with the servers running in them. WSL starts again with the next\n" +
 				"  terminal. Asks first; -y skips the question. Same as wsl_shutdown.",
 		},
-		Fallback: &Usage{Program: "wsl_restart", Usage: "wsl_restart [-y]", Description: "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_restart", Usage: "wsl_restart [-y]", Description: "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "WSL stop functions — -y/--yes",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_shutdown",
@@ -3631,8 +3681,13 @@ var functions = []Function{
 				"  Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.\n" +
 				"  Asks first; -y skips the question.",
 		},
-		Fallback: &Usage{Program: "wsl_shutdown", Usage: "wsl_shutdown [-y]", Description: "Shut down WSL (saves bash history first). Alias: wsd"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_shutdown", Usage: "wsl_shutdown [-y]", Description: "Shut down WSL (saves bash history first). Alias: wsd"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "WSL stop functions — -y/--yes",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_taskmanager",
@@ -3664,8 +3719,13 @@ var functions = []Function{
 				"  Does not change your current working directory.\n" +
 				"  Only works inside WSL (Windows Subsystem for Linux).",
 		},
-		Fallback: &Usage{Program: "wsl_taskmanager", Usage: "wsl_taskmanager", Description: "Open Windows Task Manager from WSL. Alias: wtm"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_taskmanager", Usage: "wsl_taskmanager", Description: "Open Windows Task Manager from WSL. Alias: wtm"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 }
 

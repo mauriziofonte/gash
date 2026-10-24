@@ -82,7 +82,7 @@ __gash_complete() {
             fi
             ;;
 
-        # disk_usage / ip_public — just --no-color
+        # disk_usage — just --no-color
         disk_usage)
             if [[ "$cur" == -* ]]; then
                 mapfile -t COMPREPLY < <(compgen -W "--no-color --help" -- "$cur")
@@ -130,6 +130,13 @@ __gash_complete() {
             fi
             ;;
 
+        # Only --help as an option (words complete as files)
+        gash_ssh_auto_unlock | history_grep | process_find | sudo_last | wsl_explorer | wsl_taskmanager)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "--help" -- "$cur")
+            fi
+            ;;
+
         # Git tag completion
         git_add_tag | git_delete_tag | git_list_tags)
             if type -P git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -141,6 +148,13 @@ __gash_complete() {
 
         git_sync)
             mapfile -t COMPREPLY < <(compgen -W "--message --no-push --dry-run --help" -- "$cur")
+            ;;
+
+        # hgrep — its options
+        hgrep)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help" -- "$cur")
+            fi
             ;;
 
         # ip_public — --no-color and --raw
@@ -163,9 +177,23 @@ __gash_complete() {
             fi
             ;;
 
+        # Kill functions — -y/--yes and the 2.0 -f/--force
+        port_kill | process_kill)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes -f --force --help" -- "$cur")
+            fi
+            ;;
+
+        # services_stop — confirmation flags and --dry-run
+        services_stop)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes -f --force --dry-run --help" -- "$cur")
+            fi
+            ;;
+
         # System info sections + flags
         sysinfo)
-            mapfile -t COMPREPLY < <(compgen -W "identity storage services auth network security webstack mail infra system all --llm --no-color" -- "$cur")
+            mapfile -t COMPREPLY < <(compgen -W "overview identity storage services auth network security webstack mail infra system all --llm --no-color --help" -- "$cur")
             ;;
 
         # tree_stats: directories + flags
@@ -179,6 +207,13 @@ __gash_complete() {
 
         wsl_compact)
             mapfile -t COMPREPLY < <(compgen -W "--status -y --yes --help" -- "$cur")
+            ;;
+
+        # WSL stop functions — -y/--yes
+        wsl_restart | wsl_shutdown)
+            if [[ "$cur" == -* ]]; then
+                mapfile -t COMPREPLY < <(compgen -W "-y --yes --help" -- "$cur")
+            fi
             ;;
 
         # The reference card topics, and the 3.x commands of the binary
