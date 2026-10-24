@@ -502,8 +502,12 @@ func TestWarningsNeverShowContent(t *testing.T) {
 			t.Errorf("no warning for line %s: %s", n, out)
 		}
 	}
+	// The file's own path (a random temp name, which may hold a checked
+	// word such as "box") is not content: the words are looked for with
+	// it replaced (LEDGER TEST-12).
+	scan := strings.ReplaceAll(out, p, "FILE")
 	for _, leak := range []string{"GASH_NOPE", "topsecret", "PASSWORD", "hunter2", "sk-ant", "PASTED", "prod", "ftp", "pw@", "openai", "sk-zzz", "box", "nohost", "missing_key", "pass"} {
-		if strings.Contains(out, leak) {
+		if strings.Contains(scan, leak) {
 			t.Errorf("leaked %s: %s", leak, out)
 		}
 	}
