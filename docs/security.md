@@ -348,6 +348,16 @@ A new install is cloned and checked in a temporary directory next to the
 install location and moved into place only when it passes, so a refusal leaves
 nothing behind. `GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
 
+The binary (`gash`, and `gash-hosts-helper`, which `gash hte install` makes a
+root-owned sudo target) is verified before it is installed: against the
+SHA-256 the tagged tree pins in `release/SHA256SUMS`, so a signed tag covers
+the binaries too, else against the release's `checksums.txt`. With
+`GASH_REQUIRE_SIGNED=1` only a pinned binary is accepted, and a helper the tree
+does not pin is not installed. `gash_upgrade` (`gash update`) downloads and
+verifies the new binary before it checks out the new tag, checks that it
+answers its version, then loads the new tree in a test shell and checks out
+the previous tag again when that fails.
+
 ## Reporting a vulnerability
 
 Do not open a public issue. Follow [SECURITY.md](../SECURITY.md) at the
