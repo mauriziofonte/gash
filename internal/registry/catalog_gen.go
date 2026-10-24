@@ -2824,7 +2824,7 @@ var functions = []Function{
 			Module: "node",
 			Body: "" +
 				"USAGE\n" +
-				"  node_detect_version [project_dir] [--json]\n" +
+				"  node_detect_version [project_dir] [--json|--llm]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Human-readable, current directory\n" +
@@ -2835,10 +2835,20 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Priority: .nvmrc -> .node-version -> package.json engines.node -> latest\n" +
-				"  installed. JSON output is also emitted automatically under\n" +
-				"  GASH_HEADLESS=1, --json is not required there.",
+				"  installed, read in project_dir only (no walk-up). Every source is\n" +
+				"  reduced to its major (lts/NAME through nvm's alias files, then the\n" +
+				"  codename table), and full_version is the newest installed patch of\n" +
+				"  that major: an exact pin such as v20.9.0 resolves to the newest\n" +
+				"  installed v20 patch. Installed versions are the vX.Y.Z directories of\n" +
+				"  $NVM_DIR/versions/node (prereleases and other names do not count).\n" +
+				"  When the major is not installed, a warning names it and the newest\n" +
+				"  installed version is used. A project_dir that is not a directory gives\n" +
+				"  \"Warning: Directory not found: DIR\" with the same answer and status 0.\n" +
+				"  Unknown options are refused before the NVM directory is checked.\n" +
+				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
+				"  --json (or --llm) is not required there.",
 		},
-		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
+		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json|--llm]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "NVM_DIR"},
 	},
@@ -2993,7 +3003,7 @@ var functions = []Function{
 			Module: "php",
 			Body: "" +
 				"USAGE\n" +
-				"  php_detect_version [project_dir] [--json]\n" +
+				"  php_detect_version [project_dir] [--json|--llm]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Human-readable, current directory\n" +
@@ -3003,11 +3013,23 @@ var functions = []Function{
 				"  php_detect_version /path/to/project --json\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Priority: .target-php-version (walk-up) -> composer.json .require.php ->\n" +
-				"  .github/copilot-instructions.md -> fallback 8.4. JSON output is also\n" +
-				"  emitted automatically under GASH_HEADLESS=1, --json is not required there.",
+				"  Priority: .target-php-version (the first X.Y of its first line, looked\n" +
+				"  up in project_dir, then in every parent directory except /) ->\n" +
+				"  composer.json .require.php -> .github/copilot-instructions.md (the\n" +
+				"  first \"php X.Y\") -> fallback 8.4. composer.json and\n" +
+				"  copilot-instructions.md are read in project_dir only.\n" +
+				"  A composer constraint is split on | and ||; each alternative counts by\n" +
+				"  its lower bound (^7.4 is 7.4; a bare major such as ^8, >=8 or 8.* is\n" +
+				"  8.0; * alone counts for nothing). The highest alternative whose\n" +
+				"  /usr/bin/phpX.Y is installed wins, else the highest alternative.\n" +
+				"  When /usr/bin/phpX.Y is not installed, a warning on stderr says so and\n" +
+				"  names the binary used instead (/usr/bin/phpX, then php on PATH); the\n" +
+				"  JSON is unchanged. A project_dir that is not a directory gives\n" +
+				"  \"Warning: Directory not found: DIR\" with the same answer and status 0.\n" +
+				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
+				"  --json (or --llm) is not required there.",
 		},
-		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
+		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json|--llm]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{

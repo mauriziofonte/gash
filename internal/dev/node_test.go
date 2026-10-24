@@ -78,21 +78,50 @@ func TestNodeDetect(t *testing.T) {
 	require.NotContains(t, human.out, `"version"`)
 }
 
-// TestLedger_DEV05_2x: every entry of versions/node counts (unfiltered):
-// a stray name becomes the newest, and a prerelease beats its release.
-func TestLedger_DEV05_2x(t *testing.T) {
+// 3.0: DEV-05 fixed. Only vX.Y.Z entries of versions/node are installed
+// versions: a stray name and a prerelease are ignored.
+func TestLedger_DEV05_fix(t *testing.T) {
 	m := devMod(t, "")
 
 	nvm := nvmTree(t, "v20.11.1", "zzz-broken")
 	r := call(m, "", baseEnv(phys(t), map[string]string{"NVM_DIR": nvm}), "node_detect_version", phys(t), "--llm")
-	require.Equal(t, "zzz-broken", field(r.out, "version"))
-	require.Equal(t, "nodezzz-broken", field(r.out, "node_command"))
-	require.Contains(t, r.err, "Node zzz-broken not installed. Using zzz-broken.")
+	require.Equal(t, "20", field(r.out, "version"))
+	require.Equal(t, "node20", field(r.out, "node_command"))
+	require.Empty(t, r.err)
 
 	nvm2 := nvmTree(t, "v20.11.1", "v20.12.0-rc.1")
 	r = call(m, "", baseEnv(phys(t), map[string]string{"NVM_DIR": nvm2}), "node_detect_version", phys(t), "--llm")
 	require.Equal(t, "20", field(r.out, "version"))
-	require.Equal(t, "20.12.0-rc.1", field(r.out, "full_version"))
+	require.Equal(t, "20.11.1", field(r.out, "full_version"))
+
+	// Nothing but stray entries: no installed version.
+	r = call(m, "", baseEnv(phys(t), map[string]string{"NVM_DIR": nvmTree(t, "zzz-broken")}), "node_detect_version", "--llm")
+	require.Equal(t, 1, r.rc)
+	require.Contains(t, r.err, "No Node.js versions installed in NVM. Install: nvm install 20")
+}
+
+// 3.0: DEV-20 fixed. The arguments are parsed before the environment
+// checks: an unknown option is reported first; nvm_prune_versions takes
+// -y and --yes as synonyms of --force.
+func TestLedger_DEV20_fix(t *testing.T) {
+	m := devMod(t, "")
+	noNVM := baseEnv(phys(t), map[string]string{"NVM_DIR": "/nonexistent-xyz"})
+	for _, c := range []struct {
+		fn, arg, want string
+	}{
+		{"node_detect_version", "--bogus", "Error: Unknown option: --bogus\n"},
+		{"node_upgrade", "--bogus", "Error: Unknown option: --bogus (usage: node_upgrade [-y] [--dry-run])\n"},
+		{"nvm_prune_versions", "--bogus", "Error: Unknown option: --bogus (usage: nvm_prune_versions [-y|--yes|--force])\n"},
+		{"node_upgrade", "-y", "Error: " + nvmMissing + "\n"},
+		{"nvm_prune_versions", "-y", "Error: " + nvmMissing + "\n"},
+		{"nvm_prune_versions", "--yes", "Error: " + nvmMissing + "\n"},
+		{"nvm_prune_versions", "--force", "Error: " + nvmMissing + "\n"},
+		{"node_detect_version", "--llm", "Error: NVM directory not found (/nonexistent-xyz)."},
+	} {
+		r := call(m, "", noNVM, c.fn, c.arg)
+		require.Equal(t, 1, r.rc, "%s %s", c.fn, c.arg)
+		require.True(t, strings.HasPrefix(r.err, c.want), "%s %s: %s", c.fn, c.arg, r.err)
+	}
 }
 
 // TestLedger_DEV19_2x: an exact pin resolves to the newest installed

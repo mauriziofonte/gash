@@ -1,0 +1,16 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: DEV-01
+#
+# A detected PHP version whose binary is not installed is named on stderr;
+# the JSON and the exit status are unchanged.
+
+env GASH_HEADLESS=1
+
+exec bash -c 'source "$GASH_SH"; php_detect_version p --json'
+stdout '^\{"version":"5\.1","php_raw_binary":"[^"]+","php_command":"php51",'
+stderr '^Warning: PHP 5\.1 is not installed; php_raw_binary falls back to '
+
+-- p/.target-php-version --
+5.1
