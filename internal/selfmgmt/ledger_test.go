@@ -5,6 +5,7 @@ package selfmgmt
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,4 +35,78 @@ func TestLedger_SELF15_2x(t *testing.T) {
 		require.Equal(t, 0, rc)
 		require.Equal(t, "alice\n", out)
 	})
+}
+
+// LEDGER SELF-02: uninstall keeps a ~/.gashrc that holds the user's own
+// lines as ~/.gashrc.gash-uninstall.bak (same bytes), removes one an
+// installer wrote, and keeps and lists the profile backups sed made
+// (3.0: SELF-02 fixed; 2.x removed all of them).
+func TestLedger_SELF02(t *testing.T) {
+	tmpl2x, err := knownGashrc.ReadFile("gashrc/2x.gashrc")
+	require.NoError(t, err)
+	tmpl1x, err := knownGashrc.ReadFile("gashrc/1x-1538e53.gashrc")
+	require.NoError(t, err)
+	custom := strings.Replace(string(tmpl2x), `__gash_home="${GASH_DIR:-$HOME/.gash}"`, `__gash_home="${GASH_DIR:-/opt/my\ gash}"`, 1)
+	require.NotEqual(t, string(tmpl2x), custom)
+	block := "# before\n# >>> GASH START >>>\nif [ -f ~/.gashrc ]; then\n  source ~/.gashrc\nfi\n# <<< GASH END <<<\n# after\n"
+
+	uninstallIn := func(t *testing.T, gashrc string) (string, string) {
+		t.Helper()
+		d := t.TempDir()
+		home := filepath.Join(d, "home")
+		require.NoError(t, os.MkdirAll(filepath.Join(home, ".gash/lib/core"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".gash/gash.sh"), nil, 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".bashrc"), []byte(block), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".gashrc"), []byte(gashrc), 0o644))
+		_, errOut, rc := callModule(t, New(), "gash_uninstall",
+			map[string]string{"HOME": home, "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", UninstallStepVar: "remove"})
+		require.Equal(t, 0, rc, errOut)
+		return home, errOut
+	}
+
+	t.Run("modified", func(t *testing.T) {
+		mine := string(tmpl2x) + "alias mine='echo mine'\n"
+		home, errOut := uninstallIn(t, mine)
+		_, err := os.Lstat(filepath.Join(home, ".gashrc"))
+		require.True(t, os.IsNotExist(err))
+		b, err := os.ReadFile(filepath.Join(home, ".gashrc.gash-uninstall.bak"))
+		require.NoError(t, err)
+		require.Equal(t, mine, string(b))
+		require.Contains(t, errOut, "Info: Saved your ~/.gashrc as ~/.gashrc.gash-uninstall.bak\n")
+		require.Contains(t, errOut, "Info: Backups kept: ~/.bashrc.gash-uninstall.bak, ~/.gashrc.gash-uninstall.bak\n")
+	})
+	for name, pristine := range map[string]string{"2.x": string(tmpl2x), "custom dir": custom, "1.x": string(tmpl1x)} {
+		t.Run("pristine "+name, func(t *testing.T) {
+			home, errOut := uninstallIn(t, pristine)
+			for _, gone := range []string{".gashrc", ".gashrc.gash-uninstall.bak", ".gash"} {
+				_, err := os.Lstat(filepath.Join(home, gone))
+				require.True(t, os.IsNotExist(err), gone)
+			}
+			require.Contains(t, errOut, "Info: Removing ~/.gashrc...\n")
+			require.Contains(t, errOut, "Info: Backups kept: ~/.bashrc.gash-uninstall.bak\n")
+		})
+	}
+	t.Run("profile backup", func(t *testing.T) {
+		home, _ := uninstallIn(t, string(tmpl2x))
+		b, err := os.ReadFile(filepath.Join(home, ".bashrc.gash-uninstall.bak"))
+		require.NoError(t, err)
+		require.Equal(t, block, string(b))
+		b, err = os.ReadFile(filepath.Join(home, ".bashrc"))
+		require.NoError(t, err)
+		require.Equal(t, "# before\n# after\n", string(b))
+	})
+}
+
+// The embedded 2.x template is the repository's .gashrc: a change to one
+// must reach the other, or uninstall would keep a pristine file as the
+// user's.
+func TestKnownGashrcIsRepositoryTemplate(t *testing.T) {
+	repo, err := os.ReadFile("../../.gashrc")
+	require.NoError(t, err)
+	tmpl, err := knownGashrc.ReadFile("gashrc/2x.gashrc")
+	require.NoError(t, err)
+	require.Equal(t, string(repo), string(tmpl))
+	require.True(t, pristineGashrc(repo))
+	require.False(t, pristineGashrc(append(repo, "x\n"...)))
+	require.False(t, pristineGashrc(nil))
 }

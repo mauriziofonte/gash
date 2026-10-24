@@ -1434,6 +1434,8 @@ var functions = []Function{
 				"NOTES\n" +
 				"  Removes the Gash sourcing block from your shell profile,\n" +
 				"  deletes the installation directory, and cleans up.\n" +
+				"  Kept as FILE.gash-uninstall.bak: each profile as it was\n" +
+				"  before the edit, and a ~/.gashrc that holds your own lines.\n" +
 				"  Restart your terminal after uninstalling.",
 		},
 		Fallback:  &Usage{Program: "gash_uninstall", Usage: "gash_uninstall", Description: "Remove Gash and its startup block from this account (asks first)."},

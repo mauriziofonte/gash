@@ -50,10 +50,11 @@ const (
 // uninstall is gash_uninstall (lib/modules/gash.sh): after a confirmation,
 // removes the Gash block from ~/.bashrc, ~/.bash_profile and ~/.profile,
 // ~/.gashrc and the install directory (only one that is unmistakably a
-// Gash checkout), then asks about the settings file. As in 2.x, ~/.gashrc
-// goes without a copy and the profile backups sed makes are removed at the
-// end (LEDGER SELF-02), and a linked profile is replaced by an edited
-// regular file (SELF-04): sed -i runs as 2.x ran it.
+// Gash checkout), then asks about the settings file. A ~/.gashrc that holds
+// the user's own lines is kept as ~/.gashrc.gash-uninstall.bak, and the
+// profile backups sed makes are kept and listed (3.0: SELF-02 fixed; 2.x
+// removed both). A linked profile is replaced by an edited regular file
+// (SELF-04): sed -i runs as 2.x ran it.
 func (m *Module) uninstall(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -110,10 +111,7 @@ func (m *Module) uninstall(c *invoke.Call) int {
 	}
 
 	if isFile(home + "/.gashrc") {
-		p.Info("Removing ~/.gashrc...")
-		if err := os.Remove(home + "/.gashrc"); err != nil && !os.IsNotExist(err) {
-			p.Error("Failed to remove ~/.gashrc; please remove it manually.")
-		}
+		uninstallGashrc(p, home)
 	} else {
 		p.Info(home + "/.gashrc not found; skipping.")
 	}
@@ -155,10 +153,31 @@ func uninstallTarget(c *invoke.Call, p ui.Printer, dir string) (string, bool) {
 	return real, true
 }
 
+// uninstallGashrc removes ~/.gashrc when it is a template an installer
+// wrote, and otherwise renames it to ~/.gashrc.gash-uninstall.bak, so the
+// user's own lines (the 1.x migration appends them there) survive
+// (LEDGER SELF-02).
+func uninstallGashrc(p ui.Printer, home string) {
+	gashrc := home + "/.gashrc"
+	if data, err := os.ReadFile(gashrc); err == nil && pristineGashrc(data) {
+		p.Info("Removing ~/.gashrc...")
+		if err := os.Remove(gashrc); err != nil && !os.IsNotExist(err) {
+			p.Error("Failed to remove ~/.gashrc; please remove it manually.")
+		}
+		return
+	}
+	if err := os.Rename(gashrc, gashrc+uninstallBackup); err != nil {
+		p.Error("Failed to save ~/.gashrc as ~/.gashrc" + uninstallBackup + "; it was left in place.")
+		return
+	}
+	p.Info("Saved your ~/.gashrc as ~/.gashrc" + uninstallBackup)
+}
+
 // uninstallEnd handles the settings file when it exists (removed when
-// remove is true, else kept), prints the closing lines and removes the
-// profile backups. The status is that of the last backup removal, as the
-// 2.x loop left it.
+// remove is true, else kept) and prints the closing lines, listing the
+// backups uninstall left: the profiles as sed -i saved them before the
+// edit and a ~/.gashrc that held the user's lines (3.0: SELF-02 fixed;
+// 2.x removed the profile backups here).
 func (m *Module) uninstallEnd(c *invoke.Call, p ui.Printer, remove bool) int {
 	envFile, shown := uninstallEnvFile(c)
 	if isFile(envFile) {
@@ -172,18 +191,18 @@ func (m *Module) uninstallEnd(c *invoke.Call, p ui.Printer, remove bool) int {
 		}
 	}
 	p.Success("Gash uninstalled.")
-	p.Info("Restart your terminal to apply changes.")
-
-	rc := 0
-	for _, profile := range uninstallProfiles(c.Env.Get("HOME")) {
-		rc = 0
-		backup := profile + uninstallBackup
-		if err := removeFile(backup); err != nil && !os.IsNotExist(err) {
-			_, _ = io.WriteString(c.Stderr, "rm: cannot remove '"+backup+"': "+errnoText(err)+"\n")
-			rc = 1
+	home := c.Env.Get("HOME")
+	var kept []string
+	for _, f := range append(uninstallProfiles(home), home+"/.gashrc") {
+		if st, err := os.Lstat(f + uninstallBackup); err == nil && !st.IsDir() {
+			kept = append(kept, "~"+strings.TrimPrefix(f, home)+uninstallBackup)
 		}
 	}
-	return rc
+	if len(kept) > 0 {
+		p.Info("Backups kept: " + strings.Join(kept, ", "))
+	}
+	p.Info("Restart your terminal to apply changes.")
+	return 0
 }
 
 func uninstallProfiles(home string) []string {

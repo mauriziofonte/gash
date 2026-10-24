@@ -123,13 +123,50 @@ func TestUninstallMatches2x(t *testing.T) {
 					env[k] = strings.ReplaceAll(v, "$D", d)
 				}
 				o, rc := runAnswering(t, "gash_uninstall", env, mode == "on", tc.answers, tc.args...)
-				require.Equal(t, strings.ReplaceAll(fields[2*i], dRef, d), o, tc.name)
-				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), tc.name)
+				// 3.0: SELF-02 fixed. A ~/.gashrc with the user's lines is kept
+				// as a backup and the profile backups are kept and listed, so
+				// those lines, files and the backup-removal status are put back
+				// in their 2.x shape; everything else must still match 2.x.
+				refOut, refRC := undoSELF02Ref(strings.ReplaceAll(fields[2*i], dRef, d), fields[2*i+1])
+				require.Equal(t, refOut, undoSELF02(o), tc.name)
+				require.Equal(t, refRC, strconv.Itoa(rc), tc.name)
+				bash(t, "D="+shq(d)+"; find \"$D\" -name '*.gash-uninstall.bak' ! -type d -delete")
 				require.Equal(t, strings.ReplaceAll(bash(t, "D="+shq(dRef)+"; "+uninstallState), dRef, d),
 					bash(t, "D="+shq(d)+"; "+uninstallState), tc.name)
 			}
 		})
 	}
+}
+
+// undoSELF02 maps the 3.0 uninstall messages back to 2.x: the ~/.gashrc
+// line says "Removing" and no "Backups kept" line is printed.
+func undoSELF02(out string) string {
+	out = strings.ReplaceAll(out, "Saved your ~/.gashrc as ~/.gashrc.gash-uninstall.bak", "Removing ~/.gashrc...")
+	var b strings.Builder
+	for _, line := range strings.SplitAfter(out, "\n") {
+		if !strings.Contains(line, "Backups kept: ") {
+			b.WriteString(line)
+		}
+	}
+	return b.String()
+}
+
+// undoSELF02Ref drops what 2.x printed and returned when removing a profile
+// backup failed (3.0 no longer removes the backups).
+func undoSELF02Ref(out, rc string) (string, string) {
+	var b strings.Builder
+	dropped := false
+	for _, line := range strings.SplitAfter(out, "\n") {
+		if strings.HasPrefix(line, "rm: cannot remove '") && strings.Contains(line, ".gash-uninstall.bak': ") {
+			dropped = true
+			continue
+		}
+		b.WriteString(line)
+	}
+	if dropped {
+		rc = "0"
+	}
+	return b.String(), rc
 }
 
 // uninstallFixture runs setup in a new case directory and returns it with
@@ -141,18 +178,24 @@ func uninstallFixture(t *testing.T, setup string) (string, map[string]string) {
 	return d, map[string]string{"LANG": "C.UTF-8", "PATH": "/usr/bin:/bin", "HOME": d + "/home"}
 }
 
-// LEDGER SELF-02, reproduced in rc.A: a confirmed uninstall removes a
-// ~/.gashrc holding the user's own lines without a copy, and the profile
-// backups sed made are gone at the end.
-func TestLedger_SELF02_2x(t *testing.T) {
+// LEDGER SELF-02: a confirmed uninstall keeps a ~/.gashrc holding the
+// user's own lines as ~/.gashrc.gash-uninstall.bak and keeps the profile
+// backups sed made (3.0: SELF-02 fixed; 2.x removed them all).
+func TestLedger_SELF02(t *testing.T) {
 	d, env := uninstallFixture(t, uninstallFake+"echo \"alias mine='echo mine'\" >>$D/home/.gashrc; "+uninstallBlock+">$D/home/.bashrc")
-	_, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
+	out, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
 	require.Equal(t, 0, rc)
-	for _, gone := range []string{".gashrc", ".gashrc.gash-uninstall.bak", ".bashrc.gash-uninstall.bak", ".gash"} {
+	for _, gone := range []string{".gashrc", ".gash"} {
 		_, err := os.Lstat(filepath.Join(d, "home", gone))
 		require.True(t, os.IsNotExist(err), gone)
 	}
-	b, err := os.ReadFile(filepath.Join(d, "home/.bashrc"))
+	b, err := os.ReadFile(filepath.Join(d, "home/.gashrc.gash-uninstall.bak"))
+	require.NoError(t, err)
+	require.Equal(t, "source ~/.gash/gash.sh\nalias mine='echo mine'\n", string(b))
+	_, err = os.Stat(filepath.Join(d, "home/.bashrc.gash-uninstall.bak"))
+	require.NoError(t, err)
+	require.Contains(t, out, "Info: Backups kept: ~/.bashrc.gash-uninstall.bak, ~/.gashrc.gash-uninstall.bak\n")
+	b, err = os.ReadFile(filepath.Join(d, "home/.bashrc"))
 	require.NoError(t, err)
 	require.Equal(t, "# before\n# after\n", string(b))
 }

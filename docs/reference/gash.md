@@ -362,6 +362,8 @@ gash_uninstall
 ```text
 Removes the Gash sourcing block from your shell profile,
 deletes the installation directory, and cleans up.
+Kept as FILE.gash-uninstall.bak: each profile as it was
+before the edit, and a ~/.gashrc that holds your own lines.
 Restart your terminal after uninstalling.
 ```
 

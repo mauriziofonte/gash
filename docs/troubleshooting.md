@@ -163,6 +163,11 @@ shows it. See [migration.md](migration.md).
   mode). After confirmation it removes the Gash block from `~/.bashrc`,
   `~/.bash_profile` and `~/.profile`, deletes `~/.gashrc` and the install
   directory, and asks separately before deleting `~/.gash_env`.
+* Backups it keeps, and lists at the end (`Backups kept: ...`): each edited
+  profile as it was before the edit (`~/.bashrc.gash-uninstall.bak`,
+  `~/.bash_profile.gash-uninstall.bak`, `~/.profile.gash-uninstall.bak`), and
+  `~/.gashrc.gash-uninstall.bak` when your `~/.gashrc` held lines of your own
+  (a `~/.gashrc` exactly as an installer wrote it is simply deleted).
 * Left behind: `~/.local/state/gash` (migration backups), a block added to a
   profile chosen with `PROFILE=` at install time, and a file named by
   `GASH_ENV_FILE`. Remove them by hand. Open a new terminal afterwards.
