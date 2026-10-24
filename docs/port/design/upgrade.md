@@ -46,8 +46,8 @@ nothing but the files git puts there.
    the per-file list is in section 7.
 2. The next shell (new terminal, or `source ~/.gashrc` in the same one) loads
    the 3.x `gash.sh`. The binary for `VERSION` is missing, so the bootstrap
-   downloads and verifies it, prints one line (`Gash 3.0.0: installed the
-   gash binary for linux/amd64.`) and continues: same functions, aliases,
+   downloads and verifies it, prints one line (`OK: Installed gash 3.0.0 for
+   linux/amd64`) and continues: same functions, aliases,
    prompt, history policy, toolchains, completion and banner as 2.x.
 3. `source ~/.gashrc` in the same shell runs 3.x over the loaded 2.x state:
    supported (`compat.md` section 5).
@@ -61,8 +61,8 @@ serialized), then runs. Never a non-zero return while sourcing.
 ### 3.3 The binary cannot be obtained
 
 No network, no `curl`/`wget`, a 404, a checksum mismatch: interactive shells
-get one stderr line (`Gash 3.0.0: the gash binary is not installed and could
-not be downloaded (reason). Run: bash ~/.gash/install.sh --repair`) and keep
+get one stderr line (`Warning: gash 3.0.0 is not installed and could not be
+downloaded (REASON). Run: bash ~/.gash/install.sh --repair`) and keep
 working without Gash features; headless callers get the `binary_not_found`
 envelope (STOP) from each function call. The shell is never broken and
 sourcing never returns non-zero. A failed download leaves nothing behind

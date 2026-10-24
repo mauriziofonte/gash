@@ -146,7 +146,13 @@ Re-sourcing over a running 2.x session (`source ~/.gashrc` after
 `gash_upgrade`, as 2.x suggests) is supported: the 2.x snapshot
 (`__GASH_SNAPSHOT`) is kept as the pre-Gash state, 2.x functions and the 2.x
 prompt hook are replaced, and `gash_unload` then restores the shell as it was
-before 2.x loaded.
+before 2.x loaded (variables, aliases, completion specs, shell options, traps,
+umask and the user's exported `GASH_*` settings). What 2.x set without
+recording the earlier value stays as 2.x's own `gash_unload` left it: its
+module variables (`__AI_*`, `__LLM_*`, `__REMOTE_*`, `__SYSINFO_*`, many of
+them read-only, which no unload can remove) and `LESSOPEN`, `LESSCLOSE`,
+`LS_COLORS` and an empty `PROMPT_COMMAND`. Proven by
+`testdata/script/upgrade_2x_resource.txtar`.
 
 ## 6. Direct invocation
 
