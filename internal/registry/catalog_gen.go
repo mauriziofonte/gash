@@ -1160,7 +1160,8 @@ var functions = []Function{
 				"\n" +
 				"  --timing loads Gash in a new interactive shell and lists the\n" +
 				"  milliseconds each file and step takes (5 ms or more stands out),\n" +
-				"  then times whole new shells: with your ~/.bashrc, and bash alone.\n" +
+				"  then times whole new shells: with your ~/.bashrc, and bash alone,\n" +
+				"  3 times each (a line says first that your ~/.bashrc runs 3 times).\n" +
 				"  Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps\n" +
 				"  the same figures in its __GASH_LOAD_TIMES array.",
 		},

@@ -62,6 +62,9 @@ func (m *Module) uninstall(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
+	if badArgs(c, "gash_uninstall") {
+		return usageStatus
+	}
 	s := ui.StyleOf(c.Term, false)
 	p := s.Printer(c.Stderr)
 	// Any other value is no step: the binary asks both questions itself.

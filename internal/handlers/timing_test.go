@@ -79,6 +79,11 @@ func TestDoctorTimingMatches2x(t *testing.T) {
 					"FAKE_LOG": logGo, "TIMES": tc.times,
 				}
 				o, rc := runMerged(t, "gash_doctor", env, mode != "off", args...)
+				// 3.0: SELF-15 fixed: an info line first says how often the
+				// user's ~/.bashrc runs (2.x said nothing).
+				info := regexp.MustCompile(`(?m)^.*--timing starts your shell 3 times \(your ~/\.bashrc runs each time\)\..*\n`)
+				require.Regexp(t, info, o, tc.name)
+				o = info.ReplaceAllString(o, "")
 				require.Equal(t, whole.ReplaceAllString(fields[3*i], "N ms"), whole.ReplaceAllString(o, "N ms"), tc.name)
 				require.Equal(t, fields[3*i+1], strconv.Itoa(rc), tc.name)
 				want, err := os.ReadFile(filepath.Join(d, "2x"+strconv.Itoa(i)))

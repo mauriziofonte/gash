@@ -12,31 +12,46 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/compatgen"
-	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// LEDGER SELF-15, reproduced in rc.A: the self-management commands accept
-// and ignore words they do not know.
-func TestLedger_SELF15_2x(t *testing.T) {
-	t.Run("gash_env_init", func(t *testing.T) {
-		d := t.TempDir()
-		require.NoError(t, os.Mkdir(filepath.Join(d, "home"), 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(d, ".gash_env.template"), []byte("T\n"), 0o644))
-		m := New()
-		m.run = runner.NewFake(t,
-			runner.Expect{Argv: []string{"cp", d + "/.gash_env.template", d + "/home/.gash_env"}},
-			runner.Expect{Argv: []string{"chmod", "600", d + "/home/.gash_env"}})
-		out, errOut, rc := callModule(t, m, "gash_env_init", map[string]string{"HOME": d + "/home", "GASH_DIR": d}, "--bogus")
-		require.Equal(t, 0, rc)
-		require.Empty(t, out)
-		require.Equal(t, "OK: Created "+d+"/home/.gash_env\nInfo: Edit with your SSH keys and database credentials\n", errOut)
-	})
-	t.Run("gash_username", func(t *testing.T) {
-		p := &fakeProcs{have: map[string]bool{"whoami": true}, out: map[string]string{"whoami": "alice"}, ran: []string{"whoami"}}
-		out, rc := run(t, p.module(t, "", nil), nil, "--bogus")
-		require.Equal(t, 0, rc)
-		require.Equal(t, "alice\n", out)
-	})
+// LEDGER SELF-15: every self-management command refuses an unknown option
+// or an unexpected argument with rc 2 before any side effect: no file
+// written, no git call (the fake runner expects no start). 3.0: SELF-15
+// fixed; 2.x ignored the words (gash_env_init --bogus created the file).
+func TestLedger_SELF15(t *testing.T) {
+	d := t.TempDir()
+	home := filepath.Join(d, "home")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".gash/lib/core"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash/gash.sh"), nil, 0o644))
+	require.NoError(t, os.Mkdir(filepath.Join(home, ".gash/.git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash/.gash_env.template"), []byte("T\n"), 0o644))
+	env := map[string]string{"HOME": home, "GASH_DIR": home + "/.gash"}
+	for _, tc := range []struct{ name, usage string }{
+		{"gash_env_init", "gash_env_init [--force]"},
+		{"gash_username", "gash_username"},
+		{"gash_upgrade", "gash_upgrade"},
+		{"gash_uninstall", "gash_uninstall"},
+		{"gash_doctor", "gash_doctor [--timing] [--no-color]"},
+	} {
+		for arg, what := range map[string]string{"--bogus": "Unknown option", "word": "Unexpected argument"} {
+			args := []string{arg}
+			if tc.name == "gash_env_init" {
+				args = []string{"--force", arg}
+			}
+			out, errOut, rc := call(t, tc.name, env, args...)
+			require.Equal(t, 2, rc, "%s %s", tc.name, arg)
+			require.Empty(t, out, tc.name)
+			require.Equal(t, "Error: "+what+": "+arg+" (usage: "+tc.usage+")\n", errOut, tc.name)
+		}
+	}
+	require.NoFileExists(t, filepath.Join(home, ".gash_env"))
+	require.DirExists(t, filepath.Join(home, ".gash"))
+	// The uninstall steps the stub runs refuse too, so the stub stops.
+	for _, step := range []string{"check", "remove", "env-remove"} {
+		_, _, rc := call(t, "gash_uninstall", map[string]string{"HOME": home, "GASH_DIR": home + "/.gash", UninstallStepVar: step}, "x")
+		require.Equal(t, 2, rc, step)
+	}
+	require.DirExists(t, filepath.Join(home, ".gash"))
 }
 
 // LEDGER SELF-02: uninstall keeps a ~/.gashrc that holds the user's own

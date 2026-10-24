@@ -133,6 +133,14 @@ func TestUninstallMatches2x(t *testing.T) {
 					// 3.0 differs from 2.x here on purpose (see uninstall3x).
 					continue
 				}
+				if tc.name == "extra arguments" {
+					// 3.0: SELF-15 fixed: the argument is refused before
+					// anything is removed (2.x ignored it and uninstalled).
+					require.Contains(t, o, "Unknown option: --bogus (usage: gash_uninstall)", tc.name)
+					require.Equal(t, 2, rc, tc.name)
+					require.DirExists(t, d+"/home/.gash", tc.name)
+					continue
+				}
 				// 3.0: SELF-02 fixed. A ~/.gashrc with the user's lines is kept
 				// as a backup and the profile backups are kept and listed, so
 				// those lines, files and the backup-removal status are put back

@@ -51,12 +51,16 @@ func tagSigned(obj []byte) bool {
 // signature checked first. A checkout newer than that release (a newer or
 // pre-release tag, or a commit that has the release in its history) is
 // left alone (3.0: SELF-01 fixed; 2.x compared for equality only and moved
-// such an install back); extra arguments are ignored (SELF-15). The git commands run as 2.x ran them:
+// such an install back); an argument is refused before any git command
+// (3.0: SELF-15 fixed; 2.x ignored it). The git commands run as 2.x ran them:
 // the user's git, configuration and credentials, fetch and checkout on the
 // terminal.
 func (m *Module) upgrade(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
+	}
+	if badArgs(c, "gash_upgrade") {
+		return usageStatus
 	}
 	p := ui.StyleOf(c.Term, false).Printer(c.Stderr)
 	dir := installDir(c)

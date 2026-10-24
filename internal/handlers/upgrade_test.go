@@ -173,7 +173,12 @@ func TestUpgradeMatches2x(t *testing.T) {
 						n++
 						continue
 					}
-					if want, ok := upgradeSELF10[tc.name]; ok {
+					if tc.name == "extra arguments" {
+						// 3.0: SELF-15 fixed: the argument is refused before
+						// any git command (2.x ignored it and upgraded).
+						require.Contains(t, o, "Unknown option: --bogus (usage: gash_upgrade)", tc.name)
+						require.Equal(t, 2, rc, tc.name)
+					} else if want, ok := upgradeSELF10[tc.name]; ok {
 						// 3.0: SELF-10 fixed: no "signed, but could not be
 						// verified" for a tag without a signature block.
 						require.Contains(t, o, want.line, tc.name)
@@ -190,7 +195,7 @@ func TestUpgradeMatches2x(t *testing.T) {
 					}
 					n++
 				}
-				if upgradeSELF01[tc.name] {
+				if upgradeSELF01[tc.name] || tc.name == "extra arguments" {
 					require.Equal(t, before, envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state), tc.name)
 					continue
 				}

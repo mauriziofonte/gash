@@ -18,8 +18,9 @@ import (
 // GASH_TIMING=1 and hands back __GASH_LOAD_TIMES (its own output dropped,
 // SSH key unlocking marked done), shown as a table of milliseconds; then
 // whole new shells are timed, bash -i with the user's ~/.bashrc and bash
-// alone, the median of 3 each (the ~/.bashrc runs three times: LEDGER
-// SELF-15, reproduced). The shells are the fixed runner.BashDoctor* uses.
+// alone, the median of 3 each. The ~/.bashrc runs three times, which an
+// info line says before anything starts (3.0: SELF-15 fixed; 2.x said
+// nothing). The shells are the fixed runner.BashDoctor* uses.
 func (m *Module) doctorTiming(c *invoke.Call, s ui.Style) int {
 	p := s.Printer(c.Stderr)
 	// 2.x read $EPOCHREALTIME of the calling shell: Bash 5.0 or newer.
@@ -28,6 +29,7 @@ func (m *Module) doctorTiming(c *invoke.Call, s ui.Style) int {
 		p.Error("gash_doctor --timing needs Bash 5.0 or newer ($EPOCHREALTIME); this is " + bv + ".")
 		return 1
 	}
+	p.Info("--timing starts your shell 3 times (your ~/.bashrc runs each time).")
 	dir := installDir(c)
 	bash := c.Env.Get("BASH")
 	if bash == "" {

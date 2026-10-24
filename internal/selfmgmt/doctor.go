@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -60,19 +61,10 @@ func (m *Module) doctor(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	noColor, timing := false, false
-	for _, a := range c.Args {
-		switch a {
-		case "--no-color":
-			noColor = true
-		case "--timing":
-			timing = true
-		default:
-			ui.StyleOf(c.Term, !c.Term.WantColors(noColor)).Printer(c.Stderr).
-				Error("Unknown option: " + a + " (usage: gash_doctor [--timing] [--no-color])")
-			return 2
-		}
+	if badArgs(c, "gash_doctor [--timing] [--no-color]", "--timing", "--no-color") {
+		return usageStatus
 	}
+	noColor, timing := slices.Contains(c.Args, "--no-color"), slices.Contains(c.Args, "--timing")
 	s := ui.StyleOf(c.Term, !c.Term.WantColors(noColor))
 	if timing {
 		return m.doctorTiming(c, s)

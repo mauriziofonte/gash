@@ -46,6 +46,14 @@ var envInitCases = []struct {
 	{"help long", ": >$D/home/.gash_env", nil, []string{"--help"}},
 }
 
+// envInitSELF15 names the cases whose arguments 3.0 refuses (SELF-15),
+// with the refusal: rc 2 and nothing written (2.x ignored the words).
+var envInitSELF15 = map[string]string{
+	"bogus fresh":  "Unknown option: --bogus",
+	"bogus exists": "Unknown option: --bogus",
+	"force second": "Unexpected argument: x",
+}
+
 // envInitState lists the case directory after the call: every path with
 // its type, mode and content.
 const envInitState = `cd "$D" && find . -mindepth 1 | LC_ALL=C sort | while read -r p; do ` +
@@ -116,6 +124,15 @@ func TestEnvInitMatches2x(t *testing.T) {
 				state := bash(t, "D="+shq(d)+"; "+envInitState)
 				norm := func(s, dir string) string { return strings.ReplaceAll(s, dir, "$D") }
 				want := filepath.Join(ref, strconv.Itoa(i))
+				if refusal, ok := envInitSELF15[tc.name]; ok {
+					// 3.0: SELF-15 fixed: refused before anything is written.
+					require.Contains(t, o+e, refusal+" (usage: gash_env_init [--force])", tc.name)
+					require.Equal(t, 2, rc, tc.name)
+					untouched := filepath.Join(t.TempDir(), "x")
+					bash(t, envInitSetup(untouched, tc.setup))
+					require.Equal(t, norm(bash(t, "D="+shq(untouched)+"; "+envInitState), untouched), norm(state, d), tc.name)
+					continue
+				}
 				require.Equal(t, norm(fields[3*i], want), norm(o+e, d), tc.name)
 				require.Equal(t, fields[3*i+1], strconv.Itoa(rc), tc.name)
 				require.Equal(t, norm(fields[3*i+2], want), norm(state, d), tc.name)

@@ -2,6 +2,11 @@
 
 Help, doctor, configuration, upgrade.
 
+`gash_doctor`, `gash_env_init`, `gash_uninstall`, `gash_upgrade` and
+`gash_username` refuse an unknown option (`Error: Unknown option: X`) or an
+unexpected argument (`Error: Unexpected argument: X`) with status 2, before
+they change anything.
+
 _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 | Function | Alias | Description |
@@ -185,7 +190,8 @@ when a check fails (2 for an unknown option).
 
 --timing loads Gash in a new interactive shell and lists the
 milliseconds each file and step takes (5 ms or more stands out),
-then times whole new shells: with your ~/.bashrc, and bash alone.
+then times whole new shells: with your ~/.bashrc, and bash alone,
+3 times each (a line says first that your ~/.bashrc runs 3 times).
 Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps
 the same figures in its __GASH_LOAD_TIMES array.
 ```
