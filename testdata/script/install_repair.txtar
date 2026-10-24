@@ -1,0 +1,76 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 self-management proof)
+#
+# docs/port/design/upgrade.md 3.7 (MATRIX "install.sh --repair"): --repair
+# fetches and verifies the binary for the VERSION the install has checked
+# out and does nothing else: no git command (the origin is gone: it works
+# offline from a file:// release), no checkout, no profile or ~/.gashrc
+# edit. It replaces a broken binary; when the fetch fails it exits 1 and
+# the binary in place is kept.
+
+[!exec:git] skip 'needs git'
+env GASH_BIN=
+env GASH_RELEASE_URL=file://$WORK/rel
+
+gashfixture origin v3.0.0:3x v3.0.1:3x
+gashrelease 3.0.0 rel
+exec git clone -q origin home/.gash
+exec git -C home/.gash -c advice.detachedHead=false checkout -q v3.0.0
+# Offline: no origin to fetch from.
+exec sh -c 'mv origin origin.gone'
+cp home/.bashrc bashrc.before
+cp home/.gashrc gashrc.before
+
+# A fresh repair.
+exec bash home/.gash/install.sh --repair
+stderr '^OK: Installed gash 3\.0\.0 for [a-z]+/[a-z0-9]+$'
+! stdout 'Welcome'
+exec home/.local/share/gash/versions/3.0.0/gash version --json
+stdout '"version":"3\.0\.0"'
+
+# A broken binary is replaced.
+exec sh -c 'printf broken >"$HOME/.local/share/gash/versions/3.0.0/gash"'
+exec bash home/.gash/install.sh --repair --quiet
+! stderr .
+exec home/.local/share/gash/versions/3.0.0/gash version --json
+stdout '"version":"3\.0\.0"'
+
+# A failed fetch: status 1, the binary in place kept, nothing left over.
+env GASH_RELEASE_URL=file://$WORK/nothing
+! exec bash home/.gash/install.sh --repair
+stderr '^Warning: gash 3\.0\.0 is not installed and could not be downloaded \(download failed: file://.*/nothing/gash_3\.0\.0_'
+! exec bash home/.gash/install.sh --repair --quiet
+stderr '^Error: gash 3\.0\.0 is not installed and could not be downloaded \(download failed: '
+exec home/.local/share/gash/versions/3.0.0/gash version --json
+stdout '"version":"3\.0\.0"'
+exec sh -c 'ls -A "$HOME/.local/share/gash/versions"'
+stdout '^3\.0\.0$'
+! stdout 'repair'
+exec sh -c 'ls -A "$HOME/.local/share/gash/versions/3.0.0"'
+! stdout '^\.'
+
+# Not a Gash 3 install.
+env GASH_DIR=$WORK/elsewhere
+! exec bash home/.gash/install.sh --repair
+stderr 'No Gash 3 install in .*/elsewhere'
+env GASH_DIR=
+
+# Nothing else changed.
+exec git -C home/.gash describe --tags --exact-match HEAD
+stdout '^v3\.0\.0$'
+exec git -C home/.gash status --porcelain
+! stdout .
+cmp home/.bashrc bashrc.before
+cmp home/.gashrc gashrc.before
+
+-- home/.bashrc --
+# the user's bashrc, no Gash block
+-- home/.gashrc --
+# the user's gashrc
+-- home/.gitconfig --
+[user]
+	name = t
+	email = t@t
+[advice]
+	detachedHead = false
