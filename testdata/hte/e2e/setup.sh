@@ -23,6 +23,14 @@ if ! getent shadow dev >/dev/null; then
     echo "the user dev has no shadow entry" >&2
     exit 2
 fi
+# Fedora ships /etc/shadow as mode 0000, readable only with
+# CAP_DAC_OVERRIDE; on the GitHub runners the setuid-root sudo and
+# unix_chkpwd in this container lack it (unix_chkpwd chkexpiry returns
+# AUTHINFO_UNAVAIL), so pam_unix refuses dev's account. Mode 0400 lets the
+# owner root read it without the capability.
+if [ "$(stat -c %a /etc/shadow)" = 0 ]; then
+    chmod 0400 /etc/shadow
+fi
 install -m 0755 /e2e/gash-e2e /usr/local/bin/gash-e2e
 install -m 0755 /e2e/gash-hosts-helper /usr/local/bin/gash-hosts-helper
 # The test binary is also the root step (gash hte __root).
