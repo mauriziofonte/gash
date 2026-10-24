@@ -361,6 +361,52 @@ verifies the new binary before it checks out the new tag, checks that it
 answers its version, then loads the new tree in a test shell and checks out
 the previous tag again when that fails.
 
+## gash hte
+
+`gash hte` runs Apache and PHP-FPM as your user. Root is used in two
+places only.
+
+**At install, uninstall and migrate**, through one `sudo` call that runs
+the steps the command printed first, each recorded in a receipt that
+uninstall plays back:
+
+* the hosts helper, copied to `/usr/local/libexec/gash/gash-hosts-helper`,
+  root-owned, mode 0755, after its SHA-256 is checked against the one the
+  printed plan names;
+* `/etc/sudoers.d/gash-hte`, checked with `visudo -c -f` before it is put
+  in place, which lets your user run exactly `gash-hosts-helper apply` and
+  `gash-hosts-helper check` without a password, and nothing else;
+* `net.ipv4.ip_unprivileged_port_start = 80` in
+  `/etc/sysctl.d/50-gash-hte.conf`, so that the stack can listen on ports
+  80 and 443 without root. **Every local user** can then bind ports 80 to
+  1023 while HTE is installed; on a shared machine, install with
+  `--ports high` (8080 and 8443), which skips this step. On macOS a `pf`
+  anchor redirects loopback ports 80 and 443 to the stack's ports instead,
+  checked with `pfctl -n` and loaded at boot by a LaunchDaemon;
+* the autostart unit, when one is asked for, and stopping the system Apache
+  when `migrate --apply` takes its sites over.
+
+**At runtime, the hosts helper.** It takes no path and ignores its
+environment: the file it writes is `/etc/hosts`, a constant of the binary,
+and it edits only the lines between `# >>> gash hte >>>` and
+`# <<< gash hte <<<`. It accepts only `127.0.0.1` and `::1` as addresses and
+only lowercase hostnames of at least two labels, with no wildcard and no
+numeric last label (which a resolver would read as an address). Input over
+its size limits, or a hosts file whose markers are broken, is refused and
+nothing is written.
+
+The rest runs as you:
+
+* Apache listens on the loopback addresses only (`127.0.0.1`, and `[::1]`
+  where the machine has IPv6 loopback): the sites are not reachable from the
+  network.
+* Configuration, certificates and logs live in your XDG directories, never
+  inside a document root.
+* Each site has a self-signed ECDSA P-256 certificate; its directory is
+  mode 0700 and its key 0600.
+* Configuration that gash writes is regenerated from its state; your own
+  edits go in overlay files it never rewrites.
+
 ## Reporting a vulnerability
 
 Do not open a public issue. Follow [SECURITY.md](../SECURITY.md) at the

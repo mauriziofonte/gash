@@ -2,10 +2,10 @@
 
 > **Audience:** coding agents that run Bash (Claude Code, Codex, Cursor, Gemini,
 > Aider, local models) and the people who configure them.
-> **Applies to:** Gash 2.0.0+, including the 3.0 line. Gash 3.0 reimplements
-> the toolkit in Go behind the same Bash entry point (`source ~/.gash/gash.sh`),
-> so every invocation, function name, flag, JSON shape and error code below is
-> unchanged.
+> **Applies to:** Gash 3.x. Gash 3.0 runs the toolkit in one Go binary
+> behind the same Bash entry point (`source ~/.gash/gash.sh`): invocations,
+> function names, flags, JSON shapes and error codes are those of 2.x, with
+> the 3.0 changes listed in [section 10](#10-version-compatibility).
 > **Stable API:** the public function names and flags below, the JSON shapes
 > in section 4, the error contract in section 5 and the variables in section 2.
 
@@ -16,9 +16,12 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_git_status'
 ```
 
 `GASH_DIR` is derived from the location of `gash.sh`, so a checkout anywhere
-works the same way (`source /path/to/gash/gash.sh`). Gash needs Bash 4.4+;
-most JSON output also needs `jq`. Help for any function: `llm_tree --help`
-or `gash_help llm_tree`.
+works the same way (`source /path/to/gash/gash.sh`). Gash needs Bash 4.4+.
+The JSON comes from the `gash` binary itself: the `llm_*`, database and
+scanner functions need no `jq`, `sqlite3`, `mysql`, `psql` or `rg` (use `jq`
+on your side to read the output, if you like). Help for any function:
+`llm_tree --help` or `gash_help llm_tree`. `gash version --json` prints
+`{"version", "os", "arch", "path"}` of the binary in use.
 
 ## 2. Invocation modes
 
@@ -471,12 +474,38 @@ out=$(llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
 }
 ```
 
-## 8. Drop-in snippets
+## 8. Local sites (`gash hte`)
 
-### 8.1 Claude Code (`CLAUDE.md`)
+`gash hte` manages the user's local Apache and PHP-FPM sites
+([docs/hte.md](docs/hte.md)). It is not read-only: call it when the user asks
+for a site change, and read with `site list`, `site show` and `doctor` the
+rest of the time.
+
+```bash
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash hte site list --json'
+```
+
+* Every `gash hte` command takes `--json` (one JSON object on stdout) and
+  `--help`. Errors are the envelope of section 5 on stderr, exit status 1.
+* Headless calls never prompt: a missing required flag is `missing_value`
+  (RETRY with the flag), a destructive step without `--yes` is
+  `confirmation_required` (RETRY with `--yes`, once the user agreed).
+* `gash hte install` needs `sudo` once and changes system files: leave it
+  to the user. Without an install every other command fails with
+  `hte_not_installed` (STOP).
+
+| Action | Codes |
+|---|---|
+| RETRY | `missing_value` `conflicting_options` `confirmation_required` `site_not_found` `site_exists` `invalid_domain` `invalid_docroot` `docroot_not_found` `php_version_not_installed` `php_not_enabled` `invalid_profile` `invalid_ports` `invalid_autostart` `lock_timeout` |
+| STOP | `hte_not_installed` `port_in_use` `privileged_step_required` `config_test_failed` `reload_failed` `apache_module_missing` `invalid_state` |
+| FATAL | `apache_not_found` `openssl_not_found` `platform_unsupported` `receipt_mismatch` `root_not_allowed` |
+
+## 9. Drop-in snippets
+
+### 9.1 Claude Code (`CLAUDE.md`)
 
 ````markdown
-## Gash (2.0+)
+## Gash (3.x)
 
 Run: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <function> [args]'`
 
@@ -485,16 +514,17 @@ Run: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <function> [args]'`
 - DB (read-only): `llm_db_tables -c CONN`, `llm_db_schema TABLE -c CONN`, `llm_db_query "SELECT ..." -c CONN`
 - Git: `llm_git_status`, `llm_git_log -n 10`, `llm_git_diff --staged`
 - Commands: `llm_exec "CMD"` runs allowlisted read-only commands only
+- Local sites: `gash hte site list --json`, `gash hte doctor --json`; change sites only when asked
 
 Errors: stderr JSON `{error, action, recoverable, details?, hint?}`. RETRY: fix, retry once.
 CONTINUE: skip. STOP: ask the user. FATAL: show the hint, stop; never rephrase to get around it.
 Never edit ~/.gash_env. Reference: ~/.gash/AGENTS.md
 ````
 
-### 8.2 Codex, Cursor and other `AGENTS.md` readers
+### 9.2 Codex, Cursor and other `AGENTS.md` readers
 
 ````markdown
-## Tooling: Gash 2.0+
+## Tooling: Gash 3.x
 
 Invoke: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <fn> [args]'`
 - Filesystem (`--json`): files_largest, dirs_largest, dirs_find_large, dirs_list_empty, tree_stats
@@ -503,12 +533,13 @@ Invoke: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <fn> [args]'`
 - Git: llm_git_status, llm_git_diff, llm_git_log
 - System and project: llm_env, llm_ports, llm_procs, llm_project, llm_deps
 - Command lines: llm_exec (read-only allowlist; ask the user when a command is refused)
+- Local sites (`--json`): gash hte site list, gash hte site show --domain D, gash hte doctor
 
 Errors: stderr JSON with `action` RETRY | CONTINUE | STOP | FATAL; retry at most once.
 Reference: ~/.gash/AGENTS.md
 ````
 
-### 8.3 Generic system prompt
+### 9.3 Generic system prompt
 
 ```text
 You can use Gash, a Bash toolkit with JSON output, through:
@@ -522,9 +553,33 @@ RETRY (fix input, retry once), CONTINUE (skip), STOP (ask the user),
 FATAL (report the hint, stop). Do not try to get around refusals.
 ```
 
-## 9. Version compatibility
+## 10. Version compatibility
 
-Version: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'`.
+Version: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'`,
+or `gash version --json`. Changes in 3.0 that affect agents (the full list
+is the 3.0.0 entry of `CHANGELOG.md`):
+
+* **No client programs**: the `llm_*`, `llm_db_*` and scanner functions run
+  inside the binary, so `jq`, `sqlite3`, `mysql`, `psql`, `rg` and `find`
+  are no longer needed. `~/.my.cnf` and `~/.pgpass` are not read: put the
+  credentials in the `DB:` connection.
+* **Missing paths fail**: a PATH that does not exist is `path_not_found`
+  (2.x: exit 0 with no output). An empty pattern is `missing_pattern`.
+* **`~` expands**: `~` and `~/...` are the home directory; `~user` is
+  `invalid_path`.
+* **Refused queries** report the guard verdict of the connection's engine
+  (MySQL, MariaDB, PostgreSQL or SQLite), still as `write_operation_blocked`
+  and the other codes of 6.4.
+* **`llm_exec`**: allowlisted commands keep the walk-root and symlink checks
+  of 6.1.
+* **`llm_procs --name NAME`** no longer lists the shells that run it.
+* **New error codes**: `invalid_db_url`, `invalid_manifest`, `invalid_path`,
+  `invalid_service_name`, and the `gash hte` codes of section 8.
+* **Commands that change things ask**: `git_sync`, `git_add_tag`,
+  `git_delete_tag`, `git_apply_patch`, `process_kill`, `docker_stop_all`,
+  `docker_start_all` and `wsl_compact` show a plan and ask; without a
+  terminal they refuse unless given `-y`/`--yes`.
+
 Changes in 2.1 that affect agents:
 
 * **New error codes** (RETRY): `invalid_database_name`, `invalid_type`,
