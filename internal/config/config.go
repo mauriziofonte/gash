@@ -291,8 +291,9 @@ func validSettingName(key string) bool {
 	return true
 }
 
-// ValidHostTarget reports whether v is a HOST: target remote_* accepts,
-// the rule of remote.validTarget: user@host with a user of
+// ValidHostTarget reports whether v is a HOST: target remote_* accepts
+// (remote_* applies it to raw targets too, so the load and the remote
+// functions share one rule): user@host with a user of
 // [A-Za-z0-9._][A-Za-z0-9._-]* and a host name of
 // [A-Za-z0-9][A-Za-z0-9.-]* or a bracketed IPv6 literal ([::1]). A port
 // (host:22), an option-like word or any other character is refused, so a

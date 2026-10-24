@@ -90,9 +90,8 @@ func TestLedger_REM02(t *testing.T) {
 		"-oProxyCommand=x@h": false, "u@-h": false, "-u@h": false, "u@h:22": false,
 		"deploy@box.example": true, "u@[::1]": true, "u_1.x@10.0.0.1": true, "u@[1.2.3.4]": false, "u@[]": false,
 	} {
-		require.Equal(t, ok, validTarget(v), "%q", v)
-		// The load applies the same rule (config.ValidHostTarget).
-		require.Equal(t, ok, config.ValidHostTarget(v), "config: %q", v)
+		// remote_* and the HOST: load share one rule (F-07).
+		require.Equal(t, ok, config.ValidHostTarget(v), "%q", v)
 	}
 
 	s := newGoScene(t, boxEnv)
@@ -125,7 +124,7 @@ func TestLedger_REM02(t *testing.T) {
 // 3.0: REM-08 fixed. A HOST target u@h:22 is skipped with the hint to put
 // the port in ~/.ssh/config; scp never sees it.
 func TestLedger_REM08(t *testing.T) {
-	require.False(t, validTarget("u@h:22"))
+	require.False(t, config.ValidHostTarget("u@h:22"))
 	s := newGoScene(t, "HOST:x=u@h:22\n")
 	r := s.runGo(headless, "remote_push", nil, "x", "./f", "/tmp/f")
 	require.Equal(t, 1, r.RC)
