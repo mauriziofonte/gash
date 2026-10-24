@@ -117,7 +117,11 @@ func (m *Module) find(c *invoke.Call) int {
 		if e.typeLetter() != fileType[0] {
 			return true
 		}
-		if !pathguard.MatchGlobSegment(pattern, name) || strings.Contains(e.path, "\n") {
+		// A path with a newline is left out of the line-per-path output
+		// (LLM-29), tested on the part below the start point, so a root
+		// whose own name holds one still lists its results, as llm_tree
+		// does (LLM-08; 3.0: F-04 fixed).
+		if !pathguard.MatchGlobSegment(pattern, name) || strings.Contains(e.rel, "\n") {
 			return true
 		}
 		if out.line([]byte(e.path+"\n")) != nil {

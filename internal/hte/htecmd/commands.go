@@ -24,16 +24,15 @@ func (r *run) tree() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "hte",
 		Short: "Manage the local Apache and PHP-FPM test environment",
-		Long: "gash hte runs a userland Apache and PHP-FPM for local sites: one sudo at install for the\n" +
-			"few system steps, everything else as you. Every command takes --json.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	root.SetHelpCommand(&cobra.Command{Use: "__help", Hidden: true})
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return err })
 	root.PersistentFlags().BoolVar(&r.asJSON, "json", false, "print one JSON object")
 	root.AddCommand(r.install(), r.uninstall(), r.doctor(), r.migrate(), r.site(), r.php(), r.apache(),
 		r.service(), r.cert(), r.hosts(), r.rootStep(), r.unit(), r.autostart())
+	setHelp(root)
 	return root
 }
 
@@ -119,13 +118,12 @@ func (r *run) addSiteFlags(c *cobra.Command, sf *siteFlags) {
 	f.StringVar(&sf.php, "php", "", "the PHP version (X.Y)")
 	f.StringVar(&sf.prof, "profile", "", "dev, staging or hardened")
 	for _, p := range [][2]string{{"https", "serve HTTPS"}, {"force-https", "redirect HTTP to HTTPS"},
-		{"force-https-bypass", "do not redirect requests from 127.0.0.1 and ::1"}} {
+		{"force-https-bypass", "do not redirect requests from 127.0.0.1 and ::1"}, {"http2", "serve HTTP/2"}} {
 		f.Bool(p[0], false, p[1])
 		f.Bool("no-"+p[0], false, "the opposite of --"+p[0])
 	}
 	f.StringArrayVar(&sf.f.Aliases, "alias", nil, "a name the site also answers to (repeatable)")
 	f.BoolVar(&sf.f.NoWWW, "no-www", false, "no www. alias")
-	f.Bool("no-http2", false, "no HTTP/2")
 	f.IntSliceVar(&sf.httpPorts, "extra-http-port", nil, "one more loopback port of the HTTP vhost (repeatable)")
 	f.IntSliceVar(&sf.tlsPorts, "extra-https-port", nil, "one more loopback port of the HTTPS vhost (repeatable)")
 }
@@ -144,14 +142,11 @@ func (sf *siteFlags) flags(cmd *cobra.Command) (state.Flags, error) {
 	for _, p := range []struct {
 		name string
 		dst  **bool
-	}{{"https", &f.HTTPS}, {"force-https", &f.ForceHTTPS}, {"force-https-bypass", &f.ForceHTTPSBypass}} {
+	}{{"https", &f.HTTPS}, {"force-https", &f.ForceHTTPS}, {"force-https-bypass", &f.ForceHTTPSBypass},
+		{"http2", &f.HTTP2}} {
 		if *p.dst, err = pair(cmd, p.name); err != nil {
 			return f, err
 		}
-	}
-	if cmd.Flags().Changed("no-http2") {
-		off := false
-		f.HTTP2 = &off
 	}
 	if cmd.Flags().Changed("extra-http-port") {
 		f.ExtraHTTPPorts = &sf.httpPorts

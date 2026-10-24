@@ -539,7 +539,7 @@ func (s *Session) infra(o *out) {
 	}
 	// The runtimes have a heading of their own: a Docker heading with no
 	// daemon.json under it is dropped, never inherited (SYS-17).
-	o.subhead("Containers")
+	o.lazySub("Containers")
 	if f.isDir("/etc/containerd") {
 		o.kv("containerd", "present")
 	}
@@ -599,12 +599,15 @@ func (s *Session) system(o *out) {
 		}
 	}
 	o.endsub()
+	// Virtualmin's certificates have a heading of their own, never the
+	// Let's Encrypt one (F-10).
 	if f.isDir("/etc/ssl/virtualmin") {
-		o.kv("Virtualmin SSL", strconv.Itoa(len(f.ls("/etc/ssl/virtualmin")))+" domains")
+		o.lazySub("Virtualmin SSL")
+		o.kv("Domains", strconv.Itoa(len(f.ls("/etc/ssl/virtualmin"))))
 	}
 	// The directory is listed as root (0710 root:ssl-cert: a normal user
 	// cannot expand a glob in it), sorted, the first ten (SYS-19).
-	o.subhead("SSL private keys")
+	o.lazySub("SSL private keys")
 	o.raw(head(s.sudoFind("/etc/ssl/private", query{maxDepth: 1, names: []string{"*.pem", "*.key", "*.crt"}}), 10))
 
 	o.subhead("Kernel tuning")

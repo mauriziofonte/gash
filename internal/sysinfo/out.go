@@ -56,12 +56,12 @@ func (o *out) section(title string) {
 	o.s.Section(o.w, title)
 }
 
-// flush is __sysinfo_flush.
+// flush is __sysinfo_flush, and prints a pending lazySub header in
+// either mode.
 func (o *out) flush() {
-	if !o.lazy {
-		return
+	if o.lazy {
+		o.any = true
 	}
-	o.any = true
 	if o.sub == "" {
 		return
 	}
@@ -99,8 +99,15 @@ func (o *out) subhead(title string) {
 		o.sub = title
 		return
 	}
+	o.sub = ""
 	o.subPrint(title)
 }
+
+// lazySub is a sub-header that prints only with the first line of its
+// block, also where the other headers print at once (the compact
+// collectors ai_sysinfo runs): the 3.x headings that 2.x never printed
+// (F-10).
+func (o *out) lazySub(title string) { o.sub = title }
 
 // endsub ends the block of the last sub-header: a header still waiting
 // for its first line is dropped, and the lines that follow belong to the

@@ -164,6 +164,7 @@ var codeTable = []Code{
 	{"invalid_autostart", Retry, "hte", Origin3x},
 	{"invalid_db_url", Stop, "database", Origin3x},
 	{"invalid_service_name", Continue, "llm_docker_check", Origin3x},
+	{"invalid_env_file", Retry, "llm_docker_check", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

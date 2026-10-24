@@ -804,7 +804,7 @@ that test.
 | Fedora | E2E container in CI (the session cannot reach Fedora mirrors): distro PHP plus Remi side-by-side |
 | Arch | E2E container in CI (the session cannot reach Arch mirrors): `php` and `php-legacy` |
 | macOS | GitHub Actions macOS runner: Homebrew `httpd`, `php`, `php@8.3`; port mechanism verified there |
-| WSL2 | Manual checklist for the operator (`docs/hte/wsl-checklist.md`) |
+| WSL2 | Manual checklist for the operator (`docs/hte.md`, section "WSL") |
 
 Unit tests use a fixture system root (`internal/hte/sysroot` maps every system
 path under a temporary directory) and an in-process command runner fake, so

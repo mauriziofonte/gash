@@ -70,8 +70,11 @@ All three search functions skip node_modules, vendor and .git (`llm_tree` also
 installed or not: ripgrep's regex syntax, binary files skipped, files in
 sorted path order; `llm_grep` also skips hidden files and what
 `.gitignore`/`.ignore`/`.rgignore` exclude, `llm_find --contains` searches
-them. Zero matches: exit 0, no output; a PATH that does not exist is
-`path_not_found`, an empty PATTERN `missing_pattern`.
+them. `llm_find` names and `llm_tree` entries come in the same byte order
+(C order: each directory's entries sorted by name), so `-n N` and the JSON
+tree's 500-entry cap cut at the same place on every run. Zero matches: exit
+0, no output; a PATH that does not exist is `path_not_found`, an empty
+PATTERN `missing_pattern`.
 
 ### 3.2 Filesystem scanners
 
@@ -269,7 +272,7 @@ Each code always carries the action shown:
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
 | Database | `no_db_config` `no_database` `unknown_db_type` `invalid_db_url` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
-| `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` (RETRY) |
+| `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
 non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
@@ -343,7 +346,10 @@ Matched case-insensitively on the base name, and on the target of a symlink
 `llm_find --contains` and, inside `llm_exec`, `grep`, `rg`, `diff` and
 `git diff`/`show`/`grep`/`log -p` skip them (`git log` with `--follow` or
 `-L` does not; nor do commands named in `GASH_LLM_EXEC_ALLOW` or
-`unrestricted` mode). `llm_exec` also refuses `git show REV:PATH` for a
+`unrestricted` mode). Inside `llm_exec` those tools search the `.env`
+templates and the `id_*` public keys (`id_rsa.pub`); an exception name that
+also matches another pattern (`credentials.pub`, `secrets.env.example`)
+stays skipped there. `llm_exec` also refuses `git show REV:PATH` for a
 secret PATH and git blobs named by id (`git show SHA`, `git cat-file -p
 SHA`, `--batch`). Their names still appear in `llm_tree` and `llm_find`
 name searches. Detection is by name only: a password inside `config.php` is

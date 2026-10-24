@@ -79,3 +79,26 @@ func SecretExcludes(tool string) []string {
 	}
 	return out
 }
+
+// ExecSecretExcludes is SecretExcludes for the llm_exec wrappers: the same
+// secret directories, and the patterns with the exceptions taken out
+// (SecretExcludeGlobs), so grep, rg and diff inside llm_exec search a
+// .env.example or an id_rsa.pub as the path guard allows (F-05).
+func ExecSecretExcludes(tool string) []string {
+	var out []string
+	for _, g := range SecretExcludeGlobs(tool != "rg") {
+		if tool == "rg" {
+			out = append(out, "--iglob", "!"+g)
+		} else {
+			out = append(out, "--exclude="+g)
+		}
+	}
+	for _, dir := range SecretDirs {
+		if tool == "rg" {
+			out = append(out, "--iglob", "!**/"+dir+"/**")
+		} else if !strings.Contains(dir, "/") {
+			out = append(out, "--exclude-dir="+IcaseGlob(dir))
+		}
+	}
+	return out
+}

@@ -180,10 +180,19 @@ func (m *Module) rsync(c *invoke.Call, t transfer) int {
 		x.p.Error("rsync is not installed.")
 		return 1
 	}
+	openrs := x.openrsync()
 	// -s (--protect-args): the remote shell never splits or expands the
-	// remote path (LEDGER REM-03).
+	// remote path (LEDGER REM-03). openrsync has no -s (F-08): see
+	// openrsyncArgs.
 	args := []string{"-az", "-s", "-e", rsyncRSH(x.home())}
-	if !f.noProgress {
+	if openrs {
+		args = []string{"-az", "-e", openrsyncRSH(x.home())}
+	}
+	switch {
+	case f.noProgress:
+	case openrs:
+		args = append(args, "--progress")
+	default:
 		args = append(args, "--info=progress2")
 	}
 	if f.delete {
@@ -195,12 +204,83 @@ func (m *Module) rsync(c *invoke.Call, t transfer) int {
 	for _, pat := range f.excludes {
 		args = append(args, "--exclude="+pat)
 	}
+	remote := func(p string) string {
+		if openrs {
+			return target + ":" + remoteShellWord(p)
+		}
+		return target + ":" + p
+	}
 	if t.pull {
-		args = append(args, "--", target+":"+src, dst)
+		args = append(args, "--", remote(src), dst)
 	} else {
-		args = append(args, "--", src, target+":"+dst)
+		args = append(args, "--", src, remote(dst))
 	}
 	return x.run(c.Stdin, c.Stdout, c.Stderr, "rsync", args...).ExitCode
+}
+
+// openrsync reports whether the rsync on PATH is openrsync, OpenBSD's
+// rsync that macOS ships as /usr/bin/rsync: its --version prints
+// "openrsync: protocol version N" (on stderr), where Samba's rsync prints
+// "rsync  version ...".
+func (x *call) openrsync() bool {
+	var b strings.Builder
+	x.run(nil, &b, &b, "rsync", "--version")
+	return strings.Contains(b.String(), "openrsync")
+}
+
+// openrsync takes no -s (--protect-args) and no --info, and splits the -e
+// string on blanks with no quoting (fargs.c), so the rsync functions give
+// it another argv (F-08):
+//
+//   - -e: openrsyncRSH, the ssh options as plain words;
+//   - --progress instead of --info=progress2;
+//   - the remote path quoted for the remote shell (remoteShellWord).
+//
+// Without -s, rsync sends the remote path inside the command line that
+// ssh hands to the remote user's shell, which splits it into words and
+// expands it. The remote-path guard (REM-03) has already refused every
+// character the shell would expand or that would end a quote ($, `, a
+// quote, a backslash, glob characters, ;, &, |, <, >, (, ), !, a newline),
+// so what is left to protect is blanks: the path goes inside single
+// quotes, which the shell removes, and stays one word. A leading ~, ~/ or
+// ~NAME/ stays outside the quotes, so the remote shell still expands it
+// as it does for scp and ssh.
+
+// openrsyncRSH is rsyncRSH for openrsync: no quotes (openrsync would pass
+// them to ssh as they are). A HOME with a blank cannot be one word there,
+// so the ControlPath then names the home as ssh's own "~".
+func openrsyncRSH(home string) string {
+	cp := "ControlPath=" + home + "/.ssh/cm-%C"
+	if strings.ContainsAny(home, " \t") {
+		cp = "ControlPath=~/.ssh/cm-%C"
+	}
+	return "ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o ControlMaster=auto -o " +
+		cp + " -o ControlPersist=60s"
+}
+
+// remoteShellWord is the remote path p as one word of the remote shell:
+// a leading tilde prefix (~, ~NAME, with the / after it) left for the
+// shell to expand, the rest single-quoted (a single quote in it, which
+// REM-03 never lets through, would close the quotes, be escaped with a
+// backslash and reopen them).
+func remoteShellWord(p string) string {
+	head, rest := "", p
+	if strings.HasPrefix(p, "~") {
+		end := strings.IndexByte(p, '/')
+		if end < 0 {
+			end = len(p)
+		}
+		if name := p[1:end]; strings.Trim(name, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-") == "" {
+			// The / stays unquoted too: a quoted one would make the
+			// whole word the tilde prefix, which the shell leaves alone.
+			end = min(end+1, len(p))
+			head, rest = p[:end], p[end:]
+		}
+	}
+	if rest == "" {
+		return head
+	}
+	return head + "'" + strings.ReplaceAll(rest, "'", `'\''`) + "'"
 }
 
 func (m *Module) push(c *invoke.Call) int     { return m.scp(c, pushSpec) }

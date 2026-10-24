@@ -203,6 +203,7 @@ virtual-server
 Virtualmin: installed
 `,
 	// 3.0: SYS-17 fixed: the private key names have their own heading.
+	// 3.0: F-10 fixed: so do Virtualmin's certificates.
 	"system": `=== SYSTEM ===
 --- Cron
 SHELL=/bin/sh
@@ -216,7 +217,8 @@ cron.monthly:
 example.com
 example.com
 max-log-backups = 0
-Virtualmin SSL=1 domains
+--- Virtualmin SSL
+Domains=1
 --- SSL private keys
 /etc/ssl/private/server.key
 /etc/ssl/private/server.pem

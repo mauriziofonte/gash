@@ -76,7 +76,7 @@ func TestPrelude_Parity(t *testing.T) {
 					if i < len(rl) {
 						b = rl[i]
 					}
-					if a != b {
+					if a != b && !sameExclusionLine(a, b) {
 						t.Fatalf("first difference at line %d (mine %d lines, 2.x %d):\n  mine = %q\n  2.x  = %q",
 							i+1, len(ml), len(rl), a, b)
 					}
@@ -84,6 +84,19 @@ func TestPrelude_Parity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// sameExclusionLine: both lines set the same secret-exclusion array. 3.0:
+// F-05 fixed: the arrays hold the patterns with the exceptions taken out
+// (pathguard.SecretExcludeGlobs), so their values differ from 2.x; the line
+// stays where it was, so the line numbers still agree.
+func sameExclusionLine(a, b string) bool {
+	for _, p := range []string{"__LLM_CX_GREP=(", "__LLM_CX_RG=(", "__LLM_CX_DIFFX=(", "__LLM_CX_GITEX=("} {
+		if strings.HasPrefix(a, p) && strings.HasPrefix(b, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPrintfQ(t *testing.T) {

@@ -105,6 +105,11 @@ func (m *Module) check(c *invoke.Call) int {
 	}
 
 	envPath := path + "/.env"
+	if !parsed.fromConfig {
+		if rc, ok := x.checkEnvFile(envPath, jsonOut); !ok {
+			return rc
+		}
+	}
 	var results []result
 	var total, updates, current, pinned, errs int
 	for _, svc := range parsed.services {

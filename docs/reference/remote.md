@@ -236,7 +236,9 @@ a remote path with characters the remote side may expand (* ? [ ] { }
 $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
 start) is refused, even with --force. An unknown option or a fourth
 argument is an error.
-rsync runs with -s (--protect-args). With --delete the LOCAL
+rsync runs with -s (--protect-args); openrsync (macOS), which has no
+-s, gets the remote path single-quoted for the remote shell and
+--progress. With --delete the LOCAL
 destination is checked: below /tmp, /var/tmp or /home/<user>/, or a
 relative path inside the current directory, never your home itself or
 .ssh; elsewhere it asks, or needs --force in headless mode.
@@ -276,7 +278,9 @@ a remote path with characters the remote side may expand (* ? [ ] { }
 $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
 start) is refused, even with --force. An unknown option or a fourth
 argument is an error.
-rsync runs with -s (--protect-args). --delete runs without asking only
+rsync runs with -s (--protect-args); openrsync (macOS), which has no
+-s, gets the remote path single-quoted for the remote shell and
+--progress. --delete runs without asking only
 below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the
 remote home, never the home itself or a .ssh path; elsewhere it asks,
 or needs --force in headless mode.

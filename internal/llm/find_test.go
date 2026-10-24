@@ -11,6 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestFindMatches2x compares with 2.x when its sources are at hand. 3.0:
+// F-04 fixed: names come in byte order, where 2.x printed them in directory
+// read order, so a multi-entry listing matches only where the file system
+// happens to read in that order.
 func TestFindMatches2x(t *testing.T) {
 	d := searchFixture(t)
 	mustWrite(t, filepath.Join(d, "nl\nname.php"), "needle\n")
@@ -137,4 +141,52 @@ func TestLedger_LLM29_2x_find(t *testing.T) {
 	env := baseEnv(physTemp(t), nil)
 	r := same(t, m, d, env, "llm_find", "a*")
 	require.Equal(t, d+"/a\tb\n", r.Stdout)
+}
+
+// TestFollowup_F04: llm_find keeps the results of a root whose own name
+// holds a newline (only a newline below the root leaves a path out), and
+// the name search and the JSON tree list entries in byte order (the C
+// order of LLM-36), not in directory read order (3.0: F-04 fixed).
+func TestFollowup_F04(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	d := physTemp(t)
+	root := filepath.Join(d, "r\noot")
+	mustWrite(t, filepath.Join(root, "x.txt"), "")
+	mustWrite(t, filepath.Join(root, "sub", "y.txt"), "")
+	mustWrite(t, filepath.Join(root, "n\nl.txt"), "")
+	r := runGo(t, m, d, env, "llm_find", "*.txt", "r\noot")
+	require.Equal(t, result{root + "/sub/y.txt\n" + root + "/x.txt\n", "", 0}, r)
+
+	// No two names differ only in case (a macOS file system is
+	// case-insensitive). Created out of order.
+	s := physTemp(t)
+	for _, n := range []string{"é", "b", "a-b", "a/z", "a/c", "_u", "Z1"} {
+		mustWrite(t, filepath.Join(s, n), "x")
+	}
+	r = runGo(t, m, s, env, "llm_find", "*")
+	want := ""
+	for _, n := range []string{"Z1", "_u", "a/c", "a/z", "a-b", "b", "é"} {
+		want += s + "/" + n + "\n"
+	}
+	require.Equal(t, result{want, "", 0}, r)
+	r = runGo(t, m, s, env, "llm_find", "*", "-n", "2")
+	require.Equal(t, result{s + "/Z1\n" + s + "/_u\n", "", 0}, r)
+
+	r = runGo(t, m, s, env, "llm_tree", "--depth", "2")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	type node struct {
+		Name     string
+		Children []node
+	}
+	var v node
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &v), r.Stdout)
+	var names []string
+	for _, ch := range v.Children {
+		names = append(names, ch.Name)
+		for _, g := range ch.Children {
+			names = append(names, ch.Name+"/"+g.Name)
+		}
+	}
+	require.Equal(t, []string{"Z1", "_u", "a", "a/c", "a/z", "a-b", "b", "é"}, names)
 }

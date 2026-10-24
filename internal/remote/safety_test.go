@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/config"
 )
 
 // pathVectors are the remote_spec.sh vectors and more: tables, prefixes,
@@ -125,7 +127,7 @@ func TestRawTarget(t *testing.T) {
 		"u@h:22": false, "u@h@x": false, "@h": false, "u@": false, "uh": false, "u @h": false, "u@h\t": false,
 		"u@h\v": false, "u@h\r": false, "": false, "é@h": false,
 	} {
-		require.Equal(t, ok, validTarget(v), "%q", v)
+		require.Equal(t, ok, config.ValidHostTarget(v), "%q", v)
 	}
 	// The 2.x regex, on the same vectors: it accepted the option-like and
 	// host:port targets.

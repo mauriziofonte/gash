@@ -1,9 +1,9 @@
 # Contributing to Gash
 
-Thanks for helping. Gash is a Bash library that runs inside people's
-interactive shells and inside their agents' tool calls, so a change is
-judged by two questions: does it keep the user's shell intact, and does it
-keep the public contract (functions, `--json` envelopes, error contract,
+Thanks for helping. Gash is a Go binary with a thin generated Bash layer
+that runs inside people's interactive shells and inside their agents' tool
+calls, so a change is judged by two questions: does it keep the user's
+shell intact, and does it keep the public contract (functions, `--json` envelopes, error contract,
 `GASH_*` settings) stable?
 
 ## Getting started
@@ -28,12 +28,14 @@ To try a working copy as your shell, point `~/.gashrc` at it with
 
 ```bash
 gofmt -l . && go vet ./...
-CGO_ENABLED=1 go test -race ./...                   # unit tests
-go test ./cmd/gash -run TestScript                  # black-box testscript suite
+go test -p 2 ./...                                  # unit tests and the testscript suite
+CGO_ENABLED=1 go test -race ./internal/<touched>/... # the packages you changed
+go test ./cmd/gash -run TestScript                  # the black-box suite alone
 go run ./cmd/gash __compat generate --out .         # after a compat/*.tmpl change
 go test ./internal/compatgen -update                # then refresh the goldens
 go run ./cmd/gash __compat generate --out . --check # the generated Bash is current
 go run ./internal/tools/covermap                    # every 2.x assertion has a home
+go run ./internal/tools/bashonlymap -check          # tests/parity/bash-only.tsv is current
 shellcheck -s bash -S warning $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc install.sh)
 shfmt -d $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc bin/gash)
 go test ./internal/registry -run ReferenceDocs      # when help text changed: update docs/reference
@@ -43,45 +45,55 @@ CI runs the same commands on Linux and macOS, as a non-root user.
 
 ## Conventions
 
-- **Portability.** Bash 4.4+ for the generated shell layer, using only
-  features every Bash in the matrix has (no `\b` in regexes: macOS lacks
-  it). The binary needs no external userland except the tools a command
-  documents (`git`, `docker`, `ssh`, ...); directory walks, text handling
-  and formatting are Go, identical on Linux and macOS.
-- **Safe under `set -euo pipefail`.** Callers source Gash from strict
-  scripts: avoid `[[ … ]] && cmd` as the last command of a function or loop,
-  and never leave `BASH_REMATCH` or other globals behind at load time.
-- **Every public function** starts with
-  `needs_help name "usage" "description" "${1-}" && return`, registers its
-  help with `__gash_register_help` (usage, options, examples, see also),
-  answers `--help` without side effects, and fails on unknown options.
-- **Agent-facing functions** print JSON on stdout and errors through
-  `__gash_json_error` on stderr, with an `action` the agent can branch on.
-  New keys may be added to an envelope; existing keys never change type.
-- **Output** goes through the helpers in `lib/core/output.sh`: the semantic
-  palette (`__GASH_COLOR_PRIMARY` for structure, `ACCENT` for the names the
-  user looks for, `MUTED` for secondary data, the status colors for status
-  only), emitters for diagnostics (`__gash_info`, `__gash_error`,
-  `__gash_usage`, `__gash_hint`, ...), `__gash_table` for columns, `__gash_kv`
-  for key/value lines, `__gash_section` or `__gash_heading` for titles,
-  `__gash_list`, `__gash_box`, `__gash_bar`, and `needs_confirm_prompt` or
-  `__gash_confirm_plan` for questions. Colors only when `__gash_use_color`
-  says so, glyphs with an ASCII fallback, outside text with `printf '%s'`.
-  `tests/specs/output_style_lint_spec.sh` enforces these rules on the source;
-  `tests/specs/output_style_render_spec.sh` runs every public function on a
-  real terminal, piped and with `NO_COLOR`, so a new function needs a
-  fixture there. It is slow, so `tests/run.sh` runs it only with `--slow`
-  (or `bash tests/run.sh specs/output_style_render_spec.sh`), and CI in a
-  job of its own.
+- **Layout.** Each module is a Go package under `internal/` (`fsscan`,
+  `remote`, `docker`, `llm`, ...). Its `Register(*invoke.Table)` binds every
+  public function with `t.Handle("name", fn)`, and `internal/handlers.Table`
+  lists the modules: a new module adds one line there, nothing registers
+  itself in `init()`.
+- **The registry** (`internal/registry/catalog_gen.go`, maintained by hand
+  despite its name) holds each function's help body, short line, aliases,
+  completion and settings. A new function gets an entry there; its handler
+  starts with `if help.NeedsOf(c, c.Arg(0)) { return 0 }`, answers `--help`
+  without side effects, and fails on unknown options.
+- **Handlers** read `c.Env`, write `c.Stdout` and `c.Stderr`, honor `c.Ctx`
+  and return the exit status; they never call `os.Getenv` or `os.Exit`.
+- **Agent-facing functions** print JSON on stdout and errors as the error
+  envelope on stderr with `c.Fail(contract.New(code, details, hint))`. A new
+  code goes in `internal/contract/codes.go` and in the AGENTS.md section 5
+  table, with the `action` an agent branches on. New keys may be added to an
+  envelope; existing keys never change type.
+- **Output** goes through `internal/ui`: `ui.StyleOf(c.Term, noColor)` gives
+  the semantic palette and the blocks (`Section`, `Heading`, `KV`, `Table`,
+  `List`, `Box`, `Bar`, `Confirm`, `ConfirmPlan`), and its `Printer` the
+  diagnostics (`Error`, `Hint`, ...). Colors and glyphs follow the terminal
+  state in `c.Term`, with an ASCII fallback.
 - **Settings** are `GASH_*` lines in `~/.gash_env`, listed in
-  `.gash_env.template` and in `__GASH_SETTINGS_KNOWN`; the environment
-  wins over the file, except for the `llm_exec` permissions.
-- **Traps** clean up with `command rm` and remove themselves.
-- **Tests** live in `tests/specs/*_spec.sh`: `it "behaviour" bash -c '…'`,
-  hermetic (temporary `HOME`, mocks in `tests/mocks/bin`), exit 77 to skip
-  when a tool is missing.
-- **Docs**: `docs/reference/` is generated; a test fails when it is stale or
-  when a page cites a function or setting that does not exist.
+  `.gash_env.template` and in the registry's settings; the environment wins
+  over the file, except for the `llm_exec` permissions.
+- **Generated Bash.** `gash.sh`, `bash_completion` and the shims under
+  `lib/` come from `compat/*.tmpl` through `gash __compat generate`; edit the
+  template, never the output. The shell layer is Bash 4.4+ with only features
+  every Bash in the matrix has (no `\b` in regexes: macOS lacks it), safe
+  under `set -euo pipefail` (no `[[ … ]] && cmd` as the last command of a
+  function, no globals left behind at load time), and its traps clean up
+  with `command rm` and remove themselves.
+- **Portability.** The binary needs no external userland except the tools a
+  command documents (`git`, `docker`, `ssh`, `rsync`, ...); directory walks,
+  text handling and formatting are Go, identical on Linux and macOS. Tests
+  pass on macOS (BSD userland, case-insensitive APFS) and as a non-root user.
+- **Tests** are Go unit tests next to the code, plus the black-box suite in
+  `testdata/script/*.txtar` (testscript against the built binary and the
+  generated shims). Each `.txtar` declares in its leading comments which 2.x
+  assertions it covers (`# covers: ...`, or `# covers: none (...)` for a 3.0
+  surface); `testdata/script/README.md` has the syntax and
+  `go run ./internal/tools/covermap` enforces it. The 2.x assertions with no
+  black-box home are listed, with their Go test, in
+  `tests/parity/bash-only.tsv`, which `go run ./internal/tools/bashonlymap
+  -check` verifies. Tests are hermetic (temporary `HOME`, stub binaries on
+  `PATH`) and skip when an optional tool is missing.
+- **Docs**: `docs/reference/` is checked against the registry; a test fails
+  when it is stale or when a page cites a function or setting that does not
+  exist.
 
 ## Quotes
 
@@ -97,8 +109,8 @@ on the `# ` comment line right above the quote, with a URL when there is one:
 
 Quote exactly, in English, and name the person who said it (a law named after
 someone is attributed to whoever wrote it down). When Wikiquote lists a line
-as disputed or misattributed, leave it out. `bash tests/run.sh -f Quotes`
-checks the format and duplicates.
+as disputed or misattributed, leave it out, and check that the line is not
+already in the file.
 
 ## Commits and pull requests
 
@@ -106,6 +118,21 @@ Small, focused pull requests are easiest to review. Describe what a user
 sees before and after, add a line to `CHANGELOG.md` under the unreleased
 version, and say how you tested it. Breaking a documented function,
 envelope or setting needs a major version; adding one needs a minor.
+
+## Releasing
+
+1. Set `VERSION` (e.g. `3.0.0`) and add the dated heading to `CHANGELOG.md`.
+2. `go run ./internal/tools/releasesums` writes `release/SHA256SUMS`, a
+   reproducible build of gash for darwin/linux × amd64/arm64. Commit
+   `VERSION`, `CHANGELOG.md` and `release/SHA256SUMS` together;
+   `go run ./internal/tools/releasesums -check` verifies that the file is
+   current.
+3. Tag that commit `v<VERSION>` (annotated, and signed if `GASH_REQUIRE_SIGNED`
+   users are expected) and push the tag. The Release workflow runs
+   goreleaser, which refuses a tag that differs from `VERSION` and a binary
+   that differs from its pin.
+4. Any commit that changes Go code after step 2 needs step 2 again before
+   tagging.
 
 ## Reporting security issues
 

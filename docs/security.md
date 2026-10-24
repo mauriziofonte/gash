@@ -167,7 +167,7 @@ A symlink is judged by its own name and by its target's.
 
 | Function | Effect |
 |---|---|
-| `llm_exec` | Refuses secret arguments, glob matches and `git` `REV:PATH`; `grep`, `rg`, `diff` and `git` diff/show/grep/patch logs skip secret files (not in `unrestricted` mode, nor for commands in `GASH_LLM_EXEC_ALLOW`) |
+| `llm_exec` | Refuses secret arguments, glob matches and `git` `REV:PATH`; `grep`, `rg`, `diff` and `git` diff/show/grep/patch logs skip secret files (not in `unrestricted` mode, nor for commands in `GASH_LLM_EXEC_ALLOW`) but search the `.env` templates and the `id_*` public keys (`id_rsa.pub`); an exception name that also matches another pattern (`credentials.pub`, `secrets.env.example`) stays skipped there |
 | `llm_config` | Refuses a secret file |
 | `llm_grep`, `llm_find --contains` | Refuse a secret path; skip secret files and directories in recursive searches, but search the exceptions (`.env.example`, `*.pub`, ...) there, dotfiles included |
 | `llm_tree`, `llm_find`, filesystem scanners | List names and sizes only, secret files included |
@@ -266,7 +266,10 @@ a bracketed IPv6 literal. So no part reads as an ssh option, and a port
 refused: put it in a `Host` entry of `~/.ssh/config`. ssh gets `--` before the
 target, scp and rsync before their operands, and rsync runs with `-s`
 (`--protect-args`), so the remote shell does not split or expand the remote
-path. Unknown options and extra arguments are refused. Remote paths of
+path. openrsync (macOS `/usr/bin/rsync`) has no `-s`: it gets the remote path
+inside single quotes instead (a leading `~`, `~/` or `~NAME/` left out of
+them), which the remote shell reads as one word; the characters that could
+end the quotes or be expanded are already refused. Unknown options and extra arguments are refused. Remote paths of
 `remote_push`, `remote_pull` and `remote_sync_*` are normalized (repeated `/`,
 `.` segments, trailing `/`; `~/` becomes a path relative to the remote home,
 `~root` becomes `/root` and `~user` becomes `/home/user`; `/.` is `/`), `..`

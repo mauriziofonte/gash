@@ -5,6 +5,7 @@ package docker
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -152,15 +153,17 @@ func nameChar(c byte) bool  { return nameStart(c) || '0' <= c && c <= '9' }
 // double-quoted one takes the \n \r \t \\ \" escapes and interpolation,
 // both may span lines; an unquoted value ends at a blank followed by #
 // and is interpolated. Interpolation inside the file sees the earlier
-// definitions, then the environment. The last definition wins.
-func dotenv(path string, env func(string) (string, bool)) map[string]string {
+// definitions, then the environment. The last definition wins. A quoted
+// value that never closes is an error, as Compose refuses the whole file
+// over it (F-09); the definitions before it are returned with it.
+func dotenv(path string, env func(string) (string, bool)) (map[string]string, error) {
 	vars := map[string]string{}
 	if st, err := os.Stat(path); err != nil || !st.Mode().IsRegular() {
-		return vars
+		return vars, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return vars
+		return vars, nil
 	}
 	get := func(n string) (string, bool) {
 		if v, ok := vars[n]; ok {
@@ -168,8 +171,10 @@ func dotenv(path string, env func(string) (string, bool)) map[string]string {
 		}
 		return env(n)
 	}
-	text := strings.ReplaceAll(strings.ReplaceAll(string(data), "\x00", ""), "\r\n", "\n")
+	all := strings.ReplaceAll(strings.ReplaceAll(string(data), "\x00", ""), "\r\n", "\n")
+	text := all
 	for text != "" {
+		lineNo := strings.Count(all[:len(all)-len(text)], "\n") + 1
 		var line string
 		line, text = cutLine(text)
 		line = strings.TrimLeft(line, " \t")
@@ -193,13 +198,13 @@ func dotenv(path string, env func(string) (string, bool)) map[string]string {
 		case raw != "" && raw[0] == '\'':
 			body, rest, ok := quoted(raw[1:], text, '\'')
 			if !ok {
-				continue
+				return vars, &dotenvError{path: path, line: lineNo, key: key}
 			}
 			val, text = body, rest
 		case raw != "" && raw[0] == '"':
 			body, rest, ok := quoted(raw[1:], text, '"')
 			if !ok {
-				continue
+				return vars, &dotenvError{path: path, line: lineNo, key: key}
 			}
 			text = rest
 			v, err := interpolate(unescape(body), get)
@@ -223,7 +228,19 @@ func dotenv(path string, env func(string) (string, bool)) map[string]string {
 		}
 		vars[key] = val
 	}
-	return vars
+	return vars, nil
+}
+
+// dotenvError is a quoted value of the .env file at path that opens on
+// line and never closes.
+type dotenvError struct {
+	path string
+	line int
+	key  string
+}
+
+func (e *dotenvError) Error() string {
+	return "line " + strconv.Itoa(e.line) + ": unterminated quoted value of " + e.key
 }
 
 // cutLine splits off the first line of s (without its newline).

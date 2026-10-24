@@ -728,7 +728,9 @@ var functions = []Function{
 				"  Every registry is queried: Docker Hub and GHCR with a token (GITHUB_TOKEN\n" +
 				"  is exchanged for a GHCR token), the others anonymously, answering a\n" +
 				"  Bearer challenge. Image variables come from the exported environment\n" +
-				"  and DIR/.env, with Compose's interpolation rules.\n" +
+				"  and DIR/.env, with Compose's interpolation rules; a quoted value in\n" +
+				"  DIR/.env that never closes is refused (invalid_env_file), as Compose\n" +
+				"  refuses the whole file.\n" +
 				"  The exit status is 0 whenever the report prints, ERROR rows included.\n" +
 				"\n" +
 				"REGISTRY ERRORS\n" +
@@ -3614,7 +3616,9 @@ var functions = []Function{
 				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
 				"  start) is refused, even with --force. An unknown option or a fourth\n" +
 				"  argument is an error.\n" +
-				"  rsync runs with -s (--protect-args). With --delete the LOCAL\n" +
+				"  rsync runs with -s (--protect-args); openrsync (macOS), which has no\n" +
+				"  -s, gets the remote path single-quoted for the remote shell and\n" +
+				"  --progress. With --delete the LOCAL\n" +
 				"  destination is checked: below /tmp, /var/tmp or /home/<user>/, or a\n" +
 				"  relative path inside the current directory, never your home itself or\n" +
 				"  .ssh; elsewhere it asks, or needs --force in headless mode.\n" +
@@ -3664,7 +3668,9 @@ var functions = []Function{
 				"  $ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the\n" +
 				"  start) is refused, even with --force. An unknown option or a fourth\n" +
 				"  argument is an error.\n" +
-				"  rsync runs with -s (--protect-args). --delete runs without asking only\n" +
+				"  rsync runs with -s (--protect-args); openrsync (macOS), which has no\n" +
+				"  -s, gets the remote path single-quoted for the remote shell and\n" +
+				"  --progress. --delete runs without asking only\n" +
 				"  below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the\n" +
 				"  remote home, never the home itself or a .ssh path; elsewhere it asks,\n" +
 				"  or needs --force in headless mode.\n" +
