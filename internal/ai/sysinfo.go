@@ -304,9 +304,8 @@ type siSection struct {
 }
 
 // formatAnalysis is __sysinfo_format_ai_response: the server heading, the
-// severity counts and each section's findings. A reply without a sections
-// array keeps the empty counts of the 2.x defect (LEDGER AI-10), without
-// the jq error lines (there is no jq).
+// severity counts and each section's findings. A reply without sections
+// (missing, not an array, or empty) counts zero and says so (AI-10).
 func formatAnalysis(s ui.Style, p ui.Printer, w io.Writer, jsonReply string) {
 	var top map[string]json.RawMessage
 	if json.Unmarshal([]byte(jsonReply), &top) != nil {
@@ -327,6 +326,9 @@ func formatAnalysis(s ui.Style, p ui.Printer, w io.Writer, jsonReply string) {
 
 	var sections []siSection
 	_ = json.Unmarshal(top["sections"], &sections)
+	if len(sections) == 0 {
+		p.Warning("The reply holds no sections.")
+	}
 	for _, sec := range sections {
 		s.Heading(w, sec.Title)
 		printFindings(s, w, sec.Findings)
@@ -355,14 +357,11 @@ func severityStatus(sev string) string {
 	return "info"
 }
 
-// severityCounts counts findings by severity across the sections. When
-// sections is absent or not an array, every count is "" (the 2.x empty
-// jq output), reproducing the empty counts line of AI-10.
+// severityCounts counts findings by severity across the sections; a
+// missing or non-array sections counts as no sections, all zero (AI-10).
 func severityCounts(sectionsRaw json.RawMessage) (crit, warn, info, ok string) {
 	var sections []siSection
-	if len(sectionsRaw) == 0 || json.Unmarshal(sectionsRaw, &sections) != nil {
-		return "", "", "", ""
-	}
+	_ = json.Unmarshal(sectionsRaw, &sections)
 	var c, wn, in, o int
 	for _, sec := range sections {
 		for _, f := range sec.Findings {

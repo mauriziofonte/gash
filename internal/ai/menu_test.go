@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/term"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -179,13 +181,31 @@ func TestMarkdownAccumulators(t *testing.T) {
 	}
 }
 
-// TestLedger_AI10_md: a reply without a sections array leaves the summary
-// counts empty (the 2.x jq produced nothing).
-func TestLedger_AI10_md(t *testing.T) {
+// 3.0: AI-10 fixed: a reply without sections (missing, not an array or
+// empty) counts zero, in the Markdown report and on the terminal, and the
+// terminal says the reply holds no sections; no jq error line.
+func TestLedger_AI10_fix(t *testing.T) {
 	m := testModule(newFakeAPI(t))
 	m.now = func() time.Time { return time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC) }
 	md := mdInitial(m, `{"hostname":"h","platform":"p"}`, "gemini")
-	if !strings.Contains(md, "**Summary:**  critical,  warnings,  info,  ok") {
-		t.Fatalf("AI-10 empty counts not reproduced:\n%s", md)
+	if !strings.Contains(md, "**Summary:** 0 critical, 0 warnings, 0 info, 0 ok") {
+		t.Fatalf("md counts:\n%s", md)
+	}
+	for _, reply := range []string{`{"hostname":"h","platform":"p"}`, `{"hostname":"h","sections":"x"}`, `{"hostname":"h","sections":[]}`} {
+		var out, errb strings.Builder
+		s := ui.StyleOf(term.Fixed(invoke.EnvMap(map[string]string{}), false, false, false), true)
+		formatAnalysis(s, s.Printer(&errb), &out, reply)
+		if !strings.Contains(out.String(), "0 critical  0 warnings  0 info  0 ok\n") {
+			t.Errorf("%s: counts:\n%s", reply, out.String())
+		}
+		if errb.String() != "Warning: The reply holds no sections.\n" || strings.Contains(out.String()+errb.String(), "jq:") {
+			t.Errorf("%s: stderr %q", reply, errb.String())
+		}
+	}
+	var out, errb strings.Builder
+	s := ui.StyleOf(term.Fixed(invoke.EnvMap(map[string]string{}), false, false, false), true)
+	formatAnalysis(s, s.Printer(&errb), &out, `{"hostname":"h","sections":[{"title":"T","findings":[{"severity":"ok","text":"x"}]}]}`)
+	if errb.Len() != 0 || !strings.Contains(out.String(), "0 critical  0 warnings  0 info  1 ok\n") {
+		t.Errorf("one section: %q %q", out.String(), errb.String())
 	}
 }
