@@ -568,6 +568,12 @@ func (s *server) unitState(ctx context.Context, name string) (receipt.UnitState,
 	}
 	links, _ := filepath.Glob(s.host("/etc") + "/rc[2-5].d/S[0-9][0-9]" + name)
 	st.Enabled = len(links) > 0
+	if !st.Enabled && !s.env.Sysroot.Exists("/etc/init.d/"+name) {
+		// No init script either: nothing starts the unit here (a Fedora or
+		// Arch container ships httpd.service, has no systemd running and
+		// no `service` command).
+		return st, nil
+	}
 	res, err := s.cmd(ctx, "service", name, "status")
 	if err != nil {
 		return st, err

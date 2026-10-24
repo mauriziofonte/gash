@@ -245,3 +245,76 @@ func TestInventoryExtras(t *testing.T) {
 		t.Fatalf("certs %v gaps %v", inv.CertFiles, inv.IndexGaps())
 	}
 }
+
+// TestScanConfWithoutVirtualHost: Fedora's /etc/httpd/conf.d holds the
+// distro's server configuration (welcome.conf, autoindex.conf,
+// userdir.conf, the php package's php.conf) next to the vhosts, and
+// mod_ssl's ssl.conf with its _default_:443 vhost. Only the files with a
+// <VirtualHost> are vhosts; the others are loaded snippets, which never
+// block install (they used to: every stock Fedora file was a blocking
+// "vhost" without a ServerName). On Arch the same holds for the files of
+// conf/extra that httpd.conf includes.
+func TestScanConfWithoutVirtualHost(t *testing.T) {
+	files := map[string]string{
+		"/etc/httpd/conf.d/welcome.conf":           "<LocationMatch \"^/+$\">\n    Options -Indexes\n    ErrorDocument 403 /.noindex.html\n</LocationMatch>\n",
+		"/etc/httpd/conf.d/autoindex.conf":         "IndexOptions FancyIndexing HTMLTable VersionSort\nAlias /icons/ \"/usr/share/httpd/icons/\"\n",
+		"/etc/httpd/conf.d/userdir.conf":           "<IfModule mod_userdir.c>\n    UserDir disabled\n</IfModule>\n",
+		"/etc/httpd/conf.d/php.conf":               "<Files \".user.ini\">\n    Require all denied\n</Files>\nAddType text/html .php\nDirectoryIndex index.php\n<IfModule !mod_php.c>\n  <FilesMatch \\.(php|phar)$>\n    SetHandler \"proxy:unix:/run/php-fpm/www.sock|fcgi://localhost\"\n  </FilesMatch>\n</IfModule>\n",
+		"/etc/httpd/conf.d/ssl.conf":               "Listen 443 https\nSSLPassPhraseDialog exec:/usr/libexec/httpd-ssl-pass-dialog\n<VirtualHost _default_:443>\nErrorLog logs/ssl_error_log\nSSLEngine on\nSSLCertificateFile /etc/pki/tls/certs/localhost.crt\nSSLCertificateKeyFile /etc/pki/tls/private/localhost.key\n</VirtualHost>\n",
+		"/etc/httpd/conf.d/shop.conf":              "<VirtualHost *:80>\n    ServerName shop.test\n    DocumentRoot /srv/shop\n</VirtualHost>\n",
+		"/etc/httpd/conf/httpd.conf":               "Listen 80\nInclude conf/extra/httpd-default.conf\nInclude conf/extra/httpd-ssl.conf\n",
+		"/etc/httpd/conf/extra/httpd-default.conf": "Timeout 60\nKeepAlive On\n",
+		"/etc/httpd/conf/extra/httpd-ssl.conf":     "Listen 443\n<VirtualHost _default_:443>\nServerName www.example.com:443\n</VirtualHost>\n",
+		"/etc/httpd/conf/extra/httpd-vhosts.conf":  "<VirtualHost *:80>\nServerName dummy-host.example.com\n</VirtualHost>\n",
+		"/etc/httpd/conf/extra/httpd-info.conf":    "<Location /server-status>\n    SetHandler server-status\n</Location>\n",
+	}
+	dir := t.TempDir()
+	for p, c := range files {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, p), []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sr, err := platform.NewSysroot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type vh struct {
+		Path    string
+		Enabled bool
+	}
+	for _, tc := range []struct {
+		family   platform.Family
+		vhosts   []vh
+		snippets []string
+	}{
+		{platform.FamilyFedora,
+			[]vh{{"/etc/httpd/conf.d/shop.conf", true}, {"/etc/httpd/conf.d/ssl.conf", true}},
+			[]string{"/etc/httpd/conf.d/autoindex.conf", "/etc/httpd/conf.d/php.conf", "/etc/httpd/conf.d/userdir.conf", "/etc/httpd/conf.d/welcome.conf"}},
+		{platform.FamilyArch,
+			[]vh{{"/etc/httpd/conf/extra/httpd-ssl.conf", true}, {"/etc/httpd/conf/extra/httpd-vhosts.conf", false}},
+			[]string{"/etc/httpd/conf/extra/httpd-default.conf"}},
+	} {
+		l, err := LayoutFor(tc.family, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		inv := Scan(sr, l)
+		var got []vh
+		for _, v := range inv.Vhosts {
+			got = append(got, vh{v.Path, v.Enabled})
+		}
+		var snippets []string
+		for _, s := range inv.Snippets {
+			snippets = append(snippets, s.Path)
+		}
+		if diff := cmp.Diff(tc.vhosts, got); diff != "" {
+			t.Errorf("%s vhosts (-want +got):\n%s", tc.family, diff)
+		}
+		if diff := cmp.Diff(tc.snippets, snippets); diff != "" {
+			t.Errorf("%s snippets (-want +got):\n%s", tc.family, diff)
+		}
+	}
+}

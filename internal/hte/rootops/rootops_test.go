@@ -702,3 +702,30 @@ func TestReinstallRecordsNothing(t *testing.T) {
 		c.Close()
 	}
 }
+
+// TestUnitStopWithoutServiceManager: a Fedora or Arch system without
+// systemd running (a container) ships httpd.service but no init script
+// and no `service` command. Its unit is stopped and disabled as far as
+// anything can tell: unit_stop records nothing and runs nothing, where it
+// failed on the missing `service` before.
+func TestUnitStopWithoutServiceManager(t *testing.T) {
+	f := newFixture(t)
+	if err := os.Remove(filepath.Join(f.root, "usr/sbin/service")); err != nil {
+		t.Fatal(err)
+	}
+	f.write("/usr/lib/systemd/system/httpd.service", "[Unit]\n", 0o644)
+	env := f.env()
+	env.OS = platform.OS{GOOS: "linux", ID: "fedora", VersionID: "44", Family: platform.FamilyFedora}
+	c := session(t, env, []Op{{ID: 1, Op: OpUnitStop, Name: "httpd"}})
+	defer c.Close()
+	resp, err := c.Run(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Changes) != 0 || !slices.Contains(resp.Warnings, "httpd is already stopped and disabled") {
+		t.Errorf("unit_stop: %+v", resp)
+	}
+	if len(f.lines) != 0 {
+		t.Errorf("commands run: %q", f.lines)
+	}
+}
