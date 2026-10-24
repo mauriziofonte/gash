@@ -383,6 +383,14 @@ func TestBashArgv(t *testing.T) {
 	if want := []string{"/bin/bash", "--noprofile", "--norc", "-i", "-c", DoctorLoadScript, "gash-timing", "/home/u/.gash"}; err != nil || !slices.Equal(argv, want) {
 		t.Errorf("doctor load argv = %q %v", argv, err)
 	}
+	argv, err = Bash{Use: BashUpdateSmoke, Args: []string{"/home/u/.gash"}}.argv()
+	if want := []string{"bash", "--noprofile", "--norc", "-c", UpdateSmokeScript, "gash-update", "/home/u/.gash"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("update smoke argv = %q %v", argv, err)
+	}
+	argv, err = Bash{Use: BashUpdateSmokeInteractive, Bash: "/bin/bash", Args: []string{"/d"}}.argv()
+	if want := []string{"/bin/bash", "--noprofile", "--norc", "-i", "-c", UpdateSmokeInteractiveScript, "gash-update", "/d"}; err != nil || !slices.Equal(argv, want) {
+		t.Errorf("update smoke interactive argv = %q %v", argv, err)
+	}
 	argv, err = Bash{Use: BashDoctorShell}.argv()
 	if want := []string{"bash", "-i", "-c", "exit"}; err != nil || !slices.Equal(argv, want) {
 		t.Errorf("doctor shell argv = %q %v", argv, err)
@@ -403,6 +411,11 @@ func TestBashArgv(t *testing.T) {
 		{Use: BashDoctorShell, Script: "rm -rf ~"},
 		{Use: BashDoctorShell, Args: []string{"x"}},
 		{Use: BashDoctorBare, Name: "x"},
+		{Use: BashUpdateSmoke},
+		{Use: BashUpdateSmoke, Args: []string{"/d"}, Script: "rm -rf ~"},
+		{Use: BashUpdateSmoke, Args: []string{"/d"}, Name: "x"},
+		{Use: BashUpdateSmokeInteractive, Args: []string{"/d", "x"}},
+		{Use: BashUpdateSmokeInteractive, Args: []string{"/d"}, Wrap: []string{"nice"}},
 		{Use: BashNVMBridge, Script: "nvm ls; rm -rf ~"},
 		{Use: BashNVMBridge, Wrap: []string{"bwrap"}},
 		{Use: BashLLMExec, Script: "s", Wrap: []string{"sudo", "sh", "-c", "x"}},
@@ -413,7 +426,8 @@ func TestBashArgv(t *testing.T) {
 		}
 	}
 	if BashLLMExec.String() != "llm_exec" || BashNVMBridge.String() != "nvm bridge" || BashDoctorLoad.String() != "doctor load" ||
-		BashDoctorShell.String() != "doctor shell" || BashDoctorBare.String() != "doctor bare" || BashUse(7).String() != "BashUse(7)" {
+		BashDoctorShell.String() != "doctor shell" || BashDoctorBare.String() != "doctor bare" || BashUpdateSmoke.String() != "update smoke" ||
+		BashUpdateSmokeInteractive.String() != "update smoke interactive" || BashUse(99).String() != "BashUse(99)" {
 		t.Error("BashUse.String")
 	}
 }

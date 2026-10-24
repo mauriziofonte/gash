@@ -259,6 +259,28 @@ func TestLedger_SELF17(t *testing.T) {
 	require.Contains(t, errOut, "Error:   "+plat+" — does not match release/SHA256SUMS\n")
 	require.True(t, strings.HasSuffix(errOut, "\nWarning: 3 issue(s) found.\n"), errOut)
 
+	// The hosts helper next to the binary is checked against its own pin
+	// when the tree has one (upgrade.md 2: the helper is pinned too).
+	exe = filepath.Join(t.TempDir(), "gash")
+	d = doctorTree(t, exe)
+	helper := filepath.Join(filepath.Dir(exe), "gash-hosts-helper")
+	require.NoError(t, os.WriteFile(helper, []byte("the helper"), 0o755))
+	sums, err := os.ReadFile(filepath.Join(d, "release/SHA256SUMS"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(d, "release/SHA256SUMS"),
+		append(sums, []byte(fileSHA256(helper)+"  "+plat+"/gash-hosts-helper\n")...), 0o644))
+	_, errOut, rc = callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
+	require.Equal(t, 0, rc, errOut)
+	require.Contains(t, errOut, "OK:   gash-hosts-helper — matches release/SHA256SUMS\n")
+	require.NoError(t, os.WriteFile(helper, []byte("another helper"), 0o755))
+	_, errOut, rc = callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, "Error:   gash-hosts-helper — does not match release/SHA256SUMS\n")
+	require.NoError(t, os.Remove(helper))
+	_, errOut, rc = callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
+	require.Equal(t, 0, rc, errOut)
+	require.Contains(t, errOut, "Info:   gash-hosts-helper — not installed next to the binary\n")
+
 	// A development build checks neither.
 	_, errOut, _ = callModule(t, New(), "gash_doctor", doctorEnv(t, d))
 	require.Contains(t, errOut, "Info:   not checked (development build)\n")

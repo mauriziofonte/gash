@@ -78,7 +78,7 @@ declare -gA __GASH_CALL_VARS=(
     [gash_ssh_auto_unlock]="HOME OSTYPE"
     [gash_uninstall]="HOME"
     [gash_unload]="__AI_LAST_EXIT"
-    [gash_upgrade]="GASH_REQUIRE_SIGNED HOME"
+    [gash_upgrade]="BASH GASH_RELEASE_URL GASH_REQUIRE_SIGNED HOME XDG_DATA_HOME XDG_STATE_HOME"
     [hgrep]="HISTFILE HOME"
     [llm_config]="HOME"
     [llm_db_explain]="HOME"
@@ -196,7 +196,7 @@ __GASH_FETCH_REASON=""
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
 __gash_fetch() {
     local mode="${1-quiet}" v="$__GASH_BOOT_VERSION" os="$__GASH_BOOT_OS" arch="$__GASH_BOOT_ARCH"
-    local base dir lock tmp asset url line want got pin="" rc=0
+    local base dir lock tmp asset url line want got pin="" hpin="" sumok=0 rc=0
     __GASH_FETCH_REASON=""
     if [[ -z "$v" || "$v" == unknown ]]; then
         __GASH_FETCH_REASON="no VERSION file"
@@ -249,12 +249,17 @@ __gash_fetch() {
     command rm -rf "$tmp" 2>/dev/null || true
     mkdir -p "$tmp" 2>/dev/null || rc=1
 
-    # The pinned SHA-256 of the binary in this tree (release/SHA256SUMS,
-    # lines "HASH  OS_ARCH/gash"), else the release's checksums.txt for
-    # the archive; GASH_REQUIRE_SIGNED=1 accepts only a pinned binary.
+    # The pinned SHA-256 of the binaries in this tree (release/SHA256SUMS,
+    # lines "HASH  OS_ARCH/gash" and "HASH  OS_ARCH/gash-hosts-helper"),
+    # else the release's checksums.txt for the archive; GASH_REQUIRE_SIGNED=1
+    # accepts only a pinned binary. The helper is installed only when it is
+    # verified: by its pin, else by checksums.txt (never with
+    # GASH_REQUIRE_SIGNED=1 and no pin).
     if [[ -r "$__GASH_BOOT_ROOT/release/SHA256SUMS" ]]; then
         while IFS= read -r line || [[ -n "$line" ]]; do
+            line="${line%$'\r'}"
             [[ "$line" == *"  ${os}_${arch}/gash" ]] && pin="${line%% *}"
+            [[ "$line" == *"  ${os}_${arch}/gash-hosts-helper" ]] && hpin="${line%% *}"
         done <"$__GASH_BOOT_ROOT/release/SHA256SUMS"
     fi
     if ((rc == 0)) && [[ -z "$pin" && "${GASH_REQUIRE_SIGNED-}" == 1 ]]; then
@@ -265,10 +270,14 @@ __gash_fetch() {
         __GASH_FETCH_REASON="download failed: $url/$asset"
         rc=1
     fi
-    if ((rc == 0)) && [[ -z "$pin" ]]; then
+    if ((rc == 0)) && [[ -z "$pin" || (-z "$hpin" && "${GASH_REQUIRE_SIGNED-}" != 1) ]]; then
         if ! __gash_fetch_get "$url/checksums.txt" "$tmp/checksums.txt"; then
-            __GASH_FETCH_REASON="download failed: $url/checksums.txt"
-            rc=1
+            # Without a pin the binary cannot be verified; with one, only
+            # the helper is left out.
+            if [[ -z "$pin" ]]; then
+                __GASH_FETCH_REASON="download failed: $url/checksums.txt"
+                rc=1
+            fi
         else
             want=""
             while IFS= read -r line || [[ -n "$line" ]]; do
@@ -278,6 +287,8 @@ __gash_fetch() {
             if [[ -z "$want" || "$got" != "$want" ]]; then
                 __GASH_FETCH_REASON="checksum mismatch for $asset"
                 rc=1
+            else
+                sumok=1
             fi
         fi
     fi
@@ -294,6 +305,17 @@ __gash_fetch() {
     fi
     if ((rc == 0)); then
         tar -xzf "$tmp/$asset" -C "$tmp" gash-hosts-helper 2>/dev/null || true
+        if [[ -f "$tmp/gash-hosts-helper" && -n "$hpin" ]]; then
+            got="$(__gash_fetch_sum "$tmp/gash-hosts-helper")"
+            if [[ "$got" != "$hpin" ]]; then
+                __GASH_FETCH_REASON="gash-hosts-helper does not match release/SHA256SUMS"
+                rc=1
+            fi
+        elif ((sumok == 0)); then
+            command rm -f "$tmp/gash-hosts-helper" 2>/dev/null || true
+        fi
+    fi
+    if ((rc == 0)); then
         chmod 0755 "$tmp/gash" 2>/dev/null || rc=1
         [[ -f "$tmp/gash-hosts-helper" ]] && chmod 0755 "$tmp/gash-hosts-helper" 2>/dev/null
         [[ -f "$tmp/gash-hosts-helper" ]] && mv -f "$tmp/gash-hosts-helper" "$dir/gash-hosts-helper" 2>/dev/null
@@ -343,9 +365,13 @@ __gash_boot_emitters() {
     declare -F __gash_error >/dev/null && declare -F __gash_json_error >/dev/null
 }
 
-# The one stderr line of an interactive fetch.
+# The one stderr line of an interactive fetch. The reason is kept across
+# the emitters' load: lib/core/utils.sh sources this file again, which
+# resets it (a failed fetch then read as a success).
 __gash_fetch_line() {
+    local __gfl_reason="$__GASH_FETCH_REASON"
     __gash_boot_emitters || return 0
+    __GASH_FETCH_REASON="$__gfl_reason"
     if [[ -z "$__GASH_FETCH_REASON" ]]; then
         __gash_success "Installed gash $__GASH_BOOT_VERSION for $__GASH_BOOT_OS/$__GASH_BOOT_ARCH"
     else

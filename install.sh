@@ -9,7 +9,9 @@
   #
   # Usage: install.sh [--assume-yes] [--quiet] [--repair] [--help]
   #
-  #   --repair   re-fetch the binary for an existing install (non-interactive)
+  #   --repair   fetch and verify the gash binary for the VERSION the install
+  #              has checked out, and nothing else: no git command, no profile
+  #              or ~/.gashrc edit (non-interactive; status 1 when it fails)
   #
   # Environment:
   #   GASH_DIR                install location (default: ~/.gash)
@@ -370,10 +372,9 @@
   # Fetch and verify the release binary for this platform, reusing the
   # checkout's own compat bootstrap (SHA-256 checked). Best-effort: a
   # failure is reported, not fatal — the shim fetches on first use, and
-  # 'install.sh --repair' retries. With --repair, any half-installed binary
-  # of this version is dropped first so the fetch re-downloads.
+  # 'install.sh --repair' retries.
   gashinst_fetch_binary() {
-    local INSTALL_DIR BOOT MODE VDIR
+    local INSTALL_DIR BOOT MODE
     INSTALL_DIR="$(gashinst_install_dir)"
     BOOT="$INSTALL_DIR/lib/compat/bootstrap.sh"
     if [ ! -r "$BOOT" ]; then
@@ -385,14 +386,52 @@
       gashinst_warning "Could not load the compat bootstrap; the binary will be fetched on first use."
       return 0
     fi
-    if [ "${REPAIR-0}" -eq 1 ] && [ -n "${__GASH_BOOT_VERSION-}" ]; then
-      VDIR="${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/${__GASH_BOOT_VERSION}"
-      command rm -rf "$VDIR" 2>/dev/null || true
-    fi
     MODE=loud
     [ "${QUIET-0}" -eq 1 ] && MODE=quiet
     __gash_fetch "$MODE" || true
     return 0
+  }
+
+  # --repair (upgrade.md 3.7): download and verify the binary of the
+  # VERSION this install has checked out, replacing the one in place; the
+  # checkout, the profile and ~/.gashrc are not touched. The binary in
+  # place is set aside first and put back when the fetch fails. Status 0
+  # when the verified binary is installed, 1 otherwise.
+  gashinst_repair() {
+    local INSTALL_DIR BOOT VDIR BACKUP="" MODE=loud
+    INSTALL_DIR="$(gashinst_install_dir)"
+    BOOT="$INSTALL_DIR/lib/compat/bootstrap.sh"
+    if [ ! -r "$BOOT" ]; then
+      gashinst_error "No Gash 3 install in $INSTALL_DIR (lib/compat/bootstrap.sh is missing); run the installer without --repair."
+      return 1
+    fi
+    # shellcheck source=/dev/null
+    if ! source "$BOOT" 2>/dev/null || [ -z "${__GASH_BOOT_VERSION-}" ]; then
+      gashinst_error "Cannot read the version of $INSTALL_DIR (VERSION file)."
+      return 1
+    fi
+    VDIR="${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/${__GASH_BOOT_VERSION}"
+    if [ -e "$VDIR" ]; then
+      BACKUP="$VDIR.repair.$$"
+      command rm -rf -- "$BACKUP" 2>/dev/null || true
+      if ! command mv -- "$VDIR" "$BACKUP"; then
+        gashinst_error "Cannot move $VDIR aside."
+        return 1
+      fi
+    fi
+    [ "${QUIET-0}" -eq 1 ] && MODE=quiet
+    if __gash_fetch "$MODE"; then
+      [ -n "$BACKUP" ] && command rm -rf -- "$BACKUP"
+      return 0
+    fi
+    command rm -rf -- "$VDIR" 2>/dev/null || true
+    if [ -n "$BACKUP" ]; then
+      command mv -- "$BACKUP" "$VDIR" || true
+    fi
+    if [ "$MODE" = quiet ]; then
+      gashinst_error "gash ${__GASH_BOOT_VERSION} is not installed and could not be downloaded (${__GASH_FETCH_REASON})."
+    fi
+    return 1
   }
 
   gashinst_reset() {
@@ -400,7 +439,7 @@
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
       gashinst_verify_tag gashinst_tag_signed gashinst_tmp_clone_cleanup gashinst_abort \
-      gashinst_install_from_git gashinst_fetch_binary gashinst_do_install gashinst_reset
+      gashinst_install_from_git gashinst_fetch_binary gashinst_repair gashinst_do_install gashinst_reset
   }
 
   # Main script execution starts here
@@ -439,8 +478,8 @@
       --quiet | -q) QUIET=1 ;;
       --repair) REPAIR=1 ;;
       --help | -h)
-        sed -n '5,21s/^  # \{0,1\}//p' "${BASH_SOURCE[0]}" 2>/dev/null ||
-          echo "Usage: install.sh [--assume-yes] [--quiet] [--help]"
+        sed -n '5,27s/^  # \{0,1\}//p' "${BASH_SOURCE[0]}" 2>/dev/null ||
+          echo "Usage: install.sh [--assume-yes] [--quiet] [--repair] [--help]"
         exit 0
         ;;
       *)
@@ -450,9 +489,12 @@
     esac
   done
 
-  # --repair is an explicit, non-interactive request to re-fetch the binary.
+  # --repair fetches the binary and does nothing else.
   if [ "$REPAIR" -eq 1 ]; then
-    ASSUME_YES=1
+    repair_rc=0
+    gashinst_repair || repair_rc=$?
+    gashinst_reset
+    exit "$repair_rc"
   fi
 
   gashinst_echo

@@ -49,6 +49,11 @@ builds:
     ldflags:
       - -s -w
     mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        # The helper is pinned too: gash hte install makes it a root-owned
+        # sudo target.
+        - env -u GOOS -u GOARCH -u GOAMD64 -u GOARM64 go run ./internal/tools/releasesums -verify {{ .Path }} -platform {{ .Os }}_{{ .Arch }} -snapshot={{ .IsSnapshot }}
 
 archives:
   - id: default

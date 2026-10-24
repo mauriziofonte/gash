@@ -1,0 +1,66 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 shim surface)
+#
+# MATRIX "bin_launcher.txtar" (compat.md 6): the POSIX launcher bin/gash of
+# an install execs GASH_BIN when it is set and executable, else the binary
+# of the checkout's VERSION under the versions directory; it is found
+# through a chain of links (absolute and relative); without a binary it
+# hands over to the bootstrap, which fetches it (then runs it) or reports
+# why it cannot (status 1).
+
+[!exec:git] skip 'needs git'
+env GASH_BIN=
+env GASH_RELEASE_URL=file://$WORK/rel
+
+gashfixture origin v3.0.0:3x
+exec git clone -q origin home/.gash
+exec git -C home/.gash -c advice.detachedHead=false checkout -q v3.0.0
+exec sh -c 'mkdir -p "$HOME/.local/share/gash/versions/3.0.0" && printf "#!/bin/sh\necho \"versioned \$*\"\n" >"$HOME/.local/share/gash/versions/3.0.0/gash" && chmod +x "$HOME/.local/share/gash/versions/3.0.0/gash"'
+exec sh -c 'printf "#!/bin/sh\necho \"override \$*\"\n" >fake && chmod +x fake'
+
+# The versions directory.
+exec home/.gash/bin/gash llm_tree 'a b'
+stdout '^versioned llm_tree a b$'
+
+# GASH_BIN wins when executable; a directory or a missing file does not.
+env GASH_BIN=$WORK/fake
+exec home/.gash/bin/gash version
+stdout '^override version$'
+env GASH_BIN=$WORK
+exec home/.gash/bin/gash version
+stdout '^versioned version$'
+env GASH_BIN=$WORK/missing
+exec home/.gash/bin/gash version
+stdout '^versioned version$'
+env GASH_BIN=
+
+# Through links: absolute, then relative, chained.
+exec sh -c 'mkdir -p "$HOME/.local/bin" links && ln -s "$HOME/.gash/bin/gash" "$HOME/.local/bin/gash" && cd links && ln -s ../home/.local/bin/gash rel'
+exec home/.local/bin/gash x
+stdout '^versioned x$'
+exec links/rel y
+stdout '^versioned y$'
+
+# No binary: the bootstrap fetches it, then the launcher runs it.
+rm home/.local/share/gash/versions/3.0.0/gash
+gashrelease 3.0.0 rel
+exec links/rel version --json
+stdout '"version":"3\.0\.0"'
+exists home/.local/share/gash/versions/3.0.0/gash
+
+# No binary and no release: the bootstrap's report, status 1.
+rm home/.local/share/gash/versions/3.0.0/gash
+env GASH_RELEASE_URL=file://$WORK/nothing
+! exec home/.gash/bin/gash version
+stderr '^Error: gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded$'
+stderr '^Hint: Run: bash ~/\.gash/install\.sh --repair$'
+! exec home/.gash/bin/gash llm_tree .
+stderr '^\{"error":"binary_not_found",'
+
+-- home/.gitconfig --
+[user]
+	name = t
+	email = t@t
+[advice]
+	detachedHead = false

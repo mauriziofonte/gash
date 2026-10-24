@@ -140,14 +140,6 @@ func newRoot(p *Process, status *int) *cobra.Command {
 	return root
 }
 
-// notPorted is a 3.x command placeholder until its milestone lands.
-func notPorted(p *Process, status *int, name string) func(*cobra.Command, []string) error {
-	return func(*cobra.Command, []string) error {
-		*status = p.fail(invoke.NotPorted(name))
-		return nil
-	}
-}
-
 func initCmd(p *Process, status *int) *cobra.Command {
 	return &cobra.Command{
 		Use:       "init bash",
@@ -171,14 +163,56 @@ func initCmd(p *Process, status *int) *cobra.Command {
 	}
 }
 
+// updateLong is the help of gash update (upgrade.md 3.6).
+const updateLong = `Update the Gash install (~/.gash, or $GASH_DIR) to the highest release tag
+of its origin, verified before anything changes:
+
+  1. refuses a working tree with local modifications;
+  2. fetches the tags and picks the highest release (never an older one
+     than the checkout: a pre-release or a later commit stays as it is);
+  3. checks the tag signature (GASH_REQUIRE_SIGNED=1 refuses an unsigned
+     or unverified tag);
+  4. downloads the release binary into
+     ${XDG_DATA_HOME:-~/.local/share}/gash/versions/<version>/ and checks it
+     against the hash the tagged tree pins (release/SHA256SUMS), else the
+     release's checksums.txt (GASH_REQUIRE_SIGNED=1 accepts only a pinned
+     binary); the binary must answer "gash version --json" with that version;
+  5. checks out the tag and loads it in two new shells (headless and
+     interactive); if either fails, the previous version is checked out
+     again, its binary still installed.
+
+The previous version and its binary are kept: "gash update --rollback"
+returns to it (and a second rollback comes back). gash_upgrade runs the same
+steps. GASH_RELEASE_URL replaces the release download URL (file:// works).
+
+Exit status: 0 updated or nothing to do, 1 refused or failed (nothing
+changed, or the previous version restored), 2 a bad argument.`
+
 func updateCmd(p *Process, status *int) *cobra.Command {
+	var rollback bool
 	c := &cobra.Command{
-		Use:   "update",
+		Use:   "update [--rollback]",
 		Short: "Update Gash to the latest verified release",
+		Long:  updateLong,
 		Args:  cobra.NoArgs,
-		RunE:  notPorted(p, status, "gash update"),
+		RunE: func(*cobra.Command, []string) error {
+			h, ok := p.Table.LookupCommand("update")
+			if !ok {
+				*status = p.fail(invoke.NotPorted("gash update"))
+				return nil
+			}
+			var args []string
+			if rollback {
+				args = []string{"--rollback"}
+			}
+			*status = h(&invoke.Call{
+				Ctx: p.Ctx, Name: "update", Args: args, Env: p.Env,
+				Stdin: p.Stdin, Stdout: p.Stdout, Stderr: p.Stderr, Term: p.Term, Handlers: p.Table,
+			})
+			return nil
+		},
 	}
-	c.Flags().Bool("rollback", false, "return to the previous installed version")
+	c.Flags().BoolVar(&rollback, "rollback", false, "return to the version the last update left")
 	return c
 }
 

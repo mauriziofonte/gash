@@ -290,10 +290,16 @@ gash_unload() {
         unset -f "${__gash_fn}" >/dev/null 2>&1 || true
     done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
 
-    # The completion specs Gash registered (SELF-03).
+    # The completion specs Gash registered (SELF-03), and any other spec
+    # whose function is Gash's (a 2.x load registered more names).
     if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
         complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
     fi
+    local __gash_spec
+    while IFS= read -r __gash_spec; do
+        [[ "$__gash_spec" == *" -F __gash_"*" "* ]] || continue
+        complete -r "${__gash_spec##* }" >/dev/null 2>&1 || true
+    done < <(complete -p 2>/dev/null || true)
 
     # Per-prefix variable sweep: includes the cached secrets which must
     # never survive an unload, plus colors, PS1 caches, help registry.

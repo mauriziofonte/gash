@@ -33,6 +33,17 @@ const (
 	// BashDoctorBare is the same timing of bash alone: `bash --noprofile
 	// --norc -i -c exit`.
 	BashDoctorBare
+	// BashUpdateSmoke is the headless smoke test of gash update (upgrade.md
+	// 3.6): bash --noprofile --norc runs the fixed script UpdateSmokeScript,
+	// which sources the gash.sh of the install directory (its one argument,
+	// $1; $0 is "gash-update") with GASH_HEADLESS=1 in Env, then calls one
+	// function. The NUL-separated fields it prints follow what the load
+	// printed.
+	BashUpdateSmoke
+	// BashUpdateSmokeInteractive is the interactive smoke test of gash
+	// update: bash --noprofile --norc -i runs UpdateSmokeInteractiveScript,
+	// which sources the gash.sh of the install directory ($1).
+	BashUpdateSmokeInteractive
 )
 
 func (u BashUse) String() string {
@@ -47,6 +58,10 @@ func (u BashUse) String() string {
 		return "doctor shell"
 	case BashDoctorBare:
 		return "doctor bare"
+	case BashUpdateSmoke:
+		return "update smoke"
+	case BashUpdateSmokeInteractive:
+		return "update smoke interactive"
 	}
 	return fmt.Sprintf("BashUse(%d)", int(u))
 }
@@ -58,6 +73,18 @@ const DoctorLoadScript = `exec 3>&1 >/dev/null 2>&1
 source "$1/gash.sh"
 [[ -f "$1/bash_completion" ]] && source "$1/bash_completion"
 printf "%s\n" "${__GASH_LOAD_TIMES[@]}" >&3`
+
+// UpdateSmokeScript is the whole script of BashUpdateSmoke: whatever the
+// load prints comes first, then NUL, the status of the source, NUL,
+// $GASH_VERSION, NUL, the output of gash_username, NUL, its status, NUL.
+const UpdateSmokeScript = `source "$1/gash.sh"
+printf '\0%s\0%s\0' "$?" "${GASH_VERSION-}"
+gash_username
+printf '\0%s\0' "$?"`
+
+// UpdateSmokeInteractiveScript is the whole script of
+// BashUpdateSmokeInteractive.
+const UpdateSmokeInteractiveScript = `source "$1/gash.sh"`
 
 // doctorExit is the script of the whole-shell timings.
 const doctorExit = "exit"
@@ -133,6 +160,21 @@ func (b Bash) argv() ([]string, error) {
 		if b.Use == BashDoctorLoad {
 			name = "gash-timing"
 		}
+	case BashUpdateSmoke, BashUpdateSmokeInteractive:
+		want := UpdateSmokeScript
+		if b.Use == BashUpdateSmokeInteractive {
+			want = UpdateSmokeInteractiveScript
+		}
+		if script != "" && script != want {
+			return nil, fmt.Errorf("%w: %s runs only its fixed script", ErrBashUse, b.Use)
+		}
+		if len(b.Wrap) > 0 {
+			return nil, fmt.Errorf("%w: %s takes no wrapper", ErrBashUse, b.Use)
+		}
+		if len(args) != 1 || (name != "" && name != "gash-update") {
+			return nil, fmt.Errorf("%w: %s takes the install directory only", ErrBashUse, b.Use)
+		}
+		script, name = want, "gash-update"
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrBashUse, b.Use)
 	}
@@ -145,7 +187,7 @@ func (b Bash) argv() ([]string, error) {
 	}
 	flags := []string{"--noprofile", "--norc", "-c"}
 	switch b.Use {
-	case BashDoctorLoad, BashDoctorBare:
+	case BashDoctorLoad, BashDoctorBare, BashUpdateSmokeInteractive:
 		flags = []string{"--noprofile", "--norc", "-i", "-c"}
 	case BashDoctorShell:
 		flags = []string{"-i", "-c"}

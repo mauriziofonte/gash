@@ -147,13 +147,20 @@ including the load order and every setting, is in
 ## Upgrading
 
 ```bash
-gash_upgrade
+gash_upgrade          # or: gash update
+gash update --rollback
 ```
 
-`gash_upgrade` moves to the highest release tag and refuses to overwrite local
-changes. **Coming from 1.x?** The first new shell opens a guided migration
-that shows each change, asks what you prefer, previews the diff and backs up
-every file; see [docs/migration.md](docs/migration.md).
+`gash_upgrade` (the same as `gash update`) moves to the highest release tag,
+never to an older one, and refuses to overwrite local changes. Before it
+touches the checkout it downloads the release binary and verifies it (against
+the hash the tagged tree pins in `release/SHA256SUMS`, else the release's
+`checksums.txt`); after the checkout it loads the new version in a test shell
+and, if that fails, checks out the previous version again. The previous
+version and its binary are kept: `gash update --rollback` returns to it.
+`bash ~/.gash/install.sh --repair` fetches a missing or broken binary and
+changes nothing else. **Coming from 1.x?** See
+[docs/migration.md](docs/migration.md).
 
 ## Uninstall
 
