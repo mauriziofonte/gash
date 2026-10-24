@@ -118,8 +118,9 @@ func TestSpecPrecheck(t *testing.T) {
 	}
 }
 
-// LEDGER DB-12, reproduced: when every engine rejects the query, the
-// precheck reports the sqlite verdict.
+// LEDGER DB-12: when every engine rejects the query, Precheck reports the
+// sqlite verdict. 3.0: DB-12 fixed in internal/db, which uses Precheck only
+// when no connection resolves (see internal/db TestLedger_DB12).
 func TestLedger_DB12(t *testing.T) {
 	q := "SELECT [a'] ; x"
 	for _, d := range []string{MySQL, PgSQL} {

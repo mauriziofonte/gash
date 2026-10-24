@@ -399,3 +399,40 @@ func TestLedger_DB17(t *testing.T) {
 		require.Equal(t, 0, got.RC, got.Stderr)
 	}
 }
+
+// TestLedger_DB12: a query every engine refuses gets the verdict of the
+// connection's engine once it is known (2.x gave the sqlite verdict, from
+// a precheck run before the connection was resolved); without a usable
+// connection the precheck verdict still comes first. Nothing connects.
+func TestLedger_DB12(t *testing.T) {
+	const q = "SELECT [a'] ; x"
+	d, home, env := mysqlHome(t)
+	f := &fakeMySQL{}
+	m := frozen(New())
+	m.openMySQL = f.open
+	code := func(r result) string {
+		t.Helper()
+		require.Equal(t, 1, r.RC)
+		require.Empty(t, r.Stdout)
+		var e struct{ Error string }
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		return e.Error
+	}
+	for _, fn := range []string{"llm_db_query", "llm_db_explain"} {
+		// MySQL and PostgreSQL read [a'] as an open string literal.
+		require.Equal(t, "unterminated_literal", code(runGo(t, m, d, env, fn, q)), fn)
+		pd, ph := pgHome(t, 1)
+		require.Equal(t, "unterminated_literal", code(runGo(t, m, pd, baseEnv(ph, nil), fn, q)), fn)
+		// SQLite reads [a'] as an identifier: two statements.
+		sd := physTemp(t)
+		db := sqliteFixture(t, sd, fixtureSQL)
+		require.Equal(t, "multiple_statements_blocked", code(runGo(t, m, sd, baseEnv(sd, nil), fn, q, "-f", db)), fn)
+		// No such connection: the precheck verdict, not no_db_config.
+		require.Equal(t, "multiple_statements_blocked", code(runGo(t, m, d, env, fn, q, "-c", "nope")), fn)
+		// A query the precheck accepts still reports the missing connection.
+		require.Equal(t, "no_db_config", code(runGo(t, m, d, env, fn, "SELECT 1", "-c", "nope")), fn)
+	}
+	require.Nil(t, f.cfg, "the guard refused before any connection")
+	require.Empty(t, f.log())
+	_ = home
+}

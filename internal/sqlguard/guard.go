@@ -86,9 +86,10 @@ func GuardDriver(dbDriver string) string {
 	return SQLite
 }
 
-// Precheck is __llm_sql_precheck, run before any connection is resolved:
-// the query passes when one engine's rules accept it (mysql, then pgsql,
-// then sqlite). When all reject it the sqlite verdict is returned
+// Precheck is __llm_sql_precheck: the query passes when one engine's
+// rules accept it (mysql, then pgsql, then sqlite). When all reject it the
+// sqlite verdict is returned. internal/db uses it only when no connection
+// can be resolved; otherwise Check with the connection's engine decides
 // (LEDGER DB-12). As Check, it refuses when the precheck of either reading
 // refuses, with the C reading's error first (LEDGER DB-13).
 func Precheck(query string) error {
