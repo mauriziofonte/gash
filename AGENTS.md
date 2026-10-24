@@ -108,7 +108,7 @@ slow_query_explain field (the plan) when a query takes 100 ms or more.
 | `llm_git_status [PATH]` | JSON object (4.6) |
 | `llm_git_log [-n N] [PATH]` | JSON array of `{hash, subject, author, date}` (default 10) |
 | `llm_git_diff [--staged] [PATH]` | `git diff --stat` text |
-| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords and known token formats in values shown as `***` |
+| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
 | `llm_ports [--listen]` | `[{port, proto, state, address}]`; needs `ss` or `netstat` (`ports_tool_not_found` without) |
 | `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines |
 | `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |

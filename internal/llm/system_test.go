@@ -254,12 +254,40 @@ func TestEnvMatches2x(t *testing.T) {
 	require.Equal(t, "key *** and *** end ***", v["NOTES"])
 }
 
-// TestLedger_LLM02_2x: the URL mask is anchored and ends at the first / or
-// @ of the password.
+// TestLedger_LLM02_2x: 2.x anchored the URL mask at the start of the value
+// and ended the password at its first / or @. 3.0: LLM-02 fixed, the same
+// inputs are masked whole.
 func TestLedger_LLM02_2x(t *testing.T) {
-	require.Equal(t, "mysql://u:***@ss@h/d", envRedact("mysql://u:p@ss@h/d"))
-	require.Equal(t, "mysql://u:pa/ss@h/d", envRedact("mysql://u:pa/ss@h/d"))
-	require.Equal(t, "x https://u:pw@h/", envRedact("x https://u:pw@h/"))
+	require.Equal(t, "mysql://u:***@h/d", envRedact("mysql://u:p@ss@h/d"))
+	require.Equal(t, "mysql://u:***@h/d", envRedact("mysql://u:pa/ss@h/d"))
+	require.Equal(t, "x https://u:***@h/", envRedact("x https://u:pw@h/"))
+}
+
+// TestLedger_LLM02: every URL password is masked, to the last @ of its
+// token, wherever the URL stands in the value; the separators are kept.
+func TestLedger_LLM02(t *testing.T) {
+	for in, want := range map[string]string{
+		"mysql://u:p@ss@h/d":                 "mysql://u:***@h/d",
+		"mysql://u:pa/ss@h/d":                "mysql://u:***@h/d",
+		"x https://u:pw@h/":                  "x https://u:***@h/",
+		"mysql://user:p@ss@host/db":          "mysql://user:***@host/db",
+		"https://u:pw@h/":                    "https://u:***@h/",
+		"redis://:pw@h:6379":                 "redis://:***@h:6379",
+		"postgres://u@h/d":                   "postgres://u@h/d",
+		"a+b.c-d://u:x@h":                    "a+b.c-d://u:***@h",
+		"DSN=mysql://u:p@h":                  "DSN=mysql://u:***@h",
+		"a\thttps://u:p@h  b\nftp://v:q/r@k": "a\thttps://u:***@h  b\nftp://v:***@k",
+		"http://u:p@h/x?r=https://v:q@k":     "http://u:***@k",
+		"no url here":                        "no url here",
+		"https://host/a:b":                   "https://host/a:b",
+	} {
+		require.Equal(t, want, envRedact(in), in)
+	}
+	m := New()
+	d := physTemp(t)
+	env := baseEnv(physTemp(t), map[string]string{"MYURL_A": "mysql://user:p@ss@host/db", "MYURL_B": "see mysql://u:pa/ss@h/d"})
+	r := runGo(t, m, d, env, "llm_env", "--filter", "MYURL")
+	require.Equal(t, result{"{\n  \"MYURL_A\": \"mysql://user:***@host/db\",\n  \"MYURL_B\": \"see mysql://u:***@h/d\"\n}\n", "", 0}, r)
 }
 
 // TestLedger_LLM23_2x_env: llm_env values pass invalid UTF-8 through raw.

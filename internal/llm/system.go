@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -381,10 +380,55 @@ var (
 	}
 )
 
-// envRedact is __llm_env_redact: a URL password, a private key block and
+// envURLRE is a URL with a password, from its scheme: scheme://user:
+// then the password up to the last "@" of the token.
+var envURLRE = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):.*@([^@]*)$`)
+
+// isSchemeChar is [A-Za-z0-9+.-], the characters a URL scheme is made of.
+func isSchemeChar(c byte) bool {
+	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '+' || c == '.' || c == '-'
+}
+
+// envMaskURLs masks the password of every URL in v: each blank-separated
+// token is masked from the leftmost scheme that starts it or follows a
+// character no scheme holds, the password running to the token's last
+// "@". 2.x matched the whole value from its start and stopped the password
+// at the first "/" or "@", so a password holding either, or a URL after
+// other text, leaked (3.0: LEDGER LLM-02 fixed).
+func envMaskURLs(v string) string {
+	var b strings.Builder
+	for len(v) > 0 {
+		i := strings.IndexAny(v, " \t\n\r\v\f")
+		if i < 0 {
+			i = len(v)
+		}
+		b.WriteString(maskURLToken(v[:i]))
+		j := i
+		for j < len(v) && strings.IndexByte(" \t\n\r\v\f", v[j]) >= 0 {
+			j++
+		}
+		b.WriteString(v[i:j])
+		v = v[j:]
+	}
+	return b.String()
+}
+
+func maskURLToken(tok string) string {
+	for i := 0; i < len(tok); i++ {
+		if i > 0 && isSchemeChar(tok[i-1]) {
+			continue
+		}
+		if m := envURLRE.FindStringSubmatch(tok[i:]); m != nil {
+			return tok[:i] + m[1] + ":***@" + m[2]
+		}
+	}
+	return tok
+}
+
+// envRedact is __llm_env_redact: URL passwords, a private key block and
 // the known token formats masked.
 func envRedact(v string) string {
-	v = config.MaskEnvURL(v)
+	v = envMaskURLs(v)
 	if envKeyRE.MatchString(v) {
 		return "***"
 	}
