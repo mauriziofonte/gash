@@ -103,9 +103,10 @@ func cftRoutes() map[string]route {
 }
 
 // Stubs on PATH: uname, unzip and ldd answer from MOCK_* variables of the
-// call's environment; sudo logs its argv and runs it (dropping -n, failing
-// it under MOCK_SUDO_PASSWORD, and dropping the GNU-only
-// --no-preserve=ownership where cp is BSD, as on a macOS runner).
+// call's environment; sudo logs its argv and runs it (dropping -n and
+// failing it under MOCK_SUDO_PASSWORD); cp runs /bin/cp, dropping the
+// GNU-only --no-preserve=ownership (a no-op without -p) where cp is BSD, as
+// on a macOS runner, whether or not sudo runs it.
 const (
 	unameStub = `#!/bin/sh
 case "$1" in -m) echo "${MOCK_ARCH:-x86_64}" ;; *) echo "${MOCK_SYS:-Linux}" ;; esac
@@ -128,13 +129,16 @@ if [ "$1" = -n ]; then
 	[ -n "$MOCK_SUDO_PASSWORD" ] && { echo "sudo: a password is required" >&2; exit 1; }
 	shift
 fi
-if [ "$1" = cp ] && ! cp --version >/dev/null 2>&1; then
+exec "$@"
+`
+	cpStub = `#!/bin/sh
+if ! /bin/cp --version >/dev/null 2>&1; then
 	for a do
 		shift
 		[ "$a" = --no-preserve=ownership ] || set -- "$@" "$a"
 	done
 fi
-exec "$@"
+exec /bin/cp "$@"
 `
 )
 
@@ -155,7 +159,7 @@ func newFixture(t *testing.T) *fixture {
 	for _, d := range []string{fx.bin, filepath.Join(dir, "opt"), filepath.Join(dir, "tmp")} {
 		require.NoError(t, os.MkdirAll(d, 0o755))
 	}
-	for name, body := range map[string]string{"uname": unameStub, "unzip": unzipStub, "ldd": lddStub, "sudo": sudoStub} {
+	for name, body := range map[string]string{"uname": unameStub, "unzip": unzipStub, "ldd": lddStub, "sudo": sudoStub, "cp": cpStub} {
 		require.NoError(t, os.WriteFile(filepath.Join(fx.bin, name), []byte(body), 0o755))
 	}
 	fx.env = map[string]string{

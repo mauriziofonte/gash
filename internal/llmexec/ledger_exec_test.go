@@ -237,10 +237,12 @@ func TestLedger_EXEC04(t *testing.T) {
 // whatever the caller's collation; in the C locale that is the 2.x order.
 func TestLedger_EXEC06(t *testing.T) {
 	cwd := t.TempDir()
-	for _, n := range []string{"b", "B", "a", "_u", "Z1", "é", "e", "a b"} {
+	// No two names differ only in case: a macOS runner's file system is
+	// case-insensitive.
+	for _, n := range []string{"c", "B", "a", "_u", "Z1", "é", "e", "a b"} {
 		mustWrite(t, filepath.Join(cwd, n), "")
 	}
-	want := "B Z1 _u a a b b e é\n"
+	want := "B Z1 _u a a b c e é\n"
 	if have2x() {
 		if got, exit := run2x(t, "echo *", cwd, cwd); got != want || exit != 0 {
 			t.Fatalf("2.x in C: got %q (exit %d), want %q", got, exit, want)

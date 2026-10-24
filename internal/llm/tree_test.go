@@ -383,11 +383,13 @@ func TestLedger_LLM36(t *testing.T) {
 	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
-	names := []string{"é", "e", "ab", "a_b", "a.b", "a-b", "a", "_u", "Z1", "B", "b"}
+	// No two names differ only in case: a macOS runner's file system is
+	// case-insensitive.
+	names := []string{"é", "e", "ab", "a_b", "a.b", "a-b", "a", "_u", "Z1", "B", "c"}
 	for _, n := range names {
 		mustWrite(t, filepath.Join(d, n), "x")
 	}
-	want := "B\nZ1\n_u\na\na-b\na.b\na_b\nab\nb\ne\né\n"
+	want := "B\nZ1\n_u\na\na-b\na.b\na_b\nab\nc\ne\né\n"
 	for _, loc := range []string{"C", "C.UTF-8", "en_US.UTF-8", "de_DE.UTF-8"} {
 		env := baseEnv(physTemp(t), map[string]string{"LC_ALL": loc, "LANG": loc})
 		r := runGo(t, m, d, env, "llm_tree", "--text")

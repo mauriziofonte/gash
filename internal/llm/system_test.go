@@ -5,6 +5,7 @@ package llm
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -437,7 +438,12 @@ func TestLedger_LLM23(t *testing.T) {
 	mustWrite(t, filepath.Join(repo, "f"), "x")
 	git(t, repo, home, "add", "-A")
 	git(t, repo, home, "commit", "-m", "one")
-	git(t, repo, home, "checkout", "-b", "br\xff")
+	// The branch goes in packed-refs: a loose ref would be a file named
+	// with the invalid byte, which a macOS runner's file system refuses.
+	head, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+	require.NoError(t, err)
+	mustWrite(t, filepath.Join(repo, ".git", "packed-refs"), strings.TrimSpace(string(head))+" refs/heads/br\xff\n")
+	git(t, repo, home, "symbolic-ref", "HEAD", "refs/heads/br\xff")
 	r = runGo(t, m, repo, baseEnv(home, nil), "llm_git_status")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	st := strictJSON(t, r.Stdout).(map[string]any)
