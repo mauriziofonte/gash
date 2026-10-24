@@ -47,22 +47,27 @@ func exempt(name string) bool {
 	return digitAfter("php") || digitAfter("composer") || digitAfter("1composer")
 }
 
-// aliasStmt is the alias definition for name=value under the shadow rule: an
-// exempt or non-shadowing name is defined unconditionally; a name that hides
-// a program on PATH is defined only when it already existed before Gash
-// ([[ -v 'BASH_ALIASES[gp]' ]] && alias gp='git push'), which is what 2.x
-// did (a pre-existing alias is overwritten, SHELL-09; a new one is dropped).
+// UserAliasesVar is the associative array gash.sh fills, before Gash
+// defines anything, with the aliases the user had (compat/gash.sh.tmpl).
+const UserAliasesVar = "__GASH_USER_ALIASES"
+
+// aliasStmt is the alias definition for name=value: a name the user defined
+// before Gash loaded is left alone ([[ -v '__GASH_USER_ALIASES[ll]' ]] ||
+// alias ll='ls -l'), and under the shadow rule a non-exempt name that hides
+// a program on PATH is not defined at all (""). 3.0: SHELL-09 fixed: 2.x
+// overwrote an alias the user defined first.
 func (st *state) aliasStmt(name, value string) string {
-	def := "alias " + name + "=" + quote(value)
-	if exempt(name) || !st.has(name) {
-		return def
+	if !exempt(name) && st.has(name) {
+		return ""
 	}
-	return "[[ -v 'BASH_ALIASES[" + name + "]' ]] && " + def
+	return "[[ -v '" + UserAliasesVar + "[" + name + "]' ]] || alias " + name + "=" + quote(value)
 }
 
 // alias writes one pack alias with its shadow decision.
 func (st *state) alias(b *strings.Builder, name, value string) {
-	b.WriteString(st.aliasStmt(name, value) + "\n")
+	if stmt := st.aliasStmt(name, value); stmt != "" {
+		b.WriteString(stmt + "\n")
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -278,7 +283,9 @@ func (st *state) packDocker(b *strings.Builder) {
 // aliasIfFunc emits a function-backed pack alias guarded by the shell test
 // 2.x used (declare -F FUNC), combined with the shadow rule.
 func (st *state) aliasIfFunc(b *strings.Builder, name, fn string) {
-	b.WriteString("declare -F " + fn + " >/dev/null 2>&1 && " + st.aliasStmt(name, fn) + "\n")
+	if stmt := st.aliasStmt(name, fn); stmt != "" {
+		b.WriteString("declare -F " + fn + " >/dev/null 2>&1 && { " + stmt + "; }\n")
+	}
 }
 
 // -----------------------------------------------------------------------------

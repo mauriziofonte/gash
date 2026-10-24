@@ -69,6 +69,12 @@ if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
             __GASH_SNAPSHOT2+=("${!__gash_var@A}")
         fi
     done
+    # The user's aliases: a pack alias of the same name is not defined over
+    # them (SHELL-09; `gash init bash` emits the guard).
+    declare -gA __GASH_USER_ALIASES=()
+    for __gash_var in "${!BASH_ALIASES[@]}"; do
+        __GASH_USER_ALIASES["$__gash_var"]=1
+    done
     unset __gash_var
 fi
 

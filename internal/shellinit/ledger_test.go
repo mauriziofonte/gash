@@ -191,3 +191,30 @@ func TestLedger_SHELL04(t *testing.T) {
 		require.Equal(t, tc.want, string(out), tc.before)
 	}
 }
+
+// TestLedger_SHELL09 proves every pack alias is guarded by the user's
+// aliases recorded at load (__GASH_USER_ALIASES): a name the user defined
+// first is left alone, and a name that hides a program is not defined at
+// all, not even over a user alias (3.0: SHELL-09 fixed; 2.x overwrote the
+// user's alias).
+func TestLedger_SHELL09(t *testing.T) {
+	out := newHarness().withProgram("git", "gp").emit(t)
+	require.Contains(t, out, "[[ -v '__GASH_USER_ALIASES[ll]' ]] || alias ll='ls -l'\n")
+	require.Contains(t, out, "[[ -v '__GASH_USER_ALIASES[gst]' ]] || alias gst='git status'\n")
+	require.NotContains(t, out, "alias gp=", "gp hides a program")
+	for _, line := range strings.Split(out, "\n") {
+		if i := strings.Index(line, "alias "); i >= 0 && strings.Contains(line[i:], "=") && !strings.HasPrefix(strings.TrimSpace(line), "#") &&
+			strings.HasPrefix(strings.TrimSpace(line[i:]), "alias ") && !strings.Contains(line, "unalias") {
+			require.Contains(t, line, "__GASH_USER_ALIASES[", "an unguarded alias: %q", line)
+		}
+	}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	// In Bash: the user's ll stays, a free name is defined.
+	script := "shopt -s expand_aliases; declare -A __GASH_USER_ALIASES=([ll]=1); alias ll='ls -alF'\n" +
+		"[[ -v '__GASH_USER_ALIASES[ll]' ]] || alias ll='ls -l'\n[[ -v '__GASH_USER_ALIASES[la]' ]] || alias la='ls -la'\nalias ll la"
+	b, err := exec.Command("bash", "--noprofile", "--norc", "-c", script).Output()
+	require.NoError(t, err)
+	require.Equal(t, "alias ll='ls -alF'\nalias la='ls -la'\n", string(b))
+}
