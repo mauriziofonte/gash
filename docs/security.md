@@ -266,7 +266,10 @@ a bracketed IPv6 literal. So no part reads as an ssh option, and a port
 refused: put it in a `Host` entry of `~/.ssh/config`. ssh gets `--` before the
 target, scp and rsync before their operands, and rsync runs with `-s`
 (`--protect-args`), so the remote shell does not split or expand the remote
-path. Unknown options and extra arguments are refused. Remote paths of
+path. openrsync (macOS `/usr/bin/rsync`) has no `-s`: it gets the remote path
+inside single quotes instead (a leading `~`, `~/` or `~NAME/` left out of
+them), which the remote shell reads as one word; the characters that could
+end the quotes or be expanded are already refused. Unknown options and extra arguments are refused. Remote paths of
 `remote_push`, `remote_pull` and `remote_sync_*` are normalized (repeated `/`,
 `.` segments, trailing `/`; `~/` becomes a path relative to the remote home,
 `~root` becomes `/root` and `~user` becomes `/home/user`; `/.` is `/`), `..`

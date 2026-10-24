@@ -38,6 +38,12 @@ var absRoot = func() string {
 // status of $STUB_DIR/NAME.status (0 when none is left).
 const stubScript = `#!/bin/bash
 n=${0##*/}
+# rsync --version is the binary's openrsync probe (F-08): answered from
+# NAME.version, neither logged nor counted against NAME.status.
+if [ "$n" = rsync ] && [ "$*" = --version ]; then
+	[ -f "$STUB_DIR/$n.version" ] && cat "$STUB_DIR/$n.version" >&2
+	exit 0
+fi
 {
 	printf '%s\n' "$n"
 	for a in "$@"; do printf '  [%s]\n' "$a"; done

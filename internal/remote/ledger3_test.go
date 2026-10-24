@@ -318,3 +318,54 @@ func TestLedger_REM09(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(ref), syncPullSpec.usage)
 }
+
+// TestFollowup_F08: with openrsync (macOS /usr/bin/rsync), which has no -s,
+// no --info and splits -e on blanks without quotes, the rsync functions
+// give it an argv it accepts that still keeps the remote path one word of
+// the remote shell; Samba's rsync keeps -s (3.0: F-08 fixed).
+func TestFollowup_F08(t *testing.T) {
+	s := newGoScene(t, boxEnv)
+	s.files["rsync.version"] = "openrsync: protocol version 29\n"
+	r := s.runGo(headless, "remote_sync_push", nil, "box", "./s", "/tmp/my dir")
+	require.Equal(t, 0, r.RC, r.Err)
+	calls := argv(r.Log, "rsync")
+	require.Len(t, calls, 1)
+	a := calls[0]
+	require.Equal(t, []string{"-az", "-e"}, a[:2])
+	require.NotContains(t, a, "-s")
+	require.Equal(t, []string{"--progress", "--", "./s", "deploy@box.example:'/tmp/my dir'"}, a[3:])
+	// openrsync's split of -e: blanks only; no word holds a quote.
+	words := strings.Fields(a[2])
+	require.Contains(t, words, "ControlPath="+s.home()+"/.ssh/cm-%C")
+	require.Equal(t, "ssh", words[0])
+	require.NotContains(t, a[2], "'")
+
+	// A HOME with a blank: the ControlPath names ssh's own ~.
+	s.homeName = "John Doe"
+	r = s.runGo(headless, "remote_sync_pull", nil, "box", "~/my dir/", "./d", "--no-progress", "--exclude", "a b")
+	require.Equal(t, 0, r.RC, r.Err)
+	a = argv(r.Log, "rsync")[0]
+	require.Contains(t, strings.Fields(a[2]), "ControlPath=~/.ssh/cm-%C")
+	require.NotContains(t, a, "--progress")
+	require.Equal(t, []string{"--exclude=a b", "--", "deploy@box.example:~/'my dir/'", "./d"}, a[3:])
+
+	// The remote shell reads each quoted path as one word, ~ expanded.
+	for p, want := range map[string]string{
+		"/tmp/my dir": "/tmp/my dir", "~/my dir/": "/r/my dir/", "~": "/r", "~/": "/r/", "rel\tx": "rel\tx",
+	} {
+		cmd := exec.Command("sh", "-c", `printf '[%s]\n' `+remoteShellWord(p))
+		cmd.Env = []string{"HOME=/r", "PATH=" + os.Getenv("PATH")}
+		out, err := cmd.Output()
+		require.NoError(t, err, p)
+		require.Equal(t, "["+want+"]\n", string(out), p)
+	}
+
+	// Samba's rsync: -s and --info=progress2, the path as it is.
+	s = newGoScene(t, boxEnv)
+	s.files["rsync.version"] = "rsync  version 3.2.7  protocol version 31\n"
+	r = s.runGo(headless, "remote_sync_push", nil, "box", "./s", "/tmp/my dir")
+	require.Equal(t, 0, r.RC, r.Err)
+	a = argv(r.Log, "rsync")[0]
+	require.Equal(t, []string{"-az", "-s", "-e"}, a[:3])
+	require.Equal(t, []string{"--info=progress2", "--", "./s", "deploy@box.example:/tmp/my dir"}, a[4:])
+}
