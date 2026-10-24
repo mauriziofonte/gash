@@ -38,9 +38,11 @@ locally.
 
 ## Conventions
 
-- **Bash 4.4+, GNU or BSD userland.** Only features every Bash in the
-  matrix has, no `\b` in regexes (macOS lacks it), no gawk-only awk
-  (`__GASH_AWK` prefers gawk where it is only a nicety).
+- **Portability.** Bash 4.4+ for the generated shell layer, using only
+  features every Bash in the matrix has (no `\b` in regexes: macOS lacks
+  it). The binary needs no external userland except the tools a command
+  documents (`git`, `docker`, `ssh`, ...); directory walks, text handling
+  and formatting are Go, identical on Linux and macOS.
 - **Safe under `set -euo pipefail`.** Callers source Gash from strict
   scripts: avoid `[[ … ]] && cmd` as the last command of a function or loop,
   and never leave `BASH_REMATCH` or other globals behind at load time.
