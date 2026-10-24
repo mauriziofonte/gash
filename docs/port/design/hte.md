@@ -800,7 +800,7 @@ that test.
 
 | Platform | Verification |
 |---|---|
-| Debian, Ubuntu | E2E in containers (no systemd) here and in CI: real Apache, real PHP-FPM, multi-PHP. In this cloud session the ondrej/sury repositories are blocked; multi-PHP is built from official `php:X.Y-fpm` images copied side by side into one image (`/opt/php/X.Y`), CI uses the distro repositories |
+| Debian, Ubuntu | E2E in containers here (Ubuntu; deb.debian.org is blocked in this session) and in CI (Debian 12 and Ubuntu 24.04): real Apache, real PHP-FPM, without systemd and with systemd as PID 1. Multi-PHP on Ubuntu: the ondrej/sury repositories are blocked in this session, so PHP 7.4, 8.2 and 8.4 come from the official `php:X.Y-fpm` images copied side by side into one image (`/opt/php/X.Y`), here and in CI |
 | Fedora | E2E container in CI (the session cannot reach Fedora mirrors): distro PHP plus Remi side-by-side |
 | Arch | E2E container in CI (the session cannot reach Arch mirrors): `php` and `php-legacy` |
 | macOS | GitHub Actions macOS runner: Homebrew `httpd`, `php`, `php@8.3`; port mechanism verified there |
@@ -818,8 +818,21 @@ binary runs as an unprivileged user and is also the root step, through one
 sudoers rule for `<binary> hte __root`; afterwards `setup.sh` compares `/etc`,
 `/usr/local` and `/var/lib/gash-hte` with their state before install.
 `/etc/hosts` stays Docker's bind mount, so the helper writes it in place
-(`setup.sh` checks that first). So far it runs on Ubuntu 24.04 with the
-distro PHP 8.3. `GASH_HTE_E2E_MULTIPHP=1 run.sh` runs `TestE2EMultiPHP`
+(`setup.sh` checks that first). `run.sh DISTRO` picks the image:
+`ubuntu` (the default, Ubuntu 24.04, `Dockerfile.base`) and `debian`
+(Debian 12, the same apt recipe) run `TestE2E` and `TestE2EReinstall` on
+the hte-cli tree, moved to the distro PHP (8.3, 8.2) that `setup.sh` reads
+from the `php-fpm` package; `fedora` (Fedora 44, `Dockerfile.fedora`:
+`httpd`, `mod_ssl`, `mod_http2`, the distro `php-fpm` and Remi's
+`php83-php-fpm`) and `arch` (`Dockerfile.arch`: `apache`, `php-fpm`,
+`php-legacy-fpm`) have no hte-cli and run `TestE2EDistro` on the packages
+as installed, never started: discovery of both packagings, install (on
+Fedora, mod_ssl's `_default_:443` vhost in `ssl.conf` blocks the standard
+ports, HTE-75, and the story goes on on the high ports), a site on each
+version with HTTPS, HTTP/2 and sessions, `php global set`, `site modify
+--php`, the service commands, doctor and uninstall. CI runs every distro,
+plus the multi-PHP story on Ubuntu and the systemd story on Debian and
+Ubuntu. `GASH_HTE_E2E_MULTIPHP=1 run.sh` runs `TestE2EMultiPHP`
 in an image that adds PHP-FPM 7.4, 8.2 and 8.4 from the official
 `php:X.Y-fpm` images (`Dockerfile.multiphp`): each binary is copied into
 `/opt/php/X.Y` with every library it loads, its own loader included
@@ -832,7 +845,8 @@ master of its version, a site on every other version, `site modify --php`
 giving the 7.4 site back to the system PHP 7.4. `GASH_HTE_E2E_SYSTEMD=1 run.sh` runs `TestE2ESystemd` in a
 container with systemd as PID 1 (`Dockerfile.systemd`: logind and the user
 D-Bus added, the units that touch the kernel or devices masked; started
-with a private cgroup namespace and `CAP_SYS_ADMIN`, which systemd needs to
-mount its cgroup hierarchy): in a login session of the user, install with
+`--privileged` with a private cgroup namespace: systemd mounts its cgroup
+hierarchy, which the docker-default AppArmor profile of the GitHub runners
+denies to an unprivileged container even with `CAP_SYS_ADMIN`): in a login session of the user, install with
 `--autostart systemd`, the service commands, the migrate switch and
 uninstall, each master checked to run in the unit's cgroup (HTE-73).

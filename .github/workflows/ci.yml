@@ -179,12 +179,24 @@ jobs:
           bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
 
   hte-e2e:
-    name: HTE E2E (${{ matrix.distro }})
+    name: HTE E2E (${{ matrix.distro }}${{ matrix.story != 'base' && format(', {0}', matrix.story) || '' }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        distro: [debian, ubuntu, fedora, arch]
+        # base: Debian 12 and Ubuntu 24.04 migrate the hte-cli tree on the
+        # distro PHP (8.2, 8.3); Fedora runs httpd with the distro php-fpm
+        # and Remi's php83, Arch php-fpm and php-legacy-fpm (TestE2EDistro).
+        # multiphp: PHP 7.4, 8.2 and 8.4 next to Ubuntu's 8.3. systemd:
+        # systemd as PID 1, --autostart systemd (the apt-based images).
+        include:
+          - { distro: debian, story: base }
+          - { distro: debian, story: systemd }
+          - { distro: ubuntu, story: base }
+          - { distro: ubuntu, story: multiphp }
+          - { distro: ubuntu, story: systemd }
+          - { distro: fedora, story: base }
+          - { distro: arch, story: base }
     steps:
       - uses: actions/checkout@v4
 
@@ -193,16 +205,11 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go.sum
 
-      - name: Build the binaries
-        run: |
-          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
-          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash-hosts-helper" ./cmd/gash-hosts-helper
-
-      - name: Run the HTE end-to-end stories in a ${{ matrix.distro }} container
+      - name: Run the HTE end-to-end story in a ${{ matrix.distro }} container
         run: bash testdata/hte/e2e/run.sh "${{ matrix.distro }}"
         env:
-          GASH_BIN: ${{ runner.temp }}/gash
-          GASH_HOSTS_HELPER_BIN: ${{ runner.temp }}/gash-hosts-helper
+          GASH_HTE_E2E_MULTIPHP: ${{ matrix.story == 'multiphp' && '1' || '' }}
+          GASH_HTE_E2E_SYSTEMD: ${{ matrix.story == 'systemd' && '1' || '' }}
 
   snapshot:
     name: Snapshot build (goreleaser)
