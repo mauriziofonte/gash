@@ -143,8 +143,18 @@ func (e *Engine) SiteModify(ctx context.Context, f state.Flags) (*SiteResult, er
 		if err != nil {
 			return nil, nil, false, err
 		}
+		if !slices.Equal(sortedNames(cur.Aliases), sortedNames(next.Aliases)) {
+			v.reissue = append(v.reissue, next.Domain)
+		}
 		return replace(sites, next), &next, changed, nil
 	})
+}
+
+// sortedNames is a sorted copy of names.
+func sortedNames(names []string) []string {
+	out := slices.Clone(names)
+	slices.Sort(out)
+	return out
 }
 
 func replace(sites []state.Site, s state.Site) []state.Site {

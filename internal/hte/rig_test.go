@@ -908,3 +908,49 @@ func TestLedger_HTE25(t *testing.T) {
 		t.Errorf("removing a.test changed b.test's certificate")
 	}
 }
+
+// TestLedger_HTE47 (engine part): every alias is in the certificate's
+// SAN, and an alias change reissues the pair, also for an alias the
+// wildcard already covers or one that goes away; a change that keeps the
+// aliases keeps the pair.
+func TestLedger_HTE47(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	m.install(t)
+	docroot := m.docroot(t)
+	if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: &docroot}); err != nil {
+		t.Fatal(err)
+	}
+	show := func(want ...string) string {
+		t.Helper()
+		info, err := m.e.CertShow(ctx, "app.test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(info.Names, want) {
+			t.Errorf("SAN %v, want %v", info.Names, want)
+		}
+		return info.SHA256
+	}
+	first := show("app.test", "*.app.test", "www.app.test")
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "app.test", Profile: ptr("staging")}); err != nil {
+		t.Fatal(err)
+	}
+	if show("app.test", "*.app.test", "www.app.test") != first {
+		t.Error("a change without an alias change reissued the pair")
+	}
+	res, err := m.e.SiteModify(ctx, state.Flags{Domain: "app.test", Aliases: []string{"api.app.test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := show("app.test", "*.app.test", "www.app.test", "api.app.test")
+	if second == first || res.Applied == nil || !slices.ContainsFunc(res.Applied.Notes, func(n string) bool { return strings.Contains(n, "reissued") }) {
+		t.Errorf("an added alias under the wildcard did not reissue the pair: %+v", res.Applied)
+	}
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "app.test", NoWWW: true, Aliases: []string{"api.app.test"}}); err != nil {
+		t.Fatal(err)
+	}
+	if show("app.test", "*.app.test", "api.app.test") == second {
+		t.Error("a removed alias did not reissue the pair")
+	}
+}
