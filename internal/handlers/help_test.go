@@ -71,15 +71,18 @@ func run2xIn(t *testing.T, root string, env []string, script string) (string, st
 var helpCalls = [][]string{
 	{}, {"--list"}, {"--search", "docker"}, {"--search", "flf"}, {"--search", "XYZnonexistent"}, {"--search"},
 	{"--search", "Ä"}, {"--short", "files_largest"}, {"--short", "flf"}, {"--short", "nope"}, {"--short"},
-	{"-h"}, {"--help"}, {"files_largest"}, {"flf"}, {"ai_query"}, {"gash_help"}, {"nonexistent_func_xyz"},
-	{"--list", "--no-color"}, {"--no-color", "dsa"}, {"all_colors"}, {"path_add"}, {"gash_username"},
+	// 3.0: the full help of files_largest (flf), ai_query and
+	// docker_stop_all (dsa) was rewritten with their fixes (FS-*, AI-*,
+	// DOCK-22), so the full-help forms use functions whose body 3.0 kept.
+	{"-h"}, {"--help"}, {"disk_usage"}, {"du2"}, {"gash_db_test"}, {"gash_help"}, {"nonexistent_func_xyz"},
+	{"--list", "--no-color"}, {"--no-color", "dpa"}, {"all_colors"}, {"path_add"}, {"gash_username"},
 }
 
 // migrateListing is a gash_help listing line, from its name to the end of
 // the line, of a function whose summary 3.0 rewrote: gash_migrate (the D-6
 // pointer, SHELL-18) and archive_extract, ai_ask and llm_config (their
 // fixed behaviour).
-var migrateListing = regexp.MustCompile(`(?m)^(.*\b(?:gash_migrate|archive_extract|ai_ask|llm_config)\b).*$`)
+var migrateListing = regexp.MustCompile(`(?m)^(.*(?:gash_migrate|archive_extract|ai_ask|llm_config)\b).*$`)
 
 // gash_help prints what 2.x prints: every form, colors off, on and
 // shadowed by --no-color, at two widths.
