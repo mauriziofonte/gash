@@ -72,9 +72,11 @@ With `GASH_ENV_FILE` set, `gash_env_init` writes that file instead.
 
 ### Grammar
 
-The file is read line by line. Leading and trailing whitespace and a trailing
-carriage return are removed. Empty lines and lines starting with `#` are
-skipped. Every other line must be one of these forms:
+The file is read line by line. Spaces and tabs around a line (ASCII
+whitespace, in every locale) and a trailing carriage return are ignored; a
+line padded with a non-ASCII space such as U+00A0 is not recognized. Empty
+lines and lines starting with `#` are skipped. Every other line must be one
+of these forms:
 
 | Form | Example |
 |---|---|
