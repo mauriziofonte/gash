@@ -269,6 +269,11 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   `sudo -n -l` instead.
 - PHP discovery on macOS no longer reports a duplicate when Homebrew's `php`
   and `php@X.Y` links point to the same installation.
+- A Ctrl-C that ends the child process before Gash records the signal exits
+  130 (128+N), not 1.
+- `gash <Tab>` completes the `gash hte` command tree.
+- Gash no longer registers a completion for `nvm`, which replaced the user's
+  own nvm completion and was then removed by `gash_unload`.
 - `source ~/.gashrc` in a shell that ran 2.x loads the whole 3.x interactive
   layer (it stopped part-way with a syntax error), and `gash_unload` then
   keeps the user's exported `GASH_*` settings.

@@ -42,6 +42,11 @@ if ! runuser -u dev -- sudo -n -l /usr/local/bin/gash-e2e hte __root >/dev/null 
     getent shadow dev >&2 || true
     ls -l /etc/shadow /usr/bin/sudo /usr/sbin/unix_chkpwd >&2 || true
     command -v selinuxenabled >/dev/null && { selinuxenabled && echo "selinux enabled" >&2 || echo "selinux disabled" >&2; }
+    echo "-- as dev through runuser" >&2
+    runuser -u dev -- sh -c 'id; grep -E "^(Cap|NoNewPrivs|Seccomp)" /proc/self/status; /usr/sbin/unix_chkpwd dev chkexpiry </dev/null; echo "unix_chkpwd chkexpiry: $?"' >&2 || true
+    echo "-- sudo through su" >&2
+    su -s /bin/sh dev -c 'sudo -n -l /usr/local/bin/gash-e2e hte __root' >&2 || true
+    rpm -V pam sudo util-linux-core >&2 || true
     exit 1
 fi
 

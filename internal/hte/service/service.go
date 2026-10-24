@@ -233,7 +233,7 @@ func (s *Supervisor) waitReady(ctx context.Context, m master, offset int64) erro
 			return fmt.Errorf("%s failed: %s", m.name, bad)
 		}
 		if strings.Contains(text, m.ready) {
-			if _, ok := s.pid(m); ok && s.accepting(ctx, m) == "" {
+			if _, ok := s.pid(m); ok && s.refused(ctx, m) == nil {
 				return nil
 			}
 		}
@@ -243,7 +243,7 @@ func (s *Supervisor) waitReady(ctx context.Context, m master, offset int64) erro
 				if _, ok := s.pid(m); !ok {
 					why = "its PID file names no running master"
 				} else {
-					why = s.accepting(ctx, m) + " does not accept connections"
+					why = s.refused(ctx, m).Error()
 				}
 			}
 			return fmt.Errorf("%s was not ready after %s: %s (log: %s)", m.name, s.startTimeout(), why, lastLines(text, 3))
@@ -255,14 +255,15 @@ func (s *Supervisor) waitReady(ctx context.Context, m master, offset int64) erro
 	}
 }
 
-// accepting returns the first address that refuses connections, or "".
-func (s *Supervisor) accepting(ctx context.Context, m master) string {
+// refused names the first address that refuses connections and why, or
+// is nil when every address accepts.
+func (s *Supervisor) refused(ctx context.Context, m master) error {
 	for _, a := range m.addrs {
-		if s.dial(ctx, m.network, a) != nil {
-			return a
+		if err := s.dial(ctx, m.network, a); err != nil {
+			return fmt.Errorf("%s does not accept connections (%v)", a, err)
 		}
 	}
-	return ""
+	return nil
 }
 
 func (s *Supervisor) startApache(ctx context.Context, a render.ApacheMaster) error {

@@ -1177,4 +1177,16 @@ func dumpState(t *testing.T) {
 			break
 		}
 	}
+	if runtime.GOOS == "darwin" {
+		for _, argv := range [][]string{
+			{"curl", "-sv", "--max-time", "3", "-o", "/dev/null", "http://127.0.0.1:8080/"},
+			{"/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"},
+			{"sudo", "-n", "/sbin/pfctl", "-s", "info"},
+			{"sudo", "-n", "/sbin/pfctl", "-s", "rules"},
+			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/*", "-s", "nat"},
+		} {
+			out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+			t.Logf("state: %s (err %v):\n%s", strings.Join(argv, " "), err, out)
+		}
+	}
 }
