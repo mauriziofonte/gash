@@ -62,7 +62,9 @@ caller's shell, after three checks:
 | `php`, `node`, `python`, `ruby`, `java`, `composer` | anything but `--version` |
 | `crontab`, `date`, `hostname`, `ip` | anything but `crontab -l`; setting the date or hostname; `ip` other than show/list/get |
 
-Arguments naming a secret file (see below), also as `NAME=path`, are refused.
+Arguments naming a secret file (see below), also as `NAME=path` or as a value
+attached to a short option or option cluster (`-f.env`, `-ivf.env`), are
+refused.
 Unquoted globs are expanded first; a match that is a secret file or starts with
 `-` is refused. In the child shell, functions shadowing allowed commands are
 removed, `sed` runs as GNU `sed --sandbox`, `awk` as `gawk --sandbox` (both
@@ -92,7 +94,7 @@ Settings, read from `~/.gash_env` only (never from the environment):
   reading stays possible. Without a working `bwrap`: `sandbox_unavailable`.
 
 Every argument is also checked against the [forbidden paths](#forbidden-paths):
-option values (`--file=/proc/x`, `-f/proc/x`), `key=value` words, `~` and
+option values (`--file=/proc/x`, `-f/proc/x`, `-vf/proc/x`), `key=value` words, `~` and
 `~user`, glob matches, and relative paths after a `cd` earlier in the line.
 Not checked: `/dev/null`, the arguments of `echo`, `printf`, `basename` and
 `dirname`, and the pattern operand of `grep`, `rg`, `sed`, `awk`, `jq` and

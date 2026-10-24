@@ -116,19 +116,52 @@ func TestGitRefusals(t *testing.T) {
 	}
 }
 
-// TestLedger_EXEC01_2x: an attached short-option value skips the secret-file
-// check, so a secret reached through -f<file> is not refused, while the
-// separated -f <file> is (LEDGER EXEC-01, reproduced in rc.A).
+// TestLedger_EXEC01_2x: 2.x let an attached short-option value skip the
+// secret-file check, so a secret reached through -f<file> was read while
+// the separated -f <file> was refused. 3.0: EXEC-01 fixed, both are refused.
 func TestLedger_EXEC01_2x(t *testing.T) {
 	cwd := t.TempDir()
 	// "kubeconfig" is secret by exact name; prefixed with "-f" its base name
-	// matches no secret pattern, so the attached-value form slips through.
+	// matches no secret pattern, which is how the attached form slipped by.
 	mustWrite(t, filepath.Join(cwd, "kubeconfig"), "x\n")
 	mustWrite(t, filepath.Join(cwd, "notes.txt"), "x\n")
-	// Attached value: not refused (the defect).
-	assertOK(t, "grep -fkubeconfig notes.txt", cwd)
-	// Separated value: the secret file is refused.
+	assertRefuse(t, "grep -fkubeconfig notes.txt", cwd, "secret_file_blocked")
 	assertRefuse(t, "grep -f kubeconfig notes.txt", cwd, "secret_file_blocked")
+}
+
+// TestLedger_EXEC01: an attached short-option value, alone or at the end of
+// a cluster, gets both the secret-file check (secret_file_blocked, FATAL)
+// and the forbidden-path check (forbidden_path, FATAL), for a command the
+// walk tables list and for one they do not. Plain clusters still run.
+func TestLedger_EXEC01(t *testing.T) {
+	cwd := t.TempDir()
+	mustWrite(t, filepath.Join(cwd, "kubeconfig"), "x\n")
+	mustWrite(t, filepath.Join(cwd, ".env"), "x\n")
+	mustWrite(t, filepath.Join(cwd, "notes.txt"), "x\n")
+	for line, want := range map[string]string{
+		"grep -fkubeconfig notes.txt":   "secret_file_blocked",
+		"grep -if.env notes.txt":        "secret_file_blocked",
+		"grep -ivf.env notes.txt":       "secret_file_blocked",
+		"rg -f.env x notes.txt":         "secret_file_blocked",
+		"jq -nrf.env":                   "secret_file_blocked",
+		"grep -f/etc/shadow notes.txt":  "forbidden_path",
+		"grep -if/etc/shadow notes.txt": "forbidden_path",
+		"grep -vf/proc/1/environ x":     "forbidden_path",
+		"cat -A/root/x":                 "forbidden_path",
+	} {
+		assertRefuse(t, line, cwd, want)
+	}
+	plan, err := build(t, "grep -f/etc/shadow notes.txt", cwd)
+	if r, ok := err.(*Refusal); plan != nil || !ok || r.Details != "/etc/shadow" || r.Action != "FATAL" {
+		t.Errorf("grep -f/etc/shadow: got %v, want forbidden_path with details /etc/shadow", err)
+	}
+	plan, err = build(t, "grep -ivfkubeconfig notes.txt", cwd)
+	if r, ok := err.(*Refusal); plan != nil || !ok || r.Code != "secret_file_blocked" || r.Details != "kubeconfig" || r.Action != "FATAL" {
+		t.Errorf("grep -ivfkubeconfig: got %v, want secret_file_blocked with details kubeconfig", err)
+	}
+	for _, line := range []string{"grep -in x notes.txt", "ls -la", "head -n1 notes.txt", "grep -C2 x notes.txt"} {
+		assertOK(t, line, cwd)
+	}
 }
 
 // TestLedger_EXEC02_2x: `git stash list -p` is allowed and applies no secret
