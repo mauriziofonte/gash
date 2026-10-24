@@ -59,20 +59,24 @@ func TestLedger_SHELL07(t *testing.T) {
 	h := newHarness()
 	h.env["GASH_PATH_ADD"] = "~/a  ~/b\t/c*"
 	out := h.emit(t)
-	require.Contains(t, out, "path_add '~/a' '~/b' '/c*'\n")
+	require.Contains(t, out, "__gash_path_prepend '~/a' '~/b' '/c*'\n")
 }
 
-// TestLedger_SHELL08 proves a first word of --append, -h or --help keeps its
-// 2.x path_add meaning: the binary quotes and emits the words, it never
-// consumes the option itself.
+// TestLedger_SHELL08: the words of GASH_PATH_ADD go to the option-less
+// __gash_path_prepend, so -h and --append are directory names (missing,
+// skipped) and never print the path_add help or append (3.0: SHELL-08
+// fixed; 2.x passed them to path_add). The probes' PATH follows the same
+// rule. testdata/script/path_add_no_options.txtar runs it in a shell.
 func TestLedger_SHELL08(t *testing.T) {
 	h := newHarness()
 	h.env["GASH_PATH_ADD"] = "--append /x"
-	require.Contains(t, h.emit(t), "path_add --append /x\n")
+	out := h.emit(t)
+	require.Contains(t, out, "__gash_path_prepend --append /x\n")
+	require.NotContains(t, out, "path_add ")
 
 	h2 := newHarness()
-	h2.env["GASH_PATH_ADD"] = "-h"
-	require.Contains(t, h2.emit(t), "path_add -h\n")
+	h2.env["GASH_PATH_ADD"] = "-h /opt/x"
+	require.Contains(t, h2.emit(t), "__gash_path_prepend -h /opt/x\n")
 }
 
 // TestLedger_SHELL06: the grep color alias is defined when `grep

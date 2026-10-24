@@ -357,6 +357,29 @@ __gash_expand_tilde_path() {
     printf '%s' "$p"
 }
 
+# Put each DIR at the front of PATH, once, in the order given, skipping the
+# missing ones, with path_add's ~ rule (~ and a leading ~/). It takes no
+# options: a word starting with "-" is a directory name like any other, so
+# GASH_PATH_ADD='-h /opt/x' prints no help and adds /opt/x (LEDGER SHELL-08).
+# Usage: __gash_path_prepend DIR...
+__gash_path_prepend() {
+    local dir i
+    for ((i = $#; i >= 1; i--)); do
+        dir="${!i}"
+        if [[ "$dir" == \~/* ]]; then
+            dir="$HOME/${dir:2}"
+        elif [[ "$dir" == "~" ]]; then
+            dir="$HOME"
+        fi
+        dir="${dir%/}"
+        [[ -n "$dir" && -d "$dir" ]] || continue
+        [[ ":$PATH:" == *":$dir:"* ]] && continue
+        PATH="$dir${PATH:+:$PATH}"
+    done
+    export PATH
+    return 0
+}
+
 # Put directories at the front of PATH (or the end with --append), once
 # each and in the order given. Directories that do not exist are skipped (a
 # toolchain installed later appears in the next shell); one already in PATH

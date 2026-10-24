@@ -117,6 +117,7 @@
 # GASH_PATH_ADD=           # directories put first on PATH, in this order,
 #                          #     when they exist, e.g.
 #                          #     "~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"
+#                          #     (separated by spaces; no wildcards, no options)
 # GASH_NVM=off             # lazy = node/npm of nvm's default version on PATH
 #                          #     at once, nvm.sh loaded on the first `nvm`
 #                          #     (faster shells); on = load nvm.sh now;

@@ -1,0 +1,18 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-08
+# covers: none (3.0 shell fix)
+#
+# SHELL-08 proving test: GASH_PATH_ADD holds directories only. A first word
+# of -h prints no path_add help and the next directory is still put first;
+# --append is a directory name (missing, skipped), so the directory after
+# it is prepended, not appended. 2.x passed the words to path_add.
+
+env GASH_BANNER=0
+
+exec bash --norc --noprofile -i -c 'mkdir -p "$WORK/x"; export GASH_PATH_ADD="-h $WORK/x"; source "$GASH_SH" 2>/dev/null; echo "first=${PATH%%:*}"'
+! stdout 'Usage|Add directories'
+stdout '^first=.*/x$'
+
+exec bash --norc --noprofile -i -c 'mkdir -p "$WORK/y"; export GASH_PATH_ADD="--append $WORK/y"; source "$GASH_SH" >/dev/null 2>&1; echo "first=${PATH%%:*}"'
+stdout '^first=.*/y$'

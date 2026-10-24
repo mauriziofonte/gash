@@ -12,9 +12,11 @@ import (
 // toolchains is lib/shell/toolchains.sh: GASH_PATH_ADD and GASH_NVM.
 //
 //   - GASH_PATH_ADD: the binary splits the value on space, tab and newline
-//     and never globs (SHELL-07), then emits `path_add 'w1' 'w2' ...`, so a
-//     first word of --append, -h or --help keeps its 2.x path_add meaning
-//     (SHELL-08 reproduced).
+//     and never globs (SHELL-07), then emits `__gash_path_prepend 'w1'
+//     'w2' ...`, which takes no options: a word starting with "-" is a
+//     directory name (3.0: SHELL-08 fixed; 2.x passed the words to
+//     path_add, so --append appended and -h printed its help at every
+//     shell start).
 //   - GASH_NVM=on|1: export NVM_DIR and source nvm.sh and its completion.
 //   - GASH_NVM=lazy: the binary resolves the default version directory (no
 //     =~ in the shell, SHELL-10), the script prepends its bin and defines
@@ -22,7 +24,7 @@ import (
 func (st *state) toolchains(b *strings.Builder) {
 	if v := st.s.Get("GASH_PATH_ADD"); v != "" {
 		if words := config.SplitPathAdd(v); len(words) > 0 {
-			b.WriteString("path_add")
+			b.WriteString("__gash_path_prepend")
 			for _, w := range words {
 				b.WriteString(" " + quote(w))
 			}
@@ -240,8 +242,7 @@ func (st *state) fileNonEmpty(path string) bool {
 	return err == nil && !fi.IsDir() && fi.Size() > 0
 }
 
-// pathAdd reproduces lib/core/utils.sh path_add over a PATH string: a first
-// word of --append appends (else prepend), -h / --help adds nothing
+// pathAdd reproduces __gash_path_prepend over a PATH string: no options
 // (SHELL-08), ~ and ~/ expand, one trailing slash drops, missing or
 // duplicate directories are skipped, and the order given is kept.
 func (st *state) pathAdd(path string, words []string) string {
@@ -249,13 +250,6 @@ func (st *state) pathAdd(path string, words []string) string {
 		return path
 	}
 	appendMode := false
-	switch words[0] {
-	case "--append":
-		appendMode = true
-		words = words[1:]
-	case "-h", "--help":
-		return path
-	}
 	order := words
 	if !appendMode {
 		order = make([]string, len(words))
