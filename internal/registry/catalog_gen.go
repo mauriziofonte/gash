@@ -380,7 +380,11 @@ var functions = []Function{
 				"  Layout: /opt/chrome-headless-shell/<version>/ with the symlink\n" +
 				"  /usr/local/bin/chrome-headless-shell (GASH_CHROME_ROOT and\n" +
 				"  GASH_CHROME_LINK change them). The outgoing version is kept for\n" +
-				"  rollback, older ones are removed. Installing needs sudo.\n" +
+				"  rollback, older ones are removed. Installing uses sudo only when ROOT\n" +
+				"  or the link directory is not writable; headless or without a terminal\n" +
+				"  it runs sudo -n and stops early when sudo wants a password. The\n" +
+				"  binary's --version must name the version exactly, also for a copy\n" +
+				"  already under ROOT (one that does not is replaced).\n" +
 				"  Missing shared libraries are reported with the apt packages to install.\n" +
 				"  Point your tools at the shared binary and stop npm from downloading\n" +
 				"  browsers of its own:\n" +

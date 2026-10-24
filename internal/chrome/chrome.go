@@ -37,6 +37,17 @@ const (
 // version is the vre of 2.x: four dot-separated numbers.
 var version = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$`)
 
+// versionOut is a browser's `--version` line: a product name (Chromium,
+// Google Chrome for Testing, Chrome-Headless-Shell) and the four numbers.
+var versionOut = regexp.MustCompile(`^[A-Za-z][A-Za-z -]*[A-Za-z] ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)$`)
+
+// versionIs reports whether a `--version` output names exactly v
+// (SYS-24: no substring match).
+func versionIs(out, v string) bool {
+	m := versionOut.FindStringSubmatch(strings.TrimSpace(out))
+	return m != nil && m[1] == v
+}
+
 // Module is the chrome handler with its seams: tests replace the runner
 // and the HTTP client.
 type Module struct {
@@ -44,6 +55,9 @@ type Module struct {
 	// client makes every request; nil is net/http with the proxies and
 	// the CA of the environment.
 	client *http.Client
+	// writable reports whether the user may write a directory; nil is
+	// access(2) on it, or on its nearest existing parent.
+	writable func(dir string) bool
 }
 
 // New returns the module wired to the real system.
@@ -154,11 +168,13 @@ func (m *Module) update(c *invoke.Call) int {
 	}
 
 	// The symlink names the current version; the directories under ROOT
-	// are the versions kept. The link is resolved, ROOT is not (SYS-23).
+	// are the versions kept. The link and ROOT are both resolved, so a
+	// symlinked or relative ROOT still finds its versions (SYS-23).
+	realRoot := resolveRoot(root)
 	current := ""
 	if st, err := os.Lstat(link); err == nil && st.Mode()&os.ModeSymlink != 0 {
 		current, _ = readlinkF(link)
-		current = strings.TrimPrefix(current, root+"/")
+		current = strings.TrimPrefix(current, realRoot+"/")
 		if i := strings.IndexByte(current, '/'); i >= 0 {
 			current = current[:i]
 		}
@@ -166,7 +182,7 @@ func (m *Module) update(c *invoke.Call) int {
 			current = ""
 		}
 	}
-	installed := installedVersions(root)
+	installed := installedVersions(realRoot)
 
 	var pw, target, rev string
 	if s.Task(c.Stderr, "Resolving the latest Playwright release", func() int {
@@ -256,6 +272,64 @@ func (m *Module) update(c *invoke.Call) int {
 	return k.install(root, link, target, url, prune)
 }
 
+// resolveRoot is ROOT absolute with its symlinks resolved, or only
+// absolute while it does not exist yet.
+func resolveRoot(root string) string {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return root
+	}
+	if r, err := filepath.EvalSymlinks(abs); err == nil {
+		return r
+	}
+	return abs
+}
+
+// canWrite reports whether the user may write dir, or create it: the
+// nearest directory of the path that exists is the one tested.
+func (m *Module) canWrite(dir string) bool {
+	if m.writable != nil {
+		return m.writable(dir)
+	}
+	for {
+		if _, err := os.Lstat(dir); err == nil {
+			return unix.Faccessat(unix.AT_FDCWD, dir, unix.W_OK, unix.AT_EACCESS) == nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
+}
+
+// unattended reports a run that cannot answer a sudo password prompt:
+// headless, or no controlling terminal.
+func (k *call) unattended() bool {
+	if k.c.Term.Headless() {
+		return true
+	}
+	tty, err := k.c.Term.OpenTTY()
+	if err != nil {
+		return true
+	}
+	_ = tty.Close()
+	return false
+}
+
+// priv runs a program on the caller's terminal: as it is when sudo is
+// false, else through sudo, `sudo -n` in an unattended run (SYS-25).
+func (k *call) priv(sudo bool, name string, args ...string) int {
+	if !sudo {
+		return k.passthrough(name, args...)
+	}
+	argv := append([]string{name}, args...)
+	if k.unattended() {
+		argv = append([]string{"-n"}, argv...)
+	}
+	return k.passthrough("sudo", argv...)
+}
+
 // machine is `$(uname -m)`.
 func (k *call) machine() string {
 	m, _ := k.output("uname", "-m")
@@ -297,6 +371,13 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 	tmpBase := c.Env.Get("TMPDIR")
 	if tmpBase == "" {
 		tmpBase = "/tmp"
+	}
+	// sudo only for a ROOT or a link directory the user cannot write; an
+	// unattended run checks first that sudo needs no password (SYS-25).
+	sudo := !k.m.canWrite(root) || !k.m.canWrite(filepath.Dir(link))
+	if sudo && k.unattended() && k.status("sudo", "-n", "true") != 0 {
+		k.p.Error("sudo needs a password: run interactively or configure NOPASSWD.")
+		return 1
 	}
 	tmp, err := os.MkdirTemp(tmpBase, "chrome-headless-shell.")
 	if err != nil {
@@ -347,7 +428,7 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 	}
 
 	got, _ := k.quiet(tmp+"/x/"+binRel, "--version")
-	if !strings.Contains(got, target) {
+	if !versionIs(got, target) {
 		shown := got
 		if shown == "" {
 			shown = "nothing"
@@ -359,15 +440,33 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 	k.p.Info("Verified: " + got)
 
 	rc := 0
-	k.p.Info("Installing into " + root + "/" + target + " (sudo)...")
-	// A target already there is linked as it is (SYS-24).
-	if unix.Faccessat(unix.AT_FDCWD, root+"/"+target+"/"+binRel, unix.X_OK, unix.AT_EACCESS) != nil {
-		if k.passthrough("sudo", "mkdir", "-p", root+"/"+target) != 0 ||
-			k.passthrough("sudo", "cp", "-R", "--no-preserve=ownership", tmp+"/x/chrome-headless-shell-linux64", root+"/"+target+"/") != 0 {
+	how := ""
+	if sudo {
+		how = " (sudo)"
+	}
+	k.p.Info("Installing into " + root + "/" + target + how + "...")
+	// A target already there is linked only when its own --version names
+	// the target exactly; anything else is replaced by the verified tree
+	// (SYS-24).
+	dest := root + "/" + target
+	copyTree := true
+	if unix.Faccessat(unix.AT_FDCWD, dest+"/"+binRel, unix.X_OK, unix.AT_EACCESS) == nil {
+		if have, _ := k.quiet(dest+"/"+binRel, "--version"); versionIs(have, target) {
+			copyTree = false
+		} else {
+			k.p.Info("Replacing an unverified copy of " + target + ".")
+			if k.deleteTree(dest, sudo) != 0 {
+				rc = 1
+			}
+		}
+	}
+	if rc == 0 && copyTree {
+		if k.priv(sudo, "mkdir", "-p", dest) != 0 ||
+			k.priv(sudo, "cp", "-R", "--no-preserve=ownership", tmp+"/x/chrome-headless-shell-linux64", dest+"/") != 0 {
 			rc = 1
 		}
 	}
-	if rc == 0 && k.passthrough("sudo", "ln", "-sfn", root+"/"+target+"/"+binRel, link) != 0 {
+	if rc == 0 && k.priv(sudo, "ln", "-sfn", dest+"/"+binRel, link) != 0 {
 		rc = 1
 	}
 	k.deleteTree(tmp, false)
@@ -377,7 +476,7 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 	}
 	for _, v := range prune {
 		k.p.Info("Removing chrome-headless-shell " + v + "...")
-		if k.deleteTree(root+"/"+v, true) != 0 {
+		if k.deleteTree(root+"/"+v, sudo || !k.m.canWrite(root+"/"+v)) != 0 {
 			rc = 1
 		}
 	}
@@ -406,10 +505,7 @@ func (k *call) deleteTree(dir string, sudo bool) int {
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return 0
 	}
-	if sudo {
-		return k.passthrough("sudo", "find", dir, "-depth", "-delete")
-	}
-	return k.passthrough("find", dir, "-depth", "-delete")
+	return k.priv(sudo, "find", dir, "-depth", "-delete")
 }
 
 // hasLine is `grep -qx LINE`.

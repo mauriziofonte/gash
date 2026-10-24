@@ -46,7 +46,11 @@ of the latest playwright-core release, downloaded from Chrome for Testing
 Layout: /opt/chrome-headless-shell/<version>/ with the symlink
 /usr/local/bin/chrome-headless-shell (GASH_CHROME_ROOT and
 GASH_CHROME_LINK change them). The outgoing version is kept for
-rollback, older ones are removed. Installing needs sudo.
+rollback, older ones are removed. Installing uses sudo only when ROOT
+or the link directory is not writable; headless or without a terminal
+it runs sudo -n and stops early when sudo wants a password. The
+binary's --version must name the version exactly, also for a copy
+already under ROOT (one that does not is replaced).
 Missing shared libraries are reported with the apt packages to install.
 Point your tools at the shared binary and stop npm from downloading
 browsers of its own:
