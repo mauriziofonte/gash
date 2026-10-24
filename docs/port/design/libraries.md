@@ -23,7 +23,7 @@ API before rc.A.
 
 | Area | Module | Version | Status | Use |
 |---|---|---|---|---|
-| Toolchain | Go | 1.27.2 | `encoding/json/v2` on by default (`GOEXPERIMENT=nojsonv2` breaks the build) | `go 1.27` in go.mod, `toolchain go1.27.2` |
+| Toolchain | Go | 1.27.3 | `encoding/json/v2` on by default (`GOEXPERIMENT=nojsonv2` breaks the build) | `go 1.27` in go.mod, `toolchain go1.27.3` |
 | CLI | `github.com/spf13/cobra` | v1.10.2 | active | command tree from the registry (`architecture.md` 3) |
 | JSON | `encoding/json/v2`, `encoding/json/jsontext` | stdlib | | the contract encoder sits on `jsontext` (token-level control, number text kept) |
 | YAML | `go.yaml.in/yaml/v3` | v3.0.5 | active (YAML org) | `llm_config` YAML conversion, compose fallback parsing where 2.x had the awk subset is ported as a line parser instead (`architecture.md` 7) |

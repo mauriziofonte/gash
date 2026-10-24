@@ -52,7 +52,7 @@ duplicate it.
 ```bash
 bash tests/run.sh                          # Bash reference, 807/0 with sqlite3 and gawk
 bash tests/run.sh --impl go                # same specs, Go behind the shim
-(cd go-impl && GOTOOLCHAIN=go1.27.2 go test ./...)
+(cd go-impl && GOTOOLCHAIN=go1.27.3 go test ./...)
 ```
 
 ### 2.3 Seams a binary cannot honor

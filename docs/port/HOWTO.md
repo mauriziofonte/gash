@@ -6,7 +6,7 @@ rc.A is a pure port: the Go handler prints the 2.x bytes, returns the 2.x
 status and keeps the 2.x defects, except the forced divergences listed in
 `LEDGER.md`. New defects go to the report, not into the code.
 
-All commands run in `go-impl/` with `GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0`.
+All commands run in `go-impl/` with `GOTOOLCHAIN=go1.27.3 CGO_ENABLED=0`.
 
 ## Where things are
 

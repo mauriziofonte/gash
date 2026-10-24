@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
   SHELLCHECK_VERSION: v0.11.0
   SHFMT_VERSION: v3.14.1
 
