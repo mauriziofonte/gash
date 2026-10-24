@@ -13,6 +13,14 @@ indent_size = 4
 shell_variant = bash
 switch_case_indent = true
 
+# bin/gash is the generated POSIX sh launcher (no .sh extension); same
+# 4-space style as the rest, so shfmt does not default it to tabs.
+[bin/gash]
+indent_style = space
+indent_size = 4
+shell_variant = posix
+switch_case_indent = true
+
 [{install.sh,tests/**.sh,tests/mocks/bin/*}]
 indent_size = 2
 

@@ -1,0 +1,13 @@
+# Managed by gash hte install; gash hte uninstall removes it.
+[Unit]
+Description=Gash HTE userland web stack (Apache and PHP-FPM)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart="/home/me/.local/bin/gash" "hte" "__unit" "start"
+ExecStop="/home/me/.local/bin/gash" "hte" "__unit" "stop"
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,5 @@
+# Gash 3.0 test fixture. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+NAME="Fedora Linux"
+VERSION_ID=41
+ID=fedora
+PRETTY_NAME="Fedora Linux 41 (Server Edition)"

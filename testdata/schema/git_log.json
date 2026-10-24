@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_git_log (AGENTS.md 3.4).",
+  "title": "llm_git_log",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["hash", "subject", "author", "date"],
+    "properties": {
+      "hash": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+      "subject": {"type": "string"},
+      "author": {"type": "string"},
+      "date": {"type": "string", "minLength": 1}
+    },
+    "additionalProperties": false
+  }
+}

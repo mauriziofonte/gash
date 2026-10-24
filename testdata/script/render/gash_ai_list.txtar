@@ -1,0 +1,27 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:86
+# covers: output_style_render_spec.sh:87
+#
+# gash_ai_list rendering: the empty hint (86) and the masked provider list
+# (87). Same R5/R6 contract as gash_db_list; the API key is truncated to a
+# short prefix, never shown in full.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :86 empty - plain run: word prefix on stderr, no ESC
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; gash_ai_list'
+stderr '^Info: No AI providers configured in ~/\.gash_env'
+stderr '^Info: Add: AI:claude=YOUR_API_KEY'
+! stderr '\x1b'
+# --- :86 empty - color run: glyph hint
+exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_ai_list'
+stderr '• No AI providers configured'
+
+# --- :87 list - provider with a truncated key on stdout
+exec bash -c 'printf "AI:claude=sk-ant-api03-abcdefghijkl\n" >.gash_env; chmod 600 .gash_env; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_ai_list'
+stderr '• Available AI providers:'
+stdout '^  claude +sk-ant-a\.\.\.$'
+! stdout 'abcdefghijkl'

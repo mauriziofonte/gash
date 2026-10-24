@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. dirs_list_empty --json (AGENTS.md 4.2).",
+  "title": "Empty directories",
+  "type": "object",
+  "required": ["data", "count", "path", "errors"],
+  "properties": {
+    "data": {"type": "array", "items": {"type": "string", "pattern": "^/"}},
+    "count": {"type": "integer", "minimum": 0},
+    "path": {"type": "string", "pattern": "^/"},
+    "errors": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}

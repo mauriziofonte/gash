@@ -1,0 +1,36 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 fix proof)
+# ledger: DOCK-04
+#
+# docker_compose_upgrade lets Compose discover the project's files: no -f,
+# --project-directory DIR, run in DIR, so docker-compose.override.yml and
+# COMPOSE_FILE apply. The docker mock records every argv and serves
+# `config --format json` with the merged image (nginx:mainline from the
+# override), which the plan shows.
+
+env GASH_HEADLESS=1
+env MOCK_COMPOSE_CONFIG_JSON={"services":{"web":{"image":"nginx:mainline","ports":[{"target":80,"published":"8080"}]}}}
+
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_LOG="$PWD/o.log"; source "$GASH_SH"; docker_compose_upgrade o --dry-run'
+stdout 'web \(nginx:mainline\)'
+stdout 'docker compose --project-directory .*/o pull -- web'
+! stdout ' -f '
+grep 'docker compose --project-directory .*/o config --format json' o.log
+! grep ' -f ' o.log
+
+exec bash -c 'export PATH="$GASH_STAGE/testdata/mocks/bin:$PATH" MOCK_DOCKER_LOG="$PWD/u.log"; start="$PWD"; source "$GASH_SH"; docker_compose_upgrade o --yes >/dev/null 2>&1; [ "$PWD" = "$start" ]'
+grep 'docker compose --project-directory .*/o pull -- web' u.log
+grep 'docker compose --project-directory .*/o up -d --remove-orphans -- web' u.log
+! grep ' -f ' u.log
+
+-- o/docker-compose.yml --
+services:
+  web:
+    image: nginx:latest
+-- o/docker-compose.override.yml --
+services:
+  web:
+    image: nginx:mainline
+    ports:
+      - "8080:80"

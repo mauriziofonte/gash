@@ -1,0 +1,49 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: TEST-14
+# covers: settings_spec.sh:125
+# covers: settings_spec.sh:155
+#
+# settings_spec:125 - headless mode applies the function settings of
+# ~/.gash_env quietly, environment first. Probes 1 and 2 (GASH_DB_TIMEOUT,
+# GASH_AI_CONFIRM, GASH_AI_MODEL_CLAUDE/GEMINI applied via the fork-free
+# __gash_apply_env_settings path; the prompt/umask/history settings stay
+# untouched; the environment wins; no warning on mode 644 or an unknown
+# setting) are a pure port and run here. Probe 3 (psql receives
+# statement_timeout from the file) is LEDGER TEST-14 (Defects, test harness):
+# the native pgx driver never shells out to a mock psql, so it is pinned by
+# internal/db (TestPgsqlMatches2x) instead, and annotated here with # ledger:.
+#
+# settings_spec:155 - gash_env_init honours GASH_ENV_FILE.
+
+env GASH_HEADLESS=1
+
+# --- settings_spec.sh:125 - env settings applied quietly, environment first
+exec bash env_settings.sh
+
+# --- settings_spec.sh:155 - gash_env_init honours GASH_ENV_FILE
+exec bash env_file.sh
+
+-- env_settings.sh --
+set -euo pipefail
+tmp="$WORK/set"; rm -rf "$tmp"; mkdir -p "$tmp"
+printf '%s\n' "GASH_DB_TIMEOUT=5   # seconds" "GASH_AI_CONFIRM=0" "GASH_AI_MODEL_CLAUDE=claude-x" \
+  "GASH_AI_MODEL_GEMINI=gemini-x" "GASH_PROMPT=0" "GASH_UMASK=077" "GASH_HISTORY=0" "GASH_NOPE=1" \
+  "DB:default=pgsql://u:p@127.0.0.1:5432/app" >"$tmp/.gash_env"
+chmod 644 "$tmp/.gash_env"
+probe='source "$GASH_SH"; printf "%s|" "$GASH_DB_TIMEOUT" "$GASH_AI_CONFIRM" "$GASH_AI_MODEL_CLAUDE" "$GASH_AI_MODEL_GEMINI" "${GASH_PROMPT-unset}" "${GASH_UMASK-unset}" "${GASH_HISTORY-unset}" "$(umask)"'
+
+out="$(cd "$tmp" && HOME="$tmp" GASH_HEADLESS=1 bash --noprofile --norc -c "umask 022; $probe" 2>&1)"
+[[ "$out" == "5|0|claude-x|gemini-x|unset|unset|unset|0022|" ]] || { echo "got: $out"; exit 1; }
+
+out="$(cd "$tmp" && HOME="$tmp" GASH_HEADLESS=1 GASH_DB_TIMEOUT=9 GASH_AI_CONFIRM=1 bash --noprofile --norc -c "umask 022; $probe" 2>&1)"
+[[ "$out" == "9|1|claude-x|gemini-x|"* ]] || { echo "got: $out"; exit 1; }
+
+-- env_file.sh --
+set -euo pipefail
+tmp="$WORK/envf"; rm -rf "$tmp"; mkdir -p "$tmp"
+export GASH_HEADLESS=1 HOME="$tmp"
+source "$GASH_SH"
+GASH_ENV_FILE="$tmp/conf.env" gash_env_init >/dev/null 2>&1
+[[ -f "$tmp/conf.env" && ! -e "$tmp/.gash_env" ]]
+[[ "$(stat -c %a "$tmp/conf.env" 2>/dev/null || stat -f %Lp "$tmp/conf.env")" == 600 ]]

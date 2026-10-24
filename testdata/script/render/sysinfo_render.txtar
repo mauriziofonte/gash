@@ -1,0 +1,75 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:378
+# covers: output_style_render_spec.sh:379
+# covers: output_style_render_spec.sh:380
+# covers: output_style_render_spec.sh:381
+# covers: output_style_render_spec.sh:382
+# covers: output_style_render_spec.sh:383
+# covers: output_style_render_spec.sh:384
+# covers: output_style_render_spec.sh:385
+# covers: output_style_render_spec.sh:387
+#
+# sysinfo rendering (R2-R6). sysinfo reports the live host, so only its stable
+# structure is asserted: the overview card, the section rule+heading of each
+# area, the --llm key=value dump and the bad-argument refusal. The sudo stub
+# fails `sudo -n true`, so the collectors run unprivileged (R2: no sudo). The
+# :386 layout row injects deterministic section bodies through Bash function
+# overrides of the collectors, which cannot reach the Go binary, so it is the
+# internal/sysinfo format unit test, not black-box.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+chmod 0755 bin/sudo
+
+# --- :387 bad-arg - an unknown section/flag is refused
+! exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo bogus'
+stderr 'Unknown argument: bogus'
+
+# --- :379 overview - the identity/resources card
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo overview'
+stdout 'CPU'
+# Memory comes from /proc/meminfo, as in 2.x.
+[linux] stdout 'Memory'
+
+# --- :380 overview-no-color - the same card with no escape bytes
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo overview --no-color'
+stdout 'CPU'
+! stdout '\x1b'
+
+# --- :381 identity - the IDENTITY section rule+heading and its fields
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo identity'
+stdout 'IDENTITY'
+stdout 'Hostname:'
+
+# --- :382 services - the SERVICES section
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo services'
+stdout 'SERVICES'
+
+# --- :383 network - the NETWORK section
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo network'
+stdout 'NETWORK'
+
+# --- :384 system - the SYSTEM section
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo system'
+stdout 'SYSTEM'
+
+# --- :385 llm - the machine dump (=== SECTION === key=value), no ANSI
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo all --llm'
+stdout '=== OVERVIEW ==='
+stdout '=== IDENTITY ==='
+
+# --- :378 all - the overview card followed by every section heading
+exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sysinfo'
+stdout 'IDENTITY'
+stdout 'NETWORK'
+stdout 'SYSTEM'
+
+# --- R6: plain mode, the bad-arg error keeps its word prefix and has no ESC
+! exec bash -c 'export PATH="$PWD/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; sysinfo bogus'
+stderr '^Error: Unknown argument: bogus'
+! stderr '\x1b'
+
+-- bin/sudo --
+#!/bin/sh
+exit 1

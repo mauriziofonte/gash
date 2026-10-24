@@ -1,0 +1,21 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 surface; agent headless entry point)
+#
+# The agent entry point: sourcing the staged gash.sh headless under
+# set -euo pipefail prints nothing, returns 0 and defines the functions.
+
+env GASH_HEADLESS=1
+exec bash -c 'set -euo pipefail; source "$GASH_SH"'
+! stdout .
+! stderr .
+
+exec bash -c 'set -euo pipefail; source "$GASH_SH"; declare -F gash gash_help gash_inspiring_quote llm_tree'
+cmp stdout functions.txt
+! stderr .
+
+-- functions.txt --
+gash
+gash_help
+gash_inspiring_quote
+llm_tree

@@ -1,0 +1,104 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# covers: none (3.0 HTE surface; no 2.x spec)
+#
+# hte.toml autostart = "shell" (design hte.md 5): the interactive layer of
+# gash init bash starts the HTE stack with `gash hte __autostart`, once
+# per shell, in the background, quietly, and a failed start never fails
+# the shell load. Without hte.toml, or with another mode, the layer has no
+# such line. The binary the layer calls is wrap.sh: it records the call,
+# writes to stdout and stderr, sleeps, and exits 1.
+
+env GASH_BANNER=0
+env REAL_GASH=$GASH_BIN
+env CALLS=$WORK/calls
+chmod 755 wrap.sh
+
+# No hte.toml, then autostart = "systemd": no autostart line.
+exec gash init bash
+! stdout 'hte __autostart'
+mkdir home/.config/gash/hte
+cp systemd.toml home/.config/gash/hte/hte.toml
+exec gash init bash
+! stdout 'hte __autostart'
+
+# autostart = "shell" before the logs directory exists: stderr discarded.
+cp shell.toml home/.config/gash/hte/hte.toml
+exec gash init bash
+stdout -count=1 'hte __autostart'
+stdout '^    \("\$__GASH_BIN" hte __autostart </dev/null >/dev/null 2>/dev/null &\) 2>/dev/null \|\| true$'
+
+# With the logs directory: stderr goes to autostart.log.
+mkdir home/.local/state/gash/hte/logs
+exec gash init bash
+stdout '^    \("\$__GASH_BIN" hte __autostart </dev/null >/dev/null 2>'${WORK@R}'/home/\.local/state/gash/hte/logs/autostart\.log &\) 2>/dev/null \|\| true$'
+
+# An interactive shell: the load returns at once with status 0 and no
+# output, the start runs once although the layer is evaluated twice, and
+# its stderr lands in autostart.log.
+env GASH_BIN=$WORK/wrap.sh
+exec bash --norc --noprofile -i drive.sh
+stdout '^load=0 errors=0$'
+stdout '^quiet$'
+stdout '^nonblocking$'
+stdout '^starts=1$'
+grep '^noise-err$' home/.local/state/gash/hte/logs/autostart.log
+! grep noise-out home/.local/state/gash/hte/logs/autostart.log
+
+# The block itself, evaluated by a non-interactive shell, starts nothing;
+# by an interactive one, it starts.
+rm calls
+exec bash --norc --noprofile -c '__GASH_BIN=$GASH_BIN; eval "$("$REAL_GASH" init bash | sed -n "/__GASH_HTE_AUTOSTART-/,/^fi$/p")"; sleep 1; [ -e "$CALLS" ] && echo started || echo none'
+stdout '^none$'
+exec bash --norc --noprofile -i -c '__GASH_BIN=$GASH_BIN; eval "$("$REAL_GASH" init bash | sed -n "/__GASH_HTE_AUTOSTART-/,/^fi$/p")"; for _ in $(seq 50); do [ -e "$CALLS" ] && break; sleep 0.1; done; [ -e "$CALLS" ] && echo started || echo none; for _ in $(seq 100); do grep -q "^done" "$CALLS" && break; sleep 0.1; done'
+stdout '^started$'
+
+-- systemd.toml --
+listen = ["127.0.0.1", "::1"]
+default_php = ""
+modules = []
+autostart = "systemd"
+
+[ports]
+http = 8080
+https = 8443
+-- shell.toml --
+listen = ["127.0.0.1", "::1"]
+default_php = ""
+modules = []
+autostart = "shell"
+
+[ports]
+http = 8080
+https = 8443
+-- wrap.sh --
+#!/bin/sh
+if [ "$1 $2" = "hte __autostart" ]; then
+    echo "start $*" >>"$CALLS"
+    echo noise-out
+    echo noise-err >&2
+    sleep 3
+    echo done >>"$CALLS"
+    exit 1
+fi
+exec "$REAL_GASH" "$@"
+-- drive.sh --
+source "$GASH_SH" >load.out 2>load.err
+echo "load=$? errors=${#__GASH_LOAD_ERRORS[@]}"
+# The layer again, as a reload evaluates it: the guard skips the start.
+eval "$(__gash_export_state __init && "$__GASH_BIN" init bash)"
+if [ -s load.out ] || [ -s load.err ]; then
+    echo "noisy:"
+    cat load.out load.err
+else
+    echo quiet
+fi
+for _ in $(seq 50); do
+    grep -q '^start' "$CALLS" 2>/dev/null && break
+    sleep 0.1
+done
+grep -q '^done' "$CALLS" && echo blocked || echo nonblocking
+for _ in $(seq 100); do
+    grep -q '^done' "$CALLS" && break
+    sleep 0.1
+done
+echo "starts=$(grep -c '^start' "$CALLS")"

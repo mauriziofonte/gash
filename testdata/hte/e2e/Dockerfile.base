@@ -1,0 +1,8 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# The Debian and Ubuntu image of the gash hte end-to-end test (run.sh
+# debian|ubuntu): the distro Apache and PHP-FPM, openssl and sudo, nothing
+# of gash (run.sh mounts the binaries).
+ARG BASE=mirror.gcr.io/library/ubuntu:24.04
+FROM ${BASE}
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends apache2 php-fpm openssl sudo curl ca-certificates procps iproute2 && rm -rf /var/lib/apt/lists/*

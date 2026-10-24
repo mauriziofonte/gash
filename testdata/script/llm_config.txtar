@@ -1,0 +1,56 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:316
+# covers: llm_spec.sh:336
+# forced-divergence: LLM-35
+# covers: llm_portability_spec.sh:92
+# covers: llm_portability_spec.sh:120
+#
+# llm_config: secret files are refused, JSON is returned as-is, and the
+# --max-bytes limit guards large files.
+# LLM-35: the 2.x spec mocked two yq flavours and asserted the argv each
+# received. rc.A converts YAML itself (no yq runs), so there is no yq to
+# mock; the divergence is proven by a .yml converting to JSON natively and an
+# unparseable file falling back to its raw text.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:316 - blocks .env files
+! exec bash -c 'source "$GASH_SH"; llm_config "$1"' _ secret/.env
+stderr secret_file_blocked
+
+# --- llm_spec.sh:336 - reads JSON files
+exec bash -c 'source "$GASH_SH"; llm_config "$1"' _ config.json
+stdout '"key"'
+stdout '"value"'
+
+# --- llm_portability_spec.sh:92 - native YAML, raw-text fallback (no yq)
+exec bash yaml.sh
+
+# --- llm_portability_spec.sh:120 - refuses files over --max-bytes
+exec bash maxbytes.sh
+
+-- secret/.env --
+SECRET=value
+-- config.json --
+{"key":"value"}
+-- yaml.sh --
+set -euo pipefail
+source "$GASH_SH"
+printf 'a: 1\n' >"$WORK/c.yml"
+# Native conversion: mapping becomes JSON, numbers as YAML 1.2 reads them.
+jq -e '.a == 1' <<<"$(llm_config "$WORK/c.yml")" >/dev/null
+# A file that does not parse as YAML is returned as its raw text, exit 0.
+printf 'a: 1\n  bad: : :\n\t- x\n' >"$WORK/bad.yml"
+[[ "$(llm_config "$WORK/bad.yml" 2>&1)" == "$(cat "$WORK/bad.yml")" ]]
+-- maxbytes.sh --
+set -euo pipefail
+source "$GASH_SH"
+head -c 1048577 /dev/zero | tr '\0' a >"$WORK/big.txt"
+printf '{}\n' >"$WORK/small.json"
+err="$(llm_config "$WORK/big.txt" 2>&1 >/dev/null || true)"
+jq -e '.error == "file_too_large" and .action == "RETRY"' <<<"$err" >/dev/null
+[[ "$(llm_config "$WORK/big.txt" --max-bytes 2000000 | wc -c)" -eq 1048577 ]]
+[[ "$(llm_config --max-bytes 2 "$WORK/small.json" 2>&1 >/dev/null | jq -r .error)" == file_too_large ]]
+[[ "$(llm_config "$WORK/small.json" --max-bytes x 2>&1 >/dev/null | jq -r .error)" == invalid_size ]]
+[[ "$(llm_config "$WORK/small.json")" == "{}" ]]

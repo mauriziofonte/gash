@@ -1,0 +1,5 @@
+=== STORAGE DEEP ===
+--- Disk usage
+--- Block devices
+--- Mounts
+--- fstab

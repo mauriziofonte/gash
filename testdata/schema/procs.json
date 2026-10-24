@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_procs (AGENTS.md 3.4): no filter gives pid,user,cpu,mem,name; --name gives pid,name; --port gives pid,name,port.",
+  "title": "llm_procs",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "pid",
+      "name"
+    ],
+    "properties": {
+      "pid": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "name": {
+        "type": "string"
+      },
+      "user": {
+        "type": "string"
+      },
+      "cpu": {
+        "type": "number"
+      },
+      "mem": {
+        "type": "number"
+      },
+      "port": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65535
+      }
+    },
+    "additionalProperties": false
+  }
+}

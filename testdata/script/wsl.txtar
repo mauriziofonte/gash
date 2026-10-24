@@ -1,0 +1,41 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: wsl_spec.sh:11
+# covers: wsl_spec.sh:19
+# covers: wsl_spec.sh:40
+#
+# The WSL functions refuse early off WSL. The 2.x specs reached the WSL-present
+# branches by overriding __gash_require_wsl; the binary always reads the real
+# system root (no environment seam, docs/port/design/testing.md), so the
+# WSL-present observables of the split rows (wsl_shutdown -> `cmd /C wsl
+# --shutdown`, wsl_explorer's Windows path, the post-WSL terminal refusal) are
+# proven by the Go unit tests TestWSLStopVM / TestWSLExplorer. Here we cover
+# what is observable off WSL: option parsing runs before the WSL check, and the
+# WSL check refuses (rc 1) before any sudo or cmd.exe call. The CI runner is
+# not WSL, so /proc/version carries no "microsoft" and the refusal is stable.
+
+env GASH_HEADLESS=1
+chmod 0755 bin/sudo
+
+# --- wsl_spec.sh:11 - rejects unknown options before anything else
+! exec bash -c 'source "$GASH_SH"; wsl_compact --now'
+stderr 'Unknown option: --now'
+
+# --- wsl_spec.sh:19 - refuses outside WSL without calling sudo
+! exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; wsl_compact'
+stderr 'requires WSL'
+! exists sudo.log
+
+# --- wsl_spec.sh:40 - option parsing refuses before the WSL check; the WSL
+# gate then refuses (rc 1) with nothing run. The WSL-present half (shutdown
+# argv, explorer path) is the split's Go unit-test side.
+! exec bash -c 'source "$GASH_SH"; wsl_shutdown --now'
+stderr 'Unknown option: --now'
+! exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; wsl_restart'
+stderr 'requires WSL'
+! exists sudo.log
+
+-- bin/sudo --
+#!/bin/sh
+echo called >> sudo.log
+exit 0

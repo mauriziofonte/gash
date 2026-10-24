@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_deps (AGENTS.md 3.4): {manager, dependencies}, or {manager, prod, dev} with --dev.",
+  "title": "llm_deps",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["manager", "dependencies"],
+      "properties": {
+        "manager": {"type": "string", "minLength": 1},
+        "dependencies": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["manager", "prod", "dev"],
+      "properties": {
+        "manager": {"type": "string", "minLength": 1},
+        "prod": {"type": "array", "items": {"type": "string"}},
+        "dev": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  ]
+}

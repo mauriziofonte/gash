@@ -1,0 +1,65 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 self-management proof)
+#
+# docs/port/design/upgrade.md 3.1 and 6: a 2.1.0 install runs its 2.x
+# gash_upgrade in an interactive shell (bash -i, ~/.bashrc with the
+# installer's block). The next interactive shell loads 3.0.0: the binary
+# is fetched with its one line, then the functions, the aliases, the
+# prompt hook, the completion and the banner are there, as they were in
+# 2.1.0. The working tree stays clean.
+
+[!exec:git] skip 'needs git'
+[!v2tree] skip 'needs the v2.1.0 tag (a shallow checkout has no tags: the testscript CI job fetches them)'
+env GASH_BIN=
+env GASH_RELEASE_URL=file://$WORK/rel
+
+gashfixture origin v2.1.0:2x v3.0.0:3x
+gashrelease 3.0.0 rel
+exec sh -c 'git -C origin show v2.1.0:install.sh >install2.sh'
+env GASH_INSTALL_GIT_REPO=$WORK/origin
+env GASH_INSTALL_REF=v2.1.0
+exec bash install2.sh --assume-yes --quiet
+
+# 2.1.0 interactive: the same checks as 3.0.0 below.
+exec bash -i -c 'echo "v=$GASH_VERSION"; type -t gash_doctor llm_tree; alias ..; echo "pc=$PROMPT_COMMAND"; complete -p gash'
+stdout '^v=2\.1\.0$'
+stdout 'Gash 2\.1\.0'
+stdout '^function\nfunction$'
+stdout '^alias \.\.=.cd \.\..$'
+stdout '^pc=.*__gash'
+stdout '^complete .* gash$'
+
+exec bash -i -c 'gash_upgrade'
+stderr 'Upgraded Gash from v2\.1\.0 to v3\.0\.0'
+exec git -C home/.gash status --porcelain
+! stdout .
+
+# 3.0.0 interactive: the binary is fetched once, with its one line.
+exec bash -i -c 'echo "v=$GASH_VERSION"; type -t gash_doctor llm_tree; alias ..; echo "pc=$PROMPT_COMMAND"; complete -p gash; gash version --json'
+stdout '^v=3\.0\.0$'
+stdout '^Gash 3\.0\.0 — '
+stdout '^function\nfunction$'
+stdout '^alias \.\.=.cd \.\..$'
+stdout '^pc=__gash_prompt_command$'
+stdout '^complete -o default -F __gash_complete gash$'
+stdout '"version":"3\.0\.0"'
+stderr '^OK: Installed gash 3\.0\.0 for [a-z]+/[a-z0-9]+$'
+exists home/.local/share/gash/versions/3.0.0/gash
+
+# A second shell finds it: no line.
+exec bash -i -c 'echo "v=$GASH_VERSION"'
+stdout '^v=3\.0\.0$'
+! stderr 'gash 3\.0\.0'
+
+exec git -C home/.gash status --porcelain
+! stdout .
+
+-- home/.bashrc --
+# the user's bashrc
+-- home/.gitconfig --
+[user]
+	name = t
+	email = t@t
+[advice]
+	detachedHead = false

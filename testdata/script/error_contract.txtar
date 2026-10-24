@@ -1,0 +1,152 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: error_contract_spec.sh:25
+# covers: error_contract_spec.sh:40
+# covers: error_contract_spec.sh:57
+# covers: error_contract_spec.sh:75
+# covers: error_contract_spec.sh:95
+# covers: error_contract_spec.sh:108
+# covers: error_contract_spec.sh:125
+#
+# The machine error envelope (AGENTS.md "Error contract") and the argument
+# grammar shared by llm_* and the scanners. recoverable is false exactly for
+# FATAL; a value flag with no value errors instead of hanging; -n is a limit
+# and unknown flags fail; the DB functions take -n too; llm_procs rejects
+# unknown options; the three git functions agree outside a repo. The docker
+# row (:125) is MOCK-DEPENDENT run*: curl is replaced by net/http, so the
+# remote-digest path is pinned by Go unit tests (internal/docker, net/http
+# round-trippers); here the deterministic error contract is asserted.
+
+env GASH_HEADLESS=1
+
+# --- error_contract_spec.sh:25 - recoverable is false exactly for FATAL
+exec bash recoverable.sh
+
+# --- error_contract_spec.sh:40 - a value flag at the line end errors, no hang
+exec bash missing_value.sh
+
+# --- error_contract_spec.sh:57 - -n is a limit, --json is JSON, unknown fail
+exec bash flags_mean_one_thing.sh
+
+# --- error_contract_spec.sh:75 - the DB functions take -n as the row limit
+exec bash db_limit.sh
+
+# --- error_contract_spec.sh:95 - llm_procs rejects unknown options
+exec bash procs_unknown.sh
+
+# --- error_contract_spec.sh:108 - the git functions agree outside a repo
+exec bash git_outside.sh
+
+# --- error_contract_spec.sh:125 - llm_docker_check error contract
+exec bash docker_contract.sh
+
+-- recoverable.sh --
+set -euo pipefail
+source "$GASH_SH"
+for call in "llm_grep" "llm_db_query \"DROP TABLE x\" -f /nonexistent" "files_largest --json --bogus" "files_largest --json /" "llm_config $HOME/.env"; do
+  err="$(eval "$call" 2>&1 >/dev/null || true)"
+  action="$(jq -r .action <<<"$err")"
+  recoverable="$(jq -r .recoverable <<<"$err")"
+  if [[ "$action" == "FATAL" ]]; then want=false; else want=true; fi
+  [[ "$recoverable" == "$want" ]] || { echo "$call -> $err"; exit 1; }
+done
+
+-- missing_value.sh --
+set -euo pipefail
+# bounded SECS CMD...: CMD's status, 124 when it outlived SECS (CMD and its
+# children are SIGKILLed; macOS has no timeout). No job control: `set -m`
+# makes Homebrew bash 5.3 on macOS print "child setpgid ... Operation not
+# permitted" into the command's stderr.
+bounded() {
+  local secs=$1 pid w rc=0; shift
+  "$@" & pid=$!
+  { sleep "$secs" && { pkill -KILL -P "$pid"; kill -KILL "$pid"; }; } >/dev/null 2>&1 </dev/null & w=$!
+  wait "$pid" || rc=$?
+  pkill -P "$w" 2>/dev/null || true; wait "$w" 2>/dev/null || true
+  if ((rc == 137)); then rc=124; fi
+  return "$rc"
+}
+cd "$WORK"
+for call in "files_largest --json --limit" "dirs_largest --json --depth" "dirs_find_large --json --size" \
+    "dirs_list_empty --json --exclude" "tree_stats --json --top" "llm_find x --limit" "llm_grep x --ext" \
+    "llm_db_query \"SELECT 1\" -c"; do
+  rc=0
+  GASH_HEADLESS=1 bounded 10 bash -c "source \"$GASH_SH\"; $call" 2>"$WORK/mv.err" >/dev/null || rc=$?
+  err="$(<"$WORK/mv.err")"
+  [[ $rc -ne 124 ]] || { echo "hang: $call"; exit 1; }
+  [[ $rc -ne 0 ]] || { echo "no error: $call"; exit 1; }
+  [[ "$(jq -r .error <<<"$err")" == "missing_value" ]] || { echo "$call -> $err"; exit 1; }
+done
+
+-- flags_mean_one_thing.sh --
+set -uo pipefail
+tmp="$WORK/flags"; rm -rf "$tmp"; mkdir -p "$tmp"
+for i in 1 2 3; do head -c $((i * 100)) /dev/zero >"$tmp/f$i"; done
+source "$GASH_SH"
+[[ "$(files_largest -n 2 --json "$tmp" | jq .count)" == 2 ]] || exit 1
+[[ "$(dirs_largest -n 1 --json "$tmp" | jq .count)" -le 1 ]] || exit 1
+printf "8.3\n" >"$tmp/.target-php-version"
+php_detect_version "$tmp" --json | jq -e .version >/dev/null || exit 1
+php_detect_version "$tmp" --llm | jq -e .version >/dev/null || exit 1
+php_detect_version "$tmp" --bogus >/dev/null 2>&1 && exit 1
+printf "services:\n  web:\n    image: nginx\n" >"$tmp/compose.yml"
+docker_compose_upgrade "$tmp" -n >/dev/null 2>&1 && exit 1
+exit 0
+
+-- db_limit.sh --
+set -euo pipefail
+tmp="$WORK/dblimit"; rm -rf "$tmp"; mkdir -p "$tmp"
+sqlite3 "$tmp/t.db" "CREATE TABLE t (id INTEGER); WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 10) INSERT INTO t SELECT x FROM c;"
+export HOME="$tmp"
+source "$GASH_SH"
+[[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" -n 3 | jq .rows)" == 3 ]]
+[[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" --limit 2 | jq .rows)" == 2 ]]
+[[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" -r 4 | jq .rows)" == 4 ]]
+[[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" --rows 5 | jq .rows)" == 5 ]]
+[[ "$(llm_db_sample t -f "$tmp/t.db" -n 2 | jq .rows)" == 2 ]]
+[[ "$(llm_db_sample t -f "$tmp/t.db" --limit 6 | jq .rows)" == 6 ]]
+[[ "$(llm_db_query "SELECT id FROM t" -f "$tmp/t.db" -n x 2>&1 >/dev/null | jq -r .error)" == invalid_rows ]]
+[[ "$(llm_db_sample t -f "$tmp/t.db" -n 2>&1 >/dev/null | jq -r .error)" == missing_value ]]
+[[ "$(llm_db_query -h)" == *"-n, --limit N"* ]]
+[[ "$(llm_db_sample -h)" == *"-n, --limit N"* ]]
+
+-- procs_unknown.sh --
+set -euo pipefail
+source "$GASH_SH"
+for args in "--bogus" "--pid 1" "nginx"; do
+  rc=0
+  out="$(llm_procs $args 2>"$WORK/perr")" || rc=$?
+  [[ $rc -eq 1 && -z "$out" ]] || { echo "$args: rc=$rc out=$out"; exit 1; }
+  jq -e '.error == "unknown_option" and .action == "RETRY" and .recoverable == true' "$WORK/perr" >/dev/null
+done
+
+-- git_outside.sh --
+set -euo pipefail
+tmp="$WORK/gitless"; rm -rf "$tmp"; mkdir -p "$tmp/plain"
+export HOME="$tmp" GIT_CEILING_DIRECTORIES="$tmp"
+source "$GASH_SH"
+cd "$tmp/plain"
+for fn in llm_git_status llm_git_diff "llm_git_diff --staged" llm_git_log "llm_git_log --limit 3"; do
+  rc=0
+  out="$($fn 2>"$tmp/err")" || rc=$?
+  [[ $rc -eq 1 && -z "$out" ]] || { echo "$fn: rc=$rc out=$out"; exit 1; }
+  jq -e ".error == \"not_a_git_repo\" and .action == \"CONTINUE\" and .recoverable == true
+    and .details == \"$tmp/plain is not a git repository\"" "$tmp/err" >/dev/null || { echo "$fn:"; cat "$tmp/err"; exit 1; }
+done
+
+-- docker_contract.sh --
+set -euo pipefail
+tmp="$WORK/dockchk"; rm -rf "$tmp"; mkdir -p "$tmp/none" "$tmp/nosvc"
+export HOME="$tmp" PATH="$GASH_STAGE/testdata/mocks/bin:$PATH"
+source "$GASH_SH"
+check() { # DIR ERROR ACTION
+  local rc=0 out
+  out="$(llm_docker_check "$1" 2>"$tmp/err")" || rc=$?
+  [[ $rc -eq 1 && -z "$out" ]] || { echo "$1: rc=$rc out=$out"; return 1; }
+  jq -e ".error == \"$2\" and .action == \"$3\" and .recoverable == true and (.details | length > 0)
+    and (keys - [\"error\",\"action\",\"recoverable\",\"details\",\"hint\"] == [])" "$tmp/err" >/dev/null ||
+    { cat "$tmp/err"; return 1; }
+}
+check "$tmp/none" compose_not_found RETRY
+printf "services:\n  x:\n    build: .\n" >"$tmp/nosvc/compose.yml"
+check "$tmp/nosvc" no_services CONTINUE

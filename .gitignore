@@ -1,2 +1,5 @@
 bash_local
 references/*
+
+# Per-test results of tests/run.sh --results (go mode by default)
+/tests/.results/

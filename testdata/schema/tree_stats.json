@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. tree_stats --json (AGENTS.md 4.3).",
+  "title": "Tree stats",
+  "type": "object",
+  "required": ["data", "scan_time", "errors"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["path", "files_total", "dirs_total", "size_total", "size_total_human", "avg_file_size", "max_depth", "empty_dirs", "top_by_count", "top_by_size"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "files_total": {"type": "integer", "minimum": 0},
+        "dirs_total": {"type": "integer", "minimum": 0},
+        "size_total": {"type": "integer", "minimum": 0},
+        "size_total_human": {"type": "string", "minLength": 1},
+        "avg_file_size": {"type": "integer", "minimum": 0},
+        "max_depth": {"type": "integer", "minimum": 0},
+        "empty_dirs": {"type": "integer", "minimum": 0},
+        "top_by_count": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["ext", "count", "size"],
+            "properties": {
+              "ext": {"type": "string"},
+              "count": {"type": "integer", "minimum": 1},
+              "size": {"type": "integer", "minimum": 0}
+            },
+            "additionalProperties": false
+          }
+        },
+        "top_by_size": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["ext", "size"],
+            "properties": {
+              "ext": {"type": "string"},
+              "size": {"type": "integer", "minimum": 0}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "scan_time": {"type": "string", "pattern": "^[0-9]+ms$"},
+    "errors": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,61 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:205
+# covers: output_style_render_spec.sh:206
+# covers: output_style_render_spec.sh:207
+# covers: output_style_render_spec.sh:208
+# covers: output_style_render_spec.sh:209
+#
+# services_stop rendering (R2-R6). The Go binary execs systemctl and sudo,
+# reproduced as PATH stubs keyed on MOCK_SYSTEMCTL_ACTIVE. Covers the
+# dry-run listing, the declined and -y stops, the none-running notice and
+# bad-option. __GASH_SYSTEMD_RUNDIR points at a real dir so systemd looks up.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :205 dry-run - lists the running service
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/systemctl" bin/systemctl && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; __GASH_SYSTEMD_RUNDIR="$PWD" MOCK_SYSTEMCTL_ACTIVE=mysql services_stop --dry-run'
+stderr '• Running: mysql'
+
+# --- :206 declined - lists then aborts (no -y, no terminal)
+! exec bash -c 'mkdir -p bin && install -m755 "$WORK/systemctl" bin/systemctl && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; __GASH_SYSTEMD_RUNDIR="$PWD" MOCK_SYSTEMCTL_ACTIVE=mysql services_stop'
+stderr '• Running: mysql'
+stderr 'Aborted\.'
+
+# --- :207 yes - stops the service
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/systemctl" bin/systemctl && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; __GASH_SYSTEMD_RUNDIR="$PWD" MOCK_SYSTEMCTL_ACTIVE=mysql services_stop -y'
+stderr 'Stopping mysql\.\.\.'
+
+# --- :208 none - nothing of the known set is running
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/systemctl" bin/systemctl && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; __GASH_SYSTEMD_RUNDIR="$PWD" MOCK_SYSTEMCTL_ACTIVE= services_stop -y'
+stderr 'None of the known services is running\.'
+
+# --- :209 bad-option
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; services_stop --bogus'
+stderr 'Error: Unknown option: --bogus \(usage: services_stop'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; services_stop --bogus'
+stderr '^Error: Unknown option: --bogus'
+! stderr '\x1b'
+
+-- systemctl --
+#!/usr/bin/env bash
+if [[ "${1:-}" == "is-active" && "${2:-}" == "--quiet" ]]; then
+	svc="${3:-}"
+	if [[ -n "${MOCK_SYSTEMCTL_ACTIVE:-}" && "$svc" == "$MOCK_SYSTEMCTL_ACTIVE" ]]; then
+		exit 0
+	fi
+	exit 3
+fi
+if [[ "${1:-}" == "stop" || "${1:-}" == "start" ]]; then
+	exit 0
+fi
+exit 0
+-- sudo --
+#!/usr/bin/env bash
+# 3.0: SYS-25 fixed: an unattended run passes -n.
+[ "$1" = -n ] && shift
+exec "$@"

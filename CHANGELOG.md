@@ -6,13 +6,95 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [Unreleased]
+## [3.0.0] - 2026-10-24
 
-Every function now looks the same on a terminal: one palette, one set of
-glyphs, one way to draw tables, titles, key/value blocks, lists and
-questions. Piped and `NO_COLOR` output carries no escape code at all.
+Gash is now one Go binary with thin generated Bash around it. Every 2.x
+function keeps its name, and its arguments, output, exit codes and `--json`
+envelopes stay as they were except for the changes below; the prompt,
+history, aliases and toolchains still come from Bash. HTE, formerly the separate hte-cli tool, is built in as `gash hte` and
+runs a user-owned Apache and PHP-FPM with no sudo at runtime. The port
+reviewed every 2.x behaviour (the census is
+[docs/port/LEDGER.md](docs/port/LEDGER.md), 443 items) and 3.0 fixes the
+defects it found instead of carrying them over; the changes a user or a
+script can notice are listed below. 2.x installs move to 3.0 with their own
+`gash_upgrade`, and `git checkout v2.1.0` in the install directory goes back.
+
+### Breaking
+
+- Upgrading from 1.x goes through 2.1.0: `gash_migrate` prints that route
+  (check out `v2.1.0`, run `gash_migrate`, then `gash_upgrade`) instead of
+  migrating.
+- The `hte`, `hte-create`, `hte-remove` and `hte-details` aliases are gone:
+  use `gash hte`. There is no hte-cli compatibility command; `gash hte
+  migrate` takes over an hte-cli setup.
+- The `gp`, `gc`, `dc` and `gs` aliases are not defined when a program of
+  that name is on PATH, module short aliases never hide a program, and a
+  user alias always wins over a module alias.
+- `process_kill` always asks before killing; `quit` no longer passes
+  `--force`. `docker_stop_all` and `docker_start_all` list the containers
+  and ask; `git_add_tag`, `git_delete_tag`, `git_sync` and
+  `git_apply_patch` show a plan and ask. Without a terminal each of them
+  needs `-y`/`--yes`, as `wsl_compact` now does too.
+- Arguments are checked strictly: a second PATH fails with
+  `unexpected_argument`, unknown options are refused everywhere, and the
+  self-management commands exit 2 on a bad option or argument.
+- `llm_*` contract changes: a missing PATH is `path_not_found` (before: exit
+  0 with no output); an empty pattern is `missing_pattern`; `~` and `~/`
+  expand and `~user` is `invalid_path`; a refused query reports the guard
+  verdict of the connection's engine; allow-listed `llm_exec` commands keep
+  the walk-root and symlink checks.
+- `hgrep -n N` always shows the N most recent matches, with `--reverse` too.
+- `SSH:` passphrases in `~/.gash_env` keep trailing whitespace (only a final
+  `\r` is removed), with a warning.
+- `archive_extract` refuses archives with absolute, `..` or outside-pointing
+  link members before extracting anything.
+- New error codes in the agent contract: `invalid_db_url`,
+  `invalid_manifest`, `invalid_path`, `invalid_service_name`.
+
+### Added
+
+- `gash version [--json]` and `gash init bash`, which prints the
+  interactive Bash layer that `gash.sh` evaluates.
+- `gash hte`: install, sites, certificates, PHP-FPM pools per PHP version,
+  `doctor`, `migrate` from hte-cli and a clean `uninstall`; see
+  [docs/hte.md](docs/hte.md). Ports 80 and 443 are made bindable by the
+  user through `net.ipv4.ip_unprivileged_port_start`, asked for and undone
+  by uninstall.
+- `gash update` installs and verifies the new release's binary before it
+  touches the checkout, loads the new version in a test shell and goes back
+  to the previous version when that fails; `gash update --rollback` returns
+  to the previous version, whose binary is kept. `gash_upgrade` runs the
+  same verified steps with the 2.x output lines and exit codes.
+- `install.sh --repair` fetches and verifies only the binary for the
+  checked-out `VERSION` (no git, no profile or `~/.gashrc` edit), works
+  offline from a `file://` release, and exits 1 on failure, keeping the
+  binary in place. `GASH_BIN` and `GASH_RELEASE_URL` point Gash at another
+  binary or release server.
+- `gash hte`: with `autostart = "shell"` in `hte.toml`, an interactive shell
+  that loads Gash starts the stack in the background when it is down,
+  silently and without ever failing the shell (the reason of a failure goes
+  to `~/.local/state/gash/hte/logs/autostart.log`).
+- Release binaries, `gash-hosts-helper` included, are pinned in the tagged
+  tree (`release/SHA256SUMS`); the bootstrap, `gash update` and the installer
+  install a binary only once it matches its pin:
+  with `GASH_REQUIRE_SIGNED=1`, a signed tag covers the binary too.
+  `gash_doctor` checks the binary and the generated shims.
+- `ip_public --raw`; `--dry-run` on the git tag and patch commands;
+  `--exclude=PAT` on `remote_sync_*`; `nvm_prune_versions -y/--yes`.
+- `gash <Tab>` completes card topics and commands; the docker, git, remote
+  and sysinfo completions offer the real flags.
+- `GASH_DB_TIMEOUT` also bounds `gash_db_test`, which prints the driver's
+  error as a hint when the connection fails.
+- `gash hte site create|modify --http2` turns HTTP/2 back on after
+  `--no-http2`; every `gash hte` command has its own `--help`, and
+  [docs/hte.md](docs/hte.md) has a WSL section.
 
 ### Changed
+
+- The `llm_*`, database, scanner and search functions need no `mysql`,
+  `mariadb`, `psql`, `sqlite3`, `jq`, `rg`, `numfmt` or `find`: they run
+  inside the binary. Client option files (`~/.my.cnf`) and `~/.pgpass` are
+  not read.
 
 - Colors mean the same thing everywhere: structure (rules, borders,
   labels) in the primary color, the names you look for (functions, mount
@@ -25,8 +107,8 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
   widen their column instead of breaking the row. Usage bars (`disk_usage`,
   `tree_stats`, `sysinfo overview`) take the status color of their fill.
 - Key/value output (`ip_public`, `php_detect_version`,
-  `node_detect_version`, `wsl_compact`, `sysinfo`, `gash_doctor` settings,
-  `gash migrate --status`) goes through one renderer; plain text is the same.
+  `node_detect_version`, `wsl_compact`, `sysinfo`, `gash_doctor` settings)
+  goes through one renderer; plain text is the same.
 - Questions look alike: `Question? [y/N]` (default No) or
   `Do you want to continue? [Y/n]` (default Yes), on stderr. Before,
   confirmations read `(y/N): `.
@@ -35,8 +117,6 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
   `git_apply_patch`).
 - `ai_sysinfo` findings read `Error:`, `Warning:`, `OK:`, `Info:` when piped
   or saved (before: `[!]`, `[+]`, `[i]`); on a terminal they are glyphs.
-- `gash migrate` lists the options of each screen and moves a selection
-  line under them; with `NO_COLOR` it no longer clears the screen.
 - Spinners and progress lines draw escape codes only when stdout and stderr
   are both color terminals; otherwise they redraw with carriage returns.
 - `hgrep` groups and highlights only when colors are on (before: whenever
@@ -52,6 +132,7 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
   with `NO_COLOR`, and graph lanes alternate primary and muted unless
   `log.graphColors` is configured.
 
+
 ### Fixed
 
 - `llm_procs --name NAME` no longer lists the shell that runs it, its
@@ -65,11 +146,170 @@ questions. Piped and `NO_COLOR` output carries no escape code at all.
   `docker_compose_check` without a local digest stopped early under
   `set -e` before printing their message.
 - `gash_username` has a help page.
+- Scanners (`files_largest`, `dirs_largest`, `dirs_list_empty`,
+  `dirs_find_large`, `tree_stats`): paths with a tab or newline are left out
+  the same way everywhere; `--exclude GLOB` has one meaning (a name, or a
+  path below PATH); numbers take at most 9 digits and are never evaluated;
+  size units are strict; `--min-depth` filters only the output; an
+  unreadable root is `path_unreadable` and unreadable entries count in
+  `errors`; `-L` detects directory loops; JSON escapes every control
+  character; no truncated paths without GNU `du`.
+- `archive_extract`: `.Z`, `.tar.Z` and `.taz` extract instead of emptying the
+  target; upper-case suffixes work; single-file formats replace the target
+  only on success; OUTPUT_DIR is created only after the format, tool and
+  members are checked, and may start with `-`; `7z` reads the archive name
+  literally and `unzip`/`unrar` names with `* ? [` are refused; headless or
+  without a terminal the tools never prompt or overwrite.
+- `file_backup` reserves its name atomically (`_1`, `_2`), never writes
+  through an existing file, link or directory, and removes a partial copy
+  when `cp` fails.
+- `llm_*`: every JSON path escapes control characters and turns invalid
+  UTF-8 into U+FFFD; `llm_ports` gives one record per socket, sorted;
+  `llm_procs --port` is numeric and wins over `--name`; `llm_git_log` keeps
+  commits with control bytes; `llm_deps` reads `composer.json` and
+  `package.json` itself and reports `invalid_manifest`; `llm_grep` and
+  `llm_find --contains` search the secret-exception files (`.env.example`,
+  `*.pub`); `llm_tree --text` lists in byte order, with symlinks as
+  `name -> target`; `llm_project` detects manifests correctly;
+  `query_time` measures the query only; a SQLite `EXPLAIN` returns an
+  envelope.
+- `llm_docker_check` follows the `llm_*` grammar and path rules, and
+  exported secrets no longer reach Compose interpolation.
+- Docker: `docker_compose_upgrade` lets Compose find its files (override
+  files and `COMPOSE_FILE` honoured, `--remove-orphans` no longer removes
+  override-only services); `image:tag@sha256` keeps its pin; Docker Hub
+  names are normalized; interpolation follows Compose (defaults, required
+  and alternate values, `$$`, `.env` precedence); `docker_compose_scan`
+  always prints valid JSON; daemon errors are reported and prune counts
+  are honest; a declined upgrade returns 1.
+- Git: `git_list_tags` lists unpeeled tags and fails when `ls-remote` fails;
+  an unreachable origin is an error; tags starting with `-` are refused;
+  `git_dump_revisions` writes atomically and fails loudly;
+  `git_apply_patch` returns to the starting branch on failure;
+  `git_sync` pushes to the upstream; `git_repair` clones before deleting and
+  deletes only empty objects.
+- Remote: hosts must be `user@host` (a port goes in `~/.ssh/config`, with a
+  hint) and are passed after `--`; remote paths with expandable characters
+  are refused; `-e` quoting survives a space in `$HOME`; `~/.ssh` is created
+  0700; `/.` is treated as `/` and denied.
+- System: `process_kill` and `process_find` match names literally and
+  report permission errors; `port_kill` kills only sockets bound to the
+  port; `history_grep` and `hgrep` refuse an invalid regex, emit valid JSON,
+  accept `--`, ignore `HISTTIMEFORMAT` and deduplicate; `mkdir_cd` takes
+  exactly one literal name and ignores `CDPATH`; `sudo_last` refuses an
+  empty history; `ip_public` validates the address with a 10 s timeout;
+  `disk_usage` keeps the other rows when one mount fails; `sysinfo` asks for
+  sudo only where needed and scopes its headers; `wsl_compact` reports an
+  unknown `dmesg`.
+- `ai_*`: a provider name alone selects the provider; `ai_ask` needs a
+  terminal (use `ai_query`) and `exit`/`quit` cancel it; silent piped stdin
+  is ignored after 2 s with a warning; the report file is written 0600;
+  `GASH_AI_MODEL_*` and `GASH_AI_CONFIRM` values are validated, with a
+  warning; `-h` works after the provider.
+- `chrome_headless_update` resolves `GASH_CHROME_ROOT`, checks the version
+  exactly, replaces an unverified copy, uses sudo only when the target is
+  not writable and `sudo -n` when unattended.
+- PHP and Node: OR constraints resolve to the highest installed version,
+  major-only constraints count as X.0, `.target-php-version` is read from
+  its first line, a detected PHP that is not installed warns, and only
+  `vX.Y.Z` directories count as installed Node; `node_upgrade` and
+  `nvm_prune_versions` exit 1 when an install or removal fails and ignore
+  io.js entries; a missing `project_dir` warns.
+- `~/.gash_env`: DB URLs accept bracketed IPv6 hosts; decoded passwords
+  keep newlines, and a NUL is refused with `invalid_db_url`; a repeated
+  `SSH:`, `DB:` or `HOST:` name is ignored with a warning naming both lines;
+  messages name the file `GASH_ENV_FILE` points at; SSH key paths expand
+  only `~/`.
+- Shell: the user's `HISTCONTROL` is kept; `~/.bash_aliases` is sourced
+  once; the `grep --color` alias is back; a load leaves `BASH_REMATCH` and
+  readonly names alone; a symlinked `gash.sh` finds its tree; headless
+  sourcing with a 1.x `~/.gashrc` is silent; control characters are
+  replaced in the terminal title; `needs_confirm_prompt` without a terminal
+  no longer prints the shell's `/dev/tty` error.
+- Self-management: `gash_upgrade` never moves a checkout to an older
+  release; `gash_uninstall` keeps a user-edited `~/.gashrc` and the profile
+  backups and edits a symlinked profile through its link; `gash_unload`
+  restores completion specs, exports and the user's `GASH_*` exactly; a tag
+  counts as signed only when it ends with a signature block; a new install
+  is verified in a temporary clone; the card lists only the aliases the
+  shell defines.
+- HTE: `gash hte doctor` lists the certificate a site kept after
+  `site modify --no-https`, and `--https` reuses it; changing a site's
+  aliases issues a certificate for exactly the names it serves.
+- Help pages, `AGENTS.md` and `docs/reference` were corrected wherever they
+  described 2.x behaviour wrongly (size grammar, envelope keys, error
+  vocabulary, exclusions, which user configuration the git and archive
+  tools honour).
+- `llm_find` keeps its results when the root path holds a newline;
+  `llm_find` and `llm_tree` list entries in byte order, so `-n N` and the
+  500-entry cap cut at the same place.
+- Inside `llm_exec`, grep, rg, diff and git search `.env` templates
+  (`.env.example`, ...) and `id_*.pub` keys again; real secrets stay
+  excluded.
+- `remote_sync_push` and `remote_sync_pull` work with openrsync, the
+  `/usr/bin/rsync` of macOS.
+- `docker_compose_check` and `docker_compose_upgrade` refuse a `DIR/.env`
+  with an unterminated quoted value, as Compose does (`invalid_env_file`),
+  instead of reading it differently from Compose.
+- `ai_sysinfo` prints the Containers and SSL private keys headings only
+  with content, and Virtualmin certificates under their own heading.
+- The scanners' `--exclude` hint shows `'node_modules'`, which matches at
+  any depth.
+- `gash hte install` works on Fedora and Arch without a running service
+  manager (it failed because `service` is missing), accepts macOS's
+  `#includedir /private/etc/sudoers.d` line (it refused every Mac), and no
+  longer counts server configuration files without a `<VirtualHost>`
+  (Fedora's `conf.d/welcome.conf`, Arch's `conf/extra`) as blocking vhosts.
+- `gash hte migrate --apply --exclude <stock vhost> --yes` switches onto
+  ports 80 and 443 when the excluded stock vhosts were all that blocked
+  install and there is nothing to import (it reported "nothing to migrate");
+  `gash hte uninstall` starts the system Apache again.
+- `gash hte doctor` no longer reports `/etc/sudoers.d/gash-hte` missing where
+  `/etc/sudoers.d` is not readable by the user (Fedora, Arch): it asks
+  `sudo -n -l` instead.
+- PHP discovery on macOS no longer reports a duplicate when Homebrew's `php`
+  and `php@X.Y` links point to the same installation.
+- A Ctrl-C that ends the child process before Gash records the signal exits
+  130 (128+N), not 1.
+- `gash <Tab>` completes the `gash hte` command tree.
+- Gash no longer registers a completion for `nvm`, which replaced the user's
+  own nvm completion and was then removed by `gash_unload`.
+- `source ~/.gashrc` in a shell that ran 2.x loads the whole 3.x interactive
+  layer (it stopped part-way with a syntax error), and `gash_unload` then
+  keeps the user's exported `GASH_*` settings.
+- The installer no longer reports "Installed gash" after a failed binary
+  download, and `install.sh --help` lists `GASH_RELEASE_URL` and
+  `GASH_REQUIRE_SIGNED`.
 
-### Tests
+### Security
 
-- `tests/run.sh` skips the terminal rendering fixtures unless given
-  `--slow` or the spec by name; CI runs them once, in their own job.
+- The four 2.1.1 fixes are in 3.0 by design: the SQL guard (the PostgreSQL
+  client is not used at all), the prompt that never runs text from a branch
+  or environment name, `llm_grep --context` and `tree_stats` reading digits
+  only.
+- `llm_tree`, `llm_find` and `llm_grep` refuse walks from `/` or above a
+  protected tree and skip protected entries below; `-L` never enters
+  `/proc`, `/sys`, `/dev`, `/boot` or root's home; more files count as
+  secrets (`/etc/shadow-`, `/etc/gshadow-`, `/etc/security/opasswd`,
+  `credentials_*`, `*.tfvars.json`, `ssh_host_*_key`, `.envrc`).
+- `llm_exec` checks attached short-option values against the protected
+  paths and secret files, refuses patch options on `git stash list`, and
+  handles `||`/`&&` across a line continuation.
+- `ai_*` redaction also covers `Authorization` headers, indented or not
+  `SSH:` passphrase lines and crypt(3) hashes; `ai_sysinfo` paths pass the
+  `llm_*` path guard and each question's data is confirmed before it is
+  sent. `llm_env` masks every URL password; the password of a DB URL with an
+  empty user is masked too; WireGuard keys are always masked.
+- `GITHUB_TOKEN` is exchanged for a ghcr.io token and never sent raw; other
+  registries get anonymous Bearer tokens.
+- The SSH agent search never changes permissions and refuses group- or
+  world-writable directories; a stale `SSH_AUTH_SOCK` is recovered.
+
+### Removed
+
+- The Bash implementation of the modules and the 2.x test runner
+  (`tests/run.sh`); the files left under `lib/` are generated shims.
+- The 1.x migration (see Breaking) and the `hte*` aliases.
 
 ## [2.1.1] - 2026-10-18
 
@@ -415,6 +655,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/mauriziofonte/gash/compare/v1.5.3...v2.0.0

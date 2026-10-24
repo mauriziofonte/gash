@@ -1,0 +1,101 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:349
+# covers: output_style_render_spec.sh:350
+# covers: output_style_render_spec.sh:351
+# covers: output_style_render_spec.sh:352
+# covers: output_style_render_spec.sh:353
+# covers: output_style_render_spec.sh:354
+# covers: output_style_render_spec.sh:355
+# covers: output_style_render_spec.sh:356
+# covers: output_style_render_spec.sh:357
+# covers: output_style_render_spec.sh:359
+# covers: output_style_render_spec.sh:361
+# covers: output_style_render_spec.sh:362
+#
+# ai_query rendering (R2-R6): the non-interactive query. The provider is
+# reached over net/http, so httpsfake answers the Claude/Gemini endpoints
+# from the canned responses (type chosen by the query text), with its CA
+# trusted through SSL_CERT_FILE. stdin is /dev/null so the piped-input read
+# (AI-05) sees EOF at once; the piped row feeds real stdin. The confirmation
+# of GASH_AI_CONFIRM=1 reads /dev/tty, absent here, so the confirm-no row is
+# the "no terminal to confirm on" refusal. GASH_AI_DEBUG=1 (:362) traces the
+# request on stderr; the shim passes it as an environment setting. The
+# net/http port keeps every 2.x __ai_debug block but the "Curl Stderr" one
+# (no curl, LEDGER AI-15), and sanitizes each block, so no ESC byte leaks.
+# Rows needing a live PTY+typed answer (confirm-yes) and the 60s
+# response-timeout are the internal/ai unit tests.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+
+# --- :354 no-query - no argument (resolved before any key or request)
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query </dev/null'
+stderr 'No query provided'
+
+# --- :355 no-key - a query but no provider configured
+! exec bash -c 'export GASH_ENV_FILE="$PWD/none.env" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null'
+stderr 'No AI provider configured in ~/.gash_env'
+
+# --- :356 no-token - claude configured, gemini requested: its token is missing
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query gemini hello </dev/null'
+stderr 'No token configured for .gemini. in ~/.gash_env'
+
+# --- :361 confirm-no - GASH_AI_CONFIRM=1 forces confirmation; no terminal
+# to confirm on, so the send is refused (the typed-n path is a unit test)
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH_AI_CONFIRM=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null'
+stderr 'Not sending .* to claude: no terminal to confirm on'
+
+# --- :349 command - a "how to" query renders the Command/Explanation pair
+exec bash -c 'httpsfake -ca ca1 -addr addr1 & pid=$!; for i in $(seq 1 100); do [ -s addr1 ] && break; sleep 0.05; done; read -r a <addr1; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca1" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query "how to list files?" </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'Command:'
+stdout 'ls -lhS'
+stdout 'Explanation:'
+
+# --- :350 explanation - a "what is" query, gemini, renders an explanation
+exec bash -c 'httpsfake -ca ca2 -addr addr2 & pid=$!; for i in $(seq 1 100); do [ -s addr2 ] && break; sleep 0.05; done; read -r a <addr2; printf "AI:gemini=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca2" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query gemini "what is bash?" </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'Explanation:'
+stdout 'conceptual explanation'
+
+# --- :351 code - a "write a script" query renders the code block
+exec bash -c 'httpsfake -ca ca3 -addr addr3 & pid=$!; for i in $(seq 1 100); do [ -s addr3 ] && break; sleep 0.05; done; read -r a <addr3; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca3" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query "write a script to back up my home" </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'Creates a backup script'
+stdout '# bash'
+
+# --- :352 fallback - anything else renders the assistant fallback text
+exec bash -c 'httpsfake -ca ca4 -addr addr4 & pid=$!; for i in $(seq 1 100); do [ -s addr4 ] && break; sleep 0.05; done; read -r a <addr4; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca4" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'terminal assistant'
+
+# --- :353 piped - stdin piped into the query renders the troubleshoot pair
+exec bash -c 'httpsfake -ca ca5 -addr addr5 & pid=$!; for i in $(seq 1 100); do [ -s addr5 ] && break; sleep 0.05; done; read -r a <addr5; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca5" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "PHP Fatal error: x\n" | ai_query "what is wrong?"; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stdout 'Issue:'
+stdout 'Suggestion:'
+
+# --- :357 http-error - the endpoint answers 401 (MOCK_CURL_ERROR via the fake)
+! exec bash -c 'export MOCK_CURL_ERROR=1 MOCK_CURL_ERROR_CODE=401; httpsfake -ca ca6 -addr addr6 & pid=$!; for i in $(seq 1 100); do [ -s addr6 ] && break; sleep 0.05; done; read -r a <addr6; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca6" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr 'Claude API error \(401\)'
+
+# --- :359 refusal - the model declines (stop_reason refusal via the fake;
+# the verbatim response is read from refusal.json to avoid nested quoting)
+! exec bash -c 'export MOCK_CURL_AI_RESPONSE="$(cat refusal.json)"; httpsfake -ca ca7 -addr addr7 & pid=$!; for i in $(seq 1 100); do [ -s addr7 ] && break; sleep 0.05; done; read -r a <addr7; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca7" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query hello </dev/null; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit $rc'
+stderr 'Claude declined this request'
+
+# --- :362 debug - GASH_AI_DEBUG=1 traces the request on stderr: the request
+# body, the HTTP code and elapsed, the raw response and the extracted JSON,
+# each a "Debug: AI Claude <section>" block. No "Curl Stderr" block (no curl)
+# and, since every block is sanitized, no ESC byte on stderr.
+exec bash -c 'httpsfake -ca ca8 -addr addr8 & pid=$!; for i in $(seq 1 100); do [ -s addr8 ] && break; sleep 0.05; done; read -r a <addr8; printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export HTTPS_PROXY=http://$a SSL_CERT_FILE="$PWD/ca8" GASH_AI_DEBUG=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_query "how to list files?" </dev/null 2>debug.err; rc=$?; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; cat debug.err >&2; exit $rc'
+stderr 'AI Claude Request Body'
+stderr 'AI Claude HTTP Code'
+stderr '200 .elapsed:'
+stderr 'AI Claude Raw Response'
+stderr 'AI Claude Extracted JSON'
+! stderr 'Curl Stderr'
+
+# --- R6: plain mode, the no-query error keeps its word prefix and has no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; ai_query </dev/null'
+stderr '^Error: No query provided'
+! stderr '\x1b'
+
+-- refusal.json --
+{"content":[],"stop_reason":"refusal"}

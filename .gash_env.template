@@ -13,7 +13,8 @@
 # SSH Keys
 # ============================================
 # Format: SSH:keypath=passphrase
-# The key file must exist, otherwise the entry is skipped.
+# The key file must exist, otherwise the entry is skipped. The passphrase is
+# the rest of the line, trailing spaces included (a warning names such a line).
 #
 # Examples:
 # SSH:~/.ssh/id_ed25519=my-passphrase
@@ -29,16 +30,16 @@
 # The 'default' connection is used when no -c option is specified.
 # Database name in URL is optional (can be specified per-query with -d).
 #
-# Special characters in password must be URL-encoded:
-#   @  →  %40
-#   :  →  %3A
-#   /  →  %2F
-#   #  →  %23
-#   %  →  %25
+# Password: write % as %25; other characters may be written raw or
+# URL-encoded (p@ss and p%40ss are the same password). The user name is used
+# as written (not decoded).
+#
+# IPv6 hosts go in brackets: [addr]:port, or [addr] for the default port.
 #
 # Examples:
 # DB:default=mysql://root:password@localhost:3306/myapp
 # DB:legacy=mysql://admin:p%40ssw0rd@localhost:3307/old_db
+# DB:local6=pgsql://pguser:secret@[::1]:5432/analytics
 # DB:analytics=pgsql://pguser:secret@localhost:5432/analytics
 # DB:remote=mariadb://deploy:s3cr3t@192.168.1.100:3306/production
 #
@@ -71,6 +72,10 @@
 # ============================================
 # Format: HOST:alias=user@host
 #
+# user: letters, digits, . _ - (not first); host: a name of letters, digits,
+# . - or an IPv6 address in brackets. No port: put it in a Host entry of
+# ~/.ssh/config and use that name as host.
+#
 # Named shortcuts for remote_exec/remote_push/remote_pull/remote_sync_push/
 # remote_sync_pull. Interactively you can also target any user@host directly
 # without registering it here; a registered alias is required when Gash runs
@@ -102,6 +107,7 @@
 #
 # History
 # GASH_HISTORY=1           # 0 = leave HISTSIZE/HISTCONTROL/histappend alone
+#                          # (1 adds ignoreboth unless you set your own HISTCONTROL)
 # GASH_HISTORY_SYNC=0      # 1 = share history live between open terminals
 #
 # Commands
@@ -116,6 +122,7 @@
 # GASH_PATH_ADD=           # directories put first on PATH, in this order,
 #                          #     when they exist, e.g.
 #                          #     "~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"
+#                          #     (separated by spaces; no wildcards, no options)
 # GASH_NVM=off             # lazy = node/npm of nvm's default version on PATH
 #                          #     at once, nvm.sh loaded on the first `nvm`
 #                          #     (faster shells); on = load nvm.sh now;

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. gash version --json (MATRIX).",
+  "title": "gash version",
+  "type": "object",
+  "required": ["version", "os", "arch", "path"],
+  "properties": {
+    "version": {"type": "string", "minLength": 1},
+    "os": {"enum": ["linux", "darwin"]},
+    "arch": {"enum": ["amd64", "arm64"]},
+    "path": {"type": "string"}
+  },
+  "additionalProperties": false
+}

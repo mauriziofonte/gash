@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. The llm_db_* result envelope (AGENTS.md 4.4, architecture.md 9). Values are engine-typed (SQLite and PostgreSQL native JSON, MySQL/MariaDB strings), so rows are only required to be objects (llm_db_tables: strings).",
+  "title": "Database result",
+  "type": "object",
+  "required": ["data", "rows", "query_time"],
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": {"type": ["object", "string"]}
+    },
+    "rows": {"type": "integer", "minimum": 0},
+    "query_time": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(µs|ms|s)$"},
+    "slow_query_explain": {}
+  },
+  "additionalProperties": false
+}

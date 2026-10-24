@@ -1,5 +1,0 @@
-# ShellCheck configuration for the test suite (nearest rc wins, so repeat root settings).
-# Specs embed test bodies in single-quoted `bash -c` strings on purpose (SC2016),
-# and set ROOT_DIR for the harness (SC2034).
-external-sources=true
-disable=SC1090,SC1091,SC2016,SC2034

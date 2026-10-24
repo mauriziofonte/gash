@@ -1,0 +1,38 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:320
+# covers: output_style_render_spec.sh:321
+# covers: output_style_render_spec.sh:322
+# covers: output_style_render_spec.sh:323
+#
+# nvm_prune_versions rendering (R2-R6). Shell-side (drives the caller's nvm
+# stub), so it renders in the plain word-prefixed form under testscript: a
+# dry run, a --force removal, the no-duplicates case, and nvm-not-loaded.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :320 dry_run - lists what it would uninstall, keeps the active one
+exec bash -c 'nvm() { case "$1" in current) echo v20.11.0 ;; ls) printf "       v18.20.3\n       v18.20.8\n->     v20.11.0\n       v20.19.5\n       v20.9.0\n" ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; nvm_prune_versions'
+stderr 'Dry run: would uninstall v18.20.3'
+stderr 'Keeping v20.11.0 \(currently active\)'
+stderr 'Dry-run complete'
+
+# --- :321 force - actually uninstalls the duplicates
+exec bash -c 'nvm() { case "$1" in current) echo v20.19.5 ;; ls) printf "       v18.20.3\n       v18.20.8\n       v20.11.0\n->     v20.19.5\n" ;; uninstall) : ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; nvm_prune_versions --force'
+stderr 'Uninstalling v18.20.3'
+stderr 'Duplicate NVM versions removed\.'
+
+# --- :322 none - no duplicates
+exec bash -c 'nvm() { case "$1" in current) echo v20.19.5 ;; ls) printf "%s\n" "->     v20.19.5" ;; esac; }; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; nvm_prune_versions'
+stderr 'No duplicate NVM versions found\.'
+
+# --- :323 no_nvm
+! exec bash -c 'unset -f nvm; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; nvm_prune_versions'
+stderr 'Error: nvm is not loaded in this shell'
+
+# --- R6: plain mode, no ESC
+! exec bash -c 'unset -f nvm; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; nvm_prune_versions'
+stderr '^Error: nvm is not loaded'
+! stderr '\x1b'

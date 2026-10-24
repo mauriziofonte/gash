@@ -1,0 +1,28 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: SHELL-13
+# covers: migrate_spec.sh:54
+#
+# LEDGER SHELL-13 (decision D-6): 2.x printed a plain-text 1.x reminder on
+# stderr and wrote a notice state file when gash.sh was sourced outside a
+# terminal; 3.x headless sourcing prints nothing and writes nothing (PRD
+# MUST NOT 4, the generated gash.sh skips the autostart under
+# GASH_HEADLESS). This supersedes migrate_spec.sh:54 ("outside a terminal
+# Gash prints one reminder a day on stderr"): with a 1.x ~/.gashrc the
+# headless source is silent and leaves no gash state directory.
+
+env GASH_HEADLESS=1
+exec bash reminder.sh
+
+-- home/.gashrc --
+export GASH_BASH="$HOME/.gash/gash.sh"
+export GASH_COMPLETION="$HOME/.gash/bash_completion"
+
+-- reminder.sh --
+export GASH_HEADLESS=1
+out="$(source "$GASH_SH" 2>&1)"; rc=$?
+[[ $rc -eq 0 ]] || { echo "FAIL rc=$rc" >&2; exit 1; }
+[[ -z "$out" ]] || { echo "FAIL headless source printed: $out" >&2; exit 1; }
+[[ ! -e "$HOME/.local/state/gash/notice" ]] || { echo "FAIL notice written" >&2; exit 1; }
+[[ ! -e "$HOME/.local/state/gash/schema" ]] || { echo "FAIL schema written" >&2; exit 1; }
+[[ ! -e "$HOME/.local/state/gash" ]] || { echo "FAIL gash state dir created" >&2; exit 1; }

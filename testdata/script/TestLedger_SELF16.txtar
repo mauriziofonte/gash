@@ -1,0 +1,42 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: SELF-16
+# covers: none (3.0 self-management proof; no 2.x assertion)
+#
+# LEDGER SELF-16 (uninstall_no_globals): a confirmed gash_uninstall through
+# the stub leaves no new variable in the caller's shell (2.x left
+# profile_file behind). The questions are asked in the shell, through the
+# needs_confirm_prompt a harness redefines; the binary removes.
+
+env GASH_HEADLESS=1
+mkdir home/fake/lib/core
+exec bash -c 'source "$GASH_SH"; needs_confirm_prompt() { echo "asked: $1" >>"$WORK/asked"; return 0; }; compgen -v | LC_ALL=C sort >"$WORK/before"; GASH_DIR=$HOME/fake gash_uninstall; echo "rc=$?"; compgen -v | LC_ALL=C sort >"$WORK/after"'
+stdout '^rc=0$'
+stderr '^Warning: This will remove Gash \(.*/home/fake\) and its configuration from this account\.$'
+stderr '^Warning: Found ~/\.gash_env \(may contain database credentials\)\.$'
+stderr '^Info: Removed ~/\.gash_env$'
+stderr '^OK: Gash uninstalled\.$'
+cmp before after
+cmp asked want-asked
+! exists home/fake
+! exists home/.gash_env
+! exists home/.gashrc
+cmp home/.bashrc want-bashrc
+
+-- home/fake/gash.sh --
+-- home/.gashrc --
+source ~/.gash/gash.sh
+-- home/.gash_env --
+K=v
+-- home/.bashrc --
+# before
+# >>> GASH START >>>
+source ~/.gashrc
+# <<< GASH END <<<
+# after
+-- want-asked --
+asked: Continue?
+asked: Remove ~/.gash_env?
+-- want-bashrc --
+# before
+# after

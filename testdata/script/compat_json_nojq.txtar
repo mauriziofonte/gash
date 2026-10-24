@@ -1,0 +1,25 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: CORE-09
+# covers: none (3.0 portability proof; no 2.x assertion)
+#
+# LEDGER CORE-09: __gash_json_str and __gash_json_arr need no jq. With a
+# PATH that holds no program at all, the helpers ask the binary's encoder
+# and print jq's compact layout with status 0 (2.x printed "jq: command
+# not found" and returned 127).
+
+env GASH_HEADLESS=1
+exec bash --norc --noprofile nojq.sh
+stdout '^\["a","b\\"c"\]$'
+stdout '^ rc=0$'
+stdout '^rc=0 \["x\\ty"\]$'
+! stderr .
+
+-- nojq.sh --
+source "$GASH_SH" >/dev/null 2>&1
+PATH=$WORK/empty
+__gash_json_arr a 'b"c'
+echo " rc=$?"
+v=$(__gash_json_str $'x\ty')
+echo "rc=$? [$v]"
+-- empty/.keep --

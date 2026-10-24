@@ -1,0 +1,80 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:338
+# covers: output_style_render_spec.sh:339
+# covers: output_style_render_spec.sh:340
+# covers: output_style_render_spec.sh:341
+# covers: output_style_render_spec.sh:342
+# covers: output_style_render_spec.sh:343
+# covers: output_style_render_spec.sh:344
+# covers: output_style_render_spec.sh:345
+# covers: output_style_render_spec.sh:346
+# covers: output_style_render_spec.sh:347
+# covers: output_style_render_spec.sh:348
+#
+# ai_ask rendering (R2-R6). The Go port speaks to the provider over net/http
+# (no curl), so httpsfake answers the Claude/Gemini endpoints from the canned
+# responses (response type chosen by the query text) with its CA trusted
+# through SSL_CERT_FILE. ai_ask reads one interactive question; GASH__TTY_IN=1
+# makes the shim report a terminal stdin, so the query fed on stdin is read as
+# the question (never as piped input). The confirmation of GASH_AI_CONFIRM=1
+# reads /dev/tty, which testscript has none of, so the confirm-no row is the
+# "no terminal to confirm on" refusal. The formatted reply prints on stdout,
+# the errors/notes on stderr. The interactive confirm-yes path is the
+# internal/ai unit tests.
+
+env GASH_HEADLESS=1
+env LC_ALL=C.UTF-8
+
+# --- :344 no-key - no provider configured (resolved before any request)
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_ask </dev/null'
+stderr 'No AI provider configured in ~/.gash_env'
+
+# --- :345 no-token - a named provider with no token
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_ask gemini </dev/null'
+stderr 'No token configured for .gemini. in ~/.gash_env'
+
+# --- :346 bad-provider - a provider that is not configured
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_ask openai </dev/null'
+stderr 'No token configured for .openai. in ~/.gash_env'
+
+# --- 3.0: AI-04 fixed. ai_ask reads its question from a terminal and
+# refuses headless or without /dev/tty, before reading stdin or sending
+# anything, so every row that reached the provider black-box in 2.x
+# (:338-:343, :347, :348) now renders that refusal: one error line on
+# stderr, nothing on stdout. The reply rendering these rows drove is the
+# shared formatResponse of ai_query (ai_query_render.txtar) and the
+# internal/ai unit tests (TestLedger_AI03_fix, which answers on a fake
+# terminal).
+
+# --- :343 empty-query
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; ai_ask </dev/null'
+stderr 'ai_ask needs a terminal: use ai_query "question" \(stdin is read as piped input\)'
+! stdout .
+
+# --- :338 command, :339 explanation (gemini), :340 code, :341 fallback,
+# :347 http-error, :348 confirm-no: the question on a stdin the shim reports
+# as a terminal
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "how to list files?\n" | ai_ask'
+stderr 'ai_ask needs a terminal'
+! stdout .
+! exec bash -c 'printf "AI:gemini=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask gemini'
+stderr 'ai_ask needs a terminal'
+! stdout .
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH_AI_CONFIRM=1 GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "what is bash?\n" | ai_ask'
+stderr 'ai_ask needs a terminal'
+! stderr 'Not sending'
+! stdout .
+
+# --- :342 piped - stdin is piped (not a terminal): refused before the pipe
+# is read (no "Piped input received" note)
+! exec bash -c 'printf "AI:claude=test-key\n" >"$HOME/.gash_env"; chmod 600 "$HOME/.gash_env"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; printf "PHP Fatal error: x\n" | ai_ask claude'
+stderr 'ai_ask needs a terminal'
+! stderr 'Piped input received'
+! stdout .
+
+# --- R6: plain mode, the no-key error keeps its word prefix and has no ESC
+# (a fresh empty env file, so the keys written by earlier cases do not leak)
+! exec bash -c 'export GASH_ENV_FILE="$PWD/none.env" GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; ai_ask </dev/null'
+stderr '^Error: No AI provider configured'
+! stderr '\x1b'

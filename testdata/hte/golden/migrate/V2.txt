@@ -1,0 +1,28 @@
+gash hte migrate: plan for ubuntu-24.04 (dry run: nothing is changed)
+
+Sites
+  import          http.test            V2            /etc/apache2/sites-available/001-http.test.conf
+                  PHP 8.3, profile dev (marker), HTTP only, enabled
+                  aliases: www.http.test
+                  pool: /etc/php/8.3/fpm/pool.d/http.test.conf
+  import          https.test           V2            /etc/apache2/sites-available/002-https.test.conf
+                  PHP 7.4, profile staging (marker), HTTPS, enabled
+                  aliases: www.https.test
+                  pool: /etc/php/7.4/fpm/pool.d/https.test.conf
+                  certificate: copy /etc/apache2/certs-selfsigned/https.test.crt and /etc/apache2/certs-selfsigned/https.test.key (the key by the root step)
+  import          forced.test          V2            /etc/apache2/sites-available/003-forced.test.conf
+                  PHP 8.3, profile hardened (marker), HTTPS forced (307, loopback bypass on), enabled
+                  aliases: www.forced.test
+                  pool: /etc/php/8.3/fpm/pool.d/forced.test.conf
+                  certificate: copy /etc/apache2/certs-selfsigned/forced.test.crt and /etc/apache2/certs-selfsigned/forced.test.key (the key by the root step)
+                  note: force-HTTPS with the loopback bypass, as hte-cli 1.1.x: requests from 127.0.0.1 and ::1 are not redirected; 301 becomes 307
+
+Hosts block
+  127.0.0.1 forced.test www.forced.test
+  127.0.0.1 http.test www.http.test
+  127.0.0.1 https.test www.https.test
+  the "# hte-cli" lines (4, 6, 8) stay untouched
+
+Root steps (one sudo for --apply)
+  copy_key /etc/apache2/certs-selfsigned/https.test.key -> /home/dev/.local/share/gash/hte/certs/https.test/key.pem
+  copy_key /etc/apache2/certs-selfsigned/forced.test.key -> /home/dev/.local/share/gash/hte/certs/forced.test/key.pem

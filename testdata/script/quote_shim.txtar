@@ -1,0 +1,29 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SELF-13
+# covers: none (3.0 shim surface)
+#
+# gash_inspiring_quote through the shim: a quote of GASH_DIR/quotes, its
+# source with --source; a positional word is an unexpected argument and an
+# unknown option an unknown option (3.0: SELF-13 fixed).
+
+env GASH_HEADLESS=1 COLUMNS=60
+exec bash -c 'source "$GASH_SH"; GASH_DIR=$PWD gash_inspiring_quote --source'
+cmp stdout want.txt
+! stderr .
+
+! exec bash -c 'source "$GASH_SH"; gash_inspiring_quote foo'
+! stdout .
+stderr '^Error: Unexpected argument: foo \(usage: gash_inspiring_quote \[--source\]\)$'
+
+! exec bash -c 'source "$GASH_SH"; gash_inspiring_quote --bogus'
+! stdout .
+stderr '^Error: Unknown option: --bogus \(usage: gash_inspiring_quote \[--source\]\)$'
+
+-- quotes/list.txt --
+# A talk, 2001, https://example.test/talk
+"Simplicity is prerequisite for reliability, and it is also the shortest way to the point." — Someone
+-- want.txt --
+Quote: "Simplicity is prerequisite for reliability, and it
+       is also the shortest way to the point." — Someone
+       Source: A talk, 2001, https://example.test/talk

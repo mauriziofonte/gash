@@ -1,0 +1,67 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: migrate_spec.sh:45
+# covers: migrate_spec.sh:64
+# covers: migrate_spec.sh:89
+# covers: migrate_spec.sh:106
+# covers: migrate_spec.sh:131
+# forced-divergence: SELF-22
+#
+# Decision D-6 (design/README.md): 3.x does not port the 1.x->2.x migration.
+# gash_migrate keeps only its name and prints one line pointing at the 2.x
+# route (check out v2.1.0, run gash_migrate there, then gash_upgrade),
+# writes nothing, and returns 1. This supersedes the migration-logic rows of
+# migrate_spec.sh: detection (:45), --yes apply/backup/--rollback (:64), the
+# screen choices landing in ~/.gash_env (:89), the nothing-written paths
+# (:106) and --status/option errors (:131), recorded as forced divergence
+# SELF-22 (SELF-08/SELF-09 are the related defects, "moot" under D-6); the
+# registered --help describes the pointer (LEDGER SHELL-18, fixed in 3.0).
+
+env GASH_HEADLESS=1
+exec bash route.sh
+
+-- home/.gashrc --
+export GASH_BASH="$HOME/.gash/gash.sh"
+export MY_OWN=1
+
+-- route.sh --
+export GASH_HEADLESS=1
+source "$GASH_SH"
+set -uo pipefail
+fail() { echo "FAIL: $1" >&2; exit 1; }
+POINTER="does not migrate a Gash 1.x configuration"
+before="$(cat "$HOME/.gashrc")"
+
+# :45 detection is gone: gash_migrate points at the 2.x route and returns 1.
+out="$(gash_migrate 2>&1)"; rc=$?
+[[ $rc -eq 1 ]]              || fail "45 rc"
+[[ "$out" == *"$POINTER"* ]] || fail "45 pointer"
+
+# :64 --yes neither applies nor backs up nor rolls back; it points at the
+# route and writes nothing (no backups dir, ~/.gashrc untouched).
+out="$(gash migrate --yes 2>&1)"; rc=$?
+[[ $rc -eq 1 ]]                                || fail "64 rc"
+[[ "$out" == *"$POINTER"* ]]                   || fail "64 pointer"
+[[ ! -d "$HOME/.local/state/gash/backups" ]]   || fail "64 backups written"
+[[ "$(cat "$HOME/.gashrc")" == "$before" ]]    || fail "64 gashrc changed"
+
+# :89 feeding the old screen choices writes nothing to ~/.gash_env.
+printf '1\n2\n2\n2\n2\n2\n2\n2\n1\n' | gash migrate --plain >/dev/null 2>&1; rc=$?
+[[ $rc -ne 0 ]]              || fail "89 rc"
+[[ ! -e "$HOME/.gash_env" ]] || fail "89 env written"
+
+# :106 nothing is written on any path (cancel/later/schema are all gone).
+printf '2\n' | gash_migrate --auto --plain >/dev/null 2>&1 || true
+[[ ! -d "$HOME/.local/state/gash/backups" ]] || fail "106 backups"
+[[ "$(cat "$HOME/.gashrc")" == "$before" ]]  || fail "106 gashrc changed"
+
+# :131 --status points at the route (no "pending"); an option error still
+# fails; the registered --help still carries --rollback (SHELL-18).
+out="$(gash migrate --status 2>&1)"; rc=$?
+[[ $rc -eq 1 ]]              || fail "131 status rc"
+[[ "$out" == *"$POINTER"* ]] || fail "131 status pointer"
+if gash migrate --bogus >/dev/null 2>&1; then fail "131 bogus returned 0"; fi
+# 3.0: SHELL-18 fixed: the help describes the pointer, not the 2.x usages.
+help="$(gash_migrate --help 2>&1)"
+[[ "$help" != *"--rollback"* ]] || fail "131 help still lists --rollback"
+[[ "$help" == *"does not migrate a Gash 1.x configuration"* ]] || fail "131 help pointer"

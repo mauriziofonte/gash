@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -15,74 +14,308 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  GO_VERSION: "1.27.3"
   SHELLCHECK_VERSION: v0.11.0
   SHFMT_VERSION: v3.14.1
 
 jobs:
   lint:
-    name: Lint (shellcheck + shfmt)
+    name: Lint (golangci-lint, vet, generated Bash)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would change:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.15.0
+
       - name: Install shellcheck and shfmt
         run: |
-          bin="$HOME/.local/bin"
-          mkdir -p "$bin"
+          bin="$HOME/.local/bin"; mkdir -p "$bin"
           curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
             | tar -xJ --strip-components=1 -C "$bin" "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
           curl -fsSL -o "$bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
           chmod +x "$bin/shfmt"
           echo "$bin" >> "$GITHUB_PATH"
-          export PATH="$bin:$PATH"
-          shellcheck --version
-          shfmt --version
 
-      - name: shellcheck (warning and above)
-        run: shellcheck -s bash -S warning $(git ls-files '*.sh' bash_completion .gashrc)
+      - name: shellcheck the generated Bash
+        run: shellcheck -s bash -S warning $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc install.sh)
 
-      - name: shfmt (formatting follows .editorconfig)
-        run: shfmt -d $(git ls-files '*.sh' bash_completion .gashrc tests/mocks/bin)
+      - name: shellcheck the launcher (POSIX sh)
+        run: shellcheck -s sh -S warning bin/gash
 
-  test:
-    name: Tests (${{ matrix.os }}, ${{ matrix.awk }})
+      - name: shfmt the generated Bash
+        run: shfmt -d $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc bin/gash)
+
+      - name: Generated compat Bash is current
+        run: |
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+          "$RUNNER_TEMP/gash" __compat generate --out "$GITHUB_WORKSPACE" --check
+
+  vuln:
+    name: Vulnerabilities (govulncheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  unit:
+    name: Unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # macOS gates like Linux. Its runner has Homebrew bash 5 on PATH and the
+    # BSD userland otherwise (no GNU coreutils, setsid, timeout, docker or
+    # /proc), so tests that need one of those stub it or say why they skip.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
-        awk: [gawk, mawk]
+        os: [ubuntu-24.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash gawk jq
+
+      # The race build also runs ./cmd/gash's testscript suite, which on the
+      # macOS runner takes longer than go test's default 10m timeout.
+      - name: go test -race
+        run: CGO_ENABLED=1 go test -race -timeout 30m ./...
+
+      - name: Build
+        run: CGO_ENABLED=0 go build ./...
+
+      # architecture.md 1: `gash version` under 10 ms. go test above runs the
+      # check with a 3x factor (loaded machine, -race); here it runs alone on
+      # the idle runner with the real budget (cmd/gash/version_budget_test.go).
+      - name: gash version start-up budget (10 ms)
+        if: runner.os == 'Linux'
+        run: GASH_VERSION_BUDGET_FACTOR=1 CGO_ENABLED=0 go test ./cmd/gash -run '^TestVersionStartupBudget$' -count=1 -v
+
+  testscript:
+    name: Black-box testscript (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # macOS gates like Linux (see the unit job's note).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    steps:
+      # The upgrade scripts (upgrade_2x_*, upgrade_rollback) build their
+      # fixture origin from the v2.1.0 tag: fetch the history and tags.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gawk jq sqlite3
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash gawk jq
+
+      # init_bash_state_parity.txtar loads 2.1.0 and 3.x in the same shell:
+      # the shallow checkout has no tags, so fetch v2.1.0 and make a
+      # missing 2.x tree a failure instead of a skip.
+      - name: Fetch v2.1.0 for the 2.x differential scripts
+        run: |
+          git fetch --no-tags --depth=1 origin +refs/tags/v2.1.0:refs/tags/v2.1.0
+          echo "GASH_REQUIRE_2X=1" >>"$GITHUB_ENV"
+
+      - name: testscript suite
+        run: CGO_ENABLED=0 go test ./cmd/gash/ -run TestScript -count=1
+
+  install:
+    name: Installer smoke
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Install from this checkout into a clean HOME
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gawk mawk jq sqlite3
+          # The installer clones the repository; a local branch makes this
+          # exact commit installable with GASH_INSTALL_REF.
+          git branch -f ci-under-test HEAD
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"; touch "$HOME/.bashrc"
+          GASH_INSTALL_GIT_REPO="$GITHUB_WORKSPACE" GASH_INSTALL_REF=ci-under-test \
+            bash install.sh --assume-yes --quiet
+          test -f "$HOME/.gash/gash.sh"
+          grep -q '>>> GASH START >>>' "$HOME/.bashrc"
 
-      - name: Run test suite
-        run: bash tests/run.sh --awk ${{ matrix.awk }}
+      - name: The installed shim resolves a locally built binary
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/gash" ./cmd/gash
+          version="$(GASH_BIN="$RUNNER_TEMP/gash" GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; gash version --json')"
+          echo "$version"
+          bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
 
-  render:
-    name: Tests (terminal rendering)
+  hte-e2e:
+    name: HTE E2E (${{ matrix.distro }}${{ matrix.story != 'base' && format(', {0}', matrix.story) || '' }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # base: Debian 12 and Ubuntu 24.04 migrate the hte-cli tree on the
+        # distro PHP (8.2, 8.3); Fedora runs httpd with the distro php-fpm
+        # and Remi's php83, Arch php-fpm and php-legacy-fpm (TestE2EDistro).
+        # multiphp: PHP 7.4, 8.2 and 8.4 next to Ubuntu's 8.3. systemd:
+        # systemd as PID 1, --autostart systemd (the apt-based images).
+        include:
+          - { distro: debian, story: base }
+          - { distro: debian, story: systemd }
+          - { distro: ubuntu, story: base }
+          - { distro: ubuntu, story: multiphp }
+          - { distro: ubuntu, story: systemd }
+          - { distro: fedora, story: base }
+          - { distro: arch, story: base }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Run the HTE end-to-end story in a ${{ matrix.distro }} container
+        run: bash testdata/hte/e2e/run.sh "${{ matrix.distro }}"
+        env:
+          GASH_HTE_E2E_MULTIPHP: ${{ matrix.story == 'multiphp' && '1' || '' }}
+          GASH_HTE_E2E_SYSTEMD: ${{ matrix.story == 'systemd' && '1' || '' }}
+
+  hte-macos:
+    # The HTE story natively on macOS (the macOS runners have no Docker):
+    # TestE2EDistro through testdata/hte/e2e/macos.sh, which refuses to run
+    # anywhere but a GitHub Actions macOS runner, a disposable VM. Blocking:
+    # its scope is what Homebrew bottles reliably provide (httpd, the
+    # current php and php@8.3, discovered under the Homebrew prefix) plus
+    # the runner's passwordless sudo for the root step; the rest is gash's
+    # own (the port mechanism install picks there, direct bind or the pf
+    # redirect, the LaunchAgent of autostart auto, the hosts helper on
+    # /private/etc/hosts). The script uses no job control (Homebrew bash 5.3
+    # prints setpgid noise under set -m) and only BSD userland flags.
+    name: HTE E2E (macOS, Homebrew)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Run the HTE end-to-end story on Homebrew httpd and PHP
+        run: bash testdata/hte/e2e/macos.sh
+
+  snapshot:
+    name: Snapshot build (goreleaser)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: goreleaser (snapshot, no publish)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean
+
+      # D-3: the release hook checks goreleaser's binaries against
+      # release/SHA256SUMS, which releasesums writes; both must build the
+      # same bytes.
+      - name: goreleaser and releasesums build the same binaries
+        run: go run ./internal/tools/releasesums -compare dist
+
+  coverage-gates:
+    name: Spec-to-txtar coverage gates
+    # testing.md 4 and 8: every public 2.x assertion (PARITY run/run*/split
+    # rows) is covered by a txtar case, a Go unit row of
+    # tests/parity/bash-only.tsv or a LEDGER forced divergence
+    # (testdata/script/README.md has the declaration syntax).
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: covermap (every PARITY row covered, every declaration valid)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gawk jq sqlite3
+          summary="$(go run ./internal/tools/covermap -summary)"
+          echo "$summary"
+          case "$summary" in
+            *" 0 uncovered, 0 errors") ;;
+            *) echo "covermap: uncovered rows or invalid declarations (go run ./internal/tools/covermap -v)"; exit 1 ;;
+          esac
 
-      # The slow spec: every human-facing function on a pseudo-terminal,
-      # piped and with NO_COLOR. The other test jobs leave it out.
-      - name: Run rendering fixtures
-        run: bash tests/run.sh specs/output_style_render_spec.sh
+      - name: bashonlymap (tests/parity/bash-only.tsv matches PARITY)
+        run: go run ./internal/tools/bashonlymap -check
 
-  bash-versions:
-    name: Tests (bash ${{ matrix.bash }})
+  compat-bash:
+    name: Compat Bash ${{ matrix.bash }}
+    # testing.md 5 and 7, compat.md 1: the generated Bash (gash.sh, the
+    # shims, bash_completion, the gash init bash layer) on every supported
+    # Bash. testdata/bash/run.sh copies Bash out of the official
+    # bash:VERSION image and runs the Go suite (testscript included) with
+    # it first on PATH.
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -91,56 +324,69 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gawk jq sqlite3 patchelf
+          sudo apt-get install -y -qq gawk jq sqlite3
 
-      - name: Fetch bash ${{ matrix.bash }}
-        run: bash tests/ci/fetch-bash.sh "${{ matrix.bash }}" "$RUNNER_TEMP/bash-${{ matrix.bash }}"
-
-      - name: Run test suite
-        run: bash tests/run.sh --bash "$RUNNER_TEMP/bash-${{ matrix.bash }}/bin/bash"
-
-  macos:
-    name: Tests (macOS, best effort)
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Homebrew bash and GNU tools
-        run: brew install bash coreutils findutils gnu-sed grep gawk jq
-
-      - name: Run test suite
+      - name: Fetch v2.1.0 for the 2.x differential scripts
         run: |
-          prefix="$(brew --prefix)"
-          gnu="$prefix/opt/coreutils/libexec/gnubin:$prefix/opt/findutils/libexec/gnubin"
-          gnu="$gnu:$prefix/opt/gnu-sed/libexec/gnubin:$prefix/opt/grep/libexec/gnubin"
-          export GASH_TEST_PATH="$gnu:$prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-          PATH="$GASH_TEST_PATH" "$prefix/bin/bash" tests/run.sh --bash "$prefix/bin/bash"
+          git fetch --no-tags --depth=1 origin +refs/tags/v2.1.0:refs/tags/v2.1.0
+          echo "GASH_REQUIRE_2X=1" >>"$GITHUB_ENV"
 
-  install:
-    name: Installer smoke test
+      - name: Go suite with Bash ${{ matrix.bash }}
+        run: bash testdata/bash/run.sh "${{ matrix.bash }}"
+
+  db-servers:
+    name: DB module on MySQL 8.4, MariaDB 11, PostgreSQL 16
+    # testing.md 2.4: the db module through the native drivers against
+    # real servers (internal/db/server_test.go). The password carries
+    # @, : and % so the ~/.gash_env URL grammar and its percent-decoding
+    # are exercised; GASH_TEST_DB_REQUIRE=1 turns a missing server into
+    # a failure instead of a skip.
     runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: 'p@ss:w%rd'
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: 'p@ss:w%rd'
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: 'p@ss:w%rd'
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      GASH_TEST_MYSQL_URL: 'mysql://root:p%40ss%3Aw%25rd@127.0.0.1:3306'
+      GASH_TEST_MARIADB_URL: 'mariadb://root:p%40ss%3Aw%25rd@127.0.0.1:3307'
+      GASH_TEST_PGSQL_URL: 'pgsql://postgres:p%40ss%3Aw%25rd@127.0.0.1:5432'
+      GASH_TEST_DB_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Install from this checkout into a clean HOME
-        run: |
-          # The installer clones the repository; a local branch makes this
-          # exact commit installable with GASH_INSTALL_REF.
-          git branch -f ci-under-test HEAD
-          export HOME="$RUNNER_TEMP/home"
-          mkdir -p "$HOME"
-          touch "$HOME/.bashrc"
-          GASH_INSTALL_GIT_REPO="$GITHUB_WORKSPACE" GASH_INSTALL_REF=ci-under-test \
-            bash install.sh --assume-yes --quiet
-          test -f "$HOME/.gash/gash.sh"
-          grep -q '>>> GASH START >>>' "$HOME/.bashrc"
-          version="$(GASH_HEADLESS=1 bash -c 'source "$HOME/.gash/gash.sh"; echo "$GASH_VERSION"')"
-          test "$version" = "$(cat VERSION)"
-          echo "loaded Gash $version"
-          bash --norc -i -c 'source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: internal/db against the three servers
+        run: go test ./internal/db -run TestServers -count=1 -v

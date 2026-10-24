@@ -1,0 +1,12 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_db_names_spec.sh:32
+#
+# Database-name validation driven through the shim. The validation runs
+# before any connection, so it reproduces 2.x byte for byte with the
+# native drivers. The INTERNAL TSV row (:92) is n/a (Go unit test,
+# db.MySQLTSVToJSON). The mock-client routing rows :48/:65 are a designed
+# native-driver divergence, in llm_db_names_native.txtar.
+
+# llm_db_names_spec.sh:32 - -d must be a plain database name (validated before any connection)
+exec bash -c 'set -euo pipefail; d="$WORK/dn32"; mkdir -p "$d"; printf ''%s\n'' ''DB:my=mysql://u:secret@127.0.0.1:3306/app'' ''DB:pg=pgsql://u:secret@127.0.0.1:5432/app'' >"$d/.gash_env"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; for conn in my pg; do for name in "--host=attacker.example" "-hattacker" "host=attacker.example options=-cx=y" "postgresql://attacker.example/x" "a b" "x;y" "$(printf ''%065d'' 0)"; do err="$(llm_db_query "SELECT 1" -c "$conn" -d "$name" 2>&1 >/dev/null || true)"; jq -e ''.error == "invalid_database_name" and .action == "RETRY"'' <<<"$err" >/dev/null || { echo "accepted for $conn: $name: $err"; exit 1; }; done; done'

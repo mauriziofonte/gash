@@ -1,0 +1,65 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 completion surface)
+#
+# MATRIX "gash __complete": the generated bash_completion completes the 3.x
+# commands (init, update, version, hte) by asking the binary
+# (`gash __complete WORDS...`, cobra's protocol) and keeps only the
+# candidates: descriptions (after a tab) and the ":DIRECTIVE" line are
+# dropped. Driven in a real interactive Bash through __gash_complete, as
+# TAB does. The hte tree, which the binary keeps behind its handler, is
+# completed too, to the flags of a leaf command. Without a binary nothing
+# is offered and nothing fails.
+
+env GASH_BANNER=0
+exec bash --norc --noprofile -i drive.sh
+cmp stdout want.txt
+! stderr 'command not found|syntax error'
+
+# The binary's own answer: candidates with descriptions, then the
+# directive (4: no file completion).
+exec gash __complete hte si
+stdout '^site\tCreate, change and remove sites$'
+stdout '^:4$'
+! stdout '^service'
+
+-- drive.sh --
+source "$GASH_SH" >/dev/null 2>&1
+source "$GASH_STAGE/bash_completion"
+complete -p gash | sed 's/ [^ ]*$/ .../' | grep -q -- '-F __gash_complete' && echo "registered"
+c() {
+    COMP_WORDS=("$@")
+    COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
+    COMPREPLY=()
+    __gash_complete gash "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"
+    printf '%s => %s\n' "$*" "${COMPREPLY[*]}"
+}
+c gash ve
+c gash init ""
+c gash version --
+c gash update --r
+c gash hte ""
+c gash hte s
+c gash hte site ""
+c gash hte site cr
+c gash hte site create --do
+c gash hte --json do
+c gash hte cert ""
+# Without a binary the 3.x words complete to nothing.
+__GASH_BIN=/nonexistent
+__gash_compat_ready() { return 1; }
+c gash hte ""
+-- want.txt --
+registered
+gash ve => version
+gash init  => bash
+gash version -- => --help --json
+gash update --r => --rollback
+gash hte  => apache cert doctor hosts install migrate php service site uninstall
+gash hte s => service site
+gash hte site  => create disable enable list modify remove show
+gash hte site cr => create
+gash hte site create --do => --docroot --domain
+gash hte --json do => doctor
+gash hte cert  => renew show
+gash hte  => 

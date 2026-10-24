@@ -1,0 +1,45 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:112
+# covers: output_style_render_spec.sh:113
+# covers: output_style_render_spec.sh:114
+# covers: output_style_render_spec.sh:115
+#
+# dirs_list_empty rendering (R2-R6): the plain list of empty directories,
+# the --count scalar, the no-result empty output, and the not_a_directory
+# error. The listing itself is plain paths on stdout in every mode.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :112 list - one path per empty directory
+mkdir d1
+exec bash -c 'cd d1; mkdir -p d/e1 d/e2 d/full && printf x >d/full/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_list_empty d'
+stdout '/d/e1$'
+stdout '/d/e2$'
+! stdout '/d/full'
+! stdout '\x1b'
+
+# --- :113 count - the scalar count only
+mkdir d2
+exec bash -c 'cd d2; mkdir -p d/e1 d/e2; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_list_empty --count d'
+stdout '^2$'
+
+# --- :114 none - no empty directories, no output
+# 3.0: FS-18 fixed: not even a blank line (rc.A printed one).
+mkdir d3
+exec bash -c 'cd d3; mkdir -p d && printf x >d/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_list_empty d'
+! stdout '.'
+cmp stdout empty.txt
+
+# --- :115 not-a-directory - the path is a file
+! exec bash -c 'printf x >f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_list_empty f'
+stderr 'Error: not_a_directory: Path .f. is not a directory'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'printf x >f2; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; dirs_list_empty f2'
+stderr '^Error: not_a_directory'
+! stderr '\x1b'
+
+-- empty.txt --

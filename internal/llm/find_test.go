@@ -1,0 +1,192 @@
+// Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package llm
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+// TestFindMatches2x compares with 2.x when its sources are at hand. 3.0:
+// F-04 fixed: names come in byte order, where 2.x printed them in directory
+// read order, so a multi-entry listing matches only where the file system
+// happens to read in that order.
+func TestFindMatches2x(t *testing.T) {
+	d := searchFixture(t)
+	mustWrite(t, filepath.Join(d, "nl\nname.php"), "needle\n")
+	mustWrite(t, filepath.Join(d, "vendor.php"), "needle\n")
+	mustMkdir(t, filepath.Join(d, "src", "vendor"))
+	mustWrite(t, filepath.Join(d, "src", "q[1].php"), "needle\n")
+	home := physTemp(t)
+	env := rgEnv(t, home)
+	m := New()
+	for _, args := range [][]string{
+		{"*.php"},
+		{"*.php", "."},
+		{"*.php", d},
+		{"*", "src"},
+		{"*", "src", "--type", "d"},
+		{"*", "--type", "d"},
+		{"vendor", "--type", "d"},
+		{"vendor*"},
+		{"*.PHP"},
+		{"[a-c].*", "src"},
+		{"q\\[1\\].php", "src"},
+		{"?.php", "src"},
+		{"[[:upper:]]*", "src"},
+		{"[![:lower:]_]*", "src"},
+		{"[[:digit:][:punct:]]*"},
+		{".*"},
+		{"*", "-n", "3"},
+		{"*", "--limit", "0"},
+		{"*", "src/a.php"},
+		{"a.*", "src/a.php"},
+		{"*.php", "--contains", "needle"},
+		{"*.php", ".", "--contains", "needle"},
+		{"*", "--contains", "needle"},
+		{"*", "--contains", "needle", "-n", "4"},
+		{"*.md", "--contains", "needle"},
+		{"*.nomatch", "--contains", "needle"},
+		{"a.*", "src/a.php", "--contains", "needle"},
+		{"b.*", "src/a.php", "--contains", "needle"},
+		{"*", "bin.dat", "--contains", "after"},
+		{"*", "--contains", "needle", "--type", "f"},
+		{"[", "--contains", "needle"},
+		{"*", "sub/.env.example", "--contains", "needle"},
+		{"*", ".env", "--contains", "needle"},
+		{"*", ".ssh", "--contains", "needle"},
+		{"*", ".ssh"},
+		{"*", ".env"},
+		// errors, in the 2.x order
+		{},
+		{""},
+		{"", "*.php"},
+		{"*", "--type"},
+		{"*", "--type", "x"},
+		{"*", "--type", "d", "--contains", "x"},
+		{"*", "--type", "x", "--contains", "x"},
+		{"*", "--contains"},
+		{"*", "-n"},
+		{"*", "-n", "x"},
+		{"*", "--bogus"},
+		{"*", ".", "extra"},
+		{"*", "../x"},
+		{"*", "/proc"},
+		{"*", "-h"},
+		{"--type", "--help"},
+	} {
+		same(t, m, d, env, "llm_find", args...)
+	}
+}
+
+// TestLedger_LLM18_2x: an empty first positional is PATTERN, so it is
+// missing_pattern (2.x skipped it and the next word became PATTERN).
+func TestLedger_LLM18_2x(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "x"), "")
+	env := baseEnv(physTemp(t), nil)
+	// 3.0: LLM-18 fixed
+	r := runGo(t, m, d, env, "llm_find", "", "x")
+	require.Equal(t, 1, r.RC)
+	require.Empty(t, r.Stdout)
+	require.Contains(t, r.Stderr, `"error":"missing_pattern"`)
+}
+
+// TestLedger_LLM18: llm_find ” x and llm_grep ” dir are missing_pattern
+// (RETRY), never a search for the next word.
+func TestLedger_LLM18(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "x"), "dir\n")
+	mustMkdir(t, filepath.Join(d, "dir"))
+	env := baseEnv(physTemp(t), nil)
+	for _, args := range [][]string{{"llm_find", "", "x"}, {"llm_find", "", "*"}, {"llm_grep", "", "dir"}, {"llm_grep", "", "."}} {
+		r := runGo(t, m, d, env, args[0], args[1:]...)
+		require.Equal(t, 1, r.RC, args)
+		require.Empty(t, r.Stdout, args)
+		var e struct{ Error, Action string }
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		require.Equal(t, "missing_pattern", e.Error, args)
+		require.Equal(t, "RETRY", e.Action, args)
+	}
+	// A pattern then an empty PATH is still a path (the current directory
+	// only when PATH is left out).
+	r := runGo(t, m, d, env, "llm_find", "x")
+	require.Equal(t, result{d + "/x\n", "", 0}, r)
+}
+
+// TestLedger_LLM19_2x_find: the name search leaves symlinks out.
+func TestLedger_LLM19_2x_find(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "f"), "")
+	require.NoError(t, os.Symlink("f", filepath.Join(d, "ln")))
+	env := baseEnv(physTemp(t), nil)
+	r := same(t, m, d, env, "llm_find", "*")
+	require.Equal(t, d+"/f\n", r.Stdout)
+}
+
+// TestLedger_LLM29_2x_find: the name search leaves out paths with a
+// newline.
+func TestLedger_LLM29_2x_find(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "a\nb"), "")
+	mustWrite(t, filepath.Join(d, "a\tb"), "")
+	env := baseEnv(physTemp(t), nil)
+	r := same(t, m, d, env, "llm_find", "a*")
+	require.Equal(t, d+"/a\tb\n", r.Stdout)
+}
+
+// TestFollowup_F04: llm_find keeps the results of a root whose own name
+// holds a newline (only a newline below the root leaves a path out), and
+// the name search and the JSON tree list entries in byte order (the C
+// order of LLM-36), not in directory read order (3.0: F-04 fixed).
+func TestFollowup_F04(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	d := physTemp(t)
+	root := filepath.Join(d, "r\noot")
+	mustWrite(t, filepath.Join(root, "x.txt"), "")
+	mustWrite(t, filepath.Join(root, "sub", "y.txt"), "")
+	mustWrite(t, filepath.Join(root, "n\nl.txt"), "")
+	r := runGo(t, m, d, env, "llm_find", "*.txt", "r\noot")
+	require.Equal(t, result{root + "/sub/y.txt\n" + root + "/x.txt\n", "", 0}, r)
+
+	// No two names differ only in case (a macOS file system is
+	// case-insensitive). Created out of order.
+	s := physTemp(t)
+	for _, n := range []string{"é", "b", "a-b", "a/z", "a/c", "_u", "Z1"} {
+		mustWrite(t, filepath.Join(s, n), "x")
+	}
+	r = runGo(t, m, s, env, "llm_find", "*")
+	want := ""
+	for _, n := range []string{"Z1", "_u", "a/c", "a/z", "a-b", "b", "é"} {
+		want += s + "/" + n + "\n"
+	}
+	require.Equal(t, result{want, "", 0}, r)
+	r = runGo(t, m, s, env, "llm_find", "*", "-n", "2")
+	require.Equal(t, result{s + "/Z1\n" + s + "/_u\n", "", 0}, r)
+
+	r = runGo(t, m, s, env, "llm_tree", "--depth", "2")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	type node struct {
+		Name     string
+		Children []node
+	}
+	var v node
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &v), r.Stdout)
+	var names []string
+	for _, ch := range v.Children {
+		names = append(names, ch.Name)
+		for _, g := range ch.Children {
+			names = append(names, ch.Name+"/"+g.Name)
+		}
+	}
+	require.Equal(t, []string{"Z1", "_u", "a", "a/c", "a/z", "a-b", "b", "é"}, names)
+}

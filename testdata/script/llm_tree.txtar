@@ -1,0 +1,35 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:191
+# covers: llm_spec.sh:204
+# covers: llm_spec.sh:216
+#
+# llm_tree over a private fixture tree (TEST-06: never the repository source).
+# Default output is a JSON object with path and children; --text is an
+# indented listing (no leading brace); -h prints the registered help.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:191 - JSON by default
+exec bash -c 'source "$GASH_SH"; llm_tree fx'
+stdout '\{'
+stdout '"path"'
+stdout '"children"'
+
+# --- llm_spec.sh:204 - text with --text
+exec bash -c 'source "$GASH_SH"; llm_tree --text fx'
+! stdout '^\{'
+stdout 'fx/'
+
+# --- llm_spec.sh:216 - shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_tree -h'
+stdout llm_tree
+
+-- fx/core/a.sh --
+function a() {
+    :
+}
+-- fx/modules/b.sh --
+b() { :; }
+-- fx/README.txt --
+notes

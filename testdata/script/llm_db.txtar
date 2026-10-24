@@ -1,0 +1,105 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_spec.sh:493
+# covers: llm_spec.sh:510
+# covers: llm_spec.sh:527
+# covers: llm_spec.sh:544
+# covers: llm_spec.sh:618
+# covers: llm_spec.sh:635
+# covers: llm_spec.sh:652
+# covers: llm_spec.sh:772
+# covers: llm_spec.sh:788
+# covers: llm_spec.sh:805
+# covers: llm_spec.sh:821
+# covers: llm_spec.sh:833
+# covers: llm_portability_spec.sh:8
+# covers: llm_portability_spec.sh:25
+#
+# The llm_db_* read-only SQL guard and help, driven through the shim. The
+# guard runs before any connection, so these need no database: a write first
+# keyword, a second statement or a bad table name is refused with its FATAL
+# or RETRY envelope. The timing rows are the black-box half of two split
+# portability cases: rc.A measures elapsed time natively (no EPOCHREALTIME,
+# no locale), so a decimal-comma locale cannot corrupt a duration string and
+# a fast query is always seen as fast, so it never triggers a second
+# (auto-EXPLAIN) run. files_largest provides a locale-independent scan_time;
+# a fast native sqlite query carries a well-formed query_time and no
+# slow_query_explain.
+
+env GASH_HEADLESS=1
+
+# --- llm_spec.sh:493 - blocks write operations (INSERT)
+! exec bash -c 'source "$GASH_SH"; llm_db_query "INSERT INTO users VALUES (1)" -d test'
+stderr write_operation_blocked
+
+# --- llm_spec.sh:510 - blocks DELETE
+! exec bash -c 'source "$GASH_SH"; llm_db_query "DELETE FROM users" -d test'
+stderr write_operation_blocked
+
+# --- llm_spec.sh:527 - blocks DROP
+! exec bash -c 'source "$GASH_SH"; llm_db_query "DROP TABLE users" -d test'
+stderr write_operation_blocked
+
+# --- llm_spec.sh:544 - llm_db_schema validates the table name
+! exec bash -c 'source "$GASH_SH"; llm_db_schema "users; DROP TABLE users" -d test'
+stderr invalid_table_name
+
+# --- llm_spec.sh:618 - blocks semicolon injection
+! exec bash -c 'source "$GASH_SH"; llm_db_query "SELECT 1; DROP TABLE users" -d test'
+stderr multiple_statements_blocked
+
+# --- llm_spec.sh:635 - blocks UPDATE
+! exec bash -c 'source "$GASH_SH"; llm_db_query "UPDATE users SET name = 1" -d test'
+stderr write_operation_blocked
+
+# --- llm_spec.sh:652 - blocks TRUNCATE
+! exec bash -c 'source "$GASH_SH"; llm_db_query "TRUNCATE TABLE users" -d test'
+stderr write_operation_blocked
+
+# --- llm_spec.sh:772 - llm_db_tables shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_db_tables -h'
+stdout llm_db_tables
+
+# --- llm_spec.sh:788 - llm_db_sample validates the table name
+! exec bash -c 'source "$GASH_SH"; llm_db_sample "users; DROP TABLE users" -d test'
+stderr invalid_table_name
+
+# --- llm_spec.sh:805 - llm_db_sample shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_db_sample -h'
+stdout llm_db_sample
+
+# --- llm_spec.sh:821 - llm_db_explain shows help on -h
+exec bash -c 'source "$GASH_SH"; llm_db_explain -h'
+stdout llm_db_explain
+
+# --- llm_spec.sh:833 - llm_db_explain blocks semicolon injection
+! exec bash -c 'source "$GASH_SH"; llm_db_explain "SELECT 1; DROP TABLE users" -d test'
+stderr multiple_statements_blocked
+
+# --- llm_portability_spec.sh:8 - timings are locale-independent (native)
+exec bash timing_scan.sh
+
+# --- llm_portability_spec.sh:25 - a fast query runs once, no double EXPLAIN
+exec bash timing_query.sh
+
+-- timing_scan.sh --
+set -euo pipefail
+source "$GASH_SH"
+mkdir -p "$WORK/t"
+echo hi >"$WORK/t/x"
+# scan_time is a well-formed duration regardless of the process locale,
+# because rc.A formats it with Go's own number writer, not EPOCHREALTIME.
+jq -e '.scan_time | test("^[0-9.]+(µs|ms|s)$")' <<<"$(files_largest --json "$WORK/t")" >/dev/null
+loc="$(locale -a 2>/dev/null | grep -Eix '(it_IT|de_DE|fr_FR|es_ES|pt_BR)\.utf-?8' | head -n 1 || true)"
+if [[ -n "$loc" ]]; then
+  out="$(LC_ALL="$loc" bash -c 'source "$GASH_SH"; files_largest --json "'"$WORK"'/t"')"
+  jq -e '.scan_time | test("^[0-9.]+(µs|ms|s)$")' <<<"$out" >/dev/null
+fi
+-- timing_query.sh --
+set -euo pipefail
+source "$GASH_SH"
+command -v sqlite3 >/dev/null 2>&1 || { echo "SKIP: sqlite3 not installed"; exit 0; }
+sqlite3 "$WORK/t.db" "CREATE TABLE users(id INTEGER, name TEXT); INSERT INTO users VALUES (1,'a');"
+out="$(llm_db_query "SELECT * FROM users" -f "$WORK/t.db")"
+# A fast query: rows returned, a well-formed query_time, and no auto-EXPLAIN.
+jq -e '.rows == 1 and (.query_time | test("^[0-9.]+(µs|ms|s)$")) and (has("slow_query_explain") | not)' <<<"$out" >/dev/null

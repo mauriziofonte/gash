@@ -1,0 +1,16 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-09
+# covers: none (3.0 shell fix)
+#
+# SHELL-09 proving test: an alias the user defined before Gash loaded keeps
+# its value after the load and after gash_unload (Ubuntu's skel .bashrc
+# defines ll='ls -alF'); a pack alias the user did not have is Gash's after
+# the load and gone after the unload. 2.x replaced the user's ll and left
+# Gash's value behind on unload.
+
+env GASH_BANNER=0
+
+exec bash --norc --noprofile -i -c 'alias ll="ls -alF"; source "$GASH_SH" >/dev/null 2>&1; echo "loaded ll=${BASH_ALIASES[ll]-none} la=${BASH_ALIASES[la]-none}"; gash_unload; echo "unloaded ll=${BASH_ALIASES[ll]-none} la=${BASH_ALIASES[la]-none}"'
+stdout '^loaded ll=ls -alF la=ls -la'
+stdout '^unloaded ll=ls -alF la=none$'

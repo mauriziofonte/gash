@@ -1,0 +1,20 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: llm_db_security_spec.sh:54
+# covers: llm_db_security_spec.sh:73
+# covers: llm_db_security_spec.sh:158
+#
+# llm_db_* read-only guarantees driven through the shim with an in-process
+# SQLite database. The INTERNAL guard-verdict rows (:9, :37) are n/a (Go
+# unit tests, sql.Guard, tests/parity/bash-only.tsv). The mock-client rows
+# :89/:127 are a designed native-driver divergence, in
+# llm_db_security_native.txtar.
+
+# llm_db_security_spec.sh:54 - llm_db_query on SQLite caps rows, keeps comments harmless, returns empty envelopes
+exec bash -c 'set -euo pipefail; d="$WORK/db54"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; sqlite3 "$d/t.db" "CREATE TABLE u(id INTEGER, name TEXT); INSERT INTO u VALUES (1,''a''),(2,''b''),(3,''c'');"; out="$(llm_db_query "SELECT * FROM u -- trailing comment" -f "$d/t.db")"; jq -e ''.rows == 3'' <<<"$out" >/dev/null; out="$(llm_db_query "SELECT * FROM u;" -f "$d/t.db" -r 2)"; jq -e ''.rows == 2 and .data[1].name == "b"'' <<<"$out" >/dev/null; out="$(llm_db_query "SELECT * FROM u WHERE id > 9" -f "$d/t.db")"; jq -e ''.data == [] and .rows == 0'' <<<"$out" >/dev/null; out="$(llm_db_explain "SELECT * FROM u WHERE id = 1" -f "$d/t.db")"; jq -e ''.rows == 1 and (.data[0].plan | test("u"))'' <<<"$out" >/dev/null'
+
+# llm_db_security_spec.sh:73 - llm_db_query on SQLite never writes, even past the guard (split: the direct-runner half is a Go unit test)
+exec bash -c 'set -euo pipefail; d="$WORK/db73"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; sqlite3 "$d/t.db" "CREATE TABLE u(id INTEGER);"; [[ "$(llm_db_query "INSERT INTO u VALUES (1)" -f "$d/t.db" 2>&1 >/dev/null | jq -r .error)" == write_operation_blocked ]]; [[ "$(sqlite3 "$d/t.db" "SELECT count(*) FROM u")" == 0 ]]; ! llm_db_query $''SELECT 1\n.shell touch ''"$d/pwned" -f "$d/t.db" 2>/dev/null; [[ ! -e "$d/pwned" ]]'
+
+# llm_db_security_spec.sh:158 - llm_db_* reject unknown options and stray arguments
+exec bash -c 'set -euo pipefail; d="$WORK/db158"; mkdir -p "$d"; export GASH_HEADLESS=1 HOME="$d"; source "$GASH_SH"; [[ "$(llm_db_query "SELECT 1" --bogus 2>&1 >/dev/null | jq -r .error)" == unknown_option ]]; [[ "$(llm_db_query SELECT 1 2>&1 >/dev/null | jq -r .error)" == unexpected_argument ]]; [[ "$(llm_db_tables -c 2>&1 >/dev/null | jq -r .error)" == missing_value ]]'

@@ -2,17 +2,17 @@
 
 Ask Claude or Gemini from the terminal.
 
-_Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
+_Written from the help registry (`gash_help NAME`); `go test ./internal/registry` checks it against the help text._
 
 | Function | Alias | Description |
 |---|---|---|
-| [`ai_ask`](#ai-ask) | `ask` | Interactive AI chat from the terminal |
+| [`ai_ask`](#ai-ask) | `ask` | Ask the AI one question from the terminal |
 | [`ai_query`](#ai-query) |  | Non-interactive AI query with optional piped input |
 | [`ai_sysinfo`](#ai-sysinfo) | `sysinfo_ai` | AI-powered system security and configuration analysis |
 
 ## ai_ask
 
-Interactive AI chat from the terminal
+Ask the AI one question from the terminal
 
 Alias: `ask`
 
@@ -25,14 +25,14 @@ ai_ask [provider]
 #### Examples
 
 ```bash
-# Start an interactive chat (uses first configured provider)
+# Ask one question (uses first configured provider)
 ask
 
 # Use a specific provider
 ask claude
 ask gemini
 
-# Type your questions interactively:
+# Type your question at the prompt:
 #   claude: how to find files larger than 100MB?
 #   Command: find . -type f -size +100M
 #   Explanation: Finds all files larger than 100MB.
@@ -74,17 +74,23 @@ The AI automatically detects your intent:
 #### Notes
 
 ```text
-Type 'exit' or 'quit' or press Ctrl+C to end the session.
-Piped content is auto-truncated to 4KB to save tokens.
+One question per call; Enter on an empty line aborts, exit/quit cancel.
+ai_ask needs a terminal (not headless): from a script or an agent use
+ai_query "question" instead.
+Piped content is auto-truncated to 4KB to save tokens; piped input must
+start within 2 seconds, or stdin is ignored with a warning.
+-h/--help is help as the first word or right after the provider.
 ```
 
 #### Privacy
 
 ```text
 Secrets are redacted before sending: private keys, passwords in
-URLs, KEY=value secrets and well-known token formats (sk-, ghp_,
-AKIA, xox, AIza). The API key travels in a curl config read from
-a pipe, never on the command line.
+URLs, KEY=value secrets, Authorization headers, SSH: passphrase
+lines, password hashes ($6$...) and well-known token formats (sk-,
+ghp_, AKIA, xox, AIza). Free text ("the password is ...") is not
+detected. The API key stays inside the gash process, never on a
+command line.
 GASH_AI_CONFIRM=1 asks before every request (default: auto).
 Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.
 ```
@@ -161,17 +167,24 @@ diff /etc/php/8.1/fpm/pool.d/www.conf /etc/php/8.2/fpm/pool.d/www.conf \
 #### Notes
 
 ```text
-Piped content is auto-truncated to 4KB to save tokens.
+Piped content is auto-truncated to 4KB to save tokens. Piped input must
+start within 2 seconds: an open stdin that stays silent is ignored with
+a warning (redirect </dev/null to skip the wait).
 When input is piped, the AI enters troubleshoot mode automatically.
+A provider alone is not a question: "ai_query claude" fails with
+"No query provided". -h/--help is help as the first word or as the
+only word after the provider; inside a longer question it is text.
 ```
 
 #### Privacy
 
 ```text
 Secrets are redacted before sending: private keys, passwords in
-URLs, KEY=value secrets and well-known token formats (sk-, ghp_,
-AKIA, xox, AIza). The API key travels in a curl config read from
-a pipe, never on the command line.
+URLs, KEY=value secrets, Authorization headers, SSH: passphrase
+lines, password hashes ($6$...) and well-known token formats (sk-,
+ghp_, AKIA, xox, AIza). Free text ("the password is ...") is not
+detected. The API key stays inside the gash process, never on a
+command line.
 GASH_AI_CONFIRM=1 asks before every request (default: auto).
 Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.
 ```
@@ -187,7 +200,7 @@ Alias: `sysinfo_ai`
 #### Usage
 
 ```text
-ai_sysinfo [provider] [--raw]
+ai_sysinfo [claude|gemini] [--raw] [--no-color]
 ```
 
 #### Examples
@@ -214,7 +227,8 @@ After the initial analysis, an interactive menu appears:
 
 Options 1-6 run deep collectors that read full config files.
 Option ? lets you ask about specific services, files, or ports.
-Option s exports the full session as a Markdown report.
+Option s exports the full session as a Markdown report (mode 0600)
+in the current directory; a failed write is reported as an error.
 ```
 
 #### Smart questions
@@ -225,13 +239,21 @@ The ? option detects entities in your question:
   "what's in /etc/postfix/main.cf?" -> reads the file
   "what's on port 3306?" -> reads socket listeners
   "tell me about apache" -> reads service configs
+A port is "port N" or HOST:N (127.0.0.1:8080, localhost:9000, *:22,
+[::1]:5432); a clock time such as 10:30 is no port.
+Paths follow the llm_* reader rules: no .. components, symlinks
+resolved, and protected paths (/proc, /sys, /dev, /boot, /root,
+/etc/shadow, /etc/passwd, /etc/sudoers...) and secret files
+(.env, *.key, id_rsa*, .ssh/...) are skipped, never read; directory
+listings leave secret files out.
 ```
 
 #### Privacy
 
 ```text
 Before the first request, ai_sysinfo shows how much system data it
-will send and asks for confirmation (GASH_AI_CONFIRM=auto). Without
+will send and asks for confirmation (GASH_AI_CONFIRM=auto). Each ?
+question that collects data asks again before sending it. Without
 a terminal it refuses; set GASH_AI_CONFIRM=0 in ~/.gash_env to allow
 unattended runs. Secrets are redacted before sending either way.
 Use --raw to see exactly what is collected.

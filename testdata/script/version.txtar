@@ -1,0 +1,60 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 surface)
+#
+# gash version (MATRIX "gash version", "gash version --json"): one line
+# "gash VERSION OS/ARCH PATH" on stdout, or with --json one compact object
+# {"version","os","arch","path"} in that key order; PATH is the binary that
+# ran, so through the shim it is $GASH_BIN. Nothing on stderr, status 0. A
+# stray word or an unknown flag is the RETRY envelope of the 3.x commands.
+
+# Direct.
+exec gash version
+stdout '^gash [^ ]+ (linux|darwin)/(amd64|arm64) /.+$'
+! stderr .
+exec gash version --json
+stdout '^\{"version":"[^"]+","os":"(linux|darwin)","arch":"(amd64|arm64)","path":"/[^"]+"\}$'
+! stderr .
+schema version stdout
+
+# The same through the shim, headless as agents call it: path is GASH_BIN.
+env GASH_HEADLESS=1
+exec bash -c 'source "$GASH_SH"; gash version --json; echo "bin=$GASH_BIN"'
+stdout '"path":"([^"]+)"'
+exec bash check_path.sh
+stdout '^same$'
+! stderr .
+
+# The human line and the JSON object agree.
+exec bash agree.sh
+stdout '^agree$'
+
+# Errors: one envelope on stderr, status 1, nothing on stdout.
+! exec gash version extra
+! stdout .
+stderr '^\{"error":"unexpected_argument","details":".+","action":"RETRY","recoverable":true,"hint":"Run: gash version --help"\}$'
+schema error stderr
+! exec gash version --bogus
+! stdout .
+stderr '^\{"error":"unknown_option","details":"unknown flag: --bogus","action":"RETRY","recoverable":true,"hint":"Run: gash version --help"\}$'
+schema error stderr
+
+# --help: usage on stdout, status 0.
+exec gash version --help
+stdout '^Usage:$'
+stdout '--json'
+
+-- check_path.sh --
+out=$(bash -c 'source "$GASH_SH"; gash version --json')
+case "$out" in
+*"\"path\":\"$GASH_BIN\""*) echo same ;;
+*) echo "differs: $out vs $GASH_BIN" ;;
+esac
+-- agree.sh --
+line=$(gash version)
+json=$(gash version --json)
+v=$(printf '%s' "$json" | sed -E 's/.*"version":"([^"]*)".*/\1/')
+os=$(printf '%s' "$json" | sed -E 's/.*"os":"([^"]*)".*/\1/')
+arch=$(printf '%s' "$json" | sed -E 's/.*"arch":"([^"]*)".*/\1/')
+p=$(printf '%s' "$json" | sed -E 's/.*"path":"([^"]*)".*/\1/')
+if [ "$line" = "gash $v $os/$arch $p" ]; then echo agree; else echo "disagree: $line / $json"; fi

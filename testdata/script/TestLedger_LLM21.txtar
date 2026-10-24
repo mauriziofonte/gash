@@ -1,0 +1,20 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: LLM-21
+# covers: none (3.0 self-management proof; no 2.x assertion)
+#
+# LEDGER LLM-21 (forced divergence): 2.x llm_docker_check clobbered the
+# caller's name, tag and f with its loop variables; through the shim the
+# binary runs in its own process, so they stay as they were.
+
+env GASH_HEADLESS=1
+exec bash -c 'source "$GASH_SH"; name=N tag=T f=F image=I; llm_docker_check . >/dev/null 2>&1 || true; llm_docker_check "$PWD" >/dev/null 2>&1 || true; printf "%s/%s/%s/%s\n" "$name" "$tag" "$f" "$image"'
+cmp stdout want.txt
+! stderr .
+
+-- compose.yml --
+services:
+  web:
+    image: nginx:1.25.3
+-- want.txt --
+N/T/F/I

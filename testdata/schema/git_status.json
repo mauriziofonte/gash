@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. llm_git_status (AGENTS.md 4.6).",
+  "title": "llm_git_status",
+  "type": "object",
+  "required": ["branch", "ahead", "behind", "staged", "modified", "untracked", "conflicted"],
+  "properties": {
+    "branch": {"type": "string"},
+    "ahead": {"type": "integer", "minimum": 0},
+    "behind": {"type": "integer", "minimum": 0},
+    "staged": {"type": "array", "items": {"type": "string"}},
+    "modified": {"type": "array", "items": {"type": "string"}},
+    "untracked": {"type": "array", "items": {"type": "string"}},
+    "conflicted": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

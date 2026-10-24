@@ -1,0 +1,147 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:232
+# covers: output_style_render_spec.sh:233
+# covers: output_style_render_spec.sh:234
+# covers: output_style_render_spec.sh:235
+# covers: output_style_render_spec.sh:236
+# covers: output_style_render_spec.sh:237
+# covers: output_style_render_spec.sh:238
+# covers: output_style_render_spec.sh:239
+# covers: output_style_render_spec.sh:240
+#
+# docker.sh management functions rendering (R2-R6). The Go binary execs
+# docker, reproduced as the 2.x PATH mock (keyed on MOCK_DOCKER_CONTAINERS
+# / MOCK_DOCKER_CUSTOM_NETWORKS). Covers docker_stop_all (running / none /
+# no-docker), docker_start_all (stopped / none), and docker_prune_all
+# (dry-run / declined / -y / bad-option).
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :232 docker_stop_all:running
+# 3.0: DOCK-22 fixed: headless, acting on every container needs -y.
+! exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_stop_all'
+stdout 'Will stop 1 container.s.: abc123'
+stderr 'No terminal to ask for confirmation: pass -y to go ahead\.'
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_stop_all -y'
+stderr 'Stopping Docker containers\.\.\.'
+
+# --- :233 docker_stop_all:none
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_stop_all'
+stderr 'No running containers to stop\.'
+
+# --- :234 docker_stop_all:no-docker
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH=/nonexistent docker_stop_all'
+stderr 'Error: Docker is not installed\.'
+
+# --- :235 docker_start_all:stopped
+# 3.0: DOCK-22 fixed: -y headless.
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_start_all -y'
+stderr 'Starting Docker containers\.\.\.'
+
+# --- :236 docker_start_all:none
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_start_all'
+stderr 'No stopped containers to start\.'
+
+# --- :237 docker_prune_all:dry-run
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_CUSTOM_NETWORKS=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_prune_all --dry-run'
+stderr 'To remove: 2 container.s., [0-9]+ image.s., 1 volume.s., 2 network.s.'
+
+# --- :238 docker_prune_all:declined - no -y, no terminal
+! exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_prune_all'
+stderr 'To remove: '
+# 3.0: DOCK-21 fixed: the refusal says that -y is needed.
+stderr 'No terminal to ask for confirmation: pass -y to go ahead\.'
+
+# --- :239 docker_prune_all:yes
+exec bash -c 'mkdir -p bin && install -m755 "$WORK/dockermock" bin/docker; export PATH="$HOME/bin:$PATH" MOCK_DOCKER_CONTAINERS=1 MOCK_DOCKER_CUSTOM_NETWORKS=1 GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_prune_all -y'
+stderr '\[1/6\] Stopping Docker containers\.\.\.'
+stderr '\[6/6\] Cleaning Docker environment\.\.\.'
+
+# --- :240 docker_prune_all:bad-option
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; docker_prune_all --bogus'
+stderr 'Error: Unknown option: --bogus \(usage: docker_prune_all'
+
+# --- R6: plain mode error, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; docker_prune_all --bogus'
+stderr '^Error: Unknown option: --bogus'
+! stderr '\x1b'
+
+-- dockermock --
+#!/usr/bin/env bash
+if [[ "${1:-}" == "compose" ]]; then
+	exit 0
+fi
+case "${1:-}" in
+ps)
+	shift
+	if [[ "${MOCK_DOCKER_CONTAINERS:-}" == "1" ]]; then
+		if [[ " $* " == *" --filter "* ]]; then
+			echo "stopped123"
+		elif [[ " $* " == *"-a"* ]] || [[ " $* " == *"-aq"* ]]; then
+			echo "abc123"
+			echo "stopped123"
+		else
+			echo "abc123"
+		fi
+	fi
+	exit 0
+	;;
+stop | start | rm | rmi)
+	exit 0
+	;;
+network)
+	shift
+	case "${1:-}" in
+	ls)
+		shift
+		if [[ " $* " == *"--format"* ]]; then
+			echo "bridge"
+			echo "host"
+			echo "none"
+			if [[ "${MOCK_DOCKER_CUSTOM_NETWORKS:-}" == "1" ]]; then
+				echo "my_app_network"
+				echo "test_network"
+			fi
+		elif [[ " $* " == *"-q"* ]]; then
+			echo "abc123def456"
+			echo "789ghi012jkl"
+			echo "345mno678pqr"
+			if [[ "${MOCK_DOCKER_CUSTOM_NETWORKS:-}" == "1" ]]; then
+				echo "cust1234abcd"
+				echo "cust5678efgh"
+			fi
+		else
+			echo "bridge"
+			echo "host"
+			echo "none"
+		fi
+		;;
+	rm) ;;
+	esac
+	exit 0
+	;;
+volume)
+	if [[ "${2:-}" == "ls" ]]; then
+		echo ""
+	fi
+	exit 0
+	;;
+image)
+	if [[ "${2:-}" == "prune" ]]; then
+		echo "Deleted images..."
+	fi
+	exit 0
+	;;
+system)
+	if [[ "${2:-}" == "prune" ]]; then
+		echo "Total reclaimed space: 0B"
+	fi
+	exit 0
+	;;
+*)
+	exit 0
+	;;
+esac

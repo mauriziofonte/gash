@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>. The error envelope (AGENTS.md 5, architecture.md 4): one line on stderr. Key order (error, details, action, recoverable, hint, extras) is checked by the contract unit tests; a schema cannot see it.",
+  "title": "Gash error envelope",
+  "type": "object",
+  "required": ["error", "action", "recoverable"],
+  "properties": {
+    "error": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "details": {"type": "string", "minLength": 1},
+    "action": {"enum": ["RETRY", "CONTINUE", "STOP", "FATAL"]},
+    "recoverable": {"type": "boolean"},
+    "hint": {"type": "string", "minLength": 1},
+    "query_time": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(µs|ms|s)$"}
+  },
+  "additionalProperties": false,
+  "if": {"properties": {"action": {"const": "FATAL"}}},
+  "then": {"properties": {"recoverable": {"const": false}}},
+  "else": {"properties": {"recoverable": {"const": true}}}
+}

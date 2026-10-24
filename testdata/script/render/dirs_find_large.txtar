@@ -1,0 +1,45 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: output_style_render_spec.sh:108
+# covers: output_style_render_spec.sh:109
+# covers: output_style_render_spec.sh:110
+# covers: output_style_render_spec.sh:111
+#
+# dirs_find_large terminal rendering (R2-R6): the "Directories over SIZE"
+# table, the --with-mtime column (N/A where unknown), the empty result, and
+# the invalid_size error.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env LC_ALL=C.UTF-8
+
+# --- :108 list - directories over the size threshold
+mkdir d1
+# Expected KiB from the host's du (directory blocks differ by filesystem);
+# d/big/g keeps big strictly larger than big/inner where directories take
+# no blocks.
+exec bash -c 'cd d1; mkdir -p d/big/inner d/small && head -c 65536 /dev/zero >d/big/inner/f && printf x >d/big/g && printf x >d/small/f; b=$(du -sk d/big | cut -f1); i=$(du -sk d/big/inner | cut -f1); export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; out=$(dirs_find_large --size 16K d) || exit; printf "%s\n" "$out"; grep -Eq "^  1 +$b\.0 KiB .* big$" <<<"$out" && grep -Eq "^  2 +$i\.0 KiB .* big/inner$" <<<"$out" || { echo "want big=$b big/inner=$i KiB (du -sk)" >&2; exit 1; }'
+stdout '^  Directories over 16K in .*/d$'
+stdout '^  1 +[0-9]+\.0 KiB .* big$'
+stdout '^  2 +[0-9]+\.0 KiB .* big/inner$'
+
+# --- :109 with-mtime - adds a MODIFIED column, N/A where unknown
+mkdir d2
+exec bash -c 'cd d2; mkdir -p d/big d/none && head -c 65536 /dev/zero >d/big/f; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_find_large --size 0 --with-mtime d'
+stdout '^  #      SIZE  SHARE +MODIFIED +PATH$'
+stdout 'N/A +none$'
+
+# --- :110 empty - nothing over the default threshold
+mkdir d3
+exec bash -c 'cd d3; mkdir -p d/a; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_find_large d'
+stdout 'No directories matched\.'
+
+# --- :111 invalid-size
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; dirs_find_large --size huge .'
+stderr 'Error: invalid_size: huge'
+stderr 'Hint: Use a size like 20M, 1G, 500K'
+
+# --- R6: plain mode, no ESC
+! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; dirs_find_large --size huge .'
+stderr '^Error: invalid_size: huge'
+! stderr '\x1b'

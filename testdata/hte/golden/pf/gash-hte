@@ -1,0 +1,11 @@
+# Managed by gash hte install; gash hte uninstall removes it.
+# The rules of the pf anchor com.apple/gash-hte: the standard web ports of the
+# loopback reach the userland Apache.
+rdr on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080
+rdr on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 8443
+rdr on lo0 inet6 proto tcp from any to ::1 port 80 -> ::1 port 8080
+rdr on lo0 inet6 proto tcp from any to ::1 port 443 -> ::1 port 8443
+pass in quick on lo0 inet proto tcp from any to 127.0.0.1 port { 8080 8443 } keep state
+pass in quick on lo0 inet6 proto tcp from any to ::1 port { 8080 8443 } keep state
+pass out quick on lo0 proto tcp from any to any port { 80 443 8080 8443 } no state
+pass out quick on lo0 proto tcp from any port { 80 443 8080 8443 } to any no state

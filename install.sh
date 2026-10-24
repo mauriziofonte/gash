@@ -3,10 +3,15 @@
 { # this ensures the entire script is downloaded #
 
   # Gash installer: clones https://github.com/mauriziofonte/gash into
-  # ~/.gash (or $GASH_DIR), checks out the latest release tag and adds one
-  # delimited block to your Bash profile that sources ~/.gashrc.
+  # ~/.gash (or $GASH_DIR), checks out the latest release tag, adds one
+  # delimited block to your Bash profile that sources ~/.gashrc, and fetches
+  # and verifies (SHA-256) the release binary for your platform.
   #
-  # Usage: install.sh [--assume-yes] [--quiet] [--help]
+  # Usage: install.sh [--assume-yes] [--quiet] [--repair] [--help]
+  #
+  #   --repair   fetch and verify the gash binary for the VERSION the install
+  #              has checked out, and nothing else: no git command, no profile
+  #              or ~/.gashrc edit (non-interactive; status 1 when it fails)
   #
   # Environment:
   #   GASH_DIR                install location (default: ~/.gash)
@@ -15,8 +20,11 @@
   #   GASH_INSTALL_GIT_REPO   repository to clone (default: GitHub)
   #   GASH_INSTALL_REF        branch, tag or commit to install instead of the
   #                           latest release tag
+  #   GASH_RELEASE_URL        base URL of the release assets (default: the
+  #                           GitHub release of the installed tag)
   #   GASH_REQUIRE_SIGNED=1   abort unless the release tag has a signature
-  #                           that `git verify-tag` accepts
+  #                           that `git verify-tag` accepts, and accept only a
+  #                           binary pinned in release/SHA256SUMS
   #
   # MIT License · https://github.com/mauriziofonte/gash
 
@@ -144,11 +152,30 @@
       tail -n 1
   }
 
+  # Whether TAG is an annotated tag whose object carries a signature: after
+  # the header block a line equal to the BEGIN marker and, as the last line,
+  # the matching END marker (SELF-10). A lightweight tag (cat-file tag
+  # fails) and a message that only quotes the marker are not signed.
+  gashinst_tag_signed() {
+    local obj kind
+    obj="$(git cat-file tag "refs/tags/$1" 2>/dev/null)" || return 1
+    [[ "$obj" == *$'\n\n'* ]] || return 1
+    obj=$'\n'"${obj#*$'\n\n'}"
+    for kind in PGP SSH; do
+      if [[ "$obj" == *$'\n'"-----BEGIN $kind SIGNATURE-----"$'\n'* &&
+        "$obj" == *$'\n'"-----END $kind SIGNATURE-----" ]]; then
+        return 0
+      fi
+    done
+    return 1
+  }
+
   # Check the tag signature when there is one. GASH_REQUIRE_SIGNED=1 turns
-  # a missing or unverifiable signature into an error.
+  # a missing or unverifiable signature into a refusal: status 1, the caller
+  # stops.
   gashinst_verify_tag() {
     local TAG="$1"
-    if git cat-file -p "refs/tags/$TAG" 2>/dev/null | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----'; then
+    if gashinst_tag_signed "$TAG"; then
       if git verify-tag "$TAG" >/dev/null 2>&1; then
         gashinst_success "Signature of $TAG verified."
         return 0
@@ -161,8 +188,28 @@
     fi
     if [ "${GASH_REQUIRE_SIGNED-0}" = "1" ]; then
       gashinst_error "GASH_REQUIRE_SIGNED=1 is set; refusing to install $TAG."
-      exit 1
+      return 1
     fi
+    return 0
+  }
+
+  # A new install is cloned, checked out and verified in a temporary
+  # directory next to INSTALL_DIR, and moved into place only once it passed
+  # (SELF-07): a refusal or a failure leaves nothing behind.
+  gashinst_tmp_clone_cleanup() {
+    if [ -n "${GASHINST_TMP_CLONE-}" ]; then
+      command rm -rf -- "$GASHINST_TMP_CLONE"
+      GASHINST_TMP_CLONE=""
+    fi
+  }
+
+  # Stop after a refusal or failure: remove a temporary clone, say so.
+  gashinst_abort() {
+    if [ -n "${GASHINST_TMP_CLONE-}" ]; then
+      gashinst_tmp_clone_cleanup
+      gashinst_info "Nothing was installed."
+    fi
+    exit 1
   }
 
   gashinst_install_from_git() {
@@ -191,36 +238,68 @@
       exit 1
     else
       gashinst_info "Cloning Gash into '$INSTALL_DIR'."
-      mkdir -p "$INSTALL_DIR"
-      if ! command git clone --quiet "$GIT_REPO" "$INSTALL_DIR"; then
-        gashinst_error "Failed to clone $GIT_REPO."
+      local PARENT
+      PARENT="$(dirname -- "$INSTALL_DIR")"
+      mkdir -p -- "$PARENT"
+      GASHINST_TMP_CLONE="$(mktemp -d "$PARENT/.gash-install.XXXXXX")" || {
+        GASHINST_TMP_CLONE=""
+        gashinst_error "Failed to create a temporary directory in $PARENT."
         exit 1
+      }
+      trap gashinst_tmp_clone_cleanup EXIT
+      if ! command git clone --quiet "$GIT_REPO" "$GASHINST_TMP_CLONE"; then
+        gashinst_error "Failed to clone $GIT_REPO."
+        gashinst_abort
       fi
+      cd "$GASHINST_TMP_CLONE" || {
+        gashinst_error "Failed to change directory to $GASHINST_TMP_CLONE"
+        gashinst_abort
+      }
+    fi
+
+    local REF="${GASH_INSTALL_REF-}"
+    local LATEST_TAG=""
+    if [ -n "$REF" ]; then
+      if ! git -c advice.detachedHead=false checkout --quiet "$REF" 2>/dev/null &&
+        ! git -c advice.detachedHead=false checkout --quiet "origin/$REF" 2>/dev/null; then
+        gashinst_error "Cannot check out '$REF'."
+        gashinst_abort
+      fi
+    else
+      LATEST_TAG="$(gashinst_latest_tag)" || LATEST_TAG=""
+      if [ -n "$LATEST_TAG" ]; then
+        gashinst_verify_tag "$LATEST_TAG" || gashinst_abort
+        if ! git -c advice.detachedHead=false checkout --quiet "$LATEST_TAG"; then
+          gashinst_error "Failed to check out $LATEST_TAG."
+          gashinst_abort
+        fi
+      fi
+    fi
+
+    # Move a verified new clone into place: INSTALL_DIR is absent, or an
+    # empty directory (possibly a link to one), which receives its contents.
+    if [ -n "${GASHINST_TMP_CLONE-}" ]; then
+      cd / || exit 1
+      if [ -d "$INSTALL_DIR" ]; then
+        if ! (shopt -s dotglob && command mv -- "$GASHINST_TMP_CLONE"/* "$INSTALL_DIR"/); then
+          gashinst_error "Failed to move the new checkout into $INSTALL_DIR."
+          gashinst_abort
+        fi
+      elif ! command mv -- "$GASHINST_TMP_CLONE" "$INSTALL_DIR"; then
+        gashinst_error "Failed to move the new checkout into $INSTALL_DIR."
+        gashinst_abort
+      fi
+      gashinst_tmp_clone_cleanup
+      trap - EXIT
       cd "$INSTALL_DIR" || {
         gashinst_error "Failed to change directory to $INSTALL_DIR"
         exit 1
       }
     fi
 
-    local REF="${GASH_INSTALL_REF-}"
     if [ -n "$REF" ]; then
-      if ! git -c advice.detachedHead=false checkout --quiet "$REF" 2>/dev/null &&
-        ! git -c advice.detachedHead=false checkout --quiet "origin/$REF" 2>/dev/null; then
-        gashinst_error "Cannot check out '$REF'."
-        exit 1
-      fi
       gashinst_success "Installed Gash at $REF."
-      return 0
-    fi
-
-    local LATEST_TAG
-    LATEST_TAG="$(gashinst_latest_tag)" || LATEST_TAG=""
-    if [ -n "$LATEST_TAG" ]; then
-      gashinst_verify_tag "$LATEST_TAG"
-      if ! git -c advice.detachedHead=false checkout --quiet "$LATEST_TAG"; then
-        gashinst_error "Failed to check out $LATEST_TAG."
-        exit 1
-      fi
+    elif [ -n "$LATEST_TAG" ]; then
       gashinst_success "Installed Gash $LATEST_TAG."
     else
       gashinst_warning "No release tags found, using the latest commit on the default branch."
@@ -282,17 +361,85 @@
       gashinst_success "Created ~/.gashrc"
     fi
 
+    gashinst_fetch_binary
+
     gashinst_info "Open a new terminal, or run 'source ${GASH_PROFILE:-~/.bashrc}', to start using Gash."
     gashinst_success "Enjoy using Gash"
 
     gashinst_reset
   }
 
+  # Fetch and verify the release binary for this platform, reusing the
+  # checkout's own compat bootstrap (SHA-256 checked). Best-effort: a
+  # failure is reported, not fatal — the shim fetches on first use, and
+  # 'install.sh --repair' retries.
+  gashinst_fetch_binary() {
+    local INSTALL_DIR BOOT MODE
+    INSTALL_DIR="$(gashinst_install_dir)"
+    BOOT="$INSTALL_DIR/lib/compat/bootstrap.sh"
+    if [ ! -r "$BOOT" ]; then
+      gashinst_warning "No compat bootstrap in $INSTALL_DIR; the binary will be fetched on first use."
+      return 0
+    fi
+    # shellcheck source=/dev/null
+    if ! source "$BOOT" 2>/dev/null; then
+      gashinst_warning "Could not load the compat bootstrap; the binary will be fetched on first use."
+      return 0
+    fi
+    MODE=loud
+    [ "${QUIET-0}" -eq 1 ] && MODE=quiet
+    __gash_fetch "$MODE" || true
+    return 0
+  }
+
+  # --repair (upgrade.md 3.7): download and verify the binary of the
+  # VERSION this install has checked out, replacing the one in place; the
+  # checkout, the profile and ~/.gashrc are not touched. The binary in
+  # place is set aside first and put back when the fetch fails. Status 0
+  # when the verified binary is installed, 1 otherwise.
+  gashinst_repair() {
+    local INSTALL_DIR BOOT VDIR BACKUP="" MODE=loud
+    INSTALL_DIR="$(gashinst_install_dir)"
+    BOOT="$INSTALL_DIR/lib/compat/bootstrap.sh"
+    if [ ! -r "$BOOT" ]; then
+      gashinst_error "No Gash 3 install in $INSTALL_DIR (lib/compat/bootstrap.sh is missing); run the installer without --repair."
+      return 1
+    fi
+    # shellcheck source=/dev/null
+    if ! source "$BOOT" 2>/dev/null || [ -z "${__GASH_BOOT_VERSION-}" ]; then
+      gashinst_error "Cannot read the version of $INSTALL_DIR (VERSION file)."
+      return 1
+    fi
+    VDIR="${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/${__GASH_BOOT_VERSION}"
+    if [ -e "$VDIR" ]; then
+      BACKUP="$VDIR.repair.$$"
+      command rm -rf -- "$BACKUP" 2>/dev/null || true
+      if ! command mv -- "$VDIR" "$BACKUP"; then
+        gashinst_error "Cannot move $VDIR aside."
+        return 1
+      fi
+    fi
+    [ "${QUIET-0}" -eq 1 ] && MODE=quiet
+    if __gash_fetch "$MODE"; then
+      [ -n "$BACKUP" ] && command rm -rf -- "$BACKUP"
+      return 0
+    fi
+    command rm -rf -- "$VDIR" 2>/dev/null || true
+    if [ -n "$BACKUP" ]; then
+      command mv -- "$BACKUP" "$VDIR" || true
+    fi
+    if [ "$MODE" = quiet ]; then
+      gashinst_error "gash ${__GASH_BOOT_VERSION} is not installed and could not be downloaded (${__GASH_FETCH_REASON})."
+    fi
+    return 1
+  }
+
   gashinst_reset() {
     unset -f gashinst_has gashinst_echo gashinst_error gashinst_info gashinst_success \
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
-      gashinst_verify_tag gashinst_install_from_git gashinst_do_install gashinst_reset
+      gashinst_verify_tag gashinst_tag_signed gashinst_tmp_clone_cleanup gashinst_abort \
+      gashinst_install_from_git gashinst_fetch_binary gashinst_repair gashinst_do_install gashinst_reset
   }
 
   # Main script execution starts here
@@ -324,13 +471,15 @@
 
   ASSUME_YES=0
   QUIET=0
+  REPAIR=0
   for arg in "$@"; do
     case "$arg" in
       --assume-yes | -y) ASSUME_YES=1 ;;
       --quiet | -q) QUIET=1 ;;
+      --repair) REPAIR=1 ;;
       --help | -h)
-        sed -n '5,21s/^  # \{0,1\}//p' "${BASH_SOURCE[0]}" 2>/dev/null ||
-          echo "Usage: install.sh [--assume-yes] [--quiet] [--help]"
+        sed -n '5,27s/^  # \{0,1\}//p' "${BASH_SOURCE[0]}" 2>/dev/null ||
+          echo "Usage: install.sh [--assume-yes] [--quiet] [--repair] [--help]"
         exit 0
         ;;
       *)
@@ -339,6 +488,14 @@
         ;;
     esac
   done
+
+  # --repair fetches the binary and does nothing else.
+  if [ "$REPAIR" -eq 1 ]; then
+    repair_rc=0
+    gashinst_repair || repair_rc=$?
+    gashinst_reset
+    exit "$repair_rc"
+  fi
 
   gashinst_echo
   gashinst_echo "${CYAN}Welcome to the Gash installation script${NC}"

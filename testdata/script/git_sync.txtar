@@ -1,0 +1,121 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: git_sync_spec.sh:23
+# covers: git_sync_spec.sh:38
+# covers: git_sync_spec.sh:49
+# covers: git_sync_spec.sh:59
+# covers: git_sync_spec.sh:70
+# covers: git_sync_spec.sh:81
+# covers: git_sync_spec.sh:95
+#
+# git_sync driven through the shim, as a user runs it. Each case builds its
+# own bare origin and work tree in a subdirectory. Reproduces the 2.x
+# observable contract (stdout/stderr/exit) and git state. git_sync reports
+# the commit short hash, matched by a pattern rather than a golden.
+# 3.0: GIT-01 fixed: headless, a commit or push needs --yes.
+
+env GASH_HEADLESS=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+# --- git_sync_spec.sh:95 - rejects unknown options and -m without a message
+# Option parsing happens before any repository is required.
+! exec bash -c 'source "$GASH_SH"; git_sync --bogus'
+stderr 'Unknown option: --bogus'
+! exec bash -c 'source "$GASH_SH"; git_sync -m'
+stderr '-m needs a message'
+
+# --- git_sync_spec.sh:38 - --dry-run shows the plan and changes nothing
+exec git init -q --bare o2.git
+exec git init -q -b main w2
+cd w2
+exec bash -c 'git remote add origin ../o2.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
+exec bash -c 'echo new > new'
+exec bash -c 'source "$GASH_SH"; git_sync --dry-run'
+stdout 'Would commit on main'
+stdout 'new'
+stdout 'Would push main to origin/main'
+exec git status --porcelain
+cmp stdout $WORK/want-dirty.txt
+
+# --- git_sync_spec.sh:23 - commits new, modified and deleted files and pushes
+cd $WORK
+exec git init -q --bare o1.git
+exec git init -q -b main w1
+cd w1
+exec bash -c 'git remote add origin ../o1.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
+exec bash -c 'echo b > b; echo a2 > a; mkdir sub; echo c > sub/c'
+cd sub
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
+stderr 'OK: Committed [0-9a-f]+ on main: chore: sync'
+stderr 'OK: Pushed main to origin/main\.'
+cd $WORK/w1
+exec git status --porcelain
+! stdout .
+exec git log -1 --format=%s
+stdout '^chore: sync$'
+exec bash -c 'test "$(git rev-parse HEAD)" = "$(git -C ../o1.git rev-parse main)"'
+exec git rm -q b
+exec bash -c 'source "$GASH_SH"; git_sync -m "remove b" --yes'
+exec bash -c 'test "$(git -C ../o1.git log -1 --format=%s main)" = "remove b"'
+
+# --- git_sync_spec.sh:49 - --no-push commits only
+cd $WORK
+exec git init -q --bare o3.git
+exec git init -q -b main w3
+cd w3
+exec bash -c 'git remote add origin ../o3.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
+exec bash -c 'echo x > x'
+exec bash -c 'source "$GASH_SH"; git_sync --no-push --yes'
+exec git rev-list --count origin/main..HEAD
+stdout '^1$'
+
+# --- git_sync_spec.sh:59 - pushes a new branch to origin and sets its upstream
+cd $WORK
+exec git init -q --bare o4.git
+exec git init -q -b main w4
+cd w4
+exec bash -c 'git remote add origin ../o4.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
+exec git checkout -q -b feature
+exec bash -c 'echo f > f'
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
+exec git rev-parse --abbrev-ref @{upstream}
+stdout '^origin/feature$'
+
+# --- git_sync_spec.sh:70 - pushes pending commits even with nothing to commit
+cd $WORK
+exec git init -q --bare o5.git
+exec git init -q -b main w5
+cd w5
+exec bash -c 'git remote add origin ../o5.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
+exec bash -c 'echo y > y; git add y; git commit -q -m local'
+exec bash -c 'source "$GASH_SH"; git_sync --yes'
+stderr 'Nothing to commit on main\.'
+stderr 'Pushed main to origin/main\.'
+exec git rev-list --count origin/main..HEAD
+stdout '^0$'
+
+# --- git_sync_spec.sh:81 - refuses on a detached HEAD and during a merge
+cd $WORK
+exec git init -q --bare o6.git
+exec git init -q -b main w6
+cd w6
+exec bash -c 'git remote add origin ../o6.git; echo a > a; git add a; git commit -q -m init; git push -q -u origin main 2>/dev/null'
+exec git checkout -q --detach
+! exec bash -c 'source "$GASH_SH"; git_sync'
+stderr 'Detached HEAD'
+exec git checkout -q main
+exec bash -c 'git rev-parse HEAD > .git/MERGE_HEAD'
+! exec bash -c 'source "$GASH_SH"; git_sync'
+stderr 'merge is in progress'
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+[advice]
+	detachedHead = false
+-- want-dirty.txt --
+?? new

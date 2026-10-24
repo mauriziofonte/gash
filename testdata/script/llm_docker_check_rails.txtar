@@ -1,0 +1,45 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: LLM-20
+# covers: none (3.0 security proof; no 2.x assertion)
+#
+# LEDGER LLM-20, 3.0 fix: llm_docker_check has the llm_* grammar and path
+# guard, and docker_compose_check runs for it with an environment
+# allowlist, so an exported secret named in the compose file never reaches
+# the image field, while a value from the project's .env still does. The
+# images are pinned by digest, so no registry is asked.
+
+env GASH_HEADLESS=1
+env HOME=$WORK
+env PATH=$WORK/stub${:}$PATH
+chmod 0755 stub/docker
+
+exec bash -c 'export ZSECRET=s3cr3t-marker; source "$GASH_SH"; cd p; llm_docker_check'
+stdout '"image":"/x@sha256:a+"'
+stdout '"image":"registry.example/app@sha256:a+","local_digest":"sha256:a+","remote_digest":"sha256:a+","status":"PINNED"'
+! stdout 's3cr3t-marker'
+
+! exec bash -c 'source "$GASH_SH"; cd p; llm_docker_check ../p'
+stderr '"error":"path_traversal_blocked"'
+
+! exec bash -c 'source "$GASH_SH"; llm_docker_check p --json'
+stderr '"error":"unknown_option"'
+
+exec bash -c 'source "$GASH_SH"; llm_docker_check p -h'
+stdout 'llm_docker_check'
+
+-- p/compose.yml --
+services:
+  leak:
+    image: "${ZSECRET}/x@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  app:
+    image: "${REG}/app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+-- p/.env --
+REG=registry.example
+-- stub/docker --
+#!/bin/sh
+# Docker with Compose v2 and no image pulled: `compose version` succeeds,
+# everything else (inspect, compose config) fails, so the services come
+# from the YAML reader and every image is NOT_PULLED.
+[ "$1 $2" = "compose version" ] && { echo "Docker Compose version v2.24.0"; exit 0; }
+exit 1

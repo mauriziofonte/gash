@@ -1,0 +1,39 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SHELL-12
+# covers: none (3.0 shadow-rule proof)
+#
+# SHELL-12 proving test: with a program named dcc on PATH, the module
+# short alias dcc (docker_compose_check) is not left in the interactive
+# shell and the program runs; a user alias dcc defined before Gash loaded
+# stays; without the program the alias is there. 2.x kept every module
+# alias and hid the program.
+
+env GASH_BANNER=0
+chmod 755 bin/dcc
+
+exec bash --norc --noprofile -i drive.sh with
+stdout '^dcc=file$'
+stdout '^ran=real$'
+
+exec bash --norc --noprofile -i drive.sh user
+stdout '^dcc=alias mine$'
+
+exec bash --norc --noprofile -i drive.sh without
+stdout '^dcc=alias docker_compose_check$'
+
+-- drive.sh --
+case "$1" in
+with) PATH="$WORK/bin:$PATH" ;;
+user) PATH="$WORK/bin:$PATH"; alias dcc=mine ;;
+esac
+source "$GASH_SH" >/dev/null 2>&1
+if [[ "$(type -t dcc)" == alias ]]; then
+    echo "dcc=alias ${BASH_ALIASES[dcc]}"
+else
+    echo "dcc=$(type -t dcc)"
+    echo "ran=$(dcc)"
+fi
+-- bin/dcc --
+#!/bin/sh
+echo real

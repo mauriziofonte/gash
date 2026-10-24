@@ -1,0 +1,5 @@
+# Gash 3.0 test fixture. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+NAME="Arch Linux"
+PRETTY_NAME="Arch Linux"
+ID=arch
+BUILD_ID=rolling

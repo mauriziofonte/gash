@@ -1,0 +1,20 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: install_uninstall_upgrade_spec.sh:66
+# covers: install_uninstall_upgrade_spec.sh:317
+# covers: install_uninstall_upgrade_spec.sh:462
+#
+# gash_upgrade driven through the shim: the binary fetches origin's tags and
+# checks out the highest release tag of a git checkout at GASH_DIR, as 2.x
+# did. Local git origins, no network.
+
+env GASH_HEADLESS=1
+
+# :66 gash_upgrade updates from an older tag to the latest tag
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; t="$PWD/u1"; mkdir -p "$t"; w="$t/work"; o="$t/o.git"; git init -q "$w"; git -C "$w" config user.email t@e; git -C "$w" config user.name T; ( cd "$w" && echo v1>f && git add f && git commit -q -m c1 && git tag -a v1 -m v1 && echo v2>f && git add f && git commit -q -m c2 && git tag -a v2 -m v2 ); git init -q --bare "$o"; git -C "$w" remote add origin "$o"; git -C "$w" push -q origin --all; git -C "$w" push -q origin --tags; git clone -q "$o" "$t/.gash" 2>/dev/null; git -C "$t/.gash" -c advice.detachedHead=false checkout -q v1 2>/dev/null; HOME="$t" GASH_DIR="$t/.gash" gash_upgrade >/dev/null 2>&1; test "$(git -C "$t/.gash" describe --tags --abbrev=0)" = v2'
+
+# :317 gash_upgrade reports already up-to-date
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; t="$PWD/u2"; mkdir -p "$t"; w="$t/work"; o="$t/o.git"; git init -q "$w"; git -C "$w" config user.email t@e; git -C "$w" config user.name T; ( cd "$w" && echo v1>f && git add f && git commit -q -m c1 && git tag -a v1 -m v1 ); git init -q --bare "$o"; git -C "$w" remote add origin "$o"; git -C "$w" push -q origin --all; git -C "$w" push -q origin --tags; git clone -q "$o" "$t/.gash" 2>/dev/null; git -C "$t/.gash" -c advice.detachedHead=false checkout -q v1 2>/dev/null; out="$(HOME="$t" GASH_DIR="$t/.gash" gash_upgrade 2>&1)"; case "$out" in *"already up-to-date"*) ;; *) echo "BAD:$out"; exit 1;; esac'
+
+# :462 gash_upgrade picks the highest version, not the newest tag
+exec bash -c 'set -e; source "$GASH_SH" >/dev/null 2>&1; t="$PWD/u3"; mkdir -p "$t"; w="$t/work"; o="$t/o.git"; git init -q "$w"; git -C "$w" config user.email t@e; git -C "$w" config user.name T; ( cd "$w" && for v in v1.9.0 v1.10.0 v1.9.1 v2.0.0-rc1; do echo "$v">f; git add f; git commit -q -m "$v"; git tag -a "$v" -m "$v"; done ); git init -q --bare "$o"; git -C "$w" remote add origin "$o"; git -C "$w" push -q origin --all; git -C "$w" push -q origin --tags; git clone -q "$o" "$t/.gash" 2>/dev/null; git -C "$t/.gash" -c advice.detachedHead=false checkout -q v1.9.0 2>/dev/null; HOME="$t" GASH_DIR="$t/.gash" gash_upgrade >/dev/null 2>&1; test "$(git -C "$t/.gash" describe --tags --exact-match HEAD)" = v1.10.0'
