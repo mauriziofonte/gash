@@ -111,7 +111,7 @@ M8a batch-2 merged (2026-10-19): docker (33), contracts/headless (55), functions
 
 TWO rc.A ITEMS from the syshost slice (2026-10-19):
 1. DEFECT (new, in ported code) — FIXED (lead): the ssh PTY transcript intermittently glued the next key's `spawn ssh-add -- KEY\r\n` onto the `Identity added:` line when `converse` (internal/ssh/pty.go) returned before the trailing `\r\n` arrived in the same PTY chunk; `printTranscript` (internal/ssh/ssh.go) only drops lines that START with `spawn ssh-add`, so a glued line leaked into an `SSH:` line, intermittently (~1/7, ≥2 keys) violating ssh_auto_unlock_spec:129 "spawn lines are filtered". Byte-divergence from 2.x. Fix: converse now drains to the success line's newline on the `Identity added` terminator ONLY (named `identityAdded`), leaving the Bad-passphrase/no-agent/PIN prompts (which end mid-line) exactly as read, so the DELIBERATE mid-dialog gluing that ssh_test.go (TestUnlock color case) and ledger_test.go (TestRealPTY) assert is preserved. Deterministic regression test `TestUnlockSplitSuccessLine` (Fake PTY splits "Identity added:" from its CRLF across two reads — fails with the drain disabled, glue reproduced). `ssh_auto_unlock.txtar:129` now asserts `! stdout 'spawn ssh-add'`; passes 5x on the real PTY.
-2. DOC DRIFT (not a correctness gap) — FINAL PASS: testing.md §2.3/line 64 promises a `-tags gashtest` seam where `internal/system` reads a WSL fixture root via `GASH__SYSROOT`, but NO `//go:build gashtest` file exists and nothing reads GASH__SYSROOT (system.go New() hardwires `platform.Real()`). The WSL-present behavior IS tested — via the module's injectable `sys` field (TestWSLStopVM/TestWSLExplorer inject a fake `platform.NewSysroot(dir)`) — and covermap counts wsl_spec:40 covered on its split half (off-WSL reachable surface). So this is testing.md over-promising a seam that was never built, not a missing behavior. Final-pass choice: either build the gashtest+GASH__SYSROOT seam (then add the WSL-present black-box observables to wsl.txtar:40) OR amend testing.md §2.3 to state WSL-present is unit-covered via the `sys` seam and the black-box split covers the off-WSL half. Prefer the doc amendment unless a black-box WSL-present case is specifically wanted.
+2. RESOLVED 2026-10-24 (testing.md amended: no environment seam; WSL-present stays unit-covered through the `sys` field). Was: DOC DRIFT (not a correctness gap) — FINAL PASS: testing.md §2.3/line 64 promises a `-tags gashtest` seam where `internal/system` reads a WSL fixture root via `GASH__SYSROOT`, but NO `//go:build gashtest` file exists and nothing reads GASH__SYSROOT (system.go New() hardwires `platform.Real()`). The WSL-present behavior IS tested — via the module's injectable `sys` field (TestWSLStopVM/TestWSLExplorer inject a fake `platform.NewSysroot(dir)`) — and covermap counts wsl_spec:40 covered on its split half (off-WSL reachable surface). So this is testing.md over-promising a seam that was never built, not a missing behavior. Final-pass choice: either build the gashtest+GASH__SYSROOT seam (then add the WSL-present black-box observables to wsl.txtar:40) OR amend testing.md §2.3 to state WSL-present is unit-covered via the `sys` seam and the black-box split covers the off-WSL half. Prefer the doc amendment unless a black-box WSL-present case is specifically wanted.
 Also final-pass PARITY: set ssh_auto_unlock_spec.sh:44 Go cell to `FD SYS-37` (currently `fail`; SYS-37 is a valid "## Forced divergences" id, declaration already validates in covermap).
 
 M8a render family COMPLETE (2026-10-19): render tail merged (c75f8f9: chrome/wsl-off/ssh/ai/sysinfo reachable rows, 50) then the render close-out below. covermap render uncovered now 0. Remaining universe uncovered = the 19 `install_uninstall_upgrade_spec.sh` rows only, which are M8b (install.sh is rewritten at cutover). So M8a is coverage-complete except those 19.
@@ -148,15 +148,25 @@ M2 to M5 and M7 run in parallel after M1, each in its own git worktree
 
 ## Gate
 
-Bash reference: 807 passed, 0 failed (sqlite3 and gawk installed). Until M0 lands, the Go part is `go vet` and `go test`:
+Run before every push (CI runs the same, plus the macOS legs, the HTE E2E matrix, the snapshot build and govulncheck):
 
 ```bash
-bash tests/run.sh                         # reference implementation (Bash)
-bash tests/run.sh --impl go               # same specs against the Go port behind the generated shims
-(cd go-impl && GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0 go vet ./... && GOTOOLCHAIN=go1.27.2 CGO_ENABLED=0 go test ./...)
+gofmt -l . && go vet ./... && go test -p 2 ./...     # includes the TestScript suite (go test ./cmd/gash)
+go run ./cmd/gash __compat generate --out . --check   # generated Bash is current
+~/go/bin/staticcheck -checks 'SA*' ./...               # CI runs golangci-lint v2
 ```
 
-After any edit of `MATRIX.md`, run `go generate ./internal/registry` and commit `catalog_gen.go` and the compat goldens it changes in the same push: `TestCatalogIsCurrent` renders the catalog from the 2.x sources and MATRIX and fails on a stale file.
+Generated files are never edited by hand: `go run ./cmd/gash __compat generate --out .` for the compat Bash, `go test ./internal/compatgen -update` for its goldens. `internal/registry/catalog_gen.go` is hand-maintained since the cutover.
+
+## Release procedure (3.0.0 and later)
+
+Decision D-3 pins the release binaries in the tagged tree. The order matters, because the sums are of binaries built from the final tree:
+
+1. Set `VERSION` (for example `3.0.0`) and finish every other change, `CHANGELOG.md` included.
+2. `go run ./internal/tools/releasesums` writes `release/SHA256SUMS` (a reproducible build per platform: CGO off, `-trimpath`, `-buildvcs=false`, the version in `-ldflags`); commit it last. `-check` reports a stale file.
+3. The operator tags that commit (`git tag -a vX.Y.Z -m "Gash X.Y.Z"`, then push the tag). goreleaser's before hook refuses a tag that differs from `VERSION`, and the build hook refuses any binary whose hash differs from its pin.
+
+CI's snapshot job rebuilds goreleaser's binaries with `releasesums -compare dist`, so a drift between the two build recipes fails before a tag.
 
 ## Environment blockers (cloud session)
 
