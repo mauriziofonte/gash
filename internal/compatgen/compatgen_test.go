@@ -440,3 +440,55 @@ func TestGashStubPassesCardAliases(t *testing.T) {
 	card := "..\tcd ..\ngd\ta\\\\b\ngst\tgit status --short\nll\tls\\n-l\n"
 	require.Equal(t, "[git][--no-color]\n"+card+"[]\n"+card+"unset\n", out)
 }
+
+// bashInteractive runs script in an interactive bash without a binary
+// (GASH_BIN=/bin/true: `gash init bash` emits nothing).
+func bashInteractive(t *testing.T, script string) string {
+	t.Helper()
+	cmd := exec.Command("bash", "--noprofile", "--norc", "-i", "-c", script)
+	cmd.Env = []string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin", "LANG=C.UTF-8", "TERM=dumb", "GASH_BIN=/bin/true"}
+	cmd.Stdin = nil
+	out, err := cmd.Output()
+	require.NoError(t, err, string(out))
+	return string(out)
+}
+
+// LEDGER SELF-03: gash_unload removes the completion specs Gash registered
+// and restores the variables Gash sets or exports to their exact pre-load
+// state: unset ones are unset (not left exported), set ones keep their
+// value and export flag, and an unset PROMPT_COMMAND is unset again rather
+// than left empty (3.0: SELF-03 fixed). The end-to-end proof is
+// testdata/script/unload_exact.txtar.
+func TestLedger_SELF03(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out := bashInteractive(t, `complete -F _mine mine; LESS_TERMCAP_md=keep; unset PROMPT_COMMAND
+source '`+dir+`/gash.sh' >/dev/null 2>&1; source '`+dir+`/bash_completion'
+complete -p | grep -c __gash_complete >/dev/null || echo "no specs registered"
+# What the shell layer does on a real load:
+export LESSOPEN='| lesspipe %s' LS_COLORS='di=01' LESS_TERMCAP_mb=x LESS_TERMCAP_md=y PAGER=most
+PROMPT_COMMAND=""
+gash_unload
+echo "specs=$(complete -p | grep -c __gash_complete)"
+complete -p mine
+for v in LESSOPEN LS_COLORS LESS_TERMCAP_mb PAGER PROMPT_COMMAND; do echo "$v=${!v-unset}"; done
+declare -p LESS_TERMCAP_md`)
+	require.Equal(t, "specs=0\ncomplete -F _mine mine\nLESSOPEN=unset\nLS_COLORS=unset\nLESS_TERMCAP_mb=unset\nPAGER=unset\n"+
+		"PROMPT_COMMAND=unset\ndeclare -- LESS_TERMCAP_md=\"keep\"\n", out)
+}
+
+// LEDGER SELF-05: a GASH_* setting the user had before Gash loaded keeps its
+// value and export flag after gash_unload; the GASH_* variables Gash set and
+// the secret caches are gone (3.0: SELF-05 fixed; 2.x swept them all).
+func TestLedger_SELF05(t *testing.T) {
+	needBash(t)
+	dir := tree(t)
+	out := bashInteractive(t, `export GASH_BANNER=0; GASH_GIT_EXCLUDE=/srv/repo
+source '`+dir+`/gash.sh' >/dev/null 2>&1
+__GASH_ENV_DB_default=secret; GASH_BANNER=1
+gash_unload
+declare -p GASH_BANNER GASH_GIT_EXCLUDE
+echo "GASH_VERSION=${GASH_VERSION-gone} GASH_DIR=${GASH_DIR-gone} cache=${__GASH_ENV_DB_default-gone}"`)
+	require.Equal(t, "declare -x GASH_BANNER=\"0\"\ndeclare -- GASH_GIT_EXCLUDE=\"/srv/repo\"\n"+
+		"GASH_VERSION=gone GASH_DIR=gone cache=gone\n", out)
+}

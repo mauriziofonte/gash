@@ -50,6 +50,28 @@ if [[ $- != *i* && "${GASH_HEADLESS-}" != "1" ]]; then
     return 0
 fi
 
+# The exact pre-Gash state of the variables Gash sets or exports, for
+# `gash_unload` (SELF-03, SELF-05): taken first, before GASH_DIR and
+# GASH_VERSION are assigned, so the user's own GASH_* settings are told
+# apart from Gash's. Each entry is "-NAME" (unset before) or the variable's
+# declaration as Bash prints it (${NAME@A}); arrays and read-only variables
+# are left out (unload leaves them alone), and PROMPT_COMMAND is recorded
+# only when unset (the prompt hook removal keeps any other entry).
+# Interactive only, first load only; no fork.
+if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
+    __GASH_SNAPSHOT2=()
+    for __gash_var in ${!GASH_@} LESSOPEN LESSCLOSE LS_COLORS LSCOLORS PAGER NVM_DIR debian_chroot EDITOR \
+        HISTTIMEFORMAT LESS_TERMCAP_mb LESS_TERMCAP_md LESS_TERMCAP_me LESS_TERMCAP_se LESS_TERMCAP_so \
+        LESS_TERMCAP_ue LESS_TERMCAP_us PROMPT_COMMAND; do
+        if [[ -z "${!__gash_var+x}" ]]; then
+            __GASH_SNAPSHOT2+=("-$__gash_var")
+        elif [[ "$__gash_var" != PROMPT_COMMAND && "${!__gash_var@a}" != *[aAr]* ]]; then
+            __GASH_SNAPSHOT2+=("${!__gash_var@A}")
+        fi
+    done
+    unset __gash_var
+fi
+
 # -----------------------------------------------------------------------------
 # Location and version
 # -----------------------------------------------------------------------------
@@ -405,14 +427,44 @@ gash_unload() {
         unset -f "${__gash_fn}" >/dev/null 2>&1 || true
     done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
 
+    # The completion specs Gash registered (SELF-03).
+    if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
+        complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
+    fi
+
     # Per-prefix variable sweep: includes the cached secrets which must
     # never survive an unload, plus colors, PS1 caches, help registry.
+    local -a __gash_snap2=(${__GASH_SNAPSHOT2[@]+"${__GASH_SNAPSHOT2[@]}"})
     local __gash_var
     while IFS= read -r __gash_var; do
         [[ -z "${__gash_var}" ]] && continue
         unset "${__gash_var}" >/dev/null 2>&1 || true
     done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
     unset __AI_LAST_EXIT >/dev/null 2>&1 || true
+
+    # The exact pre-Gash state (SELF-03, SELF-05): a variable unset before
+    # is unset (PROMPT_COMMAND only when nothing is left in it); any other
+    # gets back its value and attributes from the declaration Bash printed
+    # at load time (${NAME@A}, Bash's own quoting), run as a global.
+    for __gash_entry in ${__gash_snap2[@]+"${__gash_snap2[@]}"}; do
+        case "$__gash_entry" in
+            -PROMPT_COMMAND) [[ -n "${PROMPT_COMMAND[*]-}" ]] || unset PROMPT_COMMAND ;;
+            -*) unset "${__gash_entry#-}" >/dev/null 2>&1 || true ;;
+            *)
+                if [[ "$__gash_entry" == "declare "* ]]; then
+                    __gash_key="${__gash_entry#declare }"
+                    __gash_key="${__gash_key#* }"
+                    __gash_entry="declare -g ${__gash_entry#declare }"
+                else
+                    __gash_key="$__gash_entry"
+                fi
+                __gash_key="${__gash_key%%=*}"
+                [[ "$__gash_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+                unset "$__gash_key" >/dev/null 2>&1 || true
+                eval "$__gash_entry"
+                ;;
+        esac
+    done
 
     unset __gash_name
 

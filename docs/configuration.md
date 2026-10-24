@@ -234,8 +234,12 @@ not overwritten later; keep your own code in `~/.bash_local` rather than there.
 * `gash_unload`: in an interactive shell, restores `PS1`, `PS2`, history
   variables, `EDITOR`, `PATH`, `histappend`, `checkwinsize` and the umask as
   they were before Gash loaded (so `GASH_PATH_ADD` and `GASH_NVM=lazy`
-  entries go away), removes the prompt hook and every Gash function, alias
-  and `GASH_*` variable. Nothing on disk changes; `source ~/.gashrc` loads Gash
+  entries go away), removes the prompt hook, the completion specs and every
+  Gash function, alias and `GASH_*` variable it created. The variables Gash
+  sets or exports (`LESSOPEN`, `LESSCLOSE`, `LS_COLORS`, `LESS_TERMCAP_*`,
+  `PAGER`, `NVM_DIR`, `PROMPT_COMMAND` and the like) and your own `GASH_*`
+  settings get back their exact earlier value and export flag, or are unset
+  if they were unset. Nothing on disk changes; `source ~/.gashrc` loads Gash
   again. It does not work in headless mode.
 * `gash_help NAME` and `gash` (the reference card) list every function. The
   generated [function reference](reference/README.md) has the same content.

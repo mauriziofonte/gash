@@ -1,0 +1,56 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: SELF-03
+# ledger: SELF-05
+# covers: none (3.0 self-management proof)
+#
+# SELF-03 and SELF-05 proving test: gash_unload puts the shell back exactly
+# as it was before Gash loaded. In an interactive shell with the user's own
+# exported GASH_BANNER=0 and LESS set, the variables (declare -p minus the
+# ones Bash changes by itself), aliases, completion specs, shell options,
+# set -o flags, traps and umask are the same before `source gash.sh;
+# source bash_completion` and after `gash_unload`. 2.x left the completion
+# specs, the LESSOPEN/LS_COLORS/LESS_TERMCAP_* exports and an empty
+# PROMPT_COMMAND, and removed GASH_BANNER.
+
+env GASH_BANNER=0
+
+# lesspipe and dircolors stubs, so the load exports LESSOPEN, LESSCLOSE and
+# LS_COLORS on every platform.
+exec bash -c 'mkdir -p bin && printf "#!/bin/sh\n" >bin/lesspipe && printf "#!/bin/sh\necho \"LS_COLORS=\x27di=01;34\x27;\"\necho \"export LS_COLORS\"\n" >bin/dircolors && chmod +x bin/lesspipe bin/dircolors'
+env PATH=$WORK/bin:$PATH
+
+exec bash --norc --noprofile -i drive.sh
+stdout '^loaded=function$'
+stdout '^specs=[1-9][0-9]+$'
+stdout '^exports=LESSOPEN LS_COLORS LESS_TERMCAP_mb$'
+stdout '^hook=set$'
+cmp before.txt after.txt
+
+-- drive.sh --
+snap() {
+    {
+        declare -p | grep -vE '^declare -[-a-zA-Z]* (BASH[A-Z_]*|RANDOM|SRANDOM|SECONDS|LINENO|EPOCHREALTIME|EPOCHSECONDS|_|BASHPID|FUNCNAME|PIPESTATUS|HISTCMD|COLUMNS|LINES|OLDPWD|PWD|SHLVL|PPID|COMP_WORDBREAKS|MAILCHECK)='
+        echo '--- alias'; alias -p
+        echo '--- complete'; complete -p
+        echo '--- shopt'; shopt -p
+        echo '--- set'; set -o
+        echo '--- trap'; trap -p
+        echo '--- umask'; umask
+    } >"$1"
+}
+export GASH_BANNER=0 LESS=-R
+GASH_PROMPT=1
+export GASH_BANNER=0 LESS=-R
+snap before.txt
+source "$GASH_SH" >/dev/null 2>&1
+source "$GASH_STAGE/bash_completion"
+echo "loaded=$(type -t gash_username)"
+echo "specs=$(complete -p | grep -c __gash_complete)"
+x=""
+for v in LESSOPEN LS_COLORS LESS_TERMCAP_mb; do [[ "${!v@a}" == *x* ]] && x+="$v "; done
+echo "exports=${x% }"
+echo "hook=${PROMPT_COMMAND:+set}"
+unset x v
+gash_unload
+snap after.txt

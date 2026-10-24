@@ -328,6 +328,8 @@ __gash_enable_completion() {
         [[ -n "${BASH_ALIASES[$a]+x}" ]] && names+=("$a")
     done
     complete -o default -F __gash_complete "${names[@]}"
+    # The names, for gash_unload to remove these specs (SELF-03).
+    __GASH_COMPLETE_NAMES=("${names[@]}")
 }
 
 __gash_enable_completion
