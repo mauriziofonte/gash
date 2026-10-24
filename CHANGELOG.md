@@ -60,10 +60,23 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   [docs/hte.md](docs/hte.md). Ports 80 and 443 are made bindable by the
   user through `net.ipv4.ip_unprivileged_port_start`, asked for and undone
   by uninstall.
-- `install.sh --repair` fetches the binary of an existing install again;
-  `GASH_BIN` and `GASH_RELEASE_URL` point Gash at another binary or release
-  server.
-- Release binaries are pinned in the tagged tree (`release/SHA256SUMS`):
+- `gash update` installs and verifies the new release's binary before it
+  touches the checkout, loads the new version in a test shell and goes back
+  to the previous version when that fails; `gash update --rollback` returns
+  to the previous version, whose binary is kept. `gash_upgrade` runs the
+  same verified steps with the 2.x output lines and exit codes.
+- `install.sh --repair` fetches and verifies only the binary for the
+  checked-out `VERSION` (no git, no profile or `~/.gashrc` edit), works
+  offline from a `file://` release, and exits 1 on failure, keeping the
+  binary in place. `GASH_BIN` and `GASH_RELEASE_URL` point Gash at another
+  binary or release server.
+- `gash hte`: with `autostart = "shell"` in `hte.toml`, an interactive shell
+  that loads Gash starts the stack in the background when it is down,
+  silently and without ever failing the shell (the reason of a failure goes
+  to `~/.local/state/gash/hte/logs/autostart.log`).
+- Release binaries, `gash-hosts-helper` included, are pinned in the tagged
+  tree (`release/SHA256SUMS`); the bootstrap, `gash update` and the installer
+  install a binary only once it matches its pin:
   with `GASH_REQUIRE_SIGNED=1`, a signed tag covers the binary too.
   `gash_doctor` checks the binary and the generated shims.
 - `ip_public --raw`; `--dry-run` on the git tag and patch commands;
@@ -242,6 +255,17 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   with content, and Virtualmin certificates under their own heading.
 - The scanners' `--exclude` hint shows `'node_modules'`, which matches at
   any depth.
+- `gash hte install` works on Fedora and Arch without a running service
+  manager (it failed because `service` is missing), accepts macOS's
+  `#includedir /private/etc/sudoers.d` line (it refused every Mac), and no
+  longer counts server configuration files without a `<VirtualHost>`
+  (Fedora's `conf.d/welcome.conf`, Arch's `conf/extra`) as blocking vhosts.
+- `source ~/.gashrc` in a shell that ran 2.x loads the whole 3.x interactive
+  layer (it stopped part-way with a syntax error), and `gash_unload` then
+  keeps the user's exported `GASH_*` settings.
+- The installer no longer reports "Installed gash" after a failed binary
+  download, and `install.sh --help` lists `GASH_RELEASE_URL` and
+  `GASH_REQUIRE_SIGNED`.
 
 ### Security
 
