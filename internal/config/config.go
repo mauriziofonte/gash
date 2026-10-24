@@ -55,9 +55,9 @@ type Warning struct {
 // String is the warning as 2.x prints it without colors.
 func (w Warning) String() string { return "Warning: " + w.Text }
 
-// File is the parsed configuration, in file order. Lookups return the first
-// entry with a name (first entry wins); the lists keep every entry, as
-// gash_db_list shows every one (LEDGER CORE-04, reproduced).
+// File is the parsed configuration, in file order. A repeated SSH:, DB: or
+// HOST: name keeps only its first entry, with a warning for each later one
+// (3.0: CORE-04 fixed), so the lists hold the entries in effect.
 type File struct {
 	Path     string
 	Shown    string // Path as 2.x names it in messages (see ShownPath)
@@ -175,13 +175,13 @@ func (f *File) parseLine(lineno int, raw, home string) {
 			f.warnLine(lineno, "SSH key file not found (skipping)")
 			return
 		}
-		f.SSHKeys = append(f.SSHKeys, entry(key, value, lineno))
+		f.SSHKeys = f.add(f.SSHKeys, "SSH", entry(key, value, lineno))
 	case "DB":
 		if !hasPrefixAny(value, "mysql://", "mariadb://", "pgsql://") {
 			f.warnLine(lineno, "DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)")
 			return
 		}
-		f.DB = append(f.DB, entry(key, value, lineno))
+		f.DB = f.add(f.DB, "DB", entry(key, value, lineno))
 	case "AI":
 		if key != "claude" && key != "gemini" {
 			f.warnLine(lineno, "unknown AI provider (supported: claude, gemini), skipping")
@@ -197,8 +197,22 @@ func (f *File) parseLine(lineno int, raw, home string) {
 			f.warnLine(lineno, "HOST target must be user@host (skipping)")
 			return
 		}
-		f.Hosts = append(f.Hosts, entry(key, value, lineno))
+		f.Hosts = f.add(f.Hosts, "HOST", entry(key, value, lineno))
 	}
+}
+
+// add appends e to list unless an entry of that name is there already: the
+// later one is then ignored, with "Line N of FILE: duplicate DB:NAME,
+// ignored (first is at line M)" (LEDGER CORE-04). 2.x kept both, used the
+// first and said nothing.
+func (f *File) add(list []Entry, prefix string, e Entry) []Entry {
+	for _, o := range list {
+		if o.Name == e.Name {
+			f.warnLine(e.Line, "duplicate "+prefix+":"+e.Name+", ignored (first is at line "+strconv.Itoa(o.Line)+")")
+			return list
+		}
+	}
+	return append(list, e)
 }
 
 // entry stores NAME and VALUE the way 2.x did, as one "NAME<TAB>VALUE" line
@@ -359,8 +373,8 @@ type DBListRow struct {
 	URL  string // masked with MaskDBURL
 }
 
-// DBList is what gash_db_list prints, one row per DB: entry, duplicates
-// included (LEDGER CORE-04, reproduced).
+// DBList is what gash_db_list prints, one row per DB: entry in effect
+// (a repeated name is listed once, 3.0: CORE-04 fixed).
 func (f *File) DBList() []DBListRow {
 	rows := make([]DBListRow, 0, len(f.DB))
 	for _, e := range f.DB {

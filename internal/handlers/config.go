@@ -35,8 +35,8 @@ func listTable(s ui.Style, w io.Writer, lines []string, minName string) {
 }
 
 // dbList is gash_db_list: the DB: connections of the settings file, the
-// passwords masked, also with an empty user name (3.0: CORE-03 fixed), every
-// duplicate name listed (CORE-04, reproduced), the messages naming
+// passwords masked, also with an empty user name (3.0: CORE-03 fixed), a
+// repeated name listed once (3.0: CORE-04 fixed), the messages naming
 // ~/.gash_env whatever GASH_ENV_FILE says (CORE-06, reproduced).
 func dbList(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {

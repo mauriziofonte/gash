@@ -92,7 +92,10 @@ Rules that apply to every form:
 * `GASH_*` settings accept an inline comment: `GASH_BANNER=0  # quiet` sets
   `0`. A `#` counts as a comment only after whitespace; inside quotes it is
   part of the value. The template's lines work as they are once uncommented.
-* When two entries share a name, the first one wins.
+* When two entries share a name, the first one wins. A later `SSH:`, `DB:`
+  or `HOST:` entry with the same name is ignored with a warning, for example
+  `Warning: Line 7 of ~/.gash_env: duplicate DB:default, ignored (first is at line 2)`,
+  and `gash_db_list` lists only the entry in effect.
 * A line that does not match is skipped with a warning on stderr that names
   the file, the line number and the kind of problem, never any part of the
   line, for example

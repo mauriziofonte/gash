@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // write creates a file with the given mode in a fresh temporary directory.
@@ -175,21 +177,39 @@ func TestLoadReload(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-04, reproduced: duplicate DB: names are all listed, the first
-// one is used, and nothing is said about the second.
-func TestLedger_CORE04_2x(t *testing.T) {
-	f := load(t, "DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n", "/h")
+// LEDGER CORE-04: a repeated DB:, SSH: or HOST: name keeps only the first
+// entry, which is the one used, and the later one is reported with both
+// line numbers (3.0: CORE-04 fixed; 2.x listed both and said nothing).
+func TestLedger_CORE04(t *testing.T) {
+	f := Parse([]byte("DB:default=mysql://a:p1@h1/d\nDB:other=mysql://o:p@h/o\nDB:default=pgsql://b:p2@h2/e\n"+
+		"HOST:web=u@a\nHOST:web=v@b\nAI:claude=sk-1\nAI:claude=sk-2\n"), "/h/.gash_env", "/h")
 	rows := f.DBList()
-	want := []DBListRow{{"default", "mysql://a:****@h1/d"}, {"default", "pgsql://b:****@h2/e"}}
+	want := []DBListRow{{"default", "mysql://a:****@h1/d"}, {"other", "mysql://o:****@h/o"}}
 	if !reflect.DeepEqual(rows, want) {
 		t.Errorf("rows %+v", rows)
 	}
 	if u, _ := f.DBURL("default"); u != "mysql://a:p1@h1/d" {
 		t.Errorf("first entry wins: %q", u)
 	}
-	if len(f.Warnings) != 0 {
-		t.Errorf("warnings %q", texts(f.Warnings))
+	if h, _ := f.HostTarget("web"); h != "u@a" || len(f.Hosts) != 1 {
+		t.Errorf("host %q %d", h, len(f.Hosts))
 	}
+	require.Equal(t, []string{
+		"Line 3 of ~/.gash_env: duplicate DB:default, ignored (first is at line 1)",
+		"Line 5 of ~/.gash_env: duplicate HOST:web, ignored (first is at line 4)",
+	}, texts(f.Warnings))
+	// AI: lines are outside the rule: the first token is used, as in 2.x.
+	if tok, _ := f.AIToken("claude"); tok != "sk-1" {
+		t.Errorf("ai %q", tok)
+	}
+
+	dir := t.TempDir()
+	key := filepath.Join(dir, "id")
+	require.NoError(t, os.WriteFile(key, nil, 0o600))
+	f = Parse([]byte("SSH:"+key+"=one\nSSH:"+key+"=two\n"), "/h/.gash_env", "/h")
+	require.Len(t, f.SSHKeys, 1)
+	require.Equal(t, "one", f.SSHKeys[0].Value)
+	require.Equal(t, []string{"Line 2 of ~/.gash_env: duplicate SSH:" + key + ", ignored (first is at line 1)"}, texts(f.Warnings))
 }
 
 // ai_spec.sh:7-162 (AI: entries and lookups).
@@ -240,7 +260,8 @@ func TestLoadHostEntries(t *testing.T) {
 	if _, ok := f.HostTarget(""); ok {
 		t.Error("empty alias must find nothing")
 	}
-	if len(f.Hosts) != 4 || len(f.Warnings) != 1 {
+	// 3.0: CORE-04 fixed: the second web= line is ignored with a warning.
+	if len(f.Hosts) != 3 || len(f.Warnings) != 2 {
 		t.Errorf("hosts %q warnings %q", names(f.Hosts), texts(f.Warnings))
 	}
 }

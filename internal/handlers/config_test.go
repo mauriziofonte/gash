@@ -40,10 +40,12 @@ func run2xConfig(t *testing.T, env []string, color bool, script string) (string,
 	return out.String(), errb.String()
 }
 
+// 3.0: CORE-04 fixed: a repeated name keeps only its first entry, so the
+// password-only URL of "many" has a name of its own (2.x listed both rows).
 var configFixtures = map[string]string{
 	"none":  "",
 	"empty": "# nothing\n",
-	"many": "DB:default=mysql://u:p@ss@h/d\nDB:default=pgsql://:SECR@h2:5432/e\nDB:a-very-long-connection-name=mariadb://root:x@db\n" +
+	"many": "DB:default=mysql://u:p@ss@h/d\nDB:second=pgsql://:SECR@h2:5432/e\nDB:a-very-long-connection-name=mariadb://root:x@db\n" +
 		"DB:ünï=mysql://ü:pä@h/d\nDB:nopw=mysql://u@h/d\nDB:tab=mysql://u:p@h/d\tx\n" +
 		"AI:claude=sk-ant-1234567890\nAI:gemini=short\nAI:x=é€abcdefghij\nAI:averyveryverylongname=k\n",
 }
@@ -108,10 +110,21 @@ func TestLedger_CORE03(t *testing.T) {
 	require.Equal(t, "\n  default         mysql://:****@h/d\n  u               mysql://u:****@h/d\n", out)
 }
 
-// LEDGER CORE-04 (reproduced in rc.A): every duplicate name is listed.
-func TestLedger_CORE04_2x(t *testing.T) {
-	out, _ := listOf(t, "gash_db_list", "DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n", nil)
-	require.Equal(t, "\n  default         mysql://a:****@h1/d\n  default         pgsql://b:****@h2/e\n", out)
+// LEDGER CORE-04: a repeated name is listed once, with the entry in
+// effect (3.0: CORE-04 fixed; rc.A listed every duplicate).
+func TestLedger_CORE04(t *testing.T) {
+	out, errOut := listOf(t, "gash_db_list", "DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n", nil)
+	require.Equal(t, "\n  default         mysql://a:****@h1/d\n", out)
+	require.Equal(t, "Info: Available database connections:\n", errOut, "the load warning belongs to the shell's load")
+
+	// The shell's load (gash.sh) shows it, with both line numbers.
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash_env"), []byte("DB:default=mysql://a:p1@h1/d\nDB:default=pgsql://b:p2@h2/e\n"), 0o600))
+	out, errOut, rc := compat(t, map[string]string{"HOME": home}, false, "", "env", "load")
+	require.Equal(t, 0, rc)
+	require.Equal(t, "Warning: Line 2 of ~/.gash_env: duplicate DB:default, ignored (first is at line 1)\n", errOut)
+	require.Contains(t, out, "mysql://a:p1@h1/d")
+	require.NotContains(t, out, "pgsql://b:p2@h2/e")
 }
 
 // LEDGER CORE-06 (reproduced in rc.A): the messages name ~/.gash_env
