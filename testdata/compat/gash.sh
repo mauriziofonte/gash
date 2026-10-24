@@ -76,6 +76,25 @@ if [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
         __GASH_USER_ALIASES["$__gash_var"]=1
     done
     unset __gash_var
+elif [[ "${GASH_HEADLESS-}" != "1" && -z "${__GASH_SNAPSHOT2+x}" ]]; then
+    # A shell a 2.x gash.sh loaded, sourcing this one (`source ~/.gashrc`
+    # after gash_upgrade, compat.md 5): 2.x took the snapshot of the state
+    # before it, which gash_unload keeps using. Of the variables above only
+    # the user's exported GASH_* settings are told apart from 2.x's (2.x
+    # exports only GASH_SSH_AUTOUNLOCK_RAN, its own marker); the user's
+    # aliases are not told apart from 2.x's
+    # (2.x defined its packs over them too). The symbols are listed again
+    # after this load, so what 3.x adds is removed by gash_unload too.
+    __GASH_SNAPSHOT2=()
+    for __gash_var in ${!GASH_@}; do
+        [[ "$__gash_var" == GASH_SSH_AUTOUNLOCK_RAN ]] && continue
+        if [[ "${!__gash_var@a}" == *x* && "${!__gash_var@a}" != *[aAr]* ]]; then
+            __GASH_SNAPSHOT2+=("${!__gash_var@A}")
+        fi
+    done
+    declare -gA __GASH_USER_ALIASES=()
+    __GASH_SNAPSHOT_OVER_2X=1
+    unset __gash_var
 fi
 
 # -----------------------------------------------------------------------------
@@ -455,10 +474,16 @@ gash_unload() {
         unset -f "${__gash_fn}" >/dev/null 2>&1 || true
     done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
 
-    # The completion specs Gash registered (SELF-03).
+    # The completion specs Gash registered (SELF-03), and any other spec
+    # whose function is Gash's (a 2.x load registered more names).
     if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
         complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
     fi
+    local __gash_spec
+    while IFS= read -r __gash_spec; do
+        [[ "$__gash_spec" == *" -F __gash_"*" "* ]] || continue
+        complete -r "${__gash_spec##* }" >/dev/null 2>&1 || true
+    done < <(complete -p 2>/dev/null || true)
 
     # Per-prefix variable sweep: includes the cached secrets which must
     # never survive an unload, plus colors, PS1 caches, help registry.
@@ -1086,8 +1111,9 @@ fi
 ((__GASH_TIMING)) && __gash_time_record "gash init bash" "$__GASH_T1"
 
 # Record what exists after loading; `gash_unload` removes what is here but
-# was not in the snapshot taken before.
-if [[ -z "${__GASH_POST_SYMBOLS-}" ]]; then
+# was not in the snapshot taken before (listed again over a 2.x load).
+if [[ -z "${__GASH_POST_SYMBOLS-}" || -n "${__GASH_SNAPSHOT_OVER_2X-}" ]]; then
+    unset __GASH_SNAPSHOT_OVER_2X
     ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
     __gash_symbols_now __GASH_POST_SYMBOLS
     ((__GASH_TIMING)) && __gash_time_record "gash.sh: symbol list" "$__GASH_T1"
