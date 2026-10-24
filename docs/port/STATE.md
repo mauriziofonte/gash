@@ -6,7 +6,20 @@ Read this first in every session, then `git log --oneline -20`, then run the gat
 
 ## Phase
 
-**S2 reached (2026-10-19): rc.A complete, CI green, LEDGER complete — awaiting the operator's triage.** Do NOT merge PR #5 or push a tag; both are the operator's.
+**3.0 fix phase (from 2026-10-24).** The operator triaged the LEDGER: every item `accept` (bulk, "Solo le 32"), and the 32 Decisions as the lead recommended (the chosen option is in each Status note). Every accepted fix lands in 3.0 before S3, not in a 3.1 (operator, 2026-10-19). 327 items have work (a Fix recipe that is not "none"); they are split into six slices worked in parallel worktrees, highest severity first:
+
+| Worktree | Branch | Areas | Items |
+|---|---|---|---|
+| `/home/claude/wt-llm` | `wt/llm3` | LLM, EXEC, DB | 58 |
+| `/home/claude/wt-files` | `wt/files3` | FS, FILE | 63 |
+| `/home/claude/wt-sys` | `wt/sys3` | SYS, AI | 54 |
+| `/home/claude/wt-devops` | `wt/devops3` | DOCK, GIT, REM, DEV | 54 |
+| `/home/claude/wt-core` | `wt/core3` | CORE, SELF, SHELL, TEST (owns the shared packages) | 74 |
+| `/home/claude/wt-hte` | `wt/hte3` | HTE | 24 |
+
+Item lists: `/mnt/project-files/port/3.0-fixes/<slice>.txt`; worker rules: `/mnt/project-files/port/3.0-fixes/WORKER-RULES.md`. The lead merges each slice into `go-refactor` (merge commits), records per-item outcomes in the LEDGER Status notes (`accept: done <commit>`), and writes the 3.0.0 CHANGELOG from the workers' change notes. S3 = every accepted item done or explicitly re-deferred by the operator, CI green, VERSION 3.0.0, PR #5 ready for review.
+
+Previous phase: **S2 reached (2026-10-19): rc.A complete, CI green, LEDGER complete — awaiting the operator's triage.** Do NOT merge PR #5 or push a tag; both are the operator's.
 
 S1 was approved by the operator on 2026-10-18 (draft PR #5, `go-refactor` → `main`); the answers to D-1 to D-9 are in `docs/port/design/README.md`, "Decisions taken".
 
