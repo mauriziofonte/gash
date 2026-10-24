@@ -7,7 +7,7 @@ Help, doctor, configuration, upgrade.
 unexpected argument (`Error: Unexpected argument: X`) with status 2, before
 they change anything.
 
-_Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
+_Written from the help registry (`gash_help NAME`); `go test ./internal/registry` checks it against the help text._
 
 | Function | Alias | Description |
 |---|---|---|

@@ -4,6 +4,7 @@ package registry
 
 import (
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -281,4 +282,47 @@ func TestRegistry_AliasDocsMatchConditions(t *testing.T) {
 		require.True(t, seen[name], "card entry %s is no php pack alias", name)
 	}
 	require.Equal(t, []string{"1composer", "composer", "php"}, CardAliasFamilies())
+}
+
+// docs/reference is written from the help registry: the README table
+// has each topic's function and alias counts, and each topic page has
+// every function of the topic under its own heading, with its summary
+// and its first usage line. A help change that leaves the page behind
+// fails here (the pages once named a tools/gen-docs.sh that does not
+// exist).
+func TestRegistry_ReferenceDocs(t *testing.T) {
+	readme, err := os.ReadFile("../../docs/reference/README.md")
+	require.NoError(t, err)
+	for _, tp := range Topics() {
+		fns := 0
+		b, err := os.ReadFile("../../docs/reference/" + tp.Name + ".md")
+		require.NoError(t, err, tp.Name)
+		page := string(b)
+		require.False(t, strings.Contains(page, "gen-docs"), "%s names a gen-docs tool", tp.Name)
+		for _, f := range Functions() {
+			if !f.HasHelp || !slices.Contains(tp.Modules, f.Help.Module) {
+				continue
+			}
+			fns++
+			require.True(t, strings.Contains(page, "\n## "+f.Name+"\n\n"+f.Help.Short+"\n"), "%s.md: heading and summary of %s", tp.Name, f.Name)
+			lines := strings.Split(f.Help.Body, "\n")
+			for i, l := range lines {
+				if l == "USAGE" && i+1 < len(lines) {
+					require.True(t, strings.Contains(page, "\n"+strings.TrimSpace(lines[i+1])+"\n"), "%s.md: usage of %s: %s", tp.Name, f.Name, lines[i+1])
+					break
+				}
+			}
+		}
+		aliases := 0
+		for _, file := range tp.AliasFiles {
+			for _, a := range CardAliases(file) {
+				if a.Name != a.Value {
+					aliases++
+				}
+			}
+		}
+		row := "| [" + tp.Name + "](" + tp.Name + ".md) | " + strconv.Itoa(fns) + " | " + strconv.Itoa(aliases) + " | " + tp.Description + " |"
+		require.True(t, strings.Contains(string(readme), row), "README.md row: %s", row)
+	}
+	require.False(t, strings.Contains(string(readme), "gen-docs"), "README.md names a gen-docs tool")
 }

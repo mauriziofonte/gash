@@ -18,8 +18,9 @@ bash fork_bench.sh    /tmp/fx/bin/true_static_go 200 /tmp/fork.us
 Both scripts run each measurement under `env -i` with a small fixed
 environment. A `GASH_BIN` set in the calling shell is passed through, so a
 3.x run can measure a chosen binary (`GASH_BIN=/path/to/gash bash
-startup_bench.sh ...`); without it the checkout's own `bin/gash` is used and
-must be built.
+startup_bench.sh ...`); without it `gash.sh` uses the release binary of the
+checkout's `VERSION` under the throwaway `HOME`
+(`~/.local/share/gash/versions/`), fetched on first use.
 
 `prompt_bench.sh` calls the hook `__gash_prompt_command` (the 3.x hook keeps
 that name) inside `bash --noprofile --norc -i`, 200 times per case, timed with
