@@ -24,10 +24,10 @@ var signatureMarker = regexp.MustCompile(`-{5}BEGIN (PGP|SSH) SIGNATURE-{5}`)
 
 // upgrade is gash_upgrade (lib/modules/gash.sh): the install directory, a
 // clean git checkout, moves to the highest release tag of origin, its
-// signature checked first. rc.A keeps the 2.x tag choice and its
-// equality-only comparison, so an install on a newer or pre-release tag
-// moves back to the highest final one (LEDGER SELF-01, reproduced); extra
-// arguments are ignored (SELF-15). The git commands run as 2.x ran them:
+// signature checked first. A checkout newer than that release (a newer or
+// pre-release tag, or a commit that has the release in its history) is
+// left alone (3.0: SELF-01 fixed; 2.x compared for equality only and moved
+// such an install back); extra arguments are ignored (SELF-15). The git commands run as 2.x ran them:
 // the user's git, configuration and credentials, fetch and checkout on the
 // terminal.
 func (m *Module) upgrade(c *invoke.Call) int {
@@ -64,6 +64,10 @@ func (m *Module) upgrade(c *invoke.Call) int {
 		p.Success("Gash is already up-to-date (" + current + ", released on " + date + ").")
 		return 0
 	}
+	if shown, newer := m.newerThanRelease(c, dir, current, latest); newer {
+		p.Info("This checkout (" + shown + ") is newer than the latest release (" + latest + "); not downgrading.")
+		return 0
+	}
 
 	if !m.verifyTag(c, p, dir, latest) {
 		p.Error("GASH_REQUIRE_SIGNED=1 is set; not upgrading to " + latest + ".")
@@ -80,6 +84,32 @@ func (m *Module) upgrade(c *invoke.Call) int {
 	p.Success("Upgraded Gash " + from + "to " + latest + ".")
 	p.Info("Open a new terminal (or run 'source ~/.gashrc') to load it.")
 	return 0
+}
+
+// newerThanRelease reports whether the checkout at dir is at or past the
+// release latest, and how to name it. A checkout on a version tag
+// (current) compares that tag with latest; any other checkout is newer when
+// its nearest tag compares >= latest or latest is an ancestor of HEAD
+// (LEDGER SELF-01).
+func (m *Module) newerThanRelease(c *invoke.Call, dir, current, latest string) (string, bool) {
+	if cmp, ok := compareVersions(current, latest); ok {
+		return current, cmp >= 0
+	}
+	shown := current
+	if shown == "" {
+		shown = m.output(c, "git", "-C", dir, "describe", "--tags")
+	}
+	if shown == "" {
+		shown = m.output(c, "git", "-C", dir, "rev-parse", "--short", "HEAD")
+	}
+	if nearest := m.output(c, "git", "-C", dir, "describe", "--tags", "--abbrev=0"); nearest != "" {
+		if cmp, ok := compareVersions(nearest, latest); ok && cmp >= 0 {
+			return shown, true
+		}
+	}
+	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "merge-base", "--is-ancestor", latest, "HEAD"},
+		Options: runner.Options{Env: c.Env.Child()}})
+	return shown, err == nil && res.Success()
 }
 
 // latestTag is __gash_latest_tag DIR: the last release tag in git's

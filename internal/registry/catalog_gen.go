@@ -1504,7 +1504,10 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Fetches the latest git tag, checks out that version,\n" +
-				"  and cleans up. Restart your shell after upgrading.",
+				"  and cleans up. Restart your shell after upgrading.\n" +
+				"  A checkout newer than the latest release (a pre-release,\n" +
+				"  or a commit after it) is left as it is, never downgraded.\n" +
+				"  To go back to a release: git -C ~/.gash checkout vX.Y.Z",
 		},
 		Fallback:  &Usage{Program: "gash_upgrade", Usage: "gash_upgrade", Description: "Upgrade Gash to the latest release (refuses to touch local modifications)."},
 		ShellVars: []string{"GASH_REQUIRE_SIGNED", "HOME"},

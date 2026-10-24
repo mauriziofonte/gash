@@ -110,3 +110,38 @@ func TestKnownGashrcIsRepositoryTemplate(t *testing.T) {
 	require.False(t, pristineGashrc(append(repo, "x\n"...)))
 	require.False(t, pristineGashrc(nil))
 }
+
+// LEDGER SELF-01: versions compare as semver, so gash_upgrade can tell a
+// checkout newer than the latest release (a pre-release of the next one
+// included) from an older one (3.0: SELF-01 fixed; 2.x compared tags for
+// equality only). The end-to-end proof with a mirror is TestLedger_SELF01
+// in internal/handlers.
+func TestLedger_SELF01(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want int
+	}{
+		{"v3.0.0-rc.1", "v2.1.0", 1},
+		{"v2.1.0", "v3.0.0-rc.1", -1},
+		{"v3.0.0-rc.1", "v3.0.0", -1},
+		{"v3.0.0", "v3.0.0-rc.1", 1},
+		{"v3.0.0-rc.2", "v3.0.0-rc.10", -1},
+		{"v3.0.0-alpha", "v3.0.0-alpha.1", -1},
+		{"v3.0.0-alpha.1", "v3.0.0-beta", -1},
+		{"v3.0.0-1", "v3.0.0-alpha", -1},
+		{"v2.0.0", "v2.1.0", -1},
+		{"v1.10.0", "v1.9.1", 1},
+		{"2.1", "v2.1.0", 0},
+		{"v2.1.0", "v2.1.0", 0},
+		{"v2.1.0+build.5", "v2.1.0", 0},
+		{"v10.0.0", "v9.99.99", 1},
+	} {
+		got, ok := compareVersions(tc.a, tc.b)
+		require.True(t, ok, tc.a+" vs "+tc.b)
+		require.Equal(t, tc.want, got, tc.a+" vs "+tc.b)
+	}
+	for _, bad := range []string{"", "main", "v", "v1..2", "release-1"} {
+		_, ok := compareVersions(bad, "v1.0.0")
+		require.False(t, ok, bad)
+	}
+}

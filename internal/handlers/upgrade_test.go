@@ -87,6 +87,10 @@ var upgradeCases = []struct {
 	{"help", "", nil, [][]string{{"-h"}, {"--help"}}},
 }
 
+// upgradeSELF01 names the cases where 3.0 no longer matches 2.x: a
+// checkout newer than the latest release is not moved back (SELF-01).
+var upgradeSELF01 = map[string]bool{"untagged head": true, "rc install": true}
+
 // gash_upgrade does what 2.x does on the same fixtures: the same messages
 // (git's own included), status and resulting checkout.
 func TestUpgradeMatches2x(t *testing.T) {
@@ -142,6 +146,7 @@ func TestUpgradeMatches2x(t *testing.T) {
 				if args == nil {
 					args = [][]string{{}}
 				}
+				before := envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state)
 				for _, a := range args {
 					env := upgradeEnv(d)
 					env["GASH_DIR"] = d + "/g"
@@ -150,9 +155,20 @@ func TestUpgradeMatches2x(t *testing.T) {
 						env[k] = val
 					}
 					o, rc := runMerged(t, "gash_upgrade", env, mode == "on", a...)
-					require.Equal(t, strings.ReplaceAll(fields[2*n], dRef, d), o, "%s %q", tc.name, a)
-					require.Equal(t, fields[2*n+1], strconv.Itoa(rc), "%s %q", tc.name, a)
+					if upgradeSELF01[tc.name] {
+						// 3.0: SELF-01 fixed: a checkout newer than the latest
+						// release stays where it is (2.x moved it back).
+						require.Contains(t, o, "is newer than the latest release", tc.name)
+						require.Equal(t, 0, rc, tc.name)
+					} else {
+						require.Equal(t, strings.ReplaceAll(fields[2*n], dRef, d), o, "%s %q", tc.name, a)
+						require.Equal(t, fields[2*n+1], strconv.Itoa(rc), "%s %q", tc.name, a)
+					}
 					n++
+				}
+				if upgradeSELF01[tc.name] {
+					require.Equal(t, before, envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state), tc.name)
+					continue
 				}
 				require.Equal(t, envBash(t, upgradeEnv(dRef), "D="+shq(dRef)+"; "+state),
 					envBash(t, upgradeEnv(d), "D="+shq(d)+"; "+state), tc.name)
@@ -190,22 +206,40 @@ func upgradeFixture(t *testing.T, setup string) (string, map[string]string) {
 	return d, env
 }
 
-// LEDGER SELF-01, reproduced in rc.A: the newest release tag is compared
-// with HEAD for equality only, so an install on a pre-release tag, or on a
-// commit after the last release, moves back to that release.
-func TestLedger_SELF01_2x(t *testing.T) {
+// LEDGER SELF-01: an install on a pre-release tag newer than the latest
+// release, or on a commit after it, is left where it is with a "newer than"
+// line; an older release still moves to the latest (3.0: SELF-01 fixed;
+// 2.x compared for equality only and moved both back to v2.1.0).
+func TestLedger_SELF01(t *testing.T) {
 	mirror := upgradeOrigin + "git -C $D/o tag v2.0.0; git -C $D/o commit -q --allow-empty -m b; git -C $D/o tag v2.1.0; " +
 		"git -C $D/o commit -q --allow-empty -m c; git -C $D/o tag v3.0.0-rc.1; git -C $D/o commit -q --allow-empty -m d; "
-	for _, tc := range []struct{ from, clone, want string }{
-		{"v3.0.0-rc.1", "git clone -q -b v3.0.0-rc.1 $D/o $D/g 2>/dev/null", "OK: Upgraded Gash from v3.0.0-rc.1 to v2.1.0.\n"},
-		{"untagged", "git clone -q $D/o $D/g", "OK: Upgraded Gash to v2.1.0.\n"},
-		{"v2.0.0", "git clone -q -b v2.0.0 $D/o $D/g 2>/dev/null", "OK: Upgraded Gash from v2.0.0 to v2.1.0.\n"},
+	for _, tc := range []struct{ from, clone, want, head string }{
+		{"v3.0.0-rc.1", "git clone -q -b v3.0.0-rc.1 $D/o $D/g 2>/dev/null",
+			"Info: This checkout (v3.0.0-rc.1) is newer than the latest release (v2.1.0); not downgrading.\n", "v3.0.0-rc.1"},
+		{"untagged", "git clone -q $D/o $D/g",
+			"Info: This checkout (v3.0.0-rc.1-1-g", ""},
+		{"untagged after the release", "git clone -q $D/o $D/g; git -C $D/g -c advice.detachedHead=false checkout -q v2.1.0; " +
+			"git -C $D/g tag -d v3.0.0-rc.1 >/dev/null; git -C $D/g commit -q --allow-empty -m local",
+			"Info: This checkout (v2.1.0-1-g", ""},
+		{"after the release, nearest tag not a version", "git clone -q $D/o $D/g; git -C $D/g -c advice.detachedHead=false checkout -q v2.1.0; " +
+			"git -C $D/g commit -q --allow-empty -m local; git -C $D/g tag nightly",
+			"Info: This checkout (nightly) is newer", ""},
+		{"v2.0.0", "git clone -q -b v2.0.0 $D/o $D/g 2>/dev/null", "OK: Upgraded Gash from v2.0.0 to v2.1.0.\n", "v2.1.0"},
 	} {
 		d, env := upgradeFixture(t, mirror+tc.clone)
+		before := envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" rev-parse HEAD")
 		out, rc := runMerged(t, "gash_upgrade", env, false)
 		require.Equal(t, 0, rc, tc.from)
 		require.Contains(t, out, tc.want, tc.from)
-		require.Equal(t, "v2.1.0\n", envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" describe --tags --exact-match HEAD"), tc.from)
+		after := envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" rev-parse HEAD")
+		if tc.head == "v2.1.0" {
+			require.NotContains(t, out, "newer than", tc.from)
+			require.Equal(t, "v2.1.0\n", envBash(t, upgradeEnv(d), "git -C "+shq(d+"/g")+" describe --tags --exact-match HEAD"), tc.from)
+			continue
+		}
+		require.Contains(t, out, "is newer than the latest release (v2.1.0); not downgrading.\n", tc.from)
+		require.NotContains(t, out, "Upgraded", tc.from)
+		require.Equal(t, before, after, tc.from+": HEAD moved")
 	}
 }
 
