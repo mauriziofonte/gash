@@ -1,0 +1,26 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# forced-divergence: CORE-01
+# covers: none (3.0 contract proof; no 2.x assertion)
+#
+# LEDGER CORE-01: in a session without a controlling terminal,
+# needs_confirm_prompt and gash_uninstall print the question and refuse;
+# the shell's own "bash: /dev/tty: No such device or address" never
+# reaches stderr. setsid detaches the shell from any terminal.
+
+[!exec:setsid] skip 'setsid (util-linux) is needed to drop the terminal'
+
+exec setsid -w bash --norc --noprofile -i -c 'source "$GASH_SH" >/dev/null 2>&1; needs_confirm_prompt q 2>"$WORK/q.err"; echo "rc=$?"; echo "err=[$(<"$WORK/q.err")]"'
+stdout '^rc=1$'
+stdout '^err=\[q \[y/N\] \]$'
+! stderr '/dev/tty'
+
+mkdir home/fake/lib/core
+exec setsid -w bash --norc --noprofile -i -c 'source "$GASH_SH" >/dev/null 2>&1; GASH_DIR=$HOME/fake gash_uninstall; echo "rc=$?"'
+stdout '^rc=0$'
+stderr '^Continue\? \[y/N\] Info: Uninstall cancelled\.$'
+! stderr '/dev/tty'
+! stderr 'No such device'
+exists home/fake/lib/core
+-- home/fake/gash.sh --
+# fake install

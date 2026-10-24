@@ -96,7 +96,9 @@ needs_confirm_prompt() {
     __gash_ask_render "$prompt" "y/N"
 
     # A failed read (no tty, EOF) must refuse, never reuse a previous REPLY.
-    read -r REPLY </dev/tty 2>/dev/null || return 1
+    # The braces put the redirect of stderr around the failing </dev/tty, so
+    # the shell's own "/dev/tty: No such device" never reaches the user.
+    { read -r REPLY </dev/tty; } 2>/dev/null || return 1
 
     [[ "$REPLY" =~ ^[Yy]$ ]]
 }
@@ -429,7 +431,7 @@ __gash_confirm_plan() {
         return 1
     fi
     __gash_ask_render "Do you want to continue?" "Y/n"
-    if ! read -r answer </dev/tty 2>/dev/null; then
+    if ! { read -r answer </dev/tty; } 2>/dev/null; then
         printf '\n' >&2
         return 1
     fi
