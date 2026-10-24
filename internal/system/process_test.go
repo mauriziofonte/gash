@@ -159,15 +159,16 @@ func lsof(port, tcp, udp string) runner.Expect {
 	return runner.Expect{Argv: []string{"lsof", "-t", "-nP", "-iTCP:" + port, "-sTCP:LISTEN"}, Stdout: tcp}
 }
 
+// lsofUDP answers the UDP query; udp is lsof's -F pn output.
 func lsofUDP(port, udp string) runner.Expect {
-	return runner.Expect{Argv: []string{"lsof", "-t", "-nP", "-iUDP:" + port}, Stdout: udp}
+	return runner.Expect{Argv: []string{"lsof", "-nP", "-iUDP:" + port, "-F", "pn"}, Stdout: udp}
 }
 
 func TestPortKill(t *testing.T) {
 	bin := binDir(t, "lsof")
 	env := map[string]string{"PATH": bin}
 	m, k, _ := tm(t, runner.NewFake(t,
-		lsof("8080", "300\n100\n", ""), lsofUDP("8080", "100\n"),
+		lsof("8080", "300\n100\n", ""), lsofUDP("8080", "p100\nf5\nn*:8080\n"),
 		runner.Expect{Argv: []string{"ps", "-o", "comm=", "-p", "100"}, Stdout: "node\n"},
 		runner.Expect{Argv: []string{"ps", "-o", "comm=", "-p", "300"}, Stdout: ""},
 		lsof("8080", "", ""), lsofUDP("8080", ""),
@@ -197,14 +198,20 @@ func TestPortKill(t *testing.T) {
 	require.Equal(t, result{"", "Error: This function requires 'lsof', which is not available.\n", 1}, r)
 }
 
-// SYS-03: the UDP query also lists a client whose remote port is PORT.
+// SYS-03: only unconnected UDP sockets bound to PORT are targeted, not a
+// client whose remote port is PORT (3.0: SYS-03 fixed).
 func TestLedger_SYS03(t *testing.T) {
 	bin := binDir(t, "lsof")
-	m, k, _ := tm(t, runner.NewFake(t, lsof("18053", "", ""), lsofUDP("18053", "777\n"),
-		runner.Expect{Argv: []string{"ps", "-o", "comm=", "-p", "777"}, Stdout: "python3\n"}))
+	m, k, _ := tm(t, runner.NewFake(t,
+		lsof("18053", "", ""), lsofUDP("18053", "p777\nf3\nn127.0.0.1:40000->127.0.0.1:18053\n"),
+		lsof("18053", "", ""), lsofUDP("18053", "p777\nf3\nn127.0.0.1:40000->127.0.0.1:18053\np888\nf4\nn*:18053\nf5\nn[::1]:18053\np999\nf3\nn*:180530\n"),
+		runner.Expect{Argv: []string{"ps", "-o", "comm=", "-p", "888"}, Stdout: "dnsmasq\n"}))
 	r := call(m, "port_kill", map[string]string{"PATH": bin}, nil, "", "-y", "18053")
-	require.Equal(t, result{"", "Info: Listening on port 18053:\n  777  python3\nInfo: Process 777 on port 18053 terminated.\n", 0}, r)
-	require.Equal(t, "TERM 777", k.sent[0])
+	require.Equal(t, result{"", "Error: Nothing is listening on port 18053.\n", 1}, r)
+	require.Empty(t, k.sent)
+	r = call(m, "port_kill", map[string]string{"PATH": bin}, nil, "", "-y", "18053")
+	require.Equal(t, result{"", "Info: Listening on port 18053:\n  888  dnsmasq\nInfo: Process 888 on port 18053 terminated.\n", 0}, r)
+	require.Equal(t, "TERM 888", k.sent[0])
 }
 
 // SYS-33: the port is a decimal number without wraparound.

@@ -303,9 +303,9 @@ func (m *Module) terminate(pids []string, report func(pid string, outcome int)) 
 // deniedMsg is the SYS-02 error of a process the user may not signal.
 func deniedMsg(pid string) string { return "Process " + pid + ": permission denied." }
 
-// portKill is port_kill: the lsof TCP-listener and UDP queries (a UDP
-// client of PORT included, SYS-03) merged as `sort -un`, the plan, the
-// question unless -y, then the kill sequence of process_kill.
+// portKill is port_kill: the lsof TCP listeners and the UDP sockets bound
+// to PORT (udpListeners) merged as `sort -un`, the plan, the question
+// unless -y, then the kill sequence of process_kill.
 func (m *Module) portKill(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -332,9 +332,9 @@ func (m *Module) portKill(c *invoke.Call) int {
 	}
 	tcp, _ := m.run.Run(ctx(c), runner.Cmd{Path: "lsof", Args: []string{"-t", "-nP", "-iTCP:" + port, "-sTCP:LISTEN"},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
-	udp, _ := m.run.Run(ctx(c), runner.Cmd{Path: "lsof", Args: []string{"-t", "-nP", "-iUDP:" + port},
+	udp, _ := m.run.Run(ctx(c), runner.Cmd{Path: "lsof", Args: []string{"-nP", "-iUDP:" + port, "-F", "pn"},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
-	pids := m.dropSelf(sortUN(string(tcp.Stdout) + string(udp.Stdout)))
+	pids := m.dropSelf(sortUN(string(tcp.Stdout) + udpListeners(string(udp.Stdout), port)))
 	if len(pids) == 0 {
 		p.Error("Nothing is listening on port " + port + ".")
 		return 1
@@ -366,6 +366,33 @@ func (m *Module) portKill(c *invoke.Call) int {
 		return 1
 	}
 	return 0
+}
+
+// udpListeners reads `lsof -nP -iUDP:PORT -F pn` and lists, one per line,
+// the PIDs of unconnected UDP sockets whose local port is PORT (LEDGER
+// SYS-03): -iUDP:PORT also matches a connected client whose remote port is
+// PORT ("LOCAL->REMOTE"), which is not a listener.
+func udpListeners(out, port string) string {
+	var b strings.Builder
+	pid := ""
+	listed := map[string]bool{}
+	for _, l := range strings.Split(out, "\n") {
+		if l == "" {
+			continue
+		}
+		switch l[0] {
+		case 'p':
+			pid = l[1:]
+		case 'n':
+			name := l[1:]
+			if pid == "" || listed[pid] || strings.Contains(name, "->") || !strings.HasSuffix(name, ":"+port) {
+				continue
+			}
+			listed[pid] = true
+			b.WriteString(pid + "\n")
+		}
+	}
+	return b.String()
 }
 
 // sortUN is `sort -un` of lines of PIDs: numeric order, one line per
