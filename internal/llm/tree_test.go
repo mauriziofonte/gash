@@ -120,8 +120,8 @@ func TestLedger_LLM19_2x(t *testing.T) {
 }
 
 // TestLedger_LLM08: a root with a quote or backslash gives valid JSON (2.x
-// printed it raw through awk -v); a root with a tab or a newline still lists
-// nothing, as the 2.x ! -path tests saw the whole path.
+// printed it raw through awk -v); a root with a tab or a newline lists its
+// children (2.x listed nothing, as its ! -path tests saw the whole path).
 func TestLedger_LLM08(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
@@ -142,7 +142,8 @@ func TestLedger_LLM08(t *testing.T) {
 	}
 	for _, root := range []string{"t\tab", "n\nl"} {
 		r := runGo(t, m, d, env, "llm_tree", "--stats", root)
-		want := `{"path":` + string(mustJSON(t, filepath.Join(d, root))) + `,"type":"directory","size":0,"children_count":0,"children":[]}` + "\n"
+		// 3.0: LLM-08 fixed
+		want := `{"path":` + string(mustJSON(t, filepath.Join(d, root))) + `,"type":"directory","size":1,"children_count":1,"children":[{"name":"f1","type":"file","size":1}]}` + "\n"
 		require.Equal(t, result{want, "", 0}, r)
 	}
 }
@@ -195,6 +196,21 @@ func TestLedger_LLM29_2x(t *testing.T) {
 	mustWrite(t, filepath.Join(d, "n\nx"), "x")
 	mustWrite(t, filepath.Join(d, "ok"), "x")
 	r := same(t, m, d, env, "llm_tree", "--stats")
+	require.Equal(t, `{"path":"`+d+`","type":"directory","size":1,"children_count":1,"children":[{"name":"ok","type":"file","size":1}]}`+"\n", r.Stdout)
+}
+
+// TestLedger_LLM29: the JSON tree leaves out every entry whose name holds a
+// tab or a newline, and what lies below such a directory; the rule tests
+// the entry names below the start point only (see LLM-08).
+func TestLedger_LLM29(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "t\tx"), "x")
+	mustWrite(t, filepath.Join(d, "n\nx"), "x")
+	mustWrite(t, filepath.Join(d, "d\tir", "inner"), "x")
+	mustWrite(t, filepath.Join(d, "ok"), "x")
+	r := runGo(t, m, d, env, "llm_tree", "--stats")
 	require.Equal(t, `{"path":"`+d+`","type":"directory","size":1,"children_count":1,"children":[{"name":"ok","type":"file","size":1}]}`+"\n", r.Stdout)
 }
 

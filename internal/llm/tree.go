@@ -198,9 +198,10 @@ func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) 
 		if t == '?' {
 			return true
 		}
-		// ! -path '*\n*' ! -path '*\t*': tested on the whole path, the
-		// start point included (LLM-08, LLM-29).
-		if strings.ContainsAny(e.path, "\n\t") {
+		// Names with a tab or a newline are left out (LLM-29), tested on
+		// the path below the start point so a root whose own name holds
+		// one still lists its children (LLM-08).
+		if strings.ContainsAny(e.rel, "\n\t") {
 			return true
 		}
 		parts := strings.Split(e.rel, "/")

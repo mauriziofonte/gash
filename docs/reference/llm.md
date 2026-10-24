@@ -471,5 +471,6 @@ llm_tree --depth 2 /etc/nginx
 
 ```text
 Ignores noise directories: node_modules, vendor, .git, __pycache__
+The JSON tree leaves out entries whose name holds a tab or a newline
 ```
 
