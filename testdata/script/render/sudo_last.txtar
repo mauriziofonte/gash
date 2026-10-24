@@ -16,8 +16,9 @@ env LC_ALL=C.UTF-8
 exec bash -c 'mkdir -p bin && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; sudo_last echo ok'
 stdout '^ok$'
 
-# --- :213 declined - the last command is shown and aborted
-exec bash -c 'mkdir -p bin && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; fc() { printf "%s\n" "   apt update"; }; source "$GASH_SH"; sudo_last'
+# --- :213 declined - the last command is shown and aborted (3.0: SYS-12
+# fixed: declining returns 1; 2.x returned 0)
+! exec bash -c 'mkdir -p bin && install -m755 "$WORK/sudo" bin/sudo; export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__TTY_IN=1 GASH__COLOR=1 COLUMNS=100; fc() { printf "%s\n" "   apt update"; }; source "$GASH_SH"; sudo_last'
 stderr 'About to run as root: apt update'
 stderr 'Aborted\.'
 

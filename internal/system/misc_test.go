@@ -273,17 +273,21 @@ func TestSudoLast(t *testing.T) {
 	require.Contains(t, r.out, "sudo_last")
 }
 
-// SYS-12: declining returns 0, and an empty recalled command still asks.
+// SYS-12: no recalled command is an error before any warning, and
+// declining (or headless) returns 1 (3.0: SYS-12 fixed; 2.x returned 0 and
+// asked even with no command).
 func TestLedger_SYS12(t *testing.T) {
 	m, _, h := tm(t, runner.NewFake(t))
 	env := map[string]string{"GASH__HANDOFF": "3", "GASH_HEADLESS": "1"}
 	r := call(m, "sudo_last", env, nil, "")
-	require.Equal(t, result{"", "Warning: About to run as root: \nInfo: Aborted.\n", 0}, r)
+	require.Equal(t, result{"", "Error: No previous command in history.\n", 1}, r)
 	require.Empty(t, h.String())
 	require.True(t, h.closed)
 
+	r = call(m, "sudo_last", env, nil, "make install")
+	require.Equal(t, result{"", "Warning: About to run as root: make install\nInfo: Aborted.\n", 1}, r)
 	r = call(m, "sudo_last", map[string]string{"GASH__HANDOFF": "3"}, ttyTerm(nil, "n\n"), "make install")
-	require.Equal(t, 0, r.rc)
+	require.Equal(t, 1, r.rc)
 	require.Contains(t, r.err, "Aborted.")
 	require.Empty(t, h.String())
 }

@@ -3331,7 +3331,12 @@ var functions = []Function{
 				"  plz               # -> sudo apt update\n" +
 				"\n" +
 				"  # Run a specific command with sudo\n" +
-				"  plz systemctl restart nginx",
+				"  plz systemctl restart nginx\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without COMMAND it shows the previous command and asks first;\n" +
+				"  declining (or no terminal to ask on) returns 1, and so does a shell\n" +
+				"  with no previous command in its history.",
 		},
 		Fallback: &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},

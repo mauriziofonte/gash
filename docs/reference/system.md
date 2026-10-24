@@ -438,6 +438,14 @@ plz               # -> sudo apt update
 plz systemctl restart nginx
 ```
 
+#### Notes
+
+```text
+Without COMMAND it shows the previous command and asks first;
+declining (or no terminal to ask on) returns 1, and so does a shell
+with no previous command in its history.
+```
+
 ## sysinfo
 
 Comprehensive system information enumeration
