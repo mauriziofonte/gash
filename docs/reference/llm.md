@@ -306,6 +306,7 @@ PATTERN is a file name glob (find -name). With --contains only the
 files it matches are searched, hidden and gitignored ones included,
 with or without ripgrep. Skips node_modules, vendor, .git and
 __pycache__; --contains also skips secret files. Default limit 100.
+A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
 
 ## llm_git_diff
@@ -396,6 +397,9 @@ ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore
 matches, binary files, node_modules, vendor and .git are skipped; files
 come in sorted path order. Secret files are skipped, templates such as
 .env.example searched. Default limit 100.
+Output: file:line:content with absolute paths (a FILE PATH gives
+line:content); context lines use -, groups are separated by --.
+A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
 
 ## llm_ports

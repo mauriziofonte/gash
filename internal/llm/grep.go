@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"os"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -65,6 +66,16 @@ func (m *Module) search(c *invoke.Call, re string, globs []string, noIgnore bool
 	return s, 0, true
 }
 
+// pathExists fails with path_not_found/RETRY when the search root does
+// not exist (LLM-17: 2.x printed nothing and exited 0, as for no match).
+func (m *Module) pathExists(c *invoke.Call, safe string) bool {
+	if _, err := os.Stat(safe); err != nil {
+		fail(c, "path_not_found", safe, "Provide an existing file or directory")
+		return false
+	}
+	return true
+}
+
 // grep is llm_grep (fs.sh __llm_grep_impl), on the one search engine with
 // rg semantics (LLM-03).
 func (m *Module) grep(c *invoke.Call) int {
@@ -72,6 +83,7 @@ func (m *Module) grep(c *invoke.Call) int {
 		return 0
 	}
 	pattern, extensions, context, limit := "", "", "0", "100"
+	havePattern := false
 	var p pathTaker
 	p.path = "."
 	args := c.Args
@@ -96,8 +108,10 @@ func (m *Module) grep(c *invoke.Call) int {
 		if strings.HasPrefix(a, "-") {
 			return fail(c, "unknown_option", a, "Use --ext, --context, or --limit")
 		}
-		if pattern == "" {
-			pattern = a
+		// The first positional is PATTERN, even when empty (LLM-18: 2.x
+		// skipped an empty one and took the next word).
+		if !havePattern {
+			pattern, havePattern = a, true
 		} else if !p.take(c, a) {
 			return 1
 		}
@@ -116,6 +130,9 @@ func (m *Module) grep(c *invoke.Call) int {
 	}
 	safe, ok := m.validatePath(c, p.path)
 	if !ok {
+		return 1
+	}
+	if !m.pathExists(c, safe) {
 		return 1
 	}
 	if m.guard(c).IsSecretFile(safe) {

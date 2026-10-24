@@ -19,6 +19,7 @@ func (m *Module) find(c *invoke.Call) int {
 		return 0
 	}
 	pattern, fileType, contains, limit := "", "f", "", "100"
+	havePattern := false
 	var p pathTaker
 	p.path = "."
 	args := c.Args
@@ -43,8 +44,10 @@ func (m *Module) find(c *invoke.Call) int {
 		if strings.HasPrefix(a, "-") {
 			return fail(c, "unknown_option", a, "Use --type, --contains, or --limit")
 		}
-		if pattern == "" {
-			pattern = a
+		// The first positional is PATTERN, even when empty (LLM-18: 2.x
+		// skipped an empty one and took the next word).
+		if !havePattern {
+			pattern, havePattern = a, true
 		} else if !p.take(c, a) {
 			return 1
 		}
@@ -64,6 +67,9 @@ func (m *Module) find(c *invoke.Call) int {
 	}
 	safe, ok := m.validatePath(c, p.path)
 	if !ok {
+		return 1
+	}
+	if !m.pathExists(c, safe) {
 		return 1
 	}
 	n := atoi(limit)

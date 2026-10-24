@@ -2411,7 +2411,8 @@ var functions = []Function{
 				"  PATTERN is a file name glob (find -name). With --contains only the\n" +
 				"  files it matches are searched, hidden and gitignored ones included,\n" +
 				"  with or without ripgrep. Skips node_modules, vendor, .git and\n" +
-				"  __pycache__; --contains also skips secret files. Default limit 100.",
+				"  __pycache__; --contains also skips secret files. Default limit 100.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_find", Usage: "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]", Description: "Find files by pattern (ignores node_modules, vendor, .git)"},
 		ShellVars: []string{"HOME"},
@@ -2531,7 +2532,10 @@ var functions = []Function{
 				"  ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore\n" +
 				"  matches, binary files, node_modules, vendor and .git are skipped; files\n" +
 				"  come in sorted path order. Secret files are skipped, templates such as\n" +
-				"  .env.example searched. Default limit 100.",
+				"  .env.example searched. Default limit 100.\n" +
+				"  Output: file:line:content with absolute paths (a FILE PATH gives\n" +
+				"  line:content); context lines use -, groups are separated by --.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
 		ShellVars: []string{"HOME"},
