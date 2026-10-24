@@ -493,7 +493,9 @@ llm_tree --depth 2 /etc/nginx
 #### Notes
 
 ```text
-Ignores noise directories: node_modules, vendor, .git, __pycache__
-The JSON tree leaves out entries whose name holds a tab or a newline
+Ignores noise directories below PATH: node_modules, vendor, .git,
+__pycache__, .cache. Entries whose name holds a tab or
+a newline are left out. --text lists symlinks as name -> target, in
+byte order whatever the locale.
 ```
 

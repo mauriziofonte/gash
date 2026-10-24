@@ -105,18 +105,42 @@ func TestTreeTextRootAndSlash(t *testing.T) {
 	same(t, m, d, env, "llm_tree", "--depth", "1", "/")
 }
 
-// TestLedger_LLM19_2x: llm_tree --text prunes the start point itself when it
-// is named like a pruned directory (blank output) and leaves symlinks out.
+// TestLedger_LLM19_2x: a root named vendor lists its contents in text mode
+// and symlinks are listed (2.x printed nothing for such a root, as its
+// prunes ran on the start point, and left symlinks out).
 func TestLedger_LLM19_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, "vendor", "inside"), "x")
 	require.NoError(t, os.Symlink("vendor", filepath.Join(d, "ln")))
-	r := same(t, m, d, env, "llm_tree", "--text", "vendor")
-	require.Equal(t, result{"", "", 0}, r)
-	r = same(t, m, d, env, "llm_tree", "--text")
-	require.NotContains(t, r.Stdout, "ln")
+	// 3.0: LLM-19 fixed
+	r := runGo(t, m, d, env, "llm_tree", "--text", "vendor")
+	require.Equal(t, result{"vendor/\ninside\n", "", 0}, r)
+	r = runGo(t, m, d, env, "llm_tree", "--text")
+	require.Contains(t, r.Stdout, "\nln -> vendor\n")
+}
+
+// TestLedger_LLM19: the text tree prunes noise names below the root only,
+// cuts the root prefix literally (a[1]), lists symlinks, leaves out names
+// with a newline or a tab and orders entries by byte order of their path
+// components, whatever the locale.
+func TestLedger_LLM19(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), map[string]string{"LC_ALL": "en_US.UTF-8", "LC_COLLATE": "en_US.UTF-8"})
+	d := physTemp(t)
+	root := filepath.Join(d, "a[1]")
+	for _, f := range []string{"B", "a-b", "a/x", "_u", "node_modules/m", "n\nl", "t\tb"} {
+		mustWrite(t, filepath.Join(root, f), "x")
+	}
+	require.NoError(t, os.Symlink("B", filepath.Join(root, "ln")))
+	r := runGo(t, m, d, env, "llm_tree", "--text", "a[1]")
+	require.Equal(t, result{"a[1]/\nB\n_u\na/\n  x\na-b\nln -> B\n", "", 0}, r)
+	for _, name := range []string{"vendor", "node_modules", ".git", "__pycache__", ".cache"} {
+		mustWrite(t, filepath.Join(d, name, "inside"), "x")
+		r = runGo(t, m, d, env, "llm_tree", "--text", name)
+		require.Equal(t, result{name + "/\ninside\n", "", 0}, r, name)
+	}
 }
 
 // TestLedger_LLM08: a root with a quote or backslash gives valid JSON (2.x

@@ -2654,8 +2654,10 @@ var functions = []Function{
 				"  llm_tree --depth 2 /etc/nginx\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Ignores noise directories: node_modules, vendor, .git, __pycache__\n" +
-				"  The JSON tree leaves out entries whose name holds a tab or a newline",
+				"  Ignores noise directories below PATH: node_modules, vendor, .git,\n" +
+				"  __pycache__, .cache. Entries whose name holds a tab or\n" +
+				"  a newline are left out. --text lists symlinks as name -> target, in\n" +
+				"  byte order whatever the locale.",
 		},
 		Fallback:  &Usage{Program: "llm_tree", Usage: "llm_tree [--text] [--depth N] [--stats] [PATH]", Description: "Compact directory tree (JSON default, --text for indented, --stats for size/count)"},
 		ShellVars: []string{"HOME"},

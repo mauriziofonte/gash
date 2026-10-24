@@ -11,7 +11,6 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
-	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // treeCap is the awk cap= of the JSON listing, textCap the head -n of the
@@ -87,57 +86,73 @@ func (m *Module) tree(c *invoke.Call) int {
 	return 0
 }
 
-// treeText is the --text listing: find's output (start point included,
-// pruned names and everything but files and directories left out) split
-// into lines, sorted, cut at 200 lines and indented by the slashes below
-// the start point.
+// treeText is the --text listing: the start point and the entries below
+// it (pruned names and other file types left out), in byte order of their
+// path components, cut at 200 lines and indented by the slashes below the
+// start point. 3.0 (LLM-19): the noise names are pruned below the start
+// point only, so a root named vendor lists its contents; the prefix is
+// cut literally (a root like a[1] indents right); symlinks are listed as
+// "name -> target", as the JSON tree lists them; names with a tab or a
+// newline are left out, as in the JSON tree; the root / prints as /.
 func treeText(safe string, maxDepth int, forbidden func(string) bool) []byte {
-	var raw strings.Builder
+	type textEntry struct {
+		path, rel string
+		parts     []string
+		typ       byte
+	}
+	var ents []textEntry
 	w := findWalker{maxDepth: maxDepth, withStart: true, forbidden: forbidden}
 	w.visit = func(e findEntry) bool {
-		name := startName(e.path)
 		if e.depth > 0 {
-			name = e.path[strings.LastIndexByte(e.path, '/')+1:]
+			name := e.path[strings.LastIndexByte(e.path, '/')+1:]
+			if prunedNames[name] {
+				return false
+			}
+			if strings.ContainsAny(e.rel, "\n\t") {
+				return true
+			}
 		}
-		if prunedNames[name] {
-			return false
+		t := e.typeLetter()
+		if t != 'f' && t != 'd' && t != 'l' {
+			return true
 		}
-		if t := e.typeLetter(); t == 'f' || t == 'd' {
-			raw.WriteString(e.path)
-			raw.WriteByte('\n')
+		var parts []string
+		if e.rel != "" {
+			parts = strings.Split(e.rel, "/")
 		}
+		ents = append(ents, textEntry{path: e.path, rel: e.rel, parts: parts, typ: t})
 		return true
 	}
 	w.walk(safe)
-	lines := strings.Split(raw.String(), "\n")
-	lines = lines[:len(lines)-1]
-	sort.Strings(lines)
-	if len(lines) > textCap {
-		lines = lines[:textCap]
+	sort.SliceStable(ents, func(i, j int) bool {
+		a, b := ents[i].parts, ents[j].parts
+		for k := 0; k < len(a) && k < len(b); k++ {
+			if a[k] != b[k] {
+				return a[k] < b[k]
+			}
+		}
+		return len(a) < len(b)
+	})
+	if len(ents) > textCap {
+		ents = ents[:textCap]
 	}
 	var out bytes.Buffer
-	for _, item := range lines {
-		rel := stripPrefixGlob(item, safe)
-		rel = strings.TrimPrefix(rel, "/")
-		indent := strings.Repeat("  ", strings.Count(rel, "/"))
-		name := basename(item)
-		if st, err := os.Stat(item); err == nil && st.IsDir() {
-			name += "/"
+	for _, e := range ents {
+		indent := strings.Repeat("  ", strings.Count(e.rel, "/"))
+		name := basename(e.path)
+		switch e.typ {
+		case 'd':
+			if name != "/" {
+				name += "/"
+			}
+		case 'l':
+			if target, err := os.Readlink(e.path); err == nil {
+				name += " -> " + target
+			}
 		}
 		echo(&out, indent+name)
 	}
 	return out.Bytes()
-}
-
-// stripPrefixGlob is ${item#$pat} with an unquoted pattern: the shortest
-// prefix of item that matches the shell pattern pat is removed.
-func stripPrefixGlob(item, pat string) string {
-	for i := 0; i <= len(item); i++ {
-		if pathguard.MatchGlobSegment(pat, item[:i]) {
-			return item[i:]
-		}
-	}
-	return item
 }
 
 // basename is $(basename "$p"): trailing slashes removed, the last
