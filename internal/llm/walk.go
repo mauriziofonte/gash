@@ -5,6 +5,7 @@ package llm
 import (
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -63,9 +64,12 @@ func startName(p string) string {
 	return t
 }
 
-// findWalker walks like GNU find without -L: pre-order, each directory's
-// entries in the order the file system returns them (find does not sort),
-// unreadable directories skipped silently (2>/dev/null).
+// findWalker walks like GNU find without -L: pre-order, unreadable
+// directories skipped silently (2>/dev/null). Each directory's entries come
+// in byte order of their names (the C order of LLM-36), not in the order
+// the file system returns them as find's do: so llm_find's names, the -n
+// cut and the JSON tree (with its 500-entry cap) are the same on every
+// file system and run (3.0: F-04 fixed).
 type findWalker struct {
 	maxDepth int // -maxdepth; < 0 for none
 	// visit is called for every entry find evaluates (depth >= 1, and the
@@ -102,6 +106,7 @@ func (w *findWalker) dir(path, rel string, depth int) {
 	}
 	ents, _ := f.ReadDir(-1)
 	_ = f.Close()
+	sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
 	for _, d := range ents {
 		if w.stop {
 			return

@@ -70,8 +70,11 @@ All three search functions skip node_modules, vendor and .git (`llm_tree` also
 installed or not: ripgrep's regex syntax, binary files skipped, files in
 sorted path order; `llm_grep` also skips hidden files and what
 `.gitignore`/`.ignore`/`.rgignore` exclude, `llm_find --contains` searches
-them. Zero matches: exit 0, no output; a PATH that does not exist is
-`path_not_found`, an empty PATTERN `missing_pattern`.
+them. `llm_find` names and `llm_tree` entries come in the same byte order
+(C order: each directory's entries sorted by name), so `-n N` and the JSON
+tree's 500-entry cap cut at the same place on every run. Zero matches: exit
+0, no output; a PATH that does not exist is `path_not_found`, an empty
+PATTERN `missing_pattern`.
 
 ### 3.2 Filesystem scanners
 
