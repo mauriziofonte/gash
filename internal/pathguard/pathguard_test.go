@@ -72,24 +72,47 @@ func TestValidatePath_Forbidden(t *testing.T) {
 	}
 }
 
-// TestLedger_LLM10_2x pins the forbidden-list/secret gaps rc.A reproduces: the
-// shadow/gshadow backups, /etc/security/opasswd and several secret-looking
-// names are NOT refused, exactly as 2.1.0 (LEDGER LLM-10).
+// TestLedger_LLM10_2x: 2.1.0 left the shadow/gshadow backups and
+// /etc/security/opasswd out of the forbidden list and did not match several
+// secret-looking names. 3.0: LLM-10 fixed, they are refused; auth.json,
+// which the fix recipe leaves out, is still not a secret.
 func TestLedger_LLM10_2x(t *testing.T) {
 	g := guardAt("/tmp", "/home/u")
-	// Not in the forbidden list, so ValidatePath returns them (realpath-
-	// normalized; the /private firmlink applies on macOS, so compare against
-	// the same normalization).
 	for _, p := range []string{"/etc/shadow-", "/etc/gshadow-", "/etc/security/opasswd"} {
-		got, err := g.ValidatePath(p)
-		require.NoErrorf(t, err, "LLM-10: %q must not be forbidden in rc.A", p)
-		want, err := g.Realpath(p, false)
-		require.NoError(t, err)
-		require.Equal(t, want, got)
+		_, err := g.ValidatePath(p)
+		var r *Refusal
+		require.ErrorAsf(t, err, &r, "LLM-10: %q must be forbidden", p)
+		require.Equal(t, "forbidden_path", r.Code)
 	}
-	// Not matched as secrets in rc.A.
-	for _, name := range []string{"ssh_host_rsa_key", ".envrc", "terraform.tfvars.json", "auth.json", "credentials_old"} {
-		require.Falsef(t, SecretName(name), "LLM-10: %q must not be a secret in rc.A", name)
+	for _, name := range []string{"ssh_host_rsa_key", ".envrc", "terraform.tfvars.json", "credentials_old"} {
+		require.Truef(t, SecretName(name), "LLM-10: %q must be a secret", name)
+	}
+	require.False(t, SecretName("auth.json"))
+}
+
+// TestLedger_LLM10: the secret/forbidden matrix with the 3.0 additions, and
+// the look-alikes that stay allowed.
+func TestLedger_LLM10(t *testing.T) {
+	g := guardAt("/tmp", "/home/u")
+	for _, p := range []string{"/etc/shadow-", "/etc/gshadow-", "/etc/security/opasswd", "/etc/shadow", "/etc/sudoers.d/x"} {
+		_, err := g.ValidatePath(p)
+		var r *Refusal
+		require.ErrorAsf(t, err, &r, "%q must be forbidden", p)
+		require.Equal(t, "forbidden_path", r.Code)
+		require.Equal(t, "FATAL", r.Action)
+	}
+	for _, p := range []string{"/etc/shadow--x", "/etc/security", "/etc/security/limits.conf"} {
+		_, err := g.ValidatePath(p)
+		require.NoErrorf(t, err, "%q must stay allowed", p)
+	}
+	for _, name := range []string{
+		"ssh_host_rsa_key", "SSH_HOST_ED25519_KEY", "/etc/ssh/ssh_host_ecdsa_key", ".envrc", "x/.EnvRC",
+		"terraform.tfvars.json", "prod.TFVARS.JSON", "credentials", "credentials.json", "credentials_old", "Credentials-prod", "Credentials.bak",
+	} {
+		require.Truef(t, SecretName(name), "%q must be a secret", name)
+	}
+	for _, name := range []string{"ssh_host_rsa_key.pub", "ssh_host_key", "envrc", "tfvars.json.txt", "my_credentials", "CredentialsController.php", "auth.json"} {
+		require.Falsef(t, SecretName(name), "%q must not be a secret", name)
 	}
 }
 
@@ -110,21 +133,36 @@ func TestValidatePath_Tilde(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// TestLedger_LLM25_2x pins ~user as textual, not real user expansion:
-// "~root/x" becomes "$HOME" + "root/x" (LEDGER LLM-25, kept in rc.A).
+// TestLedger_LLM25_2x: ~user is refused with invalid_path (2.x read it
+// textually: "~root/x" became "$HOME" + "root/x").
 func TestLedger_LLM25_2x(t *testing.T) {
 	g := guardAt("/tmp", "/home/u")
-	got, err := g.ValidatePath("~root/x")
-	require.NoError(t, err)
-	// ~root is textual: the leading ~ is dropped and Home prepended
-	// ("/home/u" + "root/x" = "/home/uroot/x"), not expanded to root's real
-	// home. The result is then realpath-normalized exactly as Realpath does;
-	// comparing against that same normalization keeps the expectation
-	// host-independent (macOS resolves /home through the /System/Volumes/Data
-	// firmlink, which applies equally to both sides).
-	want, err := g.Realpath("/home/uroot/x", false)
-	require.NoError(t, err)
-	require.Equal(t, want, got)
+	// 3.0: LLM-25 fixed
+	_, err := g.ValidatePath("~root/x")
+	var r *Refusal
+	require.ErrorAs(t, err, &r)
+	require.Equal(t, "invalid_path", r.Code)
+	require.Equal(t, "RETRY", r.Action)
+	require.Equal(t, "~root/x", r.Details)
+}
+
+// TestLedger_LLM25: ~ and ~/... expand to Home; ~user, ~root and ~+ are
+// refused (invalid_path, RETRY); a ~ later in the path is a plain byte.
+func TestLedger_LLM25(t *testing.T) {
+	g := guardAt("/tmp", "/home/u")
+	for in, raw := range map[string]string{"~": "/home/u", "~/x": "/home/u/x", "a~b": "/tmp/a~b", "x/~": "/tmp/x/~"} {
+		got, err := g.ValidatePath(in)
+		require.NoError(t, err, in)
+		want, err := g.Realpath(raw, false)
+		require.NoError(t, err)
+		require.Equal(t, want, got, in)
+	}
+	for _, in := range []string{"~root", "~root/x", "~u/x", "~+", "~-/x"} {
+		_, err := g.ValidatePath(in)
+		var r *Refusal
+		require.ErrorAs(t, err, &r, in)
+		require.Equal(t, "invalid_path", r.Code, in)
+	}
 }
 
 func TestValidatePath_Empty(t *testing.T) {
@@ -307,5 +345,34 @@ func TestGlobPosixClasses(t *testing.T) {
 		{"[x[:bogus:]]", "x", true},
 	} {
 		require.Equal(t, c.want, MatchGlobSegment(c.pat, c.name), "%s %s", c.pat, c.name)
+	}
+}
+
+// TestUnderForbidden: the lexical per-entry test of a walk (LEDGER LLM-09).
+func TestUnderForbidden(t *testing.T) {
+	g := NewGuard(OSFS{}, "/", "/home/u", "/var/root")
+	for _, p := range []string{"/proc", "/proc/1/environ", "/root/", "/etc/shadow", "/etc/shadow-", "/etc/sudoers.d/x",
+		"/private/var/root/x", "/var/root", "proc/self"} {
+		require.Truef(t, g.UnderForbidden(p), "%q is under a forbidden entry", p)
+	}
+	for _, p := range []string{"", "/", "/etc", "/etc/passwdx", "/rootfs", "/home/u/proc", "/var", "/private/var"} {
+		require.Falsef(t, g.UnderForbidden(p), "%q is not under a forbidden entry", p)
+	}
+}
+
+// TestSecretException: the exception names match case-insensitively on the
+// base name only, and SecretName lets them through (LEDGER LLM-15).
+func TestSecretException(t *testing.T) {
+	for name, want := range map[string]bool{
+		".env.example": true, ".ENV.Example": true, "x.env.example": true, "id_rsa.pub": true,
+		".env.sample": true, ".env.dist": true, ".env.template": true,
+		".env": false, "id_rsa": false, "x.env": false, "example": false,
+	} {
+		if got := SecretException(name); got != want {
+			t.Errorf("SecretException(%q) = %v, want %v", name, got, want)
+		}
+		if want && SecretName("/p/"+name) {
+			t.Errorf("SecretName(%q) = true for an exception", name)
+		}
 	}
 }

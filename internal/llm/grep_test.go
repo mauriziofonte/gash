@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -178,8 +179,9 @@ func TestLedger_LLM01(t *testing.T) {
 	marker := filepath.Join(d, "marker")
 	for _, v := range []string{"abc", "a[$(touch " + marker + ")]", "1+1", "-1", "", "1234567890", " 1"} {
 		r := runGo(t, m, d, env, "llm_grep", "x", "--context", v)
+		// 3.0: LLM-28 fixed ("non-negative", 2.x said "positive")
 		require.Equal(t, result{"", `{"error":"invalid_context","details":"Value '` + v +
-			`' is not a positive integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for context"}` + "\n", 1}, r, v)
+			`' is not a non-negative integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for context"}` + "\n", 1}, r, v)
 	}
 	require.NoFileExists(t, marker)
 	r := runGo(t, m, d, env, "llm_grep", "x", "-C", "1")
@@ -220,15 +222,42 @@ func TestLedger_LLM07_2x(t *testing.T) {
 	require.Equal(t, d+"/f.txt:1:hit\n", same(t, m, d, env, "llm_grep", "hit", ".").Stdout)
 }
 
-// TestLedger_LLM15_2x: a walk leaves out secret-exception files too, an
-// explicit exception file is searched.
+// TestLedger_LLM15_2x: a walk searches secret-exception files (2.x left
+// them out), an explicit exception file is searched.
 func TestLedger_LLM15_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, ".env.example"), "hit\n")
 	env := rgEnv(t, physTemp(t))
-	require.Equal(t, "", same(t, m, d, env, "llm_grep", "hit", ".").Stdout)
-	require.Equal(t, "1:hit\n", same(t, m, d, env, "llm_grep", "hit", ".env.example").Stdout)
+	// 3.0: LLM-15 fixed
+	require.Equal(t, d+"/.env.example:1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".").Stdout)
+	require.Equal(t, "1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".env.example").Stdout)
+}
+
+// TestLedger_LLM15: the secret exceptions win over the patterns in a walk
+// (llm_grep and llm_find --contains) as for an explicit file; the secret
+// files themselves stay out, and --ext still filters the exceptions.
+func TestLedger_LLM15(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	for _, f := range []string{".env.example", "x.env.example", ".ENV.Sample", "id_rsa.pub", ".env", "id_rsa", "x.env"} {
+		mustWrite(t, filepath.Join(d, f), "hit\n")
+	}
+	env := rgEnv(t, physTemp(t))
+	want := d + "/.ENV.Sample:1:hit\n" + d + "/.env.example:1:hit\n" + d + "/id_rsa.pub:1:hit\n" + d + "/x.env.example:1:hit\n"
+	require.Equal(t, result{want, "", 0}, runGo(t, m, d, env, "llm_grep", "hit", "."))
+	r := runGo(t, m, d, env, "llm_find", "*", "--contains", "hit")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	for _, f := range []string{".ENV.Sample", ".env.example", "id_rsa.pub", "x.env.example"} {
+		require.Contains(t, r.Stdout, d+"/"+f+"\n")
+	}
+	for _, f := range []string{".env", "id_rsa", "x.env"} {
+		require.NotContains(t, r.Stdout, d+"/"+f+"\n")
+	}
+	require.Equal(t, "1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".env.example").Stdout)
+	require.Equal(t, d+"/id_rsa.pub:1:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".", "--ext", "pub").Stdout)
+	r = runGo(t, m, d, env, "llm_grep", "hit", ".env")
+	require.Contains(t, r.Stderr, "secret_file_blocked")
 }
 
 // TestLedger_LLM16: RIPGREP_CONFIG_PATH changes nothing.
@@ -250,10 +279,58 @@ func TestLedger_LLM17_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	env := rgEnv(t, physTemp(t))
-	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_grep", "x", "/nonexistent"))
-	require.Equal(t, result{"", "", 0}, same(t, m, d, env, "llm_find", "*", "/nonexistent"))
-	require.Equal(t, result{"", "", 0}, run2x(t, d, env, "llm_grep", "(", "."))
+	// 3.0: LLM-17 fixed (2.x: exit 0, no output)
+	for _, fn := range []string{"llm_grep", "llm_find"} {
+		r := runGo(t, m, d, env, fn, "x", "/nonexistent")
+		require.Equal(t, result{"", `{"error":"path_not_found","details":"/nonexistent","action":"RETRY","recoverable":true,"hint":"Provide an existing file or directory"}` + "\n", 1}, r, fn)
+	}
 	require.Equal(t, 1, runGo(t, m, d, env, "llm_grep", "(", ".").RC)
+}
+
+// TestLedger_LLM17: a missing root is path_not_found/RETRY for llm_grep,
+// llm_find and llm_find --contains, while zero matches stay exit 0 with no
+// output.
+func TestLedger_LLM17(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "f.txt"), "hit\n")
+	require.NoError(t, os.Symlink("gone", filepath.Join(d, "dangling")))
+	env := rgEnv(t, physTemp(t))
+	for _, args := range [][]string{
+		{"llm_grep", "hit", "missing"},
+		{"llm_grep", "hit", "dangling"},
+		{"llm_find", "*", "missing"},
+		{"llm_find", "*", "missing", "--contains", "hit"},
+	} {
+		r := runGo(t, m, d, env, args[0], args[1:]...)
+		require.Equal(t, 1, r.RC, args)
+		require.Empty(t, r.Stdout, args)
+		var e struct{ Error, Action, Details string }
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		require.Equal(t, "path_not_found", e.Error, args)
+		require.Equal(t, "RETRY", e.Action, args)
+		want := filepath.Join(d, args[2])
+		if args[2] == "dangling" {
+			want = filepath.Join(d, "gone") // the resolved path
+		}
+		require.Equal(t, want, e.Details, args)
+	}
+	require.Equal(t, result{"", "", 0}, runGo(t, m, d, env, "llm_grep", "nomatch", "."))
+	require.Equal(t, result{"", "", 0}, runGo(t, m, d, env, "llm_find", "nomatch*", "."))
+}
+
+// TestLedger_LLM07: llm_grep prints line:content for a FILE PATH and
+// abspath:line:content for a directory; context lines use - and groups
+// are separated by --.
+func TestLedger_LLM07(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "f.txt"), "hit\na\nb\nc\nd\nhit\n")
+	env := rgEnv(t, physTemp(t))
+	require.Equal(t, "1:hit\n6:hit\n", runGo(t, m, d, env, "llm_grep", "hit", "f.txt").Stdout)
+	require.Equal(t, d+"/f.txt:1:hit\n"+d+"/f.txt:6:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".").Stdout)
+	require.Equal(t, "1:hit\n2-a\n--\n5-d\n6:hit\n", runGo(t, m, d, env, "llm_grep", "hit", "f.txt", "-C", "1").Stdout)
+	require.Equal(t, d+"/f.txt:1:hit\n"+d+"/f.txt-2-a\n--\n"+d+"/f.txt-5-d\n"+d+"/f.txt:6:hit\n", runGo(t, m, d, env, "llm_grep", "hit", ".", "-C", "1").Stdout)
 }
 
 // TestLedger_LLM26: binary files are skipped in a walk.
@@ -282,7 +359,7 @@ func TestSearchTreeSize(t *testing.T) {
 // past rg's first 64 KiB buffer) is binary and skipped whole, by llm_grep
 // and llm_find --contains alike.
 func TestLedger_LLM38(t *testing.T) {
-	archive2x(t) // before runGo changes the directory
+	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, "start"), "\x00needle\n")
@@ -292,7 +369,7 @@ func TestLedger_LLM38(t *testing.T) {
 	env := baseEnv(physTemp(t), map[string]string{"PATH": ""})
 	require.Equal(t, result{d + "/text:1:needle\n", "", 0}, runGo(t, m, d, env, "llm_grep", "needle", d))
 	require.Equal(t, result{d + "/text\n", "", 0}, runGo(t, m, d, env, "llm_find", "*", d, "--contains", "needle"))
-	if _, err := exec.LookPath("rg"); err == nil {
+	if _, err := exec.LookPath("rg"); err == nil && with2x {
 		// 2.x: rg reported the match before a NUL past its first buffer.
 		require.Contains(t, run2x(t, d, rgEnv(t, physTemp(t)), "llm_grep", "needle", d).Stdout, d+"/end:1:needle")
 	}

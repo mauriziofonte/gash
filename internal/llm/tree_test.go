@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -106,23 +105,47 @@ func TestTreeTextRootAndSlash(t *testing.T) {
 	same(t, m, d, env, "llm_tree", "--depth", "1", "/")
 }
 
-// TestLedger_LLM19_2x: llm_tree --text prunes the start point itself when it
-// is named like a pruned directory (blank output) and leaves symlinks out.
+// TestLedger_LLM19_2x: a root named vendor lists its contents in text mode
+// and symlinks are listed (2.x printed nothing for such a root, as its
+// prunes ran on the start point, and left symlinks out).
 func TestLedger_LLM19_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, "vendor", "inside"), "x")
 	require.NoError(t, os.Symlink("vendor", filepath.Join(d, "ln")))
-	r := same(t, m, d, env, "llm_tree", "--text", "vendor")
-	require.Equal(t, result{"", "", 0}, r)
-	r = same(t, m, d, env, "llm_tree", "--text")
-	require.NotContains(t, r.Stdout, "ln")
+	// 3.0: LLM-19 fixed
+	r := runGo(t, m, d, env, "llm_tree", "--text", "vendor")
+	require.Equal(t, result{"vendor/\ninside\n", "", 0}, r)
+	r = runGo(t, m, d, env, "llm_tree", "--text")
+	require.Contains(t, r.Stdout, "\nln -> vendor\n")
+}
+
+// TestLedger_LLM19: the text tree prunes noise names below the root only,
+// cuts the root prefix literally (a[1]), lists symlinks, leaves out names
+// with a newline or a tab and orders entries by byte order of their path
+// components, whatever the locale.
+func TestLedger_LLM19(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), map[string]string{"LC_ALL": "en_US.UTF-8", "LC_COLLATE": "en_US.UTF-8"})
+	d := physTemp(t)
+	root := filepath.Join(d, "a[1]")
+	for _, f := range []string{"B", "a-b", "a/x", "_u", "node_modules/m", "n\nl", "t\tb"} {
+		mustWrite(t, filepath.Join(root, f), "x")
+	}
+	require.NoError(t, os.Symlink("B", filepath.Join(root, "ln")))
+	r := runGo(t, m, d, env, "llm_tree", "--text", "a[1]")
+	require.Equal(t, result{"a[1]/\nB\n_u\na/\n  x\na-b\nln -> B\n", "", 0}, r)
+	for _, name := range []string{"vendor", "node_modules", ".git", "__pycache__", ".cache"} {
+		mustWrite(t, filepath.Join(d, name, "inside"), "x")
+		r = runGo(t, m, d, env, "llm_tree", "--text", name)
+		require.Equal(t, result{name + "/\ninside\n", "", 0}, r, name)
+	}
 }
 
 // TestLedger_LLM08: a root with a quote or backslash gives valid JSON (2.x
-// printed it raw through awk -v); a root with a tab or a newline still lists
-// nothing, as the 2.x ! -path tests saw the whole path.
+// printed it raw through awk -v); a root with a tab or a newline lists its
+// children (2.x listed nothing, as its ! -path tests saw the whole path).
 func TestLedger_LLM08(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
@@ -143,7 +166,8 @@ func TestLedger_LLM08(t *testing.T) {
 	}
 	for _, root := range []string{"t\tab", "n\nl"} {
 		r := runGo(t, m, d, env, "llm_tree", "--stats", root)
-		want := `{"path":` + string(mustJSON(t, filepath.Join(d, root))) + `,"type":"directory","size":0,"children_count":0,"children":[]}` + "\n"
+		// 3.0: LLM-08 fixed
+		want := `{"path":` + string(mustJSON(t, filepath.Join(d, root))) + `,"type":"directory","size":1,"children_count":1,"children":[{"name":"f1","type":"file","size":1}]}` + "\n"
 		require.Equal(t, result{want, "", 0}, r)
 	}
 }
@@ -155,8 +179,9 @@ func mustJSON(t *testing.T, v any) []byte {
 	return b
 }
 
-// TestLedger_LLM06_2x: tree names keep C0 controls other than tab, newline
-// and CR raw, as the awk esc() did; DEL and bytes >= 0x80 too (LLM-23).
+// TestLedger_LLM06_2x: tree names escape every C0 control and DEL as jq
+// does (2.x kept those other than tab, newline and CR raw, as the awk
+// esc() did), and replace invalid UTF-8 with U+FFFD (LLM-23).
 func TestLedger_LLM06_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
@@ -165,11 +190,13 @@ func TestLedger_LLM06_2x(t *testing.T) {
 		t.Skip("filesystem rejects non-UTF-8 names")
 	}
 	mustWrite(t, filepath.Join(d, "a\x01b\x1bc\x7fd\re\xff"), "x")
-	r := same(t, m, d, env, "llm_tree")
-	require.Contains(t, r.Stdout, `"name":"a`+"\x01b\x1bc\x7fd"+`\re`+"\xff"+`"`)
+	// 3.0: LLM-06 fixed
+	r := runGo(t, m, d, env, "llm_tree")
+	require.Contains(t, r.Stdout, `"name":"a\u0001b\u001bc\u007fd\re`+"\uFFFD"+`"`)
 }
 
-// TestLedger_LLM23_2x: llm_tree names pass invalid UTF-8 through raw.
+// TestLedger_LLM23_2x: llm_tree names replace invalid UTF-8 with U+FFFD
+// (2.x passed the bytes through raw).
 func TestLedger_LLM23_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
@@ -178,8 +205,9 @@ func TestLedger_LLM23_2x(t *testing.T) {
 		t.Skip("filesystem rejects non-UTF-8 names (APFS)")
 	}
 	mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "x")
-	r := same(t, m, d, env, "llm_tree")
-	require.Contains(t, r.Stdout, "\"bad\xff\xfe\"")
+	// 3.0: LLM-23 fixed
+	r := runGo(t, m, d, env, "llm_tree")
+	require.Contains(t, r.Stdout, "\"bad\uFFFD\uFFFD\"")
 }
 
 // TestLedger_LLM29_2x: names with a tab or a newline are left out of the
@@ -195,28 +223,110 @@ func TestLedger_LLM29_2x(t *testing.T) {
 	require.Equal(t, `{"path":"`+d+`","type":"directory","size":1,"children_count":1,"children":[{"name":"ok","type":"file","size":1}]}`+"\n", r.Stdout)
 }
 
-// TestLedger_LLM28_2x: invalid_depth has two detail formats.
+// TestLedger_LLM29: the JSON tree leaves out every entry whose name holds a
+// tab or a newline, and what lies below such a directory; the rule tests
+// the entry names below the start point only (see LLM-08).
+func TestLedger_LLM29(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "t\tx"), "x")
+	mustWrite(t, filepath.Join(d, "n\nx"), "x")
+	mustWrite(t, filepath.Join(d, "d\tir", "inner"), "x")
+	mustWrite(t, filepath.Join(d, "ok"), "x")
+	r := runGo(t, m, d, env, "llm_tree", "--stats")
+	require.Equal(t, `{"path":"`+d+`","type":"directory","size":1,"children_count":1,"children":[{"name":"ok","type":"file","size":1}]}`+"\n", r.Stdout)
+}
+
+// TestLedger_LLM28_2x: invalid_depth has one detail format for 0 and for a
+// non-integer (2.x had two).
 func TestLedger_LLM28_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	d := physTemp(t)
-	r := same(t, m, d, env, "llm_tree", "--depth", "0")
-	require.Equal(t, `{"error":"invalid_depth","details":"0","action":"RETRY","recoverable":true,"hint":"Provide a positive integer"}`+"\n", r.Stderr)
-	r = same(t, m, d, env, "llm_tree", "--depth", "abc")
-	require.Equal(t, `{"error":"invalid_depth","details":"Value 'abc' is not a positive integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for depth"}`+"\n", r.Stderr)
+	// 3.0: LLM-28 fixed
+	r := runGo(t, m, d, env, "llm_tree", "--depth", "0")
+	require.Equal(t, `{"error":"invalid_depth","details":"Value '0' is not an integer from 1 to 999999999","action":"RETRY","recoverable":true,"hint":"Provide a depth of 1 or more"}`+"\n", r.Stderr)
+	r = runGo(t, m, d, env, "llm_tree", "--depth", "abc")
+	require.Equal(t, `{"error":"invalid_depth","details":"Value 'abc' is not an integer from 1 to 999999999","action":"RETRY","recoverable":true,"hint":"Provide a depth of 1 or more"}`+"\n", r.Stderr)
 }
 
-// TestLedger_LLM09_2x: only the start point is guarded; the walk enters
-// protected trees below it.
-func TestLedger_LLM09_2x(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("the walk-into-protected-tree case uses /proc, a Linux procfs")
+// TestLedger_LLM28: llm_tree --depth 0, 00, abc, -1 and 1234567890 share the
+// one invalid_depth message (RETRY); 1 and 007 are accepted; the other
+// integer options say "non-negative" and accept 0.
+func TestLedger_LLM28(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	d := physTemp(t)
+	for _, v := range []string{"0", "00", "abc", "-1", "1234567890"} {
+		r := runGo(t, m, d, env, "llm_tree", "--depth", v)
+		require.Equal(t, result{"", `{"error":"invalid_depth","details":"Value '` + v + `' is not an integer from 1 to 999999999","action":"RETRY","recoverable":true,"hint":"Provide a depth of 1 or more"}` + "\n", 1}, r, v)
 	}
+	for _, v := range []string{"1", "007"} {
+		require.Equal(t, 0, runGo(t, m, d, env, "llm_tree", "--depth", v).RC, v)
+	}
+	r := runGo(t, m, d, env, "llm_find", "*", "-n", "x")
+	require.Equal(t, result{"", `{"error":"invalid_limit","details":"Value 'x' is not a non-negative integer below 1000000000","action":"RETRY","recoverable":true,"hint":"Provide a plain integer for limit"}` + "\n", 1}, r)
+	require.Equal(t, result{"", "", 0}, runGo(t, m, d, env, "llm_find", "*", "-n", "0"))
+}
+
+// TestLedger_LLM09_2x: 2.x guarded only the start point, so a walk from /
+// entered the protected trees below it. 3.0: LLM-09 fixed, a walk from /
+// is refused.
+func TestLedger_LLM09_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	r := runGo(t, m, "/", env, "llm_tree", "--depth", "1", "/")
-	require.Equal(t, 0, r.RC)
-	require.Contains(t, r.Stdout, `{"name":"proc","type":"directory"}`)
+	require.Equal(t, result{"", `{"error":"forbidden_path","details":"/","action":"FATAL","recoverable":false,"hint":"Search a subdirectory"}` + "\n", 1}, r)
+}
+
+// TestLedger_LLM09: a walk may not start at / or above a protected tree
+// (for llm_grep and llm_find --contains also above an /etc entry), and the
+// walk leaves out every entry at or below a protected path.
+func TestLedger_LLM09(t *testing.T) {
+	m := New()
+	env := baseEnv(physTemp(t), nil)
+	refused := func(r result) {
+		t.Helper()
+		require.Equal(t, 1, r.RC)
+		require.Empty(t, r.Stdout)
+		require.Contains(t, r.Stderr, `"error":"forbidden_path"`)
+		require.Contains(t, r.Stderr, `"hint":"Search a subdirectory"`)
+	}
+	refused(runGo(t, m, "/", env, "llm_grep", "root", "/etc"))
+	refused(runGo(t, m, "/", env, "llm_tree", "--depth", "2", "/"))
+	refused(runGo(t, m, "/", env, "llm_tree", "--text", "/"))
+	refused(runGo(t, m, "/", env, "llm_find", "*", "/"))
+	refused(runGo(t, m, "/", env, "llm_find", "*", "/etc", "--contains", "root"))
+
+	// A listing of /etc is allowed, without the protected names.
+	r := runGo(t, m, "/", env, "llm_tree", "/etc")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	for _, n := range []string{"passwd", "shadow", "gshadow", "sudoers", "sudoers.d", "shadow-", "gshadow-"} {
+		require.NotContains(t, r.Stdout, `{"name":"`+n+`",`)
+	}
+	r = runGo(t, m, "/", env, "llm_find", "passwd*", "/etc", "-n", "1000")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	for _, l := range strings.Split(r.Stdout, "\n") {
+		require.NotRegexp(t, `/etc/passwd$`, l)
+	}
+
+	// Root's home is protected too: a fake one in a temp tree.
+	d := physTemp(t)
+	rh := filepath.Join(d, "home", "rootish")
+	mustWrite(t, filepath.Join(rh, "secret.txt"), "needle\n")
+	mustWrite(t, filepath.Join(d, "home", "user", "notes.txt"), "needle\n")
+	m.rootHome = func() string { return rh }
+	for _, args := range [][]string{
+		{"llm_tree", d}, {"llm_tree", "--text", filepath.Join(d, "home")}, {"llm_find", "*", d},
+		{"llm_grep", "needle", d}, {"llm_find", "*", d, "--contains", "needle"},
+	} {
+		refused(runGo(t, m, d, env, args[0], args[1:]...))
+	}
+	r = runGo(t, m, d, env, "llm_grep", "needle", filepath.Join(d, "home", "user"))
+	require.Equal(t, result{filepath.Join(d, "home", "user", "notes.txt") + ":1:needle\n", "", 0}, r)
+	_, err := os.Stat(rh)
+	require.NoError(t, err)
 }
 
 // TestLedger_LLM24: a trailing newline in PATH is kept (2.x lost it in a
@@ -233,8 +343,8 @@ func TestLedger_LLM24(t *testing.T) {
 	require.NotContains(t, r.Stdout, "in-plain")
 }
 
-// TestLedger_LLM25_2x: a leading ~ is replaced by $HOME textually, ~user
-// is not expanded: ~root/x is ${HOME}root/x.
+// TestLedger_LLM25_2x: ~user is invalid_path, ~/ expands to $HOME (2.x
+// replaced a leading ~ by $HOME textually: ~root/x was ${HOME}root/x).
 func TestLedger_LLM25_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
@@ -242,8 +352,12 @@ func TestLedger_LLM25_2x(t *testing.T) {
 	mustMkdir(t, home)
 	mustWrite(t, filepath.Join(d, "hroot", "x", "f"), "x")
 	env := baseEnv(home, nil)
-	r := same(t, m, home, env, "llm_tree", "~root/x")
-	require.Equal(t, `{"path":"`+home+`root/x","type":"directory","children":[{"name":"f","type":"file"}]}`+"\n", r.Stdout)
+	// 3.0: LLM-25 fixed (2.x listed $HOME + "root/x")
+	r := runGo(t, m, home, env, "llm_tree", "~root/x")
+	require.Equal(t, result{"", `{"error":"invalid_path","details":"~root/x","action":"RETRY","recoverable":true,"hint":"Only ~ and ~/ expand to your home; give another user's path in full"}` + "\n", 1}, r)
+	mustWrite(t, filepath.Join(home, "x", "f"), "x")
+	r = runGo(t, m, d, env, "llm_tree", "~/x")
+	require.Equal(t, `{"path":"`+home+`/x","type":"directory","children":[{"name":"f","type":"file"}]}`+"\n", r.Stdout)
 }
 
 func TestTreeCaps(t *testing.T) {
@@ -266,7 +380,7 @@ func TestTreeCaps(t *testing.T) {
 // the locale: upper case before lower, punctuation by its byte, UTF-8
 // after ASCII; 2.x's order under LC_ALL=C.
 func TestLedger_LLM36(t *testing.T) {
-	archive2x(t) // before runGo changes the directory
+	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
 	names := []string{"é", "e", "ab", "a_b", "a.b", "a-b", "a", "_u", "Z1", "B", "b"}
@@ -281,5 +395,7 @@ func TestLedger_LLM36(t *testing.T) {
 		_, body, _ := strings.Cut(r.Stdout, "\n") // the root line
 		require.Equal(t, want, body, loc)
 	}
-	same(t, m, d, baseEnv(physTemp(t), map[string]string{"LC_ALL": "C"}), "llm_tree", "--text")
+	if with2x {
+		same(t, m, d, baseEnv(physTemp(t), map[string]string{"LC_ALL": "C"}), "llm_tree", "--text")
+	}
 }

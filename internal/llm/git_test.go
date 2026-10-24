@@ -3,10 +3,13 @@
 package llm
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // gitEnv is the environment for a setup git call: a private HOME, the
@@ -254,4 +257,36 @@ func TestGitLogMatches2x(t *testing.T) {
 			same(t, m, tc.cwd, baseEnv(home, nil), "llm_git_log", tc.args...)
 		})
 	}
+}
+
+// TestLedger_LLM13: commits whose subject or author holds 0x1e, 0x1f or
+// another control character stay in the llm_git_log array (2.x split on
+// 0x1e/0x1f and dropped them).
+func TestLedger_LLM13(t *testing.T) {
+	requireGitJQ(t)
+	m := New()
+	home := physTemp(t)
+	d := physTemp(t)
+	git(t, d, home, "init", "-b", "main")
+	subjects := []string{"plain", "rs\x1ehere", "us\x1fhere", "soh\x01here"}
+	for _, s := range subjects {
+		git(t, d, home, "commit", "--allow-empty", "-m", s)
+	}
+	git(t, d, home, "commit", "--allow-empty", "--author", "Odd\x1fName <odd@example.test>", "-m", "odd author")
+	r := runGo(t, m, d, baseEnv(home, nil), "llm_git_log")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	var log []struct{ Hash, Subject, Author, Date string }
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &log), r.Stdout)
+	require.Len(t, log, 5)
+	require.Equal(t, "odd author", log[0].Subject)
+	require.Equal(t, "Odd\x1fName", log[0].Author)
+	for i, s := range subjects {
+		require.Equal(t, s, log[4-i].Subject)
+		require.Equal(t, "Port Tester", log[4-i].Author)
+		require.NotEmpty(t, log[4-i].Hash)
+		require.NotEmpty(t, log[4-i].Date)
+	}
+	r = runGo(t, m, d, baseEnv(home, nil), "llm_git_log", "-n", "2")
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &log), r.Stdout)
+	require.Len(t, log, 2)
 }

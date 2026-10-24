@@ -73,7 +73,8 @@ func validUint(name, value string) *contract.Envelope {
 	if uintRE.MatchString(value) {
 		return nil
 	}
-	e := contract.New("invalid_"+name, "Value '"+value+"' is not a positive integer below 1000000000",
+	// "non-negative": 0 is accepted (LLM-28; 2.x said "positive").
+	e := contract.New("invalid_"+name, "Value '"+value+"' is not a non-negative integer below 1000000000",
 		"Provide a plain integer for "+name)
 	return &e
 }

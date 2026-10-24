@@ -19,6 +19,7 @@ func (m *Module) find(c *invoke.Call) int {
 		return 0
 	}
 	pattern, fileType, contains, limit := "", "f", "", "100"
+	havePattern := false
 	var p pathTaker
 	p.path = "."
 	args := c.Args
@@ -43,8 +44,10 @@ func (m *Module) find(c *invoke.Call) int {
 		if strings.HasPrefix(a, "-") {
 			return fail(c, "unknown_option", a, "Use --type, --contains, or --limit")
 		}
-		if pattern == "" {
-			pattern = a
+		// The first positional is PATTERN, even when empty (LLM-18: 2.x
+		// skipped an empty one and took the next word).
+		if !havePattern {
+			pattern, havePattern = a, true
 		} else if !p.take(c, a) {
 			return 1
 		}
@@ -66,7 +69,18 @@ func (m *Module) find(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
+	if !m.pathExists(c, safe) {
+		return 1
+	}
 	n := atoi(limit)
+	mode := "names"
+	if contains != "" {
+		mode = "content"
+	}
+	forbidden, ok := m.walkRoot(c, safe, mode)
+	if !ok {
+		return 1
+	}
 	if contains != "" {
 		if m.guard(c).IsSecretFile(safe) {
 			return fail(c, "secret_file_blocked", safe, "This file contains secrets and cannot be searched")
@@ -83,6 +97,7 @@ func (m *Module) find(c *invoke.Call) int {
 			return rc
 		}
 		s.filesOnly = true
+		s.forbidden = forbidden
 		s.run(safe, c.Stdout, n)
 		return 0
 	}
@@ -90,7 +105,7 @@ func (m *Module) find(c *invoke.Call) int {
 		return 0
 	}
 	out := &lineLimiter{w: c.Stdout, left: n}
-	w := findWalker{maxDepth: -1, withStart: true}
+	w := findWalker{maxDepth: -1, withStart: true, forbidden: forbidden}
 	w.visit = func(e findEntry) bool {
 		name := startName(e.path)
 		if e.depth > 0 {

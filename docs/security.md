@@ -39,6 +39,8 @@ caller's shell, after three checks:
    `rm -rf /` and variants, `dd if=`, `mkfs.`, `> /dev/sd*`, `chmod 777 /`,
    `shutdown`, `reboot`, `halt`, fork bombs, `curl ... | sh`, `history -c`,
    `HISTFILE=`, `cat /etc/shadow`, `.ssh/id_`, `AWS_SECRET`, `PRIVATE_KEY`.
+   It reads the line as text, quotes included, so `echo 'please shutdown'`
+   is refused too.
 2. **Quote-aware parse.** Only plain words joined by `|`, `&&`, `||`, `;` or a
    newline. Refused: `$` and backticks (also inside double quotes), `(` `)`,
    brace expansion, background `&`, `|&`, `VAR=value` prefixes, commands given
@@ -54,7 +56,7 @@ caller's shell, after three checks:
 | `find`, `fd`, `rg` | `-exec`, `-execdir`, `-ok`, `-delete`, `-fprint*`, `-fls`; `fd -x/-X`; `rg --pre` |
 | `sort`, `tree` | `-o`, `--output`, `--compress-program` |
 | `sed`, `yq` | `-i`, `--in-place`; `yq` also `-s`/`--split-exp` (writes files) and `load()` (reads any file) |
-| `git` | global options other than `-C`, `--no-pager` and a few read-only ones (so no `-c`, no `--literal-pathspecs`); subcommands outside a read-only list; `--output`, `--ext-diff`, `--textconv`, `--no-index`, `cat-file --batch*`; blobs named by id (`show SHA`, `cat-file -p SHA`); `REV:PATH` naming a secret file; creating or deleting branches and tags; `remote` other than `show -n`/`get-url`; `config` without `--get`/`--list`; `stash` other than `list`/`show` (summary options only) |
+| `git` | global options other than `-C`, `--no-pager` and a few read-only ones (so no `-c`, no `--literal-pathspecs`); subcommands outside a read-only list; `--output`, `--ext-diff`, `--textconv`, `--no-index`, `cat-file --batch*`; blobs named by id (`show SHA`, `cat-file -p SHA`); `REV:PATH` naming a secret file; creating or deleting branches and tags; `remote` other than `show -n`/`get-url`; `config` without `--get`/`--list`; `stash` other than `list`/`show` (summary options only; no patch options on `list`) |
 | `ps`, `getent` | BSD `ps e` (other processes' environments); `getent shadow`, `getent gshadow` |
 | `diff` | `-r` where `diff` has no `--no-dereference` |
 | `docker` | subcommands other than `ps`, `images`, `logs`, `inspect`, `stats`, `top` and other read-only ones |
@@ -62,8 +64,11 @@ caller's shell, after three checks:
 | `php`, `node`, `python`, `ruby`, `java`, `composer` | anything but `--version` |
 | `crontab`, `date`, `hostname`, `ip` | anything but `crontab -l`; setting the date or hostname; `ip` other than show/list/get |
 
-Arguments naming a secret file (see below), also as `NAME=path`, are refused.
-Unquoted globs are expanded first; a match that is a secret file or starts with
+Arguments naming a secret file (see below), also as `NAME=path` or as a value
+attached to a short option or option cluster (`-f.env`, `-ivf.env`), are
+refused.
+Unquoted globs are expanded first, by Gash, in byte order whatever the locale
+(bash does no globbing of its own); a match that is a secret file or starts with
 `-` is refused. In the child shell, functions shadowing allowed commands are
 removed, `sed` runs as GNU `sed --sandbox`, `awk` as `gawk --sandbox` (both
 refused where unavailable), and `git` as described in [Git](#git). `grep`,
@@ -82,8 +87,10 @@ mode it inherits the caller's environment with `BASH_ENV` and `ENV` empty.
 
 Settings, read from `~/.gash_env` only (never from the environment):
 
-* `GASH_LLM_EXEC_ALLOW="make npm"`: extra commands with any arguments, without
-  per-command rules; listing `sed`, `awk`, `gawk`, `grep`, `rg`, `diff` or
+* `GASH_LLM_EXEC_ALLOW="make npm"`: extra commands with any options, without
+  per-command option rules; the secret-file, forbidden-path and walk rules
+  (no symlink-following walk, no walk at `/` or above a protected tree)
+  still apply; listing `sed`, `awk`, `gawk`, `grep`, `rg`, `diff` or
   `git` drops its wrapper.
 * `GASH_LLM_EXEC=unrestricted`: skips checks 2 and 3 (secret-file checks
   included) and the wrappers. Only the blocklist remains.
@@ -92,11 +99,12 @@ Settings, read from `~/.gash_env` only (never from the environment):
   reading stays possible. Without a working `bwrap`: `sandbox_unavailable`.
 
 Every argument is also checked against the [forbidden paths](#forbidden-paths):
-option values (`--file=/proc/x`, `-f/proc/x`), `key=value` words, `~` and
+option values (`--file=/proc/x`, `-f/proc/x`, `-vf/proc/x`), `key=value` words, `~` and
 `~user`, glob matches, and relative paths after a `cd` earlier in the line.
 Not checked: `/dev/null`, the arguments of `echo`, `printf`, `basename` and
 `dirname`, and the pattern operand of `grep`, `rg`, `sed`, `awk`, `jq` and
-`yq`. An allowed command can still read any other file your user can read
+`yq` (a pattern that looks like a secret file name, `grep id_rsa`, is still
+refused by the secret-file check). An allowed command can still read any other file your user can read
 whose name is not secret.
 
 Recursive commands (`grep -r`, `rg`, `find`, `fd`, `tree`, `du`, `ls -R`,
@@ -111,21 +119,27 @@ points read from a file (`find -files0-from`, `--files0-from`).
 
 Read-only is enforced twice, so one parser mistake does not become a write.
 First a **SQL guard** lexes the query with the target engine's quoting rules
-(including PostgreSQL `E''` and dollar quotes), ignoring literals and comments.
+(including PostgreSQL `E''` strings, where the `E` starts a token, and dollar
+quotes), ignoring literals and comments.
 It accepts one statement (a trailing `;` is fine) starting with `SELECT`,
 `WITH`, `VALUES`, `TABLE`, `SHOW`, `DESCRIBE`, `DESC`, `EXPLAIN` or `PRAGMA`,
 and refuses write keywords anywhere (`INSERT`, `UPDATE`, `DELETE`, `DROP`,
 `CREATE`, `ALTER`, `INTO`, `OUTFILE`, `LOAD DATA`, `COPY`, ...), file and
 program functions (`LOAD_FILE`, `PG_READ_FILE`, `LO_IMPORT`, `DBLINK`, ...),
-`SLEEP`, `BENCHMARK`, client commands (a backslash outside a literal), MySQL
+`SET`, `SLEEP`, `BENCHMARK`, client commands (a backslash outside a literal,
+or at the start of any line, literals and comments included), MySQL
 `/*! */` comments, SQLite dot-commands and lines holding only `go` or `/`.
 Then the **session is read-only**:
 
 | Engine | Session | Credentials |
 |---|---|---|
-| SQLite (`-f FILE`) | `sqlite3 -readonly -bail`, plus `-safe` on 3.37+; SQL on stdin | The file must pass the forbidden-path check and start with `SQLite format 3` |
-| MySQL, MariaDB | `SET SESSION TRANSACTION READ ONLY`; rows capped with `sql_select_limit`; database as `--database=NAME` | `--defaults-extra-file` on a process substitution, never argv |
-| PostgreSQL | `default_transaction_read_only=on`, `statement_timeout` from `GASH_DB_TIMEOUT` (30 s), 10 s connect timeout, `psql -X`; SQL on stdin; database in `PGDATABASE` (libpq would read a `-d` value holding `=` as a conninfo string) | `PGPASSWORD` in the environment of `psql` only |
+| SQLite (`-f FILE`) | Opened read-only (`mode=ro`), defensive and query-only, untrusted schemas (`trusted_schema=0`) | The file must pass the forbidden-path check and start with `SQLite format 3` |
+| MySQL, MariaDB | `SET SESSION TRANSACTION READ ONLY`; rows capped with `sql_select_limit` | Passed to the built-in driver in memory, never on a command line |
+| PostgreSQL | `default_transaction_read_only=on`, `statement_timeout` from `GASH_DB_TIMEOUT` (30 s), 10 s connect timeout | Passed to the built-in driver in memory, never on a command line |
+
+All three engines use drivers built into Gash: no `sqlite3`, `mysql` or
+`psql` client runs, and their error text is the driver's (`details` of
+`sqlite_error`, `mysql_error`, `pgsql_error`).
 
 Row caps are applied by the engine (outer `LIMIT` or `sql_select_limit`):
 `llm_db_query -r N` (default 100), `llm_db_sample --limit N` (default 5). Table
@@ -145,7 +159,8 @@ A path is secret when its base name matches, ignoring case, one of:
 |---|---|
 | Environment files | `.env` `.env.*` `*.env` (not `.env.example`, `.env.sample`, `.env.dist`, `.env.template`, `*.env.example`) |
 | Keys and keystores | `*.pem` `*.key` `*.p12` `*.pfx` `*.jks` `*.keystore` `*.kdbx` `*.ppk` `id_rsa*` `id_dsa*` `id_ecdsa*` `id_ed25519*` `*_rsa` `*_dsa` `*_ecdsa` `*_ed25519` (not `*.pub`) |
-| Credential files | `credentials` `credentials.*` `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc` `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto` `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig` `*.tfstate` `*.tfstate.*` `*.tfvars` |
+| Credential files | `credentials` `credentials.*` `credentials_*` `credentials-*` `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc` `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto` `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig` `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json` `.envrc` |
+| Host keys | `ssh_host_*_key` (not `*.pub`) |
 | Directories | anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.config/gcloud` |
 
 A symlink is judged by its own name and by its target's.
@@ -154,20 +169,26 @@ A symlink is judged by its own name and by its target's.
 |---|---|
 | `llm_exec` | Refuses secret arguments, glob matches and `git` `REV:PATH`; `grep`, `rg`, `diff` and `git` diff/show/grep/patch logs skip secret files (not in `unrestricted` mode, nor for commands in `GASH_LLM_EXEC_ALLOW`) |
 | `llm_config` | Refuses a secret file |
-| `llm_grep`, `llm_find --contains` | Refuse a secret path; skip secret files and directories in recursive searches, with `rg` and with the `grep` fallback alike |
+| `llm_grep`, `llm_find --contains` | Refuse a secret path; skip secret files and directories in recursive searches, but search the exceptions (`.env.example`, `*.pub`, ...) there, dotfiles included |
 | `llm_tree`, `llm_find`, filesystem scanners | List names and sizes only, secret files included |
 
 ## Forbidden paths
 
 `/proc`, `/sys`, `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/gshadow`,
-`/etc/passwd`, `/etc/sudoers`, `/etc/sudoers.d` and everything below them,
+`/etc/passwd`, `/etc/sudoers`, `/etc/sudoers.d`, `/etc/shadow-`,
+`/etc/gshadow-`, `/etc/security/opasswd` and everything below them,
 matched per path component (`/rootfs` is allowed), plus root's home where it
 is not `/root` (macOS: `/var/root`). A `..` component is refused.
-The path is checked as written, after `realpath -m` (symlinks resolved; a
-Bash walk where `realpath -m` is missing) and, for macOS, without a
-`/private` prefix. Applies to `llm_tree`, `llm_find`,
-`llm_grep`, `llm_config`, `llm_git_*`, `llm_project`, `llm_deps`, SQLite
-files of `llm_db_*` and the arguments of `llm_exec`. The filesystem scanners (`files_largest`, `dirs_largest`,
+The path is checked as written, after resolving it as `realpath -m` does
+(symlinks resolved) and, for macOS, without a `/private` prefix. Applies to
+`llm_tree`, `llm_find`, `llm_grep`, `llm_config`, `llm_git_*`, `llm_project`,
+`llm_deps`, `llm_docker_check`, SQLite files of `llm_db_*` and the
+arguments of `llm_exec`.
+The walks of `llm_tree`, `llm_find` and `llm_grep` may not start at `/` or
+above a protected tree (content searches, `llm_grep` and
+`llm_find --contains`, also not above an `/etc` entry): `forbidden_path`,
+hint `Search a subdirectory`. Below the root they skip every entry at or
+below a protected path, and they do not follow symlinks. The filesystem scanners (`files_largest`, `dirs_largest`,
 `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse `/proc`, `/sys`,
 `/dev`, `/boot` and `/root` (as written and resolved), also when reached
 through a symlink or from `/` (a walk skips them), and `/` without

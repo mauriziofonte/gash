@@ -6,10 +6,13 @@
 // One lexer, a code/quoted/line/block state machine, walks the query with
 // the lexical rules of the engine that will run it and builds a copy in
 // which every string, quoted identifier and comment is a single space. The
-// keyword checks then run on that copy. The 2.x behavior is reproduced as
-// it is, including the PostgreSQL E-string mislex (LEDGER DB-01): a quote
-// after any "e" or "E", even the last letter of an identifier, opens a
-// string in which a backslash escapes the next character.
+// keyword checks then run on that copy. A PostgreSQL quote opens an
+// E-string, in which a backslash escapes the next character, only after an
+// "e" or "E" that starts a token, as the server reads it: 2.x took the last
+// letter of an identifier for one too, so the guard and the server
+// disagreed on where a string ends (3.0: LEDGER DB-01 fixed). A backslash
+// at the start of a line is refused before the lexer runs, and SET is a
+// forbidden word.
 //
 // 2.x runs under the caller's locale, and the checks that use case or
 // [[:space:]] read a query differently under LC_ALL=C and under a UTF-8
@@ -39,7 +42,8 @@ const (
 var allowedFirstWords = []string{"SELECT", "WITH", "VALUES", "TABLE", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "PRAGMA"}
 
 // forbiddenWords is __LLM_SQL_FORBIDDEN_WORDS, in its order (the first
-// match is the one reported). SET is not in it (LEDGER DB-01).
+// match is the one reported), with SET added at the end (3.0: LEDGER DB-01
+// fixed).
 var forbiddenWords = []string{
 	"INSERT", "UPDATE", "DELETE", "MERGE", "UPSERT", "DROP", "CREATE", "ALTER", "TRUNCATE", "GRANT", "REVOKE",
 	"RENAME", "ATTACH", "DETACH", "VACUUM", "REINDEX", "COPY", "CALL", "HANDLER", "LOCK", "UNLOCK", "INTO", "OUTFILE",
@@ -49,7 +53,7 @@ var forbiddenWords = []string{
 	"DBLINK_SEND_QUERY", "QUERY_TO_XML", "QUERY_TO_XMLSCHEMA", "QUERY_TO_XML_AND_XMLSCHEMA",
 	"SET_CONFIG", "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND", "PG_RELOAD_CONF",
 	"PG_ROTATE_LOGFILE", "PG_PROMOTE", "PG_NOTIFY", "LOAD_EXTENSION", "READFILE", "WRITEFILE", "EDIT",
-	"SLEEP", "PG_SLEEP", "PG_SLEEP_FOR", "PG_SLEEP_UNTIL", "BENCHMARK",
+	"SLEEP", "PG_SLEEP", "PG_SLEEP_FOR", "PG_SLEEP_UNTIL", "BENCHMARK", "SET",
 }
 
 // Result is what a query that passes the guard becomes.
@@ -82,9 +86,10 @@ func GuardDriver(dbDriver string) string {
 	return SQLite
 }
 
-// Precheck is __llm_sql_precheck, run before any connection is resolved:
-// the query passes when one engine's rules accept it (mysql, then pgsql,
-// then sqlite). When all reject it the sqlite verdict is returned
+// Precheck is __llm_sql_precheck: the query passes when one engine's
+// rules accept it (mysql, then pgsql, then sqlite). When all reject it the
+// sqlite verdict is returned. internal/db uses it only when no connection
+// can be resolved; otherwise Check with the connection's engine decides
 // (LEDGER DB-12). As Check, it refuses when the precheck of either reading
 // refuses, with the C reading's error first (LEDGER DB-13).
 func Precheck(query string) error {
@@ -137,6 +142,12 @@ func check(driver, query string, rd reading) (Result, error) {
 		}
 		return 0
 	}
+	// A client reads a line that starts with a backslash as one of its
+	// own commands (psql's \! runs a shell): refused whatever the lexer
+	// makes of the line (3.0: LEDGER DB-01 fixed, defense in depth).
+	if backslashLine(query) {
+		return Result{}, clone(errClientCommand)
+	}
 	code := make([]byte, 0, n+2)
 	state := stCode
 	var quote byte
@@ -152,9 +163,7 @@ func check(driver, query string, rd reading) (Result, error) {
 				state = stQuoted
 				quote = c
 				esc = false
-				// LEDGER DB-01: any e or E before the quote, also the last
-				// letter of an identifier, makes it an E-string.
-				if driver == PgSQL && c == '\'' && i > 0 && (query[i-1] == 'E' || query[i-1] == 'e') {
+				if driver == PgSQL && c == '\'' && eStringAt(query, i) {
 					esc = true
 				}
 				code = append(code, ' ')
@@ -317,6 +326,42 @@ func allowedFirst(first string) bool {
 	}
 	for _, a := range allowedFirstWords {
 		if a == first {
+			return true
+		}
+	}
+	return false
+}
+
+// eStringAt reports whether the quote at query[i] opens a PostgreSQL
+// E-string: it follows an "e" or "E" that starts a token. An "e" that ends
+// an identifier ([A-Za-z_] or a byte above 0x7f, then [A-Za-z0-9_$] or such
+// bytes) does not; one that ends a number or a parameter ($1) does, as the
+// lexer of PostgreSQL 14 and older reads it (newer servers refuse the
+// number, so no reading lets text through). 3.0: LEDGER DB-01 fixed.
+func eStringAt(query string, i int) bool {
+	if i == 0 || (query[i-1] != 'E' && query[i-1] != 'e') {
+		return false
+	}
+	j := i - 1
+	for j > 0 && isIdentCont(query[j-1]) {
+		j--
+	}
+	if j == i-1 {
+		return true // the e starts the token
+	}
+	c := query[j]
+	return !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c == '_' || c >= 0x80)
+}
+
+// isIdentCont is the identifier continuation of the PostgreSQL lexer,
+// [A-Za-z0-9_$] and every byte above 0x7f.
+func isIdentCont(c byte) bool { return isTagPrev(c) || c >= 0x80 }
+
+// backslashLine reports whether a line of the query starts with a
+// backslash, after blanks.
+func backslashLine(query string) bool {
+	for _, line := range strings.Split(query, "\n") {
+		if strings.HasPrefix(strings.TrimLeft(line, " \t\r\f\v"), "\\") {
 			return true
 		}
 	}

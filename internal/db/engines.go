@@ -104,6 +104,7 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 			return mysqlError(err)
 		}
 	}
+	defer m.startQuery(ctx)()
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return mysqlError(err)
@@ -216,6 +217,7 @@ func (m *Module) pgsqlRun(c *invoke.Call, t target, json bool, query string) out
 		return pgsqlError(err)
 	}
 	defer conn.Close(context.Background())
+	defer m.startQuery(ctx)()
 	rows, err := conn.Query(ctx, query)
 	if err != nil {
 		return pgsqlError(err)

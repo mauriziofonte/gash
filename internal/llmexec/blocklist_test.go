@@ -43,3 +43,20 @@ func TestEmptyCommand(t *testing.T) {
 	cwd := t.TempDir()
 	assertRefuse(t, "   \t  ", cwd, "empty_command")
 }
+
+// TestLedger_EXEC03: the blocklist is a tripwire over the whole line, quoted
+// text included (the operator kept it quote-oblivious): a blocklisted token
+// inside quotes is refused, the same line without it is not.
+func TestLedger_EXEC03(t *testing.T) {
+	cwd := t.TempDir()
+	for _, line := range []string{
+		"echo 'please shutdown now'",
+		`echo "reboot later"`,
+		"grep 'AWS_SECRET' notes.txt",
+	} {
+		assertRefuse(t, line, cwd, "dangerous_command_blocked")
+	}
+	if _, err := Build("echo 'please wait now'", Settings{}, testEnv(cwd), permissiveProbe()); err != nil {
+		t.Errorf("a quoted harmless line must pass, got %v", err)
+	}
+}

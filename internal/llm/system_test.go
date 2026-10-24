@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -85,33 +86,55 @@ EOF`}},
 		for _, args := range [][]string{{}, {"--listen"}, {"-l"}, {"-l", "--listen"}, {"--bogus"}, {"-l", "x"}, {"x", "--help"}} {
 			r := same(t, m, d, env, "llm_ports", args...)
 			if c.name == "ss" && len(args) == 0 {
-				require.Equal(t, `[{"port":9,"proto":"tcp","state":"LISTEN","address":"[fe80::1]"},{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":53,"proto":"tcp","state":"LISTEN","address":"127.0.0.53%lo"},{"port":68,"proto":"udp","state":"LISTEN","address":"0.0.0.0"},{"port":123,"proto":"udp","state":"LISTEN","address":"[fe80::1]"},{"port":8080,"proto":"tcp","state":"LISTEN","address":"a\"b\\c`+"\x01"+`"},{"port":44312,"proto":"tcp","state":"ESTAB","address":"10.0.0.2"}]`+"\n", r.Stdout)
+				// 3.0: LLM-06 fixed, LLM-11 fixed
+				require.Equal(t, `[{"port":9,"proto":"tcp","state":"LISTEN","address":"[fe80::1]"},{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":22,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":53,"proto":"tcp","state":"LISTEN","address":"127.0.0.53%lo"},{"port":68,"proto":"udp","state":"LISTEN","address":"0.0.0.0"},{"port":123,"proto":"udp","state":"LISTEN","address":"[fe80::1]"},{"port":8080,"proto":"tcp","state":"LISTEN","address":"a\"b\\c\u0001"},{"port":44312,"proto":"tcp","state":"ESTAB","address":"10.0.0.2"}]`+"\n", r.Stdout)
 			}
 		}
 	}
 }
 
-// TestLedger_LLM11_2x: two sockets on one port and protocol are one record.
+// TestLedger_LLM11_2x: two sockets on one port and protocol are two
+// records (2.x kept one).
 func TestLedger_LLM11_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{"ss": ssOut})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log")})
-	r := same(t, m, d, env, "llm_ports", "--listen")
-	require.Equal(t, 1, strings.Count(r.Stdout, `"port":22,`))
+	// 3.0: LLM-11 fixed
+	r := runGo(t, m, d, env, "llm_ports", "--listen")
+	require.Equal(t, 2, strings.Count(r.Stdout, `"port":22,`))
 }
 
-// TestLedger_LLM06_2x_ports: llm_ports and llm_procs keep control
-// characters raw (only \ and " escaped).
+// TestLedger_LLM11: an IPv4 and an IPv6 listener on port 22 are two
+// records; an exact duplicate is one; records sort by port, then protocol.
+func TestLedger_LLM11(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	bin := stubBin(t, map[string]string{"ss": `cat <<'EOF'
+Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port
+udp   UNCONN 0      0      0.0.0.0:22         0.0.0.0:*
+tcp   LISTEN 0      4096   0.0.0.0:22         0.0.0.0:*
+tcp   LISTEN 0      4096   [::]:22            [::]:*
+tcp   LISTEN 0      4096   0.0.0.0:022        0.0.0.0:*
+tcp   LISTEN 0      4096   0.0.0.0:21         0.0.0.0:*
+EOF`})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t)})
+	r := runGo(t, m, d, env, "llm_ports", "--listen")
+	require.Equal(t, result{`[{"port":21,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":22,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":22,"proto":"udp","state":"LISTEN","address":"0.0.0.0"}]` + "\n", "", 0}, r)
+}
+
+// TestLedger_LLM06_2x_ports: llm_ports and llm_procs escape control
+// characters as jq does (2.x kept them raw, only \ and " escaped).
 func TestLedger_LLM06_2x_ports(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 1 2 ? S 00:00 0:00 /bin/a"b\x1bc\n'`})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log")})
-	r := same(t, m, d, env, "llm_ports")
-	require.Contains(t, r.Stdout, `"address":"a\"b\\c`+"\x01"+`"`)
-	r = same(t, m, d, env, "llm_procs")
-	require.Equal(t, `[{"pid":7,"user":"u`+"\x01"+`ser","cpu":0.0,"mem":0.1,"name":"/bin/a\"b`+"\x1b"+`c"}]`+"\n", r.Stdout)
+	// 3.0: LLM-06 fixed
+	r := runGo(t, m, d, env, "llm_ports")
+	require.Contains(t, r.Stdout, `"address":"a\"b\\c\u0001"`)
+	r = runGo(t, m, d, env, "llm_procs")
+	require.Equal(t, `[{"pid":7,"user":"u\u0001ser","cpu":0.0,"mem":0.1,"name":"/bin/a\"b\u001bc"}]`+"\n", r.Stdout)
 }
 
 const psStub = `case "$*" in
@@ -164,20 +187,54 @@ func TestProcsMatches2x(t *testing.T) {
 	}
 }
 
-// TestLedger_LLM12_2x: --port keeps leading zeros in the JSON (a source
-// text number token, as 2.x printed it) and has no range check.
+// TestLedger_LLM12_2x: --port is a plain base-10 JSON number (2.x kept
+// the leading zeros, a source text number token) and is range checked
+// (2.x had no check).
 func TestLedger_LLM12_2x(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{
 		"ps":   psStub,
-		"lsof": `case "$2" in :0080|:99999) echo 4242 ;; esac`,
+		"lsof": `case "$2" in :80|:0080|:99999) echo 4242 ;; esac`,
 	})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t)})
-	r := same(t, m, d, env, "llm_procs", "--port", "0080")
-	require.Equal(t, `[{"pid":4242,"name":"nginx","port":0080}]`+"\n", r.Stdout)
-	r = same(t, m, d, env, "llm_procs", "--port", "99999")
-	require.Equal(t, `[{"pid":4242,"name":"nginx","port":99999}]`+"\n", r.Stdout)
+	// 3.0: LLM-12 fixed
+	r := runGo(t, m, d, env, "llm_procs", "--port", "0080")
+	require.Equal(t, `[{"pid":4242,"name":"nginx","port":80}]`+"\n", r.Stdout)
+	r = runGo(t, m, d, env, "llm_procs", "--port", "99999")
+	require.Equal(t, 1, r.RC)
+	require.Contains(t, r.Stderr, `"error":"invalid_port"`)
+}
+
+// TestLedger_LLM12: llm_procs --port 0080 parses as strict JSON with port
+// 80 (lsof asked for :80); --port 99999 is invalid_port/RETRY with nothing
+// on stdout; 65535 is accepted.
+func TestLedger_LLM12(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	log := filepath.Join(d, "lsof.log")
+	bin := stubBin(t, map[string]string{
+		"ps":   psStub,
+		"lsof": `printf '%s\n' "$2" >>"$LSOF_LOG"; case "$2" in :80) echo 4242 ;; esac`,
+	})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "LSOF_LOG": log})
+	r := runGo(t, m, d, env, "llm_procs", "--port", "0080")
+	require.Equal(t, []any{map[string]any{"pid": float64(4242), "name": "nginx", "port": float64(80)}}, strictJSON(t, r.Stdout))
+	r = runGo(t, m, d, env, "llm_procs", "--port", "65535")
+	require.Equal(t, result{"[]\n", "", 0}, r)
+	for _, p := range []string{"99999", "65536", "1234567890"} {
+		r = runGo(t, m, d, env, "llm_procs", "--port", p)
+		require.Equal(t, "", r.Stdout)
+		require.Equal(t, 1, r.RC)
+		var e struct{ Error, Action, Details string }
+		require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
+		require.Equal(t, "invalid_port", e.Error)
+		require.Equal(t, "RETRY", e.Action)
+		require.Contains(t, e.Details, p)
+	}
+	b, err := os.ReadFile(log)
+	require.NoError(t, err)
+	require.Equal(t, ":80\n:65535\n", string(b))
 }
 
 // TestProcsByNameLeavesOutSelf: this process, its ancestors and their
@@ -254,27 +311,57 @@ func TestEnvMatches2x(t *testing.T) {
 	require.Equal(t, "key *** and *** end ***", v["NOTES"])
 }
 
-// TestLedger_LLM02_2x: the URL mask is anchored and ends at the first / or
-// @ of the password.
+// TestLedger_LLM02_2x: 2.x anchored the URL mask at the start of the value
+// and ended the password at its first / or @. 3.0: LLM-02 fixed, the same
+// inputs are masked whole.
 func TestLedger_LLM02_2x(t *testing.T) {
-	require.Equal(t, "mysql://u:***@ss@h/d", envRedact("mysql://u:p@ss@h/d"))
-	require.Equal(t, "mysql://u:pa/ss@h/d", envRedact("mysql://u:pa/ss@h/d"))
-	require.Equal(t, "x https://u:pw@h/", envRedact("x https://u:pw@h/"))
+	require.Equal(t, "mysql://u:***@h/d", envRedact("mysql://u:p@ss@h/d"))
+	require.Equal(t, "mysql://u:***@h/d", envRedact("mysql://u:pa/ss@h/d"))
+	require.Equal(t, "x https://u:***@h/", envRedact("x https://u:pw@h/"))
 }
 
-// TestLedger_LLM23_2x_env: llm_env values pass invalid UTF-8 through raw.
+// TestLedger_LLM02: every URL password is masked, to the last @ of its
+// token, wherever the URL stands in the value; the separators are kept.
+func TestLedger_LLM02(t *testing.T) {
+	for in, want := range map[string]string{
+		"mysql://u:p@ss@h/d":                 "mysql://u:***@h/d",
+		"mysql://u:pa/ss@h/d":                "mysql://u:***@h/d",
+		"x https://u:pw@h/":                  "x https://u:***@h/",
+		"mysql://user:p@ss@host/db":          "mysql://user:***@host/db",
+		"https://u:pw@h/":                    "https://u:***@h/",
+		"redis://:pw@h:6379":                 "redis://:***@h:6379",
+		"postgres://u@h/d":                   "postgres://u@h/d",
+		"a+b.c-d://u:x@h":                    "a+b.c-d://u:***@h",
+		"DSN=mysql://u:p@h":                  "DSN=mysql://u:***@h",
+		"a\thttps://u:p@h  b\nftp://v:q/r@k": "a\thttps://u:***@h  b\nftp://v:***@k",
+		"http://u:p@h/x?r=https://v:q@k":     "http://u:***@k",
+		"no url here":                        "no url here",
+		"https://host/a:b":                   "https://host/a:b",
+	} {
+		require.Equal(t, want, envRedact(in), in)
+	}
+	m := New()
+	d := physTemp(t)
+	env := baseEnv(physTemp(t), map[string]string{"MYURL_A": "mysql://user:p@ss@host/db", "MYURL_B": "see mysql://u:pa/ss@h/d"})
+	r := runGo(t, m, d, env, "llm_env", "--filter", "MYURL")
+	require.Equal(t, result{"{\n  \"MYURL_A\": \"mysql://user:***@host/db\",\n  \"MYURL_B\": \"see mysql://u:***@h/d\"\n}\n", "", 0}, r)
+}
+
+// TestLedger_LLM23_2x_env: llm_env values replace invalid UTF-8 with
+// U+FFFD, as jq does (2.x passed the bytes through raw).
 func TestLedger_LLM23_2x_env(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	env := baseEnv(physTemp(t), map[string]string{"BADV": "a\xff\xfeb"})
 	r := runGo(t, m, d, env, "llm_env", "^BADV$")
-	require.Equal(t, "{\n  \"BADV\": \"a\xff\xfeb\"\n}\n", r.Stdout)
+	// 3.0: LLM-23 fixed
+	require.Equal(t, "{\n  \"BADV\": \"a\uFFFD\uFFFDb\"\n}\n", r.Stdout)
 }
 
 // TestLedger_LLM39: llm_env leaves out _, whatever its value (in Go mode
 // the binary's path), as the 2.x Bash here does.
 func TestLedger_LLM39(t *testing.T) {
-	archive2x(t) // before runGo changes the directory
+	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
 	env := baseEnv(physTemp(t), map[string]string{"_": "/usr/local/bin/gash", "PWD": d})
@@ -283,5 +370,76 @@ func TestLedger_LLM39(t *testing.T) {
 	require.NotContains(t, r.Stdout, `"_"`)
 	require.Contains(t, r.Stdout, `"PWD": `)
 	require.Equal(t, result{"{\n}\n", "", 0}, runGo(t, m, d, env, "llm_env", "--filter", "^_$"))
-	require.Equal(t, result{"{\n}\n", "", 0}, same(t, m, d, env, "llm_env", "--filter", "^_$"))
+	if with2x {
+		require.Equal(t, result{"{\n}\n", "", 0}, same(t, m, d, env, "llm_env", "--filter", "^_$"))
+	}
+}
+
+// strictJSON fails unless out is JSON a strict parser (jq -e .) accepts:
+// valid UTF-8 and no raw control character inside a string.
+func strictJSON(t *testing.T, out string) any {
+	t.Helper()
+	require.True(t, utf8.ValidString(out), "invalid UTF-8 in %q", out)
+	require.True(t, json.Valid([]byte(out)), "invalid JSON: %q", out)
+	var v any
+	require.NoError(t, json.Unmarshal([]byte(out), &v))
+	return v
+}
+
+// TestLedger_LLM06: C0 controls and DEL in names and values are escaped on
+// every llm_* JSON path, so the output parses and the values round-trip.
+func TestLedger_LLM06(t *testing.T) {
+	m := New()
+	const hostile = "a\x01b\x1bc\x7fd"
+
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, hostile), "x")
+	r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_tree")
+	require.Equal(t, 0, r.RC)
+	tree := strictJSON(t, r.Stdout).(map[string]any)
+	require.Equal(t, hostile, tree["children"].([]any)[0].(map[string]any)["name"])
+
+	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 1 2 ? S 00:00 0:00 /bin/a"b\x1bc\x7f\n'`})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log"), "HOSTILE_V": hostile})
+	r = runGo(t, m, d, env, "llm_ports")
+	require.Contains(t, strictJSON(t, r.Stdout), map[string]any{"proto": "tcp", "address": "a\"b\\c\x01", "port": float64(8080), "state": "LISTEN"})
+	r = runGo(t, m, d, env, "llm_procs")
+	procs := strictJSON(t, r.Stdout).([]any)
+	require.Equal(t, "u\x01ser", procs[0].(map[string]any)["user"])
+	require.Equal(t, "/bin/a\"b\x1bc\x7f", procs[0].(map[string]any)["name"])
+
+	r = runGo(t, m, d, env, "llm_env", "^HOSTILE_V$")
+	require.Equal(t, map[string]any{"HOSTILE_V": hostile}, strictJSON(t, r.Stdout))
+}
+
+// TestLedger_LLM23: invalid UTF-8 becomes U+FFFD on every llm_* JSON path,
+// the former raw ones (llm_tree, llm_env) and the jq ones (llm_git_status)
+// alike.
+func TestLedger_LLM23(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	if rawNamesOK(t, d) {
+		mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "x")
+		r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_tree")
+		tree := strictJSON(t, r.Stdout).(map[string]any)
+		require.Equal(t, "bad��", tree["children"].([]any)[0].(map[string]any)["name"])
+	}
+
+	r := runGo(t, m, d, baseEnv(physTemp(t), map[string]string{"BADV": "a\xff\xfeb"}), "llm_env", "^BADV$")
+	require.Equal(t, map[string]any{"BADV": "a��b"}, strictJSON(t, r.Stdout))
+
+	if _, err := lookPathTest("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	home := physTemp(t)
+	repo := physTemp(t)
+	git(t, repo, home, "init", "-b", "main")
+	mustWrite(t, filepath.Join(repo, "f"), "x")
+	git(t, repo, home, "add", "-A")
+	git(t, repo, home, "commit", "-m", "one")
+	git(t, repo, home, "checkout", "-b", "br\xff")
+	r = runGo(t, m, repo, baseEnv(home, nil), "llm_git_status")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	st := strictJSON(t, r.Stdout).(map[string]any)
+	require.Equal(t, "br\uFFFD", st["branch"])
 }

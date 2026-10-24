@@ -179,18 +179,35 @@ func (m *Module) queryImpl(c *invoke.Call, args []string) output {
 	if e := validUint("rows", a.rows); e != nil {
 		return failed(*e)
 	}
-	if err := sqlguard.Precheck(a.positional); err != nil {
-		return guardFail(err)
-	}
-	t, fail := m.target(c, &a)
+	t, g, fail := m.guardedTarget(c, &a)
 	if fail != nil {
 		return *fail
 	}
+	return m.run(c, t, g.Kind, g.Query, a.rows)
+}
+
+// guardedTarget resolves the connection, then checks the query with the
+// rules of its engine, so a refused query gets the target engine's
+// verdict (LEDGER DB-12; 2.x gave the sqlite verdict whenever every engine
+// refused). When the connection cannot be resolved, a query that every
+// engine refuses still gets the guard error, the precheck's, first.
+// Resolving reads ~/.gash_env and the SQLite header only: nothing
+// connects before the guard accepts.
+func (m *Module) guardedTarget(c *invoke.Call, a *dbArgs) (target, sqlguard.Result, *output) {
+	t, fail := m.target(c, a)
+	if fail != nil {
+		if err := sqlguard.Precheck(a.positional); err != nil {
+			o := guardFail(err)
+			return target{}, sqlguard.Result{}, &o
+		}
+		return target{}, sqlguard.Result{}, fail
+	}
 	g, err := sqlguard.Check(sqlguard.GuardDriver(t.driver), a.positional)
 	if err != nil {
-		return guardFail(err)
+		o := guardFail(err)
+		return target{}, sqlguard.Result{}, &o
 	}
-	return m.run(c, t, g.Kind, g.Query, a.rows)
+	return t, g, nil
 }
 
 // tables is llm_db_tables.
@@ -323,16 +340,9 @@ func (m *Module) explainImpl(c *invoke.Call, args []string) output {
 	if a.positional == "" {
 		return failed(contract.New("missing_query", "", "Provide a SQL query to analyze as first argument"))
 	}
-	if err := sqlguard.Precheck(a.positional); err != nil {
-		return guardFail(err)
-	}
-	t, fail := m.target(c, &a)
+	t, g, fail := m.guardedTarget(c, &a)
 	if fail != nil {
 		return *fail
-	}
-	g, err := sqlguard.Check(sqlguard.GuardDriver(t.driver), a.positional)
-	if err != nil {
-		return guardFail(err)
 	}
 	var plan output
 	switch t.driver {

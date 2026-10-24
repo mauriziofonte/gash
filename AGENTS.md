@@ -42,26 +42,36 @@ one of them if you parse text.
 
 ## 3. Function catalog
 
-Flags: where a function takes `-n`, it means `--limit`; `--json` is the
-machine-output flag; functions that parse options reject unknown ones with
-`unknown_option` and a second PATH with `unexpected_argument`; a value flag
-at the end of the line fails with `missing_value`; integers have at most 9
-digits. `--help` or `-h` anywhere on an `llm_*` line prints its help
-(`llm_exec`: as the only argument).
+Flags (the signatures below are the registered help's, checked by a test):
+where a function takes `-n`, it means `--limit`; `--json` is the
+machine-output flag. Options are separate words: `--flag=value` and a `--`
+end-of-options marker are not supported (both are `unknown_option`, as is
+any option a function does not list). A function that takes a PATH refuses
+a second one with `unexpected_argument`; `llm_ports` and `llm_procs` take no
+PATH (a stray word is `unknown_option`) and `llm_env` reads a bare word as
+its filter. A value flag at the end of the line fails with `missing_value`;
+integers are plain digits, at most 9. `--help` or `-h` anywhere on an
+`llm_*` line prints its help, also where a flag expects its value
+(`llm_exec`: as the only argument). A PATH may start with `~` or `~/` (your
+home); `~user` is `invalid_path`.
 
 ### 3.1 Files and code
 
 | Function | Output |
 |---|---|
-| `llm_tree [--depth N] [--stats] [--text] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list, 200 lines max |
+| `llm_tree [--depth N] [--stats] [--text] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max |
 | `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches |
-| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N]` | `file:line:content` lines (default 100) |
-| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON when a `yq` (mikefarah's, or the Python one with `jq`) can, raw text otherwise; files over 1 MiB (default) fail with `file_too_large` |
+| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--` |
+| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large` |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
-\_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_) and use ripgrep when
-installed. `llm_find --contains` searches hidden and gitignored files too,
-with or without ripgrep. Zero matches: exit 0, no output.
+\_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_). `llm_grep` and
+`llm_find --contains` share one built-in engine, the same whether ripgrep is
+installed or not: ripgrep's regex syntax, binary files skipped, files in
+sorted path order; `llm_grep` also skips hidden files and what
+`.gitignore`/`.ignore`/`.rgignore` exclude, `llm_find --contains` searches
+them. Zero matches: exit 0, no output; a PATH that does not exist is
+`path_not_found`, an empty PATTERN `missing_pattern`.
 
 ### 3.2 Filesystem scanners
 
@@ -99,8 +109,16 @@ of a `.target-database` file in the current directory; `-d` and that file
 must hold a plain name (`[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}`, otherwise
 `invalid_database_name`). The row limit is `-n` (also `--limit`, and `-r`/`--rows` on
 `llm_db_query`). SQLite and PostgreSQL return native JSON types,
-MySQL/MariaDB return every value as a string. `llm_db_query` adds a
-slow_query_explain field (the plan) when a query takes 100 ms or more.
+MySQL/MariaDB return every value as a string and a SQL NULL as the string
+`"NULL"`. `llm_db_schema` keys follow the engine: SQLite
+`cid,name,type,notnull,dflt_value,pk`, MySQL/MariaDB
+`name,type,nullable,key,default`, PostgreSQL
+`column_name,data_type,is_nullable,column_default`. `-h` is always help: the
+host comes only from the connection URL. The `details` of `sqlite_error`,
+`mysql_error` and `pgsql_error` is the database driver's message on one
+line. `llm_db_query` adds a
+slow_query_explain field (the plan) when a query takes 100 ms or more
+(the query alone: connecting and the session setup do not count).
 `--analyze` executes the query to measure it, still read-only.
 
 ### 3.4 Git, system, project
@@ -110,16 +128,21 @@ slow_query_explain field (the plan) when a query takes 100 ms or more.
 | `llm_git_status [PATH]` | JSON object (4.6) |
 | `llm_git_log [-n N] [PATH]` | JSON array of `{hash, subject, author, date}` (default 10) |
 | `llm_git_diff [--staged] [PATH]` | `git diff --stat` text |
-| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords and known token formats in values shown as `***` |
-| `llm_ports [--listen]` | `[{port, proto, state, address}]`; needs `ss` or `netstat` (`ports_tool_not_found` without) |
-| `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines |
+| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
+| `llm_ports [--listen]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without) |
+| `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name` |
 | `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
-| `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev` |
-| `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference` |
+| `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
+| `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
 
 `llm_project` types: `php`, `javascript`, `python`, `go`, `rust`, `unknown`.
+The framework comes from the dependency keys of `package.json`
+(`dependencies`/`devDependencies`: next, react, vue, express) and
+`composer.json` (`require`/`require-dev`: `symfony/*`; laravel by `artisan`);
+flask from a `requirements.txt` entry; `package_manager` is `poetry` only
+when `pyproject.toml` has a `[tool.poetry]` table.
 Example: `{"type":"javascript","framework":"express","package_manager":"npm","has_tests":true,"entry_point":"","path":"/tmp/web.tbjb"}`.
 
 ### 3.5 Command execution
@@ -185,7 +208,10 @@ extension. Extensions are lowercased in ASCII only.
 
 `llm_db_tables` returns `{"data":["users"],...}`. `llm_db_explain` always
 returns an array: JSON plans as the engine gives them, SQLite text plans as
-`[{"plan": TEXT}]`. query_time is in µs, ms or s.
+`[{"plan": TEXT}]`; `llm_db_query "EXPLAIN QUERY PLAN ..."` on SQLite gives
+the same `[{"plan": TEXT}]`, and a SQLite bytecode `EXPLAIN` its rows
+(`addr`, `opcode`, `p1`..`p5`, `comment`). query_time is in µs, ms or s, and counts the time the
+query ran on the server (sent to last row read), not the connection.
 
 ### 4.5 Tree (`llm_tree --depth 2 --stats`)
 
@@ -237,13 +263,18 @@ Each code always carries the action shown:
 
 | Area | Codes |
 |---|---|
-| Arguments (RETRY) | `unknown_option` `missing_value` `unexpected_argument` `invalid_limit` `invalid_depth` `invalid_size` `invalid_top` `invalid_context` `invalid_filter` `invalid_type` `invalid_database_name` `missing_pattern` `missing_query` `missing_table` `invalid_table_name` `missing_file` `empty_command` |
-| Paths | `path_traversal_blocked` `forbidden_path` `root_scan_blocked` `secret_file_blocked` (FATAL); `path_not_found` `not_a_directory` `path_unreadable` `file_not_found` `file_too_large` (RETRY) |
+| Arguments (RETRY) | `unknown_option` `missing_value` `unexpected_argument` `invalid_limit` `invalid_depth` `invalid_size` `invalid_top` `invalid_port` `invalid_context` `invalid_regex` `invalid_filter` `invalid_type` `invalid_database_name` `missing_pattern` `missing_query` `missing_table` `invalid_table_name` `missing_file` `empty_command` |
+| Paths | `path_traversal_blocked` `forbidden_path` `root_scan_blocked` `secret_file_blocked` (FATAL); `path_not_found` `not_a_directory` `path_unreadable` `file_not_found` `file_too_large` `invalid_path` (RETRY) |
 | `llm_exec` | `dangerous_command_blocked` `option_not_allowed` (FATAL); `command_not_allowed` `sandbox_unavailable` (STOP); `construct_not_allowed` `unterminated_quote` `glob_matches_option` (RETRY) |
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
 | Database | `no_db_config` `no_database` `unknown_db_type` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
-| Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `jq_not_found` (FATAL) |
+| Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` (RETRY) |
+
+Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
+non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
+999999999 (`invalid_depth`: "Value 'X' is not an integer from 1 to
+999999999").
 
 The one exception: scanners without `--json` print human `Error:` /
 `Hint:` lines.
@@ -262,9 +293,15 @@ every check below.
 
 * `llm_*` path arguments: a `..` component is refused; `/proc`, `/sys`,
   `/dev`, `/boot`, `/root`, `/etc/shadow`, `/etc/gshadow`, `/etc/passwd`,
-  `/etc/sudoers` and everything below them are refused, checked as written
-  and after resolving symlinks. Root's home is refused also where it is not
-  `/root` (macOS: `/var/root`).
+  `/etc/sudoers`, `/etc/sudoers.d`, `/etc/shadow-`, `/etc/gshadow-`,
+  `/etc/security/opasswd` and everything below them are refused, checked as
+  written and after resolving symlinks. Root's home is refused also where it
+  is not `/root` (macOS: `/var/root`).
+* `llm_tree`, `llm_find` and `llm_grep` walks may not start at `/` or at a
+  directory above a protected tree (`llm_grep` and `llm_find --contains`:
+  also above an `/etc` entry, so not at `/etc`): `forbidden_path`, hint
+  `Search a subdirectory`. Below their root they leave out every entry at or
+  below a protected path, and they never follow symlinks.
 * Scanners refuse `/proc`, `/sys`, `/dev`, `/boot`, `/root` (and root's
   home where it is not `/root`), also when reached through a symlink or
   from `/`: as the PATH argument they fail with `forbidden_path`, and a walk
@@ -280,18 +317,28 @@ every check below.
   (content searches: also above `/etc`), and may not follow symlinks
   (`grep -R`, `rg -L`, `find -L`/`-follow`/`-files0-from`, `fd -L`,
   `tree -l`, `du -L`, `ls -RL`, `--dereference-recursive`).
-* Paths resolve with `realpath -m`, or a Bash fallback where it is missing
-  (BusyBox, older macOS).
+* Paths resolve as GNU `realpath -m` resolves them, on every platform.
 
 ### 6.2 Secret files
 
-Matched case-insensitively on the base name, and on the target of a symlink:
-`.env`, `.env.*`, `*.env`, keys and keystores (`*.pem`, `*.key`, `*.p12`,
-`*.pfx`, `*.jks`, `*.ppk`, `id_rsa*`, `*_ed25519`, ...), `credentials*`,
-`secrets*`, `.gash_env`, `.pgpass`, `.netrc`, `.git-credentials`, `.npmrc`,
-`.pypirc`, `.htpasswd`, `.my.cnf`, kubeconfig, `*.tfstate`, `*.tfvars`, and
-anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`,
-`.config/gcloud`. Templates such as `.env.example` and `*.pub` are allowed.
+Matched case-insensitively on the base name, and on the target of a symlink
+(the list is `internal/pathguard`'s table, checked by a test):
+
+* Environment: `.env` `.env.*` `*.env` `.envrc`
+* Keys and keystores: `*.pem` `*.key` `*.p12` `*.pfx` `*.jks` `*.keystore`
+  `*.kdbx` `*.ppk` `id_rsa*` `id_dsa*` `id_ecdsa*` `id_ed25519*` `*_rsa`
+  `*_dsa` `*_ecdsa` `*_ed25519` `ssh_host_*_key`
+* Credentials: `credentials` `credentials.*` `credentials_*` `credentials-*`
+  `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc`
+  `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto`
+  `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig`
+  `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json`
+* Anything under a directory `.ssh` `.gnupg` `.aws` `.azure` `.kube`
+  `.docker` `.config/gcloud`
+* Not secret (templates, which win over the above): `*.pub` `.env.example`
+  `.env.sample` `.env.dist` `.env.template` `*.env.example`; `llm_grep`
+  and `llm_find --contains` search them.
+
 `llm_config` and `llm_exec` refuse them as arguments; `llm_grep`,
 `llm_find --contains` and, inside `llm_exec`, `grep`, `rg`, `diff` and
 `git diff`/`show`/`grep`/`log -p` skip them (`git log` with `--follow` or
@@ -306,7 +353,8 @@ not.
 
 1. **Blocklist** of dangerous patterns (`rm -rf /`, `dd if=`, `mkfs.`,
    shutdown, `curl ... | sh`, `history -c`, `.ssh/id_`, ...). A regex
-   tripwire, easy to evade by rephrasing; it applies in every mode.
+   tripwire over the whole line, quoted text included (`echo 'shutdown'`
+   is refused), easy to evade by rephrasing; it applies in every mode.
 2. **Parser**: plain words joined by `|`, `&&`, `||`, `;` or newlines. No `$`
    or backtick expansion, no subshells or braces, no background jobs, no
    `VAR=value` prefixes, no redirections except `>/dev/null`, `2>&1`, `>&2`.
@@ -316,10 +364,12 @@ not.
    `git branch -D`, `git -c`, `docker rm`, `systemctl stop`, ...). php, node,
    python and similar run only with `--version`. sed and awk run as GNU
    `sed --sandbox` / `gawk --sandbox`, refused where those are missing.
-   Arguments and glob matches that are secret files are refused. Also
+   Arguments and glob matches that are secret files are refused, pattern
+   operands included (`grep id_rsa` is refused like a file). Also
    refused: `ps e`, `getent shadow`/`gshadow`, `yq` `load()` and `-s`,
    `diff -r` without GNU `--no-dereference`, git `--literal-pathspecs`,
-   `--no-index`, `cat-file --batch`, `stash show -p` and `remote show`
+   `--no-index`, `cat-file --batch`, `stash show -p`, patch options on
+   `stash list` (`-p`, `-U`, `--word-diff`, ...) and `remote show`
    without `-n` (it contacts the network).
 
 The child Bash runs with `--noprofile --norc` and a short environment:
@@ -343,7 +393,7 @@ never from same-named environment variables:
 
 | Setting | Effect |
 |---|---|
-| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any arguments (secret-file check still applies) |
+| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
 | `GASH_LLM_EXEC=unrestricted` | Skips parser, allowlist and secret-file check; only the blocklist remains |
 | `GASH_LLM_SANDBOX=1` | Runs the child in `bwrap`: read-only filesystem, no network (`sandbox_unavailable` if bwrap cannot start) |
 
@@ -359,19 +409,19 @@ which file is read. On `command_not_allowed`, ask the user; never edit
    file, program or sleep functions outside literals and comments (INSERT,
    INTO, FOR UPDATE, ATTACH, LOAD_FILE, pg_read_file, pg_sleep, ...); no client
    commands (`\!`, sqlite dot-commands, MySQL `/*! */` comments).
-2. **Read-only client session**: `sqlite3 -readonly -safe` (`-safe` where the
-   sqlite3 version has it); MySQL/MariaDB `SET SESSION TRANSACTION READ ONLY`
-   plus a sql_select_limit row cap; PostgreSQL with
-   default_transaction_read_only=on and a statement timeout of
-   `GASH_DB_TIMEOUT` seconds (default 30). MySQL and SQLite have no timeout.
+2. **Read-only session**, through the built-in drivers (no `sqlite3`,
+   `mysql` or `psql` client runs): SQLite opened read-only in defensive,
+   query-only mode with untrusted schemas; MySQL/MariaDB
+   `SET SESSION TRANSACTION READ ONLY` plus a sql_select_limit row cap;
+   PostgreSQL with default_transaction_read_only=on and a statement timeout
+   of `GASH_DB_TIMEOUT` seconds (default 30). MySQL and SQLite have no
+   timeout.
 
-Neither passwords nor the SQL reach the client's command line: all three
-clients read the SQL from stdin. Table names for `llm_db_schema` and `llm_db_sample` must match
+No program runs, so neither passwords nor the SQL appear on a command line.
+Table names for `llm_db_schema` and `llm_db_sample` must match
 `[A-Za-z_][A-Za-z0-9_]*`; database names from `-d` or `.target-database`
 must match `[A-Za-z0-9_][A-Za-z0-9_$.-]*`, 64 characters at most
-(`invalid_database_name`). MySQL gets the database as `--database=NAME`,
-psql through PGDATABASE, so no name is read as an option or a conninfo
-string. Read-only is not harmless: a heavy SELECT still
+(`invalid_database_name`). Read-only is not harmless: a heavy SELECT still
 loads the server, and the database user decides what is readable. Prefer a
 read-only database user in `~/.gash_env`.
 

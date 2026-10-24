@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // errLimit ends a search once head -n has its lines.
@@ -41,12 +43,19 @@ func (l *lineLimiter) line(b []byte) error {
 // rgSearch is one rg run of the llm functions: -e PATTERN -- PATH with the
 // given globs and ignore policy, its output cut by head -n.
 type rgSearch struct {
-	re        *rgRegex
-	over      *overrides
+	re   *rgRegex
+	over *overrides
+	// userOver is over without the secret excludes: the verdict for a
+	// file whose name is a secret exception (.env.example, *.pub), which
+	// a walk searches as the explicit-file check allows (LEDGER LLM-15).
+	userOver  *overrides
 	rules     ignoreRules
 	context   int
 	filesOnly bool // -l
 	cwd       string
+	// forbidden leaves out an entry at or below a protected tree
+	// (LEDGER LLM-09).
+	forbidden func(path string) bool
 
 	out         *lineLimiter
 	withName    bool
@@ -109,6 +118,9 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 		path := findJoin(dir, name)
 		apath := findJoin(abs, name)
 		isDir := e.IsDir()
+		if s.forbidden != nil && s.forbidden(apath) {
+			continue
+		}
 		if s.skip(ig, apath, name, isDir) {
 			continue
 		}
@@ -129,7 +141,15 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 // skip is the ignore crate's verdict on one walked entry: the overrides
 // decide first, then the ignore files, then the hidden rule.
 func (s *rgSearch) skip(ig *ignoreDir, path, name string, isDir bool) bool {
-	switch s.over.matched(path, isDir) {
+	over := s.over
+	// A secret exception (.env.example, *.pub) is judged without the
+	// secret excludes and, being named to be searched, even when hidden;
+	// the user's globs and the ignore files still apply (LEDGER LLM-15).
+	exception := !isDir && s.userOver != nil && pathguard.SecretException(name)
+	if exception {
+		over = s.userOver
+	}
+	switch over.matched(path, isDir) {
 	case matchIgnore:
 		return true
 	case matchWhitelist:
@@ -141,7 +161,7 @@ func (s *rgSearch) skip(ig *ignoreDir, path, name string, isDir bool) bool {
 	case matchWhitelist:
 		return false
 	}
-	return s.rules.hidden && strings.HasPrefix(name, ".")
+	return s.rules.hidden && !exception && strings.HasPrefix(name, ".")
 }
 
 // decodeText is rg's BOM sniffing: a UTF-8 BOM is dropped, UTF-16 with a

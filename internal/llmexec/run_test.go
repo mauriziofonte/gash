@@ -22,6 +22,15 @@ var (
 // run from a throwaway copy.
 func archive2x(t *testing.T) string {
 	t.Helper()
+	prepare2x()
+	if archiveErr != nil {
+		t.Skipf("cannot prepare 2.x archive: %v", archiveErr)
+	}
+	return archiveDir
+}
+
+// prepare2x extracts the 2.x tree once, recording archiveErr.
+func prepare2x() {
 	archiveOnce.Do(func() {
 		dir, err := os.MkdirTemp("", "gash2x")
 		if err != nil {
@@ -53,10 +62,15 @@ func archive2x(t *testing.T) string {
 		}
 		archiveDir = dir
 	})
-	if archiveErr != nil {
-		t.Skipf("cannot prepare 2.x archive: %v", archiveErr)
-	}
-	return archiveDir
+}
+
+// have2x reports whether the 2.x tree can be extracted (it cannot since
+// the cutover removed it from HEAD). A test whose own assertions do not
+// need 2.x checks the 2.x reference only when it is there, instead of
+// skipping whole.
+func have2x() bool {
+	prepare2x()
+	return archiveErr == nil
 }
 
 type execError struct {

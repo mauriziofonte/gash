@@ -2,11 +2,11 @@
 
 Read-only JSON tools for AI agents.
 
-_Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
+_Generated from the help registry by `go test ./internal/registry -run TestReferenceDocs -update-docs`; do not edit by hand._
 
 | Function | Alias | Description |
 |---|---|---|
-| [`llm_config`](#llm-config) |  | Read config files (JSON/YAML, excludes .env) |
+| [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
 | [`llm_db_sample`](#llm-db-sample) |  | Sample rows from a table (default 5 rows) |
@@ -27,12 +27,18 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 
 ## llm_config
 
-Read config files (JSON/YAML, excludes .env)
+Read a file that is not secret (YAML as JSON)
 
 #### Usage
 
 ```text
 llm_config FILE [--max-bytes N]
+```
+
+#### Options
+
+```text
+--max-bytes N          Largest file read, in bytes (default 1048576)
 ```
 
 #### Examples
@@ -46,9 +52,10 @@ llm_config big.json --max-bytes 5000000
 #### Notes
 
 ```text
-Refuses to read .env files and other secret files for security.
-YAML comes out as JSON when yq (mikefarah's or the Python yq) is
-installed, as the raw text otherwise. Files over --max-bytes
+Reads any file that is not secret: .env files, keys and the other
+secret files are refused.
+YAML comes out as JSON, converted by Gash itself (no yq needed), or
+as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
 ```
 
@@ -59,7 +66,16 @@ Show query execution plan (EXPLAIN)
 #### Usage
 
 ```text
-llm_db_explain "QUERY" [-c CONNECTION] [-f SQLITE_FILE] [--analyze]
+llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
+```
+
+#### Options
+
+```text
+-c, --connection NAME  Connection from ~/.gash_env (default: default)
+-d, --database NAME    Database name (overrides the connection's)
+-f, --file PATH        SQLite database file
+--analyze              Run the query to measure it (still read-only)
 ```
 
 #### Examples
@@ -110,9 +126,11 @@ llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
 Read-only, enforced twice: one statement starting with SELECT, WITH,
 VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA, with no write
 keywords or file/program functions; then a read-only client session
-(sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL
-default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).
-Output: {data, rows, query_time}.
+(SQLite read-only in defensive mode, MySQL READ ONLY transactions,
+PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT
+statement timeout). Output: {data, rows, query_time}. -h is help: the
+host comes from the connection URL. Error details are the database
+driver's message.
 ```
 
 See also: `llm_db_tables`, `llm_db_schema`, `llm_db_sample`, `llm_db_explain`
@@ -153,7 +171,15 @@ Show table schema (columns, types, keys)
 #### Usage
 
 ```text
-llm_db_schema TABLE [-c CONNECTION] [-f SQLITE_FILE]
+llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+```
+
+#### Options
+
+```text
+-c, --connection NAME  Connection from ~/.gash_env (default: default)
+-d, --database NAME    Database name (overrides the connection's)
+-f, --file PATH        SQLite database file
 ```
 
 #### Examples
@@ -173,7 +199,15 @@ List database tables (JSON array)
 #### Usage
 
 ```text
-llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]
+llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+```
+
+#### Options
+
+```text
+-c, --connection NAME  Connection from ~/.gash_env (default: default)
+-d, --database NAME    Database name (overrides the connection's)
+-f, --file PATH        SQLite database file
 ```
 
 #### Examples
@@ -196,6 +230,12 @@ List project dependencies (JSON)
 llm_deps [PATH] [--dev]
 ```
 
+#### Options
+
+```text
+--dev                  Split the result into prod and dev
+```
+
 #### Examples
 
 ```bash
@@ -212,7 +252,14 @@ Filtered environment variables (secrets excluded)
 #### Usage
 
 ```text
-llm_env [--filter PATTERN]
+llm_env [--filter REGEX | REGEX]
+```
+
+#### Options
+
+```text
+-f, --filter REGEX     Only names that match REGEX (Go RE2 syntax, e.g.
+                       '^PATH$' or 'NODE|NPM'); a bare REGEX works too
 ```
 
 #### Examples
@@ -269,7 +316,7 @@ searches: also /etc). The child gets a short environment (PATH,
 HOME, USER, locale, TERM, TZ, TMPDIR, ...), never the caller's tokens.
 
 SETTINGS (~/.gash_env only)
-GASH_LLM_EXEC_ALLOW="make npm"   extra commands, any arguments
+GASH_LLM_EXEC_ALLOW="make npm"   extra commands, any options (walk rules kept)
 GASH_LLM_EXEC=unrestricted       skip the allowlist
 GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)
 ```
@@ -282,6 +329,15 @@ Find files by pattern (ignores noise directories)
 
 ```text
 llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
+```
+
+#### Options
+
+```text
+--type f|d             Files (default) or directories
+--contains REGEX       Keep the files whose content matches REGEX
+                       (ripgrep's regex syntax); files only
+-n, --limit N          Paths to print (default 100)
 ```
 
 #### Examples
@@ -304,6 +360,7 @@ PATTERN is a file name glob (find -name). With --contains only the
 files it matches are searched, hidden and gitignored ones included,
 with or without ripgrep. Skips node_modules, vendor, .git and
 __pycache__; --contains also skips secret files. Default limit 100.
+A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
 
 ## llm_git_diff
@@ -314,6 +371,12 @@ Git diff with statistics
 
 ```text
 llm_git_diff [--staged] [PATH]
+```
+
+#### Options
+
+```text
+--staged               Staged changes (also --cached)
 ```
 
 #### Examples
@@ -332,7 +395,13 @@ Recent commits (JSON)
 #### Usage
 
 ```text
-llm_git_log [--limit N] [PATH]
+llm_git_log [-n N] [PATH]
+```
+
+#### Options
+
+```text
+-n, --limit N          Commits to list (default 10)
 ```
 
 #### Examples
@@ -358,7 +427,15 @@ llm_git_status [PATH]
 
 ```bash
 llm_git_status
-# {"branch":"main","ahead":0,"behind":0,"staged":[],"modified":["README.md"],"untracked":[],"conflicted":[]}
+# {
+#   "branch": "main",
+#   "ahead": 0,
+#   "behind": 0,
+#   "staged": [],
+#   "modified": ["README.md"],
+#   "untracked": [],
+#   "conflicted": []
+# }
 ```
 
 See also: `llm_git_diff`, `llm_git_log`
@@ -370,7 +447,15 @@ Search code with structured file:line:content output
 #### Usage
 
 ```text
-llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N]
+llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
+```
+
+#### Options
+
+```text
+--ext EXT1,EXT2        Search only files with these extensions
+-C, --context N        Lines of context around each match (default 0)
+-n, --limit N          Lines to print (default 100)
 ```
 
 #### Examples
@@ -386,6 +471,19 @@ llm_grep "function processOrder" .
 llm_grep "class.*Controller" . --ext php --context 3
 ```
 
+#### Notes
+
+```text
+One built-in engine, the same with or without ripgrep installed:
+ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore
+matches, binary files, node_modules, vendor and .git are skipped; files
+come in sorted path order. Secret files are skipped, templates such as
+.env.example searched. Default limit 100.
+Output: file:line:content with absolute paths (a FILE PATH gives
+line:content); context lines use -, groups are separated by --.
+A missing PATH is path_not_found, an empty PATTERN missing_pattern.
+```
+
 ## llm_ports
 
 List ports in use (JSON)
@@ -394,6 +492,12 @@ List ports in use (JSON)
 
 ```text
 llm_ports [--listen]
+```
+
+#### Options
+
+```text
+-l, --listen           Listening sockets only
 ```
 
 #### Examples
@@ -412,7 +516,14 @@ List processes by name or port (JSON)
 #### Usage
 
 ```text
-llm_procs [--name NAME] [--port PORT]
+llm_procs [--name NAME | --port PORT]
+```
+
+#### Options
+
+```text
+--name NAME            Processes whose command line contains NAME
+--port PORT            Processes with a socket on PORT
 ```
 
 #### Examples
@@ -421,6 +532,13 @@ llm_procs [--name NAME] [--port PORT]
 llm_procs
 llm_procs --name nginx
 llm_procs --port 3306
+```
+
+#### Notes
+
+```text
+--port takes 0 to 65535 (invalid_port above) and wins over --name,
+which is then ignored.
 ```
 
 See also: `llm_ports`
@@ -451,7 +569,16 @@ Compact directory tree (JSON or text output)
 #### Usage
 
 ```text
-llm_tree [--text] [--depth N] [PATH]
+llm_tree [--text] [--depth N] [--stats] [PATH]
+```
+
+#### Options
+
+```text
+--text                 Indented text list, 200 lines max (default depth 3)
+--depth N              Levels below PATH, 1 or more (default 1; also
+                       --max-depth)
+--stats                Add sizes and child counts to the JSON tree
 ```
 
 #### Examples
@@ -470,6 +597,8 @@ llm_tree --depth 2 /etc/nginx
 #### Notes
 
 ```text
-Ignores noise directories: node_modules, vendor, .git, __pycache__
+Ignores noise directories below PATH: node_modules, vendor, .git,
+__pycache__, .cache. Entries whose name holds a tab or
+a newline are left out. --text lists symlinks as name -> target, in
+byte order whatever the locale.
 ```
-

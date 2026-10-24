@@ -2,13 +2,13 @@
 
 package pathguard
 
-// The data tables ported verbatim from lib/modules/llm/core.sh. They are the
-// shared source of truth for the guards and for docs generation, so the two
-// cannot drift. The gaps the S1 audit recorded (LEDGER LLM-10) are kept here
-// unchanged: rc.A is a pure port, so /etc/shadow-, /etc/gshadow- and
-// /etc/security/opasswd are *not* forbidden, and ssh_host_*_key, .envrc,
-// *.tfvars.json, auth.json and credentials_old are *not* secret. The proving
-// tests name LLM-10 where they assert those gaps.
+// The data tables ported from lib/modules/llm/core.sh. They are the shared
+// source of truth for the guards and for the docs, so the two cannot drift.
+// 3.0 closes the gaps the S1 audit recorded (LEDGER LLM-10 fixed): the
+// shadow backups and /etc/security/opasswd are forbidden, and the SSH host
+// keys, .envrc, *.tfvars.json and credentials_*/credentials-* are secret.
+// The recipe's credentials* would also take CredentialsController.php, a
+// name the 2.x specs pin as not secret, so the two separators are listed.
 
 // ForbiddenBasePaths is __LLM_FORBIDDEN_PATHS before root's home is appended.
 // A path is refused when it equals one of these or lives below it (whole
@@ -24,6 +24,9 @@ var ForbiddenBasePaths = []string{
 	"/etc/passwd",
 	"/etc/sudoers",
 	"/etc/sudoers.d",
+	"/etc/shadow-",
+	"/etc/gshadow-",
+	"/etc/security/opasswd",
 }
 
 // SecretPatterns is __LLM_SECRET_PATTERNS: secret file base-name globs,
@@ -33,10 +36,11 @@ var SecretPatterns = []string{
 	".env", ".env.*", "*.env",
 	"*.pem", "*.key", "*.p12", "*.pfx", "*.jks", "*.keystore", "*.kdbx", "*.ppk",
 	"id_rsa*", "id_dsa*", "id_ecdsa*", "id_ed25519*", "*_rsa", "*_dsa", "*_ecdsa", "*_ed25519",
-	"credentials", "credentials.*", "secrets", "secrets.*", ".gash_env",
+	"credentials", "credentials.*", "credentials_*", "credentials-*", "secrets", "secrets.*", ".gash_env",
 	".pgpass", ".netrc", "_netrc", ".git-credentials", ".npmrc", ".pypirc", ".htpasswd",
 	".my.cnf", ".boto", ".s3cfg", ".dockercfg", ".vault-token",
-	"kubeconfig", "*.kubeconfig", "*.tfstate", "*.tfstate.*", "*.tfvars",
+	"kubeconfig", "*.kubeconfig", "*.tfstate", "*.tfstate.*", "*.tfvars", "*.tfvars.json",
+	"ssh_host_*_key", ".envrc",
 }
 
 // SecretExceptions is __LLM_SECRET_EXCEPTIONS: templates that share a secret

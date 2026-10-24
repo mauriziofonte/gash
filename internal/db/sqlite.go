@@ -28,9 +28,6 @@ const (
 // run on the connection (the -safe equivalent of the sqlite3 shell).
 const sqliteLimitAttached = 7
 
-// explainListing is the first line of the sqlite3 shell's EXPLAIN listing.
-const explainListing = "addr  opcode         p1    p2    p3    p4             p5  comment"
-
 // sqliteDSN opens path read-only (mode=ro, query_only), in defensive mode
 // and with trusted_schema off, as `sqlite3 -readonly -safe` did.
 func sqliteDSN(path string) string {
@@ -79,16 +76,21 @@ func (m *Module) sqliteRun(c *invoke.Call, file, query string, mode int) output 
 	if _, err := sqlite.Limit(conn, sqliteLimitAttached, 0); err != nil {
 		return sqliteError(err)
 	}
+	defer m.startQuery(ctx)()
 	info, err := columnInfo(conn, query)
 	if err != nil {
 		return sqliteError(err)
 	}
 	switch mode {
 	case sqliteExplain:
-		if !isEQP(info) {
-			return textOut(explainListing + "\n")
+		// An EXPLAIN QUERY PLAN is the plan tree, which the envelope
+		// wraps as [{plan}]; a bytecode EXPLAIN comes back as its rows
+		// (addr, opcode, p1..p5, comment). 2.x piped the sqlite3 shell's
+		// text table of either into jq, which refused it (3.0: LEDGER
+		// DB-14 fixed).
+		if isEQP(info) {
+			return m.sqlitePlan(c, conn, query)
 		}
-		return m.sqlitePlan(c, conn, query)
 	case sqliteEQP:
 		return m.sqlitePlan(c, conn, query)
 	case sqliteSelect:

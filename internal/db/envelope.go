@@ -3,9 +3,10 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"strconv"
-	"strings"
+	"time"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 )
@@ -14,14 +15,49 @@ import (
 // plan as slow_query_explain.
 const slowQueryUS = 100000
 
-// envelope is __llm_db_envelope: impl runs under the clock (argument
-// checks, settings, connection and query, as 2.x measured; LEDGER DB-06).
-// Success prints {data, rows, query_time} (and slow_query_explain when
-// slow is given and the call took 100 ms), an error gets query_time added.
+// queryClock adds up the time the queries of one call ran: from sending a
+// query to having read its last row, after the connection and the session
+// settings (LEDGER DB-06).
+type queryClock struct {
+	took time.Duration
+	runs int
+}
+
+type queryClockKey struct{}
+
+// startQuery starts timing one query of the call ctx belongs to; the
+// function it returns stops it. Outside an envelope it does nothing.
+func (m *Module) startQuery(ctx context.Context) func() {
+	qc, _ := ctx.Value(queryClockKey{}).(*queryClock)
+	if qc == nil {
+		return func() {}
+	}
+	t0 := m.now()
+	return func() {
+		qc.took += m.now().Sub(t0)
+		qc.runs++
+	}
+}
+
+// envelope is __llm_db_envelope. query_time, and the 100 ms rule that adds
+// slow_query_explain when slow is given, count the time the queries ran,
+// not the argument checks, the connection or the session settings: 2.x
+// started the clock before the client was spawned, so a slow connection
+// with a trivial query looked slow (3.0: LEDGER DB-06 fixed). A call that
+// ran no query (refused, or no connection) counts its whole time.
+// Success prints {data, rows, query_time}, an error gets query_time added.
 func (m *Module) envelope(c *invoke.Call, slow func() output, impl func() output) int {
+	qc := &queryClock{}
+	saved := c.Ctx
+	c.Ctx = context.WithValue(ctxOf(c), queryClockKey{}, qc)
 	t0 := m.now()
 	o := impl()
-	us := m.now().Sub(t0).Microseconds()
+	elapsed := m.now().Sub(t0)
+	c.Ctx = saved
+	if qc.runs > 0 {
+		elapsed = qc.took
+	}
+	us := elapsed.Microseconds()
 	if us < 0 {
 		us = 0
 	}
@@ -38,10 +74,11 @@ func (m *Module) envelope(c *invoke.Call, slow func() output, impl func() output
 		xpl = &x
 	}
 	if o.isText {
-		// 2.x piped the sqlite3 shell's text rendering of an EXPLAIN into
-		// jq, which refused it.
-		_, _ = fmt.Fprintf(c.Stderr, "jq: parse error: Invalid numeric literal at line 1, column %d\n", firstWordLen(o.text)+1)
-		return 5
+		// A text plan (SQLite's EXPLAIN QUERY PLAN through llm_db_query)
+		// is [{plan: TEXT}], as llm_db_explain gives it. 2.x piped the
+		// sqlite3 shell's text into jq, which refused it: a raw jq error,
+		// exit 5 (3.0: LEDGER DB-14 fixed).
+		o = planArray(o)
 	}
 	for _, v := range o.vals {
 		var obj object
@@ -54,13 +91,6 @@ func (m *Module) envelope(c *invoke.Call, slow func() output, impl func() output
 		_, _ = c.Stdout.Write(append(obj.value().appendJSON(nil), '\n'))
 	}
 	return 0
-}
-
-func firstWordLen(s string) int {
-	if i := strings.IndexAny(s, " \t\n"); i >= 0 {
-		return i
-	}
-	return len(s)
 }
 
 // formatQueryTime is __llm_format_query_time: 842µs, 12.3ms, 1.23s

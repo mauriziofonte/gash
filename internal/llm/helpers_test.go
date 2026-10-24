@@ -29,6 +29,22 @@ var (
 // from a throwaway copy.
 func archive2x(t *testing.T) string {
 	t.Helper()
+	prepare2x()
+	if archiveErr != nil {
+		t.Skipf("cannot prepare the 2.x archive: %v", archiveErr)
+	}
+	return archiveDir
+}
+
+// have2x reports whether the 2.x reference is available (it is not since
+// the cutover removed lib/), preparing it once; a test calls it before
+// runGo changes the directory and compares with 2.x only when true.
+func have2x() bool {
+	prepare2x()
+	return archiveErr == nil
+}
+
+func prepare2x() {
 	archiveOnce.Do(func() {
 		wd, err := os.Getwd()
 		if err != nil {
@@ -59,10 +75,6 @@ func archive2x(t *testing.T) string {
 		}
 		archiveDir = dir
 	})
-	if archiveErr != nil {
-		t.Skipf("cannot prepare the 2.x archive: %v", archiveErr)
-	}
-	return archiveDir
 }
 
 // result is what one call printed.

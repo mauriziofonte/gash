@@ -2201,11 +2201,14 @@ var functions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:  "Read config files (JSON/YAML, excludes .env)",
+			Short:  "Read a file that is not secret (YAML as JSON)",
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
 				"  llm_config FILE [--max-bytes N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_config package.json\n" +
@@ -2213,9 +2216,10 @@ var functions = []Function{
 				"  llm_config big.json --max-bytes 5000000\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Refuses to read .env files and other secret files for security.\n" +
-				"  YAML comes out as JSON when yq (mikefarah's or the Python yq) is\n" +
-				"  installed, as the raw text otherwise. Files over --max-bytes\n" +
+				"  Reads any file that is not secret: .env files, keys and the other\n" +
+				"  secret files are refused.\n" +
+				"  YAML comes out as JSON, converted by Gash itself (no yq needed), or\n" +
+				"  as the raw text when it does not parse. Files over --max-bytes\n" +
 				"  (default 1 MiB) fail with file_too_large.",
 		},
 		Fallback:  &Usage{Program: "llm_config", Usage: "llm_config <file> [--max-bytes N]", Description: "Read config file (JSON/YAML, NOT .env); files over 1 MiB need --max-bytes"},
@@ -2239,7 +2243,13 @@ var functions = []Function{
 			SeeAlso: "llm_db_query",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_explain \"QUERY\" [-c CONNECTION] [-f SQLITE_FILE] [--analyze]\n" +
+				"  llm_db_explain \"QUERY\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
+				"  --analyze              Run the query to measure it (still read-only)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_explain \"SELECT * FROM users WHERE email LIKE '%@example.com'\" -c default\n" +
@@ -2291,9 +2301,11 @@ var functions = []Function{
 				"  Read-only, enforced twice: one statement starting with SELECT, WITH,\n" +
 				"  VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA, with no write\n" +
 				"  keywords or file/program functions; then a read-only client session\n" +
-				"  (sqlite3 -readonly -safe, MySQL READ ONLY transactions, PostgreSQL\n" +
-				"  default_transaction_read_only with a GASH_DB_TIMEOUT statement timeout).\n" +
-				"  Output: {data, rows, query_time}.",
+				"  (SQLite read-only in defensive mode, MySQL READ ONLY transactions,\n" +
+				"  PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT\n" +
+				"  statement timeout). Output: {data, rows, query_time}. -h is help: the\n" +
+				"  host comes from the connection URL. Error details are the database\n" +
+				"  driver's message.",
 		},
 		Fallback:  &Usage{Program: "llm_db_query", Usage: "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]", Description: "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2354,7 +2366,12 @@ var functions = []Function{
 			SeeAlso: "llm_db_tables llm_db_query",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_schema TABLE [-c CONNECTION] [-f SQLITE_FILE]\n" +
+				"  llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_schema users -c default\n" +
@@ -2384,7 +2401,12 @@ var functions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]\n" +
+				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
+				"  -d, --database NAME    Database name (overrides the connection's)\n" +
+				"  -f, --file PATH        SQLite database file\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_tables -c default\n" +
@@ -2415,6 +2437,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_deps [PATH] [--dev]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --dev                  Split the result into prod and dev\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_deps\n" +
@@ -2452,7 +2477,11 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Wrapper around docker_compose_check --json.\n" +
-				"  Designed for LLM/AI agent consumption.",
+				"  Designed for LLM/AI agent consumption.\n" +
+				"  PATH follows the llm_* path rules (no .., no protected trees).\n" +
+				"  ${VAR} in the compose file is resolved from PATH/.env and a short\n" +
+				"  allowlist (HOME, USER, PATH, LANG, DOCKER_HOST, ...), never from\n" +
+				"  other exported variables, so a token cannot reach the output.",
 		},
 		Fallback: &Usage{Program: "llm_docker_check", Usage: "llm_docker_check [PATH]", Description: "Compose image update check as JSON"},
 		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GITHUB_TOKEN", "NO_COLOR", "PWD"},
@@ -2473,7 +2502,11 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_env [--filter PATTERN]\n" +
+				"  llm_env [--filter REGEX | REGEX]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -f, --filter REGEX     Only names that match REGEX (Go RE2 syntax, e.g.\n" +
+				"                         '^PATH$' or 'NODE|NPM'); a bare REGEX works too\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_env\n" +
@@ -2529,7 +2562,7 @@ var functions = []Function{
 				"  HOME, USER, locale, TERM, TZ, TMPDIR, ...), never the caller's tokens.\n" +
 				"\n" +
 				"SETTINGS (~/.gash_env only)\n" +
-				"  GASH_LLM_EXEC_ALLOW=\"make npm\"   extra commands, any arguments\n" +
+				"  GASH_LLM_EXEC_ALLOW=\"make npm\"   extra commands, any options (walk rules kept)\n" +
 				"  GASH_LLM_EXEC=unrestricted       skip the allowlist\n" +
 				"  GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)",
 		},
@@ -2556,6 +2589,12 @@ var functions = []Function{
 				"USAGE\n" +
 				"  llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]\n" +
 				"\n" +
+				"OPTIONS\n" +
+				"  --type f|d             Files (default) or directories\n" +
+				"  --contains REGEX       Keep the files whose content matches REGEX\n" +
+				"                         (ripgrep's regex syntax); files only\n" +
+				"  -n, --limit N          Paths to print (default 100)\n" +
+				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all PHP files\n" +
 				"  llm_find \"*.php\"\n" +
@@ -2570,7 +2609,8 @@ var functions = []Function{
 				"  PATTERN is a file name glob (find -name). With --contains only the\n" +
 				"  files it matches are searched, hidden and gitignored ones included,\n" +
 				"  with or without ripgrep. Skips node_modules, vendor, .git and\n" +
-				"  __pycache__; --contains also skips secret files. Default limit 100.",
+				"  __pycache__; --contains also skips secret files. Default limit 100.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_find", Usage: "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]", Description: "Find files by pattern (ignores node_modules, vendor, .git)"},
 		ShellVars: []string{"HOME"},
@@ -2594,6 +2634,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_git_diff [--staged] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --staged               Staged changes (also --cached)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_diff\n" +
@@ -2620,7 +2663,10 @@ var functions = []Function{
 			SeeAlso: "llm_git_status llm_git_diff",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_log [--limit N] [PATH]\n" +
+				"  llm_git_log [-n N] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -n, --limit N          Commits to list (default 10)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_log\n" +
@@ -2651,7 +2697,15 @@ var functions = []Function{
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_status\n" +
-				"  # {\"branch\":\"main\",\"ahead\":0,\"behind\":0,\"staged\":[],\"modified\":[\"README.md\"],\"untracked\":[],\"conflicted\":[]}",
+				"  # {\n" +
+				"  #   \"branch\": \"main\",\n" +
+				"  #   \"ahead\": 0,\n" +
+				"  #   \"behind\": 0,\n" +
+				"  #   \"staged\": [],\n" +
+				"  #   \"modified\": [\"README.md\"],\n" +
+				"  #   \"untracked\": [],\n" +
+				"  #   \"conflicted\": []\n" +
+				"  # }",
 		},
 		Fallback:  &Usage{Program: "llm_git_status", Usage: "llm_git_status [PATH]", Description: "Compact git status (JSON)"},
 		ShellVars: []string{"HOME"},
@@ -2673,7 +2727,12 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N]\n" +
+				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
+				"  -C, --context N        Lines of context around each match (default 0)\n" +
+				"  -n, --limit N          Lines to print (default 100)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find TODO comments in PHP files\n" +
@@ -2683,7 +2742,17 @@ var functions = []Function{
 				"  llm_grep \"function processOrder\" .\n" +
 				"\n" +
 				"  # With context lines\n" +
-				"  llm_grep \"class.*Controller\" . --ext php --context 3",
+				"  llm_grep \"class.*Controller\" . --ext php --context 3\n" +
+				"\n" +
+				"NOTES\n" +
+				"  One built-in engine, the same with or without ripgrep installed:\n" +
+				"  ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore\n" +
+				"  matches, binary files, node_modules, vendor and .git are skipped; files\n" +
+				"  come in sorted path order. Secret files are skipped, templates such as\n" +
+				"  .env.example searched. Default limit 100.\n" +
+				"  Output: file:line:content with absolute paths (a FILE PATH gives\n" +
+				"  line:content); context lines use -, groups are separated by --.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
 		ShellVars: []string{"HOME"},
@@ -2707,6 +2776,9 @@ var functions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_ports [--listen]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -l, --listen           Listening sockets only\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_ports\n" +
@@ -2732,12 +2804,20 @@ var functions = []Function{
 			SeeAlso: "llm_ports",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_procs [--name NAME] [--port PORT]\n" +
+				"  llm_procs [--name NAME | --port PORT]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --name NAME            Processes whose command line contains NAME\n" +
+				"  --port PORT            Processes with a socket on PORT\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
 				"  llm_procs --name nginx\n" +
-				"  llm_procs --port 3306",
+				"  llm_procs --port 3306\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --port takes 0 to 65535 (invalid_port above) and wins over --name,\n" +
+				"  which is then ignored.",
 		},
 		Fallback: &Usage{Program: "llm_procs", Usage: "llm_procs [--name NAME] [--port PORT]", Description: "List processes (JSON)"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -2785,7 +2865,13 @@ var functions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_tree [--text] [--depth N] [PATH]\n" +
+				"  llm_tree [--text] [--depth N] [--stats] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --text                 Indented text list, 200 lines max (default depth 3)\n" +
+				"  --depth N              Levels below PATH, 1 or more (default 1; also\n" +
+				"                         --max-depth)\n" +
+				"  --stats                Add sizes and child counts to the JSON tree\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # JSON output (default)\n" +
@@ -2798,7 +2884,10 @@ var functions = []Function{
 				"  llm_tree --depth 2 /etc/nginx\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Ignores noise directories: node_modules, vendor, .git, __pycache__",
+				"  Ignores noise directories below PATH: node_modules, vendor, .git,\n" +
+				"  __pycache__, .cache. Entries whose name holds a tab or\n" +
+				"  a newline are left out. --text lists symlinks as name -> target, in\n" +
+				"  byte order whatever the locale.",
 		},
 		Fallback:  &Usage{Program: "llm_tree", Usage: "llm_tree [--text] [--depth N] [--stats] [PATH]", Description: "Compact directory tree (JSON default, --text for indented, --stats for size/count)"},
 		ShellVars: []string{"HOME"},

@@ -311,6 +311,10 @@ llm_docker_check /opt/myapp
 ```text
 Wrapper around docker_compose_check --json.
 Designed for LLM/AI agent consumption.
+PATH follows the llm_* path rules (no .., no protected trees).
+${VAR} in the compose file is resolved from PATH/.env and a short
+allowlist (HOME, USER, PATH, LANG, DOCKER_HOST, ...), never from
+other exported variables, so a token cannot reach the output.
 ```
 
 See also: `docker_compose_check`
