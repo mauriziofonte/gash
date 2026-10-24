@@ -46,6 +46,9 @@ func cardScript(prefix string, shadow bool) string {
 	return b.String()
 }
 
+// cardRule is a card section rule (a line of ─ only).
+var cardRule = regexp.MustCompile(`(?m)^(\s*)─+$`)
+
 // gash prints the card 2.x prints: every topic and form, colors off, on
 // and shadowed by --no-color, at three widths, with the aliases of an
 // interactive shell and with aliases the user redefined (their values
@@ -82,7 +85,16 @@ func TestCardMatches2x(t *testing.T) {
 					require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%q", args)
 					continue
 				}
-				require.Equal(t, fields[2*i], o+e, "%q", args)
+				// 3.0: SHELL-18 fixed: gash_migrate's usage and description
+				// are the D-6 pointer (migrateListing, help_test.go), and the
+				// gash section's rule follows its widest line.
+				norm := func(s string) string {
+					if !strings.Contains(s, "gash_migrate") {
+						return s
+					}
+					return cardRule.ReplaceAllString(migrateListing.ReplaceAllString(s, "$1"), "$1─")
+				}
+				require.Equal(t, norm(fields[2*i]), norm(o+e), "%q", args)
 				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%q", args)
 			}
 		})

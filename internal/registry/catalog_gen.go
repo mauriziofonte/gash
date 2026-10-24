@@ -1328,45 +1328,35 @@ var functions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Guided migration of a Gash 1.x configuration to 2.0",
+			Short:   "Shows how to migrate a Gash 1.x configuration",
 			Module:  "gash",
-			SeeAlso: "gash gash_doctor",
+			SeeAlso: "gash gash_doctor gash_upgrade",
 			Body: "" +
 				"USAGE\n" +
-				"  gash_migrate [--yes] [--plain]\n" +
-				"  gash_migrate --rollback [--yes]\n" +
-				"  gash_migrate --status\n" +
-				"  (also: gash migrate ...)\n" +
+				"  gash_migrate\n" +
+				"  (also: gash migrate)\n" +
 				"\n" +
-				"  Walks through the Gash 2.0 changes that concern your setup, one screen\n" +
-				"  each: the ~/.gashrc loader, ~/.gash_env lines 2.0 skips, command\n" +
-				"  replacements (GASH_REPLACE_TOOLS), umask, lines of your shell files that\n" +
-				"  use changed commands, llm_exec and AI consent. You see a diff of every\n" +
-				"  file before anything is written; each file is backed up first.\n" +
+				"  Gash 3 does not migrate a Gash 1.x configuration. gash_migrate prints\n" +
+				"  one line on stderr with the route and returns 1: check out v2.1.0 in\n" +
+				"  your Gash directory, open a new terminal, run gash_migrate there (the\n" +
+				"  2.x guided review, with a diff preview and backups), then gash_upgrade.\n" +
+				"  It writes nothing.\n" +
 				"\n" +
-				"  It starts by itself in the first interactive shell after the upgrade.\n" +
-				"  In scripts and headless shells Gash only prints a one-line reminder on\n" +
-				"  stderr, at most once a day.\n" +
-				"\n" +
-				"OPTIONS\n" +
-				"  --yes         Take the recommended choice everywhere, no questions\n" +
-				"  --plain       Numbered prompts instead of arrow-key menus\n" +
-				"  --rollback    Restore the files saved by the last migration\n" +
-				"  --status      Schema version, pending migration and backups\n" +
+				"  While ~/.gashrc is still the 1.x loader, an interactive shell prints a\n" +
+				"  one-line reminder on stderr, at most once a day. Headless shells print\n" +
+				"  nothing.\n" +
 				"\n" +
 				"FILES\n" +
-				"  ~/.local/state/gash/schema     configuration schema version\n" +
-				"  ~/.local/state/gash/backups/   one folder per migration, with a manifest\n" +
+				"  ~/.local/state/gash/schema     configuration schema version (2 or more:\n" +
+				"                                 no reminder)\n" +
+				"  ~/.local/state/gash/notice     time of the last reminder\n" +
 				"  (under $XDG_STATE_HOME/gash when that is set)\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Review the changes again\n" +
-				"  gash migrate\n" +
-				"\n" +
-				"  # Undo the last migration\n" +
-				"  gash migrate --rollback",
+				"  # Show the route\n" +
+				"  gash migrate",
 		},
-		Fallback:  &Usage{Program: "gash_migrate", Usage: "gash_migrate [--rollback|--status] [--yes] [--plain]", Description: "Review the Gash 2.0 changes that concern your configuration and apply your choices, with a diff preview and backups. Also: gash migrate"},
+		Fallback:  &Usage{Program: "gash_migrate", Usage: "gash_migrate", Description: "Point a Gash 1.x configuration to the 2.x migration route: Gash 3 does not migrate it. Also: gash migrate"},
 		Settings:  []string{"GASH_REPLACE_TOOLS", "GASH_UMASK", "GASH_AI_CONFIRM"},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME", "TERM", "TMPDIR", "XDG_STATE_HOME"},

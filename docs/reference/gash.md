@@ -19,7 +19,7 @@ _Generated from the help registry by `tools/gen-docs.sh`; do not edit by hand._
 | [`gash_env_init`](#gash-env-init) |  | Create ~/.gash_env configuration template |
 | [`gash_help`](#gash-help) |  | Help system with examples, search, and discovery |
 | [`gash_inspiring_quote`](#gash-inspiring-quote) |  | Display a random quote, optionally with its source |
-| [`gash_migrate`](#gash-migrate) |  | Guided migration of a Gash 1.x configuration to 2.0 |
+| [`gash_migrate`](#gash-migrate) |  | Shows how to migrate a Gash 1.x configuration |
 | [`gash_uninstall`](#gash-uninstall) |  | Uninstall Gash and clean up configurations |
 | [`gash_unload`](#gash-unload) |  | Restore shell state to before Gash was loaded |
 | [`gash_upgrade`](#gash-upgrade) |  | Upgrade Gash to the latest version |
@@ -301,55 +301,42 @@ see CONTRIBUTING.md.
 
 ## gash_migrate
 
-Guided migration of a Gash 1.x configuration to 2.0
+Shows how to migrate a Gash 1.x configuration
 
 #### Usage
 
 ```text
-gash_migrate [--yes] [--plain]
-gash_migrate --rollback [--yes]
-gash_migrate --status
-(also: gash migrate ...)
+gash_migrate
+(also: gash migrate)
 
-Walks through the Gash 2.0 changes that concern your setup, one screen
-each: the ~/.gashrc loader, ~/.gash_env lines 2.0 skips, command
-replacements (GASH_REPLACE_TOOLS), umask, lines of your shell files that
-use changed commands, llm_exec and AI consent. You see a diff of every
-file before anything is written; each file is backed up first.
+Gash 3 does not migrate a Gash 1.x configuration. gash_migrate prints
+one line on stderr with the route and returns 1: check out v2.1.0 in
+your Gash directory, open a new terminal, run gash_migrate there (the
+2.x guided review, with a diff preview and backups), then gash_upgrade.
+It writes nothing.
 
-It starts by itself in the first interactive shell after the upgrade.
-In scripts and headless shells Gash only prints a one-line reminder on
-stderr, at most once a day.
-```
-
-#### Options
-
-```text
---yes         Take the recommended choice everywhere, no questions
---plain       Numbered prompts instead of arrow-key menus
---rollback    Restore the files saved by the last migration
---status      Schema version, pending migration and backups
+While ~/.gashrc is still the 1.x loader, an interactive shell prints a
+one-line reminder on stderr, at most once a day. Headless shells print
+nothing.
 ```
 
 #### Files
 
 ```text
-~/.local/state/gash/schema     configuration schema version
-~/.local/state/gash/backups/   one folder per migration, with a manifest
+~/.local/state/gash/schema     configuration schema version (2 or more:
+                               no reminder)
+~/.local/state/gash/notice     time of the last reminder
 (under $XDG_STATE_HOME/gash when that is set)
 ```
 
 #### Examples
 
 ```bash
-# Review the changes again
+# Show the route
 gash migrate
-
-# Undo the last migration
-gash migrate --rollback
 ```
 
-See also: `gash`, `gash_doctor`
+See also: `gash`, `gash_doctor`, `gash_upgrade`
 
 ## gash_uninstall
 

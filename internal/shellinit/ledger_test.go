@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/config"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -276,4 +277,28 @@ func TestLedger_SHELL12(t *testing.T) {
 	require.NotContains(t, out, "unalias dcc")
 	require.NotContains(t, out, "unalias ")
 	require.Contains(t, out, "alias sl=")
+}
+
+// LEDGER SHELL-18: the registered help of gash_migrate and the daily 1.x
+// reminder describe the D-6 pointer (Gash 3 does not migrate; the route
+// is v2.1.0's gash_migrate, then gash_upgrade), not the 2.x review with
+// --yes, --rollback and --status (3.0: SHELL-18 fixed).
+func TestLedger_SHELL18(t *testing.T) {
+	h := newHarness()
+	h.withFile("/home/u/.gashrc", "export GASH_BASH=$HOME/.gash/gash.sh\n")
+	out := h.emit(t)
+	require.Contains(t, out, `__gash_note 'gash: your configuration is from Gash 1.x, which Gash 3 does not migrate; run "gash migrate" for the steps'`)
+	require.NotContains(t, out, "review the changes")
+
+	f, ok := registry.Lookup("gash_migrate")
+	require.True(t, ok)
+	for _, text := range []string{f.Help.Short, f.Help.Body, f.Fallback.Usage, f.Fallback.Description} {
+		for _, gone := range []string{"--yes", "--plain", "--rollback", "--status", "Review the Gash 2.0", "Guided migration"} {
+			require.NotContains(t, text, gone)
+		}
+	}
+	require.Contains(t, f.Help.Body, "Gash 3 does not migrate a Gash 1.x configuration")
+	require.Contains(t, f.Help.Body, "v2.1.0")
+	require.Contains(t, f.Help.Body, "gash_upgrade")
+	require.Equal(t, "gash_migrate", f.Fallback.Usage)
 }

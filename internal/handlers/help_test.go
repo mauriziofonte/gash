@@ -75,6 +75,10 @@ var helpCalls = [][]string{
 	{"--list", "--no-color"}, {"--no-color", "dsa"}, {"all_colors"}, {"path_add"}, {"gash_username"},
 }
 
+// migrateListing is a gash_help listing line of gash_migrate, from its
+// name to the end of the line.
+var migrateListing = regexp.MustCompile(`(?m)^(.*gash_migrate\b).*$`)
+
 // gash_help prints what 2.x prints: every form, colors off, on and
 // shadowed by --no-color, at two widths.
 func TestGashHelpMatches2x(t *testing.T) {
@@ -104,7 +108,9 @@ func TestGashHelpMatches2x(t *testing.T) {
 				}
 				env := map[string]string{"LANG": "C.UTF-8", "COLUMNS": cols, "GASH_VERSION": "test"}
 				o, e, rc := run(t, "gash_help", env, mode != "off", args...)
-				require.Equal(t, fields[2*i], o+e, "%s %s %q", cols, mode, args)
+				// 3.0: SHELL-18 fixed: gash_migrate's description is the D-6
+				// pointer, so its listing line is compared up to the name.
+				require.Equal(t, migrateListing.ReplaceAllString(fields[2*i], "$1"), migrateListing.ReplaceAllString(o+e, "$1"), "%s %s %q", cols, mode, args)
 				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%s %s %q", cols, mode, args)
 			}
 		}

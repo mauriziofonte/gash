@@ -137,24 +137,23 @@ missing file means a damaged checkout: `git -C ~/.gash status`, then reinstall.
 
 **Cause:** `~/.gashrc` loads `bash_completion` from the install directory, in
 interactive shells only; sourcing `gash.sh` directly skips it. **Fix:** source
-`~/.gashrc` (a 1.x one is replaced by `gash migrate`). `complete -p
+`~/.gashrc` (a 1.x one is replaced by the 2.x `gash migrate`; see below). `complete -p
 files_largest` should print `complete -o default -F __gash_complete files_largest`.
 
 ## "gash: your configuration is from Gash 1.x"
 
 ```
-gash: your configuration is from Gash 1.x; open a terminal and run "gash migrate" to review the changes in 2.0
+gash: your configuration is from Gash 1.x, which Gash 3 does not migrate; run "gash migrate" for the steps
 ```
 
 **Cause:** `~/.gashrc` is the 1.x loader (it mentions `GASH_BASH`) and no
-migration is recorded. In a script or headless shell Gash prints this line on
-stderr at most once a day; in an interactive terminal it starts the guided
-migration instead.
-**Fix:** run `gash migrate` in a terminal (`gash migrate --yes` takes the
-recommended choice everywhere without asking). In the menu that opens by
-itself, "Keep everything as it is and don't ask again" also stops it. State
-lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`); `gash migrate --status`
-shows it. See [migration.md](migration.md).
+migration is recorded. An interactive shell prints this line on stderr at
+most once a day; headless shells print nothing.
+**Fix:** Gash 3 does not migrate a 1.x configuration. `gash migrate` prints
+the route: check out v2.1.0 in your Gash directory, open a new terminal, run
+`gash_migrate` there (the 2.x guided review), then `gash_upgrade`. State
+lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`). See
+[migration.md](migration.md).
 
 ## Removing Gash
 

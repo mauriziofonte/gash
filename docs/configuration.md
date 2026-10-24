@@ -11,7 +11,7 @@ environment variables. This page lists them, their load order and every setting.
 | `~/.gash/` | installer | The Gash checkout. Another location works, see `GASH_DIR` below |
 | `~/.gash_env` | you (`gash_env_init` creates it) | SSH keys, database connections, AI tokens, remote hosts, settings |
 | `~/.bash_aliases`, `~/.bash_local` | you | Your own aliases and shell code, loaded after Gash |
-| `~/.local/state/gash/` | `gash migrate` | Migration state and backups (`$XDG_STATE_HOME/gash` when that is set) |
+| `~/.local/state/gash/` | Gash 2.x `gash migrate`, the 1.x reminder | Migration state and backups of 2.x, the time of the last 1.x reminder (`$XDG_STATE_HOME/gash` when that is set) |
 | `~/.cache/gash/probes` | Gash 2.x only | What the 2.x alias files learned about your tools; Gash 3 neither reads nor writes it, safe to delete (`$XDG_CACHE_HOME/gash` when that is set) |
 
 The installer adds a block between `# >>> GASH START >>>` and `# <<< GASH END <<<`
@@ -219,8 +219,8 @@ These are not accepted in `~/.gash_env`.
 | `XDG_CACHE_HOME` | Parent of the probe cache directory (default `~/.cache`) |
 | `GASH_AI_DEBUG=1` | Prints AI request bodies and raw responses on stderr |
 | `GASH_AWK` | awk program for the functions that need specific awk features. Default: `gawk` when installed, else `awk`. Read at load time |
-| `GASH_TUI=plain` | Numbered prompts instead of arrow-key menus (`gash migrate`) |
-| `GASH_ENV_FILE` | Use this file instead of `~/.gash_env` (loader, `llm_exec`, `gash_doctor`, `gash migrate`, `gash_env_init`, `gash_uninstall`) |
+| `GASH_TUI=plain` | Numbered prompts instead of arrow-key menus |
+| `GASH_ENV_FILE` | Use this file instead of `~/.gash_env` (loader, `llm_exec`, `gash_doctor`, `gash_env_init`, `gash_uninstall`) |
 | `GASH_DIR` | Install location used by `~/.gashrc`, the installer, `gash_upgrade`, `gash_uninstall` and `gash_doctor` |
 | `XDG_STATE_HOME` | Parent of the migration state directory (default `~/.local/state`) |
 | `GASH_REQUIRE_SIGNED=1` | The installer and `gash_upgrade` refuse a release tag without a verified signature |
@@ -262,7 +262,7 @@ not overwritten later; keep your own code in `~/.bash_local` rather than there.
 
 ## Upgrading from Gash 1.x
 
-A Gash 1.x `~/.gashrc` (it exports `GASH_BASH`) starts a guided migration in
-the first interactive shell after the upgrade. Run it again at any time with
-`gash migrate`, check it with `gash migrate --status`, undo it with
-`gash migrate --rollback`. See [migration.md](migration.md).
+Gash 3 does not migrate a Gash 1.x `~/.gashrc` (it exports `GASH_BASH`):
+an interactive shell reminds you once a day, and `gash migrate` prints the
+route (check out v2.1.0, run its guided migration, then `gash_upgrade`).
+See [migration.md](migration.md).
