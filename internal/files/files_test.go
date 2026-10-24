@@ -932,51 +932,137 @@ func TestLedger_FILE22_fix(t *testing.T) {
 
 var stampRe = regexp.MustCompile(`^a_backup_[0-9]{14}$`)
 
-// TestLedger_FILE04_05_06_2x pins the reproduced file_backup defects with a
-// fixed `date` on PATH: same-second overwrite, write-through of a symlink,
-// and cp's status ignored.
-func TestLedger_FILE04_05_06_2x(t *testing.T) {
+// TestLedger_FILE04_fix: backups within one stamp never overwrite each
+// other: the second gets _1, the third _2 (3.0: FILE-04 fixed). The fixed
+// `date` stands for both the same second and the two instants of a DST
+// fall-back hour, which print the same stamp.
+func TestLedger_FILE04_fix(t *testing.T) {
 	need(t, "cp")
 	path := scriptBin(t, map[string]string{"date": "echo 20240101000000"})
-	t.Run("FILE-04", func(t *testing.T) {
-		d := t.TempDir()
-		write(t, filepath.Join(d, "a"), []byte("1"))
-		runIn(t, d, map[string]string{"PATH": path}, nil, "file_backup", "a")
-		write(t, filepath.Join(d, "a"), []byte("2"))
-		_, _, rc := runIn(t, d, map[string]string{"PATH": path}, nil, "file_backup", "a")
-		m, _ := filepath.Glob(filepath.Join(d, "a_backup_*"))
-		b, _ := os.ReadFile(filepath.Join(d, "a_backup_20240101000000"))
-		if rc != 0 || len(m) != 1 || string(b) != "2" {
-			t.Errorf("rc=%d backups=%v content=%q", rc, m, b)
+	d := t.TempDir()
+	for i, content := range []string{"1", "2", "3"} {
+		write(t, filepath.Join(d, "a"), []byte(content))
+		out, errb, rc := runIn(t, d, map[string]string{"PATH": path + ":" + os.Getenv("PATH")}, nil, "file_backup", "a")
+		name := "a_backup_20240101000000"
+		if i > 0 {
+			name += "_" + string(rune('0'+i))
 		}
-	})
-	t.Run("FILE-05", func(t *testing.T) {
+		if rc != 0 || out != "'a' -> '"+name+"'\n" || errb != "" {
+			t.Errorf("call %d: rc=%d out=%q err=%q", i+1, rc, out, errb)
+		}
+		if b, _ := os.ReadFile(filepath.Join(d, name)); string(b) != content {
+			t.Errorf("%s holds %q, want %q", name, b, content)
+		}
+	}
+	if m, _ := filepath.Glob(filepath.Join(d, "a_backup_*")); len(m) != 3 {
+		t.Errorf("backups %v, want 3", m)
+	}
+}
+
+// TestLedger_FILE05_fix: an entry already at the backup name (a symlink, a
+// hard link, a directory, a dangling symlink) is never opened: the backup
+// goes to the next suffix (3.0: FILE-05 fixed).
+func TestLedger_FILE05_fix(t *testing.T) {
+	need(t, "cp")
+	path := scriptBin(t, map[string]string{"date": "echo 20240101000000"})
+	env := map[string]string{"PATH": path + ":" + os.Getenv("PATH")}
+	const name = "a_backup_20240101000000"
+	for _, c := range []struct {
+		kind string
+		make func(d string)
+	}{
+		{"symlink", func(d string) { must(t, os.Symlink("victim", filepath.Join(d, name))) }},
+		{"hard link", func(d string) { must(t, os.Link(filepath.Join(d, "victim"), filepath.Join(d, name))) }},
+		{"directory", func(d string) { must(t, os.Mkdir(filepath.Join(d, name), 0o755)) }},
+		{"dangling symlink", func(d string) { must(t, os.Symlink("missing", filepath.Join(d, name))) }},
+	} {
 		d := t.TempDir()
 		write(t, filepath.Join(d, "a"), []byte("NEW"))
-		write(t, filepath.Join(d, "v"), []byte("OLD"))
-		if err := os.Symlink("v", filepath.Join(d, "a_backup_20240101000000")); err != nil {
-			t.Fatal(err)
+		write(t, filepath.Join(d, "victim"), []byte("OLD"))
+		c.make(d)
+		_, errb, rc := runIn(t, d, env, nil, "file_backup", "a")
+		v, _ := os.ReadFile(filepath.Join(d, "victim"))
+		b, _ := os.ReadFile(filepath.Join(d, name+"_1"))
+		if rc != 0 || string(v) != "OLD" || string(b) != "NEW" {
+			t.Errorf("%s: rc=%d err=%q victim=%q backup=%q", c.kind, rc, errb, v, b)
 		}
-		_, _, rc := runIn(t, d, map[string]string{"PATH": path}, nil, "file_backup", "a")
-		if b, _ := os.ReadFile(filepath.Join(d, "v")); rc != 0 || string(b) != "NEW" {
-			t.Errorf("rc=%d v=%q, want the target rewritten", rc, b)
+		if c.kind == "directory" {
+			if m, _ := filepath.Glob(filepath.Join(d, name, "*")); len(m) != 0 {
+				t.Errorf("directory: copied into it: %v", m)
+			}
 		}
+		if _, err := os.Lstat(filepath.Join(d, "missing")); err == nil {
+			t.Errorf("%s: the dangling symlink was written through", c.kind)
+		}
+	}
+}
+
+// TestLedger_FILE06_fix: a failing cp is a failure, and its partial file is
+// removed (3.0: FILE-06 fixed).
+func TestLedger_FILE06_fix(t *testing.T) {
+	d := t.TempDir()
+	write(t, filepath.Join(d, "a"), []byte("x"))
+	write(t, filepath.Join(d, "a_backup_20240101000000"), []byte("old"))
+	withRunner(t, runner.NewFake(t,
+		runner.Expect{Argv: []string{"date", "+%Y%m%d%H%M%S"}, Stdout: "20240101000000\n"},
+		runner.Expect{Argv: []string{"cp", "-v", "--", "a", "a_backup_20240101000000_1"}, Status: 1},
+	))
+	_, errb, rc := runIn(t, d, nil, nil, "file_backup", "a")
+	if rc != 1 || errb != "Error: Failed to create backup file.\n" {
+		t.Errorf("fake: rc=%d err=%q", rc, errb)
+	}
+	if _, err := os.Lstat(filepath.Join(d, "a_backup_20240101000000_1")); err == nil {
+		t.Error("fake: the reserved backup was left behind")
+	}
+
+	// A cp that writes one byte and fails.
+	withRunner(t, runner.Exec{})
+	failing := scriptBin(t, map[string]string{
+		"date": "echo 20240101000000",
+		"cp":   `printf X > "$4"; exit 1`,
 	})
-	t.Run("FILE-06", func(t *testing.T) {
-		failing := scriptBin(t, map[string]string{"date": "echo 20240101000000", "cp": "exit 1"})
+	e := t.TempDir()
+	write(t, filepath.Join(e, "a"), []byte("xyz"))
+	write(t, filepath.Join(e, "a_backup_20240101000000"), []byte("old"))
+	_, errb, rc = runIn(t, e, map[string]string{"PATH": failing}, nil, "file_backup", "a")
+	if rc != 1 || errb != "Error: Failed to create backup file.\n" {
+		t.Errorf("partial copy: rc=%d err=%q", rc, errb)
+	}
+	if m, _ := filepath.Glob(filepath.Join(e, "a_backup_*")); len(m) != 1 {
+		t.Errorf("partial copy left %v", m)
+	}
+	if b, _ := os.ReadFile(filepath.Join(e, "a_backup_20240101000000")); string(b) != "old" {
+		t.Errorf("the earlier backup changed: %q", b)
+	}
+}
+
+// TestFileBackupMode: the backup gets the source's permission bits minus
+// the umask (setuid, setgid and sticky dropped), also for a read-only
+// source, as the new file of `cp` would.
+func TestFileBackupMode(t *testing.T) {
+	need(t, "cp")
+	old := syscall.Umask(0o022)
+	t.Cleanup(func() { syscall.Umask(old) })
+	path := scriptBin(t, map[string]string{"date": "echo 20240101000000"})
+	for _, m := range []os.FileMode{0o644, 0o444, 0o755, 0o666} {
 		d := t.TempDir()
 		write(t, filepath.Join(d, "a"), []byte("x"))
-		write(t, filepath.Join(d, "a_backup_20240101000000"), []byte("old"))
-		if _, errb, rc := runIn(t, d, map[string]string{"PATH": failing}, nil, "file_backup", "a"); rc != 0 || errb != "" {
-			t.Errorf("rc=%d err=%q, want 0: cp's status is ignored", rc, errb)
+		must(t, os.Chmod(filepath.Join(d, "a"), m))
+		if _, errb, rc := runIn(t, d, map[string]string{"PATH": path + ":" + os.Getenv("PATH")}, nil, "file_backup", "a"); rc != 0 {
+			t.Fatalf("%o: rc=%d err=%q", m, rc, errb)
 		}
-		e := t.TempDir()
-		write(t, filepath.Join(e, "a"), []byte("x"))
-		if _, errb, rc := runIn(t, e, map[string]string{"PATH": failing}, nil, "file_backup", "a"); rc != 1 ||
-			errb != "Error: Failed to create backup file.\n" {
-			t.Errorf("no backup: rc=%d err=%q", rc, errb)
+		st, err := os.Stat(filepath.Join(d, "a_backup_20240101000000"))
+		if err != nil || st.Mode().Perm() != m&^0o022 {
+			t.Errorf("source %o: backup mode %v, want %o", m, st.Mode().Perm(), m&^0o022)
 		}
-	})
+	}
+}
+
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestLedger_FILE21: cp runs with LC_ALL=C added, so a non-ASCII name is
@@ -1000,7 +1086,8 @@ func TestLedger_FILE21(t *testing.T) {
 func TestLedger_FILE25_2x(t *testing.T) {
 	d := t.TempDir()
 	write(t, filepath.Join(d, "a"), []byte("x"))
-	write(t, filepath.Join(d, "a_backup_20251018182200"), nil)
+	// 3.0: FILE-04 fixed: the backup name is reserved before cp runs, so the
+	// fake cp finds the regular file already there.
 	withRunner(t, runner.NewFake(t,
 		runner.Expect{Argv: []string{"date", "+%Y%m%d%H%M%S"}, EnvHas: []string{"TZ=JST-9"}, Stdout: "20251018182200\n"},
 		runner.Expect{Argv: []string{"cp", "-v", "--", "a", "a_backup_20251018182200"}, EnvHas: []string{"LC_ALL=C", "TZ=JST-9"}},

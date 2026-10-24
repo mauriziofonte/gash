@@ -1,0 +1,29 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# ledger: FILE-04
+# ledger: FILE-06
+# covers: none (3.0 surface)
+#
+# file_backup with a frozen stamp (a `date` stub on PATH). 3.0: FILE-04
+# fixed (a second backup in the same second gets _1) and FILE-06 fixed (a
+# failing cp is reported and leaves no backup behind).
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir work stub fail
+exec bash -c 'printf "#!/bin/sh\necho 20240101000000\n" > stub/date; cp stub/date fail/date; printf "#!/bin/sh\nexit 1\n" > fail/cp; chmod +x stub/date fail/date fail/cp; printf one > work/a'
+
+exec bash -c 'cd work; PATH=$WORK/stub:$PATH; source "$GASH_SH"; file_backup a'
+stdout '^.a. -> .a_backup_20240101000000.$'
+
+exec bash -c 'cd work; printf two > a; PATH=$WORK/stub:$PATH; source "$GASH_SH"; file_backup a'
+stdout '^.a. -> .a_backup_20240101000000_1.$'
+exec cat work/a_backup_20240101000000
+stdout '^one$'
+exec cat work/a_backup_20240101000000_1
+stdout '^two$'
+
+! exec bash -c 'cd work; PATH=$WORK/fail:$PATH; source "$GASH_SH"; file_backup a'
+stderr '^Error: Failed to create backup file\.$'
+! exists work/a_backup_20240101000000_2

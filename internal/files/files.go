@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -522,7 +523,8 @@ func fileBackup(c *invoke.Call) int {
 		p.Error("'" + file + "' is not a regular file.")
 		return 1
 	}
-	if !isRegularFile(file) {
+	st, err := os.Stat(file)
+	if err != nil || !st.Mode().IsRegular() {
 		p.Error("File '" + file + "' does not exist.")
 		return 1
 	}
@@ -535,19 +537,60 @@ func fileBackup(c *invoke.Call) int {
 		Options: runner.Options{Env: c.Env.Child()},
 	})
 	stamp := runner.CommandSubst(dres.Stdout)
-	backup := file + "_backup_" + stamp
 
-	// FILE-21: cp runs with LC_ALL=C added, so the -v line always has C-locale
-	// quoting. FILE-06: cp's status is ignored; the regular-file check decides.
-	_, _ = rnr.Run(callCtx(c), runner.Cmd{
-		Path: "cp", Args: []string{"-v", "--", file, backup},
-		Options: runner.Options{Env: withLCAllC(c.Env.Child()), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
-	})
-	if !isRegularFile(backup) {
+	// FILE-04/05: reserve a free name atomically. O_EXCL|O_NOFOLLOW fails on
+	// any existing entry (a file, a symlink, a dangling symlink, a hard link,
+	// a directory), which is never opened: the next suffix is tried instead.
+	backup, finalMode, fixMode, err := reserveBackup(file+"_backup_"+stamp, st.Mode().Perm())
+	if err != nil {
 		p.Error("Failed to create backup file.")
 		return 1
 	}
+
+	// FILE-21: cp runs with LC_ALL=C added, so the -v line always has C-locale
+	// quoting; it rewrites the reserved file in place. FILE-06: a failing cp
+	// is a failure, and its partial file is removed.
+	res, rerr := rnr.Run(callCtx(c), runner.Cmd{
+		Path: "cp", Args: []string{"-v", "--", file, backup},
+		Options: runner.Options{Env: withLCAllC(c.Env.Child()), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
+	})
+	if rerr != nil || res.ExitCode != 0 || !isRegularFile(backup) {
+		_ = os.Remove(backup)
+		p.Error("Failed to create backup file.")
+		return 1
+	}
+	if fixMode {
+		_ = os.Chmod(backup, finalMode)
+	}
 	return 0
+}
+
+// reserveBackup creates base, or base_1, base_2... when it exists, with
+// O_CREAT|O_EXCL|O_NOFOLLOW, and returns the name taken. The file gets the
+// source's permission bits with the umask applied, as the file cp would
+// create; it is created owner-writable so cp can rewrite it, and for a
+// source without owner write fixMode asks for finalMode once the copy is
+// done.
+func reserveBackup(base string, perm os.FileMode) (name string, finalMode os.FileMode, fixMode bool, err error) {
+	for n := 0; ; n++ {
+		name = base
+		if n > 0 {
+			name = base + "_" + strconv.Itoa(n)
+		}
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, perm|0o200)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", 0, false, err
+		}
+		st, serr := f.Stat()
+		cerr := f.Close()
+		if serr == nil && perm&0o200 == 0 {
+			finalMode, fixMode = st.Mode().Perm()&^0o200, true
+		}
+		return name, finalMode, fixMode, cerr
+	}
 }
 
 // withLCAllC returns env with LC_ALL forced to C (FILE-21).
