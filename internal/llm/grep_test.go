@@ -359,7 +359,7 @@ func TestSearchTreeSize(t *testing.T) {
 // past rg's first 64 KiB buffer) is binary and skipped whole, by llm_grep
 // and llm_find --contains alike.
 func TestLedger_LLM38(t *testing.T) {
-	archive2x(t) // before runGo changes the directory
+	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
 	mustWrite(t, filepath.Join(d, "start"), "\x00needle\n")
@@ -369,7 +369,7 @@ func TestLedger_LLM38(t *testing.T) {
 	env := baseEnv(physTemp(t), map[string]string{"PATH": ""})
 	require.Equal(t, result{d + "/text:1:needle\n", "", 0}, runGo(t, m, d, env, "llm_grep", "needle", d))
 	require.Equal(t, result{d + "/text\n", "", 0}, runGo(t, m, d, env, "llm_find", "*", d, "--contains", "needle"))
-	if _, err := exec.LookPath("rg"); err == nil {
+	if _, err := exec.LookPath("rg"); err == nil && with2x {
 		// 2.x: rg reported the match before a NUL past its first buffer.
 		require.Contains(t, run2x(t, d, rgEnv(t, physTemp(t)), "llm_grep", "needle", d).Stdout, d+"/end:1:needle")
 	}

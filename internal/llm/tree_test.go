@@ -380,7 +380,7 @@ func TestTreeCaps(t *testing.T) {
 // the locale: upper case before lower, punctuation by its byte, UTF-8
 // after ASCII; 2.x's order under LC_ALL=C.
 func TestLedger_LLM36(t *testing.T) {
-	archive2x(t) // before runGo changes the directory
+	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
 	names := []string{"é", "e", "ab", "a_b", "a.b", "a-b", "a", "_u", "Z1", "B", "b"}
@@ -395,5 +395,7 @@ func TestLedger_LLM36(t *testing.T) {
 		_, body, _ := strings.Cut(r.Stdout, "\n") // the root line
 		require.Equal(t, want, body, loc)
 	}
-	same(t, m, d, baseEnv(physTemp(t), map[string]string{"LC_ALL": "C"}), "llm_tree", "--text")
+	if with2x {
+		same(t, m, d, baseEnv(physTemp(t), map[string]string{"LC_ALL": "C"}), "llm_tree", "--text")
+	}
 }

@@ -361,7 +361,7 @@ func TestLedger_LLM23_2x_env(t *testing.T) {
 // TestLedger_LLM39: llm_env leaves out _, whatever its value (in Go mode
 // the binary's path), as the 2.x Bash here does.
 func TestLedger_LLM39(t *testing.T) {
-	archive2x(t) // before runGo changes the directory
+	with2x := have2x() // before runGo changes the directory
 	m := New()
 	d := physTemp(t)
 	env := baseEnv(physTemp(t), map[string]string{"_": "/usr/local/bin/gash", "PWD": d})
@@ -370,7 +370,9 @@ func TestLedger_LLM39(t *testing.T) {
 	require.NotContains(t, r.Stdout, `"_"`)
 	require.Contains(t, r.Stdout, `"PWD": `)
 	require.Equal(t, result{"{\n}\n", "", 0}, runGo(t, m, d, env, "llm_env", "--filter", "^_$"))
-	require.Equal(t, result{"{\n}\n", "", 0}, same(t, m, d, env, "llm_env", "--filter", "^_$"))
+	if with2x {
+		require.Equal(t, result{"{\n}\n", "", 0}, same(t, m, d, env, "llm_env", "--filter", "^_$"))
+	}
 }
 
 // strictJSON fails unless out is JSON a strict parser (jq -e .) accepts:
