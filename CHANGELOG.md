@@ -260,6 +260,15 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   `#includedir /private/etc/sudoers.d` line (it refused every Mac), and no
   longer counts server configuration files without a `<VirtualHost>`
   (Fedora's `conf.d/welcome.conf`, Arch's `conf/extra`) as blocking vhosts.
+- `gash hte migrate --apply --exclude <stock vhost> --yes` switches onto
+  ports 80 and 443 when the excluded stock vhosts were all that blocked
+  install and there is nothing to import (it reported "nothing to migrate");
+  `gash hte uninstall` starts the system Apache again.
+- `gash hte doctor` no longer reports `/etc/sudoers.d/gash-hte` missing where
+  `/etc/sudoers.d` is not readable by the user (Fedora, Arch): it asks
+  `sudo -n -l` instead.
+- PHP discovery on macOS no longer reports a duplicate when Homebrew's `php`
+  and `php@X.Y` links point to the same installation.
 - `source ~/.gashrc` in a shell that ran 2.x loads the whole 3.x interactive
   layer (it stopped part-way with a syntax error), and `gash_unload` then
   keeps the user's exported `GASH_*` settings.
