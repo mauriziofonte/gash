@@ -182,8 +182,8 @@ gash_uninstall   # remove Gash, its profile block and ~/.gashrc (asks first)
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome: see
-[CONTRIBUTING.md](CONTRIBUTING.md). The test suite runs on Bash 4.4 to 5.3,
-gawk and mawk, Ubuntu and macOS: `bash tests/run.sh`.
+[CONTRIBUTING.md](CONTRIBUTING.md). The test suite runs on Linux and macOS,
+with the generated Bash checked on Bash 4.4 to 5.3: `go test ./...`.
 
 Report security issues privately, as described in [SECURITY.md](SECURITY.md).
 
