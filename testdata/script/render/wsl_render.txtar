@@ -39,7 +39,8 @@ stderr 'This command requires WSL \(Windows Subsystem for Linux\)\.'
 
 # --- :229 wsl_compact:bad-option - unknown option refused before the WSL gate
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; wsl_compact --now'
-stderr 'Unknown option: --now \(usage: wsl_compact \[--status\]\)'
+# 3.0: SYS-45 fixed: -y is an option.
+stderr 'Unknown option: --now \(usage: wsl_compact \[--status\] \[-y\]\)'
 
 # --- R6: plain mode, the off-WSL refusal carries its word prefix and no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; wsl_restart -y'

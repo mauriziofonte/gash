@@ -14,21 +14,36 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// SYS-21: only the exact "Could not open a connection" text starts an
-// agent; a stale socket's refusal (status 2) goes to the unlock, whose
-// lines are info, and the marker is set.
+// 3.0: SYS-21 fixed: ssh-add -l exiting 2 is "no agent" whatever its
+// text: a stale socket's refusal starts the agent search, and the unlock
+// runs against the new agent.
 func TestLedger_SYS21(t *testing.T) {
 	fx := newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add", "ssh-agent")
 	fx.env["SSH_AUTH_SOCK"] = "/tmp/dead.sock"
+	sock := filepath.Join(fx.home, ".ssh", agentSock)
 	m, h := tm(runner.NewFake(t, list("Error connecting to agent: Connection refused\n", 2),
-		runner.Expect{PTY: true, Argv: []string{"ssh-add", "--", fx.key("key1")}, Dialog: []runner.DialogStep{
-			{Out: "Error connecting to agent: Connection refused\r\n"},
-		}}))
-	require.Equal(t, result{"SSH: Error connecting to agent: Connection refused\n", 0}, fx.call(m, nil))
-	require.Equal(t, "export GASH_SSH_AUTOUNLOCK_RAN=1\n", h.String())
+		runner.Expect{Argv: []string{"ssh-agent", "-a", sock, "-s"}, Stdout: agentOut(sock)},
+		list(noIdentities, 1, "SSH_AUTH_SOCK="+sock), unlocked(fx.key("key1"), "pw")))
+	r := fx.call(m, nil)
+	require.Equal(t, 0, r.rc)
+	require.NotContains(t, r.err, "Error connecting")
+	require.Contains(t, r.err, "SSH: Identity added: "+fx.key("key1"))
+	require.Equal(t, "export SSH_AUTH_SOCK="+sock+"\nexport SSH_AGENT_PID=4242\nexport GASH_SSH_AUTOUNLOCK_RAN=1\n", h.String())
+
+	// The search failing keeps the 2.x error line.
+	fx = newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add", "ssh-agent")
+	sock = filepath.Join(fx.home, ".ssh", agentSock)
+	m, h = tm(runner.NewFake(t, list("Error connecting to agent: Connection refused\n", 2),
+		runner.Expect{Argv: []string{"ssh-agent", "-a", sock, "-s"}, Status: 1},
+		runner.Expect{Argv: []string{"ssh-agent", "-s"}, Status: 1},
+		list("Error connecting to agent: Connection refused\n", 2)))
+	require.Equal(t, result{"Error: ssh-agent is not running and could not be started automatically.\n", 0}, fx.call(m, nil))
+	require.Empty(t, h.String())
 }
 
-// SYS-22: the agent search chmods an existing runtime directory to 700.
+// 3.0: SYS-22 fixed: the agent search makes private only a directory it
+// created; an existing runtime directory keeps its mode, and one that
+// group or others may write is refused for the socket (~/.ssh instead).
 func TestLedger_SYS22(t *testing.T) {
 	fx := newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add", "ssh-agent")
 	run := filepath.Join(fx.home, "run")
@@ -41,6 +56,29 @@ func TestLedger_SYS22(t *testing.T) {
 		list(refused, 2)))
 	require.Equal(t, 0, fx.call(m, nil).rc)
 	st, err := os.Stat(run)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o755), st.Mode().Perm())
+
+	require.NoError(t, os.Chmod(run, 0o777))
+	m, _ = tm(runner.NewFake(t, list(refused, 2),
+		runner.Expect{Argv: []string{"ssh-agent", "-a", filepath.Join(fx.home, ".ssh", agentSock), "-s"}},
+		runner.Expect{Argv: []string{"ssh-agent", "-s"}},
+		list(refused, 2)))
+	require.Equal(t, 0, fx.call(m, nil).rc)
+	st, err = os.Stat(run)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o777), st.Mode().Perm())
+
+	// A ~/.ssh the search creates is 0700.
+	fx = newFixture(t, "SSH:~/key1=pw\n", "ssh-add", "ssh-agent")
+	require.NoError(t, os.WriteFile(filepath.Join(fx.home, "key1"), nil, 0o600))
+	require.NoError(t, os.RemoveAll(filepath.Join(fx.home, ".ssh")))
+	m, _ = tm(runner.NewFake(t, list(refused, 2),
+		runner.Expect{Argv: []string{"ssh-agent", "-a", filepath.Join(fx.home, ".ssh", agentSock), "-s"}},
+		runner.Expect{Argv: []string{"ssh-agent", "-s"}},
+		list(refused, 2)))
+	require.Equal(t, 0, fx.call(m, nil).rc)
+	st, err = os.Stat(filepath.Join(fx.home, ".ssh"))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), st.Mode().Perm())
 }

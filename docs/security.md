@@ -222,19 +222,38 @@ you do not trust.
   is filtered first: private key blocks, URL passwords, values of names like
   `password`, `secret`, `token`, `api_key`, `access_key`, `private_key`,
   `credentials`, and `AKIA...`, `ghp_`/`github_pat_`, `sk-`/`sk-ant-`, `xox?-`,
-  `AIza...` tokens. A name followed by `=` or `:` loses its value; a name
+  `AIza...` tokens, `Authorization:`/`Proxy-Authorization:` bearer, basic and
+  token credentials, the `SSH:KEY=PASSPHRASE` lines of `~/.gash_env`, and
+  crypt(3) password hashes (`$1$`, `$2a$`/`$2b$`/`$2y$`, `$5$`, `$6$`, `$7$`,
+  `$y$`, `$gy$`). A name followed by `=` or `:` loses its value; a name
   followed only by a space loses the next word only when it looks like a
   token (16 or more characters), so "token expired" stays readable. It is
-  pattern based: a secret in another format is sent.
-* **Transport.** The body goes through a temporary file created with umask 077
-  and then deleted; the API key reaches `curl` through `--config` on a pipe,
-  never argv. Control characters are stripped from replies.
+  pattern based: a secret in another format, or in free text ("the password
+  is hunter2"), is sent. The piped input and the question are redacted
+  separately, so an unclosed private key block in the pipe never swallows
+  the question.
+* **WireGuard keys.** The `sysinfo` drill-downs, and the AI collectors that
+  run them, print the value of every WireGuard `PrivateKey` and
+  `PresharedKey` line as `[REDACTED]`, whatever its case and spacing.
+* **Transport.** The request is made inside the gash process over HTTPS: the
+  body is never written to a file, and the API key is a request header set
+  in the process, never on a command line. Control characters are stripped
+  from replies.
 * **Consent.** `GASH_AI_CONFIRM=auto` (default) asks before sending data Gash
   collected (`ai_sysinfo`) and sends what you typed or piped; `1` always asks;
-  `0` never. Where consent is needed, no terminal or headless mode means
+  `0` never; any other value (case-sensitive: `off`, `AUTO`) always asks and
+  warns once. Where consent is needed, no terminal or headless mode means
   refusal. Headless mode reads it from `~/.gash_env` too; the environment
   wins. `GASH_AI_DEBUG=1` prints the (redacted) request
   bodies and raw replies on stderr.
+* **`ai_sysinfo` questions.** A path named in a `?` question passes the same
+  guard as the `llm_*` readers: a `..` component is refused, symlinks are
+  resolved, and a [forbidden path](#forbidden-paths) or a
+  [secret file](#secret-files) (lexical or resolved, base names
+  case-insensitive) contributes only `=== FILE: PATH === (skipped: protected
+  path)`, never its content; directory listings leave secret entries out.
+  The data a question collects is confirmed per question (as `data`, so the
+  default `auto` asks too); without a terminal nothing is sent.
 
 ## remote_*
 
@@ -291,12 +310,20 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `git_apply_patch` | Shows the checkout, pull and apply plan and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
 | `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
 | `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
+| `wsl_compact` | Runs without asking (it changes no data) | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
 | `sudo_last` (no argument) | Shows the command and asks | Refused |
 | `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
 
 `gash_uninstall` also refuses a directory that resolves to `/` or your home,
 or has no `gash.sh` and `lib/core`.
+
+`services_stop`, `wsl_compact` and `chrome_headless_update` run sudo with `-n`
+when headless or without a terminal, after a `sudo -n true` check: a sudo
+that needs a password stops the command with `Error: sudo needs a password:
+run interactively or configure NOPASSWD.` instead of waiting at a prompt
+nobody sees. `chrome_headless_update` uses no sudo at all when its root and
+link directories are writable.
 
 ## Credentials in ~/.gash_env
 
@@ -307,8 +334,8 @@ only with `GASH_DEBUG=1`. Parsed values
 live in unexported shell variables (not inherited by child processes) that
 `gash_unload` removes. Secrets never go on a command line, where other users
 could read them in `/proc/<pid>/cmdline`: MySQL credentials use
-`--defaults-extra-file`, SSH passphrases reach `expect` on stdin, API keys
-reach `curl` through `--config`.
+`--defaults-extra-file`, SSH passphrases are typed to `ssh-add` on a
+terminal Gash drives, and AI API keys stay inside the gash process.
 
 ## Install and upgrade
 

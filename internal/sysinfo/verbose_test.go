@@ -70,9 +70,10 @@ func TestHumanKiB(t *testing.T) {
 	require.Equal(t, "Swap\t0/0\t0.0 KiB / 0.0 KiB\t0%\tsuccess", usageRow("Swap", 0, 0))
 }
 
-// The 2.x bytes of verbose sections.
+// The 2.x bytes of verbose sections (3.0: SYS-17 fixed: containerd under
+// Containers).
 const (
-	infraTTY     = "\n\u001b[38;5;39m────────────────────────────────────────────────────────────\u001b[0m\n\u001b[1mINFRA\u001b[0m\n\n  \u001b[1mSamba\u001b[0m\n    [global]\n      workgroup = WORKGROUP\n  \u001b[1mOpenMediaVault\u001b[0m\n  \u001b[1mOMV:                    \u001b[0m installed\n  \u001b[1mconfig.xml:             \u001b[0m 10 bytes\n  \u001b[1mOpenVPN\u001b[0m\n    /etc/openvpn/client.conf\n    /etc/openvpn/sub/site.ovpn\n  \u001b[1mDocker\u001b[0m\n  \u001b[1mcontainerd:             \u001b[0m present\n  \u001b[1mCollectd\u001b[0m\n    cpu.conf\n  \u001b[1mWebmin\u001b[0m\n    miniserv.conf\n    virtual-server\n  \u001b[38;5;39m•\u001b[0m Virtualmin: installed\n"
+	infraTTY     = "\n\u001b[38;5;39m────────────────────────────────────────────────────────────\u001b[0m\n\u001b[1mINFRA\u001b[0m\n\n  \u001b[1mSamba\u001b[0m\n    [global]\n      workgroup = WORKGROUP\n  \u001b[1mOpenMediaVault\u001b[0m\n  \u001b[1mOMV:                    \u001b[0m installed\n  \u001b[1mconfig.xml:             \u001b[0m 10 bytes\n  \u001b[1mOpenVPN\u001b[0m\n    /etc/openvpn/client.conf\n    /etc/openvpn/sub/site.ovpn\n  \u001b[1mContainers\u001b[0m\n  \u001b[1mcontainerd:             \u001b[0m present\n  \u001b[1mCollectd\u001b[0m\n    cpu.conf\n  \u001b[1mWebmin\u001b[0m\n    miniserv.conf\n    virtual-server\n  \u001b[38;5;39m•\u001b[0m Virtualmin: installed\n"
 	networkPlain = "\n────────────────────────────────────────────────────────────\nNETWORK\n\n  resolv.conf\n    nameserver 1.1.1.1\n    \n    search example.com\n  hosts\n    127.0.0.1 localhost\n    ::1 localhost\n  netplan\n    network:\n      version: 2\n"
 	mailEmptyTTY = "\n\u001b[38;5;39m────────────────────────────────────────────────────────────\u001b[0m\n\u001b[1mMAIL\u001b[0m\n\n\u001b[38;5;245m  nothing found\u001b[0m\n"
 )

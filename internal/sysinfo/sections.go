@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -17,25 +18,8 @@ var (
 	reNoteSemiBlank = regexp.MustCompile(`^(#|;|$)`)
 	reHash          = regexp.MustCompile(`^#`)
 	reSlashBlank    = regexp.MustCompile(`^(//|$)`)
-
-	// grep -oP '^ID=\K\w+' and friends (SYS-18: \w is ASCII, as PCRE
-	// without UCP).
-	reOSID      = regexp.MustCompile(`^ID=([A-Za-z0-9_]+)`)
-	reOSPretty  = regexp.MustCompile(`^PRETTY_NAME="([^"]+)`)
-	reOSVersion = regexp.MustCompile(`^VERSION_ID="([^"]+)`)
-	reContainer = regexp.MustCompile(`(?i)container|vz|lxc|docker`)
+	reContainer     = regexp.MustCompile(`(?i)container|vz|lxc|docker`)
 )
-
-// grepO is `grep -oP RE FILE` for an expression whose match is group 1.
-func (f files) grepO(data []byte, re *regexp.Regexp) string {
-	var out []string
-	for _, l := range grepLines(data, f.u8) {
-		if m := re.FindStringSubmatch(l); m != nil {
-			out = append(out, m[1])
-		}
-	}
-	return subst(out)
-}
 
 // identity is __sysinfo_collect_identity.
 func (s *Session) identity(o *out) {
@@ -43,8 +27,10 @@ func (s *Session) identity(o *out) {
 	o.section("IDENTITY")
 	pretty, id, version := "", "", ""
 	if f.isFile("/etc/os-release") {
-		b := f.read("/etc/os-release")
-		id, pretty, version = f.grepO(b, reOSID), f.grepO(b, reOSPretty), f.grepO(b, reOSVersion)
+		// os-release(5): quoted or not, escapes undone, never evaluated
+		// (SYS-18).
+		rel := platform.ParseOSRelease(f.read("/etc/os-release"))
+		id, pretty, version = rel["ID"], rel["PRETTY_NAME"], rel["VERSION_ID"]
 	}
 	o.kv("OS", pretty)
 	o.kv("OS ID", id)
@@ -60,12 +46,14 @@ func (s *Session) identity(o *out) {
 	o.kv("Uptime", runner.CommandSubst(up))
 
 	if s.has("systemd-detect-virt") {
-		// `|| echo none` after the tool's own `none` (SYS-16).
-		out, rc := s.tool("systemd-detect-virt")
-		if rc != 0 {
-			out = append(append([]byte(nil), out...), "none\n"...)
+		// The tool's own answer, trimmed; none only when it printed
+		// nothing (SYS-16: it prints none and exits 1 on bare metal).
+		out, _ := s.tool("systemd-detect-virt")
+		virt := strings.TrimSpace(string(out))
+		if virt == "" {
+			virt = "none"
 		}
-		o.kv("Virtualization", runner.CommandSubst(out))
+		o.kv("Virtualization", virt)
 	}
 
 	// cat /proc/1/environ | tr '\0' '\n' | grep -iE ... | head -1
@@ -108,6 +96,7 @@ func (s *Session) storage(o *out) {
 		o.subhead("crypttab")
 		o.raw(f.grep(s.sudoRead("/etc/crypttab"), reHash, false))
 	}
+	o.endsub()
 	if f.isDir("/etc/lvm") {
 		o.kv("LVM", "present")
 	}
@@ -115,6 +104,7 @@ func (s *Session) storage(o *out) {
 		o.subhead("mdadm")
 		o.raw(f.grep(f.read("/etc/mdadm/mdadm.conf"), regexp.MustCompile(`^ARRAY`), true))
 	}
+	o.endsub()
 	if f.isDir("/etc/zfs") {
 		o.kv("ZFS", "present")
 		if f.isFile("/etc/hostid") {
@@ -137,6 +127,7 @@ func (s *Session) storage(o *out) {
 		}
 		o.raw(f.grep(f.read(smartf), reNoteBlank, false))
 	}
+	o.endsub()
 	if f.isFile("/etc/hdparm.conf") {
 		o.kv("hdparm", "present")
 	}
@@ -144,6 +135,7 @@ func (s *Session) storage(o *out) {
 		o.subhead("NFS exports")
 		o.raw(f.grep(f.read("/etc/exports"), reNoteBlank, false))
 	}
+	o.endsub()
 	if f.isFile("/etc/nfs.conf") {
 		o.kv("NFS conf", "present")
 	}
@@ -202,6 +194,7 @@ func (s *Session) services(o *out) {
 		o.subhead("saslauthd")
 		o.raw(f.grep(f.read("/etc/default/saslauthd"), reNoteBlank, false))
 	}
+	o.endsub()
 	if len(f.lsPaths(f.glob("/etc/*.org")...)) > 0 {
 		o.item("Legacy .org backups found")
 	}
@@ -341,6 +334,7 @@ func (s *Session) security(o *out) {
 			o.raw(f.grep(f.read("/etc/ufw/ufw.conf"), reNoteBlank, false))
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/firewalld") {
 		o.kv("firewalld", "present")
 	}
@@ -538,12 +532,14 @@ func (s *Session) infra(o *out) {
 		o.raw(f.lsPaths(f.glob("/etc/wireguard/*.conf")...))
 	}
 	if f.isDir("/etc/docker") {
-		// The heading waits for the next line, whatever it is (SYS-17).
 		o.subhead("Docker")
 		if f.isFile("/etc/docker/daemon.json") {
 			o.rawBytes(f.read("/etc/docker/daemon.json"))
 		}
 	}
+	// The runtimes have a heading of their own: a Docker heading with no
+	// daemon.json under it is dropped, never inherited (SYS-17).
+	o.subhead("Containers")
 	if f.isDir("/etc/containerd") {
 		o.kv("containerd", "present")
 	}
@@ -559,6 +555,7 @@ func (s *Session) infra(o *out) {
 		o.raw(f.ls("/etc/monit/conf.d"))
 		o.raw(f.ls("/etc/monit/conf-available"))
 	}
+	o.endsub()
 	if f.isDir("/etc/snmp") {
 		o.kv("SNMP", "present")
 	}
@@ -572,6 +569,7 @@ func (s *Session) infra(o *out) {
 			o.item("Virtualmin: installed")
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/usermin") {
 		o.kv("Usermin", "installed")
 	}
@@ -600,16 +598,14 @@ func (s *Session) system(o *out) {
 			o.raw(f.grep(f.read("/etc/letsencrypt/cli.ini"), reNoteBlank, false))
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/ssl/virtualmin") {
 		o.kv("Virtualmin SSL", strconv.Itoa(len(f.ls("/etc/ssl/virtualmin")))+" domains")
 	}
-	// The globs are the user's: unreadable for a normal user, so the
-	// literal words reach sudo ls (SYS-19).
-	var words []string
-	for _, pat := range []string{"/etc/ssl/private/*.pem", "/etc/ssl/private/*.key", "/etc/ssl/private/*.crt"} {
-		words = append(words, f.words(pat)...)
-	}
-	o.raw(head(s.sudoLsPaths(words...), 10))
+	// The directory is listed as root (0710 root:ssl-cert: a normal user
+	// cannot expand a glob in it), sorted, the first ten (SYS-19).
+	o.subhead("SSL private keys")
+	o.raw(head(s.sudoFind("/etc/ssl/private", query{maxDepth: 1, names: []string{"*.pem", "*.key", "*.crt"}}), 10))
 
 	o.subhead("Kernel tuning")
 	if f.isDir("/etc/sysctl.d") {
@@ -649,6 +645,7 @@ func (s *Session) system(o *out) {
 			o.raw(head(f.grep(f.read("/etc/chrony/chrony.conf"), reNoteBlank, false), 10))
 		}
 	}
+	o.endsub()
 	if f.isDir("/etc/.git") {
 		o.kv("etckeeper", "git tracked")
 	}

@@ -80,6 +80,9 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		p.Info("Aborted.")
 		return 1
 	}
+	if !m.sudoReady(c, p) {
+		return 1
+	}
 	rc := 0
 	for _, s := range running {
 		p.Info("Stopping " + s + "...")
@@ -87,7 +90,7 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		if manager == "service" {
 			args = []string{"service", s, "stop"}
 		}
-		if m.passthrough(c, "sudo", args...) != 0 {
+		if m.passthrough(c, "sudo", sudoArgv(c, args...)...) != 0 {
 			rc = 1
 		}
 	}

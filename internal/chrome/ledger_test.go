@@ -6,14 +6,17 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/term"
 )
 
-// SYS-23: a symlinked ROOT is not resolved: the link's target does not
-// start with it, so nothing counts as installed and every kept version,
-// the current one too, is listed for removal.
+// 3.0: SYS-23 fixed: ROOT is resolved like the link, so a symlinked or
+// relative ROOT finds the installed version and keeps it for rollback.
 func TestLedger_SYS23(t *testing.T) {
 	fx := newFixture(t)
 	fx.root = filepath.Join(fx.dir, "opt", "real")
@@ -22,54 +25,103 @@ func TestLedger_SYS23(t *testing.T) {
 	rootlink := filepath.Join(fx.dir, "opt", "rootlink")
 	require.NoError(t, os.Symlink("real", rootlink))
 	require.NoError(t, os.Symlink(filepath.Join(rootlink, "140.0.7339.16", binRel), fx.link))
+	plan := head + "Installed: 140.0.7339.16\n" +
+		"The following packages will be upgraded:\n  chrome-headless-shell (140.0.7339.16 => 141.0.7390.37, from playwright-core 1.56.0)\n" +
+		"Kept for rollback: 140.0.7339.16\nThe following versions will be REMOVED:\n  139.0.7258.5\n" +
+		"Need to get 2.0 KiB of archives from " + zipURL + "\n"
 	fx.env["GASH_CHROME_ROOT"] = rootlink
 	r, rc := fx.call(t, nil, "--dry-run")
 	require.Equal(t, 0, rc)
-	require.Equal(t, head+"Installed: none\n"+
-		"The following NEW packages will be installed:\n  chrome-headless-shell 141.0.7390.37 (from playwright-core 1.56.0)\n"+
-		"The following versions will be REMOVED:\n  139.0.7258.5 140.0.7339.16\n"+
-		"Need to get 2.0 KiB of archives from "+zipURL+"\n", r.out)
+	require.Equal(t, plan, r.out)
 
-	// The same tree through the real ROOT: the version is found.
-	fx.env["GASH_CHROME_ROOT"] = fx.root
-	require.NoError(t, os.Remove(fx.link))
-	require.NoError(t, os.Symlink(filepath.Join(fx.root, "140.0.7339.16", binRel), fx.link))
+	// A relative ROOT, from the directory above it.
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(filepath.Join(fx.dir, "opt")))
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+	fx.env["GASH_CHROME_ROOT"] = "rootlink"
 	r, _ = fx.call(t, nil, "--dry-run")
-	require.Contains(t, r.out, "Installed: 140.0.7339.16\n")
-	require.Contains(t, r.out, "Kept for rollback: 140.0.7339.16\n")
+	require.Equal(t, plan, r.out)
 }
 
-// SYS-24: the version check is a substring test, and an executable
-// already at ROOT/V is linked as it is, unverified.
+// 3.0: SYS-24 fixed: the --version line must name the target exactly,
+// and an executable already at ROOT/V is linked only when its own
+// --version passes that check; a bogus one is replaced.
 func TestLedger_SYS24(t *testing.T) {
 	fx := newFixture(t)
 	bogus := fx.version(t, target, "bogus")
 	r, rc := fx.call(t, nil, "-y")
 	require.Equal(t, 0, rc)
 	require.Contains(t, r.err, "Info: Verified: Chrome-Headless-Shell 141.0.7390.37\n")
-	require.Contains(t, r.err, "OK: Installed: Chrome-Headless-Shell bogus -> T/opt/chs/141.0.7390.37/"+binRel+"\n")
+	require.Contains(t, r.err, "Info: Replacing an unverified copy of 141.0.7390.37.\n")
+	require.Contains(t, r.err, "OK: Installed: Chrome-Headless-Shell 141.0.7390.37 -> T/opt/chs/141.0.7390.37/"+binRel+"\n")
 	dest, err := os.Readlink(fx.link)
 	require.NoError(t, err)
 	require.Equal(t, bogus, dest)
-	require.Equal(t, "sudo ln -sfn T/opt/chs/141.0.7390.37/"+binRel+" T/bin/chs\n", fx.sudo(t))
+	b, err := os.ReadFile(bogus)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "bogus")
+
+	// A verified copy already there is linked as it is.
+	require.NoError(t, os.Remove(fx.link))
+	fx.version(t, target, target)
+	r, rc = fx.call(t, nil, "-y")
+	require.Equal(t, 0, rc)
+	require.NotContains(t, r.err, "Replacing")
 
 	fx = newFixture(t)
 	fx.env["MOCK_VERSION"] = "Chrome-Headless-Shell 141.0.7390.37-extra"
 	r, rc = fx.call(t, nil, "-y")
-	require.Equal(t, 0, rc)
-	require.Contains(t, r.err, "Info: Verified: Chrome-Headless-Shell 141.0.7390.37-extra\n")
+	require.Equal(t, 1, rc)
+	require.Contains(t, r.err, "Error: Version check failed: expected 141.0.7390.37, the binary says 'Chrome-Headless-Shell 141.0.7390.37-extra'.\n")
+	require.Empty(t, fx.tree(t))
+	for _, ok := range []string{"Chromium 141.0.7390.37", "Google Chrome for Testing 141.0.7390.37 ", "Chrome-Headless-Shell 141.0.7390.37"} {
+		require.True(t, versionIs(ok, target), ok)
+	}
+	for _, bad := range []string{"141.0.7390.37", "Chromium 141.0.7390.370", "Chromium 1141.0.7390.37", "x 141.0.7390.37 y", "Chromium 141.0.7390.3"} {
+		require.False(t, versionIs(bad, target), bad)
+	}
 }
 
-// SYS-25: plain sudo, also headless and with a ROOT the user can write.
+// 3.0: SYS-25 fixed: no sudo when ROOT and the link's directory are
+// writable; otherwise an unattended run checks `sudo -n true` first and
+// runs every call as `sudo -n`, and a sudo that wants a password is a
+// clear error before anything is downloaded.
 func TestLedger_SYS25(t *testing.T) {
 	fx := newFixture(t)
 	fx.env["GASH_HEADLESS"] = "1"
 	_, rc := fx.call(t, nil, "-y")
 	require.Equal(t, 0, rc)
+	require.Empty(t, fx.sudo(t))
+
+	fx = newFixture(t)
+	fx.env["GASH_HEADLESS"] = "1"
+	fx.m.writable = func(string) bool { return false }
+	r, rc := fx.call(t, nil, "-y")
+	require.Equal(t, 0, rc, r.err)
+	require.Contains(t, r.err, "Info: Installing into T/opt/chs/141.0.7390.37 (sudo)...\n")
 	tmp := regexp.MustCompile(`chrome-headless-shell\.[0-9]+`)
-	require.Equal(t, "sudo mkdir -p T/opt/chs/141.0.7390.37\n"+
-		"sudo cp -R --no-preserve=ownership T/tmp/chrome-headless-shell.N/x/chrome-headless-shell-linux64 T/opt/chs/141.0.7390.37/\n"+
-		"sudo ln -sfn T/opt/chs/141.0.7390.37/"+binRel+" T/bin/chs\n", tmp.ReplaceAllString(fx.sudo(t), "chrome-headless-shell.N"))
+	require.Equal(t, "sudo -n true\nsudo -n mkdir -p T/opt/chs/141.0.7390.37\n"+
+		"sudo -n cp -R --no-preserve=ownership T/tmp/chrome-headless-shell.N/x/chrome-headless-shell-linux64 T/opt/chs/141.0.7390.37/\n"+
+		"sudo -n ln -sfn T/opt/chs/141.0.7390.37/"+binRel+" T/bin/chs\n", tmp.ReplaceAllString(fx.sudo(t), "chrome-headless-shell.N"))
+
+	fx = newFixture(t)
+	fx.env["GASH_HEADLESS"] = "1"
+	fx.env["MOCK_SUDO_PASSWORD"] = "1"
+	fx.m.writable = func(string) bool { return false }
+	r, rc = fx.call(t, nil, "-y")
+	require.Equal(t, 1, rc)
+	require.True(t, strings.HasSuffix(r.err, located+"Error: sudo needs a password: run interactively or configure NOPASSWD.\n"), r.err)
+	require.Equal(t, "sudo -n true\n", fx.sudo(t))
+	require.Empty(t, fx.tree(t))
+
+	// On a terminal, plain sudo.
+	fx = newFixture(t)
+	fx.m.writable = func(string) bool { return false }
+	e := invoke.EnvMap(fx.env)
+	_, rc = fx.call(t, term.Fixed(e, true, true, true).WithTTY("\n"), "-y")
+	require.Equal(t, 0, rc)
+	require.True(t, strings.HasPrefix(fx.sudo(t), "sudo mkdir -p T/opt/chs/141.0.7390.37\n"), fx.sudo(t))
 }
 
 // SYS-36: no curl or jq on PATH; an error status of the registry is the

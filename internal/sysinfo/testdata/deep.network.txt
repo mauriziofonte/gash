@@ -12,7 +12,8 @@ default via 10.0.0.1 dev eth0
 nameserver 1.1.1.1
 --- systemd-resolved
 Global
-  Protocols: +LLMNR--- hosts
+  Protocols: +LLMNR
+--- hosts
 127.0.0.1 localhost
 --- Netplan
 --- 01.yaml

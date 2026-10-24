@@ -11,6 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/mauriziofonte/gash/internal/contract"
+	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
@@ -26,64 +28,95 @@ type hgrepOpts struct {
 	group, pick, noHighlight, noColor, wantHelp bool
 }
 
-// parseHgrep is the 2.x option loop: every word starting with "-" is an
-// option (`--` included, SYS-07), -h only as the first word, the first
-// other word is the pattern. It prints the 2.x errors and returns false.
+// parseHgrep is the hgrep option loop. -h/--help anywhere before `--` is
+// help, `--` ends the options (the next word is the pattern even when it
+// starts with "-"), every other word starting with "-" is an option and the
+// first other word is the pattern (LEDGER SYS-07). -n takes at most 9
+// digits (SYS-30). It prints the errors and returns false.
 func parseHgrep(c *invoke.Call, p ui.Printer) (hgrepOpts, bool) {
 	var o hgrepOpts
-	if a := c.Arg(0); a == "-h" || a == "--help" {
-		o.wantHelp = true
-		return o, true
+	for _, a := range c.Args {
+		if a == "--" {
+			break
+		}
+		if a == "-h" || a == "--help" {
+			o.wantHelp = true
+			return o, true
+		}
 	}
 	o.noHighlight = c.Env.Get("GASH_HEADLESS") == "1"
 	args := c.Args
+	endOpts := false
 	for i := 0; i < len(args); {
 		a := args[i]
-		switch a {
-		case "-n", "--limit":
-			v := ""
-			if i+1 < len(args) {
-				v = args[i+1]
+		if !endOpts {
+			switch a {
+			case "--":
+				endOpts = true
+				i++
+				continue
+			case "-n", "--limit":
+				v := ""
+				if i+1 < len(args) {
+					v = args[i+1]
+				}
+				// Decimal, leading zeros allowed, never evaluated, at
+				// most 9 digits like the llm family's limits (SYS-30).
+				n, err := strconv.ParseInt(v, 10, 64)
+				if !isDigits(v) || len(v) > 9 || err != nil {
+					p.Error("Option -n requires a numeric argument")
+					return o, false
+				}
+				o.limit = n
+				i += 2
+				continue
+			case "-a", "--all":
+				o.includeSelf = true
+				i++
+				continue
+			case "-r", "--reverse":
+				o.reverse = true
+				i++
+				continue
+			case "-j", "--json":
+				o.json = true
+				i++
+				continue
+			case "-H", "--no-highlight":
+				o.noHighlight = true
+				i++
+				continue
+			case "-E", "--regex":
+				o.regex = true
+				i++
+				continue
+			case "-c", "--count":
+				o.count = true
+				i++
+				continue
+			case "-g", "--group":
+				o.group = true
+				i++
+				continue
+			case "--pick":
+				o.pick = true
+				i++
+				continue
+			case "--no-color":
+				o.noColor = true
+				i++
+				continue
 			}
-			// The 2.x digits check, then the value as a decimal number:
-			// leading zeros are allowed and nothing is evaluated (SYS-30).
-			n, err := strconv.ParseInt(v, 10, 64)
-			if v == "" || !isDigits(v) || err != nil {
-				p.Error("Option -n requires a numeric argument")
-				return o, false
-			}
-			o.limit = n
-			i += 2
-			continue
-		case "-a", "--all":
-			o.includeSelf = true
-		case "-r", "--reverse":
-			o.reverse = true
-		case "-j", "--json":
-			o.json = true
-		case "-H", "--no-highlight":
-			o.noHighlight = true
-		case "-E", "--regex":
-			o.regex = true
-		case "-c", "--count":
-			o.count = true
-		case "-g", "--group":
-			o.group = true
-		case "--pick":
-			o.pick = true
-		case "--no-color":
-			o.noColor = true
-		default:
 			if strings.HasPrefix(a, "-") {
 				p.Error("Unknown option: " + a + ". Use -h for help.")
 				return o, false
 			}
-			if o.pattern != "" {
-				p.Error("Multiple patterns not supported: " + a)
-				return o, false
-			}
-			o.pattern = a
 		}
+		if o.pattern != "" {
+			p.Error("Multiple patterns not supported: " + a)
+			return o, false
+		}
+		o.pattern = a
 		i++
 	}
 	if o.pattern == "" {
@@ -118,8 +151,16 @@ func (m *Module) hgrep(c *invoke.Call) int {
 		return 1
 	}
 	if o.wantHelp {
-		write(c.Stdout, hgrepHelp)
+		// One help body for -h and gash_help (LEDGER SYS-47).
+		help.NeedsOf(c, "--help")
 		return 0
+	}
+	// The pattern is compiled before the history is read: an invalid -E
+	// regex is an error in every output mode (LEDGER SYS-05).
+	mt := newHistMatcher(o.pattern, o.regex)
+	if mt.compile(); mt.invalid {
+		p.Error("Invalid regex: " + o.pattern)
+		return 1
 	}
 	histfile := c.Env.Get("HISTFILE")
 	if histfile == "" {
@@ -136,19 +177,14 @@ func (m *Module) hgrep(c *invoke.Call) int {
 	}
 
 	data, _ := os.ReadFile(histfile) // a directory reads as empty
-	mt := newHistMatcher(o.pattern, o.regex)
 	recs := hgrepRecords(string(data), mt, o.includeSelf)
-	if mt.invalid {
-		// awk died on the regex: an empty result with status 0 (SYS-05);
-		// its awk-specific diagnostic becomes one line of ours.
-		p.Error("Invalid regex: " + o.pattern)
-		recs = nil
+	// -n N keeps the N most recent matches, then -r reverses them (LEDGER
+	// SYS-43: 2.x cut after reversing, keeping the N oldest).
+	if o.limit > 0 && int64(len(recs)) > o.limit {
+		recs = recs[int64(len(recs))-o.limit:]
 	}
 	if o.reverse {
 		slices.Reverse(recs)
-	}
-	if o.limit > 0 && int64(len(recs)) > o.limit {
-		recs = recs[int64(len(recs))-o.limit:]
 	}
 
 	if len(recs) == 0 {
@@ -343,15 +379,19 @@ func asciiHighlight(s, low, on, off string) string {
 	}
 }
 
-// isEpochLine is awk's /^#[0-9]+$/.
-func isEpochLine(l string) bool { return len(l) > 1 && l[0] == '#' && isDigits(l[1:]) }
+// isEpochLine is awk's /^#[0-9]+$/, after one trailing CR is dropped
+// (LEDGER SYS-06: a CRLF history file keeps its records).
+func isEpochLine(l string) bool {
+	l = strings.TrimSuffix(l, "\r")
+	return len(l) > 1 && l[0] == '#' && isDigits(l[1:])
+}
 
 // hgrepRecords is the data plane: every #EPOCH line takes the next line as
 // its command (spaces and tabs trimmed, empty ones skipped, the hgrep and
 // history_grep ones too unless -a), matched commands are deduplicated with
 // the last execution winning and a count kept, then ordered by that
 // execution's epoch; equal epochs keep the order of the last executions
-// in the file (SYS-31). A CRLF record line is no record (SYS-06).
+// in the file (SYS-31). One trailing CR of both lines is dropped (SYS-06).
 func hgrepRecords(data string, mt *histMatcher, includeSelf bool) []histRecord {
 	lines := strings.Split(data, "\n")
 	if n := len(lines); n > 0 && lines[n-1] == "" {
@@ -368,12 +408,12 @@ func hgrepRecords(data string, mt *histMatcher, includeSelf bool) []histRecord {
 		if !isEpochLine(lines[i]) {
 			continue
 		}
-		ts := lines[i][1:]
+		ts := strings.TrimSuffix(lines[i], "\r")[1:]
 		if i+1 >= len(lines) {
 			break
 		}
 		i++
-		cmd := strings.Trim(lines[i], " \t")
+		cmd := strings.Trim(strings.TrimSuffix(lines[i], "\r"), " \t")
 		if cmd == "" {
 			continue
 		}
@@ -431,14 +471,8 @@ func stamp(epoch int64, loc *time.Location, layout string) string {
 	return time.Unix(epoch, 0).In(loc).Format(layout)
 }
 
-// jesc is the 2.x JSON escaping of hgrep: backslash, double quote,
-// newline and tab only; other control bytes stay raw (SYS-06).
-func jesc(s string) string {
-	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\t", `\t`)
-	return r.Replace(s)
-}
-
-// hgrepJSON is the --json array on one line.
+// hgrepJSON is the --json array on one line, the commands encoded as jq
+// prints them (LEDGER SYS-06: control bytes as \u00xx, so it parses).
 func hgrepJSON(recs []histRecord, loc *time.Location) string {
 	var b strings.Builder
 	b.WriteString("[")
@@ -447,7 +481,7 @@ func hgrepJSON(recs []histRecord, loc *time.Location) string {
 			b.WriteString(",")
 		}
 		b.WriteString(`{"timestamp":"` + stamp(r.epoch, loc, "2006-01-02 15:04:05") + `","epoch":` +
-			strconv.FormatInt(r.epoch, 10) + `,"count":` + strconv.Itoa(r.count) + `,"command":"` + jesc(r.cmd) + `"}`)
+			strconv.FormatInt(r.epoch, 10) + `,"count":` + strconv.Itoa(r.count) + `,"command":` + contract.Quote(r.cmd, contract.EscapeJQ) + `}`)
 	}
 	b.WriteString("]\n")
 	return b.String()

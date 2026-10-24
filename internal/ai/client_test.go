@@ -281,3 +281,40 @@ func TestAIDebug(t *testing.T) {
 		last = i
 	}
 }
+
+// 3.0: AI-12 fixed: a GASH_AI_MODEL_* value that is not a plain model
+// name is refused before any request (and before the consent question);
+// a plain one goes into the URL as it is.
+func TestLedger_AI12_fix(t *testing.T) {
+	f := newFakeAPI(t)
+	m := testModule(f)
+	for _, bad := range []string{"../x", "gemini/../../v1", "a?b", "m#frag", "-lead", ".hidden"} {
+		c, _, errb := newCall(map[string]string{"GASH_AI_MODEL_GEMINI": bad}, nil, false)
+		if _, rc := m.request(c, "gemini", "tok", "sys", "q", responseSchema, 64, time.Second); rc != 1 {
+			t.Fatalf("%q: rc=%d", bad, rc)
+		}
+		if got := errb.String(); got != "Error: Invalid GASH_AI_MODEL_GEMINI value (letters, digits, '.', '_' and '-' only)\n" {
+			t.Fatalf("%q: stderr %q", bad, got)
+		}
+		c, _, errb = newCall(map[string]string{"GASH_AI_MODEL_GEMINI": bad, "GASH_AI_CONFIRM": "1"}, nil, false)
+		if m.confirmSend(c, "gemini", "data", "x", 1) || !strings.Contains(errb.String(), "Invalid GASH_AI_MODEL_GEMINI") {
+			t.Fatalf("%q: consent asked: %q", bad, errb.String())
+		}
+	}
+	c, _, errb := newCall(map[string]string{"GASH_AI_MODEL_CLAUDE": "claude/x"}, nil, false)
+	if _, rc := m.request(c, "claude", "tok", "sys", "q", responseSchema, 64, time.Second); rc != 1 ||
+		errb.String() != "Error: Invalid GASH_AI_MODEL_CLAUDE value (letters, digits, '.', '_' and '-' only)\n" {
+		t.Fatalf("claude: rc=%d %q", rc, errb.String())
+	}
+	if n := f.count(); n != 0 {
+		t.Fatalf("requests sent: %d", n)
+	}
+
+	c, _, _ = newCall(map[string]string{"GASH_AI_MODEL_GEMINI": "gemini-2.5-pro"}, nil, false)
+	if _, rc := m.request(c, "gemini", "tok", "sys", "q", responseSchema, 64, time.Second); rc != 0 {
+		t.Fatalf("plain model: rc=%d", rc)
+	}
+	if n := f.count(); n != 1 {
+		t.Fatalf("requests sent: %d", n)
+	}
+}

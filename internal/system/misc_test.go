@@ -8,12 +8,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -86,15 +89,25 @@ func TestDiskUsageColors(t *testing.T) {
 	require.NotContains(t, r.out, "\x1b[")
 }
 
-// SYS-14: a df that fails loses its whole output: the typed listing falls
-// back to -Pk, and -Pk failing too is the df failure.
+// 3.0: SYS-14 fixed: df's rows count whatever its exit status (GNU df
+// exits 1 for one unreadable mount); -Pk is the fallback only when -PTk
+// printed no data row, and the df failure is an output with none.
 func TestLedger_SYS14(t *testing.T) {
-	m, _, _ := tm(t, runner.NewFake(t, df("-PTk", dfTyped, 1), df("-Pk", dfBSD, 0)))
+	ext4 := "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n" +
+		"/dev/vda1 ext4 104857600 52428800 52428800 50% /\n"
+	m, _, _ := tm(t, runner.NewFake(t, df("-PTk", ext4, 1)))
 	r := call(m, "disk_usage", nil, nil, "")
+	require.Equal(t, 0, r.rc)
+	require.Empty(t, r.err)
+	require.Contains(t, r.out, "/dev/vda1")
+
+	header := "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n"
+	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", header, 1), df("-Pk", dfBSD, 1)))
+	r = call(m, "disk_usage", nil, nil, "")
 	require.Equal(t, "\n  MOUNT  DEVICE        TYPE     SIZE     USED     FREE  USE\n"+
 		"  /      /dev/disk1s1  -     9.0 KiB  5.0 KiB  4.0 KiB  ━━━━━━────  56%\n\n", r.out)
 
-	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", dfTyped, 1), df("-Pk", dfBSD, 1)))
+	m, _, _ = tm(t, runner.NewFake(t, df("-PTk", "", 1), df("-Pk", header, 1)))
 	r = call(m, "disk_usage", nil, nil, "")
 	require.Equal(t, result{"", "Error: disk_usage: df failed\n", 1}, r)
 }
@@ -136,12 +149,33 @@ func TestIPPublic(t *testing.T) {
 	require.Equal(t, result{"", "Error: Failed to retrieve public IP address.\n", 1}, r)
 }
 
-// SYS-13: a 2xx body is printed as it is.
+// 3.0: SYS-13 fixed: only a body that parses as an address is printed
+// (an HTML page is the retrieval error), the request is bounded by
+// ipTimeout, and --raw prints the bare address.
 func TestLedger_SYS13(t *testing.T) {
 	m, _, _ := tm(t, runner.NewFake(t))
+	fail := result{"", "Error: Failed to retrieve public IP address.\n", 1}
 	ipServer(t, m, 200, "<html>Rate limit</html>\n")
-	r := call(m, "ip_public", nil, nil, "")
-	require.Equal(t, result{"Public IP: <html>Rate limit</html>\n", "", 0}, r)
+	require.Equal(t, fail, call(m, "ip_public", nil, nil, ""))
+	ipServer(t, m, 200, "203.0.113.7 extra\n")
+	require.Equal(t, fail, call(m, "ip_public", nil, nil, ""))
+
+	ipServer(t, m, 200, " 2001:db8::7\r\n")
+	require.Equal(t, result{"2001:db8::7\n", "", 0}, call(m, "ip_public", nil, ttyTerm(nil, "-"), "", "--raw"))
+	require.Equal(t, result{"Public IP: 2001:db8::7\n", "", 0}, call(m, "ip_public", nil, nil, ""))
+
+	release := make(chan struct{})
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+		_, _ = w.Write([]byte("203.0.113.9"))
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	m.client, m.ipURL, m.ipTimeout = srv.Client(), srv.URL+"/ip", 50*time.Millisecond
+	start := time.Now()
+	require.Equal(t, fail, call(m, "ip_public", nil, nil, "", "--raw"))
+	require.Less(t, time.Since(start), 5*time.Second)
+	require.Equal(t, 10*time.Second, New().ipTimeout)
 }
 
 // SYS-36: net/http, whatever PATH holds; an error status is the wget
@@ -189,7 +223,7 @@ func TestServicesStop(t *testing.T) {
 	f.Expect(runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "nginx"}, Stderr: "sudo systemctl stop nginx\n"},
 		runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "docker"}, Stderr: "sudo systemctl stop docker\n", Status: 5})
 	m, _, _ := tm(t, f)
-	r := call(m, "services_stop", svcEnv(t, true, "systemctl", "service"), nil, "", "-y")
+	r := call(m, "services_stop", svcEnv(t, true, "systemctl", "service"), ctty(), "", "-y")
 	require.Equal(t, result{"", "Info: Running: nginx docker\nInfo: Stopping nginx...\nsudo systemctl stop nginx\n" +
 		"Info: Stopping docker...\nsudo systemctl stop docker\n", 1}, r)
 
@@ -204,7 +238,7 @@ func TestServicesStop(t *testing.T) {
 	}
 	f.Expect(runner.Expect{Argv: []string{"sudo", "service", "mysql", "stop"}})
 	m, _, _ = tm(t, f)
-	r = call(m, "services_stop", svcEnv(t, false, "systemctl", "service"), nil, "", "--yes")
+	r = call(m, "services_stop", svcEnv(t, false, "systemctl", "service"), ctty(), "", "--yes")
 	require.Equal(t, result{"", "Info: Running: mysql\nInfo: Stopping mysql...\n", 0}, r)
 
 	m, _, _ = tm(t, runner.NewFake(t, isActive("nginx")...))
@@ -228,20 +262,39 @@ func TestServicesStop(t *testing.T) {
 	require.Equal(t, result{"", "Error: Unknown option: -x (usage: services_stop [-y] [--dry-run])\n", 1}, r)
 }
 
-// SYS-25: unattended -y still runs plain sudo on the caller's terminal.
+// 3.0: SYS-25 fixed: an unattended -y (headless, or no controlling
+// terminal) checks `sudo -n true` first and stops with sudo -n; a sudo
+// that wants a password is one clear error and nothing is stopped.
 func TestLedger_SYS25(t *testing.T) {
 	f := runner.NewFake(t, isActive("redis")...)
-	f.Expect(runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "redis"}, Stdin: runner.Text("typed")})
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}},
+		runner.Expect{Argv: []string{"sudo", "-n", "systemctl", "stop", "redis"}, Stdin: runner.Text("typed")})
 	m, _, _ := tm(t, f)
 	env := svcEnv(t, true, "systemctl")
 	env["GASH_HEADLESS"] = "1"
 	r := call(m, "services_stop", env, nil, "typed", "-y")
 	require.Equal(t, 0, r.rc)
 
+	f = runner.NewFake(t, isActive("redis")...)
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Stderr: "sudo: a password is required\n", Status: 1})
+	m, _, _ = tm(t, f)
+	r = call(m, "services_stop", env, nil, "", "-y")
+	require.Equal(t, result{"", "Info: Running: redis\nError: sudo needs a password: run interactively or configure NOPASSWD.\n", 1}, r)
+
+	// No controlling terminal, not headless: the same check.
+	f = runner.NewFake(t, isActive("redis")...)
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Status: 1})
+	m, _, _ = tm(t, f)
+	delete(env, "GASH_HEADLESS")
+	r = call(m, "services_stop", env, nil, "", "-y")
+	require.Equal(t, 1, r.rc)
+
 	// A sudo that does not start is the shell's message.
 	f = runner.NewFake(t, isActive("redis")...)
-	f.Expect(runner.Expect{Argv: []string{"sudo", "systemctl", "stop", "redis"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}})
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}},
+		runner.Expect{Argv: []string{"sudo", "-n", "systemctl", "stop", "redis"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}})
 	m, _, _ = tm(t, f)
+	env["GASH_HEADLESS"] = "1"
 	r = call(m, "services_stop", env, nil, "", "-y")
 	require.Equal(t, result{"", "Info: Running: redis\nInfo: Stopping redis...\nbash: sudo: command not found\n", 1}, r)
 }
@@ -273,17 +326,21 @@ func TestSudoLast(t *testing.T) {
 	require.Contains(t, r.out, "sudo_last")
 }
 
-// SYS-12: declining returns 0, and an empty recalled command still asks.
+// SYS-12: no recalled command is an error before any warning, and
+// declining (or headless) returns 1 (3.0: SYS-12 fixed; 2.x returned 0 and
+// asked even with no command).
 func TestLedger_SYS12(t *testing.T) {
 	m, _, h := tm(t, runner.NewFake(t))
 	env := map[string]string{"GASH__HANDOFF": "3", "GASH_HEADLESS": "1"}
 	r := call(m, "sudo_last", env, nil, "")
-	require.Equal(t, result{"", "Warning: About to run as root: \nInfo: Aborted.\n", 0}, r)
+	require.Equal(t, result{"", "Error: No previous command in history.\n", 1}, r)
 	require.Empty(t, h.String())
 	require.True(t, h.closed)
 
+	r = call(m, "sudo_last", env, nil, "make install")
+	require.Equal(t, result{"", "Warning: About to run as root: make install\nInfo: Aborted.\n", 1}, r)
 	r = call(m, "sudo_last", map[string]string{"GASH__HANDOFF": "3"}, ttyTerm(nil, "n\n"), "make install")
-	require.Equal(t, 0, r.rc)
+	require.Equal(t, 1, r.rc)
 	require.Contains(t, r.err, "Aborted.")
 	require.Empty(t, h.String())
 }
@@ -299,4 +356,53 @@ func TestMkdirCD(t *testing.T) {
 	require.Equal(t, result{"", "mkdir: missing operand\n", 1}, r)
 	r = call(m, "mkdir_cd", nil, nil, "")
 	require.Equal(t, result{"", "Error: Missing directory. Usage: mkdir_cd <directory>\n", 1}, r)
+}
+
+// 3.0: SYS-49 fixed: every flag ip_public and disk_usage accept is in the
+// USAGE or OPTIONS of the registered help, and in the fallback usage.
+func TestLedger_SYS49(t *testing.T) {
+	for name, flags := range map[string][]string{
+		"ip_public":  {"--no-color", "--raw"},
+		"disk_usage": {"--no-color"},
+	} {
+		page := registeredHelp(t, name)
+		usage := page[strings.Index(page, "USAGE"):]
+		if i := strings.Index(usage, "EXAMPLES"); i >= 0 {
+			usage = usage[:i]
+		}
+		f, _ := registry.Lookup(name)
+		for _, fl := range flags {
+			require.Contains(t, usage, fl, name)
+			require.Contains(t, f.Fallback.Usage, fl, name)
+		}
+	}
+}
+
+// 3.0: SYS-27 fixed: every function of the module completes its own
+// flags (the others only --help, their words completing as files).
+func TestLedger_SYS27(t *testing.T) {
+	words := regexp.MustCompile(`compgen -W "([^"]*)"`)
+	for name, want := range map[string]string{
+		"hgrep":                "-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help",
+		"port_kill":            "-y --yes -f --force --help",
+		"process_kill":         "-y --yes -f --force --help",
+		"services_stop":        "-y --yes -f --force --dry-run --help",
+		"wsl_restart":          "-y --yes --help",
+		"wsl_shutdown":         "-y --yes --help",
+		"wsl_compact":          "--status -y --yes --help",
+		"ip_public":            "--no-color --raw --help",
+		"disk_usage":           "--no-color --help",
+		"history_grep":         "--help",
+		"process_find":         "--help",
+		"sudo_last":            "--help",
+		"wsl_explorer":         "--help",
+		"wsl_taskmanager":      "--help",
+		"gash_ssh_auto_unlock": "--help",
+	} {
+		f, ok := registry.Lookup(name)
+		require.True(t, ok, name)
+		m := words.FindStringSubmatch(f.Completion)
+		require.NotNil(t, m, name)
+		require.Equal(t, want, m[1], name)
+	}
 }

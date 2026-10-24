@@ -10,14 +10,13 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
-// reOSReleaseID is the `grep -oP '^ID=\K\w+'` of the context distro: ID=
-// at the start of a line, then one or more word characters right after it
-// (LEDGER AI-21: the native GNU-grep result; AI-11: the quoting gap stays,
-// so ID="rocky" matches nothing).
-var reOSReleaseID = regexp.MustCompile(`(?m)^ID=(\w+)`)
+// reOSReleaseID is the shape of an os-release ID value once its quotes
+// are gone (AI-11).
+var reOSReleaseID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // gatherContext is __ai_gather_context: a small JSON object of shell
 // context (cwd, shell, distro, package manager, git branch, top files,
@@ -35,9 +34,9 @@ func (m *Module) gatherContext(c *invoke.Call) string {
 	if n, err := strconv.Atoi(c.Env.Get("__AI_LAST_EXIT")); err == nil {
 		exit = n
 	}
-	dist := m.distro()
+	dist, pkg := m.distro()
 	o := &contract.Object{}
-	o.String("cwd", cwd).String("shell", shell).String("distro", dist).String("pkg", pkgManager(dist))
+	o.String("cwd", cwd).String("shell", shell).String("distro", dist).String("pkg", pkg)
 	if branch := m.gitBranch(c); branch != "" {
 		o.String("git", branch)
 	} else {
@@ -52,26 +51,54 @@ func (m *Module) gatherContext(c *invoke.Call) string {
 	return string(b)
 }
 
-// distro is the distro ID of /etc/os-release, "linux" when the ID line is
-// missing or its value is empty under the `^ID=\K\w+` rule.
-func (m *Module) distro() string {
+// distro is the ID of /etc/os-release, quoted or not ("linux" when it is
+// missing or not a plain name), and its package manager: from the ID, else
+// from the first known word of ID_LIKE (AI-11).
+func (m *Module) distro() (string, string) {
 	b, err := m.sys.ReadFile("/etc/os-release")
-	if err == nil {
-		if mm := reOSReleaseID.FindSubmatch(b); mm != nil {
-			return string(mm[1])
+	if err != nil {
+		return "linux", "unknown"
+	}
+	rel := platform.ParseOSRelease(b)
+	id := rel["ID"]
+	if !reOSReleaseID.MatchString(id) {
+		id = "linux"
+	}
+	pkg := pkgManager(id)
+	if pkg == "unknown" {
+		for _, like := range strings.Fields(rel["ID_LIKE"]) {
+			if p := likeManager(like); p != "" {
+				pkg = p
+				break
+			}
 		}
 	}
-	return "linux"
+	return id, pkg
 }
 
-// pkgManager is the 2.x distro→package-manager table (LEDGER AI-11: mint
-// is apt but Linux Mint's real ID linuxmint is unknown, opensuse* is a
-// glob the truncated value still matches).
+// likeManager is the package manager of an ID_LIKE family, "" for one
+// not known.
+func likeManager(like string) string {
+	switch {
+	case like == "debian" || like == "ubuntu":
+		return "apt"
+	case like == "rhel" || like == "fedora" || like == "centos":
+		return "dnf"
+	case like == "arch":
+		return "pacman"
+	case like == "suse" || strings.HasPrefix(like, "opensuse"):
+		return "zypper"
+	}
+	return ""
+}
+
+// pkgManager is the distro→package-manager table of 2.x, with Linux
+// Mint's and AlmaLinux's real IDs added (AI-11).
 func pkgManager(distro string) string {
 	switch distro {
-	case "ubuntu", "debian", "pop", "mint":
+	case "ubuntu", "debian", "pop", "mint", "linuxmint":
 		return "apt"
-	case "fedora", "rhel", "centos", "rocky", "alma":
+	case "fedora", "rhel", "centos", "rocky", "alma", "almalinux":
 		return "dnf"
 	case "arch", "manjaro", "endeavouros":
 		return "pacman"

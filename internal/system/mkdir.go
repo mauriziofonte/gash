@@ -21,6 +21,10 @@ func (m *Module) mkdirCD(c *invoke.Call) int {
 		ui.NewPrinter(c.Stderr, c.Term, false).Error("Missing directory. Usage: mkdir_cd <directory>")
 		return 1
 	}
+	if len(c.Args) > 1 {
+		ui.NewPrinter(c.Stderr, c.Term, false).Error(unexpectedArg(c.Args[1]))
+		return 1
+	}
 	if m.passthrough(c, "mkdir", "-p", dir) != 0 {
 		return 1
 	}

@@ -56,4 +56,6 @@ fi
 exit 0
 -- sudo --
 #!/usr/bin/env bash
+# 3.0: SYS-25 fixed: an unattended run passes -n.
+[ "$1" = -n ] && shift
 exec "$@"

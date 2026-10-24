@@ -73,15 +73,16 @@ func tm(t *testing.T, f *runner.Fake) (*Module, *kills, *fakeHandoff) {
 	k := &kills{alive: map[int]bool{}}
 	h := &fakeHandoff{}
 	m := &Module{
-		run:      f,
-		sys:      platform.Real(),
-		kill:     k.kill,
-		sleep:    func(time.Duration) {},
-		self:     testSelf,
-		loc:      time.UTC,
-		ipURL:    "https://ipinfo.io/ip",
-		open:     func() (io.WriteCloser, error) { return h, nil },
-		readable: func(p string) bool { _, err := os.Stat(p); return err == nil },
+		run:       f,
+		sys:       platform.Real(),
+		kill:      k.kill,
+		sleep:     func(time.Duration) {},
+		self:      testSelf,
+		loc:       time.UTC,
+		ipURL:     "https://ipinfo.io/ip",
+		ipTimeout: ipTimeout,
+		open:      func() (io.WriteCloser, error) { return h, nil },
+		readable:  func(p string) bool { _, err := os.Stat(p); return err == nil },
 	}
 	return m, k, h
 }
@@ -125,6 +126,12 @@ func binDir(t *testing.T, names ...string) string {
 
 // ttyTerm is a color terminal on stdout and stderr whose keyboard types
 // input (no controlling terminal when input is "-").
+// ctty is a plain term (no color, nothing on a terminal) that has a
+// controlling terminal, as a shell started from one: sudo could ask.
+func ctty() *term.Term {
+	return term.Fixed(invoke.EnvMap(map[string]string{"LANG": "C.UTF-8"}), false, false, false).WithTTY("")
+}
+
 func ttyTerm(env map[string]string, input string) *term.Term {
 	if env == nil {
 		env = map[string]string{"LANG": "C.UTF-8"}

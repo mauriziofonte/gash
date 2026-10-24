@@ -98,6 +98,10 @@ func (m *Module) wslExplorer(c *invoke.Call) int {
 	if !m.requireWSL(c) {
 		return 1
 	}
+	if len(c.Args) > 1 {
+		ui.NewPrinter(c.Stderr, c.Term, false).Error(unexpectedArg(c.Args[1]))
+		return 1
+	}
 	target := c.Arg(0)
 	if target == "" {
 		target = "."
@@ -174,28 +178,36 @@ var dmesgStamp = regexp.MustCompile(`^\[([^]]+)\].*`)
 
 const order7 = "page allocation failure: order:7"
 
-// wslCompact is wsl_compact [--status]: the order-7 failures of dmesg,
-// the memory snapshot, then (unprompted, also headless: SYS-45) the
-// constant sudo script of SYS-46, the before/after table and the interop
-// check.
+// wslCompact is wsl_compact [--status] [-y]: the order-7 failures of
+// dmesg, the memory snapshot, then the constant sudo script of SYS-46,
+// the before/after table and the interop check. On a terminal it runs
+// unprompted; headless it needs -y (SYS-45).
 func (m *Module) wslCompact(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
 	p := ui.NewPrinter(c.Stderr, c.Term, false)
-	statusOnly := false
+	statusOnly, yes := false, false
 	for _, a := range c.Args {
-		if a != "--status" {
-			p.Error("Unknown option: " + a + " (usage: wsl_compact [--status])")
+		switch a {
+		case "--status":
+			statusOnly = true
+		case "-y", "--yes":
+			yes = true
+		default:
+			p.Error("Unknown option: " + a + " (usage: wsl_compact [--status] [-y])")
 			return 1
 		}
-		statusOnly = true
 	}
 	if !m.requireWSL(c) {
 		return 1
 	}
+	if !statusOnly && !yes && c.Term.Headless() {
+		p.Error("wsl_compact needs root: pass -y to run it unattended.")
+		return 1
+	}
 	s := ui.StyleOf(c.Term, false)
-	plain, _ := m.output(c, "dmesg")
+	plain, dmesgRC := m.output(c, "dmesg")
 	fails := 0
 	for _, l := range strings.Split(plain, "\n") {
 		if strings.Contains(l, order7) {
@@ -214,12 +226,19 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 	if last != "" {
 		value += " (last: " + last + ")"
 	}
+	if dmesgRC != 0 {
+		// kernel.dmesg_restrict: no count at all, not 0 (SYS-45).
+		value = "unknown (dmesg not readable)"
+	}
 	s.KV(c.Stdout, "--width", "0", "order-7 allocation failures since the VM started:", value)
 
 	before := strings.SplitN(memSnapshot(m.sys), "|", 3)
 	if statusOnly {
 		s.KV(c.Stdout, "--width", "22", "MemFree", before[0], "SReclaimable (slab)", before[1], "free >=512KiB blocks", before[2])
 		return 0
+	}
+	if !m.sudoReady(c, p) {
+		return 1
 	}
 	p.Info("Dropping the page cache and slab, then compacting memory (sudo)...")
 	res, err := m.run.RunScript(ctx(c), runner.Script{Name: runner.ScriptWSLCompact,

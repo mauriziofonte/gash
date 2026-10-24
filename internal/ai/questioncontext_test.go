@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -56,32 +58,50 @@ func TestStripTrailingPunct(t *testing.T) {
 	}
 }
 
-// TestLedger_AI08_portRegex: the bare ":" alternative makes the port regex
-// take clock times, not just ports (the reproduced defect).
-func TestLedger_AI08_portRegex(t *testing.T) {
-	q := "why is 12:30 slow on port 3306 and listening on :8080?"
-	var got []string
-	for _, mm := range rePortEntity.FindAllStringSubmatch(q, -1) {
-		got = append(got, mm[2])
-	}
-	want := []string{"30", "3306", "8080"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("ports %v want %v", got, want)
-	}
-}
-
-// TestLedger_AI08_portClockOnly: a lone clock time still yields a "port".
-func TestLedger_AI08_portClockOnly(t *testing.T) {
-	m := strings.Join(func() []string {
-		var r []string
-		for _, mm := range rePortEntity.FindAllStringSubmatch("backup runs at 03:15 daily", -1) {
-			r = append(r, mm[2])
+// 3.0: AI-08 fixed: a port is "port N" or HOST:N (IPv4, localhost, *,
+// [IPv6]) with 1 <= N <= 65535, so a clock time is none; the ss rows
+// kept are those whose local address ends with :N exactly.
+func TestLedger_AI08_fix(t *testing.T) {
+	ports := func(q string) string {
+		var got []string
+		for _, mm := range rePortEntity.FindAllStringSubmatch(q, -1) {
+			got = append(got, mm[1])
 		}
-		return r
-	}(), ",")
-	if m != "15" {
-		t.Fatalf("clock time -> port %q, want 15", m)
+		return strings.Join(got, ",")
 	}
+	for q, want := range map[string]string{
+		"backup runs at 10:30 daily":                     "",
+		"why is 12:30 slow on port 3306":                 "3306",
+		"is 127.0.0.1:8080 up? and localhost:9000, *:22": "8080,9000,22",
+		"[::1]:5432 refuses":                             "5432",
+		"port: 25 and listening on :8080":                "25",
+	} {
+		require.Equal(t, want, ports(q), q)
+	}
+
+	ss := []byte("State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n" +
+		"LISTEN 0 128 0.0.0.0:3000 0.0.0.0:* users\nLISTEN 0 128 0.0.0.0:3306 0.0.0.0:* users\n" +
+		"LISTEN 0 128 [::]:30 [::]:* users\nLISTEN 0 128 0.0.0.0:80 10.0.0.1:30 users\n")
+	require.Equal(t, "LISTEN 0 128 [::]:30 [::]:* users\n", string(ssListening(ss, "30")))
+
+	m := New()
+	sr, _ := platform.NewSysroot(t.TempDir())
+	m.sys = sr
+	calls := 0
+	m.run = &fakeRunner{handle: func(name string, _ []string) ([]byte, int) {
+		if name == "ss" {
+			calls++
+		}
+		return ss, 0
+	}}
+	c, _, _ := newCall(map[string]string{}, nil, false)
+	got, kinds := m.questionContext(c, func(string, ...string) []byte { return nil }, "the job at 10:30 and port 99999 failed")
+	require.NotContains(t, got, "=== PORT:")
+	require.NotContains(t, kinds, "ports")
+	require.Zero(t, calls)
+	got, _ = m.questionContext(c, func(string, ...string) []byte { return nil }, "what listens on port 30?")
+	require.Contains(t, got, "=== PORT: 30 ===\nLISTEN 0 128 [::]:30 [::]:* users\n")
+	require.NotContains(t, got, ":3000")
 }
 
 // TestCollectQuestionContext wires the collector to a fake runner, a temp

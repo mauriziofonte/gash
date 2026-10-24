@@ -58,5 +58,5 @@ x = 1
 --- sysctl.conf
 net.ipv4.ip_forward=1
 --- I/O scheduler
-queue: [mq-deadline] none
-queue: none
+sda: [mq-deadline] none
+vda: none

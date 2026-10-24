@@ -67,7 +67,8 @@ Razor=configured
 SOCKET=local:/run/opendkim.sock
 --- TrustedHosts
 127.0.0.1
-localhost--- KeyTable
+localhost
+--- KeyTable
 mail._domainkey.example.com example.com:mail:/etc/opendkim/keys/mail.private
 --- BIND
 --- named.conf.local
@@ -81,7 +82,8 @@ options {
 --- Unbound
 server:
   verbosity: 1
-  port: 53--- Avahi
+  port: 53
+--- Avahi
 [server]
 use-ipv4=yes
 --- ProFTPD
@@ -112,11 +114,12 @@ Mullvad=configured
 --- wg0.conf
 [Interface]
 PrivateKey = [REDACTED]
-PrivateKey=nospace
+PrivateKey=[REDACTED]
 Address = 10.0.0.1/24
   PrivateKey = [REDACTED]
 --- Docker
-{"log-driver":"json-file"}Client:
+{"log-driver":"json-file"}
+Client:
  Version: 24
 Server:
  Containers: 3
@@ -128,7 +131,8 @@ disable-require = false
 --- Collectd
 LoadPlugin cpu
 --- cpu.conf
-<Plugin cpu>--- Monit
+<Plugin cpu>
+--- Monit
 --- conf.d/nginx
 check process nginx
 --- conf-available/apache
@@ -169,7 +173,8 @@ x=1
 /opt/app
 --- Custom: backup.timer
 [Timer]
-OnCalendar=daily--- Override: /etc/systemd/system/custom.service.d/override.conf
+OnCalendar=daily
+--- Override: /etc/systemd/system/custom.service.d/override.conf
 [Service]
 Restart=always
 --- Running services

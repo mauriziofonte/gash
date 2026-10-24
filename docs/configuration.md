@@ -188,9 +188,9 @@ of them (the prompt, history and aliases are already set up). Use
 | `GASH_LLM_EXEC` | empty | `unrestricted` skips the `llm_exec` parser and allowlist. The dangerous-pattern blocklist still applies. File only |
 | `GASH_LLM_EXEC_ALLOW` | empty | Extra commands for `llm_exec`, separated by spaces, commas or colons (`"make npm"`). They run with any arguments. File only |
 | `GASH_LLM_SANDBOX` | `0` | `1` runs `llm_exec` inside `bwrap`: read-only filesystem, no network. Fails with an error when `bwrap` is missing. File only |
-| `GASH_AI_CONFIRM` | `auto` | `auto` asks before sending data Gash collected (`ai_sysinfo`); `1` asks before every request; `0` never asks |
-| `GASH_AI_MODEL_CLAUDE` | `claude-haiku-5-5` | Model for Claude requests |
-| `GASH_AI_MODEL_GEMINI` | `gemini-2.5-flash` | Model for Gemini requests |
+| `GASH_AI_CONFIRM` | `auto` | `auto` asks before sending data Gash collected (`ai_sysinfo`); `1` asks before every request; `0` never asks. The value is case-sensitive: any other value (`off`, `no`, `AUTO`) asks before every request, with a warning, so an unattended send always needs an explicit `0` |
+| `GASH_AI_MODEL_CLAUDE` | `claude-haiku-5-5` | Model for Claude requests. Letters, digits, `.`, `_` and `-` only, starting with a letter or digit; any other value is an error and nothing is sent |
+| `GASH_AI_MODEL_GEMINI` | `gemini-2.5-flash` | Model for Gemini requests (it is part of the request URL). Same rule as `GASH_AI_MODEL_CLAUDE` |
 
 See [security.md](security.md) for what the `llm_exec` and AI settings change.
 

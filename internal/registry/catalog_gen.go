@@ -19,7 +19,7 @@ var functions = []Function{
 		Aliases:  []string{"ask"},
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Interactive AI chat from the terminal",
+			Short:   "Ask the AI one question from the terminal",
 			Module:  "ai",
 			Aliases: "ask",
 			SeeAlso: "ai_query ai_sysinfo gash_ai_list",
@@ -28,14 +28,14 @@ var functions = []Function{
 				"  ai_ask [provider]\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Start an interactive chat (uses first configured provider)\n" +
+				"  # Ask one question (uses first configured provider)\n" +
 				"  ask\n" +
 				"\n" +
 				"  # Use a specific provider\n" +
 				"  ask claude\n" +
 				"  ask gemini\n" +
 				"\n" +
-				"  # Type your questions interactively:\n" +
+				"  # Type your question at the prompt:\n" +
 				"  #   claude: how to find files larger than 100MB?\n" +
 				"  #   Command: find . -type f -size +100M\n" +
 				"  #   Explanation: Finds all files larger than 100MB.\n" +
@@ -68,18 +68,24 @@ var functions = []Function{
 				"    (with piped data) -> Troubleshoot (Issue + Suggestion)\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Type 'exit' or 'quit' or press Ctrl+C to end the session.\n" +
-				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  One question per call; Enter on an empty line aborts, exit/quit cancel.\n" +
+				"  ai_ask needs a terminal (not headless): from a script or an agent use\n" +
+				"  ai_query \"question\" instead.\n" +
+				"  Piped content is auto-truncated to 4KB to save tokens; piped input must\n" +
+				"  start within 2 seconds, or stdin is ignored with a warning.\n" +
+				"  -h/--help is help as the first word or right after the provider.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
-				"  URLs, KEY=value secrets and well-known token formats (sk-, ghp_,\n" +
-				"  AKIA, xox, AIza). The API key travels in a curl config read from\n" +
-				"  a pipe, never on the command line.\n" +
+				"  URLs, KEY=value secrets, Authorization headers, SSH: passphrase\n" +
+				"  lines, password hashes ($6$...) and well-known token formats (sk-,\n" +
+				"  ghp_, AKIA, xox, AIza). Free text (\"the password is ...\") is not\n" +
+				"  detected. The API key stays inside the gash process, never on a\n" +
+				"  command line.\n" +
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},
-		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Interactive AI chat. Provider: claude or gemini (default: first available)"},
+		Fallback:          &Usage{Program: "ai_ask", Usage: "ai_ask [provider]", Description: "Ask the AI one question. Provider: claude or gemini (default: first available)"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
 		ShellVars:         []string{"BASH_VERSION", "GASH_AI_DEBUG", "HOME", "ZSH_VERSION", "__AI_LAST_EXIT"},
@@ -163,14 +169,21 @@ var functions = []Function{
 				"  } | ai_query \"correlate these errors\"\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Piped content is auto-truncated to 4KB to save tokens.\n" +
+				"  Piped content is auto-truncated to 4KB to save tokens. Piped input must\n" +
+				"  start within 2 seconds: an open stdin that stays silent is ignored with\n" +
+				"  a warning (redirect </dev/null to skip the wait).\n" +
 				"  When input is piped, the AI enters troubleshoot mode automatically.\n" +
+				"  A provider alone is not a question: \"ai_query claude\" fails with\n" +
+				"  \"No query provided\". -h/--help is help as the first word or as the\n" +
+				"  only word after the provider; inside a longer question it is text.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
-				"  URLs, KEY=value secrets and well-known token formats (sk-, ghp_,\n" +
-				"  AKIA, xox, AIza). The API key travels in a curl config read from\n" +
-				"  a pipe, never on the command line.\n" +
+				"  URLs, KEY=value secrets, Authorization headers, SSH: passphrase\n" +
+				"  lines, password hashes ($6$...) and well-known token formats (sk-,\n" +
+				"  ghp_, AKIA, xox, AIza). Free text (\"the password is ...\") is not\n" +
+				"  detected. The API key stays inside the gash process, never on a\n" +
+				"  command line.\n" +
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},
@@ -206,7 +219,7 @@ var functions = []Function{
 			SeeAlso: "sysinfo ai_query",
 			Body: "" +
 				"USAGE\n" +
-				"  ai_sysinfo [provider] [--raw]\n" +
+				"  ai_sysinfo [claude|gemini] [--raw] [--no-color]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Run AI-powered system analysis\n" +
@@ -227,7 +240,8 @@ var functions = []Function{
 				"\n" +
 				"  Options 1-6 run deep collectors that read full config files.\n" +
 				"  Option ? lets you ask about specific services, files, or ports.\n" +
-				"  Option s exports the full session as a Markdown report.\n" +
+				"  Option s exports the full session as a Markdown report (mode 0600)\n" +
+				"  in the current directory; a failed write is reported as an error.\n" +
 				"\n" +
 				"SMART QUESTIONS\n" +
 				"  The ? option detects entities in your question:\n" +
@@ -235,15 +249,23 @@ var functions = []Function{
 				"    \"what's in /etc/postfix/main.cf?\" -> reads the file\n" +
 				"    \"what's on port 3306?\" -> reads socket listeners\n" +
 				"    \"tell me about apache\" -> reads service configs\n" +
+				"  A port is \"port N\" or HOST:N (127.0.0.1:8080, localhost:9000, *:22,\n" +
+				"  [::1]:5432); a clock time such as 10:30 is no port.\n" +
+				"  Paths follow the llm_* reader rules: no .. components, symlinks\n" +
+				"  resolved, and protected paths (/proc, /sys, /dev, /boot, /root,\n" +
+				"  /etc/shadow, /etc/passwd, /etc/sudoers...) and secret files\n" +
+				"  (.env, *.key, id_rsa*, .ssh/...) are skipped, never read; directory\n" +
+				"  listings leave secret files out.\n" +
 				"\n" +
 				"PRIVACY\n" +
 				"  Before the first request, ai_sysinfo shows how much system data it\n" +
-				"  will send and asks for confirmation (GASH_AI_CONFIRM=auto). Without\n" +
+				"  will send and asks for confirmation (GASH_AI_CONFIRM=auto). Each ?\n" +
+				"  question that collects data asks again before sending it. Without\n" +
 				"  a terminal it refuses; set GASH_AI_CONFIRM=0 in ~/.gash_env to allow\n" +
 				"  unattended runs. Secrets are redacted before sending either way.\n" +
 				"  Use --raw to see exactly what is collected.",
 		},
-		Fallback:          &Usage{Program: "ai_sysinfo", Usage: "ai_sysinfo [provider] [--raw] [--no-color]", Description: "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai"},
+		Fallback:          &Usage{Program: "ai_sysinfo", Usage: "ai_sysinfo [claude|gemini] [--raw] [--no-color]", Description: "AI-powered system analysis. Provider: claude or gemini. --raw dumps collected data without API call. --no-color disables ANSI. Alias: sysinfo_ai"},
 		Settings:          []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
 		ShellVars:         []string{"GASH_AI_DEBUG", "HOME"},
@@ -381,7 +403,11 @@ var functions = []Function{
 				"  Layout: /opt/chrome-headless-shell/<version>/ with the symlink\n" +
 				"  /usr/local/bin/chrome-headless-shell (GASH_CHROME_ROOT and\n" +
 				"  GASH_CHROME_LINK change them). The outgoing version is kept for\n" +
-				"  rollback, older ones are removed. Installing needs sudo.\n" +
+				"  rollback, older ones are removed. Installing uses sudo only when ROOT\n" +
+				"  or the link directory is not writable; headless or without a terminal\n" +
+				"  it runs sudo -n and stops early when sudo wants a password. The\n" +
+				"  binary's --version must name the version exactly, also for a copy\n" +
+				"  already under ROOT (one that does not is replaced).\n" +
 				"  Missing shared libraries are reported with the apt packages to install.\n" +
 				"  Point your tools at the shared binary and stop npm from downloading\n" +
 				"  browsers of its own:\n" +
@@ -644,7 +670,7 @@ var functions = []Function{
 		},
 		Fallback:          &Usage{Program: "disk_usage", Usage: "disk_usage [--no-color]", Description: "Displays disk usage for real filesystem types, formatted for easy reading. Alias: du2"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "disk_usage / ip_public — just --no-color",
+		CompletionComment: "disk_usage — just --no-color",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
 			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --help\" -- \"$cur\")\n" +
@@ -1521,10 +1547,15 @@ var functions = []Function{
 				"  Runs once per session (tracked by GASH_SSH_AUTOUNLOCK_RAN).\n" +
 				"  Only unlocks keys that are not already loaded in the agent.",
 		},
-		Fallback:  &Usage{Program: "gash_ssh_auto_unlock", Usage: "gash_ssh_auto_unlock", Description: "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)."},
-		LoadsEnv:  true,
-		ShellVars: []string{"HOME", "OSTYPE"},
-		Env:       []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_SSH_AUTOUNLOCK_RAN", "HOME", "NO_COLOR", "OSTYPE", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"},
+		Fallback:          &Usage{Program: "gash_ssh_auto_unlock", Usage: "gash_ssh_auto_unlock", Description: "Start ssh-agent and add the keys listed as SSH:path=passphrase in ~/.gash_env (once per shell)."},
+		LoadsEnv:          true,
+		ShellVars:         []string{"HOME", "OSTYPE"},
+		Env:               []string{"EUID", "GASH_DEBUG", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_SSH_AUTOUNLOCK_RAN", "HOME", "NO_COLOR", "OSTYPE", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "gash_uninstall",
@@ -2086,13 +2117,19 @@ var functions = []Function{
 				"  hgrep PATTERN [OPTIONS]\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  -n LIMIT        Show only last N results (default: all)\n" +
-				"  -a, --all       Include the hgrep command itself in results\n" +
-				"  -r, --reverse   Reverse order (oldest first)\n" +
-				"  -j, --json      Output as JSON array\n" +
-				"  -H, --no-highlight  Disable color highlighting of matches\n" +
-				"  -E, --regex     Treat PATTERN as extended regex\n" +
-				"  -c, --count     Only show count of matching commands\n" +
+				"  -n, --limit N       Show only the N most recent matches (0: all)\n" +
+				"  -a, --all           Include hgrep/history_grep commands in results\n" +
+				"  -r, --reverse       Newest first (default: oldest first)\n" +
+				"  -j, --json          Output as JSON array\n" +
+				"  -H, --no-highlight  Disable highlighting / force plain output\n" +
+				"  -E, --regex         PATTERN is a Go regular expression (RE2 syntax),\n" +
+				"                      case-insensitive; an invalid regex is an error\n" +
+				"  -c, --count         Only show the count of unique matching commands\n" +
+				"  -g, --group         Collapse similar commands under a shared chain prefix\n" +
+				"      --pick          Fuzzy-select a matching command via fzf and print it\n" +
+				"      --no-color      Disable colored output for this invocation\n" +
+				"  -h, --help          Show this help (anywhere before --)\n" +
+				"  --                  End of options: the next word is PATTERN\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Search for git push commands\n" +
@@ -2107,14 +2144,41 @@ var functions = []Function{
 				"  # Count how many times you ran a command\n" +
 				"  hgrep \"npm install\" -c\n" +
 				"\n" +
-				"  # Regex: find git push or pull\n" +
-				"  hgrep -E \"git (push|pull)\"\n" +
+				"  # Regex: git push or pull at the start\n" +
+				"  hgrep -E \"^git (push|pull)\"\n" +
 				"\n" +
-				"  # Reverse order (oldest first)\n" +
-				"  hgrep kubectl -r",
+				"  # Group \"cd X && ...\" variants under one prefix\n" +
+				"  hgrep cd -g\n" +
+				"\n" +
+				"  # Fuzzy-pick a past git command (needs fzf)\n" +
+				"  hgrep git --pick\n" +
+				"\n" +
+				"  # Newest first\n" +
+				"  hgrep kubectl -r\n" +
+				"\n" +
+				"  # A pattern that starts with \"-\"\n" +
+				"  hgrep -- --force\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Matching is case-insensitive; PATTERN is a fixed string unless -E.\n" +
+				"  Commands are deduplicated (the last run wins) and listed oldest first.\n" +
+				"  -n N keeps the N most recent matches, with or without -r.\n" +
+				"\n" +
+				"OUTPUT FORMAT\n" +
+				"  [2024-01-15 14:52:01] git push origin main\n" +
+				"  [2024-01-15 15:10:22] git commit -m \"fix\"\n" +
+				"\n" +
+				"  With --json:\n" +
+				"  [{\"timestamp\":\"2024-01-15 14:52:01\",\"epoch\":1705330321,\"count\":1,\"command\":\"git push origin main\"},...]",
 		},
-		ShellVars: []string{"HISTFILE", "HOME"},
-		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
+		Fallback:          &Usage{Program: "hgrep", Usage: "hgrep PATTERN [OPTIONS]", Description: "Smart history search with timestamps and deduplication"},
+		ShellVars:         []string{"HISTFILE", "HOME"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HISTFILE", "HOME", "NO_COLOR"},
+		CompletionComment: "hgrep — its options",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-n --limit -a --all -r --reverse -j --json -H --no-highlight -E --regex -c --count -g --group --pick --no-color --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "history_grep",
@@ -2135,7 +2199,7 @@ var functions = []Function{
 			SeeAlso: "hgrep",
 			Body: "" +
 				"USAGE\n" +
-				"  history_grep PATTERN\n" +
+				"  history_grep PATTERN...\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all git commands in history\n" +
@@ -2149,10 +2213,19 @@ var functions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  Simple and fast. For advanced features (timestamps,\n" +
-				"  deduplication, JSON output), use hgrep instead.",
+				"  deduplication, JSON output), use hgrep instead.\n" +
+				"  The words are joined with spaces into one pattern (a GNU grep basic\n" +
+				"  regex, case-insensitive) matched against each command. Column 2 is a\n" +
+				"  command's first two words, column 3 the rest; duplicates and the\n" +
+				"  history_grep/hg lines themselves are left out.",
 		},
-		Fallback: &Usage{Program: "history_grep", Usage: "history_grep PATTERN", Description: "Searches the bash history for commands matching PATTERN. Alias: hg"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "history_grep", Usage: "history_grep PATTERN...", Description: "Searches the bash history for commands matching PATTERN (words joined with spaces). Alias: hg"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "ip_public",
@@ -2172,21 +2245,29 @@ var functions = []Function{
 			Aliases: "myip",
 			Body: "" +
 				"USAGE\n" +
-				"  ip_public\n" +
+				"  ip_public [--no-color] [--raw]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --no-color  Plain output\n" +
+				"  --raw       Print the bare address, no label\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Show your public IP\n" +
 				"  myip\n" +
 				"\n" +
 				"  # Use in a script\n" +
-				"  MY_IP=$(myip) && echo \"Server IP: $MY_IP\"",
+				"  MY_IP=$(myip --raw) && echo \"Server IP: $MY_IP\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  The request gives up after 10 seconds. An answer that is not an IP\n" +
+				"  address (a captive portal or rate-limit page) is an error, rc 1.",
 		},
-		Fallback:          &Usage{Program: "ip_public", Usage: "ip_public [--no-color]", Description: "Displays your public IP address (via ipinfo.io). Alias: myip"},
+		Fallback:          &Usage{Program: "ip_public", Usage: "ip_public [--no-color] [--raw]", Description: "Displays your public IP address (via ipinfo.io). Alias: myip"},
 		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		CompletionComment: "disk_usage / ip_public — just --no-color",
+		CompletionComment: "ip_public — --no-color and --raw",
 		Completion: "" +
 			"if [[ \"$cur\" == -* ]]; then\n" +
-			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --help\" -- \"$cur\")\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--no-color --raw --help\" -- \"$cur\")\n" +
 			"fi",
 	},
 	{
@@ -3204,10 +3285,16 @@ var functions = []Function{
 				"NOTES\n" +
 				"  --force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session\n" +
 				"  connected to that port elsewhere is left alone. SIGTERM first,\n" +
-				"  SIGKILL for processes still alive after about 3 seconds.",
+				"  SIGKILL for processes still alive after about 3 seconds.\n" +
+				"  Returns 1 when a process could not be signalled (permission denied).",
 		},
-		Fallback: &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "port_kill", Usage: "port_kill [-y] PORT", Description: "Terminate the processes listening on PORT. Alias: ptk"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Kill functions — -y/--yes and the 2.0 -f/--force",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "process_find",
@@ -3238,10 +3325,19 @@ var functions = []Function{
 				"  pf node\n" +
 				"\n" +
 				"  # Check if a service is running\n" +
-				"  pf mysql",
+				"  pf mysql\n" +
+				"\n" +
+				"NOTES\n" +
+				"  NAME is matched literally, ignoring case, against each command line\n" +
+				"  (not the user or other columns). Returns 1 when nothing matches.",
 		},
-		Fallback: &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "process_find", Usage: "process_find PROCESS_NAME", Description: "Search for a process by name. Alias: pf"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "process_kill",
@@ -3276,10 +3372,18 @@ var functions = []Function{
 				"  with their command lines and asks. Without a terminal to ask\n" +
 				"  (GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.\n" +
 				"  --force is the same as -y. SIGTERM first, SIGKILL for processes still\n" +
-				"  alive after about 3 seconds. Declining returns 1.",
+				"  alive after about 3 seconds. Declining returns 1, and so does a\n" +
+				"  process that could not be signalled (permission denied).\n" +
+				"  NAME is a name, not a pattern: regex characters match themselves, and\n" +
+				"  a name longer than 15 bytes is matched against the full program name.",
 		},
-		Fallback: &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
-		Env:      []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "process_kill", Usage: "process_kill [-y] PROCESS_NAME", Description: "Kill processes whose executable name matches NAME exactly (SIGTERM first, SIGKILL for survivors), after asking. Alias: pk"},
+		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Kill functions — -y/--yes and the 2.0 -f/--force",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "remote_exec",
@@ -3609,10 +3713,16 @@ var functions = []Function{
 				"  Only stops services that are currently active, through systemd when it\n" +
 				"  runs, else through `service` (WSL without systemd, containers).\n" +
 				"  --force is the same as -y. Returns 1 when declined or when a stop\n" +
-				"  fails.",
+				"  fails. Headless or without a terminal it runs sudo -n, and stops\n" +
+				"  before anything when sudo needs a password.",
 		},
-		Fallback: &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "services_stop", Usage: "services_stop [-y] [--dry-run]", Description: "Stop well-known services (web servers, databases, docker). Alias: svs"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "services_stop — confirmation flags and --dry-run",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes -f --force --dry-run --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "sudo_last",
@@ -3640,10 +3750,20 @@ var functions = []Function{
 				"  plz               # -> sudo apt update\n" +
 				"\n" +
 				"  # Run a specific command with sudo\n" +
-				"  plz systemctl restart nginx",
+				"  plz systemctl restart nginx\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without COMMAND it shows the previous command and asks first;\n" +
+				"  declining (or no terminal to ask on) returns 1, and so does a shell\n" +
+				"  with no previous command in its history.",
 		},
-		Fallback: &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "sudo_last", Usage: "sudo_last [COMMAND...]", Description: "Run COMMAND, or the previous command after confirmation, with sudo. Alias: plz"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "sysinfo",
@@ -3668,16 +3788,16 @@ var functions = []Function{
 				"\n" +
 				"SECTIONS\n" +
 				"  overview   Host, load, CPU, memory, swap, root disk and address at a glance\n" +
-				"  identity   OS, kernel, virtualization, cloud provider, WSL detection\n" +
-				"  storage    NFS exports/config (disk usage lives in files_largest/dirs_largest)\n" +
-				"  services   Running systemd services, custom units\n" +
-				"  auth       Sudoers, SSH config (PAM details via deep drill-down)\n" +
-				"  network    Interfaces, DNS, DHCP, hostname\n" +
-				"  security   Firewall rules, SSH hardening, fail2ban/crowdsec\n" +
-				"  webstack   Apache/Nginx vhosts, PHP-FPM pools, reverse proxies\n" +
-				"  mail       Postfix, Dovecot, DKIM, virtual domains\n" +
-				"  infra      Docker, containers, monitoring, backup systems\n" +
-				"  system     Cron jobs, systemd timers, custom hooks\n" +
+				"  identity   OS, kernel, hostname, uptime, virtualization, container, WSL\n" +
+				"  storage    fstab, crypttab, LVM, mdadm, ZFS, smartd, sanoid, hdparm, NFS\n" +
+				"  services   Detected/running services, timers, listening ports, custom units\n" +
+				"  auth       Users, sudoers, sshd_config (PAM details via deep drill-down)\n" +
+				"  network    resolv.conf, hosts, interfaces, netplan, dhcpcd\n" +
+				"  security   fail2ban, crowdsec, ufw; firewalld, iptables, AppArmor presence\n" +
+				"  webstack   Apache, Nginx, PHP and FPM pools, MySQL/MariaDB, PostgreSQL\n" +
+				"  mail       Postfix, Dovecot, Exim4, SpamAssassin, OpenDKIM, BIND, Unbound\n" +
+				"  infra      FTP, Samba, OpenMediaVault, VPN, Docker, containers, monitoring\n" +
+				"  system     Cron, Let's Encrypt, SSL keys, kernel tuning, GRUB, logrotate\n" +
 				"  all        Overview, then every section (default)\n" +
 				"\n" +
 				"EXAMPLES\n" +
@@ -3695,13 +3815,21 @@ var functions = []Function{
 				"  sysinfo services --llm\n" +
 				"\n" +
 				"  # Combine with AI for instant analysis\n" +
-				"  sysinfo webstack --llm | ai_query \"audit this web stack\"",
+				"  sysinfo webstack --llm | ai_query \"audit this web stack\"\n" +
+				"\n" +
+				"NOTES\n" +
+				"  On a terminal a normal user is asked for sudo only by the sections\n" +
+				"  that read root-only files (identity, storage, services, auth,\n" +
+				"  security, system, all); overview, network, webstack, mail and infra\n" +
+				"  never ask.\n" +
+				"  One section per call: a second one is an error. -h/--help anywhere\n" +
+				"  shows this help.",
 		},
 		Fallback:          &Usage{Program: "sysinfo", Usage: "sysinfo [section] [--llm] [--no-color]", Description: "System information enumeration for headless Debian/Ubuntu servers.\nSections: overview identity storage services auth network security webstack mail infra system all\nFlags: --llm (compact token-efficient output for AI), --no-color (disable ANSI). Alias: si"},
 		ShellVars:         []string{"TMPDIR"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR", "TMPDIR"},
 		CompletionComment: "System info sections + flags",
-		Completion:        "mapfile -t COMPREPLY < <(compgen -W \"identity storage services auth network security webstack mail infra system all --llm --no-color\" -- \"$cur\")",
+		Completion:        "mapfile -t COMPREPLY < <(compgen -W \"overview identity storage services auth network security webstack mail infra system all --llm --no-color --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "tree_stats",
@@ -3789,7 +3917,7 @@ var functions = []Function{
 			SeeAlso: "wsl_restart wsl_shutdown",
 			Body: "" +
 				"USAGE\n" +
-				"  wsl_compact [--status]\n" +
+				"  wsl_compact [--status] [-y]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # code . or explorer.exe fail with \"UtilAcceptVsock ... accept4 failed 110\"\n" +
@@ -3804,11 +3932,14 @@ var functions = []Function{
 				"  allocation fails (dmesg: \"page allocation failure: order:7\") and the\n" +
 				"  launch times out. wsl_compact drops the page cache and slab, compacts\n" +
 				"  memory (sudo), prints the free blocks before and after, and checks that\n" +
-				"  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.",
+				"  cmd.exe starts. If it still fails, run `wsl --shutdown` from Windows.\n" +
+				"  On a terminal it runs without asking; headless it needs -y (--yes).\n" +
+				"  Unattended, sudo must not need a password (sudo -n is checked first).\n" +
+				"  When dmesg is not readable the failure count is \"unknown\".",
 		},
-		Fallback:   &Usage{Program: "wsl_compact", Usage: "wsl_compact [--status]", Description: "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc"},
+		Fallback:   &Usage{Program: "wsl_compact", Usage: "wsl_compact [--status] [-y]", Description: "Drop caches and compact memory so Windows interop works again on a fragmented WSL2 VM. Alias: wslc"},
 		Env:        []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
-		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--status --help\" -- \"$cur\")",
+		Completion: "mapfile -t COMPREPLY < <(compgen -W \"--status -y --yes --help\" -- \"$cur\")",
 	},
 	{
 		Name:     "wsl_explorer",
@@ -3845,8 +3976,13 @@ var functions = []Function{
 				"  Defaults to current directory if no path specified.\n" +
 				"  Only works inside WSL (Windows Subsystem for Linux).",
 		},
-		Fallback: &Usage{Program: "wsl_explorer", Usage: "wsl_explorer [PATH]", Description: "Open Windows Explorer in the current or specified directory. Alias: wex"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_explorer", Usage: "wsl_explorer [PATH]", Description: "Open Windows Explorer in the current or specified directory. Alias: wex"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_restart",
@@ -3881,8 +4017,13 @@ var functions = []Function{
 				"  with the servers running in them. WSL starts again with the next\n" +
 				"  terminal. Asks first; -y skips the question. Same as wsl_shutdown.",
 		},
-		Fallback: &Usage{Program: "wsl_restart", Usage: "wsl_restart [-y]", Description: "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_restart", Usage: "wsl_restart [-y]", Description: "Shut down WSL so that the next terminal starts it fresh (saves bash history first). Alias: wr"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "WSL stop functions — -y/--yes",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_shutdown",
@@ -3913,8 +4054,13 @@ var functions = []Function{
 				"  Runs `wsl --shutdown`: every distro stops, Docker Desktop's included.\n" +
 				"  Asks first; -y skips the question.",
 		},
-		Fallback: &Usage{Program: "wsl_shutdown", Usage: "wsl_shutdown [-y]", Description: "Shut down WSL (saves bash history first). Alias: wsd"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_shutdown", Usage: "wsl_shutdown [-y]", Description: "Shut down WSL (saves bash history first). Alias: wsd"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "WSL stop functions — -y/--yes",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"-y --yes --help\" -- \"$cur\")\n" +
+			"fi",
 	},
 	{
 		Name:     "wsl_taskmanager",
@@ -3946,8 +4092,13 @@ var functions = []Function{
 				"  Does not change your current working directory.\n" +
 				"  Only works inside WSL (Windows Subsystem for Linux).",
 		},
-		Fallback: &Usage{Program: "wsl_taskmanager", Usage: "wsl_taskmanager", Description: "Open Windows Task Manager from WSL. Alias: wtm"},
-		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		Fallback:          &Usage{Program: "wsl_taskmanager", Usage: "wsl_taskmanager", Description: "Open Windows Task Manager from WSL. Alias: wtm"},
+		Env:               []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
+		CompletionComment: "Only --help as an option (words complete as files)",
+		Completion: "" +
+			"if [[ \"$cur\" == -* ]]; then\n" +
+			"    mapfile -t COMPREPLY < <(compgen -W \"--help\" -- \"$cur\")\n" +
+			"fi",
 	},
 }
 
