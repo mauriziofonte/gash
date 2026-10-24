@@ -4447,7 +4447,7 @@ Critical and high items:
 | rc.A behavior | GNU grep's BRE (with its `\+ \? \| \{m,n\} \( \)` extensions and POSIX classes) translated to Go regexp, case-insensitive with Unicode simple folding in every locale (the UTF-8 path). Back-references have no Go equivalent: such a pattern gets `Error: Invalid pattern: P` rc 1 instead of a grep match. |
 | Fix recipe (3.0) | None beyond rc.A in `internal/system` (one `breToRE2` translator shared by both functions, with GNU grep vectors). |
 | Proving test | `TestLedger_SYS38` in `internal/system` (`a+b` literal, `a\+b` repetition, `ssh\|cron` alternation, `école` vs `ÉCOLE` under `LC_ALL=C`, `\(a\)\1` → error) |
-| Status | accept: no 3.0 change (Fix recipe: none) |
+| Status | accept: no 3.0 change for history_grep (BRE via breToRE2); process_find is literal since SYS-04 (3750b94), which supersedes this recipe for it |
 
 <a id="sys-39"></a>
 #### SYS-39 · The agent start evals ssh-agent's output in the caller's shell
@@ -7104,7 +7104,7 @@ Critical and high items:
 | rc.A behavior | Not a runtime behaviour: the scripts benchmark whatever `gash.sh` the given checkout resolves. For 3.x that is the tree's own `bin/gash`; `GASH_BIN` is scrubbed. |
 | Fix recipe (3.0) | At the S3 3.x bench pass, add `GASH_BIN` to the `env -i` pass-through of `prompt_bench.sh` and `startup_bench.sh` (and the `bench/shell/README.md` usage), so a bench can measure a chosen binary; otherwise document that the 3.x checkout must hold the built `bin/gash`. |
 | Proving test | none (bench harness; covered when the 3.x bench numbers are filled in `bench/shell/README.md`) |
-| Status | accept: done 939ad3f, 91cecfe |
+| Status | accept: done 939ad3f, 91cecfe; correction: without GASH_BIN the benches use the installed ~/.local/share/gash/versions/VER/gash, not an in-tree bin/gash (bin/gash is the launcher script) |
 
 <a id="shell-17"></a>
 #### SHELL-17 · design/shell.md §7 describes SSH auto-unlock via a __compat sub-command; rc.A uses the ssh module on StartPTY
@@ -7196,7 +7196,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A behaves as the code (cancel, rc 0) and the page is unchanged in rc.A. |
 | Fix recipe (3.0) | Rewrite the uninstall paragraph from the 3.0 behavior: no terminal → cancelled, nothing removed; left behind: `~/.local/state/gash`, `~/.cache/gash/probes` (2.x only), the ssh-agent socket, a `PROFILE=` block, and `GASH_ENV_FILE` only when not set in the uninstalling shell; the binary `versions/` directory goes with the install directory. |
 | Proving test | none (doc change; uninstall behavior covered by SELF-02) |
-| Status | accept: done 52ac68f |
+| Status | accept: done 52ac68f; correction: the binaries in ~/.local/share/gash/versions are left behind (they are not inside the install directory), as the page now says |
 
 <a id="self-20"></a>
 #### SELF-20 · README counts of functions and aliases are stale
