@@ -369,9 +369,10 @@ read-only database user in `~/.gash_env`.
 ### 6.5 AI functions
 
 `ai_query` and `ai_sysinfo` send text to Claude or Gemini after redacting
-private key blocks, URL passwords, `password=`/`token:`-style values and known
-token formats (sk-, ghp_, AKIA, xox, AIza). Redaction is pattern-based and
-can miss secrets. `GASH_AI_CONFIRM`: auto (default) asks before sending data
+private key blocks, URL passwords, `password=`/`token:`-style values,
+Authorization headers, `SSH:` passphrase lines, crypt password hashes and
+known token formats (sk-, ghp_, AKIA, xox, AIza). Redaction is pattern-based
+and can miss secrets (free text such as "the password is ..." is sent). `GASH_AI_CONFIRM`: auto (default) asks before sending data
 Gash collected itself (`ai_sysinfo`), 1 asks before every request, 0 never
 asks. In headless mode or without a terminal, a request that needs
 confirmation is refused. `ai_ask` needs a terminal and refuses headless:

@@ -65,18 +65,24 @@ func TestLedger_AI06_2x(t *testing.T) {
 	}
 }
 
-// TestLedger_AI07_2x: bearer headers, SSH: lines and crypt hashes are NOT
-// caught (the reproduced gaps); a KEY=value secret is.
-func TestLedger_AI07_2x(t *testing.T) {
-	in := "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.e30.abcdef\nSSH:~/.ssh/id_rsa=correct horse battery\nthe password is hunter2\nDB_PASSWORD=s3cret"
-	out := redact(in)
-	for _, kept := range []string{"Bearer eyJhbGciOiJIUzI1NiJ9.e30.abcdef", "SSH:~/.ssh/id_rsa=correct horse battery", "the password is hunter2"} {
-		if !strings.Contains(out, kept) {
-			t.Fatalf("redacted a line 2.x keeps (%q):\n%s", kept, out)
-		}
-	}
-	if strings.Contains(out, "s3cret") {
-		t.Fatalf("DB_PASSWORD not redacted:\n%s", out)
+// TestLedger_AI07_fix: bearer headers, SSH: passphrase lines and crypt
+// hashes are redacted (3.0: AI-07 fixed; 2.x kept them); free text is not
+// detected, and a KEY=value secret still is.
+func TestLedger_AI07_fix(t *testing.T) {
+	in := "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.e30.abcdef\n" +
+		"proxy-authorization: basic dXNlcjpwYXNz\n" +
+		"SSH:~/.ssh/id_rsa=correct horse battery\n" +
+		"root:$6$fakesalt$fakehash:19000:0:99999:7:::\n" +
+		"admin:$2y$10$abcdefghijklmnopqrstuv:x\n" +
+		"the password is hunter2\nDB_PASSWORD=s3cret"
+	want := "Authorization: Bearer [REDACTED]\n" +
+		"proxy-authorization: basic [REDACTED]\n" +
+		"SSH:~/.ssh/id_rsa=[REDACTED]\n" +
+		"root:[REDACTED HASH]:19000:0:99999:7:::\n" +
+		"admin:[REDACTED HASH]:x\n" +
+		"the password is hunter2\nDB_PASSWORD=[REDACTED]"
+	if out := redact(in); out != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", out, want)
 	}
 }
 

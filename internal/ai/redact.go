@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-// Redaction is __ai_redact ported verbatim (LEDGER AI-06, AI-07
-// reproduced): the line-based awk PRIVATE KEY rule, then the eight sed -E
-// rules in order, on the whole user text. An unclosed PRIVATE KEY block
-// swallows the rest of the text (AI-06); bearer headers, SSH: lines and
-// crypt hashes are not caught (AI-07). The sed rules use POSIX
-// leftmost-longest matching, as sed -E does.
+// Redaction is __ai_redact: the line-based awk PRIVATE KEY rule, then the
+// eight 2.x sed -E rules in order (POSIX leftmost-longest matching, as sed
+// -E does), then the 3.0 rules of LEDGER AI-07: Authorization headers,
+// Gash's own SSH: passphrase lines and crypt password hashes. An unclosed
+// PRIVATE KEY block drops the rest of the text it is given; the callers
+// redact the piped part and the question separately (AI-06).
 
 var (
 	reKeyBegin = regexp.MustCompile(`-+BEGIN [A-Z0-9 ]*PRIVATE KEY( BLOCK)?-+`)
@@ -32,6 +32,11 @@ var (
 		{regexp.MustCompilePOSIX(`(sk-ant-|sk-)[A-Za-z0-9_-]{20,}`), `[REDACTED]`},
 		{regexp.MustCompilePOSIX(`xox[abposr]-[A-Za-z0-9-]{10,}`), `[REDACTED]`},
 		{regexp.MustCompilePOSIX(`AIza[0-9A-Za-z_-]{35}`), `[REDACTED]`},
+		// LEDGER AI-07 (3.0): bearer/basic/token Authorization headers, the
+		// SSH:KEY=PASSPHRASE lines of ~/.gash_env, crypt(3) hashes.
+		{regexp.MustCompile(`(?i)\b((?:proxy-)?authorization[ \t]*:[ \t]*(?:bearer|basic|token)[ \t]+)[^ \t]+`), `${1}[REDACTED]`},
+		{regexp.MustCompile(`^(SSH:[^=]*=).*`), `${1}[REDACTED]`},
+		{regexp.MustCompile(`\$(?:1|2[abxy]?|5|6|7|y|gy)\$[^:\s]+`), `[REDACTED HASH]`},
 	}
 )
 

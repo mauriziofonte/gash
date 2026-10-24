@@ -77,9 +77,11 @@ var functions = []Function{
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
-				"  URLs, KEY=value secrets and well-known token formats (sk-, ghp_,\n" +
-				"  AKIA, xox, AIza). The API key travels in a curl config read from\n" +
-				"  a pipe, never on the command line.\n" +
+				"  URLs, KEY=value secrets, Authorization headers, SSH: passphrase\n" +
+				"  lines, password hashes ($6$...) and well-known token formats (sk-,\n" +
+				"  ghp_, AKIA, xox, AIza). Free text (\"the password is ...\") is not\n" +
+				"  detected. The API key stays inside the gash process, never on a\n" +
+				"  command line.\n" +
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},
@@ -177,9 +179,11 @@ var functions = []Function{
 				"\n" +
 				"PRIVACY\n" +
 				"  Secrets are redacted before sending: private keys, passwords in\n" +
-				"  URLs, KEY=value secrets and well-known token formats (sk-, ghp_,\n" +
-				"  AKIA, xox, AIza). The API key travels in a curl config read from\n" +
-				"  a pipe, never on the command line.\n" +
+				"  URLs, KEY=value secrets, Authorization headers, SSH: passphrase\n" +
+				"  lines, password hashes ($6$...) and well-known token formats (sk-,\n" +
+				"  ghp_, AKIA, xox, AIza). Free text (\"the password is ...\") is not\n" +
+				"  detected. The API key stays inside the gash process, never on a\n" +
+				"  command line.\n" +
 				"  GASH_AI_CONFIRM=1 asks before every request (default: auto).\n" +
 				"  Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.",
 		},

@@ -86,9 +86,11 @@ start within 2 seconds, or stdin is ignored with a warning.
 
 ```text
 Secrets are redacted before sending: private keys, passwords in
-URLs, KEY=value secrets and well-known token formats (sk-, ghp_,
-AKIA, xox, AIza). The API key travels in a curl config read from
-a pipe, never on the command line.
+URLs, KEY=value secrets, Authorization headers, SSH: passphrase
+lines, password hashes ($6$...) and well-known token formats (sk-,
+ghp_, AKIA, xox, AIza). Free text ("the password is ...") is not
+detected. The API key stays inside the gash process, never on a
+command line.
 GASH_AI_CONFIRM=1 asks before every request (default: auto).
 Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.
 ```
@@ -178,9 +180,11 @@ only word after the provider; inside a longer question it is text.
 
 ```text
 Secrets are redacted before sending: private keys, passwords in
-URLs, KEY=value secrets and well-known token formats (sk-, ghp_,
-AKIA, xox, AIza). The API key travels in a curl config read from
-a pipe, never on the command line.
+URLs, KEY=value secrets, Authorization headers, SSH: passphrase
+lines, password hashes ($6$...) and well-known token formats (sk-,
+ghp_, AKIA, xox, AIza). Free text ("the password is ...") is not
+detected. The API key stays inside the gash process, never on a
+command line.
 GASH_AI_CONFIRM=1 asks before every request (default: auto).
 Models: GASH_AI_MODEL_CLAUDE, GASH_AI_MODEL_GEMINI in ~/.gash_env.
 ```

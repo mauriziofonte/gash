@@ -192,10 +192,16 @@ repository's `.git/config` before pointing an agent at it.
   is filtered first: private key blocks, URL passwords, values of names like
   `password`, `secret`, `token`, `api_key`, `access_key`, `private_key`,
   `credentials`, and `AKIA...`, `ghp_`/`github_pat_`, `sk-`/`sk-ant-`, `xox?-`,
-  `AIza...` tokens. A name followed by `=` or `:` loses its value; a name
+  `AIza...` tokens, `Authorization:`/`Proxy-Authorization:` bearer, basic and
+  token credentials, the `SSH:KEY=PASSPHRASE` lines of `~/.gash_env`, and
+  crypt(3) password hashes (`$1$`, `$2a$`/`$2b$`/`$2y$`, `$5$`, `$6$`, `$7$`,
+  `$y$`, `$gy$`). A name followed by `=` or `:` loses its value; a name
   followed only by a space loses the next word only when it looks like a
   token (16 or more characters), so "token expired" stays readable. It is
-  pattern based: a secret in another format is sent.
+  pattern based: a secret in another format, or in free text ("the password
+  is hunter2"), is sent. The piped input and the question are redacted
+  separately, so an unclosed private key block in the pipe never swallows
+  the question.
 * **Transport.** The body goes through a temporary file created with umask 077
   and then deleted; the API key reaches `curl` through `--config` on a pipe,
   never argv. Control characters are stripped from replies.
