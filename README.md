@@ -9,7 +9,7 @@
 
 ![Gash at a terminal: the reference card, files_largest, tree_stats and sysinfo overview](docs/assets/demo.gif)
 
-Gash adds 85 functions and over a hundred aliases to your Bash: find what
+Gash adds 85 functions and 163 aliases to Bash: find what
 fills a disk, inspect a machine, tag a release, free a port, upgrade a
 Compose stack, push files to a host, run local HTTPS sites. Every function
 has `--help` with examples, and the ones an agent needs answer in JSON with
@@ -109,9 +109,9 @@ timestamped copy before you edit.
 `gl` and its siblings draw a compact, colored log. `git_sync` stages,
 commits and pushes, `git_add_tag` creates an annotated tag and pushes it:
 both show what they are about to do and ask first (`--yes` skips the
-question, `--dry-run` only shows). Around them sit about forty short
-aliases (`gst`, `gcm`, `gpf`, `gswc`...) and `git_repair` for a repository with
-corrupted objects.
+question, `--dry-run` only shows). Around them sit short aliases (`gst`,
+`gcm`, `gpf`, `gswc`...) and `git_repair` for a repository with corrupted
+objects.
 
 ![gl, git_sync and git_add_tag with their plan and question, git_list_tags](docs/assets/git.gif)
 
@@ -184,7 +184,7 @@ against a hostile user: see the [security model](docs/security.md).
 | [files](docs/reference/files.md) | `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats`, `archive_extract`, `file_backup` |
 | [system](docs/reference/system.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `hgrep`, `wsl_compact` and other WSL helpers |
 | [nav](docs/reference/nav.md) | `..`, `...`, `ll`, `la` and friends |
-| [git](docs/reference/git.md) | `git_sync`, `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, `git_apply_patch`, about forty short aliases and the `gl` log helpers |
+| [git](docs/reference/git.md) | `git_sync`, `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, `git_apply_patch`, 38 short aliases and 6 log helpers |
 | [docker](docs/reference/docker.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
 | [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
 | [dev](docs/reference/dev.md) | `node_upgrade`, `chrome_headless_update` (Chrome for Puppeteer and Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
