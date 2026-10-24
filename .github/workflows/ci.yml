@@ -116,6 +116,13 @@ jobs:
       - name: Build
         run: CGO_ENABLED=0 go build ./...
 
+      # architecture.md 1: `gash version` under 10 ms. go test above runs the
+      # check with a 3x factor (loaded machine, -race); here it runs alone on
+      # the idle runner with the real budget (cmd/gash/version_budget_test.go).
+      - name: gash version start-up budget (10 ms)
+        if: runner.os == 'Linux'
+        run: GASH_VERSION_BUDGET_FACTOR=1 CGO_ENABLED=0 go test ./cmd/gash -run '^TestVersionStartupBudget$' -count=1 -v
+
   testscript:
     name: Black-box testscript (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
