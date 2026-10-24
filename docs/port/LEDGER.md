@@ -1320,7 +1320,7 @@ Critical and high items:
 | rc.A behavior | reproduced: an empty PATH argument resolves to the canonical current directory, same output and exit status. |
 | Fix recipe (3.0) | `internal/docker` `resolveComposeDir(raw)` (used by check, upgrade and scan): an empty argument or a resolution failure is refused. Human: `Error: Cannot resolve path: '<raw>'` rc 1. With `--json` (check, scan): `{"error":"path_not_found","details":"<raw>","action":"RETRY","recoverable":true,"hint":"Pass the directory that holds the compose file (omit it for the current directory)"}` rc 1. Omitting the argument still means `.`. docs/reference/docker.md usage notes. |
 | Proving test | `TestLedger_DOCK01` in `internal/docker` (empty argument → rc 1, the runner fake records no docker call) and `testdata/script/dock01_empty_path.txtar` (`docker_compose_check '' --json` → stderr envelope `path_not_found`, empty stdout) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-03"></a>
 #### DOCK-03 · Completion: dcup2 lacks --yes; docker_prune_all, git_repair, git_sync -m and remote_* incomplete
@@ -1338,7 +1338,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the generated bash_completion keeps the 2.x word lists. |
 | Fix recipe (3.0) | `internal/compatgen` builds each completion word list from the registry Grammar instead of the 2.x lists: docker_compose_upgrade `--dry-run --force -f --yes -y --no-color --help`; docker_prune_all and git_repair `-y --yes --dry-run --help`; git_sync `-m --message --no-push --dry-run --help`; remote_push and remote_pull `-r --recursive -p --preserve --no-progress --force --help`; remote_sync_* `--delete --dry-run --no-progress --force --exclude= --help`; remote_exec `--script`. |
 | Proving test | `TestLedger_DOCK03` in `internal/compatgen` (for every registry entry the completion words equal its grammar's flags) and a completion_spec.sh case `COMP_WORDS=(dcup2 --y)` → `--yes` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63f58e1, 9eed0f7, 4fc4e85, e370352 |
 
 <a id="dock-04"></a>
 #### DOCK-04 · dcup2 ignores override files and COMPOSE_FILE, and --remove-orphans removes override-only services
@@ -1356,7 +1356,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the same argv (`-f FILE --project-directory DIR`) for `config`, `pull`, `stop`, `up -d --remove-orphans` and `ps`. |
 | Fix recipe (3.0) | `internal/docker` compose argv builder: no `-f` for an auto-discovered file; every compose call gets `--project-directory DIR` and runs with its working directory set to DIR (the caller's cwd is untouched), so Compose applies its own discovery (compose.yaml precedence, override files, `COMPOSE_FILE` from the environment and DIR/.env); same for `config --format json`. The `This will:` list and docs/reference/docker.md say that override files are honored. |
 | Proving test | `TestLedger_DOCK04` in `internal/docker` (runner fake: no `-f` in any compose argv, cwd = DIR) and `testdata/script/dock04_override.txtar` (a `docker` stub that records argv and serves `config --format json` with the merged `nginx:mainline`: plan shows `nginx:mainline`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-05"></a>
 #### DOCK-05 · dcup2 on a compose file without image services runs compose with an empty service argument
@@ -1374,7 +1374,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the empty row and the empty argv word are kept. |
 | Fix recipe (3.0) | `internal/docker` upgrade: skip rows with an empty service name; no service with an image → `Error: No services with images found in <compose file>` rc 1 (docker_compose_check's text) before the plan and before any compose call. |
 | Proving test | `TestLedger_DOCK05` in `internal/docker` (build-only fixture: rc 1, that stderr line, the runner fake records no compose call) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-06"></a>
 #### DOCK-06 · `image:tag@sha256:...` loses its digest pin
@@ -1392,7 +1392,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the normalizer is ported rule for rule over the 2.x net/http protocol. |
 | Fix recipe (3.0) | `internal/docker/registry`: parse references with go-containerregistry `name.ParseReference` (enters in 3.0); a `name.Digest` reference → status `PINNED`, `local_digest` and `remote_digest` = that digest, `"upgradeable":false`, no network; dcup2 lists it as pinned. |
 | Proving test | `TestLedger_DOCK06` in `internal/docker` (`nginx:1.25@sha256:<64>` → PINNED and the httptest registry counts 0 requests) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-07"></a>
 #### DOCK-07 · `docker.io/<name>` and `index.docker.io/...` references are queried wrongly
@@ -1410,7 +1410,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same normalization, same requests). |
 | Fix recipe (3.0) | `internal/docker/registry`: go-containerregistry `name.ParseReference` maps `docker.io`, `index.docker.io` and `registry-1.docker.io` to Docker Hub and adds `library/` to single-segment names; token scope and manifest URL come from `ref.Context().RepositoryStr()`. |
 | Proving test | `TestLedger_DOCK07` in `internal/docker` (normalization vectors above → `docker.io`, `library/alpine`; check against an httptest Docker Hub fake → `CURRENT`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-09"></a>
 #### DOCK-09 · docker_compose_scan emits invalid or misleading JSON
@@ -1428,7 +1428,7 @@ Critical and high items:
 | rc.A behavior | reproduced: names written raw between quotes, `[""]` for a file without image services, the depth text emitted verbatim, and any depth `find -maxdepth` rejects (not `^[0-9]+$`) gives the empty shape rc 0. |
 | Fix recipe (3.0) | `internal/docker` scan: names through the contract encoder, `[]` when a file has no image service; `--depth` must match `^[0-9]+$` and is printed as an integer (`05` → `5`); otherwise with `--json` `{"error":"invalid_depth","details":"<raw>","action":"RETRY","recoverable":true,"hint":"Use --depth N with N a non-negative integer"}`, without `Error: Invalid --depth: <raw> (use a non-negative integer)`, rc 1. Add `depth` to the empty shape. |
 | Proving test | `TestLedger_DOCK09` in `internal/docker` (every output of the vectors parses with encoding/json and validates against `testdata/schema/docker_compose_scan.json`; `--depth abc` → rc 1 `invalid_depth`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-10"></a>
 #### DOCK-10 · docker_compose_scan ignores unknown options, also --help after a path
@@ -1446,7 +1446,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | `internal/cli/args` scan grammar: an unknown `-*` word → with `--json` or `-j` anywhere `{"error":"unknown_option","details":"<word>","action":"RETRY","recoverable":true,"hint":"Use a directory, --depth N, --json or --no-color"}`, otherwise `Error: Unknown option: <word>` (docker_compose_check's rule), rc 1; `-h`/`--help` stays help only as `$1`. |
 | Proving test | `TestLedger_DOCK10` in `internal/cli/args` (vectors `--bogus`, `. --help`, `-x --json`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-13"></a>
 #### DOCK-13 · Image interpolation rules differ from Compose's (default operators, precedence, `$VAR`)
@@ -1464,7 +1464,7 @@ Critical and high items:
 | rc.A behavior | reproduced, where 2.x applies it: on the line-parser path (compose v1 or `config` failure) and once more on the images Compose returned. |
 | Fix recipe (3.0) | `internal/docker/interp` with compose-go template semantics (`$VAR`, `${VAR}`, `:-`, `-`, `:?`, `?`, `:+`, `+`, `$$`), process environment over DIR/.env, .env read with Compose's dotenv rules; never re-interpolate images that came from `docker compose config`. |
 | Proving test | `TestLedger_DOCK13` in `internal/docker` (vector table compared with `docker compose config --format json` output when compose v2 is installed, skipped otherwise) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-14"></a>
 #### DOCK-14 · GITHUB_TOKEN is sent raw as the ghcr.io bearer and blocks anonymous access
@@ -1482,7 +1482,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the raw value is the bearer of the net/http HEAD. |
 | Fix recipe (3.0) | `internal/docker/registry` with go-containerregistry: exchange GITHUB_TOKEN at `https://ghcr.io/token?service=ghcr.io&scope=repository:NAME:pull` with basic auth (`authn.FromConfig(authn.AuthConfig{Username: "gash", Password: token})`), use the returned token; on 401 or 403 retry with the anonymous token; the `ghcr.io` hints stay. docs/reference/docker.md: GITHUB_TOKEN is exchanged, never sent as is. |
 | Proving test | `TestLedger_DOCK14` in `internal/docker` (httptest ghcr fake that rejects raw PATs and accepts exchanged tokens → `CURRENT`; a rejected token falls back to anonymous) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-15"></a>
 #### DOCK-15 · Other registries: no auth challenge, https only, no credential store
@@ -1500,7 +1500,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the 2.x protocol over net/http (no challenge, https only, no Docker credential store). |
 | Fix recipe (3.0) | `internal/docker/registry`: go-containerregistry `remote.Head(ref, remote.WithAuth(authn.Anonymous), remote.WithTransport(t))`, which answers the bearer challenge anonymously, and its plain-HTTP fallback for localhost and loopback registries. Reading `~/.docker/config.json` (`authn.DefaultKeychain`) stays out unless the operator decides otherwise. Timeouts, HEAD-only and the error taxonomy (DOCK-24) unchanged. |
 | Proving test | `TestLedger_DOCK15` in `internal/docker` (httptest registry that answers 401 with a `WWW-Authenticate: Bearer realm=...` challenge → `CURRENT`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-16"></a>
 #### DOCK-16 · Local digests come from `docker inspect` without `--type image`
@@ -1518,7 +1518,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the same docker CLI argv. |
 | Fix recipe (3.0) | `internal/docker` localDigest: `docker image inspect --format '{{range .RepoDigests}}{{.}}{{"\n"}}{{end}}' -- REF`, same repo-preference rule. |
 | Proving test | `TestLedger_DOCK16` in `internal/docker` (runner fake asserts the argv starts with `image inspect` and has `--` before the reference) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-18"></a>
 #### DOCK-18 · docker_compose_upgrade returns 0 when the upgrade is declined
@@ -1536,7 +1536,7 @@ Critical and high items:
 | rc.A behavior | reproduced (rc 0 after the cancellation line). |
 | Fix recipe (3.0) | `internal/docker` upgrade: return 1 after `Info: Upgrade cancelled.`; docs/security.md already says 1. |
 | Proving test | `TestLedger_DOCK18` in `internal/docker` (answer `n` on a PTY → rc 1, no `pull` recorded by the runner fake) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-20"></a>
 #### DOCK-20 · docker_stop_all and docker_start_all hide daemon errors and ignore arguments; prune counts read 0 on a failing daemon
@@ -1554,7 +1554,7 @@ Critical and high items:
 | rc.A behavior | reproduced (exit status of the listing commands ignored, extra arguments ignored). |
 | Fix recipe (3.0) | `internal/docker`: check the exit status of every listing call (`docker ps`, `docker images`, `docker volume ls`, `docker network ls`); on failure `Error: Cannot list Docker objects: <first stderr line of docker>` rc 1 before any action; unknown arguments of docker_stop_all and docker_start_all → `Error: Unknown option: X (usage: docker_stop_all)` (or `docker_start_all`) rc 1. |
 | Proving test | `TestLedger_DOCK20` in `internal/docker` (failing docker stub → rc 1, stderr carries the daemon line, no `stop`/`start` call recorded) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-21"></a>
 #### DOCK-21 · docker_prune_all refuses headless without saying that -y is needed
@@ -1572,7 +1572,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | `internal/docker` prune: headless or no terminal → `Error: No terminal to ask for confirmation: pass -y to go ahead.` rc 1 (the `__gash_confirm_plan` text) instead of the silent refusal; an interactive "no" keeps `Info: Aborted.` rc 1. |
 | Proving test | `TestLedger_DOCK21` in `internal/docker` (headless, no `-y` → that stderr line, rc 1, no removal call) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f, 9eed0f7 |
 
 <a id="dock-28"></a>
 #### DOCK-28 · The YAML-subset reader cuts ` #...` inside quoted image values
@@ -1590,7 +1590,7 @@ Critical and high items:
 | rc.A behavior | reproduced in the line parser, which runs only with compose v1 or when `config` fails (DOCK-26). |
 | Fix recipe (3.0) | `internal/docker` line parser: a value that starts with a quote ends at the matching quote; ` #...` is stripped only outside quotes. |
 | Proving test | `TestLedger_DOCK28` in `internal/docker` (`"nginx:latest #x"` → `nginx:latest #x`; `nginx:latest #x` → `nginx:latest`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-29"></a>
 #### DOCK-29 · Compose file precedence is the reverse of Compose's
@@ -1608,7 +1608,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same order, same `compose_file` in JSON and headings). |
 | Fix recipe (3.0) | with DOCK-04's fix Compose discovers the file itself; for `compose_file` and the headings use Compose's order (compose-go `DefaultFileNames`: `compose.yaml` and `compose.yml` before the docker-compose names). |
 | Proving test | `TestLedger_DOCK29` in `internal/docker` (both files present → `compose_file` is `compose.yaml`; no `-f docker-compose.yml` in any argv) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 <a id="dock-30"></a>
 #### DOCK-30 · docker_compose_check table: contradictory width limits misalign rows
@@ -1644,7 +1644,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same argv). |
 | Fix recipe (3.0) | `internal/docker`: `docker image inspect --format FMT -- REF` (DOCK-16) and `<compose> ... pull -- S...`, `stop -- S...`, `up -d --remove-orphans -- S...`; the line parser refuses service names starting with `-` (`Error: Invalid service name '<name>' in <compose file>` rc 1). |
 | Proving test | `TestLedger_DOCK31` in `internal/docker` (runner fake: `--` precedes every word taken from the compose file) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 09ca07f |
 
 ### git module
 
@@ -1664,7 +1664,7 @@ Critical and high items:
 | rc.A behavior | reproduced: no question, no `--yes`. |
 | Fix recipe (3.0) | As docker_compose_upgrade: `-y/--yes` (any position) and `--dry-run` on git_add_tag (gates the tag creation and the push), git_delete_tag (gates both deletions), git_sync (gates commit and push; with `--no-push` gates the commit) and git_apply_patch (gates checkout, pull and apply). Without `--yes`: on a TTY print the plan (`Will push refs/tags/T to origin (<url>)`, `Will delete refs/tags/T locally and on origin (<url>)`, `Will commit N file(s) on B (M untracked) and push to U`, `Will check out MAIN, pull origin MAIN and apply FEATURE's changes since COMMIT`) and `needs_confirm_prompt "Proceed?"`, decline → `Info: Cancelled.` rc 1; headless or no TTY → `Error: Refusing to <push tag 'T'\|delete tag 'T'\|commit and push\|apply the patch> in headless mode without --yes.` rc 1. git_add_tag positionals: first non-flag word TAG, second MESSAGE, `--` ends flags. docs/security.md Confirmations rows, docs/reference/git.md usage, completion `-y --yes --dry-run`. |
 | Proving test | `TestLedger_GIT01` in `internal/gitx` and `testdata/script/git01_confirm.txtar`: headless `git_delete_tag v1` → rc 1 and `git ls-remote --tags origin refs/tags/v1` still lists it; `git_delete_tag v1 --yes` → gone; headless `git_sync` on a dirty tree → rc 1, HEAD and `git status --porcelain` unchanged; `git_sync --yes` pushes; headless `git_add_tag v2` → rc 1, no local tag |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-02"></a>
 #### GIT-02 · git_list_tags shows peeled tags and returns 0 when ls-remote fails
@@ -1682,7 +1682,7 @@ Critical and high items:
 | rc.A behavior | reproduced (`git ls-remote --tags origin`, field 2, first `refs/tags/` removed, rc 0). |
 | Fix recipe (3.0) | `internal/gitx` list tags: `git ls-remote --tags --refs origin` (no peeled lines); a non-zero ls-remote status → git's stderr, then `Error: Cannot list the tags of origin.` rc 1. |
 | Proving test | `TestLedger_GIT02` in `internal/gitx` (annotated tag listed once; unreachable origin → rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-03"></a>
 #### GIT-03 · An unreachable origin counts as "tag absent"
@@ -1700,7 +1700,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | `internal/gitx` RemoteTagExists: ls-remote status 0 → present, 2 → absent, anything else → `Error: Cannot reach origin (<url>): nothing was created or deleted.` rc 1, checked before any local change in git_add_tag and git_delete_tag. |
 | Proving test | `TestLedger_GIT03` in `internal/gitx` (unreachable origin: rc 1 and the local tag still exists; for add, no local tag created) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-04"></a>
 #### GIT-04 · Option-like tag names reach `git tag`
@@ -1718,7 +1718,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same argv). |
 | Fix recipe (3.0) | `internal/gitx` checkTagName: also refuse a leading `-` with the existing `Error: Invalid tag name: '<name>'.` rc 1, for add and delete. |
 | Proving test | `TestLedger_GIT04` in `internal/gitx` (`-s`, `-f`, `--list` → `Invalid tag name`, runner fake records no `git tag`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-05"></a>
 #### GIT-05 · git_dump_revisions: file names parsed as revisions, absolute paths give empty files
@@ -1736,7 +1736,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | `internal/gitx` dumpRevisions: `git log --pretty=format:%h -- FILE`; FILE converted to its work-tree path with `git ls-files --full-name --error-unmatch -- FILE` and read as `git show HASH:<that path>`; any git failure → `Error: git failed on '<file>'.` rc 1; each output written to a temporary file and renamed, so no empty files are left. |
 | Proving test | `TestLedger_GIT05` in `internal/gitx` (file `master` → files written; absolute path → same files as the relative path; git failure → rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-06"></a>
 #### GIT-06 · git_apply_patch: slash branch names break the patch file, failures leave another branch checked out
@@ -1754,7 +1754,7 @@ Critical and high items:
 | rc.A behavior | reproduced (patch path, step order and exit status; the Bash diagnostic line is not printed, DOCK-19). |
 | Fix recipe (3.0) | `internal/gitx` applyPatch: write the patch with `os.CreateTemp("", "gash-patch-*.patch")` (named in `Info: Patch file kept for inspection: <path>`), record `git symbolic-ref --short HEAD` at entry and check it out again on every failure path before returning 1. |
 | Proving test | `TestLedger_GIT06` in `internal/gitx` (feature `feat/x` → patch applied; a failing apply → starting branch checked out again, patch kept in the temp dir) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-07"></a>
 #### GIT-07 · git_sync --dry-run promises a push that git push refuses
@@ -1772,7 +1772,7 @@ Critical and high items:
 | rc.A behavior | reproduced (plain `git push --quiet` exec'd as in 2.x). |
 | Fix recipe (3.0) | `internal/gitx` sync: push explicitly to the upstream, `git push --quiet <branch.B.remote> HEAD:<branch.B.merge without refs/heads/>`, and print the same target in `--dry-run`; when no upstream, keep `push -u origin B`. |
 | Proving test | `TestLedger_GIT07` in `internal/gitx` (fixture above: rc 0 and `origin/master` advanced; dry-run text names the same target) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 <a id="git-08"></a>
 #### GIT-08 · git_repair: origin URL parsed as a clone option; empty-file deletion too broad and before the clone
@@ -1790,7 +1790,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same git argv and step order). |
 | Fix recipe (3.0) | `internal/gitx` repair: refuse an origin URL starting with `-` (`Error: The origin URL starts with '-': refusing to pass it to git clone.` rc 1, before the plan); `git clone --quiet --bare -- "$origin_url" "$tmp/recovery.git"`; select only `OBJECTS/[0-9a-f]{2}/[0-9a-f]{38}` (or 62 for SHA-256) empty files; order clone, then delete, then copy. |
 | Proving test | `TestLedger_GIT08` in `internal/gitx` (URL `--upload-pack=...` → rc 1, empty object still present; an empty `pack/x.keep` is never deleted; a failed clone deletes nothing) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 ### remote
 
@@ -1810,7 +1810,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the 2.x remote grammar ignores unknown words. |
 | Fix recipe (3.0) | `internal/cli/args` remote grammars (push, pull, sync_push, sync_pull): an unknown `-*` word → `Error: Unknown option: X (usage: <the function's usage line>)` rc 1, before host resolution; a fourth positional → `Error: Unexpected argument: X (usage: ...)` rc 1; `--exclude PAT` (two words) accepted as well as `--exclude=PAT`; `-n` refused like any unknown option. docs/reference/remote.md and the registered help: "`--exclude PAT` or `--exclude=PAT`". |
 | Proving test | `TestLedger_REM01` in `internal/remote` and `testdata/script/rem01_flags.txtar` (logging rsync and scp stubs: `--delete -n` → rc 1, `$T/argv` empty, stderr `Unknown option: -n`; `--exclude .env` → argv has `--exclude=.env`; `remote_push box a /tmp/x --dry-run` → rc 1, scp not called) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 <a id="rem-02"></a>
 #### REM-02 · A remote target can be an ssh option (no `--` before the target)
@@ -1828,7 +1828,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same regex, same ssh argv). |
 | Fix recipe (3.0) | `internal/remote` target validation, shared by the `HOST:` parser (`internal/config`) and raw targets: user `^[A-Za-z0-9._][A-Za-z0-9._-]*$`, host `^[A-Za-z0-9][A-Za-z0-9.-]*$` or a bracketed IPv6 literal, so neither part starts with `-` and the host has no `:`; a failing `HOST:` entry gets the existing warning `Line N of ~/.gash_env: HOST target must be user@host (skipping)`; a failing raw target gets `Error: Unknown host alias 'X' and not a valid user@host target.` rc 1. Every ssh argv puts `--` before the target: `ssh OPTS -- TARGET CMD`, the 255 probe too. docs/security.md remote_* section. |
 | Proving test | `TestLedger_REM02` in `internal/remote` (validation table: `-oProxyCommand=x@h`, `u@-h`, `-u@h`, `u@h:22` refused; `deploy@box.example`, `u@[::1]` accepted) and `testdata/script/rem02_target.txtar` (logging ssh: `--` immediately before the target in both ssh calls) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: partly done 4fc4e85 (internal/remote); config.ValidHostTarget strictness pending in core |
 
 <a id="rem-03"></a>
 #### REM-03 · Path tiers are checked on strings the remote side may expand
@@ -1846,7 +1846,7 @@ Critical and high items:
 | rc.A behavior | reproduced (literal classification, same argv). |
 | Fix recipe (3.0) | `internal/remote` remote-path guard, before normalization, for push DST, pull SRC and both sync paths: refuse any remote path containing a glob character (`*`, `?`, `[`, `]`, `{`, `}`), `$`, a backquote, `;`, `&`, `\|`, `<`, `>`, `(`, `)`, `!`, a quote, a backslash or a newline, or a `~` anywhere but a leading `~`, `~/` or `~NAME[/...]`: classification `deny:metacharacters`, message `Error: Remote path 'P' contains characters the remote side may expand. Refusing OP.` rc 1, not overridable by `--force`. rsync always gets `-s` (`--protect-args`). docs/security.md tier table gains the rule. |
 | Proving test | `TestLedger_REM03` in `internal/remote` (every vector above → `deny:metacharacters`) and `testdata/script/rem03_expand.txtar` (`remote_sync_push box ./src '$HOME' --delete` and the same with `--force` → rc 1, rsync not called) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 <a id="rem-05"></a>
 #### REM-05 · The rsync -e string breaks when $HOME contains a space
@@ -1864,7 +1864,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same `-e` string). |
 | Fix recipe (3.0) | `internal/remote` rsync: build the `-e` string with rsync's quoting, `-o 'ControlPath=<HOME>/.ssh/cm-%C'` (a `'` inside HOME written as `'\''`). |
 | Proving test | `TestLedger_REM05` in `internal/remote` (the `-e` string split by rsync's rules, implemented in the test, yields exactly one ControlPath word for a HOME with spaces and quotes) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 <a id="rem-06"></a>
 #### REM-06 · remote_sync_pull --delete checks the local destination with remote wording
@@ -1882,7 +1882,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same rule, same text). |
 | Fix recipe (3.0) | `internal/remote` local delete check, same safe-set rules, local wording: `Error: rsync --delete targeting the local destination 'P' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the current directory; never your home itself or .ssh). Refused in headless mode without --force.` and the prompt `rsync --delete targeting the local destination 'P' can remove local files. Proceed? [y/N]`. |
 | Proving test | `TestLedger_REM06` in `internal/remote` (headless pull with `--delete ./` → the local wording, rc 1, rsync not called) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 <a id="rem-07"></a>
 #### REM-07 · remote_exec creates ~/.ssh with the default umask
@@ -1900,7 +1900,7 @@ Critical and high items:
 | rc.A behavior | reproduced (`os.MkdirAll` with 0777 filtered by the umask). |
 | Fix recipe (3.0) | `internal/remote` exec: create a missing `~/.ssh` with mode 0700 (`os.Mkdir(dir, 0o700)`); never change the mode of an existing directory. |
 | Proving test | `TestLedger_REM07` in `internal/remote` (temp HOME without `.ssh`, umask 022 → mode 0700) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 <a id="rem-08"></a>
 #### REM-08 · A HOST target `u@h:22` is accepted; ssh, scp and the tier check read it differently
@@ -1918,7 +1918,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | REM-02's target validation (no `:` outside a bracketed IPv6 literal); the skip warning adds `Hint: put the port in a Host entry of ~/.ssh/config`. |
 | Proving test | `TestLedger_REM08` in `internal/remote` (part of REM-02's table: `u@h:22` refused with the warning) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: partly done 4fc4e85 (internal/remote); config.ValidHostTarget strictness pending in core |
 
 <a id="rem-10"></a>
 #### REM-10 · A `/.` (or `//.`) root target normalizes to `.` and classifies as allow, not deny:/
@@ -1936,7 +1936,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/remote/safety.go:56-60` trims the trailing `/.` before the `p == "/."` special case, leaving `""`, and `:65-67` returns `.`; `classifyPath` then returns `allow`. The source comment at `:30` records that `/.` (and `//.`) come out as `.`, as in 2.x. |
 | Fix recipe (3.0) | `internal/remote` `normalizePath`: fold `/.` (and any absolute path that reduces to the root-dot form) to `/` before the trailing-`/.` strip, so `/.` and `//.` classify as `deny:/`; equivalently, when the trailing-`/.` strip empties an absolute path, set it to `/`. |
 | Proving test | `TestLedger_REM10_fix` in `internal/remote` (`/.`, `//.`, `/./` → `deny:/`); `TestLedger_REM10_2x` proves the `allow` reproduction |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 ### php and node
 
@@ -1956,7 +1956,7 @@ Critical and high items:
 | rc.A behavior | reproduced: same probe order (`/usr/bin/php<version>`, `/usr/bin/php<major>`, `php` on PATH, literal `php`), no warning, rc 0. |
 | Fix recipe (3.0) | `internal/dev/php.go` `DetectVersion`: when neither `/usr/bin/php<version>` nor `/usr/bin/php<major>` is executable, write `Warning: PHP <version> is not installed; php_raw_binary falls back to <php_raw_binary>` on stderr in both modes (as node_detect_version warns), keep every JSON key and value and rc 0; when only the major probe matched, `Warning: PHP <version> is not installed; using <path>`. Docs: registry help and `docs/reference/dev.md` NOTES of php_detect_version describe the warning. |
 | Proving test | `TestLedger_DEV01_fix` in `internal/dev` (sysroot without php8.1: stdout byte-identical to 2.x, stderr has the warning; sysroot with php8.1: stderr empty) and `testdata/script/php_detect_not_installed.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-02"></a>
 #### DEV-02 · OR constraints resolve to their first X.Y (`^7.4\|^8.0` gives 7.4)
@@ -1974,7 +1974,7 @@ Critical and high items:
 | rc.A behavior | reproduced: first X.Y of the constraint text (the text jq 1.7 `-r` prints for the value). |
 | Fix recipe (3.0) | `internal/dev/php.go` `composerVersion`: split the constraint on `\|\|` and `\|`; for each alternative take its lower bound (first X.Y; a bare major as in `^7`, `>=8`, `8.*` becomes `X.0`; `*` alone gives none); pick the highest alternative whose `/usr/bin/phpX.Y` is executable, else the highest alternative; no bound at all → next source (copilot-instructions, then 8.4). Operator sign-off needed (existing projects can change version). Docs: php_detect_version NOTES state the rule. |
 | Proving test | `TestLedger_DEV02_fix` in `internal/dev`, table: `^7.4\|^8.0` → 8.0 (7.4 when only php7.4 is installed), `^8.0 \|\| ^7.4` → 8.0, `>=7.2 <8.0` → 7.2, `~8.2.10` → 8.2 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-03"></a>
 #### DEV-03 · Major-only constraints are ignored and give the 8.4 default
@@ -1992,7 +1992,7 @@ Critical and high items:
 | rc.A behavior | reproduced: no X.Y → next source → 8.4. |
 | Fix recipe (3.0) | Same function and rule as DEV-02 (a bare major becomes `X.0`); `*` alone still falls through. Docs: as DEV-02. |
 | Proving test | `TestLedger_DEV03_fix` in `internal/dev`: `^7` → 7.0, `>=8` → 8.0, `8.*` → 8.0, `*` → 8.4 |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-04"></a>
 #### DEV-04 · Two X.Y values on line 1 of .target-php-version give a multi-line version
@@ -2010,7 +2010,7 @@ Critical and high items:
 | rc.A behavior | reproduced: all matches joined with `\n`; the binary probes use major `7`. |
 | Fix recipe (3.0) | `internal/dev/php.go` `targetFileVersion`: first match only (`FindString` on line 1), as the composer and copilot sources already do. Docs: none. |
 | Proving test | `TestLedger_DEV04_fix` in `internal/dev`: `7.4 8.0` → `"7.4"`, `8.2.15.3` → `"8.2"` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-05"></a>
 #### DEV-05 · node_detect_version counts every entry of versions/node as installed
@@ -2028,7 +2028,7 @@ Critical and high items:
 | rc.A behavior | reproduced: every directory name, leading `v` stripped, GNU `sort -V` order (DEV-13); names written into the JSON byte for byte as 2.x does (raw invalid UTF-8 included). |
 | Fix recipe (3.0) | `internal/dev/node.go` `installedVersions`: keep only names matching `^v[0-9]+\.[0-9]+\.[0-9]+$` (the node_upgrade rule); nothing left → the existing `No Node.js versions installed in NVM. Install: nvm install 20` error, rc 1. Docs: node_detect_version NOTES say "installed vX.Y.Z releases". |
 | Proving test | `TestLedger_DEV05_fix` in `internal/dev`: stray entry ignored (`"version":"20"`), `v20.12.0-rc.1` ignored |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-06"></a>
 #### DEV-06 · node_upgrade exits 0 when installing a new patch failed
@@ -2046,7 +2046,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the apply phase in the shim (DEV-16) keeps 2.x's `rc` rule. |
 | Fix recipe (3.0) | In the generated node_upgrade apply phase (`internal/compatgen` template of `lib/modules/node.sh`): set `rc=1` when any `nvm install` fails; keep the messages and the final `OK: Active version:` line, then return `rc`. Docs: node_upgrade NOTES add "exits 1 when an install or a removal failed". |
 | Proving test | `testdata/script/node_upgrade_install_fail.txtar` (mock nvm whose install fails: rc 1, v20.11.1 kept, the error line present) as `TestLedger_DEV06_fix` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: pending in core (compat/stubs.tmpl) |
 
 <a id="dev-07"></a>
 #### DEV-07 · nvm_prune_versions --force reports success when an uninstall fails
@@ -2064,7 +2064,7 @@ Critical and high items:
 | rc.A behavior | reproduced in the shim. |
 | Fix recipe (3.0) | Generated nvm_prune_versions shim: record each failing `nvm uninstall`, print `Error: Uninstalling vX failed.` for it, and end with `Error: N duplicate version(s) could not be removed.` rc 1 instead of the OK line when N > 0. Docs: nvm_prune_versions NOTES. |
 | Proving test | `testdata/script/nvm_prune_uninstall_fail.txtar` (`TestLedger_DEV07_fix`): rc 1, no OK line |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: pending in core (compat/stubs.tmpl) |
 
 <a id="dev-08"></a>
 #### DEV-08 · nvm_prune_versions reads io.js entries as Node versions
@@ -2082,7 +2082,7 @@ Critical and high items:
 | rc.A behavior | reproduced in the shim. |
 | Fix recipe (3.0) | Generated shim: match whole entries with `grep -oE '(^\|[[:space:]>])v[0-9]+\.[0-9]+\.[0-9]+'` and strip the prefix, so `iojs-v*` lines are skipped. Docs: none. |
 | Proving test | `testdata/script/nvm_prune_iojs.txtar` (`TestLedger_DEV08_fix`): `OK: No duplicate NVM versions found.` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: pending in core (compat/stubs.tmpl) |
 
 ### ai
 
@@ -4593,7 +4593,7 @@ Critical and high items:
 | rc.A behavior | Go resolves `${VAR}` from DIR/.env, then the binary's own environment (exported variables only; the shim passes none of these), then the default, with literal replacement: `redis:a&b`, `redis:[ab]`, `nginx:` with no warning. A binary cannot see the caller's unexported or local variables (a non-exported GITHUB_TOKEN is invisible too), and Bash pattern and patsub rules depend on the Bash version. This code runs only on the line-parser path and on images Compose already interpolated (DOCK-26). |
 | Fix recipe (3.0) | DOCK-13 (Compose interpolation semantics). docs/reference/docker.md: say that only exported variables and DIR/.env are used. |
 | Proving test | `TestLedger_DOCK12` in `internal/docker` (vectors above: `redis:[ab]`, `redis:a&b`, no warning; a variable set only in the test shell is not used) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63f58e1 (code already right; docs/help) |
 
 <a id="dock-19"></a>
 #### DOCK-19 · Bash's own diagnostics naming 2.x source lines (no terminal, failed redirections)
@@ -4647,7 +4647,7 @@ Critical and high items:
 | rc.A behavior | Go maps net/http errors onto the same strings: `*net.DNSError` → `dns_error`, ECONNREFUSED → `connection_refused` (whether the refused connection is to the registry host or to the proxy, matching curl exit 7), any deadline (10 s connect, 20 s total) → `timeout`, TLS handshake and x509 errors → `ssl_error`; every other transport failure — a proxy CONNECT refusal returned as an error, a connection reset, EOF or empty reply, too many redirects, invalid URL or header value — → the fixed string `transport_error` (which is also where curl exit 56 landed, so docker needs no special tunnel handling). `no_response` cannot occur (net/http yields a status or an error) and stays documented only. Human output is unchanged (`transport_error` takes the default branch, as `curl_error_N` did). curl exit numbers have no Go equivalent. |
 | Fix recipe (3.0) | keep `transport_error`; document the vocabulary in docs/reference/docker.md and the AGENTS.md llm_docker_check notes: `dns_error connection_refused timeout ssl_error transport_error unauthorized forbidden not_found rate_limited server_error http_NNN malformed_token no_digest_in_response registry_unreachable`. |
 | Proving test | `TestLedger_DOCK24` in `internal/docker` (httptest server closing the connection → `transport_error`; unresolvable host → `dns_error`; closed port → `connection_refused`; stalled server with a short deadline → `timeout`; self-signed certificate → `ssl_error`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63f58e1 (code already right; docs/help) |
 
 <a id="dock-25"></a>
 #### DOCK-25 · Manifest digest headers of redirect hops are concatenated
@@ -6043,7 +6043,7 @@ Critical and high items:
 | rc.A behavior | keeps 2.x: no question, no flag. |
 | Fix recipe (3.0) | If accepted: print `Will stop N container(s): NAME...` (or `Will start ...`), then `__gash_confirm_plan` (Y/n) with `-y/--yes`; headless or no terminal → `Error: No terminal to ask for confirmation: pass -y to go ahead.` rc 1; rows in docs/security.md "Confirmations"; completion `-y --yes`. |
 | Proving test | `TestLedger_DOCK22` in `internal/docker` (headless without `-y` → rc 1 and no `docker stop` call; with `-y` → stop called once with every ID) |
-| Status | accept: list the containers and confirm; -y/--yes for headless (operator 2026-10-24) |
+| Status | accept: done 09ca07f, 63f58e1 |
 
 ### git module
 
@@ -6063,7 +6063,7 @@ Critical and high items:
 | rc.A behavior | keeps 2.x: `internal/gitx` runs the git module functions with the caller's environment and configuration, without `-c core.hooksPath=...` or other hardening; only the `llm_*` git calls get the hardening flags. |
 | Fix recipe (3.0) | recommended: keep (they are the user's own repository operations); architecture.md section 7 and docs/security.md say that git module functions run the user's hooks and config. If the operator wants hardening, a separate decision with its own flags. |
 | Proving test | `TestLedger_GIT10` as `testdata/script/git10_hooks.txtar` (a pre-commit hook creates a marker; `git_sync --no-push` → marker exists) |
-| Status | accept: keep; document that git module functions run the user hooks and config (operator 2026-10-24) |
+| Status | accept: done 9eed0f7 |
 
 ### php and node
 
@@ -6101,7 +6101,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x behavior (frozen contract: defaults and exit codes). |
 | Fix recipe (3.0) | Recommended: keep stdout and rc 0, add `Warning: Directory not found: <DIR>` on stderr (both functions, both modes) when DIR is not a directory. Alternative (contract break): `Error: Directory not found: <DIR>` rc 1. Docs: NOTES of both functions. |
 | Proving test | `TestLedger_DEV18_fix` in `internal/dev` (missing DIR: same stdout, the warning on stderr) |
-| Status | accept: keep stdout and rc 0, add the stderr warning (operator 2026-10-24) |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-19"></a>
 #### DEV-19 · Exact Node pins are reduced to their major
@@ -6119,7 +6119,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x behavior (the `version` key is the major by contract). |
 | Fix recipe (3.0) | Recommended: keep, and document it in the NOTES ("exact pins resolve to the newest installed patch of their major"). Alternative: an installed exact pin becomes `full_version` (value change, no new key). |
 | Proving test | `TestLedger_DEV19_2x` in `internal/dev` (pin v20.9.0 → `20.11.1`) |
-| Status | accept: keep and document (operator 2026-10-24) |
+| Status | accept: done 37bcf69 |
 
 <a id="dev-20"></a>
 #### DEV-20 · Flag meanings and check order differ between the node functions
@@ -6137,7 +6137,7 @@ Critical and high items:
 | rc.A behavior | Keeps every 2.x rule and message (the 2.x grammars are ported rule for rule). |
 | Fix recipe (3.0) | Recommended: accept `-y`/`--yes` in nvm_prune_versions as synonyms of `--force`; parse arguments before the environment checks in all three (unknown option first, `Error: Unknown option: X ...` rc 1). Docs: usage lines. |
 | Proving test | `TestLedger_DEV20_fix` in `internal/cli/args` (grammar table: order of errors, `-y` accepted) |
-| Status | accept: as recommended: -y/--yes synonyms, arguments parsed before environment checks (operator 2026-10-24) |
+| Status | accept: partly done 37bcf69 (Go); nvm_prune_versions stub pending in core |
 
 ### ai
 
@@ -6586,7 +6586,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A (both the `-h` heredocs and the registered help, byte for byte), corrected in 3.0. |
 | Fix recipe (3.0) | Registry Help for docker_compose_check, docker_compose_upgrade and docker_compose_scan and the generated docs/reference/docker.md: statuses `CURRENT`, `UPDATE`, `NOT_PULLED`, `PINNED`, `ERROR`; every registry queried (Docker Hub and GHCR with tokens, the others anonymously); exit 0 whenever the report prints; full usage lines from the Grammar; one help text per function (the `-h` heredoc becomes the registered help). |
 | Proving test | `TestLedger_DOCK17` in `internal/compatgen` (docs generation: usage lines equal the Grammar; the help names every status the code can emit) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 63f58e1 |
 
 ### git module
 
@@ -6606,7 +6606,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A (the registered help, byte for byte; the "Alias: gap" fallback is never shown because the Go registry always has the help), corrected in 3.0. |
 | Fix recipe (3.0) | docs/reference/git.md (generated from the registry): drop "clean", describe the diff-index semantics, say 001 is the newest; drop the gap mentions; docs/security.md: rows for git_add_tag, git_delete_tag, git_sync and git_apply_patch (with GIT-01's confirmations). |
 | Proving test | `TestLedger_GIT11` in `internal/compatgen` (docs generation check; no "gap" in git_apply_patch help) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9eed0f7 |
 
 ### remote
 
@@ -6626,7 +6626,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Registered help and generated docs/reference/remote.md: GASH_ENV_FILE, the 255 probe, `~/.ssh` creation, and the REM-01 flag rules; docs/security.md deny row rendered from the `internal/remote` table (`/lib /lib64 /lib32 /libx32`). |
 | Proving test | `TestLedger_REM09` in `internal/compatgen` (docs generation: the security.md deny row equals the Go table) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fc4e85 |
 
 ### php and node
 
@@ -6646,7 +6646,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the card's alias names and static expansions and dev.md unchanged in rc.A (except the hte rows, dropped with DEV-17), corrected in 3.0. The values 2.x took from the live shell (`BASH_ALIASES`) cannot be read by a binary, so rc.A shows the static expansion for every row (forced part, for the owner of the `gash` card). |
 | Fix recipe (3.0) | The registry carries each php-pack alias with its condition (MATRIX rows) and the card and dev.md are generated from it (PRD 5.5): families `phpXY`, `composerXY`, `1composerXY` "for each installed phpX.Y", `php` and `composer` "with GASH_REPLACE_TOOLS=1", `composer1-self-update` "when composer1 is installed". |
 | Proving test | `TestRegistry_AliasDocsMatchConditions` in `internal/registry` and a `gash dev` golden in `testdata/script/card_dev.txtar` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: partly done 37bcf69 (docs/reference/dev.md); gash dev card pending in core |
 
 <a id="dev-22"></a>
 #### DEV-22 · php_detect_version and node_detect_version help omit how far detection reaches and what it does not check
@@ -6664,7 +6664,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | Registry help NOTES of both functions (and the generated dev.md) state the rules above, plus the DEV-01/DEV-05/DEV-09/DEV-18 outcomes that are accepted. |
 | Proving test | `TestRegistry_HelpGolden` (help bodies golden-tested; updated with the new NOTES) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 37bcf69 |
 
 ### ai
 
