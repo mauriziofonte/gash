@@ -45,7 +45,7 @@ const stackProcs = "(httpd|apache2|php-fpm.*)"
 // php-legacy; macOS: Homebrew's httpd, php and php@8.3).
 // GASH_HTE_E2E_LAYOUTS names the discovery layouts the system must show. The story: discovery, install on
 // the standard ports (where a stock vhost of the distro httpd blocks it,
-// that refusal, then the high ports), a site on each version (HTTP, HTTPS
+// that refusal, then migrate --apply excluding it), a site on each version (HTTP, HTTPS
 // with HTTP/2, sessions), php global set on one version, site modify
 // --php (the unused master stops), the service commands, doctor, site
 // remove and uninstall; setup.sh then compares /etc with its state before
@@ -63,6 +63,7 @@ func TestE2EDistro(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	uninstallOnFailure(t, e)
 	home := os.Getenv("HOME")
 	paths := state.NewPaths(mustDirs(t), os.Getuid())
 	me := e.User
@@ -112,9 +113,11 @@ func TestE2EDistro(t *testing.T) {
 	// GASH_HTE_E2E_BLOCKING names the stock vhosts of the distro httpd
 	// (Fedora: mod_ssl's ssl.conf with its _default_:443 vhost): install
 	// on the standard ports then leaves the stack stopped (HTE-75), and
-	// the story goes on, after an uninstall, on the high ports.
+	// migrate --apply --exclude <each> --yes, with nothing to import,
+	// switches onto them. The high ports beside a running system Apache
+	// are TestE2EReinstall's.
 	blocking := strings.Fields(os.Getenv("GASH_HTE_E2E_BLOCKING"))
-	httpPort, httpsPort := 80, 443
+	const httpPort, httpsPort = 80, 443
 	step("install on the standard ports", func(t *testing.T) {
 		res, err := e.Install(ctx, hte.InstallOptions{Yes: true})
 		if err != nil {
@@ -167,30 +170,36 @@ func TestE2EDistro(t *testing.T) {
 	})
 
 	if len(blocking) > 0 {
-		step("migrate names the stock vhosts, install on the high ports", func(t *testing.T) {
-			res, err := e.Migrate(ctx, hte.MigrateOptions{})
+		step("migrate --exclude the stock vhosts switches onto the standard ports", func(t *testing.T) {
+			dry, err := e.Migrate(ctx, hte.MigrateOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			var got []string
-			for _, b := range res.Plan.Blocking {
+			for _, b := range dry.Plan.Blocking {
 				got = append(got, b.Path)
 			}
 			if !slices.Equal(got, blocking) {
 				t.Errorf("migrate blocking %v, want %v", got, blocking)
 			}
-			if _, err := e.Uninstall(ctx, hte.UninstallOptions{Yes: true}); err != nil {
-				t.Fatal(err)
-			}
-			ins, err := e.Install(ctx, hte.InstallOptions{Yes: true, Ports: "high", NoRestore: true})
+			res, err := e.Migrate(ctx, hte.MigrateOptions{Apply: true, Exclude: blocking, Yes: true})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !ins.Started || len(ins.Blocking) != 0 {
-				t.Fatalf("install --ports high: %+v", ins)
+			t.Logf("root plan: %s | warnings %v", strings.Join(res.RootPlan, " | "), res.Warnings)
+			if !res.Switched || len(res.Imported) != 0 || len(res.Plan.Blocking) != 0 {
+				t.Fatalf("migrate --apply --exclude: %+v", res)
+			}
+			st, err := e.ServiceStatus(ctx)
+			if err != nil || !st.Running {
+				t.Fatalf("status after the switch: %+v %v", st, err)
+			}
+			for _, b := range blocking {
+				if !exists(b) {
+					t.Errorf("the excluded %s is gone", b)
+				}
 			}
 		})
-		httpPort, httpsPort = 8080, 8443
 	}
 
 	domains := []string{"one.test", "two.test"}

@@ -220,6 +220,7 @@ func TestE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	uninstallOnFailure(t, e)
 	home := os.Getenv("HOME")
 	paths := state.NewPaths(mustDirs(t), os.Getuid())
 	step := func(name string, fn func(t *testing.T)) {
@@ -847,6 +848,7 @@ func TestE2EReinstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	uninstallOnFailure(t, e)
 	paths := state.NewPaths(mustDirs(t), os.Getuid())
 	stages, _ := filepath.Glob(paths.Stage("*"))
 	if len(stages) != 1 {
@@ -1011,6 +1013,7 @@ func TestE2ESystemd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	uninstallOnFailure(t, e)
 	paths := state.NewPaths(mustDirs(t), os.Getuid())
 	unitState := func() string {
 		out, _ := exec.Command("systemctl", "--user", "is-active", "gash-hte.service").Output()
@@ -1116,5 +1119,23 @@ func TestE2ESystemd(t *testing.T) {
 		if exists("/var/lib/systemd/linger/dev") {
 			t.Error("linger stayed enabled")
 		}
+	})
+}
+
+// uninstallOnFailure: a story that stops at a failing step skips its own
+// uninstall; uninstall then, so that setup.sh's /etc comparison and the
+// stories after it see the machine as before install, and the report
+// names the failing step instead of leftovers.
+func uninstallOnFailure(t *testing.T, e *hte.Engine) {
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		res, err := e.Uninstall(context.Background(), hte.UninstallOptions{Yes: true})
+		if err != nil {
+			t.Logf("cleanup: uninstall: %v", err)
+			return
+		}
+		t.Logf("cleanup: uninstalled, stage %s, restored %d changes, warnings %v", res.Stage, len(res.Restored), res.Warnings)
 	})
 }
