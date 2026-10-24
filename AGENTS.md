@@ -42,11 +42,16 @@ one of them if you parse text.
 
 ## 3. Function catalog
 
-Flags: where a function takes `-n`, it means `--limit`; `--json` is the
-machine-output flag; functions that parse options reject unknown ones with
-`unknown_option` and a second PATH with `unexpected_argument`; a value flag
-at the end of the line fails with `missing_value`; integers have at most 9
-digits. `--help` or `-h` anywhere on an `llm_*` line prints its help
+Flags (the signatures below are the registered help's, checked by a test):
+where a function takes `-n`, it means `--limit`; `--json` is the
+machine-output flag. Options are separate words: `--flag=value` and a `--`
+end-of-options marker are not supported (both are `unknown_option`, as is
+any option a function does not list). A function that takes a PATH refuses
+a second one with `unexpected_argument`; `llm_ports` and `llm_procs` take no
+PATH (a stray word is `unknown_option`) and `llm_env` reads a bare word as
+its filter. A value flag at the end of the line fails with `missing_value`;
+integers are plain digits, at most 9. `--help` or `-h` anywhere on an
+`llm_*` line prints its help, also where a flag expects its value
 (`llm_exec`: as the only argument). A PATH may start with `~` or `~/` (your
 home); `~user` is `invalid_path`.
 
