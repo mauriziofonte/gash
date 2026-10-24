@@ -34,17 +34,28 @@ const (
 var rdrAnchorRE = regexp.MustCompile(`(?m)^[ \t]*rdr-anchor[ \t]+"com\.apple/\*"[ \t]*$`)
 
 // PFRules is the anchor file: ports 80 and 443 of 127.0.0.1 and ::1 to
-// the stack's HTTP and HTTPS ports.
+// the stack's HTTP and HTTPS ports. A packet on lo0 passes pf twice (out,
+// then in). With `rdr pass`, the state of a redirected connection makes
+// pf refuse the state of a later direct connection to the stack's port
+// (state-insert), so its SYN is dropped and Apache looks dead. The rules
+// therefore redirect without pass, keep state only for the inbound half,
+// and pass the outbound half of these ports without state.
 func PFRules(http, https int) []byte {
 	b := fmt.Appendf(nil, "# Managed by gash hte install; gash hte uninstall removes it.\n"+
 		"# The rules of the pf anchor %s: the standard web ports of the\n"+
 		"# loopback reach the userland Apache.\n", PFAnchor)
-	for _, fam := range []struct{ af, addr string }{{"inet", "127.0.0.1"}, {"inet6", "::1"}} {
+	fams := []struct{ af, addr string }{{"inet", "127.0.0.1"}, {"inet6", "::1"}}
+	for _, fam := range fams {
 		for _, p := range [][2]int{{80, http}, {443, https}} {
-			b = fmt.Appendf(b, "rdr pass on lo0 %s proto tcp from any to %s port %d -> %s port %d\n", fam.af, fam.addr, p[0], fam.addr, p[1])
+			b = fmt.Appendf(b, "rdr on lo0 %s proto tcp from any to %s port %d -> %s port %d\n", fam.af, fam.addr, p[0], fam.addr, p[1])
 		}
 	}
-	return b
+	for _, fam := range fams {
+		b = fmt.Appendf(b, "pass in quick on lo0 %s proto tcp from any to %s port { %d %d } keep state\n", fam.af, fam.addr, http, https)
+	}
+	ports := fmt.Sprintf("{ 80 443 %d %d }", http, https)
+	b = fmt.Appendf(b, "pass out quick on lo0 proto tcp from any to any port %s no state\n", ports)
+	return fmt.Appendf(b, "pass out quick on lo0 proto tcp from any port %s to any no state\n", ports)
 }
 
 // pfLoad is the one command that loads the anchor: the LaunchDaemon's
@@ -122,12 +133,12 @@ func (s *server) pfRedirect(ctx context.Context, o Op) ([]string, error) {
 	return nil, s.commit(c)
 }
 
-// pfUndo empties the anchor and unloads the LaunchDaemon; its files are
+// pfUndo empties the anchor (its redirect and filter rules) and unloads the LaunchDaemon; its files are
 // removed by the changes recorded before this one. pf itself stays
 // enabled until the next restart (the reference of the boot-time load
 // has no token to release), with an empty anchor.
 func (s *server) pfUndo(ctx context.Context) ([]string, error) {
 	// Loaded at boot, or not at all since install: either is fine.
 	_, _ = s.cmd(ctx, "launchctl", "bootout", "system/"+PFDaemonLabel)
-	return nil, s.mustCmd(ctx, "pfctl", "-a", PFAnchor, "-F", "nat")
+	return nil, s.mustCmd(ctx, "pfctl", "-a", PFAnchor, "-F", "all")
 }

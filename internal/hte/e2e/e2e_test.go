@@ -1183,7 +1183,9 @@ func dumpState(t *testing.T) {
 			{"/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"},
 			{"sudo", "-n", "/sbin/pfctl", "-s", "info"},
 			{"sudo", "-n", "/sbin/pfctl", "-s", "rules"},
-			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/*", "-s", "nat"},
+			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/gash-hte", "-s", "nat"},
+			{"sudo", "-n", "/sbin/pfctl", "-a", "com.apple/gash-hte", "-s", "rules"},
+			{"sudo", "-n", "/sbin/pfctl", "-s", "state"},
 		} {
 			out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
 			t.Logf("state: %s (err %v):\n%s", strings.Join(argv, " "), err, out)

@@ -18,8 +18,11 @@
 schema hte_doctor stdout
 stdout '^\{"ok":false,"checks":\[\{"name":"platform","status":"ok","details":"[^"]+"\}'
 stdout '\{"name":"install","status":"fail","details":"gash hte is not installed for this user","remedy":"run gash hte install"\}'
-stdout '"name":"port 80","status":"(ok|warn|fail)"'
-stdout '"name":"port 443","status":"(ok|warn|fail)"'
+# The port holders come from /proc: one check per port on Linux, one skipped
+# "ports" check elsewhere.
+[linux] stdout '"name":"port 80","status":"(ok|warn|fail)"'
+[linux] stdout '"name":"port 443","status":"(ok|warn|fail)"'
+[!linux] stdout '"name":"ports","status":"skip"'
 
 # The global --json form (before the subcommand) is the same report.
 ! exec gash hte --json doctor
@@ -31,7 +34,8 @@ stdout '"name":"install","status":"fail"'
 stdout '^OK: platform: .+$'
 stdout '^Error: install: gash hte is not installed for this user$'
 stdout '^  remedy: run gash hte install$'
-stdout '^(OK|Warning|Error): port 80: '
+[linux] stdout '^(OK|Warning|Error): port 80: '
+[!linux] stdout '^Info: ports: .+ \(skipped\)$'
 stderr '^Error: [0-9]+ checks? failed$'
 
 # Without a terminal no color, also with TERM set.

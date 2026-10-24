@@ -431,11 +431,23 @@ writes the rules file `/etc/pf.anchors/gash-hte` (0644, checked with
 `pfctl -n` before it is put in place):
 
 ```
-rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080
-rdr pass on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 8443
-rdr pass on lo0 inet6 proto tcp from any to ::1 port 80 -> ::1 port 8080
-rdr pass on lo0 inet6 proto tcp from any to ::1 port 443 -> ::1 port 8443
+rdr on lo0 inet proto tcp from any to 127.0.0.1 port 80 -> 127.0.0.1 port 8080
+rdr on lo0 inet proto tcp from any to 127.0.0.1 port 443 -> 127.0.0.1 port 8443
+rdr on lo0 inet6 proto tcp from any to ::1 port 80 -> ::1 port 8080
+rdr on lo0 inet6 proto tcp from any to ::1 port 443 -> ::1 port 8443
+pass in quick on lo0 inet proto tcp from any to 127.0.0.1 port { 8080 8443 } keep state
+pass in quick on lo0 inet6 proto tcp from any to ::1 port { 8080 8443 } keep state
+pass out quick on lo0 proto tcp from any to any port { 80 443 8080 8443 } no state
+pass out quick on lo0 proto tcp from any port { 80 443 8080 8443 } to any no state
 ```
+
+A packet on lo0 passes pf twice, out and then in. With `rdr pass` the
+state of a redirected connection makes pf refuse the state of a later
+direct connection to 8080 (the `state-insert` counter), so that SYN is
+dropped and the stack looks dead (seen on the macOS CI runner). The rules
+redirect without `pass`, keep state for the inbound half only, and pass the
+outbound half of these ports without state. Uninstall flushes the whole
+anchor (`pfctl -a com.apple/gash-hte -F all`).
 
 then the LaunchDaemon `/Library/LaunchDaemons/io.github.mauriziofonte.gash.hte.pf.plist`
 (0644, checked with `plutil -lint`; `RunAtLoad`, program
@@ -449,7 +461,7 @@ settings' ports, the HTTP to HTTPS redirect targets 443 (section 3), and
 `doctor` checks both files and that the redirect's targets are the
 settings' ports. Uninstall unloads the daemon (`launchctl bootout
 system/io.github.mauriziofonte.gash.hte.pf`), empties the anchor
-(`pfctl -a com.apple/gash-hte -F nat`) and removes both files; pf itself
+(`pfctl -a com.apple/gash-hte -F all`) and removes both files; pf itself
 stays enabled with the anchor empty until the next restart (the boot-time
 reference has no token to release). To verify on the runner: that the
 anchor loaded at boot is evaluated (the daemon may run before macOS loads

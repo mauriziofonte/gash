@@ -138,7 +138,7 @@ func TestPFRedirect(t *testing.T) {
 
 	f.lines = nil
 	uninstall(t, f)
-	if !slices.Contains(f.lines, "launchctl bootout system/"+PFDaemonLabel) || !slices.Contains(f.lines, "pfctl -a com.apple/gash-hte -F nat") {
+	if !slices.Contains(f.lines, "launchctl bootout system/"+PFDaemonLabel) || !slices.Contains(f.lines, "pfctl -a com.apple/gash-hte -F all") {
 		t.Errorf("uninstall commands %v", f.lines)
 	}
 	if diff := cmp.Diff(before, snapshot(t, f.root)); diff != "" {

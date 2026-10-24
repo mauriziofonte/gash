@@ -9,7 +9,7 @@
     "php_raw_binary": {"type": "string"},
     "php_command": {"type": "string", "pattern": "^php[0-9]+$"},
     "composer_raw_binary": {"type": "string"},
-    "composer_command": {"type": "string", "pattern": "^composer[0-9]+$"}
+    "composer_command": {"type": "string", "pattern": "^composer[0-9]*$", "$comment": "composer when no Composer is found"}
   },
   "additionalProperties": false
 }
