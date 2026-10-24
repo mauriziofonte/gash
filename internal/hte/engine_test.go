@@ -159,6 +159,27 @@ func TestLedger_HTE19(t *testing.T) {
 		"apache modules list":    func() error { _, err := f.e.ApacheModulesList(ctx); return err },
 		"apache modules enable":  func() error { _, err := f.e.ApacheModuleEnable(ctx, "status"); return err },
 		"apache modules disable": func() error { _, err := f.e.ApacheModuleDisable(ctx, "status"); return err },
+		"apache config path":     func() error { _, err := f.e.ApacheConfigPath(ctx); return err },
+		"site enable":            func() error { _, err := f.e.SiteEnable(ctx, "a.test"); return err },
+		"site disable":           func() error { _, err := f.e.SiteDisable(ctx, "a.test"); return err },
+		"service stop":           func() error { _, err := f.e.ServiceStop(ctx); return err },
+		"service restart":        func() error { _, err := f.e.ServiceRestart(ctx); return err },
+		"service reload":         func() error { _, err := f.e.ServiceReload(ctx); return err },
+		"cert show":              func() error { _, err := f.e.CertShow(ctx, "a.test"); return err },
+		"hosts list":             func() error { _, err := f.e.HostsList(ctx); return err },
+		"hosts check":            func() error { _, err := f.e.HostsCheck(ctx); return err },
+		"hosts windows":          func() error { _, err := f.e.HostsWindows(ctx); return err },
+		"php versions":           func() error { _, err := f.e.PHPVersions(ctx); return err },
+		"php ini get":            func() error { _, _, err := f.e.PHPIniGet(ctx, "a.test", "memory_limit"); return err },
+		"php ini set":            func() error { _, err := f.e.PHPIniSet(ctx, "a.test", "memory_limit", "1G"); return err },
+		"php ini unset":          func() error { _, err := f.e.PHPIniUnset(ctx, "a.test", "memory_limit"); return err },
+		"php global get":         func() error { _, _, err := f.e.PHPGlobalGet(ctx, "8.3", "memory_limit"); return err },
+		"php global set":         func() error { _, err := f.e.PHPGlobalSet(ctx, "8.3", "memory_limit", "1G"); return err },
+		"php global unset":       func() error { _, err := f.e.PHPGlobalUnset(ctx, "8.3", "memory_limit"); return err },
+		"migrate --apply": func() error {
+			_, err := f.e.Migrate(ctx, MigrateOptions{Apply: true})
+			return err
+		},
 	}
 	for name, call := range calls {
 		if err := call(); code(err) != hteerr.RootNotAllowed {

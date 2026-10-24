@@ -783,3 +783,196 @@ func TestLedger_HTE75(t *testing.T) {
 		t.Errorf("masters %d, system Apache active %v, plan %q", m.stack.Running(), m.active["apache2"], res.Plan)
 	}
 }
+
+// TestLedger_HTE64Apply: migrate --apply on the standard ports with one
+// enabled vhost excluded and a conf-enabled snippet: the plan names both as
+// no longer served; the system Apache stops before anything is archived,
+// the archives follow in the plan's order, each one a receipt change, and
+// nothing is deleted (every archived file is in the archive, byte for
+// byte).
+func TestLedger_HTE64Apply(t *testing.T) {
+	ctx := context.Background()
+	sa := "/etc/apache2/sites-available/"
+	m := newRig(t)
+	m.installPorts(t, state.StandardPorts)
+	m.write("/etc/apache2/conf-available/phpmyadmin.conf", "Alias /phpmyadmin /usr/share/phpmyadmin\n", 0o644)
+	must(t, os.MkdirAll(filepath.Join(m.root, "etc/apache2/conf-enabled"), 0o755))
+	must(t, os.Symlink("../conf-available/phpmyadmin.conf", filepath.Join(m.root, "etc/apache2/conf-enabled/phpmyadmin.conf")))
+	before := m.snapshot()
+	excluded := sa + "002-https.test.conf"
+	res, err := m.e.Migrate(ctx, MigrateOptions{Apply: true, Yes: true, Exclude: []string{excluded}})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if !slices.Equal(res.Plan.NoLongerServed, []string{excluded, "/etc/apache2/conf-enabled/phpmyadmin.conf"}) {
+		t.Errorf("no longer served: %v", res.Plan.NoLongerServed)
+	}
+	if !res.Switched || m.active["apache2"] || m.enabled["apache2"] {
+		t.Errorf("switched %v, apache2 active %v enabled %v", res.Switched, m.active["apache2"], m.enabled["apache2"])
+	}
+	var kinds []string
+	for _, c := range res.Changes {
+		kinds = append(kinds, string(c.Kind)+" "+c.Path+c.Name)
+	}
+	want := []string{
+		"unit apache2",
+		"legacy_vhost " + sa + "001-http.test.conf",
+		"legacy_vhost " + sa + "003-forced.test.conf",
+		"legacy_pool /etc/php/8.3/fpm/pool.d/http.test.conf",
+		"legacy_pool /etc/php/8.3/fpm/pool.d/forced.test.conf",
+		"unit php8.3-fpm", // left without pools
+	}
+	if !slices.Equal(kinds, want) {
+		t.Errorf("receipt changes:\n%s\nwant\n%s", strings.Join(kinds, "\n"), strings.Join(want, "\n"))
+	}
+	// Nothing deleted: each archived file is in its archive with its bytes;
+	// the excluded vhost and the snippet are untouched.
+	for _, c := range res.Changes {
+		if c.Kind != receipt.LegacyVhost && c.Kind != receipt.LegacyPool {
+			continue
+		}
+		if c.Archive == "" || !strings.HasPrefix(c.Archive, "/var/lib/gash-hte/archive/") {
+			t.Errorf("%s: archive %q", c.Path, c.Archive)
+			continue
+		}
+		var got string
+		filepath.WalkDir(filepath.Join(m.root, c.Archive), func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && filepath.Base(p) == filepath.Base(c.Path) {
+				data, _ := os.ReadFile(p)
+				got = string(data)
+			}
+			return nil
+		})
+		if b := before[c.Path]; b == "" || !strings.HasSuffix(b, " "+got) || got == "" {
+			t.Errorf("%s: archived bytes %q, before %q", c.Path, got, b)
+		}
+	}
+	after := m.snapshot()
+	for _, p := range []string{excluded, "/etc/apache2/conf-available/phpmyadmin.conf", "/etc/apache2/conf-enabled/phpmyadmin.conf"} {
+		if after[p] != before[p] {
+			t.Errorf("%s changed: %q, before %q", p, after[p], before[p])
+		}
+	}
+}
+
+// TestLedger_HTE25 (engine part, option a): site modify --no-https keeps
+// the site's certificate directory, doctor lists it, and --https later
+// reuses the same pair; site remove deletes exactly that site's
+// directory, never another site's.
+func TestLedger_HTE25(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	v := m.install(t)
+	docroot := m.docroot(t)
+	for _, d := range []string{"a.test", "b.test"} {
+		if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: d, Docroot: &docroot}); err != nil {
+			t.Fatalf("create %s: %v", d, err)
+		}
+	}
+	show := func(d string) string {
+		t.Helper()
+		info, err := m.e.CertShow(ctx, d)
+		if err != nil {
+			t.Fatalf("cert show %s: %v", d, err)
+		}
+		return info.SHA256
+	}
+	a, b := show("a.test"), show("b.test")
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "a.test", HTTPS: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := show("a.test"); got != a {
+		t.Errorf("--no-https replaced the certificate")
+	}
+	doc, err := m.e.Doctor(ctx)
+	must(t, err)
+	listed := slices.ContainsFunc(doc.Checks, func(c Check) bool {
+		return c.Name == "certificate a.test" && c.Status == CheckOK && strings.Contains(c.Details, "HTTP only")
+	})
+	if !listed {
+		t.Errorf("doctor does not list the kept certificate: %+v", doc.Checks)
+	}
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "a.test", HTTPS: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := show("a.test"); got != a {
+		t.Errorf("--https did not reuse the kept certificate")
+	}
+	if _, err := m.e.SiteRemove(ctx, "a.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(v.paths.CertDir("a.test")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("remove left %s: %v", v.paths.CertDir("a.test"), err)
+	}
+	if got := show("b.test"); got != b {
+		t.Errorf("removing a.test changed b.test's certificate")
+	}
+}
+
+// TestLedger_HTE47 (engine part): every alias is in the certificate's
+// SAN, and an alias change reissues the pair, also for an alias the
+// wildcard already covers or one that goes away; a change that keeps the
+// aliases keeps the pair.
+func TestLedger_HTE47(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	m.install(t)
+	docroot := m.docroot(t)
+	if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: &docroot}); err != nil {
+		t.Fatal(err)
+	}
+	show := func(want ...string) string {
+		t.Helper()
+		info, err := m.e.CertShow(ctx, "app.test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(info.Names, want) {
+			t.Errorf("SAN %v, want %v", info.Names, want)
+		}
+		return info.SHA256
+	}
+	first := show("app.test", "*.app.test", "www.app.test")
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "app.test", Profile: ptr("staging")}); err != nil {
+		t.Fatal(err)
+	}
+	if show("app.test", "*.app.test", "www.app.test") != first {
+		t.Error("a change without an alias change reissued the pair")
+	}
+	res, err := m.e.SiteModify(ctx, state.Flags{Domain: "app.test", Aliases: []string{"api.app.test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := show("app.test", "*.app.test", "www.app.test", "api.app.test")
+	if second == first || res.Applied == nil || !slices.ContainsFunc(res.Applied.Notes, func(n string) bool { return strings.Contains(n, "reissued") }) {
+		t.Errorf("an added alias under the wildcard did not reissue the pair: %+v", res.Applied)
+	}
+	if _, err := m.e.SiteModify(ctx, state.Flags{Domain: "app.test", NoWWW: true, Aliases: []string{"api.app.test"}}); err != nil {
+		t.Fatal(err)
+	}
+	if show("app.test", "*.app.test", "api.app.test") == second {
+		t.Error("a removed alias did not reissue the pair")
+	}
+}
+
+// TestLedger_HTE48 (engine part, option a for both choices): site remove
+// keeps the site's log directory and its files, as it keeps the document
+// root; nothing rotates the logs.
+func TestLedger_HTE48(t *testing.T) {
+	ctx := context.Background()
+	m := newRig(t)
+	v := m.install(t)
+	docroot := m.docroot(t)
+	if _, err := m.e.SiteCreate(ctx, state.Flags{Domain: "app.test", Docroot: &docroot, HTTPS: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	logs := v.paths.SiteLogDir("app.test")
+	access := filepath.Join(logs, "access.log")
+	must(t, os.WriteFile(access, []byte("127.0.0.1 - - GET /\n"), 0o600))
+	if _, err := m.e.SiteRemove(ctx, "app.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(access); err != nil || string(data) != "127.0.0.1 - - GET /\n" {
+		t.Errorf("site remove changed the site's log: %q %v", data, err)
+	}
+}

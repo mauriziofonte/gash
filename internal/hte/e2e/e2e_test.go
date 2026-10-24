@@ -387,6 +387,43 @@ func TestE2E(t *testing.T) {
 		}
 	})
 
+	step("server-level defaults and h2c", func(t *testing.T) {
+		// HTE-59: .htaccess and .htpasswd in a document root are never
+		// served; "/" served index.php in site create (DirectoryIndex).
+		for _, name := range []string{".htaccess", ".htpasswd"} {
+			p := filepath.Join(appRoot, name)
+			if err := os.WriteFile(p, []byte("# e2e\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			a, err := getPath("http", appDomain, 80, "/"+name, nil)
+			if err != nil || a.status != 403 {
+				t.Errorf("GET /%s: %+v %v, want 403", name, a, err)
+			}
+			if err := os.Remove(p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// HTE-38: HTTP/2 on cleartext with prior knowledge (h2c).
+		var protos http.Protocols
+		protos.SetUnencryptedHTTP2(true)
+		tr := &http.Transport{
+			Proxy:     nil,
+			Protocols: &protos,
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "tcp", "127.0.0.1:80")
+			},
+		}
+		defer tr.CloseIdleConnections()
+		resp, err := (&http.Client{Transport: tr, Timeout: 10 * time.Second}).Get("http://" + appDomain + "/")
+		if err != nil {
+			t.Fatalf("h2c: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 || resp.ProtoMajor != 2 {
+			t.Errorf("h2c: status %d over HTTP/%d, want 200 over HTTP/2", resp.StatusCode, resp.ProtoMajor)
+		}
+	})
+
 	step("logs stay out of the document root", func(t *testing.T) {
 		// HTE-07, HTE-48.
 		warn := `<?php trigger_error("e2e-warning", E_USER_WARNING); echo "ok\n";` + "\n"

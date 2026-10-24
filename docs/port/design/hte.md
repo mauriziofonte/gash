@@ -41,7 +41,7 @@ and emits `LoadModule` only for modules that are not built in.
 | Global PHP overlay | `$XDG_CONFIG_HOME/gash/hte/php/<X.Y>/` | Per PHP version, a directory of `*.ini` files (`php global set` edits `global.ini` in it) that the version's FPM master reads after the system ones through `PHP_INI_SCAN_DIR` (section 4); never rendered into pools |
 | Rendered config | `$XDG_STATE_HOME/gash/hte/render/gen-<n>/` and the symlink `render/current` | Generations; `current` swaps atomically; the previous generation is kept for rollback |
 | Certificates | `$XDG_DATA_HOME/gash/hte/certs/<domain>/{cert.pem,key.pem}` | Key 0600, directory 0700 |
-| Logs | `$XDG_STATE_HOME/gash/hte/logs/` (`error.log`, `<domain>/access.log`, `<domain>/error.log`, `<domain>/php-error.log`, `php-fpm-<X.Y>.log`) | Never inside a document root |
+| Logs | `$XDG_STATE_HOME/gash/hte/logs/` (`error.log`, `<domain>/access.log`, `<domain>/error.log`, `<domain>/php-error.log`, `php-fpm-<X.Y>.log`) | Never inside a document root. Not rotated; `site remove` keeps `logs/<domain>/`, as it keeps the document root (HTE-48) |
 | Runtime | `$XDG_RUNTIME_DIR/gash-hte/`, else `/tmp/gash-hte-<uid>/` (created 0700, owner and non-symlink checked) | PID files, FPM sockets, mutexes, TLS session cache. Socket names are short (`<X.Y>-<10 hex of sha256(domain)>.sock`) to stay under the 104-byte `sun_path` limit of macOS |
 | Receipt | `$XDG_STATE_HOME/gash/hte/receipt.json`, root-owned copy `/var/lib/gash-hte/receipt-<user>.json` | Section 8 |
 | Audit log | `$XDG_STATE_HOME/gash/hte/audit.jsonl` | |
@@ -588,8 +588,8 @@ for destructive steps (else `confirmation_required`, RETRY).
 | `migrate [--apply] [--site D]... [--exclude D\|PATH]... [--keep-pool-values] [--reissue-certs] [--yes]` | Section 10. Dry-run plan by default; the plan names every excluded enabled vhost and every enabled Debian `conf-enabled/` snippet as "no longer served" (HTE-64). `--exclude` takes a domain (every vhost serving it) or an absolute vhost file path as the plan lists it (that file only, whatever its class); nothing is excluded implicitly, not even Debian's `000-default.conf`, and each enabled vhost that blocks the stop is listed with the exact `--exclude PATH` to add (HTE-31) |
 | `uninstall [--yes]` | Stop the stack, remove autostart, move all userland HTE config and state into `hte-stage-<ts>/`, restore the receipt's pre-install state (units, port setting, linger, hosts block, helper and drop-in removed, legacy vhosts re-enabled if they were) |
 | `site create --domain D --docroot P [--php X.Y] [--profile P] [--https\|--no-https] [--force-https\|--no-force-https] [--force-https-bypass\|--no-force-https-bypass] [--alias N]... [--no-www] [--no-http2] [--extra-http-port N]... [--extra-https-port N]...` | New managed site; fails on any invalid value |
-| `site modify --domain D [same flags]` | Changes the state; overlays untouched |
-| `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root |
+| `site modify --domain D [same flags]` | Changes the state; overlays untouched. `--no-https` keeps the site's certificate directory, which `--https` later reuses and `doctor` lists while the site serves HTTP only (HTE-25) |
+| `site remove --domain D --yes` | Removes state, rendered files, pool, certificate and hosts entries of exactly that site; never the document root, the site's overlay or its logs |
 | `site list`, `site show --domain D`, `site enable`, `site disable` | |
 | `php versions`, `php ini get\|set\|unset --domain D KEY [VALUE]`, `php global get\|set\|unset --version X.Y KEY [VALUE]` | |
 | `apache config path`, `apache modules list\|enable\|disable NAME` | The global overlay the user edits (generations include a copy of it). `modules list`: every module of the userland list (`base`), the extra modules of `hte.toml` (`enabled`), then the other `mod_<name>.so` files of the system module directory (`available`), each with `builtin` (compiled in, no `LoadModule`), its path, and `missing` for a base or enabled module without a file. `modules enable NAME` adds a module of the system module directory to `hte.toml` (`apache_module_missing` when the directory has no `mod_NAME.so`; a base or already enabled module changes nothing) and `disable NAME` removes an extra one (`conflicting_options` for a base module); either moves the stack to a generation that loads exactly those modules, and a failure puts `hte.toml` back |
@@ -686,7 +686,9 @@ Parsing follows what hte-cli itself read back (discovery code of 1.1.0 and
 1.1.1, `ApacheManager.php:50-143`), made strict:
 
 1. Candidates: every `*.conf` under the platform's vhost directories
-   (recursive, as hte-cli), classified by marker; a file with a marker but no
+   (recursive, as hte-cli; an entry the user cannot read, or a symlink
+   loop, is listed in the plan as unreadable and the scan goes on, HTE-28),
+   classified by marker; a file with a marker but no
    parseable `SetHandler "proxy:unix:.../php<X.Y>-fpm-<domain>.sock|..."` is
    Malformed (hte-cli 1.1.0 crashed on those, 1.1.1 skipped them).
 2. Identity: the socket's domain, cross-checked against `ServerName`

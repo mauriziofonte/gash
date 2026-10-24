@@ -549,11 +549,17 @@ func driftText(d hosts.Drift) string {
 	return strings.Join(parts, "; ")
 }
 
-// doctorCerts checks the pair of every HTTPS site.
+// doctorCerts checks the pair of every HTTPS site, and lists the
+// certificate an HTTP-only site kept: site modify --no-https leaves it in
+// place, so that --https later reuses it (LEDGER HTE-25).
 func (e *Engine) doctorCerts(ctx context.Context, v *env, sites []state.Site, r *report) {
 	cm := e.certs(v)
 	for _, s := range sites {
 		if !s.HTTPS {
+			if info, err := cm.Show(s.Domain); err == nil {
+				r.add("certificate "+s.Domain, CheckOK, "kept while the site serves HTTP only (valid until "+
+					info.NotAfter.UTC().Format("2006-01-02")+"); site modify --https reuses it", "")
+			}
 			continue
 		}
 		name := "certificate " + s.Domain

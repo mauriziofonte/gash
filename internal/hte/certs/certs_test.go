@@ -423,3 +423,47 @@ func TestCopiedPair(t *testing.T) {
 		t.Fatal("foreign temporary path accepted")
 	}
 }
+
+// TestLedger_HTE67 (doctor part): a pair copied from hte-cli (RSA 2048,
+// no basicConstraints) passes the pair check and is noted as legacy, with
+// cert renew as the way to an ECDSA one.
+func TestLedger_HTE67(t *testing.T) {
+	m := manager(t)
+	ctx := context.Background()
+	legacyDir := "../../../testdata/hte/legacy/V2/etc/apache2/certs-selfsigned/"
+	certPEM, err := os.ReadFile(legacyDir + "https.test.crt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp, err := m.Prepare("https.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyIn, err := os.Open(legacyDir + "https.test.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer keyIn.Close()
+	c := child.Cmd(m.OpenSSL, nil, "pkey", "-out", tmp)
+	c.Stdin = keyIn
+	if res, err := child.Run(ctx, runner.Exec{}, c); err != nil || !res.Success() {
+		t.Fatalf("%v %s", err, child.Output(res))
+	}
+	if err := m.Finish(ctx, "https.test", certPEM, tmp); err != nil {
+		t.Fatal(err)
+	}
+	h := m.Check(ctx, site("https.test", "www.https.test"))
+	if len(h.Problems) != 0 || h.Info == nil || !h.Info.Legacy || !strings.HasPrefix(h.Info.Algorithm, "RSA") {
+		t.Fatalf("legacy pair: %+v %+v", h, h.Info)
+	}
+	if !slices.ContainsFunc(h.Warnings, func(w string) bool { return strings.Contains(w, "gash hte cert renew") }) {
+		t.Fatalf("no cert renew note: %v", h.Warnings)
+	}
+	// A pair gash made is not legacy.
+	if err := m.Issue(ctx, site("new.test")); err != nil {
+		t.Fatal(err)
+	}
+	if h := m.Check(ctx, site("new.test")); h.Info == nil || h.Info.Legacy || len(h.Warnings) != 0 {
+		t.Fatalf("gash pair: %+v", h)
+	}
+}
