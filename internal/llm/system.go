@@ -85,11 +85,11 @@ func (m *Module) ports(c *invoke.Call) int {
 		b = append(b, `{"port":`...)
 		b = append(b, numericText(r[0])...)
 		b = append(b, `,"proto":"`...)
-		b = appendQuoteEsc(b, r[1])
+		b = appendEscaped(b, r[1])
 		b = append(b, `","state":"`...)
-		b = appendQuoteEsc(b, r[2])
+		b = appendEscaped(b, r[2])
 		b = append(b, `","address":"`...)
-		b = appendQuoteEsc(b, r[3])
+		b = appendEscaped(b, r[3])
 		b = append(b, `"}`...)
 	}
 	b = append(b, "]\n"...)
@@ -97,16 +97,14 @@ func (m *Module) ports(c *invoke.Call) int {
 	return 0
 }
 
-// appendQuoteEsc is the esc() of the llm_ports awk: backslash and double
-// quote only (LLM-06).
-func appendQuoteEsc(b []byte, s string) []byte {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' || s[i] == '"' {
-			b = append(b, '\\')
-		}
-		b = append(b, s[i])
-	}
-	return b
+// appendEscaped appends s as the inside of a JSON string, the way jq
+// writes it: every control character escaped and each invalid UTF-8
+// sequence as one U+FFFD. The 2.x awk escapers left controls (some all,
+// some all but tab, newline and CR) and invalid bytes raw, so a name with
+// one made the output invalid JSON (3.0: LEDGER LLM-06 and LLM-23 fixed).
+func appendEscaped(b []byte, s string) []byte {
+	q := contract.AppendString(nil, s, contract.EscapeJQ)
+	return append(b, q[1:len(q)-1]...)
 }
 
 var digitsRE = regexp.MustCompile(`^[0-9]+$`)
@@ -246,7 +244,7 @@ func (m *Module) procs(c *invoke.Call) int {
 				}
 				cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
 				// The port as typed (LLM-12).
-				items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeBash)+`,"port":`+port+`}`)
+				items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`,"port":`+port+`}`)
 			}
 		}
 	case name != "":
@@ -270,13 +268,13 @@ func (m *Module) procs(c *invoke.Call) int {
 			b = append(b, `{"pid":`...)
 			b = append(b, field(f, 2)...)
 			b = append(b, `,"user":"`...)
-			b = appendQuoteEsc(b, field(f, 1))
+			b = appendEscaped(b, field(f, 1))
 			b = append(b, `","cpu":`...)
 			b = append(b, field(f, 3)...)
 			b = append(b, `,"mem":`...)
 			b = append(b, field(f, 4)...)
 			b = append(b, `,"name":"`...)
-			b = appendQuoteEsc(b, field(f, 11))
+			b = appendEscaped(b, field(f, 11))
 			b = append(b, `"}`...)
 			items = append(items, string(b))
 		}
@@ -343,7 +341,7 @@ func (m *Module) procsByName(c *invoke.Call, name string) []string {
 			}
 		}
 		cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
-		items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeBash)+`}`)
+		items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`}`)
 	}
 	return items
 }
@@ -500,9 +498,11 @@ func (m *Module) env(c *invoke.Call) int {
 		}
 		first = false
 		b = append(b, "\n  "...)
-		b = contract.AppendString(b, n, contract.EscapeBash)
+		b = contract.AppendString(b, n, contract.EscapeJQ)
 		b = append(b, ": "...)
-		b = contract.AppendString(b, envRedact(vars[n]), contract.EscapeBash)
+		// Invalid UTF-8 is one U+FFFD per bad sequence, as on the jq
+		// paths (3.0: LEDGER LLM-23 fixed; 2.x let the bytes through).
+		b = contract.AppendString(b, envRedact(vars[n]), contract.EscapeJQ)
 	}
 	b = append(b, "\n}\n"...)
 	_, _ = c.Stdout.Write(b)

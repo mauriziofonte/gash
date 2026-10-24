@@ -154,8 +154,9 @@ func mustJSON(t *testing.T, v any) []byte {
 	return b
 }
 
-// TestLedger_LLM06_2x: tree names keep C0 controls other than tab, newline
-// and CR raw, as the awk esc() did; DEL and bytes >= 0x80 too (LLM-23).
+// TestLedger_LLM06_2x: tree names escape every C0 control and DEL as jq
+// does (2.x kept those other than tab, newline and CR raw, as the awk
+// esc() did), and replace invalid UTF-8 with U+FFFD (LLM-23).
 func TestLedger_LLM06_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
@@ -164,11 +165,13 @@ func TestLedger_LLM06_2x(t *testing.T) {
 		t.Skip("filesystem rejects non-UTF-8 names")
 	}
 	mustWrite(t, filepath.Join(d, "a\x01b\x1bc\x7fd\re\xff"), "x")
-	r := same(t, m, d, env, "llm_tree")
-	require.Contains(t, r.Stdout, `"name":"a`+"\x01b\x1bc\x7fd"+`\re`+"\xff"+`"`)
+	// 3.0: LLM-06 fixed
+	r := runGo(t, m, d, env, "llm_tree")
+	require.Contains(t, r.Stdout, `"name":"a\u0001b\u001bc\u007fd\re`+"\uFFFD"+`"`)
 }
 
-// TestLedger_LLM23_2x: llm_tree names pass invalid UTF-8 through raw.
+// TestLedger_LLM23_2x: llm_tree names replace invalid UTF-8 with U+FFFD
+// (2.x passed the bytes through raw).
 func TestLedger_LLM23_2x(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
@@ -177,8 +180,9 @@ func TestLedger_LLM23_2x(t *testing.T) {
 		t.Skip("filesystem rejects non-UTF-8 names (APFS)")
 	}
 	mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "x")
-	r := same(t, m, d, env, "llm_tree")
-	require.Contains(t, r.Stdout, "\"bad\xff\xfe\"")
+	// 3.0: LLM-23 fixed
+	r := runGo(t, m, d, env, "llm_tree")
+	require.Contains(t, r.Stdout, "\"bad\uFFFD\uFFFD\"")
 }
 
 // TestLedger_LLM29_2x: names with a tab or a newline are left out of the

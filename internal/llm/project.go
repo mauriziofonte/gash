@@ -161,7 +161,7 @@ func (m *Module) project(c *invoke.Call) int {
 	b.WriteString(",\n  \"entry_point\": \"")
 	b.WriteString(entry)
 	b.WriteString("\",\n  \"path\": ")
-	b.Write(contract.AppendString(nil, safe, contract.EscapeBash))
+	b.Write(contract.AppendString(nil, safe, contract.EscapeJQ))
 	b.WriteString("\n}\n")
 	_, _ = c.Stdout.Write(b.Bytes())
 	return 0

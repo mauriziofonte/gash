@@ -249,7 +249,7 @@ func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) 
 
 	var b []byte
 	b = append(b, `{"path":`...)
-	b = contract.AppendString(b, safe, contract.EscapeBash)
+	b = contract.AppendString(b, safe, contract.EscapeJQ)
 	b = append(b, `,"type":"directory"`...)
 	if withStats {
 		b = appendStats(b, total[""], nchild[""])
@@ -276,7 +276,7 @@ func appendStats(b []byte, size int64, count int) []byte {
 
 func emitTreeNode(b []byte, n *treeNode, depthRem int, withStats bool, total map[string]int64, nchild map[string]int) []byte {
 	b = append(b, `{"name":"`...)
-	b = appendAwkEscaped(b, n.rel[strings.LastIndexByte(n.rel, '/')+1:])
+	b = appendEscaped(b, n.rel[strings.LastIndexByte(n.rel, '/')+1:])
 	b = append(b, `","type":"`...)
 	b = append(b, n.typ...)
 	b = append(b, '"')
@@ -299,27 +299,4 @@ func emitTreeNode(b []byte, n *treeNode, depthRem int, withStats bool, total map
 		b = append(b, ']')
 	}
 	return append(b, '}')
-}
-
-// appendAwkEscaped is the esc() of the 2.x awk programs: backslash, double
-// quote, newline, carriage return and tab escaped, every other byte raw
-// (LLM-06, LLM-23).
-func appendAwkEscaped(b []byte, s string) []byte {
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; c {
-		case '\\':
-			b = append(b, '\\', '\\')
-		case '"':
-			b = append(b, '\\', '"')
-		case '\n':
-			b = append(b, '\\', 'n')
-		case '\r':
-			b = append(b, '\\', 'r')
-		case '\t':
-			b = append(b, '\\', 't')
-		default:
-			b = append(b, c)
-		}
-	}
-	return b
 }

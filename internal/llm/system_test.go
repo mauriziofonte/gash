@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -101,17 +102,18 @@ func TestLedger_LLM11_2x(t *testing.T) {
 	require.Equal(t, 1, strings.Count(r.Stdout, `"port":22,`))
 }
 
-// TestLedger_LLM06_2x_ports: llm_ports and llm_procs keep control
-// characters raw (only \ and " escaped).
+// TestLedger_LLM06_2x_ports: llm_ports and llm_procs escape control
+// characters as jq does (2.x kept them raw, only \ and " escaped).
 func TestLedger_LLM06_2x_ports(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 1 2 ? S 00:00 0:00 /bin/a"b\x1bc\n'`})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log")})
-	r := same(t, m, d, env, "llm_ports")
-	require.Contains(t, r.Stdout, `"address":"a\"b\\c`+"\x01"+`"`)
-	r = same(t, m, d, env, "llm_procs")
-	require.Equal(t, `[{"pid":7,"user":"u`+"\x01"+`ser","cpu":0.0,"mem":0.1,"name":"/bin/a\"b`+"\x1b"+`c"}]`+"\n", r.Stdout)
+	// 3.0: LLM-06 fixed
+	r := runGo(t, m, d, env, "llm_ports")
+	require.Contains(t, r.Stdout, `"address":"a\"b\\c\u0001"`)
+	r = runGo(t, m, d, env, "llm_procs")
+	require.Equal(t, `[{"pid":7,"user":"u\u0001ser","cpu":0.0,"mem":0.1,"name":"/bin/a\"b\u001bc"}]`+"\n", r.Stdout)
 }
 
 const psStub = `case "$*" in
@@ -290,13 +292,15 @@ func TestLedger_LLM02(t *testing.T) {
 	require.Equal(t, result{"{\n  \"MYURL_A\": \"mysql://user:***@host/db\",\n  \"MYURL_B\": \"see mysql://u:***@h/d\"\n}\n", "", 0}, r)
 }
 
-// TestLedger_LLM23_2x_env: llm_env values pass invalid UTF-8 through raw.
+// TestLedger_LLM23_2x_env: llm_env values replace invalid UTF-8 with
+// U+FFFD, as jq does (2.x passed the bytes through raw).
 func TestLedger_LLM23_2x_env(t *testing.T) {
 	m := New()
 	d := physTemp(t)
 	env := baseEnv(physTemp(t), map[string]string{"BADV": "a\xff\xfeb"})
 	r := runGo(t, m, d, env, "llm_env", "^BADV$")
-	require.Equal(t, "{\n  \"BADV\": \"a\xff\xfeb\"\n}\n", r.Stdout)
+	// 3.0: LLM-23 fixed
+	require.Equal(t, "{\n  \"BADV\": \"a\uFFFD\uFFFDb\"\n}\n", r.Stdout)
 }
 
 // TestLedger_LLM39: llm_env leaves out _, whatever its value (in Go mode
@@ -312,4 +316,73 @@ func TestLedger_LLM39(t *testing.T) {
 	require.Contains(t, r.Stdout, `"PWD": `)
 	require.Equal(t, result{"{\n}\n", "", 0}, runGo(t, m, d, env, "llm_env", "--filter", "^_$"))
 	require.Equal(t, result{"{\n}\n", "", 0}, same(t, m, d, env, "llm_env", "--filter", "^_$"))
+}
+
+// strictJSON fails unless out is JSON a strict parser (jq -e .) accepts:
+// valid UTF-8 and no raw control character inside a string.
+func strictJSON(t *testing.T, out string) any {
+	t.Helper()
+	require.True(t, utf8.ValidString(out), "invalid UTF-8 in %q", out)
+	require.True(t, json.Valid([]byte(out)), "invalid JSON: %q", out)
+	var v any
+	require.NoError(t, json.Unmarshal([]byte(out), &v))
+	return v
+}
+
+// TestLedger_LLM06: C0 controls and DEL in names and values are escaped on
+// every llm_* JSON path, so the output parses and the values round-trip.
+func TestLedger_LLM06(t *testing.T) {
+	m := New()
+	const hostile = "a\x01b\x1bc\x7fd"
+
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, hostile), "x")
+	r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_tree")
+	require.Equal(t, 0, r.RC)
+	tree := strictJSON(t, r.Stdout).(map[string]any)
+	require.Equal(t, hostile, tree["children"].([]any)[0].(map[string]any)["name"])
+
+	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 1 2 ? S 00:00 0:00 /bin/a"b\x1bc\x7f\n'`})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log"), "HOSTILE_V": hostile})
+	r = runGo(t, m, d, env, "llm_ports")
+	require.Contains(t, strictJSON(t, r.Stdout), map[string]any{"proto": "tcp", "address": "a\"b\\c\x01", "port": float64(8080), "state": "LISTEN"})
+	r = runGo(t, m, d, env, "llm_procs")
+	procs := strictJSON(t, r.Stdout).([]any)
+	require.Equal(t, "u\x01ser", procs[0].(map[string]any)["user"])
+	require.Equal(t, "/bin/a\"b\x1bc\x7f", procs[0].(map[string]any)["name"])
+
+	r = runGo(t, m, d, env, "llm_env", "^HOSTILE_V$")
+	require.Equal(t, map[string]any{"HOSTILE_V": hostile}, strictJSON(t, r.Stdout))
+}
+
+// TestLedger_LLM23: invalid UTF-8 becomes U+FFFD on every llm_* JSON path,
+// the former raw ones (llm_tree, llm_env) and the jq ones (llm_git_status)
+// alike.
+func TestLedger_LLM23(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	if rawNamesOK(t, d) {
+		mustWrite(t, filepath.Join(d, "bad\xff\xfe"), "x")
+		r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_tree")
+		tree := strictJSON(t, r.Stdout).(map[string]any)
+		require.Equal(t, "bad��", tree["children"].([]any)[0].(map[string]any)["name"])
+	}
+
+	r := runGo(t, m, d, baseEnv(physTemp(t), map[string]string{"BADV": "a\xff\xfeb"}), "llm_env", "^BADV$")
+	require.Equal(t, map[string]any{"BADV": "a��b"}, strictJSON(t, r.Stdout))
+
+	if _, err := lookPathTest("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	home := physTemp(t)
+	repo := physTemp(t)
+	git(t, repo, home, "init", "-b", "main")
+	mustWrite(t, filepath.Join(repo, "f"), "x")
+	git(t, repo, home, "add", "-A")
+	git(t, repo, home, "commit", "-m", "one")
+	git(t, repo, home, "checkout", "-b", "br\xff")
+	r = runGo(t, m, repo, baseEnv(home, nil), "llm_git_status")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	st := strictJSON(t, r.Stdout).(map[string]any)
+	require.Equal(t, "br\uFFFD", st["branch"])
 }
