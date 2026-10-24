@@ -61,6 +61,7 @@ Headless calls stay quiet unless `GASH_DEBUG=1`.
 | `~/.gash_env is accessible by other users (mode 644). Run: chmod 600 ~/.gash_env` | `chmod 600 ~/.gash_env` (any mode without group or other bits is fine) |
 | `~/.gash_env is owned by uid N, not by you` | `chown "$USER" ~/.gash_env` |
 | `Line N ...: SSH key file not found (skipping)` | Fix the path, or remove the line |
+| `Line N ...: passphrase ends with whitespace` | The spaces or tabs are part of the passphrase; remove them unless the passphrase really ends with them |
 | `Line N ...: DB URL must start with mysql://, mariadb:// or pgsql://` | Use one of those schemes (`pgsql`, not `postgres`) |
 | `Line N ...: unknown AI provider (supported: claude, gemini)` | Only `claude` and `gemini` exist |
 | `Line N ...: AI provider X has an empty token` | Add the token after `=` |

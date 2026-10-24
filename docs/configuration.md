@@ -90,7 +90,9 @@ Rules that apply to every form:
 
 * The name ends at the first `=`. For `SSH:`, `DB:`, `AI:` and `HOST:`
   entries everything after it is the value, taken literally (spaces and `#`
-  included), so a password may contain `#`.
+  included), so a password may contain `#`. Whitespace at the start of a
+  line and at the end of a `DB:`, `AI:` or `HOST:` value is dropped; an
+  `SSH:` passphrase keeps it.
 * `GASH_*` settings accept an inline comment: `GASH_BANNER=0  # quiet` sets
   `0`. A `#` counts as a comment only after whitespace; inside quotes it is
   part of the value. The template's lines work as they are once uncommented.
@@ -110,7 +112,11 @@ Rules that apply to every form:
 `SSH:keypath=passphrase`. A leading `~/` (or `~` alone) stands for your home
 directory; a `~user` path is skipped with a warning (write the full path). The
 key file must exist, otherwise the entry is skipped with a warning. An empty
-passphrase is allowed. In interactive shells `gash_ssh_auto_unlock` starts `ssh-agent`
+passphrase is allowed. The passphrase is everything after the `=` up to the
+end of the line (a Windows line ending excepted), trailing spaces and tabs
+included; such a line gets
+`Warning: Line N of ~/.gash_env: passphrase ends with whitespace`, so an
+accidental space is visible. In interactive shells `gash_ssh_auto_unlock` starts `ssh-agent`
 when none is running and adds each key through `expect` (required), once per
 session: it exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it.
 

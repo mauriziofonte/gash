@@ -13,7 +13,8 @@
 # SSH Keys
 # ============================================
 # Format: SSH:keypath=passphrase
-# The key file must exist, otherwise the entry is skipped.
+# The key file must exist, otherwise the entry is skipped. The passphrase is
+# the rest of the line, trailing spaces included (a warning names such a line).
 #
 # Examples:
 # SSH:~/.ssh/id_ed25519=my-passphrase

@@ -115,14 +115,35 @@ func TestLoadSSHMissingKey(t *testing.T) {
 	}
 }
 
-// LEDGER SYS-44: the whole line is trimmed before SSH: is split, so a
-// passphrase loses its trailing whitespace (2.x kept).
-func TestLedger_SYS44_2x(t *testing.T) {
+// LEDGER SYS-44: an SSH: passphrase is the value verbatim but for a final
+// CR: trailing whitespace is kept, with one "passphrase ends with
+// whitespace" warning for the line (3.0: SYS-44 fixed; 2.x trimmed the
+// whole line, so "pass  \t" became "pass"). The left side and the other
+// entries are trimmed as before.
+func TestLedger_SYS44(t *testing.T) {
 	key := write(t, "k", "", 0o600)
-	f := load(t, "SSH:"+key+"=pass  \t\n", "/h")
-	if len(f.SSHKeys) != 1 || f.SSHKeys[0].Value != "pass" {
-		t.Errorf("got %+v", f.SSHKeys)
-	}
+	f := load(t, "  SSH:"+key+"=pass  \t\r\nSSH:"+key+"2=x\n", "/h")
+	require.Len(t, f.SSHKeys, 1)
+	require.Equal(t, "pass  \t", f.SSHKeys[0].Value)
+	require.Equal(t, key, f.SSHKeys[0].Name)
+	ws := texts(f.Warnings)
+	require.Len(t, ws, 2, "%q", ws)
+	require.True(t, strings.HasSuffix(ws[0], "Line 1 of "+f.Shown+": passphrase ends with whitespace"), ws[0])
+	require.Contains(t, ws[1], "SSH key file not found")
+
+	f = load(t, "SSH:"+key+"=trail   \n", "/h")
+	require.Equal(t, "trail   ", f.SSHKeys[0].Value)
+	require.Len(t, f.Warnings, 1)
+
+	// No warning without trailing whitespace, and an empty passphrase stays
+	// allowed; a DB: value is still trimmed.
+	f = load(t, "SSH:"+key+"=pass\nDB:x=mysql://u:p@h/d   \n", "/h")
+	require.Empty(t, f.Warnings)
+	require.Equal(t, "pass", f.SSHKeys[0].Value)
+	require.Equal(t, "mysql://u:p@h/d", f.DB[0].Value)
+	f = load(t, "SSH:"+key+"=\n", "/h")
+	require.Empty(t, f.Warnings)
+	require.Equal(t, "", f.SSHKeys[0].Value)
 }
 
 // config_spec.sh:258, :287, :315, :345, :430.

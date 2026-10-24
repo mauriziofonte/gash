@@ -140,6 +140,9 @@ func (f *File) parseLine(lineno int, raw, home string) {
 	line := strings.TrimSuffix(raw, "\n")
 	line = strings.ReplaceAll(line, "\x00", "")
 	line = strings.TrimSuffix(line, "\r")
+	// full keeps the right side: an SSH: passphrase is the value verbatim
+	// (LEDGER SYS-44); every other entry is read trimmed, as 2.x did.
+	full := trimLeftSpace(line)
 	line = trimSpace(line)
 	if line == "" || line[0] == '#' {
 		return
@@ -176,7 +179,10 @@ func (f *File) parseLine(lineno int, raw, home string) {
 
 	switch prefix {
 	case "SSH":
-		// SSH:keypath=passphrase (an empty passphrase is allowed).
+		// SSH:keypath=passphrase (an empty passphrase is allowed). The
+		// passphrase keeps its trailing whitespace, with a warning so an
+		// accidental space is visible (3.0: SYS-44 fixed; 2.x dropped it).
+		value = full[len(prefix)+1+len(key)+1:]
 		key, ok := ExpandTilde(key, home)
 		if !ok {
 			f.warnLine(lineno, "SSH key path starts with ~user; write the full path (skipping)")
@@ -185,6 +191,9 @@ func (f *File) parseLine(lineno int, raw, home string) {
 		if fi, err := os.Stat(key); err != nil || !fi.Mode().IsRegular() {
 			f.warnLine(lineno, "SSH key file not found (skipping)")
 			return
+		}
+		if value != trimRightSpace(value) {
+			f.warnLine(lineno, "passphrase ends with whitespace")
 		}
 		f.SSHKeys = f.add(f.SSHKeys, "SSH", entry(key, value, lineno))
 	case "DB":
