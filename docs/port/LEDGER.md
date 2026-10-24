@@ -778,7 +778,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A runs `pgrep -ix NAME` exactly as 2.x and keeps the headless refusal and the prompt. Only the binary's own PID (a process 2.x did not have) is removed from the list. |
 | Fix recipe (3.0) | `internal/system` `processKill`: escape every ERE metacharacter of NAME (`\ . [ ] ( ) * + ? { } \| ^ $`) and run `pgrep -ix -- ESCAPED`; when NAME is longer than 15 bytes, run `pgrep -ix -- ESCAPED15` on its first 15 bytes and keep only PIDs whose `/proc/PID/cmdline` argv[0] basename equals NAME ignoring case. No new error code: no match keeps `Error: No process found with exact name 'NAME'. Use process_find (pf) to inspect candidates.` rc 1. Help NOTES gain "NAME is a name, not a pattern"; regenerate `docs/reference/system.md`. |
 | Proving test | `TestLedger_SYS01` in `internal/system` (fake runner: `.*` yields argv `pgrep -ix -- \.\*`; a 19-byte NAME is matched through a cmdline fixture) and `testdata/script/ledger_sys01.txtar` (headless `process_kill '.*'` prints the not-found error, rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 44a54b7 |
 
 <a id="sys-02"></a>
 #### SYS-02 · process_kill and port_kill report a process they may not signal as "terminated"
@@ -796,7 +796,7 @@ Critical and high items:
 | rc.A behavior | Reproduced with kill(2): EPERM from the TERM or the 0-signal probe is treated as "terminated", rc 0. |
 | Fix recipe (3.0) | `internal/system` shared `terminate(pids)`: on EPERM print `Error: Process P: permission denied.` and continue; return 1 when any PID was refused. ESRCH keeps meaning terminated. Help NOTES of both functions: "Returns 1 when a process could not be signalled". |
 | Proving test | `TestLedger_SYS02` in `internal/system` (fake kill returning EPERM → message and rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ed9ec21 |
 
 <a id="sys-03"></a>
 #### SYS-03 · port_kill also targets UDP clients whose remote port is PORT
@@ -814,7 +814,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A runs the same two lsof queries and merges them with `sort -un` semantics. |
 | Fix recipe (3.0) | `internal/system` `portKill`: keep the TCP query; for UDP run `lsof -nP -iUDP:PORT -F pn` and keep only PIDs whose name field has no `->` (unconnected) and whose local port is PORT. Help NOTES unchanged (they become true). |
 | Proving test | `TestLedger_SYS03` in `internal/system` (lsof `-F` fixture with a `127.0.0.1:40000->127.0.0.1:18053` socket → not targeted) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 6d329e0 |
 
 <a id="sys-04"></a>
 #### SYS-04 · process_find returns 0 when nothing matches and matches the whole ps line
@@ -832,7 +832,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `ps aux` filtered as `grep -i NAME \| grep -v grep` (dialect: SYS-38), table of `$2 $1 $3 $11`, rc 0 on no match. 2.x also listed its own pipeline subshells (forks whose command line contained NAME); they do not exist in rc.A, and the binary drops its own row. |
 | Fix recipe (3.0) | `internal/system` `processFind`: match NAME (case-insensitive, literal) against the COMMAND field only (`ps -eo pid,user,pcpu,args`), never the header; exclude only the gash process; no match returns 1 after the same error line. |
 | Proving test | `TestLedger_SYS04` in `internal/system` (ps fixture: header and a `grep`-named process; no-match rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 3750b94 |
 
 <a id="sys-05"></a>
 #### SYS-05 · hgrep -E with an invalid regex reports success
@@ -850,7 +850,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: empty result (`[]`, `0` or nothing) and rc 0. The awk diagnostic itself cannot be kept (its text depended on the awk, SYS-32): rc.A prints one stderr line `Error: Invalid regex: PATTERN` in its place. |
 | Fix recipe (3.0) | `internal/system` `hgrep`: compile the pattern before reading the file; on failure print `Error: Invalid regex: PATTERN` and return 1 (all output modes). Help OPTIONS for `-E`: "an invalid regex is an error". |
 | Proving test | `TestLedger_SYS05` in `internal/system` and `testdata/script/ledger_sys05.txtar` (`hgrep -E '(' -j` → rc 1, empty stdout) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 105f468 |
 
 <a id="sys-06"></a>
 #### SYS-06 · hgrep --json emits invalid JSON for control characters; CRLF history entries are lost
@@ -868,7 +868,7 @@ Critical and high items:
 | rc.A behavior | Reproduced byte for byte: the contract encoder writes the 2.x `jesc` escaping (raw control bytes), and CRLF records are skipped. |
 | Fix recipe (3.0) | `internal/system` `hgrep`: encode with the jq-compatible encoder of `internal/contract` (`\u001b`, `\r`, other controls as `\u00xx`); strip one trailing `\r` from both the `#epoch` line and the command line before matching. |
 | Proving test | `TestLedger_SYS06` in `internal/system` (ESC and CR commands → output parses and round-trips; CRLF file yields its records) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 105f468 |
 
 <a id="sys-07"></a>
 #### SYS-07 · hgrep cannot search a pattern that starts with `-`; `-h` is help only as the first word
@@ -886,7 +886,7 @@ Critical and high items:
 | rc.A behavior | Reproduced by the 2.x grammar of `internal/cli/args` (no `--` terminator, help only as `$1`). |
 | Fix recipe (3.0) | `internal/cli/args` hgrep grammar: `--` ends options (next word is PATTERN even if it starts with `-`); `-h`/`--help` anywhere prints help. Help OPTIONS gain `--  end of options`. |
 | Proving test | `TestLedger_SYS07` in `internal/cli/args` (vectors `-- --force` → pattern `--force`; `git -h` → help) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 105f468 |
 
 <a id="sys-08"></a>
 #### SYS-08 · history_grep passes extra words to grep as FILE operands
@@ -904,7 +904,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: with more than one word the binary greps the named files (relative to the caller's cwd, grep's `name:` prefix with two or more files, GNU grep's missing-file message), ignoring the piped history; rc 0. |
 | Fix recipe (3.0) | `internal/system` `historyGrep`: join all words with single spaces into one pattern and always read the piped history. Help USAGE becomes `history_grep PATTERN...` with the note "words are joined with spaces". |
 | Proving test | `TestLedger_SYS08` in `internal/system` (words `git push` match the history entry `git push origin`, a file named `push` is never opened) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4734075 |
 
 <a id="sys-09"></a>
 #### SYS-09 · history_grep duplicates text in column 3; HISTTIMEFORMAT breaks columns and dedup; `hg` self-matches
@@ -922,7 +922,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the binary applies the same two awk programs (field rebuild with single spaces, first-seen dedup on the rebuilt line, `NR`, `$1" "$2`, `index`-based remainder) to the text the shim pipes from `history`. |
 | Fix recipe (3.0) | `internal/system` `historyGrep`: the shim pipes `HISTTIMEFORMAT= history` so no timestamp prefix reaches the binary; parse each line as `NUM CMD`; dedup on CMD; column 2 = first two words, column 3 = the rest by position; exclude lines whose first word is `history_grep` or `hg`. |
 | Proving test | `TestLedger_SYS09` in `internal/system` (`git push`, `cp a a`, `ls ls ls`, two timestamped `git push origin` → one row each, exact columns) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: partly done 4734075 (binary); history_grep stub HISTTIMEFORMAT pending in core |
 
 <a id="sys-10"></a>
 #### SYS-10 · Extra positional arguments are silently accepted
@@ -940,7 +940,7 @@ Critical and high items:
 | rc.A behavior | Reproduced by the per-function 2.x grammars (last or first positional wins as in 2.x). |
 | Fix recipe (3.0) | `internal/cli/args`: these grammars accept exactly one positional; a second one prints `Error: Unexpected argument: X` (the human form of the llm family's `unexpected_argument`) and returns 1. |
 | Proving test | `TestLedger_SYS10` in `internal/cli/args` (one vector per function: two positionals → error, rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: partly done fb74a23 (binary); mkdir_cd stub pending in core |
 
 <a id="sys-11"></a>
 #### SYS-11 · mkdir_cd follows CDPATH and passes option-like names to mkdir and cd
@@ -958,7 +958,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the generated shim keeps `mkdir -p "$dir" && cd "$dir" \|\| return 1` verbatim in the caller's shell. |
 | Fix recipe (3.0) | `internal/compatgen` mkdir_cd shim: `mkdir -p -- "$dir" && CDPATH= cd -- "$dir"`, with `./-` substituted for a literal `-`; no stdout. |
 | Proving test | `TestLedger_SYS11` in `internal/compatgen` plus `testdata/script/ledger_sys11.txtar` (CDPATH set → PWD is `./foo`, stdout empty; `mkdir_cd -p` creates `./-p`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: pending in core (compat/stubs.tmpl mkdir_cd) |
 
 <a id="sys-12"></a>
 #### SYS-12 · sudo_last returns 0 when declined and asks even with no previous command
@@ -976,7 +976,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the shim reads `fc -ln -1`, the binary warns and asks, decline returns 0. |
 | Fix recipe (3.0) | `internal/system` `sudoLast` (and its shim): empty recalled command → `Error: No previous command in history.` rc 1 before any warning; decline → `Info: Aborted.` rc 1. Help NOTES: "Declining returns 1". |
 | Proving test | `TestLedger_SYS12` in `internal/system` and `testdata/script/ledger_sys12.txtar` (headless `plz` → rc 1) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 2661b44 |
 
 <a id="sys-13"></a>
 #### SYS-13 · ip_public prints whatever the endpoint returns, with no timeout
@@ -994,7 +994,7 @@ Critical and high items:
 | rc.A behavior | Reproduced on the wget path (SYS-36): a 2xx body, trailing newlines stripped as `$(...)` did, is printed unvalidated with rc 0; no client timeout (Ctrl-C cancels). |
 | Fix recipe (3.0) | `internal/system` `ipPublic`: 10 s timeout; accept only a body that `net/netip.ParseAddr` parses after trimming whitespace, else `Error: Failed to retrieve public IP address.` rc 1. Add `--raw` (address only) and change the help and docs example to `MY_IP=$(myip --raw)`. |
 | Proving test | `TestLedger_SYS13` in `internal/system` (local HTTPS fake: HTML body → rc 1; slow server → timeout error; `--raw` prints the bare address) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 168324c |
 
 <a id="sys-14"></a>
 #### SYS-14 · disk_usage fails entirely when df reports one unreadable mount
@@ -1012,7 +1012,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A runs `df -PTk`, discards its stdout on a non-zero exit, falls back to `df -Pk` the same way, then fails with the 2.x message. |
 | Fix recipe (3.0) | `internal/system` `diskUsage`: keep df's stdout whatever its exit status; treat only an empty stdout (or one without data rows) as failure; fall back to `-Pk` only when `-PTk` printed nothing. |
 | Proving test | `TestLedger_SYS14` in `internal/system` (fake df: one ext4 row, exit 1 → row shown, rc 0) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done ef16f49 |
 
 <a id="sys-15"></a>
 #### SYS-15 · sysinfo asks for the sudo password for every section, even those that never use sudo
@@ -1030,7 +1030,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A calls the same sudo sequence (`sudo -n true`, then `sudo -v` on a TTY, keep-alive) before every section. |
 | Fix recipe (3.0) | `internal/sysinfo`: each section declares `NeedsSudo` (identity, storage, services, auth, security, system; `all` when any does); acquire sudo only for those. |
 | Proving test | `TestLedger_SYS15` in `internal/sysinfo` (fake runner on a fake TTY: `overview` and `network` issue no sudo call, `auth` issues `sudo -n true`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a80886c |
 
 <a id="sys-16"></a>
 #### SYS-16 · sysinfo prints `none` twice for Virtualization on bare metal
@@ -1048,7 +1048,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: stdout of the tool plus `none` on a non-zero exit, joined by a newline, as the kv value. |
 | Fix recipe (3.0) | `internal/sysinfo` identity: value = trimmed stdout of `systemd-detect-virt`, `none` only when that is empty. |
 | Proving test | `TestLedger_SYS16` in `internal/sysinfo` (fake tool printing `none`, exit 1 → exactly `Virtualization=none`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 835332a |
 
 <a id="sys-17"></a>
 #### SYS-17 · sysinfo shows a stale sub-header above unrelated lines
@@ -1066,7 +1066,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the in-memory header state follows the 2.x rule (a pending sub-header is flushed by the next kv, item or raw line, whatever block it comes from). |
 | Fix recipe (3.0) | `internal/sysinfo`: a block opens its sub-header and closes it at the block end (a pending header is dropped, never inherited); the /etc/ssl/private listing gets its own sub-header `SSL private keys`. |
 | Proving test | `TestLedger_SYS17` in `internal/sysinfo` (sysroot with `/etc/docker` and `/etc/containerd` only → no `Docker` heading, `containerd=present` under `Containers`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done c22cd6e |
 
 <a id="sys-18"></a>
 #### SYS-18 · sysinfo identity misreads quoted ID and unquoted VERSION_ID in /etc/os-release
@@ -1084,7 +1084,7 @@ Critical and high items:
 | rc.A behavior | Reproduced on the GNU grep `-P` path: the same three expressions with Go regexp (`\w` ASCII as in PCRE without UCP); the no-`-P` path (all empty) is not reproduced. |
 | Fix recipe (3.0) | `internal/sysinfo` identity: use the os-release parser of `internal/platform` (KEY=VALUE, optional single or double quotes, backslash escapes per os-release(5)) for ID, PRETTY_NAME and VERSION_ID. |
 | Proving test | `TestLedger_SYS18` in `internal/sysinfo` (table of Debian, Ubuntu, RHEL, Fedora, openSUSE, Alpine os-release fixtures) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4b4b9a8 |
 
 <a id="sys-19"></a>
 #### SYS-19 · sysinfo expands globs for sudo commands as the unprivileged user
@@ -1102,7 +1102,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A expands the patterns as the invoking user with default Bash rules (an unmatched pattern stays literal) and passes the words to `sudo ls`. |
 | Fix recipe (3.0) | `internal/sysinfo` system section: list the directory as root (`sudo find /etc/ssl/private -maxdepth 1 -name '*.pem' -o -name '*.key' -o -name '*.crt'`), sort, cap at 10. |
 | Proving test | `TestLedger_SYS19` in `internal/sysinfo` (fake runner: one root-side listing call, its names printed) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 835332a |
 
 <a id="sys-20"></a>
 #### SYS-20 · sysinfo silently keeps the last of several sections; `--help` after another word is an error
@@ -1120,7 +1120,7 @@ Critical and high items:
 | rc.A behavior | Reproduced by the 2.x sysinfo grammar in `internal/cli/args`. |
 | Fix recipe (3.0) | `internal/cli/args` sysinfo grammar: a second section prints `Error: Only one section allowed: X` + the existing `Info: Sections: ...` line, rc 1; `-h`/`--help` anywhere prints help. |
 | Proving test | `TestLedger_SYS20` in `internal/cli/args` (vectors: two sections → error; `--llm --help` → help, rc 0) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done b0c62c3 |
 
 <a id="sys-21"></a>
 #### SYS-21 · gash_ssh_auto_unlock does not recover from a stale SSH_AUTH_SOCK
@@ -1138,7 +1138,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A matches the same text in `ssh-add -l` output and ignores its exit status. |
 | Fix recipe (3.0) | `internal/ssh` `autoUnlock`: treat `ssh-add -l` exit status 2 (any message) as "no agent" and run the agent search; keep the 2.x error line when that fails. |
 | Proving test | `TestLedger_SYS21` in `internal/ssh` (fake runner: `ssh-add -l` exit 2 with the refused text → agent start attempted) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done e541cf8 |
 
 <a id="sys-22"></a>
 #### SYS-22 · The agent search chmods an existing directory to 700; the expect hint goes to stdout
@@ -1156,7 +1156,7 @@ Critical and high items:
 | rc.A behavior | chmod reproduced (`os.MkdirAll` then `os.Chmod(dir, 0700)`, errors ignored). The stdout hint is unreachable in rc.A, which needs no expect (SYS-37). |
 | Fix recipe (3.0) | `internal/ssh` agent search: `chmod 700` only a directory it created itself; an existing directory with group or other write access is refused for the socket (fallback `~/.ssh`). If any install hint remains, print it on stderr. |
 | Proving test | `TestLedger_SYS22` in `internal/ssh` (existing 0755 runtime dir keeps its mode) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done e541cf8 |
 
 <a id="sys-23"></a>
 #### SYS-23 · chrome_headless_update loses the installed version under a symlinked or relative GASH_CHROME_ROOT
@@ -1174,7 +1174,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A resolves only the link (readlink -f semantics) and strips the literal `ROOT/` prefix. |
 | Fix recipe (3.0) | `internal/dev` `chromeHeadlessUpdate`: resolve ROOT with `filepath.EvalSymlinks(filepath.Abs(ROOT))` (unresolved when it does not exist yet) before the prefix test and the version listing. |
 | Proving test | `TestLedger_SYS23` in `internal/dev` (fixture tree with a symlinked root → `Installed: 140.0.7339.16`, `Kept for rollback`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 38ea0ec |
 
 <a id="sys-24"></a>
 #### SYS-24 · chrome_headless_update: version check is a substring, a pre-existing target is linked unverified
@@ -1192,7 +1192,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: substring test and the "target exists" short cut are kept. |
 | Fix recipe (3.0) | `internal/dev`: parse `Chromium X.Y.Z.W` / `Google Chrome for Testing X.Y.Z.W` from `--version` and compare V exactly; when the target exists, run its `--version` with the same exact check and replace it with the verified tree when it fails (`Info: Replacing an unverified copy of V.`). |
 | Proving test | `TestLedger_SYS24` in `internal/dev` (pre-seeded bogus executable is replaced; `--version` printing `V-extra` is refused) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 38ea0ec |
 
 <a id="sys-25"></a>
 #### SYS-25 · services_stop, wsl_compact and chrome_headless_update call sudo without -n in unattended runs
@@ -1210,7 +1210,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the same sudo argv, inheriting the caller's terminal. |
 | Fix recipe (3.0) | `internal/runner` sudo helper: headless or no `/dev/tty` → `sudo -n ...`; on its "a password is required" failure print `Error: sudo needs a password: run interactively or configure NOPASSWD.` rc 1. `internal/dev`: skip sudo when ROOT and `dirname LINK` are writable. |
 | Proving test | `TestLedger_SYS25` in `internal/runner` and `internal/dev` (headless → argv starts `sudo -n`; writable root → no sudo) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 38ea0ec, 7607509 |
 
 <a id="sys-26"></a>
 #### SYS-26 · sysinfo completion does not offer `overview`
@@ -1228,7 +1228,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: the generated `bash_completion` carries the 2.x word list. |
 | Fix recipe (3.0) | `internal/registry` sysinfo entry: one section list feeding parser, help and completion; `internal/compatgen` emits `overview identity storage services auth network security webstack mail infra system all --llm --no-color`. |
 | Proving test | `TestLedger_SYS26` in `internal/compatgen` (completion words equal the registry section list plus flags) and completion_spec.sh case `sysinfo ov` → `overview` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done c89d025 |
 
 <a id="sys-27"></a>
 #### SYS-27 · No completion for the flags of hgrep, port_kill, process_kill, services_stop, sudo_last and the wsl stop functions
@@ -1246,7 +1246,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: rc.A generates the 2.x completion cases only. |
 | Fix recipe (3.0) | `internal/compatgen`: emit flag completion for every function from its registry grammar (`-y --yes -f --force` for the kill functions, `-y --yes --dry-run` for services_stop, the eleven hgrep options). |
 | Proving test | `TestLedger_SYS27` in `internal/compatgen` (each function's completion list equals its grammar's flags) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done c89d025 |
 
 <a id="sys-50"></a>
 #### SYS-50 · deep_services WireGuard redaction misses PrivateKey without spaces and every PresharedKey
@@ -1264,7 +1264,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/sysinfo/deep.go:80` compiles `PrivateKey = .*` and applies it at :350-357 only to lines matching that exact prefix, so `PrivateKey=nospace`, an indented key and every `PresharedKey` line pass through, as the `deep_test` fixtures confirm. |
 | Fix recipe (3.0) | `internal/sysinfo` WireGuard redaction: match `^[[:space:]]*(PrivateKey\|PresharedKey)[[:space:]]*=` case-insensitively and replace the value with `[REDACTED]`, so both key kinds and all spacing variants are masked. Docs: the sysinfo privacy note lists PresharedKey. |
 | Proving test | `TestLedger_SYS50_fix` in `internal/sysinfo` (fixture with `PrivateKey=`, `PrivateKey = `, indented and `PresharedKey = ` lines: every value `[REDACTED]`); `TestLedger_SYS50_2x` proves the rc.A reproduction |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d81ba18 |
 
 <a id="sys-51"></a>
 #### SYS-51 · deep_performance I/O-scheduler line reports the queue directory, not the block device
@@ -1282,7 +1282,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/sysinfo/deep.go:778-784` prints the literal `"queue: "` prefix (the source comment records that `$(dirname … \| xargs basename)` is the queue directory's name, never the device's). |
 | Fix recipe (3.0) | `internal/sysinfo` I/O-scheduler: take the device name from the component two levels up (`/sys/block/<dev>/queue/scheduler` → `<dev>`) and print `<dev>: <scheduler>`. |
 | Proving test | `TestLedger_SYS51_fix` in `internal/sysinfo` (`sda`/`vda` fixtures → `sda:`/`vda:`); `TestLedger_SYS51_2x` proves the `queue:` reproduction |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d81ba18 |
 
 <a id="sys-52"></a>
 #### SYS-52 · deep collectors glue the next section header onto a file with no final newline
@@ -1300,7 +1300,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: `internal/sysinfo/text.go:247` `headN` keeps the last line as it is when the input ends without a newline, and `deep.go:72` `raw` writes those bytes verbatim (e.g. `deep.go:501`), so the following `echo` header glues on, byte for byte as 2.x. |
 | Fix recipe (3.0) | `internal/sysinfo` deep output: after a `raw`/`headN` chunk that does not end in `\n`, emit a newline before the next header (equivalently, normalise each collected chunk to end with one newline). |
 | Proving test | `TestLedger_SYS52_fix` in `internal/sysinfo` (a no-final-newline fixture: the next `--- ` header starts on its own line); `TestLedger_SYS52_2x` proves the glued reproduction |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d81ba18 |
 
 ### docker and compose
 
@@ -2102,7 +2102,7 @@ Critical and high items:
 | rc.A behavior | reproduced: same entity regexes, same reads with the same rights (sudo only for `journalctl`), sent under the single initial consent. |
 | Fix recipe (3.0) | `internal/ai/sysinfo.go` `questionContext`: for every extracted path, clean it lexically, refuse `..` components, resolve symlinks, and apply `internal/pathguard` exactly as the `llm_*` file readers do (forbidden list `/proc /sys /dev /boot /root /etc/shadow /etc/gshadow /etc/passwd /etc/sudoers /etc/sudoers.d` and root's home, secret-file patterns and directories, case-insensitive base names, on both the lexical and the resolved path); a refused path contributes only `=== FILE: <path> === (skipped: protected path)`, never content; directory listings omit entries that match the secret patterns. Then, unless `GASH_AI_CONFIRM=0`, ask per `?` request through `__ai_confirm_send` with kind `data`, WHAT = `question context (<item list: files, directories, units, ports>)`, so auto mode asks too; no terminal → the existing `Error: Not sending ... no terminal to confirm on. Set GASH_AI_CONFIRM=0 in ~/.gash_env to allow it`, back to the menu; refusal → back to the menu, nothing sent. Docs: `docs/security.md` AI section and the ai_sysinfo help (SMART QUESTIONS, PRIVACY) state the path rules and the per-question confirmation. |
 | Proving test | `TestLedger_AI01_fix` in `internal/ai` (sysroot fixture: questions naming `/etc/shadow`, `/root/x`, `id_rsa.bak`, a symlink to `/etc/shadow` collect no content; answering `n` on the PTY sends no request: the fake HTTPS server sees only the initial analysis) and `testdata/script/ai_sysinfo_question_guard.txtar`; `TestLedger_AI01_2x` proves the rc.A reproduction |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 1e8a8f0 |
 
 <a id="ai-02"></a>
 #### AI-02 · `ai_query claude` sends the word "claude" as the question
@@ -2120,7 +2120,7 @@ Critical and high items:
 | rc.A behavior | reproduced. |
 | Fix recipe (3.0) | `internal/ai/query.go` argument grammar: when the only argument is `claude` or `gemini`, take it as the provider and leave the query empty → `Error: No query provided` rc 1 before any request, also with piped input (the usage requires a question). Docs: ai_query usage unchanged. |
 | Proving test | `TestLedger_AI02_fix` in `internal/cli/args` and `testdata/script/ai_query_provider_only.txtar` (fake server request count 0, stderr `Error: No query provided`, rc 1; `ai_query claude hi` unchanged) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 8049ea1 |
 
 <a id="ai-03"></a>
 #### AI-03 · ai_ask asks one question per call; a typed `exit` is sent as a question
@@ -2138,7 +2138,7 @@ Critical and high items:
 | rc.A behavior | reproduced (one question per call; `exit` is a question). |
 | Fix recipe (3.0) | Recommended (keeps the one-shot contract): at the prompt, an exact `exit`, `quit` or `q` (trimmed, any case) returns rc 1 with no request and no message, and the help NOTES become "One question per call; Enter on an empty line aborts, exit/quit cancel". Alternative: a real loop until exit/quit/EOF (then the help stays). |
 | Proving test | `TestLedger_AI03_fix` (PTY: `exit` → rc 1, no request) in `internal/ai` |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fed551 |
 
 <a id="ai-04"></a>
 #### AI-04 · ai_ask without a terminal sends stdin for auto-analysis without asking
@@ -2156,7 +2156,7 @@ Critical and high items:
 | rc.A behavior | reproduced: stdin taken as piped content, empty question, auto-analysis sent without confirmation, same rc. The Bash redirection error line is a forced divergence (AI-20). |
 | Fix recipe (3.0) | `internal/ai/ask.go`: before reading, test that `/dev/tty` can be opened and `GASH_HEADLESS` is not `1`; otherwise `Error: ai_ask needs a terminal: use ai_query "question" (stdin is read as piped input)` rc 1, nothing read, nothing sent. Docs: ai_ask NOTES. |
 | Proving test | `TestLedger_AI04_fix` in `internal/ai` (no TTY: rc 1, fake server count 0) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fed551 |
 
 <a id="ai-05"></a>
 #### AI-05 · ai_query and ai_ask block on any open non-terminal stdin
@@ -2174,7 +2174,7 @@ Critical and high items:
 | rc.A behavior | reproduced (stdin read until EOF or 4096 bytes when it is not a terminal). |
 | Fix recipe (3.0) | `internal/ai/input.go` `readPiped`: read stdin when it is a regular file, or a FIFO/socket that becomes readable (data or EOF) within 2 s (`poll(2)` on fd 0); otherwise ignore it and print `Warning: stdin is open but sent nothing within 2s: ignored (redirect </dev/null to skip the wait)`, then go on with the question alone. Same rule in ai_ask. Docs: ai_query and ai_ask NOTES ("piped input must start within 2 seconds"). |
 | Proving test | `TestLedger_AI05_fix` in `internal/ai` (socketpair/tty-less idle stdin: returns without waiting) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4fed551 |
 
 <a id="ai-06"></a>
 #### AI-06 · An unclosed PRIVATE KEY block swallows the rest of the text, the question included
@@ -2192,7 +2192,7 @@ Critical and high items:
 | rc.A behavior | reproduced (line-based awk rule, then the sed rules, on the whole user text). |
 | Fix recipe (3.0) | `internal/ai/redact.go` callers: redact the piped part and the question separately (each with the full rule set; an unclosed block still drops the rest of its own part), then compose the wrapper; the Context prefix keeps its 2.x handling. Docs: none. |
 | Proving test | `TestLedger_AI06_fix` in `internal/ai` (piped `-----BEGIN RSA PRIVATE KEY-----\nabc`, question `q1` → body contains `[REDACTED PRIVATE KEY]` and `User question: q1`, not `abc`) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 3f3b8d0 |
 
 <a id="ai-07"></a>
 #### AI-07 · Redaction misses bearer headers, Gash's own SSH: entries and password hashes
@@ -2210,7 +2210,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the awk block rule then the eight sed rules, verbatim and in that order, line based (the rail is ported unchanged). |
 | Fix recipe (3.0) | `internal/ai/redact.go`: add, after the existing rules, `(?i)\b((?:proxy-)?authorization[ \t]*:[ \t]*(?:bearer\|basic\|token)[ \t]+)[^ \t]+` → `${1}[REDACTED]`; `^(SSH:[^=]*=).*` → `${1}[REDACTED]`; `\$(?:1\|2[abxy]?\|5\|6\|7\|y\|gy)\$[^:\s]+` → `[REDACTED HASH]`; `AKIA` case stays as is (AWS keys are upper case). Docs: ai.md and security.md PRIVACY lists name the new formats and say free text ("the password is ...") is not detected. |
 | Proving test | `TestLedger_AI07_fix` in `internal/ai` (the four vectors above plus every `ai_client_spec.sh` vector unchanged) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done dff1b2c |
 
 <a id="ai-08"></a>
 #### AI-08 · The port pattern of ai_sysinfo questions takes clock times for ports
@@ -2228,7 +2228,7 @@ Critical and high items:
 | rc.A behavior | reproduced (same pattern on the lower-cased question, same `ss -tlnp` substring filter). |
 | Fix recipe (3.0) | `internal/ai/sysinfo.go` `questionContext`: accept `port[: ]+N` or `HOST:N` where HOST is an IPv4 address, `localhost`, `*` or a bracketed IPv6, with 1 <= N <= 65535; keep `ss -tlnp` rows whose local-address column ends with `:N` exactly. |
 | Proving test | `TestLedger_AI08_fix` in `internal/ai` ("at 10:30" → no port; "port 3306" and "127.0.0.1:8080" → ports; filter excludes `:3000` for N=30) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done a0dec48 |
 
 <a id="ai-09"></a>
 #### AI-09 · Saving the ai_sysinfo report: a failed write is reported as saved
@@ -2246,7 +2246,7 @@ Critical and high items:
 | rc.A behavior | reproduced: unchecked write, success line, the same Markdown bytes (blank lines dropped, no final newline), umask mode. The Bash redirection error line itself is a forced divergence (AI-20). |
 | Fix recipe (3.0) | `internal/ai/sysinfo.go` `saveReport`: build the buffer with the chunks' blank lines kept and a final newline; write it with `renameio` at mode 0600; on error print `Error: Could not save the report to <file>: <reason>` and no success line. Docs: ai_sysinfo help ("Option s exports ... (mode 0600)"). |
 | Proving test | `TestLedger_AI09_fix` in `internal/ai` (unwritable dir: error, no success line; written file ends with `\n`, keeps the blank line between sections, mode 0600) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 97372d5 |
 
 <a id="ai-10"></a>
 #### AI-10 · An analysis reply without `.sections` prints four jq errors and empty counts
@@ -2264,7 +2264,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the same four lines (jq 1.7 text, the documented tool-present path) on stderr and the same empty counts line, rc 0. |
 | Fix recipe (3.0) | `internal/ai/sysinfo.go` `formatReport`: treat a missing or non-array `sections` as empty (`0 critical  0 warnings  0 info  0 ok`) and print `Warning: The reply holds no sections.` |
 | Proving test | `TestLedger_AI10_fix` in `internal/ai` (reply without sections: no `jq:` line, zero counts, the warning) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done d3eaf94 |
 
 <a id="ai-11"></a>
 #### AI-11 · Context distro detection misses quoted IDs and Linux Mint
@@ -2282,7 +2282,7 @@ Critical and high items:
 | rc.A behavior | reproduced: same expression semantics (`\w+` right after `ID=`, first line that matches) and the same table. |
 | Fix recipe (3.0) | `internal/ai/context.go` `distro`: parse `ID=` with optional single or double quotes, value `[A-Za-z0-9._-]+`; add `linuxmint` and `almalinux` to the table; when ID is unknown, map the first known word of `ID_LIKE` (debian/ubuntu → apt, rhel/fedora/centos → dnf, arch → pacman, suse → zypper). |
 | Proving test | `TestLedger_AI11_fix` in `internal/ai` (`ID="rocky"` → rocky/dnf, `ID=linuxmint` → apt, `ID=foo` + `ID_LIKE=debian` → apt) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 8284c56 |
 
 <a id="ai-12"></a>
 #### AI-12 · GASH_AI_MODEL_GEMINI goes into the request URL unvalidated
@@ -2300,7 +2300,7 @@ Critical and high items:
 | rc.A behavior | reproduced: the value is concatenated as is; a value that makes the URL unparsable for `net/url` gets the transport fallback message of AI-15 instead of curl's exit-3 text. |
 | Fix recipe (3.0) | `internal/ai/client.go` `model`: both model settings must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, else `Error: Invalid GASH_AI_MODEL_GEMINI value (letters, digits, '.', '_' and '-' only)` rc 1, no request. Docs: configuration.md settings table. |
 | Proving test | `TestLedger_AI12_fix` in `internal/ai` (`../x` refused, request count 0; `gemini-2.5-pro` accepted) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 9bbbff9 |
 
 ### file scanners
 
@@ -4267,7 +4267,7 @@ Critical and high items:
 | rc.A behavior | The pattern reaches the matcher verbatim, since no awk's rewriting is a contract and the two disagree: fixed mode is a case-insensitive (Unicode simple folding, SYS-32) substring test, `-E` compiles `(?i)` + PATTERN with Go regexp and matches the original command; highlighting uses the same matcher. Syntax Go regexp lacks (`\y`, `\<`, `\>`, back-references) takes the invalid-regex path of SYS-05. |
 | Fix recipe (3.0) | Keep the rc.A matcher in `internal/system` `hgrep`. Help OPTIONS (3.0, with SYS-47): `-E, --regex  PATTERN is a Go regular expression (RE2 syntax), case-insensitive`; docs/troubleshooting.md drops the awk advice for hgrep. |
 | Proving test | `TestLedger_SYS28` in `internal/system` (`C:\new` matches literally; `-E 'a\.b'` does not match `axb`; `-E '\S+'` matches non-space; stderr empty) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 105f468 |
 
 <a id="sys-29"></a>
 #### SYS-29 · hgrep prints a gawk warning for fixed patterns containing regex metacharacters
@@ -4303,7 +4303,7 @@ Critical and high items:
 | rc.A behavior | The value is parsed as decimal (`08` is 8, leading zeros allowed, 0 = all) and never evaluated; a value above 2^63-1 gets `Error: Option -n requires a numeric argument` rc 1. |
 | Fix recipe (3.0) | `internal/cli/args` hgrep grammar: at most 9 digits, like the llm family's limit rule; longer → `Error: Option -n requires a numeric argument` rc 1. |
 | Proving test | `TestLedger_SYS30` in `internal/cli/args` (`08` → 8; `1234567890` → error) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 105f468 |
 
 <a id="sys-31"></a>
 #### SYS-31 · hgrep orders commands with the same timestamp by awk hash order
@@ -5969,7 +5969,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: limit applied after the sort, as `tail -n N`. |
 | Fix recipe (3.0) | Decision: (a) keep, documenting "with -r, -n keeps the oldest N"; or (b, recommended) `-n N` always means the N most recent: `internal/system` `hgrep` takes the newest N in ascending order, then reverses for `-r`. Help NOTES state the rule. |
 | Proving test | `TestLedger_SYS43` in `internal/system` (two entries, `-r -n 1` → `echo two` under option b) |
-| Status | accept: option (b): -n N is always the N most recent (operator 2026-10-24) |
+| Status | accept: done 105f468 |
 
 <a id="sys-44"></a>
 #### SYS-44 · SSH passphrases lose trailing whitespace
@@ -5987,7 +5987,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: `internal/config` trims the whole line (the config-spec vectors stay as they are). |
 | Fix recipe (3.0) | Decision: (a) keep trimming and document it in `docs/configuration.md` ("trailing spaces of a passphrase are dropped"); or (b) trim only the left side and the key part, keep the value verbatim minus a final `\r`, with a `Warning: Line N of FILE: passphrase ends with whitespace` so accidental spaces are visible. |
 | Proving test | `TestLedger_SYS44` in `internal/config` (value `trail   ` round-trips under option b; warning printed once) |
-| Status | accept: option (b): keep the value verbatim minus a final \r, warn on trailing whitespace (operator 2026-10-24) |
+| Status | accept: pending in core (internal/config SSH: parser) |
 
 <a id="sys-45"></a>
 #### SYS-45 · wsl_compact drops caches and compacts memory as root with no question and no headless gate
@@ -6005,7 +6005,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: no question, no headless gate, `0` when dmesg fails. |
 | Fix recipe (3.0) | Decision: (a) keep (it is the repair and is harmless to data); or (b, recommended) keep it unprompted on a terminal, but headless without `-y` prints `Error: wsl_compact needs root: pass -y to run it unattended.` rc 1 (new `-y`/`--yes` flag), and print `unknown (dmesg not readable)` instead of `0` when dmesg exits non-zero. |
 | Proving test | `TestLedger_SYS45` in `internal/system` (WSL sysroot, headless, no `-y` → rc 1 and no sudo call; failing dmesg → `unknown`) |
-| Status | accept: option (b): headless needs -y; dmesg failure prints unknown (operator 2026-10-24) |
+| Status | accept: done 7607509 |
 
 <a id="sys-46"></a>
 #### SYS-46 · wsl_compact's constant `sudo sh -c` script versus the runner's no-shell rule
@@ -6023,7 +6023,7 @@ Critical and high items:
 | rc.A behavior | Keeps 2.x: the identical `sudo sh -c` argv, which needs a runner exception. |
 | Fix recipe (3.0) | Decision: (a, recommended for rc.A parity) `internal/runner` gains `ConstScript`, accepted only for compile-time constant scripts declared in the registry (this one), listed in `architecture.md` 7; or (b) three calls `sudo sync`, `sudo tee /proc/sys/vm/drop_caches` (stdin `3`), `sudo tee /proc/sys/vm/compact_memory` (stdin `1`), stdout discarded, failure message unchanged; render fixture `wsl_compact compact` then sees three sudo lines. |
 | Proving test | `TestLedger_SYS46` in `internal/runner` (option a: a non-constant script is refused at build time by a vet check; option b: fake runner sees the three argv) |
-| Status | accept: option (a): runner ConstScript for registered constant scripts (operator 2026-10-24) |
+| Status | accept: done (rc.A); runner.ConstScript ScriptWSLCompact, TestLedger_SYS46 |
 
 ### docker and compose
 
@@ -6157,7 +6157,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x rule (fail closed on unknown values). |
 | Fix recipe (3.0) | Recommended: keep fail-closed and add `Warning: GASH_AI_CONFIRM=<value> is not 0, 1 or auto: asking before every request` (once per call) for other values; do not alias `off` to `0` (an unattended send must stay explicit). Docs: configuration.md settings table states the rule. |
 | Proving test | `TestLedger_AI23_fix` in `internal/ai` (`off` → asks/refuses and warns; `0`, `1`, `auto` unchanged) |
-| Status | accept: keep fail-closed, add the warning (operator 2026-10-24) |
+| Status | accept: done 2980327 |
 
 <a id="ai-24"></a>
 #### AI-24 · `-h`/`--help` is help only as the first argument of the AI functions
@@ -6175,7 +6175,7 @@ Critical and high items:
 | rc.A behavior | Keeps the 2.x rule (needs_help on `$1` only), as the architecture's grammar port requires. |
 | Fix recipe (3.0) | Recommended: also treat `-h`/`--help` as help when it is the only word after a provider (`ai_query claude --help`, `ai_ask gemini -h`) and accept it anywhere in ai_sysinfo; questions that merely contain `--help` among other words stay questions. Docs: usage NOTES. |
 | Proving test | `TestLedger_AI24_fix` in `internal/cli/args` (vectors above; `ai_query what does ls --help print` stays a question) |
-| Status | accept: as recommended: help also as the only word after a provider (operator 2026-10-24) |
+| Status | accept: done 8049ea1 |
 
 ### file scanners
 
@@ -6530,7 +6530,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A (both the `hgrep -h` heredoc and the registered `gash_help hgrep` text), corrected in 3.0. |
 | Fix recipe (3.0) | `internal/registry` hgrep entry: one help body for `-h` and `gash_help` listing all eleven options; `-r, --reverse  Newest first (default: oldest first)`; example timestamps computed from the example epochs in UTC; troubleshooting entry removed with SYS-32; regenerate `docs/reference/system.md`. |
 | Proving test | `TestLedger_SYS47` in `internal/registry` (hgrep help lists every flag of its grammar; `-h` and `gash_help` bodies equal) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 105f468 |
 
 <a id="sys-48"></a>
 #### SYS-48 · sysinfo section descriptions do not match what the sections show
@@ -6548,7 +6548,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | `internal/registry` sysinfo entry: rewrite the eleven descriptions from the collectors' sub-headers (e.g. storage `fstab, crypttab, LVM, RAID, ZFS, SMART, NFS`; network `resolv.conf, hosts, interfaces files, netplan, dhcpcd`); regenerate `docs/reference/system.md`. |
 | Proving test | `TestLedger_SYS48` in `internal/sysinfo` (each section's help description names only sub-headers that section can print) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 4c2026b |
 
 <a id="sys-49"></a>
 #### SYS-49 · ip_public's registered help and reference page omit `--no-color`
@@ -6566,7 +6566,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. |
 | Fix recipe (3.0) | `internal/registry` ip_public entry: USAGE `ip_public [--no-color]` (plus `--raw` if SYS-13 is accepted); regenerate `docs/reference/system.md`. |
 | Proving test | `TestLedger_SYS49` in `internal/registry` (every flag of each grammar appears in its USAGE or OPTIONS) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 168324c |
 
 ### docker and compose
 
@@ -6684,7 +6684,7 @@ Critical and high items:
 | rc.A behavior | Reproduced: help body unchanged in rc.A, corrected in 3.0. Prose docs rewritten for 3.x (AGENTS.md, docs/*.md other than the generated reference) may describe the real behavior, including the in-process API key. |
 | Fix recipe (3.0) | Registry help: ai_sysinfo usage `ai_sysinfo [claude\|gemini] [--raw] [--no-color]`; ai_ask short text "Ask the AI one question from the terminal", NOTES "One question per call" (plus AI-03's exit/quit rule if accepted); PRIVACY "The API key stays inside the gash process, never on a command line"; regenerate docs/reference/ai.md. |
 | Proving test | `TestRegistry_HelpGolden` (updated goldens for ai_sysinfo and ai_ask) |
-| Status | accept: operator bulk triage 2026-10-24 |
+| Status | accept: done 989eb6e |
 
 ### file scanners
 
