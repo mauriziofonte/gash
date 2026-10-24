@@ -97,11 +97,11 @@ func listOf(t *testing.T, fn, content string, env map[string]string) (string, st
 	return out, errOut
 }
 
-// LEDGER CORE-03 (reproduced in rc.A): an empty user name leaves the
-// password visible.
-func TestLedger_CORE03_2x(t *testing.T) {
+// LEDGER CORE-03: an empty user name no longer leaves the password visible
+// (3.0: CORE-03 fixed).
+func TestLedger_CORE03(t *testing.T) {
 	out, _ := listOf(t, "gash_db_list", "DB:default=mysql://:SECRETPW@h/d\nDB:u=mysql://u:p@h/d\n", nil)
-	require.Equal(t, "\n  default         mysql://:SECRETPW@h/d\n  u               mysql://u:****@h/d\n", out)
+	require.Equal(t, "\n  default         mysql://:****@h/d\n  u               mysql://u:****@h/d\n", out)
 }
 
 // LEDGER CORE-04 (reproduced in rc.A): every duplicate name is listed.

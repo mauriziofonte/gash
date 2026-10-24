@@ -131,14 +131,15 @@ func unhex(c byte) (byte, bool) {
 	return 0, false
 }
 
-// dbListMask is the gash_db_list regex, kept as 2.x wrote it: the user name
-// must be non-empty, so mysql://:PW@h/d is shown unmasked (LEDGER CORE-03,
-// reproduced in rc.A).
-var dbListMask = regexp.MustCompile(`(?s)^([^:]+://[^:]+:).+(@[^@]*)$`)
+// dbListMask is the DB URL mask: the user name may be empty, so a
+// password-only URL (mysql://:PW@h/d) is masked too (3.0: CORE-03 fixed; the
+// 2.x regex required a non-empty user name and showed that password).
+var dbListMask = regexp.MustCompile(`(?s)^([^:]+://[^:@]*:).+(@[^@]*)$`)
 
-// MaskDBURL is the URL as gash_db_list shows it: the text between the first
-// "user:" and the last "@" becomes "****" when the 2.x regex matches,
-// otherwise the URL is shown unchanged.
+// MaskDBURL is the URL as Gash shows it: when the userinfo has a password
+// (driver://USER:PASSWORD@HOST, USER possibly empty), the text between
+// "USER:" and the last "@" becomes "****"; otherwise the URL is shown
+// unchanged. Every place that shows a DB URL uses it.
 func MaskDBURL(url string) string {
 	m := dbListMask.FindStringSubmatch(url)
 	if m == nil {

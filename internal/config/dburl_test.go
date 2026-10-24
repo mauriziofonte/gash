@@ -128,18 +128,19 @@ func TestLedger_CORE12(t *testing.T) {
 	}
 }
 
-// LEDGER CORE-03, reproduced: gash_db_list masks only when the user name is
-// non-empty.
-func TestLedger_CORE03_2x(t *testing.T) {
+// LEDGER CORE-03: the password is masked whether or not the user name is
+// empty (3.0: CORE-03 fixed; 2.x showed mysql://:PW@h/d unmasked).
+func TestLedger_CORE03(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"mysql://u:p@h/d", "mysql://u:****@h/d"},
-		{"mysql://:SECRETPW@h/d", "mysql://:SECRETPW@h/d"}, // the defect
+		{"mysql://:SECRETPW@h/d", "mysql://:****@h/d"},
+		{"redis://:pw@h:6379", "redis://:****@h:6379"},
 		{"mysql://u:p@@h", "mysql://u:****@h"},
 		{"mysql://u:p@ss@host/db", "mysql://u:****@host/db"},
 		{"mysql://u@h/d", "mysql://u@h/d"},
 		{"mysql://u:@h/d", "mysql://u:@h/d"},
 		{"mysql://u@h:3306/d", "mysql://u@h:3306/d"},
-		{"mysql://u@h:3306/d@x", "mysql://u@h:****@x"},
+		{"mysql://u@h:3306/d@x", "mysql://u@h:3306/d@x"}, // no password in the userinfo
 		{"pgsql://u:p%40ss@h:5432/x", "pgsql://u:****@h:5432/x"},
 	}
 	for _, tt := range tests {
