@@ -306,11 +306,15 @@ func buildData() Data {
 	}
 
 	d.Completions = completions()
-	d.Topics = []string{"all", "help"}
+	// What `gash` accepts as its first word: all, the card topics and the
+	// binary's commands, from the registry (3.0: SHELL-03 fixed; 2.x also
+	// offered "help", an unknown topic). gash migrate is left out: it only
+	// points at the 2.x route (D-6).
+	d.Topics = []string{"all"}
 	for _, t := range registry.Topics() {
 		d.Topics = append(d.Topics, t.Name)
 	}
-	d.Topics = append(d.Topics, "init", "update", "version", "hte")
+	d.Topics = append(d.Topics, registry.Commands()...)
 
 	seenAlias := map[string]bool{}
 	for _, f := range registry.Functions() {

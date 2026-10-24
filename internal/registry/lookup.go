@@ -49,6 +49,14 @@ func Settings() []Setting { return settings }
 // Topics returns the reference card topics in card order.
 func Topics() []Topic { return topics }
 
+// commands are the public commands of the binary: `gash WORD` runs them
+// instead of a card topic.
+var commands = []string{"init", "update", "version", "hte"}
+
+// Commands returns the public commands of the binary (internal/cli selects
+// them, the generated completion offers them after the card topics).
+func Commands() []string { return slices.Clone(commands) }
+
 // CardAliases returns the reference card entries of the alias file FILE
 // (lib/aliases/FILE.sh) in file order; nil for a file no topic lists.
 func CardAliases(file string) []CardAlias { return cardAliases[file] }
