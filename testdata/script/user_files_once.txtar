@@ -23,8 +23,35 @@ exec bash --norc --noprofile -i -c 'source ~/.bashrc; echo "ll=${BASH_ALIASES[ll
 stdout '^ll=ls -l --mine$'
 stdout '^1$'
 
+# The spellings a profile uses to source it (the file then runs once, from
+# the profile); a commented line, an echo and another file do not count
+# (Gash sources it, once). BASH_REMATCH is left as it was (SHELL-10).
+exec bash --norc --noprofile -i spellings.sh
+stdout '^1 rc \. ~/\.bash_aliases$'
+stdout '^1 rc if \[ -f ~/\.bash_aliases \]; then \. ~/\.bash_aliases; fi$'
+stdout '^1 rc source "\$HOME/\.bash_aliases"$'
+stdout '^1 rc source \$\{HOME\}/\.bash_aliases$'
+stdout '^1 rc \[ -f ~/\.bash_aliases \] && \. ~/\.bash_aliases$'
+stdout '^1 gash\.sh # \. ~/\.bash_aliases$'
+stdout '^1 gash\.sh echo ~/\.bash_aliases$'
+stdout '^1 gash\.sh \. ~/\.bash_aliases_old$'
+stdout '^rematch=keep$'
+
+-- spellings.sh --
+[[ keep =~ (keep) ]]
+for l in '. ~/.bash_aliases' 'if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi' 'source "$HOME/.bash_aliases"' 'source ${HOME}/.bash_aliases' '[ -f ~/.bash_aliases ] && . ~/.bash_aliases' '# . ~/.bash_aliases' 'echo ~/.bash_aliases' '. ~/.bash_aliases_old'; do
+    printf '%s\nsource "$GASH_SH_PATH" >/dev/null 2>&1\n' "$l" >"$HOME/rc"
+    : >"$HOME/count"
+    : >"$HOME/by"
+    (
+        source "$HOME/rc" >/dev/null 2>&1
+        echo "$(wc -l <"$HOME/count") $(<"$HOME/by") $l"
+    )
+done
+echo "rematch=${BASH_REMATCH[1]}"
 -- home/.bash_aliases --
 echo sourced >>"$HOME/count"
+printf '%s' "${BASH_SOURCE[1]##*/}" >"$HOME/by"
 alias ll='ls -l --mine'
 -- skel.bashrc --
 # ~/.bashrc of a distribution

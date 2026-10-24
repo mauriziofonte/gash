@@ -1049,19 +1049,28 @@ fi
 # still win when it ran before Gash.
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 __gash_aliases_sourced=0
-__gash_re='(^|[[:space:];])(\.|source)[[:space:]]+["'"'"']?(~|\$HOME|\$\{HOME\})/\.bash_aliases(["'"'"'[:space:];]|$)'
 for ((__gash_i = 1; __gash_i < ${#BASH_SOURCE[@]}; __gash_i++)); do
     [[ -f "${BASH_SOURCE[__gash_i]}" && -r "${BASH_SOURCE[__gash_i]}" ]] || continue
     mapfile -t __gash_lines <"${BASH_SOURCE[__gash_i]}" 2>/dev/null || continue
     for __gash_line in "${__gash_lines[@]}"; do
-        [[ "$__gash_line" =~ ^[[:space:]]*# ]] && continue
-        if [[ "$__gash_line" =~ $__gash_re ]]; then
-            __gash_aliases_sourced=1
-            break 2
-        fi
+        # Glob tests only: a regex would leave BASH_REMATCH set (SHELL-10).
+        __gash_line="${__gash_line#"${__gash_line%%[![:space:]]*}"}"
+        [[ "$__gash_line" == "#"* ]] && continue
+        for __gash_cmd in ". " "source "; do
+            # The spellings a profile uses, matched as text.
+            # shellcheck disable=SC2088
+            for __gash_p in '~/.bash_aliases' '$HOME/.bash_aliases' '"$HOME/.bash_aliases"' '${HOME}/.bash_aliases' '"${HOME}/.bash_aliases"'; do
+                [[ "$__gash_line" == "$__gash_cmd$__gash_p"* || "$__gash_line" == *[[:space:]\;]"$__gash_cmd$__gash_p"* ]] || continue
+                __gash_tail="${__gash_line#*"$__gash_cmd$__gash_p"}"
+                if [[ -z "$__gash_tail" || "$__gash_tail" == [[:space:]\;]* ]]; then
+                    __gash_aliases_sourced=1
+                    break 4
+                fi
+            done
+        done
     done
 done
-unset __gash_i __gash_lines __gash_line __gash_re
+unset __gash_i __gash_lines __gash_line __gash_cmd __gash_p __gash_tail
 ((__gash_aliases_sourced)) || { [[ -f "$HOME/.bash_aliases" ]] && source "$HOME/.bash_aliases"; }
 unset __gash_aliases_sourced
 [[ -f "$HOME/.bash_local" ]] && source "$HOME/.bash_local"
