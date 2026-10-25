@@ -371,9 +371,13 @@ llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
 llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
+llm_lint() { __gash_call llm_lint "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
+llm_runtime() { __gash_call llm_runtime "$@"; }
+llm_test() { __gash_call llm_test "$@"; }
+llm_tools() { __gash_call llm_tools "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/llm.sh" "$__GASH_T1"
 
