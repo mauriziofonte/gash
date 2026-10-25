@@ -1,0 +1,42 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_ports --port N (new in 3.4, plan N4): the sockets on local port N,
+# each with the processes that hold it, from ss -p. A fake ss on PATH prints
+# a fixed table (it never signals: llm_ports only reads), so the case does
+# not depend on the host's sockets. Without --port the output keeps the 3.0
+# shape, byte for byte.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+
+exec chmod +x ssbin/ss
+
+# --- sourced shell: listeners on 8080 with their processes
+exec bash -c 'export PATH="$WORK/ssbin:$PATH"; source "$GASH_SH"; llm_ports --listen --port 8080'
+cmp stdout want-8080.json
+! stderr .
+
+# --- direct: every socket on 8080 (the established one too), ss -tunap
+exec bash -c 'export PATH="$WORK/ssbin:$PATH"; gash llm_ports --port 8080'
+stdout '"state":"ESTAB","address":"10.0.0.2","procs":\[\{"pid":4242,"name":"node"\}\]'
+
+# --- no --port: the 3.0 shape, no procs key
+exec bash -c 'export PATH="$WORK/ssbin:$PATH"; gash llm_ports --listen'
+cmp stdout want-listen.json
+
+# --- a port above 65535 is refused
+! exec bash -c 'export PATH="$WORK/ssbin:$PATH"; gash llm_ports --port 70000'
+stderr '"error":"invalid_port"'
+
+-- ssbin/ss --
+#!/usr/bin/env bash
+echo "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process"
+echo 'tcp   LISTEN 0      511    0.0.0.0:8080       0.0.0.0:*         users:(("node",pid=4242,fd=21))'
+echo 'tcp   LISTEN 0      4096   [::]:22            [::]:*            users:(("sshd",pid=700,fd=4))'
+echo 'udp   UNCONN 0      0      0.0.0.0:8080       0.0.0.0:*'
+[[ "$1" == *l* ]] || echo 'tcp   ESTAB  0      0      10.0.0.2:8080      1.2.3.4:443       users:(("node",pid=4242,fd=30))'
+-- want-8080.json --
+[{"port":8080,"proto":"tcp","state":"LISTEN","address":"0.0.0.0","procs":[{"pid":4242,"name":"node"}]},{"port":8080,"proto":"udp","state":"LISTEN","address":"0.0.0.0","procs":[]}]
+-- want-listen.json --
+[{"port":22,"proto":"tcp","state":"LISTEN","address":"[::]"},{"port":8080,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"},{"port":8080,"proto":"udp","state":"LISTEN","address":"0.0.0.0"}]

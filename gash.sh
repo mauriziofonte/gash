@@ -361,6 +361,7 @@ llm_db_tables() {
     __gash_call llm_db_tables "$@"
 }
 llm_deps() { __gash_call llm_deps "$@"; }
+llm_dns() { __gash_call llm_dns "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
 llm_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
@@ -371,9 +372,12 @@ llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
 llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
+llm_http() { __gash_call llm_http "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
+llm_tcp() { __gash_call llm_tcp "$@"; }
+llm_tls() { __gash_call llm_tls "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/llm.sh" "$__GASH_T1"
 

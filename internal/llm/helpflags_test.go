@@ -28,7 +28,7 @@ var llmOptions = map[string][]string{
 	"llm_git_diff":   {"--staged", "--cached"},
 	"llm_git_log":    {"-n", "--limit"},
 	"llm_env":        {"--filter", "-f"},
-	"llm_ports":      {"--listen", "-l"},
+	"llm_ports":      {"--listen", "-l", "--port"},
 	"llm_procs":      {"--name", "--port"},
 	"llm_project":    {},
 	"llm_deps":       {"--dev"},
@@ -40,6 +40,11 @@ var llmOptions = map[string][]string{
 	// 3.4 git.
 
 	// 3.4 network.
+	"llm_http": {"--method", "--header", "--auth-env", "--resolve", "--follow", "--status-only", "--headers",
+		"--json-path", "--grep", "--body-max", "--expect", "-k", "--insecure", "-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_dns": {"--type", "--server", "-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_tls": {"--sni", "-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_tcp": {"-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
 
 	// 3.4 processes, waiting and services.
 

@@ -51,12 +51,22 @@ func (m *Module) ports(c *invoke.Call) int {
 	if helpAnywhere(c) {
 		return 0
 	}
-	scope := "a"
-	for _, a := range c.Args {
-		if a != "--listen" && a != "-l" {
-			return fail(c, "unknown_option", a, "Use --listen or no option")
+	scope, port, byPort := "a", "", false
+	for args := c.Args; len(args) > 0; args = args[1:] {
+		switch a := args[0]; a {
+		case "--listen", "-l":
+			scope = "l"
+		case "--port": // 3.4 (plan N4): net_ports.go
+			if len(args) < 2 {
+				return fail(c, "missing_value", a, a+" needs a value")
+			}
+			port, byPort, args = args[1], true, args[1:]
+		default:
+			return fail(c, "unknown_option", a, "Use --listen, --port N or no option")
 		}
-		scope = "l"
+	}
+	if byPort {
+		return m.portsByPort(c, scope, port)
 	}
 	var rows [][4]string
 	if ss, ok := m.lookPath(c, "ss"); ok {
