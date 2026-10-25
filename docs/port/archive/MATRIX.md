@@ -1068,6 +1068,7 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_remote_run | function | pure output | new | A read-only command line on registered hosts: parallel fan-out with per-host rc/ms/out/err, or ordered steps in one ssh round trip, llm_exec rails applied before connecting (plan R1, R2) | gash llm_remote_run | internal/llm remote_run_test.go, llm_remote_run.txtar |
 
 ### Edits (E1)
 

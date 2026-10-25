@@ -199,6 +199,42 @@ value, never the network; a write failure never fails the call.
 
 ### 3.12 Remote hosts (3.4)
 
+Every remote call names a registered `HOST:alias=user@host` entry of
+`~/.gash_env` (a raw `user@host` or an unknown alias is `unknown_host`,
+STOP) and runs over the multiplexed ssh connection of `remote_*`, one round
+trip per call; a dead connection is `host_unreachable` (RETRY).
+
+| Function | Output |
+|---|---|
+| `llm_remote_run HOST... -- CMD \| HOST --step CMD... [--stop-on-error] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `-- CMD`: one row per host in HOST order, run in parallel: `[{"host","rc","ms","out","err","error"}]` (`error` null, `timeout`, `host_unreachable` or `remote_protocol_error`); `--step`: the steps in order in ONE round trip, `[{"step","rc","ms","out"}]` (out = stdout and stderr), `{"stopped":true,"skipped":K}` on stderr after `--stop-on-error` |
+
+`--host ALIAS` (repeatable) on `llm_find`, `llm_grep`, `llm_tree` and
+`llm_config` runs the same call on the host and prints the local output; a
+JSON object (and each object of an array of objects, each JSONL line) gains
+`"host":"ALIAS"` as its first key, text and line outputs are unchanged.
+Several hosts run in parallel: objects come as one array in `--host` order,
+text as `==> ALIAS <==` blocks. On a host with this machine's OS and CPU the
+gash binary itself answers: it is copied once (first call: two round trips)
+into `~/.cache/gash/remote/<version>-<hash>/gash` (0700, checked by size and
+a test run, renamed into place) and reused by every later call; elsewhere a
+POSIX sh fallback gives the local answer or refuses with
+`remote_binary_unavailable` (STOP: options it cannot honor, `llm_grep` with
+an ignore file in the tree or a pattern outside the ripgrep/ERE common
+syntax). `rm -rf ~/.cache/gash/remote` on the host removes the copies. The
+path rules are the local ones plus the transfer DENY list of `remote_*`,
+checked before connecting (a `..` component is `path_traversal_blocked`)
+and again on the host after resolving links; a secret file never leaves the
+host.
+
+`llm_remote_run` checks CMD with the `llm_exec` rules (3.5) before anything
+connects: read-only commands, no secret files or protected paths, the same
+`GASH_LLM_EXEC` settings (`GASH_LLM_SANDBOX` is local only). A glob or a
+leading `~` is `remote_glob_unsupported` (RETRY): it would expand on this
+machine; give explicit paths. Each command runs in bash on the host with
+stdin closed, from the remote home; steps share no shell state. A failing
+command is data (`rc`), never an error of the call. Unrestricted remote
+commands would be a write and are not offered.
+
 ## 4. Output shapes
 
 Real output; only whitespace was changed to fit the page.

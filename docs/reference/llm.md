@@ -23,6 +23,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
 | [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
+| [`llm_remote_run`](#llm-remote-run) |  | Run a read-only command on registered hosts, in parallel or in steps |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
 
 ## llm_config
@@ -569,6 +570,64 @@ llm_project /var/www/myapp
 ```
 
 See also: `llm_deps`
+
+## llm_remote_run
+
+Run a read-only command on registered hosts, in parallel or in steps
+
+#### Usage
+
+```text
+llm_remote_run HOST... [-j N] [--timeout S] [--format F] -- CMD
+llm_remote_run HOST --step CMD... [--stop-on-error] [--timeout S] [--format F]
+(budget: [--width N] [--max-lines N] [--head N] [--tail N])
+```
+
+#### Options
+
+```text
+-- CMD                 The command line, run on every HOST in parallel: one
+                       word is the whole line (quote pipes), several words
+                       are one command
+--step CMD             One step of a session on one HOST; repeat it: the
+                       steps run in order in ONE ssh round trip
+--stop-on-error        End the session at the first step that fails
+-j, --jobs N           Hosts at a time (default 8)
+--timeout S            Per host (with --step: the session; default 120)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut output lines at N columns
+--max-lines N          Keep the first N lines of each out/err (--head N)
+--head N, --tail N     Keep the first / last N lines of each out/err
+                       (default: 100 and 100, an omitted marker between)
+```
+
+#### Examples
+
+```bash
+# The same check on three hosts at once
+llm_remote_run web1 web2 db -- 'df -h / | tail -n 1'
+
+# Three steps, one round trip
+llm_remote_run web --step 'systemctl is-active nginx' --step 'tail -n 20 /var/log/nginx/error.log' --step 'uptime'
+```
+
+#### Notes
+
+```text
+Replaces for h in ...; do ssh $h CMD; done and ssh h a; ssh h b; ssh h c.
+HOST is a registered HOST: alias of ~/.gash_env (unknown_host, STOP,
+otherwise). CMD passes the llm_exec rules here before anything connects
+(read-only commands, secret files and protected paths refused); a glob or
+~ is refused (remote_glob_unsupported): it would expand on this machine.
+Each command runs in bash on the host, stdin closed, from the remote home.
+Steps do not share a shell (no cd or variables between steps).
+Output: [{"host","rc","ms","out","err","error"}] in HOST order, error
+null or timeout, host_unreachable, remote_protocol_error; with --step
+[{"step","rc","ms","out"}] (out holds stdout and stderr; ms null when
+the host's date has no %N), and {"stopped":true,"skipped":K} or
+{"timed_out":true} on stderr. A failing command is data (rc), not an
+error of the call.
+```
 
 ## llm_tree
 

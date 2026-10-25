@@ -7,5 +7,5 @@ import "github.com/mauriziofonte/gash/internal/invoke"
 // registerRemote binds the 3.4 functions of the area: llm_remote_run,
 // llm_same.
 func (m *Module) registerRemote(t *invoke.Table) {
-	_ = t
+	t.Handle("llm_remote_run", m.remoteRun)
 }

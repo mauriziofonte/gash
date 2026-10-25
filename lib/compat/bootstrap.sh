@@ -122,6 +122,7 @@ declare -gA __GASH_CALL_VARS=(
     [llm_git_status]="HOME"
     [llm_grep]="HOME"
     [llm_project]="HOME"
+    [llm_remote_run]="HOME"
     [llm_tree]="HOME"
     [node_detect_version]="HOME NVM_DIR"
     [node_upgrade]="HOME NVM_DIR"

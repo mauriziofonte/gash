@@ -56,6 +56,10 @@ llm_grep() { __gash_call llm_grep "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
+llm_remote_run() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_remote_run "$@"
+}
 llm_tree() { __gash_call llm_tree "$@"; }
 
 # Sourcing never fails: the status of this file is 0.

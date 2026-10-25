@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -76,6 +77,9 @@ func (f *SSH) Run(ctx context.Context, c runner.Cmd) (runner.Result, error) {
 		defer cancel()
 	}
 	cmd := exec.CommandContext(ctx, "sh", "-c", script)
+	// A command the remote side left running (a timeout) keeps the pipes
+	// open: stop waiting for them soon after the kill.
+	cmd.WaitDelay = 500 * time.Millisecond
 	cmd.Dir = f.Home
 	path := f.Path
 	if path == "" {

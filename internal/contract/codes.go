@@ -229,6 +229,8 @@ var codeTable = []Code{
 	{"host_unreachable", Retry, "remote", Origin3x},
 	{"remote_protocol_error", Stop, "remote", Origin3x},
 	{"remote_binary_unavailable", Stop, "remote", Origin3x},
+	{"missing_host", Retry, "remote", Origin3x},
+	{"remote_glob_unsupported", Retry, "remote", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.
