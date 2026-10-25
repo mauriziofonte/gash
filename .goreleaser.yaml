@@ -65,6 +65,26 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+# One SPDX SBOM per archive (syft on PATH; release.yml and the CI snapshot
+# install it).
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.spdx.json"
+
+# Keyless Sigstore signature of checksums.txt, which covers every archive
+# and SBOM: cosign signs with a short-lived certificate for the identity of
+# the release workflow (GitHub OIDC), so there is no key to keep. The bundle
+# holds the signature, the certificate and the transparency-log entry
+# (docs/security.md, Verifying a release).
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
+    output: true
+
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
 
