@@ -1,8 +1,9 @@
 name: Tag release
 
 # Releases the VERSION of main: checks the tree is ready (CI green on the
-# commit, release/SHA256SUMS current, a CHANGELOG entry), creates the
-# annotated tag v<VERSION> and dispatches the Release workflow on it. A tag
+# newest commit CI ran on, release/SHA256SUMS current, a CHANGELOG entry),
+# creates the annotated tag v<VERSION> and dispatches the Release workflow
+# on it. A tag
 # pushed with the workflow token starts no workflow by itself; a dispatch
 # does, and runs release.yml for refs/tags/v<VERSION>, the identity its
 # Sigstore signature carries.
@@ -43,33 +44,58 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The commit to tag is the newest one on main that CI passed.
+          # Commits after it may only be the Demos workflow's GIF commits
+          # ([skip ci], docs/assets only), which CI never runs on.
+          sha=""
+          for c in $(git rev-list --first-parent -n 20 HEAD); do
+            ci="$(gh run list --workflow ci.yml --commit "$c" --event push --json status,conclusion \
+              --jq 'if length == 0 then "none" else .[0].status + "/" + .[0].conclusion end')"
+            if [ "$ci" != none ]; then
+              if [ "$ci" != completed/success ]; then
+                echo "::error::CI on $c is '$ci', not success"
+                exit 1
+              fi
+              sha="$c"
+              break
+            fi
+            if git diff-tree --no-commit-id --name-only -r "$c" | grep -qv '^docs/assets/'; then
+              echo "::error::$c has no CI run and changes more than docs/assets"
+              exit 1
+            fi
+            echo "Skipping $c (demo GIFs only, no CI run)"
+          done
+          if [ -z "$sha" ]; then
+            echo "::error::no commit with a CI run among the last 20 on main"
+            exit 1
+          fi
+          git checkout -q --detach "$sha"
           v="$(cat VERSION)"
           tag="v$v"
-          sha="$(git rev-parse HEAD)"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             echo "::error::$tag already exists"
             exit 1
           fi
           case "$v" in *-*) echo "::error::VERSION $v is a pre-release"; exit 1 ;; esac
-          ci="$(gh run list --workflow ci.yml --commit "$sha" --event push --json conclusion --jq '.[0].conclusion')"
-          if [ "$ci" != success ]; then
-            echo "::error::CI on $sha is '${ci:-missing}', not success"
-            exit 1
-          fi
+          echo "Releasing $tag from $sha"
           go run ./internal/tools/relnotes -version "$v" >/dev/null
           go run ./internal/tools/releasesums -check
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
-          echo "version=$v" >>"$GITHUB_OUTPUT"
+          {
+            echo "sha=$sha"
+            echo "tag=$tag"
+            echo "version=$v"
+          } >>"$GITHUB_OUTPUT"
 
       - name: Create and push the tag
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.check.outputs.tag }}
           VERSION: ${{ steps.check.outputs.version }}
+          SHA: ${{ steps.check.outputs.sha }}
         run: |
           git -c user.name='github-actions[bot]' \
             -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            tag -a "$TAG" -m "Gash $VERSION"
+            tag -a "$TAG" -m "Gash $VERSION" "$SHA"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
 
       - name: Dispatch the Release workflow on the tag
