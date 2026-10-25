@@ -205,6 +205,9 @@ func (s *rgSearch) searchFile(path string, explicit bool) error {
 	if nul >= 0 && !explicit {
 		return nil // binary files are skipped in a walk
 	}
+	if !s.re.MayMatch(data) {
+		return nil
+	}
 	lines := splitLines(data)
 	var hits []int
 	for i, l := range lines {

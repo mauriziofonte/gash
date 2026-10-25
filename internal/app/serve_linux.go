@@ -4,13 +4,16 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -72,6 +75,10 @@ type server struct {
 	pidfd    int
 	pidfdPid int
 	held     []int
+	// lastExportText is the last call's export -p text, lastExport what
+	// it parsed to.
+	lastExportText string
+	lastExport     []string
 }
 
 func serve(environ []string, in io.Reader, out io.Writer) int {
@@ -113,28 +120,39 @@ func serve(environ []string, in io.Reader, out io.Writer) int {
 		syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU, syscall.SIGPIPE)
 	go s.signals(sigs)
 
-	// A request is the file req in the server's directory and SIGUSR1:
-	// the shell signals with kill, a builtin that touches none of its
-	// descriptors, once every redirection it used to write the file is
-	// undone (the server takes the shell's streams as they are then). The
-	// standard input only tells when the shell is gone.
-	usr1 := make(chan os.Signal, 1)
-	signal.Notify(usr1, syscall.SIGUSR1)
-	gone := make(chan struct{})
+	// A request is the file req in the server's directory. The server
+	// wakes when the shell closes it (inotify): the shell closes it as it
+	// undoes the redirection it wrote it with, so its standard streams are
+	// its own again when the server takes them. The standard input only
+	// tells when the shell is gone.
+	ifd, err := unix.InotifyInit1(unix.IN_CLOEXEC)
+	if err != nil {
+		return 1
+	}
+	if _, err := unix.InotifyAddWatch(ifd, dir, unix.IN_CLOSE_WRITE); err != nil {
+		return 1
+	}
 	go func() {
 		_, _ = io.Copy(io.Discard, in)
-		close(gone)
+		s.cleanup()
+		os.Exit(0)
 	}()
 	w := bufio.NewWriter(out)
 	fmt.Fprintf(w, "gash-serve %s %s\n", serveProtocol, dir)
 	if w.Flush() != nil {
 		return 1
 	}
+	events := make([]byte, 4096)
 	for {
-		select {
-		case <-gone:
-			return 0
-		case <-usr1:
+		n, err := unix.Read(ifd, events)
+		if err == unix.EINTR {
+			continue
+		}
+		if err != nil {
+			return 1
+		}
+		if !closedReq(events[:n]) {
+			continue
 		}
 		seq, status := "*", "F"
 		if req, err := s.readRequest(); err == nil {
@@ -148,6 +166,26 @@ func serve(environ []string, in io.Reader, out io.Writer) int {
 			return 128 + int(n)
 		}
 	}
+}
+
+// closedReq tells whether the inotify events in b hold the closing of req.
+func closedReq(b []byte) bool {
+	for len(b) >= unix.SizeofInotifyEvent {
+		// struct inotify_event: wd, mask, cookie, len, then the name.
+		end := unix.SizeofInotifyEvent + int(binary.NativeEndian.Uint32(b[12:16]))
+		if end > len(b) {
+			return false
+		}
+		name := b[unix.SizeofInotifyEvent:end]
+		if i := bytes.IndexByte(name, 0); i >= 0 {
+			name = name[:i]
+		}
+		if string(name) == "req" {
+			return true
+		}
+		b = b[end:]
+	}
+	return false
 }
 
 // closeInherited closes the descriptors above 2 the server got from the
@@ -360,18 +398,44 @@ func (s *server) handle(req request) string {
 		return "F"
 	}
 	syscall.Umask(mask)
-	os.Clearenv()
-	for _, kv := range environ {
-		if i := strings.IndexByte(kv, '='); i > 0 {
-			_ = os.Setenv(kv[:i], kv[i+1:])
-		}
-	}
+	setEnv(environ)
 
 	argv := req.args
 	if name == "gash" {
 		argv = argv[1:] // the gash card is the binary's root
 	}
 	return strconv.Itoa(s.run(argv, environ, in, outF, errF, outPipe || errPipe))
+}
+
+// setEnv makes the process environment environ (what the standard
+// library reads: PATH for a lookup, HOME, TMPDIR), changing only the
+// entries that differ: the programs a call runs get their environment
+// from the call, never from the process.
+func setEnv(environ []string) {
+	want := make(map[string]string, len(environ))
+	for _, kv := range environ {
+		if i := strings.IndexByte(kv, '='); i > 0 {
+			want[kv[:i]] = kv[i+1:]
+		}
+	}
+	have, seen := map[string]bool{}, map[string]bool{}
+	for _, kv := range os.Environ() {
+		name, value, _ := strings.Cut(kv, "=")
+		if name == "" || seen[name] {
+			continue // a later duplicate is not what Getenv reads
+		}
+		seen[name] = true
+		if v, ok := want[name]; !ok {
+			_ = os.Unsetenv(name)
+		} else if v == value {
+			have[name] = true
+		}
+	}
+	for name, v := range want {
+		if !have[name] {
+			_ = os.Setenv(name, v)
+		}
+	}
 }
 
 // run is Main for one call of the server.
@@ -429,8 +493,15 @@ func (s *server) environ(req request) (env []string, umask int, ok bool) {
 	if !ok {
 		return nil, 0, false
 	}
-	if env, err = parseExportP(exportText); err != nil {
-		return nil, 0, false
+	// A shell's exported variables seldom change between two calls: the
+	// text parsed last time is not parsed again.
+	if exportText == s.lastExportText && s.lastExport != nil {
+		env = slices.Clone(s.lastExport)
+	} else {
+		if env, err = parseExportP(exportText); err != nil {
+			return nil, 0, false
+		}
+		s.lastExportText, s.lastExport = exportText, slices.Clone(env)
 	}
 	decls, err := parseDecls(declText)
 	if err != nil {

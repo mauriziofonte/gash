@@ -27,6 +27,13 @@ func MustCompile(src string) *Regexp { return &Regexp{src: src} }
 // MustCompilePOSIX is regexp.MustCompilePOSIX, deferred to the first use.
 func MustCompilePOSIX(src string) *Regexp { return &Regexp{src: src, posix: true} }
 
+// Compiled wraps an expression already compiled.
+func Compiled(re *regexp.Regexp) *Regexp {
+	l := &Regexp{src: re.String(), re: re}
+	l.once.Do(func() {})
+	return l
+}
+
 // R returns the compiled expression.
 func (l *Regexp) R() *regexp.Regexp {
 	l.once.Do(func() {

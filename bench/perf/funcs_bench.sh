@@ -8,7 +8,8 @@
 # times (after one warm-up call) in WORKDIR, output discarded, timed with
 # $EPOCHREALTIME. OUT_TSV gets "label<TAB>mean_us<TAB>p50_us<TAB>p95_us<TAB>status".
 # The environment is scrubbed (env -i) and HOME is a throwaway directory
-# unless BENCH_HOME is set; GASH_BIN is passed through.
+# unless BENCH_HOME is set; GASH_BIN is passed through, and BENCH_ENV adds
+# NAME=VALUE words (e.g. BENCH_ENV=GASH_SERVER=0 for the exec path).
 set -u
 GASH=${1:?gash dir}
 CMDS=${2:?commands file}
@@ -21,7 +22,7 @@ while IFS=$'\t' read -r label cmd; do
     [[ -z "$label" || "$label" == \#* ]] && continue
     env -i HOME="$H" PATH=/usr/local/bin:/usr/bin:/bin TERM=xterm-256color LANG=C.UTF-8 \
         USER="${USER:-root}" LOGNAME="${USER:-root}" GASH_HEADLESS=1 \
-        ${GASH_BIN:+"GASH_BIN=$GASH_BIN"} bash -c '
+        ${GASH_BIN:+"GASH_BIN=$GASH_BIN"} ${BENCH_ENV-} bash -c '
 source "$1/gash.sh" >/dev/null 2>&1
 cd "$2" || exit 9
 eval "$3" >/dev/null 2>&1 </dev/null

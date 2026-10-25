@@ -359,8 +359,3 @@ func (st *state) isDir(path string) bool {
 	fi, err := st.e.stat(path)
 	return err == nil && fi.IsDir()
 }
-
-// discard is an io.Writer that drops everything (the probes' /dev/null).
-type discard struct{}
-
-func (discard) Write(p []byte) (int, error) { return len(p), nil }

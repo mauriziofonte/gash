@@ -528,23 +528,15 @@ __gash_srv_ready() {
 # server declined the call (nothing ran) or is gone. The request is a file
 # in the server's directory: the call, the names of the variables
 # __gash_export_state would export, and what umask, declare -p and export
-# -p print (the server rebuilds the environment from them: no fork). kill
-# tells the server; while it runs the call, the shell's standard streams
-# are the call's own: no command here redirects them (kill and read are
-# builtins that take none).
+# -p print (the server rebuilds the environment from them: no fork).
+# Closing it tells the server; while it runs the call, the shell's
+# standard streams are the call's own: no command here redirects them
+# (read takes none).
 # Usage: __gash_srv_call NAME [ARG...]
 __gash_srv_call() {
     local __gs_line="" __gs_v
     __GASH_SRV_DECLINED=1
-    {
-        printf '%s\0' R "$((++__GASH_SRV_SEQ))" "$BASHPID" "$#" "$__GASH_CALL_COMMON" \
-            "${__GASH_CALL_VARS[$1]-}" "${__GASH_CALL_SETTINGS[$1]-}" "$@"
-        umask
-        __gash_srv_decls "$1"
-        printf '\001\n'
-        export -p
-    } >"$__GASH_SRV_DIR/req" 2>/dev/null && trap -p INT >"$__GASH_SRV_DIR/trap" 2>/dev/null &&
-        [[ -n "${__GASH_SRV_PID-}" && -n "${__GASH_SRV[0]-}" ]] || {
+    [[ -n "${__GASH_SRV_PID-}" && -n "${__GASH_SRV[0]-}" ]] && trap -p INT >"$__GASH_SRV_DIR/trap" 2>/dev/null || {
         __gash_srv_stop
         return 1
     }
@@ -552,7 +544,16 @@ __gash_srv_call() {
     # the status, as it waits for the exec'd binary. The INT trap is put
     # back after.
     trap '' INT
-    if kill -USR1 "$__GASH_SRV_PID"; then
+    # Closing the request wakes the server (after the redirection is
+    # undone: the streams it takes are the shell's own).
+    if {
+        printf '%s\0' R "$((++__GASH_SRV_SEQ))" "$BASHPID" "$#" "$__GASH_CALL_COMMON" \
+            "${__GASH_CALL_VARS[$1]-}" "${__GASH_CALL_SETTINGS[$1]-}" "$@"
+        umask
+        __gash_srv_decls "$1"
+        printf '\001\n'
+        export -p
+    } >"$__GASH_SRV_DIR/req" 2>/dev/null; then
         while IFS= read -r -u "${__GASH_SRV[0]}" __gs_line; do
             [[ "${__gs_line%% *}" == "$__GASH_SRV_SEQ" || "${__gs_line%% *}" == "*" ]] && break
             __gs_line=""
