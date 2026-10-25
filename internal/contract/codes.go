@@ -212,6 +212,11 @@ var codeTable = []Code{
 
 	// New in 3.4: agent toolkit, git (llm_git_* extensions,
 	// llm_git_overview, llm_git_show, agent_git_commit).
+	{"invalid_log", Retry, "git", Origin3x},
+	{"invalid_files", Retry, "git", Origin3x},
+	{"invalid_fields", Retry, "git", Origin3x},
+	{"unknown_revision", Retry, "git", Origin3x},
+	{"git_error", Stop, "git", Origin3x},
 
 	// New in 3.4: agent toolkit, network (llm_http, llm_dns, llm_tls,
 	// llm_tcp, llm_ports --port).
