@@ -142,7 +142,10 @@ func selectLog(ctx context.Context, f *os.File, size int64, spec *logSpec) (logR
 			picked = append(picked, l)
 			return
 		}
-		res.omitted++
+		// Only a walk bounded by --since knows how many lines --tail cut.
+		if !spec.since.IsZero() {
+			res.omitted++
+		}
 	}
 	full := func() bool { return len(picked) >= spec.tail && spec.since.IsZero() }
 	err := reverseLines(ctx, f, size, func(off int64, text []byte) bool {
