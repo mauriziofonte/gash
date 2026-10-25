@@ -32,6 +32,23 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
 ### Security
 
+- `llm_db_*`: a `PRAGMA` passes the SQL guard only as a read (`PRAGMA name`
+  for a pragma that reports a value, or `PRAGMA table_info(t)` and the other
+  schema lookups). `PRAGMA user_version = 5`, `PRAGMA journal_mode(WAL)` and
+  the pragmas that act when run (`optimize`, `wal_checkpoint`,
+  `incremental_vacuum`, ...) are refused with `write_operation_blocked`
+  (2.x and 3.0 accepted them; the read-only SQLite session still stopped
+  the write). Found by fuzzing.
+- `llm_exec` refuses a command holding a NUL byte (`construct_not_allowed`)
+  instead of rendering a word bash would cut at it. Found by fuzzing.
+- Seven fuzz targets cover the guardrails: the SQL guard (with an oracle
+  that runs every accepted query on a writable SQLite database and checks
+  nothing changed), the `llm_exec` renderer (every rendered word is a
+  quoted literal and re-parses to the validated words), the path guard
+  (against the kernel's own symlink resolution), the hosts helper's block
+  grammar and splicing, and the `~/.gash_env` parser (no warning shows
+  content). CI fuzzes each for 15 seconds on every change and 5 minutes
+  weekly.
 - The workflows pin every action by commit SHA, keep no checkout
   credentials, use no module cache in the publishing jobs and grant each
   job only the permissions it needs; actionlint and zizmor check them in CI.

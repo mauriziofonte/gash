@@ -108,6 +108,14 @@ var redirRE = regexp.MustCompile(`^(2>&1|1?>&2|[12]?>[[:space:]]*/dev/null|&>[[:
 // fixed). The operator is rendered whole and the continuations after it,
 // so later lines keep their line numbers.
 func (lc *lineChecker) checkAndRender(cmd string) (string, error) {
+	// A NUL byte cannot reach bash (an argument ends at it, and 2.x read
+	// the line into a Bash variable, which cannot hold one): refuse it
+	// instead of rendering a word bash would cut (3.1: found by
+	// FuzzRenderRoundTrip).
+	if strings.IndexByte(cmd, 0) >= 0 {
+		return "", refuse("construct_not_allowed", "NUL byte", "RETRY",
+			"The command holds a NUL byte; write it without one")
+	}
 	n := len(cmd)
 	trailingBackslash := false
 	for i := 0; i < n; i++ {

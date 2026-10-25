@@ -315,6 +315,48 @@ jobs:
       - name: goreleaser and releasesums build the same binaries
         run: go run ./internal/tools/releasesums -compare dist
 
+  fuzz:
+    name: Fuzz the guardrails
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      # Each target for 15 seconds on a change, 5 minutes in the weekly run.
+      # A failing input is written under the package's testdata/fuzz and
+      # uploaded; committing it makes it a regression case of go test.
+      - name: Fuzz
+        env:
+          FUZZTIME: ${{ github.event_name == 'schedule' && '5m' || '15s' }}
+        run: |
+          set -euo pipefail
+          while read -r pkg target; do
+            echo "::group::$pkg $target"
+            go test "./$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime "$FUZZTIME"
+            echo "::endgroup::"
+          done <<'TARGETS'
+          internal/sqlguard FuzzCheck
+          internal/sqlguard FuzzCheckSQLiteReadOnly
+          internal/llmexec FuzzRenderRoundTrip
+          internal/pathguard FuzzValidatePath
+          internal/hostshelper FuzzParseBlock
+          internal/hostshelper FuzzSplice
+          internal/config FuzzParseNoLeak
+          TARGETS
+
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-failures
+          path: internal/**/testdata/fuzz/
+
   coverage-gates:
     name: Spec-to-txtar coverage gates
     # testing.md 4 and 8: every public 2.x assertion (PARITY run/run*/split

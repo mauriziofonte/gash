@@ -387,3 +387,41 @@ func repoFile(t *testing.T, rel string) string {
 		dir = parent
 	}
 }
+
+// 3.1: a PRAGMA passes only in a reading form. 2.x accepted "PRAGMA x = v",
+// "PRAGMA x(v)" and the PRAGMAs that act when run (FuzzCheckSQLiteReadOnly
+// found user_version = 5 changing a writable database).
+func TestPragmaReadsOnly(t *testing.T) {
+	for _, q := range []string{
+		"PRAGMA user_version", "pragma table_info(t)", "PRAGMA table_info('my table');", "PRAGMA main.table_info(t)",
+		`PRAGMA "main".index_list(t)`, "PRAGMA integrity_check", "PRAGMA quick_check(10)", "PRAGMA foreign_key_check",
+		"PRAGMA  journal_mode  ", "PRAGMA compile_options -- why", "PRAGMA table_list",
+	} {
+		for _, d := range []string{SQLite, MySQL, PgSQL} {
+			if _, err := Check(d, q); err != nil {
+				t.Errorf("Check(%s, %q) = %v, want it accepted", d, q, err)
+			}
+		}
+	}
+	for q, details := range map[string]string{
+		"PRAGMA user_version = 5":             "PRAGMA user_version with a value",
+		"PRAGMA user_version=5":               "PRAGMA user_version with a value",
+		"PRAGMA user_version(9)":              "PRAGMA user_version with a value",
+		"PRAGMA journal_mode=WAL":             "PRAGMA journal_mode with a value",
+		"PRAGMA writable_schema(1)":           "PRAGMA writable_schema with a value",
+		"PRAGMA optimize":                     "PRAGMA optimize is not a read",
+		"PRAGMA wal_checkpoint(PASSIVE)":      "PRAGMA wal_checkpoint with a value",
+		"PRAGMA incremental_vacuum":           "PRAGMA incremental_vacuum is not a read",
+		"PRAGMA shrink_memory":                "PRAGMA shrink_memory is not a read",
+		"PRAGMA table_info(t) x":              "PRAGMA table_info with a value",
+		"PRAGMA table_info(a b)":              "PRAGMA table_info with a value",
+		"PRAGMA temp_store_directory('/tmp')": "PRAGMA temp_store_directory with a value",
+		"PRAGMA":                              "PRAGMA without a name",
+	} {
+		_, err := Check(SQLite, q)
+		var e *Error
+		if !errors.As(err, &e) || e.Code != CodeWriteOperation || e.Details != details || e.Action != ActionFatal {
+			t.Errorf("Check(sqlite, %q) = %v, want write_operation_blocked %q", q, err, details)
+		}
+	}
+}

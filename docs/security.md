@@ -129,6 +129,10 @@ program functions (`LOAD_FILE`, `PG_READ_FILE`, `LO_IMPORT`, `DBLINK`, ...),
 `SET`, `SLEEP`, `BENCHMARK`, client commands (a backslash outside a literal,
 or at the start of any line, literals and comments included), MySQL
 `/*! */` comments, SQLite dot-commands and lines holding only `go` or `/`.
+A `PRAGMA` passes only as a read: `PRAGMA name` for a pragma that only
+reports a value, or `PRAGMA table_info(t)` and the other schema lookups; a
+value (`= v`, `(v)`) and the pragmas that act when run (`optimize`,
+`wal_checkpoint`, ...) are refused.
 Then the **session is read-only**:
 
 | Engine | Session | Credentials |
