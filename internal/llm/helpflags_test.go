@@ -34,6 +34,14 @@ var llmOptions = map[string][]string{
 	"llm_deps":       {"--dev"},
 
 	// 3.4 text reads.
+	"llm_stat":      {"--lines", "--follow", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
+	"llm_count":     {"--pat", "--regex", "--lines", "--occurrences", "--format", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
+	"llm_assert":    {"--has", "--lacks", "--count", "--regex", "--lines", "--occurrences", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
+	"llm_read":      {"--lines", "--around", "-C", "--context", "--max-bytes", "--format", "--head", "--tail", "--max-lines", "--width", "--absolute", "--relative"},
+	"llm_log":       {"--tail", "-n", "--last-match", "--grep", "--since", "--level", "--width", "--format"},
+	"llm_hash":      {"--algo", "--short", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
+	"llm_textstats": {"--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
+	"llm_textcheck": {"--rules", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
 
 	// 3.4 data.
 
