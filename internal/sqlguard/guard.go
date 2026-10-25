@@ -317,7 +317,84 @@ func check(driver, query string, rd reading) (Result, error) {
 	if rd.hasLoadData(upper) {
 		return Result{}, clone(errLoadData)
 	}
+	if first == "PRAGMA" {
+		if err := pragmaRead(upper); err != nil {
+			return Result{}, err
+		}
+	}
 	return Result{Query: query, Kind: first}, nil
+}
+
+// pragmaNoArg are the PRAGMAs that, given no value, only report one: the
+// statement "PRAGMA [schema.]name" reads them. The others (optimize,
+// wal_checkpoint, incremental_vacuum, shrink_memory, ...) act when they run.
+var pragmaNoArg = map[string]bool{
+	"ANALYSIS_LIMIT": true, "APPLICATION_ID": true, "AUTO_VACUUM": true, "AUTOMATIC_INDEX": true,
+	"BUSY_TIMEOUT": true, "CACHE_SIZE": true, "CACHE_SPILL": true, "CELL_SIZE_CHECK": true,
+	"CHECKPOINT_FULLFSYNC": true, "COLLATION_LIST": true, "COMPILE_OPTIONS": true, "DATA_VERSION": true,
+	"DATABASE_LIST": true, "DEFER_FOREIGN_KEYS": true, "ENCODING": true, "FOREIGN_KEY_CHECK": true,
+	"FOREIGN_KEYS": true, "FREELIST_COUNT": true, "FULLFSYNC": true, "FUNCTION_LIST": true,
+	"HARD_HEAP_LIMIT": true, "IGNORE_CHECK_CONSTRAINTS": true, "INTEGRITY_CHECK": true, "JOURNAL_MODE": true,
+	"JOURNAL_SIZE_LIMIT": true, "LEGACY_ALTER_TABLE": true, "LOCKING_MODE": true, "MAX_PAGE_COUNT": true,
+	"MMAP_SIZE": true, "MODULE_LIST": true, "PAGE_COUNT": true, "PAGE_SIZE": true, "PRAGMA_LIST": true,
+	"QUERY_ONLY": true, "QUICK_CHECK": true, "READ_UNCOMMITTED": true, "RECURSIVE_TRIGGERS": true,
+	"REVERSE_UNORDERED_SELECTS": true, "SCHEMA_VERSION": true, "SECURE_DELETE": true, "SOFT_HEAP_LIMIT": true,
+	"SYNCHRONOUS": true, "TABLE_LIST": true, "TEMP_STORE": true, "THREADS": true, "TRUSTED_SCHEMA": true,
+	"USER_VERSION": true, "WAL_AUTOCHECKPOINT": true,
+}
+
+// pragmaWithArg are the PRAGMAs whose argument names what to read (a
+// table, an index, a limit), not a value to set.
+var pragmaWithArg = map[string]bool{
+	"TABLE_INFO": true, "TABLE_XINFO": true, "TABLE_LIST": true, "INDEX_INFO": true, "INDEX_XINFO": true,
+	"INDEX_LIST": true, "FOREIGN_KEY_LIST": true, "FOREIGN_KEY_CHECK": true, "INTEGRITY_CHECK": true,
+	"QUICK_CHECK": true,
+}
+
+// pragmaRead accepts a PRAGMA statement only in a reading form: "PRAGMA
+// [schema.]name" for a name of pragmaNoArg, or "PRAGMA [schema.]name(arg)"
+// for one of pragmaWithArg, the argument a word or a string. "PRAGMA x = v"
+// and "PRAGMA x(v)" set x, and some PRAGMAs act when run without a value;
+// 2.x accepted them all (3.1: refused). code is the statement in upper
+// case with strings and comments blanked and the final semicolon removed.
+func pragmaRead(code string) error {
+	rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(code), "PRAGMA"))
+	name, rest := pragmaWord(rest)
+	if r := strings.TrimLeft(rest, " \t\r\n"); strings.HasPrefix(r, ".") {
+		name, rest = pragmaWord(strings.TrimLeft(r[1:], " \t\r\n"))
+	}
+	rest = strings.TrimSpace(rest)
+	switch {
+	case name == "":
+		return pragmaRefused("PRAGMA without a name")
+	case rest == "":
+		if pragmaNoArg[name] {
+			return nil
+		}
+		return pragmaRefused("PRAGMA " + strings.ToLower(name) + " is not a read")
+	case strings.HasPrefix(rest, "("):
+		arg, ok := strings.CutSuffix(rest[1:], ")")
+		if ok && pragmaWithArg[name] {
+			if w, tail := pragmaWord(strings.TrimSpace(arg)); strings.TrimSpace(tail) == "" && (w != "" || strings.TrimSpace(arg) == "") {
+				return nil
+			}
+		}
+	}
+	return pragmaRefused("PRAGMA " + strings.ToLower(name) + " with a value")
+}
+
+// pragmaWord splits a leading name ([A-Z0-9_]) off s.
+func pragmaWord(s string) (string, string) {
+	i := 0
+	for i < len(s) && (s[i] >= 'A' && s[i] <= 'Z' || s[i] >= '0' && s[i] <= '9' || s[i] == '_') {
+		i++
+	}
+	return s[:i], s[i:]
+}
+
+func pragmaRefused(details string) *Error {
+	return &Error{CodeWriteOperation, details, ActionFatal,
+		"Only PRAGMA reads are allowed: PRAGMA name, or PRAGMA table_info(t) and the other schema lookups"}
 }
 
 func allowedFirst(first string) bool {

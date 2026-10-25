@@ -1,0 +1,80 @@
+name: Mutation
+
+# Mutation testing of the guardrails: go-mutesting changes one statement
+# of the package at a time and runs its tests; a mutant the tests do not
+# catch is a gap. Each package keeps a score floor that only goes up. The
+# run is long, so it is weekly and on request, not on every push.
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.3"
+  GO_MUTESTING_VERSION: v0.0.0-20261002081621-9ce5f731e321
+
+jobs:
+  mutation:
+    name: Mutation (${{ matrix.pkg }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floors: the 2026-10-25 scores (sqlguard 0.74, llmexec 0.59,
+        # pathguard 0.60, hostshelper 0.68) less two points. internal/runner
+        # is left out: its mutants spawn and wait on processes, and one of
+        # them exhausted the machine it ran on.
+        include:
+          - { pkg: sqlguard, floor: "0.72" }
+          - { pkg: llmexec, floor: "0.57" }
+          - { pkg: pathguard, floor: "0.58" }
+          - { pkg: hostshelper, floor: "0.65" }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Install go-mutesting
+        run: go install "github.com/avito-tech/go-mutesting/cmd/go-mutesting@${GO_MUTESTING_VERSION}"
+
+      - name: Mutate internal/${{ matrix.pkg }}
+        # go-mutesting edits the checkout in place; this runner is thrown away.
+        env:
+          PKG: ${{ matrix.pkg }}
+          FLOOR: ${{ matrix.floor }}
+        run: |
+          set -uo pipefail
+          "$(go env GOPATH)/bin/go-mutesting" "./internal/$PKG/..." > "$RUNNER_TEMP/mutation.log" 2>&1
+          score="$(sed -n 's/^The mutation score is \([0-9.]*\).*/\1/p' "$RUNNER_TEMP/mutation.log")"
+          tail -1 "$RUNNER_TEMP/mutation.log"
+          if [ -z "$score" ]; then
+            echo "::error::go-mutesting gave no score for internal/$PKG"
+            tail -40 "$RUNNER_TEMP/mutation.log"
+            exit 1
+          fi
+          echo "### internal/$PKG: mutation score $score (floor $FLOOR)" >> "$GITHUB_STEP_SUMMARY"
+          if ! awk -v s="$score" -v f="$FLOOR" 'BEGIN { exit !(s + 0 >= f + 0) }'; then
+            echo "::error::internal/$PKG mutation score $score is below its floor of $FLOOR"
+            exit 1
+          fi
+
+      - name: Keep the surviving mutants
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mutation-${{ matrix.pkg }}
+          path: ${{ runner.temp }}/mutation.log
+          if-no-files-found: ignore

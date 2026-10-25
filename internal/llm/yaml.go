@@ -66,19 +66,6 @@ const (
 	yamlDirectiveErr = "found unknown directive name"
 )
 
-// yamlToJSON is the whole conversion as text.
-func yamlToJSON(data []byte) (string, error) {
-	docs, err := yamlDocs(data)
-	if err != nil {
-		return "", err
-	}
-	var b bytes.Buffer
-	if err := writeYAMLJSON(&b, docs); err != nil {
-		return "", err
-	}
-	return b.String(), nil
-}
-
 // yamlDocs converts every document of a YAML stream. An empty stream (no
 // document, or comments only) gives none: python-yq printed nothing, and
 // 2.x then printed the raw text.

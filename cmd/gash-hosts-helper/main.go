@@ -29,7 +29,7 @@ func main() {
 // execFixed runs one of the fixed flush commands: an absolute path, no
 // shell, an empty environment, no standard streams.
 func execFixed(argv []string) error {
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) //nolint:noctx // a fixed flush command run to completion; the helper has no context
 	cmd.Env = []string{}
 	cmd.Dir = "/"
 	return cmd.Run()

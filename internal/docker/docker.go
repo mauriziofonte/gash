@@ -23,6 +23,7 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -118,7 +119,8 @@ func (x *call) have(name string) bool {
 	if err == nil {
 		return true
 	}
-	se, ok := err.(*runner.StartError)
+	var se *runner.StartError
+	ok := errors.As(err, &se)
 	return ok && se.Status == 126
 }
 

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -39,8 +38,6 @@ func TestLedger_DB05(t *testing.T) {
 	got = runGo(t, m, d, env, "llm_db_tables", "-f", db)
 	require.Equal(t, result{`{"data":["u"],"rows":1,"query_time":"0µs"}` + "\n", "", 0}, got)
 }
-
-var queryTimeRE = regexp.MustCompile(`"query_time":"([0-9]+)\.([0-9])ms"`)
 
 // TestLedger_DB06_2x: 2.x started the clock before the client connected,
 // so a slow connect with a fast query tripped the 100 ms rule and added

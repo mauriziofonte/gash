@@ -1,19 +1,19 @@
 # Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
-# Initial lint policy for the Go port (rc.A). The gate runs the bug-finding
-# linters; the style/quickfix opinions and the dead-code sweep are deferred
-# to operator triage after rc.A (see docs/port/design/testing.md).
+# Lint policy (3.1). The gate runs the bug-finding linters:
 #
-#   - govet, errcheck, ineffassign, staticcheck: enabled (real-bug coverage).
+#   - govet, errcheck, ineffassign, staticcheck (SA checks): real bugs.
+#   - unused: no dead code (the 3.0 port leftovers are gone).
+#   - gosec: security rules, minus the ones Gash breaks by design (below).
+#   - errorlint: errors are matched with errors.Is/As, so wrapping is safe.
+#   - bodyclose, noctx: HTTP bodies are closed and requests, commands and
+#     listeners take a context (a justified //nolint says why not).
+#   - copyloopvar, durationcheck, makezero: Go pitfalls.
 #   - errcheck tolerates the cleanup-path errors the codebase intentionally
 #     drops (Close/Unlock/Remove/Rename/Write/... and os/fmt best-effort
 #     calls), matching the 2.x behavior the port reproduces.
-#   - staticcheck runs the SA (correctness) checks only; the ST/S1/QF style
-#     and quickfix suggestions are opinions, not defects, and are left for a
-#     later pass.
-#   - unused is off for now: its hits are candidate port gaps (e.g. the YAML
-#     helper, the dev grep subsystem) that need wiring-or-removal decisions,
-#     not a blind deletion inside the cutover. Tracked for post-rc.A.
+#   - The ST/S1/QF style suggestions of staticcheck stay off: opinions, not
+#     defects.
 version: "2"
 
 linters:
@@ -23,7 +23,36 @@ linters:
     - govet
     - ineffassign
     - staticcheck
+    - unused
+    # nilerr is off: the walkers skip what they cannot read and go on, as
+    # rg, find and tar do, which is a nil return after an error by design.
+    - gosec
+    - errorlint
+    - bodyclose
+    - noctx
+    - copyloopvar
+    - durationcheck
+    - makezero
   settings:
+    gosec:
+      excludes:
+        # By design, and guarded elsewhere: Gash runs programs (G204: only
+        # internal/runner starts processes, and llm_exec renders a checked
+        # script), opens paths the user names (G304, G703: the llm_* path
+        # guard decides what an agent may read) and writes the user's own
+        # files with the usual modes (G301, G302, G306: secret files and
+        # keys are created 0600/0700 explicitly and tested).
+        - G204
+        - G304
+        - G703
+        - G301
+        - G302
+        - G306
+        # errcheck covers unchecked errors.
+        - G104
+        # Integer conversions of sizes, runes and terminal values that are
+        # bounded where they are read.
+        - G115
     staticcheck:
       checks:
         - SA*
@@ -51,3 +80,12 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
+          - gosec
+          - noctx
+          - bodyclose
+          - errorlint
+      # The internal/tools commands are development helpers, not shipped.
+      - path: internal/tools/
+        linters:
+          - gosec
+          - noctx

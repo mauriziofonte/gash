@@ -3,6 +3,7 @@
 package selfmgmt
 
 import (
+	"errors"
 	"io"
 	"os"
 
@@ -71,7 +72,7 @@ func (m *Module) tool(c *invoke.Call, name string, args ...string) bool {
 	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: name, Args: args, Options: runner.Options{
 		Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr,
 	}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
 		return false
 	}

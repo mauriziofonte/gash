@@ -1658,9 +1658,10 @@ var functions = []Function{
 				"  Before the checkout, the release binary is downloaded into\n" +
 				"  ~/.local/share/gash/versions/<version>/ and verified (the hash in\n" +
 				"  the tag's release/SHA256SUMS, else the release's checksums.txt;\n" +
-				"  GASH_REQUIRE_SIGNED=1 also requires a signed tag and a pinned\n" +
-				"  binary). After it, the new version is loaded in a test shell; if\n" +
-				"  that fails, the previous version is checked out again.\n" +
+				"  GASH_REQUIRE_SIGNED=1 also requires a signed tag or a Sigstore\n" +
+				"  release signature that cosign verifies, and a pinned binary).\n" +
+				"  After it, the new version is loaded in a test shell; if that\n" +
+				"  fails, the previous version is checked out again.\n" +
 				"  Open a new terminal afterwards to load the new version.\n" +
 				"  To go back: gash update --rollback (the previous version and its\n" +
 				"  binary are kept), or git -C ~/.gash checkout vX.Y.Z",

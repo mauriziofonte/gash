@@ -1,0 +1,85 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.0 self-management proof)
+#
+# GASH_REQUIRE_SIGNED=1 accepts an unsigned release tag when cosign
+# verifies the Sigstore bundle of its release (checksums.txt.sigstore.json)
+# for the release workflow, the tag and the commit the tag points at; a
+# bundle cosign rejects, or a release without one, is a refusal that leaves
+# nothing installed. cosign is a stub that records its arguments. Local
+# repositories only, no network.
+
+env GASH_HEADLESS=1
+exec bash mkrepo.sh
+mkdir rel
+cp checksums.txt rel/checksums.txt
+
+# No bundle in the release.
+! exec bash inst.sh h1 0
+stdout 'Warning: v1\.0\.0 is not signed, and its release has no Sigstore signature \(checksums\.txt\.sigstore\.json\)\.'
+stderr 'refusing to install v1\.0\.0'
+! exists h1/.gash
+
+cp bundle.json rel/checksums.txt.sigstore.json
+
+# cosign rejects the bundle.
+! exec bash inst.sh h2 1
+stdout 'Warning: The release signature of v1\.0\.0 does not verify: no matching CertificateIdentity found\.'
+stderr 'refusing to install v1\.0\.0'
+! exists h2/.gash
+
+# cosign accepts it: the install goes on (the binary download from the fake
+# release fails, which the installer reports and survives), and cosign was
+# asked for this workflow, tag and commit.
+exec bash inst.sh h3 0
+stdout 'OK: Release signature of v1\.0\.0 verified \(Sigstore\)\.'
+exists h3/.gash/VERSION
+exec bash checkargs.sh
+
+-- checksums.txt --
+0000000000000000000000000000000000000000000000000000000000000000  gash_1.0.0_linux_amd64.tar.gz
+-- bundle.json --
+{}
+-- inst.sh --
+# inst.sh HOME RC: run the installer with GASH_REQUIRE_SIGNED=1 and a cosign
+# stub that exits RC.
+h="$PWD/$1"
+mkdir -p "$h" "$PWD/bin"
+: >"$h/.bashrc"
+{
+  echo '#!/bin/sh'
+  echo "printf '%s\\n' \"\$@\" >'$PWD/cosign.args'"
+  [ "$2" = 0 ] || echo 'echo "Error: no matching CertificateIdentity found" >&2'
+  echo "exit $2"
+} >"$PWD/bin/cosign"
+chmod +x "$PWD/bin/cosign"
+HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" PATH="$PWD/bin:$PATH" GASH_REQUIRE_SIGNED=1 \
+  GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL="file://$PWD/rel" \
+  bash "$PWD/repo/install.sh" --assume-yes
+-- checkargs.sh --
+set -e
+commit=$(git -C repo rev-parse 'v1.0.0^{commit}')
+printf '%s\n' verify-blob --bundle \
+  --certificate-identity https://github.com/mauriziofonte/gash/.github/workflows/release.yml@refs/tags/v1.0.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-github-workflow-repository mauriziofonte/gash \
+  --certificate-github-workflow-ref refs/tags/v1.0.0 \
+  --certificate-github-workflow-sha "$commit" >want
+sed '3d;$d' cosign.args >got
+diff want got
+case "$(sed -n 3p cosign.args)" in */checksums.txt.sigstore.json) ;; *) exit 1 ;; esac
+case "$(sed -n '$p' cosign.args)" in */checksums.txt) ;; *) exit 1 ;; esac
+-- mkrepo.sh --
+# mkrepo.sh: a fresh repo of the staged tree with a lightweight v1.0.0 tag.
+set -e
+rm -rf repo
+mkdir repo
+tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -
+git init -q repo
+git -C repo config user.email t@e
+git -C repo config user.name T
+git -C repo config maintenance.auto false
+git -C repo config gc.auto 0
+git -C repo add -A
+git -C repo commit -q -m snapshot
+git -C repo tag v1.0.0

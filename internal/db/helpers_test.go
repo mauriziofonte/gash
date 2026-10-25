@@ -86,12 +86,6 @@ func run2x(t *testing.T, cwd string, env map[string]string, fn string, args ...s
 	return run2xScript(t, `unset EPOCHREALTIME; EPOCHREALTIME=1792007131.734850; `, cwd, env, fn, args...)
 }
 
-// run2xLive runs the 2.x function fn in cwd with the real clock.
-func run2xLive(t *testing.T, cwd string, env map[string]string, fn string, args ...string) result {
-	t.Helper()
-	return run2xScript(t, "", cwd, env, fn, args...)
-}
-
 func run2xScript(t *testing.T, clock, cwd string, env map[string]string, fn string, args ...string) result {
 	t.Helper()
 	dir := archive2x(t)

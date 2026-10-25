@@ -68,7 +68,7 @@ func (e *Engine) canBindLow() bool {
 	bind := e.BindLow
 	if bind == nil {
 		bind = func(addr string) error {
-			l, err := net.Listen("tcp4", addr)
+			l, err := net.Listen("tcp4", addr) //nolint:noctx // an instant local bind probe
 			if err == nil {
 				l.Close()
 			}

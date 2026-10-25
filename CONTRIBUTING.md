@@ -128,11 +128,18 @@ envelope or setting needs a major version; adding one needs a minor.
    `VERSION`, `CHANGELOG.md` and `release/SHA256SUMS` together;
    `go run ./internal/tools/releasesums -check` verifies that the file is
    current.
-3. Tag that commit `v<VERSION>` (annotated, and signed if `GASH_REQUIRE_SIGNED`
-   users are expected) and push the tag. The Release workflow runs
-   goreleaser, which refuses a tag that differs from `VERSION` and a binary
-   that differs from its pin.
-4. Any commit that changes Go code after step 2 needs step 2 again before
+3. Merge it to `main` and wait for CI to pass on the merge commit.
+4. Run the **Tag release** workflow (Actions tab, or
+   `gh workflow run tag.yml --ref main`). It checks that CI passed on the
+   commit, that `release/SHA256SUMS` is current and that `CHANGELOG.md` has
+   the entry, creates the annotated tag `v<VERSION>` and dispatches the
+   **Release** workflow on it. That runs goreleaser (which refuses a tag
+   that differs from `VERSION` and a binary that differs from its pin),
+   takes the release notes from the `CHANGELOG.md` entry, signs
+   `checksums.txt` keyless with Sigstore, and attaches the SBOMs and the
+   build provenance. No signing key is involved: the signature names the
+   workflow, the tag and the commit (docs/security.md, Verifying a release).
+5. Any commit that changes Go code after step 2 needs step 2 again before
    tagging.
 
 ## Reporting security issues

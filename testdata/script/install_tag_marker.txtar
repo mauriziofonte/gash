@@ -14,18 +14,18 @@ env GASH_HEADLESS=1
 
 exec bash mkrepo.sh 'quoting -----BEGIN PGP SIGNATURE----- in text'
 ! exec bash -c 'h="$PWD/h1"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
-stdout 'Warning: v1\.0\.0 is not signed\.'
+stdout 'Warning: v1\.0\.0 is not signed[;,] '
 ! stdout 'could not be verified'
 ! exists h1/.gash
 
 exec bash mkrepo.sh 'line marker'
 ! exec bash -c 'h="$PWD/h2"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
-stdout 'Warning: v1\.0\.0 is not signed\.'
+stdout 'Warning: v1\.0\.0 is not signed[;,] '
 ! stdout 'could not be verified'
 
 exec bash mkrepo.sh ''
 ! exec bash -c 'h="$PWD/h3"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
-stdout 'Warning: v1\.0\.0 is not signed\.'
+stdout 'Warning: v1\.0\.0 is not signed[;,] '
 ! stdout 'could not be verified'
 
 -- mkrepo.sh --

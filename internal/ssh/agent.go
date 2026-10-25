@@ -3,6 +3,7 @@
 package ssh
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -44,16 +45,11 @@ func (m *Module) startAgent(s *session) {
 
 	if st, err := os.Stat(sock); err == nil && st.Mode()&os.ModeSocket != 0 {
 		// ssh-add -l: 0 = keys, 1 = no keys (agent alive), 2 = no agent.
-		rc := 0
 		res, err := m.run.Run(s.ctx(), runner.Cmd{Path: "ssh-add", Args: []string{"-l"},
 			Options: runner.Options{Env: s.with("SSH_AUTH_SOCK=" + sock), Stdout: io.Discard, Stderr: io.Discard}})
-		switch se := err.(type) {
-		case nil:
-			rc = res.ExitCode
-		case *runner.StartError:
+		rc := res.ExitCode
+		if se := (*runner.StartError)(nil); errors.As(err, &se) {
 			rc = se.Status
-		default:
-			rc = res.ExitCode
 		}
 		if rc != 2 {
 			s.set("SSH_AUTH_SOCK", sock)

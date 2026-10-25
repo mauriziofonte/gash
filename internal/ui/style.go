@@ -3,6 +3,7 @@
 package ui
 
 import (
+	"errors"
 	"io"
 	"strconv"
 	"strings"
@@ -171,7 +172,7 @@ func Int(s string) int {
 	}
 	n, err := strconv.ParseInt(d, base, 64)
 	if err != nil {
-		if ne, ok := err.(*strconv.NumError); ok && ne.Err == strconv.ErrRange {
+		if ne := (*strconv.NumError)(nil); errors.As(err, &ne) && errors.Is(ne.Err, strconv.ErrRange) {
 			n = wrapInt(d, base)
 		} else {
 			return 0

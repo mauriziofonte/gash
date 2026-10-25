@@ -99,8 +99,12 @@ var upgradeSELF10 = map[string]struct {
 	rc   int
 }{
 	"marker in message":            {"Upgraded Gash from v1.0 to v1.1.", 0},
-	"marker required":              {"v1.1 is not signed.", 1},
-	"lightweight on signed commit": {"v1.1 is not signed.", 1},
+	"marker required":              {"v1.1 is not signed; install cosign", 1},
+	"lightweight on signed commit": {"v1.1 is not signed; install cosign", 1},
+	// 3.0.1: an unsigned tag may still carry a Sigstore release signature,
+	// and the warning says how to check it (cosign is not on the fixtures'
+	// PATH).
+	"unsigned required": {"v1.1 is not signed; install cosign", 1},
 }
 
 // gash_upgrade does what 2.x does on the same fixtures: the same messages
@@ -288,7 +292,8 @@ func TestLedger_SELF10(t *testing.T) {
 	env["GASH_REQUIRE_SIGNED"] = "1"
 	out, rc = runMerged(t, "gash_upgrade", env, false)
 	require.Equal(t, 1, rc)
-	require.Contains(t, out, "Warning: v1.1 is not signed.\nError: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
+	require.Contains(t, out, "Warning: v1.1 is not signed; install cosign to check its Sigstore release signature "+
+		"(https://docs.sigstore.dev/cosign/system_config/installation/).\nError: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
 
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("no gpg")
@@ -304,7 +309,8 @@ func TestLedger_SELF10(t *testing.T) {
 	env["GASH_REQUIRE_SIGNED"] = "1"
 	out, rc = runMerged(t, "gash_upgrade", env, false)
 	require.Equal(t, 1, rc)
-	require.Contains(t, out, "Warning: v1.1 is not signed.\n"+
+	require.Contains(t, out, "Warning: v1.1 is not signed; install cosign to check its Sigstore release signature "+
+		"(https://docs.sigstore.dev/cosign/system_config/installation/).\n"+
 		"Error: GASH_REQUIRE_SIGNED=1 is set; not upgrading to v1.1.\n")
 
 	// A signed tag with the key still verifies.

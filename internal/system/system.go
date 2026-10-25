@@ -7,6 +7,7 @@ package system
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -116,7 +117,7 @@ func (m *Module) sudoReady(c *invoke.Call, p ui.Printer) bool {
 	}
 	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "sudo", Args: []string{"-n", "true"},
 		Options: runner.Options{Env: c.Env.Child(), Stdout: io.Discard, Stderr: io.Discard}})
-	if _, ok := err.(*runner.StartError); ok || (err == nil && res.ExitCode == 0) {
+	if errors.As(err, new(*runner.StartError)) || (err == nil && res.ExitCode == 0) {
 		return true
 	}
 	p.Error("sudo needs a password: run interactively or configure NOPASSWD.")

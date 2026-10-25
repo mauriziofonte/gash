@@ -6,6 +6,73 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.1.0] - 2026-10-25
+
+Releases are now signed and verifiable without any key to keep, and the
+guardrails are fuzzed, mutation-tested and held to coverage floors. Two of
+the fuzzers found real gaps, closed here (see Security).
+
+### Added
+
+- Signed releases without a signing key: the release workflow signs
+  `checksums.txt` with Sigstore (keyless, `checksums.txt.sigstore.json`),
+  attaches an SPDX SBOM per archive and SLSA build provenance
+  (`gh attestation verify`). docs/security.md, "Verifying a release",
+  shows how to check a download by hand.
+- `GASH_REQUIRE_SIGNED=1` accepts an unsigned release tag when `cosign`
+  verifies the Sigstore signature of its release for the release workflow,
+  the tag and the commit the tag points at (the installer, `gash update`
+  and `gash_upgrade`); without `cosign` the refusal says how to install it.
+  With `cosign` on `PATH` the signature is checked and reported without
+  `GASH_REQUIRE_SIGNED` too.
+- A **Tag release** workflow that checks the commit (CI green,
+  `release/SHA256SUMS` current, a CHANGELOG entry), tags `v<VERSION>` and
+  starts the release; the release notes are the CHANGELOG entry.
+
+### Changed
+
+- The lint gate adds unused, gosec, errorlint, bodyclose, noctx,
+  copyloopvar, durationcheck and makezero; the dead code they found (the
+  unported grep helpers of the dev module, test helpers of the removed 2.x
+  comparisons) is gone, and errors are matched with `errors.Is`/`errors.As`.
+- CI holds the guardrail packages (`internal/sqlguard`,
+  `internal/llmexec`, `internal/pathguard`, `internal/hostshelper`) to
+  statement coverage floors, and a weekly **Mutation** workflow runs
+  go-mutesting on them against score floors; both floors only go up.
+- `SECURITY.md`: 2.1.x gets critical and high security fixes until
+  2027-04-30; a fix for a critical or high report ships within 30 days.
+
+### Security
+
+- `llm_db_*`: a `PRAGMA` passes the SQL guard only as a read (`PRAGMA name`
+  for a pragma that reports a value, or `PRAGMA table_info(t)` and the other
+  schema lookups). `PRAGMA user_version = 5`, `PRAGMA journal_mode(WAL)` and
+  the pragmas that act when run (`optimize`, `wal_checkpoint`,
+  `incremental_vacuum`, ...) are refused with `write_operation_blocked`
+  (2.x and 3.0 accepted them; the read-only SQLite session still stopped
+  the write). Found by fuzzing.
+- `llm_exec` refuses a command holding a NUL byte (`construct_not_allowed`)
+  instead of rendering a word bash would cut at it. Found by fuzzing.
+- `gash hte install` refuses to install the hosts helper, the sudoers
+  drop-in or the macOS pf rules below a directory that a user other than
+  root can write (from which the helper, which sudo runs as root, could be
+  swapped), and creates its temporary files exclusively, so a planted
+  symlink is refused instead of followed as root.
+- Seven fuzz targets cover the guardrails: the SQL guard (with an oracle
+  that runs every accepted query on a writable SQLite database and checks
+  nothing changed), the `llm_exec` renderer (every rendered word is a
+  quoted literal and re-parses to the validated words), the path guard
+  (against the kernel's own symlink resolution), the hosts helper's block
+  grammar and splicing, and the `~/.gash_env` parser (no warning shows
+  content). CI fuzzes each for 15 seconds on every change and 5 minutes
+  weekly.
+- The workflows pin every action by commit SHA, keep no checkout
+  credentials, use no module cache in the publishing jobs and grant each
+  job only the permissions it needs; actionlint and zizmor check them in CI.
+  Dependabot updates the Go modules and the actions weekly. OpenSSF
+  Scorecard and CodeQL run on every change and weekly, and the CI runs
+  weekly too, so a new advisory or a distro change shows without a commit.
+
 ## [3.0.0] - 2026-10-24
 
 Gash is now one static Go binary with thin generated Bash around it, for
@@ -667,6 +734,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.1.0]: https://github.com/mauriziofonte/gash/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0

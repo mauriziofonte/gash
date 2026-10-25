@@ -757,3 +757,35 @@ func TestSudoersIncludedir(t *testing.T) {
 		}
 	}
 }
+
+// 3.1: the helper is not installed below a directory another user can
+// write, from which they could swap it for a program sudo runs as root;
+// nor is a planted temporary file followed.
+func TestInstallHelperRefusesWritableParents(t *testing.T) {
+	f := newFixture(t)
+	f.write("/home/me/bin/gash-hosts-helper", helperBytes, 0o755)
+	dir := filepath.Join(f.root, "/usr/local/libexec")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	c := session(t, f.env(), []Op{{ID: 1, Op: OpInstallHelper, Src: "/home/me/bin/gash-hosts-helper", SHA256: sha(helperBytes)}})
+	_, err := c.Run(1)
+	c.Close()
+	if hteerr.CodeOf(err) != hteerr.PrivilegedStepRequired || !strings.Contains(err.Error(), "/usr/local/libexec, above "+HelperPath+", can be changed by a user other than root") {
+		t.Fatalf("%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(f.root, HelperPath)); !os.IsNotExist(err) {
+		t.Fatalf("helper installed: %v", err)
+	}
+
+	tmp := filepath.Join(t.TempDir(), "x")
+	if err := os.Symlink(filepath.Join(t.TempDir(), "target"), tmp); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeExcl(tmp, []byte("x"), 0o644); err == nil {
+		t.Fatal("writeExcl followed a symlink")
+	}
+}

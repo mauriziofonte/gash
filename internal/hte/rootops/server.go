@@ -377,6 +377,9 @@ func moveFile(src, dst string) error {
 // the temporary file before it replaces anything. An identical file is
 // no change; an existing different one is backed up first.
 func (s *server) writeFile(sys string, data []byte, mode os.FileMode, tmpSys string, validate func(tmpHost string) error) error {
+	if err := s.secureParents(sys); err != nil {
+		return err
+	}
 	host := s.host(sys)
 	cur, err := os.ReadFile(host)
 	exists := err == nil
@@ -390,7 +393,7 @@ func (s *server) writeFile(sys string, data []byte, mode os.FileMode, tmpSys str
 	}
 	tmp := s.host(tmpSys)
 	os.Remove(tmp)
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	if err := writeExcl(tmp, data, mode); err != nil {
 		return err
 	}
 	defer os.Remove(tmp)
@@ -424,6 +427,48 @@ func (s *server) writeFile(sys string, data []byte, mode os.FileMode, tmpSys str
 		return err
 	}
 	return s.commit(c)
+}
+
+// secureParents refuses to write sys, a file root installs (the hosts
+// helper that sudo runs as root, the sudoers drop-in, the pf rules), when a
+// directory above it lets another user replace it: every directory from
+// its parent up to / must be a directory that no group or other user can
+// write and, on the real root, owned by root. A user-writable
+// /usr/local/libexec (say) would let that user swap the helper and run
+// anything as root through the sudoers line.
+func (s *server) secureParents(sys string) error {
+	for d := path.Dir(sys); ; d = path.Dir(d) {
+		fi, err := os.Stat(s.host(d))
+		if err != nil {
+			return err
+		}
+		st, _ := fi.Sys().(*syscall.Stat_t)
+		switch {
+		case !fi.IsDir():
+			return hteerr.Newf(hteerr.PrivilegedStepRequired, "", "%s is not a directory", d)
+		case fi.Mode().Perm()&0o022 != 0 || (s.env.Sysroot.IsReal() && (st == nil || st.Uid != 0)):
+			return hteerr.Newf(hteerr.PrivilegedStepRequired,
+				"make "+d+" owned by root and writable only by it (sudo chown root "+d+" && sudo chmod go-w "+d+"), then run gash hte install again",
+				"%s, above %s, can be changed by a user other than root", d, sys)
+		}
+		if d == "/" {
+			return nil
+		}
+	}
+}
+
+// writeExcl creates path, which must not exist, with data and mode. With
+// O_EXCL a symlink planted at path is refused, not followed.
+func writeExcl(path string, data []byte, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func (s *server) installHelper(ctx context.Context, o Op) ([]string, error) {

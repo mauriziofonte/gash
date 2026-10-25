@@ -33,9 +33,10 @@ jobs:
     name: Render GIFs
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      # The job commits the re-recorded GIFs, so it keeps the credentials.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 # zizmor: ignore[artipacked]
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go.sum
@@ -57,7 +58,7 @@ jobs:
           sudo rm -f /etc/apache2/sites-enabled/* /etc/nginx/sites-enabled/*
 
       # Installs vhs, ttyd, ffmpeg and the fonts; no tape is given here.
-      - uses: charmbracelet/vhs-action@v2
+      - uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2.1.1
 
       - name: Record the tapes
         env:
@@ -66,7 +67,7 @@ jobs:
 
       - name: Upload the GIFs
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: demo-gifs
           path: docs/assets/*.gif

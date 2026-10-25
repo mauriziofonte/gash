@@ -1,0 +1,79 @@
+name: Tag release
+
+# Releases the VERSION of main: checks the tree is ready (CI green on the
+# commit, release/SHA256SUMS current, a CHANGELOG entry), creates the
+# annotated tag v<VERSION> and dispatches the Release workflow on it. A tag
+# pushed with the workflow token starts no workflow by itself; a dispatch
+# does, and runs release.yml for refs/tags/v<VERSION>, the identity its
+# Sigstore signature carries.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag v<VERSION> and release it
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      # Push the tag.
+      contents: write
+      # Read the CI result and dispatch the Release workflow.
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.3"
+          cache: false
+
+      - name: Check that the commit is ready to release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="$(cat VERSION)"
+          tag="v$v"
+          sha="$(git rev-parse HEAD)"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::$tag already exists"
+            exit 1
+          fi
+          case "$v" in *-*) echo "::error::VERSION $v is a pre-release"; exit 1 ;; esac
+          ci="$(gh run list --workflow ci.yml --commit "$sha" --event push --json conclusion --jq '.[0].conclusion')"
+          if [ "$ci" != success ]; then
+            echo "::error::CI on $sha is '${ci:-missing}', not success"
+            exit 1
+          fi
+          go run ./internal/tools/relnotes -version "$v" >/dev/null
+          go run ./internal/tools/releasesums -check
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=$v" >>"$GITHUB_OUTPUT"
+
+      - name: Create and push the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            tag -a "$TAG" -m "Gash $VERSION"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
+
+      - name: Dispatch the Release workflow on the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+        run: gh workflow run release.yml --ref "$TAG"

@@ -163,7 +163,7 @@ func (e *Engine) discover(ctx context.Context, v *env, extra []string) (*machine
 
 // ipv6Loopback reports whether ::1 can be bound (containers may lack it).
 func ipv6Loopback() bool {
-	l, err := net.Listen("tcp6", "[::1]:0")
+	l, err := net.Listen("tcp6", "[::1]:0") //nolint:noctx // an instant local bind probe
 	if err != nil {
 		return false
 	}

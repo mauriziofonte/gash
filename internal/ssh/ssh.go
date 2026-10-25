@@ -8,6 +8,7 @@ package ssh
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -186,7 +187,7 @@ func (m *Module) list(s *session) (string, int) {
 	res, err := m.run.Run(s.ctx(), runner.Cmd{Path: "ssh-add", Args: []string{"-l"},
 		Options: runner.Options{Env: s.env, Stdout: &out, Stderr: &out}})
 	rc := res.ExitCode
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		rc = se.Status
 	}
 	return runner.CommandSubst(out.Bytes()), rc

@@ -75,7 +75,6 @@ func TestEnvInitMatches2x(t *testing.T) {
 			// runner then cannot traverse or remove it. Restore owner rwX
 			// before t.TempDir's RemoveAll (cleanups run last-in-first-out).
 			for _, d := range []string{ref, got} {
-				d := d
 				t.Cleanup(func() { _ = exec.Command("chmod", "-R", "u+rwX", d).Run() })
 			}
 			var script strings.Builder

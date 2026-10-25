@@ -3,28 +3,57 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # tag.yml dispatches this workflow on the tag it creates.
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     name: Release (goreleaser)
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
+    permissions:
+      # Publish the GitHub Release and its assets.
+      contents: write
+      # Keyless signing: cosign and the attestation exchange the job's OIDC
+      # token for a short-lived Sigstore certificate naming this workflow
+      # and tag (docs/security.md, Verifying a release).
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27.3"
-          cache-dependency-path: go.sum
+          # No module cache in a job that publishes (cache poisoning).
+          cache: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+
+      # The release notes are the tag's CHANGELOG.md entry; a tag without one
+      # stops here, before anything is published.
+      - name: Release notes from CHANGELOG.md
+        run: go run ./internal/tools/relnotes -version "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
 
       - name: goreleaser release
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes ${{ runner.temp }}/notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # SLSA build provenance for every archive and SBOM, stored by GitHub
+      # (gh attestation verify) and in the Sigstore transparency log.
+      - name: Build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt

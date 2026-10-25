@@ -172,8 +172,9 @@ of its origin, verified before anything changes:
   1. refuses a working tree with local modifications;
   2. fetches the tags and picks the highest release (never an older one
      than the checkout: a pre-release or a later commit stays as it is);
-  3. checks the tag signature (GASH_REQUIRE_SIGNED=1 refuses an unsigned
-     or unverified tag);
+  3. checks the tag signature, or for an unsigned tag the Sigstore
+     signature of its release with cosign (GASH_REQUIRE_SIGNED=1 refuses
+     a tag with neither verified);
   4. downloads the release binary into
      ${XDG_DATA_HOME:-~/.local/share}/gash/versions/<version>/ and checks it
      against the hash the tagged tree pins (release/SHA256SUMS), else the

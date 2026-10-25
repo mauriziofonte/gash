@@ -1,0 +1,19 @@
+# Weekly dependency updates, one grouped pull request per ecosystem. The
+# workflow actions are pinned by commit SHA; Dependabot moves the pin and
+# its version comment together.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

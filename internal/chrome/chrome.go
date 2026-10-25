@@ -9,6 +9,7 @@ package chrome
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -30,7 +31,7 @@ const (
 	npmLatest  = "https://registry.npmjs.org/playwright-core/latest"
 	cftVersion = "https://googlechromelabs.github.io/chrome-for-testing/"
 	cftIndex   = "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json"
-	pwMirror   = "https://cdn.playwright.dev/builds/cft/"
+	pwMirror   = "https://cdn.playwright.dev/builds/cft/" //nolint:gosec // G101: a public download URL, not a credential
 	binRel     = "chrome-headless-shell-linux64/chrome-headless-shell"
 )
 
@@ -86,7 +87,7 @@ func (k *call) env() []string { return k.c.Env.Child() }
 func (k *call) output(name string, args ...string) (string, int) {
 	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: k.env(), Stderr: k.c.Stderr}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(k.c.Stderr, "bash: "+se.Error()+"\n")
 		return "", se.Status
 	}
@@ -97,7 +98,7 @@ func (k *call) output(name string, args ...string) (string, int) {
 func (k *call) status(name string, args ...string) int {
 	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: k.env(), Stdout: io.Discard, Stderr: io.Discard}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		return se.Status
 	}
 	return res.ExitCode
@@ -107,7 +108,7 @@ func (k *call) status(name string, args ...string) int {
 func (k *call) passthrough(name string, args ...string) int {
 	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: k.env(), Stdin: k.c.Stdin, Stdout: k.c.Stdout, Stderr: k.c.Stderr}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(k.c.Stderr, "bash: "+se.Error()+"\n")
 		return se.Status
 	}
@@ -398,7 +399,7 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 	if k.s.Task(c.Stderr, "Unpacking chrome-headless-shell "+target, func() int {
 		res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: "unzip", Args: []string{"-q", zip, "-d", tmp + "/x"},
 			Options: runner.Options{Env: k.env(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
-		if se, ok := err.(*runner.StartError); ok {
+		if se := (*runner.StartError)(nil); errors.As(err, &se) {
 			write(c.Stderr, "bash: "+se.Error()+"\n")
 			return se.Status
 		}
@@ -490,7 +491,7 @@ func (k *call) install(root, link, target, url string, prune []string) int {
 func (k *call) quiet(name string, args ...string) (string, int) {
 	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: k.env(), Stderr: io.Discard}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		return "", se.Status
 	}
 	return runner.CommandSubst(res.Stdout), res.ExitCode

@@ -207,7 +207,7 @@ func start(ctx context.Context, argv []string, o Options) (Result, error) {
 	env := normalizeEnv(o.Env)
 	path, serr := LookPath(argv[0], env, o.Dir)
 	if serr != nil {
-		return Result{ExitCode: serr.(*StartError).Status}, serr
+		return Result{ExitCode: serr.(*StartError).Status}, serr //nolint:errorlint // LookPath returns a *StartError, unwrapped
 	}
 
 	runCtx, cancel := ctx, context.CancelFunc(func() {})

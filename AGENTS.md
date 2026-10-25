@@ -414,7 +414,8 @@ which file is read. On `command_not_allowed`, ask the user; never edit
 
 1. **SQL guard**, a lexer per engine (quotes, comments, PostgreSQL dollar
    quotes): one statement (a trailing `;` is fine); first keyword SELECT, WITH,
-   VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA; no write keywords or
+   VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN or PRAGMA (a read only: no value,
+   no acting pragma such as optimize); no write keywords or
    file, program or sleep functions outside literals and comments (INSERT,
    INTO, FOR UPDATE, ATTACH, LOAD_FILE, pg_read_file, pg_sleep, ...); no client
    commands (`\!`, sqlite dot-commands, MySQL `/*! */` comments).

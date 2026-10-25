@@ -260,7 +260,7 @@ func (s *Supervisor) waitReady(ctx context.Context, m master, offset int64) erro
 func (s *Supervisor) refused(ctx context.Context, m master) error {
 	for _, a := range m.addrs {
 		if err := s.dial(ctx, m.network, a); err != nil {
-			return fmt.Errorf("%s does not accept connections (%v)", a, err)
+			return fmt.Errorf("%s does not accept connections (%w)", a, err)
 		}
 	}
 	return nil
