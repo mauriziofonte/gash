@@ -137,7 +137,7 @@ slow_query_explain field (the plan) when a query takes 100 ms or more
 | `llm_git_overview [PATH] [--log N] [--files N]` | `{branch, upstream, ahead, behind, counts:{staged, modified, untracked, conflicted}, log:[{hash, subject}], diffstat:{files, insertions, deletions}}` (3 subjects by default); `--files N` adds the path lists, N per state |
 | `llm_git_show [REV] [--stat] [--files] [--patch] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `{hash, subject, author, date, files:[{p, add, del}]}` of REV (default HEAD); `--stat` adds `stat` totals, `--files` each file's `status`; `--patch` the patch text capped per file; `REV:FILE` the file's content at REV |
 | `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
-| `llm_ports [--listen]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without) |
+| `llm_ports [--listen] [--port N]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without); `--port N` (0-65535, else `invalid_port`) keeps local port N and adds `procs: [{pid, name}]` to each record (empty for another user's process unless root) |
 | `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name` |
 | `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
@@ -194,7 +194,7 @@ what it printed before unless you pass one of these.
 | `--format json\|jsonl\|tsv\|table` | Row output as one compact JSON array (`json`), one JSON object per line (`jsonl`), a header line plus tab-separated rows (`tsv`: tab, newline, carriage return and backslash in a value are written `\t`, `\n`, `\r`, `\\`; a null is `\N`), or aligned columns for humans (`table`). An unknown format is `invalid_format` |
 | `--width N` | Cuts each output line (in JSON, each string value) at N display columns, ending it with `…` |
 | `--max-lines N`, `--head N`, `--tail N` | Keeps the first N (`--max-lines` is `--head`) and/or the last N lines or rows; what is cut becomes one `[... K lines omitted]` line in text and `table` output, `"truncated": K` in a JSON object, and the metadata line below for a JSON array, `jsonl` and `tsv` |
-| `-j N`, `--timeout S` | Multi-target functions: N targets at a time (default: the CPU count, 8 for network probes) and a per-target time limit (seconds, `0.5`, or `500ms`, `2s`, `1m`; at most 1h). A target that times out is a field of its result, not a failed call; results keep the input order |
+| `-j N`, `--timeout S` | Multi-target functions: N targets at a time (default: the CPU count, 32 for network probes) and a per-target time limit (seconds, `0.5`, or `500ms`, `2s`, `1m`; at most 1h). A target that times out is a field of its result, not a failed call; results keep the input order |
 | `--relative`, `--absolute` | Paths relative to the PATH argument (or the working directory), or absolute (today's default) |
 
 Values are positive integers (1 to 999999999): 0 or a word is
@@ -214,6 +214,67 @@ value, never the network; a write failure never fails the call.
 ### 3.8 Data files and values (3.4)
 
 ### 3.9 Network probes (3.4)
+
+| Function | Output |
+|---|---|
+| `llm_http URL... [--method M] [--header H]... [--auth-env VAR]... [--resolve HOST:IP]... [--follow] [--status-only] [--headers h1,h2] [--json-path P] [--grep RE] [--body-max N] [--expect CODE] [--insecure] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{url, status, ms, timing, bytes, redirects, ok, error}]`, plus `headers` (`--headers`), `value` (`--json-path`), `match` and `matches` (`--grep`); `--status-only`: `[{url, status, ms, ok, error}]` |
+| `llm_dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{name, <one key per type>, ms, error}]` (default types A,AAAA) |
+| `llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{host, protocol, subject, issuer, san, not_after, days_left, verified, verify_error, chain, ms, error}]` |
+| `llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{target, open, ms, error}]` |
+
+The four probes only read (plan D4) and share the rules of 3.6: targets
+are probed in parallel (`-j`, default 8) with a per-target `--timeout`
+(llm_http and llm_tls 10s, llm_dns and llm_tcp 5s), one row per target in
+input order, exit 0 once the targets ran. What goes wrong with one target
+is its `error` field, never a failed call: `dns_not_found`, `dns_error`,
+`connection_refused`, `connection_reset`, `unreachable`, `timeout`,
+`tls_error`, `certificate_error`, `transport_error`; llm_http adds
+`too_many_redirects`, `invalid_json`, `json_path_not_found` and
+`body_max_exceeded`, llm_dns `nxdomain`, `servfail`, `refused` and
+`bad_response`, llm_tls `no_certificate`. A call with no target is
+`missing_target`, a target that does not parse (a URL that is not http(s),
+a HOST:PORT without a valid port, a bad name) `invalid_target` (RETRY).
+
+`llm_http` sends GET (default), HEAD or OPTIONS: any other method can
+change the server's state, is a write, and is refused with
+`http_method_blocked` (FATAL); writes belong to `agent_*`. No request body.
+`ok` is true when there is no error, the status is expected (`--expect
+200`, `2xx` or `200,301`; default 200 to 399), `--grep` matched and
+`--json-path` was found. `timing` is `{dns, connect, tls, ttfb}` in ms
+(null for a phase that did not happen; summed over redirect hops);
+`redirects` lists each 3xx as `{status, location}` (one without
+`--follow`, every hop with it, at most 10). Credentials never go on the
+command line: a `--header` whose name carries one (`Authorization`,
+`Cookie`, a name with TOKEN, KEY, SECRET, AUTH, ...) and a URL with a
+password are `secret_in_argv` (RETRY). `--auth-env VAR` sends the header
+held by the exported variable VAR, either `Name: value` or a bare value
+meaning `Authorization: value`; the value is never printed, not even in an
+error, and is not sent on when a redirect leaves the host (`auth_env_unset`,
+STOP, when VAR is empty; `invalid_auth_env`, RETRY, for a bad name or a
+value with a line break; `--insecure` with `--auth-env` is
+`conflicting_options`). Response headers selected with `--headers` keep
+credentials masked (`set-cookie` keeps the cookie name and attributes),
+and known token formats are masked in headers, `match` and `value` as
+`llm_env` masks them. `--body-max N` (default 8 MiB) bounds the body kept
+for `--grep` and `--json-path`; `bytes` counts the whole body. Proxies come
+from `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY`, CAs from the system or
+`SSL_CERT_FILE`/`SSL_CERT_DIR`. Other codes: `invalid_header`,
+`invalid_resolve`, `invalid_expect`, `invalid_body_max`,
+`invalid_json_path`, `invalid_regex` (RETRY).
+
+`llm_dns` asks `--server IP[:PORT]` or the nameservers of
+`/etc/resolv.conf` itself (UDP, TCP when truncated); names are asked as
+given, without search domains. Answers are sorted (addresses in numeric
+order): A/AAAA, NS, CNAME and TXT are string lists (a TXT record's strings joined), MX `[{host, pref}]`,
+CAA `[{flag, tag, value}]`, SOA `[{mname, rname, serial, refresh, retry,
+expire, minimum}]`; `[]` means no records, `null` that the lookup failed.
+An unknown type is `invalid_type`, a server that is not an IP
+`invalid_server` (RETRY). `llm_tls` accepts any certificate in the
+handshake so that an expired or self-signed one is still described, then
+verifies the chain for the server name (`--sni`, default HOST):
+`verified` and `verify_error` (`expired`, `not_yet_valid`,
+`hostname_mismatch`, `unknown_authority`, `invalid`); `days_left` is
+negative once expired.
 
 ### 3.10 Processes, waiting and services (3.4)
 

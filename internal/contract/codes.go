@@ -211,15 +211,14 @@ var codeTable = []Code{
 	// llm_csv, llm_config formats, llm_dotenv, llm_date).
 
 	// New in 3.4: agent toolkit, git (llm_git_* extensions,
-	// llm_git_overview, llm_git_show, agent_git_commit).
+	// llm_git_overview, llm_git_show, agent_git_commit). agent_git_commit
+	// also returns missing_target and invalid_target of the network block.
 	{"invalid_log", Retry, "git", Origin3x},
 	{"invalid_files", Retry, "git", Origin3x},
 	{"invalid_fields", Retry, "git", Origin3x},
 	{"unknown_revision", Retry, "git", Origin3x},
 	{"git_error", Stop, "git", Origin3x},
-	{"invalid_target", Retry, "git", Origin3x},
 	{"missing_message", Retry, "git", Origin3x},
-	{"missing_target", Retry, "git", Origin3x},
 	{"invalid_author", Retry, "git", Origin3x},
 	{"nothing_to_commit", Retry, "git", Origin3x},
 	{"git_add_failed", Retry, "git", Origin3x},
@@ -232,7 +231,21 @@ var codeTable = []Code{
 	{"push_failed", Stop, "git", Origin3x},
 
 	// New in 3.4: agent toolkit, network (llm_http, llm_dns, llm_tls,
-	// llm_tcp, llm_ports --port).
+	// llm_tcp, llm_ports --port). http_method_blocked is FATAL: a method
+	// that can change server state is a write, and llm_* never writes;
+	// auth_env_unset is STOP (a human exports the credential).
+	{"missing_target", Retry, "network", Origin3x},
+	{"invalid_target", Retry, "network", Origin3x},
+	{"invalid_server", Retry, "network", Origin3x},
+	{"invalid_header", Retry, "network", Origin3x},
+	{"invalid_resolve", Retry, "network", Origin3x},
+	{"invalid_expect", Retry, "network", Origin3x},
+	{"invalid_body_max", Retry, "network", Origin3x},
+	{"invalid_json_path", Retry, "network", Origin3x},
+	{"invalid_auth_env", Retry, "network", Origin3x},
+	{"secret_in_argv", Retry, "network", Origin3x},
+	{"auth_env_unset", Stop, "network", Origin3x},
+	{"http_method_blocked", Fatal, "network", Origin3x},
 
 	// New in 3.4: agent toolkit, processes, waiting and services (llm_wait,
 	// llm_procs, llm_service, llm_docker_*, llm_sysinfo, agent_kill,

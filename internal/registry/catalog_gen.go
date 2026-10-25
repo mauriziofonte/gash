@@ -2966,19 +2966,29 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "List ports in use (JSON)",
 			Module:  "llm",
-			SeeAlso: "llm_procs",
+			SeeAlso: "llm_procs llm_tcp",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_ports [--listen]\n" +
+				"  llm_ports [--listen] [--port N]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -l, --listen           Listening sockets only\n" +
+				"  --port N               Sockets on local port N (0 to 65535), each with the\n" +
+				"                         processes that hold it\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_ports\n" +
-				"  llm_ports --listen",
+				"  llm_ports --listen\n" +
+				"\n" +
+				"  # Who listens on 8080\n" +
+				"  llm_ports --listen --port 8080\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --port replaces ss -tlnp | grep :8080: it adds \"procs\":[{\"pid\",\"name\"}]\n" +
+				"  to each record (from ss -p or netstat -p; empty for another user's process\n" +
+				"  unless you are root).",
 		},
-		Fallback: &Usage{Program: "llm_ports", Usage: "llm_ports [--listen]", Description: "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only"},
+		Fallback: &Usage{Program: "llm_ports", Usage: "llm_ports [--listen] [--port N]", Description: "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only; --port N filters by local port and adds the owning processes"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{

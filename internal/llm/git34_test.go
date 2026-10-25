@@ -21,8 +21,8 @@ func requireGit(t *testing.T) {
 	}
 }
 
-// errCode is the error and action of an envelope on stderr.
-func errCode(t *testing.T, r result) string {
+// gitCode is the error and action of an envelope on stderr.
+func gitCode(t *testing.T, r result) string {
 	t.Helper()
 	var e struct{ Error, Action string }
 	require.NoError(t, json.Unmarshal([]byte(r.Stderr), &e), r.Stderr)
@@ -122,7 +122,7 @@ func TestGitOverview(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := runGo(t, m, clone, env, "llm_git_overview", tc.args...)
 			require.Equal(t, 1, r.RC)
-			require.Equal(t, tc.want, errCode(t, r))
+			require.Equal(t, tc.want, gitCode(t, r))
 		})
 	}
 }
@@ -181,7 +181,7 @@ func TestGitStatusModes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := runGo(t, m, clone, env, "llm_git_status", tc.args...)
 			require.Equal(t, 1, r.RC, r.Stdout)
-			require.Equal(t, tc.want, errCode(t, r))
+			require.Equal(t, tc.want, gitCode(t, r))
 		})
 	}
 }
@@ -320,7 +320,7 @@ func TestGitDiffModes(t *testing.T) {
 	r = runGo(t, m, physTemp(t), env, "llm_git_diff", "--summary", filepath.Join(d, "a.txt"))
 	require.Equal(t, `{"files":1,"insertions":2,"deletions":1}`+"\n", r.Stdout)
 	r = runGo(t, m, d, env, "llm_git_diff", "--patch", ".env")
-	require.Equal(t, "secret_file_blocked/FATAL", errCode(t, r))
+	require.Equal(t, "secret_file_blocked/FATAL", gitCode(t, r))
 
 	// A range, as stat text and as a summary.
 	git(t, d, home, "add", "-A")
@@ -348,7 +348,7 @@ func TestGitDiffModes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := runGo(t, m, d, env, "llm_git_diff", tc.args...)
 			require.Equal(t, 1, r.RC, r.Stdout)
-			require.Equal(t, tc.want, errCode(t, r))
+			require.Equal(t, tc.want, gitCode(t, r))
 		})
 	}
 }
@@ -414,7 +414,7 @@ func TestGitLogFields(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := runGo(t, m, d, env, "llm_git_log", tc.args...)
 			require.Equal(t, 1, r.RC, r.Stdout)
-			require.Equal(t, tc.want, errCode(t, r))
+			require.Equal(t, tc.want, gitCode(t, r))
 		})
 	}
 }
@@ -517,7 +517,7 @@ func TestGitShow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := runGo(t, m, d, env, "llm_git_show", tc.args...)
 			require.Equal(t, 1, r.RC, r.Stdout)
-			require.Equal(t, tc.want, errCode(t, r))
+			require.Equal(t, tc.want, gitCode(t, r))
 		})
 	}
 }

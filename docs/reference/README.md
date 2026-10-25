@@ -12,7 +12,7 @@ In a shell, `gash <topic>` shows the same card and `gash_help <name>` any entry.
 | [docker](docker.md) | 7 | 27 | Containers and Compose stacks |
 | [remote](remote.md) | 7 | 0 | Hosts from ~/.gash_env: exec, push, pull, sync |
 | [dev](dev.md) | 5 | 8 | PHP and Node.js versions, headless Chrome |
-| [llm](llm.md) | 20 | 0 | Read-only JSON tools for AI agents |
+| [llm](llm.md) | 24 | 0 | Read-only JSON tools for AI agents |
 | [agent](agent.md) | 2 | 0 | Write tools for AI agents |
 | [ai](ai.md) | 3 | 0 | Ask Claude or Gemini from the terminal |
 | [gash](gash.md) | 13 | 0 | Help, doctor, configuration, upgrade |

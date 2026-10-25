@@ -1,0 +1,99 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_http (new in 3.4, plan N1): parallel read-only HTTP probes. Every
+# request goes to httpsfake (on PATH via the harness), the local proxy that
+# answers from the routes file below: HTTP_PROXY for http:// URLs,
+# HTTPS_PROXY plus its CA in SSL_CERT_FILE for https:// ones, so nothing
+# leaves the machine. Covers the --status-only rows in input order, a
+# redirect chain with --follow, --json-path and --headers, a body --grep over
+# TLS, a per-URL timeout as a field, the write-method and secret-in-argv
+# refusals, and --auth-env: the credential reaches the request but never the
+# process argv nor the output.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- sourced shell: --status-only rows, input order, ok per status
+exec bash -c 'source "$WORK/start.sh"; source "$GASH_SH"; llm_http http://api.test/health http://api.test/missing --status-only'
+stdout '^\[\{"url":"http://api.test/health","status":200,"ms":[0-9.]+,"ok":true,"error":null\},\{"url":"http://api.test/missing","status":404,"ms":[0-9.]+,"ok":false,"error":null\}\]$'
+! stderr .
+
+# --- direct: redirect chain, JSON path, selected headers
+exec bash -c 'source "$WORK/start.sh"; gash llm_http http://api.test/old --follow --json-path items[0].id --headers content-type'
+stdout '"status":200'
+stdout '"redirects":\[\{"status":301,"location":"http://api.test/new"\}\]'
+stdout '"headers":\{"content-type":"application/json"\}'
+stdout '"value":7,"ok":true,"error":null'
+
+# --- https through the proxy tunnel, body grep, expectation
+exec bash -c 'source "$WORK/start.sh"; source "$GASH_SH"; llm_http https://secure.test/x --grep "<title>" --expect 200 --format tsv'
+stdout '^url\tstatus\tms\ttiming\tbytes\tredirects\tmatch\tmatches\tok\terror$'
+stdout '^https://secure.test/x\t200\t.*\t<html><title>Secure</title></html>\t1\ttrue\t\\N$'
+
+# --- a URL that never answers (no route: MOCK_CURL_TIMEOUT hangs it) is a
+# timeout field, not a failed call
+exec bash -c 'export MOCK_CURL_TIMEOUT=1; source "$WORK/start.sh"; gash llm_http http://api.test/hang --status-only --timeout 0.5'
+stdout '"status":null,"ms":[0-9.]+,"ok":false,"error":"timeout"'
+
+# --- writes are refused: llm_* never changes server state
+! exec gash llm_http http://api.test/health --method POST
+stderr '"error":"http_method_blocked"'
+stderr '"action":"FATAL"'
+! stdout .
+
+# --- a credential on the command line is refused, and not echoed
+! exec gash llm_http http://api.test/health --header 'Authorization: Bearer argv-s3cret'
+stderr '"error":"secret_in_argv"'
+! stderr 'argv-s3cret'
+
+# --- --auth-env: the header comes from the environment, never printed
+exec bash -c 'export API_AUTH="Authorization: Bearer txtar-s3cret"; source "$WORK/start.sh"; source "$GASH_SH"; llm_http http://api.test/health --auth-env API_AUTH --status-only --headers content-type'
+stdout '"status":200'
+! stdout 'txtar-s3cret'
+! stderr 'txtar-s3cret'
+
+# --- ... and is absent from the process argv while the request runs
+[linux] exec bash argv.sh
+
+# --- an unset variable is a STOP error naming the variable only
+! exec gash llm_http http://api.test/health --auth-env NO_SUCH_AUTH_VAR
+stderr '"error":"auth_env_unset","details":"NO_SUCH_AUTH_VAR","action":"STOP"'
+
+# --- help, and an unknown option
+exec gash llm_http --help
+stdout 'llm_http URL\.\.\.'
+! exec gash llm_http http://api.test/ --bogus
+stderr '"error":"unknown_option"'
+
+-- start.sh --
+# Starts httpsfake on the routes below and points the proxy variables and
+# SSL_CERT_FILE at it; it stops when the calling shell exits.
+export MOCK_CURL_ROUTES="$WORK/routes"
+httpsfake -ca "$WORK/ca.pem" -addr "$WORK/addr.$$" & fakepid=$!
+trap 'kill "$fakepid" 2>/dev/null; wait "$fakepid" 2>/dev/null || true' EXIT
+for i in $(seq 1 100); do [ -s "$WORK/addr.$$" ] && break; sleep 0.05; done
+read -r a <"$WORK/addr.$$"
+export HTTP_PROXY="http://$a" HTTPS_PROXY="http://$a" SSL_CERT_FILE="$WORK/ca.pem"
+-- argv.sh --
+set -euo pipefail
+export MOCK_CURL_TIMEOUT=1 API_AUTH="Authorization: Bearer argv-check-s3cret"
+source "$WORK/start.sh"
+gash llm_http http://api.test/hang --auth-env API_AUTH --timeout 1 >"$WORK/argv.out" & p=$!
+for i in $(seq 1 100); do [ -r "/proc/$p/cmdline" ] && grep -q auth-env "/proc/$p/cmdline" && break; sleep 0.02; done
+args="$(tr '\0' ' ' <"/proc/$p/cmdline")"
+wait "$p"
+[[ "$args" == *"--auth-env API_AUTH"* ]] || { echo "argv: $args"; exit 1; }
+[[ "$args" != *s3cret* ]] || { echo "secret in argv: $args"; exit 1; }
+! grep -q s3cret "$WORK/argv.out"
+grep -q '"error":"timeout"' "$WORK/argv.out"
+-- routes --
+GET http://api.test/health 200 ok
+  Content-Type: text/plain
+GET http://api.test/missing 404 not here
+GET http://api.test/old 301
+  Location: http://api.test/new
+GET http://api.test/new 200 {"status":"done","items":[{"id":7}]}
+  Content-Type: application/json
+GET https://secure.test/x 200 <html><title>Secure</title></html>

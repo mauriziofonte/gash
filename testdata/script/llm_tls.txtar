@@ -1,0 +1,69 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_tls (new in 3.4, plan N3): a TLS handshake with each HOST[:PORT] and a
+# summary of the certificate, in parallel, rows in input order. On Linux with
+# openssl, a local `openssl s_server` (on a port a fake held and released,
+# waited for with llm_tcp) serves a self-signed certificate made by the
+# case: it is described but not verified, verified once its file is
+# SSL_CERT_FILE, and a hostname mismatch for another --sni. Everywhere:
+# a server that does not speak TLS (httpsfake's plain listener) and a closed
+# port are fields of their rows, not failures of the call.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- a real handshake with a self-signed certificate
+[linux] [exec:openssl] exec bash tls_case.sh
+
+# --- sourced shell: no TLS on the port, and a closed port
+exec bash -c 'source "$WORK/start.sh"; source "$GASH_SH"; llm_tls "$PLAIN" "$CLOSED" --timeout 2'
+stdout '^\[\{"host":"127\.0\.0\.1:[0-9]+","protocol":null,.*"error":"tls_error"\},\{"host":"127\.0\.0\.1:[0-9]+",.*"error":"connection_refused"\}\]$'
+! stderr .
+
+# --- direct, as TSV: the header names every column
+exec bash -c 'source "$WORK/start.sh"; gash llm_tls "$CLOSED" --format tsv'
+stdout '^host\tprotocol\tsubject\tissuer\tsan\tnot_after\tdays_left\tverified\tverify_error\tchain\tms\terror$'
+
+# --- argument errors
+! exec gash llm_tls
+stderr '"error":"missing_target"'
+! exec gash llm_tls example.com:0
+stderr '"error":"invalid_target"'
+exec gash llm_tls --help
+stdout 'llm_tls HOST\[:PORT\]\.\.\.'
+
+-- start.sh --
+# PLAIN is httpsfake's listener (HTTP, no TLS); CLOSED the port of a second
+# fake, stopped before the probe.
+httpsfake -ca "$WORK/ca.pem" -addr "$WORK/plain.$$" & fakepid=$!
+httpsfake -ca "$WORK/ca2.pem" -addr "$WORK/closed.$$" & gone=$!
+trap 'kill "$fakepid" 2>/dev/null; wait "$fakepid" 2>/dev/null || true' EXIT
+for i in $(seq 1 100); do [ -s "$WORK/plain.$$" ] && [ -s "$WORK/closed.$$" ] && break; sleep 0.05; done
+read -r PLAIN <"$WORK/plain.$$"
+read -r CLOSED <"$WORK/closed.$$"
+kill "$gone"; wait "$gone" 2>/dev/null || true
+export PLAIN CLOSED
+-- tls_case.sh --
+set -euo pipefail
+cd "$WORK"
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 30 \
+  -subj /CN=tls.test -addext subjectAltName=DNS:tls.test,DNS:www.tls.test >/dev/null 2>&1
+# A free port: the one a fake held and released.
+httpsfake -ca ca3.pem -addr port.$$ & fp=$!
+for i in $(seq 1 100); do [ -s port.$$ ] && break; sleep 0.05; done
+kill "$fp"; wait "$fp" 2>/dev/null || true
+port="$(sed 's/.*://' port.$$)"
+openssl s_server -accept "$port" -cert cert.pem -key key.pem -quiet >/dev/null 2>&1 </dev/null & sp=$!
+trap 'kill "$sp" 2>/dev/null; wait "$sp" 2>/dev/null || true' EXIT
+source "$GASH_SH"
+for i in $(seq 1 100); do llm_tcp "127.0.0.1:$port" | grep -q '"open":true' && break; sleep 0.05; done
+out="$(llm_tls "127.0.0.1:$port" --sni www.tls.test)"
+jq -e '.[0] | .subject == "tls.test" and .issuer == "tls.test" and .san == ["tls.test","www.tls.test"]
+  and .verified == false and .verify_error == "unknown_authority" and .days_left >= 29 and .error == null
+  and (.protocol | startswith("TLS"))' <<<"$out" >/dev/null || { echo "$out"; exit 1; }
+out="$(SSL_CERT_FILE="$WORK/cert.pem" llm_tls "127.0.0.1:$port" --sni www.tls.test)"
+jq -e '.[0].verified == true and .[0].verify_error == null' <<<"$out" >/dev/null || { echo "$out"; exit 1; }
+out="$(SSL_CERT_FILE="$WORK/cert.pem" gash llm_tls "127.0.0.1:$port" --sni other.test)"
+jq -e '.[0].verify_error == "hostname_mismatch"' <<<"$out" >/dev/null || { echo "$out"; exit 1; }

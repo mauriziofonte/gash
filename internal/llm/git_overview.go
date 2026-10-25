@@ -392,13 +392,6 @@ func (s statusMode) conflict(o *llmfmt.Options, pathSet bool) string {
 	return ""
 }
 
-func nullable(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
 // repoRow is one row of llm_git_status --repos.
 type repoRow struct {
 	repo    string

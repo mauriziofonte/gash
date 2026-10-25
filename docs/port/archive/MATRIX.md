@@ -1056,6 +1056,10 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_dns | function | pure output | new | parallel DNS lookups with selectable types, own wire client (plan N2) | gash llm_dns | TestDNS*, llm_dns.txtar |
+| llm_http | function | pure output | new | parallel read-only HTTP probes: status, timings, redirects, headers, JSON path, grep (plan N1) | gash llm_http | TestHTTP*, llm_http.txtar |
+| llm_tcp | function | pure output | new | parallel TCP reachability with connect time (plan N4) | gash llm_tcp | TestTCP*, llm_tcp.txtar |
+| llm_tls | function | pure output | new | parallel TLS handshake and certificate summary (plan N3) | gash llm_tls | TestTLS*, llm_tls.txtar |
 
 ### Processes, waiting and services (P1-P5, R4)
 
