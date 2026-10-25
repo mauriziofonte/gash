@@ -8,4 +8,5 @@ import "github.com/mauriziofonte/gash/internal/invoke"
 // llm_same.
 func (m *Module) registerRemote(t *invoke.Table) {
 	t.Handle("llm_remote_run", m.remoteRun)
+	t.Handle("llm_same", m.same)
 }

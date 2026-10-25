@@ -47,6 +47,7 @@ var llmOptions = map[string][]string{
 
 	// 3.4 remote.
 	"llm_remote_run": {"--step", "--stop-on-error", "-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_same":       {"--container", "--exclude", "-j", "--jobs", "--timeout", "--width", "--max-lines", "--head", "--tail"},
 }
 
 // TestHelpListsEveryOption: every option above is accepted by its parser

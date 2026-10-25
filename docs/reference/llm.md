@@ -24,6 +24,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
 | [`llm_remote_run`](#llm-remote-run) |  | Run a read-only command on registered hosts, in parallel or in steps |
+| [`llm_same`](#llm-same) |  | Is the deployed copy the local one? Hash both sides, list the differences |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
 
 ## llm_config
@@ -627,6 +628,61 @@ null or timeout, host_unreachable, remote_protocol_error; with --step
 the host's date has no %N), and {"stopped":true,"skipped":K} or
 {"timed_out":true} on stderr. A failing command is data (rc), not an
 error of the call.
+```
+
+## llm_same
+
+Is the deployed copy the local one? Hash both sides, list the differences
+
+#### Usage
+
+```text
+llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME]... [-j N] [--timeout S]
+(budget: [--width N] [--max-lines N] [--head N] [--tail N])
+```
+
+#### Options
+
+```text
+--container CTR        REMOTE is a path inside container CTR on the host
+                       (docker exec)
+--exclude NAME         Leave out files and directories with this name glob
+                       (repeatable; .git is always left out)
+-j, --jobs N           Targets at a time (default 8)
+--timeout S            Per target (default 120)
+--width N              Cut each p at N columns
+--max-lines N          Keep the first N diff entries (--head N; default 100)
+--head N, --tail N     Keep the first / last N diff entries
+```
+
+#### Examples
+
+```bash
+# One file on two hosts
+llm_same config/app.php web1:/srv/app/config/app.php web2:/srv/app/config/app.php
+
+# A whole tree, without node_modules
+llm_same dist web:/var/www/app/dist --exclude node_modules
+
+# Inside a container
+llm_same src/handler.py web:/app/handler.py --container api
+```
+
+#### Notes
+
+```text
+Replaces sha256sum f | cut -c1-12; ssh h "docker exec c sha256sum f" and
+the eyeball comparison. One ssh round trip per target, however many files.
+Output: {"same":false,"files":N,"diff":[{"host","p","local","remote"}]}
+with the first 12 hex digits of each sha256, null where a side lacks the
+path; p is relative to the directory (LOCAL as given for a file, "." when
+a side is missing or is a directory against a file); files counts the
+local files. Directories are compared recursively over regular files
+(symlinks not followed); names holding a newline or a backslash are left
+out. Secret files are not compared (secrets_skipped: K); a secret LOCAL
+file is secret_file_blocked. ALIAS is a registered HOST: alias; REMOTE
+follows the remote path rules (AGENTS.md 3.12). The host needs
+sha256sum, shasum or openssl (hash_tool_not_found).
 ```
 
 ## llm_tree

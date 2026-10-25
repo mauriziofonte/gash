@@ -207,6 +207,7 @@ trip per call; a dead connection is `host_unreachable` (RETRY).
 | Function | Output |
 |---|---|
 | `llm_remote_run HOST... -- CMD \| HOST --step CMD... [--stop-on-error] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `-- CMD`: one row per host in HOST order, run in parallel: `[{"host","rc","ms","out","err","error"}]` (`error` null, `timeout`, `host_unreachable` or `remote_protocol_error`); `--step`: the steps in order in ONE round trip, `[{"step","rc","ms","out"}]` (out = stdout and stderr), `{"stopped":true,"skipped":K}` on stderr after `--stop-on-error` |
+| `llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME] [-j N] [--timeout S] [--width N] [--max-lines N] [--head N] [--tail N]` | `{"same":false,"files":N,"diff":[{"host","p","local","remote"}]}`: the first 12 hex of each sha256, null where a side lacks the path, one ssh round trip per target however many files; directories recursively over regular files (`.git` and `--exclude` names left out), `--container` hashes inside the container; secret files are not compared (`secrets_skipped`) |
 
 `--host ALIAS` (repeatable) on `llm_find`, `llm_grep`, `llm_tree` and
 `llm_config` runs the same call on the host and prints the local output; a

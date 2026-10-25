@@ -46,15 +46,17 @@ func argError(code, details, hint string) (*remote.Plan, bool) {
 
 // fbPrelude are the sh helpers of every fallback: the C locale, newline
 // and tab in variables, gash_err CODE KEY DETAILS (the error frame the
-// Go side turns into the local envelope), gash_resolve PATH (realpath -m:
-// GNU realpath when it is there, else cd -P and readlink -f), and the
-// rails functions gash_forbidden and gash_secret.
+// Go side turns into the local envelope), gash_resolve PATH (~ and ~/ as
+// the remote home, then realpath -m: GNU realpath when it is there, else
+// cd -P and readlink -f), and the rails functions gash_forbidden and
+// gash_secret.
 const fbPrelude = `LC_ALL=C; export LC_ALL
 NL='
 '
 TAB=$(printf '\t')
 gash_err() { printf '%s err %s %s %s\n' "$N" "$1" "$2" "$3" >&2; exit 1; }
 gash_resolve() {
+  case $1 in '~') set -- "$HOME" ;; '~/'*) set -- "$HOME/${1#'~/'}" ;; esac
   if gr_r=$(realpath -m -- "$1" 2>/dev/null) && [ -n "$gr_r" ]; then printf '%s\n' "$gr_r"; return 0; fi
   case $1 in /*) gr_p=$1 ;; *) gr_p=$(pwd -P)/$1 ;; esac
   gr_t=
@@ -125,9 +127,20 @@ type fbHint func(code, key, details string) (string, string)
 
 // fbError turns an error frame into the local envelope, or returns false.
 func fbError(stderr []byte, nonce string, hint fbHint) ([]byte, bool) {
-	rest, ok := fbFrame(stderr, nonce, "err")
+	e, ok := fbEnvelope(stderr, nonce, hint)
 	if !ok {
 		return nil, false
+	}
+	var b bytes.Buffer
+	_ = e.Write(&b)
+	return b.Bytes(), true
+}
+
+// fbEnvelope is the envelope of an error frame, or false.
+func fbEnvelope(stderr []byte, nonce string, hint fbHint) (contract.Envelope, bool) {
+	rest, ok := fbFrame(stderr, nonce, "err")
+	if !ok {
+		return contract.Envelope{}, false
 	}
 	parts := strings.SplitN(rest, " ", 3)
 	for len(parts) < 3 {
@@ -141,9 +154,7 @@ func fbError(stderr []byte, nonce string, hint fbHint) ([]byte, bool) {
 	if _, known := contract.ActionOf(code); !known {
 		code, details, h = "internal_error", "remote fallback: "+rest, ""
 	}
-	var b bytes.Buffer
-	_ = contract.New(code, details, h).Write(&b)
-	return b.Bytes(), true
+	return contract.New(code, details, h), true
 }
 
 // fbFinish is the Finish of a fallback whose stdout is the local output:

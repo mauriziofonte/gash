@@ -231,6 +231,11 @@ var codeTable = []Code{
 	{"remote_binary_unavailable", Stop, "remote", Origin3x},
 	{"missing_host", Retry, "remote", Origin3x},
 	{"remote_glob_unsupported", Retry, "remote", Origin3x},
+	{"invalid_target", Retry, "remote", Origin3x},
+	{"invalid_exclude", Retry, "remote", Origin3x},
+	{"invalid_container_name", Retry, "remote", Origin3x},
+	{"container_unavailable", Retry, "remote", Origin3x},
+	{"hash_tool_not_found", Stop, "remote", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

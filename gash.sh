@@ -378,6 +378,10 @@ llm_remote_run() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_remote_run "$@"
 }
+llm_same() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_same "$@"
+}
 llm_tree() { __gash_call llm_tree "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/llm.sh" "$__GASH_T1"
 

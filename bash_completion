@@ -20,7 +20,7 @@ fi
 # Completion handler for Gash functions.
 # Dispatches to per-function completion based on COMP_WORDS[0].
 # shellcheck disable=SC2120
-__gash_complete() { __gash_cold __gash_complete 03d6f9f3 && "${FUNCNAME[0]}" "$@"; }
+__gash_complete() { __gash_cold __gash_complete 4b4507b8 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Enable Completion
@@ -101,6 +101,7 @@ __gash_enable_completion() {
         llm_procs
         llm_project
         llm_remote_run
+        llm_same
         llm_tree
         mkdir_cd
         node_detect_version

@@ -68,4 +68,63 @@ var catalogRemote = []Function{
 		Env:       []string{"GASH_ENV_FILE", "HOME"},
 		Replaces:  "for h in a b; do ssh $h CMD; done; ssh h a; ssh h b",
 	},
+	{
+		Name:     "llm_same",
+		Module:   "llm",
+		Topic:    "llm",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("pure output"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:  "Is the deployed copy the local one? Hash both sides, list the differences",
+			Module: "llm",
+			Body: "" +
+				"USAGE\n" +
+				"  llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME]... [-j N] [--timeout S]\n" +
+				"  (budget: [--width N] [--max-lines N] [--head N] [--tail N])\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --container CTR        REMOTE is a path inside container CTR on the host\n" +
+				"                         (docker exec)\n" +
+				"  --exclude NAME         Leave out files and directories with this name glob\n" +
+				"                         (repeatable; .git is always left out)\n" +
+				"  -j, --jobs N           Targets at a time (default 8)\n" +
+				"  --timeout S            Per target (default 120)\n" +
+				"  --width N              Cut each p at N columns\n" +
+				"  --max-lines N          Keep the first N diff entries (--head N; default 100)\n" +
+				"  --head N, --tail N     Keep the first / last N diff entries\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  # One file on two hosts\n" +
+				"  llm_same config/app.php web1:/srv/app/config/app.php web2:/srv/app/config/app.php\n" +
+				"\n" +
+				"  # A whole tree, without node_modules\n" +
+				"  llm_same dist web:/var/www/app/dist --exclude node_modules\n" +
+				"\n" +
+				"  # Inside a container\n" +
+				"  llm_same src/handler.py web:/app/handler.py --container api\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces sha256sum f | cut -c1-12; ssh h \"docker exec c sha256sum f\" and\n" +
+				"  the eyeball comparison. One ssh round trip per target, however many files.\n" +
+				"  Output: {\"same\":false,\"files\":N,\"diff\":[{\"host\",\"p\",\"local\",\"remote\"}]}\n" +
+				"  with the first 12 hex digits of each sha256, null where a side lacks the\n" +
+				"  path; p is relative to the directory (LOCAL as given for a file, \".\" when\n" +
+				"  a side is missing or is a directory against a file); files counts the\n" +
+				"  local files. Directories are compared recursively over regular files\n" +
+				"  (symlinks not followed); names holding a newline or a backslash are left\n" +
+				"  out. Secret files are not compared (secrets_skipped: K); a secret LOCAL\n" +
+				"  file is secret_file_blocked. ALIAS is a registered HOST: alias; REMOTE\n" +
+				"  follows the remote path rules (AGENTS.md 3.12). The host needs\n" +
+				"  sha256sum, shasum or openssl (hash_tool_not_found).",
+		},
+		LoadsEnv:  true,
+		ShellVars: []string{"HOME"},
+		Env:       []string{"GASH_ENV_FILE", "HOME", "PWD"},
+		Replaces:  "sha256sum f | cut -c1-12; ssh h \"sha256sum f\" | cut -c1-12",
+	},
 }
