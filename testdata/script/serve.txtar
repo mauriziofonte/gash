@@ -19,7 +19,7 @@ cp $GASH_BIN $WORK/gash
 env GASH_BIN=$WORK/gash
 exec git init -q tree
 exec bash diff.sh
-stdout '^served 21$'
+stdout '^served 24$'
 ! stdout DIFF
 exec bash streams.sh
 cmp stdout want-streams
@@ -79,6 +79,12 @@ run gash files
 run gash_username
 run gash_username extra
 run llm_exec 'ls a'
+# The program's environment (Bash 4.4's exec takes one from SHLVL).
+run llm_env
+SHLVL=" 9 "
+run llm_env
+unset SHLVL
+run llm_env
 echo "served $served"
 
 -- streams.sh --
@@ -121,7 +127,7 @@ wait
 mkdir -p "$WORK/many"
 for i in {1..3000}; do : >"$WORK/many/file-with-a-rather-long-name-$i.txt"; done
 {
-    llm_find '*.txt' "$WORK/many"
+    llm_find '*.txt' "$WORK/many" -n 5000
     echo "pipe rc=$?" >>"$WORK/pipe-rc"
 } > >(head -c1 >/dev/null)
 sleep 0.5

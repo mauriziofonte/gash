@@ -481,9 +481,10 @@ __GASH_SRV_CHECKED=""
 __gash_srv_ready() {
     [[ "$BASHPID" == "$$" && "${OSTYPE-}" == linux* ]] || return 1
     if [[ -n "${__GASH_SRV_OWNER-}" ]]; then
-        # The binary's mtime is checked once a second at most.
+        # The binary's mtime is checked once a second at most (at every call
+        # on Bash 4.4, which has no EPOCHSECONDS).
         if [[ -n "${__GASH_SRV_PID-}" && "$__GASH_SRV_BIN" == "$__GASH_BIN" ]] &&
-            { [[ "${EPOCHSECONDS-}" == "$__GASH_SRV_CHECKED" ]] || ! [[ "$__GASH_BIN" -nt "$__GASH_SRV_DIR/stamp" ]]; }; then
+            { [[ -n "${EPOCHSECONDS-}" && "$EPOCHSECONDS" == "$__GASH_SRV_CHECKED" ]] || ! [[ "$__GASH_BIN" -nt "$__GASH_SRV_DIR/stamp" ]]; }; then
             __GASH_SRV_CHECKED=${EPOCHSECONDS-}
             return 0
         fi
@@ -582,6 +583,12 @@ __gash_srv_decls() {
     local IFS=$' \t\n'
     # shellcheck disable=SC2086
     declare -p $__GASH_CALL_COMMON ${__GASH_CALL_VARS[$1]-} ${__GASH_CALL_SETTINGS[$1]-} __GASH_HELP_LOADED
+    # Bash 4.4's exec gives the program one SHLVL less: the server does
+    # the same from the shell's.
+    if ((BASH_VERSINFO[0] < 5)); then
+        local __GASH_SRV_SHLVL="${SHLVL-}"
+        declare -p __GASH_SRV_SHLVL
+    fi
     return 0
 }
 

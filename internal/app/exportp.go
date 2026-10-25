@@ -252,3 +252,19 @@ func hexVal(c byte) int {
 	}
 	return int(c-'A') + 10
 }
+
+// execShellLevel is the SHLVL Bash 4.4's exec gives the program from the
+// shell's: an integer (blanks around it allowed) less one, at least 0; 0
+// for anything else; 1 past 999.
+func execShellLevel(v string) string {
+	n, err := strconv.ParseInt(strings.Trim(v, " \t\n"), 10, 64)
+	switch {
+	case err != nil || n < 1:
+		n = 0
+	case n > 1000:
+		n = 1
+	default:
+		n--
+	}
+	return strconv.FormatInt(n, 10)
+}

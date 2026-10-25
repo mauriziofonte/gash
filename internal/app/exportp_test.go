@@ -30,6 +30,8 @@ func TestParseExportPMatchesBash(t *testing.T) {
 	if err != nil {
 		t.Skip("no bash")
 	}
+	major, err := exec.Command(bash, "-c", `echo "${BASH_VERSINFO[0]}"`).Output()
+	require.NoError(t, err)
 	for _, mode := range []string{"", "set -o posix; ", "LC_ALL=C.UTF-8; ", "LC_ALL=C; "} {
 		var env []string
 		for i, v := range tricky {
@@ -52,9 +54,26 @@ func TestParseExportPMatchesBash(t *testing.T) {
 				want = append(want, kv)
 			}
 		}
+		if string(major) == "4\n" {
+			// Bash 4.4's exec takes one from SHLVL, as the server does.
+			for i, kv := range got {
+				if v, ok := strings.CutPrefix(kv, "SHLVL="); ok {
+					got[i] = "SHLVL=" + execShellLevel(v)
+				}
+			}
+		}
 		slices.Sort(got)
 		slices.Sort(want)
 		require.Equal(t, want, got, "mode %q", mode)
+	}
+}
+
+func TestExecShellLevel(t *testing.T) {
+	for in, want := range map[string]string{
+		"1": "0", "": "0", "x": "0", "7": "6", " 3\t": "2", "+2": "1", "-4": "0",
+		"1000": "999", "1001": "1", "99999999999999999999": "0",
+	} {
+		require.Equal(t, want, execShellLevel(in), in)
 	}
 }
 

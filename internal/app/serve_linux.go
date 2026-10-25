@@ -486,7 +486,7 @@ func (s *server) environ(req request) (env []string, umask int, ok bool) {
 	// The umask line, the declarations, \x01, export -p.
 	maskLine, rest, _ := strings.Cut(req.text, "\n")
 	m, err := strconv.ParseUint(maskLine, 8, 32)
-	if err != nil {
+	if err != nil || m > 0o777 {
 		return nil, 0, false
 	}
 	declText, exportText, ok := strings.Cut(rest, "\x01\n")
@@ -532,6 +532,13 @@ func (s *server) environ(req request) (env []string, umask int, ok bool) {
 			set(name, "")
 		} else if i := strings.IndexByte(kv, '='); i > 0 {
 			set(kv[:i], kv)
+		}
+	}
+	// Bash 4.4's exec takes one from SHLVL and exports it for the program
+	// (adjust_shell_level); the shell sends the value it had.
+	for _, d := range decls {
+		if d.name == "__GASH_SRV_SHLVL" {
+			set("SHLVL", "SHLVL="+execShellLevel(d.value))
 		}
 	}
 	if s.under != "" {
@@ -685,7 +692,7 @@ func fdInfo(pid, n int) (flags int, pos int64, err error) {
 		v = strings.TrimSpace(v)
 		switch k {
 		case "flags":
-			f, err := strconv.ParseInt(v, 8, 64)
+			f, err := strconv.ParseInt(v, 8, 32)
 			if err != nil {
 				return 0, 0, err
 			}
