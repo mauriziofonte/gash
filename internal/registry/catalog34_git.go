@@ -7,6 +7,74 @@ package registry
 // follow the catalog_gen.go format; mergeCatalog sorts them in.
 var catalogGit = []Function{
 	{
+		Name:     "agent_git_commit",
+		Module:   "agent",
+		Topic:    "agent",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("shell-mutating"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:   "Stage explicit paths, commit, optionally push, in one call",
+			Module:  "agent",
+			SeeAlso: "llm_git_overview llm_git_status",
+			Body: "" +
+				"USAGE\n" +
+				"  agent_git_commit -m SUBJECT [-m BODY]... (--add PATH... | -A) [--author \"N <e>\"]\n" +
+				"                   [--push [REMOTE]] [--dry-run] [--force] [--timeout S] [--format F]\n" +
+				"                   [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  -m, --message TEXT     The subject; each further -m is a body paragraph\n" +
+				"  --add PATH...          The paths to stage (files or directories, relative to\n" +
+				"                         PATH), every word up to the next option\n" +
+				"  -A, --all              Stage every change of the work tree (never implied)\n" +
+				"  --author \"N <e>\"       The commit's author\n" +
+				"  --push [REMOTE]        Push the branch afterwards: to its upstream, or to\n" +
+				"                         REMOTE under the branch's name; never forced\n" +
+				"  --dry-run              Report the files, the branch and the push target;\n" +
+				"                         stage, commit and push nothing\n" +
+				"  --force                Allow a repository on a sensitive path (/etc, /var,\n" +
+				"                         /usr/local, /root) outside your HOME and working\n" +
+				"                         directory: only after the user agreed. It never forces\n" +
+				"                         a push\n" +
+				"  --timeout S            Bound the commit (hooks) and the push (default 120s)\n" +
+				"  --format F             json (default) or jsonl: the report is one object\n" +
+				"  --max-lines N          Paths listed by --dry-run (default 100; also --head N,\n" +
+				"                         --tail N); --width N cuts each path\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  # Commit two files and push to the upstream\n" +
+				"  agent_git_commit -m 'fix: parser' -m 'Handles empty input.' --add src/p.go src/p_test.go --push\n" +
+				"  # {\"hash\":\"a1b2c3d\",\"branch\":\"main\",\"files\":2,\"pushed\":true,\"remote\":\"origin\",\"ahead\":0}\n" +
+				"\n" +
+				"  # Preview a commit of every change in another repository\n" +
+				"  agent_git_commit -m 'chore: update' -A --dry-run ~/src/site\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces git add A B && git commit -m S -m B && git push && git log -1.\n" +
+				"  Checked before anything is written: a detached HEAD (detached_head) and\n" +
+				"  unresolved conflicts (merge_conflict) are STOP; nothing to commit\n" +
+				"  (nothing_to_commit), a missing path (file_not_found), a push without an\n" +
+				"  upstream (no_upstream) or to an unknown remote (unknown_remote), and a\n" +
+				"  branch behind its upstream (push_rejected) are RETRY; a secret file in the\n" +
+				"  commit (staged already or under an --add path) is secret_file_blocked\n" +
+				"  (FATAL). The commit holds what is staged plus the --add paths, as git add\n" +
+				"  && git commit does. git runs with your configuration and hooks and never\n" +
+				"  prompts. A failed commit (a hook, the identity) is commit_failed (RETRY)\n" +
+				"  with the paths left staged; a push the remote refuses is push_rejected\n" +
+				"  (RETRY) with the remote's message, any other push failure push_failed\n" +
+				"  (STOP); both carry \"hash\" and \"branch\" of the commit, which exists.\n" +
+				"  ahead is null without an upstream to compare with.",
+		},
+		ShellVars: []string{"HOME"},
+		Env:       []string{"HOME", "PWD"},
+		Replaces:  "git add A B && git commit -m S && git push && git log -1",
+	},
+	{
 		Name:     "llm_git_overview",
 		Module:   "llm",
 		Topic:    "llm",

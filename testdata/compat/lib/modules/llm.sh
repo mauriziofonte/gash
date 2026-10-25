@@ -20,6 +20,7 @@ if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__g
 fi
 unset __gash_here
 
+agent_git_commit() { __gash_call agent_git_commit "$@"; }
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
 llm_db_explain() {
