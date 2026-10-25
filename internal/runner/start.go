@@ -32,7 +32,7 @@ func (Exec) Start(ctx context.Context, c Cmd) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(path, argv[1:]...)
+	cmd := exec.Command(path, argv[1:]...) //nolint:noctx // detached: the process outlives the call, ctx was checked above
 	cmd.Args[0] = argv[0]
 	cmd.Env, cmd.Dir = env, c.Dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, c.Stdout, c.Stderr

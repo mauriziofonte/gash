@@ -209,7 +209,8 @@ func (x *call) parseServices(file string, project bool) parsed {
 // the file is usable (an absent one is); otherwise rc is the status.
 func (x *call) checkEnvFile(envPath string, jsonOut bool) (rc int, ok bool) {
 	_, err := dotenv(envPath, x.exported.Lookup)
-	e, bad := err.(*dotenvError)
+	var e *dotenvError
+	bad := errors.As(err, &e)
 	if !bad {
 		return 0, true
 	}

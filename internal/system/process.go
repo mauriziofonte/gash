@@ -3,6 +3,7 @@
 package system
 
 import (
+	"errors"
 	"io"
 	"sort"
 	"strconv"
@@ -271,13 +272,13 @@ const (
 func (m *Module) terminate(pids []string, report func(pid string, outcome int)) bool {
 	denied := map[string]bool{}
 	for _, pid := range pids {
-		if m.signal(pid, syscall.SIGTERM) == syscall.EPERM {
+		if errors.Is(m.signal(pid, syscall.SIGTERM), syscall.EPERM) {
 			denied[pid] = true
 		}
 	}
 	probe := func(pid string) bool {
 		err := m.signal(pid, 0)
-		if err == syscall.EPERM {
+		if errors.Is(err, syscall.EPERM) {
 			denied[pid] = true
 			return false
 		}
@@ -298,7 +299,7 @@ func (m *Module) terminate(pids []string, report func(pid string, outcome int)) 
 	ok := true
 	for _, pid := range pids {
 		alive := !denied[pid] && probe(pid)
-		if alive && m.signal(pid, syscall.SIGKILL) == syscall.EPERM {
+		if alive && errors.Is(m.signal(pid, syscall.SIGKILL), syscall.EPERM) {
 			denied[pid] = true
 		}
 		switch {

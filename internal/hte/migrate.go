@@ -114,7 +114,7 @@ func freePorts() (state.Ports, error) {
 	}()
 	var ports []int
 	for range 2 {
-		l, err := net.Listen("tcp4", state.LoopbackIPv4+":0")
+		l, err := net.Listen("tcp4", state.LoopbackIPv4+":0") //nolint:noctx // an instant local bind probe
 		if err != nil {
 			return state.Ports{}, hteerr.Newf(hteerr.PortInUse, "", "no free loopback port for staging: %v", err)
 		}

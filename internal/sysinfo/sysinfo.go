@@ -11,6 +11,7 @@ package sysinfo
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"slices"
@@ -242,7 +243,7 @@ func (s *Session) elevated() bool { return s.sudo && s.m.uid() != 0 }
 func (s *Session) status(name string, args ...string) int {
 	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: s.env, Stdout: io.Discard, Stderr: io.Discard}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		return se.Status
 	}
 	return res.ExitCode
@@ -252,7 +253,7 @@ func (s *Session) status(name string, args ...string) int {
 func (s *Session) tool(name string, args ...string) ([]byte, int) {
 	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: s.env, Stderr: io.Discard}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		return nil, se.Status
 	}
 	return res.Stdout, res.ExitCode
@@ -263,7 +264,7 @@ func (s *Session) tool(name string, args ...string) ([]byte, int) {
 func (s *Session) toolShown(name string, args ...string) ([]byte, int) {
 	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: s.env, Stderr: s.c.Stderr}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		_, _ = io.WriteString(s.c.Stderr, "bash: "+se.Error()+"\n")
 		return nil, se.Status
 	}

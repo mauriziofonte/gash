@@ -24,11 +24,10 @@ type files struct {
 	u8  bool
 }
 
-// isFile is [[ -f P ]], isDir [[ -d P ]], exists [[ -e P ]] (all follow
-// symlinks); isLink is [[ -L P ]].
+// isFile is [[ -f P ]], isDir [[ -d P ]] (both follow symlinks); isLink
+// is [[ -L P ]].
 func (f files) isFile(p string) bool { return f.sys.IsRegular(p) }
 func (f files) isDir(p string) bool  { return f.sys.IsDir(p) }
-func (f files) exists(p string) bool { return f.sys.Exists(p) }
 func (f files) isLink(p string) bool {
 	st, err := f.sys.Lstat(p)
 	return err == nil && st.Mode()&fs.ModeSymlink != 0

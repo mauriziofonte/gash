@@ -3,6 +3,7 @@
 package selfmgmt
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -183,7 +184,7 @@ func (m *Module) editProfile(c *invoke.Call, p ui.Printer, profile, expr string)
 	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "sed", Args: []string{expr, target}, Options: runner.Options{
 		Env: c.Env.Child(), Stderr: c.Stderr,
 	}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
 		return false
 	}
@@ -329,10 +330,8 @@ func removeFile(path string) error {
 // errnoText is the strerror text of err, as rm prints it.
 func errnoText(err error) string {
 	var errno syscall.Errno
-	if pe, ok := err.(*os.PathError); ok {
-		if e, ok := pe.Err.(syscall.Errno); ok {
-			errno = e
-		}
+	if pe := (*os.PathError)(nil); errors.As(err, &pe) {
+		_ = errors.As(pe.Err, &errno)
 	}
 	switch errno {
 	case syscall.EISDIR:

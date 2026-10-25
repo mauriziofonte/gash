@@ -16,7 +16,6 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
-	"github.com/mauriziofonte/gash/internal/term"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -74,9 +73,6 @@ func (m *Module) nvmPrune(c *invoke.Call) int {
 
 // headless is __gash_headless_gate_active.
 func headless(c *invoke.Call) bool { return c.Env.Get("GASH_HEADLESS") == "1" }
-
-// utf8Locale is the caller's locale as the 2.x text tools read it.
-func utf8Locale(c *invoke.Call) bool { return term.LocaleUTF8(c.Env) }
 
 // cwd is the logical working directory of the caller (`pwd`): $PWD when it
 // names the current directory, else the physical path.

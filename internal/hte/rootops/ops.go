@@ -33,7 +33,7 @@ const (
 	OpInstallHelper = "install_helper"
 	// OpWriteSudoers writes /etc/sudoers.d/gash-hte for the sudo user:
 	// a temporary file, visudo -c -f, rename.
-	OpWriteSudoers = "write_sudoers"
+	OpWriteSudoers = "write_sudoers" //nolint:gosec // G101: an operation name, not a credential
 	// OpSysctlPorts sets net.ipv4.ip_unprivileged_port_start to Value
 	// unless it is already that or lower.
 	OpSysctlPorts = "sysctl_ports"

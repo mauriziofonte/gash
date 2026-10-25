@@ -3,7 +3,6 @@
 package docker
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -25,23 +24,6 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
-
-// bash2x runs script with the 2.x docker modules loaded (no color) and
-// returns its stdout.
-func bash2x(t *testing.T, env []string, script string) string {
-	t.Helper()
-	newScene(t) // the skips
-	cmd := exec.Command("bash", "--noprofile", "--norc", "-c", `root=$1; shift
-for f in output utils validation; do source "$root/lib/core/$f.sh"; done
-source "$root/lib/modules/docker.sh"; source "$root/lib/modules/docker-compose.sh"
-__gash_use_color() { return 1; }
-`+script, "_", absRoot)
-	cmd.Env = append([]string{"HOME=" + t.TempDir(), "PATH=/usr/bin:/bin", "LC_ALL=C"}, env...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	require.NoError(t, cmd.Run(), errb.String())
-	return out.String()
-}
 
 func jsonOf(t *testing.T, s string) map[string]any {
 	t.Helper()

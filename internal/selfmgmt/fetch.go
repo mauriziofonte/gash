@@ -346,7 +346,7 @@ func extract(archive, dir string, names ...string) (map[string]bool, error) {
 	found := map[string]bool{}
 	for {
 		h, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return found, nil
 		}
 		if err != nil {

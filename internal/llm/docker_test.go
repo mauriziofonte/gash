@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,31 +16,6 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/term"
 )
-
-// fakeCheck stands for docker_compose_check: it prints its arguments and
-// a line on stderr, and returns 3.
-const fakeCheck = `docker_compose_check() { printf '[%s]\n' "$@"; printf 'checked\n' >&2; return 3; }`
-
-// run2xFake runs the 2.x llm_docker_check with docker_compose_check
-// replaced by fakeCheck.
-func run2xFake(t *testing.T, cwd string, env map[string]string, args ...string) result {
-	t.Helper()
-	dir := archive2x(t)
-	script := `source "$1/gash.sh" >/dev/null 2>&1 || exit 98; ` + fakeCheck + `; cd "$2" || exit 99; shift 2; llm_docker_check "$@"`
-	cmd := exec.Command("bash", append([]string{"--noprofile", "--norc", "-c", script, "bash", dir, cwd}, args...)...)
-	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	rc := 0
-	if err := cmd.Run(); err != nil {
-		var ee *exec.ExitError
-		require.ErrorAs(t, err, &ee)
-		rc = ee.ExitCode()
-	}
-	return result{out.String(), errb.String(), rc}
-}
 
 // runGoFake runs the llm_docker_check handler with a docker_compose_check
 // handler that does what fakeCheck does (nil: none registered).

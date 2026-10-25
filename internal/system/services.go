@@ -3,6 +3,7 @@
 package system
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -104,7 +105,7 @@ func (m *Module) passthrough(c *invoke.Call, name string, args ...string) int {
 	res, err := m.run.Run(ctx(c), runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
 	if err != nil {
-		if se, ok := err.(*runner.StartError); ok {
+		if se := (*runner.StartError)(nil); errors.As(err, &se) {
 			write(c.Stderr, "bash: "+se.Error()+"\n")
 			return se.Status
 		}

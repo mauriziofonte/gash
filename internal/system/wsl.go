@@ -3,6 +3,7 @@
 package system
 
 import (
+	"errors"
 	"io"
 	"os"
 	"regexp"
@@ -81,7 +82,7 @@ func (m *Module) wslStopVM(c *invoke.Call) int {
 func (m *Module) wslCmd(c *invoke.Call, args ...string) int {
 	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "cmd.exe", Args: append([]string{"/C"}, args...),
 		Options: runner.Options{Env: c.Env.Child(), Dir: m.winDir(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(c.Stderr, "bash: "+se.Error()+"\n")
 		return se.Status
 	}
@@ -130,7 +131,7 @@ func (m *Module) wslTaskmanager(c *invoke.Call) int {
 	cmd := runner.Cmd{Path: "cmd.exe", Args: []string{"/C", "taskmgr"},
 		Options: runner.Options{Env: c.Env.Child(), Dir: m.winDir(), Stdout: osFile(c.Stdout), Stderr: osFile(c.Stderr)}}
 	if err := m.run.Start(ctx(c), cmd); err != nil {
-		if se, ok := err.(*runner.StartError); ok {
+		if se := (*runner.StartError)(nil); errors.As(err, &se) {
 			write(c.Stderr, "bash: "+se.Error()+"\n")
 		}
 	}
@@ -243,7 +244,7 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 	p.Info("Dropping the page cache and slab, then compacting memory (sudo)...")
 	res, err := m.run.RunScript(ctx(c), runner.Script{Name: runner.ScriptWSLCompact,
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
-	if se, ok := err.(*runner.StartError); ok {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(c.Stderr, "bash: "+se.Error()+"\n")
 	}
 	if err != nil || res.ExitCode != 0 {
