@@ -1,0 +1,12 @@
+{"Time":"2026-10-25T10:00:00Z","Action":"start","Package":"example.com/app/mathx"}
+{"Time":"2026-10-25T10:00:00Z","Action":"run","Package":"example.com/app/mathx","Test":"TestSum"}
+{"Time":"2026-10-25T10:00:00Z","Action":"output","Package":"example.com/app/mathx","Test":"TestSum","Output":"=== RUN   TestSum\n"}
+{"Time":"2026-10-25T10:00:00Z","Action":"output","Package":"example.com/app/mathx","Test":"TestSum","Output":"    sum_test.go:9: Sum(1, 2) = 4, want 3\n"}
+{"Time":"2026-10-25T10:00:00Z","Action":"output","Package":"example.com/app/mathx","Test":"TestSum","Output":"--- FAIL: TestSum (0.00s)\n"}
+{"Time":"2026-10-25T10:00:00Z","Action":"fail","Package":"example.com/app/mathx","Test":"TestSum","Elapsed":0}
+{"Time":"2026-10-25T10:00:00Z","Action":"run","Package":"example.com/app/mathx","Test":"TestDiv"}
+{"Time":"2026-10-25T10:00:00Z","Action":"pass","Package":"example.com/app/mathx","Test":"TestDiv","Elapsed":0}
+{"Time":"2026-10-25T10:00:00Z","Action":"run","Package":"example.com/app/mathx","Test":"TestNeg"}
+{"Time":"2026-10-25T10:00:00Z","Action":"skip","Package":"example.com/app/mathx","Test":"TestNeg","Elapsed":0}
+{"Time":"2026-10-25T10:00:00Z","Action":"output","Package":"example.com/app/mathx","Output":"FAIL\n"}
+{"Time":"2026-10-25T10:00:00Z","Action":"fail","Package":"example.com/app/mathx","Elapsed":0.003}

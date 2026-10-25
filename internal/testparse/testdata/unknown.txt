@@ -1,0 +1,6 @@
+> app@1.0.0 test
+> ./scripts/check.sh
+
+checking schema... done
+checking links... 2 broken
+make: *** [check] Error 1

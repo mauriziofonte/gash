@@ -1,0 +1,29 @@
+
+Running 4 tests using 2 workers
+
+  ✓  1 [chromium] › tests/home.spec.ts:3:5 › home › has title (812ms)
+  ✘  2 [chromium] › tests/login.spec.ts:8:5 › login › rejects bad password (5.1s)
+  -  3 [chromium] › tests/login.spec.ts:20:5 › login › sso flow
+  ✓  4 [chromium] › tests/home.spec.ts:9:5 › home › links work (1.2s)
+
+
+  1) [chromium] › tests/login.spec.ts:8:5 › login › rejects bad password ────────
+
+    Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
+
+    Locator: getByText('Invalid password')
+    Expected: visible
+    Received: <element(s) not found>
+
+      12 |   await page.fill('#password', 'nope');
+      13 |   await page.click('button[type=submit]');
+    > 14 |   await expect(page.getByText('Invalid password')).toBeVisible();
+         |                                                    ^
+      15 | });
+
+        at /work/web/tests/login.spec.ts:14:52
+
+  1 failed
+    [chromium] › tests/login.spec.ts:8:5 › login › rejects bad password ─────────
+  1 skipped
+  2 passed (6.4s)
