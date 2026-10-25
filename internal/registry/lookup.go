@@ -51,7 +51,7 @@ func Topics() []Topic { return topics }
 
 // commands are the public commands of the binary: `gash WORD` runs them
 // instead of a card topic.
-var commands = []string{"init", "update", "version", "hte", "logs", "wsl", "win"}
+var commands = []string{"init", "update", "version", "hte", "logs", "wsl", "win", "runtime", "run", "agent-functions"}
 
 // Commands returns the public commands of the binary (internal/cli selects
 // them, the generated completion offers them after the card topics).

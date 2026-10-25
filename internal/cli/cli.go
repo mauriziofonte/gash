@@ -148,6 +148,9 @@ func newRoot(p *Process, status *int) *cobra.Command {
 		hteCmd(p, status), delegateCmd(p, status, "logs", "Find and reclaim disk space from log files"),
 		delegateCmd(p, status, "wsl", "Inspect and repair WSL and convert paths"),
 		delegateCmd(p, status, "win", "Inspect the Windows host from WSL (read-only)"),
+		delegateCmd(p, status, "runtime", "Resolve a php or node version to its binary, without nvm.sh"),
+		delegateCmd(p, status, "run", "Run a command with its output shaped and its exit status kept"),
+		delegateCmd(p, status, "agent-functions", "List the llm_* and agent_* functions for direct calls"),
 		compatCmd(p, status))
 	return root
 }
