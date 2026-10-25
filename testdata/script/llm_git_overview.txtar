@@ -1,0 +1,91 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_git_overview (new in 3.4, plan G1): branch, upstream, ahead/behind,
+# the counts per state, the last subjects and the diffstat totals of the
+# tracked changes in one small JSON line, through the sourced shell and as
+# `gash llm_git_overview`. --log N sets the subjects, --files N adds the
+# path lists capped at N each with "truncated". Not a repository is
+# not_a_git_repo (CONTINUE). Like every llm_git_* reader it runs no
+# program named by the repository's own configuration.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+exec bash setup.sh
+
+# --- the whole state in one line: one commit ahead, one staged, one
+# modified, two untracked, the diffstat against HEAD
+exec bash -c 'source "$GASH_SH"; llm_git_overview "$WORK/r"'
+stdout '^\{"branch":"main","upstream":"origin/main","ahead":1,"behind":0,"counts":\{"staged":1,"modified":1,"untracked":2,"conflicted":0\},"log":\[\{"hash":"[0-9a-f]{7,}","subject":"two"\},\{"hash":"[0-9a-f]{7,}","subject":"one"\}\],"diffstat":\{"files":2,"insertions":2,"deletions":0\}\}$'
+! stdout '"files":\{'
+
+# --- small: at most 400 bytes
+exec bash -c 'source "$GASH_SH"; out="$(llm_git_overview "$WORK/r")"; (( ${#out} <= 400 ))'
+
+# --- directly, from inside the repository, one subject
+cd r
+exec gash llm_git_overview --log 1
+stdout '"log":\[\{"hash":"[0-9a-f]{7,}","subject":"two"\}\]'
+
+# --- --files N: the lists, N per state, and how many were left out
+exec gash llm_git_overview --files 1 --log 0
+stdout '"log":\[\]'
+stdout '"files":\{"staged":\["s.txt"\],"modified":\["a.txt"\],"untracked":\["u1.txt"\],"conflicted":\[\]\},"truncated":1\}$'
+cd $WORK
+
+# --- not a repository: CONTINUE
+mkdir plain
+! exec gash llm_git_overview plain
+stderr '"error":"not_a_git_repo"'
+stderr '"action":"CONTINUE"'
+
+# --- bad values and options
+! exec gash llm_git_overview r --log x
+stderr '"error":"invalid_log"'
+! exec gash llm_git_overview r --files
+stderr '"error":"missing_value"'
+! exec gash llm_git_overview r --stat
+stderr '"error":"unknown_option"'
+
+# --- help, without side effects
+exec gash llm_git_overview --help
+stdout 'llm_git_overview \[PATH\] \[--log N\] \[--files N\]'
+
+# --- the repository's own config names no program that runs
+exec bash no_exec.sh
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+-- setup.sh --
+set -euo pipefail
+git init -q --bare -b main "$WORK/remote.git"
+git init -q -b main "$WORK/r"; cd "$WORK/r"
+printf 'a\n' >a.txt; git add a.txt; git commit -qm one
+git remote add origin "$WORK/remote.git"
+git push -q -u origin main 2>/dev/null
+printf 'b\n' >b.txt; git add b.txt; git commit -qm two
+printf 'a2\n' >>a.txt
+printf 's\n' >s.txt; git add s.txt
+printf 'u\n' >u1.txt; printf 'u\n' >u2.txt
+-- no_exec.sh --
+set -euo pipefail
+cd "$WORK/r"
+printf '#!/bin/sh\necho "$0 $*" >>"%s/ran"\nexit 1\n' "$WORK" >"$WORK/evil.sh"
+chmod +x "$WORK/evil.sh"
+git config core.fsmonitor "$WORK/evil.sh"
+git config diff.external "$WORK/evil.sh"
+git config core.pager "$WORK/evil.sh"
+git status >/dev/null 2>&1 || true
+[[ -e "$WORK/ran" ]] || { echo "SKIP: git does not run the configured commands here"; exit 0; }
+rm -f "$WORK/ran"
+source "$GASH_SH"
+llm_git_overview --files 5 >/dev/null
+[[ ! -e "$WORK/ran" ]] || { cat "$WORK/ran"; exit 1; }
