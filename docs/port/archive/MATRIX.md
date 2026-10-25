@@ -1044,6 +1044,8 @@ columns are the 2.x rows' so the registry test reads them.
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
 | llm_db_databases | function | pure output | new | The databases of a connection (SHOW DATABASES, psql -l) through the read-only session, no database needed in the URL (plan D3) | gash llm_db_databases | internal/db rows_test.go (TestSQLiteCatalog, TestMySQLRowFormats, TestPgsqlCatalog), llm_db_databases.txtar |
+| llm_json | function | pure output | new | One value, the keys or the shape of a JSON file or stdin without python3/jq; missing path RETRY with the nearest prefix (plan D4) | gash llm_json | internal/llm json_test.go (TestJSONPathAndValue, TestJSONRows, TestJSONShape, TestJSONErrors, TestJSONMatchesEncodingJSON), llm_json.txtar |
+| llm_csv | function | pure output | new | Header, sample, row count and malformed records of a CSV file by a streaming RFC 4180 parser (plan D5) | gash llm_csv | internal/llm csv_test.go (TestCSVSummary, TestCSVManyErrors, TestCSVErrors, TestCSVParserMatchesEncodingCSV, TestCSVSniff), llm_csv.txtar |
 
 ### Git (G1-G7)
 

@@ -212,6 +212,28 @@ value, never the network; a write failure never fails the call.
 
 ### 3.8 Data files and values (3.4)
 
+| Function | Output |
+|---|---|
+| `llm_json FILE\|- [--path P] [--keys \| --shape] [--format json\|jsonl\|tsv\|table] [--width N] [--head N] [--tail N]` | The value at P (default: the whole document) as compact JSON, numbers and escapes as written; `--keys` the keys of an object (or of the objects of an array); `--shape` types and lengths two levels deep; an array of objects as rows with `--format`; `-` reads stdin |
+| `llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V] [--format json\|jsonl\|tsv\|table]` | `{"rows","matches","cols","header","sample","delimiter","errors","error_count"}` (`rows` and `error_count` with `--count`, `matches` with `--where`); `--head` sample rows (default 5, 0 for none); the sample as rows with `--format`, the rest on the stderr metadata line |
+
+Paths use one grammar (`internal/jsonpath`): `a.b[0].c`, `[-1]` from the
+end, `paths["/api/x"]` for a key with dots or slashes, an optional leading
+`$`. A path that does not exist is `json_path_not_found` (RETRY) with the
+nearest existing prefix and what is there in the hint; invalid JSON is
+`invalid_json` (RETRY) with line and column, checked over the whole text
+before any value prints; a repeated key keeps the last value. `--shape`
+lengths are `N` or `MIN..MAX`, mixed types join with `|`, members missing
+from some objects are listed in `optional`. `llm_csv` reads quoted fields
+with delimiters, `""` and newlines (a record is not a line), CRLF or LF,
+skips blank lines and a UTF-8 BOM, sniffs the delimiter among `,` `;` tab
+`|`, and lists the first 10 malformed records (field count differing from
+the header, a stray or unterminated quote) by their first line; without
+`--count` the read stops once the header and the sample are complete.
+`--where` matches a column (header name or 1-based number) exactly; an
+unknown one is `unknown_column` (RETRY). Secret files are refused as by
+`llm_config`.
+
 ### 3.9 Network probes (3.4)
 
 ### 3.10 Processes, waiting and services (3.4)

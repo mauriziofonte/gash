@@ -22,6 +22,7 @@ unset __gash_here
 
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
+llm_csv() { __gash_call llm_csv "$@"; }
 llm_db_databases() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_db_databases "$@"
@@ -57,6 +58,7 @@ llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
 llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
+llm_json() { __gash_call llm_json "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }

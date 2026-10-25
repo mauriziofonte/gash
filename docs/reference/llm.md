@@ -7,6 +7,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | Function | Alias | Description |
 |---|---|---|
 | [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
+| [`llm_csv`](#llm-csv) |  | Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l) |
 | [`llm_db_databases`](#llm-db-databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
@@ -21,6 +22,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_git_log`](#llm-git-log) |  | Recent commits (JSON) |
 | [`llm_git_status`](#llm-git-status) |  | Compact git status (JSON) |
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
+| [`llm_json`](#llm-json) |  | One value, the keys or the shape of a JSON file (replaces python3 json.load, jq) |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
 | [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
@@ -59,6 +61,58 @@ YAML comes out as JSON, converted by Gash itself (no yq needed), or
 as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
 ```
+
+## llm_csv
+
+Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l)
+
+#### Usage
+
+```text
+llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
+        [--format json|jsonl|tsv|table]
+```
+
+#### Options
+
+```text
+--head N               Sample rows (default 5; 0 for none)
+--cols                 The header only, no sample
+--count                Count every row (reads the whole file)
+--delim C              The delimiter (default: sniffed among , ; tab |);
+                       tab or \t for a tab
+--where COL=V          Only rows whose column COL (a header name or a
+                       1-based number) is exactly V
+--format F             json (default), or the sample as jsonl, tsv or table
+```
+
+#### Examples
+
+```bash
+llm_csv export.csv
+llm_csv export.csv --head 2 --count
+llm_csv data.csv --where status=failed --count --head 10
+llm_csv report.txt --delim ';' --cols
+```
+
+#### Notes
+
+```text
+Replaces python3 -c "import csv; r=list(csv.reader(open(f))); ..." and
+wc -l f; head -3 f (which miscounts quoted newlines). Output:
+{"rows":N,"matches":M,"cols":K,"header":[...],"sample":[[...]],
+"delimiter":",","errors":[{"line":L,"error":"..."}],"error_count":E}
+(rows, matches and error_count with --count; matches with --where).
+A streaming RFC 4180 parser: quoted fields hold delimiters, "" and
+newlines; a record is not a line; blank lines are skipped. errors lists
+the first 10 malformed records (field count differing from the header,
+a stray quote, an unterminated quote) by their first line. Without
+--count the read stops once the header and the sample are complete.
+With --format jsonl, tsv or table the sample rows print under the
+header and the rest is one JSON line on stderr.
+```
+
+See also: `llm_json`, `llm_config`
 
 ## llm_db_databases
 
@@ -578,6 +632,57 @@ Output: file:line:content with absolute paths (a FILE PATH gives
 line:content); context lines use -, groups are separated by --.
 A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
+
+## llm_json
+
+One value, the keys or the shape of a JSON file (replaces python3 json.load, jq)
+
+#### Usage
+
+```text
+llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
+         [--width N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--path P               The value at P: a.b[0].c, paths["/api/x"].post, [-1]
+--keys                 The keys of an object (or of the objects of an array)
+--shape                Types and lengths, two levels deep
+--format F             json (default), jsonl (one element per line), tsv or
+                       table (an array of objects as rows)
+--width N              Cut each string value at N columns (ends with …)
+--head N, --tail N     Keep the first / last N elements of an array
+```
+
+#### Examples
+
+```bash
+llm_json package.json --path scripts
+llm_json openapi.json --path 'paths["/users"].get.responses' --keys
+llm_json data.json --shape
+llm_json users.json --format tsv --head 20
+curl -s https://api.example/x | llm_json - --path items[0]
+```
+
+#### Notes
+
+```text
+Replaces python3 -c "import json; print(json.load(open(f))[...])" and
+jq '.a', jq 'length, (.[0]|keys)'. The whole text is validated first
+(invalid_json, RETRY, with line and column); the value prints as compact
+JSON with its numbers and escapes as written; a repeated key: the last
+one wins. A path that does not exist is json_path_not_found (RETRY) with
+the nearest existing prefix in the hint; --keys on a value without
+objects is not_an_object. --shape: {"type":"array[100]","items":
+{"type":"object{3}","keys":{"id":"number",...},"optional":[...]}};
+lengths are N or MIN..MAX, mixed types are joined with |. A cut array
+adds {"truncated":K} on stderr. Secret files (.env, keys, ...) are
+refused; - reads the standard input.
+```
+
+See also: `llm_config`, `llm_csv`
 
 ## llm_ports
 

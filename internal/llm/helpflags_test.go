@@ -36,6 +36,8 @@ var llmOptions = map[string][]string{
 	// 3.4 text reads.
 
 	// 3.4 data.
+	"llm_json": {"--path", "--keys", "--shape", "--format", "--width", "--head", "--tail"},
+	"llm_csv":  {"--head", "--cols", "--count", "--delim", "--where", "--format"},
 
 	// 3.4 git.
 
