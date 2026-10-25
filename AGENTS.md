@@ -201,7 +201,7 @@ value, never the network; a write failure never fails the call.
 | `llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{target, open, ms, error}]` |
 
 The four probes only read (plan D4) and share the rules of 3.6: targets
-are probed in parallel (`-j`, default 8) with a per-target `--timeout`
+are probed in parallel (`-j`, default 32) with a per-target `--timeout`
 (llm_http and llm_tls 10s, llm_dns and llm_tcp 5s), one row per target in
 input order, exit 0 once the targets ran. What goes wrong with one target
 is its `error` field, never a failed call: `dns_not_found`, `dns_error`,

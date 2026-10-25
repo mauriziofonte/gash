@@ -32,7 +32,7 @@ var catalogNet = []Function{
 				"                         MX, TXT, NS, CAA, CNAME, SOA\n" +
 				"  --server IP            Resolver to ask, IP[:PORT] (default: the nameservers\n" +
 				"                         of /etc/resolv.conf)\n" +
-				"  -j, --jobs N           Names at a time (default 8)\n" +
+				"  -j, --jobs N           Names at a time (default 32)\n" +
 				"  --timeout S            Time limit per name, all its types (default 5s)\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
 				"  --width N              Cut string values at N columns\n" +
@@ -105,7 +105,7 @@ var catalogNet = []Function{
 				"  --expect CODE          Statuses that are ok: codes or classes, e.g. 200,\n" +
 				"                         2xx, 200,301 (default 200 to 399)\n" +
 				"  -k, --insecure         Do not verify the certificate (not with --auth-env)\n" +
-				"  -j, --jobs N           URLs at a time (default 8)\n" +
+				"  -j, --jobs N           URLs at a time (default 32)\n" +
 				"  --timeout S            Time limit per URL, redirects and body included\n" +
 				"                         (default 10s)\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
@@ -166,7 +166,7 @@ var catalogNet = []Function{
 				"          [--max-lines N] [--head N] [--tail N]\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  -j, --jobs N           Targets at a time (default 8)\n" +
+				"  -j, --jobs N           Targets at a time (default 32)\n" +
 				"  --timeout S            Connect time limit per target (default 5s)\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
 				"  --width N              Cut string values at N columns\n" +
@@ -208,7 +208,7 @@ var catalogNet = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  --sni NAME             Server name to send and verify (default: HOST)\n" +
-				"  -j, --jobs N           Hosts at a time (default 8)\n" +
+				"  -j, --jobs N           Hosts at a time (default 32)\n" +
 				"  --timeout S            Time limit per host, connect and handshake\n" +
 				"                         (default 10s)\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +

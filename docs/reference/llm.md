@@ -268,7 +268,7 @@ llm_dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP]
                        MX, TXT, NS, CAA, CNAME, SOA
 --server IP            Resolver to ask, IP[:PORT] (default: the nameservers
                        of /etc/resolv.conf)
--j, --jobs N           Names at a time (default 8)
+-j, --jobs N           Names at a time (default 32)
 --timeout S            Time limit per name, all its types (default 5s)
 --format F             json (default), jsonl, tsv or table
 --width N              Cut string values at N columns
@@ -579,7 +579,7 @@ llm_http URL... [--method M] [--header H]... [--auth-env VAR]...
 --expect CODE          Statuses that are ok: codes or classes, e.g. 200,
                        2xx, 200,301 (default 200 to 399)
 -k, --insecure         Do not verify the certificate (not with --auth-env)
--j, --jobs N           URLs at a time (default 8)
+-j, --jobs N           URLs at a time (default 32)
 --timeout S            Time limit per URL, redirects and body included
                        (default 10s)
 --format F             json (default), jsonl, tsv or table
@@ -730,7 +730,7 @@ llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N]
 #### Options
 
 ```text
--j, --jobs N           Targets at a time (default 8)
+-j, --jobs N           Targets at a time (default 32)
 --timeout S            Connect time limit per target (default 5s)
 --format F             json (default), jsonl, tsv or table
 --width N              Cut string values at N columns
@@ -771,7 +771,7 @@ llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F]
 
 ```text
 --sni NAME             Server name to send and verify (default: HOST)
--j, --jobs N           Hosts at a time (default 8)
+-j, --jobs N           Hosts at a time (default 32)
 --timeout S            Time limit per host, connect and handshake
                        (default 10s)
 --format F             json (default), jsonl, tsv or table
