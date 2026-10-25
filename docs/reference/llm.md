@@ -329,6 +329,10 @@ Find files by pattern (ignores noise directories)
 
 ```text
 llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
+         [--sort name|mtime|size] [--newer REF] [--since T] [--tracked]
+         [--all] [--count [--by ext|dir|type]] [--relative|--absolute]
+         [--format json|jsonl|tsv|table] [--width N] [--max-lines N]
+         [--head N] [--tail N]
 ```
 
 #### Options
@@ -338,6 +342,27 @@ llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
 --contains REGEX       Keep the files whose content matches REGEX
                        (ripgrep's regex syntax); files only
 -n, --limit N          Paths to print (default 100)
+--sort name|mtime|size Path order (byte order), newest first, or
+                       largest first
+--newer REF            Modified after REF (a file or directory)
+--since T              Modified at T or later: an age (30s, 15m, 2h,
+                       3d, 1w), a date (2026-10-25), a local date and
+                       time (2026-10-25T14:30) or @EPOCH
+--tracked              Only what git tracks (git ls-files)
+--all                  Do not skip node_modules, vendor, .git,
+                       __pycache__
+--count                Print {"count":N} instead of the paths
+--by ext|dir|type      Counts per extension, per first directory below
+                       PATH, or per type f, d, l (every type unless
+                       --type); implies --count
+--relative             Paths relative to PATH (default: absolute)
+--absolute             Absolute paths (the default)
+--format FORMAT        Rows {"p","size","mtime"}: json, jsonl, tsv
+                       or table
+--width N              Cut each line (each value in rows) at N columns
+--max-lines N          Keep the first N paths (also --head N), or the
+                       last N with --tail N; they replace -n and mark
+                       what they cut
 ```
 
 #### Examples
@@ -351,16 +376,29 @@ llm_find "*.conf" /etc --contains "database"
 
 # Find directories only
 llm_find "src*" . --type d
+
+# Count PHP files per first directory (find | wc -l)
+llm_find "*.php" src --count --by dir
+
+# The 5 newest logs, relative paths (find -newer | sort | head)
+llm_find "*.log" . --sort mtime -n 5 --relative
 ```
 
 #### Notes
 
 ```text
-PATTERN is a file name glob (find -name). With --contains only the
-files it matches are searched, hidden and gitignored ones included,
-with or without ripgrep. Skips node_modules, vendor, .git and
-__pycache__; --contains also skips secret files. Default limit 100.
-A missing PATH is path_not_found, an empty PATTERN missing_pattern.
+Replaces find | sort | head, find | wc -l, find -newer and
+git ls-files | grep. PATTERN is a file name glob (find -name). With
+--contains only the files it matches are searched, hidden and
+gitignored ones included, with or without ripgrep. Skips
+node_modules, vendor, .git and __pycache__; --contains also skips
+secret files. Default limit 100.
+--count, --sort, --format and --head/--tail see every match first:
+a cut JSON array or TSV gets {"truncated":K} on stderr, a cut text
+output a [... K lines omitted] line. --count counts the paths the
+listing prints without -n. mtime is RFC 3339 in UTC.
+A missing PATH is path_not_found, an empty PATTERN missing_pattern;
+--tracked outside a repository is not_a_git_repo (CONTINUE).
 ```
 
 ## llm_git_diff
@@ -448,6 +486,10 @@ Search code with structured file:line:content output
 
 ```text
 llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
+         [--exclude GLOB]... [--only-matching] [--distinct]
+         [--files-only] [--count [--by file|ext|dir]]
+         [--relative|--absolute] [--format json|jsonl|tsv|table]
+         [--width N] [--max-lines N] [--head N] [--tail N]
 ```
 
 #### Options
@@ -456,6 +498,25 @@ llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
 --ext EXT1,EXT2        Search only files with these extensions
 -C, --context N        Lines of context around each match (default 0)
 -n, --limit N          Lines to print (default 100)
+--exclude GLOB         Skip the files and directories whose name or
+                       path below PATH matches GLOB (repeatable)
+-o, --only-matching    Print each match instead of its line
+--distinct             Each distinct match with its count, most
+                       frequent first: [{"match","count"}]
+                       (implies --only-matching)
+-l, --files-only       Print the matching files
+-c, --count            Print {"count":N}: matching lines (matches
+                       with -o, files with -l)
+--by file|ext|dir      Counts per file, extension or first directory
+                       below PATH; implies --count
+--relative             Paths relative to PATH (default: absolute)
+--absolute             Absolute paths (the default)
+--format FORMAT        Rows {"file","line","text"} ({"file"} with
+                       -l): json, jsonl, tsv or table
+--width N              Cut each line (each value in rows) at N columns
+--max-lines N          Keep the first N lines (also --head N), or the
+                       last N with --tail N; they replace -n and mark
+                       what they cut
 ```
 
 #### Examples
@@ -469,11 +530,19 @@ llm_grep "function processOrder" .
 
 # With context lines
 llm_grep "class.*Controller" . --ext php --context 3
+
+# Most frequent matches (grep -o | sort | uniq -c | sort -rn)
+llm_grep "Log::[a-z]+" src --distinct
+
+# Without tests, relative paths
+llm_grep TODO . --exclude tests --relative -n 20
 ```
 
 #### Notes
 
 ```text
+Replaces grep -rn | grep -v | head, grep -o | sort | uniq -c and
+grep -rl / grep -c.
 One built-in engine, the same with or without ripgrep installed:
 ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore
 matches, binary files, node_modules, vendor and .git are skipped; files
@@ -481,6 +550,10 @@ come in sorted path order. Secret files are skipped, templates such as
 .env.example searched. Default limit 100.
 Output: file:line:content with absolute paths (a FILE PATH gives
 line:content); context lines use -, groups are separated by --.
+--count, --distinct, --format and --head/--tail see every match
+first: a cut JSON array or TSV gets {"truncated":K} on stderr, a cut
+text output a [... K lines omitted] line. --context goes with the
+text output only (conflicting_options otherwise).
 A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
 
@@ -569,7 +642,13 @@ Compact directory tree (JSON or text output)
 #### Usage
 
 ```text
-llm_tree [--text] [--depth N] [--stats] [PATH]
+llm_tree [--text] [--depth N] [--stats] [--all] [--relative|--absolute]
+         [--width N] [--max-lines N] [--head N] [--tail N] [PATH]
+llm_tree --count [--by ext|dir|type] [--type f|d] [--name GLOB]
+         [--newer REF] [--since T] [--depth N] [--all]
+         [--format json|jsonl|tsv|table] [PATH]
+llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]
+         [--newer REF] [--since T] [--format json|jsonl|tsv|table] [PATH]
 ```
 
 #### Options
@@ -577,8 +656,28 @@ llm_tree [--text] [--depth N] [--stats] [PATH]
 ```text
 --text                 Indented text list, 200 lines max (default depth 3)
 --depth N              Levels below PATH, 1 or more (default 1; also
-                       --max-depth)
+                       --max-depth); with --count, no limit unless given
 --stats                Add sizes and child counts to the JSON tree
+--all                  Do not skip node_modules, vendor, .git,
+                       __pycache__, .cache
+--relative             The root's path as "." (--top: relative is the
+                       default)
+--absolute             Absolute paths (--top rows too)
+--count                Print {"count":N}: the entries below PATH
+--by ext|dir|type      --count per extension, first directory below
+                       PATH, or type f, d, l (implies --count); --top
+                       per directory (default) or extension
+--type f|d             --count files or directories only
+--name GLOB            --count/--top: names matching GLOB only
+--newer REF            --count/--top: modified after REF only
+--since T              --count/--top: modified at T or later (30s, 2h,
+                       3d, 1w, 2026-10-25, 2026-10-25T14:30, @EPOCH)
+--top N                Disk usage: {"total","files","top":[{"p",
+                       "size","files"}],"skipped"}, largest first
+--format FORMAT        --count/--top as json, jsonl, tsv or table rows
+--width N              Cut each line (each value) at N columns
+--max-lines N          --text/--top: keep the first N lines or rows
+                       (also --head N), or the last N with --tail N
 ```
 
 #### Examples
@@ -592,13 +691,25 @@ llm_tree --text
 
 # Limited depth
 llm_tree --depth 2 /etc/nginx
+
+# Files per extension (find -type f | wc -l)
+llm_tree --count --type f --by ext src
+
+# The 10 largest directories (du -sh */ | sort -rh | head)
+llm_tree --top 10 .
 ```
 
 #### Notes
 
 ```text
+Replaces du -sh */ | sort -rh | head and find | wc -l.
 Ignores noise directories below PATH: node_modules, vendor, .git,
 __pycache__, .cache. Entries whose name holds a tab or
 a newline are left out. --text lists symlinks as name -> target, in
 byte order whatever the locale.
+--top sums the apparent size (st_size) of every file below PATH,
+noise directories included (disk usage hides nothing); --by dir
+lists each directory down to --depth (default 1), as du -d does.
+Directories that cannot be read count in skipped; a cut list gets
+"truncated":K.
 ```

@@ -20,9 +20,18 @@ import (
 // unknown_option) and the function's registered help names it, so a flag
 // cannot be undocumented.
 var llmOptions = map[string][]string{
-	"llm_tree":       {"--text", "--depth", "--max-depth", "--stats"},
-	"llm_find":       {"--type", "--contains", "-n", "--limit"},
-	"llm_grep":       {"--ext", "--context", "-C", "-n", "--limit"},
+	"llm_tree": {"--text", "--depth", "--max-depth", "--stats",
+		// 3.4 files and search.
+		"--all", "--count", "--by", "--type", "--name", "--newer", "--since", "--top",
+		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_find": {"--type", "--contains", "-n", "--limit",
+		// 3.4 files and search.
+		"--sort", "--newer", "--since", "--tracked", "--all", "--count", "--by",
+		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_grep": {"--ext", "--context", "-C", "-n", "--limit",
+		// 3.4 files and search.
+		"--exclude", "--only-matching", "-o", "--distinct", "--files-only", "-l", "--count", "-c", "--by",
+		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail"},
 	"llm_config":     {"--max-bytes"},
 	"llm_git_status": {},
 	"llm_git_diff":   {"--staged", "--cached"},
