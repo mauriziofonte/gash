@@ -52,6 +52,8 @@ run() {
     GASH_SERVER=0
     "$@" >>"$WORK/o2" 2>>"$WORK/e2"
     echo "rc=$?" >>"$WORK/o2"
+    # tree_stats prints how long its scan took.
+    sed -i -E 's/(Scan time: +)[0-9]+ms/\1Nms/' "$WORK/o1" "$WORK/o2"
     cmp -s "$WORK/o1" "$WORK/o2" && cmp -s "$WORK/e1" "$WORK/e2" || {
         echo "DIFF $*"
         diff "$WORK/o1" "$WORK/o2"
