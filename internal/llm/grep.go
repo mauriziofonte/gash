@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
@@ -86,8 +87,23 @@ func (m *Module) grep(c *invoke.Call) int {
 	havePattern := false
 	var p pathTaker
 	p.path = "."
+	// 3.4 (plan F5, S1-S4): the shared output options and the search
+	// modes; without them the output is the 3.0 output.
+	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags | llmfmt.PathFlags)
+	var x grepOpts
 	args := c.Args
 	for len(args) > 0 {
+		n, ok := o.Take(c, args)
+		if ok && n == 0 {
+			n, ok = x.take(c, args)
+		}
+		if !ok {
+			return 1
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
 		a := args[0]
 		switch a {
 		case "--ext", "--context", "-C", "-n", "--limit":
@@ -145,6 +161,10 @@ func (m *Module) grep(c *invoke.Call) int {
 	globs := append([]string{}, noiseGlobs...)
 	for _, e := range splitExts(extensions) {
 		globs = append(globs, "*."+e)
+	}
+	if x.any() || extActive(o) {
+		return m.grepExt(c, grepQuery{safe: safe, limit: atoi(limit), context: atoi(context), o: o, x: x, forbidden: forbidden,
+			search: func() (*rgSearch, int, bool) { return m.search(c, pattern, globs, false) }})
 	}
 	s, rc, ok := m.search(c, pattern, globs, false)
 	if !ok {

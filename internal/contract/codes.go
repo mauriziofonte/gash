@@ -201,7 +201,11 @@ var codeTable = []Code{
 	{"sensitive_path", Stop, "agent", Origin3x},
 
 	// New in 3.4: agent toolkit, files and search (llm_find, llm_grep,
-	// llm_tree extensions).
+	// llm_tree extensions). conflicting_options (above) is shared with
+	// hte.
+	{"invalid_sort", Retry, "llm", Origin3x},
+	{"invalid_by", Retry, "llm", Origin3x},
+	{"invalid_since", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, text reads (llm_stat, llm_count,
 	// llm_assert, llm_read, llm_log, llm_hash, llm_textstats,

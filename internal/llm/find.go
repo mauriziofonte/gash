@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
@@ -22,8 +23,23 @@ func (m *Module) find(c *invoke.Call) int {
 	havePattern := false
 	var p pathTaker
 	p.path = "."
+	// 3.4 (plan F2, F4, S1-S4): the shared output options and the walker
+	// modes; without them the output is the 3.0 output.
+	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags | llmfmt.PathFlags)
+	var x findOpts
 	args := c.Args
 	for len(args) > 0 {
+		n, ok := o.Take(c, args)
+		if ok && n == 0 {
+			n, ok = x.take(c, args)
+		}
+		if !ok {
+			return 1
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
 		a := args[0]
 		switch a {
 		case "--type", "--contains", "-n", "--limit":
@@ -33,6 +49,7 @@ func (m *Module) find(c *invoke.Call) int {
 			switch a {
 			case "--type":
 				fileType = args[1]
+				x.typeSet = true
 			case "--contains":
 				contains = args[1]
 			default:
@@ -80,6 +97,10 @@ func (m *Module) find(c *invoke.Call) int {
 	forbidden, ok := m.walkRoot(c, safe, mode)
 	if !ok {
 		return 1
+	}
+	if x.any() || extActive(o) {
+		return m.findExt(c, findQuery{pattern: pattern, fileType: fileType, contains: contains, limit: n,
+			safe: safe, forbidden: forbidden, o: o, x: x})
 	}
 	if contains != "" {
 		if m.guard(c).IsSecretFile(safe) {

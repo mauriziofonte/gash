@@ -1,0 +1,110 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_grep 3.4 options (plan F5, S1-S4): --relative, --exclude (name or
+# path below PATH, repeatable), --only-matching, --distinct (matches with
+# their counts, most frequent first), --count [--by], --files-only, rows for
+# --format and the output budget. Without them the output is the 3.0
+# output (llm_grep.txtar, llm_grep_context.txtar).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: relative paths, -n as before
+exec bash -c 'source "$GASH_SH"; llm_grep TODO p --relative'
+cmp stdout rel.want
+exec bash -c 'source "$GASH_SH"; llm_grep TODO p --ext php -n 2 --relative'
+cmp stdout ext.want
+
+# --- the default stays absolute; vendor and hidden files stay skipped
+exec gash llm_grep TODO p --absolute -n 1
+stdout '^/.*/p/src/a\.php:1:<\?php // TODO one$'
+! stdout vendor
+
+# --- --exclude: a name anywhere, or a path below PATH
+exec gash llm_grep TODO p --relative -l --exclude tests --exclude 'src/sub'
+cmp stdout excl.want
+
+# --- --only-matching, --files-only
+exec gash llm_grep 'TODO [a-z]+' p/src/sub --relative -o
+cmp stdout only.want
+exec gash llm_grep TODO p --files-only --relative
+cmp stdout files.want
+
+# --- counts: lines, matches (-o), files (-l), per key
+exec gash llm_grep TODO p --count
+stdout '^\{"count":5\}$'
+exec gash llm_grep TODO p -o -c
+stdout '^\{"count":6\}$'
+exec gash llm_grep TODO p -l --count
+stdout '^\{"count":4\}$'
+exec gash llm_grep TODO p --by ext -o
+stdout '^\{"count":6,"by":\{"js":1,"php":5\}\}$'
+
+# --- --distinct: grep -o | sort | uniq -c | sort -rn in one call
+exec gash llm_grep 'TODO|t[a-z]+' p --distinct -n 2
+stdout '^\[\{"match":"TODO","count":6\},\{"match":"test","count":1\}\]$'
+stderr '^\{"truncated":2\}$'
+
+# --- rows: {"file","line","text"}, the cut reported on stderr
+exec gash llm_grep TODO p --format tsv --relative -n 2
+cmp stdout rows.want
+stderr '^\{"truncated":3\}$'
+
+# --- the text budget marks the cut inline
+exec gash llm_grep TODO p --relative --max-lines 1
+cmp stdout budget.want
+
+# --- errors
+! exec gash llm_grep TODO p -C 2 -o
+stderr '"error":"conflicting_options"'
+! exec gash llm_grep TODO p -l --distinct
+stderr '"error":"conflicting_options"'
+! exec gash llm_grep TODO p --by type
+stderr '"error":"invalid_by"'
+! exec gash llm_grep TODO p --exclude ''
+stderr '"error":"invalid_filter"'
+
+-- p/src/a.php --
+<?php // TODO one
+-- p/src/b.js --
+x
+// TODO js
+-- p/src/sub/c.php --
+<?php
+// TODO two
+// TODO three TODO
+-- p/tests/t.php --
+<?php // TODO test
+-- p/vendor/v.php --
+<?php // TODO vendor
+-- p/.hidden/h.php --
+<?php // TODO hidden
+-- rel.want --
+src/a.php:1:<?php // TODO one
+src/b.js:2:// TODO js
+src/sub/c.php:2:// TODO two
+src/sub/c.php:3:// TODO three TODO
+tests/t.php:1:<?php // TODO test
+-- ext.want --
+src/a.php:1:<?php // TODO one
+src/sub/c.php:2:// TODO two
+-- excl.want --
+src/a.php
+src/b.js
+-- only.want --
+c.php:2:TODO two
+c.php:3:TODO three
+-- files.want --
+src/a.php
+src/b.js
+src/sub/c.php
+tests/t.php
+-- rows.want --
+file	line	text
+src/a.php	1	<?php // TODO one
+src/b.js	2	// TODO js
+-- budget.want --
+src/a.php:1:<?php // TODO one
+[... 4 lines omitted]

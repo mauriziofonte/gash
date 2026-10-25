@@ -11,6 +11,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
 )
 
 // treeCap is the awk cap= of the JSON listing, textCap the head -n of the
@@ -29,8 +30,23 @@ func (m *Module) tree(c *invoke.Call) int {
 	maxDepth := ""
 	var p pathTaker
 	p.path = "."
+	// 3.4 (plan F2, F3, S1-S4): the shared output options, --count and
+	// --top; without them the output is the 3.0 output.
+	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags | llmfmt.PathFlags)
+	var x treeOpts
 	args := c.Args
 	for len(args) > 0 {
+		n, ok := o.Take(c, args)
+		if ok && n == 0 {
+			n, ok = x.take(c, args)
+		}
+		if !ok {
+			return 1
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
 		a := args[0]
 		switch {
 		case a == "--text":
@@ -54,6 +70,7 @@ func (m *Module) tree(c *invoke.Call) int {
 			args = args[1:]
 		}
 	}
+	depthSet := maxDepth != ""
 	if maxDepth == "" {
 		maxDepth = "1"
 		if textMode {
@@ -78,11 +95,15 @@ func (m *Module) tree(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
+	if x.any() || extActive(o) {
+		return m.treeExt(c, treeQuery{safe: safe, depth: depth, depthSet: depthSet, textMode: textMode, withStats: withStats,
+			forbidden: forbidden, o: o, x: x})
+	}
 	if textMode {
-		_, _ = c.Stdout.Write(treeText(safe, depth, forbidden))
+		_, _ = c.Stdout.Write(treeText(safe, depth, forbidden, prunedNames, textCap))
 		return 0
 	}
-	_, _ = c.Stdout.Write(treeJSON(safe, depth, withStats, forbidden))
+	_, _ = c.Stdout.Write(treeJSON(safe, safe, depth, withStats, forbidden, prunedNames))
 	return 0
 }
 
@@ -94,7 +115,10 @@ func (m *Module) tree(c *invoke.Call) int {
 // cut literally (a root like a[1] indents right); symlinks are listed as
 // "name -> target", as the JSON tree lists them; names with a tab or a
 // newline are left out, as in the JSON tree; the root / prints as /.
-func treeText(safe string, maxDepth int, forbidden func(string) bool) []byte {
+//
+// 3.4: prune is the set of pruned names (nil with --all) and limit the
+// line cap (textCap, or no cap when the output budget decides).
+func treeText(safe string, maxDepth int, forbidden func(string) bool, prune map[string]bool, limit int) []byte {
 	type textEntry struct {
 		path, rel string
 		parts     []string
@@ -105,7 +129,7 @@ func treeText(safe string, maxDepth int, forbidden func(string) bool) []byte {
 	w.visit = func(e findEntry) bool {
 		if e.depth > 0 {
 			name := e.path[strings.LastIndexByte(e.path, '/')+1:]
-			if prunedNames[name] {
+			if prune[name] {
 				return false
 			}
 			if strings.ContainsAny(e.rel, "\n\t") {
@@ -133,8 +157,8 @@ func treeText(safe string, maxDepth int, forbidden func(string) bool) []byte {
 		}
 		return len(a) < len(b)
 	})
-	if len(ents) > textCap {
-		ents = ents[:textCap]
+	if len(ents) > limit {
+		ents = ents[:limit]
 	}
 	var out bytes.Buffer
 	for _, e := range ents {
@@ -191,8 +215,9 @@ type treeNode struct {
 
 // treeJSON is the JSON tree: the find stream below the start point (pruned
 // names, other file types and paths with a tab or newline left out) folded
-// as the 2.x awk program does.
-func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) bool) []byte {
+// as the 2.x awk program does. 3.4: shown is the root's "path" (safe, or
+// "." with --relative) and prune the set of pruned names (nil with --all).
+func treeJSON(safe, shown string, maxDepth int, withStats bool, forbidden func(string) bool, prune map[string]bool) []byte {
 	total := map[string]int64{}
 	nchild := map[string]int{}
 	nodes := map[string]*treeNode{}
@@ -206,7 +231,7 @@ func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) 
 	}
 	w.visit = func(e findEntry) bool {
 		name := e.path[strings.LastIndexByte(e.path, '/')+1:]
-		if prunedNames[name] {
+		if prune[name] {
 			return false
 		}
 		t := e.typeLetter()
@@ -265,7 +290,7 @@ func treeJSON(safe string, maxDepth int, withStats bool, forbidden func(string) 
 
 	var b []byte
 	b = append(b, `{"path":`...)
-	b = contract.AppendString(b, safe, contract.EscapeJQ)
+	b = contract.AppendString(b, shown, contract.EscapeJQ)
 	b = append(b, `,"type":"directory"`...)
 	if withStats {
 		b = appendStats(b, total[""], nchild[""])

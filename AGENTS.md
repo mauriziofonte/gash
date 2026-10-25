@@ -62,9 +62,9 @@ home); `~user` is `invalid_path`.
 
 | Function | Output |
 |---|---|
-| `llm_tree [--depth N] [--stats] [--text] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max |
-| `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches |
-| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--` |
+| `llm_tree [--depth N] [--stats] [--text] [--all] [--count [--by ext\|dir\|type]] [--top N] [--type f\|d] [--name GLOB] [--newer REF] [--since T] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max; `--count` `{"count":N}`; `--top N` disk usage `{"total","files","top":[{"p","size","files"}],"skipped"}` |
+| `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N] [--sort name\|mtime\|size] [--newer REF] [--since T] [--tracked] [--all] [--count [--by ext\|dir\|type]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches; `--format` rows `{"p","size","mtime"}` |
+| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
 | `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large` |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
@@ -78,6 +78,38 @@ them. `llm_find` names and `llm_tree` entries come in the same byte order
 tree's 500-entry cap cut at the same place on every run. Zero matches: exit
 0, no output; a PATH that does not exist is `path_not_found`, an empty
 PATTERN `missing_pattern`.
+
+3.4 modes (each opt-in; without its flag the output is unchanged). Paths
+stay absolute unless `--relative` (paths below PATH; `.` for PATH itself),
+except the new `--top` rows, relative unless `--absolute`. `--count` prints
+`{"count":N}`, with `--by` (which implies it) `{"count":N,"by":{KEY:N}}`:
+`llm_find --count` counts the paths its listing prints without `-n`;
+`llm_tree --count` the entries below PATH at any depth (to `--depth N` when
+given); `llm_grep --count` matching lines (matches with `--only-matching`,
+`-o`; files with `--files-only`, `-l`). `--by ext` keys are tree_stats'
+extensions (`(no ext)`), `--by dir` the first directory below PATH (`.` for
+entries directly in it), `--by type` the letters `f`, `d`, `l` (every type
+unless `--type`), `--by file` the file. `llm_find --sort mtime|size` puts the
+newest or largest first, `--sort name` the paths in byte order;
+`--newer REF` keeps what was modified after REF, `--since T` what was
+modified at T or later (an age `30s` `15m` `2h` `3d` `1w`, a date, a local
+`2026-10-25T14:30`, RFC 3339 or `@EPOCH`; else `invalid_since`); `--tracked`
+keeps what `git ls-files` lists (`not_a_git_repo`, CONTINUE, outside a
+repository); `--all` drops the noise-directory skip. `llm_grep --exclude
+GLOB` (repeatable) skips the entries whose name or path below PATH matches,
+as the scanners' `--exclude`; `--distinct` (implies `--only-matching`) lists
+each distinct match with its count, most frequent first, at most `-n` rows.
+`llm_tree --top N` sums the apparent size (`st_size`) of every file below
+PATH, noise directories included; `--by dir` (default) lists every
+directory down to `--depth` (default 1) with its cumulative size as `du -d`
+does, `--by ext` the extensions; unreadable directories count in `skipped`,
+a cut list adds `"truncated":K`. `--count`, `--sort`, `--distinct`,
+`--format` and `--head`/`--tail`/`--max-lines` see every match before they
+print: the budget flags then replace `-n`, and what they cut is reported
+(section 3.6). Row and count `mtime` values are RFC 3339 in UTC. `--context`
+with a row, count or match mode, `--files-only` with `--only-matching`, and
+the `llm_tree` filters without `--count`/`--top` are `conflicting_options`;
+a bad `--sort` or `--by` value is `invalid_sort` or `invalid_by` (RETRY).
 
 ### 3.2 Filesystem scanners
 
