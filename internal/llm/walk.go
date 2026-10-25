@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 )
 
 // The llm_* walks are their own 2.x code (find pipelines in fs.sh), so this
@@ -19,6 +20,7 @@ type findEntry struct {
 	depth int         // 0 for the start point
 	mode  fs.FileMode // lstat type bits (find without -L)
 	size  int64       // lstat st_size (%s)
+	mtime time.Time   // lstat st_mtime (3.4: --newer, --since, --sort mtime)
 }
 
 // typeLetter is find's %y for the types the llm walks select.
@@ -90,7 +92,7 @@ func (w *findWalker) walk(start string) {
 	if err != nil {
 		return
 	}
-	e := findEntry{path: start, mode: st.Mode(), size: st.Size()}
+	e := findEntry{path: start, mode: st.Mode(), size: st.Size(), mtime: st.ModTime()}
 	if w.withStart && !w.visit(e) {
 		return
 	}
@@ -116,7 +118,7 @@ func (w *findWalker) dir(path, rel string, depth int) {
 		if err != nil {
 			continue
 		}
-		e := findEntry{path: findJoin(path, name), depth: depth, mode: info.Mode(), size: info.Size()}
+		e := findEntry{path: findJoin(path, name), depth: depth, mode: info.Mode(), size: info.Size(), mtime: info.ModTime()}
 		if w.forbidden != nil && w.forbidden(e.path) {
 			continue
 		}

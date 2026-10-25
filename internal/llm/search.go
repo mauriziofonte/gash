@@ -60,12 +60,46 @@ type rgSearch struct {
 	out         *lineLimiter
 	withName    bool
 	printedSome bool // a context group was printed (for the -- separator)
+
+	// 3.4 (plan F5), all zero for the 3.0 output. relative prints paths
+	// below the root (--relative); excludes are the --exclude globs,
+	// matched below the root; onlyMatching prints each match instead of
+	// its line; hit, when set, receives every match instead of the
+	// printer (rows, counts, --distinct).
+	root         string
+	relative     bool
+	excludes     []string
+	onlyMatching bool
+	hit          func(h grepHit) error
+}
+
+// grepHit is one match a search reports to its hit function: the file,
+// the 1-based line and its text (the match alone with onlyMatching; the
+// binary notice for a binary FILE PATH), or the file alone with filesOnly.
+// text aliases the file's buffer: a hit function copies what it keeps.
+type grepHit struct {
+	path string
+	line int
+	text []byte
+}
+
+// show is a path as printed: whole, or below the root with --relative
+// (a FILE PATH by its name).
+func (s *rgSearch) show(path string) string {
+	if !s.relative {
+		return path
+	}
+	if rel := relBelow(s.root, path); rel != "" {
+		return rel
+	}
+	return basename(path)
 }
 
 // run searches root as rg does with one PATH argument: a directory is
 // walked in path order (deterministic, LLM-03), a file is searched
 // whatever its name, a missing path prints nothing.
 func (s *rgSearch) run(root string, w io.Writer, limit int) {
+	s.root = root
 	s.out = &lineLimiter{w: w, left: limit}
 	if limit <= 0 {
 		return
@@ -113,6 +147,14 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 	ents, _ := f.ReadDir(-1)
 	_ = f.Close()
 	sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
+	// The verdicts first (they depend on this directory's ignore stack
+	// only), so the files can be read ahead while the earlier ones are
+	// searched: the output keeps the path order.
+	type item struct {
+		path, apath string
+		isDir       bool
+	}
+	items := make([]item, 0, len(ents))
 	for _, e := range ents {
 		name := e.Name()
 		path := findJoin(dir, name)
@@ -121,21 +163,69 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 		if s.forbidden != nil && s.forbidden(apath) {
 			continue
 		}
+		if s.excludes != nil && walkExcluded(s.excludes, relBelow(s.root, path), name) {
+			continue
+		}
 		if s.skip(ig, apath, name, isDir) {
 			continue
 		}
-		switch {
-		case isDir:
-			if err := s.walk(path, apath, s.rules.newIgnoreDir(ig, apath)); err != nil {
+		if isDir || e.Type().IsRegular() {
+			items = append(items, item{path, apath, isDir})
+		}
+	}
+	reads := make([]*fileRead, len(items))
+	ahead := func(j int) {
+		if j < len(items) && !items[j].isDir {
+			reads[j] = readAhead(items[j].path)
+		}
+	}
+	for j := 0; j < readAheadFiles; j++ {
+		ahead(j)
+	}
+	for i, it := range items {
+		ahead(i + readAheadFiles)
+		if it.isDir {
+			if err := s.walk(it.path, it.apath, s.rules.newIgnoreDir(ig, it.apath)); err != nil {
 				return err
 			}
-		case e.Type().IsRegular():
-			if err := s.searchFile(path, false); err != nil {
-				return err
-			}
+			continue
+		}
+		data, err := reads[i].wait()
+		reads[i] = nil
+		if err != nil {
+			continue
+		}
+		if err := s.searchData(it.path, data, false); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// readAheadFiles is how many files of a directory a walk reads ahead of
+// the one it searches. A cold cache serves parallel reads far sooner
+// than one after the other (3.4, plan F5: the cold grep).
+const readAheadFiles = 16
+
+// fileRead is one file read in the background.
+type fileRead struct {
+	done chan struct{}
+	data []byte
+	err  error
+}
+
+func readAhead(path string) *fileRead {
+	r := &fileRead{done: make(chan struct{})}
+	go func() {
+		r.data, r.err = os.ReadFile(path)
+		close(r.done)
+	}()
+	return r
+}
+
+func (r *fileRead) wait() ([]byte, error) {
+	<-r.done
+	return r.data, r.err
 }
 
 // skip is the ignore crate's verdict on one walked entry: the overrides
@@ -200,6 +290,11 @@ func (s *rgSearch) searchFile(path string, explicit bool) error {
 	if err != nil {
 		return nil
 	}
+	return s.searchData(path, data, explicit)
+}
+
+// searchData searches the content of one file.
+func (s *rgSearch) searchData(path string, data []byte, explicit bool) error {
 	data = decodeText(data)
 	nul := bytes.IndexByte(data, 0)
 	if nul >= 0 && !explicit {
@@ -221,8 +316,11 @@ func (s *rgSearch) searchFile(path string, explicit bool) error {
 	if len(hits) == 0 {
 		return nil
 	}
+	if s.hit != nil {
+		return s.report(path, lines, hits, nul)
+	}
 	if s.filesOnly {
-		return s.out.line([]byte(path + "\n"))
+		return s.out.line([]byte(s.show(path) + "\n"))
 	}
 	if nul >= 0 {
 		// The printer stops at the first event after binary data: a match
@@ -266,9 +364,21 @@ func (s *rgSearch) searchFile(path string, explicit bool) error {
 }
 
 func (s *rgSearch) printLine(path string, i int, sep byte, line []byte) error {
+	if s.onlyMatching && sep == ':' {
+		for _, m := range s.matches(line) {
+			if err := s.printOne(path, i, sep, m); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return s.printOne(path, i, sep, line)
+}
+
+func (s *rgSearch) printOne(path string, i int, sep byte, line []byte) error {
 	var b []byte
 	if s.withName {
-		b = append(b, path...)
+		b = append(b, s.show(path)...)
 		b = append(b, sep)
 	}
 	b = strconv.AppendInt(b, int64(i+1), 10)
@@ -288,4 +398,43 @@ func splitLines(data []byte) [][]byte {
 		lines = lines[:len(lines)-1]
 	}
 	return lines
+}
+
+// report hands the matches of one file to the hit function (3.4).
+func (s *rgSearch) report(path string, lines [][]byte, hits []int, nul int) error {
+	if s.filesOnly {
+		return s.hit(grepHit{path: path})
+	}
+	if nul >= 0 {
+		return s.hit(grepHit{path: path, line: hits[0] + 1,
+			text: []byte(`binary file matches (found "\0" byte around offset ` + strconv.Itoa(nul) + ")")})
+	}
+	for _, h := range hits {
+		if !s.onlyMatching {
+			if err := s.hit(grepHit{path: path, line: h + 1, text: lines[h]}); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, m := range s.matches(lines[h]) {
+			if err := s.hit(grepHit{path: path, line: h + 1, text: m}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// matches are the non-empty matches of a matching line, left to right
+// (rg -o). RE2 finds them; on the rare line where only the rg-rules NFA
+// matched (text that is not UTF-8, or \b next to non-ASCII text) RE2's
+// matches are all there is.
+func (s *rgSearch) matches(line []byte) [][]byte {
+	var out [][]byte
+	for _, loc := range s.re.re.FindAllIndex(line, -1) {
+		if loc[1] > loc[0] {
+			out = append(out, line[loc[0]:loc[1]])
+		}
+	}
+	return out
 }

@@ -1,0 +1,416 @@
+// Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package llm
+
+import (
+	"bytes"
+	"context"
+	"io/fs"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/pathguard"
+)
+
+// The 3.4 modes of the walkers (plan F2-F5): --count [--by], --top, the
+// --newer/--since filters, --tracked, rows for --format and the output
+// budget. Every one is opt-in: without its flag a walker prints what it
+// printed before, through its own 3.0 code.
+
+// mtimeFilter is --newer REF (modified after REF, as find -newer) and
+// --since T (modified at T or later); both may be set.
+type mtimeFilter struct {
+	newer, since       time.Time
+	hasNewer, hasSince bool
+}
+
+func (f mtimeFilter) active() bool { return f.hasNewer || f.hasSince }
+
+func (f mtimeFilter) ok(mt time.Time) bool {
+	if f.hasNewer && !mt.After(f.newer) {
+		return false
+	}
+	return !f.hasSince || !mt.Before(f.since)
+}
+
+// walkTimes resolves --newer REF and --since T of a walker call; ok is
+// false when it wrote an error envelope.
+func (m *Module) walkTimes(c *invoke.Call, newer, since string, haveNewer, haveSince bool) (mtimeFilter, bool) {
+	var f mtimeFilter
+	if haveNewer {
+		ref, ok := m.validatePath(c, newer)
+		if !ok {
+			return f, false
+		}
+		st, err := os.Stat(ref)
+		if err != nil {
+			fail(c, "path_not_found", ref, "--newer needs an existing file or directory to compare with")
+			return f, false
+		}
+		f.newer, f.hasNewer = st.ModTime(), true
+	}
+	if haveSince {
+		t, ok := parseSince(since, time.Now(), envLocation(c))
+		if !ok {
+			fail(c, "invalid_since", since, "Give an age (30s, 15m, 2h, 3d, 1w), a date (2026-10-25), a date and time (2026-10-25T14:30, local time unless it carries a zone) or @EPOCH")
+			return f, false
+		}
+		f.since, f.hasSince = t, true
+	}
+	return f, true
+}
+
+// envLocation is the caller's time zone: TZ of the call's environment,
+// the process zone when it is unset or unknown.
+func envLocation(c *invoke.Call) *time.Location {
+	tz := strings.TrimPrefix(c.Env.Get("TZ"), ":")
+	if tz == "" {
+		return time.Local
+	}
+	if loc, err := time.LoadLocation(tz); err == nil {
+		return loc
+	}
+	return time.Local
+}
+
+// sinceLayouts are the dates --since reads in the caller's zone.
+var sinceLayouts = []string{
+	"2006-01-02", "2006-01-02T15:04", "2006-01-02T15:04:05", "2006-01-02 15:04", "2006-01-02 15:04:05",
+}
+
+// parseSince reads --since T: an age back from now (a number with s, m,
+// h, d or w, the pairs adding up: 90s, 1h30m, 2d, 1.5h), a date (local
+// midnight), a date and time (local, or RFC 3339 with its zone), or @EPOCH
+// seconds.
+func parseSince(v string, now time.Time, loc *time.Location) (time.Time, bool) {
+	if v == "" {
+		return time.Time{}, false
+	}
+	if rest, ok := strings.CutPrefix(v, "@"); ok {
+		n, err := strconv.ParseInt(rest, 10, 64)
+		if err != nil || n < 0 || n > 1<<40 {
+			return time.Time{}, false
+		}
+		return time.Unix(n, 0), true
+	}
+	if d, ok := parseAge(v); ok {
+		return now.Add(-d), true
+	}
+	for _, l := range sinceLayouts {
+		if t, err := time.ParseInLocation(l, v, loc); err == nil {
+			return t, true
+		}
+	}
+	for _, l := range []string{time.RFC3339, time.RFC3339Nano} {
+		if t, err := time.Parse(l, v); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// ageUnits are the units of an age, in seconds.
+var ageUnits = map[byte]float64{'s': 1, 'm': 60, 'h': 3600, 'd': 86400, 'w': 7 * 86400}
+
+// parseAge reads an age: one or more NUMBER UNIT pairs, at most 100 years.
+func parseAge(v string) (time.Duration, bool) {
+	total := 0.0
+	for i := 0; i < len(v); {
+		j := i
+		for j < len(v) && (v[j] >= '0' && v[j] <= '9' || v[j] == '.') {
+			j++
+		}
+		if j == i || j >= len(v) {
+			return 0, false
+		}
+		n, err := strconv.ParseFloat(v[i:j], 64)
+		unit, ok := ageUnits[v[j]]
+		if err != nil || !ok {
+			return 0, false
+		}
+		total += n * unit
+		i = j + 1
+	}
+	if total > 100*365*86400 {
+		return 0, false
+	}
+	return time.Duration(total * float64(time.Second)), true
+}
+
+// fmtMtime is the mtime of a row: RFC 3339 in UTC, to the second, so the
+// output does not depend on the caller's zone (plan R4).
+func fmtMtime(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05Z")
+}
+
+// extKey is the --by ext key of a name, tree_stats' rule: a single
+// leading dot dropped, the text after the last dot lowercased (ASCII),
+// "(no ext)" without a dot.
+func extKey(name string) string {
+	name = strings.TrimPrefix(name, ".")
+	dot := strings.LastIndexByte(name, '.')
+	if name == "" || dot < 0 {
+		return "(no ext)"
+	}
+	b := []byte(name[dot+1:])
+	for i, ch := range b {
+		if ch >= 'A' && ch <= 'Z' {
+			b[i] = ch + 'a' - 'A'
+		}
+	}
+	return string(b)
+}
+
+// dirKey is the --by dir key of an entry: the first directory below the
+// walk's root, "." for an entry directly in it (and the root itself).
+func dirKey(rel string) string {
+	if i := strings.IndexByte(rel, '/'); i >= 0 {
+		return rel[:i]
+	}
+	return "."
+}
+
+// typeKey is the --by type key: find's %y letter.
+func typeKey(t byte) string { return string(t) }
+
+// walkExcluded is the --exclude rule of the filesystem scanners (AGENTS.md
+// 3.2, FS-12): GLOB matches the entry's base name or its path below the
+// walk's root, with fnmatch semantics where '*', '?' and a bracket never
+// match '/'.
+func walkExcluded(globs []string, rel, name string) bool {
+	for _, g := range globs {
+		if globPathname(g, name) || globPathname(g, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// globPathname is fnmatch with FNM_PATHNAME: as many '/'-separated
+// components in the pattern as in the name, each pair matching.
+func globPathname(pat, name string) bool {
+	if strings.Count(pat, "/") != strings.Count(name, "/") {
+		return false
+	}
+	ps, ns := strings.Split(pat, "/"), strings.Split(name, "/")
+	for i := range ps {
+		if !pathguard.MatchGlobSegment(ps[i], ns[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// walkSel is what a 3.4 walk keeps: the filters llm_find and llm_tree
+// share, applied the way their listings apply them.
+type walkSel struct {
+	// prune names entries neither kept nor entered (nil with --all).
+	prune map[string]bool
+	// badRel leaves out an entry whose path below the root holds one of
+	// its characters, and everything below it ("\n" for llm_find, "\n\t"
+	// for llm_tree, as their listings do).
+	badRel string
+	// pattern is the name glob; "" keeps every name.
+	pattern string
+	// types are the type letters kept ("f", "d", or "fdl").
+	types string
+	times mtimeFilter
+	// tracked, when set, keeps only what git tracks (--tracked).
+	tracked *trackedSet
+	// maxDepth bounds the walk below the root; < 0 for none.
+	maxDepth int
+}
+
+// keep reports whether one entry is selected and whether a directory is
+// entered. name is the name the glob tests, rel the path below the root
+// ("" for the root itself).
+func (s *walkSel) keep(name, rel string, typ byte, mtime time.Time) (keep, enter bool) {
+	if s.prune[name] {
+		return false, false
+	}
+	if s.badRel != "" && strings.ContainsAny(rel, s.badRel) {
+		return false, false
+	}
+	enter = true
+	if typ == '?' || !strings.ContainsRune(s.types, rune(typ)) {
+		return false, enter
+	}
+	if s.pattern != "" && !pathguard.MatchGlobSegment(s.pattern, name) {
+		return false, enter
+	}
+	if s.times.active() && !s.times.ok(mtime) {
+		return false, enter
+	}
+	if s.tracked != nil && !s.tracked.has(rel, typ == 'd') {
+		return false, enter
+	}
+	return true, enter
+}
+
+// needInfo reports whether keep needs each entry's lstat (its mtime).
+func (s *walkSel) needInfo() bool { return s.times.active() }
+
+// dirEntryType is find's %y letter of a directory entry, from its type
+// bits (no lstat).
+func dirEntryType(m fs.FileMode) byte {
+	switch {
+	case m.IsDir():
+		return 'd'
+	case m&fs.ModeSymlink != 0:
+		return 'l'
+	case m.IsRegular():
+		return 'f'
+	}
+	return '?'
+}
+
+// walkDir is one directory of a pool walk.
+type walkDir struct {
+	path, rel string
+	depth     int // 0 for the root
+}
+
+// poolWalk visits a directory tree on up to jobs goroutines: visit reads
+// one directory and returns the subdirectories to visit next; it gets the
+// index of its worker (0 to jobs-1) for worker-local totals, so the walk
+// takes no lock per entry. The order of the visits is not fixed: callers
+// only sum. A cancelled ctx stops handing out directories.
+func poolWalk(ctx context.Context, jobs int, root walkDir, visit func(w int, d walkDir) []walkDir) {
+	jobs = max(jobs, 1)
+	var mu sync.Mutex
+	cond := sync.NewCond(&mu)
+	stack := []walkDir{root}
+	busy := 0
+	var wg sync.WaitGroup
+	for w := 0; w < jobs; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for {
+				mu.Lock()
+				for len(stack) == 0 && busy > 0 {
+					cond.Wait()
+				}
+				if len(stack) == 0 {
+					mu.Unlock()
+					cond.Broadcast()
+					return
+				}
+				d := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				busy++
+				mu.Unlock()
+				var subs []walkDir
+				if ctx == nil || ctx.Err() == nil {
+					subs = visit(w, d)
+				}
+				mu.Lock()
+				busy--
+				stack = append(stack, subs...)
+				wake := len(subs) > 0 || busy == 0 && len(stack) == 0
+				mu.Unlock()
+				if wake {
+					cond.Broadcast()
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+}
+
+// readDirAll reads a directory's entries; ok is false when it could not
+// be opened or read to the end.
+func readDirAll(path string) ([]os.DirEntry, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	ents, err := f.ReadDir(-1)
+	_ = f.Close()
+	return ents, err == nil
+}
+
+// relJoin is the path below the root of a child of rel.
+func relJoin(rel, name string) string {
+	if rel == "" {
+		return name
+	}
+	return rel + "/" + name
+}
+
+// keeper holds what a line or row budget keeps of a stream: the first head
+// items, a ring of the last tail ones, and the count of all. With neither
+// set it keeps everything.
+type keeper[T any] struct {
+	head, tail int
+	first      []T
+	ring       []T
+	start      int
+	n          int
+}
+
+func (k *keeper[T]) add(v T) {
+	k.n++
+	if k.head == 0 && k.tail == 0 || len(k.first) < k.head {
+		k.first = append(k.first, v)
+		return
+	}
+	if k.tail == 0 {
+		return
+	}
+	if len(k.ring) < k.tail {
+		k.ring = append(k.ring, v)
+		return
+	}
+	k.ring[k.start] = v
+	k.start = (k.start + 1) % k.tail
+}
+
+// rows returns n rows with the kept items at the positions the same budget
+// keeps (the first head, the last tail) and nil at the others: llmfmt's
+// Cap reads only the kept positions and counts the rest as omitted.
+func (k *keeper[T]) rows(conv func(T) []any) [][]any {
+	out := make([][]any, k.n)
+	for i, v := range k.first {
+		out[i] = conv(v)
+	}
+	for i := range k.ring {
+		out[k.n-len(k.ring)+i] = conv(k.ring[(k.start+i)%len(k.ring)])
+	}
+	return out
+}
+
+// rowBudget is the budget of a row or text output that has its own limit
+// (-n): --head/--tail/--max-lines replace it when given, otherwise the
+// first limit items are kept. It returns the Options to write with.
+func rowBudget(o *llmfmt.Options, limit int) *llmfmt.Options {
+	ro := *o
+	if !ro.Capped() {
+		ro.Head = limit
+	}
+	return &ro
+}
+
+// lineSink feeds the lines an rgSearch prints (one per Write) to a
+// LineWriter.
+type lineSink struct{ lw *llmfmt.LineWriter }
+
+func (s lineSink) Write(b []byte) (int, error) {
+	s.lw.Line(string(bytes.TrimSuffix(b, []byte("\n"))))
+	return len(b), nil
+}
+
+// closeLines closes a LineWriter and notes what it cut on the call.
+func closeLines(c *invoke.Call, lw *llmfmt.LineWriter) {
+	if k := lw.Close(); k > 0 {
+		c.NoteTruncated(k)
+	}
+}
+
+// maxLimit stands for "no -n cut" in the modes that see every match.
+const maxLimit = int(^uint(0) >> 1)
