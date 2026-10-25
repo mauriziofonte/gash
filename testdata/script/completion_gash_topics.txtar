@@ -11,9 +11,9 @@
 
 env GASH_BANNER=0
 exec bash --norc --noprofile -i drive.sh
-stdout '^offered: all files system nav git docker remote dev llm ai gash init update version hte logs wsl win$'
+stdout '^offered: all files system nav git docker remote dev llm agent ai gash init update version hte logs wsl win$'
 ! stdout 'FAILED'
-stdout '^ran 11$'
+stdout '^ran 12$'
 
 -- drive.sh --
 source "$GASH_SH" >/dev/null 2>&1

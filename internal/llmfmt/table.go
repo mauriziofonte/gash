@@ -269,6 +269,13 @@ func formatFloat(f float64) string {
 	return strconv.FormatFloat(f, 'g', -1, 64)
 }
 
+// Quote returns s as a JSON string (no HTML escaping; invalid UTF-8
+// becomes U+FFFD, as encoding/json writes it).
+func Quote(s string) string {
+	enc, _ := marshal(s)
+	return string(enc)
+}
+
 // writeJSONString writes s as a JSON string (no HTML escaping).
 func writeJSONString(b *bytes.Buffer, s string) {
 	enc, _ := marshal(s)

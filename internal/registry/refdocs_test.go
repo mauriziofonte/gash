@@ -19,7 +19,7 @@ var updateDocs = flag.Bool("update-docs", false, "rewrite docs/reference pages f
 
 // docTopics are the reference pages rendered from the registry and checked
 // here (LEDGER LLM-30, LLM-31: docs/reference/llm.md is the registry help).
-var docTopics = []string{"llm"}
+var docTopics = []string{"llm", "agent"}
 
 // renderTopicDoc renders docs/reference/<topic>.md from the registered help:
 // a table of the topic's functions, then per function its short

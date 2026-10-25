@@ -4331,6 +4331,7 @@ var topics = []Topic{
 	{Name: "remote", Modules: []string{"remote", "ssh"}, AliasFiles: nil, Description: "Hosts from ~/.gash_env: exec, push, pull, sync"},
 	{Name: "dev", Modules: []string{"php", "node", "chrome"}, AliasFiles: []string{"php"}, Description: "PHP and Node.js versions, headless Chrome"},
 	{Name: "llm", Modules: []string{"llm"}, AliasFiles: nil, Description: "Read-only JSON tools for AI agents"},
+	{Name: "agent", Modules: []string{"agent"}, AliasFiles: nil, Description: "Write tools for AI agents"},
 	{Name: "ai", Modules: []string{"ai"}, AliasFiles: nil, Description: "Ask Claude or Gemini from the terminal"},
 	{Name: "gash", Modules: []string{"gash"}, AliasFiles: nil, Description: "Help, doctor, configuration, upgrade"},
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/rogpeppe/go-internal/testscript"
 
 	"github.com/mauriziofonte/gash/internal/compatgen"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 var update = flag.Bool("update", false, "rewrite the cmp files of testdata/script/*.txtar")
@@ -169,9 +170,23 @@ func TestScript(t *testing.T) {
 			if has2x {
 				env.Setenv("GASH_2X_SH", filepath.Join(tree2x, "gash.sh"))
 			}
+			// The functions new in 3.x (registry decision "new"), which a
+			// 2.x-vs-3.x comparison leaves out (init_bash_state_parity).
+			env.Setenv("GASH_NEW3X", strings.Join(new3x(), " "))
 			return nil
 		},
 	})
+}
+
+// new3x are the registry functions with no 2.x counterpart.
+func new3x() []string {
+	var out []string
+	for _, f := range registry.Functions() {
+		if f.Decision == "new" {
+			out = append(out, f.Name)
+		}
+	}
+	return out
 }
 
 // archive2x extracts the v2.1.0 tag of the checkout at root into dir

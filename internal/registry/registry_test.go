@@ -139,7 +139,7 @@ func TestSettingsAndTopics(t *testing.T) {
 	for _, tp := range Topics() {
 		topics = append(topics, tp.Name)
 	}
-	require.Equal(t, []string{"files", "system", "nav", "git", "docker", "remote", "dev", "llm", "ai", "gash"}, topics)
+	require.Equal(t, []string{"files", "system", "nav", "git", "docker", "remote", "dev", "llm", "agent", "ai", "gash"}, topics)
 	require.Len(t, Packs(), 7)
 }
 
@@ -188,7 +188,7 @@ func TestLedger_CORE07(t *testing.T) {
 		require.True(t, seen[m], "ModuleOrder lists %s, which has no help", m)
 	}
 	require.Equal(t, []string{"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh",
-		"llm", "utils", "node", "remote", "chrome", "php"}, ModuleOrder)
+		"llm", "utils", "node", "remote", "chrome", "php", "agent"}, ModuleOrder)
 }
 
 // LEDGER SELF-21: the gash_upgrade help says what it does (fetch the tags,

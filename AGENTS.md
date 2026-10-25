@@ -5,7 +5,7 @@
 > **Applies to:** Gash 3.x. Gash 3.0 runs the toolkit in one Go binary
 > behind the same Bash entry point (`source ~/.gash/gash.sh`): invocations,
 > function names, flags, JSON shapes and error codes are those of 2.x, with
-> the 3.0 changes listed in [section 11](#11-version-compatibility).
+> the 3.0 changes listed in [section 13](#13-version-compatibility).
 > **Stable API:** the public function names and flags below, the JSON shapes
 > in section 4, the error contract in section 5 and the variables in section 2.
 
@@ -285,8 +285,9 @@ branch is "" on a detached HEAD. A file can be both staged and modified.
 
 ## 5. Error contract
 
-`llm_*` functions and the filesystem scanners (in `--json` mode) report
-errors on **stderr** as one JSON line, with a non-zero exit status:
+`llm_*` and `agent_*` functions and the filesystem scanners (in `--json`
+mode) report errors on **stderr** as one JSON line, with a non-zero exit
+status:
 
 ```json
 {"error":"not_a_git_repo","details":"/tmp is not a git repository","action":"CONTINUE","recoverable":true,"hint":"Not inside a git repository. Skip git operations"}
@@ -315,6 +316,8 @@ Each code always carries the action shown:
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
 | WSL & Windows (`gash wsl`, `gash win`, `gash logs`) | `interop_unavailable` `windows_access_denied` `elevation_required` `windows_not_found` (STOP); `interop_timeout` `invalid_windows_argument` `invalid_duration` `confirmation_required` (RETRY) |
+| Shared output options (3.4) | `invalid_format` `invalid_width` `invalid_max_lines` `invalid_head` `invalid_tail` `invalid_jobs` `invalid_timeout` (RETRY) |
+| Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
 non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
@@ -495,7 +498,41 @@ Headless mode reads `GASH_DB_TIMEOUT`, `GASH_AI_CONFIRM`,
 `GASH_AI_MODEL_CLAUDE` and `GASH_AI_MODEL_GEMINI` from `~/.gash_env` (the
 environment wins) and prints no configuration warnings unless `GASH_DEBUG=1`.
 
-## 7. Best practices
+## 7. Routing: the raw shape and the Gash function
+
+_Filled when the 3.4 functions land (plan S9): one row per agent intent,
+"the command an agent would type" and the Gash function that answers it in
+one call. `gash agents-hint` prints the same table._
+
+## 8. Write tools (`agent_*`)
+
+Every `llm_*` function is read-only, with no exception. Every change an agent
+makes through Gash is an `agent_*` call, a separate family with its own card
+topic (`gash agent`) and reference page, so an agent given only the `llm_*`
+functions knows exactly what stays out. The family keeps the `llm_*`
+contract: the JSON envelope, the error contract of section 5, the shared
+output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
+
+| Rule | |
+|---|---|
+| `--dry-run` | Every `agent_*` function takes it: the same checks, a report of what would change (`"dry_run":true,"written":false`), nothing written |
+| Explicit targets | Each target is named: no glob is expanded, no implicit "all" (`agent_git_commit` has no default `-A`) |
+| All or nothing | Checks run on every target before the first write; one failure writes nothing |
+| Secret files and protected paths | Refused as for `llm_*` (`secret_file_blocked`, `forbidden_path`, `path_traversal_blocked`: FATAL) |
+| System paths | The transfer policy of the remote functions applies to local targets too: `/bin`, `/sbin`, `/lib*`, `/usr/bin`, `/usr/sbin`, `/usr/lib*`, `/boot`, `/sys`, `/proc`, `/dev`, `/etc/ssh`, `/etc/sudoers*`, `/etc/passwd`, `/etc/shadow*`, `/etc/gshadow*`, `/etc/pam.d` are `write_path_denied` (FATAL, even with `--force`); `/etc`, `/var`, `/usr/local`, `/root` and any `.ssh` are `sensitive_path` (STOP: ask the user, then `--force`), except below your HOME or below the working directory of the project you run in (never `.ssh`, never a working directory below `/etc`) |
+| Git | Never a force push |
+
+| Function | Output |
+|---|---|
+| `agent_replace FILE... (--old A --new B)... [--count N\|--min N] [--regex] [--dry-run] [--force] [--format F] [--width N]` | `{"files":N,"replaced":{"FILE":[n1,n2]},"written":true}`; each pair must match exactly once per file (`--count N`: exactly N, `--min N`: at least N, replacing all); pairs apply in order; a mismatch anywhere is `replace_count_mismatch` (RETRY) and no file changes; `--dry-run` adds `"diff":{"FILE":{"add":A,"del":D}}` (lines gained and lost) |
+
+`agent_replace` writes each file through a temporary file in the same
+directory, renamed over the target with its mode (and owner, as root); a
+target that changed while it ran is `file_changed` and nothing is written.
+Binary files (`binary_file`) and files over 64 MiB (`file_too_large`) are
+refused.
+
+## 9. Best practices
 
 * Use `--json` and parse with `jq`; text output is for people.
 * Use `--null` with `xargs -0` for paths; never split paths on newlines.
@@ -517,7 +554,7 @@ out=$(llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
 }
 ```
 
-## 8. Local sites (`gash hte`)
+## 10. Local sites (`gash hte`)
 
 `gash hte` manages the user's local Apache and PHP-FPM sites
 ([docs/hte.md](docs/hte.md)). It is not read-only: call it when the user asks
@@ -543,7 +580,7 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash hte site list --json'
 | STOP | `hte_not_installed` `port_in_use` `privileged_step_required` `config_test_failed` `reload_failed` `apache_module_missing` `invalid_state` |
 | FATAL | `apache_not_found` `openssl_not_found` `platform_unsupported` `receipt_mismatch` `root_not_allowed` |
 
-## 9. WSL, Windows and log reclaim (`gash wsl`, `gash win`, `gash logs`)
+## 11. WSL, Windows and log reclaim (`gash wsl`, `gash win`, `gash logs`)
 
 On a WSL distribution Gash reaches the Windows host and converts paths; on
 any host it reclaims disk space from log files. Each command takes `--json`
@@ -611,9 +648,9 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash logs scan --json'
   needs `--yes`. A headless `clean` without `--yes` is
   `confirmation_required` (RETRY with `--yes`, once the user agreed).
 
-## 10. Drop-in snippets
+## 12. Drop-in snippets
 
-### 10.1 Claude Code (`CLAUDE.md`)
+### 12.1 Claude Code (`CLAUDE.md`)
 
 ````markdown
 ## Gash (3.x)
@@ -632,7 +669,7 @@ CONTINUE: skip. STOP: ask the user. FATAL: show the hint, stop; never rephrase t
 Never edit ~/.gash_env. Reference: ~/.gash/AGENTS.md
 ````
 
-### 10.2 Codex, Cursor and other `AGENTS.md` readers
+### 12.2 Codex, Cursor and other `AGENTS.md` readers
 
 ````markdown
 ## Tooling: Gash 3.x
@@ -650,7 +687,7 @@ Errors: stderr JSON with `action` RETRY | CONTINUE | STOP | FATAL; retry at most
 Reference: ~/.gash/AGENTS.md
 ````
 
-### 10.3 Generic system prompt
+### 12.3 Generic system prompt
 
 ```text
 You can use Gash, a Bash toolkit with JSON output, through:
@@ -664,7 +701,7 @@ RETRY (fix input, retry once), CONTINUE (skip), STOP (ask the user),
 FATAL (report the hint, stop). Do not try to get around refusals.
 ```
 
-## 11. Version compatibility
+## 13. Version compatibility
 
 Version: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'`,
 or `gash version --json`. Changes in 3.0 that affect agents (the full list

@@ -1,0 +1,68 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# agent_replace (new in 3.4, plan E1): replacements in explicit files, every
+# pair's count checked in every file before anything is written, all or
+# nothing; --dry-run reports and writes nothing; secret files are refused.
+# The first write tool of the agent_* family (plan D1): llm_* stays
+# read-only.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: two files, one pair, exactly one match each
+exec bash -c 'source "$GASH_SH"; agent_replace a.php src/b.php --old OldName --new NewName'
+stdout '^\{"files":2,"replaced":\{"a.php":\[1\],"src/b.php":\[1\]\},"written":true\}$'
+grep 'class NewName' a.php
+grep 'new NewName' src/b.php
+
+# --- directly: a mismatch on the last file leaves every file untouched
+! exec gash agent_replace 1.txt 2.txt 3.txt --old foo --new baz
+stderr '"error":"replace_count_mismatch"'
+stderr '3.txt: pair 1 found 0, expected exactly 1'
+stderr '"action":"RETRY"'
+grep '^foo$' 1.txt
+grep '^foo$' 2.txt
+
+# --- --min replaces every occurrence; --dry-run writes nothing
+exec gash agent_replace many.js --old 'var ' --new 'let ' --min 1 --dry-run
+stdout '"replaced":\{"many.js":\[3\]\},"written":false,"dry_run":true'
+grep -count=3 '^var ' many.js
+exec gash agent_replace many.js --old 'var ' --new 'let ' --min 1
+grep -count=3 '^let ' many.js
+
+# --- --format tsv: one row per file and pair, metadata on stderr
+exec gash agent_replace 1.txt --old foo --new qux --format tsv
+cmp stdout tsv.want
+stderr '^\{"dry_run":false,"written":true\}$'
+
+# --- secret files are never written
+! exec gash agent_replace .env --old x --new y
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+grep 'DB_PASSWORD=x' .env
+
+# --- --help anywhere prints the help
+exec gash agent_replace --old -h
+stdout 'agent_replace FILE\.\.\.'
+
+-- a.php --
+<?php class OldName {}
+-- src/b.php --
+<?php new OldName();
+-- 1.txt --
+foo
+-- 2.txt --
+foo
+-- 3.txt --
+bar
+-- many.js --
+var a;
+var b;
+var c;
+-- .env --
+DB_PASSWORD=x
+-- tsv.want --
+file	pair	count
+1.txt	1	1
