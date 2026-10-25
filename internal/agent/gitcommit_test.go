@@ -295,3 +295,15 @@ func TestCommitPathsAndTail(t *testing.T) {
 	require.Equal(t, "c", tailLines([]byte("a\nb\nc\n"), 6))
 	require.Equal(t, "abc…", cutBytes("abcdef", 3))
 }
+
+func TestGitCommitPushWordIsPath(t *testing.T) {
+	repo, bare, home := commitRepo(t)
+	// From the parent directory, the word after --push names the
+	// repository (no PATH given): push to the upstream, as in the kit's
+	// agent_git_commit ... --push proj.
+	r := commitCall(t, filepath.Dir(repo), home, "-m", "via path", "--add", "a.txt", "--push", filepath.Base(repo))
+	v := decode(t, r)
+	require.Equal(t, true, v["pushed"])
+	require.Equal(t, "origin", v["remote"])
+	require.Equal(t, "via path\n", sh(t, bare, home, "log", "-1", "--format=%s", "main"))
+}

@@ -45,6 +45,7 @@ type commitArgs struct {
 	force    bool
 	path     string
 	pathSet  bool
+	pushWord string // the word after --push: REMOTE, or PATH (see gitCommit)
 }
 
 // commitResult is the report of agent_git_commit (G2), at most ~150
@@ -76,7 +77,6 @@ type commitPlan struct {
 
 func (m *Module) parseCommit(c *invoke.Call, o *llmfmt.Options) (commitArgs, bool) {
 	var a commitArgs
-	pushWord := ""
 	args := c.Args
 	for len(args) > 0 {
 		n, ok := o.Take(c, args)
@@ -119,7 +119,7 @@ func (m *Module) parseCommit(c *invoke.Call, o *llmfmt.Options) (commitArgs, boo
 		case "--push":
 			a.push = true
 			if len(args) > 1 && !strings.HasPrefix(args[1], "-") {
-				pushWord = args[1]
+				a.pushWord = args[1]
 				args = args[2:]
 				continue
 			}
@@ -139,19 +139,6 @@ func (m *Module) parseCommit(c *invoke.Call, o *llmfmt.Options) (commitArgs, boo
 			a.path, a.pathSet = w, true
 		}
 		args = args[1:]
-	}
-	if pushWord != "" {
-		// The word after --push is the REMOTE, unless it names a directory
-		// and no PATH was given: then it is the PATH (agent_git_commit ...
-		// --push repo).
-		if st, err := os.Stat(pushWord); err == nil && st.IsDir() && !a.pathSet {
-			a.path, a.pathSet = pushWord, true
-		} else {
-			a.remote = pushWord
-		}
-	}
-	if !a.pathSet {
-		a.path = "."
 	}
 	switch {
 	case len(a.messages) == 0 || strings.TrimSpace(a.messages[0]) == "":
@@ -196,6 +183,23 @@ func (m *Module) gitCommit(c *invoke.Call) int {
 		return fail(c, "git_not_found", "Git is not installed", "Git binary not found. Skip git operations")
 	}
 	g := m.guard(c)
+	if a.pushWord != "" {
+		// The word after --push is the REMOTE, unless it names a directory
+		// and no PATH was given: then it is the PATH (agent_git_commit ...
+		// --push repo).
+		w := a.pushWord
+		if !filepath.IsAbs(w) {
+			w = filepath.Join(g.Cwd, w)
+		}
+		if st, err := os.Stat(w); err == nil && st.IsDir() && !a.pathSet {
+			a.path, a.pathSet = a.pushWord, true
+		} else {
+			a.remote = a.pushWord
+		}
+	}
+	if !a.pathSet {
+		a.path = "."
+	}
 	dir, ok := m.target(c, g, a.path, a.force)
 	if !ok {
 		return 1
