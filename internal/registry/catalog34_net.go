@@ -47,8 +47,8 @@ var catalogNet = []Function{
 				"NOTES\n" +
 				"  Replaces for d in ...; do for t in A MX TXT; do dig +short $t $d; done;\n" +
 				"  done. One row per NAME, in input order: {\"name\", one key per type, \"ms\",\n" +
-				"  \"error\"}. A and AAAA, NS, CNAME and TXT are sorted string lists (a TXT\n" +
-				"  record's strings joined); MX is [{\"host\",\"pref\"}], CAA\n" +
+				"  \"error\"}. A and AAAA (in numeric order), NS, CNAME and TXT are sorted\n" +
+				"  string lists (a TXT record's strings joined); MX is [{\"host\",\"pref\"}], CAA\n" +
 				"  [{\"flag\",\"tag\",\"value\"}], SOA [{\"mname\",\"rname\",\"serial\",\"refresh\",\n" +
 				"  \"retry\",\"expire\",\"minimum\"}]. A type with no records is []; a type whose\n" +
 				"  lookup failed is null. error is null, or nxdomain (the name does not\n" +

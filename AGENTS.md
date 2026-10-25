@@ -242,8 +242,8 @@ from `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY`, CAs from the system or
 
 `llm_dns` asks `--server IP[:PORT]` or the nameservers of
 `/etc/resolv.conf` itself (UDP, TCP when truncated); names are asked as
-given, without search domains. Answers are sorted: A/AAAA, NS, CNAME and
-TXT are string lists (a TXT record's strings joined), MX `[{host, pref}]`,
+given, without search domains. Answers are sorted (addresses in numeric
+order): A/AAAA, NS, CNAME and TXT are string lists (a TXT record's strings joined), MX `[{host, pref}]`,
 CAA `[{flag, tag, value}]`, SOA `[{mname, rname, serial, refresh, retry,
 expire, minimum}]`; `[]` means no records, `null` that the lookup failed.
 An unknown type is `invalid_type`, a server that is not an IP

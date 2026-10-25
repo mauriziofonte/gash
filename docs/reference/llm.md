@@ -289,8 +289,8 @@ llm_dns _dmarc.example.com --type TXT --server 1.1.1.1
 ```text
 Replaces for d in ...; do for t in A MX TXT; do dig +short $t $d; done;
 done. One row per NAME, in input order: {"name", one key per type, "ms",
-"error"}. A and AAAA, NS, CNAME and TXT are sorted string lists (a TXT
-record's strings joined); MX is [{"host","pref"}], CAA
+"error"}. A and AAAA (in numeric order), NS, CNAME and TXT are sorted
+string lists (a TXT record's strings joined); MX is [{"host","pref"}], CAA
 [{"flag","tag","value"}], SOA [{"mname","rname","serial","refresh",
 "retry","expire","minimum"}]. A type with no records is []; a type whose
 lookup failed is null. error is null, or nxdomain (the name does not
