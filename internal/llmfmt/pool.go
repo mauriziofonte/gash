@@ -12,8 +12,9 @@ import (
 )
 
 // NetworkJobs is the default -j of the functions that wait on the network
-// (plan R6: CPUs locally, 8 for network).
-const NetworkJobs = 8
+// (plan R6 said 8; the http-20 kit row needs every URL of a typical batch
+// in one wave, so 32: a probe holds a socket, not a CPU).
+const NetworkJobs = 32
 
 // LocalJobs is the default -j of the functions bound by local CPU or disk.
 func LocalJobs() int { return runtime.NumCPU() }

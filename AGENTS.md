@@ -172,7 +172,7 @@ what it printed before unless you pass one of these.
 | `--format json\|jsonl\|tsv\|table` | Row output as one compact JSON array (`json`), one JSON object per line (`jsonl`), a header line plus tab-separated rows (`tsv`: tab, newline, carriage return and backslash in a value are written `\t`, `\n`, `\r`, `\\`; a null is `\N`), or aligned columns for humans (`table`). An unknown format is `invalid_format` |
 | `--width N` | Cuts each output line (in JSON, each string value) at N display columns, ending it with `…` |
 | `--max-lines N`, `--head N`, `--tail N` | Keeps the first N (`--max-lines` is `--head`) and/or the last N lines or rows; what is cut becomes one `[... K lines omitted]` line in text and `table` output, `"truncated": K` in a JSON object, and the metadata line below for a JSON array, `jsonl` and `tsv` |
-| `-j N`, `--timeout S` | Multi-target functions: N targets at a time (default: the CPU count, 8 for network probes) and a per-target time limit (seconds, `0.5`, or `500ms`, `2s`, `1m`; at most 1h). A target that times out is a field of its result, not a failed call; results keep the input order |
+| `-j N`, `--timeout S` | Multi-target functions: N targets at a time (default: the CPU count, 32 for network probes) and a per-target time limit (seconds, `0.5`, or `500ms`, `2s`, `1m`; at most 1h). A target that times out is a field of its result, not a failed call; results keep the input order |
 | `--relative`, `--absolute` | Paths relative to the PATH argument (or the working directory), or absolute (today's default) |
 
 Values are positive integers (1 to 999999999): 0 or a word is
