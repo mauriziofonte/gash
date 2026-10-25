@@ -17,6 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/ui"
+	"github.com/mauriziofonte/gash/internal/wsl"
 )
 
 // requireWSL is __gash_require_wsl: /proc/version names Microsoft.
@@ -29,12 +30,35 @@ func (m *Module) requireWSL(c *invoke.Call) bool {
 	return false
 }
 
-// winDir is the working directory of __gash_wsl_cmd: `cd /mnt/c || cd /`.
+// wslFacts detects the WSL environment from the module's system root (no
+// process starts, no caller environment needed: drives come from the
+// mounts). Off WSL it reports WSL=false and no drives.
+func (m *Module) wslFacts() wsl.Facts {
+	return wsl.Detect(m.sys, func(string) string { return "" })
+}
+
+// winDir is the working directory of __gash_wsl_cmd: the mount of the drive
+// that holds Windows (not the hard-wired /mnt/c, so [automount] root=/
+// works), else `/`.
 func (m *Module) winDir() string {
-	if st, err := os.Stat("/mnt/c"); err == nil && st.IsDir() && faccess("/mnt/c", 1) {
-		return "/mnt/c"
+	if d, ok := m.wslFacts().SystemDrive(m.sys.Exists); ok && faccess(m.sys.Path(d.Mount), 1) {
+		return d.Mount
 	}
 	return "/"
+}
+
+// winExe resolves a Windows System32 program (cmd.exe, explorer.exe) to its
+// absolute path under the system drive, so interop works with
+// [interop] appendWindowsPath=false. It falls back to the bare name (found
+// on PATH as before) when the drive or the file is not there.
+func (m *Module) winExe(name string) string {
+	if d, ok := m.wslFacts().SystemDrive(m.sys.Exists); ok {
+		p := d.Mount + "/Windows/System32/" + name
+		if m.sys.IsRegular(p) {
+			return m.sys.Path(p)
+		}
+	}
+	return name
 }
 
 func (m *Module) wslRestart(c *invoke.Call) int  { return m.wslStopVM(c) }
@@ -80,7 +104,7 @@ func (m *Module) wslStopVM(c *invoke.Call) int {
 // wslCmd is __gash_wsl_cmd: cmd.exe /C ARGS from a Windows directory, on
 // the caller's terminal.
 func (m *Module) wslCmd(c *invoke.Call, args ...string) int {
-	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "cmd.exe", Args: append([]string{"/C"}, args...),
+	res, err := m.run.Run(ctx(c), runner.Cmd{Path: m.winExe("cmd.exe"), Args: append([]string{"/C"}, args...),
 		Options: runner.Options{Env: c.Env.Child(), Dir: m.winDir(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(c.Stderr, "bash: "+se.Error()+"\n")
@@ -115,7 +139,7 @@ func (m *Module) wslExplorer(c *invoke.Call) int {
 	if st != 0 {
 		win = target
 	}
-	_ = m.passthrough(c, "explorer.exe", win)
+	_ = m.passthrough(c, m.winExe("explorer.exe"), win)
 	return 0
 }
 
@@ -128,7 +152,7 @@ func (m *Module) wslTaskmanager(c *invoke.Call) int {
 	if !m.requireWSL(c) {
 		return 1
 	}
-	cmd := runner.Cmd{Path: "cmd.exe", Args: []string{"/C", "taskmgr"},
+	cmd := runner.Cmd{Path: m.winExe("cmd.exe"), Args: []string{"/C", "taskmgr"},
 		Options: runner.Options{Env: c.Env.Child(), Dir: m.winDir(), Stdout: osFile(c.Stdout), Stderr: osFile(c.Stderr)}}
 	if err := m.run.Start(ctx(c), cmd); err != nil {
 		if se := (*runner.StartError)(nil); errors.As(err, &se) {

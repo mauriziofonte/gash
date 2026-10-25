@@ -72,12 +72,16 @@ func (s *Session) identity(o *out) {
 		o.kv("Container", "OpenVZ")
 	}
 
-	if f.isFile("/etc/wsl.conf") {
+	// WSL is detected from the same signals platform uses, not /etc/wsl.conf
+	// alone: a distribution without wsl.conf still runs under WSL when the
+	// interop handler is registered or /proc/version names Microsoft.
+	if f.isFile("/etc/wsl.conf") || f.isFile("/proc/sys/fs/binfmt_misc/WSLInterop") ||
+		strings.Contains(strings.ToLower(string(f.read("/proc/version"))), "microsoft") {
 		o.kv("WSL", "yes")
 		if f.isFile("/etc/ubwsl-installed") {
 			o.kv("WSL Marker", "ubwsl-installed")
 		}
-		if o.llm {
+		if o.llm && f.isFile("/etc/wsl.conf") {
 			o.write("WSL_CONF:\n")
 			o.write(string(f.read("/etc/wsl.conf")))
 		}

@@ -148,10 +148,11 @@ func (e *Engine) HostsWindows(ctx context.Context) ([]string, error) {
 	for _, d := range desired {
 		names = append(names, d.Names...)
 	}
-	if !e.Sysroot.IsRegular(hosts.PowerShell) {
+	ps, ok := hosts.WindowsPowerShell(e.Sysroot)
+	if !ok {
 		return hosts.WindowsLines(names), nil
 	}
-	missing, err := hosts.WindowsUnresolved(ctx, e.Runner, hosts.PowerShell, names)
+	missing, err := hosts.WindowsUnresolved(ctx, e.Runner, ps, names)
 	if err != nil {
 		return nil, err
 	}

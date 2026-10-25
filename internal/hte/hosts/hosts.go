@@ -26,6 +26,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/state"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
+	"github.com/mauriziofonte/gash/internal/wsl"
 )
 
 // HelperPath is where install puts the helper (design/hte.md 7.1).
@@ -258,5 +259,26 @@ func WindowsUnresolved(ctx context.Context, r runner.Runner, powershell string, 
 	return out, nil
 }
 
-// PowerShell is the WSL interop path of Windows PowerShell.
+// PowerShell is the legacy WSL interop path of Windows PowerShell on the
+// default /mnt/c mount, kept as a fallback for WindowsPowerShell.
 const PowerShell = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+
+// powerShellRel is the path of Windows PowerShell under System32.
+const powerShellRel = "/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+
+// WindowsPowerShell resolves Windows PowerShell under the mounted Windows
+// system drive (not the hard-wired /mnt/c, so [automount] root=/ works),
+// falling back to the legacy /mnt/c path. The second value is false when no
+// Windows PowerShell is reachable.
+func WindowsPowerShell(sr platform.Sysroot) (string, bool) {
+	f := wsl.Detect(sr, func(string) string { return "" })
+	if d, ok := f.SystemDrive(sr.Exists); ok {
+		if p := d.Mount + powerShellRel; sr.IsRegular(p) {
+			return sr.Path(p), true
+		}
+	}
+	if sr.IsRegular(PowerShell) {
+		return sr.Path(PowerShell), true
+	}
+	return "", false
+}

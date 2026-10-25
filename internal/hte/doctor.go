@@ -506,8 +506,8 @@ func (e *Engine) doctorHosts(ctx context.Context, v *env, sites []state.Site, r 
 			names = append(names, en.Names...)
 		}
 		missing := names
-		if e.Sysroot.IsRegular(hosts.PowerShell) {
-			if m, err := hosts.WindowsUnresolved(ctx, e.Runner, hosts.PowerShell, names); err == nil {
+		if ps, ok := hosts.WindowsPowerShell(e.Sysroot); ok {
+			if m, err := hosts.WindowsUnresolved(ctx, e.Runner, ps, names); err == nil {
 				missing = m
 			}
 		}
