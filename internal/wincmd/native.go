@@ -5,6 +5,7 @@ package wincmd
 import (
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/winbridge"
@@ -15,10 +16,12 @@ import (
 // regRootRE matches a registry key that starts with a known root. reg.exe
 // takes the key as one argument (never a shell string), so this is a
 // usability guard, not a safety boundary.
-var regRootRE = regexp.MustCompile(`(?i)^(HKLM|HKCU|HKCR|HKU|HKCC|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER|HKEY_CLASSES_ROOT|HKEY_USERS|HKEY_CURRENT_CONFIG)(\\|$)`)
+var regRootRE = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`(?i)^(HKLM|HKCU|HKCR|HKU|HKCC|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER|HKEY_CLASSES_ROOT|HKEY_USERS|HKEY_CURRENT_CONFIG)(\\|$)`)
+})
 
 // regLineRE reads one "    Name    TYPE    Data" value line.
-var regLineRE = regexp.MustCompile(`^\s{4}(.*?)\s{4}(REG_[A-Z_]+)\s{4}(.*)$`)
+var regLineRE = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^\s{4}(.*?)\s{4}(REG_[A-Z_]+)\s{4}(.*)$`) })
 
 type regValue struct {
 	Name string `json:"name"`
@@ -34,7 +37,7 @@ type regResult struct {
 
 func (r *run) doReg(key string) error {
 	key = strings.TrimSpace(key)
-	if !regRootRE.MatchString(key) {
+	if !regRootRE().MatchString(key) {
 		return r.failErr(contract.New("invalid_windows_argument", "not a registry key: "+key,
 			`start with a root: HKLM\…, HKCU\…, HKCR\…, HKU\… or HKCC\…`))
 	}
@@ -85,12 +88,12 @@ func parseReg(text, asked string) regResult {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		if m := regLineRE.FindStringSubmatch(line); m != nil {
+		if m := regLineRE().FindStringSubmatch(line); m != nil {
 			res.Values = append(res.Values, regValue{Name: strings.TrimSpace(m[1]), Type: m[2], Data: m[3]})
 			continue
 		}
 		up := strings.ToUpper(strings.TrimSpace(line))
-		if strings.HasPrefix(up, "HKEY_") || regRootRE.MatchString(strings.TrimSpace(line)) {
+		if strings.HasPrefix(up, "HKEY_") || regRootRE().MatchString(strings.TrimSpace(line)) {
 			if !seenKey {
 				res.Key = strings.TrimSpace(line)
 				seenKey = true
