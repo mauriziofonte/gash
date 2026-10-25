@@ -131,9 +131,11 @@ slow_query_explain field (the plan) when a query takes 100 ms or more
 
 | Function | Output |
 |---|---|
-| `llm_git_status [PATH]` | JSON object (4.6) |
-| `llm_git_log [-n N] [PATH]` | JSON array of `{hash, subject, author, date}` (default 10) |
-| `llm_git_diff [--staged] [PATH]` | `git diff --stat` text |
+| `llm_git_status [PATH] [--summary] [--files] [--fetch] [--repos PATH...] [-j N] [--timeout S] [--format F] [--max-lines N] [--head N] [--tail N] [--width N]` | JSON object (4.6); `--summary` the counts per state; `--files` rows `{p, xy}` (the `git status --short` letters); `--repos` one summary row per repository (`repo` first, `error` last), in parallel; `--fetch` fetches the upstream branch only and prints the `llm_git_overview` object plus `fetched` |
+| `llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P] [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | JSON array of `{hash, subject, author, date}` (default 10); `--fields` picks among hash, subject, date, author, files (the changed paths) |
+| `llm_git_diff [--staged] [REV..REV] [--files] [--numstat] [--summary] [--patch] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `git diff --stat` text; `--files` rows `{p, add, del, status}`, `--numstat` rows `{p, add, del}`, `--summary` `{files, insertions, deletions}`, `--patch` the patch text capped per file |
+| `llm_git_overview [PATH] [--log N] [--files N]` | `{branch, upstream, ahead, behind, counts:{staged, modified, untracked, conflicted}, log:[{hash, subject}], diffstat:{files, insertions, deletions}}` (3 subjects by default); `--files N` adds the path lists, N per state |
+| `llm_git_show [REV] [--stat] [--files] [--patch] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `{hash, subject, author, date, files:[{p, add, del}]}` of REV (default HEAD); `--stat` adds `stat` totals, `--files` each file's `status`; `--patch` the patch text capped per file; `REV:FILE` the file's content at REV |
 | `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
 | `llm_ports [--listen]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without) |
 | `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name` |
@@ -142,6 +144,26 @@ slow_query_explain field (the plan) when a query takes 100 ms or more
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
+
+Git (3.4 options): one call answers the usual combination: `llm_git_overview`
+for `git status --short | wc -l; git log --oneline -3; git diff --stat | tail -1`,
+`llm_git_status --summary`/`--files`/`--repos`/`--fetch`, `llm_git_diff
+--summary`/`--files`/`--patch`, `llm_git_show REV --stat` and `REV:FILE`. Without
+a 3.4 option every existing function prints what it printed before. Paths
+are relative to the repository root, as git prints them; `add`/`del` are null
+for a binary file. `--patch` keeps each file's header lines and cuts its body
+at `--max-lines` (default 200; `REV:FILE` content 2000) with
+`[... K lines omitted]`; the patch of a secret file (6.2) is replaced by one
+marker line and `REV:FILE` of a secret file is `secret_file_blocked`. A FILE
+as PATH limits `llm_git_diff` (with a 3.4 option) and `llm_git_show` to it.
+`--fetch` is the one network read: the upstream branch only (no tags, no
+prune, no submodules), bounded by `--timeout` (default 20 s), never
+prompting; a failure is `"fetched":false` with `error` and the local state is
+still printed, and a repository whose own configuration names a program for
+the fetch (`core.sshCommand`, a credential helper, `uploadpack`,
+`url.*.insteadOf`, `protocol.*`) is not fetched. An unknown revision is
+`unknown_revision`, a bad `--grep`/`--author` regex `invalid_regex`, options
+that do not go together `conflicting_options` (all RETRY).
 
 `llm_project` types: `php`, `javascript`, `python`, `go`, `rust`, `unknown`.
 The framework comes from the dependency keys of `package.json`

@@ -18,6 +18,8 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_find`](#llm-find) |  | Find files by pattern (ignores noise directories) |
 | [`llm_git_diff`](#llm-git-diff) |  | Git diff with statistics |
 | [`llm_git_log`](#llm-git-log) |  | Recent commits (JSON) |
+| [`llm_git_overview`](#llm-git-overview) |  | Repository state in one small object (JSON) |
+| [`llm_git_show`](#llm-git-show) |  | A commit's metadata and files, its patch, or a file at a revision |
 | [`llm_git_status`](#llm-git-status) |  | Compact git status (JSON) |
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
@@ -370,13 +372,26 @@ Git diff with statistics
 #### Usage
 
 ```text
-llm_git_diff [--staged] [PATH]
+llm_git_diff [--staged] [REV..REV] [--max-lines N] [--width N] [PATH]
+llm_git_diff [--staged] [REV..REV] (--files | --numstat) [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+llm_git_diff [--staged] [REV..REV] --summary [--format F] [PATH]
+llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
 
 ```text
 --staged               Staged changes (also --cached)
+REV..REV               Compare two commits (A..B, A...B for the merge base)
+--files                One row per file: {"p","add","del","status"}
+--numstat              One row per file: {"p","add","del"}
+--summary              The totals only: {"files","insertions","deletions"}
+--patch                The patch as text, capped per file (default 200 lines)
+--format F             json (default), jsonl, tsv or table (--files, --numstat,
+                       --summary)
+--max-lines N          Lines (or rows) to keep: of the --stat text, of the rows,
+                       of each file with --patch; also --head N and --tail N
+--width N              Cut each line (JSON: each path) at N columns
 ```
 
 #### Examples
@@ -384,9 +399,31 @@ llm_git_diff [--staged] [PATH]
 ```bash
 llm_git_diff
 llm_git_diff --staged
+
+# Totals of the work tree, then the changed files of the last three commits
+llm_git_diff --summary
+llm_git_diff HEAD~3..HEAD --files --format tsv
+
+# One file's patch, 80 lines at most
+llm_git_diff --patch --max-lines 80 src/app.js
 ```
 
-See also: `llm_git_status`, `llm_git_log`
+#### Notes
+
+```text
+Without an option: git diff --stat text, as git prints it. --files,
+--numstat and --summary replace git diff --stat | tail -1, --name-only,
+--name-status and --numstat; --patch replaces git diff -- file | head -80.
+Paths are relative to the repository root; add and del are null for a
+binary file. With a mode option a FILE as PATH limits the diff to it.
+--patch keeps each file's header and puts [... K lines omitted] where it
+cuts; a secret file's patch is replaced by a marker line (a secret FILE
+as PATH is secret_file_blocked). An unknown revision is unknown_revision
+(RETRY). Rows that the budget cuts are counted in the stderr metadata line
+({"truncated":K}).
+```
+
+See also: `llm_git_overview`, `llm_git_status`, `llm_git_log`
 
 ## llm_git_log
 
@@ -395,13 +432,26 @@ Recent commits (JSON)
 #### Usage
 
 ```text
-llm_git_log [-n N] [PATH]
+llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...
+            [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
 
 ```text
 -n, --limit N          Commits to list (default 10)
+--since D, --until D   Commits after / before a date (git's dates: 2026-01-31,
+                       "2 weeks ago", yesterday)
+--grep RE              Commits whose message matches RE (extended regex)
+--author RE            Commits whose author matches RE (extended regex)
+--path P               Commits that touch P (repeat for more; git pathspecs)
+--fields LIST          Comma list of hash, subject, date, author, files
+                       (default hash,subject,author,date); files is the
+                       array of the paths each commit changed
+--format F             json (default), jsonl, tsv or table
+--max-lines N          Rows to keep (also --head N, --tail N); the cut is
+                       counted on stderr
+--width N              Cut each string value at N columns
 ```
 
 #### Examples
@@ -409,9 +459,127 @@ llm_git_log [-n N] [PATH]
 ```bash
 llm_git_log
 llm_git_log --limit 20
+
+# The last three subjects, compact
+llm_git_log -n 3 --fields hash,subject
+
+# Fixes of the last week that touched src/, with their files
+llm_git_log --since "1 week ago" --grep '^fix' --path src --fields hash,subject,files
 ```
 
-See also: `llm_git_status`, `llm_git_diff`
+#### Notes
+
+```text
+Replaces git log --oneline -N [-- path] and git log -1 --format='%h %s'.
+Without a 3.4 option the output is the 2.x array of {hash, subject,
+author, date}; any 3.4 option writes the rows through the shared output
+layer (same keys, --fields to choose). A bad --grep or --author is
+invalid_regex (RETRY); a repository with no commit gives [].
+```
+
+See also: `llm_git_overview`, `llm_git_status`, `llm_git_diff`
+
+## llm_git_overview
+
+Repository state in one small object (JSON)
+
+#### Usage
+
+```text
+llm_git_overview [PATH] [--log N] [--files N]
+```
+
+#### Options
+
+```text
+--log N                Last N commit subjects (default 3; 0 for none)
+--files N              Also list the paths of each state, at most N each
+```
+
+#### Examples
+
+```bash
+llm_git_overview
+# {"branch":"main","upstream":"origin/main","ahead":1,"behind":0,
+#  "counts":{"staged":0,"modified":2,"untracked":1,"conflicted":0},
+#  "log":[{"hash":"a1b2c3d","subject":"fix: parser"}],
+#  "diffstat":{"files":2,"insertions":10,"deletions":3}}
+
+# With up to 20 paths per state
+llm_git_overview . --files 20
+```
+
+#### Notes
+
+```text
+Replaces git status --short | wc -l; git log --oneline -3; git diff --stat
+| tail -1. branch is "" on a detached HEAD, upstream "" without one (ahead
+and behind are then 0). counts follow llm_git_status: a path both staged
+and modified counts in both. diffstat counts the tracked changes against
+HEAD, staged or not (untracked files are only in counts). With --files,
+"files" holds the four lists (paths relative to the repository root) and
+"truncated" the number of paths left out. Not a repository:
+not_a_git_repo (CONTINUE).
+```
+
+See also: `llm_git_status`, `llm_git_log`, `llm_git_diff`
+
+## llm_git_show
+
+A commit's metadata and files, its patch, or a file at a revision
+
+#### Usage
+
+```text
+llm_git_show [REV] [--stat] [--files] [PATH]
+llm_git_show [REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+llm_git_show REV:FILE [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+```
+
+#### Options
+
+```text
+--stat                 Add the totals: {"files","insertions","deletions"}
+--files                Add each file's status letter (A, M, D, R, C, T)
+--patch                The commit's patch as text, capped per file
+--max-lines N          Lines kept per file with --patch (default 200), of the
+                       content with REV:FILE (default 2000), files in the
+                       JSON otherwise; also --head N and --tail N
+--width N              Cut each line (JSON: each path and the subject) at N
+                       columns
+```
+
+#### Examples
+
+```bash
+llm_git_show HEAD~1 --stat
+# {"hash":"6595b2c","subject":"docs: change 118","author":"Ann",
+#  "date":"2026-10-25 22:44:46 +0000","files":[{"p":"CHANGES.md","add":1,
+#  "del":0}],"stat":{"files":1,"insertions":1,"deletions":0}}
+
+# The patch, 80 lines per file
+llm_git_show a1b2c3d --patch --max-lines 80
+
+# A file as it was two commits ago, first 100 lines
+llm_git_show HEAD~2:src/app.js --max-lines 100
+```
+
+#### Notes
+
+```text
+Replaces git show REV --stat, git show REV --name-status and git show
+REV:path | sed -n 1,80p. REV defaults to HEAD; a tag shows its commit; a
+merge is shown against its first parent. File paths are relative to the
+repository root; add and del are null for a binary file. A FILE as PATH
+limits the files and the patch to it. --patch keeps each file's header and
+puts [... K lines omitted] where it cuts; the patch of a secret file is
+replaced by a marker line. REV:FILE paths are relative to the repository
+root (REV:./FILE to PATH); a secret FILE is secret_file_blocked (FATAL), a
+binary one binary_file. An unknown REV is unknown_revision (RETRY), a FILE
+missing at REV file_not_found, not a repository not_a_git_repo (CONTINUE).
+```
+
+See also: `llm_git_log`, `llm_git_diff`
 
 ## llm_git_status
 
@@ -421,6 +589,30 @@ Compact git status (JSON)
 
 ```text
 llm_git_status [PATH]
+llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]
+llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]
+llm_git_status [PATH] --fetch [--timeout S]
+llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--max-lines N] [--width N]
+```
+
+#### Options
+
+```text
+--summary              The number of paths in each state instead of the lists
+--files                One row per changed path: {"p","xy"} (the two letters
+                       of git status --short: index, work tree; ?? untracked)
+--fetch                Fetch the upstream branch first (no tags, no prune), then
+                       print the llm_git_overview object with "fetched"
+--repos PATH...        The summary of each repository, in parallel: one row per
+                       PATH, in the order given
+--timeout S            Bound the fetch (default 20s), with --repos each
+                       repository
+-j N                   Repositories at a time (default: the CPU count, 8 with
+                       --fetch)
+--format F             json (default), jsonl, tsv or table (--summary, --files,
+                       --repos)
+--max-lines N          Rows to keep (also --head N, --tail N)
+--width N              Cut each string value at N columns
 ```
 
 #### Examples
@@ -436,9 +628,33 @@ llm_git_status
 #   "untracked": [],
 #   "conflicted": []
 # }
+
+# Counts only; the changed paths as rows
+llm_git_status --summary
+llm_git_status --files --format tsv
+
+# Fresh ahead/behind, and three repositories at once
+llm_git_status --fetch
+llm_git_status --repos ~/src/api ~/src/web ~/src/docs --format tsv
 ```
 
-See also: `llm_git_diff`, `llm_git_log`
+#### Notes
+
+```text
+Without an option: the pretty 2.x object above. --summary replaces git
+status --short | wc -l, --files git status --short, --repos a loop of
+git -C R status, --fetch git fetch && git status -sb. --summary prints
+{"branch","upstream","ahead","behind","staged","modified",
+"untracked","conflicted"}; --repos rows add "repo" first and "error"
+last (null, or the code of a PATH that is refused, missing or not a
+repository). --fetch never prompts: a failure (network, credentials,
+timeout) is "fetched":false with "error", and the local state is still
+printed; a repository whose own configuration names a program for the
+fetch (core.sshCommand, a credential helper, uploadpack, url.insteadOf,
+protocol.*) is not fetched. Paths are relative to the repository root.
+```
+
+See also: `llm_git_overview`, `llm_git_diff`, `llm_git_log`
 
 ## llm_grep
 

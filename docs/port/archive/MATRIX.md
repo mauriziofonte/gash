@@ -1048,6 +1048,8 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_git_overview | function | pure output | new | branch, upstream, ahead/behind, counts, last subjects and diffstat in one object (G1) | gash llm_git_overview | TestGitOverview, llm_git_overview.txtar |
+| llm_git_show | function | pure output | new | commit metadata with files and stat, the patch capped per file, REV:FILE content under the output budget (G4) | gash llm_git_show | TestGitShow, TestSplitRevFileAndRange, TestPatchNames, llm_git_show.txtar |
 
 ### Network (N1-N4)
 
