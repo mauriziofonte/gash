@@ -2299,22 +2299,36 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_config FILE [--max-bytes N]\n" +
+				"  llm_config FILE [--max-bytes N] [--path P]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
+				"  --path P               Parse the file and print the value at P as compact\n" +
+				"                         JSON: a.b[0].c, tool.poetry[\"name\"], . for all\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_config package.json\n" +
 				"  llm_config docker-compose.yml\n" +
 				"  llm_config big.json --max-bytes 5000000\n" +
+				"  llm_config pyproject.toml --path project.dependencies\n" +
+				"  llm_config setup.cfg --path metadata.version\n" +
+				"  llm_config k8s.yaml --path '[1].spec.replicas'\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Reads any file that is not secret: .env files, keys and the other\n" +
 				"  secret files are refused.\n" +
 				"  YAML comes out as JSON, converted by Gash itself (no yq needed), or\n" +
 				"  as the raw text when it does not parse. Files over --max-bytes\n" +
-				"  (default 1 MiB) fail with file_too_large.",
+				"  (default 1 MiB) fail with file_too_large.\n" +
+				"  --path (3.4) replaces python3 -c \"import tomllib/configparser/yaml;\n" +
+				"  ...\": the extension names the format (.yaml/.yml, .toml, .ini/.cfg,\n" +
+				"  .json; any other: the first of JSON, TOML, INI and YAML that parses).\n" +
+				"  TOML keeps its key order, dates as RFC 3339 text; INI is read as\n" +
+				"  Python's configparser does ({section: {key: value}}, keys lowercased,\n" +
+				"  DEFAULT inherited, %(key)s expanded); a YAML file with several\n" +
+				"  documents is the array of them. A file that does not parse is\n" +
+				"  invalid_config, a path that does not exist json_path_not_found with\n" +
+				"  the nearest existing prefix (both RETRY).",
 		},
 		Fallback:  &Usage{Program: "llm_config", Usage: "llm_config <file> [--max-bytes N]", Description: "Read config file (JSON/YAML, NOT .env); files over 1 MiB need --max-bytes"},
 		ShellVars: []string{"HOME"},

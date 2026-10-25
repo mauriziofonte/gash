@@ -23,7 +23,7 @@ var llmOptions = map[string][]string{
 	"llm_tree":       {"--text", "--depth", "--max-depth", "--stats"},
 	"llm_find":       {"--type", "--contains", "-n", "--limit"},
 	"llm_grep":       {"--ext", "--context", "-C", "-n", "--limit"},
-	"llm_config":     {"--max-bytes"},
+	"llm_config":     {"--max-bytes", "--path"},
 	"llm_git_status": {},
 	"llm_git_diff":   {"--staged", "--cached"},
 	"llm_git_log":    {"-n", "--limit"},

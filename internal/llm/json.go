@@ -910,12 +910,7 @@ func (m *Module) json(c *invoke.Call) int {
 	}
 	start, err := scanJSON(data, read)
 	if err != nil {
-		var je *jsonError
-		if !errors.As(err, &je) {
-			return fail(c, "internal_error", err.Error(), "")
-		}
-		line, col := where(data, je.at)
-		return fail(c, "invalid_json", "line "+strconv.Itoa(line)+" column "+strconv.Itoa(col)+": "+je.msg,
+		return fail(c, "invalid_json", jsonErrorText(data, err).Error(),
 			"The input is not valid JSON; fix it or read the raw text with llm_config")
 	}
 	v := valueAt(data, start)
@@ -1002,6 +997,16 @@ func (m *Module) json(c *invoke.Call) int {
 	return 0
 }
 
+// jsonErrorText is a syntax error of data with its line and column.
+func jsonErrorText(data []byte, err error) error {
+	var je *jsonError
+	if !errors.As(err, &je) {
+		return err
+	}
+	line, col := where(data, je.at)
+	return errors.New("line " + strconv.Itoa(line) + " column " + strconv.Itoa(col) + ": " + je.msg)
+}
+
 // noteOmitted writes the metadata line of a cut array (plan D8).
 func noteOmitted(c *invoke.Call, omitted int) {
 	if omitted > 0 {
@@ -1014,10 +1019,22 @@ func noteOmitted(c *invoke.Call, omitted int) {
 // is there (its type, and the first keys of an object or the length of
 // an array).
 func pathHint(prefix []jsonpath.Step, at jsonValue) string {
-	h := "Nearest existing prefix: " + jsonpath.Format(prefix) + " (" + kindName(at.kind)
 	switch at.kind {
 	case 'o':
 		keys, _ := keysOf(at)
+		return prefixHint(prefix, "object", keys, 0)
+	case 'a':
+		return prefixHint(prefix, "array", nil, len(elementsOf(at)))
+	}
+	return prefixHint(prefix, kindName(at.kind), nil, 0)
+}
+
+// prefixHint is the hint text of a missing path: the prefix, its type
+// and the first keys of an object or the length of an array.
+func prefixHint(prefix []jsonpath.Step, kind string, keys []string, length int) string {
+	h := "Nearest existing prefix: " + jsonpath.Format(prefix) + " (" + kind
+	switch kind {
+	case "object":
 		shown := keys
 		if len(shown) > 10 {
 			shown = shown[:10]
@@ -1026,8 +1043,8 @@ func pathHint(prefix []jsonpath.Step, at jsonValue) string {
 		if len(keys) > len(shown) {
 			h += ", ... (" + strconv.Itoa(len(keys)) + " in all)"
 		}
-	case 'a':
-		h += ", length " + strconv.Itoa(len(elementsOf(at)))
+	case "array":
+		h += ", length " + strconv.Itoa(length)
 	}
 	return h + ")"
 }

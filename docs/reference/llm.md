@@ -35,13 +35,15 @@ Read a file that is not secret (YAML as JSON)
 #### Usage
 
 ```text
-llm_config FILE [--max-bytes N]
+llm_config FILE [--max-bytes N] [--path P]
 ```
 
 #### Options
 
 ```text
 --max-bytes N          Largest file read, in bytes (default 1048576)
+--path P               Parse the file and print the value at P as compact
+                       JSON: a.b[0].c, tool.poetry["name"], . for all
 ```
 
 #### Examples
@@ -50,6 +52,9 @@ llm_config FILE [--max-bytes N]
 llm_config package.json
 llm_config docker-compose.yml
 llm_config big.json --max-bytes 5000000
+llm_config pyproject.toml --path project.dependencies
+llm_config setup.cfg --path metadata.version
+llm_config k8s.yaml --path '[1].spec.replicas'
 ```
 
 #### Notes
@@ -60,6 +65,15 @@ secret files are refused.
 YAML comes out as JSON, converted by Gash itself (no yq needed), or
 as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
+--path (3.4) replaces python3 -c "import tomllib/configparser/yaml;
+...": the extension names the format (.yaml/.yml, .toml, .ini/.cfg,
+.json; any other: the first of JSON, TOML, INI and YAML that parses).
+TOML keeps its key order, dates as RFC 3339 text; INI is read as
+Python's configparser does ({section: {key: value}}, keys lowercased,
+DEFAULT inherited, %(key)s expanded); a YAML file with several
+documents is the array of them. A file that does not parse is
+invalid_config, a path that does not exist json_path_not_found with
+the nearest existing prefix (both RETRY).
 ```
 
 ## llm_csv

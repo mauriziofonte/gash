@@ -65,7 +65,7 @@ home); `~user` is `invalid_path`.
 | `llm_tree [--depth N] [--stats] [--text] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max |
 | `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches |
 | `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--` |
-| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large` |
+| `llm_config FILE [--max-bytes N] [--path P]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` (3.4) parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
 \_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_). `llm_grep` and
@@ -233,6 +233,18 @@ the header, a stray or unterminated quote) by their first line; without
 `--where` matches a column (header name or 1-based number) exactly; an
 unknown one is `unknown_column` (RETRY). Secret files are refused as by
 `llm_config`.
+
+`llm_config FILE --path P` (row in 3.1) takes the same path grammar and
+parses the file by its extension (`.yaml`/`.yml`, `.toml`, `.ini`/`.cfg`,
+`.json`; any other: the first of JSON, TOML, INI and YAML that parses):
+TOML keeps its key order and gives dates as RFC 3339 text; INI is read as
+Python's `configparser.ConfigParser()` reads it (`{section: {key: value}}`,
+keys lowercased, `DEFAULT` first when it has keys and inherited by every
+section, `%(key)s` and `%%` expanded, continuation lines joined with
+newlines; a repeated section or key merges instead of failing); a YAML
+file with several documents is the array of its documents. `--path .` is
+the whole file. A file that does not parse is `invalid_config` (RETRY, the
+format and line in `details`). Without `--path` the output is unchanged.
 
 ### 3.9 Network probes (3.4)
 
