@@ -1,0 +1,84 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_json (new in 3.4, plan D4): one value, the keys or the shape of a
+# JSON file or of the standard input, through the shim and the binary
+# directly. Values print as compact JSON with their numbers as written; a
+# missing path is json_path_not_found (RETRY) naming the nearest existing
+# prefix; invalid JSON is invalid_json with line and column; secret files
+# are refused before any read. The scanner, the shape and the error texts
+# are Go tests (internal/llm/json_test.go).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+
+# --- one value, through the shim and directly
+exec bash -c 'source "$GASH_SH"; llm_json pkg.json --path scripts'
+stdout '^\{"build":"tsc","test":"vitest run"\}$'
+! stderr .
+exec gash llm_json pkg.json --path 'paths["/api/x"].post.summary'
+stdout '^"make"$'
+exec gash llm_json pkg.json --path users[-1].id
+stdout '^2.0$'
+exec gash llm_json pkg.json --path users --keys
+stdout '^\["id","name","tags","role"\]$'
+
+# --- the shape, two levels deep
+exec gash llm_json pkg.json --path users --shape
+cmp stdout shape.golden
+
+# --- rows: an array of objects, a missing member is \N
+exec gash llm_json pkg.json --path users --format tsv
+cmp stdout users.tsv
+! stderr .
+
+# --- the standard input; a cut array says so on stderr
+stdin nums.json
+exec gash llm_json - --format jsonl --tail 2
+cmp stdout tail.golden
+stderr '^\{"truncated":1\}$'
+
+# --- errors
+! exec gash llm_json pkg.json --path users[5]
+stderr '"error":"json_path_not_found","details":"users\[5\]","action":"RETRY"'
+stderr '"hint":"Nearest existing prefix: users \(array, length 2\)"'
+! exec gash llm_json bad.json
+stderr '"error":"invalid_json","details":"line 2 column 6: expected .,. or .\}. after an object member"'
+! exec gash llm_json pkg.json --path name --keys
+stderr '"error":"not_an_object"'
+! exec gash llm_json .env
+stderr '"error":"secret_file_blocked"'
+! stdout .
+! exec gash llm_json
+stderr '"error":"missing_file"'
+
+# --- help without side effects
+exec gash llm_json --help
+stdout 'llm_json FILE\|- \[--path P\]'
+
+-- pkg.json --
+{
+  "name": "app",
+  "scripts": {"build": "tsc", "test": "vitest run"},
+  "paths": {"/api/x": {"post": {"summary": "make"}}},
+  "users": [
+    {"id": 1, "name": "ann", "tags": ["a"]},
+    {"id": 2.0, "name": "bob\tb", "role": "admin", "tags": []}
+  ]
+}
+-- nums.json --
+[1, 2, 3]
+-- bad.json --
+{"a":
+  "b": }
+-- .env --
+TOKEN=x
+-- shape.golden --
+{"type":"array[2]","items":{"type":"object{3..4}","keys":{"id":"number","name":"string","tags":"array[0..1]","role":"string"},"optional":["role"]}}
+-- users.tsv --
+id	name	tags	role
+1	ann	["a"]	\N
+2.0	bob\tb	[]	admin
+-- tail.golden --
+2
+3
