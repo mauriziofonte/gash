@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"bytes"
 	"errors"
 	"regexp"
 	"regexp/syntax"
@@ -12,6 +13,8 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // rgRegex is a search pattern read as ripgrep 14 read it, on Go's RE2
@@ -28,6 +31,10 @@ type rgRegex struct {
 	re    *regexp.Regexp
 	prog  *syntax.Prog
 	words bool // the program has \b or \B
+	// lit is the text every match starts with (RE2's literal prefix), nil
+	// when there is none: a line or file without it cannot match, which a
+	// substring search tells far sooner than the matcher.
+	lit []byte
 }
 
 // rgRefusal is a pattern that cannot be read as rg read it.
@@ -61,6 +68,9 @@ func compileRg(pattern string) (*rgRegex, error) {
 		return nil, &rgRefusal{err.Error()}
 	}
 	r := &rgRegex{re: re, prog: prog}
+	if pre, _ := re.LiteralPrefix(); pre != "" {
+		r.lit = []byte(pre)
+	}
 	for _, inst := range prog.Inst {
 		if inst.Op == syntax.InstEmptyWidth && syntax.EmptyOp(inst.Arg)&(syntax.EmptyWordBoundary|syntax.EmptyNoWordBoundary) != 0 {
 			r.words = true
@@ -71,10 +81,19 @@ func compileRg(pattern string) (*rgRegex, error) {
 
 // Match reports whether the line (no line break) has a match.
 func (r *rgRegex) Match(line []byte) bool {
+	if !r.MayMatch(line) {
+		return false
+	}
 	if utf8.Valid(line) && (!r.words || isASCII(line)) {
 		return r.re.Match(line)
 	}
 	return r.nfa(line)
+}
+
+// MayMatch is false when no line of b can match: b lacks the literal
+// prefix.
+func (r *rgRegex) MayMatch(b []byte) bool {
+	return r.lit == nil || bytes.Contains(b, r.lit)
 }
 
 func isASCII(b []byte) bool {
@@ -87,7 +106,7 @@ func isASCII(b []byte) bool {
 }
 
 // rgFlagGroup is a group that only sets flags, (?i) or (?-s).
-var rgFlagGroup = regexp.MustCompile(`^\(\?[A-Za-z-]*\)`)
+var rgFlagGroup = lazyre.MustCompile(`^\(\?[A-Za-z-]*\)`)
 
 // rgTranslate rewrites an rg pattern into the RE2 text that reads the
 // same, or refuses it. rg compiled each pattern as (?:PATTERN), which is

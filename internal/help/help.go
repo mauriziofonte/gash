@@ -7,10 +7,10 @@ package help
 
 import (
 	"io"
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/term"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -18,9 +18,9 @@ import (
 
 var (
 	// [[ $line =~ ^[A-Z][A-Z\ ]+$ ]]
-	sectionRe = regexp.MustCompile(`^[A-Z][A-Z ]+$`)
+	sectionRe = lazyre.MustCompile(`^[A-Z][A-Z ]+$`)
 	// [[ $line =~ ^[[:space:]]*# ]]
-	commentRe = regexp.MustCompile(`^[ \t\n\v\f\r]*#`)
+	commentRe = lazyre.MustCompile(`^[ \t\n\v\f\r]*#`)
 )
 
 // Display writes the help page of f as __gash_help_display did, to w

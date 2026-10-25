@@ -3,24 +3,24 @@
 package llmexec
 
 import (
-	"regexp"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 var (
-	nameRE    = regexp.MustCompile(`^[A-Za-z0-9._+-]+$`)
-	psPrevRE  = regexp.MustCompile(`^(-[oOpqugtCGUsk]|--(pid|ppid|sid|user|User|group|Group|tty|format|sort|cols|columns|rows|width))$`)
-	allAlpha  = regexp.MustCompile(`^[A-Za-z]+$`)
-	yqLoadRE  = regexp.MustCompile(`load(_[A-Za-z0-9]+)?[[:space:]]*\(`)
-	verRE     = regexp.MustCompile(`^(--version|-v|-V|version)$`)
-	ipCmdRE   = regexp.MustCompile(`^(a|addr|address|r|route|l|link|n|neigh|neighbour|rule|maddr)$`)
-	ipSubRE   = regexp.MustCompile(`^(show|list|ls|get)$`)
-	sysctlRE  = regexp.MustCompile(`^(status|show|cat|is-active|is-enabled|is-failed|list-units|list-unit-files|list-timers|list-sockets|list-dependencies)$`)
-	dockSubRE = regexp.MustCompile(`^(image|container|volume|network|system|context|compose)$`)
-	dockSub2  = regexp.MustCompile(`^(ls|list|ps|inspect|history|logs|top|port|diff|df|info|show|config|images|version)$`)
-	dockTopRE = regexp.MustCompile(`^(ps|images|logs|inspect|version|info|stats|top|port|diff|history)$`)
+	nameRE    = lazyre.MustCompile(`^[A-Za-z0-9._+-]+$`)
+	psPrevRE  = lazyre.MustCompile(`^(-[oOpqugtCGUsk]|--(pid|ppid|sid|user|User|group|Group|tty|format|sort|cols|columns|rows|width))$`)
+	allAlpha  = lazyre.MustCompile(`^[A-Za-z]+$`)
+	yqLoadRE  = lazyre.MustCompile(`load(_[A-Za-z0-9]+)?[[:space:]]*\(`)
+	verRE     = lazyre.MustCompile(`^(--version|-v|-V|version)$`)
+	ipCmdRE   = lazyre.MustCompile(`^(a|addr|address|r|route|l|link|n|neigh|neighbour|rule|maddr)$`)
+	ipSubRE   = lazyre.MustCompile(`^(show|list|ls|get)$`)
+	sysctlRE  = lazyre.MustCompile(`^(status|show|cat|is-active|is-enabled|is-failed|list-units|list-unit-files|list-timers|list-sockets|list-dependencies)$`)
+	dockSubRE = lazyre.MustCompile(`^(image|container|volume|network|system|context|compose)$`)
+	dockSub2  = lazyre.MustCompile(`^(ls|list|ps|inspect|history|logs|top|port|diff|df|info|show|config|images|version)$`)
+	dockTopRE = lazyre.MustCompile(`^(ps|images|logs|inspect|version|info|stats|top|port|diff|history)$`)
 )
 
 // patternCmds are commands whose first operand is a pattern/script/filter,

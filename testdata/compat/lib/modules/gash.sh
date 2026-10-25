@@ -14,54 +14,16 @@ case "$__gash_here" in
     .) __gash_here=".." ;;
     *) __gash_here="." ;;
 esac
-if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
+if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__gash_here/compat/bootstrap.sh" ]]; then
     # shellcheck source=lib/compat/bootstrap.sh
     source "$__gash_here/compat/bootstrap.sh"
 fi
 unset __gash_here
 
-gash() {
-    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
-    # The card shows the value this shell gives an alias of the card, as
-    # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
-    # backslash and newline escaped. Outside headless mode the card counts
-    # and lists only those (GASH__CARD_LIVE=1, LEDGER SELF-12); a headless
-    # shell loads no alias pack and gets the whole registered list.
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card="" __gash_live=1
-    [[ "${GASH_HEADLESS-}" == "1" ]] && __gash_live=""
-    for __gash_n in .. ... .... ..... .4 .5 1composerXY bc cd.. chgrp chmod chown cls composer composer-packages-update composer-self-update composer1-self-update composerXY cp dc dcb dcc dcdown dclogs dcls dclsr dcps dcpull dcrestart dcrm dcscan dcup dcup2 dexec dils dinspect dir dirm dlogs dnetls dpruneall drm drmi dstart dstartall dstop dstopall ga gaa gap gb gbD gba gbd gc gca gcan gcb gcm gco gd gds gdw gf gfa gl gla glf glg glo glog gls gp gpf gpr gpsh gr grb grba grbc grep grh grh1 grhh gs gsh gsha gshl gshp gst gsw gswc l la lash less ll ls mkdir mv path php phpXY ports quit reboot rm shutdown sl vdir; do
-        [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
-        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    # The families of the card (php83 for phpXY, LEDGER DEV-21).
-    for __gash_n in "${!BASH_ALIASES[@]}"; do
-        case "$__gash_n" in
-            1composer[0-9]* | composer[0-9]* | php[0-9]*) ;;
-            *) continue ;;
-        esac
-        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    GASH__CARD_ALIASES="$__gash_card" GASH__CARD_LIVE="$__gash_live" __gash_call gash "$@"
-}
-gash_doctor() {
-    # The doctor reports what this shell holds: the files that failed to
-    # load (__GASH_LOAD_ERRORS, one per line) and the known settings set
-    # here (NAME<TAB>VALUE lines), backslash and newline escaped.
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_errs="" __gash_set=""
-    for __gash_v in ${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"}; do
-        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_errs+=${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    for __gash_n in ${__GASH_SETTINGS_KNOWN-}; do
-        [[ -n "${!__gash_n+x}" ]] || continue
-        __gash_v=${!__gash_n}
-        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_set+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    GASH__LOAD_ERRORS="$__gash_errs" GASH__SETTINGS="$__gash_set" __gash_call gash_doctor "$@"
-}
+# shellcheck disable=SC2120
+gash() { __gash_cold gash 355db300 && "${FUNCNAME[0]}" "$@"; }
+# shellcheck disable=SC2120
+gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
     local __gash_a
@@ -76,143 +38,10 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
-gash_uninstall() {
-    # The questions are asked in this shell with needs_confirm_prompt (a
-    # harness may redefine it); the binary checks and removes, one step
-    # per call (GASH__UNINSTALL, internal/selfmgmt).
-    local __gash_rc=0 __gash_env __gash_shown_env
-    case "${1-}" in
-        -h | --help)
-            __gash_call gash_uninstall "$@"
-            return
-            ;;
-    esac
-    GASH__UNINSTALL=check __gash_call gash_uninstall "$@" || return
-    if ! needs_confirm_prompt "Continue?"; then
-        __gash_info "Uninstall cancelled."
-        return 0
-    fi
-    GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
-    ((__gash_rc == 10)) || return "$__gash_rc"
-    __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
-    __gash_shown __gash_shown_env "$__gash_env"
-    if needs_confirm_prompt "Remove $__gash_shown_env?"; then
-        GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
-    else
-        GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
-    fi
-}
-gash_unload() {
-    needs_help "gash_unload" "gash_unload" \
-        "Restores the shell state saved before Gash was loaded (best-effort)." \
-        "${1-}" && return
-
-    if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
-        __gash_error "Gash snapshot not found. Source gash.sh first."
-        return 1
-    fi
-
-    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
-    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
-        __gash_prompt_uninstall
-    fi
-
-    # Restore variables, shell options and umask from the load-time snapshot.
-    local __gash_entry __gash_key
-    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
-        case "$__gash_entry" in
-            shopt:*)
-                __gash_key="${__gash_entry#shopt:}"
-                if [[ "$__gash_entry" == *=1 ]]; then
-                    shopt -s "${__gash_key%=*}" 2>/dev/null
-                else
-                    shopt -u "${__gash_key%=*}" 2>/dev/null
-                fi
-                ;;
-            umask=*) umask "${__gash_entry#umask=}" ;;
-            *=*)
-                __gash_key="${__gash_entry%%=*}"
-                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
-                ;;
-            *) unset "$__gash_entry" ;;
-        esac
-    done
-
-    # Remove aliases and functions introduced by Gash.
-    local __gash_name
-    local -a __gash_names=()
-    __gash_added_symbols_to __gash_names aliases
-    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
-        unalias "$__gash_name" >/dev/null 2>&1 || true
-    done
-    __gash_added_symbols_to __gash_names functions
-    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
-        [[ "$__gash_name" == "gash_unload" ]] && continue
-        unset -f "$__gash_name" >/dev/null 2>&1 || true
-    done
-
-    # Per-prefix function sweep: the load-time snapshot misses functions
-    # defined AFTER it was taken (alias loader, prompt, completion, helpers
-    # created at runtime). Anything gash_* / __gash_* goes.
-    local __gash_fn
-    while IFS= read -r __gash_fn; do
-        [[ -z "${__gash_fn}" ]] && continue
-        [[ "${__gash_fn}" == "gash_unload" ]] && continue
-        unset -f "${__gash_fn}" >/dev/null 2>&1 || true
-    done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
-
-    # The completion specs Gash registered (SELF-03), and any other spec
-    # whose function is Gash's (a 2.x load registered more names).
-    if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
-        complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
-    fi
-    local __gash_spec
-    while IFS= read -r __gash_spec; do
-        [[ "$__gash_spec" == *" -F __gash_"*" "* ]] || continue
-        complete -r "${__gash_spec##* }" >/dev/null 2>&1 || true
-    done < <(complete -p 2>/dev/null || true)
-
-    # Per-prefix variable sweep: includes the cached secrets which must
-    # never survive an unload, plus colors, PS1 caches, help registry.
-    local -a __gash_snap2=(${__GASH_SNAPSHOT2[@]+"${__GASH_SNAPSHOT2[@]}"})
-    local __gash_var
-    while IFS= read -r __gash_var; do
-        [[ -z "${__gash_var}" ]] && continue
-        unset "${__gash_var}" >/dev/null 2>&1 || true
-    done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
-    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
-
-    # The exact pre-Gash state (SELF-03, SELF-05): a variable unset before
-    # is unset (PROMPT_COMMAND only when nothing is left in it); any other
-    # gets back its value and attributes from the declaration Bash printed
-    # at load time (${NAME@A}, Bash's own quoting), run as a global.
-    for __gash_entry in ${__gash_snap2[@]+"${__gash_snap2[@]}"}; do
-        case "$__gash_entry" in
-            -PROMPT_COMMAND) [[ -n "${PROMPT_COMMAND[*]-}" ]] || unset PROMPT_COMMAND ;;
-            -*) unset "${__gash_entry#-}" >/dev/null 2>&1 || true ;;
-            *)
-                if [[ "$__gash_entry" == "declare "* ]]; then
-                    __gash_key="${__gash_entry#declare }"
-                    __gash_key="${__gash_key#* }"
-                    __gash_entry="declare -g ${__gash_entry#declare }"
-                else
-                    __gash_key="$__gash_entry"
-                fi
-                __gash_key="${__gash_key%%=*}"
-                [[ "$__gash_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-                unset "$__gash_key" >/dev/null 2>&1 || true
-                eval "$__gash_entry"
-                ;;
-        esac
-    done
-
-    unset __gash_name
-
-    # Finally, remove gash_unload itself
-    unset -f gash_unload >/dev/null 2>&1 || true
-
-    return 0
-}
+# shellcheck disable=SC2120
+gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
+# shellcheck disable=SC2120
+gash_unload() { __gash_cold gash_unload cc4f8d75 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 

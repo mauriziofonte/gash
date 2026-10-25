@@ -4,9 +4,10 @@ package config
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // DBURL is a DB: URL split the way __gash_parse_db_url splits it.
@@ -207,7 +208,7 @@ func unhex(c byte) (byte, bool) {
 // dbListMask is the DB URL mask: the user name may be empty, so a
 // password-only URL (mysql://:PW@h/d) is masked too (3.0: CORE-03 fixed; the
 // 2.x regex required a non-empty user name and showed that password).
-var dbListMask = regexp.MustCompile(`(?s)^([^:]+://[^:@]*:).+(@[^@]*)$`)
+var dbListMask = lazyre.MustCompile(`(?s)^([^:]+://[^:@]*:).+(@[^@]*)$`)
 
 // MaskDBURL is the URL as Gash shows it: when the userinfo has a password
 // (driver://USER:PASSWORD@HOST, USER possibly empty), the text between

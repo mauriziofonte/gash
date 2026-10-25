@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/mauriziofonte/gash/internal/contract"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // The YAML converter of llm_config (LEDGER LLM-35). 2.x printed a YAML
@@ -119,8 +119,8 @@ func decodeYAML(data []byte) ([]*yaml.Node, error) {
 }
 
 var (
-	yamlVersionLine = regexp.MustCompile(`(?m)^%YAML[ \t]+1\.([0-9]+)(?:[ \t\r]|$)`)
-	yamlOtherLine   = regexp.MustCompile(`(?m)^%([0-9A-Za-z_-]+)(?:[ \t\r]|$)`)
+	yamlVersionLine = lazyre.MustCompile(`(?m)^%YAML[ \t]+1\.([0-9]+)(?:[ \t\r]|$)`)
+	yamlOtherLine   = lazyre.MustCompile(`(?m)^%([0-9A-Za-z_-]+)(?:[ \t\r]|$)`)
 )
 
 // pyDirectives makes the directive lines PyYAML took and the decoder
@@ -509,12 +509,12 @@ func (c *yconv) flatten(n *yaml.Node, depth int) ([]*yaml.Node, error) {
 }
 
 var (
-	yamlInt10  = regexp.MustCompile(`^[-+]?[0-9]+$`)
-	yamlInt8   = regexp.MustCompile(`^0o[0-7]+$`)
-	yamlInt16  = regexp.MustCompile(`^0x[0-9a-fA-F]+$`)
-	yamlFloatR = regexp.MustCompile(`^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$`)
-	yamlInf    = regexp.MustCompile(`^[-+]?\.(inf|Inf|INF)$`)
-	yamlNaN    = regexp.MustCompile(`^\.(nan|NaN|NAN)$`)
+	yamlInt10  = lazyre.MustCompile(`^[-+]?[0-9]+$`)
+	yamlInt8   = lazyre.MustCompile(`^0o[0-7]+$`)
+	yamlInt16  = lazyre.MustCompile(`^0x[0-9a-fA-F]+$`)
+	yamlFloatR = lazyre.MustCompile(`^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$`)
+	yamlInf    = lazyre.MustCompile(`^[-+]?\.(inf|Inf|INF)$`)
+	yamlNaN    = lazyre.MustCompile(`^\.(nan|NaN|NAN)$`)
 )
 
 // plainScalar resolves a plain scalar by the YAML 1.2 core schema.
@@ -661,7 +661,7 @@ func pyInt(s string, base int) (*big.Int, bool) {
 	return z, true
 }
 
-var pyFloatText = regexp.MustCompile(`^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)(e[-+]?[0-9]+)?$`)
+var pyFloatText = lazyre.MustCompile(`^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)(e[-+]?[0-9]+)?$`)
 
 // pyFloatConstruct is PyYAML's construct_yaml_float with Python's float().
 func pyFloatConstruct(s string) (float64, bool) {
@@ -724,7 +724,7 @@ func pyFloat(s string) (float64, bool) {
 	return f, true
 }
 
-var pyTimestamp = regexp.MustCompile(`^([0-9]{4})-([0-9][0-9]?)-([0-9][0-9]?)` +
+var pyTimestamp = lazyre.MustCompile(`^([0-9]{4})-([0-9][0-9]?)-([0-9][0-9]?)` +
 	`(?:(?:[Tt]|[ \t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])(?:\.([0-9]*))?` +
 	`(?:[ \t]*(Z|([-+])([0-9][0-9]?)(?::([0-9][0-9]))?))?)?\n?$`)
 

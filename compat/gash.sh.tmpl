@@ -272,11 +272,15 @@ fi
 
 # The bootstrap first (binary resolution, __gash_call), then the four core
 # shims, in the 2.x order.
+# The shims source the bootstrap for a caller that sources one of them
+# alone; __GASH_BOOT_LOADED tells them gash.sh just did.
 __gash_source "$GASH_DIR/lib/compat/bootstrap.sh"
+__GASH_BOOT_LOADED="$GASH_DIR/lib/compat/bootstrap.sh"
 __gash_source "$GASH_DIR/lib/core/output.sh"
 __gash_source "$GASH_DIR/lib/core/utils.sh"
 __gash_source "$GASH_DIR/lib/core/validation.sh"
 __gash_source "$GASH_DIR/lib/core/config.sh"
+unset __GASH_BOOT_LOADED
 
 # -----------------------------------------------------------------------------
 # Functions of the modules (they run in the gash binary)

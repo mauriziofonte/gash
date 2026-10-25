@@ -5,11 +5,11 @@ package ssh
 import (
 	"context"
 	"io"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/config"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -17,13 +17,13 @@ import (
 // answered (exp_continue), the others end the dialog. Tcl's . matches a
 // newline.
 var (
-	passPrompt = regexp.MustCompile(`(?s)Enter passphrase.*:`)
+	passPrompt = lazyre.MustCompile(`(?s)Enter passphrase.*:`)
 	// identityAdded is the success terminator. Unlike the Bad-passphrase and
 	// no-agent prompts (which end mid-line, as 2.x expect captures them),
 	// ssh-add prints "Identity added: ...\r\n" and exits, so a clean run's
 	// line is newline-terminated; converse makes sure that newline is read.
-	identityAdded = regexp.MustCompile(`(?s)Identity added:.*`)
-	dialogEnds    = []*regexp.Regexp{identityAdded, regexp.MustCompile(`(?s)Bad passphrase.*`), regexp.MustCompile(`(?s)` + noAgent + `.*`)}
+	identityAdded = lazyre.MustCompile(`(?s)Identity added:.*`)
+	dialogEnds    = []*lazyre.Regexp{identityAdded, lazyre.MustCompile(`(?s)Bad passphrase.*`), lazyre.MustCompile(`(?s)` + noAgent + `.*`)}
 	readBufSize   = 4096
 )
 

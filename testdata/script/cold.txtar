@@ -1,0 +1,72 @@
+# Gash 3.1. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.1 cold definitions proof)
+#
+# A long function of the generated files is a one-line stand-in that
+# defines it from lib/compat/cold/NAME.sh at the first call (__gash_cold,
+# internal/compatgen/lazy.go). No load, headless or interactive with the
+# completion, reads a cold file; the first call runs the real function with
+# its status, the second finds it defined; a copy of a stand-in under
+# another name (a wrapper's "old_" copy) becomes a copy of the function and
+# leaves the wrapper alone; an alias is not expanded into the definition;
+# a cold file of another version is refused.
+
+env GASH_BANNER=0
+exec bash --noprofile --norc -i load.sh
+stdout '^headless stand-ins [1-9][0-9]* all kept$'
+stdout '^interactive stand-ins [1-9][0-9]* all kept$'
+! stdout LOADED
+
+env GASH_HEADLESS=1
+exec bash calls.sh
+cmp stdout want-calls
+
+exec cp -r $GASH_STAGE $WORK/tree
+exec bash changed.sh
+stdout '^rc=1$'
+stderr '^Error: path_add: the Gash tree changed since this shell loaded it. Run: source ~/.gashrc$'
+
+-- load.sh --
+check() {
+    local n=0 f
+    for f in "$GASH_STAGE"/lib/compat/cold/*.sh; do
+        f=${f##*/}
+        f=${f%.sh}
+        declare -F "$f" >/dev/null || continue
+        n=$((n + 1))
+        [[ "$(declare -f "$f")" == *"__gash_cold $f "* ]] || echo "LOADED $f"
+    done
+    echo "$1 stand-ins $n all kept"
+}
+GASH_HEADLESS=1 bash --noprofile --norc -c "source '$GASH_SH'; $(declare -f check); check headless"
+source "$GASH_SH"
+source "$GASH_STAGE/bash_completion"
+check interactive
+
+-- calls.sh --
+source "$GASH_SH"
+shopt -s expand_aliases
+alias local='echo ALIASED'
+mkdir "$WORK/one"
+path_add "$WORK/one"
+echo "rc=$? first=$([[ "${PATH%%:*}" == "$WORK/one" ]] && echo one)"
+[[ "$(declare -f path_add)" == *__gash_cold* ]] && echo "still a stand-in" || echo "defined"
+eval "old_$(declare -f mkdir_cd)"
+mkdir_cd() { echo "wrapper"; old_mkdir_cd "$@"; }
+mkdir_cd "$PWD/made" && echo "now in ${PWD##*/}"
+mkdir_cd "$PWD/again" && echo "now in ${PWD##*/}"
+[[ "$(declare -f old_mkdir_cd)" == *__gash_cold* ]] && echo "old is a stand-in" || echo "old defined"
+
+-- want-calls --
+rc=0 first=one
+defined
+wrapper
+now in made
+wrapper
+now in again
+old defined
+-- changed.sh --
+source "$WORK/tree/gash.sh"
+printf '# shellcheck shell=bash\n# Generated: do not edit. 00000000\npath_add() { :; }\n' >"$WORK/tree/lib/compat/cold/path_add.sh"
+path_add /opt/x
+echo "rc=$?"

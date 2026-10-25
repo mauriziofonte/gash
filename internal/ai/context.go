@@ -4,19 +4,19 @@ package ai
 
 import (
 	"context"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // reOSReleaseID is the shape of an os-release ID value once its quotes
 // are gone (AI-11).
-var reOSReleaseID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+var reOSReleaseID = lazyre.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // gatherContext is __ai_gather_context: a small JSON object of shell
 // context (cwd, shell, distro, package manager, git branch, top files,

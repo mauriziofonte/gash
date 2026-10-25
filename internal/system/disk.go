@@ -4,21 +4,21 @@ package system
 
 import (
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 // diskTypes are the disk-backed filesystem types disk_usage lists.
-var diskTypes = regexp.MustCompile(`^(ext[2-4]|xfs|btrfs|zfs|f2fs|fat|vfat|exfat|msdos|ntfs|ntfs3|fuseblk|apfs|hfs|reiserfs|jfs)$`)
+var diskTypes = lazyre.MustCompile(`^(ext[2-4]|xfs|btrfs|zfs|f2fs|fat|vfat|exfat|msdos|ntfs|ntfs3|fuseblk|apfs|hfs|reiserfs|jfs)$`)
 
 // wslDrive is a Windows drive mounted by WSL (drvfs or 9p on /mnt/X).
-var wslDrive = regexp.MustCompile(`^/mnt/[a-z]$`)
+var wslDrive = lazyre.MustCompile(`^/mnt/[a-z]$`)
 
 // diskUsage is disk_usage: `df -PTk`, else `df -Pk` (BSD df) when -PTk
 // printed no data row, filtered and drawn as 2.x did. df's output counts

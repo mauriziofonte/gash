@@ -35,6 +35,33 @@ esac
 __GASH_BOOT_ROOT="${__GASH_BOOT_ROOT%/.}"
 unset __GASH_BOOT_DIR
 
+# A long function of the generated files is a one-line stand-in, so that a
+# load does not parse what the shell may never call
+# (internal/compatgen/lazy.go):
+#
+#   NAME() { __gash_cold NAME HASH && "${FUNCNAME[0]}" "$@"; }
+#
+# The first call defines it from lib/compat/cold/NAME.sh, under the
+# stand-in's own name (a copy of the stand-in made under another name
+# becomes a copy of the function, the original is left as it is), with
+# aliases off as at load, then runs it. A file whose HASH differs (the tree
+# was upgraded under this shell) is refused, and so is one that does not
+# parse (the stand-in stays, status 1).
+__gash_cold() {
+    local __gc_def="" __gc_aliases=0 __gc_rc=0 __gc_name="${FUNCNAME[1]-$1}"
+    IFS= read -r -d '' __gc_def <"$__GASH_BOOT_ROOT/lib/compat/cold/$1.sh" 2>/dev/null || :
+    if [[ "$__gc_def" != *" $2"$'\n'"$1() {"* ]]; then
+        printf 'Error: %s: the Gash tree changed since this shell loaded it. Run: source ~/.gashrc\n' "$__gc_name" >&2
+        return 1
+    fi
+    __gc_def="${__gc_def#*" $2"$'\n'}"
+    shopt -q expand_aliases && __gc_aliases=1
+    shopt -u expand_aliases
+    eval "$__gc_name${__gc_def#"$1"}" || __gc_rc=1
+    ((__gc_aliases)) && shopt -s expand_aliases
+    return "$__gc_rc"
+}
+
 # The version this checkout runs: its VERSION file.
 __GASH_BOOT_VERSION=""
 if [[ -r "$__GASH_BOOT_ROOT/VERSION" ]]; then
@@ -372,7 +399,8 @@ __gash_export_state() {
     export -n GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX 2>/dev/null || true
 }
 
-# The wrapper of every delegated function.
+# The wrapper of every delegated function: the per-shell server runs the
+# call when it can, else the binary is exec'd in a subshell.
 # Usage: __gash_call NAME [ARG...]
 __gash_call() {
     local __gc_name="${1-}"
@@ -381,6 +409,11 @@ __gash_call() {
         __gash_missing "$__gc_name"
         return 1
     }
+    if [[ "${GASH_SERVER-}" != 0 && -n "${__GASH_SRV_FN[$__gc_name]-}" ]] && __gash_srv_ready; then
+        __gash_srv_call "$__gc_name" "$@" && return 0
+        local __gc_rc=$?
+        ((__GASH_SRV_DECLINED)) || return "$__gc_rc"
+    fi
     (
         __gash_export_state "$__gc_name"
         # The gash card is the binary's root: its words go as they are.
@@ -399,6 +432,164 @@ __gash_compat() {
         __gash_export_state __compat
         exec "$__GASH_BIN" __compat "$@"
     )
+}
+
+# -----------------------------------------------------------------------------
+# The per-shell server
+# -----------------------------------------------------------------------------
+
+# `gash __serve` runs as a coprocess of this shell and takes the calls the
+# shell itself makes (not its subshells: their calls exec the binary), so a
+# call costs a file write, a signal and a line read back instead of a fork
+# and an exec. The server rebuilds what the exec'd binary would get: the
+# environment the shell gives a program it runs (export -p, plus the
+# variables the stub exports for the call), the shell's working directory,
+# umask and standard streams (taken from the shell's PID), and it declines
+# (the call then execs) what it cannot reproduce. Linux only; GASH_SERVER=0
+# turns it off.
+#
+#   __GASH_SRV, __GASH_SRV_PID  the coprocess (set and unset by Bash)
+#   __GASH_SRV_OWNER            the shell that started it
+#   __GASH_SRV_DIR              its private directory (the request, the INT
+#                               trap, a stamp)
+#   __GASH_SRV_BIN              the binary it runs
+#   __GASH_SRV_FN               the functions it runs
+
+# Stop the server of this shell, if any.
+__gash_srv_stop() {
+    if [[ -n "${__GASH_SRV_PID-}" && "${__GASH_SRV_OWNER-}" == "$BASHPID" ]]; then
+        kill "$__GASH_SRV_PID" 2>/dev/null || true
+    fi
+    unset __GASH_SRV_OWNER __GASH_SRV_DIR __GASH_SRV_BIN
+    return 0
+}
+
+# A load stops the server of an earlier one (its binary may differ).
+[[ -n "${__GASH_SRV_OWNER-}" ]] && __gash_srv_stop
+declare -gA __GASH_SRV_FN=(
+{{%- range .Served %}}
+    [{{% . %}}]=1
+{{%- end %}}
+)
+__GASH_SRV_STARTS=0
+__GASH_SRV_SEQ=0
+__GASH_SRV_DECLINED=0
+__GASH_SRV_CHECKED=""
+
+# Whether the server can take a call now: it runs, for this shell, the
+# current binary; started when it does not (three starts per shell).
+__gash_srv_ready() {
+    [[ "$BASHPID" == "$$" && "${OSTYPE-}" == linux* ]] || return 1
+    if [[ -n "${__GASH_SRV_OWNER-}" ]]; then
+        # The binary's mtime is checked once a second at most (at every call
+        # on Bash 4.4, which has no EPOCHSECONDS).
+        if [[ -n "${__GASH_SRV_PID-}" && "$__GASH_SRV_BIN" == "$__GASH_BIN" ]] &&
+            { [[ -n "${EPOCHSECONDS-}" && "$EPOCHSECONDS" == "$__GASH_SRV_CHECKED" ]] || ! [[ "$__GASH_BIN" -nt "$__GASH_SRV_DIR/stamp" ]]; }; then
+            __GASH_SRV_CHECKED=${EPOCHSECONDS-}
+            return 0
+        fi
+        __gash_srv_stop
+    fi
+    ((__GASH_SRV_STARTS < 3)) || return 1
+    ((++__GASH_SRV_STARTS))
+    local __gs_m=0 __gs_i=0 __gs_o=1 __gs_e=2
+    local -a __gs_hello=()
+    # The shell's standard streams go to the server as 3, 4 and 5 (for a
+    # kernel that does not let it take a call's streams from the shell; no
+    # redirection on these exec lines, which Bash would keep). Outside job
+    # control the coprocess shares the shell's process group,
+    # so Ctrl-C reaches the call it runs; disowned, no job lists it.
+    if [[ -e /dev/fd/0 && -e /dev/fd/1 && -e /dev/fd/2 ]]; then
+        exec {__gs_i}<&0 {__gs_o}>&1 {__gs_e}>&2
+    else
+        __gs_i=-
+    fi
+    [[ $- == *m* ]] && __gs_m=1 && set +m
+    if [[ "$__gs_i" == - ]]; then
+        { coproc __GASH_SRV { exec "$__GASH_BIN" __serve 2>/dev/null; }; } 2>/dev/null
+    else
+        { coproc __GASH_SRV { exec "$__GASH_BIN" __serve 3<&"$__gs_i" 4>&"$__gs_o" 5>&"$__gs_e" 2>/dev/null; }; } 2>/dev/null
+        exec {__gs_i}<&- {__gs_o}>&- {__gs_e}>&-
+    fi
+    ((__gs_m)) && set -m
+    [[ -n "${__GASH_SRV_PID-}" ]] || return 1
+    disown "$__GASH_SRV_PID" 2>/dev/null || true
+    if ! IFS=' ' read -r -t 5 -a __gs_hello -u "${__GASH_SRV[0]}" 2>/dev/null ||
+        [[ "${__gs_hello[0]-}" != gash-serve || "${__gs_hello[1]-}" != 1 || ! -d "${__gs_hello[2]-}" ]]; then
+        kill "$__GASH_SRV_PID" 2>/dev/null || true
+        return 1
+    fi
+    __GASH_SRV_OWNER=$BASHPID
+    __GASH_SRV_DIR=${__gs_hello[2]}
+    __GASH_SRV_BIN=$__GASH_BIN
+    return 0
+}
+
+# Run NAME in the server: its status, or __GASH_SRV_DECLINED=1 when the
+# server declined the call (nothing ran) or is gone. The request is a file
+# in the server's directory: the call, the names of the variables
+# __gash_export_state would export, and what umask, declare -p and export
+# -p print (the server rebuilds the environment from them: no fork).
+# Closing it tells the server; while it runs the call, the shell's
+# standard streams are the call's own: no command here redirects them
+# (read takes none).
+# Usage: __gash_srv_call NAME [ARG...]
+__gash_srv_call() {
+    local __gs_line="" __gs_v
+    __GASH_SRV_DECLINED=1
+    [[ -n "${__GASH_SRV_PID-}" && -n "${__GASH_SRV[0]-}" ]] && trap -p INT >"$__GASH_SRV_DIR/trap" 2>/dev/null || {
+        __gash_srv_stop
+        return 1
+    }
+    # Ctrl-C is the server's while it runs the call: the shell waits for
+    # the status, as it waits for the exec'd binary. The INT trap is put
+    # back after.
+    trap '' INT
+    # Closing the request wakes the server (after the redirection is
+    # undone: the streams it takes are the shell's own).
+    if {
+        printf '%s\0' R "$((++__GASH_SRV_SEQ))" "$BASHPID" "$#" "$__GASH_CALL_COMMON" \
+            "${__GASH_CALL_VARS[$1]-}" "${__GASH_CALL_SETTINGS[$1]-}" "$@"
+        umask
+        __gash_srv_decls "$1"
+        printf '\001\n'
+        export -p
+    } >"$__GASH_SRV_DIR/req" 2>/dev/null; then
+        while IFS= read -r -u "${__GASH_SRV[0]}" __gs_line; do
+            [[ "${__gs_line%% *}" == "$__GASH_SRV_SEQ" || "${__gs_line%% *}" == "*" ]] && break
+            __gs_line=""
+        done
+    fi
+    if [[ -s "$__GASH_SRV_DIR/trap" ]]; then
+        source "$__GASH_SRV_DIR/trap"
+    else
+        trap - INT
+    fi
+    __gs_v=${__gs_line#* }
+    case "$__gs_v" in
+        "" | *[!0-9]*)
+            # Declined ("F"), or the server is gone: the call execs.
+            [[ "$__gs_v" == F ]] || __gash_srv_stop
+            return 1
+            ;;
+    esac
+    __GASH_SRV_DECLINED=0
+    return "$__gs_v"
+}
+
+# The declarations of the variables NAME's stub exports, as the call sees
+# them (word splitting with the default IFS here only).
+__gash_srv_decls() {
+    local IFS=$' \t\n'
+    # shellcheck disable=SC2086
+    declare -p $__GASH_CALL_COMMON ${__GASH_CALL_VARS[$1]-} ${__GASH_CALL_SETTINGS[$1]-} __GASH_HELP_LOADED
+    # Bash 4.4's exec gives the program one SHLVL less: the server does
+    # the same from the shell's.
+    if ((BASH_VERSINFO[0] < 5)); then
+        local __GASH_SRV_SHLVL="${SHLVL-}"
+        declare -p __GASH_SRV_SHLVL
+    fi
+    return 0
 }
 
 __gash_bin_resolve || true

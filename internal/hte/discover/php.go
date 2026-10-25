@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 )
 
@@ -137,7 +137,7 @@ func candidates(sr platform.Sysroot, o platform.OS) []candidate {
 // fpmVersionRE matches the first line of `php-fpm -v`:
 // "PHP 8.3.6 (fpm-fcgi) (built: ...)". The SAPI must be fpm-fcgi: a CLI
 // binary under an FPM name does not count.
-var fpmVersionRE = regexp.MustCompile(`^PHP ([0-9]+)\.([0-9]+)\.([0-9]+)[^ ]* \(fpm-fcgi\)`)
+var fpmVersionRE = lazyre.MustCompile(`^PHP ([0-9]+)\.([0-9]+)\.([0-9]+)[^ ]* \(fpm-fcgi\)`)
 
 // ParseFPMVersion returns "X.Y" and the full version from `php-fpm -v`.
 func ParseFPMVersion(out string) (short, full string, ok bool) {

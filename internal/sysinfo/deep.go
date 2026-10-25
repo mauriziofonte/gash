@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -78,25 +79,25 @@ func (d deepOut) raw(b []byte) {
 }
 
 var (
-	reNoteBlankIndent = regexp.MustCompile(`^(#|$|[[:space:]]*#)`)
-	reSemiBlank       = regexp.MustCompile(`^(;|$)`)
-	rePHPIni          = regexp.MustCompile(`^(memory_limit|upload_max|post_max|max_execution|max_input|date.timezone|error_reporting|display_errors|opcache)`)
-	reWebminKeys      = regexp.MustCompile(`^(port|ssl|listen|session)`)
-	reTimesyncd       = regexp.MustCompile(`^(#|$|\[)`)
+	reNoteBlankIndent = lazyre.MustCompile(`^(#|$|[[:space:]]*#)`)
+	reSemiBlank       = lazyre.MustCompile(`^(;|$)`)
+	rePHPIni          = lazyre.MustCompile(`^(memory_limit|upload_max|post_max|max_execution|max_input|date.timezone|error_reporting|display_errors|opcache)`)
+	reWebminKeys      = lazyre.MustCompile(`^(port|ssl|listen|session)`)
+	reTimesyncd       = lazyre.MustCompile(`^(#|$|\[)`)
 	// Both WireGuard key kinds, any case and spacing (SYS-50).
-	reWireGuardKey = regexp.MustCompile(`(?i)^([[:space:]]*(?:PrivateKey|PresharedKey)[[:space:]]*=[[:space:]]*).*`)
+	reWireGuardKey = lazyre.MustCompile(`(?i)^([[:space:]]*(?:PrivateKey|PresharedKey)[[:space:]]*=[[:space:]]*).*`)
 	// grep -oP '^EnvironmentFile=-?\K.*' and friends: the match is group 1.
-	reEnvFile = regexp.MustCompile(`^EnvironmentFile=-?(.*)`)
-	reExec    = regexp.MustCompile(`^ExecStart=(.*)`)
-	reWorkDir = regexp.MustCompile(`^WorkingDirectory=(.*)`)
+	reEnvFile = lazyre.MustCompile(`^EnvironmentFile=-?(.*)`)
+	reExec    = lazyre.MustCompile(`^ExecStart=(.*)`)
+	reWorkDir = lazyre.MustCompile(`^WorkingDirectory=(.*)`)
 	// grep -oE: POSIX leftmost-longest.
-	reCfgPath    = regexp.MustCompilePOSIX(`(/etc/[^ ]+|/opt/[^ ]+\.(conf|yaml|yml|json|ini|cfg))`)
-	reLoginDefs  = regexp.MustCompile(`^(PASS_MAX_DAYS|PASS_MIN_DAYS|PASS_MIN_LEN|PASS_WARN_AGE|LOGIN_RETRIES|ENCRYPT_METHOD|UMASK)`)
-	reCgroup     = regexp.MustCompile(`cgroup`)
-	reCPUInfo    = regexp.MustCompile(`(?i)model name|cpu\(s\)|thread|core|socket|mhz`)
-	rePHPVersion = regexp.MustCompile(`/etc/php/([^/]+)`)
-	reSysctlKeys = regexp.MustCompile(`^(vm\.swappiness|vm\.dirty_ratio|vm\.dirty_background|net\.core\.somaxconn|net\.core\.netdev_max_backlog|net\.ipv4\.tcp_max_syn|net\.ipv4\.tcp_fin_timeout|net\.ipv4\.tcp_tw_reuse|net\.ipv4\.ip_local_port_range|fs\.file-max|fs\.inotify)`)
-	reCloudInit  = regexp.MustCompile(`^(distro|system_info|manage_etc_hosts|preserve_hostname)`)
+	reCfgPath    = lazyre.MustCompilePOSIX(`(/etc/[^ ]+|/opt/[^ ]+\.(conf|yaml|yml|json|ini|cfg))`)
+	reLoginDefs  = lazyre.MustCompile(`^(PASS_MAX_DAYS|PASS_MIN_DAYS|PASS_MIN_LEN|PASS_WARN_AGE|LOGIN_RETRIES|ENCRYPT_METHOD|UMASK)`)
+	reCgroup     = lazyre.MustCompile(`cgroup`)
+	reCPUInfo    = lazyre.MustCompile(`(?i)model name|cpu\(s\)|thread|core|socket|mhz`)
+	rePHPVersion = lazyre.MustCompile(`/etc/php/([^/]+)`)
+	reSysctlKeys = lazyre.MustCompile(`^(vm\.swappiness|vm\.dirty_ratio|vm\.dirty_background|net\.core\.somaxconn|net\.core\.netdev_max_backlog|net\.ipv4\.tcp_max_syn|net\.ipv4\.tcp_fin_timeout|net\.ipv4\.tcp_tw_reuse|net\.ipv4\.ip_local_port_range|fs\.file-max|fs\.inotify)`)
+	reCloudInit  = lazyre.MustCompile(`^(distro|system_info|manage_etc_hosts|preserve_hostname)`)
 )
 
 // grepFile is `grep [-v] -E RE FILE 2>/dev/null`.
@@ -139,7 +140,7 @@ func (s *Session) deepServices(d deepOut) {
 		d.echo("--- Apache2")
 		if f.isFile("/etc/apache2/ports.conf") {
 			d.echo("--- ports.conf")
-			d.lines(f.grepFile("/etc/apache2/ports.conf", reNoteBlank, false))
+			d.lines(f.grepFile("/etc/apache2/ports.conf", reNoteBlank.R(), false))
 		}
 		d.echo("--- mods-enabled")
 		d.lines(f.basenames("/etc/apache2/mods-enabled", ".load", false))
@@ -147,7 +148,7 @@ func (s *Session) deepServices(d deepOut) {
 			for _, p := range f.globIn("/etc/apache2/sites-enabled/", "*.conf") {
 				if f.isFile(p) {
 					d.echo("--- vhost: " + path.Base(p))
-					d.lines(head(f.grepFile(p, reNoteBlankIndent, false), 80))
+					d.lines(head(f.grepFile(p, reNoteBlankIndent.R(), false), 80))
 				}
 			}
 		}
@@ -158,7 +159,7 @@ func (s *Session) deepServices(d deepOut) {
 			for _, p := range f.globIn("/etc/nginx/sites-enabled/", "*") {
 				if f.isFile(p) {
 					d.echo("--- site: " + path.Base(p))
-					d.lines(head(f.grepFile(p, reNoteBlankIndent, false), 80))
+					d.lines(head(f.grepFile(p, reNoteBlankIndent.R(), false), 80))
 				}
 			}
 		}
@@ -166,7 +167,7 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/lighttpd") {
 		d.echo("--- Lighttpd")
 		if f.isFile("/etc/lighttpd/lighttpd.conf") {
-			d.lines(head(f.grepFile("/etc/lighttpd/lighttpd.conf", reNoteBlank, false), 50))
+			d.lines(head(f.grepFile("/etc/lighttpd/lighttpd.conf", reNoteBlank.R(), false), 50))
 		}
 		d.lines(f.ls("/etc/lighttpd/conf-enabled"))
 	}
@@ -181,13 +182,13 @@ func (s *Session) deepServices(d deepOut) {
 				for _, p := range f.globIn(ver+"fpm/pool.d/", "*.conf") {
 					if f.isFile(p) {
 						d.echo("--- pool: " + path.Base(p))
-						d.lines(head(f.grepFile(p, reSemiBlank, false), 50))
+						d.lines(head(f.grepFile(p, reSemiBlank.R(), false), 50))
 					}
 				}
 			}
 			if f.isFile(ver + "cli/php.ini") {
 				d.echo("--- cli/php.ini (key)")
-				d.lines(head(f.grepFile(ver+"cli/php.ini", rePHPIni, true), 10))
+				d.lines(head(f.grepFile(ver+"cli/php.ini", rePHPIni.R(), true), 10))
 			}
 			if f.isDir(ver + "mods-available") {
 				d.echo("--- modules")
@@ -209,17 +210,17 @@ func (s *Session) deepServices(d deepOut) {
 			}
 			d.echo("--- version: " + basenameSuffix(ver, ""))
 			if f.isFile(ver + "main/postgresql.conf") {
-				d.lines(head(f.grepFile(ver+"main/postgresql.conf", reNoteBlank, false), 50))
+				d.lines(head(f.grepFile(ver+"main/postgresql.conf", reNoteBlank.R(), false), 50))
 			}
 			if f.isFile(ver + "main/pg_hba.conf") {
 				d.echo("--- pg_hba.conf")
-				d.lines(head(f.grepFile(ver+"main/pg_hba.conf", reNoteBlank, false), 50))
+				d.lines(head(f.grepFile(ver+"main/pg_hba.conf", reNoteBlank.R(), false), 50))
 			}
 		}
 	}
 	if f.isFile("/etc/redis/redis.conf") {
 		d.echo("--- Redis")
-		d.lines(head(f.grepFile("/etc/redis/redis.conf", reNoteBlank, false), 50))
+		d.lines(head(f.grepFile("/etc/redis/redis.conf", reNoteBlank.R(), false), 50))
 	}
 
 	if f.isDir("/etc/postfix") {
@@ -227,18 +228,18 @@ func (s *Session) deepServices(d deepOut) {
 		for _, n := range []string{"main.cf", "master.cf"} {
 			if f.isFile("/etc/postfix/" + n) {
 				d.echo("--- " + n)
-				d.lines(head(f.grepFile("/etc/postfix/"+n, reNoteBlank, false), 50))
+				d.lines(head(f.grepFile("/etc/postfix/"+n, reNoteBlank.R(), false), 50))
 			}
 		}
 	}
 	if f.isDir("/etc/dovecot") {
 		d.echo("--- Dovecot")
 		if f.isFile("/etc/dovecot/dovecot.conf") {
-			d.lines(head(f.grepFile("/etc/dovecot/dovecot.conf", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/dovecot/dovecot.conf", reNoteBlank.R(), false), 30))
 		}
 		// find | sort: the paths in byte order (SYS-41).
 		for _, p := range sorted(f.find("/etc/dovecot/conf.d", query{maxDepth: -1, names: []string{"*.conf"}})) {
-			if content := subst(f.grepFile(p, reNoteBlank, false)); content != "" {
+			if content := subst(f.grepFile(p, reNoteBlank.R(), false)); content != "" {
 				d.echo("--- " + path.Base(p))
 				d.lines(head(strings.Split(content, "\n"), 30))
 			}
@@ -247,13 +248,13 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/exim4") {
 		d.echo("--- Exim4")
 		if f.isFile("/etc/exim4/update-exim4.conf.conf") {
-			d.lines(head(f.grepFile("/etc/exim4/update-exim4.conf.conf", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/exim4/update-exim4.conf.conf", reNoteBlank.R(), false), 30))
 		}
 	}
 	if f.isDir("/etc/spamassassin") {
 		d.echo("--- SpamAssassin")
 		if f.isFile("/etc/spamassassin/local.cf") {
-			d.lines(head(f.grepFile("/etc/spamassassin/local.cf", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/spamassassin/local.cf", reNoteBlank.R(), false), 30))
 		}
 		if f.isDir("/etc/spamassassin/razor") {
 			d.echo("Razor=configured")
@@ -265,7 +266,7 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isFile("/etc/default/opendkim") || f.isDir("/etc/opendkim") {
 		d.echo("--- OpenDKIM")
 		if f.isFile("/etc/default/opendkim") {
-			d.lines(f.grepFile("/etc/default/opendkim", reNoteBlank, false))
+			d.lines(f.grepFile("/etc/default/opendkim", reNoteBlank.R(), false))
 		}
 		for _, n := range []string{"TrustedHosts", "KeyTable", "SigningTable"} {
 			if f.isFile("/etc/opendkim/" + n) {
@@ -283,7 +284,7 @@ func (s *Session) deepServices(d deepOut) {
 		}
 		if f.isFile("/etc/bind/named.conf.options") {
 			d.echo("--- named.conf.options")
-			d.lines(head(f.grepFile("/etc/bind/named.conf.options", reSlashBlank, false), 50))
+			d.lines(head(f.grepFile("/etc/bind/named.conf.options", reSlashBlank.R(), false), 50))
 		}
 	}
 	if f.isDir("/etc/unbound") {
@@ -293,16 +294,16 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/avahi") {
 		d.echo("--- Avahi")
 		if f.isFile("/etc/avahi/avahi-daemon.conf") {
-			d.lines(head(f.grepFile("/etc/avahi/avahi-daemon.conf", reNoteBlank, false), 20))
+			d.lines(head(f.grepFile("/etc/avahi/avahi-daemon.conf", reNoteBlank.R(), false), 20))
 		}
 	}
 
 	if f.isDir("/etc/proftpd") {
 		d.echo("--- ProFTPD")
 		if f.isFile("/etc/proftpd/proftpd.conf") {
-			d.lines(head(f.grepFile("/etc/proftpd/proftpd.conf", reNoteBlank, false), 50))
+			d.lines(head(f.grepFile("/etc/proftpd/proftpd.conf", reNoteBlank.R(), false), 50))
 		}
-		d.lines(head(f.grepFiles(f.find("/etc/proftpd/conf.d", query{maxDepth: -1, names: []string{"*.conf"}}), reNoteBlank, false), 30))
+		d.lines(head(f.grepFiles(f.find("/etc/proftpd/conf.d", query{maxDepth: -1, names: []string{"*.conf"}}), reNoteBlank.R(), false), 30))
 	}
 	if f.isDir("/etc/vsftpd") || f.isFile("/etc/vsftpd.conf") {
 		d.echo("--- vsftpd")
@@ -310,13 +311,13 @@ func (s *Session) deepServices(d deepOut) {
 		if f.isFile("/etc/vsftpd/vsftpd.conf") {
 			vsf = "/etc/vsftpd/vsftpd.conf"
 		}
-		d.lines(head(f.grepFile(vsf, reNoteBlank, false), 30))
+		d.lines(head(f.grepFile(vsf, reNoteBlank.R(), false), 30))
 	}
 
 	if f.isDir("/etc/samba") {
 		d.echo("--- Samba")
 		if f.isFile("/etc/samba/smb.conf") {
-			d.lines(head(f.grepFile("/etc/samba/smb.conf", reNoteSemiBlank, false), 50))
+			d.lines(head(f.grepFile("/etc/samba/smb.conf", reNoteSemiBlank.R(), false), 50))
 		}
 	}
 	if f.isDir("/etc/openmediavault") {
@@ -334,7 +335,7 @@ func (s *Session) deepServices(d deepOut) {
 		d.echo("--- NFS")
 		d.raw(headN(f.read("/etc/exports"), 30))
 		if f.isFile("/etc/nfs.conf") {
-			d.lines(head(f.grepFile("/etc/nfs.conf", reNoteBlank, false), 20))
+			d.lines(head(f.grepFile("/etc/nfs.conf", reNoteBlank.R(), false), 20))
 		}
 	}
 
@@ -342,7 +343,7 @@ func (s *Session) deepServices(d deepOut) {
 		d.echo("--- OpenVPN")
 		for _, p := range f.find("/etc/openvpn", query{maxDepth: -1, names: []string{"*.conf", "*.ovpn"}}) {
 			d.echo("--- " + path.Base(p))
-			d.lines(head(f.grepFile(p, reNoteBlank, false), 30))
+			d.lines(head(f.grepFile(p, reNoteBlank.R(), false), 30))
 		}
 		if f.isFile("/etc/openvpn/mullvad.conf") {
 			d.echo("Mullvad=configured")
@@ -358,7 +359,7 @@ func (s *Session) deepServices(d deepOut) {
 			// The value of every PrivateKey and PresharedKey line is
 			// masked, whatever its spacing (SYS-50).
 			var ls []string
-			for _, l := range f.grepFile(p, reNoteBlank, false) {
+			for _, l := range f.grepFile(p, reNoteBlank.R(), false) {
 				ls = append(ls, reWireGuardKey.ReplaceAllString(l, "${1}[REDACTED]"))
 			}
 			d.lines(head(ls, 20))
@@ -377,7 +378,7 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/containerd") {
 		d.echo("--- containerd")
 		if f.isFile("/etc/containerd/config.toml") {
-			d.lines(head(f.grepFile("/etc/containerd/config.toml", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/containerd/config.toml", reNoteBlank.R(), false), 30))
 		}
 	}
 	if f.isDir("/etc/nvidia-container-runtime") {
@@ -391,7 +392,7 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/collectd") {
 		d.echo("--- Collectd")
 		if f.isFile("/etc/collectd/collectd.conf") {
-			d.lines(head(f.grepFile("/etc/collectd/collectd.conf", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/collectd/collectd.conf", reNoteBlank.R(), false), 30))
 		}
 		for _, p := range f.find("/etc/collectd/collectd.conf.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 			d.echo("--- " + path.Base(p))
@@ -415,7 +416,7 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/snmp") {
 		d.echo("--- SNMP")
 		if f.isFile("/etc/snmp/snmpd.conf") {
-			d.lines(head(f.grepFile("/etc/snmp/snmpd.conf", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/snmp/snmpd.conf", reNoteBlank.R(), false), 30))
 		}
 	}
 	if f.isDir("/etc/sysstat") {
@@ -430,13 +431,13 @@ func (s *Session) deepServices(d deepOut) {
 		if f.isFile("/etc/smartmontools/smartd.conf") {
 			smartf = "/etc/smartmontools/smartd.conf"
 		}
-		d.lines(head(f.grepFile(smartf, reNoteBlank, false), 20))
+		d.lines(head(f.grepFile(smartf, reNoteBlank.R(), false), 20))
 	}
 
 	if f.isDir("/etc/webmin") {
 		d.echo("--- Webmin")
 		if f.isFile("/etc/webmin/miniserv.conf") {
-			d.lines(f.grepFile("/etc/webmin/miniserv.conf", reWebminKeys, true))
+			d.lines(f.grepFile("/etc/webmin/miniserv.conf", reWebminKeys.R(), true))
 		}
 		d.echo("modules:")
 		d.lines(head(f.ls("/etc/webmin"), 30))
@@ -451,12 +452,12 @@ func (s *Session) deepServices(d deepOut) {
 	if f.isDir("/etc/chrony") {
 		d.echo("--- Chrony")
 		if f.isFile("/etc/chrony/chrony.conf") {
-			d.lines(head(f.grepFile("/etc/chrony/chrony.conf", reNoteBlank, false), 20))
+			d.lines(head(f.grepFile("/etc/chrony/chrony.conf", reNoteBlank.R(), false), 20))
 		}
 	}
 	if f.isFile("/etc/systemd/timesyncd.conf") {
 		d.echo("--- systemd-timesyncd")
-		d.lines(head(f.grepFile("/etc/systemd/timesyncd.conf", reTimesyncd, false), 10))
+		d.lines(head(f.grepFile("/etc/systemd/timesyncd.conf", reTimesyncd.R(), false), 10))
 	}
 
 	d.echo("--- Custom systemd units")
@@ -491,7 +492,7 @@ func (s *Session) cnfFiles(d deepOut, dir string) {
 	for _, p := range f.globIn(dir+"/", "*.cnf") {
 		if f.isFile(p) {
 			d.echo("--- " + path.Base(p))
-			d.lines(f.grepFile(p, reNoteBlank, false))
+			d.lines(f.grepFile(p, reNoteBlank.R(), false))
 		}
 	}
 }
@@ -504,7 +505,7 @@ func (s *Session) customUnit(d deepOut, unit string) {
 	d.echo("--- Custom: " + path.Base(unit))
 	d.raw(headN(b, 40))
 	ls := grepLines(b, f.u8)
-	for _, env := range grepOAll(ls, reEnvFile) {
+	for _, env := range grepOAll(ls, reEnvFile.R()) {
 		// ${env_file/#-/}; a relative name is the caller's directory's.
 		env = strings.TrimPrefix(env, "-")
 		if f.isFile(f.abs(env)) {
@@ -512,7 +513,7 @@ func (s *Session) customUnit(d deepOut, unit string) {
 			d.raw(headN(f.read(f.abs(env)), 30))
 		}
 	}
-	if exec := subst(grepOAll(ls, reExec)); exec != "" {
+	if exec := subst(grepOAll(ls, reExec.R())); exec != "" {
 		for _, l := range grepLines([]byte(exec+"\n"), f.u8) {
 			for _, cfg := range reCfgPath.FindAllString(l, -1) {
 				if f.isFile(cfg) {
@@ -522,7 +523,7 @@ func (s *Session) customUnit(d deepOut, unit string) {
 			}
 		}
 	}
-	d.lines(grepOAll(ls, reWorkDir))
+	d.lines(grepOAll(ls, reWorkDir.R()))
 }
 
 // deepSecurity is __sysinfo_deep_security.
@@ -538,7 +539,7 @@ func (s *Session) deepSecurity(d deepOut) {
 		d.echo("--- UFW")
 		d.raw(headN(s.Sudo("ufw", "status", "verbose"), 30))
 		if f.isFile("/etc/ufw/ufw.conf") {
-			d.lines(f.grepFile("/etc/ufw/ufw.conf", reNoteBlank, false))
+			d.lines(f.grepFile("/etc/ufw/ufw.conf", reNoteBlank.R(), false))
 		}
 	}
 	if s.has("firewall-cmd") {
@@ -551,17 +552,17 @@ func (s *Session) deepSecurity(d deepOut) {
 		d.raw(headN(s.Sudo("fail2ban-client", "status"), 20))
 		if f.isFile("/etc/fail2ban/jail.local") {
 			d.echo("--- jail.local")
-			d.lines(head(f.grep(s.sudoRead("/etc/fail2ban/jail.local"), reNoteSemiBlank, false), 40))
+			d.lines(head(f.grep(s.sudoRead("/etc/fail2ban/jail.local"), reNoteSemiBlank.R(), false), 40))
 		}
 		for _, p := range s.sudoFind("/etc/fail2ban/jail.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 			d.echo("--- " + path.Base(p))
-			d.lines(head(f.grep(s.sudoRead(p), reNoteSemiBlank, false), 30))
+			d.lines(head(f.grep(s.sudoRead(p), reNoteSemiBlank.R(), false), 30))
 		}
 	}
 	if f.isDir("/etc/crowdsec") {
 		d.echo("--- CrowdSec")
 		if f.isFile("/etc/crowdsec/config.yaml") {
-			d.lines(head(f.grepFile("/etc/crowdsec/config.yaml", reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/crowdsec/config.yaml", reNoteBlank.R(), false), 30))
 		}
 		if f.isFile("/etc/crowdsec/acquis.yaml") {
 			d.echo("--- acquis.yaml")
@@ -572,17 +573,17 @@ func (s *Session) deepSecurity(d deepOut) {
 	}
 
 	d.echo("--- SSH")
-	d.lines(f.grep(s.sudoRead("/etc/ssh/sshd_config"), reNoteBlank, false))
+	d.lines(f.grep(s.sudoRead("/etc/ssh/sshd_config"), reNoteBlank.R(), false))
 	for _, p := range s.sudoFind("/etc/ssh/sshd_config.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 		d.echo("--- " + path.Base(p))
-		d.lines(f.grep(s.sudoRead(p), reNoteBlank, false))
+		d.lines(f.grep(s.sudoRead(p), reNoteBlank.R(), false))
 	}
 
 	d.echo("--- PAM")
 	for _, pam := range []string{"common-auth", "common-password", "common-session"} {
 		if f.isFile("/etc/pam.d/" + pam) {
 			d.echo("--- " + pam)
-			d.lines(head(f.grepFile("/etc/pam.d/"+pam, reNoteBlank, false), 30))
+			d.lines(head(f.grepFile("/etc/pam.d/"+pam, reNoteBlank.R(), false), 30))
 		}
 	}
 
@@ -599,15 +600,15 @@ func (s *Session) deepSecurity(d deepOut) {
 	d.lines(passwdUsers(f.read("/etc/passwd")))
 
 	d.echo("--- Sudoers")
-	d.lines(head(f.grep(s.sudoRead("/etc/sudoers"), reNoteBlank, false), 20))
+	d.lines(head(f.grep(s.sudoRead("/etc/sudoers"), reNoteBlank.R(), false), 20))
 	for _, p := range s.sudoFind("/etc/sudoers.d", query{maxDepth: -1, typ: 'f'}) {
 		d.echo("--- " + path.Base(p))
-		d.lines(f.grep(s.sudoRead(p), reNoteBlank, false))
+		d.lines(f.grep(s.sudoRead(p), reNoteBlank.R(), false))
 	}
 
 	if f.isFile("/etc/login.defs") {
 		d.echo("--- login.defs (key)")
-		d.lines(f.grepFile("/etc/login.defs", reLoginDefs, true))
+		d.lines(f.grepFile("/etc/login.defs", reLoginDefs.R(), true))
 	}
 
 	d.echo("--- Login history")
@@ -643,11 +644,11 @@ func (s *Session) deepNetwork(d deepOut) {
 	}
 	if f.isFile("/etc/network/interfaces") {
 		d.echo("--- interfaces (legacy)")
-		d.lines(f.grepFile("/etc/network/interfaces", reNoteBlank, false))
+		d.lines(f.grepFile("/etc/network/interfaces", reNoteBlank.R(), false))
 	}
 	if f.isFile("/etc/dhcpcd.conf") {
 		d.echo("--- dhcpcd")
-		d.lines(f.grepFile("/etc/dhcpcd.conf", reNoteBlank, false))
+		d.lines(f.grepFile("/etc/dhcpcd.conf", reNoteBlank.R(), false))
 	}
 	s.listening(d)
 }
@@ -662,7 +663,7 @@ func (s *Session) deepStorage(d deepOut) {
 	d.raw(s.toolHead(30, "lsblk", "-f"))
 	d.echo("--- Mounts")
 	out, _ := s.tool("mount")
-	d.lines(head(filter(grepLines(out, f.u8), reCgroup, false), 30))
+	d.lines(head(filter(grepLines(out, f.u8), reCgroup.R(), false), 30))
 	d.echo("--- fstab")
 	d.raw(f.read("/etc/fstab"))
 	if f.isFile("/etc/crypttab") {
@@ -678,7 +679,7 @@ func (s *Session) deepStorage(d deepOut) {
 	}
 	if f.isFile("/etc/mdadm/mdadm.conf") {
 		d.echo("--- mdadm")
-		d.lines(f.grepFile("/etc/mdadm/mdadm.conf", reNoteBlank, false))
+		d.lines(f.grepFile("/etc/mdadm/mdadm.conf", reNoteBlank.R(), false))
 	}
 	if f.isFile("/proc/mdstat") {
 		d.echo("--- mdstat")
@@ -693,7 +694,7 @@ func (s *Session) deepStorage(d deepOut) {
 	}
 	if f.isFile("/etc/zfs/zed.rc") {
 		d.echo("--- zed.rc")
-		d.lines(f.grepFile("/etc/zfs/zed.rc", reNoteBlank, false))
+		d.lines(f.grepFile("/etc/zfs/zed.rc", reNoteBlank.R(), false))
 	}
 	if f.isFile("/etc/sanoid/sanoid.conf") {
 		d.echo("--- Sanoid")
@@ -716,11 +717,11 @@ func (s *Session) deepStorage(d deepOut) {
 	}
 	if f.isFile("/etc/nfs.conf") {
 		d.echo("--- nfs.conf")
-		d.lines(head(f.grepFile("/etc/nfs.conf", reNoteBlank, false), 20))
+		d.lines(head(f.grepFile("/etc/nfs.conf", reNoteBlank.R(), false), 20))
 	}
 	if f.isFile("/etc/hdparm.conf") {
 		d.echo("--- hdparm")
-		d.lines(head(f.grepFile("/etc/hdparm.conf", reNoteBlank, false), 20))
+		d.lines(head(f.grepFile("/etc/hdparm.conf", reNoteBlank.R(), false), 20))
 	}
 }
 
@@ -734,7 +735,7 @@ func (s *Session) deepPerformance(d deepOut) {
 	d.echo("--- CPU")
 	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: "lscpu", Options: runner.Options{Env: withEnv(s.env, "LC_ALL=C"), Stderr: io.Discard}})
 	if err == nil {
-		d.lines(head(filter(grepLines(res.Stdout, f.u8), reCPUInfo, true), 10))
+		d.lines(head(filter(grepLines(res.Stdout, f.u8), reCPUInfo.R(), true), 10))
 	}
 	d.echo("--- Load")
 	out, _ = s.tool("uptime")
@@ -754,11 +755,11 @@ func (s *Session) deepPerformance(d deepOut) {
 			if !f.isDir(dir) {
 				continue
 			}
-			ver := subst(grepOAll(grepLines([]byte(dir+"\n"), f.u8), rePHPVersion))
+			ver := subst(grepOAll(grepLines([]byte(dir+"\n"), f.u8), rePHPVersion.R()))
 			for _, p := range f.globIn(dir, "*.conf") {
 				if f.isFile(p) {
 					d.echo("--- PHP " + ver + " " + path.Base(p))
-					d.lines(head(f.grepFile(p, reSemiBlank, false), 50))
+					d.lines(head(f.grepFile(p, reSemiBlank.R(), false), 50))
 				}
 			}
 		}
@@ -766,14 +767,14 @@ func (s *Session) deepPerformance(d deepOut) {
 
 	d.echo("--- sysctl (key active params)")
 	out, _ = s.tool("sysctl", "-a")
-	d.lines(head(filter(grepLines(out, f.u8), reSysctlKeys, true), 30))
+	d.lines(head(filter(grepLines(out, f.u8), reSysctlKeys.R(), true), 30))
 	d.echo("--- sysctl.d configs")
 	for _, p := range f.find("/etc/sysctl.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 		d.echo("--- " + path.Base(p))
-		d.lines(f.grepFile(p, reNoteBlank, false))
+		d.lines(f.grepFile(p, reNoteBlank.R(), false))
 	}
 	if f.isFile("/etc/sysctl.conf") {
-		if content := subst(f.grepFile("/etc/sysctl.conf", reNoteBlank, false)); content != "" {
+		if content := subst(f.grepFile("/etc/sysctl.conf", reNoteBlank.R(), false)); content != "" {
 			d.echo("--- sysctl.conf")
 			d.echo(content)
 		}
@@ -794,12 +795,12 @@ func (s *Session) deepMaintenance(d deepOut) {
 	f := s.f
 	d.echo("=== MAINTENANCE DEEP ===")
 	d.echo("--- crontab")
-	d.lines(head(f.grepFile("/etc/crontab", reNoteBlank, false), 20))
+	d.lines(head(f.grepFile("/etc/crontab", reNoteBlank.R(), false), 20))
 	d.echo("--- cron.d contents")
 	for _, p := range f.globIn("/etc/cron.d/", "*") {
 		if f.isFile(p) {
 			d.echo("--- " + path.Base(p))
-			d.lines(head(f.grepFile(p, reNoteBlank, false), 15))
+			d.lines(head(f.grepFile(p, reNoteBlank.R(), false), 15))
 		}
 	}
 	for _, sub := range []string{"cron.daily", "cron.hourly", "cron.weekly", "cron.monthly"} {
@@ -833,7 +834,7 @@ func (s *Session) deepMaintenance(d deepOut) {
 		}
 		if f.isFile("/etc/letsencrypt/cli.ini") {
 			d.echo("--- cli.ini")
-			d.lines(f.grepFile("/etc/letsencrypt/cli.ini", reNoteBlank, false))
+			d.lines(f.grepFile("/etc/letsencrypt/cli.ini", reNoteBlank.R(), false))
 		}
 	}
 
@@ -844,7 +845,7 @@ func (s *Session) deepMaintenance(d deepOut) {
 	d.raw(f.tail("/var/log/dpkg.log", 30))
 	if f.isFile("/etc/apt/apt.conf.d/50unattended-upgrades") {
 		d.echo("--- unattended-upgrades")
-		d.lines(head(f.grepFile("/etc/apt/apt.conf.d/50unattended-upgrades", reSlashBlank, false), 30))
+		d.lines(head(f.grepFile("/etc/apt/apt.conf.d/50unattended-upgrades", reSlashBlank.R(), false), 30))
 	}
 
 	d.echo("--- Pending config merges")
@@ -861,7 +862,7 @@ func (s *Session) deepMaintenance(d deepOut) {
 	}
 	if f.isFile("/etc/cloud/cloud.cfg") {
 		d.echo("--- Cloud-init")
-		d.lines(head(f.grepFile("/etc/cloud/cloud.cfg", reCloudInit, true), 20))
+		d.lines(head(f.grepFile("/etc/cloud/cloud.cfg", reCloudInit.R(), true), 20))
 	}
 
 	d.echo("--- Profile scripts")

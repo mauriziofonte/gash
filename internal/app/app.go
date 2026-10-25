@@ -31,6 +31,9 @@ import (
 //     128+N, as for a 2.x function killed by the signal. A second signal
 //     gets the default action.
 func Main(args, environ []string, stdin, stdout, stderr *os.File) (status int) {
+	if len(args) > 0 && args[0] == "__serve" {
+		return serve(environ, stdin, stdout)
+	}
 	env := invoke.EnvFrom(environ)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

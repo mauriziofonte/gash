@@ -45,7 +45,7 @@ case "$__gash_here" in
     .) __gash_here=".." ;;
     *) __gash_here="." ;;
 esac
-if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
+if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__gash_here/compat/bootstrap.sh" ]]; then
     # shellcheck source=lib/compat/bootstrap.sh
     source "$__gash_here/compat/bootstrap.sh"
 fi
@@ -313,20 +313,8 @@ __gash_warning() {
 # Usage: __gash_ssh "message" [color]
 # Colors: info (default), success, warning, error. A color terminal gets
 # the variant's glyph before "SSH:"; plain output keeps "SSH: message".
-__gash_ssh() {
-    local message="${1-}" color="${2:-info}"
-    if __gash_use_color; then
-        local c="$__GASH_COLOR_INFO" g="$__GASH_GLYPH_INFO"
-        case "$color" in
-            success) c="$__GASH_COLOR_SUCCESS" g="$__GASH_GLYPH_OK" ;;
-            warning) c="$__GASH_COLOR_WARNING" g="$__GASH_GLYPH_WARN" ;;
-            error) c="$__GASH_COLOR_ERROR" g="$__GASH_GLYPH_ERR" ;;
-        esac
-        printf '%s%s%s %sSSH:%s %s\n' "$c" "$g" "$__GASH_COLOR_OFF" "$__GASH_COLOR_PRIMARY" "$__GASH_COLOR_OFF" "$message" >&2
-    else
-        printf 'SSH: %s\n' "$message" >&2
-    fi
-}
+# shellcheck disable=SC2120
+__gash_ssh() { __gash_cold __gash_ssh 6b37d7c5 && "${FUNCNAME[0]}" "$@"; }
 
 # Print a progress note without a word prefix (stderr): "<glyph> TEXT" on a
 # color terminal, "TEXT" otherwise (apt-style "Get:" and "Fetched" lines).
@@ -379,55 +367,15 @@ __gash_usage() {
 # underline; "" or none for no style. Anything else is used as given (an
 # escape sequence from the palette variables).
 # Usage: __gash_color_of VAR NAME
-__gash_color_of() {
-    local -n __gco_out="$1"
-    case "${2-}" in
-        "" | none) __gco_out="" ;;
-        primary) __gco_out="$__GASH_COLOR_PRIMARY" ;;
-        secondary) __gco_out="$__GASH_COLOR_SECONDARY" ;;
-        accent) __gco_out="$__GASH_COLOR_ACCENT" ;;
-        muted) __gco_out="$__GASH_COLOR_MUTED" ;;
-        success) __gco_out="$__GASH_COLOR_SUCCESS" ;;
-        warning) __gco_out="$__GASH_COLOR_WARNING" ;;
-        error) __gco_out="$__GASH_COLOR_ERROR" ;;
-        info) __gco_out="$__GASH_COLOR_INFO" ;;
-        bold) __gco_out="$__GASH_BOLD" ;;
-        dim) __gco_out="$__GASH_DIM" ;;
-        underline) __gco_out="$__GASH_UNDERLINE" ;;
-        *) __gco_out="$2" ;;
-    esac
-}
+# shellcheck disable=SC2120
+__gash_color_of() { __gash_cold __gash_color_of fa1973c8 && "${FUNCNAME[0]}" "$@"; }
 
 # Print text in a style, without prefix (stdout).
 # Usage: __gash_print STYLE "message"
 # Styles: the semantic names of __gash_color_of. The older hue names (red,
 # green, yellow, blue, cyan, white, bold_*) still work for user scripts.
-__gash_print() {
-    local color="${1-}" message="${2-}"
-    if ! __gash_use_color; then
-        printf '%s\n' "$message"
-        return 0
-    fi
-    local color_code=""
-    case "$color" in
-        red) color_code="${__GASH_RED}" ;;
-        green) color_code="${__GASH_GREEN}" ;;
-        yellow) color_code="${__GASH_YELLOW}" ;;
-        blue) color_code="${__GASH_BLUE}" ;;
-        cyan) color_code="${__GASH_CYAN}" ;;
-        white) color_code="${__GASH_WHITE}" ;;
-        bold_red) color_code="${__GASH_BOLD_RED}" ;;
-        bold_green) color_code="${__GASH_BOLD_GREEN}" ;;
-        bold_yellow) color_code="${__GASH_BOLD_YELLOW}" ;;
-        bold_blue) color_code="${__GASH_BOLD_BLUE}" ;;
-        bold_cyan) color_code="${__GASH_BOLD_CYAN}" ;;
-        bold_white) color_code="${__GASH_BOLD_WHITE}" ;;
-        primary | secondary | accent | muted | success | warning | error | info | bold | dim | underline)
-            __gash_color_of color_code "$color"
-            ;;
-    esac
-    printf '%s%s%s\n' "$color_code" "$message" "$__GASH_COLOR_OFF"
-}
+# shellcheck disable=SC2120
+__gash_print() { __gash_cold __gash_print e5875c64 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Glyph-only status lines (kept for older callers)
@@ -461,266 +409,56 @@ declare -g __GASH_SPINNER_PREV_TRAP=""
 declare -g __GASH_SPINNER_TRAP_SET=""
 
 # Usage: __gash_spinner_start "Loading..."
-__gash_spinner_start() {
-    local message="${1-Working...}"
-    __GASH_SPINNER_MSG="$message"
-
-    [[ -t 2 && "${GASH_HEADLESS-}" != "1" ]] || return 0
-    [[ -n "$__GASH_SPINNER_PID" ]] && __gash_spinner_stop none
-
-    local on="" off="" hide="" frames="$__GASH_SPINNER_FRAMES"
-    if __gash_stderr_fancy; then
-        on="$__GASH_COLOR_PRIMARY" off="$__GASH_COLOR_OFF" hide="$__GASH_CURSOR_HIDE"
-    fi
-
-    # Without monitor mode bash prints no "[1] PID" line for the background
-    # job; restore whatever the caller had right after.
-    local had_monitor=0
-    [[ $- == *m* ]] && had_monitor=1
-    set +m
-    (
-        n=${#frames} i=0
-        printf '%s' "$hide" >&2
-        while :; do
-            printf '\r%s%s%s %s' "$on" "${frames:i:1}" "$off" "$message" >&2
-            i=$(((i + 1) % n))
-            sleep 0.1
-        done
-    ) &
-    __GASH_SPINNER_PID=$!
-    disown "$__GASH_SPINNER_PID" 2>/dev/null || true
-    ((had_monitor)) && set -m
-
-    # Stop the spinner if the script exits, keeping the caller's EXIT trap.
-    __GASH_SPINNER_PREV_TRAP="$(trap -p EXIT)"
-    __GASH_SPINNER_TRAP_SET="1"
-    trap '__gash_spinner_stop' EXIT
-    return 0
-}
+# shellcheck disable=SC2120
+__gash_spinner_start() { __gash_cold __gash_spinner_start 8d4b68b6 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_spinner_stop [success|error|warning|none]
-__gash_spinner_stop() {
-    local status="${1-success}"
-
-    if [[ -n "${__GASH_SPINNER_PID-}" ]]; then
-        kill "$__GASH_SPINNER_PID" 2>/dev/null || true
-        wait "$__GASH_SPINNER_PID" 2>/dev/null || true
-        __GASH_SPINNER_PID=""
-        if __gash_stderr_fancy; then
-            printf '\r%s%s' "$__GASH_ERASE_EOL" "$__GASH_CURSOR_SHOW" >&2
-        else
-            printf '\r%*s\r' $((${#__GASH_SPINNER_MSG} + 2)) '' >&2
-        fi
-        case "$status" in
-            success) __gash_success "${__GASH_SPINNER_MSG}" ;;
-            error) __gash_error "${__GASH_SPINNER_MSG}" ;;
-            warning) __gash_warning "${__GASH_SPINNER_MSG}" ;;
-        esac
-    fi
-
-    # Only touch the EXIT trap if we set it; restore what was there before.
-    if [[ -n "${__GASH_SPINNER_TRAP_SET-}" ]]; then
-        if [[ -n "${__GASH_SPINNER_PREV_TRAP-}" ]]; then
-            eval "$__GASH_SPINNER_PREV_TRAP"
-        else
-            trap - EXIT
-        fi
-        __GASH_SPINNER_PREV_TRAP=""
-        __GASH_SPINNER_TRAP_SET=""
-    fi
-    return 0
-}
+# shellcheck disable=SC2120
+__gash_spinner_stop() { __gash_cold __gash_spinner_stop cfcbb630 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Progress Bar
 # -----------------------------------------------------------------------------
 
 # Usage: __gash_progress current total "message"   (stderr, terminals only)
-__gash_progress() {
-    local current total message="${3-}"
-    __gash_int current "${1-0}"
-    __gash_int total "${2-100}"
-    [[ -t 2 && "${GASH_HEADLESS-}" != "1" ]] || return 0
-    ((total > 0)) || total=1
-    ((current > total)) && current=$total
-
-    local width=30 percent filled bar="" i full="#" empty="."
-    if __gash_locale_utf8; then
-        full="█" empty="░"
-    fi
-    percent=$((current * 100 / total))
-    filled=$((percent * width / 100))
-    for ((i = 0; i < width; i++)); do
-        if ((i < filled)); then bar+="$full"; else bar+="$empty"; fi
-    done
-
-    local on="" off="" el=""
-    if __gash_stderr_fancy; then
-        on="$__GASH_COLOR_PRIMARY" off="$__GASH_COLOR_OFF" el="$__GASH_ERASE_EOL"
-    fi
-    printf '\r%s%s%s %3d%% %s%s' "$on" "$bar" "$off" "$percent" "$message" "$el" >&2
-    ((current >= total)) && printf '\n' >&2
-    return 0
-}
+# shellcheck disable=SC2120
+__gash_progress() { __gash_cold __gash_progress 1805aadd && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Section Headers
 # -----------------------------------------------------------------------------
 
 # Usage: __gash_section "Section Title"   (stdout)
-__gash_section() {
-    local title="${1-}" width=80 line="" i
-    # COLUMNS only when it is a run of digits, never evaluated (SYS-34).
-    if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]]; then
-        width=$COLUMNS
-    fi
-    ((width > 60)) && width=60
-    for ((i = 0; i < width; i++)); do line+="$__GASH_GLYPH_HLINE"; done
-
-    printf '\n'
-    if __gash_use_color; then
-        printf '%s%s%s\n' "$__GASH_COLOR_PRIMARY" "$line" "$__GASH_COLOR_OFF"
-        printf '%s%s%s\n' "$__GASH_BOLD" "$title" "$__GASH_COLOR_OFF"
-    else
-        printf '%s\n%s\n' "$line" "$title"
-    fi
-    printf '\n'
-}
+# shellcheck disable=SC2120
+__gash_section() { __gash_cold __gash_section 63c5a46c && "${FUNCNAME[0]}" "$@"; }
 
 # A bold line without rules, for a title inside a block (stdout). --note
 # adds secondary text after the title, two spaces apart, muted.
 # Usage: __gash_heading [--indent N] [--note TEXT] "Title"
-__gash_heading() {
-    local indent=0 note=""
-    while (($# > 1)); do
-        case "$1" in
-            --indent)
-                indent="${2-0}"
-                shift 2
-                ;;
-            --note)
-                note="${2-}"
-                shift 2
-                ;;
-            *) break ;;
-        esac
-    done
-    [[ "$indent" =~ ^[0-9]+$ ]] || indent=0
-    if __gash_use_color; then
-        printf '%*s%s%s%s' "$indent" '' "$__GASH_BOLD" "${1-}" "$__GASH_COLOR_OFF"
-        [[ -z "$note" ]] || printf '  %s%s%s' "$__GASH_COLOR_MUTED" "$note" "$__GASH_COLOR_OFF"
-    else
-        printf '%*s%s' "$indent" '' "${1-}"
-        [[ -z "$note" ]] || printf '  %s' "$note"
-    fi
-    printf '\n'
-}
+# shellcheck disable=SC2120
+__gash_heading() { __gash_cold __gash_heading f2b8a88c && "${FUNCNAME[0]}" "$@"; }
 
 # Key/value lines (stdout): "KEY VALUE", keys padded to the longest one (or
 # to --width N; 0 = no padding) and joined to the value by --sep (default
 # one space). On a color terminal keys are bold and values take
 # --value-color STYLE (a __gash_color_of name) when given.
 # Usage: __gash_kv [--indent N] [--width N] [--sep STR] [--value-color STYLE] KEY VALUE [KEY VALUE...]
-__gash_kv() {
-    local indent=0 width=-1 sep=" " vstyle=""
-    while (($# > 0)); do
-        case "$1" in
-            --indent)
-                indent="${2-0}"
-                shift 2 || break
-                ;;
-            --width)
-                width="${2-0}"
-                shift 2 || break
-                ;;
-            --sep)
-                sep="${2-}"
-                shift 2 || break
-                ;;
-            --value-color)
-                vstyle="${2-}"
-                shift 2 || break
-                ;;
-            *) break ;;
-        esac
-    done
-    [[ "$indent" =~ ^[0-9]+$ ]] || indent=0
-    [[ "$width" =~ ^-?[0-9]+$ ]] || width=-1
-    local i key
-    if ((width < 0)); then
-        width=0
-        for ((i = 1; i <= $#; i += 2)); do
-            key="${!i}"
-            ((${#key} > width)) && width=${#key}
-        done
-    fi
-    local kon="" von="" off=""
-    if __gash_use_color; then
-        kon="$__GASH_BOLD" off="$__GASH_COLOR_OFF"
-        __gash_color_of von "$vstyle"
-    fi
-    local val j
-    for ((i = 1; i <= $#; i += 2)); do
-        j=$((i + 1))
-        key="${!i}" val="${!j-}"
-        printf '%*s%s%-*s%s%s%s%s%s\n' "$indent" '' "$kon" "$width" "$key" "$off" "$sep" "$von" "$val" "${von:+$off}"
-    done
-}
+# shellcheck disable=SC2120
+__gash_kv() { __gash_cold __gash_kv ab6ed3a3 && "${FUNCNAME[0]}" "$@"; }
 
 # A bulleted list (stdout): "  • ITEM" per item, the bullet in the primary
 # color (or STYLE) on a color terminal.
 # Usage: __gash_list [--indent N] [--color STYLE] ITEM...
-__gash_list() {
-    local indent=2 style=primary
-    while (($# > 0)); do
-        case "$1" in
-            --indent)
-                indent="${2-2}"
-                shift 2 || break
-                ;;
-            --color)
-                style="${2-}"
-                shift 2 || break
-                ;;
-            *) break ;;
-        esac
-    done
-    [[ "$indent" =~ ^[0-9]+$ ]] || indent=2
-    local on="" off="" item
-    if __gash_use_color; then
-        __gash_color_of on "$style"
-        off="$__GASH_COLOR_OFF"
-    fi
-    for item in "$@"; do
-        printf '%*s%s%s%s %s\n' "$indent" '' "$on" "$__GASH_GLYPH_BULLET" "${on:+$off}" "$item"
-    done
-}
+# shellcheck disable=SC2120
+__gash_list() { __gash_cold __gash_list 8b661e98 && "${FUNCNAME[0]}" "$@"; }
 
 # A status line on stdout, for findings in a report rather than diagnostics:
 # "<glyph> TEXT" in the status color on a color terminal, "Word: TEXT"
 # otherwise (OK:, Info:, Warning:, Error:, as the emitters print them).
 # STATUS: ok, info, warning or error.
 # Usage: __gash_mark [--indent N] STATUS "TEXT"
-__gash_mark() {
-    local indent=0
-    if [[ "${1-}" == "--indent" ]]; then
-        indent="${2-0}"
-        shift 2
-    fi
-    [[ "$indent" =~ ^[0-9]+$ ]] || indent=0
-    local status="${1-info}" text="${2-}" c g word
-    case "$status" in
-        ok | success) c="$__GASH_COLOR_SUCCESS" g="$__GASH_GLYPH_OK" word="OK:" ;;
-        warning) c="$__GASH_COLOR_WARNING" g="$__GASH_GLYPH_WARN" word="Warning:" ;;
-        error) c="$__GASH_COLOR_ERROR" g="$__GASH_GLYPH_ERR" word="Error:" ;;
-        *) c="$__GASH_COLOR_INFO" g="$__GASH_GLYPH_INFO" word="Info:" ;;
-    esac
-    if __gash_use_color; then
-        printf '%*s%s%s%s %s\n' "$indent" '' "$c" "$g" "$__GASH_COLOR_OFF" "$text"
-    else
-        printf '%*s%s %s\n' "$indent" '' "$word" "$text"
-    fi
-}
+# shellcheck disable=SC2120
+__gash_mark() { __gash_cold __gash_mark b7fb3a0a && "${FUNCNAME[0]}" "$@"; }
 
 # True when input and output are both a terminal, so a screen can be
 # cleared and keys read from the user (menus, guided screens).
@@ -811,41 +549,15 @@ __gash_group_digits() {
 # A bar of WIDTH cells, VALUE/MAX of them full (at least one when VALUE > 0).
 # The full and empty parts are split by a tab so callers can color each.
 # Usage: __gash_bar VAR VALUE MAX WIDTH
-__gash_bar() {
-    local -n __gb_out="$1"
-    local __gb_v __gb_max __gb_w __gb_f=0 __gb_i __gb_full="" __gb_empty=""
-    __gash_int __gb_v "${2-0}"
-    __gash_int __gb_max "${3-0}"
-    __gash_int __gb_w "${4-10}"
-    ((__gb_max > 0)) && __gb_f=$(((__gb_v * __gb_w + __gb_max / 2) / __gb_max))
-    ((__gb_f < 1 && __gb_v > 0 && __gb_max > 0)) && __gb_f=1
-    ((__gb_f > __gb_w)) && __gb_f=$__gb_w
-    for ((__gb_i = 0; __gb_i < __gb_f; __gb_i++)); do __gb_full+="$__GASH_GLYPH_BAR_FULL"; done
-    for ((__gb_i = __gb_f; __gb_i < __gb_w; __gb_i++)); do __gb_empty+="$__GASH_GLYPH_BAR_EMPTY"; done
-    __gb_out="$__gb_full"$'\t'"$__gb_empty"
-}
+# shellcheck disable=SC2120
+__gash_bar() { __gash_cold __gash_bar 04525631 && "${FUNCNAME[0]}" "$@"; }
 
 # Word-wrap TEXT to WIDTH columns into the array VAR. Newlines in TEXT start
 # new lines (an empty line stays empty); a line starting with "- " wraps
 # with a two-space hanging indent.
 # Usage: __gash_wrap VAR WIDTH TEXT
-__gash_wrap() {
-    local -n __gw_out="$1"
-    local __gw_w __gw_res
-    __gash_int __gw_w "${2-72}"
-    __gw_out=()
-    # The binary prints one line per row, each ending in a newline; the x
-    # keeps trailing empty rows through the command substitution.
-    if __gw_res="$(printf '%s' "${3-}" | __gash_compat output wrap "$__gw_w" && printf x)" &&
-        [[ "$__gw_res" == *x ]]; then
-        __gw_res="${__gw_res%x}"
-        [[ -n "$__gw_res" ]] && mapfile -t __gw_out <<<"${__gw_res%$'\n'}"
-        return 0
-    fi
-    # No binary: the text's own lines.
-    mapfile -t __gw_out <<<"${3-}"
-    return 0
-}
+# shellcheck disable=SC2120
+__gash_wrap() { __gash_cold __gash_wrap 6b22d8a1 && "${FUNCNAME[0]}" "$@"; }
 
 # Let the user pick one of OPTIONS. On a terminal: the numbered options,
 # then a selection line that arrow keys (or j/k, or the option's number)
@@ -854,71 +566,15 @@ __gash_wrap() {
 # prompt that reads a line; an empty answer takes DEFAULT.
 # Usage: __gash_choose VAR DEFAULT OPTION...   (VAR gets the 1-based index)
 # Returns 1 on cancel or end of input.
-__gash_choose() {
-    local -n __gc_out="$1"
-    local __gc_sel __gc_res __gc_rc=0
-    __gash_int __gc_sel "${2-1}"
-    shift 2
-    # The menu draws on the terminal; the 1-based index comes back on fd 3.
-    if __gash_compat_ready; then
-        local __gc_c
-        __gash_color_now __gc_c
-        { __gc_res="$(GASH__COLOR=$__gc_c __gash_compat output choose "$__gc_sel" "$@" 3>&1 1>&4 4>&-)"; } 4>&1 || __gc_rc=$?
-        ((__gc_rc == 0)) || return 1
-        [[ "$__gc_res" =~ ^[0-9]+$ ]] || return 1
-        __gc_out=$__gc_res
-        return 0
-    fi
-    # No binary: the numbered prompt of 2.x.
-    local -a __gc_opts=("$@")
-    local __gc_n=${#__gc_opts[@]} __gc_i __gc_line __gc_try
-    ((__gc_n > 0)) || return 1
-    ((__gc_sel >= 1 && __gc_sel <= __gc_n)) || __gc_sel=1
-    for ((__gc_i = 0; __gc_i < __gc_n; __gc_i++)); do
-        printf '  %d) %s\n' $((__gc_i + 1)) "${__gc_opts[__gc_i]}"
-    done
-    for __gc_try in 1 2 3; do
-        printf '  Choice [%d]: ' "$__gc_sel"
-        IFS= read -r __gc_line || {
-            echo
-            return 1
-        }
-        __gc_line="${__gc_line//[[:space:]]/}"
-        [[ -z "$__gc_line" ]] && __gc_line="$__gc_sel"
-        [[ "$__gc_line" == q ]] && return 1
-        if [[ "$__gc_line" =~ ^[0-9]+$ ]] && ((10#$__gc_line >= 1 && 10#$__gc_line <= __gc_n)); then
-            __gc_out=$((10#$__gc_line))
-            return 0
-        fi
-        printf '  Type a number from 1 to %d (attempt %d of 3).\n' "$__gc_n" "$__gc_try"
-    done
-    return 1
-}
+# shellcheck disable=SC2120
+__gash_choose() { __gash_cold __gash_choose d17d7489 && "${FUNCNAME[0]}" "$@"; }
 
 # Draw a rounded box around lines (stdout), sized to the longest line and
 # capped at the terminal width. Lines may carry color codes. The border
 # takes BORDER_COLOR when colors are on.
 # Usage: __gash_box [--color ESC] LINE...
-__gash_box() {
-    local -a __gbx_args=()
-    if [[ "${1-}" == "--color" ]]; then
-        __gbx_args=(--color "${2-}")
-        shift 2
-    fi
-    # Lines go to the binary NUL-terminated on stdin; GASH__TTY_IN tells
-    # it whether this shell's stdin is a terminal (the width comes from it)
-    # and GASH__COLOR what __gash_use_color says here.
-    if __gash_compat_ready; then
-        local __gbx_in=0 __gbx_c
-        [[ -t 0 ]] && __gbx_in=1
-        __gash_color_now __gbx_c
-        { (($# == 0)) || printf '%s\0' "$@"; } |
-            GASH__TTY_IN=$__gbx_in GASH__COLOR=$__gbx_c __gash_compat output box "${__gbx_args[@]}"
-        return
-    fi
-    # No binary: the lines as they are.
-    (($# == 0)) || printf '%s\n' "$@"
-}
+# shellcheck disable=SC2120
+__gash_box() { __gash_cold __gash_box 85f532f6 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Tables
@@ -974,21 +630,8 @@ __gash_split_tabs() {
 #                     the terminal width
 #
 # Usage: printf 'NAME\tSIZE\na\t1\n' | __gash_table [options]
-__gash_table() {
-    # Rows on stdin; the color decision of __gash_table_into travels in
-    # GASH__TABLE_COLOR, the one of this shell in GASH__COLOR.
-    if __gash_compat_ready; then
-        local __gt_c
-        __gash_color_now __gt_c
-        GASH__TABLE_COLOR="${__GASH_TABLE_COLOR-}" GASH__COLOR=$__gt_c __gash_compat output table "$@"
-        return
-    fi
-    # No binary: the tab-separated rows as they are.
-    local __gt_line
-    while IFS= read -r __gt_line || [[ -n "$__gt_line" ]]; do
-        printf '%s\n' "$__gt_line"
-    done
-}
+# shellcheck disable=SC2120
+__gash_table() { __gash_cold __gash_table 2b843ae8 && "${FUNCNAME[0]}" "$@"; }
 
 # Sourcing never fails: the status of this file is 0.
 true

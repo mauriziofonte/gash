@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -20,39 +21,39 @@ import (
 // the 2.x regexes.
 var (
 	// Pattern 1: word.service/timer/socket/... systemd units.
-	reUnitEntity = regexp.MustCompile(`[a-zA-Z0-9_@.-]+\.(service|timer|socket|mount|path|target|slice|scope)`)
+	reUnitEntity = lazyre.MustCompile(`[a-zA-Z0-9_@.-]+\.(service|timer|socket|mount|path|target|slice|scope)`)
 	// Pattern 2: /etc|var|usr|opt|srv|home|run paths (the body excludes the
 	// shell-metacharacter set of the 2.x class).
-	rePathEntity = regexp.MustCompile("/(etc|var|usr|opt|srv|home|run)/[^ \"'\x60|;&<>(){}]+")
+	rePathEntity = lazyre.MustCompile("/(etc|var|usr|opt|srv|home|run)/[^ \"'\x60|;&<>(){}]+")
 	// Pattern 3: ports, as "port N" or HOST:N where HOST is an IPv4
 	// address, localhost, * or a bracketed IPv6 address, so a clock time
 	// such as 12:30 is no port (AI-08). The digits are submatch 1.
-	rePortEntity = regexp.MustCompile(`(?:port[: ]+|(?:\b[0-9]{1,3}(?:\.[0-9]{1,3}){3}|\blocalhost|\*|\[[0-9a-f:.]+\]):)([0-9]{1,5})(?:[^0-9]|$)`)
+	rePortEntity = lazyre.MustCompile(`(?:port[: ]+|(?:\b[0-9]{1,3}(?:\.[0-9]{1,3}){3}|\blocalhost|\*|\[[0-9a-f:.]+\]):)([0-9]{1,5})(?:[^0-9]|$)`)
 	// Pattern 5: hyphenated/underscored names that could be unit names.
-	reSvcNameEntity = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9]*[-_][a-zA-Z0-9][-a-zA-Z0-9_]*`)
+	reSvcNameEntity = lazyre.MustCompile(`[a-zA-Z][a-zA-Z0-9]*[-_][a-zA-Z0-9][-a-zA-Z0-9_]*`)
 )
 
 // Pattern 4 service keywords (matched case-insensitively against the
 // lowercased question).
 var (
-	reKwApache   = regexp.MustCompile(`apache|httpd`)
-	reKwNginx    = regexp.MustCompile(`nginx`)
-	reKwMysql    = regexp.MustCompile(`mysql|mariadb`)
-	reKwRedis    = regexp.MustCompile(`redis`)
-	reKwPhp      = regexp.MustCompile(`php|fpm`)
-	reKwPostfix  = regexp.MustCompile(`postfix|mail`)
-	reKwSsh      = regexp.MustCompile(`ssh|sshd`)
-	reKwFail2ban = regexp.MustCompile(`fail2ban`)
-	reKwDocker   = regexp.MustCompile(`docker`)
-	reKwPostgres = regexp.MustCompile(`postgres`)
-	reKwCron     = regexp.MustCompile(`cron`)
+	reKwApache   = lazyre.MustCompile(`apache|httpd`)
+	reKwNginx    = lazyre.MustCompile(`nginx`)
+	reKwMysql    = lazyre.MustCompile(`mysql|mariadb`)
+	reKwRedis    = lazyre.MustCompile(`redis`)
+	reKwPhp      = lazyre.MustCompile(`php|fpm`)
+	reKwPostfix  = lazyre.MustCompile(`postfix|mail`)
+	reKwSsh      = lazyre.MustCompile(`ssh|sshd`)
+	reKwFail2ban = lazyre.MustCompile(`fail2ban`)
+	reKwDocker   = lazyre.MustCompile(`docker`)
+	reKwPostgres = lazyre.MustCompile(`postgres`)
+	reKwCron     = lazyre.MustCompile(`cron`)
 )
 
 // grep -Ev filters of the config reads.
 var (
-	reCommentBlank     = regexp.MustCompile(`^(#|$)`)   // ^(#|$)
-	reCommentSemiBlank = regexp.MustCompile(`^(#|;|$)`) // ^(#|;|$)
-	reSemiBlank        = regexp.MustCompile(`^(;|$)`)   // ^(;|$)
+	reCommentBlank     = lazyre.MustCompile(`^(#|$)`)   // ^(#|$)
+	reCommentSemiBlank = lazyre.MustCompile(`^(#|;|$)`) // ^(#|;|$)
+	reSemiBlank        = lazyre.MustCompile(`^(;|$)`)   // ^(;|$)
 )
 
 // stripTrailingPunct is the 2.x `${fpath%%[set]+([set])}; ${fpath%[set]}`
@@ -220,7 +221,7 @@ func (q *qctx) guardPath(p string) (string, bool) {
 
 // reLsLong splits an `ls -la` line into its eight leading fields and the
 // name (with " -> TARGET" for a symlink).
-var reLsLong = regexp.MustCompile(`^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(.*)$`)
+var reLsLong = lazyre.MustCompile(`^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(.*)$`)
 
 // dropSecretEntries removes from an `ls -la DIR` listing the entries the
 // path guard refuses: a secret name, or a symlink into a protected path or
@@ -255,7 +256,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.add(q.cmdHead(20, "systemctl", "status", "apache2", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/apache2/apache2.conf") {
 			q.add("--- /etc/apache2/apache2.conf (key lines) ---\n")
-			q.add(q.grepFile("/etc/apache2/apache2.conf", reCommentBlank, 40) + "\n")
+			q.add(q.grepFile("/etc/apache2/apache2.conf", reCommentBlank.R(), 40) + "\n")
 		}
 		if m.sys.IsDir("/etc/apache2/sites-enabled") {
 			q.add("--- sites-enabled ---\n")
@@ -275,7 +276,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.add(q.cmdHead(20, "systemctl", "status", "nginx", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/nginx/nginx.conf") {
 			q.add("--- /etc/nginx/nginx.conf ---\n")
-			q.add(q.grepFile("/etc/nginx/nginx.conf", reCommentBlank, 40) + "\n")
+			q.add(q.grepFile("/etc/nginx/nginx.conf", reCommentBlank.R(), 40) + "\n")
 		}
 		q.add("\n")
 	}
@@ -294,7 +295,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 						continue
 					}
 					q.add("--- " + p + " ---\n")
-					q.add(q.grepFile(p, reCommentSemiBlank, 30) + "\n")
+					q.add(q.grepFile(p, reCommentSemiBlank.R(), 30) + "\n")
 				}
 			}
 		}
@@ -308,7 +309,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.add(q.cmdHead(20, "systemctl", "status", "redis-server", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/redis/redis.conf") {
 			q.add("--- /etc/redis/redis.conf (key lines) ---\n")
-			q.add(q.grepFile("/etc/redis/redis.conf", reCommentBlank, 30) + "\n")
+			q.add(q.grepFile("/etc/redis/redis.conf", reCommentBlank.R(), 30) + "\n")
 		}
 		q.add("\n")
 	}
@@ -328,7 +329,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 						continue
 					}
 					q.add("--- " + name + " ---\n")
-					q.add(q.grepFile(p, reSemiBlank, 20) + "\n")
+					q.add(q.grepFile(p, reSemiBlank.R(), 20) + "\n")
 				}
 			}
 		}
@@ -342,7 +343,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.add(q.cmdHead(20, "systemctl", "status", "postfix", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/postfix/main.cf") {
 			q.add("--- /etc/postfix/main.cf (key lines) ---\n")
-			q.add(q.grepFile("/etc/postfix/main.cf", reCommentBlank, 40) + "\n")
+			q.add(q.grepFile("/etc/postfix/main.cf", reCommentBlank.R(), 40) + "\n")
 		}
 		q.add("\n")
 	}
@@ -370,7 +371,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.add(q.cmdHead(20, "systemctl", "status", "fail2ban", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/fail2ban/jail.local") {
 			q.add("--- /etc/fail2ban/jail.local ---\n")
-			q.add(q.grepFile("/etc/fail2ban/jail.local", reCommentSemiBlank, 40) + "\n")
+			q.add(q.grepFile("/etc/fail2ban/jail.local", reCommentSemiBlank.R(), 40) + "\n")
 		}
 		q.add("\n")
 	}
@@ -395,7 +396,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		pgconf := firstLine(m.cmd(q.c, "find", "/etc/postgresql", "-name", "pg_hba.conf"))
 		if pgconf != "" {
 			q.add("--- " + pgconf + " ---\n")
-			q.add(q.grepFile(pgconf, reCommentBlank, 20) + "\n")
+			q.add(q.grepFile(pgconf, reCommentBlank.R(), 20) + "\n")
 		}
 		q.add("\n")
 	}

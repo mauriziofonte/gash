@@ -3,14 +3,15 @@
 package selfmgmt
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // versionTag is a release or pre-release tag: an optional v, dot-separated
 // numbers, an optional -PRERELEASE (semver identifiers) and +BUILD.
-var versionTag = regexp.MustCompile(`^v?([0-9]+(?:\.[0-9]+)*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$`)
+var versionTag = lazyre.MustCompile(`^v?([0-9]+(?:\.[0-9]+)*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$`)
 
 // compareVersions compares two version tags as semver does: the numbers
 // first (missing ones count as 0, so v2.1 equals v2.1.0), then a

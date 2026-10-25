@@ -4,10 +4,11 @@ package legacy
 
 import (
 	"path"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Class is the legacy format of a vhost file (design/hte.md section 10).
@@ -35,18 +36,18 @@ const (
 var (
 	// brokenRE is needsLocalhostBypassFix's test for the Broken-bypass
 	// shape: a blank line right after the HTTPS condition.
-	brokenRE = regexp.MustCompile(`RewriteCond\s+%\{HTTPS\}\s+off[ \t]*\n\s*\n`)
+	brokenRE = lazyre.MustCompile(`RewriteCond\s+%\{HTTPS\}\s+off[ \t]*\n\s*\n`)
 	// bypassCondRE is the loopback bypass condition of the force block.
-	bypassCondRE = regexp.MustCompile(`(?m)^[ \t]*RewriteCond[ \t]+%\{REMOTE_ADDR\}[ \t]+!\^127\\\.0\\\.0\\\.1\$[ \t]*$`)
+	bypassCondRE = lazyre.MustCompile(`(?m)^[ \t]*RewriteCond[ \t]+%\{REMOTE_ADDR\}[ \t]+!\^127\\\.0\\\.0\\\.1\$[ \t]*$`)
 	// activeRuleRE is an uncommented redirect to https:// in a vhost.
-	activeRuleRE = regexp.MustCompile(`(?m)^[ \t]*RewriteRule[ \t]+\S+[ \t]+https://`)
+	activeRuleRE = lazyre.MustCompile(`(?m)^[ \t]*RewriteRule[ \t]+\S+[ \t]+https://`)
 	// socketRE is a legacy FPM socket inside a SetHandler argument:
 	// php<X.Y>-fpm-<domain>.sock (hte-cli) or php<X.Y>-fpm.sock (the
 	// distro's www pool).
-	socketRE = regexp.MustCompile(`^proxy:unix:((?:/var)?/run/php/php([0-9]+\.[0-9]+)-fpm(-[^/|]*)?\.sock)\|fcgi://localhost/?$`)
+	socketRE = lazyre.MustCompile(`^proxy:unix:((?:/var)?/run/php/php([0-9]+\.[0-9]+)-fpm(-[^/|]*)?\.sock)\|fcgi://localhost/?$`)
 	// anySocketRE finds every proxy:unix socket path in a file.
-	anySocketRE = regexp.MustCompile(`proxy:unix:([^|"\s]+)`)
-	indexRE     = regexp.MustCompile(`^([0-9]+)-.*\.conf$`)
+	anySocketRE = lazyre.MustCompile(`proxy:unix:([^|"\s]+)`)
+	indexRE     = lazyre.MustCompile(`^([0-9]+)-.*\.conf$`)
 )
 
 // Vhost is one classified vhost file.

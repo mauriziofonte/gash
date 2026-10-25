@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/state"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Layout is the render directory of design/hte.md section 2: complete
@@ -42,7 +42,7 @@ const (
 	layoutFile   = 0o600
 )
 
-var genNameRE = regexp.MustCompile(`^gen-([1-9][0-9]{0,8})$`)
+var genNameRE = lazyre.MustCompile(`^gen-([1-9][0-9]{0,8})$`)
 
 // GenDir is the absolute directory of generation n.
 func (l Layout) GenDir(n int) string { return filepath.Join(l.Dir, genName(n)) }

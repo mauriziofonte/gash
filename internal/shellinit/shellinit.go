@@ -21,9 +21,13 @@ package shellinit
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -36,8 +40,11 @@ import (
 // Emitter builds the interactive layer. Its seams let tests drive the
 // probes, the clock and the file reads without the real system.
 type Emitter struct {
-	run       runner.Runner
-	lookPath  func(name string, env []string, dir string) (string, error)
+	run      runner.Runner
+	lookPath func(name string, env []string, dir string) (string, error)
+	// dirNames lists a directory's entry names; with it, a name that no
+	// PATH directory holds is answered without a stat per directory.
+	dirNames  func(string) ([]string, error)
 	readFile  func(string) ([]byte, error)
 	stat      func(string) (os.FileInfo, error)
 	getwd     func() (string, error)
@@ -56,6 +63,7 @@ func New() *Emitter {
 	return &Emitter{
 		run:       runner.Exec{},
 		lookPath:  runner.LookPath,
+		dirNames:  dirNames,
 		readFile:  os.ReadFile,
 		stat:      os.Stat,
 		getwd:     os.Getwd,
@@ -88,6 +96,9 @@ func (e *Emitter) Emit(c *invoke.Call) (string, error) {
 		effPath: "",
 	}
 	st.effPath = st.effectivePath()
+	if _, real := e.run.(runner.Exec); real && st.prefetch() {
+		defer st.writeProbeCache()
+	}
 
 	var b strings.Builder
 	st.settings(&b)
@@ -114,6 +125,84 @@ type state struct {
 	s       *config.Settings
 	home    string
 	effPath string // PATH after GASH_PATH_ADD and GASH_NVM=lazy, for the probes
+	// progs memoizes program: the alias packs ask for the same names many
+	// times, and PATH does not change while the layer is built.
+	progs map[string]string
+	// onPath holds every entry name of the PATH directories, when all of
+	// them could be listed (pathListed).
+	onPath      map[string]bool
+	pathListed  bool
+	pathIndexed bool
+	// probes holds the probes prefetch started, by probeKey: each is run
+	// once, all of them at the same time, and read when a builder asks.
+	probes map[string]chan probeResult
+}
+
+// probeResult is the outcome of one probe: a zero exit, and its stdout.
+type probeResult struct {
+	ok  bool
+	out string
+}
+
+func probeKey(stdin, name string, args []string) string {
+	return stdin + "\x00" + name + "\x00" + strings.Join(args, "\x00")
+}
+
+// prefetch starts, side by side, the probes the alias packs run one after
+// the other (each costs a fork and an exec): the builders then read the
+// results in their order, so the layer is the one the sequential probes
+// build.
+//
+// It reports whether a probe ran: the probe cache (probecache.go) answered
+// the others.
+func (st *state) prefetch() (ran bool) {
+	cached := st.readProbeCache()
+	start := func(stdin, name string, args ...string) {
+		ch := make(chan probeResult, 1)
+		if st.probes == nil {
+			st.probes = map[string]chan probeResult{}
+		}
+		k := probeKey(stdin, name, args)
+		st.probes[k] = ch
+		if r, ok := cached[k]; ok {
+			ch <- r
+			return
+		}
+		ran = true
+		go func() { ch <- st.exec(stdin, name, args) }()
+	}
+	if _, ok := st.program("dircolors"); ok {
+		start("", "dircolors", st.dircolorsArgs()...)
+	}
+	start("x\n", "grep", "--color=auto", "-q", "x")
+	start("", "ls", "--color=auto", ".")
+	if st.s.Get("GASH_SAFETY_ALIASES") == "1" {
+		start("", "rm", "--version")
+	}
+	return ran
+}
+
+// probe runs name with args (stdin its input when not empty), or reads the
+// result prefetch started for the same command.
+func (st *state) probe(stdin, name string, args []string) probeResult {
+	if ch, ok := st.probes[probeKey(stdin, name, args)]; ok {
+		r := <-ch
+		ch <- r
+		return r
+	}
+	return st.exec(stdin, name, args)
+}
+
+func (st *state) exec(stdin, name string, args []string) probeResult {
+	o := runner.Options{Env: st.probeEnv()}
+	if stdin != "" {
+		o.Stdin = strings.NewReader(stdin)
+	}
+	r, err := st.e.run.Run(st.ctx(), runner.Cmd{Path: name, Args: args, Options: o})
+	if err != nil {
+		return probeResult{}
+	}
+	return probeResult{ok: r.ExitCode == 0, out: string(r.Stdout)}
 }
 
 func (st *state) ctx() context.Context {
@@ -160,11 +249,58 @@ func quote(s string) string {
 // program reports whether name resolves to a program on the effective PATH
 // (type -P NAME), and its resolved path.
 func (st *state) program(name string) (string, bool) {
-	p, err := st.e.lookPath(name, []string{"PATH=" + st.effPath}, "")
-	if err != nil {
-		return "", false
+	if p, done := st.progs[name]; done {
+		return p, p != ""
 	}
-	return p, true
+	p := ""
+	if st.mayBeOnPath(name) {
+		var err error
+		if p, err = st.e.lookPath(name, []string{"PATH=" + st.effPath}, ""); err != nil {
+			p = ""
+		}
+	}
+	if st.progs == nil {
+		st.progs = map[string]string{}
+	}
+	st.progs[name] = p
+	return p, p != ""
+}
+
+// mayBeOnPath reports whether a PATH directory holds an entry called name
+// (true when that cannot be told: a relative or unreadable directory).
+func (st *state) mayBeOnPath(name string) bool {
+	if st.e.dirNames == nil || strings.Contains(name, "/") {
+		return true
+	}
+	if !st.pathIndexed {
+		st.pathIndexed = true
+		st.onPath, st.pathListed = map[string]bool{}, true
+		for _, dir := range filepath.SplitList(st.effPath) {
+			if !filepath.IsAbs(dir) {
+				st.pathListed = false
+				break
+			}
+			names, err := st.e.dirNames(dir)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+				st.pathListed = false
+				break
+			}
+			for _, n := range names {
+				st.onPath[n] = true
+			}
+		}
+	}
+	return !st.pathListed || st.onPath[name]
+}
+
+// dirNames returns the names of the entries of dir.
+func dirNames(dir string) ([]string, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f.Readdirnames(-1)
 }
 
 // has reports whether name is a program on the effective PATH.
@@ -189,33 +325,18 @@ func (st *state) probeEnv() []string {
 // runOK runs name with args and reports a zero exit (the shell probes that
 // test success, e.g. `ls --color=auto .`).
 func (st *state) runOK(name string, args ...string) bool {
-	r, err := st.e.run.Run(st.ctx(), runner.Cmd{
-		Path: name, Args: args,
-		Options: runner.Options{Env: st.probeEnv(), Stdout: discard{}, Stderr: discard{}},
-	})
-	return err == nil && r.ExitCode == 0
+	return st.probe("", name, args).ok
 }
 
 // runOKInput is runOK with stdin as the program's standard input.
 func (st *state) runOKInput(stdin, name string, args ...string) bool {
-	r, err := st.e.run.Run(st.ctx(), runner.Cmd{
-		Path: name, Args: args,
-		Options: runner.Options{Env: st.probeEnv(), Stdin: strings.NewReader(stdin), Stdout: discard{}, Stderr: discard{}},
-	})
-	return err == nil && r.ExitCode == 0
+	return st.probe(stdin, name, args).ok
 }
 
 // runOut runs name with args and returns its captured stdout (the shell
 // probes that read output, e.g. `rm --version`). Empty on any failure.
 func (st *state) runOut(name string, args ...string) string {
-	r, err := st.e.run.Run(st.ctx(), runner.Cmd{
-		Path: name, Args: args,
-		Options: runner.Options{Env: st.probeEnv()},
-	})
-	if err != nil {
-		return ""
-	}
-	return string(r.Stdout)
+	return st.probe("", name, args).out
 }
 
 // readable reports whether path is a readable regular file ([[ -r FILE ]]
@@ -238,8 +359,3 @@ func (st *state) isDir(path string) bool {
 	fi, err := st.e.stat(path)
 	return err == nil && fi.IsDir()
 }
-
-// discard is an io.Writer that drops everything (the probes' /dev/null).
-type discard struct{}
-
-func (discard) Write(p []byte) (int, error) { return len(p), nil }

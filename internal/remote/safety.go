@@ -3,8 +3,9 @@
 package remote
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // The 2.x path safety tables.
@@ -151,8 +152,8 @@ func classifyPath(raw string) string {
 }
 
 var (
-	homeItself = regexp.MustCompile(`^/(home|Users)/[^/]+$`)
-	belowHome  = regexp.MustCompile(`^/home/[^/]+/`)
+	homeItself = lazyre.MustCompile(`^/(home|Users)/[^/]+$`)
+	belowHome  = lazyre.MustCompile(`^/home/[^/]+/`)
 )
 
 // safeForDelete is __remote_is_safe_for_delete: below /tmp, /var/tmp,

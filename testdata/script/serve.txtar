@@ -1,0 +1,170 @@
+# Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.1 per-shell server proof)
+#
+# The per-shell server (gash __serve, lib/compat/bootstrap.sh) runs a call of
+# the shell itself as the exec'd binary runs it: the same output, errors and
+# status for every served function (differential, GASH_SERVER=0 is the exec
+# path), in the shell's working directory, on the shell's own streams (a
+# file keeps its offset), Ctrl-C ending the call with 130 and the shell going
+# on, a broken pipe ending it with 141. A subshell's call execs; a newer
+# binary restarts the server; GASH_SERVER=0 never starts one.
+
+[!linux] skip 'the server needs /proc'
+env GASH_HEADLESS=1
+env HOME=$WORK/home
+env LC_ALL=C.UTF-8
+mkdir home
+cp $GASH_BIN $WORK/gash
+env GASH_BIN=$WORK/gash
+exec git init -q tree
+exec bash diff.sh
+stdout '^served 24$'
+! stdout DIFF
+exec bash streams.sh
+cmp stdout want-streams
+exec bash signals.sh
+stdout '^int rc=130 served$'
+stdout '^pipe rc=141$'
+stdout '^after$'
+# gash_unload needs the snapshot an interactive (not headless) load takes.
+env GASH_HEADLESS=
+env GASH_BANNER=0
+exec bash --noprofile --norc -i lifecycle.sh
+cmp stdout want-lifecycle
+
+-- diff.sh --
+source "$GASH_SH"
+cd "$WORK/tree" || exit 9
+mkdir -p a/b c
+printf 'foo\nbar\n' >a/one.txt
+printf 'x%.0s' {1..5000} >a/b/big.bin
+printf 'foo bar\n' >c/two.md
+served=0
+# Each call runs served, then exec'd; append redirections are served
+# whatever the kernel's ptrace policy (a file opened again through /proc).
+run() {
+    : >"$WORK/o1"; : >"$WORK/e1"; : >"$WORK/o2"; : >"$WORK/e2"
+    GASH_SERVER=1
+    "$@" >>"$WORK/o1" 2>>"$WORK/e1"
+    echo "rc=$?" >>"$WORK/o1"
+    ((__GASH_SRV_DECLINED)) || ((served++))
+    GASH_SERVER=0
+    "$@" >>"$WORK/o2" 2>>"$WORK/e2"
+    echo "rc=$?" >>"$WORK/o2"
+    # tree_stats prints how long its scan took.
+    sed -i -E 's/(Scan time: +)[0-9]+ms/\1Nms/' "$WORK/o1" "$WORK/o2"
+    cmp -s "$WORK/o1" "$WORK/o2" && cmp -s "$WORK/e1" "$WORK/e2" || {
+        echo "DIFF $*"
+        diff "$WORK/o1" "$WORK/o2"
+        diff "$WORK/e1" "$WORK/e2"
+    }
+}
+run llm_tree .
+run llm_tree . --depth 1
+run llm_find '*.txt'
+run llm_grep foo .
+run llm_grep
+run llm_project
+run llm_config
+run llm_git_status
+run llm_git_log
+run llm_deps
+run tree_stats .
+run files_largest .
+run dirs_largest .
+run dirs_find_large . 0
+run dirs_list_empty .
+run gash_help
+run gash_help llm_tree
+run gash files
+run gash_username
+run gash_username extra
+run llm_exec 'ls a'
+# The program's environment (Bash 4.4's exec takes one from SHLVL).
+run llm_env
+SHLVL=" 9 "
+run llm_env
+unset SHLVL
+run llm_env
+echo "served $served"
+
+-- streams.sh --
+source "$GASH_SH"
+gash_username >/dev/null
+# One file, shared by the shell and the call: the offset carries over.
+{
+    echo first
+    gash_help gash_username | head -c0
+    gash_username | sed 's/.*/user/'
+    cd "$WORK/tree" && llm_find '*.md'
+    echo last
+} >"$WORK/out"
+sed "s|$WORK|WORK|" "$WORK/out"
+# Calls in a pipeline or a command substitution exec: only the two direct
+# calls above went to the server.
+x=$(gash_username)
+echo "seq=$__GASH_SRV_SEQ"
+cd / && cd "$WORK" && llm_find 'nothing*'
+echo "rc=$?"
+
+-- want-streams --
+first
+user
+WORK/tree/c/two.md
+last
+seq=2
+rc=0
+-- signals.sh --
+source "$GASH_SH"
+gash_username >/dev/null
+# Ctrl-C reaches the shell and the server (one process group); the call
+# ends with 130 and the shell goes on. The signal goes once the call runs
+# its command.
+(
+    for _ in {1..300}; do
+        pgrep -x -P "$__GASH_SRV_PID" tail >/dev/null && break
+        sleep 0.1
+    done
+    kill -INT $$ "$__GASH_SRV_PID"
+) &
+llm_exec 'tail -f /dev/null'
+rc=$?
+((__GASH_SRV_DECLINED)) && echo "int rc=$rc declined" || echo "int rc=$rc served"
+wait
+# A reader that goes away: the call ends as SIGPIPE ends the binary.
+mkdir -p "$WORK/many"
+for i in {1..3000}; do : >"$WORK/many/file-with-a-rather-long-name-$i.txt"; done
+{
+    llm_find '*.txt' "$WORK/many" -n 5000
+    echo "pipe rc=$?" >>"$WORK/pipe-rc"
+} > >(head -c1 >/dev/null)
+sleep 0.5
+cat "$WORK/pipe-rc"
+echo after
+
+-- lifecycle.sh --
+source "$GASH_SH"
+GASH_SERVER=0 gash_username >/dev/null
+echo "off pid=${__GASH_SRV_PID-none}"
+gash_username >/dev/null
+first=$__GASH_SRV_PID
+echo "on started=$((first > 0))"
+gash_username >/dev/null
+[[ "$__GASH_SRV_PID" == "$first" ]] && echo "kept"
+# A newer binary: the next call (in a later second) restarts the server.
+touch -d '+1 hour' "$GASH_BIN"
+sleep 1
+gash_username >/dev/null
+[[ -n "$__GASH_SRV_PID" && "$__GASH_SRV_PID" != "$first" ]] && echo "restarted"
+kill -0 "$first" 2>/dev/null || echo "old one gone"
+gash_unload
+echo "unloaded pid=${__GASH_SRV_PID-none}"
+
+-- want-lifecycle --
+off pid=none
+on started=1
+kept
+restarted
+old one gone
+unloaded pid=none

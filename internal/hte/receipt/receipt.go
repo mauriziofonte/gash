@@ -17,7 +17,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -25,6 +24,7 @@ import (
 	"github.com/google/renameio/v2"
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Schema is the receipt format version.
@@ -184,11 +184,11 @@ func (r *Receipt) Find(kind Kind, key string) (Change, bool) {
 }
 
 var (
-	sha256RE = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	modeRE   = regexp.MustCompile(`^0[0-7]{3}$`)
+	sha256RE = lazyre.MustCompile(`^[0-9a-f]{64}$`)
+	modeRE   = lazyre.MustCompile(`^0[0-7]{3}$`)
 	// UserRE is the user names the root step accepts: they go into the
 	// sudoers drop-in and file names.
-	UserRE = regexp.MustCompile(`^[a-z_][a-z0-9_.-]{0,31}$`)
+	UserRE = lazyre.MustCompile(`^[a-z_][a-z0-9_.-]{0,31}$`)
 )
 
 func absClean(p string) bool {

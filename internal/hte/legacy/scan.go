@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
-	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 )
 
@@ -189,7 +189,7 @@ func (inv *Inventory) enabledSet(sr platform.Sysroot, files []string) map[string
 	return out
 }
 
-var includeRE = regexp.MustCompile(`(?im)^[ \t]*Include(?:Optional)?[ \t]+("[^"]+"|\S+)[ \t]*$`)
+var includeRE = lazyre.MustCompile(`(?im)^[ \t]*Include(?:Optional)?[ \t]+("[^"]+"|\S+)[ \t]*$`)
 
 // includePatterns returns the Include targets of a main configuration, as
 // absolute patterns.
@@ -244,7 +244,7 @@ func (inv *Inventory) enabledExtras(sr platform.Sysroot) []string {
 }
 
 // poolPathRE matches the pool files hte-cli searched: */fpm/pool.d/*.conf.
-var poolPathRE = regexp.MustCompile(`/fpm/pool\.d/[^/]+\.conf$`)
+var poolPathRE = lazyre.MustCompile(`/fpm/pool\.d/[^/]+\.conf$`)
 
 func (inv *Inventory) scanPools(sr platform.Sysroot) {
 	if inv.Layout.PHPRoot == "" {
@@ -308,7 +308,7 @@ func (inv *Inventory) scanHosts(sr platform.Sysroot) {
 	}
 }
 
-var runUserRE = regexp.MustCompile(`(?m)^[ \t]*export[ \t]+APACHE_RUN_USER=("?)([^"\s]*)("?)[ \t]*$`)
+var runUserRE = lazyre.MustCompile(`(?m)^[ \t]*export[ \t]+APACHE_RUN_USER=("?)([^"\s]*)("?)[ \t]*$`)
 
 func (inv *Inventory) scanEnvvars(sr platform.Sysroot) {
 	if inv.Layout.Envvars == "" {

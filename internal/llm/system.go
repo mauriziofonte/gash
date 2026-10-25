@@ -11,6 +11,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -112,7 +113,7 @@ func appendEscaped(b []byte, s string) []byte {
 	return append(b, q[1:len(q)-1]...)
 }
 
-var digitsRE = regexp.MustCompile(`^[0-9]+$`)
+var digitsRE = lazyre.MustCompile(`^[0-9]+$`)
 
 // numericText is a digit string as awk's %d prints it.
 func numericText(s string) string {
@@ -378,21 +379,21 @@ func readTwo(s string) (string, string) {
 }
 
 var (
-	envNameRE   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	envSecretRE = regexp.MustCompile(`(PASSWORD|PASSWD|PASSPHRASE|PASS$|_PWD$|SECRET|TOKEN|KEY|CREDENTIAL|AUTH|PRIVATE|COOKIE|SIGNATURE|SESSION|BEARER|JWT|WEBHOOK|SALT|ENCRYPT|(^|_)PAT$|AWS_|DATABASE_URL|DSN|CONN(ECTION)?_?STRING)`)
-	envKeyRE    = regexp.MustCompilePOSIX(`-{5}BEGIN [[:upper:][:digit:] ]*PRIVATE KEY`)
-	envTokenREs = []*regexp.Regexp{
-		regexp.MustCompilePOSIX(`AKIA[[:upper:][:digit:]]{16}`),
-		regexp.MustCompilePOSIX(`(gh[pousr]_|github_pat_)[[:alnum:]_]{20,}`),
-		regexp.MustCompilePOSIX(`sk-(ant-)?[[:alnum:]_-]{20,}`),
-		regexp.MustCompilePOSIX(`xox[abposr]-[[:alnum:]-]{10,}`),
-		regexp.MustCompilePOSIX(`AIza[[:alnum:]_-]{35}`),
+	envNameRE   = lazyre.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	envSecretRE = lazyre.MustCompile(`(PASSWORD|PASSWD|PASSPHRASE|PASS$|_PWD$|SECRET|TOKEN|KEY|CREDENTIAL|AUTH|PRIVATE|COOKIE|SIGNATURE|SESSION|BEARER|JWT|WEBHOOK|SALT|ENCRYPT|(^|_)PAT$|AWS_|DATABASE_URL|DSN|CONN(ECTION)?_?STRING)`)
+	envKeyRE    = lazyre.MustCompilePOSIX(`-{5}BEGIN [[:upper:][:digit:] ]*PRIVATE KEY`)
+	envTokenREs = []*lazyre.Regexp{
+		lazyre.MustCompilePOSIX(`AKIA[[:upper:][:digit:]]{16}`),
+		lazyre.MustCompilePOSIX(`(gh[pousr]_|github_pat_)[[:alnum:]_]{20,}`),
+		lazyre.MustCompilePOSIX(`sk-(ant-)?[[:alnum:]_-]{20,}`),
+		lazyre.MustCompilePOSIX(`xox[abposr]-[[:alnum:]-]{10,}`),
+		lazyre.MustCompilePOSIX(`AIza[[:alnum:]_-]{35}`),
 	}
 )
 
 // envURLRE is a URL with a password, from its scheme: scheme://user:
 // then the password up to the last "@" of the token.
-var envURLRE = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):.*@([^@]*)$`)
+var envURLRE = lazyre.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]*):.*@([^@]*)$`)
 
 // isSchemeChar is [A-Za-z0-9+.-], the characters a URL scheme is made of.
 func isSchemeChar(c byte) bool {

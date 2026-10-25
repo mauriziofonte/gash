@@ -9,7 +9,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
+	"unicode/utf8"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // The content search of llm_grep and llm_find --contains has ripgrep
@@ -296,11 +300,40 @@ func classLiteral(r rune) string {
 	return string(r)
 }
 
-// compileGlob compiles a globset pattern into an anchored regexp.
-func compileGlob(glob string, icase bool) (*regexp.Regexp, error) {
+// compiledGlob is a glob's regexp, and its baseGlob when it has one.
+type compiledGlob struct {
+	re   *lazyre.Regexp
+	fast *baseGlob
+}
+
+// globCache keeps the compiled globs of the process: a search compiles
+// the same sixty twice (with and without the secret excludes), and the
+// per-shell server runs search after search.
+var globCache = struct {
+	sync.Mutex
+	m map[string]compiledGlob
+}{m: map[string]compiledGlob{}}
+
+// globCacheMax bounds globCache (ignore files hold any number of lines).
+const globCacheMax = 4096
+
+// compileGlobFast compiles a globset pattern into an anchored regexp, with
+// the glob's baseGlob when it has one. The regexp of a **/P glob, which only a name that is not ASCII
+// needs, is compiled at its first use.
+func compileGlobFast(glob string, icase bool) (compiledGlob, error) {
+	key := "c\x00" + glob
+	if icase {
+		key = "i\x00" + glob
+	}
+	globCache.Lock()
+	c, ok := globCache.m[key]
+	globCache.Unlock()
+	if ok {
+		return c, nil
+	}
 	toks, err := parseGlob(glob)
 	if err != nil {
-		return nil, err
+		return compiledGlob{}, err
 	}
 	var b strings.Builder
 	if icase {
@@ -309,12 +342,126 @@ func compileGlob(glob string, icase bool) (*regexp.Regexp, error) {
 	b.WriteByte('^')
 	tokensRegexp(toks, &b)
 	b.WriteByte('$')
-	return regexp.Compile(b.String())
+	if c.fast = newBaseGlob(toks, icase); c.fast != nil {
+		c.re = lazyre.MustCompile(b.String())
+	} else {
+		re, err := regexp.Compile(b.String())
+		if err != nil {
+			return compiledGlob{}, err
+		}
+		c.re, c.fast = lazyre.Compiled(re), needGlob(toks, icase)
+	}
+	globCache.Lock()
+	if len(globCache.m) < globCacheMax {
+		globCache.m[key] = c
+	}
+	globCache.Unlock()
+	return c, nil
+}
+
+// needGlob is the baseGlob of a glob that is not of that form but holds a
+// run of literal ASCII characters: a path without that text cannot match
+// (need), and the regexp decides for the others.
+func needGlob(toks []globToken, icase bool) *baseGlob {
+	run, best := "", ""
+	for _, t := range toks {
+		if t.kind == tokLiteral && t.lit < utf8.RuneSelf {
+			c := byte(t.lit)
+			if icase && 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			run += string(c)
+		} else {
+			run = ""
+		}
+		if len(run) > len(best) {
+			best = run
+		}
+	}
+	if best == "" {
+		return nil
+	}
+	return &baseGlob{need: best, icase: icase}
+}
+
+// baseGlob is a glob of the form **/P, P made of ASCII characters other
+// than '/' and of '*': the path matches when its last component matches P,
+// which a wildcard comparison tells far sooner than the regexp (a search
+// matches every path against some sixty globs).
+type baseGlob struct {
+	parts []string // P split at each '*', lower case when icase
+	icase bool
+	// need, set instead of parts, is text the whole path must hold (lower
+	// case when icase) for the regexp to match it.
+	need string
+}
+
+func newBaseGlob(toks []globToken, icase bool) *baseGlob {
+	if len(toks) == 0 || toks[0].kind != tokRecursivePrefix {
+		return nil
+	}
+	parts := []string{""}
+	for _, t := range toks[1:] {
+		switch {
+		case t.kind == tokZeroOrMore:
+			parts = append(parts, "")
+		case t.kind == tokLiteral && t.lit != '/' && t.lit < utf8.RuneSelf:
+			c := byte(t.lit)
+			if icase && 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			parts[len(parts)-1] += string(c)
+		default:
+			return nil
+		}
+	}
+	return &baseGlob{parts: parts, icase: icase}
+}
+
+// match reports whether base, the last component of a path, matches; ok
+// is false when only the regexp can tell (a case-insensitive glob and a
+// name that is not ASCII, whose runes may fold to ASCII ones).
+func (g *baseGlob) match(base string, ascii bool) (matched, ok bool) {
+	if g.need != "" {
+		return false, false
+	}
+	if g.icase {
+		if !ascii {
+			return false, false
+		}
+		base = strings.ToLower(base)
+	}
+	first, last := g.parts[0], g.parts[len(g.parts)-1]
+	if len(g.parts) == 1 {
+		return base == first, true
+	}
+	if len(base) < len(first)+len(last) || !strings.HasPrefix(base, first) || !strings.HasSuffix(base, last) {
+		return false, true
+	}
+	mid := base[len(first) : len(base)-len(last)]
+	for _, p := range g.parts[1 : len(g.parts)-1] {
+		i := strings.Index(mid, p)
+		if i < 0 {
+			return false, true
+		}
+		mid = mid[i+len(p):]
+	}
+	return true, true
+}
+
+func candASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
 }
 
 // ignoreGlob is one line of an ignore file (or one --glob).
 type ignoreGlob struct {
-	re        *regexp.Regexp
+	re        *lazyre.Regexp
+	fast      *baseGlob // nil: the regexp decides
 	whitelist bool
 	onlyDir   bool
 }
@@ -374,11 +521,11 @@ func (g *gitignore) add(line string, icase bool) error {
 	if strings.HasSuffix(actual, "/**") {
 		actual += "/*"
 	}
-	re, err := compileGlob(actual, icase)
+	cg, err := compileGlobFast(actual, icase)
 	if err != nil {
 		return err
 	}
-	gl.re = re
+	gl.re, gl.fast = cg.re, cg.fast
 	g.globs = append(g.globs, gl)
 	return nil
 }
@@ -400,12 +547,29 @@ func (g *gitignore) matched(path string, isDir bool) match {
 		return matchNone
 	}
 	cand := g.strip(path)
+	base := cand[strings.LastIndexByte(cand, '/')+1:]
+	ascii := candASCII(base)
 	for i := len(g.globs) - 1; i >= 0; i-- {
-		gl := g.globs[i]
+		gl := &g.globs[i]
 		if gl.onlyDir && !isDir {
 			continue
 		}
-		if gl.re.MatchString(cand) {
+		hit, ok := false, false
+		if gl.fast != nil {
+			hit, ok = gl.fast.match(base, ascii)
+			if need := gl.fast.need; need != "" {
+				switch {
+				case !gl.fast.icase:
+					ok = !strings.Contains(cand, need)
+				case candASCII(cand):
+					ok = !strings.Contains(strings.ToLower(cand), need)
+				}
+			}
+		}
+		if !ok {
+			hit = gl.re.MatchString(cand)
+		}
+		if hit {
 			if gl.whitelist {
 				return matchWhitelist
 			}
@@ -591,7 +755,7 @@ func (r *ignoreRules) matchedIgnore(d *ignoreDir, path string, isDir bool) match
 }
 
 // excludesFileRE is the ignore crate's core.excludesFile line reader.
-var excludesFileRE = regexp.MustCompile(`(?im)^\s*excludesfile\s*=\s*"?\s*(\S+?)\s*"?\s*$`)
+var excludesFileRE = lazyre.MustCompile(`(?im)^\s*excludesfile\s*=\s*"?\s*(\S+?)\s*"?\s*$`)
 
 // globalExcludes is the ignore crate's global gitignore: core.excludesFile
 // from ~/.gitconfig or $XDG_CONFIG_HOME/git/config, else

@@ -4,10 +4,10 @@ package sysinfo
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -49,7 +49,7 @@ func usageRow(label string, used, total int64) string {
 // num is Bash arithmetic on a word read from a file or a tool.
 func num(s string) int64 { return int64(ui.Int(s)) }
 
-var cpuFS = regexp.MustCompile(`: *`)
+var cpuFS = lazyre.MustCompile(`: *`)
 
 // overview is __sysinfo_collect_overview: one card (verbose) or the
 // OVERVIEW block (compact).

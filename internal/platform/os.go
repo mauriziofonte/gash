@@ -5,9 +5,10 @@ package platform
 import (
 	"bufio"
 	"bytes"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Family groups distributions that share package layouts.
@@ -78,7 +79,7 @@ func DetectOS(sr Sysroot, goos string) OS {
 	return o
 }
 
-var plistVersion = regexp.MustCompile(`<key>ProductVersion</key>\s*<string>([0-9][0-9.]*)</string>`)
+var plistVersion = lazyre.MustCompile(`<key>ProductVersion</key>\s*<string>([0-9][0-9.]*)</string>`)
 
 func familyOf(id string, like []string) Family {
 	ids := append([]string{id}, like...)
@@ -125,7 +126,7 @@ func ParseOSRelease(b []byte) map[string]string {
 	return out
 }
 
-var osReleaseKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+var osReleaseKey = lazyre.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 func unquoteOSRelease(v string) (string, bool) {
 	if v == "" {

@@ -6,13 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -209,8 +209,8 @@ func emptyFiles(root string) []string {
 }
 
 var (
-	reFanout = regexp.MustCompile(`^[0-9a-f]{2}$`)
-	reLoose  = regexp.MustCompile(`^([0-9a-f]{38}|[0-9a-f]{62})$`)
+	reFanout = lazyre.MustCompile(`^[0-9a-f]{2}$`)
+	reLoose  = lazyre.MustCompile(`^([0-9a-f]{38}|[0-9a-f]{62})$`)
 )
 
 // glob is DIR/PREFIX*: the entries of dir whose name starts with prefix

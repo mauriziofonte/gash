@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // reNodeVer is grep -oE '[0-9]+(\.[0-9]+)*'.
-var reNodeVer = regexp.MustCompile(`[0-9]+(\.[0-9]+)*`)
+var reNodeVer = lazyre.MustCompile(`[0-9]+(\.[0-9]+)*`)
 
 // reLTSNum is the Bash test ^v?([0-9]+) of an nvm alias file: an optional
 // leading v and the first run of digits.
-var reLTSNum = regexp.MustCompile(`^v?([0-9]+)`)
+var reLTSNum = lazyre.MustCompile(`^v?([0-9]+)`)
 
 // ltsTable is the built-in codename → major map, consulted after the nvm
 // alias files (lower-cased names).
@@ -201,7 +201,7 @@ func (m *Module) ltsMajor(dir, name string) string {
 
 // reRelease is an installed Node release directory, as node_upgrade
 // keeps them: vX.Y.Z.
-var reRelease = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+var reRelease = lazyre.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 // installedVersions is __node_installed_versions: the vX.Y.Z entries of
 // $NVM_DIR/versions/node with the v stripped, in sort -V order; a stray

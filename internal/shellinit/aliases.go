@@ -110,16 +110,7 @@ func (st *state) packColors(b *strings.Builder) {
 	// only when unset. The binary runs dircolors; the emitted guard keeps a
 	// value the shell already has.
 	if _, ok := st.program("dircolors"); ok {
-		var args []string
-		switch {
-		case st.readable(st.home + "/.dircolors"):
-			args = []string{"-b", st.home + "/.dircolors"}
-		case st.readable("/etc/DIR_COLORS"):
-			args = []string{"-b", "/etc/DIR_COLORS"}
-		default:
-			args = []string{"-b"}
-		}
-		if out := st.runOut("dircolors", args...); out != "" {
+		if out := st.runOut("dircolors", st.dircolorsArgs()...); out != "" {
 			b.WriteString("if [[ -z \"${LS_COLORS-}\" ]]; then\n")
 			// dircolors prints `LS_COLORS='...';` and `export LS_COLORS`;
 			// indent each line and drop the trailing statement `;` so the
@@ -141,6 +132,18 @@ func (st *state) packColors(b *strings.Builder) {
 	if st.runOKInput("x\n", "grep", "--color=auto", "-q", "x") {
 		st.alias(b, "grep", "grep --color=auto")
 	}
+}
+
+// dircolorsArgs is the database dircolors reads: ~/.dircolors, else
+// /etc/DIR_COLORS, else its built-in one.
+func (st *state) dircolorsArgs() []string {
+	switch {
+	case st.readable(st.home + "/.dircolors"):
+		return []string{"-b", st.home + "/.dircolors"}
+	case st.readable("/etc/DIR_COLORS"):
+		return []string{"-b", "/etc/DIR_COLORS"}
+	}
+	return []string{"-b"}
 }
 
 // lessTermcap is the seven LESS_TERMCAP_* exports of colors.sh, set when

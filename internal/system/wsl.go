@@ -6,13 +6,13 @@ import (
 	"errors"
 	"io"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
@@ -175,7 +175,7 @@ func memSnapshot(sys platform.Sysroot) string {
 }
 
 // dmesgStamp is the sed -E 's/^\[([^]]+)\].*/\1/' of the last failure.
-var dmesgStamp = regexp.MustCompile(`^\[([^]]+)\].*`)
+var dmesgStamp = lazyre.MustCompile(`^\[([^]]+)\].*`)
 
 const order7 = "page allocation failure: order:7"
 

@@ -6,6 +6,49 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.2.0] - 2026-10-25
+
+Gash gets out of the way: a shell loads in half the time, the prompt no
+longer forks when there is no git repository, and a loaded shell runs the
+read-only functions in a fraction of a millisecond instead of starting the
+binary for each call. Behaviour is unchanged (each change is proven against
+the path it replaces).
+
+### Added
+
+- A per-shell server (Linux): the first call of a served function (the
+  `llm_*` read-only functions, the file and disk reports, `gash_help`,
+  `gash_username` and the like) starts `gash __serve`, which runs that call
+  and the later ones with the shell's environment, directory and standard
+  streams, Ctrl-C and broken pipes included, and ends with the shell. A call
+  it cannot run exactly as the binary would (in a subshell or `$(...)`, with
+  a stream it cannot share, after `TZ` changed) runs the binary as before;
+  `GASH_SERVER=0` turns it off. See docs/security.md, "The per-shell
+  server".
+
+### Changed
+
+- Loading is faster: a function longer than a few hundred bytes is a
+  one-line stand-in that reads its definition from `lib/compat/cold/` at its
+  first call (a load parsed some 80 KB of functions a shell mostly never
+  calls), the core shims no longer source the bootstrap again when gash.sh
+  just did, and `gash_doctor` checks the cold definitions with the shims.
+- `gash init bash` keeps the answers of its probes (`dircolors`,
+  `grep --color`, `ls --color`, `rm --version`) in
+  `${XDG_CACHE_HOME:-~/.cache}/gash/init-probes`, as 2.x did, and reuses
+  them while TERM, the locale, PATH and the dircolors database are the same,
+  no PATH directory changed and the file is less than a day old.
+- The prompt counts the running and stopped jobs with `\j` instead of a
+  subshell: no fork per prompt outside a git repository.
+- `llm_grep` skips a file or line that lacks the pattern's literal prefix
+  before the regexp runs, and the ignore globs of the form `**/NAME` (all the
+  secret excludes) are matched without a regexp; compiled globs are kept for
+  the process.
+- Regular expressions and templates of the binary are compiled at their
+  first use instead of at every start, the `gash init bash` probes run side
+  by side, and `gash_username` reads `/etc/passwd` when the name service
+  takes it from files.
+
 ## [3.1.0] - 2026-10-25
 
 Releases are now signed and verifiable without any key to keep, and the
@@ -734,6 +777,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.2.0]: https://github.com/mauriziofonte/gash/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/mauriziofonte/gash/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1

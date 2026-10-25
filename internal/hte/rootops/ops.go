@@ -18,12 +18,12 @@ package rootops
 import (
 	"fmt"
 	"path"
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Operation kinds.
@@ -154,9 +154,9 @@ const (
 )
 
 var (
-	sha256RE = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	sha256RE = lazyre.MustCompile(`^[0-9a-f]{64}$`)
 	// unitRE is the closed set of system units the root step touches.
-	unitRE = regexp.MustCompile(`^(apache2|httpd|php-fpm|php[5-8]\.[0-9]-fpm|php[5-8][0-9]-php-fpm)$`)
+	unitRE = lazyre.MustCompile(`^(apache2|httpd|php-fpm|php[5-8]\.[0-9]-fpm|php[5-8][0-9]-php-fpm)$`)
 	modes  = []string{"systemd", "launchd", "shell", "none"}
 )
 

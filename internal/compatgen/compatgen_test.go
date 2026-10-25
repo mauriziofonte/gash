@@ -58,7 +58,9 @@ func TestCommittedSet(t *testing.T) {
 	require.NoError(t, err)
 	var paths []string
 	for _, f := range files {
-		paths = append(paths, f.Path)
+		if !strings.HasPrefix(f.Path, ColdDir) {
+			paths = append(paths, f.Path)
+		}
 	}
 	require.Equal(t, []string{
 		"bash_completion", "bin/gash", "gash.sh", "lib/compat/bootstrap.sh",
@@ -396,6 +398,11 @@ func TestLedger_CORE18(t *testing.T) {
 	require.NoError(t, err, out)
 	defs := strings.Split(out, "\x00")
 	for i, n := range names {
+		if strings.Contains(defs[i], "__gash_cold") {
+			b, err := os.ReadFile(filepath.Join(dir, ColdDir, n+".sh"))
+			require.NoError(t, err)
+			defs[i] = string(b)
+		}
 		require.Equal(t, want[n], strings.Contains(defs[i], "__gash_load_env"), "%s: %s", n, defs[i])
 	}
 
@@ -617,12 +624,13 @@ var (
 	hygieneBad    = regexp.MustCompile(`=~|(^|[;&|{(\s])readonly\s|declare\s+-[A-Za-z]*r`)
 	gashAssign    = regexp.MustCompile(`(?:^|[^A-Za-z0-9_$])(__GASH_[A-Z0-9_]+)(?:\[[^]]*\])?\+?=`)
 	gashDeclared  = regexp.MustCompile(`declare\s+-[A-Za-z]+\s+(__GASH_[A-Z0-9_]+)`)
-	gashAllowedRE = regexp.MustCompile(`^__GASH_(COLOR|GLYPH|SYMBOL|BOOT|ENV|SPINNER|CALL|BOLD|SNAPSHOT)(_[A-Z0-9_]+)?$`)
+	gashAllowedRE = regexp.MustCompile(`^__GASH_(COLOR|GLYPH|SYMBOL|BOOT|ENV|SPINNER|CALL|BOLD|SNAPSHOT|SRV)(_[A-Z0-9_]+)?$`)
 )
 
 // gashAllowed are the other __GASH_* names a generated file may set at
 // load time: the palette and screen sequences, the load bookkeeping that
-// gash_unload, gash_doctor --timing and completion read.
+// gash_unload, gash_doctor --timing and completion read (the per-shell
+// server's state is __GASH_SRV_*).
 var gashAllowed = map[string]bool{
 	"__GASH_AWK": true, "__GASH_RED": true, "__GASH_GREEN": true, "__GASH_YELLOW": true, "__GASH_BLUE": true,
 	"__GASH_CYAN": true, "__GASH_WHITE": true, "__GASH_DIM": true, "__GASH_UNDERLINE": true,

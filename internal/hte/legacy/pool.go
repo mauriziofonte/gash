@@ -4,10 +4,10 @@ package legacy
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/hte/profiles"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // PoolValue is one key = value line of a pool.
@@ -26,7 +26,7 @@ type Pool struct {
 	Data          []byte      `json:"-"`
 }
 
-var profileMarkerRE = regexp.MustCompile(`;\s*Profile:\s*(\w+)`)
+var profileMarkerRE = lazyre.MustCompile(`;\s*Profile:\s*(\w+)`)
 
 // ParsePool reads a pool file: ";" comments, "[section]" headers and
 // "key = value" lines; values are whitespace normalized (runs of blanks

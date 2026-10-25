@@ -20,7 +20,7 @@ case "$__gash_here" in
     .) __gash_here=".." ;;
     *) __gash_here="." ;;
 esac
-if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
+if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__gash_here/compat/bootstrap.sh" ]]; then
     # shellcheck source=lib/compat/bootstrap.sh
     source "$__gash_here/compat/bootstrap.sh"
 fi
@@ -47,32 +47,8 @@ fi
 # Colors are gated via __gash_use_color when available (load+runtime), so
 # the help blob is plain text under GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR,
 # or when stdout is not a TTY.
-needs_help() {
-    local program="${1-}"
-    local usage="${2-}"
-    local help="${3-}"
-    local user_input="${4-}"
-
-    if [[ "$user_input" == "--help" || "$user_input" == "-h" ]]; then
-        # The full registered help (examples, notes) when there is one.
-        # The help registry is loaded when gash.sh was sourced.
-        if [[ -n "${__GASH_HELP_LOADED-}" ]] && __gash_compat help "$program"; then
-            return 0
-        fi
-        if declare -f __gash_use_color >/dev/null 2>&1 && __gash_use_color; then
-            printf '%s%s%s\n' "$__GASH_COLOR_ACCENT" "$program" "$__GASH_COLOR_OFF"
-            printf '%sUsage:%s %s\n' "$__GASH_BOLD" "$__GASH_COLOR_OFF" "$usage"
-            printf '%s\n' "$help"
-        else
-            printf '%s\n' "$program"
-            printf 'Usage: %s\n' "$usage"
-            printf '%s\n' "$help"
-        fi
-        return 0
-    fi
-
-    return 1
-}
+# shellcheck disable=SC2120
+needs_help() { __gash_cold needs_help 822ed84d && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # User Prompts
@@ -87,21 +63,8 @@ needs_help() {
 # value inherited from the environment can never ghost-confirm a
 # destructive operation. The prompt goes to stderr so callers captured via
 # $(...) never see the prompt text in the value.
-needs_confirm_prompt() {
-    local prompt="${1-}"
-    local REPLY=""
-
-    [[ "${GASH_HEADLESS-}" == "1" ]] && return 1
-
-    __gash_ask_render "$prompt" "y/N"
-
-    # A failed read (no tty, EOF) must refuse, never reuse a previous REPLY.
-    # The braces put the redirect of stderr around the failing </dev/tty, so
-    # the shell's own "/dev/tty: No such device" never reaches the user.
-    { read -r REPLY </dev/tty; } 2>/dev/null || return 1
-
-    [[ "$REPLY" =~ ^[Yy]$ ]]
-}
+# shellcheck disable=SC2120
+needs_confirm_prompt() { __gash_cold needs_confirm_prompt 9062bdf9 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Terminal Utilities
@@ -110,67 +73,14 @@ needs_confirm_prompt() {
 # Path of the program NAME runs as, like `type -P NAME` (first executable
 # file on PATH), into REPLY, without a subshell. Returns 1 when none.
 # Usage: __gash_path_of NAME
-__gash_path_of() {
-    # No `local -` (set -f): Bash 4.4 and 5.0 crash at exit after it runs
-    # in an interactive shell; read -a splits without globbing.
-    local dir
-    local -a dirs=()
-    REPLY=""
-    [[ -n "${1-}" && "$1" != */* ]] || return 1
-    # Bash's own search answers "none" faster than the loop below.
-    type -P "$1" >/dev/null 2>&1 || return 1
-    # An empty entry, trailing ones included, is the current directory.
-    IFS=: read -r -a dirs <<<"${PATH-}"
-    [[ "${PATH-}" == *: ]] && dirs+=("")
-    for dir in ${dirs[@]+"${dirs[@]}"}; do
-        [[ -z "$dir" ]] && dir="."
-        if [[ -f "$dir/$1" && -x "$dir/$1" ]]; then
-            REPLY="$dir/$1"
-            return 0
-        fi
-    done
-    return 1
-}
+# shellcheck disable=SC2120
+__gash_path_of() { __gash_cold __gash_path_of b3272557 && "${FUNCNAME[0]}" "$@"; }
 
 # Get terminal width (best-effort, errexit-safe).
 # Usage: width=$(__gash_tty_width)
 # Returns: Terminal width in columns (default 80)
-__gash_tty_width() {
-    local w=""
-
-    # Try $COLUMNS first
-    if [[ "${COLUMNS-}" =~ ^[0-9]+$ ]] && ((COLUMNS > 0)); then
-        printf '%s' "$COLUMNS"
-        return 0
-    fi
-
-    # No terminal to ask: skip the tput and stty forks.
-    if [[ ! -t 0 && ! -t 1 && ! -t 2 ]]; then
-        printf '80'
-        return 0
-    fi
-
-    # Try tput
-    if command -v tput >/dev/null 2>&1; then
-        w="$(tput cols 2>/dev/null || true)"
-        if [[ "$w" =~ ^[0-9]+$ ]] && ((w > 0)); then
-            printf '%s' "$w"
-            return 0
-        fi
-    fi
-
-    # Try stty
-    if command -v stty >/dev/null 2>&1; then
-        w="$(stty size 2>/dev/null | awk '{print $2}' || true)"
-        if [[ "$w" =~ ^[0-9]+$ ]] && ((w > 0)); then
-            printf '%s' "$w"
-            return 0
-        fi
-    fi
-
-    # Fallback
-    printf '80'
-}
+# shellcheck disable=SC2120
+__gash_tty_width() { __gash_cold __gash_tty_width 57814884 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # String Utilities
@@ -194,29 +104,8 @@ __gash_trim_ws() {
 # Usage: escaped=$(__gash_json_escape "string with \"quotes\"")
 #        __gash_json_escape_to VAR "string"   (no subshell; VAR must not be
 #        named str, out, ch, code or i)
-__gash_json_escape_to() {
-    local str="${2-}"
-    str="${str//\\/\\\\}"
-    str="${str//\"/\\\"}"
-    str="${str//$'\n'/\\n}"
-    str="${str//$'\r'/\\r}"
-    str="${str//$'\t'/\\t}"
-    str="${str//$'\b'/\\b}"
-    str="${str//$'\f'/\\f}"
-    if [[ "$str" == *[$'\001'-$'\037']* ]]; then
-        local LC_ALL=C out="" ch code i
-        for ((i = 0; i < ${#str}; i++)); do
-            ch="${str:i:1}"
-            if [[ "$ch" == [$'\001'-$'\037'] ]]; then
-                printf -v code '%d' "'$ch"
-                printf -v ch '\\u%04x' "$((code & 255))"
-            fi
-            out+="$ch"
-        done
-        str="$out"
-    fi
-    printf -v "$1" '%s' "$str"
-}
+# shellcheck disable=SC2120
+__gash_json_escape_to() { __gash_cold __gash_json_escape_to b4ac0089 && "${FUNCNAME[0]}" "$@"; }
 
 __gash_json_escape() {
     local __gash_esc_out
@@ -230,23 +119,8 @@ __gash_json_escape() {
 # `recoverable` follows from the action: only FATAL is unrecoverable.
 # details and hint are omitted when empty. Always returns 1.
 # Usage: __gash_json_error TYPE [DETAILS] [ACTION] [HINT]
-__gash_json_error() {
-    local type="${1:-unknown_error}" details="${2-}" action="${3:-STOP}" hint="${4-}"
-    case "$action" in
-        RETRY | CONTINUE | STOP | FATAL) ;;
-        *) action="STOP" ;;
-    esac
-    local recoverable=true
-    [[ "$action" == "FATAL" ]] && recoverable=false
-
-    local json
-    json="{\"error\":\"$(__gash_json_escape "$type")\""
-    [[ -n "$details" ]] && json+=",\"details\":\"$(__gash_json_escape "$details")\""
-    json+=",\"action\":\"$action\",\"recoverable\":$recoverable"
-    [[ -n "$hint" ]] && json+=",\"hint\":\"$(__gash_json_escape "$hint")\""
-    printf '%s}\n' "$json" >&2
-    return 1
-}
+# shellcheck disable=SC2120
+__gash_json_error() { __gash_cold __gash_json_error 17a50914 && "${FUNCNAME[0]}" "$@"; }
 
 # Print a machine warning to stderr, one JSON line in the shape of the
 # error contract: {"warning":TYPE,KEY:NUMBER...,"hint":..}. Always returns 0.
@@ -282,24 +156,8 @@ __gash_json_str() {
 # is escaped in bash, then jq normalizes the array (invalid UTF-8 becomes
 # U+FFFD). No NUL transport: jq 1.6 cuts raw input at the first NUL.
 # Usage: json=$(__gash_json_arr "${files[@]}")
-__gash_json_arr() {
-    if (($# == 0)); then
-        printf '[]'
-        return 0
-    fi
-    if __gash_compat_ready; then
-        printf '%s\0' "$@" | __gash_compat json arr
-        return
-    fi
-    # No binary: the Bash escaping (raw bytes kept).
-    local out="" v e sep=""
-    for v in "$@"; do
-        __gash_json_escape_to e "$v"
-        out+="${sep}\"${e}\""
-        sep=","
-    done
-    printf '[%s]\n' "$out"
-}
+# shellcheck disable=SC2120
+__gash_json_arr() { __gash_cold __gash_json_arr 8a36f5a5 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Shell Utilities
@@ -362,59 +220,16 @@ __gash_expand_tilde_path() {
 # options: a word starting with "-" is a directory name like any other, so
 # GASH_PATH_ADD='-h /opt/x' prints no help and adds /opt/x (LEDGER SHELL-08).
 # Usage: __gash_path_prepend DIR...
-__gash_path_prepend() {
-    local dir i
-    for ((i = $#; i >= 1; i--)); do
-        dir="${!i}"
-        if [[ "$dir" == \~/* ]]; then
-            dir="$HOME/${dir:2}"
-        elif [[ "$dir" == "~" ]]; then
-            dir="$HOME"
-        fi
-        dir="${dir%/}"
-        [[ -n "$dir" && -d "$dir" ]] || continue
-        [[ ":$PATH:" == *":$dir:"* ]] && continue
-        PATH="$dir${PATH:+:$PATH}"
-    done
-    export PATH
-    return 0
-}
+# shellcheck disable=SC2120
+__gash_path_prepend() { __gash_cold __gash_path_prepend 9b0caafa && "${FUNCNAME[0]}" "$@"; }
 
 # Put directories at the front of PATH (or the end with --append), once
 # each and in the order given. Directories that do not exist are skipped (a
 # toolchain installed later appears in the next shell); one already in PATH
 # keeps its place.
 # Usage: path_add [--append] DIR...
-path_add() {
-    needs_help "path_add" "path_add [--append] DIR..." \
-        "Add directories to PATH once each, skipping missing ones." "${1-}" && return
-
-    local append=0 dir i
-    local -a dirs=()
-    if [[ "${1-}" == "--append" ]]; then
-        append=1
-        shift
-    fi
-    # Prepending in reverse keeps the order given: path_add a b -> a:b:PATH.
-    if ((append)); then
-        dirs=("$@")
-    else
-        for ((i = $#; i >= 1; i--)); do dirs+=("${!i}"); done
-    fi
-    for dir in "${dirs[@]}"; do
-        dir="$(__gash_expand_tilde_path "$dir")"
-        dir="${dir%/}"
-        [[ -n "$dir" && -d "$dir" ]] || continue
-        [[ ":$PATH:" == *":$dir:"* ]] && continue
-        if ((append)); then
-            PATH="${PATH:+$PATH:}$dir"
-        else
-            PATH="$dir${PATH:+:$PATH}"
-        fi
-    done
-    export PATH
-    return 0
-}
+# shellcheck disable=SC2120
+path_add() { __gash_cold path_add 70f2cba7 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Plans, steps and downloads (apt-style)
@@ -426,70 +241,21 @@ path_add() {
 
 # Bytes to IEC units with one decimal: 0 B, 1.5 KiB, 142.3 MiB.
 # Usage: __gash_human_size BYTES
-__gash_human_size() {
-    local size="${1-0}" rem=0 i=0
-    local -a units=(B KiB MiB GiB TiB PiB EiB)
-    [[ "$size" =~ ^[0-9]+$ ]] || size=0
-    while ((size >= 1024 && i < ${#units[@]} - 1)); do
-        rem=$(((size * 10 / 1024) % 10))
-        size=$((size / 1024))
-        i=$((i + 1))
-    done
-    if ((i == 0)); then
-        printf '%d %s' "$size" "${units[0]}"
-    else
-        printf '%d.%d %s' "$size" "$rem" "${units[$i]}"
-    fi
-}
+# shellcheck disable=SC2120
+__gash_human_size() { __gash_cold __gash_human_size 3e4a7bc8 && "${FUNCNAME[0]}" "$@"; }
 
 # Ask "Do you want to continue? [Y/n] " after a plan has been printed (Enter
 # means yes), rendered like needs_confirm_prompt. ASSUME_YES=1, from a -y flag, skips the question. Without a
 # terminal, or in headless mode, it refuses instead of waiting for input.
 # Usage: __gash_confirm_plan ASSUME_YES
-__gash_confirm_plan() {
-    local assume_yes="${1-0}" answer=""
-    [[ "$assume_yes" == "1" ]] && return 0
-    if [[ "${GASH_HEADLESS-}" == "1" ]] || ! { : </dev/tty; } 2>/dev/null; then
-        __gash_error "No terminal to ask for confirmation: pass -y to go ahead."
-        return 1
-    fi
-    __gash_ask_render "Do you want to continue?" "Y/n"
-    if ! { read -r answer </dev/tty; } 2>/dev/null; then
-        printf '\n' >&2
-        return 1
-    fi
-    [[ -z "$answer" || "$answer" =~ ^[Yy]([Ee][Ss])?$ ]] && return 0
-    __gash_info "Aborted."
-    return 1
-}
+# shellcheck disable=SC2120
+__gash_confirm_plan() { __gash_cold __gash_confirm_plan 3898c86a && "${FUNCNAME[0]}" "$@"; }
 
 # "Message... done" around a command; its stdout passes through, and the
 # line ends in "failed" with the command's status when it fails.
 # Usage: __gash_task "Reading the remote index" command [args...]
-__gash_task() {
-    local msg="${1-}" rc=0
-    shift
-    if __gash_stderr_fancy; then
-        printf '%s%s%s %s... ' "$__GASH_COLOR_INFO" "$__GASH_GLYPH_INFO" "$__GASH_COLOR_OFF" "$msg" >&2
-    else
-        printf '%s... ' "$msg" >&2
-    fi
-    "$@" || rc=$?
-    if ((rc == 0)); then
-        if __gash_stderr_fancy; then
-            printf '%sdone%s\n' "$__GASH_COLOR_SUCCESS" "$__GASH_COLOR_OFF" >&2
-        else
-            printf 'done\n' >&2
-        fi
-    else
-        if __gash_stderr_fancy; then
-            printf '%sfailed%s\n' "$__GASH_COLOR_ERROR" "$__GASH_COLOR_OFF" >&2
-        else
-            printf 'failed\n' >&2
-        fi
-    fi
-    return "$rc"
-}
+# shellcheck disable=SC2120
+__gash_task() { __gash_cold __gash_task 5cc82a5d && "${FUNCNAME[0]}" "$@"; }
 
 # Content-Length of URL after redirects, 0 when the server does not say.
 # Usage: __gash_remote_size URL

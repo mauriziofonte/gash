@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -240,18 +241,32 @@ func (m *Module) doctorShims(p ui.Printer, dir string, release bool) int {
 		p.Error("  cannot generate the shims: " + err.Error())
 		return 1
 	}
-	issues := 0
+	issues, cold, coldOK := 0, 0, 0
 	for _, f := range files {
 		got, err := m.readFile(dir + "/" + f.Path)
+		isCold := strings.HasPrefix(f.Path, compatgen.ColdDir)
+		if isCold {
+			cold++
+		}
 		switch {
+		case err != nil && isCold:
+			// The definitions a load leaves out: one missing breaks its
+			// function at the first call.
+			p.Error("  " + f.Path + " — MISSING")
+			issues++
 		case err != nil:
 			continue
+		case bytes.Equal(got, f.Data) && isCold:
+			coldOK++
 		case bytes.Equal(got, f.Data):
 			p.Success("  " + f.Path)
 		default:
 			p.Error("  " + f.Path + " — differs from gash " + m.version + " (regenerate: gash __compat generate --out " + dir + ")")
 			issues++
 		}
+	}
+	if cold > 0 && coldOK == cold {
+		p.Success(fmt.Sprintf("  %s (%d definitions)", compatgen.ColdDir, cold))
 	}
 	return issues
 }

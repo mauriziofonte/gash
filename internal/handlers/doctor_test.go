@@ -243,7 +243,8 @@ func TestDoctorChecksTheShippedFiles(t *testing.T) {
 		checked["lib/modules/"+m+".sh"] = true
 	}
 	for _, f := range files {
-		require.True(t, checked[f.Path], f.Path)
+		// The cold definitions are checked with the shims.
+		require.True(t, checked[f.Path] || strings.HasPrefix(f.Path, compatgen.ColdDir), f.Path)
 	}
 	require.ElementsMatch(t, compatgen.CommittedModules, selfmgmt.DoctorModules)
 	for _, f := range []string{"VERSION", "quotes/list.txt", ".gash_env.template"} {

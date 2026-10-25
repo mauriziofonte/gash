@@ -5,8 +5,9 @@ package fsscan
 import (
 	"math"
 	"math/big"
-	"regexp"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // maxInt64 is 2^63-1, the largest size a scanner accepts (FS-22).
@@ -19,7 +20,7 @@ const SizeGrammar = "bytes, or a number with up to 6 decimals and K, M, G, T, P 
 // sizeRe is the 3.0 size grammar: up to 15 integer digits, up to 6
 // decimals, then an optional IEC unit (K..E, optionally followed by iB, i
 // or B) or a bare B. Matched case-insensitively, no spaces.
-var sizeRe = regexp.MustCompile(`^([0-9]{1,15})(?:\.([0-9]{1,6}))?(?:([KMGTPE])(?:IB|I|B)?|B)?$`)
+var sizeRe = lazyre.MustCompile(`^([0-9]{1,15})(?:\.([0-9]{1,6}))?(?:([KMGTPE])(?:IB|I|B)?|B)?$`)
 
 // ParseSize is the native size parser of the five scanners (FS-11): value
 // = ceil(number x 1024^k) for unit letter k (K=1 .. E=6). ok is false for

@@ -3,10 +3,10 @@
 package state
 
 import (
-	"regexp"
 	"slices"
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Ports are the ports Apache listens on.
@@ -50,7 +50,7 @@ func DefaultSettings(ports Ports, autostart string) Settings {
 	}
 }
 
-var moduleNameRE = regexp.MustCompile(`^[a-z0-9_]+$`)
+var moduleNameRE = lazyre.MustCompile(`^[a-z0-9_]+$`)
 
 // ModuleName reports an Apache module name as hte.toml takes it: the
 // file mod_<name>.so without its prefix and suffix ("ssl", "proxy_fcgi").
