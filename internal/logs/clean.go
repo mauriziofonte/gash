@@ -53,7 +53,6 @@ type Result struct {
 // cleaner carries the seam for the privileged path.
 type cleaner struct {
 	run     runner.Runner
-	self    string // the gash binary path, for sudo (unused in the direct path)
 	dryRun  bool
 	useSudo bool
 }

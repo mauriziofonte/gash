@@ -31,8 +31,3 @@ type Error struct {
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Details }
-
-// badArg builds an invalid_windows_argument error.
-func badArg(details, hint string) *Error {
-	return &Error{Code: CodeBadArgument, Details: details, Hint: hint}
-}

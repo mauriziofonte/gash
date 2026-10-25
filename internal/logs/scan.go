@@ -73,7 +73,9 @@ func scan(roots []string, o scanOptions) *Report {
 			continue
 		}
 		base := depth(abs)
-		filepath.WalkDir(abs, func(p string, d fs.DirEntry, err error) error {
+		// The walk func never returns an error (it records unreadable
+		// entries and goes on), so WalkDir's own return is always nil.
+		_ = filepath.WalkDir(abs, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				if d != nil && d.IsDir() {
 					return fs.SkipDir

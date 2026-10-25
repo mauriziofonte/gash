@@ -158,7 +158,7 @@ func (r *run) doDoctor() error {
 		}
 	}
 	if r.asJSON {
-		r.emitJSON(map[string]any{"checks": lines, "attention": failed})
+		_ = r.emitJSON(map[string]any{"checks": lines, "attention": failed})
 		if failed > 0 {
 			r.status = 1
 		}
