@@ -164,6 +164,39 @@ func (k *readCollector) add(n int, sep byte, text []byte) {
 	k.res.omitted++
 }
 
+// spent reports that no further line can be kept: --head is full, or
+// (without --head and --tail) --max-bytes was reached.
+func (k *readCollector) spent() bool {
+	if k.spec.head > 0 {
+		return len(k.res.head) >= k.spec.head
+	}
+	return k.spec.tail == 0 && k.res.omitted > 0
+}
+
+// countRest counts the lines left in r (a last line without a newline
+// counts).
+func countRest(r io.Reader) (int, error) {
+	buf := make([]byte, 64<<10)
+	n, last := 0, byte('\n')
+	for {
+		got, err := r.Read(buf)
+		if chunk := buf[:got]; len(chunk) > 0 {
+			n += bytes.Count(chunk, []byte{'\n'})
+			last = chunk[len(chunk)-1]
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+	if last != '\n' {
+		n++
+	}
+	return n, nil
+}
+
 // done returns the selection, the tail in order, with --max-bytes applied
 // to the kept lines when --head or --tail chose them.
 func (k *readCollector) done() readResult {
@@ -298,6 +331,18 @@ func selectLines(ctx context.Context, r io.Reader, spec *readSpec) (readResult, 
 		if len(spec.around) == 0 && lastRange > 0 && n >= lastRange && spec.tail == 0 {
 			res := k.done()
 			res.total = -1
+			return res, nil
+		}
+		// A whole-file read whose budget is spent only counts the rest.
+		if whole && spec.tail == 0 && k.spent() {
+			rest, err := countRest(br)
+			if err != nil {
+				return readResult{}, err
+			}
+			res := k.done()
+			res.omitted += rest
+			res.selected += rest
+			res.total = n + rest
 			return res, nil
 		}
 	}
