@@ -50,44 +50,15 @@ func argError(code, details, hint string) (*remote.Plan, bool) {
 // the remote home, then realpath -m: GNU realpath when it is there, else
 // cd -P and readlink -f), and the rails functions gash_forbidden and
 // gash_secret.
-const fbPrelude = `LC_ALL=C; export LC_ALL
-NL='
-'
-TAB=$(printf '\t')
-gash_err() { printf '%s err %s %s %s\n' "$N" "$1" "$2" "$3" >&2; exit 1; }
-gash_resolve() {
-  case $1 in '~') set -- "$HOME" ;; '~/'*) set -- "$HOME/${1#'~/'}" ;; esac
-  if gr_r=$(realpath -m -- "$1" 2>/dev/null) && [ -n "$gr_r" ]; then printf '%s\n' "$gr_r"; return 0; fi
-  case $1 in /*) gr_p=$1 ;; *) gr_p=$(pwd -P)/$1 ;; esac
-  gr_t=
-  while [ ! -e "$gr_p" ] && [ ! -L "$gr_p" ]; do
-    gr_t=/${gr_p##*/}$gr_t
-    gr_p=${gr_p%/*}
-    [ -n "$gr_p" ] || { gr_p=/; break; }
-  done
-  if [ -d "$gr_p" ]; then
-    gr_p=$(cd -P -- "$gr_p" 2>/dev/null && pwd -P)
-  elif gr_r=$(readlink -f -- "$gr_p" 2>/dev/null) && [ -n "$gr_r" ]; then
-    gr_p=$gr_r
-  else
-    gr_d=$(cd -P -- "${gr_p%/*}/" 2>/dev/null && pwd -P)
-    gr_p=${gr_d%/}/${gr_p##*/}
-  fi
-  gr_o=${gr_p%/}
-  gr_i=$IFS; IFS=/; set -f
-  for gr_s in $gr_t; do
-    case $gr_s in ''|.) ;; *) gr_o=$gr_o/$gr_s ;; esac
-  done
-  set +f; IFS=$gr_i
-  printf '%s\n' "${gr_o:-/}"
+func fbPrelude() string {
+	return "LC_ALL=C; export LC_ALL\nNL='\n'\nTAB=$(printf '\\t')\n" + remote.ShErr() + remote.ShResolve()
 }
-`
 
 // fbHeader is the start of a fallback body: the prelude, the rails
 // functions and the shell variables of vars (NAME, value), quoted.
 func fbHeader(vars ...string) string {
 	var b strings.Builder
-	b.WriteString(fbPrelude)
+	b.WriteString(fbPrelude())
 	b.WriteString(remote.ShForbidden())
 	b.WriteString(remote.ShSecret())
 	b.WriteString(remote.ShException())
@@ -112,13 +83,7 @@ var fbHints = map[string]string{
 
 // fbFrame is one "<nonce> KIND REST" line of the fallback's stderr.
 func fbFrame(stderr []byte, nonce, kind string) (string, bool) {
-	prefix := nonce + " " + kind + " "
-	for _, l := range strings.Split(string(stderr), "\n") {
-		if strings.HasPrefix(l, prefix) {
-			return l[len(prefix):], true
-		}
-	}
-	return "", false
+	return remote.Frame(stderr, nonce, kind)
 }
 
 // fbHint maps an error frame (code, key, details) to the envelope's
@@ -138,15 +103,11 @@ func fbError(stderr []byte, nonce string, hint fbHint) ([]byte, bool) {
 
 // fbEnvelope is the envelope of an error frame, or false.
 func fbEnvelope(stderr []byte, nonce string, hint fbHint) (contract.Envelope, bool) {
-	rest, ok := fbFrame(stderr, nonce, "err")
+	code, key, details, ok := remote.ErrFrame(stderr, nonce)
 	if !ok {
 		return contract.Envelope{}, false
 	}
-	parts := strings.SplitN(rest, " ", 3)
-	for len(parts) < 3 {
-		parts = append(parts, "")
-	}
-	code, key, details := parts[0], parts[1], parts[2]
+	rest := code + " " + key + " " + details
 	h := fbHints[key]
 	if hint != nil {
 		details, h = hint(code, key, details)
