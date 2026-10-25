@@ -7,6 +7,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | Function | Alias | Description |
 |---|---|---|
 | [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
+| [`llm_db_databases`](#llm-db-databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
 | [`llm_db_sample`](#llm-db-sample) |  | Sample rows from a table (default 5 rows) |
@@ -59,6 +60,47 @@ as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
 ```
 
+## llm_db_databases
+
+List the databases of a connection (replaces SHOW DATABASES, psql -l)
+
+#### Usage
+
+```text
+llm_db_databases [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--format json|jsonl|tsv|table] [--scalar]
+```
+
+#### Options
+
+```text
+-c, --connection NAME  Connection from ~/.gash_env (default: default)
+-d, --database NAME    Database to connect to (any one works)
+-f, --file PATH        SQLite database file
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
+```
+
+#### Examples
+
+```bash
+llm_db_databases -c default
+llm_db_databases -c postgres --format tsv
+```
+
+#### Notes
+
+```text
+Replaces mysql -e 'SHOW DATABASES' and psql -l. Output:
+{data: [names], rows, query_time}, sorted: every schema MySQL/MariaDB
+shows (system ones included), every PostgreSQL database that is not a
+template, "main" for an SQLite file. The connection needs no
+database here (PostgreSQL then connects to "postgres"). With
+--format jsonl, tsv or table the names are rows of a "name" column
+and the metadata is one JSON line on stderr.
+```
+
+See also: `llm_db_tables`, `llm_db_query`
+
 ## llm_db_explain
 
 Show query execution plan (EXPLAIN)
@@ -67,6 +109,7 @@ Show query execution plan (EXPLAIN)
 
 ```text
 llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
+               [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -76,6 +119,8 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
 --analyze              Run the query to measure it (still read-only)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -83,6 +128,13 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 ```bash
 llm_db_explain "SELECT * FROM users WHERE email LIKE '%@example.com'" -c default
 llm_db_explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c legacy --analyze
+```
+
+#### Notes
+
+```text
+--format jsonl, tsv or table print the plan rows (a JSON plan as
+compact JSON in its cell) and the metadata as one JSON line on stderr.
 ```
 
 See also: `llm_db_query`
@@ -94,7 +146,8 @@ Read-only SQL query (JSON output)
 #### Usage
 
 ```text
-llm_db_query "SQL" [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]
+llm_db_query "SQL" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]
+             [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
@@ -108,6 +161,10 @@ llm_db_query "SELECT * FROM orders WHERE status='pending'" -c legacy
 
 # Query a SQLite database (no connection config needed)
 llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
+
+# Rows as TSV, one value alone
+llm_db_query "SELECT id, email FROM users" -c default --format tsv
+llm_db_query "SELECT count(*) FROM orders" -c default --scalar
 ```
 
 #### Options
@@ -118,6 +175,8 @@ llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
                        letters, digits, _ $ . - only)
 -f, --file PATH        SQLite database file
 -n, --limit N          Row cap (default 100; also -r, --rows)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Notes
@@ -131,6 +190,13 @@ PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT
 statement timeout). Output: {data, rows, query_time}. -h is help: the
 host comes from the connection URL. Error details are the database
 driver's message.
+--format jsonl, tsv or table print the rows themselves (replaces
+llm_db_query ... | jq -c '.data[]' and python3 reshaping): SQL NULL is
+null, \N in TSV and an empty table cell on every engine; the metadata
+{rows, query_time, truncated} is one JSON line on stderr, with
+"truncated": true when -n cut rows. --scalar prints the value of a
+1x1 result as a TSV cell (not_a_scalar, RETRY, with the actual shape
+otherwise). --format json is the envelope, unchanged.
 ```
 
 See also: `llm_db_tables`, `llm_db_schema`, `llm_db_sample`, `llm_db_explain`
@@ -142,7 +208,8 @@ Sample rows from a table (default 5 rows)
 #### Usage
 
 ```text
-llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [-n N]
+llm_db_sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
@@ -160,6 +227,8 @@ llm_db_sample logs -f ./app.db -n 3
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
 -n, --limit N          Rows to return (default 5)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 See also: `llm_db_query`, `llm_db_schema`
@@ -172,6 +241,8 @@ Show table schema (columns, types, keys)
 
 ```text
 llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -180,6 +251,9 @@ llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
+--all                  Every table in one call, each row led by "table"
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -188,6 +262,14 @@ llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 llm_db_schema users -c default
 llm_db_schema orders -c legacy
 llm_db_schema sessions -f ./app.db
+llm_db_schema --all -c default --format tsv
+```
+
+#### Notes
+
+```text
+--all replaces one llm_db_schema call per table: the rows of every
+table llm_db_tables lists, sorted by table and column position.
 ```
 
 See also: `llm_db_tables`, `llm_db_query`
@@ -199,7 +281,8 @@ List database tables (JSON array)
 #### Usage
 
 ```text
-llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -208,6 +291,9 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
+--counts               [{name, rows}]: the row count of each table
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -216,6 +302,15 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 llm_db_tables -c default
 llm_db_tables -c postgres
 llm_db_tables -f ./app.db
+llm_db_tables -c default --counts --format tsv
+```
+
+#### Notes
+
+```text
+--counts: rows is exact on SQLite (count(*)), the engine's estimate on
+MySQL/MariaDB (information_schema) and PostgreSQL (pg_class), null
+where the engine has none (a view, a table not analyzed yet).
 ```
 
 See also: `llm_db_query`, `llm_db_schema`

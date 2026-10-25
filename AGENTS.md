@@ -100,11 +100,12 @@ of 1024). Paths containing a tab or a newline are left out of the results.
 ### 3.3 Databases (read-only)
 
 ```
-llm_db_query   "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [-n ROWS]   # default 100 rows
-llm_db_tables         [-c CONN | -f SQLITE_FILE] [-d DB]
-llm_db_schema  TABLE  [-c CONN | -f SQLITE_FILE] [-d DB]
-llm_db_sample  TABLE  [-c CONN | -f SQLITE_FILE] [-d DB] [-n N]       # default 5
-llm_db_explain "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [--analyze]
+llm_db_query   "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [-n ROWS] [--format F] [--scalar]  # default 100 rows
+llm_db_tables         [-c CONN | -f SQLITE_FILE] [-d DB] [--counts] [--format F] [--scalar]
+llm_db_schema  TABLE|--all [-c CONN | -f SQLITE_FILE] [-d DB] [--format F] [--scalar]
+llm_db_sample  TABLE  [-c CONN | -f SQLITE_FILE] [-d DB] [-n N] [--format F] [--scalar]      # default 5
+llm_db_explain "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [--analyze] [--format F] [--scalar]
+llm_db_databases      [-c CONN | -f SQLITE_FILE] [-d DB] [--format F] [--scalar]
 ```
 
 Connections live in `~/.gash_env` as `DB:name=driver://user:pass@host:port/db`
@@ -126,6 +127,26 @@ line. `llm_db_query` adds a
 slow_query_explain field (the plan) when a query takes 100 ms or more
 (the query alone: connecting and the session setup do not count).
 `--analyze` executes the query to measure it, still read-only.
+
+Output options (3.4): `--format json` is the envelope above, byte for byte
+(the default). `--format jsonl`, `tsv` or `table` print the rows themselves
+(3.6), with SQL NULL as `null`, `\N` or an empty cell on every engine
+(MySQL/MariaDB included; the envelope keeps its `"NULL"` string), REALs in
+their shortest form and PostgreSQL columns in the query's order; the
+metadata `{"query_time","rows"}` is one JSON line on stderr, plus
+`"truncated":true` when the `-n` cap cut rows (the count beyond it is
+unknown) and `slow_query_explain` for a slow query. `--scalar` prints the
+value of a 1x1 result as a TSV cell (`\N` for NULL), nothing on stderr;
+any other shape is `not_a_scalar` (RETRY) with the shape in `details`
+(`3 rows x 2 columns`, `100+ rows x 1 columns`). `llm_db_tables --counts`
+returns `[{name, rows}]`: exact on SQLite (`count(*)`), the engine's
+estimate on MySQL/MariaDB (`information_schema.tables`) and PostgreSQL
+(`pg_class.reltuples`), `null` where there is none (a view, a table
+PostgreSQL has not analyzed). `llm_db_schema --all` returns the schema rows
+of every table `llm_db_tables` lists in one call, each led by a `table` key,
+sorted by table and column position. `llm_db_databases` lists the
+databases (`{"data":[names]}`, sorted; system schemas included; `main` for
+SQLite) and needs no database in the connection.
 
 ### 3.4 Git, system, project
 

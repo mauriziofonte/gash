@@ -22,6 +22,10 @@ unset __gash_here
 
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
+llm_db_databases() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_databases "$@"
+}
 llm_db_explain() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_db_explain "$@"

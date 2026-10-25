@@ -1043,6 +1043,7 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_db_databases | function | pure output | new | The databases of a connection (SHOW DATABASES, psql -l) through the read-only session, no database needed in the URL (plan D3) | gash llm_db_databases | internal/db rows_test.go (TestSQLiteCatalog, TestMySQLRowFormats, TestPgsqlCatalog), llm_db_databases.txtar |
 
 ### Git (G1-G7)
 

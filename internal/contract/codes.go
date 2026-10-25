@@ -209,6 +209,7 @@ var codeTable = []Code{
 
 	// New in 3.4: agent toolkit, data (llm_db_* formats, llm_json,
 	// llm_csv, llm_config formats, llm_dotenv, llm_date).
+	{"not_a_scalar", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, git (llm_git_* extensions,
 	// llm_git_overview, llm_git_show, agent_git_commit).

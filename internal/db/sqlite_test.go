@@ -27,7 +27,15 @@ func TestSQLiteMatches2x(t *testing.T) {
 	mustWrite(t, filepath.Join(d, "plain.txt"), "not sqlite\n", 0o644)
 	m := frozen(New())
 	env := baseEnv(home, nil)
-	for _, args := range [][]string{
+	for _, args := range sqliteCases(d, db) {
+		same(t, m, d, env, args[0], args[1:]...)
+	}
+}
+
+// sqliteCases are the llm_db_* calls on the fixture db (in dir d) that
+// the 2.x comparison and the --format json golden test (rows_test.go) run.
+func sqliteCases(d, db string) [][]string {
+	return [][]string{
 		{"llm_db_tables", "-f", db},
 		{"llm_db_tables", "extra", "-f", db},
 		{"llm_db_schema", "users", "-f", db},
@@ -95,8 +103,6 @@ func TestSQLiteMatches2x(t *testing.T) {
 		{"llm_db_schema", "-h"},
 		{"llm_db_sample", "x", "-h"},
 		{"llm_db_explain", "-h", "SELECT 1"},
-	} {
-		same(t, m, d, env, args[0], args[1:]...)
 	}
 }
 

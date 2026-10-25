@@ -2338,16 +2338,23 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_db_explain \"QUERY\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]\n" +
+				"                 [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
 				"  --analyze              Run the query to measure it (still read-only)\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_explain \"SELECT * FROM users WHERE email LIKE '%@example.com'\" -c default\n" +
-				"  llm_db_explain \"SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id\" -c legacy --analyze",
+				"  llm_db_explain \"SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id\" -c legacy --analyze\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --format jsonl, tsv or table print the plan rows (a JSON plan as\n" +
+				"  compact JSON in its cell) and the metadata as one JSON line on stderr.",
 		},
 		Fallback:  &Usage{Program: "llm_db_explain", Usage: "llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]", Description: "Analyze query execution plan (EXPLAIN). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2372,7 +2379,8 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_db_tables llm_db_schema llm_db_sample llm_db_explain",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_query \"SQL\" [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]\n" +
+				"  llm_db_query \"SQL\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]\n" +
+				"               [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Query using the default connection\n" +
@@ -2384,12 +2392,18 @@ var baseFunctions = []Function{
 				"  # Query a SQLite database (no connection config needed)\n" +
 				"  llm_db_query \"SELECT * FROM users\" -f ./data/app.db -n 20\n" +
 				"\n" +
+				"  # Rows as TSV, one value alone\n" +
+				"  llm_db_query \"SELECT id, email FROM users\" -c default --format tsv\n" +
+				"  llm_db_query \"SELECT count(*) FROM orders\" -c default --scalar\n" +
+				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's;\n" +
 				"                         letters, digits, _ $ . - only)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
 				"  -n, --limit N          Row cap (default 100; also -r, --rows)\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Read-only, enforced twice: one statement starting with SELECT, WITH,\n" +
@@ -2399,7 +2413,14 @@ var baseFunctions = []Function{
 				"  PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT\n" +
 				"  statement timeout). Output: {data, rows, query_time}. -h is help: the\n" +
 				"  host comes from the connection URL. Error details are the database\n" +
-				"  driver's message.",
+				"  driver's message.\n" +
+				"  --format jsonl, tsv or table print the rows themselves (replaces\n" +
+				"  llm_db_query ... | jq -c '.data[]' and python3 reshaping): SQL NULL is\n" +
+				"  null, \\N in TSV and an empty table cell on every engine; the metadata\n" +
+				"  {rows, query_time, truncated} is one JSON line on stderr, with\n" +
+				"  \"truncated\": true when -n cut rows. --scalar prints the value of a\n" +
+				"  1x1 result as a TSV cell (not_a_scalar, RETRY, with the actual shape\n" +
+				"  otherwise). --format json is the envelope, unchanged.",
 		},
 		Fallback:  &Usage{Program: "llm_db_query", Usage: "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]", Description: "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2424,7 +2445,8 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [-n N]\n" +
+				"  llm_db_sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]\n" +
+				"                [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_sample users -c default\n" +
@@ -2435,7 +2457,9 @@ var baseFunctions = []Function{
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
-				"  -n, --limit N          Rows to return (default 5)",
+				"  -n, --limit N          Rows to return (default 5)\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result",
 		},
 		Fallback:  &Usage{Program: "llm_db_sample", Usage: "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n N]", Description: "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2461,16 +2485,26 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"  llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"                [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
+				"  --all                  Every table in one call, each row led by \"table\"\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_schema users -c default\n" +
 				"  llm_db_schema orders -c legacy\n" +
-				"  llm_db_schema sessions -f ./app.db",
+				"  llm_db_schema sessions -f ./app.db\n" +
+				"  llm_db_schema --all -c default --format tsv\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --all replaces one llm_db_schema call per table: the rows of every\n" +
+				"  table llm_db_tables lists, sorted by table and column position.",
 		},
 		Fallback:  &Usage{Program: "llm_db_schema", Usage: "llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]", Description: "Show table schema (JSON). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2495,17 +2529,27 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]\n" +
+				"                [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
+				"  --counts               [{name, rows}]: the row count of each table\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_tables -c default\n" +
 				"  llm_db_tables -c postgres\n" +
-				"  llm_db_tables -f ./app.db",
+				"  llm_db_tables -f ./app.db\n" +
+				"  llm_db_tables -c default --counts --format tsv\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --counts: rows is exact on SQLite (count(*)), the engine's estimate on\n" +
+				"  MySQL/MariaDB (information_schema) and PostgreSQL (pg_class), null\n" +
+				"  where the engine has none (a view, a table not analyzed yet).",
 		},
 		Fallback:  &Usage{Program: "llm_db_tables", Usage: "llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]", Description: "List database tables (JSON array). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
