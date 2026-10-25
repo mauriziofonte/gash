@@ -1,0 +1,51 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash logs (new in 3.4, no 2.x spec): scan reports log files grouped by
+# category, clean reclaims space (deletes rotated copies, truncates live
+# logs with --truncate). An explicit PATH keeps the scan inside $WORK, so
+# the host's /var/log never enters the test. Headless clean without --yes
+# refuses; --json emits one object.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+mkdir app/var/log/nginx
+mkdir app/storage/logs
+exec bash -c 'printf "x%.0s" $(seq 1 5000) > app/var/log/nginx/access.log'
+exec bash -c 'printf "y%.0s" $(seq 1 3000) > app/var/log/nginx/access.log.1'
+exec bash -c 'printf "z%.0s" $(seq 1 2000) > app/var/log/nginx/error.log.2.gz'
+exec bash -c 'printf "l%.0s" $(seq 1 8000) > app/storage/logs/laravel.log'
+exec bash -c 'echo not-a-log > app/storage/logs/keep.md'
+
+# --- scan groups the logs and leaves keep.md out
+exec bash -c 'source "$GASH_SH"; gash logs scan "$WORK/app"'
+stdout 'web-server'
+stdout 'framework'
+! stdout 'keep\.md'
+
+# --- scan --json carries the totals
+exec bash -c 'source "$GASH_SH"; gash logs scan "$WORK/app" --json'
+stdout '"total_files":4'
+stdout '"category":"web-server"'
+
+# --- headless clean refuses without --yes, and changes nothing
+! exec bash -c 'source "$GASH_SH"; gash logs clean "$WORK/app"'
+stderr 'pass --yes'
+exists app/var/log/nginx/access.log.1
+
+# --- dry-run --json previews without touching files
+exec bash -c 'source "$GASH_SH"; gash logs clean "$WORK/app" --yes --dry-run --truncate --json'
+stdout '"dry_run":true'
+exists app/var/log/nginx/access.log.1
+
+# --- real clean: rotated deleted, live logs kept but truncated
+exec bash -c 'source "$GASH_SH"; gash logs clean "$WORK/app" --yes --truncate'
+stderr 'Reclaimed'
+! exists app/var/log/nginx/access.log.1
+! exists app/var/log/nginx/error.log.2.gz
+exists app/var/log/nginx/access.log
+exists app/storage/logs/laravel.log
+
+# --- the live logs are now empty
+exec bash -c 'test ! -s "$WORK/app/var/log/nginx/access.log"'
+exec bash -c 'test ! -s "$WORK/app/storage/logs/laravel.log"'
