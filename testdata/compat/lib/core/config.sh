@@ -77,9 +77,11 @@ declare -g __GASH_SETTINGS_KNOWN=" GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_HIS
 # =============================================================================
 
 # Decode URL-encoded string (%XX -> char)
+# shellcheck disable=SC2120
 __gash_url_decode() { __gash_cold __gash_url_decode fb41d0cf && "${FUNCNAME[0]}" "$@"; }
 
 # Encode special characters for URL (char -> %XX)
+# shellcheck disable=SC2120
 __gash_url_encode() { __gash_cold __gash_url_encode eb8bdec4 && "${FUNCNAME[0]}" "$@"; }
 
 # =============================================================================
@@ -89,11 +91,13 @@ __gash_url_encode() { __gash_cold __gash_url_encode eb8bdec4 && "${FUNCNAME[0]}"
 # Check that the config file is private: owned by the current user and with
 # no group or other permission bits (600, 400, 700 are all fine). Symlinks are followed (dotfile
 # managers commonly symlink ~/.gash_env).
+# shellcheck disable=SC2120
 __gash_check_env_perms() { __gash_cold __gash_check_env_perms 3a4761d6 && "${FUNCNAME[0]}" "$@"; }
 
 # Load and parse ~/.gash_env (cached in globals for the life of the shell).
 # Callers that read values through $(...) should call __gash_load_env first,
 # so the cache is filled in the parent shell and not rebuilt per subshell.
+# shellcheck disable=SC2120
 __gash_load_env() { __gash_cold __gash_load_env f737646d && "${FUNCNAME[0]}" "$@"; }
 
 # Apply settings read from ~/.gash_env as shell variables. A variable that
@@ -101,6 +105,7 @@ __gash_load_env() { __gash_cold __gash_load_env f737646d && "${FUNCNAME[0]}" "$@
 # With NAMEs, only those settings are applied (headless mode skips the
 # ones that only shape the interactive shell).
 # Usage: __gash_apply_settings [NAME...]
+# shellcheck disable=SC2120
 __gash_apply_settings() { __gash_cold __gash_apply_settings bcb39eec && "${FUNCNAME[0]}" "$@"; }
 
 # Apply the named settings from ~/.gash_env as shell variables, reading the
@@ -177,6 +182,7 @@ __gash_get_ssh_keys() {
 
 # Get database URL by connection name
 # Returns URL or empty string if not found
+# shellcheck disable=SC2120
 __gash_get_db_url() { __gash_cold __gash_get_db_url 7b49d93a && "${FUNCNAME[0]}" "$@"; }
 
 # Parse database URL into components
@@ -185,6 +191,7 @@ __gash_get_db_url() { __gash_cold __gash_get_db_url 7b49d93a && "${FUNCNAME[0]}"
 # All locals carry the __pdu_ prefix so callers can pass any reasonable
 # variable name without hitting bash nameref shadowing (a caller var named
 # like one of our locals would silently lose the assignment).
+# shellcheck disable=SC2120
 __gash_parse_db_url() { __gash_cold __gash_parse_db_url 0e472462 && "${FUNCNAME[0]}" "$@"; }
 
 # =============================================================================
@@ -193,6 +200,7 @@ __gash_parse_db_url() { __gash_cold __gash_parse_db_url 0e472462 && "${FUNCNAME[
 
 # Get remote target (user@host) by alias
 # Returns target or empty string (rc 1) if not found
+# shellcheck disable=SC2120
 __gash_get_host_target() { __gash_cold __gash_get_host_target 8c5faa9b && "${FUNCNAME[0]}" "$@"; }
 
 # Get all host entries as "alias\ttarget" lines
@@ -226,6 +234,7 @@ gash_env_init() { __gash_call gash_env_init "$@"; }
 
 # Get AI provider token by provider name
 # Returns token or empty string if not found
+# shellcheck disable=SC2120
 __gash_get_ai_token() { __gash_cold __gash_get_ai_token 497b04f1 && "${FUNCNAME[0]}" "$@"; }
 
 # Get first available AI provider name

@@ -199,12 +199,14 @@ __gash_symbols_now() {
 # From a list made by __gash_symbols_now, the part that holds functions
 # (public: those not starting with _) or aliases, into VAR.
 # Usage: __gash_symbols_pick VAR LIST functions|aliases [public]
+# shellcheck disable=SC2120
 __gash_symbols_pick() { __gash_cold __gash_symbols_pick 55b9307c && "${FUNCNAME[0]}" "$@"; }
 
 # Names Gash defined while loading, into the array VAR: present right after
 # it loaded (__GASH_POST_SYMBOLS), absent from the snapshot taken before
 # (__GASH_PRE_SYMBOLS). "public" leaves out names starting with _.
 # Usage: __gash_added_symbols_to VAR functions|aliases [public]
+# shellcheck disable=SC2120
 __gash_added_symbols_to() { __gash_cold __gash_added_symbols_to 69ee11cd && "${FUNCNAME[0]}" "$@"; }
 
 # Snapshot the pre-Gash state for `gash_unload` now, before Gash defines a
@@ -297,7 +299,9 @@ tree_stats() { __gash_call tree_stats "$@"; }
 
 # gash
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+# shellcheck disable=SC2120
 gash() { __gash_cold gash 355db300 && "${FUNCNAME[0]}" "$@"; }
+# shellcheck disable=SC2120
 gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
@@ -313,7 +317,9 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
+# shellcheck disable=SC2120
 gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
+# shellcheck disable=SC2120
 gash_unload() { __gash_cold gash_unload cc4f8d75 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
@@ -400,6 +406,7 @@ __node_latest_installed() {
     __node_installed_versions | tail -1
 }
 
+# shellcheck disable=SC2120
 __node_parse_version_to_major() { __gash_cold __node_parse_version_to_major bfef144f && "${FUNCNAME[0]}" "$@"; }
 
 __node_read_remote_index() {
@@ -408,8 +415,10 @@ __node_read_remote_index() {
     [[ "$__nrri_out" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
+# shellcheck disable=SC2120
 node_upgrade() { __gash_cold node_upgrade 8f4a8f6d && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
+# shellcheck disable=SC2120
 nvm_prune_versions() { __gash_cold nvm_prune_versions a63b75b3 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
@@ -448,6 +457,7 @@ remote_sync_push() {
 
 # ssh
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+# shellcheck disable=SC2120
 gash_ssh_auto_unlock() { __gash_cold gash_ssh_auto_unlock d3161657 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
@@ -480,11 +490,13 @@ history_grep() {
     HISTTIMEFORMAT='' history | __gash_call history_grep "$@"
 }
 ip_public() { __gash_call ip_public "$@"; }
+# shellcheck disable=SC2120
 mkdir_cd() { __gash_cold mkdir_cd 83c6a4ed && "${FUNCNAME[0]}" "$@"; }
 port_kill() { __gash_call port_kill "$@"; }
 process_find() { __gash_call process_find "$@"; }
 process_kill() { __gash_call process_kill "$@"; }
 services_stop() { __gash_call services_stop "$@"; }
+# shellcheck disable=SC2120
 sudo_last() { __gash_cold sudo_last 5d76cf71 && "${FUNCNAME[0]}" "$@"; }
 wsl_compact() { __gash_call wsl_compact "$@"; }
 wsl_explorer() { __gash_call wsl_explorer "$@"; }

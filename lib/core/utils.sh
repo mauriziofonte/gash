@@ -47,6 +47,7 @@ fi
 # Colors are gated via __gash_use_color when available (load+runtime), so
 # the help blob is plain text under GASH_HEADLESS, NO_COLOR, GASH_NO_COLOR,
 # or when stdout is not a TTY.
+# shellcheck disable=SC2120
 needs_help() { __gash_cold needs_help 822ed84d && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -62,6 +63,7 @@ needs_help() { __gash_cold needs_help 822ed84d && "${FUNCNAME[0]}" "$@"; }
 # value inherited from the environment can never ghost-confirm a
 # destructive operation. The prompt goes to stderr so callers captured via
 # $(...) never see the prompt text in the value.
+# shellcheck disable=SC2120
 needs_confirm_prompt() { __gash_cold needs_confirm_prompt 9062bdf9 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -71,11 +73,13 @@ needs_confirm_prompt() { __gash_cold needs_confirm_prompt 9062bdf9 && "${FUNCNAM
 # Path of the program NAME runs as, like `type -P NAME` (first executable
 # file on PATH), into REPLY, without a subshell. Returns 1 when none.
 # Usage: __gash_path_of NAME
+# shellcheck disable=SC2120
 __gash_path_of() { __gash_cold __gash_path_of b3272557 && "${FUNCNAME[0]}" "$@"; }
 
 # Get terminal width (best-effort, errexit-safe).
 # Usage: width=$(__gash_tty_width)
 # Returns: Terminal width in columns (default 80)
+# shellcheck disable=SC2120
 __gash_tty_width() { __gash_cold __gash_tty_width 57814884 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -100,6 +104,7 @@ __gash_trim_ws() {
 # Usage: escaped=$(__gash_json_escape "string with \"quotes\"")
 #        __gash_json_escape_to VAR "string"   (no subshell; VAR must not be
 #        named str, out, ch, code or i)
+# shellcheck disable=SC2120
 __gash_json_escape_to() { __gash_cold __gash_json_escape_to b4ac0089 && "${FUNCNAME[0]}" "$@"; }
 
 __gash_json_escape() {
@@ -114,6 +119,7 @@ __gash_json_escape() {
 # `recoverable` follows from the action: only FATAL is unrecoverable.
 # details and hint are omitted when empty. Always returns 1.
 # Usage: __gash_json_error TYPE [DETAILS] [ACTION] [HINT]
+# shellcheck disable=SC2120
 __gash_json_error() { __gash_cold __gash_json_error 17a50914 && "${FUNCNAME[0]}" "$@"; }
 
 # Print a machine warning to stderr, one JSON line in the shape of the
@@ -150,6 +156,7 @@ __gash_json_str() {
 # is escaped in bash, then jq normalizes the array (invalid UTF-8 becomes
 # U+FFFD). No NUL transport: jq 1.6 cuts raw input at the first NUL.
 # Usage: json=$(__gash_json_arr "${files[@]}")
+# shellcheck disable=SC2120
 __gash_json_arr() { __gash_cold __gash_json_arr 8a36f5a5 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -213,6 +220,7 @@ __gash_expand_tilde_path() {
 # options: a word starting with "-" is a directory name like any other, so
 # GASH_PATH_ADD='-h /opt/x' prints no help and adds /opt/x (LEDGER SHELL-08).
 # Usage: __gash_path_prepend DIR...
+# shellcheck disable=SC2120
 __gash_path_prepend() { __gash_cold __gash_path_prepend 9b0caafa && "${FUNCNAME[0]}" "$@"; }
 
 # Put directories at the front of PATH (or the end with --append), once
@@ -220,6 +228,7 @@ __gash_path_prepend() { __gash_cold __gash_path_prepend 9b0caafa && "${FUNCNAME[
 # toolchain installed later appears in the next shell); one already in PATH
 # keeps its place.
 # Usage: path_add [--append] DIR...
+# shellcheck disable=SC2120
 path_add() { __gash_cold path_add 70f2cba7 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -232,17 +241,20 @@ path_add() { __gash_cold path_add 70f2cba7 && "${FUNCNAME[0]}" "$@"; }
 
 # Bytes to IEC units with one decimal: 0 B, 1.5 KiB, 142.3 MiB.
 # Usage: __gash_human_size BYTES
+# shellcheck disable=SC2120
 __gash_human_size() { __gash_cold __gash_human_size 3e4a7bc8 && "${FUNCNAME[0]}" "$@"; }
 
 # Ask "Do you want to continue? [Y/n] " after a plan has been printed (Enter
 # means yes), rendered like needs_confirm_prompt. ASSUME_YES=1, from a -y flag, skips the question. Without a
 # terminal, or in headless mode, it refuses instead of waiting for input.
 # Usage: __gash_confirm_plan ASSUME_YES
+# shellcheck disable=SC2120
 __gash_confirm_plan() { __gash_cold __gash_confirm_plan 3898c86a && "${FUNCNAME[0]}" "$@"; }
 
 # "Message... done" around a command; its stdout passes through, and the
 # line ends in "failed" with the command's status when it fails.
 # Usage: __gash_task "Reading the remote index" command [args...]
+# shellcheck disable=SC2120
 __gash_task() { __gash_cold __gash_task 5cc82a5d && "${FUNCNAME[0]}" "$@"; }
 
 # Content-Length of URL after redirects, 0 when the server does not say.

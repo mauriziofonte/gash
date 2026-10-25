@@ -221,6 +221,7 @@ __GASH_FETCH_REASON=""
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
+# shellcheck disable=SC2120
 __gash_fetch() { __gash_cold __gash_fetch 57c686c5 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_fetch_get URL FILE
@@ -245,17 +246,20 @@ __gash_fetch_sum() {
 
 # The core emitters, loaded from this checkout when the caller sourced a
 # shim without them (they are the only writers to stderr).
+# shellcheck disable=SC2120
 __gash_boot_emitters() { __gash_cold __gash_boot_emitters 16d8b1c4 && "${FUNCNAME[0]}" "$@"; }
 
 # The one stderr line of an interactive fetch. The reason is kept across
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
+# shellcheck disable=SC2120
 __gash_fetch_line() { __gash_cold __gash_fetch_line 1067a67d && "${FUNCNAME[0]}" "$@"; }
 
 # The report of a call without a binary: the binary_not_found envelope for
 # agents (headless mode, llm_* functions), an Error: and a Hint: line for
 # humans. Status 1.
 # Usage: __gash_missing NAME
+# shellcheck disable=SC2120
 __gash_missing() { __gash_cold __gash_missing b29072d5 && "${FUNCNAME[0]}" "$@"; }
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x

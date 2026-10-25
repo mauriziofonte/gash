@@ -19,6 +19,7 @@ import (
 // goes to lib/compat/cold/NAME.sh, which __gash_cold (bootstrap.sh) reads
 // at the first call:
 //
+//	# shellcheck disable=SC2120
 //	NAME() { __gash_cold NAME HASH && "${FUNCNAME[0]}" "$@"; }
 //
 // HASH is the definition's: a cold file of another Gash version (the tree
@@ -84,7 +85,8 @@ func lazify(path string, src []byte, cold map[string]coldDef) ([]byte, error) {
 			cold[name] = coldDef{from: path, hash: hash, def: def}
 		}
 		out.Write(src[last:start])
-		fmt.Fprintf(&out, `%s() { __gash_cold %s %s && "${FUNCNAME[0]}" "$@"; }`, name, name, hash)
+		// (SC2120: a caller that passes no arguments is fine.)
+		fmt.Fprintf(&out, "# shellcheck disable=SC2120\n"+`%s() { __gash_cold %s %s && "${FUNCNAME[0]}" "$@"; }`, name, name, hash)
 		last = end
 	}
 	out.Write(src[last:])

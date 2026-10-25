@@ -34,11 +34,13 @@ unset __gash_here
 # Verify a command is available in PATH.
 # Usage: __gash_require_command "command" ["custom error message"]
 # Returns: 0 if command exists, 1 otherwise
+# shellcheck disable=SC2120
 __gash_require_command() { __gash_cold __gash_require_command 8332c514 && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a binary exists (not an alias or function).
 # Usage: __gash_require_binary "binary" ["custom error message"]
 # Returns: 0 if binary exists, 1 otherwise
+# shellcheck disable=SC2120
 __gash_require_binary() { __gash_cold __gash_require_binary cb7ad971 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -48,16 +50,19 @@ __gash_require_binary() { __gash_cold __gash_require_binary cb7ad971 && "${FUNCN
 # Verify a file exists.
 # Usage: __gash_require_file "path" ["custom error message"]
 # Returns: 0 if file exists, 1 otherwise
+# shellcheck disable=SC2120
 __gash_require_file() { __gash_cold __gash_require_file 5a6b54bb && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a directory exists.
 # Usage: __gash_require_dir "path" ["custom error message"]
 # Returns: 0 if directory exists, 1 otherwise
+# shellcheck disable=SC2120
 __gash_require_dir() { __gash_cold __gash_require_dir e599a06e && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a file is readable.
 # Usage: __gash_require_readable "path" ["custom error message"]
 # Returns: 0 if readable, 1 otherwise
+# shellcheck disable=SC2120
 __gash_require_readable() { __gash_cold __gash_require_readable 4580a452 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -144,6 +149,7 @@ __gash_require_arg() {
 # Verify argument count is at least N.
 # Usage: __gash_require_args_min count minimum "usage_hint"
 # Returns: 0 if count >= minimum, 1 otherwise
+# shellcheck disable=SC2120
 __gash_require_args_min() { __gash_cold __gash_require_args_min 91d2b7a1 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------

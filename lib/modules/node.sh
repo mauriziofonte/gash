@@ -48,6 +48,7 @@ __node_latest_installed() {
     __node_installed_versions | tail -1
 }
 
+# shellcheck disable=SC2120
 __node_parse_version_to_major() { __gash_cold __node_parse_version_to_major bfef144f && "${FUNCNAME[0]}" "$@"; }
 
 __node_read_remote_index() {
@@ -56,8 +57,10 @@ __node_read_remote_index() {
     [[ "$__nrri_out" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
+# shellcheck disable=SC2120
 node_upgrade() { __gash_cold node_upgrade 8f4a8f6d && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
+# shellcheck disable=SC2120
 nvm_prune_versions() { __gash_cold nvm_prune_versions a63b75b3 && "${FUNCNAME[0]}" "$@"; }
 
 alias nvmp='nvm_prune_versions'

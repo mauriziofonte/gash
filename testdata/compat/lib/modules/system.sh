@@ -42,11 +42,13 @@ history_grep() {
     HISTTIMEFORMAT='' history | __gash_call history_grep "$@"
 }
 ip_public() { __gash_call ip_public "$@"; }
+# shellcheck disable=SC2120
 mkdir_cd() { __gash_cold mkdir_cd 83c6a4ed && "${FUNCNAME[0]}" "$@"; }
 port_kill() { __gash_call port_kill "$@"; }
 process_find() { __gash_call process_find "$@"; }
 process_kill() { __gash_call process_kill "$@"; }
 services_stop() { __gash_call services_stop "$@"; }
+# shellcheck disable=SC2120
 sudo_last() { __gash_cold sudo_last 5d76cf71 && "${FUNCNAME[0]}" "$@"; }
 wsl_compact() { __gash_call wsl_compact "$@"; }
 wsl_explorer() { __gash_call wsl_explorer "$@"; }

@@ -313,6 +313,7 @@ __gash_warning() {
 # Usage: __gash_ssh "message" [color]
 # Colors: info (default), success, warning, error. A color terminal gets
 # the variant's glyph before "SSH:"; plain output keeps "SSH: message".
+# shellcheck disable=SC2120
 __gash_ssh() { __gash_cold __gash_ssh 6b37d7c5 && "${FUNCNAME[0]}" "$@"; }
 
 # Print a progress note without a word prefix (stderr): "<glyph> TEXT" on a
@@ -366,12 +367,14 @@ __gash_usage() {
 # underline; "" or none for no style. Anything else is used as given (an
 # escape sequence from the palette variables).
 # Usage: __gash_color_of VAR NAME
+# shellcheck disable=SC2120
 __gash_color_of() { __gash_cold __gash_color_of fa1973c8 && "${FUNCNAME[0]}" "$@"; }
 
 # Print text in a style, without prefix (stdout).
 # Usage: __gash_print STYLE "message"
 # Styles: the semantic names of __gash_color_of. The older hue names (red,
 # green, yellow, blue, cyan, white, bold_*) still work for user scripts.
+# shellcheck disable=SC2120
 __gash_print() { __gash_cold __gash_print e5875c64 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -406,9 +409,11 @@ declare -g __GASH_SPINNER_PREV_TRAP=""
 declare -g __GASH_SPINNER_TRAP_SET=""
 
 # Usage: __gash_spinner_start "Loading..."
+# shellcheck disable=SC2120
 __gash_spinner_start() { __gash_cold __gash_spinner_start 8d4b68b6 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_spinner_stop [success|error|warning|none]
+# shellcheck disable=SC2120
 __gash_spinner_stop() { __gash_cold __gash_spinner_stop cfcbb630 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -416,6 +421,7 @@ __gash_spinner_stop() { __gash_cold __gash_spinner_stop cfcbb630 && "${FUNCNAME[
 # -----------------------------------------------------------------------------
 
 # Usage: __gash_progress current total "message"   (stderr, terminals only)
+# shellcheck disable=SC2120
 __gash_progress() { __gash_cold __gash_progress 1805aadd && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -423,11 +429,13 @@ __gash_progress() { __gash_cold __gash_progress 1805aadd && "${FUNCNAME[0]}" "$@
 # -----------------------------------------------------------------------------
 
 # Usage: __gash_section "Section Title"   (stdout)
+# shellcheck disable=SC2120
 __gash_section() { __gash_cold __gash_section 63c5a46c && "${FUNCNAME[0]}" "$@"; }
 
 # A bold line without rules, for a title inside a block (stdout). --note
 # adds secondary text after the title, two spaces apart, muted.
 # Usage: __gash_heading [--indent N] [--note TEXT] "Title"
+# shellcheck disable=SC2120
 __gash_heading() { __gash_cold __gash_heading f2b8a88c && "${FUNCNAME[0]}" "$@"; }
 
 # Key/value lines (stdout): "KEY VALUE", keys padded to the longest one (or
@@ -435,11 +443,13 @@ __gash_heading() { __gash_cold __gash_heading f2b8a88c && "${FUNCNAME[0]}" "$@";
 # one space). On a color terminal keys are bold and values take
 # --value-color STYLE (a __gash_color_of name) when given.
 # Usage: __gash_kv [--indent N] [--width N] [--sep STR] [--value-color STYLE] KEY VALUE [KEY VALUE...]
+# shellcheck disable=SC2120
 __gash_kv() { __gash_cold __gash_kv ab6ed3a3 && "${FUNCNAME[0]}" "$@"; }
 
 # A bulleted list (stdout): "  • ITEM" per item, the bullet in the primary
 # color (or STYLE) on a color terminal.
 # Usage: __gash_list [--indent N] [--color STYLE] ITEM...
+# shellcheck disable=SC2120
 __gash_list() { __gash_cold __gash_list 8b661e98 && "${FUNCNAME[0]}" "$@"; }
 
 # A status line on stdout, for findings in a report rather than diagnostics:
@@ -447,6 +457,7 @@ __gash_list() { __gash_cold __gash_list 8b661e98 && "${FUNCNAME[0]}" "$@"; }
 # otherwise (OK:, Info:, Warning:, Error:, as the emitters print them).
 # STATUS: ok, info, warning or error.
 # Usage: __gash_mark [--indent N] STATUS "TEXT"
+# shellcheck disable=SC2120
 __gash_mark() { __gash_cold __gash_mark b7fb3a0a && "${FUNCNAME[0]}" "$@"; }
 
 # True when input and output are both a terminal, so a screen can be
@@ -538,12 +549,14 @@ __gash_group_digits() {
 # A bar of WIDTH cells, VALUE/MAX of them full (at least one when VALUE > 0).
 # The full and empty parts are split by a tab so callers can color each.
 # Usage: __gash_bar VAR VALUE MAX WIDTH
+# shellcheck disable=SC2120
 __gash_bar() { __gash_cold __gash_bar 04525631 && "${FUNCNAME[0]}" "$@"; }
 
 # Word-wrap TEXT to WIDTH columns into the array VAR. Newlines in TEXT start
 # new lines (an empty line stays empty); a line starting with "- " wraps
 # with a two-space hanging indent.
 # Usage: __gash_wrap VAR WIDTH TEXT
+# shellcheck disable=SC2120
 __gash_wrap() { __gash_cold __gash_wrap 6b22d8a1 && "${FUNCNAME[0]}" "$@"; }
 
 # Let the user pick one of OPTIONS. On a terminal: the numbered options,
@@ -553,12 +566,14 @@ __gash_wrap() { __gash_cold __gash_wrap 6b22d8a1 && "${FUNCNAME[0]}" "$@"; }
 # prompt that reads a line; an empty answer takes DEFAULT.
 # Usage: __gash_choose VAR DEFAULT OPTION...   (VAR gets the 1-based index)
 # Returns 1 on cancel or end of input.
+# shellcheck disable=SC2120
 __gash_choose() { __gash_cold __gash_choose d17d7489 && "${FUNCNAME[0]}" "$@"; }
 
 # Draw a rounded box around lines (stdout), sized to the longest line and
 # capped at the terminal width. Lines may carry color codes. The border
 # takes BORDER_COLOR when colors are on.
 # Usage: __gash_box [--color ESC] LINE...
+# shellcheck disable=SC2120
 __gash_box() { __gash_cold __gash_box 85f532f6 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
@@ -615,6 +630,7 @@ __gash_split_tabs() {
 #                     the terminal width
 #
 # Usage: printf 'NAME\tSIZE\na\t1\n' | __gash_table [options]
+# shellcheck disable=SC2120
 __gash_table() { __gash_cold __gash_table 2b843ae8 && "${FUNCNAME[0]}" "$@"; }
 
 # Sourcing never fails: the status of this file is 0.

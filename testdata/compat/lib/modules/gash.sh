@@ -20,7 +20,9 @@ if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__g
 fi
 unset __gash_here
 
+# shellcheck disable=SC2120
 gash() { __gash_cold gash 355db300 && "${FUNCNAME[0]}" "$@"; }
+# shellcheck disable=SC2120
 gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
@@ -36,7 +38,9 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
+# shellcheck disable=SC2120
 gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
+# shellcheck disable=SC2120
 gash_unload() { __gash_cold gash_unload cc4f8d75 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }

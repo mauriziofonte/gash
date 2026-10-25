@@ -20,6 +20,7 @@ if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__g
 fi
 unset __gash_here
 
+# shellcheck disable=SC2120
 gash_ssh_auto_unlock() { __gash_cold gash_ssh_auto_unlock d3161657 && "${FUNCNAME[0]}" "$@"; }
 
 # Sourcing never fails: the status of this file is 0.

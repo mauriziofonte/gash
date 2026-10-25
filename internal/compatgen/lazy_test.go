@@ -22,7 +22,7 @@ func TestLazify(t *testing.T) {
 	require.Len(t, cold, 1)
 	c := cold["cold_one"]
 	require.Equal(t, "cold_one() {\n"+long+"}", string(c.def))
-	require.Contains(t, string(out), "# doc\ncold_one() { __gash_cold cold_one "+c.hash+` && "${FUNCNAME[0]}" "$@"; }`+"\nshort() { :; }\n__gash_call() {\n")
+	require.Contains(t, string(out), "# doc\n# shellcheck disable=SC2120\ncold_one() { __gash_cold cold_one "+c.hash+` && "${FUNCNAME[0]}" "$@"; }`+"\nshort() { :; }\n__gash_call() {\n")
 	require.Contains(t, string(out), "    nested() {\n")
 	require.Contains(t, string(out), "redir() {\n")
 
