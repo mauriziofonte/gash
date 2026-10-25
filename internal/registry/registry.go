@@ -103,6 +103,11 @@ type Function struct {
 	Completion string
 	// CompletionComment is the comment line above that branch.
 	CompletionComment string
+	// Replaces is the raw command shape an agent would type that this
+	// function answers in one call (plan S9: `gash agents-hint` and the
+	// AGENTS.md routing table render it), e.g. "find D -type f | wc -l".
+	// Every llm_*/agent_* function has one; a test checks it.
+	Replaces string
 }
 
 // Alias is a module short alias or an alias pack entry.

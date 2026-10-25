@@ -65,5 +65,6 @@ var catalogAgent = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD"},
+		Replaces:  "python3 - <<EOF ... s.replace(...) ... EOF; sed -i",
 	},
 }
