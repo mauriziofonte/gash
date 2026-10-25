@@ -5,7 +5,7 @@
 > **Applies to:** Gash 3.x. Gash 3.0 runs the toolkit in one Go binary
 > behind the same Bash entry point (`source ~/.gash/gash.sh`): invocations,
 > function names, flags, JSON shapes and error codes are those of 2.x, with
-> the 3.0 changes listed in [section 10](#10-version-compatibility).
+> the 3.0 changes listed in [section 11](#11-version-compatibility).
 > **Stable API:** the public function names and flags below, the JSON shapes
 > in section 4, the error contract in section 5 and the variables in section 2.
 
@@ -276,6 +276,7 @@ Each code always carries the action shown:
 | Database | `no_db_config` `no_database` `unknown_db_type` `invalid_db_url` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
+| WSL & Windows (`gash wsl`, `gash win`, `gash logs`) | `interop_unavailable` `windows_access_denied` `elevation_required` `windows_not_found` (STOP); `interop_timeout` `invalid_windows_argument` `invalid_duration` `confirmation_required` (RETRY) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
 non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
@@ -504,9 +505,77 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash hte site list --json'
 | STOP | `hte_not_installed` `port_in_use` `privileged_step_required` `config_test_failed` `reload_failed` `apache_module_missing` `invalid_state` |
 | FATAL | `apache_not_found` `openssl_not_found` `platform_unsupported` `receipt_mismatch` `root_not_allowed` |
 
-## 9. Drop-in snippets
+## 9. WSL, Windows and log reclaim (`gash wsl`, `gash win`, `gash logs`)
 
-### 9.1 Claude Code (`CLAUDE.md`)
+On a WSL distribution Gash reaches the Windows host and converts paths; on
+any host it reclaims disk space from log files. Each command takes `--json`
+(one JSON object on stdout) and `--help`; errors are the envelope of
+section 5 on stderr, exit status 1.
+
+`gash wsl` reports and repairs the WSL environment:
+
+```bash
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash wsl info --json'
+```
+
+* `info` summarises the detection (version, distro, interop, drives,
+  networking); it exits 0 off WSL with `{"wsl":false}`.
+* `doctor` checks interop, the mounts and the configuration; it exits 1 when
+  something is wrong, and off WSL.
+* `path PATH [--windows|--mixed|--linux]` converts a path between its Linux
+  and Windows forms.
+* `config [FILE]` shows the effective `wsl.conf` and `.wslconfig` settings.
+* `interop [--export]` reports this shell's interop; `--export` prints the
+  `export WSL_INTEROP=…` line to `eval` when a reattached tmux or screen
+  left it stale.
+
+`gash win` inspects the Windows host over interop, **read-only**:
+
+```bash
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash win info --json'
+```
+
+The subcommands are `info`, `disk`, `net`, `updates`, `defender`, `policy`,
+`hosts`, `doctor`, `services [FILTER]`, `procs [FILTER]`, `apps [FILTER]`,
+`reg KEY [--value NAME]`, `events [--log L] [--level LVL] [--since DUR]
+[-n N]`, `ports [--port N]` and `file PATH`. Nothing here writes to Windows.
+Each call is bounded by `GASH_WIN_TIMEOUT` (default 10s): a disabled or
+wedged interop is `interop_unavailable` or `interop_timeout` (do not work
+around it), and data that needs an administrator reads as
+`windows_access_denied`.
+
+`gash win fix` is the one path that changes Windows, and it is **human-only,
+behind a UAC prompt**. A headless caller is refused with
+`elevation_required`; an agent uses `--dry-run` to read the exact elevated
+PowerShell command and hands it to a human to run:
+
+```bash
+gash win fix flush-dns --dry-run --json
+```
+
+The actions are a fixed allowlist (`flush-dns`, `restart-service NAME`,
+`hosts-add IP HOST`, `hosts-remove HOST`); every argument is validated and
+embedded as data, never as code.
+
+`gash logs` finds and reclaims disk space from log files (user-owned and,
+with `--sudo`, root-owned):
+
+```bash
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash logs scan --json'
+```
+
+* `scan [PATH...]` reports the log files eating disk, grouped by category
+  (`*.log`, `*.txt`, rotated and compressed logs, and framework patterns);
+  nothing is changed. `--min-size`, `--older-than` and `--depth` narrow it.
+* `clean [PATH...]` reclaims space: it deletes rotated and compressed logs,
+  and with `--truncate` also truncates live logs in place (a running daemon
+  keeps its open file). `--dry-run` shows what would be freed; otherwise it
+  needs `--yes`. A headless `clean` without `--yes` is
+  `confirmation_required` (RETRY with `--yes`, once the user agreed).
+
+## 10. Drop-in snippets
+
+### 10.1 Claude Code (`CLAUDE.md`)
 
 ````markdown
 ## Gash (3.x)
@@ -525,7 +594,7 @@ CONTINUE: skip. STOP: ask the user. FATAL: show the hint, stop; never rephrase t
 Never edit ~/.gash_env. Reference: ~/.gash/AGENTS.md
 ````
 
-### 9.2 Codex, Cursor and other `AGENTS.md` readers
+### 10.2 Codex, Cursor and other `AGENTS.md` readers
 
 ````markdown
 ## Tooling: Gash 3.x
@@ -543,7 +612,7 @@ Errors: stderr JSON with `action` RETRY | CONTINUE | STOP | FATAL; retry at most
 Reference: ~/.gash/AGENTS.md
 ````
 
-### 9.3 Generic system prompt
+### 10.3 Generic system prompt
 
 ```text
 You can use Gash, a Bash toolkit with JSON output, through:
@@ -557,7 +626,7 @@ RETRY (fix input, retry once), CONTINUE (skip), STOP (ask the user),
 FATAL (report the hint, stop). Do not try to get around refusals.
 ```
 
-## 10. Version compatibility
+## 11. Version compatibility
 
 Version: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'`,
 or `gash version --json`. Changes in 3.0 that affect agents (the full list

@@ -246,6 +246,7 @@ These are not accepted in `~/.gash_env`.
 | `GASH_SERVER=0` | The functions run in the gash binary start it for each call instead of handing the call to the shell's server. By default (Linux) the first call of a served function (the `llm_*` read-only functions, the file and disk reports, `gash_help` and the like) starts `gash __serve`, one process per shell that runs that call and the later ones in a fraction of a millisecond, with the shell's environment, directory and standard streams, and ends with the shell; a call it cannot run the same way (in a subshell or `$(...)`, with a stream it cannot share, after `TZ` changed) starts the binary as before. Read at each call |
 | `GASH_INSTALL_GIT_REPO`, `GASH_INSTALL_REF`, `PROFILE` | Installer only: repository to clone, ref to check out instead of the latest tag, profile file to edit (`/dev/null` for none) |
 | `GASH_CHROME_ROOT`, `GASH_CHROME_LINK` | Where `chrome_headless_update` installs (default `/opt/chrome-headless-shell`) and the symlink it maintains (default `/usr/local/bin/chrome-headless-shell`) |
+| `GASH_WIN_TIMEOUT` | WSL only. How long one `gash win` call waits for the Windows side before it fails with `interop_timeout`. A whole number of seconds or a Go duration (`8s`, `500ms`); default `10s`, capped at `120s`. Read at each call |
 | `GASH_VERSION` | Set by Gash (not by you): the loaded version, for scripts |
 
 ## Your own shell files
