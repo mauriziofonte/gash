@@ -21,7 +21,9 @@ fi
 unset __gash_here
 
 agent_replace() { __gash_call agent_replace "$@"; }
+llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
+llm_count() { __gash_call llm_count "$@"; }
 llm_db_explain() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_db_explain "$@"
@@ -53,9 +55,15 @@ llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
 llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
+llm_hash() { __gash_call llm_hash "$@"; }
+llm_log() { __gash_call llm_log "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
+llm_read() { __gash_call llm_read "$@"; }
+llm_stat() { __gash_call llm_stat "$@"; }
+llm_textcheck() { __gash_call llm_textcheck "$@"; }
+llm_textstats() { __gash_call llm_textstats "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
 
 # Sourcing never fails: the status of this file is 0.

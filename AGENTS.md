@@ -189,6 +189,44 @@ value, never the network; a write failure never fails the call.
 
 ### 3.7 Text reads (3.4)
 
+| Function | Output |
+|---|---|
+| `llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]` | TSV by default (`--format json`: `[{p, t, size, mode, owner, mtime}]`), one row per PATH in input order; `t` is `f` `d` `l` `p` `s` `c` `b` or `missing`; `lines` with `--lines`, `target` for symlinks and with `--follow`, `error` when a row has one |
+| `llm_count FILE... --pat P... [--regex] [--lines \| --occurrences] [--format F] [-j N] [--timeout S] [--absolute]` | `{"FILE":{"P":N}}`, files and patterns in input order; lines that hold P (as `grep -c`), or every occurrence; `--format tsv`: `file pat count` rows |
+| `llm_assert FILE... (--has P \| --lacks P \| --count P=N)... [--regex] [--lines \| --occurrences] [-j N] [--timeout S] [--absolute]` | `{"pass":true,"checked":N}` and exit 0, or `{"pass":false,"checked":N,"failed":[{file, check, found}]}` and exit 1 |
+| `llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]` | Blocks `==> FILE:A-B <==` of numbered lines (`N:text`, `N-text` for context), or rows `{file, line, text}` |
+| `llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]` | The last N (default 50) selected lines, as they are, in file order; rows `{line, ts, level, text}` with `--format` |
+| `llm_hash PATH... [--algo sha256\|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]` | `[{p, sha256, size}]` (`md5` with `--algo md5`), computed in parallel, input order |
+| `llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]` | `[{p, lines, words, chars, bytes, gzip, max_line}]` |
+| `llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]` | `{"files":N,"issues":[{file, line, rule, sample}]}`; `counts` by rule when there are issues, `truncated` and `skipped` when they apply |
+
+Paths print as given (`--absolute` for the absolute form). Every PATH goes
+through the path rules of 6.1 before anything is read: a refusal stops the
+whole call. A file that is missing, not a regular file or out of
+`--timeout` is a value of its row, not a failed call: `t: "missing"`
+(`llm_stat`), `{"error":"file_not_found"}` (`llm_count`, `llm_hash`,
+`llm_textstats`, `llm_assert`'s failed list), `skipped` (`llm_textcheck`);
+`llm_read` and `llm_log` fail with `file_not_found`. Secret files (6.2):
+`llm_read`, `llm_log`, `llm_count`, `llm_assert` and `llm_textcheck` refuse
+them (`secret_file_blocked`, FATAL, as `llm_config`); `llm_stat` gives their
+metadata but not their lines, `llm_textstats` an `error` row; `llm_hash`
+hashes them (a digest shows no content). Binary files (a NUL byte in the
+first 8000 bytes) are `binary_file` for `llm_read` and `llm_log`, an
+`error` row for `llm_textstats`, `skipped` for `llm_textcheck`. Lines count
+as an editor counts them: a last line without a newline is a line.
+Patterns of `--regex`, `--around`, `--grep` and `--last-match` use
+ripgrep's syntax, as `llm_grep`; a pattern never matches across lines.
+`llm_count` and `llm_assert` read each file once for all patterns (a large
+file in parallel parts); `llm_log` reads the file backwards in 64 KiB
+blocks, so its cost is the size of the answer. `llm_log --since` takes a
+duration back from now (`30s`, `10m`, `2h`, `1d`, `1w`) or an ISO 8601 date
+or time, and reads the timestamps of ISO 8601 (also `[bracketed]`, Laravel
+and Monolog), syslog, nginx and Apache access and error logs and JSON lines;
+`--since` and `--level` keep whole entries (a line with a timestamp or a
+level and the lines below it with neither, such as a stack trace). New
+codes, all RETRY: `invalid_range`, `invalid_assertion`, `invalid_algo`,
+`invalid_short`, `invalid_level`, `invalid_rule`.
+
 ### 3.8 Data files and values (3.4)
 
 ### 3.9 Network probes (3.4)
