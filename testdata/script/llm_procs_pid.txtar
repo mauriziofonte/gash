@@ -1,0 +1,40 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_procs --pid, --alive and --tree (new in 3.4, plan P2): the state of
+# explicit processes as [{"pid","name","cmd","alive"}] instead of kill -0
+# PID; ps -ef | grep x | grep -v grep. A process that ended is
+# alive:false, --alive keeps the live ones, --tree adds the children
+# depth first with ppid and depth. The calling gash never lists itself.
+# Every PID here is a victim the script started (sleep 297 & vic=$!).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: a live child of the calling shell
+exec bash -c 'sleep 297 & vic=$!; source "$GASH_SH"; llm_procs --pid $vic; kill $vic'
+stdout '^\[\{"pid":[0-9]+,"name":"sleep","cmd":"sleep 297","alive":true\}\]$'
+! stderr .
+
+# --- directly: an ended process is alive:false, --alive leaves it out
+exec bash -c 'sleep 297 & vic=$!; kill $vic; wait $vic; gash llm_procs --pid $vic; gash llm_procs --pid $vic --alive'
+stdout '^\[\{"pid":[0-9]+,"name":"","cmd":"","alive":false\}\]\n\[\]$'
+
+# --- --tree: the shell and its child, never the calling gash
+exec bash -c 'sleep 296 & vic=$!; gash llm_procs --pid $$ --tree --alive; kill $vic'
+stdout '"depth":0\},\{"pid":[0-9]+,"name":"sleep","cmd":"sleep 296","alive":true,"ppid":[0-9]+,"depth":1\}\]$'
+stdout '^\[\{"pid":[0-9]+,"name":"bash",'
+! stdout '"name":"gash"'
+
+# --- --name matches the full command line, never the caller's own shell
+exec bash -c 'sleep 295 & vic=$!; gash llm_procs --name "^sleep 29[5]$" --alive --format tsv; kill $vic'
+stdout '^pid\tname\tcmd\talive\n[0-9]+\tsleep\tsleep 295\ttrue\n$'
+exec bash -c 'gash llm_procs --name "no-such-process-zq8" --alive'
+stdout '^\[\]$'
+
+# --- usage errors
+! exec gash llm_procs --pid 12x
+stderr '"error":"invalid_pid"'
+! exec gash llm_procs --pid
+stderr '"error":"missing_value"'

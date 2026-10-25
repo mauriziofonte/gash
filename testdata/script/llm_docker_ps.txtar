@@ -1,0 +1,51 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_docker_ps (new in 3.4, plan P4): every container with its state,
+# health, ports and status in one JSON array, sorted by name, instead of
+# docker ps --format. docker is a stub on PATH. A daemon that cannot be
+# reached, or no docker at all, is a CONTINUE error.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+chmod 0755 stub/docker
+chmod 0755 down/docker
+env SAVED_PATH=$PATH
+env PATH=$WORK/stub${:}$PATH
+
+# --- through the sourced shell: all containers, by name
+exec bash -c 'source "$GASH_SH"; llm_docker_ps'
+stdout '^\[\{"name":"db","image":"mysql:8","state":"exited","health":"","ports":"","up":"Exited \(0\) 3 days ago"\},\{"name":"web","image":"nginx:1.27","state":"running","health":"healthy","ports":"8080->80/tcp","up":"Up 2 hours"\}\]$'
+! stderr .
+
+# --- directly: --running, --format tsv
+exec gash llm_docker_ps --running --format tsv
+cmp stdout tsv.want
+
+# --- the daemon is down: CONTINUE
+env PATH=$WORK/down${:}$SAVED_PATH
+! exec gash llm_docker_ps
+stderr '"error":"docker_unavailable","details":"Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running\?","action":"CONTINUE"'
+! stdout .
+env PATH=$WORK/stub${:}$SAVED_PATH
+
+# --- usage errors and help
+! exec gash llm_docker_ps web
+stderr '"error":"unexpected_argument"'
+exec gash llm_docker_ps -h
+stdout 'llm_docker_ps \[--running\]'
+
+-- stub/docker --
+#!/bin/sh
+# docker ps -a --no-trunc --format {{json .}}: two containers.
+[ "$1 $2" = "ps -a" ] || exit 3
+echo '{"Names":"web","Image":"nginx:1.27","State":"running","Status":"Up 2 hours (healthy)","Ports":"0.0.0.0:8080->80/tcp, :::8080->80/tcp"}'
+echo '{"Names":"db","Image":"mysql:8","State":"exited","Status":"Exited (0) 3 days ago","Ports":""}'
+-- down/docker --
+#!/bin/sh
+echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?" >&2
+exit 1
+-- tsv.want --
+name	image	state	health	ports	up
+web	nginx:1.27	running	healthy	8080->80/tcp	Up 2 hours

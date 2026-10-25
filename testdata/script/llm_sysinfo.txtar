@@ -1,0 +1,30 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_sysinfo (new in 3.4, plan R4): load, uptime, CPUs, memory, disks,
+# GPUs and OS in one compact JSON object instead of uptime; free -h; df
+# -h; nproc; uname; nvidia-smi. On Linux it reads /proc and statfs and
+# starts no program unless nvidia-smi is installed. --mount PATH names the
+# filesystems to report instead of the local disks.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: one object with the keys agents read
+exec bash -c 'source "$GASH_SH"; llm_sysinfo'
+stdout '^\{"host":"[^"]*",.*"uptime_h":[0-9.]+,"load":\[[^]]*\],"cpus":[1-9][0-9]*,.*"mem_mb":\{"total":[0-9]+,"avail":[0-9]+\},"disks":\[\{"mount":"/","size_gb":[0-9.]+,"used_pct":[0-9]+\}'
+! stderr .
+
+# --- directly: --mount names the filesystem, path checked first
+exec gash llm_sysinfo --mount $WORK
+stdout '"disks":\[\{"mount":"/[^"]*","size_gb":[0-9.]+,"used_pct":[0-9]+\}\]'
+! stdout '"mount":"/",'
+! exec gash llm_sysinfo --mount $WORK/nope
+stderr '"error":"path_not_found"'
+! exec gash llm_sysinfo /
+stderr '"error":"unexpected_argument"'
+
+# --- --help anywhere prints the help
+exec gash llm_sysinfo -h
+stdout 'llm_sysinfo \[--mount PATH\]'
