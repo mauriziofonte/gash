@@ -174,7 +174,7 @@ func tailFile(path string, n int) []string {
 		if _, err := f.ReadAt(chunk, pos); err != nil && err != io.EOF {
 			return nil
 		}
-		data = append(chunk, data...)
+		data = append(append(make([]byte, 0, len(chunk)+len(data)), chunk...), data...)
 	}
 	ls := textLines(data)
 	if pos > 0 && len(ls) > 0 {

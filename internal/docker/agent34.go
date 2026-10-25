@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/contract"
+	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 )
 
@@ -150,6 +152,64 @@ func FirstLine(stderr []byte) string {
 		}
 	}
 	return ""
+}
+
+// TakeExec reads CTR [--user U] [options] -- CMD... for llm_docker_exec
+// and agent_docker_exec: o takes the budget options, extra (when not nil)
+// the function's own (it returns how many words it took, 0 for none).
+// On a usage error the envelope is written and ok is false.
+func TakeExec(c *invoke.Call, o *llmfmt.Options, extra func(a string) int) (ctr, user string, cmd []string, ok bool) {
+	bad := func(code, details, hint string) (string, string, []string, bool) {
+		c.Fail(contract.New(code, details, hint))
+		return "", "", nil, false
+	}
+	args := c.Args
+	for len(args) > 0 {
+		a := args[0]
+		if a == "--" {
+			cmd = args[1:]
+			break
+		}
+		n, ok := o.Take(c, args)
+		if !ok {
+			return "", "", nil, false
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
+		if extra != nil {
+			if n := extra(a); n > 0 {
+				args = args[n:]
+				continue
+			}
+		}
+		switch {
+		case a == "--user" || a == "-u":
+			if len(args) < 2 {
+				return bad("missing_value", a, a+" needs a user name or uid[:gid]")
+			}
+			user = args[1]
+			if user == "" || strings.HasPrefix(user, "-") || strings.ContainsAny(user, " \t\n") {
+				return bad("invalid_user", user, "Give a user name or uid[:gid], e.g. --user www-data")
+			}
+			args = args[2:]
+			continue
+		case strings.HasPrefix(a, "-"):
+			return bad("unknown_option", a, "Use CTR [--user U] -- CMD...")
+		case ctr != "":
+			return bad("unexpected_argument", a, "Put -- between the container and the command: CTR -- CMD...")
+		}
+		ctr = a
+		args = args[1:]
+	}
+	if ctr == "" {
+		return bad("missing_container", "", "Name the container: CTR [--user U] -- CMD...")
+	}
+	if len(cmd) == 0 {
+		return bad("missing_command", "", "Give the command after --: CTR -- CMD...")
+	}
+	return ctr, user, cmd, true
 }
 
 // ExecArgs are the docker arguments of `docker exec [--user=U] CTR CMD...`:

@@ -75,12 +75,9 @@ func (t *Table) Lookup(pid int) (Proc, bool) {
 	return t.procs[i], true
 }
 
-// Callers is the caller's own chain, which no listing shows and no kill
-// reaches: self (the gash process), its ancestors up to but not
-// including PID 1, the children of self (the ps it ran), and the children
-// of an ancestor with the ancestor's own command line (the subshells a
-// shell forks for $(...)), as llm_procs --name leaves them out.
-func (t *Table) Callers(self int) map[int]bool {
+// Ancestors is self and its parents, up to but not including PID 1 (a
+// process missing from the table ends the chain).
+func (t *Table) Ancestors(self int) map[int]bool {
 	chain := map[int]bool{}
 	p := self
 	for i := 0; i < 64 && p > 1; i++ {
@@ -94,6 +91,16 @@ func (t *Table) Callers(self int) map[int]bool {
 		}
 		p = pr.PPID
 	}
+	return chain
+}
+
+// Callers is the caller's own chain, which no listing shows and no kill
+// reaches: self (the gash process), its ancestors up to but not
+// including PID 1, the children of self (the ps it ran), and the children
+// of an ancestor with the ancestor's own command line (the subshells a
+// shell forks for $(...)), as llm_procs --name leaves them out.
+func (t *Table) Callers(self int) map[int]bool {
+	chain := t.Ancestors(self)
 	out := map[int]bool{}
 	for pid := range chain {
 		out[pid] = true
@@ -168,6 +175,22 @@ var (
 
 // ErrNoPS is a ps that failed or printed nothing.
 var ErrNoPS = errors.New("ps listed no process")
+
+// Snapshot reads the Table with ps (its path, "" when not installed)
+// through r with env, else from /proc; ErrNoPS when neither works.
+func Snapshot(ctx context.Context, r runner.Runner, ps string, env []string) (*Table, error) {
+	if ps != "" {
+		if t, err := ReadPS(ctx, r, ps, env); err == nil {
+			return t, nil
+		}
+	}
+	if HasProcFS() {
+		if t, err := ReadProcFS("/proc"); err == nil {
+			return t, nil
+		}
+	}
+	return nil, ErrNoPS
+}
 
 // ReadPS reads a Table with the two ps listings, run through r with env.
 func ReadPS(ctx context.Context, r runner.Runner, ps string, env []string) (*Table, error) {

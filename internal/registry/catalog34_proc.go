@@ -9,6 +9,99 @@ package registry
 // mergeCatalog sorts them in.
 var catalogProc = []Function{
 	{
+		Name:     "agent_docker_exec",
+		Module:   "agent",
+		Topic:    "agent",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("shell-mutating"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:   "Run any command in a container, no shell quoting (JSON)",
+			Module:  "agent",
+			SeeAlso: "llm_docker_exec",
+			Body: "" +
+				"USAGE\n" +
+				"  agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --user U, -u U         Run as user U (name or uid[:gid])\n" +
+				"  --dry-run              Print the docker argv; run nothing\n" +
+				"  --width N              Cut each output line at N columns\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Keep the first/last N lines of each stream\n" +
+				"  -- CMD...              The command, one word per argument\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  # Instead of: docker exec -u www-data app sh -c 'php artisan migrate --force'\n" +
+				"  agent_docker_exec app --user www-data -- php artisan migrate --force\n" +
+				"  agent_docker_exec app --dry-run -- composer install --no-dev\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces docker exec CTR sh -c '...' for commands that change things:\n" +
+				"  CMD's words reach docker exec as an array, no shell runs, nothing to\n" +
+				"  quote. Read-only work belongs to llm_docker_exec. Rails: the llm_exec\n" +
+				"  dangerous-command blocklist (dangerous_command_blocked, FATAL) and no\n" +
+				"  secret file named in CMD (secret_file_blocked). Output as\n" +
+				"  llm_docker_exec: {\"rc\",\"out\",\"err\"}, exit status 0 when the command\n" +
+				"  ran (read rc); --dry-run: {\"argv\":[...],\"dry_run\":true,\"written\":false}.",
+		},
+		ShellVars: []string{"HOME"},
+		Env:       []string{"DOCKER_CONTEXT", "DOCKER_HOST", "HOME", "PWD"},
+		Replaces:  "docker exec ctr sh -c '...' (writes)",
+	},
+	{
+		Name:     "agent_kill",
+		Module:   "agent",
+		Topic:    "agent",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("shell-mutating"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:   "Signal processes by PID or command line, never the caller (JSON)",
+			Module:  "agent",
+			SeeAlso: "llm_procs",
+			Body: "" +
+				"USAGE\n" +
+				"  agent_kill NAME|PID... [--signal S] [--dry-run] [--format F]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  NAME                   A regular expression on the full command line, as\n" +
+				"                         llm_procs --name matches it\n" +
+				"  PID                    One process\n" +
+				"  --signal S, -s S       TERM (default), KILL, HUP, INT, USR1, ... or a number\n" +
+				"  --dry-run              Report the PIDs and command lines; signal nothing\n" +
+				"  --format F             json (default), jsonl, tsv or table: one row per\n" +
+				"                         process\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  # Instead of: pkill -f 'artisan serve' (exit 1 when nothing runs)\n" +
+				"  agent_kill 'artisan serve' --dry-run\n" +
+				"  agent_kill 'artisan serve'\n" +
+				"  agent_kill 4242 4243 --signal KILL\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces pkill -f x and kill PID. Only your own user's processes; never\n" +
+				"  PID 1, this call or one of its ancestors (the shell or agent that runs\n" +
+				"  it): an explicit PID breaking that is kill_refused (FATAL), a NAME never\n" +
+				"  matches them. A NAME matching every command line (.*) is\n" +
+				"  pattern_too_broad. Nothing matched is success: {\"killed\":0,\"pids\":[]}.\n" +
+				"  Output {\"killed\":N,\"pids\":[...]}; --dry-run adds \"cmds\", \"signal\",\n" +
+				"  \"dry_run\":true,\"written\":false. It does not wait for the processes to\n" +
+				"  exit: llm_wait --gone PID does.",
+		},
+		ShellVars: []string{"HOME"},
+		Env:       []string{"HOME", "PWD"},
+		Replaces:  "pkill -f x; kill PID",
+	},
+	{
 		Name:     "llm_wait",
 		Module:   "llm",
 		Topic:    "llm",

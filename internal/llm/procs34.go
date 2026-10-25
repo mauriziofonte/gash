@@ -63,20 +63,14 @@ func takePIDs(c *invoke.Call, args []string) ([]int, int, bool) {
 // (the seam the tests fake), else a Linux /proc; ps_not_found without
 // either.
 func (m *Module) procTable(c *invoke.Call) (*proctab.Table, bool) {
-	if ps, ok := m.lookPath(c, "ps"); ok {
-		env := append(c.Env.Child(), "LC_ALL=C")
-		if t, err := proctab.ReadPS(c.Ctx, m.run, ps, env); err == nil {
-			return t, true
-		}
+	ps, _ := m.lookPath(c, "ps")
+	t, err := proctab.Snapshot(c.Ctx, m.run, ps, append(c.Env.Child(), "LC_ALL=C"))
+	if err != nil {
+		fail(c, "ps_not_found", "Cannot list processes: no ps and no /proc",
+			"Install procps (ps) to list processes. Skip this check")
+		return nil, false
 	}
-	if proctab.HasProcFS() {
-		if t, err := proctab.ReadProcFS("/proc"); err == nil {
-			return t, true
-		}
-	}
-	fail(c, "ps_not_found", "Cannot list processes: no ps and no /proc",
-		"Install procps (ps) to list processes. Skip this check")
-	return nil, false
+	return t, true
 }
 
 // procs34 answers the 3.4 modes of llm_procs: [{pid,name,cmd,alive}] (and

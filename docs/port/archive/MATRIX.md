@@ -1065,6 +1065,8 @@ columns are the 2.x rows' so the registry test reads them.
 | llm_docker_exec | function | pure output | new | A read-only command in a container, argv end to end with no shell quoting, under the llm_exec rules (plan P5) | gash llm_docker_exec | internal/llm dockerx_test.go, llm_docker_exec.txtar |
 | llm_sysinfo | function | pure output | new | Load, uptime, CPUs, memory, disks, GPUs and OS in one compact JSON object from /proc and statfs (plan R4) | gash llm_sysinfo | internal/llm sysinfo34_test.go, internal/sysinfo facts_test.go, llm_sysinfo.txtar |
 | llm_procs --pid/--alive/--tree | flag | pure output | new | Explicit PIDs (alive:false once gone), live processes only, the children depth first; the caller and its ancestors never listed; --format and the output budget (plan P2) | gash llm_procs --pid | internal/llm procs34_test.go, internal/proctab proctab_test.go, llm_procs_pid.txtar |
+| agent_kill | function | shell-mutating | new | Signal processes by PID or command-line NAME: own uid only, never PID 1, the caller or an ancestor; nothing matched is killed:0; --dry-run (plan P2, A1) | gash agent_kill | internal/agent kill_test.go, agent_kill.txtar |
+| agent_docker_exec | function | shell-mutating | new | Any command in a container, argv end to end with no shell quoting; dangerous-command blocklist and secret-file rails; --dry-run prints the argv (plan P5, A1) | gash agent_docker_exec | internal/agent docker_exec_test.go, agent_docker_exec.txtar |
 
 ### Runtimes, lint and tests (S7, S8, S11, V1, V2, L1, L2)
 

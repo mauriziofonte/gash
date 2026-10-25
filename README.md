@@ -9,7 +9,7 @@
 
 ![Gash at a terminal: the reference card, files_largest, tree_stats and sysinfo overview](docs/assets/demo.gif)
 
-Gash adds 92 functions and 163 aliases to Bash: find what
+Gash adds 94 functions and 163 aliases to Bash: find what
 fills a disk, inspect a machine, tag a release, free a port, upgrade a
 Compose stack, push files to a host, run local HTTPS sites. Every function
 has `--help` with examples, and the ones an agent needs answer in JSON with

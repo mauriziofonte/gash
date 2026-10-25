@@ -20,7 +20,7 @@ fi
 # Completion handler for Gash functions.
 # Dispatches to per-function completion based on COMP_WORDS[0].
 # shellcheck disable=SC2120
-__gash_complete() { __gash_cold __gash_complete ee184e8b && "${FUNCNAME[0]}" "$@"; }
+__gash_complete() { __gash_cold __gash_complete 4b721a1f && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Enable Completion
@@ -32,6 +32,8 @@ __gash_complete() { __gash_cold __gash_complete ee184e8b && "${FUNCNAME[0]}" "$@
 __gash_enable_completion() {
     local a
     local -a names=(
+        agent_docker_exec
+        agent_kill
         agent_replace
         ai_ask
         ai_query

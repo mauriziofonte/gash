@@ -85,6 +85,8 @@ esac
 # that are set). From the registry.
 __GASH_CALL_COMMON="GASH_HEADLESS NO_COLOR GASH_NO_COLOR GASH_DEBUG GASH_TUI COLUMNS GASH_DIR GASH_ENV_FILE LANG LC_ALL LC_CTYPE"
 declare -gA __GASH_CALL_VARS=(
+    [agent_docker_exec]="HOME"
+    [agent_kill]="HOME"
     [agent_replace]="HOME"
     [ai_ask]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
     [ai_query]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"

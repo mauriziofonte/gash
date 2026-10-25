@@ -237,6 +237,11 @@ var codeTable = []Code{
 	{"docker_unavailable", Continue, "llm", Origin3x},
 	{"docker_error", Retry, "llm", Origin3x},
 	{"invalid_log", Retry, "llm", Origin3x},
+	{"missing_target", Retry, "agent", Origin3x},
+	{"invalid_signal", Retry, "agent", Origin3x},
+	{"pattern_too_broad", Retry, "agent", Origin3x},
+	{"kill_refused", Fatal, "agent", Origin3x},
+	{"kill_failed", Stop, "agent", Origin3x},
 
 	// New in 3.4: agent toolkit, runtimes, lint and tests (gash runtime,
 	// gash run, llm_tools, llm_runtime, llm_lint, llm_test).

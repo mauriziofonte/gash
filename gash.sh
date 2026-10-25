@@ -338,6 +338,8 @@ git_sync() { __gash_call git_sync "$@"; }
 
 # llm
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+agent_docker_exec() { __gash_call agent_docker_exec "$@"; }
+agent_kill() { __gash_call agent_kill "$@"; }
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
 llm_db_explain() {

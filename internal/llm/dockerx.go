@@ -191,65 +191,6 @@ func (m *Module) dockerLogs(c *invoke.Call) int {
 	return 0
 }
 
-// takeDockerExec parses CTR [--user U] [budget] -- CMD... (shared shape of
-// llm_docker_exec and agent_docker_exec); extra handles the function's
-// own flags (it returns the words it took, 0 for none).
-func takeDockerExec(c *invoke.Call, o *llmfmt.Options, extra func(a string) int) (ctr, user string, cmd []string, ok bool) {
-	args := c.Args
-	for len(args) > 0 {
-		a := args[0]
-		if a == "--" {
-			cmd = args[1:]
-			break
-		}
-		n, ok := o.Take(c, args)
-		if !ok {
-			return "", "", nil, false
-		}
-		if n > 0 {
-			args = args[n:]
-			continue
-		}
-		if extra != nil {
-			if n := extra(a); n > 0 {
-				args = args[n:]
-				continue
-			}
-		}
-		switch {
-		case a == "--user" || a == "-u":
-			if len(args) < 2 {
-				fail(c, "missing_value", a, a+" needs a user name or uid[:gid]")
-				return "", "", nil, false
-			}
-			user = args[1]
-			if user == "" || strings.HasPrefix(user, "-") || strings.ContainsAny(user, " \t\n") {
-				fail(c, "invalid_user", user, "Give a user name or uid[:gid], e.g. --user www-data")
-				return "", "", nil, false
-			}
-			args = args[2:]
-			continue
-		case strings.HasPrefix(a, "-"):
-			fail(c, "unknown_option", a, "Use CTR [--user U] -- CMD...")
-			return "", "", nil, false
-		case ctr != "":
-			fail(c, "unexpected_argument", a, "Put -- between the container and the command: CTR -- CMD...")
-			return "", "", nil, false
-		}
-		ctr = a
-		args = args[1:]
-	}
-	if ctr == "" {
-		fail(c, "missing_container", "", "Name the container: CTR [--user U] -- CMD...")
-		return "", "", nil, false
-	}
-	if len(cmd) == 0 {
-		fail(c, "missing_command", "", "Give the command after --: CTR -- CMD...")
-		return "", "", nil, false
-	}
-	return ctr, user, cmd, true
-}
-
 // containerProbe answers the llm_exec tool probes for a command that runs
 // in a container: sed and gawk run with --sandbox (added below), so they
 // count as available; the diff and grep extras of the host cannot be
@@ -319,7 +260,7 @@ func (m *Module) dockerExec(c *invoke.Call) int {
 		return 0
 	}
 	o := llmfmt.New(llmfmt.BudgetFlags)
-	ctr, user, cmd, ok := takeDockerExec(c, o, nil)
+	ctr, user, cmd, ok := docker.TakeExec(c, o, nil)
 	if !ok {
 		return 1
 	}
