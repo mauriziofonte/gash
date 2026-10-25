@@ -130,9 +130,10 @@ envelope or setting needs a major version; adding one needs a minor.
    current.
 3. Merge it to `main` and wait for CI to pass on the merge commit.
 4. Run the **Tag release** workflow (Actions tab, or
-   `gh workflow run tag.yml --ref main`). It checks that CI passed on the
-   commit, that `release/SHA256SUMS` is current and that `CHANGELOG.md` has
-   the entry, creates the annotated tag `v<VERSION>` and dispatches the
+   `gh workflow run tag.yml --ref main`). It takes the newest commit of
+   `main` that CI ran on (the Demos workflow's GIF commits after it are
+   skipped), checks that CI passed on it, that `release/SHA256SUMS` is
+   current and that `CHANGELOG.md` has the entry, creates the annotated tag `v<VERSION>` and dispatches the
    **Release** workflow on it. That runs goreleaser (which refuses a tag
    that differs from `VERSION` and a binary that differs from its pin),
    takes the release notes from the `CHANGELOG.md` entry, signs
