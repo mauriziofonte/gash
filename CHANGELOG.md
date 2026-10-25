@@ -6,6 +6,62 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.4.0] - 2026-10-25
+
+Gash learns to work with Windows from inside WSL, and to reclaim the disk
+space that log files quietly eat on any host. Reading Windows is automatic;
+changing it is human-only and goes through a UAC prompt.
+
+### Added
+
+- `gash wsl`: report and repair the WSL environment. `info` summarises the
+  detection (version, distro, interop, drives, networking) and exits 0 off
+  WSL; `doctor` checks interop, mounts and configuration; `path` converts a
+  path between its Linux and Windows forms (`--windows`, `--mixed`,
+  `--linux`); `config` shows the effective `wsl.conf` and `.wslconfig`;
+  `interop --export` prints the `export WSL_INTEROP=…` line that repairs a
+  stale socket after a reattached `tmux` or `screen`.
+- `gash win`: inspect the Windows host over interop, read-only, with
+  eye-candy for a human and `--json` for an agent — `info`, `disk`, `net`,
+  `updates`, `defender`, `policy`, `hosts`, `doctor`, `services`, `procs`,
+  `apps`, `reg`, `events`, `ports` and `file`. Windows programs are found by
+  absolute path under `System32` (so interop works with
+  `appendWindowsPath=false`), the system drive is discovered from the mounts
+  (not hard-wired to `/mnt/c`), and every call is bounded by
+  `GASH_WIN_TIMEOUT` (default 10s, max 120s). PowerShell runs fixed,
+  read-only scripts; arguments reach them as data, never as code.
+- `gash win fix`: the one path that changes Windows, deliberately narrow. It
+  is human-only (a headless caller is refused with `elevation_required`),
+  always goes through a UAC prompt, prints the exact PowerShell command and
+  asks first, and acts only from a fixed allowlist (`flush-dns`,
+  `restart-service`, `hosts-add`, `hosts-remove`) with every argument
+  validated. `--dry-run` prints the command without running it, so an agent
+  can hand it to a human.
+- `gash logs`: find and reclaim disk space from log files. `scan` reports
+  the logs eating disk, grouped by category (`*.log`, log-shaped `*.txt`,
+  rotated and compressed copies, and the patterns Apache, nginx, PHP, Node,
+  Python, package managers and databases write); `clean` deletes rotated and
+  compressed logs and, with `--truncate`, empties live logs in place so a
+  running daemon keeps its open file. `--sudo` reclaims root-owned logs
+  through an explicit `sudo`. See [docs/logs.md](docs/logs.md).
+- `GASH_WIN_TIMEOUT` bounds one `gash win` call (default `10s`, cap `120s`).
+
+### Changed
+
+- WSL is detected from `wsl.conf`, the `WSLInterop` binfmt handler, or the
+  `microsoft` marker in `/proc/version`, so a distribution without a
+  `wsl.conf` is still recognised. The Windows PowerShell path the HTE and
+  system helpers use is resolved from the mounted system drive rather than
+  assuming `/mnt/c`.
+
+### Security
+
+- The path guards treat the Windows secrets reachable over `/mnt` as secret
+  files: the user registry hives (`NTUSER.DAT`, `UsrClass.dat`), saved RDP
+  credentials (`*.rdp`), answer files (`unattend.xml`, `autounattend.xml`)
+  and the browser credential stores (`Login Data`, `logins.json`, `key4.db`,
+  `key3.db`). See [docs/security.md](docs/security.md).
+
 ## [3.2.0] - 2026-10-25
 
 Gash gets out of the way: a shell loads in half the time, the prompt no
@@ -777,6 +833,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.4.0]: https://github.com/mauriziofonte/gash/compare/v3.2.0...v3.4.0
 [3.2.0]: https://github.com/mauriziofonte/gash/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/mauriziofonte/gash/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
