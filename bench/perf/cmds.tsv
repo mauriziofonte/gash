@@ -1,0 +1,24 @@
+# Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# label<TAB>command (runs in the work tree: a git checkout of Gash 3.2.0)
+gash_help	gash_help files_largest
+gash_card	gash files
+files_largest	files_largest -n 10 .
+dirs_largest	dirs_largest -n 10 internal
+dirs_find_large	dirs_find_large --json internal
+dirs_list_empty	dirs_list_empty --json .
+tree_stats	tree_stats internal
+disk_usage	disk_usage
+llm_tree	llm_tree --depth 2 internal
+llm_find	llm_find '*.go' internal -n 50
+llm_grep	llm_grep 'func Register' internal -n 50
+llm_config	llm_config go.mod
+llm_project	llm_project
+llm_git_status	llm_git_status
+llm_git_log	llm_git_log -n 10
+llm_git_diff	llm_git_diff
+llm_env	llm_env PATH
+llm_procs	llm_procs
+llm_ports	llm_ports
+llm_exec	llm_exec 'ls internal'
+process_find	process_find bash
+git_list_tags	git_list_tags
