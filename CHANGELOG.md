@@ -27,6 +27,10 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
 ### Changed
 
+- The lint gate adds unused, gosec, errorlint, bodyclose, noctx,
+  copyloopvar, durationcheck and makezero; the dead code they found (the
+  unported grep helpers of the dev module, test helpers of the removed 2.x
+  comparisons) is gone, and errors are matched with `errors.Is`/`errors.As`.
 - `SECURITY.md`: 2.1.x gets critical and high security fixes until
   2027-04-30; a fix for a critical or high report ships within 30 days.
 
@@ -41,6 +45,11 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
   the write). Found by fuzzing.
 - `llm_exec` refuses a command holding a NUL byte (`construct_not_allowed`)
   instead of rendering a word bash would cut at it. Found by fuzzing.
+- `gash hte install` refuses to install the hosts helper, the sudoers
+  drop-in or the macOS pf rules below a directory that a user other than
+  root can write (from which the helper, which sudo runs as root, could be
+  swapped), and creates its temporary files exclusively, so a planted
+  symlink is refused instead of followed as root.
 - Seven fuzz targets cover the guardrails: the SQL guard (with an oracle
   that runs every accepted query on a writable SQLite database and checks
   nothing changed), the `llm_exec` renderer (every rendered word is a
