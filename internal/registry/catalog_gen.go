@@ -5,7 +5,7 @@
 
 package registry
 
-var functions = []Function{
+var baseFunctions = []Function{
 	{
 		Name:     "ai_ask",
 		Module:   "ai",

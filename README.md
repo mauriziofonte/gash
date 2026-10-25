@@ -188,7 +188,7 @@ against a hostile user: see the [security model](docs/security.md).
 | [docker](docs/reference/docker.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
 | [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
 | [dev](docs/reference/dev.md) | `node_upgrade`, `chrome_headless_update` (Chrome for Puppeteer and Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
-| [llm](docs/reference/llm.md) | Eighteen read-only JSON functions for agents |
+| [llm](docs/reference/llm.md) | 18 read-only JSON functions for agents |
 | [ai](docs/reference/ai.md) | `ai_query` and `ai_sysinfo`: Claude or Gemini from the terminal, with secrets redacted |
 | [gash](docs/reference/gash.md) | `gash_help`, `gash_doctor`, `gash_upgrade`, `gash_unload` |
 | [hte](docs/hte.md) | `gash hte install`, `site`, `php`, `service`, `cert`, `hosts`, `doctor`, `migrate` |

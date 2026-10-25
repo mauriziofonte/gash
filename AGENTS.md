@@ -161,6 +161,44 @@ llm_exec "git log --oneline -5 && git status --short"
 llm_exec "grep -rn TODO src | head -20"
 ```
 
+### 3.6 Shared output options (3.4)
+
+The 3.4 agent functions share one output layer; each function's `--help`
+lists the options it takes. The defaults never change: a function prints
+what it printed before unless you pass one of these.
+
+| Option | Effect |
+|---|---|
+| `--format json\|jsonl\|tsv\|table` | Row output as one compact JSON array (`json`), one JSON object per line (`jsonl`), a header line plus tab-separated rows (`tsv`: tab, newline, carriage return and backslash in a value are written `\t`, `\n`, `\r`, `\\`; a null is `\N`), or aligned columns for humans (`table`). An unknown format is `invalid_format` |
+| `--width N` | Cuts each output line (in JSON, each string value) at N display columns, ending it with `…` |
+| `--max-lines N`, `--head N`, `--tail N` | Keeps the first N (`--max-lines` is `--head`) and/or the last N lines or rows; what is cut becomes one `[... K lines omitted]` line in text and `table` output, `"truncated": K` in a JSON object, and the metadata line below for a JSON array, `jsonl` and `tsv` |
+| `-j N`, `--timeout S` | Multi-target functions: N targets at a time (default: the CPU count, 8 for network probes) and a per-target time limit (seconds, `0.5`, or `500ms`, `2s`, `1m`; at most 1h). A target that times out is a field of its result, not a failed call; results keep the input order |
+| `--relative`, `--absolute` | Paths relative to the PATH argument (or the working directory), or absolute (today's default) |
+
+Values are positive integers (1 to 999999999): 0 or a word is
+`invalid_width`, `invalid_max_lines`, `invalid_head`, `invalid_tail` or
+`invalid_jobs`, a bad duration `invalid_timeout` (all RETRY). Stdout carries
+data only: the metadata of a row output (`rows`, `truncated`, timings) is
+one JSON line on stderr with no `error` key, so it is never an error
+envelope. Nothing is ever cut without a marker.
+
+`GASH_TELEMETRY_FILE=/path` (exported, off by default) appends one JSON line
+per `llm_*`/`agent_*` call to that local file:
+`{"ts","fn","ms","out_bytes","rc","truncated"}`. Never the arguments or any
+value, never the network; a write failure never fails the call.
+
+### 3.7 Text reads (3.4)
+
+### 3.8 Data files and values (3.4)
+
+### 3.9 Network probes (3.4)
+
+### 3.10 Processes, waiting and services (3.4)
+
+### 3.11 Runtimes, lint and tests (3.4)
+
+### 3.12 Remote hosts (3.4)
+
 ## 4. Output shapes
 
 Real output; only whitespace was changed to fit the page.

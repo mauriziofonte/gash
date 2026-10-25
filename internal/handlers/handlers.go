@@ -6,6 +6,7 @@
 package handlers
 
 import (
+	"github.com/mauriziofonte/gash/internal/agent"
 	"github.com/mauriziofonte/gash/internal/ai"
 	"github.com/mauriziofonte/gash/internal/chrome"
 	"github.com/mauriziofonte/gash/internal/db"
@@ -38,6 +39,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	registerOutput(t)
 	selfmgmt.Register(t)
 	llm.Register(t)
+	agent.Register(t)
 	db.Register(t)
 	dev.Register(t)
 	ai.Register(t)

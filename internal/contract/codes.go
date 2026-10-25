@@ -178,6 +178,41 @@ var codeTable = []Code{
 	{"elevation_required", Stop, "win", Origin3x},
 	{"windows_not_found", Stop, "win", Origin3x},
 	{"invalid_windows_argument", Retry, "win", Origin3x},
+	// New in 3.4: agent toolkit, shared output layer (internal/llmfmt):
+	// --format, the output budget, -j and --timeout.
+	{"invalid_format", Retry, "llm", Origin3x},
+	{"invalid_width", Retry, "llm", Origin3x},
+	{"invalid_max_lines", Retry, "llm", Origin3x},
+	{"invalid_head", Retry, "llm", Origin3x},
+	{"invalid_tail", Retry, "llm", Origin3x},
+	{"invalid_jobs", Retry, "llm", Origin3x},
+	{"invalid_timeout", Retry, "llm", Origin3x},
+
+	// New in 3.4: agent toolkit, files and search (llm_find, llm_grep,
+	// llm_tree extensions).
+
+	// New in 3.4: agent toolkit, text reads (llm_stat, llm_count,
+	// llm_assert, llm_read, llm_log, llm_hash, llm_textstats,
+	// llm_textcheck).
+
+	// New in 3.4: agent toolkit, data (llm_db_* formats, llm_json,
+	// llm_csv, llm_config formats, llm_dotenv, llm_date).
+
+	// New in 3.4: agent toolkit, git (llm_git_* extensions,
+	// llm_git_overview, llm_git_show, agent_git_commit).
+
+	// New in 3.4: agent toolkit, network (llm_http, llm_dns, llm_tls,
+	// llm_tcp, llm_ports --port).
+
+	// New in 3.4: agent toolkit, processes, waiting and services (llm_wait,
+	// llm_procs, llm_service, llm_docker_*, llm_sysinfo, agent_kill,
+	// agent_docker_exec).
+
+	// New in 3.4: agent toolkit, runtimes, lint and tests (gash runtime,
+	// gash run, llm_tools, llm_runtime, llm_lint, llm_test).
+
+	// New in 3.4: agent toolkit, remote and edits (--host, llm_remote_run,
+	// llm_same, agent_replace, agent_put).
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

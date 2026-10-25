@@ -110,7 +110,20 @@ type Call struct {
 	// Handlers is the table the call was dispatched from, so that a
 	// handler can run another function (gash migrate runs gash_migrate).
 	Handlers *Table
+	// truncated counts the lines or rows an output budget cut (plan S2),
+	// for the telemetry line (plan S10).
+	truncated int
 }
+
+// NoteTruncated records that an output budget cut k lines or rows.
+func (c *Call) NoteTruncated(k int) {
+	if k > 0 {
+		c.truncated += k
+	}
+}
+
+// Truncated is what NoteTruncated recorded.
+func (c *Call) Truncated() int { return c.truncated }
 
 // Arg returns the i-th argument, or "" (Bash ${N-}).
 func (c *Call) Arg(i int) string {
@@ -231,6 +244,9 @@ func (t *Table) Run(c *Call) int {
 	h, ok := t.fns[c.Name]
 	if !ok {
 		return c.Fail(NotPorted(c.Name))
+	}
+	if Telemetered(c.Name) {
+		return WithTelemetry(c, c.Name, func() int { return h(c) })
 	}
 	return h(c)
 }

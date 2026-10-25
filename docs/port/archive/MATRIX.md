@@ -1021,3 +1021,55 @@ Required by PRD 5.3 (upgrade), 5.4 (shell layer) and 6 (HTE), or by the design (
 | ~/.config/systemd/user/gash-hte.service, ~/Library/LaunchAgents/io.github.mauriziofonte.gash.hte.plist | file | - | HTE autostart units (hte.md 5) | - | none (add autostart render tests) |
 | hte.toml autostart = "shell" | setting | - | Without systemd: the first interactive shell that runs gash init bash starts the HTE stack in the background when it is down (hte.md 5) | binary (file only) | none (add init_bash_hte_autostart.txtar) |
 | invalid_context | error code | - | RETRY: llm_grep --context value that is not a 1-9 digit integer (forced divergence LLM-01; 2.x evaluated it as Bash arithmetic) | binary | none (add TestLedger_LLM01) |
+
+## New in 3.4: agent toolkit
+
+The functions of the 3.4 agent-toolkit plan (`/mnt/project-files/3.4.0/agent-toolkit-plan.md` at
+the time of writing; AGENTS.md is the contract). Decision `new`: no 2.x counterpart. `llm_*` functions
+are read-only (`pure output`); every write is an `agent_*` function (`shell-mutating`, plan D1). The
+columns are the 2.x rows' so the registry test reads them.
+
+### Files and search (F2-F5)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Text reads (F1, F6-F12)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Data (D1, D3-D6, V3, V4)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Git (G1-G7)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Network (N1-N4)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Processes, waiting and services (P1-P5, R4)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Runtimes, lint and tests (S7, S8, S11, V1, V2, L1, L2)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Remote (S5, R1-R3, R5, D2, E2)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|
+
+### Edits (E1)
+
+| Name | Kind | Class | Decision | Reason | Go command | Tests |
+|---|---|---|---|---|---|---|

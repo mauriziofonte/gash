@@ -32,6 +32,20 @@ var llmOptions = map[string][]string{
 	"llm_procs":      {"--name", "--port"},
 	"llm_project":    {},
 	"llm_deps":       {"--dev"},
+
+	// 3.4 text reads.
+
+	// 3.4 data.
+
+	// 3.4 git.
+
+	// 3.4 network.
+
+	// 3.4 processes, waiting and services.
+
+	// 3.4 runtimes, lint and tests.
+
+	// 3.4 remote.
 }
 
 // TestHelpListsEveryOption: every option above is accepted by its parser

@@ -60,6 +60,15 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_procs", m.procs)
 	t.Handle("llm_exec", m.exec)
 	t.Handle("llm_docker_check", m.dockerCheck)
+	// 3.4 agent toolkit: one hook per area, each in its own file
+	// (register34_*.go), so parallel work never edits the same lines.
+	m.registerText(t)
+	m.registerData(t)
+	m.registerGit(t)
+	m.registerNet(t)
+	m.registerProc(t)
+	m.registerRuntime(t)
+	m.registerRemote(t)
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the

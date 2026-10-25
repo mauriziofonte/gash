@@ -204,7 +204,7 @@ func TestLedger_SELF21(t *testing.T) {
 // LEDGER SELF-20: the counts README.md states are the registry's: the
 // functions with a help page, every alias (module short aliases and pack
 // aliases), the git pack's aliases plus the log helpers of its card, and
-// the llm functions.
+// the llm functions (counted, not spelled out, since 3.4 adds many).
 func TestRegistry_ReadmeCounts(t *testing.T) {
 	b, err := os.ReadFile("../../README.md")
 	require.NoError(t, err)
@@ -227,8 +227,7 @@ func TestRegistry_ReadmeCounts(t *testing.T) {
 	helpers := len(CardAliases("git")) - gitAliases
 	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
 	require.Contains(t, readme, strconv.Itoa(gitAliases)+" short aliases and "+strconv.Itoa(helpers)+" log helpers")
-	require.Equal(t, 18, llm, "README.md says Eighteen read-only JSON functions")
-	require.Contains(t, readme, "Eighteen read-only JSON functions")
+	require.Contains(t, readme, strconv.Itoa(llm)+" read-only JSON functions for agents")
 }
 
 // LEDGER DEV-21: the card's php entries are the php pack's aliases, each
