@@ -13,6 +13,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_db_schema`](#llm-db-schema) |  | Show table schema (columns, types, keys) |
 | [`llm_db_tables`](#llm-db-tables) |  | List database tables (JSON array) |
 | [`llm_deps`](#llm-deps) |  | List project dependencies (JSON) |
+| [`llm_dns`](#llm-dns) |  | DNS records of several names at once (JSON) |
 | [`llm_env`](#llm-env) |  | Filtered environment variables (secrets excluded) |
 | [`llm_exec`](#llm-exec) |  | Safe command execution wrapper for AI agents |
 | [`llm_find`](#llm-find) |  | Find files by pattern (ignores noise directories) |
@@ -20,9 +21,12 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_git_log`](#llm-git-log) |  | Recent commits (JSON) |
 | [`llm_git_status`](#llm-git-status) |  | Compact git status (JSON) |
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
+| [`llm_http`](#llm-http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
 | [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
+| [`llm_tcp`](#llm-tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
+| [`llm_tls`](#llm-tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
 
 ## llm_config
@@ -244,6 +248,57 @@ llm_deps /var/www/myapp --dev
 ```
 
 See also: `llm_project`
+
+## llm_dns
+
+DNS records of several names at once (JSON)
+
+#### Usage
+
+```text
+llm_dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP]
+        [-j N] [--timeout S] [--format F] [--width N] [--max-lines N]
+        [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--type T,T             Record types to ask for (default A,AAAA): A, AAAA,
+                       MX, TXT, NS, CAA, CNAME, SOA
+--server IP            Resolver to ask, IP[:PORT] (default: the nameservers
+                       of /etc/resolv.conf)
+-j, --jobs N           Names at a time (default 8)
+--timeout S            Time limit per name, all its types (default 5s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+llm_dns example.com
+llm_dns example.com example.org --type A,MX,TXT
+llm_dns _dmarc.example.com --type TXT --server 1.1.1.1
+```
+
+#### Notes
+
+```text
+Replaces for d in ...; do for t in A MX TXT; do dig +short $t $d; done;
+done. One row per NAME, in input order: {"name", one key per type, "ms",
+"error"}. A and AAAA, NS, CNAME and TXT are sorted string lists (a TXT
+record's strings joined); MX is [{"host","pref"}], CAA
+[{"flag","tag","value"}], SOA [{"mname","rname","serial","refresh",
+"retry","expire","minimum"}]. A type with no records is []; a type whose
+lookup failed is null. error is null, or nxdomain (the name does not
+exist), servfail, refused, timeout, connection_refused, bad_response.
+Names are asked as given (no search domains).
+```
+
+See also: `llm_tcp`, `llm_tls`, `llm_http`
 
 ## llm_env
 
@@ -484,6 +539,92 @@ line:content); context lines use -, groups are separated by --.
 A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
 
+## llm_http
+
+Probe several URLs at once: status, timings, headers, JSON value (JSON)
+
+#### Usage
+
+```text
+llm_http URL... [--method M] [--header H]... [--auth-env VAR]...
+         [--resolve HOST:IP]... [--follow] [--status-only] [--headers h1,h2]
+         [--json-path P] [--grep RE] [--body-max N] [--expect CODE]
+         [--insecure] [-j N] [--timeout S] [--format F] [--width N]
+         [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--method M             GET (default), HEAD or OPTIONS; any other method is
+                       a write and is refused (http_method_blocked, FATAL)
+--header H             A request header "Name: value" (repeatable); "Host:
+                       NAME" sets the Host. A credential header
+                       (Authorization, Cookie, a name with TOKEN, KEY,
+                       SECRET, AUTH, ...) is refused: use --auth-env
+--auth-env VAR         Send the header held by the exported variable VAR:
+                       "Name: value", or a bare value meaning
+                       "Authorization: value" (repeatable). Never printed,
+                       never sent on to another host by a redirect
+--resolve HOST:IP      Connect to IP for HOST (also HOST:PORT:IP); TLS and
+                       the Host header keep HOST; no proxy for HOST
+--follow               Follow redirects (at most 10)
+--status-only          Do not read the body: url, status, ms, ok, error
+--headers h1,h2        Add these response headers (credentials masked)
+--json-path P          Add the value at P of the JSON body (a.b[0].c)
+--grep RE              Add the first body line matching RE (RE2) and the
+                       number of matching lines
+--body-max N           Body bytes kept for --grep and --json-path
+                       (default 8388608)
+--expect CODE          Statuses that are ok: codes or classes, e.g. 200,
+                       2xx, 200,301 (default 200 to 399)
+-k, --insecure         Do not verify the certificate (not with --auth-env)
+-j, --jobs N           URLs at a time (default 8)
+--timeout S            Time limit per URL, redirects and body included
+                       (default 10s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+# Status of many URLs at once
+llm_http https://a.example/health https://b.example/health --status-only
+
+# Redirect chain and two headers
+llm_http http://example.com --follow --headers location,content-type
+
+# An API field, the credential from the environment
+export API_AUTH='Authorization: Bearer ...'
+llm_http https://api.example/jobs/42 --auth-env API_AUTH --json-path status
+
+# A site on a new server before DNS points at it
+llm_http https://example.com/ --resolve example.com:203.0.113.7 --grep '<title>'
+```
+
+#### Notes
+
+```text
+Replaces curl -w %{http_code} loops, curl -I | grep, curl | jq and
+curl | grep. Read-only: GET, HEAD and OPTIONS, no request body. One row per
+URL, in input order: {"url","status","ms","timing","bytes","redirects",
+"ok","error"}, then "headers", "value", "match" and "matches" when asked
+(--status-only: url, status, ms, ok, error). timing is {"dns","connect",
+"tls","ttfb"} in ms; redirects lists each 3xx as {"status","location"}.
+ok: no error, the status expected, --grep matched, --json-path found.
+error is null or one of dns_not_found dns_error connection_refused
+connection_reset unreachable timeout tls_error certificate_error
+too_many_redirects transport_error invalid_json json_path_not_found
+body_max_exceeded. A URL with a password is refused (secret_in_argv).
+Proxies from HTTPS_PROXY, HTTP_PROXY and NO_PROXY; CAs from the system or
+SSL_CERT_FILE / SSL_CERT_DIR.
+```
+
+See also: `llm_tls`, `llm_tcp`, `llm_dns`
+
 ## llm_ports
 
 List ports in use (JSON)
@@ -491,13 +632,15 @@ List ports in use (JSON)
 #### Usage
 
 ```text
-llm_ports [--listen]
+llm_ports [--listen] [--port N]
 ```
 
 #### Options
 
 ```text
 -l, --listen           Listening sockets only
+--port N               Sockets on local port N (0 to 65535), each with the
+                       processes that hold it
 ```
 
 #### Examples
@@ -505,9 +648,20 @@ llm_ports [--listen]
 ```bash
 llm_ports
 llm_ports --listen
+
+# Who listens on 8080
+llm_ports --listen --port 8080
 ```
 
-See also: `llm_procs`
+#### Notes
+
+```text
+--port replaces ss -tlnp | grep :8080: it adds "procs":[{"pid","name"}]
+to each record (from ss -p or netstat -p; empty for another user's process
+unless you are root).
+```
+
+See also: `llm_procs`, `llm_tcp`
 
 ## llm_procs
 
@@ -561,6 +715,96 @@ llm_project /var/www/myapp
 ```
 
 See also: `llm_deps`
+
+## llm_tcp
+
+Can a TCP connection be opened to each HOST:PORT (JSON)
+
+#### Usage
+
+```text
+llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N]
+        [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+-j, --jobs N           Targets at a time (default 8)
+--timeout S            Connect time limit per target (default 5s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+llm_tcp db.internal:5432 cache.internal:6379
+llm_tcp [::1]:22 127.0.0.1:8080 --timeout 1
+```
+
+#### Notes
+
+```text
+Replaces nc -z h p and timeout 2 bash -c '</dev/tcp/h/p'. Nothing is sent:
+the connection is closed once open. One row per target, in input order:
+{"target","open","ms","error"}; error is null, or connection_refused,
+timeout (filtered), unreachable, dns_not_found, dns_error.
+```
+
+See also: `llm_ports`, `llm_tls`, `llm_http`
+
+## llm_tls
+
+TLS certificate of several hosts at once: expiry, SANs, issuer (JSON)
+
+#### Usage
+
+```text
+llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F]
+        [--width N] [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--sni NAME             Server name to send and verify (default: HOST)
+-j, --jobs N           Hosts at a time (default 8)
+--timeout S            Time limit per host, connect and handshake
+                       (default 10s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+llm_tls example.com example.org
+llm_tls mail.example.com:465 203.0.113.7 --sni www.example.com
+```
+
+#### Notes
+
+```text
+Replaces echo | openssl s_client -connect h:443 -servername h | openssl
+x509 -noout -dates -subject. PORT defaults to 443; an https:// URL is
+taken too. One row per host, in input order: {"host","protocol",
+"subject","issuer","san","not_after","days_left","verified",
+"verify_error","chain","ms","error"}. The handshake accepts any
+certificate, so an expired or self-signed one is still described; verified
+says whether the chain checks out for the server name against the system
+CAs (or SSL_CERT_FILE / SSL_CERT_DIR), verify_error why not: expired,
+not_yet_valid, hostname_mismatch, unknown_authority, invalid. chain lists
+the certificates after the leaf as {"subject","issuer","not_after"}.
+error is null, or connection_refused, timeout, dns_not_found, tls_error
+(the handshake failed), no_certificate. No STARTTLS.
+```
+
+See also: `llm_http`, `llm_tcp`
 
 ## llm_tree
 
