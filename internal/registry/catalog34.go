@@ -21,6 +21,11 @@ func mergeCatalog(parts ...[]Function) []Function {
 	for _, p := range parts {
 		out = append(out, p...)
 	}
+	for i := range out {
+		if r, ok := baseReplaces[out[i].Name]; ok && out[i].Replaces == "" {
+			out[i].Replaces = r
+		}
+	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }

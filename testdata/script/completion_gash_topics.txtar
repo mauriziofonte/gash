@@ -5,13 +5,13 @@
 #
 # SHELL-03 proving test: every card word TAB offers after "gash " runs with
 # status 0, and "help" (an unknown topic) is no longer offered. The
-# binary's commands (init, update, version, hte, logs, wsl, win) take their
-# own arguments and are completed further by the binary; they are not run
-# here.
+# binary's commands (init, update, version, hte, logs, wsl, win, agents-hint)
+# take their own arguments and are completed further by the binary; they
+# are not run here.
 
 env GASH_BANNER=0
 exec bash --norc --noprofile -i drive.sh
-stdout '^offered: all files system nav git docker remote dev llm agent ai gash init update version hte logs wsl win$'
+stdout '^offered: all files system nav git docker remote dev llm agent ai gash init update version hte logs wsl win agents-hint$'
 ! stdout 'FAILED'
 stdout '^ran 12$'
 
@@ -24,7 +24,7 @@ __gash_complete gash "" gash
 echo "offered: ${COMPREPLY[*]}"
 n=0
 for w in "${COMPREPLY[@]}"; do
-    case "$w" in init | update | version | hte | logs | wsl | win) continue ;; esac
+    case "$w" in init | update | version | hte | logs | wsl | win | agents-hint) continue ;; esac
     gash "$w" >/dev/null 2>&1 || echo "FAILED $w"
     n=$((n + 1))
 done

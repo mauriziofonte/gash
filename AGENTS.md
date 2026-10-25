@@ -599,9 +599,47 @@ environment wins) and prints no configuration warnings unless `GASH_DEBUG=1`.
 
 ## 7. Routing: the raw shape and the Gash function
 
-_Filled when the 3.4 functions land (plan S9): one row per agent intent,
-"the command an agent would type" and the Gash function that answers it in
-one call. `gash agents-hint` prints the same table._
+The command an agent would type, and the Gash call that answers it in one
+round trip with a capped, structured answer. `gash agents-hint` prints this
+table with a short preamble, ready to paste into an agent's instructions
+(`--format json` for one object per row). The table is generated from the
+registry, where each function's entry names the shape it replaces.
+
+| Instead of | Use |
+| --- | --- |
+| `grep -q P f && echo ok; grep -c P f (as checks)` | `llm_assert` |
+| `cat config/app.yaml; cat composer.json (a config file that is not secret)` | `llm_config` |
+| `grep -c A f; grep -c B f; grep -c C g` | `llm_count` |
+| `mysql -e "EXPLAIN SELECT ..."` | `llm_db_explain` |
+| `mysql -N -B -e "SELECT ..."; psql -c "SELECT ..."; sqlite3 f "SELECT ..."` | `llm_db_query` |
+| `mysql -e "SELECT * FROM t LIMIT 5"` | `llm_db_sample` |
+| `mysql -e "SHOW CREATE TABLE t"; psql -c "\d t"; sqlite3 f .schema` | `llm_db_schema` |
+| `mysql -e "SHOW TABLES"; psql -c "\dt"; sqlite3 f .tables` | `llm_db_tables` |
+| `cat composer.json package.json \| jq .require` | `llm_deps` |
+| `for d in ...; do for t in A MX TXT; do dig +short $t $d; done; done` | `llm_dns` |
+| `docker compose pull --dry-run; docker images` | `llm_docker_check` |
+| `env \| grep -i PATH; printenv NODE_ENV` | `llm_env` |
+| `bash -c "..." for an allowlisted command` | `llm_exec` |
+| `find D -name '*.php' -not -path '*/vendor/*'` | `llm_find` |
+| `git diff --stat; git diff --name-only` | `llm_git_diff` |
+| `git log --oneline -20` | `llm_git_log` |
+| `git status --short; git branch -vv` | `llm_git_status` |
+| `grep -rn --include='*.php' X . \| grep -v vendor` | `llm_grep` |
+| `sha256sum f \| cut -c1-12; md5sum f` | `llm_hash` |
+| `for u in ...; do curl -s -o /dev/null -w '%{http_code}' $u; done; curl -sI URL \| grep -i location; curl -s -H "$AUTH" URL \| jq .status` | `llm_http` |
+| `tail -n 50 app.log \| cut -c1-200; grep ERROR app.log \| tail -20` | `llm_log` |
+| `ss -tlnp; lsof -i :8080` | `llm_ports` |
+| `ps aux \| grep X \| grep -v grep` | `llm_procs` |
+| `ls; cat composer.json package.json (what kind of project is this)` | `llm_project` |
+| `grep -n X f; sed -n A,Bp f; cat -n f \| sed -n A,Bp; cat a b` | `llm_read` |
+| `ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e` | `llm_stat` |
+| `nc -z h p; timeout 2 bash -c '</dev/tcp/h/p'` | `llm_tcp` |
+| `grep -nP '[^\x00-\x7F]' f; file -i f` | `llm_textcheck` |
+| `wc -w f; wc -c f; gzip -c f \| wc -c` | `llm_textstats` |
+| `echo \| openssl s_client -connect h:443 -servername h \| openssl x509 -noout -dates -subject` | `llm_tls` |
+| `tree -L 2 -I node_modules; ls -R` | `llm_tree` |
+| `python3 - <<EOF ... s.replace(...) ... EOF; sed -i` | `agent_replace` |
+
 
 ## 8. Write tools (`agent_*`)
 
