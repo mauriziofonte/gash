@@ -1,0 +1,47 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_tools (new in 3.4, plan V1): the path and version of each program,
+# probed in parallel, keys in the order asked. A program not on PATH is
+# null, one whose probe prints no version has "version":null; node lists
+# every installed version (here a fake nvm tree), oldest first. The
+# programs are stubs on PATH.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env PATH=$WORK/bin:$PATH
+chmod 0755 bin/foo
+chmod 0755 bin/quiet
+chmod 0755 home/.nvm/versions/node/v20.11.1/bin/node
+chmod 0755 home/.nvm/versions/node/v24.1.0/bin/node
+
+# --- through the sourced shell
+exec bash -c 'source "$GASH_SH"; llm_tools foo quiet no-such-tool-zz'
+stdout '^\{"foo":\{"version":"1\.2\.3","path":"[^"]*/bin/foo"\},"quiet":\{"version":null,"path":"[^"]*/bin/quiet"\},"no-such-tool-zz":null\}$'
+! stderr .
+
+# --- directly: node per installed version (the host's node may sit
+# between), duplicates once
+exec gash llm_tools node foo foo -j 2
+stdout '^\{"node":\[\{"version":"20\.11\.1","path":"[^"]*/v20\.11\.1/bin/node"\},'
+stdout '\{"version":"24\.1\.0","path":"[^"]*/v24\.1\.0/bin/node"\}[^]]*\],"foo":\{"version":"1\.2\.3","path":"[^"]*"\}\}$'
+
+# --- a path is not a name
+! exec gash llm_tools /usr/bin/git
+stderr '"error":"invalid_filter"'
+! exec gash llm_tools --all
+stderr '"error":"unknown_option"'
+
+-- bin/foo --
+#!/bin/sh
+[ "$1" = --version ] && echo 'foo version 1.2.3 (build 7)'
+-- bin/quiet --
+#!/bin/sh
+exit 0
+-- home/.nvm/versions/node/v20.11.1/bin/node --
+#!/bin/sh
+echo v20.11.1
+-- home/.nvm/versions/node/v24.1.0/bin/node --
+#!/bin/sh
+echo v24.1.0
