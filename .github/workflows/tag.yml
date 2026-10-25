@@ -80,9 +80,11 @@ jobs:
           echo "Releasing $tag from $sha"
           go run ./internal/tools/relnotes -version "$v" >/dev/null
           go run ./internal/tools/releasesums -check
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
-          echo "version=$v" >>"$GITHUB_OUTPUT"
+          {
+            echo "sha=$sha"
+            echo "tag=$tag"
+            echo "version=$v"
+          } >>"$GITHUB_OUTPUT"
 
       - name: Create and push the tag
         env:
