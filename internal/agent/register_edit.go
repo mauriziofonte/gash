@@ -6,5 +6,5 @@ import "github.com/mauriziofonte/gash/internal/invoke"
 
 // registerEdit binds agent_replace (E1).
 func (m *Module) registerEdit(t *invoke.Table) {
-	_ = t
+	t.Handle("agent_replace", m.replace)
 }

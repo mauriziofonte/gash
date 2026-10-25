@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
@@ -26,7 +27,20 @@ func run(t *testing.T, name string, env map[string]string, tty bool, args ...str
 // (Handle panics on an unknown or repeated name).
 func TestTableBuilds(t *testing.T) {
 	tbl := Table()
-	require.Equal(t, []string{"ai_ask", "ai_query", "ai_sysinfo", "all_colors", "archive_extract", "chrome_headless_update", "dirs_find_large", "dirs_largest", "dirs_list_empty", "disk_usage", "docker_compose_check", "docker_compose_scan", "docker_compose_upgrade", "docker_prune_all", "docker_start_all", "docker_stop_all", "file_backup", "files_largest", "gash", "gash_ai_list", "gash_db_list", "gash_db_test", "gash_doctor", "gash_env_init", "gash_help", "gash_inspiring_quote", "gash_migrate", "gash_ssh_auto_unlock", "gash_uninstall", "gash_upgrade", "gash_username", "git_add_tag", "git_apply_patch", "git_delete_tag", "git_dump_revisions", "git_list_tags", "git_repair", "git_sync", "gl", "gla", "glf", "glg", "glo", "gls", "hgrep", "history_grep", "ip_public", "llm_config", "llm_db_explain", "llm_db_query", "llm_db_sample", "llm_db_schema", "llm_db_tables", "llm_deps", "llm_docker_check", "llm_env", "llm_exec", "llm_find", "llm_git_diff", "llm_git_log", "llm_git_status", "llm_grep", "llm_ports", "llm_procs", "llm_project", "llm_tree", "mkdir_cd", "node_detect_version", "node_upgrade", "nvm_prune_versions", "php_detect_version", "port_kill", "process_find", "process_kill", "remote_exec", "remote_hosts", "remote_pull", "remote_push", "remote_sync_pull", "remote_sync_push", "services_stop", "sudo_last", "sysinfo", "tree_stats", "wsl_compact", "wsl_explorer", "wsl_restart", "wsl_shutdown", "wsl_taskmanager"}, tbl.Names())
+	// Every function the generated Bash delegates to the binary has a
+	// handler, and nothing else does (the card, gash, is the one stub that
+	// is not delegated; gash_unload's override runs in Bash). Derived from
+	// the registry, so a new function only needs its registry entry and
+	// its Handle line.
+	var want []string
+	for _, f := range registry.Functions() {
+		if (f.Delegated() && f.Name != "gash_unload") || f.Name == "gash" {
+			want = append(want, f.Name)
+		}
+	}
+	require.Equal(t, want, tbl.Names())
+	require.Contains(t, tbl.Names(), "llm_find")
+	require.Contains(t, tbl.Names(), "agent_replace")
 	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
@@ -68,15 +82,15 @@ func TestCompatHelp(t *testing.T) {
 func TestCardUnknownTopic(t *testing.T) {
 	_, errOut, rc := run(t, "gash", map[string]string{"LANG": "C.UTF-8"}, false, "nope")
 	require.Equal(t, 1, rc)
-	require.Equal(t, "Error: Unknown topic: nope. Topics: files system nav git docker remote dev llm ai gash, all\n", errOut)
+	require.Equal(t, "Error: Unknown topic: nope. Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut)
 
 	_, errOut, rc = run(t, "gash", map[string]string{"LANG": "C.UTF-8"}, true, "--no-color", "x")
 	require.Equal(t, 1, rc)
-	require.Equal(t, "✗ Error: Unknown topic: x. Topics: files system nav git docker remote dev llm ai gash, all\n", errOut)
+	require.Equal(t, "✗ Error: Unknown topic: x. Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut)
 
 	_, errOut, rc = run(t, "gash", nil, true, "nope")
 	require.Equal(t, 1, rc)
-	require.Equal(t, "\x1b[38;5;196mx Error:\x1b[0m Unknown topic: nope. Topics: files system nav git docker remote dev llm ai gash, all\n", errOut)
+	require.Equal(t, "\x1b[38;5;196mx Error:\x1b[0m Unknown topic: nope. Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut)
 
 	// Synonyms are topics.
 	out, errOut, rc := run(t, "gash", nil, false, "navigation")

@@ -73,7 +73,7 @@ func TestUnknownWordIsTheCard(t *testing.T) {
 	for _, args := range [][]string{{"nope"}, {"--no-color", "nope"}, {"--no-color", "version", "nope"}, {"help"}, {"needs_help"}, {"flf"}} {
 		_, errOut, rc := run(args...)
 		require.Equal(t, 1, rc, args)
-		require.Equal(t, "Error: Unknown topic: "+args[len(args)-1]+". Topics: files system nav git docker remote dev llm ai gash, all\n", errOut, args)
+		require.Equal(t, "Error: Unknown topic: "+args[len(args)-1]+". Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut, args)
 	}
 	// --no-color before a command word does not select the command.
 	_, errOut, _ := run("--no-color", "version")

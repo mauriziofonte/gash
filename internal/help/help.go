@@ -128,11 +128,31 @@ func Needs(c *invoke.Call, program, usage, description, arg string) bool {
 
 // NeedsOf is Needs with the fallback triple the registry recorded for the
 // function of the call.
+//
+// A function new in 3.x (Decision "new") has no 2.x needs_help triple: its
+// fallback is derived from its registered help (the first USAGE line and
+// the short description), so --help always prints something.
 func NeedsOf(c *invoke.Call, arg string) bool {
 	f, ok := registry.Lookup(c.Name)
-	if !ok || f.Fallback == nil {
+	if !ok {
 		return false
 	}
 	u := f.Fallback
+	if u == nil && f.Decision == "new" && f.HasHelp {
+		u = &registry.Usage{Program: f.Name, Usage: firstUsage(f.Help.Body), Description: f.Help.Short}
+	}
+	if u == nil {
+		return false
+	}
 	return Needs(c, u.Program, u.Usage, u.Description, arg)
+}
+
+// firstUsage is the first line of a help body's USAGE section, trimmed.
+func firstUsage(body string) string {
+	_, rest, ok := strings.Cut(body, "USAGE\n")
+	if !ok {
+		return ""
+	}
+	line, _, _ := strings.Cut(rest, "\n")
+	return strings.TrimSpace(line)
 }

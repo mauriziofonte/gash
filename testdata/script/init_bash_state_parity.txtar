@@ -25,7 +25,9 @@
 # nvm (2.x registered it for its lazy stub; 3.x registered it always and
 # replaced the completion of a user's nvm, and gash_unload then removed
 # it: fixed with this test), aliases the user defined first stay
-# (SHELL-09 fixed).
+# (SHELL-09 fixed). The functions new in 3.x ($GASH_NEW3X: the registry's
+# decision "new", such as agent_replace) exist only in 3.x and are left
+# out too.
 #
 # After gash_unload the 3.x shell is exactly the shell before the load,
 # in every case (SELF-03, SELF-05 fixed; 2.x left completion specs,
@@ -99,6 +101,12 @@ for c in ${CASES:-defaults all_off replace_tools nvm_lazy path_add user_aliases 
         grep -qx "alias gp='echo mine'" "$l3" && grep -qx "alias ll='ls -1'" "$l3" || echo "$c: 3.x overwrote a user alias (SHELL-09)"
         grep -qx "alias gp='echo mine'" "$l2" && echo "$c: 2.x kept the user alias gp"
     fi
+    # Functions new in 3.x (registry decision "new", $GASH_NEW3X from
+    # script_test.go) and their completion specs exist only in 3.x.
+    for n in ${GASH_NEW3X-}; do
+        sed -i.bak -e "/^$n\$/d" -e "/^complete -o default -F __gash_complete $n\$/d" "$l3"
+        rm -f "$l3.bak"
+    done
     for f in "$l2" "$l3"; do
         sed -i.bak -e "/^alias grep='grep --color=auto'\$/d" -e '/^alias path=/d' \
             -e '/^complete -o default -F __gash_complete nvm$/d' "$f"

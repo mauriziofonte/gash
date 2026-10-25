@@ -187,6 +187,18 @@ var codeTable = []Code{
 	{"invalid_tail", Retry, "llm", Origin3x},
 	{"invalid_jobs", Retry, "llm", Origin3x},
 	{"invalid_timeout", Retry, "llm", Origin3x},
+	// New in 3.4: agent toolkit, edits (agent_replace). Nothing is
+	// written on any of these.
+	{"invalid_replacement", Retry, "agent", Origin3x},
+	{"invalid_count", Retry, "agent", Origin3x},
+	{"replace_count_mismatch", Retry, "agent", Origin3x},
+	{"binary_file", Retry, "agent", Origin3x},
+	{"file_changed", Retry, "agent", Origin3x},
+	{"write_failed", Stop, "agent", Origin3x},
+	// The write path policy of every agent_* target (the transfer DENY
+	// and ASK tiers of internal/remote, applied locally too).
+	{"write_path_denied", Fatal, "agent", Origin3x},
+	{"sensitive_path", Stop, "agent", Origin3x},
 
 	// New in 3.4: agent toolkit, files and search (llm_find, llm_grep,
 	// llm_tree extensions).

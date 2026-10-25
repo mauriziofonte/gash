@@ -26,7 +26,7 @@ stdout '^Gash reference card with all functions and aliases$'
 
 ! exec bash -c 'source "$GASH_SH"; gash bogus'
 ! stdout .
-stderr '^Error: Unknown topic: bogus\. Topics: files system nav git docker remote dev llm ai gash, all$'
+stderr '^Error: Unknown topic: bogus\. Topics: files system nav git docker remote dev llm agent ai gash, all$'
 
 -- nav.txt --
 

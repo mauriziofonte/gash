@@ -156,4 +156,6 @@ func (f *Function) HasStub() bool { return f.Delegated() || f.Name == "gash" }
 var ModuleOrder = []string{
 	"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh", "llm", "utils",
 	"node", "remote", "chrome", "php",
+	// New in 3.4: the agent_* write family, its own help module.
+	"agent",
 }

@@ -1073,3 +1073,4 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| agent_replace | function | shell-mutating | new | Literal or regex replacements in explicit files, every pair's count checked in every file first, all or nothing (plan E1, D1 agent_* family) | gash agent_replace | internal/agent replace_test.go, agent_replace.txtar |
