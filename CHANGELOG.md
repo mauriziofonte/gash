@@ -6,7 +6,11 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [Unreleased]
+## [3.1.0] - 2026-10-25
+
+Releases are now signed and verifiable without any key to keep, and the
+guardrails are fuzzed, mutation-tested and held to coverage floors. Two of
+the fuzzers found real gaps, closed here (see Security).
 
 ### Added
 
@@ -31,6 +35,10 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
   copyloopvar, durationcheck and makezero; the dead code they found (the
   unported grep helpers of the dev module, test helpers of the removed 2.x
   comparisons) is gone, and errors are matched with `errors.Is`/`errors.As`.
+- CI holds the guardrail packages (`internal/sqlguard`,
+  `internal/llmexec`, `internal/pathguard`, `internal/hostshelper`) to
+  statement coverage floors, and a weekly **Mutation** workflow runs
+  go-mutesting on them against score floors; both floors only go up.
 - `SECURITY.md`: 2.1.x gets critical and high security fixes until
   2027-04-30; a fix for a critical or high report ships within 30 days.
 
@@ -726,7 +734,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
-[Unreleased]: https://github.com/mauriziofonte/gash/compare/v3.0.0...HEAD
+[3.1.0]: https://github.com/mauriziofonte/gash/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0
