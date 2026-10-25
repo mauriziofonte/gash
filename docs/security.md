@@ -169,6 +169,7 @@ A path is secret when its base name matches, ignoring case, one of:
 | Keys and keystores | `*.pem` `*.key` `*.p12` `*.pfx` `*.jks` `*.keystore` `*.kdbx` `*.ppk` `id_rsa*` `id_dsa*` `id_ecdsa*` `id_ed25519*` `*_rsa` `*_dsa` `*_ecdsa` `*_ed25519` (not `*.pub`) |
 | Credential files | `credentials` `credentials.*` `credentials_*` `credentials-*` `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc` `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto` `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig` `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json` `.envrc` |
 | Host keys | `ssh_host_*_key` (not `*.pub`) |
+| Windows (WSL) | `ntuser.dat` `ntuser.dat.*` `usrclass.dat` `usrclass.dat.*` `*.rdp` `unattend.xml` `autounattend.xml` `login data` `logins.json` `key4.db` `key3.db` — reachable over `/mnt` |
 | Directories | anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.config/gcloud` |
 
 A symlink is judged by its own name and by its target's.

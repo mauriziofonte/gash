@@ -339,6 +339,9 @@ Matched case-insensitively on the base name, and on the target of a symlink
   `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto`
   `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig`
   `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json`
+* Windows (WSL), reachable over /mnt: `ntuser.dat` `ntuser.dat.*`
+  `usrclass.dat` `usrclass.dat.*` `*.rdp` `unattend.xml` `autounattend.xml`
+  `login data` `logins.json` `key4.db` `key3.db`
 * Anything under a directory `.ssh` `.gnupg` `.aws` `.azure` `.kube`
   `.docker` `.config/gcloud`
 * Not secret (templates, which win over the above): `*.pub` `.env.example`
