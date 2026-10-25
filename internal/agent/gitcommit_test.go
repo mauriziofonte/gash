@@ -307,3 +307,15 @@ func TestGitCommitPushWordIsPath(t *testing.T) {
 	require.Equal(t, "origin", v["remote"])
 	require.Equal(t, "via path\n", sh(t, bare, home, "log", "-1", "--format=%s", "main"))
 }
+
+func TestGitCommitHoldsStagedPaths(t *testing.T) {
+	repo, _, home := commitRepo(t)
+	// n.txt is staged beforehand: an --add of a.txt commits both (as git
+	// add a.txt && git commit does), dir/x.txt stays untracked.
+	sh(t, repo, home, "add", "n.txt")
+	r := commitCall(t, repo, home, "-m", "x", "--add", "a.txt", "--dry-run")
+	require.Contains(t, r.Stdout, `"files":2,"paths":["a.txt","n.txt"]`)
+	v := decode(t, commitCall(t, repo, home, "-m", "x", "--add", "a.txt"))
+	require.Equal(t, 2.0, v["files"])
+	require.Equal(t, "?? dir/\n", sh(t, repo, home, "status", "--short"))
+}

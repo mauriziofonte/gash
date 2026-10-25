@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/contract"
@@ -213,18 +215,6 @@ func (m *Module) gitCommit(c *invoke.Call) int {
 	if !res.Success() || top == "" {
 		return fail(c, "not_a_git_repo", dir+" is not a git work tree", "Not inside a git repository. Skip git operations")
 	}
-	res = gitx.Safe(ctx, m.run, env, nil, nil, io.Discard, "-C", top, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all")
-	if !res.Success() {
-		return fail(c, "git_error", gitx.LastLine(res.Stderr, 300), "")
-	}
-	st := gitx.ParseStatus(res.Stdout)
-	if st.Detached || st.Branch == "" {
-		return fail(c, "detached_head", "HEAD is not on a branch", "Check out a branch first (ask the user which one)")
-	}
-	_, _, _, conflicted := st.Counts()
-	if conflicted > 0 {
-		return fail(c, "merge_conflict", strconv.Itoa(conflicted)+" unmerged path(s)", "Resolve the conflicts first; nothing was staged or committed")
-	}
 
 	// The --add targets, relative to the repository root.
 	var rels []string
@@ -253,6 +243,18 @@ func (m *Module) gitCommit(c *invoke.Call) int {
 			return fail(c, "invalid_target", p, "That is the whole repository: use -A to commit every change")
 		}
 		rels = append(rels, filepath.ToSlash(rel))
+	}
+
+	st, res := m.commitStatus(ctx, env, top, a.all, rels)
+	if !res.Success() {
+		return fail(c, "git_error", gitx.LastLine(res.Stderr, 300), "")
+	}
+	if st.Detached || st.Branch == "" {
+		return fail(c, "detached_head", "HEAD is not on a branch", "Check out a branch first (ask the user which one)")
+	}
+	_, _, _, conflicted := st.Counts()
+	if conflicted > 0 {
+		return fail(c, "merge_conflict", strconv.Itoa(conflicted)+" unmerged path(s)", "Resolve the conflicts first; nothing was staged or committed")
 	}
 	paths, removed, unmatched := commitPaths(st, a.all, rels)
 	for _, p := range paths {
@@ -355,6 +357,57 @@ func (m *Module) git(ctx context.Context, env []string, stdin io.Reader, timeout
 	return res
 }
 
+// commitStatus is the state agent_git_commit checks: the branch, its
+// upstream and the entries. With -A that is the whole work tree. With
+// --add targets it is the work tree under the targets only (a pathspec
+// spares git the scan of every untracked file, the cost of a large
+// repository) plus every staged or unmerged path of the index, which the
+// commit holds or refuses as well; the two run side by side.
+func (m *Module) commitStatus(ctx context.Context, env []string, top string, all bool, rels []string) (gitx.Status, runner.Result) {
+	args := []string{"-C", top, "--literal-pathspecs", "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"}
+	if all {
+		res := gitx.Safe(ctx, m.run, env, nil, nil, io.Discard, args...)
+		return gitx.ParseStatus(res.Stdout), res
+	}
+	var idx runner.Result
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		idx = gitx.Safe(ctx, m.run, env, nil, nil, io.Discard, "-C", top, "diff", "--cached", "--name-status", "--no-renames", "-z", "--")
+	}()
+	res := gitx.Safe(ctx, m.run, env, nil, nil, io.Discard, append(append(args, "--"), rels...)...)
+	wg.Wait()
+	if !res.Success() {
+		return gitx.Status{}, res
+	}
+	if !idx.Success() {
+		return gitx.Status{}, idx
+	}
+	st := gitx.ParseStatus(res.Stdout)
+	have := map[string]bool{}
+	for _, e := range st.Entries {
+		have[e.Path] = true
+		if e.Orig != "" {
+			have[e.Orig] = true
+		}
+	}
+	f := gitx.SplitZ(idx.Stdout)
+	for i := 0; i+1 < len(f); i += 2 {
+		letter, p := f[i], f[i+1]
+		if letter == "" || have[p] {
+			continue
+		}
+		have[p] = true
+		e := gitx.StatusEntry{Kind: '1', X: letter[0], Y: '.', Path: p}
+		if letter[0] == 'U' {
+			e = gitx.StatusEntry{Kind: 'u', X: 'U', Y: 'U', Path: p}
+		}
+		st.Entries = append(st.Entries, e)
+	}
+	return st, res
+}
+
 // commitPaths are the paths the commit would change: what is staged
 // already plus, for each target (every path with -A), its changes in the
 // work tree and its untracked files. removed are the ones among them the
@@ -399,6 +452,7 @@ func commitPaths(st gitx.Status, all bool, targets []string) (paths []string, re
 			unmatched = append(unmatched, t)
 		}
 	}
+	sort.Strings(paths)
 	return paths, removed, unmatched
 }
 
