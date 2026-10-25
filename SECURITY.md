@@ -5,7 +5,7 @@
 | Version | Supported |
 |---|---|
 | 3.x | Yes: fixes ship in the next 3.x release |
-| 2.1.x | Security fixes only, as 2.1.x patch releases, while 3.0 settles in. Upgrade with `gash_upgrade` |
+| 2.1.x | Critical and high security fixes only, as 2.1.x patch releases, until 2027-04-30. Upgrade with `gash_upgrade` |
 | 2.0.x and older | No: upgrade with `gash_upgrade` (1.x: through 2.1.0, see [docs/migration.md](docs/migration.md)) |
 
 ## Reporting a vulnerability
@@ -19,7 +19,8 @@ not in a public issue. Include:
 - the function or `gash hte` command involved;
 - the smallest input that shows the problem, and what it lets you do.
 
-We aim to acknowledge a report within a week. Once a fix is ready we agree
+We aim to acknowledge a report within a week and to ship the fix of a
+critical or high issue within 30 days of the report. Once a fix is ready we agree
 on a disclosure date with you, publish the release and credit you in the
 advisory unless you prefer otherwise. Until then, the changelog and the
 public issue tracker describe the fix without a working exploit.
@@ -40,7 +41,9 @@ In scope:
   process or the network unasked.
 - **Install and upgrade**: anything that makes `install.sh`, `gash update`
   or `gash_upgrade` install a binary or a tree that the release tag does not
-  pin, or skip a signature check that `GASH_REQUIRE_SIGNED=1` asks for.
+  pin, or skip a signature check that `GASH_REQUIRE_SIGNED=1` asks for;
+  a release asset whose Sigstore signature or build provenance verifies
+  although the release workflow did not build it.
 - **`gash hte`**: the root-owned `gash-hosts-helper` and its sudoers line
   (anything that writes outside the gash block of `/etc/hosts`, or puts a
   non-loopback address or an unvalidated name in it), the install and
@@ -60,4 +63,4 @@ Out of scope:
   Gash drives, unless Gash calls them unsafely.
 
 [docs/security.md](docs/security.md) describes the threat model and every
-guardrail in detail.
+guardrail in detail, and how to verify a release.

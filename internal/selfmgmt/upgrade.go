@@ -165,7 +165,11 @@ func (m *Module) latestTag(c *invoke.Call, dir string) string {
 // the tag is an annotated tag whose object carries one (tagSigned; `git
 // cat-file tag` fails for a lightweight tag, which is not signed); false
 // only with GASH_REQUIRE_SIGNED=1 and a tag that is unsigned or does not
-// verify.
+// verify. An unsigned tag is accepted under GASH_REQUIRE_SIGNED=1 when the
+// Sigstore signature of its release verifies for the tag's commit
+// (verifyRelease; 3.0.1: the releases are signed keyless by the release
+// workflow, not by a person's key); with cosign on PATH that signature is
+// checked, and reported, without GASH_REQUIRE_SIGNED too.
 func (m *Module) verifyTag(c *invoke.Call, p ui.Printer, dir, tag string) bool {
 	required := c.Env.Get("GASH_REQUIRE_SIGNED") == "1"
 	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "cat-file", "tag", "refs/tags/" + tag},
@@ -179,10 +183,9 @@ func (m *Module) verifyTag(c *invoke.Call, p ui.Printer, dir, tag string) bool {
 			return true
 		}
 		p.Warning(tag + " is signed, but the signature could not be verified (is the key in your keyring?).")
-	case required:
-		p.Warning(tag + " is not signed.")
 	default:
-		return true
+		r, detail := m.verifyRelease(c, dir, tag)
+		return reportRelease(p, tag, r, detail, required)
 	}
 	return !required
 }

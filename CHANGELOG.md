@@ -6,6 +6,39 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [Unreleased]
+
+### Added
+
+- Signed releases without a signing key: the release workflow signs
+  `checksums.txt` with Sigstore (keyless, `checksums.txt.sigstore.json`),
+  attaches an SPDX SBOM per archive and SLSA build provenance
+  (`gh attestation verify`). docs/security.md, "Verifying a release",
+  shows how to check a download by hand.
+- `GASH_REQUIRE_SIGNED=1` accepts an unsigned release tag when `cosign`
+  verifies the Sigstore signature of its release for the release workflow,
+  the tag and the commit the tag points at (the installer, `gash update`
+  and `gash_upgrade`); without `cosign` the refusal says how to install it.
+  With `cosign` on `PATH` the signature is checked and reported without
+  `GASH_REQUIRE_SIGNED` too.
+- A **Tag release** workflow that checks the commit (CI green,
+  `release/SHA256SUMS` current, a CHANGELOG entry), tags `v<VERSION>` and
+  starts the release; the release notes are the CHANGELOG entry.
+
+### Changed
+
+- `SECURITY.md`: 2.1.x gets critical and high security fixes until
+  2027-04-30; a fix for a critical or high report ships within 30 days.
+
+### Security
+
+- The workflows pin every action by commit SHA, keep no checkout
+  credentials, use no module cache in the publishing jobs and grant each
+  job only the permissions it needs; actionlint and zizmor check them in CI.
+  Dependabot updates the Go modules and the actions weekly. OpenSSF
+  Scorecard and CodeQL run on every change and weekly, and the CI runs
+  weekly too, so a new advisory or a distro change shows without a commit.
+
 ## [3.0.0] - 2026-10-24
 
 Gash is now one static Go binary with thin generated Bash around it, for
@@ -667,6 +700,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[Unreleased]: https://github.com/mauriziofonte/gash/compare/v3.0.0...HEAD
 [3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/mauriziofonte/gash/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/mauriziofonte/gash/compare/v2.0.0...v2.1.0

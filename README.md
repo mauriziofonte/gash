@@ -66,7 +66,7 @@ Open a new terminal when it is done.
 |---|---|
 | `--assume-yes` | Install without a terminal (CI, Docker) |
 | `--repair` | Fetch and verify only the binary for the installed version; nothing else changes |
-| `GASH_REQUIRE_SIGNED=1` | Refuse a release tag without a valid signature, and any binary the tag does not pin |
+| `GASH_REQUIRE_SIGNED=1` | Refuse a release whose tag or Sigstore signature does not verify (needs `cosign`), and any binary the tag does not pin |
 
 ### Requirements
 

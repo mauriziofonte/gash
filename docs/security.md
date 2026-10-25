@@ -346,7 +346,17 @@ The installer and `gash_upgrade` check out the newest release tag. A signed tag
 (PGP or SSH) is checked with `git verify-tag`; an unverifiable one gets a
 warning. A tag counts as signed only when it is an annotated tag whose object
 ends with a signature block: a lightweight tag (even on a signed commit) and a
-message that only quotes the marker are unsigned. `GASH_REQUIRE_SIGNED=1` aborts on an unsigned or unverifiable tag.
+message that only quotes the marker are unsigned.
+
+The releases (from 3.1.0) are signed by the release workflow, not by a
+person's key: an unsigned tag is checked through the Sigstore signature of its
+release (`checksums.txt.sigstore.json`) when `cosign` is on `PATH`. The
+signature's certificate names the workflow (`.github/workflows/release.yml`),
+the tag and the commit, and cosign must accept it for the commit the tag
+points at in the clone, so a verified signature covers the tree of the tag,
+and with it `release/SHA256SUMS`. A signature that does not verify is a
+warning. `GASH_REQUIRE_SIGNED=1` aborts unless the tag signature or the
+release signature verifies (without `cosign` it says how to install it).
 A new install is cloned and checked in a temporary directory next to the
 install location and moved into place only when it passes, so a refusal leaves
 nothing behind. `GASH_INSTALL_REF` skips this check. Both refuse a checkout with local changes.
@@ -360,6 +370,37 @@ does not pin is not installed. `gash_upgrade` (`gash update`) downloads and
 verifies the new binary before it checks out the new tag, checks that it
 answers its version, then loads the new tree in a test shell and checks out
 the previous tag again when that fails.
+
+## Verifying a release
+
+Every release from 3.1.0 is built by `.github/workflows/release.yml` from its
+tag, and ships with:
+
+- `checksums.txt`, the SHA-256 of every archive and SBOM, and
+  `checksums.txt.sigstore.json`, its keyless Sigstore signature: the
+  certificate is issued to the workflow for that tag and commit, and the
+  signature is recorded in the public Rekor transparency log;
+- one SPDX SBOM per archive (`gash_<version>_<os>_<arch>.tar.gz.spdx.json`);
+- SLSA build provenance for every archive and SBOM, stored by GitHub.
+
+The binaries are also reproducible: `go run ./internal/tools/releasesums -check`
+on the tagged tree rebuilds them and compares them with the hashes the tree
+pins in `release/SHA256SUMS`.
+
+To verify a download by hand (here 3.1.0 on linux/amd64):
+
+```bash
+v=3.1.0
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/mauriziofonte/gash/.github/workflows/release.yml@refs/tags/v$v" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+gh attestation verify "gash_${v}_linux_amd64.tar.gz" --repo mauriziofonte/gash
+```
+
+The installer and `gash update` do the first check themselves (see Install
+and upgrade), adding the commit the tag points at.
 
 ## gash hte
 

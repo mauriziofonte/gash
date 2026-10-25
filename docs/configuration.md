@@ -240,7 +240,7 @@ These are not accepted in `~/.gash_env`.
 | `GASH_DIR` | Install location used by `~/.gashrc`, the installer, `gash_upgrade` (`gash update`), `gash_uninstall` and `gash_doctor` |
 | `XDG_STATE_HOME` | Parent of the Gash state directory (default `~/.local/state`): the migration state, and `gash/update`, the version `gash update --rollback` returns to |
 | `XDG_DATA_HOME` | Parent of the binaries, `gash/versions/<version>/` (default `~/.local/share`) |
-| `GASH_REQUIRE_SIGNED=1` | The installer and `gash_upgrade` (`gash update`) refuse a release tag without a verified signature, and the binary fetch accepts only a binary the tagged tree pins in `release/SHA256SUMS` |
+| `GASH_REQUIRE_SIGNED=1` | The installer and `gash_upgrade` (`gash update`) refuse a release tag unless its tag signature, or the Sigstore signature of its release, verifies (the latter needs `cosign` on `PATH`), and the binary fetch accepts only a binary the tagged tree pins in `release/SHA256SUMS` |
 | `GASH_RELEASE_URL` | Base URL of the release assets for the binary fetch (shell, installer, `gash update`); default the GitHub release of the version; `file://` works |
 | `GASH_BIN` | A gash binary to use as it is, instead of the one under `versions/` (development) |
 | `GASH_INSTALL_GIT_REPO`, `GASH_INSTALL_REF`, `PROFILE` | Installer only: repository to clone, ref to check out instead of the latest tag, profile file to edit (`/dev/null` for none) |

@@ -23,8 +23,10 @@
   #   GASH_RELEASE_URL        base URL of the release assets (default: the
   #                           GitHub release of the installed tag)
   #   GASH_REQUIRE_SIGNED=1   abort unless the release tag has a signature
-  #                           that `git verify-tag` accepts, and accept only a
-  #                           binary pinned in release/SHA256SUMS
+  #                           that `git verify-tag` accepts, or its release a
+  #                           Sigstore signature that cosign verifies for the
+  #                           tag's commit, and accept only a binary pinned in
+  #                           release/SHA256SUMS
   #
   # MIT License · https://github.com/mauriziofonte/gash
 
@@ -170,21 +172,81 @@
     return 1
   }
 
-  # Check the tag signature when there is one. GASH_REQUIRE_SIGNED=1 turns
-  # a missing or unverifiable signature into a refusal: status 1, the caller
+  # Download URL to FILE with curl or wget.
+  gashinst_get() {
+    if gashinst_has curl; then
+      curl -fsSL --max-time 120 -o "$2" "$1" 2>/dev/null
+    elif gashinst_has wget; then
+      wget -q -T 120 -O "$2" "$1" 2>/dev/null
+    else
+      return 1
+    fi
+  }
+
+  # The Sigstore signature of the release of TAG: the release workflow signs
+  # checksums.txt keyless (checksums.txt.sigstore.json), and the certificate
+  # names the workflow, the tag and the commit. cosign must accept it for
+  # the commit TAG points at in this clone. Status 0 verified, 1 it does not
+  # verify (cosign's last error line in the caller's GASHINST_COSIGN_ERROR),
+  # 2 no cosign, 3 no signature to check.
+  gashinst_verify_release() {
+    local TAG="$1" COMMIT BASE TMP OUT RC REPO="mauriziofonte/gash"
+    gashinst_has cosign || return 2
+    COMMIT="$(git rev-parse --verify --quiet "refs/tags/$TAG^{commit}" 2>/dev/null)" || return 3
+    BASE="${GASH_RELEASE_URL:-https://github.com/$REPO/releases/download/$TAG}"
+    BASE="${BASE%/}"
+    TMP="$(mktemp -d 2>/dev/null)" || return 3
+    if ! gashinst_get "$BASE/checksums.txt" "$TMP/checksums.txt" ||
+      ! gashinst_get "$BASE/checksums.txt.sigstore.json" "$TMP/checksums.txt.sigstore.json"; then
+      command rm -rf -- "$TMP"
+      return 3
+    fi
+    RC=0
+    OUT="$(cosign verify-blob --bundle "$TMP/checksums.txt.sigstore.json" \
+      --certificate-identity "https://github.com/$REPO/.github/workflows/release.yml@refs/tags/$TAG" \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      --certificate-github-workflow-repository "$REPO" \
+      --certificate-github-workflow-ref "refs/tags/$TAG" \
+      --certificate-github-workflow-sha "$COMMIT" \
+      "$TMP/checksums.txt" 2>&1)" || RC=1
+    command rm -rf -- "$TMP"
+    if [ "$RC" -ne 0 ]; then
+      OUT="$(printf '%s\n' "$OUT" | tail -n 1)"
+      GASHINST_COSIGN_ERROR="${OUT#Error: }"
+    fi
+    return "$RC"
+  }
+
+  # Check the tag signature when there is one, else the Sigstore signature
+  # of its release (with cosign on PATH). GASH_REQUIRE_SIGNED=1 turns a
+  # missing or unverifiable signature into a refusal: status 1, the caller
   # stops.
   gashinst_verify_tag() {
-    local TAG="$1"
+    local TAG="$1" RC GASHINST_COSIGN_ERROR=""
     if gashinst_tag_signed "$TAG"; then
       if git verify-tag "$TAG" >/dev/null 2>&1; then
         gashinst_success "Signature of $TAG verified."
         return 0
       fi
       gashinst_warning "$TAG is signed, but the signature could not be verified (is the key in your keyring?)."
-    elif [ "${GASH_REQUIRE_SIGNED-0}" = "1" ]; then
-      gashinst_warning "$TAG is not signed."
     else
-      return 0
+      RC=0
+      gashinst_verify_release "$TAG" || RC=$?
+      case "$RC" in
+        0)
+          gashinst_success "Release signature of $TAG verified (Sigstore)."
+          return 0
+          ;;
+        1) gashinst_warning "The release signature of $TAG does not verify: $GASHINST_COSIGN_ERROR." ;;
+        2)
+          [ "${GASH_REQUIRE_SIGNED-0}" = "1" ] || return 0
+          gashinst_warning "$TAG is not signed; install cosign to check its Sigstore release signature (https://docs.sigstore.dev/cosign/system_config/installation/)."
+          ;;
+        *)
+          [ "${GASH_REQUIRE_SIGNED-0}" = "1" ] || return 0
+          gashinst_warning "$TAG is not signed, and its release has no Sigstore signature (checksums.txt.sigstore.json)."
+          ;;
+      esac
     fi
     if [ "${GASH_REQUIRE_SIGNED-0}" = "1" ]; then
       gashinst_error "GASH_REQUIRE_SIGNED=1 is set; refusing to install $TAG."
@@ -438,8 +500,8 @@
     unset -f gashinst_has gashinst_echo gashinst_error gashinst_info gashinst_success \
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
-      gashinst_verify_tag gashinst_tag_signed gashinst_tmp_clone_cleanup gashinst_abort \
-      gashinst_install_from_git gashinst_fetch_binary gashinst_repair gashinst_do_install gashinst_reset
+      gashinst_verify_tag gashinst_tag_signed gashinst_get gashinst_verify_release \
+      gashinst_tmp_clone_cleanup gashinst_abort gashinst_install_from_git gashinst_fetch_binary gashinst_repair gashinst_do_install gashinst_reset
   }
 
   # Main script execution starts here

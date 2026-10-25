@@ -426,9 +426,10 @@ left as it is.
 Before the checkout, the release binary is downloaded into
 ~/.local/share/gash/versions/<version>/ and verified (the hash in
 the tag's release/SHA256SUMS, else the release's checksums.txt;
-GASH_REQUIRE_SIGNED=1 also requires a signed tag and a pinned
-binary). After it, the new version is loaded in a test shell; if
-that fails, the previous version is checked out again.
+GASH_REQUIRE_SIGNED=1 also requires a signed tag or a Sigstore
+release signature that cosign verifies, and a pinned binary).
+After it, the new version is loaded in a test shell; if that
+fails, the previous version is checked out again.
 Open a new terminal afterwards to load the new version.
 To go back: gash update --rollback (the previous version and its
 binary are kept), or git -C ~/.gash checkout vX.Y.Z
