@@ -1,0 +1,110 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# The 3.4 options of the existing llm_git_* readers (plan G3, G5, G6, G7,
+# S4, S1): llm_git_status --summary, --files, --repos PATH... (one row per
+# repository, errors as rows) and --fetch (the upstream branch only, then
+# the llm_git_overview object with "fetched"); llm_git_diff --summary,
+# --files, --numstat, --patch and REV..REV; llm_git_log --fields, --grep,
+# --path, --format. Without them each prints what it printed before
+# (llm_git.txtar). Through the sourced shell and as `gash <fn>`.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+exec bash setup.sh
+
+# --- llm_git_status --summary: the counts, one object or one TSV row
+exec bash -c 'source "$GASH_SH"; llm_git_status "$WORK/r" --summary'
+stdout '^\{"branch":"main","upstream":"origin/main","ahead":0,"behind":0,"staged":1,"modified":1,"untracked":1,"conflicted":0\}$'
+exec gash llm_git_status r --summary --format tsv
+stdout '^branch\tupstream\tahead\tbehind\tstaged\tmodified\tuntracked\tconflicted$'
+stdout '^main\torigin/main\t0\t0\t1\t1\t1\t0$'
+
+# --- --files: the git status --short letters as rows
+exec gash llm_git_status r --files
+stdout '^\[\{"p":"a.txt","xy":".M"\},\{"p":"s.txt","xy":"A."\},\{"p":"u.txt","xy":"\?\?"\}\]$'
+
+# --- --repos: input order, a refused or non-repository PATH is a row
+mkdir plain
+exec gash llm_git_status --repos r plain /proc --format jsonl
+stdout '^\{"repo":"r","branch":"main",.*"error":null\}$'
+stdout '^\{"repo":"plain",.*"error":"not_a_git_repo"\}$'
+stdout '^\{"repo":"/proc",.*"error":"forbidden_path"\}$'
+
+# --- --fetch: the remote commit arrives, behind 1, no tag fetched
+exec bash push_other.sh
+exec gash llm_git_status r --fetch --timeout 30
+stdout '"behind":1,'
+stdout '"fetched":true\}$'
+exec git -C r tag --list
+! stdout .
+
+# --- --fetch that fails: fetched false, the reason, the local state
+exec git -C r remote set-url origin $WORK/gone.git
+exec gash llm_git_status r --fetch --summary
+stdout '^\{"branch":"main",.*"fetched":false,"error":"[^"]+"\}$'
+exec git -C r remote set-url origin $WORK/remote.git
+
+# --- llm_git_diff --summary, --files, --numstat, --patch
+exec bash -c 'source "$GASH_SH"; llm_git_diff "$WORK/r" --summary'
+stdout '^\{"files":1,"insertions":1,"deletions":0\}$'
+exec gash llm_git_diff r --staged --files
+stdout '^\[\{"p":"s.txt","add":1,"del":0,"status":"A"\}\]$'
+exec gash llm_git_diff r --numstat --format tsv
+stdout '^p\tadd\tdel$'
+stdout '^a.txt\t1\t0$'
+exec gash llm_git_diff r --patch --max-lines 2
+stdout '^\+\+\+ b/a.txt$'
+stdout '^\[\.\.\. 1 lines omitted\]$'
+exec gash llm_git_diff HEAD~1..HEAD r --summary
+stdout '^\{"files":1,"insertions":1,"deletions":0\}$'
+! exec gash llm_git_diff nope..HEAD r --summary
+stderr '"error":"unknown_revision"'
+! exec gash llm_git_diff r --files --summary
+stderr '"error":"conflicting_options"'
+
+# --- llm_git_log --fields, --grep, --path, --format
+exec bash -c 'source "$GASH_SH"; llm_git_log "$WORK/r" -n 2 --fields hash,subject'
+stdout '^\[\{"hash":"[0-9a-f]{7,}","subject":"two"\},\{"hash":"[0-9a-f]{7,}","subject":"one"\}\]$'
+exec gash llm_git_log r --grep '^t' --fields subject,files
+stdout '^\[\{"subject":"two","files":\["b.txt"\]\}\]$'
+exec gash llm_git_log r --path a.txt --fields subject --format tsv
+stdout '^subject$'
+stdout '^one$'
+! stdout '^two$'
+! exec gash llm_git_log r --fields hash,body
+stderr '"error":"invalid_fields"'
+
+# --- the defaults are unchanged
+exec gash llm_git_status r
+stdout '^  "branch": "main",$'
+exec gash llm_git_log r -n 1
+stdout '^\[\{"hash":"[0-9a-f]+","subject":"two","author":"T","date":"[^"]+"\}\]$'
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+-- setup.sh --
+set -euo pipefail
+git init -q --bare -b main "$WORK/remote.git"
+git init -q -b main "$WORK/r"; cd "$WORK/r"
+printf 'a\n' >a.txt; git add a.txt; git commit -qm one
+printf 'b\n' >b.txt; git add b.txt; git commit -qm two
+git remote add origin "$WORK/remote.git"
+git push -q -u origin main 2>/dev/null
+printf 'a2\n' >>a.txt
+printf 's\n' >s.txt; git add s.txt
+printf 'u\n' >u.txt
+-- push_other.sh --
+set -euo pipefail
+git clone -q "$WORK/remote.git" "$WORK/other" 2>/dev/null; cd "$WORK/other"
+printf 'o\n' >o.txt; git add o.txt; git commit -qm other
+git tag v1
+git push -q origin main v1 2>/dev/null

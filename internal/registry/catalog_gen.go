@@ -2762,17 +2762,49 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "Git diff with statistics",
 			Module:  "llm",
-			SeeAlso: "llm_git_status llm_git_log",
+			SeeAlso: "llm_git_overview llm_git_status llm_git_log",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_diff [--staged] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] [--max-lines N] [--width N] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] (--files | --numstat) [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] --summary [--format F] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --staged               Staged changes (also --cached)\n" +
+				"  REV..REV               Compare two commits (A..B, A...B for the merge base)\n" +
+				"  --files                One row per file: {\"p\",\"add\",\"del\",\"status\"}\n" +
+				"  --numstat              One row per file: {\"p\",\"add\",\"del\"}\n" +
+				"  --summary              The totals only: {\"files\",\"insertions\",\"deletions\"}\n" +
+				"  --patch                The patch as text, capped per file (default 200 lines)\n" +
+				"  --format F             json (default), jsonl, tsv or table (--files, --numstat,\n" +
+				"                         --summary)\n" +
+				"  --max-lines N          Lines (or rows) to keep: of the --stat text, of the rows,\n" +
+				"                         of each file with --patch; also --head N and --tail N\n" +
+				"  --width N              Cut each line (JSON: each path) at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_diff\n" +
-				"  llm_git_diff --staged",
+				"  llm_git_diff --staged\n" +
+				"\n" +
+				"  # Totals of the work tree, then the changed files of the last three commits\n" +
+				"  llm_git_diff --summary\n" +
+				"  llm_git_diff HEAD~3..HEAD --files --format tsv\n" +
+				"\n" +
+				"  # One file's patch, 80 lines at most\n" +
+				"  llm_git_diff --patch --max-lines 80 src/app.js\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without an option: git diff --stat text, as git prints it. --files,\n" +
+				"  --numstat and --summary replace git diff --stat | tail -1, --name-only,\n" +
+				"  --name-status and --numstat; --patch replaces git diff -- file | head -80.\n" +
+				"  Paths are relative to the repository root; add and del are null for a\n" +
+				"  binary file. With a mode option a FILE as PATH limits the diff to it.\n" +
+				"  --patch keeps each file's header and puts [... K lines omitted] where it\n" +
+				"  cuts; a secret file's patch is replaced by a marker line (a secret FILE\n" +
+				"  as PATH is secret_file_blocked). An unknown revision is unknown_revision\n" +
+				"  (RETRY). Rows that the budget cuts are counted in the stderr metadata line\n" +
+				"  ({\"truncated\":K}).",
 		},
 		Fallback:  &Usage{Program: "llm_git_diff", Usage: "llm_git_diff [--staged] [PATH]", Description: "Git diff with stats"},
 		ShellVars: []string{"HOME"},
@@ -2792,17 +2824,43 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "Recent commits (JSON)",
 			Module:  "llm",
-			SeeAlso: "llm_git_status llm_git_diff",
+			SeeAlso: "llm_git_overview llm_git_status llm_git_diff",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_log [-n N] [PATH]\n" +
+				"  llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...\n" +
+				"              [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Commits to list (default 10)\n" +
+				"  --since D, --until D   Commits after / before a date (git's dates: 2026-01-31,\n" +
+				"                         \"2 weeks ago\", yesterday)\n" +
+				"  --grep RE              Commits whose message matches RE (extended regex)\n" +
+				"  --author RE            Commits whose author matches RE (extended regex)\n" +
+				"  --path P               Commits that touch P (repeat for more; git pathspecs)\n" +
+				"  --fields LIST          Comma list of hash, subject, date, author, files\n" +
+				"                         (default hash,subject,author,date); files is the\n" +
+				"                         array of the paths each commit changed\n" +
+				"  --format F             json (default), jsonl, tsv or table\n" +
+				"  --max-lines N          Rows to keep (also --head N, --tail N); the cut is\n" +
+				"                         counted on stderr\n" +
+				"  --width N              Cut each string value at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_log\n" +
-				"  llm_git_log --limit 20",
+				"  llm_git_log --limit 20\n" +
+				"\n" +
+				"  # The last three subjects, compact\n" +
+				"  llm_git_log -n 3 --fields hash,subject\n" +
+				"\n" +
+				"  # Fixes of the last week that touched src/, with their files\n" +
+				"  llm_git_log --since \"1 week ago\" --grep '^fix' --path src --fields hash,subject,files\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces git log --oneline -N [-- path] and git log -1 --format='%h %s'.\n" +
+				"  Without a 3.4 option the output is the 2.x array of {hash, subject,\n" +
+				"  author, date}; any 3.4 option writes the rows through the shared output\n" +
+				"  layer (same keys, --fields to choose). A bad --grep or --author is\n" +
+				"  invalid_regex (RETRY); a repository with no commit gives [].",
 		},
 		Fallback:  &Usage{Program: "llm_git_log", Usage: "llm_git_log [--limit N] [PATH]", Description: "Recent git log (JSON)"},
 		ShellVars: []string{"HOME"},
@@ -2822,10 +2880,31 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "Compact git status (JSON)",
 			Module:  "llm",
-			SeeAlso: "llm_git_diff llm_git_log",
+			SeeAlso: "llm_git_overview llm_git_diff llm_git_log",
 			Body: "" +
 				"USAGE\n" +
 				"  llm_git_status [PATH]\n" +
+				"  llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]\n" +
+				"  llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]\n" +
+				"  llm_git_status [PATH] --fetch [--timeout S]\n" +
+				"  llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--max-lines N] [--width N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --summary              The number of paths in each state instead of the lists\n" +
+				"  --files                One row per changed path: {\"p\",\"xy\"} (the two letters\n" +
+				"                         of git status --short: index, work tree; ?? untracked)\n" +
+				"  --fetch                Fetch the upstream branch first (no tags, no prune), then\n" +
+				"                         print the llm_git_overview object with \"fetched\"\n" +
+				"  --repos PATH...        The summary of each repository, in parallel: one row per\n" +
+				"                         PATH, in the order given\n" +
+				"  --timeout S            Bound the fetch (default 20s), with --repos each\n" +
+				"                         repository\n" +
+				"  -j N                   Repositories at a time (default: the CPU count, 8 with\n" +
+				"                         --fetch)\n" +
+				"  --format F             json (default), jsonl, tsv or table (--summary, --files,\n" +
+				"                         --repos)\n" +
+				"  --max-lines N          Rows to keep (also --head N, --tail N)\n" +
+				"  --width N              Cut each string value at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_status\n" +
@@ -2837,7 +2916,28 @@ var baseFunctions = []Function{
 				"  #   \"modified\": [\"README.md\"],\n" +
 				"  #   \"untracked\": [],\n" +
 				"  #   \"conflicted\": []\n" +
-				"  # }",
+				"  # }\n" +
+				"\n" +
+				"  # Counts only; the changed paths as rows\n" +
+				"  llm_git_status --summary\n" +
+				"  llm_git_status --files --format tsv\n" +
+				"\n" +
+				"  # Fresh ahead/behind, and three repositories at once\n" +
+				"  llm_git_status --fetch\n" +
+				"  llm_git_status --repos ~/src/api ~/src/web ~/src/docs --format tsv\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without an option: the pretty 2.x object above. --summary replaces git\n" +
+				"  status --short | wc -l, --files git status --short, --repos a loop of\n" +
+				"  git -C R status, --fetch git fetch && git status -sb. --summary prints\n" +
+				"  {\"branch\",\"upstream\",\"ahead\",\"behind\",\"staged\",\"modified\",\n" +
+				"  \"untracked\",\"conflicted\"}; --repos rows add \"repo\" first and \"error\"\n" +
+				"  last (null, or the code of a PATH that is refused, missing or not a\n" +
+				"  repository). --fetch never prompts: a failure (network, credentials,\n" +
+				"  timeout) is \"fetched\":false with \"error\", and the local state is still\n" +
+				"  printed; a repository whose own configuration names a program for the\n" +
+				"  fetch (core.sshCommand, a credential helper, uploadpack, url.insteadOf,\n" +
+				"  protocol.*) is not fetched. Paths are relative to the repository root.",
 		},
 		Fallback:  &Usage{Program: "llm_git_status", Usage: "llm_git_status [PATH]", Description: "Compact git status (JSON)"},
 		ShellVars: []string{"HOME"},

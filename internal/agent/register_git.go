@@ -6,5 +6,5 @@ import "github.com/mauriziofonte/gash/internal/invoke"
 
 // registerGit binds agent_git_commit (G2).
 func (m *Module) registerGit(t *invoke.Table) {
-	_ = t
+	t.Handle("agent_git_commit", m.gitCommit)
 }

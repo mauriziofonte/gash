@@ -85,6 +85,7 @@ esac
 # that are set). From the registry.
 __GASH_CALL_COMMON="GASH_HEADLESS NO_COLOR GASH_NO_COLOR GASH_DEBUG GASH_TUI COLUMNS GASH_DIR GASH_ENV_FILE LANG LC_ALL LC_CTYPE"
 declare -gA __GASH_CALL_VARS=(
+    [agent_git_commit]="HOME"
     [agent_replace]="HOME"
     [ai_ask]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
     [ai_query]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
@@ -121,6 +122,8 @@ declare -gA __GASH_CALL_VARS=(
     [llm_find]="HOME"
     [llm_git_diff]="HOME"
     [llm_git_log]="HOME"
+    [llm_git_overview]="HOME"
+    [llm_git_show]="HOME"
     [llm_git_status]="HOME"
     [llm_grep]="HOME"
     [llm_hash]="HOME"

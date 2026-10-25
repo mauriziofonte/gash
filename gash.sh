@@ -338,6 +338,7 @@ git_sync() { __gash_call git_sync "$@"; }
 
 # llm
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+agent_git_commit() { __gash_call agent_git_commit "$@"; }
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
@@ -372,6 +373,8 @@ llm_exec() {
 llm_find() { __gash_call llm_find "$@"; }
 llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
+llm_git_overview() { __gash_call llm_git_overview "$@"; }
+llm_git_show() { __gash_call llm_git_show "$@"; }
 llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
 llm_hash() { __gash_call llm_hash "$@"; }

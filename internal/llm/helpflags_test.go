@@ -33,9 +33,9 @@ var llmOptions = map[string][]string{
 		"--exclude", "--only-matching", "-o", "--distinct", "--files-only", "-l", "--count", "-c", "--by",
 		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail"},
 	"llm_config":     {"--max-bytes"},
-	"llm_git_status": {},
-	"llm_git_diff":   {"--staged", "--cached"},
-	"llm_git_log":    {"-n", "--limit"},
+	"llm_git_status": {"--summary", "--files", "--fetch", "--repos", "--timeout", "-j", "--format", "--max-lines", "--head", "--tail", "--width"},
+	"llm_git_diff":   {"--staged", "--cached", "--files", "--numstat", "--summary", "--patch", "--format", "--max-lines", "--head", "--tail", "--width"},
+	"llm_git_log":    {"-n", "--limit", "--since", "--until", "--grep", "--author", "--path", "--fields", "--format", "--max-lines", "--head", "--tail", "--width"},
 	"llm_env":        {"--filter", "-f"},
 	"llm_ports":      {"--listen", "-l", "--port"},
 	"llm_procs":      {"--name", "--port"},
@@ -55,6 +55,8 @@ var llmOptions = map[string][]string{
 	// 3.4 data.
 
 	// 3.4 git.
+	"llm_git_overview": {"--log", "--files"},
+	"llm_git_show":     {"--stat", "--files", "--patch", "--max-lines", "--head", "--tail", "--width"},
 
 	// 3.4 network.
 	"llm_http": {"--method", "--header", "--auth-env", "--resolve", "--follow", "--status-only", "--headers",
