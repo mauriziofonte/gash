@@ -132,19 +132,21 @@ func DispatchScript(nonce string, b Binary, haveBin bool, fn string, args []stri
 }
 
 // ShipScript installs the binary that arrives on stdin into the cache
-// (umask 077, size check, a `gash version` test run, atomic rename) and
+// (umask 077, size check, a `gash version` test run, atomic rename; the
+// upload is named gash in a private directory, so a binary that looks at
+// its own name runs as gash in the test run too) and
 // runs fn ARGS with it. When any step fails it drains stdin and runs the
 // fallback body, or ends with the "shipfail" trailer.
 func ShipScript(nonce string, b Binary, fn string, args []string, fallback string) string {
 	var s strings.Builder
 	s.WriteString("N=" + Quote(nonce) + "\n")
 	s.WriteString(`D="$HOME"/` + Quote(b.Dir) + "\n")
-	s.WriteString(`T="$D/gash.$$"` + "\n")
-	s.WriteString(`if (umask 077 && mkdir -p "$D" && cat >"$T" && [ "$(wc -c <"$T" | tr -d ' ')" = ` +
+	s.WriteString(`S="$D/.ship.$$"; T="$S/gash"` + "\n")
+	s.WriteString(`if (umask 077 && mkdir -p "$S" && cat >"$T" && [ "$(wc -c <"$T" | tr -d ' ')" = ` +
 		Quote(strconv.FormatInt(b.Size, 10)) + ` ] && chmod 700 "$T" && "$T" version >/dev/null 2>&1 && mv -f "$T" "$D/gash"); then` + "\n")
-	s.WriteString(`  "$D/gash" ` + runGash(nonce, append([]string{fn}, args...)))
+	s.WriteString(`  rmdir "$S" 2>/dev/null; "$D/gash" ` + runGash(nonce, append([]string{fn}, args...)))
 	s.WriteString("fi\n")
-	s.WriteString(`rm -f "$T" 2>/dev/null; cat >/dev/null 2>&1` + "\n")
+	s.WriteString(`rm -rf "$S" 2>/dev/null; cat >/dev/null 2>&1` + "\n")
 	s.WriteString(fallbackPart(nonce, fallback, "shipfail"))
 	return s.String()
 }

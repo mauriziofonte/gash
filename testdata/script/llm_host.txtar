@@ -1,0 +1,136 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# --host ALIAS on llm_find, llm_grep, llm_tree and llm_config (new in 3.4,
+# plan S5): the same function on a registered HOST: alias, in ONE ssh
+# invocation per call, with the local output plus "host" on a JSON object.
+# The ssh on PATH is a stub that logs each invocation and runs the remote
+# script locally with sh: host "web" (this platform) gets the gash binary
+# shipped into its cache on first contact, host "sun" reports another
+# platform with a uname stub and is answered by the POSIX sh fallback, host
+# "down" fails like an unreachable server. Every remote side runs in $WORK,
+# so the remote answers must equal the local ones byte for byte.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env GASH_ENV_FILE=$WORK/hostenv
+env PATH=$WORK/bin:$PATH
+chmod 755 bin/ssh
+chmod 755 sunbin/uname
+
+exec gash llm_tree src
+cp stdout tree.local
+exec sh -c 'sed "s/^{/{\"host\":\"web\",/" tree.local >tree.want'
+exec gash llm_find '*.php' src
+cp stdout find.local
+exec gash llm_grep TODO src
+cp stdout grep.local
+exec gash llm_config conf/app.yaml
+cp stdout config.local
+! exec gash llm_find '*' nope
+cp stderr nope.local
+
+# --- first contact with a host of this platform: the dispatch finds no
+# cached binary, the second invocation ships it and runs the call
+exec gash llm_tree src --host web
+stdout '^\{"host":"web","path":"[^"]*/src","type":"directory","children":\['
+cmp stdout tree.want
+! exec gash llm_find '*' nope --host web
+cmp stderr nope.local
+grep -count=3 @ ssh.log
+exec sh -c 'ls "$WORK"/web/.cache/gash/remote/*/gash'
+
+# --- every later call: one ssh invocation, the local output
+rm ssh.log
+exec gash llm_find '*.php' src --host web
+cmp stdout find.local
+grep -count=1 @ ssh.log
+
+# --- through the sourced shell; a secret file is refused before connecting
+rm ssh.log
+exec bash -c 'source "$GASH_SH"; llm_grep TODO src --host web'
+cmp stdout grep.local
+exec gash llm_config conf/app.yaml --host web
+cmp stdout config.local
+! exec gash llm_config .env --host web
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+grep -count=2 @ ssh.log
+
+# --- another platform: the POSIX fallback, one invocation, the same answer
+rm ssh.log
+exec gash llm_find '*.php' src --host sun
+cmp stdout find.local
+exec gash llm_grep TODO src --host sun
+cmp stdout grep.local
+exec gash llm_config conf/app.yaml --host sun
+cmp stdout config.local
+exec gash llm_tree src --host sun
+stdout '^\{"host":"sun","path":"[^"]*/src","type":"directory"'
+! exec gash llm_find '*' nope --host sun
+cmp stderr nope.local
+grep -count=5 @ ssh.log
+! exists sun/.cache
+
+# --- several hosts: in parallel, a JSON object per host in one array
+exec gash llm_tree src --host web --host sun
+stdout '^\[\{"host":"web","path":.*\},\{"host":"sun","path":.*\}\]$'
+
+# --- refusals before anything connects: unknown alias (STOP), a raw
+# user@host, a protected path, a traversal
+rm ssh.log
+! exec gash llm_find '*' --host nope
+stderr '"error":"unknown_host","details":"nope"'
+stderr '"action":"STOP"'
+! exec gash llm_find '*' --host deploy@web.example
+stderr '"error":"unknown_host"'
+! exec gash llm_tree /proc --host web
+stderr '"error":"forbidden_path"'
+stderr '"action":"FATAL"'
+! exec gash llm_tree src/../.. --host web
+stderr '"error":"path_traversal_blocked"'
+! exists ssh.log
+
+# --- an unreachable host is RETRY
+! exec gash llm_find '*' --host down
+stderr '"error":"host_unreachable"'
+stderr '"action":"RETRY"'
+
+# --- --help anywhere prints the local help
+exec gash llm_find --host web --help
+stdout '--host ALIAS'
+
+-- hostenv --
+HOST:web=deploy@web.example
+HOST:sun=ops@sun.example
+HOST:down=deploy@down.example
+-- bin/ssh --
+#!/bin/sh
+# ssh stub: log the invocation, then run the remote script with sh in
+# $WORK, with a remote HOME per host (sun: a uname of another platform).
+while [ $# -gt 0 ]; do a=$1; shift; [ "$a" = -- ] && break; done
+echo "$1" >>"$WORK/ssh.log"
+case $1 in
+  deploy@web.example) h=$WORK/web ;;
+  ops@sun.example) h=$WORK/sun; PATH=$WORK/sunbin:$PATH ;;
+  *) echo "ssh: connect to host ${1#*@} port 22: Connection refused" >&2; exit 255 ;;
+esac
+mkdir -p "$h"
+cd "$WORK" && HOME=$h exec sh -c "$2"
+-- sunbin/uname --
+#!/bin/sh
+case $1 in -s) echo SunOS ;; -m) echo sparc64 ;; *) echo SunOS sparc64 ;; esac
+-- src/a.php --
+<?php
+// TODO alpha
+function alpha() {}
+-- src/sub/b.php --
+<?php beta(); // TODO beta
+-- src/notes.txt --
+TODO notes
+-- conf/app.yaml --
+name: app
+ports: [80, 443]
+-- .env --
+DB_PASSWORD=x
