@@ -386,6 +386,30 @@ jobs:
       - name: bashonlymap (tests/parity/bash-only.tsv matches PARITY)
         run: go run ./internal/tools/bashonlymap -check
 
+      - name: Guardrail coverage floors
+        # The packages that decide what runs, what is read and what is
+        # written keep their statement coverage; a floor only goes up.
+        # internal/runner is not here: its tests give the helper child
+        # exactly Options.Env, so a -cover child warns about GOCOVERDIR.
+        run: |
+          set -euo pipefail
+          fail=0
+          while read -r pkg floor; do
+            go test -count=1 -coverprofile="$RUNNER_TEMP/cover.out" "./$pkg" >/dev/null
+            got="$(go tool cover -func="$RUNNER_TEMP/cover.out" | awk 'END { sub("%", "", $NF); print $NF }')"
+            echo "$pkg: $got% (floor $floor%)"
+            if ! awk -v g="$got" -v f="$floor" 'BEGIN { exit !(g + 0 >= f + 0) }'; then
+              echo "::error::$pkg coverage $got% is below its floor of $floor%"
+              fail=1
+            fi
+          done <<'FLOORS'
+          internal/sqlguard 98
+          internal/llmexec 85
+          internal/pathguard 78
+          internal/hostshelper 90
+          FLOORS
+          exit "$fail"
+
   compat-bash:
     name: Compat Bash ${{ matrix.bash }}
     # testing.md 5 and 7, compat.md 1: the generated Bash (gash.sh, the

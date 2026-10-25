@@ -67,7 +67,16 @@ func FuzzRenderRoundTrip(f *testing.F) {
 			}
 			return true
 		})
-		if !reflect.DeepEqual(got, lc.cmdWords) && !(len(got) == 0 && len(lc.cmdWords) == 0) {
+		// The oracle parser drops a CR before an LF even inside quotes,
+		// where bash keeps it; the script carries the CR (bash reads the
+		// single-quoted word as it is), so compare without it.
+		want := make([][]string, len(lc.cmdWords))
+		for i, ws := range lc.cmdWords {
+			for _, w := range ws {
+				want[i] = append(want[i], strings.ReplaceAll(w, "\r\n", "\n"))
+			}
+		}
+		if !reflect.DeepEqual(got, want) && !(len(got) == 0 && len(want) == 0) {
 			t.Fatalf("%q:\n  validated = %q\n  re-parsed = %q\n  script = %q", line, lc.cmdWords, got, script)
 		}
 	})
