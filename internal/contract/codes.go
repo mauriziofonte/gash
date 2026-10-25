@@ -221,6 +221,21 @@ var codeTable = []Code{
 	// agent_docker_exec).
 	{"invalid_pid", Retry, "llm", Origin3x},
 	{"ps_not_found", Continue, "llm", Origin3x},
+	{"missing_condition", Retry, "llm", Origin3x},
+	{"invalid_interval", Retry, "llm", Origin3x},
+	{"invalid_code", Retry, "llm", Origin3x},
+	{"invalid_url", Retry, "llm", Origin3x},
+	{"invalid_json_path", Retry, "llm", Origin3x},
+	{"missing_unit", Retry, "llm", Origin3x},
+	{"systemd_unavailable", Continue, "llm", Origin3x},
+	{"missing_container", Retry, "llm", Origin3x},
+	{"missing_command", Retry, "llm", Origin3x},
+	{"invalid_user", Retry, "llm", Origin3x},
+	{"invalid_since", Retry, "llm", Origin3x},
+	{"container_not_found", Retry, "llm", Origin3x},
+	{"container_not_running", Continue, "llm", Origin3x},
+	{"docker_unavailable", Continue, "llm", Origin3x},
+	{"docker_error", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, runtimes, lint and tests (gash runtime,
 	// gash run, llm_tools, llm_runtime, llm_lint, llm_test).

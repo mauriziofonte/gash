@@ -43,6 +43,9 @@ llm_db_tables() {
     __gash_call llm_db_tables "$@"
 }
 llm_deps() { __gash_call llm_deps "$@"; }
+llm_docker_exec() { __gash_call llm_docker_exec "$@"; }
+llm_docker_logs() { __gash_call llm_docker_logs "$@"; }
+llm_docker_ps() { __gash_call llm_docker_ps "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
 llm_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
@@ -56,7 +59,10 @@ llm_grep() { __gash_call llm_grep "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
+llm_service() { __gash_call llm_service "$@"; }
+llm_sysinfo() { __gash_call llm_sysinfo "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
+llm_wait() { __gash_call llm_wait "$@"; }
 
 # Sourcing never fails: the status of this file is 0.
 true

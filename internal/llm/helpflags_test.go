@@ -29,7 +29,7 @@ var llmOptions = map[string][]string{
 	"llm_git_log":    {"-n", "--limit"},
 	"llm_env":        {"--filter", "-f"},
 	"llm_ports":      {"--listen", "-l"},
-	"llm_procs":      {"--name", "--port"},
+	"llm_procs":      {"--name", "--port", "--pid", "--alive", "--tree", "--format", "--width", "--max-lines", "--head", "--tail"},
 	"llm_project":    {},
 	"llm_deps":       {"--dev"},
 
@@ -42,6 +42,13 @@ var llmOptions = map[string][]string{
 	// 3.4 network.
 
 	// 3.4 processes, waiting and services.
+	"llm_wait": {"--timeout", "--interval", "--file-match", "--exists", "--gone", "--http", "--code", "--json-path",
+		"--equals", "--port", "--cmd-ok", "--tail", "--width"},
+	"llm_service":     {"--log", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_docker_ps":   {"--running", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_docker_logs": {"--tail", "--since", "--grep", "--width"},
+	"llm_docker_exec": {"--user", "-u", "--width", "--max-lines", "--head", "--tail"},
+	"llm_sysinfo":     {"--mount"},
 
 	// 3.4 runtimes, lint and tests.
 

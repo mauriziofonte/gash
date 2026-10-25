@@ -13,6 +13,9 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_db_schema`](#llm-db-schema) |  | Show table schema (columns, types, keys) |
 | [`llm_db_tables`](#llm-db-tables) |  | List database tables (JSON array) |
 | [`llm_deps`](#llm-deps) |  | List project dependencies (JSON) |
+| [`llm_docker_exec`](#llm-docker-exec) |  | Run a read-only command in a container, no shell quoting (JSON) |
+| [`llm_docker_logs`](#llm-docker-logs) |  | Last log lines of a container, optionally filtered (JSON) |
+| [`llm_docker_ps`](#llm-docker-ps) |  | Docker containers with state, health and ports (JSON) |
 | [`llm_env`](#llm-env) |  | Filtered environment variables (secrets excluded) |
 | [`llm_exec`](#llm-exec) |  | Safe command execution wrapper for AI agents |
 | [`llm_find`](#llm-find) |  | Find files by pattern (ignores noise directories) |
@@ -21,9 +24,12 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_git_status`](#llm-git-status) |  | Compact git status (JSON) |
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
-| [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
+| [`llm_procs`](#llm-procs) |  | List processes by name, port or PID, alive or not, as a tree (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
+| [`llm_service`](#llm-service) |  | State and last journal lines of systemd units (JSON) |
+| [`llm_sysinfo`](#llm-sysinfo) |  | Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON) |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
+| [`llm_wait`](#llm-wait) |  | Wait for a log line, a path, a process exit, a URL, a port or a command (JSON) |
 
 ## llm_config
 
@@ -244,6 +250,129 @@ llm_deps /var/www/myapp --dev
 ```
 
 See also: `llm_project`
+
+## llm_docker_exec
+
+Run a read-only command in a container, no shell quoting (JSON)
+
+#### Usage
+
+```text
+llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
+```
+
+#### Options
+
+```text
+--user U, -u U         Run as user U (name or uid[:gid])
+--width N              Cut each output line at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N lines of each stream
+-- CMD...              The command, one word per argument
+```
+
+#### Examples
+
+```bash
+# Instead of: docker exec -u node ctr sh -c 'grep -rl "x" /app | head -3'
+llm_docker_exec ctr --user node --head 3 -- grep -rl x /app
+llm_docker_exec db -- cat /etc/mysql/my.cnf
+```
+
+#### Notes
+
+```text
+Replaces docker exec CTR sh -c '...' with its quoting levels: CMD's words
+reach docker exec as an array, no shell runs. Read-only: CMD passes the
+llm_exec rules first (allowlist and option rules, secret files,
+forbidden paths, blocklist; GASH_LLM_EXEC_ALLOW extends them); sed and
+awk run as sed --sandbox and gawk --sandbox, grep and rg skip secret
+files, git is refused. One command (no pipes): shape the output with
+--head/--tail. {"rc","out","err"} and "truncated" when lines were
+cut; the exit status is 0 when the command ran (read rc). Arbitrary
+commands: agent_docker_exec.
+```
+
+See also: `llm_exec`
+
+## llm_docker_logs
+
+Last log lines of a container, optionally filtered (JSON)
+
+#### Usage
+
+```text
+llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]
+```
+
+#### Options
+
+```text
+--tail N               Read the last N lines (default 100)
+--since T              Only lines since T (10m, 2h, 2026-10-25T10:00:00)
+--grep RE              Keep the lines RE matches (RE2; (?i) for any case)
+--width N              Cut each line at N columns (default 300)
+```
+
+#### Examples
+
+```bash
+llm_docker_logs web --tail 50 --grep '(?i)error'
+llm_docker_logs db --since 10m
+```
+
+#### Notes
+
+```text
+Replaces docker logs --tail 50 ctr 2>&1 | grep -i error | cut -c1-300.
+{"ctr","read":N,"log":[...]}: stdout and stderr in docker's order,
+read is how many lines docker returned before --grep. Unknown
+container: container_not_found (RETRY); docker absent or down:
+docker_not_found, docker_unavailable (CONTINUE).
+```
+
+See also: `llm_docker_ps`
+
+## llm_docker_ps
+
+Docker containers with state, health and ports (JSON)
+
+#### Usage
+
+```text
+llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--running              Running containers only (default: all)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut each value at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N containers
+```
+
+#### Examples
+
+```bash
+llm_docker_ps
+llm_docker_ps --running --format tsv
+```
+
+#### Notes
+
+```text
+Replaces docker ps --format '{{.Names}} {{.Status}}' and docker ps -a.
+[{"name","image","state","health","ports","up"}] by name: state
+is docker's (running, exited, ...), health healthy, unhealthy, starting
+or "", ports "8080->80/tcp" (the all-address bindings shortened), up
+docker's status without the health ("Up 2 hours", "Exited (1) 3
+minutes ago"). Without docker: docker_not_found; daemon down:
+docker_unavailable (both CONTINUE).
+```
+
+See also: `llm_docker_logs`
 
 ## llm_env
 
@@ -511,12 +640,13 @@ See also: `llm_procs`
 
 ## llm_procs
 
-List processes by name or port (JSON)
+List processes by name, port or PID, alive or not, as a tree (JSON)
 
 #### Usage
 
 ```text
-llm_procs [--name NAME | --port PORT]
+llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
+          [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
 ```
 
 #### Options
@@ -524,6 +654,14 @@ llm_procs [--name NAME | --port PORT]
 ```text
 --name NAME            Processes whose command line contains NAME
 --port PORT            Processes with a socket on PORT
+--pid PID...           These processes, alive or not (one or more PIDs)
+--alive                Live processes only (a zombie is not alive)
+--tree                 Each process and everything below it, depth first,
+                       with ppid and depth
+--format F             json (default), jsonl, tsv or table
+--width N              Cut each value at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows
 ```
 
 #### Examples
@@ -532,13 +670,25 @@ llm_procs [--name NAME | --port PORT]
 llm_procs
 llm_procs --name nginx
 llm_procs --port 3306
+
+# Instead of: kill -0 $PID && echo alive
+llm_procs --pid "$pid"
+
+# Instead of: ps -ef | grep vite | grep -v grep
+llm_procs --name vite --alive --tree
 ```
 
 #### Notes
 
 ```text
 --port takes 0 to 65535 (invalid_port above) and wins over --name,
-which is then ignored.
+which is then ignored; --pid wins over both. With --pid, --alive or
+--tree the rows are [{"pid","name","cmd","alive"}] (--tree adds
+"ppid" and "depth"): --pid rows come in the order given, a gone PID
+as alive:false; other rows by PID, never the caller's own shell and its
+parents; NAME is then a regular expression (RE2); cmd is cut at 200
+columns unless --width is given; without a filter the first 100 rows.
+Read-only: llm_procs signals nothing (agent_kill does).
 ```
 
 See also: `llm_ports`
@@ -561,6 +711,86 @@ llm_project /var/www/myapp
 ```
 
 See also: `llm_deps`
+
+## llm_service
+
+State and last journal lines of systemd units (JSON)
+
+#### Usage
+
+```text
+llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--log N                Last N journal lines of each unit (default 10; 0: none)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut each journal line at N columns (default 300)
+--max-lines N, --head N, --tail N
+                       Keep the first/last N units
+```
+
+#### Examples
+
+```bash
+llm_service nginx php8.4-fpm
+llm_service mariadb --log 30
+```
+
+#### Notes
+
+```text
+Replaces systemctl is-active x; journalctl -u x -n 20 --no-pager | cut
+-c1-200, for several units in one call. One row per unit, in the order
+given: [{"unit","load","active","sub","since","pid","restarts",
+"log":[...]}]; an unknown unit is load "not-found". Journal lines are
+short-iso without the host name; the journal may need the user in the
+systemd-journal group (no lines otherwise). Read-only (systemctl show,
+journalctl). Without systemd: systemd_unavailable (CONTINUE).
+```
+
+See also: `llm_procs`
+
+## llm_sysinfo
+
+Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON)
+
+#### Usage
+
+```text
+llm_sysinfo [--mount PATH]...
+```
+
+#### Options
+
+```text
+--mount PATH           Report the filesystem of PATH (repeatable) instead
+                       of / and the other local disks
+```
+
+#### Examples
+
+```bash
+llm_sysinfo
+llm_sysinfo --mount /var/lib/mysql
+```
+
+#### Notes
+
+```text
+Replaces uptime; free -h; df -h /; nproc; uname -a; nvidia-smi
+--query-gpu=... in about 200 bytes: {"host","os","kernel","uptime_h",
+"load":[1,5,15],"cpus","cpu","mem_mb":{"total","avail"},
+"disks":[{"mount","size_gb","used_pct"}],"gpu":[{"name","mem_mb":
+[used,total],"util_pct"}]}; gpu only when nvidia-smi is installed. The
+disks are / and the writable local disks (one mount per device; not
+/boot, /snap, network or pseudo filesystems). Linux reads /proc and
+statfs, no program runs; macOS asks sysctl.
+```
+
+See also: `sysinfo`
 
 ## llm_tree
 
@@ -602,3 +832,76 @@ __pycache__, .cache. Entries whose name holds a tab or
 a newline are left out. --text lists symlinks as name -> target, in
 byte order whatever the locale.
 ```
+
+## llm_wait
+
+Wait for a log line, a path, a process exit, a URL, a port or a command (JSON)
+
+#### Usage
+
+```text
+llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N]
+CONDITION is one of:
+  --file-match FILE RE   a line of FILE matches RE
+  --exists PATH          PATH exists
+  --gone PID|NAME        the process ended / no command line matches NAME
+  --http URL [--code N] [--json-path P --equals V]
+  --port HOST:PORT       a TCP connection opens
+  --cmd-ok CMD           CMD (llm_exec rules) exits 0
+```
+
+#### Options
+
+```text
+--timeout S            Give up after S (seconds, or 500ms, 2m; at most 1h);
+                       required
+--interval S           Poll interval (default 0.2s for files and paths and a
+                       PID, 0.5s for a NAME, a URL and a port, 1s for a command)
+--file-match FILE RE   Scan FILE once, then only what is appended (inotify on
+                       Linux); a missing FILE is waited for. RE is RE2,
+                       matched against each line
+--exists PATH          Met when PATH exists
+--gone PID|NAME        A PID: met when it ends (a zombie counts as ended). A
+                       NAME: a regular expression matched against command
+                       lines, as llm_procs --name; the caller is left out
+--http URL             GET until the status is 2xx
+--code N               ... until it is N (100-599) instead
+--json-path P          ... and the JSON body holds --equals V at path P
+--equals V             (a.b[0].c; a string compares as is, a number in its
+                       shortest form, true, false, null)
+--port HOST:PORT       Met when a TCP connection to HOST:PORT opens
+--cmd-ok CMD           Re-run the command line CMD (checked once under the
+                       llm_exec rules) until it exits 0
+--tail N               Add the last N lines of FILE, or of CMD's last output
+--width N              Cut the match and tail lines at N columns (default 300)
+```
+
+#### Examples
+
+```bash
+# Instead of: while ! grep -q DONE out.log; do sleep 10; done
+llm_wait --timeout 600 --file-match out.log '^DONE' --tail 5
+
+# A server comes up
+llm_wait --timeout 60 --http http://127.0.0.1:8080/health --json-path status --equals ok
+llm_wait --timeout 30 --port 127.0.0.1:5432
+
+# A background job ends
+llm_wait --timeout 300 --gone "$pid"
+```
+
+#### Notes
+
+```text
+Replaces sleep-and-check loops (while ! grep -q X f; do sleep N; done,
+sleep N; tail f, until curl ...; do sleep N; done) with one call that
+returns as soon as the condition holds. Met: {"met":true,"after_s":2.01,
+"match":"<line>","tail":[...]} and exit 0 (--http adds "code", --cmd-ok
+"rc" and "runs"). Timeout: {"met":false,"after_s":S} and exit 1, with
+no error envelope (--http, --port and --cmd-ok add what the last look saw:
+"last", "code", "rc"). One condition per call. FILE follows the path
+rules and secret files are refused. Reads only: nothing is signaled,
+written or started but CMD.
+```
+
+See also: `llm_procs`

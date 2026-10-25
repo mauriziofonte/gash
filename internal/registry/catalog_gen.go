@@ -2893,25 +2893,46 @@ var baseFunctions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "List processes by name or port (JSON)",
+			Short:   "List processes by name, port or PID, alive or not, as a tree (JSON)",
 			Module:  "llm",
 			SeeAlso: "llm_ports",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_procs [--name NAME | --port PORT]\n" +
+				"  llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]\n" +
+				"            [--format F] [--width N] [--max-lines N] [--head N] [--tail N]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --name NAME            Processes whose command line contains NAME\n" +
 				"  --port PORT            Processes with a socket on PORT\n" +
+				"  --pid PID...           These processes, alive or not (one or more PIDs)\n" +
+				"  --alive                Live processes only (a zombie is not alive)\n" +
+				"  --tree                 Each process and everything below it, depth first,\n" +
+				"                         with ppid and depth\n" +
+				"  --format F             json (default), jsonl, tsv or table\n" +
+				"  --width N              Cut each value at N columns\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Keep the first/last N rows\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
 				"  llm_procs --name nginx\n" +
 				"  llm_procs --port 3306\n" +
 				"\n" +
+				"  # Instead of: kill -0 $PID && echo alive\n" +
+				"  llm_procs --pid \"$pid\"\n" +
+				"\n" +
+				"  # Instead of: ps -ef | grep vite | grep -v grep\n" +
+				"  llm_procs --name vite --alive --tree\n" +
+				"\n" +
 				"NOTES\n" +
 				"  --port takes 0 to 65535 (invalid_port above) and wins over --name,\n" +
-				"  which is then ignored.",
+				"  which is then ignored; --pid wins over both. With --pid, --alive or\n" +
+				"  --tree the rows are [{\"pid\",\"name\",\"cmd\",\"alive\"}] (--tree adds\n" +
+				"  \"ppid\" and \"depth\"): --pid rows come in the order given, a gone PID\n" +
+				"  as alive:false; other rows by PID, never the caller's own shell and its\n" +
+				"  parents; NAME is then a regular expression (RE2); cmd is cut at 200\n" +
+				"  columns unless --width is given; without a filter the first 100 rows.\n" +
+				"  Read-only: llm_procs signals nothing (agent_kill does).",
 		},
 		Fallback: &Usage{Program: "llm_procs", Usage: "llm_procs [--name NAME] [--port PORT]", Description: "List processes (JSON)"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},

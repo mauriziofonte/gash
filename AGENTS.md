@@ -136,7 +136,7 @@ slow_query_explain field (the plan) when a query takes 100 ms or more
 | `llm_git_diff [--staged] [PATH]` | `git diff --stat` text |
 | `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
 | `llm_ports [--listen]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without) |
-| `llm_procs [--name NAME \| --port PORT]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name` |
+| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree` (3.4): `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
 | `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
@@ -194,6 +194,44 @@ value, never the network; a write failure never fails the call.
 ### 3.9 Network probes (3.4)
 
 ### 3.10 Processes, waiting and services (3.4)
+
+| Function | Output |
+|---|---|
+| `llm_wait --timeout S [--interval S] (--file-match FILE RE \| --exists PATH \| --gone PID\|NAME \| --http URL [--code N] [--json-path P --equals V] \| --port HOST:PORT \| --cmd-ok CMD) [--tail N] [--width N]` | `{"met":true,"after_s":2.01,"match":"<line>","tail":[...]}`, exit 0; timeout `{"met":false,"after_s":S}`, exit 1, no error envelope |
+| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given |
+| `llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{name, image, state, health, ports, up}]` by name |
+| `llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]` | `{ctr, read, log:[...]}` |
+| `llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{rc, out, err}` (+ `truncated`); exit 0 when the command ran |
+| `llm_sysinfo [--mount PATH]...` | `{host, os, kernel, uptime_h, load, cpus, cpu, mem_mb, disks, gpu}` in about 200 bytes |
+
+Waiting is one call: `llm_wait` looks at its one condition at once and
+then every `--interval` (0.2 s for files, paths and a PID; 0.5 s for a
+NAME, a URL and a port; 1 s for a command), and on Linux a file or path
+change wakes it at once (inotify). `--file-match` scans the file once, then
+only the bytes appended (a truncated or replaced file is scanned again; a
+missing one is waited for); RE is RE2, matched per line. `--gone` takes a
+PID (a zombie counts as gone) or a NAME matched as `llm_procs --name`.
+`--http` waits for a 2xx (or `--code N`), with `--json-path P --equals V`
+for a value of the JSON body; `--cmd-ok` re-runs a command line checked
+once under the `llm_exec` rules (6.3). The timeout is an answer, not an
+error: `met:false` with exit 1, plus what the last look saw (`last`,
+`code`, `rc`). `--timeout` is required (at most 1h); `missing_condition`
+without a condition, `unexpected_argument` for a second one.
+
+The process functions read, never signal (`agent_kill` does). Listings
+leave out the caller's own chain (the gash process, its parent shells and
+their same-command-line subshells), so `llm_procs --name X` and
+`llm_wait --gone X` never match the shell that asked; `--pid` targets
+are reported as given. `llm_service` runs `systemctl show` and
+`journalctl -u`; without systemd it is `systemd_unavailable` (CONTINUE).
+The docker functions run the `docker` CLI with `llm_docker_check`'s short
+environment; no docker is `docker_not_found`, a daemon that cannot be
+reached `docker_unavailable` (both CONTINUE), an unknown container
+`container_not_found` (RETRY). `llm_docker_exec` passes CMD's words to
+`docker exec` as an array (no shell, no quoting) after the `llm_exec` rules:
+one command, `sed`/`awk` under `--sandbox`, `grep`/`rg` skipping secret
+files, `git` refused. Journal, log and match lines are cut at 300 columns
+unless `--width` says otherwise.
 
 ### 3.11 Runtimes, lint and tests (3.4)
 

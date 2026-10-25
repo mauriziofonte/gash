@@ -1058,6 +1058,12 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_wait | function | pure output | new | One call for a sleep-and-check loop: a log line (scan once, then appended bytes, inotify), a path, a process exit, an HTTP status or JSON value, a TCP port, a command under the llm_exec rules; met or timed out as JSON (plan P1) | gash llm_wait | internal/llm wait_test.go, llm_wait.txtar |
+| llm_service | function | pure output | new | State, sub-state, since, main PID, restarts and the last journal lines of several systemd units in one call (plan P3) | gash llm_service | internal/llm service_test.go, llm_service.txtar |
+| llm_docker_ps | function | pure output | new | Containers as name, image, state, health, ports and status rows instead of docker ps --format strings (plan P4) | gash llm_docker_ps | internal/llm dockerx_test.go, llm_docker_ps.txtar |
+| llm_docker_logs | function | pure output | new | The last lines of a container's output, since T and filtered by RE, each cut at the S2 width (plan P4) | gash llm_docker_logs | internal/llm dockerx_test.go, llm_docker_logs.txtar |
+| llm_docker_exec | function | pure output | new | A read-only command in a container, argv end to end with no shell quoting, under the llm_exec rules (plan P5) | gash llm_docker_exec | internal/llm dockerx_test.go, llm_docker_exec.txtar |
+| llm_sysinfo | function | pure output | new | Load, uptime, CPUs, memory, disks, GPUs and OS in one compact JSON object from /proc and statfs (plan R4) | gash llm_sysinfo | internal/llm sysinfo34_test.go, internal/sysinfo facts_test.go, llm_sysinfo.txtar |
 
 ### Runtimes, lint and tests (S7, S8, S11, V1, V2, L1, L2)
 
