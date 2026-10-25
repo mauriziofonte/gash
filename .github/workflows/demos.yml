@@ -1,20 +1,21 @@
 name: Demos
 
-# Re-records the README GIFs from docs/tapes/*.tape with vhs and commits
-# them when they change. Runs on main when a tape or a rendering module
-# changes, or by hand.
+# Records the README GIFs from docs/tapes/*.tape with vhs, against gash
+# built from the commit (docs/tapes/render.sh). On main it commits the GIFs
+# that changed; on a pull request it only records them and uploads them as
+# an artifact, so a tape that breaks shows up before the merge.
 
 on:
   push:
     branches: [main]
     paths:
       - "docs/tapes/**"
-      - "lib/core/output.sh"
-      - "lib/modules/files.sh"
-      - "lib/modules/gash.sh"
-      - "lib/modules/system.sh"
-      - "lib/modules/sysinfo.sh"
-      - "lib/shell/prompt.sh"
+      - ".github/workflows/demos.yml"
+      - "VERSION"
+  pull_request:
+    paths:
+      - "docs/tapes/**"
+      - ".github/workflows/demos.yml"
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,9 @@ concurrency:
   group: demos-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GO_VERSION: "1.27.3"
+
 jobs:
   render:
     name: Render GIFs
@@ -31,20 +35,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install jq and sqlite3
-        run: sudo apt-get update -q && sudo apt-get install -y -q jq sqlite3
-
-      - name: Render docs/tapes/demo.tape
-        uses: charmbracelet/vhs-action@v2
+      - uses: actions/setup-go@v5
         with:
-          path: docs/tapes/demo.tape
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
-      - name: Render docs/tapes/agents.tape
-        uses: charmbracelet/vhs-action@v2
+      # jq and sqlite3 for the tapes; Apache and PHP-FPM for hte.tape.
+      - name: Install the tools the tapes call
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q jq sqlite3 apache2-bin php-fpm
+
+      # hte.tape runs gash hte install on ports 80 and 443. The runner is
+      # thrown away afterwards, so the system web servers are stopped and
+      # their stock vhosts removed rather than migrated.
+      - name: Free ports 80 and 443
+        run: |
+          for svc in apache2 nginx; do
+            sudo systemctl disable --now "$svc" 2>/dev/null || true
+          done
+          sudo rm -f /etc/apache2/sites-enabled/* /etc/nginx/sites-enabled/*
+
+      # Installs vhs, ttyd, ffmpeg and the fonts; no tape is given here.
+      - uses: charmbracelet/vhs-action@v2
+
+      - name: Record the tapes
+        env:
+          GASH_DEMO_HTE: "1"
+        run: docs/tapes/render.sh
+
+      - name: Upload the GIFs
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
         with:
-          path: docs/tapes/agents.tape
+          name: demo-gifs
+          path: docs/assets/*.gif
 
       - name: Commit changed GIFs
+        if: github.event_name != 'pull_request'
         run: |
           git add docs/assets/*.gif
           if git diff --cached --quiet; then

@@ -1,45 +1,43 @@
-# README demo: Gash at a terminal.
-# Render from the repository root: vhs docs/tapes/demo.tape
+# README hero: Gash at a terminal.
+# Record with docs/tapes/render.sh demo (see docs/tapes/README.md).
 Output docs/assets/demo.gif
 
 Set Shell "bash"
 Set FontSize 15
 Set Width 1100
-Set Height 620
+Set Height 640
 Set Padding 18
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 40ms
-Env LANG "C.UTF-8"
-Env LC_ALL "C.UTF-8"
-Env GASH_BANNER "0"
+Set WaitTimeout 90s
+Set WaitPattern /\$ ?$/
 
 Hide
-Type "source ./gash.sh && clear"
+Type "source docs/tapes/env.sh"
 Enter
-Sleep 1s
+Wait
 Show
 
 Type "gash"
 Sleep 300ms
 Enter
-Sleep 3.5s
+Wait
+Sleep 4s
 
-Type "clear; files_largest -n 8"
+Type "clear; files_largest ~ -n 8"
 Sleep 300ms
 Enter
-Sleep 3.5s
+Wait
+Sleep 4s
 
 Type "clear; tree_stats"
 Sleep 300ms
 Enter
-Sleep 3.5s
-
-Type "clear; disk_usage"
-Sleep 300ms
-Enter
-Sleep 3s
+Wait
+Sleep 4s
 
 Type "clear; sysinfo overview"
 Sleep 300ms
 Enter
-Sleep 4s
+Wait
+Sleep 4.5s

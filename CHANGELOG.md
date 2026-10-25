@@ -8,16 +8,30 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
 ## [3.0.0] - 2026-10-24
 
-Gash is now one Go binary with thin generated Bash around it. Every 2.x
-function keeps its name, and its arguments, output, exit codes and `--json`
-envelopes stay as they were except for the changes below; the prompt,
-history, aliases and toolchains still come from Bash. HTE, formerly the separate hte-cli tool, is built in as `gash hte` and
-runs a user-owned Apache and PHP-FPM with no sudo at runtime. The port
-reviewed every 2.x behaviour (the census is
-[docs/port/LEDGER.md](docs/port/LEDGER.md), 443 items) and 3.0 fixes the
-defects it found instead of carrying them over; the changes a user or a
-script can notice are listed below. 2.x installs move to 3.0 with their own
-`gash_upgrade`, and `git checkout v2.1.0` in the install directory goes back.
+Gash is now one static Go binary with thin generated Bash around it, for
+Linux, macOS and WSL on amd64 and arm64.
+
+- **Same functions.** Every 2.x function keeps its name, arguments, output,
+  exit codes and `--json` envelopes, except for the changes below. The
+  prompt, history, aliases, completion and toolchains still come from Bash
+  (`gash init bash`).
+- **`gash hte` is built in.** HTE, formerly the separate hte-cli tool, runs a
+  user-owned Apache and PHP-FPM with no sudo at runtime, and
+  `gash hte migrate` takes over an hte-cli setup
+  ([docs/hte.md](docs/hte.md)).
+- **Fewer dependencies.** The `llm_*`, database and scanner functions run
+  inside the binary: no `jq`, `sqlite3`, `mysql`, `psql`, `rg` or GNU `find`.
+- **Verified upgrades.** Release binaries are pinned by SHA-256 in the
+  tagged tree; `gash update` verifies before it changes anything and
+  `gash update --rollback` goes back.
+- **Audited.** The port reviewed every 2.x behaviour (the census is
+  [docs/port/LEDGER.md](docs/port/LEDGER.md), 443 items) and fixes the
+  defects it found instead of carrying them over. The changes a user or a
+  script can notice are listed below.
+
+To upgrade, run `gash_upgrade` from 2.x; `git checkout v2.1.1` in the
+install directory goes back. From 1.x, go through 2.1.0 first (see
+Breaking).
 
 ### Breaking
 
@@ -95,7 +109,6 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   `mariadb`, `psql`, `sqlite3`, `jq`, `rg`, `numfmt` or `find`: they run
   inside the binary. Client option files (`~/.my.cnf`) and `~/.pgpass` are
   not read.
-
 - Colors mean the same thing everywhere: structure (rules, borders,
   labels) in the primary color, the names you look for (functions, mount
   points, PIDs, hosts) in the accent color, secondary data muted, green,
@@ -131,7 +144,6 @@ script can notice are listed below. 2.x installs move to 3.0 with their own
   and author muted. Their plain text is unchanged, they print no colors
   with `NO_COLOR`, and graph lanes alternate primary and muted unless
   `log.graphColors` is configured.
-
 
 ### Fixed
 
