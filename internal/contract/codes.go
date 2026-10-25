@@ -236,6 +236,7 @@ var codeTable = []Code{
 	{"container_not_running", Continue, "llm", Origin3x},
 	{"docker_unavailable", Continue, "llm", Origin3x},
 	{"docker_error", Retry, "llm", Origin3x},
+	{"invalid_log", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, runtimes, lint and tests (gash runtime,
 	// gash run, llm_tools, llm_runtime, llm_lint, llm_test).

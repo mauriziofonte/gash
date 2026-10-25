@@ -95,6 +95,10 @@ func CollectFacts(e FactsEnv) Facts {
 		if f.OS == "" {
 			f.OS = strings.TrimSpace(kv["NAME"] + " " + kv["VERSION_ID"])
 		}
+		// "Debian GNU/Linux 12 (bookworm)": the codename adds bytes, not facts.
+		if i := strings.LastIndex(f.OS, " ("); i > 0 && strings.HasSuffix(f.OS, ")") {
+			f.OS = f.OS[:i]
+		}
 	}
 	if e.NumCPU != nil {
 		f.CPUs = e.NumCPU()
