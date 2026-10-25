@@ -192,7 +192,7 @@ func testZone() dnsZone {
 func TestDNSRecordsOfEveryType(t *testing.T) {
 	f := startDNSFake(t, testZone())
 	r := netRun(t, nil, "llm_dns", "example.test", "--server", f.addr, "--type", "a,AAAA,MX,TXT,NS,CAA,CNAME,SOA")
-	require.Regexp(t, `^\[\{"name":"example.test","A":\["192.0.2.20","192.0.2.3"\],"AAAA":\["2001:db8::1"\],`+
+	require.Regexp(t, `^\[\{"name":"example.test","A":\["192.0.2.3","192.0.2.20"\],"AAAA":\["2001:db8::1"\],`+
 		`"MX":\[\{"host":"mx0.example.test","pref":10\},\{"host":"mx1.example.test","pref":10\},\{"host":"mx2.example.test","pref":20\}\],`+
 		`"TXT":\["b-verify","v=spf1 -all"\],"NS":\["ns1.example.test","ns2.example.test"\],`+
 		`"CAA":\[\{"flag":0,"tag":"issue","value":"letsencrypt.org"\}\],"CNAME":\[\],`+
@@ -242,7 +242,7 @@ func TestDNSDefaultServerFromResolvConf(t *testing.T) {
 	// The lookup itself, through the rotation, against the fake.
 	v, e := dnsLookupFor(t, []string{"127.0.0.1:1", "127.0.0.1:" + port}, "example.test.", 1)
 	require.Equal(t, "", e)
-	require.Equal(t, []string{"192.0.2.20", "192.0.2.3"}, v)
+	require.Equal(t, []string{"192.0.2.3", "192.0.2.20"}, v)
 }
 
 func dnsLookupFor(t *testing.T, servers []string, fqdn string, qtype uint16) (any, string) {

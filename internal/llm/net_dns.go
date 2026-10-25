@@ -498,16 +498,28 @@ func dnsAnswer(qtype uint16, rrs []dnsRR) any {
 		}
 		return out
 	}
-	out := []string{}
-	for _, rr := range rrs {
-		d := rr.msg[rr.off:rr.end]
-		switch qtype {
-		case 1, 28:
+	if qtype == 1 || qtype == 28 {
+		// Addresses in numeric order.
+		addrs := []netip.Addr{}
+		for _, rr := range rrs {
+			d := rr.msg[rr.off:rr.end]
 			a, ok := netip.AddrFromSlice(d)
 			if !ok || (qtype == 1) != (len(d) == 4) {
 				return nil
 			}
-			out = append(out, a.String())
+			addrs = append(addrs, a)
+		}
+		sort.Slice(addrs, func(i, j int) bool { return addrs[i].Less(addrs[j]) })
+		out := make([]string, len(addrs))
+		for i, a := range addrs {
+			out[i] = a.String()
+		}
+		return out
+	}
+	out := []string{}
+	for _, rr := range rrs {
+		d := rr.msg[rr.off:rr.end]
+		switch qtype {
 		case 2, 5:
 			name, _, err := dnsReadName(rr.msg, rr.off)
 			if err != nil {

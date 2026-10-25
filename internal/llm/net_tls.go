@@ -107,15 +107,26 @@ func (p *tlsProbe) check(ctx context.Context, target, host, port string) []any {
 		name = host
 	}
 	start := time.Now()
-	d := &tls.Dialer{Config: &tls.Config{ServerName: name, InsecureSkipVerify: true}} //nolint:gosec // the chain is verified below, to describe a bad certificate instead of failing on it
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, port))
-	row[10] = llmfmt.Ms(time.Since(start))
+	var d net.Dialer
+	raw, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, port))
 	if err != nil {
-		row[11] = netError(ctx, err)
+		row[10], row[11] = llmfmt.Ms(time.Since(start)), netError(ctx, err)
 		return row
 	}
-	st := conn.(*tls.Conn).ConnectionState()
+	conn := tls.Client(raw, &tls.Config{ServerName: name, InsecureSkipVerify: true}) //nolint:gosec // the chain is verified below, to describe a bad certificate instead of failing on it
+	err = conn.HandshakeContext(ctx)
+	row[10] = llmfmt.Ms(time.Since(start))
 	_ = conn.Close()
+	if err != nil {
+		// Connected, then no TLS: whatever the server did, the handshake
+		// failed (unless the time ran out).
+		row[11] = "tls_error"
+		if netError(ctx, err) == "timeout" {
+			row[11] = "timeout"
+		}
+		return row
+	}
+	st := conn.ConnectionState()
 	if len(st.PeerCertificates) == 0 {
 		row[11] = "no_certificate"
 		return row
