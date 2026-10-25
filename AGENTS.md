@@ -404,7 +404,7 @@ never from same-named environment variables:
 |---|---|
 | `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
 | `GASH_LLM_EXEC=unrestricted` | Skips parser, allowlist and secret-file check; only the blocklist remains |
-| `GASH_LLM_SANDBOX=1` | Runs the child in `bwrap`: read-only filesystem, no network (`sandbox_unavailable` if bwrap cannot start) |
+| `GASH_LLM_SANDBOX=1` | Runs the child in `bwrap`: read-only filesystem, no network, and under WSL no Windows interop (`sandbox_unavailable` if bwrap cannot start) |
 
 Whoever controls the agent's environment (`HOME`, `GASH_ENV_FILE`) controls
 which file is read. On `command_not_allowed`, ask the user; never edit

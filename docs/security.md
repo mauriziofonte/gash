@@ -96,7 +96,11 @@ Settings, read from `~/.gash_env` only (never from the environment):
   included) and the wrappers. Only the blocklist remains.
 * `GASH_LLM_SANDBOX=1`: runs under `bwrap --ro-bind / / --dev /dev --proc /proc
   --unshare-all --die-with-parent`, so a read-only filesystem and no network;
-  reading stays possible. Without a working `bwrap`: `sandbox_unavailable`.
+  reading stays possible. Under WSL the sandbox also mounts an empty
+  `/run/WSL` (`--tmpfs /run/WSL`) and never passes `WSL_INTEROP`: a Windows
+  program would run on Windows, outside the sandbox, so the interop sockets
+  are out of its reach and a `.exe` cannot start from it. Without a working
+  `bwrap`: `sandbox_unavailable`.
 
 Every argument is also checked against the [forbidden paths](#forbidden-paths):
 option values (`--file=/proc/x`, `-f/proc/x`, `-vf/proc/x`), `key=value` words, `~` and
