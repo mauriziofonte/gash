@@ -207,6 +207,8 @@ var codeTable = []Code{
 	// New in 3.4: agent toolkit, processes, waiting and services (llm_wait,
 	// llm_procs, llm_service, llm_docker_*, llm_sysinfo, agent_kill,
 	// agent_docker_exec).
+	{"invalid_pid", Retry, "llm", Origin3x},
+	{"ps_not_found", Continue, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, runtimes, lint and tests (gash runtime,
 	// gash run, llm_tools, llm_runtime, llm_lint, llm_test).

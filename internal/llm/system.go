@@ -12,6 +12,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -220,11 +221,38 @@ func (m *Module) procs(c *invoke.Call) int {
 		return 0
 	}
 	name, port := "", ""
+	// 3.4 (plan P2): --pid, --alive, --tree select the 3.4 rows; --format
+	// and the output budget apply to every mode.
+	var q procsQuery
+	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags)
 	args := c.Args
 	for len(args) > 0 {
+		n, ok := o.Take(c, args)
+		if !ok {
+			return 1
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
 		a := args[0]
+		switch a {
+		case "--alive", "--tree":
+			q.alive = q.alive || a == "--alive"
+			q.tree = q.tree || a == "--tree"
+			args = args[1:]
+			continue
+		case "--pid":
+			pids, n, ok := takePIDs(c, args)
+			if !ok {
+				return 1
+			}
+			q.pids = append(q.pids, pids...)
+			args = args[n:]
+			continue
+		}
 		if a != "--name" && a != "--port" {
-			return fail(c, "unknown_option", a, "Use --name NAME, --port PORT or no option")
+			return fail(c, "unknown_option", a, "Use --name NAME, --port PORT, --pid PID..., --alive, --tree or no option")
 		}
 		if len(args) < 2 {
 			return fail(c, "missing_value", a, a+" needs a value")
@@ -246,6 +274,10 @@ func (m *Module) procs(c *invoke.Call) int {
 			return fail(c, "invalid_port", "Value '"+port+"' is above 65535", "Provide a port number from 0 to 65535")
 		}
 		port = numericText(port)
+	}
+	if q.active() {
+		q.name, q.port = name, port
+		return m.procs34(c, o, q)
 	}
 	var items []string
 	switch {
@@ -291,6 +323,9 @@ func (m *Module) procs(c *invoke.Call) int {
 			b = append(b, `"}`...)
 			items = append(items, string(b))
 		}
+	}
+	if o.Format != llmfmt.Default || o.Capped() || o.Width > 0 {
+		return procsLegacyTable(c, o, items)
 	}
 	_, _ = c.Stdout.Write([]byte("[" + strings.Join(items, ",") + "]\n"))
 	return 0
