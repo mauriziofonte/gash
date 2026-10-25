@@ -1,0 +1,52 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_dotenv (new in 3.4, plan V3): whether keys are set in a dotenv file
+# and the values of the ones that are not secret, through the shim and the
+# binary directly. Secret-named keys (the llm_env rule) show "***(set)",
+# other values pass llm_env's redaction, a missing key is null; no secret
+# value ever reaches the output. Key and credential files stay refused.
+# The parser and the masking are Go tests (internal/llm/dotenv_test.go).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+
+# --- values, through the shim and directly
+exec bash -c 'source "$GASH_SH"; llm_dotenv .env DB_HOST DB_PASSWORD DB_URL MISSING'
+stdout '^\{"DB_HOST":"127.0.0.1","DB_PASSWORD":"\*\*\*\(set\)","DB_URL":"mysql://app:\*\*\*@db:3306/app","MISSING":null\}$'
+! stdout 'hunter2|s3cret'
+! stderr .
+exec gash llm_dotenv .env APP_NAME API_TOKEN EMPTY_KEY
+stdout '^\{"APP_NAME":"My App","API_TOKEN":"\*\*\*\(set\)","EMPTY_KEY":""\}$'
+
+# --- presence only, and the names without values
+exec gash llm_dotenv .env DB_PASSWORD NOPE --present
+stdout '^\{"DB_PASSWORD":true,"NOPE":false\}$'
+exec gash llm_dotenv .env
+stdout '^\["APP_NAME","DB_HOST","DB_PASSWORD","DB_URL","API_TOKEN","EMPTY_KEY"\]$'
+! stdout 'hunter2|s3cret'
+
+# --- refusals
+! exec gash llm_dotenv id_rsa X
+stderr '"error":"secret_file_blocked"'
+! stdout .
+! exec gash llm_dotenv .env 9X
+stderr '"error":"invalid_env_name"'
+! exec gash llm_dotenv
+stderr '"error":"missing_file"'
+
+# --- help without side effects
+exec gash llm_dotenv --help
+stdout 'llm_dotenv FILE \[KEY\.\.\.\] \[--present\]'
+
+-- .env --
+# local settings
+APP_NAME="My App"
+export DB_HOST=127.0.0.1
+DB_PASSWORD=hunter2
+DB_URL=mysql://app:s3cret@db:3306/app
+API_TOKEN='s3cret-token'
+EMPTY_KEY=
+-- id_rsa --
+-----BEGIN OPENSSH PRIVATE KEY-----
+X=1
