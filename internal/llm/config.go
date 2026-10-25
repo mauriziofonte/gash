@@ -48,8 +48,8 @@ func (m *Module) config(c *invoke.Call) int {
 	if !validUint(c, "size", maxBytes) {
 		return 1
 	}
-	if m.guard(c).IsSecretFile(file) {
-		return fail(c, "secret_file_blocked", "Cannot read .env or credential files", "This file contains secrets and cannot be read")
+	if m.refuseSecret(c, file, "Cannot read .env or credential files") {
+		return 1
 	}
 	safe, ok := m.validatePath(c, file)
 	if !ok {
