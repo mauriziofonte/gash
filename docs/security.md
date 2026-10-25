@@ -344,6 +344,23 @@ could read them in `/proc/<pid>/cmdline`: MySQL credentials use
 `--defaults-extra-file`, SSH passphrases are typed to `ssh-add` on a
 terminal Gash drives, and AI API keys stay inside the gash process.
 
+## The per-shell server
+
+On Linux the first call of a served function starts `gash __serve`, a
+child of the shell that runs the shell's later calls of those functions
+(`GASH_SERVER=0` turns it off). It holds no more than the exec'd binary
+would: it runs as the shell's user, its private directory (the request and
+reply files) is created `0700` under `XDG_RUNTIME_DIR`, `/dev/shm` or
+`TMPDIR`, and it ends when the shell does. A request carries what the
+binary would have received (the arguments, the exported variables, the
+variables `__gash_export_state` passes, the umask); the server takes the
+shell's working directory from `/proc/<pid>/cwd` and its standard streams
+with `pidfd_getfd`, or reopens them through `/proc` when the kernel's
+ptrace policy refuses that, and declines the call (the binary runs it, as
+before) when a stream cannot be shared exactly. Ctrl-C reaches it with the
+shell's process group and ends the call, and the server restarts when the
+binary on disk changes.
+
 ## Install and upgrade
 
 The installer and `gash_upgrade` check out the newest release tag. A signed tag
