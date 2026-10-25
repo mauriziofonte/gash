@@ -148,7 +148,7 @@ func (m *Module) findExt(c *invoke.Call, q findQuery) int {
 		return m.findContentExt(c, q, sel, show)
 	}
 	if x.count {
-		cnt := findCount(c, q.safe, rootInfo, sel, x.by, q.forbidden)
+		cnt := findCount(c, q.safe, rootInfo, sel, x.by, q.forbidden, m.guardedDirs(c))
 		cnt.Write(c, q.o, q.o.Format)
 		return 0
 	}
@@ -243,7 +243,7 @@ func findKey(by, name, rel string, typ byte) string {
 // several goroutines, without the per-entry lstat unless a filter needs
 // the mtime. The count is the number of lines the same listing prints
 // without -n.
-func findCount(c *invoke.Call, root string, rootInfo os.FileInfo, sel *walkSel, by string, forbidden func(string) bool) llmfmt.Count {
+func findCount(c *invoke.Call, root string, rootInfo os.FileInfo, sel *walkSel, by string, forbidden func(string) bool, guarded func(string) bool) llmfmt.Count {
 	cnt := llmfmt.Count{}
 	if by != "" {
 		cnt.By = map[string]int{}
@@ -273,36 +273,8 @@ func findCount(c *invoke.Call, root string, rootInfo os.FileInfo, sel *walkSel, 
 			tallies[i].keys = map[string]int{}
 		}
 	}
-	info := sel.needInfo()
 	poolWalk(c.Ctx, jobs, walkDir{path: root}, func(w int, d walkDir) []walkDir {
-		ents, _ := readDirAll(d.path)
-		var subs []walkDir
-		t := &tallies[w]
-		for _, de := range ents {
-			name := de.Name()
-			path := findJoin(d.path, name)
-			if forbidden != nil && forbidden(path) {
-				continue
-			}
-			typ := dirEntryType(de.Type())
-			var mt time.Time
-			if info {
-				fi, err := de.Info()
-				if err != nil {
-					continue
-				}
-				typ, mt = dirEntryType(fi.Mode()), fi.ModTime()
-			}
-			rel := relJoin(d.rel, name)
-			keep, enter := sel.keep(name, rel, typ, mt)
-			if keep {
-				add(by, &t.n, t.keys, name, rel, typ)
-			}
-			if enter && typ == 'd' && (sel.maxDepth < 0 || d.depth+1 < sel.maxDepth) {
-				subs = append(subs, walkDir{path: path, rel: rel, depth: d.depth + 1})
-			}
-		}
-		return subs
+		return countDir(d, sel, by, &tallies[w].n, tallies[w].keys, forbidden, guarded)
 	})
 	for _, t := range tallies {
 		cnt.N += t.n
@@ -478,4 +450,28 @@ func (m *Module) loadTracked(c *invoke.Call, root string, isDir bool) (*trackedS
 		}
 	}
 	return t, true
+}
+
+// countDir counts the selected entries of one directory of a --count pool
+// walk into n and keys, and returns the directories to enter.
+func countDir(d walkDir, sel *walkSel, by string, n *int, keys map[string]int, forbidden, guarded func(string) bool) []walkDir {
+	check := forbidden != nil && guarded(d.path)
+	var subs []walkDir
+	scanDir(d.path, sel.needInfo(), func(e scanEntry) {
+		if e.failed || check && forbidden(findJoin(d.path, e.name)) {
+			return
+		}
+		rel := relJoin(d.rel, e.name)
+		keep, enter := sel.keep(e.name, rel, e.typ, e.mtime)
+		if keep {
+			*n++
+			if keys != nil {
+				keys[findKey(by, e.name, rel, e.typ)]++
+			}
+		}
+		if enter && e.typ == 'd' && (sel.maxDepth < 0 || d.depth+1 < sel.maxDepth) {
+			subs = append(subs, walkDir{path: findJoin(d.path, e.name), rel: rel, depth: d.depth + 1})
+		}
+	})
+	return subs
 }

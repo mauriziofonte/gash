@@ -323,16 +323,37 @@ func poolWalk(ctx context.Context, jobs int, root walkDir, visit func(w int, d w
 	wg.Wait()
 }
 
-// readDirAll reads a directory's entries; ok is false when it could not
-// be opened or read to the end.
-func readDirAll(path string) ([]os.DirEntry, bool) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, false
+// scanEntry is one entry scanDir read: its name, find's %y letter, and
+// the size and mtime of its lstat when it was asked for (failed: the
+// lstat failed, the entry vanished).
+type scanEntry struct {
+	name   string
+	typ    byte
+	size   int64
+	mtime  time.Time
+	failed bool
+}
+
+// guardedDirs returns the per-directory form of the protected-tree test
+// of a walk (walkRoot's forbidden): whether an entry of dir may be at or
+// below a protected tree. Only the directories on the way to one need the
+// per-entry test, which a walk of thousands of entries then skips.
+func (m *Module) guardedDirs(c *invoke.Call) func(dir string) bool {
+	trees := m.guard(c).Forbidden
+	// below reports whether a is b or below it, without building b+"/".
+	below := func(a, b string) bool {
+		return strings.HasPrefix(a, b) && (len(a) == len(b) || a[len(b)] == '/')
 	}
-	ents, err := f.ReadDir(-1)
-	_ = f.Close()
-	return ents, err == nil
+	return func(dir string) bool {
+		for _, cand := range [2]string{dir, strings.TrimPrefix(dir, "/private")} {
+			for _, f := range trees {
+				if below(f, cand) || below(cand, f) {
+					return true
+				}
+			}
+		}
+		return false
+	}
 }
 
 // relJoin is the path below the root of a child of rel.

@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -123,7 +122,7 @@ func (m *Module) treeExt(c *invoke.Call, q treeQuery) int {
 		if q.depthSet {
 			sel.maxDepth = q.depth
 		}
-		treeCount(c, q.safe, sel, x.by, q.forbidden).Write(c, o, o.Format)
+		treeCount(c, q.safe, sel, x.by, q.forbidden, m.guardedDirs(c)).Write(c, o, o.Format)
 		return 0
 	case q.textMode:
 		limit := textCap
@@ -151,7 +150,7 @@ func (m *Module) treeExt(c *invoke.Call, q treeQuery) int {
 // treeCount is llm_tree --count: the entries below PATH the listing would
 // show at any depth (or down to an explicit --depth), on several
 // goroutines.
-func treeCount(c *invoke.Call, root string, sel *walkSel, by string, forbidden func(string) bool) llmfmt.Count {
+func treeCount(c *invoke.Call, root string, sel *walkSel, by string, forbidden, guarded func(string) bool) llmfmt.Count {
 	jobs := llmfmt.LocalJobs()
 	type tally struct {
 		n    int
@@ -163,39 +162,8 @@ func treeCount(c *invoke.Call, root string, sel *walkSel, by string, forbidden f
 			tallies[i].keys = map[string]int{}
 		}
 	}
-	info := sel.needInfo()
 	poolWalk(c.Ctx, jobs, walkDir{path: root}, func(w int, d walkDir) []walkDir {
-		ents, _ := readDirAll(d.path)
-		var subs []walkDir
-		t := &tallies[w]
-		for _, de := range ents {
-			name := de.Name()
-			path := findJoin(d.path, name)
-			if forbidden != nil && forbidden(path) {
-				continue
-			}
-			typ := dirEntryType(de.Type())
-			var mt time.Time
-			if info {
-				fi, err := de.Info()
-				if err != nil {
-					continue
-				}
-				typ, mt = dirEntryType(fi.Mode()), fi.ModTime()
-			}
-			rel := relJoin(d.rel, name)
-			keep, enter := sel.keep(name, rel, typ, mt)
-			if keep {
-				t.n++
-				if t.keys != nil {
-					t.keys[findKey(by, name, rel, typ)]++
-				}
-			}
-			if enter && typ == 'd' && (sel.maxDepth < 0 || d.depth+1 < sel.maxDepth) {
-				subs = append(subs, walkDir{path: path, rel: rel, depth: d.depth + 1})
-			}
-		}
-		return subs
+		return countDir(d, sel, by, &tallies[w].n, tallies[w].keys, forbidden, guarded)
 	})
 	cnt := llmfmt.Count{}
 	if by != "" {
@@ -258,41 +226,39 @@ func (m *Module) treeTop(c *invoke.Call, q treeQuery, times mtimeFilter) int {
 		r.size += size
 		r.files += files
 	}
+	guarded := m.guardedDirs(c)
 	poolWalk(c.Ctx, jobs, walkDir{path: q.safe}, func(w int, d walkDir) []walkDir {
 		a := &accs[w]
-		ents, ok := readDirAll(d.path)
-		if !ok {
-			a.skipped++
-		}
+		check := q.forbidden != nil && guarded(d.path)
 		var subs []walkDir
 		var size, files int64
-		for _, de := range ents {
-			name := de.Name()
-			path := findJoin(d.path, name)
-			if q.forbidden != nil && q.forbidden(path) {
-				continue
+		ok := scanDir(d.path, true, func(e scanEntry) {
+			if check && q.forbidden(findJoin(d.path, e.name)) {
+				return
 			}
-			if de.IsDir() {
-				rel := relJoin(d.rel, name)
-				subs = append(subs, walkDir{path: path, rel: rel, depth: d.depth + 1})
+			if e.failed {
+				a.skipped++
+				return
+			}
+			if e.typ == 'd' {
+				rel := relJoin(d.rel, e.name)
+				subs = append(subs, walkDir{path: findJoin(d.path, e.name), rel: rel, depth: d.depth + 1})
 				if !byExt && d.depth+1 <= depth {
 					bump(a, rel, 0, 0) // listed even when empty
 				}
-				continue
+				return
 			}
-			fi, err := de.Info()
-			if err != nil {
-				a.skipped++
-				continue
+			if x.name != "" && !pathguard.MatchGlobSegment(x.name, e.name) || times.active() && !times.ok(e.mtime) {
+				return
 			}
-			if x.name != "" && !pathguard.MatchGlobSegment(x.name, name) || times.active() && !times.ok(fi.ModTime()) {
-				continue
-			}
-			size += fi.Size()
+			size += e.size
 			files++
 			if byExt {
-				bump(a, extKey(name), fi.Size(), 1)
+				bump(a, extKey(e.name), e.size, 1)
 			}
+		})
+		if !ok {
+			a.skipped++
 		}
 		a.size += size
 		a.files += files

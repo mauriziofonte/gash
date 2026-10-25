@@ -147,51 +147,57 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 	ents, _ := f.ReadDir(-1)
 	_ = f.Close()
 	sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
-	// The verdicts first (they depend on this directory's ignore stack
-	// only), so the files can be read ahead while the earlier ones are
-	// searched: the output keeps the path order.
+	// The verdicts run ahead of the search by readAheadFiles entries (they
+	// depend on this directory's ignore stack only), so the files there
+	// can be read in the background while the earlier ones are searched:
+	// the output keeps the path order, and a search that stops early has
+	// judged only a few entries more.
 	type item struct {
 		path, apath string
 		isDir       bool
+		read        *fileRead
 	}
-	items := make([]item, 0, len(ents))
-	for _, e := range ents {
-		name := e.Name()
-		path := findJoin(dir, name)
-		apath := findJoin(abs, name)
-		isDir := e.IsDir()
-		if s.forbidden != nil && s.forbidden(apath) {
-			continue
-		}
-		if s.excludes != nil && walkExcluded(s.excludes, relBelow(s.root, path), name) {
-			continue
-		}
-		if s.skip(ig, apath, name, isDir) {
-			continue
-		}
-		if isDir || e.Type().IsRegular() {
-			items = append(items, item{path, apath, isDir})
+	var items []item
+	next := 0 // the next entry to judge
+	judge := func(n int) {
+		for len(items) < n && next < len(ents) {
+			e := ents[next]
+			next++
+			name := e.Name()
+			path := findJoin(dir, name)
+			apath := findJoin(abs, name)
+			isDir := e.IsDir()
+			if s.forbidden != nil && s.forbidden(apath) {
+				continue
+			}
+			if s.excludes != nil && walkExcluded(s.excludes, relBelow(s.root, path), name) {
+				continue
+			}
+			if s.skip(ig, apath, name, isDir) {
+				continue
+			}
+			switch {
+			case isDir:
+				items = append(items, item{path: path, apath: apath, isDir: true})
+			case e.Type().IsRegular():
+				items = append(items, item{path: path, apath: apath, read: readAhead(path)})
+			}
 		}
 	}
-	reads := make([]*fileRead, len(items))
-	ahead := func(j int) {
-		if j < len(items) && !items[j].isDir {
-			reads[j] = readAhead(items[j].path)
+	for i := 0; ; i++ {
+		judge(i + 1 + readAheadFiles)
+		if i >= len(items) {
+			return nil
 		}
-	}
-	for j := 0; j < readAheadFiles; j++ {
-		ahead(j)
-	}
-	for i, it := range items {
-		ahead(i + readAheadFiles)
+		it := items[i]
+		items[i] = item{}
 		if it.isDir {
 			if err := s.walk(it.path, it.apath, s.rules.newIgnoreDir(ig, it.apath)); err != nil {
 				return err
 			}
 			continue
 		}
-		data, err := reads[i].wait()
-		reads[i] = nil
+		data, err := it.read.wait()
 		if err != nil {
 			continue
 		}
@@ -199,7 +205,6 @@ func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
 			return err
 		}
 	}
-	return nil
 }
 
 // readAheadFiles is how many files of a directory a walk reads ahead of
