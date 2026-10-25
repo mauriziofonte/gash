@@ -158,4 +158,102 @@ var catalogData = []Function{
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
 		Replaces:  "python3 -c \"import csv; r=list(csv.reader(open(f))); print(len(r)-1, r[0])\"; wc -l f; head -3 f",
 	},
+	{
+		Name:     "llm_dotenv",
+		Module:   "llm",
+		Topic:    "llm",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("pure output"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:   "Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env)",
+			Module:  "llm",
+			SeeAlso: "llm_env llm_config",
+			Body: "" +
+				"USAGE\n" +
+				"  llm_dotenv FILE [KEY...] [--present]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --present              true or false per KEY, never a value\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  llm_dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL\n" +
+				"  llm_dotenv .env.production APP_KEY --present\n" +
+				"  llm_dotenv .env\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces grep -E '^(DB_HOST|APP_URL)=' .env, which prints secrets into\n" +
+				"  the transcript. Output: {\"DB_HOST\":\"127.0.0.1\",\"DB_PASSWORD\":\n" +
+				"  \"***(set)\",\"MISSING\":null}. A key whose name llm_env hides\n" +
+				"  (PASSWORD, TOKEN, KEY, SECRET, AUTH, ...) shows \"***(set)\" (\"\" when\n" +
+				"  empty); other values pass llm_env's redaction (URL passwords, private\n" +
+				"  keys, known token formats masked). Without KEY: the names the file\n" +
+				"  sets, never a value. Reads .env, .env.*, *.env and .envrc files (the\n" +
+				"  only reader of them; key and credential files stay refused): KEY=VALUE,\n" +
+				"  export KEY=VALUE, quoted values (also on several lines), # comments;\n" +
+				"  ${VAR} is not expanded; a key set twice keeps its last value.",
+		},
+		ShellVars: []string{"HOME"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
+		Replaces:  "grep -E '^(DB_HOST|APP_URL)=' .env",
+	},
+	{
+		Name:     "llm_date",
+		Module:   "llm",
+		Topic:    "llm",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("pure output"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:   "Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime)",
+			Module:  "llm",
+			SeeAlso: "llm_env",
+			Body: "" +
+				"USAGE\n" +
+				"  llm_date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]\n" +
+				"           [--fmt FORMAT]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --diff A B             B - A: {\"result\":\"67d\",\"days\":67,\"seconds\":N}\n" +
+				"  --add DATE DURATION    DATE + DURATION (y, mo, w, d, h, m, s, ms: 3d,\n" +
+				"                         -600s, 1h30m, 1y2mo)\n" +
+				"  --epoch X              A Unix time as a date (13 digits: milliseconds),\n" +
+				"                         or a date as a Unix time\n" +
+				"  --tz ZONE              Europe/Rome, UTC, +02:00 (default: TZ, else the\n" +
+				"                         system zone)\n" +
+				"  --fmt FORMAT           rfc3339 (default), date, time, epoch, rfc2822, or\n" +
+				"                         a date(1) format: '%Y-%m-%d %H:%M:%S'\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  llm_date --diff 2026-10-25 2026-12-31\n" +
+				"  llm_date --add now -600s --fmt '%Y-%m-%dT%H:%M:%S'\n" +
+				"  llm_date --add 2026-01-31 1mo\n" +
+				"  llm_date --epoch 1700000000 --tz UTC\n" +
+				"  llm_date --tz America/New_York\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces date -d '-600 seconds' +FMT (GNU and BSD date differ) and\n" +
+				"  python3 -c \"from datetime import date; print((date(...)-date(...)).days)\".\n" +
+				"  Output: {\"result\":\"...\",\"epoch\":N}; without a mode, now. A date is\n" +
+				"  now, today, yesterday, tomorrow, YYYY-MM-DD, YYYY-MM-DD[T ]HH:MM[:SS]\n" +
+				"  [.frac][Z|+HH:MM], an RFC 2822 date or @EPOCH; without an offset it is\n" +
+				"  in --tz. The result keeps the input's offset unless --tz is given; a\n" +
+				"  date plus calendar units stays a date. Months clamp to the month's\n" +
+				"  last day (Jan 31 + 1mo = Feb 28); days follow the calendar across DST.\n" +
+				"  --diff of two dates counts calendar days; days truncates toward zero.\n" +
+				"  Bad input is invalid_date, invalid_duration, invalid_timezone or\n" +
+				"  invalid_date_format (all RETRY). The same output on Linux and macOS.",
+		},
+		ShellVars: []string{"HOME"},
+		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "TZ"},
+		Replaces:  "date -d '-600 seconds' '+%Y-%m-%dT%H:%M:%S'; python3 -c \"from datetime import date; print((date(2026,12,31)-date(2026,10,25)).days)\"",
+	},
 }

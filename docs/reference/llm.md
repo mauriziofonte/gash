@@ -8,6 +8,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 |---|---|---|
 | [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
 | [`llm_csv`](#llm-csv) |  | Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l) |
+| [`llm_date`](#llm-date) |  | Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime) |
 | [`llm_db_databases`](#llm-db-databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
@@ -15,6 +16,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_db_schema`](#llm-db-schema) |  | Show table schema (columns, types, keys) |
 | [`llm_db_tables`](#llm-db-tables) |  | List database tables (JSON array) |
 | [`llm_deps`](#llm-deps) |  | List project dependencies (JSON) |
+| [`llm_dotenv`](#llm-dotenv) |  | Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env) |
 | [`llm_env`](#llm-env) |  | Filtered environment variables (secrets excluded) |
 | [`llm_exec`](#llm-exec) |  | Safe command execution wrapper for AI agents |
 | [`llm_find`](#llm-find) |  | Find files by pattern (ignores noise directories) |
@@ -127,6 +129,59 @@ header and the rest is one JSON line on stderr.
 ```
 
 See also: `llm_json`, `llm_config`
+
+## llm_date
+
+Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime)
+
+#### Usage
+
+```text
+llm_date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]
+         [--fmt FORMAT]
+```
+
+#### Options
+
+```text
+--diff A B             B - A: {"result":"67d","days":67,"seconds":N}
+--add DATE DURATION    DATE + DURATION (y, mo, w, d, h, m, s, ms: 3d,
+                       -600s, 1h30m, 1y2mo)
+--epoch X              A Unix time as a date (13 digits: milliseconds),
+                       or a date as a Unix time
+--tz ZONE              Europe/Rome, UTC, +02:00 (default: TZ, else the
+                       system zone)
+--fmt FORMAT           rfc3339 (default), date, time, epoch, rfc2822, or
+                       a date(1) format: '%Y-%m-%d %H:%M:%S'
+```
+
+#### Examples
+
+```bash
+llm_date --diff 2026-10-25 2026-12-31
+llm_date --add now -600s --fmt '%Y-%m-%dT%H:%M:%S'
+llm_date --add 2026-01-31 1mo
+llm_date --epoch 1700000000 --tz UTC
+llm_date --tz America/New_York
+```
+
+#### Notes
+
+```text
+Replaces date -d '-600 seconds' +FMT (GNU and BSD date differ) and
+python3 -c "from datetime import date; print((date(...)-date(...)).days)".
+Output: {"result":"...","epoch":N}; without a mode, now. A date is
+now, today, yesterday, tomorrow, YYYY-MM-DD, YYYY-MM-DD[T ]HH:MM[:SS]
+[.frac][Z|+HH:MM], an RFC 2822 date or @EPOCH; without an offset it is
+in --tz. The result keeps the input's offset unless --tz is given; a
+date plus calendar units stays a date. Months clamp to the month's
+last day (Jan 31 + 1mo = Feb 28); days follow the calendar across DST.
+--diff of two dates counts calendar days; days truncates toward zero.
+Bad input is invalid_date, invalid_duration, invalid_timezone or
+invalid_date_format (all RETRY). The same output on Linux and macOS.
+```
+
+See also: `llm_env`
 
 ## llm_db_databases
 
@@ -407,6 +462,47 @@ llm_deps /var/www/myapp --dev
 ```
 
 See also: `llm_project`
+
+## llm_dotenv
+
+Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env)
+
+#### Usage
+
+```text
+llm_dotenv FILE [KEY...] [--present]
+```
+
+#### Options
+
+```text
+--present              true or false per KEY, never a value
+```
+
+#### Examples
+
+```bash
+llm_dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL
+llm_dotenv .env.production APP_KEY --present
+llm_dotenv .env
+```
+
+#### Notes
+
+```text
+Replaces grep -E '^(DB_HOST|APP_URL)=' .env, which prints secrets into
+the transcript. Output: {"DB_HOST":"127.0.0.1","DB_PASSWORD":
+"***(set)","MISSING":null}. A key whose name llm_env hides
+(PASSWORD, TOKEN, KEY, SECRET, AUTH, ...) shows "***(set)" ("" when
+empty); other values pass llm_env's redaction (URL passwords, private
+keys, known token formats masked). Without KEY: the names the file
+sets, never a value. Reads .env, .env.*, *.env and .envrc files (the
+only reader of them; key and credential files stay refused): KEY=VALUE,
+export KEY=VALUE, quoted values (also on several lines), # comments;
+${VAR} is not expanded; a key set twice keeps its last value.
+```
+
+See also: `llm_env`, `llm_config`
 
 ## llm_env
 

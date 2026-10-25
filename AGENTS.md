@@ -216,6 +216,8 @@ value, never the network; a write failure never fails the call.
 |---|---|
 | `llm_json FILE\|- [--path P] [--keys \| --shape] [--format json\|jsonl\|tsv\|table] [--width N] [--head N] [--tail N]` | The value at P (default: the whole document) as compact JSON, numbers and escapes as written; `--keys` the keys of an object (or of the objects of an array); `--shape` types and lengths two levels deep; an array of objects as rows with `--format`; `-` reads stdin |
 | `llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V] [--format json\|jsonl\|tsv\|table]` | `{"rows","matches","cols","header","sample","delimiter","errors","error_count"}` (`rows` and `error_count` with `--count`, `matches` with `--where`); `--head` sample rows (default 5, 0 for none); the sample as rows with `--format`, the rest on the stderr metadata line |
+| `llm_dotenv FILE [KEY...] [--present]` | `{"KEY":"value","DB_PASSWORD":"***(set)","MISSING":null}` in argument order; `--present` gives `true`/`false`; without KEY the names the file sets (never a value) |
+| `llm_date [--diff A B \| --add DATE DURATION \| --epoch X] [--tz ZONE] [--fmt FORMAT]` | `{"result":"...","epoch":N}` (now without a mode); `--diff` gives `{"result":"67d","days":67,"seconds":N}` (B minus A) |
 
 Paths use one grammar (`internal/jsonpath`): `a.b[0].c`, `[-1]` from the
 end, `paths["/api/x"]` for a key with dots or slashes, an optional leading
@@ -245,6 +247,29 @@ newlines; a repeated section or key merges instead of failing); a YAML
 file with several documents is the array of its documents. `--path .` is
 the whole file. A file that does not parse is `invalid_config` (RETRY, the
 format and line in `details`). Without `--path` the output is unchanged.
+
+`llm_dotenv` is the one reader of dotenv files (`.env`, `.env.*`, `*.env`,
+`.envrc`; key and credential files and anything under `.ssh`, `.aws`, ...
+stay `secret_file_blocked`). A key whose name `llm_env` hides (PASSWORD,
+TOKEN, KEY, SECRET, AUTH, ...) shows `"***(set)"`, or `""` when empty; any
+other value passes `llm_env`'s redaction (URL passwords, private key
+blocks, known token formats). Values are read as python-dotenv reads them
+(`export`, quotes, multi-line quoted values, `#` comments; the last of a
+repeated key) except that `${VAR}` is never expanded. A KEY that is not a
+variable name is `invalid_env_name`.
+
+`llm_date` dates: `now`, `today`, `yesterday`, `tomorrow`, `YYYY-MM-DD`,
+`YYYY-MM-DD[T ]HH:MM[:SS][.frac][Z|+HH:MM]`, RFC 2822, `@EPOCH`; one
+without an offset is in `--tz` (an IANA name, `UTC` or `+HH:MM`; default
+`TZ`, else the system zone). DURATION is number+unit pairs (`y`, `mo`, `w`,
+`d`, `h`, `m`, `s`, `ms`; `-600s`, `1h30m`, `1y2mo`): months clamp to the
+month's last day, days follow the calendar across DST, a date plus
+calendar units stays a date. `--epoch` reads a number (13 digits:
+milliseconds) as a Unix time and anything else as a date. `--fmt` is
+`rfc3339` (default), `date`, `time`, `epoch`, `rfc2822` or a date(1)
+format (`%Y-%m-%d %H:%M:%S`, also `%-d`, `%N`, `%:z`). The result keeps the
+input's offset unless `--tz` is given. Bad input is `invalid_date`,
+`invalid_duration`, `invalid_timezone` or `invalid_date_format` (RETRY).
 
 ### 3.9 Network probes (3.4)
 

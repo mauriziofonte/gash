@@ -23,6 +23,7 @@ unset __gash_here
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
 llm_csv() { __gash_call llm_csv "$@"; }
+llm_date() { __gash_call llm_date "$@"; }
 llm_db_databases() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_db_databases "$@"
@@ -48,6 +49,7 @@ llm_db_tables() {
     __gash_call llm_db_tables "$@"
 }
 llm_deps() { __gash_call llm_deps "$@"; }
+llm_dotenv() { __gash_call llm_dotenv "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
 llm_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env

@@ -36,8 +36,10 @@ var llmOptions = map[string][]string{
 	// 3.4 text reads.
 
 	// 3.4 data.
-	"llm_json": {"--path", "--keys", "--shape", "--format", "--width", "--head", "--tail"},
-	"llm_csv":  {"--head", "--cols", "--count", "--delim", "--where", "--format"},
+	"llm_json":   {"--path", "--keys", "--shape", "--format", "--width", "--head", "--tail"},
+	"llm_csv":    {"--head", "--cols", "--count", "--delim", "--where", "--format"},
+	"llm_dotenv": {"--present"},
+	"llm_date":   {"--diff", "--add", "--epoch", "--tz", "--fmt"},
 
 	// 3.4 git.
 

@@ -218,6 +218,10 @@ var codeTable = []Code{
 	{"invalid_where", Retry, "llm", Origin3x},
 	{"unknown_column", Retry, "llm", Origin3x},
 	{"invalid_config", Retry, "llm", Origin3x},
+	{"invalid_env_name", Retry, "llm", Origin3x},
+	{"invalid_date", Retry, "llm", Origin3x},
+	{"invalid_timezone", Retry, "llm", Origin3x},
+	{"invalid_date_format", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, git (llm_git_* extensions,
 	// llm_git_overview, llm_git_show, agent_git_commit).

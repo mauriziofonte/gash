@@ -9,4 +9,6 @@ import "github.com/mauriziofonte/gash/internal/invoke"
 func (m *Module) registerData(t *invoke.Table) {
 	t.Handle("llm_json", m.json)
 	t.Handle("llm_csv", m.csv)
+	t.Handle("llm_dotenv", m.dotenv)
+	t.Handle("llm_date", m.date)
 }
