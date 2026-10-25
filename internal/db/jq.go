@@ -19,6 +19,9 @@ import (
 type jv struct {
 	kind byte // 'z' null, 't' true, 'f' false, 'n' number, 's' string, 'a' array, 'o' object
 	num  string
+	// lit is a number as the 3.4 row formats write it: the literal as
+	// read, or for a SQLite REAL its shortest form (rows.go).
+	lit  string
 	str  string
 	arr  []jv
 	keys []string
@@ -31,7 +34,7 @@ func jvString(s string) jv { return jv{kind: 's', str: s} }
 
 // jvNumber is a number from its literal text (a JSON number, or the text a
 // client printed for one).
-func jvNumber(lit string) jv { return jv{kind: 'n', num: decCanonical(lit)} }
+func jvNumber(lit string) jv { return jv{kind: 'n', num: decCanonical(lit), lit: lit} }
 
 func jvArray(items []jv) jv { return jv{kind: 'a', arr: items} }
 

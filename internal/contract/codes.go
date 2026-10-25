@@ -219,6 +219,19 @@ var codeTable = []Code{
 
 	// New in 3.4: agent toolkit, data (llm_db_* formats, llm_json,
 	// llm_csv, llm_config formats, llm_dotenv, llm_date).
+	{"not_a_scalar", Retry, "llm", Origin3x},
+	{"invalid_json", Retry, "llm", Origin3x},
+	{"invalid_json_path", Retry, "llm", Origin3x},
+	{"json_path_not_found", Retry, "llm", Origin3x},
+	{"not_an_object", Retry, "llm", Origin3x},
+	{"invalid_delimiter", Retry, "llm", Origin3x},
+	{"invalid_where", Retry, "llm", Origin3x},
+	{"unknown_column", Retry, "llm", Origin3x},
+	{"invalid_config", Retry, "llm", Origin3x},
+	{"invalid_env_name", Retry, "llm", Origin3x},
+	{"invalid_date", Retry, "llm", Origin3x},
+	{"invalid_timezone", Retry, "llm", Origin3x},
+	{"invalid_date_format", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, git (llm_git_* extensions,
 	// llm_git_overview, llm_git_show, agent_git_commit). agent_git_commit
@@ -251,7 +264,6 @@ var codeTable = []Code{
 	{"invalid_resolve", Retry, "network", Origin3x},
 	{"invalid_expect", Retry, "network", Origin3x},
 	{"invalid_body_max", Retry, "network", Origin3x},
-	{"invalid_json_path", Retry, "network", Origin3x},
 	{"invalid_auth_env", Retry, "network", Origin3x},
 	{"secret_in_argv", Retry, "network", Origin3x},
 	{"auth_env_unset", Stop, "network", Origin3x},

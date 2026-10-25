@@ -74,7 +74,7 @@ home); `~user` is `invalid_path`.
 | `llm_tree [--depth N] [--stats] [--text] [--all] [--count [--by ext\|dir\|type]] [--top N] [--type f\|d] [--name GLOB] [--newer REF] [--since T] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max; `--count` `{"count":N}`; `--top N` disk usage `{"total","files","top":[{"p","size","files"}],"skipped"}` |
 | `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N] [--sort name\|mtime\|size] [--newer REF] [--since T] [--tracked] [--all] [--count [--by ext\|dir\|type]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches; `--format` rows `{"p","size","mtime"}` |
 | `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
-| `llm_config FILE [--max-bytes N]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large` |
+| `llm_config FILE [--max-bytes N] [--path P]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` (3.4) parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
 \_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_). `llm_grep` and
@@ -141,11 +141,12 @@ of 1024). Paths containing a tab or a newline are left out of the results.
 ### 3.3 Databases (read-only)
 
 ```
-llm_db_query   "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [-n ROWS]   # default 100 rows
-llm_db_tables         [-c CONN | -f SQLITE_FILE] [-d DB]
-llm_db_schema  TABLE  [-c CONN | -f SQLITE_FILE] [-d DB]
-llm_db_sample  TABLE  [-c CONN | -f SQLITE_FILE] [-d DB] [-n N]       # default 5
-llm_db_explain "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [--analyze]
+llm_db_query   "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [-n ROWS] [--format F] [--scalar]  # default 100 rows
+llm_db_tables         [-c CONN | -f SQLITE_FILE] [-d DB] [--counts] [--format F] [--scalar]
+llm_db_schema  TABLE|--all [-c CONN | -f SQLITE_FILE] [-d DB] [--format F] [--scalar]
+llm_db_sample  TABLE  [-c CONN | -f SQLITE_FILE] [-d DB] [-n N] [--format F] [--scalar]      # default 5
+llm_db_explain "SQL"  [-c CONN | -f SQLITE_FILE] [-d DB] [--analyze] [--format F] [--scalar]
+llm_db_databases      [-c CONN | -f SQLITE_FILE] [-d DB] [--format F] [--scalar]
 ```
 
 Connections live in `~/.gash_env` as `DB:name=driver://user:pass@host:port/db`
@@ -167,6 +168,26 @@ line. `llm_db_query` adds a
 slow_query_explain field (the plan) when a query takes 100 ms or more
 (the query alone: connecting and the session setup do not count).
 `--analyze` executes the query to measure it, still read-only.
+
+Output options (3.4): `--format json` is the envelope above, byte for byte
+(the default). `--format jsonl`, `tsv` or `table` print the rows themselves
+(3.6), with SQL NULL as `null`, `\N` or an empty cell on every engine
+(MySQL/MariaDB included; the envelope keeps its `"NULL"` string), REALs in
+their shortest form and PostgreSQL columns in the query's order; the
+metadata `{"query_time","rows"}` is one JSON line on stderr, plus
+`"truncated":true` when the `-n` cap cut rows (the count beyond it is
+unknown) and `slow_query_explain` for a slow query. `--scalar` prints the
+value of a 1x1 result as a TSV cell (`\N` for NULL), nothing on stderr;
+any other shape is `not_a_scalar` (RETRY) with the shape in `details`
+(`3 rows x 2 columns`, `100+ rows x 1 columns`). `llm_db_tables --counts`
+returns `[{name, rows}]`: exact on SQLite (`count(*)`), the engine's
+estimate on MySQL/MariaDB (`information_schema.tables`) and PostgreSQL
+(`pg_class.reltuples`), `null` where there is none (a view, a table
+PostgreSQL has not analyzed). `llm_db_schema --all` returns the schema rows
+of every table `llm_db_tables` lists in one call, each led by a `table` key,
+sorted by table and column position. `llm_db_databases` lists the
+databases (`{"data":[names]}`, sorted; system schemas included; `main` for
+SQLite) and needs no database in the connection.
 
 ### 3.4 Git, system, project
 
@@ -291,6 +312,65 @@ codes, all RETRY: `invalid_range`, `invalid_assertion`, `invalid_algo`,
 `invalid_short`, `invalid_level`, `invalid_rule`.
 
 ### 3.8 Data files and values (3.4)
+
+| Function | Output |
+|---|---|
+| `llm_json FILE\|- [--path P] [--keys \| --shape] [--format json\|jsonl\|tsv\|table] [--width N] [--head N] [--tail N]` | The value at P (default: the whole document) as compact JSON, numbers and escapes as written; `--keys` the keys of an object (or of the objects of an array); `--shape` types and lengths two levels deep; an array of objects as rows with `--format`; `-` reads stdin |
+| `llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V] [--format json\|jsonl\|tsv\|table]` | `{"rows","matches","cols","header","sample","delimiter","errors","error_count"}` (`rows` and `error_count` with `--count`, `matches` with `--where`); `--head` sample rows (default 5, 0 for none); the sample as rows with `--format`, the rest on the stderr metadata line |
+| `llm_dotenv FILE [KEY...] [--present]` | `{"KEY":"value","DB_PASSWORD":"***(set)","MISSING":null}` in argument order; `--present` gives `true`/`false`; without KEY the names the file sets (never a value) |
+| `llm_date [--diff A B \| --add DATE DURATION \| --epoch X] [--tz ZONE] [--fmt FORMAT]` | `{"result":"...","epoch":N}` (now without a mode); `--diff` gives `{"result":"67d","days":67,"seconds":N}` (B minus A) |
+
+Paths use one grammar (`internal/jsonpath`): `a.b[0].c`, `[-1]` from the
+end, `paths["/api/x"]` for a key with dots or slashes, an optional leading
+`$`. A path that does not exist is `json_path_not_found` (RETRY) with the
+nearest existing prefix and what is there in the hint; invalid JSON is
+`invalid_json` (RETRY) with line and column, checked over the whole text
+before any value prints; a repeated key keeps the last value. `--shape`
+lengths are `N` or `MIN..MAX`, mixed types join with `|`, members missing
+from some objects are listed in `optional`. `llm_csv` reads quoted fields
+with delimiters, `""` and newlines (a record is not a line), CRLF or LF,
+skips blank lines and a UTF-8 BOM, sniffs the delimiter among `,` `;` tab
+`|`, and lists the first 10 malformed records (field count differing from
+the header, a stray or unterminated quote) by their first line; without
+`--count` the read stops once the header and the sample are complete.
+`--where` matches a column (header name or 1-based number) exactly; an
+unknown one is `unknown_column` (RETRY). Secret files are refused as by
+`llm_config`.
+
+`llm_config FILE --path P` (row in 3.1) takes the same path grammar and
+parses the file by its extension (`.yaml`/`.yml`, `.toml`, `.ini`/`.cfg`,
+`.json`; any other: the first of JSON, TOML, INI and YAML that parses):
+TOML keeps its key order and gives dates as RFC 3339 text; INI is read as
+Python's `configparser.ConfigParser()` reads it (`{section: {key: value}}`,
+keys lowercased, `DEFAULT` first when it has keys and inherited by every
+section, `%(key)s` and `%%` expanded, continuation lines joined with
+newlines; a repeated section or key merges instead of failing); a YAML
+file with several documents is the array of its documents. `--path .` is
+the whole file. A file that does not parse is `invalid_config` (RETRY, the
+format and line in `details`). Without `--path` the output is unchanged.
+
+`llm_dotenv` is the one reader of dotenv files (`.env`, `.env.*`, `*.env`,
+`.envrc`; key and credential files and anything under `.ssh`, `.aws`, ...
+stay `secret_file_blocked`). A key whose name `llm_env` hides (PASSWORD,
+TOKEN, KEY, SECRET, AUTH, ...) shows `"***(set)"`, or `""` when empty; any
+other value passes `llm_env`'s redaction (URL passwords, private key
+blocks, known token formats). Values are read as python-dotenv reads them
+(`export`, quotes, multi-line quoted values, `#` comments; the last of a
+repeated key) except that `${VAR}` is never expanded. A KEY that is not a
+variable name is `invalid_env_name`.
+
+`llm_date` dates: `now`, `today`, `yesterday`, `tomorrow`, `YYYY-MM-DD`,
+`YYYY-MM-DD[T ]HH:MM[:SS][.frac][Z|+HH:MM]`, RFC 2822, `@EPOCH`; one
+without an offset is in `--tz` (an IANA name, `UTC` or `+HH:MM`; default
+`TZ`, else the system zone). DURATION is number+unit pairs (`y`, `mo`, `w`,
+`d`, `h`, `m`, `s`, `ms`; `-600s`, `1h30m`, `1y2mo`): months clamp to the
+month's last day, days follow the calendar across DST, a date plus
+calendar units stays a date. `--epoch` reads a number (13 digits:
+milliseconds) as a Unix time and anything else as a date. `--fmt` is
+`rfc3339` (default), `date`, `time`, `epoch`, `rfc2822` or a date(1)
+format (`%Y-%m-%d %H:%M:%S`, also `%-d`, `%N`, `%:z`). The result keeps the
+input's offset unless `--tz` is given. Bad input is `invalid_date`,
+`invalid_duration`, `invalid_timezone` or `invalid_date_format` (RETRY).
 
 ### 3.9 Network probes (3.4)
 
@@ -718,6 +798,9 @@ registry, where each function's entry names the shape it replaces.
 | `grep -q P f && echo ok; grep -c P f (as checks)` | `llm_assert` |
 | `cat config/app.yaml; cat composer.json (a config file that is not secret)` | `llm_config` |
 | `grep -c A f; grep -c B f; grep -c C g` | `llm_count` |
+| `python3 -c "import csv; r=list(csv.reader(open(f))); print(len(r)-1, r[0])"; wc -l f; head -3 f` | `llm_csv` |
+| `date -d '-600 seconds' '+%Y-%m-%dT%H:%M:%S'; python3 -c "from datetime import date; print((date(2026,12,31)-date(2026,10,25)).days)"` | `llm_date` |
+| `mysql -e 'SHOW DATABASES'; psql -l` | `llm_db_databases` |
 | `mysql -e "EXPLAIN SELECT ..."` | `llm_db_explain` |
 | `mysql -N -B -e "SELECT ..."; psql -c "SELECT ..."; sqlite3 f "SELECT ..."` | `llm_db_query` |
 | `mysql -e "SELECT * FROM t LIMIT 5"` | `llm_db_sample` |
@@ -726,6 +809,7 @@ registry, where each function's entry names the shape it replaces.
 | `cat composer.json package.json \| jq .require` | `llm_deps` |
 | `for d in ...; do for t in A MX TXT; do dig +short $t $d; done; done` | `llm_dns` |
 | `docker compose pull --dry-run; docker images` | `llm_docker_check` |
+| `grep -E '^(DB_HOST\|APP_URL)=' .env` | `llm_dotenv` |
 | `env \| grep -i PATH; printenv NODE_ENV` | `llm_env` |
 | `bash -c "..." for an allowlisted command` | `llm_exec` |
 | `find D -name '*.php' -not -path '*/vendor/*'` | `llm_find` |
@@ -737,6 +821,7 @@ registry, where each function's entry names the shape it replaces.
 | `grep -rn --include='*.php' X . \| grep -v vendor` | `llm_grep` |
 | `sha256sum f \| cut -c1-12; md5sum f` | `llm_hash` |
 | `for u in ...; do curl -s -o /dev/null -w '%{http_code}' $u; done; curl -sI URL \| grep -i location; curl -s -H "$AUTH" URL \| jq .status` | `llm_http` |
+| `python3 -c "import json; print(json.load(open(f))[...])"; jq '.a' f` | `llm_json` |
 | `for f in src/*.php; do php -l "$f"; done; bash -n x.sh; node --check f.js` | `llm_lint` |
 | `tail -n 50 app.log \| cut -c1-200; grep ERROR app.log \| tail -20` | `llm_log` |
 | `ss -tlnp; lsof -i :8080` | `llm_ports` |

@@ -32,7 +32,7 @@ var llmOptions = map[string][]string{
 		// 3.4 files and search.
 		"--exclude", "--only-matching", "-o", "--distinct", "--files-only", "-l", "--count", "-c", "--by",
 		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail"},
-	"llm_config":     {"--max-bytes"},
+	"llm_config":     {"--max-bytes", "--path"},
 	"llm_git_status": {"--summary", "--files", "--fetch", "--repos", "--timeout", "-j", "--format", "--max-lines", "--head", "--tail", "--width"},
 	"llm_git_diff":   {"--staged", "--cached", "--files", "--numstat", "--summary", "--patch", "--format", "--max-lines", "--head", "--tail", "--width"},
 	"llm_git_log":    {"-n", "--limit", "--since", "--until", "--grep", "--author", "--path", "--fields", "--format", "--max-lines", "--head", "--tail", "--width"},
@@ -53,6 +53,10 @@ var llmOptions = map[string][]string{
 	"llm_textcheck": {"--rules", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
 
 	// 3.4 data.
+	"llm_json":   {"--path", "--keys", "--shape", "--format", "--width", "--head", "--tail"},
+	"llm_csv":    {"--head", "--cols", "--count", "--delim", "--where", "--format"},
+	"llm_dotenv": {"--present"},
+	"llm_date":   {"--diff", "--add", "--epoch", "--tz", "--fmt"},
 
 	// 3.4 git.
 	"llm_git_overview": {"--log", "--files"},

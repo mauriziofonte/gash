@@ -9,6 +9,9 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_assert`](#llm-assert) |  | Check that files hold, lack or count patterns; exit 0 only if all pass |
 | [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
 | [`llm_count`](#llm-count) |  | Count several patterns in several files in one pass per file |
+| [`llm_csv`](#llm-csv) |  | Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l) |
+| [`llm_date`](#llm-date) |  | Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime) |
+| [`llm_db_databases`](#llm-db-databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
 | [`llm_db_sample`](#llm-db-sample) |  | Sample rows from a table (default 5 rows) |
@@ -16,6 +19,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_db_tables`](#llm-db-tables) |  | List database tables (JSON array) |
 | [`llm_deps`](#llm-deps) |  | List project dependencies (JSON) |
 | [`llm_dns`](#llm-dns) |  | DNS records of several names at once (JSON) |
+| [`llm_dotenv`](#llm-dotenv) |  | Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env) |
 | [`llm_env`](#llm-env) |  | Filtered environment variables (secrets excluded) |
 | [`llm_exec`](#llm-exec) |  | Safe command execution wrapper for AI agents |
 | [`llm_find`](#llm-find) |  | Find files by pattern (ignores noise directories) |
@@ -27,6 +31,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
 | [`llm_hash`](#llm-hash) |  | Hash files in parallel (sha256 or md5) |
 | [`llm_http`](#llm-http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
+| [`llm_json`](#llm-json) |  | One value, the keys or the shape of a JSON file (replaces python3 json.load, jq) |
 | [`llm_lint`](#llm-lint) |  | Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py) |
 | [`llm_log`](#llm-log) |  | Last lines of a log, read from the end, by pattern, time and level |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
@@ -97,13 +102,15 @@ Read a file that is not secret (YAML as JSON)
 #### Usage
 
 ```text
-llm_config FILE [--max-bytes N]
+llm_config FILE [--max-bytes N] [--path P]
 ```
 
 #### Options
 
 ```text
 --max-bytes N          Largest file read, in bytes (default 1048576)
+--path P               Parse the file and print the value at P as compact
+                       JSON: a.b[0].c, tool.poetry["name"], . for all
 ```
 
 #### Examples
@@ -112,6 +119,9 @@ llm_config FILE [--max-bytes N]
 llm_config package.json
 llm_config docker-compose.yml
 llm_config big.json --max-bytes 5000000
+llm_config pyproject.toml --path project.dependencies
+llm_config setup.cfg --path metadata.version
+llm_config k8s.yaml --path '[1].spec.replicas'
 ```
 
 #### Notes
@@ -122,6 +132,15 @@ secret files are refused.
 YAML comes out as JSON, converted by Gash itself (no yq needed), or
 as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
+--path (3.4) replaces python3 -c "import tomllib/configparser/yaml;
+...": the extension names the format (.yaml/.yml, .toml, .ini/.cfg,
+.json; any other: the first of JSON, TOML, INI and YAML that parses).
+TOML keeps its key order, dates as RFC 3339 text; INI is read as
+Python's configparser does ({section: {key: value}}, keys lowercased,
+DEFAULT inherited, %(key)s expanded); a YAML file with several
+documents is the array of them. A file that does not parse is
+invalid_config, a path that does not exist json_path_not_found with
+the nearest existing prefix (both RETRY).
 ```
 
 ## llm_count
@@ -172,6 +191,152 @@ FATAL). For a case-insensitive count use --regex with (?i).
 
 See also: `llm_assert`, `llm_grep`
 
+## llm_csv
+
+Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l)
+
+#### Usage
+
+```text
+llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
+        [--format json|jsonl|tsv|table]
+```
+
+#### Options
+
+```text
+--head N               Sample rows (default 5; 0 for none)
+--cols                 The header only, no sample
+--count                Count every row (reads the whole file)
+--delim C              The delimiter (default: sniffed among , ; tab |);
+                       tab or \t for a tab
+--where COL=V          Only rows whose column COL (a header name or a
+                       1-based number) is exactly V
+--format F             json (default), or the sample as jsonl, tsv or table
+```
+
+#### Examples
+
+```bash
+llm_csv export.csv
+llm_csv export.csv --head 2 --count
+llm_csv data.csv --where status=failed --count --head 10
+llm_csv report.txt --delim ';' --cols
+```
+
+#### Notes
+
+```text
+Replaces python3 -c "import csv; r=list(csv.reader(open(f))); ..." and
+wc -l f; head -3 f (which miscounts quoted newlines). Output:
+{"rows":N,"matches":M,"cols":K,"header":[...],"sample":[[...]],
+"delimiter":",","errors":[{"line":L,"error":"..."}],"error_count":E}
+(rows, matches and error_count with --count; matches with --where).
+A streaming RFC 4180 parser: quoted fields hold delimiters, "" and
+newlines; a record is not a line; blank lines are skipped. errors lists
+the first 10 malformed records (field count differing from the header,
+a stray quote, an unterminated quote) by their first line. Without
+--count the read stops once the header and the sample are complete.
+With --format jsonl, tsv or table the sample rows print under the
+header and the rest is one JSON line on stderr.
+```
+
+See also: `llm_json`, `llm_config`
+
+## llm_date
+
+Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime)
+
+#### Usage
+
+```text
+llm_date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]
+         [--fmt FORMAT]
+```
+
+#### Options
+
+```text
+--diff A B             B - A: {"result":"67d","days":67,"seconds":N}
+--add DATE DURATION    DATE + DURATION (y, mo, w, d, h, m, s, ms: 3d,
+                       -600s, 1h30m, 1y2mo)
+--epoch X              A Unix time as a date (13 digits: milliseconds),
+                       or a date as a Unix time
+--tz ZONE              Europe/Rome, UTC, +02:00 (default: TZ, else the
+                       system zone)
+--fmt FORMAT           rfc3339 (default), date, time, epoch, rfc2822, or
+                       a date(1) format: '%Y-%m-%d %H:%M:%S'
+```
+
+#### Examples
+
+```bash
+llm_date --diff 2026-10-25 2026-12-31
+llm_date --add now -600s --fmt '%Y-%m-%dT%H:%M:%S'
+llm_date --add 2026-01-31 1mo
+llm_date --epoch 1700000000 --tz UTC
+llm_date --tz America/New_York
+```
+
+#### Notes
+
+```text
+Replaces date -d '-600 seconds' +FMT (GNU and BSD date differ) and
+python3 -c "from datetime import date; print((date(...)-date(...)).days)".
+Output: {"result":"...","epoch":N}; without a mode, now. A date is
+now, today, yesterday, tomorrow, YYYY-MM-DD, YYYY-MM-DD[T ]HH:MM[:SS]
+[.frac][Z|+HH:MM], an RFC 2822 date or @EPOCH; without an offset it is
+in --tz. The result keeps the input's offset unless --tz is given; a
+date plus calendar units stays a date. Months clamp to the month's
+last day (Jan 31 + 1mo = Feb 28); days follow the calendar across DST.
+--diff of two dates counts calendar days; days truncates toward zero.
+Bad input is invalid_date, invalid_duration, invalid_timezone or
+invalid_date_format (all RETRY). The same output on Linux and macOS.
+```
+
+See also: `llm_env`
+
+## llm_db_databases
+
+List the databases of a connection (replaces SHOW DATABASES, psql -l)
+
+#### Usage
+
+```text
+llm_db_databases [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--format json|jsonl|tsv|table] [--scalar]
+```
+
+#### Options
+
+```text
+-c, --connection NAME  Connection from ~/.gash_env (default: default)
+-d, --database NAME    Database to connect to (any one works)
+-f, --file PATH        SQLite database file
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
+```
+
+#### Examples
+
+```bash
+llm_db_databases -c default
+llm_db_databases -c postgres --format tsv
+```
+
+#### Notes
+
+```text
+Replaces mysql -e 'SHOW DATABASES' and psql -l. Output:
+{data: [names], rows, query_time}, sorted: every schema MySQL/MariaDB
+shows (system ones included), every PostgreSQL database that is not a
+template, "main" for an SQLite file. The connection needs no
+database here (PostgreSQL then connects to "postgres"). With
+--format jsonl, tsv or table the names are rows of a "name" column
+and the metadata is one JSON line on stderr.
+```
+
+See also: `llm_db_tables`, `llm_db_query`
+
 ## llm_db_explain
 
 Show query execution plan (EXPLAIN)
@@ -180,6 +345,7 @@ Show query execution plan (EXPLAIN)
 
 ```text
 llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
+               [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -189,6 +355,8 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
 --analyze              Run the query to measure it (still read-only)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -196,6 +364,13 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 ```bash
 llm_db_explain "SELECT * FROM users WHERE email LIKE '%@example.com'" -c default
 llm_db_explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c legacy --analyze
+```
+
+#### Notes
+
+```text
+--format jsonl, tsv or table print the plan rows (a JSON plan as
+compact JSON in its cell) and the metadata as one JSON line on stderr.
 ```
 
 See also: `llm_db_query`
@@ -207,7 +382,8 @@ Read-only SQL query (JSON output)
 #### Usage
 
 ```text
-llm_db_query "SQL" [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]
+llm_db_query "SQL" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]
+             [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
@@ -221,6 +397,10 @@ llm_db_query "SELECT * FROM orders WHERE status='pending'" -c legacy
 
 # Query a SQLite database (no connection config needed)
 llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
+
+# Rows as TSV, one value alone
+llm_db_query "SELECT id, email FROM users" -c default --format tsv
+llm_db_query "SELECT count(*) FROM orders" -c default --scalar
 ```
 
 #### Options
@@ -231,6 +411,8 @@ llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
                        letters, digits, _ $ . - only)
 -f, --file PATH        SQLite database file
 -n, --limit N          Row cap (default 100; also -r, --rows)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Notes
@@ -244,6 +426,13 @@ PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT
 statement timeout). Output: {data, rows, query_time}. -h is help: the
 host comes from the connection URL. Error details are the database
 driver's message.
+--format jsonl, tsv or table print the rows themselves (replaces
+llm_db_query ... | jq -c '.data[]' and python3 reshaping): SQL NULL is
+null, \N in TSV and an empty table cell on every engine; the metadata
+{rows, query_time, truncated} is one JSON line on stderr, with
+"truncated": true when -n cut rows. --scalar prints the value of a
+1x1 result as a TSV cell (not_a_scalar, RETRY, with the actual shape
+otherwise). --format json is the envelope, unchanged.
 ```
 
 See also: `llm_db_tables`, `llm_db_schema`, `llm_db_sample`, `llm_db_explain`
@@ -255,7 +444,8 @@ Sample rows from a table (default 5 rows)
 #### Usage
 
 ```text
-llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [-n N]
+llm_db_sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
@@ -273,6 +463,8 @@ llm_db_sample logs -f ./app.db -n 3
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
 -n, --limit N          Rows to return (default 5)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 See also: `llm_db_query`, `llm_db_schema`
@@ -285,6 +477,8 @@ Show table schema (columns, types, keys)
 
 ```text
 llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -293,6 +487,9 @@ llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
+--all                  Every table in one call, each row led by "table"
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -301,6 +498,14 @@ llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 llm_db_schema users -c default
 llm_db_schema orders -c legacy
 llm_db_schema sessions -f ./app.db
+llm_db_schema --all -c default --format tsv
+```
+
+#### Notes
+
+```text
+--all replaces one llm_db_schema call per table: the rows of every
+table llm_db_tables lists, sorted by table and column position.
 ```
 
 See also: `llm_db_tables`, `llm_db_query`
@@ -312,7 +517,8 @@ List database tables (JSON array)
 #### Usage
 
 ```text
-llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -321,6 +527,9 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
+--counts               [{name, rows}]: the row count of each table
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -329,6 +538,15 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 llm_db_tables -c default
 llm_db_tables -c postgres
 llm_db_tables -f ./app.db
+llm_db_tables -c default --counts --format tsv
+```
+
+#### Notes
+
+```text
+--counts: rows is exact on SQLite (count(*)), the engine's estimate on
+MySQL/MariaDB (information_schema) and PostgreSQL (pg_class), null
+where the engine has none (a view, a table not analyzed yet).
 ```
 
 See also: `llm_db_query`, `llm_db_schema`
@@ -408,6 +626,47 @@ Names are asked as given (no search domains).
 ```
 
 See also: `llm_tcp`, `llm_tls`, `llm_http`
+
+## llm_dotenv
+
+Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env)
+
+#### Usage
+
+```text
+llm_dotenv FILE [KEY...] [--present]
+```
+
+#### Options
+
+```text
+--present              true or false per KEY, never a value
+```
+
+#### Examples
+
+```bash
+llm_dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL
+llm_dotenv .env.production APP_KEY --present
+llm_dotenv .env
+```
+
+#### Notes
+
+```text
+Replaces grep -E '^(DB_HOST|APP_URL)=' .env, which prints secrets into
+the transcript. Output: {"DB_HOST":"127.0.0.1","DB_PASSWORD":
+"***(set)","MISSING":null}. A key whose name llm_env hides
+(PASSWORD, TOKEN, KEY, SECRET, AUTH, ...) shows "***(set)" ("" when
+empty); other values pass llm_env's redaction (URL passwords, private
+keys, known token formats masked). Without KEY: the names the file
+sets, never a value. Reads .env, .env.*, *.env and .envrc files (the
+only reader of them; key and credential files stay refused): KEY=VALUE,
+export KEY=VALUE, quoted values (also on several lines), # comments;
+${VAR} is not expanded; a key set twice keeps its last value.
+```
+
+See also: `llm_env`, `llm_config`
 
 ## llm_env
 
@@ -1063,6 +1322,57 @@ SSL_CERT_FILE / SSL_CERT_DIR.
 ```
 
 See also: `llm_tls`, `llm_tcp`, `llm_dns`
+
+## llm_json
+
+One value, the keys or the shape of a JSON file (replaces python3 json.load, jq)
+
+#### Usage
+
+```text
+llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
+         [--width N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--path P               The value at P: a.b[0].c, paths["/api/x"].post, [-1]
+--keys                 The keys of an object (or of the objects of an array)
+--shape                Types and lengths, two levels deep
+--format F             json (default), jsonl (one element per line), tsv or
+                       table (an array of objects as rows)
+--width N              Cut each string value at N columns (ends with …)
+--head N, --tail N     Keep the first / last N elements of an array
+```
+
+#### Examples
+
+```bash
+llm_json package.json --path scripts
+llm_json openapi.json --path 'paths["/users"].get.responses' --keys
+llm_json data.json --shape
+llm_json users.json --format tsv --head 20
+curl -s https://api.example/x | llm_json - --path items[0]
+```
+
+#### Notes
+
+```text
+Replaces python3 -c "import json; print(json.load(open(f))[...])" and
+jq '.a', jq 'length, (.[0]|keys)'. The whole text is validated first
+(invalid_json, RETRY, with line and column); the value prints as compact
+JSON with its numbers and escapes as written; a repeated key: the last
+one wins. A path that does not exist is json_path_not_found (RETRY) with
+the nearest existing prefix in the hint; --keys on a value without
+objects is not_an_object. --shape: {"type":"array[100]","items":
+{"type":"object{3}","keys":{"id":"number",...},"optional":[...]}};
+lengths are N or MIN..MAX, mixed types are joined with |. A cut array
+adds {"truncated":K} on stderr. Secret files (.env, keys, ...) are
+refused; - reads the standard input.
+```
+
+See also: `llm_config`, `llm_csv`
 
 ## llm_lint
 

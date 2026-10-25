@@ -25,6 +25,12 @@ agent_replace() { __gash_call agent_replace "$@"; }
 llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
 llm_count() { __gash_call llm_count "$@"; }
+llm_csv() { __gash_call llm_csv "$@"; }
+llm_date() { __gash_call llm_date "$@"; }
+llm_db_databases() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_databases "$@"
+}
 llm_db_explain() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_db_explain "$@"
@@ -47,6 +53,7 @@ llm_db_tables() {
 }
 llm_deps() { __gash_call llm_deps "$@"; }
 llm_dns() { __gash_call llm_dns "$@"; }
+llm_dotenv() { __gash_call llm_dotenv "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
 llm_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
@@ -61,6 +68,7 @@ llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
 llm_hash() { __gash_call llm_hash "$@"; }
 llm_http() { __gash_call llm_http "$@"; }
+llm_json() { __gash_call llm_json "$@"; }
 llm_lint() { __gash_call llm_lint "$@"; }
 llm_log() { __gash_call llm_log "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
