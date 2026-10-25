@@ -5,6 +5,8 @@
 # behaviour (interop, drives, path conversion, config) reads the real /proc
 # with no test seam in the shipping binary, so it is proven by the Go unit
 # tests in internal/wslcmd (fixture system root) and internal/wsl.
+#
+# covers: none (gash wsl is new in 3.4; no 2.x spec)
 
 env GASH_HEADLESS=1
 env LC_ALL=C

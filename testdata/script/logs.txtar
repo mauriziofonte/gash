@@ -5,6 +5,8 @@
 # logs with --truncate). An explicit PATH keeps the scan inside $WORK, so
 # the host's /var/log never enters the test. Headless clean without --yes
 # refuses; --json emits one object.
+#
+# covers: none (gash logs is new in 3.4; no 2.x spec)
 
 env GASH_HEADLESS=1
 env LC_ALL=C
