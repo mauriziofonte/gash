@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"unicode"
 	"unicode/utf8"
@@ -31,11 +32,14 @@ import (
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
-var templates = template.Must(template.New("").Funcs(template.FuncMap{
-	"q":    QuoteApacheArg,
-	"iq":   quoteINI,
-	"join": strings.Join,
-}).ParseFS(templateFS, "templates/*.tmpl"))
+// templates are parsed on first use, not at the start of every gash run.
+var templates = sync.OnceValue(func() *template.Template {
+	return template.Must(template.New("").Funcs(template.FuncMap{
+		"q":    QuoteApacheArg,
+		"iq":   quoteINI,
+		"join": strings.Join,
+	}).ParseFS(templateFS, "templates/*.tmpl"))
+})
 
 // BaseModules is the userland module list of design/hte.md section 3 in
 // load order (dependencies first). log_config, logio and unixd are built
@@ -423,7 +427,7 @@ func (in Input) siteAddrs(stack int, extra []int) []string {
 
 func execute(name string, data any) ([]byte, error) {
 	var b bytes.Buffer
-	if err := templates.ExecuteTemplate(&b, name, data); err != nil {
+	if err := templates().ExecuteTemplate(&b, name, data); err != nil {
 		return nil, hteerr.Newf(hteerr.InvalidState, "", "rendering %s: %v", name, err)
 	}
 	return b.Bytes(), nil

@@ -35,6 +35,33 @@ esac
 __GASH_BOOT_ROOT="${__GASH_BOOT_ROOT%/.}"
 unset __GASH_BOOT_DIR
 
+# A long function of the generated files is a one-line stand-in, so that a
+# load does not parse what the shell may never call
+# (internal/compatgen/lazy.go):
+#
+#   NAME() { __gash_cold NAME HASH && "${FUNCNAME[0]}" "$@"; }
+#
+# The first call defines it from lib/compat/cold/NAME.sh, under the
+# stand-in's own name (a copy of the stand-in made under another name
+# becomes a copy of the function, the original is left as it is), with
+# aliases off as at load, then runs it. A file whose HASH differs (the tree
+# was upgraded under this shell) is refused, and so is one that does not
+# parse (the stand-in stays, status 1).
+__gash_cold() {
+    local __gc_def="" __gc_aliases=0 __gc_rc=0 __gc_name="${FUNCNAME[1]-$1}"
+    IFS= read -r -d '' __gc_def <"$__GASH_BOOT_ROOT/lib/compat/cold/$1.sh" 2>/dev/null || :
+    if [[ "$__gc_def" != *" $2"$'\n'"$1() {"* ]]; then
+        printf 'Error: %s: the Gash tree changed since this shell loaded it. Run: source ~/.gashrc\n' "$__gc_name" >&2
+        return 1
+    fi
+    __gc_def="${__gc_def#*" $2"$'\n'}"
+    shopt -q expand_aliases && __gc_aliases=1
+    shopt -u expand_aliases
+    eval "$__gc_name${__gc_def#"$1"}" || __gc_rc=1
+    ((__gc_aliases)) && shopt -s expand_aliases
+    return "$__gc_rc"
+}
+
 # The version this checkout runs: its VERSION file.
 __GASH_BOOT_VERSION=""
 if [[ -r "$__GASH_BOOT_ROOT/VERSION" ]]; then
@@ -194,142 +221,7 @@ __GASH_FETCH_REASON=""
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
-__gash_fetch() {
-    local mode="${1-quiet}" v="$__GASH_BOOT_VERSION" os="$__GASH_BOOT_OS" arch="$__GASH_BOOT_ARCH"
-    local base dir lock tmp asset url line want got pin="" hpin="" sumok=0 rc=0
-    __GASH_FETCH_REASON=""
-    if [[ -z "$v" || "$v" == unknown ]]; then
-        __GASH_FETCH_REASON="no VERSION file"
-    elif [[ -z "$os" || -z "$arch" ]]; then
-        __GASH_FETCH_REASON="no release for ${OSTYPE-?}/${HOSTTYPE-?}"
-    elif ! type -P curl >/dev/null 2>&1 && ! type -P wget >/dev/null 2>&1; then
-        __GASH_FETCH_REASON="no curl or wget"
-    elif ! type -P tar >/dev/null 2>&1; then
-        __GASH_FETCH_REASON="no tar"
-    elif ! type -P sha256sum >/dev/null 2>&1 && ! type -P shasum >/dev/null 2>&1; then
-        __GASH_FETCH_REASON="no sha256sum or shasum"
-    fi
-    if [[ -n "$__GASH_FETCH_REASON" ]]; then
-        [[ "$mode" == loud ]] && __gash_fetch_line
-        return 1
-    fi
-
-    base="${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions"
-    dir="$base/$v"
-    lock="$dir/.lock"
-    asset="gash_${v}_${os}_${arch}.tar.gz"
-    url="${GASH_RELEASE_URL:-https://github.com/mauriziofonte/gash/releases/download/v$v}"
-    url="${url%/}"
-    if ! mkdir -p "$dir" 2>/dev/null; then
-        __GASH_FETCH_REASON="cannot create $dir"
-        [[ "$mode" == loud ]] && __gash_fetch_line
-        return 1
-    fi
-    # One fetch at a time; a lock older than 10 minutes is stale.
-    if ! mkdir "$lock" 2>/dev/null; then
-        if [[ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]]; then
-            rmdir "$lock" 2>/dev/null || true
-        fi
-        local waited=0
-        while ! mkdir "$lock" 2>/dev/null; do
-            if ((waited >= 120)); then
-                __GASH_FETCH_REASON="another download holds $lock"
-                [[ "$mode" == loud ]] && __gash_fetch_line
-                return 1
-            fi
-            sleep 1
-            waited=$((waited + 1))
-        done
-    fi
-    if __gash_bin_resolve; then
-        rmdir "$lock" 2>/dev/null || true
-        return 0
-    fi
-    tmp="$dir/.tmp.$$"
-    command rm -rf "$tmp" 2>/dev/null || true
-    mkdir -p "$tmp" 2>/dev/null || rc=1
-
-    # The pinned SHA-256 of the binaries in this tree (release/SHA256SUMS,
-    # lines "HASH  OS_ARCH/gash" and "HASH  OS_ARCH/gash-hosts-helper"),
-    # else the release's checksums.txt for the archive; GASH_REQUIRE_SIGNED=1
-    # accepts only a pinned binary. The helper is installed only when it is
-    # verified: by its pin, else by checksums.txt (never with
-    # GASH_REQUIRE_SIGNED=1 and no pin).
-    if [[ -r "$__GASH_BOOT_ROOT/release/SHA256SUMS" ]]; then
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            line="${line%$'\r'}"
-            [[ "$line" == *"  ${os}_${arch}/gash" ]] && pin="${line%% *}"
-            [[ "$line" == *"  ${os}_${arch}/gash-hosts-helper" ]] && hpin="${line%% *}"
-        done <"$__GASH_BOOT_ROOT/release/SHA256SUMS"
-    fi
-    if ((rc == 0)) && [[ -z "$pin" && "${GASH_REQUIRE_SIGNED-}" == 1 ]]; then
-        __GASH_FETCH_REASON="this tree pins no binary for $os/$arch (GASH_REQUIRE_SIGNED=1)"
-        rc=1
-    fi
-    if ((rc == 0)) && ! __gash_fetch_get "$url/$asset" "$tmp/$asset"; then
-        __GASH_FETCH_REASON="download failed: $url/$asset"
-        rc=1
-    fi
-    if ((rc == 0)) && [[ -z "$pin" || (-z "$hpin" && "${GASH_REQUIRE_SIGNED-}" != 1) ]]; then
-        if ! __gash_fetch_get "$url/checksums.txt" "$tmp/checksums.txt"; then
-            # Without a pin the binary cannot be verified; with one, only
-            # the helper is left out.
-            if [[ -z "$pin" ]]; then
-                __GASH_FETCH_REASON="download failed: $url/checksums.txt"
-                rc=1
-            fi
-        else
-            want=""
-            while IFS= read -r line || [[ -n "$line" ]]; do
-                [[ "$line" == *"  $asset" || "$line" == *" *$asset" ]] && want="${line%% *}"
-            done <"$tmp/checksums.txt"
-            got="$(__gash_fetch_sum "$tmp/$asset")"
-            if [[ -z "$want" || "$got" != "$want" ]]; then
-                __GASH_FETCH_REASON="checksum mismatch for $asset"
-                rc=1
-            else
-                sumok=1
-            fi
-        fi
-    fi
-    if ((rc == 0)) && ! tar -xzf "$tmp/$asset" -C "$tmp" gash 2>/dev/null; then
-        __GASH_FETCH_REASON="cannot extract $asset"
-        rc=1
-    fi
-    if ((rc == 0)) && [[ -n "$pin" ]]; then
-        got="$(__gash_fetch_sum "$tmp/gash")"
-        if [[ "$got" != "$pin" ]]; then
-            __GASH_FETCH_REASON="the binary does not match release/SHA256SUMS"
-            rc=1
-        fi
-    fi
-    if ((rc == 0)); then
-        tar -xzf "$tmp/$asset" -C "$tmp" gash-hosts-helper 2>/dev/null || true
-        if [[ -f "$tmp/gash-hosts-helper" && -n "$hpin" ]]; then
-            got="$(__gash_fetch_sum "$tmp/gash-hosts-helper")"
-            if [[ "$got" != "$hpin" ]]; then
-                __GASH_FETCH_REASON="gash-hosts-helper does not match release/SHA256SUMS"
-                rc=1
-            fi
-        elif ((sumok == 0)); then
-            command rm -f "$tmp/gash-hosts-helper" 2>/dev/null || true
-        fi
-    fi
-    if ((rc == 0)); then
-        chmod 0755 "$tmp/gash" 2>/dev/null || rc=1
-        [[ -f "$tmp/gash-hosts-helper" ]] && chmod 0755 "$tmp/gash-hosts-helper" 2>/dev/null
-        [[ -f "$tmp/gash-hosts-helper" ]] && mv -f "$tmp/gash-hosts-helper" "$dir/gash-hosts-helper" 2>/dev/null
-        if ((rc == 0)) && ! mv -f "$tmp/gash" "$dir/gash" 2>/dev/null; then
-            __GASH_FETCH_REASON="cannot install into $dir"
-            rc=1
-        fi
-    fi
-    command rm -rf "$tmp" 2>/dev/null || true
-    rmdir "$lock" 2>/dev/null || true
-    ((rc == 0)) && __gash_bin_resolve || rc=1
-    [[ "$mode" == loud ]] && __gash_fetch_line
-    return "$rc"
-}
+__gash_fetch() { __gash_cold __gash_fetch 57c686c5 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_fetch_get URL FILE
 __gash_fetch_get() {
@@ -353,50 +245,18 @@ __gash_fetch_sum() {
 
 # The core emitters, loaded from this checkout when the caller sourced a
 # shim without them (they are the only writers to stderr).
-__gash_boot_emitters() {
-    if ! declare -F __gash_error >/dev/null && [[ -r "$__GASH_BOOT_ROOT/lib/core/output.sh" ]]; then
-        # shellcheck source=/dev/null
-        source "$__GASH_BOOT_ROOT/lib/core/output.sh"
-    fi
-    if ! declare -F __gash_json_error >/dev/null && [[ -r "$__GASH_BOOT_ROOT/lib/core/utils.sh" ]]; then
-        # shellcheck source=/dev/null
-        source "$__GASH_BOOT_ROOT/lib/core/utils.sh"
-    fi
-    declare -F __gash_error >/dev/null && declare -F __gash_json_error >/dev/null
-}
+__gash_boot_emitters() { __gash_cold __gash_boot_emitters 16d8b1c4 && "${FUNCNAME[0]}" "$@"; }
 
 # The one stderr line of an interactive fetch. The reason is kept across
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
-__gash_fetch_line() {
-    local __gfl_reason="$__GASH_FETCH_REASON"
-    __gash_boot_emitters || return 0
-    __GASH_FETCH_REASON="$__gfl_reason"
-    if [[ -z "$__GASH_FETCH_REASON" ]]; then
-        __gash_success "Installed gash $__GASH_BOOT_VERSION for $__GASH_BOOT_OS/$__GASH_BOOT_ARCH"
-    else
-        __gash_warning "gash $__GASH_BOOT_VERSION is not installed and could not be downloaded ($__GASH_FETCH_REASON). Run: bash ${__GASH_BOOT_ROOT/#$HOME/\~}/install.sh --repair"
-    fi
-    return 0
-}
+__gash_fetch_line() { __gash_cold __gash_fetch_line 1067a67d && "${FUNCNAME[0]}" "$@"; }
 
 # The report of a call without a binary: the binary_not_found envelope for
 # agents (headless mode, llm_* functions), an Error: and a Hint: line for
 # humans. Status 1.
 # Usage: __gash_missing NAME
-__gash_missing() {
-    local details hint
-    details="gash ${__GASH_BOOT_VERSION:-unknown} for ${__GASH_BOOT_OS:-${OSTYPE-unknown}}/${__GASH_BOOT_ARCH:-${HOSTTYPE-unknown}} is not installed and could not be downloaded"
-    hint="Run: bash ${__GASH_BOOT_ROOT/#$HOME/\~}/install.sh --repair"
-    __gash_boot_emitters || return 1
-    if [[ "${GASH_HEADLESS-}" == 1 || "${1-}" == llm_* ]]; then
-        __gash_json_error binary_not_found "$details" STOP "$hint"
-    else
-        __gash_error "$details"
-        __gash_hint "$hint"
-    fi
-    return 1
-}
+__gash_missing() { __gash_cold __gash_missing b29072d5 && "${FUNCNAME[0]}" "$@"; }
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x
 # code read: the common variables, NAME's own, and its settings (with
@@ -427,7 +287,8 @@ __gash_export_state() {
     export -n GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX 2>/dev/null || true
 }
 
-# The wrapper of every delegated function.
+# The wrapper of every delegated function: the per-shell server runs the
+# call when it can, else the binary is exec'd in a subshell.
 # Usage: __gash_call NAME [ARG...]
 __gash_call() {
     local __gc_name="${1-}"
@@ -436,6 +297,11 @@ __gash_call() {
         __gash_missing "$__gc_name"
         return 1
     }
+    if [[ "${GASH_SERVER-}" != 0 && -n "${__GASH_SRV_FN[$__gc_name]-}" ]] && __gash_srv_ready; then
+        __gash_srv_call "$__gc_name" "$@" && return 0
+        local __gc_rc=$?
+        ((__GASH_SRV_DECLINED)) || return "$__gc_rc"
+    fi
     (
         __gash_export_state "$__gc_name"
         # The gash card is the binary's root: its words go as they are.
@@ -454,6 +320,189 @@ __gash_compat() {
         __gash_export_state __compat
         exec "$__GASH_BIN" __compat "$@"
     )
+}
+
+# -----------------------------------------------------------------------------
+# The per-shell server
+# -----------------------------------------------------------------------------
+
+# `gash __serve` runs as a coprocess of this shell and takes the calls the
+# shell itself makes (not its subshells: their calls exec the binary), so a
+# call costs a file write, a signal and a line read back instead of a fork
+# and an exec. The server rebuilds what the exec'd binary would get: the
+# environment the shell gives a program it runs (export -p, plus the
+# variables the stub exports for the call), the shell's working directory,
+# umask and standard streams (taken from the shell's PID), and it declines
+# (the call then execs) what it cannot reproduce. Linux only; GASH_SERVER=0
+# turns it off.
+#
+#   __GASH_SRV, __GASH_SRV_PID  the coprocess (set and unset by Bash)
+#   __GASH_SRV_OWNER            the shell that started it
+#   __GASH_SRV_DIR              its private directory (the request, the INT
+#                               trap, a stamp)
+#   __GASH_SRV_BIN              the binary it runs
+#   __GASH_SRV_FN               the functions it runs
+
+# Stop the server of this shell, if any.
+__gash_srv_stop() {
+    if [[ -n "${__GASH_SRV_PID-}" && "${__GASH_SRV_OWNER-}" == "$BASHPID" ]]; then
+        kill "$__GASH_SRV_PID" 2>/dev/null || true
+    fi
+    unset __GASH_SRV_OWNER __GASH_SRV_DIR __GASH_SRV_BIN
+    return 0
+}
+
+# A load stops the server of an earlier one (its binary may differ).
+[[ -n "${__GASH_SRV_OWNER-}" ]] && __gash_srv_stop
+declare -gA __GASH_SRV_FN=(
+    [llm_tree]=1
+    [llm_find]=1
+    [llm_grep]=1
+    [llm_project]=1
+    [llm_config]=1
+    [llm_deps]=1
+    [llm_env]=1
+    [llm_exec]=1
+    [llm_procs]=1
+    [llm_ports]=1
+    [llm_git_status]=1
+    [llm_git_log]=1
+    [llm_git_diff]=1
+    [llm_docker_check]=1
+    [llm_db_tables]=1
+    [llm_db_schema]=1
+    [llm_db_sample]=1
+    [llm_db_query]=1
+    [llm_db_explain]=1
+    [tree_stats]=1
+    [files_largest]=1
+    [dirs_largest]=1
+    [dirs_find_large]=1
+    [dirs_list_empty]=1
+    [disk_usage]=1
+    [process_find]=1
+    [ip_public]=1
+    [all_colors]=1
+    [gash]=1
+    [gash_help]=1
+    [gash_username]=1
+    [gash_inspiring_quote]=1
+    [gash_ai_list]=1
+    [gash_db_list]=1
+    [node_detect_version]=1
+    [php_detect_version]=1
+)
+__GASH_SRV_STARTS=0
+__GASH_SRV_SEQ=0
+__GASH_SRV_DECLINED=0
+__GASH_SRV_CHECKED=""
+
+# Whether the server can take a call now: it runs, for this shell, the
+# current binary; started when it does not (three starts per shell).
+__gash_srv_ready() {
+    [[ "$BASHPID" == "$$" && "${OSTYPE-}" == linux* ]] || return 1
+    if [[ -n "${__GASH_SRV_OWNER-}" ]]; then
+        # The binary's mtime is checked once a second at most.
+        if [[ -n "${__GASH_SRV_PID-}" && "$__GASH_SRV_BIN" == "$__GASH_BIN" ]] &&
+            { [[ "${EPOCHSECONDS-}" == "$__GASH_SRV_CHECKED" ]] || ! [[ "$__GASH_BIN" -nt "$__GASH_SRV_DIR/stamp" ]]; }; then
+            __GASH_SRV_CHECKED=${EPOCHSECONDS-}
+            return 0
+        fi
+        __gash_srv_stop
+    fi
+    ((__GASH_SRV_STARTS < 3)) || return 1
+    ((++__GASH_SRV_STARTS))
+    local __gs_m=0 __gs_i=0 __gs_o=1 __gs_e=2
+    local -a __gs_hello=()
+    # The shell's standard streams go to the server as 3, 4 and 5 (for a
+    # kernel that does not let it take a call's streams from the shell; no
+    # redirection on these exec lines, which Bash would keep). Outside job
+    # control the coprocess shares the shell's process group,
+    # so Ctrl-C reaches the call it runs; disowned, no job lists it.
+    if [[ -e /dev/fd/0 && -e /dev/fd/1 && -e /dev/fd/2 ]]; then
+        exec {__gs_i}<&0 {__gs_o}>&1 {__gs_e}>&2
+    else
+        __gs_i=-
+    fi
+    [[ $- == *m* ]] && __gs_m=1 && set +m
+    if [[ "$__gs_i" == - ]]; then
+        { coproc __GASH_SRV { exec "$__GASH_BIN" __serve 2>/dev/null; }; } 2>/dev/null
+    else
+        { coproc __GASH_SRV { exec "$__GASH_BIN" __serve 3<&"$__gs_i" 4>&"$__gs_o" 5>&"$__gs_e" 2>/dev/null; }; } 2>/dev/null
+        exec {__gs_i}<&- {__gs_o}>&- {__gs_e}>&-
+    fi
+    ((__gs_m)) && set -m
+    [[ -n "${__GASH_SRV_PID-}" ]] || return 1
+    disown "$__GASH_SRV_PID" 2>/dev/null || true
+    if ! IFS=' ' read -r -t 5 -a __gs_hello -u "${__GASH_SRV[0]}" 2>/dev/null ||
+        [[ "${__gs_hello[0]-}" != gash-serve || "${__gs_hello[1]-}" != 1 || ! -d "${__gs_hello[2]-}" ]]; then
+        kill "$__GASH_SRV_PID" 2>/dev/null || true
+        return 1
+    fi
+    __GASH_SRV_OWNER=$BASHPID
+    __GASH_SRV_DIR=${__gs_hello[2]}
+    __GASH_SRV_BIN=$__GASH_BIN
+    return 0
+}
+
+# Run NAME in the server: its status, or __GASH_SRV_DECLINED=1 when the
+# server declined the call (nothing ran) or is gone. The request is a file
+# in the server's directory: the call, the names of the variables
+# __gash_export_state would export, and what umask, declare -p and export
+# -p print (the server rebuilds the environment from them: no fork). kill
+# tells the server; while it runs the call, the shell's standard streams
+# are the call's own: no command here redirects them (kill and read are
+# builtins that take none).
+# Usage: __gash_srv_call NAME [ARG...]
+__gash_srv_call() {
+    local __gs_line="" __gs_v
+    __GASH_SRV_DECLINED=1
+    {
+        printf '%s\0' R "$((++__GASH_SRV_SEQ))" "$BASHPID" "$#" "$__GASH_CALL_COMMON" \
+            "${__GASH_CALL_VARS[$1]-}" "${__GASH_CALL_SETTINGS[$1]-}" "$@"
+        umask
+        __gash_srv_decls "$1"
+        printf '\001\n'
+        export -p
+    } >"$__GASH_SRV_DIR/req" 2>/dev/null && trap -p INT >"$__GASH_SRV_DIR/trap" 2>/dev/null &&
+        [[ -n "${__GASH_SRV_PID-}" && -n "${__GASH_SRV[0]-}" ]] || {
+        __gash_srv_stop
+        return 1
+    }
+    # Ctrl-C is the server's while it runs the call: the shell waits for
+    # the status, as it waits for the exec'd binary. The INT trap is put
+    # back after.
+    trap '' INT
+    if kill -USR1 "$__GASH_SRV_PID"; then
+        while IFS= read -r -u "${__GASH_SRV[0]}" __gs_line; do
+            [[ "${__gs_line%% *}" == "$__GASH_SRV_SEQ" || "${__gs_line%% *}" == "*" ]] && break
+            __gs_line=""
+        done
+    fi
+    if [[ -s "$__GASH_SRV_DIR/trap" ]]; then
+        source "$__GASH_SRV_DIR/trap"
+    else
+        trap - INT
+    fi
+    __gs_v=${__gs_line#* }
+    case "$__gs_v" in
+        "" | *[!0-9]*)
+            # Declined ("F"), or the server is gone: the call execs.
+            [[ "$__gs_v" == F ]] || __gash_srv_stop
+            return 1
+            ;;
+    esac
+    __GASH_SRV_DECLINED=0
+    return "$__gs_v"
+}
+
+# The declarations of the variables NAME's stub exports, as the call sees
+# them (word splitting with the default IFS here only).
+__gash_srv_decls() {
+    local IFS=$' \t\n'
+    # shellcheck disable=SC2086
+    declare -p $__GASH_CALL_COMMON ${__GASH_CALL_VARS[$1]-} ${__GASH_CALL_SETTINGS[$1]-} __GASH_HELP_LOADED
+    return 0
 }
 
 __gash_bin_resolve || true

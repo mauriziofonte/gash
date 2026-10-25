@@ -5,7 +5,6 @@ package db
 import (
 	"context"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // run is __llm_db_run KIND SQL CAP: the guarded query on the target, its
@@ -153,7 +153,7 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 	return values(jvArray(out))
 }
 
-var digitsRE = regexp.MustCompile(`^[0-9]+$`)
+var digitsRE = lazyre.MustCompile(`^[0-9]+$`)
 
 // pgQuote quotes a libpq keyword/value connection string value.
 func pgQuote(v string) string {

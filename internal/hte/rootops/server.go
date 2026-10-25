@@ -16,7 +16,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -488,7 +488,7 @@ func (s *server) installHelper(ctx context.Context, o Op) ([]string, error) {
 // includedirRE finds the line of /etc/sudoers that reads the drop-ins.
 // macOS names the directory through the /etc symlink's target:
 // "#includedir /private/etc/sudoers.d".
-var includedirRE = regexp.MustCompile(`(?m)^[ \t]*[#@]includedir[ \t]+(/private)?/etc/sudoers\.d/?[ \t]*$`)
+var includedirRE = lazyre.MustCompile(`(?m)^[ \t]*[#@]includedir[ \t]+(/private)?/etc/sudoers\.d/?[ \t]*$`)
 
 // SudoersContent is the drop-in for user: the helper, with its exact
 // arguments, and nothing else.

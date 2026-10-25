@@ -7,11 +7,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"unicode"
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Autostart modes (design/hte.md 5, recorded in the receipt).
@@ -99,7 +99,7 @@ func AgentEnv(configHome, stateHome, dataHome, runtimeDir string) []string {
 	return env
 }
 
-var agentKeyRE = regexp.MustCompile(`^XDG_[A-Z_]+$`)
+var agentKeyRE = lazyre.MustCompile(`^XDG_[A-Z_]+$`)
 
 // LaunchAgent is the macOS user agent: it runs the start at login, with
 // env (KEY=VALUE, absolute paths) as its environment variables.

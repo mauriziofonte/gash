@@ -5,13 +5,13 @@ package migrate
 import (
 	"fmt"
 	"path"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/hte/legacy"
 	"github.com/mauriziofonte/gash/internal/hte/render"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // rawResult is a raw vhost rewritten for the userland master.
@@ -64,8 +64,8 @@ func customPorts(conf *legacy.ConfFile, env Env) (sitePorts, error) {
 }
 
 var (
-	vhostLineRE  = regexp.MustCompile(`(?i)^([ \t]*)<VirtualHost[ \t]+([^>]*)>[ \t]*$`)
-	sockVerRE    = regexp.MustCompile(`php([0-9]+\.[0-9]+)-fpm`)
+	vhostLineRE  = lazyre.MustCompile(`(?i)^([ \t]*)<VirtualHost[ \t]+([^>]*)>[ \t]*$`)
+	sockVerRE    = lazyre.MustCompile(`php([0-9]+\.[0-9]+)-fpm`)
 	sslPathLines = map[string]bool{"sslcertificatefile": true, "sslcertificatekeyfile": true}
 )
 

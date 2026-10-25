@@ -204,17 +204,17 @@ __gash_ps1_build() {
         ps1+="$__GASH_PS1_GIT_SEG"
     fi
 
-    # Running and stopped jobs (one subshell; ` + "`jobs`" + ` is a builtin). Not
+    # Running and stopped jobs: \j, the count of the jobs that are not
+    # dead (what ` + "`jobs -pr; jobs -ps`" + ` lists, without its subshell). Not
     # finished ones: bash < 5.3 keeps a finished entry for any program run
     # by a RETURN trap, which would show as a phantom job.
-    local jobs_out=""
-    ((static)) || jobs_out="$(
-        jobs -pr
-        jobs -ps
-    )"
-    if [[ -n "$jobs_out" ]]; then
-        local nl="${jobs_out//[!$'\n']/}"
-        ps1+=" ${o}${__GASH_PS1_BGREEN}${c}[j$((${#nl} + 1))]${R}"
+    local jobs_n=0
+    if ((static == 0)); then
+        jobs_n='\j'
+        jobs_n="${jobs_n@P}"
+    fi
+    if [[ "$jobs_n" != 0 ]]; then
+        ps1+=" ${o}${__GASH_PS1_BGREEN}${c}[j$((jobs_n))]${R}"
     fi
 
     # GNU screen sessions

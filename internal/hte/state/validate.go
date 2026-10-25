@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/hostshelper"
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/profiles"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Hints shared by the validation errors.
@@ -114,7 +114,7 @@ func checkStoredDocroot(p string) error {
 // SupportedPHP are the PHP versions discovery probes (hte-cli's list).
 var SupportedPHP = []string{"5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"}
 
-var phpVersionRE = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+var phpVersionRE = lazyre.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 // ComparePHP orders "X.Y" versions numerically.
 func ComparePHP(a, b string) int {
@@ -208,7 +208,7 @@ func BuildAliases(domain string, noWWW bool, extra []string) ([]string, error) {
 }
 
 // iniKeyRE is the name of a PHP ini setting.
-var iniKeyRE = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.]*$`)
+var iniKeyRE = lazyre.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.]*$`)
 
 // CheckINI validates one [php_ini] entry: the key is an ini name, the
 // value UTF-8 text that a double-quoted PHP-FPM INI value can hold: no

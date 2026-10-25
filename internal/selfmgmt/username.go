@@ -4,7 +4,11 @@ package selfmgmt
 
 import (
 	"os"
+	"runtime"
+	"strconv"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/runner"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -24,8 +28,12 @@ func (m *Module) username(c *invoke.Call) int {
 	}
 	name := ""
 	// if command -v whoami; then user_name=$(whoami 2>/dev/null) || true
-	if _, ok := m.lookPath(c, "whoami"); ok {
-		name = m.output(c, "whoami")
+	if p, ok := m.lookPath(c, "whoami"); ok {
+		if n, found := m.whoamiFiles(p); found {
+			name = n
+		} else {
+			name = m.output(c, "whoami")
+		}
 	}
 	_, hasID := m.lookPath(c, "id")
 	if name == "" && hasID {
@@ -44,6 +52,53 @@ func (m *Module) username(c *invoke.Call) int {
 	}
 	_, _ = c.Stdout.Write([]byte(name + "\n"))
 	return 0
+}
+
+// whoamiFiles answers what the system whoami at path prints without running
+// it, when that answer is sure: on Linux, the coreutils program, with
+// /etc/nsswitch.conf consulting the passwd file first and the file holding
+// no NIS (+/-) lines, getpwuid(geteuid()) is the file's first entry of that
+// uid. Otherwise found is false and whoami runs.
+func (m *Module) whoamiFiles(path string) (name string, found bool) {
+	if _, real := m.run.(runner.Exec); !real || runtime.GOOS != "linux" ||
+		(path != "/usr/bin/whoami" && path != "/bin/whoami") {
+		return "", false
+	}
+	nss, err := os.ReadFile("/etc/nsswitch.conf")
+	if err != nil || !passwdFilesFirst(string(nss)) {
+		return "", false
+	}
+	b, err := m.readFile(m.passwd)
+	if err != nil {
+		return "", false
+	}
+	uid := os.Geteuid()
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") {
+			return "", false
+		}
+		if f := strings.SplitN(line, ":", 4); len(f) == 4 && name == "" && f[0] != "" {
+			if n, err := strconv.Atoi(f[2]); err == nil && n == uid {
+				name = f[0]
+			}
+		}
+	}
+	return name, name != ""
+}
+
+// passwdFilesFirst reports whether the passwd database of an nsswitch.conf
+// looks in the files first.
+func passwdFilesFirst(conf string) bool {
+	for _, line := range strings.Split(conf, "\n") {
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		f := strings.Fields(line)
+		if len(f) >= 2 && f[0] == "passwd:" {
+			return f[1] == "files"
+		}
+	}
+	return false
 }
 
 // passwdNames is grep "^[^:]*:[^:]*:UID:" /etc/passwd | cut -d: -f1 inside

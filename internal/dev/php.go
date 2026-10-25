@@ -4,22 +4,22 @@ package dev
 
 import (
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // reXY is grep -oE '[0-9]+\.[0-9]+'.
-var reXY = regexp.MustCompile(`[0-9]+\.[0-9]+`)
+var reXY = lazyre.MustCompile(`[0-9]+\.[0-9]+`)
 
 // reCopilot is the copilot-instructions source the 2.x grep -oP intended
 // on PCRE2 >= 10.43: php, up to three spaces or colons, then X.Y
 // (case-insensitive), the X.Y captured (LEDGER DEV-09).
-var reCopilot = regexp.MustCompile(`(?i)php[ \t\n\v\f\r:]{0,3}([0-9]+\.[0-9]+)`)
+var reCopilot = lazyre.MustCompile(`(?i)php[ \t\n\v\f\r:]{0,3}([0-9]+\.[0-9]+)`)
 
 // phpDetect is php_detect_version [project_dir] [--json|--llm].
 func (m *Module) phpDetect(c *invoke.Call) int {
@@ -162,7 +162,7 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 }
 
 // reMajor is the first run of digits of a constraint alternative.
-var reMajor = regexp.MustCompile(`[0-9]+`)
+var reMajor = lazyre.MustCompile(`[0-9]+`)
 
 // constraintVersion is the X.Y a composer constraint asks for (LEDGER
 // DEV-02, DEV-03): the constraint split on || and |, each alternative's

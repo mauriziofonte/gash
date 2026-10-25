@@ -5,9 +5,10 @@ package ui
 import (
 	"bufio"
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // tableOptions are the parsed arguments of __gash_table. Column keys are
@@ -30,7 +31,7 @@ type tableOptions struct {
 	fitCol    string // as given, or "" for the default
 }
 
-var pairRe = regexp.MustCompile(`^([0-9]+):([0-9]+)$`)
+var pairRe = lazyre.MustCompile(`^([0-9]+):([0-9]+)$`)
 
 // colKey returns the column a 2.x associative-array key names: a decimal
 // number without a leading zero; ok false for a key no lookup matches.
@@ -352,7 +353,7 @@ func (s Style) TableLines(rows []string, args ...string) []string {
 	return emitted
 }
 
-var barCellRe = regexp.MustCompile(`^[0-9]+/[0-9]+$`)
+var barCellRe = lazyre.MustCompile(`^[0-9]+/[0-9]+$`)
 
 // index is ${arr[i]-} with Bash's negative subscripts (counted from the
 // end); "" out of range.

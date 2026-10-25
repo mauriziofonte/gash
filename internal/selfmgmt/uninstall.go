@@ -7,13 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -39,7 +39,7 @@ const UninstallAskEnv = 10
 
 // gashrcSource is the test for a profile that loads Gash (grep -q
 // 'source.*[./]gashrc').
-var gashrcSource = regexp.MustCompile(`source.*[./]gashrc`)
+var gashrcSource = lazyre.MustCompile(`source.*[./]gashrc`)
 
 // The profile edits of 2.x, run with sed as 2.x ran them: the delimited
 // block, or the 1.x block (its comment line and the four lines after it;

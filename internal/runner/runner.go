@@ -224,7 +224,7 @@ func start(ctx context.Context, argv []string, o Options) (Result, error) {
 	cmd.SysProcAttr = sysProcAttr(o)
 	var stdout, stderr bytes.Buffer
 	var outFile, errFile *captureFile
-	cmd.Stdout, cmd.Stderr = o.Stdout, o.Stderr
+	cmd.Stdout, cmd.Stderr = passFile(o.Stdout), passFile(o.Stderr)
 	if o.Stdout == nil {
 		cmd.Stdout = &stdout
 	}
@@ -293,6 +293,18 @@ func start(ctx context.Context, argv []string, o Options) (Result, error) {
 		return res, werr // an output writer failed, or pipes stayed open (exec.ErrWaitDelay)
 	}
 	return res, nil
+}
+
+// Filer is a writer over a file, such as the gash server's watch for a
+// broken pipe on a caller's stream: a child gets the file itself, as it
+// gets the binary's own stdout, not a pipe copied through the writer.
+type Filer interface{ File() *os.File }
+
+func passFile(w io.Writer) io.Writer {
+	if f, ok := w.(Filer); ok {
+		return f.File()
+	}
+	return w
 }
 
 func signalOf(o Options) syscall.Signal {

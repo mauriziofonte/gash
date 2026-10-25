@@ -35,7 +35,7 @@ func (Exec) Start(ctx context.Context, c Cmd) error {
 	cmd := exec.Command(path, argv[1:]...) //nolint:noctx // detached: the process outlives the call, ctx was checked above
 	cmd.Args[0] = argv[0]
 	cmd.Env, cmd.Dir = env, c.Dir
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, c.Stdout, c.Stderr
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdin, passFile(c.Stdout), passFile(c.Stderr)
 	cmd.SysProcAttr = sysProcAttr(c.Options)
 	if err := cmd.Start(); err != nil {
 		return &StartError{Name: argv[0], Status: startStatus(err), Err: err}

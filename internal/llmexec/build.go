@@ -4,9 +4,9 @@ package llmexec
 
 import (
 	"os/user"
-	"regexp"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
@@ -59,7 +59,7 @@ type Plan struct {
 	Script string
 }
 
-var allowWordRE = regexp.MustCompile(`^[A-Za-z0-9._+-]+$`)
+var allowWordRE = lazyre.MustCompile(`^[A-Za-z0-9._+-]+$`)
 
 // parseAllow splits GASH_LLM_EXEC_ALLOW on comma, colon and whitespace and
 // keeps the words that are plain command names, in order (exec.sh:1132-1134).

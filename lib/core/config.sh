@@ -53,7 +53,7 @@ case "$__gash_here" in
     .) __gash_here=".." ;;
     *) __gash_here="." ;;
 esac
-if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
+if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__gash_here/compat/bootstrap.sh" ]]; then
     # shellcheck source=lib/compat/bootstrap.sh
     source "$__gash_here/compat/bootstrap.sh"
 fi
@@ -77,59 +77,10 @@ declare -g __GASH_SETTINGS_KNOWN=" GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_HIS
 # =============================================================================
 
 # Decode URL-encoded string (%XX -> char)
-__gash_url_decode() {
-    local encoded="${1-}"
-    local decoded=""
-    local i=0
-    local len=${#encoded}
-    local char hex
-
-    while ((i < len)); do
-        char="${encoded:i:1}"
-        if [[ "$char" == "%" ]] && ((i + 2 < len)); then
-            hex="${encoded:i+1:2}"
-            if [[ "$hex" =~ ^[0-9A-Fa-f]{2}$ ]]; then
-                # printf -v (not $(...)) so decoded newlines are preserved
-                printf -v char "\\x$hex"
-                decoded+="$char"
-                i=$((i + 3))
-                continue
-            fi
-        fi
-        decoded+="$char"
-        i=$((i + 1))
-    done
-
-    printf '%s' "$decoded"
-}
+__gash_url_decode() { __gash_cold __gash_url_decode fb41d0cf && "${FUNCNAME[0]}" "$@"; }
 
 # Encode special characters for URL (char -> %XX)
-__gash_url_encode() {
-    local string="${1-}"
-    local encoded=""
-    local i char code
-    # Iterate BYTES, not codepoints: a multi-byte UTF-8 char must produce
-    # one %XX per byte (e.g. "è" -> %C3%A8, never %E8).
-    local LC_ALL=C
-
-    for ((i = 0; i < ${#string}; i++)); do
-        char="${string:i:1}"
-        case "$char" in
-            [a-zA-Z0-9._~-])
-                encoded+="$char"
-                ;;
-            *)
-                # Mask to one byte: some libcs (musl) map high bytes in the
-                # C locale to U+DF80+byte, so "'x" can exceed 255.
-                printf -v code '%d' "'$char"
-                printf -v char '%%%02X' "$((code & 255))"
-                encoded+="$char"
-                ;;
-        esac
-    done
-
-    printf '%s' "$encoded"
-}
+__gash_url_encode() { __gash_cold __gash_url_encode eb8bdec4 && "${FUNCNAME[0]}" "$@"; }
 
 # =============================================================================
 # Config File Parsing
@@ -138,85 +89,19 @@ __gash_url_encode() {
 # Check that the config file is private: owned by the current user and with
 # no group or other permission bits (600, 400, 700 are all fine). Symlinks are followed (dotfile
 # managers commonly symlink ~/.gash_env).
-__gash_check_env_perms() {
-    local file="${1-}"
-    [[ ! -f "$file" ]] && return 0
-    # Headless output is for programs: a warning line would break the JSON
-    # on stderr, and nobody reads it (GASH_DEBUG=1 still checks).
-    [[ "${GASH_HEADLESS-}" == "1" && "${GASH_DEBUG-}" != "1" ]] && return 0
-
-    # GNU stat first, BSD stat second, whatever the OS: macOS users often
-    # have GNU coreutils first on PATH, where `stat -f` means something else.
-    local perms="" owner="" out
-    if out="$(stat -L -c '%a %u' "$file" 2>/dev/null)" && [[ "$out" =~ ^[0-7]+\ [0-9]+$ ]]; then
-        read -r perms owner <<<"$out"
-    elif out="$(stat -L -f '%Lp %u' "$file" 2>/dev/null)" && [[ "$out" =~ ^[0-7]+\ [0-9]+$ ]]; then
-        read -r perms owner <<<"$out"
-    fi
-
-    local shown
-    __gash_shown shown "$file"
-    if [[ "$perms" =~ ^[0-7]{1,4}$ ]] && (((8#$perms) & 8#077)); then
-        __gash_warning "$shown is accessible by other users (mode $perms). Run: chmod 600 $shown"
-    fi
-    if [[ -n "$owner" && "$owner" != "${EUID-}" ]]; then
-        __gash_warning "$shown is owned by uid $owner, not by you (uid ${EUID-}). Gash will still read it."
-    fi
-    return 0
-}
+__gash_check_env_perms() { __gash_cold __gash_check_env_perms 3a4761d6 && "${FUNCNAME[0]}" "$@"; }
 
 # Load and parse ~/.gash_env (cached in globals for the life of the shell).
 # Callers that read values through $(...) should call __gash_load_env first,
 # so the cache is filled in the parent shell and not rebuilt per subshell.
-__gash_load_env() {
-    # Return cached if already loaded
-    [[ -n "$__GASH_ENV_LOADED" ]] && return 0
-
-    # The binary parses the file (warnings on stderr) and prints the cache
-    # as quoted assignments; the values travel on the pipe only.
-    # GASH__COLOR: the warnings take this shell's color decision, not the
-    # one of the command substitution. After a headless gash.sh load
-    # (__GASH_ENV_QUIET) the parse is quiet, as the 2.x headless startup
-    # load was (LEDGER CORE-18).
-    local __gle_out __gle_c=0 __gle_rc=1
-    if __gash_compat_ready && __gash_color_now __gle_c; then
-        if [[ -n "${__GASH_ENV_QUIET-}" ]]; then
-            __gle_out="$(GASH__COLOR=$__gle_c __gash_compat env load 2>/dev/null)" && __gle_rc=0
-        else
-            __gle_out="$(GASH__COLOR=$__gle_c __gash_compat env load)" && __gle_rc=0
-        fi
-        if ((__gle_rc == 0)); then
-            eval "$__gle_out"
-            return 0
-        fi
-    fi
-    __GASH_ENV_SSH_KEYS=""
-    __GASH_ENV_DB_ENTRIES=""
-    __GASH_ENV_AI_PROVIDERS=""
-    __GASH_ENV_HOST_ENTRIES=""
-    __GASH_ENV_SETTINGS=""
-    return 0
-}
+__gash_load_env() { __gash_cold __gash_load_env f737646d && "${FUNCNAME[0]}" "$@"; }
 
 # Apply settings read from ~/.gash_env as shell variables. A variable that
 # is already set (environment, ~/.bashrc before Gash) is left untouched.
 # With NAMEs, only those settings are applied (headless mode skips the
 # ones that only shape the interactive shell).
 # Usage: __gash_apply_settings [NAME...]
-__gash_apply_settings() {
-    __gash_load_env
-    [[ -z "$__GASH_ENV_SETTINGS" ]] && return 0
-    local line key value only=" $* "
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        key="${line%%$'\t'*}"
-        value="${line#*$'\t'}"
-        [[ $# -eq 0 || "$only" == *" $key "* ]] || continue
-        [[ -n "${!key+x}" ]] && continue
-        printf -v "$key" '%s' "$value"
-    done <<<"$__GASH_ENV_SETTINGS"
-    return 0
-}
+__gash_apply_settings() { __gash_cold __gash_apply_settings bcb39eec && "${FUNCNAME[0]}" "$@"; }
 
 # Apply the named settings from ~/.gash_env as shell variables, reading the
 # file in-shell (no binary start, LEDGER CORE-18) and quietly: no warnings,
@@ -292,27 +177,7 @@ __gash_get_ssh_keys() {
 
 # Get database URL by connection name
 # Returns URL or empty string if not found
-__gash_get_db_url() {
-    local name="${1:-default}"
-
-    __gash_load_env
-
-    [[ -z "$__GASH_ENV_DB_ENTRIES" ]] && return 1
-
-    local line
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local entry_name="${line%%$'\t'*}"
-        local entry_url="${line#*$'\t'}"
-
-        if [[ "$entry_name" == "$name" ]]; then
-            printf '%s' "$entry_url"
-            return 0
-        fi
-    done <<<"$__GASH_ENV_DB_ENTRIES"
-
-    return 1
-}
+__gash_get_db_url() { __gash_cold __gash_get_db_url 7b49d93a && "${FUNCNAME[0]}" "$@"; }
 
 # Parse database URL into components
 # Usage: __gash_parse_db_url "mysql://user:pass@host:port/db" VAR_DRIVER VAR_USER VAR_PASS VAR_HOST VAR_PORT VAR_DB
@@ -320,81 +185,7 @@ __gash_get_db_url() {
 # All locals carry the __pdu_ prefix so callers can pass any reasonable
 # variable name without hitting bash nameref shadowing (a caller var named
 # like one of our locals would silently lose the assignment).
-__gash_parse_db_url() {
-    local __pdu_url="${1-}"
-    local -n __pdu_out_driver="${2-__gash_pdu_dummy}"
-    local -n __pdu_out_user="${3-__gash_pdu_dummy}"
-    local -n __pdu_out_pass="${4-__gash_pdu_dummy}"
-    local -n __pdu_out_host="${5-__gash_pdu_dummy}"
-    local -n __pdu_out_port="${6-__gash_pdu_dummy}"
-    local -n __pdu_out_db="${7-__gash_pdu_dummy}"
-
-    # Extract driver: mysql://... -> mysql
-    local __pdu_driver="${__pdu_url%%://*}"
-    __pdu_out_driver="$__pdu_driver"
-
-    # Remove driver prefix
-    local __pdu_rest="${__pdu_url#*://}"
-
-    # Extract user:pass@host:port/database
-    local __pdu_userinfo=""
-    local __pdu_hostinfo=""
-    local __pdu_database=""
-
-    # Split by LAST @ to get userinfo and hostinfo
-    # Using %@* (shortest suffix match) instead of %%@* to handle @ in passwords
-    if [[ "$__pdu_rest" == *@* ]]; then
-        __pdu_userinfo="${__pdu_rest%@*}"
-        __pdu_rest="${__pdu_rest##*@}"
-    fi
-
-    # Split remaining by / to get hostinfo and database
-    if [[ "$__pdu_rest" == */* ]]; then
-        __pdu_hostinfo="${__pdu_rest%%/*}"
-        __pdu_database="${__pdu_rest#*/}"
-    else
-        __pdu_hostinfo="$__pdu_rest"
-        __pdu_database=""
-    fi
-
-    # Parse userinfo: user:pass
-    local __pdu_user=""
-    local __pdu_pass=""
-    if [[ -n "$__pdu_userinfo" ]]; then
-        if [[ "$__pdu_userinfo" == *:* ]]; then
-            __pdu_user="${__pdu_userinfo%%:*}"
-            __pdu_pass="${__pdu_userinfo#*:}"
-        else
-            __pdu_user="$__pdu_userinfo"
-        fi
-    fi
-
-    # Parse hostinfo: host:port
-    local __pdu_host=""
-    local __pdu_port=""
-    if [[ -n "$__pdu_hostinfo" ]]; then
-        if [[ "$__pdu_hostinfo" == *:* ]]; then
-            __pdu_host="${__pdu_hostinfo%%:*}"
-            __pdu_port="${__pdu_hostinfo#*:}"
-        else
-            __pdu_host="$__pdu_hostinfo"
-            # Default ports
-            case "$__pdu_driver" in
-                mysql | mariadb) __pdu_port="3306" ;;
-                pgsql) __pdu_port="5432" ;;
-                *) __pdu_port="" ;;
-            esac
-        fi
-    fi
-
-    __pdu_out_user="$__pdu_user"
-    __pdu_out_pass="$__pdu_pass"
-    __pdu_out_host="$__pdu_host"
-    __pdu_out_port="$__pdu_port"
-    __pdu_out_db="$__pdu_database"
-
-    return 0
-}
+__gash_parse_db_url() { __gash_cold __gash_parse_db_url 0e472462 && "${FUNCNAME[0]}" "$@"; }
 
 # =============================================================================
 # Remote Host Functions
@@ -402,29 +193,7 @@ __gash_parse_db_url() {
 
 # Get remote target (user@host) by alias
 # Returns target or empty string (rc 1) if not found
-__gash_get_host_target() {
-    local alias_name="${1-}"
-
-    [[ -z "$alias_name" ]] && return 1
-
-    __gash_load_env
-
-    [[ -z "$__GASH_ENV_HOST_ENTRIES" ]] && return 1
-
-    local line
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local entry_alias="${line%%$'\t'*}"
-        local entry_target="${line#*$'\t'}"
-
-        if [[ "$entry_alias" == "$alias_name" ]]; then
-            printf '%s' "$entry_target"
-            return 0
-        fi
-    done <<<"$__GASH_ENV_HOST_ENTRIES"
-
-    return 1
-}
+__gash_get_host_target() { __gash_cold __gash_get_host_target 8c5faa9b && "${FUNCNAME[0]}" "$@"; }
 
 # Get all host entries as "alias\ttarget" lines
 __gash_get_host_entries() {
@@ -457,29 +226,7 @@ gash_env_init() { __gash_call gash_env_init "$@"; }
 
 # Get AI provider token by provider name
 # Returns token or empty string if not found
-__gash_get_ai_token() {
-    local provider="${1-}"
-
-    [[ -z "$provider" ]] && return 1
-
-    __gash_load_env
-
-    [[ -z "$__GASH_ENV_AI_PROVIDERS" ]] && return 1
-
-    local line
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local entry_provider="${line%%$'\t'*}"
-        local entry_token="${line#*$'\t'}"
-
-        if [[ "$entry_provider" == "$provider" ]]; then
-            printf '%s' "$entry_token"
-            return 0
-        fi
-    done <<<"$__GASH_ENV_AI_PROVIDERS"
-
-    return 1
-}
+__gash_get_ai_token() { __gash_cold __gash_get_ai_token 497b04f1 && "${FUNCNAME[0]}" "$@"; }
 
 # Get first available AI provider name
 # Returns provider name or empty if none configured

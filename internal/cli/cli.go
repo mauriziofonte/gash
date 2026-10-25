@@ -75,6 +75,13 @@ func Run(p Process) int {
 	if len(p.Args) == 0 || !IsCommand(p.Args[0]) {
 		return p.call("gash", p.Args)
 	}
+	// A 2.x function takes its arguments raw (DisableFlagParsing): run it
+	// without building the cobra tree, which costs more than most calls.
+	if !commands3x[p.Args[0]] {
+		if f, ok := registry.Lookup(p.Args[0]); ok && f.Delegated() {
+			return p.call(f.Name, p.Args[1:])
+		}
+	}
 	status := 0
 	root := newRoot(&p, &status)
 	root.SetArgs(p.Args)

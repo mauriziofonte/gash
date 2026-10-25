@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,17 +20,18 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // claude5 marks the models whose output_config carries effort "low"
 // (`^claude-[a-z]+-5([-.]|$)`); older models reject the field.
-var claude5 = regexp.MustCompile(`^claude-[a-z]+-5([-.]|$)`)
+var claude5 = lazyre.MustCompile(`^claude-[a-z]+-5([-.]|$)`)
 
 // reRetryMs is the Gemini/Retry-After "Nms" form: milliseconds.
-var reRetryMs = regexp.MustCompile(`^([0-9.]+)ms$`)
+var reRetryMs = lazyre.MustCompile(`^([0-9.]+)ms$`)
 
 // reRetryNum is the accepted delay form after the ms conversion.
-var reRetryNum = regexp.MustCompile(`^[0-9]+\.?[0-9]*$`)
+var reRetryNum = lazyre.MustCompile(`^[0-9]+\.?[0-9]*$`)
 
 // request is __ai_request: one structured-output POST and the model's JSON
 // reply (sanitized), or ("", 1) with the error already printed. The user
@@ -135,7 +135,7 @@ func (m *Module) request(c *invoke.Call, provider, token, system, user, schemaRa
 
 // reModel is the shape of a model name: it goes into the Gemini URL path,
 // so no '/', '?', '#' or '..' may reach it (AI-12).
-var reModel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+var reModel = lazyre.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // modelOK reports whether the GASH_AI_MODEL_* override of provider, when
 // set, is a plain model name; it prints the error when it is not.

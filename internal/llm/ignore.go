@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // The content search of llm_grep and llm_find --contains has ripgrep
@@ -591,7 +593,7 @@ func (r *ignoreRules) matchedIgnore(d *ignoreDir, path string, isDir bool) match
 }
 
 // excludesFileRE is the ignore crate's core.excludesFile line reader.
-var excludesFileRE = regexp.MustCompile(`(?im)^\s*excludesfile\s*=\s*"?\s*(\S+?)\s*"?\s*$`)
+var excludesFileRE = lazyre.MustCompile(`(?im)^\s*excludesfile\s*=\s*"?\s*(\S+?)\s*"?\s*$`)
 
 // globalExcludes is the ignore crate's global gitignore: core.excludesFile
 // from ~/.gitconfig or $XDG_CONFIG_HOME/git/config, else

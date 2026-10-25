@@ -3,8 +3,9 @@
 package llmexec
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // gitSubcommands is the read-only subcommand allowlist of __llm_exec_check_git.
@@ -17,9 +18,9 @@ func init() {
 }
 
 var (
-	gitRemoteRE = regexp.MustCompile(`^(show|get-url)$`)
-	gitStashRE  = regexp.MustCompile(`^(list|show)$`)
-	gitReflogRE = regexp.MustCompile(`^(expire|delete)$`)
+	gitRemoteRE = lazyre.MustCompile(`^(show|get-url)$`)
+	gitStashRE  = lazyre.MustCompile(`^(list|show)$`)
+	gitReflogRE = lazyre.MustCompile(`^(expire|delete)$`)
 )
 
 // checkGit is __llm_exec_check_git: read-only subcommands, no config

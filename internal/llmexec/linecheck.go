@@ -3,9 +3,9 @@
 package llmexec
 
 import (
-	"regexp"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
@@ -86,7 +86,7 @@ func (lc *lineChecker) lookupUser(name string) (string, bool) {
 // redirRE is the 2.x redirection allowlist: 2>&1, >&2 / 1>&2, >/dev/null with
 // an optional 1 or 2 and spaces, and &>/dev/null, each at a word boundary and
 // followed by whitespace, ;, |, & or end of line.
-var redirRE = regexp.MustCompile(`^(2>&1|1?>&2|[12]?>[[:space:]]*/dev/null|&>[[:space:]]*/dev/null)([[:space:];|&]|$)`)
+var redirRE = lazyre.MustCompile(`^(2>&1|1?>&2|[12]?>[[:space:]]*/dev/null|&>[[:space:]]*/dev/null)([[:space:];|&]|$)`)
 
 // checkAndRender parses and checks the whole line, returning the canonical
 // single-quoted script to run. It mirrors __llm_exec_check_line: each simple

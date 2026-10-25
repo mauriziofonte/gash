@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -22,6 +21,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -36,11 +36,11 @@ const (
 )
 
 // version is the vre of 2.x: four dot-separated numbers.
-var version = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$`)
+var version = lazyre.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$`)
 
 // versionOut is a browser's `--version` line: a product name (Chromium,
 // Google Chrome for Testing, Chrome-Headless-Shell) and the four numbers.
-var versionOut = regexp.MustCompile(`^[A-Za-z][A-Za-z -]*[A-Za-z] ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)$`)
+var versionOut = lazyre.MustCompile(`^[A-Za-z][A-Za-z -]*[A-Za-z] ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)$`)
 
 // versionIs reports whether a `--version` output names exactly v
 // (SYS-24: no substring match).

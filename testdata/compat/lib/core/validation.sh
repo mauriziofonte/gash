@@ -21,7 +21,7 @@ case "$__gash_here" in
     .) __gash_here=".." ;;
     *) __gash_here="." ;;
 esac
-if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
+if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__gash_here/compat/bootstrap.sh" ]]; then
     # shellcheck source=lib/compat/bootstrap.sh
     source "$__gash_here/compat/bootstrap.sh"
 fi
@@ -34,50 +34,12 @@ unset __gash_here
 # Verify a command is available in PATH.
 # Usage: __gash_require_command "command" ["custom error message"]
 # Returns: 0 if command exists, 1 otherwise
-__gash_require_command() {
-    local cmd="${1-}"
-    local custom_msg="${2-}"
-
-    if [[ -z "$cmd" ]]; then
-        __gash_error "No command specified for validation."
-        return 1
-    fi
-
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        if [[ -n "$custom_msg" ]]; then
-            __gash_error "$custom_msg"
-        else
-            __gash_error "Command '$cmd' is not installed or not in PATH."
-        fi
-        return 1
-    fi
-
-    return 0
-}
+__gash_require_command() { __gash_cold __gash_require_command 8332c514 && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a binary exists (not an alias or function).
 # Usage: __gash_require_binary "binary" ["custom error message"]
 # Returns: 0 if binary exists, 1 otherwise
-__gash_require_binary() {
-    local binary="${1-}"
-    local custom_msg="${2-}"
-
-    if [[ -z "$binary" ]]; then
-        __gash_error "No binary specified for validation."
-        return 1
-    fi
-
-    if ! type -P "$binary" >/dev/null 2>&1; then
-        if [[ -n "$custom_msg" ]]; then
-            __gash_error "$custom_msg"
-        else
-            __gash_error "Binary '$binary' is not installed or not in PATH."
-        fi
-        return 1
-    fi
-
-    return 0
-}
+__gash_require_binary() { __gash_cold __gash_require_binary cb7ad971 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # File System Validation
@@ -86,74 +48,17 @@ __gash_require_binary() {
 # Verify a file exists.
 # Usage: __gash_require_file "path" ["custom error message"]
 # Returns: 0 if file exists, 1 otherwise
-__gash_require_file() {
-    local filepath="${1-}"
-    local custom_msg="${2-}"
-
-    if [[ -z "$filepath" ]]; then
-        __gash_error "No file path specified."
-        return 1
-    fi
-
-    if [[ ! -f "$filepath" ]]; then
-        if [[ -n "$custom_msg" ]]; then
-            __gash_error "$custom_msg"
-        else
-            __gash_error "File '$filepath' does not exist."
-        fi
-        return 1
-    fi
-
-    return 0
-}
+__gash_require_file() { __gash_cold __gash_require_file 5a6b54bb && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a directory exists.
 # Usage: __gash_require_dir "path" ["custom error message"]
 # Returns: 0 if directory exists, 1 otherwise
-__gash_require_dir() {
-    local dirpath="${1-}"
-    local custom_msg="${2-}"
-
-    if [[ -z "$dirpath" ]]; then
-        __gash_error "No directory path specified."
-        return 1
-    fi
-
-    if [[ ! -d "$dirpath" ]]; then
-        if [[ -n "$custom_msg" ]]; then
-            __gash_error "$custom_msg"
-        else
-            __gash_error "Directory '$dirpath' does not exist."
-        fi
-        return 1
-    fi
-
-    return 0
-}
+__gash_require_dir() { __gash_cold __gash_require_dir e599a06e && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a file is readable.
 # Usage: __gash_require_readable "path" ["custom error message"]
 # Returns: 0 if readable, 1 otherwise
-__gash_require_readable() {
-    local filepath="${1-}"
-    local custom_msg="${2-}"
-
-    if [[ -z "$filepath" ]]; then
-        __gash_error "No file path specified."
-        return 1
-    fi
-
-    if [[ ! -r "$filepath" ]]; then
-        if [[ -n "$custom_msg" ]]; then
-            __gash_error "$custom_msg"
-        else
-            __gash_error "File '$filepath' is not readable."
-        fi
-        return 1
-    fi
-
-    return 0
-}
+__gash_require_readable() { __gash_cold __gash_require_readable 4580a452 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Git Validation
@@ -239,25 +144,7 @@ __gash_require_arg() {
 # Verify argument count is at least N.
 # Usage: __gash_require_args_min count minimum "usage_hint"
 # Returns: 0 if count >= minimum, 1 otherwise
-__gash_require_args_min() {
-    local count="${1:-0}"
-    local minimum="${2:-1}"
-    local usage_hint="${3-}"
-    local __gram_c __gram_m
-    __gash_int __gram_c "$count"
-    __gash_int __gram_m "$minimum"
-
-    if [[ "$__gram_c" -lt "$__gram_m" ]]; then
-        if [[ -n "$usage_hint" ]]; then
-            __gash_error "Not enough arguments. Usage: $usage_hint"
-        else
-            __gash_error "Expected at least $minimum argument(s), got $count."
-        fi
-        return 1
-    fi
-
-    return 0
-}
+__gash_require_args_min() { __gash_cold __gash_require_args_min 91d2b7a1 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Docker Validation

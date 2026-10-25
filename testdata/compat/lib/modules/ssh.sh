@@ -14,28 +14,13 @@ case "$__gash_here" in
     .) __gash_here=".." ;;
     *) __gash_here="." ;;
 esac
-if [[ -r "$__gash_here/compat/bootstrap.sh" ]]; then
+if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__gash_here/compat/bootstrap.sh" ]]; then
     # shellcheck source=lib/compat/bootstrap.sh
     source "$__gash_here/compat/bootstrap.sh"
 fi
 unset __gash_here
 
-gash_ssh_auto_unlock() {
-    case "${1-}" in
-        -h | --help)
-            __gash_call gash_ssh_auto_unlock "$@"
-            return
-            ;;
-    esac
-    [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
-    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
-    local __gash_go="" __gash_rc=0
-    {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call gash_ssh_auto_unlock "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
-    } 4>&1
-    [[ -z "$__gash_go" ]] || eval "$__gash_go"
-    return "$__gash_rc"
-}
+gash_ssh_auto_unlock() { __gash_cold gash_ssh_auto_unlock d3161657 && "${FUNCNAME[0]}" "$@"; }
 
 # Sourcing never fails: the status of this file is 0.
 true

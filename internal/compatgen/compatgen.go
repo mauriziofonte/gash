@@ -88,6 +88,18 @@ func generate(fsys fs.FS, stage bool) ([]File, error) {
 			return nil, err
 		}
 	}
+	cold := map[string]coldDef{}
+	for i := range files {
+		if !lazyFile(files[i].Path) {
+			continue
+		}
+		b, err := lazify(files[i].Path, files[i].Data, cold)
+		if err != nil {
+			return nil, err
+		}
+		files[i].Data = b
+	}
+	files = append(files, coldFiles(cold)...)
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
 }
@@ -209,6 +221,8 @@ type Data struct {
 	// CompleteFunctions and CompleteAliases get the completion function.
 	CompleteFunctions []string
 	CompleteAliases   []string
+	// Served are the functions the per-shell server runs.
+	Served []string
 }
 
 // NamedList is one entry of an associative array of the bootstrap.
@@ -232,7 +246,7 @@ type Completion struct {
 }
 
 func buildData() Data {
-	d := Data{Common: registry.CommonShellVars}
+	d := Data{Common: registry.CommonShellVars, Served: registry.Served()}
 	common := map[string]bool{}
 	for _, v := range registry.CommonShellVars {
 		common[v] = true

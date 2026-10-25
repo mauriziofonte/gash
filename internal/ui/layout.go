@@ -4,8 +4,9 @@ package ui
 
 import (
 	"io"
-	"regexp"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // Bar is __gash_bar VALUE MAX WIDTH: the full and the empty part of a
@@ -32,7 +33,7 @@ func (s Style) Bar(value, maxV, width int) (full, empty string) {
 	return fb.String(), eb.String()
 }
 
-var sgrRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
+var sgrRe = lazyre.MustCompile("\x1b\\[[0-9;]*m")
 
 // StripSGR removes every ANSI color sequence (ESC [ digits/; m), repeating
 // until none is left, as the 2.x loops over BASH_REMATCH did.

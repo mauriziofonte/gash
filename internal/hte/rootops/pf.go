@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"regexp"
 
 	"github.com/mauriziofonte/gash/internal/hte/hteerr"
 	"github.com/mauriziofonte/gash/internal/hte/receipt"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // The macOS port redirect (design/hte.md 6). When the kernel does not let
@@ -31,7 +31,7 @@ const (
 	pfctlPath = "/sbin/pfctl"
 )
 
-var rdrAnchorRE = regexp.MustCompile(`(?m)^[ \t]*rdr-anchor[ \t]+"com\.apple/\*"[ \t]*$`)
+var rdrAnchorRE = lazyre.MustCompile(`(?m)^[ \t]*rdr-anchor[ \t]+"com\.apple/\*"[ \t]*$`)
 
 // PFRules is the anchor file: ports 80 and 443 of 127.0.0.1 and ::1 to
 // the stack's HTTP and HTTPS ports. A packet on lo0 passes pf twice (out,

@@ -246,6 +246,11 @@ gash_unload() {
         __gash_prompt_uninstall
     fi
 
+    # Stop the per-shell server (else it ends with the shell).
+    if declare -F __gash_srv_stop >/dev/null 2>&1; then
+        __gash_srv_stop
+    fi
+
     # Restore variables, shell options and umask from the load-time snapshot.
     local __gash_entry __gash_key
     for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do

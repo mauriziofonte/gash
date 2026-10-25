@@ -10,12 +10,12 @@ package llm
 import (
 	"errors"
 	"os"
-	"regexp"
 	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -98,7 +98,7 @@ func envelopeOf(code, details, action, hint string) contract.Envelope {
 	return contract.Legacy(code, details, action, hint)
 }
 
-var uintRE = regexp.MustCompile(`^[0-9]{1,9}$`)
+var uintRE = lazyre.MustCompile(`^[0-9]{1,9}$`)
 
 // validUint is __llm_validate_uint: value must be 1 to 9 ASCII digits,
 // otherwise invalid_<name> is written and false returned.

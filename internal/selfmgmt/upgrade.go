@@ -3,18 +3,18 @@
 package selfmgmt
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 // releaseTag is the 2.x release tag pattern (__gash_latest_tag): pre-release
 // tags such as v3.0.0-rc.1 never match.
-var releaseTag = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+)*$`)
+var releaseTag = lazyre.MustCompile(`^v?[0-9]+(\.[0-9]+)*$`)
 
 // signatureMarker is the text __gash_verify_tag looks for in the tag object
 // (LEDGER SELF-10, reproduced: unanchored, so a tag message quoting it

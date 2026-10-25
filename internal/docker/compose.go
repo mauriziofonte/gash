@@ -8,13 +8,13 @@ import (
 	"errors"
 	"io"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 
 	"github.com/mauriziofonte/gash/internal/contract"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -332,10 +332,10 @@ func jqText(v any) string {
 }
 
 var (
-	reServices = regexp.MustCompile(`^services:[ \t]*(#.*)?\r?$`)
-	reBlank    = regexp.MustCompile(`^[ \t]*(#.*)?\r?$`)
-	reComment  = regexp.MustCompile(`[ \t]+#.*$`)
-	reImage    = regexp.MustCompile(`^ *image:`)
+	reServices = lazyre.MustCompile(`^services:[ \t]*(#.*)?\r?$`)
+	reBlank    = lazyre.MustCompile(`^[ \t]*(#.*)?\r?$`)
+	reComment  = lazyre.MustCompile(`[ \t]+#.*$`)
+	reImage    = lazyre.MustCompile(`^ *image:`)
 )
 
 // lineParser is the YAML-subset reader of 2.x (an awk program): block
@@ -467,9 +467,9 @@ func normalizeImage(ref string) image {
 }
 
 var (
-	reMajor      = regexp.MustCompile(`^[0-9]+$`)
-	reMajorMinor = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
-	rePinned     = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+`)
+	reMajor      = lazyre.MustCompile(`^[0-9]+$`)
+	reMajorMinor = lazyre.MustCompile(`^[0-9]+\.[0-9]+$`)
+	rePinned     = lazyre.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+`)
 )
 
 // isUpgradeable is __gash_is_upgradeable TAG: mutable names, major and
@@ -495,7 +495,7 @@ func isUpgradeable(tag string) bool {
 	return true
 }
 
-var reDigest = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+var reDigest = lazyre.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
 // localDigest is $(__gash_get_local_digest IMAGE): the RepoDigests entry
 // of the image's repository from `docker image inspect` (images only, a

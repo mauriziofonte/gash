@@ -4,12 +4,12 @@ package db
 
 import (
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
@@ -63,9 +63,9 @@ func parseArgs(args []string, extra string, a *dbArgs) *contract.Envelope {
 }
 
 var (
-	uintRE   = regexp.MustCompile(`^[0-9]{1,9}$`)
-	dbNameRE = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}$`)
-	tableRE  = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	uintRE   = lazyre.MustCompile(`^[0-9]{1,9}$`)
+	dbNameRE = lazyre.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_$.-]{0,63}$`)
+	tableRE  = lazyre.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 )
 
 // validUint is __llm_validate_uint NAME VALUE.

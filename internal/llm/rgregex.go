@@ -12,6 +12,8 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/mauriziofonte/gash/internal/lazyre"
 )
 
 // rgRegex is a search pattern read as ripgrep 14 read it, on Go's RE2
@@ -87,7 +89,7 @@ func isASCII(b []byte) bool {
 }
 
 // rgFlagGroup is a group that only sets flags, (?i) or (?-s).
-var rgFlagGroup = regexp.MustCompile(`^\(\?[A-Za-z-]*\)`)
+var rgFlagGroup = lazyre.MustCompile(`^\(\?[A-Za-z-]*\)`)
 
 // rgTranslate rewrites an rg pattern into the RE2 text that reads the
 // same, or refuses it. rg compiled each pattern as (?:PATTERN), which is

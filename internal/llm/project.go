@@ -10,12 +10,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -393,9 +393,9 @@ func (m *Module) runJQ(c *invoke.Call, jq string, stdin io.Reader, args ...strin
 }
 
 var (
-	goReqOpen  = regexp.MustCompile(`^require[[:space:]]*\(`)
-	goReqClose = regexp.MustCompile(`^\)`)
-	goReqLine  = regexp.MustCompile(`^require[[:space:]]+[^(]`)
+	goReqOpen  = lazyre.MustCompile(`^require[[:space:]]*\(`)
+	goReqClose = lazyre.MustCompile(`^\)`)
+	goReqLine  = lazyre.MustCompile(`^require[[:space:]]+[^(]`)
 )
 
 // goModRequires is the awk program of the go.mod branch: inside a

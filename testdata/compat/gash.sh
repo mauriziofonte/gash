@@ -199,53 +199,13 @@ __gash_symbols_now() {
 # From a list made by __gash_symbols_now, the part that holds functions
 # (public: those not starting with _) or aliases, into VAR.
 # Usage: __gash_symbols_pick VAR LIST functions|aliases [public]
-__gash_symbols_pick() {
-    # Bytes, not characters (\x01 never occurs inside a UTF-8 character),
-    # and offsets instead of ${list#*X}, which is quadratic in bash.
-    local LC_ALL=C
-    local list="$2" public internal aliases
-    public="${list%%$'\001'*}"
-    list="${list:${#public}+1}"
-    internal="${list%%$'\001'*}"
-    aliases="${list:${#internal}+1}"
-    case "$3|${4-}" in
-        aliases*) printf -v "$1" '%s' "$aliases" ;;
-        *"|public") printf -v "$1" '%s' "$public" ;;
-        *) printf -v "$1" '%s\n%s' "$public" "$internal" ;;
-    esac
-}
+__gash_symbols_pick() { __gash_cold __gash_symbols_pick 55b9307c && "${FUNCNAME[0]}" "$@"; }
 
 # Names Gash defined while loading, into the array VAR: present right after
 # it loaded (__GASH_POST_SYMBOLS), absent from the snapshot taken before
 # (__GASH_PRE_SYMBOLS). "public" leaves out names starting with _.
 # Usage: __gash_added_symbols_to VAR functions|aliases [public]
-__gash_added_symbols_to() {
-    local -n __gas_out="$1"
-    # mapfile, not word splitting under `local -` and set -f: Bash 4.4 and
-    # 5.0 crash at exit after `local -` ran in an interactive shell.
-    local __gas_name __gas_pre __gas_post LC_ALL=C
-    local -a __gas_lines=() __gas_kept=()
-    __gash_symbols_pick __gas_pre "${__GASH_PRE_SYMBOLS-}" "${2-}" "${3-}"
-    __gash_symbols_pick __gas_post "${__GASH_POST_SYMBOLS-}" "${2-}" "${3-}"
-    mapfile -t __gas_lines <<<"$__gas_post"
-    for __gas_name in ${__gas_lines[@]+"${__gas_lines[@]}"}; do
-        [[ -n "$__gas_name" ]] && __gas_kept+=("$__gas_name")
-    done
-    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
-    # Usually little or nothing existed before: one lookup per name.
-    [[ -n "${__gas_pre//$'\n'/}" && ${#__gas_out[@]} -gt 0 ]] || return 0
-    local -A __gas_before=()
-    mapfile -t __gas_lines <<<"$__gas_pre"
-    for __gas_name in ${__gas_lines[@]+"${__gas_lines[@]}"}; do
-        [[ -n "$__gas_name" ]] && __gas_before["$__gas_name"]=1
-    done
-    __gas_kept=()
-    for __gas_name in "${__gas_out[@]}"; do
-        [[ -n "${__gas_before["$__gas_name"]+x}" ]] || __gas_kept+=("$__gas_name")
-    done
-    __gas_out=(${__gas_kept[@]+"${__gas_kept[@]}"})
-    return 0
-}
+__gash_added_symbols_to() { __gash_cold __gash_added_symbols_to 69ee11cd && "${FUNCNAME[0]}" "$@"; }
 
 # Snapshot the pre-Gash state for `gash_unload` now, before Gash defines a
 # single function, alias or changes a variable, so the whole Gash surface
@@ -272,11 +232,15 @@ fi
 
 # The bootstrap first (binary resolution, __gash_call), then the four core
 # shims, in the 2.x order.
+# The shims source the bootstrap for a caller that sources one of them
+# alone; __GASH_BOOT_LOADED tells them gash.sh just did.
 __gash_source "$GASH_DIR/lib/compat/bootstrap.sh"
+__GASH_BOOT_LOADED="$GASH_DIR/lib/compat/bootstrap.sh"
 __gash_source "$GASH_DIR/lib/core/output.sh"
 __gash_source "$GASH_DIR/lib/core/utils.sh"
 __gash_source "$GASH_DIR/lib/core/validation.sh"
 __gash_source "$GASH_DIR/lib/core/config.sh"
+unset __GASH_BOOT_LOADED
 
 # -----------------------------------------------------------------------------
 # Functions of the modules (they run in the gash binary)
@@ -333,48 +297,8 @@ tree_stats() { __gash_call tree_stats "$@"; }
 
 # gash
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-gash() {
-    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
-    # The card shows the value this shell gives an alias of the card, as
-    # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,
-    # backslash and newline escaped. Outside headless mode the card counts
-    # and lists only those (GASH__CARD_LIVE=1, LEDGER SELF-12); a headless
-    # shell loads no alias pack and gets the whole registered list.
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_card="" __gash_live=1
-    [[ "${GASH_HEADLESS-}" == "1" ]] && __gash_live=""
-    for __gash_n in .. ... .... ..... .4 .5 1composerXY bc cd.. chgrp chmod chown cls composer composer-packages-update composer-self-update composer1-self-update composerXY cp dc dcb dcc dcdown dclogs dcls dclsr dcps dcpull dcrestart dcrm dcscan dcup dcup2 dexec dils dinspect dir dirm dlogs dnetls dpruneall drm drmi dstart dstartall dstop dstopall ga gaa gap gb gbD gba gbd gc gca gcan gcb gcm gco gd gds gdw gf gfa gl gla glf glg glo glog gls gp gpf gpr gpsh gr grb grba grbc grep grh grh1 grhh gs gsh gsha gshl gshp gst gsw gswc l la lash less ll ls mkdir mv path php phpXY ports quit reboot rm shutdown sl vdir; do
-        [[ -n "${BASH_ALIASES[$__gash_n]+x}" ]] || continue
-        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    # The families of the card (php83 for phpXY, LEDGER DEV-21).
-    for __gash_n in "${!BASH_ALIASES[@]}"; do
-        case "$__gash_n" in
-            1composer[0-9]* | composer[0-9]* | php[0-9]*) ;;
-            *) continue ;;
-        esac
-        __gash_v=${BASH_ALIASES[$__gash_n]//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_card+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    GASH__CARD_ALIASES="$__gash_card" GASH__CARD_LIVE="$__gash_live" __gash_call gash "$@"
-}
-gash_doctor() {
-    # The doctor reports what this shell holds: the files that failed to
-    # load (__GASH_LOAD_ERRORS, one per line) and the known settings set
-    # here (NAME<TAB>VALUE lines), backslash and newline escaped.
-    local __gash_n __gash_v __gash_bs='\' __gash_nl=$'\n' __gash_errs="" __gash_set=""
-    for __gash_v in ${__GASH_LOAD_ERRORS[@]+"${__GASH_LOAD_ERRORS[@]}"}; do
-        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_errs+=${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    for __gash_n in ${__GASH_SETTINGS_KNOWN-}; do
-        [[ -n "${!__gash_n+x}" ]] || continue
-        __gash_v=${!__gash_n}
-        __gash_v=${__gash_v//"$__gash_bs"/"$__gash_bs$__gash_bs"}
-        __gash_set+=$__gash_n$'\t'${__gash_v//"$__gash_nl"/"${__gash_bs}n"}$__gash_nl
-    done
-    GASH__LOAD_ERRORS="$__gash_errs" GASH__SETTINGS="$__gash_set" __gash_call gash_doctor "$@"
-}
+gash() { __gash_cold gash 355db300 && "${FUNCNAME[0]}" "$@"; }
+gash_doctor() { __gash_cold gash_doctor 327a5768 && "${FUNCNAME[0]}" "$@"; }
 gash_help() {
     # --bash TOPIC is Bash's builtin help, which only the shell has.
     local __gash_a
@@ -389,143 +313,8 @@ gash_help() {
     __gash_call gash_help "$@"
 }
 gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
-gash_uninstall() {
-    # The questions are asked in this shell with needs_confirm_prompt (a
-    # harness may redefine it); the binary checks and removes, one step
-    # per call (GASH__UNINSTALL, internal/selfmgmt).
-    local __gash_rc=0 __gash_env __gash_shown_env
-    case "${1-}" in
-        -h | --help)
-            __gash_call gash_uninstall "$@"
-            return
-            ;;
-    esac
-    GASH__UNINSTALL=check __gash_call gash_uninstall "$@" || return
-    if ! needs_confirm_prompt "Continue?"; then
-        __gash_info "Uninstall cancelled."
-        return 0
-    fi
-    GASH__UNINSTALL=remove __gash_call gash_uninstall "$@" || __gash_rc=$?
-    ((__gash_rc == 10)) || return "$__gash_rc"
-    __gash_env="${GASH_ENV_FILE:-$HOME/.gash_env}"
-    __gash_shown __gash_shown_env "$__gash_env"
-    if needs_confirm_prompt "Remove $__gash_shown_env?"; then
-        GASH__UNINSTALL=env-remove __gash_call gash_uninstall "$@"
-    else
-        GASH__UNINSTALL=env-keep __gash_call gash_uninstall "$@"
-    fi
-}
-gash_unload() {
-    needs_help "gash_unload" "gash_unload" \
-        "Restores the shell state saved before Gash was loaded (best-effort)." \
-        "${1-}" && return
-
-    if [[ -z "${__GASH_SNAPSHOT_TAKEN-}" ]]; then
-        __gash_error "Gash snapshot not found. Source gash.sh first."
-        return 1
-    fi
-
-    # Remove the prompt hook from PROMPT_COMMAND (other entries stay).
-    if declare -f __gash_prompt_uninstall >/dev/null 2>&1; then
-        __gash_prompt_uninstall
-    fi
-
-    # Restore variables, shell options and umask from the load-time snapshot.
-    local __gash_entry __gash_key
-    for __gash_entry in "${__GASH_SNAPSHOT[@]}"; do
-        case "$__gash_entry" in
-            shopt:*)
-                __gash_key="${__gash_entry#shopt:}"
-                if [[ "$__gash_entry" == *=1 ]]; then
-                    shopt -s "${__gash_key%=*}" 2>/dev/null
-                else
-                    shopt -u "${__gash_key%=*}" 2>/dev/null
-                fi
-                ;;
-            umask=*) umask "${__gash_entry#umask=}" ;;
-            *=*)
-                __gash_key="${__gash_entry%%=*}"
-                printf -v "$__gash_key" '%s' "${__gash_entry#*=}"
-                ;;
-            *) unset "$__gash_entry" ;;
-        esac
-    done
-
-    # Remove aliases and functions introduced by Gash.
-    local __gash_name
-    local -a __gash_names=()
-    __gash_added_symbols_to __gash_names aliases
-    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
-        unalias "$__gash_name" >/dev/null 2>&1 || true
-    done
-    __gash_added_symbols_to __gash_names functions
-    for __gash_name in ${__gash_names[@]+"${__gash_names[@]}"}; do
-        [[ "$__gash_name" == "gash_unload" ]] && continue
-        unset -f "$__gash_name" >/dev/null 2>&1 || true
-    done
-
-    # Per-prefix function sweep: the load-time snapshot misses functions
-    # defined AFTER it was taken (alias loader, prompt, completion, helpers
-    # created at runtime). Anything gash_* / __gash_* goes.
-    local __gash_fn
-    while IFS= read -r __gash_fn; do
-        [[ -z "${__gash_fn}" ]] && continue
-        [[ "${__gash_fn}" == "gash_unload" ]] && continue
-        unset -f "${__gash_fn}" >/dev/null 2>&1 || true
-    done < <(declare -F 2>/dev/null | awk '{print $3}' | grep -E '^(gash_|__gash_)' || true)
-
-    # The completion specs Gash registered (SELF-03), and any other spec
-    # whose function is Gash's (a 2.x load registered more names).
-    if [[ -n "${__GASH_COMPLETE_NAMES+x}" ]]; then
-        complete -r "${__GASH_COMPLETE_NAMES[@]}" >/dev/null 2>&1 || true
-    fi
-    local __gash_spec
-    while IFS= read -r __gash_spec; do
-        [[ "$__gash_spec" == *" -F __gash_"*" "* ]] || continue
-        complete -r "${__gash_spec##* }" >/dev/null 2>&1 || true
-    done < <(complete -p 2>/dev/null || true)
-
-    # Per-prefix variable sweep: includes the cached secrets which must
-    # never survive an unload, plus colors, PS1 caches, help registry.
-    local -a __gash_snap2=(${__GASH_SNAPSHOT2[@]+"${__GASH_SNAPSHOT2[@]}"})
-    local __gash_var
-    while IFS= read -r __gash_var; do
-        [[ -z "${__gash_var}" ]] && continue
-        unset "${__gash_var}" >/dev/null 2>&1 || true
-    done < <(compgen -v 2>/dev/null | grep -E '^(GASH_|__GASH_)' || true)
-    unset __AI_LAST_EXIT >/dev/null 2>&1 || true
-
-    # The exact pre-Gash state (SELF-03, SELF-05): a variable unset before
-    # is unset (PROMPT_COMMAND only when nothing is left in it); any other
-    # gets back its value and attributes from the declaration Bash printed
-    # at load time (${NAME@A}, Bash's own quoting), run as a global.
-    for __gash_entry in ${__gash_snap2[@]+"${__gash_snap2[@]}"}; do
-        case "$__gash_entry" in
-            -PROMPT_COMMAND) [[ -n "${PROMPT_COMMAND[*]-}" ]] || unset PROMPT_COMMAND ;;
-            -*) unset "${__gash_entry#-}" >/dev/null 2>&1 || true ;;
-            *)
-                if [[ "$__gash_entry" == "declare "* ]]; then
-                    __gash_key="${__gash_entry#declare }"
-                    __gash_key="${__gash_key#* }"
-                    __gash_entry="declare -g ${__gash_entry#declare }"
-                else
-                    __gash_key="$__gash_entry"
-                fi
-                __gash_key="${__gash_key%%=*}"
-                [[ "$__gash_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-                unset "$__gash_key" >/dev/null 2>&1 || true
-                eval "$__gash_entry"
-                ;;
-        esac
-    done
-
-    unset __gash_name
-
-    # Finally, remove gash_unload itself
-    unset -f gash_unload >/dev/null 2>&1 || true
-
-    return 0
-}
+gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
+gash_unload() { __gash_cold gash_unload cc4f8d75 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
@@ -611,39 +400,7 @@ __node_latest_installed() {
     __node_installed_versions | tail -1
 }
 
-__node_parse_version_to_major() {
-    local version_str="$1"
-
-    if [[ "$version_str" =~ ^lts/ ]]; then
-        # nvm records every LTS line it has seen as alias/lts/<codename>
-        # (and lts/* for the newest), so new codenames need no table here.
-        local lts_name="${version_str#lts/}" alias_file target
-        alias_file="${NVM_DIR:-$HOME/.nvm}/alias/lts/${lts_name,,}"
-        if [[ "$lts_name" != */* && -r "$alias_file" ]] && IFS= read -r target <"$alias_file" &&
-            [[ "$target" =~ ^v?([0-9]+) ]]; then
-            echo "${BASH_REMATCH[1]}"
-            return 0
-        fi
-        case "${lts_name,,}" in
-            krypton) echo "24" ;;
-            jod) echo "22" ;;
-            iron) echo "20" ;;
-            hydrogen) echo "18" ;;
-            gallium) echo "16" ;;
-            fermium) echo "14" ;;
-            *)
-                local latest
-                latest="$(__node_latest_installed)"
-                echo "${latest%%.*}"
-                ;;
-        esac
-        return 0
-    fi
-
-    local version
-    version=$(echo "$version_str" | grep -oE '[0-9]+(\.[0-9]+)*' | head -1)
-    [[ -n "$version" ]] && echo "${version%%.*}"
-}
+__node_parse_version_to_major() { __gash_cold __node_parse_version_to_major bfef144f && "${FUNCNAME[0]}" "$@"; }
 
 __node_read_remote_index() {
     local -n __nrri_out="$1"
@@ -651,195 +408,9 @@ __node_read_remote_index() {
     [[ "$__nrri_out" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]
 }
 
-node_upgrade() {
-    needs_help "node_upgrade" "node_upgrade [-y] [--dry-run]" \
-        "Upgrade each installed Node.js major to its newest patch and remove the old patches. Alias: nvmc" \
-        "${1-}" && return
-
-    local assume_yes=0 dry_run=0 arg
-    for arg in "$@"; do
-        case "$arg" in
-            -y | --yes | --force) assume_yes=1 ;;
-            --dry-run) dry_run=1 ;;
-            *)
-                __gash_error "Unknown option: $arg (usage: node_upgrade [-y] [--dry-run])"
-                return 1
-                ;;
-        esac
-    done
-
-    __gash_require_nvm || return 1
-
-    local installed
-    installed="$(__node_installed_tags)"
-    if [[ -z "$installed" ]]; then
-        __gash_info "No Node.js version is installed with nvm."
-        return 0
-    fi
-
-    local remote
-    __gash_task "Reading the remote index from nodejs.org" __node_read_remote_index remote || {
-        __gash_error "Unable to read the remote index (network?). Nothing changed."
-        return 1
-    }
-
-    local latest_lts
-    latest_lts="$(grep 'Latest LTS' <<<"$remote" | tail -1 | sed -E 's/.*(v[0-9]+)\.[0-9]+\.[0-9]+.*Latest LTS: ([^)]+)\).*/\1 (\2)/')"
-
-    local -a installs=() sources=() removes=() keeps=()
-    local major target ver
-    for major in $(sed -E 's/^v([0-9]+)\..*/\1/' <<<"$installed" | sort -un); do
-        target="$(grep -oE "v${major}\.[0-9]+\.[0-9]+" <<<"$remote" | sort -V | tail -1)"
-        if [[ -z "$target" ]]; then
-            __gash_warning "v${major}: no release in the remote index, left as it is."
-            continue
-        fi
-        if grep -qx "$target" <<<"$installed"; then
-            keeps+=("$target")
-        else
-            installs+=("$target")
-            sources+=("$(grep -E "^v${major}\." <<<"$installed" | tail -1)")
-        fi
-        for ver in $(grep -E "^v${major}\." <<<"$installed"); do
-            [[ "$ver" != "$target" ]] && removes+=("$ver")
-        done
-    done
-
-    [[ -n "$latest_lts" ]] && __gash_kv --width 0 "Latest LTS:" "$latest_lts"
-    local i
-    if ((${#installs[@]})); then
-        __gash_heading "The following NEW versions will be installed:"
-        for i in "${!installs[@]}"; do
-            printf '%s\t(replaces %s, global packages carried over)\n' "${installs[$i]}" "${sources[$i]}"
-        done | __gash_table --no-header --indent 2 --color 1:accent --color 2:muted
-    fi
-    if ((${#removes[@]})); then
-        __gash_heading "The following versions will be REMOVED:"
-        printf '%s\n' "${removes[*]}" | __gash_table --no-header --indent 2 --color 1:accent
-    fi
-    if ((${#keeps[@]})); then
-        __gash_heading "Already the newest patch:"
-        printf '%s\n' "${keeps[*]}" | __gash_table --no-header --indent 2 --color 1:accent
-    fi
-    printf '%d newly installed, %d to remove, %d up to date.\n' "${#installs[@]}" "${#removes[@]}" "${#keeps[@]}"
-
-    ((${#installs[@]} + ${#removes[@]} == 0)) && return 0
-    ((dry_run)) && return 0
-    __gash_confirm_plan "$assume_yes" || return 1
-
-    # The status is 1 when an install or a removal failed (LEDGER DEV-06).
-    local current failed=" " rc=0
-    current="$(nvm current 2>/dev/null)"
-
-    for i in "${!installs[@]}"; do
-        __gash_info "Installing ${installs[$i]}..."
-        if ! nvm install "${installs[$i]}" --reinstall-packages-from="${sources[$i]}"; then
-            major="${installs[$i]#v}"
-            major="${major%%.*}"
-            __gash_error "Installing ${installs[$i]} failed: the v$major patches are kept."
-            failed+="$major "
-            rc=1
-        fi
-    done
-
-    # nvm refuses to remove the active version: move to the new patch of the
-    # same major first.
-    local current_major="${current#v}"
-    current_major="${current_major%%.*}"
-    if [[ " ${removes[*]} " == *" $current "* && "$failed" != *" $current_major "* ]]; then
-        nvm use "$(grep -oE "v${current_major}\.[0-9]+\.[0-9]+" <<<"$remote" | sort -V | tail -1)" >/dev/null
-    else
-        nvm use "$current" >/dev/null 2>&1 || true
-    fi
-
-    for ver in "${removes[@]}"; do
-        major="${ver#v}"
-        major="${major%%.*}"
-        if [[ "$failed" == *" $major "* ]]; then
-            __gash_warning "$ver kept (installing the new v$major failed)."
-            continue
-        fi
-        __gash_info "Removing $ver..."
-        nvm uninstall "$ver" >/dev/null || rc=1
-    done
-
-    __gash_success "Active version: $(nvm current)"
-    return "$rc"
-}
+node_upgrade() { __gash_cold node_upgrade 8f4a8f6d && "${FUNCNAME[0]}" "$@"; }
 # __gash_require_nvm is defined in the node_upgrade block above (same file).
-nvm_prune_versions() {
-    needs_help "nvm_prune_versions" "nvm_prune_versions [-y|--yes|--force]" \
-        "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp" \
-        "${1-}" && return
-
-    # The arguments come first, then the nvm check (LEDGER DEV-20).
-    local force=0 arg
-    for arg in "$@"; do
-        case "$arg" in
-            --force | -f | -y | --yes) force=1 ;;
-            *)
-                __gash_error "Unknown option: $arg (usage: nvm_prune_versions [-y|--yes|--force])"
-                return 1
-                ;;
-        esac
-    done
-
-    __gash_require_nvm || return 1
-
-    local current
-    current="$(nvm current)"
-
-    local -A latest=()
-    local duplicates=() ver major
-
-    # Oldest first: each newer patch of a major pushes the previous one out.
-    # Whole version entries only (start of line, after a blank or nvm's ->
-    # marker), so iojs-v1.2.3 is not read as v1.2.3 (LEDGER DEV-08).
-    # (grep -E, not -P: BSD and busybox grep have no -P.)
-    while read -r ver; do
-        [[ "$ver" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || continue
-        major="${BASH_REMATCH[1]}"
-        if [[ -n "${latest[$major]-}" ]]; then
-            duplicates+=("${latest[$major]}")
-        fi
-        latest[$major]="$ver"
-    done < <(nvm ls --no-colors --no-alias | grep -oE '(^|[[:space:]>])v[0-9]+\.[0-9]+\.[0-9]+' |
-        sed -E 's/^[[:space:]>]+//' | sort -u | sort -V)
-
-    if [[ ${#duplicates[@]} -eq 0 ]]; then
-        __gash_success "No duplicate NVM versions found."
-        return 0
-    fi
-
-    local failed=0
-    for ver in "${duplicates[@]}"; do
-        if [[ "$ver" == "$current" ]]; then
-            __gash_info "Keeping $ver (currently active)."
-            continue
-        fi
-
-        if [[ $force -eq 1 ]]; then
-            __gash_info "Uninstalling $ver..."
-            if ! nvm uninstall "$ver"; then
-                __gash_error "Uninstalling $ver failed."
-                ((failed++)) || true
-            fi
-        else
-            __gash_warning "Dry run: would uninstall $ver. Re-run with --force to apply."
-        fi
-    done
-
-    if [[ $force -eq 1 ]]; then
-        # A failed removal is an error, not the OK line (LEDGER DEV-07).
-        if ((failed)); then
-            __gash_error "$failed duplicate version(s) could not be removed."
-            return 1
-        fi
-        __gash_success "Duplicate NVM versions removed."
-    else
-        __gash_info "Dry-run complete. Re-run with --force to actually uninstall."
-    fi
-}
+nvm_prune_versions() { __gash_cold nvm_prune_versions a63b75b3 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/node.sh" "$__GASH_T1"
 
 # php
@@ -877,22 +448,7 @@ remote_sync_push() {
 
 # ssh
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-gash_ssh_auto_unlock() {
-    case "${1-}" in
-        -h | --help)
-            __gash_call gash_ssh_auto_unlock "$@"
-            return
-            ;;
-    esac
-    [[ -z "${GASH_SSH_AUTOUNLOCK_RAN:-}" ]] || return 0
-    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
-    local __gash_go="" __gash_rc=0
-    {
-        __gash_go="$(GASH__HANDOFF=3 __gash_call gash_ssh_auto_unlock "$@" 3>&1 1>&4 4>&-)" || __gash_rc=$?
-    } 4>&1
-    [[ -z "$__gash_go" ]] || eval "$__gash_go"
-    return "$__gash_rc"
-}
+gash_ssh_auto_unlock() { __gash_cold gash_ssh_auto_unlock d3161657 && "${FUNCNAME[0]}" "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/ssh.sh" "$__GASH_T1"
 
 # sysinfo
@@ -924,48 +480,12 @@ history_grep() {
     HISTTIMEFORMAT='' history | __gash_call history_grep "$@"
 }
 ip_public() { __gash_call ip_public "$@"; }
-mkdir_cd() {
-    case "${1-}" in
-        -h | --help | "")
-            __gash_call mkdir_cd "$@"
-            return
-            ;;
-    esac
-    # One directory only: a second word is the binary's "Unexpected
-    # argument" (LEDGER SYS-10).
-    if (($# > 1)); then
-        __gash_call mkdir_cd "$@"
-        return
-    fi
-    # No option parsing, no CDPATH, and "-" is ./- (LEDGER SYS-11).
-    local dir="$1"
-    [[ "$dir" == - ]] && dir=./-
-    mkdir -p -- "$dir" && CDPATH='' cd -- "$dir" || return 1
-}
+mkdir_cd() { __gash_cold mkdir_cd 83c6a4ed && "${FUNCNAME[0]}" "$@"; }
 port_kill() { __gash_call port_kill "$@"; }
 process_find() { __gash_call process_find "$@"; }
 process_kill() { __gash_call process_kill "$@"; }
 services_stop() { __gash_call services_stop "$@"; }
-sudo_last() {
-    case "${1-}" in
-        -h | --help)
-            __gash_call sudo_last "$@"
-            return
-            ;;
-    esac
-    if [[ -n "${1-}" ]]; then
-        sudo "$@"
-        return
-    fi
-    local last_cmd __gash_go="" __gash_rc=0
-    last_cmd=$(fc -ln -1)
-    last_cmd="${last_cmd#"${last_cmd%%[![:space:]]*}"}"
-    {
-        __gash_go="$(printf '%s' "$last_cmd" | GASH__HANDOFF=3 __gash_call sudo_last 3>&1 1>&4 4>&-)" || __gash_rc=$?
-    } 4>&1
-    [[ "$__gash_go" == 1 ]] || return "$__gash_rc"
-    sudo bash -c "$last_cmd"
-}
+sudo_last() { __gash_cold sudo_last 5d76cf71 && "${FUNCNAME[0]}" "$@"; }
 wsl_compact() { __gash_call wsl_compact "$@"; }
 wsl_explorer() { __gash_call wsl_explorer "$@"; }
 wsl_restart() {

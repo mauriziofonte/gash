@@ -8,17 +8,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // The grep expressions of the collectors.
 var (
-	reNoteBlank     = regexp.MustCompile(`^(#|$)`)
-	reNoteSemiBlank = regexp.MustCompile(`^(#|;|$)`)
-	reHash          = regexp.MustCompile(`^#`)
-	reSlashBlank    = regexp.MustCompile(`^(//|$)`)
-	reContainer     = regexp.MustCompile(`(?i)container|vz|lxc|docker`)
+	reNoteBlank     = lazyre.MustCompile(`^(#|$)`)
+	reNoteSemiBlank = lazyre.MustCompile(`^(#|;|$)`)
+	reHash          = lazyre.MustCompile(`^#`)
+	reSlashBlank    = lazyre.MustCompile(`^(//|$)`)
+	reContainer     = lazyre.MustCompile(`(?i)container|vz|lxc|docker`)
 )
 
 // identity is __sysinfo_collect_identity.
@@ -91,10 +92,10 @@ func (s *Session) storage(o *out) {
 	f := s.f
 	o.section("STORAGE")
 	o.subhead("fstab")
-	o.raw(f.grep(f.read("/etc/fstab"), reNoteBlank, false))
+	o.raw(f.grep(f.read("/etc/fstab"), reNoteBlank.R(), false))
 	if f.isFile("/etc/crypttab") {
 		o.subhead("crypttab")
-		o.raw(f.grep(s.sudoRead("/etc/crypttab"), reHash, false))
+		o.raw(f.grep(s.sudoRead("/etc/crypttab"), reHash.R(), false))
 	}
 	o.endsub()
 	if f.isDir("/etc/lvm") {
@@ -112,7 +113,7 @@ func (s *Session) storage(o *out) {
 		}
 		if f.isFile("/etc/zfs/zed.rc") {
 			o.subhead("zed.rc")
-			o.raw(f.grep(f.read("/etc/zfs/zed.rc"), reNoteBlank, false))
+			o.raw(f.grep(f.read("/etc/zfs/zed.rc"), reNoteBlank.R(), false))
 		}
 	}
 	if f.isFile("/etc/sanoid/sanoid.conf") {
@@ -125,7 +126,7 @@ func (s *Session) storage(o *out) {
 		if f.isFile("/etc/smartmontools/smartd.conf") {
 			smartf = "/etc/smartmontools/smartd.conf"
 		}
-		o.raw(f.grep(f.read(smartf), reNoteBlank, false))
+		o.raw(f.grep(f.read(smartf), reNoteBlank.R(), false))
 	}
 	o.endsub()
 	if f.isFile("/etc/hdparm.conf") {
@@ -133,7 +134,7 @@ func (s *Session) storage(o *out) {
 	}
 	if f.isFile("/etc/exports") {
 		o.subhead("NFS exports")
-		o.raw(f.grep(f.read("/etc/exports"), reNoteBlank, false))
+		o.raw(f.grep(f.read("/etc/exports"), reNoteBlank.R(), false))
 	}
 	o.endsub()
 	if f.isFile("/etc/nfs.conf") {
@@ -192,7 +193,7 @@ func (s *Session) services(o *out) {
 	}
 	if f.isFile("/etc/default/saslauthd") {
 		o.subhead("saslauthd")
-		o.raw(f.grep(f.read("/etc/default/saslauthd"), reNoteBlank, false))
+		o.raw(f.grep(f.read("/etc/default/saslauthd"), reNoteBlank.R(), false))
 	}
 	o.endsub()
 	if len(f.lsPaths(f.glob("/etc/*.org")...)) > 0 {
@@ -260,7 +261,7 @@ func passwdUsers(b []byte) []string {
 	return out
 }
 
-var reSSHD = regexp.MustCompile(`^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication|AuthorizedKeysFile|AllowUsers|AllowGroups|MaxAuthTries|ClientAliveInterval)`)
+var reSSHD = lazyre.MustCompile(`^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication|AuthorizedKeysFile|AllowUsers|AllowGroups|MaxAuthTries|ClientAliveInterval)`)
 
 // auth is __sysinfo_collect_auth.
 func (s *Session) auth(o *out) {
@@ -269,16 +270,16 @@ func (s *Session) auth(o *out) {
 	o.subhead("Users")
 	o.raw(passwdUsers(f.read("/etc/passwd")))
 	o.subhead("Sudo")
-	o.raw(head(f.grep(s.sudoRead("/etc/sudoers"), reNoteBlank, false), 20))
+	o.raw(head(f.grep(s.sudoRead("/etc/sudoers"), reNoteBlank.R(), false), 20))
 	for _, p := range s.sudoFind("/etc/sudoers.d", query{maxDepth: -1, typ: 'f'}) {
 		o.item("--- " + p + ":")
-		o.raw(f.grep(s.sudoRead(p), reNoteBlank, false))
+		o.raw(f.grep(s.sudoRead(p), reNoteBlank.R(), false))
 	}
 	o.subhead("SSH")
-	o.raw(f.grep(s.sudoRead("/etc/ssh/sshd_config"), reSSHD, true))
+	o.raw(f.grep(s.sudoRead("/etc/ssh/sshd_config"), reSSHD.R(), true))
 	for _, p := range s.sudoFind("/etc/ssh/sshd_config.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 		o.item("--- " + p + ":")
-		o.raw(f.grep(s.sudoRead(p), reNoteBlank, false))
+		o.raw(f.grep(s.sudoRead(p), reNoteBlank.R(), false))
 	}
 }
 
@@ -287,12 +288,12 @@ func (s *Session) network(o *out) {
 	f := s.f
 	o.section("NETWORK")
 	o.subhead("resolv.conf")
-	o.raw(f.grep(f.read("/etc/resolv.conf"), reHash, false))
+	o.raw(f.grep(f.read("/etc/resolv.conf"), reHash.R(), false))
 	o.subhead("hosts")
-	o.raw(f.grep(f.read("/etc/hosts"), reNoteBlank, false))
+	o.raw(f.grep(f.read("/etc/hosts"), reNoteBlank.R(), false))
 	if f.isFile("/etc/network/interfaces") {
 		o.subhead("interfaces")
-		o.raw(f.grep(f.read("/etc/network/interfaces"), reNoteBlank, false))
+		o.raw(f.grep(f.read("/etc/network/interfaces"), reNoteBlank.R(), false))
 	}
 	if f.isDir("/etc/netplan") {
 		o.subhead("netplan")
@@ -300,7 +301,7 @@ func (s *Session) network(o *out) {
 	}
 	if f.isFile("/etc/dhcpcd.conf") {
 		o.subhead("dhcpcd")
-		o.raw(f.grep(f.read("/etc/dhcpcd.conf"), reNoteBlank, false))
+		o.raw(f.grep(f.read("/etc/dhcpcd.conf"), reNoteBlank.R(), false))
 	}
 }
 
@@ -311,11 +312,11 @@ func (s *Session) security(o *out) {
 	if f.isDir("/etc/fail2ban") {
 		o.subhead("fail2ban")
 		if f.isFile("/etc/fail2ban/jail.local") {
-			o.raw(f.grep(s.sudoRead("/etc/fail2ban/jail.local"), reNoteSemiBlank, false))
+			o.raw(f.grep(s.sudoRead("/etc/fail2ban/jail.local"), reNoteSemiBlank.R(), false))
 		}
 		for _, p := range s.sudoFind("/etc/fail2ban/jail.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 			o.item("--- " + p + ":")
-			o.raw(f.grep(s.sudoRead(p), reNoteSemiBlank, false))
+			o.raw(f.grep(s.sudoRead(p), reNoteSemiBlank.R(), false))
 		}
 	}
 	if f.isDir("/etc/crowdsec") {
@@ -331,7 +332,7 @@ func (s *Session) security(o *out) {
 	if f.isDir("/etc/ufw") {
 		o.subhead("ufw")
 		if f.isFile("/etc/ufw/ufw.conf") {
-			o.raw(f.grep(f.read("/etc/ufw/ufw.conf"), reNoteBlank, false))
+			o.raw(f.grep(f.read("/etc/ufw/ufw.conf"), reNoteBlank.R(), false))
 		}
 	}
 	o.endsub()
@@ -356,11 +357,11 @@ func (f files) grepFiles(paths []string, re *regexp.Regexp, keep bool) []string 
 }
 
 var (
-	reApacheSite = regexp.MustCompile(`ServerName|ServerAlias|DocumentRoot|ProxyPass |ProxyPassReverse`)
-	reNginxSite  = regexp.MustCompile(`server_name|root |proxy_pass`)
-	reFPMPool    = regexp.MustCompile(`^\[|^(user|listen|pm |pm\.max_children|php_admin_value\[memory_limit\])`)
-	reCnfNoise   = regexp.MustCompile(`^(#|$|\[)`)
-	reCnfKeys    = regexp.MustCompile(`(bind|port|max_connections|innodb_buffer_pool_size|innodb_log_file_size|innodb_flush|default_storage|character.set|log_bin|disable_log_bin|galera)`)
+	reApacheSite = lazyre.MustCompile(`ServerName|ServerAlias|DocumentRoot|ProxyPass |ProxyPassReverse`)
+	reNginxSite  = lazyre.MustCompile(`server_name|root |proxy_pass`)
+	reFPMPool    = lazyre.MustCompile(`^\[|^(user|listen|pm |pm\.max_children|php_admin_value\[memory_limit\])`)
+	reCnfNoise   = lazyre.MustCompile(`^(#|$|\[)`)
+	reCnfKeys    = lazyre.MustCompile(`(bind|port|max_connections|innodb_buffer_pool_size|innodb_log_file_size|innodb_flush|default_storage|character.set|log_bin|disable_log_bin|galera)`)
 )
 
 // webstack is __sysinfo_collect_webstack.
@@ -371,12 +372,12 @@ func (s *Session) webstack(o *out) {
 		o.subhead("Apache")
 		if f.isFile("/etc/apache2/ports.conf") {
 			o.item("ports.conf:")
-			o.raw(f.grep(f.read("/etc/apache2/ports.conf"), reNoteBlank, false))
+			o.raw(f.grep(f.read("/etc/apache2/ports.conf"), reNoteBlank.R(), false))
 		}
 		if f.isDir("/etc/apache2/sites-enabled") {
 			o.item("sites-enabled:")
 			o.raw(f.ls("/etc/apache2/sites-enabled"))
-			o.raw(f.grepFiles(f.find("/etc/apache2/sites-enabled", query{maxDepth: -1, names: []string{"*.conf"}}), reApacheSite, true))
+			o.raw(f.grepFiles(f.find("/etc/apache2/sites-enabled", query{maxDepth: -1, names: []string{"*.conf"}}), reApacheSite.R(), true))
 		}
 		if f.isDir("/etc/apache2/mods-enabled") {
 			o.item("mods-enabled:")
@@ -388,7 +389,7 @@ func (s *Session) webstack(o *out) {
 		if f.isDir("/etc/nginx/sites-enabled") {
 			o.item("sites-enabled:")
 			o.raw(f.ls("/etc/nginx/sites-enabled"))
-			o.raw(f.grepFiles(f.find("/etc/nginx/sites-enabled", query{maxDepth: -1, typ: 'f'}), reNginxSite, true))
+			o.raw(f.grepFiles(f.find("/etc/nginx/sites-enabled", query{maxDepth: -1, typ: 'f'}), reNginxSite.R(), true))
 		}
 	}
 	if f.isDir("/etc/php") {
@@ -398,7 +399,7 @@ func (s *Session) webstack(o *out) {
 		o.item("FPM pools:")
 		pools := f.findAll(f.words("/etc/php/*/fpm/pool.d"), query{maxDepth: -1, names: []string{"*.conf"}})
 		o.raw(sorted(pools))
-		o.raw(f.grepFiles(pools, reFPMPool, true))
+		o.raw(f.grepFiles(pools, reFPMPool.R(), true))
 		o.item("Modules:")
 		var mods []string
 		for _, p := range f.find("/etc/php", query{maxDepth: -1, path: "*/mods-available/*.ini"}) {
@@ -412,11 +413,11 @@ func (s *Session) webstack(o *out) {
 			o.item("mariadb.conf.d:")
 			cnfs := f.find("/etc/mysql/mariadb.conf.d", query{maxDepth: -1, names: []string{"*.cnf"}})
 			o.raw(sorted(cnfs))
-			o.raw(filter(f.grepFiles(cnfs, reCnfNoise, false), reCnfKeys, true))
+			o.raw(filter(f.grepFiles(cnfs, reCnfNoise.R(), false), reCnfKeys.R(), true))
 		}
 		if f.isDir("/etc/mysql/conf.d") {
 			o.item("conf.d:")
-			o.raw(f.grepFiles(f.find("/etc/mysql/conf.d", query{maxDepth: -1, names: []string{"*.cnf"}}), reNoteBlank, false))
+			o.raw(f.grepFiles(f.find("/etc/mysql/conf.d", query{maxDepth: -1, names: []string{"*.cnf"}}), reNoteBlank.R(), false))
 		}
 	}
 	if f.isDir("/etc/postgresql") {
@@ -426,8 +427,8 @@ func (s *Session) webstack(o *out) {
 }
 
 var (
-	rePostfixKeys = regexp.MustCompile(`(myhostname|mydomain|mydestination|mynetworks|inet_interfaces|relayhost|smtpd_tls|smtpd_sasl|smtp_tls|smtpd_milters|virtual_alias|content_filter|home_mailbox|mailbox_command)`)
-	reDovecotKeys = regexp.MustCompile(`^(protocols|ssl_cert|ssl_key|mail_location|auth_mechanisms)`)
+	rePostfixKeys = lazyre.MustCompile(`(myhostname|mydomain|mydestination|mynetworks|inet_interfaces|relayhost|smtpd_tls|smtpd_sasl|smtp_tls|smtpd_milters|virtual_alias|content_filter|home_mailbox|mailbox_command)`)
+	reDovecotKeys = lazyre.MustCompile(`^(protocols|ssl_cert|ssl_key|mail_location|auth_mechanisms)`)
 )
 
 // mail is __sysinfo_collect_mail.
@@ -437,26 +438,26 @@ func (s *Session) mail(o *out) {
 	if f.isDir("/etc/postfix") {
 		o.subhead("Postfix")
 		if f.isFile("/etc/postfix/main.cf") {
-			o.raw(filter(f.grep(f.read("/etc/postfix/main.cf"), reNoteBlank, false), rePostfixKeys, true))
+			o.raw(filter(f.grep(f.read("/etc/postfix/main.cf"), reNoteBlank.R(), false), rePostfixKeys.R(), true))
 		}
 	}
 	if f.isDir("/etc/dovecot") {
 		o.subhead("Dovecot")
 		if f.isFile("/etc/dovecot/dovecot.conf") {
-			o.raw(head(f.grep(f.read("/etc/dovecot/dovecot.conf"), reNoteBlank, false), 30))
+			o.raw(head(f.grep(f.read("/etc/dovecot/dovecot.conf"), reNoteBlank.R(), false), 30))
 		}
-		o.raw(f.grepFiles(f.find("/etc/dovecot/conf.d", query{maxDepth: -1, names: []string{"*.conf"}}), reDovecotKeys, true))
+		o.raw(f.grepFiles(f.find("/etc/dovecot/conf.d", query{maxDepth: -1, names: []string{"*.conf"}}), reDovecotKeys.R(), true))
 	}
 	if f.isDir("/etc/exim4") {
 		o.subhead("Exim4")
 		if f.isFile("/etc/exim4/update-exim4.conf.conf") {
-			o.raw(f.grep(f.read("/etc/exim4/update-exim4.conf.conf"), reNoteBlank, false))
+			o.raw(f.grep(f.read("/etc/exim4/update-exim4.conf.conf"), reNoteBlank.R(), false))
 		}
 	}
 	if f.isDir("/etc/spamassassin") {
 		o.subhead("SpamAssassin")
 		if f.isFile("/etc/spamassassin/local.cf") {
-			o.raw(f.grep(f.read("/etc/spamassassin/local.cf"), reNoteBlank, false))
+			o.raw(f.grep(f.read("/etc/spamassassin/local.cf"), reNoteBlank.R(), false))
 		}
 		if f.isDir("/etc/spamassassin/razor") {
 			o.item("Razor: configured")
@@ -467,7 +468,7 @@ func (s *Session) mail(o *out) {
 	}
 	if f.isFile("/etc/default/opendkim") {
 		o.subhead("OpenDKIM")
-		o.raw(f.grep(f.read("/etc/default/opendkim"), reNoteBlank, false))
+		o.raw(f.grep(f.read("/etc/default/opendkim"), reNoteBlank.R(), false))
 	}
 	if f.isDir("/etc/bind") {
 		o.subhead("BIND")
@@ -475,7 +476,7 @@ func (s *Session) mail(o *out) {
 			o.raw(f.grep(f.read("/etc/bind/named.conf.local"), regexp.MustCompile(`^zone`), true))
 		}
 		if f.isFile("/etc/bind/named.conf.options") {
-			o.raw(head(f.grep(f.read("/etc/bind/named.conf.options"), reSlashBlank, false), 15))
+			o.raw(head(f.grep(f.read("/etc/bind/named.conf.options"), reSlashBlank.R(), false), 15))
 		}
 	}
 	if f.isDir("/etc/unbound") {
@@ -491,9 +492,9 @@ func (s *Session) infra(o *out) {
 	if f.isDir("/etc/proftpd") {
 		o.subhead("ProFTPD")
 		if f.isFile("/etc/proftpd/proftpd.conf") {
-			o.raw(head(f.grep(f.read("/etc/proftpd/proftpd.conf"), reNoteBlank, false), 20))
+			o.raw(head(f.grep(f.read("/etc/proftpd/proftpd.conf"), reNoteBlank.R(), false), 20))
 		}
-		o.raw(head(f.grepFiles(f.find("/etc/proftpd/conf.d", query{maxDepth: -1, names: []string{"*.conf"}}), reNoteBlank, false), 30))
+		o.raw(head(f.grepFiles(f.find("/etc/proftpd/conf.d", query{maxDepth: -1, names: []string{"*.conf"}}), reNoteBlank.R(), false), 30))
 	}
 	if f.isDir("/etc/vsftpd") || f.isFile("/etc/vsftpd.conf") {
 		o.subhead("vsftpd")
@@ -501,12 +502,12 @@ func (s *Session) infra(o *out) {
 		if f.isFile("/etc/vsftpd/vsftpd.conf") {
 			vsf = "/etc/vsftpd/vsftpd.conf"
 		}
-		o.raw(head(f.grep(f.read(vsf), reNoteBlank, false), 15))
+		o.raw(head(f.grep(f.read(vsf), reNoteBlank.R(), false), 15))
 	}
 	if f.isDir("/etc/samba") {
 		o.subhead("Samba")
 		if f.isFile("/etc/samba/smb.conf") {
-			o.raw(f.grep(f.read("/etc/samba/smb.conf"), reNoteSemiBlank, false))
+			o.raw(f.grep(f.read("/etc/samba/smb.conf"), reNoteSemiBlank.R(), false))
 		}
 	}
 	if f.isDir("/etc/openmediavault") {
@@ -580,7 +581,7 @@ func (s *Session) system(o *out) {
 	f := s.f
 	o.section("SYSTEM")
 	o.subhead("Cron")
-	o.raw(f.grep(f.read("/etc/crontab"), reNoteBlank, false))
+	o.raw(f.grep(f.read("/etc/crontab"), reNoteBlank.R(), false))
 	for _, d := range []string{"cron.d", "cron.daily", "cron.hourly", "cron.weekly", "cron.monthly"} {
 		o.item(d + ":")
 		o.raw(f.ls("/etc/" + d))
@@ -595,7 +596,7 @@ func (s *Session) system(o *out) {
 		}
 		o.raw(names)
 		if f.isFile("/etc/letsencrypt/cli.ini") {
-			o.raw(f.grep(f.read("/etc/letsencrypt/cli.ini"), reNoteBlank, false))
+			o.raw(f.grep(f.read("/etc/letsencrypt/cli.ini"), reNoteBlank.R(), false))
 		}
 	}
 	o.endsub()
@@ -614,13 +615,13 @@ func (s *Session) system(o *out) {
 	if f.isDir("/etc/sysctl.d") {
 		for _, p := range f.find("/etc/sysctl.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 			o.item("--- " + p + ":")
-			o.raw(f.grep(f.read(p), reNoteBlank, false))
+			o.raw(f.grep(f.read(p), reNoteBlank.R(), false))
 		}
 	}
-	o.raw(f.grep(f.read("/etc/sysctl.conf"), reNoteBlank, false))
+	o.raw(f.grep(f.read("/etc/sysctl.conf"), reNoteBlank.R(), false))
 	o.subhead("GRUB")
 	if f.isFile("/etc/default/grub") {
-		o.raw(f.grep(f.read("/etc/default/grub"), reNoteBlank, false))
+		o.raw(f.grep(f.read("/etc/default/grub"), reNoteBlank.R(), false))
 	}
 	o.subhead("modprobe")
 	for _, p := range f.find("/etc/modprobe.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
@@ -645,7 +646,7 @@ func (s *Session) system(o *out) {
 	if f.isDir("/etc/chrony") {
 		o.subhead("Chrony")
 		if f.isFile("/etc/chrony/chrony.conf") {
-			o.raw(head(f.grep(f.read("/etc/chrony/chrony.conf"), reNoteBlank, false), 10))
+			o.raw(head(f.grep(f.read("/etc/chrony/chrony.conf"), reNoteBlank.R(), false), 10))
 		}
 	}
 	o.endsub()

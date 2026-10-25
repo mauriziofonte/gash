@@ -16,7 +16,7 @@
 // *pathguard.Refusal carrying the exact 2.x code, details, action and hint.
 package llmexec
 
-import "regexp"
+import "github.com/mauriziofonte/gash/internal/lazyre"
 
 // allowedCommands is __LLM_EXEC_ALLOWED (lib/modules/llm/exec.sh:35): the
 // read-only commands allowed with any arguments unless a per-command rule
@@ -97,10 +97,10 @@ var blocklistPatterns = []string{
 	`> /dev/kmem`,
 }
 
-var blocklistRegexps = func() []*regexp.Regexp {
-	out := make([]*regexp.Regexp, len(blocklistPatterns))
+var blocklistRegexps = func() []*lazyre.Regexp {
+	out := make([]*lazyre.Regexp, len(blocklistPatterns))
 	for i, p := range blocklistPatterns {
-		out[i] = regexp.MustCompile(p)
+		out[i] = lazyre.MustCompile(p)
 	}
 	return out
 }()
