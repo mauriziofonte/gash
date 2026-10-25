@@ -17,6 +17,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/remote/sshtest"
 )
 
@@ -322,4 +323,25 @@ func TestCutTrailer(t *testing.T) {
 	out, tag, _, _ = cutTrailer([]byte("ssh: refused\n"), n)
 	require.Equal(t, "ssh: refused\n", string(out))
 	require.Empty(t, tag)
+}
+
+func TestShSecretMatchesSecretName(t *testing.T) {
+	paths := []string{
+		".env", "app/.env", "app/.ENV.local", "x.env", ".env.example", "config/secrets.yml", "id_rsa", "id_rsa.pub",
+		"keys/server.PEM", "credentials.json", "CredentialsController.php", "home/u/.ssh/config", "home/u/.SSH/known_hosts",
+		"a/.config/gcloud/x", "notes.txt", "login data", "Login Data", "terraform.tfstate.backup", "README.md", "x.tfvars.json",
+		"ssh_host_rsa_key", "ssh_host_rsa_key.pub", "app.env.example", "dir/",
+	}
+	script := ShSecret() + `for p in "$@"; do if gash_secret "$p"; then echo 1; else echo 0; fi; done`
+	out, err := exec.Command("sh", append([]string{"-c", script, "sh"}, paths...)...).CombinedOutput()
+	require.NoError(t, err, string(out))
+	got := strings.Fields(string(out))
+	require.Len(t, got, len(paths))
+	for i, p := range paths {
+		want := "0"
+		if pathguard.SecretName(p) {
+			want = "1"
+		}
+		require.Equal(t, want, got[i], p)
+	}
 }

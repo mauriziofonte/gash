@@ -32,13 +32,15 @@ Read a file that is not secret (YAML as JSON)
 #### Usage
 
 ```text
-llm_config FILE [--max-bytes N]
+llm_config FILE [--max-bytes N] [--host ALIAS]
 ```
 
 #### Options
 
 ```text
 --max-bytes N          Largest file read, in bytes (default 1048576)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -329,6 +331,7 @@ Find files by pattern (ignores noise directories)
 
 ```text
 llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
+         [--host ALIAS]
 ```
 
 #### Options
@@ -338,6 +341,8 @@ llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
 --contains REGEX       Keep the files whose content matches REGEX
                        (ripgrep's regex syntax); files only
 -n, --limit N          Paths to print (default 100)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -448,6 +453,7 @@ Search code with structured file:line:content output
 
 ```text
 llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
+         [--host ALIAS]
 ```
 
 #### Options
@@ -456,6 +462,8 @@ llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
 --ext EXT1,EXT2        Search only files with these extensions
 -C, --context N        Lines of context around each match (default 0)
 -n, --limit N          Lines to print (default 100)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -569,7 +577,7 @@ Compact directory tree (JSON or text output)
 #### Usage
 
 ```text
-llm_tree [--text] [--depth N] [--stats] [PATH]
+llm_tree [--text] [--depth N] [--stats] [PATH] [--host ALIAS]
 ```
 
 #### Options
@@ -579,6 +587,8 @@ llm_tree [--text] [--depth N] [--stats] [PATH]
 --depth N              Levels below PATH, 1 or more (default 1; also
                        --max-depth)
 --stats                Add sizes and child counts to the JSON tree
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples

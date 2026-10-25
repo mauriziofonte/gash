@@ -107,6 +107,7 @@ func ShForbidden() string {
 	var b strings.Builder
 	b.WriteString("gash_forbidden() {\n")
 	b.WriteString("  gf_rh=$(cd ~root 2>/dev/null && pwd -P) || gf_rh=/root\n")
+	b.WriteString("  case $gf_rh in /root|/|'') gf_rh=/root ;; esac\n")
 	b.WriteString("  case $1 in\n")
 	var pats []string
 	for _, p := range append(append([]string{}, pathguard.ForbiddenBasePaths...), denyPrefixes...) {
@@ -131,3 +132,53 @@ func ShForbidden() string {
 
 // shGlobQuote quotes a literal path for a case pattern.
 func shGlobQuote(p string) string { return Quote(p) }
+
+// ShSecret is a POSIX sh function, gash_secret PATH, that succeeds when
+// PATH is a secret file by name (pathguard.SecretName: the base name
+// against the secret patterns, case-insensitively, the exceptions winning;
+// or a secret directory as a component). Generated from the pathguard
+// tables. The fallbacks test the resolved path with it, so no secret
+// content ever leaves the host.
+func ShSecret() string {
+	var b strings.Builder
+	b.WriteString("gash_secret() {\n")
+	b.WriteString("  gs_p=${1%/}\n  gs_b=${gs_p##*/}\n")
+	b.WriteString("  gs_l=$(printf '%s' \"$gs_b\" | tr ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz)\n")
+	b.WriteString("  case $gs_l in " + casePatterns(pathguard.SecretExceptions) + ") return 1 ;; esac\n")
+	b.WriteString("  case $gs_l in " + casePatterns(pathguard.SecretPatterns) + ") return 0 ;; esac\n")
+	b.WriteString("  gs_l=$(printf '/%s/' \"$gs_p\" | tr ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz)\n")
+	var dirs []string
+	for _, d := range pathguard.SecretDirs {
+		dirs = append(dirs, "*/"+Quote(d)+"/*")
+	}
+	b.WriteString("  case $gs_l in " + strings.Join(dirs, "|") + ") return 0 ;; esac\n")
+	b.WriteString("  return 1\n}\n")
+	return b.String()
+}
+
+// casePatterns turns glob patterns made of literal text and * into sh
+// case patterns: the literal parts quoted, the stars bare.
+func casePatterns(globs []string) string {
+	out := make([]string, len(globs))
+	for i, g := range globs {
+		parts := strings.Split(g, "*")
+		for j, p := range parts {
+			if p != "" {
+				parts[j] = Quote(p)
+			}
+		}
+		out[i] = strings.Join(parts, "*")
+	}
+	return strings.Join(out, "|")
+}
+
+// ShException is a POSIX sh function, gash_exception NAME, that succeeds
+// when the base name NAME is a secret exception (pathguard.SecretException:
+// a template such as .env.example or a *.pub key, searched even when
+// hidden).
+func ShException() string {
+	return "gash_exception() {\n" +
+		"  ge_l=$(printf '%s' \"$1\" | tr ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz)\n" +
+		"  case $ge_l in " + casePatterns(pathguard.SecretExceptions) + ") return 0 ;; esac\n" +
+		"  return 1\n}\n"
+}

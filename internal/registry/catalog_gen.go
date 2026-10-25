@@ -2299,10 +2299,12 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_config FILE [--max-bytes N]\n" +
+				"  llm_config FILE [--max-bytes N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_config package.json\n" +
@@ -2682,12 +2684,15 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --type f|d             Files (default) or directories\n" +
 				"  --contains REGEX       Keep the files whose content matches REGEX\n" +
 				"                         (ripgrep's regex syntax); files only\n" +
 				"  -n, --limit N          Paths to print (default 100)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all PHP files\n" +
@@ -2822,11 +2827,14 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
 				"  -C, --context N        Lines of context around each match (default 0)\n" +
 				"  -n, --limit N          Lines to print (default 100)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find TODO comments in PHP files\n" +
@@ -2959,13 +2967,15 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_tree [--text] [--depth N] [--stats] [PATH]\n" +
+				"  llm_tree [--text] [--depth N] [--stats] [PATH] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --text                 Indented text list, 200 lines max (default depth 3)\n" +
 				"  --depth N              Levels below PATH, 1 or more (default 1; also\n" +
 				"                         --max-depth)\n" +
 				"  --stats                Add sizes and child counts to the JSON tree\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # JSON output (default)\n" +

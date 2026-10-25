@@ -29,6 +29,8 @@ type Module struct {
 	getpid   func() int
 	// lookPathFn replaces the PATH search in tests.
 	lookPathFn func(name string) (string, bool)
+	// exe is the running binary that --host ships (nil: os.Executable).
+	exe func() (string, error)
 }
 
 // New returns the module wired to the real system.
@@ -46,10 +48,10 @@ func Register(t *invoke.Table) { New().Register(t) }
 
 // Register binds the functions of m to t.
 func (m *Module) Register(t *invoke.Table) {
-	t.Handle("llm_tree", m.tree)
-	t.Handle("llm_find", m.find)
-	t.Handle("llm_grep", m.grep)
-	t.Handle("llm_config", m.config)
+	t.Handle("llm_tree", m.hostable("llm_tree", m.tree))
+	t.Handle("llm_find", m.hostable("llm_find", m.find))
+	t.Handle("llm_grep", m.hostable("llm_grep", m.grep))
+	t.Handle("llm_config", m.hostable("llm_config", m.config))
 	t.Handle("llm_git_status", m.gitStatus)
 	t.Handle("llm_git_diff", m.gitDiff)
 	t.Handle("llm_git_log", m.gitLog)

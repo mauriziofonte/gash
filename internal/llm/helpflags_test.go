@@ -20,10 +20,10 @@ import (
 // unknown_option) and the function's registered help names it, so a flag
 // cannot be undocumented.
 var llmOptions = map[string][]string{
-	"llm_tree":       {"--text", "--depth", "--max-depth", "--stats"},
-	"llm_find":       {"--type", "--contains", "-n", "--limit"},
-	"llm_grep":       {"--ext", "--context", "-C", "-n", "--limit"},
-	"llm_config":     {"--max-bytes"},
+	"llm_tree":       {"--text", "--depth", "--max-depth", "--stats", "--host"},
+	"llm_find":       {"--type", "--contains", "-n", "--limit", "--host"},
+	"llm_grep":       {"--ext", "--context", "-C", "-n", "--limit", "--host"},
+	"llm_config":     {"--max-bytes", "--host"},
 	"llm_git_status": {},
 	"llm_git_diff":   {"--staged", "--cached"},
 	"llm_git_log":    {"-n", "--limit"},

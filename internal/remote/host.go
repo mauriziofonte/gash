@@ -105,34 +105,37 @@ func (hs Hoster) Wrap(name string, spec Spec, h invoke.Handler) invoke.Handler {
 			}
 			hosts = append(hosts, host)
 		}
+		// The arguments first, as the local function checks them (its
+		// fallback plan refuses what it refuses), then the path rails.
+		nonce := NewNonce()
+		var plan *Plan
+		if spec.Fallback != nil {
+			if p, ok := spec.Fallback(c, nonce, rest); ok {
+				if p.Err != nil {
+					return c.Fail(*p.Err)
+				}
+				plan = p
+			}
+		}
 		if e := spec.check(rest); e != nil {
 			return c.Fail(*e)
 		}
-		outs := hs.RunHosts(c, name, spec, hosts, rest)
+		outs := hs.RunHosts(c, name, hosts, rest, nonce, plan)
 		return writeOuts(c, spec, outs)
 	}
 }
 
-// RunHosts runs name ARGS on every host (in parallel, input order kept).
-func (hs Hoster) RunHosts(c *invoke.Call, name string, spec Spec, hosts []Host, args []string) []HostOut {
+// RunHosts runs name ARGS on every host (in parallel, input order kept),
+// with the fallback plan built for nonce (nil: binary only).
+func (hs Hoster) RunHosts(c *invoke.Call, name string, hosts []Host, args []string, nonce string, plan *Plan) []HostOut {
 	bin, haveBin := LocalBinary(hs.Exe)
 	t := Transport{Run: hs.Run, Env: c.Env}
 	return llmfmt.Map(c.Ctx, llmfmt.NetworkJobs, 0, hosts, func(ctx context.Context, h Host) HostOut {
-		return hs.runOne(ctx, c, t, bin, haveBin, name, spec, h, args)
+		return runOne(ctx, t, bin, haveBin, name, h, args, nonce, plan)
 	})
 }
 
-func (hs Hoster) runOne(ctx context.Context, c *invoke.Call, t Transport, bin Binary, haveBin bool, name string, spec Spec, h Host, args []string) HostOut {
-	nonce := NewNonce()
-	var plan *Plan
-	if spec.Fallback != nil {
-		if p, ok := spec.Fallback(c, nonce, args); ok {
-			if p.Err != nil {
-				return HostOut{Host: h, Err: p.Err}
-			}
-			plan = p
-		}
-	}
+func runOne(ctx context.Context, t Transport, bin Binary, haveBin bool, name string, h Host, args []string, nonce string, plan *Plan) HostOut {
 	body := ""
 	if plan != nil {
 		body = plan.Script
