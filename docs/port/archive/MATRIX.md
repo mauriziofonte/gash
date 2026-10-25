@@ -1070,6 +1070,7 @@ columns are the 2.x rows' so the registry test reads them.
 |---|---|---|---|---|---|---|
 | llm_remote_run | function | pure output | new | A read-only command line on registered hosts: parallel fan-out with per-host rc/ms/out/err, or ordered steps in one ssh round trip, llm_exec rails applied before connecting (plan R1, R2) | gash llm_remote_run | internal/llm remote_run_test.go, llm_remote_run.txtar |
 | llm_same | function | pure output | new | Deploy verification: the local file or tree against ALIAS:REMOTE copies (optionally inside a container), sha256 on both sides in one ssh round trip per target, the differing paths listed (plan R3) | gash llm_same | internal/llm same_test.go, llm_same.txtar |
+| agent_put | function | shell-mutating | new | Upload to a registered host in one ssh round trip: temporary file, size and optional sha256 check, optional backup, atomic rename, under the transfer path policy (plan E2, D1 agent_* family) | gash agent_put | internal/agent put_test.go, agent_put.txtar |
 
 ### Edits (E1)
 

@@ -338,6 +338,10 @@ git_sync() { __gash_call git_sync "$@"; }
 
 # llm
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+agent_put() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call agent_put "$@"
+}
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
 llm_db_explain() {

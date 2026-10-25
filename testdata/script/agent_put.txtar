@@ -1,0 +1,84 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# agent_put (new in 3.4, plan E2): upload + atomic rename + optional backup
+# + sha256 check on the host in ONE ssh invocation, under the transfer path
+# policy (DENY: write_path_denied, ASK without --force: sensitive_path).
+# Also agent_replace --host (plan S5, A2): the edit runs in the gash binary
+# shipped to the host. The ssh on PATH is a stub that logs each invocation,
+# keeps the last remote script and runs it with sh, $WORK/remote playing
+# the remote home.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env GASH_ENV_FILE=$WORK/hostenv
+env PATH=$WORK/bin:$PATH
+chmod 755 bin/ssh
+
+# --- replace a file with a backup and the hash check: one invocation
+exec gash agent_put web:app/config.php --from config.php --backup --verify
+stdout '^\{"host":"web","path":"[^"]*/remote/app/config\.php","bytes":16,"sha256":"[0-9a-f]{64}","replaced":true,"backup":"[^"]*/remote/app/config\.php\.bak-[0-9]{8}T[0-9]{6}Z","verified":true,"written":true\}$'
+grep -count=1 @ ssh.log
+grep 'VERIFY=.1.' last-script
+grep 'sha256sum' last-script
+cmp remote/app/config.php config.php
+exec sh -c 'cat remote/app/config.php.bak-*'
+stdout 'return 1'
+
+# --- through the sourced shell, the content on stdin; --dry-run writes nothing
+exec bash -c 'source "$GASH_SH"; printf "v2\n" | agent_put web:app/VERSION --from -'
+stdout '"replaced":false,"backup":null,"verified":false,"written":true'
+grep '^v2$' remote/app/VERSION
+exec gash agent_put web:app/VERSION --from config.php --dry-run
+stdout '"exists":true,"backup":null,"verified":false,"dry_run":true,"written":false'
+grep '^v2$' remote/app/VERSION
+
+# --- refused before anything connects
+rm ssh.log
+! exec gash agent_put web:/usr/bin/env --from config.php --force
+stderr '"error":"write_path_denied"'
+stderr '"action":"FATAL"'
+! exec gash agent_put web:/var/www/app/config.php --from config.php
+stderr '"error":"sensitive_path"'
+stderr '"action":"STOP"'
+! exec gash agent_put web:app/.env --from config.php
+stderr '"error":"secret_file_blocked"'
+! exec gash agent_put web:app/x --from .env
+stderr '"error":"secret_file_blocked"'
+! exec gash agent_put nope:app/x --from config.php
+stderr '"error":"unknown_host"'
+! exists ssh.log
+
+# --- agent_replace --host: the binary is shipped on first contact (two
+# invocations), then each call is one
+exec gash agent_replace app/main.php --old 'Old' --new 'New' --host web
+stdout '^\{"host":"web","files":1,"replaced":\{"app/main.php":\[1\]\},"written":true\}$'
+grep 'class New' remote/app/main.php
+grep -count=2 @ ssh.log
+exec gash agent_replace app/main.php --old 'New' --new 'Newer' --host web --dry-run
+stdout '"written":false,"dry_run":true'
+grep -count=3 @ ssh.log
+grep 'class New ' remote/app/main.php
+! exec gash agent_replace /etc/hosts --old a --new b --host web
+stderr '"error":"sensitive_path"'
+grep -count=3 @ ssh.log
+
+-- hostenv --
+HOST:web=deploy@web.example
+-- config.php --
+<?php return 2;
+-- .env --
+A=1
+-- remote/app/config.php --
+<?php return 1;
+-- remote/app/main.php --
+<?php class Old {}
+-- bin/ssh --
+#!/bin/sh
+# ssh stub: log the invocation, keep the script, run it with sh in
+# $WORK/remote (the content arrives on stdin).
+while [ $# -gt 0 ]; do a=$1; shift; [ "$a" = -- ] && break; done
+echo "$1" >>"$WORK/ssh.log"
+printf '%s\n' "$2" >"$WORK/last-script"
+cd "$WORK/remote" && HOME=$WORK/remote exec sh -c "$2"

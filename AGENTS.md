@@ -236,6 +236,15 @@ stdin closed, from the remote home; steps share no shell state. A failing
 command is data (`rc`), never an error of the call. Unrestricted remote
 commands would be a write and are not offered.
 
+Remote writes are `agent_*` functions (section 8): `agent_put
+ALIAS:PATH --from FILE|-` (upload, size and `--verify` sha256 check,
+`--backup`, atomic rename, one round trip) and `agent_replace ... --host
+ALIAS` (the shipped binary edits on the host; no POSIX fallback for a
+write). Their targets follow the transfer policy: DENY paths are
+`write_path_denied` (FATAL), ASK paths (/etc, /var, /usr/local, /root, any
+.ssh) `sensitive_path` (STOP) without `--force`, checked before connecting
+and again on the host after resolving links.
+
 ## 4. Output shapes
 
 Real output; only whitespace was changed to fit the page.

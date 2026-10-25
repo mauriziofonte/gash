@@ -7,6 +7,62 @@ package registry
 // catalog_gen.go format; mergeCatalog sorts them in.
 var catalogRemote = []Function{
 	{
+		Name:     "agent_put",
+		Module:   "agent",
+		Topic:    "agent",
+		File:     "lib/modules/llm.sh",
+		StubFile: "lib/modules/llm.sh",
+		Class:    Class("shell-mutating"),
+		Decision: "new",
+		Impl:     Impl("binary"),
+		Headless: true,
+		HasHelp:  true,
+		Help: Help{
+			Short:  "Upload a file to a registered host: atomic, optional backup and hash check",
+			Module: "agent",
+			Body: "" +
+				"USAGE\n" +
+				"  agent_put ALIAS:PATH --from FILE|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --from FILE|-          The content: a local file, or - for stdin (64 MiB max)\n" +
+				"  --mode M               Octal mode of the written file (default: the old\n" +
+				"                         file's, or the host's umask for a new one)\n" +
+				"  --backup               Copy the old file to PATH.bak-<UTC time> first\n" +
+				"  --verify               Check the sha256 on the host before the rename\n" +
+				"  --force                Allow an ASK path (/etc, /var, /usr/local, /root, any\n" +
+				"                         .ssh): only after the user agreed\n" +
+				"  --dry-run              Check the target on the host and report; write nothing\n" +
+				"  --timeout S            Bound the call (default 300)\n" +
+				"\n" +
+				"EXAMPLES\n" +
+				"  # Deploy one file, keep the old one, check what arrived\n" +
+				"  agent_put web:/var/www/app/config.php --from config.php --backup --verify --force\n" +
+				"\n" +
+				"  # Generated content from stdin, into the remote home\n" +
+				"  printf '%s\\n' \"$TOKEN_LINE\" | agent_put web:app/.version --from -\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces scp f h:/tmp/x; ssh h \"install -m 644 /tmp/x /dest\"; sha256sum on\n" +
+				"  both sides. One ssh round trip: the content goes on stdin to a temporary\n" +
+				"  file next to PATH (the old file's mode kept), its size is checked (and its\n" +
+				"  sha256 with --verify), then it is renamed over PATH; a failed check\n" +
+				"  replaces nothing (write_failed, put_verify_failed: STOP). PATH's directory\n" +
+				"  must exist; a relative PATH is below the remote home. ALIAS is a\n" +
+				"  registered HOST: alias. The transfer path policy applies before connecting\n" +
+				"  and again on the host on the resolved path: DENY paths are\n" +
+				"  write_path_denied (FATAL, even with --force), ASK paths sensitive_path\n" +
+				"  (STOP) without --force; secret files are never written or uploaded\n" +
+				"  (secret_file_blocked). Output: {\"host\",\"path\",\"bytes\",\"sha256\",\n" +
+				"  \"replaced\",\"backup\",\"verified\",\"written\":true}; --dry-run gives\n" +
+				"  \"exists\" and \"dry_run\":true,\"written\":false.",
+		},
+		LoadsEnv:  true,
+		ShellVars: []string{"HOME"},
+		Env:       []string{"GASH_ENV_FILE", "HOME", "PWD"},
+		Replaces:  "scp f h:/tmp/x && ssh h \"install -m 644 /tmp/x /dest && sha256sum /dest\"",
+	},
+	{
 		Name:     "llm_remote_run",
 		Module:   "llm",
 		Topic:    "llm",

@@ -236,6 +236,8 @@ var codeTable = []Code{
 	{"invalid_container_name", Retry, "remote", Origin3x},
 	{"container_unavailable", Retry, "remote", Origin3x},
 	{"hash_tool_not_found", Stop, "remote", Origin3x},
+	{"invalid_mode", Retry, "remote", Origin3x},
+	{"put_verify_failed", Stop, "remote", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

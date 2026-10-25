@@ -6,7 +6,60 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 
 | Function | Alias | Description |
 |---|---|---|
+| [`agent_put`](#agent-put) |  | Upload a file to a registered host: atomic, optional backup and hash check |
 | [`agent_replace`](#agent-replace) |  | Replace text in explicit files, all or nothing |
+
+## agent_put
+
+Upload a file to a registered host: atomic, optional backup and hash check
+
+#### Usage
+
+```text
+agent_put ALIAS:PATH --from FILE|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]
+```
+
+#### Options
+
+```text
+--from FILE|-          The content: a local file, or - for stdin (64 MiB max)
+--mode M               Octal mode of the written file (default: the old
+                       file's, or the host's umask for a new one)
+--backup               Copy the old file to PATH.bak-<UTC time> first
+--verify               Check the sha256 on the host before the rename
+--force                Allow an ASK path (/etc, /var, /usr/local, /root, any
+                       .ssh): only after the user agreed
+--dry-run              Check the target on the host and report; write nothing
+--timeout S            Bound the call (default 300)
+```
+
+#### Examples
+
+```bash
+# Deploy one file, keep the old one, check what arrived
+agent_put web:/var/www/app/config.php --from config.php --backup --verify --force
+
+# Generated content from stdin, into the remote home
+printf '%s\n' "$TOKEN_LINE" | agent_put web:app/.version --from -
+```
+
+#### Notes
+
+```text
+Replaces scp f h:/tmp/x; ssh h "install -m 644 /tmp/x /dest"; sha256sum on
+both sides. One ssh round trip: the content goes on stdin to a temporary
+file next to PATH (the old file's mode kept), its size is checked (and its
+sha256 with --verify), then it is renamed over PATH; a failed check
+replaces nothing (write_failed, put_verify_failed: STOP). PATH's directory
+must exist; a relative PATH is below the remote home. ALIAS is a
+registered HOST: alias. The transfer path policy applies before connecting
+and again on the host on the resolved path: DENY paths are
+write_path_denied (FATAL, even with --force), ASK paths sensitive_path
+(STOP) without --force; secret files are never written or uploaded
+(secret_file_blocked). Output: {"host","path","bytes","sha256",
+"replaced","backup","verified","written":true}; --dry-run gives
+"exists" and "dry_run":true,"written":false.
+```
 
 ## agent_replace
 
@@ -15,7 +68,7 @@ Replace text in explicit files, all or nothing
 #### Usage
 
 ```text
-agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dry-run] [--force] [--format F] [--width N]
+agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dry-run] [--force] [--format F] [--width N] [--host ALIAS]
 ```
 
 #### Options
@@ -36,6 +89,8 @@ agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dr
 --format F             json (default), jsonl, tsv or table: one row per file
                        and pair
 --width N              Cut output lines at N columns
+--host ALIAS           Edit the files on a registered HOST: alias (the gash
+                       binary runs there; one ssh round trip; AGENTS.md 3.12)
 ```
 
 #### Examples

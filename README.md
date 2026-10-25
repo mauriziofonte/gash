@@ -9,7 +9,7 @@
 
 ![Gash at a terminal: the reference card, files_largest, tree_stats and sysinfo overview](docs/assets/demo.gif)
 
-Gash adds 88 functions and 163 aliases to Bash: find what
+Gash adds 89 functions and 163 aliases to Bash: find what
 fills a disk, inspect a machine, tag a release, free a port, upgrade a
 Compose stack, push files to a host, run local HTTPS sites. Every function
 has `--help` with examples, and the ones an agent needs answer in JSON with
@@ -189,7 +189,7 @@ against a hostile user: see the [security model](docs/security.md).
 | [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
 | [dev](docs/reference/dev.md) | `node_upgrade`, `chrome_headless_update` (Chrome for Puppeteer and Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
 | [llm](docs/reference/llm.md) | 20 read-only JSON functions for agents |
-| [agent](docs/reference/agent.md) | Write tools for agents (`agent_replace`, ...): explicit targets, `--dry-run`, all or nothing; kept apart so `llm_*` stays read-only |
+| [agent](docs/reference/agent.md) | Write tools for agents (`agent_replace`, `agent_put`, ...): explicit targets, `--dry-run`, all or nothing; kept apart so `llm_*` stays read-only |
 | [ai](docs/reference/ai.md) | `ai_query` and `ai_sysinfo`: Claude or Gemini from the terminal, with secrets redacted |
 | [gash](docs/reference/gash.md) | `gash_help`, `gash_doctor`, `gash_upgrade`, `gash_unload` |
 | [hte](docs/hte.md) | `gash hte install`, `site`, `php`, `service`, `cert`, `hosts`, `doctor`, `migrate` |
