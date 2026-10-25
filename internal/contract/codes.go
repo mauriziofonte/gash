@@ -165,6 +165,19 @@ var codeTable = []Code{
 	{"invalid_db_url", Stop, "database", Origin3x},
 	{"invalid_service_name", Continue, "llm_docker_check", Origin3x},
 	{"invalid_env_file", Retry, "llm_docker_check", Origin3x},
+	// New in 3.4: log reclaim (gash logs). confirmation_required is shared
+	// with hte (above).
+	{"invalid_duration", Retry, "logs", Origin3x},
+	// New in 3.4: Windows interop (gash win, gash wsl) — the winbridge
+	// contract. interop_timeout is RETRY (the Windows side may be slow);
+	// the rest are STOP (a human, an elevated terminal, or a policy change
+	// is needed) except the argument guard, which is RETRY.
+	{"interop_unavailable", Stop, "win", Origin3x},
+	{"interop_timeout", Retry, "win", Origin3x},
+	{"windows_access_denied", Stop, "win", Origin3x},
+	{"elevation_required", Stop, "win", Origin3x},
+	{"windows_not_found", Stop, "win", Origin3x},
+	{"invalid_windows_argument", Retry, "win", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

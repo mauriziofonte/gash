@@ -18,6 +18,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/logs"
+	"github.com/mauriziofonte/gash/internal/wincmd"
 	"github.com/mauriziofonte/gash/internal/wslcmd"
 	"github.com/mauriziofonte/gash/internal/remote"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
@@ -52,6 +53,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	htecmd.Register(t)
 	logs.Register(t)
 	wslcmd.Register(t)
+	wincmd.Register(t)
 	for _, r := range extra {
 		r(t)
 	}

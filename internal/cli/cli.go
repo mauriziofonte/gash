@@ -147,6 +147,7 @@ func newRoot(p *Process, status *int) *cobra.Command {
 	root.AddCommand(versionCmd(p, status), initCmd(p, status), updateCmd(p, status),
 		hteCmd(p, status), delegateCmd(p, status, "logs", "Find and reclaim disk space from log files"),
 		delegateCmd(p, status, "wsl", "Inspect and repair WSL and convert paths"),
+		delegateCmd(p, status, "win", "Inspect the Windows host from WSL (read-only)"),
 		compatCmd(p, status))
 	return root
 }

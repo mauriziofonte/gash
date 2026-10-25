@@ -1,0 +1,33 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash win (new in 3.4, no 2.x spec). This runner is not WSL, so every
+# subcommand reports interop_unavailable (STOP) and the help tree lists the
+# subcommands. The WSL-present behaviour reads the real system and talks to
+# Windows through internal/winbridge, with no test seam in the shipping
+# binary, so it is proven by the Go unit tests in internal/wincmd (a fake
+# Windows runner over recorded fixtures) and internal/winbridge.
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- the help tree lists the subcommands
+exec bash -c 'source "$GASH_SH"; gash win --help'
+stdout 'info'
+stdout 'reg'
+stdout 'events'
+stdout 'services'
+stdout 'doctor'
+
+# --- off WSL, a subcommand reports interop_unavailable (STOP)
+! exec bash -c 'source "$GASH_SH"; gash win info'
+stderr 'interop_unavailable'
+! exec bash -c 'source "$GASH_SH"; gash win services --json'
+stderr 'interop_unavailable'
+
+# --- a bad registry key is rejected before any Windows call
+! exec bash -c 'source "$GASH_SH"; gash win reg SOFTWARE\Microsoft'
+stderr 'invalid_windows_argument'
+
+# --- an unknown subcommand is a usage error
+! exec bash -c 'source "$GASH_SH"; gash win nope'
+stderr 'unexpected_argument'

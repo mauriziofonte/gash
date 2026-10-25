@@ -194,8 +194,9 @@ func (r *run) doClean(_ *cobra.Command, args []string) error {
 // confirmClean shows the plan and asks, unless there is no terminal.
 func (r *run) confirmClean(rep *Report, ops []op) bool {
 	if r.c.Term.Headless() || !r.interactive() {
-		r.say().Error("logs clean changes files: pass --yes to run it unattended (or --dry-run to preview).")
-		r.status = 1
+		r.fail(contract.New("confirmation_required",
+			"logs clean changes files and there is no terminal to confirm on",
+			"pass --yes to run it unattended, or --dry-run to preview"))
 		return false
 	}
 	r.renderPlan(rep, ops)
