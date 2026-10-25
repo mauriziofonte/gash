@@ -18,13 +18,13 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/logs"
-	"github.com/mauriziofonte/gash/internal/wincmd"
-	"github.com/mauriziofonte/gash/internal/wslcmd"
 	"github.com/mauriziofonte/gash/internal/remote"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 	"github.com/mauriziofonte/gash/internal/ssh"
 	"github.com/mauriziofonte/gash/internal/sysinfo"
 	"github.com/mauriziofonte/gash/internal/system"
+	"github.com/mauriziofonte/gash/internal/wincmd"
+	"github.com/mauriziofonte/gash/internal/wslcmd"
 )
 
 // Table returns the table of every ported function and compat operation.
