@@ -1,0 +1,133 @@
+// Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package remote
+
+import (
+	"strings"
+
+	"github.com/mauriziofonte/gash/internal/contract"
+	"github.com/mauriziofonte/gash/internal/pathguard"
+)
+
+// The remote path rails of the agent toolkit (plan S5): the local llm_*
+// rails (no .. component, no ~user, the protected trees) plus the transfer
+// tiers of this package, judged on the path as written before anything
+// connects. The remote side applies them again on the resolved path: the
+// shipped gash binary runs its own guard, and the POSIX fallbacks test the
+// resolved path with ShForbidden.
+
+// CheckRead is the rail of a path an llm_* --host call reads: the local
+// rails and the transfer DENY tier (forbidden_path, FATAL). The ASK tier
+// does not apply to reads, as it does not to local llm_* reads.
+func CheckRead(p string) *contract.Envelope {
+	norm, e := checkLexical(p)
+	if e != nil || norm == "" {
+		return e
+	}
+	if kind, detail := tier(norm); kind == "deny" {
+		env := contract.New("forbidden_path", norm, "Remote path is in the transfer DENY list (matched: "+detail+")")
+		return &env
+	}
+	return nil
+}
+
+// CheckWrite is the rail of a path an agent_* --host call writes: the
+// local rails, the secret-file rule (secret_file_blocked, FATAL), the DENY
+// tier (write_path_denied, FATAL, even with --force) and the ASK tier
+// (/etc, /var, /usr/local, /root, any .ssh: sensitive_path, STOP, unless
+// force), the codes agent_* gives a local target.
+func CheckWrite(p string, force bool) *contract.Envelope {
+	norm, e := checkLexical(p)
+	if e != nil {
+		return e
+	}
+	if norm == "" {
+		env := contract.New("missing_file", "", "Name the remote file to write")
+		return &env
+	}
+	if pathguard.SecretName(norm) {
+		env := contract.New("secret_file_blocked", p, "agent_* functions never write secret files")
+		return &env
+	}
+	kind, detail := tier(norm)
+	switch {
+	case kind == "deny":
+		env := contract.New("write_path_denied", norm+" (matched: "+detail+")", "This path is never written, not even with --force")
+		return &env
+	case kind == "ask" && !force:
+		env := contract.New("sensitive_path", norm+" (matched: "+detail+")", "Ask the user; with their agreement run again with --force")
+		return &env
+	}
+	return nil
+}
+
+// checkLexical refuses what the local guard refuses on the path as
+// written and returns it normalized (normalizePath: ~ and ~/ relative to
+// the remote home, repeated slashes and . segments dropped); "" for an
+// empty path.
+func checkLexical(p string) (string, *contract.Envelope) {
+	if p == "" {
+		return "", nil
+	}
+	if strings.Contains("/"+p+"/", "/../") || p == ".." || strings.HasPrefix(p, "../") || strings.HasSuffix(p, "/..") {
+		e := contract.New("path_traversal_blocked", "", "Path traversal (..) is not allowed for security reasons")
+		return "", &e
+	}
+	if strings.HasPrefix(p, "~") && p != "~" && !strings.HasPrefix(p, "~/") {
+		e := contract.New("invalid_path", p, "Only ~ and ~/ expand to your home; give another user's path in full")
+		return "", &e
+	}
+	norm := normalizePath(p)
+	if strings.HasPrefix(norm, "/") {
+		for _, f := range pathguard.ForbiddenBasePaths {
+			if under(norm, f) {
+				e := contract.New("forbidden_path", norm, "This path is protected and cannot be accessed")
+				return "", &e
+			}
+		}
+	}
+	return norm, nil
+}
+
+// tier is the transfer tier of a normalized path that no shell expands
+// (the words are quoted): "allow", "deny" or "ask" and the matched entry.
+func tier(norm string) (string, string) {
+	kind, detail, _ := strings.Cut(ClassifyLocal(norm), ":")
+	return kind, detail
+}
+
+// ShForbidden is a POSIX sh function, gash_forbidden PATH, that succeeds
+// when the resolved absolute PATH is refused on the remote side: at or
+// below a protected tree (the local rails, root's home included), at or
+// below a DENY entry, or, with a second argument "walk", the root or a
+// directory above a protected tree (a walk may not start there; "names"
+// walks skip the /etc entries, as the local walkRoot does). Generated from
+// the Go tables, so the two sides cannot drift.
+func ShForbidden() string {
+	var b strings.Builder
+	b.WriteString("gash_forbidden() {\n")
+	b.WriteString("  gf_rh=$(cd ~root 2>/dev/null && pwd -P) || gf_rh=/root\n")
+	b.WriteString("  case $1 in\n")
+	var pats []string
+	for _, p := range append(append([]string{}, pathguard.ForbiddenBasePaths...), denyPrefixes...) {
+		pats = append(pats, shGlobQuote(p), shGlobQuote(p)+"/*")
+	}
+	b.WriteString("  " + strings.Join(pats, "|") + ") return 0 ;;\n")
+	b.WriteString("  \"$gf_rh\"|\"$gf_rh\"/*) return 0 ;;\n")
+	b.WriteString("  esac\n")
+	b.WriteString("  [ \"$2\" = '' ] && return 1\n")
+	b.WriteString("  [ \"$1\" = / ] && return 0\n")
+	b.WriteString("  for gf_f in")
+	for _, p := range pathguard.ForbiddenBasePaths {
+		b.WriteString(" " + Quote(p))
+	}
+	b.WriteString(" \"$gf_rh\"; do\n")
+	b.WriteString("    [ \"$2\" = names ] && case $gf_f in /etc/*) continue ;; esac\n")
+	b.WriteString("    case $gf_f in \"$1\"/*) return 0 ;; esac\n")
+	b.WriteString("  done\n")
+	b.WriteString("  return 1\n}\n")
+	return b.String()
+}
+
+// shGlobQuote quotes a literal path for a case pattern.
+func shGlobQuote(p string) string { return Quote(p) }
