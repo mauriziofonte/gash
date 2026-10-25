@@ -117,11 +117,41 @@ func (s *rgSearch) run(root string, w io.Writer, limit int) {
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(s.cwd, abs)
 	}
-	var chain *ignoreDir
-	for _, a := range ancestors(abs) {
-		chain = s.rules.newIgnoreDir(chain, a)
+	// The walk runs ahead of the search in its own goroutine and starts
+	// reading each file it hands over, at most readAheadFiles ahead (3.4):
+	// a cold cache serves parallel reads far sooner than one after the
+	// other. The files reach the search in walk order, so the output is
+	// the same; the walk owns the ignore rules, the search the printer.
+	files := make(chan walkFile, readAheadFiles)
+	done, walked := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(walked)
+		defer close(files)
+		var chain *ignoreDir
+		for _, a := range ancestors(abs) {
+			chain = s.rules.newIgnoreDir(chain, a)
+		}
+		s.walk(root, abs, s.rules.newIgnoreDir(chain, abs), files, done)
+	}()
+	// A search that stops early waits for the walk to see done: nothing
+	// of this run outlives it (the reads under way only fill their own
+	// fileRead).
+	defer func() { close(done); <-walked }()
+	for f := range files {
+		data, err := f.read.wait()
+		if err != nil {
+			continue
+		}
+		if s.searchData(f.path, data, false) != nil {
+			return
+		}
 	}
-	_ = s.walk(root, abs, s.rules.newIgnoreDir(chain, abs))
+}
+
+// walkFile is one file the walk hands to the search, its read under way.
+type walkFile struct {
+	path string
+	read *fileRead
 }
 
 // ancestors lists the directories above abs, from / down to its parent.
@@ -139,77 +169,53 @@ func ancestors(abs string) []string {
 	return out
 }
 
-func (s *rgSearch) walk(dir, abs string, ig *ignoreDir) error {
+// walk sends the files below dir to out, in path order, each with its
+// read started; it returns false once done is closed (the search stopped).
+func (s *rgSearch) walk(dir, abs string, ig *ignoreDir, out chan<- walkFile, done <-chan struct{}) bool {
+	select {
+	case <-done:
+		return false
+	default:
+	}
 	f, err := os.Open(dir)
 	if err != nil {
-		return nil
+		return true
 	}
 	ents, _ := f.ReadDir(-1)
 	_ = f.Close()
 	sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
-	// The verdicts run ahead of the search by readAheadFiles entries (they
-	// depend on this directory's ignore stack only), so the files there
-	// can be read in the background while the earlier ones are searched:
-	// the output keeps the path order, and a search that stops early has
-	// judged only a few entries more.
-	type item struct {
-		path, apath string
-		isDir       bool
-		read        *fileRead
-	}
-	var items []item
-	next := 0 // the next entry to judge
-	judge := func(n int) {
-		for len(items) < n && next < len(ents) {
-			e := ents[next]
-			next++
-			name := e.Name()
-			path := findJoin(dir, name)
-			apath := findJoin(abs, name)
-			isDir := e.IsDir()
-			if s.forbidden != nil && s.forbidden(apath) {
-				continue
-			}
-			if s.excludes != nil && walkExcluded(s.excludes, relBelow(s.root, path), name) {
-				continue
-			}
-			if s.skip(ig, apath, name, isDir) {
-				continue
-			}
-			switch {
-			case isDir:
-				items = append(items, item{path: path, apath: apath, isDir: true})
-			case e.Type().IsRegular():
-				items = append(items, item{path: path, apath: apath, read: readAhead(path)})
-			}
-		}
-	}
-	for i := 0; ; i++ {
-		judge(i + 1 + readAheadFiles)
-		if i >= len(items) {
-			return nil
-		}
-		it := items[i]
-		items[i] = item{}
-		if it.isDir {
-			if err := s.walk(it.path, it.apath, s.rules.newIgnoreDir(ig, it.apath)); err != nil {
-				return err
-			}
+	for _, e := range ents {
+		name := e.Name()
+		path := findJoin(dir, name)
+		apath := findJoin(abs, name)
+		isDir := e.IsDir()
+		if s.forbidden != nil && s.forbidden(apath) {
 			continue
 		}
-		data, err := it.read.wait()
-		if err != nil {
+		if s.excludes != nil && walkExcluded(s.excludes, relBelow(s.root, path), name) {
 			continue
 		}
-		if err := s.searchData(it.path, data, false); err != nil {
-			return err
+		if s.skip(ig, apath, name, isDir) {
+			continue
+		}
+		switch {
+		case isDir:
+			if !s.walk(path, apath, s.rules.newIgnoreDir(ig, apath), out, done) {
+				return false
+			}
+		case e.Type().IsRegular():
+			select {
+			case out <- walkFile{path: path, read: readAhead(path)}:
+			case <-done:
+				return false
+			}
 		}
 	}
+	return true
 }
 
-// readAheadFiles is how many files of a directory a walk reads ahead of
-// the one it searches. A cold cache serves parallel reads far sooner
-// than one after the other (3.4, plan F5: the cold grep).
+// readAheadFiles is how many files the walk reads ahead of the one the
+// search is on (3.4, plan F5: the cold grep).
 const readAheadFiles = 16
 
 // fileRead is one file read in the background.
