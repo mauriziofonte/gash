@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -145,4 +146,47 @@ func argsObject(args map[string]string) map[string]string {
 // system root (e.g. the hosts file). It is a plain file read, no interop.
 func (b *Bridge) ReadWindowsFile(linuxPath string) ([]byte, error) {
 	return b.sys.ReadFile(linuxPath)
+}
+
+// RunElevated launches a Windows PowerShell that requests elevation for the
+// given command through UAC (Start-Process -Verb RunAs), so a human at the
+// desktop sees and authorizes it. command must be built from validated
+// data, never raw user input. It is the one write path of the bridge and
+// is never reached headless. There is no timeout: the user may take time at
+// the UAC prompt. It reports whether the elevated process ran and exited 0
+// (a cancelled UAC prompt is a non-zero exit).
+func (b *Bridge) RunElevated(ctx context.Context, command string) *Error {
+	if e := b.Available(); e != nil {
+		return e
+	}
+	path, ok := b.Exe(powerShellRel)
+	if !ok {
+		return &Error{Code: CodeNotFound, Details: "Windows PowerShell is not in System32", Hint: "the system drive may not be fully mounted"}
+	}
+	// The outer (non-elevated) shell spawns the elevated child and waits
+	// for it; -Wait makes a cancelled UAC prompt a non-zero exit.
+	inner := "'-NoProfile','-NonInteractive','-Command'," + psQuote(command)
+	outer := "Start-Process -FilePath powershell.exe -Verb RunAs -Wait -ArgumentList " + inner
+	var errb bytes.Buffer
+	res, err := b.run.Run(ctx, runner.Cmd{
+		Path:    b.sys.Path(path),
+		Args:    []string{"-NoLogo", "-NoProfile", "-NonInteractive", "-Command", outer},
+		Options: runner.Options{Env: b.childEnv(), Stderr: &errb},
+	})
+	res.Stderr = errb.Bytes()
+	var se *runner.StartError
+	if errors.As(err, &se) {
+		return &Error{Code: CodeNotFound, Details: se.Error(), Hint: "check that interop works (wsl_doctor)"}
+	}
+	if err != nil || res.ExitCode != 0 {
+		return &Error{Code: CodeElevation, Details: "the elevated action did not complete (the UAC prompt may have been declined)",
+			Hint: "approve the Windows prompt when it appears"}
+	}
+	return nil
+}
+
+// psQuote wraps s as a single-quoted PowerShell string (doubling inner
+// single quotes), so it is data to the launched shell, never code.
+func psQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }

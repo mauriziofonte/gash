@@ -93,6 +93,8 @@ type run struct {
 	since  string
 	max    int
 	port   int
+	dryRun bool
+	yes    bool
 }
 
 func (r *run) tree() *cobra.Command {
@@ -148,8 +150,46 @@ func (r *run) tree() *cobra.Command {
 	file.Flags().IntVarP(&r.max, "limit", "n", 0, "")
 
 	win.AddCommand(info, disk, net, updates, defender, policy, hosts, doctor,
-		services, procs, apps, reg, events, ports, file)
+		services, procs, apps, reg, events, ports, file, r.fixCmd())
 	return win
+}
+
+// fixCmd is `gash win fix`: the one write path, human-only and behind UAC.
+// With no action it lists the allowlist.
+func (r *run) fixCmd() *cobra.Command {
+	fix := &cobra.Command{Use: "fix [ACTION] [ARGS...]",
+		Short: "Apply an elevated Windows correction (human-only, asks for UAC)",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, a []string) error {
+			if len(a) == 0 {
+				return r.fixList(cmd)
+			}
+			return r.doFix(a[0], a[1:])
+		}}
+	fix.Flags().BoolVar(&r.dryRun, "dry-run", false, "print the exact elevated command without running it")
+	fix.Flags().BoolVar(&r.yes, "yes", false, "skip the in-shell question (Windows still asks for UAC)")
+	fix.Flags().BoolVar(&r.asJSON, "json", false, "with --dry-run, emit the command as JSON")
+	return fix
+}
+
+// fixList prints the available corrections.
+func (r *run) fixList(*cobra.Command) error {
+	if r.asJSON {
+		var out []map[string]string
+		for _, a := range fixActions {
+			out = append(out, map[string]string{"action": a.name, "usage": "gash win fix " + a.usage, "description": a.short})
+		}
+		return r.emitJSON(map[string]any{"actions": out})
+	}
+	s := r.style()
+	s.Section(r.c.Stdout, "gash win fix — elevated Windows corrections")
+	rows := []string{"action\tdescription\t"}
+	for _, a := range fixActions {
+		rows = append(rows, a.usage+"\t"+a.short)
+	}
+	s.Table(r.c.Stdout, rows, "--gap", "2")
+	r.say().Note("each action asks for a Windows UAC prompt; add --dry-run to see the exact command")
+	return nil
 }
 
 // bridge builds the Windows bridge once.
