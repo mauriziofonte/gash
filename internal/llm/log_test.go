@@ -54,7 +54,7 @@ func TestLogTime_Formats(t *testing.T) {
 	}
 }
 
-func TestParseSince(t *testing.T) {
+func TestParseSinceLogForms(t *testing.T) {
 	loc := time.UTC
 	now := time.Date(2026, 10, 25, 15, 0, 0, 0, loc)
 	for v, want := range map[string]string{
@@ -67,12 +67,12 @@ func TestParseSince(t *testing.T) {
 		"2026-10-25 14:00:30":    "2026-10-25T14:00:30Z",
 		"2026-10-25T14:00+02:00": "2026-10-25T14:00:00+02:00",
 	} {
-		got, ok := parseSince(v, loc, now)
+		got, ok := parseSince(v, now, loc)
 		require.True(t, ok, v)
 		require.Equal(t, want, got.Format(time.RFC3339), v)
 	}
 	for _, v := range []string{"", "10", "m", "10x", "yesterday", "2026-10-25T", "2026-10-25 14:00 extra", "1h-"} {
-		_, ok := parseSince(v, loc, now)
+		_, ok := parseSince(v, now, loc)
 		require.False(t, ok, v)
 	}
 }

@@ -418,58 +418,6 @@ func logTime(b []byte, loc *time.Location, now time.Time) (time.Time, int, bool)
 	return time.Time{}, 0, false
 }
 
-// parseSince reads --since: a duration back from now (90s, 10m, 2h, 1d,
-// 1w, or a sum such as 1h30m) or an ISO 8601 date or time (a date alone
-// is its midnight; no zone means loc).
-func parseSince(v string, loc *time.Location, now time.Time) (time.Time, bool) {
-	if d, ok := sumDuration(v); ok {
-		return now.Add(-d), true
-	}
-	b := []byte(v)
-	if len(b) == 10 {
-		b = append(b, " 00:00"...)
-	}
-	t, end, ok := isoAt(b, 0, loc)
-	if !ok || end != len(b) {
-		return time.Time{}, false
-	}
-	return t, true
-}
-
-// sumDuration reads N<unit>[N<unit>...] with the units s, m, h, d, w.
-func sumDuration(v string) (time.Duration, bool) {
-	units := map[byte]time.Duration{'s': time.Second, 'm': time.Minute, 'h': time.Hour, 'd': 24 * time.Hour, 'w': 7 * 24 * time.Hour}
-	var total time.Duration
-	i := 0
-	for i < len(v) {
-		j := i
-		for j < len(v) && isDigit(v[j]) {
-			j++
-		}
-		if j == i || j-i > 9 || j == len(v) {
-			return 0, false
-		}
-		u, ok := units[v[j]]
-		if !ok {
-			return 0, false
-		}
-		total += time.Duration(atoi(v[i:j])) * u
-		i = j + 1
-	}
-	return total, i > 0
-}
-
-// logLocation is the zone of timestamps without one: the caller's TZ, or
-// the process's local zone.
-func logLocation(c *invoke.Call) *time.Location {
-	if tz := strings.TrimPrefix(c.Env.Get("TZ"), ":"); tz != "" {
-		if l, err := time.LoadLocation(tz); err == nil {
-			return l
-		}
-	}
-	return time.Local
-}
-
 // log is llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE]
 // [--since T] [--level L] (plan F9): the last lines of a log read from
 // the end, filtered by pattern, time and level.
@@ -479,7 +427,7 @@ func (m *Module) log(c *invoke.Call) int {
 	}
 	o := llmfmt.New(llmfmt.FormatFlag)
 	var p pathTaker
-	spec := logSpec{tail: logTailDefault, level: -1, loc: logLocation(c), now: time.Now()}
+	spec := logSpec{tail: logTailDefault, level: -1, loc: envLocation(c), now: time.Now()}
 	var pats []string
 	since := ""
 	args := c.Args
@@ -541,7 +489,7 @@ func (m *Module) log(c *invoke.Call) int {
 		spec.grep = append(spec.grep, re)
 	}
 	if since != "" {
-		t, ok := parseSince(since, spec.loc, spec.now)
+		t, ok := parseSince(since, spec.now, spec.loc)
 		if !ok {
 			return fail(c, "invalid_duration", since, "Give a duration back from now (30s, 10m, 2h, 1d, 1w) or an ISO 8601 date or time (2026-10-25, 2026-10-25T14:00)")
 		}
