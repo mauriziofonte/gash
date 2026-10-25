@@ -4,6 +4,7 @@ package registry
 
 import (
 	"os"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -225,6 +226,13 @@ func TestRegistry_ReadmeCounts(t *testing.T) {
 		}
 	}
 	helpers := len(CardAliases("git")) - gitAliases
+	if *updateDocs {
+		readme = regexp.MustCompile(`Gash adds \d+ functions and \d+ aliases`).ReplaceAllString(readme,
+			"Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases")
+		readme = regexp.MustCompile(`\d+ read-only JSON functions for agents`).ReplaceAllString(readme,
+			strconv.Itoa(llm)+" read-only JSON functions for agents")
+		require.NoError(t, os.WriteFile("../../README.md", []byte(readme), 0o644))
+	}
 	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
 	require.Contains(t, readme, strconv.Itoa(gitAliases)+" short aliases and "+strconv.Itoa(helpers)+" log helpers")
 	require.Contains(t, readme, strconv.Itoa(llm)+" read-only JSON functions for agents")
@@ -321,6 +329,11 @@ func TestRegistry_ReferenceDocs(t *testing.T) {
 			}
 		}
 		row := "| [" + tp.Name + "](" + tp.Name + ".md) | " + strconv.Itoa(fns) + " | " + strconv.Itoa(aliases) + " | " + tp.Description + " |"
+		if *updateDocs {
+			re := regexp.MustCompile(`(?m)^\| \[` + regexp.QuoteMeta(tp.Name) + `\]\(` + regexp.QuoteMeta(tp.Name) + `\.md\) \|.*\|$`)
+			readme = re.ReplaceAll(readme, []byte(row))
+			require.NoError(t, os.WriteFile("../../docs/reference/README.md", readme, 0o644))
+		}
 		require.True(t, strings.Contains(string(readme), row), "README.md row: %s", row)
 	}
 	require.False(t, strings.Contains(string(readme), "gen-docs"), "README.md names a gen-docs tool")

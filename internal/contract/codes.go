@@ -206,6 +206,12 @@ var codeTable = []Code{
 	// New in 3.4: agent toolkit, text reads (llm_stat, llm_count,
 	// llm_assert, llm_read, llm_log, llm_hash, llm_textstats,
 	// llm_textcheck).
+	{"invalid_range", Retry, "llm", Origin3x},
+	{"invalid_assertion", Retry, "llm", Origin3x},
+	{"invalid_algo", Retry, "llm", Origin3x},
+	{"invalid_short", Retry, "llm", Origin3x},
+	{"invalid_level", Retry, "llm", Origin3x},
+	{"invalid_rule", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, data (llm_db_* formats, llm_json,
 	// llm_csv, llm_config formats, llm_dotenv, llm_date).

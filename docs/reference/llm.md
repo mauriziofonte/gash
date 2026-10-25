@@ -6,7 +6,9 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 
 | Function | Alias | Description |
 |---|---|---|
+| [`llm_assert`](#llm-assert) |  | Check that files hold, lack or count patterns; exit 0 only if all pass |
 | [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
+| [`llm_count`](#llm-count) |  | Count several patterns in several files in one pass per file |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
 | [`llm_db_sample`](#llm-db-sample) |  | Sample rows from a table (default 5 rows) |
@@ -21,13 +23,66 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_git_log`](#llm-git-log) |  | Recent commits (JSON) |
 | [`llm_git_status`](#llm-git-status) |  | Compact git status (JSON) |
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
+| [`llm_hash`](#llm-hash) |  | Hash files in parallel (sha256 or md5) |
 | [`llm_http`](#llm-http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
+| [`llm_log`](#llm-log) |  | Last lines of a log, read from the end, by pattern, time and level |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
 | [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
+| [`llm_read`](#llm-read) |  | Read files, line ranges or the lines around a match, numbered |
+| [`llm_stat`](#llm-stat) |  | Metadata of several paths: type, size, mode, owner, mtime, lines |
 | [`llm_tcp`](#llm-tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
+| [`llm_textcheck`](#llm-textcheck) |  | Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines |
+| [`llm_textstats`](#llm-textstats) |  | Lines, words, characters, bytes, gzip size and longest line of files |
 | [`llm_tls`](#llm-tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
+
+## llm_assert
+
+Check that files hold, lack or count patterns; exit 0 only if all pass
+
+#### Usage
+
+```text
+llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | --occurrences] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--has P                Every FILE holds P (repeatable, as the two below)
+--lacks P              No FILE holds P
+--count P=N            Every FILE holds P exactly N times (the last = splits)
+--regex                Patterns are regular expressions (ripgrep's syntax);
+                       literal text by default
+--lines                --count counts the lines that hold P (default)
+--occurrences          --count counts every occurrence of P
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+# After an edit: the new name is in, the old one is gone, one route
+llm_assert app/A.php app/B.php --has 'NewName' --lacks 'OldName'
+llm_assert routes/web.php --count "Route::get('/health'=1"
+```
+
+#### Notes
+
+```text
+Replaces chains of grep -q / grep -c used as checks, read back by eye.
+Every assertion is checked on every FILE, with the llm_count scanner (one
+read per file). All pass: {"pass":true,"checked":N}, exit 0. Otherwise
+exit 1 and {"pass":false,"checked":N,"failed":[{"file","check","found"}]},
+check as has:P, lacks:P or count:P=N; a FILE that cannot be read fails as
+{"file","error"} (file_not_found, not_a_file, timeout). Secret files are
+refused (secret_file_blocked, FATAL); a bad --count is invalid_assertion.
+```
+
+See also: `llm_count`
 
 ## llm_config
 
@@ -62,6 +117,54 @@ YAML comes out as JSON, converted by Gash itself (no yq needed), or
 as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
 ```
+
+## llm_count
+
+Count several patterns in several files in one pass per file
+
+#### Usage
+
+```text
+llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--pat P                A pattern to count (repeatable)
+--regex                Patterns are regular expressions (ripgrep's syntax);
+                       literal text by default
+--lines                Count the lines that hold the pattern, as grep -c
+                       (default)
+--occurrences          Count every occurrence, as grep -o | wc -l
+--format F             tsv, jsonl or table: one row per file and pattern
+                       (file, pat, count); json is the default object
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_count storage/logs/laravel.log --pat ERROR --pat WARNING --pat 'Timeout'
+llm_count a.md b.md --pat '## ' --format tsv
+```
+
+#### Notes
+
+```text
+Replaces grep -c A f; grep -c B f; grep -c C g (one pass per pattern).
+Every pattern is counted in one read of each file (a large file in
+parallel parts). Output: {"FILE":{"P":N,...},...}, files and patterns in
+the order given (repeats dropped). A FILE that cannot be read is
+{"FILE":{"error":"file_not_found"}} (also not_a_file, timeout). A pattern
+never matches across lines; an empty one is missing_pattern, one with a
+line break invalid_filter. Secret files are refused (secret_file_blocked,
+FATAL). For a case-insensitive count use --regex with (?i).
+```
+
+See also: `llm_assert`, `llm_grep`
 
 ## llm_db_explain
 
@@ -539,6 +642,49 @@ line:content); context lines use -, groups are separated by --.
 A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
 
+## llm_hash
+
+Hash files in parallel (sha256 or md5)
+
+#### Usage
+
+```text
+llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--algo sha256|md5      The digest (default sha256)
+--short N              Keep the first N hex digits
+--format F             json (default), jsonl, tsv or table
+--head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--width N              Cut values at N columns
+-j N, --jobs N         Files hashed at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_hash dist/app.js dist/app.css --short 12
+llm_hash backup.tar --algo md5
+```
+
+#### Notes
+
+```text
+Replaces sha256sum f | cut -c1-12 and md5sum f, file by file.
+Output: [{"p","sha256","size"}] in input order (the key is "md5" with
+--algo md5). A PATH that cannot be hashed keeps its row with null digest
+and size and an "error" (file_not_found, not_a_file, path_unreadable,
+timeout); the error column appears only then. Secret files are hashed: a
+digest shows no content.
+```
+
+See also: `llm_stat`
+
 ## llm_http
 
 Probe several URLs at once: status, timings, headers, JSON value (JSON)
@@ -624,6 +770,59 @@ SSL_CERT_FILE / SSL_CERT_DIR.
 ```
 
 See also: `llm_tls`, `llm_tcp`, `llm_dns`
+
+## llm_log
+
+Last lines of a log, read from the end, by pattern, time and level
+
+#### Usage
+
+```text
+llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]
+```
+
+#### Options
+
+```text
+--tail N, -n N         The last N selected lines (default 50)
+--last-match RE        Lines that match RE (ripgrep's syntax); with -n N, the
+                       last N matches. Same as --grep RE
+--grep RE              Keep the lines that match RE (repeatable: any one)
+--since T              Entries at or after T: a duration back from now (30s,
+                       10m, 2h, 1d, 1w) or an ISO 8601 date or time
+--level L              Entries at level L or more severe: trace, debug,
+                       info, notice, warning, error, critical, alert,
+                       emergency (warn, err, fatal, ... are read too)
+--width N              Cut each line at N columns
+--format F             json, jsonl, tsv or table: rows {"line","ts",
+                       "level","text"} (line numbers cost a count pass)
+```
+
+#### Examples
+
+```bash
+llm_log storage/logs/laravel.log --last-match ERROR -n 20
+llm_log /var/log/nginx/error.log --since 1h --level error --width 300
+```
+
+#### Notes
+
+```text
+Replaces tail -n N log | cut -c1-W and grep X log | tail -N.
+The file is read backwards in 64 KiB blocks, so the cost is the size of
+the answer, not of the log. Lines print in file order, as they are. An
+entry is a line with a timestamp or a level and the lines below it with
+neither (a stack trace): --since and --level keep or drop whole entries,
+--grep single lines. Timestamps read: ISO 8601 (also [bracketed], as
+Laravel and Monolog write it), syslog (Oct 25 14:02:01), nginx and Apache
+access ([25/Oct/2026:14:02:01 +0000]) and error logs, and an ISO time in
+the first 64 bytes (JSON lines). A time without a zone is local (TZ).
+With --since the walk stops at the first older entry and a cut by --tail
+is marked "[... K lines omitted]". Secret files are refused (FATAL),
+binary ones binary_file; a bad T is invalid_duration.
+```
+
+See also: `llm_read`
 
 ## llm_ports
 
@@ -716,6 +915,111 @@ llm_project /var/www/myapp
 
 See also: `llm_deps`
 
+## llm_read
+
+Read files, line ranges or the lines around a match, numbered
+
+#### Usage
+
+```text
+llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]
+```
+
+#### Options
+
+```text
+PATH:A-B               Lines A to B of that file (also PATH:A:B, PATH:A-)
+--lines A:B            Lines A to B of every PATH without its own range
+                       (repeatable; A-B and A,B too, A: and :B leave an end
+                       open)
+--around RE            The lines that match RE (ripgrep's syntax) and their
+                       context (repeatable)
+-C N, --context N      Context lines around each match (default 3)
+--max-bytes N          Content bytes printed per file (default 262144)
+--head N, --tail N     The first / last N selected lines of each file
+                       (--max-lines N is --head N)
+--width N              Cut each line at N columns
+--format F             json, jsonl, tsv or table: rows {"file","line","text"}
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+# Locate and read in one call
+llm_read app/Http/Kernel.php --around 'protected \$middleware' -C 10
+
+# Two ranges of two files
+llm_read src/a.php:120-180 src/b.php:1-40
+
+# The end of a file
+llm_read CHANGELOG.md --tail 30
+```
+
+#### Notes
+
+```text
+Replaces grep -n X f, then sed -n A,Bp f (two calls), and cat a b.
+Each run of consecutive lines is a block "==> FILE:A-B <==", each line N:
+then its text (N- for a context line of --around); a cut is marked
+"[... K lines omitted]". A file with nothing selected prints its header
+and why ([no match in N lines], [empty file]). PATH:A-B is read as a range
+only when PATH:A-B itself does not exist. Secret files are refused
+(secret_file_blocked, FATAL, as llm_config), binary files binary_file, a
+missing file file_not_found, a bad range invalid_range, before anything is
+printed.
+```
+
+See also: `llm_grep`, `llm_log`
+
+## llm_stat
+
+Metadata of several paths: type, size, mode, owner, mtime, lines
+
+#### Usage
+
+```text
+llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--lines                Count the lines of regular files under 64 MiB
+--follow               Describe what symlinks point to; target is the
+                       resolved path
+--format F             tsv (default), json, jsonl or table
+--head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--width N              Cut output lines at N columns
+-j N, --jobs N         Paths read at a time (default: the CPU count)
+--timeout S            Time limit per path (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_stat composer.json vendor storage/logs/laravel.log --lines
+llm_stat public/storage --follow --format json
+```
+
+#### Notes
+
+```text
+Replaces ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e.
+One row per PATH in input order: p, t (f d l p s c b, or missing), size,
+mode (octal, as chmod reads it), owner (user:group), mtime (UTC, ISO
+8601), lines with --lines (null for a directory, a link, a file of 64 MiB
+or more). target is the link text of a symlink, or with --follow the
+resolved path (t "l" then means it could not be followed). A missing path
+is a row, not an error. Secret files: metadata yes, lines no (error
+secret_file_blocked in that row). Columns lines, target and error appear
+only when they apply. TSV by default: the JSON objects of --format json
+repeat every key on every row.
+```
+
+See also: `llm_hash`, `llm_textstats`
+
 ## llm_tcp
 
 Can a TCP connection be opened to each HOST:PORT (JSON)
@@ -755,6 +1059,98 @@ timeout (filtered), unreachable, dns_not_found, dns_error.
 ```
 
 See also: `llm_ports`, `llm_tls`, `llm_http`
+
+## llm_textcheck
+
+Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines
+
+#### Usage
+
+```text
+llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--rules LIST           The rules to run, comma-separated (default:
+                       non-ascii,crlf,bom,trailing-ws,final-newline,
+                       mixed-indent)
+--max-lines N          Issues listed (default 100; --head N is the same,
+                       --tail N keeps the last N)
+--width N              Cut samples at N columns
+--format F             jsonl, tsv or table: one row per issue; json is the
+                       default object
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_textcheck README.md docs/*.md
+llm_textcheck src/*.php --rules trailing-ws,tabs,long-lines=120
+```
+
+#### Notes
+
+```text
+Replaces grep -nP '[^\x00-\x7F]' f, file -i f and python unicodedata
+scripts. One read per file. Output: {"files":N,"issues":[{"file","line",
+"rule","sample"}]}, plus "counts" by rule when there are issues,
+"truncated" when the list was cut and "skipped" ([{"file","reason"}]:
+binary_file, file_not_found, not_a_file) when files were skipped. No
+issue: {"files":N,"issues":[]}. non-ascii names the code points
+(U+200B, U+00E9 e-acute); crlf is one issue per file ("K of N lines");
+bom, mixed-indent (the first line indented unlike the first indented
+line) and final-newline are once per file. Secret files are refused
+(FATAL); an unknown rule is invalid_rule.
+```
+
+See also: `llm_textstats`
+
+## llm_textstats
+
+Lines, words, characters, bytes, gzip size and longest line of files
+
+#### Usage
+
+```text
+llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--format F             json (default), jsonl, tsv or table
+--head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--width N              Cut values at N columns
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_textstats README.md docs/guide.md
+```
+
+#### Notes
+
+```text
+Replaces wc -w f; wc -c f; gzip -c f | wc -c (three processes per file).
+One read per file. Output: [{"p","lines","words","chars","bytes","gzip",
+"max_line"}]: lines counts a last line without a newline, words as wc -w
+(in a Markdown file without fenced code blocks and front matter), chars
+are UTF-8 characters, gzip is the gzip -c size at level 6 (null from 64
+MiB), max_line the longest line in characters. A file that is binary,
+secret, missing or not a file keeps its row with null values and an
+"error" (binary_file, secret_file_blocked, file_not_found, not_a_file).
+```
+
+See also: `llm_stat`, `llm_textcheck`
 
 ## llm_tls
 

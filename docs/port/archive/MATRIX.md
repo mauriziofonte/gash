@@ -1038,6 +1038,14 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_assert | function | pure output | new | grep -q / grep -c chains used as checks: every assertion on every file, exit 0 only if all pass (plan F7) | gash llm_assert | TestAssert_PassAndFail, TestTextReads_TimeoutIsAField, llm_assert.txtar |
+| llm_count | function | pure output | new | grep -c A f; grep -c B f: every pattern in one pass per file (plan F6) | gash llm_count | TestCount_Matrix, TestCount_Errors, TestCount_LargeFileParts, TestLineBounds, llm_count.txtar |
+| llm_hash | function | pure output | new | sha256sum / md5sum file by file: parallel digests (plan F10) | gash llm_hash | TestHash_Digests, TestHash_MatchesCoreutils, llm_hash.txtar |
+| llm_log | function | pure output | new | tail -n N log, grep X log \| tail: reverse block reading with --grep, --since, --level (plan F9) | gash llm_log | TestLogTime_Formats, TestParseSince, TestReverseLines, TestLog_Selections, TestLog_Errors, llm_log.txtar |
+| llm_read | function | pure output | new | grep -n then sed -n A,Bp (two calls), cat a b: ranges and --around in one call (plan F8) | gash llm_read | TestRead_Blocks, TestRead_Rows, TestRead_Refusals, llm_read.txtar |
+| llm_stat | function | pure output | new | ls -la, [ -f ], wc -l, readlink -f over several paths (plan F1) | gash llm_stat | TestStat_RowsInInputOrder, TestStat_Links, TestStat_SecretMetadataButNoLines, llm_stat.txtar |
+| llm_textcheck | function | pure output | new | grep -nP '[^\x00-\x7F]', file -i: text hygiene rules in one pass (plan F12) | gash llm_textcheck | TestTextcheck, TestNonASCIISample, llm_textcheck.txtar |
+| llm_textstats | function | pure output | new | wc -w; wc -c; gzip -c \| wc -c: text statistics in one read (plan F11) | gash llm_textstats | TestTextstats, TestCountWords, llm_textstats.txtar |
 
 ### Data (D1, D3-D6, V3, V4)
 

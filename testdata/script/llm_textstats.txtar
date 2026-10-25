@@ -1,0 +1,38 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_textstats (new in 3.4, plan F11): lines, words, characters, bytes,
+# gzip size and the longest line of each file in one read; Markdown words
+# leave out fenced code blocks and the front matter; a binary file keeps
+# its row with an error.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: one file, wc's numbers
+exec bash -c 'source "$GASH_SH"; llm_textstats notes.txt'
+stdout '^\[\{"p":"notes.txt","lines":2,"words":6,"chars":30,"bytes":31,"gzip":[0-9]+,"max_line":16\}\]$'
+
+# --- directly: Markdown words without code and front matter
+exec gash llm_textstats doc.md --format tsv
+stdout '^doc.md\t8\t4\t'
+
+# --- a binary file and a missing one keep their rows
+exec bash -c 'printf "a\0b" > bin.dat'
+exec gash llm_textstats bin.dat nope --format jsonl
+stdout '"p":"bin.dat","lines":null.*"error":"binary_file"'
+stdout '"p":"nope",.*"error":"file_not_found"'
+
+-- notes.txt --
+café au lait
+second line here
+-- doc.md --
+---
+title: x y z
+---
+# Hello world
+```
+code words here
+```
+Three

@@ -1,0 +1,50 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_stat (new in 3.4, plan F1): metadata of several paths in one call, in
+# input order; a missing path is a row (t "missing"), not an error; --lines
+# counts lines (a last line without a newline counts); secret files give
+# their metadata but not their lines; TSV by default, JSON with --format.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: TSV, header first, rows in input order
+exec bash -c 'source "$GASH_SH"; llm_stat a.txt missing.txt dir --lines'
+stdout '^p\tt\tsize\tmode\towner\tmtime\tlines$'
+stdout '^a\.txt\tf\t14\t[0-7]+\t[^\t]+:[^\t]+\t20[0-9-]+T[0-9:]+Z\t3$'
+stdout '^missing\.txt\tmissing\t\\N\t\\N\t\\N\t\\N\t\\N$'
+stdout '^dir\td\t'
+! stderr .
+
+# --- directly: the same answer as JSON objects
+exec gash llm_stat a.txt missing.txt --format json
+stdout '^\[\{"p":"a\.txt","t":"f","size":14,"mode":"[0-7]+","owner":"[^"]+","mtime":"[^"]+"\},\{"p":"missing\.txt","t":"missing","size":null,'
+
+# --- a symlink shows its link text; --follow describes the target
+symlink link -> a.txt
+exec gash llm_stat link --format jsonl
+stdout '"t":"l".*"target":"a.txt"'
+exec gash llm_stat link --follow --format jsonl
+stdout '"t":"f","size":14,.*"target":"/[^"]*/a.txt"'
+
+# --- secret files: metadata yes, lines no
+exec gash llm_stat .env --lines --format jsonl
+stdout '"t":"f","size":4,.*"lines":null,"error":"secret_file_blocked"'
+
+# --- refusals and bad calls
+! exec gash llm_stat ../etc
+stderr '"error":"path_traversal_blocked"'
+! exec gash llm_stat
+stderr '"error":"missing_file"'
+! exec gash llm_stat a.txt --bogus
+stderr '"error":"unknown_option"'
+
+-- a.txt --
+one
+two
+three
+-- .env --
+K=v
+-- dir/keep --
