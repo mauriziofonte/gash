@@ -117,8 +117,15 @@ rc=0
 source "$GASH_SH"
 gash_username >/dev/null
 # Ctrl-C reaches the shell and the server (one process group); the call
-# ends with 130 and the shell goes on.
-( sleep 1; kill -INT $$ "$__GASH_SRV_PID" ) &
+# ends with 130 and the shell goes on. The signal goes once the call runs
+# its command.
+(
+    for _ in {1..300}; do
+        pgrep -x -P "$__GASH_SRV_PID" tail >/dev/null && break
+        sleep 0.1
+    done
+    kill -INT $$ "$__GASH_SRV_PID"
+) &
 llm_exec 'tail -f /dev/null'
 rc=$?
 ((__GASH_SRV_DECLINED)) && echo "int rc=$rc declined" || echo "int rc=$rc served"
