@@ -1,0 +1,33 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash agent-functions (new in 3.4, plan S7): every llm_* (family read)
+# and agent_* (family write) function the binary runs, for a wrapper that
+# calls gash <fn> directly: name, family, short, the USAGE lines, the
+# flags they name and the raw shape the function replaces (every agent
+# function records one; internal/registry TestRouting checks it).
+#
+# covers: none (gash agent-functions is new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+
+# --- --json from the sourced shell's gash function
+exec bash -c 'source "$GASH_SH"; gash agent-functions --json'
+stdout '^\[\{"name":"agent_'
+stdout '\{"name":"llm_lint","family":"read","short":"Syntax-check files by extension[^"]*","usage":\["llm_lint \[PATH\.\.\.\][^"]*"\],"flags":\["--ext","--php","--node","-j","--timeout","--max-lines","--width","--absolute"\],"replaces":"for f in src/\*\.php; do php -l '
+stdout '\{"name":"llm_runtime","family":"read","short":"[^"]*","usage":\["llm_runtime php\|node\|composer\|npm\|npx VERSION"\],"flags":\[\],"replaces":"[^"]+"\}'
+stdout '"name":"llm_find","family":"read",[^}]*"replaces":"find '
+! stdout '"replaces":null'
+stdout '"family":"write"'
+! stderr .
+
+# --- directly: a table without --json
+exec gash agent-functions
+stdout '^llm_lint +read +Syntax-check files'
+stdout '^agent_[a-z_]+ +write +'
+
+# --- every listed function runs as gash <fn>
+exec gash llm_runtime --help
+stdout 'llm_runtime php\|node'
+
+! exec gash agent-functions --yaml
+stderr '"error":"unknown_option"'

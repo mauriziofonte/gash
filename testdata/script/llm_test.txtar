@@ -1,0 +1,66 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_test (new in 3.4, plan L2): a test command run as given, its output
+# summarized (counts, each failure's file:line and message), its exit
+# status kept. The runner is a stub on PATH that prints a pytest report.
+# Output no parser reads gives its last lines with "parsed":false; options
+# come before --, every word after it is CMD's.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env PATH=$WORK/bin:$PATH
+chmod 0755 bin/pytest
+chmod 0755 bin/green
+
+# --- through the sourced shell: the summary, CMD's status
+exec bash -c 'source "$GASH_SH"; llm_test -- pytest -q; echo "rc=$?"'
+stdout '^\{"runner":"pytest","passed":2,"failed":1,"skipped":0,"duration_s":[0-9.]+,"failures":\[\{"name":"test_b","file":"tests/test_a\.py","line":5,"message":"assert 1 == 2"\}\],"parsed":true,"exit_code":1\}$'
+stdout '^rc=1$'
+! stderr .
+
+# --- directly: silent when green with --fail-only
+exec gash llm_test --fail-only -- green
+! stdout .
+exec gash llm_test -- green
+stdout '"runner":"pytest","passed":4,"failed":0'
+
+# --- output no parser reads: the last lines; --help after -- is CMD's
+exec bash -c 'gash llm_test --tail 2 -- bash -c "echo one; echo two; echo \$0; exit 3" --help; echo "rc=$?"'
+stdout '^\{"runner":null,"duration_s":[0-9.]+,"parsed":false,"exit_code":3,"tail":\["two","--help"\]\}$'
+stdout '^rc=3$'
+
+# --- errors before CMD runs
+! exec gash llm_test --
+stderr '"error":"empty_command"'
+! exec gash llm_test --runner nose -- pytest
+stderr '"error":"unknown_runner"'
+exec bash -c 'gash llm_test -- no-such-runner-zz; echo "rc=$?"'
+stderr '"error":"command_not_found"'
+stdout '^rc=127$'
+
+-- bin/pytest --
+#!/bin/sh
+cat <<'OUT'
+============================= test session starts ==============================
+collected 3 items
+
+tests/test_a.py .F.                                                      [100%]
+
+=================================== FAILURES ===================================
+___________________________________ test_b _____________________________________
+
+    def test_b():
+>       assert 1 == 2
+E       assert 1 == 2
+
+tests/test_a.py:5: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_a.py::test_b - assert 1 == 2
+========================= 1 failed, 2 passed in 0.03s ==========================
+OUT
+exit 1
+-- bin/green --
+#!/bin/sh
+echo '============================== 4 passed in 0.02s ==============================='

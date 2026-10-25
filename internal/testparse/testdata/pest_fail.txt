@@ -1,0 +1,40 @@
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true                                                    0.01s
+
+   FAIL  Tests\Feature\UserTest
+  ✓ it lists users                                                       0.05s
+  ⨯ it creates a user                                                    0.07s
+  ⨯ it deletes a user                                                    0.02s
+  … it archives a user → todo
+   WARN  Tests\Feature\SkipTest
+  - it is skipped → requires redis
+
+  ────────────────────────────────────────────────────────────────────────────
+   FAILED  Tests\Feature\UserTest > it creates a user
+  Failed asserting that 500 is identical to 201.
+
+  at tests/Feature/UserTest.php:18
+     14▕ it('creates a user', function () {
+     15▕     $response = $this->post('/users', ['name' => 'x']);
+     16▕
+  ➜  18▕     expect($response->status())->toBe(201);
+     19▕ });
+
+  1   tests/Feature/UserTest.php:18
+
+  ────────────────────────────────────────────────────────────────────────────
+   FAILED  Tests\Feature\UserTest > it deletes a user          RuntimeException
+  Record not found
+
+  at app/Models/User.php:44
+     40▕     public function remove(): void
+  ➜  44▕         throw new RuntimeException('Record not found');
+
+  1   app/Models/User.php:44
+  2   tests/Feature/UserTest.php:25
+
+
+  Tests:    2 failed, 1 skipped, 1 todo, 2 passed (5 assertions)
+  Duration: 0.21s
+

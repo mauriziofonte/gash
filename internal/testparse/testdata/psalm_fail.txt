@@ -1,0 +1,20 @@
+Target PHP version: 8.3 (inferred from composer.json).
+Scanning files...
+Analyzing files...
+
+░░░E░
+
+ERROR: UndefinedMethod - src/Repo.php:24:16 - Method App\Repo::findAll does not exist (see https://psalm.dev/022)
+        return $this->findAll();
+
+
+ERROR: InvalidReturnType - src/User.php:12:21 - The declared return type 'int' for App\User::id is incorrect, got 'string' (see https://psalm.dev/011)
+    public function id(): int
+
+
+------------------------------
+2 errors found
+------------------------------
+
+Checks took 1.52 seconds and used 98.123MB of memory
+Psalm was able to infer types for 97.5% of the codebase

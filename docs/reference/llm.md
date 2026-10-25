@@ -27,16 +27,20 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
 | [`llm_hash`](#llm-hash) |  | Hash files in parallel (sha256 or md5) |
 | [`llm_http`](#llm-http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
+| [`llm_lint`](#llm-lint) |  | Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py) |
 | [`llm_log`](#llm-log) |  | Last lines of a log, read from the end, by pattern, time and level |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
 | [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
 | [`llm_read`](#llm-read) |  | Read files, line ranges or the lines around a match, numbered |
+| [`llm_runtime`](#llm-runtime) |  | Resolve a node major or php version to its binary, without nvm.sh |
 | [`llm_stat`](#llm-stat) |  | Metadata of several paths: type, size, mode, owner, mtime, lines |
 | [`llm_tcp`](#llm-tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
+| [`llm_test`](#llm-test) |  | Run a test command and summarize it: counts and each failure's file:line |
 | [`llm_textcheck`](#llm-textcheck) |  | Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines |
 | [`llm_textstats`](#llm-textstats) |  | Lines, words, characters, bytes, gzip size and longest line of files |
 | [`llm_tls`](#llm-tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
+| [`llm_tools`](#llm-tools) |  | Path and version of each tool, probed in parallel; php and node per version |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
 
 ## llm_assert
@@ -1060,6 +1064,65 @@ SSL_CERT_FILE / SSL_CERT_DIR.
 
 See also: `llm_tls`, `llm_tcp`, `llm_dns`
 
+## llm_lint
+
+Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py)
+
+#### Usage
+
+```text
+llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]
+```
+
+#### Options
+
+```text
+--ext LIST             Languages to check in directories (default: all):
+                       php, sh (also .bash), js (.mjs, .cjs), json, yaml
+                       (.yml), toml, py
+--php VER              The php that checks .php files: 8.4, 8 (gash
+                       runtime's resolution; default: php on PATH)
+--node MAJOR           The node that checks .js files: 24 (default: node on
+                       PATH)
+-j, --jobs N           Checks at a time (default: the CPU count)
+--timeout S            Time limit of one checker process (default 60s)
+--max-lines N          Failures listed (default 100); --head N and --tail N
+                       keep the first and last N, "truncated" counts the rest
+--width N              Cut file names and messages at N columns
+--relative, --absolute File paths relative to their PATH (default) or
+                       absolute
+```
+
+#### Examples
+
+```bash
+# Every PHP file of src with php 8.4
+llm_lint src --ext php --php 8.4
+
+# A whole project, every language
+llm_lint .
+
+# Two files
+llm_lint deploy.sh config/app.yaml
+```
+
+#### Notes
+
+```text
+Replaces for f in *.php; do php -l "$f"; done, bash -n and node --check
+loops. Output: {"checked":N,"failed":K,"failures":[{"file","line","error"}]}.
+php runs once per chunk of files (php -l a b c), bash -n once per file, node
+once per chunk (each file compiled as node loads it; a failure is re-checked
+with node --check for its message), python compiles in one process (no .pyc
+written); JSON, YAML and TOML are parsed by gash (tsconfig.json and .vscode
+files may hold comments). Directories skip node_modules, vendor, .git and
+__pycache__ and never follow symlinks; secret files are skipped there and
+refused as arguments. A FILE argument with another extension is
+unsupported_file. A missing checker is runtime_not_installed (STOP).
+```
+
+See also: `llm_test`, `llm_runtime`
+
 ## llm_log
 
 Last lines of a log, read from the end, by pattern, time and level
@@ -1261,6 +1324,42 @@ printed.
 
 See also: `llm_grep`, `llm_log`
 
+## llm_runtime
+
+Resolve a node major or php version to its binary, without nvm.sh
+
+#### Usage
+
+```text
+llm_runtime php|node|composer|npm|npx VERSION
+```
+
+#### Examples
+
+```bash
+# The node 24 binary
+llm_runtime node 24
+
+# composer under php 8.4
+llm_runtime composer 8.4
+```
+
+#### Notes
+
+```text
+Replaces source ~/.nvm/nvm.sh; nvm use 24; which node (and php84 wrappers).
+Output: {"runtime":"node","request":"24","path":".../bin/node","version":"24.1.0"};
+composer adds "php" (the binary it runs under), npm and npx report their
+node's version. VERSION is a prefix: 24, 24.1, 8.4, 8: the newest installed
+version that starts with it. node comes from the nvm tree
+(${NVM_DIR:-~/.nvm}/versions/node), then the node on PATH; php from
+/usr/bin/phpX.Y and /usr/local/bin/phpX.Y, then the php on PATH. Not
+installed: runtime_not_installed (STOP) with the installed versions. The
+JSON form of gash runtime; it reads gash's runtime cache, never writes it.
+```
+
+See also: `llm_tools`, `node_detect_version`, `php_detect_version`
+
 ## llm_stat
 
 Metadata of several paths: type, size, mode, owner, mtime, lines
@@ -1348,6 +1447,60 @@ timeout (filtered), unreachable, dns_not_found, dns_error.
 ```
 
 See also: `llm_ports`, `llm_tls`, `llm_http`
+
+## llm_test
+
+Run a test command and summarize it: counts and each failure's file:line
+
+#### Usage
+
+```text
+llm_test [--runner auto|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...
+```
+
+#### Options
+
+```text
+--runner auto|NAME     The output format: pest, phpunit, phpstan, psalm,
+                       vitest, jest, mocha, pytest, go, cargo, playwright
+                       (default auto: from CMD and the output)
+--fail-only            Print nothing when CMD exits 0 with no failure
+--max-lines N          Failures listed (default 50; --head N, --tail N);
+                       unparsed output: the last N lines (default 20)
+--width N              Cut messages at N columns (default 200)
+--timeout S            End CMD after S (default: no limit)
+--relative, --absolute Paths below the working directory relative (default)
+                       or as the runner printed them
+```
+
+#### Examples
+
+```bash
+# Pest with a filter
+llm_test -- vendor/bin/pest --filter UserTest
+
+# A package script; silent when green
+llm_test --fail-only -- npm test
+
+# Go with the JSON reporter
+llm_test -- go test -json ./...
+```
+
+#### Notes
+
+```text
+Replaces pest | grep -E 'Tests:|FAIL' and npm test | tail -20. CMD runs as
+given (bash -c 'cd app && vendor/bin/pest' works), stdout and stderr
+merged, stdin /dev/null; the exit status is CMD's. Output:
+{"runner","passed","failed","skipped","duration_s","failures":[{"name",
+"file","line","message"}],"parsed":true,"exit_code"}; analyzer findings
+(phpstan, psalm) are failures. Output no parser reads:
+{"runner":null,"duration_s","parsed":false,"exit_code","tail":[...]}.
+Options come before --; a program not on PATH is command_not_found. CMD is
+the project's own code: llm_test runs it without llm_exec's rails.
+```
+
+See also: `llm_lint`
 
 ## llm_textcheck
 
@@ -1490,6 +1643,49 @@ error is null, or connection_refused, timeout, dns_not_found, tls_error
 ```
 
 See also: `llm_http`, `llm_tcp`
+
+## llm_tools
+
+Path and version of each tool, probed in parallel; php and node per version
+
+#### Usage
+
+```text
+llm_tools [NAME...] [-j N] [--timeout S]
+```
+
+#### Options
+
+```text
+-j, --jobs N           Probes at a time (default 8)
+--timeout S            Time limit of one probe (default 10s)
+```
+
+#### Examples
+
+```bash
+# The usual toolchain
+llm_tools
+
+# A few tools
+llm_tools git python3 rg php
+```
+
+#### Notes
+
+```text
+Replaces git --version; php -v | head -1; command -v rg. Output:
+{"git":{"version":"2.43.0","path":"/usr/bin/git"},"rg":null,
+"php":[{"version":"8.3.6","path":"/usr/bin/php8.3"}]}, keys in the order
+asked. php and node list every installed version (/usr/bin/phpX.Y, the nvm
+tree, the one on PATH), oldest first; a tool not on PATH is null, one whose
+probe prints no version has "version":null. Each NAME is a plain program
+name, probed with --version (go version, ssh -V, java -version; npm and npx
+read npm's package.json). Without NAME: git php composer node npm python3 go
+rg jq docker.
+```
+
+See also: `llm_runtime`, `llm_env`
 
 ## llm_tree
 

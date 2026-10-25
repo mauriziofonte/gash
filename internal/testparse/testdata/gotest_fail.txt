@@ -1,0 +1,12 @@
+--- FAIL: TestParse (0.00s)
+    --- FAIL: TestParse/empty (0.00s)
+        parse_test.go:21: Parse("") = nil, want error
+FAIL
+FAIL	example.com/app/parser	0.004s
+--- FAIL: TestSum (0.00s)
+    sum_test.go:9: Sum(1, 2) = 4, want 3
+FAIL
+FAIL	example.com/app/mathx	0.002s
+ok  	example.com/app/util	0.003s
+?   	example.com/app/cmd	[no test files]
+FAIL

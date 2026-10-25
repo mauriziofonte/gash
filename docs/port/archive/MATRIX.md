@@ -1078,6 +1078,10 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_lint | function | pure output | new | Syntax checks by extension in parallel, php batched, runtimes resolved by gash (L1) | gash llm_lint | TestLLMLintDataAndShell, TestLLMLintInterpreters, TestLLMLintErrors, llm_lint.txtar |
+| llm_runtime | function | pure output | new | node majors and php versions resolved without nvm.sh, the JSON form of gash runtime (V2, S8) | gash llm_runtime | TestLLMRuntime, TestResolveNodeFromNVM, TestResolvePHPAndComposer, TestRuntimeCache, llm_runtime.txtar |
+| llm_test | function | pure output | new | Test and analyzer output summarized: counts and file:line per failure, the exit status kept (L2) | gash llm_test | TestLLMTest, TestParseFixtures, llm_test.txtar |
+| llm_tools | function | pure output | new | Path and version per tool, probed in parallel, php and node per installed version (V1) | gash llm_tools | TestLLMTools, llm_tools.txtar |
 
 ### Remote (S5, R1-R3, R5, D2, E2)
 

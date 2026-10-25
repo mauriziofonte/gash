@@ -68,6 +68,10 @@ var llmOptions = map[string][]string{
 	// 3.4 processes, waiting and services.
 
 	// 3.4 runtimes, lint and tests.
+	"llm_lint":    {"--ext", "--php", "--node", "-j", "--jobs", "--timeout", "--max-lines", "--head", "--tail", "--width", "--relative", "--absolute"},
+	"llm_runtime": {},
+	"llm_test":    {"--runner", "--fail-only", "--max-lines", "--head", "--tail", "--width", "--timeout", "--relative", "--absolute"},
+	"llm_tools":   {"-j", "--jobs", "--timeout"},
 
 	// 3.4 remote.
 }

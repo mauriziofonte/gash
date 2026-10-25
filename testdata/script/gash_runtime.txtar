@@ -1,0 +1,52 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash runtime (new in 3.4, plan S8): a runtime version resolved to its
+# binary without nvm.sh, the llm_runtime object or with --path the path
+# alone. The resolution is cached in $XDG_CACHE_HOME/gash/runtimes.json and
+# a change to the nvm tree invalidates it: a node installed after the
+# first call is found by the next one. A fake nvm tree under $HOME.
+#
+# covers: none (gash runtime is new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env XDG_CACHE_HOME=$WORK/cache
+chmod 0755 home/.nvm/versions/node/v24.1.0/bin/node
+chmod 0755 new-node
+
+# --- through the sourced shell's gash function
+exec bash -c 'source "$GASH_SH"; gash runtime node 24'
+stdout '^\{"runtime":"node","request":"24","path":"[^"]*/home/\.nvm/versions/node/v24\.1\.0/bin/node","version":"24\.1\.0"\}$'
+! stderr .
+exists cache/gash/runtimes.json
+
+# --- directly, --path: the path alone
+exec gash runtime node 24 --path
+stdout '^.*/home/\.nvm/versions/node/v24\.1\.0/bin/node$'
+
+# --- a node installed later: the tree's mtime invalidates the cache
+mkdir home/.nvm/versions/node/v24.9.0/bin
+cp new-node home/.nvm/versions/node/v24.9.0/bin/node
+exec gash runtime node 24 --path
+stdout '/v24\.9\.0/bin/node$'
+
+# --- not installed: STOP, the installed versions, nothing on stdout
+! exec gash runtime node 7
+stderr '"error":"runtime_not_installed","details":"node 7 is not installed; installed: [^"]*24\.1\.0, 24\.9\.0'
+stderr '"action":"STOP"'
+! stdout .
+
+# --- bad words
+! exec gash runtime node
+stderr '"error":"invalid_version"'
+! exec gash runtime node 24 --json
+stderr '"error":"unknown_option"'
+exec gash runtime --help
+stdout '^Usage: gash runtime php\|node\|composer\|npm\|npx VERSION \[--path\]$'
+
+-- home/.nvm/versions/node/v24.1.0/bin/node --
+#!/bin/sh
+echo v24.1.0
+-- new-node --
+#!/bin/sh
+echo v24.9.0

@@ -43,6 +43,15 @@ not use `bash -i` and do not source `~/.gashrc` (the user's entry point).
 Gash still drops colors for most output when stdout is not a terminal; set
 one of them if you parse text.
 
+**Direct invocation, no sourcing.** Every `llm_*` and `agent_*` function
+also runs as `gash <fn> args` (the binary on PATH, no `gash.sh`, no Bash:
+a few ms instead of ~100 ms per call). Given the same working directory
+and the same exported environment, stdout, stderr (error envelopes
+included) and the exit status are those of the sourced function, byte for
+byte (a test compares them); only a shell variable that is not exported
+reaches the sourced function alone. `gash agent-functions --json` lists
+these functions for a wrapper that routes calls directly (3.11).
+
 ## 3. Function catalog
 
 Flags (the signatures below are the registered help's, checked by a test):
@@ -349,6 +358,51 @@ negative once expired.
 ### 3.10 Processes, waiting and services (3.4)
 
 ### 3.11 Runtimes, lint and tests (3.4)
+
+| Function | Output |
+|---|---|
+| `llm_tools [NAME...] [-j N] [--timeout S]` | JSON object, keys in the order asked: `{"version","path"}` per program, `null` when it is not on PATH, `"version":null` when its probe prints none; `php` and `node` are arrays of every installed version, oldest first. Without NAME: git php composer node npm python3 go rg jq docker |
+| `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins |
+| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
+| `llm_test [--runner auto\|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's |
+
+`llm_test` and `gash run` take a command after `--`: the one exception to
+the no-`--` rule of this section. Their options come before `--` (or before
+the first word that is not an option), every word after it belongs to CMD,
+`--help` included. CMD runs as given, without `llm_exec`'s rails: it is the
+project's own test suite (`bash -c 'cd app && vendor/bin/pest'` works);
+stdout and stderr are merged, stdin is `/dev/null`, a program not on PATH
+is `command_not_found` (status 127). Runners: pest, phpunit, phpstan and
+psalm (analyzer findings count as failures), vitest, jest (text or
+`--json`), mocha, pytest, go (text or `-json`), cargo, playwright; `auto`
+picks one from CMD and the output.
+
+`llm_lint` runs `php -l` on batches of files, `bash -n` per shell script,
+node per batch of js files (each compiled as node loads it, CommonJS or ES
+module; a failure is re-checked with `node --check` for its message),
+python `compile()` per batch (no `.pyc` written), and parses JSON (comments
+allowed in `tsconfig.json`, `jsconfig.json` and `.vscode/`), YAML and TOML
+itself. Directories are walked like `llm_find` (no node_modules, vendor,
+.git, \_\_pycache\_\_, no symlinks followed); a secret file is skipped
+there and `secret_file_blocked` as an argument, another extension as an
+argument is `unsupported_file`. A missing checker is
+`runtime_not_installed` (STOP).
+
+`llm_runtime`, `llm_tools` and `llm_lint --php/--node` find node in the
+nvm tree (`${NVM_DIR:-~/.nvm}/versions/node`, without loading nvm.sh), php
+as `/usr/bin/phpX.Y` or `/usr/local/bin/phpX.Y`, then the one on PATH. A
+version that is not installed is `runtime_not_installed` (STOP) naming the
+installed ones: ask the user. They read gash's runtime cache, never write
+it.
+
+Three commands of the binary (run them as `gash WORD`; they are not shell
+functions):
+
+| Command | Effect |
+|---|---|
+| `gash runtime php\|node\|composer\|npm\|npx VERSION [--path]` | The `llm_runtime` object, or with `--path` the path alone; the resolution is cached in `${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json` until the nvm tree or `/usr/bin/php*` change |
+| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime node:24\|php:8.4] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `llm_test` object instead of the output; `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
+| `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
 
 ### 3.12 Remote hosts (3.4)
 
@@ -683,16 +737,20 @@ registry, where each function's entry names the shape it replaces.
 | `grep -rn --include='*.php' X . \| grep -v vendor` | `llm_grep` |
 | `sha256sum f \| cut -c1-12; md5sum f` | `llm_hash` |
 | `for u in ...; do curl -s -o /dev/null -w '%{http_code}' $u; done; curl -sI URL \| grep -i location; curl -s -H "$AUTH" URL \| jq .status` | `llm_http` |
+| `for f in src/*.php; do php -l "$f"; done; bash -n x.sh; node --check f.js` | `llm_lint` |
 | `tail -n 50 app.log \| cut -c1-200; grep ERROR app.log \| tail -20` | `llm_log` |
 | `ss -tlnp; lsof -i :8080` | `llm_ports` |
 | `ps aux \| grep X \| grep -v grep` | `llm_procs` |
 | `ls; cat composer.json package.json (what kind of project is this)` | `llm_project` |
 | `grep -n X f; sed -n A,Bp f; cat -n f \| sed -n A,Bp; cat a b` | `llm_read` |
+| `source ~/.nvm/nvm.sh; nvm use 24; node ...; php84 ...` | `llm_runtime` |
 | `ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e` | `llm_stat` |
 | `nc -z h p; timeout 2 bash -c '</dev/tcp/h/p'` | `llm_tcp` |
+| `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20` | `llm_test` |
 | `grep -nP '[^\x00-\x7F]' f; file -i f` | `llm_textcheck` |
 | `wc -w f; wc -c f; gzip -c f \| wc -c` | `llm_textstats` |
 | `echo \| openssl s_client -connect h:443 -servername h \| openssl x509 -noout -dates -subject` | `llm_tls` |
+| `php84 -v \| head -1; node24 --version; git --version; command -v rg` | `llm_tools` |
 | `tree -L 2 -I node_modules; ls -R` | `llm_tree` |
 | `git add A B && git commit -m S && git push && git log -1` | `agent_git_commit` |
 | `python3 - <<EOF ... s.replace(...) ... EOF; sed -i` | `agent_replace` |

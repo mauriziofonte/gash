@@ -1,0 +1,8 @@
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true                                                    0.01s
+  ✓ it sums                                                              0.01s
+
+  Tests:    2 passed (2 assertions)
+  Duration: 0.08s
+

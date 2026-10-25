@@ -20,6 +20,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/llm"
 	"github.com/mauriziofonte/gash/internal/logs"
 	"github.com/mauriziofonte/gash/internal/remote"
+	"github.com/mauriziofonte/gash/internal/runcmd"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 	"github.com/mauriziofonte/gash/internal/ssh"
 	"github.com/mauriziofonte/gash/internal/sysinfo"
@@ -56,6 +57,7 @@ func Table(extra ...func(*invoke.Table)) *invoke.Table {
 	logs.Register(t)
 	wslcmd.Register(t)
 	wincmd.Register(t)
+	runcmd.Register(t)
 	for _, r := range extra {
 		r(t)
 	}

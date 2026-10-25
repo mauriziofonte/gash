@@ -1,0 +1,31 @@
+   Compiling demo v0.1.0 (/work/demo)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running unittests src/lib.rs (target/debug/deps/demo-1a2b3c)
+
+running 4 tests
+test tests::adds ... ok
+test tests::ignored_case ... ignored
+test tests::subtracts ... FAILED
+test tests::divides ... FAILED
+
+failures:
+
+---- tests::subtracts stdout ----
+
+thread 'tests::subtracts' panicked at src/lib.rs:21:9:
+assertion `left == right` failed
+  left: 1
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- tests::divides stdout ----
+thread 'tests::divides' panicked at 'attempt to divide by zero', src/lib.rs:27:5
+
+
+failures:
+    tests::divides
+    tests::subtracts
+
+test result: FAILED. 1 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
