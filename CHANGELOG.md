@@ -62,6 +62,10 @@ starts with `-`.
 - The help of several functions named `--head`, `--tail`, `--max-depth`,
   `--cached` or `--rows` only inside another option's description: each
   spelling now has its option line.
+- The per-shell server on Bash 5.3: when Bash reaped an ended or replaced
+  server after the next one had started, it unset the new server's
+  variables, so that server ran on unused until the shell exited and calls
+  ran the binary again. Each server now has a coprocess name of its own.
 
 ### Security
 

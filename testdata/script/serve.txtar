@@ -123,10 +123,10 @@ gash_username >/dev/null
 # its command.
 (
     for _ in {1..300}; do
-        pgrep -x -P "$__GASH_SRV_PID" tail >/dev/null && break
+        pgrep -x -P "$__GASH_SRV_ID" tail >/dev/null && break
         sleep 0.1
     done
-    kill -INT $$ "$__GASH_SRV_PID"
+    kill -INT $$ "$__GASH_SRV_ID"
 ) &
 llm_exec 'tail -f /dev/null'
 rc=$?
@@ -146,20 +146,34 @@ echo after
 -- lifecycle.sh --
 source "$GASH_SH"
 GASH_SERVER=0 gash_username >/dev/null
-echo "off pid=${__GASH_SRV_PID-none}"
+echo "off pid=${__GASH_SRV_ID-none}"
 gash_username >/dev/null
-first=$__GASH_SRV_PID
+first=$__GASH_SRV_ID
 echo "on started=$((first > 0))"
 gash_username >/dev/null
-[[ "$__GASH_SRV_PID" == "$first" ]] && echo "kept"
+[[ "$__GASH_SRV_ID" == "$first" ]] && echo "kept"
 # A newer binary: the next call (in a later second) restarts the server.
 touch -d '+1 hour' "$GASH_BIN"
 sleep 1
 gash_username >/dev/null
-[[ -n "$__GASH_SRV_PID" && "$__GASH_SRV_PID" != "$first" ]] && echo "restarted"
+[[ -n "$__GASH_SRV_ID" && "$__GASH_SRV_ID" != "$first" ]] && echo "restarted"
+for i in {1..50}; do kill -0 "$first" 2>/dev/null && sleep 0.1; done
 kill -0 "$first" 2>/dev/null || echo "old one gone"
+# A server that ends: its call execs, and the next call starts a new one,
+# also when Bash reaped the old coprocess within the same command (Bash 5.3
+# then unset the variables of a new one of the same name). One server runs.
+touch -d '-1 hour' "$GASH_BIN"
+second=$__GASH_SRV_ID
+{
+    kill "$second"
+    while kill -0 "$second" 2>/dev/null; do sleep 0.05; done
+    gash_username >/dev/null && echo "answered"
+    gash_username >/dev/null
+    [[ -n "$__GASH_SRV_ID" && "$__GASH_SRV_ID" != "$second" ]] && echo "started again"
+}
+echo "servers=$(pgrep -c -x -P $$ gash)"
 gash_unload
-echo "unloaded pid=${__GASH_SRV_PID-none}"
+echo "unloaded pid=${__GASH_SRV_ID-none}"
 
 -- want-lifecycle --
 off pid=none
@@ -167,4 +181,7 @@ on started=1
 kept
 restarted
 old one gone
+answered
+started again
+servers=1
 unloaded pid=none
