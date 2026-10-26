@@ -159,11 +159,13 @@ func (r Report) Envelope() contract.Envelope {
 func (r Report) Print(p ui.Printer) {
 	p.Error(r.Sentence() + ".")
 	w := p.W
-	line := "  " + r.Tool.Name + " " + r.Tool.Purpose
-	if pkg := r.Package(); pkg != "" {
-		line += " (package " + pkg + " on " + osName(r.System) + ")"
+	if r.Tool.Purpose != "" { // a program outside the catalog has none
+		line := "  " + r.Tool.Name + " " + r.Tool.Purpose
+		if pkg := r.Package(); pkg != "" {
+			line += " (package " + pkg + " on " + osName(r.System) + ")"
+		}
+		writeln(w, line+".")
 	}
-	writeln(w, line+".")
 	if cmd := r.Install(); cmd != "" {
 		writeln(w, "  Install it:  "+cmd)
 		if !r.System.NeedsRoot() {

@@ -13,6 +13,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -28,6 +29,7 @@ func registerOutput(t *invoke.Table) {
 	t.HandleCompat("json arr", compatJSONArr)
 	t.HandleCompat("env load", compatEnvLoad)
 	t.HandleCompat("env perms", compatEnvPerms)
+	t.HandleCompat("prereq fail", compatPrereqFail)
 }
 
 func readAll(c *invoke.Call) string {
@@ -137,6 +139,13 @@ func compatEnvPerms(c *invoke.Call) int {
 		p.Warning(w.Text)
 	}
 	return 0
+}
+
+// compatPrereqFail is `gash __compat prereq fail TOOL NEED`: the report a
+// missing tool gets everywhere (the envelope when headless), for the Bash
+// helpers __gash_require_command and __gash_require_binary. Status 1.
+func compatPrereqFail(c *invoke.Call) int {
+	return prereq.Fail(c, c.Arg(0), c.Arg(1), false)
 }
 
 // compatEnvLoad is `gash __compat env load`: the warnings of the load on

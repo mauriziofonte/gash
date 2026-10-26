@@ -29,6 +29,18 @@ chmod 0600 env
 exec bash --norc --noprofile -i perms.sh
 ! stderr 'accessible'
 
+# --- __gash_require_command and __gash_require_binary print the report of
+# a missing tool, naming the function that needed it; headless, the JSON
+# envelope.
+! exec bash --norc --noprofile -i require.sh
+stderr '^Error: deploy_it needs rsync-x, which is not installed\.$'
+stderr '^Error: rsync-y needs rsync-y, which is not installed\.$'
+! stderr '^  rsync-x \.$'
+env GASH_HEADLESS=1
+! exec bash --norc --noprofile -i require.sh
+stderr '"error":"prerequisite_missing","details":"deploy_it needs rsync-x, which is not installed"'
+env GASH_HEADLESS=
+
 -- env --
 GASH_BANNER=0
 -- unload.sh --
@@ -49,3 +61,8 @@ PATH=$WORK/empty
 __gash_check_env_perms "$HOME/env"
 __gash_compat_ready() { return 1; }
 __gash_check_env_perms "$HOME/env"
+-- require.sh --
+source "$GASH_SH" >/dev/null 2>&1
+deploy_it() { __gash_require_command rsync-x || return 1; }
+deploy_it
+__gash_require_binary rsync-y

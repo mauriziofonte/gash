@@ -42,7 +42,7 @@ func TestTableBuilds(t *testing.T) {
 	require.Contains(t, tbl.Names(), "llm_find")
 	require.Contains(t, tbl.Names(), "agent_replace")
 	require.Equal(t, []string{"env load", "env perms", "help", "json arr", "json str", "output box", "output choose",
-		"output download", "output table", "output wrap"}, tbl.CompatOps())
+		"output download", "output table", "output wrap", "prereq fail"}, tbl.CompatOps())
 }
 
 func TestAllColors(t *testing.T) {
