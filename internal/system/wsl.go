@@ -14,6 +14,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -232,7 +233,11 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		return 1
 	}
 	s := ui.StyleOf(c.Term, false)
-	plain, dmesgRC := m.output(c, "dmesg")
+	dres, derr := m.run.Run(ctx(c), runner.Cmd{Path: "dmesg", Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
+	plain, dmesgRC := runner.CommandSubst(dres.Stdout), dres.ExitCode
+	if derr != nil && dmesgRC == 0 {
+		dmesgRC = 1
+	}
 	fails := 0
 	for _, l := range strings.Split(plain, "\n") {
 		if strings.Contains(l, order7) {
@@ -251,7 +256,11 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 	if last != "" {
 		value += " (last: " + last + ")"
 	}
-	if dmesgRC != 0 {
+	switch {
+	case notInstalled(derr):
+		// 3.4: a missing dmesg is not an unreadable one.
+		value = "unknown (dmesg is not installed)"
+	case dmesgRC != 0:
 		// kernel.dmesg_restrict: no count at all, not 0 (SYS-45).
 		value = "unknown (dmesg not readable)"
 	}
@@ -262,12 +271,15 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		s.KV(c.Stdout, "--width", "22", "MemFree", before[0], "SReclaimable (slab)", before[1], "free >=512KiB blocks", before[2])
 		return 0
 	}
-	if !m.sudoReady(c, p) {
+	if !m.sudoReady(c, p, "wsl_compact") {
 		return 1
 	}
 	p.Info("Dropping the page cache and slab, then compacting memory (sudo)...")
 	res, err := m.run.RunScript(ctx(c), runner.Script{Name: runner.ScriptWSLCompact,
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
+	if notInstalled(err) {
+		return prereq.Fail(c, "sudo", "wsl_compact", false)
+	}
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(c.Stderr, "bash: "+se.Error()+"\n")
 	}
