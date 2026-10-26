@@ -8,11 +8,67 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
 ## [3.4.0] - 2026-10-25
 
-Gash learns to work with Windows from inside WSL, and to reclaim the disk
-space that log files quietly eat on any host. Reading Windows is automatic;
-changing it is human-only and goes through a UAC prompt.
+Gash becomes the toolkit an AI agent reaches for instead of raw shell
+pipelines: about fifty functions, built from how agents actually use a shell,
+each answering in one call what took a pipeline or several round trips, with
+compact JSON (or TSV) and output that stays inside a budget. Every read stays
+in the read-only `llm_*` family; every change is a separate `agent_*` write
+tool. Gash also learns to work with Windows from inside WSL, and to reclaim
+the disk space that log files quietly eat on any host. Reading Windows is
+automatic; changing it is human-only and goes through a UAC prompt.
 
 ### Added
+
+- **Shared output options** for the agent functions (AGENTS.md 3.6):
+  `--format json|jsonl|tsv|table` (TSV with a header and `\N` for null,
+  metadata as one JSON line on stderr), an output budget (`--width`,
+  `--max-lines`, `--head`, `--tail`, with a `[... K lines omitted]` marker),
+  `--relative`/`--absolute`, `--count [--by KEY]`, and `-j N`/`--timeout S`
+  on every multi-target function (results keep the input order; network
+  probes default to 32 at a time).
+- **Files and search**: `llm_find --count/--sort/--newer/--since/--tracked`,
+  `llm_tree --count` and `--top N` (disk usage, a parallel walk),
+  `llm_grep --exclude/--only-matching/--distinct/--count/--files-only`.
+- **Text reads**: `llm_stat` (metadata of many paths), `llm_count` (many
+  patterns, one pass per file), `llm_assert`, `llm_read` (ranges or the
+  lines around a match), `llm_log` (read from the end, by pattern, time and
+  level), `llm_hash`, `llm_textstats`, `llm_textcheck`.
+- **Data**: `--format` and `--scalar` on every `llm_db_*` function,
+  `llm_db_tables --counts`, `llm_db_schema --all`, `llm_db_databases`;
+  `llm_json` (a value, the keys or the shape), `llm_csv`, `llm_config
+  --path` for YAML, TOML, INI and JSON, `llm_dotenv`, `llm_date`.
+- **Git**: `llm_git_overview` (the state of a repository in one small
+  object), `llm_git_show`, `llm_git_status --summary/--files/--repos/
+  --fetch`, `llm_git_diff --summary/--files/--numstat/--patch` and
+  `REV..REV`, `llm_git_log` filters and `--fields`.
+- **Network probes** (read-only): `llm_http` (status, timings, headers, a
+  JSON value; credentials only through `--auth-env`), `llm_dns` (a built-in
+  resolver client), `llm_tls`, `llm_tcp`, `llm_ports --port`.
+- **Processes**: `llm_wait` (one call instead of a sleep and poll loop: a
+  log line, a file, a process gone, an HTTP answer, a port, a command),
+  `llm_procs --pid/--alive/--tree`, `llm_service`, `llm_docker_ps`,
+  `llm_docker_logs`, `llm_docker_exec` (read-only), `llm_sysinfo`.
+- **Runtimes, lint and tests**: `llm_tools`, `llm_runtime` and `gash runtime`
+  (a PHP or Node version resolved to its binary without loading nvm.sh),
+  `llm_lint` (php, sh, js, json, yaml, toml, py in parallel), `llm_test` (a
+  test suite summarized: counts and each failure's file:line), `gash run`
+  (a command with its output shaped and its exit status kept).
+- **Write tools, the `agent_*` family** (AGENTS.md section 8): `agent_replace`
+  (exact replacements in explicit files, all or nothing), `agent_git_commit`
+  (stage explicit paths, commit, push, never forced), `agent_kill`,
+  `agent_docker_exec`. Each takes `--dry-run`, names its targets explicitly
+  and keeps the secret-file and protected-path rails; system paths are
+  refused and sensitive ones need `--force`. Its own card topic, `gash
+  agent`.
+- **Routing**: `gash agents-hint` prints the "raw command -> Gash function"
+  table for an agent's instructions (also AGENTS.md section 7), each help
+  page opens with the shapes it replaces, `gash agent-functions` lists the
+  agent functions for wrappers, and every agent function runs as `gash FN`
+  without sourcing.
+- `GASH_TELEMETRY_FILE`: an opt-in local JSONL line per agent call
+  (function, time, output size, status, truncation; never arguments).
+- The agent benchmark kit (`bench/agent/`): the raw shell shapes against the
+  Gash functions, with relative acceptance rules.
 
 - `gash wsl`: report and repair the WSL environment. `info` summarises the
   detection (version, distro, interop, drives, networking) and exits 0 off
@@ -48,6 +104,8 @@ changing it is human-only and goes through a UAC prompt.
 
 ### Changed
 
+- The per-shell server runs the new read functions, so a sourced shell calls
+  them without starting a process.
 - WSL is detected from `wsl.conf`, the `WSLInterop` binfmt handler, or the
   `microsoft` marker in `/proc/version`, so a distribution without a
   `wsl.conf` is still recognised. The Windows PowerShell path the HTE and
@@ -56,6 +114,10 @@ changing it is human-only and goes through a UAC prompt.
 
 ### Security
 
+- `llm_*` stays read-only with no exception: writes live only in `agent_*`;
+  `llm_http` refuses any method but GET, HEAD and OPTIONS; `llm_test` runs
+  a test suite and nothing else (`gash run` runs any other command);
+  `llm_procs` has no kill.
 - The path guards treat the Windows secrets reachable over `/mnt` as secret
   files: the user registry hives (`NTUSER.DAT`, `UsrClass.dat`), saved RDP
   credentials (`*.rdp`), answer files (`unattend.xml`, `autounattend.xml`)
