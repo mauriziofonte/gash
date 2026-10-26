@@ -245,6 +245,7 @@ func (m *Module) gitOverview(c *invoke.Call) int {
 	if !ok {
 		return notARepo(c, safe)
 	}
+	d.st = m.repoGuard(c, safe).keepStatus(d.st)
 	obj := d.object(atoi(filesN))
 	if obj.Truncated > 0 {
 		c.NoteTruncated(obj.Truncated)
@@ -343,6 +344,7 @@ func (m *Module) gitStatus(c *invoke.Call) int {
 		if !ok {
 			return notARepo(c, safe)
 		}
+		st = m.repoGuard(c, safe).keepStatus(st)
 		rows := make([][]any, len(st.Entries))
 		for i, e := range st.Entries {
 			rows[i] = []any{e.Path, e.XY()}

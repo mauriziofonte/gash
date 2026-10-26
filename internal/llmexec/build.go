@@ -30,6 +30,8 @@ type Environ struct {
 	Vars       map[string]string
 	FS         pathguard.FS
 	LookupUser func(name string) (home string, ok bool)
+	// Rules are the paths the user protects (PROTECT: in ~/.gash_env).
+	Rules []pathguard.Rule
 }
 
 func (e Environ) fs() pathguard.FS {

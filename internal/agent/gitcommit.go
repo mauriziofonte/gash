@@ -261,7 +261,14 @@ func (m *Module) gitCommit(c *invoke.Call) int {
 	}
 	paths, removed, unmatched := commitPaths(st, a.all, rels)
 	for _, p := range paths {
-		if !removed[p] && pathguard.SecretName(p) {
+		if removed[p] {
+			continue
+		}
+		abs := filepath.Join(top, filepath.FromSlash(p))
+		if g.Hides(abs) {
+			return fail(c, "forbidden_path", p, "This path is protected and cannot be accessed; nothing was staged or committed")
+		}
+		if pathguard.SecretName(p) || g.Seals(abs) {
 			return fail(c, "secret_file_blocked", p, "agent_* functions never commit secret files; nothing was staged or committed")
 		}
 	}

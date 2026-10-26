@@ -70,6 +70,9 @@ type File struct {
 	DB      []Entry
 	AI      []Entry
 	Hosts   []Entry
+	// Protect are the PROTECT: lines, in file order (no line replaces
+	// another).
+	Protect []Protect
 	// RejectedHosts are the HOST: entries skipped because their target
 	// fails ValidHostTarget, so remote_* can say why an alias is unknown.
 	RejectedHosts []Entry
@@ -150,6 +153,9 @@ func (f *File) parseLine(lineno int, raw, home string) {
 
 	var prefix, key, value string
 	switch {
+	case strings.HasPrefix(line, "PROTECT:"):
+		f.parseProtect(lineno, line[len("PROTECT:"):])
+		return
 	case hasPrefixAny(line, "SSH:", "DB:", "AI:", "HOST:"):
 		prefix = line[:strings.IndexByte(line, ':')]
 		rest := line[len(prefix)+1:]
@@ -173,7 +179,7 @@ func (f *File) parseLine(lineno int, raw, home string) {
 		f.Settings = append(f.Settings, Setting{Name: key, Value: value, Line: lineno})
 		return
 	default:
-		f.warnLine(lineno, "unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping")
+		f.warnLine(lineno, "unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping")
 		return
 	}
 

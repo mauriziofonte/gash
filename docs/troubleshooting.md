@@ -152,7 +152,7 @@ stay quiet unless `GASH_DEBUG=1`.
 | `Line N ...: HOST target must be user@host` | One `@`; a user of letters, digits, `.`, `_`, `-`; a host name or `[IPv6]`; no port (the `Hint:` line says to put it in a `Host` entry of `~/.ssh/config`) |
 | `Line N ...: duplicate DB:NAME, ignored (first is at line M)` | Two entries share a name and the first wins: rename or remove one |
 | `Line N ...: unknown GASH_ setting` | Check the name in [configuration.md](configuration.md#settings-reference) |
-| `Line N ...: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=)` | The line has none of those prefixes |
+| `Line N ...: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=)` | The line has none of those prefixes |
 | `Line N ...: SSH: entry has no '='` | Use `SSH:path=passphrase` (the same for `DB:`, `AI:`, `HOST:`) |
 
 ## A setting has no effect

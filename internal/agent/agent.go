@@ -105,7 +105,7 @@ func (m *Module) guard(c *invoke.Call) *pathguard.Guard {
 	if err != nil {
 		cwd = c.Env.Get("PWD")
 	}
-	return pathguard.NewGuard(pathguard.OSFS{}, cwd, c.Env.Get("HOME"), m.rootHome())
+	return pathguard.NewGuard(pathguard.OSFS{}, cwd, c.Env.Get("HOME"), m.rootHome()).WithRules(pathguard.Rules(c.Env.Get))
 }
 
 // target validates one explicit write target: the llm_* path rails

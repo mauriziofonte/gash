@@ -8,6 +8,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmexec"
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // execRules are the llm_exec settings and process context of a call, as
@@ -39,6 +40,7 @@ func (m *Module) execRules(c *invoke.Call) (llmexec.Settings, llmexec.Environ) {
 		RootHome: m.rootHome(),
 		BashPath: m.bashPath(c),
 		Vars:     vars,
+		Rules:    pathguard.Rules(c.Env.Get),
 	}
 	return s, env
 }

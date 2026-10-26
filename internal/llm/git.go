@@ -63,6 +63,9 @@ func (m *Module) gitStatus2x(c *invoke.Call, path string) int {
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
 		"-C", safe, "status", "--porcelain=v2", "--branch", "-z")
 	st := parseGitStatus(res.Stdout)
+	if rg := m.repoGuard(c, safe); rg != nil {
+		st.staged, st.modified, st.untracked, st.conflicted = rg.keep(st.staged), rg.keep(st.modified), rg.keep(st.untracked), rg.keep(st.conflicted)
+	}
 
 	var b bytes.Buffer
 	b.WriteString("{\n  \"branch\": ")
@@ -184,6 +187,9 @@ func (m *Module) gitDiff2x(c *invoke.Call, path string, staged bool) int {
 	diffArgs := []string{"-C", safe, "diff", "--stat", "--no-color", "--no-ext-diff", "--no-textconv"}
 	if staged {
 		diffArgs = append(diffArgs, "--staged")
+	}
+	if ex := m.repoGuard(c, safe).excludes(); len(ex) > 0 {
+		diffArgs = append(append(diffArgs, "--"), ex...)
 	}
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, c.Stdout, io.Discard, diffArgs...)
 	return res.ExitCode

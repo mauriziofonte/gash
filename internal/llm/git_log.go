@@ -119,6 +119,11 @@ func (m *Module) gitLog34(c *invoke.Call, o *llmfmt.Options, q logQuery, limit, 
 	var commits []logCommit
 	if res.Success() {
 		commits = parseLogZ(res.Stdout, nf)
+		if rg := m.repoGuard(c, safe); withFiles && rg != nil {
+			for i := range commits {
+				commits[i].files = rg.keep(commits[i].files)
+			}
+		}
 	} else {
 		if !gitx.Safe(c.Ctx, m.run, env, nil, io.Discard, io.Discard, "-C", safe, "rev-parse", "--git-dir").Success() {
 			return notARepo(c, safe)

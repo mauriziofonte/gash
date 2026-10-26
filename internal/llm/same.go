@@ -154,7 +154,7 @@ func (m *Module) same(c *invoke.Call) int {
 			return 1
 		}
 		mine.kind = "directory"
-		mine.hashes, err = hashTree(c.Ctx, safe, excludes, under, secrets)
+		mine.hashes, err = hashTree(c.Ctx, safe, excludes, under, m.guard(c).Seals, secrets)
 		if err != nil {
 			return fail(c, "path_unreadable", err.Error(), "The file could not be read")
 		}
@@ -340,7 +340,7 @@ func sameSkip(name string, excludes []string) bool {
 // hashTree hashes the regular files below root (symlinks are not
 // followed, excluded names and protected trees are skipped, secret files
 // are counted in secrets and left out).
-func hashTree(ctx context.Context, root string, excludes []string, under func(string) bool, secrets map[string]bool) (map[string]string, error) {
+func hashTree(ctx context.Context, root string, excludes []string, under, sealed func(string) bool, secrets map[string]bool) (map[string]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -365,7 +365,7 @@ func hashTree(ctx context.Context, root string, excludes []string, under func(st
 		if root == string(filepath.Separator) {
 			rel = filepath.ToSlash(strings.TrimPrefix(p, root))
 		}
-		if pathguard.SecretName(rel) {
+		if pathguard.SecretName(rel) || sealed(p) {
 			secrets[rel] = true
 			return nil
 		}

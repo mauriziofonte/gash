@@ -4678,6 +4678,7 @@ var settings = []Setting{
 	{Name: "GASH_LLM_SANDBOX", Headless: false, FileOnly: true, Passed: false},
 	{Name: "GASH_NVM", Headless: false, FileOnly: false, Passed: true},
 	{Name: "GASH_PATH_ADD", Headless: false, FileOnly: false, Passed: true},
+	{Name: "GASH_REMOTE_NO_BINARY", Headless: false, FileOnly: true, Passed: false},
 }
 
 var topics = []Topic{

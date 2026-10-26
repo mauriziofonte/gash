@@ -54,6 +54,7 @@ func (m *Module) exec(c *invoke.Call) int {
 		RootHome: m.rootHome(),
 		BashPath: m.bashPath(c),
 		Vars:     vars,
+		Rules:    pathguard.Rules(c.Env.Get),
 	}
 	pr := &probe{m: m, c: c}
 	plan, err := llmexec.Build(c.Arg(0), s, env, pr)

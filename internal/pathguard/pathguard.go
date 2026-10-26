@@ -44,6 +44,11 @@ type Guard struct {
 	Cwd       string
 	Home      string
 	Forbidden []string
+	// Hidden and Sealed are the user's PROTECT:all and PROTECT:content
+	// trees (WithRules, protect.go), each in its resolved and its lexical
+	// form.
+	Hidden []string
+	Sealed []string
 }
 
 // NewGuard builds a guard. rootHome is the value of ~root; when it is an
@@ -111,7 +116,7 @@ func (g *Guard) ValidatePath(path string) (string, error) {
 }
 
 // PathForbidden is __llm_path_forbidden: whether path is one of the forbidden
-// entries or lives below one, tested over the realpath, the realpath with a
+// entries or the user's PROTECT:all trees, or lives below one, tested over the realpath, the realpath with a
 // leading /private stripped (macOS), and the lexical (symlink-kept) form.
 // When normalized is non-empty the caller's realpath is reused.
 func (g *Guard) PathForbidden(path, normalized string) bool {
@@ -132,12 +137,18 @@ func (g *Guard) PathForbidden(path, normalized string) bool {
 				return true
 			}
 		}
+		for _, f := range g.Hidden {
+			if below(cand, f) {
+				return true
+			}
+		}
 	}
 	return false
 }
 
 // UnderForbidden reports whether path, read as it is (no symlink resolved,
-// no realpath), is one of the forbidden entries or lives below one, also
+// no realpath), is one of the forbidden entries or the user's PROTECT:all
+// trees or lives below one, also
 // with a leading /private stripped (macOS). It is the per-entry test of a
 // walk that does not follow symlinks from a root that was resolved: every
 // entry it meets is already a physical path, so no lookup is needed. A
@@ -157,7 +168,7 @@ func (g *Guard) UnderForbidden(path string) bool {
 			}
 		}
 	}
-	return false
+	return underTrees(path, g.Hidden)
 }
 
 // PathAboveForbidden is __llm_path_above_forbidden: whether a walk starting at
@@ -187,13 +198,14 @@ func (g *Guard) PathAboveForbidden(path, mode string) bool {
 }
 
 // IsSecretFile is __llm_is_secret_file: the base name matches a secret
-// pattern (exceptions excluded) or the path is under a secret directory,
+// pattern (exceptions excluded), the path is under a secret directory or
+// in a PROTECT:content tree,
 // judged on the path as given and on a symlink's target.
 func (g *Guard) IsSecretFile(file string) bool {
 	if file == "" {
 		return false
 	}
-	if SecretName(file) {
+	if SecretName(file) || g.Seals(file) {
 		return true
 	}
 	if g.existsOrSymlink(file) {

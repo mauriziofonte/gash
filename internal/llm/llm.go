@@ -145,13 +145,14 @@ func atoi(value string) int {
 }
 
 // guard is the path guard of the call: the physical working directory
-// (realpath -m resolves relative paths from getcwd) and the caller's HOME.
+// (realpath -m resolves relative paths from getcwd), the caller's HOME and
+// the paths the user protects (PROTECT: in ~/.gash_env).
 func (m *Module) guard(c *invoke.Call) *pathguard.Guard {
 	cwd, err := m.getwd()
 	if err != nil {
 		cwd = c.Env.Get("PWD")
 	}
-	return pathguard.NewGuard(pathguard.OSFS{}, cwd, c.Env.Get("HOME"), m.rootHome())
+	return pathguard.NewGuard(pathguard.OSFS{}, cwd, c.Env.Get("HOME"), m.rootHome()).WithRules(pathguard.Rules(c.Env.Get))
 }
 
 // validatePath is __llm_validate_path; on a refusal the envelope is
@@ -178,7 +179,7 @@ func (m *Module) walkRoot(c *invoke.Call, safe, mode string) (func(string) bool,
 		fail(c, "forbidden_path", safe, "Search a subdirectory")
 		return nil, false
 	}
-	return g.UnderForbidden, true
+	return g.WalkSkip(mode), true
 }
 
 // pathTaker is __llm_take_path: the first positional is the PATH, a second

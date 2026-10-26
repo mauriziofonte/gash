@@ -26,7 +26,8 @@ var patchArgs = []string{"--patch", "--no-color", "--no-ext-diff", "--no-textcon
 // file's section keeps its header lines and gets the line budget of o for
 // its body (the S2 marker where lines are cut), --width cuts every line,
 // and the body of a secret file (pathguard.SecretName on any of its
-// names) is replaced by one marker line. Lines before the first file (the
+// names, or a name in a PROTECT: tree of rg) is replaced by one marker
+// line. Lines before the first file (the
 // commit header of llm_git_show) pass through, cut at --width.
 type patchFilter struct {
 	o       *llmfmt.Options
@@ -41,6 +42,8 @@ type patchFilter struct {
 	// blanks are the blank lines held back in the commit header: a run
 	// becomes one line, and none is left at its end.
 	blanks int
+	// rg holds the user's PROTECT: trees of the repository (nil: none).
+	rg *repoGuard
 }
 
 func newPatchFilter(w io.Writer, o *llmfmt.Options) *patchFilter {
@@ -143,7 +146,7 @@ func (p *patchFilter) startBody() {
 	p.inHead = false
 	p.secret = false
 	for _, name := range patchNames(p.header) {
-		if pathguard.SecretName(name) {
+		if pathguard.SecretName(name) || p.rg.seals(name) || p.rg.hides(name) {
 			p.secret = true
 			break
 		}
