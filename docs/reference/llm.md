@@ -64,6 +64,7 @@ Check that files hold, lack or count patterns; exit 0 only if all pass
 
 ```text
 llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | --occurrences] [-j N] [--timeout S] [--absolute]
+           [--host ALIAS]
 ```
 
 #### Options
@@ -79,6 +80,8 @@ llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | -
 -j N, --jobs N         Files read at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -161,6 +164,7 @@ Count several patterns in several files in one pass per file
 
 ```text
 llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-j N] [--timeout S] [--absolute]
+          [--host ALIAS]
 ```
 
 #### Options
@@ -177,6 +181,8 @@ llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-
 -j N, --jobs N         Files read at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -209,7 +215,7 @@ Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l)
 
 ```text
 llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
-        [--format json|jsonl|tsv|table]
+        [--format json|jsonl|tsv|table] [--host ALIAS]
 ```
 
 #### Options
@@ -223,6 +229,8 @@ llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
 --where COL=V          Only rows whose column COL (a header name or a
                        1-based number) is exactly V
 --format F             json (default), or the sample as jsonl, tsv or table
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -568,13 +576,15 @@ List project dependencies (JSON)
 #### Usage
 
 ```text
-llm_deps [PATH] [--dev]
+llm_deps [PATH] [--dev] [--host ALIAS]
 ```
 
 #### Options
 
 ```text
 --dev                  Split the result into prod and dev
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -645,6 +655,7 @@ Run a read-only command in a container, no shell quoting (JSON)
 
 ```text
 llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
+                [--host ALIAS]
 ```
 
 #### Options
@@ -655,6 +666,8 @@ llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N]
 --max-lines N, --head N, --tail N
                        Keep the first/last N lines of each stream
 -- CMD...              The command, one word per argument
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -688,7 +701,7 @@ Last log lines of a container, optionally filtered (JSON)
 #### Usage
 
 ```text
-llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]
+llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]
 ```
 
 #### Options
@@ -698,6 +711,8 @@ llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]
 --since T              Only lines since T (10m, 2h, 2026-10-25T10:00:00)
 --grep RE              Keep the lines RE matches (RE2; (?i) for any case)
 --width N              Cut each line at N columns (default 300)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -727,6 +742,7 @@ Docker containers with state, health and ports (JSON)
 
 ```text
 llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -737,6 +753,8 @@ llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [-
 --width N              Cut each value at N columns
 --max-lines N, --head N, --tail N
                        Keep the first/last N containers
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -767,13 +785,15 @@ Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env)
 #### Usage
 
 ```text
-llm_dotenv FILE [KEY...] [--present]
+llm_dotenv FILE [KEY...] [--present] [--host ALIAS]
 ```
 
 #### Options
 
 ```text
 --present              true or false per KEY, never a value
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -808,7 +828,7 @@ Filtered environment variables (secrets excluded)
 #### Usage
 
 ```text
-llm_env [--filter REGEX | REGEX]
+llm_env [--filter REGEX | REGEX] [--host ALIAS]
 ```
 
 #### Options
@@ -816,6 +836,8 @@ llm_env [--filter REGEX | REGEX]
 ```text
 -f, --filter REGEX     Only names that match REGEX (Go RE2 syntax, e.g.
                        '^PATH$' or 'NODE|NPM'); a bare REGEX works too
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1029,6 +1051,7 @@ Recent commits (JSON)
 ```text
 llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...
             [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+            [--host ALIAS]
 ```
 
 #### Options
@@ -1047,6 +1070,8 @@ llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P].
 --max-lines N          Rows to keep (also --head N, --tail N); the cut is
                        counted on stderr
 --width N              Cut each string value at N columns
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1081,7 +1106,7 @@ Repository state in one small object (JSON)
 #### Usage
 
 ```text
-llm_git_overview [PATH] [--log N] [--files N]
+llm_git_overview [PATH] [--log N] [--files N] [--host ALIAS]
 ```
 
 #### Options
@@ -1089,6 +1114,8 @@ llm_git_overview [PATH] [--log N] [--files N]
 ```text
 --log N                Last N commit subjects (default 3; 0 for none)
 --files N              Also list the paths of each state, at most N each
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1183,7 +1210,7 @@ Compact git status (JSON)
 #### Usage
 
 ```text
-llm_git_status [PATH]
+llm_git_status [PATH] [--host ALIAS]
 llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]
 llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]
 llm_git_status [PATH] --fetch [--timeout S]
@@ -1208,6 +1235,8 @@ llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--ma
                        --repos)
 --max-lines N          Rows to keep (also --head N, --tail N)
 --width N              Cut each string value at N columns
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1341,6 +1370,7 @@ Hash files in parallel (sha256 or md5)
 
 ```text
 llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]
+         [--host ALIAS]
 ```
 
 #### Options
@@ -1354,6 +1384,8 @@ llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout 
 -j N, --jobs N         Files hashed at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1470,7 +1502,7 @@ One value, the keys or the shape of a JSON file (replaces python3 json.load, jq)
 
 ```text
 llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
-         [--width N] [--head N] [--tail N]
+         [--width N] [--head N] [--tail N] [--host ALIAS]
 ```
 
 #### Options
@@ -1483,6 +1515,8 @@ llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
                        table (an array of objects as rows)
 --width N              Cut each string value at N columns (ends with …)
 --head N, --tail N     Keep the first / last N elements of an array
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1521,6 +1555,7 @@ Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py)
 
 ```text
 llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]
+         [--host ALIAS]
 ```
 
 #### Options
@@ -1540,6 +1575,8 @@ llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR
 --width N              Cut file names and messages at N columns
 --relative, --absolute File paths relative to their PATH (default) or
                        absolute
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1580,6 +1617,7 @@ Last lines of a log, read from the end, by pattern, time and level
 
 ```text
 llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]
+        [--host ALIAS]
 ```
 
 #### Options
@@ -1597,6 +1635,8 @@ llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level 
 --width N              Cut each line at N columns
 --format F             json, jsonl, tsv or table: rows {"line","ts",
                        "level","text"} (line numbers cost a count pass)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1632,7 +1672,7 @@ List ports in use (JSON)
 #### Usage
 
 ```text
-llm_ports [--listen] [--port N]
+llm_ports [--listen] [--port N] [--host ALIAS]
 ```
 
 #### Options
@@ -1641,6 +1681,8 @@ llm_ports [--listen] [--port N]
 -l, --listen           Listening sockets only
 --port N               Sockets on local port N (0 to 65535), each with the
                        processes that hold it
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1671,7 +1713,7 @@ List processes by name, port or PID, alive or not, as a tree (JSON)
 
 ```text
 llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
-          [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+          [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]
 ```
 
 #### Options
@@ -1687,6 +1729,8 @@ llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
 --width N              Cut each value at N columns
 --max-lines N, --head N, --tail N
                        Keep the first/last N rows
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1725,7 +1769,14 @@ Detect project type and framework (JSON)
 #### Usage
 
 ```text
-llm_project [PATH]
+llm_project [PATH] [--host ALIAS]
+```
+
+#### Options
+
+```text
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1745,6 +1796,7 @@ Read files, line ranges or the lines around a match, numbered
 
 ```text
 llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]
+         [--host ALIAS]
 ```
 
 #### Options
@@ -1763,6 +1815,8 @@ PATH:A-B               Lines A to B of that file (also PATH:A:B, PATH:A-)
 --width N              Cut each line at N columns
 --format F             json, jsonl, tsv or table: rows {"file","line","text"}
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1951,6 +2005,7 @@ State and last journal lines of systemd units (JSON)
 
 ```text
 llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+            [--host ALIAS]
 ```
 
 #### Options
@@ -1961,6 +2016,8 @@ llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N
 --width N              Cut each journal line at N columns (default 300)
 --max-lines N, --head N, --tail N
                        Keep the first/last N units
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -1992,6 +2049,7 @@ Metadata of several paths: type, size, mode, owner, mtime, lines
 
 ```text
 llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]
+         [--host ALIAS]
 ```
 
 #### Options
@@ -2006,6 +2064,8 @@ llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absol
 -j N, --jobs N         Paths read at a time (default: the CPU count)
 --timeout S            Time limit per path (seconds, 500ms, 2s, 1m)
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -2039,7 +2099,7 @@ Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON)
 #### Usage
 
 ```text
-llm_sysinfo [--mount PATH]...
+llm_sysinfo [--mount PATH]... [--host ALIAS]
 ```
 
 #### Options
@@ -2047,6 +2107,8 @@ llm_sysinfo [--mount PATH]...
 ```text
 --mount PATH           Report the filesystem of PATH (repeatable) instead
                        of / and the other local disks
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -2173,6 +2235,7 @@ Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines
 
 ```text
 llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -2189,6 +2252,8 @@ llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,
 -j N, --jobs N         Files read at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -2222,7 +2287,7 @@ Lines, words, characters, bytes, gzip size and longest line of files
 #### Usage
 
 ```text
-llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]
+llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]
 ```
 
 #### Options
@@ -2234,6 +2299,8 @@ llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]
 -j N, --jobs N         Files read at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
 --absolute, --relative Absolute paths, or as given (the default)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -2314,7 +2381,7 @@ Path and version of each tool, probed in parallel; php and node per version
 #### Usage
 
 ```text
-llm_tools [NAME...] [-j N] [--timeout S]
+llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]
 ```
 
 #### Options
@@ -2322,6 +2389,8 @@ llm_tools [NAME...] [-j N] [--timeout S]
 ```text
 -j, --jobs N           Probes at a time (default 8)
 --timeout S            Time limit of one probe (default 10s)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples
@@ -2439,7 +2508,7 @@ Wait for a log line, a path, a process exit, a URL, a port or a command (JSON)
 #### Usage
 
 ```text
-llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N]
+llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N] [--host ALIAS]
 CONDITION is one of:
   --file-match FILE RE   a line of FILE matches RE
   --exists PATH          PATH exists
@@ -2473,6 +2542,8 @@ CONDITION is one of:
                        llm_exec rules) until it exits 0
 --tail N               Add the last N lines of FILE, or of CMD's last output
 --width N              Cut the match and tail lines at N columns (default 300)
+--host ALIAS           Run on a registered HOST: alias over ssh, one round
+                       trip (repeatable; see AGENTS.md 3.12)
 ```
 
 #### Examples

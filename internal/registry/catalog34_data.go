@@ -69,7 +69,7 @@ var catalogData = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]\n" +
-				"           [--width N] [--head N] [--tail N]\n" +
+				"           [--width N] [--head N] [--tail N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --path P               The value at P: a.b[0].c, paths[\"/api/x\"].post, [-1]\n" +
@@ -79,6 +79,8 @@ var catalogData = []Function{
 				"                         table (an array of objects as rows)\n" +
 				"  --width N              Cut each string value at N columns (ends with …)\n" +
 				"  --head N, --tail N     Keep the first / last N elements of an array\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_json package.json --path scripts\n" +
@@ -122,7 +124,7 @@ var catalogData = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]\n" +
-				"          [--format json|jsonl|tsv|table]\n" +
+				"          [--format json|jsonl|tsv|table] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --head N               Sample rows (default 5; 0 for none)\n" +
@@ -133,6 +135,8 @@ var catalogData = []Function{
 				"  --where COL=V          Only rows whose column COL (a header name or a\n" +
 				"                         1-based number) is exactly V\n" +
 				"  --format F             json (default), or the sample as jsonl, tsv or table\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_csv export.csv\n" +
@@ -175,10 +179,12 @@ var catalogData = []Function{
 			SeeAlso: "llm_env llm_config",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_dotenv FILE [KEY...] [--present]\n" +
+				"  llm_dotenv FILE [KEY...] [--present] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --present              true or false per KEY, never a value\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL\n" +

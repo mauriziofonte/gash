@@ -25,6 +25,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | --occurrences] [-j N] [--timeout S] [--absolute]\n" +
+				"             [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --has P                Every FILE holds P (repeatable, as the two below)\n" +
@@ -37,6 +38,8 @@ var catalogText = []Function{
 				"  -j N, --jobs N         Files read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # After an edit: the new name is in, the old one is gone, one route\n" +
@@ -74,6 +77,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-j N] [--timeout S] [--absolute]\n" +
+				"            [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --pat P                A pattern to count (repeatable)\n" +
@@ -87,6 +91,8 @@ var catalogText = []Function{
 				"  -j N, --jobs N         Files read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_count storage/logs/laravel.log --pat ERROR --pat WARNING --pat 'Timeout'\n" +
@@ -124,6 +130,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --algo sha256|md5      The digest (default sha256)\n" +
@@ -134,6 +141,8 @@ var catalogText = []Function{
 				"  -j N, --jobs N         Files hashed at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_hash dist/app.js dist/app.css --short 12\n" +
@@ -169,6 +178,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]\n" +
+				"          [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --tail N, -n N         The last N selected lines (default 50)\n" +
@@ -183,6 +193,8 @@ var catalogText = []Function{
 				"  --width N              Cut each line at N columns\n" +
 				"  --format F             json, jsonl, tsv or table: rows {\"line\",\"ts\",\n" +
 				"                         \"level\",\"text\"} (line numbers cost a count pass)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_log storage/logs/laravel.log --last-match ERROR -n 20\n" +
@@ -224,6 +236,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  PATH:A-B               Lines A to B of that file (also PATH:A:B, PATH:A-)\n" +
@@ -239,6 +252,8 @@ var catalogText = []Function{
 				"  --width N              Cut each line at N columns\n" +
 				"  --format F             json, jsonl, tsv or table: rows {\"file\",\"line\",\"text\"}\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Locate and read in one call\n" +
@@ -283,6 +298,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --lines                Count the lines of regular files under 64 MiB\n" +
@@ -294,6 +310,8 @@ var catalogText = []Function{
 				"  -j N, --jobs N         Paths read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per path (seconds, 500ms, 2s, 1m)\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_stat composer.json vendor storage/logs/laravel.log --lines\n" +
@@ -333,6 +351,7 @@ var catalogText = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]\n" +
+				"                [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --rules LIST           The rules to run, comma-separated (default:\n" +
@@ -346,6 +365,8 @@ var catalogText = []Function{
 				"  -j N, --jobs N         Files read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_textcheck README.md docs/*.md\n" +
@@ -384,7 +405,7 @@ var catalogText = []Function{
 			SeeAlso: "llm_stat llm_textcheck",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]\n" +
+				"  llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
@@ -393,6 +414,8 @@ var catalogText = []Function{
 				"  -j N, --jobs N         Files read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_textstats README.md docs/guide.md\n" +

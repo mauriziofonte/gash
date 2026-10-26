@@ -18,14 +18,69 @@ import (
 	"github.com/mauriziofonte/gash/internal/remote"
 )
 
-// hostSpecs are the functions that take --host.
+// hostSpecs are the functions that take --host. Most are binary only (no
+// Fallback): the host runs the same gash, shipped once and cached, so the
+// answer is the local one.
 func (m *Module) hostSpecs() map[string]remote.Spec {
 	return map[string]remote.Spec{
-		"llm_find":   {Values: []string{"--type", "--contains", "-n", "--limit"}, PathFrom: 1, Fallback: findFallback},
-		"llm_grep":   {Values: []string{"--ext", "--context", "-C", "-n", "--limit"}, PathFrom: 1, Fallback: grepFallback},
-		"llm_tree":   {Values: []string{"--depth", "--max-depth"}, PathFrom: 0, Fallback: treeFallback},
-		"llm_config": {Values: []string{"--max-bytes"}, PathFrom: 0, Keep: true, Fallback: configFallback},
+		// Files and search: a POSIX fallback covers the 3.0 options.
+		"llm_find":   {Values: []string{"--type", "--contains", "-n", "--limit", "--sort", "--newer", "--since", "--by"}, PathFrom: 1, PathOpts: []string{"--newer"}, Fallback: findFallback},
+		"llm_grep":   {Values: []string{"--ext", "--context", "-C", "-n", "--limit", "--exclude", "--by"}, PathFrom: 1, Fallback: grepFallback},
+		"llm_tree":   {Values: []string{"--depth", "--max-depth", "--by", "--type", "--name", "--newer", "--since", "--top"}, PathFrom: 0, PathOpts: []string{"--newer"}, Fallback: treeFallback},
+		"llm_config": {Values: []string{"--max-bytes", "--path"}, PathFrom: 0, Keep: true, Fallback: configFallback},
+
+		// Text reads.
+		"llm_stat":      {PathFrom: 0},
+		"llm_read":      {Values: []string{"--lines", "--around", "-C", "--context", "--max-bytes"}, PathFrom: 0, Also: readPathForms},
+		"llm_log":       {Values: []string{"-n", "--last-match", "--grep", "--since", "--level"}, PathFrom: 0},
+		"llm_hash":      {Values: []string{"--algo", "--short"}, PathFrom: 0},
+		"llm_count":     {Values: []string{"--pat"}, PathFrom: 0},
+		"llm_assert":    {Values: []string{"--has", "--lacks", "--count"}, PathFrom: 0},
+		"llm_textstats": {PathFrom: 0},
+		"llm_textcheck": {Values: []string{"--rules"}, PathFrom: 0},
+
+		// Structured data (llm_dotenv: FILE then KEY names, not paths).
+		"llm_json":   {Values: []string{"--path"}, PathFrom: 0},
+		"llm_csv":    {Values: []string{"--delim", "--where"}, PathFrom: 0},
+		"llm_dotenv": {PathFrom: 0, PathMax: 1},
+
+		// Git (llm_git_log --path is a pathspec inside the repository).
+		"llm_git_status":   {PathFrom: 0},
+		"llm_git_log":      {Values: []string{"-n", "--limit", "--since", "--until", "--grep", "--author", "--path", "--fields"}, PathFrom: 0},
+		"llm_git_overview": {Values: []string{"--log", "--files"}, PathFrom: 0},
+
+		// Processes, services, containers, the machine.
+		"llm_procs":       {Values: []string{"--name", "--port", "--pid"}, PathFrom: -1},
+		"llm_ports":       {Values: []string{"--port"}, PathFrom: -1},
+		"llm_service":     {Values: []string{"--log"}, PathFrom: -1},
+		"llm_docker_ps":   {PathFrom: -1},
+		"llm_docker_logs": {Values: []string{"--since", "--grep"}, PathFrom: -1},
+		"llm_docker_exec": {Values: []string{"--user", "-u"}, PathFrom: -1},
+		"llm_wait": {Values: []string{"--interval", "--exists", "--gone", "--http", "--code", "--json-path", "--equals", "--port", "--cmd-ok"},
+			Pairs: []string{"--file-match"}, PathOpts: []string{"--exists", "--file-match"}, PathFrom: -1},
+		"llm_sysinfo": {Values: []string{"--mount"}, PathOpts: []string{"--mount"}, PathFrom: -1},
+
+		// Project and runtime.
+		"llm_lint":    {Values: []string{"--ext", "--php", "--node"}, PathFrom: 0},
+		"llm_tools":   {PathFrom: -1},
+		"llm_project": {PathFrom: 0},
+		"llm_deps":    {PathFrom: 0},
+		"llm_env":     {Values: []string{"--filter", "-f"}, PathFrom: -1},
 	}
+}
+
+// readPathForms is the PATH of an llm_read PATH:A-B word (also PATH:A:B,
+// PATH:A-), so the rails check the file as well as the word.
+func readPathForms(word string) []string {
+	for _, i := range []int{lastIndexNth(word, ':', 2), strings.LastIndexByte(word, ':')} {
+		if i <= 0 {
+			continue
+		}
+		if _, ok := parseRange(word[i+1:]); ok {
+			return []string{word[:i]}
+		}
+	}
+	return nil
 }
 
 // hostable is h with --host ALIAS; name must have a hostSpecs entry.

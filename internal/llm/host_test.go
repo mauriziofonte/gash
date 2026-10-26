@@ -202,3 +202,83 @@ func TestHostSpecsCoverTheHookedFunctions(t *testing.T) {
 	}
 	require.Panics(t, func() { m.hostable("llm_nope", nil) })
 }
+
+// TestHostBinaryOnly: the reads without a fallback run the shipped binary
+// with the arguments as given (--host taken out), one invocation once it
+// is cached; their output gains "host". The "binary" is a script that
+// echoes its function and arguments.
+func TestHostBinaryOnly(t *testing.T) {
+	if b, ok := remote.LocalBinary(nil); !ok || b.Platform == "" {
+		t.Skip("no binary is shipped from this platform")
+	}
+	home, rhome := physTemp(t), physTemp(t)
+	mustWrite(t, filepath.Join(home, ".gash_env"), "HOST:web=deploy@web.example\n")
+	exe := filepath.Join(physTemp(t), "gash")
+	mustWrite(t, exe, "#!/bin/sh\ncase $1 in version) echo 3.4.0 ;; *) f=$1; shift; printf '{\"fn\":\"%s\",\"args\":\"%s\"}\\n' \"$f\" \"$*\" ;; esac\n")
+	require.NoError(t, os.Chmod(exe, 0o755))
+	ssh := &sshtest.SSH{Home: rhome}
+	m := New()
+	m.run = ssh
+	m.exe = func() (string, error) { return exe, nil }
+	env := baseEnv(home, nil)
+	d := physTemp(t)
+	cases := [][]string{
+		{"llm_stat", "a", "b", "--lines"},
+		{"llm_read", "src/a.php:2-3", "--around", "TODO", "-C", "1"},
+		{"llm_log", "storage/logs/app.log", "--level", "error", "-n", "5"},
+		{"llm_hash", ".env", "--short", "12"},
+		{"llm_count", "a", "--pat", "x"},
+		{"llm_assert", "a", "--count", "x=2"},
+		{"llm_textstats", "a"},
+		{"llm_textcheck", "a", "--rules", "crlf"},
+		{"llm_json", "composer.json", "--path", "require"},
+		{"llm_csv", "a.csv", "--where", "id=1"},
+		{"llm_dotenv", ".env", "APP_KEY", "--present"},
+		{"llm_git_status", "--repos", "app", "api", "--fetch"},
+		{"llm_git_log", "-n", "3", "--path", "src", "app"},
+		{"llm_git_overview", "app", "--log", "2"},
+		{"llm_procs", "--name", "php-fpm"},
+		{"llm_ports", "--listen"},
+		{"llm_service", "nginx", "--log", "5"},
+		{"llm_docker_ps", "--running"},
+		{"llm_docker_logs", "api", "--tail", "20", "--grep", "ERROR"},
+		{"llm_docker_exec", "api", "--", "php", "artisan", "--host", "x"},
+		{"llm_wait", "--timeout", "5s", "--file-match", "app.log", "ready"},
+		{"llm_sysinfo", "--mount", "/srv"},
+		{"llm_lint", "src", "--ext", "php"},
+		{"llm_tools", "php", "node"},
+		{"llm_project", "app"},
+		{"llm_deps", "app", "--dev"},
+		{"llm_env", "--filter", "^APP_"},
+	}
+	for _, tc := range cases {
+		fn := tc[0]
+		_, ok := m.hostSpecs()[fn]
+		require.True(t, ok, fn)
+		args := append([]string{"--host", "web"}, tc[1:]...)
+		r := runGo(t, m, d, env, fn, args...)
+		require.Equal(t, 0, r.RC, "%s: %s", fn, r.Stderr)
+		require.Equal(t, `{"host":"web","fn":"`+fn+`","args":"`+strings.Join(tc[1:], " ")+`"}`+"\n", r.Stdout, fn)
+	}
+	require.Equal(t, len(cases)+1, ssh.N(), "the binary is shipped once, then one invocation per call")
+
+	for _, tc := range []struct {
+		args []string
+		code string
+	}{
+		{[]string{"llm_json", "-", "--host", "web"}, `"error":"unexpected_argument","details":"-"`},
+		{[]string{"llm_read", "/etc/ssh/sshd_config:1-5", "--host", "web"}, `"error":"forbidden_path"`},
+		{[]string{"llm_stat", "../x", "--host", "web"}, `"error":"path_traversal_blocked"`},
+		{[]string{"llm_wait", "--timeout", "1s", "--exists", "/proc/1/environ", "--host", "web"}, `"error":"forbidden_path"`},
+		{[]string{"llm_sysinfo", "--mount", "/usr/bin", "--host", "web"}, `"error":"forbidden_path"`},
+		{[]string{"llm_procs", "--host", "nope"}, `"error":"unknown_host"`},
+	} {
+		r := runGo(t, m, d, env, tc.args[0], tc.args[1:]...)
+		require.Equal(t, 1, r.RC, "%q", tc.args)
+		require.Contains(t, r.Stderr, tc.code, "%q", tc.args)
+	}
+	require.Equal(t, len(cases)+1, ssh.N(), "a refused call never connects")
+	require.Equal(t, []string{"src/x"}, readPathForms("src/x:1-5"))
+	require.Equal(t, []string{"src/x"}, readPathForms("src/x:1:5"))
+	require.Nil(t, readPathForms("src/x"))
+}

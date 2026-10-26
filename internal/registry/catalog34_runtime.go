@@ -26,6 +26,7 @@ var catalogRuntime = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --ext LIST             Languages to check in directories (default: all):\n" +
@@ -42,6 +43,8 @@ var catalogRuntime = []Function{
 				"  --width N              Cut file names and messages at N columns\n" +
 				"  --relative, --absolute File paths relative to their PATH (default) or\n" +
 				"                         absolute\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Every PHP file of src with php 8.4\n" +
@@ -183,11 +186,13 @@ var catalogRuntime = []Function{
 			SeeAlso: "llm_runtime llm_env",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_tools [NAME...] [-j N] [--timeout S]\n" +
+				"  llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -j, --jobs N           Probes at a time (default 8)\n" +
 				"  --timeout S            Time limit of one probe (default 10s)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # The usual toolchain\n" +

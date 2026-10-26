@@ -33,33 +33,33 @@ var llmOptions = map[string][]string{
 		"--exclude", "--only-matching", "-o", "--distinct", "--files-only", "-l", "--count", "-c", "--by",
 		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail", "--host"},
 	"llm_config":     {"--max-bytes", "--path", "--host"},
-	"llm_git_status": {"--summary", "--files", "--fetch", "--repos", "--timeout", "-j", "--format", "--max-lines", "--head", "--tail", "--width"},
+	"llm_git_status": {"--summary", "--files", "--fetch", "--repos", "--timeout", "-j", "--format", "--max-lines", "--head", "--tail", "--width", "--host"},
 	"llm_git_diff":   {"--staged", "--cached", "--files", "--numstat", "--summary", "--patch", "--format", "--max-lines", "--head", "--tail", "--width"},
-	"llm_git_log":    {"-n", "--limit", "--since", "--until", "--grep", "--author", "--path", "--fields", "--format", "--max-lines", "--head", "--tail", "--width"},
-	"llm_env":        {"--filter", "-f"},
-	"llm_ports":      {"--listen", "-l", "--port"},
-	"llm_procs":      {"--name", "--port", "--pid", "--alive", "--tree", "--format", "--width", "--max-lines", "--head", "--tail"},
-	"llm_project":    {},
-	"llm_deps":       {"--dev"},
+	"llm_git_log":    {"-n", "--limit", "--since", "--until", "--grep", "--author", "--path", "--fields", "--format", "--max-lines", "--head", "--tail", "--width", "--host"},
+	"llm_env":        {"--filter", "-f", "--host"},
+	"llm_ports":      {"--listen", "-l", "--port", "--host"},
+	"llm_procs":      {"--name", "--port", "--pid", "--alive", "--tree", "--format", "--width", "--max-lines", "--head", "--tail", "--host"},
+	"llm_project":    {"--host"},
+	"llm_deps":       {"--dev", "--host"},
 
 	// 3.4 text reads.
-	"llm_stat":      {"--lines", "--follow", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
-	"llm_count":     {"--pat", "--regex", "--lines", "--occurrences", "--format", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
-	"llm_assert":    {"--has", "--lacks", "--count", "--regex", "--lines", "--occurrences", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
-	"llm_read":      {"--lines", "--around", "-C", "--context", "--max-bytes", "--format", "--head", "--tail", "--max-lines", "--width", "--absolute", "--relative"},
-	"llm_log":       {"--tail", "-n", "--last-match", "--grep", "--since", "--level", "--width", "--format"},
-	"llm_hash":      {"--algo", "--short", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
-	"llm_textstats": {"--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
-	"llm_textcheck": {"--rules", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative"},
+	"llm_stat":      {"--lines", "--follow", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative", "--host"},
+	"llm_count":     {"--pat", "--regex", "--lines", "--occurrences", "--format", "-j", "--jobs", "--timeout", "--absolute", "--relative", "--host"},
+	"llm_assert":    {"--has", "--lacks", "--count", "--regex", "--lines", "--occurrences", "-j", "--jobs", "--timeout", "--absolute", "--relative", "--host"},
+	"llm_read":      {"--lines", "--around", "-C", "--context", "--max-bytes", "--format", "--head", "--tail", "--max-lines", "--width", "--absolute", "--relative", "--host"},
+	"llm_log":       {"--tail", "-n", "--last-match", "--grep", "--since", "--level", "--width", "--format", "--host"},
+	"llm_hash":      {"--algo", "--short", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative", "--host"},
+	"llm_textstats": {"--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative", "--host"},
+	"llm_textcheck": {"--rules", "--format", "--head", "--tail", "--max-lines", "--width", "-j", "--jobs", "--timeout", "--absolute", "--relative", "--host"},
 
 	// 3.4 data.
-	"llm_json":   {"--path", "--keys", "--shape", "--format", "--width", "--head", "--tail"},
-	"llm_csv":    {"--head", "--cols", "--count", "--delim", "--where", "--format"},
-	"llm_dotenv": {"--present"},
+	"llm_json":   {"--path", "--keys", "--shape", "--format", "--width", "--head", "--tail", "--host"},
+	"llm_csv":    {"--head", "--cols", "--count", "--delim", "--where", "--format", "--host"},
+	"llm_dotenv": {"--present", "--host"},
 	"llm_date":   {"--diff", "--add", "--epoch", "--tz", "--fmt"},
 
 	// 3.4 git.
-	"llm_git_overview": {"--log", "--files"},
+	"llm_git_overview": {"--log", "--files", "--host"},
 	"llm_git_show":     {"--stat", "--files", "--patch", "--max-lines", "--head", "--tail", "--width"},
 
 	// 3.4 network.
@@ -71,18 +71,18 @@ var llmOptions = map[string][]string{
 
 	// 3.4 processes, waiting and services.
 	"llm_wait": {"--timeout", "--interval", "--file-match", "--exists", "--gone", "--http", "--code", "--json-path",
-		"--equals", "--port", "--cmd-ok", "--tail", "--width"},
-	"llm_service":     {"--log", "--format", "--width", "--max-lines", "--head", "--tail"},
-	"llm_docker_ps":   {"--running", "--format", "--width", "--max-lines", "--head", "--tail"},
-	"llm_docker_logs": {"--tail", "--since", "--grep", "--width"},
-	"llm_docker_exec": {"--user", "-u", "--width", "--max-lines", "--head", "--tail"},
-	"llm_sysinfo":     {"--mount"},
+		"--equals", "--port", "--cmd-ok", "--tail", "--width", "--host"},
+	"llm_service":     {"--log", "--format", "--width", "--max-lines", "--head", "--tail", "--host"},
+	"llm_docker_ps":   {"--running", "--format", "--width", "--max-lines", "--head", "--tail", "--host"},
+	"llm_docker_logs": {"--tail", "--since", "--grep", "--width", "--host"},
+	"llm_docker_exec": {"--user", "-u", "--width", "--max-lines", "--head", "--tail", "--host"},
+	"llm_sysinfo":     {"--mount", "--host"},
 
 	// 3.4 runtimes, lint and tests.
-	"llm_lint":    {"--ext", "--php", "--node", "-j", "--jobs", "--timeout", "--max-lines", "--head", "--tail", "--width", "--relative", "--absolute"},
+	"llm_lint":    {"--ext", "--php", "--node", "-j", "--jobs", "--timeout", "--max-lines", "--head", "--tail", "--width", "--relative", "--absolute", "--host"},
 	"llm_runtime": {},
 	"llm_test":    {"--runner", "--fail-only", "--max-lines", "--head", "--tail", "--width", "--timeout", "--relative", "--absolute"},
-	"llm_tools":   {"-j", "--jobs", "--timeout"},
+	"llm_tools":   {"-j", "--jobs", "--timeout", "--host"},
 
 	// 3.4 remote.
 	"llm_remote_run": {"--step", "--stop-on-error", "-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
