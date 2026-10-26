@@ -129,7 +129,7 @@ EOF`})
 func TestLedger_LLM06_2x_ports(t *testing.T) {
 	m := New()
 	d := physTemp(t)
-	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 1 2 ? S 00:00 0:00 /bin/a"b\x1bc\n'`})
+	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 /bin/a"b\x1bc\n'`})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log")})
 	// 3.0: LLM-06 fixed
 	r := runGo(t, m, d, env, "llm_ports")
@@ -140,6 +140,7 @@ func TestLedger_LLM06_2x_ports(t *testing.T) {
 
 const psStub = `case "$*" in
   "aux --no-headers") for i in $(seq 1 25); do echo "user$i $i 1.5 0.$i 100 200 pts/0 S 10:00 0:00 /usr/bin/cmd$i --flag lc=$LC_ALL"; done ;;
+  "-A -o user=,pid=,%cpu=,%mem=,args=") for i in $(seq 25 -1 1); do echo "user$i $i 1.5 0.$i /usr/bin/cmd$i --flag lc=$LC_ALL"; done ;;
   "-o ppid= -p "*) echo "    1" ;;
   "-o ppid=,args= -p 101") echo "  50 sleep 30" ;;
   "-o ppid=,args= -p 102") echo "  51   sleep   30  " ;;
@@ -400,7 +401,7 @@ func TestLedger_LLM06(t *testing.T) {
 	tree := strictJSON(t, r.Stdout).(map[string]any)
 	require.Equal(t, hostile, tree["children"].([]any)[0].(map[string]any)["name"])
 
-	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 1 2 ? S 00:00 0:00 /bin/a"b\x1bc\x7f\n'`})
+	bin := stubBin(t, map[string]string{"ss": ssOut, "ps": `printf 'u\x01ser 7 0.0 0.1 /bin/a"b\x1bc\x7f\n'`})
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": filepath.Join(d, "log"), "HOSTILE_V": hostile})
 	r = runGo(t, m, d, env, "llm_ports")
 	require.Contains(t, strictJSON(t, r.Stdout), map[string]any{"proto": "tcp", "address": "a\"b\\c\x01", "port": float64(8080), "state": "LISTEN"})

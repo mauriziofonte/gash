@@ -177,19 +177,28 @@ var (
 var ErrNoPS = errors.New("ps listed no process")
 
 // Snapshot reads the Table with ps (its path, "" when not installed)
-// through r with env, else from /proc; ErrNoPS when neither works.
-func Snapshot(ctx context.Context, r runner.Runner, ps string, env []string) (*Table, error) {
+// through r with env, else from the Linux /proc at proc ("" where there
+// is none, see Root); ErrNoPS when neither works.
+func Snapshot(ctx context.Context, r runner.Runner, ps string, env []string, proc string) (*Table, error) {
 	if ps != "" {
 		if t, err := ReadPS(ctx, r, ps, env); err == nil {
 			return t, nil
 		}
 	}
-	if HasProcFS() {
-		if t, err := ReadProcFS("/proc"); err == nil {
+	if proc != "" {
+		if t, err := ReadProcFS(proc); err == nil {
 			return t, nil
 		}
 	}
 	return nil, ErrNoPS
+}
+
+// Root is the Linux /proc of this system, "" where there is none (macOS).
+func Root() string {
+	if HasProcFS() {
+		return "/proc"
+	}
+	return ""
 }
 
 // ReadPS reads a Table with the two ps listings, run through r with env.

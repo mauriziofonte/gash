@@ -22,6 +22,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/jsonpath"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/proctab"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -405,11 +406,12 @@ func (w *waitCall) waitExists() int {
 // zombie counts as gone), or when no process but the caller's own chain
 // has a command line NAME matches (a regular expression, as llm_procs
 // --name). Nothing is signaled: on Linux it reads /proc, elsewhere it
-// runs ps, at most once a second.
+// runs ps, at most once a second. Without either the missing ps is
+// reported (3.4 before: --gone PID was never met).
 func (w *waitCall) waitGone() int {
 	interval := w.interval
-	procfs := proctab.HasProcFS()
-	if !procfs {
+	proc := w.m.proc
+	if proc == "" {
 		interval = max(interval, waitPSInterval)
 	}
 	if digitsRE.MatchString(w.cond.gone) {
@@ -417,7 +419,14 @@ func (w *waitCall) waitGone() int {
 			return fail(w.c, "invalid_pid", "Value '"+w.cond.gone+"' is not a process id", "Pass a process id as a plain integer, or a name")
 		}
 		pid := atoi(w.cond.gone)
-		met := w.loop(sleepWaker{}, interval, func(context.Context, time.Duration) bool { return w.pidGone(pid, procfs) })
+		ps := ""
+		if proc == "" {
+			var ok bool
+			if ps, ok = w.m.locate(w.c, "ps"); !ok {
+				return prereq.Fail(w.c, "ps", "llm_wait --gone", true)
+			}
+		}
+		met := w.loop(sleepWaker{}, interval, func(context.Context, time.Duration) bool { return w.pidGone(pid, proc, ps) })
 		return w.done(waitOut{Met: met})
 	}
 	if w.cond.gone == "" {
@@ -427,17 +436,21 @@ func (w *waitCall) waitGone() int {
 	if err != nil {
 		return fail(w.c, "invalid_regex", w.cond.gone, "NAME is a regular expression matched against the full command line")
 	}
-	t, ok := w.m.procTable(w.c)
+	t, ok := w.m.procTable(w.c, "llm_wait --gone")
 	if !ok {
 		return 1
 	}
+	ps, found := w.m.locate(w.c, "ps")
 	self := t.Callers(w.m.pid())
-	met := w.loop(sleepWaker{}, interval, func(context.Context, time.Duration) bool {
-		if procfs {
-			return !anyProcMatches(re, self)
+	met := w.loop(sleepWaker{}, interval, func(ctx context.Context, _ time.Duration) bool {
+		if proc != "" {
+			return !anyProcMatches(proc, re, self)
 		}
-		t, ok := w.m.procTable(w.c)
-		if !ok {
+		if !found {
+			return false
+		}
+		t, err := proctab.ReadPS(ctx, w.m.run, ps, append(w.c.Env.Child(), "LC_ALL=C"))
+		if err != nil {
 			return false
 		}
 		for _, p := range t.Match(re.MatchString, self) {
@@ -450,16 +463,12 @@ func (w *waitCall) waitGone() int {
 	return w.done(waitOut{Met: met})
 }
 
-// pidGone reports that pid no longer runs: one small read of /proc, or
-// ps -p elsewhere.
-func (w *waitCall) pidGone(pid int, procfs bool) bool {
-	if procfs {
-		p, ok := proctab.ReadProc("/proc", pid, false)
+// pidGone reports that pid no longer runs: one small read of the Linux
+// /proc at proc, or ps -p elsewhere.
+func (w *waitCall) pidGone(pid int, proc, ps string) bool {
+	if proc != "" {
+		p, ok := proctab.ReadProc(proc, pid, false)
 		return !ok || !p.Alive()
-	}
-	ps, ok := w.m.lookPath(w.c, "ps")
-	if !ok {
-		return false
 	}
 	res, err := w.m.run.Run(w.ctx(), runner.Cmd{Path: ps, Args: []string{"-p", strconv.Itoa(pid), "-o", "stat="},
 		Options: runner.Options{Env: append(w.c.Env.Child(), "LC_ALL=C")}})
@@ -470,11 +479,11 @@ func (w *waitCall) pidGone(pid int, procfs bool) bool {
 	return st == "" || strings.HasPrefix(st, "Z")
 }
 
-// anyProcMatches scans /proc for a live process, outside skip, whose
-// command line matches re: one read of cmdline per process, and of stat
-// only for a match.
-func anyProcMatches(re *regexp.Regexp, skip map[int]bool) bool {
-	ents, err := os.ReadDir("/proc")
+// anyProcMatches scans the Linux /proc at proc for a live process,
+// outside skip, whose command line matches re: one read of cmdline per
+// process, and of stat only for a match.
+func anyProcMatches(proc string, re *regexp.Regexp, skip map[int]bool) bool {
+	ents, err := os.ReadDir(proc)
 	if err != nil {
 		return true
 	}
@@ -483,11 +492,11 @@ func anyProcMatches(re *regexp.Regexp, skip map[int]bool) bool {
 		if err != nil || skip[pid] {
 			continue
 		}
-		cmd := proctab.ReadCmdline("/proc", pid)
+		cmd := proctab.ReadCmdline(proc, pid)
 		if cmd == "" || !re.MatchString(cmd) {
 			continue
 		}
-		if p, ok := proctab.ReadProc("/proc", pid, false); ok && p.Alive() {
+		if p, ok := proctab.ReadProc(proc, pid, false); ok && p.Alive() {
 			return true
 		}
 	}
@@ -675,6 +684,11 @@ func (w *waitCall) waitPort() int {
 // (checked once, before the first run) until it exits 0; the last run's
 // exit status and, with --tail N, its last output lines are reported.
 func (w *waitCall) waitCmd() int {
+	// Every run is a bash script: without bash 3.4 before ran it to the
+	// timeout with rc 127.
+	if _, ok := w.m.findBash(w.c); !ok {
+		return prereq.Fail(w.c, "bash", "llm_wait --cmd-ok", true)
+	}
 	plan, err := w.m.execPlan(w.c, w.cond.cmd)
 	if err != nil {
 		return refusal(w.c, err)

@@ -73,7 +73,7 @@ var needs = map[string][]Need{
 	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}},
 
 	// Processes and ports.
-	"llm_procs":    {{"ps", "on macOS, or without /proc"}, {"lsof", "--port"}, {"pgrep", "--name"}},
+	"llm_procs":    {{"ps", "on macOS, or without /proc"}, {"lsof", "--port"}},
 	"agent_kill":   {{"ps", "on macOS, or without /proc"}},
 	"process_find": {{"ps", ""}},
 	"process_kill": {{"pgrep", ""}},

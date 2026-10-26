@@ -10,6 +10,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/proctab"
 )
 
@@ -38,6 +39,21 @@ type procsQuery struct {
 // shape); without one llm_procs prints exactly what it printed before.
 func (q procsQuery) active() bool { return q.pids != nil || q.alive || q.tree }
 
+// mode names the 3.4 options of the call, for a report: "--pid", "--tree".
+func (q procsQuery) mode() string {
+	var w []string
+	if q.pids != nil {
+		w = append(w, "--pid")
+	}
+	if q.alive {
+		w = append(w, "--alive")
+	}
+	if q.tree {
+		w = append(w, "--tree")
+	}
+	return strings.Join(w, " ")
+}
+
 // takePIDs reads the values of --pid: every word up to the next option,
 // at least one, each a plain integer (invalid_pid otherwise).
 func takePIDs(c *invoke.Call, args []string) ([]int, int, bool) {
@@ -60,14 +76,16 @@ func takePIDs(c *invoke.Call, args []string) ([]int, int, bool) {
 }
 
 // procTable is the process snapshot of a call: ps from the caller's PATH
-// (the seam the tests fake), else a Linux /proc; ps_not_found without
-// either.
-func (m *Module) procTable(c *invoke.Call) (*proctab.Table, bool) {
-	ps, _ := m.lookPath(c, "ps")
-	t, err := proctab.Snapshot(c.Ctx, m.run, ps, append(c.Env.Child(), "LC_ALL=C"))
+// (the seam the tests fake), else a Linux /proc; without either the
+// missing ps is reported for need (ps_not_found).
+func (m *Module) procTable(c *invoke.Call, need string) (*proctab.Table, bool) {
+	ps, ok := m.locate(c, "ps")
+	if !ok {
+		ps = ""
+	}
+	t, err := proctab.Snapshot(c.Ctx, m.run, ps, append(c.Env.Child(), "LC_ALL=C"), m.proc)
 	if err != nil {
-		fail(c, "ps_not_found", "Cannot list processes: no ps and no /proc",
-			"Install procps (ps) to list processes. Skip this check")
+		prereq.Fail(c, "ps", need, true)
 		return nil, false
 	}
 	return t, true
@@ -87,7 +105,7 @@ func (m *Module) procs34(c *invoke.Call, o *llmfmt.Options, q procsQuery) int {
 			return fail(c, "invalid_regex", q.name, "--name takes a regular expression matched against the full command line")
 		}
 	}
-	t, ok := m.procTable(c)
+	t, ok := m.procTable(c, "llm_procs "+q.mode())
 	if !ok {
 		return 1
 	}
@@ -98,7 +116,9 @@ func (m *Module) procs34(c *invoke.Call, o *llmfmt.Options, q procsQuery) int {
 	case q.pids != nil:
 		roots = q.pids
 	case q.port != "":
-		roots = m.portPIDs(c, q.port)
+		if roots, ok = m.portPIDs(c, q.port); !ok {
+			return 1
+		}
 	case re != nil:
 		for _, p := range t.Match(re.MatchString, self) {
 			roots = append(roots, p.PID)
@@ -169,11 +189,12 @@ func (m *Module) procs34(c *invoke.Call, o *llmfmt.Options, q procsQuery) int {
 }
 
 // portPIDs are the processes with a socket on port (lsof -i :PORT -t), by
-// PID; none without lsof.
-func (m *Module) portPIDs(c *invoke.Call, port string) []int {
-	lsof, ok := m.lookPath(c, "lsof")
+// PID; without lsof it is reported (3.4 before: no rows).
+func (m *Module) portPIDs(c *invoke.Call, port string) ([]int, bool) {
+	lsof, ok := m.locate(c, "lsof")
 	if !ok {
-		return nil
+		prereq.Fail(c, "lsof", "llm_procs --port", true)
+		return nil, false
 	}
 	set := map[int]bool{}
 	for _, w := range readWords(m.output(c, nil, lsof, "-i", ":"+port, "-t")) {
@@ -186,7 +207,7 @@ func (m *Module) portPIDs(c *invoke.Call, port string) []int {
 		out = append(out, p)
 	}
 	sort.Ints(out)
-	return out
+	return out, true
 }
 
 // procsLegacyTable writes the rows of a 2.x mode (the no-filter listing,

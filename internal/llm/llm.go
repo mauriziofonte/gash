@@ -17,6 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/proctab"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -29,6 +30,9 @@ type Module struct {
 	getpid   func() int
 	// lookPathFn replaces the PATH search in tests.
 	lookPathFn func(name string) (string, bool)
+	// proc is the Linux /proc the process listings read when ps is
+	// missing, "" where there is none (macOS).
+	proc string
 	// exe is the running binary that --host ships (nil: os.Executable).
 	exe func() (string, error)
 }
@@ -40,6 +44,7 @@ func New() *Module {
 		getwd:    syscall.Getwd,
 		rootHome: pathguard.RootHome,
 		readFile: os.ReadFile,
+		proc:     proctab.Root(),
 	}
 }
 
