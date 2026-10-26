@@ -674,7 +674,7 @@ fi
 # banner, SSH unlock) comes from the binary, evaluated here at top level.
 # Without a binary: one stderr line, and the stubs answer binary_not_found.
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
-if __gash_bin_resolve || __gash_fetch loud; then
+if __gash_bin_resolve || __gash_auto_fetch loud; then
     if declare -F __gash_stdout_tty >/dev/null && __gash_stdout_tty; then __gash_tty_out=1; else __gash_tty_out=0; fi
     if __gash_init="$(__gash_export_state __init && GASH__TTY_OUT=$__gash_tty_out "$__GASH_BIN" init bash)"; then
         __gash_aliases_on=0

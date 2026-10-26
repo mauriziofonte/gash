@@ -6,8 +6,9 @@
 # be obtained (the release URL has nothing, then a checksum mismatch). An
 # interactive shell gets one Gash line on stderr and sourcing returns 0;
 # headless sourcing prints nothing and returns 0, and each call answers
-# the binary_not_found envelope; nothing is left in the versions
-# directory and the working tree stays clean.
+# the binary_not_found envelope (headless, with no download unless
+# GASH_AUTO_FETCH=1); nothing is left in the versions directory and the
+# working tree stays clean.
 
 [!exec:git] skip 'needs git'
 env GASH_BIN=
@@ -31,6 +32,9 @@ stdout '^rc=0 v=3\.0\.0$'
 
 ! exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; llm_tree .'
 ! stdout .
+stderr '^\{"error":"binary_not_found","details":"gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed \(headless mode does not download it; GASH_AUTO_FETCH=1 allows that\)","action":"STOP","recoverable":true,"hint":"Run: bash ~/\.gash/install\.sh --repair"\}$'
+! exec bash -c 'GASH_HEADLESS=1 GASH_AUTO_FETCH=1; source "$HOME/.gash/gash.sh"; llm_tree .'
+! stdout .
 stderr '^\{"error":"binary_not_found","details":"gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded \(download failed: file://[^"]*/nothing/gash_3\.0\.0_[a-z]+_[a-z0-9]+\.tar\.gz\)","action":"STOP","recoverable":true,"hint":"Run: bash ~/\.gash/install\.sh --repair"\}$'
 
 exec sh -c 'ls -A "$HOME/.local/share/gash/versions/3.0.0" 2>/dev/null | wc -l'
@@ -43,8 +47,8 @@ env GASH_RELEASE_URL=file://$WORK/rel
 exec bash --norc --noprofile -i -c 'source "$HOME/.gash/gash.sh"; echo "rc=$?"'
 stdout '^rc=0$'
 stderr '^Warning: gash 3\.0\.0 is not installed and could not be downloaded \(checksum mismatch for gash_3\.0\.0_[a-z]+_[a-z0-9]+\.tar\.gz\)\.'
-! exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; gash_username'
-stderr '"error":"binary_not_found"'
+! exec bash -c 'GASH_HEADLESS=1 GASH_AUTO_FETCH=1; source "$HOME/.gash/gash.sh"; gash_username'
+stderr '"error":"binary_not_found","details":"[^"]*could not be downloaded \(checksum mismatch'
 exec sh -c 'ls -A "$HOME/.local/share/gash/versions/3.0.0" 2>/dev/null | wc -l'
 stdout '^ *0$'
 

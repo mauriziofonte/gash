@@ -224,13 +224,20 @@ func TestMissingBinary(t *testing.T) {
 	needBash(t)
 	dir := tree(t)
 	env := []string{"GASH_RELEASE_URL=file:///nonexistent"}
+	// Headless, nothing is downloaded unless GASH_AUTO_FETCH=1 (3.4.2).
 	out, err := bash(t, env, "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
+	require.Error(t, err)
+	require.Regexp(t, `^\{"error":"binary_not_found","details":"gash 2\.1\.0 for [a-z]+/[a-z0-9]+ is not installed \(headless mode does not download it; GASH_AUTO_FETCH=1 allows that\)","action":"STOP","recoverable":true,"hint":"Run: bash .*/install\.sh --repair"\}\n$`, out)
+	out, err = bash(t, append(env, "GASH_AUTO_FETCH=1"), "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
 	require.Error(t, err)
 	require.Regexp(t, `^\{"error":"binary_not_found","details":"gash 2\.1\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded \(download failed: file:///nonexistent/gash_2\.1\.0_[a-z0-9_]+\.tar\.gz\)","action":"STOP","recoverable":true,"hint":"Run: bash .*/install\.sh --repair"\}\n$`, out)
 
 	out, err = bash(t, env, "source '"+dir+"/lib/core/output.sh'; source '"+dir+"/lib/core/utils.sh'; all_colors")
 	require.Error(t, err)
 	require.Regexp(t, `^Error: gash 2\.1\.0 for .* is not installed and could not be downloaded \(download failed: .*\)\nHint: Run: bash .*/install\.sh --repair\n$`, out)
+	out, err = bash(t, append(env, "GASH_AUTO_FETCH=0"), "source '"+dir+"/lib/core/output.sh'; source '"+dir+"/lib/core/utils.sh'; all_colors")
+	require.Error(t, err)
+	require.Regexp(t, `^Error: gash 2\.1\.0 for .* is not installed \(GASH_AUTO_FETCH=0 turns the download off\)\nHint: Run: bash .*/install\.sh --repair\n$`, out)
 
 	// A missing prerequisite is named, with the command that installs it
 	// on this system (3.4): the envelope carries "missing" and "install".
@@ -238,7 +245,7 @@ func TestMissingBinary(t *testing.T) {
 	curl, err := exec.LookPath("curl")
 	require.NoError(t, err)
 	require.NoError(t, os.Symlink(curl, filepath.Join(bin, "curl")))
-	out, err = bash(t, append(env, "PATH="+bin), "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
+	out, err = bash(t, append(env, "PATH="+bin, "GASH_AUTO_FETCH=1"), "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
 	require.Error(t, err)
 	require.Regexp(t, `^\{"error":"binary_not_found","details":"gash 2\.1\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded \(tar is not installed\)","action":"STOP","recoverable":true,"hint":"Install tar(: [^"]+| with the package manager of this system)","missing":"tar"(,"install":"[^"]+")?\}\n$`, out)
 	out, err = bash(t, append(env, "PATH="+bin), "source '"+dir+"/lib/core/output.sh'; source '"+dir+"/lib/core/utils.sh'; all_colors")
@@ -648,7 +655,7 @@ var gashAllowed = map[string]bool{
 	"__GASH_AWK": true, "__GASH_RED": true, "__GASH_GREEN": true, "__GASH_YELLOW": true, "__GASH_BLUE": true,
 	"__GASH_CYAN": true, "__GASH_WHITE": true, "__GASH_DIM": true, "__GASH_UNDERLINE": true,
 	"__GASH_CLEAR_SCREEN": true, "__GASH_CURSOR_HIDE": true, "__GASH_CURSOR_SHOW": true, "__GASH_ERASE_EOL": true,
-	"__GASH_FETCH_REASON": true, "__GASH_FETCH_MISSING": true, "__GASH_HELP_LOADED": true, "__GASH_LOAD_ERRORS": true, "__GASH_LOAD_TIMES": true,
+	"__GASH_FETCH_REASON": true, "__GASH_FETCH_MISSING": true, "__GASH_FETCH_SKIPPED": true, "__GASH_HELP_LOADED": true, "__GASH_LOAD_ERRORS": true, "__GASH_LOAD_TIMES": true,
 	"__GASH_SETTINGS_KNOWN": true, "__GASH_T0": true, "__GASH_T1": true, "__GASH_TIMING": true,
 	"__GASH_USER_ALIASES": true, "__GASH_PRE_SYMBOLS": true, "__GASH_POST_SYMBOLS": true,
 	"__GASH_COMPLETE_NAMES": true, "__GASH_SNAPSHOT2": true,

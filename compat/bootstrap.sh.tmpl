@@ -10,7 +10,8 @@
 #     GASH_BIN when set and executable, else
 #     ${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/<VERSION>/gash;
 #   - the first-run fetch of that binary (curl or wget, SHA-256 checked),
-#     never at source time in headless mode;
+#     never at source time, and in headless mode only with
+#     GASH_AUTO_FETCH=1 (GASH_AUTO_FETCH=0: never on its own);
 #   - __gash_call, the wrapper of every delegated function: it passes the
 #     caller's shell state the 2.x function read and execs the binary;
 #   - the missing-binary report (one envelope line for agents, an Error:
@@ -152,19 +153,44 @@ __gash_bin_resolve() {
     return 1
 }
 
-# The binary, fetched on first use when it is missing. Silent: a failure
-# surfaces as the report of the call.
+# The binary, fetched on first use when it is missing (__gash_auto_fetch).
+# Silent: a failure, or a fetch not made, surfaces as the report of the
+# call.
 __gash_compat_ready() {
     [[ -n "${__GASH_BIN-}" && -x "$__GASH_BIN" ]] && return 0
     __gash_bin_resolve && return 0
-    __gash_fetch quiet >/dev/null 2>&1 || return 1
+    __gash_auto_fetch quiet >/dev/null 2>&1 || return 1
     __gash_bin_resolve
 }
 
 # Why the last fetch failed, for the one interactive line, and the
 # prerequisite it lacked (curl, tar, gzip, sha256sum), if that was why.
+# __GASH_FETCH_SKIPPED is 1 when no download was tried (__gash_auto_fetch).
 __GASH_FETCH_REASON=""
 __GASH_FETCH_MISSING=""
+__GASH_FETCH_SKIPPED=0
+
+# The download Gash starts on its own: at the first call of a function and
+# when an interactive shell loads. Headless mode (an agent, a script)
+# never downloads and installs a program unasked: the call answers
+# binary_not_found, whose hint is install.sh --repair, unless
+# GASH_AUTO_FETCH=1. GASH_AUTO_FETCH=0 turns it off in every mode. The
+# installer and its --repair call __gash_fetch whatever the setting.
+# Usage: __gash_auto_fetch [quiet|loud]
+__gash_auto_fetch() {
+    __GASH_FETCH_SKIPPED=1
+    __GASH_FETCH_MISSING=""
+    if [[ "${GASH_AUTO_FETCH-}" == 0 ]]; then
+        __GASH_FETCH_REASON="GASH_AUTO_FETCH=0 turns the download off"
+    elif [[ "${GASH_HEADLESS-}" == 1 && "${GASH_AUTO_FETCH-}" != 1 ]]; then
+        __GASH_FETCH_REASON="headless mode does not download it; GASH_AUTO_FETCH=1 allows that"
+    else
+        __gash_fetch "${1-quiet}"
+        return
+    fi
+    [[ "${1-}" == loud ]] && __gash_fetch_line
+    return 1
+}
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
@@ -173,6 +199,7 @@ __gash_fetch() {
     local base dir lock tmp asset url line want got pin="" hpin="" sumok=0 rc=0 now at
     __GASH_FETCH_REASON=""
     __GASH_FETCH_MISSING=""
+    __GASH_FETCH_SKIPPED=0
     if [[ -z "$v" || "$v" == unknown ]]; then
         __GASH_FETCH_REASON="no VERSION file"
     elif [[ -z "$os" || -z "$arch" ]]; then
@@ -279,7 +306,10 @@ __gash_fetch() {
             fi
         fi
     fi
-    if ((rc == 0)) && ! tar -xzf "$tmp/$asset" -C "$tmp" gash 2>/dev/null; then
+    # Extracted to stdout, so the files are created by this user: as root,
+    # tar -x would keep the owner of the archive (the release builder's
+    # uid), who could then rewrite the installed binary.
+    if ((rc == 0)) && ! tar -xzOf "$tmp/$asset" gash >"$tmp/gash" 2>/dev/null; then
         __GASH_FETCH_REASON="cannot extract $asset"
         rc=1
     fi
@@ -291,7 +321,8 @@ __gash_fetch() {
         fi
     fi
     if ((rc == 0)); then
-        tar -xzf "$tmp/$asset" -C "$tmp" gash-hosts-helper 2>/dev/null || true
+        tar -xzOf "$tmp/$asset" gash-hosts-helper >"$tmp/gash-hosts-helper" 2>/dev/null ||
+            command rm -f "$tmp/gash-hosts-helper" 2>/dev/null || true
         if [[ -f "$tmp/gash-hosts-helper" && -n "$hpin" ]]; then
             got="$(__gash_fetch_sum "$tmp/gash-hosts-helper")"
             if [[ "$got" != "$hpin" ]]; then
@@ -357,12 +388,15 @@ __gash_boot_emitters() {
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
 __gash_fetch_line() {
-    local __gfl_reason="$__GASH_FETCH_REASON" __gfl_missing="$__GASH_FETCH_MISSING"
+    local __gfl_reason="$__GASH_FETCH_REASON" __gfl_missing="$__GASH_FETCH_MISSING" __gfl_skipped="$__GASH_FETCH_SKIPPED"
     __gash_boot_emitters || return 0
     __GASH_FETCH_REASON="$__gfl_reason"
     __GASH_FETCH_MISSING="$__gfl_missing"
+    __GASH_FETCH_SKIPPED="$__gfl_skipped"
     if [[ -z "$__GASH_FETCH_REASON" ]]; then
         __gash_success "Installed gash $__GASH_BOOT_VERSION for $__GASH_BOOT_OS/$__GASH_BOOT_ARCH"
+    elif [[ "$__GASH_FETCH_SKIPPED" == 1 ]]; then
+        __gash_warning "gash $__GASH_BOOT_VERSION is not installed ($__GASH_FETCH_REASON). $(__gash_fetch_advice)"
     else
         __gash_warning "gash $__GASH_BOOT_VERSION is not installed and could not be downloaded ($__GASH_FETCH_REASON). $(__gash_fetch_advice)"
     fi
@@ -390,14 +424,16 @@ __gash_fetch_advice() {
 # humans. Status 1.
 # Usage: __gash_missing NAME
 __gash_missing() {
-    local details hint cmd="" json reason="$__GASH_FETCH_REASON" missing="$__GASH_FETCH_MISSING"
-    details="gash ${__GASH_BOOT_VERSION:-unknown} for ${__GASH_BOOT_OS:-${OSTYPE-unknown}}/${__GASH_BOOT_ARCH:-${HOSTTYPE-unknown}} is not installed and could not be downloaded"
+    local details hint cmd="" json reason="$__GASH_FETCH_REASON" missing="$__GASH_FETCH_MISSING" skipped="$__GASH_FETCH_SKIPPED"
+    details="gash ${__GASH_BOOT_VERSION:-unknown} for ${__GASH_BOOT_OS:-${OSTYPE-unknown}}/${__GASH_BOOT_ARCH:-${HOSTTYPE-unknown}} is not installed"
+    [[ "$skipped" == 1 ]] || details+=" and could not be downloaded"
     [[ -n "$reason" ]] && details+=" ($reason)"
     hint="$(__gash_fetch_advice)"
     [[ -n "$missing" ]] && cmd="$(__gash_install_hint "$missing")"
     __gash_boot_emitters || return 1
     __GASH_FETCH_REASON="$reason"
     __GASH_FETCH_MISSING="$missing"
+    __GASH_FETCH_SKIPPED="$skipped"
     if [[ "${GASH_HEADLESS-}" == 1 || "${1-}" == llm_* || "${1-}" == agent_* ]]; then
         if [[ -z "$missing" ]]; then
             __gash_json_error binary_not_found "$details" STOP "$hint"

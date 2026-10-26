@@ -10,7 +10,8 @@
 #     GASH_BIN when set and executable, else
 #     ${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/<VERSION>/gash;
 #   - the first-run fetch of that binary (curl or wget, SHA-256 checked),
-#     never at source time in headless mode;
+#     never at source time, and in headless mode only with
+#     GASH_AUTO_FETCH=1 (GASH_AUTO_FETCH=0: never on its own);
 #   - __gash_call, the wrapper of every delegated function: it passes the
 #     caller's shell state the 2.x function read and execs the binary;
 #   - the missing-binary report (one envelope line for agents, an Error:
@@ -237,24 +238,37 @@ __gash_bin_resolve() {
     return 1
 }
 
-# The binary, fetched on first use when it is missing. Silent: a failure
-# surfaces as the report of the call.
+# The binary, fetched on first use when it is missing (__gash_auto_fetch).
+# Silent: a failure, or a fetch not made, surfaces as the report of the
+# call.
 __gash_compat_ready() {
     [[ -n "${__GASH_BIN-}" && -x "$__GASH_BIN" ]] && return 0
     __gash_bin_resolve && return 0
-    __gash_fetch quiet >/dev/null 2>&1 || return 1
+    __gash_auto_fetch quiet >/dev/null 2>&1 || return 1
     __gash_bin_resolve
 }
 
 # Why the last fetch failed, for the one interactive line, and the
 # prerequisite it lacked (curl, tar, gzip, sha256sum), if that was why.
+# __GASH_FETCH_SKIPPED is 1 when no download was tried (__gash_auto_fetch).
 __GASH_FETCH_REASON=""
 __GASH_FETCH_MISSING=""
+__GASH_FETCH_SKIPPED=0
+
+# The download Gash starts on its own: at the first call of a function and
+# when an interactive shell loads. Headless mode (an agent, a script)
+# never downloads and installs a program unasked: the call answers
+# binary_not_found, whose hint is install.sh --repair, unless
+# GASH_AUTO_FETCH=1. GASH_AUTO_FETCH=0 turns it off in every mode. The
+# installer and its --repair call __gash_fetch whatever the setting.
+# Usage: __gash_auto_fetch [quiet|loud]
+# shellcheck disable=SC2120
+__gash_auto_fetch() { __gash_cold __gash_auto_fetch 6f599da2 && "${FUNCNAME[0]}" "$@"; }
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
 # shellcheck disable=SC2120
-__gash_fetch() { __gash_cold __gash_fetch bdb0d615 && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch() { __gash_cold __gash_fetch c45605a4 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_fetch_get URL FILE
 __gash_fetch_get() {
@@ -299,7 +313,7 @@ __gash_boot_emitters() { __gash_cold __gash_boot_emitters 16d8b1c4 && "${FUNCNAM
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
 # shellcheck disable=SC2120
-__gash_fetch_line() { __gash_cold __gash_fetch_line c53976a7 && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch_line() { __gash_cold __gash_fetch_line 2a8f32ce && "${FUNCNAME[0]}" "$@"; }
 
 # What to do after a failed fetch: the install command of the missing
 # prerequisite, else the installer's repair.
@@ -311,7 +325,7 @@ __gash_fetch_advice() { __gash_cold __gash_fetch_advice ccebf7a0 && "${FUNCNAME[
 # humans. Status 1.
 # Usage: __gash_missing NAME
 # shellcheck disable=SC2120
-__gash_missing() { __gash_cold __gash_missing badd25bc && "${FUNCNAME[0]}" "$@"; }
+__gash_missing() { __gash_cold __gash_missing f66a342a && "${FUNCNAME[0]}" "$@"; }
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x
 # code read: the common variables, NAME's own, and its settings (with
