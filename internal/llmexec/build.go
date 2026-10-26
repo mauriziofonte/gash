@@ -113,14 +113,22 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 
 	mode := s.Exec
 
-	canonical := line
+	canonical, protect := line, ""
 	if mode != "unrestricted" {
 		lc := newLineChecker(env, pr, extraSet)
+		// The user's PROTECT:all trees: no line runs inside one (a word
+		// without a path, git log say, would read it).
+		if len(lc.guard.Hidden) > 0 && lc.guard.Hides(env.Cwd) {
+			return nil, refuse("forbidden_path", env.Cwd, "FATAL", "This path is protected and cannot be accessed")
+		}
 		script, err := lc.checkAndRender(line)
 		if err != nil {
 			return nil, err
 		}
 		canonical = script
+		if !extraSet["git"] {
+			protect = protectGit(lc.guard)
+		}
 	}
 
 	if s.Sandbox == "1" && !pr.HasBwrap() {
@@ -135,7 +143,7 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 	if mode == "unrestricted" {
 		child = strings.TrimRight(preludeUnrestricted(extra), "\n") + "\n" + line
 	} else {
-		child = strings.TrimRight(prelude(extra, pr), "\n") + "\n" + canonical
+		child = strings.TrimRight(prelude(extra, pr)+protect, "\n") + "\n" + canonical
 	}
 
 	argv := []string{env.bash(), "--noprofile", "--norc", "-c", child}

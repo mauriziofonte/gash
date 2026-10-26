@@ -205,7 +205,7 @@ func (g *Guard) IsSecretFile(file string) bool {
 	if file == "" {
 		return false
 	}
-	if SecretName(file) || g.Seals(file) {
+	if SecretName(file) || g.sealedFile(file) {
 		return true
 	}
 	if g.existsOrSymlink(file) {

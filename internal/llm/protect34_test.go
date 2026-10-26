@@ -143,3 +143,57 @@ func TestProtectedPathsGit(t *testing.T) {
 	r = runGo(t, m, d, env, "llm_git_show", "HEAD:contracts/deal.txt")
 	require.Equal(t, "secret_file_blocked/FATAL", gitCode(t, r))
 }
+
+// TestProtectedPathsExecGit: inside llm_exec, git prints no content of a
+// PROTECT: tree and no name of a PROTECT:all one; REV:PATH in a tree is
+// refused; no line runs inside a PROTECT:all tree.
+func TestProtectedPathsExecGit(t *testing.T) {
+	requireGit(t)
+	home := physTemp(t)
+	d := physTemp(t)
+	git(t, d, home, "init", "-b", "main")
+	for _, f := range []string{"private/a.txt", "contracts/deal.txt", "pub.txt"} {
+		mustWrite(t, filepath.Join(d, f), "one\n")
+	}
+	git(t, d, home, "add", "-A")
+	git(t, d, home, "commit", "-m", "base")
+	for _, f := range []string{"private/a.txt", "contracts/deal.txt", "pub.txt"} {
+		mustWrite(t, filepath.Join(d, f), "two secret words\n")
+	}
+	env := baseEnv(home, map[string]string{
+		"GASH_ENV_FILE": envFile(t, "PROTECT:all="+d+"/private\nPROTECT:content="+d+"/contracts\n"),
+	})
+	m := New()
+	exec := func(dir, line string) result { t.Helper(); return runGo(t, m, dir, env, "llm_exec", line) }
+
+	r := exec(d, "git diff")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Equal(t, 1, strings.Count(r.Stdout, "two secret words"), r.Stdout)
+	require.Contains(t, r.Stdout, "pub.txt")
+	for _, line := range []string{"git status --short", "git diff --stat", "git log -p -1", "git grep -n secret"} {
+		r = exec(d, line)
+		require.Equal(t, 0, r.RC, "%s: %s", line, r.Stderr)
+		require.NotContains(t, r.Stdout, "private", line)
+	}
+	r = exec(d, "git grep -n one HEAD")
+	require.NotContains(t, r.Stdout, "contracts")
+	require.Contains(t, r.Stdout, "pub.txt")
+	r = exec(d, "git show HEAD:private/a.txt")
+	require.Equal(t, "forbidden_path/FATAL", gitCode(t, r))
+	r = exec(d, "git -C contracts show HEAD:./deal.txt")
+	require.Equal(t, "secret_file_blocked/FATAL", gitCode(t, r))
+	r = exec(filepath.Join(d, "private"), "git log --oneline")
+	require.Equal(t, "forbidden_path/FATAL", gitCode(t, r))
+	r = exec(filepath.Join(d, "contracts"), "git diff")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Contains(t, r.Stdout, "pub.txt", "the repository is not in the tree")
+
+	// A repository inside a content tree: nothing of its content.
+	only := baseEnv(home, map[string]string{"GASH_ENV_FILE": envFile(t, "PROTECT:content="+d+"\n")})
+	r = runGo(t, m, d, only, "llm_exec", "git diff")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Empty(t, r.Stdout)
+	r = runGo(t, m, d, only, "llm_exec", "git log --oneline")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Contains(t, r.Stdout, "base")
+}

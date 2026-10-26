@@ -167,6 +167,20 @@ func (g *Guard) Hides(path string) bool { return g.inTrees(path, g.Hidden) }
 // Seals reports whether path is at or below a PROTECT:content tree.
 func (g *Guard) Seals(path string) bool { return g.inTrees(path, g.Sealed) }
 
+// sealedFile is Seals for IsSecretFile, which judges every word of an
+// llm_exec line: a bare name (no /, no ~) counts only when it names
+// something in the working directory, so a word such as "diff" typed
+// inside a PROTECT:content tree is not a file of it.
+func (g *Guard) sealedFile(file string) bool {
+	if len(g.Sealed) == 0 {
+		return false
+	}
+	if !strings.ContainsRune(file, '/') && !strings.HasPrefix(file, "~") && !g.existsOrSymlink(strings.TrimSuffix(g.Cwd, "/")+"/"+file) {
+		return false
+	}
+	return g.Seals(file)
+}
+
 // underTrees is the walk form of inTrees: path is already physical (an
 // entry of a walk from a resolved root), so no lookup is needed.
 func underTrees(path string, trees []string) bool {
