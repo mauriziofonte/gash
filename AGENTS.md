@@ -557,11 +557,14 @@ functions):
 Every remote call names a registered `HOST:alias=user@host` entry of
 `~/.gash_env` (a raw `user@host` or an unknown alias is `unknown_host`,
 STOP) and runs over the multiplexed ssh connection of `remote_*`, one round
-trip per call; a dead connection is `host_unreachable` (RETRY).
+trip per call; a dead connection is `host_unreachable` (RETRY). Without ssh
+on this machine a remote call (`--host`, `llm_remote_run`, `llm_same`,
+`agent_put`, the `+ssh` databases) is `prerequisite_missing` (STOP), once,
+before anything connects.
 
 | Function | Output |
 |---|---|
-| `llm_remote_run HOST... -- CMD \| HOST --step CMD... [--stop-on-error] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `-- CMD`: one row per host in HOST order, run in parallel: `[{"host","rc","ms","out","err","error"}]` (`error` null, `timeout`, `host_unreachable` or `remote_protocol_error`); `--step`: the steps in order in ONE round trip, `[{"step","rc","ms","out"}]` (out = stdout and stderr), `{"stopped":true,"skipped":K}` on stderr after `--stop-on-error` |
+| `llm_remote_run HOST... -- CMD \| HOST --step CMD... [--stop-on-error] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `-- CMD`: one row per host in HOST order, run in parallel: `[{"host","rc","ms","out","err","error"}]` (`error` null, `timeout`, `host_unreachable`, `remote_protocol_error`, or `prerequisite_missing` when the host has no bash, named in `err`); `--step`: the steps in order in ONE round trip, `[{"step","rc","ms","out"}]` (out = stdout and stderr), `{"stopped":true,"skipped":K}` on stderr after `--stop-on-error` |
 | `llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME] [-j N] [--timeout S] [--width N] [--max-lines N] [--head N] [--tail N]` | `{"same":false,"files":N,"diff":[{"host","p","local","remote"}]}`: the first 12 hex of each sha256, null where a side lacks the path, one ssh round trip per target however many files; directories recursively over regular files (`.git` and `--exclude` names left out), `--container` hashes inside the container; secret files are not compared (`secrets_skipped`) |
 
 `--host ALIAS` (repeatable) on the file, text, data, git, process, service,
@@ -818,6 +821,19 @@ installs (Docker, nvm, cosign):
 
 ```json
 {"error":"prerequisite_missing","details":"remote_sync_push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo dnf install -y rsync","missing":"rsync","install":"sudo dnf install -y rsync"}
+```
+
+A tool missing on a remote host carries `host` (and `container` inside
+one) and no `install`: the host's package manager installs it, not this
+system's. That is `prerequisite_missing` for what the POSIX fallbacks,
+`llm_same`, `agent_put`, `llm_remote_run` (bash), the copy of the gash
+binary and the `+ssh` databases run there, and for a client too old for the
+call (`psql 12 or newer is needed on web (found 11.22)`); an error of the
+gash binary on the host keeps its code and gains `host` (its `install` is
+the host's command):
+
+```json
+{"error":"prerequisite_missing","details":"llm_find on web needs find, which is not installed there","action":"STOP","recoverable":true,"hint":"Install find on web (usually the findutils package), then retry","missing":"find","host":"web"}
 ```
 
 Do not install it yourself: show the user the command and let them decide.

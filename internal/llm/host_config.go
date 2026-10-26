@@ -46,11 +46,12 @@ func configFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, 
 		return argError("secret_file_blocked", "Cannot read .env or credential files", "This file contains secrets and cannot be read")
 	}
 	script := fbHeader("P", file, "MAX", maxBytes) + `
-abs=$(gash_resolve "$P")
+abs=$(gash_resolve "$P") || exit 1
 gash_secret "$abs" && gash_err secret_file_blocked secret -
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 [ -f "$abs" ] || gash_err file_not_found file "$abs"
 [ -r "$abs" ] || gash_err path_unreadable notreadable "$abs"
+gash_tools ls cat
 set -f; set -- $(ls -lnd -- "$abs" 2>/dev/null); set +f
 [ "${5:-0}" -gt "$MAX" ] && gash_err file_too_large toolarge "$abs is $5 bytes"
 printf '%s meta %s\n' "$N" "$abs" >&2

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // TestShTierIsClassifyPath: the sh tier of a resolved path is the Go one,
@@ -125,6 +127,110 @@ func TestShResolveWithoutGNU(t *testing.T) {
 			real, err := exec.Command("realpath", "-m", "--", filepath.Join(dir, c.in)).Output()
 			require.NoError(t, err)
 			require.Equal(t, strings.TrimSpace(string(real)), got[i], "realpath -m %s", c.in)
+		}
+	}
+}
+
+// shells are the POSIX shells the host scripts are tested under: dash
+// (Debian's sh, close to BusyBox ash) and bash in POSIX mode.
+func shells(t *testing.T) [][]string {
+	t.Helper()
+	var out [][]string
+	if p, err := exec.LookPath("dash"); err == nil {
+		out = append(out, []string{p})
+	}
+	if p, err := exec.LookPath("bash"); err == nil {
+		out = append(out, []string{p, "--posix"})
+	}
+	if len(out) == 0 {
+		t.Skip("neither dash nor bash")
+	}
+	return out
+}
+
+// TestShRailsWithoutTr: gash_secret, gash_exception and the .ssh check of
+// gash_tier lowercased the path with tr; without tr they compared an
+// empty string and let every secret through. They run no program now:
+// under dash and bash --posix with a PATH that holds nothing, they match
+// as the Go rails do.
+func TestShRailsWithoutTr(t *testing.T) {
+	for _, f := range []string{ShSecret(), ShException(), ShTier()} {
+		require.NotContains(t, f, "tr ", "no tr in the rails")
+	}
+	names := []string{
+		".env", "app/.env", "app/.ENV.local", "x.env", ".env.example", ".Env.Example", "config/secrets.yml", "id_rsa", "ID_RSA.pub",
+		"keys/server.PEM", "credentials.json", "CredentialsController.php", "home/u/.ssh/config", "home/u/.SSH/known_hosts",
+		"a/.config/gcloud/x", "a/.Config/GCloud/x", "notes.txt", "login data", "Login Data", "LOGIN DATA", "terraform.tfstate.backup",
+		"README.md", "x.tfvars.json", "ssh_host_rsa_key", "SSH_HOST_RSA_KEY.pub", "app.env.example", "dir/", "Kubeconfig", "NTUSER.DAT",
+		"a b/.aws/credentials", "x/.Gnupg/y",
+	}
+	tiers := []string{"/home/u/.ssh/config", "/home/u/.SSH/x", "/srv/.Ssh/k", "/srv/app/x", "/etc/hosts", "/tmp/.ssh"}
+	empty := t.TempDir()
+	for _, sh := range shells(t) {
+		var script strings.Builder
+		script.WriteString(ShSecret() + ShException() + ShTier())
+		script.WriteString(`for p in "$@"; do b=${p%/}; b=${b##*/}; s=0; e=0; gash_secret "$p" && s=1; gash_exception "$b" && e=1; echo "$s$e"; done` + "\n")
+		for _, p := range tiers {
+			script.WriteString("gash_tier " + Quote(p) + "\n")
+		}
+		cmd := exec.Command(sh[0], append(append(sh[1:], "-c", script.String(), "sh"), names...)...)
+		cmd.Env = []string{"PATH=" + empty, "LC_ALL=C"}
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "%v: %s", sh, out)
+		got := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+		require.Len(t, got, len(names)+len(tiers), "%v: %s", sh, out)
+		for i, n := range names {
+			b := strings.TrimSuffix(n, "/")
+			b = b[strings.LastIndexByte(b, '/')+1:]
+			want := bit(pathguard.SecretName(n)) + bit(pathguard.SecretException(b))
+			require.Equal(t, want, got[i], "%v %q", sh, n)
+		}
+		for i, p := range tiers {
+			require.Equal(t, classifyResolved(p), got[len(names)+i], "%v %q", sh, p)
+		}
+	}
+}
+
+func bit(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
+// TestShResolveWithoutReadlink: without realpath -m and without readlink,
+// gash_resolve gave a symlink's own path, so the rails judged a link named
+// "settings" that points at .env as "settings" and the call read or wrote
+// .env through it. It answers the "missing readlink" frame and status 1
+// now, with nothing on stdout; paths without a link still resolve.
+func TestShResolveWithoutReadlink(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "app"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env"), []byte("A=1\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app", "f"), nil, 0o600))
+	for link, target := range map[string]string{"settings": ".env", "dl": "nowhere/x", "dlink": "app"} {
+		require.NoError(t, os.Symlink(target, filepath.Join(dir, link)))
+	}
+	empty := t.TempDir()
+	for _, sh := range shells(t) {
+		for _, c := range []struct{ in, out, errOut string }{
+			{"app/f", "ok " + dir + "/app/f\n", ""},
+			{"app/new/../g", "ok " + dir + "/app/g\n", ""},
+			{"dlink/x", "ok " + dir + "/app/x\n", ""},
+			{"settings", "status 1\n", "NONCE missing readlink\n"},
+			{"dl", "status 1\n", "NONCE missing readlink\n"},
+			{"dl/y", "status 1\n", "NONCE missing readlink\n"},
+		} {
+			script := "N=NONCE\n" + ShResolve() + "cd " + Quote(dir) + "\n" +
+				`if r=$(gash_resolve "$1"); then echo "ok $r"; else echo "status $?${r:+ stdout $r}"; fi` + "\n"
+			cmd := exec.Command(sh[0], append(append(sh[1:], "-c", script, "sh"), c.in)...)
+			cmd.Env = []string{"PATH=" + empty, "LC_ALL=C"}
+			var out, errOut strings.Builder
+			cmd.Stdout, cmd.Stderr = &out, &errOut
+			require.NoError(t, cmd.Run(), "%v %s", sh, c.in)
+			require.Equal(t, c.out, out.String(), "%v %s", sh, c.in)
+			require.Equal(t, c.errOut, errOut.String(), "%v %s", sh, c.in)
 		}
 	}
 }

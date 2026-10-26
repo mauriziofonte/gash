@@ -56,8 +56,8 @@ var needs = map[string][]Need{
 
 	// Remote hosts and SSH.
 	"remote_exec":          {{"ssh", ""}},
-	"remote_push":          {{"scp", ""}},
-	"remote_pull":          {{"scp", ""}},
+	"remote_push":          {{"scp", ""}, {"ssh", ""}},
+	"remote_pull":          {{"scp", ""}, {"ssh", ""}},
 	"remote_sync_push":     {{"rsync", ""}, {"ssh", ""}},
 	"remote_sync_pull":     {{"rsync", ""}, {"ssh", ""}},
 	"llm_remote_run":       {{"ssh", ""}},
@@ -69,7 +69,6 @@ var needs = map[string][]Need{
 	"llm_db_sample":        {{"ssh", "a +ssh URL"}},
 	"llm_db_explain":       {{"ssh", "a +ssh URL"}},
 	"llm_db_databases":     {{"ssh", "a +ssh URL"}},
-	"gash_db_test":         {{"ssh", "a +ssh URL"}},
 	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}},
 
 	// Processes and ports.

@@ -103,28 +103,40 @@ func runGash(nonce string, args []string) string {
 }
 
 // fallbackPart is the end of a dispatch script: the fallback body in a
-// subshell (so its exits end only the subshell) with the "fb" trailer, or
-// the "nobin" trailer with the remote platform when there is none.
+// subshell (so its exits end only the subshell) with the "fb" trailer;
+// when there is none, the "missing" trailer with the program the upload
+// lacked (GM, set by DispatchScript), or the "nobin" trailer with the
+// remote platform.
 func fallbackPart(nonce, fallback, noneTag string) string {
 	if fallback == "" {
-		return TrailerDetail(nonce, noneTag, "0", `"$(uname -sm 2>/dev/null)"`) + "\nexit 0\n"
+		return `[ -z "$GM" ] || { ` + TrailerDetail(nonce, "missing", "0", `"$GM"`) + "; exit 0; }\n" +
+			TrailerDetail(nonce, noneTag, "0", `"$(uname -sm 2>/dev/null)"`) + "\nexit 0\n"
 	}
 	return "(\n" + fallback + "\n)\ngr=$?\n" + Trailer(nonce, "fb", `"$gr"`) + "\nexit 0\n"
 }
 
+// shipTools are the programs ShipScript runs on the host (uname picks the
+// platform before it).
+const shipTools = "mkdir cat wc chmod mv"
+
 // DispatchScript runs fn ARGS on the remote side: the cached binary when
-// it is there; else, when the platform matches and shipping is possible,
-// the "ship" trailer (the caller then sends ShipScript); else the fallback
-// body (trailer "fb"), or the "nobin" trailer.
+// it is there; else, when the platform matches and the programs of the
+// upload are there, the "ship" trailer (the caller then sends ShipScript);
+// else the fallback body (trailer "fb"); else the "missing" trailer naming
+// the program that kept the binary out (uname, or one of shipTools), or
+// the "nobin" trailer.
 func DispatchScript(nonce string, b Binary, haveBin bool, fn string, args []string, fallback string) string {
 	var s strings.Builder
-	s.WriteString("N=" + Quote(nonce) + "\n")
+	s.WriteString("N=" + Quote(nonce) + "\nGM=\n")
 	if haveBin {
 		s.WriteString(`G="$HOME"/` + Quote(b.Dir+"/gash") + "\n")
 		s.WriteString(`if [ -x "$G" ]; then "$G" ` + runGash(nonce, append([]string{fn}, args...)) + "fi\n")
 		if b.Platform != "" {
-			s.WriteString(`case "$(uname -s 2>/dev/null)/$(uname -m 2>/dev/null)" in ` + b.Platform + ") " +
-				Trailer(nonce, "ship", "0") + "; exit 0 ;; esac\n")
+			s.WriteString("if command -v uname >/dev/null 2>&1; then\n")
+			s.WriteString(`  case "$(uname -s 2>/dev/null)/$(uname -m 2>/dev/null)" in ` + b.Platform + ")\n")
+			s.WriteString("    for gt in " + shipTools + `; do command -v "$gt" >/dev/null 2>&1 || { GM=$gt; break; }; done` + "\n")
+			s.WriteString(`    [ -n "$GM" ] || { ` + Trailer(nonce, "ship", "0") + "; exit 0; } ;;\n")
+			s.WriteString("  esac\nelse\n  GM=uname\nfi\n")
 		}
 	}
 	s.WriteString(fallbackPart(nonce, fallback, "nobin"))
@@ -142,11 +154,13 @@ func ShipScript(nonce string, b Binary, fn string, args []string, fallback strin
 	s.WriteString("N=" + Quote(nonce) + "\n")
 	s.WriteString(`D="$HOME"/` + Quote(b.Dir) + "\n")
 	s.WriteString(`S="$D/.ship.$$"; T="$S/gash"` + "\n")
-	s.WriteString(`if (umask 077 && mkdir -p "$S" && cat >"$T" && [ "$(wc -c <"$T" | tr -d ' ')" = ` +
+	// The size: wc's output, its padding dropped by the field splitting
+	// of set (no tr).
+	s.WriteString(`if (umask 077 && mkdir -p "$S" && cat >"$T" && set -- $(wc -c <"$T") && [ "$1" = ` +
 		Quote(strconv.FormatInt(b.Size, 10)) + ` ] && chmod 700 "$T" && "$T" version >/dev/null 2>&1 && mv -f "$T" "$D/gash"); then` + "\n")
 	s.WriteString(`  rmdir "$S" 2>/dev/null; "$D/gash" ` + runGash(nonce, append([]string{fn}, args...)))
 	s.WriteString("fi\n")
 	s.WriteString(`rm -rf "$S" 2>/dev/null; cat >/dev/null 2>&1` + "\n")
-	s.WriteString(fallbackPart(nonce, fallback, "shipfail"))
+	s.WriteString("GM=\n" + fallbackPart(nonce, fallback, "shipfail"))
 	return s.String()
 }

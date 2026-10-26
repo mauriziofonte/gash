@@ -63,6 +63,10 @@ func newSSHDBFixture(t *testing.T) *sshDBFixture {
 	mustWrite(t, filepath.Join(stub, "mysql"), stubMySQL, 0o755)
 	mustWrite(t, filepath.Join(stub, "psql"), stubPsql, 0o755)
 	mustWrite(t, filepath.Join(stub, "docker"), stubDocker, 0o755)
+	// The host's clock is fixed: on a loaded machine a stub client could
+	// run past 100 ms, and the slow-query EXPLAIN (a second client run)
+	// would replace the stdin and the answer the tests read.
+	mustWrite(t, filepath.Join(stub, "date"), "#!/bin/sh\necho 1792007131734850000\n", 0o755)
 	mustWrite(t, filepath.Join(f.home, ".gash_env"), strings.Join([]string{
 		"HOST:web=deploy@web.example",
 		"HOST:db=deploy@db.example",
@@ -81,7 +85,7 @@ func newSSHDBFixture(t *testing.T) *sshDBFixture {
 	f.ssh = &sshtest.SSH{Home: f.rhome, Path: stub + ":" + os.Getenv("PATH")}
 	f.m = frozen(New())
 	f.m.ssh = f.ssh
-	f.env = baseEnv(f.home, nil)
+	f.env = baseEnv(f.home, map[string]string{"PATH": sshtest.ClientPath(t, os.Getenv("PATH"))})
 	return f
 }
 

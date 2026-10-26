@@ -109,11 +109,16 @@ func fbPrelude() string {
 	return "LC_ALL=C; export LC_ALL\nNL='\n'\nTAB=$(printf '\\t')\n" + remote.ShErr() + remote.ShResolve()
 }
 
-// fbHeader is the start of a fallback body: the prelude, the rails
-// functions and the shell variables of vars (NAME, value), quoted.
+// fbHeader is the start of a fallback body: the prelude, gash_tools TOOL...
+// (the "missing TOOL" frame for a program the host lacks, which the
+// transport turns into the prerequisite envelope: a fallback names every
+// program it runs before it runs it, so a missing one is never an empty
+// answer), the rails functions and the shell variables of vars (NAME,
+// value), quoted.
 func fbHeader(vars ...string) string {
 	var b strings.Builder
 	b.WriteString(fbPrelude())
+	b.WriteString(remote.ShTools())
 	b.WriteString(remote.ShForbidden())
 	b.WriteString(remote.ShSecret())
 	b.WriteString(remote.ShException())

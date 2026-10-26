@@ -132,6 +132,9 @@ func (hs Hoster) Wrap(name string, spec Spec, h invoke.Handler) invoke.Handler {
 		if e := spec.check(rest); e != nil {
 			return c.Fail(*e)
 		}
+		if !RequireSSH(c, name+" --host") {
+			return 1
+		}
 		outs := hs.RunHosts(c, name, hosts, rest, nonce, plan)
 		return writeOuts(c, spec, outs)
 	}
@@ -168,11 +171,21 @@ func runOne(ctx context.Context, t Transport, bin Binary, haveBin bool, name str
 	case "rc":
 		return HostOut{Host: h, Stdout: r.Stdout, Stderr: r.Stderr, RC: r.Status}
 	case "fb":
+		if tool, ok := MissingFrame(r.Stderr, nonce); ok {
+			e := MissingOnHost(name, tool, h, "")
+			return HostOut{Host: h, Err: &e}
+		}
 		out := HostOut{Host: h, Stdout: r.Stdout, Stderr: r.Stderr, RC: r.Status}
 		if plan.Finish != nil {
 			out.Stdout, out.Stderr, out.RC = plan.Finish(h, r.Stdout, r.Stderr, r.Status)
 		}
 		return out
+	case "missing":
+		// The binary would run there, but a program the upload needs
+		// (uname, mkdir, cat, wc, chmod, mv) is missing, and these
+		// arguments have no fallback.
+		e := MissingOnHost(name, r.Detail, h, "")
+		return HostOut{Host: h, Err: &e}
 	case "shipfail":
 		return HostOut{Host: h, Err: unavailable(name, h, "gash could not be installed in ~/"+bin.Dir+" there, and these arguments have no POSIX fallback")}
 	case "nobin":
@@ -194,7 +207,8 @@ func unavailable(name string, h Host, why string) *contract.Envelope {
 
 // writeOuts writes the answers: one host as it answered plus "host";
 // several combined (CombineHosts). A transport failure, or the first host
-// (in input order) whose status is not 0, fails the call with its error.
+// (in input order) whose status is not 0, fails the call with its error;
+// a program the host lacks is named as the host's (AttributeHost).
 func writeOuts(c *invoke.Call, spec Spec, outs []HostOut) int {
 	for _, o := range outs {
 		if o.Err != nil {
@@ -204,7 +218,7 @@ func writeOuts(c *invoke.Call, spec Spec, outs []HostOut) int {
 	for _, o := range outs {
 		if o.RC != 0 {
 			_, _ = c.Stdout.Write(o.Stdout)
-			_, _ = c.Stderr.Write(o.Stderr)
+			_, _ = c.Stderr.Write(AttributeHost(o.Stderr, o.Host.Alias))
 			return o.RC
 		}
 	}

@@ -2436,11 +2436,13 @@ otherwise). CMD passes the llm_exec rules here before anything connects
 Each command runs in bash on the host, stdin closed, from the remote home.
 Steps do not share a shell (no cd or variables between steps).
 Output: [{"host","rc","ms","out","err","error"}] in HOST order, error
-null or timeout, host_unreachable, remote_protocol_error; with --step
+null or timeout, host_unreachable, remote_protocol_error, or
+prerequisite_missing (no bash on that host, named in err); with --step
 [{"step","rc","ms","out"}] (out holds stdout and stderr; ms null when
 the host's date has no %N), and {"stopped":true,"skipped":K} or
 {"timed_out":true} on stderr. A failing command is data (rc), not an
-error of the call.
+error of the call. Without ssh on this machine the call fails once
+(prerequisite_missing), before anything connects.
 ```
 
 ### llm_runtime

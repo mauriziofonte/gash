@@ -27,19 +27,27 @@ type RemoteFile struct {
 
 // ReadScript is the remote side: for each path a header line
 // "<nonce> file I STATUS ABS" on stdout, the content when STATUS is ok,
-// then "\n<nonce> end I"; the "rc" trailer on stderr.
+// then "\n<nonce> end I"; the "rc" trailer on stderr. A program the host
+// lacks (wc, cat, or readlink for a link it cannot follow) is the
+// "missing TOOL" frame before anything is read: the size cap runs no tr.
 func ReadScript(nonce string, paths []string, maxBytes int64) string {
 	var s strings.Builder
 	s.WriteString("N=" + Quote(nonce) + "\nLC_ALL=C; export LC_ALL\nMAX=" + strconv.FormatInt(maxBytes, 10) + "\n")
-	s.WriteString(ShResolve() + ShForbidden() + ShSecret())
-	s.WriteString(`gash_read() {
-  r_a=$(gash_resolve "$2")
+	s.WriteString(ShResolve() + ShForbidden() + ShSecret() + ShTools())
+	s.WriteString(`gash_tools wc cat
+gash_read() {
+  r_a=$(gash_resolve "$2") || exit 1
   if gash_secret "$r_a"; then r_s=secret_file_blocked
   elif gash_forbidden "$r_a"; then r_s=forbidden_path
   elif [ ! -f "$r_a" ]; then r_s=file_not_found
   elif [ ! -r "$r_a" ]; then r_s=path_unreadable
-  elif [ "$(wc -c <"$r_a" | tr -d ' ')" -gt "$MAX" ]; then r_s=file_too_large
-  else r_s=ok
+  else
+    r_n=$(wc -c <"$r_a") || r_n=
+    r_n=${r_n##* }
+    case $r_n in
+      '' | *[!0-9]*) r_s=path_unreadable ;;
+      *) if [ "$r_n" -gt "$MAX" ]; then r_s=file_too_large; else r_s=ok; fi ;;
+    esac
   fi
   printf '%s file %s %s %s\n' "$N" "$1" "$r_s" "$r_a"
   [ "$r_s" = ok ] && cat -- "$r_a"
@@ -121,6 +129,10 @@ func (t Transport) ReadFiles(ctx context.Context, h Host, paths []string, maxByt
 	}
 	nonce := NewNonce()
 	r := t.Exec(ctx, h, nonce, ReadScript(nonce, paths, maxBytes), nil, timeout)
+	if tool, ok := MissingFrame(r.Stderr, nonce); ok {
+		e := MissingOnHost("the remote read", tool, h, "")
+		return nil, &e
+	}
 	if e := r.Failure(h); e != nil {
 		return nil, e
 	}

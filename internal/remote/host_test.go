@@ -41,7 +41,7 @@ func newHostScene(t *testing.T) *hostScene {
 	exe := filepath.Join(t.TempDir(), "gash")
 	require.NoError(t, os.WriteFile(exe, []byte("#!/bin/sh\ncase $1 in version) echo 3.4.0 ;; *) printf '{\"fn\":\"%s\",\"argc\":%d}\\n' \"$1\" $(($#-1)) ;; esac\n"), 0o755))
 	return &hostScene{t: t, home: home, rhome: rhome, ssh: &sshtest.SSH{Home: rhome}, exe: exe,
-		env: map[string]string{"HOME": home, "PATH": os.Getenv("PATH"), "GASH_HEADLESS": "1"}}
+		env: map[string]string{"HOME": home, "PATH": sshtest.ClientPath(t, os.Getenv("PATH")), "GASH_HEADLESS": "1"}}
 }
 
 func (s *hostScene) hoster() Hoster {

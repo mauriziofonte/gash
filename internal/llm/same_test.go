@@ -43,7 +43,7 @@ func newSameFixture(t *testing.T) *sameFixture {
 	ssh := &sshtest.SSH{Home: rhome, Path: stub + ":" + os.Getenv("PATH")}
 	m := New()
 	m.run = ssh
-	return &sameFixture{local: local, rhome: rhome, env: baseEnv(home, nil), ssh: ssh, m: m}
+	return &sameFixture{local: local, rhome: rhome, env: baseEnv(home, map[string]string{"PATH": sshtest.ClientPath(t, os.Getenv("PATH"))}), ssh: ssh, m: m}
 }
 
 func (f *sameFixture) run(t *testing.T, args ...string) (sameOut, result) {

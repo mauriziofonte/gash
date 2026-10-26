@@ -122,8 +122,8 @@ func (m *Module) scp(c *invoke.Call, t transfer) int {
 	if !x.checkSafety(remotePath, t.operation, f.force) {
 		return 1
 	}
-	if !x.have("scp") {
-		x.p.Error("scp is not installed.")
+	// scp starts ssh for the connection: both are looked up first.
+	if !x.require(t.name, "scp", "ssh") {
 		return 1
 	}
 	args := []string{"-o", "ConnectTimeout=10", "-o", "BatchMode=yes"}
@@ -176,8 +176,8 @@ func (m *Module) rsync(c *invoke.Call, t transfer) int {
 	if f.delete && !x.checkDeleteSafety(dst, f.force, t.pull) {
 		return 1
 	}
-	if !x.have("rsync") {
-		x.p.Error("rsync is not installed.")
+	// rsync starts ssh (-e) for the connection: both are looked up first.
+	if !x.require(t.name, "rsync", "ssh") {
 		return 1
 	}
 	openrs := x.openrsync()

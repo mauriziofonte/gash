@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -81,4 +82,43 @@ func forbiddenLinkTarget() string {
 		return "/proc/self/environ"
 	}
 	return "/dev/null"
+}
+
+// TestReadFilesMissingTools: the size cap stripped the wc padding with tr,
+// and without tr it compared an empty string, so every file was read
+// whatever its size; without readlink a link was judged by its own name.
+// The cap runs no tr now, and a program the host lacks is named.
+func TestReadFilesMissingTools(t *testing.T) {
+	rhome, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(rhome, "big.txt"), []byte("0123456789A"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(rhome, "a.txt"), []byte("alpha\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(rhome, ".env"), []byte("SECRET=1\n"), 0o600))
+	require.NoError(t, os.Symlink(".env", filepath.Join(rhome, "settings")))
+	ssh := &sshtest.SSH{Home: rhome}
+	tr := Transport{Run: ssh, Env: invoke.EnvMap(map[string]string{"HOME": t.TempDir()})}
+	h := Host{Alias: "web", Target: "deploy@web.example"}
+
+	ssh.Path = remotePath(t, "wc", "cat", "realpath", "readlink")
+	got, e := tr.ReadFiles(context.Background(), h, []string{"big.txt", "a.txt"}, 10, 0)
+	require.Nil(t, e)
+	require.NotNil(t, got[0].Err, "without tr: %q", got[0].Data)
+	require.Equal(t, "file_too_large", got[0].Err.Code)
+	require.Equal(t, "alpha\n", string(got[1].Data))
+
+	for _, tc := range []struct {
+		missing []string
+		tool    string
+	}{{[]string{"wc"}, "wc"}, {[]string{"cat"}, "cat"}, {[]string{"realpath", "readlink"}, "readlink"}} {
+		var tools []string
+		for _, n := range []string{"wc", "cat", "realpath", "readlink"} {
+			if !slices.Contains(tc.missing, n) {
+				tools = append(tools, n)
+			}
+		}
+		ssh.Path = remotePath(t, tools...)
+		_, e = tr.ReadFiles(context.Background(), h, []string{"a.txt", "settings"}, 1<<20, 0)
+		require.NotNil(t, e, tc.tool)
+		require.Equal(t, MissingOnHost("the remote read", tc.tool, h, ""), *e)
+	}
 }
