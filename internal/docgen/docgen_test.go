@@ -97,12 +97,28 @@ func block(t *testing.T, path, name, body string) {
 }
 
 // TestBlocks keeps the generated blocks of the guides current: the
-// prerequisites of each area and the area index of docs/README.md.
+// prerequisites of each area, the area index of docs/README.md, and the
+// table of the systems CI tests (docs/install.md, README.md).
 func TestBlocks(t *testing.T) {
 	for _, a := range Areas {
 		block(t, filepath.Join(docs, a.Key, "README.md"), "prerequisites", Prerequisites(a))
 	}
-	block(t, filepath.Join(docs, "README.md"), "areas", Index())
+	block(t, filepath.Join(docs, "README.md"), "areas", Index(""))
+	if src, err := os.ReadFile(filepath.Join("..", "..", "README.md")); err == nil && strings.Contains(string(src), "BEGIN generated: areas") {
+		block(t, filepath.Join("..", "..", "README.md"), "areas", Index("docs/"))
+	}
+
+	ci, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "ci.yml"))
+	require.NoError(t, err)
+	hte, err := os.ReadFile(filepath.Join("..", "..", "testdata", "hte", "e2e", "run.sh"))
+	require.NoError(t, err)
+	systems, err := Systems(string(ci), string(hte))
+	require.NoError(t, err)
+	for _, page := range []string{filepath.Join(docs, "install.md"), filepath.Join("..", "..", "README.md")} {
+		if src, err := os.ReadFile(page); err == nil && strings.Contains(string(src), "BEGIN generated: systems") {
+			block(t, page, "systems", systems)
+		}
+	}
 }
 
 func TestExamplesParse(t *testing.T) {

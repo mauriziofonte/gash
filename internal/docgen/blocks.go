@@ -73,12 +73,13 @@ func Prerequisites(a Area) string {
 	return b.String()
 }
 
-// Index is the generated block of docs/README.md: one row per area.
-func Index() string {
+// Index is the table of the areas, one row per area, with links below
+// dir ("" in docs/README.md, "docs/" in README.md).
+func Index(dir string) string {
 	var b strings.Builder
 	b.WriteString("| Area | What it covers | Reference |\n|---|---|---|\n")
 	for _, a := range Areas {
-		b.WriteString("| [" + a.Title + "](" + a.Key + "/README.md) | " + cell(a.Summary) + " | [reference](" + a.Key + "/reference.md) |\n")
+		b.WriteString("| [" + a.Title + "](" + dir + a.Key + "/README.md) | " + cell(a.Summary) + " | [reference](" + dir + a.Key + "/reference.md) |\n")
 	}
 	return b.String()
 }
