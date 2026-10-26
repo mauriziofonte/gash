@@ -5,6 +5,7 @@ package llmexec
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -192,4 +193,28 @@ func TestPsEnv(t *testing.T) {
 	assertRefuse(t, "ps eww", cwd, "option_not_allowed")
 	assertRefuse(t, "ps auxe", cwd, "option_not_allowed")
 	assertOK(t, "ps -o pid,etime -p 1", cwd)
+}
+
+// A refused command that changes files or processes points at the agent_*
+// functions; any other refused command at the allowlist (3.4).
+func TestRefuse_HintOfWriteCommands(t *testing.T) {
+	cwd := t.TempDir()
+	for line, want := range map[string]string{
+		"rm -rf src":     "'rm' changes files or processes. Make the change with an agent_* function",
+		"chmod +x a":     "'chmod' changes files or processes",
+		"make build":     "Ask the user to add 'make' to GASH_LLM_EXEC_ALLOW",
+		"terraform plan": "Ask the user to add 'terraform' to GASH_LLM_EXEC_ALLOW",
+	} {
+		_, err := build(t, line, cwd)
+		r, ok := err.(*Refusal)
+		if !ok || r.Code != "command_not_allowed" {
+			t.Fatalf("llm_exec %q: got %v, want command_not_allowed", line, err)
+		}
+		if !strings.Contains(r.Hint, want) {
+			t.Errorf("llm_exec %q: hint %q lacks %q", line, r.Hint, want)
+		}
+		if writeCommands[strings.Fields(line)[0]] && strings.Contains(r.Hint, "GASH_LLM_EXEC_ALLOW") {
+			t.Errorf("llm_exec %q: the hint suggests allowing a write command", line)
+		}
+	}
 }

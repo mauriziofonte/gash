@@ -85,7 +85,7 @@ func TestServiceErrors(t *testing.T) {
 	pinDebian(t, "/nonexistent")
 	r = runGo(t, m, d, env, "llm_service", "nginx")
 	require.Equal(t, `{"error":"systemd_unavailable","details":"llm_service needs systemctl, which is not installed","action":"CONTINUE","recoverable":true,`+
-		`"hint":"systemd is part of the operating system: Gash cannot install it. Under WSL, enable it in /etc/wsl.conf","missing":"systemctl"}`+"\n", r.Stderr)
+		`"hint":"It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf","missing":"systemctl"}`+"\n", r.Stderr)
 
 	for _, tc := range []struct {
 		args []string

@@ -107,7 +107,7 @@ $ cd shop
 $ llm_exec "ls src"
 index.php
 $ llm_exec "rm -rf src"
-{"error":"command_not_allowed","details":"rm","action":"STOP","recoverable":true,"hint":"llm_exec runs read-only commands (ls, cat, grep, find, git status, ...). Ask the user to add 'rm' to GASH_LLM_EXEC_ALLOW in ~/.gash_env if it is needed"}
+{"error":"command_not_allowed","details":"rm","action":"STOP","recoverable":true,"hint":"llm_exec runs read-only commands, and 'rm' changes files or processes. Make the change with an agent_* function when the user asked for it (agent_put, agent_replace, agent_kill), or ask the user to run it"}
 ```
 
 `command_not_allowed` has the action `STOP`: the agent asks you. The

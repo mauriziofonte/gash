@@ -52,6 +52,12 @@ func (lc *lineChecker) checkSimple(words []pword) ([][]string, error) {
 
 	if !lc.extra[name] {
 		if !allowedSet[name] {
+			if writeCommands[name] {
+				// 3.4: never suggest opening the read-only runner to a
+				// command that changes files or processes.
+				return nil, refuse("command_not_allowed", name, "STOP",
+					"llm_exec runs read-only commands, and '"+name+"' changes files or processes. Make the change with an agent_* function when the user asked for it (agent_put, agent_replace, agent_kill), or ask the user to run it")
+			}
 			return nil, refuse("command_not_allowed", name, "STOP",
 				"llm_exec runs read-only commands (ls, cat, grep, find, git status, ...). Ask the user to add '"+name+"' to GASH_LLM_EXEC_ALLOW in ~/.gash_env if it is needed")
 		}
@@ -408,4 +414,13 @@ func (lc *lineChecker) checkArgs(words []pword) error {
 		}
 	}
 	return nil
+}
+
+// writeCommands change files, permissions or processes: the refusal of one
+// points at the agent_* functions, not at the allowlist.
+var writeCommands = map[string]bool{
+	"rm": true, "rmdir": true, "mv": true, "cp": true, "ln": true, "mkdir": true, "touch": true,
+	"chmod": true, "chown": true, "chgrp": true, "dd": true, "truncate": true, "shred": true,
+	"install": true, "tee": true, "kill": true, "pkill": true, "killall": true,
+	"sudo": true, "su": true, "reboot": true, "shutdown": true,
 }
