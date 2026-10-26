@@ -113,11 +113,13 @@ var catalogRemote = []Function{
 				"  Each command runs in bash on the host, stdin closed, from the remote home.\n" +
 				"  Steps do not share a shell (no cd or variables between steps).\n" +
 				"  Output: [{\"host\",\"rc\",\"ms\",\"out\",\"err\",\"error\"}] in HOST order, error\n" +
-				"  null or timeout, host_unreachable, remote_protocol_error; with --step\n" +
+				"  null or timeout, host_unreachable, remote_protocol_error, or\n" +
+				"  prerequisite_missing (no bash on that host, named in err); with --step\n" +
 				"  [{\"step\",\"rc\",\"ms\",\"out\"}] (out holds stdout and stderr; ms null when\n" +
 				"  the host's date has no %N), and {\"stopped\":true,\"skipped\":K} or\n" +
 				"  {\"timed_out\":true} on stderr. A failing command is data (rc), not an\n" +
-				"  error of the call.",
+				"  error of the call. Without ssh on this machine the call fails once\n" +
+				"  (prerequisite_missing), before anything connects.",
 		},
 		LoadsEnv:  true,
 		ShellVars: []string{"HOME"},
