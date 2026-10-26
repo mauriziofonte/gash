@@ -19,7 +19,7 @@ exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH
 stderr 'Gash Doctor . checking installation \(v[0-9][0-9A-Za-z.-]*\)'
 stderr 'bash [0-9]'
 stdout '^Runtime:$'
-stdout '^External Tools:$'
+stdout '^Prerequisites:'
 
 # --- :53 problems - missing files and a warning count (split row); the
 # status is 1 (3.0: SELF-06 fixed)

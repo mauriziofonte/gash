@@ -246,13 +246,15 @@ __gash_compat_ready() {
     __gash_bin_resolve
 }
 
-# Why the last fetch failed, for the one interactive line.
+# Why the last fetch failed, for the one interactive line, and the
+# prerequisite it lacked (curl, tar, gzip, sha256sum), if that was why.
 __GASH_FETCH_REASON=""
+__GASH_FETCH_MISSING=""
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
 # shellcheck disable=SC2120
-__gash_fetch() { __gash_cold __gash_fetch 57c686c5 && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch() { __gash_cold __gash_fetch bdb0d615 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_fetch_get URL FILE
 __gash_fetch_get() {
@@ -274,6 +276,20 @@ __gash_fetch_sum() {
     printf '%s' "${out%% *}"
 }
 
+# The package manager of this system (apt, dnf, microdnf, yum, pacman,
+# zypper, apk, brew), empty when none is known. Generated from
+# internal/prereq: do not edit.
+# shellcheck disable=SC2120
+__gash_pkg_manager() { __gash_cold __gash_pkg_manager 530bea86 && "${FUNCNAME[0]}" "$@"; }
+
+# Usage: __gash_install_hint [--run] TOOL...
+# The command that installs TOOL... on this system (each package once),
+# nothing when no package is known for any of them; --run runs it instead,
+# after fetching the package lists where the manager needs it. Generated
+# from internal/prereq: do not edit.
+# shellcheck disable=SC2120
+__gash_install_hint() { __gash_cold __gash_install_hint 2e4b5e02 && "${FUNCNAME[0]}" "$@"; }
+
 # The core emitters, loaded from this checkout when the caller sourced a
 # shim without them (they are the only writers to stderr).
 # shellcheck disable=SC2120
@@ -283,14 +299,19 @@ __gash_boot_emitters() { __gash_cold __gash_boot_emitters 16d8b1c4 && "${FUNCNAM
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
 # shellcheck disable=SC2120
-__gash_fetch_line() { __gash_cold __gash_fetch_line 1067a67d && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch_line() { __gash_cold __gash_fetch_line c53976a7 && "${FUNCNAME[0]}" "$@"; }
+
+# What to do after a failed fetch: the install command of the missing
+# prerequisite, else the installer's repair.
+# shellcheck disable=SC2120
+__gash_fetch_advice() { __gash_cold __gash_fetch_advice ccebf7a0 && "${FUNCNAME[0]}" "$@"; }
 
 # The report of a call without a binary: the binary_not_found envelope for
 # agents (headless mode, llm_* functions), an Error: and a Hint: line for
 # humans. Status 1.
 # Usage: __gash_missing NAME
 # shellcheck disable=SC2120
-__gash_missing() { __gash_cold __gash_missing b29072d5 && "${FUNCNAME[0]}" "$@"; }
+__gash_missing() { __gash_cold __gash_missing badd25bc && "${FUNCNAME[0]}" "$@"; }
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x
 # code read: the common variables, NAME's own, and its settings (with

@@ -15,6 +15,8 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/compatgen"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/selfmgmt"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -205,6 +207,13 @@ func TestDoctorMatches2x(t *testing.T) {
 // generated one among them, and the binary; a staged tree passes, and a
 // missing shim is its MISSING line.
 func TestLedger_SELF17(t *testing.T) {
+	defer prereq.SetSystem(&prereq.System{
+		OS:      platform.OS{GOOS: "linux", ID: "debian", VersionID: "12", Name: "Debian GNU/Linux 12 (bookworm)"},
+		Manager: prereq.Apt, Root: true,
+		LookPath:   func(name string, _ []string) (string, bool) { return "/usr/bin/" + name, true },
+		RunProbe:   func(string, []string, []string) bool { return true },
+		RunVersion: func(string, []string) string { return "GNU bash, version 5.2.15(1)-release" },
+	})()
 	d := t.TempDir()
 	for _, f := range selfmgmt.DoctorCoreFiles {
 		p := filepath.Join(d, f)
@@ -266,5 +275,5 @@ func TestLedger_SELF06(t *testing.T) {
 
 	out, rc = runMerged(t, "gash_doctor", env, false, "--bogus")
 	require.Equal(t, 2, rc)
-	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color])\n", out)
+	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]])\n", out)
 }

@@ -158,7 +158,8 @@ Alias: `gdoctor`
 #### Usage
 
 ```text
-gash_doctor [--timing] [--no-color]
+gash_doctor [--timing] [--no-color] [--prereqs] [--json]
+gash_doctor --install [--yes] [--all] [TOOL...]
 ```
 
 #### Options
@@ -166,6 +167,12 @@ gash_doctor [--timing] [--no-color]
 ```text
 --timing    What each file and step costs when a shell starts
 --no-color  Plain output
+--prereqs   Only the prerequisites: every external tool, by area
+--json      The prerequisites as one JSON object, for scripts and agents
+--install   Install the missing tools (or the TOOLs named) with the
+            system's package manager, after asking
+--yes, -y   With --install: do not ask
+--all       With --install: the optional tools too
 ```
 
 #### Examples
@@ -173,6 +180,12 @@ gash_doctor [--timing] [--no-color]
 ```bash
 # Run a full health check
 gash_doctor
+
+# What is missing on this system, and how to install it
+gash_doctor --prereqs
+
+# Install rsync and ssh with the package manager (asks first)
+gash_doctor --install rsync ssh
 
 # Find what makes new shells slow
 gash_doctor --timing
@@ -183,10 +196,18 @@ gash_doctor --timing
 ```text
 Checks: core files, modules, the binary and gash-hosts-helper
 (against the hashes release/SHA256SUMS pins), the generated
-shims (against this gash version), config file permissions,
-external tools (git, curl, jq, sqlite3, docker).
-Reports missing or misconfigured components and returns 1
-when a check fails (2 for an unknown option).
+shims (against this gash version), config file permissions, the
+SSH keys of ~/.gash_env, and every external tool Gash runs, with
+the package and the install command for this system (apt, dnf,
+pacman, zypper, apk or brew). A missing required tool is an
+issue; a tool only some functions need is a warning.
+Returns 1 when a check fails (2 for an unknown option).
+
+--install never runs for an agent (GASH_HEADLESS=1): it answers
+with the install_needs_confirmation error and the command to show
+the user. Without a terminal to ask on it needs --yes. Docker,
+nvm and the gash hte stack are never installed: their line links
+the official instructions.
 
 --timing loads Gash in a new interactive shell and lists the
 milliseconds each file and step takes (5 ms or more stands out),

@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -51,25 +51,34 @@ var DoctorCoreFiles = []string{
 // the paths external harnesses source), in the 2.x order.
 var DoctorModules = []string{"remote", "node", "php"}
 
-// doctorTools are the external tools gash_doctor looks up.
-var doctorTools = []string{"git", "curl", "jq", "sqlite3", "docker"}
-
-// doctor is gash_doctor [--timing] [--no-color] (lib/modules/gash.sh): the
-// 2.x headings and lines over the 3.x file list, a line for the binary,
-// and the Binary and Shims checks (SELF-17). It returns 1 when a check
+// doctor is gash_doctor [--timing] [--no-color] [--prereqs] [--json]
+// [--install [--yes] [--all] [TOOL...]] (lib/modules/gash.sh): the 2.x
+// headings and lines over the 3.x file list, a line for the binary, the
+// Binary and Shims checks (SELF-17) and, since 3.4, the prerequisites of
+// internal/prereq with their install commands. It returns 1 when a check
 // fails and refuses an unknown option with status 2 before any check
 // (3.0: SELF-06 fixed; 2.x returned 0 and ignored unknown options).
 func (m *Module) doctor(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
 	}
-	if badArgs(c, "gash_doctor [--timing] [--no-color]", "--timing", "--no-color") {
+	f, ok := parseDoctor(c)
+	if !ok {
 		return usageStatus
 	}
-	noColor, timing := slices.Contains(c.Args, "--no-color"), slices.Contains(c.Args, "--timing")
-	s := ui.StyleOf(c.Term, !c.Term.WantColors(noColor))
-	if timing {
+	s := ui.StyleOf(c.Term, !c.Term.WantColors(f.noColor))
+	switch {
+	case f.timing:
 		return m.doctorTiming(c, s)
+	case f.json:
+		return m.doctorJSON(c, prereq.Current(c))
+	case f.install:
+		return m.doctorInstall(c, s, prereq.Current(c), f)
+	case f.prereqs:
+		if m.doctorPrereqs(c, s, prereq.Current(c)) > 0 {
+			return 1
+		}
+		return 0
 	}
 
 	p := s.Printer(c.Stderr)
@@ -157,16 +166,11 @@ func (m *Module) doctor(c *invoke.Call) int {
 	for _, kv := range shellSettings(c) {
 		s.KV(out, "--indent", "4", "--width", "0", "--sep", "=", kv[0], kv[1])
 	}
+	issues += doctorSSHKeys(c, p)
 
-	// 6. External tools
-	s.Heading(out, "External Tools:")
-	for _, tool := range doctorTools {
-		if path, ok := m.lookPath(c, tool); ok {
-			p.Success("  " + tool + " (" + path + ")")
-		} else {
-			p.Warning("  " + tool + " — not found (some features may be unavailable)")
-		}
-	}
+	// 6. Prerequisites: every external tool, by area (3.4: replaces the
+	// 2.x External Tools list).
+	issues += m.doctorPrereqs(c, s, prereq.Current(c))
 
 	// 7. Summary
 	_, _ = io.WriteString(out, "\n")

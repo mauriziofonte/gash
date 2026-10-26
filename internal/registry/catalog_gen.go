@@ -1284,15 +1284,28 @@ var baseFunctions = []Function{
 			SeeAlso: "gash_upgrade gash",
 			Body: "" +
 				"USAGE\n" +
-				"  gash_doctor [--timing] [--no-color]\n" +
+				"  gash_doctor [--timing] [--no-color] [--prereqs] [--json]\n" +
+				"  gash_doctor --install [--yes] [--all] [TOOL...]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --timing    What each file and step costs when a shell starts\n" +
 				"  --no-color  Plain output\n" +
+				"  --prereqs   Only the prerequisites: every external tool, by area\n" +
+				"  --json      The prerequisites as one JSON object, for scripts and agents\n" +
+				"  --install   Install the missing tools (or the TOOLs named) with the\n" +
+				"              system's package manager, after asking\n" +
+				"  --yes, -y   With --install: do not ask\n" +
+				"  --all       With --install: the optional tools too\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Run a full health check\n" +
 				"  gash_doctor\n" +
+				"\n" +
+				"  # What is missing on this system, and how to install it\n" +
+				"  gash_doctor --prereqs\n" +
+				"\n" +
+				"  # Install rsync and ssh with the package manager (asks first)\n" +
+				"  gash_doctor --install rsync ssh\n" +
 				"\n" +
 				"  # Find what makes new shells slow\n" +
 				"  gash_doctor --timing\n" +
@@ -1300,10 +1313,18 @@ var baseFunctions = []Function{
 				"NOTES\n" +
 				"  Checks: core files, modules, the binary and gash-hosts-helper\n" +
 				"  (against the hashes release/SHA256SUMS pins), the generated\n" +
-				"  shims (against this gash version), config file permissions,\n" +
-				"  external tools (git, curl, jq, sqlite3, docker).\n" +
-				"  Reports missing or misconfigured components and returns 1\n" +
-				"  when a check fails (2 for an unknown option).\n" +
+				"  shims (against this gash version), config file permissions, the\n" +
+				"  SSH keys of ~/.gash_env, and every external tool Gash runs, with\n" +
+				"  the package and the install command for this system (apt, dnf,\n" +
+				"  pacman, zypper, apk or brew). A missing required tool is an\n" +
+				"  issue; a tool only some functions need is a warning.\n" +
+				"  Returns 1 when a check fails (2 for an unknown option).\n" +
+				"\n" +
+				"  --install never runs for an agent (GASH_HEADLESS=1): it answers\n" +
+				"  with the install_needs_confirmation error and the command to show\n" +
+				"  the user. Without a terminal to ask on it needs --yes. Docker,\n" +
+				"  nvm and the gash hte stack are never installed: their line links\n" +
+				"  the official instructions.\n" +
 				"\n" +
 				"  --timing loads Gash in a new interactive shell and lists the\n" +
 				"  milliseconds each file and step takes (5 ms or more stands out),\n" +
@@ -1312,7 +1333,7 @@ var baseFunctions = []Function{
 				"  Needs Bash 5.0 or newer. Starting a shell with GASH_TIMING=1 keeps\n" +
 				"  the same figures in its __GASH_LOAD_TIMES array.",
 		},
-		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color]", Description: "Run health checks on your Gash installation (--timing: what each file costs at startup)."},
+		Fallback:          &Usage{Program: "gash_doctor", Usage: "gash_doctor [--timing] [--no-color] [--prereqs] [--json] [--install [--yes] [--all] [TOOL...]]", Description: "Run health checks on your Gash installation and its prerequisites (--install: install the missing tools)."},
 		Settings:          []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_REPLACE_TOOLS", "GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_NVM", "GASH_PATH_ADD"},
 		ShellVars:         []string{"BASH", "BASH_VERSION", "GASH_VERSION", "HOME"},
 		Env:               []string{"BASH", "BASH_VERSION", "COLUMNS", "GASH_DIR", "GASH_ENV_FILE", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "HOME", "NO_COLOR"},

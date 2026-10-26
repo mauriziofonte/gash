@@ -755,6 +755,7 @@ Each code always carries the action shown:
 | Runtimes, lint, tests (3.4) | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
 | Remote hosts (3.4) | `unknown_host` `remote_protocol_error` `remote_binary_unavailable` `hash_tool_not_found` `put_verify_failed` (STOP); `host_unreachable` `missing_host` `remote_glob_unsupported` `invalid_exclude` `invalid_container_name` `container_unavailable` `invalid_mode` (RETRY) |
 | Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
+| Prerequisites (3.4) | `prerequisite_missing` `install_needs_confirmation` (STOP) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
 non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
@@ -766,6 +767,23 @@ The one exception: scanners without `--json` print human `Error:` /
 
 Branch on `action`, not on the exit status alone. Never retry the same call
 more than once; the same error twice means stop and ask.
+
+**Missing prerequisites.** An error with a `missing` member means an
+external tool is not installed (whatever its code: `git_not_found`,
+`ps_not_found`, `docker_not_found`, or `prerequisite_missing` for a tool
+without a code of its own). `install`, when present, is the command that
+installs it on this system (`sudo dnf install -y rsync`); `hint` says the
+same in words, or links the official instructions for tools Gash never
+installs (Docker, nvm, cosign):
+
+```json
+{"error":"prerequisite_missing","details":"remote_sync_push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo dnf install -y rsync","missing":"rsync","install":"sudo dnf install -y rsync"}
+```
+
+Do not install it yourself: show the user the command and let them decide.
+`gash_doctor --json` lists every tool with its state; `gash_doctor
+--install` refuses for an agent (`install_needs_confirmation`, with the
+command in `install`).
 
 ## 6. Safety model
 

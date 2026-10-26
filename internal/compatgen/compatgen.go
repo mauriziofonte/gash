@@ -17,6 +17,7 @@ import (
 	"text/template"
 
 	"github.com/mauriziofonte/gash/compat"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/registry"
 )
 
@@ -223,6 +224,9 @@ type Data struct {
 	CompleteAliases   []string
 	// Served are the functions the per-shell server runs.
 	Served []string
+	// PrereqBash is the package manager detection and the install
+	// commands of the prerequisites the fetch needs (internal/prereq).
+	PrereqBash string
 }
 
 // NamedList is one entry of an associative array of the bootstrap.
@@ -246,7 +250,7 @@ type Completion struct {
 }
 
 func buildData() Data {
-	d := Data{Common: registry.CommonShellVars, Served: registry.Served()}
+	d := Data{Common: registry.CommonShellVars, Served: registry.Served(), PrereqBash: prereq.BashFunctions("__gash_", 4, "")}
 	common := map[string]bool{}
 	for _, v := range registry.CommonShellVars {
 		common[v] = true

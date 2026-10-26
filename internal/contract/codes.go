@@ -318,6 +318,13 @@ var codeTable = []Code{
 	{"hash_tool_not_found", Stop, "remote", Origin3x},
 	{"invalid_mode", Retry, "remote", Origin3x},
 	{"put_verify_failed", Stop, "remote", Origin3x},
+
+	// New in 3.4: prerequisites. A missing tool without a code of its own;
+	// every missing-tool envelope also carries "missing" and "install".
+	{"prerequisite_missing", Stop, "prerequisites", Origin3x},
+	// gash_doctor --install without a person to confirm (headless, no
+	// terminal, an agent): nothing is installed.
+	{"install_needs_confirmation", Stop, "prerequisites", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

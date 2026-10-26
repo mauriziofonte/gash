@@ -1,55 +1,58 @@
 #!/bin/sh
 # Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
-# The distro smoke test, inside a disposable distro container (run.sh
-# starts it): a Gash tree in ~/.gash whose bootstrap fetches the release
-# archive of this commit from file:///smoke/rel, checks it against the
-# pins of release/SHA256SUMS, then gash_doctor and a few llm_* reads run
-# in an interactive Bash. What the image lacks to fetch the binary (tar,
-# gzip, curl) is installed first with its package manager.
+# The distro smoke test, inside a disposable container of a bare distro
+# image (run.sh starts it):
+#
+#   1. install.sh --check names what the image lacks (git, tar, curl...)
+#      and the command that installs it on this distro;
+#   2. install.sh --assume-yes installs those packages, clones the Gash
+#      tree of this commit (/smoke/tree, tagged with its VERSION) and
+#      fetches the release archive from file:///smoke/rel, checked against
+#      the pins of release/SHA256SUMS;
+#   3. gash_doctor and a few llm_* reads run in an interactive Bash;
+#   4. gash_doctor --install --all --yes installs every package the
+#      prerequisites catalog names for this distro, and each must provide
+#      its tool (the catalog's package names, checked on the real distro).
+#
+# Only bash itself is installed by hand, where the image lacks it: the
+# installer is a Bash script.
 set -eu
 
 . /etc/os-release
 echo "== ${PRETTY_NAME:-$ID} ($(uname -m))"
 
-pm=""
-for p in apt-get dnf microdnf yum zypper pacman apk; do
-    if command -v "$p" >/dev/null 2>&1; then
-        pm=$p
-        break
-    fi
-done
-missing=""
-command -v bash >/dev/null 2>&1 || missing="$missing bash"
-command -v tar >/dev/null 2>&1 || missing="$missing tar"
-command -v gzip >/dev/null 2>&1 || missing="$missing gzip"
-command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || missing="$missing curl"
-if [ -n "$missing" ]; then
-    echo "== installing:$missing ($pm)"
-    # shellcheck disable=SC2086 # one word per package
-    case "$pm" in
-        apt-get) apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $missing >/dev/null ;;
-        dnf | microdnf | yum) "$pm" install -y $missing >/dev/null ;;
-        zypper) zypper -n install $missing >/dev/null ;;
-        pacman) pacman -Sy --noconfirm $missing >/dev/null ;;
-        apk) apk add --no-cache $missing >/dev/null ;;
-        *)
-            echo "no package manager for:$missing" >&2
-            exit 1
-            ;;
-    esac
-fi
-
-bash --version | head -n 1
-export HOME=/root
-mkdir -p "$HOME"
-cp -R /smoke/tree "$HOME/.gash"
-export GASH_RELEASE_URL=file:///smoke/rel
-
 fail() {
     echo "FAIL: $*" >&2
     exit 1
 }
+
+if ! command -v bash >/dev/null 2>&1; then
+    case "$ID" in
+        alpine) apk add --no-cache bash >/dev/null ;;
+        *) fail "no bash in this image" ;;
+    esac
+fi
+bash --version | head -n 1
+
+export HOME=/root
+mkdir -p "$HOME"
+: >"$HOME/.bashrc"
+cd "$HOME"
+export GASH_RELEASE_URL=file:///smoke/rel GASH_INSTALL_GIT_REPO=/smoke/tree
+# The tree belongs to the user who built it, not to root.
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+
+echo "== install.sh --check"
+check_rc=0
+bash /smoke/tree/install.sh --check </dev/null || check_rc=$?
+echo "(status $check_rc)"
+
+echo "== install.sh --assume-yes"
+bash /smoke/tree/install.sh --assume-yes </dev/null || fail "install.sh --assume-yes"
+bash /smoke/tree/install.sh --check </dev/null || fail "install.sh --check after the install"
+test -f "$HOME/.gash/gash.sh" || fail "no ~/.gash/gash.sh"
+grep -q '>>> GASH START >>>' "$HOME/.bashrc" || fail "no Gash block in ~/.bashrc"
 
 # The binary comes from the release archive, verified against the pins.
 out=$(bash --norc -i -c 'source "$HOME/.gash/gash.sh"; gash version' </dev/null 2>/dev/null) || fail "gash version: $out"
@@ -80,5 +83,17 @@ echo "$reads" | cut -c1-160
 echo "$reads" | grep -q '"kernel"' || fail "llm_sysinfo: $reads"
 echo "$reads" | grep -q '"top":\[' || fail "llm_tree: $reads"
 echo "$reads" | grep -q '^/etc/.*\.conf$' || fail "llm_find: $reads"
-echo "$reads" | grep -q '"error":"not_a_git_repo"\|"error":"git_not_found"' || fail "llm_git_status: $reads"
+echo "$reads" | grep -q '"error":"not_a_git_repo"' || fail "llm_git_status: $reads"
+
+# Every package of the catalog for this distro.
+version=$(cat "$HOME/.gash/VERSION")
+bin="$HOME/.local/share/gash/versions/$version/gash"
+echo "== gash_doctor --install --all --yes"
+"$bin" gash_doctor --install --all --yes --no-color </dev/null || true
+json=$("$bin" gash_doctor --json) || true
+# One tool per line; the ones still missing that had an install command
+# (a non-free one may need a repository the image does not enable).
+bad=$(printf '%s\n' "$json" | sed 's/},{/}\n{/g' | grep '"found":false' | grep '"install":' | grep -v '"non_free":true' || true)
+printf '%s\n' "$json" | sed 's/},{/}\n{/g' | grep '"found":false' | cut -c1-200 || true
+[ -z "$bad" ] || fail "packages that do not provide their tool: $bad"
 echo "== OK"
