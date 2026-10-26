@@ -135,7 +135,8 @@ func TestProcs34Errors(t *testing.T) {
 		require.Equal(t, 0, r.RC, r.Stderr)
 		require.Contains(t, r.Stdout, `"alive":true`)
 	} else {
-		require.Contains(t, r.Stderr, `"error":"ps_not_found","details":"Cannot list processes: no ps and no /proc","action":"CONTINUE"`)
+		require.Contains(t, r.Stderr, `"error":"ps_not_found","details":"llm_procs --pid needs ps, which is not installed","action":"CONTINUE"`)
+		require.Contains(t, r.Stderr, `"missing":"ps"`)
 	}
 }
 

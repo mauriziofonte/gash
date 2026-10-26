@@ -50,6 +50,7 @@ func TestPortsByPortWithProcesses(t *testing.T) {
 
 func TestPortsByPortNetstat(t *testing.T) {
 	m := New()
+	m.goos = "linux" // the net-tools netstat; TestPortsBSD has macOS's
 	d := physTemp(t)
 	bin := stubBin(t, map[string]string{"netstat": `cat <<'EOF'
 Active Internet connections (only servers)
