@@ -94,6 +94,8 @@ func TestTLSDescribesTheChain(t *testing.T) {
 	rows = netRows(t, netRun(t, env, "llm_tls", addr, "--sni", "other.test"))
 	require.Equal(t, false, rows[0]["verified"])
 	require.Equal(t, "hostname_mismatch", rows[0]["verify_error"])
+	require.Equal(t, "TLS 1.3", rows[0]["protocol"]) // from the handshake the verification ended
+	require.Len(t, rows[0]["chain"], 1)
 	// Without the CA: described, not verified.
 	rows = netRows(t, netRun(t, nil, "llm_tls", addr))
 	require.Equal(t, "svc.test", rows[0]["subject"])

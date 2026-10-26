@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -388,10 +389,7 @@ func insertKey(out []byte, at int, key []byte) []byte {
 	default:
 		ins = append(append([]byte(`"host":`), key...), ',')
 	}
-	res := make([]byte, 0, len(out)+len(ins))
-	res = append(res, out[:at+1]...)
-	res = append(res, ins...)
-	return append(res, out[at+1:]...)
+	return slices.Concat(out[:at+1], ins, out[at+1:])
 }
 
 // hasTopKey reports whether the JSON object at the start of b has key at

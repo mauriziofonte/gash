@@ -225,10 +225,11 @@ var catalogNet = []Function{
 				"  x509 -noout -dates -subject. PORT defaults to 443; an https:// URL is\n" +
 				"  taken too. One row per host, in input order: {\"host\",\"protocol\",\n" +
 				"  \"subject\",\"issuer\",\"san\",\"not_after\",\"days_left\",\"verified\",\n" +
-				"  \"verify_error\",\"chain\",\"ms\",\"error\"}. The handshake accepts any\n" +
-				"  certificate, so an expired or self-signed one is still described; verified\n" +
-				"  says whether the chain checks out for the server name against the system\n" +
-				"  CAs (or SSL_CERT_FILE / SSL_CERT_DIR), verify_error why not: expired,\n" +
+				"  \"verify_error\",\"chain\",\"ms\",\"error\"}. The handshake verifies the\n" +
+				"  chain as a client does, and a certificate that fails (expired,\n" +
+				"  self-signed) is still described: verified says whether the chain checks\n" +
+				"  out for the server name against the system CAs (or SSL_CERT_FILE /\n" +
+				"  SSL_CERT_DIR), verify_error why not: expired,\n" +
 				"  not_yet_valid, hostname_mismatch, unknown_authority, invalid. chain lists\n" +
 				"  the certificates after the leaf as {\"subject\",\"issuer\",\"not_after\"}.\n" +
 				"  error is null, or connection_refused, timeout, dns_not_found, tls_error\n" +

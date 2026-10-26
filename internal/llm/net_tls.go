@@ -39,10 +39,10 @@ type tlsProbe struct {
 
 // tlsCheck is llm_tls (plan N3): a TLS handshake with each HOST[:PORT]
 // (default port 443; an https:// URL is taken too) and a summary of the
-// certificate it presented. The handshake accepts any certificate, so an
-// expired or self-signed one is still described; whether it verifies
-// against the system CAs (or SSL_CERT_FILE) for the server name is the
-// verified field.
+// certificate it presented. The handshake verifies the chain against the
+// system CAs (or SSL_CERT_FILE) for the server name, the verified field;
+// an expired or self-signed certificate is still described, with the
+// reason in verify_error.
 func (m *Module) tlsCheck(c *invoke.Call) int {
 	if helpAnywhere(c) {
 		return 0
@@ -113,11 +113,21 @@ func (p *tlsProbe) check(ctx context.Context, target, host, port string) []any {
 		row[10], row[11] = llmfmt.Ms(time.Since(start)), netError(ctx, err)
 		return row
 	}
-	conn := tls.Client(raw, &tls.Config{ServerName: name, InsecureSkipVerify: true}) //nolint:gosec // the chain is verified below, to describe a bad certificate instead of failing on it
+	// The handshake verifies the chain as a client does. A certificate that
+	// does not verify ends it with the certificates the server presented,
+	// which are then described with the reason instead of failing the row.
+	now := p.now()
+	conn := tls.Client(raw, &tls.Config{ServerName: name, RootCAs: p.roots, Time: func() time.Time { return now }})
 	err = conn.HandshakeContext(ctx)
 	row[10] = llmfmt.Ms(time.Since(start))
+	st := conn.ConnectionState()
 	_ = conn.Close()
-	if err != nil {
+	certs, verr := st.PeerCertificates, error(nil)
+	var cve *tls.CertificateVerificationError
+	switch {
+	case errors.As(err, &cve):
+		certs, verr = cve.UnverifiedCertificates, cve.Err
+	case err != nil:
 		// Connected, then no TLS: whatever the server did, the handshake
 		// failed (unless the time ran out).
 		row[11] = "tls_error"
@@ -126,24 +136,20 @@ func (p *tlsProbe) check(ctx context.Context, target, host, port string) []any {
 		}
 		return row
 	}
-	st := conn.ConnectionState()
-	if len(st.PeerCertificates) == 0 {
+	if len(certs) == 0 {
 		row[11] = "no_certificate"
 		return row
 	}
-	leaf, now := st.PeerCertificates[0], p.now()
+	leaf := certs[0]
 	san := make([]string, 0, len(leaf.DNSNames)+len(leaf.IPAddresses))
 	san = append(san, leaf.DNSNames...)
 	for _, ip := range leaf.IPAddresses {
 		san = append(san, ip.String())
 	}
-	chain := make([]tlsCert, 0, len(st.PeerCertificates)-1)
-	inter := x509.NewCertPool()
-	for _, ct := range st.PeerCertificates[1:] {
-		inter.AddCert(ct)
+	chain := make([]tlsCert, 0, len(certs)-1)
+	for _, ct := range certs[1:] {
 		chain = append(chain, tlsCert{Subject: certName(ct.Subject), Issuer: certName(ct.Issuer), NotAfter: ct.NotAfter.UTC().Format(time.RFC3339)})
 	}
-	_, verr := leaf.Verify(x509.VerifyOptions{Roots: p.roots, Intermediates: inter, DNSName: name, CurrentTime: now})
 	row[1] = tls.VersionName(st.Version)
 	row[2] = certName(leaf.Subject)
 	row[3] = certName(leaf.Issuer)

@@ -428,9 +428,9 @@ order): A/AAAA, NS, CNAME and TXT are string lists (a TXT record's strings joine
 CAA `[{flag, tag, value}]`, SOA `[{mname, rname, serial, refresh, retry,
 expire, minimum}]`; `[]` means no records, `null` that the lookup failed.
 An unknown type is `invalid_type`, a server that is not an IP
-`invalid_server` (RETRY). `llm_tls` accepts any certificate in the
-handshake so that an expired or self-signed one is still described, then
-verifies the chain for the server name (`--sni`, default HOST):
+`invalid_server` (RETRY). `llm_tls` verifies the chain in the handshake
+for the server name (`--sni`, default HOST) and still describes a
+certificate that fails, expired or self-signed:
 `verified` and `verify_error` (`expired`, `not_yet_valid`,
 `hostname_mismatch`, `unknown_authority`, `invalid`); `days_left` is
 negative once expired.
