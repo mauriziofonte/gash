@@ -18,6 +18,7 @@
 #   DB:name=driver://user:password@host:port/database
 #   AI:provider=api_token
 #   HOST:alias=user@host
+#   PROTECT:content=path, PROTECT:all=path (optionally @alias)
 #   GASH_SETTING=value          (see __GASH_SETTINGS_KNOWN)
 #
 # Diagnostics never echo a line's value: a malformed entry may hold a
@@ -70,7 +71,7 @@ declare -g __GASH_ENV_SETTINGS=""
 # Settings accepted as `NAME=value` lines in ~/.gash_env. A variable already
 # set in the environment always wins over the file, so a one-off
 # `GASH_BANNER=0 bash` keeps working.
-declare -g __GASH_SETTINGS_KNOWN=" GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_HISTORY_SYNC GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_GIT_EXCLUDE GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM GASH_DB_TIMEOUT GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX GASH_NVM GASH_PATH_ADD "
+declare -g __GASH_SETTINGS_KNOWN=" GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_HISTORY_SYNC GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_GIT_EXCLUDE GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM GASH_DB_TIMEOUT GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX GASH_NVM GASH_PATH_ADD GASH_REMOTE_NO_BINARY "
 
 # =============================================================================
 # URL Encoding/Decoding

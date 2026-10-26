@@ -211,6 +211,11 @@ func (lc *lineChecker) checkWalkRoots(words []pword, mode, name string, implicit
 			return refuse("forbidden_path", name+" "+p, "FATAL",
 				"A recursive command cannot start at / or above a protected tree (/proc, /sys, /dev, /boot, /root; for content searches also /etc); name a narrower directory")
 		}
+		// The user's PROTECT: trees: the program cannot leave them out.
+		if lc.guard.AboveProtected(lc.execAbs(p, lc.cwd), mode) {
+			return refuse("forbidden_path", name+" "+p, "FATAL",
+				"A recursive command cannot start above a path the user protects in ~/.gash_env (PROTECT:); name a narrower directory, or use llm_tree, llm_find or llm_grep, which leave it out")
+		}
 	}
 	return nil
 }

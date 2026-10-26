@@ -128,6 +128,11 @@ for v in 20.11.1 22.12.0; do mkdir -p .nvm/versions/node/v$v/bin; printf '#!/bin
 ```console
 $ gash run --runtime node:20 -- node --version
 v20.11.1
+$ echo 22 >.nvmrc
+$ gash run --runtime node:project -- node --version
+v22.12.0
+$ gash run --plain -- printf '\033[32mok\033[0m 1/3\r\033[32mok\033[0m 3/3\n'
+ok 3/3
 $ gash run --max-lines 3 -- seq 10
 1
 2
@@ -135,9 +140,17 @@ $ gash run --max-lines 3 -- seq 10
 [... 7 lines omitted]
 ```
 
-- `--runtime NAME:VERSION` (repeatable): `node:20`, `php:8.3`. A version
-  that is not installed stops the call with a `runtime_not_installed` error
-  that lists the installed ones.
+- `--runtime NAME:VERSION` (repeatable): `node:20`, `php:8.3`, or
+  `node:project` and `php:project` for the version the project in the
+  current directory pins (the files `node_detect_version` and
+  `php_detect_version` read). A version that is not installed stops the
+  call with a `runtime_not_installed` error that lists the installed ones;
+  a project that pins no version stops it with `runtime_not_pinned`, rather
+  than picking one.
+- `--plain`: drop colors and the other terminal escape sequences, and keep
+  only the last state of a line redrawn with carriage returns (progress
+  bars). The output is cleaned before `--max-lines`, `--tail`, `--width`
+  and `--test-summary` read it.
 - `--max-lines N` (or `--head N`), `--tail N`, `--width N`: keep the output
   short; what is cut becomes one `[... K lines omitted]` line.
 - `--test-summary`: print a summary of a test run (counts, and each
@@ -229,6 +242,7 @@ and point Playwright's `executablePath` (Puppeteer: `executablePath` with
 | `Warning: Node 18 not installed. Using 22.12.0. Run: nvm install 18` | The project wants a major you do not have; the answer names the newest one instead. |
 | `Error: No Node.js versions installed in NVM. Install: nvm install 20` | nvm has no version yet. |
 | `{"error":"runtime_not_installed",...}` | `gash runtime` or `gash run --runtime`: the version is not installed; `details` lists the installed ones. |
+| `{"error":"runtime_not_pinned",...}` | `project` was asked, and nothing in the current directory pins a version: add `.nvmrc` (Node.js) or `.target-php-version` (PHP), or name the version. |
 | `Error: nvm is not loaded in this shell. Source $NVM_DIR/nvm.sh first.` | `node_upgrade` and `nvm_prune_versions` need `nvm`: set `GASH_NVM=lazy` and open a new shell. |
 | `Error: Unable to read the remote index (network?). Nothing changed.` | `node_upgrade` could not reach nodejs.org. |
 | `Error: Chrome for Testing publishes chrome-headless-shell for Linux x86_64 only (...)` | There is no build for this system. |

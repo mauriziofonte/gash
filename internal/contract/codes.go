@@ -297,6 +297,7 @@ var codeTable = []Code{
 	{"invalid_version", Retry, "llm", Origin3x},
 	{"runtime_not_installed", Stop, "llm", Origin3x},
 	{"runtime_link_failed", Stop, "llm", Origin3x},
+	{"runtime_not_pinned", Stop, "llm", Origin3x},
 	{"command_not_found", Retry, "llm", Origin3x},
 	{"unsupported_file", Retry, "llm", Origin3x},
 	{"invalid_ext", Retry, "llm", Origin3x},

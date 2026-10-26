@@ -368,7 +368,8 @@ Replaces:
 #### Usage
 
 ```text
-agent_test [--runner auto|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...
+agent_test [--runner auto|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S]
+           [--absolute] -- CMD...
 ```
 
 #### Options
@@ -378,8 +379,11 @@ agent_test [--runner auto|NAME] [--fail-only] [--dry-run] [--max-lines N] [--wid
                        vitest, jest, mocha, pytest, go, cargo, playwright
                        (default auto: from CMD and the output)
 --fail-only            Print nothing when CMD exits 0 with no failure
---dry-run              Print the command, its format and the directory;
-                       run nothing
+--runtime NAME:VERSION Put that runtime's directory first on CMD's PATH:
+                       node:24, php:8.4, node:project (repeatable; as gash
+                       run --runtime)
+--dry-run              Print the command, its format, the directory and
+                       the runtimes; run nothing
 --max-lines N          Failures listed (default 50; --head N, --tail N);
                        unparsed output: the last N lines (default 20)
 --width N              Cut messages at N columns (default 200)
@@ -399,6 +403,9 @@ agent_test --fail-only -- npm test
 
 # Go with the JSON reporter
 agent_test -- go test -json ./...
+
+# The suite under the node version the project pins
+agent_test --runtime node:project -- npm test
 ```
 
 #### Notes
@@ -419,9 +426,13 @@ stderr merged, stdin /dev/null; the exit status is CMD's. Output:
 (phpstan, psalm) are failures. Output no parser reads:
 {"runner":null,"duration_s","parsed":false,"exit_code","tail":[...]}.
 --dry-run: {"argv":[...],"runner","cwd","dry_run":true,"written":false}
-(runner null when only the output would tell). Options come before --;
-a program not on PATH is command_not_found. The suite runs without
-llm_exec's rails.
+(runner null when only the output would tell), with --runtime also
+"runtimes":[{"runtime","request","path","version"}] in PATH order.
+--runtime resolves like gash runtime (VERSION project: the version the
+project pins, runtime_not_pinned when none); a version that is not
+installed is runtime_not_installed (STOP) and nothing runs. Options come
+before --; a program not on PATH is command_not_found. The suite runs
+without llm_exec's rails.
 ```
 
 See also: [`llm_lint`](../agents/reference.md#llm_lint)
@@ -2073,10 +2084,11 @@ llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR
 --ext LIST             Languages to check in directories (default: all):
                        php, sh (also .bash), js (.mjs, .cjs), json, yaml
                        (.yml), toml, py
---php VER              The php that checks .php files: 8.4, 8 (gash
-                       runtime's resolution; default: php on PATH)
---node MAJOR           The node that checks .js files: 24 (default: node on
-                       PATH)
+--php VER              The php that checks .php files: 8.4, 8, or project
+                       (the version the project pins; gash runtime's
+                       resolution; default: php on PATH)
+--node MAJOR           The node that checks .js files: 24, or project
+                       (default: node on PATH)
 -j, --jobs N           Checks at a time (default: the CPU count)
 --timeout S            Time limit of one checker process (default 60s)
 --max-lines N          Failures listed (default 100); --head N and --tail N
@@ -2106,14 +2118,19 @@ llm_lint deploy.sh config/app.yaml
 ```text
 Replaces for f in *.php; do php -l "$f"; done, bash -n and node --check
 loops. Output: {"checked":N,"failed":K,"failures":[{"file","line","error"}]}.
-php runs once per chunk of files (php -l a b c), bash -n once per file, node
-once per chunk (each file compiled as node loads it; a failure is re-checked
-with node --check for its message), python compiles in one process (no .pyc
-written); JSON, YAML and TOML are parsed by gash (tsconfig.json and .vscode
+php 8.3+ runs once per chunk of files (php -l a b c); an older php -l
+checks only its first file, so there each file gets its own run. bash -n
+once per file, node once per chunk (each file compiled as node loads it; a
+failure is re-checked with node --check for its message), python compiles
+in one process (no .pyc written). A file passes only on its own verdict: one
+a batch said nothing about is checked again alone. JSON, YAML and TOML are
+parsed by gash (tsconfig.json and .vscode
 files may hold comments). Directories skip node_modules, vendor, .git and
 __pycache__ and never follow symlinks; secret files are skipped there and
 refused as arguments. A FILE argument with another extension is
-unsupported_file. A missing checker is runtime_not_installed (STOP).
+unsupported_file. A missing checker is runtime_not_installed (STOP);
+--php project or --node project with no version pinned in the working
+directory is runtime_not_pinned (STOP).
 ```
 
 See also: [`agent_test`](../agents/reference.md#agent_test), [`llm_runtime`](../agents/reference.md#llm_runtime)
@@ -2456,7 +2473,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_runtime php|node|composer|npm|npx VERSION
+llm_runtime php|node|composer|npm|npx VERSION|project
 ```
 
 #### Examples
@@ -2467,6 +2484,9 @@ llm_runtime node 24
 
 # composer under php 8.4
 llm_runtime composer 8.4
+
+# The php this project pins
+llm_runtime php project
 ```
 
 #### Notes
@@ -2476,7 +2496,13 @@ Replaces source ~/.nvm/nvm.sh; nvm use 24; which node (and php84 wrappers).
 Output: {"runtime":"node","request":"24","path":".../bin/node","version":"24.1.0"};
 composer adds "php" (the binary it runs under), npm and npx report their
 node's version. VERSION is a prefix: 24, 24.1, 8.4, 8: the newest installed
-version that starts with it. node comes from the nvm tree
+version that starts with it. project is the version the project in the
+working directory pins, read as node_detect_version and
+php_detect_version read it (.nvmrc, .node-version, package.json
+engines.node; .target-php-version, composer.json require.php,
+.github/copilot-instructions.md), "request" then names it; a project
+that pins none is runtime_not_pinned (STOP), never a default. node comes
+from the nvm tree
 (${NVM_DIR:-~/.nvm}/versions/node), then the node on PATH; php from
 /usr/bin/phpX.Y and /usr/local/bin/phpX.Y, then the php on PATH. Not
 installed: runtime_not_installed (STOP) with the installed versions. The

@@ -12,7 +12,7 @@ func TestKnownIsTheSettingsList(t *testing.T) {
 	want := []string{"GASH_PROMPT", "GASH_BANNER", "GASH_HISTORY", "GASH_HISTORY_SYNC", "GASH_REPLACE_TOOLS",
 		"GASH_SAFETY_ALIASES", "GASH_UMASK", "GASH_GIT_EXCLUDE", "GASH_SHOW_INXI", "GASH_AI_MODEL_CLAUDE",
 		"GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT", "GASH_LLM_EXEC", "GASH_LLM_EXEC_ALLOW",
-		"GASH_LLM_SANDBOX", "GASH_NVM", "GASH_PATH_ADD"}
+		"GASH_LLM_SANDBOX", "GASH_NVM", "GASH_PATH_ADD", "GASH_REMOTE_NO_BINARY"}
 	var got, headless, fileOnly []string
 	for _, s := range Known {
 		got = append(got, s.Name)
@@ -30,7 +30,7 @@ func TestKnownIsTheSettingsList(t *testing.T) {
 	if !reflect.DeepEqual(headless, []string{"GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI", "GASH_AI_CONFIRM", "GASH_DB_TIMEOUT"}) {
 		t.Errorf("headless subset = %q", headless)
 	}
-	if !reflect.DeepEqual(fileOnly, []string{"GASH_LLM_EXEC", "GASH_LLM_EXEC_ALLOW", "GASH_LLM_SANDBOX"}) {
+	if !reflect.DeepEqual(fileOnly, []string{"GASH_LLM_EXEC", "GASH_LLM_EXEC_ALLOW", "GASH_LLM_SANDBOX", "GASH_REMOTE_NO_BINARY"}) {
 		t.Errorf("file-only = %q", fileOnly)
 	}
 	if IsKnown("GASH_NOPE") || !IsKnown("GASH_NVM") {

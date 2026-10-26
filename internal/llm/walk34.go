@@ -261,7 +261,7 @@ type scanEntry struct {
 // below a protected tree. Only the directories on the way to one need the
 // per-entry test, which a walk of thousands of entries then skips.
 func (m *Module) guardedDirs(c *invoke.Call) func(dir string) bool {
-	trees := m.guard(c).Forbidden
+	trees := m.guard(c).Trees()
 	// below reports whether a is b or below it, without building b+"/".
 	below := func(a, b string) bool {
 		return strings.HasPrefix(a, b) && (len(a) == len(b) || a[len(b)] == '/')

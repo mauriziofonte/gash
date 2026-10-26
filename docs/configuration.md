@@ -123,6 +123,7 @@ of these forms:
 | `DB:name=driver://user:password@host:port/database` | `DB:default=mysql://app:s3cret@localhost:3306/shop` |
 | `AI:provider=token` | `AI:claude=sk-ant-api03-...` |
 | `HOST:alias=user@host` | `HOST:web=deploy@web.example.com` |
+| `PROTECT:mode=path`, `PROTECT:mode@alias=path` | `PROTECT:all=~/private` |
 | `GASH_NAME=value` | `GASH_PROMPT=0` |
 
 Rules that apply to every form:
@@ -238,6 +239,55 @@ accept the alias, and so do `--host ALIAS` on the `llm_*` reads,
 registered aliases are accepted. `remote_hosts` (alias `rh`) lists them.
 See the [remote hosts guide](remote/README.md).
 
+### Protected paths
+
+`PROTECT:` lines keep files and directories of yours from the agent
+functions (`llm_*`, including `llm_exec`, and `agent_*`), and from what
+`ai_*` collects to send:
+
+| Line | What the agent functions do with the path |
+|---|---|
+| `PROTECT:content=~/contracts` | Show names, metadata and digests (`llm_tree`, `llm_find`, `llm_stat`, `llm_hash`) and never the content: every file there counts as a secret file, so it is not read, searched, compared, shown in a diff, committed or written (`secret_file_blocked`). A search walks around it |
+| `PROTECT:all=~/private` | Nothing: the path is refused (`forbidden_path`), listings, searches and git outputs leave it out, and `llm_exec` neither runs inside it nor starts a recursive command above it |
+
+* The path is absolute or starts with `~/`, the home of the machine it
+  applies on. A trailing `/` is dropped; a relative path or a `..` is
+  skipped with a warning.
+* `PROTECT:mode@alias=path` applies on that `HOST:` alias only. A line
+  without `@alias` applies on this machine and on every host.
+* Each line adds a path, and no line replaces another.
+* Links are resolved: a symlink into a protected tree is protected too, and
+  so is the tree reached through a linked parent.
+* On a host the paths are checked as written before anything connects, by
+  the gash binary on the host, and by the POSIX fallbacks after the host
+  resolves links. A fallback cannot leave a tree out of a walk, so it
+  refuses a walk that would enter one. `llm_remote_run` checks its command
+  against the paths as written only.
+* `llm_exec` checks a bare name against the `all` paths too (`ls private`
+  in the directory above it), refuses every argument inside a `content`
+  tree (it cannot tell a listing from a read), and inside a repository its
+  `git` leaves the trees out of diffs, logs and greps. It does not filter
+  what a command prints: a plain `ls` above an `all` path still names it.
+  `GASH_LLM_EXEC=unrestricted` checks no path at all, and with `git` named
+  in `GASH_LLM_EXEC_ALLOW` git output is not filtered.
+* Gash reads the lines from the file at each call, never from the
+  environment. The interactive functions (`files_*`, `remote_*`) do not
+  read them.
+
+<!-- example
+mkdir -p private contracts
+echo 'one' >private/notes.txt
+echo 'two' >contracts/terms.txt
+printf 'PROTECT:all=~/private\nPROTECT:content=~/contracts\n' >.gash_env
+chmod 600 .gash_env
+-->
+```console
+$ llm_read private/notes.txt
+{"error":"forbidden_path","details":"~/private/notes.txt","action":"FATAL","recoverable":false,"hint":"This path is protected and cannot be accessed"}
+$ llm_read contracts/terms.txt
+{"error":"secret_file_blocked","details":"contracts/terms.txt","action":"FATAL","recoverable":false,"hint":"This file contains secrets and cannot be read"}
+```
+
 ### Settings
 
 `GASH_NAME=value`, with a name from the [settings reference](#settings-reference).
@@ -262,11 +312,12 @@ For the settings in the reference below:
 * **Headless mode:** only the settings functions use are applied:
   `GASH_DB_TIMEOUT`, `GASH_AI_CONFIRM`, `GASH_AI_MODEL_CLAUDE` and
   `GASH_AI_MODEL_GEMINI`. The environment still wins over the file.
-* **File only:** `GASH_LLM_EXEC`, `GASH_LLM_EXEC_ALLOW` and
-  `GASH_LLM_SANDBOX` are read from `~/.gash_env` at each call, in both
-  modes, never from the environment, so an agent cannot loosen `llm_exec`
-  by exporting a variable (whoever controls `GASH_ENV_FILE` chooses the
-  file, though). A change to them applies at once.
+* **File only:** `GASH_LLM_EXEC`, `GASH_LLM_EXEC_ALLOW`,
+  `GASH_LLM_SANDBOX` and `GASH_REMOTE_NO_BINARY` (and the `PROTECT:`
+  lines) are read from `~/.gash_env` at each call, in both modes, never
+  from the environment, so an agent cannot loosen them by exporting a
+  variable (whoever controls `GASH_ENV_FILE` chooses the file, though). A
+  change to them applies at once.
 
 Settings changed in `~/.bash_aliases` or `~/.bash_local` come too late for
 most of them (the prompt, history and aliases are already set up). Use
@@ -276,7 +327,7 @@ a new terminal.
 ## Settings reference
 
 These are the settings `~/.gash_env` accepts. Any of them may also be set
-in the environment (but the three file-only ones).
+in the environment (but the four file-only ones).
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -292,16 +343,18 @@ in the environment (but the three file-only ones).
 | `GASH_PATH_ADD` | empty | Directories put first on `PATH`, in the order given, when they exist (`~` is expanded), e.g. `"~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"`. Separated by spaces; no wildcards (a `*` is taken literally). Directories only, no options: a word starting with `-` is a directory name. Re-sourcing never adds them twice |
 | `GASH_NVM` | `off` | `lazy` puts `node`, `npm`, `npx` and the global packages of nvm's default version on `PATH` at once and loads `nvm.sh` the first time `nvm` runs: it saves the time that sourcing `nvm.sh` adds to every shell. `on` (or `1`) sources `nvm.sh` and its completion at startup. `off` leaves nvm to your own files. `NVM_DIR` defaults to `~/.nvm` |
 | `GASH_DB_TIMEOUT` | `30` | PostgreSQL statement timeout of `llm_db_*`, and how long `gash_db_test` waits, in seconds. Not applied to MySQL, MariaDB or SQLite queries |
-| `GASH_LLM_EXEC` | empty | `unrestricted` skips the `llm_exec` parser and allowlist. The blocklist of destructive patterns still applies. File only |
+| `GASH_LLM_EXEC` | empty | `unrestricted` skips the `llm_exec` parser and allowlist, for `llm_exec` only (the functions that borrow its rules always check). The blocklist of destructive patterns still applies. File only |
 | `GASH_LLM_EXEC_ALLOW` | empty | Extra commands for `llm_exec`, separated by spaces, commas or colons (`"make npm"`). They run with any arguments. File only |
 | `GASH_LLM_SANDBOX` | `0` | `1` runs `llm_exec` inside `bwrap`: read-only filesystem, no network, and under WSL no Windows programs. Fails with `sandbox_unavailable` when `bwrap` is missing. File only |
+| `GASH_REMOTE_NO_BINARY` | empty | `HOST:` aliases, separated by spaces, commas or colons, or `*` for every host, that never get the gash binary: `--host` copies it to none of them and does not run a copy already cached there. Calls with `--host` then answer through their POSIX fallback, or fail with `remote_binary_unavailable`. File only |
 | `GASH_AI_CONFIRM` | `auto` | `auto` asks before sending data Gash collected (`ai_sysinfo`); `1` asks before every request; `0` never asks. The value is case-sensitive: any other value (`off`, `no`, `AUTO`) asks before every request, with a warning, so an unattended send always needs an explicit `0` |
 | `GASH_AI_MODEL_CLAUDE` | `claude-haiku-5-5` | Model for Claude requests. Letters, digits, `.`, `_` and `-` only, starting with a letter or digit; any other value is an error and nothing is sent |
 | `GASH_AI_MODEL_GEMINI` | `gemini-2.5-flash` | Model for Gemini requests (it is part of the request URL). Same rule as `GASH_AI_MODEL_CLAUDE` |
 
-The `GASH_LLM_*` settings also apply to `llm_wait --cmd-ok`,
-`llm_docker_exec`, `gash run --safe` and `llm_remote_run` (the sandbox
-aside). See [security.md](security.md) for what the `llm_exec` and AI
+`GASH_LLM_EXEC_ALLOW` also applies to `llm_wait --cmd-ok`,
+`llm_docker_exec`, `gash run --safe` and `llm_remote_run`;
+`GASH_LLM_EXEC=unrestricted` applies to `llm_exec` alone, and the sandbox
+is local. See [security.md](security.md) for what the `llm_exec` and AI
 settings change, and the [agents guide](agents/README.md#decide-what-agents-may-run)
 for how they bound an agent.
 

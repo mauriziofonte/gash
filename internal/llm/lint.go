@@ -82,8 +82,9 @@ type lintFailure struct {
 
 // lint is llm_lint [PATH...] [--ext LIST] [--php VER] [--node MAJOR]
 // [-j N] [--timeout S] (plan L1): every file of the languages asked,
-// checked by its own tool, {"checked","failed","failures"}. php is
-// batched (php -l a b c per chunk), shell scripts pooled (bash -n), js
+// checked by its own tool, {"checked","failed","failures"}. php 8.3+ is
+// batched (php -l a b c per chunk); an older php -l checks only its first
+// file, so there each file is its own job. Shell scripts pooled (bash -n), js
 // batched through one node per chunk that compiles each file as node
 // would load it (failures re-checked with node --check for its exact
 // message), python batched (compile(), no .pyc written), JSON, YAML and
@@ -166,6 +167,7 @@ func (m *Module) lint(c *invoke.Call) int {
 		need[f.lang]++
 	}
 	tools := map[string]string{}
+	phpBatch := false
 	r := dev.NewResolver(c.Ctx, c.Env, m.run, false)
 	for _, lang := range lintOrder {
 		if need[lang] == 0 {
@@ -178,11 +180,14 @@ func (m *Module) lint(c *invoke.Call) int {
 			if lang == "js" {
 				fam, req = "node", nodeReq
 			}
-			p, ok := m.lintRuntime(c, r, fam, req, need[lang], lang)
+			p, ver, ok := m.lintRuntime(c, r, fam, req, need[lang], lang)
 			if !ok {
 				return 1
 			}
 			tool = p
+			if lang == "php" {
+				phpBatch = phpLintsMany(ver)
+			}
 		case "sh":
 			p, found := m.lookPath(c, "bash")
 			if !found {
@@ -207,7 +212,7 @@ func (m *Module) lint(c *invoke.Call) int {
 		tools[lang] = tool
 	}
 
-	results := m.runLint(c, o, files, tools)
+	results := m.runLint(c, o, files, tools, phpBatch)
 	var failures []lintFailure
 	for i, f := range files {
 		if res := results[i]; !res.ok {
@@ -241,23 +246,23 @@ func (m *Module) lint(c *invoke.Call) int {
 	return 0
 }
 
-// lintRuntime is the php or node that checks the files: the requested
-// version (gash runtime's resolution), else the one on PATH, else the
-// newest installed; none is runtime_not_installed (STOP).
-func (m *Module) lintRuntime(c *invoke.Call, r *dev.Resolver, fam, req string, n int, lang string) (string, bool) {
+// lintRuntime is the php or node that checks the files, and its version:
+// the requested version (gash runtime's resolution), else the one on
+// PATH, else the newest installed; none is runtime_not_installed (STOP).
+func (m *Module) lintRuntime(c *invoke.Call, r *dev.Resolver, fam, req string, n int, lang string) (string, string, bool) {
 	if req != "" {
 		res, err := r.Resolve(fam, req)
 		if err != nil {
 			RuntimeFail(c, err)
-			return "", false
+			return "", "", false
 		}
-		return res.Interp, true
+		return res.Interp, res.Version, true
 	}
 	if p, ok := m.lookPath(c, fam); ok {
-		return p, true
+		return p, r.Version(p), true
 	}
 	if list := r.Installed(fam); len(list) > 0 {
-		return list[len(list)-1].Path, true
+		return list[len(list)-1].Path, list[len(list)-1].Version, true
 	}
 	flag := "--php X.Y"
 	if fam == "node" {
@@ -265,7 +270,21 @@ func (m *Module) lintRuntime(c *invoke.Call, r *dev.Resolver, fam, req string, n
 	}
 	c.Fail(contract.New("runtime_not_installed", "no "+fam+" found for "+strconv.Itoa(n)+" ."+lang+" files",
 		"Install "+fam+" (gash runtime "+fam+" VERSION resolves an installed one), pass "+flag+", or leave ."+lang+" out with --ext; ask the user"))
-	return "", false
+	return "", "", false
+}
+
+// phpLintsMany reports a php whose php -l gives a verdict for each of its
+// files: 8.3 and later. Before, it checks the first file only and prints
+// nothing about the others; an unknown version is treated as old.
+func phpLintsMany(version string) bool {
+	major, rest, _ := strings.Cut(version, ".")
+	minor, _, _ := strings.Cut(rest, ".")
+	ma, err1 := strconv.Atoi(major)
+	mi, err2 := strconv.Atoi(minor)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return ma > 8 || ma == 8 && mi >= 3
 }
 
 // lintFiles expands the PATH arguments into the files to check, in
@@ -340,10 +359,10 @@ type lintJob struct {
 	files []int
 }
 
-// runLint runs the checks: the batched linters in chunks, the others one
-// job per file, at most -j jobs at a time; then the js files the batch
-// flagged, through node --check.
-func (m *Module) runLint(c *invoke.Call, o *llmfmt.Options, files []lintFile, tools map[string]string) []lintResult {
+// runLint runs the checks: the batched linters in chunks (php only when
+// phpBatch), the others one job per file, at most -j jobs at a time; then
+// the js files the batch flagged, through node --check.
+func (m *Module) runLint(c *invoke.Call, o *llmfmt.Options, files []lintFile, tools map[string]string, phpBatch bool) []lintResult {
 	jobs := o.JobsOr(llmfmt.LocalJobs())
 	byLang := map[string][]int{}
 	for i, f := range files {
@@ -361,6 +380,9 @@ func (m *Module) runLint(c *invoke.Call, o *llmfmt.Options, files []lintFile, to
 			size = max(50, (len(idx)+jobs-1)/jobs)
 		}
 		size = min(size, 200)
+		if lang == "php" && !phpBatch {
+			size = 1
+		}
 		for i := 0; i < len(idx); i += size {
 			work = append(work, lintJob{lang: lang, files: idx[i:min(i+size, len(idx))]})
 		}
@@ -459,7 +481,10 @@ var rePHPErr = lazyre.MustCompile(`^(?:PHP )?([A-Za-z ]*error): {1,2}(.*) on lin
 
 // phpCheck is php -l FILE... on one chunk: "No syntax errors detected in
 // F", or "PHP Parse error:  MESSAGE in F on line N" then "Errors parsing
-// F" (php keeps going after an error).
+// F" (php 8.3+ keeps going after an error; an older php checks the first
+// file only, so it gets chunks of one). A file passes only on its own
+// verdict line: one of a chunk without a verdict is checked again alone,
+// and alone without one it fails, its error naming it.
 func (m *Module) phpCheck(ctx context.Context, c *invoke.Call, php string, idx []int, files []lintFile, timeout time.Duration) []lintResult {
 	out := make([]lintResult, len(idx))
 	args := []string{"-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "html_errors=0", "-d", "error_reporting=-1", "-l"}
@@ -508,13 +533,25 @@ func (m *Module) phpCheck(ctx context.Context, c *invoke.Call, php string, idx [
 			out[n] = lintResult{done: true, line: atoi(mm[3]), error: msg}
 		}
 	}
-	for n := range out {
-		if !out[n].done {
-			if res.ExitCode == 0 {
-				out[n] = lintResult{done: true, ok: true}
-			} else {
-				out[n] = lintResult{done: true, error: firstLine(string(res.Stderr), "php -l gave no result")}
+	// A verdict without a message the pattern reads: "Errors parsing F"
+	// (stdout, before the stderr message), "Could not open input file: F".
+	for _, l := range strings.Split(text, "\n") {
+		l = strings.TrimSpace(l)
+		for prefix, msg := range map[string]string{"Errors parsing ": "php -l found errors in ", "Could not open input file: ": "php could not open "} {
+			if f, ok := strings.CutPrefix(l, prefix); ok {
+				if n, found := pos[f]; found && !out[n].done {
+					out[n] = lintResult{done: true, error: msg + files[idx[n]].show}
+				}
 			}
+		}
+	}
+	for n := range out {
+		switch {
+		case out[n].done:
+		case len(idx) > 1:
+			out[n] = m.phpCheck(ctx, c, php, idx[n:n+1], files, timeout)[0]
+		default:
+			out[n] = lintResult{done: true, error: "php -l gave no verdict for " + files[idx[n]].show}
 		}
 	}
 	return out
@@ -522,12 +559,13 @@ func (m *Module) phpCheck(ctx context.Context, c *invoke.Call, php string, idx [
 
 // pyLintScript compiles each file (compile(): the parser and the
 // compiler, nothing executed, no .pyc written) and prints one JSON line
-// [index, line, message] per file that fails.
+// per file: [index] when it compiles, [index, line, message] when not.
 const pyLintScript = `import sys, json
 for i, f in enumerate(sys.argv[1:]):
     try:
         with open(f, 'rb') as h:
             compile(h.read(), f, 'exec', dont_inherit=True)
+        print(json.dumps([i]), flush=True)
     except SyntaxError as e:
         print(json.dumps([i, e.lineno or 0, e.msg]), flush=True)
     except Exception as e:
@@ -537,8 +575,9 @@ for i, f in enumerate(sys.argv[1:]):
 // jsLintScript compiles each file as node loads it, without running it:
 // .mjs and a .js under "type": "module" as an ES module, .cjs and other
 // .js files as a CommonJS function body, retried as a module where node
-// detects ES syntax (22.7+, 20.19+). It prints [index, 0, message] for a
-// file that does not compile; llm_lint then asks node --check about it.
+// detects ES syntax (22.7+, 20.19+). It prints [index] for a file that
+// compiles and [index, 0, message] for one that does not; llm_lint then
+// asks node --check about the latter.
 const jsLintScript = `const fs = require('fs'), vm = require('vm'), path = require('path');
 const v = process.versions.node.split('.').map(Number);
 const detect = v[0] > 22 || (v[0] === 22 && v[1] >= 7) || (v[0] === 20 && v[1] >= 19);
@@ -572,19 +611,22 @@ files.forEach((f, i) => {
     const ext = path.extname(f);
     const type = ext === '.mjs' ? 'module' : ext === '.cjs' ? 'commonjs' : pkgType(path.dirname(path.resolve(f)));
     if (type === 'unknown') throw new Error('package.json');
-    if (type === 'module') { asModule(src, f); return; }
+    if (type === 'module') { asModule(src, f); console.log(JSON.stringify([i])); return; }
     try { asScript(src, f); } catch (e) {
       if (!detect || ext === '.cjs' || !(e instanceof SyntaxError)) throw e;
       asModule(src, f);
     }
+    console.log(JSON.stringify([i]));
   } catch (e) {
     console.log(JSON.stringify([i, 0, String(e && e.message || e)]));
   }
 });
 `
 
-// batchCheck runs a checker that prints [index, line, message] JSON lines
-// for the files that fail and nothing for the others.
+// batchCheck runs a checker that prints one JSON line per file: [index]
+// when it passes, [index, line, message] when not. A file passes only on
+// its own line: one of a batch without a line is checked again alone,
+// and alone without one it fails (the checker stopped early, or crashed).
 func (m *Module) batchCheck(ctx context.Context, c *invoke.Call, tool string, pre []string, idx []int, files []lintFile, timeout time.Duration) []lintResult {
 	out := make([]lintResult, len(idx))
 	args := append([]string(nil), pre...)
@@ -592,29 +634,41 @@ func (m *Module) batchCheck(ctx context.Context, c *invoke.Call, tool string, pr
 		args = append(args, files[i].abs)
 	}
 	res, e := m.lintRun(ctx, c, tool, args, timeout)
-	if e == "" && res.ExitCode != 0 {
-		e = firstLine(string(res.Stderr), filepath.Base(tool)+" exited with status "+strconv.Itoa(res.ExitCode))
-	}
 	if e != "" {
 		for n := range out {
 			out[n] = lintResult{done: true, error: e}
 		}
 		return out
 	}
-	for n := range out {
-		out[n] = lintResult{done: true, ok: true}
-	}
 	for _, l := range strings.Split(string(res.Stdout), "\n") {
 		var rec []json.RawMessage
-		if !strings.HasPrefix(l, "[") || json.Unmarshal([]byte(l), &rec) != nil || len(rec) != 3 {
+		if !strings.HasPrefix(l, "[") || json.Unmarshal([]byte(l), &rec) != nil || (len(rec) != 1 && len(rec) != 3) {
 			continue
 		}
 		var n, line int
 		var msg string
-		if json.Unmarshal(rec[0], &n) != nil || json.Unmarshal(rec[1], &line) != nil || json.Unmarshal(rec[2], &msg) != nil || n < 0 || n >= len(out) {
+		if json.Unmarshal(rec[0], &n) != nil || n < 0 || n >= len(out) || out[n].done {
+			continue
+		}
+		if len(rec) == 1 {
+			out[n] = lintResult{done: true, ok: true}
+			continue
+		}
+		if json.Unmarshal(rec[1], &line) != nil || json.Unmarshal(rec[2], &msg) != nil {
 			continue
 		}
 		out[n] = lintResult{done: true, line: line, error: oneLine(msg)}
+	}
+	for n := range out {
+		switch {
+		case out[n].done:
+		case len(idx) > 1:
+			out[n] = m.batchCheck(ctx, c, tool, pre, idx[n:n+1], files, timeout)[0]
+		case res.ExitCode != 0:
+			out[n] = lintResult{done: true, error: firstLine(string(res.Stderr), filepath.Base(tool)+" exited with status "+strconv.Itoa(res.ExitCode))}
+		default:
+			out[n] = lintResult{done: true, error: filepath.Base(tool) + " gave no verdict for " + files[idx[n]].show}
+		}
 	}
 	return out
 }

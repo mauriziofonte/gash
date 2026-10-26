@@ -123,7 +123,7 @@ func readErr(code, details, hint string) *contract.Envelope {
 // each RemoteFile.
 func (t Transport) ReadFiles(ctx context.Context, h Host, paths []string, maxBytes int64, timeout time.Duration) ([]RemoteFile, *contract.Envelope) {
 	for _, p := range paths {
-		if e := CheckRead(p); e != nil {
+		if e := CheckRead(p, h); e != nil {
 			return nil, e
 		}
 	}

@@ -492,7 +492,8 @@ missing one is waited for); RE is RE2, matched per line. `--gone` takes a
 PID (a zombie counts as gone) or a NAME matched as `llm_procs --name`.
 `--http` waits for a 2xx (or `--code N`), with `--json-path P --equals V`
 for a value of the JSON body; `--cmd-ok` re-runs a command line checked
-once under the `llm_exec` rules (6.3). The timeout is an answer, not an
+once under the `llm_exec` rules (6.3), always the checked ones:
+`GASH_LLM_EXEC=unrestricted` does not apply. The timeout is an answer, not an
 error: `met:false` with exit 1, plus what the last look saw (`last`,
 `code`, `rc`). `--timeout` is required (at most 1h); `missing_condition`
 without a condition, `unexpected_argument` for a second one.
@@ -507,9 +508,9 @@ The docker functions run the `docker` CLI with `llm_docker_check`'s short
 environment; no docker is `docker_not_found`, a daemon that cannot be
 reached `docker_unavailable` (both CONTINUE), an unknown container
 `container_not_found` (RETRY). `llm_docker_exec` passes CMD's words to
-`docker exec` as an array (no shell, no quoting) after the `llm_exec` rules:
-one command, `sed`/`awk` under `--sandbox`, `grep`/`rg` skipping secret
-files, `git` refused. Journal, log and match lines are cut at 300 columns
+`docker exec` as an array (no shell, no quoting) after the checked
+`llm_exec` rules (never `unrestricted`): one command, `sed`/`awk` under
+`--sandbox`, `grep`/`rg` skipping secret files, `git` refused. Journal, log and match lines are cut at 300 columns
 unless `--width` says otherwise.
 
 ### 3.11 Runtimes, lint and tests
@@ -517,15 +518,17 @@ unless `--width` says otherwise.
 | Function | Output |
 |---|---|
 | `llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]` | JSON object, keys in the order asked: `{"version","path"}` per program, `null` when it is not on PATH, `"version":null` when its probe prints none; `php` and `node` are arrays of every installed version, oldest first. Without NAME: git php composer node npm python3 go rg jq docker |
-| `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins |
-| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute] [--host ALIAS]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
+| `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins, or `project` (`"request"` then names the version the project pins) |
+| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER\|project] [--node MAJOR\|project] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute] [--host ALIAS]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
 
 `gash run` and `agent_test` (section 8) take a command after `--`: the one
 exception to the no-`--` rule of this section. Their options come before
 `--` (or before the first word that is not an option), every word after it
 belongs to CMD, `--help` included.
 
-`llm_lint` runs `php -l` on batches of files, `bash -n` per shell script,
+`llm_lint` runs `php -l` on batches of files with PHP 8.3 and later (an
+older `php -l` checks only the first file it is given, so there each file
+gets its own run), `bash -n` per shell script,
 node per batch of js files (each compiled as node loads it, CommonJS or ES
 module; a failure is re-checked with `node --check` for its message),
 python `compile()` per batch (no `.pyc` written), and parses JSON (comments
@@ -541,7 +544,14 @@ nvm tree (`${NVM_DIR:-~/.nvm}/versions/node`, without loading nvm.sh), php
 as `/usr/bin/phpX.Y` or `/usr/local/bin/phpX.Y`, then the one on PATH. A
 version that is not installed is `runtime_not_installed` (STOP) naming the
 installed ones: ask the user. They read gash's runtime cache, never write
-it.
+it. The version `project` (`llm_runtime node project`, `--php project`,
+`gash run --runtime php:project`, `agent_test --runtime node:project`) is
+the one the project in the working directory pins, read as
+`node_detect_version` and `php_detect_version` read it (`.nvmrc`,
+`.node-version`, `package.json` engines.node; `.target-php-version`,
+`composer.json` require.php, `.github/copilot-instructions.md`); a project
+that pins none is `runtime_not_pinned` (STOP: ask the user which version),
+never the default one.
 
 Three commands of the binary (run them as `gash WORD`; they are not shell
 functions):
@@ -549,7 +559,7 @@ functions):
 | Command | Effect |
 |---|---|
 | `gash runtime php\|node\|composer\|npm\|npx VERSION [--path]` | The `llm_runtime` object, or with `--path` the path alone; the resolution is cached in `${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json` until the nvm tree or `/usr/bin/php*` change |
-| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime node:24\|php:8.4] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
+| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--plain] [--test-summary] [--runtime node:24\|php:8.4\|php:project] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--plain` drops escape sequences (colors, cursor moves, titles) and keeps the last state of a line redrawn with carriage returns (progress bars), before the budget and `--test-summary` read the output; `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
 | `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
 
 ### 3.12 Remote hosts
@@ -582,9 +592,11 @@ Several hosts run in parallel: objects come as one array in `--host` order,
 text as `==> ALIAS <==` blocks. On a host with this machine's OS and CPU the
 gash binary itself answers: it is copied once (first call: two round trips)
 into `~/.cache/gash/remote/<version>-<hash>/gash` (0700, checked by size and
-a test run, renamed into place) and reused by every later call; elsewhere
-`llm_find`, `llm_grep`, `llm_tree` and `llm_config` answer their basic
-forms through POSIX sh with the local output (`llm_find` names without
+a test run, renamed into place) and reused by every later call. Elsewhere,
+and on a host named in the user's `GASH_REMOTE_NO_BINARY` (`*` names every
+host), which never gets the binary, `llm_find`, `llm_grep`, `llm_tree` and
+`llm_config` answer their basic forms through POSIX sh with the local
+output (`llm_find` names without
 `--contains`, `llm_tree` with `--depth`, `--stats` and `--text`, `llm_config`
 without `--path`, `llm_grep` with a pattern in the syntax ripgrep and POSIX
 ERE share), and every other call
@@ -594,14 +606,16 @@ syntax). `-` (stdin) is `unexpected_argument` with `--host`: the local
 stdin is not sent; words after `--` (the command of `llm_docker_exec`) are
 never read as `--host`. `llm_sysinfo` keeps the machine's own name in its
 `"host"` key. `rm -rf ~/.cache/gash/remote` on the host removes the copies. The
-path rules are the local ones plus the transfer DENY list of `remote_*`,
-checked before connecting (a `..` component is `path_traversal_blocked`)
+path rules are the local ones plus the transfer DENY list of `remote_*` and
+the user's `PROTECT:` paths for that host (6.7), checked before connecting (a `..` component is `path_traversal_blocked`)
 and again on the host after resolving links; a secret file never leaves the
 host.
 
 `llm_remote_run` checks CMD with the `llm_exec` rules (3.5) before anything
-connects: read-only commands, no secret files or protected paths, the same
-`GASH_LLM_EXEC` settings (`GASH_LLM_SANDBOX` is local only). A glob or a
+connects: read-only commands, no secret files or protected paths (the
+`PROTECT:` paths of every host it names, as written).
+`GASH_LLM_EXEC_ALLOW` applies; `GASH_LLM_EXEC=unrestricted` does not (it is
+`llm_exec`'s alone), and `GASH_LLM_SANDBOX` is local only. A glob or a
 leading `~` is `remote_glob_unsupported` (RETRY): it would expand on this
 machine; give explicit paths. Each command runs in bash on the host with
 stdin closed, from the remote home; steps share no shell state. A failing
@@ -795,7 +809,7 @@ Each code always carries the action shown:
 | Git | `git_error` `detached_head` `merge_conflict` `push_failed` (STOP); `invalid_log` `invalid_files` `invalid_fields` `unknown_revision` `missing_message` `invalid_author` `nothing_to_commit` `git_add_failed` `commit_failed` `no_upstream` `unknown_remote` `push_rejected` (RETRY) |
 | Network probes | `http_method_blocked` (FATAL); `auth_env_unset` (STOP); `missing_target` `invalid_target` `invalid_server` `invalid_header` `invalid_resolve` `invalid_expect` `invalid_body_max` `invalid_auth_env` `secret_in_argv` (RETRY) |
 | Processes, waiting, services | `kill_refused` (FATAL); `kill_failed` (STOP); `ps_not_found` `systemd_unavailable` `container_not_running` `docker_unavailable` (CONTINUE); `invalid_pid` `missing_condition` `invalid_interval` `invalid_code` `invalid_url` `missing_unit` `missing_container` `missing_command` `invalid_user` `container_not_found` `docker_error` `invalid_signal` `pattern_too_broad` (RETRY) |
-| Runtimes, lint, tests | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
+| Runtimes, lint, tests | `runtime_not_installed` `runtime_not_pinned` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
 | Remote hosts | `unknown_host` `remote_protocol_error` `remote_binary_unavailable` `hash_tool_not_found` `put_verify_failed` (STOP); `host_unreachable` `missing_host` `remote_glob_unsupported` `invalid_exclude` `invalid_container_name` `container_unavailable` `invalid_mode` (RETRY) |
 | Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
 | Prerequisites | `prerequisite_missing` `install_needs_confirmation` (STOP) |
@@ -876,6 +890,9 @@ every check below.
   (content searches: also above `/etc`), and may not follow symlinks
   (`grep -R`, `rg -L`, `find -L`/`-follow`/`-files0-from`, `fd -L`,
   `tree -l`, `du -L`, `ls -RL`, `--dereference-recursive`).
+* The user's `PROTECT:all` paths (6.7) are forbidden paths too, with one
+  difference: `llm_tree`, `llm_find` and `llm_grep` may start above them
+  and leave them out.
 * Paths resolve as GNU `realpath -m` resolves them, on every platform.
 
 ### 6.2 Secret files
@@ -912,7 +929,8 @@ stays skipped there. `llm_exec` also refuses `git show REV:PATH` for a
 secret PATH and git blobs named by id (`git show SHA`, `git cat-file -p
 SHA`, `--batch`). Their names still appear in `llm_tree` and `llm_find`
 name searches. Detection is by name only: a password inside `config.php` is
-not.
+not. Every file under one of the user's `PROTECT:content` paths (6.7) is a
+secret file too, whatever its name.
 
 ### 6.3 `llm_exec`
 
@@ -960,8 +978,8 @@ never from same-named environment variables:
 
 | Setting | Effect |
 |---|---|
-| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
-| `GASH_LLM_EXEC=unrestricted` | Skips parser, allowlist and secret-file check; only the blocklist remains |
+| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options, for `llm_exec` and the functions that check a command with its rules; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
+| `GASH_LLM_EXEC=unrestricted` | `llm_exec` only: skips its parser, allowlist and secret-file check; only the blocklist remains. `llm_remote_run`, `llm_docker_exec`, `llm_wait --cmd-ok` and `gash run --safe` always use the checked rules |
 | `GASH_LLM_SANDBOX=1` | Runs the child in `bwrap`: read-only filesystem, no network, and under WSL no Windows interop (`sandbox_unavailable` if bwrap cannot start) |
 
 Whoever controls the agent's environment (`HOME`, `GASH_ENV_FILE`) controls
@@ -1043,7 +1061,8 @@ these:
   the caller's environment.
 - **Processes.** `llm_procs` has no `--kill`, listings never show the
   caller, its ancestors or its subshells; `llm_wait --cmd-ok` and
-  `llm_docker_exec` run under the `llm_exec` rules of 6.3.
+  `llm_docker_exec` run under the checked `llm_exec` rules of 6.3, whatever
+  `GASH_LLM_EXEC` says.
 - **Commands.** `llm_lint` only compiles (`php -l`, `bash -n`, node
   compile without evaluating, python `compile()`); `llm_tools NAME` runs
   `NAME --version` for a bare program name on PATH. A test suite runs the
@@ -1067,6 +1086,27 @@ these:
   value, and only on this machine.
 
 Writes are `agent_*` calls, with the rules of section 8.
+
+### 6.7 The user's protected paths
+
+`PROTECT:` lines in `~/.gash_env` add the user's own paths to these rails,
+for this machine and every host or for one `HOST:` alias. Every `llm_*` and
+`agent_*` call holds them, after resolving links:
+
+| Line | What a call gets |
+|---|---|
+| `PROTECT:content=PATH` | Names, metadata and digests (`llm_tree`, `llm_find`, `llm_stat`, `llm_hash`); the content is `secret_file_blocked` (FATAL), searches walk around it, and no `agent_*` call writes there |
+| `PROTECT:all=PATH` | Nothing: `forbidden_path` (FATAL) as an argument, left out of walks, listings and `llm_git_*` output; `llm_exec` runs no line inside it and no recursive command above it |
+
+* `llm_exec` refuses every argument inside a `content` tree, since it
+  cannot tell a listing from a read: list it with `llm_tree` or `llm_find`.
+  Inside a repository its `git` leaves the trees out of diffs, logs and
+  greps. It does not filter what a command prints.
+* On a host the paths are checked as written before connecting, then on
+  the host. A POSIX fallback walk that would enter an `all` tree is
+  `forbidden_path`: name a narrower directory.
+* A protected path is the user's decision: do not ask for a way around
+  it, and never edit `~/.gash_env` yourself.
 
 ## 7. Routing: the raw shape and the Gash function
 
@@ -1181,7 +1221,7 @@ output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
 | `agent_kill NAME\|PID... [--signal S] [--dry-run] [--format F]` | `{"killed":N,"pids":[...]}`; NAME is the regex of `llm_procs --name` on the full command line; nothing matched is `{"killed":0,"pids":[]}`, exit 0; `--dry-run` adds `"cmds":[...],"signal":"TERM","dry_run":true,"written":false` |
 | `agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{"rc","out","err"}`, exit 0 when the command ran (read `rc`); CMD's words reach `docker exec` as an array, no shell runs; `--dry-run`: `{"argv":[...],"dry_run":true,"written":false}` |
 | `agent_put ALIAS:PATH --from FILE\|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]` | `{"host","path","bytes","sha256","replaced","backup","verified","written":true}`; one round trip: a temporary file next to PATH, size check (and sha256 with `--verify`), rename over PATH; `--dry-run` adds `"exists"` with `"dry_run":true,"written":false` |
-| `agent_test [--runner auto\|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell) |
+| `agent_test [--runner auto\|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--runtime` (repeatable: `node:24`, `php:8.4`, `node:project`) puts that runtime's directory first on CMD's PATH, as `gash run --runtime` does; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell; with `--runtime`, `"runtimes":[{"runtime","request","path","version"}]` before `"dry_run"`) |
 
 `agent_replace` writes each file through a temporary file in the same
 directory, renamed over the target with its mode (and owner, as root); a

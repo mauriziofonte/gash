@@ -99,7 +99,7 @@ func TestLoadSSHEntries(t *testing.T) {
 	}
 	shown := ShownPath(f.Path, home)
 	wantW := []string{
-		"Line 4 of " + shown + ": unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping",
+		"Line 4 of " + shown + ": unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping",
 		"Line 5 of " + shown + ": SSH key file not found (skipping)",
 	}
 	if got := texts(f.Warnings); !reflect.DeepEqual(got, wantW) {
@@ -335,10 +335,10 @@ func TestGrammar(t *testing.T) {
 		{name: "setting name with lower case", line: "GASH_prompt=1", warn: "unknown GASH_ setting, skipping"},
 		{name: "setting name with a space", line: "GASH_PROMPT GASH_BANNER=1", warn: "unknown GASH_ setting, skipping"},
 		{name: "bare GASH_", line: "GASH_=1", warn: "unknown GASH_ setting, skipping"},
-		{name: "unrecognized", line: "PASSWORD=hunter2", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"},
-		{name: "prefix is case-sensitive", line: "ssh:x=y", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"},
-		{name: "GASH_ without =", line: "GASH_PROMPT", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"},
-		{name: "space before the colon", line: "DB :x=y", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"},
+		{name: "unrecognized", line: "PASSWORD=hunter2", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping"},
+		{name: "prefix is case-sensitive", line: "ssh:x=y", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping"},
+		{name: "GASH_ without =", line: "GASH_PROMPT", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping"},
+		{name: "space before the colon", line: "DB :x=y", warn: "unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping"},
 		{name: "comment", line: "  # DB:x=y"},
 		{name: "whitespace only", line: " \t\v\f\r"},
 		{name: "CR then trimmed", line: "GASH_PROMPT=0 \r", settings: []string{"GASH_PROMPT=0"}},
@@ -378,7 +378,7 @@ func TestGrammar(t *testing.T) {
 func TestLineNumbersAndLastLine(t *testing.T) {
 	// The last line counts without a newline; empty lines count too.
 	f := Parse([]byte("\n\nnope\nGASH_PROMPT=1"), "/x/env", "/h")
-	if got := texts(f.Warnings); !reflect.DeepEqual(got, []string{"Line 3 of /x/env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"}) {
+	if got := texts(f.Warnings); !reflect.DeepEqual(got, []string{"Line 3 of /x/env: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping"}) {
 		t.Errorf("warnings %q", got)
 	}
 	if v, ok := f.Setting("GASH_PROMPT"); !ok || v != "1" || f.Settings[0].Line != 4 {
@@ -648,7 +648,7 @@ func TestLoadPermsHeadless(t *testing.T) {
 	want := []string{
 		"~/env is accessible by other users (mode 644). Run: chmod 600 ~/env",
 		"Line 1 of ~/env: unknown GASH_ setting, skipping",
-		"Line 2 of ~/env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping",
+		"Line 2 of ~/env: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping",
 	}
 	if got := texts(f.Warnings); !reflect.DeepEqual(got, want) {
 		t.Errorf("interactive: %q", got)
@@ -689,7 +689,7 @@ func TestLedger_CORE08(t *testing.T) {
 	for _, pad := range []string{"\u3000", "\u00a0"} {
 		f := Parse([]byte(pad+"GASH_DB_TIMEOUT=7"+pad+"\n"), "/e", "/h")
 		if _, ok := f.Setting("GASH_DB_TIMEOUT"); ok || len(f.Warnings) != 1 ||
-			f.Warnings[0].Text != "Line 1 of /e: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping" {
+			f.Warnings[0].Text != "Line 1 of /e: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping" {
 			t.Errorf("%q padding: %+v", pad, f)
 		}
 	}
@@ -741,7 +741,7 @@ func TestLedger_CORE14(t *testing.T) {
 	}
 	// The loader's messages use it.
 	f := Parse([]byte("bogus\n"), "/home/ab/.gash_env", "/home/a")
-	require.Equal(t, []string{"Line 1 of /home/ab/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping"}, texts(f.Warnings))
+	require.Equal(t, []string{"Line 1 of /home/ab/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping"}, texts(f.Warnings))
 }
 
 // LEDGER CORE-15: only "~" and "~/" stand for HOME, used literally, and a

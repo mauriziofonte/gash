@@ -151,6 +151,29 @@ automatic; changing it is human-only and goes through a UAC prompt.
   parts fail CI when they go stale.
 - `llm_date` carries its own time zone database, so `--tz` works where the
   system has none.
+- **Protected paths of your own**: `PROTECT:content=PATH` and
+  `PROTECT:all=PATH` lines in `~/.gash_env`, for this machine and every
+  host, or for one host with `PROTECT:all@ALIAS=PATH`. Under a `content`
+  path the agent functions see names, metadata and digests, never the
+  content (`secret_file_blocked`); an `all` path is refused as a whole
+  (`forbidden_path`) and left out of every listing, search and git output.
+  Every `llm_*` and `agent_*` call holds them after resolving links, on
+  this machine and on a host (as written before connecting, then on the
+  host). See [docs/configuration.md](docs/configuration.md#protected-paths).
+- `GASH_REMOTE_NO_BINARY` (in `~/.gash_env` only): host aliases, or `*`,
+  that never get the gash binary. `--host` calls there answer through the
+  POSIX fallbacks or with `remote_binary_unavailable`, and nothing is
+  written on the host.
+- The version `project` for `--runtime` (`gash run --runtime php:project`,
+  `node:project`) and `llm_runtime`: the version the project pins
+  (`.nvmrc`, `.node-version`, `package.json` engines; `.target-php-version`,
+  `composer.json` `require.php`). A project that pins nothing is
+  `runtime_not_pinned` (`STOP`) instead of a silent default.
+- `gash run --plain` drops escape sequences (colors, cursor moves, titles)
+  and keeps the last state of a line redrawn with carriage returns
+  (progress bars), before the budget and `--test-summary` read the output.
+- `agent_test --runtime NAME:VERSION` (repeatable) puts that runtime first
+  on the suite's PATH, as `gash run --runtime` does.
 
 ### Changed
 
@@ -203,8 +226,20 @@ automatic; changing it is human-only and goes through a UAC prompt.
   system helpers use is resolved from the mounted system drive rather than
   assuming `/mnt/c`.
 
+### Fixed
+
+- `llm_lint` passed PHP files it never checked: before PHP 8.3, `php -l`
+  checks only the first file it is given, so a syntax error in any other
+  file of a batch went unreported. Each file now gets its own verdict: PHP
+  8.3 and later still lint in batches, older versions run once per file.
+
 ### Security
 
+- `GASH_LLM_EXEC=unrestricted` applies to `llm_exec` alone. `llm_remote_run`,
+  `llm_docker_exec`, `llm_wait --cmd-ok` and `gash run --safe` always check
+  their command with the `llm_exec` rules (parser, allowlist, secret files,
+  forbidden paths); with the setting on, they ran any command line.
+  `GASH_LLM_EXEC_ALLOW` still applies to all of them.
 - `llm_*` stays read-only with no exception: writes live only in `agent_*`;
   `llm_http` refuses any method but GET, HEAD and OPTIONS; `llm_procs` has
   no kill. Running a test suite executes the project's code, so it is

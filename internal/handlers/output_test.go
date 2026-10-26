@@ -97,13 +97,13 @@ func TestCompatEnvLoad(t *testing.T) {
 	out, errOut, rc := compat(t, map[string]string{"HOME": home}, false, "", "env", "load")
 	require.Equal(t, 0, rc)
 	require.Equal(t, "Warning: ~/.gash_env is accessible by other users (mode 644). Run: chmod 600 ~/.gash_env\n"+
-		"Warning: Line 6 of ~/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping\n", errOut)
+		"Warning: Line 6 of ~/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping\n", errOut)
 	require.Equal(t, "__GASH_ENV_LOADED=1\n__GASH_ENV_SSH_KEYS=$'"+home+"/id_test\\tpass phrase'\n"+
 		"__GASH_ENV_DB_ENTRIES=$'default\\tmysql://u:p\\'w@h/d'\n__GASH_ENV_AI_PROVIDERS=$'claude\\tsk-x'\n"+
 		"__GASH_ENV_HOST_ENTRIES=$'web\\tme@web'\n__GASH_ENV_SETTINGS=$'GASH_BANNER\\t0'\n", out)
 	// Headless: no warnings unless GASH_DEBUG=1; a missing file is empty.
 	_, errOut, _ = compat(t, map[string]string{"HOME": home, "GASH_HEADLESS": "1"}, false, "", "env", "load")
-	require.Equal(t, "Warning: Line 6 of ~/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=), skipping\n", errOut)
+	require.Equal(t, "Warning: Line 6 of ~/.gash_env: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=), skipping\n", errOut)
 	out, errOut, _ = compat(t, map[string]string{"HOME": home, "GASH_ENV_FILE": home + "/none"}, false, "", "env", "load")
 	require.Empty(t, errOut)
 	require.Equal(t, "__GASH_ENV_LOADED=1\n__GASH_ENV_SSH_KEYS=''\n__GASH_ENV_DB_ENTRIES=''\n__GASH_ENV_AI_PROVIDERS=''\n"+

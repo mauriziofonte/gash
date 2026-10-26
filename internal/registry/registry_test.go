@@ -133,7 +133,7 @@ func TestSettingsAndTopics(t *testing.T) {
 			require.False(t, s.Passed, s.Name)
 		}
 	}
-	require.Len(t, names, 18)
+	require.Len(t, names, 19)
 	require.ElementsMatch(t, []string{"GASH_DB_TIMEOUT", "GASH_AI_CONFIRM", "GASH_AI_MODEL_CLAUDE", "GASH_AI_MODEL_GEMINI"}, headless)
 	var topics []string
 	for _, tp := range Topics() {

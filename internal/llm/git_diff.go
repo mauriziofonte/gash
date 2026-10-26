@@ -124,13 +124,17 @@ func (m *Module) gitDiff(c *invoke.Call) int {
 		tail = append(tail, rng)
 	}
 	tail = append(tail, "--")
+	rg := m.repoGuard(c, dir)
 	if spec != "" {
 		tail = append(tail, spec)
+	} else {
+		tail = append(tail, rg.excludes()...)
 	}
 	env := c.Env.Child()
 	switch {
 	case patch:
 		pf := newPatchFilter(c.Stdout, o)
+		pf.rg = rg
 		res := gitx.Safe(c.Ctx, m.run, env, nil, pf, nil, append(append(gitArgs, patchArgs...), tail...)...)
 		if !res.Success() {
 			return m.gitFailure(c, dir, res, rng)
@@ -164,7 +168,7 @@ func (m *Module) gitDiff(c *invoke.Call) int {
 	if !res.Success() {
 		return m.gitFailure(c, dir, res, rng)
 	}
-	changes := gitx.ParseRawNumstat(gitx.SplitZ(res.Stdout))
+	changes := rg.keepChanges(gitx.ParseRawNumstat(gitx.SplitZ(res.Stdout)))
 	if summary {
 		n, ins, del := gitx.Totals(changes)
 		t := ovDiffstat{Files: n, Insertions: ins, Deletions: del}

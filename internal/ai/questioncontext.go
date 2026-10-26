@@ -216,7 +216,7 @@ func (q *qctx) guardPath(p string) (string, bool) {
 		}
 	}
 	clean := path.Clean(p)
-	g := pathguard.NewGuard(q.m.sys, "/", q.c.Env.Get("HOME"), pathguard.RootHome())
+	g := pathguard.NewGuard(q.m.sys, "/", q.c.Env.Get("HOME"), pathguard.RootHome()).WithRules(pathguard.Rules(q.c.Env.Get))
 	resolved, err := g.Realpath(clean, false)
 	if err != nil || resolved == "" {
 		resolved = clean

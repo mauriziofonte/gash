@@ -113,10 +113,20 @@ func (m *Module) phpDetect(c *invoke.Call) int {
 	return 0
 }
 
-// phpVersionString is __php_detect_version_string: .target-php-version
-// (walk-up), then composer.json .require.php (constraintVersion), then
-// .github/copilot-instructions.md, then 8.4.
+// phpVersionString is __php_detect_version_string: the version the
+// project pins (phpPin), else 8.4.
 func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
+	if v, _ := m.phpPin(c, projectDir); v != "" {
+		return v
+	}
+	return "8.4"
+}
+
+// phpPin is the X.Y the project in projectDir pins and the file that pins
+// it: .target-php-version (walk-up), then composer.json .require.php
+// (constraintVersion), then .github/copilot-instructions.md; "" when none
+// does.
+func (m *Module) phpPin(c *invoke.Call, projectDir string) (string, string) {
 	// The walk-up starts at the directory `cd "$project_dir" && pwd`
 	// reaches (logical, CDPATH ignored: LEDGER DEV-11), or the literal
 	// argument when it is not a directory.
@@ -130,7 +140,7 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 			// The first X.Y of line 1 (LEDGER DEV-04: 2.x joined every
 			// match with a newline).
 			if v := firstXY(firstLine(headLine(f))); v != "" {
-				return v
+				return v, f
 			}
 		}
 		parent := gnuDirname(searchDir)
@@ -145,7 +155,7 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 	if composer := filepath.Join(projectDir, "composer.json"); isFile(composer) {
 		if data, err := m.readFile(composer); err == nil {
 			if v := m.constraintVersion(subst(jqPathRaw(data, "require", "php"))); v != "" {
-				return v
+				return v, composer
 			}
 		}
 	}
@@ -154,11 +164,11 @@ func (m *Module) phpVersionString(c *invoke.Call, projectDir string) string {
 	if cop := filepath.Join(projectDir, ".github", "copilot-instructions.md"); isFile(cop) {
 		if data, err := m.readFile(cop); err == nil {
 			if v := firstCopilot(string(data)); v != "" {
-				return v
+				return v, cop
 			}
 		}
 	}
-	return "8.4"
+	return "", ""
 }
 
 // reMajor is the first run of digits of a constraint alternative.

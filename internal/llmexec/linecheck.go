@@ -70,7 +70,7 @@ func newLineChecker(env Environ, pr Probe, extra map[string]bool) *lineChecker {
 	return &lineChecker{
 		env:   env,
 		pr:    pr,
-		guard: pathguard.NewGuard(env.fs(), env.Cwd, env.Home, env.RootHome),
+		guard: pathguard.NewGuard(env.fs(), env.Cwd, env.Home, env.RootHome).WithRules(env.Rules),
 		extra: extra,
 		cwd:   env.Cwd,
 	}

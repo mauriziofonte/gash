@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# A stand-in for php -l (llm_lint tests). FAKE_PHP_VERSION picks the
+# behaviour: before 8.3, php -l A B ... checks A only and prints nothing
+# about the others; from 8.3 it prints a verdict for every file. A file is
+# broken when it holds "match(" (a parse error before PHP 8.0) or a line
+# "echo 1" without its semicolon. FAKE_PHP_FIRST_ONLY makes any version
+# answer for the first file only. Each run is logged to $STUB_LOG.
+v=${FAKE_PHP_VERSION:-7.4.33}
+if [ "${1-}" = --version ]; then
+	echo "PHP $v (cli) (built: Jan  1 2026 00:00:00) ( NTS )"
+	exit 0
+fi
+while [ $# -gt 0 ]; do
+	case $1 in
+	-d) shift 2 ;;
+	-l) shift; break ;;
+	*) shift ;;
+	esac
+done
+[ -n "${STUB_LOG-}" ] && printf '%s\n' "$*" >>"$STUB_LOG"
+[ -n "${FAKE_PHP_FIRST_ONLY-}" ] && set -- "$1"
+case $v in
+7.* | 8.[0-2].*) set -- "$1" ;;
+esac
+rc=0
+for f in "$@"; do
+	if grep -q 'match(' "$f" && [ "${v%%.*}" -lt 8 ]; then
+		echo "PHP Parse error:  syntax error, unexpected '(' in $f on line 1" >&2
+		echo "Errors parsing $f"
+		rc=255
+	elif grep -qx 'echo 1' "$f"; then
+		echo "PHP Parse error:  syntax error, unexpected token \"echo\", expecting \",\" or \";\" in $f on line 3" >&2
+		echo "Errors parsing $f"
+		rc=255
+	else
+		echo "No syntax errors detected in $f"
+	fi
+done
+exit $rc

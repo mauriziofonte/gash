@@ -441,7 +441,7 @@ __gash_export_state() {
     else
         export GASH__HELP=0
     fi
-    export -n GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX 2>/dev/null || true
+    export -n GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX GASH_REMOTE_NO_BINARY 2>/dev/null || true
 }
 
 # The wrapper of every delegated function: the per-shell server runs the

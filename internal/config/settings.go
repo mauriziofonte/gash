@@ -28,7 +28,7 @@ type SettingInfo struct {
 	FileOnly bool
 }
 
-// Known is __GASH_SETTINGS_KNOWN in its 2.x order, with the default and the
+// Known is __GASH_SETTINGS_KNOWN in its 2.x order (3.x settings at the end), with the default and the
 // expansion each 2.x reader uses.
 var Known = []SettingInfo{
 	{Name: "GASH_PROMPT", Default: "1"},
@@ -49,6 +49,8 @@ var Known = []SettingInfo{
 	{Name: "GASH_LLM_SANDBOX", FileOnly: true},
 	{Name: "GASH_NVM", Default: "off"},
 	{Name: "GASH_PATH_ADD", Expand: Dash},
+	// 3.4: the HOST: aliases that never get the gash binary.
+	{Name: "GASH_REMOTE_NO_BINARY", FileOnly: true},
 }
 
 // SplitPathAdd splits a GASH_PATH_ADD value into words on space, tab and

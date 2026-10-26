@@ -123,6 +123,13 @@ func TestRuntimeCommand(t *testing.T) {
 	require.Equal(t, "node\nnpm\nnpx\n:4\n", r.Stdout)
 	r = command(t, d, env, "runtime", "__complete", "node", "--p")
 	require.Equal(t, "--path\n:4\n", r.Stdout)
+	r = command(t, d, env, "runtime", "__complete", "node", "")
+	require.Equal(t, "project\n:4\n", r.Stdout)
+
+	// project: the version the project pins.
+	require.NoError(t, os.WriteFile(filepath.Join(d, "package.json"), []byte(`{"engines":{"node":">=24"}}`), 0o644))
+	r = command(t, d, env, "runtime", "node", "project")
+	require.Equal(t, result{`{"runtime":"node","request":"24","path":"` + root + `/v24.1.0/bin/node","version":"24.1.0"}` + "\n", "", 0}, r)
 }
 
 // TestRunCommand: gash run keeps CMD's status, shapes its output only
@@ -177,6 +184,16 @@ func TestRunCommand(t *testing.T) {
 	require.Equal(t, "runtime_not_installed", errCode(t, r.Stderr))
 	require.Empty(t, r.Stdout)
 
+	// --runtime node:project: the major the project pins, never a default.
+	r = command(t, d, env, "run", "--runtime", "node:project", "--", "node")
+	require.Equal(t, 1, r.RC)
+	require.Equal(t, "runtime_not_pinned", errCode(t, r.Stderr))
+	require.Empty(t, r.Stdout)
+	require.NoError(t, os.WriteFile(filepath.Join(d, ".nvmrc"), []byte("v20.11.1\n"), 0o644))
+	r = command(t, d, env, "run", "--runtime", "node:project", "--", "node")
+	require.Equal(t, result{"v20.11.1\n", "", 0}, r)
+	require.NoError(t, os.Remove(filepath.Join(d, ".nvmrc")))
+
 	// --safe: llm_exec's rails; a refusal runs nothing.
 	mustWrite := func(p, s string) { require.NoError(t, os.WriteFile(p, []byte(s), 0o644)) }
 	mustWrite(filepath.Join(d, "a.txt"), "alpha\nbeta\n")
@@ -226,7 +243,7 @@ func TestRunCommand(t *testing.T) {
 
 	// Completion.
 	r = command(t, d, env, "run", "__complete", "--runtime", "")
-	require.Equal(t, "node:\nphp:\n:6\n", r.Stdout)
+	require.Equal(t, "node:\nnode:project\nphp:\nphp:project\n:6\n", r.Stdout)
 	r = command(t, d, env, "run", "__complete", "--te")
 	require.Equal(t, "--test-summary\n:4\n", r.Stdout)
 	r = command(t, d, env, "run", "__complete", "--", "")

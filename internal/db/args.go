@@ -237,7 +237,7 @@ func (m *Module) sqliteFile(c *invoke.Call, file string) (string, *output) {
 	if err != nil {
 		cwd = c.Env.Get("PWD")
 	}
-	safe, err := pathguard.NewGuard(pathguard.OSFS{}, cwd, c.Env.Get("HOME"), m.rootHome()).ValidatePath(file)
+	safe, err := pathguard.NewGuard(pathguard.OSFS{}, cwd, c.Env.Get("HOME"), m.rootHome()).WithRules(pathguard.Rules(c.Env.Get)).ValidatePath(file)
 	if err != nil {
 		o := refusal(err)
 		return "", &o

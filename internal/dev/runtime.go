@@ -516,6 +516,13 @@ func (r *Resolver) fullVersion(c *candidate) string {
 	return v
 }
 
+// Version is the full version of the interpreter binary at path (8.3.6),
+// through the probe cache; "" when it does not answer --version.
+func (r *Resolver) Version(path string) string {
+	c := candidate{path: path, host: path}
+	return r.fullVersion(&c)
+}
+
 // Save writes the cache when the resolver may store it and something
 // changed. A failure is ignored: the cache only saves time.
 func (r *Resolver) Save() {

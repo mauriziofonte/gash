@@ -30,6 +30,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -38,6 +39,13 @@ import (
 type Host struct {
 	Alias  string
 	Target string
+	// NoBinary: GASH_REMOTE_NO_BINARY names the host, so the gash binary
+	// is never copied there or run from its cache; the POSIX fallbacks
+	// answer.
+	NoBinary bool
+	// Rules are the PROTECT: lines that apply on the host (those without
+	// a host and its own), sent with every script (pathguard.ProtectVar).
+	Rules []pathguard.Rule
 }
 
 // Resolve returns the HOST: entry named alias. Only registered aliases are
@@ -48,7 +56,7 @@ type Host struct {
 func Resolve(get func(string) string, alias string) (Host, *contract.Envelope) {
 	f := config.LoadCaller(get)
 	if t, ok := f.HostTarget(alias); ok && config.ValidHostTarget(t) {
-		return Host{Alias: alias, Target: t}, nil
+		return Host{Alias: alias, Target: t, NoBinary: f.NoBinary(alias), Rules: pathguard.FileRules(f, alias)}, nil
 	}
 	hint := "Only HOST: aliases registered in ~/.gash_env are accepted (HOST:alias=user@host); ask the user to add one"
 	if t, ok := f.RejectedHost(alias); ok {
@@ -140,7 +148,7 @@ func (t Transport) Exec(ctx context.Context, h Host, nonce, script string, stdin
 			_ = os.Mkdir(home+"/.ssh", 0o700)
 		}
 	}
-	args := append(sshOpts(home), "--", h.Target, historyOff+script)
+	args := append(sshOpts(home), "--", h.Target, historyOff+protectExport(h)+script)
 	start := time.Now()
 	res, err := t.Run.Run(ctx, runner.Cmd{Path: "ssh", Args: args, Options: runner.Options{
 		Env: t.Env.Child(), Stdin: stdin, Timeout: timeout, KillAfter: time.Second,

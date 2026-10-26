@@ -209,7 +209,8 @@ func (containerProbe) HasBwrap() bool         { return false }
 // what llm_exec's child-side wrappers would add: sed and awk under
 // --sandbox, grep and rg with the secret-file exclusions. git is refused:
 // its rails live in a host-side wrapper. Commands named in
-// GASH_LLM_EXEC_ALLOW and the unrestricted mode run as given.
+// GASH_LLM_EXEC_ALLOW run as given; GASH_LLM_EXEC=unrestricted does not
+// apply (execRules).
 func (m *Module) containerArgv(c *invoke.Call, cmd []string) ([]string, error) {
 	s, env := m.execRules(c)
 	s.Sandbox = "" // the container is the boundary; bwrap does not apply
@@ -219,9 +220,6 @@ func (m *Module) containerArgv(c *invoke.Call, cmd []string) ([]string, error) {
 	}
 	if _, err := llmexec.Build(strings.Join(quoted, " "), s, env, containerProbe{}); err != nil {
 		return nil, err
-	}
-	if s.Exec == "unrestricted" {
-		return cmd, nil
 	}
 	for _, w := range strings.FieldsFunc(s.ExecAllow, func(r rune) bool { return r == ',' || r == ':' || r == ' ' || r == '\t' || r == '\n' }) {
 		if w == cmd[0] {

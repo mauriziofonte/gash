@@ -129,7 +129,7 @@ func (hs Hoster) Wrap(name string, spec Spec, h invoke.Handler) invoke.Handler {
 				plan = p
 			}
 		}
-		if e := spec.check(rest); e != nil {
+		if e := spec.check(rest, hosts); e != nil {
 			return c.Fail(*e)
 		}
 		if !RequireSSH(c, name+" --host") {
@@ -151,6 +151,11 @@ func (hs Hoster) RunHosts(c *invoke.Call, name string, hosts []Host, args []stri
 }
 
 func runOne(ctx context.Context, t Transport, bin Binary, haveBin bool, name string, h Host, args []string, nonce string, plan *Plan) HostOut {
+	if h.NoBinary {
+		// GASH_REMOTE_NO_BINARY: no cache test, no upload; the fallback
+		// or the "nobin" trailer.
+		haveBin = false
+	}
 	body := ""
 	if plan != nil {
 		body = plan.Script
@@ -190,7 +195,12 @@ func runOne(ctx context.Context, t Transport, bin Binary, haveBin bool, name str
 		return HostOut{Host: h, Err: unavailable(name, h, "gash could not be installed in ~/"+bin.Dir+" there, and these arguments have no POSIX fallback")}
 	case "nobin":
 		why := "no gash binary for its platform (" + r.Detail + ")"
-		if bin.Platform == "" || !haveBin {
+		switch {
+		case h.NoBinary:
+			e := contract.New("remote_binary_unavailable", name+" on "+h.Alias+": GASH_REMOTE_NO_BINARY keeps the gash binary off this host, and these arguments have no POSIX fallback",
+				"Run it with arguments the fallback covers (see the function's --help); the user decides which hosts get the binary")
+			return HostOut{Host: h, Err: &e}
+		case bin.Platform == "" || !haveBin:
 			why = "no gash binary can be shipped from this machine"
 		}
 		return HostOut{Host: h, Err: unavailable(name, h, why+", and these arguments have no POSIX fallback")}
@@ -318,9 +328,10 @@ func (s Spec) Paths(args []string) []string {
 	return out
 }
 
-// check applies the rails to every path argument. A "-" (stdin) is
+// check applies the rails (with the PROTECT: paths of hosts) to every
+// path argument. A "-" (stdin) is
 // refused: the local stdin is never sent to a host.
-func (s Spec) check(args []string) *contract.Envelope {
+func (s Spec) check(args []string, hosts []Host) *contract.Envelope {
 	force := contains(args, "--force")
 	for _, p := range s.Paths(args) {
 		var e *contract.Envelope
@@ -329,9 +340,9 @@ func (s Spec) check(args []string) *contract.Envelope {
 			env := contract.New("unexpected_argument", "-", "With --host, name a file on the host: the local stdin is not sent")
 			e = &env
 		case s.Write:
-			e = CheckWrite(p, force)
+			e = CheckWrite(p, force, hosts...)
 		default:
-			e = CheckRead(p)
+			e = CheckRead(p, hosts...)
 		}
 		if e != nil {
 			return e

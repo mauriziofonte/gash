@@ -22,9 +22,9 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [lsof](../requirements.md#tool-lsof) (feature), for `llm_procs` (--port)
 - [ss](../requirements.md#tool-ss) (feature), for `llm_ports`
 - [docker](../requirements.md#tool-docker) (feature), for `agent_docker_exec`, `llm_docker_exec`, `llm_docker_logs` and `llm_docker_ps`
-- [php](../requirements.md#tool-php) (feature), for `llm_lint` (.php files) and `llm_runtime` (php)
-- [composer](../requirements.md#tool-composer) (optional), for `llm_runtime` (composer)
-- [node](../requirements.md#tool-node) (feature), for `llm_lint` (.js files) and `llm_runtime` (node)
+- [php](../requirements.md#tool-php) (feature), for `agent_test` (--runtime php), `llm_lint` (.php files) and `llm_runtime` (php)
+- [composer](../requirements.md#tool-composer) (optional), for `agent_test` (--runtime composer) and `llm_runtime` (composer)
+- [node](../requirements.md#tool-node) (feature), for `agent_test` (--runtime node), `llm_lint` (.js files) and `llm_runtime` (node)
 - [python3](../requirements.md#tool-python3) (feature), for `llm_lint` (.py files)
 - [gawk](../requirements.md#tool-gawk) (optional), for `llm_exec` (awk)
 - [gnu-sed](../requirements.md#tool-gnu-sed) (optional), for `llm_exec` (sed)
@@ -197,22 +197,25 @@ llm_git_status     read   Compact git status (JSON)
 
 ## Decide what agents may run
 
-These settings bound what the functions do. The first three go in
+These settings bound what the functions do. The first five go in
 `~/.gash_env` only: Gash reads them from that file and never from the
 environment, so an agent cannot loosen them by exporting a variable.
 
 | Setting | Effect |
 |---|---|
 | `GASH_LLM_EXEC_ALLOW="make npm"` | More commands for `llm_exec`, with any arguments. Secret files and protected paths stay refused |
-| `GASH_LLM_EXEC=unrestricted` | `llm_exec` skips its parser and allowlist; only the blocklist of destructive patterns remains |
+| `GASH_LLM_EXEC=unrestricted` | `llm_exec`, and only it, skips its parser and allowlist; only the blocklist of destructive patterns remains |
 | `GASH_LLM_SANDBOX=1` | `llm_exec` runs inside `bwrap`: a read-only filesystem and no network |
+| `PROTECT:content=~/contracts`, `PROTECT:all=~/private` | Paths of yours the functions keep away from: `content` shows names and metadata only, `all` nothing. `PROTECT:all@web=/srv/app/storage` is for one host. See [protected paths](../configuration.md#protected-paths) |
+| `GASH_REMOTE_NO_BINARY="web db"` | Hosts (`*` for all) that never get the gash binary: `--host` there answers through the POSIX fallbacks only |
 | `DB:name=...` | The database connections `llm_db_*` may use. Every query runs in a read-only session; give Gash an account with read-only grants too |
 | `HOST:alias=user@host` | The SSH hosts `--host`, `llm_remote_run`, `llm_same` and `agent_put` may reach. A host that is not registered is refused |
 | `GASH_DB_TIMEOUT` | How long a PostgreSQL query may run, in seconds (default 30) |
 
-The `llm_exec` settings also apply to `llm_wait --cmd-ok`,
-`llm_docker_exec`, `gash run --safe` and the commands of `llm_remote_run`
-(the sandbox aside: it is local). They are read from the file at each
+`GASH_LLM_EXEC_ALLOW` also applies to `llm_wait --cmd-ok`,
+`llm_docker_exec`, `gash run --safe` and the commands of `llm_remote_run`;
+`GASH_LLM_EXEC=unrestricted` does not (those always check), and the
+sandbox is local. The settings are read from the file at each
 call, so a change applies at once. The [configuration](../configuration.md) page lists every
 setting, and [security.md](../security.md#llm_exec) what each one changes.
 
@@ -229,7 +232,9 @@ Whatever the agent asks, these rails hold:
   written: `secret_file_blocked`. `llm_dotenv` tells whether keys are set
   in a `.env` file, with the secret values masked.
 - **Protected paths.** `/proc`, `/sys`, `/dev`, `/boot`, `/root`,
-  `/etc/shadow` and the other system files are refused: `forbidden_path`.
+  `/etc/shadow` and the other system files are refused: `forbidden_path`,
+  and so are the paths you declare with `PROTECT:all=PATH`. Files under
+  `PROTECT:content=PATH` are treated as secret files.
 - **System paths for writes.** An `agent_*` write to `/bin`, `/usr/lib`,
   `/etc/ssh` and the like is refused even with `--force`
   (`write_path_denied`). A write to `/etc`, `/var`, `/usr/local`, `/root`

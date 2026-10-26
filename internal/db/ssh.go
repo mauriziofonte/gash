@@ -96,7 +96,7 @@ func (m *Module) sshTarget(c *invoke.Call, a *dbArgs) (target, *output, bool) {
 			o := failed(*e)
 			return target{}, &o, true
 		}
-		if e := remote.CheckRead(p); e != nil {
+		if e := remote.CheckRead(p, h); e != nil {
 			o := failed(*e)
 			return target{}, &o, true
 		}

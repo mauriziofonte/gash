@@ -128,7 +128,7 @@ func (m *Module) same(c *invoke.Call) int {
 		if e != nil {
 			return c.Fail(*e)
 		}
-		if e := remote.CheckRead(p); e != nil {
+		if e := remote.CheckRead(p, h); e != nil {
 			return c.Fail(*e)
 		}
 		targets[i] = sameTarget{host: h, path: p}
@@ -154,7 +154,7 @@ func (m *Module) same(c *invoke.Call) int {
 			return 1
 		}
 		mine.kind = "directory"
-		mine.hashes, err = hashTree(c.Ctx, safe, excludes, under, secrets)
+		mine.hashes, err = hashTree(c.Ctx, safe, excludes, under, m.guard(c).Seals, secrets)
 		if err != nil {
 			return fail(c, "path_unreadable", err.Error(), "The file could not be read")
 		}
@@ -340,7 +340,7 @@ func sameSkip(name string, excludes []string) bool {
 // hashTree hashes the regular files below root (symlinks are not
 // followed, excluded names and protected trees are skipped, secret files
 // are counted in secrets and left out).
-func hashTree(ctx context.Context, root string, excludes []string, under func(string) bool, secrets map[string]bool) (map[string]string, error) {
+func hashTree(ctx context.Context, root string, excludes []string, under, sealed func(string) bool, secrets map[string]bool) (map[string]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -365,7 +365,7 @@ func hashTree(ctx context.Context, root string, excludes []string, under func(st
 		if root == string(filepath.Separator) {
 			rel = filepath.ToSlash(strings.TrimPrefix(p, root))
 		}
-		if pathguard.SecretName(rel) {
+		if pathguard.SecretName(rel) || sealed(p) {
 			secrets[rel] = true
 			return nil
 		}
@@ -439,11 +439,14 @@ abs=$(gash_resolve "$P") || exit 1
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 if [ -d "$abs" ]; then
   gash_forbidden "$abs" names && gash_err forbidden_path subdir "$abs"
+  gash_secret "$abs" && gash_err secret_file_blocked secret "$abs"
+  gash_above "$GP_CONTENT" "$abs" && gash_err forbidden_path subdir "$abs"
   cd "$abs" || gash_err path_unreadable couldnot "$abs"
   gash_tools find
   printf '%s kind directory\n' "$N" >&2
   find . ` + prune.String() + ` -exec $H {} + 2>/dev/null
 elif [ -f "$abs" ]; then
+  gash_secret "$abs" && gash_err secret_file_blocked secret "$abs"
   printf '%s kind file\n' "$N" >&2
   $H "$abs" 2>/dev/null
 else
@@ -464,8 +467,11 @@ exit 0
 
 // sameHint gives the error frames of sameScript their hints.
 func sameHint(code, key, details string) (string, string) {
-	if key == "tool" {
+	switch key {
+	case "tool":
 		return details, "Install coreutils (sha256sum) on the host, or compare with llm_remote_run"
+	case "secret":
+		return details, "Secret files are not compared"
 	}
 	return details, fbHints[key]
 }

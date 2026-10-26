@@ -128,8 +128,8 @@ locally or on a remote host. Guides: [Docker](docs/docker/README.md),
 ### PHP, Node.js and local sites
 
 `php_detect_version` and `node_detect_version` read which version a
-project wants; `gash run --runtime node:24 -- npm test` runs a command
-under it. `gash hte` runs local Apache and PHP-FPM sites with HTTPS, one
+project wants; `gash run --runtime node:project -- npm test` runs a
+command under it. `gash hte` runs local Apache and PHP-FPM sites with HTTPS, one
 pool per PHP version, as your own user; installing it needs `sudo` once,
 for a few system steps it lists first.
 Guides: [runtimes](docs/runtimes/README.md),

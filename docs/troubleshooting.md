@@ -152,8 +152,11 @@ stay quiet unless `GASH_DEBUG=1`.
 | `Line N ...: HOST target must be user@host` | One `@`; a user of letters, digits, `.`, `_`, `-`; a host name or `[IPv6]`; no port (the `Hint:` line says to put it in a `Host` entry of `~/.ssh/config`) |
 | `Line N ...: duplicate DB:NAME, ignored (first is at line M)` | Two entries share a name and the first wins: rename or remove one |
 | `Line N ...: unknown GASH_ setting` | Check the name in [configuration.md](configuration.md#settings-reference) |
-| `Line N ...: unrecognized entry (expected SSH:, DB:, AI:, HOST: or GASH_NAME=)` | The line has none of those prefixes |
+| `Line N ...: unrecognized entry (expected SSH:, DB:, AI:, HOST:, PROTECT: or GASH_NAME=)` | The line has none of those prefixes |
 | `Line N ...: SSH: entry has no '='` | Use `SSH:path=passphrase` (the same for `DB:`, `AI:`, `HOST:`) |
+| `Line N ...: PROTECT: mode must be content or all` | Write `PROTECT:content=PATH` or `PROTECT:all=PATH`, optionally `@alias` after the mode (`PROTECT:all@web=PATH`); see [protected paths](configuration.md#protected-paths) |
+| `Line N ...: PROTECT: path must be absolute or start with ~/` | Give the full path, or one below your home with `~/` |
+| `Line N ...: PROTECT: path must not contain ..` | Write the path without `..` components |
 
 ## A setting has no effect
 
@@ -164,9 +167,9 @@ stay quiet unless `GASH_DEBUG=1`.
    the file.
 3. **Headless mode** applies only `GASH_DB_TIMEOUT`, `GASH_AI_CONFIRM` and
    `GASH_AI_MODEL_*` from the file; the prompt, history and alias settings
-   mean nothing there. `GASH_LLM_EXEC`, `GASH_LLM_EXEC_ALLOW` and
-   `GASH_LLM_SANDBOX` are read from the file only, never from the
-   environment.
+   mean nothing there. `GASH_LLM_EXEC`, `GASH_LLM_EXEC_ALLOW`,
+   `GASH_LLM_SANDBOX` and `GASH_REMOTE_NO_BINARY` are read from the file
+   only, never from the environment.
 4. **Set too late.** A setting assigned in `~/.bash_local` comes after the
    prompt, history and aliases are set up. Use `~/.gash_env`, and open a
    new terminal.

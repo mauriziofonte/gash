@@ -15,6 +15,6 @@ func TestExportState(t *testing.T) {
 	require.Equal(t, []string{
 		"GASH_DIR=/g", "LANG=C", "GASH_DIR=/g", "GASH_PROMPT=0",
 		"GASH__SET=GASH_PROMPT", "GASH__ADDED=GASH_DIR ARR GASH_PROMPT", "GASH__HELP=1",
-		"-GASH_LLM_EXEC", "-GASH_LLM_EXEC_ALLOW", "-GASH_LLM_SANDBOX",
+		"-GASH_LLM_EXEC", "-GASH_LLM_EXEC_ALLOW", "-GASH_LLM_SANDBOX", "-GASH_REMOTE_NO_BINARY",
 	}, got)
 }

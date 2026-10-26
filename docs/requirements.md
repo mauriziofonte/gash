@@ -110,9 +110,9 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 
 ## Runtimes and linters
 
-- <a id="tool-php"></a>**php** (feature) runs PHP code and lints .php files. Needed by `gash run` (--runtime php), `gash runtime` (php), `llm_lint` (.php files), `llm_runtime` (php) and `php_detect_version`.
-- <a id="tool-composer"></a>**composer** (optional) runs composer with a chosen PHP version. Needed by `gash run` (--runtime composer), `gash runtime` (composer) and `llm_runtime` (composer). Gash does not install it: see <https://getcomposer.org/download/>.
-- <a id="tool-node"></a>**node** (feature) runs Node code and lints .js files. Needed by `gash run` (--runtime node), `gash runtime` (node), `llm_lint` (.js files), `llm_runtime` (node), `node_upgrade` and `nvm_prune_versions`. Gash does not install it: see <https://github.com/nvm-sh/nvm#installing-and-updating>. Gash works with the Node versions nvm installs.
+- <a id="tool-php"></a>**php** (feature) runs PHP code and lints .php files. Needed by `agent_test` (--runtime php), `gash run` (--runtime php), `gash runtime` (php), `llm_lint` (.php files), `llm_runtime` (php) and `php_detect_version`.
+- <a id="tool-composer"></a>**composer** (optional) runs composer with a chosen PHP version. Needed by `agent_test` (--runtime composer), `gash run` (--runtime composer), `gash runtime` (composer) and `llm_runtime` (composer). Gash does not install it: see <https://getcomposer.org/download/>.
+- <a id="tool-node"></a>**node** (feature) runs Node code and lints .js files. Needed by `agent_test` (--runtime node), `gash run` (--runtime node), `gash runtime` (node), `llm_lint` (.js files), `llm_runtime` (node), `node_upgrade` and `nvm_prune_versions`. Gash does not install it: see <https://github.com/nvm-sh/nvm#installing-and-updating>. Gash works with the Node versions nvm installs.
 - <a id="tool-python3"></a>**python3** (feature) lints .py files. Needed by `llm_lint` (.py files).
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |

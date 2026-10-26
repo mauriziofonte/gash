@@ -90,7 +90,7 @@ declare -gA __GASH_CALL_VARS=(
     [agent_kill]="HOME"
     [agent_put]="HOME"
     [agent_replace]="HOME"
-    [agent_test]="HOME"
+    [agent_test]="HOME NVM_DIR"
     [ai_ask]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
     [ai_query]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
     [ai_sysinfo]="GASH_AI_DEBUG HOME"
@@ -339,7 +339,7 @@ __gash_export_state() {
     else
         export GASH__HELP=0
     fi
-    export -n GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX 2>/dev/null || true
+    export -n GASH_LLM_EXEC GASH_LLM_EXEC_ALLOW GASH_LLM_SANDBOX GASH_REMOTE_NO_BINARY 2>/dev/null || true
 }
 
 # The wrapper of every delegated function: the per-shell server runs the

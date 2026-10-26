@@ -148,8 +148,11 @@ func (m *Module) gitShow(c *invoke.Call) int {
 		gitArgs = append(gitArgs, "--literal-pathspecs")
 	}
 	tail := []string{rev + "^{commit}", "--"}
+	rg := m.repoGuard(c, dir)
 	if spec != "" {
 		tail = append(tail, spec)
+	} else {
+		tail = append(tail, rg.excludes()...)
 	}
 	env := c.Env.Child()
 	if patch {
@@ -157,6 +160,7 @@ func (m *Module) gitShow(c *invoke.Call) int {
 			return fail(c, "secret_file_blocked", safe, "This file contains secrets: its patch is not shown")
 		}
 		pf := newPatchFilter(c.Stdout, o)
+		pf.rg = rg
 		a := append(append(gitArgs, "-c", "core.quotePath=false", "show", "--first-parent",
 			"--format=commit %h%nAuthor: %an%nDate:   %ci%n%n%w(0,4,4)%B"), patchArgs...)
 		res := gitx.Safe(c.Ctx, m.run, env, nil, pf, nil, append(a, tail...)...)
@@ -188,7 +192,7 @@ func (m *Module) gitShow(c *invoke.Call) int {
 			break
 		}
 	}
-	changes := gitx.ParseRawNumstat(rest)
+	changes := rg.keepChanges(gitx.ParseRawNumstat(rest))
 	obj := showJSON{Hash: t[0], Subject: llmfmt.Cut(t[1], o.Width), Author: t[2], Date: t[3], Files: []any{}}
 	if stat {
 		nf, ins, del := gitx.Totals(changes)
@@ -221,6 +225,20 @@ func (m *Module) gitShow(c *invoke.Call) int {
 func (m *Module) showContent(c *invoke.Call, o *llmfmt.Options, safe, rev, file string) int {
 	if file != "" && pathguard.SecretName(strings.TrimPrefix(file, "./")) {
 		return fail(c, "secret_file_blocked", rev+":"+file, "This file contains secrets and cannot be read")
+	}
+	// The user's PROTECT: trees, judged on the path the file has in the
+	// work tree (./FILE is below PATH, any other name below the root).
+	if rg := m.repoGuard(c, safe); rg != nil {
+		abs := rg.abs(strings.TrimPrefix(file, "/"))
+		if rest, ok := strings.CutPrefix(file, "./"); ok {
+			abs = strings.TrimSuffix(safe, "/") + "/" + rest
+		}
+		switch {
+		case rg.g.Hides(abs):
+			return fail(c, "forbidden_path", rev+":"+file, "This path is protected and cannot be accessed")
+		case rg.g.Seals(abs):
+			return fail(c, "secret_file_blocked", rev+":"+file, "This file contains secrets and cannot be read")
+		}
 	}
 	env := c.Env.Child()
 	res := gitx.Safe(c.Ctx, m.run, env, nil, nil, nil, "-C", safe, "show", "--no-color", "--no-ext-diff", "--no-textconv", rev+":"+file, "--")

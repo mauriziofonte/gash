@@ -618,7 +618,7 @@ func exportState(decls []decl, req request) []string {
 		help = "1"
 	}
 	return append(out, "GASH__SET="+strings.Join(set, " "), "GASH__ADDED="+strings.Join(added, " "),
-		"GASH__HELP="+help, "-GASH_LLM_EXEC", "-GASH_LLM_EXEC_ALLOW", "-GASH_LLM_SANDBOX")
+		"GASH__HELP="+help, "-GASH_LLM_EXEC", "-GASH_LLM_EXEC_ALLOW", "-GASH_LLM_SANDBOX", "-GASH_REMOTE_NO_BINARY")
 }
 
 func isIdentifier(s string) bool {

@@ -129,10 +129,23 @@ func (m *Module) nodeDetect(c *invoke.Call) int {
 	return 0
 }
 
-// nodeMajor is __node_detect_version_major: .nvmrc, then .node-version,
-// then package.json engines.node, then the newest installed major (20
-// when none).
+// nodeMajor is __node_detect_version_major: the major the project pins
+// (nodePin), then the newest installed major (20 when none).
 func (m *Module) nodeMajor(c *invoke.Call, dir, projectDir string) string {
+	if major, _ := m.nodePin(dir, projectDir); major != "" {
+		return major
+	}
+	if latest := m.latestInstalled(dir); latest != "" {
+		major, _, _ := strings.Cut(latest, ".")
+		return major
+	}
+	return "20"
+}
+
+// nodePin is the major the project in projectDir pins and the file that
+// pins it: .nvmrc, then .node-version, then package.json engines.node
+// (lts/<name> resolved through the nvm tree dir); "" when none does.
+func (m *Module) nodePin(dir, projectDir string) (string, string) {
 	for _, name := range []string{".nvmrc", ".node-version"} {
 		f := filepath.Join(projectDir, name)
 		if !isFile(f) {
@@ -143,7 +156,7 @@ func (m *Module) nodeMajor(c *invoke.Call, dir, projectDir string) string {
 			continue
 		}
 		if major := m.parseToMajor(dir, content); major != "" {
-			return major
+			return major, f
 		}
 	}
 	if pkg := filepath.Join(projectDir, "package.json"); isFile(pkg) {
@@ -151,16 +164,12 @@ func (m *Module) nodeMajor(c *invoke.Call, dir, projectDir string) string {
 			engines := subst(jqPathRaw(data, "engines", "node"))
 			if engines != "" {
 				if major := m.parseToMajor(dir, engines); major != "" {
-					return major
+					return major, pkg
 				}
 			}
 		}
 	}
-	if latest := m.latestInstalled(dir); latest != "" {
-		major, _, _ := strings.Cut(latest, ".")
-		return major
-	}
-	return "20"
+	return "", ""
 }
 
 // parseToMajor is __node_parse_version_to_major: an lts/<name> alias

@@ -18,7 +18,11 @@ const runtimeUsage = `Usage: gash runtime php|node|composer|npm|npx VERSION [--p
 
 Resolve a runtime version to its binary, without loading nvm.sh.
 
-  VERSION   a prefix: 24, 24.1, 8.4, 8 (the newest installed match)
+  VERSION   a prefix: 24, 24.1, 8.4, 8 (the newest installed match), or
+            project: the version the project in this directory pins
+            (.nvmrc, .node-version, package.json engines.node;
+            .target-php-version, composer.json require.php), with
+            runtime_not_pinned (STOP) when it pins none
   --path    print the path alone
 
 Prints {"runtime","request","path","version"} (composer adds "php", the
@@ -42,8 +46,11 @@ func (m *Module) runtime(c *invoke.Call) int {
 				n++
 			}
 		}
-		if n == 0 {
+		switch n {
+		case 0:
 			return complete(c.Stdout, partial, cobra.ShellCompDirectiveNoFileComp, dev.RuntimeNames...)
+		case 1:
+			return complete(c.Stdout, partial, cobra.ShellCompDirectiveNoFileComp, dev.ProjectRequest)
 		}
 		return complete(c.Stdout, partial, cobra.ShellCompDirectiveNoFileComp)
 	}

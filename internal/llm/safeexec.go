@@ -6,7 +6,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmexec"
@@ -17,7 +16,8 @@ import (
 // SafeExec runs argv under llm_exec's rails (AGENTS.md 6.3), for gash run
 // --safe: the words are joined into one command line (ShellJoin), checked
 // and rendered by internal/llmexec exactly as an llm_exec line is, with
-// the settings of the caller's file. A refusal is its envelope on
+// the checked rules of execRules (GASH_LLM_EXEC=unrestricted does not
+// apply: --safe always checks). A refusal is its envelope on
 // c.Stderr (status 1, refused true, nothing run); otherwise the command's
 // output goes to stdout and stderr and its status is returned.
 func SafeExec(c *invoke.Call, argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, bool) {
@@ -25,28 +25,7 @@ func SafeExec(c *invoke.Call, argv []string, stdin io.Reader, stdout, stderr io.
 	if _, ok := m.findBash(c); !ok {
 		return prereq.Fail(c, "bash", "gash run --safe", true), true
 	}
-	f := config.LoadCaller(c.Env.Get)
-	setting := func(name string) string {
-		v, _ := f.Setting(name)
-		return v
-	}
-	s := llmexec.Settings{
-		Exec:      setting("GASH_LLM_EXEC"),
-		ExecAllow: setting("GASH_LLM_EXEC_ALLOW"),
-		Sandbox:   setting("GASH_LLM_SANDBOX"),
-	}
-	vars := map[string]string{}
-	for _, kv := range c.Env.Child() {
-		k, v, _ := strings.Cut(kv, "=")
-		vars[k] = v
-	}
-	env := llmexec.Environ{
-		Cwd:      m.logicalCwd(c),
-		Home:     c.Env.Get("HOME"),
-		RootHome: m.rootHome(),
-		BashPath: m.bashPath(c),
-		Vars:     vars,
-	}
+	s, env := m.execRules(c)
 	pr := &probe{m: m, c: c}
 	plan, err := llmexec.Build(ShellJoin(argv), s, env, pr)
 	if err != nil {
