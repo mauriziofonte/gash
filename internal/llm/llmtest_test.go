@@ -40,22 +40,26 @@ func parseTest(t *testing.T, r result) testOut {
 func TestLLMTest(t *testing.T) {
 	fixture, err := filepath.Abs(filepath.Join("..", "testparse", "testdata", "pytest_fail.txt"))
 	require.NoError(t, err)
+	// Each stub is a test runner by name: llm_test runs nothing else.
 	bin := physTemp(t)
 	for name, script := range map[string]string{
-		"pytest":  "#!/bin/sh\ncat '" + fixture + "'\necho noise >&2\nexit 1\n",
-		"green":   "#!/bin/sh\necho '============== 4 passed in 0.02s =============='\n",
-		"chatter": "#!/bin/sh\nfor i in 1 2 3 4 5; do echo line $i; done\nexit 3\n",
-		"noexec":  "not a program\n",
+		"pytest":         "#!/bin/sh\ncat '" + fixture + "'\necho noise >&2\nexit 1\n",
+		"green/pytest":   "#!/bin/sh\necho '============== 4 passed in 0.02s =============='\n",
+		"chatter/mocha":  "#!/bin/sh\nfor i in 1 2 3 4 5; do echo line $i; done\nexit 3\n",
+		"args/vitest":    "#!/bin/sh\necho \"$1\" >&2\nexit 4\n",
+		"noexec/phpunit": "not a program\n",
 	} {
 		mode := os.FileMode(0o755)
-		if name == "noexec" {
+		if name == "noexec/phpunit" {
 			mode = 0o644
 		}
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(bin, name)), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(bin, name), []byte(script), mode))
 	}
 	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + os.Getenv("PATH")})
 	m := New()
 	d := physTemp(t)
+	green, chatter, args := filepath.Join(bin, "green", "pytest"), filepath.Join(bin, "chatter", "mocha"), filepath.Join(bin, "args", "vitest")
 
 	r := runGo(t, m, d, env, "llm_test", "--", "pytest", "-x")
 	require.Equal(t, 1, r.RC, r.Stderr)
@@ -81,22 +85,22 @@ func TestLLMTest(t *testing.T) {
 	require.Nil(t, o.Runner)
 
 	// Green with --fail-only prints nothing; without it the counts.
-	r = runGo(t, m, d, env, "llm_test", "--fail-only", "--", "green")
+	r = runGo(t, m, d, env, "llm_test", "--fail-only", "--", green)
 	require.Equal(t, result{"", "", 0}, r)
-	o = parseTest(t, runGo(t, m, d, env, "llm_test", "--", "green"))
+	o = parseTest(t, runGo(t, m, d, env, "llm_test", "--", green))
 	require.Equal(t, 4, o.Passed)
 	require.Equal(t, "pytest", *o.Runner)
 
 	// Unparsed output: the last lines, CMD's status.
-	r = runGo(t, m, d, env, "llm_test", "--tail", "2", "--", "chatter")
+	r = runGo(t, m, d, env, "llm_test", "--tail", "2", "--", chatter)
 	require.Equal(t, 3, r.RC)
 	o = parseTest(t, r)
 	require.False(t, o.Parsed)
 	require.Equal(t, []string{"line 4", "line 5"}, o.Tail)
 	require.Equal(t, 3, o.ExitCode)
 
-	// A shell line runs through bash; options after CMD belong to CMD.
-	r = runGo(t, m, d, env, "llm_test", "--", "bash", "-c", "echo $0 >&2; exit 4", "--runner")
+	// Options after CMD belong to CMD.
+	r = runGo(t, m, d, env, "llm_test", "--", args, "--runner")
 	require.Equal(t, 4, r.RC)
 	o = parseTest(t, r)
 	require.Equal(t, []string{"--runner"}, o.Tail)
@@ -109,11 +113,13 @@ func TestLLMTest(t *testing.T) {
 	}{
 		{[]string{"--"}, "empty_command", 1},
 		{[]string{}, "empty_command", 1},
-		{[]string{"--runner", "nose", "--", "true"}, "unknown_runner", 1},
+		{[]string{"--runner", "nose", "--", "pytest"}, "unknown_runner", 1},
 		{[]string{"--runner"}, "missing_value", 1},
-		{[]string{"--verbose", "--", "true"}, "unknown_option", 1},
-		{[]string{"--", "no-such-program-zz"}, "command_not_found", 127},
-		{[]string{"--", "noexec"}, "command_not_found", 126},
+		{[]string{"--verbose", "--", "pytest"}, "unknown_option", 1},
+		{[]string{"--", filepath.Join(bin, "none", "jest")}, "command_not_found", 127},
+		{[]string{"--", filepath.Join(bin, "noexec", "phpunit")}, "command_not_found", 126},
+		{[]string{"--", "bash", "-c", "rm -rf x"}, "not_a_test_command", 1},
+		{[]string{"--", "rm", "-rf", "x"}, "not_a_test_command", 1},
 	} {
 		r := runGo(t, m, d, env, "llm_test", tc.args...)
 		require.Equal(t, tc.rc, r.RC, tc.args)
@@ -124,6 +130,28 @@ func TestLLMTest(t *testing.T) {
 	// --help before -- is the help; after it, an argument of CMD.
 	r = runGo(t, m, d, env, "llm_test", "--help")
 	require.Contains(t, r.Stdout, "llm_test [--runner")
-	r = runGo(t, m, d, env, "llm_test", "--", "bash", "-c", "echo $0", "--help")
+	r = runGo(t, m, d, env, "llm_test", "--", args, "--help")
 	require.Equal(t, []string{"--help"}, parseTest(t, r).Tail)
+}
+
+// D1: llm_test runs a test suite and nothing else.
+func TestTestCommand(t *testing.T) {
+	for _, argv := range [][]string{
+		{"vendor/bin/pest"}, {"vendor/bin/phpunit", "--filter", "X"}, {"php", "vendor/bin/phpunit"},
+		{"php8.3", "artisan", "test"}, {"phpunit.phar"}, {"./node_modules/.bin/vitest", "run"},
+		{"node", "node_modules/jest/bin/jest.js"}, {"npx", "playwright", "test"}, {"pytest", "-x"},
+		{"python3", "-m", "pytest"}, {"python", "-m", "unittest"}, {"go", "test", "./..."},
+		{"cargo", "test"}, {"npm", "test"}, {"npm", "run", "test:unit"}, {"pnpm", "exec", "vitest"},
+		{"yarn", "test:e2e"}, {"bun", "test"}, {"composer", "test"}, {"composer", "run-script", "test"},
+		{"make", "test"},
+	} {
+		require.True(t, testCommand(argv), argv)
+	}
+	for _, argv := range [][]string{
+		{"bash", "-c", "pytest"}, {"rm", "-rf", "x"}, {"php", "-r", "unlink('x');"}, {"php", "artisan", "migrate"},
+		{"npm", "install"}, {"npm", "run", "build"}, {"go", "run", "."}, {"python3", "x.py"},
+		{"node", "x.js"}, {"npx", "rimraf", "x"}, {"make", "install"}, {"sh", "vendor/bin/pest"},
+	} {
+		require.False(t, testCommand(argv), argv)
+	}
 }

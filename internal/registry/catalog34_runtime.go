@@ -152,15 +152,20 @@ var catalogRuntime = []Function{
 				"  llm_test -- go test -json ./...\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Replaces pest | grep -E 'Tests:|FAIL' and npm test | tail -20. CMD runs as\n" +
-				"  given (bash -c 'cd app && vendor/bin/pest' works), stdout and stderr\n" +
+				"  Replaces pest | grep -E 'Tests:|FAIL' and npm test | tail -20. CMD is a\n" +
+				"  test suite: a runner (pest, phpunit, paratest, phpstan, psalm, vitest,\n" +
+				"  jest, mocha, playwright, pytest; a path such as vendor/bin/pest, also\n" +
+				"  through php, node, npx, pnpm exec or python -m), php artisan test, go\n" +
+				"  test, cargo test, the test script of npm, pnpm, yarn, bun or composer,\n" +
+				"  make test; any other command is not_a_test_command (gash run runs it).\n" +
+				"  CMD runs as given, stdout and stderr\n" +
 				"  merged, stdin /dev/null; the exit status is CMD's. Output:\n" +
 				"  {\"runner\",\"passed\",\"failed\",\"skipped\",\"duration_s\",\"failures\":[{\"name\",\n" +
 				"  \"file\",\"line\",\"message\"}],\"parsed\":true,\"exit_code\"}; analyzer findings\n" +
 				"  (phpstan, psalm) are failures. Output no parser reads:\n" +
 				"  {\"runner\":null,\"duration_s\",\"parsed\":false,\"exit_code\",\"tail\":[...]}.\n" +
-				"  Options come before --; a program not on PATH is command_not_found. CMD is\n" +
-				"  the project's own code: llm_test runs it without llm_exec's rails.",
+				"  Options come before --; a program not on PATH is command_not_found. The\n" +
+				"  suite runs the project's own code, without llm_exec's rails.",
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PATH", "PWD"},

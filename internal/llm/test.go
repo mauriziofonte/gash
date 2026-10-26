@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/testparse"
@@ -81,6 +82,12 @@ func (m *Module) test(c *invoke.Call) int {
 	if len(cmd) == 0 {
 		return fail(c, "empty_command", "", "Give the test command after --: llm_test -- vendor/bin/pest")
 	}
+	if !testCommand(cmd) {
+		return fail(c, "not_a_test_command", ShellJoin(cmd),
+			"llm_test runs a test suite: a runner (pest, phpunit, vitest, jest, mocha, pytest, playwright, ...), "+
+				"php artisan test, go test, cargo test, python -m pytest, npm/pnpm/yarn/bun/composer test or make test. "+
+				"Run any other command with gash run")
+	}
 	out := &capWriter{max: testOutputCap}
 	t0 := time.Now()
 	res, err := runner.RunUser(c.Ctx, m.run, cmd, runner.Options{
@@ -92,6 +99,67 @@ func (m *Module) test(c *invoke.Call) int {
 	WriteTestSummary(c, o, TestRun{Argv: cmd, Runner: runnerName, Output: out.Bytes(), ExitCode: res.ExitCode,
 		Duration: time.Since(t0), FailOnly: failOnly, Cwd: m.logicalCwd(c)})
 	return res.ExitCode
+}
+
+// testRunners are the programs llm_test runs by name (a path such as
+// vendor/bin/phpunit counts by its last element, .phar dropped).
+var testRunners = map[string]bool{
+	"pest": true, "phpunit": true, "paratest": true, "phpstan": true, "psalm": true,
+	"vitest": true, "jest": true, "mocha": true, "playwright": true, "pytest": true,
+}
+
+var (
+	phpProgram    = lazyre.MustCompile(`^php[0-9.]*$`)
+	pythonProgram = lazyre.MustCompile(`^python[0-9.]*$`)
+)
+
+// testCommand reports whether argv runs a test suite, the one kind of
+// command llm_test runs (D1: llm_* never runs an arbitrary command; gash
+// run takes any other): a test runner, or a test runner through php,
+// node, python -m or a package runner, go test, cargo test, php artisan
+// test, the test script of npm, pnpm, yarn, bun or composer, make test.
+func testCommand(argv []string) bool {
+	base := func(i int) string {
+		if i >= len(argv) {
+			return ""
+		}
+		a := argv[i]
+		return strings.TrimSuffix(a[strings.LastIndexByte(a, '/')+1:], ".phar")
+	}
+	arg := func(i int) string {
+		if i >= len(argv) {
+			return ""
+		}
+		return argv[i]
+	}
+	prog := base(0)
+	switch {
+	case testRunners[prog]:
+		return true
+	case phpProgram.MatchString(prog):
+		return testRunners[base(1)] || base(1) == "artisan" && arg(2) == "test"
+	case prog == "node":
+		return testRunners[strings.TrimSuffix(strings.TrimSuffix(base(1), ".mjs"), ".js")]
+	case pythonProgram.MatchString(prog):
+		return arg(1) == "-m" && (arg(2) == "pytest" || arg(2) == "unittest")
+	case prog == "go" || prog == "cargo":
+		return arg(1) == "test"
+	case prog == "npx" || prog == "bunx" || prog == "pnpx":
+		return testRunners[base(1)]
+	case prog == "npm" || prog == "pnpm" || prog == "yarn" || prog == "bun" || prog == "composer":
+		switch arg(1) {
+		case "test", "t":
+			return true
+		case "run", "run-script":
+			return strings.HasPrefix(arg(2), "test")
+		case "exec", "x":
+			return testRunners[base(2)]
+		}
+		return prog == "yarn" && strings.HasPrefix(arg(1), "test")
+	case prog == "make":
+		return strings.HasPrefix(arg(1), "test")
+	}
+	return false
 }
 
 // helpOnly prints the help of the call's function (--help before --).

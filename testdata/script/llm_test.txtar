@@ -4,7 +4,8 @@
 # summarized (counts, each failure's file:line and message), its exit
 # status kept. The runner is a stub on PATH that prints a pytest report.
 # Output no parser reads gives its last lines with "parsed":false; options
-# come before --, every word after it is CMD's.
+# come before --, every word after it is CMD's. A command that is no test
+# runner is refused (D1: llm_* runs no arbitrary command).
 #
 # covers: none (new in 3.4; no 2.x spec)
 
@@ -12,7 +13,8 @@ env GASH_HEADLESS=1
 env LC_ALL=C
 env PATH=$WORK/bin:$PATH
 chmod 0755 bin/pytest
-chmod 0755 bin/green
+chmod 0755 green/pytest
+chmod 0755 chatter/mocha
 
 # --- through the sourced shell: the summary, CMD's status
 exec bash -c 'source "$GASH_SH"; llm_test -- pytest -q; echo "rc=$?"'
@@ -21,13 +23,13 @@ stdout '^rc=1$'
 ! stderr .
 
 # --- directly: silent when green with --fail-only
-exec gash llm_test --fail-only -- green
+exec gash llm_test --fail-only -- $WORK/green/pytest
 ! stdout .
-exec gash llm_test -- green
+exec gash llm_test -- $WORK/green/pytest
 stdout '"runner":"pytest","passed":4,"failed":0'
 
 # --- output no parser reads: the last lines; --help after -- is CMD's
-exec bash -c 'gash llm_test --tail 2 -- bash -c "echo one; echo two; echo \$0; exit 3" --help; echo "rc=$?"'
+exec bash -c 'gash llm_test --tail 2 -- "$WORK/chatter/mocha" --help; echo "rc=$?"'
 stdout '^\{"runner":null,"duration_s":[0-9.]+,"parsed":false,"exit_code":3,"tail":\["two","--help"\]\}$'
 stdout '^rc=3$'
 
@@ -36,9 +38,11 @@ stdout '^rc=3$'
 stderr '"error":"empty_command"'
 ! exec gash llm_test --runner nose -- pytest
 stderr '"error":"unknown_runner"'
-exec bash -c 'gash llm_test -- no-such-runner-zz; echo "rc=$?"'
+exec bash -c 'gash llm_test -- "$WORK/none/pytest"; echo "rc=$?"'
 stderr '"error":"command_not_found"'
 stdout '^rc=127$'
+! exec gash llm_test -- bash -c 'rm -rf x'
+stderr '"error":"not_a_test_command"'
 
 -- bin/pytest --
 #!/bin/sh
@@ -61,6 +65,9 @@ FAILED tests/test_a.py::test_b - assert 1 == 2
 ========================= 1 failed, 2 passed in 0.03s ==========================
 OUT
 exit 1
--- bin/green --
+-- chatter/mocha --
+#!/bin/sh
+echo one; echo two; echo "$1"; exit 3
+-- green/pytest --
 #!/bin/sh
 echo '============================== 4 passed in 0.02s ==============================='

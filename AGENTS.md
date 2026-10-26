@@ -487,9 +487,14 @@ unless `--width` says otherwise.
 `llm_test` and `gash run` take a command after `--`: the one exception to
 the no-`--` rule of this section. Their options come before `--` (or before
 the first word that is not an option), every word after it belongs to CMD,
-`--help` included. CMD runs as given, without `llm_exec`'s rails: it is the
-project's own test suite (`bash -c 'cd app && vendor/bin/pest'` works);
-stdout and stderr are merged, stdin is `/dev/null`, a program not on PATH
+`--help` included. `llm_test` runs a test suite and nothing else: a runner
+(pest, phpunit, paratest, phpstan, psalm, vitest, jest, mocha, playwright,
+pytest; by path such as `vendor/bin/pest`, or through `php`, `node`, `npx`,
+`pnpm exec`, `python -m`), `php artisan test`, `go test`, `cargo test`, the
+test script of npm, pnpm, yarn, bun or composer, `make test`; any other
+command is `not_a_test_command` (RETRY), and `gash run` runs it. The suite
+runs the project's own code, without `llm_exec`'s rails; stdout and stderr
+are merged, stdin is `/dev/null`, a program not on PATH
 is `command_not_found` (status 127). Runners: pest, phpunit, phpstan and
 psalm (analyzer findings count as failures), vitest, jest (text or
 `--json`), mocha, pytest, go (text or `-json`), cargo, playwright; `auto`

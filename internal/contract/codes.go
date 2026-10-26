@@ -302,6 +302,7 @@ var codeTable = []Code{
 	{"unsupported_file", Retry, "llm", Origin3x},
 	{"invalid_ext", Retry, "llm", Origin3x},
 	{"unknown_runner", Retry, "llm", Origin3x},
+	{"not_a_test_command", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, remote and edits (--host, llm_remote_run,
 	// llm_same, agent_replace, agent_put).
