@@ -742,7 +742,7 @@ Each code always carries the action shown:
 | `llm_exec` | `dangerous_command_blocked` `option_not_allowed` (FATAL); `command_not_allowed` `sandbox_unavailable` (STOP); `construct_not_allowed` `unterminated_quote` `glob_matches_option` (RETRY) |
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
 | Database | `no_db_config` `no_database` `unknown_db_type` `invalid_db_url` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
-| Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
+| Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
 | WSL & Windows (`gash wsl`, `gash win`, `gash logs`) | `interop_unavailable` `windows_access_denied` `elevation_required` `windows_not_found` (STOP); `interop_timeout` `invalid_windows_argument` `invalid_duration` `confirmation_required` (RETRY) |
 | Shared output options (3.4) | `invalid_format` `invalid_width` `invalid_max_lines` `invalid_head` `invalid_tail` `invalid_jobs` `invalid_timeout` (RETRY) |

@@ -4,7 +4,9 @@ package llm
 
 import (
 	"encoding/json"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -157,7 +159,6 @@ func TestDepsMatches2x(t *testing.T) {
 // on stderr, exit 1; 2.x printed jq's raw parse error with exit 5, or
 // nothing with exit 0 for an empty file.
 func TestLedger_LLM05(t *testing.T) {
-	requireJQ(t)
 	m := New()
 	for _, body := range []string{`{"dependencies": {`, `["a"]`, "", "  \n", `{"a":1} {"b":2}`, "null", `"x"`} {
 		for _, name := range []string{"package.json", "composer.json"} {
@@ -174,7 +175,6 @@ func TestLedger_LLM05(t *testing.T) {
 // dependency map that is not an object counts as empty (2.x: "//" and
 // the array's indices).
 func TestLedger_LLM14(t *testing.T) {
-	requireJQ(t)
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	gomod := physTemp(t)
@@ -195,6 +195,54 @@ func TestLedger_LLM14(t *testing.T) {
 	none := physTemp(t)
 	mustWrite(t, filepath.Join(none, "package.json"), `{"name":"x"}`)
 	require.Equal(t, result{`{"manager":"npm","dependencies":[]}` + "\n", "", 0}, runGo(t, m, none, env, "llm_deps"))
+}
+
+// TestDepsWithoutJQ: requirements.txt and go.mod are read without jq,
+// line for line as the 2.x jq programs read them (2.x and 3.x before:
+// jq_not_found, FATAL, for every manifest without jq). With jq installed
+// the 2.x programs are run on the same files for comparison.
+func TestDepsWithoutJQ(t *testing.T) {
+	m := New()
+	m.lookPathFn = func(string) (string, bool) { return "", false }
+	env := baseEnv(physTemp(t), map[string]string{"PATH": "/nonexistent"})
+	reqs := "# a comment\nFlask==3.0.0\n  requests>=2.0  \ndjango~=4.0\n-e .\nnumpy ; python_version>'3.6'\npkg[extra]==1.0\n\n" +
+		"\u00a0nbsp\u00a0\nx\t>=1\nweird\xffname\n--index-url x\nlast-line-no-nl"
+	gomod := "module example.com/x\n\ngo 1.22\n\nrequire (\n\tgithub.com/pkg/errors v0.9.1\n\t// pinned\n\tgolang.org/x/sys v0.1.0 // indirect\n)\n\nrequire gopkg.in/yaml.v3 v3.0.1\n"
+	shape := map[bool]string{false: "{manager: $m, dependencies: $prod}", true: "{manager: $m, prod: $prod, dev: $dev}"}
+	for _, tc := range []struct {
+		file, body, manager, prog, want string
+	}{
+		{"requirements.txt", reqs, "pip",
+			`[inputs | sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0 and (startswith("-") | not)) | sub("[ <>=!~;\\[@].*"; "")] as $prod | [] as $dev | `,
+			`["Flask","requests","django","numpy","pkg","nbsp","x\t","weird�name","last-line-no-nl"]`},
+		{"go.mod", gomod, "go", `[inputs | select(length > 0)] as $prod | [] as $dev | `,
+			`["github.com/pkg/errors","golang.org/x/sys","gopkg.in/yaml.v3"]`},
+	} {
+		d := physTemp(t)
+		mustWrite(t, filepath.Join(d, tc.file), tc.body)
+		for _, dev := range []bool{false, true} {
+			args := []string{}
+			want := `{"manager":"` + tc.manager + `","dependencies":` + tc.want + "}\n"
+			if dev {
+				args = []string{"--dev"}
+				want = `{"manager":"` + tc.manager + `","prod":` + tc.want + `,"dev":[]}` + "\n"
+			}
+			require.Equal(t, result{want, "", 0}, runGo(t, m, d, env, "llm_deps", args...), tc.file)
+			jq, err := lookPathTest("jq")
+			if err != nil {
+				continue
+			}
+			in := []byte(tc.body)
+			if tc.file == "go.mod" {
+				in = goModRequires(in)
+			}
+			cmd := exec.Command(jq, "-cRn", "--arg", "m", tc.manager, tc.prog+shape[dev])
+			cmd.Stdin = strings.NewReader(string(in))
+			out, err := cmd.Output()
+			require.NoError(t, err)
+			require.Equal(t, want, string(out), "jq on %s", tc.file)
+		}
+	}
 }
 
 // TestLedger_LLM27: llm_project reads the manifests: a pyproject.toml without

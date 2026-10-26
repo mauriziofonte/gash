@@ -82,7 +82,7 @@ func TestAgentsTableActions(t *testing.T) {
 			"path_not_found not_a_directory path_unreadable file_not_found file_too_large construct_not_allowed unterminated_quote glob_matches_option " +
 			"executable_comment_blocked backslash_in_literal unterminated_literal sqlite_error mysql_error pgsql_error sqlite_file_not_found missing_sqlite_file compose_not_found",
 		Fatal: "path_traversal_blocked forbidden_path root_scan_blocked secret_file_blocked dangerous_command_blocked option_not_allowed " +
-			"write_operation_blocked multiple_statements_blocked client_command_blocked dot_command_blocked sqlite_not_found mysql_not_found psql_not_found invalid_sqlite_file jq_not_found",
+			"write_operation_blocked multiple_statements_blocked client_command_blocked dot_command_blocked sqlite_not_found mysql_not_found psql_not_found invalid_sqlite_file",
 		Stop:     "command_not_allowed sandbox_unavailable no_db_config no_database unknown_db_type",
 		Continue: "not_a_git_repo git_not_found no_package_file ports_tool_not_found no_services docker_not_found compose_not_installed",
 	}

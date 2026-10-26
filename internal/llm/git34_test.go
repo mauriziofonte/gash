@@ -353,6 +353,25 @@ func TestGitDiffModes(t *testing.T) {
 	}
 }
 
+// TestGitLogWithoutJQ: the 2.x form of llm_git_log runs with no jq on
+// PATH (2.x and 3.x before: jq_not_found, FATAL, although the JSON is
+// built natively).
+func TestGitLogWithoutJQ(t *testing.T) {
+	requireGit(t)
+	gitBin, _ := lookPathTest("git")
+	m := New()
+	home := physTemp(t)
+	d := physTemp(t)
+	git(t, d, home, "init", "-b", "main")
+	git(t, d, home, "commit", "--allow-empty", "-m", "feat: first")
+	bin := physTemp(t)
+	require.NoError(t, os.Symlink(gitBin, filepath.Join(bin, "git")))
+	r := runGo(t, m, d, baseEnv(physTemp(t), map[string]string{"PATH": bin}), "llm_git_log", "-n", "1")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Empty(t, r.Stderr)
+	require.Contains(t, r.Stdout, `"subject":"feat: first"`)
+}
+
 func TestGitLogFields(t *testing.T) {
 	requireGit(t)
 	m := New()

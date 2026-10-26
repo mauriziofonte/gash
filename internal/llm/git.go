@@ -247,9 +247,8 @@ func (m *Module) gitLog(c *invoke.Call) int {
 	if !m.requireGitRepo(c, safe) {
 		return 1
 	}
-	if _, ok := m.lookPath(c, "jq"); !ok {
-		return fail(c, "jq_not_found", "jq is required for JSON output", "Install jq: sudo apt install jq")
-	}
+	// The JSON is built natively: no jq is needed (2.x and 3.x before
+	// failed with jq_not_found without one).
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
 		"-C", safe, "log", "-n", limit, "--no-ext-diff", "--no-textconv", "--no-show-signature",
 		"-z", "--format=%h%x00%s%x00%an%x00%ci")
