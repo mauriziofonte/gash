@@ -17,6 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -223,7 +224,7 @@ func (m *Module) gitOverview(c *invoke.Call) int {
 			args = args[2:]
 			continue
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --log N, --files N or a path")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			if !pt.take(c, a) {
 				return 1

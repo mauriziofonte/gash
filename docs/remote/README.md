@@ -64,8 +64,13 @@ Info: Configured remote hosts:
 
 Every `remote_*` function takes an alias or, in an interactive shell, a raw
 `user@host`. In headless mode (`GASH_HEADLESS=1`, the mode agents use) only
-the aliases are accepted. `GASH_ENV_FILE` points Gash at another file than
-`~/.gash_env`.
+the aliases are accepted, and `remote_exec`, `remote_push`, `remote_pull`
+and the `remote_sync_*` functions answer a refusal with one JSON error line
+on stderr, as the agent functions do (`unknown_host`, `host_unreachable`,
+`forbidden_path`, `write_path_denied`, `sensitive_path`, `invalid_path`,
+`missing_value` and the like; see the error contract in
+[AGENTS.md](../../AGENTS.md)); in a terminal they print the `Error:` lines
+below. `GASH_ENV_FILE` points Gash at another file than `~/.gash_env`.
 
 ## Run a command on a host
 
@@ -243,7 +248,7 @@ They answer in JSON, for agents first; the
 | Message | What it means and what to do |
 |---|---|
 | `Error: Unknown host alias 'web' and not a valid user@host target.` | No `HOST:web=` line is in effect: check `rh`, and add the line. |
-| `Error: Unknown host alias 'web'. In headless mode only aliases registered in ~/.gash_env (HOST:alias=user@host) are accepted.` | The same in headless mode, where a raw `user@host` is never accepted: add a `HOST:` line. |
+| `{"error":"unknown_host","details":"Unknown host alias 'web'. In headless mode only aliases registered in ~/.gash_env (HOST:alias=user@host) are accepted.",...}` | The same in headless mode, where a raw `user@host` is never accepted: add a `HOST:` line. |
 | `Warning: Line N of ~/.gash_env: HOST target must be user@host (skipping)` | The target has a port, an option or another character the rule refuses. Move the port or the key to `~/.ssh/config` and use that `Host` name. |
 | `Error: Failed to connect to deploy@web.example.com. Verify SSH connectivity and key configuration.` | `ssh` could not connect or log in (status 1). Try `ssh deploy@web.example.com` by hand: it shows the reason, lets you accept a new host key, and tells you whether the key is missing from the agent (`ssh-add -l` lists the loaded keys). |
 | `Error: Remote command exited 255 (killed by a signal or explicit exit 255); the SSH connection is healthy.` | The connection works; the command itself ended with status 255. |

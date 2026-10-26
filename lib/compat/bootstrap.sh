@@ -10,7 +10,8 @@
 #     GASH_BIN when set and executable, else
 #     ${XDG_DATA_HOME:-$HOME/.local/share}/gash/versions/<VERSION>/gash;
 #   - the first-run fetch of that binary (curl or wget, SHA-256 checked),
-#     never at source time in headless mode;
+#     never at source time, and in headless mode only with
+#     GASH_AUTO_FETCH=1 (GASH_AUTO_FETCH=0: never on its own);
 #   - __gash_call, the wrapper of every delegated function: it passes the
 #     caller's shell state the 2.x function read and execs the binary;
 #   - the missing-binary report (one envelope line for agents, an Error:
@@ -237,24 +238,37 @@ __gash_bin_resolve() {
     return 1
 }
 
-# The binary, fetched on first use when it is missing. Silent: a failure
-# surfaces as the report of the call.
+# The binary, fetched on first use when it is missing (__gash_auto_fetch).
+# Silent: a failure, or a fetch not made, surfaces as the report of the
+# call.
 __gash_compat_ready() {
     [[ -n "${__GASH_BIN-}" && -x "$__GASH_BIN" ]] && return 0
     __gash_bin_resolve && return 0
-    __gash_fetch quiet >/dev/null 2>&1 || return 1
+    __gash_auto_fetch quiet >/dev/null 2>&1 || return 1
     __gash_bin_resolve
 }
 
 # Why the last fetch failed, for the one interactive line, and the
 # prerequisite it lacked (curl, tar, gzip, sha256sum), if that was why.
+# __GASH_FETCH_SKIPPED is 1 when no download was tried (__gash_auto_fetch).
 __GASH_FETCH_REASON=""
 __GASH_FETCH_MISSING=""
+__GASH_FETCH_SKIPPED=0
+
+# The download Gash starts on its own: at the first call of a function and
+# when an interactive shell loads. Headless mode (an agent, a script)
+# never downloads and installs a program unasked: the call answers
+# binary_not_found, whose hint is install.sh --repair, unless
+# GASH_AUTO_FETCH=1. GASH_AUTO_FETCH=0 turns it off in every mode. The
+# installer and its --repair call __gash_fetch whatever the setting.
+# Usage: __gash_auto_fetch [quiet|loud]
+# shellcheck disable=SC2120
+__gash_auto_fetch() { __gash_cold __gash_auto_fetch 6f599da2 && "${FUNCNAME[0]}" "$@"; }
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
 # shellcheck disable=SC2120
-__gash_fetch() { __gash_cold __gash_fetch bdb0d615 && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch() { __gash_cold __gash_fetch c45605a4 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_fetch_get URL FILE
 __gash_fetch_get() {
@@ -299,7 +313,7 @@ __gash_boot_emitters() { __gash_cold __gash_boot_emitters 16d8b1c4 && "${FUNCNAM
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
 # shellcheck disable=SC2120
-__gash_fetch_line() { __gash_cold __gash_fetch_line c53976a7 && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch_line() { __gash_cold __gash_fetch_line 2a8f32ce && "${FUNCNAME[0]}" "$@"; }
 
 # What to do after a failed fetch: the install command of the missing
 # prerequisite, else the installer's repair.
@@ -311,7 +325,7 @@ __gash_fetch_advice() { __gash_cold __gash_fetch_advice ccebf7a0 && "${FUNCNAME[
 # humans. Status 1.
 # Usage: __gash_missing NAME
 # shellcheck disable=SC2120
-__gash_missing() { __gash_cold __gash_missing badd25bc && "${FUNCNAME[0]}" "$@"; }
+__gash_missing() { __gash_cold __gash_missing f66a342a && "${FUNCNAME[0]}" "$@"; }
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x
 # code read: the common variables, NAME's own, and its settings (with
@@ -391,24 +405,42 @@ __gash_compat() {
 # (the call then execs) what it cannot reproduce. Linux only; GASH_SERVER=0
 # turns it off.
 #
-#   __GASH_SRV, __GASH_SRV_PID  the coprocess (set and unset by Bash)
+# Each server is a coprocess of a name of its own (__GASH_SRV1, 2, 3, then
+# 1 again): Bash unsets the variables of a coprocess's name as it reaps it,
+# and Bash 5.3, which keeps several coprocesses, does so after a new one of
+# that name has set them.
+#
+#   __GASH_SRV_NTH              the number in the name of the last one
+#   __GASH_SRV_ID               its PID
+#   __GASH_SRV_FD               the descriptor its answers come on
+#   __GASH_SRV_VAR              the NAME_PID variable of its coprocess,
+#                               which Bash unsets as it reaps it
 #   __GASH_SRV_OWNER            the shell that started it
 #   __GASH_SRV_DIR              its private directory (the request, the INT
 #                               trap, a stamp)
 #   __GASH_SRV_BIN              the binary it runs
 #   __GASH_SRV_FN               the functions it runs
 
+# Whether the server is still the coprocess Bash knows (not reaped).
+__gash_srv_alive() {
+    [[ -n "${__GASH_SRV_ID-}" && -n "${__GASH_SRV_VAR-}" && "${!__GASH_SRV_VAR-}" == "$__GASH_SRV_ID" ]]
+}
+
 # Stop the server of this shell, if any.
 __gash_srv_stop() {
-    if [[ -n "${__GASH_SRV_PID-}" && "${__GASH_SRV_OWNER-}" == "$BASHPID" ]]; then
-        kill "$__GASH_SRV_PID" 2>/dev/null || true
+    if __gash_srv_alive && [[ "${__GASH_SRV_OWNER-}" == "$BASHPID" ]]; then
+        kill "$__GASH_SRV_ID" 2>/dev/null || true
     fi
-    unset __GASH_SRV_OWNER __GASH_SRV_DIR __GASH_SRV_BIN
+    unset __GASH_SRV_OWNER __GASH_SRV_DIR __GASH_SRV_BIN __GASH_SRV_ID __GASH_SRV_FD __GASH_SRV_VAR
     return 0
 }
 
-# A load stops the server of an earlier one (its binary may differ).
-[[ -n "${__GASH_SRV_OWNER-}" ]] && __gash_srv_stop
+# A load stops the server of an earlier one (its binary may differ; up to
+# 3.4.1 its coprocess was __GASH_SRV).
+if [[ -n "${__GASH_SRV_OWNER-}" ]]; then
+    [[ -n "${__GASH_SRV_VAR-}" ]] || __GASH_SRV_ID=${__GASH_SRV_PID-} __GASH_SRV_VAR=__GASH_SRV_PID
+    __gash_srv_stop
+fi
 declare -gA __GASH_SRV_FN=(
     [llm_tree]=1
     [llm_find]=1
@@ -480,6 +512,14 @@ __GASH_SRV_SEQ=0
 __GASH_SRV_DECLINED=0
 __GASH_SRV_CHECKED=""
 
+# The coprocess's command: the server, given the shell's standard streams
+# as 3, 4 and 5 (none when IN is "-").
+# Usage: __gash_srv_exec IN OUT ERR
+__gash_srv_exec() {
+    [[ "$1" == - ]] && exec "$__GASH_BIN" __serve 2>/dev/null
+    exec "$__GASH_BIN" __serve 3<&"$1" 4>&"$2" 5>&"$3" 2>/dev/null
+}
+
 # Whether the server can take a call now: it runs, for this shell, the
 # current binary; started when it does not (three starts per shell).
 __gash_srv_ready() {
@@ -487,7 +527,7 @@ __gash_srv_ready() {
     if [[ -n "${__GASH_SRV_OWNER-}" ]]; then
         # The binary's mtime is checked once a second at most (at every call
         # on Bash 4.4, which has no EPOCHSECONDS).
-        if [[ -n "${__GASH_SRV_PID-}" && "$__GASH_SRV_BIN" == "$__GASH_BIN" ]] &&
+        if [[ "$__GASH_SRV_BIN" == "$__GASH_BIN" ]] && __gash_srv_alive &&
             { [[ -n "${EPOCHSECONDS-}" && "$EPOCHSECONDS" == "$__GASH_SRV_CHECKED" ]] || ! [[ "$__GASH_BIN" -nt "$__GASH_SRV_DIR/stamp" ]]; }; then
             __GASH_SRV_CHECKED=${EPOCHSECONDS-}
             return 0
@@ -496,7 +536,7 @@ __gash_srv_ready() {
     fi
     ((__GASH_SRV_STARTS < 3)) || return 1
     ((++__GASH_SRV_STARTS))
-    local __gs_m=0 __gs_i=0 __gs_o=1 __gs_e=2
+    local __gs_m=0 __gs_i=0 __gs_o=1 __gs_e=2 __gs_fd
     local -a __gs_hello=()
     # The shell's standard streams go to the server as 3, 4 and 5 (for a
     # kernel that does not let it take a call's streams from the shell; no
@@ -509,18 +549,29 @@ __gash_srv_ready() {
         __gs_i=-
     fi
     [[ $- == *m* ]] && __gs_m=1 && set +m
-    if [[ "$__gs_i" == - ]]; then
-        { coproc __GASH_SRV { exec "$__GASH_BIN" __serve 2>/dev/null; }; } 2>/dev/null
-    else
-        { coproc __GASH_SRV { exec "$__GASH_BIN" __serve 3<&"$__gs_i" 4>&"$__gs_o" 5>&"$__gs_e" 2>/dev/null; }; } 2>/dev/null
-        exec {__gs_i}<&- {__gs_o}>&- {__gs_e}>&-
-    fi
+    # The next name (a literal word in each line: Bash expands a coprocess
+    # name only from 5.3).
+    __GASH_SRV_NTH=$((${__GASH_SRV_NTH:-0} % 3 + 1))
+    case "$__GASH_SRV_NTH" in
+        1) { coproc __GASH_SRV1 { __gash_srv_exec "$__gs_i" "$__gs_o" "$__gs_e"; }; } 2>/dev/null ;;
+        2) { coproc __GASH_SRV2 { __gash_srv_exec "$__gs_i" "$__gs_o" "$__gs_e"; }; } 2>/dev/null ;;
+        *) { coproc __GASH_SRV3 { __gash_srv_exec "$__gs_i" "$__gs_o" "$__gs_e"; }; } 2>/dev/null ;;
+    esac
+    [[ "$__gs_i" == - ]] || exec {__gs_i}<&- {__gs_o}>&- {__gs_e}>&-
     ((__gs_m)) && set -m
-    [[ -n "${__GASH_SRV_PID-}" ]] || return 1
-    disown "$__GASH_SRV_PID" 2>/dev/null || true
-    if ! IFS=' ' read -r -t 5 -a __gs_hello -u "${__GASH_SRV[0]}" 2>/dev/null ||
+    __GASH_SRV_VAR=__GASH_SRV${__GASH_SRV_NTH}_PID
+    __GASH_SRV_ID=${!__GASH_SRV_VAR-}
+    __gs_fd="__GASH_SRV${__GASH_SRV_NTH}[0]"
+    __GASH_SRV_FD=${!__gs_fd-}
+    if [[ -z "$__GASH_SRV_ID" || -z "$__GASH_SRV_FD" ]]; then
+        unset __GASH_SRV_ID __GASH_SRV_FD __GASH_SRV_VAR
+        return 1
+    fi
+    disown "$__GASH_SRV_ID" 2>/dev/null || true
+    if ! IFS=' ' read -r -t 5 -a __gs_hello -u "$__GASH_SRV_FD" 2>/dev/null ||
         [[ "${__gs_hello[0]-}" != gash-serve || "${__gs_hello[1]-}" != 1 || ! -d "${__gs_hello[2]-}" ]]; then
-        kill "$__GASH_SRV_PID" 2>/dev/null || true
+        kill "$__GASH_SRV_ID" 2>/dev/null || true
+        unset __GASH_SRV_ID __GASH_SRV_FD __GASH_SRV_VAR
         return 1
     fi
     __GASH_SRV_OWNER=$BASHPID
@@ -541,7 +592,7 @@ __gash_srv_ready() {
 __gash_srv_call() {
     local __gs_line="" __gs_v
     __GASH_SRV_DECLINED=1
-    [[ -n "${__GASH_SRV_PID-}" && -n "${__GASH_SRV[0]-}" ]] && trap -p INT >"$__GASH_SRV_DIR/trap" 2>/dev/null || {
+    __gash_srv_alive && trap -p INT >"$__GASH_SRV_DIR/trap" 2>/dev/null || {
         __gash_srv_stop
         return 1
     }
@@ -559,7 +610,7 @@ __gash_srv_call() {
         printf '\001\n'
         export -p
     } >"$__GASH_SRV_DIR/req" 2>/dev/null; then
-        while IFS= read -r -u "${__GASH_SRV[0]}" __gs_line; do
+        while IFS= read -r -u "$__GASH_SRV_FD" __gs_line; do
             [[ "${__gs_line%% *}" == "$__GASH_SRV_SEQ" || "${__gs_line%% *}" == "*" ]] && break
             __gs_line=""
         done

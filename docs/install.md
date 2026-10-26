@@ -220,8 +220,19 @@ bash ~/.gash/install.sh --repair
 
 ### From Gash 2.x
 
-Run `gash_upgrade` as usual: it moves you to the newest 3.x release. To go
-back, run `git -C ~/.gash checkout v2.1.1` and open a new terminal.
+Run `gash_upgrade` as usual: it moves you to the newest 3.x release. The
+2.x `gash_upgrade` only checks the new version out, so then download its
+binary:
+
+```bash
+gash_upgrade
+bash ~/.gash/install.sh --repair
+```
+
+Without the second step the next interactive shell downloads the binary
+(one line says so), but a headless shell (an agent, a script) never does:
+until then its calls answer `binary_not_found`. To go back, run
+`git -C ~/.gash checkout v2.1.1` and open a new terminal.
 
 ### From Gash 1.x
 

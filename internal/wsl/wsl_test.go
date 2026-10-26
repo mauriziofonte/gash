@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mauriziofonte/gash/internal/platform"
@@ -217,5 +219,92 @@ func TestINI(t *testing.T) {
 	}
 	if v, _ := ParseINI(DecodeText(u16)).Get("wsl2", "memory"); v != "8GB" {
 		t.Errorf("utf-16 memory = %q", v)
+	}
+}
+
+// mountinfoTwice mounts drive C on /mnt/c (the automount), again on /win/c
+// (an fstab drvfs line, mounted later), a directory of it on
+// /home/me/win (drvfs C:\Users\me) and through a bind mount of
+// /mnt/c/Projects on /srv/proj; D is mounted on /mnt/d and remounted
+// there.
+const mountinfoTwice = `82 62 0:52 / /mnt/c rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1000;gid=1000;metadata;symlinkroot=/mnt/,mmap,access=client,msize=65536,trans=fd,rfd=5,wfd=5
+83 62 0:53 / /mnt/d rw,noatime - 9p D:\134 rw,aname=drvfs;path=D:\;uid=1000;gid=1000;symlinkroot=/mnt/,mmap,access=client,msize=65536,trans=fd,rfd=5,wfd=5
+91 62 0:61 / /win/c rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1000;gid=1000;symlinkroot=/mnt/,mmap,access=client,msize=65536,trans=fd,rfd=7,wfd=7
+92 62 0:62 / /home/me/win rw,noatime - 9p C:\134Users\134me rw,aname=drvfs;path=C:\Users\me;uid=1000;gid=1000;symlinkroot=/mnt/,mmap,access=client,msize=65536,trans=fd,rfd=8,wfd=8
+93 62 0:52 /Projects /srv/proj rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1000;gid=1000;symlinkroot=/mnt/,mmap,access=client,msize=65536,trans=fd,rfd=5,wfd=5
+94 83 0:63 / /mnt/d rw,noatime - 9p D:\134 rw,aname=drvfs;path=D:\;uid=1000;gid=1000;metadata;symlinkroot=/mnt/,mmap,access=client,msize=65536,trans=fd,rfd=9,wfd=9
+`
+
+// TestDriveMountedTwice: a drive mounted more than once keeps every mount
+// point, the automount one preferred; each maps to the drive's letter, and
+// the system drive is found on any of them (3.4.2).
+func TestDriveMountedTwice(t *testing.T) {
+	sr := sysroot(t, tree{
+		"proc/sys/kernel/osrelease": "6.6.87.2-microsoft-standard-WSL2\n",
+		"proc/self/mountinfo":       mountinfoTwice,
+	})
+	f := Detect(sr, env(map[string]string{"WSL_DISTRO_NAME": "Ubuntu"}))
+	if len(f.Drives) != 2 {
+		t.Fatalf("drives = %+v", f.Drives)
+	}
+	c, d := f.Drives[0], f.Drives[1]
+	var paths []string
+	for _, m := range c.Mounts {
+		paths = append(paths, m.Path+"="+m.Dir)
+	}
+	if c.Letter != "C" || c.Mount != "/mnt/c" || !c.Metadata ||
+		strings.Join(paths, " ") != `/mnt/c=\ /win/c=\ /home/me/win=\Users\me /srv/proj=\Projects` {
+		t.Errorf("C = %+v (%v)", c, paths)
+	}
+	if d.Letter != "D" || d.Mount != "/mnt/d" || len(d.Mounts) != 1 || !d.Metadata {
+		t.Errorf("D = %+v (a remount on the same point replaces the first)", d)
+	}
+	for in, want := range map[string]string{
+		"/mnt/c/Users":         `C:\Users`,
+		"/win/c/Users":         `C:\Users`,
+		"/win/c":               `C:\`,
+		"/home/me/win":         `C:\Users\me`,
+		"/home/me/win/doc.txt": `C:\Users\me\doc.txt`,
+		"/srv/proj/a/b":        `C:\Projects\a\b`,
+		"/mnt/d/x":             `D:\x`,
+		"/home/me/winx":        `\\wsl.localhost\Ubuntu\home\me\winx`,
+	} {
+		if got, err := f.ToWindows(in, FormWindows); err != nil || got != want {
+			t.Errorf("ToWindows(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for in, want := range map[string]string{
+		`C:\Users\me\doc.txt`: "/mnt/c/Users/me/doc.txt",
+		`C:\`:                 "/mnt/c",
+		`D:\x`:                "/mnt/d/x",
+	} {
+		if got, err := f.ToLinux(in); err != nil || got != want {
+			t.Errorf("ToLinux(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+
+	// The system drive: on the preferred mount, else on another mount of
+	// the whole drive (a directory mount never is).
+	only := func(dirs ...string) func(string) bool {
+		return func(p string) bool { return slices.Contains(dirs, p) }
+	}
+	if sd, ok := f.SystemDrive(only("/mnt/c/Windows/System32", "/win/c/Windows/System32")); !ok || sd.Mount != "/mnt/c" {
+		t.Errorf("system drive = %+v, %v", sd, ok)
+	}
+	if sd, ok := f.SystemDrive(only("/win/c/Windows/System32")); !ok || sd.Letter != "C" || sd.Mount != "/win/c" {
+		t.Errorf("system drive on the second mount = %+v, %v", sd, ok)
+	}
+	if _, ok := f.SystemDrive(only("/home/me/win/Windows/System32")); ok {
+		t.Error("a directory mount is not the system drive")
+	}
+
+	// A drive mounted only below its root maps through that mount.
+	g := Facts{AutomountRoot: "/mnt/", Drives: []Drive{{Letter: "E", Mount: "/data",
+		Mounts: []DriveMount{{Path: "/data", Dir: `\Shares\data`}}}}}
+	if got, err := g.ToLinux(`E:\Shares\Data\x.csv`); err != nil || got != "/data/x.csv" {
+		t.Errorf("ToLinux under a directory mount = %q, %v", got, err)
+	}
+	if got, err := g.ToLinux(`E:\Other`); err != nil || got != "/mnt/e/Other" {
+		t.Errorf("ToLinux outside it = %q, %v", got, err)
 	}
 }

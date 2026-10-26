@@ -186,22 +186,31 @@ func safeForDelete(raw string) bool {
 
 // checkSafety is __remote_check_safety PATH OPERATION FORCE: DENY always
 // refused; ASK passes with --force, is refused headless, else asks y/N.
-func (x *call) checkSafety(path, operation string, force bool) bool {
+// pull is true when the remote path is read (the DENY envelope is then
+// forbidden_path, else write_path_denied as for agent_put).
+func (x *call) checkSafety(path, operation string, force, pull bool) bool {
 	verdict := classifyPath(path)
 	kind, detail, _ := strings.Cut(verdict, ":")
 	switch {
 	case verdict == "deny:metacharacters":
-		x.p.Error("Remote path '" + path + "' contains characters the remote side may expand. Refusing " + operation + ".")
+		x.fail("invalid_path", "Remote path '"+path+"' contains characters the remote side may expand. Refusing "+operation+".",
+			"Give the remote path without glob, quote, $ or other shell characters")
 		return false
 	case kind == "deny":
-		x.p.Error("Remote path '" + path + "' is in the DENY list (matched: " + detail + "). This is never allowed, not even with --force. Refusing " + operation + ".")
+		code := "write_path_denied"
+		if pull {
+			code = "forbidden_path"
+		}
+		x.fail(code, "Remote path '"+path+"' is in the DENY list (matched: "+detail+"). This is never allowed, not even with --force. Refusing "+operation+".",
+			"This remote path is never transferred; choose another path")
 		return false
 	case kind == "ask":
 		if force {
 			return true
 		}
 		if x.headless() {
-			x.p.Error("Remote path '" + path + "' is sensitive (matched: " + detail + "). " + operation + " refused in headless mode without --force.")
+			x.fail("sensitive_path", "Remote path '"+path+"' is sensitive (matched: "+detail+"). "+operation+" refused in headless mode without --force.",
+				"Ask the user; --force transfers it")
 			return false
 		}
 		if x.s.Confirm(x.Term, x.Stderr, "Remote path '"+path+"' is sensitive (matched: "+detail+"). Proceed with "+operation+"?") {
@@ -222,7 +231,8 @@ func (x *call) checkDeleteSafety(path string, force, local bool) bool {
 	}
 	if local {
 		if x.headless() {
-			x.p.Error("rsync --delete targeting the local destination '" + path + "' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the current directory; never your home itself or .ssh). Refused in headless mode without --force.")
+			x.fail("sensitive_path", "rsync --delete targeting the local destination '"+path+"' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the current directory; never your home itself or .ssh). Refused in headless mode without --force.",
+				"Ask the user; --force runs the --delete")
 			return false
 		}
 		if x.s.Confirm(x.Term, x.Stderr, "rsync --delete targeting the local destination '"+path+"' can remove local files. Proceed?") {
@@ -232,7 +242,8 @@ func (x *call) checkDeleteSafety(path string, force, local bool) bool {
 		return false
 	}
 	if x.headless() {
-		x.p.Error("rsync --delete targeting '" + path + "' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home; never the home itself or .ssh). Refused in headless mode without --force.")
+		x.fail("sensitive_path", "rsync --delete targeting '"+path+"' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home; never the home itself or .ssh). Refused in headless mode without --force.",
+			"Ask the user; --force runs the --delete")
 		return false
 	}
 	if x.s.Confirm(x.Term, x.Stderr, "rsync --delete targeting '"+path+"' can remove files on the remote. Proceed?") {

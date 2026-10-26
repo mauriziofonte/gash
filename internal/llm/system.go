@@ -16,6 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/proctab"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -77,7 +78,7 @@ func (m *Module) ports(c *invoke.Call) int {
 			}
 			port, byPort, args = args[1], true, args[1:]
 		default:
-			return fail(c, "unknown_option", a, "Use --listen, --port N or no option")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 	}
 	if byPort {
@@ -272,7 +273,7 @@ func (m *Module) procs(c *invoke.Call) int {
 			continue
 		}
 		if a != "--name" && a != "--port" {
-			return fail(c, "unknown_option", a, "Use --name NAME, --port PORT, --pid PID..., --alive, --tree or no option")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		if len(args) < 2 {
 			return fail(c, "missing_value", a, a+" needs a value")
@@ -712,7 +713,7 @@ func (m *Module) env(c *invoke.Call) int {
 			filter = args[1]
 			args = args[2:]
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --filter PATTERN")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			filter = a
 			args = args[1:]

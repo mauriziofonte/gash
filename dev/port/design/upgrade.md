@@ -55,8 +55,12 @@ nothing but the files git puts there.
 ### 3.2 A 2.x headless caller after the upgrade
 
 `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_tree'`: sourcing prints
-nothing and returns 0; the first call fetches the binary silently (lock-
-serialized), then runs. Never a non-zero return while sourcing.
+nothing and returns 0. Never a non-zero return while sourcing. Since 3.4.2
+the call downloads nothing (an agent's call never fetches and installs a
+program unannounced): it answers the `binary_not_found` envelope, whose hint
+is `bash ~/.gash/install.sh --repair`. `GASH_AUTO_FETCH=1` restores the
+3.0 behaviour (the first call fetches silently, lock-serialized, then
+runs); `GASH_AUTO_FETCH=0` turns the fetch off in interactive shells too.
 
 ### 3.3 The binary cannot be obtained
 
@@ -162,7 +166,7 @@ tags), a `file://` release directory holding the test build, and a temporary
 
 | Script | Proves |
 |---|---|
-| `upgrade_2x_headless` | 2.1.0 install, 2.x `gash_upgrade`, headless source silent and status 0, first call fetches and answers, `GASH_VERSION` |
+| `upgrade_2x_headless` | 2.1.0 install, 2.x `gash_upgrade`, headless source silent and status 0, the first call answers `binary_not_found` and installs nothing, `install.sh --repair`, then the call answers, `GASH_VERSION` |
 | `upgrade_2x_interactive` | same, interactive `bash -i`: functions, aliases, prompt hook, completion, banner |
 | `upgrade_2x_resource` | `source ~/.gashrc` in the shell that ran 2.x, then `gash_unload` restores the pre-2.x state |
 | `upgrade_no_binary` | release URL unreachable: one stderr line interactive, envelope headless, status 0 while sourcing, nothing left behind |

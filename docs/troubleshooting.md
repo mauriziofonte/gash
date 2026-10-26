@@ -43,7 +43,8 @@ Every function then fails with this message, and an agent gets the
 `binary_not_found` error.
 
 **Cause:** the gash binary of the installed version is not under
-`~/.local/share/gash/versions/` and could not be fetched. The reason is in
+`~/.local/share/gash/versions/` and could not be fetched, or was not
+fetched (headless mode, `GASH_AUTO_FETCH=0`). The reason is in
 parentheses:
 
 | Reason | Fix |
@@ -54,6 +55,8 @@ parentheses:
 | `this tree pins no binary for OS/ARCH (GASH_REQUIRE_SIGNED=1)` | `GASH_REQUIRE_SIGNED=1` accepts only a binary the release pins, and this one is not pinned |
 | `no release for OS/ARCH` | No binary is built for this system |
 | `another download holds LOCK` | Another shell is downloading the same version; wait and open a new terminal |
+| `is not installed (headless mode does not download it; GASH_AUTO_FETCH=1 allows that)` | Headless mode never downloads a program on its own: run the fix below once (or set `GASH_AUTO_FETCH=1` for that caller) |
+| `is not installed (GASH_AUTO_FETCH=0 turns the download off)` | `GASH_AUTO_FETCH=0` is set: run the fix below, or unset it |
 
 **Fix:** after fixing the cause, run `bash ~/.gash/install.sh --repair`: it
 downloads and verifies the binary of the installed version and changes

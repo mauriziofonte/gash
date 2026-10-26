@@ -16,12 +16,13 @@ env GASH_BIN=
 env GASH_RELEASE_URL=file://$WORK/rel
 env GASH_DIR=$HOME/.gash
 
-# The 3.0.0 install; its first headless call fetches the binary.
+# The 3.0.0 install; its first headless call fetches the binary
+# (GASH_AUTO_FETCH=1).
 gashfixture origin v3.0.0:3x
 gashrelease 3.0.0 rel
 exec git clone -q origin home/.gash
 exec git -C home/.gash -c advice.detachedHead=false checkout -q v3.0.0
-exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; gash version --json'
+exec bash -c 'GASH_HEADLESS=1 GASH_AUTO_FETCH=1; source "$HOME/.gash/gash.sh"; gash version --json'
 stdout '"version":"3.0.0"'
 exists home/.local/share/gash/versions/3.0.0/gash
 

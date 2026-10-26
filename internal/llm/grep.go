@@ -9,6 +9,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // noiseGlobs are the --glob exclusions of llm_grep (llm_find --contains
@@ -84,15 +85,22 @@ func (m *Module) grep(c *invoke.Call) int {
 		return 0
 	}
 	pattern, extensions, context, limit := "", "", "0", "100"
-	havePattern := false
 	var p pathTaker
 	p.path = "."
 	// 3.4 (plan F5, S1-S4): the shared output options and the search
 	// modes; without them the output is the 3.0 output.
 	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags | llmfmt.PathFlags)
 	var x grepOpts
+	// 3.4.2: -e PATTERN (also one that starts with -) makes every
+	// positional PATH; after --, every word is a positional.
+	var words []string
+	viaE := false
 	args := c.Args
 	for len(args) > 0 {
+		if args[0] == "--" {
+			words = append(words, args[1:]...)
+			break
+		}
 		n, ok := o.Take(c, args)
 		if ok && n == 0 {
 			n, ok = x.take(c, args)
@@ -106,7 +114,7 @@ func (m *Module) grep(c *invoke.Call) int {
 		}
 		a := args[0]
 		switch a {
-		case "--ext", "--context", "-C", "-n", "--limit":
+		case "--ext", "--context", "-C", "-n", "--limit", "-e", "--regexp":
 			if len(args) < 2 {
 				return fail(c, "missing_value", a, a+" needs a value")
 			}
@@ -115,6 +123,11 @@ func (m *Module) grep(c *invoke.Call) int {
 				extensions = args[1]
 			case "--context", "-C":
 				context = args[1]
+			case "-e", "--regexp":
+				if viaE {
+					return fail(c, "unexpected_argument", args[1], "Pass one pattern: join alternatives with |")
+				}
+				pattern, viaE = args[1], true
 			default:
 				limit = args[1]
 			}
@@ -122,16 +135,20 @@ func (m *Module) grep(c *invoke.Call) int {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use --ext, --context, or --limit")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
-		// The first positional is PATTERN, even when empty (LLM-18: 2.x
-		// skipped an empty one and took the next word).
+		words = append(words, a)
+		args = args[1:]
+	}
+	// The first positional is PATTERN, even when empty (LLM-18: 2.x
+	// skipped an empty one and took the next word), unless -e gave it.
+	havePattern := viaE
+	for _, a := range words {
 		if !havePattern {
 			pattern, havePattern = a, true
 		} else if !p.take(c, a) {
 			return 1
 		}
-		args = args[1:]
 	}
 	if pattern == "" {
 		return fail(c, "missing_pattern", "", "Provide a search pattern as first argument")

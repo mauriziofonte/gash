@@ -225,3 +225,35 @@ func contains(ss []string, want string) bool {
 	}
 	return false
 }
+
+// TestSystemDriveMountedTwice: with C mounted on /mnt/c and again, later,
+// on another directory (where Windows is not reachable), the bridge finds
+// System32 on /mnt/c, as gash_doctor does (3.4.2; it took the later mount
+// for the only one and answered interop_unavailable).
+func TestSystemDriveMountedTwice(t *testing.T) {
+	sr := fixtureSys(t)
+	mi := `82 62 0:52 / /mnt/c rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1000;symlinkroot=/mnt/,trans=fd
+91 62 0:61 / /win/c rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1001;umask=077;symlinkroot=/mnt/,trans=fd
+`
+	if err := os.MkdirAll(sr.Path("/proc/self"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sr.Path("/proc/self/mountinfo"), []byte(mi), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sr.Path("/proc/version"), []byte("Linux version 6.6.87.2-microsoft-standard-WSL2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := wsl.Detect(sr, func(string) string { return "" })
+	f.Interop = usableFacts().Interop
+	b := New(f, sr, &stubRunner{}, nil)
+	if e := b.Available(); e != nil {
+		t.Fatalf("available: %v", e)
+	}
+	if p, ok := b.Exe("WindowsPowerShell/v1.0/powershell.exe"); !ok || p != "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" {
+		t.Errorf("powershell = %q, %v", p, ok)
+	}
+	if got, err := f.ToWindows("/win/c/Users", wsl.FormWindows); err != nil || got != `C:\Users` {
+		t.Errorf("ToWindows(/win/c/Users) = %q, %v", got, err)
+	}
+}

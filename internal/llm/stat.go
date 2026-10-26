@@ -14,6 +14,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // statLinesMax is the size from which llm_stat --lines leaves a file's
@@ -60,7 +61,7 @@ func (m *Module) stat(c *invoke.Call) int {
 		case a == "--follow":
 			follow = true
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --lines, --follow, --format, --absolute, -j or --timeout")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			paths = append(paths, a)
 		}

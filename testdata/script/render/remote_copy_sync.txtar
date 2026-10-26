@@ -16,7 +16,8 @@
 # ssh, which they need on PATH); the host is a registered alias (headless).
 # Covers the successful copy/sync, the sensitive-path and DENY-list
 # refusals, the --delete safety refusal, and the missing-args error. All
-# path guards fire in headless mode.
+# path guards fire in headless mode, where the refusals are envelopes
+# (3.4.2); the missing-args row is the person's Error: line.
 
 env GASH_HEADLESS=1
 env HOME=$WORK
@@ -43,8 +44,10 @@ stdout '^SCP '
 stderr 'Remote path ./etc/shadow. is in the DENY list'
 
 # --- :302 remote_pull:missing_args
-! exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_pull web /tmp/f'
-stderr 'Error: Missing local destination\. Usage: remote_pull'
+! exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; unset GASH_HEADLESS; remote_pull web /tmp/f'
+stderr '✗ Error:\x1b\[0m Missing local destination\. Usage: remote_pull'
+! exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; source "$GASH_SH"; remote_pull web /tmp/f'
+stderr '^\{"error":"missing_value","details":"Missing local destination\. Usage: remote_pull'
 
 # --- :303 remote_sync_push:synced - rsync stub runs
 exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && printf "#!/bin/sh\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; mkdir d; source "$GASH_SH"; remote_sync_push web d/ /tmp/d/ --no-progress'

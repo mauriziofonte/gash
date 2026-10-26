@@ -35,6 +35,8 @@ func TestHelpListsEveryOption(t *testing.T) {
 		require.True(t, ok, fn)
 		for _, o := range opts {
 			require.Regexp(t, `(^|[\s\[|,(])`+regexp.QuoteMeta(o)+`([\s\]|,=)]|$)`, f.Help.Body, "%s help lacks %s", fn, o)
+			_, listed := registry.OptionOf(fn, o)
+			require.True(t, listed, "%s: no OPTIONS line spells %s (3.4.2: --flag=value reads them)", fn, o)
 			r := runGo(t, m, d, env, fn, "x", o, "1")
 			require.NotContains(t, r.Stderr, `"error":"unknown_option","details":"`+o+`"`, "%s %s", fn, o)
 		}

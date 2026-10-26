@@ -28,7 +28,8 @@ stderr 'Upgraded Gash from v2\.1\.0 to v3\.0\.0'
 exec git -C home/.gash status --porcelain
 ! stdout .
 
-# 3.0.0 runs: headless and interactive.
+# 3.0.0 runs, after install.sh --repair: headless and interactive.
+exec bash home/.gash/install.sh --repair --quiet
 exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; echo "v=$GASH_VERSION"; gash_username'
 stdout '^v=3\.0\.0$'
 exists home/.local/share/gash/versions/3.0.0/gash

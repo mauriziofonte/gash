@@ -11,6 +11,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // llm_dotenv (plan V3): whether keys are set in a dotenv file and the
@@ -67,7 +68,7 @@ func (m *Module) dotenv(c *invoke.Call) int {
 		case w == "--present":
 			present = true
 		case strings.HasPrefix(w, "-"):
-			return fail(c, "unknown_option", w, "Use FILE KEY... [--present]")
+			return fail(c, "unknown_option", w, registry.OptionsHint(c.Name))
 		case !p.set:
 			p.path, p.set = w, true
 		default:

@@ -79,7 +79,12 @@ type Interop struct {
 // Usable reports interop that can start a Windows program.
 func (i Interop) Usable() bool { return i.Registered && i.Enabled && i.Socket != "" }
 
-// Drive is one Windows drive mounted in the distribution.
+// Drive is one Windows drive mounted in the distribution. A drive can be
+// mounted more than once (the automount and an fstab or a manual drvfs
+// mount, or one of its directories elsewhere): Mount is the preferred
+// mount point of the whole drive (the automount one, as /mnt/c, first),
+// Mounts lists every one, Mount's first. FSType, Options and Metadata are
+// Mount's.
 type Drive struct {
 	Letter  string `json:"letter"` // "C"
 	Mount   string `json:"mount"`  // "/mnt/c"
@@ -87,7 +92,30 @@ type Drive struct {
 	Options string `json:"options"`
 	// Metadata is the drvfs metadata option: Linux permissions and owners
 	// kept in NTFS extended attributes.
-	Metadata bool `json:"metadata"`
+	Metadata bool         `json:"metadata"`
+	Mounts   []DriveMount `json:"mounts"`
+}
+
+// DriveMount is one mount point of a drive and the directory of the drive
+// it shows: `\` for the whole drive, `\Users\me` for a mount of a
+// directory (a drvfs mount of C:\Users\me, or a bind mount).
+type DriveMount struct {
+	Path     string `json:"path"`
+	Dir      string `json:"dir"`
+	FSType   string `json:"fstype"`
+	Options  string `json:"options"`
+	Metadata bool   `json:"metadata"`
+}
+
+// whole reports a mount of the drive's root.
+func (m DriveMount) whole() bool { return m.Dir == `\` }
+
+// mounts is d.Mounts, or the one Mount of a Drive built without them.
+func (d Drive) mounts() []DriveMount {
+	if len(d.Mounts) > 0 || d.Mount == "" {
+		return d.Mounts
+	}
+	return []DriveMount{{Path: d.Mount, Dir: `\`, FSType: d.FSType, Options: d.Options, Metadata: d.Metadata}}
 }
 
 // Detect reads the facts through sr. getenv is the caller's environment
@@ -111,7 +139,8 @@ func Detect(sr platform.Sysroot, getenv func(string) string) Facts {
 	f.Interop = detectInterop(sr, entry, entryErr == nil, getenv("WSL_INTEROP"))
 
 	mi, _ := sr.ReadFile("/proc/self/mountinfo")
-	f.Drives, f.AutomountRoot = parseDrives(mi)
+	mounts, root := parseMounts(mi)
+	f.AutomountRoot = root
 	if f.AutomountRoot == "" {
 		if conf, err := sr.ReadFile("/etc/wsl.conf"); err == nil {
 			if v, ok := ParseINI(conf).Get("automount", "root"); ok && v != "" {
@@ -122,6 +151,7 @@ func Detect(sr platform.Sysroot, getenv func(string) string) Facts {
 	if f.AutomountRoot == "" {
 		f.AutomountRoot = "/mnt/"
 	}
+	f.Drives = groupDrives(mounts, f.AutomountRoot)
 	comm, _ := sr.ReadFile("/proc/1/comm")
 	f.Systemd = strings.TrimSpace(string(comm)) == "systemd"
 	for _, dir := range strings.Split(getenv("PATH"), ":") {
@@ -206,10 +236,18 @@ func isSocket(sr platform.Sysroot, p string) bool {
 	return err == nil && fi.Mode().Type() == fs.ModeSocket
 }
 
-// parseDrives returns the Windows drives of a mountinfo text and the
-// automount root their options name (symlinkroot=, "" when none does).
-func parseDrives(mi []byte) ([]Drive, string) {
-	var drives []Drive
+// letterMount is a mount point of the drive of letter.
+type letterMount struct {
+	letter string
+	DriveMount
+}
+
+// parseMounts returns the mounts of Windows drives of a mountinfo text, in
+// its order, and the automount root their options name (symlinkroot=, ""
+// when none does). A later mount on the same mount point hides the first:
+// only the later one is kept.
+func parseMounts(mi []byte) ([]letterMount, string) {
+	var mounts []letterMount
 	root := ""
 	for _, line := range strings.Split(string(mi), "\n") {
 		pre, post, ok := strings.Cut(line, " - ")
@@ -220,7 +258,7 @@ func parseDrives(mi []byte) ([]Drive, string) {
 		if len(pf) < 5 || len(qf) < 2 {
 			continue
 		}
-		mount, fstype, source := unescape(pf[4]), qf[0], unescape(qf[1])
+		fsRoot, mount, fstype, source := unescape(pf[3]), unescape(pf[4]), qf[0], unescape(qf[1])
 		opts := ""
 		if len(qf) > 2 {
 			opts = qf[2]
@@ -228,49 +266,103 @@ func parseDrives(mi []byte) ([]Drive, string) {
 		if fstype != "9p" && fstype != "drvfs" && fstype != "virtiofs" {
 			continue
 		}
-		letter := driveLetter(source, opts, mount, fstype)
+		letter, dir := driveLetter(source, opts, mount, fstype)
 		if letter == "" {
 			continue
 		}
-		d := Drive{Letter: letter, Mount: mount, FSType: fstype, Options: opts}
+		m := letterMount{letter, DriveMount{Path: mount, Dir: joinDir(dir, fsRoot), FSType: fstype, Options: opts}}
 		for _, o := range strings.FieldsFunc(opts, func(r rune) bool { return r == ',' || r == ';' }) {
 			if o == "metadata" {
-				d.Metadata = true
+				m.Metadata = true
 			}
 			if v, ok := strings.CutPrefix(o, "symlinkroot="); ok && root == "" {
 				root = v
 			}
 		}
-		// A later mount of the same letter (a remount) replaces the first.
-		if i := slices.IndexFunc(drives, func(x Drive) bool { return x.Letter == letter }); i >= 0 {
-			drives[i] = d
-			continue
-		}
-		drives = append(drives, d)
+		mounts = slices.DeleteFunc(mounts, func(x letterMount) bool { return x.Path == mount })
+		mounts = append(mounts, m)
 	}
-	slices.SortFunc(drives, func(a, b Drive) int { return strings.Compare(a.Letter, b.Letter) })
-	return drives, root
+	return mounts, root
 }
 
-// driveLetter finds the drive letter of a drvfs mount: path=C:\ in the 9p
-// options, the source C:\ (or C:), or the last component of a mount point
-// that is one letter, for a virtiofs share.
-func driveLetter(source, opts, mount, fstype string) string {
+// groupDrives makes one Drive per letter of mounts, sorted by letter. Of
+// the mounts of a letter, the whole drive at the automount root (/mnt/c)
+// comes first, then the other mounts of the whole drive, then those of a
+// directory, each group in mountinfo order.
+func groupDrives(mounts []letterMount, automountRoot string) []Drive {
+	var drives []Drive
+	for _, m := range mounts {
+		i := slices.IndexFunc(drives, func(d Drive) bool { return d.Letter == m.letter })
+		if i < 0 {
+			drives = append(drives, Drive{Letter: m.letter})
+			i = len(drives) - 1
+		}
+		drives[i].Mounts = append(drives[i].Mounts, m.DriveMount)
+	}
+	auto := strings.TrimSuffix(automountRoot, "/") + "/"
+	rank := func(letter string, m DriveMount) int {
+		switch {
+		case m.whole() && m.Path == auto+strings.ToLower(letter):
+			return 0
+		case m.whole():
+			return 1
+		}
+		return 2
+	}
+	for i := range drives {
+		d := &drives[i]
+		slices.SortStableFunc(d.Mounts, func(a, b DriveMount) int { return rank(d.Letter, a) - rank(d.Letter, b) })
+		first := d.Mounts[0]
+		d.Mount, d.FSType, d.Options, d.Metadata = first.Path, first.FSType, first.Options, first.Metadata
+	}
+	slices.SortFunc(drives, func(a, b Drive) int { return strings.Compare(a.Letter, b.Letter) })
+	return drives
+}
+
+// joinDir is the drive directory of a mount: dir (`\` or `\Users`, from
+// the source or path=) and below it the mountinfo root of a bind mount
+// (/me).
+func joinDir(dir, fsRoot string) string {
+	if fsRoot == "" || fsRoot == "/" {
+		return dir
+	}
+	sub := strings.ReplaceAll(strings.Trim(fsRoot, "/"), "/", `\`)
+	if dir == `\` {
+		return `\` + sub
+	}
+	return dir + `\` + sub
+}
+
+// driveLetter finds the drive letter of a drvfs mount and the directory
+// of the drive it mounts (`\` for the root): path=C:\ in the 9p options,
+// the source C:\ (or C:), or the last component of a mount point that is
+// one letter, for a virtiofs share.
+func driveLetter(source, opts, mount, fstype string) (string, string) {
 	isDrvfs := fstype == "drvfs" || strings.Contains(opts, "aname=drvfs")
 	for _, o := range strings.FieldsFunc(opts, func(r rune) bool { return r == ',' || r == ';' }) {
 		if v, ok := strings.CutPrefix(o, "path="); ok && isLetterColon(v) {
-			return strings.ToUpper(v[:1])
+			return strings.ToUpper(v[:1]), driveDir(v[2:])
 		}
 	}
 	if isLetterColon(source) && (isDrvfs || fstype == "virtiofs") {
-		return strings.ToUpper(source[:1])
+		return strings.ToUpper(source[:1]), driveDir(source[2:])
 	}
 	if fstype == "virtiofs" || isDrvfs {
 		if b := path.Base(mount); len(b) == 1 && isLetter(b[0]) {
-			return strings.ToUpper(b)
+			return strings.ToUpper(b), `\`
 		}
 	}
-	return ""
+	return "", ""
+}
+
+// driveDir is the directory part of a Windows path after its X:, as `\`
+// or `\Users\me`.
+func driveDir(rest string) string {
+	rest = strings.Trim(strings.ReplaceAll(rest, "/", `\`), `\`)
+	if rest == "" {
+		return `\`
+	}
+	return `\` + rest
 }
 
 func isLetter(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
@@ -308,15 +400,27 @@ func (f Facts) Drive(letter string) (Drive, bool) {
 	return Drive{}, false
 }
 
-// DriveOf returns the drive whose mount holds the absolute path p.
+// DriveOf returns the drive one of whose mounts holds the absolute path p.
 func (f Facts) DriveOf(p string) (Drive, bool) {
+	d, _, ok := f.mountOf(p)
+	return d, ok
+}
+
+// mountOf returns the drive mount that holds the absolute path p: of
+// nested mounts, the deepest.
+func (f Facts) mountOf(p string) (Drive, DriveMount, bool) {
 	p = path.Clean(p)
+	var bd Drive
+	var bm DriveMount
+	found := false
 	for _, d := range f.Drives {
-		if p == d.Mount || strings.HasPrefix(p, d.Mount+"/") {
-			return d, true
+		for _, m := range d.mounts() {
+			if (p == m.Path || strings.HasPrefix(p, strings.TrimSuffix(m.Path, "/")+"/")) && (!found || len(m.Path) > len(bm.Path)) {
+				bd, bm, found = d, m, true
+			}
 		}
 	}
-	return Drive{}, false
+	return bd, bm, found
 }
 
 // OnDrive reports an absolute path on a Windows drive.
@@ -329,13 +433,26 @@ func (f Facts) OnDrive(p string) bool {
 }
 
 // SystemDrive is the drive that holds Windows (C, else the first drive
-// with a Windows directory).
+// with a Windows directory), with Mount set to the mount of the whole
+// drive where Windows was found: every mount of the drive is tried, the
+// preferred first.
 func (f Facts) SystemDrive(exists func(string) bool) (Drive, bool) {
-	if d, ok := f.Drive("C"); ok && exists(d.Mount+"/Windows/System32") {
-		return d, true
+	try := func(d Drive) (Drive, bool) {
+		for _, m := range d.mounts() {
+			if m.whole() && exists(m.Path+"/Windows/System32") {
+				d.Mount, d.FSType, d.Options, d.Metadata = m.Path, m.FSType, m.Options, m.Metadata
+				return d, true
+			}
+		}
+		return Drive{}, false
+	}
+	if d, ok := f.Drive("C"); ok {
+		if d, ok := try(d); ok {
+			return d, true
+		}
 	}
 	for _, d := range f.Drives {
-		if exists(d.Mount + "/Windows/System32") {
+		if d, ok := try(d); ok {
 			return d, true
 		}
 	}

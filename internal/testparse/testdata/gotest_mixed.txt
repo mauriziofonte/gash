@@ -1,0 +1,14 @@
+--- FAIL: TestTwo (0.00s)
+    x_test.go:7: boom two
+--- FAIL: TestFour (0.00s)
+    --- FAIL: TestFour/b (0.00s)
+        x_test.go:14: b bad
+    x_test.go:15: four skipped after subtests
+FAIL
+FAIL	example.com/app	0.005s
+--- FAIL: TestP1 (0.00s)
+    y_test.go:7: p1 log
+    y_test.go:8: p1 bad
+FAIL
+FAIL	example.com/app/sub	0.006s
+FAIL

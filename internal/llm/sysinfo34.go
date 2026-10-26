@@ -11,6 +11,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/sysinfo"
 )
@@ -56,7 +57,7 @@ func (m *Module) sysinfoLLM(c *invoke.Call) int {
 		a := args[0]
 		if a != "--mount" {
 			if strings.HasPrefix(a, "-") {
-				return fail(c, "unknown_option", a, "Use --mount PATH or no option")
+				return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 			}
 			return fail(c, "unexpected_argument", a, "llm_sysinfo takes no PATH: use --mount PATH")
 		}

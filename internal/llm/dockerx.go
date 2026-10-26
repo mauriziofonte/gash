@@ -13,6 +13,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/llmexec"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -69,7 +70,7 @@ func (m *Module) dockerPS(c *invoke.Call) int {
 			if !strings.HasPrefix(args[0], "-") {
 				return fail(c, "unexpected_argument", args[0], "llm_docker_ps takes no argument: it lists every container (--running for the running ones)")
 			}
-			return fail(c, "unknown_option", args[0], "Use --running, --format F or the output budget options")
+			return fail(c, "unknown_option", args[0], registry.OptionsHint(c.Name))
 		}
 		running = true
 		args = args[1:]
@@ -144,7 +145,7 @@ func (m *Module) dockerLogs(c *invoke.Call) int {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use CTR with --tail N, --since T, --grep RE or --width N")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		if ctr != "" {
 			return fail(c, "unexpected_argument", a, "Name one container")

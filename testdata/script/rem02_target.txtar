@@ -4,7 +4,8 @@
 # ledger: REM-02
 #
 # ssh gets -- immediately before the target, in the command call and in the
-# exit-255 probe; an option-like HOST: target is never used.
+# exit-255 probe; an option-like HOST: target is never used. Headless, the
+# dead connection and the skipped target are envelopes (3.4.2).
 
 env GASH_HEADLESS=1
 env GASH_ENV_FILE=$WORK/hostenv
@@ -13,6 +14,7 @@ env T=$WORK
 chmod 755 bin/ssh
 
 ! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_exec box true'
+stderr '^\{"error":"host_unreachable","details":"Failed to connect to deploy@box\.example\.'
 exec grep -c '^-- deploy@box\.example ' argv
 stdout '^2$'
 grep '^-- deploy@box\.example unset HISTFILE HISTSIZE; true$' argv
@@ -20,8 +22,12 @@ grep '^-- deploy@box\.example exit 0$' argv
 rm argv
 
 ! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_exec opt true'
-stderr 'HOST target of .opt. must be user@host \(skipping\)'
-stderr 'Unknown host alias .opt.'
+stderr '^\{"error":"unknown_host","details":"Unknown host alias .opt.\. .* Skipped: the HOST target of .opt. must be user@host\.",'
+! exists argv
+
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; unset GASH_HEADLESS; remote_exec opt true'
+stderr 'Warning: HOST target of .opt. must be user@host \(skipping\)'
+stderr 'Error: Unknown host alias .opt.'
 ! exists argv
 
 -- hostenv --

@@ -423,7 +423,8 @@ not_a_test_command (gash run runs it). CMD runs as given, stdout and
 stderr merged, stdin /dev/null; the exit status is CMD's. Output:
 {"runner","passed","failed","skipped","duration_s","failures":[{"name",
 "file","line","message"}],"parsed":true,"exit_code"}; analyzer findings
-(phpstan, psalm) are failures. Output no parser reads:
+(phpstan, psalm) are failures; passed and skipped are null when the
+output does not count them (go test without -v). Output no parser reads:
 {"runner":null,"duration_s","parsed":false,"exit_code","tail":[...]}.
 --dry-run: {"argv":[...],"runner","cwd","dry_run":true,"written":false}
 (runner null when only the output would tell), with --runtime also
@@ -844,7 +845,8 @@ llm_db_query "SELECT count(*) FROM orders" -c default --scalar
 -d, --database NAME    Database name (overrides the connection's;
                        letters, digits, _ $ . - only)
 -f, --file PATH        SQLite database file
--n, --limit N          Row cap (default 100; also -r, --rows)
+-n, --limit N, -r, --rows N
+                       Row cap (default 100)
 --format F             json (the envelope, default), jsonl, tsv or table
 --scalar               Print the one value of a 1x1 result
 ```
@@ -1412,9 +1414,10 @@ llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
 --format FORMAT        Rows {"p","size","mtime"}: json, jsonl, tsv
                        or table
 --width N              Cut each line (each value in rows) at N columns
---max-lines N          Keep the first N paths (also --head N), or the
-                       last N with --tail N; they replace -n and mark
-                       what they cut
+--max-lines N, --head N, --tail N
+                       Keep the first N paths (--head is --max-lines),
+                       or the last N; they replace -n and mark what
+                       they cut
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```
@@ -1453,6 +1456,8 @@ output a [... K lines omitted] line. --count counts the paths the
 listing prints without -n. mtime is RFC 3339 in UTC.
 A missing PATH is path_not_found, an empty PATTERN missing_pattern;
 --tracked outside a repository is not_a_git_repo (CONTINUE).
+A PATTERN that starts with - goes after --, which ends the options:
+llm_find -- '-*' src.
 ```
 
 ### llm_git_diff
@@ -1476,7 +1481,7 @@ llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N]
 #### Options
 
 ```text
---staged               Staged changes (also --cached)
+--staged, --cached     Staged changes
 REV..REV               Compare two commits (A..B, A...B for the merge base)
 --files                One row per file: {"p","add","del","status"}
 --numstat              One row per file: {"p","add","del"}
@@ -1484,8 +1489,10 @@ REV..REV               Compare two commits (A..B, A...B for the merge base)
 --patch                The patch as text, capped per file (default 200 lines)
 --format F             json (default), jsonl, tsv or table (--files, --numstat,
                        --summary)
---max-lines N          Lines (or rows) to keep: of the --stat text, of the rows,
-                       of each file with --patch; also --head N and --tail N
+--max-lines N, --head N, --tail N
+                       Lines (or rows) to keep, first (--head is
+                       --max-lines) or last: of the --stat text, of the
+                       rows, of each file with --patch
 --width N              Cut each line (JSON: each path) at N columns
 ```
 
@@ -1549,8 +1556,9 @@ llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P].
                        (default hash,subject,author,date); files is the
                        array of the paths each commit changed
 --format F             json (default), jsonl, tsv or table
---max-lines N          Rows to keep (also --head N, --tail N); the cut is
-                       counted on stderr
+--max-lines N, --head N, --tail N
+                       Rows to keep, first (--head is --max-lines) or
+                       last; the cut is counted on stderr
 --width N              Cut each string value at N columns
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
@@ -1655,9 +1663,11 @@ llm_git_show REV:FILE [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 --stat                 Add the totals: {"files","insertions","deletions"}
 --files                Add each file's status letter (A, M, D, R, C, T)
 --patch                The commit's patch as text, capped per file
---max-lines N          Lines kept per file with --patch (default 200), of the
-                       content with REV:FILE (default 2000), files in the
-                       JSON otherwise; also --head N and --tail N
+--max-lines N, --head N, --tail N
+                       Lines kept per file with --patch (default 200), of
+                       the content with REV:FILE (default 2000), files in
+                       the JSON otherwise; first (--head is --max-lines)
+                       or last
 --width N              Cut each line (JSON: each path and the subject) at N
                        columns
 ```
@@ -1730,7 +1740,8 @@ llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--ma
                        --fetch)
 --format F             json (default), jsonl, tsv or table (--summary, --files,
                        --repos)
---max-lines N          Rows to keep (also --head N, --tail N)
+--max-lines N, --head N, --tail N
+                       Rows to keep, first (--head is --max-lines) or last
 --width N              Cut each string value at N columns
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
@@ -1791,6 +1802,7 @@ Replaces:
 
 ```text
 llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
+         [-e PATTERN]
          [--exclude GLOB]... [--only-matching] [--distinct]
          [--files-only] [--count [--by file|ext|dir]]
          [--relative|--absolute] [--format json|jsonl|tsv|table]
@@ -1801,6 +1813,8 @@ llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
 #### Options
 
 ```text
+-e, --regexp PATTERN   The pattern, also one that starts with -; every
+                       positional is then PATH
 --ext EXT1,EXT2        Search only files with these extensions
 -C, --context N        Lines of context around each match (default 0)
 -n, --limit N          Lines to print (default 100)
@@ -1820,9 +1834,10 @@ llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
 --format FORMAT        Rows {"file","line","text"} ({"file"} with
                        -l): json, jsonl, tsv or table
 --width N              Cut each line (each value in rows) at N columns
---max-lines N          Keep the first N lines (also --head N), or the
-                       last N with --tail N; they replace -n and mark
-                       what they cut
+--max-lines N, --head N, --tail N
+                       Keep the first N lines (--head is --max-lines),
+                       or the last N; they replace -n and mark what
+                       they cut
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```
@@ -1863,6 +1878,8 @@ first: a cut JSON array or TSV gets {"truncated":K} on stderr, a cut
 text output a [... K lines omitted] line. --context goes with the
 text output only (conflicting_options otherwise).
 A missing PATH is path_not_found, an empty PATTERN missing_pattern.
+A PATTERN that starts with - goes after -e, or after --, which ends
+the options: llm_grep -- -x src.
 ```
 
 ### llm_hash
@@ -1886,7 +1903,8 @@ llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout 
 --algo sha256|md5      The digest (default sha256)
 --short N              Keep the first N hex digits
 --format F             json (default), jsonl, tsv or table
---head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--head N, --tail N, --max-lines N
+                       Keep the first / last N rows (--max-lines is --head)
 --width N              Cut values at N columns
 -j N, --jobs N         Files hashed at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
@@ -2091,7 +2109,8 @@ llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR
                        (default: node on PATH)
 -j, --jobs N           Checks at a time (default: the CPU count)
 --timeout S            Time limit of one checker process (default 60s)
---max-lines N          Failures listed (default 100); --head N and --tail N
+--max-lines N, --head N, --tail N
+                       Failures listed (default 100); --head and --tail
                        keep the first and last N, "truncated" counts the rest
 --width N              Cut file names and messages at N columns
 --relative, --absolute File paths relative to their PATH (default) or
@@ -2360,8 +2379,9 @@ PATH:A-B               Lines A to B of that file (also PATH:A:B, PATH:A-)
                        context (repeatable)
 -C N, --context N      Context lines around each match (default 3)
 --max-bytes N          Content bytes printed per file (default 262144)
---head N, --tail N     The first / last N selected lines of each file
-                       (--max-lines N is --head N)
+--head N, --tail N, --max-lines N
+                       The first / last N selected lines of each file
+                       (--max-lines is --head)
 --width N              Cut each line at N columns
 --format F             json, jsonl, tsv or table: rows {"file","line","text"}
 --absolute, --relative Absolute paths, or as given (the default)
@@ -2642,7 +2662,8 @@ llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absol
 --follow               Describe what symlinks point to; target is the
                        resolved path
 --format F             tsv (default), json, jsonl or table
---head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--head N, --tail N, --max-lines N
+                       Keep the first / last N rows (--max-lines is --head)
 --width N              Cut output lines at N columns
 -j N, --jobs N         Paths read at a time (default: the CPU count)
 --timeout S            Time limit per path (seconds, 500ms, 2s, 1m)
@@ -2785,8 +2806,9 @@ llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,
 --rules LIST           The rules to run, comma-separated (default:
                        non-ascii,crlf,bom,trailing-ws,final-newline,
                        mixed-indent)
---max-lines N          Issues listed (default 100; --head N is the same,
-                       --tail N keeps the last N)
+--max-lines N, --head N, --tail N
+                       Issues listed (default 100; --head is the same,
+                       --tail keeps the last N)
 --width N              Cut samples at N columns
 --format F             jsonl, tsv or table: one row per issue; json is the
                        default object
@@ -2839,7 +2861,8 @@ llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALI
 
 ```text
 --format F             json (default), jsonl, tsv or table
---head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--head N, --tail N, --max-lines N
+                       Keep the first / last N rows (--max-lines is --head)
 --width N              Cut values at N columns
 -j N, --jobs N         Files read at a time (default: the CPU count)
 --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
@@ -2999,8 +3022,9 @@ llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]
 
 ```text
 --text                 Indented text list, 200 lines max (default depth 3)
---depth N              Levels below PATH, 1 or more (default 1; also
-                       --max-depth); with --count, no limit unless given
+--depth N, --max-depth N
+                       Levels below PATH, 1 or more (default 1); with
+                       --count, no limit unless given
 --stats                Add sizes and child counts to the JSON tree
 --all                  Do not skip node_modules, vendor, .git,
                        __pycache__, .cache
@@ -3020,8 +3044,9 @@ llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]
                        "size","files"}],"skipped"}, largest first
 --format FORMAT        --count/--top as json, jsonl, tsv or table rows
 --width N              Cut each line (each value) at N columns
---max-lines N          --text/--top: keep the first N lines or rows
-                       (also --head N), or the last N with --tail N
+--max-lines N, --head N, --tail N
+                       --text/--top: keep the first N lines or rows
+                       (--head is --max-lines), or the last N
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```

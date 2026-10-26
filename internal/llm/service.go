@@ -15,6 +15,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -65,7 +66,7 @@ func (m *Module) service(c *invoke.Call) int {
 			args = args[2:]
 			continue
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use UNIT... with --log N, --format F or --width N")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		units = append(units, a)
 		args = args[1:]

@@ -11,6 +11,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/gitx"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // parsePathArg is __llm_path_arg: at most one PATH and no options. "." when
@@ -231,7 +232,7 @@ func (m *Module) gitLog(c *invoke.Call) int {
 			}
 			args = args[2:]
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use -n N, --since, --until, --grep, --author, --path, --fields, --format or a path")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			if !pt.take(c, a) {
 				return 1

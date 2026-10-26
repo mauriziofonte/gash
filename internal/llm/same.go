@@ -24,6 +24,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/remote"
 )
 
@@ -104,7 +105,7 @@ func (m *Module) same(c *invoke.Call) int {
 			rest = rest[2:]
 			continue
 		case strings.HasPrefix(a, "-") && a != "-":
-			return fail(c, "unknown_option", a, "Run llm_same --help for the options")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		case !haveLocal:
 			local, haveLocal = a, true
 		default:

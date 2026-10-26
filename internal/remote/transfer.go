@@ -68,16 +68,16 @@ func (x *call) parseFlags(t transfer, words []string, rsync bool) (flags, bool) 
 			f.excludes = append(f.excludes, strings.TrimPrefix(a, "--exclude="))
 		case rsync && a == "--exclude":
 			if i+1 >= len(words) {
-				x.p.Error("--exclude needs a pattern (usage: " + t.usage + ")")
+				x.fail("missing_value", "--exclude needs a pattern (usage: "+t.usage+")", "Usage: "+t.usage)
 				return f, false
 			}
 			i++
 			f.excludes = append(f.excludes, words[i])
 		case strings.HasPrefix(a, "-"):
-			x.p.Error("Unknown option: " + a + " (usage: " + t.usage + ")")
+			x.fail("unknown_option", "Unknown option: "+a+" (usage: "+t.usage+")", "Usage: "+t.usage)
 			return f, false
 		default:
-			x.p.Error("Unexpected argument: " + a + " (usage: " + t.usage + ")")
+			x.fail("unexpected_argument", "Unexpected argument: "+a+" (usage: "+t.usage+")", "Usage: "+t.usage)
 			return f, false
 		}
 	}
@@ -89,9 +89,9 @@ func (x *call) parseFlags(t transfer, words []string, rsync bool) (flags, bool) 
 func (x *call) positionals(t transfer) (string, string, string, bool) {
 	usage := t.name + " <alias> <src> <dst>"
 	input, src, dst := x.Arg(0), x.Arg(1), x.Arg(2)
-	ok := x.requireArg(input, "host alias/target", usage) &&
-		x.requireArg(src, t.srcName, usage) &&
-		x.requireArg(dst, t.dstName, usage)
+	ok := x.requireArg(input, "host alias/target", usage, "missing_host") &&
+		x.requireArg(src, t.srcName, usage, "missing_value") &&
+		x.requireArg(dst, t.dstName, usage, "missing_value")
 	return input, src, dst, ok
 }
 
@@ -119,7 +119,7 @@ func (m *Module) scp(c *invoke.Call, t transfer) int {
 	if t.pull {
 		remotePath = src
 	}
-	if !x.checkSafety(remotePath, t.operation, f.force) {
+	if !x.checkSafety(remotePath, t.operation, f.force, t.pull) {
 		return 1
 	}
 	// scp starts ssh for the connection: both are looked up first.
@@ -170,7 +170,7 @@ func (m *Module) rsync(c *invoke.Call, t transfer) int {
 	if t.pull {
 		remotePath = src
 	}
-	if !x.checkSafety(remotePath, t.operation, f.force) {
+	if !x.checkSafety(remotePath, t.operation, f.force, t.pull) {
 		return 1
 	}
 	if f.delete && !x.checkDeleteSafety(dst, f.force, t.pull) {

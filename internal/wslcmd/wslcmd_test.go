@@ -157,3 +157,39 @@ func TestInteropExport(t *testing.T) {
 		t.Errorf("export = %q", out)
 	}
 }
+
+// TestDriveMountedTwice: C on /mnt/c and again, later, on /win/c. Both map
+// to C:, info lists /mnt/c with the other mount, and a Windows path goes
+// to /mnt/c (3.4.2: the later mount replaced the first, so /mnt/c paths
+// became UNC paths of the distribution).
+func TestDriveMountedTwice(t *testing.T) {
+	sr := sysroot(t, map[string]string{
+		"proc/sys/kernel/osrelease": "6.6.87.2-microsoft-standard-WSL2\n",
+		"proc/self/mountinfo": `82 62 0:52 / /mnt/c rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1000;symlinkroot=/mnt/,trans=fd
+91 62 0:61 / /win/c rw,noatime - 9p C:\134 rw,aname=drvfs;path=C:\;uid=1000;symlinkroot=/mnt/,trans=fd
+`,
+	})
+	env := map[string]string{"WSL_DISTRO_NAME": "Ubuntu-24.04"}
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"path", "/mnt/c/Users", "--windows"}, `C:\Users`},
+		{[]string{"path", "/win/c/Users", "--windows"}, `C:\Users`},
+		{[]string{"path", `C:\Users`}, "/mnt/c/Users"},
+	} {
+		out, errb, status := call(t, sr, env, c.args...)
+		if status != 0 || strings.TrimSpace(out) != c.want {
+			t.Errorf("%v = %q (err %q, status %d); want %q", c.args, out, errb, status, c.want)
+		}
+	}
+	out, _, _ := call(t, sr, env, "info", "--json")
+	if !strings.Contains(out, `"letter":"C","mount":"/mnt/c"`) ||
+		!strings.Contains(out, `"mounts":[{"path":"/mnt/c","dir":"\\",`) || !strings.Contains(out, `{"path":"/win/c","dir":"\\",`) {
+		t.Errorf("info json = %s", out)
+	}
+	out, errb, _ := call(t, sr, env, "info")
+	if !strings.Contains(out+errb, "C: /mnt/c (also /win/c)") {
+		t.Errorf("info = %q %q", out, errb)
+	}
+}

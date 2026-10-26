@@ -16,6 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/remote"
 )
 
@@ -92,7 +93,7 @@ func (m *Module) put(c *invoke.Call) int {
 		default:
 			switch {
 			case strings.HasPrefix(a, "-"):
-				return fail(c, "unknown_option", a, "Run agent_put --help for the options")
+				return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 			case target != "":
 				return fail(c, "unexpected_argument", a, "agent_put writes one ALIAS:PATH per call")
 			}

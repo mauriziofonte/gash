@@ -27,7 +27,7 @@ func (m *Module) exec(c *invoke.Call) int {
 	}
 	x := m.begin(c)
 	input := c.Arg(0)
-	if !x.requireArg(input, "host alias/target", `remote_exec <alias|user@host> "command"`) {
+	if !x.requireArg(input, "host alias/target", `remote_exec <alias|user@host> "command"`, "missing_host") {
 		return 1
 	}
 	args := c.Args[1:]
@@ -45,7 +45,7 @@ func (m *Module) exec(c *invoke.Call) int {
 	scriptFile := ""
 	if arg(0) == "--script" {
 		scriptFile = arg(1)
-		if !x.requireArg(scriptFile, "script file", "remote_exec <alias> --script FILE|-") {
+		if !x.requireArg(scriptFile, "script file", "remote_exec <alias> --script FILE|-", "missing_file") {
 			return 1
 		}
 		args = args[2:]
@@ -59,7 +59,7 @@ func (m *Module) exec(c *invoke.Call) int {
 			return 1
 		}
 		if strings.Trim(content, " \t\n\v\f\r") == "" {
-			x.p.Error("Script is empty: " + scriptFile)
+			x.fail("empty_command", "Script is empty: "+scriptFile, "Give a script with at least one command")
 			return 1
 		}
 		if arg(0) == "--" {
@@ -69,11 +69,12 @@ func (m *Module) exec(c *invoke.Call) int {
 		stdin = strings.NewReader(content + "\n") // <<<"$script_content"
 	} else {
 		remoteCmd = arg(0)
-		if !x.requireArg(remoteCmd, "remote command", `remote_exec <alias> "command"`) {
+		if !x.requireArg(remoteCmd, "remote command", `remote_exec <alias> "command"`, "empty_command") {
 			return 1
 		}
 		if len(args) > 1 {
-			x.p.Error("Pass the remote command as a SINGLE quoted string: remote_exec <alias> \"cmd arg1 arg2\". Refusing to silently drop extra args. For multi-line commands use --script.")
+			x.fail("unexpected_argument", "Pass the remote command as a SINGLE quoted string: remote_exec <alias> \"cmd arg1 arg2\". Refusing to silently drop extra args. For multi-line commands use --script.",
+				`Quote the whole command: remote_exec <alias> "cmd arg1 arg2"`)
 			return 1
 		}
 	}
@@ -101,10 +102,15 @@ func (m *Module) exec(c *invoke.Call) int {
 	}
 	probe := append(append([]string{"-o", "ConnectTimeout=5"}, opts...), "--", target, "exit 0")
 	if x.run(c.Stdin, c.Stdout, io.Discard, "ssh", probe...).Success() {
-		x.p.Error("Remote command exited 255 (killed by a signal or explicit exit 255); the SSH connection is healthy.")
+		// The command's own status: headless, no envelope (one marks a
+		// connection that failed).
+		if !x.headless() {
+			x.p.Error("Remote command exited 255 (killed by a signal or explicit exit 255); the SSH connection is healthy.")
+		}
 		return 255
 	}
-	x.p.Error("Failed to connect to " + target + ". Verify SSH connectivity and key configuration.")
+	x.fail("host_unreachable", "Failed to connect to "+target+". Verify SSH connectivity and key configuration.",
+		"Check the network and the SSH keys of the host, then retry")
 	return 1
 }
 
@@ -122,13 +128,13 @@ func (x *call) readScript(file string) (string, bool) {
 		}
 	} else {
 		if st, serr := os.Stat(file); serr != nil || !st.Mode().IsRegular() {
-			x.p.Error("Script file not readable: " + file)
+			x.fail("path_unreadable", "Script file not readable: "+file, "Give a readable regular file, or - for stdin")
 			return "", false
 		}
 		data, err = os.ReadFile(file)
 	}
 	if err != nil {
-		x.p.Error("Script file not readable: " + file)
+		x.fail("path_unreadable", "Script file not readable: "+file, "Give a readable regular file, or - for stdin")
 		return "", false
 	}
 	return runner.CommandSubst(data), true

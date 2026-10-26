@@ -63,7 +63,12 @@ gash wsl path /mnt/c/Users/me --mixed   # C:/Users/me
 `--linux` force the direction. A path on a mounted drive becomes `X:\...`;
 any other Linux path becomes the `\\wsl.localhost\<distribution>\...` path
 that Windows programs open. The drive mount is read from the system, so a
-distribution with `[automount] root=/` gets `/c/...`.
+distribution with `[automount] root=/` gets `/c/...`. A drive mounted more
+than once (an extra `mount -t drvfs C: /win/c`, or a bind of
+`C:\Users` on `/x`) converts from every one of its mount points; a Windows
+path converts to the automount one (`/mnt/c`). `gash wsl info --json` lists
+them all under each drive's `mounts`, and `gash win` finds the Windows
+system drive on any of them.
 
 ## Repair Windows programs in this shell
 

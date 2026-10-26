@@ -10,6 +10,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // counter is the scanner of llm_count and llm_assert (plan F6, F7): every
@@ -208,7 +209,7 @@ func (m *Module) count(c *invoke.Call) int {
 		case a == "--occurrences":
 			occur = true
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --pat P (repeatable), --regex, --lines, --occurrences, --format, -j or --timeout")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			files = append(files, a)
 		}
@@ -370,7 +371,7 @@ func (m *Module) assert(c *invoke.Call) int {
 		case a == "--occurrences":
 			occur = true
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --has P, --lacks P, --count P=N (repeatable), --regex, --lines, --occurrences, -j or --timeout")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			files = append(files, a)
 		}

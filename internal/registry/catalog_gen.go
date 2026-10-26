@@ -2439,7 +2439,8 @@ var baseFunctions = []Function{
 				"  -d, --database NAME    Database name (overrides the connection's;\n" +
 				"                         letters, digits, _ $ . - only)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
-				"  -n, --limit N          Row cap (default 100; also -r, --rows)\n" +
+				"  -n, --limit N, -r, --rows N\n" +
+				"                         Row cap (default 100)\n" +
 				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
 				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
@@ -2801,9 +2802,10 @@ var baseFunctions = []Function{
 				"  --format FORMAT        Rows {\"p\",\"size\",\"mtime\"}: json, jsonl, tsv\n" +
 				"                         or table\n" +
 				"  --width N              Cut each line (each value in rows) at N columns\n" +
-				"  --max-lines N          Keep the first N paths (also --head N), or the\n" +
-				"                         last N with --tail N; they replace -n and mark\n" +
-				"                         what they cut\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Keep the first N paths (--head is --max-lines),\n" +
+				"                         or the last N; they replace -n and mark what\n" +
+				"                         they cut\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
@@ -2835,7 +2837,9 @@ var baseFunctions = []Function{
 				"  output a [... K lines omitted] line. --count counts the paths the\n" +
 				"  listing prints without -n. mtime is RFC 3339 in UTC.\n" +
 				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern;\n" +
-				"  --tracked outside a repository is not_a_git_repo (CONTINUE).",
+				"  --tracked outside a repository is not_a_git_repo (CONTINUE).\n" +
+				"  A PATTERN that starts with - goes after --, which ends the options:\n" +
+				"  llm_find -- '-*' src.",
 		},
 		Fallback:  &Usage{Program: "llm_find", Usage: "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]", Description: "Find files by pattern (ignores node_modules, vendor, .git)"},
 		ShellVars: []string{"HOME"},
@@ -2864,7 +2868,7 @@ var baseFunctions = []Function{
 				"  llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
 				"\n" +
 				"OPTIONS\n" +
-				"  --staged               Staged changes (also --cached)\n" +
+				"  --staged, --cached     Staged changes\n" +
 				"  REV..REV               Compare two commits (A..B, A...B for the merge base)\n" +
 				"  --files                One row per file: {\"p\",\"add\",\"del\",\"status\"}\n" +
 				"  --numstat              One row per file: {\"p\",\"add\",\"del\"}\n" +
@@ -2872,8 +2876,10 @@ var baseFunctions = []Function{
 				"  --patch                The patch as text, capped per file (default 200 lines)\n" +
 				"  --format F             json (default), jsonl, tsv or table (--files, --numstat,\n" +
 				"                         --summary)\n" +
-				"  --max-lines N          Lines (or rows) to keep: of the --stat text, of the rows,\n" +
-				"                         of each file with --patch; also --head N and --tail N\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Lines (or rows) to keep, first (--head is\n" +
+				"                         --max-lines) or last: of the --stat text, of the\n" +
+				"                         rows, of each file with --patch\n" +
 				"  --width N              Cut each line (JSON: each path) at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
@@ -2935,8 +2941,9 @@ var baseFunctions = []Function{
 				"                         (default hash,subject,author,date); files is the\n" +
 				"                         array of the paths each commit changed\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
-				"  --max-lines N          Rows to keep (also --head N, --tail N); the cut is\n" +
-				"                         counted on stderr\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Rows to keep, first (--head is --max-lines) or\n" +
+				"                         last; the cut is counted on stderr\n" +
 				"  --width N              Cut each string value at N columns\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
@@ -2999,7 +3006,8 @@ var baseFunctions = []Function{
 				"                         --fetch)\n" +
 				"  --format F             json (default), jsonl, tsv or table (--summary, --files,\n" +
 				"                         --repos)\n" +
-				"  --max-lines N          Rows to keep (also --head N, --tail N)\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Rows to keep, first (--head is --max-lines) or last\n" +
 				"  --width N              Cut each string value at N columns\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
@@ -3058,6 +3066,7 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]\n" +
+				"           [-e PATTERN]\n" +
 				"           [--exclude GLOB]... [--only-matching] [--distinct]\n" +
 				"           [--files-only] [--count [--by file|ext|dir]]\n" +
 				"           [--relative|--absolute] [--format json|jsonl|tsv|table]\n" +
@@ -3065,6 +3074,8 @@ var baseFunctions = []Function{
 				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
+				"  -e, --regexp PATTERN   The pattern, also one that starts with -; every\n" +
+				"                         positional is then PATH\n" +
 				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
 				"  -C, --context N        Lines of context around each match (default 0)\n" +
 				"  -n, --limit N          Lines to print (default 100)\n" +
@@ -3084,9 +3095,10 @@ var baseFunctions = []Function{
 				"  --format FORMAT        Rows {\"file\",\"line\",\"text\"} ({\"file\"} with\n" +
 				"                         -l): json, jsonl, tsv or table\n" +
 				"  --width N              Cut each line (each value in rows) at N columns\n" +
-				"  --max-lines N          Keep the first N lines (also --head N), or the\n" +
-				"                         last N with --tail N; they replace -n and mark\n" +
-				"                         what they cut\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Keep the first N lines (--head is --max-lines),\n" +
+				"                         or the last N; they replace -n and mark what\n" +
+				"                         they cut\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
@@ -3120,7 +3132,9 @@ var baseFunctions = []Function{
 				"  first: a cut JSON array or TSV gets {\"truncated\":K} on stderr, a cut\n" +
 				"  text output a [... K lines omitted] line. --context goes with the\n" +
 				"  text output only (conflicting_options otherwise).\n" +
-				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.\n" +
+				"  A PATTERN that starts with - goes after -e, or after --, which ends\n" +
+				"  the options: llm_grep -- -x src.",
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
 		ShellVars: []string{"HOME"},
@@ -3283,8 +3297,9 @@ var baseFunctions = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  --text                 Indented text list, 200 lines max (default depth 3)\n" +
-				"  --depth N              Levels below PATH, 1 or more (default 1; also\n" +
-				"                         --max-depth); with --count, no limit unless given\n" +
+				"  --depth N, --max-depth N\n" +
+				"                         Levels below PATH, 1 or more (default 1); with\n" +
+				"                         --count, no limit unless given\n" +
 				"  --stats                Add sizes and child counts to the JSON tree\n" +
 				"  --all                  Do not skip node_modules, vendor, .git,\n" +
 				"                         __pycache__, .cache\n" +
@@ -3304,8 +3319,9 @@ var baseFunctions = []Function{
 				"                         \"size\",\"files\"}],\"skipped\"}, largest first\n" +
 				"  --format FORMAT        --count/--top as json, jsonl, tsv or table rows\n" +
 				"  --width N              Cut each line (each value) at N columns\n" +
-				"  --max-lines N          --text/--top: keep the first N lines or rows\n" +
-				"                         (also --head N), or the last N with --tail N\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         --text/--top: keep the first N lines or rows\n" +
+				"                         (--head is --max-lines), or the last N\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +

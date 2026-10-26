@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -47,7 +48,10 @@ func bootRelease(t *testing.T, files map[string][]byte, sums string) string {
 	tw := tar.NewWriter(gz)
 	for _, name := range []string{"gash", "gash-hosts-helper"} {
 		if b, ok := files[name]; ok {
-			require.NoError(t, tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(b)), Typeflag: tar.TypeReg}))
+			// The owner of a release built by someone else: never the
+			// owner of the installed file.
+			require.NoError(t, tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(b)), Typeflag: tar.TypeReg,
+				Uid: 4242, Gid: 4242, Uname: "builder", Gname: "builder"}))
 			_, err := tw.Write(b)
 			require.NoError(t, err)
 		}
@@ -139,8 +143,10 @@ func TestBootstrapFetch(t *testing.T) {
 			}
 			require.Equal(t, "rc=0 reason=\n", out)
 			require.FileExists(t, filepath.Join(vdir, "gash"))
+			ownedByMe(t, filepath.Join(vdir, "gash"))
 			if tc.helper {
 				require.FileExists(t, filepath.Join(vdir, "gash-hosts-helper"))
+				ownedByMe(t, filepath.Join(vdir, "gash-hosts-helper"))
 			} else {
 				require.NoFileExists(t, filepath.Join(vdir, "gash-hosts-helper"), "an unverified helper is never installed")
 			}
@@ -151,13 +157,30 @@ func TestBootstrapFetch(t *testing.T) {
 		})
 	}
 
-	// The first call of a headless shell fetches, then runs the binary.
+	// Headless, the first call downloads nothing: binary_not_found, and
+	// nothing is installed (3.4.2). With GASH_AUTO_FETCH=1 it fetches,
+	// then runs the binary.
 	dir, home := tree(t), t.TempDir()
 	rel := bootRelease(t, both, "")
-	out, err := bashEnv([]string{"HOME=" + home, "PATH=/usr/bin:/bin", "LANG=C.UTF-8", "GASH_RELEASE_URL=file://" + rel},
-		"GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
+	env := []string{"HOME=" + home, "PATH=/usr/bin:/bin", "LANG=C.UTF-8", "GASH_RELEASE_URL=file://" + rel}
+	out, err := bashEnv(env, "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
+	require.Error(t, err)
+	require.Regexp(t, `^\{"error":"binary_not_found","details":"gash 2\.1\.0 for [a-z]+/[a-z0-9]+ is not installed \(headless mode does not download it; GASH_AUTO_FETCH=1 allows that\)","action":"STOP","recoverable":true,"hint":"Run: bash .*/install\.sh --repair"\}\n$`, out)
+	require.NoDirExists(t, filepath.Join(home, ".local/share/gash/versions"))
+	out, err = bashEnv(append(env, "GASH_AUTO_FETCH=1"), "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; gash_username")
 	require.NoError(t, err, out)
 	require.Equal(t, "fake gash_username\n", out)
+
+	// GASH_AUTO_FETCH=0: no download at an interactive load either, one
+	// line that says why; the installer's __gash_fetch still fetches.
+	dir, home = tree(t), t.TempDir()
+	out, err = bashEnv([]string{"HOME=" + home, "PATH=/usr/bin:/bin", "LANG=C.UTF-8", "GASH_RELEASE_URL=file://" + rel, "GASH_AUTO_FETCH=0"},
+		"source '"+dir+"/lib/core/output.sh'; source '"+dir+"/lib/compat/bootstrap.sh'; __gash_auto_fetch loud; echo \"rc=$?\"")
+	require.NoError(t, err, out)
+	require.Regexp(t, `^Warning: gash 2\.1\.0 is not installed \(GASH_AUTO_FETCH=0 turns the download off\)\. Run: bash .*/install\.sh --repair\nrc=1\n$`, out)
+	require.NoDirExists(t, filepath.Join(home, ".local/share/gash/versions"))
+	out = bootFetch(t, dir, home, "quiet", "GASH_RELEASE_URL=file://"+rel, "GASH_AUTO_FETCH=0")
+	require.Equal(t, "rc=0 reason=\n", out)
 
 	// The interactive line, success and failure.
 	dir, home = tree(t), t.TempDir()
@@ -205,4 +228,15 @@ func TestBootstrapFetch(t *testing.T) {
 
 func execBash(script string) *exec.Cmd {
 	return exec.Command("bash", "--noprofile", "--norc", "-c", script)
+}
+
+// ownedByMe: the file belongs to the user who fetched it, whatever owner
+// the archive recorded (as root, tar -x keeps that one).
+func ownedByMe(t *testing.T, path string) {
+	t.Helper()
+	st, err := os.Stat(path)
+	require.NoError(t, err)
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	require.True(t, ok)
+	require.Equal(t, os.Getuid(), int(sys.Uid), path)
 }

@@ -148,9 +148,11 @@ var catalogGit = []Function{
 				"  --stat                 Add the totals: {\"files\",\"insertions\",\"deletions\"}\n" +
 				"  --files                Add each file's status letter (A, M, D, R, C, T)\n" +
 				"  --patch                The commit's patch as text, capped per file\n" +
-				"  --max-lines N          Lines kept per file with --patch (default 200), of the\n" +
-				"                         content with REV:FILE (default 2000), files in the\n" +
-				"                         JSON otherwise; also --head N and --tail N\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Lines kept per file with --patch (default 200), of\n" +
+				"                         the content with REV:FILE (default 2000), files in\n" +
+				"                         the JSON otherwise; first (--head is --max-lines)\n" +
+				"                         or last\n" +
 				"  --width N              Cut each line (JSON: each path and the subject) at N\n" +
 				"                         columns\n" +
 				"\n" +

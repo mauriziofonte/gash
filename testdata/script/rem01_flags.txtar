@@ -14,8 +14,12 @@ chmod 755 bin/rsync
 chmod 755 bin/ssh
 chmod 755 bin/scp
 
-# --delete -n: -n is refused, rsync never runs.
+# --delete -n: -n is refused, rsync never runs (headless: the envelope,
+# 3.4.2; a terminal gets the Error: line).
 ! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src /tmp/build --delete -n'
+stderr '^\{"error":"unknown_option","details":"Unknown option: -n \(usage: remote_sync_push '
+! exists argv
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; unset GASH_HEADLESS; remote_sync_push box ./src /tmp/build --delete -n'
 stderr '^Error: Unknown option: -n \(usage: remote_sync_push '
 ! exists argv
 
@@ -32,7 +36,7 @@ stderr 'Unknown option: --dry-run'
 
 # A fourth positional.
 ! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_pull box /tmp/x ./x extra'
-stderr '^Error: Unexpected argument: extra \(usage: remote_pull '
+stderr '^\{"error":"unexpected_argument","details":"Unexpected argument: extra \(usage: remote_pull '
 ! exists argv
 
 -- hostenv --

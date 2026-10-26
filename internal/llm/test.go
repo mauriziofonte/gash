@@ -65,6 +65,8 @@ type TestRun struct {
 //
 //	{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}
 //
+// passed and skipped are null when the runner named only its failures (go
+// test without -v),
 // or, when no parser read the output,
 //
 //	{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}
@@ -105,8 +107,12 @@ func WriteTestSummary(c *invoke.Call, o *llmfmt.Options, run TestRun) {
 		o.Head = testDefaultFailures
 	}
 	head, tail, omitted := llmfmt.Cap(o, failures)
-	b.WriteString(`{"runner":` + llmfmt.Quote(sum.Runner) + `,"passed":` + strconv.Itoa(sum.Passed) +
-		`,"failed":` + strconv.Itoa(sum.Failed) + `,"skipped":` + strconv.Itoa(sum.Skipped) +
+	passed, skipped := strconv.Itoa(sum.Passed), strconv.Itoa(sum.Skipped)
+	if sum.NoPassCounts {
+		passed, skipped = "null", "null"
+	}
+	b.WriteString(`{"runner":` + llmfmt.Quote(sum.Runner) + `,"passed":` + passed +
+		`,"failed":` + strconv.Itoa(sum.Failed) + `,"skipped":` + skipped +
 		`,"duration_s":` + dur + `,"failures":[`)
 	first := true
 	for _, part := range [][]testparse.Failure{head, tail} {

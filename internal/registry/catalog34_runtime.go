@@ -40,7 +40,8 @@ var catalogRuntime = []Function{
 				"                         (default: node on PATH)\n" +
 				"  -j, --jobs N           Checks at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit of one checker process (default 60s)\n" +
-				"  --max-lines N          Failures listed (default 100); --head N and --tail N\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Failures listed (default 100); --head and --tail\n" +
 				"                         keep the first and last N, \"truncated\" counts the rest\n" +
 				"  --width N              Cut file names and messages at N columns\n" +
 				"  --relative, --absolute File paths relative to their PATH (default) or\n" +
@@ -192,7 +193,8 @@ var catalogRuntime = []Function{
 				"  stderr merged, stdin /dev/null; the exit status is CMD's. Output:\n" +
 				"  {\"runner\",\"passed\",\"failed\",\"skipped\",\"duration_s\",\"failures\":[{\"name\",\n" +
 				"  \"file\",\"line\",\"message\"}],\"parsed\":true,\"exit_code\"}; analyzer findings\n" +
-				"  (phpstan, psalm) are failures. Output no parser reads:\n" +
+				"  (phpstan, psalm) are failures; passed and skipped are null when the\n" +
+				"  output does not count them (go test without -v). Output no parser reads:\n" +
 				"  {\"runner\":null,\"duration_s\",\"parsed\":false,\"exit_code\",\"tail\":[...]}.\n" +
 				"  --dry-run: {\"argv\":[...],\"runner\",\"cwd\",\"dry_run\":true,\"written\":false}\n" +
 				"  (runner null when only the output would tell), with --runtime also\n" +

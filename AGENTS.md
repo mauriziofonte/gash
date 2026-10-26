@@ -65,6 +65,7 @@ use.
 | `GASH_HEADLESS=1` | Recommended for agents. Loads core and function modules only, prints nothing while loading, no ANSI colors. |
 | `NO_COLOR=1` / `GASH_NO_COLOR=1` | No ANSI colors; everything else as in an interactive shell. |
 | `GASH_DEBUG=1` | With headless: show the stderr of files that fail to load. |
+| `GASH_AUTO_FETCH=0` / `=1` | `0`: Gash never downloads its binary on its own. `1`: headless mode may, at the first call. |
 
 Headless mode does **not** load the prompt, history settings, banner, the
 alias pack, `~/.bash_aliases` or `~/.bash_local`. Module short aliases exist,
@@ -72,6 +73,13 @@ but Bash does not expand aliases in non-interactive shells: use full function
 names. Sourcing in headless mode never prints, whatever the configuration.
 `GASH_DIR` is derived from the location of `gash.sh`, so a checkout anywhere
 works the same way (`source /path/to/gash/gash.sh`).
+
+Headless mode never downloads or installs a program on its own: when the
+gash binary of the checkout's version is missing (after a 2.x
+`gash_upgrade`, which only checks the new version out), every call answers
+`binary_not_found` (STOP) with the hint `Run: bash ~/.gash/install.sh
+--repair`. Ask the user to run it once; `GASH_AUTO_FETCH=1` lets the first
+call download and verify the binary instead.
 
 Without headless mode, `gash.sh` does nothing in a non-interactive shell. Do
 not use `bash -i` and do not source `~/.gashrc` (the user's entry point).
@@ -93,13 +101,22 @@ functions for a wrapper that routes calls directly (3.11).
 
 Flags (the signatures below are the registered help's, checked by a test):
 where a function takes `-n`, it means `--limit`; `--json` is the
-machine-output flag. Options are separate words: `--flag=value` and a `--`
-end-of-options marker are not supported (both are `unknown_option`, as is
-any option a function does not list). A function that takes a PATH refuses
-a second one with `unexpected_argument`; `llm_ports` and `llm_procs` take no
-PATH (a stray word is `unknown_option`) and `llm_env` reads a bare word as
-its filter. A value flag at the end of the line fails with `missing_value`;
-integers are plain digits, at most 9. `--help` or `-h` anywhere on an
+machine-output flag. A value flag takes its value as the next word or after
+`=`: `--depth 2` and `--depth=2` are the same, on every function of this
+section (long flags that the function's `--help` lists with a value;
+`--stats=1` or `-n=5` stays `unknown_option`). Any option a function does
+not list is `unknown_option`; its hint lists the options the function takes.
+`--` ends the options of `llm_grep` and `llm_find`, for a PATTERN that
+starts with `-` (`llm_grep -- -x src`, also `llm_grep -e -x src`), and comes
+where a signature shows it (`agent_test ... -- CMD...`); elsewhere it is
+`unknown_option`, and a PATH that starts with `-` is written `./-name`. A
+flag value may start with `-`
+(`llm_find '*' --contains -x`, `llm_count F --pat -x`, `llm_assert F --has
+-x`). A function that takes a PATH refuses a second one with
+`unexpected_argument`; `llm_ports` and `llm_procs` take no PATH (a stray
+word is `unknown_option`) and `llm_env` reads a bare word as its filter. A
+value flag at the end of the line fails with `missing_value`; integers are
+plain digits, at most 9. `--help` or `-h` anywhere before a `--` on an
 `llm_*` line prints its help, also where a flag expects its value
 (`llm_exec`: as the only argument). A PATH may start with `~` or `~/` (your
 home); `~user` is `invalid_path`.
@@ -110,7 +127,7 @@ home); `~user` is `invalid_path`.
 |---|---|
 | `llm_tree [--depth N] [--stats] [--text] [--all] [--count [--by ext\|dir\|type]] [--top N] [--type f\|d] [--name GLOB] [--newer REF] [--since T] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [PATH] [--host ALIAS]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max; `--count` `{"count":N}`; `--top N` disk usage `{"total","files","top":[{"p","size","files"}],"skipped"}` |
 | `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N] [--sort name\|mtime\|size] [--newer REF] [--since T] [--tracked] [--all] [--count [--by ext\|dir\|type]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches; `--format` rows `{"p","size","mtime"}` |
-| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
+| `llm_grep PATTERN [PATH] [-e PATTERN] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
 | `llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
@@ -630,6 +647,17 @@ write). Their targets follow the transfer policy: DENY paths are
 `write_path_denied` (FATAL), ASK paths (/etc, /var, /usr/local, /root, any
 .ssh) `sensitive_path` (STOP) without `--force`, checked before connecting
 and again on the host after resolving links.
+
+The interactive `remote_exec`, `remote_push`, `remote_pull`,
+`remote_sync_push` and `remote_sync_pull` answer a refusal in headless
+mode with the error envelope as well, one line on stderr, status 1:
+`unknown_host`, `host_unreachable`, `missing_host`, `empty_command`,
+`unexpected_argument`, `unknown_option`, `missing_value`, `path_unreadable`
+(`--script FILE`), `invalid_path` (a glob or shell character in a remote
+path), `forbidden_path` (a DENY path pulled), `write_path_denied` (a DENY
+path pushed) and `sensitive_path` (an ASK path, or a `--delete` that needs
+confirming, without `--force`). The exit status of the remote command
+itself, 255 included, passes through with no envelope.
 
 `llm_db_*` reach a database on a host through a `DB:` connection whose
 scheme ends in `+ssh`: `mysql+ssh://USER:PASS@ALIAS/DB`,
@@ -1228,7 +1256,7 @@ output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
 | `agent_kill NAME\|PID... [--signal S] [--dry-run] [--format F]` | `{"killed":N,"pids":[...]}`; NAME is the regex of `llm_procs --name` on the full command line; nothing matched is `{"killed":0,"pids":[]}`, exit 0; `--dry-run` adds `"cmds":[...],"signal":"TERM","dry_run":true,"written":false` |
 | `agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{"rc","out","err"}`, exit 0 when the command ran (read `rc`); CMD's words reach `docker exec` as an array, no shell runs; `--dry-run`: `{"argv":[...],"dry_run":true,"written":false}` |
 | `agent_put ALIAS:PATH --from FILE\|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]` | `{"host","path","bytes","sha256","replaced","backup","verified","written":true}`; one round trip: a temporary file next to PATH, size check (and sha256 with `--verify`), rename over PATH; `--dry-run` adds `"exists"` with `"dry_run":true,"written":false` |
-| `agent_test [--runner auto\|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--runtime` (repeatable: `node:24`, `php:8.4`, `node:project`) puts that runtime's directory first on CMD's PATH, as `gash run --runtime` does; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell; with `--runtime`, `"runtimes":[{"runtime","request","path","version"}]` before `"dry_run"`) |
+| `agent_test [--runner auto\|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}` (`passed` and `skipped` are null when the output does not count them: `go test` without `-v`); output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--runtime` (repeatable: `node:24`, `php:8.4`, `node:project`) puts that runtime's directory first on CMD's PATH, as `gash run --runtime` does; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell; with `--runtime`, `"runtimes":[{"runtime","request","path","version"}]` before `"dry_run"`) |
 
 `agent_replace` writes each file through a temporary file in the same
 directory, renamed over the target with its mode (and owner, as root); a
@@ -1353,7 +1381,11 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash wsl info --json'
 ```
 
 * `info` summarises the detection (version, distro, interop, drives,
-  networking); it exits 0 off WSL with `{"wsl":false}`.
+  networking); it exits 0 off WSL with `{"wsl":false}`. A drive mounted
+  more than once is one entry: `mount` is the automount one (`/mnt/c`)
+  when it is mounted there, `mounts` lists every mount point with the
+  Windows directory it shows (`dir`, `\` for the whole drive); `path`
+  converts from any of them.
 * `doctor` checks interop, the mounts and the configuration; it exits 1 when
   something is wrong, and off WSL.
 * `path PATH [--windows|--mixed|--linux]` converts a path between its Linux

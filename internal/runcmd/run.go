@@ -173,6 +173,7 @@ func (m *Module) runMain(c *invoke.Call) int {
 		}
 		rc = code
 	case inProc:
+		sub.Args = invoke.SplitEquals(sub.Name, sub.Args)
 		rc = h(sub)
 	default:
 		res, err := runner.RunUser(c.Ctx, m.run, cmd, runner.Options{Env: env.Child(), Stdin: stdin, Stdout: out, Stderr: errw})

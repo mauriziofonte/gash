@@ -86,9 +86,13 @@ func (m *Module) Register(t *invoke.Table) {
 }
 
 // helpAnywhere is __llm_needs_help: --help or -h anywhere among the
-// arguments prints the help and ends the call.
+// arguments prints the help and ends the call. A -- ends the options: the
+// words after it are data (3.4.2: llm_grep -- --help searches for it).
 func helpAnywhere(c *invoke.Call) bool {
 	for _, a := range c.Args {
+		if a == "--" {
+			return false
+		}
 		if a == "--help" || a == "-h" {
 			help.NeedsOf(c, "--help")
 			return true

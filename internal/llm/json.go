@@ -15,6 +15,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/jsonpath"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // llm_json (plan D4): a JSON file (or the standard input) read by a
@@ -874,7 +875,7 @@ func (m *Module) json(c *invoke.Call) int {
 				return 1
 			}
 		case strings.HasPrefix(w, "-"):
-			return fail(c, "unknown_option", w, "Use FILE (or - for stdin), --path P, --keys, --shape, --format F, --width N, --head N, --tail N")
+			return fail(c, "unknown_option", w, registry.OptionsHint(c.Name))
 		default:
 			if !p.take(c, w) {
 				return 1

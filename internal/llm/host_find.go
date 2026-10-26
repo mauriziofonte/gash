@@ -17,25 +17,31 @@ import (
 // of a later version need the binary.
 func findFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, bool) {
 	pattern, fileType, limit := "", "f", "100"
-	havePattern, havePath := false, false
+	havePattern, havePath, ended := false, false, false
 	path := "."
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		switch a {
-		case "--type", "-n", "--limit":
-			if i+1 >= len(args) {
-				return argError("missing_value", a, a+" needs a value")
+		if !ended {
+			switch a {
+			case "--":
+				ended = true
+				continue
+			case "--type", "-n", "--limit":
+				next := args[i+1:]
+				if len(next) == 0 {
+					return argError("missing_value", a, a+" needs a value")
+				}
+				if a == "--type" {
+					fileType = next[0]
+				} else {
+					limit = next[0]
+				}
+				i++
+				continue
 			}
-			if a == "--type" {
-				fileType = args[i+1]
-			} else {
-				limit = args[i+1]
+			if strings.HasPrefix(a, "-") {
+				return nil, false
 			}
-			i++
-			continue
-		}
-		if strings.HasPrefix(a, "-") {
-			return nil, false
 		}
 		switch {
 		case !havePattern:

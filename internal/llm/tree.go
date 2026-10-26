@@ -12,6 +12,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // treeCap is the awk cap= of the JSON listing, textCap the head -n of the
@@ -62,7 +63,7 @@ func (m *Module) tree(c *invoke.Call) int {
 			withStats = true
 			args = args[1:]
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --text, --depth N, or --stats")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			if !p.take(c, a) {
 				return 1

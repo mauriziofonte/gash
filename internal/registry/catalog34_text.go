@@ -136,7 +136,8 @@ var catalogText = []Function{
 				"  --algo sha256|md5      The digest (default sha256)\n" +
 				"  --short N              Keep the first N hex digits\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
-				"  --head N, --tail N     Keep the first / last N rows (--max-lines N is --head)\n" +
+				"  --head N, --tail N, --max-lines N\n" +
+				"                         Keep the first / last N rows (--max-lines is --head)\n" +
 				"  --width N              Cut values at N columns\n" +
 				"  -j N, --jobs N         Files hashed at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +
@@ -247,8 +248,9 @@ var catalogText = []Function{
 				"                         context (repeatable)\n" +
 				"  -C N, --context N      Context lines around each match (default 3)\n" +
 				"  --max-bytes N          Content bytes printed per file (default 262144)\n" +
-				"  --head N, --tail N     The first / last N selected lines of each file\n" +
-				"                         (--max-lines N is --head N)\n" +
+				"  --head N, --tail N, --max-lines N\n" +
+				"                         The first / last N selected lines of each file\n" +
+				"                         (--max-lines is --head)\n" +
 				"  --width N              Cut each line at N columns\n" +
 				"  --format F             json, jsonl, tsv or table: rows {\"file\",\"line\",\"text\"}\n" +
 				"  --absolute, --relative Absolute paths, or as given (the default)\n" +
@@ -305,7 +307,8 @@ var catalogText = []Function{
 				"  --follow               Describe what symlinks point to; target is the\n" +
 				"                         resolved path\n" +
 				"  --format F             tsv (default), json, jsonl or table\n" +
-				"  --head N, --tail N     Keep the first / last N rows (--max-lines N is --head)\n" +
+				"  --head N, --tail N, --max-lines N\n" +
+				"                         Keep the first / last N rows (--max-lines is --head)\n" +
 				"  --width N              Cut output lines at N columns\n" +
 				"  -j N, --jobs N         Paths read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per path (seconds, 500ms, 2s, 1m)\n" +
@@ -357,8 +360,9 @@ var catalogText = []Function{
 				"  --rules LIST           The rules to run, comma-separated (default:\n" +
 				"                         non-ascii,crlf,bom,trailing-ws,final-newline,\n" +
 				"                         mixed-indent)\n" +
-				"  --max-lines N          Issues listed (default 100; --head N is the same,\n" +
-				"                         --tail N keeps the last N)\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Issues listed (default 100; --head is the same,\n" +
+				"                         --tail keeps the last N)\n" +
 				"  --width N              Cut samples at N columns\n" +
 				"  --format F             jsonl, tsv or table: one row per issue; json is the\n" +
 				"                         default object\n" +
@@ -409,7 +413,8 @@ var catalogText = []Function{
 				"\n" +
 				"OPTIONS\n" +
 				"  --format F             json (default), jsonl, tsv or table\n" +
-				"  --head N, --tail N     Keep the first / last N rows (--max-lines N is --head)\n" +
+				"  --head N, --tail N, --max-lines N\n" +
+				"                         Keep the first / last N rows (--max-lines is --head)\n" +
 				"  --width N              Cut values at N columns\n" +
 				"  -j N, --jobs N         Files read at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit per file (seconds, 500ms, 2s, 1m)\n" +

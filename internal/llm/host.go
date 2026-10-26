@@ -24,8 +24,10 @@ import (
 func (m *Module) hostSpecs() map[string]remote.Spec {
 	return map[string]remote.Spec{
 		// Files and search: a POSIX fallback covers the 3.0 options.
-		"llm_find":   {Values: []string{"--type", "--contains", "-n", "--limit", "--sort", "--newer", "--since", "--by"}, PathFrom: 1, PathOpts: []string{"--newer"}, Fallback: findFallback},
-		"llm_grep":   {Values: []string{"--ext", "--context", "-C", "-n", "--limit", "--exclude", "--by"}, PathFrom: 1, Fallback: grepFallback},
+		"llm_find": {Values: []string{"--type", "--contains", "-n", "--limit", "--sort", "--newer", "--since", "--by"}, PathFrom: 1, PathOpts: []string{"--newer"},
+			EndOpts: true, Fallback: findFallback},
+		"llm_grep": {Values: []string{"--ext", "--context", "-C", "-n", "--limit", "--exclude", "--by", "-e", "--regexp"}, PathFrom: 1,
+			Firsts: []string{"-e", "--regexp"}, EndOpts: true, Fallback: grepFallback},
 		"llm_tree":   {Values: []string{"--depth", "--max-depth", "--by", "--type", "--name", "--newer", "--since", "--top"}, PathFrom: 0, PathOpts: []string{"--newer"}, Fallback: treeFallback},
 		"llm_config": {Values: []string{"--max-bytes", "--path"}, PathFrom: 0, Keep: true, Fallback: configFallback},
 

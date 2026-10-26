@@ -19,6 +19,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/jsonpath"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // configMaxBytes is the default --max-bytes of llm_config.
@@ -50,7 +51,7 @@ func (m *Module) config(c *invoke.Call) int {
 			}
 			args = args[2:]
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use a file path and --max-bytes N")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			if file != "" {
 				return fail(c, "unexpected_argument", a, "Pass one file per call")

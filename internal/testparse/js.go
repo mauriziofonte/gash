@@ -93,7 +93,9 @@ func parseJest(text string, lines []string) (Summary, bool) {
 			continue
 		}
 		m := reJestBullet.FindStringSubmatch(lines[i])
-		if m == nil || m[1] == "Test suite failed to run" && suite == "" {
+		// "● Console" heads the console output of a suite (Jest 24 and
+		// before), not a failure (3.4.2).
+		if m == nil || m[1] == "Test suite failed to run" && suite == "" || m[1] == "Console" {
 			continue
 		}
 		f := Failure{Name: m[1], File: suite}

@@ -6,8 +6,9 @@
 # installer, from a fixture origin whose v3.0.0 tag holds this checkout's
 # 3.x tree) runs its own 2.x gash_upgrade headless. Sourcing the 3.x
 # gash.sh headless then prints nothing and returns 0 with GASH_VERSION
-# 3.0.0; the first call fetches the binary from the file:// release
-# silently and answers. The working tree stays clean throughout.
+# 3.0.0. A headless call downloads nothing (3.4.2): it answers
+# binary_not_found with the install.sh --repair hint, and after that
+# repair it answers. The working tree stays clean throughout.
 
 [!exec:git] skip 'needs git'
 [!v2tree] skip 'needs the v2.1.0 tag (a shallow checkout has no tags: the testscript CI job fetches them)'
@@ -41,12 +42,20 @@ stdout '^rc=0 v=3\.0\.0$'
 ! stderr .
 ! exists home/.local/share/gash/versions/3.0.0/gash
 
-# The first call fetches silently, then answers.
+# A headless call downloads nothing: binary_not_found, nothing installed.
 mkdir proj/src
+! exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; llm_tree proj'
+! stdout .
+stderr '^\{"error":"binary_not_found","details":"gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed \(headless mode does not download it; GASH_AUTO_FETCH=1 allows that\)","action":"STOP","recoverable":true,"hint":"Run: bash ~/\.gash/install\.sh --repair"\}$'
+! exists home/.local/share/gash/versions/3.0.0/gash
+
+# From 2.x: gash_upgrade, then install.sh --repair; then the call answers.
+exec bash home/.gash/install.sh --repair --quiet
+! stderr .
+exists home/.local/share/gash/versions/3.0.0/gash
 exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; llm_tree proj'
 stdout '"src"'
 ! stderr .
-exists home/.local/share/gash/versions/3.0.0/gash
 exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gashrc"; gash version --json'
 stdout '"version":"3\.0\.0"'
 exec sh -c 'ls -A "$HOME/.local/share/gash/versions/3.0.0"'

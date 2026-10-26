@@ -15,6 +15,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/proctab"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // killCmdWidth cuts the command lines a dry run reports, as llm_procs.
@@ -103,7 +104,7 @@ func (k *killer) run(c *invoke.Call) int {
 			args = nil
 			continue
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use NAME|PID... with --signal S, --dry-run or --format F")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			kt, ok := parseKillTarget(c, a)
 			if !ok {

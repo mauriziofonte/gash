@@ -76,3 +76,31 @@ func TestHelpLoaded(t *testing.T) {
 	require.True(t, (&Call{Env: EnvMap(map[string]string{"GASH__HELP": "1"})}).HelpLoaded())
 	require.False(t, (&Call{Env: EnvMap(map[string]string{"GASH__HELP": "0"})}).HelpLoaded())
 }
+
+// --flag=value is --flag value for a value flag of the function's help,
+// before --, never inside the value of a flag (3.4.2).
+func TestSplitEquals(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{"llm_tree", []string{"DIR", "--depth=1"}, []string{"DIR", "--depth", "1"}},
+		{"llm_grep", []string{"x", "--limit=3", "-C", "2", "--ext=go,md"}, []string{"x", "--limit", "3", "-C", "2", "--ext", "go,md"}},
+		{"llm_csv", []string{"f.csv", "--where=a=b"}, []string{"f.csv", "--where", "a=b"}},
+		{"llm_grep", []string{"x", "--limit="}, []string{"x", "--limit", ""}},
+		// A flag without a value, an unknown one, a short one: as written.
+		{"llm_tree", []string{"--stats=1", "--bogus=2", "-n=3"}, []string{"--stats=1", "--bogus=2", "-n=3"}},
+		// The value of a value flag, and everything after --.
+		{"agent_replace", []string{"f", "--old", "--count=1", "--new", "--count=2"}, []string{"f", "--old", "--count=1", "--new", "--count=2"}},
+		{"llm_wait", []string{"--file-match", "--timeout=1", "--x=y", "--timeout=5"}, []string{"--file-match", "--timeout=1", "--x=y", "--timeout", "5"}},
+		{"agent_test", []string{"--timeout=60", "--", "go", "test", "--timeout=5s"}, []string{"--timeout", "60", "--", "go", "test", "--timeout=5s"}},
+		// Only the agent catalog.
+		{"remote_push", []string{"box", "--exclude=x"}, []string{"box", "--exclude=x"}},
+		{"files_largest", []string{".", "--limit=3"}, []string{".", "--limit", "3"}},
+	} {
+		require.Equal(t, c.want, SplitEquals(c.name, c.in), "%s %q", c.name, c.in)
+	}
+	in := []string{"a", "b"}
+	require.Same(t, &in[0], &SplitEquals("llm_tree", in)[0], "nothing to split: the same slice")
+}
