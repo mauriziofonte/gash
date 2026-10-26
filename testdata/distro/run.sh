@@ -3,9 +3,8 @@
 #
 # Runs the distro smoke test (smoke.sh) in a disposable container of IMAGE,
 # on the architecture of this machine: builds the release archive of this
-# commit as release.yml does (reproducible: the binaries match
-# release/SHA256SUMS), a Gash repository from `git archive` tagged with the
-# VERSION, and mounts both.
+# commit as release.yml does, a Gash repository from `git archive` that pins
+# those binaries, tagged with the VERSION, and mounts both.
 #
 #   testdata/distro/run.sh mirror.gcr.io/library/rockylinux:8
 set -euo pipefail
@@ -36,6 +35,13 @@ asset="gash_${version}_linux_${arch}.tar.gz"
 tar -czf "$stage/rel/$asset" -C "$stage/bin" gash gash-hosts-helper
 (cd "$stage/rel" && sha256sum "$asset" >checksums.txt)
 (cd "$mod" && git archive HEAD) | tar -x -C "$stage/tree"
+# The smoke checks the installer, not the pins: pin the binaries just built
+# (release/SHA256SUMS goes stale between release bumps).
+for b in gash gash-hosts-helper; do
+    sum=$(sha256sum "$stage/bin/$b" | cut -d' ' -f1)
+    sed -i "s|^[0-9a-f]*  linux_${arch}/$b\$|$sum  linux_${arch}/$b|" "$stage/tree/release/SHA256SUMS"
+done
+grep "linux_${arch}/" "$stage/tree/release/SHA256SUMS"
 # The installer clones it and checks out its newest release tag.
 git -C "$stage/tree" init -q
 git -C "$stage/tree" add -A
