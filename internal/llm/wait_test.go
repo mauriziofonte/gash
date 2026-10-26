@@ -189,7 +189,9 @@ func TestWaitExistsAndGone(t *testing.T) {
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Equal(t, true, waitJSON(t, r)["met"])
 	r = runGo(t, New(), d, env, "llm_wait", "--timeout", "0.2", "--exists", "nothing")
-	require.Equal(t, result{`{"met":false,"after_s":0.2}` + "\n", "", 1}, r)
+	require.Equal(t, 1, r.RC)
+	require.Empty(t, r.Stderr)
+	require.Regexp(t, `^\{"met":false,"after_s":0\.[2-9][0-9]?\}\n$`, r.Stdout) // elapsed time, 0.2 or a little more
 
 	if _, err := exec.LookPath("sleep"); err != nil {
 		t.Skip("no sleep")
