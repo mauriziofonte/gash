@@ -245,6 +245,7 @@ func (t *Table) Run(c *Call) int {
 	if !ok {
 		return c.Fail(NotPorted(c.Name))
 	}
+	c.Args = SplitEquals(c.Name, c.Args)
 	if Telemetered(c.Name) {
 		return WithTelemetry(c, c.Name, func() int { return h(c) })
 	}
@@ -256,4 +257,39 @@ func NotPorted(name string) contract.Envelope {
 	return contract.New("internal_error",
 		name+" is not implemented in this gash build",
 		"Gash 3.0 development build: this function has no Go handler yet")
+}
+
+// SplitEquals writes --flag=value as the two words --flag value, for the
+// functions that take that form (registry.EqualsForm) and a flag their
+// help lists with a value (3.4.2). It stops at a -- that ends the
+// options, and leaves the words a value flag takes as they are: in
+// --old --count=1, --count=1 is the value of --old.
+func SplitEquals(name string, args []string) []string {
+	if !registry.EqualsForm(name) {
+		return args
+	}
+	var out []string
+	done := 0 // args[:done] are in out
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
+		if o, ok := registry.OptionOf(name, a); ok {
+			i += o.Values
+			continue
+		}
+		flag, value, ok := strings.Cut(a, "=")
+		if !ok || !strings.HasPrefix(flag, "--") {
+			continue
+		}
+		if o, ok := registry.OptionOf(name, flag); ok && o.Takes() {
+			out = append(append(out, args[done:i]...), flag, value)
+			done = i + 1
+		}
+	}
+	if out == nil {
+		return args
+	}
+	return append(out, args[done:]...)
 }

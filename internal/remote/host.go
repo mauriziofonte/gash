@@ -46,6 +46,13 @@ type Spec struct {
 	// Pairs are the options that take two values (llm_wait --file-match
 	// FILE RE).
 	Pairs []string
+	// Firsts are the value options that stand for the first positional
+	// (llm_grep -e PATTERN): with one, the positionals start one later.
+	Firsts []string
+	// EndOpts: a -- ends the options and the words after it are
+	// positionals (llm_grep, llm_find). Otherwise Paths stops at it (the
+	// command of llm_docker_exec).
+	EndOpts bool
 	// Also gives more forms of a path argument for the rails to check as
 	// well (llm_read PATH:A-B is checked as PATH too); nil: none.
 	Also func(arg string) []string
@@ -301,11 +308,35 @@ func (s Spec) Paths(args []string) []string {
 			out = append(out, s.Also(p)...)
 		}
 	}
-	pos := 0
+	// With -e PATTERN the first positional is already given: the next
+	// one counts as the second.
+	pos, ended := 0, false
+	for i := 0; i < len(args) && args[i] != "--"; i++ {
+		switch a := args[i]; {
+		case contains(s.Firsts, a):
+			pos = 1
+			i++
+		case contains(values, a):
+			i++
+		case contains(s.Pairs, a):
+			i += 2
+		}
+	}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if a == "--" {
-			break
+		if a == "--" && !ended {
+			if !s.EndOpts {
+				break
+			}
+			ended = true
+			continue
+		}
+		if ended {
+			if s.PathFrom >= 0 && pos >= s.PathFrom && (s.PathMax == 0 || pos < s.PathFrom+s.PathMax) {
+				add(a)
+			}
+			pos++
+			continue
 		}
 		if contains(values, a) || contains(s.Pairs, a) {
 			if i+1 < len(args) && contains(s.PathOpts, a) {

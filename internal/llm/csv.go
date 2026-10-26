@@ -12,6 +12,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // llm_csv (plan D5): the header, a sample and, with --count, the row count
@@ -418,7 +419,7 @@ func (m *Module) csv(c *invoke.Call) int {
 			count = true
 		default:
 			if strings.HasPrefix(w, "-") {
-				return fail(c, "unknown_option", w, "Use FILE, --head N, --cols, --count, --delim C, --where COL=V, --format F")
+				return fail(c, "unknown_option", w, registry.OptionsHint(c.Name))
 			}
 			if !p.take(c, w) {
 				return 1

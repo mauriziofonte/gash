@@ -28,7 +28,7 @@ var llmOptions = map[string][]string{
 		// 3.4 files and search.
 		"--sort", "--newer", "--since", "--tracked", "--all", "--count", "--by",
 		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail", "--host"},
-	"llm_grep": {"--ext", "--context", "-C", "-n", "--limit",
+	"llm_grep": {"--ext", "--context", "-C", "-n", "--limit", "-e", "--regexp",
 		// 3.4 files and search.
 		"--exclude", "--only-matching", "-o", "--distinct", "--files-only", "-l", "--count", "-c", "--by",
 		"--relative", "--absolute", "--format", "--width", "--max-lines", "--head", "--tail", "--host"},
@@ -100,6 +100,10 @@ func TestHelpListsEveryOption(t *testing.T) {
 		require.True(t, ok, fn)
 		for _, o := range opts {
 			require.Regexp(t, `(^|[\s\[|,(])`+regexp.QuoteMeta(o)+`([\s\]|,=)]|$)`, f.Help.Body, "%s help lacks %s", fn, o)
+			// An OPTIONS line spells it: --flag=value and the unknown_option
+			// hint read those lines (3.4.2).
+			_, listed := registry.OptionOf(fn, o)
+			require.True(t, listed, "%s: no OPTIONS line spells %s", fn, o)
 			// A value after a boolean flag may itself be refused; the flag
 			// must not be.
 			r := runGo(t, m, d, env, fn, o, "1")
@@ -151,7 +155,8 @@ func helpUsage(body string) string {
 
 // TestLedger_LLM30: AGENTS.md section 3 gives each llm_* function the
 // options of its registered USAGE line, none it does not accept, and the
-// grammar rules it states hold: no --flag=value, no --, a second PATH is
+// grammar rules it states hold: --flag=value for a value flag, -- only on
+// llm_grep and llm_find, a second PATH is
 // unexpected_argument, a stray word for llm_ports/llm_procs is
 // unknown_option, llm_env reads a bare word as its filter, -h as a flag's
 // value prints the help.
@@ -192,10 +197,24 @@ func TestLedger_LLM30(t *testing.T) {
 		_ = json.Unmarshal([]byte(r.Stderr), &e)
 		return e.Error
 	}
+	// 3.4.2: --flag=value is --flag value for a value flag; -- ends the
+	// options of llm_grep and llm_find only.
+	for _, pair := range [][2][]string{
+		{{"llm_tree", "--depth=2"}, {"llm_tree", "--depth", "2"}},
+		{{"llm_grep", "x", "--context=1"}, {"llm_grep", "x", "--context", "1"}},
+		{{"llm_grep", "--", "x"}, {"llm_grep", "x"}},
+		{{"llm_grep", "-e", "x", "."}, {"llm_grep", "x", "."}},
+		{{"llm_find", "*", "--limit=1"}, {"llm_find", "*", "--limit", "1"}},
+		{{"llm_find", "--", "*", "."}, {"llm_find", "*", "."}},
+		{{"llm_env", "--filter=PATH"}, {"llm_env", "--filter", "PATH"}},
+	} {
+		got, want := runGo(t, m, d, env, pair[0][0], pair[0][1:]...), runGo(t, m, d, env, pair[1][0], pair[1][1:]...)
+		require.Equal(t, want, got, pair[0])
+		require.Equal(t, 0, got.RC, pair[0])
+	}
 	for _, args := range [][]string{
-		{"llm_tree", "--depth=2"}, {"llm_tree", "--"}, {"llm_grep", "x", "--context=1"},
-		{"llm_grep", "--", "x"}, {"llm_find", "*", "--limit=1"}, {"llm_git_log", "--limit=1"},
-		{"llm_env", "--filter=PATH"}, {"llm_ports", "x"}, {"llm_procs", "x"},
+		{"llm_tree", "--"}, {"llm_tree", "--stats=1"}, {"llm_grep", "x", "-n=1"},
+		{"llm_ports", "x"}, {"llm_procs", "x"},
 	} {
 		require.Equal(t, "unknown_option", code(runGo(t, m, d, env, args[0], args[1:]...)), args)
 	}

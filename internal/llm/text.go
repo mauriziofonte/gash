@@ -16,6 +16,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // textGzipMax is the size from which llm_textstats leaves the gzip size
@@ -211,7 +212,7 @@ func (m *Module) textstats(c *invoke.Call) int {
 			continue
 		}
 		if a := args[0]; strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use FILE..., --format, --absolute, -j or --timeout")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		files = append(files, args[0])
 		args = args[1:]
@@ -528,7 +529,7 @@ func (m *Module) textcheck(c *invoke.Call) int {
 			args = args[2:]
 			continue
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --rules LIST, --format, --max-lines, --absolute, -j or --timeout")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			files = append(files, a)
 		}

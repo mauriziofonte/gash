@@ -9,6 +9,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // findPruned are the -name ... -prune tests of the llm_find name search.
@@ -29,6 +30,18 @@ func (m *Module) find(c *invoke.Call) int {
 	var x findOpts
 	args := c.Args
 	for len(args) > 0 {
+		// 3.4.2: after --, every word is a positional (a PATTERN that
+		// starts with -).
+		if args[0] == "--" {
+			for _, a := range args[1:] {
+				if !havePattern {
+					pattern, havePattern = a, true
+				} else if !p.take(c, a) {
+					return 1
+				}
+			}
+			break
+		}
 		n, ok := o.Take(c, args)
 		if ok && n == 0 {
 			n, ok = x.take(c, args)
@@ -59,7 +72,7 @@ func (m *Module) find(c *invoke.Call) int {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use --type, --contains, or --limit")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		// The first positional is PATTERN, even when empty (LLM-18: 2.x
 		// skipped an empty one and took the next word).

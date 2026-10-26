@@ -374,3 +374,24 @@ func TestShSecretMatchesSecretName(t *testing.T) {
 		require.Equal(t, want, got[i], p)
 	}
 }
+
+// llm_grep -e PATTERN and --: the path rails see the PATH wherever it
+// comes (3.4.2).
+func TestSpecFirstsAndEndOpts(t *testing.T) {
+	grep := Spec{PathFrom: 1, Values: []string{"--ext", "-e", "--regexp"}, Firsts: []string{"-e", "--regexp"}, EndOpts: true}
+	for _, c := range []struct {
+		args, want []string
+	}{
+		{[]string{"x", "/etc"}, []string{"/etc"}},
+		{[]string{"-e", "-x", "/etc"}, []string{"/etc"}},
+		{[]string{"/etc", "--regexp", "-x"}, []string{"/etc"}},
+		{[]string{"--", "-x", "/etc"}, []string{"/etc"}},
+		{[]string{"-e", "x", "--", "/etc"}, []string{"/etc"}},
+		{[]string{"--ext", "-e", "x", "/etc"}, []string{"/etc"}},
+		{[]string{"--", "--", "/etc"}, []string{"/etc"}},
+	} {
+		require.Equal(t, c.want, grep.Paths(c.args), c.args)
+	}
+	// Without EndOpts, -- still ends the paths (a command follows).
+	require.Equal(t, []string{"f"}, Spec{PathFrom: 0}.Paths([]string{"f", "--", "g"}))
+}

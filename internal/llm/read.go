@@ -15,6 +15,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // readMaxBytes is the default --max-bytes of llm_read: the content bytes
@@ -418,7 +419,7 @@ func (m *Module) read(c *invoke.Call) int {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use --lines A:B, --around RE, -C N, --max-bytes N, --format, --head, --tail, --max-lines or --width")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		p, r, ranged := splitPathRange(a)
 		paths = append(paths, pathArg{p, r, ranged})

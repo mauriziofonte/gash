@@ -16,6 +16,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // llm_date (plan V4): date arithmetic without GNU or BSD date and without
@@ -494,7 +495,7 @@ func (m *Module) dateAt(c *invoke.Call, now time.Time) int {
 			need = 1
 		default:
 			if strings.HasPrefix(w, "-") && w != "-" {
-				return fail(c, "unknown_option", w, "Use --diff A B, --add DATE DURATION, --epoch X, --tz ZONE, --fmt FORMAT")
+				return fail(c, "unknown_option", w, registry.OptionsHint(c.Name))
 			}
 			return fail(c, "unexpected_argument", w, "Dates go after --diff, --add or --epoch")
 		}

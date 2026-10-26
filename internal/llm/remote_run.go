@@ -24,6 +24,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmexec"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/remote"
 )
 
@@ -75,7 +76,7 @@ func (m *Module) remoteRun(c *invoke.Call) int {
 		case a == "--stop-on-error":
 			stop = true
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Run llm_remote_run --help for the options")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			aliases = append(aliases, a)
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // defaultTools are the programs llm_tools reports without a NAME.
@@ -52,7 +53,7 @@ func (m *Module) tools(c *invoke.Call) int {
 		a := args[0]
 		args = args[1:]
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use -j N or --timeout S")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		if !toolNameRE.MatchString(a) {
 			return fail(c, "invalid_filter", a, "Name programs by their plain name (git, php), not by path")

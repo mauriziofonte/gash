@@ -23,6 +23,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -143,7 +144,7 @@ func (m *Module) lint(c *invoke.Call) int {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use --ext, --php, --node, -j, --timeout, --max-lines, --width or --absolute")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		paths = append(paths, a)
 		args = args[1:]

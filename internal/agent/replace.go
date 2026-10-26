@@ -13,6 +13,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // maxReplaceBytes caps the size of a file agent_replace rewrites in memory.
@@ -109,7 +110,7 @@ func (m *Module) replace(c *invoke.Call) int {
 			force = true
 		default:
 			if strings.HasPrefix(a, "-") {
-				return fail(c, "unknown_option", a, "Use --old, --new, --count, --min, --regex, --dry-run, --force, --format or --width")
+				return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 			}
 			files = append(files, a)
 		}

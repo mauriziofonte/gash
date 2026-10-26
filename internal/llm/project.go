@@ -17,6 +17,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // isRegular is [[ -f PATH ]]: a regular file after symlinks.
@@ -264,7 +265,7 @@ func (m *Module) deps(c *invoke.Call) int {
 			includeDev = true
 			args = args[1:]
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --dev or a path")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		default:
 			if !pt.take(c, a) {
 				return 1

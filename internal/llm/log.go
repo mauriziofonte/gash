@@ -13,6 +13,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // logTailDefault is the number of lines llm_log prints when --tail and -n
@@ -471,7 +472,7 @@ func (m *Module) log(c *invoke.Call) int {
 			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Use --tail N, --last-match RE, -n N, --grep RE, --since T, --level L, --width N or --format")
+			return fail(c, "unknown_option", a, registry.OptionsHint(c.Name))
 		}
 		if !p.take(c, a) {
 			return 1

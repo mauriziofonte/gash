@@ -27,28 +27,41 @@ import (
 // searched as it is.
 func grepFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, bool) {
 	pattern, extensions, context, limit := "", "", "0", "100"
-	havePattern, havePath := false, false
+	havePattern, havePath, ended := false, false, false
 	path := "."
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		switch a {
-		case "--ext", "--context", "-C", "-n", "--limit":
-			if i+1 >= len(args) {
-				return argError("missing_value", a, a+" needs a value")
-			}
+		if !ended {
 			switch a {
-			case "--ext":
-				extensions = args[i+1]
-			case "--context", "-C":
-				context = args[i+1]
-			default:
-				limit = args[i+1]
+			case "--":
+				ended = true
+				continue
+			case "--ext", "--context", "-C", "-n", "--limit", "-e", "--regexp":
+				next := args[i+1:]
+				if len(next) == 0 {
+					return argError("missing_value", a, a+" needs a value")
+				}
+				switch a {
+				case "--ext":
+					extensions = next[0]
+				case "--context", "-C":
+					context = next[0]
+				case "-e", "--regexp":
+					if havePattern {
+						// The local parser decides (a second -e, or -e
+						// after a positional PATTERN that is then PATH).
+						return nil, false
+					}
+					pattern, havePattern = next[0], true
+				default:
+					limit = next[0]
+				}
+				i++
+				continue
 			}
-			i++
-			continue
-		}
-		if strings.HasPrefix(a, "-") {
-			return nil, false
+			if strings.HasPrefix(a, "-") {
+				return nil, false
+			}
 		}
 		switch {
 		case !havePattern:

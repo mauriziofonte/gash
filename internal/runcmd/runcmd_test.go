@@ -208,6 +208,9 @@ func TestRunCommand(t *testing.T) {
 	// A gash function runs in process, under the budget.
 	r = command(t, d, env, "run", "--max-lines", "1", "--", "llm_find", "*.txt", ".")
 	require.Equal(t, result{d + "/a.txt\n", "", 0}, r)
+	// --flag=value, as a direct call takes it (3.4.2).
+	r = command(t, d, env, "run", "--", "llm_find", "*.txt", ".", "--limit=1")
+	require.Equal(t, result{d + "/a.txt\n", "", 0}, r)
 
 	// gash's own errors.
 	for _, tc := range []struct {
