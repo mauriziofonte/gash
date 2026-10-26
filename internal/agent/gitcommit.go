@@ -19,6 +19,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -181,8 +182,10 @@ func (m *Module) gitCommit(c *invoke.Call) int {
 		return 1
 	}
 	env := c.Env.Child()
-	if _, err := runner.LookPath("git", env, ""); err != nil {
-		return fail(c, "git_not_found", "Git is not installed", "Git binary not found. Skip git operations")
+	// git as gash_doctor finds it: the macOS /usr/bin/git stub without the
+	// Command Line Tools counts as missing (3.4).
+	if _, ok := prereq.Locate(c, "git"); !ok {
+		return prereq.Fail(c, "git", "agent_git_commit", true)
 	}
 	g := m.guard(c)
 	if a.pushWord != "" {

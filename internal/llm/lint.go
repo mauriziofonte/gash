@@ -22,6 +22,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -182,12 +183,24 @@ func (m *Module) lint(c *invoke.Call) int {
 				return 1
 			}
 			tool = p
-		case "sh", "py":
-			name := map[string]string{"sh": "bash", "py": "python3"}[lang]
-			p, found := m.lookPath(c, name)
+		case "sh":
+			p, found := m.lookPath(c, "bash")
 			if !found {
 				return c.Fail(contract.New("runtime_not_installed",
-					name+" not found for "+strconv.Itoa(need[lang])+" ."+lang+" files", "Install "+name+" or leave ."+lang+" out with --ext; ask the user"))
+					"bash not found for "+strconv.Itoa(need[lang])+" .sh files", "Install bash or leave .sh out with --ext; ask the user"))
+			}
+			tool = p
+		case "py":
+			// python3 as gash_doctor finds it: the macOS /usr/bin/python3
+			// stub without the Command Line Tools counts as missing, and
+			// the report names the install command (3.4; before, the stub
+			// ran and every file failed with its message).
+			p, found := m.locate(c, "python3")
+			if !found {
+				r := prereq.Current(c).Report("python3", "llm_lint on "+strconv.Itoa(need[lang])+" .py files")
+				e := r.Envelope()
+				e.Hint += "; or leave .py out with --ext"
+				return c.Fail(e)
 			}
 			tool = p
 		}

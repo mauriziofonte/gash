@@ -186,3 +186,65 @@ func TestExecWithoutBash(t *testing.T) {
 	require.Equal(t, strings.Replace(want, "NEED", "gash run --safe", 1), errb.String())
 	require.Empty(t, out.String())
 }
+
+// pinMacStubs pins a macOS without the Command Line Tools: git and
+// python3 are the /usr/bin stubs, every other program comes from the
+// caller's PATH.
+func pinMacStubs(t *testing.T) {
+	t.Helper()
+	t.Cleanup(prereq.SetSystem(&prereq.System{
+		OS:      platform.OS{GOOS: "darwin", ID: "macos", Name: "macOS 15.1"},
+		Manager: prereq.Brew, Brew: "/opt/homebrew/bin/brew", Env: []string{"PATH=/usr/bin:/bin"},
+		LookPath: func(name string, env []string) (string, bool) {
+			if name == "git" || name == "python3" {
+				return "/usr/bin/" + name, true
+			}
+			p, err := runner.LookPath(name, env, "")
+			return p, err == nil
+		},
+		Xcode: func(string) bool { return false },
+	}))
+}
+
+// TestGitXcodeStub: on macOS without the Command Line Tools /usr/bin/git
+// is a stub, reported as git_not_found with the install command for
+// every git function and llm_find --tracked (3.4 before: the stub ran,
+// and its failure read as not_a_git_repo or a git error).
+func TestGitXcodeStub(t *testing.T) {
+	pinMacStubs(t)
+	d := physTemp(t)
+	m := New()
+	m.run = runner.NewFake(t)
+	env := baseEnv(physTemp(t), nil)
+	want := `{"error":"git_not_found","details":"NEED needs git, which is not installed","action":"CONTINUE","recoverable":true,` +
+		`"hint":"Install git: brew install git. On macOS git comes with the Command Line Tools: xcode-select --install","missing":"git","install":"brew install git"}` + "\n"
+	for _, tc := range []struct {
+		need string
+		args []string
+	}{
+		{"llm_git_status", nil}, {"llm_git_status", []string{"--summary"}},
+		{"llm_git_diff", nil}, {"llm_git_diff", []string{"--numstat"}},
+		{"llm_git_log", nil}, {"llm_git_log", []string{"--fields", "subject"}},
+		{"llm_git_show", []string{"HEAD"}}, {"llm_git_overview", nil},
+		{"llm_find --tracked", []string{"*", "--tracked"}},
+	} {
+		name := strings.Fields(tc.need)[0]
+		r := runGo(t, m, d, env, name, tc.args...)
+		require.Equal(t, result{"", strings.Replace(want, "NEED", tc.need, 1), 1}, r, "%s %v", name, tc.args)
+	}
+}
+
+// TestLintPythonXcodeStub: llm_lint on .py files with the macOS python3
+// stub reports python3 as missing, with the install command (3.4
+// before: the stub ran for each file and every file failed).
+func TestLintPythonXcodeStub(t *testing.T) {
+	pinMacStubs(t)
+	d := physTemp(t)
+	mustWrite(t, filepath.Join(d, "a.py"), "x = 1\n")
+	mustWrite(t, filepath.Join(d, "b.py"), "y = 2\n")
+	m := New()
+	m.run = runner.NewFake(t)
+	r := runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_lint")
+	require.Equal(t, result{"", `{"error":"runtime_not_installed","details":"llm_lint on 2 .py files needs python3, which is not installed","action":"STOP","recoverable":true,` +
+		`"hint":"Install python: brew install python; or leave .py out with --ext","missing":"python3","install":"brew install python"}` + "\n", 1}, r)
+}

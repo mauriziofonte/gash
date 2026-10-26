@@ -16,6 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -105,10 +106,14 @@ func (m *Module) readStatus(ctx context.Context, env []string, dir string) (gitx
 }
 
 // gitPresent is the git_not_found check of requireGitRepo, without the
-// repository test (the 3.4 modes learn that from their first git call).
-func (m *Module) gitPresent(c *invoke.Call) bool {
-	if _, ok := m.lookPath(c, "git"); !ok {
-		fail(c, "git_not_found", "Git is not installed", "Git binary not found. Skip git operations")
+// repository test (the 3.4 modes learn that from their first git call):
+// git found as gash_doctor finds it, so that the macOS /usr/bin/git stub
+// without the Command Line Tools counts as missing (3.4; before, the stub
+// ran and its failure read as not_a_git_repo or a git error), reported
+// with its install command for need.
+func (m *Module) gitPresent(c *invoke.Call, need string) bool {
+	if _, ok := m.locate(c, "git"); !ok {
+		prereq.Fail(c, "git", need, true)
 		return false
 	}
 	return true
@@ -233,7 +238,7 @@ func (m *Module) gitOverview(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
-	if !m.gitPresent(c) {
+	if !m.gitPresent(c, c.Name) {
 		return 1
 	}
 	d, ok := m.collectOverview(c.Ctx, c.Env.Child(), safe, atoi(logN))
@@ -314,7 +319,7 @@ func (m *Module) gitStatus(c *invoke.Call) int {
 	if mode.repos && len(mode.repoList) == 0 {
 		return fail(c, "missing_value", "--repos", "--repos needs one or more paths")
 	}
-	if !m.gitPresent(c) {
+	if !m.gitPresent(c, c.Name) {
 		return 1
 	}
 	if mode.repos {

@@ -51,6 +51,7 @@ var needs = map[string][]Need{
 	"llm_git_overview":   {{"git", ""}},
 	"llm_git_show":       {{"git", ""}},
 	"agent_git_commit":   {{"git", ""}},
+	"llm_find":           {{"git", "--tracked"}},
 	"gash_upgrade":       {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"}},
 	"gash update":        {{"git", ""}, {"bash", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}},
 
