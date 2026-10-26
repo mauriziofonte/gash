@@ -5,7 +5,9 @@ package prereq
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -309,4 +311,23 @@ func TestNeeds(t *testing.T) {
 		}
 	}
 	require.Equal(t, []string{"llm_procs (--port)", "port_kill"}, Users("lsof"))
+}
+
+// TestBrewFormulas asks Homebrew for every formula the catalog names: on
+// the macOS CI runner (GASH_TEST_BREW=1), skipped elsewhere.
+func TestBrewFormulas(t *testing.T) {
+	if os.Getenv("GASH_TEST_BREW") != "1" {
+		t.Skip("GASH_TEST_BREW=1 runs it (it needs Homebrew)")
+	}
+	brew, err := exec.LookPath("brew")
+	require.NoError(t, err)
+	var formulas []string
+	for _, tool := range Catalog() {
+		if f := tool.Packages[Brew]; f != "" && !tool.NoInstall && !slices.Contains(formulas, f) {
+			formulas = append(formulas, f)
+		}
+	}
+	out, err := exec.Command(brew, append([]string{"info", "--formula", "--json=v2"}, formulas...)...).CombinedOutput()
+	require.NoError(t, err, "%s\n%s", strings.Join(formulas, " "), out)
+	t.Log(strings.Join(formulas, " "))
 }

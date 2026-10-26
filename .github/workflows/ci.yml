@@ -142,6 +142,11 @@ jobs:
       - name: Build
         run: CGO_ENABLED=0 go build ./...
 
+      # Every Homebrew formula the prerequisites catalog names exists.
+      - name: Homebrew formulas of the prerequisites
+        if: runner.os == 'macOS'
+        run: GASH_TEST_BREW=1 go test ./internal/prereq -run '^TestBrewFormulas$' -count=1 -v
+
       # architecture.md 1: `gash version` under 10 ms. go test above runs the
       # check with a 3x factor (loaded machine, -race); here it runs alone on
       # the idle runner with the real budget (cmd/gash/version_budget_test.go).
@@ -226,11 +231,14 @@ jobs:
           bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
 
   distro-smoke:
-    # The release archive of this commit on the distros Gash supports, on
-    # both architectures the release ships: the bootstrap fetches it, checks
-    # it against release/SHA256SUMS, then gash_doctor and a few llm_* reads
-    # run (testdata/distro). What an image lacks to fetch (tar, gzip, curl)
-    # is installed first.
+    # Gash on the distros it supports, on both architectures the release
+    # ships, from the bare image (testdata/distro): install.sh --check names
+    # what the image lacks, install.sh --assume-yes installs it with the
+    # distro's package manager, clones this commit and fetches its release
+    # archive (checked against release/SHA256SUMS); then gash_doctor and a
+    # few llm_* reads run, and gash_doctor --install --all installs every
+    # package the prerequisites catalog names for the distro, each of which
+    # must provide its tool.
     name: Distro smoke (${{ matrix.image }}, ${{ matrix.os == 'ubuntu-24.04-arm' && 'arm64' || 'amd64' }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -238,15 +246,23 @@ jobs:
       matrix:
         os: [ubuntu-24.04, ubuntu-24.04-arm]
         image:
-          - rockylinux:8
-          - rockylinux:9-minimal
-          - almalinux:9
-          - almalinux:10
-          - oraclelinux:9
-          - amazonlinux:2023
-          - fedora:44
-          - debian:12
-          - ubuntu:24.04
+          - library/rockylinux:8
+          - library/rockylinux:9-minimal
+          - library/almalinux:9
+          - library/almalinux:10
+          - library/oraclelinux:9
+          - library/amazonlinux:2023
+          - library/fedora:44
+          - library/debian:12
+          - library/ubuntu:24.04
+          - library/alpine:3.22
+          - opensuse/leap:15.6
+          - opensuse/tumbleweed:latest
+          - library/archlinux:latest
+        exclude:
+          # Arch Linux publishes no arm64 image.
+          - os: ubuntu-24.04-arm
+            image: library/archlinux:latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -258,7 +274,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Smoke test in a ${{ matrix.image }} container
-        run: bash testdata/distro/run.sh "mirror.gcr.io/library/${{ matrix.image }}"
+        run: bash testdata/distro/run.sh "mirror.gcr.io/${{ matrix.image }}"
 
   hte-e2e:
     name: HTE E2E (${{ matrix.distro }}${{ matrix.story != 'base' && format(', {0}', matrix.story) || '' }})
