@@ -12,13 +12,15 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 const unknownUsername = "UNKNOWN_USERNAME"
 
 // username is gash_username: whoami, then id -un, then the /etc/passwd
-// entry of id -u, else UNKNOWN_USERNAME. An argument is refused (3.0:
-// SELF-15 fixed; 2.x ignored it).
+// entry of id -u (of the effective uid without id, 3.4), else
+// UNKNOWN_USERNAME with a warning that says why (3.4: silent). An argument
+// is refused (3.0: SELF-15 fixed; 2.x ignored it).
 func (m *Module) username(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -28,7 +30,8 @@ func (m *Module) username(c *invoke.Call) int {
 	}
 	name := ""
 	// if command -v whoami; then user_name=$(whoami 2>/dev/null) || true
-	if p, ok := m.lookPath(c, "whoami"); ok {
+	p, hasWhoami := m.lookPath(c, "whoami")
+	if hasWhoami {
 		if n, found := m.whoamiFiles(p); found {
 			name = n
 		} else {
@@ -39,19 +42,56 @@ func (m *Module) username(c *invoke.Call) int {
 	if name == "" && hasID {
 		name = m.output(c, "id", "-un")
 	}
+	uid := ""
 	if name == "" && hasID {
-		uid := m.output(c, "id", "-u")
-		if uid != "" {
-			if b, err := m.readFile(m.passwd); err == nil {
-				name = passwdNames(string(b), uid)
-			}
+		uid = m.output(c, "id", "-u")
+	}
+	if name == "" && !hasID {
+		uid = strconv.Itoa(os.Geteuid())
+	}
+	var passwdErr error
+	if name == "" && uid != "" {
+		var b []byte
+		if b, passwdErr = m.readFile(m.passwd); passwdErr == nil {
+			name = passwdNames(string(b), uid)
 		}
 	}
 	if name == "" {
 		name = unknownUsername
+		usernameWarning(c, uid, hasWhoami, hasID, passwdErr != nil, m.passwd)
 	}
 	_, _ = c.Stdout.Write([]byte(name + "\n"))
 	return 0
+}
+
+// usernameWarning says why gash_username prints UNKNOWN_USERNAME: what
+// was missing or knew no name.
+func usernameWarning(c *invoke.Call, uid string, hasWhoami, hasID, passwdUnreadable bool, passwd string) {
+	var why []string
+	for _, t := range []struct {
+		name string
+		has  bool
+	}{{"whoami", hasWhoami}, {"id", hasID}} {
+		if t.has {
+			why = append(why, t.name+" knows no name for it")
+		} else {
+			why = append(why, t.name+" is not installed")
+		}
+	}
+	switch {
+	case uid == "":
+		why = append(why, "id -u printed no uid")
+	case passwdUnreadable:
+		why = append(why, passwd+" cannot be read")
+	default:
+		why = append(why, passwd+" has no entry for it")
+	}
+	who := "the current user"
+	if uid != "" {
+		who = "uid " + uid
+	}
+	ui.NewPrinter(c.Stderr, c.Term, false).Warning("Cannot tell the name of " + who + ": " +
+		strings.Join(why[:len(why)-1], ", ") + ", and " + why[len(why)-1] + ".")
 }
 
 // whoamiFiles answers what the system whoami at path prints without running

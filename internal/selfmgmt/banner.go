@@ -4,6 +4,7 @@ package selfmgmt
 
 import (
 	"bytes"
+	"io"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -50,6 +51,7 @@ func (m *Module) bannerUsername(c *invoke.Call) string {
 	uc := *c
 	uc.Args = nil
 	uc.Stdout = &out
+	uc.Stderr = io.Discard // the banner shows UNKNOWN_USERNAME; no warning at shell start
 	m.username(&uc)
 	return string(bytes.TrimRight(out.Bytes(), "\n"))
 }

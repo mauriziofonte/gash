@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -97,6 +99,28 @@ func scriptBin(t *testing.T, scripts map[string]string) string {
 	}
 	return d + ":" + os.Getenv("PATH")
 }
+
+// pinSystem makes the prerequisite reports name Debian 12, as root.
+func pinSystem() (restore func()) {
+	return prereq.SetSystem(&prereq.System{OS: platform.OS{GOOS: "linux", ID: "debian", Name: "Debian GNU/Linux 12 (bookworm)"},
+		Manager: prereq.Apt, Root: true})
+}
+
+// report is the prerequisite report of a missing archive tool on Debian.
+func report(label, tool, purpose, pkg string) string {
+	return "Error: archive_extract (" + label + ") needs " + tool + ", which is not installed.\n" +
+		"  " + tool + " " + purpose + " (package " + pkg + " on Debian GNU/Linux 12).\n" +
+		"  Install it:  apt-get install -y " + pkg + "\n" +
+		"  Or run:      gash_doctor --install " + tool + "\n"
+}
+
+func gzipReport(label string) string {
+	return report(label, "gzip", "decompresses the Gash release archive and .gz files", "gzip")
+}
+
+func zstdReport(label string) string { return report(label, "zstd", "extracts .zst archives", "zstd") }
+
+var unzipReport = report(".zip", "unzip", "extracts .zip archives", "unzip")
 
 func need(t *testing.T, tools ...string) {
 	t.Helper()
@@ -267,9 +291,10 @@ func TestLedger_FILE03_fix(t *testing.T) {
 
 	e := t.TempDir()
 	write(t, filepath.Join(e, "s.txt.gz"), gzipBytes(t, "hi\n"))
+	restore := pinSystem()
 	_, errb, rc = runIn(t, e, map[string]string{"PATH": t.TempDir()}, nil, "archive_extract", "s.txt.gz")
-	if _, err := os.Lstat(filepath.Join(e, "s.txt")); rc != 1 || err == nil ||
-		errb != "Error: Command 'gunzip' is not installed or not in PATH.\n" {
+	restore()
+	if _, err := os.Lstat(filepath.Join(e, "s.txt")); rc != 1 || err == nil || errb != gzipReport(".gz") {
 		t.Errorf("missing gunzip: rc=%d err=%q created=%v", rc, errb, err == nil)
 	}
 
@@ -313,8 +338,10 @@ func TestLedger_FILE15_fix(t *testing.T) {
 }
 
 // TestLedger_FILE07_fix: nothing is created when the type is unsupported or
-// the branch's tool is missing (3.0: FILE-07 fixed).
+// the branch's tool is missing (3.0: FILE-07 fixed). 3.4: the missing tool
+// is the prerequisite report.
 func TestLedger_FILE07_fix(t *testing.T) {
+	defer pinSystem()()
 	d := t.TempDir()
 	write(t, filepath.Join(d, "f.abc"), []byte("x"))
 	write(t, filepath.Join(d, "a.tar.zst"), []byte("x"))
@@ -322,8 +349,8 @@ func TestLedger_FILE07_fix(t *testing.T) {
 	withRunner(t, runner.NewFake(t)) // nothing may start, mkdir included
 	for _, c := range []struct{ archive, path, err string }{
 		{"f.abc", os.Getenv("PATH"), "Error: Cannot extract 'f.abc', unsupported file type.\n"},
-		{"a.tar.zst", stubBin(t, "tar", "mkdir"), "Error: Extracting .zst needs zstd.\n"},
-		{"a.zip", stubBin(t, "mkdir"), "Error: Command 'unzip' is not installed or not in PATH.\n"},
+		{"a.tar.zst", stubBin(t, "tar", "mkdir"), zstdReport(".tar.zst")},
+		{"a.zip", stubBin(t, "mkdir"), unzipReport},
 	} {
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": c.path}, nil, "archive_extract", c.archive, "newdir")
 		if rc != 1 || errb != c.err {
@@ -403,13 +430,16 @@ func TestLedger_FILE17(t *testing.T) {
 }
 
 // TestLedger_FILE19 pins the missing-tool lines. 3.0: FILE-03 and FILE-07
-// fixed: the tools are checked before anything is created.
+// fixed: the tools are checked before anything is created. 3.4: each is the
+// prerequisite report ("Command 'X' is not installed or not in PATH." and
+// "Extracting .zst needs zstd." before).
 func TestLedger_FILE19(t *testing.T) {
+	defer pinSystem()()
 	t.Run("gunzip", func(t *testing.T) {
 		d := t.TempDir()
 		write(t, filepath.Join(d, "s.txt.gz"), gzipBytes(t, "hi\n"))
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": t.TempDir()}, nil, "archive_extract", "s.txt.gz")
-		if rc != 1 || errb != "Error: Command 'gunzip' is not installed or not in PATH.\n" {
+		if rc != 1 || errb != gzipReport(".gz") {
 			t.Errorf("rc=%d err=%q", rc, errb)
 		}
 		if _, err := os.Lstat(filepath.Join(d, "s.txt")); err == nil {
@@ -420,7 +450,7 @@ func TestLedger_FILE19(t *testing.T) {
 		d := t.TempDir()
 		writeZip(t, filepath.Join(d, "a.zip"), map[string]string{"src/a.txt": "a"}, nil)
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": linkBin(t, "mkdir")}, nil, "archive_extract", "a.zip", "newdir")
-		if rc != 1 || errb != "Error: Command 'unzip' is not installed or not in PATH.\n" {
+		if rc != 1 || errb != unzipReport {
 			t.Errorf("rc=%d err=%q", rc, errb)
 		}
 		if _, err := os.Lstat(filepath.Join(d, "newdir")); err == nil {
@@ -431,7 +461,7 @@ func TestLedger_FILE19(t *testing.T) {
 		d := t.TempDir()
 		write(t, filepath.Join(d, "s.zst"), []byte("x"))
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": t.TempDir()}, nil, "archive_extract", "s.zst")
-		if rc != 1 || errb != "Error: Extracting .zst needs zstd.\n" {
+		if rc != 1 || errb != zstdReport(".zst") {
 			t.Errorf("rc=%d err=%q", rc, errb)
 		}
 		if _, err := os.Stat(filepath.Join(d, "s")); err == nil {
@@ -446,7 +476,10 @@ func TestLedger_FILE19(t *testing.T) {
 		}
 		withRunner(t, runner.NewFake(t)) // no start at all: zstd is never run
 		_, errb, rc := runIn(t, d, map[string]string{"PATH": stubBin(t, "zstd")}, nil, "archive_extract", "a.tar.zst", "out")
-		if rc != 1 || errb != "Error: Command 'tar' is not installed or not in PATH.\n" {
+		if rc != 1 || errb != "Error: archive_extract (.tar.zst) needs tar, which is not installed.\n"+
+			"  tar unpacks the Gash release archive (package tar on Debian GNU/Linux 12).\n"+
+			"  Install it:  apt-get install -y tar\n"+
+			"  Or run:      gash_doctor --install tar\n" {
 			t.Errorf("rc=%d err=%q", rc, errb)
 		}
 	})
@@ -461,7 +494,7 @@ func TestLedger_FILE23(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(d, "o"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := stubBin(t, "tar", "unzip", "7z")
+	path := stubBin(t, "tar", "gzip", "unzip", "7z")
 	sevenList := runner.Expect{Argv: []string{"7z", "l", "-slt", "-ba", "--", "a.7z"}}
 	sevenX := []string{"7z", "x", "-spd", "-aos", "-oo", "--", "a.7z"}
 	cases := []struct {
@@ -496,7 +529,7 @@ func TestLedger_FILE24_2x(t *testing.T) {
 		EnvLacks: []string{"GASH__HELP"},
 	}))
 	_, _, rc := runIn(t, d, map[string]string{
-		"PATH": stubBin(t, "tar"), "HOME": "/home/u", "TAR_OPTIONS": "--keep-old-files", "UNZIP": "-o",
+		"PATH": stubBin(t, "tar", "gzip"), "HOME": "/home/u", "TAR_OPTIONS": "--keep-old-files", "UNZIP": "-o",
 	}, nil, "archive_extract", "a.tgz", "o")
 	if rc != 0 {
 		t.Errorf("rc=%d", rc)
@@ -513,7 +546,7 @@ func TestLedger_FILE08_fix(t *testing.T) {
 		runner.Expect{Argv: []string{"tar", "xvzf", "a.tgz", "-C", "./--help", "--no-same-owner", "--no-same-permissions"}},
 	)
 	withRunner(t, f)
-	if _, _, rc := runIn(t, d, map[string]string{"PATH": stubBin(t, "tar", "mkdir")}, nil, "archive_extract", "a.tgz", "--help"); rc != 0 {
+	if _, _, rc := runIn(t, d, map[string]string{"PATH": stubBin(t, "tar", "gzip", "mkdir")}, nil, "archive_extract", "a.tgz", "--help"); rc != 0 {
 		t.Errorf("fake: rc=%d", rc)
 	}
 

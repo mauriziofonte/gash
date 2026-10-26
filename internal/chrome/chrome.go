@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -83,17 +85,6 @@ type call struct {
 
 func (k *call) env() []string { return k.c.Env.Child() }
 
-// output is `$(NAME ARGS...)` with stderr passed through.
-func (k *call) output(name string, args ...string) (string, int) {
-	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
-		Options: runner.Options{Env: k.env(), Stderr: k.c.Stderr}})
-	if se := (*runner.StartError)(nil); errors.As(err, &se) {
-		write(k.c.Stderr, "bash: "+se.Error()+"\n")
-		return "", se.Status
-	}
-	return runner.CommandSubst(res.Stdout), res.ExitCode
-}
-
 // status runs a program with its output discarded.
 func (k *call) status(name string, args ...string) int {
 	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
@@ -146,16 +137,15 @@ func (m *Module) update(c *invoke.Call) int {
 		}
 	}
 
-	if sys, _ := k.output("uname", "-s"); sys != "Linux" || k.machine() != "x86_64" {
-		sys, _ = k.output("uname", "-s")
-		k.p.Error("Chrome for Testing publishes chrome-headless-shell for Linux x86_64 only (this is " + sys + " " + k.machine() + ").")
+	if sys, arch := k.platform(); sys != "Linux" || arch != "x86_64" {
+		k.p.Error("Chrome for Testing publishes chrome-headless-shell for Linux x86_64 only (this is " + sys + " " + arch + ").")
 		return 1
 	}
-	// curl and jq are not needed any more (SYS-36).
+	// curl and jq are not needed any more (SYS-36). 3.4: a missing tool is
+	// the prerequisite report ("chrome_headless_update needs 'ldd'." before).
 	for _, tool := range []string{"unzip", "ldd"} {
 		if !k.found(tool) {
-			k.p.Error("chrome_headless_update needs '" + tool + "'.")
-			return 1
+			return prereq.Fail(c, tool, c.Name, false)
 		}
 	}
 
@@ -332,10 +322,32 @@ func (k *call) priv(sudo bool, name string, args ...string) int {
 }
 
 // machine is `$(uname -m)`.
-func (k *call) machine() string {
-	m, _ := k.output("uname", "-m")
-	return m
+// platform is `uname -s` and `uname -m`, else (uname missing or silent)
+// the system and architecture Gash was built for, in uname's words (3.4:
+// the error read "(this is  )").
+func (k *call) platform() (sys, arch string) {
+	sys, _ = k.quiet("uname", "-s")
+	arch, _ = k.quiet("uname", "-m")
+	if sys == "" {
+		sys = map[string]string{"linux": "Linux", "darwin": "Darwin"}[goos]
+		if sys == "" {
+			sys = goos
+		}
+	}
+	if arch == "" {
+		arch = map[string]string{"amd64": "x86_64", "arm64": "aarch64", "386": "i686"}[goarch]
+		if goos == "darwin" && goarch == "arm64" {
+			arch = "arm64"
+		}
+		if arch == "" {
+			arch = goarch
+		}
+	}
+	return sys, arch
 }
+
+// goos and goarch are the fallback of platform; a test seam.
+var goos, goarch = runtime.GOOS, runtime.GOARCH
 
 func boolStatus(ok bool) int {
 	if ok {

@@ -87,6 +87,9 @@ var catalog = []Tool{
 	{Name: "ssh-agent", Purpose: "holds the unlocked SSH keys",
 		Level: Feature, Area: "remote", Builtin: []string{"darwin"},
 		Packages: pkgs("openssh-client", "dnf", "openssh-clients", "pacman", "openssh", "zypper", "openssh-clients", "brew", "")},
+	{Name: "ssh-keygen", Purpose: "tells the SSH keys already in the agent, and checks SSH-signed release tags",
+		Level: Optional, Area: "remote", Builtin: []string{"darwin"},
+		Packages: pkgs("openssh-client", "dnf", "openssh-clients", "pacman", "openssh", "zypper", "openssh-clients", "brew", "")},
 
 	// Processes and ports.
 	{Name: "ps", Purpose: "lists the running processes",
@@ -156,6 +159,11 @@ var catalog = []Tool{
 		OS: []string{"linux"}, NoInstall: true, Note: "It comes with systemd"},
 	{Name: "fzf", Purpose: "picks an entry from a list", Level: Optional, Area: "system",
 		Packages: pkgs("fzf"), EPEL: true},
+	{Name: "truncate", Purpose: "empties root-owned live logs for gash logs clean --sudo --truncate", Level: Optional,
+		Area: "system", Packages: pkgs("coreutils", "brew", "truncate")},
+	{Name: "ldd", Purpose: "lists the shared libraries chrome-headless-shell needs", Level: Feature, Area: "system",
+		OS: []string{"linux"}, Packages: pkgs("libc-bin", "dnf", "glibc-common", "pacman", "glibc", "zypper", "glibc",
+			"apk", "musl-utils", "brew", "")},
 	{Name: "bc", Purpose: "is the calculator behind the calc alias", Level: Optional, Area: "system",
 		Packages: pkgs("bc", "brew", ""), Builtin: []string{"darwin"}},
 
@@ -173,7 +181,10 @@ var catalog = []Tool{
 	{Name: "powershell.exe", Purpose: "answers the gash win queries and edits the Windows hosts file",
 		Level: Feature, Area: "windows", OS: []string{"wsl"}, Code: "windows_not_found", NoInstall: true,
 		Note: "It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf)"},
-	{Name: "cmd.exe", Purpose: "restarts and shuts down WSL from inside it",
+	{Name: "cmd.exe", Purpose: "restarts and shuts down WSL from inside it, and starts the Task Manager",
+		Level: Feature, Area: "windows", OS: []string{"wsl"}, NoInstall: true,
+		Note: "It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf)"},
+	{Name: "explorer.exe", Purpose: "opens Windows Explorer from WSL",
 		Level: Feature, Area: "windows", OS: []string{"wsl"}, NoInstall: true,
 		Note: "It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf)"},
 

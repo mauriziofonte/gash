@@ -27,6 +27,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -177,6 +178,9 @@ func (r *run) doClean(_ *cobra.Command, args []string) error {
 	if len(ops) == 0 {
 		return r.cleanResult(rep, Result{}, true)
 	}
+	if !r.rootReady(ops) {
+		return nil
+	}
 	// The confirmation: a human sees the report and the total; headless or
 	// without --yes on a pipe it must pass --yes.
 	if !r.dryRun && !r.yes {
@@ -189,6 +193,33 @@ func (r *run) doClean(_ *cobra.Command, args []string) error {
 	cl := cleaner{run: r.opt.Run, dryRun: r.dryRun, useSudo: r.useSudo}
 	res := cl.apply(r.c.Ctx, ops)
 	return r.cleanResult(rep, res, false)
+}
+
+// rootReady checks, before anything is asked or changed, the programs the
+// sudo batches run: sudo, and truncate when a root-owned live log is
+// truncated (3.4: a missing one was "N files could not be removed.", after
+// the other files were changed).
+func (r *run) rootReady(ops []op) bool {
+	if !r.useSudo || r.dryRun {
+		return true
+	}
+	need := map[string]bool{}
+	for _, o := range ops {
+		if o.needRoot {
+			need["sudo"] = true
+			need["truncate"] = need["truncate"] || o.Truncate
+		}
+	}
+	for _, t := range [][2]string{{"sudo", "gash logs clean --sudo"}, {"truncate", "gash logs clean --sudo --truncate"}} {
+		if !need[t[0]] {
+			continue
+		}
+		if _, ok := prereq.Locate(r.c, t[0]); !ok {
+			r.status = prereq.Fail(r.c, t[0], t[1], r.asJSON)
+			return false
+		}
+	}
+	return true
 }
 
 // confirmClean shows the plan and asks, unless there is no terminal.

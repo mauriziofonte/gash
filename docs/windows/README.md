@@ -22,6 +22,7 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [sudo](../requirements.md#tool-sudo) (feature), for `wsl_compact`
 - [powershell.exe](../requirements.md#tool-powershell.exe) (feature), for `gash win`
 - [cmd.exe](../requirements.md#tool-cmd.exe) (feature), for `wsl_restart`, `wsl_shutdown` and `wsl_taskmanager`
+- [explorer.exe](../requirements.md#tool-explorer.exe) (feature), for `wsl_explorer`
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).

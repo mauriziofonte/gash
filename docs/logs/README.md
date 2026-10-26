@@ -16,6 +16,7 @@ Platforms: Linux, macOS and WSL. With no path given, the scan includes
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
 - [sudo](../requirements.md#tool-sudo) (feature), for `gash logs` (clean --sudo)
+- [truncate](../requirements.md#tool-truncate) (optional), for `gash logs` (clean --sudo --truncate)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).

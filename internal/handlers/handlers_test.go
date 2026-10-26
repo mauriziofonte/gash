@@ -41,7 +41,7 @@ func TestTableBuilds(t *testing.T) {
 	require.Equal(t, want, tbl.Names())
 	require.Contains(t, tbl.Names(), "llm_find")
 	require.Contains(t, tbl.Names(), "agent_replace")
-	require.Equal(t, []string{"env load", "help", "json arr", "json str", "output box", "output choose",
+	require.Equal(t, []string{"env load", "env perms", "help", "json arr", "json str", "output box", "output choose",
 		"output download", "output table", "output wrap"}, tbl.CompatOps())
 }
 

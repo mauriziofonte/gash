@@ -18,7 +18,10 @@ other program is needed. `ai_sysinfo` reads what
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
+- [ss](../requirements.md#tool-ss) (feature), for `ai_sysinfo` (questions)
 - [sudo](../requirements.md#tool-sudo) (feature), for `ai_sysinfo` (the privileged sections)
+- [systemctl](../requirements.md#tool-systemctl) (feature), for `ai_sysinfo` (questions)
+- [journalctl](../requirements.md#tool-journalctl) (optional), for `ai_sysinfo` (questions)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).

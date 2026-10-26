@@ -21,6 +21,7 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [rsync](../requirements.md#tool-rsync) (feature), for `remote_sync_pull` and `remote_sync_push`
 - [ssh-add](../requirements.md#tool-ssh-add) (feature), for `gash_ssh_auto_unlock`
 - [ssh-agent](../requirements.md#tool-ssh-agent) (feature), for `gash_ssh_auto_unlock`
+- [ssh-keygen](../requirements.md#tool-ssh-keygen) (optional), for `gash_ssh_auto_unlock` (keys already loaded)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).

@@ -31,8 +31,8 @@ type member struct {
 // an absolute name, a ".." component, a symlink or hard link whose target
 // escapes OUTPUT_DIR, or a member that lies below a symlink member. Formats
 // with no member list (single-file compressors) and archives the guard
-// cannot read (a missing list tool, a corrupt header) return not-unsafe, so
-// 2.x's own handling takes over.
+// cannot read (a corrupt header) return not-unsafe, so 2.x's own handling
+// takes over; a decompressor that is not there is a missingErr.
 func memberGuard(c *invoke.Call, k kind, archive, outputDir string) (string, bool, error) {
 	members, err := listMembers(c, k, archive)
 	if err != nil || members == nil {
@@ -181,16 +181,22 @@ func readTar(r io.Reader) ([]member, error) {
 	}
 }
 
+// missingErr is a program the guard needs that is not on PATH: the archive
+// is refused, never extracted unchecked (3.4: the guard stood down).
+type missingErr struct{ cmd string }
+
+func (e *missingErr) Error() string { return e.cmd + " is not installed" }
+
 // readTarPiped decompresses with `TOOL ARGS...` (the archive is the last
 // argument) through the runner and reads the tar stream it produces. A
-// missing tool or a read error returns nil (no guard), so the extraction
-// path reports it.
+// read error returns nil (no guard), so the extraction path reports it; a
+// missing decompressor or tar is a missingErr (archiveExtract has checked
+// both, so only a program removed since gets here), and a missing tar
+// never starts the decompressor (FILE-19).
 func readTarPiped(c *invoke.Call, tool string, args []string, stdin io.Reader) ([]member, error) {
-	// Stand down when the decompressor or tar is missing: the extraction
-	// path then reports it, and a missing tar never starts zstd (FILE-19).
-	for _, need := range []string{tool, "tar"} {
+	for _, need := range []string{"tar", tool} {
 		if _, err := runner.LookPath(need, c.Env.Child(), ""); err != nil {
-			return nil, nil
+			return nil, &missingErr{need}
 		}
 	}
 	rnr := runnerFor(c)

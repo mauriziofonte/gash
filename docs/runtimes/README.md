@@ -20,6 +20,7 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [php](../requirements.md#tool-php) (feature), for `php_detect_version`, `gash runtime` (php) and `gash run` (--runtime php)
 - [composer](../requirements.md#tool-composer) (optional), for `gash runtime` (composer) and `gash run` (--runtime composer)
 - [node](../requirements.md#tool-node) (feature), for `node_upgrade`, `nvm_prune_versions`, `gash runtime` (node) and `gash run` (--runtime node)
+- [ldd](../requirements.md#tool-ldd) (feature), for `chrome_headless_update`
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).

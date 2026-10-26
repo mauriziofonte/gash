@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
@@ -440,11 +442,37 @@ func TestOptionsAndTools(t *testing.T) {
 	require.Equal(t, 0, rc)
 	require.Contains(t, r.out, "chrome_headless_update [-y] [--dry-run]")
 
+	// 3.4: the prerequisite report ("chrome_headless_update needs 'ldd'."
+	// before).
+	defer prereq.SetSystem(&prereq.System{OS: platform.OS{GOOS: "linux", ID: "debian", Name: "Debian GNU/Linux 12 (bookworm)"},
+		Manager: prereq.Apt, Root: true})()
 	require.NoError(t, os.Remove(filepath.Join(fx.bin, "ldd")))
 	fx.env["PATH"] = fx.bin
 	r, rc = fx.call(t, nil)
 	require.Equal(t, 1, rc)
-	require.Equal(t, result{"", "Error: chrome_headless_update needs 'ldd'.\n"}, r)
+	require.Equal(t, result{"", "Error: chrome_headless_update needs ldd, which is not installed.\n" +
+		"  ldd lists the shared libraries chrome-headless-shell needs (package libc-bin on Debian GNU/Linux 12).\n" +
+		"  Install it:  apt-get install -y libc-bin\n" +
+		"  Or run:      gash_doctor --install ldd\n"}, r)
+	require.Empty(t, fx.srv.seen)
+}
+
+// Without uname the platform is the one Gash was built for, in uname's
+// words (3.4: "(this is  )").
+func TestPlatformWithoutUname(t *testing.T) {
+	fx := newFixture(t)
+	require.NoError(t, os.Remove(filepath.Join(fx.bin, "uname")))
+	fx.env["PATH"] = fx.bin
+	oldOS, oldArch := goos, goarch
+	t.Cleanup(func() { goos, goarch = oldOS, oldArch })
+	for _, c := range []struct{ goos, goarch, shown string }{
+		{"linux", "arm64", "Linux aarch64"}, {"darwin", "arm64", "Darwin arm64"}, {"freebsd", "riscv64", "freebsd riscv64"},
+	} {
+		goos, goarch = c.goos, c.goarch
+		r, rc := fx.call(t, nil)
+		require.Equal(t, 1, rc)
+		require.Equal(t, result{"", "Error: Chrome for Testing publishes chrome-headless-shell for Linux x86_64 only (this is " + c.shown + ").\n"}, r)
+	}
 	require.Empty(t, fx.srv.seen)
 }
 

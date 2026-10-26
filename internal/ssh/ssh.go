@@ -19,6 +19,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -109,7 +110,8 @@ func (s *session) exports(ran bool) string {
 // autoUnlock is gash_ssh_auto_unlock. The stub override evaluates the
 // export lines the binary hands back (SSH_AUTH_SOCK, SSH_AGENT_PID,
 // GASH_SSH_AUTOUNLOCK_RAN); a direct run does the work without them.
-// Status 0 whatever happens, as 2.x.
+// Status 1 when the keys could not be unlocked: no ssh-add, no agent
+// (3.4: status 0 whatever happened).
 func (m *Module) autoUnlock(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -122,6 +124,9 @@ func (m *Module) autoUnlock(c *invoke.Call) int {
 	s := &session{c: c, env: c.Env.Child(), vars: map[string]string{}}
 	ran := m.unlock(c, s)
 	ch.Send(s.exports(ran))
+	if !ran {
+		return 1
+	}
 	return 0
 }
 
@@ -136,7 +141,9 @@ func (m *Module) unlock(c *invoke.Call, s *session) bool {
 		return true
 	}
 	if !m.found(s, "ssh-add") {
-		p.Error("ssh-add is not available; cannot auto-unlock SSH keys.")
+		// 3.4: the prerequisite report ("ssh-add is not available; cannot
+		// auto-unlock SSH keys." before).
+		prereq.Fail(c, "ssh-add", c.Name, false)
 		return false
 	}
 	// ssh-add -l exits 2 when it reaches no agent, whatever it says: an
@@ -146,6 +153,11 @@ func (m *Module) unlock(c *invoke.Call, s *session) bool {
 		m.startAgent(s)
 		list, rc = m.list(s)
 		if rc == 2 || strings.Contains(list, noAgent) {
+			if !m.found(s, "ssh-agent") {
+				// 3.4: a missing ssh-agent was "not running" too.
+				prereq.Fail(c, "ssh-agent", c.Name, false)
+				return false
+			}
 			p.Error("ssh-agent is not running and could not be started automatically.")
 			return false
 		}
@@ -158,9 +170,15 @@ func (m *Module) unlock(c *invoke.Call, s *session) bool {
 	if strings.Contains(list, "SHA256:") || strings.Contains(list, "MD5:") {
 		loaded = list
 	}
+	if loaded != "" && !m.found(s, "ssh-keygen") {
+		// 3.4: the keys already loaded were added again without a word.
+		p.Warning("ssh-keygen is not installed, so the keys already in the agent cannot be recognized: every key is added again.")
+		p.Hint(prereq.Current(c).Report("ssh-keygen", c.Name).Advice())
+		loaded = ""
+	}
 	var todo []config.Entry
 	for _, k := range keys {
-		if loaded != "" && m.found(s, "ssh-keygen") {
+		if loaded != "" {
 			if fp := m.fingerprint(s, k.Name); fp != "" && strings.Contains(loaded, " "+fp+" ") {
 				continue
 			}

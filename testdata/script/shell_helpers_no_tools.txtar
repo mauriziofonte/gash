@@ -1,0 +1,51 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.4 prerequisites)
+#
+# The shell helpers that ran external programs work without them. 3.4:
+# gash_unload swept the gash_*/__gash_* functions and the GASH_*/__GASH_*
+# variables through awk and grep, so without them a function or variable
+# made after the load survived the unload; __gash_check_env_perms read the
+# mode with GNU or BSD stat only, so without stat the warning about a
+# readable ~/.gash_env was not printed.
+
+env HOME=$WORK
+mkdir empty
+
+# --- gash_unload with a PATH that has no awk and no grep.
+exec bash --norc --noprofile -i unload.sh
+stdout '^before=function set$'
+stdout '^after= unset$'
+! stdout '^left '
+
+# --- __gash_check_env_perms with no stat: the binary checks the file;
+# without the binary either, the warning says why nothing was checked. A
+# private file gives no mode warning.
+chmod 0644 env
+exec bash --norc --noprofile -i perms.sh
+stderr '^Warning: ~/env is accessible by other users \(mode 644\)\. Run: chmod 600 ~/env$'
+stderr '^Warning: Cannot check who may read ~/env: stat is not installed or reads neither the GNU nor the BSD format\.$'
+chmod 0600 env
+exec bash --norc --noprofile -i perms.sh
+! stderr 'accessible'
+
+-- env --
+GASH_BANNER=0
+-- unload.sh --
+source "$GASH_SH" >/dev/null 2>&1
+# Made after the load, so only the per-prefix sweeps remove them.
+gash_mine() { :; }
+GASH_MINE=1
+echo "before=$(type -t gash_mine) ${GASH_MINE:+set}"
+PATH=$WORK/empty
+gash_unload
+echo "after=$(type -t gash_mine) ${GASH_MINE-unset}"
+for f in $(compgen -A function gash_; compgen -A function __gash_); do
+    [[ "$f" == gash_unload ]] || echo "left $f"
+done
+-- perms.sh --
+source "$GASH_SH" >/dev/null 2>&1
+PATH=$WORK/empty
+__gash_check_env_perms "$HOME/env"
+__gash_compat_ready() { return 1; }
+__gash_check_env_perms "$HOME/env"

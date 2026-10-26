@@ -51,8 +51,11 @@ var needs = map[string][]Need{
 	"llm_git_overview":   {{"git", ""}},
 	"llm_git_show":       {{"git", ""}},
 	"agent_git_commit":   {{"git", ""}},
-	"gash_upgrade":       {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"}},
-	"gash update":        {{"git", ""}, {"bash", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}},
+	"gash_upgrade": {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
+		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
+	"gash_uninstall": {{"sed", ""}},
+	"gash update": {{"git", ""}, {"bash", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
+		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
 
 	// Remote hosts and SSH.
 	"remote_exec":          {{"ssh", ""}},
@@ -69,7 +72,7 @@ var needs = map[string][]Need{
 	"llm_db_sample":        {{"ssh", "a +ssh URL"}},
 	"llm_db_explain":       {{"ssh", "a +ssh URL"}},
 	"llm_db_databases":     {{"ssh", "a +ssh URL"}},
-	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}},
+	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}, {"ssh-keygen", "keys already loaded"}},
 
 	// Processes and ports.
 	"llm_procs":    {{"ps", "on macOS, or without /proc"}, {"lsof", "--port"}, {"pgrep", "--name"}},
@@ -94,7 +97,7 @@ var needs = map[string][]Need{
 	// Archives.
 	"archive_extract": {{"tar", "tar archives"}, {"gzip", ".gz"}, {"bzip2", ".bz2"}, {"xz", ".xz"}, {"zstd", ".zst"},
 		{"unzip", ".zip"}, {"7z", ".7z"}, {"unrar", ".rar"}, {"uncompress", ".Z"}},
-	"chrome_headless_update": {{"unzip", ""}},
+	"chrome_headless_update": {{"unzip", ""}, {"ldd", ""}},
 
 	// Runtimes and linters.
 	"llm_lint":           {{"php", ".php files"}, {"node", ".js files"}, {"python3", ".py files"}, {"bash", ".sh files"}},
@@ -114,11 +117,11 @@ var needs = map[string][]Need{
 	"services_stop": {{"systemctl", ""}, {"sudo", ""}},
 	"sudo_last":     {{"sudo", ""}},
 	"sysinfo":       {{"sudo", "the privileged sections"}},
-	"ai_sysinfo":    {{"sudo", "the privileged sections"}},
+	"ai_sysinfo":    {{"sudo", "the privileged sections"}, {"systemctl", "questions"}, {"journalctl", "questions"}, {"ss", "questions"}},
 	"wsl_compact":   {{"sudo", ""}},
 	"hgrep":         {{"fzf", "--pick"}},
 	"history_grep":  {{"fzf", "--pick"}},
-	"gash logs":     {{"sudo", "clean --sudo"}},
+	"gash logs":     {{"sudo", "clean --sudo"}, {"truncate", "clean --sudo --truncate"}},
 	"gash init":     {{"bc", "the calc alias"}},
 
 	// Local web stack.
@@ -129,6 +132,7 @@ var needs = map[string][]Need{
 	"wsl_restart":     {{"cmd.exe", ""}},
 	"wsl_shutdown":    {{"cmd.exe", ""}},
 	"wsl_taskmanager": {{"cmd.exe", ""}},
+	"wsl_explorer":    {{"explorer.exe", ""}},
 }
 
 // needsIndex is needs plus ssh for every --host function, built on first

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -114,8 +116,9 @@ func (m *Module) wslCmd(c *invoke.Call, args ...string) int {
 }
 
 // wslExplorer is wsl_explorer [PATH]: Explorer on the Windows form of
-// PATH (wslpath -w, else PATH as given); status 0 whatever explorer.exe
-// returns.
+// PATH. explorer.exe exits 1 even when the window opens, so its status is
+// not a failure; a missing explorer.exe is (3.4: status 0 whatever
+// happened).
 func (m *Module) wslExplorer(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -123,8 +126,9 @@ func (m *Module) wslExplorer(c *invoke.Call) int {
 	if !m.requireWSL(c) {
 		return 1
 	}
+	p := ui.NewPrinter(c.Stderr, c.Term, false)
 	if len(c.Args) > 1 {
-		ui.NewPrinter(c.Stderr, c.Term, false).Error(unexpectedArg(c.Args[1]))
+		p.Error(unexpectedArg(c.Args[1]))
 		return 1
 	}
 	target := c.Arg(0)
@@ -132,19 +136,62 @@ func (m *Module) wslExplorer(c *invoke.Call) int {
 		target = "."
 	}
 	if _, err := os.Stat(target); err != nil {
-		ui.NewPrinter(c.Stderr, c.Term, false).Error("No such file or directory: " + target)
+		p.Error("No such file or directory: " + target)
 		return 1
 	}
-	win, st := m.output(c, "wslpath", "-w", target)
-	if st != 0 {
-		win = target
+	win, why := m.windowsPath(c, target)
+	if win == "" {
+		p.Error("Cannot open " + target + " in Explorer: " + why + ".")
+		return 1
 	}
-	_ = m.passthrough(c, m.winExe("explorer.exe"), win)
+	_, err := m.run.Run(ctx(c), runner.Cmd{Path: m.winExe("explorer.exe"), Args: []string{win},
+		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
+		if se.Status == 127 {
+			return prereq.Fail(c, "explorer.exe", "wsl_explorer", false)
+		}
+		write(c.Stderr, "bash: "+se.Error()+"\n")
+		return se.Status
+	}
 	return 0
 }
 
+// windowsPath is the Windows form of target: wslpath -w, else (wslpath
+// missing or failing) the same translation done here from the drive
+// mounts and WSL_DISTRO_NAME (3.4: the Linux path went to Explorer as it
+// was). On failure it returns "" and why.
+func (m *Module) windowsPath(c *invoke.Call, target string) (win, why string) {
+	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "wslpath", Args: []string{"-w", target},
+		Options: runner.Options{Env: c.Env.Child()}})
+	if err == nil && res.Success() {
+		if win = runner.CommandSubst(res.Stdout); win != "" {
+			return win, ""
+		}
+	}
+	msg, _, _ := strings.Cut(strings.TrimSpace(string(res.Stderr)), "\n")
+	switch {
+	case notInstalled(err):
+		why = "wslpath is not installed"
+	case msg != "":
+		why = "wslpath failed (" + strings.TrimSpace(msg) + ")"
+	default:
+		why = "wslpath failed"
+	}
+	abs, aerr := filepath.Abs(target)
+	if aerr != nil {
+		return "", why
+	}
+	win, terr := wsl.Detect(m.sys, c.Env.Get).ToWindows(abs, wsl.FormWindows)
+	if terr != nil {
+		return "", why + ", and " + terr.Error()
+	}
+	return win, ""
+}
+
 // wslTaskmanager is wsl_taskmanager: `(__gash_wsl_cmd taskmgr &)`, a
-// background start that is not waited for.
+// background start that is not waited for. A cmd.exe that does not start
+// is the prerequisite report and status 1 (3.4: status 0 whatever
+// happened).
 func (m *Module) wslTaskmanager(c *invoke.Call) int {
 	if help.NeedsOf(c, c.Arg(0)) {
 		return 0
@@ -154,10 +201,12 @@ func (m *Module) wslTaskmanager(c *invoke.Call) int {
 	}
 	cmd := runner.Cmd{Path: m.winExe("cmd.exe"), Args: []string{"/C", "taskmgr"},
 		Options: runner.Options{Env: c.Env.Child(), Dir: m.winDir(), Stdout: osFile(c.Stdout), Stderr: osFile(c.Stderr)}}
-	if err := m.run.Start(ctx(c), cmd); err != nil {
-		if se := (*runner.StartError)(nil); errors.As(err, &se) {
-			write(c.Stderr, "bash: "+se.Error()+"\n")
+	if se := (*runner.StartError)(nil); errors.As(m.run.Start(ctx(c), cmd), &se) {
+		if se.Status == 127 {
+			return prereq.Fail(c, "cmd.exe", "wsl_taskmanager", false)
 		}
+		write(c.Stderr, "bash: "+se.Error()+"\n")
+		return se.Status
 	}
 	return 0
 }
@@ -232,7 +281,11 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		return 1
 	}
 	s := ui.StyleOf(c.Term, false)
-	plain, dmesgRC := m.output(c, "dmesg")
+	dres, derr := m.run.Run(ctx(c), runner.Cmd{Path: "dmesg", Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
+	plain, dmesgRC := runner.CommandSubst(dres.Stdout), dres.ExitCode
+	if derr != nil && dmesgRC == 0 {
+		dmesgRC = 1
+	}
 	fails := 0
 	for _, l := range strings.Split(plain, "\n") {
 		if strings.Contains(l, order7) {
@@ -251,7 +304,11 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 	if last != "" {
 		value += " (last: " + last + ")"
 	}
-	if dmesgRC != 0 {
+	switch {
+	case notInstalled(derr):
+		// 3.4: a missing dmesg is not an unreadable one.
+		value = "unknown (dmesg is not installed)"
+	case dmesgRC != 0:
 		// kernel.dmesg_restrict: no count at all, not 0 (SYS-45).
 		value = "unknown (dmesg not readable)"
 	}
@@ -262,12 +319,15 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		s.KV(c.Stdout, "--width", "22", "MemFree", before[0], "SReclaimable (slab)", before[1], "free >=512KiB blocks", before[2])
 		return 0
 	}
-	if !m.sudoReady(c, p) {
+	if !m.sudoReady(c, p, "wsl_compact") {
 		return 1
 	}
 	p.Info("Dropping the page cache and slab, then compacting memory (sudo)...")
 	res, err := m.run.RunScript(ctx(c), runner.Script{Name: runner.ScriptWSLCompact,
 		Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
+	if notInstalled(err) {
+		return prereq.Fail(c, "sudo", "wsl_compact", false)
+	}
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
 		write(c.Stderr, "bash: "+se.Error()+"\n")
 	}

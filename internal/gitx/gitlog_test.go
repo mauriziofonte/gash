@@ -4,6 +4,8 @@ package gitx
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -47,6 +49,10 @@ func runLog(t *testing.T, env map[string]string, cfgOK bool, fn string, args ...
 		}
 		return runner.Expect{}, false
 	})
+	// A git on PATH for the prerequisite check; the fake answers its runs.
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\n"), 0o755))
+	env["PATH"] = bin + ":" + env["PATH"]
 	e := invoke.EnvMap(env)
 	var out, errb bytes.Buffer
 	c := &invoke.Call{

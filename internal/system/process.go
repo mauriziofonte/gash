@@ -13,6 +13,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -36,8 +37,12 @@ func (m *Module) processFind(c *invoke.Call) int {
 		p.Error(unexpectedArg(c.Args[1]))
 		return 1
 	}
-	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "ps", Args: []string{"-eo", "pid=,user=,pcpu=,args="},
+	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "ps", Args: []string{"-eo", "pid=,user=,pcpu=,args="},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: c.Stderr}})
+	if notInstalled(err) {
+		// 3.4: no longer "No process found" for a missing ps.
+		return prereq.Fail(c, "ps", "process_find", false)
+	}
 	ps := strings.ReplaceAll(string(res.Stdout), "\x00", "")
 	needle := strings.ToLower(name)
 	self := strconv.Itoa(m.self)
@@ -108,7 +113,12 @@ func (m *Module) processKill(c *invoke.Call) int {
 		p.Error("Missing process name. Usage: process_kill [-y] <process_name>")
 		return 1
 	}
-	pids := m.dropSelf(m.pgrepName(c, name))
+	found, ok := m.pgrepName(c, name)
+	if !ok {
+		// 3.4: no longer "No process found" for a missing pgrep.
+		return prereq.Fail(c, "pgrep", "process_kill", false)
+	}
+	pids := m.dropSelf(found)
 	if len(pids) == 0 {
 		p.Error("No process found with exact name '" + name + "'. Use process_find (pf) to inspect candidates.")
 		return 1
@@ -163,16 +173,20 @@ const commLen = 15
 // escaped for `pgrep -ix --`; a NAME longer than the 15-byte comm is
 // looked up by its first 15 bytes and kept only where argv[0]'s base name
 // (from /proc/PID/cmdline, else `ps -o args=`) equals NAME ignoring case.
-func (m *Module) pgrepName(c *invoke.Call, name string) []string {
+// ok is false when pgrep is not installed.
+func (m *Module) pgrepName(c *invoke.Call, name string) (pids []string, ok bool) {
 	key := name
 	if len(key) > commLen {
 		key = key[:commLen]
 	}
-	res, _ := m.run.Run(ctx(c), runner.Cmd{Path: "pgrep", Args: []string{"-ix", "--", escapeERE(key)},
+	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "pgrep", Args: []string{"-ix", "--", escapeERE(key)},
 		Options: runner.Options{Env: c.Env.Child(), Stderr: io.Discard}})
-	pids := strings.Fields(runner.CommandSubst(res.Stdout))
+	if notInstalled(err) {
+		return nil, false
+	}
+	pids = strings.Fields(runner.CommandSubst(res.Stdout))
 	if len(name) <= commLen {
-		return pids
+		return pids, true
 	}
 	var out []string
 	for _, pid := range pids {
@@ -180,7 +194,7 @@ func (m *Module) pgrepName(c *invoke.Call, name string) []string {
 			out = append(out, pid)
 		}
 	}
-	return out
+	return out, true
 }
 
 // argv0Base is the base name of PID's argv[0]: /proc/PID/cmdline, or the

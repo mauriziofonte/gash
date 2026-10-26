@@ -12,7 +12,9 @@ package child
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,14 +38,49 @@ func BaseEnv(home string) []string {
 }
 
 // Find returns an executable named name in the system directories of
-// BasePath, as seen through exists; "" when there is none.
+// BasePath, as seen through exists; "" when there is none. Programs run as
+// root, and sudo, are looked up here only.
 func Find(name string, exists func(string) bool) string {
-	for _, dir := range strings.Split(BasePath, ":") {
+	return FindIn(name, strings.Split(BasePath, ":"), exists)
+}
+
+// FindIn returns an executable named name in dirs, as seen through
+// exists; "" when there is none.
+func FindIn(name string, dirs []string, exists func(string) bool) string {
+	for _, dir := range dirs {
 		if p := filepath.Join(dir, name); exists(p) {
 			return p
 		}
 	}
 	return ""
+}
+
+// UserDirs is where gash hte looks for a program it runs as the user:
+// BasePath, then Homebrew's bin directories, ~/.local/bin and the
+// directories of the user's PATH (3.4: BasePath only, so an openssl
+// installed there was "not installed"). An entry that is not absolute, is
+// not a directory, or that group or others may write is left out: what is
+// found there could be anyone's program. stat sees the system.
+func UserDirs(home, path string, stat func(string) (fs.FileInfo, error)) []string {
+	dirs := strings.Split(BasePath, ":")
+	extra := []string{"/opt/homebrew/bin", "/opt/homebrew/sbin"}
+	if filepath.IsAbs(home) {
+		extra = append(extra, filepath.Join(home, ".local/bin"))
+	}
+	for _, d := range append(extra, filepath.SplitList(path)...) {
+		if !filepath.IsAbs(d) {
+			continue
+		}
+		d = filepath.Clean(d)
+		if slices.Contains(dirs, d) {
+			continue
+		}
+		if st, err := stat(d); err != nil || !st.IsDir() || st.Mode().Perm()&0o022 != 0 {
+			continue
+		}
+		dirs = append(dirs, d)
+	}
+	return dirs
 }
 
 // Cmd is the start of path with args: env as the whole environment (nil

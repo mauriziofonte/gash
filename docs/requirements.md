@@ -38,7 +38,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-sha256sum"></a>**sha256sum** (required) verifies the downloaded binary against its pinned hash. Any of: `sha256sum`, `shasum`.
 - <a id="tool-git"></a>**git** (required) installs and updates Gash, and runs the git functions. Needed by `agent_git_commit`, `gash update`, `gash_upgrade`, `git_add_tag`, `git_apply_patch`, `git_delete_tag`, `git_dump_revisions`, `git_list_tags`, `git_repair`, `git_sync`, `gl`, `gla`, `glf`, `glg`, `glo`, `gls`, `llm_git_diff`, `llm_git_log`, `llm_git_overview`, `llm_git_show` and `llm_git_status`. On macOS git comes with the Command Line Tools: xcode-select --install.
 - <a id="tool-grep"></a>**grep** (required) is used by the installer.
-- <a id="tool-sed"></a>**sed** (required) is used by the installer and gash_uninstall.
+- <a id="tool-sed"></a>**sed** (required) is used by the installer and gash_uninstall. Needed by `gash_uninstall`.
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -58,6 +58,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-rsync"></a>**rsync** (feature) syncs directories with remote hosts. Needed by `remote_sync_pull` and `remote_sync_push`.
 - <a id="tool-ssh-add"></a>**ssh-add** (feature) loads SSH keys into the agent. Needed by `gash_ssh_auto_unlock`.
 - <a id="tool-ssh-agent"></a>**ssh-agent** (feature) holds the unlocked SSH keys. Needed by `gash_ssh_auto_unlock`.
+- <a id="tool-ssh-keygen"></a>**ssh-keygen** (optional) tells the SSH keys already in the agent, and checks SSH-signed release tags. Needed by `gash update` (GASH_REQUIRE_SIGNED=1), `gash_ssh_auto_unlock` (keys already loaded) and `gash_upgrade` (GASH_REQUIRE_SIGNED=1).
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -66,13 +67,14 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 | rsync | `rsync` | `rsync` | `rsync` | `rsync` | `rsync` | built in |
 | ssh-add | `openssh-client` | `openssh-clients` | `openssh` | `openssh-clients` | `openssh-client` | built in |
 | ssh-agent | `openssh-client` | `openssh-clients` | `openssh` | `openssh-clients` | `openssh-client` | built in |
+| ssh-keygen | `openssh-client` | `openssh-clients` | `openssh` | `openssh-clients` | `openssh-client` | built in |
 
 ## Processes and ports
 
 - <a id="tool-ps"></a>**ps** (feature) lists the running processes. Needed by `agent_kill` (on macOS, or without /proc), `llm_procs` (on macOS, or without /proc), `llm_wait` (--gone, on macOS) and `process_find`.
 - <a id="tool-pgrep"></a>**pgrep** (feature) finds processes by name. Needed by `llm_procs` (--name) and `process_kill`.
 - <a id="tool-lsof"></a>**lsof** (feature) maps ports to the processes that hold them. Needed by `llm_procs` (--port) and `port_kill`.
-- <a id="tool-ss"></a>**ss** (feature) lists the listening ports; netstat works too. Any of: `ss`, `netstat`. Needed by `llm_ports`.
+- <a id="tool-ss"></a>**ss** (feature) lists the listening ports; netstat works too. Any of: `ss`, `netstat`. Needed by `ai_sysinfo` (questions) and `llm_ports`.
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -135,15 +137,19 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 ## System
 
 - <a id="tool-sudo"></a>**sudo** (feature) runs the privileged steps of some functions. Needed by `ai_sysinfo` (the privileged sections), `gash hte`, `gash logs` (clean --sudo), `services_stop`, `sudo_last`, `sysinfo` (the privileged sections) and `wsl_compact`.
-- <a id="tool-systemctl"></a>**systemctl** (feature) reads and controls systemd services. Only on Linux. Needed by `llm_service` and `services_stop`. It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf.
-- <a id="tool-journalctl"></a>**journalctl** (optional) adds the service journal to llm_service --log. Only on Linux. Needed by `llm_service` (--log). It comes with systemd.
+- <a id="tool-systemctl"></a>**systemctl** (feature) reads and controls systemd services. Only on Linux. Needed by `ai_sysinfo` (questions), `llm_service` and `services_stop`. It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf.
+- <a id="tool-journalctl"></a>**journalctl** (optional) adds the service journal to llm_service --log. Only on Linux. Needed by `ai_sysinfo` (questions) and `llm_service` (--log). It comes with systemd.
 - <a id="tool-fzf"></a>**fzf** (optional) picks an entry from a list. Needed by `hgrep` (--pick) and `history_grep` (--pick).
+- <a id="tool-truncate"></a>**truncate** (optional) empties root-owned live logs for gash logs clean --sudo --truncate. Needed by `gash logs` (clean --sudo --truncate).
+- <a id="tool-ldd"></a>**ldd** (feature) lists the shared libraries chrome-headless-shell needs. Only on Linux. Needed by `chrome_headless_update`.
 - <a id="tool-bc"></a>**bc** (optional) is the calculator behind the calc alias. Needed by `gash init` (the calc alias).
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
 | sudo | `sudo` | `sudo` | `sudo` | `sudo` | `sudo` | built in |
 | fzf | `fzf` | `fzf` (EPEL) | `fzf` | `fzf` | `fzf` | `fzf` |
+| truncate | `coreutils` | `coreutils` | `coreutils` | `coreutils` | `coreutils` | `truncate` |
+| ldd | `libc-bin` | `glibc-common` | `glibc` | `glibc` | `musl-utils` | — |
 | bc | `bc` | `bc` | `bc` | `bc` | `bc` | built in |
 
 ## Local web stack (gash hte)
@@ -161,12 +167,13 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 ## Windows (WSL)
 
 - <a id="tool-powershell.exe"></a>**powershell.exe** (feature) answers the gash win queries and edits the Windows hosts file. Only on WSL. Needed by `gash win`. It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).
-- <a id="tool-cmd.exe"></a>**cmd.exe** (feature) restarts and shuts down WSL from inside it. Only on WSL. Needed by `wsl_restart`, `wsl_shutdown` and `wsl_taskmanager`. It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).
+- <a id="tool-cmd.exe"></a>**cmd.exe** (feature) restarts and shuts down WSL from inside it, and starts the Task Manager. Only on WSL. Needed by `wsl_restart`, `wsl_shutdown` and `wsl_taskmanager`. It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).
+- <a id="tool-explorer.exe"></a>**explorer.exe** (feature) opens Windows Explorer from WSL. Only on WSL. Needed by `wsl_explorer`. It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).
 
 ## Release signatures
 
 - <a id="tool-cosign"></a>**cosign** (optional) checks the Sigstore signature of a release. Needed by `gash update` (GASH_REQUIRE_SIGNED=1) and `gash_upgrade` (GASH_REQUIRE_SIGNED=1). Where no package exists: <https://docs.sigstore.dev/cosign/system_config/installation/>.
-- <a id="tool-gpg"></a>**gpg** (optional) checks signed release tags. Needed by `gash_upgrade` (GASH_REQUIRE_SIGNED=1).
+- <a id="tool-gpg"></a>**gpg** (optional) checks signed release tags. Needed by `gash update` (GASH_REQUIRE_SIGNED=1) and `gash_upgrade` (GASH_REQUIRE_SIGNED=1).
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
