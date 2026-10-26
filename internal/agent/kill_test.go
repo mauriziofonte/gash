@@ -197,6 +197,13 @@ func TestKillReal(t *testing.T) {
 		n, err := out.Read(buf)
 		require.NoError(t, err)
 		pid := strings.TrimSpace(string(buf[:n]))
+		// $! is known at fork: wait until the child is sleep, not bash.
+		for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+			args, _ := exec.Command("ps", "-o", "args=", "-p", pid).Output()
+			if strings.HasPrefix(strings.TrimSpace(string(args)), "sleep ") || time.Now().After(deadline) {
+				break
+			}
+		}
 		target := pid
 		if byName {
 			target = "^sleep " + strings.ReplaceAll(secs, ".", `\.`) + "$"
