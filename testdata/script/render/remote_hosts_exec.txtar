@@ -12,7 +12,9 @@
 # ~/.gash_env (HOST:alias=user@host), so the host is registered as "web".
 # Covers: the host list, the empty hint, a successful exec (stub output),
 # the unreachable (exit 255) error, an unknown alias, and the extra-args
-# refusal.
+# refusal. Headless, the errors are envelopes (3.4.2): the error rows run
+# the function as a person does (GASH_HEADLESS unset after the load), and
+# an envelope row follows each.
 
 env GASH_HEADLESS=1
 env HOME=$WORK
@@ -34,18 +36,22 @@ exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600
 stdout '^hello from the remote host$'
 
 # --- :294 remote_exec:unreachable - ssh exits 255
-! exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\nexit 255\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_exec web uptime'
-stderr 'Error: Failed to connect to deploy@web\.example\.com'
+! exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\nexit 255\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; unset GASH_HEADLESS; remote_exec web uptime'
+stderr '✗ Error:\x1b\[0m Failed to connect to deploy@web\.example\.com'
+! exec bash -c 'export PATH="$HOME/bin:$PATH"; source "$GASH_SH"; remote_exec web uptime'
+stderr '^\{"error":"host_unreachable","details":"Failed to connect to deploy@web\.example\.com\. '
 
 # --- :295 remote_exec:unknown_alias
-! exec bash -c 'export HOME="$WORK/u"; mkdir -p "$HOME"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_exec nohost uptime'
-stderr 'Error: Unknown host alias .nohost.'
+! exec bash -c 'export HOME="$WORK/u"; mkdir -p "$HOME"; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; unset GASH_HEADLESS; remote_exec nohost uptime'
+stderr '✗ Error:\x1b\[0m Unknown host alias .nohost.'
+! exec bash -c 'export HOME="$WORK/u"; source "$GASH_SH"; remote_exec nohost uptime'
+stderr '^\{"error":"unknown_host","details":"Unknown host alias .nohost.\. In headless mode only aliases registered in ~/\.gash_env'
 
 # --- :296 remote_exec:extra_args - a command must be one quoted string
 ! exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_exec web ls -la'
 stderr 'Pass the remote command as a SINGLE quoted string'
 
 # --- R6: plain mode error, no ESC
-! exec bash -c 'export HOME="$WORK/u2"; mkdir -p "$HOME"; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; remote_exec nohost uptime'
+! exec bash -c 'export HOME="$WORK/u2"; mkdir -p "$HOME"; export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; unset GASH_HEADLESS; remote_exec nohost uptime'
 stderr '^Error: Unknown host alias'
 ! stderr '\x1b'

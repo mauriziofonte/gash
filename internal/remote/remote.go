@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/config"
+	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -96,12 +97,24 @@ func (x *call) require(need string, tools ...string) bool {
 	return true
 }
 
-// requireArg is __gash_require_arg VALUE NAME USAGE.
-func (x *call) requireArg(value, name, usage string) bool {
+// fail reports an error: in headless mode the envelope of code on
+// stderr, which an agent reads as it reads the llm_* errors; for a person
+// the Error: line, as 2.x printed it.
+func (x *call) fail(code, msg, hint string) {
+	if x.headless() {
+		_ = x.Fail(contract.New(code, msg, hint))
+		return
+	}
+	x.p.Error(msg)
+}
+
+// requireArg is __gash_require_arg VALUE NAME USAGE; code is the
+// envelope's in headless mode.
+func (x *call) requireArg(value, name, usage, code string) bool {
 	if value != "" {
 		return true
 	}
-	x.p.Error("Missing " + name + ". Usage: " + usage)
+	x.fail(code, "Missing "+name+". Usage: "+usage, "Usage: "+usage)
 	return false
 }
 
@@ -122,17 +135,28 @@ func (x *call) resolveTarget(input string) (string, bool) {
 		// is unknown.
 		t, ok = f.RejectedHost(input)
 	}
+	skipped := ""
 	if ok {
 		if config.ValidHostTarget(t) {
 			return t, true
 		}
-		x.p.Warning("HOST target of '" + input + "' must be user@host (skipping)")
+		skipped = "the HOST target of '" + input + "' must be user@host"
 		if strings.Contains(t, ":") {
-			x.p.Hint("put the port in a Host entry of ~/.ssh/config")
+			skipped += " (put the port in a Host entry of ~/.ssh/config)"
+		}
+		if !x.headless() {
+			x.p.Warning("HOST target of '" + input + "' must be user@host (skipping)")
+			if strings.Contains(t, ":") {
+				x.p.Hint("put the port in a Host entry of ~/.ssh/config")
+			}
 		}
 	}
 	if x.headless() {
-		x.p.Error("Unknown host alias '" + input + "'. In headless mode only aliases registered in ~/.gash_env (HOST:alias=user@host) are accepted.")
+		msg := "Unknown host alias '" + input + "'. In headless mode only aliases registered in ~/.gash_env (HOST:alias=user@host) are accepted."
+		if skipped != "" {
+			msg += " Skipped: " + skipped + "."
+		}
+		x.fail("unknown_host", msg, "Use an alias that remote_hosts lists, or ask the user to add HOST:alias=user@host to ~/.gash_env")
 		return "", false
 	}
 	if config.ValidHostTarget(input) {

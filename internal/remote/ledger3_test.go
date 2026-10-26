@@ -3,6 +3,7 @@
 package remote
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,14 +36,34 @@ func tty(input string) func(*term.Term) *term.Term {
 	return func(t *term.Term) *term.Term { return t.WithTTY(input) }
 }
 
+// envelope is the code and the details of the one error envelope a
+// headless run printed: since 3.4.2 the remote_* errors are envelopes in
+// headless mode, the Error: line for a person.
+func envelope(t *testing.T, stderr string) (code, details string) {
+	t.Helper()
+	require.Equal(t, 1, strings.Count(stderr, "\n"), "one line: %q", stderr)
+	var e struct {
+		Error, Details, Action, Hint string
+	}
+	require.NoError(t, json.Unmarshal([]byte(stderr), &e), stderr)
+	require.NotEmpty(t, e.Action)
+	require.NotEmpty(t, e.Hint)
+	return e.Error, e.Details
+}
+
 // 3.0: REM-01 fixed. An unknown option or a fourth positional is refused
 // before the host is resolved; --exclude PAT is two words.
 func TestLedger_REM01(t *testing.T) {
 	s := newGoScene(t, boxEnv)
 	r := s.runGo(headless, "remote_sync_push", nil, "box", "./src", "/tmp/build", "--delete", "-n")
 	require.Equal(t, 1, r.RC)
-	require.Equal(t, "Error: Unknown option: -n (usage: "+syncPushSpec.usage+")\n", r.Err)
+	code, details := envelope(t, r.Err)
+	require.Equal(t, "unknown_option", code)
+	require.Equal(t, "Unknown option: -n (usage: "+syncPushSpec.usage+")", details)
 	require.Empty(t, r.Log)
+	r = s.runGo(plain, "remote_sync_push", nil, "box", "./src", "/tmp/build", "--delete", "-n")
+	require.Equal(t, 1, r.RC)
+	require.Equal(t, "Error: Unknown option: -n (usage: "+syncPushSpec.usage+")\n", r.Err)
 
 	r = s.runGo(headless, "remote_sync_push", nil, "box", "./src", "/tmp/build", "--delete", "--exclude", ".env")
 	require.Equal(t, 0, r.RC, r.Err)
@@ -60,16 +81,24 @@ func TestLedger_REM01(t *testing.T) {
 
 	r = s.runGo(headless, "remote_push", nil, "box", "./x", "/tmp/x", "--dry-run")
 	require.Equal(t, 1, r.RC)
-	require.Equal(t, "Error: Unknown option: --dry-run (usage: "+pushSpec.usage+")\n", r.Err)
+	code, details = envelope(t, r.Err)
+	require.Equal(t, "unknown_option", code)
+	require.Equal(t, "Unknown option: --dry-run (usage: "+pushSpec.usage+")", details)
 	require.Empty(t, r.Log, "scp is not called")
 
 	r = s.runGo(headless, "remote_pull", nil, "box", "/tmp/x", "./x", "-r", "extra")
 	require.Equal(t, 1, r.RC)
+	code, details = envelope(t, r.Err)
+	require.Equal(t, "unexpected_argument", code)
+	require.Equal(t, "Unexpected argument: extra (usage: "+pullSpec.usage+")", details)
+	r = s.runGo(plain, "remote_pull", nil, "box", "/tmp/x", "./x", "-r", "extra")
 	require.Equal(t, "Error: Unexpected argument: extra (usage: "+pullSpec.usage+")\n", r.Err)
 
 	r = s.runGo(headless, "remote_sync_push", nil, "box", "./s", "/tmp/d", "--exclude")
 	require.Equal(t, 1, r.RC)
-	require.Contains(t, r.Err, "--exclude needs a pattern")
+	code, details = envelope(t, r.Err)
+	require.Equal(t, "missing_value", code)
+	require.Contains(t, details, "--exclude needs a pattern")
 
 	// Before the host is resolved.
 	r = s.runGo(headless, "remote_push", nil, "nohost", "./x", "/tmp/x", "-z")
@@ -110,8 +139,15 @@ func TestLedger_REM02(t *testing.T) {
 	require.Contains(t, r.Err, "No remote hosts configured")
 	r = s.runGo(headless, "remote_exec", nil, "opt", "true")
 	require.Equal(t, 1, r.RC)
+	code, details := envelope(t, r.Err)
+	require.Equal(t, "unknown_host", code)
+	require.Contains(t, details, "Unknown host alias 'opt'.")
+	require.Contains(t, details, "Skipped: the HOST target of 'opt' must be user@host.")
+	require.Empty(t, r.Log)
+	r = s.runGo(plain, "remote_exec", nil, "opt", "true")
+	require.Equal(t, 1, r.RC)
 	require.Contains(t, r.Err, "Warning: HOST target of 'opt' must be user@host (skipping)\n")
-	require.Contains(t, r.Err, "Error: Unknown host alias 'opt'.")
+	require.Contains(t, r.Err, "Error: Unknown host alias 'opt' and not a valid user@host target.")
 	require.Empty(t, r.Log)
 
 	// Interactively, an option-like raw target is refused.
@@ -127,6 +163,12 @@ func TestLedger_REM08(t *testing.T) {
 	require.False(t, config.ValidHostTarget("u@h:22"))
 	s := newGoScene(t, "HOST:x=u@h:22\n")
 	r := s.runGo(headless, "remote_push", nil, "x", "./f", "/tmp/f")
+	require.Equal(t, 1, r.RC)
+	code, details := envelope(t, r.Err)
+	require.Equal(t, "unknown_host", code)
+	require.Contains(t, details, "Skipped: the HOST target of 'x' must be user@host (put the port in a Host entry of ~/.ssh/config).")
+	require.Empty(t, r.Log)
+	r = s.runGo(plain, "remote_push", nil, "x", "./f", "/tmp/f")
 	require.Equal(t, 1, r.RC)
 	require.Contains(t, r.Err, "Warning: HOST target of 'x' must be user@host (skipping)\nHint: put the port in a Host entry of ~/.ssh/config\n")
 	require.Empty(t, r.Log)
@@ -150,7 +192,9 @@ func TestLedger_REM03(t *testing.T) {
 		args := append([]string{"box", "./src", "$HOME", "--delete"}, extra...)
 		r := s.runGo(headless, "remote_sync_push", nil, args...)
 		require.Equal(t, 1, r.RC, extra)
-		require.Equal(t, "Error: Remote path '$HOME' contains characters the remote side may expand. Refusing sync-push.\n", r.Err)
+		code, details := envelope(t, r.Err)
+		require.Equal(t, "invalid_path", code)
+		require.Equal(t, "Remote path '$HOME' contains characters the remote side may expand. Refusing sync-push.", details)
 		require.Empty(t, r.Log, "rsync is not called")
 	}
 	r := s.runGo(headless, "remote_pull", nil, "box", "/etc/*", "./x", "--force")
@@ -238,7 +282,9 @@ func TestLedger_REM06(t *testing.T) {
 	s := newGoScene(t, boxEnv)
 	r := s.runGo(headless, "remote_sync_pull", nil, "box", "/srv", "./", "--delete")
 	require.Equal(t, 1, r.RC)
-	require.Equal(t, "Error: rsync --delete targeting the local destination './' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the current directory; never your home itself or .ssh). Refused in headless mode without --force.\n", r.Err)
+	code, details := envelope(t, r.Err)
+	require.Equal(t, "sensitive_path", code)
+	require.Equal(t, "rsync --delete targeting the local destination './' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the current directory; never your home itself or .ssh). Refused in headless mode without --force.", details)
 	require.Empty(t, r.Log)
 
 	r = s.runGo(plain, "remote_sync_pull", tty("n\n"), "box", "/srv", "./", "--delete")
@@ -247,7 +293,9 @@ func TestLedger_REM06(t *testing.T) {
 
 	// The push keeps the remote words.
 	r = s.runGo(headless, "remote_sync_push", nil, "box", "./s", "~", "--delete")
-	require.Contains(t, r.Err, "Error: rsync --delete targeting '~' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home;")
+	code, details = envelope(t, r.Err)
+	require.Equal(t, "sensitive_path", code)
+	require.Contains(t, details, "rsync --delete targeting '~' is outside the safe set (below /tmp, /var/tmp, /home/<user>/ or the remote home;")
 }
 
 // 3.0: REM-07 fixed. A missing ~/.ssh is created with mode 0700; an

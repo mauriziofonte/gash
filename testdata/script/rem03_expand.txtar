@@ -4,7 +4,9 @@
 # ledger: REM-03
 #
 # A remote path the remote side may expand is refused, also with --force,
-# and rsync never runs; a plain path reaches rsync with -s.
+# and rsync never runs; a plain path reaches rsync with -s. Headless, the
+# refusal is the invalid_path envelope (3.4.2); for a person, the Error:
+# line.
 
 env GASH_HEADLESS=1
 env GASH_ENV_FILE=$WORK/hostenv
@@ -14,6 +16,10 @@ chmod 755 bin/rsync
 chmod 755 bin/ssh
 
 ! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; remote_sync_push box ./src ''$HOME'' --delete'
+stderr '^\{"error":"invalid_path","details":"Remote path .\$HOME. contains characters the remote side may expand\. Refusing sync-push\.","action":"RETRY",'
+! exists argv
+
+! exec bash -c 'export PATH="$T/bin:$PATH"; source "$GASH_SH"; unset GASH_HEADLESS; remote_sync_push box ./src ''$HOME'' --delete'
 stderr '^Error: Remote path .\$HOME. contains characters the remote side may expand\. Refusing sync-push\.$'
 ! exists argv
 
