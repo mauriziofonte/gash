@@ -116,3 +116,45 @@ done`)
 	defer prereq.SetSystem(rockySystem(allBut()))()
 	require.Equal(t, "Warning: v-PGP is signed, but the signature could not be verified (is the key in your keyring?).\n", run("v-PGP"))
 }
+
+// uninstallHome is a HOME with a Gash install and a .bashrc that loads it.
+func uninstallHome(t *testing.T) (home, bashrc string) {
+	t.Helper()
+	home = t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".gash/lib/core"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gash/gash.sh"), nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".gashrc"), []byte("# mine\n"), 0o644))
+	bashrc = "a\n# >>> GASH START >>>\nsource ~/.gashrc\n# <<< GASH END <<<\nb\n"
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".bashrc"), []byte(bashrc), 0o644))
+	return home, bashrc
+}
+
+// gash_uninstall removes nothing when the profile edit cannot run or
+// fails: without sed it stops on the prerequisite report before the
+// question, and a failing sed stops it before the install is removed
+// (3.4: it went on and left the profile loading a removed Gash).
+func TestUninstallStopsWithoutProfileEdit(t *testing.T) {
+	home, bashrc := uninstallHome(t)
+	restore := prereq.SetSystem(rockySystem(allBut("sed")))
+	_, errOut, rc := callModule(t, New(), "gash_uninstall", map[string]string{"HOME": home, UninstallStepVar: "check"})
+	restore()
+	require.Equal(t, 1, rc)
+	require.Equal(t, "Error: gash_uninstall needs sed, which is not installed.\n"+
+		"  sed is used by the installer and gash_uninstall (package sed on Rocky Linux 9.4).\n"+
+		"  Install it:  sudo dnf install -y sed\n"+
+		"  Or run:      gash_doctor --install sed\n", errOut)
+	require.DirExists(t, filepath.Join(home, ".gash"))
+
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "sed"), []byte("#!/bin/sh\necho 'sed: -e expression #1, char 3: unknown command' >&2\nexit 1\n"), 0o755))
+	_, errOut, rc = callModule(t, New(), "gash_uninstall", map[string]string{"HOME": home, "PATH": bin, UninstallStepVar: "remove"})
+	require.Equal(t, 1, rc)
+	require.Equal(t, "Info: Removing Gash block from: "+home+"/.bashrc\n"+
+		"sed: -e expression #1, char 3: unknown command\n"+
+		"Error: Gash was not uninstalled: the Gash block is still in "+home+"/.bashrc.\n", errOut)
+	require.DirExists(t, filepath.Join(home, ".gash"))
+	require.FileExists(t, filepath.Join(home, ".gashrc"))
+	b, err := os.ReadFile(filepath.Join(home, ".bashrc"))
+	require.NoError(t, err)
+	require.Equal(t, bashrc, string(b))
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -84,6 +85,14 @@ func (m *Module) uninstall(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
+	home := c.Env.Get("HOME")
+	// The profile edits run sed: without it nothing is removed (3.4: the
+	// uninstall went on and left the profiles loading a removed Gash).
+	if len(gashProfiles(home)) > 0 {
+		if _, ok := prereq.Require(c, "sed", "gash_uninstall", false); !ok {
+			return 1
+		}
+	}
 	if step != "remove" {
 		p.Warning("This will remove Gash (" + real + ") and its configuration from this account.")
 		if staged {
@@ -95,7 +104,6 @@ func (m *Module) uninstall(c *invoke.Call) int {
 		}
 	}
 
-	home := c.Env.Get("HOME")
 	for _, profile := range uninstallProfiles(home) {
 		if !isFile(profile) {
 			continue
@@ -109,11 +117,19 @@ func (m *Module) uninstall(c *invoke.Call) int {
 			continue
 		}
 		p.Info("Removing Gash block from: " + profile)
+		edited := true
 		switch {
 		case strings.Contains(string(text), "# >>> GASH START >>>"):
-			m.editProfile(c, p, profile, uninstallSedBlock)
+			edited = m.editProfile(c, p, profile, uninstallSedBlock)
 		case strings.Contains(string(text), "# Load Gash Bash"):
-			m.editProfile(c, p, profile, uninstallSed1xBlock)
+			edited = m.editProfile(c, p, profile, uninstallSed1xBlock)
+		}
+		// 3.4: a profile that still loads Gash stops the uninstall before
+		// anything is removed, rather than leaving it to load a removed
+		// install.
+		if !edited {
+			p.Error("Gash was not uninstalled: the Gash block is still in " + profile + ".")
+			return 1
 		}
 	}
 
@@ -185,7 +201,11 @@ func (m *Module) editProfile(c *invoke.Call, p ui.Printer, profile, expr string)
 		Env: c.Env.Child(), Stderr: c.Stderr,
 	}})
 	if se := (*runner.StartError)(nil); errors.As(err, &se) {
-		_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
+		if se.Status == 127 {
+			prereq.Fail(c, "sed", "gash_uninstall", false)
+		} else {
+			_, _ = io.WriteString(c.Stderr, "bash: "+se.Error()+"\n")
+		}
 		return false
 	}
 	if err != nil || !res.Success() {
@@ -277,6 +297,25 @@ func (m *Module) uninstallEnd(c *invoke.Call, p ui.Printer, remove bool) int {
 
 func uninstallProfiles(home string) []string {
 	return []string{home + "/.bashrc", home + "/.bash_profile", home + "/.profile"}
+}
+
+// gashProfiles are the profiles uninstall edits: those that load Gash and
+// hold one of the two blocks it removes.
+func gashProfiles(home string) []string {
+	var out []string
+	for _, profile := range uninstallProfiles(home) {
+		if !isFile(profile) {
+			continue
+		}
+		text, err := os.ReadFile(profile)
+		if err != nil || !gashrcSource.Match(text) {
+			continue
+		}
+		if strings.Contains(string(text), "# >>> GASH START >>>") || strings.Contains(string(text), "# Load Gash Bash") {
+			out = append(out, profile)
+		}
+	}
+	return out
 }
 
 // uninstallEnvFile is the settings file and its name as the messages show

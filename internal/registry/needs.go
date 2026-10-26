@@ -53,6 +53,7 @@ var needs = map[string][]Need{
 	"agent_git_commit":   {{"git", ""}},
 	"gash_upgrade": {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
 		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
+	"gash_uninstall": {{"sed", ""}},
 	"gash update": {{"git", ""}, {"bash", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
 		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
 
