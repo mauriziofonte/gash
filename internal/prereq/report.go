@@ -5,11 +5,13 @@ package prereq
 import (
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -224,14 +226,29 @@ func Fail(c *invoke.Call, name, need string, machine bool) int {
 	return 1
 }
 
-// Require looks the named tool up for the call: its path, or the report of
-// Fail and false.
-func Require(c *invoke.Call, name, need string, machine bool) (string, bool) {
+// Locate finds the named catalog tool for the call, as gash_doctor does
+// (alternatives, the macOS Xcode stubs, probes, minimum versions): the
+// path of the program that serves it. Cheap: the distribution is read only
+// when a report needs it.
+func Locate(c *invoke.Call, name string) (string, bool) {
 	t, ok := Lookup(name)
 	if !ok {
 		panic(fmt.Sprintf("prereq: %q is not in the catalog", name))
 	}
-	if p, ok := Current(c).Find(t); ok {
+	overrideMu.Lock()
+	o := override
+	overrideMu.Unlock()
+	if o != nil {
+		return o.Find(t)
+	}
+	s := &System{Env: c.Env.Child(), OS: platform.OS{GOOS: runtime.GOOS}}
+	return s.Find(t)
+}
+
+// Require looks the named tool up for the call: its path, or the report of
+// Fail and false.
+func Require(c *invoke.Call, name, need string, machine bool) (string, bool) {
+	if p, ok := Locate(c, name); ok {
 		return p, true
 	}
 	Fail(c, name, need, machine)

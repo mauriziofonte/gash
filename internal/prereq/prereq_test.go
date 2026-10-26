@@ -4,6 +4,7 @@ package prereq
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,8 +14,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/registry"
+	"github.com/mauriziofonte/gash/internal/term"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -330,4 +333,40 @@ func TestBrewFormulas(t *testing.T) {
 	out, err := exec.Command(brew, append([]string{"info", "--formula", "--json=v2"}, formulas...)...).CombinedOutput()
 	require.NoError(t, err, "%s\n%s", strings.Join(formulas, " "), out)
 	t.Log(strings.Join(formulas, " "))
+}
+
+// TestRequire: Locate finds a tool on the caller's PATH without reading
+// the distribution; Require reports a missing one, as an envelope for a
+// machine caller and as the gash_doctor block for a person.
+func TestRequire(t *testing.T) {
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "zstd"), []byte("#!/bin/sh\n"), 0o755))
+	call := func(env map[string]string) (*invoke.Call, *bytes.Buffer) {
+		var errb bytes.Buffer
+		e := invoke.EnvMap(env)
+		return &invoke.Call{Name: "archive_extract", Env: e, Stdout: io.Discard, Stderr: &errb, Term: term.Fixed(e, false, false, false)}, &errb
+	}
+	c, _ := call(map[string]string{"PATH": bin})
+	p, ok := Locate(c, "zstd")
+	require.True(t, ok)
+	require.Equal(t, filepath.Join(bin, "zstd"), p)
+	_, ok = Locate(c, "rsync")
+	require.False(t, ok)
+
+	defer SetSystem(&System{OS: platform.OS{GOOS: "linux", ID: "debian", Name: "Debian GNU/Linux 12 (bookworm)"}, Manager: Apt, Sudo: true,
+		LookPath: func(name string, _ []string) (string, bool) { return "/usr/bin/" + name, name != "rsync" }})()
+	c, errb := call(map[string]string{"PATH": bin})
+	_, ok = Require(c, "rsync", "remote_sync_push", true)
+	require.False(t, ok)
+	require.Equal(t, `{"error":"prerequisite_missing","details":"remote_sync_push needs rsync, which is not installed","action":"STOP","recoverable":true,"hint":"Install rsync: sudo apt-get install -y rsync","missing":"rsync","install":"sudo apt-get install -y rsync"}`+"\n", errb.String())
+	c, errb = call(map[string]string{"PATH": bin})
+	_, ok = Require(c, "rsync", "remote_sync_push", false)
+	require.False(t, ok)
+	require.Equal(t, "Error: remote_sync_push needs rsync, which is not installed.\n"+
+		"  rsync syncs directories with remote hosts (package rsync on Debian GNU/Linux 12).\n"+
+		"  Install it:  sudo apt-get install -y rsync\n"+
+		"  Or run:      gash_doctor --install rsync\n", errb.String())
+	p, ok = Require(c, "zstd", "archive_extract", true)
+	require.True(t, ok)
+	require.Equal(t, "/usr/bin/zstd", p, "the pinned system answers")
 }
