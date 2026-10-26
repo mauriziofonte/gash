@@ -1560,8 +1560,9 @@ var baseFunctions = []Function{
 				"    SSH:~/.ssh/work_rsa=work-passphrase\n" +
 				"\n" +
 				"REQUIREMENTS\n" +
-				"  - expect (for non-interactive passphrase entry)\n" +
-				"  - ssh-agent (auto-started if not running)\n" +
+				"  - ssh-add and ssh-agent (the agent is started if none is running)\n" +
+				"  - Gash types each passphrase into ssh-add itself: expect is not\n" +
+				"    needed\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Runs once per session (tracked by GASH_SSH_AUTOUNLOCK_RAN).\n" +
@@ -3440,7 +3441,7 @@ var baseFunctions = []Function{
 				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
 				"  --json (or --llm) is not required there.",
 		},
-		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json|--llm]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and resolve the matching gash-exec function names."},
+		Fallback:  &Usage{Program: "node_detect_version", Usage: "node_detect_version [project_dir] [--json|--llm]", Description: "Detect which Node.js version a project wants (.nvmrc, .node-version, package.json engines.node) and the newest installed patch of it."},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "NVM_DIR"},
 	},
@@ -3534,8 +3535,8 @@ var baseFunctions = []Function{
 				"NOTES\n" +
 				"  For each installed major version, keeps only the latest patch.\n" +
 				"  The currently active version (nvm current) is never uninstalled,\n" +
-				"  even if it is not the latest patch for its major. -y and --yes are\n" +
-				"  the same as --force. Exits 1 when a removal failed.",
+				"  even if it is not the latest patch for its major. -f, -y and --yes\n" +
+				"  are the same as --force. Exits 1 when a removal failed.",
 		},
 		Fallback:  &Usage{Program: "nvm_prune_versions", Usage: "nvm_prune_versions [-y|--yes|--force]", Description: "Remove duplicate/older NVM patch versions, keeping the latest patch per major. Alias: nvmp"},
 		ShellVars: []string{"HOME", "NVM_DIR"},
@@ -3623,7 +3624,7 @@ var baseFunctions = []Function{
 				"  JSON output is also emitted automatically under GASH_HEADLESS=1;\n" +
 				"  --json (or --llm) is not required there.",
 		},
-		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json|--llm]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and resolve the matching binary/gash-exec function names."},
+		Fallback: &Usage{Program: "php_detect_version", Usage: "php_detect_version [project_dir] [--json|--llm]", Description: "Detect which PHP version a project wants (.target-php-version, composer.json, repo instructions) and the PHP and composer binaries to run it with."},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{

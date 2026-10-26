@@ -151,7 +151,7 @@ chmod 600 .gash_env
 ```console
 $ gash_db_list
 Warning: Line 2 of ~/.gash_env: unknown GASH_ setting, skipping
-Warning: Line 3 of ~/.gash_env: DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)
+Warning: Line 3 of ~/.gash_env: DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)
 Info: No database connections configured in ~/.gash_env
 Info: Run 'gash_env_init' to create a template configuration
 ```
@@ -172,9 +172,9 @@ end of the line (a Windows line ending excepted), trailing spaces and tabs
 included; such a line gets
 `Warning: Line N of ~/.gash_env: passphrase ends with whitespace`, so an
 accidental space is visible. In interactive shells `gash_ssh_auto_unlock`
-starts `ssh-agent` when none is running and adds each key through `expect`
-(required), once per session: it exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so
-child shells skip it. See the [remote hosts guide](remote/README.md).
+starts `ssh-agent` when none is running and adds each key with `ssh-add`,
+typing the passphrase itself (`expect` is not needed), once per session: it
+exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it. See the [remote hosts guide](remote/README.md).
 
 ### Databases
 
@@ -196,10 +196,14 @@ child shells skip it. See the [remote hosts guide](remote/README.md).
 
 `gash_db_list` masks passwords; `gash_db_test [NAME]` runs `SELECT 1` on one.
 No `mysql`, `mariadb` or `psql` client is needed and none is run: Gash
-connects through its own drivers, so client option files (`~/.my.cnf`,
-`/etc/mysql/*.cnf`) and `~/.pgpass` are not read. A MySQL `localhost` host
-connects through the first existing of `/run/mysqld/mysqld.sock`,
-`/var/run/mysqld/mysqld.sock` and `/tmp/mysql.sock`, else over TCP. The test
+connects through its own drivers, so `~/.pgpass` and the client option files
+are not used for the connection: the `DB:` URL is the connection. One
+exception: a MySQL `localhost` host connects through a Unix socket, the last
+`socket=` of the `[client]` group of `/etc/my.cnf`, `/etc/mysql/my.cnf`
+(with their `!include` files) and `~/.my.cnf`; without one, the first
+existing of `/run/mysqld/mysqld.sock`, `/var/run/mysqld/mysqld.sock`,
+`/tmp/mysql.sock` and `/var/lib/mysql/mysql.sock`. Write `127.0.0.1` to
+connect over TCP instead. The test
 gives up after `GASH_DB_TIMEOUT` seconds (default 30), and a failed test
 prints the driver's error as a `Hint:` line after `Error: Connection failed`.
 

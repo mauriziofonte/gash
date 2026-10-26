@@ -170,8 +170,8 @@ nvmp --force
 ```text
 For each installed major version, keeps only the latest patch.
 The currently active version (nvm current) is never uninstalled,
-even if it is not the latest patch for its major. -y and --yes are
-the same as --force. Exits 1 when a removal failed.
+even if it is not the latest patch for its major. -f, -y and --yes
+are the same as --force. Exits 1 when a removal failed.
 ```
 
 ### php_detect_version

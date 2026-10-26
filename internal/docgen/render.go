@@ -3,6 +3,7 @@
 package docgen
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/registry"
@@ -21,11 +22,29 @@ var packOrder = []string{"colors", "navigation", "safety", "general", "git", "do
 var packNotes = map[string]string{
 	"colors":     "`grep` gets `--color=auto` when the system's grep supports it.",
 	"navigation": "`ls`, `ll`, `la`, `l`, `lash`, `sl`, `dir` and `vdir` also get the color option of the system's `ls` (`--color=auto` on GNU, `-G` on BSD and macOS) when it has one.",
-	"safety":     "Interactive and verbose forms of the commands that overwrite or delete. On by default: `GASH_SAFETY_ALIASES=0` in `~/.gash_env` turns the pack off (see [configuration](../configuration.md)).",
+	"safety":     "Interactive and verbose forms of the commands that overwrite or delete. On by default: `GASH_SAFETY_ALIASES=0` in `~/.gash_env` turns off those of `cp`, `mv`, `mkdir`, `rm`, `chown`, `chmod` and `chgrp` (see [configuration](../configuration.md)); `bc`, `ports`, `reboot` and `shutdown` stay. The `--preserve-root` forms need GNU coreutils.",
 	"general":    "With `GASH_REPLACE_TOOLS=1`, Gash also aliases standard commands to their richer replacements when those are installed: see [configuration](../configuration.md).",
 	"git":        "Loaded when `git` is on PATH. The first six entries are log functions (`gl --help` lists their options). An alias that would hide an installed program of the same name is skipped (`gs` when Ghostscript is installed).",
 	"docker":     "Loaded when `docker` is on PATH.",
 	"php":        "Loaded when `php` is on PATH. `phpX.Y` stands for the absolute path of that binary followed by `-d allow_url_fopen=1 -d memory_limit=2048M`.",
+}
+
+// typeP is the shell test that a program is on PATH.
+var typeP = regexp.MustCompile(`^type -P "?([^" ]+)"? >/dev/null 2>&1$`)
+
+// definedWhen says in words when the shell defines an alias of the pack,
+// from the condition the alias catalog records (cond) and what the alias
+// runs: a program beyond the one the pack note names, or
+// GASH_REPLACE_TOOLS. Conditions the pack note covers give "".
+func definedWhen(pack, cond, runs string) string {
+	prog, _, _ := strings.Cut(runs, " ")
+	if rest, ok := strings.CutPrefix(cond, `[[ "${GASH_REPLACE_TOOLS:-0}" == "1" ]] && `); ok && typeP.MatchString(rest) {
+		return "with GASH_REPLACE_TOOLS=1, when " + prog + " is installed"
+	}
+	if m := typeP.FindStringSubmatch(cond); m != nil && m[1] != pack {
+		return "when " + m[1] + " is installed"
+	}
+	return ""
 }
 
 // groups split the functions of an area into sections by help topic, for
@@ -91,9 +110,11 @@ func Reference(a Area, help HelpFunc) string {
 		}
 		w("| Alias | Runs | Defined |", "|---|---|---|")
 		defined := map[string]bool{}
+		shellCond := map[string]string{}
 		for _, al := range registry.Aliases() {
 			if al.Pack == pack {
 				defined[al.Name] = true
+				shellCond[al.Name] = al.Condition
 			}
 		}
 		for _, al := range registry.CardAliases(pack) {
@@ -104,7 +125,11 @@ func Reference(a Area, help HelpFunc) string {
 				// A shell function of the pack: the card describes it.
 				runs = cell(al.Value)
 			}
-			w("| " + name + " | " + runs + " | " + cell(al.Condition) + " |")
+			cond := al.Condition
+			if cond == "" {
+				cond = definedWhen(pack, shellCond[al.Name], al.Value)
+			}
+			w("| " + name + " | " + runs + " | " + cell(cond) + " |")
 		}
 	}
 

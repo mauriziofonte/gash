@@ -10,9 +10,10 @@ import (
 // A log file is reclaimable in one of two ways. An active log is the file
 // a program still writes to (app.log): deleting it would leak the inode a
 // running daemon holds, so Gash truncates it in place, which frees the
-// space and keeps the file. A rotated log is a past copy
-// (app.log.1, app.log.2.gz, app-2026-10-24.log): nothing writes to it, so
-// Gash deletes it.
+// space and keeps the file. A rotated log is a past copy (app.log.1,
+// app.log.2.gz, app.log.2026-10-24): nothing writes to it, so Gash deletes
+// it. A date before the .log (laravel-2026-10-24.log) may be today's live
+// file, so it counts as active: truncating a past one is safe too.
 type kind int
 
 const (

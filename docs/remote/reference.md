@@ -45,8 +45,9 @@ Add SSH keys to ~/.gash_env:
 #### Requirements
 
 ```text
-- expect (for non-interactive passphrase entry)
-- ssh-agent (auto-started if not running)
+- ssh-add and ssh-agent (the agent is started if none is running)
+- Gash types each passphrase into ssh-add itself: expect is not
+  needed
 ```
 
 #### Notes

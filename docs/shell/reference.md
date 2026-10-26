@@ -280,7 +280,7 @@ Defined in interactive shells, in packs. The Defined column says when an alias e
 
 ### The safety pack
 
-Interactive and verbose forms of the commands that overwrite or delete. On by default: `GASH_SAFETY_ALIASES=0` in `~/.gash_env` turns the pack off (see [configuration](../configuration.md)).
+Interactive and verbose forms of the commands that overwrite or delete. On by default: `GASH_SAFETY_ALIASES=0` in `~/.gash_env` turns off those of `cp`, `mv`, `mkdir`, `rm`, `chown`, `chmod` and `chgrp` (see [configuration](../configuration.md)); `bc`, `ports`, `reboot` and `shutdown` stay. The `--preserve-root` forms need GNU coreutils.
 
 | Alias | Runs | Defined |
 |---|---|---|
@@ -303,4 +303,4 @@ With `GASH_REPLACE_TOOLS=1`, Gash also aliases standard commands to their richer
 | Alias | Runs | Defined |
 |---|---|---|
 | `quit` | `services_stop` |  |
-| `less` | `most` |  |
+| `less` | `most` | with GASH_REPLACE_TOOLS=1, when most is installed |
