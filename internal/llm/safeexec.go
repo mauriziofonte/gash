@@ -47,9 +47,10 @@ func SafeExec(c *invoke.Call, argv []string, stdin io.Reader, stdout, stderr io.
 		BashPath: m.bashPath(c),
 		Vars:     vars,
 	}
-	plan, err := llmexec.Build(ShellJoin(argv), s, env, &probe{m: m, c: c})
+	pr := &probe{m: m, c: c}
+	plan, err := llmexec.Build(ShellJoin(argv), s, env, pr)
 	if err != nil {
-		return refusal(c, err), true
+		return pr.refusal(err), true
 	}
 	res, err := m.run.RunBash(c.Ctx, runner.Bash{
 		Use:    runner.BashLLMExec,

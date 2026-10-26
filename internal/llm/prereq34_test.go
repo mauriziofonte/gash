@@ -248,3 +248,74 @@ func TestLintPythonXcodeStub(t *testing.T) {
 	require.Equal(t, result{"", `{"error":"runtime_not_installed","details":"llm_lint on 2 .py files needs python3, which is not installed","action":"STOP","recoverable":true,` +
 		`"hint":"Install python: brew install python; or leave .py out with --ext","missing":"python3","install":"brew install python"}` + "\n", 1}, r)
 }
+
+// TestExecToolRefusalHints: sed, awk and diff -r refused for a missing
+// GNU tool keep their code and action, and name the catalog tool with its
+// install command (3.4 before: no package, no command); llm_wait
+// --cmd-ok and gash run --safe report the same.
+func TestExecToolRefusalHints(t *testing.T) {
+	d, home := execFixture(t)
+	pinDebian(t, "/nonexistent")
+	m := New()
+	m.lookPathFn = func(name string) (string, bool) { return "/bin/" + name, name == "bash" }
+	m.run = runner.NewFake(t)
+	env := baseEnv(home, map[string]string{"PWD": d, "BASH": "/nonexistent/bash"})
+	sedWant := `{"error":"command_not_allowed","details":"sed","action":"STOP","recoverable":true,` +
+		`"hint":"llm_exec allows sed only where GNU sed --sandbox exists; use grep, head or llm_grep. Install sed: sudo apt-get install -y sed. Homebrew installs it as gsed; Gash finds it there",` +
+		`"missing":"gnu-sed","install":"sudo apt-get install -y sed"}` + "\n"
+	for line, want := range map[string]string{
+		"sed -n 1p a.txt": sedWant,
+		"awk '{print}' a.txt": `{"error":"command_not_allowed","details":"awk","action":"STOP","recoverable":true,` +
+			`"hint":"llm_exec allows awk only where gawk --sandbox exists; use grep, cut or jq. Install gawk: sudo apt-get install -y gawk",` +
+			`"missing":"gawk","install":"sudo apt-get install -y gawk"}` + "\n",
+		"diff -r src src": `{"error":"option_not_allowed","details":"diff -r","action":"FATAL","recoverable":false,` +
+			`"hint":"Recursive diff needs GNU diff (--no-dereference) here: it would follow symlinks out of the tree; compare single files. Install diffutils: sudo apt-get install -y diffutils",` +
+			`"missing":"diffutils","install":"sudo apt-get install -y diffutils"}` + "\n",
+	} {
+		r := runGo(t, m, d, env, "llm_exec", line)
+		require.Equal(t, result{"", want, 1}, r, line)
+	}
+	r := runGo(t, m, d, env, "llm_wait", "--cmd-ok", "sed -n 1p a.txt", "--timeout", "1")
+	require.Equal(t, result{"", sedWant, 1}, r)
+
+	// gash run --safe looks the tools up on PATH: bash only.
+	bashBin, err := lookPathTest("bash")
+	require.NoError(t, err)
+	bin := physTemp(t)
+	require.NoError(t, os.Symlink(bashBin, filepath.Join(bin, "bash")))
+	env["PATH"] = bin
+	var out, errb bytes.Buffer
+	e := invoke.EnvMap(env)
+	c := &invoke.Call{Ctx: context.Background(), Name: "gash", Env: e, Stdin: bytes.NewReader(nil), Stdout: &out, Stderr: &errb,
+		Term: term.Fixed(e, false, false, false)}
+	t.Chdir(d)
+	code, refused := SafeExec(c, []string{"sed", "-n", "1p", "a.txt"}, nil, &out, &errb)
+	require.True(t, refused)
+	require.Equal(t, 1, code)
+	require.Equal(t, sedWant, errb.String())
+}
+
+// TestExecGsed: where only gsed has --sandbox (Homebrew on macOS), sed
+// runs as gsed (3.4 before: refused, although gash_doctor found
+// gnu-sed).
+func TestExecGsed(t *testing.T) {
+	d, home := execFixture(t)
+	m := New()
+	m.lookPathFn = func(name string) (string, bool) { return "/bin/" + name, true }
+	m.run = runner.NewFake(t).Respond(func(c runner.Call) (runner.Expect, bool) {
+		switch strings.Join(c.Argv, " ") {
+		case "/bin/sed --sandbox -n p":
+			return runner.Expect{Status: 1, Stderr: "sed: illegal option -- -\n"}, true
+		case "/bin/gsed --sandbox -n p":
+			return runner.Expect{Stdout: "x\n"}, true
+		}
+		return runner.Expect{Status: 1}, true
+	})
+	e := invoke.EnvMap(baseEnv(home, map[string]string{"PWD": d}))
+	t.Chdir(d)
+	c := &invoke.Call{Ctx: context.Background(), Name: "llm_exec", Env: e, Stdin: bytes.NewReader(nil),
+		Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}, Term: term.Fixed(e, false, false, false)}
+	plan, _, err := m.execPlan(c, "sed -n 1p a.txt")
+	require.NoError(t, err)
+	require.Contains(t, plan.Script, "sed() { command gsed --sandbox \"$@\"; }\n")
+}

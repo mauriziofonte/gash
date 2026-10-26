@@ -689,9 +689,9 @@ func (w *waitCall) waitCmd() int {
 	if _, ok := w.m.findBash(w.c); !ok {
 		return prereq.Fail(w.c, "bash", "llm_wait --cmd-ok", true)
 	}
-	plan, err := w.m.execPlan(w.c, w.cond.cmd)
+	plan, pr, err := w.m.execPlan(w.c, w.cond.cmd)
 	if err != nil {
-		return refusal(w.c, err)
+		return pr.refusal(err)
 	}
 	var out waitOut
 	var last []byte

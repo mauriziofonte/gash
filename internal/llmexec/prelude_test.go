@@ -122,3 +122,22 @@ func TestPrintfQ(t *testing.T) {
 		t.Errorf("quoteArray(nil) = %q", got)
 	}
 }
+
+// gsedProbe is a macOS with Homebrew's GNU sed as gsed beside BSD sed.
+type gsedProbe struct{ fakeProbe }
+
+func (gsedProbe) SedName() string { return "gsed" }
+
+// TestPreludeGsed: where GNU sed is gsed (Homebrew on macOS), sed runs as
+// gsed --sandbox (3.4; before, llm_exec refused sed although gash_doctor
+// found gnu-sed); any other name keeps sed.
+func TestPreludeGsed(t *testing.T) {
+	got := prelude(nil, gsedProbe{fakeProbe{sed: true}})
+	if !strings.Contains(got, "sed() { command gsed --sandbox \"$@\"; }\n") {
+		t.Fatalf("no gsed wrapper in %q", got)
+	}
+	got = prelude(nil, fakeProbe{sed: true})
+	if !strings.Contains(got, "sed() { command sed --sandbox \"$@\"; }\n") {
+		t.Fatalf("no sed wrapper in %q", got)
+	}
+}

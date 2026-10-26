@@ -3,6 +3,7 @@
 package llm
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmexec"
+	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -53,9 +55,10 @@ func (m *Module) exec(c *invoke.Call) int {
 		BashPath: m.bashPath(c),
 		Vars:     vars,
 	}
-	plan, err := llmexec.Build(c.Arg(0), s, env, &probe{m: m, c: c})
+	pr := &probe{m: m, c: c}
+	plan, err := llmexec.Build(c.Arg(0), s, env, pr)
 	if err != nil {
-		return refusal(c, err)
+		return pr.refusal(err)
 	}
 	res, err := m.run.RunBash(c.Ctx, runner.Bash{
 		Use:    runner.BashLLMExec,
@@ -145,7 +148,51 @@ func (p *probe) ok(key string, stdin string, name string, args ...string) bool {
 	return v
 }
 
-func (p *probe) HasSandboxedSed() bool { return p.ok("sed", "x\n", "sed", "--sandbox", "-n", "p") }
+// HasSandboxedSed is GNU sed --sandbox as sed, else as gsed (Homebrew's
+// name for GNU sed beside the BSD sed of macOS; 3.4).
+func (p *probe) HasSandboxedSed() bool {
+	return p.ok("sed", "x\n", "sed", "--sandbox", "-n", "p") || p.ok("gsed", "x\n", "gsed", "--sandbox", "-n", "p")
+}
+
+// SedName is the program sed runs as: gsed when only gsed has --sandbox.
+func (p *probe) SedName() string {
+	if !p.ok("sed", "x\n", "sed", "--sandbox", "-n", "p") && p.ok("gsed", "x\n", "gsed", "--sandbox", "-n", "p") {
+		return "gsed"
+	}
+	return "sed"
+}
+
+// refusal is the refusal of a line Build refused with this probe. When a
+// missing tool is the cause (sed without GNU sed --sandbox, awk without
+// gawk --sandbox, diff -r without GNU diff), the hint also says how to
+// install the catalog tool here, and the envelope carries missing and
+// install as a prerequisite report does; the code and action stay (3.4;
+// before, the hint named no package and no command).
+func (p *probe) refusal(err error) int {
+	var r *pathguard.Refusal
+	if !errors.As(err, &r) {
+		return refusal(p.c, err)
+	}
+	tool := ""
+	switch {
+	case r.Code == "command_not_allowed" && r.Details == "sed" && !p.HasSandboxedSed():
+		tool = "gnu-sed"
+	case r.Code == "command_not_allowed" && (r.Details == "awk" || r.Details == "gawk") && !p.HasSandboxedGawk():
+		tool = "gawk"
+	case r.Code == "option_not_allowed" && strings.HasPrefix(r.Details, "diff ") &&
+		strings.HasPrefix(r.Hint, "Recursive diff needs GNU diff") && !p.HasDiffNoDeref():
+		tool = "diffutils"
+	default:
+		return refusal(p.c, err)
+	}
+	rep := prereq.Current(p.c).Report(tool, "")
+	e := envelopeOf(r.Code, r.Details, r.Action, r.Hint+". "+rep.Advice()).With("missing", tool)
+	if cmd := rep.Install(); cmd != "" {
+		e = e.With("install", cmd)
+	}
+	return p.c.Fail(e)
+}
+
 func (p *probe) HasSandboxedGawk() bool {
 	return p.ok("gawk", "", "gawk", "--sandbox", "BEGIN{}")
 }
