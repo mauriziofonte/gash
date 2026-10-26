@@ -101,7 +101,11 @@ Settings, read from `~/.gash_env` only (never from the environment):
   still apply; listing `sed`, `awk`, `gawk`, `grep`, `rg`, `diff` or
   `git` drops its wrapper.
 * `GASH_LLM_EXEC=unrestricted`: skips checks 2 and 3 (secret-file checks
-  included) and the wrappers. Only the blocklist remains.
+  included) and the wrappers, for `llm_exec` only. Only the blocklist
+  remains. The other functions that check a command with these rules
+  (`llm_remote_run`, `llm_docker_exec`, `llm_wait --cmd-ok`, `gash run
+  --safe`) always use the checked rules: the setting never turns a read
+  function, or a remote host, into a place to run any command.
 * `GASH_LLM_SANDBOX=1`: runs under `bwrap --ro-bind / / --dev /dev --proc /proc
   --unshare-all --die-with-parent`, so a read-only filesystem and no network;
   reading stays possible. Under WSL the sandbox also mounts an empty
@@ -319,7 +323,8 @@ and the [agents guide](agents/README.md) shows them to a person.
   OPTIONS without a body; a credential reaches it only through
   `--auth-env VAR` (never argv, never printed, never sent to another host
   on a redirect). `llm_docker_exec` and `llm_wait --cmd-ok` run under the
-  `llm_exec` rules; `llm_procs` has no kill.
+  checked `llm_exec` rules, whatever `GASH_LLM_EXEC` says; `llm_procs` has
+  no kill.
 * **`agent_*` are the write tools**: `agent_replace`, `agent_git_commit`,
   `agent_kill`, `agent_docker_exec`, `agent_put`, and `agent_test`, because
   a test suite runs the project's own code (it runs a test suite and
@@ -341,8 +346,8 @@ and the [agents guide](agents/README.md) shows them to a person.
   take registered `HOST:` aliases only. Remote paths pass the local rules
   and the deny tier before anything connects, and again on the host after
   links resolve; a secret file never leaves the host and the local stdin is
-  never sent. `llm_remote_run` checks each command with the `llm_exec`
-  rules first. Over a `+ssh` database connection the SQL guard runs before
+  never sent. `llm_remote_run` checks each command with the checked
+  `llm_exec` rules first (`GASH_LLM_EXEC=unrestricted` does not apply). Over a `+ssh` database connection the SQL guard runs before
   ssh and the password goes on ssh's stdin. The gash binary Gash copies to a
   host is size-checked, test-run and renamed into a 0700 cache directory.
 * **Telemetry** (`GASH_TELEMETRY_FILE`) is off by default and local: the

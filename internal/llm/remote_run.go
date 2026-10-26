@@ -372,7 +372,9 @@ func remoteLines(c *invoke.Call, lines []string) (string, []string, error) {
 		v, _ := f.Setting(name)
 		return v
 	}
-	s := llmexec.Settings{Exec: setting("GASH_LLM_EXEC"), ExecAllow: setting("GASH_LLM_EXEC_ALLOW")}
+	// The checked rules: GASH_LLM_EXEC=unrestricted is llm_exec's alone
+	// (AGENTS.md 3.12: an unchecked remote command would be a write).
+	s := llmexec.Settings{ExecAllow: setting("GASH_LLM_EXEC_ALLOW")}
 	env := llmexec.Environ{
 		Cwd: remoteCwd, Home: remoteCwd, RootHome: "/root", BashPath: "bash", Vars: map[string]string{},
 		FS: noFS{}, LookupUser: func(string) (string, bool) { return "", false },
@@ -388,11 +390,9 @@ func remoteLines(c *invoke.Call, lines []string) (string, []string, error) {
 	prelude := base.Script[:i]
 	canons := make([]string, len(lines))
 	for k, line := range lines {
-		if s.Exec != "unrestricted" {
-			if w, ok := localExpansion(line); ok {
-				return "", nil, &llmexec.Refusal{Code: "remote_glob_unsupported", Details: w, Action: "RETRY",
-					Hint: "Globs and ~ would expand on this machine, not on the host: give explicit paths (llm_find PATTERN DIR --host ALIAS lists them)"}
-			}
+		if w, ok := localExpansion(line); ok {
+			return "", nil, &llmexec.Refusal{Code: "remote_glob_unsupported", Details: w, Action: "RETRY",
+				Hint: "Globs and ~ would expand on this machine, not on the host: give explicit paths (llm_find PATTERN DIR --host ALIAS lists them)"}
 		}
 		p, err := llmexec.Build(line, s, env, remoteProbe{})
 		if err != nil {

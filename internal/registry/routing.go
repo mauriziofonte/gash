@@ -114,7 +114,7 @@ func AgentsHint() string {
 		"Run them as `gash FN ARGS` or, after `GASH_HEADLESS=1 source ~/.gash/gash.sh`, as `FN ARGS`; " +
 		"`FN --help` lists the flags; most reads take `--host ALIAS` to run on a registered ssh host. Errors are one JSON line on stderr: " +
 		"`action` RETRY = fix the arguments, CONTINUE = skip, STOP = ask the user, FATAL = stop. " +
-		"`llm_*` only read. `agent_*` write: name every target, run `--dry-run` first.\n\n" +
+		"`llm_*` only read (`llm_exec` follows the user's `GASH_LLM_EXEC` setting). `agent_*` write: name every target, run `--dry-run` first.\n\n" +
 		RoutingTable()
 }
 

@@ -32,7 +32,8 @@ Run CMD and return its exit status unchanged.
   --runtime NAME:VERSION  put that runtime's directory first on PATH:
                           node:24, php:8.4 (repeatable; gash runtime resolves
                           it, php is reachable as php)
-  --safe                  run CMD under llm_exec's read-only rules
+  --safe                  run CMD under llm_exec's checked read-only rules
+                          (GASH_LLM_EXEC=unrestricted does not apply)
 
 Options come before -- (or before the first word that is not an option);
 every word after it belongs to CMD. CMD may be a gash function

@@ -204,15 +204,16 @@ environment, so an agent cannot loosen them by exporting a variable.
 | Setting | Effect |
 |---|---|
 | `GASH_LLM_EXEC_ALLOW="make npm"` | More commands for `llm_exec`, with any arguments. Secret files and protected paths stay refused |
-| `GASH_LLM_EXEC=unrestricted` | `llm_exec` skips its parser and allowlist; only the blocklist of destructive patterns remains |
+| `GASH_LLM_EXEC=unrestricted` | `llm_exec`, and only it, skips its parser and allowlist; only the blocklist of destructive patterns remains |
 | `GASH_LLM_SANDBOX=1` | `llm_exec` runs inside `bwrap`: a read-only filesystem and no network |
 | `DB:name=...` | The database connections `llm_db_*` may use. Every query runs in a read-only session; give Gash an account with read-only grants too |
 | `HOST:alias=user@host` | The SSH hosts `--host`, `llm_remote_run`, `llm_same` and `agent_put` may reach. A host that is not registered is refused |
 | `GASH_DB_TIMEOUT` | How long a PostgreSQL query may run, in seconds (default 30) |
 
-The `llm_exec` settings also apply to `llm_wait --cmd-ok`,
-`llm_docker_exec`, `gash run --safe` and the commands of `llm_remote_run`
-(the sandbox aside: it is local). They are read from the file at each
+`GASH_LLM_EXEC_ALLOW` also applies to `llm_wait --cmd-ok`,
+`llm_docker_exec`, `gash run --safe` and the commands of `llm_remote_run`;
+`GASH_LLM_EXEC=unrestricted` does not (those always check), and the
+sandbox is local. The settings are read from the file at each
 call, so a change applies at once. The [configuration](../configuration.md) page lists every
 setting, and [security.md](../security.md#llm_exec) what each one changes.
 

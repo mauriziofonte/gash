@@ -492,7 +492,8 @@ missing one is waited for); RE is RE2, matched per line. `--gone` takes a
 PID (a zombie counts as gone) or a NAME matched as `llm_procs --name`.
 `--http` waits for a 2xx (or `--code N`), with `--json-path P --equals V`
 for a value of the JSON body; `--cmd-ok` re-runs a command line checked
-once under the `llm_exec` rules (6.3). The timeout is an answer, not an
+once under the `llm_exec` rules (6.3), always the checked ones:
+`GASH_LLM_EXEC=unrestricted` does not apply. The timeout is an answer, not an
 error: `met:false` with exit 1, plus what the last look saw (`last`,
 `code`, `rc`). `--timeout` is required (at most 1h); `missing_condition`
 without a condition, `unexpected_argument` for a second one.
@@ -507,9 +508,9 @@ The docker functions run the `docker` CLI with `llm_docker_check`'s short
 environment; no docker is `docker_not_found`, a daemon that cannot be
 reached `docker_unavailable` (both CONTINUE), an unknown container
 `container_not_found` (RETRY). `llm_docker_exec` passes CMD's words to
-`docker exec` as an array (no shell, no quoting) after the `llm_exec` rules:
-one command, `sed`/`awk` under `--sandbox`, `grep`/`rg` skipping secret
-files, `git` refused. Journal, log and match lines are cut at 300 columns
+`docker exec` as an array (no shell, no quoting) after the checked
+`llm_exec` rules (never `unrestricted`): one command, `sed`/`awk` under
+`--sandbox`, `grep`/`rg` skipping secret files, `git` refused. Journal, log and match lines are cut at 300 columns
 unless `--width` says otherwise.
 
 ### 3.11 Runtimes, lint and tests
@@ -602,8 +603,9 @@ and again on the host after resolving links; a secret file never leaves the
 host.
 
 `llm_remote_run` checks CMD with the `llm_exec` rules (3.5) before anything
-connects: read-only commands, no secret files or protected paths, the same
-`GASH_LLM_EXEC` settings (`GASH_LLM_SANDBOX` is local only). A glob or a
+connects: read-only commands, no secret files or protected paths.
+`GASH_LLM_EXEC_ALLOW` applies; `GASH_LLM_EXEC=unrestricted` does not (it is
+`llm_exec`'s alone), and `GASH_LLM_SANDBOX` is local only. A glob or a
 leading `~` is `remote_glob_unsupported` (RETRY): it would expand on this
 machine; give explicit paths. Each command runs in bash on the host with
 stdin closed, from the remote home; steps share no shell state. A failing
@@ -962,8 +964,8 @@ never from same-named environment variables:
 
 | Setting | Effect |
 |---|---|
-| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
-| `GASH_LLM_EXEC=unrestricted` | Skips parser, allowlist and secret-file check; only the blocklist remains |
+| `GASH_LLM_EXEC_ALLOW="make npm"` | Extra commands, any options, for `llm_exec` and the functions that check a command with its rules; the secret-file, forbidden-path and walk rules (no symlink-following walk, no walk at `/` or above a protected tree) still apply |
+| `GASH_LLM_EXEC=unrestricted` | `llm_exec` only: skips its parser, allowlist and secret-file check; only the blocklist remains. `llm_remote_run`, `llm_docker_exec`, `llm_wait --cmd-ok` and `gash run --safe` always use the checked rules |
 | `GASH_LLM_SANDBOX=1` | Runs the child in `bwrap`: read-only filesystem, no network, and under WSL no Windows interop (`sandbox_unavailable` if bwrap cannot start) |
 
 Whoever controls the agent's environment (`HOME`, `GASH_ENV_FILE`) controls
@@ -1045,7 +1047,8 @@ these:
   the caller's environment.
 - **Processes.** `llm_procs` has no `--kill`, listings never show the
   caller, its ancestors or its subshells; `llm_wait --cmd-ok` and
-  `llm_docker_exec` run under the `llm_exec` rules of 6.3.
+  `llm_docker_exec` run under the checked `llm_exec` rules of 6.3, whatever
+  `GASH_LLM_EXEC` says.
 - **Commands.** `llm_lint` only compiles (`php -l`, `bash -n`, node
   compile without evaluating, python `compile()`); `llm_tools NAME` runs
   `NAME --version` for a bare program name on PATH. A test suite runs the
