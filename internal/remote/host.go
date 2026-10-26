@@ -38,8 +38,16 @@ type Spec struct {
 	// PathFrom is the index (among the positionals) of the first one that
 	// is a remote path; every positional from there is one. -1: none.
 	PathFrom int
-	// PathOpts are the value options whose value is a remote path.
+	// PathMax is how many positionals from PathFrom are paths; 0: all.
+	PathMax int
+	// PathOpts are the value options whose (first) value is a remote path.
 	PathOpts []string
+	// Pairs are the options that take two values (llm_wait --file-match
+	// FILE RE).
+	Pairs []string
+	// Also gives more forms of a path argument for the rails to check as
+	// well (llm_read PATH:A-B is checked as PATH too); nil: none.
+	Also func(arg string) []string
 	// Write marks an agent_* function: its paths get CheckWrite (with
 	// --force read from the arguments) instead of CheckRead.
 	Write bool
@@ -85,11 +93,14 @@ type HostOut struct {
 // Wrap returns h with --host ALIAS.
 func (hs Hoster) Wrap(name string, spec Spec, h invoke.Handler) invoke.Handler {
 	return func(c *invoke.Call) int {
-		aliases, rest, found, missing := SplitHost(c.Args, spec.values())
+		aliases, rest, found, missing := splitHost(c.Args, spec.values(), spec.Pairs)
 		if !found {
 			return h(c)
 		}
 		for _, a := range c.Args {
+			if a == "--" {
+				break
+			}
 			if a == "--help" || a == "-h" {
 				return h(c)
 			}
@@ -214,27 +225,37 @@ func writeOuts(c *invoke.Call, spec Spec, outs []HostOut) int {
 }
 
 // SplitHost takes every "--host ALIAS" out of args, skipping the values of
-// the value options (so a value "--host" is never one). missing reports a
-// --host with no value after it.
+// the value options (so a value "--host" is never one). A "--" ends the
+// options: it and every word after it are kept as they are (the command of
+// llm_docker_exec). missing reports a --host with no value after it.
 func SplitHost(args, values []string) (aliases, rest []string, found, missing bool) {
+	return splitHost(args, values, nil)
+}
+
+func splitHost(args, values, pairs []string) (aliases, rest []string, found, missing bool) {
 	rest = make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
+		case a == "--":
+			return aliases, append(rest, args[i:]...), found, missing
 		case a == "--host":
 			found = true
-			if i+1 >= len(args) {
+			next := args[i+1:]
+			if len(next) == 0 {
 				missing = true
 				continue
 			}
-			aliases = append(aliases, args[i+1])
+			aliases = append(aliases, next[0])
 			i++
-		case contains(values, a):
-			rest = append(rest, a)
-			if i+1 < len(args) {
-				rest = append(rest, args[i+1])
-				i++
+		case contains(values, a) || contains(pairs, a):
+			n := 1
+			if contains(pairs, a) {
+				n = 2
 			}
+			n = min(n, len(args)-i-1)
+			rest = append(rest, args[i:i+1+n]...)
+			i += n
 		default:
 			rest = append(rest, a)
 		}
@@ -244,39 +265,57 @@ func SplitHost(args, values []string) (aliases, rest []string, found, missing bo
 
 func (s Spec) values() []string { return append(append([]string{}, sharedValues...), s.Values...) }
 
-// Paths are the remote path arguments of args (without --host).
+// Paths are the remote path arguments of args (without --host), each
+// followed by its Also forms.
 func (s Spec) Paths(args []string) []string {
 	values := s.values()
 	var out []string
+	add := func(p string) {
+		out = append(out, p)
+		if s.Also != nil {
+			out = append(out, s.Also(p)...)
+		}
+	}
 	pos := 0
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if contains(values, a) {
+		if a == "--" {
+			break
+		}
+		if contains(values, a) || contains(s.Pairs, a) {
 			if i+1 < len(args) && contains(s.PathOpts, a) {
-				out = append(out, args[i+1])
+				add(args[i+1])
 			}
 			i++
+			if contains(s.Pairs, a) {
+				i++
+			}
 			continue
 		}
 		if strings.HasPrefix(a, "-") && a != "-" {
 			continue
 		}
-		if s.PathFrom >= 0 && pos >= s.PathFrom {
-			out = append(out, a)
+		if s.PathFrom >= 0 && pos >= s.PathFrom && (s.PathMax == 0 || pos < s.PathFrom+s.PathMax) {
+			add(a)
 		}
 		pos++
 	}
 	return out
 }
 
-// check applies the rails to every path argument.
+// check applies the rails to every path argument. A "-" (stdin) is
+// refused: the local stdin is never sent to a host.
 func (s Spec) check(args []string) *contract.Envelope {
 	force := contains(args, "--force")
 	for _, p := range s.Paths(args) {
 		var e *contract.Envelope
-		if s.Write {
+		switch {
+		case p == "-":
+			env := contract.New("unexpected_argument", "-", "With --host, name a file on the host: the local stdin is not sent")
+			e = &env
+		case s.Write:
 			e = CheckWrite(p, force)
-		} else {
+		default:
 			e = CheckRead(p)
 		}
 		if e != nil {

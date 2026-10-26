@@ -109,6 +109,35 @@ func TestWrapRefusesBeforeConnecting(t *testing.T) {
 	require.Zero(t, rc)
 }
 
+func TestSpecPairsAlsoDashAndDoubleDash(t *testing.T) {
+	spec := Spec{PathFrom: -1, Values: []string{"--exists"}, PathOpts: []string{"--file-match", "--exists"}, Pairs: []string{"--file-match"}}
+	aliases, rest, found, _ := splitHost([]string{"--file-match", "log", "--host", "--host", "web"}, spec.values(), spec.Pairs)
+	require.True(t, found)
+	require.Equal(t, []string{"web"}, aliases, "the second value of a pair is never --host")
+	require.Equal(t, []string{"--file-match", "log", "--host"}, rest)
+	require.Equal(t, []string{"log"}, spec.Paths(rest))
+
+	aliases, rest, _, _ = SplitHost([]string{"ctr", "--host", "web", "--", "curl", "--host", "x"}, nil)
+	require.Equal(t, []string{"web"}, aliases)
+	require.Equal(t, []string{"ctr", "--", "curl", "--host", "x"}, rest, "-- ends the options")
+
+	read := Spec{PathFrom: 0, Also: func(a string) []string { return []string{a + ".also"} }}
+	require.Equal(t, []string{"f", "f.also", "-", "-.also"}, read.Paths([]string{"f", "-", "--", "g"}))
+
+	s := newHostScene(t)
+	h := s.hoster().Wrap("llm_x", Spec{PathFrom: 0}, local)
+	_, errOut, rc := s.call(h, "--host", "web", "-")
+	require.Equal(t, 1, rc)
+	require.Equal(t, "unexpected_argument/RETRY", code(t, errOut), "stdin never crosses")
+	h = s.hoster().Wrap("llm_x", Spec{PathFrom: 0, Also: func(a string) []string { return []string{strings.TrimSuffix(a, ":1-5")} }}, local)
+	_, errOut, rc = s.call(h, "--host", "web", "/etc/ssh/sshd_config:1-5")
+	require.Equal(t, 1, rc)
+	require.Equal(t, "forbidden_path/FATAL", code(t, errOut))
+	out, _, _ := s.call(h, "--host", "web", "--", "--help")
+	require.NotEqual(t, "local\n", out, "a --help after -- is an argument")
+	require.NotZero(t, s.ssh.N())
+}
+
 func code(t *testing.T, s string) string {
 	t.Helper()
 	var e struct{ Error, Action string }
