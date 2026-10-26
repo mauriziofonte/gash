@@ -108,12 +108,16 @@ type target struct {
 	driver                           string // sqlite, mysql, mariadb or pgsql
 	file                             string
 	user, pass, host, port, database string
+	via                              *sshVia // a +ssh connection's host (ssh.go)
 }
 
 // target is __llm_db_target: the SQLite file of -f, or the named
 // connection of ~/.gash_env with its database (-d, the URL, then the
 // first word of ./.target-database).
 func (m *Module) target(c *invoke.Call, a *dbArgs) (target, *output) {
+	if t, o, ok := m.sshTarget(c, a); ok {
+		return t, o
+	}
 	if a.sqliteFile != "" {
 		path, fail := m.sqliteFile(c, a.sqliteFile)
 		if fail != nil {

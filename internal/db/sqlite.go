@@ -62,6 +62,9 @@ func cleanError(s string) string {
 // sqliteRun is __llm_sqlite_run FILE SQL: the rows as the sqlite3 shell's
 // -json output read by jq, or the text the shell printed for an EXPLAIN.
 func (m *Module) sqliteRun(c *invoke.Call, file, query string, mode int) output {
+	if o, ok := m.sqliteOnHost(c, file, query, mode); ok {
+		return o
+	}
 	ctx := ctxOf(c)
 	db, err := m.openSQLite(sqliteDSN(file))
 	if err != nil {

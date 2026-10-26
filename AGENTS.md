@@ -245,6 +245,19 @@ write). Their targets follow the transfer policy: DENY paths are
 .ssh) `sensitive_path` (STOP) without `--force`, checked before connecting
 and again on the host after resolving links.
 
+`llm_db_*` reach a database on a host through a `DB:` connection whose
+scheme ends in `+ssh`: `mysql+ssh://USER:PASS@ALIAS/DB`,
+`mariadb+ssh://...`, `pgsql+ssh://USER:PASS@ALIAS[:PORT]/DB`,
+`sqlite+ssh://ALIAS/relative.db` or `sqlite+ssh://ALIAS//absolute.db`, any
+of them with `+docker:CONTAINER` at the end to run the client inside that
+container. The engine's own client (`mysql`, `psql` 12+, `sqlite3` with
+`-json`) runs on the host against its local server (socket, or
+127.0.0.1:PORT when the URL names a port), one round trip per query, the
+output shape of the local call. The SQL guard runs here first: a refused
+query never leaves the machine. The password goes on the ssh stdin to the
+client's `MYSQL_PWD`/`PGPASSWORD`, never in an argument; the session is
+read-only as locally.
+
 ## 4. Output shapes
 
 Real output; only whitespace was changed to fit the page.
