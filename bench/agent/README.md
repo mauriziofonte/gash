@@ -15,7 +15,7 @@ them (no Go test, no lint, no CI job).
 | Copy the two scripts | `cp bench/agent/gen.py bench/agent/agentbench.py $B/kit/` |
 | Requirements | Python 3.8+, git, curl; optional: php, node, jq, sqlite3, rg, dig, tac (a variant whose tool is missing is skipped) |
 | Build the corpus (~600 MB, ~40 s, deterministic) | `python3 -I $B/kit/gen.py $B` |
-| Build gash | `go build -o $B/gash ./cmd/gash` (from the repository root) |
+| Build gash as a release builds it (static, stripped: a cgo build starts about 1 ms slower) | `CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o $B/gash ./cmd/gash` (from the repository root) |
 | Run every case, or the ones named | `GASH_BENCH_BIN=$B/gash python3 -I $B/kit/agentbench.py --root $B [case ...]` |
 | Read | `$B/results/AGENTBENCH.md` (per-variant timings, PASS / FAIL / NA), `$B/results/agentbench.json` |
 
