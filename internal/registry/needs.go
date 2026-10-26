@@ -122,7 +122,7 @@ var needs = map[string][]Need{
 	"wsl_compact":   {{"sudo", ""}},
 	"hgrep":         {{"fzf", "--pick"}},
 	"history_grep":  {{"fzf", "--pick"}},
-	"gash logs":     {{"sudo", "clean --sudo"}},
+	"gash logs":     {{"sudo", "clean --sudo"}, {"truncate", "clean --sudo --truncate"}},
 	"gash init":     {{"bc", "the calc alias"}},
 
 	// Local web stack.

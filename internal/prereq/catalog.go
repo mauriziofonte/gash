@@ -153,6 +153,8 @@ var catalog = []Tool{
 		OS: []string{"linux"}, NoInstall: true, Note: "part of systemd"},
 	{Name: "fzf", Purpose: "picks an entry from a list", Level: Optional, Area: "system",
 		Packages: pkgs("fzf"), EPEL: true},
+	{Name: "truncate", Purpose: "empties root-owned live logs for gash logs clean --sudo --truncate", Level: Optional,
+		Area: "system", Packages: pkgs("coreutils", "brew", "truncate")},
 	{Name: "ldd", Purpose: "lists the shared libraries chrome-headless-shell needs", Level: Feature, Area: "system",
 		OS: []string{"linux"}, Packages: pkgs("libc-bin", "dnf", "glibc-common", "pacman", "glibc", "zypper", "glibc",
 			"apk", "musl-utils", "brew", "")},
