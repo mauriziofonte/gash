@@ -647,6 +647,13 @@ Each code always carries the action shown:
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
 | WSL & Windows (`gash wsl`, `gash win`, `gash logs`) | `interop_unavailable` `windows_access_denied` `elevation_required` `windows_not_found` (STOP); `interop_timeout` `invalid_windows_argument` `invalid_duration` `confirmation_required` (RETRY) |
 | Shared output options (3.4) | `invalid_format` `invalid_width` `invalid_max_lines` `invalid_head` `invalid_tail` `invalid_jobs` `invalid_timeout` (RETRY) |
+| Files and search (3.4) | `invalid_sort` `invalid_by` `invalid_since` (RETRY) |
+| Text reads (3.4) | `invalid_range` `invalid_assertion` `invalid_algo` `invalid_short` `invalid_level` `invalid_rule` (RETRY) |
+| Data files and values (3.4) | `not_a_scalar` `invalid_json` `invalid_json_path` `json_path_not_found` `not_an_object` `invalid_delimiter` `invalid_where` `unknown_column` `invalid_config` `invalid_env_name` `invalid_date` `invalid_timezone` `invalid_date_format` (RETRY) |
+| Git (3.4) | `git_error` `detached_head` `merge_conflict` `push_failed` (STOP); `invalid_log` `invalid_files` `invalid_fields` `unknown_revision` `missing_message` `invalid_author` `nothing_to_commit` `git_add_failed` `commit_failed` `no_upstream` `unknown_remote` `push_rejected` (RETRY) |
+| Network probes (3.4) | `http_method_blocked` (FATAL); `auth_env_unset` (STOP); `missing_target` `invalid_target` `invalid_server` `invalid_header` `invalid_resolve` `invalid_expect` `invalid_body_max` `invalid_auth_env` `secret_in_argv` (RETRY) |
+| Processes, waiting, services (3.4) | `kill_refused` (FATAL); `kill_failed` (STOP); `ps_not_found` `systemd_unavailable` `container_not_running` `docker_unavailable` (CONTINUE); `invalid_pid` `missing_condition` `invalid_interval` `invalid_code` `invalid_url` `missing_unit` `missing_container` `missing_command` `invalid_user` `container_not_found` `docker_error` `invalid_signal` `pattern_too_broad` (RETRY) |
+| Runtimes, lint, tests (3.4) | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
 | Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a

@@ -4,6 +4,7 @@ package contract
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -151,4 +152,47 @@ func TestLedger_CORE09_JQBytes(t *testing.T) {
 	}
 	require.Equal(t, "[\"a\",\"�\"]\n", JQArray("a", "\xe2\x82"))
 	require.Equal(t, "[]", JQArray())
+}
+
+// Every 3.x code outside gash hte (docs/hte.md lists those) is in the
+// AGENTS.md section 5 table, under its own action: a 3.4 code cannot ship
+// undocumented, nor documented with another action.
+func TestAgentsTableHas3xCodes(t *testing.T) {
+	b, err := os.ReadFile("../../AGENTS.md")
+	require.NoError(t, err)
+	doc := string(b)
+	s5 := doc[strings.Index(doc, "\n## 5. "):strings.Index(doc, "\n## 6. ")]
+	rows := map[string]string{}
+	for _, line := range strings.Split(s5, "\n") {
+		if !strings.HasPrefix(line, "| ") {
+			continue
+		}
+		cells := strings.Split(line, " | ")
+		if len(cells) < 2 {
+			continue
+		}
+		for _, part := range strings.Split(cells[len(cells)-1], ";") {
+			action := ""
+			for _, a := range []string{"RETRY", "STOP", "CONTINUE", "FATAL"} {
+				if strings.Contains(part, "("+a+")") {
+					action = a
+				}
+			}
+			for _, f := range strings.Fields(part) {
+				if strings.HasPrefix(f, "`") && strings.HasSuffix(f, "`") && len(f) > 2 {
+					rows[strings.Trim(f, "`")] = action
+				}
+			}
+		}
+	}
+	for _, c := range Codes() {
+		if c.Origin != Origin3x || c.Area == "hte" || c.Area == "compat" || c.Area == "binary" {
+			continue
+		}
+		action, ok := rows[c.Name]
+		require.True(t, ok, "AGENTS.md section 5 lacks %s", c.Name)
+		if action != "" {
+			require.Equal(t, string(c.Action), action, "AGENTS.md section 5 action of %s", c.Name)
+		}
+	}
 }
