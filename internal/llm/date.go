@@ -8,6 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	// The IANA time zone database built in (about 450 KB): llm_date --tz
+	// and the TZ of --since read a zone the system's zoneinfo lacks
+	// (Windows, a minimal container without tzdata) as they read it on a
+	// full Linux or macOS (3.4).
+	_ "time/tzdata"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
@@ -15,7 +20,7 @@ import (
 
 // llm_date (plan V4): date arithmetic without GNU or BSD date and without
 // a Python interpreter, the same on Linux and macOS (pure Go; time zones
-// from the system's zoneinfo).
+// from the system's zoneinfo, else from the copy built into the binary).
 //
 //	llm_date                       now: {"result":"...","epoch":N}
 //	llm_date --epoch 1700000000    a Unix time as a date (13 digits: ms)

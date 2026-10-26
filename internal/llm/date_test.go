@@ -6,6 +6,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,4 +127,34 @@ func TestDateFormatDuration(t *testing.T) {
 	} {
 		require.Equal(t, want, formatDuration(d), d.String())
 	}
+}
+
+// TestDateZonesBuiltIn: llm_date --tz and the TZ of --since read IANA
+// zones with ZONEINFO pointing nowhere, and the zone database is linked
+// into gash (time/tzdata), so a system without zoneinfo (Windows, a
+// minimal container) reads them too (3.4 before: invalid_timezone there,
+// and --since fell back to the local zone). ZONEINFO is read once per
+// process, so the check runs in a child of the test binary.
+func TestDateZonesBuiltIn(t *testing.T) {
+	if os.Getenv("GASH_TEST_ZONES_CHILD") == "1" {
+		now := time.Date(2026, 10, 25, 14, 3, 5, 0, time.UTC)
+		r := runDate(t, now, map[string]string{"TZ": "UTC"}, "--tz", "Asia/Kathmandu")
+		require.Equal(t, result{`{"result":"2026-10-25T19:48:05+05:45","epoch":1792936985}` + "\n", "", 0}, r)
+		e := invoke.EnvMap(map[string]string{"TZ": ":America/New_York"})
+		require.Equal(t, "America/New_York", envLocation(&invoke.Call{Env: e}).String())
+		return
+	}
+	exe, err := os.Executable()
+	require.NoError(t, err)
+	cmd := exec.Command(exe, "-test.run=^TestDateZonesBuiltIn$", "-test.count=1")
+	cmd.Env = append(os.Environ(), "GASH_TEST_ZONES_CHILD=1", "ZONEINFO="+filepath.Join(t.TempDir(), "nowhere", "zoneinfo.zip"))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "%s", out)
+
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go tool to list the dependencies of gash")
+	}
+	out, err = exec.Command("go", "list", "-deps", "github.com/mauriziofonte/gash/cmd/gash").Output()
+	require.NoError(t, err)
+	require.Contains(t, strings.Fields(string(out)), "time/tzdata")
 }
