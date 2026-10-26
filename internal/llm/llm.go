@@ -37,6 +37,8 @@ type Module struct {
 	// goos is the system the tools' output formats come from
 	// (runtime.GOOS: BSD netstat on darwin).
 	goos string
+	// journalOK replaces the system journal access check in tests.
+	journalOK func() bool
 	// exe is the running binary that --host ships (nil: os.Executable).
 	exe func() (string, error)
 }

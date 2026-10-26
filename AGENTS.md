@@ -440,7 +440,7 @@ negative once expired.
 | Function | Output |
 |---|---|
 | `llm_wait --timeout S [--interval S] (--file-match FILE RE \| --exists PATH \| --gone PID\|NAME \| --http URL [--code N] [--json-path P --equals V] \| --port HOST:PORT \| --cmd-ok CMD) [--tail N] [--width N] [--host ALIAS]` | `{"met":true,"after_s":2.01,"match":"<line>","tail":[...]}`, exit 0; timeout `{"met":false,"after_s":S}`, exit 1, no error envelope |
-| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given |
+| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given; `log_note` (why, `null` on the other rows) when a unit's journal could not be read |
 | `llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{name, image, state, health, ports, up}]` by name |
 | `llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]` | `{ctr, read, log:[...]}` |
 | `llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD... [--host ALIAS]` | `{rc, out, err}` (+ `truncated`); exit 0 when the command ran |

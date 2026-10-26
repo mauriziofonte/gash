@@ -218,8 +218,10 @@ var catalogProc = []Function{
 				"  -c1-200, for several units in one call. One row per unit, in the order\n" +
 				"  given: [{\"unit\",\"load\",\"active\",\"sub\",\"since\",\"pid\",\"restarts\",\n" +
 				"  \"log\":[...]}]; an unknown unit is load \"not-found\". Journal lines are\n" +
-				"  short-iso without the host name; the journal may need the user in the\n" +
-				"  systemd-journal group (no lines otherwise). Read-only (systemctl show,\n" +
+				"  short-iso without the host name. A unit whose journal could not be read\n" +
+				"  (no journalctl, journalctl failed, or a system journal closed to a user\n" +
+				"  neither root nor in the systemd-journal group) says why in \"log_note\",\n" +
+				"  a column there only when a row has one. Read-only (systemctl show,\n" +
 				"  journalctl). Without systemd: systemd_unavailable (CONTINUE).",
 		},
 		Env:      []string{"HOME", "PWD"},

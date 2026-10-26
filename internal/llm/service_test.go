@@ -82,8 +82,10 @@ func TestServiceErrors(t *testing.T) {
 
 	m = New()
 	m.lookPathFn = func(string) (string, bool) { return "", false }
+	pinDebian(t, "/nonexistent")
 	r = runGo(t, m, d, env, "llm_service", "nginx")
-	require.Contains(t, r.Stderr, `"error":"systemd_unavailable","details":"systemctl is not installed","action":"CONTINUE"`)
+	require.Equal(t, `{"error":"systemd_unavailable","details":"llm_service needs systemctl, which is not installed","action":"CONTINUE","recoverable":true,`+
+		`"hint":"systemd is part of the operating system: Gash cannot install it. Under WSL, enable it in /etc/wsl.conf","missing":"systemctl"}`+"\n", r.Stderr)
 
 	for _, tc := range []struct {
 		args []string
@@ -113,4 +115,50 @@ func TestParseUnitShow(t *testing.T) {
 	require.Nil(t, intOrNull("x"))
 	require.Nil(t, intOrNull(""))
 	require.Equal(t, 7, intOrNull("7"))
+}
+
+// TestServiceLogNote: a unit whose journal could not be read says why in
+// log_note (3.4 before: "log":[] as for an empty journal); the column is
+// there only when a row has a note.
+func TestServiceLogNote(t *testing.T) {
+	d := physTemp(t)
+	env := baseEnv(physTemp(t), nil)
+	two := strings.Replace(showOut, "Id=nosuch.service\nLoadState=not-found", "Id=cron.service\nLoadState=loaded", 1)
+
+	// Without journalctl.
+	m, f := serviceModule(t, runner.Expect{Stdout: two}, nil)
+	m.lookPathFn = func(name string) (string, bool) { return "/bin/" + name, name == "systemctl" }
+	r := runGo(t, m, d, env, "llm_service", "nginx", "cron")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Equal(t, `[{"unit":"nginx","load":"loaded","active":"active","sub":"running","since":"2026-10-20 10:00:00 UTC","pid":812,"restarts":2,"log":[],"log_note":"journalctl is not installed"},`+
+		`{"unit":"cron","load":"loaded","active":"inactive","sub":"dead","since":null,"pid":0,"restarts":0,"log":[],"log_note":"journalctl is not installed"}]`+"\n", r.Stdout)
+	require.Len(t, f.Calls(), 1)
+
+	// journalctl fails for one unit; the other has lines.
+	m, _ = serviceModule(t, runner.Expect{Stdout: two}, nil)
+	m.run = runner.NewFake(t).Respond(func(c runner.Call) (runner.Expect, bool) {
+		switch {
+		case c.Argv[0] == "/bin/systemctl":
+			return runner.Expect{Stdout: two}, true
+		case c.Argv[2] == "nginx":
+			return runner.Expect{Status: 1, Stderr: "No journal files were opened due to insufficient permissions.\n"}, true
+		}
+		return runner.Expect{Stdout: "2026-10-25T10:00:00+0000 cron[1]: ok\n"}, true
+	})
+	r = runGo(t, m, d, env, "llm_service", "nginx", "cron", "--format", "tsv")
+	require.Equal(t, "unit\tload\tactive\tsub\tsince\tpid\trestarts\tlog\tlog_note\n"+
+		"nginx\tloaded\tactive\trunning\t2026-10-20 10:00:00 UTC\t812\t2\t[]\tNo journal files were opened due to insufficient permissions.\n"+
+		"cron\tloaded\tinactive\tdead\t\\N\t0\t0\t[\"2026-10-25T10:00:00+0000 cron[1]: ok\"]\t\\N\n", r.Stdout)
+
+	// No lines and a system journal this user cannot read; a readable one
+	// adds no column.
+	m, _ = serviceModule(t, runner.Expect{Stdout: showOut}, nil)
+	m.journalOK = func() bool { return false }
+	r = runGo(t, m, d, env, "llm_service", "nginx", "nosuch")
+	require.Contains(t, r.Stdout, `"log":[],"log_note":"the system journal is not readable by this user (root and the systemd-journal group read it)"},`)
+	require.Contains(t, r.Stdout, `"unit":"nosuch","load":"not-found","active":"inactive","sub":"dead","since":null,"pid":0,"restarts":0,"log":[],"log_note":null}`)
+	m, _ = serviceModule(t, runner.Expect{Stdout: showOut}, nil)
+	m.journalOK = func() bool { return true }
+	r = runGo(t, m, d, env, "llm_service", "nginx")
+	require.NotContains(t, r.Stdout, "log_note")
 }
