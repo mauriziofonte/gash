@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -244,19 +245,46 @@ func (m *Module) rollback(c *invoke.Call) int {
 	return 0
 }
 
-// cleanCheckout is the first check of gash_upgrade: a git checkout at dir
-// without local modifications.
+// cleanCheckout is the first check of gash_upgrade: git installed, and a
+// git checkout at dir without local modifications. A missing git is the
+// prerequisite report (3.4: it used to pass this check, as an empty git
+// status, and fail the fetch as a network problem); a git status that
+// fails refuses too, since it proves nothing about local edits.
 func (m *Module) cleanCheckout(c *invoke.Call, p ui.Printer, dir string) bool {
+	if _, ok := prereq.Require(c, "git", updateNeed(c), false); !ok {
+		return false
+	}
 	if st, err := os.Stat(dir + "/.git"); err != nil || !st.IsDir() {
 		p.Error("Gash is not installed in " + dir + " as a git checkout. See https://github.com/mauriziofonte/gash.")
 		return false
 	}
 	// The checkout would overwrite local edits: refuse instead.
-	if m.output(c, "git", "-C", dir, "status", "--porcelain") != "" {
+	res, err := m.git(c, dir, "status", "--porcelain")
+	if err != nil || !res.Success() {
+		why := firstLine(res.Stderr)
+		if err != nil {
+			why = err.Error()
+		}
+		p.Error("Cannot tell whether the working tree at " + dir + " has local modifications (git status failed: " + why + "); not upgrading.")
+		return false
+	}
+	if runner.CommandSubst(res.Stdout) != "" {
 		p.Error("Working tree at " + dir + " has local modifications. Commit, stash, or discard them before upgrading.")
 		return false
 	}
 	return true
+}
+
+// updateNeed names the call in a prerequisite report: gash_upgrade, gash
+// update or gash update --rollback.
+func updateNeed(c *invoke.Call) string {
+	if c.Name == "gash_upgrade" {
+		return c.Name
+	}
+	if slices.Contains(c.Args, "--rollback") {
+		return "gash update --rollback"
+	}
+	return "gash update"
 }
 
 // upgradeState is the update state file,
