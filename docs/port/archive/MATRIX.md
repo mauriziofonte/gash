@@ -1038,31 +1038,64 @@ columns are the 2.x rows' so the registry test reads them.
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_assert | function | pure output | new | grep -q / grep -c chains used as checks: every assertion on every file, exit 0 only if all pass (plan F7) | gash llm_assert | TestAssert_PassAndFail, TestTextReads_TimeoutIsAField, llm_assert.txtar |
+| llm_count | function | pure output | new | grep -c A f; grep -c B f: every pattern in one pass per file (plan F6) | gash llm_count | TestCount_Matrix, TestCount_Errors, TestCount_LargeFileParts, TestLineBounds, llm_count.txtar |
+| llm_hash | function | pure output | new | sha256sum / md5sum file by file: parallel digests (plan F10) | gash llm_hash | TestHash_Digests, TestHash_MatchesCoreutils, llm_hash.txtar |
+| llm_log | function | pure output | new | tail -n N log, grep X log \| tail: reverse block reading with --grep, --since, --level (plan F9) | gash llm_log | TestLogTime_Formats, TestParseSince, TestReverseLines, TestLog_Selections, TestLog_Errors, llm_log.txtar |
+| llm_read | function | pure output | new | grep -n then sed -n A,Bp (two calls), cat a b: ranges and --around in one call (plan F8) | gash llm_read | TestRead_Blocks, TestRead_Rows, TestRead_Refusals, llm_read.txtar |
+| llm_stat | function | pure output | new | ls -la, [ -f ], wc -l, readlink -f over several paths (plan F1) | gash llm_stat | TestStat_RowsInInputOrder, TestStat_Links, TestStat_SecretMetadataButNoLines, llm_stat.txtar |
+| llm_textcheck | function | pure output | new | grep -nP '[^\x00-\x7F]', file -i: text hygiene rules in one pass (plan F12) | gash llm_textcheck | TestTextcheck, TestNonASCIISample, llm_textcheck.txtar |
+| llm_textstats | function | pure output | new | wc -w; wc -c; gzip -c \| wc -c: text statistics in one read (plan F11) | gash llm_textstats | TestTextstats, TestCountWords, llm_textstats.txtar |
 
 ### Data (D1, D3-D6, V3, V4)
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_db_databases | function | pure output | new | The databases of a connection (SHOW DATABASES, psql -l) through the read-only session, no database needed in the URL (plan D3) | gash llm_db_databases | internal/db rows_test.go (TestSQLiteCatalog, TestMySQLRowFormats, TestPgsqlCatalog), llm_db_databases.txtar |
+| llm_json | function | pure output | new | One value, the keys or the shape of a JSON file or stdin without python3/jq; missing path RETRY with the nearest prefix (plan D4) | gash llm_json | internal/llm json_test.go (TestJSONPathAndValue, TestJSONRows, TestJSONShape, TestJSONErrors, TestJSONMatchesEncodingJSON), llm_json.txtar |
+| llm_csv | function | pure output | new | Header, sample, row count and malformed records of a CSV file by a streaming RFC 4180 parser (plan D5) | gash llm_csv | internal/llm csv_test.go (TestCSVSummary, TestCSVManyErrors, TestCSVErrors, TestCSVParserMatchesEncodingCSV, TestCSVSniff), llm_csv.txtar |
+| llm_dotenv | function | pure output | new | Presence and non-secret values of dotenv keys, secret-named keys masked with the llm_env rules instead of grep KEY= .env (plan V3) | gash llm_dotenv | internal/llm dotenv_test.go (TestDotenvValues, TestDotenvNeverPrintsSecrets, TestDotenvRefusals), llm_dotenv.txtar |
+| llm_date | function | pure output | new | Portable date differences, additions and Unix times, identical on Linux and macOS, instead of GNU/BSD date or python datetime (plan V4) | gash llm_date | internal/llm date_test.go (TestDateModes, TestDateErrors, TestDateFormatDuration), llm_date.txtar |
 
 ### Git (G1-G7)
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| agent_git_commit | function | shell-mutating | new | Stage explicit paths (or -A), commit, optionally push (never forced) in one call; detached HEAD, conflicts, nothing to commit, secret files and a push that cannot succeed refused before anything is written; --dry-run report (G2, D1 agent_* family) | gash agent_git_commit | internal/agent TestGitCommit*, agent_git_commit.txtar |
+| llm_git_overview | function | pure output | new | branch, upstream, ahead/behind, counts, last subjects and diffstat in one object (G1) | gash llm_git_overview | TestGitOverview, llm_git_overview.txtar |
+| llm_git_show | function | pure output | new | commit metadata with files and stat, the patch capped per file, REV:FILE content under the output budget (G4) | gash llm_git_show | TestGitShow, TestSplitRevFileAndRange, TestPatchNames, llm_git_show.txtar |
 
 ### Network (N1-N4)
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_dns | function | pure output | new | parallel DNS lookups with selectable types, own wire client (plan N2) | gash llm_dns | TestDNS*, llm_dns.txtar |
+| llm_http | function | pure output | new | parallel read-only HTTP probes: status, timings, redirects, headers, JSON path, grep (plan N1) | gash llm_http | TestHTTP*, llm_http.txtar |
+| llm_tcp | function | pure output | new | parallel TCP reachability with connect time (plan N4) | gash llm_tcp | TestTCP*, llm_tcp.txtar |
+| llm_tls | function | pure output | new | parallel TLS handshake and certificate summary (plan N3) | gash llm_tls | TestTLS*, llm_tls.txtar |
 
 ### Processes, waiting and services (P1-P5, R4)
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_wait | function | pure output | new | One call for a sleep-and-check loop: a log line (scan once, then appended bytes, inotify), a path, a process exit, an HTTP status or JSON value, a TCP port, a command under the llm_exec rules; met or timed out as JSON (plan P1) | gash llm_wait | internal/llm wait_test.go, llm_wait.txtar |
+| llm_service | function | pure output | new | State, sub-state, since, main PID, restarts and the last journal lines of several systemd units in one call (plan P3) | gash llm_service | internal/llm service_test.go, llm_service.txtar |
+| llm_docker_ps | function | pure output | new | Containers as name, image, state, health, ports and status rows instead of docker ps --format strings (plan P4) | gash llm_docker_ps | internal/llm dockerx_test.go, llm_docker_ps.txtar |
+| llm_docker_logs | function | pure output | new | The last lines of a container's output, since T and filtered by RE, each cut at the S2 width (plan P4) | gash llm_docker_logs | internal/llm dockerx_test.go, llm_docker_logs.txtar |
+| llm_docker_exec | function | pure output | new | A read-only command in a container, argv end to end with no shell quoting, under the llm_exec rules (plan P5) | gash llm_docker_exec | internal/llm dockerx_test.go, llm_docker_exec.txtar |
+| llm_sysinfo | function | pure output | new | Load, uptime, CPUs, memory, disks, GPUs and OS in one compact JSON object from /proc and statfs (plan R4) | gash llm_sysinfo | internal/llm sysinfo34_test.go, internal/sysinfo facts_test.go, llm_sysinfo.txtar |
+| llm_procs --pid/--alive/--tree | flag | pure output | new | Explicit PIDs (alive:false once gone), live processes only, the children depth first; the caller and its ancestors never listed; --format and the output budget (plan P2) | gash llm_procs --pid | internal/llm procs34_test.go, internal/proctab proctab_test.go, llm_procs_pid.txtar |
+| agent_kill | function | shell-mutating | new | Signal processes by PID or command-line NAME: own uid only, never PID 1, the caller or an ancestor; nothing matched is killed:0; --dry-run (plan P2, A1) | gash agent_kill | internal/agent kill_test.go, agent_kill.txtar |
+| agent_docker_exec | function | shell-mutating | new | Any command in a container, argv end to end with no shell quoting; dangerous-command blocklist and secret-file rails; --dry-run prints the argv (plan P5, A1) | gash agent_docker_exec | internal/agent docker_exec_test.go, agent_docker_exec.txtar |
 
 ### Runtimes, lint and tests (S7, S8, S11, V1, V2, L1, L2)
 
 | Name | Kind | Class | Decision | Reason | Go command | Tests |
 |---|---|---|---|---|---|---|
+| llm_lint | function | pure output | new | Syntax checks by extension in parallel, php batched, runtimes resolved by gash (L1) | gash llm_lint | TestLLMLintDataAndShell, TestLLMLintInterpreters, TestLLMLintErrors, llm_lint.txtar |
+| llm_runtime | function | pure output | new | node majors and php versions resolved without nvm.sh, the JSON form of gash runtime (V2, S8) | gash llm_runtime | TestLLMRuntime, TestResolveNodeFromNVM, TestResolvePHPAndComposer, TestRuntimeCache, llm_runtime.txtar |
+| llm_test | function | pure output | new | Test and analyzer output summarized: counts and file:line per failure, the exit status kept (L2) | gash llm_test | TestLLMTest, TestParseFixtures, llm_test.txtar |
+| llm_tools | function | pure output | new | Path and version per tool, probed in parallel, php and node per installed version (V1) | gash llm_tools | TestLLMTools, llm_tools.txtar |
 
 ### Remote (S5, R1-R3, R5, D2, E2)
 

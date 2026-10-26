@@ -1,0 +1,39 @@
+
+
+  Cart
+    ✔ adds items
+    ✔ computes totals
+    1) applies discount
+    - handles coupons
+
+  Parser
+    ✔ parses json (41ms)
+    2) rejects bad input
+
+
+  3 passing (62ms)
+  1 pending
+  2 failing
+
+  1) Cart
+       applies discount:
+
+      AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+100 !== 90
+
+      + expected - actual
+
+      -100
+      +90
+
+      at Context.<anonymous> (test/cart.spec.js:14:12)
+      at process.processImmediate (node:internal/timers:483:21)
+
+  2) Parser
+       rejects bad input:
+     Error: expected parse to throw
+      at Context.<anonymous> (test/parser.spec.js:9:11)
+
+
+

@@ -338,12 +338,23 @@ git_sync() { __gash_call git_sync "$@"; }
 
 # llm
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
+agent_docker_exec() { __gash_call agent_docker_exec "$@"; }
+agent_git_commit() { __gash_call agent_git_commit "$@"; }
+agent_kill() { __gash_call agent_kill "$@"; }
 agent_put() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call agent_put "$@"
 }
 agent_replace() { __gash_call agent_replace "$@"; }
+llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
+llm_count() { __gash_call llm_count "$@"; }
+llm_csv() { __gash_call llm_csv "$@"; }
+llm_date() { __gash_call llm_date "$@"; }
+llm_db_databases() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_db_databases "$@"
+}
 llm_db_explain() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_db_explain "$@"
@@ -365,6 +376,11 @@ llm_db_tables() {
     __gash_call llm_db_tables "$@"
 }
 llm_deps() { __gash_call llm_deps "$@"; }
+llm_dns() { __gash_call llm_dns "$@"; }
+llm_docker_exec() { __gash_call llm_docker_exec "$@"; }
+llm_docker_logs() { __gash_call llm_docker_logs "$@"; }
+llm_docker_ps() { __gash_call llm_docker_ps "$@"; }
+llm_dotenv() { __gash_call llm_dotenv "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
 llm_exec() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
@@ -373,20 +389,39 @@ llm_exec() {
 llm_find() { __gash_call llm_find "$@"; }
 llm_git_diff() { __gash_call llm_git_diff "$@"; }
 llm_git_log() { __gash_call llm_git_log "$@"; }
+llm_git_overview() { __gash_call llm_git_overview "$@"; }
+llm_git_show() { __gash_call llm_git_show "$@"; }
 llm_git_status() { __gash_call llm_git_status "$@"; }
 llm_grep() { __gash_call llm_grep "$@"; }
+llm_hash() { __gash_call llm_hash "$@"; }
+llm_http() { __gash_call llm_http "$@"; }
+llm_json() { __gash_call llm_json "$@"; }
+llm_lint() { __gash_call llm_lint "$@"; }
+llm_log() { __gash_call llm_log "$@"; }
 llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
+llm_read() { __gash_call llm_read "$@"; }
 llm_remote_run() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_remote_run "$@"
 }
+llm_runtime() { __gash_call llm_runtime "$@"; }
 llm_same() {
     declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
     __gash_call llm_same "$@"
 }
+llm_service() { __gash_call llm_service "$@"; }
+llm_stat() { __gash_call llm_stat "$@"; }
+llm_sysinfo() { __gash_call llm_sysinfo "$@"; }
+llm_tcp() { __gash_call llm_tcp "$@"; }
+llm_test() { __gash_call llm_test "$@"; }
+llm_textcheck() { __gash_call llm_textcheck "$@"; }
+llm_textstats() { __gash_call llm_textstats "$@"; }
+llm_tls() { __gash_call llm_tls "$@"; }
+llm_tools() { __gash_call llm_tools "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
+llm_wait() { __gash_call llm_wait "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/llm.sh" "$__GASH_T1"
 
 # node

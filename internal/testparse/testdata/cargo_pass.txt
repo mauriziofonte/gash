@@ -1,0 +1,15 @@
+     Running unittests src/lib.rs (target/debug/deps/demo-1a2b3c)
+
+running 2 tests
+test tests::adds ... ok
+test tests::subtracts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests demo
+
+running 1 test
+test src/lib.rs - add (line 3) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+

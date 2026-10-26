@@ -1,0 +1,66 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_log (new in 3.4, plan F9): the last lines of a log, read backwards;
+# --last-match RE -n N is grep RE | tail -N; --level keeps whole entries
+# (a stack trace below an ERROR comes along); --since takes an ISO date
+# here so the test does not depend on the clock; rows carry the line
+# number, timestamp and level.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env TZ=UTC
+
+# --- through the sourced shell: the last 2 lines, as tail -n 2
+exec bash -c 'source "$GASH_SH"; llm_log laravel.log --tail 2'
+cmp stdout tail.want
+
+# --- directly: the last 2 ERROR lines, as grep ERROR | tail -2
+exec gash llm_log laravel.log --last-match ERROR -n 2
+cmp stdout last.want
+
+# --- --level error: the entries with their traces
+exec gash llm_log laravel.log --level error --tail 3
+cmp stdout level.want
+
+# --- --since an ISO time: the entries at or after it
+exec gash llm_log laravel.log --since '2026-10-25 10:03:00'
+cmp stdout since.want
+
+# --- rows
+exec gash llm_log laravel.log --level error --tail 1 --format tsv
+stdout '^line\tts\tlevel\ttext$'
+stdout '^7\t2026-10-25T10:02:00\terror\t#0 /app/x.php\(12\): trace$'
+
+# --- errors
+! exec gash llm_log laravel.log --since tomorrow
+stderr '"error":"invalid_duration"'
+! exec gash llm_log laravel.log --level loud
+stderr '"error":"invalid_level"'
+! exec gash llm_log nope.log
+stderr '"error":"file_not_found"'
+
+-- laravel.log --
+[2026-10-25 10:00:00] production.INFO: started
+[2026-10-25 10:01:00] production.ERROR: first failure
+#0 /app/x.php(12): trace
+[2026-10-25 10:01:30] production.DEBUG: retry
+[2026-10-25 10:01:45] production.WARNING: slow
+[2026-10-25 10:02:00] production.ERROR: second failure
+#0 /app/x.php(12): trace
+[2026-10-25 10:03:00] production.INFO: recovered
+[2026-10-25 10:04:00] production.INFO: done
+-- tail.want --
+[2026-10-25 10:03:00] production.INFO: recovered
+[2026-10-25 10:04:00] production.INFO: done
+-- last.want --
+[2026-10-25 10:01:00] production.ERROR: first failure
+[2026-10-25 10:02:00] production.ERROR: second failure
+-- level.want --
+#0 /app/x.php(12): trace
+[2026-10-25 10:02:00] production.ERROR: second failure
+#0 /app/x.php(12): trace
+-- since.want --
+[2026-10-25 10:03:00] production.INFO: recovered
+[2026-10-25 10:04:00] production.INFO: done

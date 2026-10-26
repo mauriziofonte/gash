@@ -1,0 +1,46 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_db_databases (new in 3.4, plan D3): the databases of a connection in
+# the llm_db_* envelope, through the shim and the binary directly. SQLite
+# has one, "main"; the row formats and --scalar apply as on every
+# llm_db_* function. A missing connection is no_db_config before any
+# network; a positional word is unexpected_argument. The MySQL/MariaDB and
+# PostgreSQL paths are Go tests (rows_test.go: fake MySQL server, the
+# PostgreSQL test cluster).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+[!exec:sqlite3] skip 'sqlite3 is needed to create the fixture'
+exec sqlite3 app.db 'CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT); INSERT INTO users VALUES (1, ''alice'');'
+
+# --- the envelope, through the shim and directly
+exec bash -c 'source "$GASH_SH"; llm_db_databases -f app.db'
+stdout '^\{"data":\["main"\],"rows":1,"query_time":"[0-9.]+(µs|ms|s)"\}$'
+! stderr .
+exec gash llm_db_databases -f app.db
+stdout '^\{"data":\["main"\],"rows":1,"query_time":"[0-9.]+(µs|ms|s)"\}$'
+
+# --- rows: a "name" column, the metadata on stderr
+exec gash llm_db_databases -f app.db --format tsv
+cmp stdout tsv.golden
+stderr '^\{"query_time":"[0-9.]+(µs|ms|s)","rows":1\}$'
+exec gash llm_db_databases -f app.db --scalar
+stdout '^main$'
+! stderr .
+
+# --- errors
+! exec gash llm_db_databases -c nope
+stderr '"error":"no_db_config"'
+! exec gash llm_db_databases extra -f app.db
+stderr '"error":"unexpected_argument","details":"extra"'
+! exec gash llm_db_databases -f app.db --bogus
+stderr '"error":"unknown_option","details":"--bogus"'
+
+# --- help without side effects
+exec gash llm_db_databases --help
+stdout 'llm_db_databases \[-c CONNECTION'
+
+-- tsv.golden --
+name
+main

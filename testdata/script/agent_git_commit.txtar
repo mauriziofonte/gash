@@ -1,0 +1,106 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# agent_git_commit (new in 3.4, plan G2, the agent_* family of D1): stage
+# explicit paths (or -A, never implied), commit and optionally push, in one
+# call. --dry-run reports the files, the branch and the push target and
+# writes nothing. A detached HEAD, conflicts, nothing to commit, a secret
+# file and a push that cannot succeed are refused before anything is
+# staged. Never a forced push. Through the sourced shell and as `gash
+# agent_git_commit`.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+exec bash setup.sh
+
+# --- --dry-run: the plan, nothing staged or committed
+exec bash -c 'source "$GASH_SH"; agent_git_commit -m "feat: a" --add a.txt n.txt --push --dry-run "$WORK/r"'
+stdout '^\{"branch":"main","files":2,"paths":\["a.txt","n.txt"\],"push":true,"remote":"origin","ref":"refs/heads/main","ahead":0,"dry_run":true,"written":false\}$'
+exec git -C r status --porcelain
+stdout '^ M a.txt$'
+stdout '^\?\? n.txt$'
+
+# --- commit two paths and push to the upstream; u.txt stays untracked
+cd r
+exec gash agent_git_commit -m 'feat: a' -m 'The body.' --add a.txt n.txt --push
+stdout '^\{"hash":"[0-9a-f]{7,}","branch":"main","files":2,"pushed":true,"remote":"origin","ahead":0\}$'
+exec git log -1 --format=%B
+cmp stdout $WORK/want_msg.txt
+exec git -C $WORK/remote.git log -1 --format=%s
+stdout '^feat: a$'
+exec git status --porcelain
+stdout '^\?\? u.txt$'
+! stdout 'a.txt|n.txt'
+
+# --- refused before anything is written
+! exec gash agent_git_commit -m x
+stderr '"error":"missing_target"'
+! exec gash agent_git_commit -m x --add a.txt
+stderr '"error":"nothing_to_commit"'
+! exec gash agent_git_commit -m x --add missing.txt
+stderr '"error":"file_not_found"'
+! exec gash agent_git_commit -m x --add ../elsewhere
+stderr '"error":"path_traversal_blocked"'
+! exec gash agent_git_commit -m x --add u.txt --force-push
+stderr '"error":"unknown_option"'
+
+# --- a secret file in the commit is refused, nothing staged
+cp $WORK/env.txt .env
+! exec gash agent_git_commit -m x -A
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+exec git status --porcelain
+! stdout '^A'
+rm .env
+
+# --- a branch behind its upstream: push_rejected before the commit
+exec bash $WORK/push_other.sh
+exec git fetch -q
+! exec gash agent_git_commit -m mine --add u.txt --push
+stderr '"error":"push_rejected"'
+stderr '"action":"RETRY"'
+exec git log -1 --format=%s
+stdout '^feat: a$'
+
+# --- a detached HEAD is STOP
+exec git checkout -q --detach
+! exec gash agent_git_commit -m x --add u.txt
+stderr '"error":"detached_head"'
+stderr '"action":"STOP"'
+
+# --- help
+exec gash agent_git_commit -h
+stdout 'agent_git_commit -m SUBJECT'
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+-- want_msg.txt --
+feat: a
+
+The body.
+
+-- env.txt --
+TOKEN=x
+-- setup.sh --
+set -euo pipefail
+git init -q --bare -b main "$WORK/remote.git"
+git init -q -b main "$WORK/r"; cd "$WORK/r"
+printf 'a\n' >a.txt; git add a.txt; git commit -qm base
+git remote add origin "$WORK/remote.git"
+git push -q -u origin main 2>/dev/null
+printf 'a2\n' >>a.txt
+printf 'n\n' >n.txt
+printf 'u\n' >u.txt
+-- push_other.sh --
+set -euo pipefail
+git clone -q "$WORK/remote.git" "$WORK/other" 2>/dev/null; cd "$WORK/other"
+printf 'o\n' >o.txt; git add o.txt; git commit -qm other
+git push -q origin main 2>/dev/null

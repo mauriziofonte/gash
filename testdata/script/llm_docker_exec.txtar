@@ -1,0 +1,65 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_docker_exec (new in 3.4, plan P5): a read-only command in a running
+# container, its words passed to docker exec as they are (no shell, no
+# quoting), answered as {"rc","out","err"} under the output budget. The
+# command follows the llm_exec rules before docker runs: sed and awk get
+# --sandbox, a write command or a secret path is refused. The exit status
+# of gash is 0 when the command ran; rc is the command's own. docker is a
+# stub on PATH that prints the words it got.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+chmod 0755 stub/docker
+env PATH=$WORK/stub${:}$PATH
+
+# --- the llm_exec rules refuse before docker runs
+! exec gash llm_docker_exec web -- rm -rf /app
+stderr '"error":"command_not_allowed","details":"rm"'
+! exec gash llm_docker_exec web -- cat /app/.env
+stderr '"error":"secret_file_blocked"'
+! exec gash llm_docker_exec web -- sh -c id
+stderr '"error":"command_not_allowed"'
+! exists home/calls.log
+
+# --- through the sourced shell: --user, a word with a blank stays one word
+exec bash -c 'source "$GASH_SH"; llm_docker_exec web --user www-data -- cat "/app/a b.txt"'
+stdout '^\{"rc":0,"out":"exec\|--user=www-data\|web\|cat\|/app/a b.txt\|\\n","err":""\}$'
+! stderr .
+
+# --- directly: the command's own status is rc; sed runs sandboxed
+exec gash llm_docker_exec web -- false
+stdout '^\{"rc":3,"out":"exec\|web\|false\|\\n","err":"failed\\n"\}$'
+exec gash llm_docker_exec web -- sed -n 1p /etc/hosts
+stdout '"out":"exec\|web\|sed\|--sandbox\|-n\|1p\|/etc/hosts\|\\n"'
+
+# --- --head keeps the first lines of each stream with one marker
+exec gash llm_docker_exec web --head 1 -- ls /app
+stdout '^\{"rc":0,"out":"1\\n\[... 2 lines omitted\]\\n","err":"","truncated":2\}$'
+
+# --- a stopped container: CONTINUE
+! exec gash llm_docker_exec db -- ls
+stderr '"error":"container_not_running","details":"Error response from daemon: container db is not running","action":"CONTINUE"'
+
+# --- usage errors and help
+! exec gash llm_docker_exec web ls
+stderr '"error":"unexpected_argument"'
+! exec gash llm_docker_exec web --
+stderr '"error":"missing_command"'
+exec gash llm_docker_exec web -h
+stdout 'llm_docker_exec CTR'
+
+-- stub/docker --
+#!/bin/sh
+# docker exec [--user=U] CTR CMD...: web prints the words it got, each
+# followed by |; ls /app lists three names; db is stopped.
+echo "$*" >>"$HOME/calls.log"
+[ "$1" = exec ] || exit 3
+[ "$2" = db ] && { echo "Error response from daemon: container db is not running" >&2; exit 1; }
+[ "$*" = "exec web ls /app" ] && { printf '1\n2\n3\n'; exit 0; }
+printf '%s|' "$@"
+echo
+[ "$3" = false ] && { echo failed >&2; exit 3; }
+exit 0

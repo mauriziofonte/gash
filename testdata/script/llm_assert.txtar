@@ -1,0 +1,40 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_assert (new in 3.4, plan F7): every --has, --lacks and --count on
+# every file, with the llm_count scanner; exit 0 and a short answer when
+# all pass, exit 1 with the failed checks otherwise (on stdout: a failed
+# check is an answer, not an error envelope).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: all pass, under 200 bytes
+exec bash -c 'source "$GASH_SH"; llm_assert a.md b.md --has "## Sites" --lacks TODO'
+stdout '^\{"pass":true,"checked":4\}$'
+! stderr .
+
+# --- directly: one check fails, exit 1, the failure named
+! exec gash llm_assert a.md b.md --has Gotchas --count 'Sites=1'
+stdout '^\{"pass":false,"checked":4,"failed":\[\{"file":"b.md","check":"has:Gotchas","found":0\}\]\}$'
+! stderr .
+
+# --- a missing file fails; --count counts lines unless --occurrences
+! exec gash llm_assert a.md nope.md --has Gotchas
+stdout '"failed":\[\{"file":"nope.md","error":"file_not_found"\}\]'
+exec gash llm_assert a.md --count 'foo=1'
+exec gash llm_assert a.md --count 'foo=2' --occurrences
+
+# --- a bad --count
+! exec gash llm_assert a.md --count nonumber
+stderr '"error":"invalid_assertion"'
+
+-- a.md --
+# A
+## Gotchas
+## Sites
+foo foo
+-- b.md --
+# B
+## Sites

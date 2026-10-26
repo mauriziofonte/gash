@@ -1,0 +1,13 @@
+Target PHP version: 8.3 (inferred from composer.json).
+Scanning files...
+Analyzing files...
+
+░░░░░
+
+------------------------------
+
+       No errors found!
+
+------------------------------
+
+Checks took 1.02 seconds and used 80.000MB of memory

@@ -1,0 +1,21 @@
+ 4/4 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
+
+ ------ ---------------------------------------------------------------
+  Line   src/Controller/UserController.php
+ ------ ---------------------------------------------------------------
+  24     Call to an undefined method App\Repo::findAll().
+         🪪  method.notFound
+  31     Parameter #1 $id of method App\Repo::find() expects int, string
+         given.
+         🪪  argument.type
+ ------ ---------------------------------------------------------------
+
+ ------ ---------------------------------------------------------------
+  Line   src/Model/User.php
+ ------ ---------------------------------------------------------------
+  12     Property App\Model\User::$name has no type specified.
+         🪪  missingType.property
+ ------ ---------------------------------------------------------------
+
+ [ERROR] Found 3 errors
+

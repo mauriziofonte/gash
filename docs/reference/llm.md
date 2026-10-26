@@ -6,26 +6,102 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 
 | Function | Alias | Description |
 |---|---|---|
+| [`llm_assert`](#llm-assert) |  | Check that files hold, lack or count patterns; exit 0 only if all pass |
 | [`llm_config`](#llm-config) |  | Read a file that is not secret (YAML as JSON) |
+| [`llm_count`](#llm-count) |  | Count several patterns in several files in one pass per file |
+| [`llm_csv`](#llm-csv) |  | Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l) |
+| [`llm_date`](#llm-date) |  | Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime) |
+| [`llm_db_databases`](#llm-db-databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
 | [`llm_db_explain`](#llm-db-explain) |  | Show query execution plan (EXPLAIN) |
 | [`llm_db_query`](#llm-db-query) |  | Read-only SQL query (JSON output) |
 | [`llm_db_sample`](#llm-db-sample) |  | Sample rows from a table (default 5 rows) |
 | [`llm_db_schema`](#llm-db-schema) |  | Show table schema (columns, types, keys) |
 | [`llm_db_tables`](#llm-db-tables) |  | List database tables (JSON array) |
 | [`llm_deps`](#llm-deps) |  | List project dependencies (JSON) |
+| [`llm_dns`](#llm-dns) |  | DNS records of several names at once (JSON) |
+| [`llm_docker_exec`](#llm-docker-exec) |  | Run a read-only command in a container, no shell quoting (JSON) |
+| [`llm_docker_logs`](#llm-docker-logs) |  | Last log lines of a container, optionally filtered (JSON) |
+| [`llm_docker_ps`](#llm-docker-ps) |  | Docker containers with state, health and ports (JSON) |
+| [`llm_dotenv`](#llm-dotenv) |  | Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env) |
 | [`llm_env`](#llm-env) |  | Filtered environment variables (secrets excluded) |
 | [`llm_exec`](#llm-exec) |  | Safe command execution wrapper for AI agents |
 | [`llm_find`](#llm-find) |  | Find files by pattern (ignores noise directories) |
 | [`llm_git_diff`](#llm-git-diff) |  | Git diff with statistics |
 | [`llm_git_log`](#llm-git-log) |  | Recent commits (JSON) |
+| [`llm_git_overview`](#llm-git-overview) |  | Repository state in one small object (JSON) |
+| [`llm_git_show`](#llm-git-show) |  | A commit's metadata and files, its patch, or a file at a revision |
 | [`llm_git_status`](#llm-git-status) |  | Compact git status (JSON) |
 | [`llm_grep`](#llm-grep) |  | Search code with structured file:line:content output |
+| [`llm_hash`](#llm-hash) |  | Hash files in parallel (sha256 or md5) |
+| [`llm_http`](#llm-http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
+| [`llm_json`](#llm-json) |  | One value, the keys or the shape of a JSON file (replaces python3 json.load, jq) |
+| [`llm_lint`](#llm-lint) |  | Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py) |
+| [`llm_log`](#llm-log) |  | Last lines of a log, read from the end, by pattern, time and level |
 | [`llm_ports`](#llm-ports) |  | List ports in use (JSON) |
-| [`llm_procs`](#llm-procs) |  | List processes by name or port (JSON) |
+| [`llm_procs`](#llm-procs) |  | List processes by name, port or PID, alive or not, as a tree (JSON) |
 | [`llm_project`](#llm-project) |  | Detect project type and framework (JSON) |
+| [`llm_read`](#llm-read) |  | Read files, line ranges or the lines around a match, numbered |
 | [`llm_remote_run`](#llm-remote-run) |  | Run a read-only command on registered hosts, in parallel or in steps |
+| [`llm_runtime`](#llm-runtime) |  | Resolve a node major or php version to its binary, without nvm.sh |
 | [`llm_same`](#llm-same) |  | Is the deployed copy the local one? Hash both sides, list the differences |
+| [`llm_service`](#llm-service) |  | State and last journal lines of systemd units (JSON) |
+| [`llm_stat`](#llm-stat) |  | Metadata of several paths: type, size, mode, owner, mtime, lines |
+| [`llm_sysinfo`](#llm-sysinfo) |  | Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON) |
+| [`llm_tcp`](#llm-tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
+| [`llm_test`](#llm-test) |  | Run a test command and summarize it: counts and each failure's file:line |
+| [`llm_textcheck`](#llm-textcheck) |  | Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines |
+| [`llm_textstats`](#llm-textstats) |  | Lines, words, characters, bytes, gzip size and longest line of files |
+| [`llm_tls`](#llm-tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
+| [`llm_tools`](#llm-tools) |  | Path and version of each tool, probed in parallel; php and node per version |
 | [`llm_tree`](#llm-tree) |  | Compact directory tree (JSON or text output) |
+| [`llm_wait`](#llm-wait) |  | Wait for a log line, a path, a process exit, a URL, a port or a command (JSON) |
+
+## llm_assert
+
+Check that files hold, lack or count patterns; exit 0 only if all pass
+
+#### Usage
+
+```text
+llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | --occurrences] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--has P                Every FILE holds P (repeatable, as the two below)
+--lacks P              No FILE holds P
+--count P=N            Every FILE holds P exactly N times (the last = splits)
+--regex                Patterns are regular expressions (ripgrep's syntax);
+                       literal text by default
+--lines                --count counts the lines that hold P (default)
+--occurrences          --count counts every occurrence of P
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+# After an edit: the new name is in, the old one is gone, one route
+llm_assert app/A.php app/B.php --has 'NewName' --lacks 'OldName'
+llm_assert routes/web.php --count "Route::get('/health'=1"
+```
+
+#### Notes
+
+```text
+Replaces chains of grep -q / grep -c used as checks, read back by eye.
+Every assertion is checked on every FILE, with the llm_count scanner (one
+read per file). All pass: {"pass":true,"checked":N}, exit 0. Otherwise
+exit 1 and {"pass":false,"checked":N,"failed":[{"file","check","found"}]},
+check as has:P, lacks:P or count:P=N; a FILE that cannot be read fails as
+{"file","error"} (file_not_found, not_a_file, timeout). Secret files are
+refused (secret_file_blocked, FATAL); a bad --count is invalid_assertion.
+```
+
+See also: `llm_count`
 
 ## llm_config
 
@@ -34,13 +110,15 @@ Read a file that is not secret (YAML as JSON)
 #### Usage
 
 ```text
-llm_config FILE [--max-bytes N] [--host ALIAS]
+llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]
 ```
 
 #### Options
 
 ```text
 --max-bytes N          Largest file read, in bytes (default 1048576)
+--path P               Parse the file and print the value at P as compact
+                       JSON: a.b[0].c, tool.poetry["name"], . for all
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```
@@ -51,6 +129,9 @@ llm_config FILE [--max-bytes N] [--host ALIAS]
 llm_config package.json
 llm_config docker-compose.yml
 llm_config big.json --max-bytes 5000000
+llm_config pyproject.toml --path project.dependencies
+llm_config setup.cfg --path metadata.version
+llm_config k8s.yaml --path '[1].spec.replicas'
 ```
 
 #### Notes
@@ -61,7 +142,210 @@ secret files are refused.
 YAML comes out as JSON, converted by Gash itself (no yq needed), or
 as the raw text when it does not parse. Files over --max-bytes
 (default 1 MiB) fail with file_too_large.
+--path (3.4) replaces python3 -c "import tomllib/configparser/yaml;
+...": the extension names the format (.yaml/.yml, .toml, .ini/.cfg,
+.json; any other: the first of JSON, TOML, INI and YAML that parses).
+TOML keeps its key order, dates as RFC 3339 text; INI is read as
+Python's configparser does ({section: {key: value}}, keys lowercased,
+DEFAULT inherited, %(key)s expanded); a YAML file with several
+documents is the array of them. A file that does not parse is
+invalid_config, a path that does not exist json_path_not_found with
+the nearest existing prefix (both RETRY).
 ```
+
+## llm_count
+
+Count several patterns in several files in one pass per file
+
+#### Usage
+
+```text
+llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--pat P                A pattern to count (repeatable)
+--regex                Patterns are regular expressions (ripgrep's syntax);
+                       literal text by default
+--lines                Count the lines that hold the pattern, as grep -c
+                       (default)
+--occurrences          Count every occurrence, as grep -o | wc -l
+--format F             tsv, jsonl or table: one row per file and pattern
+                       (file, pat, count); json is the default object
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_count storage/logs/laravel.log --pat ERROR --pat WARNING --pat 'Timeout'
+llm_count a.md b.md --pat '## ' --format tsv
+```
+
+#### Notes
+
+```text
+Replaces grep -c A f; grep -c B f; grep -c C g (one pass per pattern).
+Every pattern is counted in one read of each file (a large file in
+parallel parts). Output: {"FILE":{"P":N,...},...}, files and patterns in
+the order given (repeats dropped). A FILE that cannot be read is
+{"FILE":{"error":"file_not_found"}} (also not_a_file, timeout). A pattern
+never matches across lines; an empty one is missing_pattern, one with a
+line break invalid_filter. Secret files are refused (secret_file_blocked,
+FATAL). For a case-insensitive count use --regex with (?i).
+```
+
+See also: `llm_assert`, `llm_grep`
+
+## llm_csv
+
+Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l)
+
+#### Usage
+
+```text
+llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
+        [--format json|jsonl|tsv|table]
+```
+
+#### Options
+
+```text
+--head N               Sample rows (default 5; 0 for none)
+--cols                 The header only, no sample
+--count                Count every row (reads the whole file)
+--delim C              The delimiter (default: sniffed among , ; tab |);
+                       tab or \t for a tab
+--where COL=V          Only rows whose column COL (a header name or a
+                       1-based number) is exactly V
+--format F             json (default), or the sample as jsonl, tsv or table
+```
+
+#### Examples
+
+```bash
+llm_csv export.csv
+llm_csv export.csv --head 2 --count
+llm_csv data.csv --where status=failed --count --head 10
+llm_csv report.txt --delim ';' --cols
+```
+
+#### Notes
+
+```text
+Replaces python3 -c "import csv; r=list(csv.reader(open(f))); ..." and
+wc -l f; head -3 f (which miscounts quoted newlines). Output:
+{"rows":N,"matches":M,"cols":K,"header":[...],"sample":[[...]],
+"delimiter":",","errors":[{"line":L,"error":"..."}],"error_count":E}
+(rows, matches and error_count with --count; matches with --where).
+A streaming RFC 4180 parser: quoted fields hold delimiters, "" and
+newlines; a record is not a line; blank lines are skipped. errors lists
+the first 10 malformed records (field count differing from the header,
+a stray quote, an unterminated quote) by their first line. Without
+--count the read stops once the header and the sample are complete.
+With --format jsonl, tsv or table the sample rows print under the
+header and the rest is one JSON line on stderr.
+```
+
+See also: `llm_json`, `llm_config`
+
+## llm_date
+
+Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime)
+
+#### Usage
+
+```text
+llm_date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]
+         [--fmt FORMAT]
+```
+
+#### Options
+
+```text
+--diff A B             B - A: {"result":"67d","days":67,"seconds":N}
+--add DATE DURATION    DATE + DURATION (y, mo, w, d, h, m, s, ms: 3d,
+                       -600s, 1h30m, 1y2mo)
+--epoch X              A Unix time as a date (13 digits: milliseconds),
+                       or a date as a Unix time
+--tz ZONE              Europe/Rome, UTC, +02:00 (default: TZ, else the
+                       system zone)
+--fmt FORMAT           rfc3339 (default), date, time, epoch, rfc2822, or
+                       a date(1) format: '%Y-%m-%d %H:%M:%S'
+```
+
+#### Examples
+
+```bash
+llm_date --diff 2026-10-25 2026-12-31
+llm_date --add now -600s --fmt '%Y-%m-%dT%H:%M:%S'
+llm_date --add 2026-01-31 1mo
+llm_date --epoch 1700000000 --tz UTC
+llm_date --tz America/New_York
+```
+
+#### Notes
+
+```text
+Replaces date -d '-600 seconds' +FMT (GNU and BSD date differ) and
+python3 -c "from datetime import date; print((date(...)-date(...)).days)".
+Output: {"result":"...","epoch":N}; without a mode, now. A date is
+now, today, yesterday, tomorrow, YYYY-MM-DD, YYYY-MM-DD[T ]HH:MM[:SS]
+[.frac][Z|+HH:MM], an RFC 2822 date or @EPOCH; without an offset it is
+in --tz. The result keeps the input's offset unless --tz is given; a
+date plus calendar units stays a date. Months clamp to the month's
+last day (Jan 31 + 1mo = Feb 28); days follow the calendar across DST.
+--diff of two dates counts calendar days; days truncates toward zero.
+Bad input is invalid_date, invalid_duration, invalid_timezone or
+invalid_date_format (all RETRY). The same output on Linux and macOS.
+```
+
+See also: `llm_env`
+
+## llm_db_databases
+
+List the databases of a connection (replaces SHOW DATABASES, psql -l)
+
+#### Usage
+
+```text
+llm_db_databases [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--format json|jsonl|tsv|table] [--scalar]
+```
+
+#### Options
+
+```text
+-c, --connection NAME  Connection from ~/.gash_env (default: default)
+-d, --database NAME    Database to connect to (any one works)
+-f, --file PATH        SQLite database file
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
+```
+
+#### Examples
+
+```bash
+llm_db_databases -c default
+llm_db_databases -c postgres --format tsv
+```
+
+#### Notes
+
+```text
+Replaces mysql -e 'SHOW DATABASES' and psql -l. Output:
+{data: [names], rows, query_time}, sorted: every schema MySQL/MariaDB
+shows (system ones included), every PostgreSQL database that is not a
+template, "main" for an SQLite file. The connection needs no
+database here (PostgreSQL then connects to "postgres"). With
+--format jsonl, tsv or table the names are rows of a "name" column
+and the metadata is one JSON line on stderr.
+```
+
+See also: `llm_db_tables`, `llm_db_query`
 
 ## llm_db_explain
 
@@ -71,6 +355,7 @@ Show query execution plan (EXPLAIN)
 
 ```text
 llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
+               [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -80,6 +365,8 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
 --analyze              Run the query to measure it (still read-only)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -87,6 +374,13 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 ```bash
 llm_db_explain "SELECT * FROM users WHERE email LIKE '%@example.com'" -c default
 llm_db_explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c legacy --analyze
+```
+
+#### Notes
+
+```text
+--format jsonl, tsv or table print the plan rows (a JSON plan as
+compact JSON in its cell) and the metadata as one JSON line on stderr.
 ```
 
 See also: `llm_db_query`
@@ -98,7 +392,8 @@ Read-only SQL query (JSON output)
 #### Usage
 
 ```text
-llm_db_query "SQL" [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]
+llm_db_query "SQL" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]
+             [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
@@ -112,6 +407,10 @@ llm_db_query "SELECT * FROM orders WHERE status='pending'" -c legacy
 
 # Query a SQLite database (no connection config needed)
 llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
+
+# Rows as TSV, one value alone
+llm_db_query "SELECT id, email FROM users" -c default --format tsv
+llm_db_query "SELECT count(*) FROM orders" -c default --scalar
 ```
 
 #### Options
@@ -122,6 +421,8 @@ llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
                        letters, digits, _ $ . - only)
 -f, --file PATH        SQLite database file
 -n, --limit N          Row cap (default 100; also -r, --rows)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Notes
@@ -135,6 +436,13 @@ PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT
 statement timeout). Output: {data, rows, query_time}. -h is help: the
 host comes from the connection URL. Error details are the database
 driver's message.
+--format jsonl, tsv or table print the rows themselves (replaces
+llm_db_query ... | jq -c '.data[]' and python3 reshaping): SQL NULL is
+null, \N in TSV and an empty table cell on every engine; the metadata
+{rows, query_time, truncated} is one JSON line on stderr, with
+"truncated": true when -n cut rows. --scalar prints the value of a
+1x1 result as a TSV cell (not_a_scalar, RETRY, with the actual shape
+otherwise). --format json is the envelope, unchanged.
 ```
 
 See also: `llm_db_tables`, `llm_db_schema`, `llm_db_sample`, `llm_db_explain`
@@ -146,7 +454,8 @@ Sample rows from a table (default 5 rows)
 #### Usage
 
 ```text
-llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [-n N]
+llm_db_sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
@@ -164,6 +473,8 @@ llm_db_sample logs -f ./app.db -n 3
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
 -n, --limit N          Rows to return (default 5)
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 See also: `llm_db_query`, `llm_db_schema`
@@ -176,6 +487,8 @@ Show table schema (columns, types, keys)
 
 ```text
 llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -184,6 +497,9 @@ llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
+--all                  Every table in one call, each row led by "table"
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -192,6 +508,14 @@ llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 llm_db_schema users -c default
 llm_db_schema orders -c legacy
 llm_db_schema sessions -f ./app.db
+llm_db_schema --all -c default --format tsv
+```
+
+#### Notes
+
+```text
+--all replaces one llm_db_schema call per table: the rows of every
+table llm_db_tables lists, sorted by table and column position.
 ```
 
 See also: `llm_db_tables`, `llm_db_query`
@@ -203,7 +527,8 @@ List database tables (JSON array)
 #### Usage
 
 ```text
-llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]
+              [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -212,6 +537,9 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 -c, --connection NAME  Connection from ~/.gash_env (default: default)
 -d, --database NAME    Database name (overrides the connection's)
 -f, --file PATH        SQLite database file
+--counts               [{name, rows}]: the row count of each table
+--format F             json (the envelope, default), jsonl, tsv or table
+--scalar               Print the one value of a 1x1 result
 ```
 
 #### Examples
@@ -220,6 +548,15 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 llm_db_tables -c default
 llm_db_tables -c postgres
 llm_db_tables -f ./app.db
+llm_db_tables -c default --counts --format tsv
+```
+
+#### Notes
+
+```text
+--counts: rows is exact on SQLite (count(*)), the engine's estimate on
+MySQL/MariaDB (information_schema) and PostgreSQL (pg_class), null
+where the engine has none (a view, a table not analyzed yet).
 ```
 
 See also: `llm_db_query`, `llm_db_schema`
@@ -248,6 +585,221 @@ llm_deps /var/www/myapp --dev
 ```
 
 See also: `llm_project`
+
+## llm_dns
+
+DNS records of several names at once (JSON)
+
+#### Usage
+
+```text
+llm_dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP]
+        [-j N] [--timeout S] [--format F] [--width N] [--max-lines N]
+        [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--type T,T             Record types to ask for (default A,AAAA): A, AAAA,
+                       MX, TXT, NS, CAA, CNAME, SOA
+--server IP            Resolver to ask, IP[:PORT] (default: the nameservers
+                       of /etc/resolv.conf)
+-j, --jobs N           Names at a time (default 32)
+--timeout S            Time limit per name, all its types (default 5s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+llm_dns example.com
+llm_dns example.com example.org --type A,MX,TXT
+llm_dns _dmarc.example.com --type TXT --server 1.1.1.1
+```
+
+#### Notes
+
+```text
+Replaces for d in ...; do for t in A MX TXT; do dig +short $t $d; done;
+done. One row per NAME, in input order: {"name", one key per type, "ms",
+"error"}. A and AAAA (in numeric order), NS, CNAME and TXT are sorted
+string lists (a TXT record's strings joined); MX is [{"host","pref"}], CAA
+[{"flag","tag","value"}], SOA [{"mname","rname","serial","refresh",
+"retry","expire","minimum"}]. A type with no records is []; a type whose
+lookup failed is null. error is null, or nxdomain (the name does not
+exist), servfail, refused, timeout, connection_refused, bad_response.
+Names are asked as given (no search domains).
+```
+
+See also: `llm_tcp`, `llm_tls`, `llm_http`
+
+## llm_docker_exec
+
+Run a read-only command in a container, no shell quoting (JSON)
+
+#### Usage
+
+```text
+llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
+```
+
+#### Options
+
+```text
+--user U, -u U         Run as user U (name or uid[:gid])
+--width N              Cut each output line at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N lines of each stream
+-- CMD...              The command, one word per argument
+```
+
+#### Examples
+
+```bash
+# Instead of: docker exec -u node ctr sh -c 'grep -rl "x" /app | head -3'
+llm_docker_exec ctr --user node --head 3 -- grep -rl x /app
+llm_docker_exec db -- cat /etc/mysql/my.cnf
+```
+
+#### Notes
+
+```text
+Replaces docker exec CTR sh -c '...' with its quoting levels: CMD's words
+reach docker exec as an array, no shell runs. Read-only: CMD passes the
+llm_exec rules first (allowlist and option rules, secret files,
+forbidden paths, blocklist; GASH_LLM_EXEC_ALLOW extends them); sed and
+awk run as sed --sandbox and gawk --sandbox, grep and rg skip secret
+files, git is refused. One command (no pipes): shape the output with
+--head/--tail. {"rc","out","err"} and "truncated" when lines were
+cut; the exit status is 0 when the command ran (read rc). Arbitrary
+commands: agent_docker_exec.
+```
+
+See also: `llm_exec`
+
+## llm_docker_logs
+
+Last log lines of a container, optionally filtered (JSON)
+
+#### Usage
+
+```text
+llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]
+```
+
+#### Options
+
+```text
+--tail N               Read the last N lines (default 100)
+--since T              Only lines since T (10m, 2h, 2026-10-25T10:00:00)
+--grep RE              Keep the lines RE matches (RE2; (?i) for any case)
+--width N              Cut each line at N columns (default 300)
+```
+
+#### Examples
+
+```bash
+llm_docker_logs web --tail 50 --grep '(?i)error'
+llm_docker_logs db --since 10m
+```
+
+#### Notes
+
+```text
+Replaces docker logs --tail 50 ctr 2>&1 | grep -i error | cut -c1-300.
+{"ctr","read":N,"log":[...]}: stdout and stderr in docker's order,
+read is how many lines docker returned before --grep. Unknown
+container: container_not_found (RETRY); docker absent or down:
+docker_not_found, docker_unavailable (CONTINUE).
+```
+
+See also: `llm_docker_ps`
+
+## llm_docker_ps
+
+Docker containers with state, health and ports (JSON)
+
+#### Usage
+
+```text
+llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--running              Running containers only (default: all)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut each value at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N containers
+```
+
+#### Examples
+
+```bash
+llm_docker_ps
+llm_docker_ps --running --format tsv
+```
+
+#### Notes
+
+```text
+Replaces docker ps --format '{{.Names}} {{.Status}}' and docker ps -a.
+[{"name","image","state","health","ports","up"}] by name: state
+is docker's (running, exited, ...), health healthy, unhealthy, starting
+or "", ports "8080->80/tcp" (the all-address bindings shortened), up
+docker's status without the health ("Up 2 hours", "Exited (1) 3
+minutes ago"). Without docker: docker_not_found; daemon down:
+docker_unavailable (both CONTINUE).
+```
+
+See also: `llm_docker_logs`
+
+## llm_dotenv
+
+Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env)
+
+#### Usage
+
+```text
+llm_dotenv FILE [KEY...] [--present]
+```
+
+#### Options
+
+```text
+--present              true or false per KEY, never a value
+```
+
+#### Examples
+
+```bash
+llm_dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL
+llm_dotenv .env.production APP_KEY --present
+llm_dotenv .env
+```
+
+#### Notes
+
+```text
+Replaces grep -E '^(DB_HOST|APP_URL)=' .env, which prints secrets into
+the transcript. Output: {"DB_HOST":"127.0.0.1","DB_PASSWORD":
+"***(set)","MISSING":null}. A key whose name llm_env hides
+(PASSWORD, TOKEN, KEY, SECRET, AUTH, ...) shows "***(set)" ("" when
+empty); other values pass llm_env's redaction (URL passwords, private
+keys, known token formats masked). Without KEY: the names the file
+sets, never a value. Reads .env, .env.*, *.env and .envrc files (the
+only reader of them; key and credential files stay refused): KEY=VALUE,
+export KEY=VALUE, quoted values (also on several lines), # comments;
+${VAR} is not expanded; a key set twice keeps its last value.
+```
+
+See also: `llm_env`, `llm_config`
 
 ## llm_env
 
@@ -333,6 +885,10 @@ Find files by pattern (ignores noise directories)
 
 ```text
 llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
+         [--sort name|mtime|size] [--newer REF] [--since T] [--tracked]
+         [--all] [--count [--by ext|dir|type]] [--relative|--absolute]
+         [--format json|jsonl|tsv|table] [--width N] [--max-lines N]
+         [--head N] [--tail N]
          [--host ALIAS]
 ```
 
@@ -343,6 +899,27 @@ llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
 --contains REGEX       Keep the files whose content matches REGEX
                        (ripgrep's regex syntax); files only
 -n, --limit N          Paths to print (default 100)
+--sort name|mtime|size Path order (byte order), newest first, or
+                       largest first
+--newer REF            Modified after REF (a file or directory)
+--since T              Modified at T or later: an age (30s, 15m, 2h,
+                       3d, 1w), a date (2026-10-25), a local date and
+                       time (2026-10-25T14:30) or @EPOCH
+--tracked              Only what git tracks (git ls-files)
+--all                  Do not skip node_modules, vendor, .git,
+                       __pycache__
+--count                Print {"count":N} instead of the paths
+--by ext|dir|type      Counts per extension, per first directory below
+                       PATH, or per type f, d, l (every type unless
+                       --type); implies --count
+--relative             Paths relative to PATH (default: absolute)
+--absolute             Absolute paths (the default)
+--format FORMAT        Rows {"p","size","mtime"}: json, jsonl, tsv
+                       or table
+--width N              Cut each line (each value in rows) at N columns
+--max-lines N          Keep the first N paths (also --head N), or the
+                       last N with --tail N; they replace -n and mark
+                       what they cut
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```
@@ -358,16 +935,29 @@ llm_find "*.conf" /etc --contains "database"
 
 # Find directories only
 llm_find "src*" . --type d
+
+# Count PHP files per first directory (find | wc -l)
+llm_find "*.php" src --count --by dir
+
+# The 5 newest logs, relative paths (find -newer | sort | head)
+llm_find "*.log" . --sort mtime -n 5 --relative
 ```
 
 #### Notes
 
 ```text
-PATTERN is a file name glob (find -name). With --contains only the
-files it matches are searched, hidden and gitignored ones included,
-with or without ripgrep. Skips node_modules, vendor, .git and
-__pycache__; --contains also skips secret files. Default limit 100.
-A missing PATH is path_not_found, an empty PATTERN missing_pattern.
+Replaces find | sort | head, find | wc -l, find -newer and
+git ls-files | grep. PATTERN is a file name glob (find -name). With
+--contains only the files it matches are searched, hidden and
+gitignored ones included, with or without ripgrep. Skips
+node_modules, vendor, .git and __pycache__; --contains also skips
+secret files. Default limit 100.
+--count, --sort, --format and --head/--tail see every match first:
+a cut JSON array or TSV gets {"truncated":K} on stderr, a cut text
+output a [... K lines omitted] line. --count counts the paths the
+listing prints without -n. mtime is RFC 3339 in UTC.
+A missing PATH is path_not_found, an empty PATTERN missing_pattern;
+--tracked outside a repository is not_a_git_repo (CONTINUE).
 ```
 
 ## llm_git_diff
@@ -377,13 +967,26 @@ Git diff with statistics
 #### Usage
 
 ```text
-llm_git_diff [--staged] [PATH]
+llm_git_diff [--staged] [REV..REV] [--max-lines N] [--width N] [PATH]
+llm_git_diff [--staged] [REV..REV] (--files | --numstat) [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+llm_git_diff [--staged] [REV..REV] --summary [--format F] [PATH]
+llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
 
 ```text
 --staged               Staged changes (also --cached)
+REV..REV               Compare two commits (A..B, A...B for the merge base)
+--files                One row per file: {"p","add","del","status"}
+--numstat              One row per file: {"p","add","del"}
+--summary              The totals only: {"files","insertions","deletions"}
+--patch                The patch as text, capped per file (default 200 lines)
+--format F             json (default), jsonl, tsv or table (--files, --numstat,
+                       --summary)
+--max-lines N          Lines (or rows) to keep: of the --stat text, of the rows,
+                       of each file with --patch; also --head N and --tail N
+--width N              Cut each line (JSON: each path) at N columns
 ```
 
 #### Examples
@@ -391,9 +994,31 @@ llm_git_diff [--staged] [PATH]
 ```bash
 llm_git_diff
 llm_git_diff --staged
+
+# Totals of the work tree, then the changed files of the last three commits
+llm_git_diff --summary
+llm_git_diff HEAD~3..HEAD --files --format tsv
+
+# One file's patch, 80 lines at most
+llm_git_diff --patch --max-lines 80 src/app.js
 ```
 
-See also: `llm_git_status`, `llm_git_log`
+#### Notes
+
+```text
+Without an option: git diff --stat text, as git prints it. --files,
+--numstat and --summary replace git diff --stat | tail -1, --name-only,
+--name-status and --numstat; --patch replaces git diff -- file | head -80.
+Paths are relative to the repository root; add and del are null for a
+binary file. With a mode option a FILE as PATH limits the diff to it.
+--patch keeps each file's header and puts [... K lines omitted] where it
+cuts; a secret file's patch is replaced by a marker line (a secret FILE
+as PATH is secret_file_blocked). An unknown revision is unknown_revision
+(RETRY). Rows that the budget cuts are counted in the stderr metadata line
+({"truncated":K}).
+```
+
+See also: `llm_git_overview`, `llm_git_status`, `llm_git_log`
 
 ## llm_git_log
 
@@ -402,13 +1027,26 @@ Recent commits (JSON)
 #### Usage
 
 ```text
-llm_git_log [-n N] [PATH]
+llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...
+            [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
 
 ```text
 -n, --limit N          Commits to list (default 10)
+--since D, --until D   Commits after / before a date (git's dates: 2026-01-31,
+                       "2 weeks ago", yesterday)
+--grep RE              Commits whose message matches RE (extended regex)
+--author RE            Commits whose author matches RE (extended regex)
+--path P               Commits that touch P (repeat for more; git pathspecs)
+--fields LIST          Comma list of hash, subject, date, author, files
+                       (default hash,subject,author,date); files is the
+                       array of the paths each commit changed
+--format F             json (default), jsonl, tsv or table
+--max-lines N          Rows to keep (also --head N, --tail N); the cut is
+                       counted on stderr
+--width N              Cut each string value at N columns
 ```
 
 #### Examples
@@ -416,9 +1054,127 @@ llm_git_log [-n N] [PATH]
 ```bash
 llm_git_log
 llm_git_log --limit 20
+
+# The last three subjects, compact
+llm_git_log -n 3 --fields hash,subject
+
+# Fixes of the last week that touched src/, with their files
+llm_git_log --since "1 week ago" --grep '^fix' --path src --fields hash,subject,files
 ```
 
-See also: `llm_git_status`, `llm_git_diff`
+#### Notes
+
+```text
+Replaces git log --oneline -N [-- path] and git log -1 --format='%h %s'.
+Without a 3.4 option the output is the 2.x array of {hash, subject,
+author, date}; any 3.4 option writes the rows through the shared output
+layer (same keys, --fields to choose). A bad --grep or --author is
+invalid_regex (RETRY); a repository with no commit gives [].
+```
+
+See also: `llm_git_overview`, `llm_git_status`, `llm_git_diff`
+
+## llm_git_overview
+
+Repository state in one small object (JSON)
+
+#### Usage
+
+```text
+llm_git_overview [PATH] [--log N] [--files N]
+```
+
+#### Options
+
+```text
+--log N                Last N commit subjects (default 3; 0 for none)
+--files N              Also list the paths of each state, at most N each
+```
+
+#### Examples
+
+```bash
+llm_git_overview
+# {"branch":"main","upstream":"origin/main","ahead":1,"behind":0,
+#  "counts":{"staged":0,"modified":2,"untracked":1,"conflicted":0},
+#  "log":[{"hash":"a1b2c3d","subject":"fix: parser"}],
+#  "diffstat":{"files":2,"insertions":10,"deletions":3}}
+
+# With up to 20 paths per state
+llm_git_overview . --files 20
+```
+
+#### Notes
+
+```text
+Replaces git status --short | wc -l; git log --oneline -3; git diff --stat
+| tail -1. branch is "" on a detached HEAD, upstream "" without one (ahead
+and behind are then 0). counts follow llm_git_status: a path both staged
+and modified counts in both. diffstat counts the tracked changes against
+HEAD, staged or not (untracked files are only in counts). With --files,
+"files" holds the four lists (paths relative to the repository root) and
+"truncated" the number of paths left out. Not a repository:
+not_a_git_repo (CONTINUE).
+```
+
+See also: `llm_git_status`, `llm_git_log`, `llm_git_diff`
+
+## llm_git_show
+
+A commit's metadata and files, its patch, or a file at a revision
+
+#### Usage
+
+```text
+llm_git_show [REV] [--stat] [--files] [PATH]
+llm_git_show [REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+llm_git_show REV:FILE [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+```
+
+#### Options
+
+```text
+--stat                 Add the totals: {"files","insertions","deletions"}
+--files                Add each file's status letter (A, M, D, R, C, T)
+--patch                The commit's patch as text, capped per file
+--max-lines N          Lines kept per file with --patch (default 200), of the
+                       content with REV:FILE (default 2000), files in the
+                       JSON otherwise; also --head N and --tail N
+--width N              Cut each line (JSON: each path and the subject) at N
+                       columns
+```
+
+#### Examples
+
+```bash
+llm_git_show HEAD~1 --stat
+# {"hash":"6595b2c","subject":"docs: change 118","author":"Ann",
+#  "date":"2026-10-25 22:44:46 +0000","files":[{"p":"CHANGES.md","add":1,
+#  "del":0}],"stat":{"files":1,"insertions":1,"deletions":0}}
+
+# The patch, 80 lines per file
+llm_git_show a1b2c3d --patch --max-lines 80
+
+# A file as it was two commits ago, first 100 lines
+llm_git_show HEAD~2:src/app.js --max-lines 100
+```
+
+#### Notes
+
+```text
+Replaces git show REV --stat, git show REV --name-status and git show
+REV:path | sed -n 1,80p. REV defaults to HEAD; a tag shows its commit; a
+merge is shown against its first parent. File paths are relative to the
+repository root; add and del are null for a binary file. A FILE as PATH
+limits the files and the patch to it. --patch keeps each file's header and
+puts [... K lines omitted] where it cuts; the patch of a secret file is
+replaced by a marker line. REV:FILE paths are relative to the repository
+root (REV:./FILE to PATH); a secret FILE is secret_file_blocked (FATAL), a
+binary one binary_file. An unknown REV is unknown_revision (RETRY), a FILE
+missing at REV file_not_found, not a repository not_a_git_repo (CONTINUE).
+```
+
+See also: `llm_git_log`, `llm_git_diff`
 
 ## llm_git_status
 
@@ -428,6 +1184,30 @@ Compact git status (JSON)
 
 ```text
 llm_git_status [PATH]
+llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]
+llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]
+llm_git_status [PATH] --fetch [--timeout S]
+llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--max-lines N] [--width N]
+```
+
+#### Options
+
+```text
+--summary              The number of paths in each state instead of the lists
+--files                One row per changed path: {"p","xy"} (the two letters
+                       of git status --short: index, work tree; ?? untracked)
+--fetch                Fetch the upstream branch first (no tags, no prune), then
+                       print the llm_git_overview object with "fetched"
+--repos PATH...        The summary of each repository, in parallel: one row per
+                       PATH, in the order given
+--timeout S            Bound the fetch (default 20s), with --repos each
+                       repository
+-j N                   Repositories at a time (default: the CPU count, 8 with
+                       --fetch)
+--format F             json (default), jsonl, tsv or table (--summary, --files,
+                       --repos)
+--max-lines N          Rows to keep (also --head N, --tail N)
+--width N              Cut each string value at N columns
 ```
 
 #### Examples
@@ -443,9 +1223,33 @@ llm_git_status
 #   "untracked": [],
 #   "conflicted": []
 # }
+
+# Counts only; the changed paths as rows
+llm_git_status --summary
+llm_git_status --files --format tsv
+
+# Fresh ahead/behind, and three repositories at once
+llm_git_status --fetch
+llm_git_status --repos ~/src/api ~/src/web ~/src/docs --format tsv
 ```
 
-See also: `llm_git_diff`, `llm_git_log`
+#### Notes
+
+```text
+Without an option: the pretty 2.x object above. --summary replaces git
+status --short | wc -l, --files git status --short, --repos a loop of
+git -C R status, --fetch git fetch && git status -sb. --summary prints
+{"branch","upstream","ahead","behind","staged","modified",
+"untracked","conflicted"}; --repos rows add "repo" first and "error"
+last (null, or the code of a PATH that is refused, missing or not a
+repository). --fetch never prompts: a failure (network, credentials,
+timeout) is "fetched":false with "error", and the local state is still
+printed; a repository whose own configuration names a program for the
+fetch (core.sshCommand, a credential helper, uploadpack, url.insteadOf,
+protocol.*) is not fetched. Paths are relative to the repository root.
+```
+
+See also: `llm_git_overview`, `llm_git_diff`, `llm_git_log`
 
 ## llm_grep
 
@@ -455,6 +1259,10 @@ Search code with structured file:line:content output
 
 ```text
 llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
+         [--exclude GLOB]... [--only-matching] [--distinct]
+         [--files-only] [--count [--by file|ext|dir]]
+         [--relative|--absolute] [--format json|jsonl|tsv|table]
+         [--width N] [--max-lines N] [--head N] [--tail N]
          [--host ALIAS]
 ```
 
@@ -464,6 +1272,25 @@ llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
 --ext EXT1,EXT2        Search only files with these extensions
 -C, --context N        Lines of context around each match (default 0)
 -n, --limit N          Lines to print (default 100)
+--exclude GLOB         Skip the files and directories whose name or
+                       path below PATH matches GLOB (repeatable)
+-o, --only-matching    Print each match instead of its line
+--distinct             Each distinct match with its count, most
+                       frequent first: [{"match","count"}]
+                       (implies --only-matching)
+-l, --files-only       Print the matching files
+-c, --count            Print {"count":N}: matching lines (matches
+                       with -o, files with -l)
+--by file|ext|dir      Counts per file, extension or first directory
+                       below PATH; implies --count
+--relative             Paths relative to PATH (default: absolute)
+--absolute             Absolute paths (the default)
+--format FORMAT        Rows {"file","line","text"} ({"file"} with
+                       -l): json, jsonl, tsv or table
+--width N              Cut each line (each value in rows) at N columns
+--max-lines N          Keep the first N lines (also --head N), or the
+                       last N with --tail N; they replace -n and mark
+                       what they cut
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```
@@ -479,11 +1306,19 @@ llm_grep "function processOrder" .
 
 # With context lines
 llm_grep "class.*Controller" . --ext php --context 3
+
+# Most frequent matches (grep -o | sort | uniq -c | sort -rn)
+llm_grep "Log::[a-z]+" src --distinct
+
+# Without tests, relative paths
+llm_grep TODO . --exclude tests --relative -n 20
 ```
 
 #### Notes
 
 ```text
+Replaces grep -rn | grep -v | head, grep -o | sort | uniq -c and
+grep -rl / grep -c.
 One built-in engine, the same with or without ripgrep installed:
 ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore
 matches, binary files, node_modules, vendor and .git are skipped; files
@@ -491,8 +1326,304 @@ come in sorted path order. Secret files are skipped, templates such as
 .env.example searched. Default limit 100.
 Output: file:line:content with absolute paths (a FILE PATH gives
 line:content); context lines use -, groups are separated by --.
+--count, --distinct, --format and --head/--tail see every match
+first: a cut JSON array or TSV gets {"truncated":K} on stderr, a cut
+text output a [... K lines omitted] line. --context goes with the
+text output only (conflicting_options otherwise).
 A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 ```
+
+## llm_hash
+
+Hash files in parallel (sha256 or md5)
+
+#### Usage
+
+```text
+llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--algo sha256|md5      The digest (default sha256)
+--short N              Keep the first N hex digits
+--format F             json (default), jsonl, tsv or table
+--head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--width N              Cut values at N columns
+-j N, --jobs N         Files hashed at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_hash dist/app.js dist/app.css --short 12
+llm_hash backup.tar --algo md5
+```
+
+#### Notes
+
+```text
+Replaces sha256sum f | cut -c1-12 and md5sum f, file by file.
+Output: [{"p","sha256","size"}] in input order (the key is "md5" with
+--algo md5). A PATH that cannot be hashed keeps its row with null digest
+and size and an "error" (file_not_found, not_a_file, path_unreadable,
+timeout); the error column appears only then. Secret files are hashed: a
+digest shows no content.
+```
+
+See also: `llm_stat`
+
+## llm_http
+
+Probe several URLs at once: status, timings, headers, JSON value (JSON)
+
+#### Usage
+
+```text
+llm_http URL... [--method M] [--header H]... [--auth-env VAR]...
+         [--resolve HOST:IP]... [--follow] [--status-only] [--headers h1,h2]
+         [--json-path P] [--grep RE] [--body-max N] [--expect CODE]
+         [--insecure] [-j N] [--timeout S] [--format F] [--width N]
+         [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--method M             GET (default), HEAD or OPTIONS; any other method is
+                       a write and is refused (http_method_blocked, FATAL)
+--header H             A request header "Name: value" (repeatable); "Host:
+                       NAME" sets the Host. A credential header
+                       (Authorization, Cookie, a name with TOKEN, KEY,
+                       SECRET, AUTH, ...) is refused: use --auth-env
+--auth-env VAR         Send the header held by the exported variable VAR:
+                       "Name: value", or a bare value meaning
+                       "Authorization: value" (repeatable). Never printed,
+                       never sent on to another host by a redirect
+--resolve HOST:IP      Connect to IP for HOST (also HOST:PORT:IP); TLS and
+                       the Host header keep HOST; no proxy for HOST
+--follow               Follow redirects (at most 10)
+--status-only          Do not read the body: url, status, ms, ok, error
+--headers h1,h2        Add these response headers (credentials masked)
+--json-path P          Add the value at P of the JSON body (a.b[0].c)
+--grep RE              Add the first body line matching RE (RE2) and the
+                       number of matching lines
+--body-max N           Body bytes kept for --grep and --json-path
+                       (default 8388608)
+--expect CODE          Statuses that are ok: codes or classes, e.g. 200,
+                       2xx, 200,301 (default 200 to 399)
+-k, --insecure         Do not verify the certificate (not with --auth-env)
+-j, --jobs N           URLs at a time (default 32)
+--timeout S            Time limit per URL, redirects and body included
+                       (default 10s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+# Status of many URLs at once
+llm_http https://a.example/health https://b.example/health --status-only
+
+# Redirect chain and two headers
+llm_http http://example.com --follow --headers location,content-type
+
+# An API field, the credential from the environment
+export API_AUTH='Authorization: Bearer ...'
+llm_http https://api.example/jobs/42 --auth-env API_AUTH --json-path status
+
+# A site on a new server before DNS points at it
+llm_http https://example.com/ --resolve example.com:203.0.113.7 --grep '<title>'
+```
+
+#### Notes
+
+```text
+Replaces curl -w %{http_code} loops, curl -I | grep, curl | jq and
+curl | grep. Read-only: GET, HEAD and OPTIONS, no request body. One row per
+URL, in input order: {"url","status","ms","timing","bytes","redirects",
+"ok","error"}, then "headers", "value", "match" and "matches" when asked
+(--status-only: url, status, ms, ok, error). timing is {"dns","connect",
+"tls","ttfb"} in ms; redirects lists each 3xx as {"status","location"}.
+ok: no error, the status expected, --grep matched, --json-path found.
+error is null or one of dns_not_found dns_error connection_refused
+connection_reset unreachable timeout tls_error certificate_error
+too_many_redirects transport_error invalid_json json_path_not_found
+body_max_exceeded. A URL with a password is refused (secret_in_argv).
+Proxies from HTTPS_PROXY, HTTP_PROXY and NO_PROXY; CAs from the system or
+SSL_CERT_FILE / SSL_CERT_DIR.
+```
+
+See also: `llm_tls`, `llm_tcp`, `llm_dns`
+
+## llm_json
+
+One value, the keys or the shape of a JSON file (replaces python3 json.load, jq)
+
+#### Usage
+
+```text
+llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
+         [--width N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--path P               The value at P: a.b[0].c, paths["/api/x"].post, [-1]
+--keys                 The keys of an object (or of the objects of an array)
+--shape                Types and lengths, two levels deep
+--format F             json (default), jsonl (one element per line), tsv or
+                       table (an array of objects as rows)
+--width N              Cut each string value at N columns (ends with …)
+--head N, --tail N     Keep the first / last N elements of an array
+```
+
+#### Examples
+
+```bash
+llm_json package.json --path scripts
+llm_json openapi.json --path 'paths["/users"].get.responses' --keys
+llm_json data.json --shape
+llm_json users.json --format tsv --head 20
+curl -s https://api.example/x | llm_json - --path items[0]
+```
+
+#### Notes
+
+```text
+Replaces python3 -c "import json; print(json.load(open(f))[...])" and
+jq '.a', jq 'length, (.[0]|keys)'. The whole text is validated first
+(invalid_json, RETRY, with line and column); the value prints as compact
+JSON with its numbers and escapes as written; a repeated key: the last
+one wins. A path that does not exist is json_path_not_found (RETRY) with
+the nearest existing prefix in the hint; --keys on a value without
+objects is not_an_object. --shape: {"type":"array[100]","items":
+{"type":"object{3}","keys":{"id":"number",...},"optional":[...]}};
+lengths are N or MIN..MAX, mixed types are joined with |. A cut array
+adds {"truncated":K} on stderr. Secret files (.env, keys, ...) are
+refused; - reads the standard input.
+```
+
+See also: `llm_config`, `llm_csv`
+
+## llm_lint
+
+Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py)
+
+#### Usage
+
+```text
+llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]
+```
+
+#### Options
+
+```text
+--ext LIST             Languages to check in directories (default: all):
+                       php, sh (also .bash), js (.mjs, .cjs), json, yaml
+                       (.yml), toml, py
+--php VER              The php that checks .php files: 8.4, 8 (gash
+                       runtime's resolution; default: php on PATH)
+--node MAJOR           The node that checks .js files: 24 (default: node on
+                       PATH)
+-j, --jobs N           Checks at a time (default: the CPU count)
+--timeout S            Time limit of one checker process (default 60s)
+--max-lines N          Failures listed (default 100); --head N and --tail N
+                       keep the first and last N, "truncated" counts the rest
+--width N              Cut file names and messages at N columns
+--relative, --absolute File paths relative to their PATH (default) or
+                       absolute
+```
+
+#### Examples
+
+```bash
+# Every PHP file of src with php 8.4
+llm_lint src --ext php --php 8.4
+
+# A whole project, every language
+llm_lint .
+
+# Two files
+llm_lint deploy.sh config/app.yaml
+```
+
+#### Notes
+
+```text
+Replaces for f in *.php; do php -l "$f"; done, bash -n and node --check
+loops. Output: {"checked":N,"failed":K,"failures":[{"file","line","error"}]}.
+php runs once per chunk of files (php -l a b c), bash -n once per file, node
+once per chunk (each file compiled as node loads it; a failure is re-checked
+with node --check for its message), python compiles in one process (no .pyc
+written); JSON, YAML and TOML are parsed by gash (tsconfig.json and .vscode
+files may hold comments). Directories skip node_modules, vendor, .git and
+__pycache__ and never follow symlinks; secret files are skipped there and
+refused as arguments. A FILE argument with another extension is
+unsupported_file. A missing checker is runtime_not_installed (STOP).
+```
+
+See also: `llm_test`, `llm_runtime`
+
+## llm_log
+
+Last lines of a log, read from the end, by pattern, time and level
+
+#### Usage
+
+```text
+llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]
+```
+
+#### Options
+
+```text
+--tail N, -n N         The last N selected lines (default 50)
+--last-match RE        Lines that match RE (ripgrep's syntax); with -n N, the
+                       last N matches. Same as --grep RE
+--grep RE              Keep the lines that match RE (repeatable: any one)
+--since T              Entries at or after T: a duration back from now (30s,
+                       10m, 2h, 1d, 1w) or an ISO 8601 date or time
+--level L              Entries at level L or more severe: trace, debug,
+                       info, notice, warning, error, critical, alert,
+                       emergency (warn, err, fatal, ... are read too)
+--width N              Cut each line at N columns
+--format F             json, jsonl, tsv or table: rows {"line","ts",
+                       "level","text"} (line numbers cost a count pass)
+```
+
+#### Examples
+
+```bash
+llm_log storage/logs/laravel.log --last-match ERROR -n 20
+llm_log /var/log/nginx/error.log --since 1h --level error --width 300
+```
+
+#### Notes
+
+```text
+Replaces tail -n N log | cut -c1-W and grep X log | tail -N.
+The file is read backwards in 64 KiB blocks, so the cost is the size of
+the answer, not of the log. Lines print in file order, as they are. An
+entry is a line with a timestamp or a level and the lines below it with
+neither (a stack trace): --since and --level keep or drop whole entries,
+--grep single lines. Timestamps read: ISO 8601 (also [bracketed], as
+Laravel and Monolog write it), syslog (Oct 25 14:02:01), nginx and Apache
+access ([25/Oct/2026:14:02:01 +0000]) and error logs, and an ISO time in
+the first 64 bytes (JSON lines). A time without a zone is local (TZ).
+With --since the walk stops at the first older entry and a cut by --tail
+is marked "[... K lines omitted]". Secret files are refused (FATAL),
+binary ones binary_file; a bad T is invalid_duration.
+```
+
+See also: `llm_read`
 
 ## llm_ports
 
@@ -501,13 +1632,15 @@ List ports in use (JSON)
 #### Usage
 
 ```text
-llm_ports [--listen]
+llm_ports [--listen] [--port N]
 ```
 
 #### Options
 
 ```text
 -l, --listen           Listening sockets only
+--port N               Sockets on local port N (0 to 65535), each with the
+                       processes that hold it
 ```
 
 #### Examples
@@ -515,18 +1648,30 @@ llm_ports [--listen]
 ```bash
 llm_ports
 llm_ports --listen
+
+# Who listens on 8080
+llm_ports --listen --port 8080
 ```
 
-See also: `llm_procs`
+#### Notes
+
+```text
+--port replaces ss -tlnp | grep :8080: it adds "procs":[{"pid","name"}]
+to each record (from ss -p or netstat -p; empty for another user's process
+unless you are root).
+```
+
+See also: `llm_procs`, `llm_tcp`
 
 ## llm_procs
 
-List processes by name or port (JSON)
+List processes by name, port or PID, alive or not, as a tree (JSON)
 
 #### Usage
 
 ```text
-llm_procs [--name NAME | --port PORT]
+llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
+          [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
 ```
 
 #### Options
@@ -534,6 +1679,14 @@ llm_procs [--name NAME | --port PORT]
 ```text
 --name NAME            Processes whose command line contains NAME
 --port PORT            Processes with a socket on PORT
+--pid PID...           These processes, alive or not (one or more PIDs)
+--alive                Live processes only (a zombie is not alive)
+--tree                 Each process and everything below it, depth first,
+                       with ppid and depth
+--format F             json (default), jsonl, tsv or table
+--width N              Cut each value at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows
 ```
 
 #### Examples
@@ -542,13 +1695,25 @@ llm_procs [--name NAME | --port PORT]
 llm_procs
 llm_procs --name nginx
 llm_procs --port 3306
+
+# Instead of: kill -0 $PID && echo alive
+llm_procs --pid "$pid"
+
+# Instead of: ps -ef | grep vite | grep -v grep
+llm_procs --name vite --alive --tree
 ```
 
 #### Notes
 
 ```text
 --port takes 0 to 65535 (invalid_port above) and wins over --name,
-which is then ignored.
+which is then ignored; --pid wins over both. With --pid, --alive or
+--tree the rows are [{"pid","name","cmd","alive"}] (--tree adds
+"ppid" and "depth"): --pid rows come in the order given, a gone PID
+as alive:false; other rows by PID, never the caller's own shell and its
+parents; NAME is then a regular expression (RE2); cmd is cut at 200
+columns unless --width is given; without a filter the first 100 rows.
+Read-only: llm_procs signals nothing (agent_kill does).
 ```
 
 See also: `llm_ports`
@@ -571,6 +1736,63 @@ llm_project /var/www/myapp
 ```
 
 See also: `llm_deps`
+
+## llm_read
+
+Read files, line ranges or the lines around a match, numbered
+
+#### Usage
+
+```text
+llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]
+```
+
+#### Options
+
+```text
+PATH:A-B               Lines A to B of that file (also PATH:A:B, PATH:A-)
+--lines A:B            Lines A to B of every PATH without its own range
+                       (repeatable; A-B and A,B too, A: and :B leave an end
+                       open)
+--around RE            The lines that match RE (ripgrep's syntax) and their
+                       context (repeatable)
+-C N, --context N      Context lines around each match (default 3)
+--max-bytes N          Content bytes printed per file (default 262144)
+--head N, --tail N     The first / last N selected lines of each file
+                       (--max-lines N is --head N)
+--width N              Cut each line at N columns
+--format F             json, jsonl, tsv or table: rows {"file","line","text"}
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+# Locate and read in one call
+llm_read app/Http/Kernel.php --around 'protected \$middleware' -C 10
+
+# Two ranges of two files
+llm_read src/a.php:120-180 src/b.php:1-40
+
+# The end of a file
+llm_read CHANGELOG.md --tail 30
+```
+
+#### Notes
+
+```text
+Replaces grep -n X f, then sed -n A,Bp f (two calls), and cat a b.
+Each run of consecutive lines is a block "==> FILE:A-B <==", each line N:
+then its text (N- for a context line of --around); a cut is marked
+"[... K lines omitted]". A file with nothing selected prints its header
+and why ([no match in N lines], [empty file]). PATH:A-B is read as a range
+only when PATH:A-B itself does not exist. Secret files are refused
+(secret_file_blocked, FATAL, as llm_config), binary files binary_file, a
+missing file file_not_found, a bad range invalid_range, before anything is
+printed.
+```
+
+See also: `llm_grep`, `llm_log`
 
 ## llm_remote_run
 
@@ -630,6 +1852,42 @@ the host's date has no %N), and {"stopped":true,"skipped":K} or
 error of the call.
 ```
 
+## llm_runtime
+
+Resolve a node major or php version to its binary, without nvm.sh
+
+#### Usage
+
+```text
+llm_runtime php|node|composer|npm|npx VERSION
+```
+
+#### Examples
+
+```bash
+# The node 24 binary
+llm_runtime node 24
+
+# composer under php 8.4
+llm_runtime composer 8.4
+```
+
+#### Notes
+
+```text
+Replaces source ~/.nvm/nvm.sh; nvm use 24; which node (and php84 wrappers).
+Output: {"runtime":"node","request":"24","path":".../bin/node","version":"24.1.0"};
+composer adds "php" (the binary it runs under), npm and npx report their
+node's version. VERSION is a prefix: 24, 24.1, 8.4, 8: the newest installed
+version that starts with it. node comes from the nvm tree
+(${NVM_DIR:-~/.nvm}/versions/node), then the node on PATH; php from
+/usr/bin/phpX.Y and /usr/local/bin/phpX.Y, then the php on PATH. Not
+installed: runtime_not_installed (STOP) with the installed versions. The
+JSON form of gash runtime; it reads gash's runtime cache, never writes it.
+```
+
+See also: `llm_tools`, `node_detect_version`, `php_detect_version`
+
 ## llm_same
 
 Is the deployed copy the local one? Hash both sides, list the differences
@@ -685,6 +1943,413 @@ follows the remote path rules (AGENTS.md 3.12). The host needs
 sha256sum, shasum or openssl (hash_tool_not_found).
 ```
 
+## llm_service
+
+State and last journal lines of systemd units (JSON)
+
+#### Usage
+
+```text
+llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--log N                Last N journal lines of each unit (default 10; 0: none)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut each journal line at N columns (default 300)
+--max-lines N, --head N, --tail N
+                       Keep the first/last N units
+```
+
+#### Examples
+
+```bash
+llm_service nginx php8.4-fpm
+llm_service mariadb --log 30
+```
+
+#### Notes
+
+```text
+Replaces systemctl is-active x; journalctl -u x -n 20 --no-pager | cut
+-c1-200, for several units in one call. One row per unit, in the order
+given: [{"unit","load","active","sub","since","pid","restarts",
+"log":[...]}]; an unknown unit is load "not-found". Journal lines are
+short-iso without the host name; the journal may need the user in the
+systemd-journal group (no lines otherwise). Read-only (systemctl show,
+journalctl). Without systemd: systemd_unavailable (CONTINUE).
+```
+
+See also: `llm_procs`
+
+## llm_stat
+
+Metadata of several paths: type, size, mode, owner, mtime, lines
+
+#### Usage
+
+```text
+llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--lines                Count the lines of regular files under 64 MiB
+--follow               Describe what symlinks point to; target is the
+                       resolved path
+--format F             tsv (default), json, jsonl or table
+--head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--width N              Cut output lines at N columns
+-j N, --jobs N         Paths read at a time (default: the CPU count)
+--timeout S            Time limit per path (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_stat composer.json vendor storage/logs/laravel.log --lines
+llm_stat public/storage --follow --format json
+```
+
+#### Notes
+
+```text
+Replaces ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e.
+One row per PATH in input order: p, t (f d l p s c b, or missing), size,
+mode (octal, as chmod reads it), owner (user:group), mtime (UTC, ISO
+8601), lines with --lines (null for a directory, a link, a file of 64 MiB
+or more). target is the link text of a symlink, or with --follow the
+resolved path (t "l" then means it could not be followed). A missing path
+is a row, not an error. Secret files: metadata yes, lines no (error
+secret_file_blocked in that row). Columns lines, target and error appear
+only when they apply. TSV by default: the JSON objects of --format json
+repeat every key on every row.
+```
+
+See also: `llm_hash`, `llm_textstats`
+
+## llm_sysinfo
+
+Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON)
+
+#### Usage
+
+```text
+llm_sysinfo [--mount PATH]...
+```
+
+#### Options
+
+```text
+--mount PATH           Report the filesystem of PATH (repeatable) instead
+                       of / and the other local disks
+```
+
+#### Examples
+
+```bash
+llm_sysinfo
+llm_sysinfo --mount /var/lib/mysql
+```
+
+#### Notes
+
+```text
+Replaces uptime; free -h; df -h /; nproc; uname -a; nvidia-smi
+--query-gpu=... in about 200 bytes: {"host","os","kernel","uptime_h",
+"load":[1,5,15],"cpus","cpu","mem_mb":{"total","avail"},
+"disks":[{"mount","size_gb","used_pct"}],"gpu":[{"name","mem_mb":
+[used,total],"util_pct"}]}; gpu only when nvidia-smi is installed. The
+disks are / and the writable local disks (one mount per device; not
+/boot, /snap, network or pseudo filesystems). Linux reads /proc and
+statfs, no program runs; macOS asks sysctl.
+```
+
+See also: `sysinfo`
+
+## llm_tcp
+
+Can a TCP connection be opened to each HOST:PORT (JSON)
+
+#### Usage
+
+```text
+llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N]
+        [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+-j, --jobs N           Targets at a time (default 32)
+--timeout S            Connect time limit per target (default 5s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+llm_tcp db.internal:5432 cache.internal:6379
+llm_tcp [::1]:22 127.0.0.1:8080 --timeout 1
+```
+
+#### Notes
+
+```text
+Replaces nc -z h p and timeout 2 bash -c '</dev/tcp/h/p'. Nothing is sent:
+the connection is closed once open. One row per target, in input order:
+{"target","open","ms","error"}; error is null, or connection_refused,
+timeout (filtered), unreachable, dns_not_found, dns_error.
+```
+
+See also: `llm_ports`, `llm_tls`, `llm_http`
+
+## llm_test
+
+Run a test command and summarize it: counts and each failure's file:line
+
+#### Usage
+
+```text
+llm_test [--runner auto|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...
+```
+
+#### Options
+
+```text
+--runner auto|NAME     The output format: pest, phpunit, phpstan, psalm,
+                       vitest, jest, mocha, pytest, go, cargo, playwright
+                       (default auto: from CMD and the output)
+--fail-only            Print nothing when CMD exits 0 with no failure
+--max-lines N          Failures listed (default 50; --head N, --tail N);
+                       unparsed output: the last N lines (default 20)
+--width N              Cut messages at N columns (default 200)
+--timeout S            End CMD after S (default: no limit)
+--relative, --absolute Paths below the working directory relative (default)
+                       or as the runner printed them
+```
+
+#### Examples
+
+```bash
+# Pest with a filter
+llm_test -- vendor/bin/pest --filter UserTest
+
+# A package script; silent when green
+llm_test --fail-only -- npm test
+
+# Go with the JSON reporter
+llm_test -- go test -json ./...
+```
+
+#### Notes
+
+```text
+Replaces pest | grep -E 'Tests:|FAIL' and npm test | tail -20. CMD runs as
+given (bash -c 'cd app && vendor/bin/pest' works), stdout and stderr
+merged, stdin /dev/null; the exit status is CMD's. Output:
+{"runner","passed","failed","skipped","duration_s","failures":[{"name",
+"file","line","message"}],"parsed":true,"exit_code"}; analyzer findings
+(phpstan, psalm) are failures. Output no parser reads:
+{"runner":null,"duration_s","parsed":false,"exit_code","tail":[...]}.
+Options come before --; a program not on PATH is command_not_found. CMD is
+the project's own code: llm_test runs it without llm_exec's rails.
+```
+
+See also: `llm_lint`
+
+## llm_textcheck
+
+Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines
+
+#### Usage
+
+```text
+llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--rules LIST           The rules to run, comma-separated (default:
+                       non-ascii,crlf,bom,trailing-ws,final-newline,
+                       mixed-indent)
+--max-lines N          Issues listed (default 100; --head N is the same,
+                       --tail N keeps the last N)
+--width N              Cut samples at N columns
+--format F             jsonl, tsv or table: one row per issue; json is the
+                       default object
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_textcheck README.md docs/*.md
+llm_textcheck src/*.php --rules trailing-ws,tabs,long-lines=120
+```
+
+#### Notes
+
+```text
+Replaces grep -nP '[^\x00-\x7F]' f, file -i f and python unicodedata
+scripts. One read per file. Output: {"files":N,"issues":[{"file","line",
+"rule","sample"}]}, plus "counts" by rule when there are issues,
+"truncated" when the list was cut and "skipped" ([{"file","reason"}]:
+binary_file, file_not_found, not_a_file) when files were skipped. No
+issue: {"files":N,"issues":[]}. non-ascii names the code points
+(U+200B, U+00E9 e-acute); crlf is one issue per file ("K of N lines");
+bom, mixed-indent (the first line indented unlike the first indented
+line) and final-newline are once per file. Secret files are refused
+(FATAL); an unknown rule is invalid_rule.
+```
+
+See also: `llm_textstats`
+
+## llm_textstats
+
+Lines, words, characters, bytes, gzip size and longest line of files
+
+#### Usage
+
+```text
+llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]
+```
+
+#### Options
+
+```text
+--format F             json (default), jsonl, tsv or table
+--head N, --tail N     Keep the first / last N rows (--max-lines N is --head)
+--width N              Cut values at N columns
+-j N, --jobs N         Files read at a time (default: the CPU count)
+--timeout S            Time limit per file (seconds, 500ms, 2s, 1m)
+--absolute, --relative Absolute paths, or as given (the default)
+```
+
+#### Examples
+
+```bash
+llm_textstats README.md docs/guide.md
+```
+
+#### Notes
+
+```text
+Replaces wc -w f; wc -c f; gzip -c f | wc -c (three processes per file).
+One read per file. Output: [{"p","lines","words","chars","bytes","gzip",
+"max_line"}]: lines counts a last line without a newline, words as wc -w
+(in a Markdown file without fenced code blocks and front matter), chars
+are UTF-8 characters, gzip is the gzip -c size at level 6 (null from 64
+MiB), max_line the longest line in characters. A file that is binary,
+secret, missing or not a file keeps its row with null values and an
+"error" (binary_file, secret_file_blocked, file_not_found, not_a_file).
+```
+
+See also: `llm_stat`, `llm_textcheck`
+
+## llm_tls
+
+TLS certificate of several hosts at once: expiry, SANs, issuer (JSON)
+
+#### Usage
+
+```text
+llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F]
+        [--width N] [--max-lines N] [--head N] [--tail N]
+```
+
+#### Options
+
+```text
+--sni NAME             Server name to send and verify (default: HOST)
+-j, --jobs N           Hosts at a time (default 32)
+--timeout S            Time limit per host, connect and handshake
+                       (default 10s)
+--format F             json (default), jsonl, tsv or table
+--width N              Cut string values at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N rows (cut rows are reported)
+```
+
+#### Examples
+
+```bash
+llm_tls example.com example.org
+llm_tls mail.example.com:465 203.0.113.7 --sni www.example.com
+```
+
+#### Notes
+
+```text
+Replaces echo | openssl s_client -connect h:443 -servername h | openssl
+x509 -noout -dates -subject. PORT defaults to 443; an https:// URL is
+taken too. One row per host, in input order: {"host","protocol",
+"subject","issuer","san","not_after","days_left","verified",
+"verify_error","chain","ms","error"}. The handshake accepts any
+certificate, so an expired or self-signed one is still described; verified
+says whether the chain checks out for the server name against the system
+CAs (or SSL_CERT_FILE / SSL_CERT_DIR), verify_error why not: expired,
+not_yet_valid, hostname_mismatch, unknown_authority, invalid. chain lists
+the certificates after the leaf as {"subject","issuer","not_after"}.
+error is null, or connection_refused, timeout, dns_not_found, tls_error
+(the handshake failed), no_certificate. No STARTTLS.
+```
+
+See also: `llm_http`, `llm_tcp`
+
+## llm_tools
+
+Path and version of each tool, probed in parallel; php and node per version
+
+#### Usage
+
+```text
+llm_tools [NAME...] [-j N] [--timeout S]
+```
+
+#### Options
+
+```text
+-j, --jobs N           Probes at a time (default 8)
+--timeout S            Time limit of one probe (default 10s)
+```
+
+#### Examples
+
+```bash
+# The usual toolchain
+llm_tools
+
+# A few tools
+llm_tools git python3 rg php
+```
+
+#### Notes
+
+```text
+Replaces git --version; php -v | head -1; command -v rg. Output:
+{"git":{"version":"2.43.0","path":"/usr/bin/git"},"rg":null,
+"php":[{"version":"8.3.6","path":"/usr/bin/php8.3"}]}, keys in the order
+asked. php and node list every installed version (/usr/bin/phpX.Y, the nvm
+tree, the one on PATH), oldest first; a tool not on PATH is null, one whose
+probe prints no version has "version":null. Each NAME is a plain program
+name, probed with --version (go version, ssh -V, java -version; npm and npx
+read npm's package.json). Without NAME: git php composer node npm python3 go
+rg jq docker.
+```
+
+See also: `llm_runtime`, `llm_env`
+
 ## llm_tree
 
 Compact directory tree (JSON or text output)
@@ -692,7 +2357,14 @@ Compact directory tree (JSON or text output)
 #### Usage
 
 ```text
-llm_tree [--text] [--depth N] [--stats] [PATH] [--host ALIAS]
+llm_tree [--text] [--depth N] [--stats] [--all] [--relative|--absolute]
+         [--width N] [--max-lines N] [--head N] [--tail N] [PATH]
+         [--host ALIAS]
+llm_tree --count [--by ext|dir|type] [--type f|d] [--name GLOB]
+         [--newer REF] [--since T] [--depth N] [--all]
+         [--format json|jsonl|tsv|table] [PATH]
+llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]
+         [--newer REF] [--since T] [--format json|jsonl|tsv|table] [PATH]
 ```
 
 #### Options
@@ -700,8 +2372,28 @@ llm_tree [--text] [--depth N] [--stats] [PATH] [--host ALIAS]
 ```text
 --text                 Indented text list, 200 lines max (default depth 3)
 --depth N              Levels below PATH, 1 or more (default 1; also
-                       --max-depth)
+                       --max-depth); with --count, no limit unless given
 --stats                Add sizes and child counts to the JSON tree
+--all                  Do not skip node_modules, vendor, .git,
+                       __pycache__, .cache
+--relative             The root's path as "." (--top: relative is the
+                       default)
+--absolute             Absolute paths (--top rows too)
+--count                Print {"count":N}: the entries below PATH
+--by ext|dir|type      --count per extension, first directory below
+                       PATH, or type f, d, l (implies --count); --top
+                       per directory (default) or extension
+--type f|d             --count files or directories only
+--name GLOB            --count/--top: names matching GLOB only
+--newer REF            --count/--top: modified after REF only
+--since T              --count/--top: modified at T or later (30s, 2h,
+                       3d, 1w, 2026-10-25, 2026-10-25T14:30, @EPOCH)
+--top N                Disk usage: {"total","files","top":[{"p",
+                       "size","files"}],"skipped"}, largest first
+--format FORMAT        --count/--top as json, jsonl, tsv or table rows
+--width N              Cut each line (each value) at N columns
+--max-lines N          --text/--top: keep the first N lines or rows
+                       (also --head N), or the last N with --tail N
 --host ALIAS           Run on a registered HOST: alias over ssh, one round
                        trip (repeatable; see AGENTS.md 3.12)
 ```
@@ -717,13 +2409,98 @@ llm_tree --text
 
 # Limited depth
 llm_tree --depth 2 /etc/nginx
+
+# Files per extension (find -type f | wc -l)
+llm_tree --count --type f --by ext src
+
+# The 10 largest directories (du -sh */ | sort -rh | head)
+llm_tree --top 10 .
 ```
 
 #### Notes
 
 ```text
+Replaces du -sh */ | sort -rh | head and find | wc -l.
 Ignores noise directories below PATH: node_modules, vendor, .git,
 __pycache__, .cache. Entries whose name holds a tab or
 a newline are left out. --text lists symlinks as name -> target, in
 byte order whatever the locale.
+--top sums the apparent size (st_size) of every file below PATH,
+noise directories included (disk usage hides nothing); --by dir
+lists each directory down to --depth (default 1), as du -d does.
+Directories that cannot be read count in skipped; a cut list gets
+"truncated":K.
 ```
+
+## llm_wait
+
+Wait for a log line, a path, a process exit, a URL, a port or a command (JSON)
+
+#### Usage
+
+```text
+llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N]
+CONDITION is one of:
+  --file-match FILE RE   a line of FILE matches RE
+  --exists PATH          PATH exists
+  --gone PID|NAME        the process ended / no command line matches NAME
+  --http URL [--code N] [--json-path P --equals V]
+  --port HOST:PORT       a TCP connection opens
+  --cmd-ok CMD           CMD (llm_exec rules) exits 0
+```
+
+#### Options
+
+```text
+--timeout S            Give up after S (seconds, or 500ms, 2m; at most 1h);
+                       required
+--interval S           Poll interval (default 0.2s for files and paths and a
+                       PID, 0.5s for a NAME, a URL and a port, 1s for a command)
+--file-match FILE RE   Scan FILE once, then only what is appended (inotify on
+                       Linux); a missing FILE is waited for. RE is RE2,
+                       matched against each line
+--exists PATH          Met when PATH exists
+--gone PID|NAME        A PID: met when it ends (a zombie counts as ended). A
+                       NAME: a regular expression matched against command
+                       lines, as llm_procs --name; the caller is left out
+--http URL             GET until the status is 2xx
+--code N               ... until it is N (100-599) instead
+--json-path P          ... and the JSON body holds --equals V at path P
+--equals V             (a.b[0].c; a string compares as is, a number in its
+                       shortest form, true, false, null)
+--port HOST:PORT       Met when a TCP connection to HOST:PORT opens
+--cmd-ok CMD           Re-run the command line CMD (checked once under the
+                       llm_exec rules) until it exits 0
+--tail N               Add the last N lines of FILE, or of CMD's last output
+--width N              Cut the match and tail lines at N columns (default 300)
+```
+
+#### Examples
+
+```bash
+# Instead of: while ! grep -q DONE out.log; do sleep 10; done
+llm_wait --timeout 600 --file-match out.log '^DONE' --tail 5
+
+# A server comes up
+llm_wait --timeout 60 --http http://127.0.0.1:8080/health --json-path status --equals ok
+llm_wait --timeout 30 --port 127.0.0.1:5432
+
+# A background job ends
+llm_wait --timeout 300 --gone "$pid"
+```
+
+#### Notes
+
+```text
+Replaces sleep-and-check loops (while ! grep -q X f; do sleep N; done,
+sleep N; tail f, until curl ...; do sleep N; done) with one call that
+returns as soon as the condition holds. Met: {"met":true,"after_s":2.01,
+"match":"<line>","tail":[...]} and exit 0 (--http adds "code", --cmd-ok
+"rc" and "runs"). Timeout: {"met":false,"after_s":S} and exit 1, with
+no error envelope (--http, --port and --cmd-ok add what the last look saw:
+"last", "code", "rc"). One condition per call. FILE follows the path
+rules and secret files are refused. Reads only: nothing is signaled,
+written or started but CMD.
+```
+
+See also: `llm_procs`

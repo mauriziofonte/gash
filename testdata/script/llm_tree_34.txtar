@@ -1,0 +1,82 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_tree 3.4 options (plan F2, F3, S1-S4): --count [--by] with its
+# filters, --top N (disk usage, largest first, every file below PATH
+# counted), --all, --relative and the --text budget. Without them the
+# output is the 3.0 output (llm_tree.txtar).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: entries below PATH, noise directories skipped
+exec bash -c 'source "$GASH_SH"; llm_tree --count p'
+stdout '^\{"count":6\}$'
+exec bash -c 'source "$GASH_SH"; llm_tree --count --all p'
+stdout '^\{"count":8\}$'
+
+# --- --type, --name, --depth, --by
+exec gash llm_tree --count --type f p
+stdout '^\{"count":4\}$'
+exec gash llm_tree --count --name '*.php' p
+stdout '^\{"count":2\}$'
+exec gash llm_tree --count --depth 1 p
+stdout '^\{"count":2\}$'
+exec gash llm_tree --by dir p
+stdout '^\{"count":6,"by":\{".":2,"src":4\}\}$'
+exec gash llm_tree --count --by ext --type f p --format tsv
+cmp stdout ext.want
+stderr '^\{"count":4\}$'
+
+# --- --top: du -sh */ | sort -rh | head in one call
+exec gash llm_tree --top 10 p
+stdout '^\{"total":62,"files":5,"top":\[\{"p":"src","size":35,"files":3\},\{"p":"node_modules","size":20,"files":1\}\],"skipped":0\}$'
+exec gash llm_tree --top 1 --depth 2 p
+stdout '^\{"total":62,"files":5,"top":\[\{"p":"src","size":35,"files":3\}\],"skipped":0,"truncated":2\}$'
+exec gash llm_tree --top 5 --by ext p --format tsv
+cmp stdout top.want
+stderr '^\{"files":5,"skipped":0,"total":62\}$'
+
+# --- the listing: --relative root, --all, the --text budget
+exec gash llm_tree --relative p/src
+stdout '^\{"path":"\.","type":"directory","children":\['
+exec gash llm_tree --all --depth 1 p
+stdout '"name":"node_modules"'
+exec gash llm_tree --text p --max-lines 2
+cmp stdout text.want
+
+# --- errors
+! exec gash llm_tree --top 0 p
+stderr '"error":"invalid_top"'
+! exec gash llm_tree --top 3 --count p
+stderr '"error":"conflicting_options"'
+! exec gash llm_tree --name '*.php' p
+stderr '"error":"conflicting_options"'
+! exec gash llm_tree --count --by size p
+stderr '"error":"invalid_by"'
+
+-- p/README.md --
+readme
+-- p/src/a.php --
+<?php // TODO one
+-- p/src/b.js --
+// TODO js
+-- p/src/sub/c.php --
+<?php
+-- p/node_modules/n.js --
+// node module code
+-- ext.want --
+key	count
+php	2
+js	1
+md	1
+-- top.want --
+ext	size	files
+js	31	2
+php	24	2
+md	7	1
+-- text.want --
+p/
+README.md
+[... 5 lines omitted]

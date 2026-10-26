@@ -1,0 +1,46 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_count (new in 3.4, plan F6): several patterns in several files, one
+# pass per file; the lines that hold each pattern (grep -c) or every
+# occurrence; files and patterns in input order; a missing file is an
+# entry with an error; secret files are refused.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: the matrix file x pattern
+exec bash -c 'source "$GASH_SH"; llm_count app.log other.log --pat ERROR --pat WARN --pat id=999999'
+stdout '^\{"app.log":\{"ERROR":2,"WARN":1,"id=999999":1\},"other.log":\{"ERROR":0,"WARN":1,"id=999999":0\}\}$'
+
+# --- directly: occurrences, a regex, a missing file
+exec gash llm_count app.log --pat ERROR --occurrences
+stdout '^\{"app.log":\{"ERROR":3\}\}$'
+exec gash llm_count app.log nope.log --pat '^[A-Z]+ ' --regex
+stdout '^\{"app.log":\{"\^\[A-Z\]\+ ":4\},"nope.log":\{"error":"file_not_found"\}\}$'
+
+# --- TSV rows
+exec gash llm_count app.log --pat ERROR --pat WARN --format tsv
+cmp stdout tsv.want
+
+# --- refusals
+! exec gash llm_count .env --pat K
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+! exec gash llm_count app.log
+stderr '"error":"missing_pattern"'
+
+-- app.log --
+ERROR one ERROR
+WARN two
+INFO id=999999
+ERROR three
+-- other.log --
+WARN only
+-- .env --
+K=v
+-- tsv.want --
+file	pat	count
+app.log	ERROR	2
+app.log	WARN	1

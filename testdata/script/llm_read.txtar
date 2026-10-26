@@ -1,0 +1,61 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_read (new in 3.4, plan F8): line ranges of several files in one call,
+# or the lines around a match (locate and read: the grep -n then sed -n
+# pair in one call), numbered, in "==> FILE:A-B <==" blocks or rows;
+# secret files are refused FATAL as llm_config refuses them, binary files
+# binary_file, before anything is printed.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: around a marker, with context
+exec bash -c 'source "$GASH_SH"; llm_read f.php --around TODO_MARKER -C 1'
+cmp stdout around.want
+
+# --- directly: two ranges of two files
+exec gash llm_read f.php:1-2 g.txt:2-2
+cmp stdout ranges.want
+
+# --- rows, and the tail of a file with the cut marked
+exec gash llm_read g.txt --lines 1:1 --format jsonl
+stdout '^\{"file":"g.txt","line":1,"text":"alpha"\}$'
+exec gash llm_read f.php --tail 1
+stdout '^\[\.\.\. 4 lines omitted\]$'
+stdout '^==> f.php:5-5 <==$'
+
+# --- refusals: nothing on stdout
+! exec gash llm_read g.txt .env
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+! stdout .
+exec bash -c 'printf "a\0b" > bin.dat'
+! exec gash llm_read bin.dat
+stderr '"error":"binary_file"'
+! exec gash llm_read g.txt --lines 3:1
+stderr '"error":"invalid_range"'
+
+-- f.php --
+<?php
+function a() {}
+// TODO_MARKER fix
+function b() {}
+return;
+-- g.txt --
+alpha
+beta
+-- .env --
+K=v
+-- around.want --
+==> f.php:2-4 <==
+2-function a() {}
+3:// TODO_MARKER fix
+4-function b() {}
+-- ranges.want --
+==> f.php:1-2 <==
+1:<?php
+2:function a() {}
+==> g.txt:2-2 <==
+2:beta

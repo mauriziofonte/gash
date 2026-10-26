@@ -6,6 +6,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 )
@@ -52,7 +53,7 @@ var fixActions = []fixAction{
 		name: "restart-service", usage: "restart-service NAME", short: "Restart a Windows service by its service name", min: 1, max: 1,
 		build: func(a []string) (string, string, contract.Envelope, bool) {
 			name := strings.TrimSpace(a[0])
-			if !serviceNameRE.MatchString(name) {
+			if !serviceNameRE().MatchString(name) {
 				return "", "", contract.New("invalid_windows_argument", "not a service name: "+a[0],
 					"use the short service name (letters, digits, dot, dash, underscore): gash win services"), false
 			}
@@ -67,7 +68,7 @@ var fixActions = []fixAction{
 			if net.ParseIP(ip) == nil {
 				return "", "", contract.New("invalid_windows_argument", "not an IP address: "+a[0], "give an IPv4 or IPv6 address"), false
 			}
-			if !hostnameRE.MatchString(host) {
+			if !hostnameRE().MatchString(host) {
 				return "", "", contract.New("invalid_windows_argument", "not a hostname: "+a[1], "give a DNS name such as app.local"), false
 			}
 			return "Add " + ip + " " + host + " to the Windows hosts file",
@@ -79,7 +80,7 @@ var fixActions = []fixAction{
 		name: "hosts-remove", usage: "hosts-remove HOSTNAME", short: "Remove a hostname from the Windows hosts file", min: 1, max: 1,
 		build: func(a []string) (string, string, contract.Envelope, bool) {
 			host := strings.TrimSpace(a[0])
-			if !hostnameRE.MatchString(host) {
+			if !hostnameRE().MatchString(host) {
 				return "", "", contract.New("invalid_windows_argument", "not a hostname: "+a[0], "give a DNS name such as app.local"), false
 			}
 			// Keep every line whose active part (before a '#') does not list
@@ -92,9 +93,13 @@ var fixActions = []fixAction{
 	},
 }
 
+// The patterns compile on first use: the bounded repetitions make large
+// programs, and every gash process would pay for them at start.
 var (
-	serviceNameRE = regexp.MustCompile(`^[A-Za-z0-9._ -]{1,128}$`)
-	hostnameRE    = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$`)
+	serviceNameRE = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`^[A-Za-z0-9._ -]{1,128}$`) })
+	hostnameRE    = sync.OnceValue(func() *regexp.Regexp {
+		return regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$`)
+	})
 )
 
 // previewFix shows the human the action and the exact elevated command.

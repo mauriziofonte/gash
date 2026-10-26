@@ -1,0 +1,118 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_find 3.4 options (plan F2, F4, S1-S4): --relative, --count [--by],
+# --sort, --newer/--since, --tracked, --all, rows for --format and the
+# output budget. Without them the output is the 3.0 output (llm_find.txtar).
+# The fixture's mtimes are set with touch -d, so the order is fixed.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env TZ=UTC
+
+exec touch -d '2026-01-01 12:00:00' p/README.md
+exec touch -d '2026-01-05 12:00:00' p/src/a.php
+exec touch -d '2026-01-09 12:00:00' p/src/sub/c.php
+exec touch -d '2026-01-03 12:00:00' p/src/b.js
+exec touch -d '2026-01-04 12:00:00' p/vendor/v.php
+
+# --- through the sourced shell: paths relative to PATH, -n as before
+exec bash -c 'source "$GASH_SH"; llm_find "*" p --relative'
+cmp stdout rel.want
+exec bash -c 'source "$GASH_SH"; llm_find "*.php" p/src --relative -n 1'
+stdout '^a\.php$'
+! stdout 'sub'
+
+# --- the default stays absolute; --absolute is the default
+exec gash llm_find '*.php' p/src --absolute
+stdout '^/.*/p/src/a\.php$'
+
+# --- --count: the paths the listing prints without -n
+exec gash llm_find '*' p --count
+stdout '^\{"count":4\}$'
+exec gash llm_find '*' p --by ext
+stdout '^\{"count":4,"by":\{"js":1,"md":1,"php":2\}\}$'
+exec gash llm_find '*' p --by dir --all
+stdout '^\{"count":5,"by":\{".":1,"src":3,"vendor":1\}\}$'
+exec gash llm_find '*' p --by type
+stdout '^\{"count":7,"by":\{"d":3,"f":4\}\}$'
+
+# --- --sort: newest first, largest first; -n cuts after the sort
+exec gash llm_find '*' p --sort mtime --relative -n 2
+cmp stdout mtime.want
+exec gash llm_find '*' p --sort size --relative -n 1
+stdout '^src/sub/c\.php$'
+
+# --- --newer REF and --since T
+exec gash llm_find '*' p --newer p/src/b.js --relative
+cmp stdout newer.want
+exec gash llm_find '*' p --since 2026-01-05T12:00 --relative
+cmp stdout newer.want
+exec gash llm_find '*' p --since 1h --count
+stdout '^\{"count":0\}$'
+
+# --- rows: TSV with a header; -n cuts and says so on stderr
+exec gash llm_find '*' p --format tsv --relative --sort name -n 2
+cmp stdout rows.want
+stderr '^\{"truncated":2\}$'
+
+# --- the text budget: the cut is marked inline
+exec gash llm_find '*' p --relative --head 1 --tail 1
+cmp stdout budget.want
+
+# --- --tracked: only what git ls-files lists
+exec git init -q p
+exec git -C p add README.md src/sub/c.php
+exec gash llm_find '*' p --tracked --relative
+cmp stdout tracked.want
+! exec gash llm_find '*' fx --tracked
+stderr '"error":"not_a_git_repo"'
+stderr '"action":"CONTINUE"'
+
+# --- errors
+! exec gash llm_find '*' p --sort date
+stderr '"error":"invalid_sort"'
+! exec gash llm_find '*' p --since yesterday
+stderr '"error":"invalid_since"'
+! exec gash llm_find '*' p --by size
+stderr '"error":"invalid_by"'
+! exec gash llm_find '*' p --newer p/missing
+stderr '"error":"path_not_found"'
+
+-- p/README.md --
+readme
+-- p/src/a.php --
+<?php // TODO one
+-- p/src/b.js --
+// TODO js
+-- p/src/sub/c.php --
+<?php
+// TODO two
+// TODO three TODO
+-- p/vendor/v.php --
+<?php // TODO vendor
+-- fx/x.txt --
+x
+-- rel.want --
+README.md
+src/a.php
+src/b.js
+src/sub/c.php
+-- mtime.want --
+src/sub/c.php
+src/a.php
+-- newer.want --
+src/a.php
+src/sub/c.php
+-- rows.want --
+p	size	mtime
+README.md	7	2026-01-01T12:00:00Z
+src/a.php	18	2026-01-05T12:00:00Z
+-- budget.want --
+README.md
+[... 2 lines omitted]
+src/sub/c.php
+-- tracked.want --
+README.md
+src/sub/c.php

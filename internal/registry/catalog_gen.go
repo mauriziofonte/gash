@@ -2299,10 +2299,12 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_config FILE [--max-bytes N] [--host ALIAS]\n" +
+				"  llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
+				"  --path P               Parse the file and print the value at P as compact\n" +
+				"                         JSON: a.b[0].c, tool.poetry[\"name\"], . for all\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
@@ -2310,13 +2312,25 @@ var baseFunctions = []Function{
 				"  llm_config package.json\n" +
 				"  llm_config docker-compose.yml\n" +
 				"  llm_config big.json --max-bytes 5000000\n" +
+				"  llm_config pyproject.toml --path project.dependencies\n" +
+				"  llm_config setup.cfg --path metadata.version\n" +
+				"  llm_config k8s.yaml --path '[1].spec.replicas'\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Reads any file that is not secret: .env files, keys and the other\n" +
 				"  secret files are refused.\n" +
 				"  YAML comes out as JSON, converted by Gash itself (no yq needed), or\n" +
 				"  as the raw text when it does not parse. Files over --max-bytes\n" +
-				"  (default 1 MiB) fail with file_too_large.",
+				"  (default 1 MiB) fail with file_too_large.\n" +
+				"  --path (3.4) replaces python3 -c \"import tomllib/configparser/yaml;\n" +
+				"  ...\": the extension names the format (.yaml/.yml, .toml, .ini/.cfg,\n" +
+				"  .json; any other: the first of JSON, TOML, INI and YAML that parses).\n" +
+				"  TOML keeps its key order, dates as RFC 3339 text; INI is read as\n" +
+				"  Python's configparser does ({section: {key: value}}, keys lowercased,\n" +
+				"  DEFAULT inherited, %(key)s expanded); a YAML file with several\n" +
+				"  documents is the array of them. A file that does not parse is\n" +
+				"  invalid_config, a path that does not exist json_path_not_found with\n" +
+				"  the nearest existing prefix (both RETRY).",
 		},
 		Fallback:  &Usage{Program: "llm_config", Usage: "llm_config <file> [--max-bytes N]", Description: "Read config file (JSON/YAML, NOT .env); files over 1 MiB need --max-bytes"},
 		ShellVars: []string{"HOME"},
@@ -2340,16 +2354,23 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_db_explain \"QUERY\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]\n" +
+				"                 [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
 				"  --analyze              Run the query to measure it (still read-only)\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_explain \"SELECT * FROM users WHERE email LIKE '%@example.com'\" -c default\n" +
-				"  llm_db_explain \"SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id\" -c legacy --analyze",
+				"  llm_db_explain \"SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id\" -c legacy --analyze\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --format jsonl, tsv or table print the plan rows (a JSON plan as\n" +
+				"  compact JSON in its cell) and the metadata as one JSON line on stderr.",
 		},
 		Fallback:  &Usage{Program: "llm_db_explain", Usage: "llm_db_explain <QUERY> [-c CONNECTION] [-f SQLITE_FILE] [--analyze]", Description: "Analyze query execution plan (EXPLAIN). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2374,7 +2395,8 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_db_tables llm_db_schema llm_db_sample llm_db_explain",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_query \"SQL\" [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]\n" +
+				"  llm_db_query \"SQL\" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]\n" +
+				"               [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Query using the default connection\n" +
@@ -2386,12 +2408,18 @@ var baseFunctions = []Function{
 				"  # Query a SQLite database (no connection config needed)\n" +
 				"  llm_db_query \"SELECT * FROM users\" -f ./data/app.db -n 20\n" +
 				"\n" +
+				"  # Rows as TSV, one value alone\n" +
+				"  llm_db_query \"SELECT id, email FROM users\" -c default --format tsv\n" +
+				"  llm_db_query \"SELECT count(*) FROM orders\" -c default --scalar\n" +
+				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's;\n" +
 				"                         letters, digits, _ $ . - only)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
 				"  -n, --limit N          Row cap (default 100; also -r, --rows)\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"NOTES\n" +
 				"  Read-only, enforced twice: one statement starting with SELECT, WITH,\n" +
@@ -2401,7 +2429,14 @@ var baseFunctions = []Function{
 				"  PostgreSQL default_transaction_read_only with a GASH_DB_TIMEOUT\n" +
 				"  statement timeout). Output: {data, rows, query_time}. -h is help: the\n" +
 				"  host comes from the connection URL. Error details are the database\n" +
-				"  driver's message.",
+				"  driver's message.\n" +
+				"  --format jsonl, tsv or table print the rows themselves (replaces\n" +
+				"  llm_db_query ... | jq -c '.data[]' and python3 reshaping): SQL NULL is\n" +
+				"  null, \\N in TSV and an empty table cell on every engine; the metadata\n" +
+				"  {rows, query_time, truncated} is one JSON line on stderr, with\n" +
+				"  \"truncated\": true when -n cut rows. --scalar prints the value of a\n" +
+				"  1x1 result as a TSV cell (not_a_scalar, RETRY, with the actual shape\n" +
+				"  otherwise). --format json is the envelope, unchanged.",
 		},
 		Fallback:  &Usage{Program: "llm_db_query", Usage: "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]", Description: "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2426,7 +2461,8 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_sample TABLE [-c CONNECTION] [-f SQLITE_FILE] [-n N]\n" +
+				"  llm_db_sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]\n" +
+				"                [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_sample users -c default\n" +
@@ -2437,7 +2473,9 @@ var baseFunctions = []Function{
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
-				"  -n, --limit N          Rows to return (default 5)",
+				"  -n, --limit N          Rows to return (default 5)\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result",
 		},
 		Fallback:  &Usage{Program: "llm_db_sample", Usage: "llm_db_sample <table> [-c CONNECTION] [-f SQLITE_FILE] [-n N]", Description: "Get sample rows from table (default 5 rows). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2463,16 +2501,26 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"  llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"                [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
+				"  --all                  Every table in one call, each row led by \"table\"\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_schema users -c default\n" +
 				"  llm_db_schema orders -c legacy\n" +
-				"  llm_db_schema sessions -f ./app.db",
+				"  llm_db_schema sessions -f ./app.db\n" +
+				"  llm_db_schema --all -c default --format tsv\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --all replaces one llm_db_schema call per table: the rows of every\n" +
+				"  table llm_db_tables lists, sorted by table and column position.",
 		},
 		Fallback:  &Usage{Program: "llm_db_schema", Usage: "llm_db_schema <table> [-c CONNECTION] [-f SQLITE_FILE]", Description: "Show table schema (JSON). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2497,17 +2545,27 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_db_query llm_db_schema",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB]\n" +
+				"  llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]\n" +
+				"                [--format json|jsonl|tsv|table] [--scalar]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -c, --connection NAME  Connection from ~/.gash_env (default: default)\n" +
 				"  -d, --database NAME    Database name (overrides the connection's)\n" +
 				"  -f, --file PATH        SQLite database file\n" +
+				"  --counts               [{name, rows}]: the row count of each table\n" +
+				"  --format F             json (the envelope, default), jsonl, tsv or table\n" +
+				"  --scalar               Print the one value of a 1x1 result\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_db_tables -c default\n" +
 				"  llm_db_tables -c postgres\n" +
-				"  llm_db_tables -f ./app.db",
+				"  llm_db_tables -f ./app.db\n" +
+				"  llm_db_tables -c default --counts --format tsv\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --counts: rows is exact on SQLite (count(*)), the engine's estimate on\n" +
+				"  MySQL/MariaDB (information_schema) and PostgreSQL (pg_class), null\n" +
+				"  where the engine has none (a view, a table not analyzed yet).",
 		},
 		Fallback:  &Usage{Program: "llm_db_tables", Usage: "llm_db_tables [-c CONNECTION] [-f SQLITE_FILE]", Description: "List database tables (JSON array). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2684,6 +2742,10 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]\n" +
+				"           [--sort name|mtime|size] [--newer REF] [--since T] [--tracked]\n" +
+				"           [--all] [--count [--by ext|dir|type]] [--relative|--absolute]\n" +
+				"           [--format json|jsonl|tsv|table] [--width N] [--max-lines N]\n" +
+				"           [--head N] [--tail N]\n" +
 				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
@@ -2691,6 +2753,27 @@ var baseFunctions = []Function{
 				"  --contains REGEX       Keep the files whose content matches REGEX\n" +
 				"                         (ripgrep's regex syntax); files only\n" +
 				"  -n, --limit N          Paths to print (default 100)\n" +
+				"  --sort name|mtime|size Path order (byte order), newest first, or\n" +
+				"                         largest first\n" +
+				"  --newer REF            Modified after REF (a file or directory)\n" +
+				"  --since T              Modified at T or later: an age (30s, 15m, 2h,\n" +
+				"                         3d, 1w), a date (2026-10-25), a local date and\n" +
+				"                         time (2026-10-25T14:30) or @EPOCH\n" +
+				"  --tracked              Only what git tracks (git ls-files)\n" +
+				"  --all                  Do not skip node_modules, vendor, .git,\n" +
+				"                         __pycache__\n" +
+				"  --count                Print {\"count\":N} instead of the paths\n" +
+				"  --by ext|dir|type      Counts per extension, per first directory below\n" +
+				"                         PATH, or per type f, d, l (every type unless\n" +
+				"                         --type); implies --count\n" +
+				"  --relative             Paths relative to PATH (default: absolute)\n" +
+				"  --absolute             Absolute paths (the default)\n" +
+				"  --format FORMAT        Rows {\"p\",\"size\",\"mtime\"}: json, jsonl, tsv\n" +
+				"                         or table\n" +
+				"  --width N              Cut each line (each value in rows) at N columns\n" +
+				"  --max-lines N          Keep the first N paths (also --head N), or the\n" +
+				"                         last N with --tail N; they replace -n and mark\n" +
+				"                         what they cut\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
@@ -2704,12 +2787,25 @@ var baseFunctions = []Function{
 				"  # Find directories only\n" +
 				"  llm_find \"src*\" . --type d\n" +
 				"\n" +
+				"  # Count PHP files per first directory (find | wc -l)\n" +
+				"  llm_find \"*.php\" src --count --by dir\n" +
+				"\n" +
+				"  # The 5 newest logs, relative paths (find -newer | sort | head)\n" +
+				"  llm_find \"*.log\" . --sort mtime -n 5 --relative\n" +
+				"\n" +
 				"NOTES\n" +
-				"  PATTERN is a file name glob (find -name). With --contains only the\n" +
-				"  files it matches are searched, hidden and gitignored ones included,\n" +
-				"  with or without ripgrep. Skips node_modules, vendor, .git and\n" +
-				"  __pycache__; --contains also skips secret files. Default limit 100.\n" +
-				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
+				"  Replaces find | sort | head, find | wc -l, find -newer and\n" +
+				"  git ls-files | grep. PATTERN is a file name glob (find -name). With\n" +
+				"  --contains only the files it matches are searched, hidden and\n" +
+				"  gitignored ones included, with or without ripgrep. Skips\n" +
+				"  node_modules, vendor, .git and __pycache__; --contains also skips\n" +
+				"  secret files. Default limit 100.\n" +
+				"  --count, --sort, --format and --head/--tail see every match first:\n" +
+				"  a cut JSON array or TSV gets {\"truncated\":K} on stderr, a cut text\n" +
+				"  output a [... K lines omitted] line. --count counts the paths the\n" +
+				"  listing prints without -n. mtime is RFC 3339 in UTC.\n" +
+				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern;\n" +
+				"  --tracked outside a repository is not_a_git_repo (CONTINUE).",
 		},
 		Fallback:  &Usage{Program: "llm_find", Usage: "llm_find <pattern> [PATH] [--type f|d] [--contains REGEX]", Description: "Find files by pattern (ignores node_modules, vendor, .git)"},
 		ShellVars: []string{"HOME"},
@@ -2729,17 +2825,49 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "Git diff with statistics",
 			Module:  "llm",
-			SeeAlso: "llm_git_status llm_git_log",
+			SeeAlso: "llm_git_overview llm_git_status llm_git_log",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_diff [--staged] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] [--max-lines N] [--width N] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] (--files | --numstat) [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] --summary [--format F] [PATH]\n" +
+				"  llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --staged               Staged changes (also --cached)\n" +
+				"  REV..REV               Compare two commits (A..B, A...B for the merge base)\n" +
+				"  --files                One row per file: {\"p\",\"add\",\"del\",\"status\"}\n" +
+				"  --numstat              One row per file: {\"p\",\"add\",\"del\"}\n" +
+				"  --summary              The totals only: {\"files\",\"insertions\",\"deletions\"}\n" +
+				"  --patch                The patch as text, capped per file (default 200 lines)\n" +
+				"  --format F             json (default), jsonl, tsv or table (--files, --numstat,\n" +
+				"                         --summary)\n" +
+				"  --max-lines N          Lines (or rows) to keep: of the --stat text, of the rows,\n" +
+				"                         of each file with --patch; also --head N and --tail N\n" +
+				"  --width N              Cut each line (JSON: each path) at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_diff\n" +
-				"  llm_git_diff --staged",
+				"  llm_git_diff --staged\n" +
+				"\n" +
+				"  # Totals of the work tree, then the changed files of the last three commits\n" +
+				"  llm_git_diff --summary\n" +
+				"  llm_git_diff HEAD~3..HEAD --files --format tsv\n" +
+				"\n" +
+				"  # One file's patch, 80 lines at most\n" +
+				"  llm_git_diff --patch --max-lines 80 src/app.js\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without an option: git diff --stat text, as git prints it. --files,\n" +
+				"  --numstat and --summary replace git diff --stat | tail -1, --name-only,\n" +
+				"  --name-status and --numstat; --patch replaces git diff -- file | head -80.\n" +
+				"  Paths are relative to the repository root; add and del are null for a\n" +
+				"  binary file. With a mode option a FILE as PATH limits the diff to it.\n" +
+				"  --patch keeps each file's header and puts [... K lines omitted] where it\n" +
+				"  cuts; a secret file's patch is replaced by a marker line (a secret FILE\n" +
+				"  as PATH is secret_file_blocked). An unknown revision is unknown_revision\n" +
+				"  (RETRY). Rows that the budget cuts are counted in the stderr metadata line\n" +
+				"  ({\"truncated\":K}).",
 		},
 		Fallback:  &Usage{Program: "llm_git_diff", Usage: "llm_git_diff [--staged] [PATH]", Description: "Git diff with stats"},
 		ShellVars: []string{"HOME"},
@@ -2759,17 +2887,43 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "Recent commits (JSON)",
 			Module:  "llm",
-			SeeAlso: "llm_git_status llm_git_diff",
+			SeeAlso: "llm_git_overview llm_git_status llm_git_diff",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_log [-n N] [PATH]\n" +
+				"  llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...\n" +
+				"              [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Commits to list (default 10)\n" +
+				"  --since D, --until D   Commits after / before a date (git's dates: 2026-01-31,\n" +
+				"                         \"2 weeks ago\", yesterday)\n" +
+				"  --grep RE              Commits whose message matches RE (extended regex)\n" +
+				"  --author RE            Commits whose author matches RE (extended regex)\n" +
+				"  --path P               Commits that touch P (repeat for more; git pathspecs)\n" +
+				"  --fields LIST          Comma list of hash, subject, date, author, files\n" +
+				"                         (default hash,subject,author,date); files is the\n" +
+				"                         array of the paths each commit changed\n" +
+				"  --format F             json (default), jsonl, tsv or table\n" +
+				"  --max-lines N          Rows to keep (also --head N, --tail N); the cut is\n" +
+				"                         counted on stderr\n" +
+				"  --width N              Cut each string value at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_log\n" +
-				"  llm_git_log --limit 20",
+				"  llm_git_log --limit 20\n" +
+				"\n" +
+				"  # The last three subjects, compact\n" +
+				"  llm_git_log -n 3 --fields hash,subject\n" +
+				"\n" +
+				"  # Fixes of the last week that touched src/, with their files\n" +
+				"  llm_git_log --since \"1 week ago\" --grep '^fix' --path src --fields hash,subject,files\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Replaces git log --oneline -N [-- path] and git log -1 --format='%h %s'.\n" +
+				"  Without a 3.4 option the output is the 2.x array of {hash, subject,\n" +
+				"  author, date}; any 3.4 option writes the rows through the shared output\n" +
+				"  layer (same keys, --fields to choose). A bad --grep or --author is\n" +
+				"  invalid_regex (RETRY); a repository with no commit gives [].",
 		},
 		Fallback:  &Usage{Program: "llm_git_log", Usage: "llm_git_log [--limit N] [PATH]", Description: "Recent git log (JSON)"},
 		ShellVars: []string{"HOME"},
@@ -2789,10 +2943,31 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "Compact git status (JSON)",
 			Module:  "llm",
-			SeeAlso: "llm_git_diff llm_git_log",
+			SeeAlso: "llm_git_overview llm_git_diff llm_git_log",
 			Body: "" +
 				"USAGE\n" +
 				"  llm_git_status [PATH]\n" +
+				"  llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]\n" +
+				"  llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]\n" +
+				"  llm_git_status [PATH] --fetch [--timeout S]\n" +
+				"  llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--max-lines N] [--width N]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --summary              The number of paths in each state instead of the lists\n" +
+				"  --files                One row per changed path: {\"p\",\"xy\"} (the two letters\n" +
+				"                         of git status --short: index, work tree; ?? untracked)\n" +
+				"  --fetch                Fetch the upstream branch first (no tags, no prune), then\n" +
+				"                         print the llm_git_overview object with \"fetched\"\n" +
+				"  --repos PATH...        The summary of each repository, in parallel: one row per\n" +
+				"                         PATH, in the order given\n" +
+				"  --timeout S            Bound the fetch (default 20s), with --repos each\n" +
+				"                         repository\n" +
+				"  -j N                   Repositories at a time (default: the CPU count, 8 with\n" +
+				"                         --fetch)\n" +
+				"  --format F             json (default), jsonl, tsv or table (--summary, --files,\n" +
+				"                         --repos)\n" +
+				"  --max-lines N          Rows to keep (also --head N, --tail N)\n" +
+				"  --width N              Cut each string value at N columns\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_status\n" +
@@ -2804,7 +2979,28 @@ var baseFunctions = []Function{
 				"  #   \"modified\": [\"README.md\"],\n" +
 				"  #   \"untracked\": [],\n" +
 				"  #   \"conflicted\": []\n" +
-				"  # }",
+				"  # }\n" +
+				"\n" +
+				"  # Counts only; the changed paths as rows\n" +
+				"  llm_git_status --summary\n" +
+				"  llm_git_status --files --format tsv\n" +
+				"\n" +
+				"  # Fresh ahead/behind, and three repositories at once\n" +
+				"  llm_git_status --fetch\n" +
+				"  llm_git_status --repos ~/src/api ~/src/web ~/src/docs --format tsv\n" +
+				"\n" +
+				"NOTES\n" +
+				"  Without an option: the pretty 2.x object above. --summary replaces git\n" +
+				"  status --short | wc -l, --files git status --short, --repos a loop of\n" +
+				"  git -C R status, --fetch git fetch && git status -sb. --summary prints\n" +
+				"  {\"branch\",\"upstream\",\"ahead\",\"behind\",\"staged\",\"modified\",\n" +
+				"  \"untracked\",\"conflicted\"}; --repos rows add \"repo\" first and \"error\"\n" +
+				"  last (null, or the code of a PATH that is refused, missing or not a\n" +
+				"  repository). --fetch never prompts: a failure (network, credentials,\n" +
+				"  timeout) is \"fetched\":false with \"error\", and the local state is still\n" +
+				"  printed; a repository whose own configuration names a program for the\n" +
+				"  fetch (core.sshCommand, a credential helper, uploadpack, url.insteadOf,\n" +
+				"  protocol.*) is not fetched. Paths are relative to the repository root.",
 		},
 		Fallback:  &Usage{Program: "llm_git_status", Usage: "llm_git_status [PATH]", Description: "Compact git status (JSON)"},
 		ShellVars: []string{"HOME"},
@@ -2827,12 +3023,35 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]\n" +
+				"           [--exclude GLOB]... [--only-matching] [--distinct]\n" +
+				"           [--files-only] [--count [--by file|ext|dir]]\n" +
+				"           [--relative|--absolute] [--format json|jsonl|tsv|table]\n" +
+				"           [--width N] [--max-lines N] [--head N] [--tail N]\n" +
 				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
 				"  -C, --context N        Lines of context around each match (default 0)\n" +
 				"  -n, --limit N          Lines to print (default 100)\n" +
+				"  --exclude GLOB         Skip the files and directories whose name or\n" +
+				"                         path below PATH matches GLOB (repeatable)\n" +
+				"  -o, --only-matching    Print each match instead of its line\n" +
+				"  --distinct             Each distinct match with its count, most\n" +
+				"                         frequent first: [{\"match\",\"count\"}]\n" +
+				"                         (implies --only-matching)\n" +
+				"  -l, --files-only       Print the matching files\n" +
+				"  -c, --count            Print {\"count\":N}: matching lines (matches\n" +
+				"                         with -o, files with -l)\n" +
+				"  --by file|ext|dir      Counts per file, extension or first directory\n" +
+				"                         below PATH; implies --count\n" +
+				"  --relative             Paths relative to PATH (default: absolute)\n" +
+				"  --absolute             Absolute paths (the default)\n" +
+				"  --format FORMAT        Rows {\"file\",\"line\",\"text\"} ({\"file\"} with\n" +
+				"                         -l): json, jsonl, tsv or table\n" +
+				"  --width N              Cut each line (each value in rows) at N columns\n" +
+				"  --max-lines N          Keep the first N lines (also --head N), or the\n" +
+				"                         last N with --tail N; they replace -n and mark\n" +
+				"                         what they cut\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
@@ -2846,7 +3065,15 @@ var baseFunctions = []Function{
 				"  # With context lines\n" +
 				"  llm_grep \"class.*Controller\" . --ext php --context 3\n" +
 				"\n" +
+				"  # Most frequent matches (grep -o | sort | uniq -c | sort -rn)\n" +
+				"  llm_grep \"Log::[a-z]+\" src --distinct\n" +
+				"\n" +
+				"  # Without tests, relative paths\n" +
+				"  llm_grep TODO . --exclude tests --relative -n 20\n" +
+				"\n" +
 				"NOTES\n" +
+				"  Replaces grep -rn | grep -v | head, grep -o | sort | uniq -c and\n" +
+				"  grep -rl / grep -c.\n" +
 				"  One built-in engine, the same with or without ripgrep installed:\n" +
 				"  ripgrep's regex syntax; hidden files, .gitignore/.ignore/.rgignore\n" +
 				"  matches, binary files, node_modules, vendor and .git are skipped; files\n" +
@@ -2854,6 +3081,10 @@ var baseFunctions = []Function{
 				"  .env.example searched. Default limit 100.\n" +
 				"  Output: file:line:content with absolute paths (a FILE PATH gives\n" +
 				"  line:content); context lines use -, groups are separated by --.\n" +
+				"  --count, --distinct, --format and --head/--tail see every match\n" +
+				"  first: a cut JSON array or TSV gets {\"truncated\":K} on stderr, a cut\n" +
+				"  text output a [... K lines omitted] line. --context goes with the\n" +
+				"  text output only (conflicting_options otherwise).\n" +
 				"  A missing PATH is path_not_found, an empty PATTERN missing_pattern.",
 		},
 		Fallback:  &Usage{Program: "llm_grep", Usage: "llm_grep <pattern> [PATH] [--ext EXT1,EXT2] [--context N]", Description: "Search code with file:line:content output"},
@@ -2874,19 +3105,29 @@ var baseFunctions = []Function{
 		Help: Help{
 			Short:   "List ports in use (JSON)",
 			Module:  "llm",
-			SeeAlso: "llm_procs",
+			SeeAlso: "llm_procs llm_tcp",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_ports [--listen]\n" +
+				"  llm_ports [--listen] [--port N]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -l, --listen           Listening sockets only\n" +
+				"  --port N               Sockets on local port N (0 to 65535), each with the\n" +
+				"                         processes that hold it\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_ports\n" +
-				"  llm_ports --listen",
+				"  llm_ports --listen\n" +
+				"\n" +
+				"  # Who listens on 8080\n" +
+				"  llm_ports --listen --port 8080\n" +
+				"\n" +
+				"NOTES\n" +
+				"  --port replaces ss -tlnp | grep :8080: it adds \"procs\":[{\"pid\",\"name\"}]\n" +
+				"  to each record (from ss -p or netstat -p; empty for another user's process\n" +
+				"  unless you are root).",
 		},
-		Fallback: &Usage{Program: "llm_ports", Usage: "llm_ports [--listen]", Description: "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only"},
+		Fallback: &Usage{Program: "llm_ports", Usage: "llm_ports [--listen] [--port N]", Description: "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only; --port N filters by local port and adds the owning processes"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
 	},
 	{
@@ -2901,25 +3142,46 @@ var baseFunctions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "List processes by name or port (JSON)",
+			Short:   "List processes by name, port or PID, alive or not, as a tree (JSON)",
 			Module:  "llm",
 			SeeAlso: "llm_ports",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_procs [--name NAME | --port PORT]\n" +
+				"  llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]\n" +
+				"            [--format F] [--width N] [--max-lines N] [--head N] [--tail N]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --name NAME            Processes whose command line contains NAME\n" +
 				"  --port PORT            Processes with a socket on PORT\n" +
+				"  --pid PID...           These processes, alive or not (one or more PIDs)\n" +
+				"  --alive                Live processes only (a zombie is not alive)\n" +
+				"  --tree                 Each process and everything below it, depth first,\n" +
+				"                         with ppid and depth\n" +
+				"  --format F             json (default), jsonl, tsv or table\n" +
+				"  --width N              Cut each value at N columns\n" +
+				"  --max-lines N, --head N, --tail N\n" +
+				"                         Keep the first/last N rows\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
 				"  llm_procs --name nginx\n" +
 				"  llm_procs --port 3306\n" +
 				"\n" +
+				"  # Instead of: kill -0 $PID && echo alive\n" +
+				"  llm_procs --pid \"$pid\"\n" +
+				"\n" +
+				"  # Instead of: ps -ef | grep vite | grep -v grep\n" +
+				"  llm_procs --name vite --alive --tree\n" +
+				"\n" +
 				"NOTES\n" +
 				"  --port takes 0 to 65535 (invalid_port above) and wins over --name,\n" +
-				"  which is then ignored.",
+				"  which is then ignored; --pid wins over both. With --pid, --alive or\n" +
+				"  --tree the rows are [{\"pid\",\"name\",\"cmd\",\"alive\"}] (--tree adds\n" +
+				"  \"ppid\" and \"depth\"): --pid rows come in the order given, a gone PID\n" +
+				"  as alive:false; other rows by PID, never the caller's own shell and its\n" +
+				"  parents; NAME is then a regular expression (RE2); cmd is cut at 200\n" +
+				"  columns unless --width is given; without a filter the first 100 rows.\n" +
+				"  Read-only: llm_procs signals nothing (agent_kill does).",
 		},
 		Fallback: &Usage{Program: "llm_procs", Usage: "llm_procs [--name NAME] [--port PORT]", Description: "List processes (JSON)"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -2967,13 +3229,40 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_tree [--text] [--depth N] [--stats] [PATH] [--host ALIAS]\n" +
+				"  llm_tree [--text] [--depth N] [--stats] [--all] [--relative|--absolute]\n" +
+				"           [--width N] [--max-lines N] [--head N] [--tail N] [PATH]\n" +
+				"           [--host ALIAS]\n" +
+				"  llm_tree --count [--by ext|dir|type] [--type f|d] [--name GLOB]\n" +
+				"           [--newer REF] [--since T] [--depth N] [--all]\n" +
+				"           [--format json|jsonl|tsv|table] [PATH]\n" +
+				"  llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]\n" +
+				"           [--newer REF] [--since T] [--format json|jsonl|tsv|table] [PATH]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --text                 Indented text list, 200 lines max (default depth 3)\n" +
 				"  --depth N              Levels below PATH, 1 or more (default 1; also\n" +
-				"                         --max-depth)\n" +
+				"                         --max-depth); with --count, no limit unless given\n" +
 				"  --stats                Add sizes and child counts to the JSON tree\n" +
+				"  --all                  Do not skip node_modules, vendor, .git,\n" +
+				"                         __pycache__, .cache\n" +
+				"  --relative             The root's path as \".\" (--top: relative is the\n" +
+				"                         default)\n" +
+				"  --absolute             Absolute paths (--top rows too)\n" +
+				"  --count                Print {\"count\":N}: the entries below PATH\n" +
+				"  --by ext|dir|type      --count per extension, first directory below\n" +
+				"                         PATH, or type f, d, l (implies --count); --top\n" +
+				"                         per directory (default) or extension\n" +
+				"  --type f|d             --count files or directories only\n" +
+				"  --name GLOB            --count/--top: names matching GLOB only\n" +
+				"  --newer REF            --count/--top: modified after REF only\n" +
+				"  --since T              --count/--top: modified at T or later (30s, 2h,\n" +
+				"                         3d, 1w, 2026-10-25, 2026-10-25T14:30, @EPOCH)\n" +
+				"  --top N                Disk usage: {\"total\",\"files\",\"top\":[{\"p\",\n" +
+				"                         \"size\",\"files\"}],\"skipped\"}, largest first\n" +
+				"  --format FORMAT        --count/--top as json, jsonl, tsv or table rows\n" +
+				"  --width N              Cut each line (each value) at N columns\n" +
+				"  --max-lines N          --text/--top: keep the first N lines or rows\n" +
+				"                         (also --head N), or the last N with --tail N\n" +
 				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
 				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
@@ -2987,11 +3276,23 @@ var baseFunctions = []Function{
 				"  # Limited depth\n" +
 				"  llm_tree --depth 2 /etc/nginx\n" +
 				"\n" +
+				"  # Files per extension (find -type f | wc -l)\n" +
+				"  llm_tree --count --type f --by ext src\n" +
+				"\n" +
+				"  # The 10 largest directories (du -sh */ | sort -rh | head)\n" +
+				"  llm_tree --top 10 .\n" +
+				"\n" +
 				"NOTES\n" +
+				"  Replaces du -sh */ | sort -rh | head and find | wc -l.\n" +
 				"  Ignores noise directories below PATH: node_modules, vendor, .git,\n" +
 				"  __pycache__, .cache. Entries whose name holds a tab or\n" +
 				"  a newline are left out. --text lists symlinks as name -> target, in\n" +
-				"  byte order whatever the locale.",
+				"  byte order whatever the locale.\n" +
+				"  --top sums the apparent size (st_size) of every file below PATH,\n" +
+				"  noise directories included (disk usage hides nothing); --by dir\n" +
+				"  lists each directory down to --depth (default 1), as du -d does.\n" +
+				"  Directories that cannot be read count in skipped; a cut list gets\n" +
+				"  \"truncated\":K.",
 		},
 		Fallback:  &Usage{Program: "llm_tree", Usage: "llm_tree [--text] [--depth N] [--stats] [PATH]", Description: "Compact directory tree (JSON default, --text for indented, --stats for size/count)"},
 		ShellVars: []string{"HOME"},

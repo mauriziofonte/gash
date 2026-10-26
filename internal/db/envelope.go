@@ -80,6 +80,9 @@ func (m *Module) envelope(c *invoke.Call, slow func() output, impl func() output
 		// exit 5 (3.0: LEDGER DB-14 fixed).
 		o = planArray(o)
 	}
+	if o.mode.active() {
+		return m.writeRows(c, o, qt, xpl)
+	}
 	for _, v := range o.vals {
 		var obj object
 		obj.set("data", v)

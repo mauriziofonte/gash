@@ -201,27 +201,107 @@ var codeTable = []Code{
 	{"sensitive_path", Stop, "agent", Origin3x},
 
 	// New in 3.4: agent toolkit, files and search (llm_find, llm_grep,
-	// llm_tree extensions).
+	// llm_tree extensions). conflicting_options (above) is shared with
+	// hte.
+	{"invalid_sort", Retry, "llm", Origin3x},
+	{"invalid_by", Retry, "llm", Origin3x},
+	{"invalid_since", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, text reads (llm_stat, llm_count,
 	// llm_assert, llm_read, llm_log, llm_hash, llm_textstats,
 	// llm_textcheck).
+	{"invalid_range", Retry, "llm", Origin3x},
+	{"invalid_assertion", Retry, "llm", Origin3x},
+	{"invalid_algo", Retry, "llm", Origin3x},
+	{"invalid_short", Retry, "llm", Origin3x},
+	{"invalid_level", Retry, "llm", Origin3x},
+	{"invalid_rule", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, data (llm_db_* formats, llm_json,
 	// llm_csv, llm_config formats, llm_dotenv, llm_date).
+	{"not_a_scalar", Retry, "llm", Origin3x},
+	{"invalid_json", Retry, "llm", Origin3x},
+	{"invalid_json_path", Retry, "llm", Origin3x},
+	{"json_path_not_found", Retry, "llm", Origin3x},
+	{"not_an_object", Retry, "llm", Origin3x},
+	{"invalid_delimiter", Retry, "llm", Origin3x},
+	{"invalid_where", Retry, "llm", Origin3x},
+	{"unknown_column", Retry, "llm", Origin3x},
+	{"invalid_config", Retry, "llm", Origin3x},
+	{"invalid_env_name", Retry, "llm", Origin3x},
+	{"invalid_date", Retry, "llm", Origin3x},
+	{"invalid_timezone", Retry, "llm", Origin3x},
+	{"invalid_date_format", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, git (llm_git_* extensions,
-	// llm_git_overview, llm_git_show, agent_git_commit).
+	// llm_git_overview, llm_git_show, agent_git_commit). agent_git_commit
+	// also returns missing_target and invalid_target of the network block.
+	{"invalid_log", Retry, "git", Origin3x},
+	{"invalid_files", Retry, "git", Origin3x},
+	{"invalid_fields", Retry, "git", Origin3x},
+	{"unknown_revision", Retry, "git", Origin3x},
+	{"git_error", Stop, "git", Origin3x},
+	{"missing_message", Retry, "git", Origin3x},
+	{"invalid_author", Retry, "git", Origin3x},
+	{"nothing_to_commit", Retry, "git", Origin3x},
+	{"git_add_failed", Retry, "git", Origin3x},
+	{"commit_failed", Retry, "git", Origin3x},
+	{"no_upstream", Retry, "git", Origin3x},
+	{"unknown_remote", Retry, "git", Origin3x},
+	{"push_rejected", Retry, "git", Origin3x},
+	{"detached_head", Stop, "git", Origin3x},
+	{"merge_conflict", Stop, "git", Origin3x},
+	{"push_failed", Stop, "git", Origin3x},
 
 	// New in 3.4: agent toolkit, network (llm_http, llm_dns, llm_tls,
-	// llm_tcp, llm_ports --port).
+	// llm_tcp, llm_ports --port). http_method_blocked is FATAL: a method
+	// that can change server state is a write, and llm_* never writes;
+	// auth_env_unset is STOP (a human exports the credential).
+	{"missing_target", Retry, "network", Origin3x},
+	{"invalid_target", Retry, "network", Origin3x},
+	{"invalid_server", Retry, "network", Origin3x},
+	{"invalid_header", Retry, "network", Origin3x},
+	{"invalid_resolve", Retry, "network", Origin3x},
+	{"invalid_expect", Retry, "network", Origin3x},
+	{"invalid_body_max", Retry, "network", Origin3x},
+	{"invalid_auth_env", Retry, "network", Origin3x},
+	{"secret_in_argv", Retry, "network", Origin3x},
+	{"auth_env_unset", Stop, "network", Origin3x},
+	{"http_method_blocked", Fatal, "network", Origin3x},
 
 	// New in 3.4: agent toolkit, processes, waiting and services (llm_wait,
 	// llm_procs, llm_service, llm_docker_*, llm_sysinfo, agent_kill,
 	// agent_docker_exec).
+	{"invalid_pid", Retry, "llm", Origin3x},
+	{"ps_not_found", Continue, "llm", Origin3x},
+	{"missing_condition", Retry, "llm", Origin3x},
+	{"invalid_interval", Retry, "llm", Origin3x},
+	{"invalid_code", Retry, "llm", Origin3x},
+	{"invalid_url", Retry, "llm", Origin3x},
+	{"missing_unit", Retry, "llm", Origin3x},
+	{"systemd_unavailable", Continue, "llm", Origin3x},
+	{"missing_container", Retry, "llm", Origin3x},
+	{"missing_command", Retry, "llm", Origin3x},
+	{"invalid_user", Retry, "llm", Origin3x},
+	{"container_not_found", Retry, "llm", Origin3x},
+	{"container_not_running", Continue, "llm", Origin3x},
+	{"docker_unavailable", Continue, "llm", Origin3x},
+	{"docker_error", Retry, "llm", Origin3x},
+	{"invalid_signal", Retry, "agent", Origin3x},
+	{"pattern_too_broad", Retry, "agent", Origin3x},
+	{"kill_refused", Fatal, "agent", Origin3x},
+	{"kill_failed", Stop, "agent", Origin3x},
 
 	// New in 3.4: agent toolkit, runtimes, lint and tests (gash runtime,
 	// gash run, llm_tools, llm_runtime, llm_lint, llm_test).
+	{"unknown_runtime", Retry, "llm", Origin3x},
+	{"invalid_version", Retry, "llm", Origin3x},
+	{"runtime_not_installed", Stop, "llm", Origin3x},
+	{"runtime_link_failed", Stop, "llm", Origin3x},
+	{"command_not_found", Retry, "llm", Origin3x},
+	{"unsupported_file", Retry, "llm", Origin3x},
+	{"invalid_ext", Retry, "llm", Origin3x},
+	{"unknown_runner", Retry, "llm", Origin3x},
 
 	// New in 3.4: agent toolkit, remote and edits (--host, llm_remote_run,
 	// llm_same, agent_replace, agent_put).
@@ -231,7 +311,6 @@ var codeTable = []Code{
 	{"remote_binary_unavailable", Stop, "remote", Origin3x},
 	{"missing_host", Retry, "remote", Origin3x},
 	{"remote_glob_unsupported", Retry, "remote", Origin3x},
-	{"invalid_target", Retry, "remote", Origin3x},
 	{"invalid_exclude", Retry, "remote", Origin3x},
 	{"invalid_container_name", Retry, "remote", Origin3x},
 	{"container_unavailable", Retry, "remote", Origin3x},

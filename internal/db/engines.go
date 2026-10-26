@@ -19,12 +19,12 @@ import (
 // run is __llm_db_run KIND SQL CAP: the guarded query on the target, its
 // rows capped at CAP by the engine (a wrapping query or sql_select_limit).
 func (m *Module) run(c *invoke.Call, t target, kind, query, rowCap string) output {
-	wrappable := kind == "SELECT" || kind == "WITH" || kind == "VALUES" || kind == "TABLE"
+	wrap := wrappable(kind)
 	switch t.driver {
 	case "sqlite":
 		mode := sqliteOther
 		switch {
-		case wrappable:
+		case wrap:
 			query = "SELECT * FROM (\n" + query + "\n) LIMIT " + rowCap
 			mode = sqliteSelect
 		case kind == "EXPLAIN":
@@ -34,12 +34,17 @@ func (m *Module) run(c *invoke.Call, t target, kind, query, rowCap string) outpu
 	case "mysql", "mariadb":
 		return m.mysqlRun(c, t, false, query, rowCap)
 	}
-	if !wrappable {
+	if !wrap {
 		return m.pgsqlRun(c, t, false, query)
 	}
 	// PostgreSQL serializes the rows itself: native types, and tabs or
-	// newlines inside values survive.
-	o := m.pgsqlRun(c, t, true, "SELECT COALESCE(jsonb_agg(to_jsonb(__gash_row)), '[]'::jsonb) FROM (SELECT * FROM (\n"+
+	// newlines inside values survive. The envelope keeps jsonb's key
+	// order (2.x); the row formats keep the query's column order.
+	agg, obj, typ := "jsonb_agg", "to_jsonb", "jsonb"
+	if t.rowFormat {
+		agg, obj, typ = "json_agg", "to_json", "json"
+	}
+	o := m.pgsqlRun(c, t, true, "SELECT COALESCE("+agg+"("+obj+"(__gash_row)), '[]'::"+typ+") FROM (SELECT * FROM (\n"+
 		query+"\n) __gash_q LIMIT "+rowCap+") __gash_row")
 	if o.fail != nil {
 		return o
@@ -143,6 +148,10 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 		}
 		var o object
 		for i, col := range cols {
+			if vals[i] == nil && t.rowFormat {
+				o.set(col, jvNull)
+				continue
+			}
 			o.set(col, jvString(mysqlText(vals[i], meta[i])))
 		}
 		out = append(out, o.value())
@@ -153,7 +162,9 @@ func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap stri
 	if raw {
 		return textOut(trimNewlines(strings.Join(lines, "\n")))
 	}
-	return values(jvArray(out))
+	res := values(jvArray(out))
+	res.cols = cols
+	return res
 }
 
 var digitsRE = lazyre.MustCompile(`^[0-9]+$`)
@@ -269,10 +280,17 @@ func (m *Module) pgsqlRun(c *invoke.Call, t target, json bool, query string) out
 			v := ""
 			if i < len(rec) && rec[i] != nil {
 				v = *rec[i]
+			} else if t.rowFormat {
+				o.set(f.Name, jvNull)
+				continue
 			}
 			o.set(f.Name, jvString(v))
 		}
 		out = append(out, o.value())
 	}
-	return values(jvArray(out))
+	res := values(jvArray(out))
+	for _, f := range fields {
+		res.cols = append(res.cols, f.Name)
+	}
+	return res
 }

@@ -1,0 +1,93 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_dns (new in 3.4, plan N2): the records of several names, for each
+# --type, asked in parallel of --server (gash speaks DNS itself: UDP, TCP
+# when truncated), rows in input order. With python3, a tiny DNS responder
+# on 127.0.0.1 (dns_fake.py, port 0, written to a file) answers A, MX and
+# TXT for example.test and NXDOMAIN for anything else: answers are sorted,
+# a type without records is [], NXDOMAIN is the error field of its row.
+# Everywhere: a resolver port nobody listens on is a field, not a failure
+# of the call, and bad types or servers are RETRY errors. Nothing is asked
+# of a real resolver.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- answers from a local resolver (sourced shell and direct)
+[exec:python3] exec bash dns_case.sh
+
+# --- a resolver port with nobody behind it: an error field, exit 0
+exec bash -c 'source "$WORK/start.sh"; source "$GASH_SH"; llm_dns example.test --server "$CLOSED" --timeout 1'
+stdout '^\[\{"name":"example.test","A":null,"AAAA":null,"ms":[0-9.]+,"error":"(connection_refused|timeout)"\}\]$'
+
+# --- argument errors
+! exec gash llm_dns
+stderr '"error":"missing_target"'
+! exec gash llm_dns example.test --type PTR
+stderr '"error":"invalid_type","details":"PTR"'
+! exec gash llm_dns example.test --server dns.google
+stderr '"error":"invalid_server"'
+exec gash llm_dns --help
+stdout 'llm_dns NAME\.\.\.'
+
+-- start.sh --
+# CLOSED is 127.0.0.1 and the port of a fake that held it and stopped.
+httpsfake -ca "$WORK/ca.pem" -addr "$WORK/closed.$$" & gone=$!
+for i in $(seq 1 100); do [ -s "$WORK/closed.$$" ] && break; sleep 0.05; done
+read -r CLOSED <"$WORK/closed.$$"
+kill "$gone"; wait "$gone" 2>/dev/null || true
+export CLOSED
+-- dns_case.sh --
+set -euo pipefail
+cd "$WORK"
+python3 -I dns_fake.py "$WORK/dnsport" & dp=$!
+trap 'kill "$dp" 2>/dev/null; wait "$dp" 2>/dev/null || true' EXIT
+for i in $(seq 1 100); do [ -s dnsport ] && break; sleep 0.05; done
+server="127.0.0.1:$(cat dnsport)"
+source "$GASH_SH"
+out="$(llm_dns example.test nope.test --type A,MX,TXT,AAAA --server "$server")"
+want='[{"name":"example.test","A":["192.0.2.2","192.0.2.10"],"MX":[{"host":"mx.example.test","pref":10}],"TXT":["v=spf1 -all"],"AAAA":[],"ms":0,"error":null},{"name":"nope.test","A":[],"MX":[],"TXT":[],"AAAA":[],"ms":0,"error":"nxdomain"}]'
+got="$(sed -E 's/"ms":[0-9.]+/"ms":0/g' <<<"$out")"
+[[ "$got" == "$want" ]] || { echo "got:  $out"; exit 1; }
+out="$(gash llm_dns nope.test example.test --type MX --server "$server" --format tsv)"
+[[ "$(head -1 <<<"$out")" == $'name\tMX\tms\terror' ]] || { echo "$out"; exit 1; }
+grep -q $'^example.test\t\\[{"host":"mx.example.test","pref":10}\\]\t' <<<"$out" || { echo "$out"; exit 1; }
+-- dns_fake.py --
+# A DNS responder for the case: A, MX and TXT of example.test, NXDOMAIN
+# for other names. Writes its UDP port to argv[1] once it listens.
+import os
+import socket
+import struct
+import sys
+
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(("127.0.0.1", 0))
+with open(sys.argv[1] + ".tmp", "w") as f:
+    f.write(str(s.getsockname()[1]))
+os.rename(sys.argv[1] + ".tmp", sys.argv[1])
+
+
+def name(n):
+    return b"".join(bytes([len(x)]) + x.encode() for x in n.split(".")) + b"\0"
+
+
+zone = {
+    ("example.test", 1): [bytes([192, 0, 2, 2]), bytes([192, 0, 2, 10])],
+    ("example.test", 15): [struct.pack(">H", 10) + name("mx.example.test")],
+    ("example.test", 16): [b"\x0bv=spf1 -all"],
+}
+while True:
+    q, peer = s.recvfrom(1500)
+    i, labels = 12, []
+    while q[i]:
+        labels.append(q[i + 1:i + 1 + q[i]].decode())
+        i += 1 + q[i]
+    qtype = struct.unpack(">H", q[i + 1:i + 3])[0]
+    qname = ".".join(labels).lower()
+    rrs = zone.get((qname, qtype), [])
+    rcode = 0 if any(k[0] == qname for k in zone) else 3
+    head = q[:2] + bytes([0x81, 0x80 | rcode]) + struct.pack(">HHHH", 1, len(rrs), 0, 0)
+    body = q[12:i + 5] + b"".join(b"\xc0\x0c" + struct.pack(">HHIH", qtype, 1, 60, len(d)) + d for d in rrs)
+    s.sendto(head + body, peer)

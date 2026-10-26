@@ -85,6 +85,7 @@ func (m *Module) Register(t *invoke.Table) {
 	t.Handle("llm_db_schema", m.schema)
 	t.Handle("llm_db_sample", m.sample)
 	t.Handle("llm_db_explain", m.explain)
+	t.Handle("llm_db_databases", m.databases)
 	t.Handle("gash_db_test", m.dbTest)
 }
 
@@ -108,11 +109,15 @@ func helpAnywhere(c *invoke.Call) bool {
 }
 
 // output is what an impl printed: JSON values, or text that is not JSON.
+// cols are the result's column names when the engine gave them (for a
+// header when no row came back), mode the 3.4 output options (rows.go).
 type output struct {
 	vals   []jv
 	text   string
 	isText bool
 	fail   *contract.Envelope
+	cols   []string
+	mode   rowsMode
 }
 
 func failed(e contract.Envelope) output { return output{fail: &e} }
@@ -158,13 +163,15 @@ func (m *Module) query(c *invoke.Call) int {
 }
 
 // explainArgs is __GASH_DB_EXPLAIN_ARGS: the arguments without the row
-// cap options and the word after each.
+// cap options and the word after each (3.4: and without the output
+// options, so the plan of a slow query comes back in every format).
 func explainArgs(args []string) []string {
 	var out []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "-r", "--rows", "-n", "--limit":
+		case "-r", "--rows", "-n", "--limit", "--format":
 			i++
+		case "--scalar":
 		default:
 			out = append(out, args[i])
 		}
@@ -174,7 +181,7 @@ func explainArgs(args []string) []string {
 
 func (m *Module) queryImpl(c *invoke.Call, args []string) output {
 	a := dbArgs{connection: "default", rows: "100"}
-	if e := parseArgs(args, "-r --rows -n --limit", &a); e != nil {
+	if e := parseArgs(args, "-r --rows -n --limit "+rowFlags, &a); e != nil {
 		return failed(*e)
 	}
 	if a.positional == "" {
@@ -187,7 +194,11 @@ func (m *Module) queryImpl(c *invoke.Call, args []string) output {
 	if fail != nil {
 		return *fail
 	}
-	return m.run(c, t, g.Kind, g.Query, a.rows)
+	t.rowFormat = a.rowsMode()
+	rowCap, mode := capped(&a, g.Kind, "value")
+	o := m.run(c, t, g.Kind, g.Query, rowCap)
+	o.mode = mode
+	return o
 }
 
 // guardedTarget resolves the connection, then checks the query with the
@@ -224,17 +235,24 @@ func (m *Module) tables(c *invoke.Call) int {
 
 func (m *Module) tablesImpl(c *invoke.Call) output {
 	a := dbArgs{connection: "default", rows: "0"}
-	if e := parseArgs(c.Args, "", &a); e != nil {
+	if e := parseArgs(c.Args, "--counts "+rowFlags, &a); e != nil {
 		return failed(*e)
 	}
 	t, fail := m.target(c, &a)
 	if fail != nil {
 		return *fail
 	}
+	t.rowFormat = a.rowsMode()
+	mode := rowsMode{format: a.format, scalar: a.scalar, limit: -1, column: "name"}
+	if a.counts {
+		o := m.tableCounts(c, t)
+		o.mode = mode
+		return o
+	}
 	var q string
 	switch t.driver {
 	case "sqlite":
-		q = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+		q = sqliteTablesQuery
 	case "mysql", "mariadb":
 		q = "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name"
 	default:
@@ -253,7 +271,9 @@ func (m *Module) tablesImpl(c *invoke.Call) output {
 		}
 		out = append(out, jvArray(names))
 	}
-	return values(out...)
+	o = values(out...)
+	o.mode = mode
+	return o
 }
 
 func pickName(row jv) jv {
@@ -275,8 +295,22 @@ func (m *Module) schema(c *invoke.Call) int {
 
 func (m *Module) schemaImpl(c *invoke.Call) output {
 	a := dbArgs{connection: "default", rows: "0"}
-	if e := parseArgs(c.Args, "", &a); e != nil {
+	if e := parseArgs(c.Args, "--all "+rowFlags, &a); e != nil {
 		return failed(*e)
+	}
+	mode := rowsMode{format: a.format, scalar: a.scalar, limit: -1, column: "value"}
+	if a.all {
+		if a.positional != "" {
+			return failed(contract.New("unexpected_argument", a.positional, "--all reads every table: drop the TABLE name or --all"))
+		}
+		t, fail := m.target(c, &a)
+		if fail != nil {
+			return *fail
+		}
+		t.rowFormat = a.rowsMode()
+		o := m.schemaAll(c, t)
+		o.mode = mode
+		return o
 	}
 	if e := checkTable(a.positional); e != nil {
 		return failed(*e)
@@ -286,6 +320,7 @@ func (m *Module) schemaImpl(c *invoke.Call) output {
 	if fail != nil {
 		return *fail
 	}
+	t.rowFormat = a.rowsMode()
 	var q string
 	switch t.driver {
 	case "sqlite":
@@ -295,7 +330,9 @@ func (m *Module) schemaImpl(c *invoke.Call) output {
 	default:
 		q = "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '" + table + "' AND table_schema = 'public' ORDER BY ordinal_position"
 	}
-	return m.run(c, t, "SELECT", q, "10000")
+	o := m.run(c, t, "SELECT", q, "10000")
+	o.mode = mode
+	return o
 }
 
 // sample is llm_db_sample.
@@ -308,7 +345,7 @@ func (m *Module) sample(c *invoke.Call) int {
 
 func (m *Module) sampleImpl(c *invoke.Call) output {
 	a := dbArgs{connection: "default", rows: "5"}
-	if e := parseArgs(c.Args, "-n --limit", &a); e != nil {
+	if e := parseArgs(c.Args, "-n --limit "+rowFlags, &a); e != nil {
 		return failed(*e)
 	}
 	if e := checkTable(a.positional); e != nil {
@@ -321,11 +358,15 @@ func (m *Module) sampleImpl(c *invoke.Call) output {
 	if fail != nil {
 		return *fail
 	}
+	t.rowFormat = a.rowsMode()
 	quoted := `"` + a.positional + `"`
 	if t.driver == "mysql" || t.driver == "mariadb" {
 		quoted = "`" + a.positional + "`"
 	}
-	return m.run(c, t, "SELECT", "SELECT * FROM "+quoted, a.rows)
+	rowCap, mode := capped(&a, "SELECT", "value")
+	o := m.run(c, t, "SELECT", "SELECT * FROM "+quoted, rowCap)
+	o.mode = mode
+	return o
 }
 
 // explain is llm_db_explain.
@@ -338,7 +379,7 @@ func (m *Module) explain(c *invoke.Call) int {
 
 func (m *Module) explainImpl(c *invoke.Call, args []string) output {
 	a := dbArgs{connection: "default", rows: "0"}
-	if e := parseArgs(args, "--analyze", &a); e != nil {
+	if e := parseArgs(args, "--analyze "+rowFlags, &a); e != nil {
 		return failed(*e)
 	}
 	if a.positional == "" {
@@ -378,7 +419,9 @@ func (m *Module) explainImpl(c *invoke.Call, args []string) output {
 	if plan.fail != nil {
 		return plan
 	}
-	return planArray(plan)
+	o := planArray(plan)
+	o.mode = rowsMode{format: a.format, scalar: a.scalar, limit: -1, column: "plan"}
+	return o
 }
 
 // planArray is the end of __llm_db_explain_impl: JSON plans as arrays

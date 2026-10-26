@@ -10,9 +10,7 @@ package llm
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
-	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -159,7 +157,7 @@ func (m *Module) same(c *invoke.Call) int {
 		if m.guard(c).IsSecretFile(safe) {
 			return fail(c, "secret_file_blocked", safe, "Secret files are not compared")
 		}
-		h, err := hashFile(safe)
+		h, _, err := hashFile(c.Ctx, safe, "sha256")
 		if err != nil {
 			return fail(c, "path_unreadable", safe, "The file could not be read")
 		}
@@ -362,8 +360,8 @@ func hashTree(ctx context.Context, root string, excludes []string, under func(st
 	if err != nil {
 		return nil, err
 	}
-	sums := llmfmt.Map(ctx, llmfmt.LocalJobs(), 0, files, func(_ context.Context, rel string) string {
-		h, err := hashFile(filepath.Join(root, filepath.FromSlash(rel)))
+	sums := llmfmt.Map(ctx, llmfmt.LocalJobs(), 0, files, func(ctx context.Context, rel string) string {
+		h, _, err := hashFile(ctx, filepath.Join(root, filepath.FromSlash(rel)), "sha256")
 		if err != nil {
 			return ""
 		}
@@ -376,19 +374,6 @@ func hashTree(ctx context.Context, root string, excludes []string, under func(st
 		}
 	}
 	return out, nil
-}
-
-func hashFile(p string) (string, error) {
-	f, err := os.Open(p)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // parseHashes reads "HASH  NAME" lines (sha256sum, shasum; openssl -r

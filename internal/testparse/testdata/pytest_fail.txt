@@ -1,0 +1,37 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-8.3.3, pluggy-1.5.0
+rootdir: /work/py
+collected 6 items
+
+tests/test_math.py ..F.                                                  [ 66%]
+tests/test_io.py sE                                                      [100%]
+
+==================================== ERRORS ====================================
+_______________________ ERROR at setup of test_read_file _______________________
+
+    @pytest.fixture
+    def tmpfile():
+>       raise OSError("disk full")
+E       OSError: disk full
+
+tests/test_io.py:7: OSError
+=================================== FAILURES ===================================
+__________________________________ test_div ____________________________________
+
+    def test_div():
+>       assert div(1, 0) == 0
+
+tests/test_math.py:12:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+a = 1, b = 0
+
+    def div(a, b):
+>       return a / b
+E       ZeroDivisionError: division by zero
+
+mathx.py:3: ZeroDivisionError
+=========================== short test summary info ============================
+FAILED tests/test_math.py::test_div - ZeroDivisionError: division by zero
+ERROR tests/test_io.py::test_read_file - OSError: disk full
+============== 1 failed, 3 passed, 1 skipped, 1 error in 0.08s ===============

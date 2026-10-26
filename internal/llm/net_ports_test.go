@@ -1,0 +1,84 @@
+// Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package llm
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+const ssProcsOut = `printf '%s\n' "$*" >>"$STUB_LOG"
+cat <<'EOF'
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:Port Process
+tcp   LISTEN 0      511    0.0.0.0:8080        0.0.0.0:*         users:(("nginx",pid=812,fd=6),("nginx",pid=811,fd=6),("nginx",pid=812,fd=6))
+tcp   LISTEN 0      511    [::]:8080           [::]:*            users:(("Web Content",pid=90,fd=7))
+udp   UNCONN 0      0      0.0.0.0:8080        0.0.0.0:*
+tcp   LISTEN 0      4096   0.0.0.0:22          0.0.0.0:*         users:(("sshd",pid=700,fd=3))
+tcp   LISTEN 0      4096   127.0.0.1:08080     0.0.0.0:*         users:(("odd\"name",pid=5,fd=3))
+EOF
+[[ "$1" == *l* ]] || echo "tcp   ESTAB  0      0      10.0.0.2:8080       1.2.3.4:443       users:((\"nginx\",pid=812,fd=9))"`
+
+func TestPortsByPortWithProcesses(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	log := filepath.Join(d, "log")
+	bin := stubBin(t, map[string]string{"ss": ssProcsOut})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t), "STUB_LOG": log})
+	r := runGo(t, m, d, env, "llm_ports", "--listen", "--port", "8080")
+	require.Equal(t, result{`[` +
+		`{"port":8080,"proto":"tcp","state":"LISTEN","address":"0.0.0.0","procs":[{"pid":811,"name":"nginx"},{"pid":812,"name":"nginx"}]},` +
+		`{"port":8080,"proto":"tcp","state":"LISTEN","address":"[::]","procs":[{"pid":90,"name":"Web Content"}]},` +
+		`{"port":8080,"proto":"tcp","state":"LISTEN","address":"127.0.0.1","procs":[{"pid":5,"name":"odd\"name"}]},` +
+		`{"port":8080,"proto":"udp","state":"LISTEN","address":"0.0.0.0","procs":[]}]` + "\n", "", 0}, r)
+	r = runGo(t, m, d, env, "llm_ports", "--port", "08080")
+	require.Contains(t, r.Stdout, `{"port":8080,"proto":"tcp","state":"ESTAB","address":"10.0.0.2","procs":[{"pid":812,"name":"nginx"}]}`)
+	r = runGo(t, m, d, env, "llm_ports", "--port", "9")
+	require.Equal(t, result{"[]\n", "", 0}, r)
+	calls, err := os.ReadFile(log)
+	require.NoError(t, err)
+	require.Equal(t, "-tunlp\n-tunap\n-tunap\n", string(calls))
+
+	// Without --port the output is the 3.0 one, byte for byte.
+	r = runGo(t, m, d, env, "llm_ports", "--listen")
+	require.NotContains(t, r.Stdout, "procs")
+	require.True(t, strings.HasPrefix(r.Stdout, `[{"port":22,"proto":"tcp","state":"LISTEN","address":"0.0.0.0"}`), r.Stdout)
+}
+
+func TestPortsByPortNetstat(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	bin := stubBin(t, map[string]string{"netstat": `cat <<'EOF'
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 0.0.0.0:3306            0.0.0.0:*               LISTEN      1201/mysqld
+tcp6       0      0 :::3306                 :::*                    LISTEN      -
+udp        0      0 0.0.0.0:3306            0.0.0.0:*                           77/odd prog
+EOF`})
+	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + toolsPath(t)})
+	r := runGo(t, m, d, env, "llm_ports", "-l", "--port", "3306")
+	require.Equal(t, result{`[` +
+		`{"port":3306,"proto":"tcp","state":"LISTEN","address":"0.0.0.0","procs":[{"pid":1201,"name":"mysqld"}]},` +
+		`{"port":3306,"proto":"tcp","state":"LISTEN","address":"::","procs":[]},` +
+		`{"port":3306,"proto":"udp","state":"LISTEN","address":"0.0.0.0","procs":[{"pid":77,"name":"odd prog"}]}]` + "\n", "", 0}, r)
+}
+
+func TestPortsByPortErrors(t *testing.T) {
+	m := New()
+	d := physTemp(t)
+	env := baseEnv(physTemp(t), map[string]string{"PATH": toolsPath(t)})
+	code := func(args ...string) string {
+		r := runGo(t, m, d, env, "llm_ports", args...)
+		require.Equal(t, 1, r.RC, args)
+		return r.Stderr
+	}
+	require.Contains(t, code("--port", "x"), `"error":"invalid_port"`)
+	require.Contains(t, code("--port", "65536"), `"error":"invalid_port"`)
+	require.Contains(t, code("--port", ""), `"error":"invalid_port"`)
+	require.Contains(t, code("--port"), `"error":"missing_value"`)
+	require.Contains(t, code("--port", "80", "x"), `"error":"unknown_option"`)
+	require.Contains(t, code("--port", "80"), `"error":"ports_tool_not_found"`)
+}
