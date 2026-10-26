@@ -6,7 +6,7 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
-## [3.4.0] - 2026-10-25
+## [3.4.0] - 2026-10-26
 
 Gash becomes the toolkit an AI agent reaches for instead of raw shell
 pipelines: 36 new functions and new options on most of the 3.0 ones, built
@@ -118,8 +118,82 @@ automatic; changing it is human-only and goes through a UAC prompt.
   running daemon keeps its open file. `--sudo` reclaims root-owned logs
   through an explicit `sudo`. See [docs/logs/README.md](docs/logs/README.md).
 - `GASH_WIN_TIMEOUT` bounds one `gash win` call (default `10s`, cap `120s`).
+- **Prerequisites**: one catalog of every external program Gash runs, what
+  it is for, which functions need it and its package on apt, dnf (with
+  EPEL where needed), yum, microdnf, pacman, zypper, apk and Homebrew
+  ([docs/requirements.md](docs/requirements.md)). A function that needs a
+  missing tool says so in one way: `prerequisite_missing` (`STOP`), or the
+  tool's own code, with `missing` and `install` members (and `host`, or
+  `container`, for a tool missing on a remote host); a person gets the
+  explanation and the install command of this system. `gash_doctor
+  --prereqs` lists every tool by area, `--json` for scripts, and
+  `gash_doctor --install [--all] [TOOL...]` installs the missing ones after
+  asking; it never installs for an agent (`install_needs_confirmation`).
+- **Installer**: `install.sh --check` reports what Gash needs (Bash 4.4+,
+  git, curl or wget, tar, gzip, sha256sum or shasum, grep, sed) and the
+  command that installs it; an install offers to install it first
+  (`--assume-yes` installs those required tools only). A Bash older than
+  4.4 is refused with a clear message, and a failed binary fetch ends with
+  the `install.sh --repair` line instead of "Enjoy using Gash".
+- **Supported systems**: CI on arm64 (unit, black-box and smoke), an
+  install smoke test on Debian, Ubuntu, Rocky Linux 8 and 9 (minimal),
+  AlmaLinux 9 and 10, Oracle Linux 9, Amazon Linux 2023, Fedora, openSUSE
+  Leap and Tumbleweed, Alpine and Arch, on amd64 and arm64 (Arch on amd64
+  only; each installs every package of the catalog and checks it provides
+  its tool), and the
+  local web stack end to end on AlmaLinux 9 too. The table is in
+  [docs/install.md](docs/install.md).
+- **Documentation**: rewritten. One guide per area with a generated
+  reference of its functions ([docs/](docs/README.md)), an install page,
+  the requirements, configuration, security and troubleshooting pages, and
+  a new README and AGENTS.md. The examples are run by the tests and their
+  output checked; links, function and setting names, and the generated
+  parts fail CI when they go stale.
+- `llm_date` carries its own time zone database, so `--tz` works where the
+  system has none.
 
 ### Changed
+
+- **A missing tool is reported, never misread.** Among the cases that
+  blamed something else or failed silently: the `git_*` functions said "Not
+  in a git repository" and the `gl*` family exited 127 without a word;
+  `process_find`, `process_kill` and `services_stop` blamed the process or
+  went on without `sudo`; `remote_exec` without ssh exited 127 silently and
+  every remote call without a local ssh was `host_unreachable` (`RETRY`);
+  a missing docker for a `+docker` connection was `container_unavailable`,
+  and a psql older than 12 or a sqlite3 older than 3.33 on a `+ssh` host
+  was an SQL error; `gash_upgrade` blamed the network for a missing git;
+  verifying a signed tag without gpg or ssh-keygen blamed the keyring;
+  `hgrep --pick` without fzf, and `archive_extract`, had messages of their
+  own. On macOS the Xcode stub of git or python3 counts as missing.
+- **Fewer tools needed.** `jq` is no longer used (`llm_deps` reads
+  `requirements.txt` and `go.mod` itself); `llm_procs` lists processes
+  from `/proc` without ps, and on macOS; `llm_ports` reads BSD netstat on
+  macOS; `llm_exec` uses Homebrew's `gsed`; `sysinfo` and `ai_sysinfo`
+  fall back to netstat, `ps aux` and `df -h`, read host, kernel, cores,
+  disk and address in-process, and print a note for each block whose tool
+  is missing or that needs a sudo it cannot get; `gash_unload`,
+  `gash_username` and the `~/.gash_env` permission check work without awk,
+  grep, id or stat.
+- `llm_service` adds a `log_note` when the journal cannot be read, and
+  `llm_procs` without a filter lists the first 20 processes by PID with
+  user, cpu and mem.
+- `gash_ssh_auto_unlock` returns 1 when the keys cannot be unlocked, and
+  `gash_uninstall` stops, removing nothing, when it cannot edit the profile.
+- `gash_db_test` names the query to run for a `sqlite`, `+ssh` or
+  `+docker` connection (it said "Unknown driver"), and the warning for a
+  `DB:` URL with an unknown scheme names the `+ssh` forms.
+- `glf FILE` takes `git log` options after the file; `gl`, `gla`, `glg`
+  and `gls` end their output with a newline; a git action refused for lack
+  of a terminal no longer says "headless mode".
+- The `sysinfo` overview shows the disk share as `df` does (used of used
+  plus available), so the space reserved for root, or outside a
+  container's allowance, no longer hides a full disk.
+- `llm_exec` refusing a command that changes files (`rm`, `mv`, `chmod`,
+  ...) points at the `agent_*` functions instead of the allowlist.
+- `gash_doctor --prereqs` finds Apache and PHP-FPM where `gash hte` does
+  (`/usr/sbin`, `php-fpm8.3`), and installs `mod_ssl` and `mod_http2` with
+  `httpd` on the Fedora family.
 
 - The per-shell server runs the new read functions, so a sourced shell calls
   them without starting a process.
@@ -148,6 +222,16 @@ automatic; changing it is human-only and goes through a UAC prompt.
   credentials (`*.rdp`), answer files (`unattend.xml`, `autounattend.xml`)
   and the browser credential stores (`Login Data`, `logins.json`, `key4.db`,
   `key3.db`). See [docs/security.md](docs/security.md).
+- The remote secret-file and `.ssh` rails no longer need `tr` on the host,
+  and a symlink on a host with neither realpath nor readlink is refused
+  instead of judged by its own name: without them both failed open.
+- `archive_extract` refuses a `.tar.xz` when xz is missing (macOS
+  extracted it unchecked), and a tar whose member headers it cannot read
+  (tar would skip the header and extract what follows unchecked).
+
+### Removed
+
+- The `jq_not_found` error code: no function needs jq any more.
 
 ## [3.2.0] - 2026-10-25
 
