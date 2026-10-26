@@ -42,8 +42,8 @@ mkdir -p "$HOME"
 : >"$HOME/.bashrc"
 cd "$HOME"
 export GASH_RELEASE_URL=file:///smoke/rel GASH_INSTALL_GIT_REPO=/smoke/tree
-# The tree belongs to the user who built it, not to root; git before 2.46
-# reads safe.directory only from the global configuration.
+# The tree belongs to the user who built it, not to root; the git of
+# Debian 12 and Ubuntu 24.04 reads safe.directory only from a config file.
 printf '[safe]\n\tdirectory = *\n' >"$HOME/.gitconfig"
 
 echo "== install.sh --check"
