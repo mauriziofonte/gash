@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -40,14 +41,20 @@ func (f *fakeProcs) module(t *testing.T, passwd string, readErr error) *Module {
 
 func run(t *testing.T, m *Module, env map[string]string, args ...string) (string, int) {
 	t.Helper()
+	out, errOut, rc := runErr(m, env, args...)
+	require.Empty(t, errOut)
+	return out, rc
+}
+
+// runErr is run with the stderr of the call.
+func runErr(m *Module, env map[string]string, args ...string) (string, string, int) {
 	tbl := invoke.NewTable()
 	m.Register(tbl)
 	var out, errb bytes.Buffer
 	e := invoke.EnvMap(env)
 	c := &invoke.Call{Name: "gash_username", Args: args, Env: e, Stdout: &out, Stderr: &errb, Term: term.Fixed(e, false, false, false)}
 	rc := tbl.Run(c)
-	require.Empty(t, errb.String())
-	return out.String(), rc
+	return out.String(), errb.String(), rc
 }
 
 func TestUsernameChain(t *testing.T) {
@@ -67,23 +74,43 @@ func TestUsernameChain(t *testing.T) {
 			"a:x:7:7::/:/bin/sh\nb:x:17:7::/:/bin/sh\nc:x:7:1::/:/bin/sh", "a\nc\n", []string{"id -un", "id -u"}},
 		{"passwd no match", &fakeProcs{have: map[string]bool{"id": true}, out: map[string]string{"id -u": "5"}},
 			"a:x:55:7::/:/bin/sh\n", "UNKNOWN_USERNAME\n", []string{"id -un", "id -u"}},
+		// 3.4: without whoami and id, the passwd entry of the effective uid.
+		{"no tools", &fakeProcs{}, "me:x:" + strconv.Itoa(os.Geteuid()) + ":1::/:/bin/sh\n", "me\n", nil},
 		{"nothing", &fakeProcs{}, "", "UNKNOWN_USERNAME\n", nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.procs.ran = tc.ran
-			out, rc := run(t, tc.procs.module(t, tc.passwd, nil), nil)
+			out, _, rc := runErr(tc.procs.module(t, tc.passwd, nil), nil)
 			require.Equal(t, 0, rc)
 			require.Equal(t, tc.want, out)
 		})
 	}
 }
 
-func TestUsernameUnreadablePasswd(t *testing.T) {
-	p := &fakeProcs{have: map[string]bool{"id": true}, out: map[string]string{"id -u": "0"}, ran: []string{"id -un", "id -u"}}
-	out, rc := run(t, p.module(t, "root:x:0:0::/root:/bin/sh\n", errors.New("denied")), nil)
-	require.Equal(t, 0, rc)
-	require.Equal(t, "UNKNOWN_USERNAME\n", out)
+// 3.4: UNKNOWN_USERNAME comes with a warning that says why (it was
+// silent).
+func TestUsernameUnknownSaysWhy(t *testing.T) {
+	uid := strconv.Itoa(os.Geteuid())
+	for _, tc := range []struct {
+		procs  *fakeProcs
+		passwd string
+		err    error
+		want   string
+	}{
+		{&fakeProcs{}, "", nil, "Warning: Cannot tell the name of uid " + uid + ": whoami is not installed, id is not installed, and /etc/passwd has no entry for it.\n"},
+		{&fakeProcs{have: map[string]bool{"whoami": true, "id": true}, out: map[string]string{"id -u": "5"}, ran: []string{"whoami", "id -un", "id -u"}},
+			"a:x:55:7::/:/bin/sh\n", nil, "Warning: Cannot tell the name of uid 5: whoami knows no name for it, id knows no name for it, and /etc/passwd has no entry for it.\n"},
+		{&fakeProcs{have: map[string]bool{"id": true}, out: map[string]string{"id -u": "0"}, ran: []string{"id -un", "id -u"}},
+			"root:x:0:0::/root:/bin/sh\n", errors.New("denied"), "Warning: Cannot tell the name of uid 0: whoami is not installed, id knows no name for it, and /etc/passwd cannot be read.\n"},
+		{&fakeProcs{have: map[string]bool{"id": true}, ran: []string{"id -un", "id -u"}},
+			"", nil, "Warning: Cannot tell the name of the current user: whoami is not installed, id knows no name for it, and id -u printed no uid.\n"},
+	} {
+		out, errOut, rc := runErr(tc.procs.module(t, tc.passwd, tc.err), nil)
+		require.Equal(t, 0, rc)
+		require.Equal(t, "UNKNOWN_USERNAME\n", out)
+		require.Equal(t, tc.want, errOut)
+	}
 }
 
 // 3.0: SELF-15 fixed: an extra word is refused with rc 2 before whoami
