@@ -879,7 +879,8 @@ every check below.
   home where it is not `/root`), also when reached through a symlink or
   from `/`: as the PATH argument they fail with `forbidden_path`, and a walk
   that follows `-L` or starts at `/` with `--allow-root` skips them. They
-  need `--allow-root` for `/` and do not refuse `..`.
+  need `--allow-root` for `/` and do not refuse `..`. The user's
+  `PROTECT:all` paths (6.7) are refused and skipped the same way.
 * `llm_exec` applies the same forbidden-path rules to every argument of
   every command (option values, `key=value` words, `~`, glob matches, and
   relative paths after a `cd` in the line), except `/dev/null`, the
@@ -1105,6 +1106,12 @@ for this machine and every host or for one `HOST:` alias. Every `llm_*` and
 * On a host the paths are checked as written before connecting, then on
   the host. A POSIX fallback walk that would enter an `all` tree is
   `forbidden_path`: name a narrower directory.
+* `llm_tree --text` lists a link that leads into an `all` tree as
+  `name -> [protected]`, without its target.
+* The filesystem scanners (3.2) and `gash logs` (section 11) hold them
+  too: an `all` path is `forbidden_path` as PATH and left out of every
+  walk; a log in a `content` path is listed by `gash logs scan` with
+  `"protected":true` and never deleted or truncated by `clean`.
 * A protected path is the user's decision: do not ask for a way around
   it, and never edit `~/.gash_env` yourself.
 

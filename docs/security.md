@@ -213,7 +213,8 @@ below a protected path, and they do not follow symlinks. The filesystem scanners
 `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse `/proc`, `/sys`,
 `/dev`, `/boot` and `/root` (as written and resolved), also when reached
 through a symlink or from `/` (a walk skips them), and `/` without
-`--allow-root`.
+`--allow-root`. They refuse and skip your `PROTECT:all` paths the same way
+(below).
 
 ## Your protected paths
 
@@ -225,7 +226,18 @@ own paths to the rails above, for this machine and every host, or for one
 | Mode | Effect |
 |---|---|
 | `content` | Every file in the tree is a secret file: names, metadata and digests are shown, the content is never read, searched, compared, diffed, committed or written (`secret_file_blocked`) |
-| `all` | The tree is a forbidden path: refused as an argument (`forbidden_path`), left out of every walk, listing and git output; `llm_exec` runs no line inside it and no recursive command above it |
+| `all` | The tree is a forbidden path: refused as an argument (`forbidden_path`), left out of every walk, listing and git output; `llm_exec` runs no line inside it and no recursive command above it; `llm_tree --text` lists a link into it as `name -> [protected]` |
+
+The agent functions (`llm_*`, `agent_*`) hold them, and so do the
+filesystem scanners (`files_largest`, `dirs_largest`, `dirs_find_large`,
+`dirs_list_empty`, `tree_stats`) and `gash logs`. The scanners refuse an
+`all` path as PATH and leave it out of every walk, also through `-L`; a
+`content` path is listed, since they show names and sizes only. `gash logs`
+refuses an `all` path as PATH, drops it from its default roots and leaves
+it out of a walk; `scan` lists a log in a `content` path as protected,
+and `clean` never deletes or truncates it. The other interactive
+functions (`remote_*`, `archive_extract`, `file_backup`) do not read the
+lines.
 
 The checks resolve links as the forbidden paths do. On a host they run
 three times: on the path as written before anything connects, in the gash
@@ -498,10 +510,10 @@ The binaries are also reproducible: `go run ./internal/tools/releasesums -check`
 on the tagged tree rebuilds them and compares them with the hashes the tree
 pins in `release/SHA256SUMS`.
 
-To verify a download by hand (here 3.4.0 on linux/amd64):
+To verify a download by hand (here 3.4.1 on linux/amd64):
 
 ```bash
-v=3.4.0
+v=3.4.1
 cosign verify-blob --bundle checksums.txt.sigstore.json \
   --certificate-identity "https://github.com/mauriziofonte/gash/.github/workflows/release.yml@refs/tags/v$v" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \

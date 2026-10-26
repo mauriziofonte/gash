@@ -112,6 +112,12 @@ file, its owner and its mode, so a program that holds the log open keeps
 writing to it: there is no service to restart and no space lost to a deleted
 file a process still holds. Empty live logs are left alone.
 
+The paths you protect in `~/.gash_env` hold here too
+([configuration](../configuration.md#protected-paths)). A
+`PROTECT:all=PATH` path is never scanned: as a PATH it is `forbidden_path`,
+and a walk leaves it out. A log under `PROTECT:content=PATH` is listed by
+`scan` but never deleted or truncated by `clean`.
+
 `clean` without `--yes` needs a terminal to ask on. From a script, a cron
 job or an agent it stops with a `confirmation_required` error and changes
 nothing; pass `--yes` once you have read the `--dry-run` output.
@@ -146,9 +152,10 @@ Both commands take `--json` and then print one JSON object on stdout:
 
 - `scan --json`: `roots`, `groups` (per category: `files`, `size`,
   `reclaim`, `active`, `rotated` and the `entries`, each with `path`,
-  `size`, `modified`, `kind` and `reclaim`), `total_files`, `total_size`,
-  `total_reclaim`, `journal_bytes` and `unreadable` (files the scan could not
-  read);
+  `size`, `modified`, `kind` and `reclaim`, plus `"protected":true` for a
+  log in a protected path), `total_files`, `total_size`, `total_reclaim`,
+  `journal_bytes`, `unreadable` (files the scan could not read) and, when
+  there are any, `protected` (the logs in protected paths);
 - `clean --json`: `dry_run`, `deleted`, `truncated`, `freed`, `failed`,
   `need_root`, `need_root_bytes` and `scanned_files`.
 
@@ -177,7 +184,8 @@ run; an agent runs `clean --yes` only once the user has agreed to it.
 | `{"error":"invalid_duration",...}` | `--older-than` takes a number with `d`, `h`, `m` or `s` (`7d`, `48h`). |
 | `{"error":"unknown_option",...}`, `missing_value`, `unexpected_argument` | A mistyped option; `gash logs clean --help` lists them. |
 | `Info: No log files found under: PATH` | Nothing matched: the path holds no log files, or `--min-size` and `--older-than` left them all out. |
-| `Info: No reclaimable logs found.` | `clean` found logs but nothing to change: no rotated copies, and live logs only without `--truncate`. |
+| `Info: No reclaimable logs found.` | `clean` found logs but nothing to change: no rotated copies, and live logs only without `--truncate`, or only logs in protected paths. |
+| `{"error":"forbidden_path",...}` | The PATH is in a path you protect with `PROTECT:all=PATH` in `~/.gash_env`; it is never scanned. |
 
 ## See also
 

@@ -178,7 +178,7 @@ mask: [0-9]+ +[0-9]+ {2}
 $ gash
 
 ╭───────────────────────────────────────────────────╮
-│  Gash 3.4.0 · Bash for humans and AI agents       │
+│  Gash 3.4.1 · Bash for humans and AI agents       │
 │  121 functions · gash <topic> · gash_help <name>  │
 ╰───────────────────────────────────────────────────╯
 
