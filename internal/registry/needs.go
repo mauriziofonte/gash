@@ -105,6 +105,7 @@ var needs = map[string][]Need{
 	"llm_runtime":        {{"php", "php"}, {"node", "node"}, {"composer", "composer"}},
 	"gash runtime":       {{"php", "php"}, {"node", "node"}, {"composer", "composer"}},
 	"gash run":           {{"php", "--runtime php"}, {"node", "--runtime node"}, {"composer", "--runtime composer"}, {"bash", "--safe"}},
+	"agent_test":         {{"php", "--runtime php"}, {"node", "--runtime node"}, {"composer", "--runtime composer"}},
 	"php_detect_version": {{"php", ""}},
 	"node_upgrade":       {{"node", ""}},
 	"nvm_prune_versions": {{"node", ""}},

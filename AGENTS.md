@@ -518,8 +518,8 @@ unless `--width` says otherwise.
 | Function | Output |
 |---|---|
 | `llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]` | JSON object, keys in the order asked: `{"version","path"}` per program, `null` when it is not on PATH, `"version":null` when its probe prints none; `php` and `node` are arrays of every installed version, oldest first. Without NAME: git php composer node npm python3 go rg jq docker |
-| `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins |
-| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute] [--host ALIAS]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
+| `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins, or `project` (`"request"` then names the version the project pins) |
+| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER\|project] [--node MAJOR\|project] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute] [--host ALIAS]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
 
 `gash run` and `agent_test` (section 8) take a command after `--`: the one
 exception to the no-`--` rule of this section. Their options come before
@@ -544,7 +544,14 @@ nvm tree (`${NVM_DIR:-~/.nvm}/versions/node`, without loading nvm.sh), php
 as `/usr/bin/phpX.Y` or `/usr/local/bin/phpX.Y`, then the one on PATH. A
 version that is not installed is `runtime_not_installed` (STOP) naming the
 installed ones: ask the user. They read gash's runtime cache, never write
-it.
+it. The version `project` (`llm_runtime node project`, `--php project`,
+`gash run --runtime php:project`, `agent_test --runtime node:project`) is
+the one the project in the working directory pins, read as
+`node_detect_version` and `php_detect_version` read it (`.nvmrc`,
+`.node-version`, `package.json` engines.node; `.target-php-version`,
+`composer.json` require.php, `.github/copilot-instructions.md`); a project
+that pins none is `runtime_not_pinned` (STOP: ask the user which version),
+never the default one.
 
 Three commands of the binary (run them as `gash WORD`; they are not shell
 functions):
@@ -552,7 +559,7 @@ functions):
 | Command | Effect |
 |---|---|
 | `gash runtime php\|node\|composer\|npm\|npx VERSION [--path]` | The `llm_runtime` object, or with `--path` the path alone; the resolution is cached in `${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json` until the nvm tree or `/usr/bin/php*` change |
-| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime node:24\|php:8.4] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
+| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--plain] [--test-summary] [--runtime node:24\|php:8.4\|php:project] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--plain` drops escape sequences (colors, cursor moves, titles) and keeps the last state of a line redrawn with carriage returns (progress bars), before the budget and `--test-summary` read the output; `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
 | `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
 
 ### 3.12 Remote hosts
@@ -799,7 +806,7 @@ Each code always carries the action shown:
 | Git | `git_error` `detached_head` `merge_conflict` `push_failed` (STOP); `invalid_log` `invalid_files` `invalid_fields` `unknown_revision` `missing_message` `invalid_author` `nothing_to_commit` `git_add_failed` `commit_failed` `no_upstream` `unknown_remote` `push_rejected` (RETRY) |
 | Network probes | `http_method_blocked` (FATAL); `auth_env_unset` (STOP); `missing_target` `invalid_target` `invalid_server` `invalid_header` `invalid_resolve` `invalid_expect` `invalid_body_max` `invalid_auth_env` `secret_in_argv` (RETRY) |
 | Processes, waiting, services | `kill_refused` (FATAL); `kill_failed` (STOP); `ps_not_found` `systemd_unavailable` `container_not_running` `docker_unavailable` (CONTINUE); `invalid_pid` `missing_condition` `invalid_interval` `invalid_code` `invalid_url` `missing_unit` `missing_container` `missing_command` `invalid_user` `container_not_found` `docker_error` `invalid_signal` `pattern_too_broad` (RETRY) |
-| Runtimes, lint, tests | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
+| Runtimes, lint, tests | `runtime_not_installed` `runtime_not_pinned` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
 | Remote hosts | `unknown_host` `remote_protocol_error` `remote_binary_unavailable` `hash_tool_not_found` `put_verify_failed` (STOP); `host_unreachable` `missing_host` `remote_glob_unsupported` `invalid_exclude` `invalid_container_name` `container_unavailable` `invalid_mode` (RETRY) |
 | Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
 | Prerequisites | `prerequisite_missing` `install_needs_confirmation` (STOP) |
@@ -1186,7 +1193,7 @@ output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
 | `agent_kill NAME\|PID... [--signal S] [--dry-run] [--format F]` | `{"killed":N,"pids":[...]}`; NAME is the regex of `llm_procs --name` on the full command line; nothing matched is `{"killed":0,"pids":[]}`, exit 0; `--dry-run` adds `"cmds":[...],"signal":"TERM","dry_run":true,"written":false` |
 | `agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{"rc","out","err"}`, exit 0 when the command ran (read `rc`); CMD's words reach `docker exec` as an array, no shell runs; `--dry-run`: `{"argv":[...],"dry_run":true,"written":false}` |
 | `agent_put ALIAS:PATH --from FILE\|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]` | `{"host","path","bytes","sha256","replaced","backup","verified","written":true}`; one round trip: a temporary file next to PATH, size check (and sha256 with `--verify`), rename over PATH; `--dry-run` adds `"exists"` with `"dry_run":true,"written":false` |
-| `agent_test [--runner auto\|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell) |
+| `agent_test [--runner auto\|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--runtime` (repeatable: `node:24`, `php:8.4`, `node:project`) puts that runtime's directory first on CMD's PATH, as `gash run --runtime` does; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell; with `--runtime`, `"runtimes":[{"runtime","request","path","version"}]` before `"dry_run"`) |
 
 `agent_replace` writes each file through a temporary file in the same
 directory, renamed over the target with its mode (and owner, as root); a

@@ -22,9 +22,9 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [lsof](../requirements.md#tool-lsof) (feature), for `llm_procs` (--port)
 - [ss](../requirements.md#tool-ss) (feature), for `llm_ports`
 - [docker](../requirements.md#tool-docker) (feature), for `agent_docker_exec`, `llm_docker_exec`, `llm_docker_logs` and `llm_docker_ps`
-- [php](../requirements.md#tool-php) (feature), for `llm_lint` (.php files) and `llm_runtime` (php)
-- [composer](../requirements.md#tool-composer) (optional), for `llm_runtime` (composer)
-- [node](../requirements.md#tool-node) (feature), for `llm_lint` (.js files) and `llm_runtime` (node)
+- [php](../requirements.md#tool-php) (feature), for `agent_test` (--runtime php), `llm_lint` (.php files) and `llm_runtime` (php)
+- [composer](../requirements.md#tool-composer) (optional), for `agent_test` (--runtime composer) and `llm_runtime` (composer)
+- [node](../requirements.md#tool-node) (feature), for `agent_test` (--runtime node), `llm_lint` (.js files) and `llm_runtime` (node)
 - [python3](../requirements.md#tool-python3) (feature), for `llm_lint` (.py files)
 - [gawk](../requirements.md#tool-gawk) (optional), for `llm_exec` (awk)
 - [gnu-sed](../requirements.md#tool-gnu-sed) (optional), for `llm_exec` (sed)

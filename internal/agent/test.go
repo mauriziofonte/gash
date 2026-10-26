@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mauriziofonte/gash/internal/dev"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llm"
@@ -20,17 +21,19 @@ import (
 // the oldest half is dropped (the summary and the failures come last).
 const testOutputCap = 64 << 20
 
-// test is agent_test [--runner auto|NAME] [--fail-only] [--dry-run]
-// [budget] -- CMD... (plan L2): it runs a test suite as given (its stdout
-// and stderr merged, stdin /dev/null), parses the runner's output and
-// prints one JSON object; the exit status is CMD's. A write tool (D1): the
-// suite runs the project's own code, which may change files, caches or a
-// test database, so it is no llm_* read.
+// test is agent_test [--runner auto|NAME] [--fail-only] [--runtime
+// NAME:VERSION]... [--dry-run] [budget] -- CMD... (plan L2): it runs a
+// test suite as given (its stdout and stderr merged, stdin /dev/null),
+// parses the runner's output and prints one JSON object; the exit status
+// is CMD's. --runtime puts that runtime's directory first on CMD's PATH,
+// as gash run --runtime does. A write tool (D1): the suite runs the
+// project's own code, which may change files, caches or a test database,
+// so it is no llm_* read.
 func (m *Module) test(c *invoke.Call) int {
 	o := llmfmt.New(llmfmt.BudgetFlags | llmfmt.TimeoutFlag | llmfmt.PathFlags)
 	runnerName, failOnly, dry := "auto", false, false
 	args := c.Args
-	var cmd []string
+	var cmd, runtimes []string
 	for len(args) > 0 {
 		a := args[0]
 		if a == "--" {
@@ -67,9 +70,16 @@ func (m *Module) test(c *invoke.Call) int {
 			dry = true
 			args = args[1:]
 			continue
+		case "--runtime":
+			if len(args) < 2 {
+				return fail(c, "missing_value", a, "--runtime needs NAME:VERSION: node:24, php:8.4, php:project")
+			}
+			runtimes = append(runtimes, args[1])
+			args = args[2:]
+			continue
 		}
 		if strings.HasPrefix(a, "-") {
-			return fail(c, "unknown_option", a, "Options come before --: --runner, --fail-only, --dry-run, --max-lines, --width, --timeout, --absolute")
+			return fail(c, "unknown_option", a, "Options come before --: --runner, --fail-only, --runtime, --dry-run, --max-lines, --width, --timeout, --absolute")
 		}
 		cmd = args
 		break
@@ -83,13 +93,25 @@ func (m *Module) test(c *invoke.Call) int {
 				"php artisan test, go test, cargo test, python -m pytest, npm/pnpm/yarn/bun/composer test or make test. "+
 				"Run any other command with gash run")
 	}
+	// The runtimes resolve before anything runs; a dry run writes no
+	// cache and no link.
+	r := dev.NewResolver(c.Ctx, c.Env, m.run, !dry)
+	defer r.Save()
+	resolved, ok := llm.RuntimeSpecs(c, r, runtimes)
+	if !ok {
+		return 1
+	}
 	if dry {
-		return m.testDryRun(c, cmd, runnerName)
+		return m.testDryRun(c, cmd, runnerName, resolved)
+	}
+	env, ok := llm.RuntimeEnv(c, r, resolved)
+	if !ok {
+		return 1
 	}
 	out := llm.NewCapWriter(testOutputCap)
 	t0 := time.Now()
 	res, err := runner.RunUser(c.Ctx, m.run, cmd, runner.Options{
-		Env: c.Env.Child(), Stdout: out, Stderr: out, Timeout: o.Timeout, KillAfter: 5 * time.Second,
+		Env: env.Child(), Stdout: out, Stderr: out, Timeout: o.Timeout, KillAfter: 5 * time.Second,
 	})
 	if rc, failed := llm.StartFailure(c, cmd, res, err); failed {
 		return rc
@@ -101,8 +123,10 @@ func (m *Module) test(c *invoke.Call) int {
 
 // testDryRun reports what agent_test would run, and runs nothing:
 // {"argv":[...],"runner":R,"cwd":DIR,"dry_run":true,"written":false},
-// runner the parser CMD names (null when only its output would tell).
-func (m *Module) testDryRun(c *invoke.Call, cmd []string, runnerName string) int {
+// runner the parser CMD names (null when only its output would tell);
+// with --runtime, "runtimes" lists each resolution (the llm_runtime
+// object) before "dry_run", in PATH order.
+func (m *Module) testDryRun(c *invoke.Call, cmd []string, runnerName string, runtimes []dev.Resolution) int {
 	if runnerName == "auto" {
 		runnerName = testparse.Hint(cmd)
 	}
@@ -120,7 +144,13 @@ func (m *Module) testDryRun(c *invoke.Call, cmd []string, runnerName string) int
 	} else {
 		b.WriteString(llmfmt.Quote(runnerName))
 	}
-	b.WriteString(`,"cwd":` + llmfmt.Quote(m.logicalCwd(c)) + `,"dry_run":true,"written":false}` + "\n")
+	b.WriteString(`,"cwd":` + llmfmt.Quote(m.logicalCwd(c)))
+	if len(runtimes) > 0 {
+		var list strings.Builder
+		_ = llmfmt.JSONLine(&list, runtimes)
+		b.WriteString(`,"runtimes":` + strings.TrimSuffix(list.String(), "\n"))
+	}
+	b.WriteString(`,"dry_run":true,"written":false}` + "\n")
 	_, _ = c.Stdout.Write([]byte(b.String()))
 	return 0
 }

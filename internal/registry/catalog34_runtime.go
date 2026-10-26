@@ -33,10 +33,11 @@ var catalogRuntime = []Function{
 				"  --ext LIST             Languages to check in directories (default: all):\n" +
 				"                         php, sh (also .bash), js (.mjs, .cjs), json, yaml\n" +
 				"                         (.yml), toml, py\n" +
-				"  --php VER              The php that checks .php files: 8.4, 8 (gash\n" +
-				"                         runtime's resolution; default: php on PATH)\n" +
-				"  --node MAJOR           The node that checks .js files: 24 (default: node on\n" +
-				"                         PATH)\n" +
+				"  --php VER              The php that checks .php files: 8.4, 8, or project\n" +
+				"                         (the version the project pins; gash runtime's\n" +
+				"                         resolution; default: php on PATH)\n" +
+				"  --node MAJOR           The node that checks .js files: 24, or project\n" +
+				"                         (default: node on PATH)\n" +
 				"  -j, --jobs N           Checks at a time (default: the CPU count)\n" +
 				"  --timeout S            Time limit of one checker process (default 60s)\n" +
 				"  --max-lines N          Failures listed (default 100); --head N and --tail N\n" +
@@ -70,7 +71,9 @@ var catalogRuntime = []Function{
 				"  files may hold comments). Directories skip node_modules, vendor, .git and\n" +
 				"  __pycache__ and never follow symlinks; secret files are skipped there and\n" +
 				"  refused as arguments. A FILE argument with another extension is\n" +
-				"  unsupported_file. A missing checker is runtime_not_installed (STOP).",
+				"  unsupported_file. A missing checker is runtime_not_installed (STOP);\n" +
+				"  --php project or --node project with no version pinned in the working\n" +
+				"  directory is runtime_not_pinned (STOP).",
 		},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"HOME", "NVM_DIR", "PATH", "PWD", "XDG_CACHE_HOME"},
@@ -93,7 +96,7 @@ var catalogRuntime = []Function{
 			SeeAlso: "llm_tools node_detect_version php_detect_version",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_runtime php|node|composer|npm|npx VERSION\n" +
+				"  llm_runtime php|node|composer|npm|npx VERSION|project\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # The node 24 binary\n" +
@@ -102,19 +105,28 @@ var catalogRuntime = []Function{
 				"  # composer under php 8.4\n" +
 				"  llm_runtime composer 8.4\n" +
 				"\n" +
+				"  # The php this project pins\n" +
+				"  llm_runtime php project\n" +
+				"\n" +
 				"NOTES\n" +
 				"  Replaces source ~/.nvm/nvm.sh; nvm use 24; which node (and php84 wrappers).\n" +
 				"  Output: {\"runtime\":\"node\",\"request\":\"24\",\"path\":\".../bin/node\",\"version\":\"24.1.0\"};\n" +
 				"  composer adds \"php\" (the binary it runs under), npm and npx report their\n" +
 				"  node's version. VERSION is a prefix: 24, 24.1, 8.4, 8: the newest installed\n" +
-				"  version that starts with it. node comes from the nvm tree\n" +
+				"  version that starts with it. project is the version the project in the\n" +
+				"  working directory pins, read as node_detect_version and\n" +
+				"  php_detect_version read it (.nvmrc, .node-version, package.json\n" +
+				"  engines.node; .target-php-version, composer.json require.php,\n" +
+				"  .github/copilot-instructions.md), \"request\" then names it; a project\n" +
+				"  that pins none is runtime_not_pinned (STOP), never a default. node comes\n" +
+				"  from the nvm tree\n" +
 				"  (${NVM_DIR:-~/.nvm}/versions/node), then the node on PATH; php from\n" +
 				"  /usr/bin/phpX.Y and /usr/local/bin/phpX.Y, then the php on PATH. Not\n" +
 				"  installed: runtime_not_installed (STOP) with the installed versions. The\n" +
 				"  JSON form of gash runtime; it reads gash's runtime cache, never writes it.",
 		},
 		ShellVars: []string{"HOME", "NVM_DIR"},
-		Env:       []string{"HOME", "NVM_DIR", "PATH", "XDG_CACHE_HOME"},
+		Env:       []string{"HOME", "NVM_DIR", "PATH", "PWD", "XDG_CACHE_HOME"},
 		Replaces:  "source ~/.nvm/nvm.sh; nvm use 24; node ...; php84 ...",
 	},
 	{
@@ -134,15 +146,19 @@ var catalogRuntime = []Function{
 			SeeAlso: "llm_lint",
 			Body: "" +
 				"USAGE\n" +
-				"  agent_test [--runner auto|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...\n" +
+				"  agent_test [--runner auto|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S]\n" +
+				"             [--absolute] -- CMD...\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --runner auto|NAME     The output format: pest, phpunit, phpstan, psalm,\n" +
 				"                         vitest, jest, mocha, pytest, go, cargo, playwright\n" +
 				"                         (default auto: from CMD and the output)\n" +
 				"  --fail-only            Print nothing when CMD exits 0 with no failure\n" +
-				"  --dry-run              Print the command, its format and the directory;\n" +
-				"                         run nothing\n" +
+				"  --runtime NAME:VERSION Put that runtime's directory first on CMD's PATH:\n" +
+				"                         node:24, php:8.4, node:project (repeatable; as gash\n" +
+				"                         run --runtime)\n" +
+				"  --dry-run              Print the command, its format, the directory and\n" +
+				"                         the runtimes; run nothing\n" +
 				"  --max-lines N          Failures listed (default 50; --head N, --tail N);\n" +
 				"                         unparsed output: the last N lines (default 20)\n" +
 				"  --width N              Cut messages at N columns (default 200)\n" +
@@ -160,6 +176,9 @@ var catalogRuntime = []Function{
 				"  # Go with the JSON reporter\n" +
 				"  agent_test -- go test -json ./...\n" +
 				"\n" +
+				"  # The suite under the node version the project pins\n" +
+				"  agent_test --runtime node:project -- npm test\n" +
+				"\n" +
 				"NOTES\n" +
 				"  A write tool: the suite runs the project's own code, which can change\n" +
 				"  files, caches or a test database, so it is an agent_* function and not\n" +
@@ -176,12 +195,16 @@ var catalogRuntime = []Function{
 				"  (phpstan, psalm) are failures. Output no parser reads:\n" +
 				"  {\"runner\":null,\"duration_s\",\"parsed\":false,\"exit_code\",\"tail\":[...]}.\n" +
 				"  --dry-run: {\"argv\":[...],\"runner\",\"cwd\",\"dry_run\":true,\"written\":false}\n" +
-				"  (runner null when only the output would tell). Options come before --;\n" +
-				"  a program not on PATH is command_not_found. The suite runs without\n" +
-				"  llm_exec's rails.",
+				"  (runner null when only the output would tell), with --runtime also\n" +
+				"  \"runtimes\":[{\"runtime\",\"request\",\"path\",\"version\"}] in PATH order.\n" +
+				"  --runtime resolves like gash runtime (VERSION project: the version the\n" +
+				"  project pins, runtime_not_pinned when none); a version that is not\n" +
+				"  installed is runtime_not_installed (STOP) and nothing runs. Options come\n" +
+				"  before --; a program not on PATH is command_not_found. The suite runs\n" +
+				"  without llm_exec's rails.",
 		},
-		ShellVars: []string{"HOME"},
-		Env:       []string{"HOME", "PATH", "PWD"},
+		ShellVars: []string{"HOME", "NVM_DIR"},
+		Env:       []string{"HOME", "NVM_DIR", "PATH", "PWD", "XDG_CACHE_HOME"},
 		Replaces:  "vendor/bin/pest | grep -E 'Tests:|FAIL'; npm run test | tail -20",
 	},
 	{

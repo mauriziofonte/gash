@@ -242,7 +242,11 @@ Usage: gash runtime php|node|composer|npm|npx VERSION [--path]
 
 Resolve a runtime version to its binary, without loading nvm.sh.
 
-  VERSION   a prefix: 24, 24.1, 8.4, 8 (the newest installed match)
+  VERSION   a prefix: 24, 24.1, 8.4, 8 (the newest installed match), or
+            project: the version the project in this directory pins
+            (.nvmrc, .node-version, package.json engines.node;
+            .target-php-version, composer.json require.php), with
+            runtime_not_pinned (STOP) when it pins none
   --path    print the path alone
 
 Prints {"runtime","request","path","version"} (composer adds "php", the
@@ -257,7 +261,7 @@ ${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json until the nvm tree or
 ### gash run
 
 ```text
-Usage: gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime NAME:VERSION]... [--safe] -- CMD...
+Usage: gash run [--width N] [--max-lines N] [--head N] [--tail N] [--plain] [--test-summary] [--runtime NAME:VERSION]... [--safe] -- CMD...
 
 Run CMD and return its exit status unchanged.
 
@@ -265,18 +269,25 @@ Run CMD and return its exit status unchanged.
   --max-lines N, --head N keep the first N lines of stdout and of stderr
   --tail N                keep the last N lines; what is cut becomes one
                           "[... K lines omitted]" line
+  --plain                 drop color and other escape sequences, and keep
+                          the last state of a line redrawn with carriage
+                          returns (progress bars); before the budget
   --test-summary          print the agent_test summary of CMD's output instead
                           of the output (stdout and stderr merged)
   --runtime NAME:VERSION  put that runtime's directory first on PATH:
                           node:24, php:8.4 (repeatable; gash runtime resolves
-                          it, php is reachable as php)
+                          it, php is reachable as php); VERSION project is
+                          the version the project pins (.nvmrc,
+                          .target-php-version, composer.json, ...), and a
+                          project that pins none stops with
+                          runtime_not_pinned
   --safe                  run CMD under llm_exec's checked read-only rules
                           (GASH_LLM_EXEC=unrestricted does not apply)
 
 Options come before -- (or before the first word that is not an option);
 every word after it belongs to CMD. CMD may be a gash function
-(gash run --max-lines 20 -- files_largest .). Without a budget flag CMD's
-output passes through untouched. gash's own errors (a bad option, a
+(gash run --max-lines 20 -- files_largest .). Without a budget flag or
+--plain CMD's output passes through untouched. gash's own errors (a bad option, a
 program not found, a --safe refusal, a runtime not installed) are JSON
 envelopes on stderr.
 ```
