@@ -1,6 +1,14 @@
 # Security
 
-What Gash protects against, what it does not, and which checks each part enforces.
+This page describes the guardrails of Gash: what they protect against,
+what they do not, and which checks each part enforces. It is for anyone
+who lets an AI agent work through Gash, or wants to know what a function
+refuses and why. To report a vulnerability, see
+[Reporting a vulnerability](#reporting-a-vulnerability).
+
+Platforms: Linux, macOS and WSL; the checks are the same on each. The
+`llm_exec` sandbox needs `bwrap` (Linux only), and the per-shell server
+runs on Linux only.
 
 ## Threat model
 
@@ -301,10 +309,11 @@ your home itself), and the messages say so.
 `remote_exec` runs any command on the remote host: the path tiers do not apply
 to it.
 
-## Agent toolkit (3.4)
+## Agent toolkit
 
-The 3.4 functions keep every rail above and split reads from writes.
-[AGENTS.md](../AGENTS.md) sections 6.6 and 8 hold the details.
+The agent functions keep every rail above and split reads from writes.
+[AGENTS.md](../AGENTS.md), the contract agents follow, holds the details,
+and the [agents guide](agents/README.md) shows them to a person.
 
 * **`llm_*` only read**, with no exception. `llm_http` sends GET, HEAD or
   OPTIONS without a body; a credential reaches it only through
@@ -325,6 +334,9 @@ The 3.4 functions keep every rail above and split reads from writes.
   `--no-verify`; `agent_kill` signals only your own processes, never PID 1,
   the caller or an ancestor; `agent_docker_exec` refuses commands that wipe
   or format a root, stop the machine or pipe a download into a shell.
+* **`gash run`** is not an agent function: it runs any command. With
+  `--safe` it runs the command under the `llm_exec` rules above, with the
+  settings of `~/.gash_env`.
 * **Remote hosts.** `--host`, `llm_remote_run`, `llm_same` and `agent_put`
   take registered `HOST:` aliases only. Remote paths pass the local rules
   and the deny tier before anything connects, and again on the host after
@@ -340,10 +352,10 @@ The 3.4 functions keep every rail above and split reads from writes.
 ## Confirmations
 
 `needs_confirm_prompt` reads the answer from `/dev/tty`, accepts only `y` or
-`Y`, and always refuses in headless mode or without a terminal. The 2.1
+`Y`, and always refuses in headless mode or without a terminal. The
 commands that show a plan first ask "Do you want to continue? [Y/n]" the same
 way. Answering no returns 1. `port_kill`, `process_kill`, `services_stop`
-and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
+and `node_upgrade` also accept `--force` as a synonym of `-y`.
 
 | Function | Interactive | Headless |
 |---|---|---|
@@ -361,6 +373,10 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `wsl_compact` | Runs without asking (it changes no data) | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
 | `sudo_last` (no argument) | Shows the command and asks | Refused |
+| `nvm_prune_versions` | Lists what it would remove and changes nothing; `-y`, `--yes` or `--force` removes | The same |
+| `gash logs clean` | Shows what it would free and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` (`confirmation_required`) |
+| `gash hte site remove`, `gash hte uninstall`, and `gash hte install` or `gash hte migrate --apply` when they stop the system Apache | Refused unless `--yes` (`confirmation_required`): no question is asked | The same |
+| `gash_doctor --install` | Shows the packages and the command, and asks; `--yes` skips | Refused (`install_needs_confirmation`, with the command to show the user) |
 | `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
 
 `gash_uninstall` also refuses a directory that resolves to `/` or your home,
@@ -381,9 +397,11 @@ and the kind of problem, never any part of the line; headless mode prints them
 only with `GASH_DEBUG=1`. Parsed values
 live in unexported shell variables (not inherited by child processes) that
 `gash_unload` removes. Secrets never go on a command line, where other users
-could read them in `/proc/<pid>/cmdline`: MySQL credentials use
-`--defaults-extra-file`, SSH passphrases are typed to `ssh-add` on a
-terminal Gash drives, and AI API keys stay inside the gash process.
+could read them in `/proc/<pid>/cmdline`: database passwords go to the
+drivers built into Gash, in memory (over a `+ssh` connection they travel on
+ssh's stdin and reach the client on the host in its environment), SSH
+passphrases are typed to `ssh-add` on a terminal Gash drives, and AI API
+keys stay inside the gash process.
 
 ## The per-shell server
 
@@ -410,8 +428,8 @@ warning. A tag counts as signed only when it is an annotated tag whose object
 ends with a signature block: a lightweight tag (even on a signed commit) and a
 message that only quotes the marker are unsigned.
 
-The releases (from 3.1.0) are signed by the release workflow, not by a
-person's key: an unsigned tag is checked through the Sigstore signature of its
+Releases are signed by the release workflow, not by a person's key: an
+unsigned tag is checked through the Sigstore signature of its
 release (`checksums.txt.sigstore.json`) when `cosign` is on `PATH`. The
 signature's certificate names the workflow (`.github/workflows/release.yml`),
 the tag and the commit, and cosign must accept it for the commit the tag
@@ -435,8 +453,8 @@ the previous tag again when that fails.
 
 ## Verifying a release
 
-Every release from 3.1.0 is built by `.github/workflows/release.yml` from its
-tag, and ships with:
+Every release is built by `.github/workflows/release.yml` from its tag, and
+ships with:
 
 - `checksums.txt`, the SHA-256 of every archive and SBOM, and
   `checksums.txt.sigstore.json`, its keyless Sigstore signature: the
@@ -449,10 +467,10 @@ The binaries are also reproducible: `go run ./internal/tools/releasesums -check`
 on the tagged tree rebuilds them and compares them with the hashes the tree
 pins in `release/SHA256SUMS`.
 
-To verify a download by hand (here 3.1.0 on linux/amd64):
+To verify a download by hand (here 3.4.0 on linux/amd64):
 
 ```bash
-v=3.1.0
+v=3.4.0
 cosign verify-blob --bundle checksums.txt.sigstore.json \
   --certificate-identity "https://github.com/mauriziofonte/gash/.github/workflows/release.yml@refs/tags/v$v" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
