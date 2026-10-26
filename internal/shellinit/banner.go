@@ -39,9 +39,10 @@ func (st *state) banner(b *strings.Builder) {
 	// (it drives ssh-add through a PTY and exports the agent variables); with
 	// none, only the run-once marker, as 2.x. The binary knows the keys from
 	// the file, so no fork happens when there are none (design shell.md 7).
+	// Its status 1 on a failure (3.4) never fails the shell's start.
 	if len(st.file.SSHKeys) > 0 {
 		b.WriteString("if declare -F gash_ssh_auto_unlock >/dev/null 2>&1; then\n")
-		b.WriteString("    gash_ssh_auto_unlock\n")
+		b.WriteString("    gash_ssh_auto_unlock || :\n")
 		b.WriteString("fi\n")
 	} else {
 		b.WriteString("export GASH_SSH_AUTOUNLOCK_RAN=1\n")

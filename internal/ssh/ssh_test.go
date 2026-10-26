@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -63,6 +65,12 @@ func newFixture(t *testing.T, settings string, tools ...string) *fixture {
 	return &fixture{home: home, bin: bin, env: map[string]string{
 		"HOME": home, "PATH": bin, "LANG": "C.UTF-8", "GASH__HANDOFF": "3", "TMPDIR": t.TempDir(),
 	}}
+}
+
+// pinSystem makes the prerequisite reports name Debian 12, as root.
+func pinSystem() (restore func()) {
+	return prereq.SetSystem(&prereq.System{OS: platform.OS{GOOS: "linux", ID: "debian", Name: "Debian GNU/Linux 12 (bookworm)"},
+		Manager: prereq.Apt, Root: true})
 }
 
 func (fx *fixture) key(n string) string { return filepath.Join(fx.home, ".ssh", n) }
@@ -142,10 +150,16 @@ func TestNoKeys(t *testing.T) {
 	require.True(t, h.closed)
 }
 
+// 3.4: a missing ssh-add is the prerequisite report and status 1 (it was
+// "ssh-add is not available; cannot auto-unlock SSH keys." and status 0).
 func TestNoSSHAdd(t *testing.T) {
+	defer pinSystem()()
 	fx := newFixture(t, "SSH:~/.ssh/key1=pw\n")
 	m, h := tm(runner.NewFake(t))
-	require.Equal(t, result{"Error: ssh-add is not available; cannot auto-unlock SSH keys.\n", 0}, fx.call(m, nil))
+	require.Equal(t, result{"Error: gash_ssh_auto_unlock needs ssh-add, which is not installed.\n" +
+		"  ssh-add loads SSH keys into the agent (package openssh-client on Debian GNU/Linux 12).\n" +
+		"  Install it:  apt-get install -y openssh-client\n" +
+		"  Or run:      gash_doctor --install ssh-add\n", 1}, fx.call(m, nil))
 	require.Empty(t, h.String())
 	require.True(t, h.closed)
 }
@@ -197,10 +211,16 @@ func TestSkipLoaded(t *testing.T) {
 	require.Equal(t, result{"", 0}, fx.call(m, nil))
 	require.Equal(t, "export GASH_SSH_AUTOUNLOCK_RAN=1\n", h.String())
 
-	// Without ssh-keygen nothing is skipped.
+	// Without ssh-keygen nothing is skipped, and the warning says why
+	// (3.4: silent before).
+	defer pinSystem()()
 	fx = newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add")
 	m, _ = tm(runner.NewFake(t, list("256 SHA256:fp-key1 a@b (ED25519)\n", 0), unlocked(fx.key("key1"), "pw")))
-	require.Equal(t, 0, fx.call(m, nil).rc)
+	r = fx.call(m, nil)
+	require.Equal(t, 0, r.rc)
+	require.True(t, strings.HasPrefix(r.err, "Warning: ssh-keygen is not installed, so the keys already in the agent cannot be recognized: every key is added again.\n"+
+		"Hint: Install openssh-client: apt-get install -y openssh-client\n"+
+		"SSH: Enter passphrase for "), r.err)
 }
 
 func agentOut(sock string) string {
@@ -243,20 +263,26 @@ func TestAgentFails(t *testing.T) {
 		runner.Expect{Argv: []string{"ssh-agent", "-a", sock, "-s"}, Status: 1},
 		runner.Expect{Argv: []string{"ssh-agent", "-s"}, Status: 1},
 		list(refused, 2)))
-	require.Equal(t, result{"Error: ssh-agent is not running and could not be started automatically.\n", 0}, fx.call(m, nil))
+	// 3.4: status 1 (0 before).
+	require.Equal(t, result{"Error: ssh-agent is not running and could not be started automatically.\n", 1}, fx.call(m, nil))
 	require.Empty(t, h.String())
 
-	// Without ssh-agent the same error, the variables an agent set kept.
+	// 3.4: without ssh-agent the prerequisite report (the same "not
+	// running" error before).
+	defer pinSystem()()
 	fx = newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add")
 	m, h = tm(runner.NewFake(t, list(refused, 2), list(refused, 2)))
-	require.Equal(t, result{"Error: ssh-agent is not running and could not be started automatically.\n", 0}, fx.call(m, nil))
+	require.Equal(t, result{"Error: gash_ssh_auto_unlock needs ssh-agent, which is not installed.\n" +
+		"  ssh-agent holds the unlocked SSH keys (package openssh-client on Debian GNU/Linux 12).\n" +
+		"  Install it:  apt-get install -y openssh-client\n" +
+		"  Or run:      gash_doctor --install ssh-agent\n", 1}, fx.call(m, nil))
 	require.Empty(t, h.String())
 
 	fx = newFixture(t, "SSH:~/.ssh/key1=pw\n", "ssh-add", "ssh-agent")
 	sock = filepath.Join(fx.home, ".ssh", agentSock)
 	m, h = tm(runner.NewFake(t, list(refused, 2), runner.Expect{Argv: []string{"ssh-agent", "-a", sock, "-s"}, Stdout: agentOut("/x")},
 		list(refused, 2, "SSH_AUTH_SOCK=/x")))
-	require.Equal(t, 0, fx.call(m, nil).rc)
+	require.Equal(t, 1, fx.call(m, nil).rc)
 	require.Equal(t, "export SSH_AUTH_SOCK=/x\nexport SSH_AGENT_PID=4242\n", h.String())
 }
 

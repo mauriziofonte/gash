@@ -30,13 +30,14 @@ stderr 'SSH: Identity added'
 ! stderr 'is not installed'
 ! stderr 'expect'
 
-# --- :333 no_agent - the agent cannot be started; the error line is rendered
-# (the function stays exit 0 so a sourced headless caller is never broken)
-exec bash -c 'mkdir bin0; printf "#!/bin/sh\nexit 1\n" >bin0/ssh-agent; chmod +x bin0/ssh-agent; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=0 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100 PATH="$PWD/bin0:$GASH_STAGE/testdata/mocks/bin:$PATH"; unset SSH_AUTH_SOCK SSH_AGENT_PID; source "$GASH_SH"; gash_ssh_auto_unlock'
+# --- :333 no_agent - the agent cannot be started; the error line is rendered.
+# 3.4: status 1 (it was 0); the shell start runs it as `gash_ssh_auto_unlock
+# || :`, so a sourced caller is never broken.
+! exec bash -c 'mkdir bin0; printf "#!/bin/sh\nexit 1\n" >bin0/ssh-agent; chmod +x bin0/ssh-agent; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=0 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100 PATH="$PWD/bin0:$GASH_STAGE/testdata/mocks/bin:$PATH"; unset SSH_AUTH_SOCK SSH_AGENT_PID; source "$GASH_SH"; gash_ssh_auto_unlock'
 stderr 'ssh-agent is not running'
 
 # --- R6: plain mode, the agent-missing error keeps its word prefix, no ESC
-exec bash -c 'mkdir bin1; printf "#!/bin/sh\nexit 1\n" >bin1/ssh-agent; chmod +x bin1/ssh-agent; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=0 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100 PATH="$PWD/bin1:$GASH_STAGE/testdata/mocks/bin:$PATH"; unset SSH_AUTH_SOCK SSH_AGENT_PID; source "$GASH_SH"; gash_ssh_auto_unlock'
+! exec bash -c 'mkdir bin1; printf "#!/bin/sh\nexit 1\n" >bin1/ssh-agent; chmod +x bin1/ssh-agent; export GASH_ENV_FILE=home/env1 MOCK_SSH_AGENT=0 GASH_SSH_AUTOUNLOCK_RAN= GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100 PATH="$PWD/bin1:$GASH_STAGE/testdata/mocks/bin:$PATH"; unset SSH_AUTH_SOCK SSH_AGENT_PID; source "$GASH_SH"; gash_ssh_auto_unlock'
 stderr '^Error: ssh-agent is not running'
 ! stderr '\x1b'
 
