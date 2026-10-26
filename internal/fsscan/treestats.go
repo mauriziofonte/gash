@@ -149,7 +149,8 @@ func treeStats(c *invoke.Call) int {
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(pa.dir, home, pwd, allowRoot)
+	hidden := userHidden(c, home, pwd)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot, hidden)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
@@ -159,7 +160,7 @@ func treeStats(c *invoke.Call) int {
 	// directories with the same prunes, excludes, -L and tab/newline rule,
 	// so empty_dirs equals dirs_list_empty --count (FS-08, FS-16).
 	res := findWalk(walkOpts{
-		root: root, follow: follow, xdev: xdev, maxDepth: maxDepth,
+		root: root, hidden: hidden, follow: follow, xdev: xdev, maxDepth: maxDepth,
 		noIgnore: noIgnore, excludes: excludes, needEmpty: true,
 	}, func(e entry) bool { return e.isDir || e.isRegular })
 	if res.rootErr {
