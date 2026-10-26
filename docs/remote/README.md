@@ -16,7 +16,7 @@ SSH keys are unlocked in interactive shells only.
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [ssh](../requirements.md#tool-ssh) (feature), for `remote_exec`, `remote_sync_pull` and `remote_sync_push`
+- [ssh](../requirements.md#tool-ssh) (feature), for `remote_exec`, `remote_pull`, `remote_push`, `remote_sync_pull` and `remote_sync_push`
 - [scp](../requirements.md#tool-scp) (feature), for `remote_pull` and `remote_push`
 - [rsync](../requirements.md#tool-rsync) (feature), for `remote_sync_pull` and `remote_sync_push`
 - [ssh-add](../requirements.md#tool-ssh-add) (feature), for `gash_ssh_auto_unlock`

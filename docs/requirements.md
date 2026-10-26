@@ -53,7 +53,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 
 ## Remote hosts and SSH
 
-- <a id="tool-ssh"></a>**ssh** (feature) connects to remote hosts. Needed by every `--host` call, `agent_put`, `gash_db_test` (a +ssh URL), `llm_db_databases` (a +ssh URL), `llm_db_explain` (a +ssh URL), `llm_db_query` (a +ssh URL), `llm_db_sample` (a +ssh URL), `llm_db_schema` (a +ssh URL), `llm_db_tables` (a +ssh URL), `llm_remote_run`, `llm_same` (a host side), `remote_exec`, `remote_sync_pull` and `remote_sync_push`.
+- <a id="tool-ssh"></a>**ssh** (feature) connects to remote hosts. Needed by every `--host` call, `agent_put`, `llm_db_databases` (a +ssh URL), `llm_db_explain` (a +ssh URL), `llm_db_query` (a +ssh URL), `llm_db_sample` (a +ssh URL), `llm_db_schema` (a +ssh URL), `llm_db_tables` (a +ssh URL), `llm_remote_run`, `llm_same` (a host side), `remote_exec`, `remote_pull`, `remote_push`, `remote_sync_pull` and `remote_sync_push`.
 - <a id="tool-scp"></a>**scp** (feature) copies files to and from remote hosts. Needed by `remote_pull` and `remote_push`.
 - <a id="tool-rsync"></a>**rsync** (feature) syncs directories with remote hosts. Needed by `remote_sync_pull` and `remote_sync_push`.
 - <a id="tool-ssh-add"></a>**ssh-add** (feature) loads SSH keys into the agent. Needed by `gash_ssh_auto_unlock`.

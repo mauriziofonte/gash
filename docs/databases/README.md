@@ -13,9 +13,7 @@ Platforms: Linux, macOS and WSL. A connection to a database on a remote host
 (a `+ssh` URL) runs that engine's client on the host, over `ssh`.
 
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
-Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
-
-- [ssh](../requirements.md#tool-ssh) (feature), for `gash_db_test` (a +ssh URL)
+Nothing beyond what Gash itself needs ([requirements](../requirements.md)).
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
