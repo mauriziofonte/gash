@@ -133,6 +133,7 @@ var needs = map[string][]Need{
 	"wsl_restart":     {{"cmd.exe", ""}},
 	"wsl_shutdown":    {{"cmd.exe", ""}},
 	"wsl_taskmanager": {{"cmd.exe", ""}},
+	"wsl_explorer":    {{"explorer.exe", ""}},
 }
 
 // needsIndex is needs plus ssh for every --host function, built on first

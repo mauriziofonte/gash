@@ -169,7 +169,10 @@ var catalog = []Tool{
 	{Name: "powershell.exe", Purpose: "answers the gash win queries and edits the Windows hosts file",
 		Level: Feature, Area: "windows", OS: []string{"wsl"}, Code: "windows_not_found", NoInstall: true,
 		Note: "It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf)"},
-	{Name: "cmd.exe", Purpose: "restarts and shuts down WSL from inside it",
+	{Name: "cmd.exe", Purpose: "restarts and shuts down WSL from inside it, and starts the Task Manager",
+		Level: Feature, Area: "windows", OS: []string{"wsl"}, NoInstall: true,
+		Note: "It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf)"},
+	{Name: "explorer.exe", Purpose: "opens Windows Explorer from WSL",
 		Level: Feature, Area: "windows", OS: []string{"wsl"}, NoInstall: true,
 		Note: "It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf)"},
 
