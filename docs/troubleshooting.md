@@ -193,13 +193,13 @@ functions still call GNU tools:
 | `sed --sandbox`, `gawk --sandbox` | `sed` and `awk` in `llm_exec` are refused |
 | `df -T` | `disk_usage` shows every `/dev` device, without a filesystem type |
 
-**Fix:** `brew install bash coreutils gawk gnu-sed`, then put the GNU
-names first in `PATH` before the Gash block in `~/.bashrc`:
+**Fix:** `brew install gawk gnu-sed` is enough for `llm_exec`: Gash
+finds them under their Homebrew names (`gawk`, `gsed`). For the filesystem
+type of `disk_usage`, also `brew install coreutils` and put its GNU names
+first in `PATH`, before the Gash block in `~/.bashrc`:
 
 ```bash
-for p in coreutils gnu-sed; do
-    PATH="$(brew --prefix)/opt/$p/libexec/gnubin:$PATH"
-done
+PATH="$(brew --prefix)/opt/coreutils/libexec/gnubin:$PATH"
 ```
 
 ## Parsing headless output

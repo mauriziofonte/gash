@@ -123,7 +123,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 ## Agent command runner (llm_exec)
 
 - <a id="tool-gawk"></a>**gawk** (optional) lets llm_exec run awk, through gawk --sandbox. Needed by `llm_exec` (awk).
-- <a id="tool-gnu-sed"></a>**gnu-sed** (optional) lets llm_exec run sed, through GNU sed --sandbox. Any of: `sed`, `gsed`. Needed by `llm_exec` (sed). Homebrew installs it as gsed; Gash finds it there.
+- <a id="tool-gnu-sed"></a>**gnu-sed** (optional) lets llm_exec run sed, through GNU sed --sandbox. Any of: `sed`, `gsed`. Needed by `llm_exec` (sed). On macOS, Homebrew installs it as gsed, which Gash finds.
 - <a id="tool-diffutils"></a>**diffutils** (optional) lets llm_exec run diff -r, through GNU diff --no-dereference. Needed by `llm_exec` (diff -r).
 - <a id="tool-bwrap"></a>**bwrap** (optional) sandboxes llm_exec when GASH_LLM_SANDBOX=1. Only on Linux. Needed by `llm_exec` (GASH_LLM_SANDBOX=1).
 

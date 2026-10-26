@@ -261,7 +261,7 @@ func TestExecToolRefusalHints(t *testing.T) {
 	m.run = runner.NewFake(t)
 	env := baseEnv(home, map[string]string{"PWD": d, "BASH": "/nonexistent/bash"})
 	sedWant := `{"error":"command_not_allowed","details":"sed","action":"STOP","recoverable":true,` +
-		`"hint":"llm_exec allows sed only where GNU sed --sandbox exists; use grep, head or llm_grep. Install sed: sudo apt-get install -y sed. Homebrew installs it as gsed; Gash finds it there",` +
+		`"hint":"llm_exec allows sed only where GNU sed --sandbox exists; use grep, head or llm_grep. Install sed: sudo apt-get install -y sed. On macOS, Homebrew installs it as gsed, which Gash finds",` +
 		`"missing":"gnu-sed","install":"sudo apt-get install -y sed"}` + "\n"
 	for line, want := range map[string]string{
 		"sed -n 1p a.txt": sedWant,

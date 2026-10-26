@@ -143,7 +143,7 @@ var catalog = []Tool{
 		Level: Optional, Area: "exec", Packages: pkgs("gawk"), Probe: []string{"--sandbox", "BEGIN{}"}},
 	{Name: "gnu-sed", Commands: []string{"sed", "gsed"}, Purpose: "lets llm_exec run sed, through GNU sed --sandbox",
 		Level: Optional, Area: "exec", Packages: pkgs("sed", "brew", "gnu-sed"), Probe: []string{"--sandbox", "-n", "p"},
-		Note: "Homebrew installs it as gsed; Gash finds it there"},
+		Note: "On macOS, Homebrew installs it as gsed, which Gash finds"},
 	{Name: "diffutils", Commands: []string{"diff"}, Purpose: "lets llm_exec run diff -r, through GNU diff --no-dereference",
 		Level: Optional, Area: "exec", Packages: pkgs("diffutils"), Probe: []string{"--no-dereference", "/dev/null", "/dev/null"}},
 	{Name: "bwrap", Purpose: "sandboxes llm_exec when GASH_LLM_SANDBOX=1", Level: Optional, Area: "exec", OS: []string{"linux"},
