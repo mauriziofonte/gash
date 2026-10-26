@@ -524,6 +524,10 @@ On a terminal a normal user is asked for sudo only by the sections
 that read root-only files (identity, storage, services, auth,
 security, system, all); overview, network, webstack, mail and infra
 never ask.
+Without sudo (or as a user it cannot elevate) the first of those
+sections says so in a Note row: files only root can read are left
+out. A block whose tool is missing says so too (Note=ss is not
+installed); without ss the listening ports come from netstat.
 One section per call: a second one is an error. -h/--help anywhere
 shows this help.
 ```

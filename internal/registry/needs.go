@@ -115,7 +115,7 @@ var needs = map[string][]Need{
 	"llm_service":   {{"systemctl", ""}, {"journalctl", "--log"}},
 	"services_stop": {{"systemctl", ""}, {"sudo", ""}},
 	"sudo_last":     {{"sudo", ""}},
-	"sysinfo":       {{"sudo", "the privileged sections"}},
+	"sysinfo":       {{"sudo", "the privileged sections"}, {"ss", "the listening ports"}},
 	"ai_sysinfo":    {{"sudo", "the privileged sections"}},
 	"wsl_compact":   {{"sudo", ""}},
 	"hgrep":         {{"fzf", "--pick"}},

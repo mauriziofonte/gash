@@ -3,6 +3,7 @@
 package sysinfo
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -52,9 +53,14 @@ func num(s string) int64 { return int64(ui.Int(s)) }
 var cpuFS = lazyre.MustCompile(`: *`)
 
 // overview is __sysinfo_collect_overview: one card (verbose) or the
-// OVERVIEW block (compact).
+// OVERVIEW block (compact). A field whose tool is missing or prints
+// nothing is read in-process (3.4: 2.x left it blank, and printed Bash's
+// "command not found" for uname).
 func (s *Session) overview(o *out) {
 	host := s.either([]string{"hostname"}, []string{"uname", "-n"}, true)
+	if host == "" {
+		host = s.m.native.host()
+	}
 	os := ""
 	if b, err := s.m.sys.ReadFile("/etc/os-release"); err == nil {
 		// Parsed, never sourced (SYS-40).
@@ -71,6 +77,10 @@ func (s *Session) overview(o *out) {
 	kernelOut, _ := s.tool("uname", "-sr")
 	archOut, _ := s.tool("uname", "-m")
 	kernel, arch := runner.CommandSubst(kernelOut), runner.CommandSubst(archOut)
+	if kernel == "" || arch == "" {
+		k, _, a := s.m.native.kernel()
+		kernel, arch = cmp.Or(kernel, k), cmp.Or(arch, a)
+	}
 
 	up := ""
 	if b, err := s.m.sys.ReadFile("/proc/uptime"); err == nil {
@@ -115,6 +125,9 @@ func (s *Session) overview(o *out) {
 	}
 	cpu = strings.TrimRight(squeezeSpaces(cpu), "\n")
 	cores := s.either([]string{"getconf", "_NPROCESSORS_ONLN"}, []string{"nproc"}, false)
+	if cores == "" {
+		cores = s.m.native.cpus()
+	}
 
 	var memTotal, memAvail, swapTotal, swapFree, diskTotal, diskUsed int64
 	if b, err := s.m.sys.ReadFile("/proc/meminfo"); err == nil {
@@ -140,12 +153,18 @@ func (s *Session) overview(o *out) {
 			diskTotal, diskUsed = num(w[0]), num(w[1])
 		}
 	}
+	if diskTotal == 0 {
+		diskTotal, diskUsed = s.m.native.disk(s.m.sys.Path("/"))
+	}
 	ipOut, _ := s.tool("hostname", "-I")
 	var ips []string
 	for _, l := range lines(ipOut) {
 		ips = append(ips, awkField(l, 1))
 	}
 	ip := subst(ips)
+	if ip == "" {
+		ip = s.m.native.ip()
+	}
 
 	if o.llm {
 		o.write("=== OVERVIEW ===\n")

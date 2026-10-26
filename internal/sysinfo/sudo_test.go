@@ -5,6 +5,7 @@ package sysinfo
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -30,23 +31,45 @@ func TestSudoReads(t *testing.T) {
 }
 
 // No cached credentials and no terminal (or headless): no prompt, the
-// reads are the user's.
+// reads are the user's, and the output says so under the section's
+// header (3.4: 2.x warned only on a terminal, in verbose mode).
 func TestSudoUnavailable(t *testing.T) {
+	noted := func(note string) string {
+		return strings.Replace(llmWant["auth"], "=== AUTH ===\n", "=== AUTH ===\nNote="+note+"\n", 1)
+	}
+	notCached := "sudo credentials are not cached (run sudo -v first): files only root can read are left out"
 	fx := newFixture(t, etcTree)
 	fx.uid = 1000
-	require.Equal(t, result{llmWant["auth"], "", 0}, fx.call(t, fx.tty(), "auth", "--llm", "--no-color"))
+	require.Equal(t, result{noted("could not obtain sudo: files only root can read are left out"), "", 0},
+		fx.call(t, fx.tty(), "auth", "--llm", "--no-color"))
 	require.Equal(t, "sudo -n true\nsudo -v\n", fx.sudo(t))
 
 	fx = newFixture(t, etcTree)
 	fx.uid = 1000
-	require.Equal(t, result{llmWant["auth"], "", 0}, fx.call(t, nil, "auth", "--llm"))
+	require.Equal(t, result{noted(notCached), "", 0}, fx.call(t, nil, "auth", "--llm"))
 	require.Equal(t, "sudo -n true\n", fx.sudo(t))
 
 	fx = newFixture(t, etcTree)
 	fx.uid = 1000
 	fx.env["GASH_HEADLESS"] = "1"
-	require.Equal(t, result{llmWant["auth"], "", 0}, fx.call(t, fx.tty(), "auth", "--llm"))
+	require.Equal(t, result{noted(notCached), "", 0}, fx.call(t, fx.tty(), "auth", "--llm"))
 	require.Equal(t, "sudo -n true\n", fx.sudo(t))
+
+	// Without sudo at all; verbose, the note is a row of the section.
+	fx = newFixture(t, etcTree)
+	fx.uid = 1000
+	require.NoError(t, os.Remove(filepath.Join(fx.bin, "sudo")))
+	require.Equal(t, result{noted("sudo is not installed: files only root can read are left out"), "", 0}, fx.call(t, nil, "auth", "--llm"))
+	r := fx.call(t, nil, "auth")
+	require.Contains(t, r.out, "AUTH\n")
+	require.Contains(t, r.out, "  Note:                    sudo is not installed: files only root can read are left out\n")
+	// all says it once, under the first section that reads as root.
+	r = fx.call(t, nil, "all", "--llm")
+	require.Equal(t, 1, strings.Count(r.out, "Note=sudo is not installed"))
+	require.Contains(t, r.out, "=== IDENTITY ===\nNote=sudo is not installed")
+	// Root reads as root: nothing to say.
+	fx.uid = 0
+	require.Equal(t, result{llmWant["auth"], "", 0}, fx.call(t, nil, "auth", "--llm"))
 }
 
 // On a terminal, verbose mode says why it asks, and what failed (3.0:

@@ -4198,6 +4198,10 @@ var baseFunctions = []Function{
 				"  that read root-only files (identity, storage, services, auth,\n" +
 				"  security, system, all); overview, network, webstack, mail and infra\n" +
 				"  never ask.\n" +
+				"  Without sudo (or as a user it cannot elevate) the first of those\n" +
+				"  sections says so in a Note row: files only root can read are left\n" +
+				"  out. A block whose tool is missing says so too (Note=ss is not\n" +
+				"  installed); without ss the listening ports come from netstat.\n" +
 				"  One section per call: a second one is an error. -h/--help anywhere\n" +
 				"  shows this help.",
 		},

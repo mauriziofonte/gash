@@ -3,9 +3,12 @@
 package sysinfo
 
 import (
+	"cmp"
+	"errors"
 	"io"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -21,10 +24,17 @@ import (
 // ai_sysinfo menu (1-6).
 var DeepSections = []string{"services", "security", "network", "storage", "performance", "maintenance"}
 
+// deepNeedsSudo are the drill-downs that read anything as root: each
+// says under its header why it could not (3.4).
+var deepNeedsSudo = map[string]bool{"security": true, "storage": true, "maintenance": true}
+
 // Deep writes the collector __sysinfo_deep_NAME to w; false for a name
 // that is not one of DeepSections.
 func (s *Session) Deep(w io.Writer, name string) bool {
 	d := deepOut{w}
+	if deepNeedsSudo[name] && s.limited != "" {
+		d = deepOut{&noteAfterHeader{w: w, note: "Note=" + s.limited + "\n"}}
+	}
 	switch name {
 	case "services":
 		s.deepServices(d)
@@ -61,6 +71,10 @@ type deepOut struct{ w io.Writer }
 
 // echo is `echo "S"`.
 func (d deepOut) echo(s string) { _, _ = io.WriteString(d.w, s+"\n") }
+
+// note is a Note line: what the block it ends lacks and why, such as
+// "ip is not installed" (3.4: 2.x left the block empty).
+func (d deepOut) note(text string) { d.echo("Note=" + text) }
 
 // lines echoes each line (a grep, ls or awk output).
 func (d deepOut) lines(ls []string) {
@@ -105,10 +119,131 @@ func (f files) grepFile(p string, re *regexp.Regexp, keep bool) []string {
 	return f.grep(f.read(p), re, keep)
 }
 
+// noteAfterHeader writes note after the first line (the === header) of
+// a drill-down.
+type noteAfterHeader struct {
+	w    io.Writer
+	note string
+}
+
+func (n *noteAfterHeader) Write(b []byte) (int, error) {
+	if n.note == "" {
+		return n.w.Write(b)
+	}
+	i := strings.IndexByte(string(b), '\n')
+	if i < 0 {
+		return n.w.Write(b)
+	}
+	if _, err := n.w.Write(b[:i+1]); err != nil {
+		return 0, err
+	}
+	note := n.note
+	n.note = ""
+	if _, err := io.WriteString(n.w, note); err != nil {
+		return 0, err
+	}
+	if _, err := n.w.Write(b[i+1:]); err != nil {
+		return 0, err
+	}
+	return len(b), nil
+}
+
 // toolHead is `NAME ARGS 2>/dev/null | head -N`.
 func (s *Session) toolHead(n int, name string, args ...string) []byte {
 	out, _ := s.tool(name, args...)
 	return headN(out, n)
+}
+
+// block is `NAME ARGS 2>/dev/null | head -N` (all of it for a negative
+// N) as a block's body, or the note that NAME is not installed (3.4).
+func (s *Session) block(d deepOut, n int, name string, args ...string) {
+	out, _, missing := s.run(nil, name, args...)
+	if missing {
+		d.note(name + " is not installed")
+		return
+	}
+	if n >= 0 {
+		out = headN(out, n)
+	}
+	d.raw(out)
+}
+
+// topBy is `ps aux --sort=-%COL | head -N`; where ps refuses --sort (BSD
+// ps), ps aux is sorted here on the column (field col from 0, %CPU 2 or
+// %MEM 3), the header first (3.4: 2.x printed nothing there).
+func (s *Session) topBy(d deepOut, n, col int, sort string) {
+	out, rc, missing := s.run(nil, "ps", "aux", sort)
+	switch {
+	case missing:
+		d.note("ps is not installed")
+		return
+	case rc == 0 || len(out) > 0:
+		d.raw(headN(out, n))
+		return
+	}
+	out, _, _ = s.run(nil, "ps", "aux")
+	ls := lines(out)
+	if len(ls) == 0 {
+		return
+	}
+	pct := func(l string) float64 {
+		v, _ := strconv.ParseFloat(awkField(l, col+1), 64)
+		return v
+	}
+	rows := ls[1:]
+	slices.SortStableFunc(rows, func(a, b string) int { return cmp.Compare(pct(b), pct(a)) })
+	d.lines(head(append([]string{ls[0]}, rows...), n))
+}
+
+// sudoBlock is block through __sysinfo_sudo; the program is looked up on
+// the caller's PATH first, as sudo's own failure says nothing usable.
+func (s *Session) sudoBlock(d deepOut, n int, name string, args ...string) {
+	if !s.has(name) {
+		d.note(name + " is not installed")
+		return
+	}
+	d.raw(headN(s.Sudo(name, args...), n))
+}
+
+// listening is the listening sockets for one protocol, the header line
+// left out: ss -tlnp or -ulnp, else netstat -tlnp or -ulnp (net-tools),
+// or the listening rows of the BSD netstat -an -p tcp|udp (3.4: 2.x read
+// ss only). Without either the note to print.
+func (s *Session) listening(udp bool) ([]byte, string) {
+	flag, proto := "-tlnp", "tcp"
+	if udp {
+		flag, proto = "-ulnp", "udp"
+	}
+	if out, _, missing := s.run(nil, "ss", flag); !missing {
+		return skipLine(out), ""
+	}
+	if s.m.bsd() {
+		if out, _, missing := s.run(nil, "netstat", "-an", "-p", proto); !missing {
+			return bsdListening(out, udp), ""
+		}
+	} else if out, _, missing := s.run(nil, "netstat", flag); !missing {
+		// Two header lines: "Active Internet connections" and the columns.
+		return skipLine(skipLine(out)), ""
+	}
+	return nil, "neither ss nor netstat is installed"
+}
+
+// bsdListening keeps the listening rows of a BSD netstat -an -p tcp|udp:
+// tcp rows in state LISTEN, udp rows with no foreign address (*.*).
+func bsdListening(out []byte, udp bool) []byte {
+	var b []byte
+	for _, l := range lines(out) {
+		f := awkFields(l)
+		if len(f) < 5 {
+			continue
+		}
+		switch {
+		case !udp && strings.HasPrefix(f[0], "tcp") && f[len(f)-1] == "LISTEN",
+			udp && strings.HasPrefix(f[0], "udp") && f[4] == "*.*":
+			b = append(b, strings.TrimRight(l, " \t")+"\n"...)
+		}
+	}
+	return b
 }
 
 // sudoTail is `__sysinfo_sudo tail -N FILE`.
@@ -120,15 +255,21 @@ func (s *Session) sudoTail(p string, n int) []byte {
 	return s.f.tail(p, n)
 }
 
-// listening is the two ss blocks that close the services and network
+// listeners is the two ss blocks that close the services and network
 // drill-downs.
-func (s *Session) listening(d deepOut) {
-	d.echo("--- Listening TCP")
-	out, _ := s.tool("ss", "-tlnp")
-	d.raw(headN(skipLine(out), 50))
-	d.echo("--- Listening UDP")
-	out, _ = s.tool("ss", "-ulnp")
-	d.raw(headN(skipLine(out), 30))
+func (s *Session) listeners(d deepOut) {
+	for _, b := range []struct {
+		head string
+		udp  bool
+		n    int
+	}{{"--- Listening TCP", false, 50}, {"--- Listening UDP", true, 30}} {
+		d.echo(b.head)
+		out, note := s.listening(b.udp)
+		d.raw(headN(out, b.n))
+		if note != "" {
+			d.note(note)
+		}
+	}
 }
 
 // deepServices is __sysinfo_deep_services.
@@ -475,12 +616,18 @@ func (s *Session) deepServices(d deepOut) {
 	}
 
 	d.echo("--- Running services")
-	out, _ := s.tool("systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--no-legend")
+	out, _, missing := s.run(nil, "systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--no-legend")
 	d.lines(head(fieldLines(out, 1), 50))
+	if missing {
+		d.note("systemctl is not installed")
+	}
 	d.echo("--- Active timers")
-	out, _ = s.tool("systemctl", "list-timers", "--no-pager", "--no-legend")
+	out, _, missing = s.run(nil, "systemctl", "list-timers", "--no-pager", "--no-legend")
 	d.lines(head(fieldLines(out, 0), 30))
-	s.listening(d)
+	if missing {
+		d.note("systemctl is not installed")
+	}
+	s.listeners(d)
 }
 
 // cnfFiles is the loop over DIR/*.cnf of the MySQL blocks.
@@ -537,7 +684,7 @@ func (s *Session) deepSecurity(d deepOut) {
 	}
 	if f.isDir("/etc/ufw") {
 		d.echo("--- UFW")
-		d.raw(headN(s.Sudo("ufw", "status", "verbose"), 30))
+		s.sudoBlock(d, 30, "ufw", "status", "verbose")
 		if f.isFile("/etc/ufw/ufw.conf") {
 			d.lines(f.grepFile("/etc/ufw/ufw.conf", reNoteBlank.R(), false))
 		}
@@ -549,7 +696,7 @@ func (s *Session) deepSecurity(d deepOut) {
 
 	if f.isDir("/etc/fail2ban") {
 		d.echo("--- fail2ban")
-		d.raw(headN(s.Sudo("fail2ban-client", "status"), 20))
+		s.sudoBlock(d, 20, "fail2ban-client", "status")
 		if f.isFile("/etc/fail2ban/jail.local") {
 			d.echo("--- jail.local")
 			d.lines(head(f.grep(s.sudoRead("/etc/fail2ban/jail.local"), reNoteSemiBlank.R(), false), 40))
@@ -612,7 +759,7 @@ func (s *Session) deepSecurity(d deepOut) {
 	}
 
 	d.echo("--- Login history")
-	d.raw(s.toolHead(20, "last", "-20"))
+	s.block(d, 20, "last", "-20")
 	d.echo("--- Auth log (recent)")
 	d.raw(headN(s.sudoTail("/var/log/auth.log", 30), 30))
 }
@@ -622,11 +769,11 @@ func (s *Session) deepNetwork(d deepOut) {
 	f := s.f
 	d.echo("=== NETWORK DEEP ===")
 	d.echo("--- Interfaces")
-	d.raw(s.toolHead(50, "ip", "addr", "show"))
+	s.block(d, 50, "ip", "addr", "show")
 	d.echo("--- Routes")
-	d.raw(s.toolHead(20, "ip", "route", "show"))
+	s.block(d, 20, "ip", "route", "show")
 	d.echo("--- Neighbors")
-	d.raw(s.toolHead(20, "ip", "neigh", "show"))
+	s.block(d, 20, "ip", "neigh", "show")
 	d.echo("--- resolv.conf")
 	d.raw(f.read("/etc/resolv.conf"))
 	if s.has("resolvectl") {
@@ -650,7 +797,7 @@ func (s *Session) deepNetwork(d deepOut) {
 		d.echo("--- dhcpcd")
 		d.lines(f.grepFile("/etc/dhcpcd.conf", reNoteBlank.R(), false))
 	}
-	s.listening(d)
+	s.listeners(d)
 }
 
 // deepStorage is __sysinfo_deep_storage.
@@ -658,12 +805,22 @@ func (s *Session) deepStorage(d deepOut) {
 	f := s.f
 	d.echo("=== STORAGE DEEP ===")
 	d.echo("--- Disk usage")
-	d.raw(s.toolHead(30, "df", "-hT"))
+	// BSD df has no -T (the filesystem type): df -h there (3.4).
+	if out, rc, missing := s.run(nil, "df", "-hT"); missing {
+		d.note("df is not installed")
+	} else if rc != 0 && len(out) == 0 {
+		d.raw(s.toolHead(30, "df", "-h"))
+	} else {
+		d.raw(headN(out, 30))
+	}
 	d.echo("--- Block devices")
-	d.raw(s.toolHead(30, "lsblk", "-f"))
+	s.block(d, 30, "lsblk", "-f")
 	d.echo("--- Mounts")
-	out, _ := s.tool("mount")
+	out, _, missing := s.run(nil, "mount")
 	d.lines(head(filter(grepLines(out, f.u8), reCgroup.R(), false), 30))
+	if missing {
+		d.note("mount is not installed")
+	}
 	d.echo("--- fstab")
 	d.raw(f.read("/etc/fstab"))
 	if f.isFile("/etc/crypttab") {
@@ -730,20 +887,20 @@ func (s *Session) deepPerformance(d deepOut) {
 	f := s.f
 	d.echo("=== PERFORMANCE DEEP ===")
 	d.echo("--- Memory")
-	out, _ := s.tool("free", "-h")
-	d.raw(out)
+	s.block(d, -1, "free", "-h")
 	d.echo("--- CPU")
 	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: "lscpu", Options: runner.Options{Env: withEnv(s.env, "LC_ALL=C"), Stderr: io.Discard}})
-	if err == nil {
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
+		d.note("lscpu is not installed")
+	} else if err == nil {
 		d.lines(head(filter(grepLines(res.Stdout, f.u8), reCPUInfo.R(), true), 10))
 	}
 	d.echo("--- Load")
-	out, _ = s.tool("uptime")
-	d.raw(out)
+	s.block(d, -1, "uptime")
 	d.echo("--- Top by memory")
-	d.raw(s.toolHead(15, "ps", "aux", "--sort=-%mem"))
+	s.topBy(d, 15, 3, "--sort=-%mem")
 	d.echo("--- Top by CPU")
-	d.raw(s.toolHead(10, "ps", "aux", "--sort=-%cpu"))
+	s.topBy(d, 10, 2, "--sort=-%cpu")
 
 	if f.isDir("/etc/mysql") {
 		d.echo("--- MySQL/MariaDB config")
@@ -766,8 +923,11 @@ func (s *Session) deepPerformance(d deepOut) {
 	}
 
 	d.echo("--- sysctl (key active params)")
-	out, _ = s.tool("sysctl", "-a")
+	out, _, missing := s.run(nil, "sysctl", "-a")
 	d.lines(head(filter(grepLines(out, f.u8), reSysctlKeys.R(), true), 30))
+	if missing {
+		d.note("sysctl is not installed")
+	}
 	d.echo("--- sysctl.d configs")
 	for _, p := range f.find("/etc/sysctl.d", query{maxDepth: -1, names: []string{"*.conf"}}) {
 		d.echo("--- " + path.Base(p))
@@ -823,6 +983,9 @@ func (s *Session) deepMaintenance(d deepOut) {
 		d.echo("--- Live domains")
 		d.lines(s.sudoLs("/etc/letsencrypt/live"))
 		d.echo("--- Cert expiry")
+		if !s.has("openssl") {
+			d.note("openssl is not installed")
+		}
 		for _, cert := range s.sudoFind("/etc/letsencrypt/live", query{maxDepth: -1, names: []string{"cert.pem"}}) {
 			expiry := runner.CommandSubst(s.Sudo("openssl", "x509", "-enddate", "-noout", "-in", s.m.sys.Path(cert)))
 			d.echo(path.Base(path.Dir(cert)) + ": " + expiry)
@@ -839,8 +1002,11 @@ func (s *Session) deepMaintenance(d deepOut) {
 	}
 
 	d.echo("--- Upgradable packages")
-	out, _ := s.tool("apt", "list", "--upgradable")
-	d.raw(headN(skipLine(out), 30))
+	if out, _, missing := s.run(nil, "apt", "list", "--upgradable"); missing {
+		d.note("apt is not installed")
+	} else {
+		d.raw(headN(skipLine(out), 30))
+	}
 	d.echo("--- dpkg log (recent)")
 	d.raw(f.tail("/var/log/dpkg.log", 30))
 	if f.isFile("/etc/apt/apt.conf.d/50unattended-upgrades") {
@@ -857,8 +1023,7 @@ func (s *Session) deepMaintenance(d deepOut) {
 	}
 	if f.isDir("/etc/.git") {
 		d.echo("--- etckeeper log")
-		out, _ := s.tool("git", "-C", s.m.sys.Path("/etc"), "log", "--oneline", "-20")
-		d.raw(out)
+		s.block(d, -1, "git", "-C", s.m.sys.Path("/etc"), "log", "--oneline", "-20")
 	}
 	if f.isFile("/etc/cloud/cloud.cfg") {
 		d.echo("--- Cloud-init")

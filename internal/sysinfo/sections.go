@@ -37,14 +37,32 @@ func (s *Session) identity(o *out) {
 	o.kv("OS ID", id)
 	o.kv("Version", version)
 	o.kv("Debian Version", runner.CommandSubst(f.read("/etc/debian_version")))
-	kernel, _ := s.toolShown("uname", "-r")
+	// Without uname the kernel's own answer, else a note (3.4: 2.x
+	// printed Bash's "uname: command not found" on stderr).
+	kernel, _, noUname := s.toolShown("uname", "-r")
+	arch, _, _ := s.toolShown("uname", "-m")
+	if noUname {
+		_, r, a := s.m.native.kernel()
+		kernel, arch = []byte(r), []byte(a)
+	}
 	o.kv("Kernel", runner.CommandSubst(kernel))
-	arch, _ := s.toolShown("uname", "-m")
 	o.kv("Arch", runner.CommandSubst(arch))
-	o.kv("Hostname", s.either([]string{"hostname", "-f"}, []string{"hostname"}, true))
+	if noUname && len(kernel) == 0 {
+		o.note("uname is not installed")
+	}
+	host := s.either([]string{"hostname", "-f"}, []string{"hostname"}, true)
+	if host == "" && !s.has("hostname") {
+		if host = s.m.native.host(); host == "" {
+			o.note("hostname is not installed")
+		}
+	}
+	o.kv("Hostname", host)
 	o.kv("Machine-ID", runner.CommandSubst(f.read("/etc/machine-id")))
-	up, _ := s.tool("uptime", "-p")
+	up, _, noUptime := s.run(nil, "uptime", "-p")
 	o.kv("Uptime", runner.CommandSubst(up))
+	if noUptime {
+		o.note("uptime is not installed")
+	}
 
 	if s.has("systemd-detect-virt") {
 		// The tool's own answer, trimmed; none only when it printed
@@ -213,8 +231,11 @@ func (s *Session) services(o *out) {
 		o.raw(fieldLines(out, 0))
 	}
 	o.subhead("Listening ports")
-	ss, _ := s.tool("ss", "-tlnp")
-	o.raw(tail2(lines(ss)))
+	ports, note := s.listening(false)
+	o.raw(lines(ports))
+	if note != "" {
+		o.note(note)
+	}
 
 	if f.isDir("/etc/systemd/system") {
 		o.subhead("Custom systemd units")
@@ -243,14 +264,6 @@ func fieldLines(out []byte, n int) []string {
 		ls = append(ls, awkField(l, n))
 	}
 	return ls
-}
-
-// tail2 is `tail -n +2`.
-func tail2(ls []string) []string {
-	if len(ls) < 2 {
-		return nil
-	}
-	return ls[1:]
 }
 
 // passwdUsers is `awk -F: '$3>=1000 && $3<65534{print $1":"$3":"$6":"$7}'`.

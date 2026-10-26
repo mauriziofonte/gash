@@ -1,5 +1,8 @@
 === STORAGE DEEP ===
 --- Disk usage
+Note=df is not installed
 --- Block devices
+Note=lsblk is not installed
 --- Mounts
+Note=mount is not installed
 --- fstab
