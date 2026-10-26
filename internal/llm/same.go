@@ -183,9 +183,6 @@ func (m *Module) same(c *invoke.Call) int {
 			return got{err: e}
 		}
 		errOut := r.Stderr
-		if e, ok := fbEnvelope(errOut, nonce, sameHint); ok {
-			return got{err: &e}
-		}
 		// A program the host (or the container) lacks: find there gave an
 		// empty listing, which read as every file differing.
 		if tool, ok := remote.MissingFrame(errOut, nonce); ok {
@@ -194,6 +191,9 @@ func (m *Module) same(c *invoke.Call) int {
 				ctr = ""
 			}
 			e := remote.MissingOnHost("llm_same", tool, t.host, ctr)
+			return got{err: &e}
+		}
+		if e, ok := fbEnvelope(errOut, nonce, sameHint); ok {
 			return got{err: &e}
 		}
 		kind, ok := fbFrame(errOut, nonce, "kind")
@@ -435,7 +435,7 @@ if command -v sha256sum >/dev/null 2>&1; then H=sha256sum
 elif command -v shasum >/dev/null 2>&1; then H='shasum -a 256'
 elif command -v openssl >/dev/null 2>&1; then H='openssl dgst -sha256 -r'
 else gash_err hash_tool_not_found tool "no sha256sum, shasum or openssl on the host"; fi
-abs=$(gash_resolve "$P")
+abs=$(gash_resolve "$P") || exit 1
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 if [ -d "$abs" ]; then
   gash_forbidden "$abs" names && gash_err forbidden_path subdir "$abs"

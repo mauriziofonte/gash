@@ -86,7 +86,7 @@ func grepFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, bo
 	}
 	script := fbHeader("P", path, "PAT", pattern, "EXTS", strings.Join(exts, " "), "CTX", ctx, "L", limit) + `
 gash_need() { printf '%s need %s\n' "$N" "$1" >&2; exit 0; }
-abs=$(gash_resolve "$P")
+abs=$(gash_resolve "$P") || exit 1
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 [ -e "$abs" ] || gash_err path_not_found exists "$abs"
 gash_secret "$abs" && gash_err secret_file_blocked searchsecret "$abs"

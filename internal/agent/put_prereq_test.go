@@ -60,6 +60,24 @@ func TestPutRailsWithoutTr(t *testing.T) {
 	}
 }
 
+// TestPutWithoutReadlink: without realpath -m and without readlink on the
+// host gash_resolve gave a symlink's own path, so a link named settings
+// that points at .env passed the secret rail and was written through. It
+// is refused with readlink named now, and a path without a link uploads.
+func TestPutWithoutReadlink(t *testing.T) {
+	f := newPutFixture(t)
+	f.ssh.Path = putPath(t, "realpath", "readlink")
+	write(t, filepath.Join(f.rhome, ".env"), "SECRET=1\n", 0o600)
+	require.NoError(t, os.Symlink("../.env", filepath.Join(f.rhome, "app", "settings")))
+	r := f.run(t, "", "agent_put", "web:app/settings", "--from", "config.php", "--force")
+	require.Equal(t, 1, r.RC)
+	require.Equal(t, `{"error":"prerequisite_missing","details":"agent_put on web needs readlink, which is not installed there","action":"STOP","recoverable":true,`+
+		`"hint":"Install readlink on web (usually the coreutils package), then retry","missing":"readlink","host":"web"}`+"\n", r.Stderr)
+	require.Equal(t, "SECRET=1\n", read(t, filepath.Join(f.rhome, ".env")))
+	out := putJSON(t, f.run(t, "", "agent_put", "web:app/config.php", "--from", "config.php"))
+	require.Equal(t, true, out["written"])
+}
+
 // TestPutMissingHostTools: a missing wc made the upload "cut short", a
 // missing cp gave the new file the default mode instead of the old one's;
 // the program is named now, before anything is written (a dry run too).

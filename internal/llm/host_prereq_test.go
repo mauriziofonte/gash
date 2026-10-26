@@ -114,6 +114,26 @@ func TestHostRailsWithoutTr(t *testing.T) {
 	}
 }
 
+// TestHostRailsWithoutReadlink: without realpath -m and without readlink
+// on the host gash_resolve gave a symlink's own path, so llm_config read
+// env-link (a link to .env) as a file named env-link and sent .env. The
+// link is refused with readlink named now; a path without a link still
+// answers.
+func TestHostRailsWithoutReadlink(t *testing.T) {
+	f := newHostFixtureOn(t, true)
+	f.tree(t)
+	f.ssh.Path = hostPath(t, f, fallbackTools, "readlink")
+	for _, args := range [][]string{{"llm_config", "env-link"}, {"llm_grep", "TODO", "env-link"}} {
+		r := runGo(t, f.m, f.dir, f.env, args[0], append(args[1:], "--host", "web")...)
+		require.Equal(t, 1, r.RC, args)
+		require.Equal(t, missingOnWeb(args[0], "readlink", "coreutils"), r.Stderr, args)
+		require.Empty(t, r.Stdout, args)
+	}
+	r := runGo(t, f.m, f.dir, f.env, "llm_config", "conf/app.json", "--host", "web")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Equal(t, "{\"a\": 1}\n", r.Stdout)
+}
+
 // TestHostFallbacksUnderBashPosix: the fallbacks give the local answer
 // under bash --posix too (the parity tests run them under sh).
 func TestHostFallbacksUnderBashPosix(t *testing.T) {

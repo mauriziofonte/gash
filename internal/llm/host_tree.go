@@ -59,7 +59,7 @@ func treeFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, bo
 		all = "1"
 	}
 	script := fbHeader("P", path, "D", strconv.Itoa(depth), "ALL", all) + `
-abs=$(gash_resolve "$P")
+abs=$(gash_resolve "$P") || exit 1
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 [ -d "$abs" ] || gash_err not_a_directory dir "$abs"
 gash_forbidden "$abs" names && gash_err forbidden_path subdir "$abs"

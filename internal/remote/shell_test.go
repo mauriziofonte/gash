@@ -197,3 +197,40 @@ func bit(b bool) string {
 	}
 	return "0"
 }
+
+// TestShResolveWithoutReadlink: without realpath -m and without readlink,
+// gash_resolve gave a symlink's own path, so the rails judged a link named
+// "settings" that points at .env as "settings" and the call read or wrote
+// .env through it. It answers the "missing readlink" frame and status 1
+// now, with nothing on stdout; paths without a link still resolve.
+func TestShResolveWithoutReadlink(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "app"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".env"), []byte("A=1\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "app", "f"), nil, 0o600))
+	for link, target := range map[string]string{"settings": ".env", "dl": "nowhere/x", "dlink": "app"} {
+		require.NoError(t, os.Symlink(target, filepath.Join(dir, link)))
+	}
+	empty := t.TempDir()
+	for _, sh := range shells(t) {
+		for _, c := range []struct{ in, out, errOut string }{
+			{"app/f", "ok " + dir + "/app/f\n", ""},
+			{"app/new/../g", "ok " + dir + "/app/g\n", ""},
+			{"dlink/x", "ok " + dir + "/app/x\n", ""},
+			{"settings", "status 1\n", "NONCE missing readlink\n"},
+			{"dl", "status 1\n", "NONCE missing readlink\n"},
+			{"dl/y", "status 1\n", "NONCE missing readlink\n"},
+		} {
+			script := "N=NONCE\n" + ShResolve() + "cd " + Quote(dir) + "\n" +
+				`if r=$(gash_resolve "$1"); then echo "ok $r"; else echo "status $?${r:+ stdout $r}"; fi` + "\n"
+			cmd := exec.Command(sh[0], append(append(sh[1:], "-c", script, "sh"), c.in)...)
+			cmd.Env = []string{"PATH=" + empty, "LC_ALL=C"}
+			var out, errOut strings.Builder
+			cmd.Stdout, cmd.Stderr = &out, &errOut
+			require.NoError(t, cmd.Run(), "%v %s", sh, c.in)
+			require.Equal(t, c.out, out.String(), "%v %s", sh, c.in)
+			require.Equal(t, c.errOut, errOut.String(), "%v %s", sh, c.in)
+		}
+	}
+}

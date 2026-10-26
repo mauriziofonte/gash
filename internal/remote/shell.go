@@ -19,7 +19,10 @@ func ShErr() string {
 // realpath -m (GNU realpath where it is there; elsewhere, as on macOS and
 // BusyBox, cd -P on the longest existing prefix, readlink -f, and a
 // dangling symlink followed with plain readlink, at most 40 hops), the
-// rest appended without . segments and with .. applied.
+// rest appended without . segments and with .. applied. A symlink it
+// cannot follow (no realpath and no readlink on the host) is the "missing
+// readlink" frame and status 1, with nothing on stdout: the rails must
+// never judge a link by its own name.
 func ShResolve() string {
 	return `gash_resolve() {
   case $1 in '~') set -- "$HOME" ;; '~/'*) set -- "$HOME/${1#'~/'}" ;; esac
@@ -37,6 +40,9 @@ func ShResolve() string {
       gr_p=$(cd -P -- "$gr_p" 2>/dev/null && pwd -P)
     elif gr_r=$(readlink -f -- "$gr_p" 2>/dev/null) && [ -n "$gr_r" ]; then
       gr_p=$gr_r
+    elif [ -L "$gr_p" ] && ! command -v readlink >/dev/null 2>&1; then
+      printf '%s missing readlink\n' "$N" >&2
+      return 1
     elif [ -L "$gr_p" ] && [ "$gr_h" -lt 40 ] && gr_l=$(readlink -- "$gr_p" 2>/dev/null) && [ -n "$gr_l" ]; then
       gr_h=$((gr_h + 1))
       case $gr_l in /*) gr_p=$gr_l$gr_t ;; *) gr_p=${gr_p%/*}/$gr_l$gr_t ;; esac

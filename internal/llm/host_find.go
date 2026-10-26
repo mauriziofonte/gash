@@ -56,7 +56,7 @@ func findFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, bo
 		return argError("invalid_limit", "Value '"+limit+"' is not a non-negative integer below 1000000000", "Provide a plain integer for limit")
 	}
 	script := fbHeader("P", path, "PAT", pattern, "T", fileType, "L", limit) + `
-abs=$(gash_resolve "$P")
+abs=$(gash_resolve "$P") || exit 1
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 [ -e "$abs" ] || gash_err path_not_found exists "$abs"
 gash_forbidden "$abs" names && gash_err forbidden_path subdir "$abs"

@@ -137,14 +137,14 @@ func (m *Module) put(c *invoke.Call) int {
 		stdin = bytes.NewReader(data)
 	}
 	r := tr.Exec(c.Ctx, h, nonce, putScript(nonce, p, mode, len(data), hexSum, backup, verify, force, dry), stdin, o.TimeoutOr(putTimeout))
+	if tool, ok := remote.MissingFrame(r.Stderr, nonce); ok {
+		return c.Fail(remote.MissingOnHost("agent_put", tool, h, ""))
+	}
 	if code, _, details, ok := remote.ErrFrame(r.Stderr, nonce); ok {
 		if _, known := contract.ActionOf(code); !known {
 			code, details = "internal_error", "agent_put on "+h.Alias+": "+code+" "+details
 		}
 		return c.Fail(contract.New(code, details, putHints[code]))
-	}
-	if tool, ok := remote.MissingFrame(r.Stderr, nonce); ok {
-		return c.Fail(remote.MissingOnHost("agent_put", tool, h, ""))
 	}
 	if e := r.Failure(h); e != nil {
 		return c.Fail(*e)
@@ -251,7 +251,7 @@ func putScript(nonce, p, mode string, size int, sum string, backup, verify, forc
 		s.WriteString(kv[0] + "=" + remote.Quote(kv[1]) + "\n")
 	}
 	s.WriteString(`(
-abs=$(gash_resolve "$P")
+abs=$(gash_resolve "$P") || exit 1
 gash_secret "$abs" && gash_err secret_file_blocked secret "$abs"
 gash_forbidden "$abs" && gash_err write_path_denied deny "$abs (matched: protected)"
 t=$(gash_tier "$abs")
