@@ -45,6 +45,10 @@ func TestNamesExist(t *testing.T) {
 		// Error codes share the shape (git_not_found).
 		known[c.Name] = true
 	}
+	// Names of other programs' files and directories share it too.
+	for _, n := range []string{"node_modules"} {
+		known[n] = true
+	}
 	settings := codeSettings(t, root)
 	for _, page := range markdownFiles(t, root) {
 		rel, _ := filepath.Rel(root, page)

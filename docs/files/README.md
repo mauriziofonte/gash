@@ -206,6 +206,9 @@ Tree statistics for ~/proj
 
 The extension is what follows the last dot of the name, in lower case; files
 without one, and names such as `.env`, count as `(no ext)`.
+`Max depth` counts the directory levels below the root: `logs/old/app-2025.log.gz`
+is at depth 2 (one less than `find -maxdepth` counts, which also counts the
+file itself).
 
 ## Find and remove empty directories
 
