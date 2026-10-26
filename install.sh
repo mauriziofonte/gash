@@ -670,7 +670,12 @@
       gashinst_success "Created ~/.gashrc"
     fi
 
-    gashinst_fetch_binary
+    if ! gashinst_fetch_binary; then
+      gashinst_info "Open a new terminal, or run 'source ${GASH_PROFILE:-~/.bashrc}', to load Gash."
+      gashinst_warning "Gash cannot run until its binary is installed: bash $(gashinst_install_dir)/install.sh --repair"
+      gashinst_reset
+      return 0
+    fi
     gashinst_feature_tools
 
     gashinst_info "Open a new terminal, or run 'source ${GASH_PROFILE:-~/.bashrc}', to start using Gash."
@@ -682,7 +687,7 @@
   # Fetch and verify the release binary for this platform, reusing the
   # checkout's own compat bootstrap (SHA-256 checked). Best-effort: a
   # failure is reported, not fatal — the shim fetches on first use, and
-  # 'install.sh --repair' retries.
+  # 'install.sh --repair' retries. Status 1 when no binary is in place.
   gashinst_fetch_binary() {
     local INSTALL_DIR BOOT MODE
     INSTALL_DIR="$(gashinst_install_dir)"
@@ -698,8 +703,7 @@
     fi
     MODE=loud
     [ "${QUIET-0}" -eq 1 ] && MODE=quiet
-    __gash_fetch "$MODE" || true
-    return 0
+    __gash_fetch "$MODE"
   }
 
   # --repair (upgrade.md 3.7): download and verify the binary of the
