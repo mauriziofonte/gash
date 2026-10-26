@@ -287,7 +287,6 @@ func TestCatalog(t *testing.T) {
 	}
 }
 
-
 func must(t *testing.T, name string) *Tool {
 	t.Helper()
 	tool, ok := Lookup(name)
