@@ -11,19 +11,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// protectedDir is DIR with private/ (PROTECT:all), contracts/
-// (PROTECT:content), public/, a link to private and a link into
+// protectedDir is DIR with personal/ (PROTECT:all), contracts/
+// (PROTECT:content), public/, a link to personal and a link into
 // contracts; env reads the PROTECT: lines from its GASH_ENV_FILE.
 func protectedDir(t *testing.T) (string, map[string]string) {
 	t.Helper()
 	d := physTemp(t)
-	mustWrite(t, filepath.Join(d, "private", "a.txt"), "token private\n")
+	mustWrite(t, filepath.Join(d, "personal", "a.txt"), "token personal\n")
 	mustWrite(t, filepath.Join(d, "contracts", "deal.txt"), "token contract\n")
 	mustWrite(t, filepath.Join(d, "public", "a.txt"), "token public\n")
-	require.NoError(t, os.Symlink(filepath.Join(d, "private"), filepath.Join(d, "plink")))
+	require.NoError(t, os.Symlink(filepath.Join(d, "personal"), filepath.Join(d, "plink")))
 	require.NoError(t, os.Symlink(filepath.Join(d, "contracts", "deal.txt"), filepath.Join(d, "public", "c.txt")))
 	env := baseEnv(physTemp(t), map[string]string{
-		"GASH_ENV_FILE": envFile(t, "PROTECT:all="+d+"/private\nPROTECT:content="+d+"/contracts\n"),
+		"GASH_ENV_FILE": envFile(t, "PROTECT:all="+d+"/personal\nPROTECT:content="+d+"/contracts\n"),
 	})
 	return d, env
 }
@@ -39,34 +39,34 @@ func TestProtectedPathsLocal(t *testing.T) {
 		require.Equal(t, 1, r.RC, r.Stdout)
 		return gitCode(t, r)
 	}
-	for _, p := range []string{"private/a.txt", "plink/a.txt", d + "/private"} {
+	for _, p := range []string{"personal/a.txt", "plink/a.txt", d + "/personal"} {
 		require.Equal(t, "forbidden_path/FATAL", code(runGo(t, m, d, env, "llm_read", p)), p)
 	}
 	for _, p := range []string{"contracts/deal.txt", "public/c.txt"} {
 		require.Equal(t, "secret_file_blocked/FATAL", code(runGo(t, m, d, env, "llm_read", p)), p)
 	}
-	require.Equal(t, "forbidden_path/FATAL", code(runGo(t, m, d, env, "llm_tree", "private")))
+	require.Equal(t, "forbidden_path/FATAL", code(runGo(t, m, d, env, "llm_tree", "personal")))
 
 	r := runGo(t, m, d, env, "llm_grep", "token", ".")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, r.Stdout, "token public")
 	require.NotContains(t, r.Stdout, "contract")
-	require.NotContains(t, r.Stdout, "private")
+	require.NotContains(t, r.Stdout, "personal")
 
 	r = runGo(t, m, d, env, "llm_tree", ".", "--depth", "3")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, r.Stdout, "deal.txt")
-	require.NotContains(t, r.Stdout, "private")
+	require.NotContains(t, r.Stdout, "personal")
 
 	r = runGo(t, m, d, env, "llm_find", "*.txt", ".")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, r.Stdout, "contracts/deal.txt")
-	require.NotContains(t, r.Stdout, "private/")
+	require.NotContains(t, r.Stdout, "personal/")
 
 	// llm_exec: by name, through a link, and a walk that would enter one.
 	for line, want := range map[string]string{
-		"cat private/a.txt":       "forbidden_path/FATAL",
-		"ls -la private":          "forbidden_path/FATAL",
+		"cat personal/a.txt":       "forbidden_path/FATAL",
+		"ls -la personal":          "forbidden_path/FATAL",
 		"cat plink/a.txt":         "forbidden_path/FATAL",
 		"cat contracts/deal.txt":  "secret_file_blocked/FATAL",
 		"wc -l public/c.txt":      "secret_file_blocked/FATAL",
@@ -90,7 +90,7 @@ func TestProtectedPathsLocal(t *testing.T) {
 	require.Equal(t, "forbidden_path/FATAL", code(runGo(t, m, d, only, "llm_exec", "grep -r token .")))
 
 	// Without the file, nothing is protected.
-	r = runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_read", "private/a.txt")
+	r = runGo(t, m, d, baseEnv(physTemp(t), nil), "llm_read", "personal/a.txt")
 	require.Equal(t, 0, r.RC, r.Stderr)
 }
 
@@ -101,17 +101,17 @@ func TestProtectedPathsGit(t *testing.T) {
 	home := physTemp(t)
 	d := physTemp(t)
 	git(t, d, home, "init", "-b", "main")
-	for _, f := range []string{"private/a.txt", "contracts/deal.txt", "pub.txt"} {
+	for _, f := range []string{"personal/a.txt", "contracts/deal.txt", "pub.txt"} {
 		mustWrite(t, filepath.Join(d, f), "one\n")
 	}
 	git(t, d, home, "add", "-A")
 	git(t, d, home, "commit", "-m", "base")
-	for _, f := range []string{"private/a.txt", "contracts/deal.txt", "pub.txt"} {
+	for _, f := range []string{"personal/a.txt", "contracts/deal.txt", "pub.txt"} {
 		mustWrite(t, filepath.Join(d, f), "two secret words\n")
 	}
-	mustWrite(t, filepath.Join(d, "private", "new.txt"), "x\n")
+	mustWrite(t, filepath.Join(d, "personal", "new.txt"), "x\n")
 	env := baseEnv(physTemp(t), map[string]string{
-		"GASH_ENV_FILE": envFile(t, "PROTECT:all=~/w/private\nPROTECT:content="+d+"/contracts\n"),
+		"GASH_ENV_FILE": envFile(t, "PROTECT:all=~/w/personal\nPROTECT:content="+d+"/contracts\n"),
 	})
 	// ~ is the caller's home: link it to the repository.
 	require.NoError(t, os.Symlink(d, filepath.Join(env["HOME"], "w")))
@@ -120,12 +120,12 @@ func TestProtectedPathsGit(t *testing.T) {
 	r := runGo(t, m, d, env, "llm_git_status")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, r.Stdout, "contracts/deal.txt")
-	require.NotContains(t, r.Stdout, "private")
+	require.NotContains(t, r.Stdout, "personal")
 	for _, args := range [][]string{{"--files"}, {"--numstat"}, {}, {"--patch"}} {
 		r = runGo(t, m, d, env, "llm_git_diff", args...)
 		require.Equal(t, 0, r.RC, r.Stderr)
 		require.Contains(t, r.Stdout, "pub.txt", args)
-		require.NotContains(t, r.Stdout, "private", args)
+		require.NotContains(t, r.Stdout, "personal", args)
 		if len(args) == 1 && args[0] == "--patch" {
 			require.Contains(t, r.Stdout, "[... secret file: patch omitted]")
 			require.Equal(t, 1, strings.Count(r.Stdout, "two secret words"), "pub.txt only")
@@ -134,11 +134,11 @@ func TestProtectedPathsGit(t *testing.T) {
 	git(t, d, home, "commit", "-qam", "second")
 	r = runGo(t, m, d, env, "llm_git_show", "HEAD", "--patch")
 	require.Equal(t, 0, r.RC, r.Stderr)
-	require.NotContains(t, r.Stdout, "private")
+	require.NotContains(t, r.Stdout, "personal")
 	require.Equal(t, 1, strings.Count(r.Stdout, "two secret words"), r.Stdout)
 	r = runGo(t, m, d, env, "llm_git_log", "--fields", "subject,files", "-n", "1")
 	require.Equal(t, `[{"subject":"second","files":["contracts/deal.txt","pub.txt"]}]`+"\n", r.Stdout)
-	r = runGo(t, m, d, env, "llm_git_show", "HEAD:private/a.txt")
+	r = runGo(t, m, d, env, "llm_git_show", "HEAD:personal/a.txt")
 	require.Equal(t, "forbidden_path/FATAL", gitCode(t, r))
 	r = runGo(t, m, d, env, "llm_git_show", "HEAD:contracts/deal.txt")
 	require.Equal(t, "secret_file_blocked/FATAL", gitCode(t, r))
@@ -152,16 +152,16 @@ func TestProtectedPathsExecGit(t *testing.T) {
 	home := physTemp(t)
 	d := physTemp(t)
 	git(t, d, home, "init", "-b", "main")
-	for _, f := range []string{"private/a.txt", "contracts/deal.txt", "pub.txt"} {
+	for _, f := range []string{"personal/a.txt", "contracts/deal.txt", "pub.txt"} {
 		mustWrite(t, filepath.Join(d, f), "one\n")
 	}
 	git(t, d, home, "add", "-A")
 	git(t, d, home, "commit", "-m", "base")
-	for _, f := range []string{"private/a.txt", "contracts/deal.txt", "pub.txt"} {
+	for _, f := range []string{"personal/a.txt", "contracts/deal.txt", "pub.txt"} {
 		mustWrite(t, filepath.Join(d, f), "two secret words\n")
 	}
 	env := baseEnv(home, map[string]string{
-		"GASH_ENV_FILE": envFile(t, "PROTECT:all="+d+"/private\nPROTECT:content="+d+"/contracts\n"),
+		"GASH_ENV_FILE": envFile(t, "PROTECT:all="+d+"/personal\nPROTECT:content="+d+"/contracts\n"),
 	})
 	m := New()
 	exec := func(dir, line string) result { t.Helper(); return runGo(t, m, dir, env, "llm_exec", line) }
@@ -173,16 +173,16 @@ func TestProtectedPathsExecGit(t *testing.T) {
 	for _, line := range []string{"git status --short", "git diff --stat", "git log -p -1", "git grep -n secret"} {
 		r = exec(d, line)
 		require.Equal(t, 0, r.RC, "%s: %s", line, r.Stderr)
-		require.NotContains(t, r.Stdout, "private", line)
+		require.NotContains(t, r.Stdout, "personal", line)
 	}
 	r = exec(d, "git grep -n one HEAD")
 	require.NotContains(t, r.Stdout, "contracts")
 	require.Contains(t, r.Stdout, "pub.txt")
-	r = exec(d, "git show HEAD:private/a.txt")
+	r = exec(d, "git show HEAD:personal/a.txt")
 	require.Equal(t, "forbidden_path/FATAL", gitCode(t, r))
 	r = exec(d, "git -C contracts show HEAD:./deal.txt")
 	require.Equal(t, "secret_file_blocked/FATAL", gitCode(t, r))
-	r = exec(filepath.Join(d, "private"), "git log --oneline")
+	r = exec(filepath.Join(d, "personal"), "git log --oneline")
 	require.Equal(t, "forbidden_path/FATAL", gitCode(t, r))
 	r = exec(filepath.Join(d, "contracts"), "git diff")
 	require.Equal(t, 0, r.RC, r.Stderr)
