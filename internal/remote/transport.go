@@ -30,6 +30,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -119,6 +120,9 @@ type Result struct {
 	TimedOut bool
 	// Ms is how long the invocation took.
 	Ms float64
+	// noSSH is the prerequisite envelope when ssh itself could not start
+	// (not on PATH, or not executable).
+	noSSH *contract.Envelope
 }
 
 // Exec runs script on h in one ssh invocation, with stdin (nil: none) as
@@ -138,25 +142,37 @@ func (t Transport) Exec(ctx context.Context, h Host, nonce, script string, stdin
 	}
 	args := append(sshOpts(home), "--", h.Target, historyOff+script)
 	start := time.Now()
-	res, _ := t.Run.Run(ctx, runner.Cmd{Path: "ssh", Args: args, Options: runner.Options{
+	res, err := t.Run.Run(ctx, runner.Cmd{Path: "ssh", Args: args, Options: runner.Options{
 		Env: t.Env.Child(), Stdin: stdin, Timeout: timeout, KillAfter: time.Second,
 	}})
 	r := Result{Stdout: res.Stdout, SSH: res.ExitCode, TimedOut: res.TimedOut, Ms: msSince(start)}
+	var se *runner.StartError
+	if errors.As(err, &se) {
+		// The entry points check ssh before connecting (RequireSSH); this
+		// is the backstop, never host_unreachable.
+		e := prereq.Current(&invoke.Call{Env: t.Env}).Report("ssh", "").Envelope()
+		r.noSSH = &e
+	}
 	r.Stderr, r.Tag, r.Status, r.Detail = cutTrailer(res.Stderr, nonce)
 	return r
 }
 
-// Unreachable reports that ssh itself failed: no trailer and ssh's 255
-// (or a start failure: no ssh on PATH).
+// Unreachable reports that ssh itself failed: no trailer and ssh's 255.
+// A 127 is the remote login shell's "not found", or ssh missing here:
+// neither is a dead connection.
 func (r Result) Unreachable() bool {
-	return r.Tag == "" && (r.SSH == 255 || r.SSH == 127 || r.SSH == 126)
+	return r.Tag == "" && r.SSH == 255
 }
 
 // Failure is the envelope of an invocation that did not run to its
-// trailer: host_unreachable (RETRY) when ssh failed or timed out,
+// trailer: the prerequisite report when ssh is missing here,
+// host_unreachable (RETRY) when ssh failed or timed out,
 // remote_protocol_error (STOP) when the remote side ended early. nil when
 // the trailer is there.
 func (r Result) Failure(h Host) *contract.Envelope {
+	if r.noSSH != nil {
+		return r.noSSH
+	}
 	if r.Tag != "" {
 		return nil
 	}
@@ -168,9 +184,6 @@ func (r Result) Failure(h Host) *contract.Envelope {
 		detail := h.Alias + " (" + h.Target + ")"
 		if msg := lastLine(r.Stderr); msg != "" {
 			detail += ": " + msg
-		}
-		if r.SSH == 127 || r.SSH == 126 {
-			detail = h.Alias + ": ssh is not installed"
 		}
 		e := contract.New("host_unreachable", detail, "Check that the host is up and that ssh to it works without a prompt (BatchMode), then retry once")
 		return &e

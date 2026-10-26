@@ -14,10 +14,24 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/mauriziofonte/gash/internal/runner"
 )
+
+// ClientPath is path with a directory in front of it that holds an ssh
+// program, for machines without an ssh client: the remote functions look
+// ssh up on the caller's PATH before they connect, and the fake answers
+// in its place, so this one never runs.
+func ClientPath(t testing.TB, path string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte("#!/bin/sh\necho 'sshtest: ssh ran instead of the fake' >&2\nexit 255\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir + string(os.PathListSeparator) + path
+}
 
 // SSH is the fake. Calls, Scripts, Targets and Stdins record every
 // invocation.
@@ -29,6 +43,8 @@ type SSH struct {
 	Path string
 	// Env are extra remote variables, NAME=value.
 	Env []string
+	// Shell runs the remote script (default sh): "bash --posix", say.
+	Shell []string
 	// Unreachable makes every invocation fail as a dead connection: ssh's
 	// 255 with its message, nothing run.
 	Unreachable bool
@@ -84,7 +100,11 @@ func (f *SSH) Run(ctx context.Context, c runner.Cmd) (runner.Result, error) {
 	if err := os.WriteFile(file, []byte(script), 0o600); err != nil {
 		return runner.Result{}, err
 	}
-	r, err := f.Exec.Run(ctx, runner.Cmd{Path: "sh", Args: []string{file}, Options: runner.Options{
+	shell := f.Shell
+	if len(shell) == 0 {
+		shell = []string{"sh"}
+	}
+	r, err := f.Exec.Run(ctx, runner.Cmd{Path: shell[0], Args: append(append([]string{}, shell[1:]...), file), Options: runner.Options{
 		Env:       append([]string{"HOME=" + f.Home, "PATH=" + path, "LC_ALL=C"}, f.Env...),
 		Dir:       f.Home,
 		Stdin:     bytes.NewReader(in),
