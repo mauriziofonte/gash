@@ -140,7 +140,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-systemctl"></a>**systemctl** (feature) reads and controls systemd services. Only on Linux. Needed by `ai_sysinfo` (questions), `llm_service` and `services_stop`. It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf.
 - <a id="tool-journalctl"></a>**journalctl** (optional) adds the service journal to llm_service --log. Only on Linux. Needed by `ai_sysinfo` (questions) and `llm_service` (--log). It comes with systemd.
 - <a id="tool-fzf"></a>**fzf** (optional) picks an entry from a list. Needed by `hgrep` (--pick).
-- <a id="tool-truncate"></a>**truncate** (optional) empties root-owned live logs for gash logs clean --sudo --truncate. Needed by `gash logs` (clean --sudo --truncate).
+- <a id="tool-truncate"></a>**truncate** (optional) empties root-owned live logs for gash logs clean --sudo --truncate. Any of: `truncate`, `gtruncate`. Needed by `gash logs` (clean --sudo --truncate). On macOS, Homebrew's coreutils installs it as gtruncate, which Gash finds.
 - <a id="tool-ldd"></a>**ldd** (feature) lists the shared libraries chrome-headless-shell needs. Only on Linux. Needed by `chrome_headless_update`.
 - <a id="tool-bc"></a>**bc** (optional) is the calculator behind the calc alias. Needed by `gash init` (the calc alias).
 
@@ -148,7 +148,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 | --- | --- | --- | --- | --- | --- | --- |
 | sudo | `sudo` | `sudo` | `sudo` | `sudo` | `sudo` | built in |
 | fzf | `fzf` | `fzf` (EPEL) | `fzf` | `fzf` | `fzf` | `fzf` |
-| truncate | `coreutils` | `coreutils` | `coreutils` | `coreutils` | `coreutils` | `truncate` |
+| truncate | `coreutils` | `coreutils` | `coreutils` | `coreutils` | `coreutils` | `coreutils` |
 | ldd | `libc-bin` | `glibc-common` | `glibc` | `glibc` | `musl-utils` | — |
 | bc | `bc` | `bc` | `bc` | `bc` | `bc` | built in |
 

@@ -89,6 +89,8 @@ type run struct {
 	dryRun    bool
 	yes       bool
 	depth     int
+	// truncateBin is the truncate rootReady found (gtruncate on macOS).
+	truncateBin string
 }
 
 func (r *run) tree() *cobra.Command {
@@ -190,7 +192,7 @@ func (r *run) doClean(_ *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	cl := cleaner{run: r.opt.Run, dryRun: r.dryRun, useSudo: r.useSudo}
+	cl := cleaner{run: r.opt.Run, dryRun: r.dryRun, useSudo: r.useSudo, truncate: r.truncateBin}
 	res := cl.apply(r.c.Ctx, ops)
 	return r.cleanResult(rep, res, false)
 }
@@ -214,9 +216,13 @@ func (r *run) rootReady(ops []op) bool {
 		if !need[t[0]] {
 			continue
 		}
-		if _, ok := prereq.Locate(r.c, t[0]); !ok {
+		path, ok := prereq.Locate(r.c, t[0])
+		if !ok {
 			r.status = prereq.Fail(r.c, t[0], t[1], r.asJSON)
 			return false
+		}
+		if t[0] == "truncate" {
+			r.truncateBin = path
 		}
 	}
 	return true

@@ -4,6 +4,7 @@ package logs
 
 import (
 	"bytes"
+	"context"
 	"slices"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/platform"
 	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
@@ -57,14 +59,41 @@ func TestCleanRootTools(t *testing.T) {
 	require.Empty(t, errOut)
 	restore()
 
-	restore = prereq.SetSystem(debian("truncate"))
+	restore = prereq.SetSystem(debian("truncate", "gtruncate"))
 	ok, _, errOut = rootRun(true, []op{rootDel, rootTrunc})
 	require.False(t, ok)
 	require.Equal(t, `{"error":"prerequisite_missing","details":"gash logs clean --sudo --truncate needs truncate, which is not installed",`+
-		`"action":"STOP","recoverable":true,"hint":"Install coreutils: sudo apt-get install -y coreutils","missing":"truncate",`+
+		`"action":"STOP","recoverable":true,"hint":"Install coreutils: sudo apt-get install -y coreutils. `+
+		`On macOS, Homebrew's coreutils installs it as gtruncate, which Gash finds","missing":"truncate",`+
 		`"install":"sudo apt-get install -y coreutils"}`+"\n", errOut)
 	// Deletes alone need no truncate.
 	ok, _, _ = rootRun(true, []op{rootDel})
 	require.True(t, ok)
 	restore()
+}
+
+// On macOS Homebrew's coreutils installs truncate as gtruncate: the check
+// finds it and the sudo batch runs it (3.4: the batch ran a truncate that
+// macOS does not have).
+func TestCleanRootTruncateProgram(t *testing.T) {
+	sys := debian()
+	sys.OS = platform.OS{GOOS: "darwin", ID: "macos", Name: "macOS"}
+	sys.Manager = prereq.Brew
+	sys.LookPath = func(name string, _ []string) (string, bool) {
+		return "/opt/homebrew/bin/" + name, name == "sudo" || name == "gtruncate"
+	}
+	defer prereq.SetSystem(sys)()
+	e := invoke.EnvMap(map[string]string{"PATH": "/usr/bin"})
+	c := &invoke.Call{Name: "gash", Env: e, Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}, Term: term.Fixed(e, false, false, false)}
+	r := &run{c: c, useSudo: true}
+	rootTrunc := op{Path: "/var/log/system.log", Truncate: true, needRoot: true}
+	require.True(t, r.rootReady([]op{rootTrunc}))
+	require.Equal(t, "/opt/homebrew/bin/gtruncate", r.truncateBin)
+
+	f := runner.NewFake(t).Respond(func(runner.Call) (runner.Expect, bool) { return runner.Expect{}, true })
+	res := cleaner{run: f, useSudo: true, truncate: r.truncateBin}.apply(context.Background(), []op{rootTrunc})
+	require.Equal(t, 1, res.Truncated)
+	calls := f.Calls()
+	require.Len(t, calls, 1)
+	require.Equal(t, []string{"sudo", "/opt/homebrew/bin/gtruncate", "-s", "0", "--", "/var/log/system.log"}, calls[0].Argv)
 }

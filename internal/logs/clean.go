@@ -55,6 +55,9 @@ type cleaner struct {
 	run     runner.Runner
 	dryRun  bool
 	useSudo bool
+	// truncate is the program of the sudo truncate batch (truncate when
+	// empty).
+	truncate string
 }
 
 // apply runs the ops. The files the process can change it changes directly
@@ -119,7 +122,11 @@ func (c cleaner) applyRoot(ctx context.Context, res *Result, del []string, delB 
 		}
 	}
 	if len(trunc) > 0 {
-		if c.dryRun || c.sudo(ctx, append([]string{"truncate", "-s", "0", "--"}, trunc...)) {
+		prog := c.truncate
+		if prog == "" {
+			prog = "truncate"
+		}
+		if c.dryRun || c.sudo(ctx, append([]string{prog, "-s", "0", "--"}, trunc...)) {
 			res.Truncated += len(trunc)
 			res.Freed += truncB
 		} else {
