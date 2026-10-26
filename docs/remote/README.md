@@ -229,7 +229,11 @@ read-only command on several hosts in parallel,
 matches the local one, and [`agent_put`](../agents/reference.md#agent_put)
 uploads a file atomically. They all use the `HOST:` aliases of this page and
 the same multiplexed connection, and they accept an alias only, never a raw
-`user@host`. Remote paths pass the deny tier above before anything connects.
+`user@host`. Remote paths pass the deny tier above before anything connects,
+and the paths you protect for the host with `PROTECT:` lines are kept from
+them on the host too. `GASH_REMOTE_NO_BINARY` names the hosts that must
+never receive the gash binary: there only the POSIX fallbacks answer. See
+[configuration.md](../configuration.md#protected-paths).
 They answer in JSON, for agents first; the
 [agents guide](../agents/README.md) explains them, and
 [AGENTS.md](../../AGENTS.md) holds the rules an agent follows.

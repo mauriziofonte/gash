@@ -215,6 +215,29 @@ below a protected path, and they do not follow symlinks. The filesystem scanners
 through a symlink or from `/` (a walk skips them), and `/` without
 `--allow-root`.
 
+## Your protected paths
+
+`PROTECT:content=PATH` and `PROTECT:all=PATH` in `~/.gash_env` add your
+own paths to the rails above, for this machine and every host, or for one
+`HOST:` alias (`PROTECT:all@web=PATH`).
+[configuration.md](configuration.md#protected-paths) has the syntax.
+
+| Mode | Effect |
+|---|---|
+| `content` | Every file in the tree is a secret file: names, metadata and digests are shown, the content is never read, searched, compared, diffed, committed or written (`secret_file_blocked`) |
+| `all` | The tree is a forbidden path: refused as an argument (`forbidden_path`), left out of every walk, listing and git output; `llm_exec` runs no line inside it and no recursive command above it |
+
+The checks resolve links as the forbidden paths do. On a host they run
+three times: on the path as written before anything connects, in the gash
+binary on the host (the rules travel with each call, in `GASH__PROTECT`,
+and only add to the host's own), and in the POSIX fallbacks on the path the
+host resolves (a fallback walk that would enter a tree is refused, where
+the binary leaves the tree out). `llm_remote_run` checks the paths of its
+command as written. `llm_exec` cannot filter what a command prints (a
+plain `ls` above an `all` tree names it), and `GASH_LLM_EXEC=unrestricted`
+checks no path. Like every rail here, they bind Gash, not an agent that
+has a shell of its own.
+
 ## Git
 
 A cloned repository can carry configuration that names programs: an
@@ -349,7 +372,10 @@ and the [agents guide](agents/README.md) shows them to a person.
   never sent. `llm_remote_run` checks each command with the checked
   `llm_exec` rules first (`GASH_LLM_EXEC=unrestricted` does not apply). Over a `+ssh` database connection the SQL guard runs before
   ssh and the password goes on ssh's stdin. The gash binary Gash copies to a
-  host is size-checked, test-run and renamed into a 0700 cache directory.
+  host is size-checked, test-run and renamed into a 0700 cache directory;
+  `GASH_REMOTE_NO_BINARY` keeps it off the hosts it names (the POSIX
+  fallbacks answer there, or the call fails with
+  `remote_binary_unavailable`).
 * **Telemetry** (`GASH_TELEMETRY_FILE`) is off by default and local: the
   function, time, output size, status and truncation of each call, never an
   argument, a path or a value.

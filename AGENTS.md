@@ -592,9 +592,11 @@ Several hosts run in parallel: objects come as one array in `--host` order,
 text as `==> ALIAS <==` blocks. On a host with this machine's OS and CPU the
 gash binary itself answers: it is copied once (first call: two round trips)
 into `~/.cache/gash/remote/<version>-<hash>/gash` (0700, checked by size and
-a test run, renamed into place) and reused by every later call; elsewhere
-`llm_find`, `llm_grep`, `llm_tree` and `llm_config` answer their basic
-forms through POSIX sh with the local output (`llm_find` names without
+a test run, renamed into place) and reused by every later call. Elsewhere,
+and on a host named in the user's `GASH_REMOTE_NO_BINARY` (`*` names every
+host), which never gets the binary, `llm_find`, `llm_grep`, `llm_tree` and
+`llm_config` answer their basic forms through POSIX sh with the local
+output (`llm_find` names without
 `--contains`, `llm_tree` with `--depth`, `--stats` and `--text`, `llm_config`
 without `--path`, `llm_grep` with a pattern in the syntax ripgrep and POSIX
 ERE share), and every other call
@@ -604,13 +606,14 @@ syntax). `-` (stdin) is `unexpected_argument` with `--host`: the local
 stdin is not sent; words after `--` (the command of `llm_docker_exec`) are
 never read as `--host`. `llm_sysinfo` keeps the machine's own name in its
 `"host"` key. `rm -rf ~/.cache/gash/remote` on the host removes the copies. The
-path rules are the local ones plus the transfer DENY list of `remote_*`,
-checked before connecting (a `..` component is `path_traversal_blocked`)
+path rules are the local ones plus the transfer DENY list of `remote_*` and
+the user's `PROTECT:` paths for that host (6.7), checked before connecting (a `..` component is `path_traversal_blocked`)
 and again on the host after resolving links; a secret file never leaves the
 host.
 
 `llm_remote_run` checks CMD with the `llm_exec` rules (3.5) before anything
-connects: read-only commands, no secret files or protected paths.
+connects: read-only commands, no secret files or protected paths (the
+`PROTECT:` paths of every host it names, as written).
 `GASH_LLM_EXEC_ALLOW` applies; `GASH_LLM_EXEC=unrestricted` does not (it is
 `llm_exec`'s alone), and `GASH_LLM_SANDBOX` is local only. A glob or a
 leading `~` is `remote_glob_unsupported` (RETRY): it would expand on this
@@ -887,6 +890,9 @@ every check below.
   (content searches: also above `/etc`), and may not follow symlinks
   (`grep -R`, `rg -L`, `find -L`/`-follow`/`-files0-from`, `fd -L`,
   `tree -l`, `du -L`, `ls -RL`, `--dereference-recursive`).
+* The user's `PROTECT:all` paths (6.7) are forbidden paths too, with one
+  difference: `llm_tree`, `llm_find` and `llm_grep` may start above them
+  and leave them out.
 * Paths resolve as GNU `realpath -m` resolves them, on every platform.
 
 ### 6.2 Secret files
@@ -923,7 +929,8 @@ stays skipped there. `llm_exec` also refuses `git show REV:PATH` for a
 secret PATH and git blobs named by id (`git show SHA`, `git cat-file -p
 SHA`, `--batch`). Their names still appear in `llm_tree` and `llm_find`
 name searches. Detection is by name only: a password inside `config.php` is
-not.
+not. Every file under one of the user's `PROTECT:content` paths (6.7) is a
+secret file too, whatever its name.
 
 ### 6.3 `llm_exec`
 
@@ -1079,6 +1086,27 @@ these:
   value, and only on this machine.
 
 Writes are `agent_*` calls, with the rules of section 8.
+
+### 6.7 The user's protected paths
+
+`PROTECT:` lines in `~/.gash_env` add the user's own paths to these rails,
+for this machine and every host or for one `HOST:` alias. Every `llm_*` and
+`agent_*` call holds them, after resolving links:
+
+| Line | What a call gets |
+|---|---|
+| `PROTECT:content=PATH` | Names, metadata and digests (`llm_tree`, `llm_find`, `llm_stat`, `llm_hash`); the content is `secret_file_blocked` (FATAL), searches walk around it, and no `agent_*` call writes there |
+| `PROTECT:all=PATH` | Nothing: `forbidden_path` (FATAL) as an argument, left out of walks, listings and `llm_git_*` output; `llm_exec` runs no line inside it and no recursive command above it |
+
+* `llm_exec` refuses every argument inside a `content` tree, since it
+  cannot tell a listing from a read: list it with `llm_tree` or `llm_find`.
+  Inside a repository its `git` leaves the trees out of diffs, logs and
+  greps. It does not filter what a command prints.
+* On a host the paths are checked as written before connecting, then on
+  the host. A POSIX fallback walk that would enter an `all` tree is
+  `forbidden_path`: name a narrower directory.
+* A protected path is the user's decision: do not ask for a way around
+  it, and never edit `~/.gash_env` yourself.
 
 ## 7. Routing: the raw shape and the Gash function
 

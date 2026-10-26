@@ -88,6 +88,26 @@
 # To list configured hosts: remote_hosts
 
 # ============================================
+# Protected Paths
+# ============================================
+# Format: PROTECT:mode=path   or   PROTECT:mode@alias=path
+#
+# Paths the agent functions (llm_*, agent_*) must keep away from, on top of
+# the built-in rails. A path is absolute or starts with ~/; it covers the
+# directory and everything below it, also when reached through a symlink.
+#   content = names and metadata stay visible (listings, stat), the content
+#             is refused like a secret file (secret_file_blocked)
+#   all     = nothing at all: no read, no listing, no search, no write
+#             (forbidden_path); walks above it leave it out
+# Without @alias a line holds locally and on every host; with @alias it
+# holds on that HOST: alias only (the path is the host's).
+#
+# Examples:
+# PROTECT:content=~/clients/contracts
+# PROTECT:all=~/private
+# PROTECT:all@web=/srv/app/storage/keys
+
+# ============================================
 # Shell Settings
 # ============================================
 # Format: GASH_NAME=value   (quotes optional: GASH_NAME="a b")
@@ -135,7 +155,11 @@
 # GASH_LLM_EXEC_ALLOW=     # extra commands for llm_exec, e.g. "make npm"
 # GASH_LLM_SANDBOX=0       # 1 = llm_exec runs inside bwrap: read-only
 #                          #     filesystem, no network
-#                          # These three are read from this file only, never
+# GASH_REMOTE_NO_BINARY=   # host aliases that never get the gash binary,
+#                          #     e.g. "web, db"; * = every host. --host
+#                          #     calls there use the POSIX fallbacks or
+#                          #     answer remote_binary_unavailable
+#                          # These four are read from this file only, never
 #                          # from the environment.
 #
 # AI (ask, ai_query, ai_sysinfo)
