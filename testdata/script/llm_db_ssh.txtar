@@ -6,6 +6,8 @@
 # before the stub ssh is ever called. The ssh on PATH is a stub that logs
 # each invocation and its arguments and runs the remote script with sh; the
 # mysql on PATH is a stub that logs its arguments, MYSQL_PWD and stdin.
+# The date stub stops the clock the host reads around the client, so a
+# loaded machine never makes the query slow (no slow_query_explain).
 #
 # covers: none (new in 3.4; no 2.x spec)
 
@@ -15,6 +17,7 @@ env GASH_ENV_FILE=$WORK/hostenv
 env PATH=$WORK/bin:$PATH
 chmod 755 bin/ssh
 chmod 755 bin/mysql
+chmod 755 bin/date
 
 # --- the guard refuses a write before anything connects
 ! exec gash llm_db_query 'DELETE FROM users' -c shop
@@ -57,3 +60,6 @@ printf '%s\n' "$@" >"$WORK/mysql.args"
 printf '%s\n' "$MYSQL_PWD" >"$WORK/mysql.pw"
 cat >"$WORK/mysql.stdin"
 printf 'id\tname\n1\tAlice\n2\tNULL\n'
+-- bin/date --
+#!/bin/sh
+echo 1700000000000000000
