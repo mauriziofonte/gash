@@ -10,6 +10,7 @@ package llm
 import (
 	"errors"
 	"os"
+	"runtime"
 	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/contract"
@@ -33,6 +34,9 @@ type Module struct {
 	// proc is the Linux /proc the process listings read when ps is
 	// missing, "" where there is none (macOS).
 	proc string
+	// goos is the system the tools' output formats come from
+	// (runtime.GOOS: BSD netstat on darwin).
+	goos string
 	// exe is the running binary that --host ships (nil: os.Executable).
 	exe func() (string, error)
 }
@@ -45,6 +49,7 @@ func New() *Module {
 		rootHome: pathguard.RootHome,
 		readFile: os.ReadFile,
 		proc:     proctab.Root(),
+		goos:     runtime.GOOS,
 	}
 }
 

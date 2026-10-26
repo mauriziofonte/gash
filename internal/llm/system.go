@@ -83,15 +83,11 @@ func (m *Module) ports(c *invoke.Call) int {
 	if byPort {
 		return m.portsByPort(c, scope, port)
 	}
-	var rows [][4]string
-	if ss, ok := m.lookPath(c, "ss"); ok {
-		rows = parseSS(m.output(c, nil, ss, "-tun"+scope))
-	} else if ns, ok := m.lookPath(c, "netstat"); ok {
-		rows = parseNetstat(m.output(c, nil, ns, "-tun"+scope))
-	} else {
-		return fail(c, "ports_tool_not_found", "Neither ss nor netstat is installed",
-			"Install iproute2 (ss) or net-tools (netstat) to list ports. Skip this check")
+	src, ok := m.portsSource(c, "llm_ports")
+	if !ok {
+		return 1
 	}
+	rows, _ := src.read(scope, false)
 	// By port, then protocol, in the tool's order otherwise; one record
 	// per (port, protocol, state, address), so an IPv4 and an IPv6
 	// listener on one port are two records (LLM-11; 2.x kept one line
