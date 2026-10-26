@@ -49,9 +49,11 @@ agent_docker_exec app --dry-run -- composer install --no-dev
 ```text
 Replaces docker exec CTR sh -c '...' for commands that change things:
 CMD's words reach docker exec as an array, no shell runs, nothing to
-quote. Read-only work belongs to llm_docker_exec. Rails: the llm_exec
-dangerous-command blocklist (dangerous_command_blocked, FATAL) and no
-secret file named in CMD (secret_file_blocked). Output as
+quote. Read-only work belongs to llm_docker_exec. Rails: the agent
+write blocklist (rm -rf /, chown -R or chmod -R of /, mkfs, dd to a
+disk, shutdown, curl | sh, keys: dangerous_command_blocked, FATAL; a path
+below a root is fine) and no secret file named in CMD
+(secret_file_blocked). Output as
 llm_docker_exec: {"rc","out","err"}, exit status 0 when the command
 ran (read rc); --dry-run: {"argv":[...],"dry_run":true,"written":false}.
 ```

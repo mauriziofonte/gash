@@ -7,7 +7,6 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/docker"
 	"github.com/mauriziofonte/gash/internal/invoke"
-	"github.com/mauriziofonte/gash/internal/llmexec"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/runner"
@@ -17,8 +16,9 @@ import (
 // (plan P5, A1): the write half of llm_docker_exec, same shape, any
 // command (php artisan migrate, composer install, chown). The words reach
 // docker exec as an array, no shell runs. The rails that stay: the
-// dangerous-command blocklist of llm_exec (rm -rf /, mkfs, dd to a disk,
-// ...) and no secret file named in the command (A5). --dry-run prints the
+// agent write blocklist (writeBlocklist: rm -rf /, mkfs, dd to a disk,
+// ...; a path below a root is not the root) and no secret file named in
+// the command (A5). --dry-run prints the
 // docker argv and runs nothing.
 func (m *Module) dockerExec(c *invoke.Call) int {
 	if helpAnywhere(c) {
@@ -36,8 +36,9 @@ func (m *Module) dockerExec(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
-	if _, err := llmexec.Build(strings.Join(cmd, " "), llmexec.Settings{Exec: "unrestricted"}, llmexec.Environ{}, nil); err != nil {
-		return refusal(c, err)
+	if writeBlocked(strings.Join(cmd, " ")) {
+		return fail(c, "dangerous_command_blocked", "Command matches dangerous pattern",
+			"agent_docker_exec refuses commands that wipe, format, chown or chmod a whole root, write a disk, stop the machine or read keys; ask the user")
 	}
 	for _, w := range cmd {
 		_, v, _ := strings.Cut(w, "=")

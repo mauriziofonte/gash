@@ -2,10 +2,10 @@
 #
 # agent_docker_exec (new in 3.4, plan P5 and A1): the write half of
 # llm_docker_exec, same shape, any command: its words reach docker exec as
-# an array, no shell runs, nothing to quote. The llm_exec dangerous-command
-# blocklist and the secret-file rule still apply; --dry-run prints the
-# docker argv and runs nothing. docker is a stub on PATH that records its
-# arguments.
+# an array, no shell runs, nothing to quote. The agent write blocklist (a
+# root, never a path below it) and the secret-file rule still apply;
+# --dry-run prints the docker argv and runs nothing. docker is a stub on
+# PATH that records its arguments.
 #
 # covers: none (new in 3.4; no 2.x spec)
 

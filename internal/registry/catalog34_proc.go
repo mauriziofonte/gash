@@ -43,9 +43,11 @@ var catalogProc = []Function{
 				"NOTES\n" +
 				"  Replaces docker exec CTR sh -c '...' for commands that change things:\n" +
 				"  CMD's words reach docker exec as an array, no shell runs, nothing to\n" +
-				"  quote. Read-only work belongs to llm_docker_exec. Rails: the llm_exec\n" +
-				"  dangerous-command blocklist (dangerous_command_blocked, FATAL) and no\n" +
-				"  secret file named in CMD (secret_file_blocked). Output as\n" +
+				"  quote. Read-only work belongs to llm_docker_exec. Rails: the agent\n" +
+				"  write blocklist (rm -rf /, chown -R or chmod -R of /, mkfs, dd to a\n" +
+				"  disk, shutdown, curl | sh, keys: dangerous_command_blocked, FATAL; a path\n" +
+				"  below a root is fine) and no secret file named in CMD\n" +
+				"  (secret_file_blocked). Output as\n" +
 				"  llm_docker_exec: {\"rc\",\"out\",\"err\"}, exit status 0 when the command\n" +
 				"  ran (read rc); --dry-run: {\"argv\":[...],\"dry_run\":true,\"written\":false}.",
 		},
