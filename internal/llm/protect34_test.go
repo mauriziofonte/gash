@@ -66,6 +66,7 @@ func TestProtectedPathsLocal(t *testing.T) {
 	// llm_exec: by name, through a link, and a walk that would enter one.
 	for line, want := range map[string]string{
 		"cat private/a.txt":       "forbidden_path/FATAL",
+		"ls -la private":          "forbidden_path/FATAL",
 		"cat plink/a.txt":         "forbidden_path/FATAL",
 		"cat contracts/deal.txt":  "secret_file_blocked/FATAL",
 		"wc -l public/c.txt":      "secret_file_blocked/FATAL",

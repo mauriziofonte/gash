@@ -40,6 +40,11 @@ func (lc *lineChecker) checkPath(word, cwd string, plain bool) error {
 		return nil
 	}
 	if !plain && !strings.Contains(word, "/") && !strings.HasPrefix(word, "~") && word != "." && word != ".." {
+		// A bare name may still be a PROTECT:all path of the user's
+		// below the working directory (ls private).
+		if len(lc.guard.Hidden) > 0 && lc.guard.Hides(lc.execAbs(word, cwd)) {
+			return refuse("forbidden_path", word, "FATAL", "This path is protected and cannot be accessed")
+		}
 		return nil
 	}
 	p := lc.execAbs(word, cwd)

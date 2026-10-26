@@ -105,7 +105,7 @@ func (m *Module) remoteRun(c *invoke.Call) int {
 	if dash {
 		lines = []string{joinWords(words)}
 	}
-	prelude, canons, err := remoteLines(c, lines)
+	prelude, canons, err := remoteLines(c, lines, hosts)
 	if err != nil {
 		return refusal(c, err)
 	}
@@ -363,10 +363,11 @@ func joinWords(words []string) string {
 // remoteLines checks each line as llm_exec checks it (the settings of
 // ~/.gash_env, GASH_LLM_SANDBOX aside: bwrap is a local sandbox) against
 // the remote side: no local filesystem lookups, a relative path is a path
-// below the remote home, and a glob or ~ the canonical rendering would
-// expand here is refused. It returns the prelude (the same for every
-// line) and each line's canonical script.
-func remoteLines(c *invoke.Call, lines []string) (string, []string, error) {
+// below the remote home, the PROTECT: paths of every host (as written)
+// are protected, and a glob or ~ the canonical rendering would expand
+// here is refused. It returns the prelude (the same for every line) and
+// each line's canonical script.
+func remoteLines(c *invoke.Call, lines []string, hosts []remote.Host) (string, []string, error) {
 	f := config.LoadCaller(c.Env.Get)
 	setting := func(name string) string {
 		v, _ := f.Setting(name)
@@ -378,6 +379,9 @@ func remoteLines(c *invoke.Call, lines []string) (string, []string, error) {
 	env := llmexec.Environ{
 		Cwd: remoteCwd, Home: remoteCwd, RootHome: "/root", BashPath: "bash", Vars: map[string]string{},
 		FS: noFS{}, LookupUser: func(string) (string, bool) { return "", false },
+	}
+	for _, h := range hosts {
+		env.Rules = append(env.Rules, h.Rules...)
 	}
 	base, err := llmexec.Build("true", s, env, remoteProbe{})
 	if err != nil {

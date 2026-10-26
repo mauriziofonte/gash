@@ -117,7 +117,7 @@ func (m *Module) put(c *invoke.Call) int {
 	if e != nil {
 		return c.Fail(*e)
 	}
-	if e := remote.CheckWrite(p, force); e != nil {
+	if e := remote.CheckWrite(p, force, h); e != nil {
 		return c.Fail(*e)
 	}
 	data, ok := m.putSource(c, from)

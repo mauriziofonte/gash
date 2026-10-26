@@ -5,6 +5,7 @@ package remote
 import (
 	"strings"
 
+	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
@@ -17,11 +18,15 @@ import (
 // resolved path with ShForbidden.
 
 // CheckRead is the rail of a path an llm_* --host call reads: the local
-// rails and the transfer DENY tier (forbidden_path, FATAL). The ASK tier
+// rails, the PROTECT:all paths of hosts as written and the transfer DENY
+// tier (forbidden_path, FATAL). The ASK tier
 // does not apply to reads, as it does not to local llm_* reads.
-func CheckRead(p string) *contract.Envelope {
+func CheckRead(p string, hosts ...Host) *contract.Envelope {
 	norm, e := checkLexical(p)
 	if e != nil || norm == "" {
+		return e
+	}
+	if e := protectedRead(norm, hosts); e != nil {
 		return e
 	}
 	if kind, detail := tier(norm); kind == "deny" {
@@ -32,11 +37,13 @@ func CheckRead(p string) *contract.Envelope {
 }
 
 // CheckWrite is the rail of a path an agent_* --host call writes: the
-// local rails, the secret-file rule (secret_file_blocked, FATAL), the DENY
+// local rails and the PROTECT: paths of hosts as written (a PROTECT:all
+// path is forbidden_path, a PROTECT:content one a secret file), the
+// secret-file rule (secret_file_blocked, FATAL), the DENY
 // tier (write_path_denied, FATAL, even with --force) and the ASK tier
 // (/etc, /var, /usr/local, /root, any .ssh: sensitive_path, STOP, unless
 // force), the codes agent_* gives a local target.
-func CheckWrite(p string, force bool) *contract.Envelope {
+func CheckWrite(p string, force bool, hosts ...Host) *contract.Envelope {
 	norm, e := checkLexical(p)
 	if e != nil {
 		return e
@@ -45,7 +52,10 @@ func CheckWrite(p string, force bool) *contract.Envelope {
 		env := contract.New("missing_file", "", "Name the remote file to write")
 		return &env
 	}
-	if pathguard.SecretName(norm) {
+	if e := protectedRead(norm, hosts); e != nil {
+		return e
+	}
+	if pathguard.SecretName(norm) || protectedLexical(norm, hosts) == config.ProtectContent {
 		env := contract.New("secret_file_blocked", p, "agent_* functions never write secret files")
 		return &env
 	}
@@ -98,14 +108,21 @@ func tier(norm string) (string, string) {
 
 // ShForbidden is a POSIX sh function, gash_forbidden PATH, that succeeds
 // when the resolved absolute PATH is refused on the remote side: at or
-// below a protected tree (the local rails, root's home included), at or
-// below a DENY entry, or, with a second argument "walk", the root or a
-// directory above a protected tree (a walk may not start there; "names"
-// walks skip the /etc entries, as the local walkRoot does). Generated from
+// below a protected tree (the local rails, root's home included, and the
+// host's PROTECT:all paths), at or below a DENY entry, or, with a second
+// argument "names" or "content", the root or a directory above a
+// protected tree (a walk may not start there; "names" walks skip the /etc
+// entries, as the local walkRoot does; "content" walks also stop above a
+// PROTECT:content path). It carries ShProtect, which resolves the rules
+// with gash_resolve when the script has it (ShResolve), else reads them
+// as written. Generated from
 // the Go tables, so the two sides cannot drift.
 func ShForbidden() string {
 	var b strings.Builder
+	b.WriteString(ShProtect())
 	b.WriteString("gash_forbidden() {\n")
+	b.WriteString("  [ -n \"${GP_INIT-}\" ] || gash_protect_init\n")
+	b.WriteString("  gash_in \"$GP_ALL\" \"$1\" && return 0\n")
 	b.WriteString("  gf_rh=$(cd ~root 2>/dev/null && pwd -P) || gf_rh=/root\n")
 	b.WriteString("  case $gf_rh in /root|/|'') gf_rh=/root ;; esac\n")
 	b.WriteString("  case $1 in\n")
@@ -118,6 +135,8 @@ func ShForbidden() string {
 	b.WriteString("  esac\n")
 	b.WriteString("  [ \"$2\" = '' ] && return 1\n")
 	b.WriteString("  [ \"$1\" = / ] && return 0\n")
+	b.WriteString("  gash_above \"$GP_ALL\" \"$1\" && return 0\n")
+	b.WriteString("  [ \"$2\" = content ] && gash_above \"$GP_CONTENT\" \"$1\" && return 0\n")
 	b.WriteString("  for gf_f in")
 	for _, p := range pathguard.ForbiddenBasePaths {
 		b.WriteString(" " + Quote(p))
@@ -136,7 +155,8 @@ func shGlobQuote(p string) string { return Quote(p) }
 // ShSecret is a POSIX sh function, gash_secret PATH, that succeeds when
 // PATH is a secret file by name (pathguard.SecretName: the base name
 // against the secret patterns, case-insensitively, the exceptions winning;
-// or a secret directory as a component). Generated from the pathguard
+// or a secret directory as a component), or, absolute, lies in a
+// PROTECT:content path of the host (it carries ShProtect). Generated from the pathguard
 // tables. The fallbacks test the resolved path with it, so no secret
 // content ever leaves the host. The patterns ignore case themselves
 // (icaseGlob): the check runs no program, so it cannot fail open on a host
@@ -144,7 +164,10 @@ func shGlobQuote(p string) string { return Quote(p) }
 // empty string where tr was missing).
 func ShSecret() string {
 	var b strings.Builder
+	b.WriteString(ShProtect())
 	b.WriteString("gash_secret() {\n")
+	b.WriteString("  [ -n \"${GP_INIT-}\" ] || gash_protect_init\n")
+	b.WriteString("  case $1 in /*) gash_in \"$GP_CONTENT\" \"${1%/}\" && return 0 ;; esac\n")
 	b.WriteString("  gs_p=${1%/}\n  gs_b=${gs_p##*/}\n")
 	b.WriteString("  case $gs_b in " + icasePatterns(pathguard.SecretExceptions) + ") return 1 ;; esac\n")
 	b.WriteString("  case $gs_b in " + icasePatterns(pathguard.SecretPatterns) + ") return 0 ;; esac\n")
