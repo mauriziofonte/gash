@@ -307,8 +307,22 @@ func firstLine(s string) string {
 }
 
 // PHPInstallHint is the command that installs PHP-FPM version v on the
-// platform (doctor prints it for a missing version).
+// platform, the distribution's own version when v is "" (doctor and
+// install print it when no version is installed; 3.4: it was unused).
 func PHPInstallHint(f platform.Family, v string) string {
+	if v == "" {
+		switch f {
+		case platform.FamilyDebian:
+			return "sudo apt install php-fpm"
+		case platform.FamilyFedora:
+			return "sudo dnf install php-fpm"
+		case platform.FamilyArch:
+			return "sudo pacman -S php-fpm"
+		case platform.FamilyDarwin:
+			return "brew install php"
+		}
+		return ""
+	}
 	switch f {
 	case platform.FamilyDebian:
 		return "sudo apt install php" + v + "-fpm"

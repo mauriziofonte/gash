@@ -258,7 +258,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 		return err
 	}
 	if len(m.php.Versions) == 0 {
-		res.Warnings = append(res.Warnings, "no PHP-FPM version is installed: site create needs one (install php-fpm, then run gash hte doctor)")
+		res.Warnings = append(res.Warnings, "no PHP-FPM version is installed: site create needs one ("+phpRemedy(v.os.Family)+", then run gash hte doctor)")
 	}
 	if e.find("openssl") == "" {
 		return hteerr.New(hteerr.OpenSSLNotFound, "openssl is not installed", discover.OpenSSLInstallHint(v.os.Family))
