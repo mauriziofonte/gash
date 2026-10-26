@@ -94,7 +94,8 @@ func TestRemoteExecScriptWithoutCat(t *testing.T) {
 		r := s.runGo(plain, "remote_exec", nil, args...)
 		require.Equal(t, 0, r.RC, r.Err)
 		require.NotContains(t, "\n"+r.Log, "\ncat\n", mode)
-		require.Contains(t, r.Log, "stdin: e c h o o n e \\n e c h o t w o \\n\n", mode)
+		// BSD od (macOS) ends its line with a blank.
+		require.Regexp(t, `stdin: e c h o o n e \\n e c h o t w o \\n *\n`, r.Log, mode)
 	}
 	s := newGoScene(t, boxEnv)
 	r := s.runGo(plain, "remote_exec", nil, "box", "--script", "nope.sh")
