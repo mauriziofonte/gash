@@ -13,7 +13,7 @@ Platforms: Linux, macOS and WSL, in an interactive Bash. A headless shell
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [fzf](../requirements.md#tool-fzf) (optional), for `hgrep` (--pick) and `history_grep` (--pick)
+- [fzf](../requirements.md#tool-fzf) (optional), for `hgrep` (--pick)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
@@ -335,7 +335,7 @@ alias or function.
 | `Error: Cannot read history file: PATH` | `hgrep` reads `HISTFILE` (default `~/.bash_history`), which does not exist yet or is not readable. It exists once a command has run with `GASH_HISTORY=1` |
 | `hgrep` finds nothing that `hg` finds | Those commands have no timestamp in the history file (see [Search your history](#search-your-history)) |
 | `Error: Invalid regex: PATTERN` | The `-E` pattern is not a valid regular expression. Without `-E` the pattern is plain text |
-| `Error: --pick requires fzf; install it or drop --pick` | Install `fzf` ([requirements](../requirements.md#tool-fzf)). `--pick` also needs a terminal: `Error: --pick requires an interactive terminal` |
+| `Error: hgrep (--pick) needs fzf, which is not installed.` | Run the install command printed below it, or drop `--pick` ([requirements](../requirements.md#tool-fzf)). `--pick` also needs a terminal: `Error: --pick requires an interactive terminal` |
 | `Error: Unexpected argument: NAME` from `mkcd` | `mkdir_cd` takes one directory; quote a name that contains spaces |
 | `Error: Unknown topic: NAME. Topics: ...` | `gash` takes one of the topics it lists, or `all` |
 | `Error: No help found for 'NAME'.` | No function or alias has that name; the hint suggests `gash_help --search NAME` |

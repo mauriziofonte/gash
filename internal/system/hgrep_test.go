@@ -178,7 +178,9 @@ func TestHgrepPick(t *testing.T) {
 	delete(env, "GASH_HEADLESS")
 	env["PATH"] = t.TempDir()
 	r = call(m, "hgrep", env, ttyTerm(env, ""), "", "cd", "--pick")
-	require.Equal(t, result{"", "\x1b[38;5;196m✗ Error:\x1b[0m --pick requires fzf; install it or drop --pick\n", 1}, r)
+	// 3.4: the prerequisite report.
+	require.Equal(t, 1, r.rc)
+	require.Contains(t, r.err, "hgrep (--pick) needs fzf, which is not installed")
 	// No match: nothing to pick, status 0 before any check.
 	r = call(m, "hgrep", env, nil, "", "zz", "--pick")
 	require.Equal(t, result{"", "", 0}, r)
