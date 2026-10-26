@@ -138,7 +138,7 @@ func TestAdvice(t *testing.T) {
 	rocky := fakeSystem(t, "linux", rocky9, false, "dnf", "sudo")
 	require.Equal(t, "Install procps-ng: sudo dnf install -y procps-ng", rocky.Report("ps", "").Advice())
 	require.Equal(t, "Install docker: https://docs.docker.com/engine/install/", rocky.Report("docker", "").Advice())
-	require.Equal(t, "systemd is part of the operating system: Gash cannot install it. Under WSL, enable it in /etc/wsl.conf",
+	require.Equal(t, "It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf",
 		rocky.Report("systemctl", "").Advice())
 	require.Equal(t, "Install git: sudo dnf install -y git. On macOS git comes with the Command Line Tools: xcode-select --install",
 		rocky.Report("git", "").Advice())
@@ -368,4 +368,18 @@ func TestRequire(t *testing.T) {
 	p, ok = Require(c, "zstd", "archive_extract", true)
 	require.True(t, ok)
 	require.Equal(t, "/usr/bin/zstd", p, "the pinned system answers")
+}
+
+// TestRequirementsDoc keeps docs/requirements.md current
+// (go test ./internal/prereq -update rewrites it).
+func TestRequirementsDoc(t *testing.T) {
+	path := filepath.Join("..", "..", "docs", "requirements.md")
+	got := RequirementsDoc()
+	if *update {
+		require.NoError(t, os.WriteFile(path, []byte(got), 0o644))
+		return
+	}
+	want, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, got, string(want), "docs/requirements.md is stale: go test ./internal/prereq -update")
 }
