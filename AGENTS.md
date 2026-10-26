@@ -987,6 +987,15 @@ The 3.4 reads keep every rail above and add these:
 - **Databases.** Row formats, `--scalar`, `--counts`, `--all` and
   `llm_db_databases` pass the SQL guard first and run in the same read-only
   session.
+- **Remote hosts** (3.12). `--host`, `llm_remote_run`, `llm_same` and
+  `agent_put` take registered `HOST:` aliases only, never a raw
+  `user@host` or an option-like word. Remote paths pass 6.1 and the
+  transfer DENY list here, then again on the host after links resolve; a
+  secret file never leaves the host, and the local stdin is never sent.
+  `llm_remote_run` commands pass 6.3 before anything connects. Over a
+  `+ssh` database connection the SQL guard of 6.4 runs before ssh, and the
+  password travels on ssh's stdin, never in an argument. The only thing an
+  `llm_*` call writes on a host is its cached gash binary.
 - **Telemetry** (`GASH_TELEMETRY_FILE`) records the function, time, output
   size, status and truncation of each call: never an argument, a path or a
   value, and only on this machine.
@@ -1101,10 +1110,11 @@ output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
 
 | Function | Output |
 |---|---|
-| `agent_replace FILE... (--old A --new B)... [--count N\|--min N] [--regex] [--dry-run] [--force] [--format F] [--width N]` | `{"files":N,"replaced":{"FILE":[n1,n2]},"written":true}`; each pair must match exactly once per file (`--count N`: exactly N, `--min N`: at least N, replacing all); pairs apply in order; a mismatch anywhere is `replace_count_mismatch` (RETRY) and no file changes; `--dry-run` adds `"diff":{"FILE":{"add":A,"del":D}}` (lines gained and lost) |
+| `agent_replace FILE... (--old A --new B)... [--count N\|--min N] [--regex] [--dry-run] [--force] [--format F] [--width N] [--host ALIAS]` | `{"files":N,"replaced":{"FILE":[n1,n2]},"written":true}`; each pair must match exactly once per file (`--count N`: exactly N, `--min N`: at least N, replacing all); pairs apply in order; a mismatch anywhere is `replace_count_mismatch` (RETRY) and no file changes; `--dry-run` adds `"diff":{"FILE":{"add":A,"del":D}}` (lines gained and lost) |
 | `agent_git_commit -m SUBJECT [-m BODY]... (--add PATH...\|-A) [--author "N <e>"] [--push [REMOTE]] [--dry-run] [--force] [--timeout S] [--format F] [PATH]` | `{"hash":"a1b2c3d","branch":"main","files":2,"pushed":true,"remote":"origin","ahead":0}`; `--add` takes every word up to the next option (paths relative to PATH), `-A` only when asked; the commit holds what is staged plus the `--add` paths; `--push` pushes `HEAD:refs/heads/<branch>` to the upstream, or to REMOTE under the branch's name, never forced; `--dry-run`: `{"branch","files","paths":[...],"push","remote","ref","ahead","dry_run":true,"written":false}` |
 | `agent_kill NAME\|PID... [--signal S] [--dry-run] [--format F]` | `{"killed":N,"pids":[...]}`; NAME is the regex of `llm_procs --name` on the full command line; nothing matched is `{"killed":0,"pids":[]}`, exit 0; `--dry-run` adds `"cmds":[...],"signal":"TERM","dry_run":true,"written":false` |
 | `agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{"rc","out","err"}`, exit 0 when the command ran (read `rc`); CMD's words reach `docker exec` as an array, no shell runs; `--dry-run`: `{"argv":[...],"dry_run":true,"written":false}` |
+| `agent_put ALIAS:PATH --from FILE\|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]` | `{"host","path","bytes","sha256","replaced","backup","verified","written":true}`; one round trip: a temporary file next to PATH, size check (and sha256 with `--verify`), rename over PATH; `--dry-run` adds `"exists"` with `"dry_run":true,"written":false` |
 
 `agent_replace` writes each file through a temporary file in the same
 directory, renamed over the target with its mode (and owner, as root); a
@@ -1132,6 +1142,15 @@ that wipes, formats, or changes the owner or mode of a whole root, writes a
 disk, stops the machine, pipes a download into a shell or reads keys
 (`dangerous_command_blocked`, FATAL; a path below a root is fine), and any
 word that names a secret file.
+
+`agent_put` writes on a registered host (3.12): PATH's directory must exist
+and a relative PATH is below the remote home. A failed size or hash check
+renames nothing (`write_failed`, `put_verify_failed`: STOP); `--backup`
+copies the old file to `PATH.bak-<UTC time>` and never overwrites a backup;
+the old file's mode is kept unless `--mode` names one. `agent_replace
+--host ALIAS` makes the same all-or-nothing replacement on the host through
+the shipped gash binary; a host without it is `remote_binary_unavailable`
+(there is no POSIX fallback for a write).
 
 ## 9. Best practices
 

@@ -9,9 +9,10 @@ and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 ## [3.4.0] - 2026-10-25
 
 Gash becomes the toolkit an AI agent reaches for instead of raw shell
-pipelines: about fifty functions, built from how agents actually use a shell,
-each answering in one call what took a pipeline or several round trips, with
-compact JSON (or TSV) and output that stays inside a budget. Every read stays
+pipelines: 36 new functions and new options on most of the 3.0 ones, built
+from how agents actually use a shell, each answering in one call what took a
+pipeline or several round trips, with compact JSON (or TSV) and output that
+stays inside a budget; most of them also run on a registered ssh host. Every read stays
 in the read-only `llm_*` family; every change is a separate `agent_*` write
 tool. Gash also learns to work with Windows from inside WSL, and to reclaim
 the disk space that log files quietly eat on any host. Reading Windows is
@@ -53,10 +54,24 @@ automatic; changing it is human-only and goes through a UAC prompt.
   `llm_lint` (php, sh, js, json, yaml, toml, py in parallel), `llm_test` (a
   test suite summarized: counts and each failure's file:line), `gash run`
   (a command with its output shaped and its exit status kept).
+- **Remote hosts** (AGENTS.md 3.12): `--host ALIAS` (repeatable) on 31 read
+  functions runs the same call on a registered `HOST:` alias over ssh in one
+  round trip, several hosts in parallel; Gash ships its own binary once to a
+  host of the same OS and architecture (`~/.cache/gash/remote/`), and
+  `llm_find`, `llm_grep`, `llm_tree` and `llm_config` fall back to POSIX sh
+  elsewhere. `llm_remote_run` (one command on several hosts, or several
+  commands on one host in one round trip, each checked by the `llm_exec`
+  rules first), `llm_same` (is the deployed copy the local one: short
+  sha256 per file, one round trip per target, optionally inside a
+  container), and `llm_db_*` through a `+ssh` connection
+  (`mysql+ssh://USER:PASS@ALIAS/DB`, `pgsql+ssh://`, `sqlite+ssh://`,
+  optionally `+docker:CTR`), which runs the engine's client on the host.
 - **Write tools, the `agent_*` family** (AGENTS.md section 8): `agent_replace`
   (exact replacements in explicit files, all or nothing), `agent_git_commit`
   (stage explicit paths, commit, push, never forced), `agent_kill`,
-  `agent_docker_exec`. Each takes `--dry-run`, names its targets explicitly
+  `agent_docker_exec`, `agent_put` (upload one file to a host: size and
+  sha256 checks, optional backup, atomic rename), and `agent_replace
+  --host`. Each takes `--dry-run`, names its targets explicitly
   and keeps the secret-file and protected-path rails; system paths are
   refused and sensitive ones need `--force`. Its own card topic, `gash
   agent`.
@@ -118,6 +133,13 @@ automatic; changing it is human-only and goes through a UAC prompt.
   `llm_http` refuses any method but GET, HEAD and OPTIONS; `llm_test` runs
   a test suite and nothing else (`gash run` runs any other command);
   `llm_procs` has no kill.
+- Remote calls take registered `HOST:` aliases only. Remote paths pass the
+  local rails and the transfer deny list before anything connects and are
+  checked again on the host after links resolve; a secret file never
+  leaves the host and the local stdin is never sent. Over `+ssh` the SQL
+  guard runs before ssh and the password goes on ssh's stdin, never in an
+  argument. The shipped binary is size-checked, test-run and renamed into a
+  0700 cache directory.
 - The path guards treat the Windows secrets reachable over `/mnt` as secret
   files: the user registry hives (`NTUSER.DAT`, `UsrClass.dat`), saved RDP
   credentials (`*.rdp`), answer files (`unattend.xml`, `autounattend.xml`)
