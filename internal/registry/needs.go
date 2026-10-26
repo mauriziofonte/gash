@@ -98,7 +98,7 @@ var needs = map[string][]Need{
 	// Archives.
 	"archive_extract": {{"tar", "tar archives"}, {"gzip", ".gz"}, {"bzip2", ".bz2"}, {"xz", ".xz"}, {"zstd", ".zst"},
 		{"unzip", ".zip"}, {"7z", ".7z"}, {"unrar", ".rar"}, {"uncompress", ".Z"}},
-	"chrome_headless_update": {{"unzip", ""}},
+	"chrome_headless_update": {{"unzip", ""}, {"ldd", ""}},
 
 	// Runtimes and linters.
 	"llm_lint":           {{"php", ".php files"}, {"node", ".js files"}, {"python3", ".py files"}, {"bash", ".sh files"}},
