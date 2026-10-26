@@ -1,0 +1,39 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.4 prerequisites)
+#
+# A signed release tag whose verifier is not installed: the installer
+# names the program instead of blaming the keyring. gpg.program points at
+# a program that does not exist, so the case needs no gpg; the tag carries
+# a signature block made without a key.
+
+env GASH_HEADLESS=1
+
+exec bash mkrepo.sh
+
+# GASH_REQUIRE_SIGNED=1: the program is named, then the refusal.
+! exec bash -c 'h="$PWD/h1"; mkdir -p "$h"; : >"$h/.bashrc"; printf "[gpg]\n\tprogram = /nonexistent/gpg\n" >"$h/.gitconfig"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_REQUIRE_SIGNED=1 GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Warning: v1\.0\.1 is signed, but its signature cannot be checked: /nonexistent/gpg is not installed\.'
+! stdout 'keyring'
+stderr 'GASH_REQUIRE_SIGNED=1 is set; refusing to install v1\.0\.1\.'
+! exists h1/.gash
+
+# Without it the warning, and the install goes on.
+exec bash -c 'h="$PWD/h2"; mkdir -p "$h"; : >"$h/.bashrc"; printf "[gpg]\n\tprogram = /nonexistent/gpg\n" >"$h/.gitconfig"; HOME="$h" GIT_CONFIG_GLOBAL="$h/.gitconfig" GASH_INSTALL_GIT_REPO="$PWD/repo" GASH_RELEASE_URL=file:///nonexistent bash "$PWD/repo/install.sh" --assume-yes'
+stdout 'Warning: v1\.0\.1 is signed, but its signature cannot be checked: /nonexistent/gpg is not installed\.'
+stdout 'Installed Gash v1\.0\.1\.'
+exists h2/.gash/gash.sh
+
+-- mkrepo.sh --
+set -e
+mkdir repo
+tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -
+git init -q repo
+git -C repo config user.email t@e
+git -C repo config user.name T
+git -C repo config maintenance.auto false
+git -C repo config gc.auto 0
+git -C repo add -A
+git -C repo commit -q -m snapshot
+obj=$(printf 'object %s\ntype commit\ntag v1.0.1\ntagger T <t@e> 1700000000 +0000\n\nv1.0.1\n-----BEGIN PGP SIGNATURE-----\nx\n-----END PGP SIGNATURE-----\n' "$(git -C repo rev-parse HEAD)" | git -C repo mktag)
+git -C repo update-ref refs/tags/v1.0.1 "$obj"

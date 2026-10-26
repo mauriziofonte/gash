@@ -82,6 +82,9 @@ var catalog = []Tool{
 	{Name: "ssh-agent", Purpose: "holds the unlocked SSH keys",
 		Level: Feature, Area: "remote", Builtin: []string{"darwin"},
 		Packages: pkgs("openssh-client", "dnf", "openssh-clients", "pacman", "openssh", "zypper", "openssh-clients", "brew", "")},
+	{Name: "ssh-keygen", Purpose: "tells the SSH keys already in the agent, and checks SSH-signed release tags",
+		Level: Optional, Area: "remote", Builtin: []string{"darwin"},
+		Packages: pkgs("openssh-client", "dnf", "openssh-clients", "pacman", "openssh", "zypper", "openssh-clients", "brew", "")},
 
 	// Processes and ports.
 	{Name: "ps", Purpose: "lists the running processes",

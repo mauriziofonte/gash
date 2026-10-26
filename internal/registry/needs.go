@@ -51,8 +51,10 @@ var needs = map[string][]Need{
 	"llm_git_overview":   {{"git", ""}},
 	"llm_git_show":       {{"git", ""}},
 	"agent_git_commit":   {{"git", ""}},
-	"gash_upgrade":       {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"}},
-	"gash update":        {{"git", ""}, {"bash", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}},
+	"gash_upgrade": {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
+		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
+	"gash update": {{"git", ""}, {"bash", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
+		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
 
 	// Remote hosts and SSH.
 	"remote_exec":          {{"ssh", ""}},
@@ -70,7 +72,7 @@ var needs = map[string][]Need{
 	"llm_db_explain":       {{"ssh", "a +ssh URL"}},
 	"llm_db_databases":     {{"ssh", "a +ssh URL"}},
 	"gash_db_test":         {{"ssh", "a +ssh URL"}},
-	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}},
+	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}, {"ssh-keygen", "keys already loaded"}},
 
 	// Processes and ports.
 	"llm_procs":    {{"ps", "on macOS, or without /proc"}, {"lsof", "--port"}, {"pgrep", "--name"}},

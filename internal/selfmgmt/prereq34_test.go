@@ -3,14 +3,19 @@
 package selfmgmt
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
+	"github.com/mauriziofonte/gash/internal/term"
+	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 // gitReport is the prerequisite report of a missing git on rockySystem.
@@ -67,4 +72,47 @@ func TestUpgradeStatusFailsClosed(t *testing.T) {
 	require.Equal(t, 1, rc)
 	require.Equal(t, "Error: Cannot tell whether the working tree at "+dir+" has local modifications "+
 		"(git status failed: fatal: detected dubious ownership in repository at '"+dir+"'); not upgrading.\n", errOut)
+}
+
+// A signed tag whose verifier is not installed names that program, with
+// the install command for the default one (3.4: the warning blamed the
+// keyring whatever failed).
+func TestVerifyTagMissingVerifier(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	d := t.TempDir()
+	env := []string{"HOME=" + d, "PATH=" + os.Getenv("PATH"), "GIT_CONFIG_NOSYSTEM=1",
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t"}
+	// Tag objects that carry a signature block, made without a key.
+	bashRun(t, d, env, `git init -q repo && cd repo && git commit -q --allow-empty -m one
+for kind in PGP SSH; do
+  obj=$(printf 'object %s\ntype commit\ntag v-%s\ntagger T <t@t> 1700000000 +0000\n\nrel\n-----BEGIN %s SIGNATURE-----\nx\n-----END %s SIGNATURE-----\n' "$(git rev-parse HEAD)" "$kind" "$kind" "$kind" | git mktag)
+  git update-ref "refs/tags/v-$kind" "$obj"
+done`)
+	repo := d + "/repo"
+	run := func(tag string) string {
+		t.Helper()
+		e := invoke.EnvMap(map[string]string{"HOME": d, "PATH": os.Getenv("PATH"), "GIT_CONFIG_NOSYSTEM": "1"})
+		var buf bytes.Buffer
+		c := &invoke.Call{Name: "gash_upgrade", Env: e, Term: term.Fixed(e, false, false, false)}
+		require.True(t, New().verifyTag(c, ui.StyleOf(c.Term, false).Printer(&buf), repo, tag))
+		return buf.String()
+	}
+
+	restore := prereq.SetSystem(rockySystem(allBut("gpg", "ssh-keygen")))
+	require.Equal(t, "Warning: v-PGP is signed, but its signature cannot be checked: gpg is not installed.\n"+
+		"Hint: Install gnupg2: sudo dnf install -y gnupg2\n", run("v-PGP"))
+	require.Equal(t, "Warning: v-SSH is signed, but its signature cannot be checked: ssh-keygen is not installed.\n"+
+		"Hint: Install openssh-clients: sudo dnf install -y openssh-clients\n", run("v-SSH"))
+
+	// A program the user configured is named as configured.
+	bashRun(t, repo, env, "git config gpg.program /nonexistent/gpg2")
+	require.Equal(t, "Warning: v-PGP is signed, but its signature cannot be checked: /nonexistent/gpg2 is not installed.\n", run("v-PGP"))
+	bashRun(t, repo, env, "git config --unset gpg.program")
+	restore()
+
+	// The verifier is there: the signature itself does not verify.
+	defer prereq.SetSystem(rockySystem(allBut()))()
+	require.Equal(t, "Warning: v-PGP is signed, but the signature could not be verified (is the key in your keyring?).\n", run("v-PGP"))
 }

@@ -424,6 +424,21 @@
     return 1
   }
 
+  # The program git verify-tag runs for the signature of TAG: for an SSH
+  # signature gpg.ssh.program, else ssh-keygen; for a PGP one
+  # gpg.openpgp.program, else gpg.program, else gpg.
+  gashinst_tag_verifier() {
+    local obj prog
+    obj="$(git cat-file tag "refs/tags/$1" 2>/dev/null)" || return 1
+    if [[ "$obj" == *$'\n'"-----BEGIN SSH SIGNATURE-----"$'\n'* ]]; then
+      prog="$(git config --get gpg.ssh.program 2>/dev/null)" || prog=ssh-keygen
+    else
+      prog="$(git config --get gpg.openpgp.program 2>/dev/null)" ||
+        prog="$(git config --get gpg.program 2>/dev/null)" || prog=gpg
+    fi
+    command printf '%s' "$prog"
+  }
+
   # Download URL to FILE with curl or wget.
   gashinst_get() {
     if gashinst_has curl; then
@@ -474,13 +489,19 @@
   # missing or unverifiable signature into a refusal: status 1, the caller
   # stops.
   gashinst_verify_tag() {
-    local TAG="$1" RC GASHINST_COSIGN_ERROR=""
+    local TAG="$1" RC PROG GASHINST_COSIGN_ERROR=""
     if gashinst_tag_signed "$TAG"; then
       if git verify-tag "$TAG" >/dev/null 2>&1; then
         gashinst_success "Signature of $TAG verified."
         return 0
       fi
-      gashinst_warning "$TAG is signed, but the signature could not be verified (is the key in your keyring?)."
+      # A verifier that is not installed is named, not blamed on the keyring.
+      PROG="$(gashinst_tag_verifier "$TAG")" || PROG=""
+      if [ -n "$PROG" ] && ! type -P "$PROG" >/dev/null 2>&1; then
+        gashinst_warning "$TAG is signed, but its signature cannot be checked: $PROG is not installed."
+      else
+        gashinst_warning "$TAG is signed, but the signature could not be verified (is the key in your keyring?)."
+      fi
     else
       RC=0
       gashinst_verify_release "$TAG" || RC=$?
@@ -748,7 +769,7 @@
     unset -f gashinst_has gashinst_echo gashinst_error gashinst_info gashinst_success \
       gashinst_warning gashinst_confirm gashinst_default_install_dir gashinst_install_dir \
       gashinst_try_profile gashinst_detect_profile gashinst_check_bash gashinst_latest_tag \
-      gashinst_verify_tag gashinst_tag_signed gashinst_get gashinst_verify_release \
+      gashinst_verify_tag gashinst_tag_signed gashinst_tag_verifier gashinst_get gashinst_verify_release \
       gashinst_tmp_clone_cleanup gashinst_abort gashinst_install_from_git gashinst_fetch_binary gashinst_repair \
       gashinst_pkg_manager gashinst_install_hint gashinst_xcode_stub gashinst_missing_tools gashinst_preflight \
       gashinst_feature_tools gashinst_do_install gashinst_reset
