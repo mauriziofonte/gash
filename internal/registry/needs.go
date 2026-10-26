@@ -69,7 +69,6 @@ var needs = map[string][]Need{
 	"llm_db_sample":        {{"ssh", "a +ssh URL"}},
 	"llm_db_explain":       {{"ssh", "a +ssh URL"}},
 	"llm_db_databases":     {{"ssh", "a +ssh URL"}},
-	"gash_db_test":         {{"ssh", "a +ssh URL"}},
 	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}},
 
 	// Processes and ports.
