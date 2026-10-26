@@ -82,7 +82,8 @@ func (n *natives) cpus() string {
 	return strconv.Itoa(n.numCPU())
 }
 
-// disk is df -Pk PATH: the size and the used KiB, 0 without natives.
+// disk is df -Pk PATH as the overview reads it: the used KiB and the KiB
+// users can fill (used + available, as df's Capacity), 0 without natives.
 func (n *natives) disk(path string) (total, used int64) {
 	if n == nil {
 		return 0, 0
@@ -91,7 +92,8 @@ func (n *natives) disk(path string) (total, used int64) {
 	if !ok {
 		return 0, 0
 	}
-	return int64(fs.Total / 1024), int64((fs.Total - fs.Free) / 1024) //nolint:gosec // sizes in KiB fit in int64
+	used = int64((fs.Total - fs.Free) / 1024) //nolint:gosec // sizes in KiB fit in int64
+	return used + int64(fs.Avail/1024), used  //nolint:gosec // sizes in KiB fit in int64
 }
 
 // ip is the first address, "" without natives.

@@ -50,7 +50,7 @@ func TestOverviewNatives(t *testing.T) {
 	fx.m.native = fakeNatives()
 	r = fx.call(t, nil, "overview", "--llm")
 	require.Equal(t, result{"=== OVERVIEW ===\nHost=native-host\nUptime=3d 4h\nLoad=0.50 0.40 0.30\nCPU=Intel(R) Xeon(R) CPU @ 2.20GHz x8\n" +
-		"Memory KiB=used=12000000 total=16000000\nSwap KiB=used=0 total=2097152\nDisk / KiB=used=157286400 total=209715200\n", "", 0}, r)
+		"Memory KiB=used=12000000 total=16000000\nSwap KiB=used=0 total=2097152\nDisk / KiB=used=157286400 total=199229440\n", "", 0}, r)
 	r = fx.call(t, nil, "overview")
 	require.Empty(t, r.err)
 	require.Contains(t, r.out, "native-host · Debian GNU/Linux 12 (bookworm)")
@@ -188,4 +188,14 @@ func TestCollectSudoNote(t *testing.T) {
 	}
 	require.Equal(t, 1, strings.Count(w.String(), "Note=sudo credentials are not cached"))
 	require.Contains(t, w.String(), "=== IDENTITY ===\nNote=sudo credentials are not cached")
+}
+
+// The disk share is df's Capacity, used of used + available: the 10 GiB
+// reserved for root (or outside a container's allowance) are not space a
+// user can fill, so a full disk does not show 75% (3.4).
+func TestOverviewDiskShare(t *testing.T) {
+	fx := newFixture(t, etcTree, procTree)
+	fx.stub(t, "df", `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/vda1 104857600 52428800 10485760 84%% /\n'`)
+	r := fx.call(t, nil, "overview", "--llm")
+	require.Contains(t, r.out, "Disk / KiB=used=52428800 total=62914560\n")
 }

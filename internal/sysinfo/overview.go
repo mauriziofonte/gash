@@ -149,8 +149,14 @@ func (s *Session) overview(o *out) {
 	{
 		if ls := lines(dfOut); len(ls) >= 2 {
 			// awk 'NR == 2 { print $2, $3 }', then read -r total used.
-			w := append(awkFields(awkField(ls[1], 2)+" "+awkField(ls[1], 3)), "", "")
+			w := append(awkFields(awkField(ls[1], 2)+" "+awkField(ls[1], 3)+" "+awkField(ls[1], 4)), "", "", "")
 			diskTotal, diskUsed = num(w[0]), num(w[1])
+			// 3.4: the share df's Capacity shows, used of what users can
+			// fill (used + available): the blocks reserved for root, and a
+			// container's allowance, are not space a user can fill.
+			if avail := num(w[2]); avail > 0 && diskUsed+avail < diskTotal {
+				diskTotal = diskUsed + avail
+			}
 		}
 	}
 	if diskTotal == 0 {
