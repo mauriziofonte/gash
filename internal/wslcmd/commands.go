@@ -379,8 +379,28 @@ func drivesLine(f wsl.Facts) string {
 	var parts []string
 	for _, d := range f.Drives {
 		s := d.Letter + ": " + d.Mount
+		var notes []string
 		if d.Metadata {
-			s += " (metadata)"
+			notes = append(notes, "metadata")
+		}
+		// The other mount points of the drive (3.4.2), with the directory
+		// of a mount that shows one.
+		var also []string
+		for _, m := range d.Mounts {
+			if m.Path == d.Mount {
+				continue
+			}
+			if m.Dir != `\` {
+				also = append(also, m.Path+" = "+d.Letter+":"+m.Dir)
+			} else {
+				also = append(also, m.Path)
+			}
+		}
+		if len(also) > 0 {
+			notes = append(notes, "also "+strings.Join(also, ", "))
+		}
+		if len(notes) > 0 {
+			s += " (" + strings.Join(notes, "; ") + ")"
 		}
 		parts = append(parts, s)
 	}

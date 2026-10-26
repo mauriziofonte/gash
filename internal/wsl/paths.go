@@ -42,9 +42,15 @@ func (f Facts) ToWindows(p, form string) (string, error) {
 	if form == FormMixed {
 		sep = "/"
 	}
-	if d, ok := f.DriveOf(p); ok {
-		rest := strings.TrimPrefix(strings.TrimPrefix(p, d.Mount), "/")
-		return d.Letter + ":" + sep + strings.ReplaceAll(rest, "/", sep), nil
+	if d, m, ok := f.mountOf(p); ok {
+		out := d.Letter + ":" + strings.ReplaceAll(m.Dir, `\`, sep)
+		if rest := strings.TrimPrefix(strings.TrimPrefix(p, m.Path), "/"); rest != "" {
+			if !strings.HasSuffix(out, sep) {
+				out += sep
+			}
+			out += strings.ReplaceAll(rest, "/", sep)
+		}
+		return out, nil
 	}
 	if f.Distro == "" {
 		return "", ErrNoDistro
@@ -59,20 +65,21 @@ func (f Facts) ToWindows(p, form string) (string, error) {
 }
 
 // ToLinux translates a Windows path to the Linux one: X:\... to the mount
-// of drive X (the automount root plus the lower-case letter when the drive
-// is not mounted, as wslpath does), \\wsl.localhost\<this distro>\... (or
-// \\wsl$\...) to /..., and a relative path to the same path with forward
-// slashes. A share, or another distribution, is ErrNotMapped.
+// of drive X that shows it (the preferred mount of the whole drive, or a
+// mount of a directory that holds the path; the automount root plus the
+// lower-case letter when none does, as wslpath does), \\wsl.localhost\<this
+// distro>\... (or \\wsl$\...) to /..., and a relative path to the same path
+// with forward slashes. A share, or another distribution, is ErrNotMapped.
 func (f Facts) ToLinux(w string) (string, error) {
 	s := strings.ReplaceAll(w, `\`, "/")
 	switch {
 	case isLetterColon(s) && (len(s) == 2 || s[2] == '/'):
 		letter := strings.ToUpper(s[:1])
 		mount := strings.TrimSuffix(f.AutomountRoot, "/") + "/" + strings.ToLower(letter)
+		rest := strings.Trim(path.Clean("/"+strings.TrimLeft(s[2:], "/")), "/")
 		if d, ok := f.Drive(letter); ok {
-			mount = d.Mount
+			mount, rest = d.linuxOf(mount, rest)
 		}
-		rest := strings.TrimLeft(s[2:], "/")
 		if rest == "" {
 			return mount, nil
 		}
@@ -93,6 +100,26 @@ func (f Facts) ToLinux(w string) (string, error) {
 		return "", ErrNotMapped
 	}
 	return s, nil
+}
+
+// linuxOf is the mount and the path below it of rest, a path of the
+// drive ("Users/me", "" for its root): the preferred mount of the whole
+// drive, else the mount of the deepest directory that holds rest, else
+// fallback (the automount root's) with rest as it is.
+func (d Drive) linuxOf(fallback, rest string) (string, string) {
+	best, mount, below := -1, fallback, rest
+	for _, m := range d.mounts() {
+		if m.whole() {
+			return m.Path, rest
+		}
+		dir := strings.Trim(strings.ReplaceAll(m.Dir, `\`, "/"), "/")
+		under := strings.EqualFold(rest, dir) ||
+			len(rest) > len(dir) && rest[len(dir)] == '/' && strings.EqualFold(rest[:len(dir)], dir)
+		if under && len(dir) > best {
+			best, mount, below = len(dir), m.Path, strings.TrimLeft(rest[len(dir):], "/")
+		}
+	}
+	return mount, below
 }
 
 // IsWindowsPath reports a string that reads as a Windows path: a drive
