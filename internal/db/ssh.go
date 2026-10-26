@@ -320,11 +320,20 @@ func (m *Module) sshMySQL(c *invoke.Call, t target, raw bool, query, rowCap stri
 			if i < len(f) {
 				v = mysqlUnescape(f[i])
 			}
+			// The client prints a SQL NULL as NULL (and the string
+			// 'NULL' the same way): null in the row formats, as the
+			// driver path gives it.
+			if t.rowFormat && i < len(f) && f[i] == "NULL" {
+				o.set(col, jvNull)
+				continue
+			}
 			o.set(col, jvString(v))
 		}
 		rows = append(rows, o.value())
 	}
-	return values(jvArray(rows))
+	res := values(jvArray(rows))
+	res.cols = cols
+	return res
 }
 
 // mysqlMessage is the client's error without its "ERROR 1064 (42000) at
@@ -386,7 +395,7 @@ func (m *Module) sshPG(c *invoke.Call, t target, json bool, query string) output
 	if json {
 		argv = append(argv, "-A", "-t")
 	} else {
-		argv = append(argv, "--csv")
+		argv = append(argv, "--csv", "-P", "null="+pgNullMark)
 	}
 	if t.port != "" {
 		argv = append(argv, "-h", t.host, "-p", t.port)
@@ -433,12 +442,27 @@ func (m *Module) sshPG(c *invoke.Call, t target, json bool, query string) output
 			if i < len(rec) {
 				v = rec[i]
 			}
+			if v == pgNullMark {
+				// A SQL NULL: "" in the envelope's text rows, null in
+				// the row formats (the driver path's answer).
+				if t.rowFormat {
+					o.set(col, jvNull)
+					continue
+				}
+				v = ""
+			}
 			o.set(col, jvString(v))
 		}
 		rows = append(rows, o.value())
 	}
-	return values(jvArray(rows))
+	res := values(jvArray(rows))
+	res.cols = recs[0]
+	return res
 }
+
+// pgNullMark is what psql prints for a SQL NULL in the text rows (psql
+// -P null=...), so that it is told apart from an empty string.
+const pgNullMark = "__gash_null__"
 
 // sshSQLite is sqliteRun on a sqlite+ssh file: sqlite3 -readonly -json,
 // the SQL on stdin (the guard has refused ATTACH, load_extension and the

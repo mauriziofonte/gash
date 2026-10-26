@@ -39,7 +39,7 @@ printf '%s\n' "$@" >"$HOME/psql.args"
 printf '%s|%s' "${PGPASSWORD-unset}" "${PGOPTIONS-unset}" >"$HOME/psql.env"
 cat >"$HOME/psql.stdin"
 case " $* " in
-  *" --csv "*) printf 'search_path\n"""$user"", public"\n' ;;
+  *" --csv "*" null=__gash_null__ "*) if grep -q nulls "$HOME/psql.stdin"; then printf 'a,b\n__gash_null__,""\n'; else printf 'search_path\n"""$user"", public"\n'; fi ;;
   *) printf '[{"id": 1, "name": "Alice"}, {"id": 2, "name": null}]\n' ;;
 esac
 `
@@ -108,6 +108,10 @@ func TestSSHMySQLOneInvocation(t *testing.T) {
 	require.Equal(t, "--batch\n--default-character-set=utf8mb4\n-u\nshop\nshop\n", f.remote(t, "mysql.args"), "socket by default")
 	require.Equal(t, "SET SESSION TRANSACTION READ ONLY;\nSET SESSION sql_select_limit = 100;\nSELECT id, name, note FROM users\n", f.remote(t, "mysql.stdin"))
 
+	r = f.run(t, "llm_db_query", "SELECT id, name, note FROM users", "-c", "shop", "--format", "jsonl")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Equal(t, `{"id":"1","name":"Alice","note":null}`+"\n"+`{"id":"2","name":"Bob","note":"a\tb\nc"}`+"\n", r.Stdout, "NULL is null in the row formats")
+
 	r = f.run(t, "llm_db_tables", "-c", "port")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, f.remote(t, "mysql.args"), "-h\n127.0.0.1\n-P\n3307\n--protocol=TCP\n")
@@ -154,6 +158,13 @@ func TestSSHPostgresInAContainer(t *testing.T) {
 	r = f.run(t, "llm_db_query", "SHOW search_path", "-c", "pg")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, r.Stdout, `{"data":[{"search_path":"\"$user\", public"}],"rows":1,`)
+
+	r = f.run(t, "llm_db_query", "SHOW nulls", "-c", "pg")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Contains(t, r.Stdout, `{"data":[{"a":"","b":""}],"rows":1,`, "a NULL is \"\" in the envelope")
+	r = f.run(t, "llm_db_query", "SHOW nulls", "-c", "pg", "--format", "jsonl")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Equal(t, `{"a":null,"b":""}`+"\n", r.Stdout, "and null in the row formats")
 
 	r = f.run(t, "llm_db_query", "SELECT 1", "-c", "gone")
 	require.Equal(t, 1, r.RC)
