@@ -13,7 +13,7 @@ env GASH_HEADLESS=1
 # --- --json from the sourced shell's gash function
 exec bash -c 'source "$GASH_SH"; gash agent-functions --json'
 stdout '^\[\{"name":"agent_'
-stdout '\{"name":"llm_lint","family":"read","short":"Syntax-check files by extension[^"]*","usage":\["llm_lint \[PATH\.\.\.\][^"]*"\],"flags":\["--ext","--php","--node","-j","--timeout","--max-lines","--width","--absolute"\],"replaces":"for f in src/\*\.php; do php -l '
+stdout '\{"name":"llm_lint","family":"read","short":"Syntax-check files by extension[^"]*","usage":\["llm_lint \[PATH\.\.\.\][^"]*","\[--host ALIAS\]"\],"flags":\["--ext","--php","--node","-j","--timeout","--max-lines","--width","--absolute","--host"\],"replaces":"for f in src/\*\.php; do php -l '
 stdout '\{"name":"llm_runtime","family":"read","short":"[^"]*","usage":\["llm_runtime php\|node\|composer\|npm\|npx VERSION"\],"flags":\[\],"replaces":"[^"]+"\}'
 stdout '"name":"llm_find","family":"read",[^}]*"replaces":"find '
 ! stdout '"replaces":null'

@@ -251,7 +251,7 @@ func TestAgentFunctions(t *testing.T) {
 	}
 	lint := by["llm_lint"]
 	require.Equal(t, "read", lint.Family)
-	require.Equal(t, []string{"--ext", "--php", "--node", "-j", "--timeout", "--max-lines", "--width", "--absolute"}, lint.Flags)
+	require.Equal(t, []string{"--ext", "--php", "--node", "-j", "--timeout", "--max-lines", "--width", "--absolute", "--host"}, lint.Flags)
 	require.NotNil(t, lint.Replaces)
 	require.Contains(t, *lint.Replaces, "php -l")
 	require.Equal(t, []string{}, by["llm_runtime"].Flags)
