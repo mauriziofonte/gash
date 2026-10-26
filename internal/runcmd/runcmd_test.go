@@ -155,7 +155,7 @@ func TestRunCommand(t *testing.T) {
 	r = command(t, d, env, "run", "--tail", "1", "--width", "3", "lines")
 	require.Equal(t, result{"[... 10 lines omitted]\nta…\n", "[... 9 lines omitted]\ner…\n", 3}, r)
 
-	// --test-summary: the llm_test object, CMD's status.
+	// --test-summary: the agent_test object, CMD's status.
 	r = command(t, d, env, "run", "--test-summary", "--", "pytest")
 	require.Equal(t, 1, r.RC)
 	var sum struct {

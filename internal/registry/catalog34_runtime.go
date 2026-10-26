@@ -3,8 +3,9 @@
 package registry
 
 // catalogRuntime are the 3.4 agent-toolkit functions of one area, runtimes,
-// lint and tests: llm_tools, llm_runtime, llm_lint, llm_test (V1, V2, L1,
-// L2). Entries follow the catalog_gen.go format; mergeCatalog sorts them in.
+// lint and tests: llm_tools, llm_runtime, llm_lint, agent_test (V1, V2, L1,
+// L2; a test suite runs the project's code, so agent_test is a write
+// tool, D1). Entries follow the catalog_gen.go format; mergeCatalog sorts them in.
 // The commands of the area (gash runtime, gash run, gash agent-functions)
 // are not registry functions: internal/runcmd.
 var catalogRuntime = []Function{
@@ -22,7 +23,7 @@ var catalogRuntime = []Function{
 		Help: Help{
 			Short:   "Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py)",
 			Module:  "llm",
-			SeeAlso: "llm_test llm_runtime",
+			SeeAlso: "agent_test llm_runtime",
 			Body: "" +
 				"USAGE\n" +
 				"  llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]\n" +
@@ -114,29 +115,31 @@ var catalogRuntime = []Function{
 		Replaces:  "source ~/.nvm/nvm.sh; nvm use 24; node ...; php84 ...",
 	},
 	{
-		Name:     "llm_test",
-		Module:   "llm",
-		Topic:    "llm",
+		Name:     "agent_test",
+		Module:   "agent",
+		Topic:    "agent",
 		File:     "lib/modules/llm.sh",
 		StubFile: "lib/modules/llm.sh",
-		Class:    Class("pure output"),
+		Class:    Class("shell-mutating"),
 		Decision: "new",
 		Impl:     Impl("binary"),
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Run a test command and summarize it: counts and each failure's file:line",
-			Module:  "llm",
+			Short:   "Run a test suite and summarize it: counts and each failure's file:line",
+			Module:  "agent",
 			SeeAlso: "llm_lint",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_test [--runner auto|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...\n" +
+				"  agent_test [--runner auto|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --runner auto|NAME     The output format: pest, phpunit, phpstan, psalm,\n" +
 				"                         vitest, jest, mocha, pytest, go, cargo, playwright\n" +
 				"                         (default auto: from CMD and the output)\n" +
 				"  --fail-only            Print nothing when CMD exits 0 with no failure\n" +
+				"  --dry-run              Print the command, its format and the directory;\n" +
+				"                         run nothing\n" +
 				"  --max-lines N          Failures listed (default 50; --head N, --tail N);\n" +
 				"                         unparsed output: the last N lines (default 20)\n" +
 				"  --width N              Cut messages at N columns (default 200)\n" +
@@ -146,29 +149,33 @@ var catalogRuntime = []Function{
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Pest with a filter\n" +
-				"  llm_test -- vendor/bin/pest --filter UserTest\n" +
+				"  agent_test -- vendor/bin/pest --filter UserTest\n" +
 				"\n" +
 				"  # A package script; silent when green\n" +
-				"  llm_test --fail-only -- npm test\n" +
+				"  agent_test --fail-only -- npm test\n" +
 				"\n" +
 				"  # Go with the JSON reporter\n" +
-				"  llm_test -- go test -json ./...\n" +
+				"  agent_test -- go test -json ./...\n" +
 				"\n" +
 				"NOTES\n" +
-				"  Replaces pest | grep -E 'Tests:|FAIL' and npm test | tail -20. CMD is a\n" +
-				"  test suite: a runner (pest, phpunit, paratest, phpstan, psalm, vitest,\n" +
-				"  jest, mocha, playwright, pytest; a path such as vendor/bin/pest, also\n" +
-				"  through php, node, npx, pnpm exec or python -m), php artisan test, go\n" +
-				"  test, cargo test, the test script of npm, pnpm, yarn, bun or composer,\n" +
-				"  make test; any other command is not_a_test_command (gash run runs it).\n" +
-				"  CMD runs as given, stdout and stderr\n" +
-				"  merged, stdin /dev/null; the exit status is CMD's. Output:\n" +
+				"  A write tool: the suite runs the project's own code, which can change\n" +
+				"  files, caches or a test database, so it is an agent_* function and not\n" +
+				"  an llm_* read. Replaces pest | grep -E 'Tests:|FAIL' and npm test |\n" +
+				"  tail -20. CMD is a test suite: a runner (pest, phpunit, paratest,\n" +
+				"  phpstan, psalm, vitest, jest, mocha, playwright, pytest; a path such as\n" +
+				"  vendor/bin/pest, also through php, node, npx, pnpm exec or python -m),\n" +
+				"  php artisan test, go test, cargo test, the test script of npm, pnpm,\n" +
+				"  yarn, bun or composer, make test; any other command is\n" +
+				"  not_a_test_command (gash run runs it). CMD runs as given, stdout and\n" +
+				"  stderr merged, stdin /dev/null; the exit status is CMD's. Output:\n" +
 				"  {\"runner\",\"passed\",\"failed\",\"skipped\",\"duration_s\",\"failures\":[{\"name\",\n" +
 				"  \"file\",\"line\",\"message\"}],\"parsed\":true,\"exit_code\"}; analyzer findings\n" +
 				"  (phpstan, psalm) are failures. Output no parser reads:\n" +
 				"  {\"runner\":null,\"duration_s\",\"parsed\":false,\"exit_code\",\"tail\":[...]}.\n" +
-				"  Options come before --; a program not on PATH is command_not_found. The\n" +
-				"  suite runs the project's own code, without llm_exec's rails.",
+				"  --dry-run: {\"argv\":[...],\"runner\",\"cwd\",\"dry_run\":true,\"written\":false}\n" +
+				"  (runner null when only the output would tell). Options come before --;\n" +
+				"  a program not on PATH is command_not_found. The suite runs without\n" +
+				"  llm_exec's rails.",
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PATH", "PWD"},

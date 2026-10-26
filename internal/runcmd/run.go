@@ -27,7 +27,7 @@ Run CMD and return its exit status unchanged.
   --max-lines N, --head N keep the first N lines of stdout and of stderr
   --tail N                keep the last N lines; what is cut becomes one
                           "[... K lines omitted]" line
-  --test-summary          print the llm_test summary of CMD's output instead
+  --test-summary          print the agent_test summary of CMD's output instead
                           of the output (stdout and stderr merged)
   --runtime NAME:VERSION  put that runtime's directory first on PATH:
                           node:24, php:8.4 (repeatable; gash runtime resolves

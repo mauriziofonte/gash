@@ -66,6 +66,7 @@ func (m *Module) Register(t *invoke.Table) {
 	m.registerGit(t)
 	m.registerProc(t)
 	m.registerRemote(t)
+	m.registerRuntime(t)
 }
 
 // helpAnywhere: --help or -h anywhere among the arguments prints the help

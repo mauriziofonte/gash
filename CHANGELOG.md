@@ -51,9 +51,10 @@ automatic; changing it is human-only and goes through a UAC prompt.
   `llm_docker_logs`, `llm_docker_exec` (read-only), `llm_sysinfo`.
 - **Runtimes, lint and tests**: `llm_tools`, `llm_runtime` and `gash runtime`
   (a PHP or Node version resolved to its binary without loading nvm.sh),
-  `llm_lint` (php, sh, js, json, yaml, toml, py in parallel), `llm_test` (a
-  test suite summarized: counts and each failure's file:line), `gash run`
-  (a command with its output shaped and its exit status kept).
+  `llm_lint` (php, sh, js, json, yaml, toml, py in parallel), `agent_test`
+  (a test suite summarized: counts and each failure's file:line; a write
+  tool, since a suite runs the project's code), `gash run` (a command with
+  its output shaped and its exit status kept).
 - **Remote hosts** (AGENTS.md 3.12): `--host ALIAS` (repeatable) on 31 read
   functions runs the same call on a registered `HOST:` alias over ssh in one
   round trip, several hosts in parallel; Gash ships its own binary once to a
@@ -70,7 +71,8 @@ automatic; changing it is human-only and goes through a UAC prompt.
   (exact replacements in explicit files, all or nothing), `agent_git_commit`
   (stage explicit paths, commit, push, never forced), `agent_kill`,
   `agent_docker_exec`, `agent_put` (upload one file to a host: size and
-  sha256 checks, optional backup, atomic rename), and `agent_replace
+  sha256 checks, optional backup, atomic rename), `agent_test` (a test
+  suite, and nothing else, run and summarized), and `agent_replace
   --host`. Each takes `--dry-run`, names its targets explicitly
   and keeps the secret-file and protected-path rails; system paths are
   refused and sensitive ones need `--force`. Its own card topic, `gash
@@ -130,9 +132,10 @@ automatic; changing it is human-only and goes through a UAC prompt.
 ### Security
 
 - `llm_*` stays read-only with no exception: writes live only in `agent_*`;
-  `llm_http` refuses any method but GET, HEAD and OPTIONS; `llm_test` runs
-  a test suite and nothing else (`gash run` runs any other command);
-  `llm_procs` has no kill.
+  `llm_http` refuses any method but GET, HEAD and OPTIONS; `llm_procs` has
+  no kill. Running a test suite executes the project's code, so it is
+  `agent_test`, which runs a test suite and nothing else (`gash run` runs
+  any other command).
 - Remote calls take registered `HOST:` aliases only. Remote paths pass the
   local rails and the transfer deny list before anything connects and are
   checked again on the host after links resolve; a secret file never

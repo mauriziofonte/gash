@@ -1,7 +1,7 @@
 // Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
 // Package testparse reads the output of a test runner or a static
-// analyzer into counts and failures (plan L2): llm_test and
+// analyzer into counts and failures (plan L2): agent_test and
 // `gash run --test-summary` share it. The runners are pest, phpunit,
 // phpstan, psalm, vitest, jest, mocha, pytest, go test, cargo test and
 // playwright, in their default reporters and, where the runner has one

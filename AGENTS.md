@@ -482,23 +482,11 @@ unless `--width` says otherwise.
 | `llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]` | JSON object, keys in the order asked: `{"version","path"}` per program, `null` when it is not on PATH, `"version":null` when its probe prints none; `php` and `node` are arrays of every installed version, oldest first. Without NAME: git php composer node npm python3 go rg jq docker |
 | `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins |
 | `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute] [--host ALIAS]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
-| `llm_test [--runner auto\|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's |
 
-`llm_test` and `gash run` take a command after `--`: the one exception to
-the no-`--` rule of this section. Their options come before `--` (or before
-the first word that is not an option), every word after it belongs to CMD,
-`--help` included. `llm_test` runs a test suite and nothing else: a runner
-(pest, phpunit, paratest, phpstan, psalm, vitest, jest, mocha, playwright,
-pytest; by path such as `vendor/bin/pest`, or through `php`, `node`, `npx`,
-`pnpm exec`, `python -m`), `php artisan test`, `go test`, `cargo test`, the
-test script of npm, pnpm, yarn, bun or composer, `make test`; any other
-command is `not_a_test_command` (RETRY), and `gash run` runs it. The suite
-runs the project's own code, without `llm_exec`'s rails; stdout and stderr
-are merged, stdin is `/dev/null`, a program not on PATH
-is `command_not_found` (status 127). Runners: pest, phpunit, phpstan and
-psalm (analyzer findings count as failures), vitest, jest (text or
-`--json`), mocha, pytest, go (text or `-json`), cargo, playwright; `auto`
-picks one from CMD and the output.
+`gash run` and `agent_test` (section 8) take a command after `--`: the one
+exception to the no-`--` rule of this section. Their options come before
+`--` (or before the first word that is not an option), every word after it
+belongs to CMD, `--help` included.
 
 `llm_lint` runs `php -l` on batches of files, `bash -n` per shell script,
 node per batch of js files (each compiled as node loads it, CommonJS or ES
@@ -524,7 +512,7 @@ functions):
 | Command | Effect |
 |---|---|
 | `gash runtime php\|node\|composer\|npm\|npx VERSION [--path]` | The `llm_runtime` object, or with `--path` the path alone; the resolution is cached in `${XDG_CACHE_HOME:-~/.cache}/gash/runtimes.json` until the nvm tree or `/usr/bin/php*` change |
-| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime node:24\|php:8.4] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `llm_test` object instead of the output; `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
+| `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime node:24\|php:8.4] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
 | `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
 
 ### 3.12 Remote hosts (3.4)
@@ -979,11 +967,12 @@ The 3.4 reads keep every rail above and add these:
 - **Processes.** `llm_procs` has no `--kill`, listings never show the
   caller, its ancestors or its subshells; `llm_wait --cmd-ok` and
   `llm_docker_exec` run under the `llm_exec` rules of 6.3.
-- **Commands.** `llm_test` runs a test suite and nothing else (3.11);
-  `llm_lint` only compiles (`php -l`, `bash -n`, node compile without
-  evaluating, python `compile()`); `llm_tools NAME` runs `NAME --version`
-  for a bare program name on PATH. `gash run` is not an `llm_*` function:
-  it runs any command, under the `llm_exec` rules only with `--safe`.
+- **Commands.** `llm_lint` only compiles (`php -l`, `bash -n`, node
+  compile without evaluating, python `compile()`); `llm_tools NAME` runs
+  `NAME --version` for a bare program name on PATH. A test suite runs the
+  project's own code, so the test runner is `agent_test`, a write tool
+  (section 8). `gash run` is not an `llm_*` function: it runs any command,
+  under the `llm_exec` rules only with `--safe`.
 - **Databases.** Row formats, `--scalar`, `--counts`, `--all` and
   `llm_db_databases` pass the SQL guard first and run in the same read-only
   session.
@@ -1074,7 +1063,6 @@ registry, where each function's entry names the shape it replaces.
 | `ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e` | `llm_stat` |
 | `uptime; free -h; df -h /; nproc; nvidia-smi` | `llm_sysinfo` |
 | `nc -z h p; timeout 2 bash -c '</dev/tcp/h/p'` | `llm_tcp` |
-| `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20` | `llm_test` |
 | `grep -nP '[^\x00-\x7F]' f; file -i f` | `llm_textcheck` |
 | `wc -w f; wc -c f; gzip -c f \| wc -c` | `llm_textstats` |
 | `openssl s_client -connect h:443 \| openssl x509 -noout -dates` | `llm_tls` |
@@ -1088,6 +1076,7 @@ registry, where each function's entry names the shape it replaces.
 | `pkill -f x; kill PID` | `agent_kill` |
 | `scp f h:/tmp/x && ssh h "install -m 644 /tmp/x /dest && sha256sum /dest"` | `agent_put` |
 | `python3 - <<EOF ... s.replace(...) ... EOF; sed -i` | `agent_replace` |
+| `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20` | `agent_test` |
 
 
 ## 8. Write tools (`agent_*`)
@@ -1115,6 +1104,7 @@ output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
 | `agent_kill NAME\|PID... [--signal S] [--dry-run] [--format F]` | `{"killed":N,"pids":[...]}`; NAME is the regex of `llm_procs --name` on the full command line; nothing matched is `{"killed":0,"pids":[]}`, exit 0; `--dry-run` adds `"cmds":[...],"signal":"TERM","dry_run":true,"written":false` |
 | `agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{"rc","out","err"}`, exit 0 when the command ran (read `rc`); CMD's words reach `docker exec` as an array, no shell runs; `--dry-run`: `{"argv":[...],"dry_run":true,"written":false}` |
 | `agent_put ALIAS:PATH --from FILE\|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]` | `{"host","path","bytes","sha256","replaced","backup","verified","written":true}`; one round trip: a temporary file next to PATH, size check (and sha256 with `--verify`), rename over PATH; `--dry-run` adds `"exists"` with `"dry_run":true,"written":false` |
+| `agent_test [--runner auto\|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's; `--dry-run`: `{"argv":[...],"runner","cwd","dry_run":true,"written":false}` (`"runner":null` when only the output would tell) |
 
 `agent_replace` writes each file through a temporary file in the same
 directory, renamed over the target with its mode (and owner, as root); a
@@ -1151,6 +1141,20 @@ the old file's mode is kept unless `--mode` names one. `agent_replace
 --host ALIAS` makes the same all-or-nothing replacement on the host through
 the shipped gash binary; a host without it is `remote_binary_unavailable`
 (there is no POSIX fallback for a write).
+
+`agent_test` is a write tool because a test suite runs the project's own
+code, which can change files, caches or a test database. It runs a test
+suite and nothing else: a runner (pest, phpunit, paratest, phpstan, psalm,
+vitest, jest, mocha, playwright, pytest; by path such as `vendor/bin/pest`,
+or through `php`, `node`, `npx`, `pnpm exec`, `python -m`), `php artisan
+test`, `go test`, `cargo test`, the test script of npm, pnpm, yarn, bun or
+composer, `make test`; any other command is `not_a_test_command` (RETRY),
+and `gash run` runs it. The suite runs without `llm_exec`'s rails; stdout
+and stderr are merged, stdin is `/dev/null`, a program not on PATH is
+`command_not_found` (status 127). Options come before `--` (3.11).
+Runners: pest, phpunit, phpstan and psalm (analyzer findings count as
+failures), vitest, jest (text or `--json`), mocha, pytest, go (text or
+`-json`), cargo, playwright; `auto` picks one from CMD and the output.
 
 ## 9. Best practices
 

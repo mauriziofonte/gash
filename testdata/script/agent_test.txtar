@@ -1,11 +1,11 @@
 # Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 #
-# llm_test (new in 3.4, plan L2): a test command run as given, its output
+# agent_test (new in 3.4, plan L2): a test command run as given, its output
 # summarized (counts, each failure's file:line and message), its exit
 # status kept. The runner is a stub on PATH that prints a pytest report.
 # Output no parser reads gives its last lines with "parsed":false; options
 # come before --, every word after it is CMD's. A command that is no test
-# runner is refused (D1: llm_* runs no arbitrary command).
+# runner is refused (D1: a write tool, never an arbitrary command).
 #
 # covers: none (new in 3.4; no 2.x spec)
 
@@ -17,31 +17,36 @@ chmod 0755 green/pytest
 chmod 0755 chatter/mocha
 
 # --- through the sourced shell: the summary, CMD's status
-exec bash -c 'source "$GASH_SH"; llm_test -- pytest -q; echo "rc=$?"'
+exec bash -c 'source "$GASH_SH"; agent_test -- pytest -q; echo "rc=$?"'
 stdout '^\{"runner":"pytest","passed":2,"failed":1,"skipped":0,"duration_s":[0-9.]+,"failures":\[\{"name":"test_b","file":"tests/test_a\.py","line":5,"message":"assert 1 == 2"\}\],"parsed":true,"exit_code":1\}$'
 stdout '^rc=1$'
 ! stderr .
 
 # --- directly: silent when green with --fail-only
-exec gash llm_test --fail-only -- $WORK/green/pytest
+exec gash agent_test --fail-only -- $WORK/green/pytest
 ! stdout .
-exec gash llm_test -- $WORK/green/pytest
+exec gash agent_test -- $WORK/green/pytest
 stdout '"runner":"pytest","passed":4,"failed":0'
 
 # --- output no parser reads: the last lines; --help after -- is CMD's
-exec bash -c 'gash llm_test --tail 2 -- "$WORK/chatter/mocha" --help; echo "rc=$?"'
+exec bash -c 'gash agent_test --tail 2 -- "$WORK/chatter/mocha" --help; echo "rc=$?"'
 stdout '^\{"runner":null,"duration_s":[0-9.]+,"parsed":false,"exit_code":3,"tail":\["two","--help"\]\}$'
 stdout '^rc=3$'
 
+# --- --dry-run: the command, its format, the directory; nothing runs
+exec gash agent_test --dry-run -- pytest -q
+stdout '^\{"argv":\["pytest","-q"\],"runner":"pytest","cwd":"[^"]+","dry_run":true,"written":false\}$'
+! stderr .
+
 # --- errors before CMD runs
-! exec gash llm_test --
+! exec gash agent_test --
 stderr '"error":"empty_command"'
-! exec gash llm_test --runner nose -- pytest
+! exec gash agent_test --runner nose -- pytest
 stderr '"error":"unknown_runner"'
-exec bash -c 'gash llm_test -- "$WORK/none/pytest"; echo "rc=$?"'
+exec bash -c 'gash agent_test -- "$WORK/none/pytest"; echo "rc=$?"'
 stderr '"error":"command_not_found"'
 stdout '^rc=127$'
-! exec gash llm_test -- bash -c 'rm -rf x'
+! exec gash agent_test -- bash -c 'rm -rf x'
 stderr '"error":"not_a_test_command"'
 
 -- bin/pytest --

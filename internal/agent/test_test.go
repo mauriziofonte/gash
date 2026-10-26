@@ -1,14 +1,19 @@
 // Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-package llm
+package agent
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/term"
 )
 
 type testOut struct {
@@ -27,6 +32,20 @@ type testOut struct {
 	Truncated int      `json:"truncated"`
 }
 
+// runTest runs agent_test ARGS with env, from dir.
+func runTest(t *testing.T, dir string, env map[string]string, args ...string) result {
+	t.Helper()
+	m := New()
+	m.getwd = func() (string, error) { return dir, nil }
+	tbl := invoke.NewTable()
+	m.Register(tbl)
+	var out, errb bytes.Buffer
+	e := invoke.EnvMap(env)
+	rc := tbl.Run(&invoke.Call{Ctx: context.Background(), Name: "agent_test", Args: args, Env: e,
+		Stdout: &out, Stderr: &errb, Term: term.Fixed(e, false, false, false)})
+	return result{out.String(), errb.String(), rc}
+}
+
 func parseTest(t *testing.T, r result) testOut {
 	t.Helper()
 	var o testOut
@@ -35,13 +54,13 @@ func parseTest(t *testing.T, r result) testOut {
 	return o
 }
 
-// TestLLMTest: llm_test runs CMD, summarizes the runner's output and
+// TestAgentTest: agent_test runs CMD, summarizes the runner's output and
 // returns CMD's exit status; output no parser reads gives its last lines.
-func TestLLMTest(t *testing.T) {
+func TestAgentTest(t *testing.T) {
 	fixture, err := filepath.Abs(filepath.Join("..", "testparse", "testdata", "pytest_fail.txt"))
 	require.NoError(t, err)
-	// Each stub is a test runner by name: llm_test runs nothing else.
-	bin := physTemp(t)
+	// Each stub is a test runner by name: agent_test runs nothing else.
+	bin := physDir(t)
 	for name, script := range map[string]string{
 		"pytest":         "#!/bin/sh\ncat '" + fixture + "'\necho noise >&2\nexit 1\n",
 		"green/pytest":   "#!/bin/sh\necho '============== 4 passed in 0.02s =============='\n",
@@ -56,12 +75,11 @@ func TestLLMTest(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(bin, name)), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(bin, name), []byte(script), mode))
 	}
-	env := baseEnv(physTemp(t), map[string]string{"PATH": bin + ":" + os.Getenv("PATH")})
-	m := New()
-	d := physTemp(t)
+	d := physDir(t)
+	env := map[string]string{"HOME": physDir(t), "PWD": d, "GASH_HEADLESS": "1", "PATH": bin + ":" + os.Getenv("PATH")}
 	green, chatter, args := filepath.Join(bin, "green", "pytest"), filepath.Join(bin, "chatter", "mocha"), filepath.Join(bin, "args", "vitest")
 
-	r := runGo(t, m, d, env, "llm_test", "--", "pytest", "-x")
+	r := runTest(t, d, env, "--", "pytest", "-x")
 	require.Equal(t, 1, r.RC, r.Stderr)
 	require.Empty(t, r.Stderr)
 	o := parseTest(t, r)
@@ -74,25 +92,25 @@ func TestLLMTest(t *testing.T) {
 	require.Equal(t, "ZeroDivisionError: division by zero", o.Failures[0].Message)
 
 	// Budget and width; no -- (CMD starts at the first plain word).
-	o = parseTest(t, runGo(t, m, d, env, "llm_test", "--max-lines", "1", "--width", "10", "pytest"))
+	o = parseTest(t, runTest(t, d, env, "--max-lines", "1", "--width", "10", "pytest"))
 	require.Len(t, o.Failures, 1)
 	require.Equal(t, 1, o.Truncated)
 	require.Equal(t, "ZeroDivis…", o.Failures[0].Message)
 
 	// --runner forces a parser: pytest output read as go test parses nothing.
-	o = parseTest(t, runGo(t, m, d, env, "llm_test", "--runner", "go", "--", "pytest"))
+	o = parseTest(t, runTest(t, d, env, "--runner", "go", "--", "pytest"))
 	require.False(t, o.Parsed)
 	require.Nil(t, o.Runner)
 
 	// Green with --fail-only prints nothing; without it the counts.
-	r = runGo(t, m, d, env, "llm_test", "--fail-only", "--", green)
+	r = runTest(t, d, env, "--fail-only", "--", green)
 	require.Equal(t, result{"", "", 0}, r)
-	o = parseTest(t, runGo(t, m, d, env, "llm_test", "--", green))
+	o = parseTest(t, runTest(t, d, env, "--", green))
 	require.Equal(t, 4, o.Passed)
 	require.Equal(t, "pytest", *o.Runner)
 
 	// Unparsed output: the last lines, CMD's status.
-	r = runGo(t, m, d, env, "llm_test", "--tail", "2", "--", chatter)
+	r = runTest(t, d, env, "--tail", "2", "--", chatter)
 	require.Equal(t, 3, r.RC)
 	o = parseTest(t, r)
 	require.False(t, o.Parsed)
@@ -100,7 +118,7 @@ func TestLLMTest(t *testing.T) {
 	require.Equal(t, 3, o.ExitCode)
 
 	// Options after CMD belong to CMD.
-	r = runGo(t, m, d, env, "llm_test", "--", args, "--runner")
+	r = runTest(t, d, env, "--", args, "--runner")
 	require.Equal(t, 4, r.RC)
 	o = parseTest(t, r)
 	require.Equal(t, []string{"--runner"}, o.Tail)
@@ -121,20 +139,23 @@ func TestLLMTest(t *testing.T) {
 		{[]string{"--", "bash", "-c", "rm -rf x"}, "not_a_test_command", 1},
 		{[]string{"--", "rm", "-rf", "x"}, "not_a_test_command", 1},
 	} {
-		r := runGo(t, m, d, env, "llm_test", tc.args...)
+		r := runTest(t, d, env, tc.args...)
 		require.Equal(t, tc.rc, r.RC, tc.args)
 		require.Contains(t, r.Stderr, `"error":"`+tc.code+`"`, tc.args)
 		require.Empty(t, r.Stdout, tc.args)
 	}
 
 	// --help before -- is the help; after it, an argument of CMD.
-	r = runGo(t, m, d, env, "llm_test", "--help")
-	require.Contains(t, r.Stdout, "llm_test [--runner")
-	r = runGo(t, m, d, env, "llm_test", "--", args, "--help")
+	r = runTest(t, d, env, "--help")
+	require.Contains(t, r.Stdout, "agent_test [--runner")
+	for _, f := range []string{"--runner", "--fail-only", "--dry-run", "--max-lines", "--head", "--tail", "--width", "--timeout", "--relative", "--absolute"} {
+		require.Contains(t, r.Stdout, f)
+	}
+	r = runTest(t, d, env, "--", args, "--help")
 	require.Equal(t, []string{"--help"}, parseTest(t, r).Tail)
 }
 
-// D1: llm_test runs a test suite and nothing else.
+// D1: agent_test runs a test suite and nothing else.
 func TestTestCommand(t *testing.T) {
 	for _, argv := range [][]string{
 		{"vendor/bin/pest"}, {"vendor/bin/phpunit", "--filter", "X"}, {"php", "vendor/bin/phpunit"},
@@ -154,4 +175,34 @@ func TestTestCommand(t *testing.T) {
 	} {
 		require.False(t, testCommand(argv), argv)
 	}
+}
+
+// --dry-run reports the command, the parser it names and the directory,
+// and runs nothing; the gate applies first.
+func TestAgentTestDryRun(t *testing.T) {
+	bin, d := physDir(t), physDir(t)
+	marker := filepath.Join(d, "ran")
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "pest"), []byte("#!/bin/sh\ntouch '"+marker+"'\n"), 0o755))
+	env := map[string]string{"HOME": physDir(t), "PWD": d, "GASH_HEADLESS": "1", "PATH": bin + ":" + os.Getenv("PATH")}
+
+	r := runTest(t, d, env, "--dry-run", "--", "vendor/bin/pest", "--filter", "a b")
+	require.Equal(t, result{`{"argv":["vendor/bin/pest","--filter","a b"],"runner":"pest","cwd":` +
+		string(mustJSON(t, d)) + `,"dry_run":true,"written":false}` + "\n", "", 0}, r)
+	r = runTest(t, d, env, "--dry-run", "--runner", "phpunit", "--", "pest")
+	require.Contains(t, r.Stdout, `"runner":"phpunit"`)
+	r = runTest(t, d, env, "--dry-run", "--", "npm", "test")
+	require.Contains(t, r.Stdout, `"runner":null`)
+	require.NoFileExists(t, marker)
+
+	r = runTest(t, d, env, "--dry-run", "--", "rm", "-rf", "x")
+	require.Equal(t, 1, r.RC)
+	require.Contains(t, r.Stderr, `"error":"not_a_test_command"`)
+	require.Empty(t, r.Stdout)
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	require.NoError(t, err)
+	return b
 }

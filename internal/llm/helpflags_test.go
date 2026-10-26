@@ -78,10 +78,9 @@ var llmOptions = map[string][]string{
 	"llm_docker_exec": {"--user", "-u", "--width", "--max-lines", "--head", "--tail", "--host"},
 	"llm_sysinfo":     {"--mount", "--host"},
 
-	// 3.4 runtimes, lint and tests.
+	// 3.4 runtimes and lint (agent_test: internal/agent).
 	"llm_lint":    {"--ext", "--php", "--node", "-j", "--jobs", "--timeout", "--max-lines", "--head", "--tail", "--width", "--relative", "--absolute", "--host"},
 	"llm_runtime": {},
-	"llm_test":    {"--runner", "--fail-only", "--max-lines", "--head", "--tail", "--width", "--timeout", "--relative", "--absolute"},
 	"llm_tools":   {"-j", "--jobs", "--timeout", "--host"},
 
 	// 3.4 remote.

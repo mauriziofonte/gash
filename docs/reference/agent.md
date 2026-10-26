@@ -11,6 +11,7 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`agent_kill`](#agent-kill) |  | Signal processes by PID or command line, never the caller (JSON) |
 | [`agent_put`](#agent-put) |  | Upload a file to a registered host: atomic, optional backup and hash check |
 | [`agent_replace`](#agent-replace) |  | Replace text in explicit files, all or nothing |
+| [`agent_test`](#agent-test) |  | Run a test suite and summarize it: counts and each failure's file:line |
 
 ## agent_docker_exec
 
@@ -300,3 +301,72 @@ named once. Secret files, protected paths and system paths are refused
 files and files over 64 MiB are refused. Output:
 {"files":N,"replaced":{"FILE":[n1,n2]},"written":true}.
 ```
+
+## agent_test
+
+Run a test suite and summarize it: counts and each failure's file:line
+
+Replaces:
+
+- `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20`
+
+#### Usage
+
+```text
+agent_test [--runner auto|NAME] [--fail-only] [--dry-run] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...
+```
+
+#### Options
+
+```text
+--runner auto|NAME     The output format: pest, phpunit, phpstan, psalm,
+                       vitest, jest, mocha, pytest, go, cargo, playwright
+                       (default auto: from CMD and the output)
+--fail-only            Print nothing when CMD exits 0 with no failure
+--dry-run              Print the command, its format and the directory;
+                       run nothing
+--max-lines N          Failures listed (default 50; --head N, --tail N);
+                       unparsed output: the last N lines (default 20)
+--width N              Cut messages at N columns (default 200)
+--timeout S            End CMD after S (default: no limit)
+--relative, --absolute Paths below the working directory relative (default)
+                       or as the runner printed them
+```
+
+#### Examples
+
+```bash
+# Pest with a filter
+agent_test -- vendor/bin/pest --filter UserTest
+
+# A package script; silent when green
+agent_test --fail-only -- npm test
+
+# Go with the JSON reporter
+agent_test -- go test -json ./...
+```
+
+#### Notes
+
+```text
+A write tool: the suite runs the project's own code, which can change
+files, caches or a test database, so it is an agent_* function and not
+an llm_* read. Replaces pest | grep -E 'Tests:|FAIL' and npm test |
+tail -20. CMD is a test suite: a runner (pest, phpunit, paratest,
+phpstan, psalm, vitest, jest, mocha, playwright, pytest; a path such as
+vendor/bin/pest, also through php, node, npx, pnpm exec or python -m),
+php artisan test, go test, cargo test, the test script of npm, pnpm,
+yarn, bun or composer, make test; any other command is
+not_a_test_command (gash run runs it). CMD runs as given, stdout and
+stderr merged, stdin /dev/null; the exit status is CMD's. Output:
+{"runner","passed","failed","skipped","duration_s","failures":[{"name",
+"file","line","message"}],"parsed":true,"exit_code"}; analyzer findings
+(phpstan, psalm) are failures. Output no parser reads:
+{"runner":null,"duration_s","parsed":false,"exit_code","tail":[...]}.
+--dry-run: {"argv":[...],"runner","cwd","dry_run":true,"written":false}
+(runner null when only the output would tell). Options come before --;
+a program not on PATH is command_not_found. The suite runs without
+llm_exec's rails.
+```
+
+See also: `llm_lint`

@@ -309,11 +309,12 @@ The 3.4 functions keep every rail above and split reads from writes.
 * **`llm_*` only read**, with no exception. `llm_http` sends GET, HEAD or
   OPTIONS without a body; a credential reaches it only through
   `--auth-env VAR` (never argv, never printed, never sent to another host
-  on a redirect). `llm_test` runs a test suite and nothing else;
-  `llm_docker_exec` and `llm_wait --cmd-ok` run under the `llm_exec` rules;
-  `llm_procs` has no kill.
+  on a redirect). `llm_docker_exec` and `llm_wait --cmd-ok` run under the
+  `llm_exec` rules; `llm_procs` has no kill.
 * **`agent_*` are the write tools**: `agent_replace`, `agent_git_commit`,
-  `agent_kill`, `agent_docker_exec`, `agent_put`. Each takes `--dry-run`,
+  `agent_kill`, `agent_docker_exec`, `agent_put`, and `agent_test`, because
+  a test suite runs the project's own code (it runs a test suite and
+  nothing else; `gash run` runs any other command). Each takes `--dry-run`,
   names every target (no glob is expanded, no implicit "all"), checks every
   target before the first write, and keeps the secret-file and
   forbidden-path rules. The deny tier of `remote_*` applies to local targets

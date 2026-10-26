@@ -8,7 +8,7 @@ import (
 )
 
 // RunUser runs a command line the caller wrote out word by word (gash run
-// -- CMD..., llm_test -- CMD...): argv as Run starts it, and when argv is
+// -- CMD..., agent_test -- CMD...): argv as Run starts it, and when argv is
 // a shell with a command string (bash -c 'a | b'), which Run refuses,
 // through BashUserCommand, that execs the same argv. The caller's words
 // are never joined into a script.

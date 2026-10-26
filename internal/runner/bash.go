@@ -45,7 +45,7 @@ const (
 	// which sources the gash.sh of the install directory ($1).
 	BashUpdateSmokeInteractive
 	// BashUserCommand runs the caller's own command line of gash run and
-	// llm_test when it is a shell with a command string (bash -c '...'),
+	// agent_test when it is a shell with a command string (bash -c '...'),
 	// which Run refuses: the fixed script UserCommandScript execs the
 	// argv, passed as the positional parameters, never as script text
 	// (RunUser).

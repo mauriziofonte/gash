@@ -4,7 +4,7 @@
 # Without a budget flag its output passes through untouched; --max-lines,
 # --tail and --width shape stdout and stderr each, with one omitted-lines
 # marker; --runtime puts a runtime first on PATH (a fake nvm tree here);
-# --test-summary prints the llm_test object; --safe applies llm_exec's
+# --test-summary prints the agent_test object; --safe applies llm_exec's
 # rails; a gash function runs in process. gash's own errors are envelopes.
 #
 # covers: none (gash run is new in 3.4; no 2.x spec)

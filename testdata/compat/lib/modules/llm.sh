@@ -28,6 +28,7 @@ agent_put() {
     __gash_call agent_put "$@"
 }
 agent_replace() { __gash_call agent_replace "$@"; }
+agent_test() { __gash_call agent_test "$@"; }
 llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
 llm_count() { __gash_call llm_count "$@"; }
@@ -97,7 +98,6 @@ llm_service() { __gash_call llm_service "$@"; }
 llm_stat() { __gash_call llm_stat "$@"; }
 llm_sysinfo() { __gash_call llm_sysinfo "$@"; }
 llm_tcp() { __gash_call llm_tcp "$@"; }
-llm_test() { __gash_call llm_test "$@"; }
 llm_textcheck() { __gash_call llm_textcheck "$@"; }
 llm_textstats() { __gash_call llm_textstats "$@"; }
 llm_tls() { __gash_call llm_tls "$@"; }

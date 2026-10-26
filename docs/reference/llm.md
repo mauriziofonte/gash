@@ -48,7 +48,6 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 | [`llm_stat`](#llm-stat) |  | Metadata of several paths: type, size, mode, owner, mtime, lines |
 | [`llm_sysinfo`](#llm-sysinfo) |  | Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON) |
 | [`llm_tcp`](#llm-tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
-| [`llm_test`](#llm-test) |  | Run a test command and summarize it: counts and each failure's file:line |
 | [`llm_textcheck`](#llm-textcheck) |  | Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines |
 | [`llm_textstats`](#llm-textstats) |  | Lines, words, characters, bytes, gzip size and longest line of files |
 | [`llm_tls`](#llm-tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
@@ -1746,7 +1745,7 @@ refused as arguments. A FILE argument with another extension is
 unsupported_file. A missing checker is runtime_not_installed (STOP).
 ```
 
-See also: `llm_test`, `llm_runtime`
+See also: `agent_test`, `llm_runtime`
 
 ## llm_log
 
@@ -2363,69 +2362,6 @@ timeout (filtered), unreachable, dns_not_found, dns_error.
 ```
 
 See also: `llm_ports`, `llm_tls`, `llm_http`
-
-## llm_test
-
-Run a test command and summarize it: counts and each failure's file:line
-
-Replaces:
-
-- `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20`
-
-#### Usage
-
-```text
-llm_test [--runner auto|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...
-```
-
-#### Options
-
-```text
---runner auto|NAME     The output format: pest, phpunit, phpstan, psalm,
-                       vitest, jest, mocha, pytest, go, cargo, playwright
-                       (default auto: from CMD and the output)
---fail-only            Print nothing when CMD exits 0 with no failure
---max-lines N          Failures listed (default 50; --head N, --tail N);
-                       unparsed output: the last N lines (default 20)
---width N              Cut messages at N columns (default 200)
---timeout S            End CMD after S (default: no limit)
---relative, --absolute Paths below the working directory relative (default)
-                       or as the runner printed them
-```
-
-#### Examples
-
-```bash
-# Pest with a filter
-llm_test -- vendor/bin/pest --filter UserTest
-
-# A package script; silent when green
-llm_test --fail-only -- npm test
-
-# Go with the JSON reporter
-llm_test -- go test -json ./...
-```
-
-#### Notes
-
-```text
-Replaces pest | grep -E 'Tests:|FAIL' and npm test | tail -20. CMD is a
-test suite: a runner (pest, phpunit, paratest, phpstan, psalm, vitest,
-jest, mocha, playwright, pytest; a path such as vendor/bin/pest, also
-through php, node, npx, pnpm exec or python -m), php artisan test, go
-test, cargo test, the test script of npm, pnpm, yarn, bun or composer,
-make test; any other command is not_a_test_command (gash run runs it).
-CMD runs as given, stdout and stderr
-merged, stdin /dev/null; the exit status is CMD's. Output:
-{"runner","passed","failed","skipped","duration_s","failures":[{"name",
-"file","line","message"}],"parsed":true,"exit_code"}; analyzer findings
-(phpstan, psalm) are failures. Output no parser reads:
-{"runner":null,"duration_s","parsed":false,"exit_code","tail":[...]}.
-Options come before --; a program not on PATH is command_not_found. The
-suite runs the project's own code, without llm_exec's rails.
-```
-
-See also: `llm_lint`
 
 ## llm_textcheck
 
