@@ -5,7 +5,9 @@
 #
 # A missing extraction tool gets the dependency error line, rc 1. 3.0:
 # FILE-07 and FILE-03 fixed: the tool is checked before OUTPUT_DIR or any
-# output file is created.
+# output file is created. 3.4: the line is the prerequisite report, here
+# its envelope (GASH_HEADLESS=1); it was "Command 'X' is not installed or
+# not in PATH.".
 
 env GASH_HEADLESS=1
 env LC_ALL=C
@@ -14,9 +16,9 @@ mkdir work bin
 exec bash -c 'ln -s "$(command -v bash)" bin/bash; printf x > work/a.zip; printf x > work/s.txt.gz'
 
 ! exec bash -c 'cd work; PATH=$WORK/bin; source "$GASH_SH"; archive_extract a.zip newdir'
-stderr '^Error: Command .unzip. is not installed or not in PATH\.$'
+stderr '^\{"error":"prerequisite_missing","details":"archive_extract \(\.zip\) needs unzip, which is not installed",.*"missing":"unzip"'
 ! exists work/newdir
 
 ! exec bash -c 'cd work; PATH=$WORK/bin; source "$GASH_SH"; archive_extract s.txt.gz'
-stderr '^Error: Command .gunzip. is not installed or not in PATH\.$'
+stderr '^\{"error":"prerequisite_missing","details":"archive_extract \(\.gz\) needs gzip, which is not installed",.*"missing":"gzip"'
 ! exists work/s.txt
