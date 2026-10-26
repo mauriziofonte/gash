@@ -246,9 +246,16 @@ func (e *Engine) certs(v *env) certs.Manager {
 		Paths: v.paths, Env: child.BaseEnv(v.dirs.Home), Now: e.Now}
 }
 
-// find returns a system binary in the base PATH, as seen through the
-// sysroot ("" when absent).
-func (e *Engine) find(name string) string { return child.Find(name, e.Sysroot.IsRegular) }
+// find returns a program gash hte runs as the user (openssl, launchctl,
+// systemctl --user) in child.UserDirs, as seen through the sysroot; sudo,
+// which runs the root helper, only in the system directories of the base
+// PATH. "" when absent.
+func (e *Engine) find(name string) string {
+	if name == "sudo" {
+		return child.Find(name, e.Sysroot.IsRegular)
+	}
+	return child.FindIn(name, child.UserDirs(e.Getenv("HOME"), e.Getenv("PATH"), e.Sysroot.Stat), e.Sysroot.IsRegular)
+}
 
 // prepare creates the directories a generation names: the runtime
 // directory (0700, owner checked), the logs, the per-site log
