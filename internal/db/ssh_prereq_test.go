@@ -127,6 +127,13 @@ func TestSSHMissingOnTheHost(t *testing.T) {
 	require.Equal(t, 1, r.RC)
 	require.Contains(t, r.Stderr, `{"error":"mysql_not_found","details":"mysql is not installed on web","action":"FATAL","recoverable":false,`+
 		`"hint":"Install the mysql client on the host, or name its container with +docker:CONTAINER in the URL","missing":"mysql","host":"web"`)
+
+	// Inside a container (the stub docker runs the client on the host).
+	mustWrite(t, filepath.Join(dir, "docker"), stubDocker, 0o755)
+	r = f.run(t, "llm_db_query", "SELECT 1", "-c", "pg")
+	require.Equal(t, 1, r.RC)
+	require.Contains(t, r.Stderr, `{"error":"psql_not_found","details":"psql is not installed in container pg on db","action":"FATAL","recoverable":false,`+
+		`"hint":"Install the psql client in the container, or name another one with +docker:CONTAINER in the URL","missing":"psql","host":"db","container":"pg"`)
 }
 
 // TestSSHWithoutLocalSSH: host_unreachable (RETRY) "check the host is up"

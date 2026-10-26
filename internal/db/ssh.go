@@ -312,11 +312,17 @@ func (m *Module) addQueryTime(c *invoke.Call, d time.Duration) {
 	}
 }
 
-// clientMissing is the envelope of a client the host does not have, with
-// the members of a missing prerequisite ("missing", "host").
-func clientMissing(code, client string, h remote.Host) output {
-	return failed(contract.New(code, client+" is not installed on "+h.Alias, "Install the "+client+" client on the host, or name its container with +docker:CONTAINER in the URL").
-		With("missing", client).With("host", h.Alias))
+// clientMissing is the envelope of a client the host (or the container
+// on it) does not have, with the members of a missing prerequisite
+// ("missing", "host", "container").
+func clientMissing(code, client string, via *sshVia) output {
+	if via.container != "" {
+		return failed(contract.New(code, client+" is not installed in container "+via.container+" on "+via.host.Alias,
+			"Install the "+client+" client in the container, or name another one with +docker:CONTAINER in the URL").
+			With("missing", client).With("host", via.host.Alias).With("container", via.container))
+	}
+	return failed(contract.New(code, client+" is not installed on "+via.host.Alias, "Install the "+client+" client on the host, or name its container with +docker:CONTAINER in the URL").
+		With("missing", client).With("host", via.host.Alias))
 }
 
 // sshMySQL is mysqlRun on a +ssh target: the mysql client in batch mode,
@@ -348,7 +354,7 @@ func (m *Module) sshMySQL(c *invoke.Call, t target, raw bool, query, rowCap stri
 	case fail != nil:
 		return *fail
 	case rc == 127:
-		return clientMissing("mysql_not_found", "mysql", t.via.host)
+		return clientMissing("mysql_not_found", "mysql", t.via)
 	case rc != 0:
 		return failed(contract.New("mysql_error", cleanError(mysqlMessage(errText)), "Fix the SQL and retry"))
 	}
@@ -466,7 +472,7 @@ func (m *Module) sshPG(c *invoke.Call, t target, json bool, query string) output
 	case fail != nil:
 		return *fail
 	case rc == 127:
-		return clientMissing("psql_not_found", "psql", t.via.host)
+		return clientMissing("psql_not_found", "psql", t.via)
 	case rc != 0 && !json:
 		// --csv came with psql 12: an older one refuses it before it
 		// reads any SQL.
@@ -533,7 +539,7 @@ func (m *Module) sshSQLite(c *invoke.Call, via *sshVia, p, query string, mode in
 	case fail != nil:
 		return *fail
 	case rc == 127:
-		return clientMissing("sqlite_not_found", "sqlite3", via.host)
+		return clientMissing("sqlite_not_found", "sqlite3", via)
 	case rc != 0:
 		// -json came with sqlite3 3.33: an older one refuses it before
 		// it reads any SQL.
