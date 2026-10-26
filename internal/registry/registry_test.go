@@ -289,4 +289,3 @@ func TestRegistry_AliasDocsMatchConditions(t *testing.T) {
 	}
 	require.Equal(t, []string{"1composer", "composer", "php"}, CardAliasFamilies())
 }
-
