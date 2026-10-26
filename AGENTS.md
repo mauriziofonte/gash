@@ -200,7 +200,7 @@ SQLite) and needs no database in the connection.
 | `llm_git_show [REV] [--stat] [--files] [--patch] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `{hash, subject, author, date, files:[{p, add, del}]}` of REV (default HEAD); `--stat` adds `stat` totals, `--files` each file's `status`; `--patch` the patch text capped per file; `REV:FILE` the file's content at REV |
 | `llm_env [--filter REGEX] [--host ALIAS]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
 | `llm_ports [--listen] [--port N] [--host ALIAS]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without); `--port N` (0-65535, else `invalid_port`) keeps local port N and adds `procs: [{pid, name}]` to each record (empty for another user's process unless root) |
-| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree` (3.4): `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
+| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: the first 20 processes by PID with user, cpu and mem (from `ps`, else `/proc`; `ps_not_found` without either); `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree` (3.4): `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
 | `llm_project [PATH] [--host ALIAS]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev] [--host ALIAS]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
@@ -872,7 +872,9 @@ not.
    their writing options (`find -delete`/`-exec`, `sort -o`, `sed -i`,
    `git branch -D`, `git -c`, `docker rm`, `systemctl stop`, ...). php, node,
    python and similar run only with `--version`. sed and awk run as GNU
-   `sed --sandbox` / `gawk --sandbox`, refused where those are missing.
+   `sed --sandbox` (Homebrew's `gsed` on macOS) / `gawk --sandbox`,
+   refused where those are missing, with the install command in the
+   envelope's `missing` and `install`.
    Arguments and glob matches that are secret files are refused, pattern
    operands included (`grep id_rsa` is refused like a file). Also
    refused: `ps e`, `getent shadow`/`gshadow`, `yq` `load()` and `-s`,

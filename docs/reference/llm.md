@@ -1847,8 +1847,8 @@ llm_ports --listen --port 8080
 
 ```text
 --port replaces ss -tlnp | grep :8080: it adds "procs":[{"pid","name"}]
-to each record (from ss -p or netstat -p; empty for another user's process
-unless you are root).
+to each record (from ss -p or netstat -p, lsof on macOS; empty for
+another user's process unless you are root).
 ```
 
 See also: `llm_procs`, `llm_tcp`
