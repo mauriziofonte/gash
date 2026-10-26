@@ -146,7 +146,7 @@ stay quiet unless `GASH_DEBUG=1`.
 | `Line N ...: SSH key file not found (skipping)` | Fix the path, or remove the line |
 | `Line N ...: SSH key path starts with ~user; write the full path (skipping)` | Write the path in full, or with `~/` for your own home |
 | `Line N ...: passphrase ends with whitespace` | The spaces or tabs are part of the passphrase; remove them unless the passphrase really ends with them |
-| `Line N ...: DB URL must start with mysql://, mariadb:// or pgsql://` | Use one of those schemes (`pgsql`, not `postgres`), or a `+ssh` form of the [databases](configuration.md#databases) |
+| `Line N ...: DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form` | Use one of those schemes (`pgsql`, not `postgres`), or a `+ssh` form of the [databases](configuration.md#databases) |
 | `Line N ...: unknown AI provider (supported: claude, gemini)` | Only `claude` and `gemini` exist |
 | `Line N ...: AI provider X has an empty token` | Add the token after `=` |
 | `Line N ...: HOST target must be user@host` | One `@`; a user of letters, digits, `.`, `_`, `-`; a host name or `[IPv6]`; no port (the `Hint:` line says to put it in a `Host` entry of `~/.ssh/config`) |

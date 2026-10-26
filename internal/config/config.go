@@ -199,7 +199,7 @@ func (f *File) parseLine(lineno int, raw, home string) {
 	case "DB":
 		// The +ssh forms run the client on a HOST: alias (internal/db ssh.go).
 		if !hasPrefixAny(value, "mysql://", "mariadb://", "pgsql://", "mysql+ssh://", "mariadb+ssh://", "pgsql+ssh://", "sqlite+ssh://") {
-			f.warnLine(lineno, "DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)")
+			f.warnLine(lineno, "DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)")
 			return
 		}
 		f.DB = f.add(f.DB, "DB", entry(key, value, lineno))

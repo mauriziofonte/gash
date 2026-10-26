@@ -184,8 +184,8 @@ is absolute. A `+docker:NAME` suffix runs the client inside that container
 on the host. The client must be installed where it runs. [configuration](../configuration.md#databases) has
 the full syntax.
 
-`gash_db_test` does not test these connections (it answers
-`Error: Unknown driver: mysql+ssh`). Run a query instead:
+`gash_db_test` does not test these connections (it says so, and names the
+query to run instead):
 
 ```bash
 llm_db_query "SELECT 1" -c live --scalar
@@ -208,11 +208,11 @@ Gash sets no time limit on the MySQL, MariaDB and SQLite queries of
 | Message | What it means and what to do |
 |---|---|
 | `Error: Connection 'NAME' not found in ~/.gash_env` | No `DB:NAME=` line is in effect. `gash_db_list` shows the names; without a name, the test uses `default`. |
-| `Warning: Line N of ~/.gash_env: DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)` | The scheme is not one Gash knows (a `+ssh` form is accepted too). A local SQLite file has no `DB:` line: use `-f FILE`. |
+| `Warning: Line N of ~/.gash_env: DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)` | The scheme is not one Gash knows. A local SQLite file has no `DB:` line: use `-f FILE`. |
 | `Warning: Line N of ~/.gash_env: duplicate DB:NAME, ignored (first is at line M)` | Two lines share a name; the first one is used. |
 | `Error: Connection 'NAME' has an invalid URL` | The `Hint:` line says why: an IPv6 host without its closing `]`, or a password holding `%00`. Fix the line. |
 | `Error: Connection failed` and a `Hint:` | The driver's message: `connection refused` (no server on that host and port), `Access denied` or `password authentication failed` (user or password; check the percent-encoding), `no such file or directory` for `localhost` (no MySQL socket: try `127.0.0.1`). |
-| `Error: Unknown driver: mysql+ssh` | `gash_db_test` cannot test a `+ssh` connection; use `llm_db_query "SELECT 1" -c NAME --scalar`. |
+| `Error: gash_db_test tests mysql, mariadb and pgsql connections from this machine; 'NAME' is a mysql+ssh connection` | `gash_db_test` cannot test a `sqlite`, `+ssh` or `+docker` connection; use `llm_db_query "SELECT 1" -c NAME --scalar`. |
 | `{"error":"no_db_config",...}` | An `llm_db_*` call named a connection (or `default`) that is not in the file. |
 | `{"error":"no_database",...}` | The connection has no database: add it to the URL, pass `-d NAME`, or write it in `.target-database`. |
 | `{"error":"write_operation_blocked",...}`, `multiple_statements_blocked` and the other `_blocked` codes | The SQL guard refused the statement. Send one read-only statement per call. |
