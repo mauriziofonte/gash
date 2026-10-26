@@ -58,10 +58,21 @@ func ShResolve() string {
 `
 }
 
+// ShTools is gash_tools TOOL...: the "missing TOOL" frame and exit 1 for
+// the first TOOL the host does not have (command -v), before a script runs
+// it. Without it a missing find, sort or ls went silent behind 2>/dev/null
+// and its empty output read as an empty answer; the Go side turns the
+// frame into the prerequisite envelope (MissingOnHost).
+func ShTools() string {
+	return `gash_tools() { for gt_t in "$@"; do command -v "$gt_t" >/dev/null 2>&1 || { printf '%s missing %s\n' "$N" "$gt_t" >&2; exit 1; }; done; }` + "\n"
+}
+
 // ShTier is gash_tier PATH: the transfer tier of a resolved absolute PATH
 // as classifyResolved reads it (deny:ENTRY, ask:ENTRY or allow), generated
 // from the same tables, so a symlink on the host cannot carry a write
-// into a tier its spelling avoided.
+// into a tier its spelling avoided. The sensitive components are matched
+// without regard to case by the case patterns themselves (icaseGlob), with
+// no tr: a host without tr cannot turn the check off.
 func ShTier() string {
 	var b strings.Builder
 	b.WriteString("gash_tier() {\n")
@@ -73,9 +84,8 @@ func ShTier() string {
 	b.WriteString("  [ \"$1\" = / ] && { echo deny:/; return; }\n")
 	b.WriteString("  for gt_p in " + QuoteAll(denyPrefixes) + "; do\n")
 	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo \"deny:$gt_p\"; return ;; esac\n  done\n")
-	b.WriteString("  gt_l=$(printf '/%s/' \"$1\" | tr ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz)\n")
 	for _, comp := range askComponents {
-		b.WriteString("  case $gt_l in *" + Quote("/"+asciiLower(comp)+"/") + "*) echo " + Quote("ask:"+comp) + "; return ;; esac\n")
+		b.WriteString("  case /$1/ in " + icaseGlob("*/"+comp+"/*") + ") echo " + Quote("ask:"+comp) + "; return ;; esac\n")
 	}
 	b.WriteString("  for gt_p in " + QuoteAll(append(append([]string{}, deleteSafePrefixes...), resolvedSafePrefixes...)) + "; do\n")
 	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo allow; return ;; esac\n  done\n")

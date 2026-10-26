@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // TestShTierIsClassifyPath: the sh tier of a resolved path is the Go one,
@@ -127,4 +129,71 @@ func TestShResolveWithoutGNU(t *testing.T) {
 			require.Equal(t, strings.TrimSpace(string(real)), got[i], "realpath -m %s", c.in)
 		}
 	}
+}
+
+// shells are the POSIX shells the host scripts are tested under: dash
+// (Debian's sh, close to BusyBox ash) and bash in POSIX mode.
+func shells(t *testing.T) [][]string {
+	t.Helper()
+	var out [][]string
+	if p, err := exec.LookPath("dash"); err == nil {
+		out = append(out, []string{p})
+	}
+	if p, err := exec.LookPath("bash"); err == nil {
+		out = append(out, []string{p, "--posix"})
+	}
+	if len(out) == 0 {
+		t.Skip("neither dash nor bash")
+	}
+	return out
+}
+
+// TestShRailsWithoutTr: gash_secret, gash_exception and the .ssh check of
+// gash_tier lowercased the path with tr; without tr they compared an
+// empty string and let every secret through. They run no program now:
+// under dash and bash --posix with a PATH that holds nothing, they match
+// as the Go rails do.
+func TestShRailsWithoutTr(t *testing.T) {
+	for _, f := range []string{ShSecret(), ShException(), ShTier()} {
+		require.NotContains(t, f, "tr ", "no tr in the rails")
+	}
+	names := []string{
+		".env", "app/.env", "app/.ENV.local", "x.env", ".env.example", ".Env.Example", "config/secrets.yml", "id_rsa", "ID_RSA.pub",
+		"keys/server.PEM", "credentials.json", "CredentialsController.php", "home/u/.ssh/config", "home/u/.SSH/known_hosts",
+		"a/.config/gcloud/x", "a/.Config/GCloud/x", "notes.txt", "login data", "Login Data", "LOGIN DATA", "terraform.tfstate.backup",
+		"README.md", "x.tfvars.json", "ssh_host_rsa_key", "SSH_HOST_RSA_KEY.pub", "app.env.example", "dir/", "Kubeconfig", "NTUSER.DAT",
+		"a b/.aws/credentials", "x/.Gnupg/y",
+	}
+	tiers := []string{"/home/u/.ssh/config", "/home/u/.SSH/x", "/srv/.Ssh/k", "/srv/app/x", "/etc/hosts", "/tmp/.ssh"}
+	empty := t.TempDir()
+	for _, sh := range shells(t) {
+		var script strings.Builder
+		script.WriteString(ShSecret() + ShException() + ShTier())
+		script.WriteString(`for p in "$@"; do b=${p%/}; b=${b##*/}; s=0; e=0; gash_secret "$p" && s=1; gash_exception "$b" && e=1; echo "$s$e"; done` + "\n")
+		for _, p := range tiers {
+			script.WriteString("gash_tier " + Quote(p) + "\n")
+		}
+		cmd := exec.Command(sh[0], append(append(sh[1:], "-c", script.String(), "sh"), names...)...)
+		cmd.Env = []string{"PATH=" + empty, "LC_ALL=C"}
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "%v: %s", sh, out)
+		got := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+		require.Len(t, got, len(names)+len(tiers), "%v: %s", sh, out)
+		for i, n := range names {
+			b := strings.TrimSuffix(n, "/")
+			b = b[strings.LastIndexByte(b, '/')+1:]
+			want := bit(pathguard.SecretName(n)) + bit(pathguard.SecretException(b))
+			require.Equal(t, want, got[i], "%v %q", sh, n)
+		}
+		for i, p := range tiers {
+			require.Equal(t, classifyResolved(p), got[len(names)+i], "%v %q", sh, p)
+		}
+	}
+}
+
+func bit(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
