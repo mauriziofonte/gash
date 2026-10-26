@@ -127,7 +127,7 @@ to it (`-10`, `--since=1.week`, `--author=ada`):
 | `glo` | one line per commit: hash, refs, subject |
 | `glg` | the graph along first parents only, so merges read as one line |
 | `gls` | each commit with the files it changed |
-| `glf FILE` | the history of one file, with its changes, across renames |
+| `glf FILE [OPTIONS]` | the history of one file, with its changes, across renames |
 
 <!-- example
 git config --global user.name 'Ada Lovelace'
@@ -155,7 +155,8 @@ $ glo --all
 
 `gl --help` prints the same summary with examples. On a terminal the output
 goes through git's pager, in color unless `NO_COLOR` or `GASH_NO_COLOR` is
-set. `glf` takes the file alone.
+set. `glf FILE` takes `git log` options after the file
+(`glf config.yml -2`, the last two changes).
 
 ## Learn the short aliases
 

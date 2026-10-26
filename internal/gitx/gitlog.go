@@ -100,7 +100,7 @@ func (m *Module) gl(c *invoke.Call) int {
 		x.logHelp()
 		return 0
 	}
-	return x.gitLog(append([]string{"--graph", "--pretty=format:" + gitLogFormat, "--abbrev-commit"}, c.Args...)...)
+	return x.gitLog(append([]string{"--graph", "--pretty=tformat:" + gitLogFormat, "--abbrev-commit"}, c.Args...)...)
 }
 
 // gla is gl across all branches.
@@ -110,7 +110,7 @@ func (m *Module) gla(c *invoke.Call) int {
 		x.logHelp()
 		return 0
 	}
-	return x.gitLog(append([]string{"--graph", "--pretty=format:" + gitLogFormat, "--abbrev-commit", "--all"}, c.Args...)...)
+	return x.gitLog(append([]string{"--graph", "--pretty=tformat:" + gitLogFormat, "--abbrev-commit", "--all"}, c.Args...)...)
 }
 
 // glo is the ultra-compact oneline graph.
@@ -130,7 +130,7 @@ func (m *Module) glg(c *invoke.Call) int {
 		x.logHelp()
 		return 0
 	}
-	return x.gitLog(append([]string{"--graph", "--pretty=format:" + gitLogFormat, "--abbrev-commit", "--first-parent"}, c.Args...)...)
+	return x.gitLog(append([]string{"--graph", "--pretty=tformat:" + gitLogFormat, "--abbrev-commit", "--first-parent"}, c.Args...)...)
 }
 
 // gls is the log with per-commit file statistics (no graph).
@@ -140,7 +140,7 @@ func (m *Module) gls(c *invoke.Call) int {
 		x.logHelp()
 		return 0
 	}
-	return x.gitLog(append([]string{"--pretty=format:" + gitLogFormatFull, "--stat"}, c.Args...)...)
+	return x.gitLog(append([]string{"--pretty=tformat:" + gitLogFormatFull, "--stat"}, c.Args...)...)
 }
 
 // glf is the file-specific log with patches; without a file it prints the
@@ -156,5 +156,8 @@ func (m *Module) glf(c *invoke.Call) int {
 		x.p.Note("Shows commit history for a specific file with patches")
 		return 1
 	}
-	return x.gitLog(append([]string{"--follow", "-p", "--"}, c.Args...)...)
+	// The options go before --: after it, git takes them for paths and
+	// --follow refuses more than one (3.4).
+	args := append([]string{"--follow", "-p"}, c.Args[1:]...)
+	return x.gitLog(append(args, "--", c.Args[0])...)
 }

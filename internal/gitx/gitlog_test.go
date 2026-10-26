@@ -76,19 +76,19 @@ func TestShellInit_GitLog_glg(t *testing.T) {
 	require.Equal(t, 0, s.rc)
 	require.Equal(t, []string{
 		"git", "-c", "log.graphColors=39,245", "log",
-		"--graph", "--pretty=format:" + gitLogFormat, "--abbrev-commit", "--first-parent", "-5",
+		"--graph", "--pretty=tformat:" + gitLogFormat, "--abbrev-commit", "--first-parent", "-5",
 	}, s.gitArgv)
 
 	// When the user already set log.graphColors, Gash does not inject it.
 	s2 := runLog(t, envColor(), true, "glg")
 	require.Equal(t, []string{
-		"git", "log", "--graph", "--pretty=format:" + gitLogFormat, "--abbrev-commit", "--first-parent",
+		"git", "log", "--graph", "--pretty=tformat:" + gitLogFormat, "--abbrev-commit", "--first-parent",
 	}, s2.gitArgv)
 
 	// NO_COLOR forces --no-color right after log.
 	s3 := runLog(t, envNoColor(), false, "glg")
 	require.Equal(t, []string{
-		"git", "log", "--no-color", "--graph", "--pretty=format:" + gitLogFormat, "--abbrev-commit", "--first-parent",
+		"git", "log", "--no-color", "--graph", "--pretty=tformat:" + gitLogFormat, "--abbrev-commit", "--first-parent",
 	}, s3.gitArgv)
 }
 
@@ -98,6 +98,11 @@ func TestShellInit_GitLog_glf(t *testing.T) {
 	s := runLog(t, envNoColor(), false, "glf", "src/main.go")
 	require.Equal(t, 0, s.rc)
 	require.Equal(t, []string{"git", "log", "--no-color", "--follow", "-p", "--", "src/main.go"}, s.gitArgv)
+
+	// The options of glf <file> [options] go before the --: after it git
+	// would take them for paths (3.4).
+	s = runLog(t, envNoColor(), false, "glf", "src/main.go", "-1", "--stat")
+	require.Equal(t, []string{"git", "log", "--no-color", "--follow", "-p", "-1", "--stat", "--", "src/main.go"}, s.gitArgv)
 
 	// No file: usage and note on stderr, rc 1, no git run.
 	nf := runLog(t, envColor(), false, "glf")
