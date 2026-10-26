@@ -43,7 +43,7 @@ stdout '^\{"met":true,"after_s":[0-9.]+\}$'
 exec bash -c '(sleep 0.3; touch ready.txt) & gash llm_wait --timeout 10 --cmd-ok "ls ready.txt"'
 stdout '^\{"met":true,"after_s":[0-9.]+,"rc":0,"runs":[0-9]+\}$'
 ! exec gash llm_wait --timeout 0.2 --cmd-ok 'ls missing.txt' --tail 1
-stdout '"met":false,.*"rc":2,"runs":[0-9]+,"tail":\["ls: cannot access'
+stdout '"met":false,.*"rc":[12],"runs":[0-9]+,"tail":\["ls: .*missing\.txt'
 
 # --- refused: a secret file, a write command, no condition, no timeout
 ! exec gash llm_wait --timeout 1 --file-match .env x

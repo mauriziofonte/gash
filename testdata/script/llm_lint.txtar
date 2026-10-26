@@ -12,16 +12,17 @@
 env GASH_HEADLESS=1
 env LC_ALL=C
 
-# --- through the sourced shell: the whole tree, data and shell
+# --- through the sourced shell: the whole tree, data and shell (bash 5.3
+# --- adds the construct left open to "unexpected end of file")
 exec bash -c 'source "$GASH_SH"; llm_lint proj --ext json,yaml,toml,sh'
-cmp stdout lint.want
+stdout '^\{"checked":8,"failed":4,"failures":\[\{"file":"bad\.json","line":3,"error":"invalid character .\}. looking for beginning of object key string"\},\{"file":"bad\.sh","line":2,"error":"syntax error: unexpected end of file( from [^"]*)?"\},\{"file":"bad\.toml","line":2,"error":"expected value but found [^ ]+ instead"\},\{"file":"bad\.yaml","line":2,"error":"did not find expected node content"\}\]\}$'
 ! stderr .
 
-# --- directly, same bytes; one file shown as given
+# --- directly, the same answer; one file shown as given
 exec gash llm_lint proj --ext json,yaml,toml,sh
-cmp stdout lint.want
+stdout '^\{"checked":8,"failed":4,"failures":\[\{"file":"bad\.json","line":3,"error":"invalid character .\}. looking for beginning of object key string"\},\{"file":"bad\.sh","line":2,"error":"syntax error: unexpected end of file( from [^"]*)?"\},\{"file":"bad\.toml","line":2,"error":"expected value but found [^ ]+ instead"\},\{"file":"bad\.yaml","line":2,"error":"did not find expected node content"\}\]\}$'
 exec gash llm_lint proj/bad.sh
-stdout '^\{"checked":1,"failed":1,"failures":\[\{"file":"proj/bad\.sh","line":2,"error":"syntax error: unexpected end of file"\}\]\}$'
+stdout '^\{"checked":1,"failed":1,"failures":\[\{"file":"proj/bad\.sh","line":2,"error":"syntax error: unexpected end of file( from [^"]*)?"\}\]\}$'
 
 # --- a budget keeps the first failure and counts the rest
 exec gash llm_lint proj --ext json,yaml,toml,sh --max-lines 1
@@ -38,8 +39,6 @@ stderr '"error":"invalid_ext"'
 stderr '"error":"runtime_not_installed","details":"php 3\.1 is not installed'
 stderr '"action":"STOP"'
 
--- lint.want --
-{"checked":8,"failed":4,"failures":[{"file":"bad.json","line":3,"error":"invalid character '}' looking for beginning of object key string"},{"file":"bad.sh","line":2,"error":"syntax error: unexpected end of file"},{"file":"bad.toml","line":2,"error":"expected value but found '\\n' instead"},{"file":"bad.yaml","line":2,"error":"did not find expected node content"}]}
 -- proj/ok.json --
 {"a": 1}
 -- proj/bad.json --

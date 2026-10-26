@@ -19,7 +19,7 @@ chmod 755 bin/ssh
 
 # --- three hosts in parallel: one invocation each, rows in HOST order
 exec gash llm_remote_run web db cache -- 'wc -l app.log'
-stdout '^\[\{"host":"web","rc":0,"ms":[0-9.]+,"out":"3 app.log","err":"","error":null\},\{"host":"db",.*\{"host":"cache","rc":0,'
+stdout '^\[\{"host":"web","rc":0,"ms":[0-9.]+,"out":" *3 app.log","err":"","error":null\},\{"host":"db",.*\{"host":"cache","rc":0,'
 grep -count=3 @ ssh.log
 ! exists seq
 

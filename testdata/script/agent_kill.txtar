@@ -18,7 +18,8 @@ env LC_ALL=C
 exec bash -c 'sleep 289 & vic=$!; source "$GASH_SH"; agent_kill "sleep 289"; wait $vic; echo "status=$?"'
 stdout '^\{"killed":1,"pids":\[[0-9]+\]\}$'
 stdout '^status=143$'
-! stderr .
+# no envelope (bash 4.4 reports the killed job on stderr)
+! stderr '"error"'
 
 # --- directly: --dry-run signals nothing
 exec bash -c 'sleep 288 & vic=$!; gash agent_kill $vic --dry-run; kill -0 $vic && echo alive; kill $vic'

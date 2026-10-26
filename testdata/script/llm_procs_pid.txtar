@@ -24,7 +24,7 @@ stdout '^\[\{"pid":[0-9]+,"name":"","cmd":"","alive":false\}\]\n\[\]$'
 # --- --tree: the shell and its child, never the calling gash
 exec bash -c 'sleep 296 & vic=$!; gash llm_procs --pid $$ --tree --alive; kill $vic'
 stdout '"depth":0\},\{"pid":[0-9]+,"name":"sleep","cmd":"sleep 296","alive":true,"ppid":[0-9]+,"depth":1\}\]$'
-stdout '^\[\{"pid":[0-9]+,"name":"bash",'
+stdout '^\[\{"pid":[0-9]+,"name":"([^"]*/)?bash",'
 ! stdout '"name":"gash"'
 
 # --- --name matches the full command line, never the caller's own shell

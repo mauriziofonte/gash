@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,6 +63,10 @@ func parseLint(t *testing.T, r result) lintOut {
 	return o
 }
 
+// bashConstruct is what bash 5.3 adds to "unexpected end of file": the
+// construct left open and its line. Older versions print without it.
+var bashConstruct = regexp.MustCompile(" from `[a-z]+' command on line [0-9]+")
+
 // TestLLMLintDataAndShell: JSON, YAML, TOML (parsed by gash) and shell
 // (bash -n) give exact lines and messages; node_modules is pruned, the
 // secret file and other extensions are skipped, tsconfig.json may hold
@@ -71,6 +76,7 @@ func TestLLMLintDataAndShell(t *testing.T) {
 	m := New()
 	env := baseEnv(physTemp(t), nil)
 	r := runGo(t, m, d, env, "llm_lint", ".", "--ext", "json,yaml,toml,sh")
+	r.Stdout = bashConstruct.ReplaceAllString(r.Stdout, "")
 	require.Equal(t, `{"checked":8,"failed":4,"failures":[`+
 		`{"file":"bad.json","line":3,"error":"invalid character '}' looking for beginning of object key string"},`+
 		`{"file":"bad.sh","line":2,"error":"syntax error: unexpected end of file"},`+
@@ -80,6 +86,7 @@ func TestLLMLintDataAndShell(t *testing.T) {
 
 	// One file, by name: shown as given; --absolute shows the full path.
 	r = runGo(t, m, d, env, "llm_lint", "./bad.sh")
+	r.Stdout = bashConstruct.ReplaceAllString(r.Stdout, "")
 	require.Equal(t, `{"checked":1,"failed":1,"failures":[{"file":"bad.sh","line":2,"error":"syntax error: unexpected end of file"}]}`+"\n", r.Stdout)
 	o := parseLint(t, runGo(t, m, d, env, "llm_lint", "bad.json", "--absolute"))
 	require.Equal(t, filepath.Join(d, "bad.json"), o.Failures[0].File)
