@@ -2106,10 +2106,13 @@ llm_lint deploy.sh config/app.yaml
 ```text
 Replaces for f in *.php; do php -l "$f"; done, bash -n and node --check
 loops. Output: {"checked":N,"failed":K,"failures":[{"file","line","error"}]}.
-php runs once per chunk of files (php -l a b c), bash -n once per file, node
-once per chunk (each file compiled as node loads it; a failure is re-checked
-with node --check for its message), python compiles in one process (no .pyc
-written); JSON, YAML and TOML are parsed by gash (tsconfig.json and .vscode
+php 8.3+ runs once per chunk of files (php -l a b c); an older php -l
+checks only its first file, so there each file gets its own run. bash -n
+once per file, node once per chunk (each file compiled as node loads it; a
+failure is re-checked with node --check for its message), python compiles
+in one process (no .pyc written). A file passes only on its own verdict: one
+a batch said nothing about is checked again alone. JSON, YAML and TOML are
+parsed by gash (tsconfig.json and .vscode
 files may hold comments). Directories skip node_modules, vendor, .git and
 __pycache__ and never follow symlinks; secret files are skipped there and
 refused as arguments. A FILE argument with another extension is

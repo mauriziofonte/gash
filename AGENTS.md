@@ -525,7 +525,9 @@ exception to the no-`--` rule of this section. Their options come before
 `--` (or before the first word that is not an option), every word after it
 belongs to CMD, `--help` included.
 
-`llm_lint` runs `php -l` on batches of files, `bash -n` per shell script,
+`llm_lint` runs `php -l` on batches of files with PHP 8.3 and later (an
+older `php -l` checks only the first file it is given, so there each file
+gets its own run), `bash -n` per shell script,
 node per batch of js files (each compiled as node loads it, CommonJS or ES
 module; a failure is re-checked with `node --check` for its message),
 python `compile()` per batch (no `.pyc` written), and parses JSON (comments
