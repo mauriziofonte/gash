@@ -100,7 +100,7 @@ func RequirementsDoc() string {
 // toolLine is the list entry of a tool: name, level, purpose, the
 // programs that serve it, where it applies, who needs it and its notes.
 func toolLine(t *Tool) string {
-	s := "- **" + t.Name + "** (" + t.Level.String() + ") " + strings.TrimSuffix(t.Purpose, ".") + "."
+	s := "- <a id=\"tool-" + t.Name + "\"></a>**" + t.Name + "** (" + t.Level.String() + ") " + strings.TrimSuffix(t.Purpose, ".") + "."
 	if len(t.Commands) > 1 {
 		s += " Any of: `" + strings.Join(t.Commands, "`, `") + "`."
 	}

@@ -292,11 +292,11 @@ not overwritten later; keep your own code in `~/.bash_local` rather than there.
   if they were unset. Nothing on disk changes; `source ~/.gashrc` loads Gash
   again. It does not work in headless mode.
 * `gash_help NAME` and `gash` (the reference card) list every function. The
-  generated [function reference](reference/README.md) has the same content.
+  generated [function reference](README.md) has the same content.
 
 ## Upgrading from Gash 1.x
 
 Gash 3 does not migrate a Gash 1.x `~/.gashrc` (it exports `GASH_BASH`):
 an interactive shell reminds you once a day, and `gash migrate` prints the
 route (check out v2.1.0, run its guided migration, then `gash_upgrade`).
-See [migration.md](migration.md).
+See [migration.md](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md).

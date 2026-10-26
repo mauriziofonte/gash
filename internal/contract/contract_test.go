@@ -154,7 +154,7 @@ func TestLedger_CORE09_JQBytes(t *testing.T) {
 	require.Equal(t, "[]", JQArray())
 }
 
-// Every 3.x code outside gash hte (docs/hte.md lists those) is in the
+// Every 3.x code outside gash hte (docs/hte/README.md lists those) is in the
 // AGENTS.md section 5 table, under its own action: a 3.4 code cannot ship
 // undocumented, nor documented with another action.
 func TestAgentsTableHas3xCodes(t *testing.T) {

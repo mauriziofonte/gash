@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"flag"
 	"os"
 	"regexp"
 	"strings"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+// updateDocs rewrites the parts of README.md and AGENTS.md that these
+// tests check: go test ./internal/registry -update-docs
+var updateDocs = flag.Bool("update-docs", false, "rewrite the registry-generated parts of README.md and AGENTS.md")
 
 // Plan S9: every agent function names the raw command shape it replaces,
 // in its own entry or, for the functions that predate 3.4, in

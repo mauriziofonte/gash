@@ -6,6 +6,14 @@ for an agent, with `--json`. The rule that shapes everything here: **reading
 Windows is free and automatic; changing Windows is human-only and goes through
 a UAC prompt.**
 
+<!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
+Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
+
+- [sudo](../requirements.md#tool-sudo) (feature), for `wsl_compact`
+- [powershell.exe](../requirements.md#tool-powershell.exe) (feature), for `gash win`
+- [cmd.exe](../requirements.md#tool-cmd.exe) (feature), for `wsl_restart`, `wsl_shutdown` and `wsl_taskmanager`
+<!-- END generated: prerequisites -->
+
 These commands do nothing off WSL (`gash wsl info` says so and exits 0;
 `gash wsl doctor` exits 1). On a real Linux host they are simply not useful.
 

@@ -285,7 +285,7 @@ func TestLedger_REM10_2x(t *testing.T) {
 }
 
 // 3.0: REM-09 fixed. The security.md deny row is the Go table, and the
-// registered help (the source of docs/reference/remote.md) states the
+// registered help (the source of docs/remote/reference.md) states the
 // flag rules, GASH_ENV_FILE, the 255 probe and the ~/.ssh creation.
 func TestLedger_REM09(t *testing.T) {
 	sec, err := os.ReadFile(filepath.Join(absRoot, "docs/security.md"))
@@ -314,7 +314,7 @@ func TestLedger_REM09(t *testing.T) {
 	require.Contains(t, rex.Help.Body, "the status is 255")
 	require.Contains(t, rex.Help.Body, "~/.ssh")
 	require.Contains(t, rex.Help.Body, "mode 0700")
-	ref, err := os.ReadFile(filepath.Join(absRoot, "docs/reference/remote.md"))
+	ref, err := os.ReadFile(filepath.Join(absRoot, "docs/remote/reference.md"))
 	require.NoError(t, err)
 	require.Contains(t, string(ref), syncPullSpec.usage)
 }

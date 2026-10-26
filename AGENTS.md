@@ -1199,7 +1199,7 @@ out=$(llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
 ## 10. Local sites (`gash hte`)
 
 `gash hte` manages the user's local Apache and PHP-FPM sites
-([docs/hte.md](docs/hte.md)). It is not read-only: call it when the user asks
+([docs/hte/README.md](docs/hte/README.md)). It is not read-only: call it when the user asks
 for a site change, and read with `site list`, `site show` and `doctor` the
 rest of the time.
 

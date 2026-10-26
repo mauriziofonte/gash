@@ -116,7 +116,7 @@ automatic; changing it is human-only and goes through a UAC prompt.
   Python, package managers and databases write); `clean` deletes rotated and
   compressed logs and, with `--truncate`, empties live logs in place so a
   running daemon keeps its open file. `--sudo` reclaims root-owned logs
-  through an explicit `sudo`. See [docs/logs.md](docs/logs.md).
+  through an explicit `sudo`. See [docs/logs/README.md](docs/logs/README.md).
 - `GASH_WIN_TIMEOUT` bounds one `gash win` call (default `10s`, cap `120s`).
 
 ### Changed
@@ -271,7 +271,7 @@ Linux, macOS and WSL on amd64 and arm64.
 - **`gash hte` is built in.** HTE, formerly the separate hte-cli tool, runs a
   user-owned Apache and PHP-FPM with no sudo at runtime, and
   `gash hte migrate` takes over an hte-cli setup
-  ([docs/hte.md](docs/hte.md)).
+  ([docs/hte/README.md](docs/hte/README.md)).
 - **Fewer dependencies.** The `llm_*`, database and scanner functions run
   inside the binary: no `jq`, `sqlite3`, `mysql`, `psql`, `rg` or GNU `find`.
 - **Verified upgrades.** Release binaries are pinned by SHA-256 in the
@@ -324,7 +324,7 @@ Breaking).
   interactive Bash layer that `gash.sh` evaluates.
 - `gash hte`: install, sites, certificates, PHP-FPM pools per PHP version,
   `doctor`, `migrate` from hte-cli and a clean `uninstall`; see
-  [docs/hte.md](docs/hte.md). Ports 80 and 443 are made bindable by the
+  [docs/hte/README.md](docs/hte/README.md). Ports 80 and 443 are made bindable by the
   user through `net.ipv4.ip_unprivileged_port_start`, asked for and undone
   by uninstall.
 - `gash update` installs and verifies the new release's binary before it
@@ -354,7 +354,7 @@ Breaking).
   error as a hint when the connection fails.
 - `gash hte site create|modify --http2` turns HTTP/2 back on after
   `--no-http2`; every `gash hte` command has its own `--help`, and
-  [docs/hte.md](docs/hte.md) has a WSL section.
+  [docs/hte/README.md](docs/hte/README.md) has a WSL section.
 
 ### Changed
 
@@ -723,7 +723,7 @@ quote collection where every line has a source.
 A rebuild for quality: a quieter and reversible bootstrap, read-only
 guarantees for agents that hold under adversarial input, a reference that
 cannot drift from the code, and terminal output designed for people.
-Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
+Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md).
 
 ### Breaking
 

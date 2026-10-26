@@ -19,7 +19,7 @@ without --yes is confirmation_required.
 
 Start with: gash hte install, then gash hte migrate (a dry run of what
 would move from hte-cli), then gash hte site create. The guide is
-docs/hte.md; WSL notes are in its "WSL" section.`,
+docs/hte/README.md; WSL notes are in its "WSL" section.`,
 
 	"hte install": `Install the stack. install prints its plan, then runs the system steps in
 one interactive sudo: the hosts helper and its sudoers line, the low ports
@@ -185,7 +185,7 @@ and doctor do this too.`,
 for the site names Windows cannot resolve (asked through powershell.exe
 when interop is available, else every name). gash never edits the Windows
 file. Elsewhere this is platform_unsupported. See the "WSL" section of
-docs/hte.md.`,
+docs/hte/README.md.`,
 }
 
 // setHelp gives every visible command of the tree its long help.

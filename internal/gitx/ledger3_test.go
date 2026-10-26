@@ -374,7 +374,7 @@ func TestLedger_GIT08(t *testing.T) {
 }
 
 // 3.0: GIT-11 fixed. The registered help (the source of `gash help`,
-// NAME -h and docs/reference/git.md) says what the code does.
+// NAME -h and docs/git/reference.md) says what the code does.
 func TestLedger_GIT11(t *testing.T) {
 	body := func(fn string) (string, *registry.Usage) {
 		f, ok := registry.Lookup(fn)
@@ -403,7 +403,7 @@ func TestLedger_GIT11(t *testing.T) {
 	require.Contains(t, testFile(t, "../../docs/security.md"), "| `git_add_tag`, `git_delete_tag` |")
 	require.Contains(t, testFile(t, "../../docs/security.md"), "| `git_sync` |")
 	require.Contains(t, testFile(t, "../../docs/security.md"), "| `git_apply_patch` |")
-	ref := testFile(t, "../../docs/reference/git.md")
+	ref := testFile(t, "../../docs/git/reference.md")
 	require.Contains(t, ref, "001 is the newest revision")
 	require.NotContains(t, ref, "Requires a clean git repo")
 }

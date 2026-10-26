@@ -154,7 +154,7 @@ most once a day; headless shells print nothing.
 the route: check out v2.1.0 in your Gash directory, open a new terminal, run
 `gash_migrate` there (the 2.x guided review), then `gash_upgrade`. State
 lives in `~/.local/state/gash` (`$XDG_STATE_HOME/gash`). See
-[migration.md](migration.md).
+[migration.md](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md).
 
 ## Removing Gash
 

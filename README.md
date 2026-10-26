@@ -145,7 +145,7 @@ gash hte migrate                                  # coming from hte-cli: a dry-r
 ![gash hte install, site create, curl https://shop.test, site list, service status](docs/assets/hte.gif)
 
 It works on Debian, Ubuntu, Fedora, Arch, WSL2 and macOS with Homebrew
-(through a `pf` redirect for ports 80 and 443). The [guide](docs/hte.md)
+(through a `pf` redirect for ports 80 and 443). The [guide](docs/hte/README.md)
 covers every command, the hte-cli command table and the WSL notes.
 
 ## For AI agents
@@ -181,20 +181,20 @@ against a hostile user: see the [security model](docs/security.md).
 
 | Topic | Highlights |
 |---|---|
-| [files](docs/reference/files.md) | `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats`, `archive_extract`, `file_backup` |
-| [system](docs/reference/system.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `hgrep`, `wsl_compact` and other WSL helpers |
-| [nav](docs/reference/nav.md) | `..`, `...`, `ll`, `la` and friends |
-| [git](docs/reference/git.md) | `git_sync`, `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, `git_apply_patch`, 38 short aliases and 6 log helpers |
-| [docker](docs/reference/docker.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
-| [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
-| [dev](docs/reference/dev.md) | `node_upgrade`, `chrome_headless_update` (Chrome for Puppeteer and Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
-| [llm](docs/reference/llm.md) | 48 read-only JSON functions for agents |
-| [agent](docs/reference/agent.md) | Write tools for agents (`agent_replace`, `agent_put`, ...): explicit targets, `--dry-run`, all or nothing; kept apart so `llm_*` stays read-only |
-| [ai](docs/reference/ai.md) | `ai_query` and `ai_sysinfo`: Claude or Gemini from the terminal, with secrets redacted |
-| [gash](docs/reference/gash.md) | `gash_help`, `gash_doctor`, `gash_upgrade`, `gash_unload` |
-| [hte](docs/hte.md) | `gash hte install`, `site`, `php`, `service`, `cert`, `hosts`, `doctor`, `migrate` |
+| [files](docs/files/reference.md) | `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats`, `archive_extract`, `file_backup` |
+| [system](docs/system/reference.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `hgrep`, `wsl_compact` and other WSL helpers |
+| [nav](docs/shell/reference.md) | `..`, `...`, `ll`, `la` and friends |
+| [git](docs/git/reference.md) | `git_sync`, `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, `git_apply_patch`, 38 short aliases and 6 log helpers |
+| [docker](docs/docker/reference.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
+| [remote](docs/remote/reference.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
+| [dev](docs/runtimes/reference.md) | `node_upgrade`, `chrome_headless_update` (Chrome for Puppeteer and Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
+| [llm](docs/agents/reference.md) | 48 read-only JSON functions for agents |
+| [agent](docs/agents/reference.md) | Write tools for agents (`agent_replace`, `agent_put`, ...): explicit targets, `--dry-run`, all or nothing; kept apart so `llm_*` stays read-only |
+| [ai](docs/ai/reference.md) | `ai_query` and `ai_sysinfo`: Claude or Gemini from the terminal, with secrets redacted |
+| [gash](docs/gash/reference.md) | `gash_help`, `gash_doctor`, `gash_upgrade`, `gash_unload` |
+| [hte](docs/hte/README.md) | `gash hte install`, `site`, `php`, `service`, `cert`, `hosts`, `doctor`, `migrate` |
 
-The [function reference](docs/reference/README.md) is generated from the
+The [function reference](docs/README.md) is generated from the
 same help text you see in the shell, and a test keeps them equal.
 
 ## Configuration
@@ -232,7 +232,7 @@ version and its binary are kept for `--rollback`.
 - **From 2.x:** run `gash_upgrade` as usual; it moves you to 3.0. To go
   back, `git -C ~/.gash checkout v2.1.1` and open a new terminal.
 - **From 1.x:** move to 2.1.0 first and run its guided migration, then
-  upgrade; [docs/migration.md](docs/migration.md) has the steps.
+  upgrade; [the 2.1.0 migration guide](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md) has the steps.
 
 ## Uninstall
 
@@ -246,13 +246,13 @@ the stack and restores the system files it changed.
 
 ## Documentation
 
-- [Function reference](docs/reference/README.md), generated from the help registry
-- [Local sites (`gash hte`)](docs/hte.md)
+- [Function reference](docs/README.md), generated from the help registry
+- [Local sites (`gash hte`)](docs/hte/README.md)
 - [Agent guide](AGENTS.md): headless mode, JSON shapes, error contract, safety model
 - [Configuration](docs/configuration.md): files, load order, every setting
 - [Security model](docs/security.md): what the guardrails do and do not do
 - [Troubleshooting](docs/troubleshooting.md)
-- [Upgrading from 1.x](docs/migration.md)
+- [Upgrading from 1.x](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md)
 - [Changelog](CHANGELOG.md)
 
 ## Contributing
@@ -261,7 +261,7 @@ Bug reports, ideas and pull requests are welcome: see
 [CONTRIBUTING.md](CONTRIBUTING.md). `go test ./...` runs the suite; CI runs
 it on Linux and macOS, checks the generated Bash on Bash 4.4 to 5.3, and
 runs `gash hte` end to end on Debian, Ubuntu, Fedora, Arch and macOS. The GIFs above
-are recorded from [docs/tapes](docs/tapes/README.md).
+are recorded from [dev/tapes](dev/tapes/README.md).
 
 Report security issues privately, as described in [SECURITY.md](SECURITY.md).
 
