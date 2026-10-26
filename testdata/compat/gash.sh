@@ -320,7 +320,7 @@ gash_inspiring_quote() { __gash_call gash_inspiring_quote "$@"; }
 # shellcheck disable=SC2120
 gash_uninstall() { __gash_cold gash_uninstall 6da7db56 && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
-gash_unload() { __gash_cold gash_unload cc4f8d75 && "${FUNCNAME[0]}" "$@"; }
+gash_unload() { __gash_cold gash_unload 37b45b21 && "${FUNCNAME[0]}" "$@"; }
 gash_upgrade() { __gash_call gash_upgrade "$@"; }
 gash_username() { __gash_call gash_username "$@"; }
 ((__GASH_TIMING)) && __gash_time_record "lib/modules/gash.sh" "$__GASH_T1"
