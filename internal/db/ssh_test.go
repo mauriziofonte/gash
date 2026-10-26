@@ -81,7 +81,7 @@ func newSSHDBFixture(t *testing.T) *sshDBFixture {
 	f.ssh = &sshtest.SSH{Home: f.rhome, Path: stub + ":" + os.Getenv("PATH")}
 	f.m = frozen(New())
 	f.m.ssh = f.ssh
-	f.env = baseEnv(f.home, nil)
+	f.env = baseEnv(f.home, map[string]string{"PATH": sshtest.ClientPath(t, os.Getenv("PATH"))})
 	return f
 }
 

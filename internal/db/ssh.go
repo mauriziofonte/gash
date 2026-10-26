@@ -100,6 +100,10 @@ func (m *Module) sshTarget(c *invoke.Call, a *dbArgs) (target, *output, bool) {
 			o := failed(*e)
 			return target{}, &o, true
 		}
+		if e := remote.SSHMissing(c, c.Name); e != nil {
+			o := failed(*e)
+			return target{}, &o, true
+		}
 		via := &sshVia{host: h, container: container}
 		return target{driver: "sqlite", file: sqliteSSHFile(via, p), via: via}, nil, true
 	}
@@ -155,14 +159,24 @@ func (m *Module) sshTarget(c *invoke.Call, a *dbArgs) (target, *output, bool) {
 		o := failed(*e)
 		return target{}, &o, true
 	}
+	// ssh is looked up once the URL is known good, before anything
+	// connects: without it, the prerequisite report, not host_unreachable.
+	if e := remote.SSHMissing(c, c.Name); e != nil {
+		o := failed(*e)
+		return target{}, &o, true
+	}
 	return t, nil, true
 }
 
 // sshClient runs one client invocation on the host: argv is the client
 // command (quoted here), env the variables it takes from the ssh stdin's
 // first line (the password) or sets, sql the rest of stdin. It returns the
-// client's stdout, its stderr and exit status, or a failure output.
-func (m *Module) sshClient(c *invoke.Call, via *sshVia, argv []string, pwVar string, env map[string]string, pass, sql string) ([]byte, string, int, *output) {
+// client's stdout, its stderr and exit status, or a failure output. When
+// the client fails, the same invocation asks it for its version ("version"
+// frame, returned as version): an old psql or sqlite3 rejects the options
+// of this code, which is not the SQL's fault. Without docker on the host
+// (+docker:CTR) it answers "missing docker".
+func (m *Module) sshClient(c *invoke.Call, via *sshVia, argv []string, pwVar string, env map[string]string, pass, sql string) (out []byte, errText string, rc int, version string, fail *output) {
 	nonce := remote.NewNonce()
 	var s strings.Builder
 	s.WriteString("N=" + remote.Quote(nonce) + "\n")
@@ -180,16 +194,20 @@ func (m *Module) sshClient(c *invoke.Call, via *sshVia, argv []string, pwVar str
 	}
 	s.WriteString("unset GASH_PW\n")
 	cmd := remote.QuoteAll(argv)
+	vcmd := remote.QuoteAll([]string{argv[0], "--version"})
 	if via.container != "" {
 		pre := []string{"docker", "exec", "-i"}
 		for _, k := range keys {
 			pre = append(pre, "-e", k)
 		}
 		cmd = remote.QuoteAll(append(append(pre, via.container), argv...))
+		vcmd = remote.QuoteAll([]string{"docker", "exec", via.container, argv[0], "--version"})
+		s.WriteString(`command -v docker >/dev/null 2>&1 || { printf '%s missing docker\n' "$N" >&2; ` + remote.Trailer(nonce, "rc", "127") + "; exit 0; }\n")
 	}
 	s.WriteString(`gash_t() { date +%s%N 2>/dev/null; }` + "\n")
 	s.WriteString(`s=$(gash_t); ` + cmd + `; r=$?; e=$(gash_t)` + "\n")
 	s.WriteString(`printf '%s time %s %s\n' "$N" "$s" "$e" >&2` + "\n")
+	s.WriteString(`if [ "$r" != 0 ] && [ "$r" != 127 ]; then ` + vcmd + ` 2>/dev/null </dev/null | { IFS= read -r gv || :; printf '%s version %s\n' "$N" "$gv" >&2; }; fi` + "\n")
 	s.WriteString(remote.Trailer(nonce, "rc", `"$r"`) + "\nexit 0\n")
 	tr := remote.Transport{Run: m.ssh, Env: c.Env}
 	timeout := dbTimeout(c) + 15*time.Second
@@ -198,8 +216,13 @@ func (m *Module) sshClient(c *invoke.Call, via *sshVia, argv []string, pwVar str
 	elapsed := m.now().Sub(t0)
 	if e := r.Failure(via.host); e != nil {
 		o := failed(*e)
-		return nil, "", 0, &o
+		return nil, "", 0, "", &o
 	}
+	if tool, ok := remote.MissingFrame(r.Stderr, nonce); ok {
+		o := failed(remote.MissingOnHost(c.Name, tool, via.host, ""))
+		return nil, "", 0, "", &o
+	}
+	version, _ = remote.Frame(r.Stderr, nonce, "version")
 	took := elapsed
 	if tm, ok := remote.Frame(r.Stderr, nonce, "time"); ok {
 		a, b, _ := strings.Cut(tm, " ")
@@ -208,18 +231,45 @@ func (m *Module) sshClient(c *invoke.Call, via *sshVia, argv []string, pwVar str
 		}
 	}
 	m.addQueryTime(c, took)
-	errText := string(r.Stderr)
+	errText = string(r.Stderr)
 	if i := strings.Index(errText, nonce+" time "); i >= 0 {
 		errText = errText[:i]
 	}
 	if r.Status == 127 && via.container == "" {
-		return nil, errText, r.Status, nil
+		return nil, errText, r.Status, version, nil
 	}
 	if via.container != "" && r.Status != 0 && containerFailed(errText) {
 		o := failed(contract.New("container_unavailable", via.host.Alias+": "+cleanError(lastLine(errText)), "Check the container name and that it runs (docker ps on the host)"))
-		return nil, "", 0, &o
+		return nil, "", 0, "", &o
 	}
-	return r.Stdout, errText, r.Status, nil
+	return r.Stdout, errText, r.Status, version, nil
+}
+
+// clientVersionRE is the version in a client's --version line ("psql
+// (PostgreSQL) 11.22", "3.31.1 2020-01-27 ...").
+var clientVersionRE = lazyre.MustCompile(`[0-9]+(\.[0-9]+)+`)
+
+// oldClient reports a client too old for an option this code passes
+// (psql --csv, sqlite3 -json), from the version it printed or, when it
+// printed none, from its "unknown option" error; found is the version.
+func oldClient(version, errText, option string, major, minor int) (found string, old bool) {
+	found = clientVersionRE.FindString(version)
+	if found != "" {
+		maj, rest, _ := strings.Cut(found, ".")
+		mnr, _, _ := strings.Cut(rest, ".")
+		a, _ := strconv.Atoi(maj)
+		b, _ := strconv.Atoi(mnr)
+		return found, a < major || (a == major && b < minor)
+	}
+	if !strings.Contains(errText, option) {
+		return "", false
+	}
+	for _, s := range []string{"unrecognized option", "unknown option", "illegal option", "invalid option"} {
+		if strings.Contains(errText, s) {
+			return "", true
+		}
+	}
+	return "", false
 }
 
 // containerFailed reports a docker exec that did not reach the client.
@@ -262,9 +312,11 @@ func (m *Module) addQueryTime(c *invoke.Call, d time.Duration) {
 	}
 }
 
-// clientMissing is the envelope of a client the host does not have.
+// clientMissing is the envelope of a client the host does not have, with
+// the members of a missing prerequisite ("missing", "host").
 func clientMissing(code, client string, h remote.Host) output {
-	return failed(contract.New(code, client+" is not installed on "+h.Alias, "Install the "+client+" client on the host, or name its container with +docker:CONTAINER in the URL"))
+	return failed(contract.New(code, client+" is not installed on "+h.Alias, "Install the "+client+" client on the host, or name its container with +docker:CONTAINER in the URL").
+		With("missing", client).With("host", h.Alias))
 }
 
 // sshMySQL is mysqlRun on a +ssh target: the mysql client in batch mode,
@@ -291,7 +343,7 @@ func (m *Module) sshMySQL(c *invoke.Call, t target, raw bool, query, rowCap stri
 	if t.pass != "" {
 		pw = "MYSQL_PWD" //nolint:gosec // G101: the name of the client variable, not a credential
 	}
-	out, errText, rc, fail := m.sshClient(c, t.via, argv, pw, nil, t.pass, sql)
+	out, errText, rc, _, fail := m.sshClient(c, t.via, argv, pw, nil, t.pass, sql)
 	switch {
 	case fail != nil:
 		return *fail
@@ -409,12 +461,19 @@ func (m *Module) sshPG(c *invoke.Call, t target, json bool, query string) output
 	if t.pass != "" {
 		pw = "PGPASSWORD" //nolint:gosec // G101: the name of the client variable, not a credential
 	}
-	out, errText, rc, fail := m.sshClient(c, t.via, argv, pw, env, t.pass, query+"\n")
+	out, errText, rc, version, fail := m.sshClient(c, t.via, argv, pw, env, t.pass, query+"\n")
 	switch {
 	case fail != nil:
 		return *fail
 	case rc == 127:
 		return clientMissing("psql_not_found", "psql", t.via.host)
+	case rc != 0 && !json:
+		// --csv came with psql 12: an older one refuses it before it
+		// reads any SQL.
+		if found, old := oldClient(version, errText, "--csv", 12, 0); old {
+			return failed(remote.OldOnHost("psql", "12", found, t.via.host, t.via.container))
+		}
+		fallthrough
 	case rc != 0:
 		msg := strings.TrimSpace(errText)
 		msg = strings.TrimPrefix(msg, "psql:<stdin>:")
@@ -469,13 +528,18 @@ const pgNullMark = "__gash_null__"
 // dot commands); an EXPLAIN QUERY PLAN comes back as the shell's text.
 func (m *Module) sshSQLite(c *invoke.Call, via *sshVia, p, query string, mode int) output {
 	argv := []string{"sqlite3", "-readonly", "-bail", "-json", p}
-	out, errText, rc, fail := m.sshClient(c, via, argv, "", nil, "", query+";\n")
+	out, errText, rc, version, fail := m.sshClient(c, via, argv, "", nil, "", query+";\n")
 	switch {
 	case fail != nil:
 		return *fail
 	case rc == 127:
 		return clientMissing("sqlite_not_found", "sqlite3", via.host)
 	case rc != 0:
+		// -json came with sqlite3 3.33: an older one refuses it before
+		// it reads any SQL.
+		if found, old := oldClient(version, errText, "-json", 3, 33); old {
+			return failed(remote.OldOnHost("sqlite3", "3.33", found, via.host, via.container))
+		}
 		msg := strings.TrimSpace(errText)
 		msg = strings.TrimPrefix(msg, "Error: ")
 		if i := strings.Index(msg, "Parse error"); i >= 0 {
