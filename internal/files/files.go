@@ -282,6 +282,10 @@ func archiveExtract(c *invoke.Call) int {
 	if me := (*missingErr)(nil); errors.As(err, &me) {
 		return missingTool(c, me.cmd)
 	}
+	if ue := (*unreadableErr)(nil); errors.As(err, &ue) {
+		p.Error("Archive '" + archive + "' cannot be checked: " + ue.Error() + "; nothing extracted.")
+		return 1
+	}
 	if unsafe {
 		p.Error("Archive '" + archive + "' has an unsafe member '" + member +
 			"' (absolute path, .. component or link outside the destination); nothing extracted.")

@@ -297,9 +297,12 @@ $ axe links.tar
 Error: Archive 'links.tar' has an unsafe member 'passwd' (absolute path, .. component or link outside the destination); nothing extracted.
 ```
 
-Nothing is extracted in either case and the status is 1. When the member list
-cannot be read (a damaged header), the check is skipped and the tool's own
-handling applies. It also refuses, before writing anything:
+Nothing is extracted in either case and the status is 1. A tar member
+header that cannot be read refuses the archive too (`cannot be checked: the
+member header after 'NAME' is unreadable`), because tar would skip it and
+extract what follows unchecked. A compressed stream that ends early is
+checked up to where it ends, and the tool reports the rest. It also refuses,
+before writing anything:
 
 - a format it does not know, or a missing tool, which it names;
 - a `.zip` or `.rar` whose name contains `*`, `?` or `[`, which unzip and
@@ -349,6 +352,7 @@ with `--json`:
 | `Error: Command 'unzip' is not installed or not in PATH.` | Install the tool the format needs ([requirements](../requirements.md#tool-unzip)); for `.zst` the message is `Extracting .zst needs zstd.` Nothing was written |
 | `Error: Cannot extract 'FILE', unsupported file type.` | The suffix is not one the [reference](reference.md#archive_extract) lists; rename the file if its suffix is wrong |
 | `Error: Archive 'FILE' has an unsafe member 'NAME' ...` | See [What it refuses](#what-it-refuses). Inspect the archive with `tar -tvf`, `unzip -l` or `7z l` before you trust it |
+| `Error: Archive 'FILE' cannot be checked: ... is unreadable; nothing extracted.` | The archive is damaged or was built to hide a member. Get a new copy; `tar -tvf FILE` shows where it breaks |
 | `Error: Archive name 'FILE' contains wildcard characters ...` | Rename the archive without `*`, `?` and `[` |
 | A tool's own error, then status 1 | The tool ran and failed, for example on a damaged archive; its message says why |
 | `Error: File 'FILE' does not exist.` or `Error: 'FILE' is not a regular file.` | Both functions take one regular file |
