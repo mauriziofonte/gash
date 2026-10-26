@@ -32,6 +32,7 @@ type walkOpts struct {
 	excludes  []string // user --exclude globs (FS-12)
 	rawOrder  bool     // children in readdir (fts) order, not sorted
 	needEmpty bool     // also read directories at maxDepth, to know if they are empty
+	hidden    []string // the user's PROTECT:all trees (userHidden), left out like protected ones
 }
 
 // entry is one filesystem entry the walk reports.
@@ -110,8 +111,9 @@ func matchPathname(pat, name string) bool {
 // order with rawOrder), and reports every entry keep accepts, the root
 // included. Below the root it applies skipped, -xdev, -L with loop
 // detection, and the protected-tree rail: an entry whose physical path is
-// protected (FS-02, FS-03) is skipped silently, before its target is
-// stat'ed, and is not counted in errors.
+// protected (FS-02, FS-03) or in one of the user's PROTECT:all trees
+// (3.4.1) is skipped silently, before its target is stat'ed, and is not
+// counted in errors.
 func findWalk(o walkOpts, keep func(e entry) bool) walkResult {
 	res := walkResult{}
 	var rootDev uint64
@@ -169,7 +171,7 @@ func findWalk(o walkOpts, keep func(e entry) bool) walkResult {
 			}
 			child := filepath.Join(abs, name)
 			cphys := filepath.Join(phys, name)
-			if protected(cphys) {
+			if protected(cphys) || pathguard.UnderTrees(cphys, o.hidden) {
 				continue
 			}
 			ci, lerr := os.Lstat(child)
@@ -179,7 +181,7 @@ func findWalk(o walkOpts, keep func(e entry) bool) walkResult {
 			}
 			if o.follow && ci.Mode()&os.ModeSymlink != 0 {
 				target, rerr := filepath.EvalSymlinks(child)
-				if rerr == nil && protected(target) {
+				if rerr == nil && (protected(target) || pathguard.UnderTrees(target, o.hidden)) {
 					continue
 				}
 				if st, serr := os.Stat(child); serr == nil {

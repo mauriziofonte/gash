@@ -21,11 +21,15 @@ type op struct {
 
 // plan turns a report into the list of changes clean would make. truncate
 // says whether active logs are truncated (false leaves them alone and only
-// rotated copies are deleted). It never plans anything for a journal.
+// rotated copies are deleted). It never plans anything for a journal, nor
+// for a file in a PROTECT:content path.
 func plan(r *Report, truncate bool) []op {
 	var ops []op
 	for _, g := range r.Groups {
 		for _, e := range g.Entries {
+			if e.Protected {
+				continue
+			}
 			switch e.kindCode {
 			case rotated:
 				ops = append(ops, op{Path: e.Path, Truncate: false, Size: e.Size, needRoot: !canDelete(e.Path)})

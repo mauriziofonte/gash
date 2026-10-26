@@ -270,7 +270,8 @@ func filesLargest(c *invoke.Call) int {
 	}
 
 	home, pwd := callEnv(c)
-	root, fe := safePath(pa.dir, home, pwd, allowRoot)
+	hidden := userHidden(c, home, pwd)
+	root, fe := safePath(pa.dir, home, pwd, allowRoot, hidden)
 	if fe != nil {
 		return fe.emit(c.Stderr, s, jsonMode)
 	}
@@ -278,7 +279,7 @@ func filesLargest(c *invoke.Call) int {
 	elapsed := scanTimer()
 
 	res := findWalk(walkOpts{
-		root: root, follow: follow, xdev: xdev, maxDepth: maxDepth,
+		root: root, hidden: hidden, follow: follow, xdev: xdev, maxDepth: maxDepth,
 		noIgnore: noIgnore, excludes: excludes,
 	}, func(e entry) bool { return e.isRegular && e.size >= minBytes })
 	if res.rootErr {
@@ -461,14 +462,15 @@ func dirsLargest(c *invoke.Call) int {
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(pa.dir, home, pwd, allowRoot)
+	hidden := userHidden(c, home, pwd)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot, hidden)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
 	human := hm.resolve(jsonMode, nullMode)
 	elapsed := scanTimer()
 
-	res := duWalk(duOpts{root: root, xdev: xdev, maxDepth: depth, noIgnore: noIgnore, excludes: excludes})
+	res := duWalk(duOpts{root: root, hidden: hidden, xdev: xdev, maxDepth: depth, noIgnore: noIgnore, excludes: excludes})
 	if res.rootErr {
 		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
 	}
@@ -610,14 +612,15 @@ func dirsFindLarge(c *invoke.Call) int {
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(pa.dir, home, pwd, allowRoot)
+	hidden := userHidden(c, home, pwd)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot, hidden)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
 	human := hm.resolve(jsonMode, nullMode)
 	elapsed := scanTimer()
 
-	res := duWalk(duOpts{root: root, xdev: xdev, maxDepth: maxDepth, noIgnore: noIgnore, excludes: excludes})
+	res := duWalk(duOpts{root: root, hidden: hidden, xdev: xdev, maxDepth: maxDepth, noIgnore: noIgnore, excludes: excludes})
 	if res.rootErr {
 		return rootUnreadable(pa.dir, home).emit(c.Stderr, s, jsonMode)
 	}
@@ -758,7 +761,8 @@ func dirsListEmpty(c *invoke.Call) int {
 	}
 
 	home, pwd := callEnv(c)
-	root, pe := safePath(pa.dir, home, pwd, allowRoot)
+	hidden := userHidden(c, home, pwd)
+	root, pe := safePath(pa.dir, home, pwd, allowRoot, hidden)
 	if pe != nil {
 		return pe.emit(c.Stderr, s, jsonMode)
 	}
@@ -766,7 +770,7 @@ func dirsListEmpty(c *invoke.Call) int {
 	// --min-depth only filters the output: the prunes and excludes apply at
 	// every level during the walk (FS-13).
 	res := findWalk(walkOpts{
-		root: root, xdev: xdev, maxDepth: maxDepth,
+		root: root, hidden: hidden, xdev: xdev, maxDepth: maxDepth,
 		noIgnore: noIgnore, excludes: excludes, rawOrder: true, needEmpty: true,
 	}, func(e entry) bool {
 		if e.depth < minDepth || !e.isDir || !e.empty {

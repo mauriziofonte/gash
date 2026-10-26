@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // duDir is one directory the walk reported: its absolute path and its
@@ -25,6 +27,7 @@ type duOpts struct {
 	maxDepth int      // du -d; <0 means unbounded
 	noIgnore bool     // drop the default prunes
 	excludes []string // user --exclude globs (FS-12)
+	hidden   []string // the user's PROTECT:all trees (userHidden)
 }
 
 // duResult is what one du walk produced.
@@ -38,7 +41,8 @@ type duResult struct {
 // directory within maxDepth (the root included; the caller drops it). It
 // applies the scanners' one exclusion rule (skipped: tab/newline paths,
 // default prunes, --exclude; FS-01, FS-12, FS-13) and the protected-tree
-// rail (FS-03): a skipped entry is neither counted nor descended.
+// rail (FS-03, and the user's PROTECT:all trees): a skipped entry is
+// neither counted nor descended.
 func duWalk(o duOpts) duResult {
 	res := duResult{}
 	wo := walkOpts{noIgnore: o.noIgnore, excludes: o.excludes}
@@ -68,7 +72,7 @@ func duWalk(o duOpts) duResult {
 		}
 		for _, name := range names {
 			child := filepath.Join(abs, name)
-			if protected(child) {
+			if protected(child) || pathguard.UnderTrees(child, o.hidden) {
 				continue
 			}
 			crel := name

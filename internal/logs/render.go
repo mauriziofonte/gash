@@ -74,6 +74,9 @@ func (r *run) renderReport(rep *Report) {
 	if rep.Journal > 0 {
 		lines = append(lines, "Journal:     "+ui.HumanBytes(rep.Journal)+" (use journalctl --vacuum-size=…)")
 	}
+	if rep.Protected > 0 {
+		lines = append(lines, "Protected:   "+plural(rep.Protected, "file", "files")+" in PROTECT:content paths, never cleaned")
+	}
 	s.Box(w, "", lines...)
 	r.say().Hint("gash logs clean deletes rotated logs; add --truncate for live ones, --sudo for /var/log.")
 }

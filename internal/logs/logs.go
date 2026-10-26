@@ -27,6 +27,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/pathguard"
 	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -143,15 +144,50 @@ func (r *run) scanOpts() (scanOptions, *contract.Envelope) {
 	return o, nil
 }
 
-func (r *run) roots(args []string) []string {
+// roots are the directories to scan: the PATH arguments, or the default
+// roots. With PROTECT: lines in ~/.gash_env (3.4.1) a PATH at or below a
+// PROTECT:all path is forbidden_path, a default root there is dropped,
+// and o gets the trees the walk leaves out (all) or never cleans
+// (content).
+func (r *run) roots(args []string, o *scanOptions) ([]string, *contract.Envelope) {
+	home := r.c.Env.Get("HOME")
+	g := r.protect()
+	if g != nil {
+		o.hidden, o.sealed = g.Hidden, g.Sealed
+	}
 	if len(args) > 0 {
 		out := make([]string, 0, len(args))
 		for _, a := range args {
-			out = append(out, expandHome(a, r.c.Env.Get("HOME")))
+			p := expandHome(a, home)
+			if g != nil && g.Hides(p) {
+				e := contract.New("forbidden_path", p, "This path is protected and cannot be scanned")
+				return nil, &e
+			}
+			out = append(out, p)
 		}
-		return out
+		return out, nil
 	}
-	return defaultRoots(r.c.Env.Get("HOME"))
+	var out []string
+	for _, p := range defaultRoots(home) {
+		if g == nil || !g.Hides(p) {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// protect is the guard of the PROTECT: lines of the caller's ~/.gash_env;
+// nil when there are none.
+func (r *run) protect() *pathguard.Guard {
+	rules := pathguard.Rules(r.c.Env.Get)
+	if len(rules) == 0 {
+		return nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = r.c.Env.Get("PWD")
+	}
+	return pathguard.NewGuard(pathguard.OSFS{}, cwd, r.c.Env.Get("HOME"), pathguard.RootHome()).WithRules(rules)
 }
 
 func (r *run) doScan(_ *cobra.Command, args []string) error {
@@ -160,7 +196,12 @@ func (r *run) doScan(_ *cobra.Command, args []string) error {
 		r.fail(*e)
 		return nil
 	}
-	rep := scan(r.roots(args), o)
+	roots, e := r.roots(args, &o)
+	if e != nil {
+		r.fail(*e)
+		return nil
+	}
+	rep := scan(roots, o)
 	if r.asJSON {
 		writeJSON(r.c.Stdout, rep)
 		return nil
@@ -175,7 +216,12 @@ func (r *run) doClean(_ *cobra.Command, args []string) error {
 		r.fail(*e)
 		return nil
 	}
-	rep := scan(r.roots(args), o)
+	roots, e := r.roots(args, &o)
+	if e != nil {
+		r.fail(*e)
+		return nil
+	}
+	rep := scan(roots, o)
 	ops := plan(rep, r.truncate)
 	if len(ops) == 0 {
 		return r.cleanResult(rep, Result{}, true)

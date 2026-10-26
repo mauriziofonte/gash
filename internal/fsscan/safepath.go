@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // scannerForbidden is __gash_fs_forbidden's list: the scanners' own, short
@@ -44,7 +46,9 @@ func expandHome(input, home string) string {
 // safePath resolves a user PATH and refuses dangerous targets
 // (__gash_fs_safe_path). home and pwd are the caller's $HOME and $PWD; the
 // relative path is resolved against pwd only, so CDPATH is ignored (FS-25).
-func safePath(input, home, pwd string, allowRoot bool) (string, *fsError) {
+// hidden is the user's PROTECT:all trees (userHidden): a PATH at or below
+// one is refused as a protected location is, as written and resolved.
+func safePath(input, home, pwd string, allowRoot bool, hidden []string) (string, *fsError) {
 	input = expandHome(input, home)
 
 	// Protected locations are refused before any existence check.
@@ -52,7 +56,7 @@ func safePath(input, home, pwd string, allowRoot bool) (string, *fsError) {
 	if !strings.HasPrefix(lexical, "/") {
 		lexical = pwd + "/" + lexical
 	}
-	if forbidden(lexical) {
+	if forbidden(lexical) || pathguard.UnderTrees(filepath.Clean(lexical), hidden) {
 		return "", errf("forbidden_path", lexical, "This path is protected and cannot be scanned")
 	}
 
@@ -79,7 +83,7 @@ func safePath(input, home, pwd string, allowRoot bool) (string, *fsError) {
 	if resolved == "/" && !allowRoot {
 		return "", errf("root_scan_blocked", "Scanning '/' is blocked", "Use --allow-root to override (slow, traverses virtual filesystems)")
 	}
-	if forbidden(resolved) {
+	if forbidden(resolved) || pathguard.UnderTrees(resolved, hidden) {
 		return "", errf("forbidden_path", resolved, "This path is protected and cannot be scanned")
 	}
 	return resolved, nil

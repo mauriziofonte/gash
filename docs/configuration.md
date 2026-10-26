@@ -242,8 +242,8 @@ See the [remote hosts guide](remote/README.md).
 ### Protected paths
 
 `PROTECT:` lines keep files and directories of yours from the agent
-functions (`llm_*`, including `llm_exec`, and `agent_*`), and from what
-`ai_*` collects to send:
+functions (`llm_*`, including `llm_exec`, and `agent_*`), from the
+filesystem scanners and `gash logs`, and from what `ai_*` collects to send:
 
 | Line | What the agent functions do with the path |
 |---|---|
@@ -270,9 +270,16 @@ functions (`llm_*`, including `llm_exec`, and `agent_*`), and from what
   what a command prints: a plain `ls` above an `all` path still names it.
   `GASH_LLM_EXEC=unrestricted` checks no path at all, and with `git` named
   in `GASH_LLM_EXEC_ALLOW` git output is not filtered.
+* The filesystem scanners (`files_largest`, `dirs_largest`,
+  `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse an `all` path
+  and leave it out of every walk; they list a `content` path, names and
+  sizes. `gash logs` does the same, and `clean` never deletes or truncates
+  a log in a `content` path.
+* `llm_tree --text` lists a link into an `all` path as
+  `name -> [protected]`, without its target.
 * Gash reads the lines from the file at each call, never from the
-  environment. The interactive functions (`files_*`, `remote_*`) do not
-  read them.
+  environment. The other interactive functions (`remote_*`,
+  `archive_extract`, `file_backup`) do not read them.
 
 <!-- example
 mkdir -p private contracts

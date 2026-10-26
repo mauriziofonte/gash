@@ -338,7 +338,7 @@ with `--json`:
 | Message | Meaning and what to do |
 |---|---|
 | `Error: root_scan_blocked: Scanning '/' is blocked` | A scan of `/` walks virtual filesystems and is slow. Scan a directory, or pass `--allow-root` (with `--xdev` to stay on the root filesystem) |
-| `Error: forbidden_path: PATH` | System trees such as `/proc`, `/sys` and `/dev`, and the root user's home, are never scanned, not even through a symbolic link |
+| `Error: forbidden_path: PATH` | System trees such as `/proc`, `/sys` and `/dev`, the root user's home, and the paths you protect with `PROTECT:all=PATH` in `~/.gash_env` ([configuration](../configuration.md#protected-paths)), are never scanned, not even through a symbolic link |
 | `Error: path_not_found: Path 'PATH' does not exist` | Check the path; `~` and `~/...` are expanded, other forms are taken as written |
 | `Error: not_a_directory: ...` | The scanners start from a directory, not a file |
 | `Error: invalid_size: VALUE` | Use a number with an optional unit: `500K`, `20M`, `1.5G` |

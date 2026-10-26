@@ -130,7 +130,7 @@ func (m *Module) treeExt(c *invoke.Call, q treeQuery) int {
 			limit = maxLimit
 		}
 		lw := o.Lines(c.Stdout, "lines")
-		text := treeText(q.safe, q.depth, q.forbidden, prune, limit)
+		text := treeText(q.safe, q.depth, q.forbidden, m.linkHidden(c), prune, limit)
 		for _, l := range bytes.SplitAfter(text, []byte("\n")) {
 			if len(l) > 0 {
 				lw.Line(string(bytes.TrimSuffix(l, []byte("\n"))))

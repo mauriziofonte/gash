@@ -194,6 +194,18 @@ func underTrees(path string, trees []string) bool {
 	return false
 }
 
+// UnderTrees reports whether a physical path (resolved, as a walk from a
+// resolved root meets it) is at or below one of trees, also with a
+// leading /private stripped (macOS). A walk outside this package, the
+// scanners' and gash logs', tests its entries against Hidden and Sealed
+// with it.
+func UnderTrees(path string, trees []string) bool {
+	if len(trees) == 0 || path == "" {
+		return false
+	}
+	return underTrees(strings.TrimSuffix(path, "/"), trees)
+}
+
 // WalkSkip is the per-entry test of a walk from a resolved root: the
 // protected trees (UnderForbidden), and with mode "content" the
 // PROTECT:content trees too, whose files a content walk may not open.

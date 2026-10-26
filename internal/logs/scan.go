@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // Entry is one log file the scan found.
@@ -18,7 +21,10 @@ type Entry struct {
 	Category string    `json:"category"`
 	Kind     string    `json:"kind"`    // "active", "rotated" or "journal"
 	Reclaim  int64     `json:"reclaim"` // bytes clean would free (size; 0 for journal)
-	kindCode kind
+	// Protected marks a file in a PROTECT:content path of ~/.gash_env:
+	// listed with its size, never deleted or truncated (reclaim 0).
+	Protected bool `json:"protected,omitempty"`
+	kindCode  kind
 }
 
 // Group is the entries of one category.
@@ -39,8 +45,9 @@ type Report struct {
 	TotalFiles   int      `json:"total_files"`
 	TotalSize    int64    `json:"total_size"`
 	TotalReclaim int64    `json:"total_reclaim"`
-	Journal      int64    `json:"journal_bytes"` // size held by systemd journals (vacuum, not delete)
-	Unreadable   int      `json:"unreadable"`    // files a stat could not reach
+	Journal      int64    `json:"journal_bytes"`       // size held by systemd journals (vacuum, not delete)
+	Unreadable   int      `json:"unreadable"`          // files a stat could not reach
+	Protected    int      `json:"protected,omitempty"` // files in PROTECT:content paths, never cleaned
 	entries      []Entry
 }
 
@@ -50,6 +57,10 @@ type scanOptions struct {
 	olderThan time.Duration // ignore files modified more recently than this
 	maxDepth  int           // 0 = no limit
 	now       time.Time     // the clock, for olderThan (tests set it)
+	// hidden and sealed are the user's PROTECT:all and PROTECT:content
+	// trees (resolved and as written): the walk leaves hidden ones out,
+	// and lists the files of sealed ones as protected.
+	hidden, sealed []string
 }
 
 // skipDirs are directories the walk never descends: huge, and their logs
@@ -61,6 +72,9 @@ var skipDirs = map[string]bool{
 
 // scan walks the roots and returns the report. It never follows symlinks,
 // never leaves a root, and reads only metadata (never a file's contents).
+// An entry is judged on its physical path (the root resolved once, the
+// rest as walked): one in a PROTECT:all tree is left out, a directory not
+// descended; one in a PROTECT:content tree is listed as protected.
 func scan(roots []string, o scanOptions) *Report {
 	if o.now.IsZero() {
 		o.now = time.Now()
@@ -73,9 +87,22 @@ func scan(roots []string, o scanOptions) *Report {
 			continue
 		}
 		base := depth(abs)
+		phys := abs
+		if len(o.hidden)+len(o.sealed) > 0 {
+			if r, err := filepath.EvalSymlinks(abs); err == nil {
+				phys = r
+			}
+		}
+		physOf := func(p string) string { return phys + strings.TrimPrefix(p, abs) }
 		// The walk func never returns an error (it records unreadable
 		// entries and goes on), so WalkDir's own return is always nil.
 		_ = filepath.WalkDir(abs, func(p string, d fs.DirEntry, err error) error {
+			if len(o.hidden) > 0 && pathguard.UnderTrees(physOf(p), o.hidden) {
+				if d != nil && d.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
 			if err != nil {
 				if d != nil && d.IsDir() {
 					return fs.SkipDir
@@ -118,7 +145,11 @@ func scan(roots []string, o scanOptions) *Report {
 			seen[p] = true
 			e := Entry{Path: p, Size: info.Size(), Modified: info.ModTime().UTC(),
 				Category: cat, Kind: kindName(k), kindCode: k}
-			if k != journal {
+			switch {
+			case len(o.sealed) > 0 && pathguard.UnderTrees(physOf(p), o.sealed):
+				e.Protected = true
+				r.Protected++
+			case k != journal:
 				e.Reclaim = info.Size()
 			}
 			r.entries = append(r.entries, e)
