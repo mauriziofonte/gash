@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -205,4 +207,42 @@ func mustJSON(t *testing.T, v any) []byte {
 	b, err := json.Marshal(v)
 	require.NoError(t, err)
 	return b
+}
+
+// TestAgentTestGo: agent_test on a real go test run. Without -v go test
+// names no passing test, so passed and skipped are null (not the number of
+// ok packages); with -v a failure is the failing test's own line, not the
+// log of the test after it (3.4.2).
+func TestAgentTestGo(t *testing.T) {
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("go is not installed")
+	}
+	d := physDir(t)
+	write(t, filepath.Join(d, "go.mod"), "module example.com/app\n\ngo 1.21\n", 0o644)
+	write(t, filepath.Join(d, "app_test.go"), "package app\n\nimport \"testing\"\n\n"+
+		"func TestOne(t *testing.T)   {}\nfunc TestTwo(t *testing.T)   { t.Fatalf(\"boom two\") }\nfunc TestThree(t *testing.T) { t.Log(\"three ok\") }\n", 0o644)
+	home := physDir(t)
+	cache, err := exec.Command(goBin, "env", "GOCACHE").Output()
+	require.NoError(t, err)
+	env := map[string]string{"HOME": home, "PWD": d, "GASH_HEADLESS": "1", "PATH": filepath.Dir(goBin) + ":/usr/bin:/bin",
+		"GOTOOLCHAIN": "local", "GOFLAGS": "-mod=mod", "GOCACHE": strings.TrimSpace(string(cache)), "GOPATH": filepath.Join(home, "go")}
+	// The command runs in the working directory of the process.
+	t.Chdir(d)
+
+	r := runTest(t, d, env, "--", "go", "test", "./...")
+	require.Equal(t, 1, r.RC, r.Stdout+r.Stderr)
+	require.Contains(t, r.Stdout, `"runner":"go","passed":null,"failed":1,"skipped":null,`)
+	o := parseTest(t, r)
+	require.Len(t, o.Failures, 1)
+	require.Equal(t, []any{"TestTwo", "app_test.go", 6, "boom two"},
+		[]any{o.Failures[0].Name, o.Failures[0].File, o.Failures[0].Line, o.Failures[0].Message})
+
+	r = runTest(t, d, env, "--", "go", "test", "-v", "./...")
+	require.Equal(t, 1, r.RC, r.Stdout+r.Stderr)
+	o = parseTest(t, r)
+	require.Equal(t, []int{2, 1, 0}, []int{o.Passed, o.Failed, o.Skipped})
+	require.Len(t, o.Failures, 1)
+	require.Equal(t, []any{"TestTwo", "app_test.go", 6, "boom two"},
+		[]any{o.Failures[0].Name, o.Failures[0].File, o.Failures[0].Line, o.Failures[0].Message})
 }

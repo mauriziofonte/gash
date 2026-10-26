@@ -94,6 +94,8 @@ var (
 	reGoPackage = lazyre.MustCompile(`^(ok|FAIL|\?)\s+(\S+)\s+`)
 	reGoLoc     = lazyre.MustCompile(`^\s+(\S+\.go):(\d+): (.*)$`)
 	reGoBuild   = lazyre.MustCompile(`^(\S+\.go):(\d+):(?:\d+:)? (.*)$`)
+	// go test -v: the test the following lines of output belong to.
+	reGoMarker = lazyre.MustCompile(`^=== (RUN|CONT|NAME|PAUSE)\s+(\S+)`)
 )
 
 func parseGo(_ string, lines []string) (Summary, bool) {
@@ -106,20 +108,36 @@ func parseGo(_ string, lines []string) (Summary, bool) {
 		at     int // line index of the --- line
 	}
 	var results []result
-	okPkgs := 0
-	found := false
+	found, verbose := false, false
+	// owner[i] is the test whose output line i is, under -v: go test
+	// streams a test's log lines before its --- line, after its === RUN
+	// (=== CONT, === NAME) marker.
+	owner := make([]string, len(lines))
+	cur := ""
 	for i, l := range lines {
+		if m := reGoMarker.FindStringSubmatch(l); m != nil {
+			verbose = true
+			cur = m[2]
+			if m[1] == "PAUSE" {
+				cur = ""
+			}
+			continue
+		}
 		if m := reGoResult.FindStringSubmatch(l); m != nil {
 			results = append(results, result{m[2], m[3], i})
 			found = true
+			if m[2] != "FAIL" {
+				verbose = true
+			}
+			cur = ""
 			continue
 		}
-		if m := reGoPackage.FindStringSubmatch(l); m != nil {
+		if reGoPackage.MatchString(l) {
 			found = true
-			if m[1] == "ok" {
-				okPkgs++
-			}
+			cur = ""
+			continue
 		}
+		owner[i] = cur
 	}
 	if !found {
 		return Summary{}, false
@@ -137,8 +155,6 @@ func parseGo(_ string, lines []string) (Summary, bool) {
 		return true
 	}
 	var s Summary
-	seenPass := false
-	failedTests := map[string]bool{}
 	for _, r := range results {
 		if !leaf(r.name) {
 			continue
@@ -146,32 +162,39 @@ func parseGo(_ string, lines []string) (Summary, bool) {
 		switch r.status {
 		case "PASS":
 			s.Passed++
-			seenPass = true
 		case "SKIP":
 			s.Skipped++
 		case "FAIL":
 			s.Failed++
-			failedTests[r.name] = true
 			f := Failure{Name: r.name}
-			// The t.Error lines follow the --- FAIL line (go test prints
-			// them indented under it).
-			for k := r.at + 1; k < len(lines); k++ {
-				if reGoResult.MatchString(lines[k]) || reGoPackage.MatchString(lines[k]) || lines[k] == "FAIL" {
-					break
-				}
-				if lm := reGoLoc.FindStringSubmatch(lines[k]); lm != nil {
+			loc := func(l string) bool {
+				if lm := reGoLoc.FindStringSubmatch(l); lm != nil {
 					f.File, f.Line, f.Message = lm[1], atoi(lm[2]), lm[3]
+					return true
+				}
+				return false
+			}
+			done := false
+			if verbose {
+				// The test's own lines, wherever -v streamed them.
+				for k := 0; k < r.at && !done; k++ {
+					done = owner[k] == r.name && loc(lines[k])
+				}
+			}
+			// Without -v the t.Error lines follow the --- FAIL line,
+			// indented under it; never past the next test's marker.
+			for k := r.at + 1; k < len(lines) && !done; k++ {
+				if reGoResult.MatchString(lines[k]) || reGoPackage.MatchString(lines[k]) || reGoMarker.MatchString(lines[k]) || lines[k] == "FAIL" {
 					break
 				}
+				done = loc(lines[k])
 			}
 			s.Failures = append(s.Failures, f)
 		}
 	}
-	// Without -v go test names no passing test: passed counts the ok
-	// packages then.
-	if !seenPass {
-		s.Passed = okPkgs
-	}
+	// Without -v go test names no passing or skipped test: those counts
+	// are unknown (not the number of ok packages).
+	s.NoPassCounts = !verbose
 	// A package that failed without a failing test: a build error or a
 	// panic.
 	for i, l := range lines {

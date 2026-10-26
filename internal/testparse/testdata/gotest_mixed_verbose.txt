@@ -1,0 +1,35 @@
+=== RUN   TestOne
+--- PASS: TestOne (0.00s)
+=== RUN   TestTwo
+    x_test.go:7: boom two
+--- FAIL: TestTwo (0.00s)
+=== RUN   TestThree
+    x_test.go:10: three ok
+--- PASS: TestThree (0.00s)
+=== RUN   TestFour
+=== RUN   TestFour/a
+    x_test.go:13: a ok
+=== RUN   TestFour/b
+    x_test.go:14: b bad
+=== NAME  TestFour
+    x_test.go:15: four skipped after subtests
+--- FAIL: TestFour (0.00s)
+    --- PASS: TestFour/a (0.00s)
+    --- FAIL: TestFour/b (0.00s)
+FAIL
+FAIL	example.com/app	0.004s
+=== RUN   TestP1
+=== PAUSE TestP1
+=== RUN   TestP2
+=== PAUSE TestP2
+=== CONT  TestP1
+=== CONT  TestP2
+    y_test.go:12: p2 ok
+--- PASS: TestP2 (0.00s)
+=== NAME  TestP1
+    y_test.go:7: p1 log
+    y_test.go:8: p1 bad
+--- FAIL: TestP1 (0.00s)
+FAIL
+FAIL	example.com/app/sub	0.003s
+FAIL

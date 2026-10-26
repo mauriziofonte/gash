@@ -5,6 +5,7 @@ package testparse
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -70,11 +71,26 @@ func TestParseFixtures(t *testing.T) {
 			{"test_read_file", "tests/test_io.py", 7, "OSError: disk full"},
 		}}},
 		{"pytest_pass.txt", "pytest", Summary{Passed: 5, Skipped: 1}},
-		{"gotest_fail.txt", "go", Summary{Passed: 1, Failed: 2, Failures: []Failure{
+		{"gotest_fail.txt", "go", Summary{Failed: 2, NoPassCounts: true, Failures: []Failure{
 			{"TestParse/empty", "parse_test.go", 21, "Parse(\"\") = nil, want error"},
 			{"TestSum", "sum_test.go", 9, "Sum(1, 2) = 4, want 3"},
 		}}},
 		{"gotest_verbose.txt", "go", Summary{Passed: 2, Skipped: 1}},
+		// TestOne passes, TestTwo fails (t.Fatalf), TestThree logs, TestFour
+		// has a failing subtest, TestP1 and TestP2 run in parallel (3.4.2:
+		// without -v the passed count is unknown, not the ok packages; under
+		// -v a test's lines come before its --- FAIL line, so the next test's
+		// log is not its message).
+		{"gotest_mixed.txt", "go", Summary{Failed: 3, NoPassCounts: true, Failures: []Failure{
+			{"TestTwo", "x_test.go", 7, "boom two"},
+			{"TestFour/b", "x_test.go", 14, "b bad"},
+			{"TestP1", "y_test.go", 7, "p1 log"},
+		}}},
+		{"gotest_mixed_verbose.txt", "go", Summary{Passed: 4, Failed: 3, Failures: []Failure{
+			{"TestTwo", "x_test.go", 7, "boom two"},
+			{"TestFour/b", "x_test.go", 14, "b bad"},
+			{"TestP1", "y_test.go", 7, "p1 log"},
+		}}},
 		{"gotest_json.txt", "go", Summary{Passed: 1, Failed: 1, Skipped: 1, Failures: []Failure{
 			{"TestSum", "sum_test.go", 9, "Sum(1, 2) = 4, want 3"},
 		}}},
@@ -99,6 +115,17 @@ func TestParseFixtures(t *testing.T) {
 			require.Equal(t, want, got)
 		})
 	}
+}
+
+// TestJestConsoleBlock: the "● Console" block of a suite's console output
+// is not a failure, and its frames are not a failure's location (3.4.2).
+func TestJestConsoleBlock(t *testing.T) {
+	out := strings.Replace(string(fixture(t, "jest_fail.txt")), " FAIL  src/cart.test.js\n",
+		" FAIL  src/cart.test.js\n  ● Console\n\n    console.log src/cart.test.js:31\n      three ok\n\n", 1)
+	s, ok := Parse([]byte(out), "jest", nil)
+	require.True(t, ok)
+	require.Len(t, s.Failures, 2)
+	require.Equal(t, Failure{"Cart › applies discount", "src/cart.test.js", 14, "expect(received).toBe(expected) // Object.is equality"}, s.Failures[0])
 }
 
 func TestParseUnknownAndWrongRunner(t *testing.T) {

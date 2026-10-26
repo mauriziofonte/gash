@@ -31,10 +31,13 @@ type Failure struct {
 	Message string `json:"message"`
 }
 
-// Summary is what a parser read.
+// Summary is what a parser read. NoPassCounts is true when the runner
+// named only its failures (go test without -v): Passed and Skipped are
+// then unknown, and the summary prints them as null.
 type Summary struct {
 	Runner                  string
 	Passed, Failed, Skipped int
+	NoPassCounts            bool
 	Failures                []Failure
 }
 
