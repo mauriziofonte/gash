@@ -2,7 +2,7 @@
 
 # Local web stack (HTE): reference
 
-gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one pool per PHP version. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
 
 ## Commands
 

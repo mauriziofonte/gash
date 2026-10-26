@@ -1322,9 +1322,9 @@ var baseFunctions = []Function{
 				"\n" +
 				"  --install never runs for an agent (GASH_HEADLESS=1): it answers\n" +
 				"  with the install_needs_confirmation error and the command to show\n" +
-				"  the user. Without a terminal to ask on it needs --yes. Docker,\n" +
-				"  nvm and the gash hte stack are never installed: their line links\n" +
-				"  the official instructions.\n" +
+				"  the user. Without a terminal to ask on it needs --yes. Docker\n" +
+				"  and nvm are never installed: their line links the official\n" +
+				"  instructions.\n" +
 				"\n" +
 				"  --timing loads Gash in a new interactive shell and lists the\n" +
 				"  milliseconds each file and step takes (5 ms or more stands out),\n" +

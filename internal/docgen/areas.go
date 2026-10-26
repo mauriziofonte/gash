@@ -40,7 +40,7 @@ var Areas = []Area{
 	{Key: "databases", Title: "Databases", Summary: "The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only."},
 	{Key: "runtimes", Title: "PHP, Node.js and Chrome", Summary: "Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current.",
 		Commands: []string{"runtime", "run"}},
-	{Key: "hte", Title: "Local web stack (HTE)", Summary: "gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one pool per PHP version.",
+	{Key: "hte", Title: "Local web stack (HTE)", Summary: "gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site.",
 		Commands: []string{"hte"}},
 	{Key: "windows", Title: "Windows and WSL", Summary: "Inspect and repair WSL, and read the Windows host from inside it.",
 		Commands: []string{"wsl", "win"}},

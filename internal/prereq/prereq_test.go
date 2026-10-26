@@ -277,7 +277,7 @@ func TestCatalog(t *testing.T) {
 		for _, m := range Managers {
 			_, has := tool.Packages[m]
 			builtin := m == Brew && contains(tool.Builtin, "darwin")
-			require.True(t, has || builtin || tool.Manual != "" || tool.NonFree || len(tool.OS) > 0,
+			require.True(t, has || builtin || tool.Manual != "" || tool.NonFree || len(tool.OS) > 0 || tool.Locate != nil,
 				"%s: no package for %s and no manual page", tool.Name, m)
 		}
 		if tool.Code != "" {
@@ -382,4 +382,53 @@ func TestRequirementsDoc(t *testing.T) {
 	want, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, got, string(want), "docs/requirements.md is stale: go test ./internal/prereq -update")
+}
+
+// The gash hte daemons are found where gash hte finds them, off PATH and
+// under versioned names, and only on the systems gash hte runs on.
+func TestLocateHTE(t *testing.T) {
+	sysroot := func(t *testing.T, release string, execs, dirs, files []string) *System {
+		dir := t.TempDir()
+		for _, d := range append(dirs, "etc") {
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, d), 0o755))
+		}
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "etc/os-release"), []byte(release), 0o644))
+		for _, f := range execs {
+			require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(dir, f)), 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, f), []byte("#!/bin/sh\n"), 0o755))
+		}
+		for _, f := range files {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, f), nil, 0o644))
+		}
+		sr, err := platform.NewSysroot(dir)
+		require.NoError(t, err)
+		s := &System{LookPath: func(name string, _ []string) (string, bool) {
+			return "/usr/bin/" + name, name == "sudo" || name == "dnf" || name == "apt-get" || name == "apk"
+		}}
+		s.detect(sr, "linux")
+		return s
+	}
+
+	s := sysroot(t, ubuntu2404, []string{"usr/sbin/php-fpm8.3", "usr/sbin/apache2"},
+		[]string{"usr/lib/apache2/modules"}, []string{"etc/mime.types"})
+	p, ok := s.Find(must(t, "php-fpm"))
+	require.True(t, ok)
+	require.Equal(t, "/usr/sbin/php-fpm8.3", p)
+	p, ok = s.Find(must(t, "apache"))
+	require.True(t, ok)
+	require.Equal(t, "/usr/sbin/apache2", p)
+
+	s = sysroot(t, ubuntu2404, []string{"usr/sbin/apache2"}, nil, nil)
+	_, ok = s.Find(must(t, "apache"))
+	require.False(t, ok, "an Apache without its modules does not serve gash hte")
+
+	s = sysroot(t, rocky9, nil, nil, nil)
+	require.Equal(t, "sudo dnf install -y httpd mod_ssl mod_http2", s.Report("apache", "").Install())
+
+	s = sysroot(t, alpine, []string{"usr/sbin/php-fpm83", "usr/sbin/httpd"}, nil, nil)
+	_, ok = s.Find(must(t, "php-fpm"))
+	require.False(t, ok, "gash hte does not run on Alpine")
+	r := s.Report("php-fpm", "")
+	require.Empty(t, r.Install())
+	require.Equal(t, hteNote, r.Advice())
 }

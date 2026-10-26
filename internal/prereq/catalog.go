@@ -2,6 +2,11 @@
 
 package prereq
 
+import (
+	"github.com/mauriziofonte/gash/internal/hte/discover"
+	"github.com/mauriziofonte/gash/internal/platform"
+)
+
 // pkgs builds a Packages map: the same name for every manager, then the
 // overrides (an empty override leaves the manager out).
 func pkgs(name string, over ...string) map[Manager]string {
@@ -115,7 +120,8 @@ var catalog = []Tool{
 	{Name: "unrar", Purpose: "extracts .rar archives", Level: Feature, Area: "archives", NonFree: true,
 		Packages: pkgs("unrar", "dnf", "", "brew", ""), Manual: "https://www.rarlab.com/download.htm"},
 	{Name: "uncompress", Purpose: "extracts .Z archives", Level: Feature, Area: "archives",
-		Packages: pkgs("ncompress", "brew", ""), Builtin: []string{"darwin"}},
+		Packages: pkgs("ncompress", "apt", "gzip", "brew", "", "apk", ""), Builtin: []string{"darwin"},
+		Manual: "https://github.com/vapier/ncompress"},
 
 	// Runtimes and linters.
 	{Name: "php", Purpose: "runs PHP code and lints .php files",
@@ -155,11 +161,12 @@ var catalog = []Tool{
 
 	// Local web stack.
 	{Name: "apache", Commands: []string{"apache2", "httpd"}, Purpose: "serves the gash hte sites",
-		Level: Feature, Area: "hte", Code: "apache_not_found",
-		Packages: pkgs("apache2", "dnf", "httpd", "pacman", "apache", "brew", "httpd")},
-	{Name: "php-fpm", Purpose: "runs PHP for the gash hte sites, one pool per PHP version", Level: Feature, Area: "hte",
-		Packages: pkgs("php-fpm", "zypper", "php8-fpm", "apk", "php83-fpm", "brew", "php")},
-	{Name: "openssl", Purpose: "makes the gash hte local certificate authority and site certificates",
+		Level: Feature, Area: "hte", Code: "apache_not_found", Locate: locateApache, Note: hteNote,
+		Packages: map[Manager]string{Apt: "apache2", Dnf: "httpd mod_ssl mod_http2", Pacman: "apache", Brew: "httpd"}},
+	{Name: "php-fpm", Purpose: "runs PHP for the gash hte sites: one master per PHP version, one pool per site",
+		Level: Feature, Area: "hte", Locate: locateFPM, Note: hteNote,
+		Packages: map[Manager]string{Apt: "php-fpm", Dnf: "php-fpm", Pacman: "php-fpm", Brew: "php"}},
+	{Name: "openssl", Purpose: "makes the self-signed certificate of each gash hte site",
 		Level: Feature, Area: "hte", Code: "openssl_not_found", Packages: pkgs("openssl", "brew", "openssl@3")},
 
 	// Windows, under WSL: these come with Windows.
@@ -176,4 +183,23 @@ var catalog = []Tool{
 		Packages: map[Manager]string{Brew: "cosign", Pacman: "cosign", Apk: "cosign"}},
 	{Name: "gpg", Purpose: "checks signed release tags", Level: Optional, Area: "release",
 		Packages: pkgs("gnupg", "dnf", "gnupg2", "zypper", "gpg2")},
+}
+
+// hteNote says where gash hte runs: elsewhere its daemons do not count.
+const hteNote = "gash hte runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew"
+
+// locateApache finds Apache where gash hte does: the platform's binary,
+// with its module directory and mime.types.
+func locateApache(sr platform.Sysroot, o platform.OS) (string, bool) {
+	a, err := discover.FindApache(sr, o)
+	return a.Binary, err == nil
+}
+
+// locateFPM finds the first PHP-FPM binary gash hte would use
+// (/usr/sbin/php-fpm8.3 on Debian, /usr/sbin/php-fpm on Fedora).
+func locateFPM(sr platform.Sysroot, o platform.OS) (string, bool) {
+	if b := discover.FPMBinaries(sr, o); len(b) > 0 {
+		return b[0], true
+	}
+	return "", false
 }

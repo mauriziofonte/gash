@@ -11,7 +11,7 @@
 | [Remote hosts](remote/README.md) | Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_env, and unlock SSH keys at login. | [reference](remote/reference.md) |
 | [Databases](databases/README.md) | The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only. | [reference](databases/reference.md) |
 | [PHP, Node.js and Chrome](runtimes/README.md) | Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current. | [reference](runtimes/reference.md) |
-| [Local web stack (HTE)](hte/README.md) | gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one pool per PHP version. | [reference](hte/reference.md) |
+| [Local web stack (HTE)](hte/README.md) | gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. | [reference](hte/reference.md) |
 | [Windows and WSL](windows/README.md) | Inspect and repair WSL, and read the Windows host from inside it. | [reference](windows/reference.md) |
 | [Logs](logs/README.md) | gash logs: find the log files that fill a disk and reclaim the space safely. | [reference](logs/reference.md) |
 | [AI assistants](ai/README.md) | Ask Claude or Gemini from the terminal, with the context of this system. | [reference](ai/reference.md) |

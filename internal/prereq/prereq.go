@@ -88,8 +88,9 @@ type Tool struct {
 	// OS limits the tool to "linux", "darwin" or "wsl" (Linux under WSL);
 	// empty is every system.
 	OS []string
-	// Packages names the package that provides it, per manager. A missing
-	// manager means none is known there.
+	// Packages names the package that provides it, per manager (several,
+	// space-separated, when one is not enough). A missing manager means
+	// none is known there.
 	Packages map[Manager]string
 	// Builtin lists the systems where it ships with the OS ("darwin"):
 	// missing there, it is not a package to install.
@@ -119,6 +120,11 @@ type Tool struct {
 	MinVersion string
 	// Gash never installs it: Manual tells how.
 	NoInstall bool
+	// Locate, when set, finds it when PATH has none of Commands: the gash
+	// hte daemons live outside a user's PATH (/usr/sbin) and under
+	// versioned names (php-fpm8.3), where gash hte looks for them. Its
+	// Packages list only the systems where Locate can find it.
+	Locate func(sr platform.Sysroot, o platform.OS) (string, bool)
 }
 
 // commands are the programs that satisfy t.
@@ -185,6 +191,8 @@ type System struct {
 	NoPacmanDB bool
 	// Env is the environment programs are looked up in (its PATH).
 	Env []string
+	// Sysroot is where Locate looks.
+	Sysroot platform.Sysroot
 
 	// For tests: the program lookup, the probe run and the Xcode check.
 	LookPath   func(name string, env []string) (string, bool)
@@ -211,6 +219,7 @@ func Detect(env []string) *System {
 // detect fills the system from the sysroot: the distribution, its
 // manager and sudo, found with the lookup hooks already set.
 func (s *System) detect(sr platform.Sysroot, goos string) {
+	s.Sysroot = sr
 	s.OS = platform.DetectOS(sr, goos)
 	s.Manager = s.detectManager()
 	_, s.Sudo = s.lookPath("sudo")
@@ -353,6 +362,9 @@ func (s *System) find(t *Tool) (string, bool) {
 			}
 			return p, true
 		}
+	}
+	if t.Locate != nil {
+		return t.Locate(s.Sysroot, s.OS)
 	}
 	return "", false
 }
@@ -504,7 +516,11 @@ func (s *System) InstallArgv(epel bool, pkgs ...string) [][]string {
 	if epel && s.el() {
 		cmds = append(cmds, s.withSudo(append(s.installWords(), s.epelRelease())))
 	}
-	return append(cmds, s.withSudo(append(s.installWords(), pkgs...)))
+	words := s.installWords()
+	for _, p := range pkgs {
+		words = append(words, strings.Fields(p)...) // "httpd mod_ssl mod_http2"
+	}
+	return append(cmds, s.withSudo(words))
 }
 
 // RefreshArgv is the command that fetches the package lists before an

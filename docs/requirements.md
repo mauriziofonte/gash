@@ -94,7 +94,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-zstd"></a>**zstd** (feature) extracts .zst archives. Needed by `archive_extract` (.zst).
 - <a id="tool-7z"></a>**7z** (feature) extracts .7z archives. Any of: `7z`, `7zz`. Needed by `archive_extract` (.7z).
 - <a id="tool-unrar"></a>**unrar** (feature) extracts .rar archives. Needed by `archive_extract` (.rar). Where no package exists: <https://www.rarlab.com/download.htm>. Its package is in the non-free repositories (Debian non-free, Ubuntu multiverse, openSUSE non-oss).
-- <a id="tool-uncompress"></a>**uncompress** (feature) extracts .Z archives. Needed by `archive_extract` (.Z).
+- <a id="tool-uncompress"></a>**uncompress** (feature) extracts .Z archives. Needed by `archive_extract` (.Z). Where no package exists: <https://github.com/vapier/ncompress>.
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -104,7 +104,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 | zstd | `zstd` | `zstd` | `zstd` | `zstd` | `zstd` | `zstd` |
 | 7z | `p7zip-full` | `p7zip-plugins` (EPEL) | `7zip` | `7zip` | `7zip` | `p7zip` |
 | unrar | `unrar` (non-free) | — | `unrar` | `unrar` (non-free) | `unrar` | — |
-| uncompress | `ncompress` | `ncompress` | `ncompress` | `ncompress` | `ncompress` | built in |
+| uncompress | `gzip` | `ncompress` | `ncompress` | `ncompress` | — | built in |
 
 ## Runtimes and linters
 
@@ -148,14 +148,14 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 
 ## Local web stack (gash hte)
 
-- <a id="tool-apache"></a>**apache** (feature) serves the gash hte sites. Any of: `apache2`, `httpd`. Needed by `gash hte`.
-- <a id="tool-php-fpm"></a>**php-fpm** (feature) runs PHP for the gash hte sites, one pool per PHP version. Needed by `gash hte` (PHP sites).
-- <a id="tool-openssl"></a>**openssl** (feature) makes the gash hte local certificate authority and site certificates. Needed by `gash hte`.
+- <a id="tool-apache"></a>**apache** (feature) serves the gash hte sites. Any of: `apache2`, `httpd`. Needed by `gash hte`. Gash hte runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew.
+- <a id="tool-php-fpm"></a>**php-fpm** (feature) runs PHP for the gash hte sites: one master per PHP version, one pool per site. Needed by `gash hte` (PHP sites). Gash hte runs on Debian, Ubuntu, Fedora, the RHEL family, Arch and macOS with Homebrew.
+- <a id="tool-openssl"></a>**openssl** (feature) makes the self-signed certificate of each gash hte site. Needed by `gash hte`.
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
-| apache | `apache2` | `httpd` | `apache` | `apache2` | `apache2` | `httpd` |
-| php-fpm | `php-fpm` | `php-fpm` | `php-fpm` | `php8-fpm` | `php83-fpm` | `php` |
+| apache | `apache2` | `httpd mod_ssl mod_http2` | `apache` | — | — | `httpd` |
+| php-fpm | `php-fpm` | `php-fpm` | `php-fpm` | — | — | `php` |
 | openssl | `openssl` | `openssl` | `openssl` | `openssl` | `openssl` | `openssl@3` |
 
 ## Windows (WSL)

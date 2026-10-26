@@ -85,6 +85,19 @@ func (r PHPResult) Find(v string) (PHP, bool) {
 	return PHP{}, false
 }
 
+// FPMBinaries are the PHP-FPM binaries DiscoverPHP would probe here, in
+// its order: the installed ones of the platform's layouts, without running
+// them.
+func FPMBinaries(sr platform.Sysroot, o platform.OS) []string {
+	var out []string
+	for _, c := range candidates(sr, o) {
+		if isExecutable(sr, c.fpm) {
+			out = append(out, c.fpm)
+		}
+	}
+	return out
+}
+
 type candidate struct {
 	layout  Layout
 	fpm     string

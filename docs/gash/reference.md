@@ -119,9 +119,9 @@ Returns 1 when a check fails (2 for an unknown option).
 
 --install never runs for an agent (GASH_HEADLESS=1): it answers
 with the install_needs_confirmation error and the command to show
-the user. Without a terminal to ask on it needs --yes. Docker,
-nvm and the gash hte stack are never installed: their line links
-the official instructions.
+the user. Without a terminal to ask on it needs --yes. Docker
+and nvm are never installed: their line links the official
+instructions.
 
 --timing loads Gash in a new interactive shell and lists the
 milliseconds each file and step takes (5 ms or more stands out),
