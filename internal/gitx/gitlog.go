@@ -72,8 +72,12 @@ func (x *call) logHelp() { _, _ = io.WriteString(x.Stdout, gitLogHelp) }
 // when colors are allowed and the user has not configured them, --no-color
 // when NO_COLOR or GASH_NO_COLOR forbids them, nothing otherwise; the git
 // output and the exit status go to the caller unchanged. Git itself drops
-// color when its stdout is not a terminal, as 2.x.
+// color when its stdout is not a terminal, as 2.x. A missing git is the
+// prerequisite report (3.4: status 127 and nothing on stderr).
 func (x *call) gitLog(extra ...string) int {
+	if !x.requireGit() {
+		return 1
+	}
 	var argv []string
 	switch {
 	case !x.Term.ColorEnvOK():
