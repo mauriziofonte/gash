@@ -1,27 +1,62 @@
-# AGENTS.md: Gash for LLM coding agents
+# AGENTS.md: Gash for AI coding agents
 
-> **Audience:** coding agents that run Bash (Claude Code, Codex, Cursor, Gemini,
-> Aider, local models) and the people who configure them.
-> **Applies to:** Gash 3.x. Gash 3.0 runs the toolkit in one Go binary
-> behind the same Bash entry point (`source ~/.gash/gash.sh`): invocations,
-> function names, flags, JSON shapes and error codes are those of 2.x, with
-> the 3.0 changes listed in [section 13](#13-version-compatibility).
-> **Stable API:** the public function names and flags below, the JSON shapes
-> in section 4, the error contract in section 5 and the variables in section 2.
+This is the contract between Gash and the AI coding agents that run Bash
+for a person (Claude Code, Codex, Cursor, Gemini CLI, Aider, local models),
+and the reference for the people who set them up. It says how to call
+Gash, what each agent function returns, how errors are reported and what
+the agent should do about each, and what the guardrails refuse.
 
-## 1. Quick start
+**Stable API**: the function names and flags of section 3, the JSON shapes
+of section 4, the error contract of section 5 and the variables of
+section 2. Changing one of them needs a new major version; adding one, a
+new minor version ([CHANGELOG.md](CHANGELOG.md)). Internal helpers
+(`__gash_*`, `__llm_*`) are not part of it.
+
+## 1. Start here
 
 ```bash
-GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_git_status'
+~/.gash/bin/gash llm_git_overview
+~/.gash/bin/gash llm_grep 'TODO' src --ext php --format tsv
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_db_tables -c default'
 ```
 
-`GASH_DIR` is derived from the location of `gash.sh`, so a checkout anywhere
-works the same way (`source /path/to/gash/gash.sh`). Gash needs Bash 4.4+.
-The JSON comes from the `gash` binary itself: the `llm_*`, database and
-scanner functions need no `jq`, `sqlite3`, `mysql`, `psql` or `rg` (use `jq`
-on your side to read the output, if you like). Help for any function:
-`llm_tree --help` or `gash_help llm_tree`. `gash version --json` prints
-`{"version", "os", "arch", "path"}` of the binary in use.
+The first two lines call the binary directly, through the launcher of the
+install (a few milliseconds per call, no Bash to load); link it into a
+directory on PATH (`ln -s ~/.gash/bin/gash ~/.local/bin/gash`) to call
+`gash FN`. The last line loads the functions in a headless Bash first.
+Both forms give the same output (section 2).
+
+The rules, in order of importance:
+
+1. **Read with `llm_*`, write with `agent_*`.** Every `llm_*` function only
+   reads. A change goes through an `agent_*` function (section 8), and only
+   when the user asked for that change. Run it with `--dry-run` first when
+   the change is not trivial.
+2. **Prefer the function to the raw command.** Section 7 maps the commands
+   an agent would type (`grep -rn`, `git status --short | wc -l`,
+   `mysql -e`, `curl -w`, a `sleep` loop) to the function that answers in
+   one call, with output that stays small.
+3. **Branch on `action`.** An error is one JSON line on stderr with an
+   `action`: `RETRY` fix the arguments and retry once, `CONTINUE` skip
+   this step, `STOP` ask the user, `FATAL` report the hint and stop
+   (section 5).
+4. **Never work around a refusal.** A guard that refuses (a secret file, a
+   protected path, a write query, a command outside the allowlist) is
+   policy. Do not rephrase the call to get past it, and never edit
+   `~/.gash_env`.
+5. **A missing tool is the user's to install.** An error with a `missing`
+   member names an external program that is not installed and, in
+   `install`, the command that installs it. Show it to the user; do not
+   run it (section 5).
+
+Help for any function: `FN --help` (or `gash_help FN`). The full list, with
+the flags of each: `gash agent-functions --json`. The routing table of
+section 7, ready to paste into an agent's instructions: `gash
+agents-hint`. Gash needs Bash 4.4 or newer; its JSON comes from the binary
+itself, so no `jq`, `sqlite3`, `mysql`, `psql` or `rg` is needed on this
+machine (use `jq` on your side to read the output, if you like). `gash
+version --json` prints `{"version", "os", "arch", "path"}` of the binary in
+use.
 
 ## 2. Invocation modes
 
@@ -34,8 +69,9 @@ on your side to read the output, if you like). Help for any function:
 Headless mode does **not** load the prompt, history settings, banner, the
 alias pack, `~/.bash_aliases` or `~/.bash_local`. Module short aliases exist,
 but Bash does not expand aliases in non-interactive shells: use full function
-names. Sourcing in headless mode never prints, whatever the configuration
-(a Gash 1.x one included: its reminder is for interactive shells only).
+names. Sourcing in headless mode never prints, whatever the configuration.
+`GASH_DIR` is derived from the location of `gash.sh`, so a checkout anywhere
+works the same way (`source /path/to/gash/gash.sh`).
 
 Without headless mode, `gash.sh` does nothing in a non-interactive shell. Do
 not use `bash -i` and do not source `~/.gashrc` (the user's entry point).
@@ -43,14 +79,15 @@ not use `bash -i` and do not source `~/.gashrc` (the user's entry point).
 Gash still drops colors for most output when stdout is not a terminal; set
 one of them if you parse text.
 
-**Direct invocation, no sourcing.** Every `llm_*` and `agent_*` function
-also runs as `gash <fn> args` (the binary on PATH, no `gash.sh`, no Bash:
-a few ms instead of ~100 ms per call). Given the same working directory
-and the same exported environment, stdout, stderr (error envelopes
-included) and the exit status are those of the sourced function, byte for
-byte (a test compares them); only a shell variable that is not exported
-reaches the sourced function alone. `gash agent-functions --json` lists
-these functions for a wrapper that routes calls directly (3.11).
+**Direct invocation, no sourcing.** Every function of this page also runs
+as `gash FN ARGS` (`~/.gash/bin/gash`, or a link to it on PATH): no
+`gash.sh`, no Bash, a few ms instead of ~100 ms per call. For the `llm_*`
+and `agent_*` functions, given the same working directory and the same
+exported environment, stdout, stderr (error envelopes included) and the
+exit status are those of the sourced function, byte for byte (a test
+compares them); only a shell variable that is not exported reaches the
+sourced function alone. `gash agent-functions --json` lists these
+functions for a wrapper that routes calls directly (3.11).
 
 ## 3. Function catalog
 
@@ -74,7 +111,7 @@ home); `~user` is `invalid_path`.
 | `llm_tree [--depth N] [--stats] [--text] [--all] [--count [--by ext\|dir\|type]] [--top N] [--type f\|d] [--name GLOB] [--newer REF] [--since T] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [PATH] [--host ALIAS]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max; `--count` `{"count":N}`; `--top N` disk usage `{"total","files","top":[{"p","size","files"}],"skipped"}` |
 | `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N] [--sort name\|mtime\|size] [--newer REF] [--since T] [--tracked] [--all] [--count [--by ext\|dir\|type]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches; `--format` rows `{"p","size","mtime"}` |
 | `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
-| `llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` (3.4) parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
+| `llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
 \_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_). `llm_grep` and
@@ -88,9 +125,9 @@ tree's 500-entry cap cut at the same place on every run. Zero matches: exit
 0, no output; a PATH that does not exist is `path_not_found`, an empty
 PATTERN `missing_pattern`.
 
-3.4 modes (each opt-in; without its flag the output is unchanged). Paths
+Opt-in modes (without its flag a function prints the default above). Paths
 stay absolute unless `--relative` (paths below PATH; `.` for PATH itself),
-except the new `--top` rows, relative unless `--absolute`. `--count` prints
+except the `--top` rows, relative unless `--absolute`. `--count` prints
 `{"count":N}`, with `--by` (which implies it) `{"count":N,"by":{KEY:N}}`:
 `llm_find --count` counts the paths its listing prints without `-n`;
 `llm_tree --count` the entries below PATH at any depth (to `--depth N` when
@@ -169,7 +206,7 @@ slow_query_explain field (the plan) when a query takes 100 ms or more
 (the query alone: connecting and the session setup do not count).
 `--analyze` executes the query to measure it, still read-only.
 
-Output options (3.4): `--format json` is the envelope above, byte for byte
+Output options: `--format json` is the envelope above, byte for byte
 (the default). `--format jsonl`, `tsv` or `table` print the rows themselves
 (3.6), with SQL NULL as `null`, `\N` or an empty cell on every engine
 (MySQL/MariaDB included; the envelope keeps its `"NULL"` string), REALs in
@@ -200,24 +237,24 @@ SQLite) and needs no database in the connection.
 | `llm_git_show [REV] [--stat] [--files] [--patch] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `{hash, subject, author, date, files:[{p, add, del}]}` of REV (default HEAD); `--stat` adds `stat` totals, `--files` each file's `status`; `--patch` the patch text capped per file; `REV:FILE` the file's content at REV |
 | `llm_env [--filter REGEX] [--host ALIAS]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
 | `llm_ports [--listen] [--port N] [--host ALIAS]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without); `--port N` (0-65535, else `invalid_port`) keeps local port N and adds `procs: [{pid, name}]` to each record (empty for another user's process unless root) |
-| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree` (3.4): `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
+| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree`: `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
 | `llm_project [PATH] [--host ALIAS]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev] [--host ALIAS]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
 
-Git (3.4 options): one call answers the usual combination: `llm_git_overview`
+Git: one call answers the usual combination: `llm_git_overview`
 for `git status --short | wc -l; git log --oneline -3; git diff --stat | tail -1`,
 `llm_git_status --summary`/`--files`/`--repos`/`--fetch`, `llm_git_diff
---summary`/`--files`/`--patch`, `llm_git_show REV --stat` and `REV:FILE`. Without
-a 3.4 option every existing function prints what it printed before. Paths
+--summary`/`--files`/`--patch`, `llm_git_show REV --stat` and `REV:FILE`. Paths
 are relative to the repository root, as git prints them; `add`/`del` are null
 for a binary file. `--patch` keeps each file's header lines and cuts its body
 at `--max-lines` (default 200; `REV:FILE` content 2000) with
 `[... K lines omitted]`; the patch of a secret file (6.2) is replaced by one
 marker line and `REV:FILE` of a secret file is `secret_file_blocked`. A FILE
-as PATH limits `llm_git_diff` (with a 3.4 option) and `llm_git_show` to it.
+as PATH limits `llm_git_diff` (with `--files`, `--numstat`, `--summary` or
+`--patch`) and `llm_git_show` to it.
 `--fetch` is the one network read: the upstream branch only (no tags, no
 prune, no submodules), bounded by `--timeout` (default 20 s), never
 prompting; a failure is `"fetched":false` with `error` and the local state is
@@ -245,11 +282,11 @@ llm_exec "git log --oneline -5 && git status --short"
 llm_exec "grep -rn TODO src | head -20"
 ```
 
-### 3.6 Shared output options (3.4)
+### 3.6 Shared output options
 
-The 3.4 agent functions share one output layer; each function's `--help`
-lists the options it takes. The defaults never change: a function prints
-what it printed before unless you pass one of these.
+The agent functions share one output layer; each function's `--help` lists
+the options it takes. Without one of these options a function prints its
+default output.
 
 | Option | Effect |
 |---|---|
@@ -257,7 +294,7 @@ what it printed before unless you pass one of these.
 | `--width N` | Cuts each output line (in JSON, each string value) at N display columns, ending it with `…` |
 | `--max-lines N`, `--head N`, `--tail N` | Keeps the first N (`--max-lines` is `--head`) and/or the last N lines or rows; what is cut becomes one `[... K lines omitted]` line in text and `table` output, `"truncated": K` in a JSON object, and the metadata line below for a JSON array, `jsonl` and `tsv` |
 | `-j N`, `--timeout S` | Multi-target functions: N targets at a time (default: the CPU count, 32 for network probes) and a per-target time limit (seconds, `0.5`, or `500ms`, `2s`, `1m`; at most 1h). A target that times out is a field of its result, not a failed call; results keep the input order |
-| `--relative`, `--absolute` | Paths relative to the PATH argument (or the working directory), or absolute (today's default) |
+| `--relative`, `--absolute` | Paths relative to the PATH argument (or the working directory), or absolute (the default) |
 
 Values are positive integers (1 to 999999999): 0 or a word is
 `invalid_width`, `invalid_max_lines`, `invalid_head`, `invalid_tail` or
@@ -271,7 +308,7 @@ per `llm_*`/`agent_*` call to that local file:
 `{"ts","fn","ms","out_bytes","rc","truncated"}`. Never the arguments or any
 value, never the network; a write failure never fails the call.
 
-### 3.7 Text reads (3.4)
+### 3.7 Text reads
 
 | Function | Output |
 |---|---|
@@ -311,7 +348,7 @@ level and the lines below it with neither, such as a stack trace). New
 codes, all RETRY: `invalid_range`, `invalid_assertion`, `invalid_algo`,
 `invalid_short`, `invalid_level`, `invalid_rule`.
 
-### 3.8 Data files and values (3.4)
+### 3.8 Data files and values
 
 | Function | Output |
 |---|---|
@@ -372,7 +409,7 @@ format (`%Y-%m-%d %H:%M:%S`, also `%-d`, `%N`, `%:z`). The result keeps the
 input's offset unless `--tz` is given. Bad input is `invalid_date`,
 `invalid_duration`, `invalid_timezone` or `invalid_date_format` (RETRY).
 
-### 3.9 Network probes (3.4)
+### 3.9 Network probes
 
 | Function | Output |
 |---|---|
@@ -381,7 +418,7 @@ input's offset unless `--tz` is given. Bad input is `invalid_date`,
 | `llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{host, protocol, subject, issuer, san, not_after, days_left, verified, verify_error, chain, ms, error}]` |
 | `llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{target, open, ms, error}]` |
 
-The four probes only read (plan D4) and share the rules of 3.6: targets
+The four probes only read and share the rules of 3.6: targets
 are probed in parallel (`-j`, default 32) with a per-target `--timeout`
 (llm_http and llm_tls 10s, llm_dns and llm_tcp 5s), one row per target in
 input order, exit 0 once the targets ran. What goes wrong with one target
@@ -435,7 +472,7 @@ certificate that fails, expired or self-signed:
 `hostname_mismatch`, `unknown_authority`, `invalid`); `days_left` is
 negative once expired.
 
-### 3.10 Processes, waiting and services (3.4)
+### 3.10 Processes, waiting and services
 
 | Function | Output |
 |---|---|
@@ -475,7 +512,7 @@ one command, `sed`/`awk` under `--sandbox`, `grep`/`rg` skipping secret
 files, `git` refused. Journal, log and match lines are cut at 300 columns
 unless `--width` says otherwise.
 
-### 3.11 Runtimes, lint and tests (3.4)
+### 3.11 Runtimes, lint and tests
 
 | Function | Output |
 |---|---|
@@ -515,7 +552,7 @@ functions):
 | `gash run [--width N] [--max-lines N] [--head N] [--tail N] [--test-summary] [--runtime node:24\|php:8.4] [--safe] -- CMD...` | Runs CMD and returns its exit status unchanged. The budget flags shape its output (3.6, `[... K lines omitted]` markers); `--runtime` (repeatable) puts that runtime's directory first on PATH; `--test-summary` prints the `agent_test` object instead of the output (section 8); `--safe` runs CMD under `llm_exec`'s rules (6.3). CMD may be a gash function (`gash run --max-lines 20 -- files_largest .`). gash's own errors are envelopes |
 | `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
 
-### 3.12 Remote hosts (3.4)
+### 3.12 Remote hosts
 
 Every remote call names a registered `HOST:alias=user@host` entry of
 `~/.gash_env` (a raw `user@host` or an unknown alias is `unknown_host`,
@@ -543,8 +580,11 @@ text as `==> ALIAS <==` blocks. On a host with this machine's OS and CPU the
 gash binary itself answers: it is copied once (first call: two round trips)
 into `~/.cache/gash/remote/<version>-<hash>/gash` (0700, checked by size and
 a test run, renamed into place) and reused by every later call; elsewhere
-`llm_find`, `llm_grep`, `llm_tree` and `llm_config` have a POSIX sh fallback
-that gives the local answer for their 3.0 options, and every other call
+`llm_find`, `llm_grep`, `llm_tree` and `llm_config` answer their basic
+forms through POSIX sh with the local output (`llm_find` names without
+`--contains`, `llm_tree` with `--depth`, `--stats` and `--text`, `llm_config`
+without `--path`, `llm_grep` with a pattern in the syntax ripgrep and POSIX
+ERE share), and every other call
 refuses with `remote_binary_unavailable` (STOP; also `llm_grep` with an
 ignore file in the tree or a pattern outside the ripgrep/ERE common
 syntax). `-` (stdin) is `unexpected_argument` with `--host`: the local
@@ -671,7 +711,7 @@ children counts are real, also below the depth limit. The listing stops at
 
 branch is "" on a detached HEAD. A file can be both staged and modified.
 
-### 4.7 Agent toolkit (3.4), real answers
+### 4.7 The agent functions, real answers
 
 A project with one modified file; every call is one round trip. Row output
 (`--format tsv`) has a header line and `\N` for null; metadata such as
@@ -745,17 +785,17 @@ Each code always carries the action shown:
 | Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
 | WSL & Windows (`gash wsl`, `gash win`, `gash logs`) | `interop_unavailable` `windows_access_denied` `elevation_required` `windows_not_found` (STOP); `interop_timeout` `invalid_windows_argument` `invalid_duration` `confirmation_required` (RETRY) |
-| Shared output options (3.4) | `invalid_format` `invalid_width` `invalid_max_lines` `invalid_head` `invalid_tail` `invalid_jobs` `invalid_timeout` (RETRY) |
-| Files and search (3.4) | `invalid_sort` `invalid_by` `invalid_since` (RETRY) |
-| Text reads (3.4) | `invalid_range` `invalid_assertion` `invalid_algo` `invalid_short` `invalid_level` `invalid_rule` (RETRY) |
-| Data files and values (3.4) | `not_a_scalar` `invalid_json` `invalid_json_path` `json_path_not_found` `not_an_object` `invalid_delimiter` `invalid_where` `unknown_column` `invalid_config` `invalid_env_name` `invalid_date` `invalid_timezone` `invalid_date_format` (RETRY) |
-| Git (3.4) | `git_error` `detached_head` `merge_conflict` `push_failed` (STOP); `invalid_log` `invalid_files` `invalid_fields` `unknown_revision` `missing_message` `invalid_author` `nothing_to_commit` `git_add_failed` `commit_failed` `no_upstream` `unknown_remote` `push_rejected` (RETRY) |
-| Network probes (3.4) | `http_method_blocked` (FATAL); `auth_env_unset` (STOP); `missing_target` `invalid_target` `invalid_server` `invalid_header` `invalid_resolve` `invalid_expect` `invalid_body_max` `invalid_auth_env` `secret_in_argv` (RETRY) |
-| Processes, waiting, services (3.4) | `kill_refused` (FATAL); `kill_failed` (STOP); `ps_not_found` `systemd_unavailable` `container_not_running` `docker_unavailable` (CONTINUE); `invalid_pid` `missing_condition` `invalid_interval` `invalid_code` `invalid_url` `missing_unit` `missing_container` `missing_command` `invalid_user` `container_not_found` `docker_error` `invalid_signal` `pattern_too_broad` (RETRY) |
-| Runtimes, lint, tests (3.4) | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
-| Remote hosts (3.4) | `unknown_host` `remote_protocol_error` `remote_binary_unavailable` `hash_tool_not_found` `put_verify_failed` (STOP); `host_unreachable` `missing_host` `remote_glob_unsupported` `invalid_exclude` `invalid_container_name` `container_unavailable` `invalid_mode` (RETRY) |
+| Shared output options | `invalid_format` `invalid_width` `invalid_max_lines` `invalid_head` `invalid_tail` `invalid_jobs` `invalid_timeout` (RETRY) |
+| Files and search | `invalid_sort` `invalid_by` `invalid_since` (RETRY) |
+| Text reads | `invalid_range` `invalid_assertion` `invalid_algo` `invalid_short` `invalid_level` `invalid_rule` (RETRY) |
+| Data files and values | `not_a_scalar` `invalid_json` `invalid_json_path` `json_path_not_found` `not_an_object` `invalid_delimiter` `invalid_where` `unknown_column` `invalid_config` `invalid_env_name` `invalid_date` `invalid_timezone` `invalid_date_format` (RETRY) |
+| Git | `git_error` `detached_head` `merge_conflict` `push_failed` (STOP); `invalid_log` `invalid_files` `invalid_fields` `unknown_revision` `missing_message` `invalid_author` `nothing_to_commit` `git_add_failed` `commit_failed` `no_upstream` `unknown_remote` `push_rejected` (RETRY) |
+| Network probes | `http_method_blocked` (FATAL); `auth_env_unset` (STOP); `missing_target` `invalid_target` `invalid_server` `invalid_header` `invalid_resolve` `invalid_expect` `invalid_body_max` `invalid_auth_env` `secret_in_argv` (RETRY) |
+| Processes, waiting, services | `kill_refused` (FATAL); `kill_failed` (STOP); `ps_not_found` `systemd_unavailable` `container_not_running` `docker_unavailable` (CONTINUE); `invalid_pid` `missing_condition` `invalid_interval` `invalid_code` `invalid_url` `missing_unit` `missing_container` `missing_command` `invalid_user` `container_not_found` `docker_error` `invalid_signal` `pattern_too_broad` (RETRY) |
+| Runtimes, lint, tests | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
+| Remote hosts | `unknown_host` `remote_protocol_error` `remote_binary_unavailable` `hash_tool_not_found` `put_verify_failed` (STOP); `host_unreachable` `missing_host` `remote_glob_unsupported` `invalid_exclude` `invalid_container_name` `container_unavailable` `invalid_mode` (RETRY) |
 | Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
-| Prerequisites (3.4) | `prerequisite_missing` `install_needs_confirmation` (STOP) |
+| Prerequisites | `prerequisite_missing` `install_needs_confirmation` (STOP) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
 non-negative integer below 1000000000"); `llm_tree --depth` takes 1 to
@@ -953,9 +993,10 @@ Headless mode reads `GASH_DB_TIMEOUT`, `GASH_AI_CONFIRM`,
 `GASH_AI_MODEL_CLAUDE` and `GASH_AI_MODEL_GEMINI` from `~/.gash_env` (the
 environment wins) and prints no configuration warnings unless `GASH_DEBUG=1`.
 
-### 6.6 Agent toolkit (3.4)
+### 6.6 More rails of the agent functions
 
-The 3.4 reads keep every rail above and add these:
+The agent functions of sections 3.6 to 3.12 keep every rail above and add
+these:
 
 - **Paths and secret files.** Every PATH of a multi-target call passes 6.1
   before anything is read; one refusal refuses the whole call. `llm_read`,
@@ -1176,18 +1217,29 @@ failures), vitest, jest (text or `--json`), mocha, pytest, go (text or
 
 ## 9. Best practices
 
-* Use `--json` and parse with `jq`; text output is for people.
-* Use `--null` with `xargs -0` for paths; never split paths on newlines.
+* Call the binary directly (`gash FN`, section 1) when you make many calls:
+  it saves the ~100 ms of loading Gash into a Bash each time.
 * Prefer the dedicated function to `llm_exec`: `llm_grep` over grep,
-  `llm_git_status` over git status.
-* Bound big scans with `--depth N`, `--xdev`, `-n N`, `--exclude GLOB`.
+  `llm_git_overview` over three git commands, `llm_wait` over a `sleep`
+  loop (section 7).
+* Ask for the smallest answer that does: `--count`, `--summary`,
+  `--scalar`, `--format tsv` for rows, `--fields` on the git log. Bound the
+  rest with `--max-lines`, `--head`, `--tail` and `--width`; a cut is
+  always marked, never silent (3.6).
+* Give one call many targets: `llm_stat a b c`, `llm_count FILES --pat A
+  --pat B`, `llm_http URL1 URL2`, `llm_git_status --repos DIR...`. They run
+  in parallel (`-j`) and answer in the order asked.
+* On the scanners use `--json`; use `--null` with `xargs -0` for paths and
+  never split paths on newlines. Bound big scans with `--depth N`,
+  `--xdev`, `-n N`, `--exclude GLOB`.
 * Pass the SQL statement as one quoted argument; keep user input out of
   string literals.
 * Empty results are success (`[]`, `"data": []`, or no lines, exit 0), also
-  under `set -euo pipefail`. Read stderr only when the exit status is non-zero.
+  under `set -euo pipefail`. Read stderr only when the exit status is
+  non-zero, and branch on `action`:
 
 ```bash
-out=$(llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
+out=$(gash llm_db_query "SELECT id FROM users" -c default 2>err.json) || {
   case "$(jq -r .action err.json)" in
     RETRY)    : fix the arguments, retry once ;;
     CONTINUE) : skip this step ;;
@@ -1292,130 +1344,63 @@ GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; gash logs scan --json'
 
 ## 12. Drop-in snippets
 
-### 12.1 Claude Code (`CLAUDE.md`)
+### 12.1 Instructions for the agent (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
+
+Add this block to the instructions file of a project, or of your user
+(`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, ...):
 
 ````markdown
-## Gash (3.x)
+## Gash
 
-Run: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <function> [args]'`
+Gash is installed in ~/.gash. Call a function as `~/.gash/bin/gash FN ARGS`
+(or `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; FN ARGS'`); `FN --help`
+lists its flags.
 
-- Code: `llm_tree --depth 2 --stats`, `llm_find '*.php' --contains REGEX`, `llm_grep PATTERN --ext php,js`
-- Disk: `files_largest --json`, `dirs_largest --json`, `tree_stats --json`
-- DB (read-only): `llm_db_tables -c CONN`, `llm_db_schema TABLE -c CONN`, `llm_db_query "SELECT ..." -c CONN`
-- Git: `llm_git_status`, `llm_git_log -n 10`, `llm_git_diff --staged`
-- Commands: `llm_exec "CMD"` runs allowlisted read-only commands only
-- Local sites: `gash hte site list --json`, `gash hte doctor --json`; change sites only when asked
+- Read with the llm_* functions: one compact JSON answer per call.
+- Change files, commits, uploads and processes only with the agent_*
+  functions, only when asked, and with --dry-run first.
+- Prefer them to raw pipelines; `gash agents-hint` lists which function
+  replaces which command.
+- Errors are one JSON line on stderr. action RETRY: fix the arguments, retry
+  once. CONTINUE: skip the step. STOP: ask the user (show the hint, and the
+  install command when there is one). FATAL: report the hint and stop.
+- Never work around a refusal, never edit ~/.gash_env, never install a
+  missing tool yourself.
 
-Errors: stderr JSON `{error, action, recoverable, details?, hint?}`. RETRY: fix, retry once.
-CONTINUE: skip. STOP: ask the user. FATAL: show the hint, stop; never rephrase to get around it.
-Never edit ~/.gash_env. Reference: ~/.gash/AGENTS.md
+Contract: ~/.gash/AGENTS.md
 ````
 
-### 12.2 Codex, Cursor and other `AGENTS.md` readers
+### 12.2 The routing table
 
-````markdown
-## Tooling: Gash 3.x
+`gash agents-hint` prints the table of section 7 with a short preamble,
+generated from the functions this Gash has: append it to the same file
+(`gash agents-hint >> CLAUDE.md`), and run it again after an update.
+`gash agents-hint --format json` gives one object per row, and `gash
+agent-functions --json` every function with its usage and flags, for a
+wrapper that exposes them as tools.
 
-Invoke: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <fn> [args]'`
-- Filesystem (`--json`): files_largest, dirs_largest, dirs_find_large, dirs_list_empty, tree_stats
-- Code: llm_tree, llm_find, llm_grep, llm_config
-- Database, read-only (`-c CONN` or `-f SQLITE_FILE`): llm_db_query, llm_db_tables, llm_db_schema, llm_db_sample, llm_db_explain
-- Git: llm_git_status, llm_git_diff, llm_git_log
-- System and project: llm_env, llm_ports, llm_procs, llm_project, llm_deps
-- Command lines: llm_exec (read-only allowlist; ask the user when a command is refused)
-- Local sites (`--json`): gash hte site list, gash hte site show --domain D, gash hte doctor
-
-Errors: stderr JSON with `action` RETRY | CONTINUE | STOP | FATAL; retry at most once.
-Reference: ~/.gash/AGENTS.md
-````
-
-### 12.3 Generic system prompt
+### 12.3 A system prompt
 
 ```text
-You can use Gash, a Bash toolkit with JSON output, through:
-  GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; <function> [args]'
-Functions: llm_tree, llm_find, llm_grep, llm_config, llm_git_status, llm_git_log,
-llm_git_diff, llm_db_query, llm_db_tables, llm_db_schema, llm_db_sample,
-llm_db_explain, llm_env, llm_ports, llm_procs, llm_project, llm_deps, llm_exec,
-files_largest, dirs_largest, dirs_find_large, dirs_list_empty, tree_stats.
-Use --json where offered. Errors arrive on stderr as JSON with "action":
-RETRY (fix input, retry once), CONTINUE (skip), STOP (ask the user),
-FATAL (report the hint, stop). Do not try to get around refusals.
+You can use Gash, a toolkit of shell functions that answer in JSON. Run
+  ~/.gash/bin/gash FUNCTION [ARGS]
+llm_* functions only read (files, code search, git, databases, logs,
+processes, HTTP); agent_* functions write and take --dry-run. FUNCTION --help
+lists the flags. Errors arrive on stderr as JSON with "action": RETRY (fix
+the arguments, retry once), CONTINUE (skip), STOP (ask the user), FATAL
+(report the hint, stop). Do not try to get around a refusal.
 ```
 
-## 13. Version compatibility
+## 13. Versions and stability
 
-Version: `GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; echo "$GASH_VERSION"'`,
-or `gash version --json`. Changes in 3.0 that affect agents (the full list
-is the 3.0.0 entry of `CHANGELOG.md`):
+The version in use: `gash version --json`, or `$GASH_VERSION` in a shell
+that loaded Gash. Gash follows semantic versioning over the API named at
+the top of this page: a minor release adds functions, flags, keys and error
+codes; only a major release changes or removes them. New keys can appear
+in any JSON object, so read the keys you need and ignore the others; an
+existing key never changes type.
 
-* **No client programs**: the `llm_*`, `llm_db_*` and scanner functions run
-  inside the binary, so `jq`, `sqlite3`, `mysql`, `psql`, `rg` and `find`
-  are no longer needed. `~/.my.cnf` and `~/.pgpass` are not read: put the
-  credentials in the `DB:` connection.
-* **Missing paths fail**: a PATH that does not exist is `path_not_found`
-  (2.x: exit 0 with no output). An empty pattern is `missing_pattern`.
-* **`~` expands**: `~` and `~/...` are the home directory; `~user` is
-  `invalid_path`.
-* **Refused queries** report the guard verdict of the connection's engine
-  (MySQL, MariaDB, PostgreSQL or SQLite), still as `write_operation_blocked`
-  and the other codes of 6.4.
-* **`llm_exec`**: allowlisted commands keep the walk-root and symlink checks
-  of 6.1.
-* **`llm_procs --name NAME`** no longer lists the shells that run it.
-* **New error codes**: `invalid_db_url`, `invalid_manifest`, `invalid_path`,
-  `invalid_service_name`, and the `gash hte` codes of section 8.
-* **Commands that change things ask**: `git_sync`, `git_add_tag`,
-  `git_delete_tag`, `git_apply_patch`, `process_kill`, `docker_stop_all`,
-  `docker_start_all` and `wsl_compact` show a plan and ask; without a
-  terminal they refuse unless given `-y`/`--yes`.
-
-Changes in 2.1 that affect agents:
-
-* **New error codes** (RETRY): `invalid_database_name`, `invalid_type`,
-  `file_too_large`.
-* **Stricter arguments**: a second PATH fails with `unexpected_argument`;
-  `llm_git_status`, `llm_project` and `llm_config` reject unknown options;
-  `llm_find` needs a pattern; `--help` works anywhere on the line.
-* **`llm_exec`** runs with a minimal environment and refuses more (6.3).
-* **`llm_find --contains`** honours PATTERN; `llm_procs` prints one line.
-
-Changes from 1.x that affect agents (the full list for people, with upgrade
-steps, is in `docs/migration.md`):
-
-* **`llm_exec`**: 1.x evaluated the line in the caller's shell behind a
-  blocklist; 2.0 uses a child Bash, the parser and the allowlist of 6.3.
-  Other commands fail with `command_not_allowed` (STOP).
-* **`recoverable` follows `action`**: `false` only for FATAL (in 1.x some
-  CONTINUE errors, such as `not_a_git_repo`, said `false`).
-* **`llm_git_status`** has a conflicted array (unmerged paths).
-* **`llm_tree`** sets `"truncated": true` at 500 entries; `--stats` sizes and
-  counts are real totals past the depth limit.
-* **`-n` means `--limit`** (`files_largest`, `dirs_largest`, `dirs_find_large`,
-  `llm_find`, `llm_grep`, `llm_git_log`, `llm_db_query`, `llm_db_sample`);
-  `docker_compose_upgrade -n` is
-  refused (use `--dry-run`). `--json` replaces `--llm` on `php_detect_version`
-  and `node_detect_version` (`--llm` still works).
-* **Empty envelopes**: `llm_db_*` return `{"data": [], "rows": 0, ...}` for no
-  rows (1.x printed nothing).
-* **Stricter arguments**: unknown options fail (`unknown_option`), flags
-  without values fail (`missing_value`), and `llm_db_*` and `llm_exec` reject
-  extra arguments (`unexpected_argument`).
-* **New error codes**: `command_not_allowed`, `option_not_allowed`,
-  `construct_not_allowed`, `unterminated_quote`, `glob_matches_option`,
-  `sandbox_unavailable`, `client_command_blocked`, `dot_command_blocked`,
-  `executable_comment_blocked`, `backslash_in_literal`, `unterminated_literal`,
-  `invalid_filter`, `missing_value`, `unexpected_argument`,
-  `ports_tool_not_found`, `docker_not_found`, `compose_not_installed`.
-* **Consistent errors**: `llm_git_diff` and `llm_git_log` return
-  `not_a_git_repo` outside a repository (1.x: no output, or `[]`);
-  `llm_ports` returns `ports_tool_not_found` instead of `[]`;
-  `llm_docker_check` errors moved from stdout to the standard stderr
-  envelope (the path is in `details`); `llm_procs` rejects unknown options.
-* **`llm_exec` path rules**: arguments under `/proc`, `/sys`, `/dev`, `/root`
-  and the other forbidden paths fail with `forbidden_path`.
-* **Stricter SQL**: queries 1.x accepted (`SELECT ... INTO`, `FOR UPDATE`,
-  sleep functions) now fail with `write_operation_blocked`.
-
-Internal helpers (`__gash_*`, `__llm_*`) are not part of the API and change
-without notice.
+What changed in each release, including what an agent written for Gash
+2.x has to know about 3.x (no client programs needed, missing paths fail
+with `path_not_found`, `~` expands, stricter arguments), is in
+[CHANGELOG.md](CHANGELOG.md).
