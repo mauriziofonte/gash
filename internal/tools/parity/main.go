@@ -26,7 +26,7 @@ import (
 
 func main() {
 	results := flag.String("results", "../tests/.results/go.tsv", "per-test results of tests/run.sh --impl go")
-	parity := flag.String("parity", "docs/port/archive/PARITY.md", "the parity table to update")
+	parity := flag.String("parity", "dev/port/archive/PARITY.md", "the parity table to update")
 	force := flag.Bool("force", false, "also overwrite FD and n/a rows")
 	check := flag.Bool("check", false, "report only; status 1 when the file would change")
 	flag.Parse()

@@ -109,7 +109,7 @@ follows D-2. LEDGER statuses stay the operator's to write at S2.
   newline (listed in the LEDGER as a decision).
 * **LEDGER at S1** holds the verified seeds and the findings of the S1 audit;
   it is completed at S2. Its permanent home after cutover is
-  `docs/port/LEDGER.md` (`layout.md`).
+  `dev/port/LEDGER.md` (`layout.md`).
 * **Environment limits** of the cloud session (blocked mirrors, no macOS,
   no vulnerability database) are in `STATE.md`; the affected checks run in
   GitHub Actions.

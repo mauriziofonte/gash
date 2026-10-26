@@ -278,7 +278,7 @@ Linux, macOS and WSL on amd64 and arm64.
   tagged tree; `gash update` verifies before it changes anything and
   `gash update --rollback` goes back.
 - **Audited.** The port reviewed every 2.x behaviour (the census is
-  [docs/port/LEDGER.md](docs/port/LEDGER.md), 443 items) and fixes the
+  [dev/port/LEDGER.md](dev/port/LEDGER.md), 443 items) and fixes the
   defects it found instead of carrying them over. The changes a user or a
   script can notice are listed below.
 

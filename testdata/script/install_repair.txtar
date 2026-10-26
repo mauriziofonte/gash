@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.7 (MATRIX "install.sh --repair"): --repair
+# dev/port/design/upgrade.md 3.7 (MATRIX "install.sh --repair"): --repair
 # fetches and verifies the binary for the VERSION the install has checked
 # out and does nothing else: no git command (the origin is gone: it works
 # offline from a file:// release), no checkout, no profile or ~/.gashrc

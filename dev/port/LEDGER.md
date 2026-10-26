@@ -5377,7 +5377,7 @@ Critical and high items:
 | Severity | low |
 | Public-contract impact | no |
 | rc.A behavior | Not reproduced: a binary cannot call the caller's shell functions and Go never executes user-supplied code. It runs the executables found on the PATH it receives (`exec.LookPath`; shell functions, aliases and `hash -p` entries ignored) and takes the stamp per FILE-25 |
-| Fix recipe (3.0) | None (by construction); `docs/port` notes that tool overrides must be executables on PATH |
+| Fix recipe (3.0) | None (by construction); `dev/port` notes that tool overrides must be executables on PATH |
 | Proving test | `testdata/script/files_shadow.txtar`: with `date(){ echo FIXED; }` and `tar(){ return 9; }` defined in the caller, the backup name ends in 14 digits and the `.tgz` extracts, rc 0 |
 | Status | accept: no 3.0 change (Fix recipe: none) |
 

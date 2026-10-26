@@ -32,7 +32,7 @@ a documented error contract.
   install, tests the new version in a separate shell, and
   `gash update --rollback` goes back.
 - **Audited.** The port reviewed every 2.x behaviour (443 items in the
-  [ledger](docs/port/LEDGER.md)) and fixes the defects instead of carrying
+  [ledger](dev/port/LEDGER.md)) and fixes the defects instead of carrying
   them over.
 
 ## Contents

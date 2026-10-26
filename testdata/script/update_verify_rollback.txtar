@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.6 and 6: gash update (and gash_upgrade,
+# dev/port/design/upgrade.md 3.6 and 6: gash update (and gash_upgrade,
 # the same flow) on a 3.x install cloned from a fixture origin, against a
 # file:// release directory of builds of this checkout. A target whose
 # binary does not verify (checksum, wrong version) is refused before the

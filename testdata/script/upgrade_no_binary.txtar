@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.3 and 6: a 3.x install whose binary cannot
+# dev/port/design/upgrade.md 3.3 and 6: a 3.x install whose binary cannot
 # be obtained (the release URL has nothing, then a checksum mismatch). An
 # interactive shell gets one Gash line on stderr and sourcing returns 0;
 # headless sourcing prints nothing and returns 0, and each call answers

@@ -1,5 +1,5 @@
 # bash-only tests: the INTERNAL 2.x specs replaced by a Go unit test (Plan `unit`).
-# Generated from docs/port/archive/PARITY.md by internal/tools/bashonlymap; do not edit by hand.
+# Generated from dev/port/archive/PARITY.md by internal/tools/bashonlymap; do not edit by hand.
 # spec	line	test name	replacement
 ai_client_spec.sh	8	secrets are redacted before sending	ai.Redact
 ai_client_spec.sh	34	redaction keeps ordinary words after password/token/secret	ai.Redact negative vectors (password/token/secret followed by prose)

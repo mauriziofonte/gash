@@ -2,7 +2,7 @@
 
 package main
 
-// Fixtures of the upgrade scripts (docs/port/design/upgrade.md 6): an
+// Fixtures of the upgrade scripts (dev/port/design/upgrade.md 6): an
 // origin repository with Gash trees under local tags, and a file://
 // release directory holding release builds of this checkout.
 //

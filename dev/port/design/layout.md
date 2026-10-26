@@ -80,7 +80,7 @@ testdata/script/*.txtar          testscript black-box suite (with the compat shi
 testdata/schema/*.json           JSON Schemas of every envelope
 testdata/hte/                    legacy vhost/pool fixtures, sysroot fixtures
 docs/                            user docs; docs/reference generated from the registry
-docs/port/                       permanent home of LEDGER.md and decisions (see below)
+dev/port/                       permanent home of LEDGER.md and decisions (see below)
 .github/workflows/ci.yml         lint, vuln, unit + testscript on Linux and macOS, HTE E2E matrix, snapshot build
 .github/workflows/release.yml    tags only: goreleaser
 .goreleaser.yaml
@@ -100,7 +100,7 @@ effect on an open 2.x shell is two soft degradations until the next shell
 
 | File | Moves to |
 |---|---|
-| `go-impl/PORT/LEDGER.md` | `docs/port/LEDGER.md` (kept for the 3.x line: triage record and fix recipes) |
-| `go-impl/design/*.md` | `docs/port/design/` (decisions as approved at S1, then amended) |
-| `go-impl/PORT/MATRIX.md`, `PARITY.md` | `docs/port/archive/` (final state at rc.A) |
+| `go-impl/PORT/LEDGER.md` | `dev/port/LEDGER.md` (kept for the 3.x line: triage record and fix recipes) |
+| `go-impl/design/*.md` | `dev/port/design/` (decisions as approved at S1, then amended) |
+| `go-impl/PORT/MATRIX.md`, `PARITY.md` | `dev/port/archive/` (final state at rc.A) |
 | `go-impl/PORT/STATE.md` | removed at S3 |

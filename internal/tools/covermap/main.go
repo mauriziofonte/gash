@@ -39,8 +39,8 @@ import (
 )
 
 func main() {
-	parity := flag.String("parity", "docs/port/archive/PARITY.md", "the parity table")
-	ledger := flag.String("ledger", "docs/port/LEDGER.md", "the ledger (forced-divergence ids)")
+	parity := flag.String("parity", "dev/port/archive/PARITY.md", "the parity table")
+	ledger := flag.String("ledger", "dev/port/LEDGER.md", "the ledger (forced-divergence ids)")
 	bashOnly := flag.String("bash-only", "tests/parity/bash-only.tsv", "the bash-only (n/a) map")
 	script := flag.String("script", "testdata/script", "the directory of *.txtar cases")
 	verbose := flag.Bool("v", false, "list every uncovered row, not only per-spec counts")

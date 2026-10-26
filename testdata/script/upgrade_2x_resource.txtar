@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.1 step 3, compat.md 5 and upgrade.md 6: in
+# dev/port/design/upgrade.md 3.1 step 3, compat.md 5 and upgrade.md 6: in
 # the interactive shell that loaded 2.1.0 and ran its gash_upgrade,
 # `source ~/.gashrc` loads 3.0.0 over the 2.x state (the whole interactive
 # layer, no error), and gash_unload then puts the shell back as it was
