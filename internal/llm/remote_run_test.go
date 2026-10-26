@@ -66,12 +66,12 @@ func TestRemoteRunFansOut(t *testing.T) {
 	for i, h := range []string{"web", "db", "cache"} {
 		require.Equal(t, h, got[i]["host"])
 		require.Equal(t, float64(1), got[i]["rc"], "cat nope fails")
-		require.Equal(t, "3 app.log", got[i]["out"])
+		require.Regexp(t, `^ *3 app\.log$`, got[i]["out"]) // BSD wc pads the count
 		require.Contains(t, got[i]["err"], "nope")
 		require.Nil(t, got[i]["error"])
 		require.Contains(t, got[i], "ms")
 	}
-	require.Regexp(t, `^\[\{"host":"web","rc":1,"ms":[0-9.]+,"out":"3 app.log","err":"[^"]*nope[^"]*","error":null\},`, r.Stdout)
+	require.Regexp(t, `^\[\{"host":"web","rc":1,"ms":[0-9.]+,"out":" *3 app.log","err":"[^"]*nope[^"]*","error":null\},`, r.Stdout)
 	require.Equal(t, 3, f.ssh.N(), "one invocation per host")
 	for i, s := range f.ssh.Scripts {
 		require.Equal(t, "unset HISTFILE HISTSIZE; sh -s", s, "the script goes on stdin")

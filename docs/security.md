@@ -319,7 +319,8 @@ The 3.4 functions keep every rail above and split reads from writes.
   forbidden-path rules. The deny tier of `remote_*` applies to local targets
   too (`write_path_denied`, even with `--force`); the ask tier needs
   `--force` (`sensitive_path`), except below your HOME or the project you
-  work in. `agent_git_commit` never force-pushes and has no `--amend` or
+  work in. On macOS a target resolved into `/private/etc` or
+  `/private/var` is judged as `/etc` or `/var`. `agent_git_commit` never force-pushes and has no `--amend` or
   `--no-verify`; `agent_kill` signals only your own processes, never PID 1,
   the caller or an ancestor; `agent_docker_exec` refuses commands that wipe
   or format a root, stop the machine or pipe a download into a shell.

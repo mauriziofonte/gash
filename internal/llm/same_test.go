@@ -163,7 +163,11 @@ func TestSameRefusesBeforeConnecting(t *testing.T) {
 
 func TestSameRemoteRails(t *testing.T) {
 	f := newSameFixture(t)
-	require.NoError(t, os.Symlink("/proc/self", filepath.Join(f.rhome, "p")))
+	target := "/proc/self" // a protected tree that exists: /dev where there is no /proc
+	if _, err := os.Stat(target); err != nil {
+		target = "/dev"
+	}
+	require.NoError(t, os.Symlink(target, filepath.Join(f.rhome, "p")))
 	_, r := f.run(t, "app", "web:p")
 	require.Equal(t, 1, r.RC)
 	require.Contains(t, r.Stderr, `"error":"forbidden_path"`)

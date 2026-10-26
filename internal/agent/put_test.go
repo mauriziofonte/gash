@@ -145,11 +145,13 @@ func TestPutRefusesBeforeConnecting(t *testing.T) {
 func TestPutRemoteRails(t *testing.T) {
 	f := newPutFixture(t)
 	require.NoError(t, os.Symlink("/usr/bin", filepath.Join(f.rhome, "bin-link")))
-	require.NoError(t, os.Symlink("/var/lib/gash-test-nonexistent", filepath.Join(f.rhome, "var-link")))
+	// /var exists everywhere (on macOS as /private/var, judged as /var); the
+	// ASK refusal comes before anything is written.
+	require.NoError(t, os.Symlink("/var", filepath.Join(f.rhome, "var-link")))
 	require.NoError(t, os.Symlink("server.key", filepath.Join(f.rhome, "app", "k")))
 	for _, tc := range []struct{ target, want string }{
 		{"web:bin-link/env", "write_path_denied/FATAL"},
-		{"web:var-link/x", "sensitive_path/STOP"},
+		{"web:var-link/gash-put-test-never-written", "sensitive_path/STOP"},
 		{"web:app/k", "secret_file_blocked/FATAL"},
 		{"web:nodir/x", "path_not_found/RETRY"},
 		{"web:app", "invalid_target/RETRY"},

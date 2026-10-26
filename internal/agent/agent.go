@@ -144,15 +144,17 @@ func (m *Module) target(c *invoke.Call, g *pathguard.Guard, path string, force b
 // askWaived reports an ASK target that is the caller's own work: below
 // their HOME (root's /root included), or below the working directory the
 // agent runs in (a project in /var/www), unless that directory is /, an
-// ASK root itself or below /etc. A .ssh component is never waived.
+// ASK root itself or below /etc. A .ssh component is never waived. Paths
+// are compared as the policy reads them: macOS /private/etc is /etc.
 func askWaived(g *pathguard.Guard, safe, detail string) bool {
 	if detail == ".ssh" {
 		return false
 	}
-	if h := strings.TrimSuffix(g.Home, "/"); h != "" && within(safe, h) {
+	safe = remote.UnaliasResolved(safe)
+	if h := remote.UnaliasResolved(strings.TrimSuffix(g.Home, "/")); h != "" && within(safe, h) {
 		return true
 	}
-	cwd := strings.TrimSuffix(g.Cwd, "/")
+	cwd := remote.UnaliasResolved(strings.TrimSuffix(g.Cwd, "/"))
 	if cwd == "" || within(cwd, "/etc") {
 		return false
 	}

@@ -49,12 +49,17 @@ func ShResolve() string {
 }
 
 // ShTier is gash_tier PATH: the transfer tier of a resolved absolute PATH
-// as classifyPath reads it (deny:ENTRY, ask:ENTRY or allow), generated
+// as classifyResolved reads it (deny:ENTRY, ask:ENTRY or allow), generated
 // from the same tables, so a symlink on the host cannot carry a write
 // into a tier its spelling avoided.
 func ShTier() string {
 	var b strings.Builder
 	b.WriteString("gash_tier() {\n")
+	var alias []string
+	for _, a := range resolvedAliases {
+		alias = append(alias, Quote(a), Quote(a)+"/*")
+	}
+	b.WriteString("  case $1 in " + strings.Join(alias, "|") + ") set -- \"${1#/private}\" ;; esac\n")
 	b.WriteString("  [ \"$1\" = / ] && { echo deny:/; return; }\n")
 	b.WriteString("  for gt_p in " + QuoteAll(denyPrefixes) + "; do\n")
 	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo \"deny:$gt_p\"; return ;; esac\n  done\n")
@@ -62,7 +67,7 @@ func ShTier() string {
 	for _, comp := range askComponents {
 		b.WriteString("  case $gt_l in *" + Quote("/"+asciiLower(comp)+"/") + "*) echo " + Quote("ask:"+comp) + "; return ;; esac\n")
 	}
-	b.WriteString("  for gt_p in " + QuoteAll(deleteSafePrefixes) + "; do\n")
+	b.WriteString("  for gt_p in " + QuoteAll(append(append([]string{}, deleteSafePrefixes...), resolvedSafePrefixes...)) + "; do\n")
 	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo allow; return ;; esac\n  done\n")
 	b.WriteString("  for gt_p in " + QuoteAll(askPrefixes) + "; do\n")
 	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo \"ask:$gt_p\"; return ;; esac\n  done\n")

@@ -29,7 +29,7 @@ func TestReadFilesOneInvocation(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Join(rhome, filepath.Dir(p)), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(rhome, p), []byte(c), 0o644))
 	}
-	require.NoError(t, os.Symlink("/proc/self/environ", filepath.Join(rhome, "env-link")))
+	require.NoError(t, os.Symlink(forbiddenLinkTarget(), filepath.Join(rhome, "env-link")))
 	require.NoError(t, os.Symlink("conf/.env", filepath.Join(rhome, "secret-link")))
 	ssh := &sshtest.SSH{Home: rhome}
 	tr := Transport{Run: ssh, Env: invoke.EnvMap(map[string]string{"HOME": t.TempDir()})}
@@ -70,4 +70,14 @@ func TestParseReadIncomplete(t *testing.T) {
 	got := ParseRead("N", []string{"a", "b"}, 10, []byte("N file 1 ok /a\nhello\nN end 1\nN file 2 ok /b\npartial"))
 	require.Equal(t, "hello", string(got[0].Data))
 	require.Equal(t, "remote_protocol_error", got[1].Err.Code)
+}
+
+// forbiddenLinkTarget is a protected path that exists here: /proc/self/environ
+// on Linux, /dev/null where there is no /proc (a link to a missing path
+// resolves to the link itself, which is no protected path).
+func forbiddenLinkTarget() string {
+	if _, err := os.Stat("/proc/self/environ"); err == nil {
+		return "/proc/self/environ"
+	}
+	return "/dev/null"
 }

@@ -33,7 +33,7 @@ func runIn(t *testing.T, dir, name string, args ...string) result {
 	tbl := invoke.NewTable()
 	m.Register(tbl)
 	var out, errb bytes.Buffer
-	env := invoke.EnvMap(map[string]string{"HOME": t.TempDir(), "PWD": dir, "GASH_HEADLESS": "1"})
+	env := invoke.EnvMap(map[string]string{"HOME": t.TempDir(), "PWD": dir, "GASH_HEADLESS": "1", "PATH": os.Getenv("PATH")})
 	rc := tbl.Run(&invoke.Call{Ctx: context.Background(), Name: name, Args: args, Env: env,
 		Stdout: &out, Stderr: &errb, Term: term.Fixed(env, false, false, false)})
 	return result{out.String(), errb.String(), rc}
@@ -196,6 +196,10 @@ func TestAskWaived(t *testing.T) {
 	g.Cwd = "/var"
 	require.False(t, askWaived(&pathguard.Guard{Cwd: "/var"}, "/var/www/a", "/var"))
 	require.False(t, askWaived(&pathguard.Guard{Cwd: "/etc/nginx"}, "/etc/nginx/nginx.conf", "/etc"))
+	// macOS: the physical working directory of /etc/nginx is /private/etc/nginx.
+	require.False(t, askWaived(&pathguard.Guard{Cwd: "/private/etc/nginx"}, "/private/etc/nginx/nginx.conf", "/etc"))
+	require.False(t, askWaived(&pathguard.Guard{Cwd: "/private/var"}, "/private/var/www/a", "/var"))
+	require.True(t, askWaived(&pathguard.Guard{Cwd: "/private/var/www/app"}, "/private/var/www/app/a.php", "/var"))
 }
 
 func TestReplaceHelp(t *testing.T) {
