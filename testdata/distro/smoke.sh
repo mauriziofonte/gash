@@ -29,7 +29,9 @@ fail() {
 
 if ! command -v bash >/dev/null 2>&1; then
     case "$ID" in
-        alpine) apk add --no-cache bash >/dev/null ;;
+        # BusyBox wget, which the installer would take for curl, cannot read
+        # the file:// release this test serves: curl too.
+        alpine) apk add --no-cache bash curl >/dev/null ;;
         *) fail "no bash in this image" ;;
     esac
 fi
@@ -40,8 +42,9 @@ mkdir -p "$HOME"
 : >"$HOME/.bashrc"
 cd "$HOME"
 export GASH_RELEASE_URL=file:///smoke/rel GASH_INSTALL_GIT_REPO=/smoke/tree
-# The tree belongs to the user who built it, not to root.
-export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+# The tree belongs to the user who built it, not to root; git before 2.46
+# reads safe.directory only from the global configuration.
+printf '[safe]\n\tdirectory = *\n' >"$HOME/.gitconfig"
 
 echo "== install.sh --check"
 check_rc=0
@@ -89,6 +92,11 @@ echo "$reads" | grep -q '"error":"not_a_git_repo"' || fail "llm_git_status: $rea
 version=$(cat "$HOME/.gash/VERSION")
 bin="$HOME/.local/share/gash/versions/$version/gash"
 echo "== gash_doctor --install --all --yes"
+# The Tumbleweed image ships busybox-gawk, which zypper will not replace
+# without being told to.
+if [ "$ID" = opensuse-tumbleweed ]; then
+    zypper --non-interactive install --force-resolution gawk >/dev/null
+fi
 "$bin" gash_doctor --install --all --yes --no-color </dev/null || true
 json=$("$bin" gash_doctor --json) || true
 # One tool per line; the ones still missing that had an install command
