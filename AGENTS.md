@@ -613,6 +613,47 @@ children counts are real, also below the depth limit. The listing stops at
 
 branch is "" on a detached HEAD. A file can be both staged and modified.
 
+### 4.7 Agent toolkit (3.4), real answers
+
+A project with one modified file; every call is one round trip. Row output
+(`--format tsv`) has a header line and `\N` for null; metadata such as
+`{"truncated":K}` goes to stderr as one JSON line, so stdout stays data.
+
+```text
+$ llm_git_overview
+{"branch":"main","upstream":"","ahead":0,"behind":0,"counts":{"staged":0,"modified":1,"untracked":0,"conflicted":0},"log":[{"hash":"e165c74","subject":"feat: kernel"}],"diffstat":{"files":1,"insertions":1,"deletions":0}}
+$ llm_find '*' src --count
+{"count":2}
+$ llm_grep TODO . --count --by ext
+{"count":1,"by":{"php":1}}
+$ llm_find '*.php' . --sort name --relative --format tsv
+p	size	mtime
+src/Kernel.php	86	2026-10-26T00:17:38Z
+src/User.php	25	2026-10-26T00:17:38Z
+$ llm_stat src composer.json nope.txt --lines
+p	t	size	mode	owner	mtime	lines
+src	d	4096	755	root:root	2026-10-26T00:17:38Z	\N
+composer.json	f	73	644	root:root	2026-10-26T00:17:38Z	1
+nope.txt	missing	\N	\N	\N	\N	\N
+$ llm_count app.log src/Kernel.php --pat ERROR --pat TODO
+{"app.log":{"ERROR":1,"TODO":0},"src/Kernel.php":{"ERROR":0,"TODO":1}}
+$ llm_read src/Kernel.php --around TODO -C 1
+==> src/Kernel.php:2-4 <==
+2-class Kernel {
+3:    // TODO fix the middleware
+4-    protected $middleware = [];
+$ llm_log app.log --last-match ERROR -n 1
+[2026-10-25 10:01:00] production.ERROR: payment failed id=42
+$ llm_json composer.json --path require.php
+"^8.3"
+$ llm_config config/app.yaml --path app.name
+"Acme"
+$ llm_wait --timeout 1 --exists ready.flag          # exit 1, no error envelope
+{"met":false,"after_s":1}
+$ agent_replace src/Kernel.php --old 'TODO fix the middleware' --new 'Middleware stack' --dry-run
+{"files":1,"replaced":{"src/Kernel.php":[1]},"written":false,"dry_run":true,"diff":{"src/Kernel.php":{"add":1,"del":1}}}
+```
+
 ## 5. Error contract
 
 `llm_*` and `agent_*` functions and the filesystem scanners (in `--json`
@@ -835,6 +876,52 @@ Headless mode reads `GASH_DB_TIMEOUT`, `GASH_AI_CONFIRM`,
 `GASH_AI_MODEL_CLAUDE` and `GASH_AI_MODEL_GEMINI` from `~/.gash_env` (the
 environment wins) and prints no configuration warnings unless `GASH_DEBUG=1`.
 
+### 6.6 Agent toolkit (3.4)
+
+The 3.4 reads keep every rail above and add these:
+
+- **Paths and secret files.** Every PATH of a multi-target call passes 6.1
+  before anything is read; one refusal refuses the whole call. `llm_read`,
+  `llm_log`, `llm_count`, `llm_assert`, `llm_textcheck`, `llm_json`,
+  `llm_csv` and `llm_config --path` refuse secret files as `llm_config`
+  does. `llm_stat` and `llm_hash` give metadata and digests of a secret
+  file, never its content or line count. `llm_dotenv` is the one reader of
+  dotenv files (`.env`, `.env.*`, `*.env`, `.envrc`): a key whose name
+  `llm_env` hides prints `"***(set)"`, other values pass `llm_env`'s
+  redaction, `${VAR}` is never expanded; key and credential files stay
+  blocked.
+- **Git.** Every `llm_git_*` read runs hardened git: no fsmonitor, hooks,
+  external diff, textconv or pager named by the repository runs. A secret
+  file's patch body is replaced by `[... secret file: patch omitted]`.
+  `llm_git_status --fetch` is the one network read: the upstream branch
+  only, no tags, no prune, never a prompt, bounded by `--timeout`, and
+  skipped (`"fetched":false`) when the repository's own config names a
+  program (`core.sshCommand`, `credential.*`, `url.*.insteadOf`, ...).
+- **Network.** Reads only: `llm_http` sends GET, HEAD or OPTIONS without a
+  body (`http_method_blocked`, FATAL, for anything else), `llm_tcp` opens
+  and closes, `llm_tls` handshakes, `llm_dns` queries. A credential never
+  goes in argv: `--header` with a credential name or a URL with a password
+  is `secret_in_argv`; `--auth-env VAR` reads it from the environment, never
+  prints it (scrubbed from every printed string), never sends it to another
+  host on a redirect, and refuses `--insecure`. Proxies and CAs come from
+  the caller's environment.
+- **Processes.** `llm_procs` has no `--kill`, listings never show the
+  caller, its ancestors or its subshells; `llm_wait --cmd-ok` and
+  `llm_docker_exec` run under the `llm_exec` rules of 6.3.
+- **Commands.** `llm_test` runs a test suite and nothing else (3.11);
+  `llm_lint` only compiles (`php -l`, `bash -n`, node compile without
+  evaluating, python `compile()`); `llm_tools NAME` runs `NAME --version`
+  for a bare program name on PATH. `gash run` is not an `llm_*` function:
+  it runs any command, under the `llm_exec` rules only with `--safe`.
+- **Databases.** Row formats, `--scalar`, `--counts`, `--all` and
+  `llm_db_databases` pass the SQL guard first and run in the same read-only
+  session.
+- **Telemetry** (`GASH_TELEMETRY_FILE`) records the function, time, output
+  size, status and truncation of each call: never an argument, a path or a
+  value, and only on this machine.
+
+Writes are `agent_*` calls, with the rules of section 8.
+
 ## 7. Routing: the raw shape and the Gash function
 
 The command an agent would type, and the Gash call that answers it in one
@@ -938,12 +1025,36 @@ output options of 3.6, the telemetry line, `gash <fn>` without sourcing.
 | Function | Output |
 |---|---|
 | `agent_replace FILE... (--old A --new B)... [--count N\|--min N] [--regex] [--dry-run] [--force] [--format F] [--width N]` | `{"files":N,"replaced":{"FILE":[n1,n2]},"written":true}`; each pair must match exactly once per file (`--count N`: exactly N, `--min N`: at least N, replacing all); pairs apply in order; a mismatch anywhere is `replace_count_mismatch` (RETRY) and no file changes; `--dry-run` adds `"diff":{"FILE":{"add":A,"del":D}}` (lines gained and lost) |
+| `agent_git_commit -m SUBJECT [-m BODY]... (--add PATH...\|-A) [--author "N <e>"] [--push [REMOTE]] [--dry-run] [--force] [--timeout S] [--format F] [PATH]` | `{"hash":"a1b2c3d","branch":"main","files":2,"pushed":true,"remote":"origin","ahead":0}`; `--add` takes every word up to the next option (paths relative to PATH), `-A` only when asked; the commit holds what is staged plus the `--add` paths; `--push` pushes `HEAD:refs/heads/<branch>` to the upstream, or to REMOTE under the branch's name, never forced; `--dry-run`: `{"branch","files","paths":[...],"push","remote","ref","ahead","dry_run":true,"written":false}` |
+| `agent_kill NAME\|PID... [--signal S] [--dry-run] [--format F]` | `{"killed":N,"pids":[...]}`; NAME is the regex of `llm_procs --name` on the full command line; nothing matched is `{"killed":0,"pids":[]}`, exit 0; `--dry-run` adds `"cmds":[...],"signal":"TERM","dry_run":true,"written":false` |
+| `agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{"rc","out","err"}`, exit 0 when the command ran (read `rc`); CMD's words reach `docker exec` as an array, no shell runs; `--dry-run`: `{"argv":[...],"dry_run":true,"written":false}` |
 
 `agent_replace` writes each file through a temporary file in the same
 directory, renamed over the target with its mode (and owner, as root); a
 target that changed while it ran is `file_changed` and nothing is written.
 Binary files (`binary_file`) and files over 64 MiB (`file_too_large`) are
 refused.
+
+`agent_git_commit` checks everything before the index changes: a detached
+HEAD (`detached_head`) and unresolved conflicts (`merge_conflict`) are STOP;
+nothing to commit, a missing or ignored `--add` path, a push without an
+upstream (`no_upstream`), to an unknown remote, or from a branch behind its
+upstream (`push_rejected`) are RETRY; a secret file in the commit, staged
+already or under an `--add` path, is `secret_file_blocked` (FATAL). It runs
+the user's own git configuration and hooks, never prompts (`--timeout`,
+default 120s) and has no `--amend` or `--no-verify`. A commit that fails (a
+hook, the identity) is `commit_failed` with the paths left staged; a push
+the remote refuses is `push_rejected` with the remote's message, any other
+push failure `push_failed` (STOP), both with `hash` and `branch`.
+
+`agent_kill` signals only the caller's own uid, never PID 1, the caller or
+an ancestor (`kill_refused`, FATAL), and refuses a NAME that matches
+everything (`pattern_too_broad`); it does not wait for the processes to end
+(`llm_wait --gone PID` does). `agent_docker_exec` refuses a command line
+that wipes, formats, or changes the owner or mode of a whole root, writes a
+disk, stops the machine, pipes a download into a shell or reads keys
+(`dangerous_command_blocked`, FATAL; a path below a root is fine), and any
+word that names a secret file.
 
 ## 9. Best practices
 
