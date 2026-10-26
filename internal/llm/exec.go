@@ -11,6 +11,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmexec"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -22,6 +23,11 @@ func (m *Module) exec(c *invoke.Call) int {
 	}
 	if len(c.Args) > 1 {
 		return fail(c, "unexpected_argument", c.Args[1], "Pass the whole command line as one quoted argument")
+	}
+	// The line runs as a bash script: without bash 2.x exited 127 with
+	// nothing said.
+	if _, ok := m.findBash(c); !ok {
+		return prereq.Fail(c, "bash", "llm_exec", true)
 	}
 	// Settings come from the file only, never the environment. The
 	// caller's shell printed the file's warnings when it loaded it.
@@ -69,16 +75,26 @@ func (m *Module) exec(c *invoke.Call) int {
 	return res.ExitCode
 }
 
-// bashPath is ${BASH:-bash}: the caller's $BASH (the stub passes it), or
-// bash from the caller's PATH.
+// bashPath is ${BASH:-bash}: the bash findBash finds, else the bare word
+// (a container's bash, for llm_docker_exec).
 func (m *Module) bashPath(c *invoke.Call) string {
-	if b := c.Env.Get("BASH"); b != "" {
-		return b
-	}
-	if p, ok := m.lookPath(c, "bash"); ok {
+	if p, ok := m.findBash(c); ok {
 		return p
 	}
 	return "bash"
+}
+
+// findBash is the bash that runs the canonical script: the caller's
+// $BASH when it names a program, else bash from the caller's PATH; false
+// when there is none. As in 2.x it is a plain lookup, not the 4.4 check of
+// gash_doctor, which would start a bash --version on every call.
+func (m *Module) findBash(c *invoke.Call) (string, bool) {
+	if b := c.Env.Get("BASH"); b != "" {
+		if _, err := runner.LookPath(b, c.Env.Child(), ""); err == nil {
+			return b, true
+		}
+	}
+	return m.lookPath(c, "bash")
 }
 
 // logicalCwd is the caller's $PWD when it names the working directory,

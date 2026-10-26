@@ -10,6 +10,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/llmexec"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -21,6 +22,9 @@ import (
 // output goes to stdout and stderr and its status is returned.
 func SafeExec(c *invoke.Call, argv []string, stdin io.Reader, stdout, stderr io.Writer) (int, bool) {
 	m := New()
+	if _, ok := m.findBash(c); !ok {
+		return prereq.Fail(c, "bash", "gash run --safe", true), true
+	}
 	f := config.LoadCaller(c.Env.Get)
 	setting := func(name string) string {
 		v, _ := f.Setting(name)
