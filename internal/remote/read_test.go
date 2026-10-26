@@ -15,7 +15,8 @@ import (
 )
 
 func TestReadFilesOneInvocation(t *testing.T) {
-	rhome := t.TempDir()
+	rhome, err := filepath.EvalSymlinks(t.TempDir()) // the host reports resolved paths
+	require.NoError(t, err)
 	files := map[string]string{
 		"a.txt":     "alpha\n",
 		"nonl.txt":  "no newline",

@@ -16,31 +16,41 @@ func ShErr() string {
 }
 
 // ShResolve is gash_resolve PATH: ~ and ~/ as the remote home, then
-// realpath -m (GNU realpath where it is there, else cd -P and readlink -f
-// on the longest existing prefix, the rest appended without . segments).
+// realpath -m (GNU realpath where it is there; elsewhere, as on macOS and
+// BusyBox, cd -P on the longest existing prefix, readlink -f, and a
+// dangling symlink followed with plain readlink, at most 40 hops), the
+// rest appended without . segments and with .. applied.
 func ShResolve() string {
 	return `gash_resolve() {
   case $1 in '~') set -- "$HOME" ;; '~/'*) set -- "$HOME/${1#'~/'}" ;; esac
   if gr_r=$(realpath -m -- "$1" 2>/dev/null) && [ -n "$gr_r" ]; then printf '%s\n' "$gr_r"; return 0; fi
   case $1 in /*) gr_p=$1 ;; *) gr_p=$(pwd -P)/$1 ;; esac
-  gr_t=
-  while [ ! -e "$gr_p" ] && [ ! -L "$gr_p" ]; do
-    gr_t=/${gr_p##*/}$gr_t
-    gr_p=${gr_p%/*}
-    [ -n "$gr_p" ] || { gr_p=/; break; }
+  gr_h=0
+  while :; do
+    gr_t=
+    while [ ! -e "$gr_p" ] && [ ! -L "$gr_p" ]; do
+      gr_t=/${gr_p##*/}$gr_t
+      gr_p=${gr_p%/*}
+      [ -n "$gr_p" ] || { gr_p=/; break; }
+    done
+    if [ -d "$gr_p" ]; then
+      gr_p=$(cd -P -- "$gr_p" 2>/dev/null && pwd -P)
+    elif gr_r=$(readlink -f -- "$gr_p" 2>/dev/null) && [ -n "$gr_r" ]; then
+      gr_p=$gr_r
+    elif [ -L "$gr_p" ] && [ "$gr_h" -lt 40 ] && gr_l=$(readlink -- "$gr_p" 2>/dev/null) && [ -n "$gr_l" ]; then
+      gr_h=$((gr_h + 1))
+      case $gr_l in /*) gr_p=$gr_l$gr_t ;; *) gr_p=${gr_p%/*}/$gr_l$gr_t ;; esac
+      continue
+    else
+      gr_d=$(cd -P -- "${gr_p%/*}/" 2>/dev/null && pwd -P)
+      gr_p=${gr_d%/}/${gr_p##*/}
+    fi
+    break
   done
-  if [ -d "$gr_p" ]; then
-    gr_p=$(cd -P -- "$gr_p" 2>/dev/null && pwd -P)
-  elif gr_r=$(readlink -f -- "$gr_p" 2>/dev/null) && [ -n "$gr_r" ]; then
-    gr_p=$gr_r
-  else
-    gr_d=$(cd -P -- "${gr_p%/*}/" 2>/dev/null && pwd -P)
-    gr_p=${gr_d%/}/${gr_p##*/}
-  fi
   gr_o=${gr_p%/}
   gr_i=$IFS; IFS=/; set -f
   for gr_s in $gr_t; do
-    case $gr_s in ''|.) ;; *) gr_o=$gr_o/$gr_s ;; esac
+    case $gr_s in ''|.) ;; ..) gr_o=${gr_o%/*} ;; *) gr_o=$gr_o/$gr_s ;; esac
   done
   set +f; IFS=$gr_i
   printf '%s\n' "${gr_o:-/}"
