@@ -141,6 +141,7 @@ type target struct {
 	driver                           string // sqlite, mysql, mariadb or pgsql
 	file                             string
 	user, pass, host, port, database string
+	via                              *sshVia // a +ssh connection's host (ssh.go)
 	// rowFormat is set for the 3.4 row formats, never for the envelope: a
 	// SQL NULL is null in the rows, not the client's text ("NULL" on
 	// MySQL/MariaDB, "" in PostgreSQL text rows), and PostgreSQL rows keep
@@ -152,6 +153,9 @@ type target struct {
 // connection of ~/.gash_env with its database (-d, the URL, then the
 // first word of ./.target-database).
 func (m *Module) target(c *invoke.Call, a *dbArgs) (target, *output) {
+	if t, o, ok := m.sshTarget(c, a); ok {
+		return t, o
+	}
 	if a.sqliteFile != "" {
 		path, fail := m.sqliteFile(c, a.sqliteFile)
 		if fail != nil {

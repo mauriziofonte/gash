@@ -2299,12 +2299,14 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_config FILE [--max-bytes N] [--path P]\n" +
+				"  llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --max-bytes N          Largest file read, in bytes (default 1048576)\n" +
 				"  --path P               Parse the file and print the value at P as compact\n" +
 				"                         JSON: a.b[0].c, tool.poetry[\"name\"], . for all\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_config package.json\n" +
@@ -2434,7 +2436,11 @@ var baseFunctions = []Function{
 				"  {rows, query_time, truncated} is one JSON line on stderr, with\n" +
 				"  \"truncated\": true when -n cut rows. --scalar prints the value of a\n" +
 				"  1x1 result as a TSV cell (not_a_scalar, RETRY, with the actual shape\n" +
-				"  otherwise). --format json is the envelope, unchanged.",
+				"  otherwise). --format json is the envelope, unchanged.\n" +
+				"  A connection whose scheme ends in +ssh (mysql+ssh://USER:PASS@ALIAS/DB,\n" +
+				"  pgsql+ssh://, sqlite+ssh://ALIAS/f.db, +docker:CTR at the end) runs the\n" +
+				"  engine's client on that registered host, one ssh round trip per query,\n" +
+				"  after the same SQL guard (AGENTS.md 3.12).",
 		},
 		Fallback:  &Usage{Program: "llm_db_query", Usage: "llm_db_query <query> [-c CONNECTION] [-f SQLITE_FILE] [-n ROWS]", Description: "Execute read-only database query (JSON envelope with timing). Use -c for MySQL/PostgreSQL, -f for SQLite"},
 		Settings:  []string{"GASH_DB_TIMEOUT"},
@@ -2588,10 +2594,12 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_project",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_deps [PATH] [--dev]\n" +
+				"  llm_deps [PATH] [--dev] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --dev                  Split the result into prod and dev\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_deps\n" +
@@ -2654,11 +2662,13 @@ var baseFunctions = []Function{
 			Module: "llm",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_env [--filter REGEX | REGEX]\n" +
+				"  llm_env [--filter REGEX | REGEX] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -f, --filter REGEX     Only names that match REGEX (Go RE2 syntax, e.g.\n" +
 				"                         '^PATH$' or 'NODE|NPM'); a bare REGEX works too\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_env\n" +
@@ -2744,6 +2754,7 @@ var baseFunctions = []Function{
 				"           [--all] [--count [--by ext|dir|type]] [--relative|--absolute]\n" +
 				"           [--format json|jsonl|tsv|table] [--width N] [--max-lines N]\n" +
 				"           [--head N] [--tail N]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --type f|d             Files (default) or directories\n" +
@@ -2771,6 +2782,8 @@ var baseFunctions = []Function{
 				"  --max-lines N          Keep the first N paths (also --head N), or the\n" +
 				"                         last N with --tail N; they replace -n and mark\n" +
 				"                         what they cut\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find all PHP files\n" +
@@ -2887,6 +2900,7 @@ var baseFunctions = []Function{
 				"USAGE\n" +
 				"  llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...\n" +
 				"              [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]\n" +
+				"              [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -n, --limit N          Commits to list (default 10)\n" +
@@ -2902,6 +2916,8 @@ var baseFunctions = []Function{
 				"  --max-lines N          Rows to keep (also --head N, --tail N); the cut is\n" +
 				"                         counted on stderr\n" +
 				"  --width N              Cut each string value at N columns\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_log\n" +
@@ -2941,7 +2957,7 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_git_overview llm_git_diff llm_git_log",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_status [PATH]\n" +
+				"  llm_git_status [PATH] [--host ALIAS]\n" +
 				"  llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]\n" +
 				"  llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]\n" +
 				"  llm_git_status [PATH] --fetch [--timeout S]\n" +
@@ -2963,6 +2979,8 @@ var baseFunctions = []Function{
 				"                         --repos)\n" +
 				"  --max-lines N          Rows to keep (also --head N, --tail N)\n" +
 				"  --width N              Cut each string value at N columns\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_status\n" +
@@ -3022,6 +3040,7 @@ var baseFunctions = []Function{
 				"           [--files-only] [--count [--by file|ext|dir]]\n" +
 				"           [--relative|--absolute] [--format json|jsonl|tsv|table]\n" +
 				"           [--width N] [--max-lines N] [--head N] [--tail N]\n" +
+				"           [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --ext EXT1,EXT2        Search only files with these extensions\n" +
@@ -3046,6 +3065,8 @@ var baseFunctions = []Function{
 				"  --max-lines N          Keep the first N lines (also --head N), or the\n" +
 				"                         last N with --tail N; they replace -n and mark\n" +
 				"                         what they cut\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Find TODO comments in PHP files\n" +
@@ -3100,12 +3121,14 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_procs llm_tcp",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_ports [--listen] [--port N]\n" +
+				"  llm_ports [--listen] [--port N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  -l, --listen           Listening sockets only\n" +
 				"  --port N               Sockets on local port N (0 to 65535), each with the\n" +
 				"                         processes that hold it\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_ports\n" +
@@ -3140,7 +3163,7 @@ var baseFunctions = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]\n" +
-				"            [--format F] [--width N] [--max-lines N] [--head N] [--tail N]\n" +
+				"            [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --name NAME            Processes whose command line contains NAME\n" +
@@ -3153,6 +3176,8 @@ var baseFunctions = []Function{
 				"  --width N              Cut each value at N columns\n" +
 				"  --max-lines N, --head N, --tail N\n" +
 				"                         Keep the first/last N rows\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_procs\n" +
@@ -3195,7 +3220,11 @@ var baseFunctions = []Function{
 			SeeAlso: "llm_deps",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_project [PATH]\n" +
+				"  llm_project [PATH] [--host ALIAS]\n" +
+				"\n" +
+				"OPTIONS\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_project\n" +
@@ -3223,6 +3252,7 @@ var baseFunctions = []Function{
 				"USAGE\n" +
 				"  llm_tree [--text] [--depth N] [--stats] [--all] [--relative|--absolute]\n" +
 				"           [--width N] [--max-lines N] [--head N] [--tail N] [PATH]\n" +
+				"           [--host ALIAS]\n" +
 				"  llm_tree --count [--by ext|dir|type] [--type f|d] [--name GLOB]\n" +
 				"           [--newer REF] [--since T] [--depth N] [--all]\n" +
 				"           [--format json|jsonl|tsv|table] [PATH]\n" +
@@ -3254,6 +3284,8 @@ var baseFunctions = []Function{
 				"  --width N              Cut each line (each value) at N columns\n" +
 				"  --max-lines N          --text/--top: keep the first N lines or rows\n" +
 				"                         (also --head N), or the last N with --tail N\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # JSON output (default)\n" +

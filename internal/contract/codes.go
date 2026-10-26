@@ -306,6 +306,18 @@ var codeTable = []Code{
 
 	// New in 3.4: agent toolkit, remote and edits (--host, llm_remote_run,
 	// llm_same, agent_replace, agent_put).
+	{"unknown_host", Stop, "remote", Origin3x},
+	{"host_unreachable", Retry, "remote", Origin3x},
+	{"remote_protocol_error", Stop, "remote", Origin3x},
+	{"remote_binary_unavailable", Stop, "remote", Origin3x},
+	{"missing_host", Retry, "remote", Origin3x},
+	{"remote_glob_unsupported", Retry, "remote", Origin3x},
+	{"invalid_exclude", Retry, "remote", Origin3x},
+	{"invalid_container_name", Retry, "remote", Origin3x},
+	{"container_unavailable", Retry, "remote", Origin3x},
+	{"hash_tool_not_found", Stop, "remote", Origin3x},
+	{"invalid_mode", Retry, "remote", Origin3x},
+	{"put_verify_failed", Stop, "remote", Origin3x},
 }
 
 // codeIndex is built on first use, so the binary does no work at start.

@@ -16,7 +16,8 @@ var baseReplaces = map[string]string{
 		"python3 -c \"import tomllib, yaml ...\"; yq .a.b f => --path a.b",
 	"llm_db_explain": "mysql -e \"EXPLAIN SELECT ...\"",
 	"llm_db_query": "mysql -N -B -e \"SELECT ...\"; sqlite3 f \"SELECT ...\" => --format tsv\n" +
-		"llm_db_query ... | jq -r '.rows[0][0]' => --scalar",
+		"llm_db_query ... | jq -r '.rows[0][0]' => --scalar\n" +
+		"ssh h \"mysql -e 'SELECT ...'\" => -c CONN",
 	"llm_db_sample":    "mysql -e \"SELECT * FROM t LIMIT 5\"",
 	"llm_db_schema":    "mysql -e \"SHOW CREATE TABLE t\"; sqlite3 f .schema\nmysqldump --no-data => --all",
 	"llm_db_tables":    "mysql -e \"SHOW TABLES\"; sqlite3 f .tables\nSELECT count(*) FROM t, per table => --counts",
@@ -33,7 +34,8 @@ var baseReplaces = map[string]string{
 		"for r; do git -C $r status -sb; done => --repos\n" +
 		"git fetch && git status -sb => --fetch",
 	"llm_grep": "grep -rn --include='*.php' X . | grep -v vendor => --ext php\n" +
-		"grep -o RE f | sort | uniq -c => --distinct",
+		"grep -o RE f | sort | uniq -c => --distinct\n" +
+		"ssh h \"grep -rn X d\" => --host ALIAS",
 	"llm_ports":   "ss -tuln\nss -tlnp | grep :8080; lsof -i :8080 => --port 8080",
 	"llm_procs":   "ps aux | grep X | grep -v grep => --name X\nkill -0 PID => --pid PID",
 	"llm_project": "ls; cat composer.json package.json (what kind of project is this)",
@@ -110,7 +112,7 @@ func AgentsHint() string {
 		"Prefer these to the raw commands on the left: one call, compact JSON on stdout " +
 		"(`--format tsv` for rows), output capped by `--max-lines` and `--width`. " +
 		"Run them as `gash FN ARGS` or, after `GASH_HEADLESS=1 source ~/.gash/gash.sh`, as `FN ARGS`; " +
-		"`FN --help` lists the flags. Errors are one JSON line on stderr: " +
+		"`FN --help` lists the flags; most reads take `--host ALIAS` to run on a registered ssh host. Errors are one JSON line on stderr: " +
 		"`action` RETRY = fix the arguments, CONTINUE = skip, STOP = ask the user, FATAL = stop. " +
 		"`llm_*` only read. `agent_*` write: name every target, run `--dry-run` first.\n\n" +
 		RoutingTable()

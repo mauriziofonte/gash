@@ -29,6 +29,8 @@ type Module struct {
 	getpid   func() int
 	// lookPathFn replaces the PATH search in tests.
 	lookPathFn func(name string) (string, bool)
+	// exe is the running binary that --host ships (nil: os.Executable).
+	exe func() (string, error)
 }
 
 // New returns the module wired to the real system.
@@ -46,18 +48,18 @@ func Register(t *invoke.Table) { New().Register(t) }
 
 // Register binds the functions of m to t.
 func (m *Module) Register(t *invoke.Table) {
-	t.Handle("llm_tree", m.tree)
-	t.Handle("llm_find", m.find)
-	t.Handle("llm_grep", m.grep)
-	t.Handle("llm_config", m.config)
-	t.Handle("llm_git_status", m.gitStatus)
+	t.Handle("llm_tree", m.hostable("llm_tree", m.tree))
+	t.Handle("llm_find", m.hostable("llm_find", m.find))
+	t.Handle("llm_grep", m.hostable("llm_grep", m.grep))
+	t.Handle("llm_config", m.hostable("llm_config", m.config))
+	t.Handle("llm_git_status", m.hostable("llm_git_status", m.gitStatus))
 	t.Handle("llm_git_diff", m.gitDiff)
-	t.Handle("llm_git_log", m.gitLog)
-	t.Handle("llm_project", m.project)
-	t.Handle("llm_deps", m.deps)
-	t.Handle("llm_env", m.env)
-	t.Handle("llm_ports", m.ports)
-	t.Handle("llm_procs", m.procs)
+	t.Handle("llm_git_log", m.hostable("llm_git_log", m.gitLog))
+	t.Handle("llm_project", m.hostable("llm_project", m.project))
+	t.Handle("llm_deps", m.hostable("llm_deps", m.deps))
+	t.Handle("llm_env", m.hostable("llm_env", m.env))
+	t.Handle("llm_ports", m.hostable("llm_ports", m.ports))
+	t.Handle("llm_procs", m.hostable("llm_procs", m.procs))
 	t.Handle("llm_exec", m.exec)
 	t.Handle("llm_docker_check", m.dockerCheck)
 	// 3.4 agent toolkit: one hook per area, each in its own file

@@ -23,6 +23,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/sqlguard"
 )
 
@@ -39,6 +40,8 @@ type Module struct {
 	// socketDefaults the built-in socket paths (LEDGER DB-16).
 	myCnfFiles     []string
 	socketDefaults []string
+	// ssh runs the +ssh connections' clients (ssh.go).
+	ssh runner.Runner
 }
 
 // pgConn is the part of *pgx.Conn the module uses.
@@ -68,6 +71,7 @@ func New() *Module {
 		},
 		myCnfFiles:     mysqlSystemFiles,
 		socketDefaults: mysqlSocketDefaults,
+		ssh:            runner.Exec{},
 	}
 }
 

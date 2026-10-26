@@ -1,0 +1,66 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_same (new in 3.4, plan R3): the local file or tree against its
+# deployed copy, sha256 on both sides, ONE ssh round trip per target
+# however many files. The ssh on PATH is a stub that logs each invocation
+# and runs the remote script with sh, $WORK/remote playing the remote home;
+# its docker stub runs `docker exec CTR sh -c S` on the host itself.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env GASH_ENV_FILE=$WORK/hostenv
+env PATH=$WORK/bin:$PATH
+chmod 755 bin/ssh
+chmod 755 bin/docker
+exec sh -c 'for i in $(seq 1 300); do mkdir -p app/d$((i % 7)) remote/srv/app/d$((i % 7)); echo "f$i" >app/d$((i % 7))/f$i.txt; echo "f$i" >remote/srv/app/d$((i % 7))/f$i.txt; done'
+
+# --- a 300-file tree, identical: one invocation
+exec gash llm_same app web:srv/app
+stdout '^\{"same":true,"files":300,"diff":\[\]\}$'
+grep -count=1 @ ssh.log
+
+# --- one file changed, one missing, one extra on the host
+exec sh -c 'echo changed >remote/srv/app/d1/f1.txt; rm remote/srv/app/d2/f2.txt; echo x >remote/srv/app/extra.txt'
+exec gash llm_same app web:srv/app
+stdout '^\{"same":false,"files":300,"diff":\[\{"host":"web","p":"d1/f1.txt","local":"[0-9a-f]{12}","remote":"[0-9a-f]{12}"\},\{"host":"web","p":"d2/f2.txt","local":"[0-9a-f]{12}","remote":null\},\{"host":"web","p":"extra.txt","local":null,"remote":"[0-9a-f]{12}"\}\]\}$'
+grep -count=2 @ ssh.log
+
+# --- a single file through the sourced shell, and inside a container
+exec bash -c 'source "$GASH_SH"; llm_same app/d3/f3.txt web:srv/app/d3/f3.txt'
+stdout '^\{"same":true,"files":1,"diff":\[\]\}$'
+exec gash llm_same app/d1/f1.txt web:srv/app/d1/f1.txt --container api
+stdout '"p":"app/d1/f1.txt"'
+grep 'docker exec api sh -c' docker.log
+
+# --- refused before connecting: a secret file, a protected remote path,
+# an unknown alias
+rm ssh.log
+! exec gash llm_same .env web:srv/app/.env
+stderr '"error":"secret_file_blocked"'
+! exec gash llm_same app web:/etc/shadow
+stderr '"error":"forbidden_path"'
+stderr '"action":"FATAL"'
+! exec gash llm_same app nope:srv/app
+stderr '"error":"unknown_host"'
+! exists ssh.log
+
+-- hostenv --
+HOST:web=deploy@web.example
+-- .env --
+A=1
+-- bin/ssh --
+#!/bin/sh
+# ssh stub: log the invocation, run the remote script with sh, the remote
+# home in $WORK/remote.
+while [ $# -gt 0 ]; do a=$1; shift; [ "$a" = -- ] && break; done
+echo "$1" >>"$WORK/ssh.log"
+cd "$WORK/remote" && HOME=$WORK/remote exec sh -c "$2"
+-- bin/docker --
+#!/bin/sh
+# docker stub: `docker exec CTR sh -c S` runs on the host itself.
+echo "docker $1 $2 $3 $4" >>"$WORK/docker.log"
+[ "$1" = exec ] || exit 2
+shift 2
+exec "$@"

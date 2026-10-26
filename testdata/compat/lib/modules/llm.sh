@@ -23,6 +23,10 @@ unset __gash_here
 agent_docker_exec() { __gash_call agent_docker_exec "$@"; }
 agent_git_commit() { __gash_call agent_git_commit "$@"; }
 agent_kill() { __gash_call agent_kill "$@"; }
+agent_put() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call agent_put "$@"
+}
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
@@ -80,7 +84,15 @@ llm_ports() { __gash_call llm_ports "$@"; }
 llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
 llm_read() { __gash_call llm_read "$@"; }
+llm_remote_run() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_remote_run "$@"
+}
 llm_runtime() { __gash_call llm_runtime "$@"; }
+llm_same() {
+    declare -F __gash_load_env >/dev/null 2>&1 && __gash_load_env
+    __gash_call llm_same "$@"
+}
 llm_service() { __gash_call llm_service "$@"; }
 llm_stat() { __gash_call llm_stat "$@"; }
 llm_sysinfo() { __gash_call llm_sysinfo "$@"; }

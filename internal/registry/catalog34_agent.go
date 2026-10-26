@@ -22,7 +22,7 @@ var catalogAgent = []Function{
 			Module: "agent",
 			Body: "" +
 				"USAGE\n" +
-				"  agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dry-run] [--force] [--format F] [--width N]\n" +
+				"  agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dry-run] [--force] [--format F] [--width N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --old A --new B        One replacement; repeat the pair for more, applied in\n" +
@@ -40,6 +40,8 @@ var catalogAgent = []Function{
 				"  --format F             json (default), jsonl, tsv or table: one row per file\n" +
 				"                         and pair\n" +
 				"  --width N              Cut output lines at N columns\n" +
+				"  --host ALIAS           Edit the files on a registered HOST: alias (the gash\n" +
+				"                         binary runs there; one ssh round trip; AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Rename a class in two files; fails, writing nothing, unless each has it once\n" +

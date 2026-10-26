@@ -71,10 +71,10 @@ home); `~user` is `invalid_path`.
 
 | Function | Output |
 |---|---|
-| `llm_tree [--depth N] [--stats] [--text] [--all] [--count [--by ext\|dir\|type]] [--top N] [--type f\|d] [--name GLOB] [--newer REF] [--since T] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [PATH]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max; `--count` `{"count":N}`; `--top N` disk usage `{"total","files","top":[{"p","size","files"}],"skipped"}` |
-| `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N] [--sort name\|mtime\|size] [--newer REF] [--since T] [--tracked] [--all] [--count [--by ext\|dir\|type]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches; `--format` rows `{"p","size","mtime"}` |
-| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
-| `llm_config FILE [--max-bytes N] [--path P]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` (3.4) parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
+| `llm_tree [--depth N] [--stats] [--text] [--all] [--count [--by ext\|dir\|type]] [--top N] [--type f\|d] [--name GLOB] [--newer REF] [--since T] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [PATH] [--host ALIAS]` | JSON tree (default depth 1); `--stats` adds sizes and child counts; `--text` indented list (symlinks as `name -> target`), 200 lines max; `--count` `{"count":N}`; `--top N` disk usage `{"total","files","top":[{"p","size","files"}],"skipped"}` |
+| `llm_find PATTERN [PATH] [--type f\|d] [--contains REGEX] [-n N] [--sort name\|mtime\|size] [--newer REF] [--since T] [--tracked] [--all] [--count [--by ext\|dir\|type]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | Paths, one per line (default 100); PATTERN is a name glob, `--contains` keeps the matching files whose content matches; `--format` rows `{"p","size","mtime"}` |
+| `llm_grep PATTERN [PATH] [--ext a,b] [--context N] [-n N] [--exclude GLOB]... [--only-matching] [--distinct] [--files-only] [--count [--by file\|ext\|dir]] [--relative\|--absolute] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `file:line:content` lines (default 100), absolute paths; a FILE PATH gives `line:content`; context lines use `-`, groups are separated by `--`; `--distinct` `[{"match","count"}]`; `--format` rows `{"file","line","text"}` |
+| `llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]` | File content; YAML converted to JSON by Gash itself (no `yq` needed), the raw text when it does not parse; files over 1 MiB (default) fail with `file_too_large`; `--path P` (3.4) parses YAML, TOML, INI or JSON and prints the value at P as compact JSON (see 3.8) |
 
 All three search functions skip node_modules, vendor and .git (`llm_tree` also
 \_\_pycache\_\_ and .cache, `llm_find` also \_\_pycache\_\_). `llm_grep` and
@@ -193,16 +193,16 @@ SQLite) and needs no database in the connection.
 
 | Function | Output |
 |---|---|
-| `llm_git_status [PATH] [--summary] [--files] [--fetch] [--repos PATH...] [-j N] [--timeout S] [--format F] [--max-lines N] [--head N] [--tail N] [--width N]` | JSON object (4.6); `--summary` the counts per state; `--files` rows `{p, xy}` (the `git status --short` letters); `--repos` one summary row per repository (`repo` first, `error` last), in parallel; `--fetch` fetches the upstream branch only and prints the `llm_git_overview` object plus `fetched` |
-| `llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P] [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | JSON array of `{hash, subject, author, date}` (default 10); `--fields` picks among hash, subject, date, author, files (the changed paths) |
+| `llm_git_status [PATH] [--summary] [--files] [--fetch] [--repos PATH...] [-j N] [--timeout S] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [--host ALIAS]` | JSON object (4.6); `--summary` the counts per state; `--files` rows `{p, xy}` (the `git status --short` letters); `--repos` one summary row per repository (`repo` first, `error` last), in parallel; `--fetch` fetches the upstream branch only and prints the `llm_git_overview` object plus `fetched` |
+| `llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P] [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH] [--host ALIAS]` | JSON array of `{hash, subject, author, date}` (default 10); `--fields` picks among hash, subject, date, author, files (the changed paths) |
 | `llm_git_diff [--staged] [REV..REV] [--files] [--numstat] [--summary] [--patch] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `git diff --stat` text; `--files` rows `{p, add, del, status}`, `--numstat` rows `{p, add, del}`, `--summary` `{files, insertions, deletions}`, `--patch` the patch text capped per file |
-| `llm_git_overview [PATH] [--log N] [--files N]` | `{branch, upstream, ahead, behind, counts:{staged, modified, untracked, conflicted}, log:[{hash, subject}], diffstat:{files, insertions, deletions}}` (3 subjects by default); `--files N` adds the path lists, N per state |
+| `llm_git_overview [PATH] [--log N] [--files N] [--host ALIAS]` | `{branch, upstream, ahead, behind, counts:{staged, modified, untracked, conflicted}, log:[{hash, subject}], diffstat:{files, insertions, deletions}}` (3 subjects by default); `--files N` adds the path lists, N per state |
 | `llm_git_show [REV] [--stat] [--files] [--patch] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `{hash, subject, author, date, files:[{p, add, del}]}` of REV (default HEAD); `--stat` adds `stat` totals, `--files` each file's `status`; `--patch` the patch text capped per file; `REV:FILE` the file's content at REV |
-| `llm_env [--filter REGEX]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
-| `llm_ports [--listen] [--port N]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without); `--port N` (0-65535, else `invalid_port`) keeps local port N and adds `procs: [{pid, name}]` to each record (empty for another user's process unless root) |
-| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree` (3.4): `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
-| `llm_project [PATH]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
-| `llm_deps [PATH] [--dev]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
+| `llm_env [--filter REGEX] [--host ALIAS]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
+| `llm_ports [--listen] [--port N] [--host ALIAS]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without); `--port N` (0-65535, else `invalid_port`) keeps local port N and adds `procs: [{pid, name}]` to each record (empty for another user's process unless root) |
+| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree` (3.4): `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
+| `llm_project [PATH] [--host ALIAS]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
+| `llm_deps [PATH] [--dev] [--host ALIAS]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
 | `php_detect_version [DIR] [--json]` | `{version, php_raw_binary, php_command, ...}`; JSON by default in headless |
 | `node_detect_version [DIR] [--json]` | Same for Node (needs nvm) |
@@ -275,14 +275,14 @@ value, never the network; a write failure never fails the call.
 
 | Function | Output |
 |---|---|
-| `llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]` | TSV by default (`--format json`: `[{p, t, size, mode, owner, mtime}]`), one row per PATH in input order; `t` is `f` `d` `l` `p` `s` `c` `b` or `missing`; `lines` with `--lines`, `target` for symlinks and with `--follow`, `error` when a row has one |
-| `llm_count FILE... --pat P... [--regex] [--lines \| --occurrences] [--format F] [-j N] [--timeout S] [--absolute]` | `{"FILE":{"P":N}}`, files and patterns in input order; lines that hold P (as `grep -c`), or every occurrence; `--format tsv`: `file pat count` rows |
-| `llm_assert FILE... (--has P \| --lacks P \| --count P=N)... [--regex] [--lines \| --occurrences] [-j N] [--timeout S] [--absolute]` | `{"pass":true,"checked":N}` and exit 0, or `{"pass":false,"checked":N,"failed":[{file, check, found}]}` and exit 1 |
-| `llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]` | Blocks `==> FILE:A-B <==` of numbered lines (`N:text`, `N-text` for context), or rows `{file, line, text}` |
-| `llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]` | The last N (default 50) selected lines, as they are, in file order; rows `{line, ts, level, text}` with `--format` |
-| `llm_hash PATH... [--algo sha256\|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]` | `[{p, sha256, size}]` (`md5` with `--algo md5`), computed in parallel, input order |
-| `llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute]` | `[{p, lines, words, chars, bytes, gzip, max_line}]` |
-| `llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]` | `{"files":N,"issues":[{file, line, rule, sample}]}`; `counts` by rule when there are issues, `truncated` and `skipped` when they apply |
+| `llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]` | TSV by default (`--format json`: `[{p, t, size, mode, owner, mtime}]`), one row per PATH in input order; `t` is `f` `d` `l` `p` `s` `c` `b` or `missing`; `lines` with `--lines`, `target` for symlinks and with `--follow`, `error` when a row has one |
+| `llm_count FILE... --pat P... [--regex] [--lines \| --occurrences] [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]` | `{"FILE":{"P":N}}`, files and patterns in input order; lines that hold P (as `grep -c`), or every occurrence; `--format tsv`: `file pat count` rows |
+| `llm_assert FILE... (--has P \| --lacks P \| --count P=N)... [--regex] [--lines \| --occurrences] [-j N] [--timeout S] [--absolute] [--host ALIAS]` | `{"pass":true,"checked":N}` and exit 0, or `{"pass":false,"checked":N,"failed":[{file, check, found}]}` and exit 1 |
+| `llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute] [--host ALIAS]` | Blocks `==> FILE:A-B <==` of numbered lines (`N:text`, `N-text` for context), or rows `{file, line, text}` |
+| `llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F] [--host ALIAS]` | The last N (default 50) selected lines, as they are, in file order; rows `{line, ts, level, text}` with `--format` |
+| `llm_hash PATH... [--algo sha256\|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]` | `[{p, sha256, size}]` (`md5` with `--algo md5`), computed in parallel, input order |
+| `llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]` | `[{p, lines, words, chars, bytes, gzip, max_line}]` |
+| `llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]` | `{"files":N,"issues":[{file, line, rule, sample}]}`; `counts` by rule when there are issues, `truncated` and `skipped` when they apply |
 
 Paths print as given (`--absolute` for the absolute form). Every PATH goes
 through the path rules of 6.1 before anything is read: a refusal stops the
@@ -315,9 +315,9 @@ codes, all RETRY: `invalid_range`, `invalid_assertion`, `invalid_algo`,
 
 | Function | Output |
 |---|---|
-| `llm_json FILE\|- [--path P] [--keys \| --shape] [--format json\|jsonl\|tsv\|table] [--width N] [--head N] [--tail N]` | The value at P (default: the whole document) as compact JSON, numbers and escapes as written; `--keys` the keys of an object (or of the objects of an array); `--shape` types and lengths two levels deep; an array of objects as rows with `--format`; `-` reads stdin |
-| `llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V] [--format json\|jsonl\|tsv\|table]` | `{"rows","matches","cols","header","sample","delimiter","errors","error_count"}` (`rows` and `error_count` with `--count`, `matches` with `--where`); `--head` sample rows (default 5, 0 for none); the sample as rows with `--format`, the rest on the stderr metadata line |
-| `llm_dotenv FILE [KEY...] [--present]` | `{"KEY":"value","DB_PASSWORD":"***(set)","MISSING":null}` in argument order; `--present` gives `true`/`false`; without KEY the names the file sets (never a value) |
+| `llm_json FILE\|- [--path P] [--keys \| --shape] [--format json\|jsonl\|tsv\|table] [--width N] [--head N] [--tail N] [--host ALIAS]` | The value at P (default: the whole document) as compact JSON, numbers and escapes as written; `--keys` the keys of an object (or of the objects of an array); `--shape` types and lengths two levels deep; an array of objects as rows with `--format`; `-` reads stdin |
+| `llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V] [--format json\|jsonl\|tsv\|table] [--host ALIAS]` | `{"rows","matches","cols","header","sample","delimiter","errors","error_count"}` (`rows` and `error_count` with `--count`, `matches` with `--where`); `--head` sample rows (default 5, 0 for none); the sample as rows with `--format`, the rest on the stderr metadata line |
+| `llm_dotenv FILE [KEY...] [--present] [--host ALIAS]` | `{"KEY":"value","DB_PASSWORD":"***(set)","MISSING":null}` in argument order; `--present` gives `true`/`false`; without KEY the names the file sets (never a value) |
 | `llm_date [--diff A B \| --add DATE DURATION \| --epoch X] [--tz ZONE] [--fmt FORMAT]` | `{"result":"...","epoch":N}` (now without a mode); `--diff` gives `{"result":"67d","days":67,"seconds":N}` (B minus A) |
 
 Paths use one grammar (`internal/jsonpath`): `a.b[0].c`, `[-1]` from the
@@ -439,12 +439,12 @@ negative once expired.
 
 | Function | Output |
 |---|---|
-| `llm_wait --timeout S [--interval S] (--file-match FILE RE \| --exists PATH \| --gone PID\|NAME \| --http URL [--code N] [--json-path P --equals V] \| --port HOST:PORT \| --cmd-ok CMD) [--tail N] [--width N]` | `{"met":true,"after_s":2.01,"match":"<line>","tail":[...]}`, exit 0; timeout `{"met":false,"after_s":S}`, exit 1, no error envelope |
-| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given |
-| `llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `[{name, image, state, health, ports, up}]` by name |
-| `llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]` | `{ctr, read, log:[...]}` |
-| `llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...` | `{rc, out, err}` (+ `truncated`); exit 0 when the command ran |
-| `llm_sysinfo [--mount PATH]...` | `{host, os, kernel, uptime_h, load, cpus, cpu, mem_mb, disks, gpu}` in about 200 bytes |
+| `llm_wait --timeout S [--interval S] (--file-match FILE RE \| --exists PATH \| --gone PID\|NAME \| --http URL [--code N] [--json-path P --equals V] \| --port HOST:PORT \| --cmd-ok CMD) [--tail N] [--width N] [--host ALIAS]` | `{"met":true,"after_s":2.01,"match":"<line>","tail":[...]}`, exit 0; timeout `{"met":false,"after_s":S}`, exit 1, no error envelope |
+| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given |
+| `llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{name, image, state, health, ports, up}]` by name |
+| `llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]` | `{ctr, read, log:[...]}` |
+| `llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD... [--host ALIAS]` | `{rc, out, err}` (+ `truncated`); exit 0 when the command ran |
+| `llm_sysinfo [--mount PATH]... [--host ALIAS]` | `{host, os, kernel, uptime_h, load, cpus, cpu, mem_mb, disks, gpu}` in about 200 bytes |
 
 Waiting is one call: `llm_wait` looks at its one condition at once and
 then every `--interval` (0.2 s for files, paths and a PID; 0.5 s for a
@@ -479,9 +479,9 @@ unless `--width` says otherwise.
 
 | Function | Output |
 |---|---|
-| `llm_tools [NAME...] [-j N] [--timeout S]` | JSON object, keys in the order asked: `{"version","path"}` per program, `null` when it is not on PATH, `"version":null` when its probe prints none; `php` and `node` are arrays of every installed version, oldest first. Without NAME: git php composer node npm python3 go rg jq docker |
+| `llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]` | JSON object, keys in the order asked: `{"version","path"}` per program, `null` when it is not on PATH, `"version":null` when its probe prints none; `php` and `node` are arrays of every installed version, oldest first. Without NAME: git php composer node npm python3 go rg jq docker |
 | `llm_runtime php\|node\|composer\|npm\|npx VERSION` | `{"runtime","request","path","version"}` (composer adds `"php"`, the binary it runs under); VERSION is a prefix (`24`, `24.1`, `8.4`, `8`) and the newest match wins |
-| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
+| `llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute] [--host ALIAS]` | `{"checked","failed","failures":[{"file","line","error"}]}`, 100 failures at most by default; exit 0 also when files fail |
 | `llm_test [--runner auto\|NAME] [--fail-only] [--max-lines N] [--width N] [--timeout S] [--absolute] -- CMD...` | `{"runner","passed","failed","skipped","duration_s","failures":[{"name","file","line","message"}],"parsed":true,"exit_code"}`; output no parser reads: `{"runner":null,"duration_s","parsed":false,"exit_code","tail":[LINES]}`. The exit status is CMD's |
 
 `llm_test` and `gash run` take a command after `--`: the one exception to
@@ -528,6 +528,76 @@ functions):
 | `gash agent-functions [--json]` | Every `llm_*` and `agent_*` function: `[{"name","family","short","usage","flags","replaces"}]`, family `read` or `write`; a table without `--json` |
 
 ### 3.12 Remote hosts (3.4)
+
+Every remote call names a registered `HOST:alias=user@host` entry of
+`~/.gash_env` (a raw `user@host` or an unknown alias is `unknown_host`,
+STOP) and runs over the multiplexed ssh connection of `remote_*`, one round
+trip per call; a dead connection is `host_unreachable` (RETRY).
+
+| Function | Output |
+|---|---|
+| `llm_remote_run HOST... -- CMD \| HOST --step CMD... [--stop-on-error] [-j N] [--timeout S] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]` | `-- CMD`: one row per host in HOST order, run in parallel: `[{"host","rc","ms","out","err","error"}]` (`error` null, `timeout`, `host_unreachable` or `remote_protocol_error`); `--step`: the steps in order in ONE round trip, `[{"step","rc","ms","out"}]` (out = stdout and stderr), `{"stopped":true,"skipped":K}` on stderr after `--stop-on-error` |
+| `llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME] [-j N] [--timeout S] [--width N] [--max-lines N] [--head N] [--tail N]` | `{"same":false,"files":N,"diff":[{"host","p","local","remote"}]}`: the first 12 hex of each sha256, null where a side lacks the path, one ssh round trip per target however many files; directories recursively over regular files (`.git` and `--exclude` names left out), `--container` hashes inside the container; secret files are not compared (`secrets_skipped`) |
+
+`--host ALIAS` (repeatable) on the file, text, data, git, process, service,
+container, project and machine reads (`llm_find`, `llm_grep`, `llm_tree`,
+`llm_config`, `llm_stat`, `llm_read`, `llm_log`, `llm_hash`, `llm_count`,
+`llm_assert`, `llm_textstats`, `llm_textcheck`, `llm_json`, `llm_csv`,
+`llm_dotenv`, `llm_git_status`, `llm_git_log`, `llm_git_overview`,
+`llm_procs`, `llm_ports`, `llm_service`, `llm_docker_ps`, `llm_docker_logs`,
+`llm_docker_exec`, `llm_wait`, `llm_sysinfo`, `llm_lint`, `llm_tools`,
+`llm_project`, `llm_deps`, `llm_env`) runs the same call on the host and
+prints the local output; a
+JSON object (and each object of an array of objects, each JSONL line) gains
+`"host":"ALIAS"` as its first key, text and line outputs are unchanged.
+Several hosts run in parallel: objects come as one array in `--host` order,
+text as `==> ALIAS <==` blocks. On a host with this machine's OS and CPU the
+gash binary itself answers: it is copied once (first call: two round trips)
+into `~/.cache/gash/remote/<version>-<hash>/gash` (0700, checked by size and
+a test run, renamed into place) and reused by every later call; elsewhere
+`llm_find`, `llm_grep`, `llm_tree` and `llm_config` have a POSIX sh fallback
+that gives the local answer for their 3.0 options, and every other call
+refuses with `remote_binary_unavailable` (STOP; also `llm_grep` with an
+ignore file in the tree or a pattern outside the ripgrep/ERE common
+syntax). `-` (stdin) is `unexpected_argument` with `--host`: the local
+stdin is not sent; words after `--` (the command of `llm_docker_exec`) are
+never read as `--host`. `llm_sysinfo` keeps the machine's own name in its
+`"host"` key. `rm -rf ~/.cache/gash/remote` on the host removes the copies. The
+path rules are the local ones plus the transfer DENY list of `remote_*`,
+checked before connecting (a `..` component is `path_traversal_blocked`)
+and again on the host after resolving links; a secret file never leaves the
+host.
+
+`llm_remote_run` checks CMD with the `llm_exec` rules (3.5) before anything
+connects: read-only commands, no secret files or protected paths, the same
+`GASH_LLM_EXEC` settings (`GASH_LLM_SANDBOX` is local only). A glob or a
+leading `~` is `remote_glob_unsupported` (RETRY): it would expand on this
+machine; give explicit paths. Each command runs in bash on the host with
+stdin closed, from the remote home; steps share no shell state. A failing
+command is data (`rc`), never an error of the call. Unrestricted remote
+commands would be a write and are not offered.
+
+Remote writes are `agent_*` functions (section 8): `agent_put
+ALIAS:PATH --from FILE|-` (upload, size and `--verify` sha256 check,
+`--backup`, atomic rename, one round trip) and `agent_replace ... --host
+ALIAS` (the shipped binary edits on the host; no POSIX fallback for a
+write). Their targets follow the transfer policy: DENY paths are
+`write_path_denied` (FATAL), ASK paths (/etc, /var, /usr/local, /root, any
+.ssh) `sensitive_path` (STOP) without `--force`, checked before connecting
+and again on the host after resolving links.
+
+`llm_db_*` reach a database on a host through a `DB:` connection whose
+scheme ends in `+ssh`: `mysql+ssh://USER:PASS@ALIAS/DB`,
+`mariadb+ssh://...`, `pgsql+ssh://USER:PASS@ALIAS[:PORT]/DB`,
+`sqlite+ssh://ALIAS/relative.db` or `sqlite+ssh://ALIAS//absolute.db`, any
+of them with `+docker:CONTAINER` at the end to run the client inside that
+container. The engine's own client (`mysql`, `psql` 12+, `sqlite3` with
+`-json`) runs on the host against its local server (socket, or
+127.0.0.1:PORT when the URL names a port), one round trip per query, the
+output shape of the local call. The SQL guard runs here first: a refused
+query never leaves the machine. The password goes on the ssh stdin to the
+client's `MYSQL_PWD`/`PGPASSWORD`, never in an argument; the session is
+read-only as locally.
 
 ## 4. Output shapes
 
@@ -695,6 +765,7 @@ Each code always carries the action shown:
 | Network probes (3.4) | `http_method_blocked` (FATAL); `auth_env_unset` (STOP); `missing_target` `invalid_target` `invalid_server` `invalid_header` `invalid_resolve` `invalid_expect` `invalid_body_max` `invalid_auth_env` `secret_in_argv` (RETRY) |
 | Processes, waiting, services (3.4) | `kill_refused` (FATAL); `kill_failed` (STOP); `ps_not_found` `systemd_unavailable` `container_not_running` `docker_unavailable` (CONTINUE); `invalid_pid` `missing_condition` `invalid_interval` `invalid_code` `invalid_url` `missing_unit` `missing_container` `missing_command` `invalid_user` `container_not_found` `docker_error` `invalid_signal` `pattern_too_broad` (RETRY) |
 | Runtimes, lint, tests (3.4) | `runtime_not_installed` `runtime_link_failed` (STOP); `unknown_runtime` `invalid_version` `command_not_found` `unsupported_file` `invalid_ext` `unknown_runner` `not_a_test_command` (RETRY) |
+| Remote hosts (3.4) | `unknown_host` `remote_protocol_error` `remote_binary_unavailable` `hash_tool_not_found` `put_verify_failed` (STOP); `host_unreachable` `missing_host` `remote_glob_unsupported` `invalid_exclude` `invalid_container_name` `container_unavailable` `invalid_mode` (RETRY) |
 | Write tools (`agent_*`) | `write_path_denied` (FATAL); `sensitive_path` `write_failed` (STOP); `invalid_replacement` `invalid_count` `replace_count_mismatch` `binary_file` `file_changed` (RETRY) |
 
 Integer options take 0 to 999999999 (`invalid_<name>`: "Value 'X' is not a
@@ -942,6 +1013,7 @@ registry, where each function's entry names the shape it replaces.
 | `mysql -e "EXPLAIN SELECT ..."` | `llm_db_explain` |
 | `mysql -N -B -e "SELECT ..."; sqlite3 f "SELECT ..."` | `llm_db_query --format tsv` |
 | `llm_db_query ... \| jq -r '.rows[0][0]'` | `llm_db_query --scalar` |
+| `ssh h "mysql -e 'SELECT ...'"` | `llm_db_query -c CONN` |
 | `mysql -e "SELECT * FROM t LIMIT 5"` | `llm_db_sample` |
 | `mysql -e "SHOW CREATE TABLE t"; sqlite3 f .schema` | `llm_db_schema` |
 | `mysqldump --no-data` | `llm_db_schema --all` |
@@ -951,6 +1023,7 @@ registry, where each function's entry names the shape it replaces.
 | `for d; do dig +short MX $d; done` | `llm_dns --type MX` |
 | `docker compose pull --dry-run; docker images` | `llm_docker_check` |
 | `docker exec -u USER ctr sh -c '...'` | `llm_docker_exec` |
+| `ssh h "docker exec ctr ..."` | `llm_docker_exec --host ALIAS` |
 | `docker logs --tail 50 ctr 2>&1 \| grep -i error` | `llm_docker_logs` |
 | `docker ps --format '{{.Names}} {{.Status}}'` | `llm_docker_ps` |
 | `grep -E '^(DB_HOST\|APP_URL)=' .env` | `llm_dotenv` |
@@ -970,6 +1043,7 @@ registry, where each function's entry names the shape it replaces.
 | `git fetch && git status -sb` | `llm_git_status --fetch` |
 | `grep -rn --include='*.php' X . \| grep -v vendor` | `llm_grep --ext php` |
 | `grep -o RE f \| sort \| uniq -c` | `llm_grep --distinct` |
+| `ssh h "grep -rn X d"` | `llm_grep --host ALIAS` |
 | `sha256sum f \| cut -c1-12; md5sum f` | `llm_hash` |
 | `for u; do curl -s -o /dev/null -w '%{http_code}' $u; done` | `llm_http --status-only` |
 | `curl -s URL \| jq .status` | `llm_http --json-path status` |
@@ -984,7 +1058,9 @@ registry, where each function's entry names the shape it replaces.
 | `ls; cat composer.json package.json (what kind of project is this)` | `llm_project` |
 | `grep -n X f, then sed -n A,Bp f` | `llm_read --around X -C 5` |
 | `cat -n f \| sed -n A,Bp; cat a b` | `llm_read` |
+| `for h in a b; do ssh $h CMD; done; ssh h a; ssh h b` | `llm_remote_run` |
 | `source ~/.nvm/nvm.sh; nvm use 24; node ...; php84 ...` | `llm_runtime` |
+| `sha256sum f \| cut -c1-12; ssh h "sha256sum f" \| cut -c1-12` | `llm_same` |
 | `systemctl is-active x; journalctl -u x -n 20` | `llm_service --log 20` |
 | `ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e` | `llm_stat` |
 | `uptime; free -h; df -h /; nproc; nvidia-smi` | `llm_sysinfo` |
@@ -1001,6 +1077,7 @@ registry, where each function's entry names the shape it replaces.
 | `docker exec ctr sh -c '...' (writes)` | `agent_docker_exec` |
 | `git add A B && git commit -m S && git push && git log -1` | `agent_git_commit --add A B --push` |
 | `pkill -f x; kill PID` | `agent_kill` |
+| `scp f h:/tmp/x && ssh h "install -m 644 /tmp/x /dest && sha256sum /dest"` | `agent_put` |
 | `python3 - <<EOF ... s.replace(...) ... EOF; sed -i` | `agent_replace` |
 
 

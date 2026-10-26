@@ -41,6 +41,7 @@ type Module struct {
 	rootHome func() string
 	readFile func(string) ([]byte, error)
 	getpid   func() int
+	exe      func() (string, error)
 }
 
 // New returns the module wired to the real system.
@@ -51,6 +52,7 @@ func New() *Module {
 		rootHome: pathguard.RootHome,
 		readFile: os.ReadFile,
 		getpid:   os.Getpid,
+		exe:      os.Executable,
 	}
 }
 

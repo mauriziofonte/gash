@@ -90,6 +90,9 @@ func mysqlError(err error) output {
 // objects of strings, each the client's text, NULL as "NULL" (LEDGER
 // DB-02).
 func (m *Module) mysqlRun(c *invoke.Call, t target, raw bool, query, rowCap string) output {
+	if t.via != nil {
+		return m.sshMySQL(c, t, raw, query, rowCap)
+	}
 	ctx := ctxOf(c)
 	db, err := m.openMySQL(m.mysqlConfig(c, t))
 	if err != nil {
@@ -214,6 +217,9 @@ func pgsqlError(err error) output {
 // returns one JSON value (the text, "[]" when empty); otherwise the rows
 // are objects of strings in the server's text format, NULL as "".
 func (m *Module) pgsqlRun(c *invoke.Call, t target, json bool, query string) output {
+	if t.via != nil {
+		return m.sshPG(c, t, json, query)
+	}
 	timeout := c.Env.Get("GASH_DB_TIMEOUT")
 	if !digitsRE.MatchString(timeout) {
 		timeout = "30"

@@ -120,7 +120,7 @@ var catalogProc = []Function{
 			SeeAlso: "llm_procs",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N]\n" +
+				"  llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N] [--host ALIAS]\n" +
 				"  CONDITION is one of:\n" +
 				"    --file-match FILE RE   a line of FILE matches RE\n" +
 				"    --exists PATH          PATH exists\n" +
@@ -151,6 +151,8 @@ var catalogProc = []Function{
 				"                         llm_exec rules) until it exits 0\n" +
 				"  --tail N               Add the last N lines of FILE, or of CMD's last output\n" +
 				"  --width N              Cut the match and tail lines at N columns (default 300)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Instead of: while ! grep -q DONE out.log; do sleep 10; done\n" +
@@ -196,6 +198,7 @@ var catalogProc = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]\n" +
+				"              [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --log N                Last N journal lines of each unit (default 10; 0: none)\n" +
@@ -203,6 +206,8 @@ var catalogProc = []Function{
 				"  --width N              Cut each journal line at N columns (default 300)\n" +
 				"  --max-lines N, --head N, --tail N\n" +
 				"                         Keep the first/last N units\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_service nginx php8.4-fpm\n" +
@@ -238,6 +243,7 @@ var catalogProc = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]\n" +
+				"                [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --running              Running containers only (default: all)\n" +
@@ -245,6 +251,8 @@ var catalogProc = []Function{
 				"  --width N              Cut each value at N columns\n" +
 				"  --max-lines N, --head N, --tail N\n" +
 				"                         Keep the first/last N containers\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_docker_ps\n" +
@@ -279,13 +287,15 @@ var catalogProc = []Function{
 			SeeAlso: "llm_docker_ps",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N]\n" +
+				"  llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --tail N               Read the last N lines (default 100)\n" +
 				"  --since T              Only lines since T (10m, 2h, 2026-10-25T10:00:00)\n" +
 				"  --grep RE              Keep the lines RE matches (RE2; (?i) for any case)\n" +
 				"  --width N              Cut each line at N columns (default 300)\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_docker_logs web --tail 50 --grep '(?i)error'\n" +
@@ -319,6 +329,7 @@ var catalogProc = []Function{
 			Body: "" +
 				"USAGE\n" +
 				"  llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...\n" +
+				"                  [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --user U, -u U         Run as user U (name or uid[:gid])\n" +
@@ -326,6 +337,8 @@ var catalogProc = []Function{
 				"  --max-lines N, --head N, --tail N\n" +
 				"                         Keep the first/last N lines of each stream\n" +
 				"  -- CMD...              The command, one word per argument\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  # Instead of: docker exec -u node ctr sh -c 'grep -rl \"x\" /app | head -3'\n" +
@@ -345,7 +358,7 @@ var catalogProc = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"DOCKER_CONTEXT", "DOCKER_HOST", "GASH_ENV_FILE", "HOME", "PWD"},
-		Replaces:  "docker exec -u USER ctr sh -c '...'",
+		Replaces:  "docker exec -u USER ctr sh -c '...'\nssh h \"docker exec ctr ...\" => --host ALIAS",
 	},
 	{
 		Name:     "llm_sysinfo",
@@ -364,11 +377,13 @@ var catalogProc = []Function{
 			SeeAlso: "sysinfo",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_sysinfo [--mount PATH]...\n" +
+				"  llm_sysinfo [--mount PATH]... [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --mount PATH           Report the filesystem of PATH (repeatable) instead\n" +
 				"                         of / and the other local disks\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_sysinfo\n" +

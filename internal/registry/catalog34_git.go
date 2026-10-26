@@ -91,11 +91,13 @@ var catalogGit = []Function{
 			SeeAlso: "llm_git_status llm_git_log llm_git_diff",
 			Body: "" +
 				"USAGE\n" +
-				"  llm_git_overview [PATH] [--log N] [--files N]\n" +
+				"  llm_git_overview [PATH] [--log N] [--files N] [--host ALIAS]\n" +
 				"\n" +
 				"OPTIONS\n" +
 				"  --log N                Last N commit subjects (default 3; 0 for none)\n" +
 				"  --files N              Also list the paths of each state, at most N each\n" +
+				"  --host ALIAS           Run on a registered HOST: alias over ssh, one round\n" +
+				"                         trip (repeatable; see AGENTS.md 3.12)\n" +
 				"\n" +
 				"EXAMPLES\n" +
 				"  llm_git_overview\n" +
