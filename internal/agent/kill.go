@@ -13,8 +13,8 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/proctab"
-	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // killCmdWidth cuts the command lines a dry run reports, as llm_procs.
@@ -33,11 +33,8 @@ type killer struct {
 func (m *Module) newKiller() *killer {
 	return &killer{
 		table: func(c *invoke.Call) (*proctab.Table, error) {
-			ps, err := runner.LookPath("ps", c.Env.Child(), "")
-			if err != nil {
-				ps = ""
-			}
-			return proctab.Snapshot(c.Ctx, m.run, ps, append(c.Env.Child(), "LC_ALL=C"))
+			ps, _ := prereq.Locate(c, "ps")
+			return proctab.Snapshot(c.Ctx, m.run, ps, append(c.Env.Child(), "LC_ALL=C"), proctab.Root())
 		},
 		getpid: m.getpid,
 		signal: syscall.Kill,
@@ -122,7 +119,9 @@ func (k *killer) run(c *invoke.Call) int {
 
 	tab, err := k.table(c)
 	if err != nil {
-		return fail(c, "ps_not_found", "Cannot list processes: no ps and no /proc", "Install procps (ps); agent_kill checks every target in the process table before signaling")
+		// agent_kill checks every target in the process table before
+		// signaling: without one nothing is signaled.
+		return prereq.Fail(c, "ps", "agent_kill", true)
 	}
 	self := k.getpid()
 	uid := -1

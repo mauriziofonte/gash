@@ -51,6 +51,7 @@ var needs = map[string][]Need{
 	"llm_git_overview":   {{"git", ""}},
 	"llm_git_show":       {{"git", ""}},
 	"agent_git_commit":   {{"git", ""}},
+	"llm_find":           {{"git", "--tracked"}},
 	"gash_upgrade": {{"git", ""}, {"cosign", "GASH_REQUIRE_SIGNED=1"}, {"gpg", "GASH_REQUIRE_SIGNED=1"},
 		{"ssh-keygen", "GASH_REQUIRE_SIGNED=1"}},
 	"gash_uninstall": {{"sed", ""}},
@@ -75,7 +76,7 @@ var needs = map[string][]Need{
 	"gash_ssh_auto_unlock": {{"ssh-add", ""}, {"ssh-agent", ""}, {"ssh-keygen", "keys already loaded"}},
 
 	// Processes and ports.
-	"llm_procs":    {{"ps", "on macOS, or without /proc"}, {"lsof", "--port"}, {"pgrep", "--name"}},
+	"llm_procs":    {{"ps", "on macOS, or without /proc"}, {"lsof", "--port"}},
 	"agent_kill":   {{"ps", "on macOS, or without /proc"}},
 	"process_find": {{"ps", ""}},
 	"process_kill": {{"pgrep", ""}},
@@ -116,7 +117,7 @@ var needs = map[string][]Need{
 	"llm_service":   {{"systemctl", ""}, {"journalctl", "--log"}},
 	"services_stop": {{"systemctl", ""}, {"sudo", ""}},
 	"sudo_last":     {{"sudo", ""}},
-	"sysinfo":       {{"sudo", "the privileged sections"}},
+	"sysinfo":       {{"sudo", "the privileged sections"}, {"ss", "the listening ports"}},
 	"ai_sysinfo":    {{"sudo", "the privileged sections"}, {"systemctl", "questions"}, {"journalctl", "questions"}, {"ss", "questions"}},
 	"wsl_compact":   {{"sudo", ""}},
 	"hgrep":         {{"fzf", "--pick"}},

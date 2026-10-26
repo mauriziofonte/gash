@@ -16,6 +16,7 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [ps](../requirements.md#tool-ps) (feature), for `process_find`
 - [pgrep](../requirements.md#tool-pgrep) (feature), for `process_kill`
 - [lsof](../requirements.md#tool-lsof) (feature), for `port_kill`
+- [ss](../requirements.md#tool-ss) (feature), for `sysinfo` (the listening ports)
 - [sudo](../requirements.md#tool-sudo) (feature), for `services_stop`, `sudo_last` and `sysinfo` (the privileged sections)
 - [systemctl](../requirements.md#tool-systemctl) (feature), for `services_stop`
 <!-- END generated: prerequisites -->

@@ -133,7 +133,7 @@ func (m *Module) gitShow(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
-	if !m.gitPresent(c) {
+	if !m.gitPresent(c, c.Name) {
 		return 1
 	}
 	if r, file, ok := splitRevFile(rev); ok {

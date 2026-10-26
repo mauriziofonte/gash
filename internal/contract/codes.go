@@ -122,7 +122,6 @@ var codeTable = []Code{
 	{"git_not_found", Continue, "context", Origin2x},
 	{"no_package_file", Continue, "context", Origin2x},
 	{"ports_tool_not_found", Continue, "context", Origin2x},
-	{"jq_not_found", Fatal, "context", Origin2x},
 	// llm_docker_check.
 	{"no_services", Continue, "llm_docker_check", Origin2x},
 	{"docker_not_found", Continue, "llm_docker_check", Origin2x},

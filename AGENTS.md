@@ -237,7 +237,7 @@ SQLite) and needs no database in the connection.
 | `llm_git_show [REV] [--stat] [--files] [--patch] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]` | `{hash, subject, author, date, files:[{p, add, del}]}` of REV (default HEAD); `--stat` adds `stat` totals, `--files` each file's `status`; `--patch` the patch text capped per file; `REV:FILE` the file's content at REV |
 | `llm_env [--filter REGEX] [--host ALIAS]` | JSON object; secret-looking names left out (PASSWORD, TOKEN, KEY, SECRET, SESSION, JWT, WEBHOOK, `*_PWD`, `*_PAT`, ...), URL passwords (anywhere in a value, up to the last `@` of the URL) and known token formats in values shown as `***` |
 | `llm_ports [--listen] [--port N] [--host ALIAS]` | `[{port, proto, state, address}]`, one record per socket, sorted by port then proto; needs `ss` or `netstat` (`ports_tool_not_found` without); `--port N` (0-65535, else `invalid_port`) keeps local port N and adds `procs: [{pid, name}]` to each record (empty for another user's process unless root) |
-| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: first 20 of `ps aux`; `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree`: `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
+| `llm_procs [--name NAME \| --port PORT \| --pid PID...] [--alive] [--tree] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{pid, name, ...}]`; no filter: the first 20 processes by PID with user, cpu and mem (from `ps`, else `/proc`; `ps_not_found` without either); `--name` matches full command lines; `--port` (0-65535, else `invalid_port`) wins over `--name`, `--pid` over both. With `--pid`, `--alive` or `--tree`: `[{pid, name, cmd, alive}]` (`--tree` adds `ppid`, `depth`), never the caller's own chain (3.10) |
 | `llm_project [PATH] [--host ALIAS]` | `{type, framework, package_manager, has_tests, entry_point, path}`; a missing PATH is `path_not_found` |
 | `llm_deps [PATH] [--dev] [--host ALIAS]` | `{manager, dependencies}`, or `{manager, prod, dev}` with `--dev`; names sorted; a `composer.json`/`package.json` that is not one JSON object is `invalid_manifest` |
 | `llm_docker_check [PATH]` | Compose image update check as JSON (contacts the registries; Compose applies override files and `COMPOSE_FILE`); an unknown digest is `null`; an `ERROR` service's `error` is one of `dns_error` `connection_refused` `timeout` `ssl_error` `transport_error` `unauthorized` `forbidden` `not_found` `rate_limited` `server_error` `http_NNN` `malformed_token` `no_digest_in_response` `registry_unreachable` `invalid_reference`. PATH follows the path rules (6.1); `${VAR}` is resolved from `PATH/.env` and a short allowlist (`HOME`, `USER`, `PATH`, `LANG`, `DOCKER_*`, ...), never from other exported variables |
@@ -477,7 +477,7 @@ negative once expired.
 | Function | Output |
 |---|---|
 | `llm_wait --timeout S [--interval S] (--file-match FILE RE \| --exists PATH \| --gone PID\|NAME \| --http URL [--code N] [--json-path P --equals V] \| --port HOST:PORT \| --cmd-ok CMD) [--tail N] [--width N] [--host ALIAS]` | `{"met":true,"after_s":2.01,"match":"<line>","tail":[...]}`, exit 0; timeout `{"met":false,"after_s":S}`, exit 1, no error envelope |
-| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given |
+| `llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{unit, load, active, sub, since, pid, restarts, log:[...]}]`, in the order given; `log_note` (why, `null` on the other rows) when a unit's journal could not be read |
 | `llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]` | `[{name, image, state, health, ports, up}]` by name |
 | `llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]` | `{ctr, read, log:[...]}` |
 | `llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD... [--host ALIAS]` | `{rc, out, err}` (+ `truncated`); exit 0 when the command ran |
@@ -785,7 +785,7 @@ Each code always carries the action shown:
 | `llm_exec` | `dangerous_command_blocked` `option_not_allowed` (FATAL); `command_not_allowed` `sandbox_unavailable` (STOP); `construct_not_allowed` `unterminated_quote` `glob_matches_option` (RETRY) |
 | SQL guard | `write_operation_blocked` `multiple_statements_blocked` `client_command_blocked` `dot_command_blocked` (FATAL); `executable_comment_blocked` `backslash_in_literal` `unterminated_literal` (RETRY) |
 | Database | `no_db_config` `no_database` `unknown_db_type` `invalid_db_url` (STOP); `sqlite_error` `mysql_error` `pgsql_error` `sqlite_file_not_found` `missing_sqlite_file` (RETRY); `sqlite_not_found` `mysql_not_found` `psql_not_found` `invalid_sqlite_file` (FATAL) |
-| Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY); `jq_not_found` (FATAL) |
+| Context | `not_a_git_repo` `git_not_found` `no_package_file` `ports_tool_not_found` (CONTINUE); `invalid_manifest` (RETRY) |
 | `llm_docker_check` | `no_services` `docker_not_found` `compose_not_installed` `invalid_service_name` (CONTINUE); `compose_not_found` `invalid_env_file` (RETRY) |
 | WSL & Windows (`gash wsl`, `gash win`, `gash logs`) | `interop_unavailable` `windows_access_denied` `elevation_required` `windows_not_found` (STOP); `interop_timeout` `invalid_windows_argument` `invalid_duration` `confirmation_required` (RETRY) |
 | Shared output options | `invalid_format` `invalid_width` `invalid_max_lines` `invalid_head` `invalid_tail` `invalid_jobs` `invalid_timeout` (RETRY) |
@@ -928,7 +928,9 @@ not.
    their writing options (`find -delete`/`-exec`, `sort -o`, `sed -i`,
    `git branch -D`, `git -c`, `docker rm`, `systemctl stop`, ...). php, node,
    python and similar run only with `--version`. sed and awk run as GNU
-   `sed --sandbox` / `gawk --sandbox`, refused where those are missing.
+   `sed --sandbox` (Homebrew's `gsed` on macOS) / `gawk --sandbox`,
+   refused where those are missing, with the install command in the
+   envelope's `missing` and `install`.
    Arguments and glob matches that are secret files are refused, pattern
    operands included (`grep id_rsa` is refused like a file). Also
    refused: `ps e`, `getent shadow`/`gshadow`, `yq` `load()` and `-s`,

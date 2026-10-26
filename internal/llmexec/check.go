@@ -287,7 +287,7 @@ func (lc *lineChecker) checkArgs(words []pword) error {
 	case "awk", "gawk":
 		if !lc.pr.HasSandboxedGawk() {
 			return refuse("command_not_allowed", name, "STOP",
-				"llm_exec allows awk only where gawk --sandbox exists; install gawk or use grep, cut or jq")
+				"llm_exec allows awk only where gawk --sandbox exists; use grep, cut or jq")
 		}
 	case "file":
 		for _, w := range args {

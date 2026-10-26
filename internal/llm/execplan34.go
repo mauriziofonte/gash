@@ -41,8 +41,11 @@ func (m *Module) execRules(c *invoke.Call) (llmexec.Settings, llmexec.Environ) {
 }
 
 // execPlan checks line under the llm_exec rules and returns what llm_exec
-// would run; a refusal comes back as the *llmexec.Refusal error.
-func (m *Module) execPlan(c *invoke.Call, line string) (*llmexec.Plan, error) {
+// would run, with the probe that answered; a refusal comes back as the
+// *llmexec.Refusal error, for the probe's refusal.
+func (m *Module) execPlan(c *invoke.Call, line string) (*llmexec.Plan, *probe, error) {
 	s, env := m.execRules(c)
-	return llmexec.Build(line, s, env, &probe{m: m, c: c})
+	pr := &probe{m: m, c: c}
+	plan, err := llmexec.Build(line, s, env, pr)
+	return plan, pr, err
 }

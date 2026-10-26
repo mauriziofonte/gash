@@ -99,7 +99,7 @@ func (m *Module) gitDiff(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
-	if !m.gitPresent(c) {
+	if !m.gitPresent(c, c.Name) {
 		return 1
 	}
 	// A FILE as PATH limits the diff to that file (the repository is its

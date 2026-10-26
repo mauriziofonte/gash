@@ -80,7 +80,7 @@ func (m *Module) gitLog34(c *invoke.Call, o *llmfmt.Options, q logQuery, limit, 
 	if !ok {
 		return 1
 	}
-	if !m.gitPresent(c) {
+	if !m.gitPresent(c, c.Name) {
 		return 1
 	}
 	fields := q.fields

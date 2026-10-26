@@ -317,8 +317,10 @@ func lookTool(t *testing.T, name string) string {
 	return ""
 }
 
-// Nothing to find and no tools: the headers only, as 2.x printed them
-// (testdata/bare.*.txt), which sysinfo_spec checks at lines 607 to 689.
+// Nothing to find and no tools: the headers 2.x printed (sysinfo_spec
+// checks them at lines 607 to 689), and under each block whose tool is
+// missing a Note naming it (3.4; 2.x left the blocks empty), in
+// testdata/bare.*.txt.
 func TestDeepBare(t *testing.T) {
 	fx := newFixture(t)
 	for name := range stubs {

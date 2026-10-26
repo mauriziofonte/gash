@@ -1,6 +1,10 @@
 === SERVICES DEEP ===
 --- Custom systemd units
 --- Running services
+Note=systemctl is not installed
 --- Active timers
+Note=systemctl is not installed
 --- Listening TCP
+Note=neither ss nor netstat is installed
 --- Listening UDP
+Note=neither ss nor netstat is installed

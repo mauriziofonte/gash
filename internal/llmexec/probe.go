@@ -16,6 +16,23 @@ type Probe interface {
 	HasBwrap() bool
 }
 
+// SedNamer is a Probe that can name the GNU sed it trusts: "gsed" where
+// only that name has --sandbox (Homebrew installs GNU sed as gsed, beside
+// the BSD sed of macOS), "sed" or "" otherwise. sed on the command line then
+// runs as that program, with --sandbox (3.4).
+type SedNamer interface {
+	SedName() string
+}
+
+// sedProgram is the program the sed wrapper of the prelude runs: gsed when
+// the probe names it, sed otherwise.
+func sedProgram(pr Probe) string {
+	if n, ok := pr.(SedNamer); ok && n.SedName() == "gsed" {
+		return "gsed"
+	}
+	return "sed"
+}
+
 // noProbe is the Probe of a nil argument: no tool is there to trust.
 type noProbe struct{}
 

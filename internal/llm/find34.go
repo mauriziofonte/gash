@@ -412,14 +412,14 @@ func (t *trackedSet) has(rel string, dir bool) bool {
 
 // loadTracked runs the hardened `git ls-files -z` in the root (or, for a
 // FILE root, in its directory for that one name), through the module's
-// runner. git missing is git_not_found, a root outside a repository
-// not_a_git_repo (both CONTINUE).
+// runner. git missing is git_not_found (a prerequisite report), a root
+// outside a repository not_a_git_repo (both CONTINUE).
 func (m *Module) loadTracked(c *invoke.Call, root string, isDir bool) (*trackedSet, bool) {
 	dir, name := root, ""
 	if !isDir {
 		dir, name = filepath.Dir(root), filepath.Base(root)
 	}
-	if !m.requireGitRepo(c, dir) {
+	if !m.requireGitRepo(c, "llm_find --tracked", dir) {
 		return nil, false
 	}
 	args := []string{"-C", dir, "ls-files", "-z", "--cached"}

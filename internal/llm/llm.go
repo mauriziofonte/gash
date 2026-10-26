@@ -10,6 +10,7 @@ package llm
 import (
 	"errors"
 	"os"
+	"runtime"
 	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/contract"
@@ -17,6 +18,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/proctab"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -29,6 +31,14 @@ type Module struct {
 	getpid   func() int
 	// lookPathFn replaces the PATH search in tests.
 	lookPathFn func(name string) (string, bool)
+	// proc is the Linux /proc the process listings read when ps is
+	// missing, "" where there is none (macOS).
+	proc string
+	// goos is the system the tools' output formats come from
+	// (runtime.GOOS: BSD netstat on darwin).
+	goos string
+	// journalOK replaces the system journal access check in tests.
+	journalOK func() bool
 	// exe is the running binary that --host ships (nil: os.Executable).
 	exe func() (string, error)
 }
@@ -40,6 +50,8 @@ func New() *Module {
 		getwd:    syscall.Getwd,
 		rootHome: pathguard.RootHome,
 		readFile: os.ReadFile,
+		proc:     proctab.Root(),
+		goos:     runtime.GOOS,
 	}
 }
 

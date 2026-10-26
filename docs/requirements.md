@@ -36,7 +36,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-tar"></a>**tar** (required) unpacks the Gash release archive. Needed by `archive_extract` (tar archives).
 - <a id="tool-gzip"></a>**gzip** (required) decompresses the Gash release archive and .gz files. Needed by `archive_extract` (.gz).
 - <a id="tool-sha256sum"></a>**sha256sum** (required) verifies the downloaded binary against its pinned hash. Any of: `sha256sum`, `shasum`.
-- <a id="tool-git"></a>**git** (required) installs and updates Gash, and runs the git functions. Needed by `agent_git_commit`, `gash update`, `gash_upgrade`, `git_add_tag`, `git_apply_patch`, `git_delete_tag`, `git_dump_revisions`, `git_list_tags`, `git_repair`, `git_sync`, `gl`, `gla`, `glf`, `glg`, `glo`, `gls`, `llm_git_diff`, `llm_git_log`, `llm_git_overview`, `llm_git_show` and `llm_git_status`. On macOS git comes with the Command Line Tools: xcode-select --install.
+- <a id="tool-git"></a>**git** (required) installs and updates Gash, and runs the git functions. Needed by `agent_git_commit`, `gash update`, `gash_upgrade`, `git_add_tag`, `git_apply_patch`, `git_delete_tag`, `git_dump_revisions`, `git_list_tags`, `git_repair`, `git_sync`, `gl`, `gla`, `glf`, `glg`, `glo`, `gls`, `llm_find` (--tracked), `llm_git_diff`, `llm_git_log`, `llm_git_overview`, `llm_git_show` and `llm_git_status`. On macOS git comes with the Command Line Tools: xcode-select --install.
 - <a id="tool-grep"></a>**grep** (required) is used by the installer.
 - <a id="tool-sed"></a>**sed** (required) is used by the installer and gash_uninstall. Needed by `gash_uninstall`.
 
@@ -72,9 +72,9 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 ## Processes and ports
 
 - <a id="tool-ps"></a>**ps** (feature) lists the running processes. Needed by `agent_kill` (on macOS, or without /proc), `llm_procs` (on macOS, or without /proc), `llm_wait` (--gone, on macOS) and `process_find`.
-- <a id="tool-pgrep"></a>**pgrep** (feature) finds processes by name. Needed by `llm_procs` (--name) and `process_kill`.
+- <a id="tool-pgrep"></a>**pgrep** (feature) finds processes by name. Needed by `process_kill`.
 - <a id="tool-lsof"></a>**lsof** (feature) maps ports to the processes that hold them. Needed by `llm_procs` (--port) and `port_kill`.
-- <a id="tool-ss"></a>**ss** (feature) lists the listening ports; netstat works too. Any of: `ss`, `netstat`. Needed by `ai_sysinfo` (questions) and `llm_ports`.
+- <a id="tool-ss"></a>**ss** (feature) lists the listening ports; netstat works too. Any of: `ss`, `netstat`. Needed by `ai_sysinfo` (questions), `llm_ports` and `sysinfo` (the listening ports).
 
 | Tool | Debian, Ubuntu (apt) | Fedora, RHEL family, Amazon Linux (dnf) | Arch (pacman) | openSUSE (zypper) | Alpine (apk) | macOS (Homebrew) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -139,7 +139,7 @@ Rocky, AlmaLinux and Oracle Linux take it from EPEL, which `gash_doctor
 - <a id="tool-sudo"></a>**sudo** (feature) runs the privileged steps of some functions. Needed by `ai_sysinfo` (the privileged sections), `gash hte`, `gash logs` (clean --sudo), `services_stop`, `sudo_last`, `sysinfo` (the privileged sections) and `wsl_compact`.
 - <a id="tool-systemctl"></a>**systemctl** (feature) reads and controls systemd services. Only on Linux. Needed by `ai_sysinfo` (questions), `llm_service` and `services_stop`. It comes with systemd, part of the operating system: Gash cannot install it. Under WSL, enable systemd in /etc/wsl.conf.
 - <a id="tool-journalctl"></a>**journalctl** (optional) adds the service journal to llm_service --log. Only on Linux. Needed by `ai_sysinfo` (questions) and `llm_service` (--log). It comes with systemd.
-- <a id="tool-fzf"></a>**fzf** (optional) picks an entry from a list. Needed by `hgrep` (--pick) and `history_grep` (--pick).
+- <a id="tool-fzf"></a>**fzf** (optional) picks an entry from a list. Needed by `hgrep` (--pick).
 - <a id="tool-truncate"></a>**truncate** (optional) empties root-owned live logs for gash logs clean --sudo --truncate. Needed by `gash logs` (clean --sudo --truncate).
 - <a id="tool-ldd"></a>**ldd** (feature) lists the shared libraries chrome-headless-shell needs. Only on Linux. Needed by `chrome_headless_update`.
 - <a id="tool-bc"></a>**bc** (optional) is the calculator behind the calc alias. Needed by `gash init` (the calc alias).

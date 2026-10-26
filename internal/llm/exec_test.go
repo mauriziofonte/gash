@@ -99,7 +99,10 @@ func TestExecBashPath(t *testing.T) {
 		}
 		return "", false
 	}
-	env := baseEnv(home, map[string]string{"PWD": d, "BASH": "/custom/bash", "GASH__ADDED": "BASH", "MY_TOKEN": "x"})
+	custom := filepath.Join(physTemp(t), "bash")
+	mustWrite(t, custom, "#!/bin/sh\n")
+	require.NoError(t, os.Chmod(custom, 0o755))
+	env := baseEnv(home, map[string]string{"PWD": d, "BASH": custom, "GASH__ADDED": "BASH", "MY_TOKEN": "x"})
 	r := runGo(t, m, d, env, "llm_exec", "true")
 	require.Equal(t, result{"ran\n", "", 4}, r)
 	delete(env, "BASH")
@@ -108,7 +111,7 @@ func TestExecBashPath(t *testing.T) {
 	require.Len(t, rec.calls, 2)
 	b := rec.calls[0]
 	require.Equal(t, runner.BashLLMExec, b.Use)
-	require.Equal(t, "/custom/bash", b.Bash)
+	require.Equal(t, custom, b.Bash)
 	require.Nil(t, b.Wrap)
 	require.True(t, strings.HasSuffix(b.Script, "\n'true'"), b.Script)
 	require.Contains(t, b.Env, "PWD="+d)

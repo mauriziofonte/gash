@@ -14,6 +14,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,18 +36,27 @@ var Sections = []string{"overview", "identity", "storage", "services", "auth", "
 var needsSudo = map[string]bool{"identity": true, "storage": true, "services": true, "auth": true, "security": true, "system": true, "all": true}
 
 // Module is the sysinfo handler with its seams: the runner, the sysroot,
-// the user id and the period of the sudo keep-alive (0: none).
+// the user id, the period of the sudo keep-alive (0: none), the operating
+// system (netstat's dialect) and the in-process sources the overview and
+// identity fall back on (nil: none, the fields stay blank).
 type Module struct {
-	run  runner.Runner
-	sys  platform.Sysroot
-	uid  func() int
-	tick time.Duration
+	run    runner.Runner
+	sys    platform.Sysroot
+	uid    func() int
+	tick   time.Duration
+	goos   string
+	native *natives
 }
 
 // New returns the module wired to the real system.
 func New() *Module {
-	return &Module{run: runner.Exec{}, sys: platform.Real(), uid: os.Getuid, tick: 50 * time.Second}
+	return &Module{run: runner.Exec{}, sys: platform.Real(), uid: os.Getuid, tick: 50 * time.Second,
+		goos: runtime.GOOS, native: realNatives()}
 }
+
+// bsd reports a netstat of the BSD family (macOS, the BSDs): no -t, -u
+// or -p PID selectors, addresses as host.port.
+func (m *Module) bsd() bool { return m.goos == "darwin" || strings.HasSuffix(m.goos, "bsd") }
 
 // Register binds sysinfo to t.
 func Register(t *invoke.Table) { New().Register(t) }
@@ -120,8 +130,13 @@ type Session struct {
 	f     files
 	// sudo is __SYSINFO_HAS_SUDO.
 	sudo bool
-	stop context.CancelFunc
-	done chan struct{}
+	// limited says why a user other than root reads without sudo (3.4:
+	// noted in the output, where 2.x warned only on a terminal); noted is
+	// set once the compact or verbose output said it.
+	limited string
+	noted   bool
+	stop    context.CancelFunc
+	done    chan struct{}
 }
 
 // Begin is __sysinfo_ensure_sudo for one run of c: root needs nothing;
@@ -134,7 +149,12 @@ func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
 	if s.sudo {
 		return s
 	}
-	if s.status("sudo", "-n", "true") != 0 {
+	if _, rc, missing := s.run(nil, "sudo", "-n", "true"); rc != 0 {
+		if missing {
+			s.limited = "sudo is not installed: files only root can read are left out"
+			return s
+		}
+		s.limited = "sudo credentials are not cached (run sudo -v first): files only root can read are left out"
 		if c.Term.Headless() || !c.Term.StdinTTY() {
 			return s
 		}
@@ -148,9 +168,11 @@ func (m *Module) Begin(c *invoke.Call, noColor, verbose bool) *Session {
 			if verbose {
 				p.Warning("Could not obtain sudo. Some data will be limited.")
 			}
+			s.limited = "could not obtain sudo: files only root can read are left out"
 			return s
 		}
 	}
+	s.limited = ""
 	s.sudo = true
 	s.keepAlive()
 	return s
@@ -210,6 +232,10 @@ func (s *Session) Collect(w io.Writer, section string) {
 }
 
 func (s *Session) collect(o *out, section string) {
+	// The first section that reads as root says once why it could not.
+	if needsSudo[section] && s.limited != "" && !s.noted {
+		o.notice, s.noted = s.limited, true
+	}
 	switch section {
 	case "overview":
 		s.overview(o)
@@ -239,36 +265,32 @@ func (s *Session) collect(o *out, section string) {
 // elevated is the test of __sysinfo_sudo: cached sudo and not root.
 func (s *Session) elevated() bool { return s.sudo && s.m.uid() != 0 }
 
-// status runs a program with its output discarded.
-func (s *Session) status(name string, args ...string) int {
-	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
-		Options: runner.Options{Env: s.env, Stdout: io.Discard, Stderr: io.Discard}})
-	if se := (*runner.StartError)(nil); errors.As(err, &se) {
-		return se.Status
-	}
-	return res.ExitCode
-}
-
 // tool is `NAME ARGS 2>/dev/null`: its stdout and status.
 func (s *Session) tool(name string, args ...string) ([]byte, int) {
-	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
-		Options: runner.Options{Env: s.env, Stderr: io.Discard}})
-	if se := (*runner.StartError)(nil); errors.As(err, &se) {
-		return nil, se.Status
-	}
-	return res.Stdout, res.ExitCode
+	out, rc, _ := s.run(nil, name, args...)
+	return out, rc
 }
 
-// toolShown is `NAME ARGS` with its stderr on the caller's, a missing
-// program reported as Bash does.
-func (s *Session) toolShown(name string, args ...string) ([]byte, int) {
-	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
-		Options: runner.Options{Env: s.env, Stderr: s.c.Stderr}})
-	if se := (*runner.StartError)(nil); errors.As(err, &se) {
-		_, _ = io.WriteString(s.c.Stderr, "bash: "+se.Error()+"\n")
-		return nil, se.Status
+// run is `NAME ARGS 2>/dev/null` (stderr to stderr when given): its
+// stdout and status, and missing when the program is not installed, for
+// the note a block prints then (3.4: 2.x left the block empty).
+func (s *Session) run(stderr io.Writer, name string, args ...string) (out []byte, rc int, missing bool) {
+	if stderr == nil {
+		stderr = io.Discard
 	}
-	return res.Stdout, res.ExitCode
+	res, err := s.m.run.Run(s.ctx, runner.Cmd{Path: name, Args: args,
+		Options: runner.Options{Env: s.env, Stderr: stderr}})
+	if se := (*runner.StartError)(nil); errors.As(err, &se) {
+		return nil, se.Status, true
+	}
+	return res.Stdout, res.ExitCode, false
+}
+
+// toolShown is `NAME ARGS` with its stderr on the caller's; missing when
+// the program is not installed, which the caller notes (3.4: 2.x printed
+// Bash's "command not found" on stderr).
+func (s *Session) toolShown(name string, args ...string) ([]byte, int, bool) {
+	return s.run(s.c.Stderr, name, args...)
 }
 
 // has is `command -v NAME >/dev/null 2>&1`.
@@ -284,7 +306,7 @@ func (s *Session) either(a []string, b []string, shown bool) string {
 	if rc != 0 {
 		var more []byte
 		if shown {
-			more, _ = s.toolShown(b[0], b[1:]...)
+			more, _, _ = s.toolShown(b[0], b[1:]...)
 		} else {
 			more, _ = s.tool(b[0], b[1:]...)
 		}

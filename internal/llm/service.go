@@ -4,11 +4,17 @@ package llm
 
 import (
 	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -67,9 +73,9 @@ func (m *Module) service(c *invoke.Call) int {
 	if len(units) == 0 {
 		return fail(c, "missing_unit", "", "Name one or more units, e.g. llm_service nginx php8.4-fpm")
 	}
-	systemctl, ok := m.lookPath(c, "systemctl")
+	systemctl, ok := m.locate(c, "systemctl")
 	if !ok {
-		return fail(c, "systemd_unavailable", "systemctl is not installed", "This system does not run systemd. Skip this check")
+		return prereq.Fail(c, "systemctl", "llm_service", true)
 	}
 	env := append(c.Env.Child(), "LC_ALL=C", "SYSTEMD_PAGER=", "SYSTEMD_COLORS=0")
 	res, err := m.run.Run(c.Ctx, runner.Cmd{Path: systemctl, Args: append([]string{"show", "--no-pager", "--property=" + serviceProps, "--"}, units...),
@@ -82,7 +88,11 @@ func (m *Module) service(c *invoke.Call) int {
 		return fail(c, "systemd_unavailable", "systemctl show gave "+strconv.Itoa(len(states))+" units for "+strconv.Itoa(len(units)), "Skip this check")
 	}
 	logs := make([][]string, len(units))
-	if journalctl, ok := m.lookPath(c, "journalctl"); ok && logN > 0 {
+	// notes say why a unit has no journal lines when the journal could
+	// not be read (3.4: 2.x and 3.4 before printed "log":[] as if it were
+	// empty); the column is there only when a row has one.
+	notes := make([]string, len(units))
+	if logN > 0 {
 		type job struct {
 			i    int
 			unit string
@@ -93,34 +103,61 @@ func (m *Module) service(c *invoke.Call) int {
 				jobs = append(jobs, job{i, u})
 			}
 		}
+		journalctl, found := m.locate(c, "journalctl")
 		width := o.Width
 		if width == 0 {
 			width = waitLineWidth
 		}
-		got := llmfmt.Map(c.Ctx, llmfmt.LocalJobs(), 0, jobs, func(_ context.Context, j job) []string {
+		type journal struct {
+			lines []string
+			note  string
+		}
+		got := llmfmt.Map(c.Ctx, llmfmt.LocalJobs(), 0, jobs, func(_ context.Context, j job) journal {
+			if !found {
+				return journal{note: "journalctl is not installed"}
+			}
 			r, err := m.run.Run(c.Ctx, runner.Cmd{Path: journalctl, Args: []string{"-u", j.unit, "-n", strconv.Itoa(logN), "--no-pager", "-q", "-o", "short-iso", "--no-hostname"},
 				Options: runner.Options{Env: env}})
-			if err != nil {
-				return nil
+			if err != nil || r.ExitCode != 0 {
+				return journal{note: firstLine(string(r.Stderr), "journalctl exited with status "+strconv.Itoa(r.ExitCode))}
 			}
 			ls := textLines(r.Stdout)
 			for k, l := range ls {
 				ls[k] = llmfmt.Cut(l, width)
 			}
-			return ls
+			return journal{lines: ls}
 		})
+		checked, readable := false, true
 		for k, j := range jobs {
-			logs[j.i] = got[k]
+			logs[j.i], notes[j.i] = got[k].lines, got[k].note
+			if notes[j.i] != "" || len(logs[j.i]) > 0 {
+				continue
+			}
+			if !checked {
+				checked, readable = true, m.journalReadable()
+			}
+			if !readable {
+				notes[j.i] = "the system journal is not readable by this user (root and the systemd-journal group read it)"
+			}
 		}
 	}
-	t := llmfmt.Table{Cols: []string{"unit", "load", "active", "sub", "since", "pid", "restarts", "log"}}
+	cols := []string{"unit", "load", "active", "sub", "since", "pid", "restarts", "log"}
+	noted := slices.ContainsFunc(notes, func(n string) bool { return n != "" })
+	if noted {
+		cols = append(cols, "log_note")
+	}
+	t := llmfmt.Table{Cols: cols}
 	for i, u := range units {
 		s := states[i]
 		l := logs[i]
 		if l == nil {
 			l = []string{}
 		}
-		t.Rows = append(t.Rows, []any{u, s.load, s.active, s.sub, nullable(s.since), intOrNull(s.pid), intOrNull(s.restarts), l})
+		row := []any{u, s.load, s.active, s.sub, nullable(s.since), intOrNull(s.pid), intOrNull(s.restarts), l}
+		if noted {
+			row = append(row, nullable(notes[i]))
+		}
+		t.Rows = append(t.Rows, row)
 	}
 	o.Write(c, o.FormatOr(llmfmt.JSON), t, nil)
 	return 0
@@ -186,4 +223,27 @@ func intOrNull(s string) any {
 		n = n*10 + int(s[i]-'0')
 	}
 	return n
+}
+
+// journalReadable reports whether this user reads the system journal:
+// false when a system journal file exists and does not open (a user
+// neither root nor in the systemd-journal group, whose journalctl -q
+// prints nothing and exits 0).
+func (m *Module) journalReadable() bool {
+	if m.journalOK != nil {
+		return m.journalOK()
+	}
+	denied := false
+	for _, pat := range []string{"/var/log/journal/*/system.journal", "/run/log/journal/*/system.journal"} {
+		files, _ := filepath.Glob(pat)
+		for _, p := range files {
+			f, err := os.Open(p)
+			if err == nil {
+				_ = f.Close()
+				return true
+			}
+			denied = denied || errors.Is(err, fs.ErrPermission)
+		}
+	}
+	return !denied
 }

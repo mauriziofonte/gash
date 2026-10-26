@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -166,5 +167,34 @@ func TestReadProcFS(t *testing.T) {
 	k, _ := tb.Lookup(2)
 	require.Equal(t, "[kthreadd]", k.Cmd)
 	_, err = ReadProcFS(filepath.Join(root, "none"))
+	require.Error(t, err)
+}
+
+// TestReadUsage: %CPU is the CPU time over the time since the process
+// started, %MEM the resident size over MemTotal, in tenths cut as ps
+// prints them; a process without its times keeps zeros.
+func TestReadUsage(t *testing.T) {
+	root := t.TempDir()
+	write := func(p, s string) {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(root, p), []byte(s), 0o644))
+	}
+	rss := strconv.Itoa(51200 * 1024 / os.Getpagesize()) // 50 MiB
+	// 99.5 s of CPU (4975 ticks each of user and system) over the 995 s
+	// since it started at tick 500.
+	write("1/stat", "1 (in it) S 0 1 1 0 -1 0 0 0 0 0 4975 4975 0 0 20 0 1 0 500 1000 "+rss+"\n")
+	write("1/cmdline", "/sbin/init\x00")
+	write("7/stat", "7 (short) S 1 7 7\n")
+	write("uptime", "1000.00 1.00\n")
+	write("meminfo", "MemTotal:        1024000 kB\n")
+	us, err := ReadUsage(root)
+	require.NoError(t, err)
+	require.Len(t, us, 2)
+	require.Equal(t, 100, us[0].CPU)
+	require.Equal(t, 50, us[0].Mem)
+	require.Equal(t, "/sbin/init", us[0].Cmd)
+	require.Equal(t, "in it", us[0].Name)
+	require.Equal(t, Usage{Proc: Proc{PID: 7, PPID: 1, UID: us[1].UID, State: "S", Name: "short", Cmd: "[short]"}}, us[1])
+	_, err = ReadUsage(filepath.Join(root, "none"))
 	require.Error(t, err)
 }

@@ -3161,8 +3161,8 @@ var baseFunctions = []Function{
 				"\n" +
 				"NOTES\n" +
 				"  --port replaces ss -tlnp | grep :8080: it adds \"procs\":[{\"pid\",\"name\"}]\n" +
-				"  to each record (from ss -p or netstat -p; empty for another user's process\n" +
-				"  unless you are root).",
+				"  to each record (from ss -p or netstat -p, lsof on macOS; empty for\n" +
+				"  another user's process unless you are root).",
 		},
 		Fallback: &Usage{Program: "llm_ports", Usage: "llm_ports [--listen] [--port N]", Description: "List TCP/UDP ports (JSON array of {port, proto, state, address}); --listen keeps listening sockets only; --port N filters by local port and adds the owning processes"},
 		Env:      []string{"GASH_HEADLESS", "GASH_NO_COLOR", "NO_COLOR"},
@@ -4199,6 +4199,10 @@ var baseFunctions = []Function{
 				"  that read root-only files (identity, storage, services, auth,\n" +
 				"  security, system, all); overview, network, webstack, mail and infra\n" +
 				"  never ask.\n" +
+				"  Without sudo (or as a user it cannot elevate) the first of those\n" +
+				"  sections says so in a Note row: files only root can read are left\n" +
+				"  out. A block whose tool is missing says so too (Note=ss is not\n" +
+				"  installed); without ss the listening ports come from netstat.\n" +
 				"  One section per call: a second one is an error. -h/--help anywhere\n" +
 				"  shows this help.",
 		},

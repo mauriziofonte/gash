@@ -31,13 +31,12 @@ func parsePathArg(c *invoke.Call, hint string) (string, bool) {
 	return path, true
 }
 
-// requireGitRepo is __llm_git_repo: git must be installed (git_not_found,
-// CONTINUE) and safe must be inside a work tree or repository
+// requireGitRepo is __llm_git_repo: git must be installed (gitPresent,
+// for need) and safe must be inside a work tree or repository
 // (not_a_git_repo, CONTINUE). The membership test is the hardened
 // `git -C safe rev-parse --git-dir` with its output discarded.
-func (m *Module) requireGitRepo(c *invoke.Call, safe string) bool {
-	if _, ok := m.lookPath(c, "git"); !ok {
-		fail(c, "git_not_found", "Git is not installed", "Git binary not found. Skip git operations")
+func (m *Module) requireGitRepo(c *invoke.Call, need, safe string) bool {
+	if !m.gitPresent(c, need) {
 		return false
 	}
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, io.Discard, io.Discard, "-C", safe, "rev-parse", "--git-dir")
@@ -58,7 +57,7 @@ func (m *Module) gitStatus2x(c *invoke.Call, path string) int {
 	if !ok {
 		return 1
 	}
-	if !m.requireGitRepo(c, safe) {
+	if !m.requireGitRepo(c, c.Name, safe) {
 		return 1
 	}
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
@@ -179,7 +178,7 @@ func (m *Module) gitDiff2x(c *invoke.Call, path string, staged bool) int {
 	if !ok {
 		return 1
 	}
-	if !m.requireGitRepo(c, safe) {
+	if !m.requireGitRepo(c, c.Name, safe) {
 		return 1
 	}
 	diffArgs := []string{"-C", safe, "diff", "--stat", "--no-color", "--no-ext-diff", "--no-textconv"}
@@ -244,12 +243,11 @@ func (m *Module) gitLog(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
-	if !m.requireGitRepo(c, safe) {
+	if !m.requireGitRepo(c, c.Name, safe) {
 		return 1
 	}
-	if _, ok := m.lookPath(c, "jq"); !ok {
-		return fail(c, "jq_not_found", "jq is required for JSON output", "Install jq: sudo apt install jq")
-	}
+	// The JSON is built natively: no jq is needed (2.x and 3.x before
+	// failed with jq_not_found without one).
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
 		"-C", safe, "log", "-n", limit, "--no-ext-diff", "--no-textconv", "--no-show-signature",
 		"-z", "--format=%h%x00%s%x00%an%x00%ci")
