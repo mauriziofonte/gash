@@ -1,0 +1,70 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_service (new in 3.4, plan P3): the state of systemd units and the
+# last journal lines of each, in one JSON array, instead of systemctl
+# is-active plus journalctl -u. systemctl and journalctl are stubs on
+# PATH. A machine without systemd (a container, WSL) is a CONTINUE error:
+# the agent skips the check.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+chmod 0755 stub/systemctl
+chmod 0755 stub/journalctl
+chmod 0755 nosystemd/systemctl
+env SAVED_PATH=$PATH
+env PATH=$WORK/stub${:}$PATH
+
+# --- through the sourced shell: a running unit with its log, a missing one
+exec bash -c 'source "$GASH_SH"; llm_service nginx nosuch --log 2'
+stdout '^\[\{"unit":"nginx","load":"loaded","active":"active","sub":"running","since":"2026-10-20 10:00:00 UTC","pid":812,"restarts":2,"log":\["2026-10-25T10:00:00\+0000 nginx\[812\]: started","2026-10-25T10:00:01\+0000 nginx\[812\]: ready"\]\},\{"unit":"nosuch","load":"not-found","active":"inactive","sub":"dead","since":null,"pid":0,"restarts":0,"log":\[\]\}\]$'
+! stderr .
+
+# --- directly: --log 0 reads no journal; --format tsv
+exec gash llm_service nginx --log 0 --format tsv
+cmp stdout tsv.want
+
+# --- no systemd: CONTINUE
+env PATH=$WORK/nosystemd${:}$SAVED_PATH
+! exec gash llm_service nginx
+stderr '"error":"systemd_unavailable","details":"System has not been booted with systemd as init system \(PID 1\). Can.t operate.","action":"CONTINUE"'
+! stdout .
+env PATH=$WORK/stub${:}$SAVED_PATH
+
+# --- usage errors
+! exec gash llm_service
+stderr '"error":"missing_unit"'
+! exec gash llm_service nginx --log x
+stderr '"error":"invalid_log"'
+
+# --- --help anywhere prints the help
+exec gash llm_service nginx -h
+stdout 'llm_service UNIT\.\.\.'
+
+-- stub/systemctl --
+#!/bin/sh
+# systemctl show --no-pager --property=... -- UNIT...: one block per unit.
+[ "$1" = show ] || exit 3
+seen=
+for a; do
+  [ "$a" = -- ] && { seen=1; continue; }
+  [ -n "$seen" ] || continue
+  case "$a" in
+  nginx) printf 'Id=nginx.service\nLoadState=loaded\nActiveState=active\nSubState=running\nStateChangeTimestamp=Tue 2026-10-20 10:00:00 UTC\nMainPID=812\nNRestarts=2\n\n' ;;
+  *) printf 'Id=%s.service\nLoadState=not-found\nActiveState=inactive\nSubState=dead\nStateChangeTimestamp=\nMainPID=0\nNRestarts=0\n\n' "$a" ;;
+  esac
+done
+-- stub/journalctl --
+#!/bin/sh
+# journalctl -u UNIT -n N ...: the last N of three lines.
+[ "$1 $2" = "-u nginx" ] || exit 0
+printf '2026-10-25T09:59:59+0000 nginx[812]: starting\n2026-10-25T10:00:00+0000 nginx[812]: started\n2026-10-25T10:00:01+0000 nginx[812]: ready\n' | tail -n "$4"
+-- nosystemd/systemctl --
+#!/bin/sh
+echo "System has not been booted with systemd as init system (PID 1). Can't operate." >&2
+echo "Failed to connect to bus: Host is down" >&2
+exit 1
+-- tsv.want --
+unit	load	active	sub	since	pid	restarts	log
+nginx	loaded	active	running	2026-10-20 10:00:00 UTC	812	2	[]

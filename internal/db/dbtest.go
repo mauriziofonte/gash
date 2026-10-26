@@ -40,6 +40,15 @@ func (m *Module) dbTest(c *invoke.Call) int {
 		return 1
 	}
 	u := config.ParseDBURL(url)
+	switch u.Driver {
+	case "mysql", "mariadb", "pgsql":
+	default:
+		// sqlite and the +ssh and +docker forms run a client somewhere
+		// else: a query is the test.
+		p.Error("gash_db_test tests mysql, mariadb and pgsql connections from this machine; '" + name + "' is a " + u.Driver + " connection")
+		p.Hint("Test it with a query: llm_db_query \"SELECT 1\" -c " + name + " --scalar")
+		return 1
+	}
 	t := target{driver: u.Driver, user: u.User, pass: config.DecodePassword(u.Password), host: u.Host, port: u.Port, database: u.Database}
 	p.Info("Testing connection '" + name + "' (" + u.Display() + ")...")
 	ctx, cancel := context.WithTimeout(ctxOf(c), dbTimeout(c))
@@ -50,9 +59,6 @@ func (m *Module) dbTest(c *invoke.Call) int {
 		err = m.pingMySQL(ctx, c, t)
 	case "pgsql":
 		err = m.pingPG(ctx, t)
-	default:
-		p.Error("Unknown driver: " + u.Driver)
-		return 1
 	}
 	if err == nil {
 		p.Success("Connection successful!")

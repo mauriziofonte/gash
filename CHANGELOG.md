@@ -6,6 +6,233 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.4.0] - 2026-10-26
+
+Gash becomes the toolkit an AI agent reaches for instead of raw shell
+pipelines: 36 new functions and new options on most of the 3.0 ones, built
+from how agents actually use a shell, each answering in one call what took a
+pipeline or several round trips, with compact JSON (or TSV) and output that
+stays inside a budget; most of them also run on a registered ssh host. Every read stays
+in the read-only `llm_*` family; every change is a separate `agent_*` write
+tool. Gash also learns to work with Windows from inside WSL, and to reclaim
+the disk space that log files quietly eat on any host. Reading Windows is
+automatic; changing it is human-only and goes through a UAC prompt.
+
+### Added
+
+- **Shared output options** for the agent functions (AGENTS.md 3.6):
+  `--format json|jsonl|tsv|table` (TSV with a header and `\N` for null,
+  metadata as one JSON line on stderr), an output budget (`--width`,
+  `--max-lines`, `--head`, `--tail`, with a `[... K lines omitted]` marker),
+  `--relative`/`--absolute`, `--count [--by KEY]`, and `-j N`/`--timeout S`
+  on every multi-target function (results keep the input order; network
+  probes default to 32 at a time).
+- **Files and search**: `llm_find --count/--sort/--newer/--since/--tracked`,
+  `llm_tree --count` and `--top N` (disk usage, a parallel walk),
+  `llm_grep --exclude/--only-matching/--distinct/--count/--files-only`.
+- **Text reads**: `llm_stat` (metadata of many paths), `llm_count` (many
+  patterns, one pass per file), `llm_assert`, `llm_read` (ranges or the
+  lines around a match), `llm_log` (read from the end, by pattern, time and
+  level), `llm_hash`, `llm_textstats`, `llm_textcheck`.
+- **Data**: `--format` and `--scalar` on every `llm_db_*` function,
+  `llm_db_tables --counts`, `llm_db_schema --all`, `llm_db_databases`;
+  `llm_json` (a value, the keys or the shape), `llm_csv`, `llm_config
+  --path` for YAML, TOML, INI and JSON, `llm_dotenv`, `llm_date`.
+- **Git**: `llm_git_overview` (the state of a repository in one small
+  object), `llm_git_show`, `llm_git_status --summary/--files/--repos/
+  --fetch`, `llm_git_diff --summary/--files/--numstat/--patch` and
+  `REV..REV`, `llm_git_log` filters and `--fields`.
+- **Network probes** (read-only): `llm_http` (status, timings, headers, a
+  JSON value; credentials only through `--auth-env`), `llm_dns` (a built-in
+  resolver client), `llm_tls`, `llm_tcp`, `llm_ports --port`.
+- **Processes**: `llm_wait` (one call instead of a sleep and poll loop: a
+  log line, a file, a process gone, an HTTP answer, a port, a command),
+  `llm_procs --pid/--alive/--tree`, `llm_service`, `llm_docker_ps`,
+  `llm_docker_logs`, `llm_docker_exec` (read-only), `llm_sysinfo`.
+- **Runtimes, lint and tests**: `llm_tools`, `llm_runtime` and `gash runtime`
+  (a PHP or Node version resolved to its binary without loading nvm.sh),
+  `llm_lint` (php, sh, js, json, yaml, toml, py in parallel), `agent_test`
+  (a test suite summarized: counts and each failure's file:line; a write
+  tool, since a suite runs the project's code), `gash run` (a command with
+  its output shaped and its exit status kept).
+- **Remote hosts** (AGENTS.md 3.12): `--host ALIAS` (repeatable) on 31 read
+  functions runs the same call on a registered `HOST:` alias over ssh in one
+  round trip, several hosts in parallel; Gash ships its own binary once to a
+  host of the same OS and architecture (`~/.cache/gash/remote/`), and
+  `llm_find`, `llm_grep`, `llm_tree` and `llm_config` fall back to POSIX sh
+  elsewhere. `llm_remote_run` (one command on several hosts, or several
+  commands on one host in one round trip, each checked by the `llm_exec`
+  rules first), `llm_same` (is the deployed copy the local one: short
+  sha256 per file, one round trip per target, optionally inside a
+  container), and `llm_db_*` through a `+ssh` connection
+  (`mysql+ssh://USER:PASS@ALIAS/DB`, `pgsql+ssh://`, `sqlite+ssh://`,
+  optionally `+docker:CTR`), which runs the engine's client on the host.
+- **Write tools, the `agent_*` family** (AGENTS.md section 8): `agent_replace`
+  (exact replacements in explicit files, all or nothing), `agent_git_commit`
+  (stage explicit paths, commit, push, never forced), `agent_kill`,
+  `agent_docker_exec`, `agent_put` (upload one file to a host: size and
+  sha256 checks, optional backup, atomic rename), `agent_test` (a test
+  suite, and nothing else, run and summarized), and `agent_replace
+  --host`. Each takes `--dry-run`, names its targets explicitly
+  and keeps the secret-file and protected-path rails; system paths are
+  refused and sensitive ones need `--force`. Its own card topic, `gash
+  agent`.
+- **Routing**: `gash agents-hint` prints the "raw command -> Gash function"
+  table for an agent's instructions (also AGENTS.md section 7), each help
+  page opens with the shapes it replaces, `gash agent-functions` lists the
+  agent functions for wrappers, and every agent function runs as `gash FN`
+  without sourcing.
+- `GASH_TELEMETRY_FILE`: an opt-in local JSONL line per agent call
+  (function, time, output size, status, truncation; never arguments).
+- The agent benchmark kit (`bench/agent/`): the raw shell shapes against the
+  Gash functions, with relative acceptance rules.
+
+- `gash wsl`: report and repair the WSL environment. `info` summarises the
+  detection (version, distro, interop, drives, networking) and exits 0 off
+  WSL; `doctor` checks interop, mounts and configuration; `path` converts a
+  path between its Linux and Windows forms (`--windows`, `--mixed`,
+  `--linux`); `config` shows the effective `wsl.conf` and `.wslconfig`;
+  `interop --export` prints the `export WSL_INTEROP=…` line that repairs a
+  stale socket after a reattached `tmux` or `screen`.
+- `gash win`: inspect the Windows host over interop, read-only, with
+  eye-candy for a human and `--json` for an agent — `info`, `disk`, `net`,
+  `updates`, `defender`, `policy`, `hosts`, `doctor`, `services`, `procs`,
+  `apps`, `reg`, `events`, `ports` and `file`. Windows programs are found by
+  absolute path under `System32` (so interop works with
+  `appendWindowsPath=false`), the system drive is discovered from the mounts
+  (not hard-wired to `/mnt/c`), and every call is bounded by
+  `GASH_WIN_TIMEOUT` (default 10s, max 120s). PowerShell runs fixed,
+  read-only scripts; arguments reach them as data, never as code.
+- `gash win fix`: the one path that changes Windows, deliberately narrow. It
+  is human-only (a headless caller is refused with `elevation_required`),
+  always goes through a UAC prompt, prints the exact PowerShell command and
+  asks first, and acts only from a fixed allowlist (`flush-dns`,
+  `restart-service`, `hosts-add`, `hosts-remove`) with every argument
+  validated. `--dry-run` prints the command without running it, so an agent
+  can hand it to a human.
+- `gash logs`: find and reclaim disk space from log files. `scan` reports
+  the logs eating disk, grouped by category (`*.log`, log-shaped `*.txt`,
+  rotated and compressed copies, and the patterns Apache, nginx, PHP, Node,
+  Python, package managers and databases write); `clean` deletes rotated and
+  compressed logs and, with `--truncate`, empties live logs in place so a
+  running daemon keeps its open file. `--sudo` reclaims root-owned logs
+  through an explicit `sudo`. See [docs/logs/README.md](docs/logs/README.md).
+- `GASH_WIN_TIMEOUT` bounds one `gash win` call (default `10s`, cap `120s`).
+- **Prerequisites**: one catalog of every external program Gash runs, what
+  it is for, which functions need it and its package on apt, dnf (with
+  EPEL where needed), yum, microdnf, pacman, zypper, apk and Homebrew
+  ([docs/requirements.md](docs/requirements.md)). A function that needs a
+  missing tool says so in one way: `prerequisite_missing` (`STOP`), or the
+  tool's own code, with `missing` and `install` members (and `host`, or
+  `container`, for a tool missing on a remote host); a person gets the
+  explanation and the install command of this system. `gash_doctor
+  --prereqs` lists every tool by area, `--json` for scripts, and
+  `gash_doctor --install [--all] [TOOL...]` installs the missing ones after
+  asking; it never installs for an agent (`install_needs_confirmation`).
+- **Installer**: `install.sh --check` reports what Gash needs (Bash 4.4+,
+  git, curl or wget, tar, gzip, sha256sum or shasum, grep, sed) and the
+  command that installs it; an install offers to install it first
+  (`--assume-yes` installs those required tools only). A Bash older than
+  4.4 is refused with a clear message, and a failed binary fetch ends with
+  the `install.sh --repair` line instead of "Enjoy using Gash".
+- **Supported systems**: CI on arm64 (unit, black-box and smoke), an
+  install smoke test on Debian, Ubuntu, Rocky Linux 8 and 9 (minimal),
+  AlmaLinux 9 and 10, Oracle Linux 9, Amazon Linux 2023, Fedora, openSUSE
+  Leap and Tumbleweed, Alpine and Arch, on amd64 and arm64 (Arch on amd64
+  only; each installs every package of the catalog and checks it provides
+  its tool), and the
+  local web stack end to end on AlmaLinux 9 too. The table is in
+  [docs/install.md](docs/install.md).
+- **Documentation**: rewritten. One guide per area with a generated
+  reference of its functions ([docs/](docs/README.md)), an install page,
+  the requirements, configuration, security and troubleshooting pages, and
+  a new README and AGENTS.md. The examples are run by the tests and their
+  output checked; links, function and setting names, and the generated
+  parts fail CI when they go stale.
+- `llm_date` carries its own time zone database, so `--tz` works where the
+  system has none.
+
+### Changed
+
+- **A missing tool is reported, never misread.** Among the cases that
+  blamed something else or failed silently: the `git_*` functions said "Not
+  in a git repository" and the `gl*` family exited 127 without a word;
+  `process_find`, `process_kill` and `services_stop` blamed the process or
+  went on without `sudo`; `remote_exec` without ssh exited 127 silently and
+  every remote call without a local ssh was `host_unreachable` (`RETRY`);
+  a missing docker for a `+docker` connection was `container_unavailable`,
+  and a psql older than 12 or a sqlite3 older than 3.33 on a `+ssh` host
+  was an SQL error; `gash_upgrade` blamed the network for a missing git;
+  verifying a signed tag without gpg or ssh-keygen blamed the keyring;
+  `hgrep --pick` without fzf, and `archive_extract`, had messages of their
+  own. On macOS the Xcode stub of git or python3 counts as missing.
+- **Fewer tools needed.** `jq` is no longer used (`llm_deps` reads
+  `requirements.txt` and `go.mod` itself); `llm_procs` lists processes
+  from `/proc` without ps, and on macOS; `llm_ports` reads BSD netstat on
+  macOS; `llm_exec` uses Homebrew's `gsed`; `sysinfo` and `ai_sysinfo`
+  fall back to netstat, `ps aux` and `df -h`, read host, kernel, cores,
+  disk and address in-process, and print a note for each block whose tool
+  is missing or that needs a sudo it cannot get; `gash_unload`,
+  `gash_username` and the `~/.gash_env` permission check work without awk,
+  grep, id or stat.
+- `llm_service` adds a `log_note` when the journal cannot be read, and
+  `llm_procs` without a filter lists the first 20 processes by PID with
+  user, cpu and mem.
+- `gash_ssh_auto_unlock` returns 1 when the keys cannot be unlocked, and
+  `gash_uninstall` stops, removing nothing, when it cannot edit the profile.
+- `gash_db_test` names the query to run for a `sqlite`, `+ssh` or
+  `+docker` connection (it said "Unknown driver"), and the warning for a
+  `DB:` URL with an unknown scheme names the `+ssh` forms.
+- `glf FILE` takes `git log` options after the file; `gl`, `gla`, `glg`
+  and `gls` end their output with a newline; a git action refused for lack
+  of a terminal no longer says "headless mode".
+- The `sysinfo` overview shows the disk share as `df` does (used of used
+  plus available), so the space reserved for root, or outside a
+  container's allowance, no longer hides a full disk.
+- `llm_exec` refusing a command that changes files (`rm`, `mv`, `chmod`,
+  ...) points at the `agent_*` functions instead of the allowlist.
+- `gash_doctor --prereqs` finds Apache and PHP-FPM where `gash hte` does
+  (`/usr/sbin`, `php-fpm8.3`), and installs `mod_ssl` and `mod_http2` with
+  `httpd` on the Fedora family.
+
+- The per-shell server runs the new read functions, so a sourced shell calls
+  them without starting a process.
+- WSL is detected from `wsl.conf`, the `WSLInterop` binfmt handler, or the
+  `microsoft` marker in `/proc/version`, so a distribution without a
+  `wsl.conf` is still recognised. The Windows PowerShell path the HTE and
+  system helpers use is resolved from the mounted system drive rather than
+  assuming `/mnt/c`.
+
+### Security
+
+- `llm_*` stays read-only with no exception: writes live only in `agent_*`;
+  `llm_http` refuses any method but GET, HEAD and OPTIONS; `llm_procs` has
+  no kill. Running a test suite executes the project's code, so it is
+  `agent_test`, which runs a test suite and nothing else (`gash run` runs
+  any other command).
+- Remote calls take registered `HOST:` aliases only. Remote paths pass the
+  local rails and the transfer deny list before anything connects and are
+  checked again on the host after links resolve; a secret file never
+  leaves the host and the local stdin is never sent. Over `+ssh` the SQL
+  guard runs before ssh and the password goes on ssh's stdin, never in an
+  argument. The shipped binary is size-checked, test-run and renamed into a
+  0700 cache directory.
+- The path guards treat the Windows secrets reachable over `/mnt` as secret
+  files: the user registry hives (`NTUSER.DAT`, `UsrClass.dat`), saved RDP
+  credentials (`*.rdp`), answer files (`unattend.xml`, `autounattend.xml`)
+  and the browser credential stores (`Login Data`, `logins.json`, `key4.db`,
+  `key3.db`). See [docs/security.md](docs/security.md).
+- The remote secret-file and `.ssh` rails no longer need `tr` on the host,
+  and a symlink on a host with neither realpath nor readlink is refused
+  instead of judged by its own name: without them both failed open.
+- `archive_extract` refuses a `.tar.xz` when xz is missing (macOS
+  extracted it unchecked), and a tar whose member headers it cannot read
+  (tar would skip the header and extract what follows unchecked).
+
+### Removed
+
+- The `jq_not_found` error code: no function needs jq any more.
+
 ## [3.2.0] - 2026-10-25
 
 Gash gets out of the way: a shell loads in half the time, the prompt no
@@ -128,14 +355,14 @@ Linux, macOS and WSL on amd64 and arm64.
 - **`gash hte` is built in.** HTE, formerly the separate hte-cli tool, runs a
   user-owned Apache and PHP-FPM with no sudo at runtime, and
   `gash hte migrate` takes over an hte-cli setup
-  ([docs/hte.md](docs/hte.md)).
+  ([docs/hte/README.md](docs/hte/README.md)).
 - **Fewer dependencies.** The `llm_*`, database and scanner functions run
   inside the binary: no `jq`, `sqlite3`, `mysql`, `psql`, `rg` or GNU `find`.
 - **Verified upgrades.** Release binaries are pinned by SHA-256 in the
   tagged tree; `gash update` verifies before it changes anything and
   `gash update --rollback` goes back.
 - **Audited.** The port reviewed every 2.x behaviour (the census is
-  [docs/port/LEDGER.md](docs/port/LEDGER.md), 443 items) and fixes the
+  [dev/port/LEDGER.md](dev/port/LEDGER.md), 443 items) and fixes the
   defects it found instead of carrying them over. The changes a user or a
   script can notice are listed below.
 
@@ -181,7 +408,7 @@ Breaking).
   interactive Bash layer that `gash.sh` evaluates.
 - `gash hte`: install, sites, certificates, PHP-FPM pools per PHP version,
   `doctor`, `migrate` from hte-cli and a clean `uninstall`; see
-  [docs/hte.md](docs/hte.md). Ports 80 and 443 are made bindable by the
+  [docs/hte/README.md](docs/hte/README.md). Ports 80 and 443 are made bindable by the
   user through `net.ipv4.ip_unprivileged_port_start`, asked for and undone
   by uninstall.
 - `gash update` installs and verifies the new release's binary before it
@@ -211,7 +438,7 @@ Breaking).
   error as a hint when the connection fails.
 - `gash hte site create|modify --http2` turns HTTP/2 back on after
   `--no-http2`; every `gash hte` command has its own `--help`, and
-  [docs/hte.md](docs/hte.md) has a WSL section.
+  [docs/hte/README.md](docs/hte/README.md) has a WSL section.
 
 ### Changed
 
@@ -580,7 +807,7 @@ quote collection where every line has a source.
 A rebuild for quality: a quieter and reversible bootstrap, read-only
 guarantees for agents that hold under adversarial input, a reference that
 cannot drift from the code, and terminal output designed for people.
-Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
+Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md).
 
 ### Breaking
 
@@ -777,6 +1004,7 @@ Upgrading from 1.x is guided: see [docs/migration.md](docs/migration.md).
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.4.0]: https://github.com/mauriziofonte/gash/compare/v3.2.0...v3.4.0
 [3.2.0]: https://github.com/mauriziofonte/gash/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/mauriziofonte/gash/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/mauriziofonte/gash/compare/v2.1.1...v3.0.0

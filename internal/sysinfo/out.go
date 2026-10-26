@@ -24,6 +24,9 @@ type out struct {
 	// directory.
 	sec, any bool
 	sub      string
+	// notice is a note the next section prints under its header (why
+	// sudo could not be used).
+	notice string
 }
 
 func (s *Session) output(w io.Writer, llm, lazy bool) *out {
@@ -51,10 +54,18 @@ func (o *out) section(title string) {
 	}
 	if o.llm {
 		o.write("=== " + title + " ===\n")
-		return
+	} else {
+		o.s.Section(o.w, title)
 	}
-	o.s.Section(o.w, title)
+	if o.notice != "" {
+		o.note(o.notice)
+		o.notice = ""
+	}
 }
+
+// note is a Note row: what the block it ends up in lacks and why, such as
+// "ss is not installed" (3.4: 2.x left the block empty).
+func (o *out) note(text string) { o.kv("Note", text) }
 
 // flush is __sysinfo_flush, and prints a pending lazySub header in
 // either mode.

@@ -38,7 +38,7 @@ go run ./internal/tools/covermap                    # every 2.x assertion has a 
 go run ./internal/tools/bashonlymap -check          # tests/parity/bash-only.tsv is current
 shellcheck -s bash -S warning $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc install.sh)
 shfmt -d $(git ls-files 'lib/**/*.sh' gash.sh bash_completion .gashrc bin/gash)
-go test ./internal/registry -run ReferenceDocs      # when help text changed: update docs/reference
+go test ./internal/docgen ./internal/prereq -update # after a help, catalog or example change: regenerate the docs
 ```
 
 CI runs the same commands on Linux and macOS, as a non-root user.
@@ -91,9 +91,10 @@ CI runs the same commands on Linux and macOS, as a non-root user.
   `tests/parity/bash-only.tsv`, which `go run ./internal/tools/bashonlymap
   -check` verifies. Tests are hermetic (temporary `HOME`, stub binaries on
   `PATH`) and skip when an optional tool is missing.
-- **Docs**: `docs/reference/` is checked against the registry; a test fails
-  when it is stale or when a page cites a function or setting that does not
-  exist.
+- **Docs**: [dev/documentation.md](dev/documentation.md) has the layout and
+  the rules. The references, the prerequisites and the outputs of the
+  examples are generated; `internal/docgen` fails when a page is stale,
+  links nowhere, or names a function or setting that does not exist.
 
 ## Quotes
 

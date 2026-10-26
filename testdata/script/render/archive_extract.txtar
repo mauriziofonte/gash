@@ -33,7 +33,9 @@ stderr 'Error: Cannot extract .file.abc., unsupported file type\.'
 
 # --- :125 no-zstd - zstd is not on a minimal PATH
 ! exec bash -c 'printf x >a.tar.zst && mkdir e; export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; PATH="$PWD/e" archive_extract a.tar.zst'
-stderr 'Error: Extracting .zst needs zstd\.'
+# 3.4: the prerequisite report, as the envelope under GASH_HEADLESS=1 (it
+# was "Error: Extracting .zst needs zstd.").
+stderr '"details":"archive_extract \(\.tar\.zst\) needs zstd, which is not installed"'
 
 # --- R6: plain mode error, no ESC
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; archive_extract'

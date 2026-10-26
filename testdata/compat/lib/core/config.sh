@@ -92,7 +92,7 @@ __gash_url_encode() { __gash_cold __gash_url_encode eb8bdec4 && "${FUNCNAME[0]}"
 # no group or other permission bits (600, 400, 700 are all fine). Symlinks are followed (dotfile
 # managers commonly symlink ~/.gash_env).
 # shellcheck disable=SC2120
-__gash_check_env_perms() { __gash_cold __gash_check_env_perms 3a4761d6 && "${FUNCNAME[0]}" "$@"; }
+__gash_check_env_perms() { __gash_cold __gash_check_env_perms a252a62a && "${FUNCNAME[0]}" "$@"; }
 
 # Load and parse ~/.gash_env (cached in globals for the life of the shell).
 # Callers that read values through $(...) should call __gash_load_env first,

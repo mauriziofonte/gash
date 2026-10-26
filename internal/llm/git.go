@@ -10,6 +10,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/gitx"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
 )
 
 // parsePathArg is __llm_path_arg: at most one PATH and no options. "." when
@@ -30,13 +31,12 @@ func parsePathArg(c *invoke.Call, hint string) (string, bool) {
 	return path, true
 }
 
-// requireGitRepo is __llm_git_repo: git must be installed (git_not_found,
-// CONTINUE) and safe must be inside a work tree or repository
+// requireGitRepo is __llm_git_repo: git must be installed (gitPresent,
+// for need) and safe must be inside a work tree or repository
 // (not_a_git_repo, CONTINUE). The membership test is the hardened
 // `git -C safe rev-parse --git-dir` with its output discarded.
-func (m *Module) requireGitRepo(c *invoke.Call, safe string) bool {
-	if _, ok := m.lookPath(c, "git"); !ok {
-		fail(c, "git_not_found", "Git is not installed", "Git binary not found. Skip git operations")
+func (m *Module) requireGitRepo(c *invoke.Call, need, safe string) bool {
+	if !m.gitPresent(c, need) {
 		return false
 	}
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, io.Discard, io.Discard, "-C", safe, "rev-parse", "--git-dir")
@@ -47,23 +47,17 @@ func (m *Module) requireGitRepo(c *invoke.Call, safe string) bool {
 	return true
 }
 
-// gitStatus is llm_git_status (git.sh __llm_git_status_impl). The JSON is
-// built natively, never through jq: the 2.x no-jq degraded path is the
-// forced divergence LEDGER LLM-04, which cannot arise here. The pretty
-// 2-space layout is kept byte for byte.
-func (m *Module) gitStatus(c *invoke.Call) int {
-	if helpAnywhere(c) {
-		return 0
-	}
-	path, ok := parsePathArg(c, "Use a path or no argument")
-	if !ok {
-		return 1
-	}
+// gitStatus2x is llm_git_status without a 3.4 option (git.sh
+// __llm_git_status_impl). The JSON is built natively, never through jq:
+// the 2.x no-jq degraded path is the forced divergence LEDGER LLM-04,
+// which cannot arise here. The pretty 2-space layout is kept byte for
+// byte.
+func (m *Module) gitStatus2x(c *invoke.Call, path string) int {
 	safe, ok := m.validatePath(c, path)
 	if !ok {
 		return 1
 	}
-	if !m.requireGitRepo(c, safe) {
+	if !m.requireGitRepo(c, c.Name, safe) {
 		return 1
 	}
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
@@ -176,35 +170,15 @@ func stripFields(s string, n int) string {
 	return s
 }
 
-// gitDiff is llm_git_diff (git.sh __llm_git_diff_impl): `git diff --stat`
-// text, optionally staged, passed through verbatim.
-func (m *Module) gitDiff(c *invoke.Call) int {
-	if helpAnywhere(c) {
-		return 0
-	}
-	staged := false
-	pt := pathTaker{path: "."}
-	args := c.Args
-	for len(args) > 0 {
-		a := args[0]
-		switch {
-		case a == "--staged" || a == "--cached":
-			staged = true
-			args = args[1:]
-		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --staged or a path")
-		default:
-			if !pt.take(c, a) {
-				return 1
-			}
-			args = args[1:]
-		}
-	}
-	safe, ok := m.validatePath(c, pt.path)
+// gitDiff2x is llm_git_diff without a 3.4 option (git.sh
+// __llm_git_diff_impl): `git diff --stat` text, optionally staged, passed
+// through verbatim.
+func (m *Module) gitDiff2x(c *invoke.Call, path string, staged bool) int {
+	safe, ok := m.validatePath(c, path)
 	if !ok {
 		return 1
 	}
-	if !m.requireGitRepo(c, safe) {
+	if !m.requireGitRepo(c, c.Name, safe) {
 		return 1
 	}
 	diffArgs := []string{"-C", safe, "diff", "--stat", "--no-color", "--no-ext-diff", "--no-textconv"}
@@ -226,18 +200,32 @@ func (m *Module) gitLog(c *invoke.Call) int {
 	}
 	limit := "10"
 	pt := pathTaker{path: "."}
+	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags)
+	var q logQuery
 	args := c.Args
 	for len(args) > 0 {
+		n, ok := o.Take(c, args)
+		if !ok {
+			return 1
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
 		a := args[0]
 		switch {
-		case a == "-n" || a == "--limit":
+		case a == "-n" || a == "--limit" || logValueFlags[a]:
 			if len(args) < 2 {
 				return fail(c, "missing_value", a, a+" needs a value")
 			}
-			limit = args[1]
+			if a == "-n" || a == "--limit" {
+				limit = args[1]
+			} else if !q.set(c, a, args[1]) {
+				return 1
+			}
 			args = args[2:]
 		case strings.HasPrefix(a, "-"):
-			return fail(c, "unknown_option", a, "Use --limit N or a path")
+			return fail(c, "unknown_option", a, "Use -n N, --since, --until, --grep, --author, --path, --fields, --format or a path")
 		default:
 			if !pt.take(c, a) {
 				return 1
@@ -248,16 +236,18 @@ func (m *Module) gitLog(c *invoke.Call) int {
 	if !validUint(c, "limit", limit) {
 		return 1
 	}
+	if q.any() || o.Format != llmfmt.Default || o.Width > 0 || o.Capped() {
+		return m.gitLog34(c, o, q, limit, pt.path)
+	}
 	safe, ok := m.validatePath(c, pt.path)
 	if !ok {
 		return 1
 	}
-	if !m.requireGitRepo(c, safe) {
+	if !m.requireGitRepo(c, c.Name, safe) {
 		return 1
 	}
-	if _, ok := m.lookPath(c, "jq"); !ok {
-		return fail(c, "jq_not_found", "jq is required for JSON output", "Install jq: sudo apt install jq")
-	}
+	// The JSON is built natively: no jq is needed (2.x and 3.x before
+	// failed with jq_not_found without one).
 	res := gitx.Safe(c.Ctx, m.run, c.Env.Child(), nil, nil, io.Discard,
 		"-C", safe, "log", "-n", limit, "--no-ext-diff", "--no-textconv", "--no-show-signature",
 		"-z", "--format=%h%x00%s%x00%an%x00%ci")

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -40,6 +42,11 @@ func wslRoot(t *testing.T, m *Module, wsl, cmd bool) string {
 		p := filepath.Join(d, "mnt/c/Windows/System32/cmd.exe")
 		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o700))
 		require.NoError(t, os.WriteFile(p, []byte("#!/bin/sh\n"), 0o700))
+		// The C: drive, so that cmd.exe is found on the drive that holds
+		// Windows.
+		require.NoError(t, os.MkdirAll(filepath.Join(d, "proc/self"), 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(d, "proc/self/mountinfo"),
+			[]byte("97 62 0:52 / /mnt/c rw,noatime - 9p C:\\134 rw,aname=drvfs;path=C:\\;uid=1000;gid=1000\n"), 0o600))
 	}
 	sr, err := platform.NewSysroot(d)
 	require.NoError(t, err)
@@ -93,16 +100,21 @@ func TestWSLStopVM(t *testing.T) {
 
 func TestWSLExplorer(t *testing.T) {
 	d := t.TempDir()
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	unc := `\\wsl.localhost\Ubuntu` + strings.ReplaceAll(cwd, "/", `\`)
 	m, _, _ := tm(t, runner.NewFake(t,
 		runner.Expect{Argv: []string{"wslpath", "-w", d}, Stdout: "\\\\wsl.localhost\\Ubuntu\\tmp\\x\n"},
 		runner.Expect{Argv: []string{"explorer.exe", "\\\\wsl.localhost\\Ubuntu\\tmp\\x"}, Status: 1},
 		runner.Expect{Argv: []string{"wslpath", "-w", "."}, Status: 1},
-		runner.Expect{Argv: []string{"explorer.exe", "."}},
+		runner.Expect{Argv: []string{"explorer.exe", unc}},
 	))
 	wslRoot(t, m, true, false)
 	r := call(m, "wsl_explorer", nil, nil, "", d)
 	require.Equal(t, result{"", "", 0}, r)
-	r = call(m, "wsl_explorer", nil, nil, "")
+	// 3.4: a failing wslpath falls back to the translation done here (the
+	// Linux path went to Explorer as it was).
+	r = call(m, "wsl_explorer", map[string]string{"WSL_DISTRO_NAME": "Ubuntu"}, nil, "")
 	require.Equal(t, result{"", "", 0}, r)
 	r = call(m, "wsl_explorer", nil, nil, "", filepath.Join(d, "nope"))
 	require.Equal(t, result{"", "Error: No such file or directory: " + filepath.Join(d, "nope") + "\n", 1}, r)
@@ -121,8 +133,13 @@ func TestWSLTaskmanager(t *testing.T) {
 	wslRoot(t, m, true, false)
 	r := call(m, "wsl_taskmanager", nil, nil, "")
 	require.Equal(t, result{"", "", 0}, r)
+	// 3.4: a cmd.exe that does not start is the prerequisite report and
+	// status 1 (it was "bash: cmd.exe: command not found" and status 0).
+	defer prereq.SetSystem(debian("cmd.exe"))()
 	r = call(m, "wsl_taskmanager", nil, nil, "")
-	require.Equal(t, result{"", "bash: cmd.exe: command not found\n", 0}, r)
+	require.Equal(t, result{"", "Error: wsl_taskmanager needs cmd.exe, which is not installed.\n" +
+		"  cmd.exe restarts and shuts down WSL from inside it, and starts the Task Manager.\n" +
+		"  It comes with Windows: check that WSL interop is enabled ([interop] enabled=true in /etc/wsl.conf).\n", 1}, r)
 }
 
 func dmesg(plain, stamped string, status int) []runner.Expect {

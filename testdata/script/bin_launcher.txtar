@@ -53,7 +53,7 @@ exists home/.local/share/gash/versions/3.0.0/gash
 rm home/.local/share/gash/versions/3.0.0/gash
 env GASH_RELEASE_URL=file://$WORK/nothing
 ! exec home/.gash/bin/gash version
-stderr '^Error: gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded$'
+stderr '^Error: gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded \(download failed: file://.*/nothing/gash_3\.0\.0_[a-z]+_[a-z0-9]+\.tar\.gz\)$'
 stderr '^Hint: Run: bash ~/\.gash/install\.sh --repair$'
 ! exec home/.gash/bin/gash llm_tree .
 stderr '^\{"error":"binary_not_found",'

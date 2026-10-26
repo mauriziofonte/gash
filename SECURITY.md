@@ -6,7 +6,7 @@
 |---|---|
 | 3.x | Yes: fixes ship in the next 3.x release |
 | 2.1.x | Critical and high security fixes only, as 2.1.x patch releases, until 2027-04-30. Upgrade with `gash_upgrade` |
-| 2.0.x and older | No: upgrade with `gash_upgrade` (1.x: through 2.1.0, see [docs/migration.md](docs/migration.md)) |
+| 2.0.x and older | No: upgrade with `gash_upgrade` (1.x: through 2.1.0, see [the 2.1.0 migration guide](https://github.com/mauriziofonte/gash/blob/v2.1.0/docs/migration.md)) |
 
 ## Reporting a vulnerability
 

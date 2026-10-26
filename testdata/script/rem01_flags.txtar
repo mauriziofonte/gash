@@ -11,6 +11,7 @@ env GASH_ENV_FILE=$WORK/hostenv
 env T=$WORK
 
 chmod 755 bin/rsync
+chmod 755 bin/ssh
 chmod 755 bin/scp
 
 # --delete -n: -n is refused, rsync never runs.
@@ -42,3 +43,6 @@ for a in "$@"; do printf '%s\n' "$a"; done >>"$T/argv"
 -- bin/scp --
 #!/bin/sh
 for a in "$@"; do printf '%s\n' "$a"; done >>"$T/argv"
+-- bin/ssh --
+#!/bin/sh
+exit 0

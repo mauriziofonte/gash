@@ -3,9 +3,13 @@
 package llmexec
 
 import (
+	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
 // TestSettings_Allow: GASH_LLM_EXEC_ALLOW adds extra commands that skip the
@@ -174,5 +178,55 @@ func TestSandbox(t *testing.T) {
 	}
 	if plan.Argv[0] != "bwrap" {
 		t.Errorf("argv[0] = %q, want bwrap", plan.Argv[0])
+	}
+}
+
+// wslFS is the real filesystem plus a /run/WSL directory, as under WSL.
+type wslFS struct{ pathguard.OSFS }
+
+func (f wslFS) Lstat(name string) (fs.FileInfo, error) {
+	if name == WSLInteropDir {
+		return os.Lstat(os.TempDir())
+	}
+	return f.OSFS.Lstat(name)
+}
+
+// TestSandbox_WSLInterop: under WSL the sandbox hides the interop sockets
+// and never passes WSL_INTEROP, so a Windows program cannot start from it.
+func TestSandbox_WSLInterop(t *testing.T) {
+	cwd := t.TempDir()
+	probe := fakeProbe{sed: true, gawk: true, diff: true, gnu: true, bwrap: true}
+	for _, mode := range []string{"", "unrestricted"} {
+		env := testEnv(cwd)
+		env.FS = wslFS{}
+		env.Vars["WSL_INTEROP"] = "/run/WSL/42_interop"
+		plan, err := Build("echo hi", Settings{Exec: mode, Sandbox: "1"}, env, probe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		joined := strings.Join(plan.Wrap, " ")
+		if !strings.Contains(joined, "--tmpfs "+WSLInteropDir) {
+			t.Errorf("mode %q: sandbox does not hide %s: %v", mode, WSLInteropDir, plan.Wrap)
+		}
+		for _, kv := range plan.Env {
+			if strings.HasPrefix(kv, "WSL_INTEROP=") {
+				t.Errorf("mode %q: WSL_INTEROP reaches the sandbox", mode)
+			}
+		}
+	}
+	// Without the sandbox nothing changes; on a machine without /run/WSL
+	// the sandbox argv has no tmpfs.
+	env := testEnv(cwd)
+	env.Vars["WSL_INTEROP"] = "/run/WSL/42_interop"
+	plan, err := Build("echo hi", Settings{Exec: "unrestricted"}, env, probe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(plan.Env, "WSL_INTEROP=/run/WSL/42_interop") {
+		t.Errorf("unrestricted without sandbox lost WSL_INTEROP: %v", plan.Env)
+	}
+	env.FS = nil
+	if plan, _ = Build("echo hi", Settings{Sandbox: "1"}, env, probe); strings.Contains(strings.Join(plan.Wrap, " "), "--tmpfs") && !isDir(pathguard.OSFS{}, WSLInteropDir) {
+		t.Errorf("tmpfs without %s: %v", WSLInteropDir, plan.Wrap)
 	}
 }

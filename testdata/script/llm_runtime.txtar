@@ -1,0 +1,63 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_runtime (new in 3.4, plan V2, S8): a node major or a php version
+# resolved to its binary without loading nvm.sh. node comes from the nvm
+# tree under $HOME (a fake one here, each node a stub that prints its
+# version), php from /usr/bin/phpX.Y and the php on PATH (a stub with a
+# version no host has). A version that is not installed is a STOP naming
+# the installed ones; llm_runtime never writes the runtime cache.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env PATH=$WORK/bin:$PATH
+chmod 0755 bin/php
+chmod 0755 home/.nvm/versions/node/v20.11.1/bin/node
+chmod 0755 home/.nvm/versions/node/v24.1.0/bin/node
+chmod 0755 home/.nvm/versions/node/v24.1.0/bin/npm
+
+# --- through the sourced shell: node 24 from the nvm tree
+exec bash -c 'source "$GASH_SH"; llm_runtime node 24'
+stdout '^\{"runtime":"node","request":"24","path":"[^"]*/home/\.nvm/versions/node/v24\.1\.0/bin/node","version":"24\.1\.0"\}$'
+! stderr .
+
+# --- directly: a prefix picks the newest match; npm sits beside its node
+exec gash llm_runtime node v20
+stdout '"path":"[^"]*/v20\.11\.1/bin/node","version":"20\.11\.1"'
+exec gash llm_runtime npm 24
+stdout '^\{"runtime":"npm","request":"24","path":"[^"]*/v24\.1\.0/bin/npm","version":"24\.1\.0"\}$'
+
+# --- php from PATH, probed with --version
+exec gash llm_runtime php 5.9
+stdout '^\{"runtime":"php","request":"5\.9","path":"[^"]*/bin/php","version":"5\.9\.0"\}$'
+
+# --- not installed: STOP with the installed versions
+! exec gash llm_runtime node 18
+stderr '"error":"runtime_not_installed","details":"node 18 is not installed; installed: [^"]*24\.1\.0'
+stderr '"action":"STOP"'
+! stdout .
+
+# --- bad arguments
+! exec gash llm_runtime ruby 3
+stderr '"error":"unknown_runtime"'
+! exec gash llm_runtime node 24.x
+stderr '"error":"invalid_version"'
+! exec gash llm_runtime node 24 extra
+stderr '"error":"unexpected_argument"'
+
+# --- the cache is the commands' alone
+! exists home/.cache/gash/runtimes.json
+
+-- bin/php --
+#!/bin/sh
+[ "$1" = --version ] && echo 'PHP 5.9.0 (cli) (built: Jan  1 2000)'
+-- home/.nvm/versions/node/v20.11.1/bin/node --
+#!/bin/sh
+echo v20.11.1
+-- home/.nvm/versions/node/v24.1.0/bin/node --
+#!/bin/sh
+echo v24.1.0
+-- home/.nvm/versions/node/v24.1.0/bin/npm --
+#!/bin/sh
+echo 10.0.0

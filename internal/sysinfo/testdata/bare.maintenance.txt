@@ -8,6 +8,7 @@
 --- User crontabs
 --- Logrotate configs
 --- Upgradable packages
+Note=apt is not installed
 --- dpkg log (recent)
 --- Pending config merges
 --- Profile scripts

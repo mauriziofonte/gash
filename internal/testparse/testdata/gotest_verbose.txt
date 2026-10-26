@@ -1,0 +1,11 @@
+=== RUN   TestA
+--- PASS: TestA (0.00s)
+=== RUN   TestB
+=== RUN   TestB/one
+=== RUN   TestB/two
+    b_test.go:14: skipping on linux
+--- PASS: TestB (0.00s)
+    --- PASS: TestB/one (0.00s)
+    --- SKIP: TestB/two (0.00s)
+PASS
+ok  	example.com/app/util	0.003s

@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.4 and 6: a 2.1.0 install upgraded by its
+# dev/port/design/upgrade.md 3.4 and 6: a 2.1.0 install upgraded by its
 # 2.x gash_upgrade to 3.0.0 (which fetched its binary and ran) goes back
 # with a plain `git checkout v2.1.0`: the working tree is clean at every
 # step (the binary and every 3.x state live under the XDG directories),

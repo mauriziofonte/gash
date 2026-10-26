@@ -41,6 +41,13 @@ var SecretPatterns = []string{
 	".my.cnf", ".boto", ".s3cfg", ".dockercfg", ".vault-token",
 	"kubeconfig", "*.kubeconfig", "*.tfstate", "*.tfstate.*", "*.tfvars", "*.tfvars.json",
 	"ssh_host_*_key", ".envrc",
+	// Windows secrets reachable from WSL over /mnt: the user registry hive,
+	// saved RDP credentials, answer files that can hold plaintext passwords,
+	// and the browser credential stores. Matched on the base name like the
+	// rest, so they apply wherever the file lives.
+	"ntuser.dat", "ntuser.dat.*", "usrclass.dat", "usrclass.dat.*",
+	"*.rdp", "unattend.xml", "autounattend.xml",
+	"login data", "logins.json", "key4.db", "key3.db",
 }
 
 // SecretExceptions is __LLM_SECRET_EXCEPTIONS: templates that share a secret

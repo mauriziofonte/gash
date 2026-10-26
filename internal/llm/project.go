@@ -12,11 +12,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
-	"github.com/mauriziofonte/gash/internal/runner"
 )
 
 // isRegular is [[ -f PATH ]]: a regular file after symlinks.
@@ -247,8 +247,9 @@ func (m *Module) project(c *invoke.Call) int {
 // invalid_manifest (2.x: jq's raw parse error and exit 5, or nothing and
 // exit 0), and a dependency map that is not an object counts as empty
 // (2.x: jq's keys gave an array's indices). requirements.txt and go.mod
-// keep the 2.x jq programs, through the sanctioned runner (jq_not_found,
-// FATAL, without jq); a go.mod comment line is no dependency (LLM-14).
+// are read natively too, as the 2.x jq programs read them (3.4: no jq is
+// needed; 2.x and 3.x before failed with jq_not_found, FATAL, for every
+// manifest); a go.mod comment line is no dependency (LLM-14).
 func (m *Module) deps(c *invoke.Call) int {
 	if helpAnywhere(c) {
 		return 0
@@ -275,28 +276,26 @@ func (m *Module) deps(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
-	jq, ok := m.lookPath(c, "jq")
-	if !ok {
-		return fail(c, "jq_not_found", "jq is required for JSON output", "Install jq: sudo apt install jq")
-	}
-
-	shape := "{manager: $m, dependencies: $prod}"
-	if includeDev {
-		shape = "{manager: $m, prod: $prod, dev: $dev}"
-	}
 	switch {
 	case isRegular(safe + "/composer.json"):
 		return m.jsonDeps(c, safe+"/composer.json", "composer", "require", "require-dev", includeDev)
 	case isRegular(safe + "/package.json"):
 		return m.jsonDeps(c, safe+"/package.json", "npm", "dependencies", "devDependencies", includeDev)
 	case isRegular(safe + "/requirements.txt"):
+		// An unreadable file lists nothing, as jq read nothing from it.
 		data, _ := os.ReadFile(safe + "/requirements.txt")
-		prog := `[inputs | sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0 and (startswith("-") | not)) | sub("[ <>=!~;\\[@].*"; "")] as $prod | [] as $dev | ` + shape
-		return m.runJQ(c, jq, bytes.NewReader(data), "-cRn", "--arg", "m", "pip", prog)
+		_, _ = c.Stdout.Write(depsJSON("pip", pipRequires(data), includeDev))
+		return 0
 	case isRegular(safe + "/go.mod"):
 		data, _ := os.ReadFile(safe + "/go.mod")
-		prog := `[inputs | select(length > 0)] as $prod | [] as $dev | ` + shape
-		return m.runJQ(c, jq, bytes.NewReader(goModRequires(data)), "-cRn", "--arg", "m", "go", prog)
+		var mods []string
+		for _, l := range rawLines(goModRequires(data)) {
+			if l != "" {
+				mods = append(mods, l)
+			}
+		}
+		_, _ = c.Stdout.Write(depsJSON("go", mods, includeDev))
+		return 0
 	default:
 		return fail(c, "no_package_file",
 			"No composer.json, package.json, requirements.txt or go.mod found",
@@ -382,14 +381,59 @@ func appendKeys(b []byte, v json.RawMessage) []byte {
 	return append(b, ']')
 }
 
-// runJQ runs jq with its stdout and stderr on the caller's streams (the 2.x
-// pipeline left jq's stderr on the function's stderr), returning jq's exit
-// status. stdin is nil (/dev/null) when the program reads a file argument.
-func (m *Module) runJQ(c *invoke.Call, jq string, stdin io.Reader, args ...string) int {
-	res, _ := m.run.Run(c.Ctx, runner.Cmd{Path: jq, Args: args, Options: runner.Options{
-		Env: c.Env.Child(), Stdin: stdin, Stdout: c.Stdout, Stderr: c.Stderr,
-	}})
-	return res.ExitCode
+// depsJSON is the {manager, dependencies} line of llm_deps (with dev,
+// {manager, prod, dev} and no dev dependencies), as jq -c wrote it.
+func depsJSON(manager string, prod []string, dev bool) []byte {
+	b := []byte(`{"manager":`)
+	b = contract.AppendString(b, manager, contract.EscapeJQ)
+	if dev {
+		b = append(b, `,"prod":`...)
+	} else {
+		b = append(b, `,"dependencies":`...)
+	}
+	b = append(b, '[')
+	for i, p := range prod {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = contract.AppendString(b, p, contract.EscapeJQ)
+	}
+	b = append(b, ']')
+	if dev {
+		b = append(b, `,"dev":[]`...)
+	}
+	return append(b, "}\n"...)
+}
+
+// rawLines are the inputs of jq -R: the text split at each newline, a
+// last line without one included, no empty input after a final newline.
+func rawLines(data []byte) []string {
+	if len(data) == 0 {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+}
+
+// pipRequires is the 2.x jq program of requirements.txt, natively: each
+// line without its # comment and the blanks around it (Unicode white
+// space, as jq's \s), empty lines and options (-r, -e, --index-url) left
+// out, cut at the first of ` <>=!~;[@`.
+func pipRequires(data []byte) []string {
+	var out []string
+	for _, l := range rawLines(data) {
+		if i := strings.IndexByte(l, '#'); i >= 0 {
+			l = l[:i]
+		}
+		l = strings.TrimFunc(l, unicode.IsSpace)
+		if l == "" || strings.HasPrefix(l, "-") {
+			continue
+		}
+		if i := strings.IndexAny(l, " <>=!~;[@"); i >= 0 {
+			l = l[:i]
+		}
+		out = append(out, l)
+	}
+	return out
 }
 
 var (

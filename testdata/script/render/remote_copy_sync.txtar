@@ -12,17 +12,18 @@
 # covers: output_style_render_spec.sh:306
 #
 # remote_push / remote_pull / remote_sync_push / remote_sync_pull rendering
-# (R2-R6). scp and rsync are PATH stubs that echo a marker; the host is a
-# registered alias (headless). Covers the successful copy/sync, the
-# sensitive-path and DENY-list refusals, the --delete safety refusal, and
-# the missing-args error. All path guards fire in headless mode.
+# (R2-R6). scp and rsync are PATH stubs that echo a marker (beside a stub
+# ssh, which they need on PATH); the host is a registered alias (headless).
+# Covers the successful copy/sync, the sensitive-path and DENY-list
+# refusals, the --delete safety refusal, and the missing-args error. All
+# path guards fire in headless mode.
 
 env GASH_HEADLESS=1
 env HOME=$WORK
 env LC_ALL=C.UTF-8
 
 # --- :297 remote_push:copied - scp stub runs
-exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho SCP \"$@\"\n" >bin/scp && chmod +x bin/scp && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; echo x >f; source "$GASH_SH"; remote_push web f /tmp/f'
+exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho SCP \"$@\"\n" >bin/scp && chmod +x bin/scp && printf "#!/bin/sh\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; echo x >f; source "$GASH_SH"; remote_push web f /tmp/f'
 stdout '^SCP '
 
 # --- :298 remote_push:sensitive_declined - /etc is sensitive
@@ -34,7 +35,7 @@ stderr 'Remote path ./etc/app.conf. is sensitive'
 stderr 'Remote path ./etc/shadow. is in the DENY list'
 
 # --- :300 remote_pull:copied
-exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho SCP \"$@\"\n" >bin/scp && chmod +x bin/scp && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_pull web /tmp/f ./f'
+exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho SCP \"$@\"\n" >bin/scp && chmod +x bin/scp && printf "#!/bin/sh\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_pull web /tmp/f ./f'
 stdout '^SCP '
 
 # --- :301 remote_pull:denied
@@ -46,7 +47,7 @@ stderr 'Remote path ./etc/shadow. is in the DENY list'
 stderr 'Error: Missing local destination\. Usage: remote_pull'
 
 # --- :303 remote_sync_push:synced - rsync stub runs
-exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; mkdir d; source "$GASH_SH"; remote_sync_push web d/ /tmp/d/ --no-progress'
+exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && printf "#!/bin/sh\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; mkdir d; source "$GASH_SH"; remote_sync_push web d/ /tmp/d/ --no-progress'
 stdout 'sending incremental file list'
 
 # --- :304 remote_sync_push:delete_declined - --delete outside the safe set
@@ -54,7 +55,7 @@ stdout 'sending incremental file list'
 stderr 'rsync --delete targeting ./srv/d/. is outside the safe set'
 
 # --- :305 remote_sync_pull:synced
-exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_sync_pull web /tmp/d/ ./d/'
+exec bash -c 'printf "HOST:web=deploy@web.example.com\n" >.gash_env && chmod 600 .gash_env; mkdir -p bin && printf "#!/bin/sh\necho sending incremental file list\n" >bin/rsync && chmod +x bin/rsync && printf "#!/bin/sh\n" >bin/ssh && chmod +x bin/ssh && export PATH="$HOME/bin:$PATH" GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; remote_sync_pull web /tmp/d/ ./d/'
 stdout 'sending incremental file list'
 
 # --- :306 remote_sync_pull:denied - /proc is on the DENY list

@@ -1,0 +1,126 @@
+// Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+
+package remote
+
+import "strings"
+
+// The POSIX sh pieces every remote script of the agent toolkit shares
+// (the --host fallbacks, llm_same, agent_put): the error frame, path
+// resolution and the transfer tier on the resolved path. A script sets N
+// to its nonce first; frames are "<nonce> KIND REST" lines on stderr.
+
+// ShErr is gash_err CODE KEY DETAILS: the error frame, then exit 1 (the
+// scripts run their checks in a subshell, so the trailer still follows).
+func ShErr() string {
+	return `gash_err() { printf '%s err %s %s %s\n' "$N" "$1" "$2" "$3" >&2; exit 1; }` + "\n"
+}
+
+// ShResolve is gash_resolve PATH: ~ and ~/ as the remote home, then
+// realpath -m (GNU realpath where it is there; elsewhere, as on macOS and
+// BusyBox, cd -P on the longest existing prefix, readlink -f, and a
+// dangling symlink followed with plain readlink, at most 40 hops), the
+// rest appended without . segments and with .. applied. A symlink it
+// cannot follow (no realpath and no readlink on the host) is the "missing
+// readlink" frame and status 1, with nothing on stdout: the rails must
+// never judge a link by its own name.
+func ShResolve() string {
+	return `gash_resolve() {
+  case $1 in '~') set -- "$HOME" ;; '~/'*) set -- "$HOME/${1#'~/'}" ;; esac
+  if gr_r=$(realpath -m -- "$1" 2>/dev/null) && [ -n "$gr_r" ]; then printf '%s\n' "$gr_r"; return 0; fi
+  case $1 in /*) gr_p=$1 ;; *) gr_p=$(pwd -P)/$1 ;; esac
+  gr_h=0
+  while :; do
+    gr_t=
+    while [ ! -e "$gr_p" ] && [ ! -L "$gr_p" ]; do
+      gr_t=/${gr_p##*/}$gr_t
+      gr_p=${gr_p%/*}
+      [ -n "$gr_p" ] || { gr_p=/; break; }
+    done
+    if [ -d "$gr_p" ]; then
+      gr_p=$(cd -P -- "$gr_p" 2>/dev/null && pwd -P)
+    elif gr_r=$(readlink -f -- "$gr_p" 2>/dev/null) && [ -n "$gr_r" ]; then
+      gr_p=$gr_r
+    elif [ -L "$gr_p" ] && ! command -v readlink >/dev/null 2>&1; then
+      printf '%s missing readlink\n' "$N" >&2
+      return 1
+    elif [ -L "$gr_p" ] && [ "$gr_h" -lt 40 ] && gr_l=$(readlink -- "$gr_p" 2>/dev/null) && [ -n "$gr_l" ]; then
+      gr_h=$((gr_h + 1))
+      case $gr_l in /*) gr_p=$gr_l$gr_t ;; *) gr_p=${gr_p%/*}/$gr_l$gr_t ;; esac
+      continue
+    else
+      gr_d=$(cd -P -- "${gr_p%/*}/" 2>/dev/null && pwd -P)
+      gr_p=${gr_d%/}/${gr_p##*/}
+    fi
+    break
+  done
+  gr_o=${gr_p%/}
+  gr_i=$IFS; IFS=/; set -f
+  for gr_s in $gr_t; do
+    case $gr_s in ''|.) ;; ..) gr_o=${gr_o%/*} ;; *) gr_o=$gr_o/$gr_s ;; esac
+  done
+  set +f; IFS=$gr_i
+  printf '%s\n' "${gr_o:-/}"
+}
+`
+}
+
+// ShTools is gash_tools TOOL...: the "missing TOOL" frame and exit 1 for
+// the first TOOL the host does not have (command -v), before a script runs
+// it. Without it a missing find, sort or ls went silent behind 2>/dev/null
+// and its empty output read as an empty answer; the Go side turns the
+// frame into the prerequisite envelope (MissingOnHost).
+func ShTools() string {
+	return `gash_tools() { for gt_t in "$@"; do command -v "$gt_t" >/dev/null 2>&1 || { printf '%s missing %s\n' "$N" "$gt_t" >&2; exit 1; }; done; }` + "\n"
+}
+
+// ShTier is gash_tier PATH: the transfer tier of a resolved absolute PATH
+// as classifyResolved reads it (deny:ENTRY, ask:ENTRY or allow), generated
+// from the same tables, so a symlink on the host cannot carry a write
+// into a tier its spelling avoided. The sensitive components are matched
+// without regard to case by the case patterns themselves (icaseGlob), with
+// no tr: a host without tr cannot turn the check off.
+func ShTier() string {
+	var b strings.Builder
+	b.WriteString("gash_tier() {\n")
+	var alias []string
+	for _, a := range resolvedAliases {
+		alias = append(alias, Quote(a), Quote(a)+"/*")
+	}
+	b.WriteString("  case $1 in " + strings.Join(alias, "|") + ") set -- \"${1#/private}\" ;; esac\n")
+	b.WriteString("  [ \"$1\" = / ] && { echo deny:/; return; }\n")
+	b.WriteString("  for gt_p in " + QuoteAll(denyPrefixes) + "; do\n")
+	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo \"deny:$gt_p\"; return ;; esac\n  done\n")
+	for _, comp := range askComponents {
+		b.WriteString("  case /$1/ in " + icaseGlob("*/"+comp+"/*") + ") echo " + Quote("ask:"+comp) + "; return ;; esac\n")
+	}
+	b.WriteString("  for gt_p in " + QuoteAll(append(append([]string{}, deleteSafePrefixes...), resolvedSafePrefixes...)) + "; do\n")
+	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo allow; return ;; esac\n  done\n")
+	b.WriteString("  for gt_p in " + QuoteAll(askPrefixes) + "; do\n")
+	b.WriteString("    case $1 in \"$gt_p\"|\"$gt_p\"/*) echo \"ask:$gt_p\"; return ;; esac\n  done\n")
+	b.WriteString("  echo allow\n}\n")
+	return b.String()
+}
+
+// Frame is the REST of the first "<nonce> KIND REST" line of stderr.
+func Frame(stderr []byte, nonce, kind string) (string, bool) {
+	prefix := nonce + " " + kind + " "
+	for _, l := range strings.Split(string(stderr), "\n") {
+		if strings.HasPrefix(l, prefix) {
+			return l[len(prefix):], true
+		}
+	}
+	return "", false
+}
+
+// ErrFrame is the CODE, KEY and DETAILS of a gash_err frame.
+func ErrFrame(stderr []byte, nonce string) (code, key, details string, ok bool) {
+	rest, ok := Frame(stderr, nonce, "err")
+	if !ok {
+		return "", "", "", false
+	}
+	parts := strings.SplitN(rest, " ", 3)
+	for len(parts) < 3 {
+		parts = append(parts, "")
+	}
+	return parts[0], parts[1], parts[2], true
+}

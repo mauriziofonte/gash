@@ -1,6 +1,14 @@
 # Security
 
-What Gash protects against, what it does not, and which checks each part enforces.
+This page describes the guardrails of Gash: what they protect against,
+what they do not, and which checks each part enforces. It is for anyone
+who lets an AI agent work through Gash, or wants to know what a function
+refuses and why. To report a vulnerability, see
+[Reporting a vulnerability](#reporting-a-vulnerability).
+
+Platforms: Linux, macOS and WSL; the checks are the same on each. The
+`llm_exec` sandbox needs `bwrap` (Linux only), and the per-shell server
+runs on Linux only.
 
 ## Threat model
 
@@ -96,7 +104,11 @@ Settings, read from `~/.gash_env` only (never from the environment):
   included) and the wrappers. Only the blocklist remains.
 * `GASH_LLM_SANDBOX=1`: runs under `bwrap --ro-bind / / --dev /dev --proc /proc
   --unshare-all --die-with-parent`, so a read-only filesystem and no network;
-  reading stays possible. Without a working `bwrap`: `sandbox_unavailable`.
+  reading stays possible. Under WSL the sandbox also mounts an empty
+  `/run/WSL` (`--tmpfs /run/WSL`) and never passes `WSL_INTEROP`: a Windows
+  program would run on Windows, outside the sandbox, so the interop sockets
+  are out of its reach and a `.exe` cannot start from it. Without a working
+  `bwrap`: `sandbox_unavailable`.
 
 Every argument is also checked against the [forbidden paths](#forbidden-paths):
 option values (`--file=/proc/x`, `-f/proc/x`, `-vf/proc/x`), `key=value` words, `~` and
@@ -165,6 +177,7 @@ A path is secret when its base name matches, ignoring case, one of:
 | Keys and keystores | `*.pem` `*.key` `*.p12` `*.pfx` `*.jks` `*.keystore` `*.kdbx` `*.ppk` `id_rsa*` `id_dsa*` `id_ecdsa*` `id_ed25519*` `*_rsa` `*_dsa` `*_ecdsa` `*_ed25519` (not `*.pub`) |
 | Credential files | `credentials` `credentials.*` `credentials_*` `credentials-*` `secrets` `secrets.*` `.gash_env` `.pgpass` `.netrc` `_netrc` `.git-credentials` `.npmrc` `.pypirc` `.htpasswd` `.my.cnf` `.boto` `.s3cfg` `.dockercfg` `.vault-token` `kubeconfig` `*.kubeconfig` `*.tfstate` `*.tfstate.*` `*.tfvars` `*.tfvars.json` `.envrc` |
 | Host keys | `ssh_host_*_key` (not `*.pub`) |
+| Windows (WSL) | `ntuser.dat` `ntuser.dat.*` `usrclass.dat` `usrclass.dat.*` `*.rdp` `unattend.xml` `autounattend.xml` `login data` `logins.json` `key4.db` `key3.db` — reachable over `/mnt` |
 | Directories | anything under `.ssh`, `.gnupg`, `.aws`, `.azure`, `.kube`, `.docker`, `.config/gcloud` |
 
 A symlink is judged by its own name and by its target's.
@@ -296,13 +309,53 @@ your home itself), and the messages say so.
 `remote_exec` runs any command on the remote host: the path tiers do not apply
 to it.
 
+## Agent toolkit
+
+The agent functions keep every rail above and split reads from writes.
+[AGENTS.md](../AGENTS.md), the contract agents follow, holds the details,
+and the [agents guide](agents/README.md) shows them to a person.
+
+* **`llm_*` only read**, with no exception. `llm_http` sends GET, HEAD or
+  OPTIONS without a body; a credential reaches it only through
+  `--auth-env VAR` (never argv, never printed, never sent to another host
+  on a redirect). `llm_docker_exec` and `llm_wait --cmd-ok` run under the
+  `llm_exec` rules; `llm_procs` has no kill.
+* **`agent_*` are the write tools**: `agent_replace`, `agent_git_commit`,
+  `agent_kill`, `agent_docker_exec`, `agent_put`, and `agent_test`, because
+  a test suite runs the project's own code (it runs a test suite and
+  nothing else; `gash run` runs any other command). Each takes `--dry-run`,
+  names every target (no glob is expanded, no implicit "all"), checks every
+  target before the first write, and keeps the secret-file and
+  forbidden-path rules. The deny tier of `remote_*` applies to local targets
+  too (`write_path_denied`, even with `--force`); the ask tier needs
+  `--force` (`sensitive_path`), except below your HOME or the project you
+  work in. On macOS a target resolved into `/private/etc` or
+  `/private/var` is judged as `/etc` or `/var`. `agent_git_commit` never force-pushes and has no `--amend` or
+  `--no-verify`; `agent_kill` signals only your own processes, never PID 1,
+  the caller or an ancestor; `agent_docker_exec` refuses commands that wipe
+  or format a root, stop the machine or pipe a download into a shell.
+* **`gash run`** is not an agent function: it runs any command. With
+  `--safe` it runs the command under the `llm_exec` rules above, with the
+  settings of `~/.gash_env`.
+* **Remote hosts.** `--host`, `llm_remote_run`, `llm_same` and `agent_put`
+  take registered `HOST:` aliases only. Remote paths pass the local rules
+  and the deny tier before anything connects, and again on the host after
+  links resolve; a secret file never leaves the host and the local stdin is
+  never sent. `llm_remote_run` checks each command with the `llm_exec`
+  rules first. Over a `+ssh` database connection the SQL guard runs before
+  ssh and the password goes on ssh's stdin. The gash binary Gash copies to a
+  host is size-checked, test-run and renamed into a 0700 cache directory.
+* **Telemetry** (`GASH_TELEMETRY_FILE`) is off by default and local: the
+  function, time, output size, status and truncation of each call, never an
+  argument, a path or a value.
+
 ## Confirmations
 
 `needs_confirm_prompt` reads the answer from `/dev/tty`, accepts only `y` or
-`Y`, and always refuses in headless mode or without a terminal. The 2.1
+`Y`, and always refuses in headless mode or without a terminal. The
 commands that show a plan first ask "Do you want to continue? [Y/n]" the same
 way. Answering no returns 1. `port_kill`, `process_kill`, `services_stop`
-and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
+and `node_upgrade` also accept `--force` as a synonym of `-y`.
 
 | Function | Interactive | Headless |
 |---|---|---|
@@ -320,6 +373,10 @@ and `node_upgrade` still accept the 2.0 `--force` as a synonym of `-y`.
 | `wsl_compact` | Runs without asking (it changes no data) | Refused unless `-y` |
 | `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
 | `sudo_last` (no argument) | Shows the command and asks | Refused |
+| `nvm_prune_versions` | Lists what it would remove and changes nothing; `-y`, `--yes` or `--force` removes | The same |
+| `gash logs clean` | Shows what it would free and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` (`confirmation_required`) |
+| `gash hte site remove`, `gash hte uninstall`, and `gash hte install` or `gash hte migrate --apply` when they stop the system Apache | Refused unless `--yes` (`confirmation_required`): no question is asked | The same |
+| `gash_doctor --install` | Shows the packages and the command, and asks; `--yes` skips | Refused (`install_needs_confirmation`, with the command to show the user) |
 | `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
 
 `gash_uninstall` also refuses a directory that resolves to `/` or your home,
@@ -340,9 +397,11 @@ and the kind of problem, never any part of the line; headless mode prints them
 only with `GASH_DEBUG=1`. Parsed values
 live in unexported shell variables (not inherited by child processes) that
 `gash_unload` removes. Secrets never go on a command line, where other users
-could read them in `/proc/<pid>/cmdline`: MySQL credentials use
-`--defaults-extra-file`, SSH passphrases are typed to `ssh-add` on a
-terminal Gash drives, and AI API keys stay inside the gash process.
+could read them in `/proc/<pid>/cmdline`: database passwords go to the
+drivers built into Gash, in memory (over a `+ssh` connection they travel on
+ssh's stdin and reach the client on the host in its environment), SSH
+passphrases are typed to `ssh-add` on a terminal Gash drives, and AI API
+keys stay inside the gash process.
 
 ## The per-shell server
 
@@ -369,8 +428,8 @@ warning. A tag counts as signed only when it is an annotated tag whose object
 ends with a signature block: a lightweight tag (even on a signed commit) and a
 message that only quotes the marker are unsigned.
 
-The releases (from 3.1.0) are signed by the release workflow, not by a
-person's key: an unsigned tag is checked through the Sigstore signature of its
+Releases are signed by the release workflow, not by a person's key: an
+unsigned tag is checked through the Sigstore signature of its
 release (`checksums.txt.sigstore.json`) when `cosign` is on `PATH`. The
 signature's certificate names the workflow (`.github/workflows/release.yml`),
 the tag and the commit, and cosign must accept it for the commit the tag
@@ -394,8 +453,8 @@ the previous tag again when that fails.
 
 ## Verifying a release
 
-Every release from 3.1.0 is built by `.github/workflows/release.yml` from its
-tag, and ships with:
+Every release is built by `.github/workflows/release.yml` from its tag, and
+ships with:
 
 - `checksums.txt`, the SHA-256 of every archive and SBOM, and
   `checksums.txt.sigstore.json`, its keyless Sigstore signature: the
@@ -408,10 +467,10 @@ The binaries are also reproducible: `go run ./internal/tools/releasesums -check`
 on the tagged tree rebuilds them and compares them with the hashes the tree
 pins in `release/SHA256SUMS`.
 
-To verify a download by hand (here 3.1.0 on linux/amd64):
+To verify a download by hand (here 3.4.0 on linux/amd64):
 
 ```bash
-v=3.1.0
+v=3.4.0
 cosign verify-blob --bundle checksums.txt.sigstore.json \
   --certificate-identity "https://github.com/mauriziofonte/gash/.github/workflows/release.yml@refs/tags/v$v" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \

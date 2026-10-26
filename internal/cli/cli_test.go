@@ -4,6 +4,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"runtime"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/buildinfo"
 	"github.com/mauriziofonte/gash/internal/handlers"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/term"
 )
 
@@ -73,7 +75,7 @@ func TestUnknownWordIsTheCard(t *testing.T) {
 	for _, args := range [][]string{{"nope"}, {"--no-color", "nope"}, {"--no-color", "version", "nope"}, {"help"}, {"needs_help"}, {"flf"}} {
 		_, errOut, rc := run(args...)
 		require.Equal(t, 1, rc, args)
-		require.Equal(t, "Error: Unknown topic: "+args[len(args)-1]+". Topics: files system nav git docker remote dev llm ai gash, all\n", errOut, args)
+		require.Equal(t, "Error: Unknown topic: "+args[len(args)-1]+". Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut, args)
 	}
 	// --no-color before a command word does not select the command.
 	_, errOut, _ := run("--no-color", "version")
@@ -161,4 +163,21 @@ func TestIsCommand(t *testing.T) {
 	for _, w := range []string{"gash", "help", "needs_help", "path_add", "nvm", "git", "flf", "--no-color", "migrate"} {
 		require.False(t, IsCommand(w), w)
 	}
+}
+
+// Plan S9: gash agents-hint prints the routing table (md, the default) or
+// one JSON object per row; another format is a RETRY error.
+func TestAgentsHint(t *testing.T) {
+	out, errOut, rc := run("agents-hint")
+	require.Equal(t, 0, rc, errOut)
+	require.Equal(t, registry.AgentsHint(), out)
+	out, _, rc = run("agents-hint", "--format", "json")
+	require.Equal(t, 0, rc)
+	var rows []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &rows))
+	require.Len(t, rows, len(registry.Routes()))
+	require.Equal(t, registry.Routes()[0].Fn, rows[0]["fn"])
+	_, errOut, rc = run("agents-hint", "--format", "yaml")
+	require.Equal(t, 1, rc)
+	require.Contains(t, errOut, `"error":"invalid_format"`)
 }

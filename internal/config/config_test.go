@@ -312,9 +312,9 @@ func TestGrammar(t *testing.T) {
 	}{
 		{name: "no = after prefix", line: "AI:claude", warn: "AI: entry has no '=' (expected AI:name=value), skipping"},
 		{name: "empty name", line: "DB:=mysql://x", warn: "DB: entry has an empty name, skipping"},
-		{name: "bad DB scheme", line: "DB:prod=ftp://u:pw@h/x", warn: "DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)"},
-		{name: "DB scheme is case-sensitive", line: "DB:x=MYSQL://h", warn: "DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)"},
-		{name: "space before the URL", line: "DB:x= mysql://h", warn: "DB URL must start with mysql://, mariadb:// or pgsql:// (skipping)"},
+		{name: "bad DB scheme", line: "DB:prod=ftp://u:pw@h/x", warn: "DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)"},
+		{name: "DB scheme is case-sensitive", line: "DB:x=MYSQL://h", warn: "DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)"},
+		{name: "space before the URL", line: "DB:x= mysql://h", warn: "DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)"},
 		{name: "name keeps inner spaces", line: "DB: x =mysql://h", db: []string{" x =mysql://h"}},
 		{name: "value split at the first =", line: "DB:x=mysql://h/d?a=b", db: []string{"x=mysql://h/d?a=b"}},
 		{name: "tab in the name moves into the value", line: "DB:a\tb=mysql://h", db: []string{"a=b\tmysql://h"}},

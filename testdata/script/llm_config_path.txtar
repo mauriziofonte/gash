@@ -1,0 +1,87 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_config --path (new in 3.4, plan D6): one value of a YAML, TOML, INI
+# or JSON file as compact JSON, through the shim and the binary directly.
+# Without --path the output is what it always was (TOML and INI raw, YAML
+# converted); a file that does not parse is invalid_config and a missing
+# path json_path_not_found, both RETRY; secret files stay refused. The
+# values were checked against Python's tomllib and configparser; the
+# formats and the INI rules are Go tests (internal/llm/config_path_test.go).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+
+# --- TOML, through the shim and directly
+exec bash -c 'source "$GASH_SH"; llm_config pyproject.toml --path project.dependencies'
+stdout '^\["requests>=2","rich"\]$'
+! stderr .
+exec gash llm_config pyproject.toml --path 'tool.mypy.overrides[-1]'
+stdout '^\{"ignore":false,"module":"b"\}$'
+exec gash llm_config pyproject.toml --path .
+cmp stdout toml.golden
+
+# --- INI as configparser reads it: keys lowercased, DEFAULT inherited
+exec gash llm_config setup.cfg --path metadata
+cmp stdout ini.golden
+
+# --- YAML: several documents are an array
+exec gash llm_config k8s.yaml --path '[1].spec.replicas'
+stdout '^3$'
+
+# --- the default is unchanged: TOML prints raw
+exec gash llm_config pyproject.toml
+cmp stdout pyproject.toml
+
+# --- errors
+! exec gash llm_config bad.toml --path .
+stderr '"error":"invalid_config","details":"TOML line 2: '
+! exec gash llm_config pyproject.toml --path project.nope
+stderr '"error":"json_path_not_found","details":"project.nope","action":"RETRY"'
+stderr '"hint":"Nearest existing prefix: project \(object, keys: name, dependencies\)"'
+! exec gash llm_config .env --path TOKEN
+stderr '"error":"secret_file_blocked"'
+! stdout .
+
+# --- help without side effects
+exec gash llm_config --help
+stdout 'llm_config FILE \[--max-bytes N\] \[--path P\]'
+
+-- pyproject.toml --
+[project]
+name = "demo"
+dependencies = ["requests>=2", "rich"]
+
+[[tool.mypy.overrides]]
+module = "a.*"
+ignore = true
+
+[[tool.mypy.overrides]]
+ignore = false
+module = "b"
+-- setup.cfg --
+[DEFAULT]
+Base = /srv
+
+[metadata]
+Name = demo
+version: 1.0
+path = %(base)s/app
+classifiers =
+    A
+    B
+-- k8s.yaml --
+kind: Service
+---
+kind: Deployment
+spec:
+  replicas: 3
+-- bad.toml --
+[t]
+a =
+-- .env --
+TOKEN=x
+-- toml.golden --
+{"project":{"name":"demo","dependencies":["requests>=2","rich"]},"tool":{"mypy":{"overrides":[{"module":"a.*","ignore":true},{"ignore":false,"module":"b"}]}}}
+-- ini.golden --
+{"name":"demo","version":"1.0","path":"/srv/app","classifiers":"\nA\nB","base":"/srv"}

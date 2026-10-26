@@ -37,7 +37,8 @@ func TestLedger_SYS21(t *testing.T) {
 		runner.Expect{Argv: []string{"ssh-agent", "-a", sock, "-s"}, Status: 1},
 		runner.Expect{Argv: []string{"ssh-agent", "-s"}, Status: 1},
 		list("Error connecting to agent: Connection refused\n", 2)))
-	require.Equal(t, result{"Error: ssh-agent is not running and could not be started automatically.\n", 0}, fx.call(m, nil))
+	// 3.4: status 1 (0 before).
+	require.Equal(t, result{"Error: ssh-agent is not running and could not be started automatically.\n", 1}, fx.call(m, nil))
 	require.Empty(t, h.String())
 }
 
@@ -54,7 +55,7 @@ func TestLedger_SYS22(t *testing.T) {
 		runner.Expect{Argv: []string{"ssh-agent", "-a", filepath.Join(run, agentSock), "-s"}},
 		runner.Expect{Argv: []string{"ssh-agent", "-s"}},
 		list(refused, 2)))
-	require.Equal(t, 0, fx.call(m, nil).rc)
+	require.Equal(t, 1, fx.call(m, nil).rc) // no agent answers (3.4: status 1)
 	st, err := os.Stat(run)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o755), st.Mode().Perm())
@@ -64,7 +65,7 @@ func TestLedger_SYS22(t *testing.T) {
 		runner.Expect{Argv: []string{"ssh-agent", "-a", filepath.Join(fx.home, ".ssh", agentSock), "-s"}},
 		runner.Expect{Argv: []string{"ssh-agent", "-s"}},
 		list(refused, 2)))
-	require.Equal(t, 0, fx.call(m, nil).rc)
+	require.Equal(t, 1, fx.call(m, nil).rc)
 	st, err = os.Stat(run)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o777), st.Mode().Perm())
@@ -77,7 +78,7 @@ func TestLedger_SYS22(t *testing.T) {
 		runner.Expect{Argv: []string{"ssh-agent", "-a", filepath.Join(fx.home, ".ssh", agentSock), "-s"}},
 		runner.Expect{Argv: []string{"ssh-agent", "-s"}},
 		list(refused, 2)))
-	require.Equal(t, 0, fx.call(m, nil).rc)
+	require.Equal(t, 1, fx.call(m, nil).rc)
 	st, err = os.Stat(filepath.Join(fx.home, ".ssh"))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), st.Mode().Perm())

@@ -6,7 +6,7 @@
 #
 # The WSL functions refuse early off WSL. The 2.x specs reached the WSL-present
 # branches by overriding __gash_require_wsl; the binary always reads the real
-# system root (no environment seam, docs/port/design/testing.md), so the
+# system root (no environment seam, dev/port/design/testing.md), so the
 # WSL-present observables of the split rows (wsl_shutdown -> `cmd /C wsl
 # --shutdown`, wsl_explorer's Windows path, the post-WSL terminal refusal) are
 # proven by the Go unit tests TestWSLStopVM / TestWSLExplorer. Here we cover

@@ -10,13 +10,28 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
 	"github.com/mauriziofonte/gash/internal/pathguard"
 )
 
-// dbArgs are the locals __llm_db_parse_args fills.
+// dbArgs are the locals __llm_db_parse_args fills, and the 3.4 output
+// options (plan D1, D3): --format, --scalar, --counts and --all.
 type dbArgs struct {
 	positional, database, connection, sqliteFile, rows string
 	analyze                                            bool
+	format                                             llmfmt.Format
+	scalar, counts, all                                bool
+	// anyDatabase lets a connection name no database (llm_db_databases).
+	anyDatabase bool
+}
+
+// rowFlags are the output options every llm_db_* function takes.
+const rowFlags = "--format --scalar"
+
+// rowsMode reports whether the call prints rows in a 3.4 format or a
+// scalar instead of the envelope.
+func (a *dbArgs) rowsMode() bool {
+	return a.scalar || (a.format != llmfmt.Default && a.format != llmfmt.JSON)
 }
 
 // parseArgs is __llm_db_parse_args "EXTRA" ARGS: -d/-c/-f plus the flags
@@ -31,8 +46,18 @@ func parseArgs(args []string, extra string, a *dbArgs) *contract.Envelope {
 				e := contract.New("unknown_option", arg, "Valid options:"+allowed)
 				return &e
 			}
-			if arg == "--analyze" {
+			switch arg {
+			case "--analyze":
 				a.analyze = true
+				continue
+			case "--scalar":
+				a.scalar = true
+				continue
+			case "--counts":
+				a.counts = true
+				continue
+			case "--all":
+				a.all = true
 				continue
 			}
 			if i+1 >= len(args) {
@@ -49,6 +74,14 @@ func parseArgs(args []string, extra string, a *dbArgs) *contract.Envelope {
 				a.sqliteFile = v
 			case "-r", "--rows", "-n", "--limit":
 				a.rows = v
+			case "--format":
+				switch f := llmfmt.Format(v); f {
+				case llmfmt.JSON, llmfmt.JSONL, llmfmt.TSV, llmfmt.TableF:
+					a.format = f
+				default:
+					e := contract.New("invalid_format", v, "Use --format json, jsonl, tsv or table")
+					return &e
+				}
 			}
 			i++
 			continue
@@ -108,12 +141,21 @@ type target struct {
 	driver                           string // sqlite, mysql, mariadb or pgsql
 	file                             string
 	user, pass, host, port, database string
+	via                              *sshVia // a +ssh connection's host (ssh.go)
+	// rowFormat is set for the 3.4 row formats, never for the envelope: a
+	// SQL NULL is null in the rows, not the client's text ("NULL" on
+	// MySQL/MariaDB, "" in PostgreSQL text rows), and PostgreSQL rows keep
+	// the query's column order (json, not jsonb).
+	rowFormat bool
 }
 
 // target is __llm_db_target: the SQLite file of -f, or the named
 // connection of ~/.gash_env with its database (-d, the URL, then the
 // first word of ./.target-database).
 func (m *Module) target(c *invoke.Call, a *dbArgs) (target, *output) {
+	if t, o, ok := m.sshTarget(c, a); ok {
+		return t, o
+	}
 	if a.sqliteFile != "" {
 		path, fail := m.sqliteFile(c, a.sqliteFile)
 		if fail != nil {
@@ -152,7 +194,7 @@ func (m *Module) target(c *invoke.Call, a *dbArgs) (target, *output) {
 			t.database = name
 		}
 	}
-	if t.database == "" {
+	if t.database == "" && !a.anyDatabase {
 		o := failed(contract.New("no_database", "Database name not specified",
 			"Ask user for database name. Use -d option or specify in connection URL"))
 		return target{}, &o

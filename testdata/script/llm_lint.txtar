@@ -1,0 +1,72 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_lint (new in 3.4, plan L1): files syntax-checked by extension in
+# parallel, {"checked","failed","failures":[{"file","line","error"}]}.
+# JSON, YAML and TOML are parsed by gash, shell scripts go through bash -n
+# (the languages every host has). node_modules is pruned, a secret file is
+# skipped in a directory and refused as an argument, a requested runtime
+# that is not installed is a STOP.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: the whole tree, data and shell (bash 5.3
+# --- adds the construct left open to "unexpected end of file")
+exec bash -c 'source "$GASH_SH"; llm_lint proj --ext json,yaml,toml,sh'
+stdout '^\{"checked":8,"failed":4,"failures":\[\{"file":"bad\.json","line":3,"error":"invalid character .\}. looking for beginning of object key string"\},\{"file":"bad\.sh","line":2,"error":"syntax error: unexpected end of file( from [^"]*)?"\},\{"file":"bad\.toml","line":2,"error":"expected value but found [^ ]+ instead"\},\{"file":"bad\.yaml","line":2,"error":"did not find expected node content"\}\]\}$'
+! stderr .
+
+# --- directly, the same answer; one file shown as given
+exec gash llm_lint proj --ext json,yaml,toml,sh
+stdout '^\{"checked":8,"failed":4,"failures":\[\{"file":"bad\.json","line":3,"error":"invalid character .\}. looking for beginning of object key string"\},\{"file":"bad\.sh","line":2,"error":"syntax error: unexpected end of file( from [^"]*)?"\},\{"file":"bad\.toml","line":2,"error":"expected value but found [^ ]+ instead"\},\{"file":"bad\.yaml","line":2,"error":"did not find expected node content"\}\]\}$'
+exec gash llm_lint proj/bad.sh
+stdout '^\{"checked":1,"failed":1,"failures":\[\{"file":"proj/bad\.sh","line":2,"error":"syntax error: unexpected end of file( from [^"]*)?"\}\]\}$'
+
+# --- a budget keeps the first failure and counts the rest
+exec gash llm_lint proj --ext json,yaml,toml,sh --max-lines 1
+stdout '"failures":\[\{"file":"bad\.json",[^]]*\],"truncated":3\}$'
+
+# --- refusals
+! exec gash llm_lint proj/credentials.json
+stderr '"error":"secret_file_blocked"'
+! exec gash llm_lint proj/README
+stderr '"error":"unsupported_file"'
+! exec gash llm_lint proj --ext rb
+stderr '"error":"invalid_ext"'
+! exec gash llm_lint proj/a.php --php 3.1
+stderr '"error":"runtime_not_installed","details":"php 3\.1 is not installed'
+stderr '"action":"STOP"'
+
+-- proj/ok.json --
+{"a": 1}
+-- proj/bad.json --
+{
+"a": 1,
+}
+-- proj/tsconfig.json --
+{
+  // comments are allowed here
+  "compilerOptions": {},
+}
+-- proj/bad.yaml --
+a: 1
+b: [
+-- proj/ok.toml --
+a = 1
+-- proj/bad.toml --
+a = 1
+b =
+-- proj/ok.sh --
+echo ok
+-- proj/bad.sh --
+if true; then
+-- proj/node_modules/x/broken.json --
+{"a":
+-- proj/credentials.json --
+{"password":
+-- proj/a.php --
+<?php echo 1;
+-- proj/README --
+text

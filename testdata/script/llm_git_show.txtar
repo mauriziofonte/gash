@@ -1,0 +1,113 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_git_show (new in 3.4, plan G4): a commit's hash, subject, author,
+# date and files {p, add, del} as one JSON line (--stat adds the totals,
+# --files the status letters), its patch as text capped per file
+# (--patch --max-lines N, the secret file's patch replaced by a marker),
+# and REV:FILE, the content of a file at a revision under the output
+# budget. Through the sourced shell and as `gash llm_git_show`. An unknown
+# revision is unknown_revision (RETRY), a secret REV:FILE
+# secret_file_blocked (FATAL). The textconv, external diff and pager of
+# the repository's own config never run.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_DATE='1700000000 +0000'
+env GIT_COMMITTER_DATE='1700000000 +0000'
+
+exec bash setup.sh
+
+# --- the metadata and the files, with the totals
+exec bash -c 'source "$GASH_SH"; llm_git_show HEAD --stat "$WORK/r"'
+stdout '^\{"hash":"[0-9a-f]{7,}","subject":"two","author":"T","date":"2023-11-14 22:13:20 \+0000","files":\[\{"p":".env","add":1,"del":1\},\{"p":"a.txt","add":30,"del":0\}\],"stat":\{"files":2,"insertions":31,"deletions":1\}\}$'
+
+# --- directly; --files adds the status letter; REV defaults to HEAD
+cd r
+exec gash llm_git_show --files
+stdout '"files":\[\{"p":".env","add":1,"del":1,"status":"M"\},\{"p":"a.txt","add":30,"del":0,"status":"M"\}\]\}$'
+exec gash llm_git_show HEAD~1 --files
+stdout '"subject":"one"'
+stdout '"status":"A"'
+
+# --- the patch, 4 body lines per file, the secret file's patch omitted
+exec gash llm_git_show HEAD --patch --max-lines 4
+stdout '^commit [0-9a-f]{7,}$'
+stdout '^    two$'
+stdout '^diff --git a/.env b/.env$'
+stdout '^\[\.\.\. secret file: patch omitted\]$'
+! stdout 'SECRET'
+stdout '^\+\+\+ b/a.txt$'
+stdout '^\[\.\.\. 28 lines omitted\]$'
+
+# --- a file at a revision, under the budget
+exec gash llm_git_show HEAD:a.txt --head 2 --tail 1
+cmp stdout $WORK/want_head_tail.txt
+exec gash llm_git_show HEAD~1:a.txt
+cmp stdout $WORK/want_one.txt
+
+# --- refusals and errors
+! exec gash llm_git_show HEAD:.env
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+! exec gash llm_git_show nosuchrev --stat
+stderr '"error":"unknown_revision"'
+stderr '"action":"RETRY"'
+! exec gash llm_git_show HEAD:missing.txt
+stderr '"error":"file_not_found"'
+! exec gash llm_git_show HEAD --patch --stat
+stderr '"error":"conflicting_options"'
+cd $WORK
+mkdir plain
+! exec gash llm_git_show HEAD plain
+stderr '"error":"not_a_git_repo"'
+
+# --- help
+exec gash llm_git_show -h
+stdout 'llm_git_show REV:FILE'
+
+# --- no program named by the repository's config runs
+exec bash no_exec.sh
+
+-- home/.gitconfig --
+[user]
+	name = T
+	email = t@example.com
+[init]
+	defaultBranch = main
+-- want_head_tail.txt --
+first
+2
+[... 28 lines omitted]
+31
+-- want_one.txt --
+first
+-- setup.sh --
+set -euo pipefail
+git init -q -b main "$WORK/r"; cd "$WORK/r"
+printf 'first\n' >a.txt; printf 'SECRET=one\n' >.env
+git add -A; git commit -qm one
+seq 2 31 >>a.txt
+printf 'SECRET=two\n' >.env
+git add -A; git commit -qm two
+-- no_exec.sh --
+set -euo pipefail
+cd "$WORK/r"
+printf '#!/bin/sh\necho "$0 $*" >>"%s/ran"\nexit 1\n' "$WORK" >"$WORK/evil.sh"
+chmod +x "$WORK/evil.sh"
+printf '*.txt diff=evil\n' >.git/info/attributes
+git config diff.external "$WORK/evil.sh"
+git config diff.evil.command "$WORK/evil.sh"
+git config diff.evil.textconv "$WORK/evil.sh"
+git config core.pager "$WORK/evil.sh"
+git config log.showSignature true
+git config gpg.program "$WORK/evil.sh"
+git -c core.pager=cat show HEAD >/dev/null 2>&1 || true
+[[ -e "$WORK/ran" ]] || { echo "SKIP: git does not run the configured commands here"; exit 0; }
+rm -f "$WORK/ran"
+source "$GASH_SH"
+llm_git_show HEAD --stat >/dev/null
+llm_git_show HEAD --patch >/dev/null
+llm_git_show HEAD:a.txt >/dev/null
+[[ ! -e "$WORK/ran" ]] || { cat "$WORK/ran"; exit 1; }

@@ -1,0 +1,94 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.4 prerequisites)
+#
+# The installer's preflight: before anything changes it checks the tools
+# Gash needs (git, curl or wget, tar, gzip, sha256sum or shasum, grep, sed)
+# and names the missing ones with the command that installs them on this
+# distro (its /etc/os-release, here a Debian fixture under GASH__SYSROOT).
+# --check stops there, status 1. --assume-yes runs that command (a stub
+# apt-get, which puts the programs on PATH) after apt-get update, and the
+# install goes on. A failed install command stops the installer before it
+# changes anything.
+
+[darwin] skip 'the Linux package managers'
+[!exec:git] skip 'needs git'
+env GASH__SYSROOT=$WORK/sysroot
+env GASH_RELEASE_URL=file:///nonexistent
+exec bash mkrepo.sh
+exec bash mkbin.sh
+env PATH=$WORK/bin
+
+# --check: the report, nothing else.
+! exec bash repo/install.sh --check
+stderr '^Error: Gash needs these tools, which are not installed: tar, gzip\.$'
+stderr '^To install them: (sudo )?apt-get install -y tar gzip$'
+! stdout .
+! exists apt.log
+
+# --assume-yes: installed, then the install goes on.
+exec bash -c 'h="$PWD/h1"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GASH_INSTALL_GIT_REPO="$PWD/repo" bash repo/install.sh --assume-yes'
+stderr '^To install them: (sudo )?apt-get install -y tar gzip$'
+stdout '^OK: Installed what Gash needs\.$'
+stdout '^OK: Installed Gash v1\.0\.0\.$'
+exists h1/.gash/gash.sh
+grep '^update$' apt.log
+grep '^install -y tar gzip$' apt.log
+exec bash repo/install.sh --check
+stdout '^OK: Gash finds everything it needs'
+
+# A failed install command: nothing changed.
+exec bash mkbin.sh fail
+! exec bash -c 'h="$PWD/h2"; mkdir -p "$h"; : >"$h/.bashrc"; HOME="$h" GASH_INSTALL_GIT_REPO="$PWD/repo" bash repo/install.sh --assume-yes'
+stderr '^Error: The install command failed: (sudo )?apt-get install -y tar gzip$'
+! exists h2/.gash
+! grep GASH h2/.bashrc
+
+-- sysroot/etc/os-release --
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+ID=debian
+VERSION_ID="12"
+-- mkbin.sh --
+# mkbin.sh [fail]: bin/ holds every program of the system but tar and gzip
+# (and the real package managers), a sudo that runs its arguments, and an
+# apt-get that logs its arguments and links the packages it installs into
+# bin/ (fail: exits 100 instead).
+set -e
+PATH=/usr/local/bin:/usr/bin:/bin
+rm -rf bin apt.log
+mkdir bin
+for f in /usr/local/bin/* /usr/bin/* /bin/*; do
+    n=${f##*/}
+    case "$n" in
+    tar | gzip | apt | apt-get | dnf | yum | microdnf | pacman | zypper | apk | brew | sudo) continue ;;
+    esac
+    [ -e "bin/$n" ] || ln -s "$f" "bin/$n"
+done
+w=$PWD
+printf '#!%s\n"$@"\n' "$(command -v bash)" >bin/sudo
+if [ "${1-}" = fail ]; then
+    printf '#!%s\necho "$*" >>%s/apt.log\nexit 100\n' "$(command -v bash)" "$w" >bin/apt-get
+else
+    cat >bin/apt-get <<EOF
+#!$(command -v bash)
+echo "\$*" >>$w/apt.log
+[ "\$1" = install ] || exit 0
+shift 2
+for p in "\$@"; do ln -sf "\$(PATH=/usr/bin:/bin command -v "\$p")" "$w/bin/\$p"; done
+EOF
+fi
+chmod +x bin/sudo bin/apt-get
+-- mkrepo.sh --
+# mkrepo.sh: a fresh repo of the staged tree tagged v1.0.0.
+set -e
+rm -rf repo
+mkdir repo
+tar -C "$GASH_STAGE" -cf - . | tar -C repo -xf -
+git init -q repo
+git -C repo config user.email t@e
+git -C repo config user.name T
+git -C repo config maintenance.auto false
+git -C repo config gc.auto 0
+git -C repo add -A
+git -C repo commit -q -m snapshot
+git -C repo tag v1.0.0

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -30,13 +31,17 @@ type member struct {
 // multi-member archive and reports the first one that is unsafe to extract:
 // an absolute name, a ".." component, a symlink or hard link whose target
 // escapes OUTPUT_DIR, or a member that lies below a symlink member. Formats
-// with no member list (single-file compressors) and archives the guard
-// cannot read (a missing list tool, a corrupt header) return not-unsafe, so
-// 2.x's own handling takes over.
+// with no member list (single-file compressors) and streams that end early
+// return what was read, so 2.x's own handling takes over; a tar header the
+// guard cannot read is an unreadableErr (tar would skip it and extract
+// what follows unchecked), a decompressor that is not there a missingErr.
 func memberGuard(c *invoke.Call, k kind, archive, outputDir string) (string, bool, error) {
 	members, err := listMembers(c, k, archive)
-	if err != nil || members == nil {
+	if err != nil {
 		return "", false, err
+	}
+	if members == nil {
+		return "", false, nil
 	}
 	name, unsafe := unsafeMember(members)
 	return name, unsafe, nil
@@ -169,8 +174,20 @@ func readTar(r io.Reader) ([]member, error) {
 		if err == io.EOF {
 			return out, nil
 		}
+		if errors.Is(err, tar.ErrHeader) {
+			// 3.4: tar skips a header it cannot read and extracts the
+			// members after it, which the guard never saw: refuse.
+			after := ""
+			if len(out) > 0 {
+				after = out[len(out)-1].name
+			}
+			return out, &unreadableErr{after: after}
+		}
 		if err != nil {
-			return nil, nil // a header the guard cannot parse: leave it to tar
+			// The stream ends early (a truncated or corrupt compression):
+			// the members read so far are checked, tar reports the rest
+			// (3.4: none were checked).
+			return out, nil
 		}
 		out = append(out, member{
 			name:       h.Name,
@@ -181,16 +198,33 @@ func readTar(r io.Reader) ([]member, error) {
 	}
 }
 
+// unreadableErr is a tar header the guard cannot read: the members after it
+// cannot be checked, so the archive is refused.
+type unreadableErr struct{ after string }
+
+func (e *unreadableErr) Error() string {
+	if e.after == "" {
+		return "its first member header is unreadable"
+	}
+	return "the member header after '" + e.after + "' is unreadable"
+}
+
+// missingErr is a program the guard needs that is not on PATH: the archive
+// is refused, never extracted unchecked (3.4: the guard stood down).
+type missingErr struct{ cmd string }
+
+func (e *missingErr) Error() string { return e.cmd + " is not installed" }
+
 // readTarPiped decompresses with `TOOL ARGS...` (the archive is the last
 // argument) through the runner and reads the tar stream it produces. A
-// missing tool or a read error returns nil (no guard), so the extraction
-// path reports it.
+// read error returns nil (no guard), so the extraction path reports it; a
+// missing decompressor or tar is a missingErr (archiveExtract has checked
+// both, so only a program removed since gets here), and a missing tar
+// never starts the decompressor (FILE-19).
 func readTarPiped(c *invoke.Call, tool string, args []string, stdin io.Reader) ([]member, error) {
-	// Stand down when the decompressor or tar is missing: the extraction
-	// path then reports it, and a missing tar never starts zstd (FILE-19).
-	for _, need := range []string{tool, "tar"} {
+	for _, need := range []string{"tar", tool} {
 		if _, err := runner.LookPath(need, c.Env.Child(), ""); err != nil {
-			return nil, nil
+			return nil, &missingErr{need}
 		}
 	}
 	rnr := runnerFor(c)
@@ -205,10 +239,10 @@ func readTarPiped(c *invoke.Call, tool string, args []string, stdin io.Reader) (
 		}
 		_ = pw.CloseWithError(err)
 	}()
-	members, _ := readTar(pr)
+	members, err := readTar(pr)
 	_, _ = io.Copy(io.Discard, pr) // drain so the decompressor can finish
 	_ = pr.Close()
-	return members, nil
+	return members, err
 }
 
 // readZip lists a zip's entries, reading a symlink member's stored target.

@@ -258,17 +258,17 @@ func version(out string) string {
 	return rest[:strings.Index(rest, `"`)]
 }
 
-// TestLedger_DEV21 proves the php alias table of docs/reference/dev.md
+// TestLedger_DEV21 proves the php alias table of docs/runtimes/reference.md
 // lists every alias the php pack defines, each with its condition, and
 // none of the dropped hte aliases. (TestRegistry_AliasDocsMatchConditions
 // in internal/registry is outside this slice; the `gash dev` card is
 // generated elsewhere.)
 func TestLedger_DEV21(t *testing.T) {
 	_, self, _, _ := runtime.Caller(0) // call() changes the working directory
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "docs", "reference", "dev.md"))
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "docs", "runtimes", "reference.md"))
 	require.NoError(t, err)
 	doc := string(data)
-	i := strings.Index(doc, "## Aliases\n")
+	i := strings.Index(doc, "### The php pack\n")
 	require.GreaterOrEqual(t, i, 0)
 	rows := map[string]string{}
 	for _, line := range strings.Split(doc[i:], "\n") {
@@ -281,10 +281,10 @@ func TestLedger_DEV21(t *testing.T) {
 	}
 	want := map[string]string{
 		"phpXY":                    "for each installed phpX.Y",
-		"composerXY":               "for each installed phpX.Y, when composer is installed",
-		"1composerXY":              "for each installed phpX.Y of 7.2, 7.1, 7.0 and 5.6, when composer1 is installed",
+		"composerXY":               "for each installed phpX.Y, with composer",
+		"1composerXY":              "for each installed phpX.Y up to 7.2, with composer1",
 		"php":                      "with GASH_REPLACE_TOOLS=1",
-		"composer":                 "with GASH_REPLACE_TOOLS=1, when composer is installed",
+		"composer":                 "with GASH_REPLACE_TOOLS=1",
 		"composer-packages-update": "when composer is installed",
 		"composer-self-update":     "when composer is installed",
 		"composer1-self-update":    "when composer1 is installed",

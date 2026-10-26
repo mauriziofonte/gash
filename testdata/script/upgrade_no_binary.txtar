@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.3 and 6: a 3.x install whose binary cannot
+# dev/port/design/upgrade.md 3.3 and 6: a 3.x install whose binary cannot
 # be obtained (the release URL has nothing, then a checksum mismatch). An
 # interactive shell gets one Gash line on stderr and sourcing returns 0;
 # headless sourcing prints nothing and returns 0, and each call answers
@@ -31,7 +31,7 @@ stdout '^rc=0 v=3\.0\.0$'
 
 ! exec bash -c 'GASH_HEADLESS=1; source "$HOME/.gash/gash.sh"; llm_tree .'
 ! stdout .
-stderr '^\{"error":"binary_not_found","details":"gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded","action":"STOP","recoverable":true,"hint":"Run: bash ~/\.gash/install\.sh --repair"\}$'
+stderr '^\{"error":"binary_not_found","details":"gash 3\.0\.0 for [a-z]+/[a-z0-9]+ is not installed and could not be downloaded \(download failed: file://[^"]*/nothing/gash_3\.0\.0_[a-z]+_[a-z0-9]+\.tar\.gz\)","action":"STOP","recoverable":true,"hint":"Run: bash ~/\.gash/install\.sh --repair"\}$'
 
 exec sh -c 'ls -A "$HOME/.local/share/gash/versions/3.0.0" 2>/dev/null | wc -l'
 stdout '^ *0$'

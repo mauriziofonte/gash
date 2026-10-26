@@ -1,0 +1,34 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash wsl (new in 3.4, no 2.x spec). The CI runner is not WSL, so what is
+# observable here is the off-WSL refusal and the help tree. The WSL-present
+# behaviour (interop, drives, path conversion, config) reads the real /proc
+# with no test seam in the shipping binary, so it is proven by the Go unit
+# tests in internal/wslcmd (fixture system root) and internal/wsl.
+#
+# covers: none (gash wsl is new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- the help tree lists the subcommands
+exec bash -c 'source "$GASH_SH"; gash wsl --help'
+stdout 'doctor'
+stdout 'info'
+stdout 'path'
+stdout 'config'
+stdout 'interop'
+
+# --- info is a report: off WSL it answers and exits 0, text and JSON
+exec bash -c 'source "$GASH_SH"; gash wsl info'
+stderr 'Not running under WSL'
+exec bash -c 'source "$GASH_SH"; gash wsl info --json'
+stdout '"wsl":false'
+
+# --- doctor also refuses off WSL
+! exec bash -c 'source "$GASH_SH"; gash wsl doctor'
+stderr 'Not running under WSL'
+
+# --- an unknown subcommand is a usage error
+! exec bash -c 'source "$GASH_SH"; gash wsl nope'
+stderr 'unexpected_argument'

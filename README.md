@@ -4,43 +4,22 @@
 
 [![CI](https://github.com/mauriziofonte/gash/actions/workflows/ci.yml/badge.svg)](https://github.com/mauriziofonte/gash/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/tag/mauriziofonte/gash?sort=semver&label=release)](CHANGELOG.md)
-[![Platforms](https://img.shields.io/badge/linux%20%C2%B7%20macOS%20%C2%B7%20WSL-amd64%20%7C%20arm64-4EAA25?logo=gnubash&logoColor=white)](#requirements)
+[![Platforms](https://img.shields.io/badge/linux%20%C2%B7%20macOS%20%C2%B7%20WSL-amd64%20%7C%20arm64-4EAA25?logo=gnubash&logoColor=white)](#supported-systems)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![Gash at a terminal: the reference card, files_largest, tree_stats and sysinfo overview](docs/assets/demo.gif)
 
-Gash adds 85 functions and 163 aliases to Bash: find what
-fills a disk, inspect a machine, tag a release, free a port, upgrade a
-Compose stack, push files to a host, run local HTTPS sites. Every function
-has `--help` with examples, and the ones an agent needs answer in JSON with
-a documented error contract.
+Gash adds 121 functions and 163 aliases to Bash, for the jobs that
+otherwise take a pipeline or a search: find what fills a disk, see what
+holds a port, tag a release, upgrade a Compose stack, copy files to a
+server, query a database read-only, run local HTTPS sites, look after WSL
+and Windows. Every function has `--help` with examples. For AI coding
+agents it adds read-only `llm_*` functions and guarded `agent_*` write
+functions that answer in JSON, with a documented error contract.
 
-## What's new in 3.0
-
-- **One static Go binary** does the work behind the same Bash functions.
-  Names, flags, output, exit codes and `--json` envelopes stay as they were
-  in 2.x, except for the changes listed in the [changelog](CHANGELOG.md).
-  The prompt, history, aliases and completion are still plain Bash.
-- **Fewer dependencies.** The `llm_*`, database and scanner functions no
-  longer need `jq`, `sqlite3`, `mysql`, `psql`, `rg` or GNU `find`: SQLite,
-  MySQL, MariaDB and PostgreSQL are spoken natively.
-- **`gash hte` is built in**: local Apache and PHP-FPM sites with HTTPS,
-  run as your own user. It replaces the separate hte-cli tool, and
-  `gash hte migrate` takes over an existing hte-cli setup.
-- **Verified upgrades.** The release binaries are pinned by SHA-256 in the
-  tagged tree. `gash update` checks the new binary before it touches your
-  install, tests the new version in a separate shell, and
-  `gash update --rollback` goes back.
-- **Audited.** The port reviewed every 2.x behaviour (443 items in the
-  [ledger](docs/port/LEDGER.md)) and fixes the defects instead of carrying
-  them over.
-
-## Contents
-
-[Install](#install) · [Quickstart](#quickstart) · [A tour](#a-tour) ·
-[Local sites](#local-sites-with-gash-hte) · [For AI agents](#for-ai-agents) ·
-[What's inside](#whats-inside) · [Configuration](#configuration) ·
-[Upgrading](#upgrading) · [Documentation](#documentation)
+Gash is one static Go binary plus the Bash that loads it, installed in
+your home directory for your user. It keeps your shell: the prompt,
+aliases and safety defaults can each be turned off.
 
 ## Install
 
@@ -48,221 +27,250 @@ a documented error contract.
 curl -fsSL https://raw.githubusercontent.com/mauriziofonte/gash/main/install.sh | bash
 ```
 
-or `wget -qO- https://raw.githubusercontent.com/mauriziofonte/gash/main/install.sh | bash`.
-To read the installer first, or to install somewhere else with `GASH_DIR`:
+The installer checks that the system has what Gash needs (Bash 4.4 or
+newer, git, curl or wget, tar, gzip, sha256sum or shasum, grep and sed),
+offers to install what is missing with the system's package manager,
+clones the newest release into `~/.gash`, downloads the binary of that
+release and checks its SHA-256 against the hash the release pins, and adds
+one block to your Bash profile. It asks before it changes anything;
+`--assume-yes` installs without a terminal, `--check` only reports. Then
+open a new terminal.
+
+[docs/install.md](docs/install.md) covers the options, installs in CI and
+containers, signature checks, updates, removal and what to do when an
+install fails.
+
+## Supported systems
+
+CI installs Gash on each of these systems at every change, from the bare
+image, and checks every package Gash can install there:
+
+<!-- BEGIN generated: systems (go test ./internal/docgen -update) -->
+| System | Version | amd64 | arm64 | Local sites (`gash hte`) |
+|---|---|---|---|---|
+| Rocky Linux | 8 | tested | tested | not tested |
+| Rocky Linux | 9 (minimal image) | tested | tested | not tested |
+| AlmaLinux | 9 | tested | tested | tested |
+| AlmaLinux | 10 | tested | tested | not tested |
+| Oracle Linux | 9 | tested | tested | not tested |
+| Amazon Linux | 2023 | tested | tested | not tested |
+| Fedora | 44 | tested | tested | tested |
+| Debian | 12 | tested | tested | tested |
+| Ubuntu | 24.04 | tested | tested | tested |
+| Alpine Linux | 3.22 | tested | tested | not tested |
+| openSUSE Leap | 15.6 | tested | tested | not tested |
+| openSUSE Tumbleweed | rolling | tested | tested | not tested |
+| Arch Linux | rolling | tested | no image | tested |
+| macOS (Homebrew Bash) | current | built, not tested | tested | tested (Homebrew httpd and PHP) |
+<!-- END generated: systems -->
+
+WSL 2 runs the Linux build. macOS needs a current Bash from Homebrew
+(`brew install bash`): the system Bash 3.2 is too old.
+
+## Quick start
 
 ```bash
-git clone https://github.com/mauriziofonte/gash.git ~/.gash
-bash ~/.gash/install.sh
-```
-
-The installer checks out the latest release tag into `~/.gash`, downloads
-the `gash` binary for your platform and checks its SHA-256 against the hash
-the tag pins, writes `~/.gashrc` and adds one
-delimited block to your Bash profile. It asks before changing anything.
-Open a new terminal when it is done.
-
-| Option | Effect |
-|---|---|
-| `--assume-yes` | Install without a terminal (CI, Docker) |
-| `--repair` | Fetch and verify only the binary for the installed version; nothing else changes |
-| `GASH_REQUIRE_SIGNED=1` | Refuse a release whose tag or Sigstore signature does not verify (needs `cosign`), and any binary the tag does not pin |
-
-### Requirements
-
-- **Linux** (amd64, arm64), **WSL2**, or **macOS** (Intel, Apple silicon).
-- **Bash 4.4 or newer.** macOS ships Bash 3.2: `brew install bash` first
-  ([details](docs/troubleshooting.md#gash-requires-bash-44-or-newer)).
-- `git`, and `curl` or `wget`.
-- Optional, for the functions that drive them: `docker`, `ssh`/`scp`/`rsync`
-  (remote hosts), `expect` (SSH key unlocking), `fzf` (`hgrep --pick`),
-  Apache and PHP-FPM (`gash hte`).
-
-## Quickstart
-
-```bash
-gash                      # the reference card: every topic with its functions and aliases
-gash git                  # one topic: functions, short aliases, usage
+gash                      # the reference card: every area with its functions and aliases
+gash git                  # one area: functions, short aliases, usage
 gash_help files_largest   # full help with examples (aliases work too: gash_help flf)
 gash_help --search tag    # search every help page
 files_largest ~ -n 10     # the ten largest files in your home
-sysinfo overview          # host, OS, load, memory and disk at a glance
-gash_doctor               # check the installation and the active settings
+sysinfo overview          # host, OS, load, memory and disks at a glance
+gash_doctor               # check the install, and what this system lacks
 ```
 
 ![Finding things: gash git, gash_help --search tag, gash_help on an alias](docs/assets/help.gif)
 
-## A tour
+## What Gash does
 
 ### Files and disks
 
 `files_largest`, `dirs_largest`, `dirs_find_large`, `tree_stats` and
-`dirs_list_empty` find what takes the space. `archive_extract` unpacks any
-common format, and refuses an archive whose members would land outside the
-target folder before it extracts anything. `file_backup` makes a
-timestamped copy before you edit.
+`dirs_list_empty` find what takes the space. `archive_extract` unpacks
+every common archive format and refuses, before extracting anything, an
+archive whose members would land outside the target folder.
+`file_backup` makes a timestamped copy before you edit.
+[Guide](docs/files/README.md)
 
 ![dirs_largest, dirs_list_empty, archive_extract refusing an unsafe tar, file_backup](docs/assets/files.gif)
 
 ### Git
 
-`gl` and its siblings draw a compact, colored log. `git_sync` stages,
-commits and pushes, `git_add_tag` creates an annotated tag and pushes it:
-both show what they are about to do and ask first (`--yes` skips the
-question, `--dry-run` only shows). Around them sit short aliases (`gst`,
-`gcm`, `gpf`, `gswc`...) and `git_repair` for a repository with corrupted
-objects.
+`gl` and its siblings draw a compact log. `git_sync` stages, commits and
+pushes; `git_add_tag` creates an annotated tag and pushes it; both show
+what they will do and ask first (`--yes` skips the question, `--dry-run`
+only shows). Around them sit 38 short aliases and 6 log helpers (`gst`,
+`gcm`, `gpf`, `gswc`...) and `git_repair` for a repository with damaged
+objects. [Guide](docs/git/README.md)
 
 ![gl, git_sync and git_add_tag with their plan and question, git_list_tags](docs/assets/git.gif)
 
-### Processes, ports, history
+### Processes, ports and the system
 
-`process_find` and `port_kill` answer "what is holding port 8080" and free
-it, after asking. `hgrep` searches your history with timestamps and
-de-duplication. `sysinfo` reports the machine section by section, and on
-WSL `wsl_compact`, `wsl_restart` and friends handle the Windows side.
+`process_find` and `port_kill` answer "what holds port 8080" and free it,
+after asking. `sysinfo` reports the machine section by section,
+`disk_usage` the mounts, `hgrep` searches your history with timestamps.
+[Guide](docs/system/README.md)
 
 ![process_find, port_kill with its question, hgrep](docs/assets/system.gif)
 
-## Local sites with `gash hte`
+### Docker, remote hosts and databases
 
-`gash hte` runs local Apache and PHP-FPM sites, with HTTPS and HTTP/2, as
-your own user. Install needs `sudo` once, for a few system steps it lists
-before running them: a small helper that may edit only the gash block of
-`/etc/hosts`, the sudoers line for that helper, and the sysctl that lets
-your user bind ports 80 and 443. After that no command runs as root. It
-uses the Apache and PHP-FPM your system already has, one pool per PHP
-version, and `gash hte uninstall` puts every system file back as it was.
+`docker_compose_check` tells which images of a Compose stack have a newer
+version, and `docker_compose_upgrade` pulls them and restarts the stack.
+`remote_exec`, `remote_push` and `remote_sync_push` work with the SSH
+hosts you name in `~/.gash_env`, and refuse system paths on the other
+side. The `DB:` connections of the same file are queried read-only by
+`llm_db_query` and its siblings, for MySQL, MariaDB, PostgreSQL and SQLite,
+locally or on a remote host. Guides: [Docker](docs/docker/README.md),
+[remote hosts](docs/remote/README.md), [databases](docs/databases/README.md)
 
-```bash
-gash hte install                                  # one sudo, then the stack runs as you
-gash hte site create --domain shop.test --docroot public
-curl -k https://shop.test/                        # self-signed, 10-year certificate per site
-gash hte doctor                                   # checks everything, names the fix for each failure
-gash hte migrate                                  # coming from hte-cli: a dry-run plan
-```
+### PHP, Node.js and local sites
+
+`php_detect_version` and `node_detect_version` read which version a
+project wants; `gash run --runtime node:24 -- npm test` runs a command
+under it. `gash hte` runs local Apache and PHP-FPM sites with HTTPS, one
+pool per PHP version, as your own user; installing it needs `sudo` once,
+for a few system steps it lists first.
+Guides: [runtimes](docs/runtimes/README.md),
+[local sites](docs/hte/README.md)
 
 ![gash hte install, site create, curl https://shop.test, site list, service status](docs/assets/hte.gif)
 
-It works on Debian, Ubuntu, Fedora, Arch, WSL2 and macOS with Homebrew
-(through a `pf` redirect for ports 80 and 443). The [guide](docs/hte.md)
-covers every command, the hte-cli command table and the WSL notes.
+### Windows and WSL, logs
+
+Inside WSL, `gash wsl` checks and repairs the WSL setup and `gash win`
+reads the Windows host (services, ports, updates, events, Defender);
+`wsl_compact` gives the disk space of the virtual disk back to Windows.
+`gash logs` finds the log files that fill a disk and reclaims the space
+without breaking the programs that write them.
+Guides: [Windows and WSL](docs/windows/README.md), [logs](docs/logs/README.md)
+
+### AI from the terminal
+
+`ask` puts one question to Claude or Gemini from the terminal, with piped
+files as context; `ai_sysinfo` sends a report of this system for a
+diagnosis, after asking. Secrets are redacted before anything is sent.
+[Guide](docs/ai/README.md)
 
 ## For AI agents
 
-Coding agents (Claude Code, Codex, Cursor, Gemini, Aider, local models) load
-Gash headless and get read-only tools that answer in JSON: the project's
-type and tree, code search, git state, database schemas and queries,
-processes and ports. Writes, secret files and commands outside an allowlist
-are refused with an error the agent can act on.
+Coding agents (Claude Code, Codex, Cursor, Gemini CLI, Aider, local
+models) call Gash instead of composing pipelines. Gash has
+48 read-only JSON functions for agents (`llm_*`: code search, project and git state, logs,
+data files, databases, processes, services, containers, HTTP, DNS and TLS
+probes, remote hosts) and a separate family of write functions
+(`agent_*`: edit, upload, commit, run tests, stop a process) that need an
+explicit target, offer `--dry-run`, and never touch secret files or system
+paths.
+
+```bash
+~/.gash/bin/gash llm_git_overview     # the launcher: no shell setup
+GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_db_query "SELECT id, email FROM users LIMIT 5"'
+```
 
 ![An agent's view: llm_project, llm_git_status and a SELECT as JSON; a DELETE, a .env read and rm -rf refused](docs/assets/agents.gif)
 
-```bash
-GASH_HEADLESS=1 bash -c 'source ~/.gash/gash.sh; llm_db_query "SELECT id, email FROM users LIMIT 5" -c default'
-```
-
-Headless mode loads only the functions: no prompt, no aliases, no colors,
-nothing printed while loading. Errors arrive on stderr as one JSON line:
+Errors arrive on stderr as one JSON line, with an action the agent follows:
+`RETRY` fix the arguments, `CONTINUE` skip this step, `STOP` ask the user,
+`FATAL` report and stop.
 
 ```json
 {"error":"write_operation_blocked","details":"Statement starts with 'DELETE'","action":"FATAL","recoverable":false,"hint":"Only SELECT, WITH, VALUES, TABLE, SHOW, DESCRIBE, EXPLAIN and PRAGMA are allowed"}
 ```
 
-`RETRY` means fix the arguments, `CONTINUE` skip this step, `STOP` ask the
-user, `FATAL` report and stop. [AGENTS.md](AGENTS.md) is the full contract,
-with JSON shapes, the safety model and drop-in snippets for `CLAUDE.md`,
-`AGENTS.md` and system prompts.
+[AGENTS.md](AGENTS.md) is the contract: invocation, every function, the
+output shapes, the error codes, the safety model, and snippets for
+`CLAUDE.md`, `AGENTS.md` and system prompts. `gash agents-hint` prints a
+routing table to paste into an agent's instructions.
+[docs/agents/README.md](docs/agents/README.md) is the guide for the person
+who sets the agent up.
 
-The guardrails are defence in depth for your own account, not a sandbox
-against a hostile user: see the [security model](docs/security.md).
+## When a tool is missing
 
-## What's inside
+Most of Gash needs nothing beyond the install. A function that drives
+another program (rsync, Docker, expect, a database client on a remote
+host) checks for it first; when it is missing, the function stops with an
+error that names the program and the command that installs it on your
+system. `gash_doctor` lists everything this system lacks, and
+`gash_doctor --install` installs it after asking:
 
-| Topic | Highlights |
-|---|---|
-| [files](docs/reference/files.md) | `files_largest`, `dirs_largest`, `dirs_find_large`, `dirs_list_empty`, `tree_stats`, `archive_extract`, `file_backup` |
-| [system](docs/reference/system.md) | `disk_usage`, `sysinfo`, `port_kill`, `process_find`, `services_stop`, `hgrep`, `wsl_compact` and other WSL helpers |
-| [nav](docs/reference/nav.md) | `..`, `...`, `ll`, `la` and friends |
-| [git](docs/reference/git.md) | `git_sync`, `git_repair`, `git_add_tag`, `git_list_tags`, `git_dump_revisions`, `git_apply_patch`, 38 short aliases and 6 log helpers |
-| [docker](docs/reference/docker.md) | `docker_compose_check` and `docker_compose_upgrade` (image updates for a stack), `docker_stop_all`, `docker_prune_all` |
-| [remote](docs/reference/remote.md) | `remote_exec`, `remote_push`, `remote_pull`, `remote_sync_push`: hosts named in `~/.gash_env`, with a deny list for system paths |
-| [dev](docs/reference/dev.md) | `node_upgrade`, `chrome_headless_update` (Chrome for Puppeteer and Playwright), `php_detect_version`, `node_detect_version`, `php84`-style aliases |
-| [llm](docs/reference/llm.md) | Eighteen read-only JSON functions for agents |
-| [ai](docs/reference/ai.md) | `ai_query` and `ai_sysinfo`: Claude or Gemini from the terminal, with secrets redacted |
-| [gash](docs/reference/gash.md) | `gash_help`, `gash_doctor`, `gash_upgrade`, `gash_unload` |
-| [hte](docs/hte.md) | `gash hte install`, `site`, `php`, `service`, `cert`, `hosts`, `doctor`, `migrate` |
+```bash
+gash_doctor --prereqs           # what is missing, by area, with the install command
+gash_doctor --install rsync     # install one tool (asks first)
+```
 
-The [function reference](docs/reference/README.md) is generated from the
-same help text you see in the shell, and a test keeps them equal.
+[docs/requirements.md](docs/requirements.md) lists every tool with its
+package on each system.
 
 ## Configuration
 
 Settings are `GASH_*` lines in `~/.gash_env`, a private file that also holds
-SSH keys to unlock, database connections, AI tokens and remote hosts
-(`gash_env_init` creates it from the [template](.gash_env.template)):
+the SSH keys to unlock, the database connections, AI tokens and remote
+hosts (`gash_env_init` creates it from the [template](.gash_env.template)):
 
 ```bash
 GASH_PROMPT=0            # keep your own PS1
-GASH_REPLACE_TOOLS=1     # top->htop, df->pydf, diff->colordiff... when installed
-GASH_HISTORY_SYNC=1      # share history live between terminals
+GASH_SAFETY_ALIASES=0    # no cp -i, mv -i, rm -I
+GASH_HISTORY_SYNC=1      # share history between terminals as you type
 GASH_PATH_ADD="~/.local/bin ~/.cargo/bin"   # put these on PATH if they exist
-GASH_NVM=lazy            # node on PATH now, nvm.sh loaded on first use
 DB:default=pgsql://reader:secret@localhost:5432/app
+HOST:web=deploy@web.example.com
 ```
 
-A variable set in the environment wins over the file. The load order, every
-setting and how to undo each one are in
-[docs/configuration.md](docs/configuration.md).
+A variable set in the environment wins over the file.
+[docs/configuration.md](docs/configuration.md) has the load order, every
+setting and how to undo each one.
 
-## Upgrading
+## Security
 
-```bash
-gash update               # or gash_upgrade: the newest release, verified
-gash update --rollback    # back to the version you had before
-```
-
-`gash update` moves to the highest release tag, never to an older one, and
-refuses to overwrite local changes. It downloads and verifies the new
-binary before it touches the checkout, then loads the new version in a test
-shell and checks out the previous one again if that fails. The previous
-version and its binary are kept for `--rollback`.
-
-- **From 2.x:** run `gash_upgrade` as usual; it moves you to 3.0. To go
-  back, `git -C ~/.gash checkout v2.1.1` and open a new terminal.
-- **From 1.x:** move to 2.1.0 first and run its guided migration, then
-  upgrade; [docs/migration.md](docs/migration.md) has the steps.
-
-## Uninstall
-
-```bash
-gash_unload      # this shell only: back to how it was before Gash
-gash_uninstall   # remove Gash, its profile block and ~/.gashrc (asks first)
-```
-
-If you installed `gash hte`, run `gash hte uninstall --yes` first: it stops
-the stack and restores the system files it changed.
+Gash runs as you and changes nothing as root, except the steps of
+`gash hte install` that it lists before asking for `sudo`. Release
+binaries are pinned by SHA-256 in the release tag, and the release
+workflow signs each release with Sigstore. The guardrails of the agent functions (read-only
+database sessions, secret files, protected paths, an allowlist for
+`llm_exec`) are defence in depth for your own account, not a sandbox
+against a hostile user: [docs/security.md](docs/security.md) says what
+they do and what they do not. Report vulnerabilities privately, as
+[SECURITY.md](SECURITY.md) describes.
 
 ## Documentation
 
-- [Function reference](docs/reference/README.md), generated from the help registry
-- [Local sites (`gash hte`)](docs/hte.md)
-- [Agent guide](AGENTS.md): headless mode, JSON shapes, error contract, safety model
-- [Configuration](docs/configuration.md): files, load order, every setting
-- [Security model](docs/security.md): what the guardrails do and do not do
-- [Troubleshooting](docs/troubleshooting.md)
-- [Upgrading from 1.x](docs/migration.md)
-- [Changelog](CHANGELOG.md)
+Each area has a guide and a reference generated from the help you see in
+the shell:
+
+<!-- BEGIN generated: areas (go test ./internal/docgen -update) -->
+| Area | What it covers | Reference |
+|---|---|---|
+| [Shell](docs/shell/README.md) | The prompt, navigation, history search, aliases, colors and the help card that Gash adds to an interactive Bash. | [reference](docs/shell/reference.md) |
+| [Files and archives](docs/files/README.md) | Find what fills a disk, summarize a tree, extract any archive and back up a file. | [reference](docs/files/reference.md) |
+| [System](docs/system/README.md) | Processes, ports, services, disks, sudo history and a system report. | [reference](docs/system/reference.md) |
+| [Git](docs/git/README.md) | Sync, tags, patches, repository repair and the gl* log shortcuts. | [reference](docs/git/reference.md) |
+| [Docker](docs/docker/README.md) | Start, stop and prune containers, and check and upgrade Compose stacks. | [reference](docs/docker/reference.md) |
+| [Remote hosts](docs/remote/README.md) | Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_env, and unlock SSH keys at login. | [reference](docs/remote/reference.md) |
+| [Databases](docs/databases/README.md) | The MySQL, MariaDB, PostgreSQL and SQLite connections of ~/.gash_env: list, test and query them read-only. | [reference](docs/databases/reference.md) |
+| [PHP, Node.js and Chrome](docs/runtimes/README.md) | Pick PHP and Node.js versions per project, run commands under a version, and keep headless Chrome current. | [reference](docs/runtimes/reference.md) |
+| [Local web stack (HTE)](docs/hte/README.md) | gash hte: a userland Apache and PHP-FPM for local sites with HTTPS, one PHP-FPM pool per site. | [reference](docs/hte/reference.md) |
+| [Windows and WSL](docs/windows/README.md) | Inspect and repair WSL, and read the Windows host from inside it. | [reference](docs/windows/reference.md) |
+| [Logs](docs/logs/README.md) | gash logs: find the log files that fill a disk and reclaim the space safely. | [reference](docs/logs/reference.md) |
+| [AI assistants](docs/ai/README.md) | Ask Claude or Gemini from the terminal, with the context of this system. | [reference](docs/ai/reference.md) |
+| [Tools for AI agents](docs/agents/README.md) | The read-only llm_* functions and the agent_* write tools that AI coding agents call: one JSON answer per call, with the safety rails of AGENTS.md. | [reference](docs/agents/reference.md) |
+| [Gash itself](docs/gash/README.md) | Help, the doctor, prerequisites, settings, updates and removal. | [reference](docs/gash/reference.md) |
+<!-- END generated: areas -->
+
+Also: [install, update, remove](docs/install.md) ·
+[requirements](docs/requirements.md) ·
+[configuration](docs/configuration.md) · [security](docs/security.md) ·
+[troubleshooting](docs/troubleshooting.md) · [AGENTS.md](AGENTS.md) ·
+[changelog](CHANGELOG.md)
 
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome: see
-[CONTRIBUTING.md](CONTRIBUTING.md). `go test ./...` runs the suite; CI runs
-it on Linux and macOS, checks the generated Bash on Bash 4.4 to 5.3, and
-runs `gash hte` end to end on Debian, Ubuntu, Fedora, Arch and macOS. The GIFs above
-are recorded from [docs/tapes](docs/tapes/README.md).
-
-Report security issues privately, as described in [SECURITY.md](SECURITY.md).
+[CONTRIBUTING.md](CONTRIBUTING.md). `go test ./...` runs the suite. CI runs
+it on Linux (amd64 and arm64) and macOS, checks the generated Bash on Bash
+4.4 to 5.3, installs Gash on the systems above, and runs `gash hte` end to
+end. The GIFs are recorded from [dev/tapes](dev/tapes/README.md).
 
 ## License
 

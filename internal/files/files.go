@@ -16,13 +16,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -36,6 +39,9 @@ func Register(t *invoke.Table) {
 // runnerFor returns the runner a files handler uses; a test seam
 // (runner.Fake in the LEDGER tests).
 var runnerFor = func(*invoke.Call) runner.Runner { return runner.Exec{} }
+
+// now is the clock of the file_backup stamp when date is missing.
+var now = time.Now
 
 func callCtx(c *invoke.Call) context.Context {
 	if c.Ctx != nil {
@@ -119,43 +125,81 @@ func classify(name string) (kind, string) {
 	}
 }
 
-// tools are the programs a branch runs, in the order they are checked.
-func (k kind) tools() []string {
+// program is one a branch runs: cmd as it is run, tool its name in the
+// prerequisite catalog (gunzip comes with gzip, bunzip2 with bzip2).
+type program struct{ cmd, tool string }
+
+// bsdTar is set where tar is bsdtar (macOS), which decompresses .gz and
+// .bz2 itself; GNU tar runs gzip and bzip2 (3.4: they were not checked,
+// and tar's "Cannot exec" lines came after OUTPUT_DIR was made).
+var bsdTar = runtime.GOOS == "darwin"
+
+// needs are the programs a branch runs, in the order they are checked.
+// xz is needed for .tar.xz everywhere: the FILE-22 guard reads the members
+// through it, and without it the archive is refused, not extracted
+// unchecked (3.4).
+func (k kind) needs() []program {
+	tar := program{"tar", "tar"}
 	switch k {
-	case kTarBz2, kTarGz, kTarXz, kTarPlain, kTbz2, kTgz:
-		return []string{"tar"}
+	case kTarPlain:
+		return []program{tar}
+	case kTarGz, kTgz:
+		if bsdTar {
+			return []program{tar}
+		}
+		return []program{tar, {"gzip", "gzip"}}
+	case kTarBz2, kTbz2:
+		if bsdTar {
+			return []program{tar}
+		}
+		return []program{tar, {"bzip2", "bzip2"}}
+	case kTarXz:
+		return []program{tar, {"xz", "xz"}}
 	case kTarZst:
-		return []string{"zstd", "tar"}
+		return []program{{"zstd", "zstd"}, tar}
 	case kTarZ:
-		return []string{"uncompress", "tar"}
+		return []program{{"uncompress", "uncompress"}, tar}
 	case kSingleXz:
-		return []string{"xz"}
+		return []program{{"xz", "xz"}}
 	case kSingleZst:
-		return []string{"zstd"}
+		return []program{{"zstd", "zstd"}}
 	case kSingleBz2:
-		return []string{"bunzip2"}
+		return []program{{"bunzip2", "bzip2"}}
 	case kSingleGz:
-		return []string{"gunzip"}
+		return []program{{"gunzip", "gzip"}}
 	case kSingleZ:
-		return []string{"uncompress"}
+		return []program{{"uncompress", "uncompress"}}
 	case kRar:
-		return []string{"unrar"}
+		return []program{{"unrar", "unrar"}}
 	case kZip:
-		return []string{"unzip"}
+		return []program{{"unzip", "unzip"}}
 	case kSevenZip:
-		return []string{"7z"}
+		return []program{{"7z", "7z"}}
 	}
 	return nil
 }
 
-// missingTool is the dependency error of a branch whose tool is not on
-// PATH (FILE-19): zstd keeps its 2.x line, the others get the
-// __gash_require_command default.
-func missingTool(tool string) string {
-	if tool == "zstd" {
-		return "Extracting .zst needs zstd."
+// labels name each kind in the prerequisite report, "archive_extract
+// (.tar.xz) needs xz".
+var labels = map[kind]string{
+	kTarBz2: ".tar.bz2", kTarGz: ".tar.gz", kTarXz: ".tar.xz", kTarZst: ".tar.zst",
+	kSingleXz: ".xz", kSingleZst: ".zst", kSingleBz2: ".bz2", kRar: ".rar", kSingleGz: ".gz",
+	kTarPlain: ".tar", kTbz2: ".tbz2", kTgz: ".tgz", kZip: ".zip", kTarZ: ".tar.Z",
+	kSingleZ: ".Z", kSevenZip: ".7z",
+}
+
+// missingTool is the prerequisite report of a branch program that is not
+// on PATH, for the archive of the call (3.4: "Command 'X' is not installed
+// or not in PATH.", and "Extracting .zst needs zstd." for zstd, FILE-19).
+func missingTool(c *invoke.Call, cmd string) int {
+	k, _ := classify(c.Arg(0))
+	tool := cmd
+	for _, n := range k.needs() {
+		if n.cmd == cmd {
+			tool = n.tool
+		}
 	}
-	return "Command '" + tool + "' is not installed or not in PATH."
+	return prereq.Fail(c, tool, "archive_extract ("+labels[k]+")", false)
 }
 
 // hasWildcard reports whether name holds a character that unzip and unrar
@@ -222,19 +266,27 @@ func archiveExtract(c *invoke.Call) int {
 		return 1
 	}
 	if (k == kZip || k == kRar) && hasWildcard(baseName(archive)) {
-		tool := k.tools()[0]
+		tool := k.needs()[0].cmd
 		p.Error("Archive name '" + archive + "' contains wildcard characters (* ? [) that " + tool +
 			" would expand; rename it.")
 		return 1
 	}
-	for _, tool := range k.tools() {
-		if _, err := runner.LookPath(tool, c.Env.Child(), ""); err != nil {
-			p.Error(missingTool(tool))
-			return 1
+	for _, n := range k.needs() {
+		if _, err := runner.LookPath(n.cmd, c.Env.Child(), ""); err != nil {
+			return missingTool(c, n.cmd)
 		}
 	}
-	// FILE-22 (option b): refuse a hostile member before OUTPUT_DIR exists.
-	if member, unsafe, _ := memberGuard(c, k, archive, outputDir); unsafe {
+	// FILE-22 (option b): refuse a hostile member before OUTPUT_DIR exists,
+	// and an archive whose members cannot be listed for want of a program.
+	member, unsafe, err := memberGuard(c, k, archive, outputDir)
+	if me := (*missingErr)(nil); errors.As(err, &me) {
+		return missingTool(c, me.cmd)
+	}
+	if ue := (*unreadableErr)(nil); errors.As(err, &ue) {
+		p.Error("Archive '" + archive + "' cannot be checked: " + ue.Error() + "; nothing extracted.")
+		return 1
+	}
+	if unsafe {
 		p.Error("Archive '" + archive + "' has an unsafe member '" + member +
 			"' (absolute path, .. component or link outside the destination); nothing extracted.")
 		return 1
@@ -344,8 +396,7 @@ func runTool(c *invoke.Call, tool string, args []string, ask bool) int {
 	}
 	res, err := runnerFor(c).Run(callCtx(c), runner.Cmd{Path: tool, Args: args, Options: o})
 	if notFound(err) {
-		ui.StyleOf(c.Term, false).Printer(c.Stderr).Error(missingTool(tool))
-		return 1
+		return missingTool(c, tool)
 	}
 	if err != nil || res.ExitCode != 0 {
 		return 1
@@ -364,7 +415,6 @@ func runTar(c *invoke.Call, flags, archive, outputDir string) int {
 // is replaced, never written through. stdin, when not nil, replaces the
 // caller's stdin.
 func runSingle(c *invoke.Call, tool string, args []string, target string, stdin io.Reader) int {
-	p := ui.StyleOf(c.Term, false).Printer(c.Stderr)
 	if st, err := os.Lstat(target); err == nil && st.IsDir() {
 		_, _ = io.WriteString(c.Stderr, target+": Is a directory\n")
 		return 1
@@ -384,8 +434,7 @@ func runSingle(c *invoke.Call, tool string, args []string, target string, stdin 
 	cerr := f.Close()
 	if notFound(rerr) {
 		_ = os.Remove(tmp)
-		p.Error(missingTool(tool))
-		return 1
+		return missingTool(c, tool)
 	}
 	if rerr != nil || res.ExitCode != 0 || cerr != nil {
 		_ = os.Remove(tmp)
@@ -557,11 +606,16 @@ func fileBackup(c *invoke.Call) int {
 	rnr := runnerFor(c)
 	// FILE-25 (option a): the stamp comes from `date +…` on PATH, so POSIX
 	// TZ strings match 2.x and a user `date` function stays ignored (FILE-20).
+	// Without date, or from one that prints nothing, the stamp is the local
+	// time read here (3.4: it was empty, FILE_backup_).
 	dres, _ := rnr.Run(callCtx(c), runner.Cmd{
 		Path: "date", Args: []string{"+%Y%m%d%H%M%S"},
 		Options: runner.Options{Env: c.Env.Child()},
 	})
 	stamp := runner.CommandSubst(dres.Stdout)
+	if stamp == "" {
+		stamp = now().Format("20060102150405")
+	}
 
 	// FILE-04/05: reserve a free name atomically. O_EXCL|O_NOFOLLOW fails on
 	// any existing entry (a file, a symlink, a dangling symlink, a hard link,
@@ -579,6 +633,13 @@ func fileBackup(c *invoke.Call) int {
 		Path: "cp", Args: []string{"-v", "--", file, backup},
 		Options: runner.Options{Env: withLCAllC(c.Env.Child()), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr},
 	})
+	if notFound(rerr) {
+		// cp is POSIX, outside the prerequisite catalog: named, not
+		// "Failed to create backup file." (3.4).
+		_ = os.Remove(backup)
+		p.Error("file_backup needs cp, which is not on PATH.")
+		return 1
+	}
 	if rerr != nil || res.ExitCode != 0 || !isRegularFile(backup) {
 		_ = os.Remove(backup)
 		p.Error("Failed to create backup file.")

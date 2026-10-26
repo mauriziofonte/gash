@@ -1,0 +1,93 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_remote_run (new in 3.4, plan R1, R2): a read-only command line on
+# registered hosts. HOST... -- CMD runs on every host in parallel, one row
+# per host; HOST --step CMD... runs the steps in ONE ssh invocation. The ssh
+# on PATH is a stub that logs each invocation and runs the remote script
+# (sent on stdin to `sh -s`) locally in $WORK; with $WORK/barrier present
+# each invocation waits until three have started, so a sequential fan-out
+# would leave $WORK/seq behind. The llm_exec rules refuse a write before
+# anything connects.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env GASH_ENV_FILE=$WORK/hostenv
+env PATH=$WORK/bin:$PATH
+chmod 755 bin/ssh
+
+# --- three hosts in parallel: one invocation each, rows in HOST order
+exec gash llm_remote_run web db cache -- 'wc -l app.log'
+stdout '^\[\{"host":"web","rc":0,"ms":[0-9.]+,"out":" *3 app.log","err":"","error":null\},\{"host":"db",.*\{"host":"cache","rc":0,'
+grep -count=3 @ ssh.log
+! exists seq
+
+# --- three steps, one invocation; --stop-on-error ends at the failing one
+rm ssh.log
+rm barrier
+exec gash llm_remote_run web --step 'cat app.log' --step 'cat nope' --step 'echo done'
+stdout '^\[\{"step":1,"rc":0,"ms":[0-9.]+,"out":"one\\ntwo\\nthree"\},\{"step":2,"rc":1,.*nope.*\},\{"step":3,"rc":0,"ms":[0-9.]+,"out":"done"\}\]$'
+grep -count=1 @ ssh.log
+exec gash llm_remote_run web --step 'cat nope' --step 'echo done' --stop-on-error
+stdout '^\[\{"step":1,"rc":1,'
+! stdout '"step":2'
+stderr '^\{"skipped":1,"stopped":true\}$'
+grep -count=2 @ ssh.log
+
+# --- through the sourced shell, as tsv
+exec bash -c 'source "$GASH_SH"; llm_remote_run web db --format tsv -- cat app.log'
+stdout '^host\trc\tms\tout\terr\terror$'
+stdout '^web\t0\t[0-9.]+\tone\\ntwo\\nthree\t\t\\N$'
+
+# --- refused before anything connects: a write, a secret file, a local
+# glob, an unknown alias
+rm ssh.log
+! exec gash llm_remote_run web -- 'touch x'
+stderr '"error":"command_not_allowed"'
+! exec gash llm_remote_run web -- 'cat .env'
+stderr '"error":"secret_file_blocked"'
+stderr '"action":"FATAL"'
+! exec gash llm_remote_run web -- 'ls *.log'
+stderr '"error":"remote_glob_unsupported"'
+stderr '"action":"RETRY"'
+! exec gash llm_remote_run nope -- uptime
+stderr '"error":"unknown_host","details":"nope"'
+stderr '"action":"STOP"'
+! exists ssh.log
+
+# --- an unreachable host is a row, not a failed call
+exec gash llm_remote_run web down -- 'cat app.log'
+stdout '\{"host":"down","rc":null,"ms":[0-9.]+,"out":"","err":"ssh: connect to host down.example port 22: Connection refused","error":"host_unreachable"\}'
+
+-- hostenv --
+HOST:web=deploy@web.example
+HOST:db=deploy@db.example
+HOST:cache=ops@cache.example
+HOST:down=deploy@down.example
+-- barrier --
+-- bin/ssh --
+#!/bin/sh
+# ssh stub: log the invocation, wait for the others when $WORK/barrier is
+# there, then run the remote command with sh in $WORK (the script arrives
+# on stdin).
+while [ $# -gt 0 ]; do a=$1; shift; [ "$a" = -- ] && break; done
+echo "$1" >>"$WORK/ssh.log"
+case $1 in
+  *@down.example) echo "ssh: connect to host down.example port 22: Connection refused" >&2; exit 255 ;;
+esac
+if [ -f "$WORK/barrier" ]; then
+  i=0
+  while [ "$(wc -l <"$WORK/ssh.log")" -lt 3 ]; do
+    i=$((i + 1))
+    [ "$i" -gt 50 ] && { echo sequential >>"$WORK/seq"; break; }
+    sleep 0.1
+  done
+fi
+cd "$WORK" && HOME=$WORK exec sh -c "$2"
+-- app.log --
+one
+two
+three
+-- .env --
+DB_PASSWORD=x

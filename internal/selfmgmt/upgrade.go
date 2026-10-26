@@ -8,6 +8,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -25,10 +26,14 @@ var releaseTag = lazyre.MustCompile(`^v?[0-9]+(\.[0-9]+)*$`)
 // (3.0: SELF-10 fixed; 2.x matched the marker anywhere in the text of the
 // object the tag names, so a message quoting it, or the gpgsig header of a
 // signed commit under a lightweight tag, counted as a signature).
-func tagSigned(obj []byte) bool {
+func tagSigned(obj []byte) bool { return signatureKind(obj) != "" }
+
+// signatureKind is the kind of the signature tagSigned finds in a tag
+// object, "PGP" or "SSH"; "" when it finds none.
+func signatureKind(obj []byte) string {
 	_, body, ok := strings.Cut(string(obj), "\n\n")
 	if !ok {
-		return false
+		return ""
 	}
 	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
 	last := lines[len(lines)-1]
@@ -38,11 +43,11 @@ func tagSigned(obj []byte) bool {
 		}
 		for _, l := range lines[:len(lines)-1] {
 			if l == "-----BEGIN "+kind+" SIGNATURE-----" {
-				return true
+				return kind
 			}
 		}
 	}
-	return false
+	return ""
 }
 
 // upgrade is gash_upgrade (lib/modules/gash.sh), which runs the flow of
@@ -174,18 +179,51 @@ func (m *Module) verifyTag(c *invoke.Call, p ui.Printer, dir, tag string) bool {
 	required := c.Env.Get("GASH_REQUIRE_SIGNED") == "1"
 	res, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "cat-file", "tag", "refs/tags/" + tag},
 		Options: runner.Options{Env: c.Env.Child()}})
+	kind := ""
+	if err == nil && res.Success() {
+		kind = signatureKind(res.Stdout)
+	}
 	switch {
-	case err == nil && res.Success() && tagSigned(res.Stdout):
+	case kind != "":
 		vr, err := m.run.Run(ctxOf(c), runner.Cmd{Path: "git", Args: []string{"-C", dir, "verify-tag", tag},
 			Options: runner.Options{Env: c.Env.Child()}})
 		if err == nil && vr.Success() {
 			p.Success("Signature of " + tag + " verified.")
 			return true
 		}
-		p.Warning(tag + " is signed, but the signature could not be verified (is the key in your keyring?).")
+		// 3.4: a verifier that is not installed is named, not blamed on
+		// the keyring.
+		if prog, tool, ok := m.verifier(c, dir, kind); !ok {
+			p.Warning(tag + " is signed, but its signature cannot be checked: " + prog + " is not installed.")
+			if tool != "" {
+				p.Hint(prereq.Current(c).Report(tool, updateNeed(c)).Advice())
+			}
+		} else {
+			p.Warning(tag + " is signed, but the signature could not be verified (is the key in your keyring?).")
+		}
 	default:
 		r, detail := m.verifyRelease(c, dir, tag)
 		return reportRelease(p, tag, r, detail, required)
 	}
 	return !required
+}
+
+// verifier is the program git verify-tag runs for a signature of kind
+// (PGP: gpg.openpgp.program, else gpg.program, else gpg; SSH:
+// gpg.ssh.program, else ssh-keygen), the catalog tool it is when git uses
+// the default name ("" for one the user configured), and whether it is
+// installed.
+func (m *Module) verifier(c *invoke.Call, dir, kind string) (prog, tool string, found bool) {
+	keys, tool := []string{"gpg.openpgp.program", "gpg.program"}, "gpg"
+	if kind == "SSH" {
+		keys, tool = []string{"gpg.ssh.program"}, "ssh-keygen"
+	}
+	for _, k := range keys {
+		if v := m.output(c, "git", "-C", dir, "config", "--get", k); v != "" {
+			_, err := runner.LookPath(v, c.Env.Child(), dir)
+			return v, "", err == nil
+		}
+	}
+	_, found = prereq.Locate(c, tool)
+	return tool, tool, found
 }

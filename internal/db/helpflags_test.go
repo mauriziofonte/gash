@@ -18,11 +18,12 @@ import (
 // function (LEDGER LLM-31): the parser takes each, the registered help
 // names each.
 var dbOptions = map[string][]string{
-	"llm_db_query":   {"-c", "--connection", "-d", "--database", "-f", "--file", "-r", "--rows", "-n", "--limit"},
-	"llm_db_tables":  {"-c", "--connection", "-d", "--database", "-f", "--file"},
-	"llm_db_schema":  {"-c", "--connection", "-d", "--database", "-f", "--file"},
-	"llm_db_sample":  {"-c", "--connection", "-d", "--database", "-f", "--file", "-n", "--limit"},
-	"llm_db_explain": {"-c", "--connection", "-d", "--database", "-f", "--file", "--analyze"},
+	"llm_db_query":     {"-c", "--connection", "-d", "--database", "-f", "--file", "-r", "--rows", "-n", "--limit", "--format", "--scalar"},
+	"llm_db_tables":    {"-c", "--connection", "-d", "--database", "-f", "--file", "--counts", "--format", "--scalar"},
+	"llm_db_schema":    {"-c", "--connection", "-d", "--database", "-f", "--file", "--all", "--format", "--scalar"},
+	"llm_db_sample":    {"-c", "--connection", "-d", "--database", "-f", "--file", "-n", "--limit", "--format", "--scalar"},
+	"llm_db_explain":   {"-c", "--connection", "-d", "--database", "-f", "--file", "--analyze", "--format", "--scalar"},
+	"llm_db_databases": {"-c", "--connection", "-d", "--database", "-f", "--file", "--format", "--scalar"},
 }
 
 func TestHelpListsEveryOption(t *testing.T) {

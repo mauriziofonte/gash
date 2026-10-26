@@ -1,7 +1,7 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
 // Command releasesums pins the release binaries in the tagged tree
-// (design decision D-3, docs/port/design/upgrade.md 2): it builds `gash`
+// (design decision D-3, dev/port/design/upgrade.md 2): it builds `gash`
 // and `gash-hosts-helper` for every release platform the way
 // .goreleaser.yaml does and writes their SHA-256 to release/SHA256SUMS,
 // "HASH  OS_ARCH/gash" and "HASH  OS_ARCH/gash-hosts-helper" lines, which

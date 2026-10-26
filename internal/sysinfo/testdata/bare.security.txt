@@ -4,4 +4,5 @@
 --- Users
 --- Sudoers
 --- Login history
+Note=last is not installed
 --- Auth log (recent)

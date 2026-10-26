@@ -85,6 +85,12 @@ esac
 # that are set). From the registry.
 __GASH_CALL_COMMON="GASH_HEADLESS NO_COLOR GASH_NO_COLOR GASH_DEBUG GASH_TUI COLUMNS GASH_DIR GASH_ENV_FILE LANG LC_ALL LC_CTYPE"
 declare -gA __GASH_CALL_VARS=(
+    [agent_docker_exec]="HOME"
+    [agent_git_commit]="HOME"
+    [agent_kill]="HOME"
+    [agent_put]="HOME"
+    [agent_replace]="HOME"
+    [agent_test]="HOME"
     [ai_ask]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
     [ai_query]="BASH_VERSION GASH_AI_DEBUG HOME ZSH_VERSION __AI_LAST_EXIT"
     [ai_sysinfo]="GASH_AI_DEBUG HOME"
@@ -107,21 +113,44 @@ declare -gA __GASH_CALL_VARS=(
     [gash_unload]="__AI_LAST_EXIT"
     [gash_upgrade]="BASH GASH_RELEASE_URL GASH_REQUIRE_SIGNED HOME XDG_DATA_HOME XDG_STATE_HOME"
     [hgrep]="HISTFILE HOME"
+    [llm_assert]="HOME"
     [llm_config]="HOME"
+    [llm_count]="HOME"
+    [llm_csv]="HOME"
+    [llm_date]="HOME"
+    [llm_db_databases]="HOME"
     [llm_db_explain]="HOME"
     [llm_db_query]="HOME"
     [llm_db_sample]="HOME"
     [llm_db_schema]="HOME"
     [llm_db_tables]="HOME"
     [llm_deps]="HOME"
+    [llm_docker_exec]="HOME"
+    [llm_dotenv]="HOME"
     [llm_exec]="BASH HOME"
     [llm_find]="HOME"
     [llm_git_diff]="HOME"
     [llm_git_log]="HOME"
+    [llm_git_overview]="HOME"
+    [llm_git_show]="HOME"
     [llm_git_status]="HOME"
     [llm_grep]="HOME"
+    [llm_hash]="HOME"
+    [llm_json]="HOME"
+    [llm_lint]="HOME NVM_DIR"
+    [llm_log]="HOME"
     [llm_project]="HOME"
+    [llm_read]="HOME"
+    [llm_remote_run]="HOME"
+    [llm_runtime]="HOME NVM_DIR"
+    [llm_same]="HOME"
+    [llm_stat]="HOME"
+    [llm_sysinfo]="HOME"
+    [llm_textcheck]="HOME"
+    [llm_textstats]="HOME"
+    [llm_tools]="HOME NVM_DIR"
     [llm_tree]="HOME"
+    [llm_wait]="HOME"
     [node_detect_version]="HOME NVM_DIR"
     [node_upgrade]="HOME NVM_DIR"
     [nvm_prune_versions]="HOME NVM_DIR"
@@ -142,6 +171,7 @@ declare -gA __GASH_CALL_SETTINGS=(
     [gash_db_test]="GASH_DB_TIMEOUT"
     [gash_doctor]="GASH_PROMPT GASH_BANNER GASH_HISTORY GASH_REPLACE_TOOLS GASH_SAFETY_ALIASES GASH_UMASK GASH_SHOW_INXI GASH_AI_MODEL_CLAUDE GASH_AI_MODEL_GEMINI GASH_AI_CONFIRM GASH_DB_TIMEOUT GASH_NVM GASH_PATH_ADD"
     [gash_migrate]="GASH_REPLACE_TOOLS GASH_UMASK GASH_AI_CONFIRM"
+    [llm_db_databases]="GASH_DB_TIMEOUT"
     [llm_db_explain]="GASH_DB_TIMEOUT"
     [llm_db_query]="GASH_DB_TIMEOUT"
     [llm_db_sample]="GASH_DB_TIMEOUT"
@@ -216,13 +246,15 @@ __gash_compat_ready() {
     __gash_bin_resolve
 }
 
-# Why the last fetch failed, for the one interactive line.
+# Why the last fetch failed, for the one interactive line, and the
+# prerequisite it lacked (curl, tar, gzip, sha256sum), if that was why.
 __GASH_FETCH_REASON=""
+__GASH_FETCH_MISSING=""
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
 # shellcheck disable=SC2120
-__gash_fetch() { __gash_cold __gash_fetch 57c686c5 && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch() { __gash_cold __gash_fetch bdb0d615 && "${FUNCNAME[0]}" "$@"; }
 
 # Usage: __gash_fetch_get URL FILE
 __gash_fetch_get() {
@@ -244,6 +276,20 @@ __gash_fetch_sum() {
     printf '%s' "${out%% *}"
 }
 
+# The package manager of this system (apt, dnf, microdnf, yum, pacman,
+# zypper, apk, brew), empty when none is known. Generated from
+# internal/prereq: do not edit.
+# shellcheck disable=SC2120
+__gash_pkg_manager() { __gash_cold __gash_pkg_manager 530bea86 && "${FUNCNAME[0]}" "$@"; }
+
+# Usage: __gash_install_hint [--run] TOOL...
+# The command that installs TOOL... on this system (each package once),
+# nothing when no package is known for any of them; --run runs it instead,
+# after fetching the package lists where the manager needs it. Generated
+# from internal/prereq: do not edit.
+# shellcheck disable=SC2120
+__gash_install_hint() { __gash_cold __gash_install_hint 2e4b5e02 && "${FUNCNAME[0]}" "$@"; }
+
 # The core emitters, loaded from this checkout when the caller sourced a
 # shim without them (they are the only writers to stderr).
 # shellcheck disable=SC2120
@@ -253,14 +299,19 @@ __gash_boot_emitters() { __gash_cold __gash_boot_emitters 16d8b1c4 && "${FUNCNAM
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
 # shellcheck disable=SC2120
-__gash_fetch_line() { __gash_cold __gash_fetch_line 1067a67d && "${FUNCNAME[0]}" "$@"; }
+__gash_fetch_line() { __gash_cold __gash_fetch_line c53976a7 && "${FUNCNAME[0]}" "$@"; }
+
+# What to do after a failed fetch: the install command of the missing
+# prerequisite, else the installer's repair.
+# shellcheck disable=SC2120
+__gash_fetch_advice() { __gash_cold __gash_fetch_advice ccebf7a0 && "${FUNCNAME[0]}" "$@"; }
 
 # The report of a call without a binary: the binary_not_found envelope for
 # agents (headless mode, llm_* functions), an Error: and a Hint: line for
 # humans. Status 1.
 # Usage: __gash_missing NAME
 # shellcheck disable=SC2120
-__gash_missing() { __gash_cold __gash_missing b29072d5 && "${FUNCNAME[0]}" "$@"; }
+__gash_missing() { __gash_cold __gash_missing badd25bc && "${FUNCNAME[0]}" "$@"; }
 
 # Export, in the subshell that execs the binary, the shell state NAME's 2.x
 # code read: the common variables, NAME's own, and its settings (with
@@ -378,6 +429,34 @@ declare -gA __GASH_SRV_FN=(
     [llm_db_sample]=1
     [llm_db_query]=1
     [llm_db_explain]=1
+    [llm_stat]=1
+    [llm_count]=1
+    [llm_assert]=1
+    [llm_read]=1
+    [llm_log]=1
+    [llm_hash]=1
+    [llm_textstats]=1
+    [llm_textcheck]=1
+    [llm_json]=1
+    [llm_csv]=1
+    [llm_dotenv]=1
+    [llm_date]=1
+    [llm_db_databases]=1
+    [llm_git_overview]=1
+    [llm_git_show]=1
+    [llm_http]=1
+    [llm_dns]=1
+    [llm_tls]=1
+    [llm_tcp]=1
+    [llm_wait]=1
+    [llm_service]=1
+    [llm_docker_ps]=1
+    [llm_docker_logs]=1
+    [llm_docker_exec]=1
+    [llm_sysinfo]=1
+    [llm_runtime]=1
+    [llm_tools]=1
+    [llm_lint]=1
     [tree_stats]=1
     [files_largest]=1
     [dirs_largest]=1

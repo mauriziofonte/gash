@@ -239,13 +239,15 @@ func TestLedger_SELF04(t *testing.T) {
 	require.Contains(t, string(b), "# >>> GASH START >>>")
 
 	// A backup path taken by a directory: the profile is left as it was,
-	// with an error, and the uninstall goes on.
+	// with an error. 3.4: the uninstall stops there, Gash still installed
+	// (it went on, and the profile loaded a removed Gash).
 	d, env = uninstallFixture(t, uninstallFake+uninstallBlock+">$D/home/.profile; mkdir $D/home/.profile.gash-uninstall.bak")
 	out, rc := runAnswering(t, "gash_uninstall", env, false, "y\n")
-	require.Equal(t, 0, rc)
-	require.Contains(t, out, "Error: Failed to edit "+d+"/home/.profile; remove the Gash block yourself.\n")
+	require.Equal(t, 1, rc)
+	require.Contains(t, out, "Error: Failed to edit "+d+"/home/.profile; remove the Gash block yourself.\n"+
+		"Error: Gash was not uninstalled: the Gash block is still in "+d+"/home/.profile.\n")
 	b, err = os.ReadFile(filepath.Join(d, "home/.profile"))
 	require.NoError(t, err)
 	require.Contains(t, string(b), "# >>> GASH START >>>")
-	require.NoDirExists(t, filepath.Join(d, "home/.gash"))
+	require.DirExists(t, filepath.Join(d, "home/.gash"))
 }

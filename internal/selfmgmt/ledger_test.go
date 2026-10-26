@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/compatgen"
+	"github.com/mauriziofonte/gash/internal/prereq"
 )
 
 // LEDGER SELF-15: every self-management command refuses an unknown option
@@ -31,7 +32,7 @@ func TestLedger_SELF15(t *testing.T) {
 		{"gash_username", "gash_username"},
 		{"gash_upgrade", "gash_upgrade"},
 		{"gash_uninstall", "gash_uninstall"},
-		{"gash_doctor", "gash_doctor [--timing] [--no-color]"},
+		{"gash_doctor", doctorUsage},
 	} {
 		for arg, what := range map[string]string{"--bogus": "Unknown option", "word": "Unexpected argument"} {
 			args := []string{arg}
@@ -238,6 +239,7 @@ func doctorEnv(t *testing.T, dir string) map[string]string {
 // removed shim is its MISSING line, an edited one and a binary that does
 // not match are their own lines, each an issue.
 func TestLedger_SELF17(t *testing.T) {
+	defer prereq.SetSystem(rockySystem(allBut()))()
 	exe := filepath.Join(t.TempDir(), "gash")
 	d := doctorTree(t, exe)
 	out, errOut, rc := callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d))
@@ -290,6 +292,7 @@ func TestLedger_SELF17(t *testing.T) {
 // unknown option with status 2 before running any check (3.0: SELF-06
 // fixed).
 func TestLedger_SELF06(t *testing.T) {
+	defer prereq.SetSystem(rockySystem(allBut()))()
 	exe := filepath.Join(t.TempDir(), "gash")
 	d := doctorTree(t, exe)
 	require.NoError(t, os.Remove(filepath.Join(d, "lib/modules/php.sh")))
@@ -301,7 +304,7 @@ func TestLedger_SELF06(t *testing.T) {
 	out, errOut, rc := callModule(t, doctorModule(exe), "gash_doctor", doctorEnv(t, d), "--bogus")
 	require.Equal(t, 2, rc)
 	require.Empty(t, out)
-	require.Equal(t, "Error: Unknown option: --bogus (usage: gash_doctor [--timing] [--no-color])\n", errOut)
+	require.Equal(t, "Error: Unknown option: --bogus (usage: "+doctorUsage+")\n", errOut)
 }
 
 // LEDGER SELF-10: tagSigned takes a tag object as signed only when, after

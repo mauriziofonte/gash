@@ -1,0 +1,35 @@
+ PASS  src/math.test.js
+ FAIL  src/cart.test.js
+  ● Cart › applies discount
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 90
+    Received: 100
+
+      12 |     const cart = new Cart();
+      13 |     cart.add({ price: 100 });
+    > 14 |     expect(cart.total(0.1)).toBe(90);
+         |                             ^
+      15 |   });
+      16 | });
+
+      at Object.toBe (src/cart.test.js:14:29)
+
+  ● Cart › handles empty cart
+
+    TypeError: Cannot read properties of undefined (reading 'price')
+
+      21 |   total() {
+    > 22 |     return this.items[0].price;
+         |                          ^
+      23 |   }
+
+      at Cart.total (src/cart.js:22:26)
+      at Object.<anonymous> (src/cart.test.js:19:17)
+
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       2 failed, 1 skipped, 5 passed, 8 total
+Snapshots:   0 total
+Time:        0.842 s, estimated 1 s
+Ran all test suites.

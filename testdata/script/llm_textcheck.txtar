@@ -1,0 +1,41 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_textcheck (new in 3.4, plan F12): text hygiene rules in one read per
+# file; zero issues is {"files":N,"issues":[]}; non-ascii names the code
+# points (an invisible zero-width space shows as U+200B); --rules selects;
+# binary files are skipped.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: a clean file
+exec bash -c 'source "$GASH_SH"; llm_textcheck clean.txt'
+stdout '^\{"files":1,"issues":\[\]\}$'
+
+# --- directly: trailing blanks, a hidden character, no final newline
+exec bash -c 'printf "ok\nzero\342\200\213width\nend  \nlast" > dirty.txt'
+exec gash llm_textcheck clean.txt dirty.txt
+stdout '"files":2'
+stdout '\{"file":"dirty.txt","line":2,"rule":"non-ascii","sample":"U\+200B"\}'
+stdout '\{"file":"dirty.txt","line":3,"rule":"trailing-ws","sample":"end  "\}'
+stdout '\{"file":"dirty.txt","line":4,"rule":"final-newline","sample":"last"\}'
+stdout '"counts":\{"final-newline":1,"non-ascii":1,"trailing-ws":1\}'
+
+# --- --rules: tabs and long lines only
+exec gash llm_textcheck tabs.txt --rules tabs,long-lines=5
+stdout '"rule":"tabs"'
+stdout '"rule":"long-lines","sample":"9 chars: '
+
+# --- binary skipped; unknown rule refused
+exec bash -c 'printf "a\0b" > bin.dat'
+exec gash llm_textcheck bin.dat
+stdout '^\{"files":0,"issues":\[\],"skipped":\[\{"file":"bin.dat","reason":"binary_file"\}\]\}$'
+! exec gash llm_textcheck clean.txt --rules emoji
+stderr '"error":"invalid_rule"'
+
+-- clean.txt --
+all good
+-- tabs.txt --
+a	bcdefgh

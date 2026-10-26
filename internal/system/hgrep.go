@@ -14,6 +14,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/term"
@@ -236,8 +237,7 @@ func (m *Module) hgrepPick(c *invoke.Call, p ui.Printer, o hgrepOpts, recs []his
 		p.Error("--pick requires an interactive terminal")
 		return 1
 	}
-	if !found(c, "fzf") {
-		p.Error("--pick requires fzf; install it or drop --pick")
+	if _, ok := prereq.Require(c, "fzf", "hgrep (--pick)", false); !ok {
 		return 1
 	}
 	var in strings.Builder

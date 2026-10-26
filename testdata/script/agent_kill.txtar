@@ -1,0 +1,55 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# agent_kill (new in 3.4, plan P2 and A1): the write half of llm_procs,
+# instead of pkill -f x and kill PID. A NAME is a regular expression on the
+# full command line; only the caller's own user's processes are signaled,
+# never PID 1, the caller or one of its ancestors. Nothing matched is
+# success with killed:0 (pkill exits 1). --dry-run reports and signals
+# nothing. Every process signaled here is a victim the script started
+# (sleep 289 & vic=$!).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: the calling shell's own command line also
+# --- holds "sleep 289", and only the victim is signaled
+exec bash -c 'sleep 289 & vic=$!; source "$GASH_SH"; agent_kill "sleep 289"; wait $vic; echo "status=$?"'
+stdout '^\{"killed":1,"pids":\[[0-9]+\]\}$'
+stdout '^status=143$'
+# no envelope (bash 4.4 reports the killed job on stderr)
+! stderr '"error"'
+
+# --- directly: --dry-run signals nothing
+exec bash -c 'sleep 288 & vic=$!; gash agent_kill $vic --dry-run; kill -0 $vic && echo alive; kill $vic'
+stdout '^\{"killed":1,"pids":\[[0-9]+\],"cmds":\["sleep 288"\],"signal":"TERM","dry_run":true,"written":false\}$'
+stdout '^alive$'
+
+# --- an explicit PID with --signal KILL
+exec bash -c 'sleep 287 & vic=$!; gash agent_kill $vic --signal KILL; wait $vic; echo "status=$?"'
+stdout '^\{"killed":1,"pids":\[[0-9]+\]\}$'
+stdout '^status=137$'
+
+# --- nothing matched is success
+exec gash agent_kill no-such-process-zq9
+stdout '^\{"killed":0,"pids":\[\]\}$'
+exec gash agent_kill no-such-process-zq9 --format tsv
+stdout '^pid\tname\tcmd$'
+stderr '^\{"killed":0,"signal":"TERM"\}$'
+
+# --- refused: PID 1, the calling shell, everything, nothing
+! exec gash agent_kill 1
+stderr '"error":"kill_refused","details":"1","action":"FATAL"'
+! exec bash -c 'gash agent_kill $$'
+stderr '"error":"kill_refused",.*ancestor'
+! exec gash agent_kill '.*'
+stderr '"error":"pattern_too_broad"'
+! exec gash agent_kill
+stderr '"error":"missing_target"'
+! exec gash agent_kill x --signal 0
+stderr '"error":"invalid_signal"'
+
+# --- --help anywhere prints the help
+exec gash agent_kill x -h
+stdout 'agent_kill NAME\|PID\.\.\.'

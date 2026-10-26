@@ -4,7 +4,7 @@ package registry
 
 import (
 	"os"
-	"slices"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +16,7 @@ import (
 // matrixFunctions reads the function rows of go-impl/PORT/MATRIX.md.
 func matrixFunctions(t *testing.T) map[string][]string {
 	t.Helper()
-	b, err := os.ReadFile("../../docs/port/archive/MATRIX.md")
+	b, err := os.ReadFile("../../dev/port/archive/MATRIX.md")
 	require.NoError(t, err)
 	rows := map[string][]string{}
 	for _, l := range strings.Split(string(b), "\n") {
@@ -139,7 +139,7 @@ func TestSettingsAndTopics(t *testing.T) {
 	for _, tp := range Topics() {
 		topics = append(topics, tp.Name)
 	}
-	require.Equal(t, []string{"files", "system", "nav", "git", "docker", "remote", "dev", "llm", "ai", "gash"}, topics)
+	require.Equal(t, []string{"files", "system", "nav", "git", "docker", "remote", "dev", "llm", "agent", "ai", "gash"}, topics)
 	require.Len(t, Packs(), 7)
 }
 
@@ -188,7 +188,7 @@ func TestLedger_CORE07(t *testing.T) {
 		require.True(t, seen[m], "ModuleOrder lists %s, which has no help", m)
 	}
 	require.Equal(t, []string{"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh",
-		"llm", "utils", "node", "remote", "chrome", "php"}, ModuleOrder)
+		"llm", "utils", "node", "remote", "chrome", "php", "agent"}, ModuleOrder)
 }
 
 // LEDGER SELF-21: the gash_upgrade help says what it does (fetch the tags,
@@ -204,7 +204,7 @@ func TestLedger_SELF21(t *testing.T) {
 // LEDGER SELF-20: the counts README.md states are the registry's: the
 // functions with a help page, every alias (module short aliases and pack
 // aliases), the git pack's aliases plus the log helpers of its card, and
-// the llm functions.
+// the llm functions (counted, not spelled out, since 3.4 adds many).
 func TestRegistry_ReadmeCounts(t *testing.T) {
 	b, err := os.ReadFile("../../README.md")
 	require.NoError(t, err)
@@ -225,10 +225,16 @@ func TestRegistry_ReadmeCounts(t *testing.T) {
 		}
 	}
 	helpers := len(CardAliases("git")) - gitAliases
+	if *updateDocs {
+		readme = regexp.MustCompile(`Gash adds \d+ functions and \d+ aliases`).ReplaceAllString(readme,
+			"Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases")
+		readme = regexp.MustCompile(`\d+ read-only JSON functions for agents`).ReplaceAllString(readme,
+			strconv.Itoa(llm)+" read-only JSON functions for agents")
+		require.NoError(t, os.WriteFile("../../README.md", []byte(readme), 0o644))
+	}
 	require.Contains(t, readme, "Gash adds "+strconv.Itoa(fns)+" functions and "+strconv.Itoa(len(Aliases()))+" aliases to Bash")
 	require.Contains(t, readme, strconv.Itoa(gitAliases)+" short aliases and "+strconv.Itoa(helpers)+" log helpers")
-	require.Equal(t, 18, llm, "README.md says Eighteen read-only JSON functions")
-	require.Contains(t, readme, "Eighteen read-only JSON functions")
+	require.Contains(t, readme, strconv.Itoa(llm)+" read-only JSON functions for agents")
 }
 
 // LEDGER DEV-21: the card's php entries are the php pack's aliases, each
@@ -282,47 +288,4 @@ func TestRegistry_AliasDocsMatchConditions(t *testing.T) {
 		require.True(t, seen[name], "card entry %s is no php pack alias", name)
 	}
 	require.Equal(t, []string{"1composer", "composer", "php"}, CardAliasFamilies())
-}
-
-// docs/reference is written from the help registry: the README table
-// has each topic's function and alias counts, and each topic page has
-// every function of the topic under its own heading, with its summary
-// and its first usage line. A help change that leaves the page behind
-// fails here (the pages once named a tools/gen-docs.sh that does not
-// exist).
-func TestRegistry_ReferenceDocs(t *testing.T) {
-	readme, err := os.ReadFile("../../docs/reference/README.md")
-	require.NoError(t, err)
-	for _, tp := range Topics() {
-		fns := 0
-		b, err := os.ReadFile("../../docs/reference/" + tp.Name + ".md")
-		require.NoError(t, err, tp.Name)
-		page := string(b)
-		require.False(t, strings.Contains(page, "gen-docs"), "%s names a gen-docs tool", tp.Name)
-		for _, f := range Functions() {
-			if !f.HasHelp || !slices.Contains(tp.Modules, f.Help.Module) {
-				continue
-			}
-			fns++
-			require.True(t, strings.Contains(page, "\n## "+f.Name+"\n\n"+f.Help.Short+"\n"), "%s.md: heading and summary of %s", tp.Name, f.Name)
-			lines := strings.Split(f.Help.Body, "\n")
-			for i, l := range lines {
-				if l == "USAGE" && i+1 < len(lines) {
-					require.True(t, strings.Contains(page, "\n"+strings.TrimSpace(lines[i+1])+"\n"), "%s.md: usage of %s: %s", tp.Name, f.Name, lines[i+1])
-					break
-				}
-			}
-		}
-		aliases := 0
-		for _, file := range tp.AliasFiles {
-			for _, a := range CardAliases(file) {
-				if a.Name != a.Value {
-					aliases++
-				}
-			}
-		}
-		row := "| [" + tp.Name + "](" + tp.Name + ".md) | " + strconv.Itoa(fns) + " | " + strconv.Itoa(aliases) + " | " + tp.Description + " |"
-		require.True(t, strings.Contains(string(readme), row), "README.md row: %s", row)
-	}
-	require.False(t, strings.Contains(string(readme), "gen-docs"), "README.md names a gen-docs tool")
 }

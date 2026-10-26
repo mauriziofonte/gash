@@ -4,6 +4,7 @@ package llm
 
 import (
 	"os"
+	"os/user"
 	"regexp"
 	"sort"
 	"strconv"
@@ -12,6 +13,9 @@ import (
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
+	"github.com/mauriziofonte/gash/internal/llmfmt"
+	"github.com/mauriziofonte/gash/internal/prereq"
+	"github.com/mauriziofonte/gash/internal/proctab"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -22,6 +26,17 @@ func (m *Module) lookPath(c *invoke.Call, name string) (string, bool) {
 	}
 	p, err := runner.LookPath(name, c.Env.Child(), "")
 	return p, err == nil
+}
+
+// locate finds a tool of the prerequisites catalog for the call as
+// gash_doctor does (prereq.Locate: an alternative such as netstat for ss,
+// a macOS Xcode stub such as /usr/bin/git without the Command Line Tools
+// counted as missing), or through the test seam.
+func (m *Module) locate(c *invoke.Call, tool string) (string, bool) {
+	if m.lookPathFn != nil {
+		return m.lookPathFn(tool)
+	}
+	return prereq.Locate(c, tool)
 }
 
 // output runs a program found in the caller's PATH with the caller's
@@ -51,22 +66,28 @@ func (m *Module) ports(c *invoke.Call) int {
 	if helpAnywhere(c) {
 		return 0
 	}
-	scope := "a"
-	for _, a := range c.Args {
-		if a != "--listen" && a != "-l" {
-			return fail(c, "unknown_option", a, "Use --listen or no option")
+	scope, port, byPort := "a", "", false
+	for args := c.Args; len(args) > 0; args = args[1:] {
+		switch a := args[0]; a {
+		case "--listen", "-l":
+			scope = "l"
+		case "--port": // 3.4 (plan N4): net_ports.go
+			if len(args) < 2 {
+				return fail(c, "missing_value", a, a+" needs a value")
+			}
+			port, byPort, args = args[1], true, args[1:]
+		default:
+			return fail(c, "unknown_option", a, "Use --listen, --port N or no option")
 		}
-		scope = "l"
 	}
-	var rows [][4]string
-	if ss, ok := m.lookPath(c, "ss"); ok {
-		rows = parseSS(m.output(c, nil, ss, "-tun"+scope))
-	} else if ns, ok := m.lookPath(c, "netstat"); ok {
-		rows = parseNetstat(m.output(c, nil, ns, "-tun"+scope))
-	} else {
-		return fail(c, "ports_tool_not_found", "Neither ss nor netstat is installed",
-			"Install iproute2 (ss) or net-tools (netstat) to list ports. Skip this check")
+	if byPort {
+		return m.portsByPort(c, scope, port)
 	}
+	src, ok := m.portsSource(c, "llm_ports")
+	if !ok {
+		return 1
+	}
+	rows, _ := src.read(scope, false)
 	// By port, then protocol, in the tool's order otherwise; one record
 	// per (port, protocol, state, address), so an IPv4 and an IPv6
 	// listener on one port are two records (LLM-11; 2.x kept one line
@@ -220,11 +241,38 @@ func (m *Module) procs(c *invoke.Call) int {
 		return 0
 	}
 	name, port := "", ""
+	// 3.4 (plan P2): --pid, --alive, --tree select the 3.4 rows; --format
+	// and the output budget apply to every mode.
+	var q procsQuery
+	o := llmfmt.New(llmfmt.FormatFlag | llmfmt.BudgetFlags)
 	args := c.Args
 	for len(args) > 0 {
+		n, ok := o.Take(c, args)
+		if !ok {
+			return 1
+		}
+		if n > 0 {
+			args = args[n:]
+			continue
+		}
 		a := args[0]
+		switch a {
+		case "--alive", "--tree":
+			q.alive = q.alive || a == "--alive"
+			q.tree = q.tree || a == "--tree"
+			args = args[1:]
+			continue
+		case "--pid":
+			pids, n, ok := takePIDs(c, args)
+			if !ok {
+				return 1
+			}
+			q.pids = append(q.pids, pids...)
+			args = args[n:]
+			continue
+		}
 		if a != "--name" && a != "--port" {
-			return fail(c, "unknown_option", a, "Use --name NAME, --port PORT or no option")
+			return fail(c, "unknown_option", a, "Use --name NAME, --port PORT, --pid PID..., --alive, --tree or no option")
 		}
 		if len(args) < 2 {
 			return fail(c, "missing_value", a, a+" needs a value")
@@ -247,50 +295,43 @@ func (m *Module) procs(c *invoke.Call) int {
 		}
 		port = numericText(port)
 	}
+	if q.active() {
+		q.name, q.port = name, port
+		return m.procs34(c, o, q)
+	}
 	var items []string
 	switch {
 	case port != "":
-		if lsof, ok := m.lookPath(c, "lsof"); ok {
-			ps, _ := m.lookPath(c, "ps")
-			for _, pid := range readWords(m.output(c, nil, lsof, "-i", ":"+port, "-t")) {
-				if !digitsRE.MatchString(pid) {
-					continue
-				}
-				cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
-				items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`,"port":`+port+`}`)
+		// lsof -i :PORT -t, then the name of each process (3.4: a missing
+		// lsof, or ps and /proc, is reported, where 2.x printed [] or
+		// empty names).
+		lsof, ok := m.locate(c, "lsof")
+		if !ok {
+			return prereq.Fail(c, "lsof", "llm_procs --port", true)
+		}
+		r, ok := m.procReader(c, "llm_procs --port")
+		if !ok {
+			return 1
+		}
+		for _, pid := range readWords(m.output(c, nil, lsof, "-i", ":"+port, "-t")) {
+			if !digitsRE.MatchString(pid) {
+				continue
 			}
+			items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(r.comm(pid), contract.EscapeJQ)+`,"port":`+port+`}`)
 		}
 	case name != "":
-		items = m.procsByName(c, name)
+		var ok bool
+		if items, ok = m.procsByName(c, name); !ok {
+			return 1
+		}
 	default:
-		ps, ok := m.lookPath(c, "ps")
-		if !ok {
-			break
+		var ok bool
+		if items, ok = m.procsList(c); !ok {
+			return 1
 		}
-		out := m.output(c, []string{"LC_ALL=C"}, ps, "aux", "--no-headers")
-		lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
-		if len(out) == 0 {
-			lines = nil
-		}
-		if len(lines) > 20 {
-			lines = lines[:20]
-		}
-		for _, l := range lines {
-			f := awkFields(l)
-			var b []byte
-			b = append(b, `{"pid":`...)
-			b = append(b, field(f, 2)...)
-			b = append(b, `,"user":"`...)
-			b = appendEscaped(b, field(f, 1))
-			b = append(b, `","cpu":`...)
-			b = append(b, field(f, 3)...)
-			b = append(b, `,"mem":`...)
-			b = append(b, field(f, 4)...)
-			b = append(b, `,"name":"`...)
-			b = appendEscaped(b, field(f, 11))
-			b = append(b, `"}`...)
-			items = append(items, string(b))
-		}
+	}
+	if o.Format != llmfmt.Default || o.Capped() || o.Width > 0 {
+		return procsLegacyTable(c, o, items)
 	}
 	_, _ = c.Stdout.Write([]byte("[" + strings.Join(items, ",") + "]\n"))
 	return 0
@@ -308,19 +349,94 @@ func readWords(out []byte) []string {
 	return ws
 }
 
-// psField is "$(ps ARGS)", empty when ps is missing.
-func (m *Module) psField(c *invoke.Call, ps string, args ...string) string {
-	if ps == "" {
+// procReader answers what the 2.x modes ask ps about one process: ps -p
+// PID -o FIELD= as 2.x ran it, else the Linux /proc.
+type procReader struct {
+	m  *Module
+	c  *invoke.Call
+	ps string // "" reads m.proc
+}
+
+// procReader is the reader of the call: ps, else /proc; without either
+// the missing ps is reported for need (false).
+func (m *Module) procReader(c *invoke.Call, need string) (*procReader, bool) {
+	if ps, ok := m.locate(c, "ps"); ok {
+		return &procReader{m: m, c: c, ps: ps}, true
+	}
+	if m.proc != "" {
+		return &procReader{m: m, c: c}, true
+	}
+	prereq.Fail(c, "ps", need, true)
+	return nil, false
+}
+
+// proc is pid from /proc, with its command line when cmdline is set.
+func (r *procReader) proc(pid string, cmdline bool) (proctab.Proc, bool) {
+	if len(pid) > 9 {
+		return proctab.Proc{}, false
+	}
+	return proctab.ReadProc(r.m.proc, atoi(pid), cmdline)
+}
+
+// comm is "$(ps -p PID -o comm=)": the process name.
+func (r *procReader) comm(pid string) string {
+	if r.ps != "" {
+		return r.m.commandSubst(r.c, r.ps, "-p", pid, "-o", "comm=")
+	}
+	p, _ := r.proc(pid, false)
+	return p.Name
+}
+
+// ppid is "$(ps -o ppid= -p PID)" without its blanks.
+func (r *procReader) ppid(pid string) string {
+	if r.ps == "" {
+		if p, ok := r.proc(pid, false); ok {
+			return strconv.Itoa(p.PPID)
+		}
 		return ""
 	}
-	return m.commandSubst(c, ps, args...)
+	return strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\v' || r == '\f' || r == '\r' {
+			return -1
+		}
+		return r
+	}, r.m.commandSubst(r.c, r.ps, "-o", "ppid=", "-p", pid))
+}
+
+// ppidArgs is `read -r ppid args <<<"$(ps -o ppid=,args= -p PID)"`.
+func (r *procReader) ppidArgs(pid string) (string, string) {
+	if r.ps == "" {
+		if p, ok := r.proc(pid, true); ok {
+			return strconv.Itoa(p.PPID), p.Cmd
+		}
+		return "", ""
+	}
+	return readTwo(r.m.commandSubst(r.c, r.ps, "-o", "ppid=,args=", "-p", pid))
+}
+
+// args is the first line of "$(ps -o args= -p PID)".
+func (r *procReader) args(pid string) string {
+	if r.ps == "" {
+		p, _ := r.proc(pid, true)
+		return p.Cmd
+	}
+	return readLine(r.m.commandSubst(r.c, r.ps, "-o", "args=", "-p", pid))
 }
 
 // procsByName is the --name branch: pgrep -f NAME without this process,
 // its ancestors and the subshells they forked (same command line as their
-// parent), nor a process gone before it was read.
-func (m *Module) procsByName(c *invoke.Call, name string) []string {
-	ps, _ := m.lookPath(c, "ps")
+// parent), nor a process gone before it was read. Without pgrep the
+// command lines of the process table are matched instead (3.4; 2.x
+// printed []).
+func (m *Module) procsByName(c *invoke.Call, name string) ([]string, bool) {
+	pgrep, ok := m.locate(c, "pgrep")
+	if !ok {
+		return m.procsByNameTable(c, name)
+	}
+	r, ok := m.procReader(c, "llm_procs --name")
+	if !ok {
+		return nil, false
+	}
 	self := map[string]bool{}
 	p := strconv.Itoa(m.pid())
 	for i := 0; i < 64; i++ {
@@ -328,35 +444,158 @@ func (m *Module) procsByName(c *invoke.Call, name string) []string {
 			break
 		}
 		self[p] = true
-		p = strings.Map(func(r rune) rune {
-			if r == ' ' || r == '\t' || r == '\n' || r == '\v' || r == '\f' || r == '\r' {
-				return -1
-			}
-			return r
-		}, m.psField(c, ps, "-o", "ppid=", "-p", p))
-	}
-	pgrep, ok := m.lookPath(c, "pgrep")
-	if !ok {
-		return nil
+		p = r.ppid(p)
 	}
 	var items []string
 	for _, pid := range readWords(m.output(c, nil, pgrep, "-f", name)) {
 		if !digitsRE.MatchString(pid) || self[pid] {
 			continue
 		}
-		ppid, args := readTwo(m.psField(c, ps, "-o", "ppid=,args=", "-p", pid))
+		ppid, args := r.ppidArgs(pid)
 		if !digitsRE.MatchString(ppid) {
 			continue
 		}
 		if self[ppid] {
-			if readLine(m.psField(c, ps, "-o", "args=", "-p", ppid)) == args {
+			if r.args(ppid) == args {
 				continue
 			}
 		}
-		cmd := m.psField(c, ps, "-p", pid, "-o", "comm=")
-		items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(cmd, contract.EscapeJQ)+`}`)
+		items = append(items, `{"pid":`+pid+`,"name":`+contract.Quote(r.comm(pid), contract.EscapeJQ)+`}`)
+	}
+	return items, true
+}
+
+// procsByNameTable is --name without pgrep: NAME, a regular expression,
+// matched against the command lines of the process table (ps, else
+// /proc) as pgrep -f matches them, the caller's own chain left out; a
+// pattern that does not compile matches nothing, as pgrep's refusal did.
+func (m *Module) procsByNameTable(c *invoke.Call, name string) ([]string, bool) {
+	t, ok := m.procTable(c, "llm_procs --name")
+	if !ok {
+		return nil, false
+	}
+	re, err := regexp.Compile(name)
+	if err != nil {
+		return nil, true
+	}
+	var items []string
+	for _, p := range t.Match(re.MatchString, t.Callers(m.pid())) {
+		items = append(items, `{"pid":`+strconv.Itoa(p.PID)+`,"name":`+contract.Quote(p.Name, contract.EscapeJQ)+`}`)
+	}
+	return items, true
+}
+
+// psListArgs is the listing of llm_procs without a filter, in a form both
+// procps and BSD ps take: the ps aux columns the rows show. 2.x ran ps aux
+// --no-headers, which BSD ps refuses, so macOS listed nothing.
+var psListArgs = []string{"-A", "-o", "user=,pid=,%cpu=,%mem=,args="}
+
+// procsListMax is the number of rows of the listing (2.x: head -20).
+const procsListMax = 20
+
+// procsList is the listing without a filter: the first processes by PID,
+// with user, %CPU, %MEM and the first word of the command line, from ps,
+// else from a Linux /proc (3.4; 2.x printed [] without ps); ps_not_found
+// without either.
+func (m *Module) procsList(c *invoke.Call) ([]string, bool) {
+	ps, found := m.locate(c, "ps")
+	if found {
+		out := m.output(c, []string{"LC_ALL=C"}, ps, psListArgs...)
+		if len(out) > 0 || m.proc == "" {
+			return psListItems(out), true
+		}
+	}
+	if m.proc != "" {
+		if us, err := proctab.ReadUsage(m.proc); err == nil {
+			return usageItems(us), true
+		}
+	}
+	if found {
+		return nil, true
+	}
+	prereq.Fail(c, "ps", "llm_procs", true)
+	return nil, false
+}
+
+// psListItems are the rows of the psListArgs listing, by PID.
+func psListItems(out []byte) []string {
+	type row struct {
+		pid int
+		f   []string
+	}
+	var rows []row
+	for _, l := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
+		f := awkFields(l)
+		if len(f) == 0 {
+			continue
+		}
+		pid := -1
+		if p := field(f, 2); digitsRE.MatchString(p) && len(p) <= 9 {
+			pid = atoi(p)
+		}
+		rows = append(rows, row{pid, f})
+	}
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].pid < rows[j].pid })
+	if len(rows) > procsListMax {
+		rows = rows[:procsListMax]
+	}
+	items := make([]string, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, procsListItem(field(r.f, 1), field(r.f, 2), field(r.f, 3), field(r.f, 4), field(r.f, 5)))
 	}
 	return items
+}
+
+// usageItems are the rows of the listing read from /proc.
+func usageItems(us []proctab.Usage) []string {
+	if len(us) > procsListMax {
+		us = us[:procsListMax]
+	}
+	users := map[int]string{}
+	items := make([]string, 0, len(us))
+	for _, u := range us {
+		name, ok := users[u.UID]
+		if !ok {
+			name = psUser(u.UID)
+			users[u.UID] = name
+		}
+		items = append(items, procsListItem(name, strconv.Itoa(u.PID), tenths(u.CPU), tenths(u.Mem), field(awkFields(u.Cmd), 1)))
+	}
+	return items
+}
+
+// procsListItem is one row of the listing; cpu and mem are the numbers
+// as ps printed them.
+func procsListItem(user, pid, cpu, mem, name string) string {
+	var b []byte
+	b = append(b, `{"pid":`...)
+	b = append(b, pid...)
+	b = append(b, `,"user":"`...)
+	b = appendEscaped(b, user)
+	b = append(b, `","cpu":`...)
+	b = append(b, cpu...)
+	b = append(b, `,"mem":`...)
+	b = append(b, mem...)
+	b = append(b, `,"name":"`...)
+	b = appendEscaped(b, name)
+	b = append(b, `"}`...)
+	return string(b)
+}
+
+// tenths is a share in tenths of a percent as ps prints it (123: 12.3).
+func tenths(n int) string { return strconv.Itoa(n/10) + "." + strconv.Itoa(n%10) }
+
+// psUser is the user column of ps for a uid: the name, cut to 7
+// characters and a "+" past 8, or the uid when it has none.
+func psUser(uid int) string {
+	u, err := user.LookupId(strconv.Itoa(uid))
+	if err != nil || uid < 0 {
+		return strconv.Itoa(uid)
+	}
+	if len(u.Username) > 8 {
+		return u.Username[:7] + "+"
+	}
+	return u.Username
 }
 
 // readLine is `read -r line <<<"$s"`: the first line, blanks trimmed.

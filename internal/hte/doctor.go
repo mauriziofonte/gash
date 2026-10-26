@@ -166,7 +166,7 @@ func (e *Engine) doctorMachine(ctx context.Context, v *env, set state.Settings, 
 	}
 	m.php = e.discoverPHP(ctx, v)
 	if len(m.php.Versions) == 0 {
-		r.add("php", CheckWarn, "no PHP-FPM version is installed", "install php-fpm with the system package manager")
+		r.add("php", CheckWarn, "no PHP-FPM version is installed", phpRemedy(v.os.Family))
 	} else {
 		var vs []string
 		for _, p := range m.php.Versions {
@@ -183,6 +183,15 @@ func (e *Engine) doctorMachine(ctx context.Context, v *env, set state.Settings, 
 		r.add("openssl", CheckOK, e.find("openssl"), "")
 	}
 	return m
+}
+
+// phpRemedy is the install command of PHP-FPM on the platform, else the
+// advice to use the package manager (3.4: always the advice).
+func phpRemedy(f platform.Family) string {
+	if hint := discover.PHPInstallHint(f, ""); hint != "" {
+		return hint
+	}
+	return "install php-fpm with the system package manager"
 }
 
 // doctorReceipt compares the user copy of the receipt with the root copy.
@@ -506,8 +515,8 @@ func (e *Engine) doctorHosts(ctx context.Context, v *env, sites []state.Site, r 
 			names = append(names, en.Names...)
 		}
 		missing := names
-		if e.Sysroot.IsRegular(hosts.PowerShell) {
-			if m, err := hosts.WindowsUnresolved(ctx, e.Runner, hosts.PowerShell, names); err == nil {
+		if ps, ok := hosts.WindowsPowerShell(e.Sysroot); ok {
+			if m, err := hosts.WindowsUnresolved(ctx, e.Runner, ps, names); err == nil {
 				missing = m
 			}
 		}

@@ -1,0 +1,50 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_docker_logs (new in 3.4, plan P4): the last lines of a container's
+# log, stdout and stderr together as docker gives them, optionally since
+# T and kept by --grep RE, in one JSON object, instead of docker logs
+# --tail 50 ctr 2>&1 | grep. docker is a stub on PATH that records its
+# arguments.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+chmod 0755 stub/docker
+env PATH=$WORK/stub${:}$PATH
+
+# --- through the sourced shell: --grep keeps matching lines, read counts all
+exec bash -c 'source "$GASH_SH"; llm_docker_logs web --grep "(?i)error|warn"'
+stdout '^\{"ctr":"web","read":4,"log":\["PHP Warning: x","GET /a 500 error"\]\}$'
+! stderr .
+
+# --- directly: --tail and --since reach docker, the container after --
+exec gash llm_docker_logs web --tail 10 --since 10m
+stdout '^\{"ctr":"web","read":4,"log":\["GET / 200","PHP Warning: x","GET /a 500 error","GET /b 200"\]\}$'
+grep '^logs --tail 10 --since 10m -- web$' home/args.log
+
+# --- an unknown container: RETRY with a hint to list them
+! exec gash llm_docker_logs gone
+stderr '"error":"container_not_found","details":"Error response from daemon: No such container: gone","action":"RETRY"'
+! stdout .
+
+# --- usage errors and help
+! exec gash llm_docker_logs
+stderr '"error":"missing_container"'
+! exec gash llm_docker_logs web --since -1h
+stderr '"error":"invalid_since"'
+! exec gash llm_docker_logs web --grep '('
+stderr '"error":"invalid_regex"'
+exec gash llm_docker_logs web -h
+stdout 'llm_docker_logs CTR'
+
+-- stub/docker --
+#!/bin/sh
+# docker logs --tail N [--since T] -- CTR: web has four lines, one on stderr.
+echo "$*" >>"$HOME/args.log"
+[ "$1" = logs ] || exit 3
+for a; do ctr=$a; done
+case "$ctr" in
+web) echo "GET / 200"; echo "PHP Warning: x" >&2; echo "GET /a 500 error"; echo "GET /b 200" ;;
+*) echo "Error response from daemon: No such container: $ctr" >&2; exit 1 ;;
+esac

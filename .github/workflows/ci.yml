@@ -109,10 +109,11 @@ jobs:
     # macOS gates like Linux. Its runner has Homebrew bash 5 on PATH and the
     # BSD userland otherwise (no GNU coreutils, setsid, timeout, docker or
     # /proc), so tests that need one of those stub it or say why they skip.
+    # ubuntu-24.04-arm runs the linux/arm64 build the release ships.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -141,6 +142,11 @@ jobs:
       - name: Build
         run: CGO_ENABLED=0 go build ./...
 
+      # Every Homebrew formula the prerequisites catalog names exists.
+      - name: Homebrew formulas of the prerequisites
+        if: runner.os == 'macOS'
+        run: GASH_TEST_BREW=1 go test ./internal/prereq -run '^TestBrewFormulas$' -count=1 -v
+
       # architecture.md 1: `gash version` under 10 ms. go test above runs the
       # check with a 3x factor (loaded machine, -race); here it runs alone on
       # the idle runner with the real budget (cmd/gash/version_budget_test.go).
@@ -151,11 +157,11 @@ jobs:
   testscript:
     name: Black-box testscript (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # macOS gates like Linux (see the unit job's note).
+    # macOS and linux/arm64 gate like Linux (see the unit job's note).
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-latest]
     steps:
       # The upgrade scripts (upgrade_2x_*, upgrade_rollback) build their
       # fixture origin from the v2.1.0 tag: fetch the history and tags.
@@ -224,6 +230,52 @@ jobs:
           echo "$version"
           bash --norc -i -c 'export GASH_BIN="'"$RUNNER_TEMP"'/gash"; source "$HOME/.bashrc"; type gash_doctor >/dev/null && gash_doctor --no-color' </dev/null
 
+  distro-smoke:
+    # Gash on the distros it supports, on both architectures the release
+    # ships, from the bare image (testdata/distro): install.sh --check names
+    # what the image lacks, install.sh --assume-yes installs it with the
+    # distro's package manager, clones this commit and fetches its release
+    # archive (checked against release/SHA256SUMS); then gash_doctor and a
+    # few llm_* reads run, and gash_doctor --install --all installs every
+    # package the prerequisites catalog names for the distro, each of which
+    # must provide its tool.
+    name: Distro smoke (${{ matrix.image }}, ${{ matrix.os == 'ubuntu-24.04-arm' && 'arm64' || 'amd64' }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        image:
+          - library/rockylinux:8
+          - library/rockylinux:9-minimal
+          - library/almalinux:9
+          - library/almalinux:10
+          - library/oraclelinux:9
+          - library/amazonlinux:2023
+          - library/fedora:44
+          - library/debian:12
+          - library/ubuntu:24.04
+          - library/alpine:3.22
+          - opensuse/leap:15.6
+          - opensuse/tumbleweed:latest
+          - library/archlinux:latest
+        exclude:
+          # Arch Linux publishes no arm64 image.
+          - os: ubuntu-24.04-arm
+            image: library/archlinux:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Smoke test in a ${{ matrix.image }} container
+        run: bash testdata/distro/run.sh "mirror.gcr.io/${{ matrix.image }}"
+
   hte-e2e:
     name: HTE E2E (${{ matrix.distro }}${{ matrix.story != 'base' && format(', {0}', matrix.story) || '' }})
     runs-on: ubuntu-24.04
@@ -231,8 +283,9 @@ jobs:
       fail-fast: false
       matrix:
         # base: Debian 12 and Ubuntu 24.04 migrate the hte-cli tree on the
-        # distro PHP (8.2, 8.3); Fedora runs httpd with the distro php-fpm
-        # and Remi's php83, Arch php-fpm and php-legacy-fpm (TestE2EDistro).
+        # distro PHP (8.2, 8.3); Fedora and AlmaLinux 9 (the RHEL family)
+        # run httpd with the distro php-fpm and Remi's php83, Arch php-fpm
+        # and php-legacy-fpm (TestE2EDistro).
         # multiphp: PHP 7.4, 8.2 and 8.4 next to Ubuntu's 8.3. systemd:
         # systemd as PID 1, --autostart systemd (the apt-based images).
         include:
@@ -242,6 +295,7 @@ jobs:
           - { distro: ubuntu, story: multiphp }
           - { distro: ubuntu, story: systemd }
           - { distro: fedora, story: base }
+          - { distro: alma, story: base }
           - { distro: arch, story: base }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

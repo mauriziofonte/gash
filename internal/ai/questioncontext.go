@@ -5,8 +5,10 @@ package ai
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/lazyre"
 	"github.com/mauriziofonte/gash/internal/pathguard"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -130,7 +133,11 @@ func (m *Module) questionContext(c *invoke.Call, sudo func(string, ...string) []
 		case m.sys.IsDir(target):
 			q.kind("directories")
 			q.add("=== DIRECTORY: " + fpath + " ===\n")
-			q.add(sub(headN(q.dropSecretEntries(target, m.cmd(c, "ls", "-la", target)), 50)) + "\n")
+			if out, _, found := m.cmdRun(c, "ls", "-la", target); found {
+				q.add(sub(headN(q.dropSecretEntries(target, out), 50)) + "\n")
+			} else {
+				q.add(notInstalled("ls") + "\n")
+			}
 			q.add("\n")
 		}
 	}
@@ -150,7 +157,7 @@ func (m *Module) questionContext(c *invoke.Call, sudo func(string, ...string) []
 		seen["port:"+port] = true
 		q.kind("ports")
 		q.add("=== PORT: " + port + " ===\n")
-		q.add(sub(headN(ssListening(m.cmd(c, "ss", "-tlnp"), port), 10)) + "\n")
+		q.add(q.listening(port) + "\n")
 		q.add("\n")
 	}
 
@@ -170,7 +177,8 @@ func (m *Module) questionContext(c *invoke.Call, sudo func(string, ...string) []
 		if seen[svc+".service"] || seen["svc:"+strings.ToLower(svc)] {
 			continue
 		}
-		unitOut := q.cmdHead(60, "systemctl", "cat", svc+".service")
+		out, _, _ := m.cmdRun(c, "systemctl", "cat", svc+".service")
+		unitOut := sub(headN(out, 60))
 		if unitOut == "" {
 			continue
 		}
@@ -182,7 +190,7 @@ func (m *Module) questionContext(c *invoke.Call, sudo func(string, ...string) []
 		q.add("--- Status ---\n")
 		q.add(q.cmdHead(30, "systemctl", "status", svc+".service", "--no-pager") + "\n")
 		q.add("--- Journal (last 50 lines) ---\n")
-		q.add(sub(headN(sudo("journalctl", "-u", svc+".service", "-n", "50", "--no-pager"), 50)) + "\n")
+		q.add(q.sudoHead(50, "journalctl", "-u", svc+".service", "-n", "50", "--no-pager") + "\n")
 		q.add("\n")
 	}
 
@@ -355,7 +363,7 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.add(q.cmdHead(20, "systemctl", "status", "sshd", "--no-pager") + "\n")
 		if m.sys.IsRegular("/etc/ssh/sshd_config") {
 			q.add("--- /etc/ssh/sshd_config (key lines) ---\n")
-			q.add(sub(headN(q.sudo("grep", "-Ev", "^(#|$)", "/etc/ssh/sshd_config"), 30)) + "\n")
+			q.add(q.sudoHead(30, "grep", "-Ev", "^(#|$)", "/etc/ssh/sshd_config") + "\n")
 		}
 		if m.sys.IsDir("/etc/ssh/sshd_config.d") {
 			q.add("--- sshd_config.d/ ---\n")
@@ -393,8 +401,11 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		q.kind("services")
 		q.add("=== SERVICE: PostgreSQL ===\n")
 		q.add(q.cmdHead(20, "systemctl", "status", "postgresql", "--no-pager") + "\n")
-		pgconf := firstLine(m.cmd(q.c, "find", "/etc/postgresql", "-name", "pg_hba.conf"))
-		if pgconf != "" {
+		out, _, found := m.cmdRun(q.c, "find", "/etc/postgresql", "-name", "pg_hba.conf")
+		if !found && m.sys.IsDir("/etc/postgresql") {
+			q.add("--- pg_hba.conf ---\n" + notInstalled("find") + "\n")
+		}
+		if pgconf := firstLine(out); pgconf != "" {
 			q.add("--- " + pgconf + " ---\n")
 			q.add(q.grepFile(pgconf, reCommentBlank.R(), 20) + "\n")
 		}
@@ -405,7 +416,9 @@ func (q *qctx) serviceKeywords(lowerQ string, seen map[string]bool) {
 		seen["svc:cron"] = true
 		q.kind("services")
 		q.add("=== SERVICE: Cron ===\n")
-		if out, rc := m.cmdRC(q.c, "crontab", "-l"); rc != 0 {
+		if out, rc, found := m.cmdRun(q.c, "crontab", "-l"); !found {
+			q.add(notInstalled("crontab") + "\n")
+		} else if rc != 0 {
 			q.add("(no user crontab)\n")
 		} else {
 			q.add(sub(out) + "\n")
@@ -446,14 +459,56 @@ func (q *qctx) unitBlock(unit string) {
 	q.add("--- Status ---\n")
 	q.add(q.cmdHead(30, "systemctl", "status", unit, "--no-pager") + "\n")
 	q.add("--- Journal (last 50 lines) ---\n")
-	q.add(sub(headN(q.sudo("journalctl", "-u", unit, "-n", "50", "--no-pager"), 50)) + "\n")
+	q.add(q.sudoHead(50, "journalctl", "-u", unit, "-n", "50", "--no-pager") + "\n")
 	q.add("\n")
 }
 
-// cmdHead is `NAME ARGS 2>/dev/null | head -N` captured in $(...).
+// notInstalled is the line of a section whose program is not installed
+// (3.4: the section stayed empty).
+func notInstalled(name string) string { return "(" + name + " is not installed)" }
+
+// cmdHead is `NAME ARGS 2>/dev/null | head -N` captured in $(...), or the
+// not-installed line.
 func (q *qctx) cmdHead(n int, name string, args ...string) string {
-	return sub(headN(q.m.cmd(q.c, name, args...), n))
+	out, _, found := q.m.cmdRun(q.c, name, args...)
+	if !found {
+		return notInstalled(name)
+	}
+	return sub(headN(out, n))
 }
+
+// sudoHead is cmdHead through the session's sudo (journalctl, the
+// sshd_config grep), which returns only the output: an empty one from a
+// program that is not on PATH is the not-installed line.
+func (q *qctx) sudoHead(n int, name string, args ...string) string {
+	out := sub(headN(q.sudo(name, args...), n))
+	if out == "" {
+		if _, ok := prereq.Locate(q.c, name); !ok {
+			return notInstalled(name)
+		}
+	}
+	return out
+}
+
+// listening is the port section: the ss -tlnp rows of the port, else the
+// netstat ones (-tlnp, or -an -p tcp on macOS) when ss is not installed
+// (3.4: the section stayed empty, always on macOS).
+func (q *qctx) listening(port string) string {
+	if out, _, found := q.m.cmdRun(q.c, "ss", "-tlnp"); found {
+		return sub(headN(ssListening(out, port), 10))
+	}
+	args := []string{"-tlnp"}
+	if goos == "darwin" {
+		args = []string{"-an", "-p", "tcp"}
+	}
+	if out, _, found := q.m.cmdRun(q.c, "netstat", args...); found {
+		return sub(headN(netstatListening(out, port), 10))
+	}
+	return "(ss and netstat are not installed)"
+}
+
+// goos picks the netstat arguments; a test seam.
+var goos = runtime.GOOS
 
 // headFile is `head -N FILE` captured in $(...), read through the sysroot.
 func (q *qctx) headFile(path string, n int) string {
@@ -522,15 +577,10 @@ func (q *qctx) phpVersions() []string {
 	return vers
 }
 
-// cmd runs NAME ARGS and returns its stdout (errors discarded, as the 2.x
-// `2>/dev/null` and empty output on failure).
-func (m *Module) cmd(c *invoke.Call, name string, args ...string) []byte {
-	out, _ := m.cmdRC(c, name, args...)
-	return out
-}
-
-// cmdRC runs NAME ARGS and returns its stdout and $?.
-func (m *Module) cmdRC(c *invoke.Call, name string, args ...string) ([]byte, int) {
+// cmdRun runs NAME ARGS and returns its stdout (errors discarded, as the
+// 2.x `2>/dev/null` and empty output on failure) and $?; found is false
+// when NAME is not installed.
+func (m *Module) cmdRun(c *invoke.Call, name string, args ...string) (out []byte, rc int, found bool) {
 	ctx := c.Ctx
 	if ctx == nil {
 		ctx = context.Background()
@@ -538,9 +588,10 @@ func (m *Module) cmdRC(c *invoke.Call, name string, args ...string) ([]byte, int
 	res, err := m.run.Run(ctx, runner.Cmd{Path: name, Args: args,
 		Options: runner.Options{Env: c.Env.Child()}})
 	if err != nil {
-		return nil, 127
+		var se *runner.StartError
+		return nil, 127, !errors.As(err, &se) || se.Status != 127
 	}
-	return res.Stdout, res.ExitCode
+	return res.Stdout, res.ExitCode, true
 }
 
 // sub is command substitution `$(...)`: trailing newlines are stripped.
@@ -563,14 +614,27 @@ func headN(b []byte, n int) []byte {
 	return b
 }
 
-// grepF is `grep -F SUBSTR`: the lines containing substr, each kept with
-// its newline.
 // ssListening keeps the `ss -tlnp` rows whose local address (column 4)
 // ends with :PORT exactly, so port 30 never keeps :3000 or :3306 (AI-08).
 func ssListening(b []byte, port string) []byte {
 	var out []byte
 	for _, l := range bytes.SplitAfter(b, []byte("\n")) {
 		if f := strings.Fields(string(l)); len(f) > 3 && strings.HasSuffix(f[3], ":"+port) {
+			out = append(out, l...)
+		}
+	}
+	return out
+}
+
+// netstatListening keeps the listening TCP rows of netstat whose local
+// address (column 4) ends with :PORT (Linux, -tlnp) or .PORT (macOS and
+// BSD, -an -p tcp).
+func netstatListening(b []byte, port string) []byte {
+	var out []byte
+	for _, l := range bytes.SplitAfter(b, []byte("\n")) {
+		f := strings.Fields(string(l))
+		if len(f) > 5 && strings.HasPrefix(f[0], "tcp") && f[5] == "LISTEN" &&
+			(strings.HasSuffix(f[3], ":"+port) || strings.HasSuffix(f[3], "."+port)) {
 			out = append(out, l...)
 		}
 	}

@@ -1,0 +1,65 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# The direct entry point (new in 3.4, plan S7, AGENTS.md section 2): an
+# agent function run as `gash <fn> args`, with no gash.sh sourced, prints
+# the same stdout and stderr and exits with the same status as the sourced
+# function, in the same directory with the same exported environment. Each
+# pair below runs once through the sourced shell and once directly, and
+# the outputs are compared byte for byte: matches, an empty result, an
+# error envelope, a budget marker.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- llm_find
+exec bash -c 'source "$GASH_SH"; llm_find "*.php" proj -n 2 2>&1; echo "rc=$?"'
+cp stdout sourced.out
+exec bash -c 'gash llm_find "*.php" proj -n 2 2>&1; echo "rc=$?"'
+cmp stdout sourced.out
+stdout '/proj/src/a\.php$'
+
+# --- llm_tree, with stats
+exec bash -c 'source "$GASH_SH"; llm_tree proj --depth 2 --stats 2>&1; echo "rc=$?"'
+cp stdout sourced.out
+exec bash -c 'gash llm_tree proj --depth 2 --stats 2>&1; echo "rc=$?"'
+cmp stdout sourced.out
+
+# --- llm_grep: matches, then no match (no output, status 0)
+exec bash -c 'source "$GASH_SH"; llm_grep "function \w+" proj --ext php 2>&1; echo "rc=$?"; llm_grep zzz-nothing proj 2>&1; echo "rc=$?"'
+cp stdout sourced.out
+exec bash -c 'gash llm_grep "function \w+" proj --ext php 2>&1; echo "rc=$?"; gash llm_grep zzz-nothing proj 2>&1; echo "rc=$?"'
+cmp stdout sourced.out
+stdout 'a\.php:2:function alpha'
+
+# --- an error envelope and its status
+exec bash -c 'source "$GASH_SH"; llm_find "*" no-such-dir; echo "rc=$?"'
+cp stdout sourced.out
+cp stderr sourced.err
+exec bash -c 'gash llm_find "*" no-such-dir; echo "rc=$?"'
+cmp stdout sourced.out
+cmp stderr sourced.err
+stderr '"error":"path_not_found"'
+
+# --- a 3.4 function with a budget
+exec bash -c 'source "$GASH_SH"; llm_lint proj --max-lines 1 2>&1; echo "rc=$?"'
+cp stdout sourced.out
+exec bash -c 'gash llm_lint proj --max-lines 1 2>&1; echo "rc=$?"'
+cmp stdout sourced.out
+
+-- proj/src/a.php --
+<?php
+function alpha() { return 1; }
+-- proj/src/b.php --
+<?php
+function beta() { return 2; }
+-- proj/src/lib/c.php --
+<?php
+function gamma() { return 3; }
+-- proj/data/bad.json --
+{"a":
+-- proj/data/bad2.json --
+[1,
+-- proj/README.md --
+readme

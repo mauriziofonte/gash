@@ -139,10 +139,14 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 	argv := []string{env.bash(), "--noprofile", "--norc", "-c", child}
 	var wrap []string
 	if s.Sandbox == "1" {
-		wrap = []string{
-			"bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
-			"--unshare-all", "--die-with-parent", "--chdir", env.Cwd,
+		wrap = []string{"bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"}
+		// Under WSL a Windows program started from the sandbox would run on
+		// Windows, outside every limit of it: an empty /run/WSL hides the
+		// interop sockets, so the kernel's binfmt handler finds no server.
+		if isDir(env.fs(), WSLInteropDir) {
+			wrap = append(wrap, "--tmpfs", WSLInteropDir)
 		}
+		wrap = append(wrap, "--unshare-all", "--die-with-parent", "--chdir", env.Cwd)
 		argv = append(append([]string{}, wrap...), argv...)
 	}
 
@@ -152,8 +156,30 @@ func Build(line string, s Settings, env Environ, pr Probe) (*Plan, error) {
 	} else {
 		envSlice = buildChildEnv(env)
 	}
+	if s.Sandbox == "1" {
+		envSlice = dropEnv(envSlice, "WSL_INTEROP")
+	}
 
 	return &Plan{Argv: argv, Env: envSlice, Wrap: wrap, Bash: env.bash(), Script: child}, nil
+}
+
+// WSLInteropDir holds the sockets of the WSL interop servers.
+const WSLInteropDir = "/run/WSL"
+
+func isDir(fsys pathguard.FS, name string) bool {
+	fi, err := fsys.Lstat(name)
+	return err == nil && fi.IsDir()
+}
+
+// dropEnv removes the NAME=... entries of env.
+func dropEnv(env []string, name string) []string {
+	out := env[:0:0]
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, name+"=") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 func isSpaceByte(r rune) bool {

@@ -13,6 +13,7 @@ import (
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/contract"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
@@ -27,6 +28,8 @@ func registerOutput(t *invoke.Table) {
 	t.HandleCompat("json str", compatJSONStr)
 	t.HandleCompat("json arr", compatJSONArr)
 	t.HandleCompat("env load", compatEnvLoad)
+	t.HandleCompat("env perms", compatEnvPerms)
+	t.HandleCompat("prereq fail", compatPrereqFail)
 }
 
 func readAll(c *invoke.Call) string {
@@ -125,6 +128,24 @@ func compatJSONArr(c *invoke.Call) int {
 var envCache = []string{
 	"__GASH_ENV_LOADED", "__GASH_ENV_SSH_KEYS", "__GASH_ENV_DB_ENTRIES",
 	"__GASH_ENV_AI_PROVIDERS", "__GASH_ENV_HOST_ENTRIES", "__GASH_ENV_SETTINGS",
+}
+
+// compatEnvPerms is `gash __compat env perms FILE`: the mode and owner
+// warnings of __gash_check_env_perms, for a shell whose stat reads neither
+// the GNU nor the BSD format (3.4: there was no warning then).
+func compatEnvPerms(c *invoke.Call) int {
+	p := ui.NewPrinter(c.Stderr, c.Term, false)
+	for _, w := range config.CheckPerms(c.Arg(0), c.Env.Get("HOME"), os.Geteuid()) {
+		p.Warning(w.Text)
+	}
+	return 0
+}
+
+// compatPrereqFail is `gash __compat prereq fail TOOL NEED`: the report a
+// missing tool gets everywhere (the envelope when headless), for the Bash
+// helpers __gash_require_command and __gash_require_binary. Status 1.
+func compatPrereqFail(c *invoke.Call) int {
+	return prereq.Fail(c, c.Arg(0), c.Arg(1), false)
 }
 
 // compatEnvLoad is `gash __compat env load`: the warnings of the load on

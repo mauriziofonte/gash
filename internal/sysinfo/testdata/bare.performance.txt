@@ -1,9 +1,15 @@
 === PERFORMANCE DEEP ===
 --- Memory
+Note=free is not installed
 --- CPU
+Note=lscpu is not installed
 --- Load
+Note=uptime is not installed
 --- Top by memory
+Note=ps is not installed
 --- Top by CPU
+Note=ps is not installed
 --- sysctl (key active params)
+Note=sysctl is not installed
 --- sysctl.d configs
 --- I/O scheduler

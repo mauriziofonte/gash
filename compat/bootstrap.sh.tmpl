@@ -161,25 +161,35 @@ __gash_compat_ready() {
     __gash_bin_resolve
 }
 
-# Why the last fetch failed, for the one interactive line.
+# Why the last fetch failed, for the one interactive line, and the
+# prerequisite it lacked (curl, tar, gzip, sha256sum), if that was why.
 __GASH_FETCH_REASON=""
+__GASH_FETCH_MISSING=""
 
 # Download the binary of this checkout's version (upgrade.md 4).
 # Usage: __gash_fetch [quiet|loud]   (loud: one stderr line, success or not)
 __gash_fetch() {
     local mode="${1-quiet}" v="$__GASH_BOOT_VERSION" os="$__GASH_BOOT_OS" arch="$__GASH_BOOT_ARCH"
-    local base dir lock tmp asset url line want got pin="" hpin="" sumok=0 rc=0
+    local base dir lock tmp asset url line want got pin="" hpin="" sumok=0 rc=0 now at
     __GASH_FETCH_REASON=""
+    __GASH_FETCH_MISSING=""
     if [[ -z "$v" || "$v" == unknown ]]; then
         __GASH_FETCH_REASON="no VERSION file"
     elif [[ -z "$os" || -z "$arch" ]]; then
         __GASH_FETCH_REASON="no release for ${OSTYPE-?}/${HOSTTYPE-?}"
     elif ! type -P curl >/dev/null 2>&1 && ! type -P wget >/dev/null 2>&1; then
-        __GASH_FETCH_REASON="no curl or wget"
+        __GASH_FETCH_MISSING=curl
+        __GASH_FETCH_REASON="neither curl nor wget is installed"
     elif ! type -P tar >/dev/null 2>&1; then
-        __GASH_FETCH_REASON="no tar"
+        __GASH_FETCH_MISSING=tar
+        __GASH_FETCH_REASON="tar is not installed"
+    elif [[ "$os" != darwin ]] && ! type -P gzip >/dev/null 2>&1; then
+        # GNU tar runs gzip for -z; the bsdtar of macOS does not.
+        __GASH_FETCH_MISSING=gzip
+        __GASH_FETCH_REASON="gzip is not installed"
     elif ! type -P sha256sum >/dev/null 2>&1 && ! type -P shasum >/dev/null 2>&1; then
-        __GASH_FETCH_REASON="no sha256sum or shasum"
+        __GASH_FETCH_MISSING=sha256sum
+        __GASH_FETCH_REASON="neither sha256sum nor shasum is installed"
     fi
     if [[ -n "$__GASH_FETCH_REASON" ]]; then
         [[ "$mode" == loud ]] && __gash_fetch_line
@@ -197,24 +207,29 @@ __gash_fetch() {
         [[ "$mode" == loud ]] && __gash_fetch_line
         return 1
     fi
-    # One fetch at a time; a lock older than 10 minutes is stale.
-    if ! mkdir "$lock" 2>/dev/null; then
-        if [[ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]]; then
-            rmdir "$lock" 2>/dev/null || true
+    # One fetch at a time. The lock holds the time it was taken (lock/at,
+    # epoch seconds): it is stale after 10 minutes, or when it holds no time
+    # 5 seconds on (a fetch that died before writing it, or a 3.3 lock).
+    local waited=0
+    while ! mkdir "$lock" 2>/dev/null; do
+        printf -v now '%(%s)T' -1
+        at=""
+        [[ -r "$lock/at" ]] && read -r at <"$lock/at" 2>/dev/null
+        case "$at" in '' | *[!0-9]*) at="" ;; esac
+        if { [[ -n "$at" ]] && ((now - at > 600)); } || { [[ -z "$at" ]] && ((waited >= 5)); }; then
+            command rm -rf "$lock" 2>/dev/null && continue
         fi
-        local waited=0
-        while ! mkdir "$lock" 2>/dev/null; do
-            if ((waited >= 120)); then
-                __GASH_FETCH_REASON="another download holds $lock"
-                [[ "$mode" == loud ]] && __gash_fetch_line
-                return 1
-            fi
-            sleep 1
-            waited=$((waited + 1))
-        done
-    fi
+        if ((waited >= 120)); then
+            __GASH_FETCH_REASON="another download holds $lock"
+            [[ "$mode" == loud ]] && __gash_fetch_line
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    printf '%(%s)T\n' -1 >"$lock/at" 2>/dev/null || true
     if __gash_bin_resolve; then
-        rmdir "$lock" 2>/dev/null || true
+        command rm -rf "$lock" 2>/dev/null || true
         return 0
     fi
     tmp="$dir/.tmp.$$"
@@ -297,7 +312,7 @@ __gash_fetch() {
         fi
     fi
     command rm -rf "$tmp" 2>/dev/null || true
-    rmdir "$lock" 2>/dev/null || true
+    command rm -rf "$lock" 2>/dev/null || true
     ((rc == 0)) && __gash_bin_resolve || rc=1
     [[ "$mode" == loud ]] && __gash_fetch_line
     return "$rc"
@@ -323,6 +338,7 @@ __gash_fetch_sum() {
     printf '%s' "${out%% *}"
 }
 
+{{% .PrereqBash %}}
 # The core emitters, loaded from this checkout when the caller sourced a
 # shim without them (they are the only writers to stderr).
 __gash_boot_emitters() {
@@ -341,15 +357,32 @@ __gash_boot_emitters() {
 # the emitters' load: lib/core/utils.sh sources this file again, which
 # resets it (a failed fetch then read as a success).
 __gash_fetch_line() {
-    local __gfl_reason="$__GASH_FETCH_REASON"
+    local __gfl_reason="$__GASH_FETCH_REASON" __gfl_missing="$__GASH_FETCH_MISSING"
     __gash_boot_emitters || return 0
     __GASH_FETCH_REASON="$__gfl_reason"
+    __GASH_FETCH_MISSING="$__gfl_missing"
     if [[ -z "$__GASH_FETCH_REASON" ]]; then
         __gash_success "Installed gash $__GASH_BOOT_VERSION for $__GASH_BOOT_OS/$__GASH_BOOT_ARCH"
     else
-        __gash_warning "gash $__GASH_BOOT_VERSION is not installed and could not be downloaded ($__GASH_FETCH_REASON). Run: bash ${__GASH_BOOT_ROOT/#$HOME/\~}/install.sh --repair"
+        __gash_warning "gash $__GASH_BOOT_VERSION is not installed and could not be downloaded ($__GASH_FETCH_REASON). $(__gash_fetch_advice)"
     fi
     return 0
+}
+
+# What to do after a failed fetch: the install command of the missing
+# prerequisite, else the installer's repair.
+__gash_fetch_advice() {
+    local cmd
+    if [[ -n "$__GASH_FETCH_MISSING" ]]; then
+        cmd="$(__gash_install_hint "$__GASH_FETCH_MISSING")"
+        if [[ -n "$cmd" ]]; then
+            printf 'Install %s: %s' "$__GASH_FETCH_MISSING" "$cmd"
+        else
+            printf 'Install %s with the package manager of this system' "$__GASH_FETCH_MISSING"
+        fi
+        return 0
+    fi
+    printf 'Run: bash %s/install.sh --repair' "${__GASH_BOOT_ROOT/#$HOME/\~}"
 }
 
 # The report of a call without a binary: the binary_not_found envelope for
@@ -357,12 +390,24 @@ __gash_fetch_line() {
 # humans. Status 1.
 # Usage: __gash_missing NAME
 __gash_missing() {
-    local details hint
+    local details hint cmd="" json reason="$__GASH_FETCH_REASON" missing="$__GASH_FETCH_MISSING"
     details="gash ${__GASH_BOOT_VERSION:-unknown} for ${__GASH_BOOT_OS:-${OSTYPE-unknown}}/${__GASH_BOOT_ARCH:-${HOSTTYPE-unknown}} is not installed and could not be downloaded"
-    hint="Run: bash ${__GASH_BOOT_ROOT/#$HOME/\~}/install.sh --repair"
+    [[ -n "$reason" ]] && details+=" ($reason)"
+    hint="$(__gash_fetch_advice)"
+    [[ -n "$missing" ]] && cmd="$(__gash_install_hint "$missing")"
     __gash_boot_emitters || return 1
-    if [[ "${GASH_HEADLESS-}" == 1 || "${1-}" == llm_* ]]; then
-        __gash_json_error binary_not_found "$details" STOP "$hint"
+    __GASH_FETCH_REASON="$reason"
+    __GASH_FETCH_MISSING="$missing"
+    if [[ "${GASH_HEADLESS-}" == 1 || "${1-}" == llm_* || "${1-}" == agent_* ]]; then
+        if [[ -z "$missing" ]]; then
+            __gash_json_error binary_not_found "$details" STOP "$hint"
+            return 1
+        fi
+        # A missing prerequisite: the members every such error carries.
+        json="{\"error\":\"binary_not_found\",\"details\":\"$(__gash_json_escape "$details")\",\"action\":\"STOP\",\"recoverable\":true"
+        json+=",\"hint\":\"$(__gash_json_escape "$hint")\",\"missing\":\"$(__gash_json_escape "$missing")\""
+        [[ -n "$cmd" ]] && json+=",\"install\":\"$(__gash_json_escape "$cmd")\""
+        printf '%s}\n' "$json" >&2
     else
         __gash_error "$details"
         __gash_hint "$hint"

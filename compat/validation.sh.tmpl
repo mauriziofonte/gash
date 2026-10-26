@@ -47,7 +47,8 @@ __gash_require_command() {
         if [[ -n "$custom_msg" ]]; then
             __gash_error "$custom_msg"
         else
-            __gash_error "Command '$cmd' is not installed or not in PATH."
+            __gash_require_report "$cmd" ||
+                __gash_error "Command '$cmd' is not installed or not in PATH."
         fi
         return 1
     fi
@@ -71,11 +72,34 @@ __gash_require_binary() {
         if [[ -n "$custom_msg" ]]; then
             __gash_error "$custom_msg"
         else
-            __gash_error "Binary '$binary' is not installed or not in PATH."
+            __gash_require_report "$binary" ||
+                __gash_error "Binary '$binary' is not installed or not in PATH."
         fi
         return 1
     fi
 
+    return 0
+}
+
+# Prints the missing-tool report of the binary (what the tool is for, the
+# command that installs it here; the JSON envelope when headless) for TOOL,
+# needed by the first caller outside these helpers. Status 1 when the
+# binary is not there to print it.
+# Usage: __gash_require_report TOOL
+__gash_require_report() {
+    __gash_compat_ready || return 1
+    local __grr_c=0 __grr_need="$1" __grr_f
+    for __grr_f in "${FUNCNAME[@]:1}"; do
+        case "$__grr_f" in
+            __gash_require_* | __gash_cold | main) ;;
+            *)
+                __grr_need="$__grr_f"
+                break
+                ;;
+        esac
+    done
+    __gash_color_now __grr_c
+    GASH__COLOR=$__grr_c __gash_compat prereq fail "$1" "$__grr_need"
     return 0
 }
 
@@ -267,7 +291,7 @@ __gash_require_args_min() {
 # Usage: __gash_require_docker
 # Returns: 0 if docker is available, 1 otherwise
 __gash_require_docker() {
-    __gash_require_command "docker" "Docker is not installed."
+    __gash_require_command "docker"
 }
 
 # -----------------------------------------------------------------------------

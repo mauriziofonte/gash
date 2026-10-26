@@ -145,8 +145,51 @@ func newRoot(p *Process, status *int) *cobra.Command {
 		})
 	}
 	root.AddCommand(versionCmd(p, status), initCmd(p, status), updateCmd(p, status),
-		hteCmd(p, status), compatCmd(p, status))
+		hteCmd(p, status), delegateCmd(p, status, "logs", "Find and reclaim disk space from log files"),
+		delegateCmd(p, status, "wsl", "Inspect and repair WSL and convert paths"),
+		delegateCmd(p, status, "win", "Inspect the Windows host from WSL (read-only)"),
+		delegateCmd(p, status, "runtime", "Resolve a php or node version to its binary, without nvm.sh"),
+		delegateCmd(p, status, "run", "Run a command with its output shaped and its exit status kept"),
+		delegateCmd(p, status, "agent-functions", "List the llm_* and agent_* functions for direct calls"),
+		agentsHintCmd(p, status), compatCmd(p, status))
 	return root
+}
+
+// delegateCmd builds the cobra command of a 3.x top-level command whose
+// whole tree lives in its table handler (like hte): the arguments are
+// handed to the handler raw, and completion is relayed through it
+// (gash __complete NAME WORDS asks the handler, which answers a leading
+// __complete).
+func delegateCmd(p *Process, status *int, name, short string) *cobra.Command {
+	return &cobra.Command{
+		Use:                name,
+		Short:              short,
+		DisableFlagParsing: true,
+		Args:               cobra.ArbitraryArgs,
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			h, ok := p.Table.LookupCommand(name)
+			if !ok {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			var out bytes.Buffer
+			h(&invoke.Call{
+				Ctx: p.Ctx, Name: name, Args: append(append([]string{cobra.ShellCompRequestCmd}, args...), toComplete),
+				Env: p.Env, Stdin: p.Stdin, Stdout: &out, Stderr: io.Discard, Term: p.Term, Handlers: p.Table,
+			})
+			return parseCompletion(out.String())
+		},
+		RunE: func(_ *cobra.Command, args []string) error {
+			if h, ok := p.Table.LookupCommand(name); ok {
+				*status = h(&invoke.Call{
+					Ctx: p.Ctx, Name: name, Args: args, Env: p.Env,
+					Stdin: p.Stdin, Stdout: p.Stdout, Stderr: p.Stderr, Term: p.Term, Handlers: p.Table,
+				})
+				return nil
+			}
+			*status = p.fail(invoke.NotPorted("gash " + name))
+			return nil
+		},
+	}
 }
 
 func initCmd(p *Process, status *int) *cobra.Command {

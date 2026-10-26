@@ -44,6 +44,12 @@ const (
 	// update: bash --noprofile --norc -i runs UpdateSmokeInteractiveScript,
 	// which sources the gash.sh of the install directory ($1).
 	BashUpdateSmokeInteractive
+	// BashUserCommand runs the caller's own command line of gash run and
+	// agent_test when it is a shell with a command string (bash -c '...'),
+	// which Run refuses: the fixed script UserCommandScript execs the
+	// argv, passed as the positional parameters, never as script text
+	// (RunUser).
+	BashUserCommand
 )
 
 func (u BashUse) String() string {
@@ -62,6 +68,8 @@ func (u BashUse) String() string {
 		return "update smoke"
 	case BashUpdateSmokeInteractive:
 		return "update smoke interactive"
+	case BashUserCommand:
+		return "user command"
 	}
 	return fmt.Sprintf("BashUse(%d)", int(u))
 }
@@ -85,6 +93,10 @@ printf '\0%s\0' "$?"`
 // UpdateSmokeInteractiveScript is the whole script of
 // BashUpdateSmokeInteractive.
 const UpdateSmokeInteractiveScript = `source "$1/gash.sh"`
+
+// UserCommandScript is the whole script of BashUserCommand: exec the
+// positional parameters.
+const UserCommandScript = `exec "$@"`
 
 // doctorExit is the script of the whole-shell timings.
 const doctorExit = "exit"
@@ -175,6 +187,17 @@ func (b Bash) argv() ([]string, error) {
 			return nil, fmt.Errorf("%w: %s takes the install directory only", ErrBashUse, b.Use)
 		}
 		script, name = want, "gash-update"
+	case BashUserCommand:
+		if script != "" && script != UserCommandScript {
+			return nil, fmt.Errorf("%w: %s runs only UserCommandScript", ErrBashUse, b.Use)
+		}
+		if len(b.Wrap) > 0 {
+			return nil, fmt.Errorf("%w: %s takes no wrapper", ErrBashUse, b.Use)
+		}
+		if len(args) == 0 {
+			return nil, fmt.Errorf("%w: %s needs the command", ErrBashUse, b.Use)
+		}
+		script, name = UserCommandScript, "gash-run"
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrBashUse, b.Use)
 	}

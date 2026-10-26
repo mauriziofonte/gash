@@ -205,13 +205,8 @@ func TestRemoteScpFlags(t *testing.T) {
 		s.files = map[string]string{"scp.status": "4", "scp.err": "scp: failed\n"}
 		require.Equal(t, 4, s.same(plain, "remote_push", "web", "f", "/tmp/f").RC)
 	})
-	t.Run("no scp", func(t *testing.T) {
-		s := newScene(t, hostsEnv)
-		s.stubs = []string{"ssh", "rsync"}
-		s.env = []string{"PATH=" + s.stubD()}
-		r := s.same(plain, "remote_push", "web", "f", "/tmp/f")
-		require.Equal(t, "Error: scp is not installed.\n", r.Err)
-	})
+	// 3.4: a missing scp is the prerequisite report, not 2.x's "scp is
+	// not installed." (TestRemoteMissingClients).
 	t.Run("color", func(t *testing.T) {
 		newScene(t, hostsEnv).same(color, "remote_push", "web", "f", "/etc/shadow")
 	})
@@ -264,12 +259,8 @@ func TestRemoteRsyncFlags(t *testing.T) {
 			require.Equal(t, tc.rc, r.RC)
 		})
 	}
-	t.Run("no rsync", func(t *testing.T) {
-		s := newScene(t, hostsEnv)
-		s.stubs = []string{"ssh", "scp"}
-		s.env = []string{"PATH=" + s.stubD()}
-		require.Equal(t, "Error: rsync is not installed.\n", s.same(plain, "remote_sync_push", "web", "d", "/tmp/d").Err)
-	})
+	// 3.4: a missing rsync is the prerequisite report, not 2.x's "rsync
+	// is not installed." (TestRemoteMissingClients).
 	t.Run("rsync status and output", func(t *testing.T) {
 		s := newScene(t, hostsEnv)
 		s.files = map[string]string{"rsync.status": "23", "rsync.out": "sending incremental file list\n"}

@@ -51,7 +51,7 @@ func Topics() []Topic { return topics }
 
 // commands are the public commands of the binary: `gash WORD` runs them
 // instead of a card topic.
-var commands = []string{"init", "update", "version", "hte"}
+var commands = []string{"init", "update", "version", "hte", "logs", "wsl", "win", "runtime", "run", "agent-functions", "agents-hint"}
 
 // Commands returns the public commands of the binary (internal/cli selects
 // them, the generated completion offers them after the card topics).
@@ -156,4 +156,6 @@ func (f *Function) HasStub() bool { return f.Delegated() || f.Name == "gash" }
 var ModuleOrder = []string{
 	"files", "system", "git", "docker", "docker-compose", "ai", "sysinfo", "gash", "ssh", "llm", "utils",
 	"node", "remote", "chrome", "php",
+	// New in 3.4: the agent_* write family, its own help module.
+	"agent",
 }

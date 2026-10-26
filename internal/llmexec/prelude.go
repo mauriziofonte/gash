@@ -265,7 +265,7 @@ func prelude(extra []string, pr Probe) string {
 	b.WriteString("unset -f " + unsetNames(extra) + " 2>/dev/null\n")
 	b.WriteString("unset CDPATH\n")
 	if !inExtra["sed"] {
-		b.WriteString("sed() { command sed --sandbox \"$@\"; }\n")
+		b.WriteString("sed() { command " + sedProgram(pr) + " --sandbox \"$@\"; }\n")
 	}
 	if !inExtra["awk"] {
 		b.WriteString("awk() { command gawk --sandbox \"$@\"; }\n")

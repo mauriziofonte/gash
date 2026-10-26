@@ -1,8 +1,13 @@
 === NETWORK DEEP ===
 --- Interfaces
+Note=ip is not installed
 --- Routes
+Note=ip is not installed
 --- Neighbors
+Note=ip is not installed
 --- resolv.conf
 --- hosts
 --- Listening TCP
+Note=neither ss nor netstat is installed
 --- Listening UDP
+Note=neither ss nor netstat is installed

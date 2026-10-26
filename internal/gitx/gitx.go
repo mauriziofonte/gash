@@ -19,6 +19,7 @@ import (
 	"os"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -116,8 +117,19 @@ func (x *call) requireArg(value, name, usage string) bool {
 	return false
 }
 
-// requireRepo is __gash_require_git_repo.
+// requireGit reports a missing git (the macOS /usr/bin/git stub without
+// the Command Line Tools included) as the prerequisite it is.
+func (x *call) requireGit() bool {
+	_, ok := prereq.Require(x.Call, "git", x.Name, false)
+	return ok
+}
+
+// requireRepo is __gash_require_git_repo, after requireGit (3.4: a missing
+// git was "Not in a git repository.").
 func (x *call) requireRepo() bool {
+	if !x.requireGit() {
+		return false
+	}
 	if x.gitQuiet("rev-parse", "--is-inside-work-tree") {
 		return true
 	}

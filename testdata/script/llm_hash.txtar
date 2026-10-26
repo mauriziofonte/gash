@@ -1,0 +1,38 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_hash (new in 3.4, plan F10): digests of several files in parallel,
+# in input order; --short cuts the digest, --algo md5 switches it; a path
+# that cannot be hashed keeps its row with an error; secret files are
+# hashed (a digest shows no content).
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: sha256sum's digest
+exec bash -c 'source "$GASH_SH"; llm_hash hello.txt'
+stdout '^\[\{"p":"hello.txt","sha256":"5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03","size":6\}\]$'
+
+# --- directly: md5, short, a missing file and a directory as rows
+exec gash llm_hash hello.txt nope dir .env --algo md5 --short 8 -j 2
+stdout '^\[\{"p":"hello.txt","md5":"b1946ac9","size":6,"error":null\},\{"p":"nope","md5":null,"size":null,"error":"file_not_found"\},\{"p":"dir","md5":null,"size":null,"error":"not_a_file"\},\{"p":".env","md5":"[0-9a-f]{8}","size":4,"error":null\}\]$'
+
+# --- TSV
+exec gash llm_hash hello.txt --format tsv
+cmp stdout tsv.want
+
+# --- bad values
+! exec gash llm_hash hello.txt --algo sha1
+stderr '"error":"invalid_algo"'
+! exec gash llm_hash hello.txt --short 0
+stderr '"error":"invalid_short"'
+
+-- hello.txt --
+hello
+-- .env --
+K=v
+-- dir/keep --
+-- tsv.want --
+p	sha256	size
+hello.txt	5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03	6

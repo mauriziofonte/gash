@@ -2,7 +2,7 @@
 #
 # covers: none (3.0 self-management proof)
 #
-# docs/port/design/upgrade.md 3.1 and 6: a 2.1.0 install runs its 2.x
+# dev/port/design/upgrade.md 3.1 and 6: a 2.1.0 install runs its 2.x
 # gash_upgrade in an interactive shell (bash -i, ~/.bashrc with the
 # installer's block). The next interactive shell loads 3.0.0: the binary
 # is fetched with its one line, then the functions, the aliases, the

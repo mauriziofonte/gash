@@ -16,19 +16,19 @@ package remote
 
 import (
 	"context"
-	"errors"
 	"io"
 	"strings"
 
 	"github.com/mauriziofonte/gash/internal/config"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
 
 // Module is the remote handler set with its process seam.
 type Module struct {
-	// Run starts ssh, scp, rsync and cat.
+	// Run starts ssh, scp and rsync.
 	Run runner.Runner
 }
 
@@ -84,16 +84,16 @@ func (x *call) home() string { return x.Env.Get("HOME") }
 // headless is __gash_headless_gate_active.
 func (x *call) headless() bool { return x.Env.Get("GASH_HEADLESS") == "1" }
 
-// have is `command -v NAME >/dev/null`: a regular file NAME on the PATH,
-// executable or not (Bash's command -v also names a file it cannot run).
-func (x *call) have(name string) bool {
-	_, err := runner.LookPath(name, x.Env.Child(), "")
-	if err == nil {
-		return true
+// require looks up the catalog tools need runs, in order: the first one
+// missing gets the prerequisite report (2.x printed "scp is not
+// installed.") and false.
+func (x *call) require(need string, tools ...string) bool {
+	for _, tool := range tools {
+		if _, ok := prereq.Require(x.Call, tool, need, false); !ok {
+			return false
+		}
 	}
-	var se *runner.StartError
-	ok := errors.As(err, &se)
-	return ok && se.Status == 126
+	return true
 }
 
 // requireArg is __gash_require_arg VALUE NAME USAGE.

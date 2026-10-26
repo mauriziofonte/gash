@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -188,6 +189,18 @@ func TestBootstrapFetch(t *testing.T) {
 	require.Less(t, time.Since(start), 30*time.Second)
 	require.NoDirExists(t, lock)
 	require.FileExists(t, filepath.Join(home, ".local/share/gash/versions/2.1.0/gash"))
+
+	// A lock holds the time it was taken: one older than 10 minutes is
+	// stale at once (3.4: no find needed to tell).
+	dir, home = tree(t), t.TempDir()
+	lock = filepath.Join(home, ".local/share/gash/versions/2.1.0/.lock")
+	require.NoError(t, os.MkdirAll(lock, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lock, "at"), []byte(strconv.FormatInt(time.Now().Add(-11*time.Minute).Unix(), 10)+"\n"), 0o644))
+	start = time.Now()
+	out = bootFetch(t, dir, home, "quiet", "GASH_RELEASE_URL=file://"+rel)
+	require.Equal(t, "rc=0 reason=\n", out)
+	require.Less(t, time.Since(start), 3*time.Second, "an old lock is stale at once")
+	require.NoDirExists(t, lock)
 }
 
 func execBash(script string) *exec.Cmd {

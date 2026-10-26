@@ -1,0 +1,71 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# llm_wait (new in 3.4, plan P1): one call instead of a sleep/grep poll
+# loop. It waits until a log line matches, a path appears, a process is
+# gone or a read-only command succeeds, and answers with one JSON object.
+# A timeout is an answer, not an error: {"met":false,...} on stdout, exit
+# 1, nothing on stderr. The file is scanned once and then only its new
+# bytes are read; secret files and commands outside the llm_exec rules
+# are refused. Every process this script waits on is one it started.
+#
+# covers: none (new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+
+# --- through the sourced shell: a line appended after the call starts
+exec bash -c '(sleep 0.3; echo "server ready on 8080" >> app.log) & source "$GASH_SH"; llm_wait --timeout 10 --file-match app.log "ready on [0-9]+"'
+stdout '^\{"met":true,"after_s":[0-9.]+,"match":"server ready on 8080"\}$'
+! stderr .
+
+# --- directly: a line already there is met by the first scan; --tail N
+exec gash llm_wait --timeout 10 --file-match app.log 'ready' --tail 2
+stdout '^\{"met":true,"after_s":0[0-9.]*,"match":"server ready on 8080","tail":\["boot","server ready on 8080"\]\}$'
+
+# --- a timeout: met false, exit 1, no error envelope
+! exec gash llm_wait --timeout 0.2 --file-match app.log 'FATAL'
+stdout '^\{"met":false,"after_s":[0-9.]+\}$'
+! stderr .
+! exec gash llm_wait --timeout 300ms --exists never-made
+stdout '^\{"met":false,"after_s":[0-9.]+\}$'
+
+# --- --exists: a path made after the call starts
+exec bash -c '(sleep 0.3; touch flag) & gash llm_wait --timeout 10 --exists flag'
+stdout '^\{"met":true,"after_s":[0-9.]+\}$'
+
+# --- --gone PID and --gone NAME: a victim this script started
+exec bash -c 'sleep 300 & vic=$!; (sleep 0.3; kill $vic) & gash llm_wait --timeout 10 --gone $vic'
+stdout '^\{"met":true,"after_s":[0-9.]+\}$'
+exec bash -c 'sleep 299 & vic=$!; (sleep 0.3; kill $vic) & gash llm_wait --timeout 10 --gone "^sleep 299$"'
+stdout '^\{"met":true,"after_s":[0-9.]+\}$'
+
+# --- --cmd-ok: a read-only command, rerun until it exits 0
+exec bash -c '(sleep 0.3; touch ready.txt) & gash llm_wait --timeout 10 --cmd-ok "ls ready.txt"'
+stdout '^\{"met":true,"after_s":[0-9.]+,"rc":0,"runs":[0-9]+\}$'
+! exec gash llm_wait --timeout 0.2 --cmd-ok 'ls missing.txt' --tail 1
+stdout '"met":false,.*"rc":[12],"runs":[0-9]+,"tail":\["ls: .*missing\.txt'
+
+# --- refused: a secret file, a write command, no condition, no timeout
+! exec gash llm_wait --timeout 1 --file-match .env x
+stderr '"error":"secret_file_blocked"'
+! stdout .
+! exec gash llm_wait --timeout 1 --cmd-ok 'rm -f app.log'
+stderr '"error":"command_not_allowed"'
+exists app.log
+! exec gash llm_wait --timeout 1
+stderr '"error":"missing_condition"'
+! exec gash llm_wait --exists flag
+stderr '"error":"missing_value","details":"--timeout"'
+! exec gash llm_wait --timeout 2h --exists flag
+stderr '"error":"invalid_timeout"'
+! exec gash llm_wait --timeout 1 --exists flag --equals 1
+stderr '"error":"unexpected_argument"'
+
+# --- --help anywhere prints the help
+exec gash llm_wait --timeout 1 -h
+stdout 'llm_wait --timeout S'
+
+-- app.log --
+boot
+-- .env --
+DB_PASSWORD=x

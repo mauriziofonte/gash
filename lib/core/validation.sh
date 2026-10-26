@@ -35,13 +35,21 @@ unset __gash_here
 # Usage: __gash_require_command "command" ["custom error message"]
 # Returns: 0 if command exists, 1 otherwise
 # shellcheck disable=SC2120
-__gash_require_command() { __gash_cold __gash_require_command 8332c514 && "${FUNCNAME[0]}" "$@"; }
+__gash_require_command() { __gash_cold __gash_require_command f54f836a && "${FUNCNAME[0]}" "$@"; }
 
 # Verify a binary exists (not an alias or function).
 # Usage: __gash_require_binary "binary" ["custom error message"]
 # Returns: 0 if binary exists, 1 otherwise
 # shellcheck disable=SC2120
-__gash_require_binary() { __gash_cold __gash_require_binary cb7ad971 && "${FUNCNAME[0]}" "$@"; }
+__gash_require_binary() { __gash_cold __gash_require_binary b73f7dc5 && "${FUNCNAME[0]}" "$@"; }
+
+# Prints the missing-tool report of the binary (what the tool is for, the
+# command that installs it here; the JSON envelope when headless) for TOOL,
+# needed by the first caller outside these helpers. Status 1 when the
+# binary is not there to print it.
+# Usage: __gash_require_report TOOL
+# shellcheck disable=SC2120
+__gash_require_report() { __gash_cold __gash_require_report 2244d216 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # File System Validation
@@ -160,7 +168,7 @@ __gash_require_args_min() { __gash_cold __gash_require_args_min 91d2b7a1 && "${F
 # Usage: __gash_require_docker
 # Returns: 0 if docker is available, 1 otherwise
 __gash_require_docker() {
-    __gash_require_command "docker" "Docker is not installed."
+    __gash_require_command "docker"
 }
 
 # -----------------------------------------------------------------------------

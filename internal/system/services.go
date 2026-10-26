@@ -10,6 +10,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/ui"
 )
@@ -81,7 +82,7 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		p.Info("Aborted.")
 		return 1
 	}
-	if !m.sudoReady(c, p) {
+	if !m.sudoReady(c, p, "services_stop") {
 		return 1
 	}
 	rc := 0
@@ -91,7 +92,16 @@ func (m *Module) servicesStop(c *invoke.Call) int {
 		if manager == "service" {
 			args = []string{"service", s, "stop"}
 		}
-		if m.passthrough(c, "sudo", sudoArgv(c, args...)...) != 0 {
+		res, err := m.run.Run(ctx(c), runner.Cmd{Path: "sudo", Args: sudoArgv(c, args...),
+			Options: runner.Options{Env: c.Env.Child(), Stdin: c.Stdin, Stdout: c.Stdout, Stderr: c.Stderr}})
+		switch se := (*runner.StartError)(nil); {
+		case notInstalled(err):
+			// No sudo: the report once, not one failure per service.
+			return prereq.Fail(c, "sudo", "services_stop", false)
+		case errors.As(err, &se):
+			write(c.Stderr, "bash: "+se.Error()+"\n")
+			rc = 1
+		case err != nil || res.ExitCode != 0:
 			rc = 1
 		}
 	}

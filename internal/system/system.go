@@ -16,6 +16,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/invoke"
 	"github.com/mauriziofonte/gash/internal/platform"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/system/handoff"
 	"github.com/mauriziofonte/gash/internal/ui"
@@ -109,14 +110,21 @@ func unattended(c *invoke.Call) bool {
 
 // sudoReady is the check before an unattended sudo (SYS-25): `sudo -n
 // true` must pass, else the call is refused with one clear error rather
-// than a password prompt nobody sees. On a terminal it is always ready;
-// a sudo that does not start is left to the real call's message.
-func (m *Module) sudoReady(c *invoke.Call, p ui.Printer) bool {
+// than a password prompt nobody sees. On a terminal it is always ready
+// (the first sudo call reports a missing sudo, sudoMissing). A sudo that
+// is not installed is the prerequisite report for need (3.4: it counted as
+// ready, and each stop then failed on its own); one that does not start
+// otherwise is left to the real call's message.
+func (m *Module) sudoReady(c *invoke.Call, p ui.Printer, need string) bool {
 	if !unattended(c) {
 		return true
 	}
 	res, err := m.run.Run(ctx(c), runner.Cmd{Path: "sudo", Args: []string{"-n", "true"},
 		Options: runner.Options{Env: c.Env.Child(), Stdout: io.Discard, Stderr: io.Discard}})
+	if notInstalled(err) {
+		prereq.Fail(c, "sudo", need, false)
+		return false
+	}
 	if errors.As(err, new(*runner.StartError)) || (err == nil && res.ExitCode == 0) {
 		return true
 	}
@@ -131,6 +139,13 @@ func sudoArgv(c *invoke.Call, args ...string) []string {
 		return append([]string{"-n"}, args...)
 	}
 	return args
+}
+
+// notInstalled reports a start error of a program that is not on PATH
+// (Bash's status 127).
+func notInstalled(err error) bool {
+	se := (*runner.StartError)(nil)
+	return errors.As(err, &se) && se.Status == 127
 }
 
 // found is `command -v NAME` for a program on the caller's PATH.

@@ -1,7 +1,7 @@
 name: Demos
 
-# Records the README GIFs from docs/tapes/*.tape with vhs, against gash
-# built from the commit (docs/tapes/render.sh). On main it commits the GIFs
+# Records the README GIFs from dev/tapes/*.tape with vhs, against gash
+# built from the commit (dev/tapes/render.sh). On main it commits the GIFs
 # that changed; on a pull request it only records them and uploads them as
 # an artifact, so a tape that breaks shows up before the merge.
 
@@ -9,12 +9,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "docs/tapes/**"
+      - "dev/tapes/**"
       - ".github/workflows/demos.yml"
       - "VERSION"
   pull_request:
     paths:
-      - "docs/tapes/**"
+      - "dev/tapes/**"
       - ".github/workflows/demos.yml"
   workflow_dispatch:
 
@@ -63,7 +63,7 @@ jobs:
       - name: Record the tapes
         env:
           GASH_DEMO_HTE: "1"
-        run: docs/tapes/render.sh
+        run: dev/tapes/render.sh
 
       - name: Upload the GIFs
         if: github.event_name == 'pull_request'

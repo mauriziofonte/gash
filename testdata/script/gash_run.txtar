@@ -1,0 +1,105 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# gash run (new in 3.4, plan S11): CMD run with its exit status unchanged.
+# Without a budget flag its output passes through untouched; --max-lines,
+# --tail and --width shape stdout and stderr each, with one omitted-lines
+# marker; --runtime puts a runtime first on PATH (a fake nvm tree here);
+# --test-summary prints the agent_test object; --safe applies llm_exec's
+# rails; a gash function runs in process. gash's own errors are envelopes.
+#
+# covers: none (gash run is new in 3.4; no 2.x spec)
+
+env GASH_HEADLESS=1
+env LC_ALL=C
+env XDG_CACHE_HOME=$WORK/cache
+env PATH=$WORK/bin:$PATH
+chmod 0755 bin/chatty
+chmod 0755 bin/pytest
+chmod 0755 home/.nvm/versions/node/v24.1.0/bin/node
+
+# --- the exit status passes through, from the sourced shell and directly
+exec bash -c 'source "$GASH_SH"; gash run -- chatty; echo "rc=$?"'
+cmp stdout passthrough.want
+exec bash -c 'gash run bash -c "exit 42"; echo "rc=$?"'
+stdout '^rc=42$'
+
+# --- shaped: the first lines and a marker, each stream on its own
+exec bash -c 'gash run --max-lines 2 -- chatty; echo "rc=$?"'
+cmp stdout shaped.want
+cmp stderr shaped-err.want
+! exec gash run --tail 1 --width 3 -- chatty
+stdout '^\[\.\.\. 5 lines omitted\]$'
+stdout '^la…$'
+stderr '^\[\.\.\. 2 lines omitted\]$'
+stderr '^er…$'
+
+# --- --runtime: the nvm node first on PATH
+exec gash run --runtime node:24 -- node --version
+stdout '^v24\.1\.0$'
+! exec gash run --runtime node:5 -- node
+stderr '"error":"runtime_not_installed"'
+
+# --- --test-summary: the llm_test object, CMD's status
+exec bash -c 'gash run --test-summary -- pytest; echo "rc=$?"'
+stdout '^\{"runner":"pytest","passed":2,"failed":1,.*"exit_code":1\}$'
+stdout '^rc=1$'
+
+# --- --safe: a write is refused before anything runs
+! exec gash run --safe -- cp chatty-copy.txt copy.txt
+stderr '"error":"command_not_allowed","details":"cp"'
+! exists copy.txt
+exec gash run --safe -- grep -c line chatty-copy.txt
+stdout '^2$'
+
+# --- a gash function runs in process, under the budget
+exec gash run --max-lines 1 -- llm_find '*.txt' .
+stdout 'chatty-copy\.txt$'
+
+# --- gash's own errors
+! exec gash run
+stderr '"error":"empty_command"'
+! exec gash run --verbose -- true
+stderr '"error":"unknown_option"'
+exec bash -c 'gash run -- no-such-program-zz; echo "rc=$?"'
+stderr '"error":"command_not_found"'
+stdout '^rc=127$'
+
+-- bin/chatty --
+#!/bin/sh
+echo line 1
+echo line 2
+echo err 1 >&2
+echo err 2 >&2
+echo err 3 >&2
+echo line 3
+echo line 4
+echo line 5
+echo last
+exit 3
+-- bin/pytest --
+#!/bin/sh
+printf '%s\n' 'tests/test_a.py .F.' 'tests/test_a.py:5: AssertionError' 'FAILED tests/test_a.py::test_b - assert 1 == 2' '========================= 1 failed, 2 passed in 0.03s =========================='
+exit 1
+-- home/.nvm/versions/node/v24.1.0/bin/node --
+#!/bin/sh
+echo v24.1.0
+-- chatty-copy.txt --
+line 1
+line 2
+-- passthrough.want --
+line 1
+line 2
+line 3
+line 4
+line 5
+last
+rc=3
+-- shaped.want --
+line 1
+line 2
+[... 4 lines omitted]
+rc=3
+-- shaped-err.want --
+err 1
+err 2
+[... 1 lines omitted]

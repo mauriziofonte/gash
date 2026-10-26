@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/registry"
 	"github.com/mauriziofonte/gash/internal/runner"
 	"github.com/mauriziofonte/gash/internal/term"
@@ -289,14 +290,17 @@ func TestLedger_SYS25(t *testing.T) {
 	r = call(m, "services_stop", env, nil, "", "-y")
 	require.Equal(t, 1, r.rc)
 
-	// A sudo that does not start is the shell's message.
+	// 3.4: a sudo that is not installed is the prerequisite report (it
+	// counted as ready, then each stop said "bash: sudo: command not
+	// found").
+	defer prereq.SetSystem(debian("sudo"))()
 	f = runner.NewFake(t, isActive("redis")...)
-	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}},
-		runner.Expect{Argv: []string{"sudo", "-n", "systemctl", "stop", "redis"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}})
+	f.Expect(runner.Expect{Argv: []string{"sudo", "-n", "true"}, Err: &runner.StartError{Name: "sudo", Status: 127, Err: errors.New("not found")}})
 	m, _, _ = tm(t, f)
 	env["GASH_HEADLESS"] = "1"
 	r = call(m, "services_stop", env, nil, "", "-y")
-	require.Equal(t, result{"", "Info: Running: redis\nInfo: Stopping redis...\nbash: sudo: command not found\n", 1}, r)
+	require.Equal(t, result{"", "Info: Running: redis\n" + `{"error":"prerequisite_missing","details":"services_stop needs sudo, which is not installed",` +
+		`"action":"STOP","recoverable":true,"hint":"Install sudo: apt-get install -y sudo","missing":"sudo","install":"apt-get install -y sudo"}` + "\n", 1}, r)
 }
 
 func TestSudoLast(t *testing.T) {

@@ -20,7 +20,7 @@ fi
 # Completion handler for Gash functions.
 # Dispatches to per-function completion based on COMP_WORDS[0].
 # shellcheck disable=SC2120
-__gash_complete() { __gash_cold __gash_complete cf2310b7 && "${FUNCNAME[0]}" "$@"; }
+__gash_complete() { __gash_cold __gash_complete 6744aaf8 && "${FUNCNAME[0]}" "$@"; }
 
 # -----------------------------------------------------------------------------
 # Enable Completion
@@ -32,6 +32,12 @@ __gash_complete() { __gash_cold __gash_complete cf2310b7 && "${FUNCNAME[0]}" "$@
 __gash_enable_completion() {
     local a
     local -a names=(
+        agent_docker_exec
+        agent_git_commit
+        agent_kill
+        agent_put
+        agent_replace
+        agent_test
         ai_ask
         ai_query
         ai_sysinfo
@@ -81,25 +87,55 @@ __gash_enable_completion() {
         hgrep
         history_grep
         ip_public
+        llm_assert
         llm_config
+        llm_count
+        llm_csv
+        llm_date
+        llm_db_databases
         llm_db_explain
         llm_db_query
         llm_db_sample
         llm_db_schema
         llm_db_tables
         llm_deps
+        llm_dns
         llm_docker_check
+        llm_docker_exec
+        llm_docker_logs
+        llm_docker_ps
+        llm_dotenv
         llm_env
         llm_exec
         llm_find
         llm_git_diff
         llm_git_log
+        llm_git_overview
+        llm_git_show
         llm_git_status
         llm_grep
+        llm_hash
+        llm_http
+        llm_json
+        llm_lint
+        llm_log
         llm_ports
         llm_procs
         llm_project
+        llm_read
+        llm_remote_run
+        llm_runtime
+        llm_same
+        llm_service
+        llm_stat
+        llm_sysinfo
+        llm_tcp
+        llm_textcheck
+        llm_textstats
+        llm_tls
+        llm_tools
         llm_tree
+        llm_wait
         mkdir_cd
         node_detect_version
         node_upgrade
