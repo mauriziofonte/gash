@@ -11,6 +11,7 @@
 #   testdata/hte/e2e/run.sh [ubuntu]   # Ubuntu 24.04: the hte-cli tree migrated (PHP 8.3)
 #   testdata/hte/e2e/run.sh debian     # Debian 12: the same story on its PHP 8.2
 #   testdata/hte/e2e/run.sh fedora     # Fedora 44: httpd, the distro php-fpm and Remi's php83
+#   testdata/hte/e2e/run.sh alma       # AlmaLinux 9 (RHEL family): the same story on AppStream and Remi
 #   testdata/hte/e2e/run.sh arch       # Arch: httpd, php-fpm and php-legacy-fpm
 #   GASH_HTE_E2E_BASE=... run.sh D     # another image of the same family as D
 #   GASH_HTE_E2E_SYSTEMD=1 run.sh D    # systemd as PID 1, autostart systemd (debian, ubuntu)
@@ -24,9 +25,10 @@ case "$distro" in
     debian) def=mirror.gcr.io/library/debian:12 dockerfile=Dockerfile.base ;;
     ubuntu) def=mirror.gcr.io/library/ubuntu:24.04 dockerfile=Dockerfile.base ;;
     fedora) def=mirror.gcr.io/library/fedora:44 dockerfile=Dockerfile.fedora ;;
+    alma) def=mirror.gcr.io/library/almalinux:9 dockerfile=Dockerfile.alma ;;
     arch) def=mirror.gcr.io/library/archlinux:latest dockerfile=Dockerfile.arch ;;
     *)
-        echo "usage: $0 [debian|ubuntu|fedora|arch]" >&2
+        echo "usage: $0 [debian|ubuntu|fedora|alma|arch]" >&2
         exit 2
         ;;
 esac

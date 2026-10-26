@@ -79,10 +79,11 @@ multiphp=${GASH_HTE_E2E_MULTIPHP:-}
 testenv=(GASH_HTE_E2E=1)
 case "$distro" in
     debian | ubuntu) legacy=1 ;;
-    fedora)
+    fedora | alma)
         legacy=0
         # The distro php-fpm and Remi's php83; mod_ssl's ssl.conf carries
-        # the stock _default_:443 vhost.
+        # the stock _default_:443 vhost. AlmaLinux (the RHEL family) has
+        # Fedora's layout.
         testenv+=("GASH_HTE_E2E_LAYOUTS=fedora remi" "GASH_HTE_E2E_BLOCKING=/etc/httpd/conf.d/ssl.conf")
         ;;
     arch)

@@ -1,0 +1,15 @@
+# Gash 3.4. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+# The AlmaLinux image of the gash hte end-to-end test (run.sh alma), the
+# RHEL family (Rocky and Oracle Linux share its layout): the AppStream
+# httpd (mod_ssl and mod_http2 are packages of their own) and php-fpm,
+# PHP-FPM 8.3 from the Remi repository side by side (/opt/remi/php83,
+# /etc/opt/remi/php83; Remi needs EPEL), openssl and sudo, nothing of gash
+# (run.sh mounts the binaries). As a fresh install leaves them, nothing is
+# enabled or started. curl replaces the image's curl-minimal.
+ARG BASE=mirror.gcr.io/library/almalinux:9
+FROM ${BASE}
+RUN dnf -y install epel-release \
+    && dnf -y install "https://rpms.remirepo.net/enterprise/remi-release-$(rpm -E %rhel).rpm" \
+    && dnf -y install --allowerasing --setopt=install_weak_deps=False httpd mod_ssl mod_http2 php-fpm php83-php-fpm \
+        openssl sudo curl procps-ng iproute shadow-utils util-linux-core findutils diffutils \
+    && dnf clean all
