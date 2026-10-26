@@ -56,8 +56,8 @@ var needs = map[string][]Need{
 
 	// Remote hosts and SSH.
 	"remote_exec":          {{"ssh", ""}},
-	"remote_push":          {{"scp", ""}},
-	"remote_pull":          {{"scp", ""}},
+	"remote_push":          {{"scp", ""}, {"ssh", ""}},
+	"remote_pull":          {{"scp", ""}, {"ssh", ""}},
 	"remote_sync_push":     {{"rsync", ""}, {"ssh", ""}},
 	"remote_sync_pull":     {{"rsync", ""}, {"ssh", ""}},
 	"llm_remote_run":       {{"ssh", ""}},

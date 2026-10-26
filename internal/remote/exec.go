@@ -11,6 +11,7 @@ import (
 
 	"github.com/mauriziofonte/gash/internal/help"
 	"github.com/mauriziofonte/gash/internal/invoke"
+	"github.com/mauriziofonte/gash/internal/prereq"
 	"github.com/mauriziofonte/gash/internal/runner"
 )
 
@@ -77,6 +78,11 @@ func (m *Module) exec(c *invoke.Call) int {
 		}
 	}
 
+	// ssh is looked up before anything is created or started: without
+	// it, the prerequisite report, not a silent exit 127.
+	if _, ok := prereq.Require(c, "ssh", "remote_exec", false); !ok {
+		return 1
+	}
 	// A missing ~/.ssh (the multiplexing socket's directory) is created
 	// with mode 0700, as OpenSSH expects; an existing one is left as it
 	// is (LEDGER REM-07).
@@ -104,20 +110,28 @@ func (m *Module) exec(c *invoke.Call) int {
 
 // readScript is the script of --script: FILE must be a regular file
 // (else "Script file not readable: FILE"), or - for stdin, read whole as
-// $(cat ...) reads it (NUL bytes and trailing newlines dropped). cat runs
-// as in 2.x, so its own messages stay its own.
+// 2.x's $(cat ...) read it (NUL bytes and trailing newlines dropped). The
+// binary reads it itself: no cat to miss (2.x then sent an empty script,
+// "Script is empty"), and a file it cannot read is "not readable" too.
 func (x *call) readScript(file string) (string, bool) {
-	var res runner.Result
+	var data []byte
+	var err error
 	if file == "-" {
-		res = x.run(x.Stdin, nil, x.Stderr, "cat")
+		if x.Stdin != nil {
+			data, err = io.ReadAll(x.Stdin)
+		}
 	} else {
-		if st, err := os.Stat(file); err != nil || !st.Mode().IsRegular() {
+		if st, serr := os.Stat(file); serr != nil || !st.Mode().IsRegular() {
 			x.p.Error("Script file not readable: " + file)
 			return "", false
 		}
-		res = x.run(x.Stdin, nil, x.Stderr, "cat", file)
+		data, err = os.ReadFile(file)
 	}
-	return runner.CommandSubst(res.Stdout), true
+	if err != nil {
+		x.p.Error("Script file not readable: " + file)
+		return "", false
+	}
+	return runner.CommandSubst(data), true
 }
 
 // scriptArgs is the argument part of `bash -s --ARGS`: each argument
