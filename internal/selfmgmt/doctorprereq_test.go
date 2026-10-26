@@ -77,7 +77,7 @@ func TestDoctorPrereqs(t *testing.T) {
 		"          Install tar: sudo dnf install -y tar\n")
 	require.Contains(t, errs, "Warning:     rsync — not installed: syncs directories with remote hosts (needed by remote_sync_pull and remote_sync_push)\n"+
 		"          Install rsync: sudo dnf install -y rsync\n")
-	require.Contains(t, errs, "Info:     fzf — not installed: picks an entry from a list (needed by hgrep (--pick) and history_grep (--pick)) (optional)\n"+
+	require.Contains(t, errs, "Info:     fzf — not installed: picks an entry from a list (needed by hgrep (--pick)) (optional)\n"+
 		"          Install fzf: sudo dnf install -y epel-release && sudo dnf install -y fzf\n")
 	require.Contains(t, errs, "Hint: gash_doctor --install installs the missing tools")
 
