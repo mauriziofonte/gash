@@ -7,5 +7,3 @@ package proctab
 // HasProcFS reports whether this system has a Linux /proc to poll: never
 // here, so the callers read ps.
 func HasProcFS() bool { return false }
-
-func ownerUID(string) int { return -1 }

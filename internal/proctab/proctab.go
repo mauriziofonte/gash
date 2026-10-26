@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/mauriziofonte/gash/internal/runner"
 )
@@ -380,4 +381,17 @@ func parseStat(b []byte) (Proc, bool) {
 		return Proc{}, false
 	}
 	return Proc{PID: pid, PPID: ppid, State: f[0], Name: s[open+1 : end]}, true
+}
+
+// ownerUID is the owner of a /proc/PID directory: the process's effective
+// uid (-1 when it is gone).
+func ownerUID(dir string) int {
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return -1
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return int(st.Uid)
+	}
+	return -1
 }
