@@ -49,6 +49,18 @@ func Display(w io.Writer, color bool, f *registry.Function) bool {
 		line("")
 		line("  " + b + h.Short + r)
 	}
+	// Plan S9: an agent function's page names the raw command shapes it
+	// replaces, before anything else.
+	if routes := registry.RoutesOf(f.Name); len(routes) > 0 {
+		line("")
+		heading("REPLACES")
+		for _, rt := range routes {
+			line("    " + rt.Shape)
+			if rt.Use != rt.Fn {
+				line("      " + m + "-> " + rt.Use + r)
+			}
+		}
+	}
 	if h.Aliases != "" {
 		line("")
 		heading("ALIASES")

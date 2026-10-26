@@ -55,6 +55,16 @@ func renderTopicDoc(t *testing.T, topic string) string {
 	}
 	for _, f := range fns {
 		b.WriteString("\n## " + f.Name + "\n\n" + f.Help.Short + "\n")
+		if routes := RoutesOf(f.Name); len(routes) > 0 {
+			b.WriteString("\nReplaces:\n\n")
+			for _, r := range routes {
+				b.WriteString("- " + mdCode(r.Shape))
+				if r.Use != r.Fn {
+					b.WriteString(" (" + mdCode(r.Use) + ")")
+				}
+				b.WriteString("\n")
+			}
+		}
 		for _, sec := range helpSections(f.Help.Body) {
 			fence := "text"
 			if sec.title == "EXAMPLES" {

@@ -102,7 +102,7 @@ var catalogData = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
-		Replaces:  "python3 -c \"import json; print(json.load(open(f))[...])\"; jq '.a' f",
+		Replaces:  "python3 -c \"import json ...\"; jq .a.b f => --path a.b",
 	},
 	{
 		Name:     "llm_csv",
@@ -156,7 +156,7 @@ var catalogData = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD"},
-		Replaces:  "python3 -c \"import csv; r=list(csv.reader(open(f))); print(len(r)-1, r[0])\"; wc -l f; head -3 f",
+		Replaces:  "python3 -c \"import csv ...\"; wc -l f; head -3 f",
 	},
 	{
 		Name:     "llm_dotenv",
@@ -254,6 +254,6 @@ var catalogData = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"GASH_HEADLESS", "GASH_NO_COLOR", "HOME", "NO_COLOR", "PWD", "TZ"},
-		Replaces:  "date -d '-600 seconds' '+%Y-%m-%dT%H:%M:%S'; python3 -c \"from datetime import date; print((date(2026,12,31)-date(2026,10,25)).days)\"",
+		Replaces:  "date -d '-600 seconds'; python3 datetime arithmetic",
 	},
 }

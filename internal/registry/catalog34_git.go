@@ -72,7 +72,7 @@ var catalogGit = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD"},
-		Replaces:  "git add A B && git commit -m S && git push && git log -1",
+		Replaces:  "git add A B && git commit -m S && git push && git log -1 => --add A B --push",
 	},
 	{
 		Name:     "llm_git_overview",
@@ -178,6 +178,6 @@ var catalogGit = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD"},
-		Replaces:  "git show REV --stat; git show REV:path | sed -n 1,80p",
+		Replaces:  "git show REV --stat => --stat\ngit show REV:path | sed -n 1,80p => --max-lines 80",
 	},
 }

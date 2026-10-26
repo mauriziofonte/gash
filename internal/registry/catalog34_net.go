@@ -56,7 +56,7 @@ var catalogNet = []Function{
 				"  Names are asked as given (no search domains).",
 		},
 		Env:      []string{"GASH_HEADLESS"},
-		Replaces: "for d in ...; do for t in A MX TXT; do dig +short $t $d; done; done",
+		Replaces: "for d; do dig +short MX $d; done => --type MX",
 	},
 	{
 		Name:     "llm_http",
@@ -143,7 +143,7 @@ var catalogNet = []Function{
 				"  SSL_CERT_FILE / SSL_CERT_DIR.",
 		},
 		Env:      []string{"GASH_HEADLESS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "SSL_CERT_DIR", "SSL_CERT_FILE"},
-		Replaces: "for u in ...; do curl -s -o /dev/null -w '%{http_code}' $u; done; curl -sI URL | grep -i location; curl -s -H \"$AUTH\" URL | jq .status",
+		Replaces: "for u; do curl -s -o /dev/null -w '%{http_code}' $u; done => --status-only\ncurl -s URL | jq .status => --json-path status",
 	},
 	{
 		Name:     "llm_tcp",
@@ -235,6 +235,6 @@ var catalogNet = []Function{
 				"  (the handshake failed), no_certificate. No STARTTLS.",
 		},
 		Env:      []string{"GASH_HEADLESS", "SSL_CERT_DIR", "SSL_CERT_FILE"},
-		Replaces: "echo | openssl s_client -connect h:443 -servername h | openssl x509 -noout -dates -subject",
+		Replaces: "openssl s_client -connect h:443 | openssl x509 -noout -dates",
 	},
 }

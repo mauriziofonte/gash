@@ -834,18 +834,22 @@ registry, where each function's entry names the shape it replaces.
 | Instead of | Use |
 | --- | --- |
 | `grep -q P f && echo ok; grep -c P f (as checks)` | `llm_assert` |
-| `cat config/app.yaml; cat composer.json (a config file that is not secret)` | `llm_config` |
+| `cat config/app.yaml (a config file that is not secret)` | `llm_config` |
+| `python3 -c "import tomllib, yaml ..."; yq .a.b f` | `llm_config --path a.b` |
 | `grep -c A f; grep -c B f; grep -c C g` | `llm_count` |
-| `python3 -c "import csv; r=list(csv.reader(open(f))); print(len(r)-1, r[0])"; wc -l f; head -3 f` | `llm_csv` |
-| `date -d '-600 seconds' '+%Y-%m-%dT%H:%M:%S'; python3 -c "from datetime import date; print((date(2026,12,31)-date(2026,10,25)).days)"` | `llm_date` |
+| `python3 -c "import csv ..."; wc -l f; head -3 f` | `llm_csv` |
+| `date -d '-600 seconds'; python3 datetime arithmetic` | `llm_date` |
 | `mysql -e 'SHOW DATABASES'; psql -l` | `llm_db_databases` |
 | `mysql -e "EXPLAIN SELECT ..."` | `llm_db_explain` |
-| `mysql -N -B -e "SELECT ..."; psql -c "SELECT ..."; sqlite3 f "SELECT ..."` | `llm_db_query` |
+| `mysql -N -B -e "SELECT ..."; sqlite3 f "SELECT ..."` | `llm_db_query --format tsv` |
+| `llm_db_query ... \| jq -r '.rows[0][0]'` | `llm_db_query --scalar` |
 | `mysql -e "SELECT * FROM t LIMIT 5"` | `llm_db_sample` |
-| `mysql -e "SHOW CREATE TABLE t"; psql -c "\d t"; sqlite3 f .schema` | `llm_db_schema` |
-| `mysql -e "SHOW TABLES"; psql -c "\dt"; sqlite3 f .tables` | `llm_db_tables` |
+| `mysql -e "SHOW CREATE TABLE t"; sqlite3 f .schema` | `llm_db_schema` |
+| `mysqldump --no-data` | `llm_db_schema --all` |
+| `mysql -e "SHOW TABLES"; sqlite3 f .tables` | `llm_db_tables` |
+| `SELECT count(*) FROM t, per table` | `llm_db_tables --counts` |
 | `cat composer.json package.json \| jq .require` | `llm_deps` |
-| `for d in ...; do for t in A MX TXT; do dig +short $t $d; done; done` | `llm_dns` |
+| `for d; do dig +short MX $d; done` | `llm_dns --type MX` |
 | `docker compose pull --dry-run; docker images` | `llm_docker_check` |
 | `docker exec -u USER ctr sh -c '...'` | `llm_docker_exec` |
 | `docker logs --tail 50 ctr 2>&1 \| grep -i error` | `llm_docker_logs` |
@@ -854,35 +858,49 @@ registry, where each function's entry names the shape it replaces.
 | `env \| grep -i PATH; printenv NODE_ENV` | `llm_env` |
 | `bash -c "..." for an allowlisted command` | `llm_exec` |
 | `find D -name '*.php' -not -path '*/vendor/*'` | `llm_find` |
-| `git diff --stat; git diff --name-only` | `llm_git_diff` |
-| `git log --oneline -20` | `llm_git_log` |
+| `find D -type f \| wc -l` | `llm_find --count` |
+| `find D -newer F \| sort \| head` | `llm_find --newer F --sort mtime` |
+| `git diff --stat \| tail -1` | `llm_git_diff --summary` |
+| `git diff --name-status; git diff --numstat` | `llm_git_diff --files` |
+| `git log --oneline -20 -- path` | `llm_git_log --path P` |
 | `git status --short \| wc -l; git log --oneline -3; git diff --stat \| tail -1` | `llm_git_overview` |
-| `git show REV --stat; git show REV:path \| sed -n 1,80p` | `llm_git_show` |
+| `git show REV --stat` | `llm_git_show --stat` |
+| `git show REV:path \| sed -n 1,80p` | `llm_git_show --max-lines 80` |
 | `git status --short; git branch -vv` | `llm_git_status` |
-| `grep -rn --include='*.php' X . \| grep -v vendor` | `llm_grep` |
+| `for r; do git -C $r status -sb; done` | `llm_git_status --repos` |
+| `git fetch && git status -sb` | `llm_git_status --fetch` |
+| `grep -rn --include='*.php' X . \| grep -v vendor` | `llm_grep --ext php` |
+| `grep -o RE f \| sort \| uniq -c` | `llm_grep --distinct` |
 | `sha256sum f \| cut -c1-12; md5sum f` | `llm_hash` |
-| `for u in ...; do curl -s -o /dev/null -w '%{http_code}' $u; done; curl -sI URL \| grep -i location; curl -s -H "$AUTH" URL \| jq .status` | `llm_http` |
-| `python3 -c "import json; print(json.load(open(f))[...])"; jq '.a' f` | `llm_json` |
-| `for f in src/*.php; do php -l "$f"; done; bash -n x.sh; node --check f.js` | `llm_lint` |
-| `tail -n 50 app.log \| cut -c1-200; grep ERROR app.log \| tail -20` | `llm_log` |
-| `ss -tlnp; lsof -i :8080` | `llm_ports` |
-| `ps aux \| grep X \| grep -v grep` | `llm_procs` |
+| `for u; do curl -s -o /dev/null -w '%{http_code}' $u; done` | `llm_http --status-only` |
+| `curl -s URL \| jq .status` | `llm_http --json-path status` |
+| `python3 -c "import json ..."; jq .a.b f` | `llm_json --path a.b` |
+| `for f; do php -l $f; done; bash -n x.sh; node --check f.js` | `llm_lint` |
+| `tail -n 50 app.log \| cut -c1-200` | `llm_log` |
+| `grep ERROR app.log \| tail -20` | `llm_log --last-match ERROR -n 20` |
+| `ss -tuln` | `llm_ports` |
+| `ss -tlnp \| grep :8080; lsof -i :8080` | `llm_ports --port 8080` |
+| `ps aux \| grep X \| grep -v grep` | `llm_procs --name X` |
+| `kill -0 PID` | `llm_procs --pid PID` |
 | `ls; cat composer.json package.json (what kind of project is this)` | `llm_project` |
-| `grep -n X f; sed -n A,Bp f; cat -n f \| sed -n A,Bp; cat a b` | `llm_read` |
+| `grep -n X f, then sed -n A,Bp f` | `llm_read --around X -C 5` |
+| `cat -n f \| sed -n A,Bp; cat a b` | `llm_read` |
 | `source ~/.nvm/nvm.sh; nvm use 24; node ...; php84 ...` | `llm_runtime` |
-| `systemctl is-active x; journalctl -u x -n 20 --no-pager \| cut -c1-200` | `llm_service` |
+| `systemctl is-active x; journalctl -u x -n 20` | `llm_service --log 20` |
 | `ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e` | `llm_stat` |
-| `uptime; free -h; df -h /; nproc; nvidia-smi --query-gpu=...` | `llm_sysinfo` |
+| `uptime; free -h; df -h /; nproc; nvidia-smi` | `llm_sysinfo` |
 | `nc -z h p; timeout 2 bash -c '</dev/tcp/h/p'` | `llm_tcp` |
 | `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20` | `llm_test` |
 | `grep -nP '[^\x00-\x7F]' f; file -i f` | `llm_textcheck` |
 | `wc -w f; wc -c f; gzip -c f \| wc -c` | `llm_textstats` |
-| `echo \| openssl s_client -connect h:443 -servername h \| openssl x509 -noout -dates -subject` | `llm_tls` |
+| `openssl s_client -connect h:443 \| openssl x509 -noout -dates` | `llm_tls` |
 | `php84 -v \| head -1; node24 --version; git --version; command -v rg` | `llm_tools` |
-| `tree -L 2 -I node_modules; ls -R` | `llm_tree` |
-| `while ! grep -q X f; do sleep N; done; sleep N; tail f` | `llm_wait` |
+| `tree -L 2 -I node_modules` | `llm_tree` |
+| `du -sh */ \| sort -rh \| head` | `llm_tree --top 10` |
+| `while ! grep -q X f; do sleep N; done; tail f` | `llm_wait --file-match f X` |
+| `until curl -sf URL; do sleep 1; done` | `llm_wait --http URL` |
 | `docker exec ctr sh -c '...' (writes)` | `agent_docker_exec` |
-| `git add A B && git commit -m S && git push && git log -1` | `agent_git_commit` |
+| `git add A B && git commit -m S && git push && git log -1` | `agent_git_commit --add A B --push` |
 | `pkill -f x; kill PID` | `agent_kill` |
 | `python3 - <<EOF ... s.replace(...) ... EOF; sed -i` | `agent_replace` |
 

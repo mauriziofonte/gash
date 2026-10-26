@@ -204,7 +204,7 @@ var catalogText = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD", "TZ"},
-		Replaces:  "tail -n 50 app.log | cut -c1-200; grep ERROR app.log | tail -20",
+		Replaces:  "tail -n 50 app.log | cut -c1-200\ngrep ERROR app.log | tail -20 => --last-match ERROR -n 20",
 	},
 	{
 		Name:     "llm_read",
@@ -263,7 +263,7 @@ var catalogText = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD"},
-		Replaces:  "grep -n X f; sed -n A,Bp f; cat -n f | sed -n A,Bp; cat a b",
+		Replaces:  "grep -n X f, then sed -n A,Bp f => --around X -C 5\ncat -n f | sed -n A,Bp; cat a b",
 	},
 	{
 		Name:     "llm_stat",

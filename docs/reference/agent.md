@@ -15,6 +15,10 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 
 Run any command in a container, no shell quoting (JSON)
 
+Replaces:
+
+- `docker exec ctr sh -c '...' (writes)`
+
 #### Usage
 
 ```text
@@ -57,6 +61,10 @@ See also: `llm_docker_exec`
 ## agent_git_commit
 
 Stage explicit paths, commit, optionally push, in one call
+
+Replaces:
+
+- `git add A B && git commit -m S && git push && git log -1` (`agent_git_commit --add A B --push`)
 
 #### Usage
 
@@ -124,6 +132,10 @@ See also: `llm_git_overview`, `llm_git_status`
 
 Signal processes by PID or command line, never the caller (JSON)
 
+Replaces:
+
+- `pkill -f x; kill PID`
+
 #### Usage
 
 ```text
@@ -169,6 +181,10 @@ See also: `llm_procs`
 ## agent_replace
 
 Replace text in explicit files, all or nothing
+
+Replaces:
+
+- `python3 - <<EOF ... s.replace(...) ... EOF; sed -i`
 
 #### Usage
 

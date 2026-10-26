@@ -174,7 +174,7 @@ var catalogProc = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD"},
-		Replaces:  "while ! grep -q X f; do sleep N; done; sleep N; tail f",
+		Replaces:  "while ! grep -q X f; do sleep N; done; tail f => --file-match f X\nuntil curl -sf URL; do sleep 1; done => --http URL",
 	},
 	{
 		Name:     "llm_service",
@@ -216,7 +216,7 @@ var catalogProc = []Function{
 				"  journalctl). Without systemd: systemd_unavailable (CONTINUE).",
 		},
 		Env:      []string{"HOME", "PWD"},
-		Replaces: "systemctl is-active x; journalctl -u x -n 20 --no-pager | cut -c1-200",
+		Replaces: "systemctl is-active x; journalctl -u x -n 20 => --log 20",
 	},
 	{
 		Name:     "llm_docker_ps",
@@ -384,6 +384,6 @@ var catalogProc = []Function{
 		},
 		ShellVars: []string{"HOME"},
 		Env:       []string{"HOME", "PWD"},
-		Replaces:  "uptime; free -h; df -h /; nproc; nvidia-smi --query-gpu=...",
+		Replaces:  "uptime; free -h; df -h /; nproc; nvidia-smi",
 	},
 }

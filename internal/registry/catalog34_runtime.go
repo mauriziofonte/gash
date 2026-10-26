@@ -67,7 +67,7 @@ var catalogRuntime = []Function{
 		},
 		ShellVars: []string{"HOME", "NVM_DIR"},
 		Env:       []string{"HOME", "NVM_DIR", "PATH", "PWD", "XDG_CACHE_HOME"},
-		Replaces:  "for f in src/*.php; do php -l \"$f\"; done; bash -n x.sh; node --check f.js",
+		Replaces:  "for f; do php -l $f; done; bash -n x.sh; node --check f.js",
 	},
 	{
 		Name:     "llm_runtime",

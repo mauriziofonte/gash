@@ -58,6 +58,10 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 
 Check that files hold, lack or count patterns; exit 0 only if all pass
 
+Replaces:
+
+- `grep -q P f && echo ok; grep -c P f (as checks)`
+
 #### Usage
 
 ```text
@@ -104,6 +108,11 @@ See also: `llm_count`
 ## llm_config
 
 Read a file that is not secret (YAML as JSON)
+
+Replaces:
+
+- `cat config/app.yaml (a config file that is not secret)`
+- `python3 -c "import tomllib, yaml ..."; yq .a.b f` (`llm_config --path a.b`)
 
 #### Usage
 
@@ -153,6 +162,10 @@ the nearest existing prefix (both RETRY).
 
 Count several patterns in several files in one pass per file
 
+Replaces:
+
+- `grep -c A f; grep -c B f; grep -c C g`
+
 #### Usage
 
 ```text
@@ -200,6 +213,10 @@ See also: `llm_assert`, `llm_grep`
 ## llm_csv
 
 Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l)
+
+Replaces:
+
+- `python3 -c "import csv ..."; wc -l f; head -3 f`
 
 #### Usage
 
@@ -252,6 +269,10 @@ See also: `llm_json`, `llm_config`
 ## llm_date
 
 Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime)
+
+Replaces:
+
+- `date -d '-600 seconds'; python3 datetime arithmetic`
 
 #### Usage
 
@@ -306,6 +327,10 @@ See also: `llm_env`
 
 List the databases of a connection (replaces SHOW DATABASES, psql -l)
 
+Replaces:
+
+- `mysql -e 'SHOW DATABASES'; psql -l`
+
 #### Usage
 
 ```text
@@ -347,6 +372,10 @@ See also: `llm_db_tables`, `llm_db_query`
 
 Show query execution plan (EXPLAIN)
 
+Replaces:
+
+- `mysql -e "EXPLAIN SELECT ..."`
+
 #### Usage
 
 ```text
@@ -384,6 +413,11 @@ See also: `llm_db_query`
 ## llm_db_query
 
 Read-only SQL query (JSON output)
+
+Replaces:
+
+- `mysql -N -B -e "SELECT ..."; sqlite3 f "SELECT ..."` (`llm_db_query --format tsv`)
+- `llm_db_query ... \| jq -r '.rows[0][0]'` (`llm_db_query --scalar`)
 
 #### Usage
 
@@ -447,6 +481,10 @@ See also: `llm_db_tables`, `llm_db_schema`, `llm_db_sample`, `llm_db_explain`
 
 Sample rows from a table (default 5 rows)
 
+Replaces:
+
+- `mysql -e "SELECT * FROM t LIMIT 5"`
+
 #### Usage
 
 ```text
@@ -478,6 +516,11 @@ See also: `llm_db_query`, `llm_db_schema`
 ## llm_db_schema
 
 Show table schema (columns, types, keys)
+
+Replaces:
+
+- `mysql -e "SHOW CREATE TABLE t"; sqlite3 f .schema`
+- `mysqldump --no-data` (`llm_db_schema --all`)
 
 #### Usage
 
@@ -520,6 +563,11 @@ See also: `llm_db_tables`, `llm_db_query`
 
 List database tables (JSON array)
 
+Replaces:
+
+- `mysql -e "SHOW TABLES"; sqlite3 f .tables`
+- `SELECT count(*) FROM t, per table` (`llm_db_tables --counts`)
+
 #### Usage
 
 ```text
@@ -561,6 +609,10 @@ See also: `llm_db_query`, `llm_db_schema`
 
 List project dependencies (JSON)
 
+Replaces:
+
+- `cat composer.json package.json \| jq .require`
+
 #### Usage
 
 ```text
@@ -585,6 +637,10 @@ See also: `llm_project`
 ## llm_dns
 
 DNS records of several names at once (JSON)
+
+Replaces:
+
+- `for d; do dig +short MX $d; done` (`llm_dns --type MX`)
 
 #### Usage
 
@@ -637,6 +693,10 @@ See also: `llm_tcp`, `llm_tls`, `llm_http`
 
 Run a read-only command in a container, no shell quoting (JSON)
 
+Replaces:
+
+- `docker exec -u USER ctr sh -c '...'`
+
 #### Usage
 
 ```text
@@ -681,6 +741,10 @@ See also: `llm_exec`
 
 Last log lines of a container, optionally filtered (JSON)
 
+Replaces:
+
+- `docker logs --tail 50 ctr 2>&1 \| grep -i error`
+
 #### Usage
 
 ```text
@@ -718,6 +782,10 @@ See also: `llm_docker_ps`
 ## llm_docker_ps
 
 Docker containers with state, health and ports (JSON)
+
+Replaces:
+
+- `docker ps --format '{{.Names}} {{.Status}}'`
 
 #### Usage
 
@@ -760,6 +828,10 @@ See also: `llm_docker_logs`
 
 Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env)
 
+Replaces:
+
+- `grep -E '^(DB_HOST\|APP_URL)=' .env`
+
 #### Usage
 
 ```text
@@ -801,6 +873,10 @@ See also: `llm_env`, `llm_config`
 
 Filtered environment variables (secrets excluded)
 
+Replaces:
+
+- `env \| grep -i PATH; printenv NODE_ENV`
+
 #### Usage
 
 ```text
@@ -833,6 +909,10 @@ TOKEN, SECRET, KEY, CREDENTIAL, AUTH, SESSION, JWT, WEBHOOK, *_PWD,
 ## llm_exec
 
 Safe command execution wrapper for AI agents
+
+Replaces:
+
+- `bash -c "..." for an allowlisted command`
 
 #### Usage
 
@@ -876,6 +956,12 @@ GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)
 ## llm_find
 
 Find files by pattern (ignores noise directories)
+
+Replaces:
+
+- `find D -name '*.php' -not -path '*/vendor/*'`
+- `find D -type f \| wc -l` (`llm_find --count`)
+- `find D -newer F \| sort \| head` (`llm_find --newer F --sort mtime`)
 
 #### Usage
 
@@ -957,6 +1043,11 @@ A missing PATH is path_not_found, an empty PATTERN missing_pattern;
 
 Git diff with statistics
 
+Replaces:
+
+- `git diff --stat \| tail -1` (`llm_git_diff --summary`)
+- `git diff --name-status; git diff --numstat` (`llm_git_diff --files`)
+
 #### Usage
 
 ```text
@@ -1017,6 +1108,10 @@ See also: `llm_git_overview`, `llm_git_status`, `llm_git_log`
 
 Recent commits (JSON)
 
+Replaces:
+
+- `git log --oneline -20 -- path` (`llm_git_log --path P`)
+
 #### Usage
 
 ```text
@@ -1071,6 +1166,10 @@ See also: `llm_git_overview`, `llm_git_status`, `llm_git_diff`
 
 Repository state in one small object (JSON)
 
+Replaces:
+
+- `git status --short \| wc -l; git log --oneline -3; git diff --stat \| tail -1`
+
 #### Usage
 
 ```text
@@ -1115,6 +1214,11 @@ See also: `llm_git_status`, `llm_git_log`, `llm_git_diff`
 ## llm_git_show
 
 A commit's metadata and files, its patch, or a file at a revision
+
+Replaces:
+
+- `git show REV --stat` (`llm_git_show --stat`)
+- `git show REV:path \| sed -n 1,80p` (`llm_git_show --max-lines 80`)
 
 #### Usage
 
@@ -1172,6 +1276,12 @@ See also: `llm_git_log`, `llm_git_diff`
 ## llm_git_status
 
 Compact git status (JSON)
+
+Replaces:
+
+- `git status --short; git branch -vv`
+- `for r; do git -C $r status -sb; done` (`llm_git_status --repos`)
+- `git fetch && git status -sb` (`llm_git_status --fetch`)
 
 #### Usage
 
@@ -1247,6 +1357,11 @@ See also: `llm_git_overview`, `llm_git_diff`, `llm_git_log`
 ## llm_grep
 
 Search code with structured file:line:content output
+
+Replaces:
+
+- `grep -rn --include='*.php' X . \| grep -v vendor` (`llm_grep --ext php`)
+- `grep -o RE f \| sort \| uniq -c` (`llm_grep --distinct`)
 
 #### Usage
 
@@ -1327,6 +1442,10 @@ A missing PATH is path_not_found, an empty PATTERN missing_pattern.
 
 Hash files in parallel (sha256 or md5)
 
+Replaces:
+
+- `sha256sum f \| cut -c1-12; md5sum f`
+
 #### Usage
 
 ```text
@@ -1369,6 +1488,11 @@ See also: `llm_stat`
 ## llm_http
 
 Probe several URLs at once: status, timings, headers, JSON value (JSON)
+
+Replaces:
+
+- `for u; do curl -s -o /dev/null -w '%{http_code}' $u; done` (`llm_http --status-only`)
+- `curl -s URL \| jq .status` (`llm_http --json-path status`)
 
 #### Usage
 
@@ -1456,6 +1580,10 @@ See also: `llm_tls`, `llm_tcp`, `llm_dns`
 
 One value, the keys or the shape of a JSON file (replaces python3 json.load, jq)
 
+Replaces:
+
+- `python3 -c "import json ..."; jq .a.b f` (`llm_json --path a.b`)
+
 #### Usage
 
 ```text
@@ -1506,6 +1634,10 @@ See also: `llm_config`, `llm_csv`
 ## llm_lint
 
 Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py)
+
+Replaces:
+
+- `for f; do php -l $f; done; bash -n x.sh; node --check f.js`
 
 #### Usage
 
@@ -1566,6 +1698,11 @@ See also: `llm_test`, `llm_runtime`
 
 Last lines of a log, read from the end, by pattern, time and level
 
+Replaces:
+
+- `tail -n 50 app.log \| cut -c1-200`
+- `grep ERROR app.log \| tail -20` (`llm_log --last-match ERROR -n 20`)
+
 #### Usage
 
 ```text
@@ -1619,6 +1756,11 @@ See also: `llm_read`
 
 List ports in use (JSON)
 
+Replaces:
+
+- `ss -tuln`
+- `ss -tlnp \| grep :8080; lsof -i :8080` (`llm_ports --port 8080`)
+
 #### Usage
 
 ```text
@@ -1656,6 +1798,11 @@ See also: `llm_procs`, `llm_tcp`
 ## llm_procs
 
 List processes by name, port or PID, alive or not, as a tree (JSON)
+
+Replaces:
+
+- `ps aux \| grep X \| grep -v grep` (`llm_procs --name X`)
+- `kill -0 PID` (`llm_procs --pid PID`)
 
 #### Usage
 
@@ -1712,6 +1859,10 @@ See also: `llm_ports`
 
 Detect project type and framework (JSON)
 
+Replaces:
+
+- `ls; cat composer.json package.json (what kind of project is this)`
+
 #### Usage
 
 ```text
@@ -1730,6 +1881,11 @@ See also: `llm_deps`
 ## llm_read
 
 Read files, line ranges or the lines around a match, numbered
+
+Replaces:
+
+- `grep -n X f, then sed -n A,Bp f` (`llm_read --around X -C 5`)
+- `cat -n f \| sed -n A,Bp; cat a b`
 
 #### Usage
 
@@ -1788,6 +1944,10 @@ See also: `llm_grep`, `llm_log`
 
 Resolve a node major or php version to its binary, without nvm.sh
 
+Replaces:
+
+- `source ~/.nvm/nvm.sh; nvm use 24; node ...; php84 ...`
+
 #### Usage
 
 ```text
@@ -1823,6 +1983,10 @@ See also: `llm_tools`, `node_detect_version`, `php_detect_version`
 ## llm_service
 
 State and last journal lines of systemd units (JSON)
+
+Replaces:
+
+- `systemctl is-active x; journalctl -u x -n 20` (`llm_service --log 20`)
 
 #### Usage
 
@@ -1864,6 +2028,10 @@ See also: `llm_procs`
 ## llm_stat
 
 Metadata of several paths: type, size, mode, owner, mtime, lines
+
+Replaces:
+
+- `ls -la a b; [ -f c ] && echo yes; wc -l d; readlink -f e`
 
 #### Usage
 
@@ -1913,6 +2081,10 @@ See also: `llm_hash`, `llm_textstats`
 
 Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON)
 
+Replaces:
+
+- `uptime; free -h; df -h /; nproc; nvidia-smi`
+
 #### Usage
 
 ```text
@@ -1951,6 +2123,10 @@ See also: `sysinfo`
 ## llm_tcp
 
 Can a TCP connection be opened to each HOST:PORT (JSON)
+
+Replaces:
+
+- `nc -z h p; timeout 2 bash -c '</dev/tcp/h/p'`
 
 #### Usage
 
@@ -1991,6 +2167,10 @@ See also: `llm_ports`, `llm_tls`, `llm_http`
 ## llm_test
 
 Run a test command and summarize it: counts and each failure's file:line
+
+Replaces:
+
+- `vendor/bin/pest \| grep -E 'Tests:\|FAIL'; npm run test \| tail -20`
 
 #### Usage
 
@@ -2046,6 +2226,10 @@ See also: `llm_lint`
 
 Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines
 
+Replaces:
+
+- `grep -nP '[^\x00-\x7F]' f; file -i f`
+
 #### Usage
 
 ```text
@@ -2096,6 +2280,10 @@ See also: `llm_textstats`
 
 Lines, words, characters, bytes, gzip size and longest line of files
 
+Replaces:
+
+- `wc -w f; wc -c f; gzip -c f \| wc -c`
+
 #### Usage
 
 ```text
@@ -2137,6 +2325,10 @@ See also: `llm_stat`, `llm_textcheck`
 ## llm_tls
 
 TLS certificate of several hosts at once: expiry, SANs, issuer (JSON)
+
+Replaces:
+
+- `openssl s_client -connect h:443 \| openssl x509 -noout -dates`
 
 #### Usage
 
@@ -2188,6 +2380,10 @@ See also: `llm_http`, `llm_tcp`
 
 Path and version of each tool, probed in parallel; php and node per version
 
+Replaces:
+
+- `php84 -v \| head -1; node24 --version; git --version; command -v rg`
+
 #### Usage
 
 ```text
@@ -2230,6 +2426,11 @@ See also: `llm_runtime`, `llm_env`
 ## llm_tree
 
 Compact directory tree (JSON or text output)
+
+Replaces:
+
+- `tree -L 2 -I node_modules`
+- `du -sh */ \| sort -rh \| head` (`llm_tree --top 10`)
 
 #### Usage
 
@@ -2309,6 +2510,11 @@ Directories that cannot be read count in skipped; a cut list gets
 ## llm_wait
 
 Wait for a log line, a path, a process exit, a URL, a port or a command (JSON)
+
+Replaces:
+
+- `while ! grep -q X f; do sleep N; done; tail f` (`llm_wait --file-match f X`)
+- `until curl -sf URL; do sleep 1; done` (`llm_wait --http URL`)
 
 #### Usage
 
