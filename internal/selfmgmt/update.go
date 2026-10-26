@@ -245,17 +245,17 @@ func (m *Module) rollback(c *invoke.Call) int {
 	return 0
 }
 
-// cleanCheckout is the first check of gash_upgrade: git installed, and a
-// git checkout at dir without local modifications. A missing git is the
+// cleanCheckout is the first check of gash_upgrade: a git checkout at dir,
+// git installed, and no local modifications. A missing git is the
 // prerequisite report (3.4: it used to pass this check, as an empty git
 // status, and fail the fetch as a network problem); a git status that
 // fails refuses too, since it proves nothing about local edits.
 func (m *Module) cleanCheckout(c *invoke.Call, p ui.Printer, dir string) bool {
-	if _, ok := prereq.Require(c, "git", updateNeed(c), false); !ok {
-		return false
-	}
 	if st, err := os.Stat(dir + "/.git"); err != nil || !st.IsDir() {
 		p.Error("Gash is not installed in " + dir + " as a git checkout. See https://github.com/mauriziofonte/gash.")
+		return false
+	}
+	if _, ok := prereq.Require(c, "git", updateNeed(c), false); !ok {
 		return false
 	}
 	// The checkout would overwrite local edits: refuse instead.
