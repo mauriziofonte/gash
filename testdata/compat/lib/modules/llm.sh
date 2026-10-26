@@ -20,7 +20,9 @@ if [[ "${__GASH_BOOT_LOADED-}" != "$__gash_here/compat/bootstrap.sh" && -r "$__g
 fi
 unset __gash_here
 
+agent_docker_exec() { __gash_call agent_docker_exec "$@"; }
 agent_git_commit() { __gash_call agent_git_commit "$@"; }
+agent_kill() { __gash_call agent_kill "$@"; }
 agent_replace() { __gash_call agent_replace "$@"; }
 llm_assert() { __gash_call llm_assert "$@"; }
 llm_config() { __gash_call llm_config "$@"; }
@@ -53,6 +55,9 @@ llm_db_tables() {
 }
 llm_deps() { __gash_call llm_deps "$@"; }
 llm_dns() { __gash_call llm_dns "$@"; }
+llm_docker_exec() { __gash_call llm_docker_exec "$@"; }
+llm_docker_logs() { __gash_call llm_docker_logs "$@"; }
+llm_docker_ps() { __gash_call llm_docker_ps "$@"; }
 llm_dotenv() { __gash_call llm_dotenv "$@"; }
 llm_env() { __gash_call llm_env "$@"; }
 llm_exec() {
@@ -76,7 +81,9 @@ llm_procs() { __gash_call llm_procs "$@"; }
 llm_project() { __gash_call llm_project "$@"; }
 llm_read() { __gash_call llm_read "$@"; }
 llm_runtime() { __gash_call llm_runtime "$@"; }
+llm_service() { __gash_call llm_service "$@"; }
 llm_stat() { __gash_call llm_stat "$@"; }
+llm_sysinfo() { __gash_call llm_sysinfo "$@"; }
 llm_tcp() { __gash_call llm_tcp "$@"; }
 llm_test() { __gash_call llm_test "$@"; }
 llm_textcheck() { __gash_call llm_textcheck "$@"; }
@@ -84,6 +91,7 @@ llm_textstats() { __gash_call llm_textstats "$@"; }
 llm_tls() { __gash_call llm_tls "$@"; }
 llm_tools() { __gash_call llm_tools "$@"; }
 llm_tree() { __gash_call llm_tree "$@"; }
+llm_wait() { __gash_call llm_wait "$@"; }
 
 # Sourcing never fails: the status of this file is 0.
 true

@@ -113,7 +113,7 @@ source "$GASH_SH"
 -- procs_unknown.sh --
 set -euo pipefail
 source "$GASH_SH"
-for args in "--bogus" "--pid 1" "nginx"; do
+for args in "--bogus" "--kill 1" "nginx"; do
   rc=0
   out="$(llm_procs $args 2>"$WORK/perr")" || rc=$?
   [[ $rc -eq 1 && -z "$out" ]] || { echo "$args: rc=$rc out=$out"; exit 1; }

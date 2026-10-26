@@ -6,8 +6,53 @@ _Generated from the help registry by `go test ./internal/registry -run TestRefer
 
 | Function | Alias | Description |
 |---|---|---|
+| [`agent_docker_exec`](#agent-docker-exec) |  | Run any command in a container, no shell quoting (JSON) |
 | [`agent_git_commit`](#agent-git-commit) |  | Stage explicit paths, commit, optionally push, in one call |
+| [`agent_kill`](#agent-kill) |  | Signal processes by PID or command line, never the caller (JSON) |
 | [`agent_replace`](#agent-replace) |  | Replace text in explicit files, all or nothing |
+
+## agent_docker_exec
+
+Run any command in a container, no shell quoting (JSON)
+
+#### Usage
+
+```text
+agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
+```
+
+#### Options
+
+```text
+--user U, -u U         Run as user U (name or uid[:gid])
+--dry-run              Print the docker argv; run nothing
+--width N              Cut each output line at N columns
+--max-lines N, --head N, --tail N
+                       Keep the first/last N lines of each stream
+-- CMD...              The command, one word per argument
+```
+
+#### Examples
+
+```bash
+# Instead of: docker exec -u www-data app sh -c 'php artisan migrate --force'
+agent_docker_exec app --user www-data -- php artisan migrate --force
+agent_docker_exec app --dry-run -- composer install --no-dev
+```
+
+#### Notes
+
+```text
+Replaces docker exec CTR sh -c '...' for commands that change things:
+CMD's words reach docker exec as an array, no shell runs, nothing to
+quote. Read-only work belongs to llm_docker_exec. Rails: the llm_exec
+dangerous-command blocklist (dangerous_command_blocked, FATAL) and no
+secret file named in CMD (secret_file_blocked). Output as
+llm_docker_exec: {"rc","out","err"}, exit status 0 when the command
+ran (read rc); --dry-run: {"argv":[...],"dry_run":true,"written":false}.
+```
+
+See also: `llm_docker_exec`
 
 ## agent_git_commit
 
@@ -74,6 +119,52 @@ ahead is null without an upstream to compare with.
 ```
 
 See also: `llm_git_overview`, `llm_git_status`
+
+## agent_kill
+
+Signal processes by PID or command line, never the caller (JSON)
+
+#### Usage
+
+```text
+agent_kill NAME|PID... [--signal S] [--dry-run] [--format F]
+```
+
+#### Options
+
+```text
+NAME                   A regular expression on the full command line, as
+                       llm_procs --name matches it
+PID                    One process
+--signal S, -s S       TERM (default), KILL, HUP, INT, USR1, ... or a number
+--dry-run              Report the PIDs and command lines; signal nothing
+--format F             json (default), jsonl, tsv or table: one row per
+                       process
+```
+
+#### Examples
+
+```bash
+# Instead of: pkill -f 'artisan serve' (exit 1 when nothing runs)
+agent_kill 'artisan serve' --dry-run
+agent_kill 'artisan serve'
+agent_kill 4242 4243 --signal KILL
+```
+
+#### Notes
+
+```text
+Replaces pkill -f x and kill PID. Only your own user's processes; never
+PID 1, this call or one of its ancestors (the shell or agent that runs
+it): an explicit PID breaking that is kill_refused (FATAL), a NAME never
+matches them. A NAME matching every command line (.*) is
+pattern_too_broad. Nothing matched is success: {"killed":0,"pids":[]}.
+Output {"killed":N,"pids":[...]}; --dry-run adds "cmds", "signal",
+"dry_run":true,"written":false. It does not wait for the processes to
+exit: llm_wait --gone PID does.
+```
+
+See also: `llm_procs`
 
 ## agent_replace
 

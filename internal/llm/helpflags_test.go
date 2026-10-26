@@ -38,7 +38,7 @@ var llmOptions = map[string][]string{
 	"llm_git_log":    {"-n", "--limit", "--since", "--until", "--grep", "--author", "--path", "--fields", "--format", "--max-lines", "--head", "--tail", "--width"},
 	"llm_env":        {"--filter", "-f"},
 	"llm_ports":      {"--listen", "-l", "--port"},
-	"llm_procs":      {"--name", "--port"},
+	"llm_procs":      {"--name", "--port", "--pid", "--alive", "--tree", "--format", "--width", "--max-lines", "--head", "--tail"},
 	"llm_project":    {},
 	"llm_deps":       {"--dev"},
 
@@ -70,6 +70,13 @@ var llmOptions = map[string][]string{
 	"llm_tcp": {"-j", "--jobs", "--timeout", "--format", "--width", "--max-lines", "--head", "--tail"},
 
 	// 3.4 processes, waiting and services.
+	"llm_wait": {"--timeout", "--interval", "--file-match", "--exists", "--gone", "--http", "--code", "--json-path",
+		"--equals", "--port", "--cmd-ok", "--tail", "--width"},
+	"llm_service":     {"--log", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_docker_ps":   {"--running", "--format", "--width", "--max-lines", "--head", "--tail"},
+	"llm_docker_logs": {"--tail", "--since", "--grep", "--width"},
+	"llm_docker_exec": {"--user", "-u", "--width", "--max-lines", "--head", "--tail"},
+	"llm_sysinfo":     {"--mount"},
 
 	// 3.4 runtimes, lint and tests.
 	"llm_lint":    {"--ext", "--php", "--node", "-j", "--jobs", "--timeout", "--max-lines", "--head", "--tail", "--width", "--relative", "--absolute"},
