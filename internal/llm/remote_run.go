@@ -109,6 +109,11 @@ func (m *Module) remoteRun(c *invoke.Call) int {
 	if err != nil {
 		return refusal(c, err)
 	}
+	// ssh once for the call, before any host: without it every row was
+	// host_unreachable, and the call exited 0.
+	if !remote.RequireSSH(c, "llm_remote_run") {
+		return 1
+	}
 	budget := *o
 	if !budget.Capped() {
 		budget.Head, budget.Tail = remoteRunLines, remoteRunLines
@@ -137,6 +142,10 @@ func (m *Module) fanOut(c *invoke.Call, tr remote.Transport, hosts []remote.Host
 		errText, n2 := capText(budget, afterBegin(r.Stderr, nonce))
 		row := []any{h.Alias, nil, r.Ms, out, errText, nil}
 		switch {
+		case r.Tag == "missing":
+			// No bash on the host: the line never ran.
+			e := remote.MissingOnHost("llm_remote_run", r.Detail, h, "")
+			row[4], row[5] = e.Details, e.Code
 		case r.Tag == "rc":
 			row[1] = r.Status
 		case r.TimedOut:
@@ -166,6 +175,9 @@ func (m *Module) runSteps(c *invoke.Call, tr remote.Transport, h remote.Host, no
 	r := tr.Exec(c.Ctx, h, nonce, "sh -s", strings.NewReader(script), timeout)
 	if r.Tag == "" && !r.TimedOut {
 		return c.Fail(*r.Failure(h))
+	}
+	if r.Tag == "missing" {
+		return c.Fail(remote.MissingOnHost("llm_remote_run", r.Detail, h, ""))
 	}
 	done, rest := parseSteps(afterBegin(r.Stdout, nonce), nonce)
 	table := llmfmt.Table{Cols: []string{"step", "rc", "ms", "out"}}
@@ -286,12 +298,15 @@ func capText(o *llmfmt.Options, s string) (string, int) {
 }
 
 // runHeader starts every remote run script: the begin lines, the nonce,
-// the llm_exec prelude in P, and GL, the grep-order flag of the prelude
-// as the remote grep needs it (GNU grep takes the secret excludes last,
-// so they win over an --include; any other grep takes them first).
+// the "missing" trailer when the host has no bash (each line would get
+// bash's 127, read as the command's own status), the llm_exec prelude in
+// P, and GL, the grep-order flag of the prelude as the remote grep needs
+// it (GNU grep takes the secret excludes last, so they win over an
+// --include; any other grep takes them first).
 func runHeader(nonce, prelude string) string {
 	return "N=" + remote.Quote(nonce) + "\n" +
 		`printf '%s begin\n' "$N"; printf '%s begin\n' "$N" >&2` + "\n" +
+		"command -v bash >/dev/null 2>&1 || { " + remote.TrailerDetail(nonce, "missing", "0", "bash") + "; exit 0; }\n" +
 		"NL='\n'\nGL=\n" +
 		"if command grep --version 2>/dev/null | command grep GNU >/dev/null 2>&1; then GL='__LLM_CX_GREP_LAST=1'; fi\n" +
 		"P=" + remote.Quote(prelude) + "\n"

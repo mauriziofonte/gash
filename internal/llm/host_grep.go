@@ -93,10 +93,12 @@ gash_secret "$abs" && gash_err secret_file_blocked searchsecret "$abs"
 gash_forbidden "$abs" content && gash_err forbidden_path subdir "$abs"
 [ "$L" -eq 0 ] && exit 0
 if [ ! -d "$abs" ]; then
+  gash_tools tr wc grep head
   [ "$(tr -d '\000' <"$abs" | wc -c)" -eq "$(wc -c <"$abs")" ] || gash_need "$abs is a binary file"
   grep -n $CTX -E -e "$PAT" -- "$abs" 2>/dev/null | head -n "$L"
   exit 0
 fi
+gash_tools find sort tr grep head
 d=$abs
 while :; do
   for f in .gitignore .ignore .rgignore .git; do [ -e "$d/$f" ] || [ -L "$d/$f" ] && gash_need "an ignore file: $d/$f"; done

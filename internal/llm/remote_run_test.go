@@ -42,7 +42,7 @@ func newRunFixture(t *testing.T) *runFixture {
 	ssh := &sshtest.SSH{Home: rhome, Path: stub + ":" + os.Getenv("PATH")}
 	m := New()
 	m.run = ssh
-	return &runFixture{home: rhome, env: baseEnv(home, nil), ssh: ssh, m: m}
+	return &runFixture{home: rhome, env: baseEnv(home, map[string]string{"PATH": sshtest.ClientPath(t, os.Getenv("PATH"))}), ssh: ssh, m: m}
 }
 
 func (f *runFixture) run(t *testing.T, args ...string) result {

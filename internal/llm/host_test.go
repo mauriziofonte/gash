@@ -56,7 +56,8 @@ func newHostFixtureOn(t *testing.T, bsd bool) *hostFixture {
 	m := New()
 	m.run = ssh
 	m.exe = func() (string, error) { return "", os.ErrNotExist }
-	return &hostFixture{dir: dir, env: baseEnv(home, nil), ssh: ssh, m: m, bare: New()}
+	env := baseEnv(home, map[string]string{"PATH": sshtest.ClientPath(t, os.Getenv("PATH"))})
+	return &hostFixture{dir: dir, env: env, ssh: ssh, m: m, bare: New()}
 }
 
 // same requires the --host answer to be the local one.
@@ -220,7 +221,7 @@ func TestHostBinaryOnly(t *testing.T) {
 	m := New()
 	m.run = ssh
 	m.exe = func() (string, error) { return exe, nil }
-	env := baseEnv(home, nil)
+	env := baseEnv(home, map[string]string{"PATH": sshtest.ClientPath(t, os.Getenv("PATH"))})
 	d := physTemp(t)
 	cases := [][]string{
 		{"llm_stat", "a", "b", "--lines"},

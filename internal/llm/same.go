@@ -141,6 +141,11 @@ func (m *Module) same(c *invoke.Call) int {
 	if err != nil {
 		return fail(c, "path_not_found", safe, "Provide an existing file or directory")
 	}
+	// ssh before the local side is hashed: without it nothing can be
+	// compared.
+	if !remote.RequireSSH(c, "llm_same") {
+		return 1
+	}
 	mine := sameSide{kind: "file", hashes: map[string]string{}}
 	secrets := map[string]bool{}
 	if fi.IsDir() {
@@ -179,6 +184,16 @@ func (m *Module) same(c *invoke.Call) int {
 		}
 		errOut := r.Stderr
 		if e, ok := fbEnvelope(errOut, nonce, sameHint); ok {
+			return got{err: &e}
+		}
+		// A program the host (or the container) lacks: find there gave an
+		// empty listing, which read as every file differing.
+		if tool, ok := remote.MissingFrame(errOut, nonce); ok {
+			ctr := container
+			if tool == "docker" {
+				ctr = ""
+			}
+			e := remote.MissingOnHost("llm_same", tool, t.host, ctr)
 			return got{err: &e}
 		}
 		kind, ok := fbFrame(errOut, nonce, "kind")
@@ -406,7 +421,8 @@ func parseHashes(out string, file bool) map[string]string {
 
 // sameScript is the remote side: the path checks of the fallbacks, then
 // the hash listing of the file or the tree (frame "kind": file, directory
-// or none); with container, all of it inside `docker exec CTR sh -c`.
+// or none); with container, all of it inside `docker exec CTR sh -c`. A
+// missing find (or docker on the host) is the "missing" frame.
 func sameScript(nonce, p string, excludes []string, container string) string {
 	var prune strings.Builder
 	prune.WriteString(`\( -name "*$NL*" -o -name '*\\*'`)
@@ -424,6 +440,7 @@ gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 if [ -d "$abs" ]; then
   gash_forbidden "$abs" names && gash_err forbidden_path subdir "$abs"
   cd "$abs" || gash_err path_unreadable couldnot "$abs"
+  gash_tools find
   printf '%s kind directory\n' "$N" >&2
   find . ` + prune.String() + ` -exec $H {} + 2>/dev/null
 elif [ -f "$abs" ]; then
@@ -438,7 +455,10 @@ exit 0
 	if container == "" {
 		return body + "gr=$?\n" + remote.Trailer(nonce, "rc", `"$gr"`) + "\nexit 0\n"
 	}
-	return "S=" + remote.Quote(body) + "\ndocker exec " + remote.Quote(container) + ` sh -c "$S" </dev/null` + "\ngr=$?\n" +
+	// docker itself is the host's: its absence is named as such.
+	return "N=" + remote.Quote(nonce) + "\n" + `command -v docker >/dev/null 2>&1 || { printf '%s missing docker\n' "$N" >&2; ` +
+		remote.Trailer(nonce, "rc", "1") + "; exit 0; }\n" +
+		"S=" + remote.Quote(body) + "\ndocker exec " + remote.Quote(container) + ` sh -c "$S" </dev/null` + "\ngr=$?\n" +
 		remote.Trailer(nonce, "rc", `"$gr"`) + "\nexit 0\n"
 }
 

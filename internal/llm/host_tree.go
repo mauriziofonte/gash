@@ -63,16 +63,18 @@ abs=$(gash_resolve "$P")
 gash_forbidden "$abs" && gash_err forbidden_path protected "$abs"
 [ -d "$abs" ] || gash_err not_a_directory dir "$abs"
 gash_forbidden "$abs" names && gash_err forbidden_path subdir "$abs"
+gash_tools find
 printf '%s root %s\n' "$N" "$abs" >&2
 if [ "$ALL" = 1 ]; then set -- -mindepth 1; else set -- -mindepth 1 -maxdepth "$D"; fi
 set -- "$@" \( -name node_modules -o -name vendor -o -name .git -o -name __pycache__ -o -name .cache -o -name "*$NL*" -o -name "*$TAB*" \) -prune -o
 if find "$abs" -maxdepth 0 -printf '' >/dev/null 2>&1; then
   find "$abs" "$@" -printf '%y\t%s\t%P\t%l\n' 2>/dev/null
 else
+  gash_tools ls
   find "$abs" "$@" -print 2>/dev/null | while IFS= read -r p; do
     if [ -L "$p" ]; then t=l; elif [ -d "$p" ]; then t=d; elif [ -f "$p" ]; then t=f; else t=x; fi
     set -f; set -- $(ls -ldn -- "$p" 2>/dev/null); set +f
-    l=; [ "$t" = l ] && l=$(readlink -- "$p" 2>/dev/null)
+    l=; [ "$t" = l ] && { gash_tools readlink; l=$(readlink -- "$p" 2>/dev/null); }
     printf '%s\t%s\t%s\t%s\n' "$t" "${5:-0}" "${p#"$abs"/}" "$l"
   done
 fi
