@@ -73,6 +73,13 @@ func testHostProtectedFallback(t *testing.T, bsd bool) {
 		}
 	}
 
+	// A link the host resolves into a PROTECT:all path lists no target; a
+	// link into a PROTECT:content path does (3.4.1).
+	require.NoError(t, os.Symlink(filepath.Join(f.dir, "plink", "a.txt"), filepath.Join(f.dir, "public", "pa")))
+	r = call("llm_tree", "public", "--text")
+	require.Equal(t, 0, r.RC, r.Stderr)
+	require.Equal(t, "public/\napp.yaml\nc.yaml -> "+f.dir+"/contracts/app.yaml\npa -> [protected]\n", r.Stdout)
+
 	// A content tree alone: a listing walks it, a search does not.
 	f = protectHost(t, bsd, "PROTECT:content=~/contracts\n")
 	r = call("llm_find", "*.yaml", ".")

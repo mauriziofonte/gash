@@ -100,7 +100,7 @@ func (m *Module) tree(c *invoke.Call) int {
 			forbidden: forbidden, o: o, x: x})
 	}
 	if textMode {
-		_, _ = c.Stdout.Write(treeText(safe, depth, forbidden, prunedNames, textCap))
+		_, _ = c.Stdout.Write(treeText(safe, depth, forbidden, m.linkHidden(c), prunedNames, textCap))
 		return 0
 	}
 	_, _ = c.Stdout.Write(treeJSON(safe, safe, depth, withStats, forbidden, prunedNames))
@@ -117,8 +117,10 @@ func (m *Module) tree(c *invoke.Call) int {
 // newline are left out, as in the JSON tree; the root / prints as /.
 //
 // 3.4: prune is the set of pruned names (nil with --all) and limit the
-// line cap (textCap, or no cap when the output budget decides).
-func treeText(safe string, maxDepth int, forbidden func(string) bool, prune map[string]bool, limit int) []byte {
+// line cap (textCap, or no cap when the output budget decides). 3.4.1:
+// a link whose target lies in a PROTECT:all path (hidden, nil without
+// one) prints "-> [protected]" instead of the target.
+func treeText(safe string, maxDepth int, forbidden, hidden func(string) bool, prune map[string]bool, limit int) []byte {
 	type textEntry struct {
 		path, rel string
 		parts     []string
@@ -170,13 +172,29 @@ func treeText(safe string, maxDepth int, forbidden func(string) bool, prune map[
 				name += "/"
 			}
 		case 'l':
-			if target, err := os.Readlink(e.path); err == nil {
+			if hidden != nil && hidden(e.path) {
+				name += " -> " + protectedTarget
+			} else if target, err := os.Readlink(e.path); err == nil {
 				name += " -> " + target
 			}
 		}
 		echo(&out, indent+name)
 	}
 	return out.Bytes()
+}
+
+// protectedTarget stands for the target of a link into a PROTECT:all
+// path in a listing (llm_tree --text, here and on a host).
+const protectedTarget = "[protected]"
+
+// linkHidden is the test of a link for treeText: whether it leads into
+// one of the user's PROTECT:all paths; nil when there are none.
+func (m *Module) linkHidden(c *invoke.Call) func(string) bool {
+	g := m.guard(c)
+	if len(g.Hidden) == 0 {
+		return nil
+	}
+	return g.Hides
 }
 
 // basename is $(basename "$p"): trailing slashes removed, the last

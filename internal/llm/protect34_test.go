@@ -58,6 +58,18 @@ func TestProtectedPathsLocal(t *testing.T) {
 	require.Contains(t, r.Stdout, "deal.txt")
 	require.NotContains(t, r.Stdout, "personal")
 
+	// A link into a PROTECT:all tree lists no target; one into a
+	// PROTECT:content tree does (names are not its content). The gash
+	// binary on a host reads the rules from GASH__PROTECT (3.4.1).
+	carried := baseEnv(physTemp(t), map[string]string{"GASH__PROTECT": "all " + d + "/personal\ncontent " + d + "/contracts\n"})
+	for _, e := range []map[string]string{env, carried} {
+		r = runGo(t, m, d, e, "llm_tree", ".", "--text", "--depth", "3")
+		require.Equal(t, 0, r.RC, r.Stderr)
+		require.Contains(t, r.Stdout, "\nplink -> [protected]\n")
+		require.Contains(t, r.Stdout, "\n  c.txt -> "+d+"/contracts/deal.txt\n")
+		require.NotContains(t, r.Stdout, "personal")
+	}
+
 	r = runGo(t, m, d, env, "llm_find", "*.txt", ".")
 	require.Equal(t, 0, r.RC, r.Stderr)
 	require.Contains(t, r.Stdout, "contracts/deal.txt")

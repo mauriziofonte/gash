@@ -19,7 +19,8 @@ import (
 // (type, lstat size, path, link target), find's -printf where it has one,
 // a loop over -print and ls -ldn elsewhere; the tree is folded here, in
 // the walk's order, with the local emitters, so the output is the local
-// one.
+// one. With PROTECT:all paths for the host, a link the host resolves into
+// one lists "[protected]" as its target.
 func treeFallback(_ *invoke.Call, nonce string, args []string) (*remote.Plan, bool) {
 	textMode, withStats := false, false
 	maxDepth, path, havePath := "", ".", false
@@ -67,16 +68,27 @@ gash_tools find
 printf '%s root %s\n' "$N" "$abs" >&2
 if [ "$ALL" = 1 ]; then set -- -mindepth 1; else set -- -mindepth 1 -maxdepth "$D"; fi
 set -- "$@" \( -name node_modules -o -name vendor -o -name .git -o -name __pycache__ -o -name .cache -o -name "*$NL*" -o -name "*$TAB*" \) -prune -o
-if find "$abs" -maxdepth 0 -printf '' >/dev/null 2>&1; then
-  find "$abs" "$@" -printf '%y\t%s\t%P\t%l\n' 2>/dev/null
-else
-  gash_tools ls
-  find "$abs" "$@" -print 2>/dev/null | while IFS= read -r p; do
-    if [ -L "$p" ]; then t=l; elif [ -d "$p" ]; then t=d; elif [ -f "$p" ]; then t=f; else t=x; fi
-    set -f; set -- $(ls -ldn -- "$p" 2>/dev/null); set +f
-    l=; [ "$t" = l ] && { gash_tools readlink; l=$(readlink -- "$p" 2>/dev/null); }
-    printf '%s\t%s\t%s\t%s\n' "$t" "${5:-0}" "${p#"$abs"/}" "$l"
+PF=; find "$abs" -maxdepth 0 -printf '' >/dev/null 2>&1 && PF=1
+[ -n "$PF" ] || gash_tools ls
+gash_list() {
+  if [ -n "$PF" ]; then
+    find "$abs" "$@" -printf '%y\t%s\t%P\t%l\n' 2>/dev/null
+  else
+    find "$abs" "$@" -print 2>/dev/null | while IFS= read -r p; do
+      if [ -L "$p" ]; then t=l; elif [ -d "$p" ]; then t=d; elif [ -f "$p" ]; then t=f; else t=x; fi
+      set -f; set -- $(ls -ldn -- "$p" 2>/dev/null); set +f
+      l=; [ "$t" = l ] && { gash_tools readlink; l=$(readlink -- "$p" 2>/dev/null); }
+      printf '%s\t%s\t%s\t%s\n' "$t" "${5:-0}" "${p#"$abs"/}" "$l"
+    done
+  fi
+}
+if [ -n "$GP_ALL" ]; then
+  gash_list "$@" | while IFS="$TAB" read -r t s p l; do
+    [ "$t" = l ] && r=$(gash_resolve "$abs/$p" 2>/dev/null) && gash_in "$GP_ALL" "$r" && l=` + remote.Quote(protectedTarget) + `
+    printf '%s\t%s\t%s\t%s\n' "$t" "$s" "$p" "$l"
   done
+else
+  gash_list "$@"
 fi
 exit 0`
 	finish := func(_ remote.Host, out, errOut []byte, st int) ([]byte, []byte, int) {
