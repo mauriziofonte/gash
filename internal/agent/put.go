@@ -124,6 +124,9 @@ func (m *Module) put(c *invoke.Call) int {
 	if !ok {
 		return 1
 	}
+	if !remote.RequireSSH(c, "agent_put") {
+		return 1
+	}
 	sum := sha256.Sum256(data)
 	hexSum := hex.EncodeToString(sum[:])
 
@@ -139,6 +142,9 @@ func (m *Module) put(c *invoke.Call) int {
 			code, details = "internal_error", "agent_put on "+h.Alias+": "+code+" "+details
 		}
 		return c.Fail(contract.New(code, details, putHints[code]))
+	}
+	if tool, ok := remote.MissingFrame(r.Stderr, nonce); ok {
+		return c.Fail(remote.MissingOnHost("agent_put", tool, h, ""))
 	}
 	if e := r.Failure(h); e != nil {
 		return c.Fail(*e)
@@ -225,10 +231,11 @@ var putHints = map[string]string{
 }
 
 // putScript is the remote side of agent_put: the rails on the resolved
-// path, then (unless dry) the upload from stdin to a temporary file in the
-// target's directory, the size and --verify checks, the --mode, the
-// --backup copy and the rename. Frames: "path ABS", "done EXISTED",
-// "backup PATH" (empty without one).
+// path, the programs the write runs (a dry run checks them too), then
+// (unless dry) the upload from stdin to a temporary file in the target's
+// directory, the size and --verify checks, the --mode, the --backup copy
+// and the rename. Frames: "path ABS", "done EXISTED", "backup PATH" (empty
+// without one), "missing TOOL".
 func putScript(nonce, p, mode string, size int, sum string, backup, verify, force, dry bool) string {
 	flag := func(b bool) string {
 		if b {
@@ -238,7 +245,7 @@ func putScript(nonce, p, mode string, size int, sum string, backup, verify, forc
 	}
 	var s strings.Builder
 	s.WriteString("N=" + remote.Quote(nonce) + "\nLC_ALL=C; export LC_ALL\n")
-	s.WriteString(remote.ShErr() + remote.ShResolve() + remote.ShForbidden() + remote.ShSecret() + remote.ShTier())
+	s.WriteString(remote.ShErr() + remote.ShTools() + remote.ShResolve() + remote.ShForbidden() + remote.ShSecret() + remote.ShTier())
 	for _, kv := range [][2]string{{"P", p}, {"MODE", mode}, {"SIZE", strconv.Itoa(size)}, {"SUM", sum},
 		{"BACKUP", flag(backup)}, {"VERIFY", flag(verify)}, {"FORCE", flag(force)}, {"DRY", flag(dry)}} {
 		s.WriteString(kv[0] + "=" + remote.Quote(kv[1]) + "\n")
@@ -257,13 +264,18 @@ d=${abs%/*}; [ -n "$d" ] || d=/
 [ -d "$abs" ] && gash_err invalid_target isdir "$abs is a directory"
 e=0; [ -e "$abs" ] && e=1
 [ -w "$d" ] || gash_err write_failed perm "$d is not writable"
+gash_tools cat wc mv rm
+[ "$e" = 1 ] && gash_tools cp
+[ -n "$MODE" ] && gash_tools chmod
+[ -n "$BACKUP" ] && [ "$e" = 1 ] && gash_tools date
 printf '%s path %s\n' "$N" "$abs" >&2
 if [ -n "$DRY" ]; then printf '%s done %s\n' "$N" "$e" >&2; exit 0; fi
 T=$d/.gash-put.$$.tmp
 trap 'rm -f "$T"' EXIT
 if [ "$e" = 1 ]; then cp -p "$abs" "$T" 2>/dev/null || rm -f "$T"; fi
 cat >"$T" || gash_err write_failed write "$abs: the upload failed"
-[ "$(wc -c <"$T" | tr -d ' ')" = "$SIZE" ] || gash_err write_failed short "$abs: the upload was cut short"
+set -- $(wc -c <"$T")
+[ "$1" = "$SIZE" ] || gash_err write_failed short "$abs: the upload was cut short"
 if [ -n "$VERIFY" ]; then
   if command -v sha256sum >/dev/null 2>&1; then h=$(sha256sum <"$T")
   elif command -v shasum >/dev/null 2>&1; then h=$(shasum -a 256 <"$T")

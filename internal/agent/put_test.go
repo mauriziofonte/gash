@@ -46,7 +46,7 @@ func (f *putFixture) run(t *testing.T, stdin string, name string, args ...string
 	tbl := invoke.NewTable()
 	m.Register(tbl)
 	var out, errb bytes.Buffer
-	env := invoke.EnvMap(map[string]string{"HOME": f.home, "PWD": f.dir, "GASH_HEADLESS": "1", "PATH": os.Getenv("PATH")})
+	env := invoke.EnvMap(map[string]string{"HOME": f.home, "PWD": f.dir, "GASH_HEADLESS": "1", "PATH": sshtest.ClientPath(t, os.Getenv("PATH"))})
 	rc := tbl.Run(&invoke.Call{Ctx: context.Background(), Name: name, Args: args, Env: env, Stdin: strings.NewReader(stdin),
 		Stdout: &out, Stderr: &errb, Term: term.Fixed(env, false, false, false)})
 	return result{out.String(), errb.String(), rc}
