@@ -301,6 +301,40 @@ your home itself), and the messages say so.
 `remote_exec` runs any command on the remote host: the path tiers do not apply
 to it.
 
+## Agent toolkit (3.4)
+
+The 3.4 functions keep every rail above and split reads from writes.
+[AGENTS.md](../AGENTS.md) sections 6.6 and 8 hold the details.
+
+* **`llm_*` only read**, with no exception. `llm_http` sends GET, HEAD or
+  OPTIONS without a body; a credential reaches it only through
+  `--auth-env VAR` (never argv, never printed, never sent to another host
+  on a redirect). `llm_test` runs a test suite and nothing else;
+  `llm_docker_exec` and `llm_wait --cmd-ok` run under the `llm_exec` rules;
+  `llm_procs` has no kill.
+* **`agent_*` are the write tools**: `agent_replace`, `agent_git_commit`,
+  `agent_kill`, `agent_docker_exec`, `agent_put`. Each takes `--dry-run`,
+  names every target (no glob is expanded, no implicit "all"), checks every
+  target before the first write, and keeps the secret-file and
+  forbidden-path rules. The deny tier of `remote_*` applies to local targets
+  too (`write_path_denied`, even with `--force`); the ask tier needs
+  `--force` (`sensitive_path`), except below your HOME or the project you
+  work in. `agent_git_commit` never force-pushes and has no `--amend` or
+  `--no-verify`; `agent_kill` signals only your own processes, never PID 1,
+  the caller or an ancestor; `agent_docker_exec` refuses commands that wipe
+  or format a root, stop the machine or pipe a download into a shell.
+* **Remote hosts.** `--host`, `llm_remote_run`, `llm_same` and `agent_put`
+  take registered `HOST:` aliases only. Remote paths pass the local rules
+  and the deny tier before anything connects, and again on the host after
+  links resolve; a secret file never leaves the host and the local stdin is
+  never sent. `llm_remote_run` checks each command with the `llm_exec`
+  rules first. Over a `+ssh` database connection the SQL guard runs before
+  ssh and the password goes on ssh's stdin. The gash binary Gash copies to a
+  host is size-checked, test-run and renamed into a 0700 cache directory.
+* **Telemetry** (`GASH_TELEMETRY_FILE`) is off by default and local: the
+  function, time, output size, status and truncation of each call, never an
+  argument, a path or a value.
+
 ## Confirmations
 
 `needs_confirm_prompt` reads the answer from `/dev/tty`, accepts only `y` or

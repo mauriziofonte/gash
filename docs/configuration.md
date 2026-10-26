@@ -147,6 +147,16 @@ connects through the first existing of `/run/mysqld/mysqld.sock`,
 gives up after `GASH_DB_TIMEOUT` seconds (default 30), and a failed test
 prints the driver's error as a `Hint:` line after `Error: Connection failed`.
 
+A scheme ending in `+ssh` reaches a database on a registered host (3.4):
+`mysql+ssh://USER:PASS@ALIAS/DB`, `mariadb+ssh://...`,
+`pgsql+ssh://USER:PASS@ALIAS[:PORT]/DB`, `sqlite+ssh://ALIAS/relative.db`
+or `sqlite+ssh://ALIAS//absolute.db`, any of them with `+docker:CONTAINER`
+at the end. ALIAS is a `HOST:` alias. The `llm_db_*` functions then run the
+engine's own client on the host (`mysql`, `psql` 12+, `sqlite3` with
+`-json`), one ssh round trip per query, after the same SQL guard; the
+password goes on ssh's stdin, never in an argument, and one holding a
+newline is refused. `gash_db_test` does not test these connections.
+
 ### AI providers
 
 `AI:provider=token`, with provider `claude` or `gemini`. An empty token is
@@ -161,7 +171,9 @@ letter or digit, or an IPv6 address in brackets (`deploy@[2001:db8::1]`). Any
 other target, such as `u@h:2222` or `-oOption@h`, is skipped at load with a
 warning. The `remote_*` functions accept the alias. For a non-standard port
 or key, define the host in `~/.ssh/config` and use that name as `host`. In headless mode only registered
-aliases are accepted. `remote_hosts` (alias `rh`) lists them.
+aliases are accepted. `remote_hosts` (alias `rh`) lists them. The 3.4
+agent functions take the alias too: `--host ALIAS` on the reads,
+`llm_remote_run`, `llm_same`, `agent_put` (see AGENTS.md 3.12).
 
 ### Settings
 
@@ -246,6 +258,7 @@ These are not accepted in `~/.gash_env`.
 | `GASH_SERVER=0` | The functions run in the gash binary start it for each call instead of handing the call to the shell's server. By default (Linux) the first call of a served function (the `llm_*` read-only functions, the file and disk reports, `gash_help` and the like) starts `gash __serve`, one process per shell that runs that call and the later ones in a fraction of a millisecond, with the shell's environment, directory and standard streams, and ends with the shell; a call it cannot run the same way (in a subshell or `$(...)`, with a stream it cannot share, after `TZ` changed) starts the binary as before. Read at each call |
 | `GASH_INSTALL_GIT_REPO`, `GASH_INSTALL_REF`, `PROFILE` | Installer only: repository to clone, ref to check out instead of the latest tag, profile file to edit (`/dev/null` for none) |
 | `GASH_CHROME_ROOT`, `GASH_CHROME_LINK` | Where `chrome_headless_update` installs (default `/opt/chrome-headless-shell`) and the symlink it maintains (default `/usr/local/bin/chrome-headless-shell`) |
+| `GASH_TELEMETRY_FILE` | A file path: every `llm_*` and `agent_*` call appends one JSON line, `{"ts","fn","ms","out_bytes","rc","truncated"}`, to it (created 0600). Off when unset. Local only: never an argument, a path or a value, never the network; a write failure never fails the call |
 | `GASH_WIN_TIMEOUT` | WSL only. How long one `gash win` call waits for the Windows side before it fails with `interop_timeout`. A whole number of seconds or a Go duration (`8s`, `500ms`); default `10s`, capped at `120s`. Read at each call |
 | `GASH_VERSION` | Set by Gash (not by you): the loaded version, for scripts |
 
