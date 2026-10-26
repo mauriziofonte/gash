@@ -10,10 +10,9 @@ package sshtest
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -68,43 +67,34 @@ func (f *SSH) Run(ctx context.Context, c runner.Cmd) (runner.Result, error) {
 	if f.Unreachable {
 		return runner.Result{ExitCode: 255, Stderr: []byte("ssh: connect to host " + target + " port 22: Connection refused\n")}, nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if c.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
-		defer cancel()
-	}
-	cmd := exec.CommandContext(ctx, "sh", "-c", script)
-	// A command the remote side left running (a timeout) keeps the pipes
-	// open: stop waiting for them soon after the kill.
-	cmd.WaitDelay = 500 * time.Millisecond
-	cmd.Dir = f.Home
 	path := f.Path
 	if path == "" {
 		path = os.Getenv("PATH")
 	}
-	cmd.Env = append([]string{"HOME=" + f.Home, "PATH=" + path, "LC_ALL=C"}, f.Env...)
-	cmd.Stdin = bytes.NewReader(in)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	rc := 0
-	timedOut := false
+	// The remote script runs through the runner like any process (only
+	// internal/runner starts them), from a file: the runner refuses a
+	// shell command string (sh -c). A command the remote side left running
+	// (a timeout) has half a second to let go of the pipes.
+	dir, err := os.MkdirTemp("", "sshtest")
 	if err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			rc = ee.ExitCode()
-		} else {
-			rc = 255
-		}
-		if ctx.Err() != nil {
-			timedOut = true
-			rc = 124
-		}
+		return runner.Result{}, err
 	}
-	return runner.Result{Stdout: out.Bytes(), Stderr: errb.Bytes(), ExitCode: rc, TimedOut: timedOut}, nil
+	defer func() { _ = os.RemoveAll(dir) }()
+	file := filepath.Join(dir, "script.sh")
+	if err := os.WriteFile(file, []byte(script), 0o600); err != nil {
+		return runner.Result{}, err
+	}
+	r, err := f.Exec.Run(ctx, runner.Cmd{Path: "sh", Args: []string{file}, Options: runner.Options{
+		Env:       append([]string{"HOME=" + f.Home, "PATH=" + path, "LC_ALL=C"}, f.Env...),
+		Dir:       f.Home,
+		Stdin:     bytes.NewReader(in),
+		Timeout:   c.Timeout,
+		KillAfter: 500 * time.Millisecond,
+	}})
+	if err != nil && r.ExitCode == 0 {
+		r.ExitCode = 255
+	}
+	return r, nil
 }
 
 // N is the number of invocations so far.
