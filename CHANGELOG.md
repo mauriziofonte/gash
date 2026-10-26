@@ -6,6 +6,32 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.4.1] - 2026-10-26
+
+A patch release: the paths you protect with `PROTECT:` lines in
+`~/.gash_env` now hold in the filesystem scanners and in `gash logs` too,
+not only in the agent functions.
+
+### Security
+
+- The filesystem scanners (`files_largest`, `dirs_largest`,
+  `dirs_find_large`, `dirs_list_empty`, `tree_stats`) ignored `PROTECT:`
+  lines: they listed a `PROTECT:all` path, below the scan root and as the
+  PATH argument itself. They now refuse it as PATH (`forbidden_path`: as
+  written, through a link, and with `..`) and leave it out of every walk,
+  `-L` included. A `PROTECT:content` path is still listed, names and sizes
+  only.
+- `gash logs` ignored them too: `scan` listed the logs in a `PROTECT:all`
+  path, and `clean` deleted rotated logs and, with `--truncate`, truncated
+  live ones inside `PROTECT:all` and `PROTECT:content` paths. Now an `all`
+  path is `forbidden_path` as PATH, dropped from the default roots and left
+  out of the walk. A log in a `content` path is listed with
+  `"protected":true` (the report counts them in `protected`) and is never
+  deleted or truncated.
+- `llm_tree --text` printed the target of a link that leads into a
+  `PROTECT:all` path. It now prints `name -> [protected]`, locally and on a
+  host, from the gash binary and from the POSIX fallback alike.
+
 ## [3.4.0] - 2026-10-26
 
 Gash becomes the toolkit an AI agent reaches for instead of raw shell
@@ -1039,6 +1065,7 @@ Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.4.1]: https://github.com/mauriziofonte/gash/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/mauriziofonte/gash/compare/v3.2.0...v3.4.0
 [3.2.0]: https://github.com/mauriziofonte/gash/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/mauriziofonte/gash/compare/v3.0.0...v3.1.0
