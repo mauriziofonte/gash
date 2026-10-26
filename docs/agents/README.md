@@ -292,7 +292,7 @@ status 1 and no output bytes.
 | `confirmation_required` | The function asks a person first. Run it yourself, or let the agent pass `--yes` once you agreed. |
 | `sandbox_unavailable` | `GASH_LLM_SANDBOX=1` is set but `bwrap` is missing or cannot run. Install bubblewrap, or remove the setting. |
 | `prerequisite_missing` (or a tool's own code, such as `docker_not_found`) | A program the function needs is not installed. The `install` member holds the command: run it, or `gash_doctor --install TOOL` in a terminal. |
-| `binary_not_found` | The gash binary of this version is missing and could not be downloaded. The hint names the fix, usually `bash ~/.gash/install.sh --repair`. |
+| `binary_not_found` | The gash binary of this version is missing. Headless mode never downloads it on its own (an agent's call is no place for an unannounced download and install): run the hint's `bash ~/.gash/install.sh --repair` once, typically after a 2.x `gash_upgrade`. `GASH_AUTO_FETCH=1` lets the first call download it; `GASH_AUTO_FETCH=0` forbids it everywhere. |
 | `gash: command not found` | The agent calls `gash FUNCTION` but the launcher is not on its `PATH`: link `~/.gash/bin/gash` as shown above, or use headless mode. |
 
 The full list of error codes and their actions is in

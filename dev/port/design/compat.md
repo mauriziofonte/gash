@@ -45,9 +45,12 @@ refuses a dirty `git status --porcelain`), including after a checkout back to
 
 When the file is missing, `__gash_fetch` downloads it once (section 4 of
 `upgrade.md`): at source time in an interactive shell (one stderr line on
-success or failure), lazily at the first call in headless mode (silent; a
-failure surfaces as the envelope of that call). Concurrent first calls
-serialize on a `mkdir` lock in the versions directory.
+success or failure). In headless mode it is not downloaded (3.4.2): each
+call answers `binary_not_found`; with `GASH_AUTO_FETCH=1` the first call
+downloads it (silent; a failure surfaces as the envelope of that call).
+`GASH_AUTO_FETCH=0` turns both off; `install.sh` and `--repair` always
+fetch. Concurrent fetches serialize on a `mkdir` lock in the versions
+directory.
 
 ## 3. The call wrapper
 

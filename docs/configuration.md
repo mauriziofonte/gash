@@ -59,14 +59,17 @@ nothing unless `GASH_HEADLESS=1` is set. There are two modes.
 5. `~/.gashrc` sources the completion.
 
 When the binary of this version is missing, the first interactive shell
-downloads it and prints one line saying so.
+downloads it and prints one line saying so (`GASH_AUTO_FETCH=0` turns
+that off).
 
 **Headless** (`GASH_HEADLESS=1`): the core libraries and the functions
 only, and from `~/.gash_env` only the settings functions need (see
 [Precedence](#precedence)). No prompt, history settings, aliases, banner,
 completion, `~/.bash_aliases`, `~/.bash_local` or colors, and nothing is
-printed while loading. A missing binary is downloaded at the first call
-instead, without a word unless it fails.
+printed while loading. A missing binary is never downloaded on its own
+here: each call answers `binary_not_found`, whose hint is
+`bash ~/.gash/install.sh --repair` (`GASH_AUTO_FETCH=1` downloads it at
+the first call instead).
 
 `gash_doctor --timing` shows what each of these steps costs in a new shell.
 
@@ -383,6 +386,7 @@ These are read from the environment and are not accepted in
 | `GASH_DIR` | Install location used by `~/.gashrc`, the installer, `gash_upgrade` (`gash update`), `gash_uninstall` and `gash_doctor`. `gash.sh` sets it to its own directory |
 | `GASH_REQUIRE_SIGNED=1` | The installer and `gash_upgrade` (`gash update`) refuse a release unless its tag signature, or the Sigstore signature of its release, verifies (the latter needs `cosign` on `PATH`), and every binary download accepts only a binary the tagged tree pins in `release/SHA256SUMS` |
 | `GASH_RELEASE_URL` | Base URL of the release assets for every binary download (the shell, the installer, `gash update`); default the GitHub release of the version; `file://` works |
+| `GASH_AUTO_FETCH` | Whether Gash downloads a missing binary of its version on its own. Unset: an interactive shell does when it loads, headless mode never does (each call answers `binary_not_found`). `1`: headless mode downloads it at the first call, without a word unless it fails. `0`: never, in any mode, for wrappers that must not reach the network. `install.sh` and `install.sh --repair` download it whatever the value. Set it in the environment or in the shell before Gash loads |
 | `GASH_BIN` | A gash binary to use as it is, instead of the one under `versions/` (development) |
 | `GASH_SERVER=0` | Turns off the per-shell server. By default (Linux) the first call of a served function (the `llm_*` reads, the file and disk reports, `gash_help` and the like) starts `gash __serve`, one process per shell that runs that call and the later ones without starting the binary again, with the shell's environment, directory and standard streams, and that ends with the shell. A call it cannot run the same way (in a subshell or `$(...)`, with a stream it cannot share, after `TZ` changed) starts the binary as usual. Read at each call |
 | `GASH_TELEMETRY_FILE` | A file path: every `llm_*` and `agent_*` call appends one JSON line, `{"ts","fn","ms","out_bytes","rc","truncated"}`, to it (created 0600). Off when unset. Local only: never an argument, a path or a value, never the network; a write failure never fails the call. Export it so the calls see it |

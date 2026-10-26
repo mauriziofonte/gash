@@ -6,6 +6,78 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.4.2] - 2026-10-26
+
+Fixes found while wiring Gash into an agent harness: a WSL drive mounted
+twice, `agent_test` on `go test`, a silent binary download in headless
+mode and plain-text errors from `remote_*`. Two small grammar additions
+save agents a round trip: `--flag=value`, and a way to pass a pattern that
+starts with `-`.
+
+### Added
+
+- `--flag=value` is accepted as `--flag value` for every value flag of the
+  `llm_*` and `agent_*` functions and the filesystem scanners (the long
+  flags their `--help` lists with a value; `--depth=2` works,
+  `--stats=1` is still `unknown_option`). The words a value flag takes and
+  everything after `--` are left as they are.
+- `llm_grep -e PATTERN` (`--regexp`), and `--` to end the options of
+  `llm_grep` and `llm_find`, for a pattern that starts with `-`:
+  `llm_grep -e -x src`, `llm_grep -- -x src`, `llm_find -- '-*' src`, also
+  with `--host`. After `--`, `--help` and `-h` are data.
+- The hint of an `unknown_option` lists the options the function takes,
+  read from its registered help (the hand-written lists had fallen behind:
+  `llm_grep` named three of its options).
+- `GASH_AUTO_FETCH`: `0` turns off every binary download Gash starts on its
+  own (for wrappers that must never reach the network), `1` lets headless
+  mode download a missing binary at the first call. The installer and
+  `install.sh --repair` fetch whatever the value.
+- `gash wsl info --json`: each drive lists all its mount points in
+  `mounts` (`path`, `dir`, `fstype`, `options`, `metadata`).
+
+### Fixed
+
+- WSL: a Windows drive mounted twice (the automount `/mnt/c` and another
+  `drvfs` mount or bind of `C:\` or of a folder of it) kept only the last
+  mount. `gash win` then answered `interop_unavailable` "no Windows system
+  drive is mounted" although interop worked, and `gash wsl path
+  /mnt/c/Users --windows` gave a `\\wsl.localhost\...` path instead of
+  `C:\Users`. Every mount point now maps to its drive letter (a folder
+  mount to its folder), a Windows path converts to the automount one, and
+  the system drive is found on any mount, as `gash_doctor` finds it.
+- `agent_test -- go test ./...`: without `-v`, go prints no line for a
+  passing or skipped test, and the summary said `"passed":0`. `passed` and
+  `skipped` are now `null` when the output does not count them (with `-v`,
+  the counts). With `-v`, a failure took the file, line and message of the
+  next test's log; each failure now gets its own test's first `file:line:`
+  message. The other runners were checked for the same mistake; jest's
+  `● Console` block is no longer read as a failing test.
+- `remote_exec`, `remote_push`, `remote_pull` and the `remote_sync_*`
+  functions printed their refusals as `Error:` text in headless mode too.
+  They now answer with the JSON error envelope there (`unknown_host`,
+  `host_unreachable`, `forbidden_path`, `write_path_denied`,
+  `sensitive_path`, `invalid_path`, `missing_value` and the like), and
+  keep the text for a terminal. A remote command's own exit status, 255
+  included, still passes through with no envelope.
+- The help of several functions named `--head`, `--tail`, `--max-depth`,
+  `--cached` or `--rows` only inside another option's description: each
+  spelling now has its option line.
+
+### Security
+
+- Headless mode downloaded and installed the gash binary on its own at the
+  first call when it was missing (for example after a 2.x `gash_upgrade`,
+  which only checks the new version out), with no word on any stream: an
+  unannounced network fetch and install inside an agent's call. Headless
+  mode now never downloads it unless `GASH_AUTO_FETCH=1`: each call
+  answers `binary_not_found` (STOP) with the hint `Run: bash
+  ~/.gash/install.sh --repair`. From 2.x: `gash_upgrade`, then
+  `bash ~/.gash/install.sh --repair`.
+- A binary download run as root kept the owner that the release archive
+  recorded for the files (the uid of the account that built it), so that
+  uid could rewrite the installed `gash` and `gash-hosts-helper`. The
+  files are now extracted as the user who runs the download.
+
 ## [3.4.1] - 2026-10-26
 
 A patch release: the paths you protect with `PROTECT:` lines in
@@ -1065,6 +1137,7 @@ Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.4.2]: https://github.com/mauriziofonte/gash/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/mauriziofonte/gash/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/mauriziofonte/gash/compare/v3.2.0...v3.4.0
 [3.2.0]: https://github.com/mauriziofonte/gash/compare/v3.1.0...v3.2.0
