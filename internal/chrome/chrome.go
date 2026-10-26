@@ -85,17 +85,6 @@ type call struct {
 
 func (k *call) env() []string { return k.c.Env.Child() }
 
-// output is `$(NAME ARGS...)` with stderr passed through.
-func (k *call) output(name string, args ...string) (string, int) {
-	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
-		Options: runner.Options{Env: k.env(), Stderr: k.c.Stderr}})
-	if se := (*runner.StartError)(nil); errors.As(err, &se) {
-		write(k.c.Stderr, "bash: "+se.Error()+"\n")
-		return "", se.Status
-	}
-	return runner.CommandSubst(res.Stdout), res.ExitCode
-}
-
 // status runs a program with its output discarded.
 func (k *call) status(name string, args ...string) int {
 	res, err := k.m.run.Run(k.ctx, runner.Cmd{Path: name, Args: args,
