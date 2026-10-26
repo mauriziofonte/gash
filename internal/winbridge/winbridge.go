@@ -16,8 +16,8 @@
 //   - interop that the policy or wsl.conf turned off is reported as
 //     interop_unavailable, not worked around;
 //   - a PowerShell request runs a fixed, versioned script with only
-//     read verbs; the caller's arguments reach it as data (environment
-//     variables the script reads), never as code.
+//     read verbs; the caller's arguments reach it as data (one JSON object
+//     on its standard input), never as code.
 //
 // The bridge reads nothing from Windows itself: it is handed the facts
 // that package wsl found, and a runner that starts the processes, so the
@@ -99,7 +99,7 @@ func (b *Bridge) Available() *Error {
 	}
 	if !b.facts.Interop.Usable() {
 		why := "Windows interop is off"
-		hint := "enable it in /etc/wsl.conf ([interop] enabled=true) or run wsl_interop_fix in this shell"
+		hint := "enable it in /etc/wsl.conf ([interop] enabled=true) or run eval \"$(gash wsl interop --export)\" in this shell"
 		switch {
 		case !b.facts.Interop.Registered:
 			why = "the WSLInterop handler is not registered"
@@ -107,7 +107,7 @@ func (b *Bridge) Available() *Error {
 			why = "the WSLInterop handler is disabled"
 		case b.facts.Interop.Stale:
 			why = "WSL_INTEROP points at a socket that is gone (a reattached tmux or screen session)"
-			hint = "run wsl_interop_fix in this shell, or open a new terminal"
+			hint = "run eval \"$(gash wsl interop --export)\" in this shell, or open a new terminal"
 		case b.facts.Interop.Socket == "":
 			why = "no live interop server was found in " + wsl.InteropDir
 		}
@@ -134,14 +134,14 @@ func (b *Bridge) errFrom(what string, res runner.Result, err error) *Error {
 	var se *runner.StartError
 	if errors.As(err, &se) {
 		return &Error{Code: CodeNotFound, Details: what + ": " + se.Error(),
-			Hint: "the Windows program could not be started; check that interop works (wsl_doctor)"}
+			Hint: "the Windows program could not be started; check that interop works (gash wsl doctor)"}
 	}
 	if res.TimedOut {
 		return &Error{Code: CodeTimeout, Details: what + " did not answer within " + b.timeout.String(),
-			Hint: "the Windows side may be slow or wedged; try wsl_compact or wsl_doctor"}
+			Hint: "the Windows side may be slow or wedged; try wsl_compact or gash wsl doctor"}
 	}
 	if err != nil {
-		return &Error{Code: CodeUnavailable, Details: what + ": " + err.Error(), Hint: "check that interop works (wsl_doctor)"}
+		return &Error{Code: CodeUnavailable, Details: what + ": " + err.Error(), Hint: "check that interop works (gash wsl doctor)"}
 	}
 	if res.ExitCode != 0 {
 		out := strings.TrimSpace(Decode(res.Stderr))

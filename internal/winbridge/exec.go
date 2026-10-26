@@ -110,7 +110,7 @@ func (b *Bridge) DecodeJSON(ctx context.Context, s Script, args map[string]strin
 	}
 	if err := json.Unmarshal([]byte(text), v); err != nil {
 		return &Error{Code: CodeUnavailable, Details: "could not read the Windows answer: " + err.Error(),
-			Hint: "the PowerShell output was not the expected JSON; run wsl_doctor"}
+			Hint: "the PowerShell output was not the expected JSON; run gash wsl doctor"}
 	}
 	return nil
 }
@@ -176,7 +176,7 @@ func (b *Bridge) RunElevated(ctx context.Context, command string) *Error {
 	res.Stderr = errb.Bytes()
 	var se *runner.StartError
 	if errors.As(err, &se) {
-		return &Error{Code: CodeNotFound, Details: se.Error(), Hint: "check that interop works (wsl_doctor)"}
+		return &Error{Code: CodeNotFound, Details: se.Error(), Hint: "check that interop works (gash wsl doctor)"}
 	}
 	if err != nil || res.ExitCode != 0 {
 		return &Error{Code: CodeElevation, Details: "the elevated action did not complete (the UAC prompt may have been declined)",

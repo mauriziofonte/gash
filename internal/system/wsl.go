@@ -348,11 +348,13 @@ func (m *Module) wslCompact(c *invoke.Call) int {
 		"free >=512KiB blocks\t" + before[2] + "\t" + after[2],
 	}, args...)
 
-	const winCmd = "/mnt/c/Windows/System32/cmd.exe"
-	if !faccess(m.sys.Path(winCmd), 1) {
+	// The drive that holds Windows, not a hard-wired /mnt/c ([automount]
+	// root=/ mounts it on /c).
+	winCmd := m.winExe("cmd.exe")
+	if !filepath.IsAbs(winCmd) || !faccess(winCmd, 1) {
 		return 0
 	}
-	res, err = m.run.Run(ctx(c), runner.Cmd{Path: m.sys.Path(winCmd), Args: []string{"/c", "exit", "0"},
+	res, err = m.run.Run(ctx(c), runner.Cmd{Path: winCmd, Args: []string{"/c", "exit", "0"},
 		Options: runner.Options{Env: c.Env.Child(), Stdout: io.Discard, Stderr: io.Discard, Timeout: 20 * time.Second}})
 	if err == nil && res.TimeoutStatus() == 0 {
 		p.Success("Windows interop works.")

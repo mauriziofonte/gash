@@ -42,6 +42,11 @@ func wslRoot(t *testing.T, m *Module, wsl, cmd bool) string {
 		p := filepath.Join(d, "mnt/c/Windows/System32/cmd.exe")
 		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o700))
 		require.NoError(t, os.WriteFile(p, []byte("#!/bin/sh\n"), 0o700))
+		// The C: drive, so that cmd.exe is found on the drive that holds
+		// Windows.
+		require.NoError(t, os.MkdirAll(filepath.Join(d, "proc/self"), 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(d, "proc/self/mountinfo"),
+			[]byte("97 62 0:52 / /mnt/c rw,noatime - 9p C:\\134 rw,aname=drvfs;path=C:\\;uid=1000;gid=1000\n"), 0o600))
 	}
 	sr, err := platform.NewSysroot(d)
 	require.NoError(t, err)
