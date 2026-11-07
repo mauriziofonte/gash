@@ -106,7 +106,7 @@ func TestShellInit_AliasPackGit(t *testing.T) {
 	for _, fn := range []string{"gl", "gla", "glo", "glg", "gls", "glf"} {
 		require.Contains(t, out, fn+"() { __gash_call "+fn+" \"$@\"; }")
 	}
-	require.Contains(t, out, "alias glog=gl")
+	require.NotContains(t, out, "alias glog=", "3.5: gl is the shortcut")
 	require.Contains(t, out, "alias gst='git status'")
 	require.Contains(t, out, "alias gs='git status -sb'")
 	require.Contains(t, out, "alias gcm='git commit -m'")
@@ -146,4 +146,40 @@ func TestShellInit_EnvHome(t *testing.T) {
 	h2.withFile("/home/u/.gashrc", "export GASH_BASH=x\n")
 	h2.withFile("/home/u/.local/state/gash/schema", "2\n")
 	require.NotContains(t, h2.emit(t), "Gash 1.x")
+}
+
+// 3.5: GASH_SHORTCUTS picks the packs of shortcuts (commands, git, docker,
+// navigation, php); the shell defaults and the gl functions stay.
+func TestShellInit_Shortcuts(t *testing.T) {
+	h := newHarness().withProgram("git").withProgram("docker")
+	h.env["GASH_SHORTCUTS"] = "git"
+	out := h.emit(t)
+	require.Contains(t, out, "alias gst='git status'")
+	require.NotContains(t, out, "alias dcls=")
+	require.NotContains(t, out, "alias ll=")
+	require.Contains(t, out, "alias bc='bc -l'")
+	require.Contains(t, out, "gl() { __gash_call gl")
+	// The command shortcuts gash.sh defined are taken back.
+	require.Contains(t, out, "|| unalias flf 2>/dev/null || true")
+
+	h.env["GASH_SHORTCUTS"] = "none"
+	out = h.emit(t)
+	require.NotContains(t, out, "alias gst=")
+	require.Contains(t, out, "gl() { __gash_call gl")
+
+	for _, v := range []string{"", "all", "ALL"} {
+		h.env["GASH_SHORTCUTS"] = v
+		out = h.emit(t)
+		require.Contains(t, out, "alias gst=", v)
+		require.Contains(t, out, "alias dcls=", v)
+		require.NotContains(t, out, "unalias flf", v)
+	}
+	// 3.5: the duplicates are gone.
+	for _, gone := range []string{"dstopall", "dstartall", "dpruneall", "quit", "glog"} {
+		require.NotContains(t, out, "alias "+gone+"=", gone)
+	}
+	require.NotContains(t, out, "declare -F docker_compose_check", "dcc is a command shortcut")
+
+	h.env["GASH_LEGACY_HINTS"] = "0"
+	require.Contains(t, h.emit(t), "__GASH_FORMER=()")
 }

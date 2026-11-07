@@ -72,7 +72,7 @@ or through its service.
 
 ## Stop the usual services
 
-[`services_stop`](reference.md#services_stop) (`svs`, also `quit`) stops the
+[`services_stop`](reference.md#services_stop) (`svs`) stops the
 development services that are running among a fixed list (Apache, nginx,
 MySQL, MariaDB, PostgreSQL, Redis, Docker and a few more; the
 [reference](reference.md#services_stop) has the list):

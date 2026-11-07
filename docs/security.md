@@ -404,7 +404,7 @@ and `node_upgrade` also accept `--force` as a synonym of `-y`.
 |---|---|---|
 | `port_kill PORT` | Lists the listening processes and asks; `-y` skips | Refused unless `-y` |
 | `process_kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
-| `services_stop` (alias `quit`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
+| `services_stop` (alias `svs`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
 | `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
 | `docker_stop_all`, `docker_start_all` | List the containers (`Will stop N container(s): NAMES`) and ask; `-y` skips | Refused unless `-y` |
 | `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |

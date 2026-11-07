@@ -294,7 +294,6 @@ Loaded when `git` is on PATH. The first six entries are log functions (`gl --hel
 | `glg` | Graph focused (first-parent for cleaner merge view) |  |
 | `gls` | With file statistics |  |
 | `glf` | File-specific log with patches |  |
-| `glog` | `gl` |  |
 | `gst` | `git status` |  |
 | `gs` | `git status -sb` |  |
 | `ga` | `git add` |  |

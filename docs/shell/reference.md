@@ -302,5 +302,4 @@ With `GASH_REPLACE_TOOLS=1`, Gash also aliases standard commands to their richer
 
 | Alias | Runs | Defined |
 |---|---|---|
-| `quit` | `services_stop` |  |
 | `less` | `most` | with GASH_REPLACE_TOOLS=1, when most is installed |

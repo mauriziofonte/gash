@@ -161,8 +161,7 @@ itself, so `docker-compose.override.yml` and `COMPOSE_FILE` apply.
 
 With `docker` installed, short aliases cover the everyday commands: `dcls`
 lists all containers, `dexec` is `docker exec -it`, `dlogs` follows a
-container's logs, `dstopall`, `dstartall` and `dpruneall` are the functions
-above. The `dc` family (`dcup`, `dcdown`, `dclogs`, `dcps`...) runs the
+container's logs. The `dc` family (`dcup`, `dcdown`, `dclogs`, `dcps`...) runs the
 `docker-compose` program and exists only when that program is installed;
 with Compose v2 only, type `docker compose`. `gash docker` lists the ones your
 shell defines, and the [docker pack](reference.md#the-docker-pack) table has

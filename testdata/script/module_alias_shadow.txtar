@@ -20,7 +20,7 @@ exec bash --norc --noprofile -i drive.sh user
 stdout '^dcc=alias mine$'
 
 exec bash --norc --noprofile -i drive.sh without
-stdout '^dcc=alias docker_compose_check$'
+stdout '^dcc=alias gash docker compose check$'
 
 -- drive.sh --
 case "$1" in

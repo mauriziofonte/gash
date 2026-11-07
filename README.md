@@ -9,7 +9,7 @@
 
 ![Gash at a terminal: the reference card, files_largest, tree_stats and sysinfo overview](docs/assets/demo.gif)
 
-Gash adds 121 functions and 163 aliases to Bash, for the jobs that
+Gash adds 121 functions and 155 aliases to Bash, for the jobs that
 otherwise take a pipeline or a search: find what fills a disk, see what
 holds a port, tag a release, upgrade a Compose stack, copy files to a
 server, query a database read-only, run local HTTPS sites, look after WSL
@@ -99,7 +99,7 @@ archive whose members would land outside the target folder.
 `gl` and its siblings draw a compact log. `git_sync` stages, commits and
 pushes; `git_add_tag` creates an annotated tag and pushes it; both show
 what they will do and ask first (`--yes` skips the question, `--dry-run`
-only shows). Around them sit 38 short aliases and 6 log helpers (`gst`,
+only shows). Around them sit 37 short aliases and 6 log helpers (`gst`,
 `gcm`, `gpf`, `gswc`...) and `git_repair` for a repository with damaged
 objects. [Guide](docs/git/README.md)
 

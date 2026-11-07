@@ -37,14 +37,20 @@ func (n *routeNode) child(word string) *routeNode {
 func routeTree() *routeNode {
 	root := &routeNode{}
 	for _, c := range registry.Tree() {
-		if c.Handler == "" || c.Hidden {
+		handler := c.Handler
+		if c.Command3x == "help" {
+			// gash help --bash TOPIC is Bash's builtin help: gash_help's
+			// shell function runs it.
+			handler = "gash_help"
+		}
+		if handler == "" || c.Hidden {
 			continue
 		}
 		n := root
 		for _, w := range c.Path {
 			n = n.child(w)
 		}
-		n.handler = c.Handler
+		n.handler = handler
 	}
 	return root
 }

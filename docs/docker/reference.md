@@ -350,9 +350,6 @@ Loaded when `docker` is on PATH.
 | `dlogs` | `docker logs -f` |  |
 | `dinspect` | `docker inspect` |  |
 | `dnetls` | `docker network ls` |  |
-| `dstopall` | `docker_stop_all` |  |
-| `dstartall` | `docker_start_all` |  |
-| `dpruneall` | `docker_prune_all` |  |
 | `dc` | `docker-compose` | when docker-compose is installed |
 | `dcup` | `docker-compose up -d` | when docker-compose is installed |
 | `dcdown` | `docker-compose down` | when docker-compose is installed |
@@ -361,6 +358,3 @@ Loaded when `docker` is on PATH.
 | `dcrestart` | `docker-compose restart` | when docker-compose is installed |
 | `dcps` | `docker-compose ps` | when docker-compose is installed |
 | `dcpull` | `docker-compose pull` | when docker-compose is installed |
-| `dcc` | `docker_compose_check` |  |
-| `dcup2` | `docker_compose_upgrade` |  |
-| `dcscan` | `docker_compose_scan` |  |
