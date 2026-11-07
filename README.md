@@ -253,7 +253,7 @@ the shell:
 <!-- BEGIN generated: areas (go test ./internal/docgen -update) -->
 | Area | What it covers | Reference |
 |---|---|---|
-| [Shell](docs/shell/README.md) | The prompt, navigation, history search, aliases, colors and the help card that Gash adds to an interactive Bash. | [reference](docs/shell/reference.md) |
+| [Shell](docs/shell/README.md) | The prompt, navigation, history search, shortcuts, colors, Tab completion and the overview of the commands that Gash adds to an interactive Bash. | [reference](docs/shell/reference.md) |
 | [Files and archives](docs/files/README.md) | Find what fills a disk, summarize a tree, extract any archive and back up a file. | [reference](docs/files/reference.md) |
 | [System](docs/system/README.md) | Processes, ports, services, disks, sudo history and a system report. | [reference](docs/system/reference.md) |
 | [Git](docs/git/README.md) | Sync, tags, patches, repository repair and the gl* log shortcuts. | [reference](docs/git/reference.md) |

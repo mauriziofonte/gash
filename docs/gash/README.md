@@ -18,18 +18,19 @@ Beyond what Gash itself needs, this area uses (install commands for each system:
 - [gpg](../requirements.md#tool-gpg) (optional), for `gash update` (GASH_REQUIRE_SIGNED=1)
 <!-- END generated: prerequisites -->
 
-## Find a function and its help
+## Find a command and its help
 
-`gash` alone prints the reference card: one line per topic, with the number
-of functions and aliases in it. `gash TOPIC` lists the functions and
-aliases of one topic (`gash git`, `gash docker`, `gash llm`), and
-`gash all` the whole card. In an interactive shell the card lists only the
-aliases the shell defines: an alias left out because a program of the same
-name is installed does not appear.
+Every command is `gash NAMESPACE COMMAND`. `gash` alone prints the
+overview: the namespaces, one line each, and Gash's own commands.
+`gash NAMESPACE` lists the commands of one namespace with their usage and
+shortcut (`gash git`, `gash docker`, `gash llm`), and `gash all` every
+namespace. Tab completes the namespaces, the commands, their options with
+a description, and the values they take.
 
-`gash help NAME` prints the full help of a function, with examples. It
-accepts an alias (`gash help flf` is the help of `gash files largest`), and
-every function also prints its help with `--help`. To find a function by
+`gash help NAME` prints the full help of a command, with examples. It
+accepts a shortcut (`gash help flf` is the help of `gash files largest`)
+or a former name, suggests the closest command for a mistyped one, and
+every command also prints its help with `--help`. To find a command by
 what it does, search all the help text:
 
 <!-- example -->
@@ -50,7 +51,8 @@ $ gash help --short files_largest
 List the largest files under a path with size/exclude/json filters
 ```
 
-`gash help --list` lists every function by module, and
+`gash help --list` lists every command by namespace, `gash help shortcuts`
+every shortcut, and
 `gash help --bash cd` shows the help of a Bash builtin. The generated
 references of each area hold the same help text: start from the
 [documentation index](../README.md).

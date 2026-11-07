@@ -237,8 +237,10 @@ its release: `bash ~/.gash/install.sh --repair`.
 
 **Cause:** `~/.gashrc` loads `bash_completion` from the install directory,
 in interactive shells only; sourcing `gash.sh` directly skips it.
-**Fix:** source `~/.gashrc`. `complete -p files_largest` should print
-`complete -o default -F __gash_complete files_largest`.
+**Fix:** source `~/.gashrc`. `complete -p gash` should print
+`complete -o default -F __gash_complete gash`. The binary answers each
+Tab: when `gash version` fails, Tab offers file names only (see
+["gash VERSION is not installed"](#gash-version-is-not-installed-and-could-not-be-downloaded)).
 
 ## "gash: your configuration is from Gash 1.x"
 

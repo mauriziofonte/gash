@@ -3,8 +3,8 @@
 When Gash loads in an interactive Bash, the shell gets a prompt that shows
 the git branch and the status of the last command, unlimited history with
 timestamps and two ways to search it, short aliases to move around,
-interactive forms of the commands that overwrite or delete, and a help card
-that lists every function. This page explains each part, what it changes in
+interactive forms of the commands that overwrite or delete, shortcuts that
+expand to the commands, Tab completion, and an overview of every command. This page explains each part, what it changes in
 your shell, and the setting that turns it off.
 
 Platforms: Linux, macOS and WSL, in an interactive Bash. A headless shell
@@ -165,11 +165,11 @@ and prints the one you choose. A pattern that starts with `-` goes after
 managed your history, or with `GASH_HISTORY=0`, have none: `hg` still finds
 them while they are in the history of the current shell.
 
-## Find a function: the help card
+## Find a command: the overview, Tab and help
 
-`gash` alone prints the card: one row per topic, and where to go next. The
-alias counts follow what is installed: an alias whose tool is missing, or
-that a program of the same name hides, is not counted.
+Every command is `gash NAMESPACE COMMAND`. `gash` alone prints the
+overview: the namespaces in four groups, Gash's own commands, and where to
+go next.
 
 <!-- example
 mask: [0-9]+ +[0-9]+ {2}
@@ -177,7 +177,7 @@ mask: [0-9]+ +[0-9]+ {2}
 ```console
 $ gash
 
-  Gash 3.4.2 · Bash for humans and AI agents
+  Gash 3.5.0 · Bash for humans and AI agents
 
   EVERYDAY
     files    Largest files and folders, tree stats, archives, backups
@@ -212,11 +212,15 @@ $ gash
   TAB                      completes namespaces, commands, options and their values
 ```
 
-`gash git` shows the functions of one topic with their short alias and usage,
-then the aliases your shell defines for it; `gash all` shows every topic.
+`gash git` shows the commands of one namespace with their usage and
+shortcut, then the shortcut packs your shell defines for it; `gash all`
+shows every namespace. Tab completes each word: the namespaces, their
+commands with a description, the options of a command, and the values an
+option or argument takes (the hosts and databases of `~/.gash_env`, git
+tags and branches, containers, services, processes, listening ports).
 [`gash help`](../gash/reference.md#gash-help) gives the full help of a
-function or of its alias (`gash help flf`), with examples;
-`gash help --search WORD` searches every help page, and
+command, of its shortcut (`gash help flf`) or of its former name, with
+examples; `gash help --search WORD` searches every help page, and
 `gash help --short NAME` prints the one-line description:
 
 <!-- example -->
@@ -225,9 +229,23 @@ $ gash help --short dfl
 Find directories exceeding a size threshold (single-walk aggregation)
 ```
 
-Every function also answers `-h` or `--help`. Gash replaces the `help`
-builtin with a small function: `help NAME` shows the Gash help of a function
-or alias, and Bash's own help for builtins and keywords (`help cd`).
+Every command also answers `-h` or `--help`. Gash replaces the `help`
+builtin with a small function: `help NAME` shows the Gash help of a command
+or shortcut, and Bash's own help for builtins and keywords (`help cd`).
+
+### Shortcuts
+
+A shortcut is an alias that expands to a command: `flf` is
+`gash files largest`, `gsync` is `gash git sync`. `gash help shortcuts`
+lists them. They come in packs, and `GASH_SHORTCUTS` in `~/.gash_env`
+picks the ones you want: `commands` (the shortcuts of the commands),
+`git` (`gst`, `gcm`, `gpf`...), `docker`, `navigation` (the `ls` and `cd`
+shortcuts) and `php`; `all` is the default and `none` turns them all off.
+A program of the same name on `PATH`, or an alias you defined before Gash
+loaded, wins over a shortcut. The flat names of 3.4
+(`files_largest`) still run, and print a one-line tip with their new name
+the first time you type each one in a session (`GASH_LEGACY_HINTS=0`
+turns the tip off): see [the migration guide](../migration-3.5.md).
 
 ### Give your own functions the same help
 
@@ -346,8 +364,8 @@ alias or function.
 | `Error: Invalid regex: PATTERN` | The `-E` pattern is not a valid regular expression. Without `-E` the pattern is plain text |
 | `Error: hgrep (--pick) needs fzf, which is not installed.` | Run the install command printed below it, or drop `--pick` ([requirements](../requirements.md#tool-fzf)). `--pick` also needs a terminal: `Error: --pick requires an interactive terminal` |
 | `Error: Unexpected argument: NAME` from `mkcd` | `gash shell mkcd` takes one directory; quote a name that contains spaces |
-| `Error: Unknown topic: NAME. Topics: ...` | `gash` takes one of the topics it lists, or `all` |
-| `Error: No help found for 'NAME'.` | No function or alias has that name; the hint suggests `gash help --search NAME` |
+| `{"error":"unknown_command",...}` or `Error: Unknown command: gash NAME` | `gash` takes a namespace, a command or `all`; the hint names the closest command when there is one |
+| `Error: No help found for 'NAME'.` | No command, shortcut or former name has that name; the hint suggests the closest one, or `gash help --search NAME` |
 | `Warning: GASH_UMASK must be an octal mask such as 022 or 077 (ignored)` | Set three or four octal digits, or remove the setting |
 
 ## See also

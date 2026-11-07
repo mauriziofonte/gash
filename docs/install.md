@@ -188,12 +188,12 @@ release archive by hand, with cosign or `gh attestation verify`, is in
 ## First steps
 
 ```bash
-gash                 # the reference card: every topic with its functions
+gash                 # the overview: every namespace with its commands
 gash doctor          # check the install, and list what this system lacks
 gash doctor --install   # install the missing tools, after asking
 ```
 
-[docs/gash/README.md](gash/README.md) explains the card, the help and the
+[docs/gash/README.md](gash/README.md) explains the overview, the help and the
 doctor; [docs/README.md](README.md) lists every area.
 
 ## Update

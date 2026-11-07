@@ -2,7 +2,7 @@
 
 # Shell: reference
 
-The prompt, navigation, history search, aliases, colors and the help card that Gash adds to an interactive Bash. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
+The prompt, navigation, history search, shortcuts, colors, Tab completion and the overview of the commands that Gash adds to an interactive Bash. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
 ## Commands
 
