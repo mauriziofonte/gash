@@ -218,12 +218,10 @@ type Data struct {
 	CallSettings  []NamedList
 	Modules       []Module
 	ModuleAliases []registry.Alias
-	Completions   []Completion
-	Topics        []string
-	HelpNames     []string
-	// CompleteFunctions and CompleteAliases get the completion function.
-	CompleteFunctions []string
-	CompleteAliases   []string
+	// CompleteWords are the names that complete like a command of the
+	// tree, with its words: former flat names, llm_*/agent_* names and
+	// shortcuts.
+	CompleteWords []NamedWords
 	// Served are the functions the per-shell server runs.
 	Served []string
 	// PrereqBash is the package manager detection and the install
@@ -244,11 +242,9 @@ type Module struct {
 	Aliases []registry.Alias
 }
 
-// Completion is one branch of __gash_complete.
-type Completion struct {
-	Names   []string
-	Comment string
-	Body    string
+// NamedWords is a name and the canonical words it stands for.
+type NamedWords struct {
+	Name, Words string
 }
 
 func buildData() Data {
@@ -333,60 +329,33 @@ func buildData() Data {
 		d.Modules = append(d.Modules, *modules[name])
 	}
 
-	d.Completions = completions()
-	// What `gash` accepts as its first word: all, the card topics and the
-	// binary's commands, from the registry (3.0: SHELL-03 fixed; 2.x also
-	// offered "help", an unknown topic). gash migrate is left out: it only
-	// points at the 2.x route (D-6).
-	d.Topics = []string{"all"}
-	for _, t := range registry.Topics() {
-		d.Topics = append(d.Topics, t.Name)
-	}
-	d.Topics = append(d.Topics, registry.Commands()...)
-
-	seenAlias := map[string]bool{}
-	for _, f := range registry.Functions() {
-		// nvm is nvm's own function (2.x registered only the functions its
-		// load added, so nvm only under GASH_NVM=lazy, whose stub hands over
-		// to nvm and its completion on first use): Gash must not replace
-		// the completion of an nvm the user loaded (init_bash_state_parity).
-		if f.Name != "needs_help" && f.Name != "needs_confirm_prompt" && f.Name != "nvm" {
-			d.CompleteFunctions = append(d.CompleteFunctions, f.Name)
-		}
-		if !f.HasHelp {
-			continue
-		}
-		d.HelpNames = append(d.HelpNames, f.Name)
-		for _, a := range strings.Split(f.Help.Aliases, ",") {
-			a = strings.TrimSpace(a)
-			if a != "" && !seenAlias[a] {
-				seenAlias[a] = true
-				d.HelpNames = append(d.HelpNames, a)
-				d.CompleteAliases = append(d.CompleteAliases, a)
-			}
-		}
-	}
+	d.CompleteWords = completeWords()
 	return d
 }
 
-// completions groups the 2.x branches back: functions with the same body
-// and comment share a branch, in the order of their first function. The
-// gash and gash_help branches are static in the template (2.x built them
-// from the help registry at completion time).
-func completions() []Completion {
-	var out []Completion
-	index := map[string]int{}
-	for _, f := range registry.Functions() {
-		if f.Completion == "" || f.Name == "gash" || f.Name == "gash_help" {
-			continue
+// completeWords are the names of __GASH_COMPLETE_WORDS, sorted.
+func completeWords() []NamedWords {
+	seen := map[string]bool{}
+	var out []NamedWords
+	add := func(name, words string) {
+		if name != "" && name != "gash" && !seen[name] {
+			seen[name] = true
+			out = append(out, NamedWords{name, words})
 		}
-		key := f.CompletionComment + "\x00" + f.Completion
-		if i, ok := index[key]; ok {
-			out[i].Names = append(out[i].Names, f.Name)
-			continue
-		}
-		index[key] = len(out)
-		out = append(out, Completion{Names: []string{f.Name}, Comment: f.CompletionComment, Body: f.Completion})
 	}
+	for i := range registry.Tree() {
+		c := &registry.Tree()[i]
+		if c.Hidden {
+			continue
+		}
+		for _, f := range c.FormerNames() {
+			add(f, c.Words())
+		}
+		if c.Permanent() {
+			add(c.Handler, c.Words())
+		}
+		add(c.Shortcut, c.Words())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }

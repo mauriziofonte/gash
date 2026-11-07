@@ -2,14 +2,16 @@
 #
 # covers: none (3.0 completion surface)
 #
-# MATRIX "gash __complete": the generated bash_completion completes the 3.x
-# commands (init, update, version, hte) by asking the binary
-# (`gash __complete WORDS...`, cobra's protocol) and keeps only the
-# candidates: descriptions (after a tab) and the ":DIRECTIVE" line are
-# dropped. Driven in a real interactive Bash through __gash_complete, as
-# TAB does. The hte tree, which the binary keeps behind its handler, is
-# completed too, to the flags of a leaf command. Without a binary nothing
-# is offered and nothing fails.
+# MATRIX "gash __complete", 3.5: the generated bash_completion asks the
+# binary (`gash __complete WORDS... PARTIAL`, cobra's protocol) for every
+# word: the namespaces, the commands of a group, the options of a command
+# and their values, the 3.x commands (init, update, version, hte) through
+# their cobra tree. Two or more candidates carry their descriptions
+# ("VALUE  (DESCRIPTION)", cut here); one is inserted alone. A shortcut and
+# a former name complete as their command; --name=value and a command line
+# after gash run -- complete too. Driven in a real interactive Bash through
+# __gash_complete, as TAB does. Without a binary nothing is offered and
+# nothing fails.
 
 env GASH_BANNER=0
 exec bash --norc --noprofile -i drive.sh
@@ -22,19 +24,32 @@ exec gash __complete hte si
 stdout '^site\tCreate, change and remove sites$'
 stdout '^:4$'
 ! stdout '^service'
+exec gash __complete files largest --li
+stdout '^--limit\tCap results \(default 100\)$'
+stdout '^:36$'
+exec gash __complete run -- ''
+stdout '^!offset 2$'
+exec gash __complete system info we
+stdout '^webstack$'
 
 -- drive.sh --
 source "$GASH_SH" >/dev/null 2>&1
 source "$GASH_STAGE/bash_completion"
 complete -p gash | sed 's/ [^ ]*$/ .../' | grep -q -- '-F __gash_complete' && echo "registered"
+complete -p files_largest | grep -q -- '-F __gash_complete' && echo "former registered"
 c() {
     COMP_WORDS=("$@")
     COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
     COMPREPLY=()
-    __gash_complete gash "${COMP_WORDS[COMP_CWORD]}" "${COMP_WORDS[COMP_CWORD - 1]}"
-    printf '%s => %s\n' "$*" "${COMPREPLY[*]}"
+    __gash_complete
+    local v out=()
+    for v in "${COMPREPLY[@]}"; do out+=("${v%% *}"); done
+    printf '%s => %s\n' "$*" "${out[*]}"
 }
 c gash ve
+c gash gi
+c gash git tag ""
+c gash git tag d
 c gash init ""
 c gash version --
 c gash update --r
@@ -45,13 +60,28 @@ c gash hte site cr
 c gash hte site create --do
 c gash hte --json do
 c gash hte cert ""
-# Without a binary the 3.x words complete to nothing.
+c gash files largest --li
+c files_largest --li
+c gash llm grep --format = j
+c gash system info we
+c gash help gi
+c gash_help --se
+# The description of two candidates, the value alone of one.
+COLUMNS=80
+COMP_WORDS=(gash git tag ""); COMP_CWORD=3; __gash_complete; printf '%s\n' "${COMPREPLY[0]}"
+COMP_WORDS=(gash git sy); COMP_CWORD=2; __gash_complete; printf '%s\n' "${COMPREPLY[@]}"
+# Without a binary the words complete to nothing.
 __GASH_BIN=/nonexistent
-__gash_compat_ready() { return 1; }
+__gash_bin_resolve() { return 1; }
 c gash hte ""
+c gash ""
 -- want.txt --
 registered
+former registered
 gash ve => version
+gash gi => git
+gash git tag  => add delete list
+gash git tag d => delete
 gash init  => bash
 gash version -- => --help --json
 gash update --r => --rollback
@@ -62,4 +92,13 @@ gash hte site cr => create
 gash hte site create --do => --docroot --domain
 gash hte --json do => doctor
 gash hte cert  => renew show
+gash files largest --li => --limit
+files_largest --li => --limit
+gash llm grep --format = j => json jsonl
+gash system info we => webstack
+gash help gi => git
+gash_help --se => --search
+add     (Create an annotated tag and push to remote)
+sync
 gash hte  => 
+gash  => 

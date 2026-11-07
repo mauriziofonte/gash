@@ -72,6 +72,11 @@ func Run(p Process) int {
 	if p.Executable == nil {
 		p.Executable = os.Executable
 	}
+	// 3.5: the completion of the command tree; the 3.x commands' words go
+	// on to their cobra tree below.
+	if p.completeTree() {
+		return 0
+	}
 	// 3.5: a canonical command (gash files largest, gash git tag add,
 	// gash doctor) runs its handler directly, as its flat name does.
 	if len(p.Args) > 0 && !strings.HasPrefix(p.Args[0], "__") {

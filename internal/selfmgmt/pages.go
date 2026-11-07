@@ -40,6 +40,11 @@ func pageWords(args []string) (words []string, noColor, wantsHelp bool) {
 	return words, noColor, wantsHelp
 }
 
+func isNamespace(word string) bool {
+	_, ok := registry.NamespaceOf(word)
+	return ok
+}
+
 // pages renders the page the words select, or reports an unknown command.
 func (m *Module) pages(c *invoke.Call, k cardWriter, words []string) int {
 	switch {
@@ -54,7 +59,8 @@ func (m *Module) pages(c *invoke.Call, k cardWriter, words []string) int {
 		k.selfPage()
 		k.nl()
 		return 0
-	case words[0] == "gash" || words[0] == "management":
+	case words[0] == "gash" || words[0] == "management" || len(words) == 1 && registry.IsGroup(words[0]) && !isNamespace(words[0]):
+		// gash config: a group of Gash's own commands.
 		k.selfPage()
 		k.nl()
 		return 0
@@ -157,10 +163,7 @@ func (k cardWriter) namespacePage(c *invoke.Call, ns registry.Namespace, group [
 		// A tree command that forwards the delegate's own words (gash
 		// runtime which php 8.4 is gash runtime php 8.4) stands for the
 		// words the delegate lists without a description.
-		forwards := false
-		for _, cmd := range registry.CommandsUnder(ns.Name) {
-			forwards = forwards || cmd.Command3x == ns.Delegate && len(cmd.Prefix) == 0
-		}
+		forwards := registry.Forwards(ns)
 		for _, d := range delegateCommands(c, ns.Delegate) {
 			if forwards && d[1] == "" {
 				continue

@@ -68,6 +68,7 @@ const (
 	ArgRuntime   ArgKind = "runtime"   // php, node, composer, npm, npx
 	ArgFormat    ArgKind = "format"    // json, jsonl, tsv, table
 	ArgCommand   ArgKind = "command"   // a program and its arguments
+	ArgChoice    ArgKind = "choice"    // one of the command's Choices
 )
 
 // Command is one canonical command.
@@ -96,6 +97,9 @@ type Command struct {
 	Args []ArgKind
 	// Values are the kinds of the values of its options, by option name.
 	Values map[string]ArgKind
+	// Choices are the words an ArgChoice argument takes (the sections of
+	// gash system info).
+	Choices []string
 	// Shell is true when the calling shell keeps a part of the command
 	// (cd, history, ssh-agent, nvm, unload): the generated gash function
 	// runs it through the shell function of its handler.
@@ -239,6 +243,22 @@ func NamespaceOfTopic(word string) (Namespace, bool) {
 		}
 	}
 	return Namespace{}, false
+}
+
+// Forwards reports a namespace with a tree command that hands the words
+// of its 3.x command over as they are (gash runtime which php 8.4 is gash
+// runtime php 8.4): the pages and the completion list that command, not
+// the 3.x words.
+func Forwards(ns Namespace) bool {
+	if ns.Delegate == "" {
+		return false
+	}
+	for _, c := range CommandsUnder(ns.Name) {
+		if c.Command3x == ns.Delegate && len(c.Prefix) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // CommandAt returns the command whose words are exactly words.

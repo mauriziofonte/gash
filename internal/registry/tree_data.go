@@ -39,7 +39,8 @@ var tree = []Command{
 	{Path: []string{"files", "backup"}, Handler: "file_backup", Shortcut: "fbk", Args: []ArgKind{ArgFile}},
 
 	// system
-	{Path: []string{"system", "info"}, Handler: "sysinfo", Shortcut: "si"},
+	{Path: []string{"system", "info"}, Handler: "sysinfo", Shortcut: "si", Args: []ArgKind{ArgChoice},
+		Choices: []string{"overview", "identity", "storage", "services", "auth", "network", "security", "webstack", "mail", "infra", "system", "all"}},
 	{Path: []string{"system", "disks"}, Handler: "disk_usage", Shortcut: "du2"},
 	{Path: []string{"system", "ip"}, Handler: "ip_public", Shortcut: "myip"},
 	{Path: []string{"system", "ps"}, Handler: "process_find", Shortcut: "pf", Args: []ArgKind{ArgProc}},
@@ -159,8 +160,8 @@ var agentArgs = map[string][]ArgKind{
 	"llm_project": {ArgDir}, "llm_deps": {ArgDir}, "llm_docker_logs": {ArgContainer},
 	"llm_docker_exec": {ArgContainer, ArgCommand}, "agent_docker_exec": {ArgContainer, ArgCommand},
 	"llm_service": {ArgUnit}, "llm_git_show": {ArgGitRef}, "llm_runtime": {ArgRuntime, ArgAny},
-	"llm_exec": {ArgCommand}, "agent_replace": {ArgAny, ArgAny, ArgFile}, "agent_git_commit": {ArgFile},
-	"llm_docker_check": {ArgDir}, "llm_remote_run": {ArgAny}, "agent_test": {ArgCommand},
+	"llm_exec": {ArgCommand}, "agent_replace": {ArgFile}, "agent_git_commit": {ArgFile},
+	"llm_docker_check": {ArgDir}, "llm_remote_run": {ArgHost}, "agent_test": {ArgCommand},
 }
 
 // withAgentCommands inserts gash llm NAME and gash agent NAME for every

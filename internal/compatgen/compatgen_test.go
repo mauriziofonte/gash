@@ -601,25 +601,6 @@ func TestLedger_CORE14(t *testing.T) {
 	require.Equal(t, "~/x|/home/ab/x|~|~/y|/x|/home/b/x|/h/a/x|", out)
 }
 
-// LEDGER SHELL-03: TAB after "gash " offers all, the card topics and the
-// binary's commands, all from the registry, and no longer "help" (an
-// unknown topic: 3.0: SHELL-03 fixed). Every topic candidate is one the
-// card accepts; testdata/script/completion_gash_topics.txtar runs them.
-func TestLedger_SHELL03(t *testing.T) {
-	needBash(t)
-	dir := tree(t)
-	out := bashInteractive(t, `source '`+dir+`/gash.sh' >/dev/null 2>&1; source '`+dir+`/bash_completion'; COMP_WORDS=(gash ""); COMP_CWORD=1; __gash_complete gash "" gash; printf '%s\n' "${COMPREPLY[@]}"`)
-	got := strings.Fields(out)
-	want := []string{"all"}
-	for _, tp := range registry.Topics() {
-		want = append(want, tp.Name)
-	}
-	want = append(want, registry.Commands()...)
-	require.Equal(t, want, got)
-	require.NotContains(t, got, "help")
-	require.NotContains(t, got, "migrate")
-}
-
 // topLevel returns the lines of a generated Bash file outside function
 // bodies (the generated files are shfmt-formatted: a function opens with
 // "NAME() {" at column 0 and closes with "}" at column 0).
@@ -660,7 +641,7 @@ var gashAllowed = map[string]bool{
 	"__GASH_SETTINGS_KNOWN": true, "__GASH_T0": true, "__GASH_T1": true, "__GASH_TIMING": true,
 	"__GASH_USER_ALIASES": true, "__GASH_PRE_SYMBOLS": true, "__GASH_POST_SYMBOLS": true,
 	"__GASH_COMPLETE_NAMES": true, "__GASH_SNAPSHOT2": true,
-	"__GASH_FORMER": true, "__GASH_FORMER_SEEN": true,
+	"__GASH_FORMER": true, "__GASH_FORMER_SEEN": true, "__GASH_COMPLETE_WORDS": true,
 }
 
 // LEDGER SHELL-10: loading leaves no BASH_REMATCH and nothing readonly in
