@@ -1,6 +1,6 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-// Package hte is the engine of gash hte: one method per command of
+// Package hte is the engine of gash localweb: one method per command of
 // design/hte.md section 9, returning a result value for the CLI to print
 // (text or --json) or an error of the HTE contract. The CLI parses flags,
 // builds an Engine from the process facts, and calls it; nothing here
@@ -88,8 +88,8 @@ func (e *Engine) CheckIdentity(command string) error {
 	if e.EUID != 0 || slices.Contains(rootOnly, command) {
 		return nil
 	}
-	return hteerr.New(hteerr.RootNotAllowed, "gash hte "+command+" runs as your own user, not as root",
-		"Run gash hte as your own user; it asks for sudo itself when a step needs root")
+	return hteerr.New(hteerr.RootNotAllowed, "gash localweb "+command+" runs as your own user, not as root",
+		"Run gash localweb as your own user; it asks for sudo itself when a step needs root")
 }
 
 // env is what one command resolved about the machine.
@@ -246,7 +246,7 @@ func (e *Engine) certs(v *env) certs.Manager {
 		Paths: v.paths, Env: child.BaseEnv(v.dirs.Home), Now: e.Now}
 }
 
-// find returns a program gash hte runs as the user (openssl, launchctl,
+// find returns a program gash localweb runs as the user (openssl, launchctl,
 // systemctl --user) in child.UserDirs, as seen through the sysroot; sudo,
 // which runs the root helper, only in the system directories of the base
 // PATH. "" when absent.
@@ -265,7 +265,7 @@ func (e *Engine) prepare(v *env, in render.Input) error {
 		return err
 	}
 	if err := platform.EnsurePrivateDir(v.paths.RuntimeDir, e.UID); err != nil {
-		return hteerr.Newf(hteerr.InvalidState, "remove it; gash hte creates it again", "%s: %v", v.paths.RuntimeDir, err)
+		return hteerr.Newf(hteerr.InvalidState, "remove it; gash localweb creates it again", "%s: %v", v.paths.RuntimeDir, err)
 	}
 	dirs := []string{v.paths.LogsDir()}
 	for _, s := range in.Sites {
@@ -310,7 +310,7 @@ func (e *Engine) ensureCerts(ctx context.Context, v *env, sites []state.Site) ([
 			notes = append(notes, "reissued the certificate of "+s.Domain+" for its names")
 		default:
 			if h := cm.Check(ctx, s); len(h.Problems) > 0 {
-				return notes, hteerr.Newf(hteerr.InvalidState, "run gash hte cert renew --domain "+s.Domain,
+				return notes, hteerr.Newf(hteerr.InvalidState, "run gash localweb cert renew --domain "+s.Domain,
 					"the certificate of %s: %s", s.Domain, strings.Join(h.Problems, "; "))
 			}
 		}

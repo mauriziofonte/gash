@@ -25,6 +25,8 @@ import (
 
 // Markers of the managed region, each a full line of the hosts file.
 const (
+	// The markers keep the 3.x name (gash localweb was gash hte): the
+	// hosts files of existing installs carry them.
 	BeginMarker = "# >>> gash hte >>>"
 	EndMarker   = "# <<< gash hte <<<"
 )

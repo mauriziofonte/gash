@@ -300,7 +300,7 @@ __gash_fn_tree_stats() { __gash_call tree_stats "$@"; }
 # gash
 ((__GASH_TIMING)) && __GASH_T1="$EPOCHREALTIME"
 # shellcheck disable=SC2120
-gash() { __gash_cold gash 84aa23f4 && "${FUNCNAME[0]}" "$@"; }
+gash() { __gash_cold gash 55fe322e && "${FUNCNAME[0]}" "$@"; }
 # shellcheck disable=SC2120
 __gash_fn_gash_doctor() { __gash_cold __gash_fn_gash_doctor 3d0ab6af && "${FUNCNAME[0]}" "$@"; }
 __gash_fn_gash_help() {

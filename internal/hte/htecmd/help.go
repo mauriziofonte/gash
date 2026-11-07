@@ -4,11 +4,11 @@ package htecmd
 
 import "github.com/spf13/cobra"
 
-// helpLong is the --help text of each visible command of gash hte, by
+// helpLong is the --help text of each visible command of gash localweb, by
 // command path, printed above the usage and the flags (F-02). It names
 // only flags the command has (TestFollowup_F02 checks that).
 var helpLong = map[string]string{
-	"hte": `gash hte runs a userland Apache and PHP-FPM for local sites: one sudo at
+	"hte": `gash localweb runs a userland Apache and PHP-FPM for local sites: one sudo at
 install for the few system steps, everything else as you. The Apache and
 PHP-FPM binaries are the ones the system already has.
 
@@ -17,8 +17,8 @@ error envelope on stderr with exit status 1. Without a terminal nothing
 prompts: a missing required flag is missing_value, and a destructive step
 without --yes is confirmation_required.
 
-Start with: gash hte install, then gash hte migrate (a dry run of what
-would move from hte-cli), then gash hte site create. The guide is
+Start with: gash localweb install, then gash localweb migrate (a dry run of what
+would move from hte-cli), then gash localweb site create. The guide is
 docs/hte/README.md; WSL notes are in its "WSL" section.`,
 
 	"hte install": `Install the stack. install prints its plan, then runs the system steps in
@@ -37,7 +37,7 @@ systemd runs, else none; shell starts the stack from the first interactive
 shell that loads gash.
 --yes allows stopping the system Apache when the plan does that; while an
 enabled system vhost is neither migrated nor excluded, install leaves the
-stack stopped and names gash hte migrate.
+stack stopped and names gash localweb migrate.
 An uninstall stage is restored when one is found: --restore-stage PATH
 names it, --no-restore skips it.`,
 
@@ -52,7 +52,7 @@ them, autostart, the configuration test, every site (HTTP and HTTPS
 answers, certificate validity and names), name resolution, the receipt and
 the PHP versions. Each failure comes with its remedy. A hosts block that
 drifted is written again through the helper. On WSL it also checks that
-Windows resolves the site names (see gash hte hosts windows).
+Windows resolves the site names (see gash localweb hosts windows).
 Exits 1 when a check fails.`,
 
 	"hte migrate": `Move the hte-cli and other system Apache vhosts to the stack. Without
@@ -129,7 +129,7 @@ master that does not come back gets the previous file.`,
 	"hte apache": `The global Apache overlay and the extra modules.`,
 
 	"hte apache config": `The global Apache overlay: a file of yours that gash includes and never
-rewrites. Run gash hte service reload after editing it.`,
+rewrites. Run gash localweb service reload after editing it.`,
 
 	"hte apache config path": `Print the path of the global Apache overlay file.`,
 

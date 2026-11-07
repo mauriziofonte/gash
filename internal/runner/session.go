@@ -61,7 +61,7 @@ func (c *captureFile) bytes() []byte {
 func (c *captureFile) close() { _ = c.f.Close() }
 
 // Session is a child whose standard input and output the caller drives
-// while it runs (gash hte's root session behind one sudo).
+// while it runs (gash localweb's root session behind one sudo).
 type Session interface {
 	// Stdin is the child's standard input; closing it sends end of file.
 	Stdin() io.WriteCloser

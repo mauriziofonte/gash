@@ -132,7 +132,7 @@ func splitVersion(v string) (int, int) {
 
 func phpHint(installed []string) string {
 	if len(installed) == 0 {
-		return "no PHP-FPM version is installed; gash hte doctor prints the install command"
+		return "no PHP-FPM version is installed; gash localweb doctor prints the install command"
 	}
 	s := slices.Clone(installed)
 	slices.SortFunc(s, ComparePHP)

@@ -35,6 +35,9 @@
 # gone, path_add completes directories, and help and gash_migrate have no
 # Gash completion.
 #
+# 4.0: both shells load with GASH_LEGACY_NAMES=1, which keeps the 3.x flat
+# names (the 2.x names); 2.x ignores it.
+#
 # After gash_unload the 3.x shell is exactly the shell before the load,
 # in every case (SELF-03, SELF-05 fixed; 2.x left completion specs,
 # exports and overwritten aliases behind).
@@ -81,7 +84,7 @@ for c in ${CASES:-defaults all_off replace_tools nvm_lazy path_add user_aliases 
     for impl in 2 3; do
         home "$c"
         if [ "$impl" = 2 ]; then sh_=$GASH_2X_SH; else sh_=$GASH_SH; fi
-        (cd "$WORK/h" && env -i PATH="$p" HOME="$WORK/h" TERM=dumb LANG=C.UTF-8 GASH_BIN="$GASH_BIN" \
+        (cd "$WORK/h" && env -i PATH="$p" HOME="$WORK/h" TERM=dumb LANG=C.UTF-8 GASH_BIN="$GASH_BIN" GASH_LEGACY_NAMES=1 \
             __P_SH="$sh_" __P_CASE="$c" __P_OUT="$WORK/out/$impl.$c" bash --norc --noprofile -i "$WORK/state.sh" >/dev/null 2>&1)
         for s in before loaded unloaded; do norm "$WORK/out/$impl.$c.$s" "${sh_%/gash.sh}" >"$WORK/out/$impl.$c.$s.n"; done
     done

@@ -224,10 +224,10 @@ before Gash loaded, and so do the variables Gash set (`LS_COLORS`,
 
 <!-- example -->
 ```console
-$ type -t gash_doctor
+$ type -t gash
 function
 $ gash unload
-$ type -t gash_doctor || echo "not defined"
+$ type -t gash || echo "not defined"
 not defined
 ```
 

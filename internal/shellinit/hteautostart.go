@@ -15,15 +15,15 @@ import (
 // string).
 const autostartShell = "shell"
 
-// hteAutostart emits the shell autostart of gash hte (design hte.md 5):
+// hteAutostart emits the shell autostart of gash localweb (design hte.md 5):
 // when hte.toml says autostart = "shell", the interactive shell starts the
 // stack in the background when it is down. The binary reads hte.toml here,
 // so a shell without it gets no line at all; a file that does not decode
-// is left to `gash hte doctor` and gets none either.
+// is left to `gash localweb doctor` and gets none either.
 //
 // The emitted block runs once per shell (a re-evaluation of the layer
 // skips it; gash_unload sweeps the __GASH_ guard), only when the shell is
-// interactive, and never blocks or fails the load: `gash hte __autostart`
+// interactive, and never blocks or fails the load: `gash localweb __autostart`
 // runs detached in a subshell (no job-table entry, no "[1] PID" line) with
 // no terminal input, its stdout discarded and its stderr (the error
 // envelope of a failed start, nothing on success) kept in the logs

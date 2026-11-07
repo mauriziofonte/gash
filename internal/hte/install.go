@@ -220,7 +220,7 @@ func (e *Engine) Install(ctx context.Context, opt InstallOptions) (*InstallResul
 		return nil, err
 	}
 	// The stack starts once the lock is released: the systemd unit runs
-	// gash hte __unit start, which takes the lock itself.
+	// gash localweb __unit start, which takes the lock itself.
 	if len(res.Blocking) > 0 {
 		return res, nil
 	}
@@ -258,7 +258,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 		return err
 	}
 	if len(m.php.Versions) == 0 {
-		res.Warnings = append(res.Warnings, "no PHP-FPM version is installed: site create needs one ("+phpRemedy(v.os.Family)+", then run gash hte doctor)")
+		res.Warnings = append(res.Warnings, "no PHP-FPM version is installed: site create needs one ("+phpRemedy(v.os.Family)+", then run gash localweb doctor)")
 	}
 	if e.find("openssl") == "" {
 		return hteerr.New(hteerr.OpenSSLNotFound, "openssl is not installed", discover.OpenSSLInstallHint(v.os.Family))
@@ -369,7 +369,7 @@ func (e *Engine) install(ctx context.Context, v *env, opt InstallOptions, res *I
 
 	// The stack.
 	if len(res.Blocking) > 0 {
-		res.Next = "gash hte migrate"
+		res.Next = "gash localweb migrate"
 		res.Warnings = append(res.Warnings, fmt.Sprintf("the system Apache still serves %d enabled vhosts (%s), so it keeps ports %d and %d "+
 			"and the stack is not started: run %s to move them (or exclude them), then the stack starts",
 			len(res.Blocking), strings.Join(res.Blocking, ", "), ports.HTTP, ports.HTTPS, res.Next))

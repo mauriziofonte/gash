@@ -68,6 +68,8 @@ func (m *Module) doctor(c *invoke.Call) int {
 	}
 	s := ui.StyleOf(c.Term, !c.Term.WantColors(f.noColor))
 	switch {
+	case f.legacy:
+		return m.doctorLegacy(c, s, f)
 	case f.timing:
 		return m.doctorTiming(c, s)
 	case f.json:

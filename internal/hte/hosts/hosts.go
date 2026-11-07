@@ -201,7 +201,7 @@ func (a Applier) Apply(ctx context.Context, desired []hostshelper.Entry) error {
 	c.Stdin = bytes.NewReader(block)
 	res, err := child.Run(ctx, a.Runner, c)
 	if err != nil {
-		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte doctor", "running the hosts helper: %v", err)
+		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash localweb doctor", "running the hosts helper: %v", err)
 	}
 	switch {
 	case res.Success():
@@ -209,9 +209,9 @@ func (a Applier) Apply(ctx context.Context, desired []hostshelper.Entry) error {
 	case res.ExitCode == hostshelper.ExitRefused:
 		return hteerr.Newf(hteerr.InvalidState, "", "the hosts helper refused the block: %s", child.Output(res))
 	case strings.Contains(string(res.Stderr), "gash-hosts-helper:"):
-		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte doctor", "the hosts helper failed: %s", child.Output(res))
+		return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash localweb doctor", "the hosts helper failed: %s", child.Output(res))
 	}
-	return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash hte install: it installs the helper and its sudoers line",
+	return hteerr.Newf(hteerr.PrivilegedStepRequired, "run gash localweb install: it installs the helper and its sudoers line",
 		"sudo -n %s apply: %s", a.Helper, child.Output(res))
 }
 

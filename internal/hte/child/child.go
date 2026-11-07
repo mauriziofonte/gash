@@ -1,6 +1,6 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-// Package child holds what every process gash hte starts has in common:
+// Package child holds what every process gash localweb starts has in common:
 // an absolute binary, an explicit argument vector, the fixed PATH and C
 // locale of BaseEnv (nothing of the caller's environment reaches a child,
 // so nothing secret does), / as the working directory, a new session
@@ -55,7 +55,7 @@ func FindIn(name string, dirs []string, exists func(string) bool) string {
 	return ""
 }
 
-// UserDirs is where gash hte looks for a program it runs as the user:
+// UserDirs is where gash localweb looks for a program it runs as the user:
 // BasePath, then Homebrew's bin directories, ~/.local/bin and the
 // directories of the user's PATH (3.4: BasePath only, so an openssl
 // installed there was "not installed"). An entry that is not absolute, is
@@ -132,7 +132,7 @@ func Line(argv []string) string {
 	return strings.Join(parts, " ")
 }
 
-// Fake is a runner.Fake for the tests of gash hte, whose starts follow
+// Fake is a runner.Fake for the tests of gash localweb, whose starts follow
 // from what it discovers rather than a fixed order: every start, Run or
 // StartSession, is answered by answer.
 func Fake(t runner.TB, answer func(c runner.Call) runner.Expect) *runner.Fake {

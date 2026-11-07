@@ -6,7 +6,7 @@
 // .goreleaser.yaml does and writes their SHA-256 to release/SHA256SUMS,
 // "HASH  OS_ARCH/gash" and "HASH  OS_ARCH/gash-hosts-helper" lines, which
 // the compat bootstrap, gash update and gash_doctor check the binaries
-// against (the helper becomes the root-owned target of gash hte install,
+// against (the helper becomes the root-owned target of gash localweb install,
 // so it is pinned like gash).
 //
 //	go run ./internal/tools/releasesums            # write release/SHA256SUMS

@@ -56,7 +56,7 @@ func AcquireLock(path string, wait time.Duration, clk Clock) (*Lock, error) {
 			return &Lock{fl: fl}, nil
 		}
 		if clk.Now().Sub(start) >= wait {
-			return nil, hteerr.Newf(hteerr.LockTimeout, "another gash hte command is running; retry when it ends",
+			return nil, hteerr.Newf(hteerr.LockTimeout, "another gash localweb command is running; retry when it ends",
 				"%s is held by another process after %s", path, wait)
 		}
 		clk.Sleep(lockRetry)

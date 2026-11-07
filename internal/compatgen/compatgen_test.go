@@ -63,7 +63,7 @@ func TestCommittedSet(t *testing.T) {
 		}
 	}
 	require.Equal(t, []string{
-		"bash_completion", "bin/gash", "gash.sh", "lib/compat/bootstrap.sh",
+		"bash_completion", "bin/gash", "gash.sh", "lib/compat/bootstrap.sh", "lib/compat/legacy.sh",
 		"lib/core/config.sh", "lib/core/output.sh", "lib/core/utils.sh", "lib/core/validation.sh",
 		"lib/modules/node.sh", "lib/modules/php.sh", "lib/modules/remote.sh",
 	}, paths)
@@ -409,11 +409,16 @@ func TestLedger_CORE18(t *testing.T) {
 	want := map[string]bool{}
 	for _, f := range registry.Functions() {
 		if f.HasStub() {
-			names = append(names, f.Name)
-			want[f.Name] = f.LoadsEnv
+			// 4.0: gash.sh defines a legacy name as __gash_fn_NAME.
+			n := f.Name
+			if registry.Legacy(n) {
+				n = PrivatePrefix + n
+			}
+			names = append(names, n)
+			want[n] = f.LoadsEnv
 		}
 	}
-	require.True(t, want["gash_db_list"] && want["llm_exec"] && want["ai_query"] && !want["llm_tree"] && !want["all_colors"])
+	require.True(t, want[PrivatePrefix+"gash_db_list"] && want["llm_exec"] && want[PrivatePrefix+"ai_query"] && !want["llm_tree"] && !want[PrivatePrefix+"all_colors"])
 	out, err := bash(t, nil, "GASH_HEADLESS=1; source '"+dir+"/gash.sh'; for f in "+strings.Join(names, " ")+"; do declare -f \"$f\"; printf '\\0'; done")
 	require.NoError(t, err, out)
 	defs := strings.Split(out, "\x00")
@@ -442,10 +447,10 @@ func TestLedger_CORE18(t *testing.T) {
 	// A headless gash.sh load parses quietly at the first call, as the 2.x
 	// headless startup did; with GASH_DEBUG=1 it loads at source time,
 	// warnings shown, and the calls then use the cache.
-	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash_db_list")
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash db list")
 	require.NoError(t, err, out)
 	require.Equal(t, "sourced\ncall llm_exec\ncall gash_db_list\n", out)
-	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1", "GASH_DEBUG=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash_db_list")
+	out, err = bash(t, []string{"GASH_BIN=" + fake, "GASH_HEADLESS=1", "GASH_DEBUG=1"}, "source '"+dir+"/gash.sh'; echo sourced; llm_exec ls; gash db list")
 	require.NoError(t, err, out)
 	require.Equal(t, "Warning: Line 1 of ~/.gash_env: unrecognized entry\nsourced\ncall llm_exec\ncall gash_db_list\n", out)
 }
@@ -496,7 +501,7 @@ complete -p | grep -c __gash_complete >/dev/null || echo "no specs registered"
 # What the shell layer does on a real load:
 export LESSOPEN='| lesspipe %s' LS_COLORS='di=01' LESS_TERMCAP_mb=x LESS_TERMCAP_md=y PAGER=most
 PROMPT_COMMAND=""
-gash_unload
+gash unload
 echo "specs=$(complete -p | grep -c __gash_complete)"
 complete -p mine
 for v in LESSOPEN LS_COLORS LESS_TERMCAP_mb PAGER PROMPT_COMMAND; do echo "$v=${!v-unset}"; done
@@ -514,7 +519,7 @@ func TestLedger_SELF05(t *testing.T) {
 	out := bashInteractive(t, `export GASH_BANNER=0; GASH_GIT_EXCLUDE=/srv/repo
 source '`+dir+`/gash.sh' >/dev/null 2>&1
 __GASH_ENV_DB_default=secret; GASH_BANNER=1
-gash_unload
+gash unload
 declare -p GASH_BANNER GASH_GIT_EXCLUDE
 echo "GASH_VERSION=${GASH_VERSION-gone} GASH_DIR=${GASH_DIR-gone} cache=${__GASH_ENV_DB_default-gone}"`)
 	require.Equal(t, "declare -x GASH_BANNER=\"0\"\ndeclare -- GASH_GIT_EXCLUDE=\"/srv/repo\"\n"+
@@ -708,7 +713,7 @@ func TestLedger_SYS09(t *testing.T) {
 	needBash(t)
 	dir := tree(t)
 	out, err := bash(t, []string{"GASH_HEADLESS=1", "GASH_BIN=/bin/true"}, `source '`+dir+`/gash.sh'; set -o history; HISTTIMEFORMAT='%F %T '; `+
-		`history -s 'git push'; history -s 'cp a a'; __gash_call() { cat; }; history_grep git; echo "fmt=$HISTTIMEFORMAT"`)
+		`history -s 'git push'; history -s 'cp a a'; __gash_call() { cat; }; gash shell history git; echo "fmt=$HISTTIMEFORMAT"`)
 	require.NoError(t, err, out)
 	require.Regexp(t, `(?m)^ *[0-9]+  git push$`, out)
 	require.Regexp(t, `(?m)^ *[0-9]+  cp a a$`, out)
@@ -734,13 +739,13 @@ func TestLedger_SYS11(t *testing.T) {
 		require.NoError(t, err, out)
 		return out
 	}
-	out := run(`export CDPATH='` + work + `/cdp'; mkdir_cd foo; echo "rc=$? pwd=$PWD"`)
+	out := run(`export CDPATH='` + work + `/cdp'; gash shell mkcd foo; echo "rc=$? pwd=$PWD"`)
 	require.Equal(t, "rc=0 pwd="+work+"/here/foo\n", out, "stdout stays empty and CDPATH is not followed")
-	out = run(`mkdir_cd -; echo "rc=$? pwd=$PWD"`)
+	out = run(`gash shell mkcd -; echo "rc=$? pwd=$PWD"`)
 	require.Equal(t, "rc=0 pwd="+work+"/here/-\n", out)
-	out = run(`mkdir_cd -p; echo "rc=$? pwd=$PWD"`)
+	out = run(`gash shell mkcd -p; echo "rc=$? pwd=$PWD"`)
 	require.Equal(t, "rc=0 pwd="+work+"/here/-p\n", out)
-	out = run(`mkdir_cd a b 2>&1; echo "rc=$? pwd=$PWD"`)
+	out = run(`gash shell mkcd a b 2>&1; echo "rc=$? pwd=$PWD"`)
 	require.Equal(t, "bin: mkdir_cd a b\nrc=1 pwd="+work+"/here\n", out)
 	_, err := os.Stat(filepath.Join(work, "here", "a"))
 	require.True(t, os.IsNotExist(err), "nothing is created for two words")

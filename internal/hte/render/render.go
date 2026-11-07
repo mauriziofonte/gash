@@ -245,7 +245,7 @@ func (in Input) validate() error {
 		}
 		for _, p := range append(slices.Clone(s.ExtraHTTPPorts), s.ExtraHTTPSPorts...) {
 			if p == in.Ports.HTTP || p == in.Ports.HTTPS {
-				return hteerr.Newf(hteerr.ConflictingOptions, "change the site with gash hte site modify",
+				return hteerr.Newf(hteerr.ConflictingOptions, "change the site with gash localweb site modify",
 					"site %s lists the stack's port %d as an extra port", s.Domain, p)
 			}
 		}
@@ -253,7 +253,7 @@ func (in Input) validate() error {
 			continue
 		}
 		if _, ok := in.PHP[s.PHP]; !ok {
-			return hteerr.Newf(hteerr.PHPVersionNotInstalled, "install it or change the site with gash hte site modify --php",
+			return hteerr.Newf(hteerr.PHPVersionNotInstalled, "install it or change the site with gash localweb site modify --php",
 				"site %s uses PHP %s, which is not installed", s.Domain, s.PHP)
 		}
 		if sock := SocketPath(in.Paths.RuntimeDir, s.PHP, s.Domain); len(sock) > MaxSocketPath {

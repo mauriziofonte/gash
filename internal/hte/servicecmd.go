@@ -58,7 +58,7 @@ func (e *Engine) systemctlUser(ctx context.Context, v *env, args ...string) erro
 		return err
 	}
 	if !res.Success() {
-		return hteerr.Newf(hteerr.ReloadFailed, "run gash hte service logs", "systemctl --user %v: %s", args, child.Output(res))
+		return hteerr.Newf(hteerr.ReloadFailed, "run gash localweb service logs", "systemctl --user %v: %s", args, child.Output(res))
 	}
 	return nil
 }

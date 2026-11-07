@@ -109,6 +109,8 @@ func FormerTable() string {
 	for _, r := range rows {
 		b.WriteString("    [" + r.name + "]='" + r.value + "'\n")
 	}
+	// 4.0: the namespace hte is localweb (gash hte runs it through 4.x).
+	b.WriteString("    ['gash hte']='gash localweb'\n")
 	return strings.TrimRight(b.String(), "\n")
 }
 

@@ -1,6 +1,6 @@
 // Gash 3.0. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
 
-// Package htecmd is the command line of gash hte (design/hte.md 9): a
+// Package htecmd is the command line of gash localweb (design/hte.md 9): a
 // cobra tree with ordinary flags over the hte.Engine API. Every command
 // takes --json (one compact JSON object on stdout); without it the data
 // goes to stdout as text and the messages (OK, warnings, hints) to
@@ -45,13 +45,13 @@ type Options struct {
 	RootEnv func() rootops.Env
 }
 
-// Run is the handler of `gash hte ARGS...` on the real process.
+// Run is the handler of `gash localweb ARGS...` on the real process.
 func Run(c *invoke.Call) int { return Handler(Options{})(c) }
 
-// Register binds gash hte to the table.
+// Register binds gash localweb to the table.
 func Register(t *invoke.Table) { t.HandleCommand("hte", Run) }
 
-// Handler returns the handler of `gash hte` with opt's seams.
+// Handler returns the handler of `gash localweb` with opt's seams.
 func Handler(opt Options) invoke.Handler {
 	return func(c *invoke.Call) int {
 		if c.Ctx == nil {
@@ -59,16 +59,16 @@ func Handler(opt Options) invoke.Handler {
 		}
 		r := &run{opt: opt, c: c}
 		// hte runs under a stand-in for the gash root, so that help and
-		// hints name the whole command (gash hte site create).
+		// hints name the whole command (gash localweb site create).
 		top := &cobra.Command{Use: "gash", SilenceErrors: true, SilenceUsage: true}
 		top.CompletionOptions.DisableDefaultCmd = true
 		top.SetHelpCommand(&cobra.Command{Use: "__help", Hidden: true})
 		top.AddCommand(r.tree())
-		args := append([]string{"hte"}, c.Args...)
+		args := append([]string{"localweb"}, c.Args...)
 		// gash __complete hte WORDS... reaches here as Args __complete
 		// WORDS...: cobra's completion request is a command of the root.
 		if len(c.Args) > 0 && c.Args[0] == cobra.ShellCompRequestCmd {
-			args = append([]string{cobra.ShellCompRequestCmd, "hte"}, c.Args[1:]...)
+			args = append([]string{cobra.ShellCompRequestCmd, "localweb"}, c.Args[1:]...)
 		}
 		top.SetArgs(args)
 		top.SetIn(c.Stdin)
@@ -159,7 +159,7 @@ func Envelope(err error) contract.Envelope {
 	if e, ok := hteerr.As(err); ok {
 		return contract.Envelope{Code: string(e.Code), Details: e.Details, Action: contract.Action(e.Action()), Hint: e.Hint}
 	}
-	return contract.New("internal_error", err.Error(), "run gash hte doctor")
+	return contract.New("internal_error", err.Error(), "run gash localweb doctor")
 }
 
 // writeJSON writes v as one compact JSON line.
@@ -264,7 +264,7 @@ func usageEnvelope(err error, cmd *cobra.Command) contract.Envelope {
 	case missingArg(msg):
 		code = "missing_value"
 	}
-	path := "gash hte"
+	path := "gash localweb"
 	if cmd != nil && cmd.HasParent() {
 		path = cmd.CommandPath()
 	}

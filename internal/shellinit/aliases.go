@@ -387,7 +387,7 @@ func (st *state) packPhp(b *strings.Builder) {
 		st.alias(b, "composer1-self-update", "sudo "+composer1+" self-update")
 	}
 	// The legacy hte, hte-create, hte-remove, hte-details aliases are dropped
-	// (DEV-17): `gash hte` replaces them.
+	// (DEV-17): `gash localweb` replaces them.
 }
 
 // -----------------------------------------------------------------------------

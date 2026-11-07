@@ -4693,7 +4693,7 @@ var settings = []Setting{
 	{Name: "GASH_REMOTE_NO_BINARY", Headless: false, FileOnly: true, Passed: false},
 	{Name: "GASH_SHORTCUTS", Headless: false, FileOnly: false, Passed: true},
 	{Name: "GASH_LEGACY_HINTS", Headless: false, FileOnly: false, Passed: true},
-	{Name: "GASH_LEGACY_NAMES", Headless: true, FileOnly: false, Passed: true},
+	{Name: "GASH_LEGACY_NAMES", Headless: false, FileOnly: false, Passed: true},
 }
 
 var topics = []Topic{
@@ -4806,7 +4806,7 @@ var cardAliases = map[string][]CardAlias{
 	},
 	// The php pack as internal/shellinit emits it (LEDGER DEV-21): the
 	// per-version families, the GASH_REPLACE_TOOLS pair and composer1;
-	// the hte aliases are gone (DEV-17: gash hte replaces them).
+	// the hte aliases are gone (DEV-17: gash localweb replaces them).
 	"php": {
 		{Name: "phpXY", Value: "phpX.Y", Condition: "for each installed phpX.Y", Each: "php"},
 		{Name: "composerXY", Value: "phpX.Y composer", Condition: "for each installed phpX.Y, with composer", Each: "composer"},

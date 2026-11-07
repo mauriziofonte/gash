@@ -267,7 +267,7 @@ func DiscoverPHP(env PHPEnv) PHPResult {
 			res.Problems = append(res.Problems, fmt.Sprintf("%s reports PHP %s, not %s", c.fpm, short, c.version))
 			continue
 		case !slices.Contains(state.SupportedPHP, short):
-			res.Problems = append(res.Problems, fmt.Sprintf("%s reports PHP %s, which gash hte does not support", c.fpm, short))
+			res.Problems = append(res.Problems, fmt.Sprintf("%s reports PHP %s, which gash localweb does not support", c.fpm, short))
 			continue
 		}
 		ini := strings.ReplaceAll(c.ini, versionToken, short)

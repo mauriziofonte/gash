@@ -11,7 +11,9 @@
 # leaves the wrapper alone; an alias is not expanded into the definition;
 # a cold file of another version is refused.
 
-env GASH_BANNER=0
+# The 4.0 default: no former flat name (a GASH_LEGACY_NAMES=1 wrapper is
+# no stand-in).
+env GASH_BANNER=0 GASH_LEGACY_NAMES=
 exec bash --noprofile --norc -i load.sh
 stdout '^headless stand-ins [1-9][0-9]* all kept$'
 stdout '^interactive stand-ins [1-9][0-9]* all kept$'
@@ -51,11 +53,11 @@ mkdir "$WORK/one"
 path_add "$WORK/one"
 echo "rc=$? first=$([[ "${PATH%%:*}" == "$WORK/one" ]] && echo one)"
 [[ "$(declare -f path_add)" == *__gash_cold* ]] && echo "still a stand-in" || echo "defined"
-eval "old_$(declare -f mkdir_cd)"
-mkdir_cd() { echo "wrapper"; old_mkdir_cd "$@"; }
-mkdir_cd "$PWD/made" && echo "now in ${PWD##*/}"
-mkdir_cd "$PWD/again" && echo "now in ${PWD##*/}"
-[[ "$(declare -f old_mkdir_cd)" == *__gash_cold* ]] && echo "old is a stand-in" || echo "old defined"
+eval "old_$(declare -f __gash_fn_mkdir_cd)"
+__gash_fn_mkdir_cd() { echo "wrapper"; old___gash_fn_mkdir_cd "$@"; }
+gash shell mkcd "$PWD/made" && echo "now in ${PWD##*/}"
+gash shell mkcd "$PWD/again" && echo "now in ${PWD##*/}"
+[[ "$(declare -f old___gash_fn_mkdir_cd)" == *__gash_cold* ]] && echo "old is a stand-in" || echo "old defined"
 
 -- want-calls --
 rc=0 first=one

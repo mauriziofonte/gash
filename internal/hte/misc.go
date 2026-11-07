@@ -116,7 +116,7 @@ func (e *Engine) HostsApply(ctx context.Context) (*hosts.Drift, error) {
 			return nil, err
 		}
 		if !e.Sysroot.IsRegular(hosts.HelperPath) {
-			return nil, hteerr.New(hteerr.PrivilegedStepRequired, hosts.HelperPath+" is not installed", "run gash hte install")
+			return nil, hteerr.New(hteerr.PrivilegedStepRequired, hosts.HelperPath+" is not installed", "run gash localweb install")
 		}
 		return nil, e.applyHosts(ctx, v, sites)
 	})

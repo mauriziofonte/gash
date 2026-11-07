@@ -114,17 +114,17 @@ func ReadManifest(dir string) (*Manifest, error) {
 	path := filepath.Join(dir, ManifestFile)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte service reload to render again", "%s does not exist", path)
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb service reload to render again", "%s does not exist", path)
 	}
 	if err != nil {
 		return nil, err
 	}
 	var m Manifest
 	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte service reload to render again", "%s: %v", path, err)
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb service reload to render again", "%s: %v", path, err)
 	}
 	if m.Schema != manifestSchema {
-		return nil, hteerr.Newf(hteerr.InvalidState, "run gash hte service reload to render again",
+		return nil, hteerr.Newf(hteerr.InvalidState, "run gash localweb service reload to render again",
 			"%s has schema %d, not %d", path, m.Schema, manifestSchema)
 	}
 	return &m, nil

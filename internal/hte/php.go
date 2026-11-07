@@ -75,7 +75,7 @@ func (e *Engine) phpIni(ctx context.Context, command, domain string, edit func(m
 			return nil, nil, false, err
 		}
 		if !cur.HasPool() {
-			return nil, nil, false, hteerr.Newf(hteerr.PHPNotEnabled, "gash hte site modify --domain "+cur.Domain+" --php VERSION",
+			return nil, nil, false, hteerr.Newf(hteerr.PHPNotEnabled, "gash localweb site modify --domain "+cur.Domain+" --php VERSION",
 				"%s has no PHP", cur.Domain)
 		}
 		next := cur
@@ -169,7 +169,7 @@ func (e *Engine) phpGlobal(ctx context.Context, command, version string, edit fu
 		return nil, err
 	}
 	if !slices.Contains(e.discoverPHP(ctx, v).Installed(), version) {
-		return nil, hteerr.Newf(hteerr.PHPVersionNotInstalled, "gash hte php versions lists them", "PHP %q is not installed", version)
+		return nil, hteerr.Newf(hteerr.PHPVersionNotInstalled, "gash localweb php versions lists them", "PHP %q is not installed", version)
 	}
 	file := v.paths.PHPOverlay(version)
 	res, err := e.locked(v, command, "", func() (any, error) {

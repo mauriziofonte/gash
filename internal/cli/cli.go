@@ -341,7 +341,12 @@ func updateCmd(p *Process, status *int) *cobra.Command {
 
 func hteCmd(p *Process, status *int) *cobra.Command {
 	return &cobra.Command{
-		Use:                "hte",
+		// 4.0: gash localweb; gash localweb is its former name through 4.x.
+		// "hte" (homelab test environment) stays the name of the handler
+		// and of the code, for historical reasons: it began as hte-cli, a
+		// standalone PHP tool.
+		Use:                "localweb",
+		Aliases:            []string{"hte"},
 		Short:              "Manage the local Apache and PHP-FPM test environment",
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs,
@@ -367,7 +372,7 @@ func hteCmd(p *Process, status *int) *cobra.Command {
 				})
 				return nil
 			}
-			*status = p.fail(invoke.NotPorted("gash hte"))
+			*status = p.fail(invoke.NotPorted("gash localweb"))
 			return nil
 		},
 	}
