@@ -172,7 +172,7 @@ func TestLedger_SYS20(t *testing.T) {
 	for _, args := range [][]string{{"--help", "bogus"}, {"-h"}, {"--llm", "--help"}, {"mail", "-h"}, {"identity", "storage", "--help"}} {
 		r := fx.call(t, nil, args...)
 		require.Equal(t, 0, r.rc, args)
-		require.Contains(t, r.out, "  sysinfo  (module: sysinfo)\n", args)
+		require.Contains(t, r.out, "  gash system info\n", args)
 	}
 	require.Equal(t, result{llmWant["storage"], "", 0}, fx.call(t, nil, "storage", "--llm"))
 	require.Empty(t, fx.sudo(t))

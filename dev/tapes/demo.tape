@@ -24,19 +24,19 @@ Enter
 Wait
 Sleep 4s
 
-Type "clear; files_largest ~ -n 8"
+Type "clear; gash files largest ~ -n 8"
 Sleep 300ms
 Enter
 Wait
 Sleep 4s
 
-Type "clear; tree_stats"
+Type "clear; gash files stats"
 Sleep 300ms
 Enter
 Wait
 Sleep 4s
 
-Type "clear; sysinfo overview"
+Type "clear; gash system info overview"
 Sleep 300ms
 Enter
 Wait

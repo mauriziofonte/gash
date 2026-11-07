@@ -9,11 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mauriziofonte/gash/internal/registry"
 )
 
 // run2xGash loads the 2.x gash.sh of the checkout in an interactive Bash
@@ -68,77 +69,24 @@ func run2xIn(t *testing.T, root string, env []string, script string) (string, st
 	return out.String(), errb.String(), rc
 }
 
-var helpCalls = [][]string{
-	{}, {"--list"}, {"--search", "docker"}, {"--search", "flf"}, {"--search", "XYZnonexistent"}, {"--search"},
-	{"--search", "Ä"}, {"--short", "files_largest"}, {"--short", "flf"}, {"--short", "nope"}, {"--short"},
-	// 3.0: the full help of files_largest (flf), ai_query and
-	// docker_stop_all (dsa) was rewritten with their fixes (FS-*, AI-*,
-	// DOCK-22), so the full-help forms use functions whose body 3.0 kept.
-	{"-h"}, {"--help"}, {"disk_usage"}, {"du2"}, {"gash_db_test"}, {"gash_help"}, {"nonexistent_func_xyz"},
-	{"--list", "--no-color"}, {"--no-color", "dpa"}, {"all_colors"}, {"path_add"}, {"gash_username"},
-}
-
-// migrateListing is a gash_help listing line, from its name to the end of
-// the line, of a function whose summary 3.0 rewrote: gash_migrate (the D-6
-// pointer, SHELL-18) and archive_extract, ai_ask and llm_config (their
-// fixed behaviour).
-var migrateListing = regexp.MustCompile(`(?m)^(.*(?:gash_migrate|archive_extract|ai_ask|llm_config)\b).*$`)
-
-// gash_help prints what 2.x prints: every form, colors off, on and
-// shadowed by --no-color, at two widths.
-func TestGashHelpMatches2x(t *testing.T) {
-	for _, cols := range []string{"100", "60"} {
-		for _, mode := range []string{"off", "on", "shadow"} {
-			var script strings.Builder
-			for _, args := range helpCalls {
-				if mode == "shadow" {
-					args = append([]string{"--no-color"}, args...)
-				}
-				script.WriteString("gash_help")
-				for _, a := range args {
-					script.WriteString(" " + shq(a))
-				}
-				script.WriteString(" 2>&1; printf '\\0%s\\0' $?\n")
-			}
-			gate := "__gash_use_color() { return 1; }; "
-			if mode != "off" {
-				gate = "__gash_use_color() { return 0; }; "
-			}
-			// stderr has only Bash's job-control notice of bash -i.
-			out, _, _ := run2xGash(t, []string{"LANG=C.UTF-8", "COLUMNS=" + cols}, gate+script.String())
-			fields := strings.Split(out, "\x00")
-			for i, args := range helpCalls {
-				if mode == "shadow" {
-					args = append([]string{"--no-color"}, args...)
-				}
-				env := map[string]string{"LANG": "C.UTF-8", "COLUMNS": cols, "GASH_VERSION": "test"}
-				o, e, rc := run(t, "gash_help", env, mode != "off", args...)
-				// 3.0: SHELL-18 fixed: gash_migrate's description is the D-6
-				// pointer, so its listing line is compared up to the name.
-				require.Equal(t, migrateListing.ReplaceAllString(fields[2*i], "$1"), migrateListing.ReplaceAllString(o+e, "$1"), "%s %s %q", cols, mode, args)
-				require.Equal(t, fields[2*i+1], strconv.Itoa(rc), "%s %s %q", cols, mode, args)
-			}
-		}
-	}
-}
-
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
-// LEDGER CORE-07: gash_help --list (and gash_help with no argument) shows
-// the modules in one fixed order, the 2.x list then node remote chrome php
-// (and agent, new in 3.4), never in a hash order.
+// LEDGER CORE-07: gash help --list shows the namespaces in one fixed
+// order (the overview's), never in a hash order.
 func TestLedger_CORE07(t *testing.T) {
-	want := []string{"FILES", "SYSTEM", "GIT", "DOCKER", "DOCKER-COMPOSE", "AI", "SYSINFO", "GASH", "SSH",
-		"LLM", "UTILS", "NODE", "REMOTE", "CHROME", "PHP", "AGENT"}
-	for _, args := range [][]string{{"--list"}, nil} {
-		out, _, rc := run(t, "gash_help", map[string]string{"LANG": "C.UTF-8"}, false, args...)
-		require.Equal(t, 0, rc)
-		var got []string
-		for _, l := range strings.Split(out, "\n") {
-			if m := regexp.MustCompile(`^  ([A-Z][A-Z-]+)$`).FindStringSubmatch(l); m != nil {
-				got = append(got, m[1])
-			}
+	var want []string
+	for _, ns := range registry.Namespaces() {
+		if len(registry.CommandsUnder(ns.Name)) > 0 {
+			want = append(want, ns.Name)
 		}
-		require.Equal(t, want, got, "%v", args)
 	}
+	out, _, rc := run(t, "gash_help", map[string]string{"LANG": "C.UTF-8"}, false, "--list")
+	require.Equal(t, 0, rc)
+	var got []string
+	for _, l := range strings.Split(out, "\n") {
+		if m := regexp.MustCompile(`^  gash ([a-z]+)  `).FindStringSubmatch(l); m != nil {
+			got = append(got, m[1])
+		}
+	}
+	require.Equal(t, want, got)
 }

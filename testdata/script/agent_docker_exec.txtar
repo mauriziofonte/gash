@@ -43,7 +43,7 @@ stderr '"error":"unexpected_argument"'
 ! exec gash agent_docker_exec app --
 stderr '"error":"missing_command"'
 exec gash agent_docker_exec app -h
-stdout 'agent_docker_exec CTR'
+stdout 'gash agent docker-exec CTR'
 
 -- stub/docker --
 #!/bin/sh

@@ -67,12 +67,12 @@ has "$out" && fail "231 ansi"
 
 # :240 gash_help --list --no-color: names kept, no escapes.
 out="$(GASH__TTY_OUT=1 "$B" gash_help --list --no-color 2>&1)"
-[[ "$out" == *files_largest* ]] || fail "240 name"
+[[ "$out" == *largest-dirs* ]] || fail "240 name"
 has "$out" && fail "240 ansi"
 
 # :249 gash_help --search --no-color: result kept, no escapes.
 out="$(GASH__TTY_OUT=1 "$B" gash_help --search flf --no-color 2>&1)"
-[[ "$out" == *files_largest* ]] || fail "249 name"
+[[ "$out" == *"gash files largest"* ]] || fail "249 name"
 has "$out" && fail "249 ansi"
 
 # :258 dirs_list_empty --json forbidden: JSON error, no escapes.

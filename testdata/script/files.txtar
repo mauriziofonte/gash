@@ -166,7 +166,7 @@ stdout '"top_by_count":'
 
 # --- files_spec.sh:311 - tls alias is defined (headless loads module aliases)
 exec bash -c 'source "$GASH_SH"; alias tls'
-stdout 'tree_stats'
+stdout 'gash files stats'
 
 # --- files_spec.sh:322 - llm_tree JSON default depth 1 stays flat
 mkdir lt

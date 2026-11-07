@@ -112,7 +112,7 @@ func AgentsHint() string {
 		"Prefer these to the raw commands on the left: one call, compact JSON on stdout " +
 		"(`--format tsv` for rows), output capped by `--max-lines` and `--width`. " +
 		"Run them as `gash FN ARGS` or, after `GASH_HEADLESS=1 source ~/.gash/gash.sh`, as `FN ARGS`; " +
-		"`FN --help` lists the flags; most reads take `--host ALIAS` to run on a registered ssh host. Errors are one JSON line on stderr: " +
+		"`FN --help` lists the flags; `llm_db_query` is also `gash llm db-query` (each `llm_*` and `agent_*` alike); most reads take `--host ALIAS` to run on a registered ssh host. Errors are one JSON line on stderr: " +
 		"`action` RETRY = fix the arguments, CONTINUE = skip, STOP = ask the user, FATAL = stop. " +
 		"`llm_*` only read (`llm_exec` follows the user's `GASH_LLM_EXEC` setting). `agent_*` write: name every target, run `--dry-run` first.\n\n" +
 		RoutingTable()

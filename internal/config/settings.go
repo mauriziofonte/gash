@@ -51,6 +51,10 @@ var Known = []SettingInfo{
 	{Name: "GASH_PATH_ADD", Expand: Dash},
 	// 3.4: the HOST: aliases that never get the gash binary.
 	{Name: "GASH_REMOTE_NO_BINARY", FileOnly: true},
+	// 3.5: the shortcut packs an interactive shell gets, and the one tip a
+	// former flat name prints.
+	{Name: "GASH_SHORTCUTS", Default: "all"},
+	{Name: "GASH_LEGACY_HINTS", Default: "1"},
 }
 
 // SplitPathAdd splits a GASH_PATH_ADD value into words on space, tab and

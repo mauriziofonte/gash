@@ -49,7 +49,7 @@ stderr '"error":"unexpected_argument"'
 ! exec gash llm_docker_exec web --
 stderr '"error":"missing_command"'
 exec gash llm_docker_exec web -h
-stdout 'llm_docker_exec CTR'
+stdout 'gash llm docker-exec CTR'
 
 -- stub/docker --
 #!/bin/sh

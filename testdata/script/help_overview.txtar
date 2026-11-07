@@ -14,10 +14,10 @@
 # covers: help_spec.sh:227
 # covers: help_spec.sh:203
 #
-# gash_help: the function detail (USAGE/EXAMPLES/ALIASES), alias
-# resolution, the unknown-name error, the no-argument overview, --short
-# (one line), -h self-help, --search by name and by alias and its
-# no-results message, --list (grouped, with aliases), and the ai_query
+# gash_help (gash help in 3.5): the command page (USAGE/EXAMPLES/SHORTCUT),
+# shortcut resolution, the unknown-name error, the no-argument overview,
+# --short (one line), -h self-help, --search by name and by shortcut and its
+# no-results message, --list (by namespace, with shortcuts), and the ai_query
 # page's MULTI-SOURCE PIPING block. Driven through the shim as an agent
 # calls it (headless). GASH_VERSION is pinned so the overview is stable.
 
@@ -36,10 +36,10 @@ out="$(gash_help files_largest 2>&1)"
 [[ "$out" == *EXAMPLES* ]]      || fail "70 EXAMPLES"
 [[ "$out" == *files_largest* ]] || fail "70 name"
 
-# :82 an alias resolves to its function, and says it is an alias.
+# :82 a shortcut resolves to its command, and the page names the shortcut.
 out="$(gash_help flf 2>&1)"
-[[ "$out" == *files_largest* ]] || fail "82 target"
-[[ "$out" == *alias* ]]         || fail "82 alias word"
+[[ "$out" == *"gash files largest"* ]] || fail "82 target"
+[[ "$out" == *SHORTCUT* ]]             || fail "82 shortcut word"
 
 # :93 an unknown name is an error on stderr.
 out="$(gash_help nonexistent_func_xyz 2>&1)"; rc=$?
@@ -48,9 +48,10 @@ out="$(gash_help nonexistent_func_xyz 2>&1)"; rc=$?
 
 # :107 no argument prints the overview.
 out="$(gash_help 2>&1)"
-[[ "$out" == *Gash* ]]   || fail "107 Gash"
-[[ "$out" == *FILES* ]]  || fail "107 FILES"
-[[ "$out" == *SYSTEM* ]] || fail "107 SYSTEM"
+[[ "$out" == *Gash* ]]      || fail "107 Gash"
+[[ "$out" == *EVERYDAY* ]]  || fail "107 EVERYDAY"
+[[ "$out" == *"files "* ]]  || fail "107 files"
+[[ "$out" == *"system "* ]] || fail "107 system"
 
 # :119 --short is one non-empty line.
 out="$(gash_help --short files_largest 2>&1)"
@@ -63,26 +64,26 @@ out="$(gash_help -h 2>&1)"
 [[ "$out" == *--list* ]]    || fail "141 --list"
 [[ "$out" == *--search* ]]  || fail "141 --search"
 
-# :155 --search finds by function name.
+# :155 --search finds by command name.
 out="$(gash_help --search docker 2>&1)"
-[[ "$out" == *docker_stop_all* ]] || fail "155 by name"
+[[ "$out" == *"gash docker stop-all"* ]] || fail "155 by name"
 
-# :165 --search finds by alias.
+# :165 --search finds by shortcut.
 out="$(gash_help --search flf 2>&1)"
-[[ "$out" == *files_largest* ]] || fail "165 by alias"
+[[ "$out" == *"gash files largest"* ]] || fail "165 by alias"
 
 # :175 --search with no match says so.
 out="$(gash_help --search xyznonexistent 2>&1)"
 [[ "$out" == *"No results"* ]] || fail "175 no results"
 
-# :190 --list is grouped and names functions.
+# :190 --list is grouped by namespace and names the commands.
 out="$(gash_help --list 2>&1)"
-[[ "$out" == *FILES* ]]         || fail "190 FILES"
-[[ "$out" == *SYSTEM* ]]        || fail "190 SYSTEM"
-[[ "$out" == *GIT* ]]           || fail "190 GIT"
-[[ "$out" == *files_largest* ]] || fail "190 name"
+[[ "$out" == *"gash files"* ]]  || fail "190 files"
+[[ "$out" == *"gash system"* ]] || fail "190 system"
+[[ "$out" == *"gash git"* ]]    || fail "190 git"
+[[ "$out" == *largest* ]]       || fail "190 name"
 
-# :203 --list includes aliases.
+# :203 --list includes the shortcuts.
 [[ "$out" == *flf* ]] || fail "203 flf"
 [[ "$out" == *dsa* ]] || fail "203 dsa"
 

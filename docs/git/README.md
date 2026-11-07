@@ -22,7 +22,7 @@ remote show what they will do and ask first; see
 
 ## Save and push everything
 
-[`git_sync`](reference.md#git_sync) (`gsync`) stages every change of the work
+[`gash git sync`](reference.md#gash-git-sync) (`gsync`) stages every change of the work
 tree (new, modified and deleted files), commits them, and pushes the current
 branch to its upstream. `--dry-run` shows what it would commit and where it
 would push:
@@ -64,16 +64,16 @@ name, and becomes its upstream. `--no-push` stops after the commit.
 
 `git add --all` follows `.gitignore`: in a repository without one, check
 `git status` first, or a build directory or a secret file goes into the
-commit. `git_sync` refuses to run on a detached HEAD and during a merge,
+commit. `gash git sync` refuses to run on a detached HEAD and during a merge,
 rebase, cherry-pick or revert.
 
 ## Tag a release
 
-[`git_add_tag`](reference.md#git_add_tag) (`gat`) creates an annotated tag and
+[`gash git tag add`](reference.md#gash-git-tag-add) (`gat`) creates an annotated tag and
 pushes it to `origin` in one step; the message defaults to `Release TAG`.
-[`git_list_tags`](reference.md#git_list_tags) (`glt`) lists the tags of the
+[`gash git tag list`](reference.md#gash-git-tag-list) (`glt`) lists the tags of the
 repository and those of `origin`, and
-[`git_delete_tag`](reference.md#git_delete_tag) (`gdt`) deletes a tag in
+[`gash git tag delete`](reference.md#gash-git-tag-delete) (`gdt`) deletes a tag in
 both places:
 
 <!-- example
@@ -111,7 +111,7 @@ OK: Remote tag 'v1.0.0' deleted.
 
 Both check `origin` before they change anything: a tag that already exists,
 locally or on `origin`, is refused, and when `origin` cannot be reached
-nothing is created or deleted. `git_delete_tag` deletes the tag where it
+nothing is created or deleted. `gash git tag delete` deletes the tag where it
 exists, which may be only one of the two places. A tag name must be valid for
 git and cannot start with `-`.
 
@@ -180,7 +180,7 @@ in `~/.bash_aliases` if you want it anyway.
 
 ## Keep every version of a file
 
-[`git_dump_revisions`](reference.md#git_dump_revisions) (`gdr`) writes each
+[`gash git revisions`](reference.md#gash-git-revisions) (`gdr`) writes each
 committed version of a file next to it, numbered from the newest, with a
 second file that holds the commit's message, author and date:
 
@@ -220,7 +220,7 @@ an absolute path inside the work tree.
 
 ## Carry a branch's changes to another branch
 
-[`git_apply_patch`](reference.md#git_apply_patch) (`gpatch`) takes every
+[`gash git patch`](reference.md#gash-git-patch) (`gpatch`) takes every
 change between a commit and the tip of a feature branch and applies it, as
 one patch, to the main branch, without committing it. It is a way to bring
 work over without its history. The three arguments are the target branch, the
@@ -289,7 +289,7 @@ A crash or an out-of-memory kill during a git command can leave object files
 of zero bytes in `.git/objects`. git then reports `object file ... is empty`
 or a corrupt object, and a plain `git fetch` does not help: the references
 already match, so git believes it has the objects.
-[`git_repair`](reference.md#git_repair) (`gheal`) clones `origin` into a
+[`gash git repair`](reference.md#gash-git-repair) (`gheal`) clones `origin` into a
 temporary bare repository, deletes the empty object files, copies the packs
 of the clone in, then runs `git gc` and `git fsck --full` to check the
 result. `--dry-run` counts the empty files and shows the plan:
@@ -328,37 +328,37 @@ The functions that change a repository or `origin` show their plan and ask:
 
 | Function | Asks before | Default answer | `--dry-run` |
 |---|---|---|---|
-| `git_sync` | committing and pushing | no (`[y/N]`) | yes |
-| `git_add_tag` | creating and pushing the tag | no (`[y/N]`) | yes |
-| `git_delete_tag` | deleting the tag | no (`[y/N]`) | yes |
-| `git_apply_patch` | checking out, pulling and applying | no (`[y/N]`) | yes |
-| `git_repair` | cloning and deleting the empty files | yes (`[Y/n]`) | yes |
+| `gash git sync` | committing and pushing | no (`[y/N]`) | yes |
+| `gash git tag add` | creating and pushing the tag | no (`[y/N]`) | yes |
+| `gash git tag delete` | deleting the tag | no (`[y/N]`) | yes |
+| `gash git patch` | checking out, pulling and applying | no (`[y/N]`) | yes |
+| `gash git repair` | cloning and deleting the empty files | yes (`[Y/n]`) | yes |
 
 `-y` or `--yes` answers for you. Without a terminal to ask on (a script, an
 agent, `GASH_HEADLESS=1`) these functions refuse unless you pass it. The
-others only read (`git_list_tags`, the `gl*` commands) or only add new files
-(`git_dump_revisions`).
+others only read (`gash git tag list`, the `gl*` commands) or only add new files
+(`gash git revisions`).
 
 ## When something goes wrong
 
 | Message | Meaning and what to do |
 |---|---|
 | `Error: Not in a git repository.` | Run it inside a work tree |
-| `Error: Remote 'origin' is not configured.` | The tag functions and `git_repair` work with `origin`: `git remote add origin URL` |
+| `Error: Remote 'origin' is not configured.` | The tag functions and `gash git repair` work with `origin`: `git remote add origin URL` |
 | `Error: Cannot reach origin (URL): nothing was created or deleted.` | The network, the URL or your credentials failed; `git ls-remote origin` shows git's own error |
 | `Error: Refusing to commit and push in headless mode without --yes.` | A function of the table above ran without a terminal (the action in the message varies). Check the plan with `--dry-run`, then add `--yes` |
-| `Error: No terminal to ask for confirmation: pass -y to go ahead.` | The same, for `git_repair` |
+| `Error: No terminal to ask for confirmation: pass -y to go ahead.` | The same, for `gash git repair` |
 | `Info: Cancelled.` | You answered no; nothing changed. Status 1 |
-| `Error: Detached HEAD: check out a branch first.` | `git_sync` pushes a branch: `git switch NAME` |
+| `Error: Detached HEAD: check out a branch first.` | `gash git sync` pushes a branch: `git switch NAME` |
 | `Error: A rebase is in progress: finish or abort it first (git rebase --continue or --abort).` | Finish the operation git is in the middle of (merge, rebase, cherry-pick or revert) |
-| `Error: Branch 'NAME' has no upstream and there is no 'origin' remote: use --no-push or add a remote.` | Add a remote, or commit with `git_sync --no-push` |
-| `Error: Tag 'NAME' already exists.` | Choose another name, or delete it first with `git_delete_tag` |
+| `Error: Branch 'NAME' has no upstream and there is no 'origin' remote: use --no-push or add a remote.` | Add a remote, or commit with `gash git sync --no-push` |
+| `Error: Tag 'NAME' already exists.` | Choose another name, or delete it first with `gash git tag delete` |
 | `Error: Invalid tag name: 'NAME'.` | `git check-ref-format` refuses it (spaces, `..`, a leading `-` and the like) |
-| `Error: Working tree is not clean. Commit or stash your changes before applying a patch.` | `git_apply_patch` needs a clean work tree, untracked files included |
+| `Error: Working tree is not clean. Commit or stash your changes before applying a patch.` | `gash git patch` needs a clean work tree, untracked files included |
 | `Error: Commit hash 'HASH' is not valid.` | The commit does not exist in this repository: check `glo --all` |
 | `Error: Failed to apply the patch. Rolling back working tree.` | The changes conflict with the target branch. The target is reset to its last commit, the path of the kept patch follows; apply it by hand with `git apply --3way PATH` |
-| `Error: File 'FILE' does not exist in the repository.` or `Error: git failed on 'FILE'.` | `git_dump_revisions` needs a tracked file of this work tree |
-| `Error: Failed to clone 'URL': nothing was deleted.` | `git_repair` could not clone `origin`; fix the access to `origin` first |
+| `Error: File 'FILE' does not exist in the repository.` or `Error: git failed on 'FILE'.` | `gash git revisions` needs a tracked file of this work tree |
+| `Error: Failed to clone 'URL': nothing was deleted.` | `gash git repair` could not clone `origin`; fix the access to `origin` first |
 | `Error: Repo still reports issues after repair. Manual inspection needed.` | The damage is not only empty files; `git fsck --full` lists what is wrong |
 
 ## See also

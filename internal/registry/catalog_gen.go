@@ -1120,39 +1120,41 @@ var baseFunctions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Gash reference card with all functions and aliases",
+			Short:   "The overview of Gash: namespaces, their commands and shortcuts",
 			Module:  "gash",
 			SeeAlso: "gash_help gash_doctor",
 			Body: "" +
 				"USAGE\n" +
-				"  gash [TOPIC|all] [--no-color]\n" +
-				"  gash migrate [...]   Same as gash_migrate (Gash 1.x configuration)\n" +
+				"  gash [NAMESPACE|all] [--no-color]\n" +
+				"  gash NAMESPACE COMMAND [ARGS...]\n" +
 				"\n" +
-				"  gash                 Overview: topics with function and alias counts\n" +
-				"  gash TOPIC           Functions (alias, usage, description) and aliases of a topic\n" +
-				"  gash all             The whole card, every topic\n" +
+				"  gash                 The overview: namespaces and Gash's own commands\n" +
+				"  gash NAMESPACE       Its commands (usage, shortcut, description) and shortcuts\n" +
+				"  gash all             Every namespace page\n" +
 				"\n" +
-				"TOPICS\n" +
-				"  files, system, nav, git, docker, remote, dev, llm, ai, gash\n" +
-				"  (navigation, management, php and node still work as old names)\n" +
+				"NAMESPACES\n" +
+				"  files, system, shell, git, docker, remote, db, runtime, ai,\n" +
+				"  hte, wsl, win, logs, llm, agent\n" +
+				"  (the former card topics nav, navigation, dev, php and node still open\n" +
+				"  their namespace page)\n" +
 				"\n" +
-				"  The card is built from the help registry and the alias files. In an\n" +
-				"  interactive shell it counts and lists only the aliases the shell\n" +
-				"  defines (one skipped because a program of that name exists, or a pack\n" +
-				"  whose tool is missing, is left out); headless it lists them all.\n" +
+				"  The pages are built from the command tree and the alias files. In an\n" +
+				"  interactive shell they list only the shortcuts the shell defines (one\n" +
+				"  skipped because a program of that name exists, or a pack whose tool is\n" +
+				"  missing, is left out); headless they list them all.\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Quick reminder of all git aliases\n" +
+				"  # The git commands and shortcuts\n" +
 				"  gash git\n" +
 				"\n" +
-				"  # See what Docker functions are available\n" +
+				"  # The Docker commands\n" +
 				"  gash docker\n" +
 				"\n" +
-				"  # See every function and alias in Gash, plain text for a file\n" +
-				"  gash all --no-color > gash-card.txt\n" +
+				"  # Every page, plain text for a file\n" +
+				"  gash all --no-color > gash-pages.txt\n" +
 				"\n" +
-				"  # Check AI-related functions\n" +
-				"  gash ai",
+				"  # Run a command by its canonical name\n" +
+				"  gash files largest --limit 5",
 		},
 		Settings:          []string{"GASH_REPLACE_TOOLS", "GASH_UMASK", "GASH_AI_CONFIRM"},
 		LoadsEnv:          true,
@@ -1392,37 +1394,39 @@ var baseFunctions = []Function{
 		Headless: true,
 		HasHelp:  true,
 		Help: Help{
-			Short:   "Help system with examples, search, and discovery",
+			Short:   "The page of a command, a namespace or a topic; search every page",
 			Module:  "gash",
 			SeeAlso: "gash",
 			Body: "" +
 				"USAGE\n" +
-				"  gash_help                    Overview of all functions\n" +
-				"  gash_help FUNCTION           Detailed help with real-world examples\n" +
-				"  gash_help ALIAS              Lookup by short alias name\n" +
-				"  gash_help --list             List all functions grouped by module\n" +
-				"  gash_help --search KEYWORD   Search across all help text\n" +
-				"  gash_help --short FUNCTION   One-line description (for scripting)\n" +
-				"  gash_help --bash TOPIC       Bash builtin help (e.g. cd, export)\n" +
+				"  gash help                    The overview: namespaces and Gash's own commands\n" +
+				"  gash help NAME               The page of a command, shortcut or former name\n" +
+				"  gash help NAMESPACE          The commands of a namespace (gash help git)\n" +
+				"  gash help TOPIC              shortcuts, shell-defaults, scripting, migrate\n" +
+				"  gash help --list             Every command, by namespace\n" +
+				"  gash help --search WORD      Search every page\n" +
+				"  gash help --short NAME       One-line description (for scripting)\n" +
+				"  gash help --bash TOPIC       Bash builtin help (e.g. cd, export)\n" +
 				"\n" +
 				"EXAMPLES\n" +
-				"  # Get detailed help for a function\n" +
-				"  gash_help ai_query\n" +
+				"  # The page of a command\n" +
+				"  gash help ai query\n" +
 				"\n" +
-				"  # Don't remember the long name? Use the alias\n" +
-				"  gash_help flf\n" +
+				"  # By its shortcut or its former name\n" +
+				"  gash help flf\n" +
+				"  gash help files_largest\n" +
 				"\n" +
-				"  # Find all Docker-related functions\n" +
-				"  gash_help --search docker\n" +
+				"  # Every command that mentions Docker\n" +
+				"  gash help --search docker\n" +
 				"\n" +
-				"  # Find functions that work with pipes\n" +
-				"  gash_help --search pipe\n" +
+				"  # Every shortcut this shell defines\n" +
+				"  gash help shortcuts\n" +
 				"\n" +
-				"  # Get just the description for scripting\n" +
-				"  gash_help --short files_largest\n" +
+				"  # Just the description, for scripting\n" +
+				"  gash help --short files largest\n" +
 				"\n" +
-				"  # Access bash builtin help\n" +
-				"  gash_help --bash cd",
+				"  # Bash builtin help\n" +
+				"  gash help --bash cd",
 		},
 		ShellVars:         []string{"GASH_VERSION"},
 		Env:               []string{"COLUMNS", "GASH_HEADLESS", "GASH_NO_COLOR", "GASH_VERSION", "NO_COLOR"},
@@ -4514,9 +4518,6 @@ var aliases = []Alias{
 	{Name: "dlogs", Definition: "dlogs=\"docker logs -f\"", Pack: "docker", Condition: "type -P docker >/dev/null 2>&1", Source: "lib/aliases/docker.sh:20"},
 	{Name: "dinspect", Definition: "dinspect=\"docker inspect\"", Pack: "docker", Condition: "type -P docker >/dev/null 2>&1", Source: "lib/aliases/docker.sh:21"},
 	{Name: "dnetls", Definition: "dnetls=\"docker network ls\"", Pack: "docker", Condition: "type -P docker >/dev/null 2>&1", Source: "lib/aliases/docker.sh:22"},
-	{Name: "dstopall", Definition: "dstopall=\"docker_stop_all\"", Pack: "docker", Condition: "type -P docker >/dev/null 2>&1 && declare -F docker_stop_all >/dev/null 2>&1", Source: "lib/aliases/docker.sh:26"},
-	{Name: "dstartall", Definition: "dstartall=\"docker_start_all\"", Pack: "docker", Condition: "type -P docker >/dev/null 2>&1 && declare -F docker_start_all >/dev/null 2>&1", Source: "lib/aliases/docker.sh:29"},
-	{Name: "dpruneall", Definition: "dpruneall=\"docker_prune_all\"", Pack: "docker", Condition: "type -P docker >/dev/null 2>&1 && declare -F docker_prune_all >/dev/null 2>&1", Source: "lib/aliases/docker.sh:32"},
 	{Name: "dc", Definition: "dc=\"docker-compose\"", Pack: "docker", Condition: "type -P docker-compose >/dev/null 2>&1", Source: "lib/aliases/docker.sh:38"},
 	{Name: "dcup", Definition: "dcup=\"docker-compose up -d\"", Pack: "docker", Condition: "type -P docker-compose >/dev/null 2>&1", Source: "lib/aliases/docker.sh:39"},
 	{Name: "dcdown", Definition: "dcdown=\"docker-compose down\"", Pack: "docker", Condition: "type -P docker-compose >/dev/null 2>&1", Source: "lib/aliases/docker.sh:40"},
@@ -4525,13 +4526,8 @@ var aliases = []Alias{
 	{Name: "dcrestart", Definition: "dcrestart=\"docker-compose restart\"", Pack: "docker", Condition: "type -P docker-compose >/dev/null 2>&1", Source: "lib/aliases/docker.sh:43"},
 	{Name: "dcps", Definition: "dcps=\"docker-compose ps\"", Pack: "docker", Condition: "type -P docker-compose >/dev/null 2>&1", Source: "lib/aliases/docker.sh:44"},
 	{Name: "dcpull", Definition: "dcpull=\"docker-compose pull\"", Pack: "docker", Condition: "type -P docker-compose >/dev/null 2>&1", Source: "lib/aliases/docker.sh:45"},
-	{Name: "dcc", Definition: "dcc='docker_compose_check'", Pack: "docker", Condition: "declare -F docker_compose_check >/dev/null 2>&1", Source: "lib/aliases/docker.sh:50"},
-	{Name: "dcup2", Definition: "dcup2='docker_compose_upgrade'", Pack: "docker", Condition: "declare -F docker_compose_upgrade >/dev/null 2>&1", Source: "lib/aliases/docker.sh:53"},
-	{Name: "dcscan", Definition: "dcscan='docker_compose_scan'", Pack: "docker", Condition: "declare -F docker_compose_scan >/dev/null 2>&1", Source: "lib/aliases/docker.sh:56"},
-	{Name: "quit", Definition: "quit='services_stop'", Pack: "general", Source: "lib/aliases/general.sh:20"},
 	{Name: "\"$1\"", Definition: "\"$1\"=\"$2\"", Pack: "general", Condition: "[[ \"${GASH_REPLACE_TOOLS:-0}\" == \"1\" ]] && type -P \"$2\" >/dev/null 2>&1", Source: "lib/aliases/general.sh:33"},
 	{Name: "less", Definition: "less='most'", Pack: "general", Condition: "[[ \"${GASH_REPLACE_TOOLS:-0}\" == \"1\" ]] && type -P most >/dev/null 2>&1", Source: "lib/aliases/general.sh:38"},
-	{Name: "glog", Definition: "glog='gl'", Pack: "git", Condition: "command -v git >/dev/null 2>&1", Source: "lib/aliases/git.sh:128"},
 	{Name: "gst", Definition: "gst='git status'", Pack: "git", Condition: "command -v git >/dev/null 2>&1", Source: "lib/aliases/git.sh:133"},
 	{Name: "gs", Definition: "gs='git status -sb'", Pack: "git", Condition: "command -v git >/dev/null 2>&1 && ! type -P gs >/dev/null 2>&1", Source: "lib/aliases/git.sh:136"},
 	{Name: "ga", Definition: "ga='git add'", Pack: "git", Condition: "command -v git >/dev/null 2>&1", Source: "lib/aliases/git.sh:142"},
@@ -4695,6 +4691,8 @@ var settings = []Setting{
 	{Name: "GASH_NVM", Headless: false, FileOnly: false, Passed: true},
 	{Name: "GASH_PATH_ADD", Headless: false, FileOnly: false, Passed: true},
 	{Name: "GASH_REMOTE_NO_BINARY", Headless: false, FileOnly: true, Passed: false},
+	{Name: "GASH_SHORTCUTS", Headless: false, FileOnly: false, Passed: true},
+	{Name: "GASH_LEGACY_HINTS", Headless: false, FileOnly: false, Passed: true},
 }
 
 var topics = []Topic{
@@ -4729,9 +4727,6 @@ var cardAliases = map[string][]CardAlias{
 		{Name: "dlogs", Value: "docker logs -f"},
 		{Name: "dinspect", Value: "docker inspect"},
 		{Name: "dnetls", Value: "docker network ls"},
-		{Name: "dstopall", Value: "docker_stop_all"},
-		{Name: "dstartall", Value: "docker_start_all"},
-		{Name: "dpruneall", Value: "docker_prune_all"},
 		{Name: "dc", Value: "docker-compose"},
 		{Name: "dcup", Value: "docker-compose up -d"},
 		{Name: "dcdown", Value: "docker-compose down"},
@@ -4740,12 +4735,8 @@ var cardAliases = map[string][]CardAlias{
 		{Name: "dcrestart", Value: "docker-compose restart"},
 		{Name: "dcps", Value: "docker-compose ps"},
 		{Name: "dcpull", Value: "docker-compose pull"},
-		{Name: "dcc", Value: "docker_compose_check"},
-		{Name: "dcup2", Value: "docker_compose_upgrade"},
-		{Name: "dcscan", Value: "docker_compose_scan"},
 	},
 	"general": {
-		{Name: "quit", Value: "services_stop"},
 		{Name: "less", Value: "most"},
 	},
 	"git": {
@@ -4755,7 +4746,6 @@ var cardAliases = map[string][]CardAlias{
 		{Name: "glg", Value: "Graph focused (first-parent for cleaner merge view)"},
 		{Name: "gls", Value: "With file statistics"},
 		{Name: "glf", Value: "File-specific log with patches"},
-		{Name: "glog", Value: "gl"},
 		{Name: "gst", Value: "git status"},
 		{Name: "gs", Value: "git status -sb"},
 		{Name: "ga", Value: "git add"},

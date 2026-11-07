@@ -49,4 +49,4 @@ stderr '"error":"invalid_date_format"'
 
 # --- help without side effects
 exec gash llm_date --help
-stdout 'llm_date \[--diff A B \| --add DATE DURATION \| --epoch X\]'
+stdout 'gash llm date \[--diff A B \| --add DATE DURATION \| --epoch X\]'

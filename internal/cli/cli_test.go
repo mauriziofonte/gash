@@ -69,21 +69,35 @@ func TestFunctionArgsRaw(t *testing.T) {
 	require.Contains(t, errOut, `"details":"llm_tree is not implemented in this gash build"`)
 }
 
-// Words that are not commands go to the card, all of them, as the 2.x gash
-// function received them.
+// Words that are not commands go to the pages, all of them, as the 2.x
+// gash function received them: one that is no namespace is an unknown
+// command (3.5), with the nearest command when there is one.
 func TestUnknownWordIsTheCard(t *testing.T) {
-	for _, args := range [][]string{{"nope"}, {"--no-color", "nope"}, {"--no-color", "version", "nope"}, {"help"}, {"needs_help"}, {"flf"}} {
-		_, errOut, rc := run(args...)
-		require.Equal(t, 1, rc, args)
-		require.Equal(t, "Error: Unknown topic: "+args[len(args)-1]+". Topics: files system nav git docker remote dev llm agent ai gash, all\n", errOut, args)
+	for _, tc := range []struct {
+		args  []string
+		typed string
+	}{
+		{[]string{"nope"}, "nope"}, {[]string{"--no-color", "nope"}, "nope"},
+		{[]string{"--no-color", "version", "nope"}, "version nope"}, {[]string{"needs_help"}, "needs_help"},
+		{[]string{"flf"}, "flf"},
+	} {
+		_, errOut, rc := run(tc.args...)
+		require.Equal(t, 1, rc, tc.args)
+		require.Contains(t, errOut, `{"error":"unknown_command","details":"Unknown command: gash `+tc.typed+`"`, tc.args)
 	}
+	// A shortcut typed after gash points to its command.
+	_, errOut, _ := run("flf")
+	require.Contains(t, errOut, `"hint":"Did you mean gash files largest?"`)
 	// --no-color before a command word does not select the command.
-	_, errOut, _ := run("--no-color", "version")
-	require.Contains(t, errOut, "Unknown topic: version.")
+	_, errOut, _ = run("--no-color", "version")
+	require.Contains(t, errOut, `"details":"Unknown command: gash version"`)
 
 	out, _, rc := run("-h")
 	require.Equal(t, 0, rc)
-	require.Contains(t, out, "  gash  (module: gash)")
+	require.Contains(t, out, "FOR AI AGENTS")
+	out, _, rc = run("help")
+	require.Equal(t, 0, rc)
+	require.Contains(t, out, "EVERYDAY")
 }
 
 func TestCompatOps(t *testing.T) {
@@ -101,7 +115,7 @@ func TestCompatOps(t *testing.T) {
 
 	out, _, rc = run("__compat", "help", "gash_username")
 	require.Equal(t, 0, rc)
-	require.Contains(t, out, "  gash_username  (module: gash)\n")
+	require.Contains(t, out, "  gash shell username\n")
 }
 
 // gash update runs the selfmgmt flow (upgrade.md 3.6): it needs a git

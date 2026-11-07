@@ -31,7 +31,7 @@ type Area struct {
 
 // Areas are the folders of docs/, in index order.
 var Areas = []Area{
-	{Key: "shell", Title: "Shell", Summary: "The prompt, navigation, history search, aliases, colors and the help card that Gash adds to an interactive Bash."},
+	{Key: "shell", Title: "Shell", Summary: "The prompt, navigation, history search, shortcuts, colors, Tab completion and the overview of the commands that Gash adds to an interactive Bash."},
 	{Key: "files", Title: "Files and archives", Summary: "Find what fills a disk, summarize a tree, extract any archive and back up a file."},
 	{Key: "system", Title: "System", Summary: "Processes, ports, services, disks, sudo history and a system report."},
 	{Key: "git", Title: "Git", Summary: "Sync, tags, patches, repository repair and the gl* log shortcuts."},

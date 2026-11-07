@@ -5,65 +5,67 @@ checking the installation, installing the tools a function needs, reading
 the settings, updating to a new release, and unloading or removing Gash.
 Installing Gash the first time is in [install.md](../install.md).
 
-Platforms: Linux, macOS and WSL. `gash_doctor --timing` needs Bash 5.0 or
-newer. `gash_doctor --install` needs one of the package managers apt, dnf,
+Platforms: Linux, macOS and WSL. `gash doctor --timing` needs Bash 5.0 or
+newer. `gash doctor --install` needs one of the package managers apt, dnf,
 pacman, zypper, apk or Homebrew.
 
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [ssh-keygen](../requirements.md#tool-ssh-keygen) (optional), for `gash_upgrade` (GASH_REQUIRE_SIGNED=1) and `gash update` (GASH_REQUIRE_SIGNED=1)
+- [ssh-keygen](../requirements.md#tool-ssh-keygen) (optional), for `gash update` (GASH_REQUIRE_SIGNED=1)
 - [bc](../requirements.md#tool-bc) (optional), for `gash init` (the calc alias)
-- [cosign](../requirements.md#tool-cosign) (optional), for `gash_upgrade` (GASH_REQUIRE_SIGNED=1) and `gash update` (GASH_REQUIRE_SIGNED=1)
-- [gpg](../requirements.md#tool-gpg) (optional), for `gash_upgrade` (GASH_REQUIRE_SIGNED=1) and `gash update` (GASH_REQUIRE_SIGNED=1)
+- [cosign](../requirements.md#tool-cosign) (optional), for `gash update` (GASH_REQUIRE_SIGNED=1)
+- [gpg](../requirements.md#tool-gpg) (optional), for `gash update` (GASH_REQUIRE_SIGNED=1)
 <!-- END generated: prerequisites -->
 
-## Find a function and its help
+## Find a command and its help
 
-`gash` alone prints the reference card: one line per topic, with the number
-of functions and aliases in it. `gash TOPIC` lists the functions and
-aliases of one topic (`gash git`, `gash docker`, `gash llm`), and
-`gash all` the whole card. In an interactive shell the card lists only the
-aliases the shell defines: an alias left out because a program of the same
-name is installed does not appear.
+Every command is `gash NAMESPACE COMMAND`. `gash` alone prints the
+overview: the namespaces, one line each, and Gash's own commands.
+`gash NAMESPACE` lists the commands of one namespace with their usage and
+shortcut (`gash git`, `gash docker`, `gash llm`), and `gash all` every
+namespace. Tab completes the namespaces, the commands, their options with
+a description, and the values they take.
 
-`gash_help NAME` prints the full help of a function, with examples. It
-accepts an alias (`gash_help flf` is the help of `files_largest`), and
-every function also prints its help with `--help`. To find a function by
+`gash help NAME` prints the full help of a command, with examples. It
+accepts a shortcut (`gash help flf` is the help of `gash files largest`)
+or a former name, suggests the closest command for a mistyped one, and
+every command also prints its help with `--help`. To find a command by
 what it does, search all the help text:
 
 <!-- example -->
 ```console
-$ gash_help --search uninstall
+$ gash help --search uninstall
 
   Search results for 'uninstall':
 
-  gash_uninstall                        Uninstall Gash and clean up configurations
-  nvm_prune_versions      (nvmp)        Remove duplicate/older NVM patch versions
+  gash runtime prune node  nvmp  Remove duplicate/older NVM patch versions
+  gash uninstall                 Uninstall Gash and clean up configurations
 ```
 
 `--short` prints the one-line description only, for scripts:
 
 <!-- example -->
 ```console
-$ gash_help --short files_largest
+$ gash help --short files_largest
 List the largest files under a path with size/exclude/json filters
 ```
 
-`gash_help --list` lists every function by module, and
-`gash_help --bash cd` shows the help of a Bash builtin. The generated
+`gash help --list` lists every command by namespace, `gash help shortcuts`
+every shortcut, and
+`gash help --bash cd` shows the help of a Bash builtin. The generated
 references of each area hold the same help text: start from the
 [documentation index](../README.md).
 
-See [`gash_help`](reference.md#gash_help) and [`gash`](reference.md#gash).
+See [`gash help`](reference.md#gash-help) and [`gash`](reference.md#gash).
 
 ## Check the installation
 
-`gash_doctor` (alias `gdoctor`) checks everything Gash depends on and
+`gash doctor` (alias `gdoctor`) checks everything Gash depends on and
 prints one line per check:
 
 ```bash
-gash_doctor
+gash doctor
 ```
 
 | Section | What it checks |
@@ -95,7 +97,7 @@ The options that matter:
   Steps of 5 ms or more stand out.
 
 [requirements.md](../requirements.md) lists every tool with its package on
-each distribution. See [`gash_doctor`](reference.md#gash_doctor) for the
+each distribution. See [`gash doctor`](reference.md#gash-doctor) for the
 rest.
 
 ## Install a missing tool
@@ -106,19 +108,19 @@ doing anything and says so. In a terminal the first line is
 function (with the option that needs the tool, when only one does). The
 next line says what TOOL is for and which package provides it on this
 system, then `Install it:` gives the install command and `Or run:` the
-`gash_doctor --install TOOL` that runs it for you. A few functions still
+`gash doctor --install TOOL` that runs it for you. A few functions still
 print the shorter `Error: Command 'TOOL' is not installed or not in PATH.`:
 the fix is the same.
 
 Run the install command it shows, or let Gash run it:
 
 ```bash
-gash_doctor --install rsync ssh    # the named tools
-gash_doctor --install              # every missing tool that a function needs
-gash_doctor --install --all        # the optional tools too
+gash doctor --install rsync ssh    # the named tools
+gash doctor --install              # every missing tool that a function needs
+gash doctor --install --all        # the optional tools too
 ```
 
-`gash_doctor --install` prints the packages and the command, asks before it
+`gash doctor --install` prints the packages and the command, asks before it
 runs anything (`--yes` skips the question), fetches the package lists first
 where the manager needs it (apt, apk), then checks again that each tool is
 found. Some tools have no package Gash can install: Docker, Compose,
@@ -143,8 +145,8 @@ SSH keys, database connections, AI tokens and remote hosts. Create it from
 the template:
 
 ```bash
-gash_env_init            # ~/.gash_env, mode 600; never overwrites an existing file
-gash_env_init --force    # replace it with a fresh template
+gash config init            # ~/.gash_env, mode 600; never overwrites an existing file
+gash config init --force    # replace it with a fresh template
 ```
 
 Your own aliases and shell code go in `~/.bash_aliases` and
@@ -158,7 +160,7 @@ gash update               # or gash_upgrade: move to the newest release
 gash update --rollback    # back to the version the last update replaced
 ```
 
-`gash update` and `gash_upgrade` run the same steps:
+`gash update` runs these steps:
 
 1. They refuse an install directory with local changes (commit, stash or
    discard them first).
@@ -177,7 +179,7 @@ it, and a second rollback comes back. The exit status is 0 when Gash was
 updated or was already up to date, 1 when the update was refused or failed
 (nothing changed, or the previous version is back), 2 for a bad argument.
 
-See [`gash_upgrade`](reference.md#gash_upgrade) and
+See [`gash update`](reference.md#gash-update) and
 [`gash update`](reference.md#gash-update).
 
 ### Require a signed release
@@ -213,7 +215,7 @@ In a shell, `$GASH_VERSION` holds the version of the loaded tree.
 
 ## Unload Gash from this shell
 
-`gash_unload` removes Gash from the current shell and changes nothing on
+`gash unload` removes Gash from the current shell and changes nothing on
 disk: every Gash function, alias and `GASH_*` variable goes, the prompt,
 history settings, `PATH`, `EDITOR` and the umask return to how they were
 before Gash loaded, and so do the variables Gash set (`LS_COLORS`,
@@ -224,13 +226,13 @@ before Gash loaded, and so do the variables Gash set (`LS_COLORS`,
 ```console
 $ type -t gash_doctor
 function
-$ gash_unload
+$ gash unload
 $ type -t gash_doctor || echo "not defined"
 not defined
 ```
 
-`gash_unload` works in an interactive shell only. See
-[`gash_unload`](reference.md#gash_unload).
+`gash unload` works in an interactive shell only. See
+[`gash unload`](reference.md#gash-unload).
 
 ## Remove Gash
 
@@ -239,10 +241,10 @@ the stack and restores the system files it changed (see the
 [HTE guide](../hte/README.md)). Then:
 
 ```bash
-gash_uninstall
+gash uninstall
 ```
 
-`gash_uninstall` asks first, in a terminal only: without one (a script, an
+`gash uninstall` asks first, in a terminal only: without one (a script, an
 agent) it prints `Info: Uninstall cancelled.` and removes nothing. After
 you confirm it:
 
@@ -283,12 +285,12 @@ has the steps.
 
 | Message | Meaning and fix |
 |---|---|
-| `NEED needs TOOL, which is not installed` | A function needs a program this system lacks. Run the install command the message shows, or `gash_doctor --install TOOL`. |
-| `Unknown tool: NAME (gash_doctor --prereqs lists them)` | `gash_doctor --install` takes the names of the Prerequisites list (`ssh`, `7z`, `gnu-sed`), not package names. |
+| `NEED needs TOOL, which is not installed` | A function needs a program this system lacks. Run the install command the message shows, or `gash doctor --install TOOL`. |
+| `Unknown tool: NAME (gash_doctor --prereqs lists them)` | `gash doctor --install` takes the names of the Prerequisites list (`ssh`, `7z`, `gnu-sed`), not package names. |
 | `Installing packages needs root, and sudo is not installed` | Run the command it prints as root. |
 | `Working tree at DIR has local modifications` | `gash update` never overwrites your edits. `git -C ~/.gash stash` keeps them, `git -C ~/.gash checkout -- .` discards them. |
 | `GASH_REQUIRE_SIGNED=1 is set; not upgrading to TAG` | No signature of the release could be verified. Install `cosign` (or the key of a signed tag), or update without `GASH_REQUIRE_SIGNED=1`. |
-| `TAG failed its smoke test (...)` | The new version did not load in a test shell; the previous one is checked out again and nothing else changed. Run `gash_doctor` and report the message. |
+| `TAG failed its smoke test (...)` | The new version did not load in a test shell; the previous one is checked out again and nothing else changed. Run `gash doctor` and report the message. |
 | `No previous version of DIR to return to` | `gash update --rollback` has nothing recorded; check out a release tag by hand: `git -C ~/.gash checkout vX.Y.Z`. |
 | `gash VERSION for OS/ARCH is not installed and could not be downloaded (REASON)` | The binary of this version is missing. The hint names the missing download tool, or says to run `bash ~/.gash/install.sh --repair`. |
 

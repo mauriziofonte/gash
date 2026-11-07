@@ -22,7 +22,7 @@ unset __gash_here
 
 sysinfo() { __gash_call sysinfo "$@"; }
 
-alias si='sysinfo'
+alias si='gash system info'
 
 # Sourcing never fails: the status of this file is 0.
 true

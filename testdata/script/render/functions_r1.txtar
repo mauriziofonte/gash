@@ -4,9 +4,9 @@
 #
 # R1: every public human-facing function has a fixture. In Go mode the help
 # registry lives in the binary (the bash __GASH_HELP_REGISTRY is empty), so
-# the public surface is enumerated with `gash help all`. This case proves the
-# surface is complete and introspectable - the count line plus a representative
-# function from each topic group (files, system, git, docker, remote, dev).
+# the public surface is enumerated with `gash help --list` (every command, by
+# namespace). This case proves the surface is complete and introspectable - a
+# representative command from each namespace group (files, system, docker, wsl).
 # The per-function fixture requirement itself is enforced by the covermap gate,
 # which fails if any render row is left without a `# covers:` declaration.
 
@@ -16,13 +16,14 @@ env LC_ALL=C.UTF-8
 env GASH__COLOR=0
 env COLUMNS=100
 
-exec gash help all
-stdout '[0-9]+ functions'
-stdout '(?m)^  archive_extract'
-stdout '(?m)^  disk_usage'
-stdout '(?m)^  ip_public'
-stdout '(?m)^  process_kill'
-stdout '(?m)^  sysinfo'
-stdout '(?m)^  docker_compose_check'
-stdout '(?m)^  wsl_restart'
+exec gash help --list
+stdout '(?m)^  gash files '
+stdout '(?m)^    extract '
+stdout '(?m)^  gash system '
+stdout '(?m)^    disks '
+stdout '(?m)^    ip '
+stdout '(?m)^    kill '
+stdout '(?m)^    info '
+stdout '(?m)^    compose check '
+stdout '(?m)^    restart '
 ! stdout '\x1b'

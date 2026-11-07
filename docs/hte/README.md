@@ -272,7 +272,7 @@ linger, the hosts helper and its sudoers line, the macOS port redirect.
 Your sites, their certificates and settings move to an
 `hte-stage-TIMESTAMP` directory, which a later `install` restores
 (`--restore-stage PATH` names one, `--no-restore` skips it). Document roots
-are never touched. Run it before `gash_uninstall` when you remove Gash.
+are never touched. Run it before `gash uninstall` when you remove Gash.
 
 See [`gash hte uninstall`](reference.md#gash-hte-uninstall).
 

@@ -33,8 +33,8 @@ ai_sysinfo() {
     __gash_call ai_sysinfo "$@"
 }
 
-alias ask='ai_ask'
-alias sysinfo_ai='ai_sysinfo'
+alias ask='gash ai ask'
+alias sysinfo_ai='gash ai sysinfo'
 
 # Sourcing never fails: the status of this file is 0.
 true

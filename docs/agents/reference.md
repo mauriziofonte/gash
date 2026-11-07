@@ -2,75 +2,77 @@
 
 # Tools for AI agents: reference
 
-The read-only llm_* functions and the agent_* write tools that AI coding agents call: one JSON answer per call, with the safety rails of AGENTS.md. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+The read-only llm_* functions and the agent_* write tools that AI coding agents call: one JSON answer per call, with the safety rails of AGENTS.md. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Read-only functions (llm_*)
+## Read-only commands (gash llm, llm_*)
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`llm_assert`](#llm_assert) |  | Check that files hold, lack or count patterns; exit 0 only if all pass |
-| [`llm_config`](#llm_config) |  | Read a file that is not secret (YAML as JSON) |
-| [`llm_count`](#llm_count) |  | Count several patterns in several files in one pass per file |
-| [`llm_csv`](#llm_csv) |  | Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l) |
-| [`llm_date`](#llm_date) |  | Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime) |
-| [`llm_db_databases`](#llm_db_databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
-| [`llm_db_explain`](#llm_db_explain) |  | Show query execution plan (EXPLAIN) |
-| [`llm_db_query`](#llm_db_query) |  | Read-only SQL query (JSON output) |
-| [`llm_db_sample`](#llm_db_sample) |  | Sample rows from a table (default 5 rows) |
-| [`llm_db_schema`](#llm_db_schema) |  | Show table schema (columns, types, keys) |
-| [`llm_db_tables`](#llm_db_tables) |  | List database tables (JSON array) |
-| [`llm_deps`](#llm_deps) |  | List project dependencies (JSON) |
-| [`llm_dns`](#llm_dns) |  | DNS records of several names at once (JSON) |
-| [`llm_docker_exec`](#llm_docker_exec) |  | Run a read-only command in a container, no shell quoting (JSON) |
-| [`llm_docker_logs`](#llm_docker_logs) |  | Last log lines of a container, optionally filtered (JSON) |
-| [`llm_docker_ps`](#llm_docker_ps) |  | Docker containers with state, health and ports (JSON) |
-| [`llm_dotenv`](#llm_dotenv) |  | Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env) |
-| [`llm_env`](#llm_env) |  | Filtered environment variables (secrets excluded) |
-| [`llm_exec`](#llm_exec) |  | Safe command execution wrapper for AI agents |
-| [`llm_find`](#llm_find) |  | Find files by pattern (ignores noise directories) |
-| [`llm_git_diff`](#llm_git_diff) |  | Git diff with statistics |
-| [`llm_git_log`](#llm_git_log) |  | Recent commits (JSON) |
-| [`llm_git_overview`](#llm_git_overview) |  | Repository state in one small object (JSON) |
-| [`llm_git_show`](#llm_git_show) |  | A commit's metadata and files, its patch, or a file at a revision |
-| [`llm_git_status`](#llm_git_status) |  | Compact git status (JSON) |
-| [`llm_grep`](#llm_grep) |  | Search code with structured file:line:content output |
-| [`llm_hash`](#llm_hash) |  | Hash files in parallel (sha256 or md5) |
-| [`llm_http`](#llm_http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
-| [`llm_json`](#llm_json) |  | One value, the keys or the shape of a JSON file (replaces python3 json.load, jq) |
-| [`llm_lint`](#llm_lint) |  | Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py) |
-| [`llm_log`](#llm_log) |  | Last lines of a log, read from the end, by pattern, time and level |
-| [`llm_ports`](#llm_ports) |  | List ports in use (JSON) |
-| [`llm_procs`](#llm_procs) |  | List processes by name, port or PID, alive or not, as a tree (JSON) |
-| [`llm_project`](#llm_project) |  | Detect project type and framework (JSON) |
-| [`llm_read`](#llm_read) |  | Read files, line ranges or the lines around a match, numbered |
-| [`llm_remote_run`](#llm_remote_run) |  | Run a read-only command on registered hosts, in parallel or in steps |
-| [`llm_runtime`](#llm_runtime) |  | Resolve a node major or php version to its binary, without nvm.sh |
-| [`llm_same`](#llm_same) |  | Is the deployed copy the local one? Hash both sides, list the differences |
-| [`llm_service`](#llm_service) |  | State and last journal lines of systemd units (JSON) |
-| [`llm_stat`](#llm_stat) |  | Metadata of several paths: type, size, mode, owner, mtime, lines |
-| [`llm_sysinfo`](#llm_sysinfo) |  | Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON) |
-| [`llm_tcp`](#llm_tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
-| [`llm_textcheck`](#llm_textcheck) |  | Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines |
-| [`llm_textstats`](#llm_textstats) |  | Lines, words, characters, bytes, gzip size and longest line of files |
-| [`llm_tls`](#llm_tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
-| [`llm_tools`](#llm_tools) |  | Path and version of each tool, probed in parallel; php and node per version |
-| [`llm_tree`](#llm_tree) |  | Compact directory tree (JSON or text output) |
-| [`llm_wait`](#llm_wait) |  | Wait for a log line, a path, a process exit, a URL, a port or a command (JSON) |
+| [`gash llm assert`](#gash-llm-assert) |  | Check that files hold, lack or count patterns; exit 0 only if all pass |
+| [`gash llm config`](#gash-llm-config) |  | Read a file that is not secret (YAML as JSON) |
+| [`gash llm count`](#gash-llm-count) |  | Count several patterns in several files in one pass per file |
+| [`gash llm csv`](#gash-llm-csv) |  | Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l) |
+| [`gash llm date`](#gash-llm-date) |  | Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime) |
+| [`gash llm db-databases`](#gash-llm-db-databases) |  | List the databases of a connection (replaces SHOW DATABASES, psql -l) |
+| [`gash llm db-explain`](#gash-llm-db-explain) |  | Show query execution plan (EXPLAIN) |
+| [`gash llm db-query`](#gash-llm-db-query) |  | Read-only SQL query (JSON output) |
+| [`gash llm db-sample`](#gash-llm-db-sample) |  | Sample rows from a table (default 5 rows) |
+| [`gash llm db-schema`](#gash-llm-db-schema) |  | Show table schema (columns, types, keys) |
+| [`gash llm db-tables`](#gash-llm-db-tables) |  | List database tables (JSON array) |
+| [`gash llm deps`](#gash-llm-deps) |  | List project dependencies (JSON) |
+| [`gash llm dns`](#gash-llm-dns) |  | DNS records of several names at once (JSON) |
+| [`gash llm docker-exec`](#gash-llm-docker-exec) |  | Run a read-only command in a container, no shell quoting (JSON) |
+| [`gash llm docker-logs`](#gash-llm-docker-logs) |  | Last log lines of a container, optionally filtered (JSON) |
+| [`gash llm docker-ps`](#gash-llm-docker-ps) |  | Docker containers with state, health and ports (JSON) |
+| [`gash llm dotenv`](#gash-llm-dotenv) |  | Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env) |
+| [`gash llm env`](#gash-llm-env) |  | Filtered environment variables (secrets excluded) |
+| [`gash llm exec`](#gash-llm-exec) |  | Safe command execution wrapper for AI agents |
+| [`gash llm find`](#gash-llm-find) |  | Find files by pattern (ignores noise directories) |
+| [`gash llm git-diff`](#gash-llm-git-diff) |  | Git diff with statistics |
+| [`gash llm git-log`](#gash-llm-git-log) |  | Recent commits (JSON) |
+| [`gash llm git-overview`](#gash-llm-git-overview) |  | Repository state in one small object (JSON) |
+| [`gash llm git-show`](#gash-llm-git-show) |  | A commit's metadata and files, its patch, or a file at a revision |
+| [`gash llm git-status`](#gash-llm-git-status) |  | Compact git status (JSON) |
+| [`gash llm grep`](#gash-llm-grep) |  | Search code with structured file:line:content output |
+| [`gash llm hash`](#gash-llm-hash) |  | Hash files in parallel (sha256 or md5) |
+| [`gash llm http`](#gash-llm-http) |  | Probe several URLs at once: status, timings, headers, JSON value (JSON) |
+| [`gash llm json`](#gash-llm-json) |  | One value, the keys or the shape of a JSON file (replaces python3 json.load, jq) |
+| [`gash llm lint`](#gash-llm-lint) |  | Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py) |
+| [`gash llm log`](#gash-llm-log) |  | Last lines of a log, read from the end, by pattern, time and level |
+| [`gash llm ports`](#gash-llm-ports) |  | List ports in use (JSON) |
+| [`gash llm procs`](#gash-llm-procs) |  | List processes by name, port or PID, alive or not, as a tree (JSON) |
+| [`gash llm project`](#gash-llm-project) |  | Detect project type and framework (JSON) |
+| [`gash llm read`](#gash-llm-read) |  | Read files, line ranges or the lines around a match, numbered |
+| [`gash llm remote-run`](#gash-llm-remote-run) |  | Run a read-only command on registered hosts, in parallel or in steps |
+| [`gash llm runtime`](#gash-llm-runtime) |  | Resolve a node major or php version to its binary, without nvm.sh |
+| [`gash llm same`](#gash-llm-same) |  | Is the deployed copy the local one? Hash both sides, list the differences |
+| [`gash llm service`](#gash-llm-service) |  | State and last journal lines of systemd units (JSON) |
+| [`gash llm stat`](#gash-llm-stat) |  | Metadata of several paths: type, size, mode, owner, mtime, lines |
+| [`gash llm sysinfo`](#gash-llm-sysinfo) |  | Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON) |
+| [`gash llm tcp`](#gash-llm-tcp) |  | Can a TCP connection be opened to each HOST:PORT (JSON) |
+| [`gash llm textcheck`](#gash-llm-textcheck) |  | Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines |
+| [`gash llm textstats`](#gash-llm-textstats) |  | Lines, words, characters, bytes, gzip size and longest line of files |
+| [`gash llm tls`](#gash-llm-tls) |  | TLS certificate of several hosts at once: expiry, SANs, issuer (JSON) |
+| [`gash llm tools`](#gash-llm-tools) |  | Path and version of each tool, probed in parallel; php and node per version |
+| [`gash llm tree`](#gash-llm-tree) |  | Compact directory tree (JSON or text output) |
+| [`gash llm wait`](#gash-llm-wait) |  | Wait for a log line, a path, a process exit, a URL, a port or a command (JSON) |
 
-## Write functions (agent_*)
+## Write commands (gash agent, agent_*)
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`agent_docker_exec`](#agent_docker_exec) |  | Run any command in a container, no shell quoting (JSON) |
-| [`agent_git_commit`](#agent_git_commit) |  | Stage explicit paths, commit, optionally push, in one call |
-| [`agent_kill`](#agent_kill) |  | Signal processes by PID or command line, never the caller (JSON) |
-| [`agent_put`](#agent_put) |  | Upload a file to a registered host: atomic, optional backup and hash check |
-| [`agent_replace`](#agent_replace) |  | Replace text in explicit files, all or nothing |
-| [`agent_test`](#agent_test) |  | Run a test suite and summarize it: counts and each failure's file:line |
+| [`gash agent docker-exec`](#gash-agent-docker-exec) |  | Run any command in a container, no shell quoting (JSON) |
+| [`gash agent git-commit`](#gash-agent-git-commit) |  | Stage explicit paths, commit, optionally push, in one call |
+| [`gash agent kill`](#gash-agent-kill) |  | Signal processes by PID or command line, never the caller (JSON) |
+| [`gash agent put`](#gash-agent-put) |  | Upload a file to a registered host: atomic, optional backup and hash check |
+| [`gash agent replace`](#gash-agent-replace) |  | Replace text in explicit files, all or nothing |
+| [`gash agent test`](#gash-agent-test) |  | Run a test suite and summarize it: counts and each failure's file:line |
 
-### agent_docker_exec
+### gash agent docker-exec
 
 Run any command in a container, no shell quoting (JSON).
+
+Also `agent_docker_exec`, the name agents call.
 
 Replaces:
 
@@ -79,7 +81,7 @@ Replaces:
 #### Usage
 
 ```text
-agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
+gash agent docker-exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
 ```
 
 #### Options
@@ -97,8 +99,8 @@ agent_docker_exec CTR [--user U] [--dry-run] [--width N] [--max-lines N] [--head
 
 ```bash
 # Instead of: docker exec -u www-data app sh -c 'php artisan migrate --force'
-agent_docker_exec app --user www-data -- php artisan migrate --force
-agent_docker_exec app --dry-run -- composer install --no-dev
+gash agent docker-exec app --user www-data -- php artisan migrate --force
+gash agent docker-exec app --dry-run -- composer install --no-dev
 ```
 
 #### Notes
@@ -115,11 +117,13 @@ llm_docker_exec: {"rc","out","err"}, exit status 0 when the command
 ran (read rc); --dry-run: {"argv":[...],"dry_run":true,"written":false}.
 ```
 
-See also: [`llm_docker_exec`](../agents/reference.md#llm_docker_exec)
+See also: [`gash llm docker-exec`](../agents/reference.md#gash-llm-docker-exec)
 
-### agent_git_commit
+### gash agent git-commit
 
 Stage explicit paths, commit, optionally push, in one call.
+
+Also `agent_git_commit`, the name agents call.
 
 Replaces:
 
@@ -128,9 +132,9 @@ Replaces:
 #### Usage
 
 ```text
-agent_git_commit -m SUBJECT [-m BODY]... (--add PATH... | -A) [--author "N <e>"]
-                 [--push [REMOTE]] [--dry-run] [--force] [--timeout S] [--format F]
-                 [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+gash agent git-commit -m SUBJECT [-m BODY]... (--add PATH... | -A) [--author "N <e>"]
+                      [--push [REMOTE]] [--dry-run] [--force] [--timeout S] [--format F]
+                      [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
@@ -159,11 +163,11 @@ agent_git_commit -m SUBJECT [-m BODY]... (--add PATH... | -A) [--author "N <e>"]
 
 ```bash
 # Commit two files and push to the upstream
-agent_git_commit -m 'fix: parser' -m 'Handles empty input.' --add src/p.go src/p_test.go --push
+gash agent git-commit -m 'fix: parser' -m 'Handles empty input.' --add src/p.go src/p_test.go --push
 # {"hash":"a1b2c3d","branch":"main","files":2,"pushed":true,"remote":"origin","ahead":0}
 
 # Preview a commit of every change in another repository
-agent_git_commit -m 'chore: update' -A --dry-run ~/src/site
+gash agent git-commit -m 'chore: update' -A --dry-run ~/src/site
 ```
 
 #### Notes
@@ -185,11 +189,13 @@ with the paths left staged; a push the remote refuses is push_rejected
 ahead is null without an upstream to compare with.
 ```
 
-See also: [`llm_git_overview`](../agents/reference.md#llm_git_overview), [`llm_git_status`](../agents/reference.md#llm_git_status)
+See also: [`gash llm git-overview`](../agents/reference.md#gash-llm-git-overview), [`gash llm git-status`](../agents/reference.md#gash-llm-git-status)
 
-### agent_kill
+### gash agent kill
 
 Signal processes by PID or command line, never the caller (JSON).
+
+Also `agent_kill`, the name agents call.
 
 Replaces:
 
@@ -198,7 +204,7 @@ Replaces:
 #### Usage
 
 ```text
-agent_kill NAME|PID... [--signal S] [--dry-run] [--format F]
+gash agent kill NAME|PID... [--signal S] [--dry-run] [--format F]
 ```
 
 #### Options
@@ -217,9 +223,9 @@ PID                    One process
 
 ```bash
 # Instead of: pkill -f 'artisan serve' (exit 1 when nothing runs)
-agent_kill 'artisan serve' --dry-run
-agent_kill 'artisan serve'
-agent_kill 4242 4243 --signal KILL
+gash agent kill 'artisan serve' --dry-run
+gash agent kill 'artisan serve'
+gash agent kill 4242 4243 --signal KILL
 ```
 
 #### Notes
@@ -235,11 +241,13 @@ Output {"killed":N,"pids":[...]}; --dry-run adds "cmds", "signal",
 exit: llm_wait --gone PID does.
 ```
 
-See also: [`llm_procs`](../agents/reference.md#llm_procs)
+See also: [`gash llm procs`](../agents/reference.md#gash-llm-procs)
 
-### agent_put
+### gash agent put
 
 Upload a file to a registered host: atomic, optional backup and hash check.
+
+Also `agent_put`, the name agents call.
 
 Replaces:
 
@@ -248,7 +256,7 @@ Replaces:
 #### Usage
 
 ```text
-agent_put ALIAS:PATH --from FILE|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]
+gash agent put ALIAS:PATH --from FILE|- [--mode M] [--backup] [--verify] [--force] [--dry-run] [--timeout S]
 ```
 
 #### Options
@@ -269,10 +277,10 @@ agent_put ALIAS:PATH --from FILE|- [--mode M] [--backup] [--verify] [--force] [-
 
 ```bash
 # Deploy one file, keep the old one, check what arrived
-agent_put web:/var/www/app/config.php --from config.php --backup --verify --force
+gash agent put web:/var/www/app/config.php --from config.php --backup --verify --force
 
 # Generated content from stdin, into the remote home
-printf '%s\n' "$TOKEN_LINE" | agent_put web:app/.version --from -
+printf '%s\n' "$TOKEN_LINE" | gash agent put web:app/.version --from -
 ```
 
 #### Notes
@@ -293,9 +301,11 @@ write_path_denied (FATAL, even with --force), ASK paths sensitive_path
 "exists" and "dry_run":true,"written":false.
 ```
 
-### agent_replace
+### gash agent replace
 
 Replace text in explicit files, all or nothing.
+
+Also `agent_replace`, the name agents call.
 
 Replaces:
 
@@ -304,7 +314,7 @@ Replaces:
 #### Usage
 
 ```text
-agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dry-run] [--force] [--format F] [--width N] [--host ALIAS]
+gash agent replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dry-run] [--force] [--format F] [--width N] [--host ALIAS]
 ```
 
 #### Options
@@ -333,13 +343,13 @@ agent_replace FILE... (--old A --new B)... [--count N | --min N] [--regex] [--dr
 
 ```bash
 # Rename a class in two files; fails, writing nothing, unless each has it once
-agent_replace app/A.php app/B.php --old 'OldName' --new 'NewName'
+gash agent replace app/A.php app/B.php --old 'OldName' --new 'NewName'
 
 # Every occurrence, at least one per file, preview first
-agent_replace src/x.js src/y.js --old 'var ' --new 'let ' --min 1 --dry-run
+gash agent replace src/x.js src/y.js --old 'var ' --new 'let ' --min 1 --dry-run
 
 # Two pairs, a regular expression with a group
-agent_replace conf.ini --old 'debug=1' --new 'debug=0' --old 'v([0-9]+)' --new 'v$1-lts' --regex
+gash agent replace conf.ini --old 'debug=1' --new 'debug=0' --old 'v([0-9]+)' --new 'v$1-lts' --regex
 ```
 
 #### Notes
@@ -357,9 +367,11 @@ files and files over 64 MiB are refused. Output:
 {"files":N,"replaced":{"FILE":[n1,n2]},"written":true}.
 ```
 
-### agent_test
+### gash agent test
 
 Run a test suite and summarize it: counts and each failure's file:line.
+
+Also `agent_test`, the name agents call.
 
 Replaces:
 
@@ -368,8 +380,8 @@ Replaces:
 #### Usage
 
 ```text
-agent_test [--runner auto|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S]
-           [--absolute] -- CMD...
+gash agent test [--runner auto|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry-run] [--max-lines N] [--width N] [--timeout S]
+                [--absolute] -- CMD...
 ```
 
 #### Options
@@ -396,16 +408,16 @@ agent_test [--runner auto|NAME] [--fail-only] [--runtime NAME:VERSION]... [--dry
 
 ```bash
 # Pest with a filter
-agent_test -- vendor/bin/pest --filter UserTest
+gash agent test -- vendor/bin/pest --filter UserTest
 
 # A package script; silent when green
-agent_test --fail-only -- npm test
+gash agent test --fail-only -- npm test
 
 # Go with the JSON reporter
-agent_test -- go test -json ./...
+gash agent test -- go test -json ./...
 
 # The suite under the node version the project pins
-agent_test --runtime node:project -- npm test
+gash agent test --runtime node:project -- npm test
 ```
 
 #### Notes
@@ -436,11 +448,13 @@ before --; a program not on PATH is command_not_found. The suite runs
 without llm_exec's rails.
 ```
 
-See also: [`llm_lint`](../agents/reference.md#llm_lint)
+See also: [`gash llm lint`](../agents/reference.md#gash-llm-lint)
 
-### llm_assert
+### gash llm assert
 
 Check that files hold, lack or count patterns; exit 0 only if all pass.
+
+Also `llm_assert`, the name agents call.
 
 Replaces:
 
@@ -449,8 +463,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | --occurrences] [-j N] [--timeout S] [--absolute]
-           [--host ALIAS]
+gash llm assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | --occurrences] [-j N] [--timeout S] [--absolute]
+                [--host ALIAS]
 ```
 
 #### Options
@@ -474,8 +488,8 @@ llm_assert FILE... (--has P | --lacks P | --count P=N)... [--regex] [--lines | -
 
 ```bash
 # After an edit: the new name is in, the old one is gone, one route
-llm_assert app/A.php app/B.php --has 'NewName' --lacks 'OldName'
-llm_assert routes/web.php --count "Route::get('/health'=1"
+gash llm assert app/A.php app/B.php --has 'NewName' --lacks 'OldName'
+gash llm assert routes/web.php --count "Route::get('/health'=1"
 ```
 
 #### Notes
@@ -490,11 +504,13 @@ check as has:P, lacks:P or count:P=N; a FILE that cannot be read fails as
 refused (secret_file_blocked, FATAL); a bad --count is invalid_assertion.
 ```
 
-See also: [`llm_count`](../agents/reference.md#llm_count)
+See also: [`gash llm count`](../agents/reference.md#gash-llm-count)
 
-### llm_config
+### gash llm config
 
 Read a file that is not secret (YAML as JSON).
+
+Also `llm_config`, the name agents call.
 
 Replaces:
 
@@ -504,7 +520,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]
+gash llm config FILE [--max-bytes N] [--path P] [--host ALIAS]
 ```
 
 #### Options
@@ -520,12 +536,12 @@ llm_config FILE [--max-bytes N] [--path P] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_config package.json
-llm_config docker-compose.yml
-llm_config big.json --max-bytes 5000000
-llm_config pyproject.toml --path project.dependencies
-llm_config setup.cfg --path metadata.version
-llm_config k8s.yaml --path '[1].spec.replicas'
+gash llm config package.json
+gash llm config docker-compose.yml
+gash llm config big.json --max-bytes 5000000
+gash llm config pyproject.toml --path project.dependencies
+gash llm config setup.cfg --path metadata.version
+gash llm config k8s.yaml --path '[1].spec.replicas'
 ```
 
 #### Notes
@@ -547,9 +563,11 @@ invalid_config, a path that does not exist json_path_not_found with
 the nearest existing prefix (both RETRY).
 ```
 
-### llm_count
+### gash llm count
 
 Count several patterns in several files in one pass per file.
+
+Also `llm_count`, the name agents call.
 
 Replaces:
 
@@ -558,8 +576,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-j N] [--timeout S] [--absolute]
-          [--host ALIAS]
+gash llm count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-j N] [--timeout S] [--absolute]
+               [--host ALIAS]
 ```
 
 #### Options
@@ -583,8 +601,8 @@ llm_count FILE... --pat P... [--regex] [--lines | --occurrences] [--format F] [-
 #### Examples
 
 ```bash
-llm_count storage/logs/laravel.log --pat ERROR --pat WARNING --pat 'Timeout'
-llm_count a.md b.md --pat '## ' --format tsv
+gash llm count storage/logs/laravel.log --pat ERROR --pat WARNING --pat 'Timeout'
+gash llm count a.md b.md --pat '## ' --format tsv
 ```
 
 #### Notes
@@ -600,11 +618,13 @@ line break invalid_filter. Secret files are refused (secret_file_blocked,
 FATAL). For a case-insensitive count use --regex with (?i).
 ```
 
-See also: [`llm_assert`](../agents/reference.md#llm_assert), [`llm_grep`](../agents/reference.md#llm_grep)
+See also: [`gash llm assert`](../agents/reference.md#gash-llm-assert), [`gash llm grep`](../agents/reference.md#gash-llm-grep)
 
-### llm_csv
+### gash llm csv
 
 Header, sample and row count of a CSV file (replaces python3 csv.reader, wc -l).
+
+Also `llm_csv`, the name agents call.
 
 Replaces:
 
@@ -613,8 +633,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
-        [--format json|jsonl|tsv|table] [--host ALIAS]
+gash llm csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
+             [--format json|jsonl|tsv|table] [--host ALIAS]
 ```
 
 #### Options
@@ -635,10 +655,10 @@ llm_csv FILE [--head N] [--cols] [--count] [--delim C] [--where COL=V]
 #### Examples
 
 ```bash
-llm_csv export.csv
-llm_csv export.csv --head 2 --count
-llm_csv data.csv --where status=failed --count --head 10
-llm_csv report.txt --delim ';' --cols
+gash llm csv export.csv
+gash llm csv export.csv --head 2 --count
+gash llm csv data.csv --where status=failed --count --head 10
+gash llm csv report.txt --delim ';' --cols
 ```
 
 #### Notes
@@ -658,11 +678,13 @@ With --format jsonl, tsv or table the sample rows print under the
 header and the rest is one JSON line on stderr.
 ```
 
-See also: [`llm_json`](../agents/reference.md#llm_json), [`llm_config`](../agents/reference.md#llm_config)
+See also: [`gash llm json`](../agents/reference.md#gash-llm-json), [`gash llm config`](../agents/reference.md#gash-llm-config)
 
-### llm_date
+### gash llm date
 
 Portable date arithmetic: differences, additions, Unix times (replaces date -d, python datetime).
+
+Also `llm_date`, the name agents call.
 
 Replaces:
 
@@ -671,8 +693,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]
-         [--fmt FORMAT]
+gash llm date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]
+              [--fmt FORMAT]
 ```
 
 #### Options
@@ -692,11 +714,11 @@ llm_date [--diff A B | --add DATE DURATION | --epoch X] [--tz ZONE]
 #### Examples
 
 ```bash
-llm_date --diff 2026-10-25 2026-12-31
-llm_date --add now -600s --fmt '%Y-%m-%dT%H:%M:%S'
-llm_date --add 2026-01-31 1mo
-llm_date --epoch 1700000000 --tz UTC
-llm_date --tz America/New_York
+gash llm date --diff 2026-10-25 2026-12-31
+gash llm date --add now -600s --fmt '%Y-%m-%dT%H:%M:%S'
+gash llm date --add 2026-01-31 1mo
+gash llm date --epoch 1700000000 --tz UTC
+gash llm date --tz America/New_York
 ```
 
 #### Notes
@@ -715,11 +737,13 @@ Bad input is invalid_date, invalid_duration, invalid_timezone or
 invalid_date_format (all RETRY). The same output on Linux and macOS.
 ```
 
-See also: [`llm_env`](../agents/reference.md#llm_env)
+See also: [`gash llm env`](../agents/reference.md#gash-llm-env)
 
-### llm_db_databases
+### gash llm db-databases
 
 List the databases of a connection (replaces SHOW DATABASES, psql -l).
+
+Also `llm_db_databases`, the name agents call.
 
 Replaces:
 
@@ -728,7 +752,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_db_databases [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--format json|jsonl|tsv|table] [--scalar]
+gash llm db-databases [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -744,8 +768,8 @@ llm_db_databases [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--format json|jsonl|t
 #### Examples
 
 ```bash
-llm_db_databases -c default
-llm_db_databases -c postgres --format tsv
+gash llm db-databases -c default
+gash llm db-databases -c postgres --format tsv
 ```
 
 #### Notes
@@ -760,11 +784,13 @@ database here (PostgreSQL then connects to "postgres"). With
 and the metadata is one JSON line on stderr.
 ```
 
-See also: [`llm_db_tables`](../agents/reference.md#llm_db_tables), [`llm_db_query`](../agents/reference.md#llm_db_query)
+See also: [`gash llm db-tables`](../agents/reference.md#gash-llm-db-tables), [`gash llm db-query`](../agents/reference.md#gash-llm-db-query)
 
-### llm_db_explain
+### gash llm db-explain
 
 Show query execution plan (EXPLAIN).
+
+Also `llm_db_explain`, the name agents call.
 
 Replaces:
 
@@ -773,8 +799,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
-               [--format json|jsonl|tsv|table] [--scalar]
+gash llm db-explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
+                    [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -791,8 +817,8 @@ llm_db_explain "QUERY" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--analyze]
 #### Examples
 
 ```bash
-llm_db_explain "SELECT * FROM users WHERE email LIKE '%@example.com'" -c default
-llm_db_explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c legacy --analyze
+gash llm db-explain "SELECT * FROM users WHERE email LIKE '%@example.com'" -c default
+gash llm db-explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c legacy --analyze
 ```
 
 #### Notes
@@ -802,11 +828,13 @@ llm_db_explain "SELECT o.* FROM orders o JOIN users u ON o.user_id=u.id" -c lega
 compact JSON in its cell) and the metadata as one JSON line on stderr.
 ```
 
-See also: [`llm_db_query`](../agents/reference.md#llm_db_query)
+See also: [`gash llm db-query`](../agents/reference.md#gash-llm-db-query)
 
-### llm_db_query
+### gash llm db-query
 
 Read-only SQL query (JSON output).
+
+Also `llm_db_query`, the name agents call.
 
 Replaces:
 
@@ -817,25 +845,25 @@ Replaces:
 #### Usage
 
 ```text
-llm_db_query "SQL" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]
-             [--format json|jsonl|tsv|table] [--scalar]
+gash llm db-query "SQL" [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n ROWS]
+                  [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
 
 ```bash
 # Query using the default connection
-llm_db_query "SELECT id, name FROM users LIMIT 5"
+gash llm db-query "SELECT id, name FROM users LIMIT 5"
 
 # Query a named connection
-llm_db_query "SELECT * FROM orders WHERE status='pending'" -c legacy
+gash llm db-query "SELECT * FROM orders WHERE status='pending'" -c legacy
 
 # Query a SQLite database (no connection config needed)
-llm_db_query "SELECT * FROM users" -f ./data/app.db -n 20
+gash llm db-query "SELECT * FROM users" -f ./data/app.db -n 20
 
 # Rows as TSV, one value alone
-llm_db_query "SELECT id, email FROM users" -c default --format tsv
-llm_db_query "SELECT count(*) FROM orders" -c default --scalar
+gash llm db-query "SELECT id, email FROM users" -c default --format tsv
+gash llm db-query "SELECT count(*) FROM orders" -c default --scalar
 ```
 
 #### Options
@@ -875,11 +903,13 @@ engine's client on that registered host, one ssh round trip per query,
 after the same SQL guard (AGENTS.md 3.12).
 ```
 
-See also: [`llm_db_tables`](../agents/reference.md#llm_db_tables), [`llm_db_schema`](../agents/reference.md#llm_db_schema), [`llm_db_sample`](../agents/reference.md#llm_db_sample), [`llm_db_explain`](../agents/reference.md#llm_db_explain)
+See also: [`gash llm db-tables`](../agents/reference.md#gash-llm-db-tables), [`gash llm db-schema`](../agents/reference.md#gash-llm-db-schema), [`gash llm db-sample`](../agents/reference.md#gash-llm-db-sample), [`gash llm db-explain`](../agents/reference.md#gash-llm-db-explain)
 
-### llm_db_sample
+### gash llm db-sample
 
 Sample rows from a table (default 5 rows).
+
+Also `llm_db_sample`, the name agents call.
 
 Replaces:
 
@@ -888,16 +918,16 @@ Replaces:
 #### Usage
 
 ```text
-llm_db_sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]
-              [--format json|jsonl|tsv|table] [--scalar]
+gash llm db-sample TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB] [-n N]
+                   [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Examples
 
 ```bash
-llm_db_sample users -c default
-llm_db_sample orders -c legacy --limit 10
-llm_db_sample logs -f ./app.db -n 3
+gash llm db-sample users -c default
+gash llm db-sample orders -c legacy --limit 10
+gash llm db-sample logs -f ./app.db -n 3
 ```
 
 #### Options
@@ -911,11 +941,13 @@ llm_db_sample logs -f ./app.db -n 3
 --scalar               Print the one value of a 1x1 result
 ```
 
-See also: [`llm_db_query`](../agents/reference.md#llm_db_query), [`llm_db_schema`](../agents/reference.md#llm_db_schema)
+See also: [`gash llm db-query`](../agents/reference.md#gash-llm-db-query), [`gash llm db-schema`](../agents/reference.md#gash-llm-db-schema)
 
-### llm_db_schema
+### gash llm db-schema
 
 Show table schema (columns, types, keys).
+
+Also `llm_db_schema`, the name agents call.
 
 Replaces:
 
@@ -925,9 +957,9 @@ Replaces:
 #### Usage
 
 ```text
-llm_db_schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
-llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]
-              [--format json|jsonl|tsv|table] [--scalar]
+gash llm db-schema TABLE [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+gash llm db-schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]
+                   [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -944,10 +976,10 @@ llm_db_schema --all [-c CONNECTION | -f SQLITE_FILE] [-d DB]
 #### Examples
 
 ```bash
-llm_db_schema users -c default
-llm_db_schema orders -c legacy
-llm_db_schema sessions -f ./app.db
-llm_db_schema --all -c default --format tsv
+gash llm db-schema users -c default
+gash llm db-schema orders -c legacy
+gash llm db-schema sessions -f ./app.db
+gash llm db-schema --all -c default --format tsv
 ```
 
 #### Notes
@@ -957,11 +989,13 @@ llm_db_schema --all -c default --format tsv
 table llm_db_tables lists, sorted by table and column position.
 ```
 
-See also: [`llm_db_tables`](../agents/reference.md#llm_db_tables), [`llm_db_query`](../agents/reference.md#llm_db_query)
+See also: [`gash llm db-tables`](../agents/reference.md#gash-llm-db-tables), [`gash llm db-query`](../agents/reference.md#gash-llm-db-query)
 
-### llm_db_tables
+### gash llm db-tables
 
 List database tables (JSON array).
+
+Also `llm_db_tables`, the name agents call.
 
 Replaces:
 
@@ -971,8 +1005,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]
-              [--format json|jsonl|tsv|table] [--scalar]
+gash llm db-tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]
+                   [--format json|jsonl|tsv|table] [--scalar]
 ```
 
 #### Options
@@ -989,10 +1023,10 @@ llm_db_tables [-c CONNECTION | -f SQLITE_FILE] [-d DB] [--counts]
 #### Examples
 
 ```bash
-llm_db_tables -c default
-llm_db_tables -c postgres
-llm_db_tables -f ./app.db
-llm_db_tables -c default --counts --format tsv
+gash llm db-tables -c default
+gash llm db-tables -c postgres
+gash llm db-tables -f ./app.db
+gash llm db-tables -c default --counts --format tsv
 ```
 
 #### Notes
@@ -1003,11 +1037,13 @@ MySQL/MariaDB (information_schema) and PostgreSQL (pg_class), null
 where the engine has none (a view, a table not analyzed yet).
 ```
 
-See also: [`llm_db_query`](../agents/reference.md#llm_db_query), [`llm_db_schema`](../agents/reference.md#llm_db_schema)
+See also: [`gash llm db-query`](../agents/reference.md#gash-llm-db-query), [`gash llm db-schema`](../agents/reference.md#gash-llm-db-schema)
 
-### llm_deps
+### gash llm deps
 
 List project dependencies (JSON).
+
+Also `llm_deps`, the name agents call.
 
 Replaces:
 
@@ -1016,7 +1052,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_deps [PATH] [--dev] [--host ALIAS]
+gash llm deps [PATH] [--dev] [--host ALIAS]
 ```
 
 #### Options
@@ -1030,15 +1066,17 @@ llm_deps [PATH] [--dev] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_deps
-llm_deps /var/www/myapp --dev
+gash llm deps
+gash llm deps /var/www/myapp --dev
 ```
 
-See also: [`llm_project`](../agents/reference.md#llm_project)
+See also: [`gash llm project`](../agents/reference.md#gash-llm-project)
 
-### llm_dns
+### gash llm dns
 
 DNS records of several names at once (JSON).
+
+Also `llm_dns`, the name agents call.
 
 Replaces:
 
@@ -1047,9 +1085,9 @@ Replaces:
 #### Usage
 
 ```text
-llm_dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP]
-        [-j N] [--timeout S] [--format F] [--width N] [--max-lines N]
-        [--head N] [--tail N]
+gash llm dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP]
+             [-j N] [--timeout S] [--format F] [--width N] [--max-lines N]
+             [--head N] [--tail N]
 ```
 
 #### Options
@@ -1070,9 +1108,9 @@ llm_dns NAME... [--type A,AAAA,MX,TXT,NS,CAA,CNAME,SOA] [--server IP]
 #### Examples
 
 ```bash
-llm_dns example.com
-llm_dns example.com example.org --type A,MX,TXT
-llm_dns _dmarc.example.com --type TXT --server 1.1.1.1
+gash llm dns example.com
+gash llm dns example.com example.org --type A,MX,TXT
+gash llm dns _dmarc.example.com --type TXT --server 1.1.1.1
 ```
 
 #### Notes
@@ -1089,11 +1127,13 @@ exist), servfail, refused, timeout, connection_refused, bad_response.
 Names are asked as given (no search domains).
 ```
 
-See also: [`llm_tcp`](../agents/reference.md#llm_tcp), [`llm_tls`](../agents/reference.md#llm_tls), [`llm_http`](../agents/reference.md#llm_http)
+See also: [`gash llm tcp`](../agents/reference.md#gash-llm-tcp), [`gash llm tls`](../agents/reference.md#gash-llm-tls), [`gash llm http`](../agents/reference.md#gash-llm-http)
 
-### llm_docker_exec
+### gash llm docker-exec
 
 Run a read-only command in a container, no shell quoting (JSON).
+
+Also `llm_docker_exec`, the name agents call.
 
 Replaces:
 
@@ -1103,8 +1143,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
-                [--host ALIAS]
+gash llm docker-exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N] -- CMD...
+                     [--host ALIAS]
 ```
 
 #### Options
@@ -1123,8 +1163,8 @@ llm_docker_exec CTR [--user U] [--width N] [--max-lines N] [--head N] [--tail N]
 
 ```bash
 # Instead of: docker exec -u node ctr sh -c 'grep -rl "x" /app | head -3'
-llm_docker_exec ctr --user node --head 3 -- grep -rl x /app
-llm_docker_exec db -- cat /etc/mysql/my.cnf
+gash llm docker-exec ctr --user node --head 3 -- grep -rl x /app
+gash llm docker-exec db -- cat /etc/mysql/my.cnf
 ```
 
 #### Notes
@@ -1141,11 +1181,13 @@ cut; the exit status is 0 when the command ran (read rc). Arbitrary
 commands: agent_docker_exec.
 ```
 
-See also: [`llm_exec`](../agents/reference.md#llm_exec)
+See also: [`gash llm exec`](../agents/reference.md#gash-llm-exec)
 
-### llm_docker_logs
+### gash llm docker-logs
 
 Last log lines of a container, optionally filtered (JSON).
+
+Also `llm_docker_logs`, the name agents call.
 
 Replaces:
 
@@ -1154,7 +1196,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]
+gash llm docker-logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS]
 ```
 
 #### Options
@@ -1171,8 +1213,8 @@ llm_docker_logs CTR [--tail N] [--since T] [--grep RE] [--width N] [--host ALIAS
 #### Examples
 
 ```bash
-llm_docker_logs web --tail 50 --grep '(?i)error'
-llm_docker_logs db --since 10m
+gash llm docker-logs web --tail 50 --grep '(?i)error'
+gash llm docker-logs db --since 10m
 ```
 
 #### Notes
@@ -1185,11 +1227,13 @@ container: container_not_found (RETRY); docker absent or down:
 docker_not_found, docker_unavailable (CONTINUE).
 ```
 
-See also: [`llm_docker_ps`](../agents/reference.md#llm_docker_ps)
+See also: [`gash llm docker-ps`](../agents/reference.md#gash-llm-docker-ps)
 
-### llm_docker_ps
+### gash llm docker-ps
 
 Docker containers with state, health and ports (JSON).
+
+Also `llm_docker_ps`, the name agents call.
 
 Replaces:
 
@@ -1198,8 +1242,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
-              [--host ALIAS]
+gash llm docker-ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+                   [--host ALIAS]
 ```
 
 #### Options
@@ -1217,8 +1261,8 @@ llm_docker_ps [--running] [--format F] [--width N] [--max-lines N] [--head N] [-
 #### Examples
 
 ```bash
-llm_docker_ps
-llm_docker_ps --running --format tsv
+gash llm docker-ps
+gash llm docker-ps --running --format tsv
 ```
 
 #### Notes
@@ -1233,11 +1277,13 @@ minutes ago"). Without docker: docker_not_found; daemon down:
 docker_unavailable (both CONTINUE).
 ```
 
-See also: [`llm_docker_logs`](../agents/reference.md#llm_docker_logs)
+See also: [`gash llm docker-logs`](../agents/reference.md#gash-llm-docker-logs)
 
-### llm_dotenv
+### gash llm dotenv
 
 Whether keys are set in a .env file, secrets masked (replaces grep KEY= .env).
+
+Also `llm_dotenv`, the name agents call.
 
 Replaces:
 
@@ -1246,7 +1292,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_dotenv FILE [KEY...] [--present] [--host ALIAS]
+gash llm dotenv FILE [KEY...] [--present] [--host ALIAS]
 ```
 
 #### Options
@@ -1260,9 +1306,9 @@ llm_dotenv FILE [KEY...] [--present] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL
-llm_dotenv .env.production APP_KEY --present
-llm_dotenv .env
+gash llm dotenv .env DB_HOST DB_PORT DB_PASSWORD APP_URL
+gash llm dotenv .env.production APP_KEY --present
+gash llm dotenv .env
 ```
 
 #### Notes
@@ -1280,11 +1326,13 @@ export KEY=VALUE, quoted values (also on several lines), # comments;
 ${VAR} is not expanded; a key set twice keeps its last value.
 ```
 
-See also: [`llm_env`](../agents/reference.md#llm_env), [`llm_config`](../agents/reference.md#llm_config)
+See also: [`gash llm env`](../agents/reference.md#gash-llm-env), [`gash llm config`](../agents/reference.md#gash-llm-config)
 
-### llm_env
+### gash llm env
 
 Filtered environment variables (secrets excluded).
+
+Also `llm_env`, the name agents call.
 
 Replaces:
 
@@ -1293,7 +1341,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_env [--filter REGEX | REGEX] [--host ALIAS]
+gash llm env [--filter REGEX | REGEX] [--host ALIAS]
 ```
 
 #### Options
@@ -1308,8 +1356,8 @@ llm_env [--filter REGEX | REGEX] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_env
-llm_env --filter PATH
+gash llm env
+gash llm env --filter PATH
 ```
 
 #### Notes
@@ -1321,9 +1369,11 @@ TOKEN, SECRET, KEY, CREDENTIAL, AUTH, SESSION, JWT, WEBHOOK, *_PWD,
 (AKIA..., ghp_..., sk-..., xox?-..., AIza...) are shown as ***.
 ```
 
-### llm_exec
+### gash llm exec
 
 Safe command execution wrapper for AI agents.
+
+Also `llm_exec`, the name agents call.
 
 Replaces:
 
@@ -1332,16 +1382,16 @@ Replaces:
 #### Usage
 
 ```text
-llm_exec "command"
+gash llm exec "command"
 ```
 
 #### Examples
 
 ```bash
-llm_exec "ls -la /var/log"
-llm_exec "git log --oneline -5 && git status --short"
-llm_exec "grep -rn TODO src | head -20"
-llm_exec "systemctl status nginx"
+gash llm exec "ls -la /var/log"
+gash llm exec "git log --oneline -5 && git status --short"
+gash llm exec "grep -rn TODO src | head -20"
+gash llm exec "systemctl status nginx"
 ```
 
 #### Notes
@@ -1368,9 +1418,11 @@ GASH_LLM_EXEC=unrestricted       skip the allowlist
 GASH_LLM_SANDBOX=1               run inside bwrap (read-only, no network)
 ```
 
-### llm_find
+### gash llm find
 
 Find files by pattern (ignores noise directories).
+
+Also `llm_find`, the name agents call.
 
 Replaces:
 
@@ -1381,12 +1433,12 @@ Replaces:
 #### Usage
 
 ```text
-llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
-         [--sort name|mtime|size] [--newer REF] [--since T] [--tracked]
-         [--all] [--count [--by ext|dir|type]] [--relative|--absolute]
-         [--format json|jsonl|tsv|table] [--width N] [--max-lines N]
-         [--head N] [--tail N]
-         [--host ALIAS]
+gash llm find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
+              [--sort name|mtime|size] [--newer REF] [--since T] [--tracked]
+              [--all] [--count [--by ext|dir|type]] [--relative|--absolute]
+              [--format json|jsonl|tsv|table] [--width N] [--max-lines N]
+              [--head N] [--tail N]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -1426,19 +1478,19 @@ llm_find PATTERN [PATH] [--type f|d] [--contains REGEX] [-n N]
 
 ```bash
 # Find all PHP files
-llm_find "*.php"
+gash llm find "*.php"
 
 # Find config files containing "database"
-llm_find "*.conf" /etc --contains "database"
+gash llm find "*.conf" /etc --contains "database"
 
 # Find directories only
-llm_find "src*" . --type d
+gash llm find "src*" . --type d
 
 # Count PHP files per first directory (find | wc -l)
-llm_find "*.php" src --count --by dir
+gash llm find "*.php" src --count --by dir
 
 # The 5 newest logs, relative paths (find -newer | sort | head)
-llm_find "*.log" . --sort mtime -n 5 --relative
+gash llm find "*.log" . --sort mtime -n 5 --relative
 ```
 
 #### Notes
@@ -1460,9 +1512,11 @@ A PATTERN that starts with - goes after --, which ends the options:
 llm_find -- '-*' src.
 ```
 
-### llm_git_diff
+### gash llm git-diff
 
 Git diff with statistics.
+
+Also `llm_git_diff`, the name agents call.
 
 Replaces:
 
@@ -1472,10 +1526,10 @@ Replaces:
 #### Usage
 
 ```text
-llm_git_diff [--staged] [REV..REV] [--max-lines N] [--width N] [PATH]
-llm_git_diff [--staged] [REV..REV] (--files | --numstat) [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
-llm_git_diff [--staged] [REV..REV] --summary [--format F] [PATH]
-llm_git_diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+gash llm git-diff [--staged] [REV..REV] [--max-lines N] [--width N] [PATH]
+gash llm git-diff [--staged] [REV..REV] (--files | --numstat) [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+gash llm git-diff [--staged] [REV..REV] --summary [--format F] [PATH]
+gash llm git-diff [--staged] [REV..REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
@@ -1499,15 +1553,15 @@ REV..REV               Compare two commits (A..B, A...B for the merge base)
 #### Examples
 
 ```bash
-llm_git_diff
-llm_git_diff --staged
+gash llm git-diff
+gash llm git-diff --staged
 
 # Totals of the work tree, then the changed files of the last three commits
-llm_git_diff --summary
-llm_git_diff HEAD~3..HEAD --files --format tsv
+gash llm git-diff --summary
+gash llm git-diff HEAD~3..HEAD --files --format tsv
 
 # One file's patch, 80 lines at most
-llm_git_diff --patch --max-lines 80 src/app.js
+gash llm git-diff --patch --max-lines 80 src/app.js
 ```
 
 #### Notes
@@ -1525,11 +1579,13 @@ as PATH is secret_file_blocked). An unknown revision is unknown_revision
 ({"truncated":K}).
 ```
 
-See also: [`llm_git_overview`](../agents/reference.md#llm_git_overview), [`llm_git_status`](../agents/reference.md#llm_git_status), [`llm_git_log`](../agents/reference.md#llm_git_log)
+See also: [`gash llm git-overview`](../agents/reference.md#gash-llm-git-overview), [`gash llm git-status`](../agents/reference.md#gash-llm-git-status), [`gash llm git-log`](../agents/reference.md#gash-llm-git-log)
 
-### llm_git_log
+### gash llm git-log
 
 Recent commits (JSON).
+
+Also `llm_git_log`, the name agents call.
 
 Replaces:
 
@@ -1538,9 +1594,9 @@ Replaces:
 #### Usage
 
 ```text
-llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...
-            [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
-            [--host ALIAS]
+gash llm git-log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P]...
+                 [--fields LIST] [--format F] [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+                 [--host ALIAS]
 ```
 
 #### Options
@@ -1567,14 +1623,14 @@ llm_git_log [-n N] [--since D] [--until D] [--grep RE] [--author RE] [--path P].
 #### Examples
 
 ```bash
-llm_git_log
-llm_git_log --limit 20
+gash llm git-log
+gash llm git-log --limit 20
 
 # The last three subjects, compact
-llm_git_log -n 3 --fields hash,subject
+gash llm git-log -n 3 --fields hash,subject
 
 # Fixes of the last week that touched src/, with their files
-llm_git_log --since "1 week ago" --grep '^fix' --path src --fields hash,subject,files
+gash llm git-log --since "1 week ago" --grep '^fix' --path src --fields hash,subject,files
 ```
 
 #### Notes
@@ -1587,11 +1643,13 @@ layer (same keys, --fields to choose). A bad --grep or --author is
 invalid_regex (RETRY); a repository with no commit gives [].
 ```
 
-See also: [`llm_git_overview`](../agents/reference.md#llm_git_overview), [`llm_git_status`](../agents/reference.md#llm_git_status), [`llm_git_diff`](../agents/reference.md#llm_git_diff)
+See also: [`gash llm git-overview`](../agents/reference.md#gash-llm-git-overview), [`gash llm git-status`](../agents/reference.md#gash-llm-git-status), [`gash llm git-diff`](../agents/reference.md#gash-llm-git-diff)
 
-### llm_git_overview
+### gash llm git-overview
 
 Repository state in one small object (JSON).
+
+Also `llm_git_overview`, the name agents call.
 
 Replaces:
 
@@ -1600,7 +1658,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_git_overview [PATH] [--log N] [--files N] [--host ALIAS]
+gash llm git-overview [PATH] [--log N] [--files N] [--host ALIAS]
 ```
 
 #### Options
@@ -1615,14 +1673,14 @@ llm_git_overview [PATH] [--log N] [--files N] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_git_overview
+gash llm git-overview
 # {"branch":"main","upstream":"origin/main","ahead":1,"behind":0,
 #  "counts":{"staged":0,"modified":2,"untracked":1,"conflicted":0},
 #  "log":[{"hash":"a1b2c3d","subject":"fix: parser"}],
 #  "diffstat":{"files":2,"insertions":10,"deletions":3}}
 
 # With up to 20 paths per state
-llm_git_overview . --files 20
+gash llm git-overview . --files 20
 ```
 
 #### Notes
@@ -1638,11 +1696,13 @@ HEAD, staged or not (untracked files are only in counts). With --files,
 not_a_git_repo (CONTINUE).
 ```
 
-See also: [`llm_git_status`](../agents/reference.md#llm_git_status), [`llm_git_log`](../agents/reference.md#llm_git_log), [`llm_git_diff`](../agents/reference.md#llm_git_diff)
+See also: [`gash llm git-status`](../agents/reference.md#gash-llm-git-status), [`gash llm git-log`](../agents/reference.md#gash-llm-git-log), [`gash llm git-diff`](../agents/reference.md#gash-llm-git-diff)
 
-### llm_git_show
+### gash llm git-show
 
 A commit's metadata and files, its patch, or a file at a revision.
+
+Also `llm_git_show`, the name agents call.
 
 Replaces:
 
@@ -1652,9 +1712,9 @@ Replaces:
 #### Usage
 
 ```text
-llm_git_show [REV] [--stat] [--files] [PATH]
-llm_git_show [REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
-llm_git_show REV:FILE [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+gash llm git-show [REV] [--stat] [--files] [PATH]
+gash llm git-show [REV] --patch [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
+gash llm git-show REV:FILE [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 ```
 
 #### Options
@@ -1675,16 +1735,16 @@ llm_git_show REV:FILE [--max-lines N] [--head N] [--tail N] [--width N] [PATH]
 #### Examples
 
 ```bash
-llm_git_show HEAD~1 --stat
+gash llm git-show HEAD~1 --stat
 # {"hash":"6595b2c","subject":"docs: change 118","author":"Ann",
 #  "date":"2026-10-25 22:44:46 +0000","files":[{"p":"CHANGES.md","add":1,
 #  "del":0}],"stat":{"files":1,"insertions":1,"deletions":0}}
 
 # The patch, 80 lines per file
-llm_git_show a1b2c3d --patch --max-lines 80
+gash llm git-show a1b2c3d --patch --max-lines 80
 
 # A file as it was two commits ago, first 100 lines
-llm_git_show HEAD~2:src/app.js --max-lines 100
+gash llm git-show HEAD~2:src/app.js --max-lines 100
 ```
 
 #### Notes
@@ -1702,11 +1762,13 @@ binary one binary_file. An unknown REV is unknown_revision (RETRY), a FILE
 missing at REV file_not_found, not a repository not_a_git_repo (CONTINUE).
 ```
 
-See also: [`llm_git_log`](../agents/reference.md#llm_git_log), [`llm_git_diff`](../agents/reference.md#llm_git_diff)
+See also: [`gash llm git-log`](../agents/reference.md#gash-llm-git-log), [`gash llm git-diff`](../agents/reference.md#gash-llm-git-diff)
 
-### llm_git_status
+### gash llm git-status
 
 Compact git status (JSON).
+
+Also `llm_git_status`, the name agents call.
 
 Replaces:
 
@@ -1717,11 +1779,11 @@ Replaces:
 #### Usage
 
 ```text
-llm_git_status [PATH] [--host ALIAS]
-llm_git_status [PATH] --summary [--fetch] [--timeout S] [--format F]
-llm_git_status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]
-llm_git_status [PATH] --fetch [--timeout S]
-llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--max-lines N] [--width N]
+gash llm git-status [PATH] [--host ALIAS]
+gash llm git-status [PATH] --summary [--fetch] [--timeout S] [--format F]
+gash llm git-status [PATH] --files [--format F] [--max-lines N] [--head N] [--tail N] [--width N]
+gash llm git-status [PATH] --fetch [--timeout S]
+gash llm git-status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--max-lines N] [--width N]
 ```
 
 #### Options
@@ -1750,7 +1812,7 @@ llm_git_status --repos PATH... [--fetch] [-j N] [--timeout S] [--format F] [--ma
 #### Examples
 
 ```bash
-llm_git_status
+gash llm git-status
 # {
 #   "branch": "main",
 #   "ahead": 0,
@@ -1762,12 +1824,12 @@ llm_git_status
 # }
 
 # Counts only; the changed paths as rows
-llm_git_status --summary
-llm_git_status --files --format tsv
+gash llm git-status --summary
+gash llm git-status --files --format tsv
 
 # Fresh ahead/behind, and three repositories at once
-llm_git_status --fetch
-llm_git_status --repos ~/src/api ~/src/web ~/src/docs --format tsv
+gash llm git-status --fetch
+gash llm git-status --repos ~/src/api ~/src/web ~/src/docs --format tsv
 ```
 
 #### Notes
@@ -1786,11 +1848,13 @@ fetch (core.sshCommand, a credential helper, uploadpack, url.insteadOf,
 protocol.*) is not fetched. Paths are relative to the repository root.
 ```
 
-See also: [`llm_git_overview`](../agents/reference.md#llm_git_overview), [`llm_git_diff`](../agents/reference.md#llm_git_diff), [`llm_git_log`](../agents/reference.md#llm_git_log)
+See also: [`gash llm git-overview`](../agents/reference.md#gash-llm-git-overview), [`gash llm git-diff`](../agents/reference.md#gash-llm-git-diff), [`gash llm git-log`](../agents/reference.md#gash-llm-git-log)
 
-### llm_grep
+### gash llm grep
 
 Search code with structured file:line:content output.
+
+Also `llm_grep`, the name agents call.
 
 Replaces:
 
@@ -1801,13 +1865,13 @@ Replaces:
 #### Usage
 
 ```text
-llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
-         [-e PATTERN]
-         [--exclude GLOB]... [--only-matching] [--distinct]
-         [--files-only] [--count [--by file|ext|dir]]
-         [--relative|--absolute] [--format json|jsonl|tsv|table]
-         [--width N] [--max-lines N] [--head N] [--tail N]
-         [--host ALIAS]
+gash llm grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
+              [-e PATTERN]
+              [--exclude GLOB]... [--only-matching] [--distinct]
+              [--files-only] [--count [--by file|ext|dir]]
+              [--relative|--absolute] [--format json|jsonl|tsv|table]
+              [--width N] [--max-lines N] [--head N] [--tail N]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -1846,19 +1910,19 @@ llm_grep PATTERN [PATH] [--ext EXT1,EXT2] [--context N] [-n N]
 
 ```bash
 # Find TODO comments in PHP files
-llm_grep "TODO|FIXME" src/ --ext php,js
+gash llm grep "TODO|FIXME" src/ --ext php,js
 
 # Search for a function definition
-llm_grep "function processOrder" .
+gash llm grep "function processOrder" .
 
 # With context lines
-llm_grep "class.*Controller" . --ext php --context 3
+gash llm grep "class.*Controller" . --ext php --context 3
 
 # Most frequent matches (grep -o | sort | uniq -c | sort -rn)
-llm_grep "Log::[a-z]+" src --distinct
+gash llm grep "Log::[a-z]+" src --distinct
 
 # Without tests, relative paths
-llm_grep TODO . --exclude tests --relative -n 20
+gash llm grep TODO . --exclude tests --relative -n 20
 ```
 
 #### Notes
@@ -1882,9 +1946,11 @@ A PATTERN that starts with - goes after -e, or after --, which ends
 the options: llm_grep -- -x src.
 ```
 
-### llm_hash
+### gash llm hash
 
 Hash files in parallel (sha256 or md5).
+
+Also `llm_hash`, the name agents call.
 
 Replaces:
 
@@ -1893,8 +1959,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]
-         [--host ALIAS]
+gash llm hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout S] [--absolute]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -1916,8 +1982,8 @@ llm_hash PATH... [--algo sha256|md5] [--short N] [--format F] [-j N] [--timeout 
 #### Examples
 
 ```bash
-llm_hash dist/app.js dist/app.css --short 12
-llm_hash backup.tar --algo md5
+gash llm hash dist/app.js dist/app.css --short 12
+gash llm hash backup.tar --algo md5
 ```
 
 #### Notes
@@ -1931,11 +1997,13 @@ timeout); the error column appears only then. Secret files are hashed: a
 digest shows no content.
 ```
 
-See also: [`llm_stat`](../agents/reference.md#llm_stat)
+See also: [`gash llm stat`](../agents/reference.md#gash-llm-stat)
 
-### llm_http
+### gash llm http
 
 Probe several URLs at once: status, timings, headers, JSON value (JSON).
+
+Also `llm_http`, the name agents call.
 
 Replaces:
 
@@ -1945,11 +2013,11 @@ Replaces:
 #### Usage
 
 ```text
-llm_http URL... [--method M] [--header H]... [--auth-env VAR]...
-         [--resolve HOST:IP]... [--follow] [--status-only] [--headers h1,h2]
-         [--json-path P] [--grep RE] [--body-max N] [--expect CODE]
-         [--insecure] [-j N] [--timeout S] [--format F] [--width N]
-         [--max-lines N] [--head N] [--tail N]
+gash llm http URL... [--method M] [--header H]... [--auth-env VAR]...
+              [--resolve HOST:IP]... [--follow] [--status-only] [--headers h1,h2]
+              [--json-path P] [--grep RE] [--body-max N] [--expect CODE]
+              [--insecure] [-j N] [--timeout S] [--format F] [--width N]
+              [--max-lines N] [--head N] [--tail N]
 ```
 
 #### Options
@@ -1991,17 +2059,17 @@ llm_http URL... [--method M] [--header H]... [--auth-env VAR]...
 
 ```bash
 # Status of many URLs at once
-llm_http https://a.example/health https://b.example/health --status-only
+gash llm http https://a.example/health https://b.example/health --status-only
 
 # Redirect chain and two headers
-llm_http http://example.com --follow --headers location,content-type
+gash llm http http://example.com --follow --headers location,content-type
 
 # An API field, the credential from the environment
 export API_AUTH='Authorization: Bearer ...'
-llm_http https://api.example/jobs/42 --auth-env API_AUTH --json-path status
+gash llm http https://api.example/jobs/42 --auth-env API_AUTH --json-path status
 
 # A site on a new server before DNS points at it
-llm_http https://example.com/ --resolve example.com:203.0.113.7 --grep '<title>'
+gash llm http https://example.com/ --resolve example.com:203.0.113.7 --grep '<title>'
 ```
 
 #### Notes
@@ -2022,11 +2090,13 @@ Proxies from HTTPS_PROXY, HTTP_PROXY and NO_PROXY; CAs from the system or
 SSL_CERT_FILE / SSL_CERT_DIR.
 ```
 
-See also: [`llm_tls`](../agents/reference.md#llm_tls), [`llm_tcp`](../agents/reference.md#llm_tcp), [`llm_dns`](../agents/reference.md#llm_dns)
+See also: [`gash llm tls`](../agents/reference.md#gash-llm-tls), [`gash llm tcp`](../agents/reference.md#gash-llm-tcp), [`gash llm dns`](../agents/reference.md#gash-llm-dns)
 
-### llm_json
+### gash llm json
 
 One value, the keys or the shape of a JSON file (replaces python3 json.load, jq).
+
+Also `llm_json`, the name agents call.
 
 Replaces:
 
@@ -2035,8 +2105,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
-         [--width N] [--head N] [--tail N] [--host ALIAS]
+gash llm json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
+              [--width N] [--head N] [--tail N] [--host ALIAS]
 ```
 
 #### Options
@@ -2056,11 +2126,11 @@ llm_json FILE|- [--path P] [--keys | --shape] [--format json|jsonl|tsv|table]
 #### Examples
 
 ```bash
-llm_json package.json --path scripts
-llm_json openapi.json --path 'paths["/users"].get.responses' --keys
-llm_json data.json --shape
-llm_json users.json --format tsv --head 20
-curl -s https://api.example/x | llm_json - --path items[0]
+gash llm json package.json --path scripts
+gash llm json openapi.json --path 'paths["/users"].get.responses' --keys
+gash llm json data.json --shape
+gash llm json users.json --format tsv --head 20
+curl -s https://api.example/x | gash llm json - --path items[0]
 ```
 
 #### Notes
@@ -2079,11 +2149,13 @@ adds {"truncated":K} on stderr. Secret files (.env, keys, ...) are
 refused; - reads the standard input.
 ```
 
-See also: [`llm_config`](../agents/reference.md#llm_config), [`llm_csv`](../agents/reference.md#llm_csv)
+See also: [`gash llm config`](../agents/reference.md#gash-llm-config), [`gash llm csv`](../agents/reference.md#gash-llm-csv)
 
-### llm_lint
+### gash llm lint
 
 Syntax-check files by extension, in parallel (php, sh, js, json, yaml, toml, py).
+
+Also `llm_lint`, the name agents call.
 
 Replaces:
 
@@ -2092,8 +2164,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]
-         [--host ALIAS]
+gash llm lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR] [-j N] [--timeout S] [--max-lines N] [--width N] [--absolute]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -2123,13 +2195,13 @@ llm_lint [PATH...] [--ext php,sh,js,json,yaml,toml,py] [--php VER] [--node MAJOR
 
 ```bash
 # Every PHP file of src with php 8.4
-llm_lint src --ext php --php 8.4
+gash llm lint src --ext php --php 8.4
 
 # A whole project, every language
-llm_lint .
+gash llm lint .
 
 # Two files
-llm_lint deploy.sh config/app.yaml
+gash llm lint deploy.sh config/app.yaml
 ```
 
 #### Notes
@@ -2152,11 +2224,13 @@ unsupported_file. A missing checker is runtime_not_installed (STOP);
 directory is runtime_not_pinned (STOP).
 ```
 
-See also: [`agent_test`](../agents/reference.md#agent_test), [`llm_runtime`](../agents/reference.md#llm_runtime)
+See also: [`gash agent test`](../agents/reference.md#gash-agent-test), [`gash llm runtime`](../agents/reference.md#gash-llm-runtime)
 
-### llm_log
+### gash llm log
 
 Last lines of a log, read from the end, by pattern, time and level.
+
+Also `llm_log`, the name agents call.
 
 Replaces:
 
@@ -2166,8 +2240,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]
-        [--host ALIAS]
+gash llm log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level L] [--width N] [--format F]
+             [--host ALIAS]
 ```
 
 #### Options
@@ -2192,8 +2266,8 @@ llm_log FILE [--tail N] [--last-match RE -n N] [--grep RE] [--since T] [--level 
 #### Examples
 
 ```bash
-llm_log storage/logs/laravel.log --last-match ERROR -n 20
-llm_log /var/log/nginx/error.log --since 1h --level error --width 300
+gash llm log storage/logs/laravel.log --last-match ERROR -n 20
+gash llm log /var/log/nginx/error.log --since 1h --level error --width 300
 ```
 
 #### Notes
@@ -2213,11 +2287,13 @@ is marked "[... K lines omitted]". Secret files are refused (FATAL),
 binary ones binary_file; a bad T is invalid_duration.
 ```
 
-See also: [`llm_read`](../agents/reference.md#llm_read)
+See also: [`gash llm read`](../agents/reference.md#gash-llm-read)
 
-### llm_ports
+### gash llm ports
 
 List ports in use (JSON).
+
+Also `llm_ports`, the name agents call.
 
 Replaces:
 
@@ -2227,7 +2303,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_ports [--listen] [--port N] [--host ALIAS]
+gash llm ports [--listen] [--port N] [--host ALIAS]
 ```
 
 #### Options
@@ -2243,11 +2319,11 @@ llm_ports [--listen] [--port N] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_ports
-llm_ports --listen
+gash llm ports
+gash llm ports --listen
 
 # Who listens on 8080
-llm_ports --listen --port 8080
+gash llm ports --listen --port 8080
 ```
 
 #### Notes
@@ -2258,11 +2334,13 @@ to each record (from ss -p or netstat -p, lsof on macOS; empty for
 another user's process unless you are root).
 ```
 
-See also: [`llm_procs`](../agents/reference.md#llm_procs), [`llm_tcp`](../agents/reference.md#llm_tcp)
+See also: [`gash llm procs`](../agents/reference.md#gash-llm-procs), [`gash llm tcp`](../agents/reference.md#gash-llm-tcp)
 
-### llm_procs
+### gash llm procs
 
 List processes by name, port or PID, alive or not, as a tree (JSON).
+
+Also `llm_procs`, the name agents call.
 
 Replaces:
 
@@ -2272,8 +2350,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
-          [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]
+gash llm procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
+               [--format F] [--width N] [--max-lines N] [--head N] [--tail N] [--host ALIAS]
 ```
 
 #### Options
@@ -2296,15 +2374,15 @@ llm_procs [--name NAME | --port PORT | --pid PID...] [--alive] [--tree]
 #### Examples
 
 ```bash
-llm_procs
-llm_procs --name nginx
-llm_procs --port 3306
+gash llm procs
+gash llm procs --name nginx
+gash llm procs --port 3306
 
 # Instead of: kill -0 $PID && echo alive
-llm_procs --pid "$pid"
+gash llm procs --pid "$pid"
 
 # Instead of: ps -ef | grep vite | grep -v grep
-llm_procs --name vite --alive --tree
+gash llm procs --name vite --alive --tree
 ```
 
 #### Notes
@@ -2320,11 +2398,13 @@ columns unless --width is given; without a filter the first 100 rows.
 Read-only: llm_procs signals nothing (agent_kill does).
 ```
 
-See also: [`llm_ports`](../agents/reference.md#llm_ports)
+See also: [`gash llm ports`](../agents/reference.md#gash-llm-ports)
 
-### llm_project
+### gash llm project
 
 Detect project type and framework (JSON).
+
+Also `llm_project`, the name agents call.
 
 Replaces:
 
@@ -2333,7 +2413,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_project [PATH] [--host ALIAS]
+gash llm project [PATH] [--host ALIAS]
 ```
 
 #### Options
@@ -2346,15 +2426,17 @@ llm_project [PATH] [--host ALIAS]
 #### Examples
 
 ```bash
-llm_project
-llm_project /var/www/myapp
+gash llm project
+gash llm project /var/www/myapp
 ```
 
-See also: [`llm_deps`](../agents/reference.md#llm_deps)
+See also: [`gash llm deps`](../agents/reference.md#gash-llm-deps)
 
-### llm_read
+### gash llm read
 
 Read files, line ranges or the lines around a match, numbered.
+
+Also `llm_read`, the name agents call.
 
 Replaces:
 
@@ -2364,8 +2446,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]
-         [--host ALIAS]
+gash llm read PATH[:A-B]... [--lines A:B] [--around RE -C N] [--max-bytes N] [--head N] [--tail N] [--max-lines N] [--width N] [--format F] [--absolute]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -2393,13 +2475,13 @@ PATH:A-B               Lines A to B of that file (also PATH:A:B, PATH:A-)
 
 ```bash
 # Locate and read in one call
-llm_read app/Http/Kernel.php --around 'protected \$middleware' -C 10
+gash llm read app/Http/Kernel.php --around 'protected \$middleware' -C 10
 
 # Two ranges of two files
-llm_read src/a.php:120-180 src/b.php:1-40
+gash llm read src/a.php:120-180 src/b.php:1-40
 
 # The end of a file
-llm_read CHANGELOG.md --tail 30
+gash llm read CHANGELOG.md --tail 30
 ```
 
 #### Notes
@@ -2416,11 +2498,13 @@ missing file file_not_found, a bad range invalid_range, before anything is
 printed.
 ```
 
-See also: [`llm_grep`](../agents/reference.md#llm_grep), [`llm_log`](../agents/reference.md#llm_log)
+See also: [`gash llm grep`](../agents/reference.md#gash-llm-grep), [`gash llm log`](../agents/reference.md#gash-llm-log)
 
-### llm_remote_run
+### gash llm remote-run
 
 Run a read-only command on registered hosts, in parallel or in steps.
+
+Also `llm_remote_run`, the name agents call.
 
 Replaces:
 
@@ -2429,8 +2513,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_remote_run HOST... [-j N] [--timeout S] [--format F] -- CMD
-llm_remote_run HOST --step CMD... [--stop-on-error] [--timeout S] [--format F]
+gash llm remote-run HOST... [-j N] [--timeout S] [--format F] -- CMD
+gash llm remote-run HOST --step CMD... [--stop-on-error] [--timeout S] [--format F]
 (budget: [--width N] [--max-lines N] [--head N] [--tail N])
 ```
 
@@ -2456,10 +2540,10 @@ llm_remote_run HOST --step CMD... [--stop-on-error] [--timeout S] [--format F]
 
 ```bash
 # The same check on three hosts at once
-llm_remote_run web1 web2 db -- 'df -h / | tail -n 1'
+gash llm remote-run web1 web2 db -- 'df -h / | tail -n 1'
 
 # Three steps, one round trip
-llm_remote_run web --step 'systemctl is-active nginx' --step 'tail -n 20 /var/log/nginx/error.log' --step 'uptime'
+gash llm remote-run web --step 'systemctl is-active nginx' --step 'tail -n 20 /var/log/nginx/error.log' --step 'uptime'
 ```
 
 #### Notes
@@ -2482,9 +2566,11 @@ error of the call. Without ssh on this machine the call fails once
 (prerequisite_missing), before anything connects.
 ```
 
-### llm_runtime
+### gash llm runtime
 
 Resolve a node major or php version to its binary, without nvm.sh.
+
+Also `llm_runtime`, the name agents call.
 
 Replaces:
 
@@ -2493,20 +2579,20 @@ Replaces:
 #### Usage
 
 ```text
-llm_runtime php|node|composer|npm|npx VERSION|project
+gash llm runtime php|node|composer|npm|npx VERSION|project
 ```
 
 #### Examples
 
 ```bash
 # The node 24 binary
-llm_runtime node 24
+gash llm runtime node 24
 
 # composer under php 8.4
-llm_runtime composer 8.4
+gash llm runtime composer 8.4
 
 # The php this project pins
-llm_runtime php project
+gash llm runtime php project
 ```
 
 #### Notes
@@ -2517,8 +2603,8 @@ Output: {"runtime":"node","request":"24","path":".../bin/node","version":"24.1.0
 composer adds "php" (the binary it runs under), npm and npx report their
 node's version. VERSION is a prefix: 24, 24.1, 8.4, 8: the newest installed
 version that starts with it. project is the version the project in the
-working directory pins, read as node_detect_version and
-php_detect_version read it (.nvmrc, .node-version, package.json
+working directory pins, read as gash runtime detect node and
+gash runtime detect php read it (.nvmrc, .node-version, package.json
 engines.node; .target-php-version, composer.json require.php,
 .github/copilot-instructions.md), "request" then names it; a project
 that pins none is runtime_not_pinned (STOP), never a default. node comes
@@ -2529,11 +2615,13 @@ installed: runtime_not_installed (STOP) with the installed versions. The
 JSON form of gash runtime; it reads gash's runtime cache, never writes it.
 ```
 
-See also: [`llm_tools`](../agents/reference.md#llm_tools), [`node_detect_version`](../runtimes/reference.md#node_detect_version), [`php_detect_version`](../runtimes/reference.md#php_detect_version)
+See also: [`gash llm tools`](../agents/reference.md#gash-llm-tools), [`gash runtime detect node`](../runtimes/reference.md#gash-runtime-detect-node), [`gash runtime detect php`](../runtimes/reference.md#gash-runtime-detect-php)
 
-### llm_same
+### gash llm same
 
 Is the deployed copy the local one? Hash both sides, list the differences.
+
+Also `llm_same`, the name agents call.
 
 Replaces:
 
@@ -2542,7 +2630,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME]... [-j N] [--timeout S]
+gash llm same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME]... [-j N] [--timeout S]
 (budget: [--width N] [--max-lines N] [--head N] [--tail N])
 ```
 
@@ -2564,13 +2652,13 @@ llm_same LOCAL ALIAS:REMOTE... [--container CTR] [--exclude NAME]... [-j N] [--t
 
 ```bash
 # One file on two hosts
-llm_same config/app.php web1:/srv/app/config/app.php web2:/srv/app/config/app.php
+gash llm same config/app.php web1:/srv/app/config/app.php web2:/srv/app/config/app.php
 
 # A whole tree, without node_modules
-llm_same dist web:/var/www/app/dist --exclude node_modules
+gash llm same dist web:/var/www/app/dist --exclude node_modules
 
 # Inside a container
-llm_same src/handler.py web:/app/handler.py --container api
+gash llm same src/handler.py web:/app/handler.py --container api
 ```
 
 #### Notes
@@ -2590,9 +2678,11 @@ follows the remote path rules (AGENTS.md 3.12). The host needs
 sha256sum, shasum or openssl (hash_tool_not_found).
 ```
 
-### llm_service
+### gash llm service
 
 State and last journal lines of systemd units (JSON).
+
+Also `llm_service`, the name agents call.
 
 Replaces:
 
@@ -2601,8 +2691,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
-            [--host ALIAS]
+gash llm service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N] [--tail N]
+                 [--host ALIAS]
 ```
 
 #### Options
@@ -2620,8 +2710,8 @@ llm_service UNIT... [--log N] [--format F] [--width N] [--max-lines N] [--head N
 #### Examples
 
 ```bash
-llm_service nginx php8.4-fpm
-llm_service mariadb --log 30
+gash llm service nginx php8.4-fpm
+gash llm service mariadb --log 30
 ```
 
 #### Notes
@@ -2638,11 +2728,13 @@ a column there only when a row has one. Read-only (systemctl show,
 journalctl). Without systemd: systemd_unavailable (CONTINUE).
 ```
 
-See also: [`llm_procs`](../agents/reference.md#llm_procs)
+See also: [`gash llm procs`](../agents/reference.md#gash-llm-procs)
 
-### llm_stat
+### gash llm stat
 
 Metadata of several paths: type, size, mode, owner, mtime, lines.
+
+Also `llm_stat`, the name agents call.
 
 Replaces:
 
@@ -2651,8 +2743,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]
-         [--host ALIAS]
+gash llm stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absolute]
+              [--host ALIAS]
 ```
 
 #### Options
@@ -2675,8 +2767,8 @@ llm_stat PATH... [--lines] [--follow] [--format F] [-j N] [--timeout S] [--absol
 #### Examples
 
 ```bash
-llm_stat composer.json vendor storage/logs/laravel.log --lines
-llm_stat public/storage --follow --format json
+gash llm stat composer.json vendor storage/logs/laravel.log --lines
+gash llm stat public/storage --follow --format json
 ```
 
 #### Notes
@@ -2694,11 +2786,13 @@ only when they apply. TSV by default: the JSON objects of --format json
 repeat every key on every row.
 ```
 
-See also: [`llm_hash`](../agents/reference.md#llm_hash), [`llm_textstats`](../agents/reference.md#llm_textstats)
+See also: [`gash llm hash`](../agents/reference.md#gash-llm-hash), [`gash llm textstats`](../agents/reference.md#gash-llm-textstats)
 
-### llm_sysinfo
+### gash llm sysinfo
 
 Load, uptime, CPUs, memory, disks, GPUs and OS in one line (JSON).
+
+Also `llm_sysinfo`, the name agents call.
 
 Replaces:
 
@@ -2707,7 +2801,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_sysinfo [--mount PATH]... [--host ALIAS]
+gash llm sysinfo [--mount PATH]... [--host ALIAS]
 ```
 
 #### Options
@@ -2722,8 +2816,8 @@ llm_sysinfo [--mount PATH]... [--host ALIAS]
 #### Examples
 
 ```bash
-llm_sysinfo
-llm_sysinfo --mount /var/lib/mysql
+gash llm sysinfo
+gash llm sysinfo --mount /var/lib/mysql
 ```
 
 #### Notes
@@ -2739,11 +2833,13 @@ disks are / and the writable local disks (one mount per device; not
 statfs, no program runs; macOS asks sysctl.
 ```
 
-See also: [`sysinfo`](../system/reference.md#sysinfo)
+See also: [`gash system info`](../system/reference.md#gash-system-info)
 
-### llm_tcp
+### gash llm tcp
 
 Can a TCP connection be opened to each HOST:PORT (JSON).
+
+Also `llm_tcp`, the name agents call.
 
 Replaces:
 
@@ -2752,8 +2848,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N]
-        [--max-lines N] [--head N] [--tail N]
+gash llm tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N]
+             [--max-lines N] [--head N] [--tail N]
 ```
 
 #### Options
@@ -2770,8 +2866,8 @@ llm_tcp HOST:PORT... [-j N] [--timeout S] [--format F] [--width N]
 #### Examples
 
 ```bash
-llm_tcp db.internal:5432 cache.internal:6379
-llm_tcp [::1]:22 127.0.0.1:8080 --timeout 1
+gash llm tcp db.internal:5432 cache.internal:6379
+gash llm tcp [::1]:22 127.0.0.1:8080 --timeout 1
 ```
 
 #### Notes
@@ -2783,11 +2879,13 @@ the connection is closed once open. One row per target, in input order:
 timeout (filtered), unreachable, dns_not_found, dns_error.
 ```
 
-See also: [`llm_ports`](../agents/reference.md#llm_ports), [`llm_tls`](../agents/reference.md#llm_tls), [`llm_http`](../agents/reference.md#llm_http)
+See also: [`gash llm ports`](../agents/reference.md#gash-llm-ports), [`gash llm tls`](../agents/reference.md#gash-llm-tls), [`gash llm http`](../agents/reference.md#gash-llm-http)
 
-### llm_textcheck
+### gash llm textcheck
 
 Text hygiene checks: non-ASCII, CRLF, BOM, trailing blanks, tabs, long lines.
+
+Also `llm_textcheck`, the name agents call.
 
 Replaces:
 
@@ -2796,8 +2894,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]
-              [--host ALIAS]
+gash llm textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,final-newline,mixed-indent] [--max-lines N] [--format F] [-j N] [--timeout S] [--absolute]
+                   [--host ALIAS]
 ```
 
 #### Options
@@ -2822,8 +2920,8 @@ llm_textcheck FILE... [--rules non-ascii,crlf,bom,trailing-ws,tabs,long-lines=N,
 #### Examples
 
 ```bash
-llm_textcheck README.md docs/*.md
-llm_textcheck src/*.php --rules trailing-ws,tabs,long-lines=120
+gash llm textcheck README.md docs/*.md
+gash llm textcheck src/*.php --rules trailing-ws,tabs,long-lines=120
 ```
 
 #### Notes
@@ -2841,11 +2939,13 @@ line) and final-newline are once per file. Secret files are refused
 (FATAL); an unknown rule is invalid_rule.
 ```
 
-See also: [`llm_textstats`](../agents/reference.md#llm_textstats)
+See also: [`gash llm textstats`](../agents/reference.md#gash-llm-textstats)
 
-### llm_textstats
+### gash llm textstats
 
 Lines, words, characters, bytes, gzip size and longest line of files.
+
+Also `llm_textstats`, the name agents call.
 
 Replaces:
 
@@ -2854,7 +2954,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]
+gash llm textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALIAS]
 ```
 
 #### Options
@@ -2874,7 +2974,7 @@ llm_textstats FILE... [--format F] [-j N] [--timeout S] [--absolute] [--host ALI
 #### Examples
 
 ```bash
-llm_textstats README.md docs/guide.md
+gash llm textstats README.md docs/guide.md
 ```
 
 #### Notes
@@ -2890,11 +2990,13 @@ secret, missing or not a file keeps its row with null values and an
 "error" (binary_file, secret_file_blocked, file_not_found, not_a_file).
 ```
 
-See also: [`llm_stat`](../agents/reference.md#llm_stat), [`llm_textcheck`](../agents/reference.md#llm_textcheck)
+See also: [`gash llm stat`](../agents/reference.md#gash-llm-stat), [`gash llm textcheck`](../agents/reference.md#gash-llm-textcheck)
 
-### llm_tls
+### gash llm tls
 
 TLS certificate of several hosts at once: expiry, SANs, issuer (JSON).
+
+Also `llm_tls`, the name agents call.
 
 Replaces:
 
@@ -2903,8 +3005,8 @@ Replaces:
 #### Usage
 
 ```text
-llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F]
-        [--width N] [--max-lines N] [--head N] [--tail N]
+gash llm tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F]
+             [--width N] [--max-lines N] [--head N] [--tail N]
 ```
 
 #### Options
@@ -2923,8 +3025,8 @@ llm_tls HOST[:PORT]... [--sni NAME] [-j N] [--timeout S] [--format F]
 #### Examples
 
 ```bash
-llm_tls example.com example.org
-llm_tls mail.example.com:465 203.0.113.7 --sni www.example.com
+gash llm tls example.com example.org
+gash llm tls mail.example.com:465 203.0.113.7 --sni www.example.com
 ```
 
 #### Notes
@@ -2945,11 +3047,13 @@ error is null, or connection_refused, timeout, dns_not_found, tls_error
 (the handshake failed), no_certificate. No STARTTLS.
 ```
 
-See also: [`llm_http`](../agents/reference.md#llm_http), [`llm_tcp`](../agents/reference.md#llm_tcp)
+See also: [`gash llm http`](../agents/reference.md#gash-llm-http), [`gash llm tcp`](../agents/reference.md#gash-llm-tcp)
 
-### llm_tools
+### gash llm tools
 
 Path and version of each tool, probed in parallel; php and node per version.
+
+Also `llm_tools`, the name agents call.
 
 Replaces:
 
@@ -2958,7 +3062,7 @@ Replaces:
 #### Usage
 
 ```text
-llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]
+gash llm tools [NAME...] [-j N] [--timeout S] [--host ALIAS]
 ```
 
 #### Options
@@ -2974,10 +3078,10 @@ llm_tools [NAME...] [-j N] [--timeout S] [--host ALIAS]
 
 ```bash
 # The usual toolchain
-llm_tools
+gash llm tools
 
 # A few tools
-llm_tools git python3 rg php
+gash llm tools git python3 rg php
 ```
 
 #### Notes
@@ -2994,11 +3098,13 @@ read npm's package.json). Without NAME: git php composer node npm python3 go
 rg jq docker.
 ```
 
-See also: [`llm_runtime`](../agents/reference.md#llm_runtime), [`llm_env`](../agents/reference.md#llm_env)
+See also: [`gash llm runtime`](../agents/reference.md#gash-llm-runtime), [`gash llm env`](../agents/reference.md#gash-llm-env)
 
-### llm_tree
+### gash llm tree
 
 Compact directory tree (JSON or text output).
+
+Also `llm_tree`, the name agents call.
 
 Replaces:
 
@@ -3008,14 +3114,14 @@ Replaces:
 #### Usage
 
 ```text
-llm_tree [--text] [--depth N] [--stats] [--all] [--relative|--absolute]
-         [--width N] [--max-lines N] [--head N] [--tail N] [PATH]
-         [--host ALIAS]
-llm_tree --count [--by ext|dir|type] [--type f|d] [--name GLOB]
-         [--newer REF] [--since T] [--depth N] [--all]
-         [--format json|jsonl|tsv|table] [PATH]
-llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]
-         [--newer REF] [--since T] [--format json|jsonl|tsv|table] [PATH]
+gash llm tree [--text] [--depth N] [--stats] [--all] [--relative|--absolute]
+              [--width N] [--max-lines N] [--head N] [--tail N] [PATH]
+              [--host ALIAS]
+gash llm tree --count [--by ext|dir|type] [--type f|d] [--name GLOB]
+              [--newer REF] [--since T] [--depth N] [--all]
+              [--format json|jsonl|tsv|table] [PATH]
+gash llm tree --top N [--by dir|ext] [--depth N] [--name GLOB]
+              [--newer REF] [--since T] [--format json|jsonl|tsv|table] [PATH]
 ```
 
 #### Options
@@ -3055,19 +3161,19 @@ llm_tree --top N [--by dir|ext] [--depth N] [--name GLOB]
 
 ```bash
 # JSON output (default)
-llm_tree
+gash llm tree
 
 # Text-indented output
-llm_tree --text
+gash llm tree --text
 
 # Limited depth
-llm_tree --depth 2 /etc/nginx
+gash llm tree --depth 2 /etc/nginx
 
 # Files per extension (find -type f | wc -l)
-llm_tree --count --type f --by ext src
+gash llm tree --count --type f --by ext src
 
 # The 10 largest directories (du -sh */ | sort -rh | head)
-llm_tree --top 10 .
+gash llm tree --top 10 .
 ```
 
 #### Notes
@@ -3085,9 +3191,11 @@ Directories that cannot be read count in skipped; a cut list gets
 "truncated":K.
 ```
 
-### llm_wait
+### gash llm wait
 
 Wait for a log line, a path, a process exit, a URL, a port or a command (JSON).
+
+Also `llm_wait`, the name agents call.
 
 Replaces:
 
@@ -3097,14 +3205,14 @@ Replaces:
 #### Usage
 
 ```text
-llm_wait --timeout S [--interval S] CONDITION [--tail N] [--width N] [--host ALIAS]
+gash llm wait --timeout S [--interval S] CONDITION [--tail N] [--width N] [--host ALIAS]
 CONDITION is one of:
-  --file-match FILE RE   a line of FILE matches RE
-  --exists PATH          PATH exists
-  --gone PID|NAME        the process ended / no command line matches NAME
-  --http URL [--code N] [--json-path P --equals V]
-  --port HOST:PORT       a TCP connection opens
-  --cmd-ok CMD           CMD (llm_exec rules) exits 0
+       --file-match FILE RE   a line of FILE matches RE
+       --exists PATH          PATH exists
+       --gone PID|NAME        the process ended / no command line matches NAME
+       --http URL [--code N] [--json-path P --equals V]
+       --port HOST:PORT       a TCP connection opens
+       --cmd-ok CMD           CMD (llm_exec rules) exits 0
 ```
 
 #### Options
@@ -3139,14 +3247,14 @@ CONDITION is one of:
 
 ```bash
 # Instead of: while ! grep -q DONE out.log; do sleep 10; done
-llm_wait --timeout 600 --file-match out.log '^DONE' --tail 5
+gash llm wait --timeout 600 --file-match out.log '^DONE' --tail 5
 
 # A server comes up
-llm_wait --timeout 60 --http http://127.0.0.1:8080/health --json-path status --equals ok
-llm_wait --timeout 30 --port 127.0.0.1:5432
+gash llm wait --timeout 60 --http http://127.0.0.1:8080/health --json-path status --equals ok
+gash llm wait --timeout 30 --port 127.0.0.1:5432
 
 # A background job ends
-llm_wait --timeout 300 --gone "$pid"
+gash llm wait --timeout 300 --gone "$pid"
 ```
 
 #### Notes
@@ -3163,9 +3271,9 @@ rules and secret files are refused. Reads only: nothing is signaled,
 written or started but CMD.
 ```
 
-See also: [`llm_procs`](../agents/reference.md#llm_procs)
+See also: [`gash llm procs`](../agents/reference.md#gash-llm-procs)
 
-## Commands
+## Command trees
 
 ### gash agent-functions
 
@@ -3176,9 +3284,10 @@ List the agent functions: every llm_* (read-only, family "read") and
 agent_* (family "write") function. Each runs as gash <fn> args, with the
 output of the sourced function.
 
-  --json   one JSON array: [{"name","family","short","usage","flags","replaces"}]
-           (usage: the USAGE lines of its help; flags: the options they name;
-           replaces: the raw shell shape it replaces, or null)
+  --json   one JSON array: [{"name","command","family","short","usage","flags","replaces"}]
+           (command: the same function as gash llm|agent WORD; usage: the
+           USAGE lines of its help; flags: the options they name; replaces:
+           the raw shell shape it replaces, or null)
 ```
 
 ### gash agents-hint

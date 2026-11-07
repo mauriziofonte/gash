@@ -22,7 +22,7 @@ unset __gash_here
 
 chrome_headless_update() { __gash_call chrome_headless_update "$@"; }
 
-alias chri='chrome_headless_update'
+alias chri='gash runtime upgrade chrome'
 
 # Sourcing never fails: the status of this file is 0.
 true

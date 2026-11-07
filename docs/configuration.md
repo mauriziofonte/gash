@@ -14,7 +14,7 @@ each.
 |---|---|---|
 | `~/.gashrc` | the installer, once; never overwritten | The loader: sources `gash.sh` from the install directory, then the completion in interactive shells |
 | `~/.gash/` | the installer, `gash update` | The install: a git checkout of a release. Another location works: see `GASH_DIR` below |
-| `~/.gash_env` | you (`gash_env_init` creates it) | SSH keys to unlock, database connections, AI tokens, remote hosts and settings |
+| `~/.gash_env` | you (`gash config init` creates it) | SSH keys to unlock, database connections, AI tokens, remote hosts and settings |
 | `~/.bash_aliases`, `~/.bash_local` | you | Your own aliases and shell code, loaded after Gash |
 | `~/.local/share/gash/versions/VERSION/` | the installer, the first shell, `gash update` | The `gash` binary of each version (and `gash-hosts-helper`) |
 | `~/.local/state/gash/` | Gash | `update` (the version `gash update --rollback` returns to), `schema` and `notice` (the Gash 1.x reminder), `hte/` (the rendered `gash hte` configuration and its logs) |
@@ -25,7 +25,7 @@ each.
 move the last four, as their names say.
 
 The installer adds this block to `~/.bashrc` (or the profile it finds),
-and `gash_uninstall` removes it:
+and `gash uninstall` removes it:
 
 ```bash
 # >>> GASH START >>>
@@ -46,7 +46,7 @@ nothing unless `GASH_HEADLESS=1` is set. There are two modes.
 
 **Interactive** (a terminal), in this order:
 
-1. `gash.sh` records the shell state that `gash_unload` restores.
+1. `gash.sh` records the shell state that `gash unload` restores.
 2. The core libraries, every function, and the short aliases of the
    modules (`flf`, `gsync`, `dcc`, ...).
 3. `gash init bash`, from the binary: the settings of `~/.gash_env` (see
@@ -71,7 +71,7 @@ here: each call answers `binary_not_found`, whose hint is
 `bash ~/.gash/install.sh --repair` (`GASH_AUTO_FETCH=1` downloads it at
 the first call instead).
 
-`gash_doctor --timing` shows what each of these steps costs in a new shell.
+`gash doctor --timing` shows what each of these steps costs in a new shell.
 
 ### Aliases
 
@@ -82,7 +82,7 @@ and Ghostscript, `sl` and the steam locomotive), the alias is not defined
 and the program runs. The aliases that wrap the program of the same name on
 purpose stay (`ls`, `cp`, `mv`, `rm`, `mkdir`, `grep`, `bc`, `reboot`,
 `shutdown`, and the `GASH_REPLACE_TOOLS` ones), and so does an alias you
-defined before Gash loaded. The `hg` alias of `history_grep` follows the
+defined before Gash loaded. The `hg` alias of `gash shell history` follows the
 same rule when Mercurial is installed. To get a dropped alias back, define
 it in `~/.bash_aliases`.
 
@@ -97,20 +97,20 @@ change. The [shell guide](shell/README.md) describes the alias packs.
 ### Create it
 
 ```bash
-gash_env_init            # copies the template to ~/.gash_env, mode 600
-gash_env_init --force    # overwrites an existing file
+gash config init            # copies the template to ~/.gash_env, mode 600
+gash config init --force    # overwrites an existing file
 ```
 
 <!-- example -->
 ```console
-$ gash_env_init
+$ gash config init
 OK: Created ~/.gash_env
 Info: Edit with your SSH keys and database credentials
 $ stat -c '%a %n' ~/.gash_env
 600 ~/.gash_env
 ```
 
-With `GASH_ENV_FILE` set, `gash_env_init` writes that file instead.
+With `GASH_ENV_FILE` set, `gash config init` writes that file instead.
 
 ### Grammar
 
@@ -153,7 +153,7 @@ printf 'GASH_BANNER=0\nGASH_PROMTP=0\nDB:x=postgres://app@localhost/shop\n' >.ga
 chmod 600 .gash_env
 -->
 ```console
-$ gash_db_list
+$ gash db list
 Warning: Line 2 of ~/.gash_env: unknown GASH_ setting, skipping
 Warning: Line 3 of ~/.gash_env: DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)
 Info: No database connections configured in ~/.gash_env
@@ -161,7 +161,7 @@ Info: Run 'gash_env_init' to create a template configuration
 ```
 
 The warnings appear once per shell: the first time a function reads the
-file (`gash_db_list`, `remote_*`, `llm_db_*`, `ai_*`), or when the shell
+file (`gash db list`, `remote_*`, `llm_db_*`, `ai_*`), or when the shell
 starts if the file has `SSH:` keys. Headless mode prints them only with
 `GASH_DEBUG=1`. [troubleshooting.md](troubleshooting.md#warnings-about-gash_env)
 lists each warning and its fix.
@@ -175,7 +175,7 @@ passphrase is allowed. The passphrase is everything after the `=` up to the
 end of the line (a Windows line ending excepted), trailing spaces and tabs
 included; such a line gets
 `Warning: Line N of ~/.gash_env: passphrase ends with whitespace`, so an
-accidental space is visible. In interactive shells `gash_ssh_auto_unlock`
+accidental space is visible. In interactive shells `gash remote unlock-keys`
 starts `ssh-agent` when none is running and adds each key with `ssh-add`,
 typing the passphrase itself (`expect` is not needed), once per session: it
 exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it. See the [remote hosts guide](remote/README.md).
@@ -198,7 +198,7 @@ exports `GASH_SSH_AUTOUNLOCK_RAN=1`, so child shells skip it. See the [remote ho
 * An IPv6 host goes in brackets: `[::1]:5432`, or `[::1]` for the default
   port. A bracket that is not closed is refused with `invalid_db_url`.
 
-`gash_db_list` masks passwords; `gash_db_test [NAME]` runs `SELECT 1` on one.
+`gash db list` masks passwords; `gash db test [NAME]` runs `SELECT 1` on one.
 No `mysql`, `mariadb` or `psql` client is needed and none is run: Gash
 connects through its own drivers, so `~/.pgpass` and the client option files
 are not used for the connection: the `DB:` URL is the connection. One
@@ -219,14 +219,14 @@ at the end. ALIAS is a `HOST:` alias. The `llm_db_*` functions then run the
 engine's own client on the host (`mysql`, `psql` 12 or newer, `sqlite3`
 with `-json`), one ssh round trip per query, after the same SQL guard; the
 password goes on ssh's stdin, never in an argument, and one holding a
-newline is refused. `gash_db_test` does not test these connections. See
+newline is refused. `gash db test` does not test these connections. See
 the [databases guide](databases/README.md).
 
 ### AI providers
 
 `AI:provider=token`, with provider `claude` or `gemini`. An empty token is
-skipped. The first provider listed is the default for `ai_ask` (alias `ask`),
-`ai_query` and `ai_sysinfo`. `gash_ai_list` shows only a token's first 8
+skipped. The first provider listed is the default for `gash ai ask` (alias `ask`),
+`gash ai query` and `gash ai sysinfo`. `gash ai providers` shows only a token's first 8
 characters. See the [AI guide](ai/README.md).
 
 ### Remote hosts
@@ -239,7 +239,7 @@ warning. For a non-standard port or key, define the host in
 `~/.ssh/config` and use that name as `host`. The `remote_*` functions
 accept the alias, and so do `--host ALIAS` on the `llm_*` reads,
 `llm_remote_run`, `llm_same` and `agent_put`. In headless mode only
-registered aliases are accepted. `remote_hosts` (alias `rh`) lists them.
+registered aliases are accepted. `gash remote hosts` (alias `rh`) lists them.
 See the [remote hosts guide](remote/README.md).
 
 ### Protected paths
@@ -273,8 +273,8 @@ filesystem scanners and `gash logs`, and from what `ai_*` collects to send:
   what a command prints: a plain `ls` above an `all` path still names it.
   `GASH_LLM_EXEC=unrestricted` checks no path at all, and with `git` named
   in `GASH_LLM_EXEC_ALLOW` git output is not filtered.
-* The filesystem scanners (`files_largest`, `dirs_largest`,
-  `dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse an `all` path
+* The filesystem scanners (`gash files largest`, `gash files largest-dirs`,
+  `gash files big-dirs`, `gash files empty-dirs`, `gash files stats`) refuse an `all` path
   and leave it out of every walk; they list a `content` path, names and
   sizes. `gash logs` does the same, and `clean` never deletes or truncates
   a log in a `content` path.
@@ -282,7 +282,7 @@ filesystem scanners and `gash logs`, and from what `ai_*` collects to send:
   `name -> [protected]`, without its target.
 * Gash reads the lines from the file at each call, never from the
   environment. The other interactive functions (`remote_*`,
-  `archive_extract`, `file_backup`) do not read them.
+  `gash files extract`, `gash files backup`) do not read them.
 
 <!-- example
 mkdir -p private contracts
@@ -309,7 +309,7 @@ Keep the file private: `chmod 600 ~/.gash_env`. Whenever Gash reads it, it
 warns when group or other users have any access (`Warning: ~/.gash_env is
 accessible by other users (mode 644). Run: chmod 600 ~/.gash_env`) or when
 you do not own it, then reads it anyway (headless: only with
-`GASH_DEBUG=1`). Symlinks are followed. `gash_doctor` checks the mode too.
+`GASH_DEBUG=1`). Symlinks are followed. `gash doctor` checks the mode too.
 
 ## Precedence
 
@@ -348,16 +348,18 @@ in the environment (but the four file-only ones).
 | `GASH_HISTORY` | `1` | Gash manages history: unlimited size, timestamps, `histappend`, each command written at once, and `ignoreboth` added to `HISTCONTROL` unless you set your own (`ignorespace`, `ignoredups` or `ignoreboth`; another value such as `erasedups` gets `:ignoreboth` appended). `0` leaves history alone |
 | `GASH_HISTORY_SYNC` | `0` | `1` re-reads the history file before each prompt, to see commands from other terminals |
 | `GASH_SAFETY_ALIASES` | `1` | `cp -iv`, `mv -iv`, `mkdir -pv`, and `rm -Iv --one-file-system --preserve-root` plus `--preserve-root` for `chown`, `chmod`, `chgrp` with GNU tools (`rm -iv` otherwise). `0` turns them off |
+| `GASH_SHORTCUTS` | `all` | Which shortcut packs Gash defines, separated by spaces, commas or colons: `commands` (the short names of commands, such as `flf` for `gash files largest`), `git` (`gst`, `gcm`, `gpf` and the other git aliases; the `gl*` log functions stay), `docker` (`dcls`, `dils`...), `navigation` (the `ls` and `cd` shortcuts) and `php` (`php` and `composer` with Gash's options). `all` is every pack, `none` (or any value naming no pack) defines none. The commands themselves (`gash files largest`) and their former names stay whatever the value |
+| `GASH_LEGACY_HINTS` | `1` | `0` stops the tip a former name (`files_largest`) prints once per session, the first time it runs, naming its `gash NAMESPACE COMMAND` form |
 | `GASH_REPLACE_TOOLS` | `0` | `1` aliases `less` to `most` (and sets `PAGER`), `tail` to `multitail`, `df` to `pydf`, `top` to `htop`, `traceroute` and `tracepath` to `mtr`, `diff` to `colordiff` when installed, and `php`/`composer` to the newest `phpX.Y` |
 | `GASH_UMASK` | empty | An octal mask of 3 or 4 digits, such as `027`, applied at startup. Empty keeps the system umask; any other value is ignored with a warning |
 | `GASH_PATH_ADD` | empty | Directories put first on `PATH`, in the order given, when they exist (`~` is expanded), e.g. `"~/.local/bin ~/.cargo/bin ~/.config/composer/vendor/bin"`. Separated by spaces; no wildcards (a `*` is taken literally). Directories only, no options: a word starting with `-` is a directory name. Re-sourcing never adds them twice |
 | `GASH_NVM` | `off` | `lazy` puts `node`, `npm`, `npx` and the global packages of nvm's default version on `PATH` at once and loads `nvm.sh` the first time `nvm` runs: it saves the time that sourcing `nvm.sh` adds to every shell. `on` (or `1`) sources `nvm.sh` and its completion at startup. `off` leaves nvm to your own files. `NVM_DIR` defaults to `~/.nvm` |
-| `GASH_DB_TIMEOUT` | `30` | PostgreSQL statement timeout of `llm_db_*`, and how long `gash_db_test` waits, in seconds. Not applied to MySQL, MariaDB or SQLite queries |
+| `GASH_DB_TIMEOUT` | `30` | PostgreSQL statement timeout of `llm_db_*`, and how long `gash db test` waits, in seconds. Not applied to MySQL, MariaDB or SQLite queries |
 | `GASH_LLM_EXEC` | empty | `unrestricted` skips the `llm_exec` parser and allowlist, for `llm_exec` only (the functions that borrow its rules always check). The blocklist of destructive patterns still applies. File only |
 | `GASH_LLM_EXEC_ALLOW` | empty | Extra commands for `llm_exec`, separated by spaces, commas or colons (`"make npm"`). They run with any arguments. File only |
 | `GASH_LLM_SANDBOX` | `0` | `1` runs `llm_exec` inside `bwrap`: read-only filesystem, no network, and under WSL no Windows programs. Fails with `sandbox_unavailable` when `bwrap` is missing. File only |
 | `GASH_REMOTE_NO_BINARY` | empty | `HOST:` aliases, separated by spaces, commas or colons, or `*` for every host, that never get the gash binary: `--host` copies it to none of them and does not run a copy already cached there. Calls with `--host` then answer through their POSIX fallback, or fail with `remote_binary_unavailable`. File only |
-| `GASH_AI_CONFIRM` | `auto` | `auto` asks before sending data Gash collected (`ai_sysinfo`); `1` asks before every request; `0` never asks. The value is case-sensitive: any other value (`off`, `no`, `AUTO`) asks before every request, with a warning, so an unattended send always needs an explicit `0` |
+| `GASH_AI_CONFIRM` | `auto` | `auto` asks before sending data Gash collected (`gash ai sysinfo`); `1` asks before every request; `0` never asks. The value is case-sensitive: any other value (`off`, `no`, `AUTO`) asks before every request, with a warning, so an unattended send always needs an explicit `0` |
 | `GASH_AI_MODEL_CLAUDE` | `claude-haiku-5-5` | Model for Claude requests. Letters, digits, `.`, `_` and `-` only, starting with a letter or digit; any other value is an error and nothing is sent |
 | `GASH_AI_MODEL_GEMINI` | `gemini-2.5-flash` | Model for Gemini requests (it is part of the request URL). Same rule as `GASH_AI_MODEL_CLAUDE` |
 
@@ -378,20 +380,20 @@ These are read from the environment and are not accepted in
 | `GASH_HEADLESS=1` | Headless mode (see above). Only the value `1` counts |
 | `NO_COLOR`, `GASH_NO_COLOR` | Turn ANSI colors off in Gash output and in the prompt (from the next prompt). `NO_COLOR`: any non-empty value; `GASH_NO_COLOR`: any value but empty or `0` |
 | `GASH_DEBUG=1` | Shows what files print while a headless shell loads, the `~/.gash_env` warnings in headless mode, the `Debug:` lines of functions, and a stack trace with an `internal_error` |
-| `GASH_TIMING=1` | When a shell starts: records how long each file and step takes, in the `__GASH_LOAD_TIMES` array (Bash 5.0+). `gash_doctor --timing` shows the same in a new shell |
+| `GASH_TIMING=1` | When a shell starts: records how long each file and step takes, in the `__GASH_LOAD_TIMES` array (Bash 5.0+). `gash doctor --timing` shows the same in a new shell |
 | `GASH_AI_DEBUG=1` | Prints the (redacted) AI request bodies and raw responses on stderr |
 | `GASH_AWK` | awk program for the functions that need specific awk features. Default: `gawk` when installed, else `awk`. Read when Gash loads |
 | `GASH_TUI=plain` | Numbered prompts instead of arrow-key menus |
-| `GASH_ENV_FILE` | Use this file instead of `~/.gash_env` (the loader, every function that reads it, `llm_exec`, `gash_doctor`, `gash_env_init`, `gash_uninstall`) |
-| `GASH_DIR` | Install location used by `~/.gashrc`, the installer, `gash_upgrade` (`gash update`), `gash_uninstall` and `gash_doctor`. `gash.sh` sets it to its own directory |
-| `GASH_REQUIRE_SIGNED=1` | The installer and `gash_upgrade` (`gash update`) refuse a release unless its tag signature, or the Sigstore signature of its release, verifies (the latter needs `cosign` on `PATH`), and every binary download accepts only a binary the tagged tree pins in `release/SHA256SUMS` |
+| `GASH_ENV_FILE` | Use this file instead of `~/.gash_env` (the loader, every function that reads it, `llm_exec`, `gash doctor`, `gash config init`, `gash uninstall`) |
+| `GASH_DIR` | Install location used by `~/.gashrc`, the installer, `gash update`, `gash uninstall` and `gash doctor`. `gash.sh` sets it to its own directory |
+| `GASH_REQUIRE_SIGNED=1` | The installer and `gash update` refuse a release unless its tag signature, or the Sigstore signature of its release, verifies (the latter needs `cosign` on `PATH`), and every binary download accepts only a binary the tagged tree pins in `release/SHA256SUMS` |
 | `GASH_RELEASE_URL` | Base URL of the release assets for every binary download (the shell, the installer, `gash update`); default the GitHub release of the version; `file://` works |
 | `GASH_AUTO_FETCH` | Whether Gash downloads a missing binary of its version on its own. Unset: an interactive shell does when it loads, headless mode never does (each call answers `binary_not_found`). `1`: headless mode downloads it at the first call, without a word unless it fails. `0`: never, in any mode, for wrappers that must not reach the network. `install.sh` and `install.sh --repair` download it whatever the value. Set it in the environment or in the shell before Gash loads |
 | `GASH_BIN` | A gash binary to use as it is, instead of the one under `versions/` (development) |
-| `GASH_SERVER=0` | Turns off the per-shell server. By default (Linux) the first call of a served function (the `llm_*` reads, the file and disk reports, `gash_help` and the like) starts `gash __serve`, one process per shell that runs that call and the later ones without starting the binary again, with the shell's environment, directory and standard streams, and that ends with the shell. A call it cannot run the same way (in a subshell or `$(...)`, with a stream it cannot share, after `TZ` changed) starts the binary as usual. Read at each call |
+| `GASH_SERVER=0` | Turns off the per-shell server. By default (Linux) the first call of a served function (the `llm_*` reads, the file and disk reports, `gash help` and the like) starts `gash __serve`, one process per shell that runs that call and the later ones without starting the binary again, with the shell's environment, directory and standard streams, and that ends with the shell. A call it cannot run the same way (in a subshell or `$(...)`, with a stream it cannot share, after `TZ` changed) starts the binary as usual. Read at each call |
 | `GASH_TELEMETRY_FILE` | A file path: every `llm_*` and `agent_*` call appends one JSON line, `{"ts","fn","ms","out_bytes","rc","truncated"}`, to it (created 0600). Off when unset. Local only: never an argument, a path or a value, never the network; a write failure never fails the call. Export it so the calls see it |
 | `GASH_WIN_TIMEOUT` | WSL only. How long one `gash win` call waits for the Windows side before it fails with `interop_timeout`. A whole number of seconds or a Go duration (`8s`, `500ms`); default `10s`, capped at `120s`. Read at each call |
-| `GASH_CHROME_ROOT`, `GASH_CHROME_LINK` | Where `chrome_headless_update` installs (default `/opt/chrome-headless-shell`) and the symlink it maintains (default `/usr/local/bin/chrome-headless-shell`) |
+| `GASH_CHROME_ROOT`, `GASH_CHROME_LINK` | Where `gash runtime upgrade chrome` installs (default `/opt/chrome-headless-shell`) and the symlink it maintains (default `/usr/local/bin/chrome-headless-shell`) |
 | `GASH_INSTALL_GIT_REPO`, `GASH_INSTALL_REF`, `PROFILE` | Installer only: the repository to clone, a ref to check out instead of the latest release tag (no signature check then), the profile file to edit (`/dev/null` for none) |
 | `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME` | Parents of the Gash directories listed under [Files](#files) |
 | `GASH_VERSION` | Set by Gash, not by you: the loaded version, for scripts |
@@ -410,10 +412,10 @@ in `~/.bash_local` rather than there.
 
 ## Check and undo
 
-* `gash_doctor` lists the settings set in the shell and checks the mode of
+* `gash doctor` lists the settings set in the shell and checks the mode of
   `~/.gash_env`; see the [Gash guide](gash/README.md#check-the-installation).
-* `gash_unload` removes Gash from the current shell and restores what it
+* `gash unload` removes Gash from the current shell and restores what it
   changed there, settings included; nothing on disk changes. See the
   [Gash guide](gash/README.md#unload-gash-from-this-shell).
-* `gash_uninstall` removes Gash, its profile block and `~/.gashrc`; see the
+* `gash uninstall` removes Gash, its profile block and `~/.gashrc`; see the
   [Gash guide](gash/README.md#remove-gash).

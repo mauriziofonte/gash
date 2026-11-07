@@ -25,9 +25,9 @@ docker_compose_scan() { __gash_call docker_compose_scan "$@"; }
 docker_compose_upgrade() { __gash_call docker_compose_upgrade "$@"; }
 llm_docker_check() { __gash_call llm_docker_check "$@"; }
 
-alias dcc='docker_compose_check'
-alias dcup2='docker_compose_upgrade'
-alias dcscan='docker_compose_scan'
+alias dcc='gash docker compose check'
+alias dcup2='gash docker compose upgrade'
+alias dcscan='gash docker compose scan'
 
 # Sourcing never fails: the status of this file is 0.
 true

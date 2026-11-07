@@ -2,28 +2,267 @@
 
 # Remote hosts: reference
 
-Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_env, and unlock SSH keys at login. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Run commands on, and copy and sync files with, the SSH hosts named in ~/.gash_env, and unlock SSH keys at login. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`gash_ssh_auto_unlock`](#gash_ssh_auto_unlock) |  | Auto-unlock SSH keys from ~/.gash_env on shell startup |
-| [`remote_exec`](#remote_exec) | `rex` | Run a command or script on a remote host via multiplexed SSH |
-| [`remote_hosts`](#remote_hosts) | `rh` | List configured remote host aliases |
-| [`remote_pull`](#remote_pull) | `rpull` | Copy a remote file/dir to the local machine via scp |
-| [`remote_push`](#remote_push) | `rpush` | Copy a local file/dir to a remote host via scp |
-| [`remote_sync_pull`](#remote_sync_pull) | `rspull` | Sync a remote directory to the local machine via rsync |
-| [`remote_sync_push`](#remote_sync_push) | `rspush` | Sync a local directory to a remote host via rsync |
+| [`gash remote exec`](#gash-remote-exec) | `rex` | Run a command or script on a remote host via multiplexed SSH |
+| [`gash remote hosts`](#gash-remote-hosts) | `rh` | List configured remote host aliases |
+| [`gash remote pull`](#gash-remote-pull) | `rpull` | Copy a remote file/dir to the local machine via scp |
+| [`gash remote push`](#gash-remote-push) | `rpush` | Copy a local file/dir to a remote host via scp |
+| [`gash remote sync pull`](#gash-remote-sync-pull) | `rspull` | Sync a remote directory to the local machine via rsync |
+| [`gash remote sync push`](#gash-remote-sync-push) | `rspush` | Sync a local directory to a remote host via rsync |
+| [`gash remote unlock-keys`](#gash-remote-unlock-keys) |  | Auto-unlock SSH keys from ~/.gash_env on shell startup |
 
-### gash_ssh_auto_unlock
+### gash remote exec
 
-Auto-unlock SSH keys from ~/.gash_env on shell startup.
+Run a command or script on a remote host via multiplexed SSH.
+
+Shortcut: `rex`. Former name: `remote_exec` (works through 3.x).
 
 #### Usage
 
 ```text
-gash_ssh_auto_unlock
+gash remote exec <alias|user@host> "command"
+gash remote exec <alias|user@host> --script FILE [-- arg1 arg2 ...]
+gash remote exec <alias|user@host> --script -
+```
+
+#### Examples
+
+```bash
+# Run a single command
+gash remote exec hnas "ls -la /root"
+
+# Run a local script on the remote (no quoting hell)
+gash remote exec myserver --script /tmp/provision.sh -- --verbose
+```
+
+#### Notes
+
+```text
+Connections are multiplexed (ControlMaster, 60s persist): repeated calls to
+the same host reuse one session; a missing ~/.ssh (the socket's
+directory) is created with mode 0700.
+The exit status is the remote command's. When ssh exits 255, a probe
+(ssh ... exit 0) tells the cases apart: the connection is healthy and
+the status is 255 (the command was killed or exited 255), or it is not
+and the status is 1.
+A target is user@host: a user of letters, digits, '.', '_' and '-'
+(not first), a host name or a bracketed IPv6 literal; no port (put it
+in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
+registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
+names) is accepted, never a raw user@host target.
+```
+
+See also: [`gash remote hosts`](../remote/reference.md#gash-remote-hosts), [`gash remote push`](../remote/reference.md#gash-remote-push), [`gash remote pull`](../remote/reference.md#gash-remote-pull)
+
+### gash remote hosts
+
+List configured remote host aliases.
+
+Shortcut: `rh`. Former name: `remote_hosts` (works through 3.x).
+
+#### Usage
+
+```text
+gash remote hosts
+```
+
+#### Examples
+
+```bash
+# See which aliases are registered
+gash remote hosts
+```
+
+#### Notes
+
+```text
+Reads HOST:alias=user@host entries from ~/.gash_env, or from the file
+GASH_ENV_FILE names. An entry whose target is not a valid user@host
+(an option-like name, a host:port) is not listed and never used.
+```
+
+See also: [`gash remote exec`](../remote/reference.md#gash-remote-exec), [`gash remote push`](../remote/reference.md#gash-remote-push), [`gash remote pull`](../remote/reference.md#gash-remote-pull)
+
+### gash remote pull
+
+Copy a remote file/dir to the local machine via scp.
+
+Shortcut: `rpull`. Former name: `remote_pull` (works through 3.x).
+
+#### Usage
+
+```text
+gash remote pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]
+```
+
+#### Examples
+
+```bash
+# Pull a single file
+gash remote pull viper /tmp/backup.tar.gz ./backup.tar.gz
+
+# Pull a directory, keeping times and modes
+gash remote pull viper /srv/app/config ./config -r -p
+```
+
+#### Notes
+
+```text
+The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
+a remote path with characters the remote side may expand (* ? [ ] { }
+$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
+start) is refused, even with --force. An unknown option or a fourth
+argument is an error.
+A target is user@host: a user of letters, digits, '.', '_' and '-'
+(not first), a host name or a bracketed IPv6 literal; no port (put it
+in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
+registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
+names) is accepted, never a raw user@host target.
+```
+
+See also: [`gash remote push`](../remote/reference.md#gash-remote-push), [`gash remote sync pull`](../remote/reference.md#gash-remote-sync-pull)
+
+### gash remote push
+
+Copy a local file/dir to a remote host via scp.
+
+Shortcut: `rpush`. Former name: `remote_push` (works through 3.x).
+
+#### Usage
+
+```text
+gash remote push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]
+```
+
+#### Examples
+
+```bash
+# Push a config file
+gash remote push hnas ./nginx.conf /tmp/nginx.conf
+
+# Push a directory
+gash remote push hnas ./dist /tmp/dist -r
+```
+
+#### Notes
+
+```text
+The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
+a remote path with characters the remote side may expand (* ? [ ] { }
+$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
+start) is refused, even with --force. An unknown option or a fourth
+argument is an error.
+A target is user@host: a user of letters, digits, '.', '_' and '-'
+(not first), a host name or a bracketed IPv6 literal; no port (put it
+in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
+registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
+names) is accepted, never a raw user@host target.
+```
+
+See also: [`gash remote pull`](../remote/reference.md#gash-remote-pull), [`gash remote sync push`](../remote/reference.md#gash-remote-sync-push)
+
+### gash remote sync pull
+
+Sync a remote directory to the local machine via rsync.
+
+Shortcut: `rspull`. Former name: `remote_sync_pull` (works through 3.x).
+
+#### Usage
+
+```text
+gash remote sync pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]
+```
+
+#### Examples
+
+```bash
+# Sync a remote project directory locally
+gash remote sync pull viper /home/maurizio/projects/foo/ ./foo/
+
+# Mirror it, skipping logs
+gash remote sync pull viper /srv/app/ ./app/ --delete --exclude '*.log'
+```
+
+#### Notes
+
+```text
+The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
+a remote path with characters the remote side may expand (* ? [ ] { }
+$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
+start) is refused, even with --force. An unknown option or a fourth
+argument is an error.
+rsync runs with -s (--protect-args); openrsync (macOS), which has no
+-s, gets the remote path single-quoted for the remote shell and
+--progress. With --delete the LOCAL
+destination is checked: below /tmp, /var/tmp or /home/<user>/, or a
+relative path inside the current directory, never your home itself or
+.ssh; elsewhere it asks, or needs --force in headless mode.
+A target is user@host: a user of letters, digits, '.', '_' and '-'
+(not first), a host name or a bracketed IPv6 literal; no port (put it
+in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
+registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
+names) is accepted, never a raw user@host target.
+```
+
+See also: [`gash remote sync push`](../remote/reference.md#gash-remote-sync-push), [`gash remote pull`](../remote/reference.md#gash-remote-pull)
+
+### gash remote sync push
+
+Sync a local directory to a remote host via rsync.
+
+Shortcut: `rspush`. Former name: `remote_sync_push` (works through 3.x).
+
+#### Usage
+
+```text
+gash remote sync push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]
+```
+
+#### Examples
+
+```bash
+# Sync a build directory
+gash remote sync push hnas ./build/ /tmp/build/ --delete --exclude='*.log'
+```
+
+#### Notes
+
+```text
+The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
+a remote path with characters the remote side may expand (* ? [ ] { }
+$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
+start) is refused, even with --force. An unknown option or a fourth
+argument is an error.
+rsync runs with -s (--protect-args); openrsync (macOS), which has no
+-s, gets the remote path single-quoted for the remote shell and
+--progress. --delete runs without asking only
+below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the
+remote home, never the home itself or a .ssh path; elsewhere it asks,
+or needs --force in headless mode.
+A target is user@host: a user of letters, digits, '.', '_' and '-'
+(not first), a host name or a bracketed IPv6 literal; no port (put it
+in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
+registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
+names) is accepted, never a raw user@host target.
+```
+
+See also: [`gash remote sync pull`](../remote/reference.md#gash-remote-sync-pull), [`gash remote push`](../remote/reference.md#gash-remote-push)
+
+### gash remote unlock-keys
+
+Auto-unlock SSH keys from ~/.gash_env on shell startup.
+
+Former name: `gash_ssh_auto_unlock` (works through 3.x).
+
+#### Usage
+
+```text
+gash remote unlock-keys
 ```
 
 #### Examples
@@ -31,7 +270,7 @@ gash_ssh_auto_unlock
 ```bash
 # Runs automatically on shell startup if SSH keys are configured.
 # Manual invocation:
-gash_ssh_auto_unlock
+gash remote unlock-keys
 ```
 
 #### Configuration
@@ -57,241 +296,4 @@ Runs once per session (tracked by GASH_SSH_AUTOUNLOCK_RAN).
 Only unlocks keys that are not already loaded in the agent.
 ```
 
-See also: [`gash_env_init`](../gash/reference.md#gash_env_init)
-
-### remote_exec
-
-Run a command or script on a remote host via multiplexed SSH.
-
-Alias: `rex`
-
-#### Usage
-
-```text
-remote_exec <alias|user@host> "command"
-remote_exec <alias|user@host> --script FILE [-- arg1 arg2 ...]
-remote_exec <alias|user@host> --script -
-```
-
-#### Examples
-
-```bash
-# Run a single command
-rex hnas "ls -la /root"
-
-# Run a local script on the remote (no quoting hell)
-rex myserver --script /tmp/provision.sh -- --verbose
-```
-
-#### Notes
-
-```text
-Connections are multiplexed (ControlMaster, 60s persist): repeated calls to
-the same host reuse one session; a missing ~/.ssh (the socket's
-directory) is created with mode 0700.
-The exit status is the remote command's. When ssh exits 255, a probe
-(ssh ... exit 0) tells the cases apart: the connection is healthy and
-the status is 255 (the command was killed or exited 255), or it is not
-and the status is 1.
-A target is user@host: a user of letters, digits, '.', '_' and '-'
-(not first), a host name or a bracketed IPv6 literal; no port (put it
-in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
-registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
-names) is accepted, never a raw user@host target.
-```
-
-See also: [`remote_hosts`](../remote/reference.md#remote_hosts), [`remote_push`](../remote/reference.md#remote_push), [`remote_pull`](../remote/reference.md#remote_pull)
-
-### remote_hosts
-
-List configured remote host aliases.
-
-Alias: `rh`
-
-#### Usage
-
-```text
-remote_hosts
-```
-
-#### Examples
-
-```bash
-# See which aliases are registered
-rh
-```
-
-#### Notes
-
-```text
-Reads HOST:alias=user@host entries from ~/.gash_env, or from the file
-GASH_ENV_FILE names. An entry whose target is not a valid user@host
-(an option-like name, a host:port) is not listed and never used.
-```
-
-See also: [`remote_exec`](../remote/reference.md#remote_exec), [`remote_push`](../remote/reference.md#remote_push), [`remote_pull`](../remote/reference.md#remote_pull)
-
-### remote_pull
-
-Copy a remote file/dir to the local machine via scp.
-
-Alias: `rpull`
-
-#### Usage
-
-```text
-remote_pull <alias|user@host> <remote-src> <local-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]
-```
-
-#### Examples
-
-```bash
-# Pull a single file
-rpull viper /tmp/backup.tar.gz ./backup.tar.gz
-
-# Pull a directory, keeping times and modes
-rpull viper /srv/app/config ./config -r -p
-```
-
-#### Notes
-
-```text
-The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
-a remote path with characters the remote side may expand (* ? [ ] { }
-$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
-start) is refused, even with --force. An unknown option or a fourth
-argument is an error.
-A target is user@host: a user of letters, digits, '.', '_' and '-'
-(not first), a host name or a bracketed IPv6 literal; no port (put it
-in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
-registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
-names) is accepted, never a raw user@host target.
-```
-
-See also: [`remote_push`](../remote/reference.md#remote_push), [`remote_sync_pull`](../remote/reference.md#remote_sync_pull)
-
-### remote_push
-
-Copy a local file/dir to a remote host via scp.
-
-Alias: `rpush`
-
-#### Usage
-
-```text
-remote_push <alias|user@host> <local-src> <remote-dst> [-r|--recursive] [-p|--preserve] [--no-progress] [--force]
-```
-
-#### Examples
-
-```bash
-# Push a config file
-rpush hnas ./nginx.conf /tmp/nginx.conf
-
-# Push a directory
-rpush hnas ./dist /tmp/dist -r
-```
-
-#### Notes
-
-```text
-The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
-a remote path with characters the remote side may expand (* ? [ ] { }
-$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
-start) is refused, even with --force. An unknown option or a fourth
-argument is an error.
-A target is user@host: a user of letters, digits, '.', '_' and '-'
-(not first), a host name or a bracketed IPv6 literal; no port (put it
-in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
-registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
-names) is accepted, never a raw user@host target.
-```
-
-See also: [`remote_pull`](../remote/reference.md#remote_pull), [`remote_sync_push`](../remote/reference.md#remote_sync_push)
-
-### remote_sync_pull
-
-Sync a remote directory to the local machine via rsync.
-
-Alias: `rspull`
-
-#### Usage
-
-```text
-remote_sync_pull <alias|user@host> <remote-dir> <local-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]
-```
-
-#### Examples
-
-```bash
-# Sync a remote project directory locally
-rspull viper /home/maurizio/projects/foo/ ./foo/
-
-# Mirror it, skipping logs
-rspull viper /srv/app/ ./app/ --delete --exclude '*.log'
-```
-
-#### Notes
-
-```text
-The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
-a remote path with characters the remote side may expand (* ? [ ] { }
-$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
-start) is refused, even with --force. An unknown option or a fourth
-argument is an error.
-rsync runs with -s (--protect-args); openrsync (macOS), which has no
--s, gets the remote path single-quoted for the remote shell and
---progress. With --delete the LOCAL
-destination is checked: below /tmp, /var/tmp or /home/<user>/, or a
-relative path inside the current directory, never your home itself or
-.ssh; elsewhere it asks, or needs --force in headless mode.
-A target is user@host: a user of letters, digits, '.', '_' and '-'
-(not first), a host name or a bracketed IPv6 literal; no port (put it
-in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
-registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
-names) is accepted, never a raw user@host target.
-```
-
-See also: [`remote_sync_push`](../remote/reference.md#remote_sync_push), [`remote_pull`](../remote/reference.md#remote_pull)
-
-### remote_sync_push
-
-Sync a local directory to a remote host via rsync.
-
-Alias: `rspush`
-
-#### Usage
-
-```text
-remote_sync_push <alias|user@host> <local-dir> <remote-dir> [--delete] [--exclude PAT|--exclude=PAT]... [--dry-run] [--no-progress] [--force]
-```
-
-#### Examples
-
-```bash
-# Sync a build directory
-rspush hnas ./build/ /tmp/build/ --delete --exclude='*.log'
-```
-
-#### Notes
-
-```text
-The remote path goes through the DENY/ASK/ALLOW tiers (docs/security.md);
-a remote path with characters the remote side may expand (* ? [ ] { }
-$ ` ; & | < > ( ) ! quotes, a backslash, a newline, a ~ past the
-start) is refused, even with --force. An unknown option or a fourth
-argument is an error.
-rsync runs with -s (--protect-args); openrsync (macOS), which has no
--s, gets the remote path single-quoted for the remote shell and
---progress. --delete runs without asking only
-below /tmp, /var/tmp or /home/<user>/, or (a relative path) inside the
-remote home, never the home itself or a .ssh path; elsewhere it asks,
-or needs --force in headless mode.
-A target is user@host: a user of letters, digits, '.', '_' and '-'
-(not first), a host name or a bracketed IPv6 literal; no port (put it
-in a Host entry of ~/.ssh/config). Under GASH_HEADLESS=1 only a
-registered alias (HOST: in ~/.gash_env, or the file GASH_ENV_FILE
-names) is accepted, never a raw user@host target.
-```
-
-See also: [`remote_sync_pull`](../remote/reference.md#remote_sync_pull), [`remote_push`](../remote/reference.md#remote_push)
+See also: [`gash config init`](../gash/reference.md#gash-config-init)

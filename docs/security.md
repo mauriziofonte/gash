@@ -56,7 +56,7 @@ caller's shell, after three checks:
    `&>/dev/null`, `2>&1` and `>&2`.
 3. **Read-only allowlist.** Each command must be on the list (`ls`, `cat`,
    `grep`, `rg`, `find`, `jq`, `ps`, `ss`, `git`, `docker`, `systemctl`, and
-   similar; see `gash_help llm_exec`). Commands that also have writing options
+   similar; see `gash help llm_exec`). Commands that also have writing options
    get per-command rules, for example:
 
 | Command | Refused |
@@ -209,8 +209,8 @@ The walks of `llm_tree`, `llm_find` and `llm_grep` may not start at `/` or
 above a protected tree (content searches, `llm_grep` and
 `llm_find --contains`, also not above an `/etc` entry): `forbidden_path`,
 hint `Search a subdirectory`. Below the root they skip every entry at or
-below a protected path, and they do not follow symlinks. The filesystem scanners (`files_largest`, `dirs_largest`,
-`dirs_find_large`, `dirs_list_empty`, `tree_stats`) refuse `/proc`, `/sys`,
+below a protected path, and they do not follow symlinks. The filesystem scanners (`gash files largest`, `gash files largest-dirs`,
+`gash files big-dirs`, `gash files empty-dirs`, `gash files stats`) refuse `/proc`, `/sys`,
 `/dev`, `/boot` and `/root` (as written and resolved), also when reached
 through a symlink or from `/` (a walk skips them), and `/` without
 `--allow-root`. They refuse and skip your `PROTECT:all` paths the same way
@@ -229,14 +229,14 @@ own paths to the rails above, for this machine and every host, or for one
 | `all` | The tree is a forbidden path: refused as an argument (`forbidden_path`), left out of every walk, listing and git output; `llm_exec` runs no line inside it and no recursive command above it; `llm_tree --text` lists a link into it as `name -> [protected]` |
 
 The agent functions (`llm_*`, `agent_*`) hold them, and so do the
-filesystem scanners (`files_largest`, `dirs_largest`, `dirs_find_large`,
-`dirs_list_empty`, `tree_stats`) and `gash logs`. The scanners refuse an
+filesystem scanners (`gash files largest`, `gash files largest-dirs`, `gash files big-dirs`,
+`gash files empty-dirs`, `gash files stats`) and `gash logs`. The scanners refuse an
 `all` path as PATH and leave it out of every walk, also through `-L`; a
 `content` path is listed, since they show names and sizes only. `gash logs`
 refuses an `all` path as PATH, drops it from its default roots and leaves
 it out of a walk; `scan` lists a log in a `content` path as protected,
 and `clean` never deletes or truncates it. The other interactive
-functions (`remote_*`, `archive_extract`, `file_backup`) do not read the
+functions (`remote_*`, `gash files extract`, `gash files backup`) do not read the
 lines.
 
 The checks resolve links as the forbidden paths do. On a host they run
@@ -264,8 +264,8 @@ smudge filters named in `.gitattributes` and defined in the repository's
 configuration can still run during `status` and `diff`: inspect an untrusted
 repository's `.git/config` before pointing an agent at it.
 
-The git module functions (`git_sync`, `git_add_tag`, `git_delete_tag`,
-`git_apply_patch`, `git_repair`, `git_dump_revisions`, `git_list_tags`) are
+The git module functions (`gash git sync`, `gash git tag add`, `gash git tag delete`,
+`gash git patch`, `gash git repair`, `gash git revisions`, `gash git tag list`) are
 your own repository operations and get none of this hardening: they run your
 hooks (`pre-commit`, `commit-msg`, ...), signing (`commit.gpgSign`,
 `tag.gpgSign`), credential helpers, `core.sshCommand` and `insteadOf` rules,
@@ -288,7 +288,7 @@ you do not trust.
   is hunter2"), is sent. The piped input and the question are redacted
   separately, so an unclosed private key block in the pipe never swallows
   the question.
-* **WireGuard keys.** The `sysinfo` drill-downs, and the AI collectors that
+* **WireGuard keys.** The `gash system info` drill-downs, and the AI collectors that
   run them, print the value of every WireGuard `PrivateKey` and
   `PresharedKey` line as `[REDACTED]`, whatever its case and spacing.
 * **Transport.** The request is made inside the gash process over HTTPS: the
@@ -296,13 +296,13 @@ you do not trust.
   in the process, never on a command line. Control characters are stripped
   from replies.
 * **Consent.** `GASH_AI_CONFIRM=auto` (default) asks before sending data Gash
-  collected (`ai_sysinfo`) and sends what you typed or piped; `1` always asks;
+  collected (`gash ai sysinfo`) and sends what you typed or piped; `1` always asks;
   `0` never; any other value (case-sensitive: `off`, `AUTO`) always asks and
   warns once. Where consent is needed, no terminal or headless mode means
   refusal. Headless mode reads it from `~/.gash_env` too; the environment
   wins. `GASH_AI_DEBUG=1` prints the (redacted) request
   bodies and raw replies on stderr.
-* **`ai_sysinfo` questions.** A path named in a `?` question passes the same
+* **`gash ai sysinfo` questions.** A path named in a `?` question passes the same
   guard as the `llm_*` readers: a `..` component is refused, symlinks are
   resolved, and a [forbidden path](#forbidden-paths) or a
   [secret file](#secret-files) (lexical or resolved, base names
@@ -326,7 +326,7 @@ path. openrsync (macOS `/usr/bin/rsync`) has no `-s`: it gets the remote path
 inside single quotes instead (a leading `~`, `~/` or `~NAME/` left out of
 them), which the remote shell reads as one word; the characters that could
 end the quotes or be expanded are already refused. Unknown options and extra arguments are refused. Remote paths of
-`remote_push`, `remote_pull` and `remote_sync_*` are normalized (repeated `/`,
+`gash remote push`, `gash remote pull` and `remote_sync_*` are normalized (repeated `/`,
 `.` segments, trailing `/`; `~/` becomes a path relative to the remote home,
 `~root` becomes `/root` and `~user` becomes `/home/user`; `/.` is `/`), `..`
 is refused, then:
@@ -342,10 +342,10 @@ is refused, then:
 `/home/<user>/`, and for relative paths inside the remote home. The home
 itself, however it is written (`~`, `~user`, `/home/<user>`, `/Users/<user>`,
 `/root`), and any `.ssh` path never count as safe; elsewhere it asks, or needs
-`--force` in headless mode. For `remote_sync_pull` the same rule applies to
+`--force` in headless mode. For `gash remote sync pull` the same rule applies to
 the local destination (a relative path is inside the current directory, never
 your home itself), and the messages say so.
-`remote_exec` runs any command on the remote host: the path tiers do not apply
+`gash remote exec` runs any command on the remote host: the path tiers do not apply
 to it.
 
 ## Agent toolkit
@@ -397,39 +397,39 @@ and the [agents guide](agents/README.md) shows them to a person.
 `needs_confirm_prompt` reads the answer from `/dev/tty`, accepts only `y` or
 `Y`, and always refuses in headless mode or without a terminal. The
 commands that show a plan first ask "Do you want to continue? [Y/n]" the same
-way. Answering no returns 1. `port_kill`, `process_kill`, `services_stop`
-and `node_upgrade` also accept `--force` as a synonym of `-y`.
+way. Answering no returns 1. `gash system port-kill`, `gash system kill`, `gash system stop-services`
+and `gash runtime upgrade node` also accept `--force` as a synonym of `-y`.
 
 | Function | Interactive | Headless |
 |---|---|---|
-| `port_kill PORT` | Lists the listening processes and asks; `-y` skips | Refused unless `-y` |
-| `process_kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
-| `services_stop` (alias `quit`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
-| `docker_prune_all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
-| `docker_stop_all`, `docker_start_all` | List the containers (`Will stop N container(s): NAMES`) and ask; `-y` skips | Refused unless `-y` |
-| `git_repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
-| `git_add_tag`, `git_delete_tag` | Show the tag and the origin URL (`Will push refs/tags/T to origin (URL)`) and ask; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
-| `git_sync` | Shows what it commits and where it pushes (`Will commit N file(s) on B (M untracked) and push to U`) and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
-| `git_apply_patch` | Shows the checkout, pull and apply plan and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
-| `node_upgrade`, `chrome_headless_update` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
-| `wsl_restart`, `wsl_shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
-| `wsl_compact` | Runs without asking (it changes no data) | Refused unless `-y` |
-| `docker_compose_upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
-| `sudo_last` (no argument) | Shows the command and asks | Refused |
-| `nvm_prune_versions` | Lists what it would remove and changes nothing; `-y`, `--yes` or `--force` removes | The same |
+| `gash system port-kill PORT` | Lists the listening processes and asks; `-y` skips | Refused unless `-y` |
+| `gash system kill NAME` | Lists the matches and asks, even for one; `-y` skips | Refused unless `-y` |
+| `gash system stop-services` (alias `svs`) | Lists the running services and asks; `-y` skips | Refused unless `-y` |
+| `gash docker prune-all` | Counts what would go and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` |
+| `gash docker stop-all`, `gash docker start-all` | List the containers (`Will stop N container(s): NAMES`) and ask; `-y` skips | Refused unless `-y` |
+| `gash git repair` | Shows the empty object files and the plan, asks; `-y` skips | Refused unless `-y` |
+| `gash git tag add`, `gash git tag delete` | Show the tag and the origin URL (`Will push refs/tags/T to origin (URL)`) and ask; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `gash git sync` | Shows what it commits and where it pushes (`Will commit N file(s) on B (M untracked) and push to U`) and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `gash git patch` | Shows the checkout, pull and apply plan and asks; `-y`/`--yes` skips, `--dry-run` only shows | Refused unless `--yes` |
+| `gash runtime upgrade node`, `gash runtime upgrade chrome` | Show the plan (versions, download size) and ask; `-y` skips | Refused unless `-y` |
+| `gash wsl restart`, `gash wsl shutdown` | Ask before stopping every WSL distribution; `-y` skips | Refused unless `-y` |
+| `gash wsl compact` | Runs without asking (it changes no data) | Refused unless `-y` |
+| `gash docker compose upgrade` | Shows the plan and asks; `--yes` skips | Refused unless `--yes` |
+| `gash shell sudo-last` (no argument) | Shows the command and asks | Refused |
+| `gash runtime prune node` | Lists what it would remove and changes nothing; `-y`, `--yes` or `--force` removes | The same |
 | `gash logs clean` | Shows what it would free and asks; `-y` skips, `--dry-run` only shows | Refused unless `-y` (`confirmation_required`) |
 | `gash hte site remove`, `gash hte uninstall`, and `gash hte install` or `gash hte migrate --apply` when they stop the system Apache | Refused unless `--yes` (`confirmation_required`): no question is asked | The same |
-| `gash_doctor --install` | Shows the packages and the command, and asks; `--yes` skips | Refused (`install_needs_confirmation`, with the command to show the user) |
-| `gash_uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
+| `gash doctor --install` | Shows the packages and the command, and asks; `--yes` skips | Refused (`install_needs_confirmation`, with the command to show the user) |
+| `gash uninstall` | Asks, then asks again before deleting `~/.gash_env` | Cancelled |
 
-`gash_uninstall` also refuses a directory that resolves to `/` or your home,
+`gash uninstall` also refuses a directory that resolves to `/` or your home,
 or has no `gash.sh` and `lib/core`.
 
-`services_stop`, `wsl_compact` and `chrome_headless_update` run sudo with `-n`
+`gash system stop-services`, `gash wsl compact` and `gash runtime upgrade chrome` run sudo with `-n`
 when headless or without a terminal, after a `sudo -n true` check: a sudo
 that needs a password stops the command with `Error: sudo needs a password:
 run interactively or configure NOPASSWD.` instead of waiting at a prompt
-nobody sees. `chrome_headless_update` uses no sudo at all when its root and
+nobody sees. `gash runtime upgrade chrome` uses no sudo at all when its root and
 link directories are writable.
 
 ## Credentials in ~/.gash_env
@@ -439,7 +439,7 @@ when group or other users can read it). Parse warnings give the line number
 and the kind of problem, never any part of the line; headless mode prints them
 only with `GASH_DEBUG=1`. Parsed values
 live in unexported shell variables (not inherited by child processes) that
-`gash_unload` removes. Secrets never go on a command line, where other users
+`gash unload` removes. Secrets never go on a command line, where other users
 could read them in `/proc/<pid>/cmdline`: database passwords go to the
 drivers built into Gash, in memory (over a `+ssh` connection they travel on
 ssh's stdin and reach the client on the host in its environment), SSH
@@ -465,7 +465,7 @@ binary on disk changes.
 
 ## Install and upgrade
 
-The installer and `gash_upgrade` check out the newest release tag. A signed tag
+The installer and `gash update` check out the newest release tag. A signed tag
 (PGP or SSH) is checked with `git verify-tag`; an unverifiable one gets a
 warning. A tag counts as signed only when it is an annotated tag whose object
 ends with a signature block: a lightweight tag (even on a signed commit) and a
@@ -489,7 +489,7 @@ root-owned sudo target) is verified before it is installed: against the
 SHA-256 the tagged tree pins in `release/SHA256SUMS`, so a signed tag covers
 the binaries too, else against the release's `checksums.txt`. With
 `GASH_REQUIRE_SIGNED=1` only a pinned binary is accepted, and a helper the tree
-does not pin is not installed. `gash_upgrade` (`gash update`) downloads and
+does not pin is not installed. `gash update` downloads and
 verifies the new binary before it checks out the new tag, checks that it
 answers its version, then loads the new tree in a test shell and checks out
 the previous tag again when that fails.

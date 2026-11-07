@@ -28,12 +28,15 @@ env GASH_HEADLESS=1
 env LC_ALL=C
 
 # --- functions_smoke_spec.sh:11 - gash_help displays grouped overview
+# (3.5: the namespaces; gash help --list names their commands)
 exec bash -c 'export GASH_VERSION=test; source "$GASH_SH"; gash_help'
 stdout Gash
-stdout FILES
-stdout GIT
-stdout files_largest
-stdout git_add_tag
+stdout EVERYDAY
+stdout '^    files '
+stdout '^    git '
+exec bash -c 'export GASH_VERSION=test; source "$GASH_SH"; gash_help --list'
+stdout '^    largest '
+stdout '^    tag add '
 
 # --- functions_smoke_spec.sh:43 - file_backup creates timestamped backup
 mkdir fb
@@ -67,7 +70,7 @@ stderr 'Docker is not installed'
 
 # --- functions_smoke_spec.sh:123 - wsl_restart shows help on -h
 exec bash -c 'source "$GASH_SH"; wsl_restart -h'
-stdout wsl_restart
+stdout 'gash wsl restart'
 
 # --- functions_smoke_spec.sh:132 - wsl_shutdown shows help on -h
 exec bash -c 'source "$GASH_SH"; wsl_shutdown -h'
@@ -75,7 +78,7 @@ stdout wsl_shutdown
 
 # --- functions_smoke_spec.sh:141 - wsl_explorer shows help on -h
 exec bash -c 'source "$GASH_SH"; wsl_explorer -h'
-stdout wsl_explorer
+stdout 'gash win explorer'
 
 # --- functions_smoke_spec.sh:150 - wsl_taskmanager shows help on -h
 exec bash -c 'source "$GASH_SH"; wsl_taskmanager -h'
@@ -91,8 +94,8 @@ stderr WSL
 
 # --- functions_smoke_spec.sh:198 - wr alias points to wsl_restart
 exec bash -c 'source "$GASH_SH"; alias wr'
-stdout wsl_restart
+stdout 'gash wsl restart'
 
 # --- functions_smoke_spec.sh:207 - wex alias points to wsl_explorer
 exec bash -c 'source "$GASH_SH"; alias wex'
-stdout wsl_explorer
+stdout 'gash win explorer'

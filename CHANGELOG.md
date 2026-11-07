@@ -6,6 +6,78 @@ All notable changes to Gash are documented here. The format follows
 the set of documented functions, the `--json` envelopes, the error contract
 and the `GASH_*` settings (see [AGENTS.md](AGENTS.md)).
 
+## [3.5.0] - 2026-11-07
+
+One name per command. Every command of Gash is now `gash NAMESPACE
+COMMAND` (`gash files largest`, `gash git tag add`, `gash system info`),
+the short aliases are shortcuts that expand to it, Tab completion is
+answered by the binary, and the help is rewritten around the namespaces.
+Nothing that worked in 3.4 stops working: the flat names run as before and
+print a one-line tip with their new name. [docs/migration-3.5.md](docs/migration-3.5.md)
+has the table of every name.
+
+### Added
+
+- The command tree: 15 namespaces (`files`, `system`, `git`, `docker`,
+  `remote`, `db`, `runtime`, `hte`, `wsl`, `win`, `logs`, `ai`, `shell`,
+  `llm`, `agent`) and Gash's own commands at the top level (`gash doctor`,
+  `gash update`, `gash help`, `gash config init`, `gash uninstall`,
+  `gash unload`). They run in the shell (`gash files largest ~`) and from
+  the binary (`~/.gash/bin/gash files largest ~`), with the output of the
+  function they replace.
+- `gash` shows the overview of the namespaces and their commands;
+  `gash NAMESPACE` the page of one namespace, with each command's usage
+  and shortcut; `gash help shortcuts` every shortcut.
+- `gash help NAME` takes a command (`gash help git tag add`), a shortcut
+  (`gash help flf`) or a former name; a mistyped name gets a suggestion
+  (`Did you mean gash git sync?`), and `gash help --search WORD` searches
+  every page.
+- Tab completion served by the binary: the words of each command, the
+  options of every command with their descriptions (`--format=` values
+  too), and live values: the `HOST:` and `DB:` names of `~/.gash_env`
+  (never a password), git tags and branches, Docker containers, systemd
+  services, process names and listening ports. `gash run -- CMD` and the
+  other command lines complete as that command. The probes are bounded
+  (800 ms): a slow daemon costs one empty completion, never a stuck Tab.
+- `GASH_SHORTCUTS`: which shortcut packs an interactive shell defines
+  (`commands`, `git`, `docker`, `navigation`, `php`; `all` by default,
+  `none` for none).
+- `GASH_LEGACY_HINTS=0` stops the tip a former name prints.
+- `gash llm NAME` and `gash agent NAME` for every `llm_*` and `agent_*`
+  function (`llm_db_query` is `gash llm db-query`); `gash llm list` and
+  `gash llm hint` are `gash agent-functions` and `gash agents-hint`.
+  `gash agent-functions --json` gives each function's `command`.
+- The references of `docs/` list every command by its canonical name, with
+  its shortcut and former name; `docs/migration-3.5.md` is new.
+
+### Changed
+
+- The guides, the README and AGENTS.md name the commands by their
+  canonical name. The `llm_*` and `agent_*` names stay the names agents
+  call, permanently.
+- A shortcut is an alias of the command (`flf` is `gash files largest`),
+  no longer of the flat function.
+- Typed at an interactive prompt on a terminal, a former flat name
+  (`files_largest`, `gash_doctor`, `sysinfo`) prints
+  `tip: files_largest is now gash files largest (shortcut flf)` on stderr,
+  once per name and session. From a script, a function or headless mode
+  it prints nothing; stdout and the exit status are unchanged.
+- `gash help --bash NAME` shows the help of a Bash builtin (the `help`
+  wrapper of 3.4 still works).
+
+### Removed
+
+- The duplicate aliases `dstopall`, `dstartall`, `dpruneall` (use `dsa`,
+  `daa`, `dpa`), `glog` (use `gl`) and `quit` (use `svs`). `dcc`, `dcup2`
+  and `dcscan` were defined twice, by the docker pack and the module; they
+  stay once, as shortcuts.
+
+### Deprecated
+
+- The flat names of the non-agent functions (`files_largest`,
+  `git_sync`, `gash_doctor`...). They work through 3.x; 4.0 removes them
+  from the default, with a setting to bring them back.
+
 ## [3.4.2] - 2026-10-26
 
 Fixes found while wiring Gash into an agent harness: a WSL drive mounted
@@ -1141,6 +1213,7 @@ Upgrading from 1.x is guided: see [the 2.1.0 migration guide](https://github.com
 
 - Filesystem scanners rewritten: JSON envelopes and a single O(N) walk.
 
+[3.5.0]: https://github.com/mauriziofonte/gash/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/mauriziofonte/gash/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/mauriziofonte/gash/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/mauriziofonte/gash/compare/v3.2.0...v3.4.0

@@ -53,7 +53,7 @@ stderr '"error":"unknown_option"'
 
 # --- help, without side effects
 exec gash llm_git_overview --help
-stdout 'llm_git_overview \[PATH\] \[--log N\] \[--files N\]'
+stdout 'gash llm git-overview \[PATH\] \[--log N\] \[--files N\]'
 
 # --- the repository's own config names no program that runs
 exec bash no_exec.sh

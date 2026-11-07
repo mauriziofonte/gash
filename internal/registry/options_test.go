@@ -73,6 +73,20 @@ func TestSpecOptions(t *testing.T) {
 		"-- CMD...":                         nil,
 		"-l, --files-only":                  {{Names: []string{"-l", "--files-only"}}},
 	} {
-		require.Equal(t, want, specOptions(spec), spec)
+		got := specOptions(spec)
+		for i := range got {
+			got[i].Meta = "" // TestOptionMeta
+		}
+		require.Equal(t, want, got, spec)
 	}
+}
+
+// The first value name and the description of an option are kept for the
+// completion.
+func TestOptionMeta(t *testing.T) {
+	require.Equal(t, []Option{{Names: []string{"--sort"}, Values: 1, Meta: "name|mtime|size"}}, specOptions("--sort name|mtime|size"))
+	require.Equal(t, []Option{{Names: []string{"--pid"}, Values: 1, Meta: "PID"}}, specOptions("--pid PID..."))
+	o, ok := OptionOf("files_largest", "--limit")
+	require.True(t, ok)
+	require.Equal(t, "Cap results (default 100)", o.Desc)
 }

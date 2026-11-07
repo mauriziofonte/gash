@@ -29,6 +29,12 @@
 # decision "new", such as agent_replace) exist only in 3.x and are left
 # out too.
 #
+# 3.5 differences, checked and left out the same way: each shortcut
+# expands to its canonical command instead of the flat function, the
+# duplicate aliases dstopall, dstartall, dpruneall, glog and quit are
+# gone, path_add completes directories, and help and gash_migrate have no
+# Gash completion.
+#
 # After gash_unload the 3.x shell is exactly the shell before the load,
 # in every case (SELF-03, SELF-05 fixed; 2.x left completion specs,
 # exports and overwritten aliases behind).
@@ -101,6 +107,38 @@ for c in ${CASES:-defaults all_off replace_tools nvm_lazy path_add user_aliases 
         grep -qx "alias gp='echo mine'" "$l3" && grep -qx "alias ll='ls -1'" "$l3" || echo "$c: 3.x overwrote a user alias (SHELL-09)"
         grep -qx "alias gp='echo mine'" "$l2" && echo "$c: 2.x kept the user alias gp"
     fi
+    # 3.5: a shortcut expands to the command (flf='gash files largest'),
+    # not to the flat function (flf='files_largest'): the same names, and
+    # each command is the one the 2.x function became (its help page is
+    # the same page).
+    for n in $(sed -n "s/^alias \([^=]*\)='gash .*/\1/p" "$l3"); do
+        v2=$(sed -n "s/^alias $n='\(.*\)'\$/\1/p" "$l2")
+        v3=$(sed -n "s/^alias $n='gash \(.*\)'\$/\1/p" "$l3")
+        if [ -z "$v2" ]; then
+            echo "$c: shortcut $n is new in 3.x"
+            continue
+        fi
+        if [ "$c" = defaults ] && [ "$("$GASH_BIN" help "$v2" 2>&1)" != "$("$GASH_BIN" help $v3 2>&1)" ]; then
+            echo "$c: $n is gash $v3, not what $v2 became"
+        fi
+        for f in "$l2" "$l3"; do
+            sed -i.bak "s/^alias $n=.*/alias $n=SHORTCUT/" "$f"
+            rm -f "$f.bak"
+        done
+    done
+    # 3.5 dropped the duplicate aliases, and completes path_add with
+    # directories; help (Bash's builtin) and gash_migrate (it prints a
+    # route) get no Gash completion.
+    for n in dstopall dstartall dpruneall glog quit; do
+        grep -q "^alias $n=" "$l3" && echo "$c: 3.x still defines $n"
+        sed -i.bak "/^alias $n=/d" "$l2"
+        rm -f "$l2.bak"
+    done
+    grep -qx 'complete -d path_add' "$l3" || echo "$c: 3.x path_add does not complete directories"
+    sed -i.bak -e '/^complete -o default -F __gash_complete help$/d' -e '/^complete -o default -F __gash_complete gash_migrate$/d' \
+        -e '/^complete -o default -F __gash_complete path_add$/d' "$l2"
+    sed -i.bak -e '/^complete -d path_add$/d' "$l3"
+    rm -f "$l2.bak" "$l3.bak"
     # Functions new in 3.x (registry decision "new", $GASH_NEW3X from
     # script_test.go) and their completion specs exist only in 3.x.
     for n in ${GASH_NEW3X-}; do

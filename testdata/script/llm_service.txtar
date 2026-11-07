@@ -40,7 +40,7 @@ stderr '"error":"invalid_log"'
 
 # --- --help anywhere prints the help
 exec gash llm_service nginx -h
-stdout 'llm_service UNIT\.\.\.'
+stdout 'gash llm service UNIT\.\.\.'
 
 -- stub/systemctl --
 #!/bin/sh

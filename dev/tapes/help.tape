@@ -1,4 +1,5 @@
-# Help: a topic card, search, and the full page of a function.
+# Help: a namespace page, Tab completion, search, and the full page of a
+# command found by its shortcut.
 # Record with dev/tapes/render.sh help (see dev/tapes/README.md).
 Output docs/assets/help.gif
 
@@ -24,13 +25,23 @@ Enter
 Wait
 Sleep 4.5s
 
-Type "clear; gash_help --search tag"
+Type "clear; gash git t"
+Sleep 300ms
+Tab
+Sleep 800ms
+Tab
+Tab
+Sleep 3.5s
+Ctrl+C
+Sleep 300ms
+
+Type "clear; gash help --search tag"
 Sleep 300ms
 Enter
 Wait
 Sleep 3.5s
 
-Type "clear; gash_help gat"
+Type "clear; gash help gat"
 Sleep 300ms
 Enter
 Wait

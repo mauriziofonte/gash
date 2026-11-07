@@ -32,7 +32,7 @@ stderr '"error":"missing_target"'
 ! exec gash llm_tls example.com:0
 stderr '"error":"invalid_target"'
 exec gash llm_tls --help
-stdout 'llm_tls HOST\[:PORT\]\.\.\.'
+stdout 'gash llm tls HOST\[:PORT\]\.\.\.'
 
 -- start.sh --
 # PLAIN is httpsfake's listener (HTTP, no TLS); CLOSED the port of a second

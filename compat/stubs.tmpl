@@ -139,6 +139,9 @@ gash_help() {
 
 {{% define "stub/gash" %}}
 gash() {
+    # 3.5: a canonical command runs the shell function of its handler,
+    # as the flat name does (gash files largest is files_largest).
+{{% gashRoute %}}
     {{% if .LoadsEnv %}}{{% loadenv %}}{{% end %}}
     # The card shows the value this shell gives an alias of the card, as
     # 2.x read BASH_ALIASES: one NAME<TAB>VALUE line per defined alias,

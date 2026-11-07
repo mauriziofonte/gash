@@ -28,13 +28,13 @@ git_list_tags() { __gash_call git_list_tags "$@"; }
 git_repair() { __gash_call git_repair "$@"; }
 git_sync() { __gash_call git_sync "$@"; }
 
-alias glt='git_list_tags'
-alias gat='git_add_tag'
-alias gdt='git_delete_tag'
-alias gdr='git_dump_revisions'
-alias gpatch='git_apply_patch'
-alias gheal='git_repair'
-alias gsync='git_sync'
+alias glt='gash git tag list'
+alias gat='gash git tag add'
+alias gdt='gash git tag delete'
+alias gdr='gash git revisions'
+alias gpatch='gash git patch'
+alias gheal='gash git repair'
+alias gsync='gash git sync'
 
 # Sourcing never fails: the status of this file is 0.
 true

@@ -20,7 +20,7 @@ Every function, alias and command of this area, with all its options: [reference
 
 ## Add a connection
 
-Add one `DB:` line per connection to `~/.gash_env` (`gash_env_init` creates
+Add one `DB:` line per connection to `~/.gash_env` (`gash config init` creates
 the file from a template):
 
 ```text
@@ -47,7 +47,7 @@ The full grammar is in [configuration](../configuration.md#databases). Keep
 the file private (`chmod 600 ~/.gash_env`): it holds passwords, and Gash
 warns at each read when other users can open it.
 
-[`gash_db_list`](reference.md#gash_db_list) shows the connections in effect,
+[`gash db list`](reference.md#gash-db-list) shows the connections in effect,
 with the passwords masked:
 
 <!-- example
@@ -55,7 +55,7 @@ printf 'DB:default=mysql://app:s3cret@localhost:3306/shop\nDB:reports=pgsql://re
 chmod 600 .gash_env
 -->
 ```console
-$ gash_db_list
+$ gash db list
 Info: Available database connections:
 
   default         mysql://app:****@localhost:3306/shop
@@ -64,12 +64,12 @@ Info: Available database connections:
 
 ## Test a connection
 
-[`gash_db_test`](reference.md#gash_db_test) connects and runs `SELECT 1`, on
+[`gash db test`](reference.md#gash-db-test) connects and runs `SELECT 1`, on
 the connection you name or on `default`:
 
 ```bash
-gash_db_test            # the default connection
-gash_db_test reports
+gash db test            # the default connection
+gash db test reports
 ```
 
 It prints `Info: Testing connection 'reports' (pgsql://report@db.example.com:5432/analytics)...`
@@ -84,12 +84,12 @@ per call), and they work the same for you at the prompt:
 
 | To | Use |
 |---|---|
-| List the databases of a server | [`llm_db_databases`](../agents/reference.md#llm_db_databases) |
-| List the tables, with `--counts` their row counts | [`llm_db_tables`](../agents/reference.md#llm_db_tables) |
-| Show the columns of a table, or of all with `--all` | [`llm_db_schema`](../agents/reference.md#llm_db_schema) |
-| See a few rows of a table | [`llm_db_sample`](../agents/reference.md#llm_db_sample) |
-| Run a query | [`llm_db_query`](../agents/reference.md#llm_db_query) |
-| See how a query runs (`EXPLAIN`, `--analyze`) | [`llm_db_explain`](../agents/reference.md#llm_db_explain) |
+| List the databases of a server | [`llm_db_databases`](../agents/reference.md#gash-llm-db-databases) |
+| List the tables, with `--counts` their row counts | [`llm_db_tables`](../agents/reference.md#gash-llm-db-tables) |
+| Show the columns of a table, or of all with `--all` | [`llm_db_schema`](../agents/reference.md#gash-llm-db-schema) |
+| See a few rows of a table | [`llm_db_sample`](../agents/reference.md#gash-llm-db-sample) |
+| Run a query | [`llm_db_query`](../agents/reference.md#gash-llm-db-query) |
+| See how a query runs (`EXPLAIN`, `--analyze`) | [`llm_db_explain`](../agents/reference.md#gash-llm-db-explain) |
 
 Pick the database with `-c NAME` (a `DB:` connection; `default` when you
 leave it out) or `-f FILE` (a SQLite file), and override the database name
@@ -131,7 +131,7 @@ Every `llm_db_*` query passes two checks:
 
 1. **The SQL guard.** The query must be a single statement that starts
    with a reading keyword (`SELECT`, `WITH`, `SHOW`, `EXPLAIN` and a few
-   others, listed in the [`llm_db_query`](../agents/reference.md#llm_db_query)
+   others, listed in the [`llm_db_query`](../agents/reference.md#gash-llm-db-query)
    notes), with no write keyword (such as `INSERT`, `UPDATE` or `SET`) and
    no function that reads or writes files or runs programs. The guard reads
    strings and comments the way the engine does, so quoting tricks cannot
@@ -184,7 +184,7 @@ is absolute. A `+docker:NAME` suffix runs the client inside that container
 on the host. The client must be installed where it runs. [configuration](../configuration.md#databases) has
 the full syntax.
 
-`gash_db_test` does not test these connections (it says so, and names the
+`gash db test` does not test these connections (it says so, and names the
 query to run instead):
 
 ```bash
@@ -196,7 +196,7 @@ llm_db_query "SELECT 1" -c live --scalar
 `GASH_DB_TIMEOUT` (seconds, default 30, set in `~/.gash_env` or the
 environment) is:
 
-- for `gash_db_test`, how long the whole test may take, on every engine;
+- for `gash db test`, how long the whole test may take, on every engine;
 - for the `llm_db_*` functions on PostgreSQL, the statement timeout of the
   session.
 
@@ -207,12 +207,12 @@ Gash sets no time limit on the MySQL, MariaDB and SQLite queries of
 
 | Message | What it means and what to do |
 |---|---|
-| `Error: Connection 'NAME' not found in ~/.gash_env` | No `DB:NAME=` line is in effect. `gash_db_list` shows the names; without a name, the test uses `default`. |
+| `Error: Connection 'NAME' not found in ~/.gash_env` | No `DB:NAME=` line is in effect. `gash db list` shows the names; without a name, the test uses `default`. |
 | `Warning: Line N of ~/.gash_env: DB URL must start with mysql://, mariadb://, pgsql:// or a +ssh form (mysql+ssh://, mariadb+ssh://, pgsql+ssh://, sqlite+ssh://) (skipping)` | The scheme is not one Gash knows. A local SQLite file has no `DB:` line: use `-f FILE`. |
 | `Warning: Line N of ~/.gash_env: duplicate DB:NAME, ignored (first is at line M)` | Two lines share a name; the first one is used. |
 | `Error: Connection 'NAME' has an invalid URL` | The `Hint:` line says why: an IPv6 host without its closing `]`, or a password holding `%00`. Fix the line. |
 | `Error: Connection failed` and a `Hint:` | The driver's message: `connection refused` (no server on that host and port), `Access denied` or `password authentication failed` (user or password; check the percent-encoding), `no such file or directory` for `localhost` (no MySQL socket: try `127.0.0.1`). |
-| `Error: gash_db_test tests mysql, mariadb and pgsql connections from this machine; 'NAME' is a mysql+ssh connection` | `gash_db_test` cannot test a `sqlite`, `+ssh` or `+docker` connection; use `llm_db_query "SELECT 1" -c NAME --scalar`. |
+| `Error: gash_db_test tests mysql, mariadb and pgsql connections from this machine; 'NAME' is a mysql+ssh connection` | `gash db test` cannot test a `sqlite`, `+ssh` or `+docker` connection; use `llm_db_query "SELECT 1" -c NAME --scalar`. |
 | `{"error":"no_db_config",...}` | An `llm_db_*` call named a connection (or `default`) that is not in the file. |
 | `{"error":"no_database",...}` | The connection has no database: add it to the URL, pass `-d NAME`, or write it in `.target-database`. |
 | `{"error":"write_operation_blocked",...}`, `multiple_statements_blocked` and the other `_blocked` codes | The SQL guard refused the statement. Send one read-only statement per call. |
@@ -224,8 +224,8 @@ The JSON errors follow the error envelope of [AGENTS.md](../../AGENTS.md):
 
 ## See also
 
-- [reference.md](reference.md): `gash_db_list` and `gash_db_test` with all their options.
-- [The `llm_db_*` reference](../agents/reference.md#llm_db_query): every option of the query functions.
+- [reference.md](reference.md): `gash db list` and `gash db test` with all their options.
+- [The `llm_db_*` reference](../agents/reference.md#gash-llm-db-query): every option of the query functions.
 - [configuration](../configuration.md#databases): the `DB:` grammar, and [`GASH_DB_TIMEOUT`](../configuration.md#settings-reference).
 - [Remote hosts](../remote/README.md): the `HOST:` aliases that `+ssh` connections use.
 - [security](../security.md): the SQL guard in detail.

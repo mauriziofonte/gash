@@ -30,7 +30,7 @@ stderr '"error":"invalid_type","details":"PTR"'
 ! exec gash llm_dns example.test --server dns.google
 stderr '"error":"invalid_server"'
 exec gash llm_dns --help
-stdout 'llm_dns NAME\.\.\.'
+stdout 'gash llm dns NAME\.\.\.'
 
 -- start.sh --
 # CLOSED is 127.0.0.1 and the port of a fake that held it and stopped.

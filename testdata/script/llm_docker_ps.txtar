@@ -34,7 +34,7 @@ env PATH=$WORK/stub${:}$SAVED_PATH
 ! exec gash llm_docker_ps web
 stderr '"error":"unexpected_argument"'
 exec gash llm_docker_ps -h
-stdout 'llm_docker_ps \[--running\]'
+stdout 'gash llm docker-ps \[--running\]'
 
 -- stub/docker --
 #!/bin/sh

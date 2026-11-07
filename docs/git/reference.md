@@ -2,80 +2,40 @@
 
 # Git: reference
 
-Sync, tags, patches, repository repair and the gl* log shortcuts. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Sync, tags, patches, repository repair and the gl* log shortcuts. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`git_add_tag`](#git_add_tag) | `gat` | Create an annotated tag and push to remote |
-| [`git_apply_patch`](#git_apply_patch) | `gpatch` | Apply a patch from a feature branch to main |
-| [`git_delete_tag`](#git_delete_tag) | `gdt` | Delete a tag locally and on remote |
-| [`git_dump_revisions`](#git_dump_revisions) | `gdr` | Dump all revisions of a file into separate files |
-| [`git_list_tags`](#git_list_tags) | `glt` | List all local and remote tags |
-| [`git_repair`](#git_repair) | `gheal` | Repair a repo with corrupted 0-byte loose objects |
-| [`git_sync`](#git_sync) | `gsync` | Stage everything, commit and push the current branch |
+| [`gash git patch`](#gash-git-patch) | `gpatch` | Apply a patch from a feature branch to main |
+| [`gash git repair`](#gash-git-repair) | `gheal` | Repair a repo with corrupted 0-byte loose objects |
+| [`gash git revisions`](#gash-git-revisions) | `gdr` | Dump all revisions of a file into separate files |
+| [`gash git sync`](#gash-git-sync) | `gsync` | Stage everything, commit and push the current branch |
+| [`gash git tag add`](#gash-git-tag-add) | `gat` | Create an annotated tag and push to remote |
+| [`gash git tag delete`](#gash-git-tag-delete) | `gdt` | Delete a tag locally and on remote |
+| [`gash git tag list`](#gash-git-tag-list) | `glt` | List all local and remote tags |
 
-### git_add_tag
-
-Create an annotated tag and push to remote.
-
-Alias: `gat`
-
-#### Usage
-
-```text
-git_add_tag TAG_NAME ["TAG_MESSAGE"] [-y|--yes] [--dry-run]
-```
-
-#### Examples
-
-```bash
-# Create a tag with auto-generated message
-gat v1.0.0
-
-# Create a tag with a custom message
-gat v2.0.0 "Major release with breaking changes"
-
-# Release workflow: commit, tag, done (no question asked)
-gcm "prepare release" && gat v1.2.3 "Bugfix release" --yes
-```
-
-#### Notes
-
-```text
-Creates an annotated tag and pushes it to origin in one step
-(Will push refs/tags/TAG to origin (URL)).
-Shows the plan and asks first; -y/--yes skips the question and is
-required in headless mode or without a terminal; --dry-run only shows.
-The flags may come anywhere; -- ends them. A name starting with '-'
-is refused. An unreachable origin is an error before anything is
-created. Requires a git repo with an 'origin' remote.
-Runs with your git configuration, hooks and signing settings.
-```
-
-See also: [`git_list_tags`](../git/reference.md#git_list_tags), [`git_delete_tag`](../git/reference.md#git_delete_tag)
-
-### git_apply_patch
+### gash git patch
 
 Apply a patch from a feature branch to main.
 
-Alias: `gpatch`
+Shortcut: `gpatch`. Former name: `git_apply_patch` (works through 3.x).
 
 #### Usage
 
 ```text
-git_apply_patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]
+gash git patch MAIN_BRANCH FEATURE_BRANCH COMMIT_HASH [-y|--yes] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
 # Bring the work of feature-auth since abc1234 onto main
-gpatch main feature-auth abc1234
+gash git patch main feature-auth abc1234
 
 # The same without a question (scripts, headless mode)
-gpatch develop hotfix-db e5f6a7b --yes
+gash git patch develop hotfix-db e5f6a7b --yes
 ```
 
 #### Notes
@@ -94,128 +54,28 @@ required in headless mode or without a terminal; --dry-run only shows.
 Runs with your git configuration, hooks and signing settings.
 ```
 
-See also: [`git_dump_revisions`](../git/reference.md#git_dump_revisions)
+See also: [`gash git revisions`](../git/reference.md#gash-git-revisions)
 
-### git_delete_tag
-
-Delete a tag locally and on remote.
-
-Alias: `gdt`
-
-#### Usage
-
-```text
-git_delete_tag TAG_NAME [-y|--yes] [--dry-run]
-```
-
-#### Examples
-
-```bash
-# Remove a mis-tagged release
-gdt v1.0.0-beta
-
-# Fix a tag: delete and recreate
-gdt v1.0.0 --yes && gat v1.0.0 "Fixed release" --yes
-```
-
-#### Notes
-
-```text
-Deletes the tag both locally and on the remote origin
-(Will delete refs/tags/TAG locally and on origin (URL)).
-Shows the plan and asks first; -y/--yes skips the question and is
-required in headless mode or without a terminal; --dry-run only shows.
-An unreachable origin is an error before anything is deleted.
-Runs with your git configuration, hooks and signing settings.
-```
-
-See also: [`git_list_tags`](../git/reference.md#git_list_tags), [`git_add_tag`](../git/reference.md#git_add_tag)
-
-### git_dump_revisions
-
-Dump all revisions of a file into separate files.
-
-Alias: `gdr`
-
-#### Usage
-
-```text
-git_dump_revisions FILENAME
-```
-
-#### Examples
-
-```bash
-# Trace how a config file evolved over time
-gdr path/to/config.yml
-
-# Dump revisions of a deployment script
-gdr scripts/deploy.sh
-```
-
-#### Notes
-
-```text
-Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg
-Each revision is dumped with its commit log message alongside.
-001 is the newest revision, the highest number the oldest.
-FILENAME may be relative or absolute, inside the work tree, and must
-be tracked; a git failure returns 1 and leaves no empty file.
-```
-
-See also: [`git_apply_patch`](../git/reference.md#git_apply_patch)
-
-### git_list_tags
-
-List all local and remote tags.
-
-Alias: `glt`
-
-#### Usage
-
-```text
-git_list_tags
-```
-
-#### Examples
-
-```bash
-# List all tags in the current repo
-glt
-
-# Check existing tags before creating a new release
-glt && gat v2.0.0 "Major release"
-```
-
-#### Notes
-
-```text
-Annotated tags are listed once. When origin cannot be reached the
-remote list is an error and the status is 1.
-```
-
-See also: [`git_add_tag`](../git/reference.md#git_add_tag), [`git_delete_tag`](../git/reference.md#git_delete_tag)
-
-### git_repair
+### gash git repair
 
 Repair a repo with corrupted 0-byte loose objects.
 
-Alias: `gheal`
+Shortcut: `gheal`. Former name: `git_repair` (works through 3.x).
 
 #### Usage
 
 ```text
-git_repair [-y|--yes] [--dry-run]
+gash git repair [-y|--yes] [--dry-run]
 ```
 
 #### Examples
 
 ```bash
 # Fix a repo after a crash/OOM left empty loose object files
-gheal
+gash git repair
 
 # Only count the empty objects and show the plan
-gheal --dry-run
+gash git repair --dry-run
 ```
 
 #### Notes
@@ -232,31 +92,65 @@ first; -y skips the question. Requires a git repo with an 'origin'
 remote; an origin URL starting with '-' is refused.
 ```
 
-See also: [`git_list_tags`](../git/reference.md#git_list_tags)
+See also: [`gash git tag list`](../git/reference.md#gash-git-tag-list)
 
-### git_sync
+### gash git revisions
 
-Stage everything, commit and push the current branch.
+Dump all revisions of a file into separate files.
 
-Alias: `gsync`
+Shortcut: `gdr`. Former name: `git_dump_revisions` (works through 3.x).
 
 #### Usage
 
 ```text
-git_sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]
+gash git revisions FILENAME
+```
+
+#### Examples
+
+```bash
+# Trace how a config file evolved over time
+gash git revisions path/to/config.yml
+
+# Dump revisions of a deployment script
+gash git revisions scripts/deploy.sh
+```
+
+#### Notes
+
+```text
+Creates files named: FILENAME.001.HASH, FILENAME.001.HASH.logmsg
+Each revision is dumped with its commit log message alongside.
+001 is the newest revision, the highest number the oldest.
+FILENAME may be relative or absolute, inside the work tree, and must
+be tracked; a git failure returns 1 and leaves no empty file.
+```
+
+See also: [`gash git patch`](../git/reference.md#gash-git-patch)
+
+### gash git sync
+
+Stage everything, commit and push the current branch.
+
+Shortcut: `gsync`. Former name: `git_sync` (works through 3.x).
+
+#### Usage
+
+```text
+gash git sync [-m MESSAGE] [--no-push] [--dry-run] [-y|--yes]
 ```
 
 #### Examples
 
 ```bash
 # Save everything with the default message "chore: sync" and push
-gsync
+gash git sync
 
 # With a real message, no question asked
-gsync -m "docs: notes from the meeting" --yes
+gash git sync -m "docs: notes from the meeting" --yes
 
 # What would be committed and where it would go
-gsync --dry-run
+gash git sync --dry-run
 ```
 
 #### Notes
@@ -276,7 +170,113 @@ without one.
 Runs with your git configuration, hooks and signing settings.
 ```
 
-See also: [`git_repair`](../git/reference.md#git_repair)
+See also: [`gash git repair`](../git/reference.md#gash-git-repair)
+
+### gash git tag add
+
+Create an annotated tag and push to remote.
+
+Shortcut: `gat`. Former name: `git_add_tag` (works through 3.x).
+
+#### Usage
+
+```text
+gash git tag add TAG_NAME ["TAG_MESSAGE"] [-y|--yes] [--dry-run]
+```
+
+#### Examples
+
+```bash
+# Create a tag with auto-generated message
+gash git tag add v1.0.0
+
+# Create a tag with a custom message
+gash git tag add v2.0.0 "Major release with breaking changes"
+
+# Release workflow: commit, tag, done (no question asked)
+gcm "prepare release" && gash git tag add v1.2.3 "Bugfix release" --yes
+```
+
+#### Notes
+
+```text
+Creates an annotated tag and pushes it to origin in one step
+(Will push refs/tags/TAG to origin (URL)).
+Shows the plan and asks first; -y/--yes skips the question and is
+required in headless mode or without a terminal; --dry-run only shows.
+The flags may come anywhere; -- ends them. A name starting with '-'
+is refused. An unreachable origin is an error before anything is
+created. Requires a git repo with an 'origin' remote.
+Runs with your git configuration, hooks and signing settings.
+```
+
+See also: [`gash git tag list`](../git/reference.md#gash-git-tag-list), [`gash git tag delete`](../git/reference.md#gash-git-tag-delete)
+
+### gash git tag delete
+
+Delete a tag locally and on remote.
+
+Shortcut: `gdt`. Former name: `git_delete_tag` (works through 3.x).
+
+#### Usage
+
+```text
+gash git tag delete TAG_NAME [-y|--yes] [--dry-run]
+```
+
+#### Examples
+
+```bash
+# Remove a mis-tagged release
+gash git tag delete v1.0.0-beta
+
+# Fix a tag: delete and recreate
+gash git tag delete v1.0.0 --yes && gash git tag add v1.0.0 "Fixed release" --yes
+```
+
+#### Notes
+
+```text
+Deletes the tag both locally and on the remote origin
+(Will delete refs/tags/TAG locally and on origin (URL)).
+Shows the plan and asks first; -y/--yes skips the question and is
+required in headless mode or without a terminal; --dry-run only shows.
+An unreachable origin is an error before anything is deleted.
+Runs with your git configuration, hooks and signing settings.
+```
+
+See also: [`gash git tag list`](../git/reference.md#gash-git-tag-list), [`gash git tag add`](../git/reference.md#gash-git-tag-add)
+
+### gash git tag list
+
+List all local and remote tags.
+
+Shortcut: `glt`. Former name: `git_list_tags` (works through 3.x).
+
+#### Usage
+
+```text
+gash git tag list
+```
+
+#### Examples
+
+```bash
+# List all tags in the current repo
+gash git tag list
+
+# Check existing tags before creating a new release
+gash git tag list && gash git tag add v2.0.0 "Major release"
+```
+
+#### Notes
+
+```text
+Annotated tags are listed once. When origin cannot be reached the
+remote list is an error and the status is 1.
+```
+
+See also: [`gash git tag add`](../git/reference.md#gash-git-tag-add), [`gash git tag delete`](../git/reference.md#gash-git-tag-delete)
 
 ## Aliases
 
@@ -294,7 +294,6 @@ Loaded when `git` is on PATH. The first six entries are log functions (`gl --hel
 | `glg` | Graph focused (first-parent for cleaner merge view) |  |
 | `gls` | With file statistics |  |
 | `glf` | File-specific log with patches |  |
-| `glog` | `gl` |  |
 | `gst` | `git status` |  |
 | `gs` | `git status -sb` |  |
 | `ga` | `git add` |  |

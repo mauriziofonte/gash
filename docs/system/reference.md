@@ -2,38 +2,69 @@
 
 # System: reference
 
-Processes, ports, services, disks, sudo history and a system report. The guide is [README.md](README.md); this page lists every function, alias and command, as their own help prints it (`gash_help NAME`, `gash COMMAND --help`).
+Processes, ports, services, disks, sudo history and a system report. The guide is [README.md](README.md); this page lists every command, shortcut and alias, as their own help prints it (`gash help NAME`, `gash COMMAND --help`).
 
-## Functions
+## Commands
 
-| Function | Alias | Description |
+| Command | Shortcut | Description |
 |---|---|---|
-| [`disk_usage`](#disk_usage) | `du2` | Display disk usage for real filesystem types |
-| [`ip_public`](#ip_public) | `myip` | Get your public IP address |
-| [`port_kill`](#port_kill) | `ptk` | Kill processes listening on a specific port |
-| [`process_find`](#process_find) | `pf` | Search for a process by name |
-| [`process_kill`](#process_kill) | `pk` | Kill all processes matching a name |
-| [`services_stop`](#services_stop) | `svs` | Stop well-known services (Apache, MySQL, Redis, Docker, etc.) |
-| [`sudo_last`](#sudo_last) | `plz` | Re-run last command with sudo |
-| [`sysinfo`](#sysinfo) | `si` | Comprehensive system information enumeration |
+| [`gash shell sudo-last`](#gash-shell-sudo-last) | `plz` | Re-run last command with sudo |
+| [`gash system disks`](#gash-system-disks) | `du2` | Display disk usage for real filesystem types |
+| [`gash system info`](#gash-system-info) | `si` | Comprehensive system information enumeration |
+| [`gash system ip`](#gash-system-ip) | `myip` | Get your public IP address |
+| [`gash system kill`](#gash-system-kill) | `pk` | Kill all processes matching a name |
+| [`gash system port-kill`](#gash-system-port-kill) | `ptk` | Kill processes listening on a specific port |
+| [`gash system ps`](#gash-system-ps) | `pf` | Search for a process by name |
+| [`gash system stop-services`](#gash-system-stop-services) | `svs` | Stop well-known services (Apache, MySQL, Redis, Docker, etc.) |
 
-### disk_usage
+### gash shell sudo-last
 
-Display disk usage for real filesystem types.
+Re-run last command with sudo.
 
-Alias: `du2`
+Shortcut: `plz`. Former name: `sudo_last` (works through 3.x).
 
 #### Usage
 
 ```text
-disk_usage [--no-color]
+gash shell sudo-last [command]
+```
+
+#### Examples
+
+```bash
+# Oops, forgot sudo? Re-run with sudo
+apt update        # -> Permission denied
+gash shell sudo-last               # -> sudo apt update
+
+# Run a specific command with sudo
+gash shell sudo-last systemctl restart nginx
+```
+
+#### Notes
+
+```text
+Without COMMAND it shows the previous command and asks first;
+declining (or no terminal to ask on) returns 1, and so does a shell
+with no previous command in its history.
+```
+
+### gash system disks
+
+Display disk usage for real filesystem types.
+
+Shortcut: `du2`. Former name: `disk_usage` (works through 3.x).
+
+#### Usage
+
+```text
+gash system disks [--no-color]
 ```
 
 #### Examples
 
 ```bash
 # Show disk usage for ext4, xfs, btrfs, zfs, etc.
-du2
+gash system disks
 ```
 
 #### Notes
@@ -45,233 +76,18 @@ The bar turns yellow at 75% and red at 90%.
 On macOS (no df -T) every /dev device is listed, without a type.
 ```
 
-See also: [`dirs_largest`](../files/reference.md#dirs_largest), [`dirs_find_large`](../files/reference.md#dirs_find_large)
+See also: [`gash files largest-dirs`](../files/reference.md#gash-files-largest-dirs), [`gash files big-dirs`](../files/reference.md#gash-files-big-dirs)
 
-### ip_public
-
-Get your public IP address.
-
-Alias: `myip`
-
-#### Usage
-
-```text
-ip_public [--no-color] [--raw]
-```
-
-#### Options
-
-```text
---no-color  Plain output
---raw       Print the bare address, no label
-```
-
-#### Examples
-
-```bash
-# Show your public IP
-myip
-
-# Use in a script
-MY_IP=$(myip --raw) && echo "Server IP: $MY_IP"
-```
-
-#### Notes
-
-```text
-The request gives up after 10 seconds. An answer that is not an IP
-address (a captive portal or rate-limit page) is an error, rc 1.
-```
-
-### port_kill
-
-Kill processes listening on a specific port.
-
-Alias: `ptk`
-
-#### Usage
-
-```text
-port_kill [-y] PORT
-```
-
-#### Examples
-
-```bash
-# Stop whatever listens on port 3000 (lists it and asks first)
-ptk 3000
-
-# No confirmation (scripts, agents)
-ptk -y 3000
-```
-
-#### Notes
-
-```text
---force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session
-connected to that port elsewhere is left alone. SIGTERM first,
-SIGKILL for processes still alive after about 3 seconds.
-Returns 1 when a process could not be signalled (permission denied).
-```
-
-See also: [`process_find`](../system/reference.md#process_find), [`process_kill`](../system/reference.md#process_kill)
-
-### process_find
-
-Search for a process by name.
-
-Alias: `pf`
-
-#### Usage
-
-```text
-process_find PROCESS_NAME
-```
-
-#### Examples
-
-```bash
-# Find nginx processes
-pf nginx
-
-# Find node processes
-pf node
-
-# Check if a service is running
-pf mysql
-```
-
-#### Notes
-
-```text
-NAME is matched literally, ignoring case, against each command line
-(not the user or other columns). Returns 1 when nothing matches.
-```
-
-See also: [`process_kill`](../system/reference.md#process_kill), [`port_kill`](../system/reference.md#port_kill)
-
-### process_kill
-
-Kill all processes matching a name.
-
-Alias: `pk`
-
-#### Usage
-
-```text
-process_kill [-y] PROCESS_NAME
-```
-
-#### Examples
-
-```bash
-# Kill all node processes (lists them and asks first)
-pk node
-
-# No confirmation (scripts, agents)
-pk -y webpack-dev-server
-```
-
-#### Notes
-
-```text
-Matches the executable name exactly, ignoring case, lists the matches
-with their command lines and asks. Without a terminal to ask
-(GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.
---force is the same as -y. SIGTERM first, SIGKILL for processes still
-alive after about 3 seconds. Declining returns 1, and so does a
-process that could not be signalled (permission denied).
-NAME is a name, not a pattern: regex characters match themselves, and
-a name longer than 15 bytes is matched against the full program name.
-```
-
-See also: [`process_find`](../system/reference.md#process_find), [`port_kill`](../system/reference.md#port_kill)
-
-### services_stop
-
-Stop well-known services (Apache, MySQL, Redis, Docker, etc.).
-
-Alias: `svs`
-
-#### Usage
-
-```text
-services_stop [-y] [--dry-run]
-```
-
-#### Examples
-
-```bash
-# List the running ones and ask before stopping them
-svs
-
-# Only list them
-svs --dry-run
-
-# Skip confirmation
-svs -y
-```
-
-#### Services stopped
-
-```text
-apache2, nginx, mysql, mariadb, postgresql,
-mongodb, redis, redis-server, memcached, docker
-```
-
-#### Notes
-
-```text
-Only stops services that are currently active, through systemd when it
-runs, else through `service` (WSL without systemd, containers).
---force is the same as -y. Returns 1 when declined or when a stop
-fails. Headless or without a terminal it runs sudo -n, and stops
-before anything when sudo needs a password.
-```
-
-See also: [`process_kill`](../system/reference.md#process_kill)
-
-### sudo_last
-
-Re-run last command with sudo.
-
-Alias: `plz`
-
-#### Usage
-
-```text
-sudo_last [command]
-```
-
-#### Examples
-
-```bash
-# Oops, forgot sudo? Re-run with sudo
-apt update        # -> Permission denied
-plz               # -> sudo apt update
-
-# Run a specific command with sudo
-plz systemctl restart nginx
-```
-
-#### Notes
-
-```text
-Without COMMAND it shows the previous command and asks first;
-declining (or no terminal to ask on) returns 1, and so does a shell
-with no previous command in its history.
-```
-
-### sysinfo
+### gash system info
 
 Comprehensive system information enumeration.
 
-Alias: `si`
+Shortcut: `si`. Former name: `sysinfo` (works through 3.x).
 
 #### Usage
 
 ```text
-sysinfo [section] [--llm] [--no-color]
+gash system info [section] [--llm] [--no-color]
 ```
 
 #### Sections
@@ -295,20 +111,20 @@ all        Overview, then every section (default)
 
 ```bash
 # Full system enumeration (colored verbose output)
-sysinfo
+gash system info
 
 # Check just network configuration
-sysinfo network
+gash system info network
 
 # Audit the web stack
-sysinfo webstack
+gash system info webstack
 
 # LLM-compact output (token-efficient, pipe to AI)
-sysinfo --llm
-sysinfo services --llm
+gash system info --llm
+gash system info services --llm
 
 # Combine with AI for instant analysis
-sysinfo webstack --llm | ai_query "audit this web stack"
+gash system info webstack --llm | gash ai query "audit this web stack"
 ```
 
 #### Notes
@@ -326,4 +142,188 @@ One section per call: a second one is an error. -h/--help anywhere
 shows this help.
 ```
 
-See also: [`ai_sysinfo`](../ai/reference.md#ai_sysinfo)
+See also: [`gash ai sysinfo`](../ai/reference.md#gash-ai-sysinfo)
+
+### gash system ip
+
+Get your public IP address.
+
+Shortcut: `myip`. Former name: `ip_public` (works through 3.x).
+
+#### Usage
+
+```text
+gash system ip [--no-color] [--raw]
+```
+
+#### Options
+
+```text
+--no-color  Plain output
+--raw       Print the bare address, no label
+```
+
+#### Examples
+
+```bash
+# Show your public IP
+gash system ip
+
+# Use in a script
+MY_IP=$(gash system ip --raw) && echo "Server IP: $MY_IP"
+```
+
+#### Notes
+
+```text
+The request gives up after 10 seconds. An answer that is not an IP
+address (a captive portal or rate-limit page) is an error, rc 1.
+```
+
+### gash system kill
+
+Kill all processes matching a name.
+
+Shortcut: `pk`. Former name: `process_kill` (works through 3.x).
+
+#### Usage
+
+```text
+gash system kill [-y] PROCESS_NAME
+```
+
+#### Examples
+
+```bash
+# Kill all node processes (lists them and asks first)
+gash system kill node
+
+# No confirmation (scripts, agents)
+gash system kill -y webpack-dev-server
+```
+
+#### Notes
+
+```text
+Matches the executable name exactly, ignoring case, lists the matches
+with their command lines and asks. Without a terminal to ask
+(GASH_HEADLESS=1, no /dev/tty) nothing is killed unless -y is given.
+--force is the same as -y. SIGTERM first, SIGKILL for processes still
+alive after about 3 seconds. Declining returns 1, and so does a
+process that could not be signalled (permission denied).
+NAME is a name, not a pattern: regex characters match themselves, and
+a name longer than 15 bytes is matched against the full program name.
+```
+
+See also: [`gash system ps`](../system/reference.md#gash-system-ps), [`gash system port-kill`](../system/reference.md#gash-system-port-kill)
+
+### gash system port-kill
+
+Kill processes listening on a specific port.
+
+Shortcut: `ptk`. Former name: `port_kill` (works through 3.x).
+
+#### Usage
+
+```text
+gash system port-kill [-y] PORT
+```
+
+#### Examples
+
+```bash
+# Stop whatever listens on port 3000 (lists it and asks first)
+gash system port-kill 3000
+
+# No confirmation (scripts, agents)
+gash system port-kill -y 3000
+```
+
+#### Notes
+
+```text
+--force is the same as -y. Requires lsof. Only listeners are targeted: a browser or ssh session
+connected to that port elsewhere is left alone. SIGTERM first,
+SIGKILL for processes still alive after about 3 seconds.
+Returns 1 when a process could not be signalled (permission denied).
+```
+
+See also: [`gash system ps`](../system/reference.md#gash-system-ps), [`gash system kill`](../system/reference.md#gash-system-kill)
+
+### gash system ps
+
+Search for a process by name.
+
+Shortcut: `pf`. Former name: `process_find` (works through 3.x).
+
+#### Usage
+
+```text
+gash system ps PROCESS_NAME
+```
+
+#### Examples
+
+```bash
+# Find nginx processes
+gash system ps nginx
+
+# Find node processes
+gash system ps node
+
+# Check if a service is running
+gash system ps mysql
+```
+
+#### Notes
+
+```text
+NAME is matched literally, ignoring case, against each command line
+(not the user or other columns). Returns 1 when nothing matches.
+```
+
+See also: [`gash system kill`](../system/reference.md#gash-system-kill), [`gash system port-kill`](../system/reference.md#gash-system-port-kill)
+
+### gash system stop-services
+
+Stop well-known services (Apache, MySQL, Redis, Docker, etc.).
+
+Shortcut: `svs`. Former name: `services_stop` (works through 3.x).
+
+#### Usage
+
+```text
+gash system stop-services [-y] [--dry-run]
+```
+
+#### Examples
+
+```bash
+# List the running ones and ask before stopping them
+gash system stop-services
+
+# Only list them
+gash system stop-services --dry-run
+
+# Skip confirmation
+gash system stop-services -y
+```
+
+#### Services stopped
+
+```text
+apache2, nginx, mysql, mariadb, postgresql,
+mongodb, redis, redis-server, memcached, docker
+```
+
+#### Notes
+
+```text
+Only stops services that are currently active, through systemd when it
+runs, else through `service` (WSL without systemd, containers).
+--force is the same as -y. Returns 1 when declined or when a stop
+fails. Headless or without a terminal it runs sudo -n, and stops
+before anything when sudo needs a password.
+```
+
+See also: [`gash system kill`](../system/reference.md#gash-system-kill)

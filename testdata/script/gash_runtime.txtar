@@ -41,7 +41,7 @@ stderr '"action":"STOP"'
 stderr '"error":"invalid_version"'
 ! exec gash runtime node 24 --json
 stderr '"error":"unknown_option"'
-exec gash runtime --help
+exec gash runtime which --help
 stdout '^Usage: gash runtime php\|node\|composer\|npm\|npx VERSION \[--path\]$'
 
 -- home/.nvm/versions/node/v24.1.0/bin/node --

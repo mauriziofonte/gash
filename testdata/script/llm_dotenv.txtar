@@ -37,7 +37,7 @@ stderr '"error":"missing_file"'
 
 # --- help without side effects
 exec gash llm_dotenv --help
-stdout 'llm_dotenv FILE \[KEY\.\.\.\] \[--present\]'
+stdout 'gash llm dotenv FILE \[KEY\.\.\.\] \[--present\]'
 
 -- .env --
 # local settings

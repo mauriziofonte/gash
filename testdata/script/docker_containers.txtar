@@ -82,6 +82,6 @@ grep 'system prune' prune5.log
 
 # --- docker_spec.sh:214 - docker aliases are defined
 exec bash -c 'source "$GASH_SH"; alias dsa && alias daa && alias dpa'
-stdout 'dsa=.docker_stop_all.'
-stdout 'daa=.docker_start_all.'
-stdout 'dpa=.docker_prune_all.'
+stdout 'dsa=.gash docker stop-all.'
+stdout 'daa=.gash docker start-all.'
+stdout 'dpa=.gash docker prune-all.'

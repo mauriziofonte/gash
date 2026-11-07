@@ -1,0 +1,46 @@
+# Gash 3.5. Author: Maurizio Fonte <fonte.maurizio@gmail.com>
+#
+# covers: none (3.5 names)
+#
+# The names of a command run the same handler: the canonical command
+# (gash files largest, in the shell and from the binary), its shortcut
+# (flf) and its former flat name (files_largest) print the same stdout and
+# exit with the same status; so do gash llm read and llm_read. The former
+# name alone prints its tip, once per session, on stderr, and only at an
+# interactive prompt on a terminal: never here.
+
+env GASH_BANNER=0
+mkdir d/sub
+exec sh -c 'head -c 3000 /dev/zero >d/a.bin; head -c 1000 /dev/zero >d/sub/b.bin'
+
+exec bash --norc --noprofile -i drive.sh
+grep 'a\.bin' canonical.out
+grep 'one' llm.out
+cmp former.out canonical.out
+cmp former.out shortcut.out
+cmp llm.out llm_flat.out
+stdout '^rc=0 0 0 0 0$'
+! stderr 'tip:'
+
+exec gash files largest d --limit 5
+cmp stdout canonical.out
+exec gash files_largest d --limit 5
+cmp stdout canonical.out
+exec gash llm read notes.txt --max-lines 1
+cmp stdout llm.out
+
+# A word that is no command of the namespace is refused.
+! exec gash files nosuch
+stderr 'nosuch'
+
+-- drive.sh --
+source "$GASH_SH" >/dev/null 2>&1
+files_largest d --limit 5 >former.out; a=$?
+gash files largest d --limit 5 >canonical.out; b=$?
+flf d --limit 5 >shortcut.out; c=$?
+gash llm read notes.txt --max-lines 1 >llm.out; d=$?
+llm_read notes.txt --max-lines 1 >llm_flat.out; e=$?
+echo "rc=$a $b $c $d $e"
+-- notes.txt --
+one
+two

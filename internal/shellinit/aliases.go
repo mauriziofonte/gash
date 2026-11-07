@@ -24,6 +24,32 @@ func (st *state) aliasPacks(b *strings.Builder) {
 	st.timed(b, "lib/aliases/php.sh", st.packPhp)
 	st.timed(b, "lib/aliases/general.sh", st.packGeneral)
 	st.moduleShadows(b)
+	if st.s.Get("GASH_LEGACY_HINTS") == "0" {
+		// No former name prints its tip in this shell.
+		b.WriteString("__GASH_FORMER=()\n")
+	}
+}
+
+// ShortcutPacks are the words of GASH_SHORTCUTS: the shortcuts of the
+// commands (flf, gsync) and the alias packs of shortcuts. The shell
+// defaults (safety, colors, general) are not shortcuts: GASH_SAFETY_ALIASES
+// and GASH_REPLACE_TOOLS choose them.
+var ShortcutPacks = []string{"commands", "git", "docker", "navigation", "php"}
+
+// shortcuts reports whether GASH_SHORTCUTS selects pack: "all" (the
+// default) or empty selects every pack, "none" none, else the words of the
+// list (commas or spaces; an unknown word selects nothing).
+func (st *state) shortcuts(pack string) bool {
+	v := strings.ToLower(strings.TrimSpace(st.s.Get("GASH_SHORTCUTS")))
+	if v == "" || v == "all" {
+		return true
+	}
+	for _, w := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == ':' }) {
+		if w == pack {
+			return true
+		}
+	}
+	return false
 }
 
 // moduleShadows applies the shadow rule to the module short aliases gash.sh
@@ -34,12 +60,13 @@ func (st *state) aliasPacks(b *strings.Builder) {
 // fixed: 2.x took the module aliases for the user's own and kept them all.
 func (st *state) moduleShadows(b *strings.Builder) {
 	seen := map[string]bool{}
+	off := !st.shortcuts("commands")
 	for _, a := range registry.Aliases() {
 		if a.Pack != "" || a.Function == "" || seen[a.Name] {
 			continue
 		}
 		seen[a.Name] = true
-		if !exempt(a.Name) && st.has(a.Name) {
+		if off || !exempt(a.Name) && st.has(a.Name) {
 			b.WriteString("[[ -v '" + UserAliasesVar + "[" + a.Name + "]' ]] || unalias " + a.Name + " 2>/dev/null || true\n")
 		}
 	}
@@ -162,6 +189,9 @@ export LESS_TERMCAP_us=$'\E[04;38;5;146m'
 // -----------------------------------------------------------------------------
 
 func (st *state) packNavigation(b *strings.Builder) {
+	if !st.shortcuts("navigation") {
+		return
+	}
 	flag := st.lsColorFlag()
 	if flag != "" {
 		suffix := " " + flag
@@ -248,7 +278,9 @@ func (st *state) packGit(b *strings.Builder) {
 	for _, fn := range []string{"gl", "gla", "glo", "glg", "gls", "glf"} {
 		b.WriteString(fn + "() { __gash_call " + fn + " \"$@\"; }\n")
 	}
-	st.alias(b, "glog", "gl")
+	if !st.shortcuts("git") {
+		return
+	}
 	st.alias(b, "gst", "git status")
 	if !st.has("gs") {
 		st.alias(b, "gs", "git status -sb")
@@ -279,6 +311,9 @@ func (st *state) packGit(b *strings.Builder) {
 // -----------------------------------------------------------------------------
 
 func (st *state) packDocker(b *strings.Builder) {
+	if !st.shortcuts("docker") {
+		return
+	}
 	if st.has("docker") {
 		for _, kv := range [][2]string{
 			{"dcls", "docker container ls -a"}, {"dclsr", "docker container ls"},
@@ -289,9 +324,8 @@ func (st *state) packDocker(b *strings.Builder) {
 		} {
 			st.alias(b, kv[0], kv[1])
 		}
-		st.aliasIfFunc(b, "dstopall", "docker_stop_all")
-		st.aliasIfFunc(b, "dstartall", "docker_start_all")
-		st.aliasIfFunc(b, "dpruneall", "docker_prune_all")
+		// 3.5: dstopall, dstartall and dpruneall are gone: the shortcuts
+		// of gash docker stop-all (dsa), start-all (daa), prune-all (dpa).
 	}
 	if st.has("docker-compose") {
 		for _, kv := range [][2]string{
@@ -303,18 +337,8 @@ func (st *state) packDocker(b *strings.Builder) {
 			st.alias(b, kv[0], kv[1])
 		}
 	}
-	// These depend on a module function, not on docker on PATH.
-	st.aliasIfFunc(b, "dcc", "docker_compose_check")
-	st.aliasIfFunc(b, "dcup2", "docker_compose_upgrade")
-	st.aliasIfFunc(b, "dcscan", "docker_compose_scan")
-}
-
-// aliasIfFunc emits a function-backed pack alias guarded by the shell test
-// 2.x used (declare -F FUNC), combined with the shadow rule.
-func (st *state) aliasIfFunc(b *strings.Builder, name, fn string) {
-	if stmt := st.aliasStmt(name, fn); stmt != "" {
-		b.WriteString("declare -F " + fn + " >/dev/null 2>&1 && { " + stmt + "; }\n")
-	}
+	// 3.5: dcc, dcup2 and dcscan are the shortcuts of gash docker compose
+	// check, upgrade and scan, defined with the other command shortcuts.
 }
 
 // -----------------------------------------------------------------------------
@@ -322,7 +346,7 @@ func (st *state) aliasIfFunc(b *strings.Builder, name, fn string) {
 // -----------------------------------------------------------------------------
 
 func (st *state) packPhp(b *strings.Builder) {
-	if !st.has("php") {
+	if !st.has("php") || !st.shortcuts("php") {
 		return
 	}
 	const opts = "-d allow_url_fopen=1 -d memory_limit=2048M"
@@ -372,7 +396,8 @@ func (st *state) packPhp(b *strings.Builder) {
 
 func (st *state) packGeneral(b *strings.Builder) {
 	b.WriteString(helpFunc)
-	st.alias(b, "quit", "services_stop")
+	// 3.5: quit is gone (it stopped services: gash system stop-services,
+	// svs).
 	if st.s.Get("GASH_REPLACE_TOOLS") == "1" {
 		if st.has("most") {
 			st.alias(b, "less", "most")
@@ -395,15 +420,15 @@ func (st *state) replaceAlias(b *strings.Builder, name, prog string) {
 	}
 }
 
-// helpFunc is general.sh's help wrapper: gash_help for Gash commands, the
+// helpFunc is general.sh's help wrapper: gash help for Gash commands, the
 // Bash builtin for options, builtins and keywords.
 const helpFunc = `help() {
     if [[ $# -eq 0 ]]; then
-        gash_help
+        gash help
     elif [[ "$1" == -* ]] || [[ "$(type -t "$1" 2>/dev/null)" == "builtin" || "$(type -t "$1" 2>/dev/null)" == "keyword" ]]; then
         builtin help "$@"
     else
-        gash_help "$@"
+        gash help "$@"
     fi
 }
 `

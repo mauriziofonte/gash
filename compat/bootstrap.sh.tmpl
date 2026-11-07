@@ -486,6 +486,9 @@ __gash_export_state() {
 __gash_call() {
     local __gc_name="${1-}"
     shift
+    # A former flat name (files_largest) typed at the prompt: one tip per
+    # name and session (3.5); never from a function, a script or gash.
+    [[ -z "${FUNCNAME[2]-}" && -n "${__GASH_FORMER[$__gc_name]-}" ]] && __gash_former "$__gc_name"
     __gash_compat_ready || {
         __gash_missing "$__gc_name"
         return 1
@@ -501,6 +504,37 @@ __gash_call() {
         [[ "$__gc_name" == gash ]] && exec "$__GASH_BIN" "$@"
         exec "$__GASH_BIN" "$__gc_name" "$@"
     )
+}
+
+# 3.5: the gash function runs a canonical command through the shell
+# function of its handler (gash files largest is files_largest, a stub
+# override's shell steps included); a handler that has no function in this
+# shell (an interactive-only one, in headless mode) runs in the binary.
+# Usage: __gash_route HANDLER [ARG...]
+__gash_route() {
+    local __gr_name="$1"
+    shift
+    if declare -F "$__gr_name" >/dev/null; then
+        "$__gr_name" "$@"
+    else
+        __gash_call "$__gr_name" "$@"
+    fi
+}
+
+# The former flat names of 3.5 and what replaces them. They work through
+# Gash 3.x; typed at the prompt of an interactive shell, each one prints
+# a tip once per session (GASH_LEGACY_HINTS=0 turns the tips off).
+declare -gA __GASH_FORMER=(
+{{% formerTable %}}
+)
+declare -gA __GASH_FORMER_SEEN=()
+
+# Usage: __gash_former NAME
+__gash_former() {
+    [[ $- == *i* && -t 2 && "${GASH_LEGACY_HINTS-1}" != 0 && "${GASH_HEADLESS-}" != 1 ]] || return 0
+    [[ -z "${__GASH_FORMER_SEEN[$1]-}" ]] || return 0
+    __GASH_FORMER_SEEN[$1]=1
+    printf 'tip: %s is now %s\n' "$1" "${__GASH_FORMER[$1]}" >&2
 }
 
 # A hidden operation of the binary for the shims (gash __compat OP ...),

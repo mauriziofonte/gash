@@ -11,9 +11,9 @@
 # covers: output_style_render_spec.sh:63
 # covers: output_style_render_spec.sh:64
 #
-# gash_help rendering (R2-R6): overview, --list, --search (hit and miss),
-# --search usage error, a function page (palette-colored name/headers), an
-# alias lookup, self help (-h), --short, and not-found. The colored
+# gash_help rendering (R2-R6), the 3.5 pages: overview, --list, --search
+# (hit and miss), --search usage error, a command page (palette-colored
+# name/headers), a shortcut lookup, self help (-h), --short, and not-found. The colored
 # function page drops every ESC in plain mode (R6).
 
 env GASH_HEADLESS=1
@@ -22,19 +22,19 @@ env LC_ALL=C.UTF-8
 
 # --- :55 overview
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help'
-stdout 'Gash  v[0-9][0-9A-Za-z.-]* - Gash, Another SHell!'
-stdout '^  FILES$'
-stdout '^    files_largest +\(flf\) '
+stdout 'Gash [0-9][0-9A-Za-z.-]*.* Bash for humans and AI agents'
+stdout 'EVERYDAY'
+stdout '^    files +Largest files'
 
 # --- :56 list
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help --list'
-stdout 'Gash Functions'
-stdout '^    git_sync +\(gsync\) '
+stdout '^  gash git '
+stdout '^    sync +gsync '
 
 # --- :57 search - keyword hits
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help --search docker'
 stdout 'Search results for .docker.:'
-stdout '^  docker_compose_check +\(dcc\) '
+stdout '^  gash docker compose check +dcc '
 
 # --- :58 search-none - no hits
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help --search zzzqqq'
@@ -42,26 +42,27 @@ stdout 'No results for .zzzqqq.\.'
 
 # --- :59 search-usage - missing keyword
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help --search'
-stderr 'Usage: gash_help --search KEYWORD'
+stderr 'Usage: gash help --search WORD'
 
 # --- :60 function - the colored help page
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help files_largest'
-stdout 'files_largest'
-stdout 'module: files'
+stdout 'gash files largest'
 stdout 'List the largest files under a path'
 stdout 'USAGE'
 stdout 'EXAMPLES'
+stdout 'SHORTCUT'
+stdout 'FORMER NAME'
 
-# --- :61 alias - resolves the alias then shows the page
+# --- :61 shortcut - resolves the shortcut then shows the page
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help flf'
-stdout '.flf. is an alias for .files_largest.'
+stdout 'gash files largest'
 stdout 'List the largest files under a path'
 
 # --- :62 self - gash_help -h quick usage
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help -h'
-stdout 'gash_help'
-stdout 'Overview of all functions'
-stdout '--search KEYWORD'
+stdout 'gash help'
+stdout 'The overview: namespaces'
+stdout '--search WORD'
 
 # --- :63 short - one-line description, then an unknown name
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help --short git_sync; gash_help --short nosuch'
@@ -71,7 +72,7 @@ stderr 'Error: No help found for .nosuch.\.'
 # --- :64 not-found
 ! exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=1 COLUMNS=100; source "$GASH_SH"; gash_help nosuch'
 stderr 'Error: No help found for .nosuch.\.'
-stderr 'Hint: Try: gash_help --list'
+stderr 'Hint: Run: gash \(namespaces\) or gash help --search WORD'
 
 # --- R6: the function page is plain with color off, no ESC
 exec bash -c 'export GASH__TTY_OUT=1 GASH__COLOR=0 COLUMNS=100; source "$GASH_SH"; gash_help files_largest'

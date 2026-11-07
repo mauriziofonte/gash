@@ -16,19 +16,19 @@ SSH keys are unlocked in interactive shells only.
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [ssh](../requirements.md#tool-ssh) (feature), for `remote_exec`, `remote_pull`, `remote_push`, `remote_sync_pull` and `remote_sync_push`
-- [scp](../requirements.md#tool-scp) (feature), for `remote_pull` and `remote_push`
-- [rsync](../requirements.md#tool-rsync) (feature), for `remote_sync_pull` and `remote_sync_push`
-- [ssh-add](../requirements.md#tool-ssh-add) (feature), for `gash_ssh_auto_unlock`
-- [ssh-agent](../requirements.md#tool-ssh-agent) (feature), for `gash_ssh_auto_unlock`
-- [ssh-keygen](../requirements.md#tool-ssh-keygen) (optional), for `gash_ssh_auto_unlock` (keys already loaded)
+- [ssh](../requirements.md#tool-ssh) (feature), for `gash remote exec`, `gash remote pull`, `gash remote push`, `gash remote sync pull` and `gash remote sync push`
+- [scp](../requirements.md#tool-scp) (feature), for `gash remote pull` and `gash remote push`
+- [rsync](../requirements.md#tool-rsync) (feature), for `gash remote sync pull` and `gash remote sync push`
+- [ssh-add](../requirements.md#tool-ssh-add) (feature), for `gash remote unlock-keys`
+- [ssh-agent](../requirements.md#tool-ssh-agent) (feature), for `gash remote unlock-keys`
+- [ssh-keygen](../requirements.md#tool-ssh-keygen) (optional), for `gash remote unlock-keys` (keys already loaded)
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
 
 ## Name your hosts
 
-Add one `HOST:` line per server to `~/.gash_env` (`gash_env_init` creates the
+Add one `HOST:` line per server to `~/.gash_env` (`gash config init` creates the
 file from a template):
 
 ```text
@@ -44,7 +44,7 @@ entry's name as the host. A line that breaks these rules is skipped with a
 warning, and the first entry wins when two share an alias. The full grammar
 of the file is in [configuration](../configuration.md#remote-hosts).
 
-`remote_hosts` (alias `rh`) lists the aliases in effect. The functions read
+`gash remote hosts` (alias `rh`) lists the aliases in effect. The functions read
 the file at each call, so a new line works at once; the warnings about a bad
 line appear the first time a shell reads the file:
 
@@ -53,7 +53,7 @@ printf 'HOST:web=deploy@web.example.com\nHOST:nas=admin@192.168.1.20\nHOST:old=d
 chmod 600 .gash_env
 -->
 ```console
-$ remote_hosts
+$ gash remote hosts
 Warning: Line 3 of ~/.gash_env: HOST target must be user@host (skipping)
 Hint: put the port in a Host entry of ~/.ssh/config
 Info: Configured remote hosts:
@@ -64,7 +64,7 @@ Info: Configured remote hosts:
 
 Every `remote_*` function takes an alias or, in an interactive shell, a raw
 `user@host`. In headless mode (`GASH_HEADLESS=1`, the mode agents use) only
-the aliases are accepted, and `remote_exec`, `remote_push`, `remote_pull`
+the aliases are accepted, and `gash remote exec`, `gash remote push`, `gash remote pull`
 and the `remote_sync_*` functions answer a refusal with one JSON error line
 on stderr, as the agent functions do (`unknown_host`, `host_unreachable`,
 `forbidden_path`, `write_path_denied`, `sensitive_path`, `invalid_path`,
@@ -74,7 +74,7 @@ below. `GASH_ENV_FILE` points Gash at another file than `~/.gash_env`.
 
 ## Run a command on a host
 
-`remote_exec` (alias `rex`) runs one command line on the host and passes its
+`gash remote exec` (alias `rex`) runs one command line on the host and passes its
 output and exit status through:
 
 ```bash
@@ -106,12 +106,12 @@ What to know about the connection:
   is missing).
 - The connect timeout is 10 seconds.
 
-See [`remote_exec`](reference.md#remote_exec) for the exit status rules.
+See [`gash remote exec`](reference.md#gash-remote-exec) for the exit status rules.
 
 ## Copy a file or a directory
 
-`remote_push` (alias `rpush`) copies a local file to the host, and
-`remote_pull` (alias `rpull`) copies a remote file here, both with `scp`.
+`gash remote push` (alias `rpush`) copies a local file to the host, and
+`gash remote pull` (alias `rpull`) copies a remote file here, both with `scp`.
 The arguments are always the alias, the source, then the destination:
 
 ```bash
@@ -124,14 +124,14 @@ rpull web /srv/app/config ./config -r -p   # a directory, keeping times and mode
 `--no-progress` silences the progress meter. `--force` answers yes to the
 question about a sensitive path (below). A remote path that does not start
 with `/` is relative to the remote home. See
-[`remote_push`](reference.md#remote_push) and
-[`remote_pull`](reference.md#remote_pull).
+[`gash remote push`](reference.md#gash-remote-push) and
+[`gash remote pull`](reference.md#gash-remote-pull).
 
 ## Keep a directory in sync
 
-`remote_sync_push` (alias `rspush`) and `remote_sync_pull` (alias `rspull`)
+`gash remote sync push` (alias `rspush`) and `gash remote sync pull` (alias `rspull`)
 mirror a directory with `rsync` (archive mode, compressed), over the same
-multiplexed connection as `remote_exec`. They copy only what changed, so they
+multiplexed connection as `gash remote exec`. They copy only what changed, so they
 suit deploys and backups:
 
 ```bash
@@ -150,8 +150,8 @@ destination is below `/tmp`, `/var/tmp` or `/home/<user>/`, or is a
 relative path (inside the remote home for a push, inside the current
 directory for a pull). A home directory itself and any `.ssh` path never
 count as safe. Anywhere else Gash asks first, as it does for the second
-command above, or, in headless mode, needs `--force`. See [`remote_sync_push`](reference.md#remote_sync_push) and
-[`remote_sync_pull`](reference.md#remote_sync_pull).
+command above, or, in headless mode, needs `--force`. See [`gash remote sync push`](reference.md#gash-remote-sync-push) and
+[`gash remote sync pull`](reference.md#gash-remote-sync-pull).
 
 ## Which remote paths are allowed
 
@@ -166,7 +166,7 @@ Before `scp` or `rsync` starts, the remote path goes through three tiers:
 The full lists are in [security](../security.md). The characters that are
 refused are the glob and shell characters (`*`, `?`, `[`, `$`, a quote, `;`,
 `|` and the like) and a `~` past the start: name each file in full instead
-of using a pattern. The tiers apply to transfers only; `remote_exec` runs
+of using a pattern. The tiers apply to transfers only; `gash remote exec` runs
 whatever command you give it.
 
 <!-- example
@@ -175,9 +175,9 @@ chmod 600 .gash_env
 printf 'server {}\n' >nginx.conf
 -->
 ```console
-$ remote_push web ./nginx.conf /etc/ssh/sshd_config
+$ gash remote push web ./nginx.conf /etc/ssh/sshd_config
 Error: Remote path '/etc/ssh/sshd_config' is in the DENY list (matched: /etc/ssh). This is never allowed, not even with --force. Refusing push.
-$ remote_pull web '/var/log/nginx/*.log' ./logs/
+$ gash remote pull web '/var/log/nginx/*.log' ./logs/
 Error: Remote path '/var/log/nginx/*.log' contains characters the remote side may expand. Refusing pull (source path access).
 ```
 
@@ -202,7 +202,7 @@ Gash warns at each read when others can open it. What storing passphrases in
 a file means is described in [security](../security.md).
 
 When an interactive shell starts and the file has `SSH:` lines,
-[`gash_ssh_auto_unlock`](reference.md#gash_ssh_auto_unlock) runs:
+[`gash remote unlock-keys`](reference.md#gash-remote-unlock-keys) runs:
 
 1. It uses the agent `SSH_AUTH_SOCK` names when one answers. Otherwise it
    looks for Gash's own agent, on the socket `gash-ssh-agent.sock` in
@@ -220,7 +220,7 @@ you have just added to `~/.gash_env` without opening a new terminal:
 
 ```bash
 unset GASH_SSH_AUTOUNLOCK_RAN
-gash_ssh_auto_unlock
+gash remote unlock-keys
 ```
 
 ## Use a host from the agent functions
@@ -228,10 +228,10 @@ gash_ssh_auto_unlock
 The read-only `llm_*` functions take `--host ALIAS` to run the same read on
 a registered host: `llm_read /etc/nginx/nginx.conf --host web`, or
 `llm_grep timeout /var/log/nginx --host web`. Three functions exist only
-for hosts: [`llm_remote_run`](../agents/reference.md#llm_remote_run) runs a
+for hosts: [`llm_remote_run`](../agents/reference.md#gash-llm-remote-run) runs a
 read-only command on several hosts in parallel,
-[`llm_same`](../agents/reference.md#llm_same) checks that a deployed copy
-matches the local one, and [`agent_put`](../agents/reference.md#agent_put)
+[`llm_same`](../agents/reference.md#gash-llm-same) checks that a deployed copy
+matches the local one, and [`agent_put`](../agents/reference.md#gash-agent-put)
 uploads a file atomically. They all use the `HOST:` aliases of this page and
 the same multiplexed connection, and they accept an alias only, never a raw
 `user@host`. Remote paths pass the deny tier above before anything connects,

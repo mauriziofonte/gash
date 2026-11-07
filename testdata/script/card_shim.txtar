@@ -3,13 +3,13 @@
 # ledger: SELF-12
 # covers: none (3.0 shim surface; headless nav card)
 #
-# The reference card through the shim, plain when piped. Headless loads no
-# alias pack: the nav topic shows the values the alias file writes, the
-# identity alias (ls -> ls) left out. The box (version, function count)
-# is left out of the comparison.
+# The pages through the shim, plain when piped. Headless loads no alias
+# pack: the shell page (the former nav topic) shows the values the alias
+# file writes, the identity alias (ls -> ls) left out. Only its SHORTCUTS
+# grid is compared.
 
 env GASH_HEADLESS=1 COLUMNS=80
-exec bash -c 'source "$GASH_SH"; gash nav | tail -n +6'
+exec bash -c 'source "$GASH_SH"; gash nav | sed -n "/SHORTCUTS/,/^\$/p"'
 cmp stdout nav.txt
 ! stderr .
 
@@ -22,17 +22,15 @@ stdout '(^|  )ll +ls -l --si( |$)'
 
 # The binary answers directly too.
 exec gash gash_help --short gash
-stdout '^Gash reference card with all functions and aliases$'
+stdout '^The overview of Gash: namespaces, their commands and shortcuts$'
 
+# An unknown word is an unknown command (the error envelope when piped).
 ! exec bash -c 'source "$GASH_SH"; gash bogus'
 ! stdout .
-stderr '^Error: Unknown topic: bogus\. Topics: files system nav git docker remote dev llm agent ai gash, all$'
+stderr '^\{"error":"unknown_command","details":"Unknown command: gash bogus",'
 
 -- nav.txt --
-
-  NAV  Directory navigation and listings
-
-  Aliases
+  SHORTCUTS  packs navigation · GASH_SHORTCUTS
   ll    ls -l             la     ls -la
   l     ls -CF            lash   ls -lash
   sl    ls                ..     cd ..

@@ -18,31 +18,31 @@ Enter
 Wait
 Show
 
-Type "dirs_largest --depth 2 --limit 6"
+Type "gash files largest-dirs --depth 2 --limit 6"
 Sleep 300ms
 Enter
 Wait
 Sleep 3.5s
 
-Type "clear; dirs_list_empty"
+Type "clear; gash files empty-dirs"
 Sleep 300ms
 Enter
 Wait
 Sleep 3s
 
-Type "clear; archive_extract ~/archives/suspicious.tar"
+Type "clear; gash files extract ~/archives/suspicious.tar"
 Sleep 300ms
 Enter
 Wait
 Sleep 4s
 
-Type "archive_extract ~/archives/site-1.4.2.tar.gz ~/sites"
+Type "gash files extract ~/archives/site-1.4.2.tar.gz ~/sites"
 Sleep 300ms
 Enter
 Wait
 Sleep 3.5s
 
-Type "clear; file_backup .env && ls -a"
+Type "clear; gash files backup .env && ls -a"
 Sleep 300ms
 Enter
 Wait

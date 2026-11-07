@@ -24,9 +24,9 @@ docker_prune_all() { __gash_call docker_prune_all "$@"; }
 docker_start_all() { __gash_call docker_start_all "$@"; }
 docker_stop_all() { __gash_call docker_stop_all "$@"; }
 
-alias dsa='docker_stop_all'
-alias daa='docker_start_all'
-alias dpa='docker_prune_all'
+alias dsa='gash docker stop-all'
+alias daa='gash docker start-all'
+alias dpa='gash docker prune-all'
 
 # Sourcing never fails: the status of this file is 0.
 true

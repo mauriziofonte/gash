@@ -41,7 +41,7 @@ stderr 'Unknown argument'
 
 # --- sysinfo_spec.sh:331 - si alias is defined
 exec bash -c 'source "$GASH_SH"; alias si'
-stdout 'sysinfo'
+stdout 'gash system info'
 
 # --- sysinfo_spec.sh:343 - sysinfo all --llm outputs all 10 section headers
 exec bash -c 'export PATH="$PWD/bin:$PATH"; source "$GASH_SH"; sysinfo all --llm'
@@ -90,7 +90,7 @@ stdout 'Kernel='
 
 # --- sysinfo_spec.sh:476 - sysinfo_ai alias is defined
 exec bash -c 'source "$GASH_SH"; alias sysinfo_ai'
-stdout 'ai_sysinfo'
+stdout 'gash ai sysinfo'
 
 -- bin/sudo --
 #!/bin/sh

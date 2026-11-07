@@ -11,23 +11,23 @@ installs the headless Chrome that Playwright and Puppeteer use.
 Platforms: Linux, macOS and WSL. PHP versions are the `phpX.Y` programs that
 Debian and Ubuntu packages (and the ondrej PPA) install; elsewhere the `php`
 on `PATH` is used. Node.js versions are the ones nvm installed in
-`${NVM_DIR:-~/.nvm}`. `chrome_headless_update` works on Linux x86_64 only.
+`${NVM_DIR:-~/.nvm}`. `gash runtime upgrade chrome` works on Linux x86_64 only.
 
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [unzip](../requirements.md#tool-unzip) (feature), for `chrome_headless_update`
-- [php](../requirements.md#tool-php) (feature), for `php_detect_version`, `gash runtime` (php) and `gash run` (--runtime php)
+- [unzip](../requirements.md#tool-unzip) (feature), for `gash runtime upgrade chrome`
+- [php](../requirements.md#tool-php) (feature), for `gash runtime detect php`, `gash runtime` (php) and `gash run` (--runtime php)
 - [composer](../requirements.md#tool-composer) (optional), for `gash runtime` (composer) and `gash run` (--runtime composer)
-- [node](../requirements.md#tool-node) (feature), for `node_upgrade`, `nvm_prune_versions`, `gash runtime` (node) and `gash run` (--runtime node)
-- [ldd](../requirements.md#tool-ldd) (feature), for `chrome_headless_update`
+- [node](../requirements.md#tool-node) (feature), for `gash runtime upgrade node`, `gash runtime prune node`, `gash runtime` (node) and `gash run` (--runtime node)
+- [ldd](../requirements.md#tool-ldd) (feature), for `gash runtime upgrade chrome`
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
 
 ## Find the PHP version a project wants
 
-[`php_detect_version`](reference.md#php_detect_version) reads, in this order,
+[`gash runtime detect php`](reference.md#gash-runtime-detect-php) reads, in this order,
 and stops at the first that names a version:
 
 1. `.target-php-version` (its first `X.Y`), in the project directory or any
@@ -37,8 +37,8 @@ and stops at the first that names a version:
 4. otherwise, 8.4.
 
 ```bash
-php_detect_version              # the current directory
-php_detect_version ~/src/shop --json
+gash runtime detect php              # the current directory
+gash runtime detect php ~/src/shop --json
 ```
 
 It prints the version and the commands that serve it: the binary
@@ -70,7 +70,7 @@ the newest version. The pack also has `composer-packages-update`
 
 ## Find the Node.js version a project wants
 
-[`node_detect_version`](reference.md#node_detect_version) reads `.nvmrc`,
+[`gash runtime detect node`](reference.md#gash-runtime-detect-node) reads `.nvmrc`,
 then `.node-version`, then `engines.node` of `package.json`, in the project
 directory only, and reduces what it finds to a major version: `20.9.0`,
 `v20` and `>=20` all mean 20, and `lts/iron` goes through nvm's alias files
@@ -83,13 +83,13 @@ printf '{"name":"web","engines":{"node":">=22"}}\n' >web/package.json
 -->
 ```console
 $ cd web
-$ node_detect_version
+$ gash runtime detect node
 Info: Node.js version for '.': 22.12.0 (major 22)
   node_command    node22
   npm_command     npm22
   npx_command     npx22
 $ echo 20 >.nvmrc
-$ node_detect_version --json
+$ gash runtime detect node --json
 {"version":"20","full_version":"20.11.1","node_command":"node20","npm_command":"npm20","npx_command":"npx20"}
 ```
 
@@ -142,8 +142,8 @@ $ gash run --max-lines 3 -- seq 10
 
 - `--runtime NAME:VERSION` (repeatable): `node:20`, `php:8.3`, or
   `node:project` and `php:project` for the version the project in the
-  current directory pins (the files `node_detect_version` and
-  `php_detect_version` read). A version that is not installed stops the
+  current directory pins (the files `gash runtime detect node` and
+  `gash runtime detect php` read). A version that is not installed stops the
   call with a `runtime_not_installed` error that lists the installed ones;
   a project that pins no version stops it with `runtime_not_pinned`, rather
   than picking one.
@@ -161,7 +161,7 @@ $ gash run --max-lines 3 -- seq 10
 The command may be a Gash function: `gash run --max-lines 20 -- files_largest .`.
 See [`gash runtime`](reference.md#gash-runtime) and
 [`gash run`](reference.md#gash-run). Agents use the JSON form,
-[`llm_runtime`](../agents/reference.md#llm_runtime).
+[`llm_runtime`](../agents/reference.md#gash-llm-runtime).
 
 ## Load nvm in every shell
 
@@ -174,12 +174,12 @@ nvm adds 0.2 to 0.5 seconds to each shell that sources `nvm.sh`. Set
 | `lazy` | `node`, `npm`, `npx` and the global packages of nvm's default version are on `PATH` at once; `nvm.sh` loads the first time you run `nvm`. |
 | `on` | `nvm.sh` and its completion load when the shell starts. |
 
-`NVM_DIR` defaults to `~/.nvm`. `node_upgrade` and `nvm_prune_versions`
+`NVM_DIR` defaults to `~/.nvm`. `gash runtime upgrade node` and `gash runtime prune node`
 need the `nvm` command, which `lazy` and `on` both provide.
 
 ## Keep the Node.js versions current
 
-[`node_upgrade`](reference.md#node_upgrade) (alias `nvmc`) brings every
+[`gash runtime upgrade node`](reference.md#gash-runtime-upgrade-node) (alias `nvmc`) brings every
 installed major to its newest patch: it installs the new patch with the
 global packages of the one it replaces, removes the older patches of that
 major, and moves the active version along. It never adds a major you do not
@@ -194,7 +194,7 @@ nvmc -y          # no question
 It reads the version list from nodejs.org, so it needs the network. A
 failed install leaves that major as it was, and the status is then 1.
 
-[`nvm_prune_versions`](reference.md#nvm_prune_versions) (alias `nvmp`) only
+[`gash runtime prune node`](reference.md#gash-runtime-prune-node) (alias `nvmp`) only
 removes: for each major it keeps the newest patch and uninstalls the older
 ones, and it never removes the active version. Without an option it shows
 what it would remove; `--force` (or `-y`) removes it.
@@ -206,7 +206,7 @@ nvmp --force   # uninstall the duplicates
 
 ## Keep headless Chrome current
 
-[`chrome_headless_update`](reference.md#chrome_headless_update) (alias
+[`gash runtime upgrade chrome`](reference.md#gash-runtime-upgrade-chrome) (alias
 `chri`) installs chrome-headless-shell, the build of Chrome that Playwright
 and Puppeteer drive. It takes the exact build that the latest Playwright
 release pins, downloads it from Chrome for Testing, checks that the binary
@@ -238,13 +238,13 @@ and point Playwright's `executablePath` (Puppeteer: `executablePath` with
 | Message | What it means and what to do |
 |---|---|
 | `Warning: PHP 8.2 is not installed; php_raw_binary falls back to /usr/bin/php` | The project wants a PHP you do not have. Install `php8.2`, or change `.target-php-version`. |
-| `Error: NVM directory not found (...)` | `node_detect_version` needs nvm. Install it, or set `NVM_DIR` if it lives elsewhere. |
+| `Error: NVM directory not found (...)` | `gash runtime detect node` needs nvm. Install it, or set `NVM_DIR` if it lives elsewhere. |
 | `Warning: Node 18 not installed. Using 22.12.0. Run: nvm install 18` | The project wants a major you do not have; the answer names the newest one instead. |
 | `Error: No Node.js versions installed in NVM. Install: nvm install 20` | nvm has no version yet. |
 | `{"error":"runtime_not_installed",...}` | `gash runtime` or `gash run --runtime`: the version is not installed; `details` lists the installed ones. |
 | `{"error":"runtime_not_pinned",...}` | `project` was asked, and nothing in the current directory pins a version: add `.nvmrc` (Node.js) or `.target-php-version` (PHP), or name the version. |
-| `Error: nvm is not loaded in this shell. Source $NVM_DIR/nvm.sh first.` | `node_upgrade` and `nvm_prune_versions` need `nvm`: set `GASH_NVM=lazy` and open a new shell. |
-| `Error: Unable to read the remote index (network?). Nothing changed.` | `node_upgrade` could not reach nodejs.org. |
+| `Error: nvm is not loaded in this shell. Source $NVM_DIR/nvm.sh first.` | `gash runtime upgrade node` and `gash runtime prune node` need `nvm`: set `GASH_NVM=lazy` and open a new shell. |
+| `Error: Unable to read the remote index (network?). Nothing changed.` | `gash runtime upgrade node` could not reach nodejs.org. |
 | `Error: Chrome for Testing publishes chrome-headless-shell for Linux x86_64 only (...)` | There is no build for this system. |
 | `Error: chrome_headless_update needs 'unzip'.` | Install [unzip](../requirements.md#tool-unzip). |
 | `Error: Missing shared libraries: ...` | The next line names the `apt-get install` command that adds them; run it, then `chri` again. |

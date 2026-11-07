@@ -24,7 +24,7 @@ Enter
 Wait
 Sleep 3.5s
 
-Type "clear; git_sync -m 'Document npm run dev'"
+Type "clear; gash git sync -m 'Document npm run dev'"
 Sleep 300ms
 Enter
 Sleep 2.5s
@@ -46,7 +46,7 @@ Enter
 Wait
 Sleep 3s
 
-Type "clear; git_list_tags"
+Type "clear; gash git tag list"
 Sleep 300ms
 Enter
 Wait

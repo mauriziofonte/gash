@@ -72,22 +72,22 @@ wsl_shutdown() {
 }
 wsl_taskmanager() { __gash_call wsl_taskmanager "$@"; }
 
-alias du2='disk_usage'
+alias du2='gash system disks'
 if ! type -P hg >/dev/null 2>&1; then
-    alias hg='history_grep'
+    alias hg='gash shell history'
 fi
-alias myip='ip_public'
-alias pf='process_find'
-alias pk='process_kill'
-alias ptk='port_kill'
-alias svs='services_stop'
-alias plz='sudo_last'
-alias mkcd='mkdir_cd'
-alias wr='wsl_restart'
-alias wsd='wsl_shutdown'
-alias wex='wsl_explorer'
-alias wtm='wsl_taskmanager'
-alias wslc='wsl_compact'
+alias myip='gash system ip'
+alias pf='gash system ps'
+alias pk='gash system kill'
+alias ptk='gash system port-kill'
+alias svs='gash system stop-services'
+alias plz='gash shell sudo-last'
+alias mkcd='gash shell mkcd'
+alias wr='gash wsl restart'
+alias wsd='gash wsl shutdown'
+alias wex='gash win explorer'
+alias wtm='gash win taskmgr'
+alias wslc='gash wsl compact'
 
 # Sourcing never fails: the status of this file is 0.
 true

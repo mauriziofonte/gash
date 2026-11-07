@@ -132,6 +132,10 @@ var codeTable = []Code{
 
 	// New in 3.x.
 	{"binary_not_found", Stop, "compat", Origin3x},
+	// 3.5: a word after gash that names no command, and a command whose
+	// part runs in the calling shell, reached through the binary alone.
+	{"unknown_command", Retry, "arguments", Origin3x},
+	{"shell_required", Stop, "compat", Origin3x},
 	{"internal_error", Stop, "binary", Origin3x},
 	{"invalid_regex", Retry, "arguments", Origin3x},
 	{"invalid_manifest", Retry, "context", Origin3x},

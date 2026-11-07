@@ -45,12 +45,12 @@ remote_sync_push() {
     __gash_call remote_sync_push "$@"
 }
 
-alias rh='remote_hosts'
-alias rex='remote_exec'
-alias rpush='remote_push'
-alias rpull='remote_pull'
-alias rspush='remote_sync_push'
-alias rspull='remote_sync_pull'
+alias rh='gash remote hosts'
+alias rex='gash remote exec'
+alias rpush='gash remote push'
+alias rpull='gash remote pull'
+alias rspush='gash remote sync push'
+alias rspull='gash remote sync pull'
 
 # Sourcing never fails: the status of this file is 0.
 true

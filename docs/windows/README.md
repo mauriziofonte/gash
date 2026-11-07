@@ -19,10 +19,10 @@ functions exit 1.
 <!-- BEGIN generated: prerequisites (go test ./internal/docgen -update) -->
 Beyond what Gash itself needs, this area uses (install commands for each system: [requirements](../requirements.md)):
 
-- [sudo](../requirements.md#tool-sudo) (feature), for `wsl_compact`
+- [sudo](../requirements.md#tool-sudo) (feature), for `gash wsl compact`
 - [powershell.exe](../requirements.md#tool-powershell.exe) (feature), for `gash win`
-- [cmd.exe](../requirements.md#tool-cmd.exe) (feature), for `wsl_restart`, `wsl_shutdown` and `wsl_taskmanager`
-- [explorer.exe](../requirements.md#tool-explorer.exe) (feature), for `wsl_explorer`
+- [cmd.exe](../requirements.md#tool-cmd.exe) (feature), for `gash wsl restart`, `gash wsl shutdown` and `gash win taskmgr`
+- [explorer.exe](../requirements.md#tool-explorer.exe) (feature), for `gash win explorer`
 <!-- END generated: prerequisites -->
 
 Every function, alias and command of this area, with all its options: [reference.md](reference.md).
@@ -170,14 +170,14 @@ wex /mnt/c/Users   # Explorer in another directory
 wtm                # Task Manager (alias of wsl_taskmanager)
 ```
 
-[`wsl_explorer`](reference.md#wsl_explorer) translates the directory to its
-Windows form first; [`wsl_taskmanager`](reference.md#wsl_taskmanager) starts
+[`gash win explorer`](reference.md#gash-win-explorer) translates the directory to its
+Windows form first; [`gash win taskmgr`](reference.md#gash-win-taskmgr) starts
 Task Manager in the background.
 
 ## Restart or shut down WSL
 
-[`wsl_restart`](reference.md#wsl_restart) (alias `wr`) and
-[`wsl_shutdown`](reference.md#wsl_shutdown) (alias `wsd`) do the same thing:
+[`gash wsl restart`](reference.md#gash-wsl-restart) (alias `wr`) and
+[`gash wsl shutdown`](reference.md#gash-wsl-shutdown) (alias `wsd`) do the same thing:
 they save this shell's history, then run `wsl --shutdown` through `cmd.exe`.
 Every distribution stops, Docker Desktop's included, with the servers
 running in them; WSL starts again with the next terminal. They ask first;
@@ -188,7 +188,7 @@ running in them; WSL starts again with the next terminal. They ask first;
 On a WSL 2 VM that has run for a long time, memory gets fragmented, and
 starting any Windows program can fail with `UtilAcceptVsock ... accept4
 failed 110` (the kernel log says `page allocation failure: order:7`).
-[`wsl_compact`](reference.md#wsl_compact) (alias `wslc`) counts those
+[`gash wsl compact`](reference.md#gash-wsl-compact) (alias `wslc`) counts those
 failures, drops the page cache and compacts memory (with `sudo`), shows the
 free memory blocks before and after, and checks that `cmd.exe` starts:
 
@@ -242,7 +242,7 @@ code:
 | `windows_not_found` | The Windows program, file or key does not exist, or a Windows program could not start. |
 | `invalid_windows_argument` | An argument failed the check before anything ran: a registry key must start with `HKLM\`, `HKCU\`, `HKCR\`, `HKU\` or `HKCC\`; a fix needs a valid IP address, host name or service name. |
 | `Error: This command requires WSL (Windows Subsystem for Linux).` | A `wsl_*` function ran outside WSL. |
-| `Error: wsl_compact needs root: pass -y to run it unattended.` | `wsl_compact` in headless mode: add `-y`; `sudo` must then work without a password. |
+| `Error: wsl_compact needs root: pass -y to run it unattended.` | `gash wsl compact` in headless mode: add `-y`; `sudo` must then work without a password. |
 | `Error: Windows interop still fails. Last resort, from Windows: wsl --shutdown` | Compacting did not free a large enough block: restart WSL from Windows. |
 
 `gash wsl doctor` prints a `remedy:` line under each failed check, which is
